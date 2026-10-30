@@ -10,15 +10,17 @@ base { archivesName = mod_id }
 
 java.toolchain.languageVersion = JavaLanguageVersion.of(21)
 
-// Проверки только для запусков из Gradle (GameTest, сценарий клиента): в jar мода не попадают
+// Checks only for runs from Gradle (GameTest, client scenario): they do not get into the mod's jar
 sourceSets {
     devtest {
         compileClasspath += sourceSets.main.output
         runtimeClasspath += sourceSets.main.output
     }
-    // агент горячей замены песочницы эффектов (tools/sandbox.sh): свой jar для -javaagent, без Minecraft, в мод не входит
+    // hot-swap agent of the effects sandbox (tools/sandbox.sh): its own jar for -javaagent, without Minecraft, not part
+    // of the mod
     sandboxAgent {}
-    // юнит-тесты чистых частей проверок (разбор сценария commands — CommandPlanTest, команды песочницы, агент)
+    // unit tests of the pure parts of the checks (parsing the commands scenario — CommandPlanTest, sandbox commands,
+    // agent)
     test {
         compileClasspath += sourceSets.devtest.output + sourceSets.sandboxAgent.output
         runtimeClasspath += sourceSets.devtest.output + sourceSets.sandboxAgent.output
@@ -27,7 +29,7 @@ sourceSets {
 configurations {
     devtestCompileOnly.extendsFrom compileOnly
     devtestImplementation.extendsFrom implementation
-    // моды песочницы эффектов (copyRuntimeMods_scenario при INCOMING_SANDBOX)
+    // effects sandbox mods (copyRuntimeMods_scenario with INCOMING_SANDBOX)
     sandboxMods { transitive = false }
 }
 
@@ -36,12 +38,12 @@ repositories {
         forRepository { maven { url = 'https://maven.ryanhcode.dev/releases' } }
         filter { includeGroupAndSubgroups 'dev.ryanhcode' }
     }
-    // Distant Horizons API (у DH своего maven нет; Modrinth отдаёт файлы проекта как maven)
+    // Distant Horizons API (DH has no maven of its own; Modrinth serves the project files as maven)
     exclusiveContent {
         forRepository { maven { url = 'https://api.modrinth.com/maven' } }
         filter { includeGroup 'maven.modrinth' }
     }
-    // glsl-processor — разбор GLSL Veil (его несёт Sable): ShaderSourceTest прогоняет через него свои шейдеры
+    // glsl-processor — parsing of Veil's GLSL (carried by Sable): ShaderSourceTest runs its shaders through it
     exclusiveContent {
         forRepository { maven { url = 'https://maven.blamejared.com' } }
         filter { includeModule 'io.github.ocelot', 'glsl-processor' }
@@ -49,29 +51,30 @@ repositories {
     mavenCentral()
 }
 
-// Моды из инстанса хоста (сборка «Open Skies») для запусков из Gradle (Create, Sable, Aeronautics).
-// NeoForge 1.21.1 работает на mojmap-именах, поэтому jar из mods/ подходят без ремаппинга.
-// Каталог — -PmcModsDir=..., иначе из tools/paths.py (единственное место путей к игре; MC_DIR его переопределяет):
-// своя копия пути здесь пережила переименование инстанса и молча вела в пустоту.
+// Mods from the host's instance (the «Open Skies» pack) for runs from Gradle (Create, Sable, Aeronautics).
+// NeoForge 1.21.1 works on mojmap names, so jars from mods/ fit without remapping.
+// Directory — -PmcModsDir=..., otherwise from tools/paths.py (the only place for game paths; MC_DIR overrides it):
+// a separate copy of the path here survived the instance rename and silently pointed at nothing.
 def mcModsDir = file(project.findProperty('mcModsDir')
         ?: providers.exec { commandLine 'python3', file('../tools/paths.py').path, 'MODS' }.standardOutput.asText.get().trim())
 def runtimeModPatterns = ['create-1.21.1-*.jar', 'sable-neoforge-1.21.1-*.jar', 'create-aeronautics-bundled-1.21.1-*.jar']
-// сценарий клиента с Sodium и Iris, как у хоста (tools/client_scenario.sh nuke shaders)
+// client scenario with Sodium and Iris, as on the host (tools/client_scenario.sh nuke shaders)
 def shaderModPatterns = System.getenv('INCOMING_SHADERS') ? ['sodium-neoforge-*.jar', 'iris-neoforge-*.jar'] : []
-// ... и с Distant Horizons, как у хоста: рельеф карты наведения вдали (tools/client_scenario.sh target-map dh)
+// ... and with Distant Horizons, as on the host: the far terrain of the aiming map (tools/client_scenario.sh target-map
+// dh)
 def dhModPatterns = System.getenv('INCOMING_DH') ? ['DistantHorizons-*.jar'] : []
-// ... или с Voxy через Roxy (официальный jar Voxy для 1.21.11, Roxy переводит его под 1.21.1; нужны Sodium и Forgified
-// Fabric API): глубина рельефа Voxy для слоя эффектов (tools/client_scenario.sh far voxy)
+// ... or with Voxy via Roxy (Voxy's official jar for 1.21.11, Roxy adapts it to 1.21.1; needs Sodium and Forgified
+// Fabric API): Voxy's terrain depth for the effects layer (tools/client_scenario.sh far voxy)
 def voxyModPatterns = System.getenv('INCOMING_VOXY') ? ['sodium-neoforge-*.jar', 'roxy-*.jar', 'voxy-*.jar', 'forgified-fabric-api-*.jar'] : []
-// ... и с LOD Server Support: рельеф карты вдали с сервера (tools/client_scenario.sh target-map lss; jar кладёт скрипт —
-// в сборке хоста его пока нет)
+// ... and with LOD Server Support: the far map terrain from the server (tools/client_scenario.sh target-map lss;
+// the script puts the jar in place — the host's build does not have it yet)
 def lssModPatterns = System.getenv('INCOMING_LSS') ? ['lod-server-support-neoforge-*.jar'] : []
-// GameTest с Lithium, как у хоста (-PwithLithium): проверка совместимости руками, в CI её нет
+// GameTest with Lithium, as on the host (-PwithLithium): a manual compatibility check, none in CI
 def lithiumModPatterns = project.hasProperty('withLithium') ? ['lithium-neoforge-*.jar'] : []
 
-// каталог клиента сценария; в мультиплеере у каждого клиента свой (tools/mp_scenario.sh)
-// песочница эффектов (tools/sandbox.sh): сценарий sandbox в своём каталоге, только мод (+ Iris и DH по желанию) и
-// агент горячей замены, который следит за каталогами классов мода
+// the client directory of the scenario; in multiplayer each client has its own (tools/mp_scenario.sh) effects sandbox
+// (tools/sandbox.sh): the sandbox scenario in its own directory, only the mod (+ Iris and DH if wanted) and the
+// hot-swap agent that watches the mod's class directories
 def sandbox = System.getenv('INCOMING_SANDBOX') != null
 def scenarioDir = project.findProperty('scenarioDir') ?: (sandbox ? 'run/sandbox' : 'run/scenario')
 
@@ -86,50 +89,58 @@ neoForge {
             client()
             gameDirectory = project.file('run/client')
         }
-        // клиент без окна для сценария проверки (см. src/devtest/.../ClientScenario и tools/client_scenario.sh)
+        // client without a window for the check scenario (see src/devtest/.../ClientScenario and
+        // tools/client_scenario.sh)
         clientScenario {
             client()
-            // мультиплеер (tools/mp_scenario.sh): у каждого клиента свой каталог и ник
+            // multiplayer (tools/mp_scenario.sh): each client has its own directory and nickname
             gameDirectory = project.file(scenarioDir)
             if (project.findProperty('scenarioUser')) programArguments.addAll '--username', project.findProperty('scenarioUser')
             if (System.getenv('INCOMING_MP_PORT')) systemProperty 'incoming.mp.port', System.getenv('INCOMING_MP_PORT')
-            // режим сценария (all, launch, nuke, fx, models…) — список в tools/client_scenario.sh
+            // scenario mode (all, launch, nuke, fx, models…) — the list is in tools/client_scenario.sh
             systemProperty 'incoming.scenario', System.getenv('INCOMING_SCENARIO') ?: 'all'
-            // strike-profile в облаке без prod_client.py: шаги и промежуток — как --prop incoming.profile.steps/gap
+            // strike profile in the cloud without prod_client.py: steps and interval — as --prop
+            // incoming.profile.steps/gap
             if (System.getenv('INCOMING_PROFILE_STEPS')) systemProperty 'incoming.profile.steps', System.getenv('INCOMING_PROFILE_STEPS')
             if (System.getenv('INCOMING_PROFILE_GAP')) systemProperty 'incoming.profile.gap', System.getenv('INCOMING_PROFILE_GAP')
-            // сценарий commands в облаке без prod_client.py: шаги через «;», как --prop incoming.commands
+            // commands scenario in the cloud without prod_client.py: steps separated by “;”, as --prop
+            // incoming.commands
             if (System.getenv('INCOMING_COMMANDS')) systemProperty 'incoming.commands', System.getenv('INCOMING_COMMANDS')
-            // замер огня клиента в подробном городе: INCOMING_CITY=N@тик (FireCity — N секций с глобальной палитрой в чанке)
+            // client fire measurement in a detailed city: INCOMING_CITY=N@tick (FireCity — N sections with a global
+            // palette in the chunk)
             if (System.getenv('INCOMING_CITY')) systemProperty 'incoming.scenario.city', System.getenv('INCOMING_CITY')
-            // открыть мир сценария прошлого запуска, а не создавать заново (INCOMING_WORLD=incoming_scenario: повторный вход,
-            // например рельеф LSS из файла, когда LSS присылает только изменённое)
+            // open the scenario world of the previous run instead of creating it anew
+            // (INCOMING_WORLD=incoming_scenario: re-entry, e.g. LSS terrain from a file, when LSS sends only what
+            // changed)
             if (System.getenv('INCOMING_WORLD')) systemProperty 'incoming.world', System.getenv('INCOMING_WORLD')
-            // сценарий probe (шлагбаум): только эти сцены (INCOMING_PROBE_CASES=flyby,grad-day — как --prop incoming.probe.cases)
+            // probe scenario (gate): only these scenes (INCOMING_PROBE_CASES=flyby,grad-day — as --prop
+            // incoming.probe.cases)
             if (System.getenv('INCOMING_PROBE_CASES')) systemProperty 'incoming.probe.cases', System.getenv('INCOMING_PROBE_CASES')
-            // сценарий guide: только эти разделы (INCOMING_GUIDE=recipes,map — список в GuideShots)
+            // guide scenario: only these sections (INCOMING_GUIDE=recipes,map — the list is in GuideShots)
             if (System.getenv('INCOMING_GUIDE')) systemProperty 'incoming.guide', System.getenv('INCOMING_GUIDE')
-            // размер окна: INCOMING_SIZE=1920x1080 (трейлер), по умолчанию 1280x720
+            // window size: INCOMING_SIZE=1920x1080 (trailer), by default 1280x720
             def size = (System.getenv('INCOMING_SIZE') ?: '1280x720').split('x')
             programArguments.addAll '--width', size[0], '--height', size[1]
-            // трейлер проверяет, что кадр ровно такой (окно в KWin иначе уменьшается на заголовок)
+            // the trailer checks that the frame is exactly that (otherwise the KWin window shrinks by its title bar)
             systemProperty 'incoming.frame', size.join('x')
             environment 'ALSOFT_CONF', project.file(sandbox ? "${scenarioDir}/alsoft.conf" : 'run/scenario/alsoft.conf').absolutePath
             if (sandbox) {
                 def classes = [sourceSets.main, sourceSets.devtest].collect { it.java.destinationDirectory.get().asFile.absolutePath }
                 jvmArgument "-javaagent:${project.file('build/sandbox/sandbox-agent.jar').absolutePath}=" +
                         ([project.file("${scenarioDir}/fx/hotswap").absolutePath] + classes).join(';')
-                // JetBrains Runtime (INCOMING_SANDBOX_JAVA, флаг он знает — проверяет tools/sandbox.sh): замена принимает
-                // и новые поля, методы, лямбды; обычная JVM с этим флагом не стартует
+                // JetBrains Runtime (INCOMING_SANDBOX_JAVA; the flag is known to it — tools/sandbox.sh checks it): hot
+                // swap accepts new fields, methods and lambdas too; a plain JVM does not start with this flag
                 if (System.getenv('INCOMING_SANDBOX_ENHANCED')) jvmArgument '-XX:+AllowEnhancedClassRedefinition'
             }
-            // LSS раздаёт LOD и встроенным сервером одиночной игры — своим тестовым свойством (иначе только по сети)
+            // LSS serves LOD also through the built-in server of singleplayer — with its own test property (otherwise
+            // only over the network)
             if (System.getenv('INCOMING_LSS')) systemProperty 'lss.test.integratedServer', 'true'
-            // effects-layer GPU time per pass and part (drain frames, LayerTimes): INCOMING_FX_DRAIN=1 tools/sandbox.sh start
+            // effects-layer GPU time per pass and part (drain frames, LayerTimes): INCOMING_FX_DRAIN=1 tools/sandbox.sh
+            // start
             if (System.getenv('INCOMING_FX_DRAIN')) systemProperty 'incoming.fx.drain', 'true'
-            // паузы сборщика мусора — чтобы отличать их от медленного кода (run/scenario/logs/gc.log)
+            // garbage collector pauses — to tell them apart from slow code (run/scenario/logs/gc.log)
             jvmArgument "-Xlog:gc:file=${project.file("${scenarioDir}/logs/gc.log").absolutePath}:time,uptime"
-            // профиль JFR по желанию: INCOMING_JFR=1 tools/client_scenario.sh nuke → run/scenario/logs/scenario.jfr
+            // optional JFR profile: INCOMING_JFR=1 tools/client_scenario.sh nuke → run/scenario/logs/scenario.jfr
             if (System.getenv('INCOMING_JFR')) jvmArgument "-XX:StartFlightRecording=filename=${project.file('run/scenario/logs/scenario.jfr').absolutePath},settings=profile"
         }
         server {
@@ -137,7 +148,8 @@ neoForge {
             gameDirectory = project.file(project.findProperty('serverDir') ?: 'run/server')
             programArgument '--nogui'
         }
-        // стенд нагрузки (tools/stress.sh): выделенный сервер с режиссёром и игроки-клиенты, см. src/devtest/.../stress
+        // load stand (tools/stress.sh): dedicated server with the director and player clients, see
+        // src/devtest/.../stress
         stressServer {
             server()
             gameDirectory = project.file('run/stress/server')
@@ -147,14 +159,16 @@ neoForge {
             systemProperty 'incoming.stress.restart', System.getenv('INCOMING_STRESS_RESTART') ?: 'false'
             systemProperty 'incoming.stress.probes', System.getenv('INCOMING_STRESS_PROBES') ?: 'true'
             jvmArgument "-Xlog:gc:file=${project.file('run/stress/server/gc.log').absolutePath}:time,uptime"
-            // профиль JFR сервера по желанию, как у сценария клиента: INCOMING_JFR=1 tools/stress.sh → run/stress/server/stress.jfr
+            // optional server JFR profile, as for the client scenario: INCOMING_JFR=1 tools/stress.sh →
+            // run/stress/server/stress.jfr
             if (System.getenv('INCOMING_JFR')) jvmArgument "-XX:StartFlightRecording=filename=${project.file('run/stress/server/stress.jfr').absolutePath},settings=profile"
-            // сервер и три клиента на одной машине: без предела каждая JVM берёт ¼ памяти, и ядро убивает клиента.
-            // INCOMING_RIG_JVM=artem — сервер с JVM, как в игре у Артёма (8 ГБ, поколенческий ZGC), только где хватает
-            // памяти (VPS): 8 ГБ сервера и три клиента по 2 ГБ облако на 15 ГБ не вынесет. Режиссёр пишет сборщик в лог
-            // и не запускается, если JVM стенда (тулчейн Gradle) работает с другим сборщиком (incoming.stress.gc —
-            // начало имени MXBean: у поколенческого ZGC «ZGC Minor/Major …», у непоколенческого — «ZGC Cycles») или с кучей
-            // меньше заказанной (incoming.stress.heap, МБ)
+            // server and three clients on one machine: without a limit each JVM takes ¼ of memory, and the kernel kills
+            // a client. INCOMING_RIG_JVM=artem — server with the JVM as in Artem's game (8 GB, generational ZGC), only
+            // where there is enough memory (VPS): 8 GB of server and three 2 GB clients would not fit in the 15 GB
+            // cloud. The director writes the collector into the log and does not start if the stand's JVM (the Gradle
+            // toolchain) runs with another collector (incoming.stress.gc — the start of the MXBean name: generational
+            // ZGC has «ZGC Minor/Major …», non-generational — «ZGC Cycles») or with a heap smaller than ordered
+            // (incoming.stress.heap, MB)
             def rigJvm = System.getenv('INCOMING_RIG_JVM') ?: 'default'
             if (rigJvm == 'artem') {
                 ['-Xmx8g', '-XX:+UseZGC', '-XX:+ZGenerational'].each { jvmArgument it }
@@ -163,14 +177,14 @@ neoForge {
             } else if (rigJvm == 'default') {
                 jvmArgument '-Xmx4g'
             } else {
-                throw new GradleException("INCOMING_RIG_JVM=${rigJvm}: ожидается artem или default")
+                throw new GradleException("INCOMING_RIG_JVM=${rigJvm}: expected artem or default")
             }
         }
         stressClient {
             client()
             def name = System.getenv('INCOMING_STRESS_NAME') ?: 'Host'
             gameDirectory = project.file("run/stress/${name}")
-            // сервер стенда слушает только петлю, порт — свободный, его выбирает tools/stress.sh
+            // the stand's server listens only on loopback, its port is free — tools/stress.sh picks it
             def server = "127.0.0.1:${System.getenv('INCOMING_STRESS_PORT') ?: '25565'}"
             programArguments.addAll '--username', name, '--quickPlayMultiplayer', server, '--width', '854', '--height', '480'
             systemProperty 'incoming.stress.server', server
@@ -181,14 +195,15 @@ neoForge {
             type = 'gameTestServer'
             gameDirectory = project.file('run/gametest')
             systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
-            // своя часть партий на машине CI: -PgametestShard=i/n (devtest GameTestShards); без свойства — все тесты
+            // own share of batches on the CI machine: -PgametestShard=i/n (devtest GameTestShards); without the
+            // property — all tests
             systemProperty 'incoming.gametest.shard', (project.findProperty('gametestShard') ?: '').toString()
-            // только партии по регулярному выражению: -PgametestOnly='nuke_scorch|nuke_fresh'
+            // only batches matching a regular expression: -PgametestOnly='nuke_scorch|nuke_fresh'
             systemProperty 'incoming.gametest.only', (project.findProperty('gametestOnly') ?: '').toString()
         }
-        // Сценарии полёта (gametest/scenario): все зёрна (-PscenarioSeeds, по умолчанию 16) без остальных GameTest —
-        // шаблон сценариев в своём пространстве имён incoming_sweep. -PscenarioOnly=<регулярное выражение> — только
-        // подходящие сценарии; -PscenarioRealChunks — настоящая загрузка чанков в темпе игры, без эталона
+        // Flight scenarios (gametest/scenario): all seeds (-PscenarioSeeds, 16 by default) without the other GameTests
+        // — the scenario template in its own namespace incoming_sweep. -PscenarioOnly=<regular expression> — only
+        // matching scenarios; -PscenarioRealChunks — real chunk loading at game pace, without the reference
         scenarioSweep {
             type = 'gameTestServer'
             gameDirectory = project.file('run/scenario-sweep')
@@ -198,7 +213,7 @@ neoForge {
             systemProperty 'incoming.scenario.only', (project.findProperty('scenarioOnly') ?: '').toString()
             systemProperty 'incoming.scenario.realChunks', project.hasProperty('scenarioRealChunks').toString()
         }
-        // Записать эталон траекторий заново (зерно 0): src/devtest/resources/scenario-baseline.json
+        // Re-record the trajectory baseline (seed 0): src/devtest/resources/scenario-baseline.json
         scenarioRecord {
             type = 'gameTestServer'
             gameDirectory = project.file('run/scenario-record')
@@ -218,24 +233,27 @@ neoForge {
         }
     }
 }
-// -Xlog:gc пишет в logs/ каталога запуска, а JVM сама каталог не создаёт и не стартует без него (свежий клон, облако)
+// -Xlog:gc writes to logs/ of the run directory, and the JVM does not create that directory itself nor start without it
+// (fresh clone, cloud)
 tasks.matching { it.name == 'runClientScenario' }.configureEach { doFirst { project.file("${scenarioDir}/logs").mkdirs() } }
 tasks.matching { it.name == 'runStressServer' }.configureEach { doFirst { project.file('run/stress/server').mkdirs() } }
 neoForge.addModdingDependenciesTo(sourceSets.devtest)
-// юнит-тесты кода, который держит данные в классах Minecraft (Vec3, NBT), без запуска игры
+// unit tests of code that holds data in Minecraft classes (Vec3, NBT), without starting the game
 neoForge.addModdingDependenciesTo(sourceSets.test)
 
 dependencies {
-    // Sable: только API для компиляции; во время игры он есть в сборке
+    // Sable: only the API for compilation; during the game it is in the pack
     compileOnly "dev.ryanhcode.sable:sable-common-${minecraft_version}:${sable_version}"
-    // sable-companion (MIT): мягкая зависимость — без Sable работает встроенная заглушка
+    // sable-companion (MIT): soft dependency — without Sable the built-in stub works
     compileOnly "dev.ryanhcode.sable-companion:sable-companion-common-${minecraft_version}:${sable_companion_version}"
-    // Distant Horizons: только API для компиляции — рельеф вдали для карты наведения, если DH стоит (compat/DistantHorizons)
+    // Distant Horizons: only the API for compilation — far terrain for the aiming map if DH is installed
+    // (compat/DistantHorizons)
     compileOnly "maven.modrinth:distanthorizonsapi:${dh_api_version}"
-    // LOD Server Support (MIT): только для компиляции — рельеф вдали с сервера через его клиентское API (client/map/LssTerrain)
+    // LOD Server Support (MIT): only for compilation — far terrain from the server through its client API
+    // (client/map/LssTerrain)
     compileOnly "maven.modrinth:lod-server-support:${lss_version}"
-    // диапазон, а не ровно версия: Sable несёт тот же companion со своим диапазоном, и FML выбирает одну версию,
-    // подходящую всем, — ровно [1.6.0] не пустил бы игру с Sable, который принесёт 1.6.1
+    // a range, not an exact version: Sable carries the same companion with its own range, and FML picks one version
+    // suitable for all — exactly [1.6.0] would not let in a game with Sable that brings 1.6.1
     jarJar("dev.ryanhcode.sable-companion:sable-companion-common-${minecraft_version}") {
         version { strictly "[${sable_companion_version},2.0)"; prefer sable_companion_version }
     }
@@ -246,9 +264,9 @@ dependencies {
     testImplementation 'org.junit.jupiter:junit-jupiter'
     testImplementation 'org.mockito:mockito-core:5.14.2'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
-    // SoundAssetsTest читает sounds.json
+    // SoundAssetsTest reads sounds.json
     testImplementation 'com.google.code.gson:gson:2.10.1'
-    // та же версия, что в Veil из Sable сборки (Veil 4.3.2): ShaderSourceTest печатает шейдеры, как Veil
+    // same version as Veil in the Sable pack (Veil 4.3.2): ShaderSourceTest prints the shaders as Veil does
     testImplementation 'io.github.ocelot:glsl-processor:0.2.3'
 }
 
@@ -263,14 +281,15 @@ test {
     maxParallelForks = (project.findProperty('testForks') ?: '1') as int
 }
 
-// Порядок сборки модов для запусков из Gradle. simulated, offroad и aeronautics (всё из Create Aeronautics) в своих
-// конструкторах добавляют обратные вызовы в реестр Create (CreateRegistrateRegistrationCallback), а зависимость
-// на create у них с ordering "NONE": FML строит их параллельно с Create и друг с другом, и HashMultimap обратных
-// вызовов Registrate портится от одновременной записи. В dev (не production) Registrate тогда падает на старте:
-// «Found unused register callbacks». Переопределение зависимостей FML (dependencyOverrides в
-// config/fml.toml, штатная настройка загрузчика) ставит их строго друг за другом после Create: гонки нет, остальные
-// моды строятся параллельно. В игре хоста fml.toml не трогаем: там Registrate от этого не падает.
-def fmlDependencyOverrides = """# Пишет build.gradle перед каждым запуском (файл целиком); остальные ключи FML дополнит сам значениями по умолчанию
+// Mod load order for runs from Gradle. simulated, offroad and aeronautics (all of Create Aeronautics) in their own
+// constructors add callbacks to Create's registry (CreateRegistrateRegistrationCallback), and their dependency on
+// create has ordering "NONE": FML builds them in parallel with Create and with each other, and Registrate's
+// HashMultimap of callbacks gets corrupted by simultaneous writes. In dev (not production) Registrate then fails at
+// startup with «Found unused register callbacks». Overriding the FML dependencies (dependencyOverrides in
+// config/fml.toml, the standard loader setting) places them strictly one after another after Create: no race, and the
+// other mods still build in parallel. We do not touch fml.toml in the host's game: there Registrate does not fail
+// because of this.
+def fmlDependencyOverrides = """# Written by build.gradle before each run (the whole file); FML fills in the other keys itself with default values
 [dependencyOverrides]
 simulated = ["+create", "+sable"]
 offroad = ["+simulated"]
@@ -278,40 +297,43 @@ aeronautics = ["+simulated", "+offroad"]
 """
 def writeFmlOverrides = { File gameDir ->
     File config = new File(gameDir, 'config/fml.toml')
-    // песочница — только мод: переопределение отсутствующих модов FML показывает экраном предупреждений до главного
-    // меню, и клиент без окна на нём стоит
+    // sandbox — mod only: overriding absent FML mods shows a warning screen before the main
+    // menu, and the windowless client gets stuck on it
     if (sandbox && gameDir == project.file(scenarioDir)) {
         if (config.isFile() && config.text.startsWith(fmlDependencyOverrides.readLines().first())) config.delete()
         return
     }
-    // без Create Aeronautics в сборке запуска переопределять нечего
+    // without Create Aeronautics in the run's pack there is nothing to override
     if (!(mcModsDir.isDirectory() && mcModsDir.list().any { it.contains('aeronautics') })) return
     config.parentFile.mkdirs()
     config.text = fmlDependencyOverrides
 }
-// перед каждым запуском из Gradle (клиент, сервер, GameTest, сценарий, стенд): каталог игры — у самой задачи запуска
+// before each run from Gradle (client, server, GameTest, scenario, stand): the game directory — of the run task itself
 tasks.matching { it.name.startsWith('run') && it.hasProperty('gameDirectory') }.configureEach { task ->
     task.doFirst { writeFmlOverrides(task.gameDirectory.get().asFile) }
 }
 
-// Запуск без живого Gradle (стенд tools/stress.sh, мультиплеер tools/mp_scenario.sh): процесс Gradle держит UDP-сокет
-// блокировок файлов (DefaultFileLockCommunicator) на 0.0.0.0, и адрес ему не задать. Серверы и клиенты проверок
-// поэтому идут не задачей run*, а скриптом, который пишет эта задача: ./gradlew rigLaunch -PrigRun=runStressServer
-// -PrigOut=stress-server → build/rig/stress-server.sh (тот же java, аргументы, classpath, каталог и окружение, что
-// у задачи запуска; файлы аргументов MDG копируются: у клиентов стенда он один на всех). Gradle выходит, игра — нет.
+// Runs without a live Gradle (the stand tools/stress.sh, multiplayer tools/mp_scenario.sh): the Gradle process holds
+// a UDP socket for file locks (DefaultFileLockCommunicator) on 0.0.0.0, and its address cannot be set. So the servers
+// and clients of the checks go not as a run* task but through a script that this task writes: ./gradlew rigLaunch
+// -PrigRun=runStressServer -PrigOut=stress-server → build/rig/stress-server.sh (the same java, arguments, classpath,
+// directory and environment as the run task; MDG argument files are copied: the stand's clients share one of them).
+// Gradle exits, the game does not.
 tasks.register('rigLaunch') {
     def runName = project.findProperty('rigRun')
     def out = project.findProperty('rigOut')
     if (runName) dependsOn { tasks.named(runName as String).get().taskDependencies }
     doFirst {
-        // без имени скрипта остался бы прежний build/rig/<имя>.sh, и скрипт проверки запустил бы устаревший запуск
+        // without the script's name the old build/rig/<name>.sh would remain, and the check script would start a stale
+        // run
         if (!runName || !out) throw new GradleException('rigLaunch needs -PrigRun and -PrigOut')
     }
     doLast {
         def run = tasks.named(runName as String).get()
         File dir = layout.buildDirectory.dir('rig').get().asFile
         dir.mkdirs()
-        // @файл MDG — копия под своим именем: следующий rigLaunch того же запуска (другой клиент стенда) его перепишет
+        // MDG @file — a copy under its own name: the next rigLaunch of the same run (another stand client) will
+        // overwrite it
         def own = { String arg ->
             if (!arg.startsWith('@')) return arg
             File src = file(arg.substring(1))
@@ -319,11 +341,13 @@ tasks.register('rigLaunch') {
             copy.bytes = src.bytes
             return '@' + copy.absolutePath
         }
-        // песочница с JetBrains Runtime (INCOMING_SANDBOX_JAVA — его bin/java): горячая замена и новых полей и методов
+        // sandbox with JetBrains Runtime (INCOMING_SANDBOX_JAVA — its bin/java): hot swap of both new fields and
+        // methods
         String java = sandbox && System.getenv('INCOMING_SANDBOX_JAVA') ? System.getenv('INCOMING_SANDBOX_JAVA')
                 : run.javaLauncher.get().executablePath.asFile.absolutePath
         List<String> cmd = [java]
-        // allJvmArgs у JavaExec не несёт явных jvmArgs задачи, а в них @файл MDG (модули, --add-opens, -D запуска)
+        // allJvmArgs of JavaExec does not carry the task's explicit jvmArgs, and those hold the MDG @file (modules,
+        // --add-opens, the run's -D)
         cmd += ((run.jvmArgs ?: []) + run.allJvmArgs.findAll { !(it in (run.jvmArgs ?: [])) }).collect(own)
         cmd += ['-cp', run.classpathProvider.asPath, run.mainClass.get()]
         cmd += (run.args + run.argumentProviders.collectMany { it.asArguments() as List }).collect(own)
@@ -331,22 +355,23 @@ tasks.register('rigLaunch') {
         File gameDir = run.gameDirectory.get().asFile
         writeFmlOverrides(gameDir)
         File script = new File(dir, "${out}.sh")
-        script.text = "#!/usr/bin/env bash\n# ${runName} без Gradle: пишет ./gradlew rigLaunch (build.gradle)\n" +
+        script.text = "#!/usr/bin/env bash\n# ${runName} without Gradle: written by ./gradlew rigLaunch (build.gradle)\n" +
                 "mkdir -p ${quote(gameDir.absolutePath)}/logs && cd ${quote(gameDir.absolutePath)} || exit 1\n" +
                 "exec env ${run.environmentProperty.get().collect { k, v -> quote("${k}=${v}") }.join(' ')} ${cmd.collect(quote).join(' ')}\n"
         script.setExecutable(true)
     }
 }
 
-// Копирует моды сборки в каталог запуска: FML сам распакует вложенные jar (Flywheel, Ponder, Veil…)
+// Copies the build's mods into the run directory: FML unpacks the nested jars itself (Flywheel, Ponder, Veil…)
 def copyRuntimeMods = { String runDir ->
     tasks.register("copyRuntimeMods_${runDir}", Sync) {
-        // песочница — без Create и Sable (старт за секунды); sable-companion в dev не вшит — его jar рядом
+        // sandbox — without Create and Sable (starts in seconds); sable-companion is not embedded in dev — its jar sits
+        // next to it
         if (sandbox && runDir == 'scenario') from(configurations.sandboxMods)
         def patterns = runDir == 'scenario' ? (sandbox ? [] : runtimeModPatterns) + shaderModPatterns + dhModPatterns + voxyModPatterns + lssModPatterns
                 : runDir in ['gametest', 'scenario-sweep', 'scenario-record'] ? runtimeModPatterns + lithiumModPatterns : runtimeModPatterns
-        // без шаблонов from() взял бы весь каталог модов; шаблоны — у этого from(): в замыкании each include ушёл бы
-        // в корень задачи и отсеял бы и jar песочницы
+        // without from() patterns it would take the whole mods directory; the patterns are in this from(): in the
+        // each-closure an include would go to the task root and would filter out the sandbox jar as well
         if (patterns) from(mcModsDir, { CopySpec spec -> spec.include(patterns) } as Action<CopySpec>)
         into({ "${runDir == 'scenario' ? scenarioDir : project.findProperty(runDir + 'Dir') ?: 'run/' + runDir}/mods" })
         onlyIf { sandbox && runDir == 'scenario' || mcModsDir.isDirectory() }
@@ -368,8 +393,8 @@ tasks.matching { it.name == 'runClientScenario' }.configureEach {
 tasks.matching { it.name == 'runGameTestServer' }.configureEach { dependsOn 'copyRuntimeMods_gametest' }
 tasks.matching { it.name == 'runScenarioSweep' }.configureEach { dependsOn 'copyRuntimeMods_scenario-sweep' }
 tasks.matching { it.name == 'runScenarioRecord' }.configureEach { dependsOn 'copyRuntimeMods_scenario-record' }
-// Мир GameTest — каждый раз новый, как в CI: площадки сценариев полёта стоят на одних и тех же координатах, и рельеф,
-// аппараты и чанки прошлого прогона меняли бы полёт против эталона
+// GameTest world — new each time, as in CI: the flight-scenario pads stand at the same coordinates, and the terrain,
+// vehicles and chunks of a previous run would change the flight against the baseline
 tasks.matching { it.name in ['runGameTestServer', 'runScenarioSweep', 'runScenarioRecord'] }.configureEach { task ->
     doFirst { project.delete(new File(task.gameDirectory.get().asFile, 'world')) }
 }
@@ -390,7 +415,7 @@ var generateModMetadata = tasks.register('generateModMetadata', ProcessResources
 sourceSets.main.resources.srcDir generateModMetadata
 neoForge.ideSyncTask generateModMetadata
 
-// GPL: копия лицензии — в каждом jar, который уходит игрокам
+// GPL: a copy of the license — in each jar that goes to players
 tasks.named('jar', Jar) {
     from(file('../LICENSE'))
 }
@@ -407,7 +432,7 @@ tasks.withType(JavaCompile).configureEach {
     }
 }
 
-// Агент горячей замены песочницы эффектов (src/sandboxAgent, tools/sandbox.sh): -javaagent у клиента песочницы
+// Hot-swap agent of the effects sandbox (src/sandboxAgent, tools/sandbox.sh): -javaagent of the sandbox client
 tasks.register('sandboxAgentJar', Jar) {
     archiveBaseName = 'sandbox-agent'
     archiveVersion = ''
@@ -416,8 +441,8 @@ tasks.register('sandboxAgentJar', Jar) {
     manifest.attributes('Premain-Class': 'ua.zentix.hotswap.HotswapAgent', 'Can-Redefine-Classes': 'true')
 }
 
-// Тестовая сборка для боевого клиента (tools/prod_client.py): мод вместе со сценариями из devtest.
-// Отдельный каталог, чтобы deploy.sh и релиз никогда не взяли её вместо обычного jar.
+// Test build for the production client (tools/prod_client.py): the mod together with the scenarios from devtest.
+// A separate directory, so that deploy.sh and the release never take it instead of the regular jar.
 tasks.register('scenarioJar', Jar) {
     dependsOn tasks.named('jar')
     archiveClassifier = 'scenario'

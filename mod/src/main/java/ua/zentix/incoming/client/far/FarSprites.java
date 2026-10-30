@@ -13,76 +13,99 @@ import ua.zentix.incoming.client.render.WeaponModels;
 import java.util.Arrays;
 
 /**
- * Всё дальнее — квадратами в общий кадр слоя эффектов ({@link FxQuads}): шлейфы (лентой), клубы дыма, модели снарядов
- * (плитки атласа {@link FarModels}), огненные шары и пожары — кадрами анимации и клубами пламени, тела мельче
- * нескольких пикселей — круги (корпуса снарядов мельче модели, далёкие шары и факелы), свет — ореолы (блик и вуаль
- * вокруг вспышек, шаров и факелов, зарево). Слой сортирует их вместе с ближними частицами от
- * дальних к ближним по настоящему расстоянию, поэтому огненный шар и модель за ближним столбом дыма закрыты дымом,
- * а пусковая в десятке блоков — впереди дальних столбов.
- * Координаты — относительно камеры; дальше дальней плоскости точка переносится ближе с тем же угловым размером,
- * а слою передаётся, во сколько раз (по настоящему расстоянию он прячет дальнее за рельефом и LOD Distant Horizons).
+ * All distant things are squares in the shared frame of the effects layer ({@link FxQuads}): trails (as ribbons), smoke
+ * puffs, projectile models
+ * (atlas tiles {@link FarModels}), fireballs and fires — as animation frames and flame puffs; bodies smaller than a few
+ * pixels — as circles (projectile bodies smaller than the model, distant balls and torches); light — as halos (glare
+ * and veil
+ * around flashes, balls and torches, glow). The layer sorts them together with the near particles from
+ * far to near by true distance, so a fireball and a model behind a near smoke column are hidden by the smoke,
+ * and a launch within ten blocks is in front of the distant columns.
+ * Coordinates are relative to the camera; beyond the far plane a point is moved closer at the same angular size,
+ * and the layer is told by how many times (by true distance it hides distant things behind terrain and Distant Horizons
+ * LOD).
  * <p>
- * Цвет вершины — свет, уже умноженный на непрозрачность, альфа — сколько закрыто того, что за спрайтом. Дым и корпус
- * закрывают и светят своим цветом, раскалённое закрывает и светит, ореол только светит (альфа 0 — сложение). Дымка
- * воздуха — в непрозрачности ({@link Sight}: L = L₀·t + небо·(1 − t)).
+ * Vertex colour is light already multiplied by opacity; alpha is how much of what is behind the sprite is covered.
+ * Smoke and body
+ * cover and shine in their own colour; hot matter covers and shines; a halo only shines (alpha 0 — addition). Haze of
+ * the
+ * air is in the opacity ({@link Sight}: L = L₀·t + sky·(1 − t)).
  * <p>
- * Текстуры ({@code tools/gen_particles.py}, на листе слоя): круг {@code far/disc} — сплошной, край сглажен; ореол
- * {@code far/glow} — гауссов, без ядра; ленты — его средняя строка; огненный шар — кадры {@code fx/particle/fireball},
- * пламя — {@code fx/particle/fire}. Сколько квадрата закрывает текстура, столько света она и несёт — множители
- * {@link #DISC}, {@link #GLOW}, {@link #FIREBALL}, {@link #FIRE} переводят радиус круга того же светового потока
- * в полуразмер квадрата ({@code FarSpritesTest}).
+ * Textures ({@code tools/gen_particles.py}, on the layer's sheet): disc {@code far/disc} — solid, soft edge; halo
+ * {@code far/glow} — Gaussian, without core; ribbons — its middle row; fireball — frames {@code fx/particle/fireball},
+ * flame — {@code fx/particle/fire}. How much of the square the texture covers is how much light it carries — the
+ * factors
+ * {@link #DISC}, {@link #GLOW}, {@link #FIREBALL}, {@link #FIRE} convert the radius of a disc of the same luminous flux
+ * into the square's half-size ({@code FarSpritesTest}).
  */
 public final class FarSprites implements SmokePuffs.Out {
     /**
-     * Полуразмер квадрата на радиус круга того же потока: круг {@code far/disc} закрывает 0,632 квадрата (√(π/(4·0,632))),
-     * ореол {@code far/glow} — 0,133 (пик в середине — 1).
+     * Half-size of the square per radius of a disc of the same flux: the disc {@code far/disc} covers 0.632 of a square
+     * (√(π/(4·0.632))),
+     * halo {@code far/glow} — 0.133 (peak in the middle — 1).
      */
     public static final double DISC = 1.115, GLOW = 2.43;
     /**
-     * Полуразмер кадра огненного шара на его радиус: светящийся шар в кадре — 0,72–0,79 полуразмера (к концу бугры
-     * дыма шире); вблизи частицы берут тот же размер ({@code Explosions#fireball}). Клуб пламени закрывает 0,27 квадрата.
+     * Half-size of the fireball frame per its radius: a glowing ball in the frame is 0.72–0.79 half-size (later the
+     * smoke
+     * bumps are wider); near, particles take the same size ({@code Explosions#fireball}). A flame puff covers 0.27 of a
+     * square.
      */
     public static final double FIREBALL = 1.3, FIRE = 1.7;
     /**
-     * Огненный шар — объём: его кадр стоит на столько радиусов ближе середины, у передней половины ({@link #front}).
-     * Плоскостью через середину он сверху уходил бы ближней к глазу половиной в землю под собой (наземный шар — полусфера,
-     * середина на 0,45 радиуса над землёй: с 54° срезало бы треть шара), а настоящий купол сверху виден целиком.
+     * A fireball is a volume: its frame stands this many radii nearer than the middle, at the front half ({@link
+     * #front}).
+     * A plane through the middle would from above drop the half nearer the eye into the ground beneath it (a ground
+     * ball is a hemisphere,
+     * the middle is 0.45 radius above the ground: at 54° it would cut a third of the ball), while a real dome is seen
+     * whole from above.
      */
     public static final double BALL_FRONT = 0.5;
-    /** Тело мельче стольких пикселей (радиус) — круг: формы не видно, а свет точки верен; крупнее — кадр анимации. */
+    /**
+     * A body smaller than this many pixels (radius) is a circle: the shape is not visible, but the light of a point is
+     * right; larger — an animation frame.
+     */
     private static final double SHAPE_FROM = 2, SHAPE_FULL = 4;
     /**
-     * Блик и вуаль — свет, рассеянный в самом глазу: их квадрат переносится к глазу на столько блоков с тем же угловым
-     * размером, и ближние рельеф и постройки его не режут (иначе у края загруженного мира ореол обрывался бы прямой
-     * линией).
-     * Закрыто ли само тело: в кадре — по тому, что на экране ({@link SourceProbes}: глубина Minecraft и LOD Distant
-     * Horizons у самого источника), вне кадра — по лучам вызывающего (дальше прорисовки — по рельефу, в ней — по блокам).
+     * Glare and veil — light scattered in the eye itself: their square is moved toward the eye by this many blocks at
+     * the same
+     * angular size, and near terrain and buildings do not cut it (otherwise at the edge of a loaded world the halo
+     * would end in a
+     * straight line).
+     * Whether the body itself is covered: in the frame — by what is on screen ({@link SourceProbes}: Minecraft depth
+     * and the LOD of
+     * Distant Horizons at the source itself); outside the frame — by the caller's rays (beyond the draw distance — by
+     * terrain, within it — by blocks).
      */
     static final double EYE = 0.25;
     /**
-     * Ореол у глаза — в плоскости экрана на глубине {@link #EYE}·cos θ; сбоку (θ больше ~78°) это ближе ближней плоскости
-     * Minecraft (0,05), и квадрат срезало бы целиком. Глубина — не меньше этой.
+     * The halo at the eye — in the screen plane at depth {@link #EYE}·cos θ; at the side (θ above ~78°) that is nearer
+     * than the Minecraft near
+     * plane (0.05), and the square would be cut entirely. The depth is not less than this.
      */
     static final double EYE_DEPTH = 0.1;
-    /** Ореол в воздухе ({@link #glow}) — не ближе стольких блоков по оси взгляда. */
+    /** A halo in the air ({@link #glow}) — not nearer than this many blocks along the view axis. */
     static final double AIR_NEAR = 1.5;
-    /** Полуширина ленты на половину следа: середина {@code far/glow} поперёк закрывает 0,365 ширины. */
+    /** Half-width of a ribbon for half the trail: the middle of {@code far/glow} across covers 0.365 of the width. */
     public static final double RIBBON = 2.74;
-    /** Мягкость края у рельефа: клуб — {@link FxQuads#SOFT} полуразмера, тело — четверть радиуса. */
+    /**
+     * Softness of the edge at terrain: a puff — {@link FxQuads#SOFT} of the half-size, a body — a quarter of the
+     * radius.
+     */
     private static final float BODY_SOFT = 0.25f;
 
-    /** Модели кадра в атласе. */
+    /** Model frames in the atlas. */
     final FarModels models = new FarModels();
     private final float[] tile = new float[FarModels.OUT];
     private FxQuads out;
     private SourceProbes probes;
     private double far;
-    /** Куда смотрит камера (для глубины ореола у глаза). */
+    /** Where the camera looks (for the depth of the halo at the eye). */
     private float fx, fy, fz;
-    /** Сколько клубов, кругов, света, лент, моделей и вуалей вещества у глаза записано в этом кадре. */
+    /** How many puffs, discs, lights, ribbons, models and substance veils at the eye are recorded in this frame. */
     private final int[] counts = new int[6];
 
-    /** Новый кадр: писать в out, яркие источники — в пробы видимости probes. */
+    /** New frame: write to out, bright sources to the visibility probes probes. */
     void begin(FarView view, FxQuads out, SourceProbes probes) {
         this.out = out;
         this.probes = probes;
@@ -98,14 +121,15 @@ public final class FarSprites implements SmokePuffs.Out {
         return counts[0] + counts[1] + counts[2] + counts[3] + counts[4] + counts[5] == 0;
     }
 
-    /** Сколько чего в кадре (клубы, круги, свет, ленты, модели) — в out, без выделения памяти. */
+    /** How much of each (puffs, discs, lights, ribbons, models) is in the frame — in out, without allocating memory. */
     void counts(int[] into) {
         System.arraycopy(counts, 0, into, 0, counts.length);
     }
 
     /**
-     * Клуб дыма или пыли (кадр tex из 4×2 {@code nuke/puffs.png}) с центром (dx, dy, dz) от камеры: свой цвет
-     * (r, g, b) с непрозрачностью a (уже с дымкой воздуха).
+     * A smoke or dust puff (frame tex from the 4×2 {@code nuke/puffs.png}) centred at (dx, dy, dz) from the camera: its
+     * own colour
+     * (r, g, b) with opacity a (already with the air's haze).
      */
     public void puff(double dx, double dy, double dz, double half, float rot, int tex, float r, float g, float b, float a) {
         FxQuads.Part was = out.part(FxQuads.Part.CLUBS);
@@ -154,15 +178,20 @@ public final class FarSprites implements SmokePuffs.Out {
     }
 
     /**
-     * Вуаль вещества вокруг глаза (облако, в которое вошла камера, {@link SmokePuffs}): ровный квадрат полуразмера half лицом
-     * к камере в (dx, dy, dz) от неё — свой цвет (r, g, b) с непрозрачностью a, без мягкого края у мира (что ближе —
-     * ближе квадрата и так).
+     * Substance veil around the eye (the cloud the camera is in, {@link SmokePuffs}): a flat square of half-size half
+     * facing
+     * the camera at (dx, dy, dz) from it — its own colour (r, g, b) with opacity a, without a soft edge at the world
+     * (what is nearer —
+     * is nearer than the square anyway).
      */
     public void veil(double dx, double dy, double dz, double half, float r, float g, float b, float a) {
         veil(dx, dy, dz, half, r, g, b, a, LightTexture.FULL_BRIGHT);
     }
 
-    /** То же со светом мира {@code light} (упакованный, для карты освещения): вещество ленты следа освещает мир у глаза. */
+    /**
+     * The same with the world's light {@code light} (packed, for the light map): the substance of the trail's ribbon
+     * lights the world at the eye.
+     */
     public void veil(double dx, double dy, double dz, double half, float r, float g, float b, float a, int light) {
         if (a < 0.002f) return;
         double d = Math.sqrt(dx * dx + dy * dy + dz * dz);
@@ -210,12 +239,13 @@ public final class FarSprites implements SmokePuffs.Out {
     }
 
     /**
-     * Модель снаряда в позе pose с центром (dx, dy, dz) от камеры: плитка атласа {@link FarModels} квадратом поперёк луча
-     * на неё, закрывает и светит долю a (дымка воздуха, видимость над рельефом, переход от точки).
+     * A projectile model in pose pose centred at (dx, dy, dz) from the camera: an atlas tile {@link FarModels} as a
+     * square across the ray
+     * toward it, covers and shines the share a (air haze, visibility above terrain, transition from the point).
      *
-     * @param size  размер модели ({@code FarLook.size})
-     * @param camUp верх экрана: плитка повёрнута, как экран
-     * @return false — модели нет (атлас полон, модель вплотную к камере): нужна точка
+     * @param size  model size ({@code FarLook.size})
+     * @param camUp top of the screen: the tile is rotated as the screen is
+     * @return false — no model (atlas full, model too close to the camera): a point is needed
      */
     public boolean model(WeaponModels.Look look, ProjectilePose pose, double dx, double dy, double dz, double size, double pixel, Vector3f camUp,
                          float a) {
@@ -227,7 +257,7 @@ public final class FarSprites implements SmokePuffs.Out {
         float u0 = tile[FarModels.U0], v0 = tile[FarModels.V0], u1 = tile[FarModels.U1], v1 = tile[FarModels.V1];
         float c = Math.min(1, a), soft = tile[FarModels.HALF] * BODY_SOFT, unfold = (float) k;
         int light = LightTexture.FULL_BRIGHT;
-        // нижний левый угол — (u0, v0) атласа: низ атласа — низ плитки
+        // lower-left corner — (u0, v0) of the atlas: the bottom of the atlas is the bottom of the tile
         out.modelTiles(true);
         out.quad((float) d);
         out.vertex(x - rx - ux, y - ry - uy, z - rz - uz, u0, v0, c, c, c, c, soft, unfold, light, 0);
@@ -240,26 +270,33 @@ public final class FarSprites implements SmokePuffs.Out {
     }
 
     /**
-     * Круг радиуса radius (того же потока: квадрат — в {@link #DISC} раз больше) своего цвета с непрозрачностью a поверх
-     * того, что за ним: корпус снаряда, огненный шар, ядро вспышки.
+     * A disc of radius radius (of the same flux: the square is {@link #DISC} times larger) of its colour with opacity a
+     * over
+     * what is behind it: a projectile body, a fireball, a flash core.
      */
     public void disc(double dx, double dy, double dz, double radius, float r, float g, float b, float a) {
         if (billboard(dx, dy, dz, radius * DISC, 0, FxAtlas.disc(), r * a, g * a, b * a, a, (float) radius * BODY_SOFT)) counts[1]++;
     }
 
     /**
-     * Ореол в воздухе, который несёт свет круга радиуса radius яркостью a (пик в середине — a): складывается с тем, что
-     * за ним — зарево из-за гребня и на облаках. Светится воздух глубиной deep перед (dx, dy, dz): квадрат стоит там, где
-     * этот воздух начинается, — что ближе, его закрывает, а что внутри — закрывает плавно (мягкий край по расстоянию до
-     * мира, с LOD DH). На месте источника квадрат резал бы прямо по себе постройки на том же расстоянии: ночью зарево
-     * из-за гребня шириной в экран ложилось бы на дома пятнами и полосами, а на LOD DH, которых аппаратная глубина не
-     * видит, — поверх. Блик и вуаль — в глазу ({@link #EYE}).
+     * A halo in the air that carries the light of a disc of radius radius with brightness a (peak in the middle — a):
+     * adds to what
+     * is behind it — glow from over a ridge and on clouds. Air at depth deep in front of (dx, dy, dz) glows: the square
+     * stands where
+     * this air begins — what is nearer, it covers; what is inside, it covers smoothly (soft edge by distance to the
+     * world, with DH LOD).
+     * At the source's place the square would cut straight through the buildings at the same distance: at night the glow
+     * from over a
+     * ridge the width of the screen would lie on houses in patches and stripes, and on DH LODs, which the hardware
+     * depth does not see, it would lie over them.
+     * Glare and veil — at the eye ({@link #EYE}).
      */
     public void glow(double dx, double dy, double dz, double radius, double deep, float r, float g, float b, float a) {
         if (r * a + g * a + b * a < 0.006f) return;
         double d = Math.sqrt(dx * dx + dy * dy + dz * dz);
         double cos = (dx * fx + dy * fy + dz * fz) / Math.max(d, 1e-9);
-        // не ближе, чем у камеры гаснет любой квадрат слоя (fx.fsh: полностью виден с 1,5 блока по оси взгляда)
+        // no nearer than the camera, any square of the layer fades (fx.fsh: fully visible from 1.5 blocks along the
+        // view axis)
         double front = Math.max(d - deep, AIR_NEAR / Math.max(cos, 0.1));
         FxQuads.Part was = out.part(FxQuads.Part.GLARE);
         out.glowShape(true);
@@ -276,15 +313,18 @@ public final class FarSprites implements SmokePuffs.Out {
     }
 
     /**
-     * Яркое тело с центром (dx, dy, dz) от камеры радиуса radius, яркостью seen против белого экрана (с привыканием глаза
-     * и воздухом), цвета (r, g, b) ({@link Sight#light}): ядро — свой свет поверх того, что за ним (пересвет — к белому,
-     * тусклее белого — гаснет и тает: остывший шар уже стал дымом), блик и вуаль — ореолами того же цвета.
+     * A bright body centred at (dx, dy, dz) from the camera with radius radius, brightness seen against the white
+     * screen (with eye adaptation
+     * and air), colours (r, g, b) ({@link Sight#light}): the core — its own light over what is behind it (overexposure
+     * goes to white,
+     * dimmer than white — fades and melts: a cooled ball is already smoke), glare and veil — halos of the same colour.
      *
-     * @param t     доля света, дошедшая через воздух: насколько тело закрывает то, что за ним
-     * @param w     доля ядра (видимое над рельефом, переход к ближней картинке)
-     * @param glare доля блика и вуали: их глубина не режет, поэтому закрытое по лучам вызывающего — здесь (в кадре — ещё
-     *              и проба {@link SourceProbes})
-     * @param out   числа {@link Sight#light} (5) — для лога
+     * @param t     share of light that came through the air: how much the body covers what is behind it
+     * @param w     share of the core (visible above terrain, transition to the near picture)
+     * @param glare share of glare and veil: their depth does not cut, so what is covered along the caller's rays is
+     * here (in the frame, also
+     *              the {@link SourceProbes} probe)
+     * @param out   numbers of {@link Sight#light} (5) — for the log
      */
     public void light(double dx, double dy, double dz, double radius, double seen, double t, double pixel, float r, float g, float b, double w,
                       double glare, double[] out) {
@@ -295,18 +335,23 @@ public final class FarSprites implements SmokePuffs.Out {
     }
 
     /**
-     * Яркое тело с формой, как {@link #light}: крупнее {@link #SHAPE_FULL} пикселей — картинкой полуразмера half (кадр
-     * огненного шара, клуб пламени: цвет — в ней), мельче {@link #SHAPE_FROM} — кругом с тем же светом, между ними —
-     * смесь. Тело и свет в глазу — каждый своей долей: вблизи тело рисуют частицы, а блик и вуаль — здесь.
+     * A bright body with a shape, as {@link #light}: larger than {@link #SHAPE_FULL} pixels — a picture of half-size
+     * half (a fireball frame,
+     * a flame puff: the colour is in it); smaller than {@link #SHAPE_FROM} — a disc with the same light; between them —
+     * a mix.
+     * The body and the light at the eye — each with its own share: up close the body is drawn by particles, and glare
+     * and veil here.
      *
-     * @param radius радиус светящегося тела сейчас (свет, блик, вуаль, точка), блоков
-     * @param half   полуразмер картинки, блоков (растёт ли тело — в её кадрах)
-     * @param mix    смесь кадра огня со следующим (один фрагмент, с умноженной альфой)
-     * @param body   доля тела (видимое над рельефом, переход к частицам, таяние)
-     * @param glare  доля блика и вуали
-     * @param shown  тело на экране в картинке (доля белого): блик и вуаль не ярче — остывший в сажу шар не слепит
-     * @param hdr    во сколько раз тело ярче своей картинки на экране (кадр огня показан своей экспозицией): свечение
-     *               ({@code FxBloom}) берёт пересвет, не больше белой точки
+     * @param radius radius of the glowing body now (light, glare, veil, point), blocks
+     * @param half   half-size of the picture, blocks (whether the body grows — in its frames)
+     * @param mix    mix of the fire frame with the next (one fragment, with multiplied alpha)
+     * @param body   share of the body (visible above terrain, transition to particles, fading)
+     * @param glare  share of glare and veil
+     * @param shown  the body on screen in the picture (share of white): glare and veil are not brighter — a ball cooled
+     * to soot does not dazzle
+     * @param hdr    how many times the body is brighter than its picture on screen (the fire frame is shown at its own
+     * exposure): glow
+     *               ({@code FxBloom}) takes the overexposure, not more than the white point
      */
     public void shaped(double dx, double dy, double dz, double radius, FxAtlas.Sprite sprite, double half, float mix, double seen, double t, double pixel,
                        float r, float g, float b, double body, double glare, double shown, double hdr, double[] out) {
@@ -315,7 +360,8 @@ public final class FarSprites implements SmokePuffs.Out {
         double shape = smoothstep(SHAPE_FROM, SHAPE_FULL, radius / Math.max(d * pixel, 1e-12));
         if (shape < 1) core(dx, dy, dz, out, t, r, g, b, body * (1 - shape));
         float a = (float) (t * body * shape);
-        // огонь кадра светится (FxBloom: ореол — по форме огня, с пересветом модели против кадра)
+        // the fire frame glows (FxBloom: the halo follows the fire's shape, with the model's overexposure against the
+        // frame)
         FxQuads.Part was = this.out.part(FxQuads.Part.FIRE);
         this.out.fireballMix(mix);
         this.out.emission((float) Math.max(1, hdr));
@@ -326,19 +372,21 @@ public final class FarSprites implements SmokePuffs.Out {
         glare(dx, dy, dz, radius, out, seen, r, g, b, glare, shown);
     }
 
-    /** У запечённого термика есть верх: случайный поворот шара направлял бы пламя вбок и вниз. */
+    /** A baked thermal has a top: a random rotation of the ball would point the flame sideways and down. */
     static float fireballRotation() {
         return 0;
     }
 
     /**
-     * Блик и вуаль яркого тела ({@link #light}) без самого тела: тело рисует объём (огненный шар ядерного удара —
-     * в проходе пелены, {@code fx_pall}), свет в глазу — здесь, с пробой видимости тела ({@link SourceProbes}: мир,
-     * пелена и стена пыли, грибы перед ним).
+     * Glare and veil of a bright body ({@link #light}) without the body itself: the body is drawn by the volume (a nuke
+     * fireball —
+     * in the pall pass, {@code fx_pall}); the light at the eye is here, with the body's visibility probe ({@link
+     * SourceProbes}: world,
+     * pall and dust wall, mushrooms in front of it).
      *
-     * @param seen  яркость тела против белого экрана (с привыканием глаза и воздухом)
-     * @param shown тело на экране (доля белого): блик и вуаль не ярче
-     * @param out   числа {@link Sight#light} (5)
+     * @param seen  brightness of the body against the white screen (with eye adaptation and air)
+     * @param shown the body on screen (share of white): glare and veil are not brighter
+     * @param out   numbers of {@link Sight#light} (5)
      */
     public void eyeLight(double dx, double dy, double dz, double radius, double seen, double pixel, float r, float g, float b, double shown,
                          double[] out) {
@@ -347,14 +395,16 @@ public final class FarSprites implements SmokePuffs.Out {
     }
 
     /**
-     * Ядро {@link #light} кругом: свой свет поверх того, что за ним; пересвет — к белому, тусклее белого — темнее в линейном
-     * свете и на экран в sRGB ({@link Sight#onScreen}, как струя и языки пламени вблизи: на 0,8 прорисовки без скачка) и тает.
+     * The core of {@link #light} as a disc: its own light over what is behind it; overexposure goes to white, dimmer
+     * than white — darker in linear
+     * light and to the screen in sRGB ({@link Sight#onScreen}, as a jet and flame tongues up close: at 0.8 of the draw
+     * distance without a jump) and melts.
      */
     private void core(double dx, double dy, double dz, double[] o, double t, float r, float g, float b, double w) {
         double s = o[2];
         float[] c = Sight.onScreen(r, g, b, s, (float) w);
         float a = (float) (o[1] * t * Math.min(1, 4 * s) * w);
-        // светится (FxBloom) со своим пересветом: экран показал его белым
+        // glows (FxBloom) with its own overexposure: the screen showed it white
         FxQuads.Part was = out.part(FxQuads.Part.FIRE);
         out.emission((float) Math.max(1, s));
         if (billboard(dx, dy, dz, o[0] * DISC, 0, FxAtlas.disc(), c[0], c[1], c[2], a, (float) (o[0] * BODY_SOFT))) counts[1]++;
@@ -363,8 +413,10 @@ public final class FarSprites implements SmokePuffs.Out {
     }
 
     /**
-     * Блик и вуаль {@link #light} тела радиуса radius ореолами его цвета у самого глаза ({@link #EYE}), не ярче тела на
-     * экране shown: доля w — сколько тела открыто по лучам вызывающего, в кадре — ещё и проба тела ({@link SourceProbes}).
+     * Glare and veil of {@link #light} of a body with radius radius as halos of its colour at the eye itself ({@link
+     * #EYE}), not brighter than the body on
+     * the screen shown: share w — how much of the body is open along the caller's rays; in the frame — also the body's
+     * probe ({@link SourceProbes}).
      */
     private void glare(double dx, double dy, double dz, double radius, double[] o, double seen, float r, float g, float b, double w, double shown) {
         if (w <= 0) return;
@@ -376,8 +428,9 @@ public final class FarSprites implements SmokePuffs.Out {
     }
 
     /**
-     * Ореол {@link #glow}, перенесённый к глазу: те же лучи от глаза, сортировка — по настоящему расстоянию; глубина —
-     * не меньше {@link #EYE_DEPTH} (сбоку — дальше от глаза); виден, сколько видно источника с пробой probe.
+     * A halo {@link #glow} moved to the eye: the same rays from the eye, sorted by true distance; depth
+     * not less than {@link #EYE_DEPTH} (at the side — farther from the eye); visible as far as the source is seen
+     * through the probe probe.
      */
     private void eye(double dx, double dy, double dz, double radius, float r, float g, float b, float a, int probe) {
         if (r * a + g * a + b * a < 0.006f) return;
@@ -403,18 +456,25 @@ public final class FarSprites implements SmokePuffs.Out {
     }
 
     /**
-     * Отрезок шлейфа лентой лицом к камере: от (ax..) до (bx..), полуширины (уже с {@link #RIBBON}), непрозрачности и
-     * свет мира концов (упакованный, для карты освещения), свой цвет. Поперёк ленты — перпендикуляр к отрезку и к лучу
-     * зрения (на любую его точку — тот же); joint на входе — поперёк у конца a, общий с прошлым отрезком той же ленты
-     * (NaN в [0] — нет: по этому отрезку), на выходе — поперёк у конца b.
+     * A segment of a trail as a ribbon facing the camera: from (ax..) to (bx..), half-widths (already with {@link
+     * #RIBBON}), opacity and
+     * the world light of the ends (packed, for the light map), its own colour. Across the ribbon — a perpendicular to
+     * the segment and to the view
+     * ray (any point on it gives the same); joint on input — across at end a, common with the previous segment of the
+     * same ribbon
+     * (NaN in [0] — none: by this segment), on output — across at end b.
      * <p>
-     * Смотришь вдоль отрезка — трубка дыма видна с торца: на экране она короче своей ширины, и лента вырождается —
-     * перпендикуляр к почти параллельным отрезку и лучу случаен, соседние отрезки ложатся веером полос с прямым краем
-     * (у сопла их ещё и освещает факел). Видно же сечение трубки — круг её ширины, а толща вдоль взгляда — длина отрезка
-     * против ширины. Короче ширины на экране отрезок рисуется кругом (ореол того же следа) этой толщи, длиннее —
-     * лентой, между — плавно ({@link #endOn}).
+     * Looking along the segment, the smoke tube is seen end-on: on screen it is shorter than its width, and the ribbon
+     * degenerates —
+     * the perpendicular to a segment and a ray almost parallel is random; neighbouring segments lie in a fan of bands
+     * with a straight edge
+     * (near the nozzle they are also lit by the torch). But the cross-section of the tube is seen — a disc of its
+     * width, while the thickness along the view is the segment's length
+     * against its width. Shorter than the width on screen, the segment is drawn as a disc (the halo of the same trail)
+     * of that thickness; longer —
+     * as a ribbon; between, smoothly ({@link #endOn}).
      *
-     * @return отрезок записан лентой (joint — новый)
+     * @return the segment is written as a ribbon (joint — new)
      */
     public boolean ribbon(double ax, double ay, double az, double halfA, float alphaA, int lightA, double bx, double by, double bz, double halfB,
                           float alphaB, int lightB, float r, float g, float b, float[] joint) {
@@ -448,13 +508,13 @@ public final class FarSprites implements SmokePuffs.Out {
 
     private static final RibbonShape SHAPE = new RibbonShape();
 
-    /** Вуаль «глаз в трубке» и торец трубки кругом ({@link RibbonShape}), если они есть. */
+    /** The "eye in the tube" veil and the tube's end as a disc ({@link RibbonShape}), if any. */
     private void emitVeilAndCap(RibbonShape q, float r, float g, float b, int lightA) {
         if (q.veil > 0.004f) veil(fx * VEIL_AT, fy * VEIL_AT, fz * VEIL_AT, VEIL_AT * 4, Math.min(1, r), Math.min(1, g), Math.min(1, b), q.veil, lightA);
         if (q.capAlpha > 0) {
             float k = q.capAlpha;
             out.glowShape(true);
-            // мягкость края у мира — в настоящих блоках, как у всех квадратов (halfW — в перенесённых ближе)
+            // softness of the edge at the world — in real blocks, as for all squares (halfW — in those moved nearer)
             out.billboard(q.mx, q.my, q.mz, (float) (0.5 * (q.da + q.db)), (float) (q.halfW * GLOW), 0, FxAtlas.glow(), Math.min(1, r) * k,
                     Math.min(1, g) * k, Math.min(1, b) * k, k, (float) q.softCap, (float) (0.5 * (q.ka + q.kb)), lightA, 0);
             out.glowShape(false);
@@ -463,17 +523,23 @@ public final class FarSprites implements SmokePuffs.Out {
     }
 
     /**
-     * Что нарисует отрезок ленты ({@link #ribbon}) — одна геометрия у рисования, плана кадра ({@code SmokePuffs}: заливка ленты
-     * входит в бюджет) и проверок: концы (перенесены ближе, {@link FarDraw#fold}), поперечники у концов, полуширины,
-     * вуаль «глаз в трубке» и круг торца с их непрозрачностью, непрозрачности полосы; {@link #set} — ляжет ли полоса.
+     * What the ribbon segment ({@link #ribbon}) will draw — one geometry for drawing, the frame's plan ({@code
+     * SmokePuffs}: filling the ribbon
+     * is within the budget) and checks: ends (moved nearer, {@link FarDraw#fold}), cross-sections at the ends,
+     * half-widths,
+     * the "eye in the tube" veil and the disc of the end with their opacity, the strip's opacities; {@link #set} —
+     * whether the strip will be laid.
      */
     static final class RibbonShape {
         float x0, y0, z0, x1, y1, z1, mx, my, mz, px, py, pz, nx, ny, nz, ha, hb, alphaA, alphaB, veil, capAlpha;
         double da, db, ka, kb, halfW, softCap;
-        /** Отрезок целиком торцом (круг без полосы): поперечник у b — нет. */
+        /** The segment entirely end-on (a disc without a strip): no cross-section at b. */
         boolean cap;
 
-        /** Геометрия отрезка от (ax..) до (bx..) при взгляде (fx, fy, fz) и переносе far; joint — поперёк у a (не меняется). */
+        /**
+         * Geometry of the segment from (ax..) to (bx..) when looking at (fx, fy, fz) with the move far; joint — across
+         * at a (does not change).
+         */
         boolean set(double far, float fx, float fy, float fz, double ax, double ay, double az, double halfA, float alphaA, double bx, double by,
                     double bz, double halfB, float alphaB, float[] joint) {
             veil = capAlpha = 0;
@@ -499,29 +565,35 @@ public final class FarSprites implements SmokePuffs.Out {
             ny = tz * mx - tx * mz;
             nz = tx * my - ty * mx;
             float len = (float) Math.sqrt(nx * nx + ny * ny + nz * nz);
-            // длина отрезка на экране (поперёк луча к его середине) против его ширины: торцом — круг
+            // length of the segment on screen (across the ray to its midpoint) against its width: end-on — a disc
             double seg = Math.sqrt(tx * tx + ty * ty + tz * tz), across = len / Math.max(Math.sqrt(mx * mx + my * my + mz * mz), 1e-9);
-            // глаз в самой трубке (ближе полуширины к оси отрезка, с полуширины — плавно): лента — плоскость через глаз; её
-            // вещество вокруг глаза — вуалью: толща по взгляду — путь в трубке (длина отрезка или ширина на синус угла к нему)
-            // в ширинах
+            // the eye in the tube itself (nearer than the half-width to the segment's axis, from the half-width —
+            // smoothly): the ribbon is a plane through the eye; its
+            // substance around the eye — as a veil: thickness along the view — the path in the tube (the segment's
+            // length or its width times the sine of the angle to it)
+            // in widths
             double hw = 0.5 * (halfA * ka + halfB * kb) / RIBBON, gap = distance(x0, y0, z0, tx, ty, tz);
             double inside = 1 - smoothstep(0.5 * hw, hw, gap);
             if (inside > 0) {
                 double sin = Math.sqrt(Math.max(0, 1 - sq((tx * fx + ty * fy + tz * fz) / Math.max(seg, 1e-9))));
                 double path = Math.min(seg, 2 * hw / Math.max(sin, 0.1));
                 double a = 0.5 * (Math.min(1, this.alphaA) + Math.min(1, this.alphaB));
-                // толща — путь этого отрезка в ширинах, без пола: у соседних отрезков пути складываются в настоящий путь взгляда
+                // thickness — the path of this segment in widths, without the floor: for neighbouring segments the
+                // paths add up to the true view path
                 veil = (float) (inside * (1 - Math.pow(1 - Math.min(a, 0.999), path / (2 * Math.max(hw, 1e-6)))));
                 this.alphaA *= (float) (1 - inside);
                 this.alphaB *= (float) (1 - inside);
                 if (this.alphaA < 0.002f && this.alphaB < 0.002f) return false;
             }
-            // торцом — только когда отрезок и луч почти параллельны (sin до 0,35, к 0,5 — плавно к ленте): сбоку короткий отрезок
-            // широкого старого следа — лента, иначе диски соседних отрезков ложились бы друг на друга и густили след
+            // end-on — only when the segment and the ray are almost parallel (sin up to 0.35, toward 0.5 — smoothly to
+            // the ribbon): sideways a short segment
+            // of a wide old trail is a ribbon, otherwise the discs of neighbouring segments would lie over each other
+            // and thicken the trail
             double tilt = Math.max(0, Math.min(1, (across / Math.max(seg, 1e-9) - 0.35) / 0.15));
             double side = Math.max(endOn(across, 0.5 * (halfA * ka + halfB * kb) / RIBBON), tilt * tilt * (3 - 2 * tilt));
             if (side < 1) {
-                // торец трубки: круг её ширины, толща вдоль взгляда — длина отрезка в ширинах (непрозрачность ленты — поперёк)
+                // end of the tube: a disc of its width, thickness along the view — the segment's length in widths (the
+                // ribbon's opacity — across)
                 halfW = 0.5 * (halfA * ka + halfB * kb) / RIBBON;
                 softCap = 0.5 * (halfA + halfB) / RIBBON;
                 double a = 0.5 * (Math.min(1, this.alphaA) + Math.min(1, this.alphaB));
@@ -552,8 +624,10 @@ public final class FarSprites implements SmokePuffs.Out {
         }
 
         /**
-         * Сколько экранов зальют квадраты отрезка во взгляде view: вуаль «глаз в трубке» (квадрат у глаза), круг торца,
-         * полоса ({@code drawn} — {@link #set} вернул true) — каждый по своим вершинам на экране ({@code SmokePuffs.polygonFill}).
+         * How many screens the segment's squares fill in the view view: the "eye in the tube" veil (square at the eye),
+         * the disc of the end,
+         * the strip ({@code drawn} — {@link #set} returned true) — each by its own vertices on screen ({@code
+         * SmokePuffs.polygonFill}).
          */
         double fill(FarView view, boolean drawn) {
             double f = 0;
@@ -584,13 +658,19 @@ public final class FarSprites implements SmokePuffs.Out {
     }
 
     /**
-     * Светящаяся полоса — струя факела вблизи ({@code PlumeRenderer}): углы a, b — у одного конца, c, d — у другого (от
-     * камеры), свет этих концов (на экране, с пересветом к белому, умноженный на долю). Поперёк — профиль ореола
-     * {@code far/glow} (мягкий край, как у смешения на кромке струи), квадрат шире в {@link #STRIP_CROSS} раза: свет поперёк
-     * тот же, что у ровной полосы этой ширины (с кругом {@code far/disc} край был жёстким, кадры F6). Только светит (альфа 0):
-     * что за ней, остаётся видно. Сортируется по ключу key (у всех кусков одной струи — один: её ближняя точка минус клубы у оси):
-     * дым своего выхлопа ложится под огонь, а не между его кусками, дым ближе — поверх. Светится (свечение {@code FxBloom}):
-     * hdr0, hdr1 — яркость концов против белого экрана до среза ({@link Sight#onScreen}).
+     * A glowing strip — a torch's jet up close ({@code PlumeRenderer}): corners a, b — at one end, c, d — at the other
+     * (from the
+     * camera), the light of these ends (on screen, with overexposure to white, multiplied by the share). Across — the
+     * profile of the halo
+     * {@code far/glow} (soft edge, like blending at a jet's edge), the square is wider by {@link #STRIP_CROSS} times:
+     * the light across is
+     * the same as for a flat strip of this width (with the disc {@code far/disc} the edge was hard, F6 frames). Only
+     * shines (alpha 0):
+     * what is behind it stays visible. Sorted by key key (all pieces of one jet have one: its nearest point minus the
+     * puffs at the axis):
+     * the smoke of its exhaust lies under the fire, not between its pieces; nearer smoke — over it. Glows (the {@code
+     * FxBloom} glow):
+     * hdr0, hdr1 — brightness of the ends against the white screen before the clip ({@link Sight#onScreen}).
      */
     public void glowStrip(Vector3f a, Vector3f b, Vector3f c, Vector3f d, float r0, float g0, float b0, float r1, float g1, float b1, float soft,
                           float key, float hdr0, float hdr1) {
@@ -621,12 +701,14 @@ public final class FarSprites implements SmokePuffs.Out {
     }
 
     /**
-     * Во сколько раз полоса {@code far/glow} шире ровной того же света поперёк: середина круга {@code far/disc} поперёк
-     * закрывает ~0,93 ширины, ореола exp(−(u/0,42)²) — 0,42·√π/2 ≈ 0,372 (доля ширины, не интеграл по ней), ≈ 2,5.
+     * How many times the {@code far/glow} strip is wider than a flat one of the same light across: the middle of the
+     * disc {@code far/disc} across
+     * covers ~0.93 of the width, the halo exp(−(u/0.42)²) — 0.42·√π/2 ≈ 0.372 (share of the width, not an integral over
+     * it), ≈ 2.5.
      */
     static final float STRIP_CROSS = (float) (0.93 / (0.42 * Math.sqrt(Math.PI) / 2));
 
-    /** Отрезок p–q поперёк струи — шире в {@link #STRIP_CROSS} раза от своей середины. */
+    /** A segment p–q across the jet — wider by {@link #STRIP_CROSS} times than its middle. */
     private static void widen(Vector3f p, Vector3f q) {
         float mx = 0.5f * (p.x + q.x), my = 0.5f * (p.y + q.y), mz = 0.5f * (p.z + q.z);
         p.set(mx + (p.x - mx) * STRIP_CROSS, my + (p.y - my) * STRIP_CROSS, mz + (p.z - mz) * STRIP_CROSS);
@@ -634,8 +716,10 @@ public final class FarSprites implements SmokePuffs.Out {
     }
 
     /**
-     * Светящийся круг радиуса radius лицом к камере (сечение струи факела с торца, {@code PlumeRenderer}): свет (r, g, b)
-     * на экране, только светит; hdr — его яркость против белого экрана до среза (свечение {@code FxBloom}).
+     * A glowing disc of radius radius facing the camera (a cross-section of a torch's jet end-on, {@code
+     * PlumeRenderer}): light (r, g, b)
+     * on screen, it only shines; hdr — its brightness against the white screen before the clip (the {@code FxBloom}
+     * glow).
      */
     public void glowDisc(double dx, double dy, double dz, double radius, float r, float g, float b, float soft, float hdr) {
         FxQuads.Part was = out.part(FxQuads.Part.FIRE);
@@ -646,10 +730,14 @@ public final class FarSprites implements SmokePuffs.Out {
     }
 
     /**
-     * Светящийся круг в своей плоскости (срез горячего сопла, {@code PlumeRenderer}): центр c от камеры, a и b — его
-     * радиусы по двум осям плоскости (круг {@code far/disc} того же потока, квадрат — в {@link #DISC} раз больше); сбоку
-     * он сходит в отрезок, как настоящий срез. Свет (r, g, bl) на экране, только светит; без мягкости у рельефа: за
-     * срезом в сантиметрах — сам корпус. Сортируется по ключу key; hdr — яркость против белого экрана до среза (свечение
+     * A glowing disc in its plane (a cut of a hot nozzle, {@code PlumeRenderer}): centre c from the camera, a and b —
+     * its
+     * radii along the two axes of the plane (the disc {@code far/disc} of the same flux; the square is {@link #DISC}
+     * times larger); at the side
+     * it degenerates into a segment, like a real cut. Light (r, g, bl) on screen, it only shines; without softness at
+     * terrain: beyond the
+     * cut, centimetres away, is the body itself. Sorted by key key; hdr — brightness against the white screen before
+     * the clip (the glow
      * {@code FxBloom}).
      */
     public void glowPlate(Vector3f c, Vector3f a, Vector3f b, float r, float g, float bl, float key, float hdr) {
@@ -677,10 +765,13 @@ public final class FarSprites implements SmokePuffs.Out {
         out.vertex(x * f, y * f, z * f, u, v, r, g, bl, 0, 0, f, LightTexture.FULL_BRIGHT, 0);
     }
 
-    /** Вуаль трубки следа вокруг глаза — на столько блоков перед ним (как у облаков, {@link SmokePuffs#VEIL_AT}). */
+    /**
+     * The veil of the trail's tube around the eye — this many blocks in front of it (as for clouds, {@link
+     * SmokePuffs#VEIL_AT}).
+     */
     static final double VEIL_AT = SmokePuffs.VEIL_AT;
 
-    /** Расстояние от глаза (начало координат) до отрезка от (x0, y0, z0) длиной (tx, ty, tz). */
+    /** Distance from the eye (the origin) to a segment from (x0, y0, z0) of length (tx, ty, tz). */
     static double distance(double x0, double y0, double z0, double tx, double ty, double tz) {
         double t2 = tx * tx + ty * ty + tz * tz;
         double u = t2 < 1e-12 ? 0 : Math.max(0, Math.min(1, -(x0 * tx + y0 * ty + z0 * tz) / t2));
@@ -693,34 +784,37 @@ public final class FarSprites implements SmokePuffs.Out {
     }
 
     /**
-     * Доля отрезка шлейфа, что рисуется лентой, при его длине на экране across (поперёк луча зрения, блоки на месте) и
-     * полуширине трубки halfWidth: длиннее двух ширин — вся, короче ширины — круг торца ({@link #ribbon}), между — плавно.
+     * Share of a trail segment drawn as a ribbon, at its length on screen across (across the view ray, blocks in place)
+     * and the
+     * half-width of the tube halfWidth: longer than two widths — all of it; shorter than the width — a disc of the end
+     * ({@link #ribbon}), between — smoothly.
      */
     static double endOn(double across, double halfWidth) {
         double u = Math.max(0, Math.min(1, (across / Math.max(2 * halfWidth, 1e-9) - 1)));
         return u * u * (3 - 2 * u);
     }
 
-    /** Квадрат: свет (r, g, b) уже умножен на непрозрачность a; ни света, ни заслона — не пишется. */
+    /** Square: light (r, g, b) already multiplied by opacity a; with no light and no cover — it is not written. */
     private boolean billboard(double dx, double dy, double dz, double half, float rot, FxAtlas.Sprite sprite, float r, float g, float b, float a,
                               float soft) {
         return billboard(dx, dy, dz, half, rot, sprite, r, g, b, a, soft, 0);
     }
 
-    /** Квадрат с тем же угловым размером, перенесённый на {@code ahead} блоков ближе к глазу ({@link #front}). */
+    /** A square of the same angular size moved {@code ahead} blocks nearer the eye ({@link #front}). */
     private boolean billboard(double dx, double dy, double dz, double half, float rot, FxAtlas.Sprite sprite, float r, float g, float b, float a,
                               float soft, double ahead) {
         if (a < 0.002f && r + g + b < 0.006f) return false;
         double d = Math.sqrt(dx * dx + dy * dy + dz * dz), shift = front(d, ahead), unfold = FarDraw.fold(d * shift, far), k = shift * unfold;
-        // цвет вершины — байт: больше 1 переполнился бы
+        // the vertex colour is a byte: more than 1 would overflow
         out.billboard((float) (dx * k), (float) (dy * k), (float) (dz * k), (float) d, (float) (half * k), rot, sprite, Math.min(1, r), Math.min(1, g),
                 Math.min(1, b), Math.min(1, a), soft, (float) unfold, LightTexture.FULL_BRIGHT, 0);
         return true;
     }
 
     /**
-     * Во сколько раз ближе к глазу поставить квадрат на расстоянии d, чтобы он стоял на ahead блоков ближе, с тем же
-     * угловым размером (размер × то же число); не ближе {@link #AIR_NEAR}, у самого глаза — на месте.
+     * How many times nearer to the eye to place a square at distance d so that it stands ahead blocks nearer, with the
+     * same
+     * angular size (size × the same number); not nearer than {@link #AIR_NEAR}, at the eye itself — in place.
      */
     public static double front(double d, double ahead) {
         if (ahead <= 0 || d <= AIR_NEAR) return 1;

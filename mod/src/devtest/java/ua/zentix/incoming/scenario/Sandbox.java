@@ -61,89 +61,108 @@ import java.util.Optional;
 import java.util.stream.Stream;
 
 /**
- * Песочница эффектов (сценарий клиента {@code sandbox}, tools/sandbox.sh): клиент только с модом (по желанию — Iris и
- * шейдерпак хоста) в плоском мире; эффект — взрыв, пуск, полёт, пожар — играется командой за секунды, без полёта
- * через полкарты, а кадры на заданные секунды от его начала и звук пишутся в {@code fx/out/<имя>/}. Команды —
- * {@link SandboxCommand}: в чате {@code /fx …} (клиентская команда, есть только в этом сценарии) или файлами
- * {@code fx/inbox/*.cmd} от скрипта (итог — рядом, {@code *.done}). Клиент не выходит сам: код меняется горячей
- * заменой (агент {@code ua.zentix.hotswap.HotswapAgent}), ресурсы — {@code fx reload}.
+ * Effects sandbox (client scenario {@code sandbox}, tools/sandbox.sh): a client with only the mod (optionally Iris and
+ * the host's shaderpack) in a flat world; an effect — blast, launch, flight, fire — is played by a command in seconds,
+ * without flying across half the map; frames at set seconds from its start, and sound, are written to {@code
+ * fx/out/<name>/}. Commands — {@link SandboxCommand}: in chat {@code /fx …} (a client command, present only in this
+ * scenario) or as files {@code fx/inbox/*.cmd} from a script (the result — next to it, {@code *.done}). The client does
+ * not exit by itself: code changes by hot swap (agent {@code ua.zentix.hotswap.HotswapAgent}), resources — {@code fx
+ * reload}.
  * <p>
- * Мир — плоский (коренная порода, 124 камня, 3 земли, трава; верх травы — {@link #GROUND}), равнины без построек, вечный
- * полдень без погоды и мобов: одинаковый каждый запуск, и место нового настоящего взрыва ({@code real}, {@code nuke}) —
- * та же земля, что у прежнего.
+ * The world is flat (bedrock, 124 stone, 3 dirt, grass; top of the grass — {@link #GROUND}), plains without buildings,
+ * eternal noon without weather or mobs: the same on every run, and the site of a new real blast ({@code real}, {@code
+ * nuke}) — the same ground as the previous one.
  * <p>
- * Ядерка у камеры ({@code nuke <кт> [air|ground] near [м]}) — то, что снимает сценарий {@code debris} (ClientScenario),
- * за секунды: на новом месте дома и дубы той же раскладки, подрыв в {@code м} к северу, время эффекта — от прихода фронта
- * к домам. Волна — та же, что у сценариев клиента (1,0 скорости звука, {@code TestScale}): у 15 кт фронт доходит до
- * домов в 2 км за ~4 с игры. Отличия от сценария: дубы — ровные кроны из блоков, а не случайной формы {@code place
- * feature}; земля — плоская трава, а не равнина генератора. Место у
- * каждого запуска новое, но разброс порогов блоков ({@code BlockResponse.jitterAt}, хеш места) на нём тот же
- * ({@link #nearSite}), номер подрыва тот же ({@link #NEAR_ID}: сид подрыва сценария — по нему), и время игры в миг подрыва
- * то же ({@link #NEAR_GAME_TIME}: ветер мира — по нему, {@code Wind.at}), — те же блоки ломаются при том же ветре; прочая
- * случайность руин и следа по месту мира (шум следа, выборка обломков) — своя у места, как у двух прогонов сценария на
- * разных картах.
+ * The nuke near the camera ({@code nuke <kt> [air|ground] near [m]}) — what the {@code debris} scenario
+ * (ClientScenario) films, in seconds: houses and oaks of the same layout at a new site, detonation {@code m} north,
+ * effect timing — from the front's arrival at the houses. The wave is the same as in client scenarios (1.0 speed of
+ * sound, {@code TestScale}): at 15 kt the front reaches houses 2 km away in ~4 s of game time. Differences from the
+ * scenario: oaks — even crowns of blocks, not of the random shape of {@code place feature}; ground — flat grass, not a
+ * generator plain. The site at each run is new, but the spread of block thresholds ({@code BlockResponse.jitterAt}, the
+ * site's hash) there is the same ({@link #nearSite}), the detonation number is the same ({@link #NEAR_ID}: the
+ * scenario's detonation seed — by it), and the game time at the moment of detonation is the same ({@link
+ * #NEAR_GAME_TIME}: the world's wind — by it, {@code Wind.at}) — the same blocks break in the same wind; other
+ * randomness of ruins and trails by world site (trail noise, debris sampling) is per site, as for two scenario runs on
+ * different maps.
  */
 final class Sandbox {
     static final String WORLD = "incoming_sandbox";
-    /** Верх травы плоского мира: 1 + 124 + 3 + 1 слоёв от −64. */
+    /** Top of the grass of the flat world: 1 + 124 + 3 + 1 layers from −64. */
     static final int GROUND = 64;
-    /** Новое место настоящего взрыва — дальше прорисовки от прежнего (пожары и воронка не в кадре). */
+    /**
+     * A new site of a real blast — beyond draw distance from the previous one (fires and the crater are not in frame).
+     */
     static final int REAL_STEP = 320, NUKE_STEP = 6000;
-    /** Разрыв зенитной ракеты ({@code airburst}) — на столько блоков над землёй точки. */
+    /** Burst of an air-defence missile ({@code airburst}) — this many blocks above the ground at the point. */
     static final double AIRBURST_HEIGHT = 30;
-    /** Пуск и пролёт: ждать снаряд не дольше, тиков. */
+    /** Launch and flyby: wait for the projectile no longer than this many ticks. */
     static final int FLIGHT_LIMIT = 1800;
-    /** {@code sam}: шахед идёт со стольких блоков к северу от ЗРК и целит на столько к югу (как сцена {@code sam-side} пробы). */
+    /**
+     * {@code sam}: the Shahed comes from this many blocks north of the SAM and aims this far south (as the {@code
+     * sam-side} probe scene).
+     */
     static final int SAM_FROM = 1400, SAM_PAST = 250;
     /**
-     * Ядерка у камеры: место k-го запуска — (X0 + k·DX, Z0 + k·DZ). Хеш места {@code Long.hashCode(BlockPos.asLong())} —
-     * старшие 32 бита (x << 6 и выше) XOR младшие (z << 12 | y): сдвиг x на k·2¹⁶ и z на k·2¹⁰ кладёт k в оба слова на
-     * одно и то же место (бит 22), и XOR его снимает — у дома с x в [X0 − 2¹⁵, X0 + 2¹⁵) и z в [Z0 − 2⁹, Z0 + 2⁹) хеш, а
-     * с ним и разброс порогов, тот же на любом месте. k до 450: x не дальше края мира (3·10⁷).
+     * The nuke near the camera: the site of the k-th run — (X0 + k·DX, Z0 + k·DZ). The site hash {@code
+     * Long.hashCode(BlockPos.asLong())} — the high 32 bits (x << 6 and up) XOR the low bits (z << 12 | y): shifting x
+     * by k·2¹⁶ and z by k·2¹⁰ puts k into both words at the same spot (bit 22), and XOR cancels it: for a house with x
+     * in [X0 − 2¹⁵, X0 + 2¹⁵) and z in [Z0 − 2⁹, Z0 + 2⁹) the hash, and with it the spread of thresholds, is the same
+     * at any site. k up to 450: x no farther than the world edge (3·10⁷).
      */
     static final int NEAR_X0 = 1 << 15, NEAR_Z0 = 1 << 9, NEAR_DX = 1 << 16, NEAR_DZ = 1 << 10, NEAR_RUNS = 450;
-    /** Номер подрыва у камеры: сид подрыва сценария — по номеру ({@code NuclearWarhead}), у каждого запуска тот же. */
+    /**
+     * Detonation number near the camera: the scenario's detonation seed — by number ({@code NuclearWarhead}), the same
+     * for every run.
+     */
     static final int NEAR_ID = 9000;
-    /** Время игры в миг подрыва у камеры: ветер мира — функция времени игры ({@code Wind.at}), у каждого запуска тот же. */
+    /**
+     * Game time at the moment of detonation near the camera: the world's wind — a function of game time ({@code
+     * Wind.at}), the same for every run.
+     */
     static final long NEAR_GAME_TIME = 6000;
 
     private final Path dir = FMLPaths.GAMEDIR.get().resolve("fx");
     private final Path inbox = dir.resolve("inbox");
     private boolean started, ready;
     private int tick = -1;
-    /** Точка эффектов, что землю не трогают (на земле), и точка эффекта сейчас. */
+    /** Point of effects that do not touch the ground (on the ground), and the current effect's point. */
     private static final Vec3 HOME = new Vec3(0.5, GROUND + 1, 0.5);
     private Vec3 site = HOME;
-    /** Настоящие взрывы и подрывы — каждый на нетронутой земле: столько блоков к +X от {@link #HOME} уже занято. */
+    /**
+     * Real blasts and detonations — each on untouched ground: this many blocks toward +X from {@link #HOME} are already
+     * taken.
+     */
     private int freshX;
-    /** Камера: дальность, высота над землёй, азимут от точки, высота точки взгляда. */
+    /** Camera: distance, height above ground, bearing from the point, height of the look point. */
     private double camDist = 60, camHeight = 10, camBearing = 90, camLook = 8;
     private boolean overlay;
-    /** Зум ×k ({@code zoom}): 1 — нет. */
+    /** Zoom ×k ({@code zoom}): 1 — none. */
     private double zoom = 1;
-    /** Взгляд ведёт снаряд эффекта ({@code track}). */
+    /** Look follows the effect's projectile ({@code track}). */
     private boolean track;
     /**
      * {@code turn <deg/s> [from s]}: from that effect second the view turns at this rate, by the effect clock (the same
-     * yaw in every run at the same effect instant); 0 — none. Effects and {@code clear} keep it; the start yaw is the view's
-     * at the effect's first frame.
+     * yaw in every run at the same effect instant); 0 — none. Effects and {@code clear} keep it; the start yaw is the
+     * view's at the effect's first frame.
      */
     private double turn, turnFrom;
     private float turnYaw = Float.NaN;
     @Nullable
     private SandboxCommand lastEffect;
-    /** Команда из файла, которая ещё идёт, и её файл итога. */
+    /** Command from a file that is still running, and its result file. */
     @Nullable
     private Path running;
-    /** Тик, когда команда без эффекта кончится сама ({@code wait}); −1 — нет. */
+    /** Tick when a command without an effect ends by itself ({@code wait}); −1 — none. */
     private int waitUntil = -1;
-    /** Время суток (0–23999), которого команда {@code time} ждёт у клиента; −1 — нет; с какого тика ждёт. */
+    /**
+     * Time of day (0–23999) that the {@code time} command waits for at the client; −1 — none; from which tick it waits.
+     */
     private long timeWait = -1;
     private int timeSince;
-    /** Эффект ждёт начала: что ждать (пуск, пролёт, сервер) и с какого тика. */
+    /** Effect waits to start: what to wait for (launch, flyby, server) and from which tick. */
     @Nullable
     private Pending pending;
-    /** Тик начала эффекта (−1 — нет) и снимок. */
+    /** Tick the effect started (−1 — none) and a snapshot. */
     private int effectTick = -1;
     @Nullable
     private Capture armed, capture;
@@ -152,33 +171,36 @@ final class Sandbox {
 
     private int pendingSince;
     private SandboxCommand pendingCmd;
-    /** Сервер выполнил задачу самого эффекта (взрыв, подрыв, пожар) — не камеры и не прочих команд. */
+    /** The server ran the effect's own task (blast, detonation, fire) — not the camera's or other commands'. */
     private volatile boolean serverDone;
     /**
-     * Ресурсы перезагружаются ({@code reload}): следующая команда — уже с новыми. Готово — когда загрузка кончилась,
-     * экран загрузки ушёл и пауза снята: на время перезагрузки одиночная игра на паузе, а экран загрузки гаснет ещё
-     * ~1 с после неё (эффект, начатый в это время, стоял бы, пока часы песочницы шли).
+     * Resources reload ({@code reload}): the next command runs on the new ones. Done — when loading has ended, the
+     * loading screen is gone and pause lifted: during a reload the single-player game is paused, and the loading screen
+     * fades out ~1 s after it (an effect started at that time would stall while the sandbox clock keeps running).
      */
     private boolean reloading;
     private volatile boolean reloaded;
     private long reloadStart;
     @Nullable
     private volatile String serverError;
-    /** Пуск и пролёт: снаряд у клиента, где его увидели, ближе всего к точке. */
+    /** Launch and flyby: the projectile at the client, where it was seen, closest to the point. */
     @Nullable
-    /** Путь снаряда эффекта: по сущности вблизи и по пакетам сервера вдали, где сущности у клиента нет. */
+    /**
+     * Path of the effect's projectile: by entity nearby and by server packets far away, where the client has no entity.
+     */
     private FlightTrack projectile;
     /**
-     * Ядерка: подрывы, что клиент знал до команды. Начало — пакет нового подрыва у клиента, а не задача сервера: место
-     * подрыва, чья земля ещё грузится, сервер откладывает ({@code NuclearStrikes.detonateNow}).
+     * Nuke: detonations the client knew before the command. The start is the packet of a new detonation at the client,
+     * not a server task: the detonation site, whose ground is still loading, the server defers ({@code
+     * NuclearStrikes.detonateNow}).
      */
     private final java.util.Set<Integer> knownNukes = new java.util.HashSet<>();
     private Vec3 firstSeen = Vec3.ZERO;
     private double closest = Double.MAX_VALUE;
-    /** Ядерка у камеры: сколько запусков было (место — {@link #nearSite}). */
+    /** Nuke near the camera: how many runs there were (site — {@link #nearSite}). */
     private int nearRuns;
 
-    /** Снимок эффекта: кадры на секунды {@code times}, звук {@code wavSeconds}. */
+    /** Effect snapshot: frames at the seconds {@code times}, sound {@code wavSeconds}. */
     private static final class Capture {
         final String name;
         final double[] times;
@@ -186,7 +208,7 @@ final class Sandbox {
         final Path out;
         int next;
         long audioStart = -1;
-        /** Тик начала звука: первый кадр, если он до начала эффекта, иначе начало эффекта. */
+        /** Tick sound starts: the first frame, if it is before the effect's start, otherwise the effect's start. */
         int audioTick;
         final List<String> frames = new ArrayList<>();
 
@@ -207,7 +229,7 @@ final class Sandbox {
         NeoForge.EVENT_BUS.addListener(this::onFrameStart);
         try {
             Files.createDirectories(inbox);
-            // команды прошлого запуска — не этому клиенту
+            // commands of a previous run — not for this client
             try (Stream<Path> old = Files.list(inbox)) {
                 old.forEach(p -> p.toFile().delete());
             }
@@ -217,17 +239,18 @@ final class Sandbox {
         }
     }
 
-    // ---------------------------------------------------------------- мир
+    // ---------------------------------------------------------------- world
 
     private void onScreen(ScreenEvent.Init.Post e) {
-        // до мира — какой экран открыт: клиент без окна, который встал на чужом экране, иначе не понять
+        // before the world — which screen is open: a client without a window that stopped on someone else's screen,
+        // otherwise it would be impossible to tell
         if (!ready) Incoming.LOG.info("SANDBOX screen {}", e.getScreen().getClass().getName());
         if (started || !(e.getScreen() instanceof TitleScreen)) return;
         started = true;
         createWorld(e.getScreen());
     }
 
-    /** Плоский мир заново: каждый запуск тот же (прежний удаляется). */
+    /** Flat world anew: every run is the same (the previous one is deleted). */
     private static void createWorld(Screen parent) {
         Minecraft mc = Minecraft.getInstance();
         Path old = mc.gameDirectory.toPath().resolve("saves").resolve(WORLD);
@@ -254,7 +277,7 @@ final class Sandbox {
         }, parent);
     }
 
-    // ---------------------------------------------------------------- тик
+    // ---------------------------------------------------------------- tick
 
     private void onTick(ClientTickEvent.Post e) {
         Minecraft mc = Minecraft.getInstance();
@@ -263,12 +286,12 @@ final class Sandbox {
             reloading = false;
             finish(String.format(Locale.ROOT, "ok reloaded in %.1f s", (System.nanoTime() - reloadStart) / 1e9));
         }
-        // часы эффектов — тики мира: на паузе (перезагрузка ресурсов, меню) эффекты стоят, и кадры ждут
+        // effect clocks are world ticks: paused (resource reload, menu), effects stand still and frames wait
         if (mc.isPaused()) return;
         tick++;
         if (!ready) {
             if (tick == 1) setup();
-            // земля под точкой и камерой у клиента
+            // ground under the point and the camera at the client
             if (tick < 20 || !mc.level.getChunkSource().hasChunk(BlockPos.containing(site).getX() >> 4, BlockPos.containing(site).getZ() >> 4)) return;
             ready = true;
             double up = (System.currentTimeMillis() - ManagementFactory.getRuntimeMXBean().getStartTime()) / 1000.0;
@@ -320,12 +343,12 @@ final class Sandbox {
         }
     }
 
-    /** Идёт команда (из файла или чата): ожидание, эффект и его кадры, перезагрузка — следующая ждёт. */
+    /** A command is running (from a file or chat): waiting, the effect and its frames, reload — the next one waits. */
     private boolean busy() {
         return running != null || pending != null || reloading || waitUntil >= 0 || timeWait >= 0 || capture != null;
     }
 
-    /** Итог команды из файла (у команды из чата — строка в чат). */
+    /** Result of a command from a file (for a command from chat — a line in chat). */
     private void finish(String result) {
         Incoming.LOG.info("SANDBOX > {}", result);
         if (running != null) write(running, result);
@@ -333,13 +356,13 @@ final class Sandbox {
         running = null;
     }
 
-    // ---------------------------------------------------------------- команды
+    // ---------------------------------------------------------------- commands
 
     private void onCommands(RegisterClientCommandsEvent e) {
         e.getDispatcher().register(Commands.literal("fx").then(Commands.argument("line", StringArgumentType.greedyString()).executes(ctx -> {
             String line = StringArgumentType.getString(ctx, "line");
             if (busy()) {
-                ctx.getSource().sendFailure(Component.literal("fx: занято"));
+                ctx.getSource().sendFailure(Component.literal("fx: busy"));
                 return 0;
             }
             try {
@@ -353,8 +376,8 @@ final class Sandbox {
     }
 
     /**
-     * Зум ×k: поле зрения мира в k раз уже по тангенсу половины угла, последним из всех, кто его меняет, — так, как
-     * Ok Zoomer меняет его на выходе {@code getFov} (кадр мира и его матрица — с зумом).
+     * Zoom ×k: the world's field of view is k times narrower by the tangent of the half-angle, last of all who change
+     * it — as Ok Zoomer changes it at the output of {@code getFov} (the world frame and its matrix — with zoom).
      */
     private void onFov(ViewportEvent.ComputeFov e) {
         if (zoom <= 1 || !e.usedConfiguredFov()) return;
@@ -379,7 +402,8 @@ final class Sandbox {
             }
             case STANCE -> {
                 boolean stand = c.args().getFirst().equals("stand");
-                // Только игрок своей dev-песочницы: в spectator он летает, и качания тела на ногах не видно.
+                // Only the player in their own dev sandbox: in spectator they fly, and the body's leg sway is not
+                // visible.
                 var id = mc.player.getUUID();
                 onServer(false, s -> {
                     var p = s.getPlayerList().getPlayer(id);
@@ -398,8 +422,10 @@ final class Sandbox {
             case TIME -> {
                 String t = c.args().getFirst();
                 long day = t.equals("day") ? 6000 : t.equals("night") ? 18000 : (long) c.number(0);
-                // сервер шлёт время игрокам раз в 20 тиков: пакет — сразу, а команда кончается, когда время пришло к
-                // клиенту, — иначе эффект за ней первую секунду шёл при прежнем свете (кадры 0,1 и 0,5 с «ночи» — днём)
+                // the server sends the time to players every 20 ticks: the packet — at once, and the command ends when
+                // the time has reached
+                // the client — otherwise the effect after it ran its first second in the previous light (frames at 0.1
+                // and 0.5 s of “night” were by day)
                 onServer(false, s -> {
                     run(s, "time set " + day);
                     var level = s.overworld();
@@ -420,9 +446,11 @@ final class Sandbox {
                 server(String.format(Locale.ROOT, "fill %d %d %d %d %d %d minecraft:%s", s.getX() - 48, GROUND, s.getZ() - 48,
                         s.getX() + 48, GROUND, s.getZ() + 48, kind.equals("paved") ? "stone" : "grass_block"));
                 if (kind.equals("roof")) {
-                    // помещение 21×21: коробка из каменного кирпича (у hollow и пол, и потолок — каменные), потолок заменён
-                    // метром досок на высоте 5 м (верх — 6 м над травой), под ним — пустота в 3 м: удар blast <оружие> 1 5 — в
-                    // крышу над пустотой
+                    // room 21×21: a box of stone brick (in hollow both floor and ceiling are stone), the ceiling
+                    // replaced
+                    // by a metre of planks at 5 m height (top — 6 m above the grass), under it — a 3 m void: strike
+                    // blast <weapon> 1 5 — into
+                    // the roof over the void
                     int x0 = s.getX() - 10, z0 = s.getZ() - 10, x1 = s.getX() + 10, z1 = s.getZ() + 10;
                     server(String.format(Locale.ROOT, "fill %d %d %d %d %d %d minecraft:stone_bricks hollow", x0, GROUND + 1, z0, x1, GROUND + 5, z1));
                     server(String.format(Locale.ROOT, "fill %d %d %d %d %d %d minecraft:oak_planks", x0, GROUND + 5, z0, x1, GROUND + 5, z1));
@@ -441,7 +469,8 @@ final class Sandbox {
                 finish("ok");
             }
             case HOUSE -> {
-                // прежний дом — прочь, новый — сплошной из каменного кирпича от травы до высоты (крыша — на ней)
+                // the previous house — gone, the new one — solid stone brick from the grass to the height (the roof is
+                // on it)
                 BlockPos s = BlockPos.containing(HOME);
                 if (house[0] > 0) {
                     server(String.format(Locale.ROOT, "fill %d %d %d %d %d %d minecraft:air", s.getX() - house[1], GROUND + 1, s.getZ() - house[1],
@@ -498,7 +527,7 @@ final class Sandbox {
                 finish("ok armed " + out);
             }
             case AGAIN -> {
-                if (lastEffect == null) finish("error эффектов ещё не было");
+                if (lastEffect == null) finish("error no effects yet");
                 else startEffect(lastEffect);
             }
             case CLEAR -> {
@@ -516,7 +545,9 @@ final class Sandbox {
         }
     }
 
-    /** Снять все эффекты: у клиента — как при выходе из мира, у сервера — снаряды и огонь у точки. */
+    /**
+     * Clear all effects: at the client — as on leaving the world, at the server — projectiles and fire at the point.
+     */
     private void clear() {
         raid.clear();
         turnYaw = Float.NaN;
@@ -526,14 +557,15 @@ final class Sandbox {
         BlockPos s = BlockPos.containing(site);
         server(String.format(Locale.ROOT, "fill %d %d %d %d %d %d minecraft:air replace minecraft:fire", s.getX() - 20, GROUND, s.getZ() - 20,
                 s.getX() + 20, GROUND + 6, s.getZ() + 20));
-        // ЗРК ({@code sam}) — прочь: заряженный, он бил бы снаряды следующих эффектов
+        // SAM ({@code sam}) — gone: loaded, it would shoot down the projectiles of the next effects
         server(String.format(Locale.ROOT, "fill %d %d %d %d %d %d minecraft:air replace incoming:sam", s.getX() - 20, GROUND + 1, s.getZ() - 20,
                 s.getX() + 20, GROUND + 1, s.getZ() + 20));
-        // пожар ({@code fire}) — на незераке: земля снова трава
+        // fire ({@code fire}) — on netherrack: the ground is grass again
         server(String.format(Locale.ROOT, "fill %d %d %d %d %d %d minecraft:grass_block replace minecraft:netherrack", s.getX() - 20, GROUND,
                 s.getZ() - 20, s.getX() + 20, GROUND, s.getZ() + 20));
-        // пруд ({@code blast … water}, всегда в исходной точке) — снова земля и трава; русло моста {@code real … deck} — на
-        // своём месте, его вода остаётся
+        // pond ({@code blast … water}, always at the source point) — ground and grass again; the bridge bed {@code real
+        // … deck} — at
+        // its place, its water stays
         BlockPos p = BlockPos.containing(HOME);
         int half = SandboxCommand.POND / 2;
         server(String.format(Locale.ROOT, "fill %d %d %d %d %d %d minecraft:dirt replace minecraft:water", p.getX() - half, GROUND - SandboxCommand.POND_DEPTH + 1,
@@ -544,17 +576,17 @@ final class Sandbox {
         capture = null;
     }
 
-    /** Дом под точкой ({@code house}): высота и полуширина, блоков; 0 — дома нет. */
+    /** House under the point ({@code house}): height and half-width, in blocks; 0 — no house. */
     private final int[] house = new int[2];
-    /** Тик, когда мостовая под {@code real … masonry} уже поставлена; −1 — ещё нет. */
+    /** Tick when the paving under {@code real … masonry} is already placed; −1 — not yet. */
     private int paved = -1;
 
-    /** Взрывы налёта ({@code raid}), что ещё впереди: тик, x, z (биты double), зерно. */
+    /** Raid blasts ({@code raid}) still ahead: tick, x, z (double bits), seed. */
     private final List<long[]> raid = new ArrayList<>();
-    /** Оружие налёта. */
+    /** Raid weapon. */
     private WeaponType raidWeapon = WeaponType.DRONE;
 
-    /** Взрывы налёта, чей тик пришёл: пакет взрыва только у клиента, как {@code blast}. */
+    /** Raid blasts whose tick has come: a blast packet only at the client, as {@code blast}. */
     private void raidNext(Minecraft mc) {
         while (!raid.isEmpty() && raid.getFirst()[0] <= tick) {
             long[] r = raid.removeFirst();
@@ -565,7 +597,7 @@ final class Sandbox {
         }
     }
 
-    /** Вид пакета взрыва по оружию. */
+    /** Blast packet kind by weapon. */
     private static int blastKind(WeaponType w) {
         return switch (w.spec().blast()) {
             case MISSILE -> S2C.Blast.MISSILE;
@@ -574,7 +606,7 @@ final class Sandbox {
         };
     }
 
-    /** Налёт ({@code raid}): взрывы по кругу через интервал, первый — сейчас. */
+    /** Raid ({@code raid}): blasts in a circle at an interval, the first one now. */
     private void raidStart(Minecraft mc, SandboxCommand c) {
         int n = (int) c.number(0, 16);
         double radius = c.number(1, 120), every = c.number(2, 3);
@@ -590,7 +622,10 @@ final class Sandbox {
         begin();
     }
 
-    /** Пруд в точке ({@code blast … water}, {@code raid … water}) — у сервера; эффект — когда клиент видит воду под точкой. */
+    /**
+     * Pond at the point ({@code blast … water}, {@code raid … water}) — at the server; the effect — when the client
+     * sees water under the point.
+     */
     private void pond() {
         BlockPos s = BlockPos.containing(site);
         int half = SandboxCommand.POND / 2;
@@ -608,17 +643,19 @@ final class Sandbox {
         serverError = null;
         projectile = null;
         closest = Double.MAX_VALUE;
-        // воронка и пожары настоящего взрыва остаются на его месте, остальное — снова на нетронутой точке
+        // the crater and fires of a real blast stay in place, the rest — again on an untouched point
         if (c.verb() != SandboxCommand.Verb.REAL && c.verb() != SandboxCommand.Verb.NUKE && c.verb() != SandboxCommand.Verb.SURFACE) site = HOME;
-        // кадры до начала эффекта — только там, где начало известно заранее (приход фронта к домам)
-        if (armed != null && armed.times[0] < 0 && !c.near()) throw new IllegalArgumentException("кадры до начала эффекта — только у nuke … near");
+        // frames before the effect's start — only where the start is known in advance (the front's arrival at the
+        // houses)
+        if (armed != null && armed.times[0] < 0 && !c.near()) throw new IllegalArgumentException("frames before the effect's start — only for nuke … near");
         switch (c.verb()) {
             case BLAST -> {
                 sameAir(mc);
                 placeCamera();
                 WeaponType w = c.weapon();
-                if (w == WeaponType.BUNKER) throw new IllegalArgumentException("бомба без сервера не взрывается: flight bunker");
-                // пруд — у сервера (вода у клиента приходит с чанком), взрыв — когда клиент видит воду под точкой
+                if (w == WeaponType.BUNKER) throw new IllegalArgumentException("a bomb without a server does not detonate: flight bunker");
+                // pond — at the server (water reaches the client with the chunk), blast — when the client sees water
+                // under the point
                 if (c.water()) pond();
                 else blast(level, c);
             }
@@ -636,7 +673,8 @@ final class Sandbox {
             }
             case REAL, NUKE, SURFACE -> {
                 if (c.near()) {
-                    // прежний подрыв у камеры забыт: номер и время игры у этого — те же ({@link #NEAR_ID})
+                    // the previous detonation near the camera is forgotten: this one's number and game time are the
+                    // same ({@link #NEAR_ID})
                     clear();
                     nearRuns = nearRuns % NEAR_RUNS + 1;
                     site = nearSite(nearRuns);
@@ -649,13 +687,13 @@ final class Sandbox {
             }
             case LAUNCH, FLIGHT -> {
                 placeCamera();
-                // свой пуск — от имени игрока: сервер берёт владельца из источника команды
+                // own launch — on behalf of the player: the server takes the owner from the command's source
                 String as = c.own() ? "execute as " + mc.player.getGameProfile().getName() + " run " : "";
                 server(as + c.order((int) Math.floor(site.x), (int) Math.floor(site.z)));
                 pending = c.verb() == SandboxCommand.Verb.LAUNCH ? Pending.LAUNCH : Pending.FLIGHT;
             }
             case SAM -> {
-                // Один воздух для сравнения разных веток: Wind зависит от gameTime, а /time меняет только dayTime.
+                // One air for comparing different branches: Wind depends on gameTime, and /time changes only dayTime.
                 onServer(false, s -> {
                     var world = s.overworld();
                     ((net.minecraft.world.level.storage.ServerLevelData) world.getLevelData()).setGameTime(NEAR_GAME_TIME);
@@ -664,8 +702,10 @@ final class Sandbox {
                 });
                 placeCamera();
                 int x = (int) Math.floor(site.x), z = (int) Math.floor(site.z);
-                // ЗРК заряжен (4 ракеты), шахед идёт с севера через точку к югу: радар берёт его, ракета сходит у точки
-                // заново (again без clear): на месте прежнего ЗРК setblock не сменил бы блок, и ракеты не пополнились бы
+                // SAM loaded (4 missiles), the Shahed comes from the north through the point to the south: the radar
+                // takes it, the missile launches at the point
+                // anew (again without clear): at the site of the previous SAM, setblock would not have changed the
+                // block, and the missiles would not have been refilled
                 server(String.format(Locale.ROOT, "setblock %d %d %d minecraft:air", x, GROUND + 1, z));
                 server(String.format(Locale.ROOT, "setblock %d %d %d incoming:sam{ready:4}", x, GROUND + 1, z));
                 server(String.format(Locale.ROOT, "incoming salvo drone 1 0 at %d %d from %d %d", x, z + SAM_PAST, x, z - SAM_FROM));
@@ -675,7 +715,8 @@ final class Sandbox {
                 placeCamera();
                 WeaponType w = c.weapon();
                 Vec3 at = new Vec3(site.x, GROUND + 1 + c.number(1, 20), site.z);
-                // /summon у ускорителя закрыт (сущность не призывается): своими руками, как его отделяет снаряд
+                // /summon is closed for the accelerator (the entity is not summoned): by hand, as the projectile
+                // separates it
                 onServer(true, server -> {
                     net.minecraft.server.level.ServerLevel l = server.overworld();
                     var e = new ua.zentix.incoming.entity.SpentBoosterEntity(ua.zentix.incoming.registry.ModEntities.SPENT_BOOSTER.get(), l);
@@ -700,14 +741,15 @@ final class Sandbox {
                 });
                 pending = Pending.SERVER;
             }
-            default -> throw new IllegalArgumentException("не эффект: " + c);
+            default -> throw new IllegalArgumentException("not an effect: " + c);
         }
     }
 
     /**
-     * Один воздух у {@code blast}, {@code raid} и {@code fire} в любом запуске и на любой ветке: ветер и устойчивость —
-     * функция времени игры ({@code Wind.at}, у клиента — {@code ClientAir}), а {@code time} меняет только время суток.
-     * Клиент берёт {@link #NEAR_GAME_TIME} сразу (пакет взрыва — в этом же тике), сервер — своей задачей и шлёт его всем.
+     * One air for {@code blast}, {@code raid} and {@code fire} in any run and on any branch: wind and stability — a
+     * function of game time ({@code Wind.at}, at the client — {@code ClientAir}), and {@code time} changes only the
+     * time of day. The client takes {@link #NEAR_GAME_TIME} at once (the blast packet — in this same tick), the server
+     * — with its own task, and sends it to all.
      */
     private void sameAir(Minecraft mc) {
         mc.level.setGameTime(NEAR_GAME_TIME);
@@ -719,25 +761,29 @@ final class Sandbox {
         });
     }
 
-    /** Пакет взрыва {@code blast} только у клиента, тем же входом, что от сервера; земля — то, что под точкой (трава или пруд). */
+    /**
+     * Blast packet {@code blast} only at the client, through the same entry as from the server; ground — whatever is
+     * under the point (grass or pond).
+     */
     private void blast(ClientLevel level, SandboxCommand c) {
         WeaponType w = c.weapon();
         int kind = blastKind(w);
         int n = c.args().size() - (c.water() ? 1 : 0);
         Vec3 ground = new Vec3(site.x, GROUND + 1, site.z), pos = ground.add(0, n > 2 ? c.number(2) : 0, 0);
-        // материал — как у сервера: в точке удара (крыша, мостовая), по миру сервера (у клиента вдали чанка нет — у
-        // сервера он есть, и пакет несёт его материал)
+        // material — as at the server: at the strike point (roof, paving), by the server's world (the client has no far
+        // chunk — the
+        // server has it, and the packet carries its material)
         GroundMaterial mat = sampleOnServer(level, BlockPos.containing(pos));
         long seed = n > 1 ? c.seedAt(1) : 1;
-        // тот же вход, что у пакета сервера (ClientHooks): картинка и звук взрыва — как в игре
+        // the same entry as the server's packet (ClientHooks): the blast picture and sound — as in the game
         ClientHooks.get().blast(new S2C.Blast(kind, pos, mat.ordinal(), (float) ground.y, seed, Optional.empty(), w.id(), S2C.Blast.DOWN, false,
                 supportOnServer(pos, w.spec().charge())));
         begin();
     }
 
     /**
-     * Опора по оси удара, как её шлёт сервер в пакете взрыва ({@code Warheads.support}: крыша над пустотой — плита): у
-     * встроенного сервера — его задачей; без него — нет (картинка по материалу).
+     * Support along the strike axis, as the server sends it in the blast packet ({@code Warheads.support}: a roof over
+     * a void — a slab): at the integrated server — its task; without it — none (picture by material).
      */
     private static Optional<S2C.Blast.Support> supportOnServer(Vec3 pos, double tnt) {
         net.minecraft.client.server.IntegratedServer server = Minecraft.getInstance().getSingleplayerServer();
@@ -751,8 +797,8 @@ final class Sandbox {
     }
 
     /**
-     * Материал под точкой, как его берёт сервер ({@code GroundMaterial.sample} в потоке сервера): у встроенного сервера —
-     * его задачей (клиент ждёт тик), без него — по миру клиента.
+     * Material under the point, as the server takes it ({@code GroundMaterial.sample} in the server thread): at the
+     * integrated server — its task (the client waits a tick); without it — by the client's world.
      */
     private static GroundMaterial sampleOnServer(ClientLevel level, BlockPos at) {
         net.minecraft.client.server.IntegratedServer server = Minecraft.getInstance().getSingleplayerServer();
@@ -764,12 +810,12 @@ final class Sandbox {
         }
     }
 
-    /** Эффект начался в этом тике: часы кадров и звука. */
+    /** Effect started in this tick: frame and sound clocks. */
     private void begin() {
         begin(tick);
     }
 
-    /** Эффект начнётся в тике {@code at} (не раньше этого): часы кадров и звука от него. */
+    /** Effect starts at tick {@code at} (not before it): frame and sound clocks from it. */
     private void begin(int at) {
         pending = null;
         effectTick = at;
@@ -777,8 +823,9 @@ final class Sandbox {
         capture = armed;
         armed = null;
         if (capture != null) {
-            // первый кадр уже в прошлом (подрыв ближе, чем кадры до фронта) — звук с этого тика, кадры — сейчас (их
-            // настоящее время — age в capture.json)
+            // the first frame is already in the past (the detonation is closer than the frames before the front) —
+            // sound from this tick, frames — now (their
+            // real time — age in capture.json)
             int first = at + (int) Math.round(Math.min(0, capture.times[0]) * 20);
             if (first < tick) {
                 Incoming.LOG.warn("SANDBOX frames before {} s are already past (the front comes in {} s): taken now, see age",
@@ -796,14 +843,15 @@ final class Sandbox {
             waitUntil = -1;
             finish("ok");
         }
-        // время пришло (пакет без смены суток пишет 0 как 1 — допуск в тик)
+        // time has come (a packet without a day change writes 0 as 1 — tolerance of a tick)
         if (timeWait >= 0 && Math.floorMod(mc.level.getDayTime() - timeWait, 24000L) <= 1) {
             timeWait = -1;
             finish("ok");
         } else if (timeWait >= 0 && tick - timeSince > 40) {
-            // пакет идёт тик-два; не пришло за 2 с — смену суток включили или сервер команду не принял
+            // the packet takes a tick or two; not arrived within 2 s — the day change was switched on or the server did
+            // not accept the command
             timeWait = -1;
-            finish("error время не пришло к клиенту за 2 с: " + mc.level.getDayTime() % 24000);
+            finish("error time did not reach the client within 2 s: " + mc.level.getDayTime() % 24000);
         }
         if (pending != null) {
             if (serverError != null) {
@@ -837,7 +885,7 @@ final class Sandbox {
             }
             if (pending != null && tick - pendingSince > FLIGHT_LIMIT) {
                 pending = null;
-                finish("error не дождался начала эффекта за " + FLIGHT_LIMIT + " тиков");
+                finish("error did not wait for the effect to start within " + FLIGHT_LIMIT + " ticks");
             }
         }
         Capture cap = capture;
@@ -849,15 +897,20 @@ final class Sandbox {
         }
     }
 
-    /** Новое место настоящего взрыва: подождать, пока земля у клиента и у сервера готова, — и взрыв или подрыв. */
+    /**
+     * New site of a real blast: wait until the ground is ready at the client and at the server — then the blast or
+     * detonation.
+     */
     private void siteReady(Minecraft mc) {
         if (tick - pendingSince < 40 || !aroundLoaded(mc)) return;
-        // точка в прорисовке — и её земля у клиента; ядерку дальше прорисовки сервер грузит сам (NuclearTickets)
+        // the point is in draw distance — and its ground is at the client; the nuke beyond draw distance the server
+        // loads itself (NuclearTickets)
         BlockPos s = BlockPos.containing(site);
         if (mc.player.position().distanceTo(site) < mc.options.getEffectiveRenderDistance() * 16 - 32 && !loaded(mc, s)) return;
         SandboxCommand c = pendingCmd;
         if ((c.masonry() || c.town()) && paved < 0) {
-            // город: вокруг — мостовая, а не газон; клиент должен получить её раньше пакета взрыва (земля пыли — у клиента)
+            // city: paving around, not lawn; the client must get it before the blast packet (dust ground — at the
+            // client)
             paved = tick;
             server("fill %d %d %d %d %d %d minecraft:gray_concrete".formatted(s.getX() - 48, GROUND, s.getZ() - 48, s.getX() + 48, GROUND, s.getZ() + 48));
             return;
@@ -885,10 +938,13 @@ final class Sandbox {
                     run(server, "fill %d %d %d %d %d %d minecraft:black_concrete".formatted(
                             o.getX() - 16, GROUND, o.getZ() - 5, o.getX() + 16, GROUND, o.getZ() + 5));
                 }
-                // у дощатого дома: удар в землю у его стены к камере (дом — от x + 4 до x + 12, z ± 3, крыша — доски на
-                // высоте 5 над землёй) или в середину его крыши (верх досок — 6 над землёй)
-                // или в середину крыши дома из каменного кирпича (x − 12 … x − 4, z ± 4), крыша там — плита бетона в метр над
-                // пустотой комнаты (каменный потолок дома убран: с ним крыша — 2 м, шахед её не пробивает), верх — 8 над землёй
+                // at the plank house: a strike into the ground at its wall facing the camera (house — from x + 4 to x +
+                // 12, z ± 3, roof — planks at
+                // 5 above the ground) or into the middle of its roof (top of the planks — 6 above the ground)
+                // or into the middle of the roof of the stone brick house (x − 12 … x − 4, z ± 4), the roof there is a
+                // concrete slab one metre above
+                // the room's void (the stone ceiling of the house is removed: with it the roof is 2 m, and the Shahed
+                // does not break through it), top — 8 above the ground
                 if (c.houses() || c.roof() || c.masonry()) buildHouses(server, BlockPos.containing(site));
                 if (c.town()) buildTown(server, BlockPos.containing(site));
                 if (c.masonry()) {
@@ -913,8 +969,9 @@ final class Sandbox {
     }
 
     /**
-     * Мост для {@code real … deck}: русло вдоль X (13 м шириной, вода на дне) и поперёк него настил из камня толщиной
-     * {@code deck} м и 9 м шириной вровень с землёй; удар — в середину настила (точка взрыва — на его верхней грани).
+     * Bridge for {@code real … deck}: a bed along X (13 m wide, water on the bottom) and across it a deck of stone,
+     * thickness {@code deck} m, and 9 m wide flush with the ground; the strike — into the middle of the deck (the blast
+     * point — on its top face).
      */
     private static void buildBridge(MinecraftServer server, BlockPos o, int deck, String material) {
         int x = o.getX(), y = GROUND, z = o.getZ();
@@ -926,15 +983,18 @@ final class Sandbox {
         }
     }
 
-    /** Место k-го запуска ядерки у камеры (точка — середина между домами, на земле): разброс порогов на нём тот же. */
+    /**
+     * Site of the k-th run of the nuke near the camera (point — midway between the houses, on the ground): the
+     * threshold spread there is the same.
+     */
     static Vec3 nearSite(int k) {
         return new Vec3(NEAR_X0 + (long) k * NEAR_DX + 0.5, GROUND + 1, NEAR_Z0 + (long) k * NEAR_DZ + 0.5);
     }
 
     /**
-     * Дома и дубы сцены {@code debris} (ClientScenario.debrisEvents): дом из каменного кирпича со стеклянными панелями к
-     * зрителю и к взрыву и дощатой крышей, дощатый дом со стёклами; дубы — ровные кроны (у сценария — {@code place
-     * feature}: форма случайная).
+     * Houses and oaks of the {@code debris} scene (ClientScenario.debrisEvents): a stone brick house with glass panels
+     * facing the viewer and the blast, and a plank roof; a plank house with glass; oaks — even crowns (in the scenario
+     * — {@code place feature}: random shape).
      */
     private static void buildHouses(MinecraftServer server, BlockPos o) {
         int x = o.getX(), y = o.getY(), z = o.getZ();
@@ -951,8 +1011,8 @@ final class Sandbox {
     }
 
     /**
-     * Квартал {@code real … town}: дома из каменного кирпича 10×10 м высотой 12 м, улицы по 6 м вдоль X и Z, точка — в
-     * перекрёстке (улицы — в ±3 м от неё), ±48 м.
+     * Block {@code real … town}: stone brick houses 10×10 m and 12 m high, streets 6 m wide along X and Z, the point —
+     * at the crossroads (streets — at ±3 m from it), ±48 m.
      */
     private static void buildTown(MinecraftServer server, BlockPos o) {
         int y = GROUND + 1;
@@ -964,7 +1024,10 @@ final class Sandbox {
         }
     }
 
-    /** Дуб в 5 брёвен: два слоя кроны 5×5 без углов на 3-м и 4-м бревне, сверху 3×3 и крест — как у ванильного дуба. */
+    /**
+     * Oak of 5 logs: two layers of 5×5 crown without corners on the 3rd and 4th log, on top 3×3 and a cross — as the
+     * vanilla oak.
+     */
     private static List<String> oak(int x, int y, int z) {
         String leaves = "minecraft:oak_leaves[persistent=true]";
         return List.of(
@@ -977,9 +1040,10 @@ final class Sandbox {
     }
 
     /**
-     * Номер следующего подрыва — {@link #NEAR_ID}: ветер и сид подрыва сценария — по номеру, у каждого запуска тот же.
-     * Счётчик закрыт ({@code NuclearEvents.nextId}, игре чужой номер не нужен) — только здесь, отражением; прошлые подрывы
-     * {@code clear} уже забыл ({@code incoming clear}), так что номер ни с кем не совпадёт.
+     * Number of the next detonation — {@link #NEAR_ID}: wind and the scenario's detonation seed — by number, the same
+     * for every run. The counter is closed ({@code NuclearEvents.nextId}, the game does not need a foreign number) —
+     * only here, by reflection; past detonations {@code clear} has already forgotten ({@code incoming clear}), so the
+     * number will not match anyone's.
      */
     private static void sameDetonationNumber(MinecraftServer server) {
         try {
@@ -987,14 +1051,15 @@ final class Sandbox {
             f.setAccessible(true);
             f.setInt(ua.zentix.incoming.nuclear.NuclearEvents.get(server.overworld()), NEAR_ID);
         } catch (ReflectiveOperationException e) {
-            throw new IllegalStateException("номер подрыва не задан", e);
+            throw new IllegalStateException("detonation number not set", e);
         }
     }
 
     /**
-     * Время игры — {@link #NEAR_GAME_TIME} (всем игрокам — пакет времени, как у пропуска сценария {@code firestorm}), а земля
-     * эпицентра — готова сейчас (плоский мир, миллисекунды; песочница, не игра): подрыв идёт в этом же тике
-     * ({@code NuclearStrikes.detonateNow}), а не отложенным, когда земля догрузится, — и ветер в миг подрыва тот же.
+     * Game time — {@link #NEAR_GAME_TIME} (to all players — a time packet, as in the {@code firestorm} scenario skip),
+     * and the ground of the epicentre — ready now (flat world, milliseconds; a sandbox, not the game): the detonation
+     * runs in this same tick ({@code NuclearStrikes.detonateNow}), not deferred until the ground loads — and the wind
+     * at the moment of detonation is the same.
      */
     private static void sameGameTime(MinecraftServer server, Vec3 burst) {
         var level = server.overworld();
@@ -1004,7 +1069,10 @@ final class Sandbox {
                 level.getGameRules().getBoolean(GameRules.RULE_DAYLIGHT)));
     }
 
-    /** Подрыв у камеры пришёл: начало эффекта — приход фронта к домам по часам подрыва клиента, как у сценария {@code debris}. */
+    /**
+     * The detonation near the camera has come: the effect's start — the front's arrival at the houses by the client's
+     * detonation clock, as in the {@code debris} scenario.
+     */
     private void frontAtHouses(ua.zentix.incoming.client.nuclear.ClientNuclear.Active a) {
         Vec3 houses = site.add(0, 2, 0);
         double wait = a.d.arrivalTicks(houses.distanceTo(a.d.burst())) - a.ticks(0);
@@ -1017,8 +1085,8 @@ final class Sandbox {
     }
 
     /**
-     * Земля в прорисовке вокруг камеры пришла клиенту (на новом месте чанки идут секунду-две): иначе первые кадры
-     * эффекта — без земли, цветом тумана (кадры ядерки на 0,5–1 с).
+     * The ground in draw distance around the camera has reached the client (at a new site chunks take a second or two):
+     * otherwise the first frames of the effect — without ground, in fog colour (nuke frames at 0.5–1 s).
      */
     private static boolean aroundLoaded(Minecraft mc) {
         BlockPos at = mc.player.blockPosition();
@@ -1031,7 +1099,7 @@ final class Sandbox {
         return true;
     }
 
-    /** Сход зенитной ракеты ЗРК ({@code sam}): с её первого движения; {@code track on} ведёт её. */
+    /** Launch of the SAM air-defence missile ({@code sam}): from its first movement; {@code track on} follows it. */
     private void watchSam() {
         double[] at = new double[3];
         if (projectile == null) {
@@ -1047,7 +1115,7 @@ final class Sandbox {
         if (projectile.predict(FlightTracks.now() - 1, at) && firstSeen.distanceTo(new Vec3(at[0], at[1], at[2])) > 0.3) begin();
     }
 
-    /** Пуск — с первого движения снаряда у точки; пролёт — в миг, когда он ближе всего к ней. */
+    /** Launch — from the projectile's first movement at the point; flyby — at the moment it is closest to it. */
     private void watchFlight(Minecraft mc) {
         double[] at = new double[3];
         if (projectile == null || projectile.isDead()) {
@@ -1079,9 +1147,11 @@ final class Sandbox {
         closest = Math.min(closest, d);
     }
 
-    // ---------------------------------------------------------------- кадры
+    // ---------------------------------------------------------------- frames
 
-    /** {@code track on}: перед кадром глаз смотрит на снаряд эффекта там, где он в этом кадре по пути. */
+    /**
+     * {@code track on}: before a frame the eye looks at the effect's projectile where it is on its path in this frame.
+     */
     private void onFrameStart(RenderFrameEvent.Pre e) {
         Minecraft mc = Minecraft.getInstance();
         if (turn != 0 && effectTick >= 0 && mc.player != null) {
@@ -1130,7 +1200,7 @@ final class Sandbox {
         cap.next++;
     }
 
-    /** Числа модели поверх кадра: последний взрыв, дальние взрывы и их звук, звук у уха, пожары, камера. */
+    /** Model numbers over the frame: last blast, distant blasts and their sound, sound at the ear, fires, camera. */
     private void drawOverlay(Minecraft mc, float partial) {
         List<String> lines = new ArrayList<>();
         Vec3 eye = mc.gameRenderer.getMainCamera().getPosition();
@@ -1152,7 +1222,8 @@ final class Sandbox {
                     front - eye.distanceTo(a.d.burst()), a.d.overpressureKpa(site) / 6.895));
             lines.add("near: " + ua.zentix.incoming.client.nuclear.NukeDust.describe());
         }
-        // проекция интерфейса ещё стоит, а сдвиг вида по z (−11000) ваниль уже сняла: без него текст вне глубины проекции
+        // the interface projection is still set, but vanilla has already removed the view shift along z (−11000):
+        // without it the text is outside the projection depth
         var view = com.mojang.blaze3d.systems.RenderSystem.getModelViewStack();
         view.pushMatrix();
         view.translation(0, 0, -11000);
@@ -1171,12 +1242,15 @@ final class Sandbox {
         com.mojang.blaze3d.systems.RenderSystem.applyModelViewMatrix();
     }
 
-    // ---------------------------------------------------------------- камера и сервер
+    // ---------------------------------------------------------------- camera and server
 
-    /** Камера — на {@link #camDist} от точки по азимуту {@link #camBearing}, на {@link #camHeight} над землёй, взгляд — на точку. */
+    /**
+     * Camera — at {@link #camDist} from the point at bearing {@link #camBearing}, at {@link #camHeight} above the
+     * ground, looking at the point.
+     */
     private void placeCamera() {
         double a = Math.toRadians(camBearing);
-        // азимут — как поворот игрока: 0 — к югу (+Z), 90 — к западу (−X)
+        // bearing — as the player's turn: 0 — south (+Z), 90 — west (−X)
         Vec3 eye = site.add(-Math.sin(a) * camDist, 0, Math.cos(a) * camDist);
         double y = GROUND + 1 + camHeight;
         String me = Minecraft.getInstance().player.getGameProfile().getName();
@@ -1187,10 +1261,10 @@ final class Sandbox {
         onServer(false, s -> run(s, command));
     }
 
-    /** Задача потоку сервера; {@code effect} — сам эффект: его конец ждёт {@link Pending#SERVER}. */
+    /** Task for the server thread; {@code effect} — the effect itself: its end awaits {@link Pending#SERVER}. */
     private void onServer(boolean effect, java.util.function.Consumer<MinecraftServer> action) {
         MinecraftServer s = Minecraft.getInstance().getSingleplayerServer();
-        if (s == null) throw new IllegalStateException("нет встроенного сервера");
+        if (s == null) throw new IllegalStateException("no integrated server");
         s.execute(() -> {
             try {
                 action.accept(s);
@@ -1207,7 +1281,7 @@ final class Sandbox {
         s.getCommands().performPrefixedCommand(s.createCommandSourceStack(), command);
     }
 
-    // ---------------------------------------------------------------- файлы
+    // ---------------------------------------------------------------- files
 
     private long audioBytes() {
         try {

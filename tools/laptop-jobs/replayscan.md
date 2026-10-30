@@ -1,39 +1,40 @@
-# Задание ноутбуку: повторы Flashback — в базы (tools/replayscan)
+# Laptop task: Flashback replays into databases (tools/replayscan)
 
-Коммит zentixua/incoming — в сообщении координатора. Цель — разобрать повторы
-игр самой игрой (`tools/replayscan/README.md`) в таблицы и базу DuckDB: события, пути снарядов, удары по земле, в
-воздухе и перехваты, видимость глазами всех игроков. Базы нужны треду «Превью TikTok» для выбора моментов.
+Commit zentixua/incoming — in the coordinator's message. Goal: parse replays of games with the game itself
+(`tools/replayscan/README.md`) into tables and a DuckDB database: events, projectile paths, strikes on the ground, in
+the air and interceptions, visibility through the eyes of all players. The databases are needed by the “TikTok preview”
+thread to pick moments.
 
-Не трогать: инстанс Артёма, его миры и настройки; оригиналы повторов только читать, разбирать — копии. Не во время
-игры Артёма (`pgrep -af java` — нет клиента инстанса «Airstrike Pack»). Клиент разбора — со всей сборкой (около
-10 ГБ): одновременно с другим клиентом со всей сборкой (шаги трейлера `record`, `render`) не идёт; рядом с `cut`
-(монтаж) — можно. Видеокарта разбору не нужна: он не рисует (шейдеры в его копии выключены).
+Do not touch: Artem's instance, his worlds and settings; read the original replays only, parse copies. Not during
+Artem's game (`pgrep -af java` — no client of the “Airstrike Pack” instance). The parsing client runs with the full pack
+(about 10 GB): it does not run at the same time as another full-pack client (trailer steps `record`, `render`); it can
+run alongside `cut` (editing). The GPU is not needed for parsing: it does not render (shaders are off in its copy).
 
-Пути — от `/mnt/data/projects/airstrike`, `W=mod/run/claude-work`, `JAVA_HOME` — `java-runtime-delta` из Prism.
+Paths start at `/mnt/data/projects/incoming`, `W=mod/run/claude-work`, `JAVA_HOME` — `java-runtime-delta` from Prism.
 
-## Подготовка (один раз)
-1. Рабочее дерево и сборка:
+## Setup (once)
+1. Working tree and build:
    ```sh
-   git fetch origin <коммит>
-   git worktree add --detach $W/replayscan-wt <коммит>
+   git fetch origin <commit>
+   git worktree add --detach $W/replayscan-wt <commit>
    $W/replayscan-wt/mod/gradlew -p $W/replayscan-wt/tools/replayscan build   # → tools/replayscan/build/libs/replayscan-1.0.0.jar
    ```
-2. Каталоги игры — `$W/replayscan/game/<версия>`: копия (`cp -a --reflink=auto`) `$W/epic-index/render/<версия>`
-   (2.10.2, 2.10.3), без `saves`, `flashback`, `logs`, `screenshots`, `crash-reports`, `audio.wav`. В каждой копии:
-   - jar мода дня (`airstrike-*.jar` или `incoming-*.jar`) — из `mods/` в `day/`: `prod_client.py --no-copy` стирает
-     `incoming-*.jar` в `mods/` и кладёт тот, что дан `--incoming-jar`;
-   - jar разбора — в `mods/`;
+2. Game directories — `$W/replayscan/game/<version>`: a copy (`cp -a --reflink=auto`) of `$W/epic-index/render/<version>`
+   (2.10.2, 2.10.3), without `saves`, `flashback`, `logs`, `screenshots`, `crash-reports`, `audio.wav`. In each copy:
+   - the mod's jar for the day (`airstrike-*.jar` or `incoming-*.jar`) — from `mods/` into `day/`: `prod_client.py --no-copy`
+     deletes `incoming-*.jar` in `mods/` and puts the one given by `--incoming-jar`;
+   - the parsing jar — in `mods/`;
    - `config/iris.properties`: `enableShaders=false`.
-3. Копии повторов — `$W/replayscan/replays/`: готовые копии из `$W/epic-index/render/<версия>/flashback/replays/`
-   (уже без пакетов Point Blank, путь DH — на копию); остальные — как `render_windows.replay_copy`:
-   `patch_replay.py` (путь DH → `$W/release-media/dh-airstrike-overworld`; нет `distantHorizonPaths` — шаг не нужен),
-   затем `strip_payloads.py <src> <dst> pointblank:mainheldsimplifiedstatebroadcastpacket` (`$W/epic-index`).
-   Источник — `flashback/replays/` инстанса «Airstrike Pack».
+3. Replay copies — `$W/replayscan/replays/`: ready copies from `$W/epic-index/render/<version>/flashback/replays/`
+   (already without Point Blank packets, DH path pointing to the copy); the rest — as `render_windows.replay_copy`:
+   `patch_replay.py` (DH path → `$W/release-media/dh-airstrike-overworld`; no `distantHorizonPaths` — the step is not
+   needed), then `strip_payloads.py <src> <dst> pointblank:mainheldsimplifiedstatebroadcastpacket` (`$W/epic-index`).
+   Source — `flashback/replays/` of the “Airstrike Pack” instance.
 
-## Разбор одного повтора
+## Parsing one replay
 ```sh
 cd $W/replayscan
-V=<версия>; R=<имя повтора без .zip>; G=$PWD/game/$V; T=$PWD/../replayscan-wt/tools
+V=<version>; R=<replay name without .zip>; G=$PWD/game/$V; T=$PWD/../replayscan-wt/tools
 timeout -k 60 4h $T/laptop_job.sh scan-$R -- python3 $T/prod_client.py --no-copy --dir $G --incoming-jar $G/day/<jar> \
   --size 640x360 --jvm=-Xmx8g --prop replayscan.replay=$PWD/replays/$R.zip --prop replayscan.out=$PWD/out/$R \
   --prop replayscan.viewers=players --prop replayscan.every=2
@@ -42,22 +43,22 @@ uv run $T/replayscan/replaydb.py --aspect 0.5625 report out/$R/replay.duckdb
 uv run $T/replayscan/replaydb.py sql out/$R/replay.duckdb "SELECT place, count(*) FROM impact_kinds GROUP BY place"
 rm -f $G/audio.wav
 ```
-Ход — строки `Replay scan: tick N of M` в `$G/logs/latest.log` (раз в 30 с); клиент выходит сам. Повтор встал на
-5 минут — разбор кончается сам (`complete: false`).
+Progress — `Replay scan: tick N of M` lines in `$G/logs/latest.log` (every 30 s); the client exits by itself. If the replay
+stalls for 5 minutes, the parse ends by itself (`complete: false`).
 
-**Удачно:** в `out/$R/meta.json` `complete: true`, `gaps: 0`; в `errors` нет пакетов игры и пакетов `airstrike:*` или
-`incoming:*`; в `payloads` есть `<airstrike|incoming>:blast`; `build` пишет число
-строк. Иначе — первые строки `ERROR` и исключения из лога и `errors` из `meta.json`; один повтор запуска, не больше.
+**Success:** in `out/$R/meta.json` `complete: true`, `gaps: 0`; `errors` has no game packets and no `airstrike:*` or
+`incoming:*` packets; `payloads` has `<airstrike|incoming>:blast`; `build` prints the number of rows. Otherwise — the first
+`ERROR` lines and exceptions from the log and `errors` from `meta.json`; one rerun of the launch, no more.
 
-## Порядок
-Только игры 06.10 (Артём: ранние версии мода и записи 12.10 без него не разбирать):
-1. `2026-10-09T15_24_55` (2.10.3, 60 мин) — война 06.10 с Артёмом, MartinFrances и ClyuDan, самая интересная игра.
-   Она же проба: через 10 минут — скорость по строкам `tick N of M` и память клиента; после конца — итог `build`,
-   `seconds`, размер `out/$R`, роды ударов.
-2. 06.10 22:13 (2.10.3, 75 мин) — Артём, MartinFrances и ClyuDan: Zearth One, ClyuJet, Homelander, «Война за Ньюайл».
+## Order
+Only the 06.10 games (Artem: do not parse early mod versions or the 12.10 recordings made without the mod):
+1. `2026-10-09T15_24_55` (2.10.3, 60 min) — the 06.10 war with Artem, MartinFrances and ClyuDan, the most interesting game.
+   It is also the trial run: after 10 minutes — speed from the `tick N of M` lines and client memory; after it ends — the
+   `build` result, `seconds`, size of `out/$R`, impact kinds.
+2. 06.10 22:13 (2.10.3, 75 min) — Artem, MartinFrances and ClyuDan: Zearth One, ClyuJet, Homelander, “War for Newisle”.
 3. 06.10 09:59 (2.10.2), 06.10 16:31 (2.10.3).
 
-## Отчёт
-После каждого повтора — координатору одна строка: путь `replay.duckdb`, `complete`, тики и минуты разбора, роды
-ударов, ошибки, если есть. `meta.json` и `report/*.csv` — одним архивом `replayscan-<повтор>.tar.gz` в файлы проекта.
-Базы и таблицы остаются на ноутбуке (`$W/replayscan/out/`).
+## Report
+After each replay — one line to the coordinator: the path to `replay.duckdb`, `complete`, the ticks and minutes of
+parsing, impact kinds, errors if any. `meta.json` and `report/*.csv` — in one archive `replayscan-<replay>.tar.gz` in the
+project files. The databases and tables stay on the laptop (`$W/replayscan/out/`).

@@ -19,30 +19,36 @@ import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.Incoming;
 
 /**
- * Вызов API Distant Horizons: чанк — в LOD сразу, а не при следующем сохранении чанка (DH сам видит изменения блоков
- * только по сохранению чанка: у свободного сервера через ~10 с, у занятого — автосохранением раз в 5 минут).
- * {@code DhApi.Delayed.terrainRepo.overwriteChunkDataAsync} кладёт чанк в очередь обновлений DH (та же, что у его
- * собственных обновлений; разбор — в потоках DH не раньше чем через 250 мс, по живой ссылке на чанк, без копии), DH
- * пишет LOD в свою базу и рассылает его игрокам с DH (одиночная игра, хост с DH, сервер с DH: «real-time updates»).
- * Принимает любой {@link ChunkAccess} с миром — и загруженный чанк, и собранный модом чанк не из мира
- * ({@link DhUpdates#offer}). Темп и повторы — {@link DhUpdates}: позицию, которая уже в очереди DH, он молча
- * пропускает. Без DH или с другой мажорной версией API ничего не делает; классы API трогает только вложенный
- * {@link Api}, и только если DH стоит.
+  * API call of Distant Horizons: the chunk goes into the LOD at once, not at the next chunk save (DH itself sees block
+  * changes only on a chunk save: on a free server after ~10 s, on a busy one by autosave every 5 minutes). {@code
+  * DhApi.Delayed.terrainRepo.overwriteChunkDataAsync} puts the chunk into DH's update queue (the same one as its own
+  * updates; parsing runs in DH's threads no earlier than 250 ms later, by a live reference to the chunk, without a
+  * copy), DH writes the LOD to its database and sends it to players with DH (single player, a host with DH, a server
+  * with DH: “real-time updates”). Accepts any {@link ChunkAccess} with a world: both a loaded chunk and a chunk built
+  * by the mod that is not from the world ({@link DhUpdates#offer}). Pace and repeats are {@link DhUpdates}: a position
+  * already in DH's queue is silently skipped. Without DH, or with another major version of the API, it does nothing;
+  * only the nested {@link Api} touches the API classes, and only if DH is installed.
  */
 public final class DhChunks {
-    /** Мажорная версия API, против которой собран мод (7.2.0, DH 3.3.x). */
+    /** Major version of the API the mod is built against (7.2.0, DH 3.3.x). */
     private static final int API_MAJOR = 7;
-    /** 0 — ещё не проверяли, 1 — DH с нашим API, −1 — нет (или его классы не те, что знает мод). */
+    /** 0 — not yet checked, 1 — DH with our API, −1 — no (or its classes are not the ones the mod knows). */
     private static volatile int state;
-    /** Ошибка или отказ API уже в логе (с запуска сервера): дальше — молча. Классы DH здесь не нужны. */
+    /**
+     * API error or refusal already in the log (since server start): silent from then on. DH classes are not needed
+     * here.
+     */
     private static boolean logged, refused;
-    /** Подписка на записи LOD ({@link #listen}) есть: события API DH живут, пока жива игра, — одна на запуск игры. */
+    /**
+      * Subscription to LOD records ({@link #listen}) exists: the DH API events live as long as the game does, one per
+      * game launch.
+     */
     private static volatile boolean listening;
 
     private DhChunks() {
     }
 
-    /** Запуск сервера (в одиночной игре — каждый мир): проверить DH заново, ошибки прошлого мира не в счёт. */
+    /** Server start (in single player, each world): check DH again, errors of the previous world do not count. */
     public static void onServerStarting(ServerStartingEvent e) {
         DhUpdates.resetWaiting();
         state = 0;
@@ -51,15 +57,15 @@ public final class DhChunks {
     }
 
     /**
-     * Сервер остановлен (в одиночной игре — выход из мира): забыть генераторы DH по мирам. DH 3.3.3 заводит генератор
-     * каждому миру сервера в статической карте {@code WorldGeneratorInjector} (ключ — обёртка мира с самим
-     * {@code ServerLevel}) и не убирает его никогда, так что без очистки все миры, открытые за запуск игры, остаются
-     * в памяти целиком с чанками (сценарий leak: в меню 1,3 ГБ до мира, 2,4 ГБ после двух; держатель — эта карта,
-     * без e4all так же). После остановки миров в ней нет живых: DH заводит генератор заново при загрузке
-     * мира, а чужой генератор регистрируется на обёртку загруженного мира — у следующего мира обёртки новые. Метод
-     * очистки — публичный и в jar API DH.
-     * Прошлый мир DH держит ещё в {@code ThreadWorldGenParams} (статическое поле и поля потоков генерации) до генерации
-     * в следующем мире — мод туда не лезет.
+      * Server stopped (in single player, leaving the world): forget DH's generators per world. DH 3.3.3 creates a
+      * generator for each server world in the static map {@code WorldGeneratorInjector} (the key is the wrapper of the
+      * world with the {@code ServerLevel} itself) and never removes it, so without clearing, all worlds opened during
+      * the game launch stay in memory entirely with their chunks (scenario leak: 1.3 GB in the menu before a world, 2.4
+      * GB after two; the holder is this map, without e4all too). After the worlds stop, there are no live ones in it:
+      * DH creates the generator anew when a world loads, and another generator is registered to the wrapper of the
+      * loaded world — the next world's wrappers are new. The clearing method is public and in DH's API jar. The
+      * previous world is still held by DH in {@code ThreadWorldGenParams} (a static field and the fields of the
+      * generation threads) until generation in the next world — the mod does not touch it there.
      */
     public static void onServerStopped(ServerStoppedEvent e) {
         DhUpdates.resetWaiting();
@@ -72,23 +78,26 @@ public final class DhChunks {
         }
     }
 
-    /** Distant Horizons стоит, и его API — то, под которое собран мод. */
+    /** Distant Horizons is installed, and its API is the one the mod was built for. */
     public static boolean available() {
         if (state == 0) state = ModList.get().isLoaded("distanthorizons") && supported() ? 1 : -1;
         return state > 0;
     }
 
-    /** Чанк мира {@code level} (загруженный или собранный модом): DH перестроит по нему LOD. Поток сервера. */
+    /**
+     * Chunk of the world {@code level} (loaded or built by the mod): DH will rebuild the LOD from it. Server thread.
+     */
     static void overwrite(ServerLevel level, ChunkAccess chunk) {
         if (!available()) return;
         try {
             Api.overwrite(level, chunk);
         } catch (LinkageError e) {
-            // API не то, под которое собран мод: до конца игры не трогаем
+            // the API is not the one the mod was built for: we do not touch it until the end of the game
             state = -1;
             Incoming.LOG.warn("Distant Horizons: API differs from the one the mod was built for — LODs of changed chunks will update when they are saved", e);
         } catch (RuntimeException e) {
-            // разовый отказ (мир DH ещё не готов и т. п.): этот чанк — при сохранении, следующие — снова через API
+            // one-off refusal (the DH world is not ready yet, etc.): this chunk on save, the next ones again via the
+            // API
             if (!logged) {
                 logged = true;
                 Incoming.LOG.warn("Distant Horizons: LOD update of changed chunk {} failed — it will update when saved", chunk.getPos(), e);
@@ -97,8 +106,8 @@ public final class DhChunks {
     }
 
     /**
-     * Потоки разбора обновлений DH ({@code numberOfThreads} в его настройках): по ним DH считает предел своей очереди
-     * обновлений ({@link DhQueue}). Без DH — 1.
+     * DH update parsing threads ({@code numberOfThreads} in its settings): DH computes its update queue limit by them
+     * ({@link DhQueue}). Without DH — 1.
      */
     static int threads() {
         if (!available()) return 1;
@@ -110,8 +119,9 @@ public final class DhChunks {
     }
 
     /**
-     * Подписка на записи LOD чанков в базу DH ({@code DhApiChunkModifiedEvent} — после записи участка, по чанку) —
-     * подтверждения держанных копий ({@link DhUpdates#saved}). Один раз за запуск игры. Поток сервера.
+      * Subscription to chunk LOD records into DH's database ({@code DhApiChunkModifiedEvent} — after a section is
+      * written, per chunk) — confirmations of the held copies ({@link DhUpdates#saved}). Once per game launch. Server
+      * thread.
      */
     static void listen() {
         if (listening || !available()) return;
@@ -142,7 +152,7 @@ public final class DhChunks {
             return configs == null ? 1 : configs.multiThreading().threadCount().getValue();
         }
 
-        /** Подписка; null — встала, иначе — почему DH её не принял. */
+        /** Subscription; null — it took, otherwise the reason DH refused it. */
         @Nullable
         static String listen() {
             DhApiResult<Void> r = DhApiEventRegister.on(DhApiChunkModifiedEvent.class, new DhApiChunkModifiedEvent() {
@@ -165,7 +175,8 @@ public final class DhChunks {
             for (IDhApiLevelWrapper w : world.getAllLoadedLevelWrappers()) {
                 if (w.getWrappedMcObject() == level) {
                     DhApiResult<Void> r = repo.overwriteChunkDataAsync(w, new Object[] {chunk, level});
-                    // отказ API (мир DH не тот, DH только читает) — один раз в лог: в LOD руины придут при сохранении чанка
+                    // API refusal (the DH world is not the right one, DH only reads) — once to the log: in LODs the
+                    // ruins will come on chunk save
                     if (!r.success && !refused) {
                         refused = true;
                         Incoming.LOG.warn("Distant Horizons rejected changed chunk {}: {}", chunk.getPos(), r.message);

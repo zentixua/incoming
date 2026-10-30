@@ -8,74 +8,74 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * Команда песочницы эффектов ({@link Sandbox}, {@code /fx …} в чате или строка файла {@code fx/inbox/*.cmd}), без
- * Minecraft: разбор строки в действие. Слова:
+ * Command of the effects sandbox ({@link Sandbox}, {@code /fx …} in chat or a line of the file {@code fx/inbox/*.cmd}), without
+ * Minecraft: parsing a line into an action. Words:
  * <ul>
- *   <li>{@code blast <оружие> [seed] [высота]} — взрыв только у клиента: пакет взрыва в той точке песочницы, как от
- *       сервера (картинка и звук; воронки, огня и обломков сервера нет — земля остаётся, взрыв можно повторять); высота —
- *       над землёй, м (удар в крышу — на высоте дома {@code house}, иначе — точка в воздухе над травой); последнее слово
- *       {@code water} — удар в пруд {@link #POND}×{@link #POND} блоков глубиной {@link #POND_DEPTH} (вода у сервера и
- *       клиента, земля в пакете — вода; {@code clear} возвращает траву);</li>
- *   <li>{@code scenery grass|paved|forest|roof} — поверхность и одинаковый лес для сравнения пыли (сначала убрать дом); roof —
- *   дощатая крыша в метр над пустым помещением 21×21 высотой 3 м (стены и пол из каменного кирпича): удар {@code blast <оружие> 1 5} — в крышу,
- *   плита над пустотой;</li>
- *   <li>{@code house <высота> [полуширина] [верх]} — дом из каменного кирпича под точкой (высота 0 — убрать), по
- *       умолчанию 21×21 блок; верх — блок крыши ({@code coarse_dirt} — крыша-сад с рыхлой землёй);</li>
- *   <li>{@code real <оружие> [deck <м> | houses | roof]} — настоящий взрыв боевой части на сервере (воронка, пожары, обломки)
- *   на новом месте; {@code deck} — удар в середину моста: настил из камня в столько метров над руслом с водой (пробой
- *   плиты); {@code houses} — у дощатого дома сцены {@code debris} (дома и дубы рядом): что загорится и как дымит;
- *   {@code roof} — те же дома, удар в середину дощатой крыши: куда падает и где горит топливо; {@code masonry} — те же дома,
- *   удар в середину бетонной крыши дома из каменного кирпича, вокруг — мостовая (город, ±48 м): пыль пробитой плиты;
- *   {@code town} — квартал из каменного кирпича на мостовой (дома 10×10×12 м, улицы по 6 м вдоль X и Z, ±48 м), удар
- *   в перекрёсток: ветер у земли в улице ({@code LocalWind});</li>
- *   <li>{@code nuke <кт> [air|ground] [near [метров]]} — ядерный подрыв без полёта ({@code /incoming nuke now}) на новом
- *       месте; с {@code near} — вид у камеры: дома и дубы сцены {@code debris} в точке, подрыв в стольких метрах к северу
- *       (по умолчанию {@link #NEAR_RANGE}), время эффекта — от прихода фронта к домам (кадры и до него, с −10 с);</li>
- *   <li>{@code airburst [seed]} — разрыв зенитной ракеты в воздухе над точкой;</li>
- *   <li>{@code sam} — ЗРК в точке (заряжен) и шахед, который идёт через неё с севера; время — от схода зенитной ракеты
- *       (след, облако схода, звук мотора — как сцена {@code sam-side} пробы);</li>
- *   <li>{@code raid [число] [радиус] [секунд между] [оружие] [water]} — налёт: взрывы (по умолчанию шахедов) только у
- *       клиента (как {@code blast}) в круге радиуса вокруг точки один за другим (по умолчанию 16 за 45 с в 120 м) — цена
- *       дыма многих ударов в кадре; {@code water} — в пруд, как у {@code blast} (залп «Града» по воде у берега: радиус —
- *       не больше полупруда);</li>
- *   <li>{@code launch <оружие>} — пуск с пусковой в точке; время — от первого движения снаряда;</li>
- *   <li>{@code flight <оружие> [от, блоков]} — снаряд проходит над точкой по прямой: пуск в стольких блоках к югу
- *       (по умолчанию {@link #FLIGHT_FROM}), цель — столько же к северу, у оружия с маршрутом оператора (шахед, ракета,
- *       «Ланцет») точка маршрута — сама точка ({@link #order}); время — от ближайшего к ней места; у {@code launch} и
- *       {@code flight} последнее слово {@code own} — пуск от игрока (свои снаряды: список и метки на экране);</li>
- *   <li>{@code spent <оружие> [высота]} — отработавший ускоритель ({@code SpentBoosterEntity}) в высоте над точкой (по
- *       умолчанию 20 м): падает, кувыркаясь, и лежит; время — от конца работы его двигателя (горячее сопло, {@code NozzleGlow});</li>
- *   <li>{@code fire [сторона]} — пожар: квадрат незерака с огнём в точке;</li>
- *   <li>{@code cam <дальность> [высота] [азимут°] [взгляд]} — где камера: дальность от точки, высота над землёй, азимут
- *       от точки (0 — юг, 90 — запад, как поворот игрока), высота точки взгляда над землёй;</li>
- *   <li>{@code stance stand|fly} — стоящий игрок (качание тела) или летающий наблюдатель (по умолчанию);</li>
- *   <li>{@code weather clear|rain} — погода для проверки конденсации во влажном воздухе;</li>
- *   <li>{@code time day|night|<тик>}, {@code hud on|off}, {@code overlay on|off} — свет, интерфейс, числа модели;</li>
- *   <li>{@code track on|off} — взгляд держит снаряд эффекта {@code launch}/{@code flight} в середине кадра (как игрок,
- *       который ведёт его с зумом);</li>
+ *   <li>{@code blast <weapon> [seed] [height]} — an explosion on the client only: the explosion packet at the sandbox point, as from
+ *       the server (picture and sound; no server craters, fire or debris — the ground stays, the explosion can be repeated); height —
+ *       above the ground, m (a strike on a roof — at the height of the {@code house}, otherwise — a point in the air above the grass); the last word
+ *       {@code water} — a strike into a pond {@link #POND}×{@link #POND} blocks, depth {@link #POND_DEPTH} (water on the server and
+ *       client, the ground in the packet — water; {@code clear} returns the grass);</li>
+ *   <li>{@code scenery grass|paved|forest|roof} — the surface and the same forest for comparing dust (first remove the house); roof —
+ *   a plank roof a meter above an empty room 21×21 and 3 m high (walls and floor of stone brick): a strike {@code blast <weapon> 1 5} — on the roof,
+ *   a slab over the void;</li>
+ *   <li>{@code house <height> [half-width] [top]} — a stone brick house under the point (height 0 — remove), by
+ *       default 21×21 blocks; top — the roof block ({@code coarse_dirt} — a garden roof with loose earth);</li>
+ *   <li>{@code real <weapon> [deck <m> | houses | roof]} — a real warhead explosion on the server (crater, fires, debris)
+ *   at a new place; {@code deck} — a strike at the middle of a bridge: a stone deck that many meters above a riverbed with water (slab
+ *   breach); {@code houses} — at the plank house of the {@code debris} scene (houses and oaks nearby): what catches fire and how it smokes;
+ *   {@code roof} — the same houses, a strike at the middle of the plank roof: where it falls and where the fuel burns; {@code masonry} — the same houses,
+ *   a strike at the middle of the concrete roof of a stone brick house, with a paved road around (city, ±48 m): dust of the breached slab;
+ *   {@code town} — a stone brick block on paving (houses 10×10×12 m, streets 6 m wide along X and Z, ±48 m), a strike at
+ *   the intersection: wind at ground level in the street ({@code LocalWind});</li>
+ *   <li>{@code nuke <kt> [air|ground] [near [meters]]} — a nuclear detonation without flight ({@code /incoming nuke now}) at a new
+ *       place; with {@code near} — the view from the camera: the houses and oaks of the {@code debris} scene at the point, the detonation that many meters to the north
+ *       (by default {@link #NEAR_RANGE}), effect time — from the arrival of the front at the houses (frames also before it, from −10 s));</li>
+ *   <li>{@code airburst [seed]} — the burst of an anti-aircraft missile in the air above the point;</li>
+ *   <li>{@code sam} — a SAM at the point (loaded) and a Shahed flying through it from the north; time — from the launch of the anti-aircraft missile
+ *       (trail, launch cloud, engine sound — like the {@code sam-side} scene of the probe);</li>
+ *   <li>{@code raid [count] [radius] [seconds between] [weapon] [water]} — a raid: explosions (by default Shaheds) only at the
+ *       client (like {@code blast}) in a circle of the radius around the point, one after another (by default 16 in 45 s at 120 m) — the cost of
+ *       the smoke of many strikes in the frame; {@code water} — into the pond, as with {@code blast} (a Grad salvo on the water by the shore: the radius —
+ *       no more than half the pond);</li>
+ *   <li>{@code launch <weapon>} — a launch from a launcher at the point; time — from the first movement of the projectile;</li>
+ *   <li>{@code flight <weapon> [from, blocks]} — a projectile passes over the point in a straight line: a launch that many blocks to the south
+ *       (by default {@link #FLIGHT_FROM}), the target — as many to the north; for a weapon with an operator route (Shahed, missile,
+ *       Lancet) the route point is the point itself ({@link #order}); time — from the nearest place to it; for {@code launch} and
+ *       {@code flight} the last word {@code own} — a launch by the player (own projectiles: the list and marks on screen);</li>
+ *   <li>{@code spent <weapon> [height]} — a spent booster ({@code SpentBoosterEntity}) at the height above the point (by
+ *       default 20 m): it falls tumbling and lies; time — from the end of its engine's work (hot nozzle, {@code NozzleGlow});</li>
+ *   <li>{@code fire [side]} — a fire: a square of netherrack with fire at the point;</li>
+ *   <li>{@code cam <distance> [height] [azimuth°] [look]} — where the camera is: distance from the point, height above the ground, azimuth
+ *       from the point (0 — south, 90 — west, as the player's turn), height of the look point above the ground;</li>
+ *   <li>{@code stance stand|fly} — a standing player (body sway) or a flying observer (by default);</li>
+ *   <li>{@code weather clear|rain} — weather for checking condensation in humid air;</li>
+ *   <li>{@code time day|night|<tick>}, {@code hud on|off}, {@code overlay on|off} — light, interface, model numbers;</li>
+ *   <li>{@code track on|off} — the view keeps the effect's projectile ({@code launch}/{@code flight}) in the middle of the frame (as a player
+ *       who follows it with zoom);</li>
  *   <li>{@code turn <deg/s> [from s]} — the view turns at this rate from that effect second, by the effect clock (camera-turn
  *       clips; {@code turn 0} stops);</li>
- *   <li>{@code zoom <k>} — зум ×k (1–256; 1 — без зума): поле зрения в k раз уже (тангенс половины угла), как у Ok Zoomer, —
- *       последним, после всех, кто его меняет;</li>
- *   <li>{@code shots <имя> <секунды через запятую> [wav]} — кадры и звук следующего эффекта: кадры на эти секунды от
- *       его начала, звук — столько секунд ({@code wav}, 0 — без звука) в {@code fx/out/<имя>/};</li>
- *   <li>{@code again} — последний эффект ещё раз (после горячей замены кода), {@code clear} — снять все эффекты,
- *       {@code reload} — перезагрузка ресурсов (как F3+T: шейдеры, текстуры, звуки, язык), {@code wait <тиков>}.</li>
+ *   <li>{@code zoom <k>} — zoom ×k (1–256; 1 — no zoom): the field of view k times narrower (tangent of the half-angle), as in Ok Zoomer, —
+ *       last, after all who change it;</li>
+ *   <li>{@code shots <name> <seconds, comma-separated> [wav]} — frames and sound of the next effect: frames at those seconds from
+ *       its start, sound — that many seconds ({@code wav}, 0 — no sound) in {@code fx/out/<name>/};</li>
+ *   <li>{@code again} — the last effect once more (after a hot code swap), {@code clear} — remove all effects,
+ *       {@code reload} — reload resources (like F3+T: shaders, textures, sounds, language), {@code wait <ticks>}.</li>
  * </ul>
  */
 record SandboxCommand(Verb verb, List<String> args) {
-    /** {@code nuke … near}: дальность подрыва от домов по умолчанию — как в сценарии {@code debris} (2 км). */
+    /** {@code nuke … near}: detonation distance from the houses by default — as in the {@code debris} scene (2 km). */
     static final double NEAR_RANGE = 2000;
-    /** {@code launch}: цель — на столько блоков к северу от точки (−Z). */
+    /** {@code launch}: the target — that many blocks north of the point (−Z). */
     static final int LAUNCH_RANGE = 3000;
-    /** {@code flight}: пуск — на столько блоков к югу от точки (+Z), цель — на столько же к северу (−Z). */
+    /** {@code flight}: the launch — that many blocks south of the point (+Z), the target — as many to the north (−Z). */
     static final int FLIGHT_FROM = 600;
-    /** {@code blast … water}: сторона и глубина пруда, блоков (пруд шире столба и кольца брызг шахеда). */
+    /** {@code blast … water}: side and depth of the pond, blocks (the pond is wider than the Shahed's column and spray ring). */
     static final int POND = 64, POND_DEPTH = 4;
 
     enum Verb { BLAST, REAL, NUKE, AIRBURST, LAUNCH, FLIGHT, FIRE, SPENT, CAM, STANCE, WEATHER, TIME, HUD, OVERLAY, ZOOM, TRACK, SHOTS, AGAIN, CLEAR, RELOAD, WAIT, RAID, SAM, HOUSE, SCENERY, SURFACE, TURN }
 
-    /** Эффект (его повторяет {@code again} и снимает {@code shots}). */
+    /** An effect (repeated by {@code again} and captured by {@code shots}). */
     boolean effect() {
         return switch (verb) {
             case BLAST, REAL, NUKE, AIRBURST, LAUNCH, FLIGHT, FIRE, SPENT, RAID, SAM, SURFACE -> true;
@@ -83,7 +83,7 @@ record SandboxCommand(Verb verb, List<String> args) {
         };
     }
 
-    /** Пуск от игрока ({@code own} последним словом): он владелец снаряда — список и метки снарядов на экране, как в игре. */
+    /** A launch by the player ({@code own} as the last word): the player owns the projectile — the list and marks of projectiles on screen, as in the game. */
     boolean own() {
         return (verb == Verb.LAUNCH || verb == Verb.FLIGHT) && args.size() > 1 && args.getLast().equals("own");
     }
@@ -93,12 +93,12 @@ record SandboxCommand(Verb verb, List<String> args) {
         if (s.startsWith("/")) s = s.substring(1);
         if (s.startsWith("fx ")) s = s.substring(3).strip();
         String[] w = s.split("\\s+");
-        if (w.length == 0 || w[0].isEmpty()) throw new IllegalArgumentException("пустая команда");
+        if (w.length == 0 || w[0].isEmpty()) throw new IllegalArgumentException("empty command");
         Verb verb;
         try {
             verb = Verb.valueOf(w[0].toUpperCase(Locale.ROOT));
         } catch (IllegalArgumentException e) {
-            throw new IllegalArgumentException("нет команды " + w[0]);
+            throw new IllegalArgumentException("no command " + w[0]);
         }
         List<String> args = new ArrayList<>(List.of(w).subList(1, w.length));
         SandboxCommand c = new SandboxCommand(verb, List.copyOf(args));
@@ -111,43 +111,43 @@ record SandboxCommand(Verb verb, List<String> args) {
             case BLAST, REAL -> {
                 need(1, verb == Verb.BLAST && water() ? 4 : 3);
                 WeaponType w = weapon();
-                if (w == WeaponType.NUKE) throw new IllegalArgumentException("ядерка — nuke <кт>");
+                if (w == WeaponType.NUKE) throw new IllegalArgumentException("for a nuke use nuke <kt>");
                 if (verb == Verb.REAL) {
                     if (houses() || roof() || masonry() || town() || paved() ? args.size() != 2
                             : args.size() > 1 && (args.size() != 3 || !List.of("deck", "concrete").contains(args.get(1)) || number(2) < 1 || number(2) > 6)) {
-                        throw new IllegalArgumentException("real <оружие> [deck|concrete <1–6 м> | houses | roof | masonry | town | paved]");
+                        throw new IllegalArgumentException("real <weapon> [deck|concrete <1–6 m> | houses | roof | masonry | town | paved]");
                     }
                     break;
                 }
                 int n = args.size() - (water() ? 1 : 0);
                 if (n > 1) seedAt(1);
-                if (n > 2 && (number(2) < 0 || number(2) > 200)) throw new IllegalArgumentException("высота 0–200 м");
+                if (n > 2 && (number(2) < 0 || number(2) > 200)) throw new IllegalArgumentException("height 0–200 m");
             }
             case LAUNCH, FLIGHT -> {
                 need(1, own() ? 3 : 2);
                 weapon();
-                if (args.size() > (own() ? 2 : 1) && !(number(1) >= 50 && number(1) <= 5000)) throw new IllegalArgumentException("от точки 50–5000 блоков");
+                if (args.size() > (own() ? 2 : 1) && !(number(1) >= 50 && number(1) <= 5000)) throw new IllegalArgumentException("from the point 50–5000 blocks");
             }
             case NUKE -> {
                 need(1, 4);
                 int kt = (int) number(0);
-                if (kt < 1 || kt > 15) throw new IllegalArgumentException("мощность 1–15 кт");
+                if (kt < 1 || kt > 15) throw new IllegalArgumentException("yield 1–15 kt");
                 int i = 1;
                 if (args.size() > i && List.of("air", "ground").contains(args.get(i))) i++;
                 if (args.size() > i && args.get(i).equals("near")) {
                     i++;
-                    if (args.size() > i && (number(i) < 100 || number(i) > 10000)) throw new IllegalArgumentException("дальность near 100–10000 м");
+                    if (args.size() > i && (number(i) < 100 || number(i) > 10000)) throw new IllegalArgumentException("near distance 100–10000 m");
                     if (args.size() > i) i++;
                 }
-                if (args.size() > i) throw new IllegalArgumentException("nuke <кт> [air|ground] [near [метров]]");
+                if (args.size() > i) throw new IllegalArgumentException("nuke <kt> [air|ground] [near [meters]]");
             }
             case RAID -> {
                 need(0, water() ? 5 : 4);
                 if (args.size() > 3 && !(args.size() == 4 && water())) weaponAt(3);
-                if (water() && number(1, 120) > POND / 2.0) throw new IllegalArgumentException("в пруд — радиус до " + POND / 2 + " м");
-                if (number(0, 16) < 1 || number(0, 16) > 40) throw new IllegalArgumentException("взрывов 1–40");
-                if (number(1, 120) < 10 || number(1, 120) > 400) throw new IllegalArgumentException("радиус 10–400 м");
-                if (number(2, 3) < 0 || number(2, 3) > 30) throw new IllegalArgumentException("между взрывами 0–30 с");
+                if (water() && number(1, 120) > POND / 2.0) throw new IllegalArgumentException("into the pond — radius up to " + POND / 2 + " m");
+                if (number(0, 16) < 1 || number(0, 16) > 40) throw new IllegalArgumentException("explosions 1–40");
+                if (number(1, 120) < 10 || number(1, 120) > 400) throw new IllegalArgumentException("radius 10–400 m");
+                if (number(2, 3) < 0 || number(2, 3) > 30) throw new IllegalArgumentException("between explosions 0–30 s");
             }
             case SAM -> need(0, 0);
             case AIRBURST -> {
@@ -157,8 +157,8 @@ record SandboxCommand(Verb verb, List<String> args) {
             case SPENT -> {
                 need(1, 2);
                 var booster = weapon().spec().airframe().article().booster();
-                if (booster == null || booster.jettison() <= 0) throw new IllegalArgumentException("у оружия нет сбрасываемого ускорителя");
-                if (args.size() > 1 && (number(1) < 0 || number(1) > 200)) throw new IllegalArgumentException("высота 0–200 м");
+                if (booster == null || booster.jettison() <= 0) throw new IllegalArgumentException("this weapon has no jettisonable booster");
+                if (args.size() > 1 && (number(1) < 0 || number(1) > 200)) throw new IllegalArgumentException("height 0–200 m");
             }
             case SURFACE -> {
                 need(1, 2);
@@ -167,7 +167,7 @@ record SandboxCommand(Verb verb, List<String> args) {
             }
             case FIRE -> {
                 need(0, 1);
-                if (!args.isEmpty() && (number(0) < 1 || number(0) > 32)) throw new IllegalArgumentException("сторона пожара 1–32");
+                if (!args.isEmpty() && (number(0) < 1 || number(0) > 32)) throw new IllegalArgumentException("fire side 1–32");
             }
             case CAM -> {
                 need(1, 4);
@@ -175,25 +175,25 @@ record SandboxCommand(Verb verb, List<String> args) {
             }
             case TIME -> {
                 need(1, 1);
-                // тик, как у ванильного time set: целое от 0
+                // a tick, as in vanilla time set: an integer from 0
                 if (!List.of("day", "night").contains(args.getFirst()) && (number(0) < 0 || number(0) > Integer.MAX_VALUE
-                        || number(0) != Math.rint(number(0)))) throw new IllegalArgumentException("время — day, night или тик (целое от 0)");
+                        || number(0) != Math.rint(number(0)))) throw new IllegalArgumentException("time — day, night or a tick (integer from 0)");
             }
             case STANCE -> {
                 need(1, 1);
-                if (!List.of("stand", "fly").contains(args.getFirst())) throw new IllegalArgumentException("stand или fly");
+                if (!List.of("stand", "fly").contains(args.getFirst())) throw new IllegalArgumentException("stand or fly");
             }
             case WEATHER -> {
                 need(1, 1);
-                if (!List.of("clear", "rain").contains(args.getFirst())) throw new IllegalArgumentException("clear или rain");
+                if (!List.of("clear", "rain").contains(args.getFirst())) throw new IllegalArgumentException("clear or rain");
             }
             case HUD, OVERLAY, TRACK -> {
                 need(1, 1);
-                if (!List.of("on", "off").contains(args.getFirst())) throw new IllegalArgumentException("on или off");
+                if (!List.of("on", "off").contains(args.getFirst())) throw new IllegalArgumentException("on or off");
             }
             case ZOOM -> {
                 need(1, 1);
-                if (number(0) < 1 || number(0) > 256) throw new IllegalArgumentException("зум 1–256");
+                if (number(0) < 1 || number(0) > 256) throw new IllegalArgumentException("zoom 1–256");
             }
             case TURN -> {
                 need(1, 2);
@@ -202,9 +202,9 @@ record SandboxCommand(Verb verb, List<String> args) {
             }
             case SHOTS -> {
                 need(2, 3);
-                if (!args.getFirst().matches("[A-Za-z0-9_.-]+")) throw new IllegalArgumentException("имя — буквы, цифры, _ . -");
+                if (!args.getFirst().matches("[A-Za-z0-9_.-]+")) throw new IllegalArgumentException("name — letters, digits, _ . -");
                 times();
-                if (args.size() > 2 && (number(2) < 0 || number(2) > 120)) throw new IllegalArgumentException("звук 0–120 с");
+                if (args.size() > 2 && (number(2) < 0 || number(2) > 120)) throw new IllegalArgumentException("sound 0–120 s");
             }
             case WAIT -> {
                 need(1, 1);
@@ -212,9 +212,9 @@ record SandboxCommand(Verb verb, List<String> args) {
             }
             case HOUSE -> {
                 need(1, 3);
-                if (args.size() > 2 && !args.get(2).matches("[a-z0-9_]+")) throw new IllegalArgumentException("верх — блок minecraft: " + args.get(2));
-                if (number(0) < 0 || number(0) > 50) throw new IllegalArgumentException("высота дома 0–50");
-                if (number(1, 10) < 1 || number(1, 10) > 12) throw new IllegalArgumentException("полуширина 1–12");
+                if (args.size() > 2 && !args.get(2).matches("[a-z0-9_]+")) throw new IllegalArgumentException("top — a minecraft block: " + args.get(2));
+                if (number(0) < 0 || number(0) > 50) throw new IllegalArgumentException("house height 0–50");
+                if (number(1, 10) < 1 || number(1, 10) > 12) throw new IllegalArgumentException("half-width 1–12");
             }
             case SCENERY -> {
                 need(1, 1);
@@ -224,55 +224,56 @@ record SandboxCommand(Verb verb, List<String> args) {
         }
     }
 
-    /** {@code blast … water}, {@code raid … water}: удар в пруд. */
+    /** {@code blast … water}, {@code raid … water}: a strike into the pond. */
     boolean water() {
         return (verb == Verb.BLAST && args.size() > 1 || verb == Verb.RAID) && !args.isEmpty() && args.getLast().equals("water");
     }
 
-    /** {@code raid}: оружие налёта (по умолчанию шахед). */
+    /** {@code raid}: the raid's weapon (by default Shahed). */
     WeaponType raidWeapon() {
         return args.size() > 3 && !args.get(3).equals("water") ? weaponAt(3) : WeaponType.DRONE;
     }
 
-    /** {@code nuke}: воздушный подрыв. */
+    /** {@code nuke}: an air burst. */
     boolean air() {
         return args.contains("air");
     }
 
-    /** {@code nuke … near}: вид у камеры. */
+    /** {@code nuke … near}: the view from the camera. */
     boolean near() {
         return verb == Verb.NUKE && args.contains("near");
     }
 
-    /** {@code nuke … near [метров]}: дальность подрыва от домов. */
+    /** {@code nuke … near [meters]}: detonation distance from the houses. */
     double nearRange() {
         int i = args.indexOf("near");
         return i >= 0 && args.size() > i + 1 ? number(i + 1) : NEAR_RANGE;
     }
 
     /**
-     * Приказ серверу для {@code launch}/{@code flight} в точке (x, z), без «execute as» ({@code own} добавляет его сам).
-     * Пролёт — по прямой мимо камеры: без точек оператора шахед и ракета летят петлёй в обход и заходят из-за спины
-     * стреляющего ({@code StrikeService.Loop}), и у точки проходили в 200–350 блоках, дальше, чем ждёт песочница. Поэтому
-     * у оружия, которое летает по точкам ({@link WeaponSpec.Route#waypoints}), точка маршрута — сама точка, на одной
-     * прямой между местом пуска и целью: снаряд проходит над ней на своей высоте. «Град» и B-2 точек не берут (приказ с
-     * {@code via} сервер отклоняет) и идут по прямой сами: баллистика и курс сброса от места пуска на цель.
+     * Order to the server for {@code launch}/{@code flight} at the point (x, z), without "execute as" ({@code own} adds it itself).
+     * A flyover — in a straight line past the camera: without the operator's points a Shahed and a missile fly a loop around and
+     * approach from behind the shooter ({@code StrikeService.Loop}), and pass the point at 200–350 blocks, farther than the sandbox
+     * expects. Therefore for a weapon that flies through points ({@link WeaponSpec.Route#waypoints}), the route point is the point
+     * itself, on one straight line between the launch place and the target: the projectile passes over it at its own height.
+     * Grad and B-2 take no points (the server rejects an order with {@code via}) and go straight on their own: ballistics and
+     * the release course from the launch place to the target.
      */
     String order(int x, int z) {
         WeaponType w = weapon();
         if (verb == Verb.LAUNCH) return String.format(Locale.ROOT, "incoming salvo %s 1 0 at %d %d from %d %d", w.getSerializedName(), x, z - LAUNCH_RANGE, x, z);
-        if (verb != Verb.FLIGHT) throw new IllegalStateException("не пуск: " + this);
+        if (verb != Verb.FLIGHT) throw new IllegalStateException("not a launch: " + this);
         int from = flightFrom();
         String s = String.format(Locale.ROOT, "incoming salvo %s 1 0 at %d %d from %d %d", w.getSerializedName(), x, z - from, x, z + from);
         return w.spec().route().waypoints() ? s + String.format(Locale.ROOT, " via %d %d", x, z) : s;
     }
 
-    /** {@code flight}: пуск и цель — на столько блоков от точки. */
+    /** {@code flight}: the launch and the target — that many blocks from the point. */
     int flightFrom() {
         return args.size() > 1 && !args.get(1).equals("own") ? (int) number(1) : FLIGHT_FROM;
     }
 
-    /** {@code real … deck <м>}: толщина настила моста, м; 0 — удар в землю. */
+    /** {@code real … deck <m>}: thickness of the bridge deck, m; 0 — a strike on the ground. */
     int deck() {
         return verb == Verb.REAL && args.size() == 3 ? (int) number(2) : 0;
     }
@@ -286,22 +287,22 @@ record SandboxCommand(Verb verb, List<String> args) {
         return args.size() == 3 && args.get(1).equals("concrete");
     }
 
-    /** {@code real <оружие> houses}: удар у дощатого дома сцены {@code debris}. */
+    /** {@code real <weapon> houses}: a strike at the plank house of the {@code debris} scene. */
     boolean houses() {
         return verb == Verb.REAL && args.size() > 1 && args.get(1).equals("houses");
     }
 
-    /** {@code real <оружие> roof}: удар в середину дощатой крыши дома сцены {@code debris}. */
+    /** {@code real <weapon> roof}: a strike at the middle of the plank roof of the house in the {@code debris} scene. */
     boolean roof() {
         return verb == Verb.REAL && args.size() > 1 && args.get(1).equals("roof");
     }
 
-    /** {@code real … masonry}: те же дома на мостовой, удар в середину бетонной крыши дома из каменного кирпича. */
+    /** {@code real … masonry}: the same houses on paving, a strike at the middle of the concrete roof of a stone brick house. */
     boolean masonry() {
         return verb == Verb.REAL && args.size() > 1 && args.get(1).equals("masonry");
     }
 
-    /** {@code real … town}: квартал на мостовой (дома 10×10×12 м, улицы по 6 м), удар в перекрёсток. */
+    /** {@code real … town}: a block on paving (houses 10×10×12 m, streets 6 m wide), a strike at the intersection. */
     boolean town() {
         return verb == Verb.REAL && args.size() > 1 && args.get(1).equals("town");
     }
@@ -315,19 +316,19 @@ record SandboxCommand(Verb verb, List<String> args) {
         for (WeaponType t : WeaponType.values()) {
             if (t.getSerializedName().equals(name)) return t;
         }
-        throw new IllegalArgumentException("нет оружия " + name + " (drone, missile, bunker, rocket, loiter)");
+        throw new IllegalArgumentException("no weapon " + name + " (drone, missile, bunker, rocket, loiter)");
     }
 
     long seed() {
         return seedAt(args.size() - 1);
     }
 
-    /** Зерно — слово i. */
+    /** Seed — word i. */
     long seedAt(int i) {
         try {
             return Long.parseLong(args.get(i));
         } catch (NumberFormatException e) {
-            throw new IllegalArgumentException("зерно — целое: " + args.get(i));
+            throw new IllegalArgumentException("seed — an integer: " + args.get(i));
         }
     }
 
@@ -335,7 +336,7 @@ record SandboxCommand(Verb verb, List<String> args) {
         try {
             return Double.parseDouble(args.get(i));
         } catch (NumberFormatException e) {
-            throw new IllegalArgumentException("не число: " + args.get(i));
+            throw new IllegalArgumentException("not a number: " + args.get(i));
         }
     }
 
@@ -343,7 +344,7 @@ record SandboxCommand(Verb verb, List<String> args) {
         return args.size() > i ? number(i) : otherwise;
     }
 
-    /** {@code shots}: секунды кадров по возрастанию. */
+    /** {@code shots}: frame seconds in ascending order. */
     double[] times() {
         String[] parts = args.get(1).split(",");
         double[] t = new double[parts.length];
@@ -351,18 +352,18 @@ record SandboxCommand(Verb verb, List<String> args) {
             try {
                 t[i] = Double.parseDouble(parts[i]);
             } catch (NumberFormatException e) {
-                throw new IllegalArgumentException("время кадра — секунды через запятую: " + args.get(1));
+                throw new IllegalArgumentException("frame time — seconds separated by commas: " + args.get(1));
             }
-            // до начала эффекта (−10…0 с) — только у эффекта, чьё начало известно заранее (nuke … near: приход фронта)
-            if (t[i] < -10 || t[i] > 600) throw new IllegalArgumentException("время кадра −10…600 с");
-            if (i > 0 && t[i] < t[i - 1]) throw new IllegalArgumentException("время кадров — по возрастанию");
+            // before the effect starts (−10…0 s) — only for an effect whose start is known in advance (nuke … near: the front's arrival)
+            if (t[i] < -10 || t[i] > 600) throw new IllegalArgumentException("frame time −10…600 s");
+            if (i > 0 && t[i] < t[i - 1]) throw new IllegalArgumentException("frame times must ascend");
         }
         return t;
     }
 
     private void need(int min, int max) {
         if (args.size() < min || args.size() > max) {
-            throw new IllegalArgumentException(verb.name().toLowerCase(Locale.ROOT) + ": аргументов " + min + (max > min ? "–" + max : ""));
+            throw new IllegalArgumentException(verb.name().toLowerCase(Locale.ROOT) + ": arguments " + min + (max > min ? "–" + max : ""));
         }
     }
 

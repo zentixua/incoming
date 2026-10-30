@@ -156,7 +156,7 @@ public final class FixedLauncherGameTests {
     @GameTest(template = "runway", timeoutTicks = 600, batch = "fixed_salvo", skyAccess = true)
     public static void salvoPaysPerShot(GameTestHelper h) {
         ServerLevel level = h.getLevel();
-        FakePlayer player = player(level, "Хозяин", Vec3.atBottomCenterOf(h.absolutePos(PAD)).add(3, 0, 0));
+        FakePlayer player = player(level, "Owner", Vec3.atBottomCenterOf(h.absolutePos(PAD)).add(3, 0, 0));
         UUID owner = player.getUUID();
         FixedLauncherBlockEntity be = launcher(h, PAD, owner);
         Vec3 site = Vec3.atBottomCenterOf(h.absolutePos(PAD));
@@ -212,8 +212,8 @@ public final class FixedLauncherGameTests {
     public static void designatorAssignsMission(GameTestHelper h) {
         ServerLevel level = h.getLevel();
         Vec3 c = Vec3.atBottomCenterOf(h.absolutePos(RANGE_CENTER));
-        FakePlayer owner = player(level, "Хозяин", c.add(3, 0, 0));
-        FakePlayer stranger = player(level, "Чужой", c.add(-3, 0, 0));
+        FakePlayer owner = player(level, "Owner", c.add(3, 0, 0));
+        FakePlayer stranger = player(level, "Stranger", c.add(-3, 0, 0));
         FixedLauncherBlockEntity be = launcher(h, RANGE_CENTER, owner.getUUID());
         ItemStack designator = new ItemStack(ModItems.DESIGNATOR.get());
         LauncherLinks.toggle(owner, designator, be);

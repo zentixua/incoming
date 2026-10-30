@@ -20,10 +20,10 @@ import java.util.List;
 import java.util.Locale;
 
 /**
- * Осколки (S4): «Град» рвётся в метре над площадкой осью вниз — пояс осколков идёт над землёй во все стороны.
- * Манекены на двух кольцах, 8 и 16 м: попаданий на дальнем меньше — по 1/R² (манекен выше пояса на 8 м ловит его
- * долю больше, чем на 16 м, поэтому отношение — 2,8–5, а не ровно 4); за каменной стеной — ни одного. Стекло и кладка
- * в поясе: стёкла выбиты точками, на кладке — выбоины.
+ * Fragments (S4): Grad bursts one meter above the pad with its axis pointing down — the fragment belt runs over the
+ * ground in all directions. Mannequins on two rings, 8 and 16 m: hits on the far ring are fewer — by 1/R² (a mannequin
+ * 8 m above the belt catches a larger share of it than one 16 m away, so the ratio is 2.8–5, not exactly 4); behind a
+ * stone wall — none. Glass and masonry in the belt: panes are punched through at points, masonry gets pits.
  */
 @GameTestHolder(Incoming.MOD_ID)
 @PrefixGameTestTemplate(false)
@@ -38,17 +38,17 @@ public final class FragmentGameTests {
         Vec3 at = Vec3.atBottomCenterOf(h.absolutePos(CENTER)).add(0, 1, 0);
         List<ArmorStand> near = new ArrayList<>(), far = new ArrayList<>();
         for (int i = 0; i < 9; i++) {
-            // кольца — от 30° до 285°: на 0° — манекен за стеной, на 320° — стекло и кладка
+            // rings from 30° to 285°: at 0° a mannequin behind a wall, at 320° glass and masonry
             double a = Math.toRadians(30 + 30 * i);
             near.add(stand(h, 8 * Math.cos(a), 8 * Math.sin(a)));
             far.add(stand(h, 16 * Math.cos(a + Math.toRadians(15)), 16 * Math.sin(a + Math.toRadians(15))));
         }
-        // стена 5 × 4 камня в 5 м по +X, манекен за ней в 8 м
+        // stone wall 5 × 4 at 5 m along +X, a mannequin behind it at 8 m
         for (int dz = -2; dz <= 2; dz++) {
             for (int dy = 0; dy < 4; dy++) h.setBlock(CENTER.offset(5, dy, dz), Blocks.STONE);
         }
         ArmorStand hidden = stand(h, 8, 0);
-        // на 320°, в 10 м: стенка 6 × 4 из стеклянных панелей, за ней в 12 м — кладка
+        // at 320°, 10 m out: a 6 × 4 wall of glass panes, with masonry behind it at 12 m
         List<BlockPos> glass = new ArrayList<>(), bricks = new ArrayList<>();
         double g = Math.toRadians(320);
         for (int k = -3; k <= 2; k++) {
@@ -63,7 +63,7 @@ public final class FragmentGameTests {
         }
         FragmentStrike strike = Warheads.testFragments(level, WeaponType.ROCKET, at, new Vec3(0, -1, 0), 1234);
         h.succeedWhen(() -> {
-            h.assertTrue(strike.done(), "осколки не кончились");
+            h.assertTrue(strike.done(), "fragments have not finished");
             double n = 0, f = 0;
             for (ArmorStand s : near) n += strike.hits(s.getUUID());
             for (ArmorStand s : far) f += strike.hits(s.getUUID());
@@ -72,7 +72,7 @@ public final class FragmentGameTests {
             int broken = 0, cracked = 0;
             for (BlockPos p : glass) if (level.getBlockState(p).isAir()) broken++;
             for (BlockPos p : bricks) if (level.getBlockState(p).is(Blocks.CRACKED_STONE_BRICKS)) cracked++;
-            String got = String.format(Locale.ROOT, "попаданий на манекен: 8 м %.1f, 16 м %.1f (×%.2f), за стеной %.0f; стёкол %d/%d, выбоин %d/%d",
+            String got = String.format(Locale.ROOT, "hits per mannequin: 8 m %.1f, 16 m %.1f (×%.2f), behind wall %.0f; panes %d/%d, pits %d/%d",
                     n, f, n / Math.max(f, 1e-9), strike.hits(hidden.getUUID()), broken, glass.size(), cracked, bricks.size());
             Incoming.LOG.info("FRAGBENCH {}", got);
             h.assertTrue(f >= 1, got);

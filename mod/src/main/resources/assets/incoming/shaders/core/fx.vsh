@@ -7,23 +7,26 @@
 #moj_import <incoming:fx_balls.glsl>
 #moj_import <incoming:bloom.glsl>
 
-// Слой эффектов (client/fx/layer): дым, пламя, искры, вспышки и всё дальнее одним проходом после мира.
+// Effects layer (client/fx/layer): smoke, flames, sparks, flashes and everything distant in one pass after the world.
 in vec3 Position;
 in vec2 UV0;
-// свет, уже умноженный на непрозрачность; альфа — сколько закрыто того, что за частицей
+// light already multiplied by opacity; alpha — how much of what is behind the particle is covered
 in vec4 Color;
-// x: мягкость края у рельефа, блоков × 16 (меньше нуля — свет в глазу от источника: минус номер его пробы,
-// SourceProbes); y: во сколько раз точка перенесена ближе (дальше дальней плоскости), × 32767
+// x: softness of the edge at terrain, blocks × 16 (below zero — light at the eye from a source: minus the number of its
+// probe,
+// SourceProbes); y: how many times the point is moved nearer (beyond the far plane), × 32767
 in ivec2 UV1;
 // World lightmap; baked puffs store their geometry basis (puffBasis) here and use FULL_BRIGHT lighting.
 in ivec2 UV2;
-// x: туман Minecraft 0..1; y: 1 — частица (ближайшим пикселем, как из атласа Minecraft), −1 — плитка атласа дальних
-// моделей (свет в ней уже есть), ½ — ореол far/glow (крупный — по формуле, fx.fsh), −¼ — запечённый клуб с
-// шестисторонним светом (FxAtlas.puff6), ⅝ — кадры огня; z: непрозрачность частицы без текстуры, у клуба/огня — смесь кадров
+// x: Minecraft fog 0..1; y: 1 — particle (by the nearest pixel, as from the Minecraft atlas), −1 — a far-model atlas
+// tile
+// (the light is already in it), ½ — halo far/glow (large — by formula, fx.fsh), −¼ — a baked puff with
+// six-sided light (FxAtlas.puff6), ⅝ — fire frames; z: opacity of a particle without texture, for a puff or fire — a
+// mix of frames
 in vec3 Normal;
-// свечение (FxBloom, FxQuads.emission): байт Emit — bloom.glsl
+// glow (FxBloom, FxQuads.emission): byte Emit — bloom.glsl
 in float Emit;
-// x: 1 — проход свечения (FxBloom); y — во сколько раз пиксель прохода крупнее пикселя кадра
+// x: 1 — glow pass (FxBloom); y — how many times the pass pixel is larger than the frame pixel
 uniform vec2 FxGlowPass;
 // Half-resolution split (HalfPass): x — 1 clips each quad to its rectangle for this pass (an empty one drops it), HalfRect
 // texel (quad % 1024, quad / 1024 + y) — NDC x0, y0, x1, y1; quad = vertex / 4, the sorted place. HalfRect is on its own
@@ -34,18 +37,19 @@ uniform sampler2D HalfRect;
 flat out float quadPlace;
 
 uniform sampler2D Sampler2;
-// свет открытого неба на веществе в воздухе против карты освещения у открытого неба (FarView.sky): карта красит синим
-// уже на закате, облака Minecraft — только когда свет ушёл; по каналам, на экране
+// sky light on the substance in the air against the light map in the open sky (FarView.sky): the map paints blue
+// already at sunset, Minecraft clouds — only when the light has gone; per channel, on screen
 uniform vec3 FxSkyFix;
-// видимая доля источников кадра (SourceProbes): проба i — пиксель (i % ширина, i / ширина)
+// visible share of the frame's sources (SourceProbes): probe i — pixel (i % width, i / width)
 uniform sampler2D Sampler4;
-// 1 — пробы есть
+// 1 — probes exist
 uniform float FxProbes;
 
 uniform mat4 ModelViewMat;
 uniform mat4 ProjMat;
-// пелена, стена пыли и грибы кадра — pall_front.glsl; огненный шторм: карты огня слотов и слоты огня (pall.glsl) — свет
-// пожаров снизу на дыме и пыли слоя
+// pall, dust wall and mushrooms of the frame — pall_front.glsl; fire storm: the fire maps of the slots and fire slots
+// (pall.glsl) — light
+// of fires from below on the layer's smoke and dust
 uniform sampler2D Sampler7;
 uniform sampler2D Sampler8;
 uniform mat4 PallFire0;
@@ -58,7 +62,7 @@ out float softness;
 out float fog;
 out float nearest;
 out float opacity;
-// сколько пропускает пелена между глазом и квадратом (её свет — в fx.fsh, по пелене на кадре)
+// how much the pall between the eye and the square passes (its light — in fx.fsh, by the pall on the frame)
 out float pallFront;
 // Baked puff: direct sun/moon share of skylight, fireball light relative to light at the eye (rgb),
 // and directions toward direct light and fireballs in the puff's actual geometry and UV axes.
@@ -66,13 +70,14 @@ out float sixKey;
 out vec3 sixBall;
 out vec3 sixKeyDir;
 out vec3 sixBallDir;
-// место вершины от камеры (настоящее, без переноса ближе): свет шаров на лежащем клубе — в каждом пикселе (fx.fsh)
+// the vertex's place from the camera (true, without moving nearer): light of the balls on a lying puff — in each pixel
+// (fx.fsh)
 out vec3 worldPos;
-// свечение: во сколько раз свет ярче показанного; 0 — не светится
+// glow: how many times the light is brighter than shown; 0 — does not glow
 out float emitGain;
-// 1 — пятно мелкого светящегося (FxQuads, FxBloom.spots): ореол формулой, свет линейный
+// 1 — spot of a small glowing thing (FxQuads, FxBloom.spots): halo by formula, light linear
 out float emitSpot;
-// на солнце (днём) или луну (ночью) в мире; w — доля прямого света в свете неба (FxLayer.sun)
+// in the sun (by day) or the moon (by night) in the world; w — share of direct light in the sky light (FxLayer.sun)
 uniform vec4 FxSun;
 
 // Two circles from UV2 (PuffGeometry.faceLight/flatLight), each storing sin/(|cos| + |sin|) in signed 15 bits.
@@ -100,10 +105,13 @@ vec3 puffDirection(vec3 l, vec4 axes, bool mirror) {
     return vec3(right, axes.z * l.y - axes.w * h, -axes.z * h - axes.w * l.y);
 }
 
-// свет точки p (от камеры) огненными шарами на экране (доля белого, привыкание глаза — уже в FxBallLight): у поверхности
-// шара — его освещённость, дальше — как (r/d)²; с колена — не ярче огня самого шара на экране: освещённое не бывает ярче
-// источника. Свет неба на экране сюда не множится: ночь уже в привыкании глаза (Sight.exposure), второй раз она гасила
-// огонь на дыме и частицах ночью в 3 раза
+// light at point p (from the camera) by fireballs on the screen (share of white, eye adaptation — already in
+// FxBallLight): at the surface
+// of the ball — its irradiance, farther — as (r/d)²; from the knee on — not brighter than the ball's own fire on
+// screen: a lit thing is never brighter than
+// its source. Sky light on screen is not multiplied in here: the night is already in eye adaptation (Sight.exposure); a
+// second time it dimmed
+// fire on smoke and particles at night 3 times
 vec3 balls(vec3 p) {
     vec3 sum = vec3(0.0);
     for (int i = 0; i < 4; i++) {
@@ -117,8 +125,10 @@ vec3 balls(vec3 p) {
     return sum;
 }
 
-// свет горящего города снизу на точке p (от камеры): пламя со всей площади шириной ~2h под ней, как зарево на пелене
-// (fx_pall), вполовину: клуб частиц освещён снизу только с одной стороны; у земли — сильнее, выше дым между ними его гасит
+// light of a burning city from below at point p (from the camera): flames from the whole area ~2h wide under it, as
+// glow on the pall
+// (fx_pall), by half: a particle puff is lit from below only on one side; near the ground — stronger, higher up the
+// smoke between them dims it
 vec3 firelight(sampler2D map, mat4 S, mat4 F, vec3 p) {
     if (F[0].x <= 0.0) return vec3(0.0);
     float h = p.y - S[0].z;
@@ -126,9 +136,11 @@ vec3 firelight(sampler2D map, mat4 S, mat4 F, vec3 p) {
     return F[3].rgb * (0.5 * F[1].w * flame * exp(-max(h, 0.0) / F[0].z));
 }
 
-// Пелена, грибы и дым взрывов перед точкой p (настоящей, от глаза): объём пелены уже на кадре (PallPass) — до мира за
-// пикселем; квадрат ближе мира должен быть за той их частью, что между ним и глазом (pallThrough; грибы — так же, по своему
-// полю без шума, дым — по сетке, smokeThrough)
+// Pall, mushrooms and explosion smoke in front of point p (the real one, from the eye): the pall's volume is already on
+// the frame (PallPass) — up to the world behind
+// the pixel; a square nearer than the world must be behind that part of them which is between it and the eye
+// (pallThrough; mushrooms — likewise, by their own
+// noise-free field, smoke — by grid, smokeThrough)
 float pall(vec3 p) {
     float len = length(p);
     if (PallAmbient.w < 0.5 || len < 1e-3) return 1.0;
@@ -171,7 +183,8 @@ void main() {
             light.rgb += add / max(1.0, dot(add, LUMA));
         }
     }
-    // блик и вуаль у глаза за ними ничто не режет: их видно, сколько видно в кадре самого источника
+    // glare and veil at the eye are cut by nothing in front of them: they are visible as far as the source itself is
+    // visible in the frame
     float seen = 1.0;
     if (UV1.x < 0 && FxProbes > 0.5) {
         int i = -UV1.x - 1, w = textureSize(Sampler4, 0).x;
@@ -193,7 +206,7 @@ void main() {
         sixBallDir = puffDirection(bd, axes, UV2.y < 0);
         if (dot(sixBallDir, sixBallDir) > 1e-8) sixBallDir = normalize(sixBallDir);
     }
-    // настоящее расстояние по оси взгляда: перенесённую ближе точку — обратно
+    // true distance along the view axis — the point moved nearer is taken back
     viewDistance = -view.z / unfold;
     worldPos = Position / unfold;
     softness = float(max(UV1.x, 0)) / 16.0;
@@ -205,16 +218,20 @@ void main() {
     if (Emit > 129.5) {
         emitSpot = 1.0;
         emitGain = 1.0;
-        // свет пятна линейный: оттенок — в цвете вершины, величина — в UV2.x, доля закрытого — в UV2.y (FxBloom.magnitude)
+        // spot light is linear: hue — in the vertex colour, magnitude — in UV2.x, covered share — in UV2.y
+        // (FxBloom.magnitude)
         vertexColor = vec4(Color.rgb * bloomMag(float(UV2.x)), bloomMag(float(UV2.y)));
     } else if (Emit > 1.5) {
         emitGain = bloomGain(Emit - 2.0);
     }
-    // пятно — только в проходе свечения, квадрат, что светится пятнами, — только в слое: другой — за пределами кадра
+    // a spot — only in the glow pass; a square that glows by spots — only in the layer: the other one is beyond the
+    // frame
     bool glowPass = FxGlowPass.x > 0.5;
     if ((Emit > 129.5 && !glowPass) || (Emit > 0.5 && Emit < 1.5 && glowPass)) gl_Position = vec4(2.0, 2.0, 2.0, 1.0);
-    // блик и вуаль с пробой: пелена и грибы перед источником — уже в ней (fx_probe, до самого источника); по углам
-    // квадрата у глаза их не считать — свет в глазу идёт от источника, а угол блика в своей же шапке гасил бы его над ней
+    // glare and veil with a probe: the pall and mushrooms in front of the source — already in it (fx_probe, up to the
+    // source itself); at the corners
+    // of the square at the eye they must not be counted — light at the eye comes from the source, and the glare's
+    // corner in its own cap would dim it above it
     pallFront = 1.0;
     if (UV1.x >= 0 || FxProbes < 0.5) pallFront = pall(Position / unfold);
 }
