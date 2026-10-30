@@ -252,8 +252,15 @@ dependencies {
     testImplementation 'io.github.ocelot:glsl-processor:0.2.3'
 }
 
+// CI (build.yml, "Юнит-тесты"): -PtestGroup=slow runs the three slowest classes (@Tag("slow"), 1–3 min each), the rest
+// runs with -PtestGroup=rest; -PtestForks spreads classes over JVMs. Gradle hands classes to forks in turn, so a
+// slow class sharing a JVM with the others would queue them behind it. Without these properties: everything, one JVM.
 test {
-    useJUnitPlatform()
+    useJUnitPlatform {
+        if (project.findProperty('testGroup') == 'slow') includeTags 'slow'
+        if (project.findProperty('testGroup') == 'rest') excludeTags 'slow'
+    }
+    maxParallelForks = (project.findProperty('testForks') ?: '1') as int
 }
 
 // Порядок сборки модов для запусков из Gradle. simulated, offroad и aeronautics (всё из Create Aeronautics) в своих
