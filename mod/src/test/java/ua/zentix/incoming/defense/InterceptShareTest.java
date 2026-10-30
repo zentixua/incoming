@@ -96,7 +96,7 @@ class InterceptShareTest {
             if (!t.step()) return new int[] {0, missiles, 0};
             Vec3 now = t.pos;
             if (f == null && (tick + sweep) % SamBlockEntity.SWEEP == 0 && seen(a, now)) {
-                f = new Interceptor(SPEC, UUID.randomUUID(), null, "тест", RAIL, Interceptor.railDirection(RAIL, now, SPEC));
+                f = new Interceptor(SPEC, UUID.randomUUID(), null, "test", RAIL, Interceptor.railDirection(RAIL, now, SPEC));
                 missiles++;
             }
             if (f == null) continue;

@@ -486,7 +486,7 @@ public final class StressDirector {
         ServerPlayer p = s.getPlayerList().getPlayerByName(name);
         if (p == null) {
             log("skip %s: no player %s", what, name);
-            problems.add("шаг пропущен, нет игрока " + name + ": " + what);
+            problems.add("step skipped, no player " + name + ": " + what);
         }
         return p;
     }
@@ -522,7 +522,7 @@ public final class StressDirector {
         ServerPlayer p = need(s, name, "teleport");
         if (p == null) return;
         if (level == null) {
-            problems.add("шаг пропущен: телепорт " + name + ", мира назначения нет");
+            problems.add("step skipped: teleport " + name + ", no destination world");
             return;
         }
         ArrayDeque<TpRequest> queue = deferredTeleports.computeIfAbsent(name, k -> new ArrayDeque<>());
@@ -736,12 +736,12 @@ public final class StressDirector {
         ServerPlayer p = need(s, shooter, "blow to craft");
         if (p == null) return;
         if (craftId == null) {
-            problems.add("шаг пропущен: удар по аппарату, аппарат не построен");
+            problems.add("step skipped: strike on a craft, the craft is not built");
             return;
         }
         var sub = ua.zentix.incoming.compat.SubLevels.byId(s.overworld(), craftCenter, craftId);
         if (sub == null) {
-            problems.add("шаг пропущен: удар по аппарату, аппарата " + craftId + " больше нет");
+            problems.add("step skipped: strike on a craft, craft " + craftId + " is gone");
             return;
         }
         Vec3 c = ua.zentix.incoming.compat.SubLevels.center(sub);
@@ -1605,7 +1605,7 @@ public final class StressDirector {
      */
     private void stopWhenSettled(MinecraftServer s) {
         settlingSince = tick;
-        for (ServerPlayer p : List.copyOf(s.getPlayerList().getPlayers())) p.connection.disconnect(Component.literal("Стенд закончен"));
+        for (ServerPlayer p : List.copyOf(s.getPlayerList().getPlayers())) p.connection.disconnect(Component.literal("Bench finished"));
         log("completion: players are disconnected, waiting for the end of chunk generation");
     }
 
@@ -1730,8 +1730,8 @@ public final class StressDirector {
      *  (waiting limit for slow generation), something for which the test was not checked - “not verified”, not ok and not a failure.
      */
     public static String probeVerdict(List<String> fails, int gaveUps) {
-        if (!fails.isEmpty()) return "провал: " + String.join("; ", fails);
-        return gaveUps > 0 ? "не проверено: не дождались района цели " + gaveUps : "ok";
+        if (!fails.isEmpty()) return "failed: " + String.join("; ", fails);
+        return gaveUps > 0 ? "not checked: did not wait for the target area " + gaveUps : "ok";
     }
 
     private void onStopping(ServerStoppingEvent e) {

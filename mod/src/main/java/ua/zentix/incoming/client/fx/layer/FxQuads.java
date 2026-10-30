@@ -12,22 +12,21 @@ import org.lwjgl.system.MemoryUtil;
 import java.util.Arrays;
 
 /**
- * Quads for the effects-layer frame: accumulated in reusable off-heap memory, then sorted far to near by their
- * true camera distance and submitted in one draw call. Transparency blends correctly only in this order:
- * a near puff covers a distant one, regardless of which was created later.
- * <p>
- * A vertex is 36 bytes ({@link #FORMAT}): camera-relative position, atlas coordinates, premultiplied color,
- * terrain softness or source probe ({@link #seenBy}) and near-fold factor ({@code UV1}), world light ({@code UV2};
- * baked puffs store their lighting basis instead, {@link PuffGeometry#faceLight}), Minecraft fog ({@code Normal.x}),
- * texture mode ({@code Normal.y}: 1 for nearest-texel particles, {@link #nearestTexels}; −1 for distant-model atlas
- * tiles, {@link #modelTiles}; ½ for analytic glow, {@link #glowShape}; −¼ for baked puffs with six-way lighting,
- * {@link #sixWay}; ⅝ for blended fire frames, {@link #fireballMix}; 0 for smooth effects-atlas sampling), and particle
- * opacity before texturing or puff-frame blend ({@code Normal.z}, {@link #opacity}), plus emission ({@code Emit}, {@link #emission}).
+ * Quads for the effects-layer frame: accumulated in reusable off-heap memory, then sorted far to near by their true
+ * camera distance and submitted in one draw call. Transparency blends correctly only in this order: a near puff covers
+ * a distant one, regardless of which was created later. <p> A vertex is 36 bytes ({@link #FORMAT}): camera-relative
+ * position, atlas coordinates, premultiplied color, terrain softness or source probe ({@link #seenBy}) and near-fold
+ * factor ({@code UV1}), world light ({@code UV2}; baked puffs store their lighting basis instead, {@link
+ * PuffGeometry#faceLight}), Minecraft fog ({@code Normal.x}), texture mode ({@code Normal.y}: 1 for nearest-texel
+ * particles, {@link #nearestTexels}; −1 for distant-model atlas tiles, {@link #modelTiles}; ½ for analytic glow, {@link
+ * #glowShape}; −¼ for baked puffs with six-way lighting, {@link #sixWay}; ⅝ for blended fire frames, {@link
+ * #fireballMix}; 0 for smooth effects-atlas sampling), and particle opacity before texturing or puff-frame blend
+ * ({@code Normal.z}, {@link #opacity}), plus emission ({@code Emit}, {@link #emission}).
  */
 public final class FxQuads {
     /**
-     * Свечение вершины ({@link #emission}): байт без нормировки (в шейдере — число 0…255). Свой элемент формата — под
-     * свободным номером ({@code findNextId}), как свои элементы заводит Iris.
+     * Vertex glow ({@link #emission}): an unnormalized byte (in the shader, a number 0…255). Its own format element —
+     * under a free number ({@code findNextId}), as Iris adds its own elements.
      */
     public static final VertexFormatElement EMIT = VertexFormatElement.register(VertexFormatElement.findNextId(), 0, VertexFormatElement.Type.UBYTE,
             VertexFormatElement.Usage.GENERIC, 1);
@@ -41,27 +40,27 @@ public final class FxQuads {
             .add("Emit", EMIT)
             .build();
     private static final int VERTEX = 36, QUAD = 4 * VERTEX;
-    /** Мягкость края клуба у земли и стен — доля его полуразмера. */
+    /** Softness of the puff's edge at the ground and walls — a fraction of its half-size. */
     public static final float SOFT = 0.5f;
 
     private long stage;
     private int capacity, n;
     private long write;
     private float[] keys = new float[0];
-    /** Квадрат светится (хоть одна вершина с {@link #emission}). */
+    /** The quad glows (at least one vertex with {@link #emission}). */
     private boolean[] emits = new boolean[0];
-    /** После {@link #draw}: начало прохода свечения в отсортированном порядке ({@link #glowStart}; n — нет светящихся). */
+    /** After {@link #draw}: start of the glow pass in sorted order ({@link #glowStart}; n — no glowing ones). */
     private int glowFrom;
     /**
-     * Глубина, ближе которой квадраты закрывают ореол светящихся ({@link #glowStart}): наибольшее у светящихся кадра
-     * расстояние с полуразмером квадрата.
+     * Depth nearer than which the quads cover the halo of the glowing ones ({@link #glowStart}): the greatest, among
+     * the frame's glowing ones, of distance with the quad's half-size.
      */
     private float glowReach;
-    /** Рамка вершин светящихся квадратов кадра (от камеры): x, y, z наименьшие, потом наибольшие. */
+    /** Bounding box of the vertices of the frame's glowing quads (from the camera): x, y, z smallest, then largest. */
     private final float[] glowBox = new float[6];
-    /** Угол пикселя прохода свечения, рад ({@link FxBloom#texel}); 0 — свечения нет. */
+    /** Pixel angle of the glow pass, rad ({@link FxBloom#texel}); 0 — no glow. */
     private double glowTexel;
-    /** Вершин записано у текущего квадрата; идёт запись пятен ({@link #spots}). */
+    /** Vertices written for the current quad; spots are being written ({@link #spots}). */
     private int corner;
     private boolean spotting;
     private final FarFirst sort = new FarFirst();
@@ -71,18 +70,18 @@ public final class FxQuads {
     private final double[] puff = new double[12];
     private byte nearest, opacity, emit;
     private short probe;
-    /** В кадре есть квадраты со свечением ({@link #emission}). */
+    /** The frame has quads with glow ({@link #emission}). */
     private boolean glows;
-    /** Часть слоя следующих квадратов ({@link #part}) и у каждого квадрата кадра — номер его части. */
+    /** Layer part of the next quads ({@link #part}), and each quad of the frame has its part number. */
     private Part part = Part.OTHER;
     private byte[] parts = new byte[0];
-    /** После {@link #draw}: порядок квадратов в буфере (от дальних), до следующей сортировки. */
+    /** After {@link #draw}: order of the quads in the buffer (from the far ones), until the next sort. */
     private int[] drawn = new int[0];
 
     /**
-     * Часть слоя, к которой относится квадрат, — для времени на видеокарте по частям ({@link LayerTimes}): клубы дыма и пыли,
-     * вуаль вещества у глаза, ленты шлейфов, огонь и пламя, блик и ореолы в глазу, частицы, дымные хвосты обломков, прочее
-     * (модели вдали, круги, ядерка).
+     * The layer part a quad belongs to — for GPU time by parts ({@link LayerTimes}): puffs of smoke and dust, the
+     * substance veil near the eye, trails of plumes, fire and flame, glare and halos in the eye, particles, smoke tails
+     * of debris, other (distant models, rings, the nuke).
      */
     public enum Part {
         CLUBS, VEIL, RIBBONS, FIRE, GLARE, PARTICLES, DEBRIS, OTHER;
@@ -90,14 +89,14 @@ public final class FxQuads {
         final String label = name().toLowerCase(java.util.Locale.ROOT);
     }
 
-    /** Следующие квадраты — часть p ({@link Part}); прежняя — ответом, чтобы вернуть её после своих квадратов. */
+    /** The next quads are part p ({@link Part}); the previous one — returned, to restore it after its own quads. */
     public Part part(Part p) {
         Part was = part;
         part = p;
         return was;
     }
 
-    /** Новый кадр: оси экрана (влево, вверх) для квадратов лицом к камере. */
+    /** New frame: screen axes (left, up) for quads facing the camera. */
     public void begin(Vector3f left, Vector3f up) {
         this.left = left;
         this.up = up;
@@ -112,9 +111,9 @@ public final class FxQuads {
     }
 
     /**
-     * Следующие квадраты — частицы: вблизи ближайшим пикселем картинки, как из атласа Minecraft (сглаженный клуб
-     * мыльный), и без бледного края ({@link #opacity}); мельче вдвое — гладко. Дальнее — всегда гладко (ореол в сотню
-     * пикселей из картинки 64×64 иначе лестницей).
+     * The next quads are particles: up close, the nearest pixel of the picture, as from the Minecraft atlas (the
+     * smoothed puff soapy), and without a pale edge ({@link #opacity}); half as small — smooth. Far away — always
+     * smooth (a halo of a hundred pixels from a 64×64 picture would otherwise be a staircase).
      */
     public void nearestTexels(boolean on) {
         nearest = (byte) (on ? 127 : 0);
@@ -122,8 +121,8 @@ public final class FxQuads {
     }
 
     /**
-     * Следующие квадраты — плитки атласа дальних моделей ({@code FarModels}): текстура — его, свет в нём уже есть
-     * (карта освещения не умножается).
+     * The next quads are tiles of the atlas of distant models ({@code FarModels}): the texture is its own, the light is
+     * already in it (the lightmap is not multiplied).
      */
     public void modelTiles(boolean on) {
         nearest = (byte) (on ? -127 : 0);
@@ -131,34 +130,37 @@ public final class FxQuads {
     }
 
     /**
-     * Следующие квадраты — ореол {@code far/glow} ({@link FxAtlas#glow}; блик, вуаль, зарево, ленты шлейфов): крупнее
-     * четверти картинки на экране — по той же формуле в шейдере, а не из картинки 64×64. Ореол у глаза бывает в экран
-     * поперёк, и билинейно из картинки он выходил бы ступенями квадратами по пикселю картинки (по 25 пикселей экрана:
-     * излом выборки на каждом и 8 бит в бледном хвосте). Мельче — из картинки и её уменьшенных копий (гладко).
+     * The next quads are the halo {@code far/glow} ({@link FxAtlas#glow}; glare, veil, blaze, trails of plumes): larger
+     * than a quarter of the picture on screen — by the same formula in the shader, not from the 64×64 picture. The halo
+     * near the eye can cross the screen across, and bilinearly from the picture it would come out in steps, squares of
+     * one picture pixel (25 screen pixels each: a kink in the sample at each, and 8 bits in the pale tail). Smaller —
+     * from the picture and its reduced copies (smooth).
      */
     /**
-     * Следующие квадраты — запечённый клуб с шестисторонним светом ({@link FxAtlas#puff6}, {@code Normal.y} = −¼): свет
-     * солнца или луны, неба и огненных шаров — по его картам в шейдере, между кадром и следующим — смесь mix по векторам
-     * движения ({@code Normal.z}). Меньше нуля — снова как обычно.
+     * The next quads are the baked puff with six-sided light ({@link FxAtlas#puff6}, {@code Normal.y} = −¼): sunlight
+     * or moonlight, of sun or moon, sky and fireballs — by its maps in the shader; between a frame and the next — a mix
+     * by the motion vectors ({@code Normal.z}). Below zero — as usual again.
      */
     public void sixWay(float mix) {
         sixWay(mix, 1);
     }
 
     /**
-     * То же с тенью карт в степени shade (0…{@link #SHADE_MAX}, {@code SmokePuffs.shade}): она — в {@code Normal.y} внутри
-     * полосы запечённых клубов (−0,4…−0,1), {@link #SHADE_STEPS} ступеней.
+     * The same with the shadow of the maps in the shade power (0…{@link #SHADE_MAX}, {@code SmokePuffs.shade}): it is
+     * in {@code Normal.y} within the band of baked puffs (−0.4…−0.1), {@link #SHADE_STEPS} steps.
      */
     public void sixWay(float mix, float shade) {
         nearest = (byte) (mix < 0 ? 0 : -13 - Math.round(Mth.clamp(shade / SHADE_MAX, 0, 1) * SHADE_STEPS));
         opacity = mix < 0 ? 0 : (byte) Math.round(Mth.clamp(mix, 0, 1) * 127);
     }
 
-    /** Наибольшая степень тени карт клуба (сажа — ~1,3) и ступеней в полосе байта −13…−50 ({@code fx.fsh}). */
+    /** Greatest degree of the puffs' map shadow (soot — ~1.3) and steps in the byte band −13…−50 ({@code fx.fsh}). */
     public static final float SHADE_MAX = 1.5f;
     public static final int SHADE_STEPS = 37;
 
-    /** Кадры огня — смесь в шейдере с умноженной альфой, а не два квадрата с провалом яркости между кадрами. */
+    /**
+     * Fire frames — a blend in the shader with multiplied alpha, not two quads with a brightness dip between frames.
+     */
     public void fireballMix(float mix) {
         nearest = (byte) (mix < 0 ? 0 : 80);
         opacity = mix < 0 ? 0 : (byte) Math.round(Mth.clamp(mix, 0, 1) * 127);
@@ -170,46 +172,51 @@ public final class FxQuads {
     }
 
     /**
-     * Непрозрачность следующих вершин частицы без текстуры (у искр и вспышек тоже, хоть они только светят): где вместе
-     * с текстурой она меньше 0,1, частица вблизи не рисуется — как у ванильного шейдера частиц, иначе бледный ореол
-     * каждого клуба в плотном облаке складывался бы в мутную дымку вокруг него. Вдали среза нет.
+     * Opacity of the next vertices of a particle without a texture (sparks and flashes too, although they only glow):
+     * where together with the texture it is below 0.1, the particle is not drawn up close — as in the vanilla particle
+     * shader; otherwise the pale halo of each puff in a dense cloud would add up into a murky haze around it. Far away
+     * there is no cutoff.
      */
     public void opacity(float a) {
         opacity = (byte) Math.round(Mth.clamp(a, 0, 1) * 127);
     }
 
     /**
-     * Следующие квадраты — свет в глазу (блик, вуаль) от источника с пробой {@code probe} ({@link SourceProbes#add}):
-     * их видно, сколько в кадре видно самого источника, а что за самим квадратом — не важно (мягкость края у рельефа
-     * не берётся). 0 — снова как обычно.
+     * The next quads are light in the eye (glare, veil) from a source with the probe {@code probe} ({@link
+     * SourceProbes#add}): they are visible as far as the source itself is visible in the frame; what is behind the quad
+     * itself does not matter (the edge softness at the relief is not taken). 0 — as usual again.
      */
     public void seenBy(int probe) {
         this.probe = (short) Mth.clamp(probe, 0, SourceProbes.MAX);
     }
 
     /**
-     * Следующие вершины светятся ({@link FxBloom}): огонь, огненный шар, вспышка, факел. {@code hdr} — во сколько раз их
-     * свет ярче показанного (пересвет, который экран срезал: яркость против белого экрана больше 1, у кадра огня — шар
-     * модели против кадра); 1 — свет как показан; 0 и меньше — не светятся (дым, ореолы в глазу, модели).
+     * The next vertices glow ({@link FxBloom}): fire, fireball, flash, torch. {@code hdr} — how many times brighter
+     * their light is than shown (overexposure that the screen clipped: brightness against a white screen is above 1,
+     * for a fire frame — the model's ball against the frame); 1 — light as shown; 0 and less — no glow (smoke, halos in
+     * the eye, models).
      */
     public void emission(float hdr) {
         emit = (byte) (hdr > 0 && glowTexel > 0 ? FxBloom.EMITTER + FxBloom.code(hdr) : 0);
     }
 
     /**
-     * Угол пикселя прохода свечения кадра, рад ({@link FxBloom#texel}): светящийся квадрат уже {@link FxBloom#SMALL} таких
-     * пикселей идёт в свечение пятнами с той же энергией ({@link #spots}); 0 — свечения нет (настройка, шейдеры).
+     * Pixel angle of the frame's glow pass, rad ({@link FxBloom#texel}): a glowing quad already {@link FxBloom#SMALL}
+     * such pixels goes into the glow as spots with the same energy ({@link #spots}); 0 — no glow (setting, shaders).
      */
     public void glowTexel(double texel) {
         glowTexel = texel;
     }
 
-    /** В кадре есть свечение: проход свечения нужен. */
+    /** The frame has glow: the glow pass is needed. */
     public boolean glows() {
         return glows;
     }
 
-    /** Рамка вершин светящихся квадратов кадра (от камеры): x, y, z наименьшие, потом наибольшие; без них — пустая. */
+    /**
+     * Bounding box of the vertices of the frame's glowing quads (from the camera): x, y, z smallest, then largest;
+     * without them — empty.
+     */
     float[] glowBox() {
         return glowBox;
     }
@@ -218,12 +225,12 @@ public final class FxQuads {
         return n;
     }
 
-    /** Место вершин квадрата i в памяти кадра (проверки: что записано — то и уйдёт в шейдер). */
+    /** Place of the vertices of quad i in the frame's memory (checks: what is written is what goes to the shader). */
     long address(int i) {
         return stage + (long) i * QUAD;
     }
 
-    /** Начать квадрат на расстоянии {@code key} от камеры; дальше — ровно четыре {@link #vertex}. */
+    /** Start a quad at distance {@code key} from the camera; then exactly four {@link #vertex}. */
     public void quad(float key) {
         if (n == capacity) grow();
         keys[n] = key > 0 ? key : 0;
@@ -235,9 +242,10 @@ public final class FxQuads {
     }
 
     /**
-     * Вершина: место от камеры, место на листе, свет (r, g, b), уже умноженный на непрозрачность, сколько закрыто
-     * за ней (a), мягкость края у рельефа (блоки, 0 — без мягкости; у света от источника, {@link #seenBy}, — не
-     * берётся), во сколько раз точка перенесена ближе (1 — нет), свет мира (упакованный), туман Minecraft 0..1.
+     * Vertex: position from the camera, position on the sheet, light (r, g, b), already multiplied by opacity, how much
+     * is covered behind it (a), edge softness at the relief (blocks, 0 — no softness; for the light from a source,
+     * {@link #seenBy}, — not taken), how many times the point is moved closer (1 — none), world light (packed),
+     * Minecraft fog 0..1.
      */
     public void vertex(float x, float y, float z, float u, float v, float r, float g, float b, float a, float soft, float unfold, int light, float fog) {
         long p = write;
@@ -250,7 +258,7 @@ public final class FxQuads {
         MemoryUtil.memPutByte(p + 21, unorm(g));
         MemoryUtil.memPutByte(p + 22, unorm(b));
         MemoryUtil.memPutByte(p + 23, unorm(a));
-        // мягкость — не меньше нуля, проба источника — минус её номер
+        // softness — not less than zero, the source probe — minus its number
         MemoryUtil.memPutShort(p + 24, probe > 0 ? (short) -probe : (short) Mth.clamp(Math.round(soft * 16), 0, Short.MAX_VALUE));
         MemoryUtil.memPutShort(p + 26, (short) Mth.clamp(Math.round(unfold * Short.MAX_VALUE), 1, Short.MAX_VALUE));
         MemoryUtil.memPutShort(p + 28, (short) (light & 0xFFFF));
@@ -277,9 +285,9 @@ public final class FxQuads {
     }
 
     /**
-     * Светящийся квадрат i достаёт по глубине до своего расстояния с полуразмером (настоящим: вершины вдали перенесены
-     * ближе): кадр шара стоит у передней половины шара, а ореол — свет воздуха вокруг всего огня, и рукава дыма сбоку на
-     * глубине его середины стоят перед частью этого воздуха.
+     * A glowing quad i reaches in depth as far as its distance with its half-size (the real one: vertices far away are
+     * moved closer): the frame of the ball stands at the front half of the ball, and the halo is the light of the air
+     * around all the fire, and smoke streamers sideways at the depth of its middle stand in front of part of that air.
      */
     private void reach(int i) {
         long q = stage + (long) i * QUAD;
@@ -305,13 +313,14 @@ public final class FxQuads {
     private final float[] means = new float[FxAtlas.MEANS];
 
     /**
-     * Светящийся квадрат i уже {@link FxBloom#SMALL} пикселей прохода свечения поперёк ({@link FxBloom#spots}): в проходе
-     * свечения выборка в серединах его пикселей то попадает в него, то нет — свечение пропадает и мерцает. Вместо него в
-     * проход идут пятна (ореол {@code far/glow} формулой, полуразмер {@link FxBloom#SPOT_HALF} пикселя) с его энергией:
-     * средний свет его места на листе ({@link FxAtlas#means}, тем же законом, что {@code bloomLight} в {@code fx.fsh}) × цвет
-     * вершин × пересвет × его телесный угол, поровну на пятна; доля закрытого — так же. Свет и доля закрытого — в
-     * {@code UV2} ({@link FxBloom#magnitude}), оттенок — в цвете (наибольший канал — 1). Сам он в проход не идёт
-     * ({@link FxBloom#SKIP}).
+     * A glowing quad i already spans {@link FxBloom#SMALL} pixels of the glow pass across ({@link FxBloom#spots}): in
+     * the glow pass the sample at the middles of its pixels sometimes hits it and sometimes does not — the glow
+     * vanishes and flickers. Instead, spots go into the pass (the halo {@code far/glow} by its formula, half-size
+     * {@link FxBloom#SPOT_HALF} pixel) with its energy: the mean light of its place on the sheet ({@link
+     * FxAtlas#means}, by the same law as {@code bloomLight} in {@code fx.fsh}) × the vertices' colour × overexposure ×
+     * its solid angle, split equally among the spots; the covered share is the same. Light and covered share go in
+     * {@code UV2} ({@link FxBloom#magnitude}), the tint in colour (the largest channel — 1). The quad itself does not
+     * go into the pass ({@link FxBloom#SKIP}).
      */
     private void spots(int i) {
         long q = stage + (long) i * QUAD;
@@ -340,7 +349,8 @@ public final class FxQuads {
             gain += FxBloom.gain((MemoryUtil.memGetByte(p + 35) & 255) - FxBloom.EMITTER) / 4;
         }
         if (!FxAtlas.means(u0, v0, u1, v1, means)) return;
-        // как bloomLight: у частиц и кадров огня (умноженная альфа) — свет цвета на долю, у остального — свет поверх
+        // as bloomLight: for particles and fire frames (multiplied alpha) — light of the colour by a share, for the
+        // rest — light on top
         boolean cover = (MemoryUtil.memGetByte(q + 33) & 255) > 69 && a > 0.004f;
         double[] e = new double[3];
         double alpha;
@@ -355,16 +365,17 @@ public final class FxQuads {
             e[2] = Math.pow(b, 2.2) * means[5];
             alpha = 0;
         }
-        // на пятно: свет квадрата (средний × телесный угол) поровну, по площади ореола пятна
+        // onto a spot: the quad's light (mean × solid angle) equally, by the halo area of the spot
         double solid = places[3 * count], spot = FxBloom.SPOT_COVER * Math.pow(2 * FxBloom.SPOT_HALF * glowTexel, 2), share = solid / count / spot;
         double er = e[0] * gain * share, eg = e[1] * gain * share, eb = e[2] * gain * share, cover2 = Math.min(1, alpha * share);
         double top = Math.max(er, Math.max(eg, eb));
         if (top <= 0 && cover2 <= 0) return;
-        // свет пятна — в 16 битах UV2 (FxBloom.magnitude), в цвете — только оттенок: в байте цвета слабое пятно обнулялось
+        // the spot's light — in the 16 bits of UV2 (FxBloom.magnitude), in colour — only the tint: in the colour byte a
+        // weak spot was zeroed
         int light = FxBloom.magnitude(top) & 0xFFFF | FxBloom.magnitude(cover2) << 16;
         float hr = top > 0 ? (float) (er / top) : 0, hg = top > 0 ? (float) (eg / top) : 0, hb = top > 0 ? (float) (eb / top) : 0;
         float soft = Math.max(0, MemoryUtil.memGetShort(q + 24)) / 16f, fog = (MemoryUtil.memGetByte(q + 32) & 255) / 127f, key = keys[i];
-        // сам квадрат — только в слое
+        // the quad itself — only in the layer
         for (int k = 0; k < 4; k++) MemoryUtil.memPutByte(q + (long) k * VERTEX + 35, (byte) FxBloom.SKIP);
         byte n0 = nearest, o0 = opacity, e0 = emit;
         short p0 = probe;
@@ -386,8 +397,8 @@ public final class FxQuads {
     }
 
     /**
-     * Квадрат лицом к камере с центром (x, y, z) от камеры, полуразмером half, повёрнутый на rot, на расстоянии key
-     * (для сортировки), текстура — место на листе.
+     * A quad facing the camera with centre (x, y, z) from the camera, half-size half, rotated by rot, at distance key
+     * (for sorting), texture — place on the sheet.
      */
     public void billboard(float x, float y, float z, float key, float half, float rot, FxAtlas.Sprite s, float r, float g, float b, float a,
                           float soft, float unfold, int light, float fog) {
@@ -395,13 +406,13 @@ public final class FxQuads {
     }
 
     /**
-     * То же с разными полуразмерами по осям квадрата (до поворота): {@code halfA} — вдоль «влево» экрана, {@code halfB} —
-     * вдоль «вверх». Хлопья пепла кувыркаются — сжатая ось.
+     * The same with different half-sizes along the quad's axes (before rotation): {@code halfA} — along the screen's
+     * “left”, {@code halfB} — along “up”. Ash flakes tumble — the compressed axis.
      */
     public void billboard(float x, float y, float z, float key, float halfA, float halfB, float rot, FxAtlas.Sprite s, float r, float g, float b,
                           float a, float soft, float unfold, int light, float fog) {
         float c = Mth.cos(rot), sn = Mth.sin(rot);
-        // оси квадрата в плоскости экрана, повёрнутые на rot
+        // axes of the quad in the screen plane, rotated by rot
         float ax = (left.x * c + up.x * sn) * halfA, ay = (left.y * c + up.y * sn) * halfA, az = (left.z * c + up.z * sn) * halfA;
         float bx = (-left.x * sn + up.x * c) * halfB, by = (-left.y * sn + up.y * c) * halfB, bz = (-left.z * sn + up.z * c) * halfB;
         quad(key);
@@ -412,10 +423,11 @@ public final class FxQuads {
     }
 
     /**
-     * Квадрат, лежащий в горизонтальной плоскости, с центром (x, y, z) от камеры: оси — «влево» экрана, положенное на
-     * горизонталь, и горизонталь поперёк неё (от камеры), полуразмеры {@code halfA} и {@code halfB}. Плоский клуб (слой
-     * пыли у земли) — такой квадрат: у квадрата лицом к камере нижняя половина уходила в землю, а верхняя стояла стеной
-     * над ней; у лежащего каждая точка — на своей глубине, и мягкий край у рельефа считается по ней.
+     * A quad lying in the horizontal plane, with centre (x, y, z) from the camera: the axes — the screen's “left”, laid
+     * on the horizontal, and the horizontal across it (from the camera), half-sizes {@code halfA} and {@code halfB}. A
+     * flat puff (a layer of dust at the ground) — such a quad: a quad facing the camera had its lower half going into
+     * the ground, and its upper half stood as a wall above it; for a lying one each point is at its own depth, and the
+     * soft edge at the relief is computed from that.
      */
     public void flat(float x, float y, float z, float key, float halfA, float halfB, FxAtlas.Sprite s, float r, float g, float b, float a,
                      float soft, float unfold, int light, float fog) {
@@ -435,7 +447,9 @@ public final class FxQuads {
         vertex(x + ax - bx, y, z + az - bz, s.u0(), s.v1(), r, g, b, a, soft, unfold, light, fog);
     }
 
-    /** Puff facing the eye position with world up ({@link PuffGeometry#face}); turning the camera does not rotate it. */
+    /**
+     * Puff facing the eye position with world up ({@link PuffGeometry#face}); turning the camera does not rotate it.
+     */
     public void facePosition(float x, float y, float z, float key, float halfA, float halfB, FxAtlas.Sprite s, float r, float g, float b, float a,
                              float soft, float unfold, int light, float fog) {
         PuffGeometry.face(x, y, z, halfA, halfB, puff);
@@ -483,12 +497,15 @@ public final class FxQuads {
     }
 
     /**
-     * Sorted quads from..to (after {@link #prepare}) with shader s and the current state: at half resolution
-     * ({@link HalfPass}) when {@code halfDepth} is that pass's world distance texture (≥ 0), otherwise as the layer;
-     * {@code split} — 0 whole quads, 1 only where they lie behind their tile's last full-resolution quad, 2 only in front
+     * Sorted quads from..to (after {@link #prepare}) with shader s and the current state: at half resolution ({@link
+     * HalfPass}) when {@code halfDepth} is that pass's world distance texture (≥ 0), otherwise as the layer; {@code
+     * split} — 0 whole quads, 1 only where they lie behind their tile's last full-resolution quad, 2 only in front
      * (tile cut texture {@code cut}, tiles of {@code tile} frame pixels).
      */
-    /** Texture unit of the half-resolution tile cuts in the layer program (12 named samplers take 0–11; 13, 14 are PallOpen, smoke grid). */
+    /**
+     * Texture unit of the half-resolution tile cuts in the layer program (12 named samplers take 0–11; 13, 14 are
+     * PallOpen, smoke grid).
+     */
     static final int CUT_UNIT = 12;
     /** Texture unit of the quads' clip rectangles ({@code HalfRect}, vertex shader). */
     static final int RECT_UNIT = 15;
@@ -497,7 +514,10 @@ public final class FxQuads {
         drawRange(s, from, to, halfDepth, split, cut, tile, -1, 0);
     }
 
-    /** Same; {@code rect} ≥ 0 — clip each quad to its rectangle from that texture ({@code HalfRect}), rows from {@code row}. */
+    /**
+     * Same; {@code rect} ≥ 0 — clip each quad to its rectangle from that texture ({@code HalfRect}), rows from {@code
+     * row}.
+     */
     void drawRange(net.minecraft.client.renderer.ShaderInstance s, int from, int to, int halfDepth, int split, int cut, int tile, int rect, int row) {
         if (to <= from) return;
         passBegin(s, halfDepth, split, cut, tile, rect, row);
@@ -529,7 +549,8 @@ public final class FxQuads {
             for (int i = 0; i < 4; i++) org.lwjgl.opengl.GL11.glEnable(org.lwjgl.opengl.GL30.GL_CLIP_DISTANCE0 + i);
         }
         if (split > 0) {
-            // tile cuts on their own unit, the unit into the program on every bind (Veil recompiles programs; OpenAir.bind)
+            // tile cuts on their own unit, the unit into the program on every bind (Veil recompiles programs;
+            // OpenAir.bind)
             int unit = com.mojang.blaze3d.platform.GlStateManager._getActiveTexture();
             com.mojang.blaze3d.platform.GlStateManager._activeTexture(org.lwjgl.opengl.GL13.GL_TEXTURE0 + CUT_UNIT);
             org.lwjgl.opengl.GL11.glBindTexture(org.lwjgl.opengl.GL11.GL_TEXTURE_2D, cut);
@@ -573,11 +594,10 @@ public final class FxQuads {
     }
 
     /**
-     * Screen of sorted quads (after {@link #prepare}) in a w×h frame: viewProjection maps their eye-relative vertices to
-     * clip space. Per sorted place k: {@code half[k]} — a club or veil quad at least {@code wide} pixels across along
-     * both edges on screen;
-     * {@code tiles[4k..4k+3]} — tiles of {@code tile} pixels it covers (x0, y0, x1, y1 inclusive; x0 > x1 off screen).
-     * A quad reaching behind the eye covers the whole frame.
+     * Screen of sorted quads (after {@link #prepare}) in a w×h frame: viewProjection maps their eye-relative vertices
+     * to clip space. Per sorted place k: {@code half[k]} — a club or veil quad at least {@code wide} pixels across
+     * along both edges on screen; {@code tiles[4k..4k+3]} — tiles of {@code tile} pixels it covers (x0, y0, x1, y1
+     * inclusive; x0 > x1 off screen). A quad reaching behind the eye covers the whole frame.
      */
     void screen(org.joml.Matrix4fc viewProjection, int w, int h, int tile, double wide, boolean[] half, int[] tiles) {
         int tx = (w + tile - 1) / tile - 1, ty = (h + tile - 1) / tile - 1;
@@ -616,8 +636,9 @@ public final class FxQuads {
                 if (x1 < 0 || y1 < 0 || x0 >= w || y0 >= h) tiles[o] = tx + 1;
             }
             int part = parts[i];
-            // clubs, the eye veil and glare in the eye (pure light with alpha 0, a smooth halo by formula; sorted by its
-            // source's distance, it would otherwise cut every tile it covers — night glare covers most of the frame)
+            // clubs, the eye veil and glare in the eye (pure light with alpha 0, a smooth halo by formula; sorted by
+            // its source's distance, it would otherwise cut every tile it covers — night glare covers most of the
+            // frame)
             boolean soft = part == Part.CLUBS.ordinal() || part == Part.VEIL.ordinal() || part == Part.GLARE.ordinal();
             if (soft && !behind) {
                 // both quad edges wide enough on screen: a lying club seen edge-on is a few pixels thin and would break
@@ -632,9 +653,9 @@ public final class FxQuads {
     private static final float[] SCREEN_X = new float[4], SCREEN_Y = new float[4];
 
     /**
-     * Начало прохода свечения в порядке order (от дальних): первый квадрат не дальше {@link #glowReach}. В проход идёт
-     * то, что закрывает излучение и ореол светящихся: само светящееся и всё ближе глубины, до которой оно достаёт; что
-     * дальше, их не закрывает (ореол над ним остаётся). n — светящихся нет.
+     * Start of the glow pass in the order order (from the far ones): the first quad no farther than {@link #glowReach}.
+     * Into the pass goes what covers the glowing ones' emission and halo: the glowing one itself and everything nearer
+     * than the depth it reaches; what is farther does not cover them (the halo above it remains). n — no glowing ones.
      */
     private int glowStart(int[] order) {
         for (int i = 0; i < n; i++) {
@@ -643,15 +664,16 @@ public final class FxQuads {
         return n;
     }
 
-    /** {@link #glowStart} у квадратов кадра (проверки). */
+    /** {@link #glowStart} for the frame's quads (checks). */
     int glowStart() {
         return glowStart(sort.sort(keys, n));
     }
 
     /**
-     * После {@link #draw}: ещё раз шейдером s — квадраты с начала прохода свечения ({@link #glowStart}) до ближнего
-     * (проход свечения, {@link FxBloom}): что дальше, излучения и ореола светящихся не закрывает. Из того же буфера, что выгрузил
-     * {@link #draw} (его отсортированные квадраты — с места {@code glowFrom}), без второй выгрузки. false — светящихся нет.
+     * After {@link #draw}: once more with shader s — the quads from the start of the glow pass ({@link #glowStart}) to
+     * the nearest (the glow pass, {@link FxBloom}): what is farther, the emission and halo of the glowing ones does not
+     * cover. From the same buffer that {@link #draw} uploaded (its sorted quads — from the place {@code glowFrom}),
+     * without a second upload. false — no glowing ones.
      */
     boolean drawGlow(net.minecraft.client.renderer.ShaderInstance s) {
         if (glowFrom >= n) return false;
@@ -667,10 +689,11 @@ public final class FxQuads {
     }
 
     /**
-     * После {@link #draw}, на кадре пробы ({@link LayerTimes}): каждая часть слоя ({@link Part}) отдельно, тем же шейдером
-     * из того же буфера — её отрезки в порядке сортировки одним вызовом (glMultiDrawElements), без остальных частей.
-     * Каждый пиксель части проходит тот же шейдер, смешивание и тест глубины, что и в общем вызове, поэтому её время —
-     * её цена в кадре (порядок смешивания между частями цены не меняет). Слив и метки до и после — {@code clock}.
+     * After {@link #draw}, on the probe frame ({@link LayerTimes}): each layer part ({@link Part}) separately, with the
+     * same shader from the same buffer — its segments in sort order in one call (glMultiDrawElements), without the
+     * other parts. Each pixel of the part passes the same shader, blending and depth test as in the common call, so its
+     * time is its cost in the frame (the blend order between parts does not change the cost). The flush and marks
+     * before and after — {@code clock}.
      */
     void drawParts(net.minecraft.client.renderer.ShaderInstance s, LayerTimes.PartClock clock) {
         // the frame split smoke at half resolution: each part as the frame drew it
@@ -706,8 +729,8 @@ public final class FxQuads {
     }
 
     /**
-     * Отрезки каждой части в порядке order (первые n квадратов): у части p — пары «начало, длина» по местам в порядке,
-     * отрезки части не соприкасаются (соседние слиты), каждый квадрат — ровно в одном отрезке своей части.
+     * Segments of each part in the order order (the first n quads): for part p — pairs “start, length” by places in the
+     * order; segments of a part do not touch (neighbors are merged), each quad is in exactly one segment of its part.
      */
     static int[][] runs(byte[] parts, int[] order, int n) {
         int[] counts = new int[Part.values().length];
@@ -736,7 +759,7 @@ public final class FxQuads {
         return drawn[k];
     }
 
-    /** Часть квадрата i в порядке записи (проверки). */
+    /** Part of quad i in the write order (checks). */
     public Part partOf(int i) {
         return Part.values()[parts[i]];
     }
@@ -757,16 +780,16 @@ public final class FxQuads {
     }
 
     /**
-     * Порядок от дальних к ближним: поразрядная сортировка (три прохода по 11, 11 и 10 бит) по битам расстояния —
-     * у неотрицательных чисел порядок битов и есть порядок значений, инверсия даёт убывание; равные — в порядке записи.
-     * Массивы живут между кадрами.
+     * Order from far to near: a radix sort (three passes of 11, 11 and 10 bits) by the bits of the distance — for
+     * non-negative numbers the order of the bits is the order of the values, inversion gives descending; equal ones —
+     * in the write order. The arrays live between frames.
      */
     static final class FarFirst {
         private static final int RADIX = 11, BUCKETS = 1 << RADIX;
         private final int[] counts = new int[BUCKETS];
         private int[] order = new int[0], spare = new int[0], bits = new int[0], spareBits = new int[0];
 
-        /** Номера первых n ключей (неотрицательных) по убыванию; массив — до следующего вызова. */
+        /** Indices of the first n keys (non-negative) in descending order; the array — until the next call. */
         int[] sort(float[] keys, int n) {
             if (order.length < n) {
                 int cap = Math.max(n, order.length * 2);

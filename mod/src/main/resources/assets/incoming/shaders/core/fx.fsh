@@ -4,30 +4,30 @@
 #moj_import <incoming:fx_balls.glsl>
 #moj_import <incoming:bloom.glsl>
 
-// Слой эффектов (client/fx/layer). Смешивание ONE, ONE_MINUS_SRC_ALPHA: цвет — свет, уже умноженный на
-// непрозрачность, альфа — сколько закрыто того, что за частицей (у искр и ореолов 0 — свет складывается).
-// Текстура листа — тоже с умноженной альфой. Бледное (альфа меньше 0,1) не отбрасывается, как у ванильных шейдеров:
-// дальний дым и зарево как раз бледные.
+// Effects layer (client/fx/layer). Blending ONE, ONE_MINUS_SRC_ALPHA: colour — light already multiplied by
+// opacity, alpha — how much of what lies behind the particle is covered (sparks and halos: 0 — light adds up).
+// The sheet texture is also premultiplied by alpha. Faint (alpha below 0.1) is not discarded, as in vanilla shaders:
+// distant smoke and glow are exactly the faint ones.
 uniform sampler2D Sampler0;
-// расстояние до мира за пикселем (SceneDepth)
+// distance to the world behind the pixel (SceneDepth)
 uniform sampler2D Sampler1;
-// атлас дальних моделей (client/render/FarModels), с умноженной альфой и уменьшенными копиями
+// atlas of distant models (client/render/FarModels), premultiplied by alpha, with downscaled copies
 uniform sampler2D Sampler3;
-// пелена на кадре (PallPass, мельче экрана): свет её до мира за пикселем (rgb) и сколько она пропускает (a)
+// pall on the frame (PallPass, smaller than the screen): its light up to the world behind the pixel (rgb) and how much it passes (a)
 uniform sampler2D Sampler6;
-// средний свет пелены (rgb); w — 1, если пелена на кадре есть
+// average pall light (rgb); w — 1 if a pall is on the frame
 uniform vec4 PallAmbient;
-// место ореола far/glow на листе (u0, v0, u1, v1; FxAtlas.glow)
+// place of the halo far/glow on the sheet (u0, v0, u1, v1; FxAtlas.glow)
 uniform vec4 FxGlow;
-// Шар: размер кадра (u, v), начало (v), число кадров. Карты огня смешиваются до alpha-over: без потери непрозрачности.
+// Ball: frame size (u, v), start (v), number of frames. Fire maps are mixed to alpha-over: without loss of opacity.
 uniform vec4 FxFireball;
-// векторы движения кадров шара: размер карты (u, v), начало (v), предел смещения — доля кадра (FxAtlas.FIREBALL_FLOW / 256)
+// motion vectors of the ball's frames: map size (u, v), start (v), displacement limit — share of a frame (FxAtlas.FIREBALL_FLOW / 256)
 uniform vec4 FxFireFlow;
 
 uniform vec4 ColorModulator;
 uniform vec2 ScreenSize;
 uniform vec4 FxFogColor;
-// 1 — расстояние до мира есть
+// 1 — distance to the world is present
 uniform float FxScene;
 // 1 — half-resolution smoke target (HalfPass): it has no hardware depth, so the world hides smoke by its distance; the
 // composite adds the 8-bit noise
@@ -53,28 +53,28 @@ in vec3 sixBall;
 in vec3 sixKeyDir;
 in vec3 sixBallDir;
 in vec3 worldPos;
-// свечение (FxBloom): во сколько раз свет ярче показанного; 0 — не светится
+// glow (FxBloom): how many times brighter than shown the light is; 0 — does not glow
 in float emitGain;
-// 1 — пятно мелкого светящегося (FxBloom.spots): ореол far/glow формулой при любом размере, цвет — линейный свет
+// 1 — a spot of small glow (FxBloom.spots): halo far/glow by the formula at any size, colour — linear light
 in float emitSpot;
 
-// запечённый клуб (FxAtlas.puff6): x — шаг карт по листу (v), y — начало кадров (v), z и w — размер кадра (u, v)
+// baked puff (FxAtlas.puff6): x — step of the maps across the sheet (v), y — start of the frames (v), z and w — frame size (u, v)
 uniform vec4 FxSix;
-// x — наибольшее смещение векторов движения, доля кадра; y и z — средний по клубу свет спереди и средний по шести
-// сторонам в линейном (puff6.json); к среднему по шести карты приводятся
+// x — largest displacement of the motion vectors, share of a frame; y and z — the puff's average light from the front and the average over the six
+// sides in linear (puff6.json); the maps are brought to the six-side average
 uniform vec3 FxSixLight;
-// оттенок света неба у клубов (FarView.sky против его яркости, линейно): цвет вершины клуба несёт только яркость
+// tint of sky light at puffs (FarView.sky against its brightness, linear): the puff's vertex colour carries only the brightness
 uniform vec3 FxSkyTint;
 
-// Проход слоя — цвет; проход свечения (FxBloom, FxGlowPass.x = 1) — излучение, что доходит до глаза: rgb — линейный свет
-// (белый экран — 1) с умноженной альфой, альфа — та же, что у цвета. Смешивание то же: дым перед огнём гасит излучение
-// той же долей
+// Layer pass — colour; glow pass (FxBloom, FxGlowPass.x = 1) — emission that reaches the eye: rgb — linear light
+// (white screen — 1) with premultiplied alpha, alpha — the same as the colour's. Blending is the same: smoke in front of fire dims the emission
+// by the same share
 layout(location = 0) out vec4 fragColor;
-// Проход свечения: доля пикселя, которую занимает само светящееся. Огонь показан своей экспозицией, и его ореол,
-// посчитанный с пересветом модели, на нём самом высветлил бы складки и сажу — ореол ложится вокруг
+// Glow pass: the share of the pixel occupied by the glowing thing itself. Fire is shown at its own exposure, and its halo,
+// computed with the model's overexposure, would brighten the folds and soot on it — the halo lies around
 layout(location = 1) out vec4 fragCover;
-// x: 1 — проход свечения (на уровне пирамиды FxBloom.glowLevel: излучение и доля светящегося, без света на дыме; что за
-// миром — по расстоянию до мира, аппаратной глубины у него нет); y — во сколько раз пиксель прохода крупнее пикселя кадра
+// x: 1 — glow pass (at the level of the FxBloom.glowLevel pyramid: emission and the glowing share, without light on smoke; what is behind
+// the world — by distance to the world, it has no hardware depth); y — how many times larger the glow pass pixel is than the frame pixel
 uniform vec2 FxGlowPass;
 
 // Six-way lighting: a contains right/top/back maps, b left/bottom/front (linear puff light from a sun on that side,
@@ -89,22 +89,22 @@ float sixLight(vec3 a, vec3 b, vec3 l) {
     return side * q.x + vertical * q.y + depth * q.z;
 }
 
-// Уменьшенных копий у листа (FxAtlas.MIPS)
+// Downscaled copies of the sheet (FxAtlas.MIPS)
 const float FRAME_LEVELS = 4.0;
 
-// Отступ выборки от края кадра клуба и огня (sixFrames, fireFrames), текселей листа: полтекселя самой грубой копии, которую читает выборка (уровень —
-// вверх от log2 шага выборки span, текселей листа на пиксель; так выбирает OpenGL; ceil — через floor: так его считает
-// и PuffAtlasEdgeGlslTest). С отступом в полтекселя листа выборка заходит в соседний кадр уже на первой копии, а на
-// копиях 3–4 его край заметен: клубы вдали и плоский клуб с ребра ложились тонкими чертами поперёк кадра (пыль
-// сорванного дёрна, WV)
+// Inset of the sample from the edge of the puff and fire frames (sixFrames, fireFrames), in sheet texels: half a texel of the coarsest copy the sample reads (level —
+// up from log2 of the sample step span, sheet texels per pixel; that is how OpenGL chooses; ceil — through floor: that is how it is computed
+// and in PuffAtlasEdgeGlslTest). With an inset of half a sheet texel, the sample reaches the neighbouring frame already on the first copy, and on
+// copies 3–4 its edge shows: distant puffs and a flat puff seen edge-on came out as thin lines across the frame (dust
+// of torn-up sod, WV)
 float frameInset(float span) {
     float level = clamp(-floor(-0.5 * log2(max(span * span, 1.0))), 0.0, FRAME_LEVELS);
     return 0.5 * pow(2.0, level);
 }
 
-// Кадр клуба и следующий, сдвинутые вдоль векторов движения на долю смеси m (кадр k — назад на m, k + 1 — вперёд на
-// 1 − m): клуб течёт, а не проступает двойным. Карты a и b — в линейном свете, альфа — в a.w
-// Места кадра клуба k и следующего на листе, сдвинутые вдоль векторов движения на долю смеси m (общие у sixFrames и
+// The puff's frame k and the next, shifted along the motion vectors by the mix share m (frame k — back by m, k + 1 — forward by
+// 1 − m): the puff flows instead of showing doubled. Maps a and b — in linear light, alpha — in a.w
+// Places of the puff's frame k and the next on the sheet, shifted along the motion vectors by the mix share m (shared by sixFrames and
 // sixAlpha)
 void sixPlaces(vec2 uv, vec2 dx, vec2 dy, float m, out vec2 uv0, out vec2 uv1, out float lod) {
     vec2 tile = FxSix.zw;
@@ -129,17 +129,17 @@ void sixFrames(vec2 uv, vec2 dx, vec2 dy, float m, out vec4 a, out vec3 b) {
     float lod;
     sixPlaces(uv, dx, dy, m, uv0, uv1, lod);
     vec4 a0 = textureLod(Sampler0, uv0, lod), a1 = textureLod(Sampler0, uv1, lod);
-    // прозрачный край кадра (половина квадрата клуба) — без второй карты и света: цена слоя — заливка крупных клубов
+    // transparent edge of the frame (half of the puff's square) — without the second map and light: the layer's cost is the fill of large puffs
     if (mix(a0.a, a1.a, m) < 0.002) discard;
     vec4 b0 = textureLod(Sampler0, uv0 + vec2(0.0, FxSix.x), lod), b1 = textureLod(Sampler0, uv1 + vec2(0.0, FxSix.x), lod);
-    // на листе — умноженная альфа и степень 1/2,2
+    // on the sheet — premultiplied alpha and an exponent of 1/2.2
     vec3 la0 = pow(a0.rgb / max(a0.a, 1e-3), vec3(2.2)), la1 = pow(a1.rgb / max(a1.a, 1e-3), vec3(2.2));
     vec3 lb0 = pow(b0.rgb / max(b0.a, 1e-3), vec3(2.2)), lb1 = pow(b1.rgb / max(b1.a, 1e-3), vec3(2.2));
     a = vec4(mix(la0, la1, m), mix(a0.a, a1.a, m));
     b = mix(lb0, lb1, m);
 }
 
-// Непрозрачность кадра клуба со смесью — те же места, что у sixFrames, без карт света: проходу свечения дым только гасит
+// Opacity of a puff frame with the mix — the same places as sixFrames, without light maps: the glow pass only dims smoke
 float sixAlpha(vec2 uv, vec2 dx, vec2 dy, float m) {
     vec2 uv0, uv1;
     float lod;
@@ -147,10 +147,10 @@ float sixAlpha(vec2 uv, vec2 dx, vec2 dy, float m) {
     return mix(textureLod(Sampler0, uv0, lod).a, textureLod(Sampler0, uv1, lod).a, m);
 }
 
-// Кадры огня — как у запечённого клуба (sixFrames): кадр k и следующий, сдвинутые вдоль векторов движения кадра k на
-// долю смеси m (k — назад на m, k + 1 — вперёд на 1 − m), смешаны одним фрагментом с умноженной альфой (смесь кадров
-// с векторами движения — обычный приём флипбуков: Unity VFX Graph, Unreal Niagara). Огонь течёт между кадрами, а не
-// проступает двойным; два квадрата с весами дали бы на полпути 0,75 непрозрачности вместо 1 и пульс яркости
+// Fire frames — as for the baked puff (sixFrames): frame k and the next, shifted along the motion vectors of frame k by
+// the mix share m (k — back by m, k + 1 — forward by 1 − m), mixed in one fragment with premultiplied alpha (mixing frames
+// with motion vectors is a common flipbook technique: Unity VFX Graph, Unreal Niagara). Fire flows between frames instead of
+// showing doubled; two squares with weights would give 0.75 opacity halfway instead of 1, and a pulse of brightness
 vec4 fireFrames(vec2 uv, vec2 dx, vec2 dy, float m) {
     vec2 tile = FxFireball.xy;
     float columns = floor(1.0 / tile.x + 0.5), frames = FxFireball.w;
@@ -160,7 +160,7 @@ vec4 fireFrames(vec2 uv, vec2 dx, vec2 dy, float m) {
     float nextIndex = min(index + 1.0, frames - 1.0);
     vec2 next = vec2(mod(nextIndex, columns) * tile.x, FxFireball.z + floor(nextIndex / columns) * tile.y);
     vec2 local = uv - origin;
-    // векторы движения кадра k: своя карта 128² (FxFireFlow: размер, начало, предел смещения — доля кадра)
+    // motion vectors of frame k: its own 128² map (FxFireFlow: size, start, displacement limit — share of a frame)
     float flowColumns = floor(1.0 / FxFireFlow.x + 0.5);
     vec2 flowAt = vec2(mod(index, flowColumns) * FxFireFlow.x, FxFireFlow.z + floor(index / flowColumns) * FxFireFlow.y);
     vec2 toFlow = FxFireFlow.xy / tile;
@@ -173,9 +173,9 @@ vec4 fireFrames(vec2 uv, vec2 dx, vec2 dy, float m) {
     return mix(textureGrad(Sampler0, uv0, dx, dy), textureGrad(Sampler0, uv1, dx, dy), m);
 }
 
-// Частица вблизи — как из атласа Minecraft (NEAREST_MIPMAP_LINEAR): ближайший пиксель картинки и её копии вдвое
-// меньше, между ними — смесь; сглаженная, она выходила бы мыльной. Мельче копии вдвое (клуб в 32 пикселя и меньше) —
-// гладко, как всё дальнее: ступеньки там только рябят. Уровень копии — как у OpenGL, по производным.
+// Particle up close — as from the Minecraft atlas (NEAREST_MIPMAP_LINEAR): the nearest pixel of the picture and its copy half
+// the size, mixed between them; smoothed, it would come out soapy. Copies half that size or smaller (a puff of 32 pixels and less) —
+// smooth, like everything distant: the steps only shimmer there. The copy level — as in OpenGL, by derivatives.
 vec4 particle(vec2 uv, vec2 dx, vec2 dy, out float lod) {
     vec2 size = vec2(textureSize(Sampler0, 0));
     vec2 px = dx * size, py = dy * size;
@@ -187,15 +187,15 @@ vec4 particle(vec2 uv, vec2 dx, vec2 dy, out float lod) {
     return mix(a, b, lod);
 }
 
-// Ореол far/glow (tools/gen_particles.py, far_glow) на расстоянии r от середины в долях полуразмера: exp(−(r/0,42)²),
-// к краю — ноль без ступеньки; пик картинки — у четырёх средних пикселей (r = √2/63), он — 1
+// Halo far/glow (tools/gen_particles.py, far_glow) at distance r from the middle in fractions of the half-size: exp(−(r/0.42)²),
+// at the edge — zero without a step; the picture's peak — at the four middle pixels (r = √2/63), it is 1
 float glowAlpha(float r) {
     return exp(-(r / 0.42) * (r / 0.42)) * smoothstep(0.0, 0.25, 1.0 - r) / 0.997147;
 }
 
-// Излучение фрагмента c (значения экрана) в линейном свете × пересвет gain, который экран срезал, не ярче белой точки
-// (BLOOM_WHITE): у частиц и кадров огня (cover) цвет умножен на непрозрачность — свет цвета на ту же долю; у ядер и
-// факела цвет — сам свет поверх
+// Emission of fragment c (screen values) in linear light × the overexposure gain the screen clipped, no brighter than the white point
+// (BLOOM_WHITE): for particles and fire frames (cover) the colour is multiplied by opacity — the light of the colour by the same share; for cores and
+// torches the colour is the light itself on top
 vec3 bloomLight(vec4 c, float cover, float gain) {
     vec3 shown = c.rgb;
     float a = 1.0;
@@ -208,7 +208,7 @@ vec3 bloomLight(vec4 c, float cover, float gain) {
 }
 
 void main() {
-    // производные — до ветвления (вне его они определены у всех пикселей)
+    // derivatives — before the branch (outside it they are defined for all pixels)
     vec2 dx = dFdx(texCoord0), dy = dFdy(texCoord0);
     if (FxHalfSplit.x > 0.5) {
         bool behind = quadPlace <= texelFetch(HalfCut, ivec2(gl_FragCoord.xy * FxGlowPass.y / FxHalfSplit.z), 0).r;
@@ -219,7 +219,7 @@ void main() {
     bool six = nearest < -0.1 && nearest > -0.4;
     vec3 sixLit = vec3(1.0);
     if (emitSpot > 0.5) {
-        // пятно — всегда формулой: выборка в серединах пикселей несёт ту же энергию при любом сдвиге (FxBloomTest)
+        // the spot — always by formula: sampling at pixel middles carries the same energy at any shift (FxBloomTest)
         vec2 local = ((texCoord0 - FxGlow.xy) / (FxGlow.zw - FxGlow.xy) * 2.0 - 1.0) * (64.0 / 63.0);
         tex = vec4(glowAlpha(length(local)));
     } else if (nearest > 0.75) {
@@ -230,25 +230,25 @@ void main() {
         vec4 a;
         vec3 b;
         sixFrames(texCoord0, dx, dy, opacity, a, b);
-        // свет неба: прямой (солнце, луна) — по сторонам, рассеянный — средний по шести; оба — против среднего по шести
-        // сторонам по клубу (цвет вершины — толстый слой вещества в рассеянном свете неба, R∞): к солнцу просвечивающий
-        // край ярче, со стороны солнца плотный клуб темнее (рассеяние вперёд). Огненные шары — по сторонам, в долях света
-        // у глаза, и не ярче огня на экране (FxLights). Сумма — в линейном, на экран — степень 1/2,2
-        // тень карт — у вещества запекания; у этого — в степени его затухания света против запечённого (SmokePuffs.shade,
-        // байт −13…−50 в Normal.y: FxQuads.sixWay)
-        // степень не ниже 0,001 и основание не ноль: pow(0, 0) в GLSL не определён (NaN — чёрный пиксель в смешивании)
+        // sky light: direct (sun, moon) — by sides, diffuse — the average over six; both — against the average over six
+        // sides per puff (the vertex colour — a thick layer of matter in diffuse sky light, R∞): towards the sun the translucent
+        // edge is brighter, on the sun's side the dense puff is darker (forward scattering). Fireballs — by sides, in fractions of light
+        // at the eye, and not brighter than the fire on screen (FxLights). The sum — in linear, to the screen — exponent 1/2.2
+        // map shadow — for baked matter; for this one — in the exponent of its light attenuation against the baked (SmokePuffs.shade,
+        // byte −13…−50 in Normal.y: FxQuads.sixWay)
+        // exponent not below 0.001 and the base not zero: pow(0, 0) is undefined in GLSL (NaN — a black pixel in blending)
         float shade = max((-nearest * 127.0 - 13.0) / 37.0 * 1.5, 0.001);
         float key = pow(max(sixLight(a.rgb, b, sixKeyDir) / FxSixLight.z, 1e-6), shade);
         float diffuse = pow(max((a.r + a.g + a.b + b.r + b.g + b.b) / 6.0 / FxSixLight.z, 1e-6), shade);
         float sky = sixKey * key + (1.0 - sixKey) * diffuse;
         vec3 fire = sixBall * pow(max(sixLight(a.rgb, b, sixBallDir) / FxSixLight.z, 1e-6), shade);
-        // клуб, лежащий на горизонтали (степень тени 0 — освещённый сверху верх слоя): свет шаров — в этом пикселе
+        // a puff lying on the horizontal (shadow exponent 0 — the top of the layer lit from above): the balls' light — in this pixel
         if (-nearest * 127.0 - 13.0 < 0.5) {
             vec3 bd;
             fire = ballsToward(worldPos, bd);
         }
-        // оттенок неба (ночью — сиреневый свет луны) — только у света неба: цвет вершины несёт его яркость, а огонь у клуба
-        // свой (оттенок на огне красил пыль у шара ночью в розовый)
+        // sky tint (at night — the lilac light of the moon) — only for sky light: the vertex colour carries its brightness, and the puff's fire
+        // has its own (the tint on the fire turned the dust around a ball pink at night)
         sixLit = pow(max(FxSkyTint * sky + fire, vec3(0.0)), vec3(1.0 / 2.2));
         tex = vec4(vec3(a.a), a.a);
     } else if (nearest > 0.55) {
@@ -258,8 +258,8 @@ void main() {
     } else {
         tex = textureGrad(Sampler0, texCoord0, dx, dy);
         if (nearest > 0.25) {
-            // ореол (FxQuads.glowShape) крупнее четверти картинки на экране — по формуле: из картинки 64×64 он вышел бы
-            // ступенями квадратами по её пикселю. Середины крайних пикселей картинки — r = 1 (63 шага на 64 пикселя)
+            // a halo (FxQuads.glowShape) larger than a quarter of the picture on screen — by formula: from a 64×64 picture it would come out
+            // as steps of squares by its pixel. The middles of the picture's edge pixels — r = 1 (63 steps across 64 pixels)
             vec2 size = vec2(textureSize(Sampler0, 0)), px = dx * size, py = dy * size;
             if (max(dot(px, px), dot(py, py)) < 16.0) {
                 vec2 local = ((texCoord0 - FxGlow.xy) / (FxGlow.zw - FxGlow.xy) * 2.0 - 1.0) * (64.0 / 63.0);
@@ -267,14 +267,14 @@ void main() {
             }
         }
     }
-    // частица вблизи бледнее 0,1 не рисуется, как у ванильного шейдера частиц: иначе бледные ореолы клубов складываются
-    // в мутную дымку вокруг облака. Вдали (клуб мельче 16 пикселей) — без среза: дальний дым и так бледный
+    // a particle up close fainter than 0.1 is not drawn, as in the vanilla particle shader: otherwise the faint halos of puffs add up
+    // into a murky haze around the cloud. Far away (a puff smaller than 16 pixels) — without the cut: distant smoke is faint anyway
     if (nearest > 0.75 && tex.a * opacity < 0.1 * clamp(2.0 - lod, 0.0, 1.0)) discard;
     vec4 color = vec4(vertexColor.rgb * tex.rgb * sixLit, vertexColor.a * tex.a);
-    // пиксель кадра (у прохода свечения — крупнее)
+    // frame pixel (for the glow pass — larger)
     vec2 frag = gl_FragCoord.xy * FxGlowPass.y;
     vec3 glow = vec3(0.0);
-    // частицы и кадры огня — с умноженной альфой
+    // particles and fire frames — with premultiplied alpha
     float cover = 0.0;
     if (nearest > 0.55) cover = 1.0;
     if (FxGlowPass.x > 0.5 && emitSpot > 0.5) {
@@ -283,49 +283,49 @@ void main() {
         glow = bloomLight(color, cover, emitGain);
     }
     if (PallAmbient.w > 0.5) {
-        // пелена перед квадратом: его свет ослаблен, а закрытое им — уже её свет до него (пелена на кадре — до мира).
-        // Квадрат ближе мира: перед ним пелены не больше, чем на кадре до мира, — и её свет до него — доля света пелены
-        // на кадре по доле ослабления. Средний свет годится только там, где пелены на кадре почти нет: иначе клуб за
-        // густой пеленой выходил бы пятном другого цвета (вдали — светлыми точками на тёмной пелене)
+        // the pall in front of the square: its light is dimmed, and what it covers is already its light up to it (a pall on the frame — up to the world).
+        // The square is nearer than the world: in front of it there is no more pall than on the frame up to the world — and its light up to it is the pall's light share
+        // by the share of attenuation on the frame. The average light only fits where there is almost no pall on the frame: otherwise a puff behind a
+        // dense pall would come out as a spot of another colour (far away — as light dots on a dark pall)
         vec4 frame = texture(Sampler6, frag / ScreenSize);
-        // негодный пиксель пелены (NaN, бесконечность) — пелены перед квадратом нет: NaN дал бы чёрный квадрат
+        // invalid pall pixel (NaN, infinity) — there is no pall in front of the square: NaN would give a black square
         if (!pallValid(frame)) frame = vec4(0.0, 0.0, 0.0, 1.0);
         float front = max(pallFront, frame.a);
         vec3 before = mix(PallAmbient.rgb, frame.rgb / max(1.0 - frame.a, 1e-3), smoothstep(0.02, 0.15, 1.0 - frame.a));
         color.rgb = color.rgb * front + color.a * before * (1.0 - front);
         glow *= front;
     }
-    // видимая доля квадрата — у цвета и излучения одна
+    // visible share of the square — colour and emission have the same one
     float seen = 1.0;
     if (FxScene > 0.5 && (softness > 0.0 || FxGlowPass.x > 0.5 || FxHalf > 0.5)) {
-        // клуб тает, входя в землю и стены, и пропадает за рельефом (и за LOD Distant Horizons)
-        // негодное расстояние (NaN, за глазом) — мира за пикселем нет, как у неба
+        // the puff melts as it enters the ground and walls, and vanishes behind terrain (and behind Distant Horizons LOD)
+        // invalid distance (NaN, behind the eye) — there is no world behind the pixel, as for the sky
         float scene = pallScene(texture(Sampler1, frag / ScreenSize).r);
         if (softness > 0.0) seen *= clamp((scene - viewDistance) / softness, 0.0, 1.0);
         // half-resolution target: without hardware depth, what lies behind the world is hidden by its distance (glare
         // in the eye has its probe instead, softness below zero, and is never cut by depth)
         else if (FxHalf > 0.5 && softness == 0.0 && nearest < 0.25 && scene < viewDistance) discard;
-        // проход свечения без аппаратной глубины: что за миром, не светится и не гасит (у слоя это режет глубина кадра)
+        // glow pass without hardware depth: what lies behind the world neither glows nor dims (for the layer, the frame's depth cuts it)
         if (FxGlowPass.x > 0.5 && scene < viewDistance * 0.999 - 0.05) discard;
     }
-    // у самой камеры квадрат не режет экран краем ближней плоскости (те же числа — SmokePuffs.NEAR_FROM, NEAR_FADE: что
-    // здесь тает, отдаёт вуали)
+    // right at the camera the square does not cut the screen with the near-plane edge (the same numbers — SmokePuffs.NEAR_FROM, NEAR_FADE: what
+    // melts here gives to the veil)
     seen *= clamp((viewDistance - 0.3) / 1.2, 0.0, 1.0);
-    // туман Minecraft гасит частицу, а не красит её в свой цвет: за ней и так мир в тумане, а непрозрачное пятно цвета
-    // тумана у края прорисовки закрывало бы ленты шлейфов и дальнюю картинку взрывов, которые сменяют частицы там
+    // Minecraft fog dims a particle rather than painting it its own colour: the world behind it is in fog anyway, and an opaque spot of the fog's
+    // colour at the draw edge would cover the bands of plume trails and the distant picture of explosions, which particles replace there
     seen *= 1.0 - fog * FxFogColor.a;
     fragColor = color * seen * ColorModulator;
     // the half-resolution target is float: clamp as the 8-bit frame does before blending (NaN — nothing)
     if (FxHalf > 0.5) fragColor = any(isnan(fragColor)) ? vec4(0.0) : clamp(fragColor, 0.0, 1.0);
-    // 8 бит кадра: плавная вуаль вещества у глаза (сетка лучей, SmokePuffs.Veil) и бледные края клубов без подмешанного
-    // шума идут ступенями — шум в полступени (Jimenez 2014, как у ореола), долей того, что квадрат кладёт
+    // 8-bit frame: the smooth veil of matter at the eye (the ray grid, SmokePuffs.Veil) and the faint edges of puffs without mixed-in
+    // noise come in steps — noise at half a step (Jimenez 2014, as for the halo), in the share of what the square lays down
     if (FxGlowPass.x < 0.5 && FxHalf < 0.5) {
         float noise = fract(52.9829189 * fract(dot(gl_FragCoord.xy, vec2(0.06711056, 0.00583715))));
         fragColor.rgb = max(fragColor.rgb + (noise - 0.5) / 255.0 * fragColor.a, vec3(0.0));
     }
     fragCover = vec4(0.0);
     if (FxGlowPass.x > 0.5) {
-        // что закрывает ореол в пикселе (bloomCovers): светящееся и дым перед ним; пятно — своей непрозрачностью
+        // what covers the halo in the pixel (bloomCovers): the glowing thing and the smoke in front of it; the spot — by its own opacity
         float emits = 0.0;
         if (emitGain > 0.0 && emitSpot < 0.5) emits = 1.0;
         float covers = bloomCovers(fragColor.a, max(fragColor.r, max(fragColor.g, fragColor.b)), emits);

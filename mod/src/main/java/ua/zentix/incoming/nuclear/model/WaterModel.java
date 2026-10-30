@@ -1,196 +1,209 @@
 package ua.zentix.incoming.nuclear.model;
 
 /**
- * Вода под ядерным подрывом и под его волной (DESIGN-nuke §6, «Вода»): рябь и пена под ветром за фронтом (тёмное кольцо
- * на воде), брызги с гребней, а у подрыва на воде или низко над ней — полый столб воды с короной брызг наверху и
- * базисная волна. Метры, секунды, килотонны; ветер — м/с ({@link BlastModel#windSpeed}).
+ * Water under a nuclear detonation and its blast wave (DESIGN-nuke §6, “Water”): ripples and foam under the wind behind
+ * the front (a dark ring on the water), spray off the crests, and for a burst on or low above water — a hollow column
+ * of water with a spray crown on top and a base surge. Meters, seconds, kilotons; wind — m/s
+ * ({@link BlastModel#windSpeed}).
  * <p>
- * Числа — по шкале Бофорта (рябь от «кошачьих лапок» при 1,5 м/с, срыв брызг с гребней с 7–8 баллов, пена полосами с 10)
- * и по Glasstone, Dolan 1977, §2.47–2.65: «Бейкер» (Crossroads, 1946, 23 кт на глубине 27 м) — столб ~600 м
- * в поперечнике и 1,8 км в высоту, стенки ~90 м, базисная волна — с ~10 с, когда вода столба падает, поначалу
- * ~25–30 м/с, к 4 минутам — около 2,5–3 км по радиусу и ~550 м в высоту; мелкий подводный подрыв 100 кт — столб выше
- * 1,5 км за 2 с, к 12 с 1 км в поперечнике со стенками 150 м, к 20 с оседает и сужается до 600 м. Время и размеры — по
- * кубическому корню мощности от «Бейкера». Облако конденсации (купол тумана на секунду-две) — облако Вильсона за
- * фронтом, как у всякого подрыва во влажном воздухе ({@code BlastWall}).
- * Подрыв на поверхности или над ней выбрасывает меньше воды, чем подводный: столб ниже ({@link #SURFACE_COLUMN}), волна
- * меньше ({@link #SURFACE_SURGE}); здесь — подрыв на поверхности (подводных у мода нет), и у него в Glasstone, Dolan
- * своих чисел нет: доли — оценка.
+ * Numbers — from the Beaufort scale (ripples from “cat's paws” at 1.5 m/s, spray tearing off the crests from force 7–8,
+ * foam in streaks from 10) and from Glasstone, Dolan 1977, §2.47–2.65: “Baker” (Crossroads, 1946, 23 kt at 27 m depth)
+ * — a column ~600 m across and 1.8 km high, walls ~90 m, base surge — from ~10 s, when the column's water starts to
+ * fall, at first ~25–30 m/s, by 4 minutes — about 2.5–3 km in radius and ~550 m high; a shallow underwater 100 kt burst
+ * — a column above 1.5 km in 2 s, by 12 s 1 km across with walls 150 m, by 20 s it subsides and narrows to 600 m. Time
+ * and sizes — by the cube root of the yield from “Baker”. Condensation cloud (a fog dome for a second or two) — a
+ * Wilson cloud behind the front, as for any burst in humid air ({@code BlastWall}). A burst on or above the surface
+ * throws up less water than an underwater one: the column is lower ({@link #SURFACE_COLUMN}), the wave smaller
+ * ({@link #SURFACE_SURGE}); here — a surface burst (the mod has no underwater ones), and for it Glasstone, Dolan has no
+ * numbers of its own: the fractions are estimates.
  */
 public final class WaterModel {
-    /** Рябь: с какого ветра вода темнеет и с какого темнее уже некуда, м/с. */
+    /** Ripples: from what wind the water darkens, and from what wind it cannot get darker, m/s. */
     static final double RIPPLE_FROM = 1.5, RIPPLE_FULL = 18;
-    /** Брызги: с какого ветра срывает гребни и с какого над водой сплошная стена брызг, м/с. */
+    /**
+     * Spray: from what wind it tears off the crests, and from what wind a solid wall of spray stands over the water,
+     * m/s.
+     */
     static final double SPRAY_FROM = 14, SPRAY_FULL = 45;
-    /** Пена: с какого ветра вода белеет полосами и с какого — вся, м/с. */
+    /** Foam: from what wind the water whitens in streaks, and from what wind it is all white, m/s. */
     static final double FOAM_FROM = 25, FOAM_FULL = 65;
-    /** Высота стены брызг, м: при слабом срыве и при самом сильном ветре. */
+    /** Height of the spray wall, m: at weak tearing and at the strongest wind. */
     static final double SPRAY_LOW = 6, SPRAY_HIGH = 45;
     /**
-     * На сколько секунд стена брызг отстаёт от фронта: ветер за ударной волной срывает гребни сразу, но облако капель
-     * встаёт на свою высоту (десятки метров, капли поднимаются со скоростью в десятки м/с) за доли секунды — тёмное
-     * кольцо ряби бежит впереди белой стены.
+     * How many seconds the spray wall lags behind the front: the wind behind the blast wave tears off the crests at
+     * once, but the droplet cloud takes its height (tens of m, droplets rise at tens of m/s) in fractions of a second —
+     * the dark ring of ripples runs ahead of the white wall.
      */
     public static final double SPRAY_LAG = 0.5;
-    /** Масштаб «Бейкера», кт: столб и волна растут как кубический корень мощности. */
+    /** “Baker” scale, kt: the column and the wave grow as the cube root of the yield. */
     private static final double BAKER_KT = 23;
     /**
-     * Столб у «Бейкера»: наружный радиус (м; 2000 футов в поперечнике), высота (м), постоянная подъёма (с; подобрана так,
-     * что у мелкого подводного 100 кт столб выше 5000 футов за 2 с: начальная скорость по этому закону — ~3700 футов
-     * в секунду, у купола брызг «Бейкера» в Glasstone, Dolan — 2500); у подрыва на поверхности — доля его высоты.
+     * The “Baker” column: outer radius (m; 2000 ft across), height (m), rise constant (s; chosen so that
+     * a shallow underwater 100 kt column is above 5000 ft in 2 s: the initial speed by this law is ~3700 ft
+     * per second; the “Baker” spray dome in Glasstone, Dolan is 2500); for a surface burst — a fraction of its height.
      */
     static final double COLUMN_RADIUS = 300, COLUMN_TOP = 1800, COLUMN_RISE = 1.6, SURFACE_COLUMN = 0.6;
-    /** Толщина стенки столба — доля его наружного радиуса (у 100 кт — 500 футов при 3300 футах в поперечнике). */
+    /** Wall thickness of the column — a fraction of its outer radius (for 100 kt — 500 ft at 3300 ft across). */
     static final double COLUMN_WALL = 0.3;
-    /** Когда вода столба начинает падать, с (у «Бейкера»), и за сколько падает. */
+    /** When the column's water starts to fall, s (for “Baker”), and how long it takes to fall. */
     static final double COLUMN_FALL = 10, COLUMN_FALL_SPAN = 25;
     /**
-     * Столб сужается, оседая: у 100 кт — с 3300 футов в поперечнике на 12-й секунде до 2000 футов на 20-й (наружная
-     * завеса брызг падает первой и уходит в базисную волну); доля радиуса и время у «Бейкера», с.
+     * The column narrows as it settles: for 100 kt — from 3300 ft across at the 12th second to 2000 ft at the 20th (the
+     * outer spray curtain falls first and goes into the base surge); radius fraction and time for “Baker”, s.
      */
     static final double COLUMN_SHRINK = 0.4, SHRINK_FROM = 7.4, SHRINK_TO = 12.3;
     /**
-     * Корона — верх столба, где струи останавливаются и раскрываются брызгами: радиус — доля наружного радиуса столба,
-     * полувысота — доля его радиуса до сужения (оценка: у «Бейкера» «цветная капуста» наверху втрое шире столба, но
-     * большая её часть — пар и газ пузыря, вышедшие сквозь полый столб, — у подрыва на поверхности это шапка гриба).
-     * Корона — самые наружные брызги и падает с наружной завесой ({@link #COLUMN_SHRINK}): оседающий столб — без неё.
+     * The crown — the top of the column, where the jets stop and open into spray: radius — a fraction of the column's
+     * outer radius, half-height — a fraction of its radius before narrowing (estimate: for “Baker” the “cauliflower” on
+     * top is three times wider than the column, but most of it is steam and bubble gas that left through the hollow
+     * column — for a surface burst this is the mushroom cap). The crown — the outermost spray; it falls with the outer
+     * curtain ({@link #COLUMN_SHRINK}): the settling column has none.
      */
     static final double CROWN_R = 1.4, CROWN_H = 0.35;
-    /** Базисная волна у «Бейкера»: начало (с), предел радиуса (м), постоянная (с), высота (м), за сколько тает (с, e-кратно). */
+    /** “Baker” base surge: start (s), radius limit (m), constant (s), height (m), time to fade (s, e-folding). */
     static final double SURGE_START = 8, SURGE_RADIUS = 3000, SURGE_TAU = 100, SURGE_HEIGHT = 550, SURGE_FADE = 240;
     /**
-     * Базисная волна у подрыва на поверхности — доля «бейкеровской» (рост радиуса и высота): над глубокой водой подрыв на
-     * поверхности поднимает меньше воды, и волна у него меньше, чем у подводного (Glasstone, Dolan, гл. II); доля —
-     * оценка, как {@link #SURFACE_COLUMN} у столба.
+     * Base surge of a surface burst — a fraction of the “Baker” one (radius growth and height): over deep water a
+     * surface burst throws up less water, and its wave is smaller than an underwater one (Glasstone, Dolan, ch. II);
+     * the fraction is an estimate, like {@link #SURFACE_COLUMN} for the column.
      */
     static final double SURFACE_SURGE = 0.7;
-    /** Подрыв выше этой доли наибольшего радиуса шара — уже не «водяной»: столба и волны нет. */
+    /** A burst above this fraction of the largest fireball radius is no longer “water”: there is no column or wave. */
     static final double WET_FULL = 0.15, WET_NONE = 0.5;
 
     private WaterModel() {}
 
-    /** Сколько вода под ветром темнеет рябью, 0..1. */
+    /** How much the water under the wind darkens with ripples, 0..1. */
     public static double ripple(double windMs) {
         return smooth(RIPPLE_FROM, RIPPLE_FULL, windMs);
     }
 
-    /** Срыв брызг с гребней, 0..1. */
+    /** Spray tearing off the crests, 0..1. */
     public static double spray(double windMs) {
         return smooth(SPRAY_FROM, SPRAY_FULL, windMs);
     }
 
-    /** Пена на воде, 0..1. */
+    /** Foam on the water, 0..1. */
     public static double foam(double windMs) {
         return smooth(FOAM_FROM, FOAM_FULL, windMs);
     }
 
-    /** Высота стены брызг над водой, м (0 — ветер брызг не срывает). */
+    /** Height of the spray wall above the water, m (0 — the wind does not tear off spray). */
     public static double sprayHeight(double windMs) {
         double s = spray(windMs);
         return s <= 0 ? 0 : SPRAY_LOW + (SPRAY_HIGH - SPRAY_LOW) * s;
     }
 
     /**
-     * Тёмное кольцо фронта: насколько темнее вода (0..1 доля её света) там, где фронт прошёл {@code since} тиков игры
-     * назад, а ветер за ним был {@code windMs}. У самого фронта — полоса ряби (воздух за фронтом дует, пока идёт
-     * положительная фаза: {@code band} тиков игры), за ней вода ещё долго неспокойна ({@code calm} тиков), впереди
-     * фронта — гладкая.
+     * The dark ring of the front: how much darker the water is (0..1 fraction of its light) where the front passed
+     * {@code since} game ticks ago, and the wind behind it was {@code windMs}. At the front itself — a strip of ripples
+     * (the air behind the front blows while the positive phase runs: {@code band} game ticks), behind it the water
+     * stays rough for a long time ({@code calm} ticks), ahead of the front — smooth.
      */
     public static double darkness(double windMs, double since, double band, double calm) {
         if (since < 0) return 0;
         return 0.6 * ripple(windMs) * (0.3 + 0.7 * Math.exp(-since / band)) * Math.exp(-since / calm);
     }
 
-    /** Пена за фронтом 0..1: встаёт за несколько тиков, сходит за {@code calm} / 4. */
+    /** Foam behind the front, 0..1: appears within a few ticks, drains over {@code calm} / 4. */
     public static double whitecaps(double windMs, double since, double calm) {
         if (since < 0) return 0;
         return 0.7 * foam(windMs) * smooth(0, 8, since) * Math.exp(-since / (calm / 4));
     }
 
-    // ---------------------------------------------------------------- подрыв на воде
+    // ---------------------------------------------------------------- detonation on water
 
     /**
-     * Насколько подрыв «водяной», 0..1: на воде или ниже 0,15 наибольшего радиуса шара — весь, выше половины радиуса —
-     * нет (шар воды почти не касается). У 15 кт: до ~40 м — полностью, к ~130 м — сходит на нет.
+     * How much of a “water” detonation it is, 0..1: on water or below 0.15 of the largest fireball radius — all of it,
+     * above half the radius — none (the water ball barely touches it). For 15 kt: up to ~40 m — fully; by ~130 m it
+     * fades to nothing.
      */
     public static double wetBurst(double hobM, double yieldKt) {
         double rf = FireballModel.maxRadius(yieldKt, true);
         return 1 - smooth(WET_FULL * rf, WET_NONE * rf, hobM);
     }
 
-    /** Масштаб «Бейкера» для мощности: кубический корень. */
+    /** “Baker” scale for yield: cube root. */
     static double bakerScale(double yieldKt) {
-        // и для обычного заряда (килограммы — миллионные доли килотонны, WaterBlast): ноль не даёт деления на ноль
+        // and for an ordinary charge (kilograms — millionths of a kiloton, WaterBlast): zero does not give division by
+        // zero
         return Math.cbrt(Math.max(yieldKt, 1e-12) / BAKER_KT);
     }
 
-    /** Наружный радиус полого столба воды до сужения, м. */
+    /** Outer radius of the hollow water column before narrowing, m. */
     public static double columnRadius(double yieldKt) {
         return COLUMN_RADIUS * bakerScale(yieldKt);
     }
 
-    /** Наибольший радиус базисной волны подрыва на поверхности сверх стенки столба, м (обычный взрыв на воде — тот же закон). */
+    /**
+     * Largest radius of the surface-burst base surge beyond the column wall, m (an ordinary explosion on water — the
+     * same law).
+     */
     public static double surgeReach(double yieldKt) {
         return SURFACE_SURGE * SURGE_RADIUS * bakerScale(yieldKt);
     }
 
-    /** Высота базисной волны подрыва на поверхности, м. */
+    /** Height of the surface-burst base surge, m. */
     public static double surgeTop(double yieldKt) {
         return SURFACE_SURGE * SURGE_HEIGHT * bakerScale(yieldKt);
     }
 
-    /** Толщина стенки столба, м. */
+    /** Column wall thickness, m. */
     public static double columnWall(double yieldKt) {
         return COLUMN_WALL * columnRadius(yieldKt);
     }
 
     /**
-     * Верх столба в момент t, м: растёт к {@link #SURFACE_COLUMN} высоты «Бейкера» (подрыв на поверхности выбрасывает
-     * меньше воды, чем подводный) с постоянной {@link #COLUMN_RISE} с, падая — оседает до воды.
+     * Top of the column at time t, m: grows toward {@link #SURFACE_COLUMN} of the “Baker” height (a surface burst
+     * throws up less water than an underwater one) with the constant {@link #COLUMN_RISE} s, falling — it settles back
+     * to the water.
      */
     public static double columnTop(double t, double yieldKt) {
         return columnRise(t, yieldKt) * (1 - columnFall(t, yieldKt));
     }
 
-    /** Докуда поднялась бы вода столба к моменту t без падения, м. */
+    /** How high the column's water would have risen by time t without falling, m. */
     private static double columnRise(double t, double yieldKt) {
         if (t <= 0) return 0;
         double s = bakerScale(yieldKt);
         return COLUMN_TOP * SURFACE_COLUMN * s * (1 - Math.exp(-t / (COLUMN_RISE * s)));
     }
 
-    /** Сколько воды столба уже упало, 0..1. */
+    /** How much of the column's water has already fallen, 0..1. */
     public static double columnFall(double t, double yieldKt) {
         double s = bakerScale(yieldKt);
         return smooth(COLUMN_FALL * s, (COLUMN_FALL + COLUMN_FALL_SPAN) * s, t);
     }
 
     /**
-     * Столб в момент t, м: середина стенки и её полутолщина по радиусу, верх стенки (середина короны), наружный край короны
-     * и её полувысота, доля воды, что ещё не упала. Стенка — от воды до середины короны; корона — кольцо на верху стенки:
-     * в сечении эллипс с серединой на середине стенки (раскрывшись шире столба, она сверху сужает и его полость).
+     * The column at time t, m: the middle of the wall and its half-thickness in radius, the top of the wall (middle of
+     * the crown), the outer edge of the crown and its half-height, and the fraction of water not yet fallen. The wall —
+     * from the water to the middle of the crown; the crown — a ring on top of the wall: in section an ellipse centred
+     * on the middle of the wall (opened wider than the column, it also narrows its cavity from above).
      */
     public record Column(double mid, double half, double wallTop, double crownR, double crownH, double water) {
-        /** Верх короны над водой, м. */
+        /** Top of the crown above the water, m. */
         public double top() {
             return wallTop + crownH;
         }
 
-        /** Полуось сечения короны по радиусу, м: от середины стенки до её наружного края. */
+        /** Radius semi-axis of the crown's section, m: from the middle of the wall to its outer edge. */
         public double crownA() {
             return crownR - mid;
         }
 
-        /** Наружный край короны или стенки, м. */
+        /** Outer edge of the crown or wall, m. */
         public double outer() {
             return Math.max(mid + half, crownR);
         }
     }
 
     /**
-     * Столб воды в момент t; null — ещё не встал или упал. Корона раскрывается, когда струи тормозят (доля подъёма), и
-     * падает с наружной завесой, пока столб сужается ({@link #COLUMN_SHRINK}): дальше верх стенки — скруглённый край
-     * в её толщину (сечение короны — круг в толщину стенки). Пока столб ниже короны (первые доли секунды, конец падения),
-     * её середина под водой: над водой — её верх. Толщина стенки — та же.
+     * The column of water at time t; null — not yet risen or already fallen. The crown opens when the jets slow down
+     * (fraction of the rise), and falls with the outer curtain while the column narrows ({@link #COLUMN_SHRINK}); after
+     * that the top of the wall is a rounded edge as thick as the wall (the crown's section is a circle as thick as the
+     * wall). While the column is below the crown (the first fractions of a second, the end of the fall), its middle is
+     * under water: above water — its top. The wall thickness is the same.
      */
     public static Column column(double t, double yieldKt) {
         double top = columnTop(t, yieldKt), fall = columnFall(t, yieldKt);
@@ -203,22 +216,22 @@ public final class WaterModel {
     }
 
     /**
-     * Сколько воды столба видно брызгами, 0..1: пока светит шар, вода в нём и у него — пар (его ничем не закрыть), и
-     * столб проступает, когда шар остывает, — за 4–20 t_max его второго максимума, как пыль ножки ({@link MushroomModel}):
-     * у 15 кт — за 0,5–2,5 с.
+     * How much of the column's water is visible as spray, 0..1: while the fireball shines, the water in it and at it is
+     * steam (it cannot be covered), the column shows through as the fireball cools — over 4–20 t_max of its second
+     * maximum, like the stem dust ({@link MushroomModel}): for 15 kt — over 0.5–2.5 s.
      */
     public static double columnShow(double t, double yieldKt) {
         return smooth(4, 20, t / FireballModel.secondMaximumSeconds(yieldKt));
     }
 
-    /** Когда встаёт базисная волна, с. */
+    /** When the base surge appears, s. */
     public static double surgeStart(double yieldKt) {
         return SURGE_START * bakerScale(yieldKt);
     }
 
     /**
-     * Радиус базисной волны подрыва на поверхности в момент t, м (0 — ещё не встала): от стенки столба, поначалу ~20 м/с
-     * ({@link #SURFACE_SURGE} от ~30 м/с «Бейкера»).
+     * Radius of the surface-burst base surge at time t, m (0 — not yet risen): from the column wall, at first ~20 m/s
+     * ({@link #SURFACE_SURGE} of the “Baker” ~30 m/s).
      */
     public static double surgeRadius(double t, double yieldKt) {
         double s = bakerScale(yieldKt), since = t - surgeStart(yieldKt);
@@ -226,14 +239,14 @@ public final class WaterModel {
         return columnRadius(yieldKt) * 1.2 + SURFACE_SURGE * SURGE_RADIUS * s * (1 - Math.exp(-since / (SURGE_TAU * s)));
     }
 
-    /** Высота базисной волны подрыва на поверхности в момент t, м ({@link #SURFACE_SURGE} от «Бейкера»). */
+    /** Height of the surface-burst base surge at time t, m ({@link #SURFACE_SURGE} of “Baker”). */
     public static double surgeHeight(double t, double yieldKt) {
         double s = bakerScale(yieldKt), since = t - surgeStart(yieldKt);
         if (since <= 0) return 0;
         return SURFACE_SURGE * SURGE_HEIGHT * s * (0.25 + 0.75 * smooth(0, 60 * s, since));
     }
 
-    /** Густота базисной волны 0..1: встаёт за несколько секунд, тает минутами. */
+    /** Density of the base surge 0..1: appears within a few seconds, fades over minutes. */
     public static double surgeDensity(double t, double yieldKt) {
         double s = bakerScale(yieldKt), since = t - surgeStart(yieldKt);
         if (since <= 0) return 0;

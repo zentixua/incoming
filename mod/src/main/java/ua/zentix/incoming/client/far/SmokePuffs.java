@@ -9,29 +9,34 @@ import ua.zentix.incoming.client.fx.smoke.CloudModel;
 import ua.zentix.incoming.client.fx.smoke.SmokeGrid;
 
 /**
- * Облака клиента квадратами слоя эффектов — на любой дальности, вблизи и вдали одинаково: клуб модели (гаусс массы
- * вещества от источника {@link SmokeGrid.Source}: облако взрыва, облако старта, дым пожара) — кучка запечённых клубов
- * ({@link FxAtlas#puff6}: симуляция газа в Blender, шестисторонний свет, векторы движения между кадрами).
+ * Client clouds as squares of the effects layer, at any distance, near and far alike: a model puff (the Gaussian of
+ * substance mass of the substance from the source {@link SmokeGrid.Source}: a blast cloud, a launch cloud, fire smoke)
+ * — a cluster of baked puffs ({@link FxAtlas#puff6}: gas simulation in Blender, six-sided lighting, motion vectors
+ * between frames).
  * <ul>
- * <li><b>Размер.</b> Видимый край гаусса — там, где толща падает до {@link #EDGE_TAU}: r = σ·√(2·ln(τ₀/{@value #EDGE_TAU}))
- * (τ₀ — толща поперёк середины, Σκ'm/(2πσhσv)); у густого облака это ~3,7σ, у тонкого — ближе к середине. Квадрат клуба
- * — этот край (карта клуба кадрирована по краю вещества, {@code tools/bake_fx/pack.py}).</li>
- * <li><b>Плотность.</b> Непрозрачность середины — 1 − e^(−τ₀); крупный на экране гаусс — кучка до {@value #CLUSTER}
- * клубов вокруг середины (чем крупнее, тем их больше и они мельче), в середине их перекрывается несколько: каждый берёт
- * свою долю, чтобы вместе вышло то же пропускание.</li>
- * <li><b>Цвет</b> — отражение толстого слоя смеси сажи, пыли и капель (два потока, {@link #thick}) при свете неба, каким
- * карта освещения светит блоки под открытым небом ({@link FarView#sky});
- * свет по сторонам (солнце, луна, небо, огненные шары кадра) — по картам кадра в шейдере ({@code fx.vsh}, {@code fx.fsh}).</li>
- * <li><b>Кадр</b> — тот, где симуляция выросла во столько же раз, во сколько вещество источника с выброса
- * ({@link SmokeGrid.Source#puffGrowth}, {@link FxAtlas#puffFrame}), у каждого клуба кучки со своим сдвигом.</li>
+ * <li><b>Size.</b> The visible edge of the Gaussian — where the thickness falls to {@link #EDGE_TAU}: r =
+ * σ·√(2·ln(τ₀/{@value #EDGE_TAU})) (τ₀ — thickness across the middle, Σκ'm/(2πσhσv)); for a dense cloud this is ~3.7σ,
+ * for a thin one — nearer the middle. The puff's square — this edge (the puff's map is cropped to the substance's edge,
+ * {@code tools/bake_fx/pack.py}).</li>
+ * <li><b>Density.</b> The middle's opacity is 1 − e^(−τ₀); a Gaussian large on screen — a cluster of up to
+ * {@value #CLUSTER} puffs around the middle (the larger, the more of them and the smaller they are); several overlap in
+ * the middle: each takes its share, so that together they give the same transmittance.</li>
+ * <li><b>Color</b> — reflection of the thick layer of a mix of soot, dust and droplets (two streams, {@link #thick})
+ * under sky light as the lightmap lights blocks under open sky ({@link FarView#sky}); light from the sides (sun, moon,
+ * sky, the frame's fireballs) — from the frame's maps in the shader ({@code fx.vsh}, {@code fx.fsh}).</li>
+ * <li><b>Frame</b> — the one where the simulation has grown as many times as the source's substance since the emission
+ * ({@link SmokeGrid.Source#puffGrowth}, {@link FxAtlas#puffFrame}); each puff of a cluster has its own offset.</li>
  * </ul>
- * Светящийся газ (горячее точки Дрейпера) у источника, что рисует тело огня ({@link SmokeGrid.Source#drawsGlow}: облако
- * взрыва — огненным шаром), здесь не рисуется: дым проступает той же долей, что тело тает. Отрезок облака
- * ({@link SmokeGrid.Sink#segment}) — клубы вдоль него через ~σ; кусок трубки ({@link SmokeGrid.Sink#tube}: шлейф пожара) —
- * как след снаряда ({@link FarFlightView#line}, {@link #tube}).
+ * Glowing gas (hotter than the Draper point) at the source, which the fire body draws
+ * ({@link SmokeGrid.Source#drawsGlow}: a blast cloud as a fireball), is not drawn here: smoke shows through in the same
+ * share as the body melts. A cloud segment ({@link SmokeGrid.Sink#segment}) — puffs along it every ~σ; a piece of tube
+ * ({@link SmokeGrid.Sink#tube}: the fire's trail) — like a projectile's trail ({@link FarFlightView#line},
+ * {@link #tube}).
  */
 final class SmokePuffs {
-    /** Куда клубы, вуали и ленты идут квадратами (кадр слоя — {@link FarSprites}; проверки — свой приёмник). */
+    /**
+     * Where puffs, veils and ribbons go as squares (frame of the layer — {@link FarSprites}; checks — their own sink).
+     */
     interface Out {
         void puff6(double dx, double dy, double dz, double halfA, double halfB, FxAtlas.Sprite sprite, float mix, float shade, float r, float g,
                    float b, float a);
@@ -39,7 +44,7 @@ final class SmokePuffs {
         void puff6Flat(double dx, double dy, double dz, double halfA, double halfB, double soft, double angle, FxAtlas.Sprite sprite, float mix, float shade,
                        float r, float g, float b, float a);
 
-        /** Вуаль вещества у глаза по экрану ({@link Veil}) со светом мира light (упакованный). */
+        /** Veil of the substance at the eye on screen ({@link Veil}) with world light `light` (packed). */
         void veil(Veil veil, int light);
 
         boolean ribbon(double ax, double ay, double az, double halfA, float alphaA, int lightA, double bx, double by, double bz, double halfB,
@@ -47,31 +52,37 @@ final class SmokePuffs {
     }
 
     /**
-     * Чисел на ждущий клуб: место, σh, σv, сажа, пыль, капли, альбедо пыли (3), номер, источник, доля дыма (непрозрачность
-     * клуба, что не тело огня, {@link #smokeShare}), клуб ли это отрезка (1 — свой кадр, отражение и блуждание, как у
-     * клубов трубки), вид клуба ({@link SmokeGrid.Look}, номер) и его кадр (у вида не {@code SMOKE}).
+     * Numbers per waiting puff: place, σh, σv, soot, dust, droplets, dust albedo (3), number, source, smoke share
+     * (opacity of the puff that is not the fire body, {@link #smokeShare}), whether this is a segment puff (1 — its own
+     * frame, reflection and wander, as with tube puffs), the puff's look ({@link SmokeGrid.Look}, number) and its frame
+     * (for a look that is not {@code SMOKE}).
      */
     static final int FIELDS = 17;
     /**
-     * Клубы одного источника, чьи середины ближе этой доли меньшего σ (по горизонтали и по вертикали), — один гаусс с теми
-     * же массой и моментами: их сумма от одного гаусса почти не отличается (у двух равных на расстоянии σ — на 1,3 % пика),
-     * а рисуется вдвое-вдесятеро меньше квадратов. Так пуфовые модели держат число пуфов (SCIPUFF: Sykes и др., «PC-SCIPUFF
-     * Version 1.2PD Technical Documentation», ARAP Report 718, 1998, слияние перекрывающихся пуфов). Пыль волны —
-     * 32 клуба (4 кольца × 8 секторов), и когда расплывание шире расстояния между ними, они лежат друг на друге: в дыму
-     * налёта из 16 ударов кадр заливал ~17 экранов (замер {@code SmokeFillTest}).
+     * Puffs of one source whose centers are closer than this share of the smaller σ (horizontally and vertically) — one
+     * Gaussian with the same mass and moments: their sum from one Gaussian barely differs (for two equal ones at
+     * distance σ — 1.3 % of the peak), and they are drawn two to ten times fewer squares. So puff models keep the puff
+     * count down (SCIPUFF: Sykes et al., “PC-SCIPUFF Version 1.2PD Technical Documentation”, ARAP Report 718, 1998,
+     * merging of overlapping puffs). The blast wave's dust — 32 puffs (4 rings × 8 sectors), and when the spreading is
+     * wider than the distance between them, they lie on top of each other: in the smoke of a raid of 16 strikes the
+     * frame was flooded ~17 screens (measured with {@code SmokeFillTest}).
      */
     static final double MERGE = 1;
 
     /**
-     * Слить близкие клубы ({@link #MERGE}) с {@code start} до {@code n} в {@code held} ({@link #FIELDS} чисел на клуб): вес —
-     * ослабление (что видно), середина — средняя, σ² — средняя σ² плюс разброс середин (по горизонтали — половина:
-     * σh общий для двух осей), массы — суммы; слитый помечается в {@code gone}. Только вещество одного альбедо.
+     * Merge close puffs ({@link #MERGE}) from {@code start} to {@code n} into {@code held} ({@link #FIELDS} numbers per
+     * puff): weight — attenuation (what is visible), center — average, σ² — average σ² plus the spread of centers
+     * (horizontally — half: σh shared by both axes), masses — sums; the merged one is marked {@code gone}. Only
+     * substance of one albedo.
      */
     static void merge(double[] held, int start, int n, boolean[] gone, double sootK, double dropK) {
         merge(held, start, n, gone, sootK, dropK, MERGE);
     }
 
-    /** То же с долей σ {@code reach}; вид слитого (кадр клуба, зерно) — у того, чьего вещества больше. */
+    /**
+     * The same, with a σ share {@code reach}; the merged puff's look (puff frame, grain) — that of the one with more
+     * substance.
+     */
     static void merge(double[] held, int start, int n, boolean[] gone, double sootK, double dropK, double reach) {
         for (int i = start; i < n; i++) {
             if (gone[i]) continue;
@@ -83,10 +94,12 @@ final class SmokePuffs {
                     if (gone[j]) continue;
                     int b = j * FIELDS;
                     if (held[a + 8] != held[b + 8] || held[a + 9] != held[b + 9] || held[a + 10] != held[b + 10]) continue;
-                    // клубы разного вида (дым, завеса выброса, пыль дробления) — разные кадры: в один гаусс не сливаются
+                    // puffs of different looks (smoke, emission curtain, crushing dust) — different frames: they do not
+                    // merge into one Gaussian
                     if (held[a + 15] != held[b + 15]) continue;
-                    // клубы одного отрезка разложены по нему нарочно: слитые, они собрались бы в один гаусс, и плоский ряд
-                    // (пыль старта: шаг — по меньшей σ, соседи ближе σh) потерял бы длину
+                    // puffs of one segment are laid out along it deliberately: merged, they would gather into one
+                    // Gaussian, and a flat row (launch dust: step by the smaller σ, neighbors closer than σh) would
+                    // lose its length
                     if (held[a + 14] > 0.5 && held[b + 14] > 0.5 && (long) held[a + 11] / SEGMENT_CLUBS == (long) held[b + 11] / SEGMENT_CLUBS) continue;
                     double dx = held[b] - held[a], dy = held[b + 1] - held[a + 1], dz = held[b + 2] - held[a + 2];
                     double h = reach * Math.min(held[a + 3], held[b + 3]), v = reach * Math.min(held[a + 4], held[b + 4]);
@@ -100,10 +113,11 @@ final class SmokePuffs {
     }
 
     /**
-     * Клуб с b ({@link #FIELDS} чисел) — в клуб с a: вес — ослабление (что видно), середина — средняя, σ² — средняя σ² плюс
-     * разброс середин (по горизонтали — половина: σh общий для двух осей), массы — суммы; у пыли разного цвета альбедо —
-     * среднее по её ослаблению (так считается ω' смеси — точно), масса — по ослаблению смеси. Доля дыма — средняя по
-     * ослаблению; вид (кадр клуба, зерно, источник) — у того, чьего вещества больше.
+     * Puff with b ({@link #FIELDS} numbers) — into the puff with a: weight — attenuation (what is visible), center —
+     * average, σ² — average σ² plus the spread of centers (horizontally — half: σh shared by both axes), masses — sums;
+     * for dust of different color albedo — the average weighted by its attenuation (this is how the mix's ω' is
+     * computed — exactly), mass — by the attenuation of the mix. Smoke share — average by attenuation; look (puff
+     * frame, grain, source) — that of the one with more substance.
      */
     static void absorb(double[] held, int a, int b, double sootK, double dropK) {
         boolean same = held[a + 8] == held[b + 8] && held[a + 9] == held[b + 9] && held[a + 10] == held[b + 10];
@@ -113,9 +127,9 @@ final class SmokePuffs {
         double w = wa + wb;
         if (!(w > 0)) return;
         double fa = wa / w, fb = wb / w;
-        // доля дыма — средняя по тому, что видно (ослаблению)
+        // smoke share — average by what is visible (attenuation)
         held[a + 13] = fa * held[a + 13] + fb * held[b + 13];
-        // вид источника (кадр клуба, зерно, видимость, кадр своего вида) — у того, чьего вещества больше
+        // source look (puff frame, grain, visibility, frame of its own look) — that of the one with more substance
         if (wb > wa) {
             held[a + 11] = held[b + 11];
             held[a + 12] = held[b + 12];
@@ -124,7 +138,7 @@ final class SmokePuffs {
         }
         double dx = held[b] - held[a], dy = held[b + 1] - held[a + 1], dz = held[b + 2] - held[a + 2];
         double mx = held[a] + fb * dx, my = held[a + 1] + fb * dy, mz = held[a + 2] + fb * dz;
-        // второй момент около новой середины
+        // second moment around the new center
         double ax = held[a] - mx, ay = held[a + 1] - my, az = held[a + 2] - mz, bx = held[b] - mx, by = held[b + 1] - my, bz = held[b + 2] - mz;
         double sh2 = fa * (held[a + 3] * held[a + 3] + 0.5 * (ax * ax + az * az)) + fb * (held[b + 3] * held[b + 3] + 0.5 * (bx * bx + bz * bz));
         double sv2 = fa * (held[a + 4] * held[a + 4] + ay * ay) + fb * (held[b + 4] * held[b + 4] + by * by);
@@ -144,17 +158,19 @@ final class SmokePuffs {
     }
 
     /**
-     * Сколько экранов могут закрыть квадраты облаков и мест трубок за кадр (сумма их площадей на экране с перекрытием) при
-     * любом числе ударов: что видно сквозь дым — толща по лучу взгляда, Στ, а не число слоёв. Сверх бюджета кучки берут
-     * меньше клубов (крупнее) с той же непрозрачностью середины; не хватает и по одному клубу на гаусс (пол) — крупное на
-     * экране тает в вуаль, а лежащие друг на друге клубы и места разных источников сливаются ({@link Draw#flush}). Жалоба
-     * 23.10: в дыму налёта 8 к/с; стенд 25.10, налёт из 100 шахедов: пол 41/104/175 экранов снаружи/с края/внутри (бюджет не
-     * действовал), ~0,3 мс видеокарты за экран (RTX 4060, 2560×1600). ⚠ Число — оценка: 16 экранов ≈ 4,8 мс; налёт из 16
-     * ударов ложится в них без слияния ({@code SmokeFillTest}), из 100 — с ним ({@code SmokeRaidTest}). При 8 налёт из 40
-     * в песочнице с края и изнутри уже терял тёмную растекающуюся массу и шлейфы в ровную мглу вуали (кадры PR #460).
+     * How many screens the puff squares and tube spots can cover per frame (the sum of their screen areas, with
+     * overlap) for any number of strikes: what is seen through smoke is the thickness along the view ray, Στ, not the
+     * number of layers. Over budget, clusters take fewer puffs (larger) with the same middle opacity; not even one puff
+     * per Gaussian (the floor) is enough — a large one on screen melts into the veil, and puffs lying on top of each
+     * other and spots of different sources merge ({@link Draw#flush}). Complaint 23.10: in the smoke of a raid, 8 fps;
+     * bench 25.10, a raid of 100 Shaheds: the floor was 41/104/175 screens outside/from the edge/inside (the budget did
+     * not work), ~0.3 ms of GPU time per screen (RTX 4060, 2560×1600). ⚠ The number is an estimate: 16 screens ≈ 4.8
+     * ms; a raid of 16 strikes lands in them without merging ({@code SmokeFillTest}), from 100 — with it
+     * ({@code SmokeRaidTest}). At 8, a raid of 40 in the sandbox from the edge and from inside already lost the dark
+     * spreading mass and the trails in a flat haze of veil (frames of PR #460).
      */
     static final double FILL_BUDGET = 16;
-    /** Бюджет, по которому кадр строится ({@link #FILL_BUDGET}; проверки сравнивают с кадром без бюджета). */
+    /** Budget the frame is built to ({@link #FILL_BUDGET}; checks compare with the frame without a budget). */
     static double budget = FILL_BUDGET;
     /**
      * Cross-source merge levels ({@link Draw#mergeLevel}): a level-k cell spans {@link #LOD_CELL}·2^k puff edges
@@ -162,69 +178,76 @@ final class SmokePuffs {
      */
     static final int LEVELS = 3;
     static final double LOD_CELL = 0.5;
-    /** Уровень слияния прошлого кадра держится, пока пол уровнем ниже не меньше этой доли бюджета. */
+    /**
+     * The merge level of the previous frame is kept while the floor one level lower is not less than this share of the
+     * budget.
+     */
     static final double HYSTERESIS = 0.8;
     /**
-     * Quads selected by {@code Draw.fit} fade into the veil from this fraction of cumulative budget fill; ribbons fade out.
-     * Presentation: a 15% band keeps the transition continuous without turning an under-budget water salvo (floor 13.16) into haze.
+     * Quads selected by {@code Draw.fit} fade into the veil from this fraction of cumulative budget fill; ribbons fade
+     * out. Presentation: a 15% band keeps the transition continuous without turning an under-budget water salvo (floor
+     * 13.16) into haze.
      */
     static final double FIT_FADE = 0.85;
-    /** Групп в ячейке слияния мест трубок: места одной трубки — в разных группах. */
+    /** Groups in a tube-spot merge cell: spots of one tube — in different groups. */
     static final int SLOTS = 8;
     /**
-     * Гауссов вуали — не больше (толща — по лучу каждой из 13×13 вершин через каждый: ~0,3 мс процессора на 48); больше —
-     * близкие сливаются.
+     * Veil Gaussians — no more than (thickness along each ray from each of the 13×13 vertices through each: ~0.3 ms of
+     * CPU for 48); more — nearby ones merge.
      */
     static final int VEIL_MAX = 48;
-    /** Мягкость вуали к миру — не меньше, блоков ({@link Veil#soft}). */
+    /** Softness of the veil to the world — no less than, blocks ({@link Veil#soft}). */
     static final double VEIL_SOFT_MIN = 1;
     /**
-     * Чисел на ждущее место трубки: середина от глаза (3), σ, толща клубов и всей трубки поперёк оси, кусок оси, цвет (3),
-     * степень тени, кадр клуба, видимая доля, клубов в кучке, свой ли кадр, ось (3), вид, вещество, дымка воздуха до него.
+     * Numbers per waiting tube spot: center from the eye (3), σ, thickness of puffs and of the whole tube across the
+     * axis, piece of axis, color (3), shadow level, puff frame, visible share, puffs in the cluster, whether its own
+     * frame, axis (3), look, substance, haze of air before it.
      */
     static final int PLACE_FIELDS = 21, P_CONTEXT = 18, P_MATERIAL = 19, P_AIR = 20;
-    /** Чисел на ждущий отрезок ленты ({@code Draw.holdRibbon}). */
+    /** Numbers per waiting ribbon segment ({@code Draw.holdRibbon}). */
     static final int RIBBON_FIELDS = 21;
-    /** Веществ мест в кадре — не больше (больше — места не сливаются). */
+    /** Substances of spots in the frame — no more than (more — spots do not merge). */
     static final int MATERIALS = 32;
     /**
-     * Клубов облаков в кадре — не больше (план, слияние и квадраты — процессор на каждый): налёт из 100 ударов — ~800 после
-     * слияния внутри источников, сверх — сливаются до плана ({@code Draw.thin}).
+     * Puffs of clouds in the frame — no more than (plan, merge and squares — CPU per each): a raid of 100 strikes —
+     * ~800 after merging inside sources; beyond that they merge before the plan ({@code Draw.thin}).
      */
     static final int BLOBS = 2000;
     /**
-     * Мест трубок в кадре — не больше (план, слияние и квадраты — процессор на каждое): сверх — у отрезка мест в этом кадре нет
-     * ({@link #tube}); в среднем их держит {@code FarFlightView.CLUB_BUDGET} шагом мест по прошлым кадрам, а это — в каждом
-     * кадре, и в первом кадре налёта тоже.
+     * Tube spots in the frame — no more than (plan, merge and squares — CPU per each): beyond that the segment has no
+     * spots in this frame ({@link #tube}); on average they are kept at {@code FarFlightView.CLUB_BUDGET} by a step of
+     * spots from past frames, and this is in each frame, and in the first frame of a raid too.
      */
     static final int PLACES = FarFlightView.CLUB_BUDGET;
-    /** Номера трубок облаков кадра — с этого (у следов — номер снаряда). */
+    /** Cloud tube numbers in the frame start from this (for trails — the projectile's number). */
     static final long TUBES = 1L << 40;
 
     /**
-     * Доля экрана под квадратом с полуразмерами {@code radius} поперёк и {@code tall} вверх (м, лицом к камере) с серединой
-     * (px, py, pz) от глаза,
-     * обрезанным кадром: кадр — 16:9 с полудиагональю {@link FarView#edge} (⚠ соотношение сторон — оценка; для бюджета).
+     * Screen share under a square with half-sizes {@code radius} across and {@code tall} up (m, facing the camera) with
+     * a center (px, py, pz) from the eye, cropped by the frame: the frame is 16:9 with half-diagonal
+     * {@link FarView#edge} (⚠ aspect ratio — estimate; for the budget).
      */
     static double cover(FarView view, double px, double py, double pz, double radius, double tall) {
         org.joml.Vector3f f = view.forward(), l = view.left(), u = view.up();
         double depth = px * f.x + py * f.y + pz * f.z;
         double diag = Math.tan(Math.min(view.edge(), 1.5)), w = diag * 16 / Math.sqrt(337), h = diag * 9 / Math.sqrt(337);
-        // позади глаза — не на экране; у плоскости глаза — проекция с глубины в сантиметры (обрежется кадром)
+        // behind the eye — not on screen; at the eye plane — projection from depth to centimeters (cropped by the
+        // frame)
         if (depth <= 0) return 0;
         double r = radius / Math.max(depth, 0.05), t = tall / Math.max(depth, 0.05);
         double cu = (px * l.x + py * l.y + pz * l.z) / depth, cv = (px * u.x + py * u.y + pz * u.z) / depth;
         double x0 = Math.max(-w, cu - r), x1 = Math.min(w, cu + r), y0 = Math.max(-h, cv - t), y1 = Math.min(h, cv + t);
         if (x1 <= x0 || y1 <= y0) return 0;
-        // видеокарта закрашивает весь квадрат клуба (прозрачные углы — тоже), а не круг в нём
+        // the GPU fills the whole square of the puff (transparent corners too), not the circle inside it
         return Math.min(1, (x1 - x0) * (y1 - y0) / (4 * w * h));
     }
 
     /**
-     * Доля экрана под плоским многоугольником с вершинами xyz (от глаза, подряд, выпуклый): обрезан ближней плоскостью и
-     * кадром ({@link #cover}: 16:9 с полудиагональю {@link FarView#edge}), площадь проекции — по самим вершинам. Квадрат лицом
-     * к камере — тот же прямоугольник, что у {@link #cover}; лежащий клуб и полоса ленты на экране — трапеция, ближний край
-     * которой у пыли под углом в разы крупнее, чем на глубине середины.
+     * Screen share under a flat polygon with vertices xyz (from the eye, in order, convex): clipped by the near plane
+     * and by the frame ({@link #cover}: 16:9 with a half-diagonal {@link FarView#edge}); the projected area — from the
+     * vertices themselves. A square facing the camera — the same rectangle as for {@link #cover}; a lying puff and a
+     * ribbon strip on screen — a trapezoid; the near edge which for dust at an angle is several times larger than at
+     * the depth of the middle.
      */
     static double polygonFill(FarView view, double[] xyz) {
         org.joml.Vector3f f = view.forward(), l = view.left(), u = view.up();
@@ -233,7 +256,7 @@ final class SmokePuffs {
         PolygonScratch scratch = POLYGONS.get();
         scratch.reserve(n + 5);
         double[] a = scratch.a, b = scratch.b;
-        // в осях глаза: (влево, вверх, глубина); обрезка ближней плоскостью
+        // in eye axes: (left, up, depth); clipping by the near plane
         int m = 0;
         for (int i = 0; i < n; i++) {
             int j = (i + 1) % n;
@@ -252,7 +275,7 @@ final class SmokePuffs {
                 m++;
             }
         }
-        // обрезка кадром: четыре полуплоскости
+        // clipping by the frame: four half-planes
         for (int edge = 0; edge < 4 && m > 0; edge++) {
             int k = 0;
             for (int i = 0; i < m; i++) {
@@ -297,10 +320,13 @@ final class SmokePuffs {
 
     private static final ThreadLocal<PolygonScratch> POLYGONS = ThreadLocal.withInitial(PolygonScratch::new);
 
-    /** Ближняя плоскость обрезки многоугольника, блоков (у квадратов слоя — 0,05 блока, {@link #cover}). */
+    /** Near clipping plane of the polygon, blocks (for layer squares — 0.05 blocks, {@link #cover}). */
     private static final double NEAR_CLIP = 0.05;
 
-    /** Со знаком: внутри ли точка (u, v) полуплоскости edge кадра ±w, ±h (0 — правая, 1 — левая, 2 — верх, 3 — низ). */
+    /**
+     * Signed: whether point (u, v) is inside the frame's half-plane edge ±w, ±h (0 — right, 1 — left, 2 — top, 3 —
+     * bottom).
+     */
     private static double inside(int edge, double u, double v, double w, double h) {
         return switch (edge) {
             case 0 -> w - u;
@@ -310,20 +336,20 @@ final class SmokePuffs {
         };
     }
 
-    /** Толща видимого края гаусса (порог контраста — 0,02; край квадрата чуть внутри). */
+    /** Thickness of the Gaussian's visible edge (contrast threshold — 0.02; the square's edge slightly inside). */
     static final double EDGE_TAU = 0.05;
     /**
-     * Клубов на гаусс — не больше; по одному на столько пикселей видимого радиуса на экране (кадр клуба — 128 пикселей:
-     * крупнее он мылится), мельче — один клуб.
+     * Puffs per Gaussian — no more than one per this many pixels of visible radius on screen (the puff frame is 128
+     * pixels: larger, it blurs), smaller — one puff.
      */
     static final int CLUSTER = 12;
     static final double CLUSTER_PIXELS = 40;
-    /** Клуб кучки — не больше этой доли видимого радиуса гаусса. */
+    /** A cluster's puff — no more than this share of the Gaussian's visible radius. */
     static final double MAX_SHARE = 0.8;
 
     /**
-     * Transition from one puff to a cluster: the first puff stays in place and gradually gains the cluster's size, spread and frame.
-     * ceil(many) determines only the number of draw calls, not the appearance of an existing puff.
+     * Transition from one puff to a cluster: the first puff stays in place and gradually gains the cluster's size,
+     * spread and frame. ceil(many) determines only the number of draw calls, not the appearance of an existing puff.
      */
     static double clusterBlend(double many) {
         return smoothstep(1, 2, many);
@@ -354,45 +380,51 @@ final class SmokePuffs {
         long pair = mix(seed + ((child + 1L) / 2) * 0x632BE59BD9B4E019L);
         return ((child & 1) == 1 ? 1 : -1) * gauss(pair >>> shift);
     }
-    /** Клубы отрезка — через столько σ (меньшей из двух). */
+    /** Puffs of a segment — every this many σ (the smaller of the two). */
     static final double SEGMENT_STEP = 1.2;
-    /** Клубов на отрезок — не больше (струя столба брызг — до ~17 σ своего сечения). */
+    /** Puffs per segment — no more than (a spray column's jet — up to ~17 σ of its section). */
     static final int SEGMENT_CLUBS = 16;
     /**
-     * Кадры — с этого. Прежний клуб (своя Mantaflow) начинался плотным круглым выбросом и шёл с третьего кадра; кадры
-     * шапки облака взрыва EmberGen сверху ({@code tools/bake_fx}, puff-vdb) клубятся с первого.
+     * Frames — from this one. The former puff (its own Mantaflow) started with a dense round emission and ran from the
+     * third frame; the frames of the blast cloud's cap from EmberGen above ({@code tools/bake_fx}, puff-vdb) billow
+     * from the first.
      */
     static final int FIRST_FRAME = 0;
     /**
-     * Разброс кадра клубов кучки и трубки около кадра источника, кадров в обе стороны: соседние кадры — та же шапка в
-     * другой миг, клубы другие. У конца листа разброс уходит назад: у старого облака кадр источника — последний, и все клубы
-     * были бы одной картинкой (только отражённой) — «штамп».
+     * Scatter of the frame of cluster and tube puffs around the source's frame, frames in both directions: neighboring
+     * frames are the same cap at another moment, the puffs are different. At the end of the sprite sheet the scatter
+     * goes backward: for an old cloud the source's frame is the last, and all puffs would be one picture (only
+     * mirrored) — a “stamp”.
      */
     static final double FRAME_SPREAD = 1;
 
     /**
-     * Доля дыма в непрозрачности вещества источника, что рисует тело огня (glow, {@link SmokeGrid.Source#drawsGlow}): тело тает,
-     * дым проступает той же долей ({@link CloudModel#glowShare}), sky — свет неба. Доля — у непрозрачности, а не у массы: у шара
-     * сотни оптических толщ, и масса × доля давала непрозрачную сажу уже при доле 1 % — скачок за ~0,1 с ночью около 1200 K и
-     * днём при остывании шара взрывчатки, тёмный ореол до ~2 радиусов перед шаром ракеты днём (live 24.10).
+     * Smoke share in the opacity of the source's substance, which draws the fire body (glow,
+     * {@link SmokeGrid.Source#drawsGlow}): the body melts, smoke shows through in the same share
+     * ({@link CloudModel#glowShare}), sky — the sky light. The share is of opacity, not of mass: a fireball has
+     * hundreds of optical thicknesses, and mass × share gave opaque soot already at a share of 1 % — a jump over ~0.1 s
+     * at night at about 1200 K and by day as the explosive's ball cools, a dark halo up to ~2 radii in front of the
+     * missile's ball by day (live 24.10).
      */
     static double smokeShare(boolean glow, double kelvin, double sky) {
         return glow ? 1 - CloudModel.glowShare(kelvin, sky) : 1;
     }
 
     /**
-     * Сколько клубов кучки трубки ({@link #club}) накрывают её середину — ось трубки (с долей последнего, не меньше 1): клуб
-     * j — со сдвигом и размером из того же зерна, что у его квадрата, диск — {@link #puffDisc} его кадра; середина под ним,
-     * если сдвиг поперёк взгляда (у лежащего — по горизонтали) меньше диска (плавно на ±20 %). У трубки закон — у оси (толща
-     * поперёк оси, {@code PlumeContinuityTest}); прежде доля клуба шла от слоёв в среднем по площади кучки (много × размер²),
-     * а ось накрывают почти все клубы кучки (их сдвиг ~0,1 края): тонкий след вблизи выходил у оси до 1,4 закона (ревью
-     * #443). Кучка облака ({@code blob}) держит среднее по площади (SmokeFillTest: бюджет не меняет пропускание в среднем).
+     * How many puffs of the tube's cluster ({@link #club}) cover its middle — the tube's axis (with the last one's
+     * share, not less than 1): puff j — with the offset and size from the same grain as its square, the disc —
+     * {@link #puffDisc} of its frame; the middle is under it if the offset across the view (for a lying one —
+     * horizontally) is less than the disc (smoothly within ±20 %). For a tube the law is by the axis (thickness across
+     * the axis, {@code PlumeContinuityTest}); before, a puff's share came from the layers on average over the cluster's
+     * area (many × size²), but almost all of the cluster's puffs cover the axis (their offset is ~0.1 of the edge): a
+     * thin trail nearby overshot the law at the axis by up to 1.4× (review #443). A cloud's cluster ({@code blob})
+     * keeps the average over the area (SmokeFillTest: the budget does not change the transmittance on average).
      */
     static double centreCover(double px, double py, double pz, double d, long h, int count, double many, double size, double spread, double rh,
                               double rv, double rw, double grow, boolean lying, double age, boolean vary) {
         if (count <= 1) return 1;
         double vx = px / d, vy = py / d, vz = pz / d;
-        // оси квадрата лицом к камере: поперёк — горизонталь, перпендикулярная взгляду, вверх — поперёк обеих
+        // axes of the square facing the camera: across — the horizontal perpendicular to the view, up — across both
         double hx = -vz, hz = vx, hn = Math.hypot(hx, hz);
         if (hn < 1e-6) {
             hx = 1;
@@ -418,7 +450,7 @@ final class SmokePuffs {
         return Math.max(1, sum);
     }
 
-    /** Кадр клуба (с дробью) у источника с кадром age; u — зерно клуба 0..1; vary — с разбросом. */
+    /** Puff frame (with a fraction) at the source with frame age; u — puff grain 0..1; vary — with scatter. */
     static double clubFrame(double age, double u, boolean vary) {
         double last = FxAtlas.PUFF6_FRAMES - 1.001;
         if (!vary) return Math.clamp(age, FIRST_FRAME, last);
@@ -427,14 +459,17 @@ final class SmokePuffs {
 
     /**
      * The render thread fills one instance with the frame's puffs, places and ribbons ({@link #sink}, {@link #tube},
-     * {@link #ribbon}). With a {@link Planner} the other instance meanwhile plans the previous frame off the client thread,
-     * and each frame draws the last completed plan at its own eye ({@link #flush}); without one the filled instance plans
-     * and draws at once.
+     * {@link #ribbon}). With a {@link Planner} the other instance meanwhile plans the previous frame off the client
+     * thread, and each frame draws the last completed plan at its own eye ({@link #flush}); without one the filled
+     * instance plans and draws at once.
      */
     private static Draw fill = new Draw(), job = new Draw();
     /** Client thread only: the replayed plan's veil, merged and laid at the current eye. */
     private static final Draw VEIL = new Draw();
-    /** The plan being made off the client thread, and the last completed one (drawn every frame until the next completes). */
+    /**
+     * The plan being made off the client thread, and the last completed one (drawn every frame until the next
+     * completes).
+     */
     private static Recording planned = new Recording(), shown = new Recording();
     @Nullable
     private static Planner planner;
@@ -456,7 +491,7 @@ final class SmokePuffs {
 
     private SmokePuffs() {}
 
-    /** Облака, которых объём не рисует, — в кадр. */
+    /** Clouds whose volume does not draw — into the frame. */
     static void collect(FarView view, FarSprites out) {
         // a frame without smoke inputs still draws the last plan at its own eye
         lastView = view;
@@ -467,8 +502,8 @@ final class SmokePuffs {
     }
 
     /**
-     * Plan the frame off the client thread (null: plan and draw on the caller's thread, as unit tests do). Waits for the
-     * running plan before switching.
+     * Plan the frame off the client thread (null: plan and draw on the caller's thread, as unit tests do). Waits for
+     * the running plan before switching.
      */
     static void planner(@Nullable Planner next) {
         if (planner == next) return;
@@ -482,14 +517,14 @@ final class SmokePuffs {
     }
 
     /**
-     * Ждущие клубы всех источников кадра (слияние {@link #merge}, бюджет {@link #FILL_BUDGET}) и вуаль — в кадр. Зовёт тот,
-     * кто брал {@link #sink}, когда все источники кадра отданы (и следы снарядов, {@code FarFlightView}: их кучки и вуали —
-     * в том же кадре).
+     * Waiting puffs of all sources of the frame (merge {@link #merge}, budget {@link #FILL_BUDGET}) and the veil — into
+     * the frame. Called by the one who took {@link #sink} when all the frame's sources were handed out (and the
+     * projectiles' trails, {@code FarFlightView}: their clusters and veils are in the same frame).
      * <p>
-     * With a planner, the frame draws the last completed plan at its own eye: billboards, ribbons and the veil are built
-     * here, on the client thread, from the plan's world-anchored quads; then this frame's inputs go to the planner. The plan
-     * lags one frame (snapshots of clouds are refreshed every few frames anyway). If the previous plan is not done within
-     * {@link #WAIT_NANOS}, the frame draws the plan before it again and drops its own inputs.
+     * With a planner, the frame draws the last completed plan at its own eye: billboards, ribbons and the veil are
+     * built here, on the client thread, from the plan's world-anchored quads; then this frame's inputs go to the
+     * planner. The plan lags one frame (snapshots of clouds are refreshed every few frames anyway). If the previous
+     * plan is not done within {@link #WAIT_NANOS}, the frame draws the plan before it again and drops its own inputs.
      */
     static void flush() {
         Planner p = planner;
@@ -507,8 +542,9 @@ final class SmokePuffs {
         boolean ready = !running || p.await(WAIT_NANOS);
         if (running && ready) collect();
         if (lastView != null && !(shown.fits(lastView) && shown.trim(lastView, budget))) {
-            // The last plan was made for another projection (zoom), far from this eye, or a fast turn brings more of it onto
-            // the screen than the budget's fading share: this frame is planned now and drawn at once, as inline planning would.
+            // The last plan was made for another projection (zoom), far from this eye, or a fast turn brings more of it
+            // onto the screen than the budget's fading share: this frame is planned now and drawn at once, as inline
+            // planning would.
             boolean drained = !running || p.await(DRAIN_NANOS);
             if (running && drained) collect();
             shown.clear();
@@ -534,7 +570,9 @@ final class SmokePuffs {
         start(p);
     }
 
-    /** Longest wait for a plan the frame cannot do without (projection change, world exit): a plan's own bounded cost. */
+    /**
+     * Longest wait for a plan the frame cannot do without (projection change, world exit): a plan's own bounded cost.
+     */
     static final long DRAIN_NANOS = 10_000_000_000L;
 
     /** The finished plan becomes the drawn one. */
@@ -550,7 +588,10 @@ final class SmokePuffs {
         }
     }
 
-    /** This frame's inputs go to the planner, continuing the last plan's history (merge level, cluster share, occlusion grid). */
+    /**
+     * This frame's inputs go to the planner, continuing the last plan's history (merge level, cluster share, occlusion
+     * grid).
+     */
     private static void start(Planner p) {
         fill.level = job.level;
         fill.lastShare = job.lastShare;
@@ -567,8 +608,9 @@ final class SmokePuffs {
     }
 
     /**
-     * Storage for this frame's camera vectors ({@link FarRenderer#view}): the filling Draw's own, which no plan reads until it is
-     * sealed; the Camera's vectors are live until the next frame, and a fresh copy every frame would be garbage.
+     * Storage for this frame's camera vectors ({@link FarRenderer#view}): the filling Draw's own, which no plan reads
+     * until it is sealed; the Camera's vectors are live until the next frame, and a fresh copy every frame would be
+     * garbage.
      */
     static org.joml.Vector3f[] cameraBasis() {
         return fill.basis;
@@ -599,7 +641,10 @@ final class SmokePuffs {
         lastVeils = veil.lastVeils;
     }
 
-    /** Заливка последнего кадра квадратами облаков, экранов, и доля кучки, что ей дал бюджет (замер, строки описания). */
+    /**
+     * Fill of the last frame by cloud squares, in screens, and the share of a cluster the budget gave it (measured;
+     * description lines).
+     */
     static double lastFill() {
         return lastFill;
     }
@@ -608,17 +653,20 @@ final class SmokePuffs {
         return lastShare;
     }
 
-    /** Пол кадра — по одному клубу на гаусс и место трубки, что остались квадратами, экранов: не выше бюджета. */
+    /** Frame floor — one puff per Gaussian and tube spot that stayed as squares, in screens: not above the budget. */
     static double lastFloor() {
         return lastFloor;
     }
 
-    /** Пол до слияния разных источников и вуали ({@link #lastFloor} — после), экранов. */
+    /** Floor before merging of different sources and the veil ({@link #lastFloor} — after), in screens. */
     static double lastRaw() {
         return lastRaw;
     }
 
-    /** Уровень слияния разных источников ({@link #LEVELS}; 0 — без слияния), гауссов вуали, квадратов-клубов кадра (гауссов и мест). */
+    /**
+     * Merge level of different sources ({@link #LEVELS}; 0 — no merge), veil Gaussians, frame's cloud squares
+     * (Gaussians and spots).
+     */
     static int lastLevel() {
         return lastLevel;
     }
@@ -631,7 +679,10 @@ final class SmokePuffs {
         return lastItems;
     }
 
-    /** Клубов облаков в плане последнего кадра (после слияния внутри источников и {@link #BLOBS}) и мест трубок ({@link #PLACES}). */
+    /**
+     * Cloud puffs in the plan of the last frame (after merging inside sources and {@link #BLOBS}) and tube spots
+     * ({@link #PLACES}).
+     */
     static int lastBlobs() {
         return lastBlobs;
     }
@@ -640,7 +691,7 @@ final class SmokePuffs {
         return lastPlaces;
     }
 
-    /** Мест трубок, которых в последнем кадре не дали ({@link #PLACES}): у их отрезков доли клубов в кадре не было. */
+    /** Tube spots that the last frame did not give ({@link #PLACES}): their segments had no puff share in the frame. */
     static int lastRefused() {
         return lastRefused;
     }
@@ -650,12 +701,15 @@ final class SmokePuffs {
         return lastReused;
     }
 
-    /** Вещество мест трубок последнего кадра: ослабление всей массы клубов, м² (толща поперёк оси × √(2π)σ × кусок оси). */
+    /**
+     * Substance of the last frame's tube spots: attenuation of all the puffs' mass, m² (thickness across the axis ×
+     * √(2π)σ × piece of axis).
+     */
     static double lastPlaceMatter() {
         return lastPlaceMatter;
     }
 
-    /** Бюджет заново: план и уровень слияния (проверки, что строят кадры с разным бюджетом подряд). */
+    /** Budget anew: plan and merge level (checks that build frames with different budgets in a row). */
     static void resetBudget() {
         for (Draw d : new Draw[]{fill, job}) {
             d.plans = 0;
@@ -666,7 +720,10 @@ final class SmokePuffs {
         VEIL.veilLevel = 0;
     }
 
-    /** Выход из мира, смена измерения: ждущие клубы и места, план, вуаль — заново; the running plan is drained first. */
+    /**
+     * Leaving the world, change of dimension: waiting puffs and spots, plan, veil — anew; the running plan is drained
+     * first.
+     */
     static void reset() {
         stop();
         for (Draw d : new Draw[]{fill, job}) {
@@ -694,9 +751,9 @@ final class SmokePuffs {
     }
 
     /**
-     * Runs a frame's plan off the caller's thread, one at a time ({@link #flush}). {@link #start} and {@link #await} order
-     * memory: the plan sees everything the client thread wrote before starting it, and the client thread sees the whole
-     * plan after {@link #await} returns true.
+     * Runs a frame's plan off the caller's thread, one at a time ({@link #flush}). {@link #start} and {@link #await}
+     * order memory: the plan sees everything the client thread wrote before starting it, and the client thread sees the
+     * whole plan after {@link #await} returns true.
      */
     interface Planner {
         /** Start the plan (the previous one is done). */
@@ -709,7 +766,10 @@ final class SmokePuffs {
         void stop();
     }
 
-    /** One named daemon thread, started by the first plan and released by {@link #stop}; a failing plan is dropped, not drawn. */
+    /**
+     * One named daemon thread, started by the first plan and released by {@link #stop}; a failing plan is dropped, not
+     * drawn.
+     */
     static final class Worker implements Planner {
         private final String name;
         private final Object lock = new Object();
@@ -819,13 +879,15 @@ final class SmokePuffs {
     }
 
     /**
-     * A plan made off the client thread: its quads and ribbons as calls of {@link Out} relative to the planning eye, and its
-     * veil Gaussians. {@link #replay} anchors them at the current eye, so billboards, ribbons and the veil face the current
-     * camera; the plan's choices (merges, clusters, concealment, budget) are the previous frame's.
+     * A plan made off the client thread: its quads and ribbons as calls of {@link Out} relative to the planning eye,
+     * and its veil Gaussians. {@link #replay} anchors them at the current eye, so billboards, ribbons and the veil face
+     * the current camera; the plan's choices (merges, clusters, concealment, budget) are the previous frame's.
      */
     static final class Recording implements Out {
         private static final int PUFF = 0, FLAT = 1, RIBBON = 2, STRIDE = 20;
-        /** Largest relative change of the pixel angle and frame half-diagonal, and eye step (m), a plan is drawn across. */
+        /**
+         * Largest relative change of the pixel angle and frame half-diagonal, and eye step (m), a plan is drawn across.
+         */
         static final double PROJECTION = 0.03, STEP = 1;
         private double[] calls = new double[64 * STRIDE];
         private FxAtlas.Sprite[] sprites = new FxAtlas.Sprite[64];
@@ -835,7 +897,9 @@ final class SmokePuffs {
         private double ex, ey, ez, pixel, edge;
         private float fx, fy, fz;
         private boolean anchored;
-        /** Visible opacity of the plan entry whose quads are recorded next, the order {@code Draw.fit} keeps entries in. */
+        /**
+         * Visible opacity of the plan entry whose quads are recorded next, the order {@code Draw.fit} keeps entries in.
+         */
         float rank;
         /** Per call: fill at the drawn view, the keep order, and whether this frame leaves it out ({@link #trim}). */
         private double[] fills = new double[64];
@@ -845,7 +909,10 @@ final class SmokePuffs {
         int trimmed;
         private final double[] corners = new double[12];
         private final FarSprites.RibbonShape shape = new FarSprites.RibbonShape();
-        /** Set by the plan when it finished; an unfinished or failed plan is not drawn. Its time on the planner's thread. */
+        /**
+         * Set by the plan when it finished; an unfinished or failed plan is not drawn. Its time on the planner's
+         * thread.
+         */
         volatile boolean complete;
         long nanos;
         private final float[] joint = new float[3];
@@ -871,13 +938,14 @@ final class SmokePuffs {
         }
 
         /**
-         * Chooses what of the plan the next {@link #replay} at view leaves out so that it fills at most budget screens; false
-         * if that would be more than the budget's fading share. At the view it was planned for the plan keeps the budget
-         * ({@code Draw.drawnFill}); at another one a turn brings quads planned beside the old frame onto the screen (review of
-         * #511: a 30° turn showed 20.2 screens of a 13.3-screen plan, a 5° one 16.9 of 16.0). Each recorded quad and ribbon is
-         * measured on this screen by the plan's law; in the order {@code Draw.fit} keeps entries (most visible first) each
-         * stays if its fill still fits. Up to 1 − {@link #FIT_FADE} of the budget over, what goes is what {@code fit} fades
-         * into the veil anyway, for one frame; more, and the frame is planned for this view.
+         * Chooses what of the plan the next {@link #replay} at view leaves out so that it fills at most budget screens;
+         * false if that would be more than the budget's fading share. At the view it was planned for the plan keeps the
+         * budget ({@code Draw.drawnFill}); at another one a turn brings quads planned beside the old frame onto the
+         * screen (review of #511: a 30° turn showed 20.2 screens of a 13.3-screen plan, a 5° one 16.9 of 16.0). Each
+         * recorded quad and ribbon is measured on this screen by the plan's law; in the order {@code Draw.fit} keeps
+         * entries (most visible first) each stays if its fill still fits. Up to 1 − {@link #FIT_FADE} of the budget
+         * over, what goes is what {@code fit} fades into the veil anyway, for one frame; more, and the frame is planned
+         * for this view.
          */
         boolean trim(FarView view, double budget) {
             trimmed = 0;
@@ -926,9 +994,9 @@ final class SmokePuffs {
 
         /**
          * Whether this plan may be drawn at view: the same projection within {@link #PROJECTION} and an eye within
-         * {@link #STEP}. Fill on screen grows as the inverse square of the pixel angle (a 4× zoom: 13 → 121 screens) and as
-         * the eye nears a puff; beyond these limits {@link #trim} would leave out much of the frame, and the plan's clusters
-         * and merges were chosen for another pixel size.
+         * {@link #STEP}. Fill on screen grows as the inverse square of the pixel angle (a 4× zoom: 13 → 121 screens)
+         * and as the eye nears a puff; beyond these limits {@link #trim} would leave out much of the frame, and the
+         * plan's clusters and merges were chosen for another pixel size.
          */
         boolean fits(FarView view) {
             if (!anchored) return true;
@@ -1032,8 +1100,8 @@ final class SmokePuffs {
         }
 
         /**
-         * Draw at the eye of view into out: positions move by the eye's step since planning, geometry faces this camera, and
-         * what {@link #trim} chose for this view is left out.
+         * Draw at the eye of view into out: positions move by the eye's step since planning, geometry faces this
+         * camera, and what {@link #trim} chose for this view is left out.
          */
         void replay(FarView view, Out out, Draw veil) {
             if (!anchored) return;
@@ -1061,10 +1129,11 @@ final class SmokePuffs {
     }
 
     /**
-     * Оценка, сколько экранов закроет кучка с полным числом клубов {@code most} при доле {@code s} (кучка — между одним
-     * клубом и полной): квадратов — ⌈1 + (most − 1)·s⌉ (последний, с долей альфы, заливает всю свою площадь), у каждого — доля
-     * размера (одиночный — весь край) × доля экрана под краем кучки с её разбросом ({@link #cover}). Для подбора доли; что
-     * заливают настоящие квадраты — {@code Draw.drawnFill}.
+     * Estimate of how many screens a cluster with the full number of puffs {@code most} will cover at share {@code s}
+     * (the cluster — between one puff and the full one): squares — ⌈1 + (most − 1)·s⌉ (the last, with the alpha share,
+     * fills its whole area), each has a share of the size (a single one — the whole edge) × share of the screen under
+     * the cluster's edge with its scatter ({@link #cover}). For fitting the share; what the real squares fill —
+     * {@code Draw.drawnFill}.
      */
     static double clusterFill(FarView view, double px, double py, double pz, double ra, double rb, double most, double s) {
         double many = 1 + (most - 1) * s;
@@ -1074,40 +1143,44 @@ final class SmokePuffs {
     }
 
     /**
-     * Отрезок ленты следа или шлейфа ({@code FarFlightView.line}) — в ожидание кадра, как места трубок: лента тоже заливает
-     * экран ({@link FarSprites.RibbonShape#fill}: полоса по своим вершинам, круг торца, вуаль «глаз в трубке»), и её заливка
-     * — в плане и бюджете ({@link Draw#fit}: не влезла — не рисуется, наименее видимая — первой). Прежде ленты шли мимо
-     * плана, и 300 трубок сверх мест кадра заливали 29,5 экрана при бюджете 16. Возвращает, ляжет ли полоса; joint — как у
-     * {@link Out#ribbon} (поперёк у b).
+     * A segment of a trail or plume ({@code FarFlightView.line}) — into the wait for the frame, like tube spots: the
+     * ribbon also fills the screen ({@link FarSprites.RibbonShape#fill}: a strip by its own vertices, the disc of the
+     * end, a veil “eye in the tube”), and its fill — in the plan and the budget ({@link Draw#fit}: does not fit — not
+     * drawn, the least visible — first). Before, ribbons went past the plan, and 300 tubes beyond the frame's spots
+     * filled 29.5 screens with a budget of 16. Returns whether the strip lies; joint — as with {@link Out#ribbon}
+     * (across at b).
      */
     static boolean ribbon(FarView view, Out out, double ax, double ay, double az, double halfA, float alphaA, int lightA, double bx, double by,
                           double bz, double halfB, float alphaB, int lightB, float r, float g, float b, float[] joint) {
         return fill.holdRibbon(view, out, ax, ay, az, halfA, alphaA, lightA, bx, by, bz, halfB, alphaB, lightB, r, g, b, joint);
     }
 
-    /** Приёмник клубов источника source в кадре view в миг seconds: клубы — квадратами в out (один на поток кадра). */
+    /**
+     * Sink of the source's puffs source in frame view at moment seconds: puffs — as squares into out (one per frame
+     * stream).
+     */
     static SmokeGrid.Sink sink(FarView view, Out out, SmokeGrid.Source source, double seconds) {
         fill.begin(view, out, source, seconds);
         return fill;
     }
 
-    /** Приёмник клубов одного источника: клубы — квадратами. */
+    /** Sink of one source's puffs: puffs — as squares. */
     private static final class Draw implements SmokeGrid.Sink {
         private final double[] point = new double[2];
         FarView view;
         Out out;
         private SmokeGrid.Source source;
-        /** Кадр клуба по росту вещества (с дробью): дыма и брызг. */
+        /** Puff frame by the substance's growth (with a fraction): smoke and spray. */
         private double age, sprayAge;
         private long seed;
         private boolean glow, sprays;
         private int index;
-        /** Вид следующих клубов источника и его кадр ({@link SmokeGrid.Sink#look}). */
+        /** Look of the source's next puffs and its frame ({@link SmokeGrid.Sink#look}). */
         private SmokeGrid.Look look = SmokeGrid.Look.SMOKE;
         private double lookFrame;
 
         void begin(FarView view, Out out, SmokeGrid.Source source, double seconds) {
-            // клубы прошлого источника сливаются только между собой
+            // the past source's puffs merge only among themselves
             close();
             this.view = view;
             this.out = out;
@@ -1121,7 +1194,7 @@ final class SmokePuffs {
             this.index = 0;
             this.look = SmokeGrid.Look.SMOKE;
             this.lookFrame = 0;
-            // вид источника для второго прохода ({@link #flush})
+            // source look for the second pass ({@link #flush})
             if (contexts == ctxSource.length) {
                 int n = 2 * contexts;
                 ctxSource = java.util.Arrays.copyOf(ctxSource, n);
@@ -1154,29 +1227,34 @@ final class SmokePuffs {
             this.lookFrame = frame;
         }
 
-        /** Концы куска трубки и поперёк ленты у конца прошлого куска этого источника (NaN — ленты не было). */
+        /**
+         * Ends of a tube piece, and across the ribbon at the end of this source's previous piece (NaN — there was no
+         * ribbon).
+         */
         private final FarFlightView.Tube a = new FarFlightView.Tube(), b = new FarFlightView.Tube();
         private final float[] joint = new float[3];
 
         /**
-         * Шлейф — трубка, как след снаряда ({@link FarFlightView#line}): гауссово сечение σ = √(σh·σv) (среднее
-         * геометрическое, как у толщи шлейфа {@code FirePlume.tau}; ⚠ сечение шлейфа в σh/σv до 2 раз шире, чем выше),
-         * ослабление сажи на метр у каждого конца; узкая на экране — лентой, крупная — клубами через ≤ 1,2σ. Куски одного
-         * источника идут подряд — лента без щели на стыке.
+         * Trail — a tube, like a projectile's trail ({@link FarFlightView#line}): a Gaussian section σ = √(σh·σv)
+         * (average geometric mean, as for the plume's thickness {@code FirePlume.tau}; ⚠ the plume's section in σh/σv
+         * is up to 2 times wider than tall), soot attenuation per meter at each end; narrow on screen — as a ribbon,
+         * large — as puffs every ≤ 1.2σ. Pieces of one source go in a row — the ribbon without a gap at the joint.
          */
         @Override
         public void tube(double ax, double ay, double az, double sha, double sva, double sootA, double dustA, double bx, double by, double bz,
                      double shb, double svb, double sootB, double dustB, float albedoR, float albedoG, float albedoB, double kelvin, double rise,
                      double sigma0) {
             int at = index++;
-            // светящийся газ — тело огня у источника; остывая, он проступает дымом той же долей, что тело тает
+            // glowing gas — the fire body at the source; as it cools, it shows through as smoke in the same share that
+            // the body melts
             double smoke = smokeShare(glow, kelvin, view.skyLuminance());
             if (smoke <= 0) {
                 joint[0] = Float.NaN;
                 return;
             }
-            // над рельефом, что закрывает место источника вдали (как у клуба, {@link SmokeGrid.Source#visible}): у каждого конца
-            // по его высоте и размаху сечения, вдоль куска — между ними
+            // above the relief that covers the source's place far away (as for a puff,
+            // {@link SmokeGrid.Source#visible}): at each end by its height and span of the section, along the piece —
+            // between them
             double visA = source.visible(ay, 3 * Math.max(sha, sva)), visB = source.visible(by, 3 * Math.max(shb, svb));
             sootA *= visA;
             dustA *= visA;
@@ -1186,15 +1264,16 @@ final class SmokePuffs {
                 joint[0] = Float.NaN;
                 return;
             }
-            // ослабление на метр: сажа — полное (как толща шлейфа и порог видимости, FirePlume.tau), пыль — как у клубов
-            // облаков (SmokeGrid.dustK по её альбедо)
+            // attenuation per meter: soot — full (as the plume's thickness and visibility threshold, FirePlume.tau),
+            // dust — as for the puffs of clouds (SmokeGrid.dustK by its albedo)
             double kd = SmokeGrid.dustK(albedoR, albedoG, albedoB);
             double ea = CloudModel.SOOT_K * sootA + kd * dustA, eb = CloudModel.SOOT_K * sootB + kd * dustB;
             double ks = CloudModel.SOOT_K * (sootA + sootB), kdust = kd * (dustA + dustB);
             Vec3 cam = view.camera();
             end(a, ax - cam.x, ay - cam.y, az - cam.z, Math.sqrt(sha * sva), ea, smoke);
             end(b, bx - cam.x, by - cam.y, bz - cam.z, Math.sqrt(shb * svb), eb, smoke);
-            // цвет и тень — толстого слоя смеси, как у клубов облаков ({@link #thick}); лента — тем же цветом в тоне клуба
+            // color and shade — of the thick layer of the mix, as for cloud puffs ({@link #thick}); the ribbon — in the
+            // same color as the puff's tone
             float cr = thick(ks, kdust, 0, albedoR), cg = thick(ks, kdust, 0, albedoG), cb = thick(ks, kdust, 0, albedoB);
             float tone = FarFlightView.TONE;
             double shade = shade(ks, kdust, 0, albedoG) / BAKED_K;
@@ -1204,8 +1283,8 @@ final class SmokePuffs {
         }
 
         /**
-         * Конец трубки (от камеры): ширина на половине непрозрачности середины и лента — как у следа ({@code TrailModel.width});
-         * smoke — доля дыма в непрозрачности ({@link #smokeShare}).
+         * The end of the tube (from the camera): width at half of the middle's opacity, and the ribbon — as for a trail
+         * ({@code TrailModel.width}); smoke — smoke share in the opacity ({@link #smokeShare}).
          */
         private void end(FarFlightView.Tube t, double dx, double dy, double dz, double sigma, double e, double smoke) {
             double tau = e / (Math.sqrt(2 * Math.PI) * sigma), d = Math.sqrt(dx * dx + dy * dy + dz * dz);
@@ -1219,12 +1298,14 @@ final class SmokePuffs {
         public void segment(double x, double y, double z, double ax, double ay, double az, double sh, double sv, double soot, double dust,
                             double water, float dustR, float dustG, float dustB, double kelvin, double rise) {
             int at = index++;
-            // светящийся газ — тело огня у источника; остывая, он проступает дымом той же долей, что тело тает
+            // glowing gas — the fire body at the source; as it cools, it shows through as smoke in the same share that
+            // the body melts
             double smoke = smokeShare(glow, kelvin, view.skyLuminance());
             if (smoke <= 0 || soot + dust + water <= 0 || !(sh > 0) || !(sv > 0)) return;
             double len = 2 * Math.sqrt(ax * ax + ay * ay + az * az);
-            // клубы отрезка ждут, как клубы-точки: слияние и бюджет заливки кадра — у всех ({@link #flush}); идут рядом друг с
-            // другом, поэтому каждый — со своим кадром, отражением и блужданием, как клубы трубки (одинаковые — стопка монет)
+            // the segment's puffs wait, like point puffs: merge and the frame fill budget — for all ({@link #flush});
+            // they go side by side another, so each — with its own frame, reflection and wander, as the tube's puffs
+            // (identical — a stack of coins)
             int n = (int) Math.min(SEGMENT_CLUBS, Math.max(1, Math.ceil(len / (SEGMENT_STEP * Math.min(sh, sv)))));
             for (int k = 0; k < n; k++) {
                 double f = n == 1 ? 0 : (k + 0.5) / n * 2 - 1;
@@ -1233,18 +1314,21 @@ final class SmokePuffs {
             }
         }
 
-        /** Клубы кадра, что ждут слияния и бюджета: по {@link #FIELDS} чисел на клуб. */
+        /** Puffs of the frame waiting for merging and budget: {@link #FIELDS} numbers per puff. */
         private double[] held = new double[16 * FIELDS];
         private int holding, from;
         private boolean[] merged = new boolean[16];
-        /** Источники кадра: вид, приёмник, кадр клуба, зерно, брызги. */
+        /** Sources of the frame: look, sink, puff frame, grain, spray. */
         private SmokeGrid.Source[] ctxSource = new SmokeGrid.Source[8];
         private Out[] ctxOut = new Out[8];
         private FarView[] ctxView = new FarView[8];
         private double[] ctxAge = new double[8], ctxSprayAge = new double[8];
         private long[] ctxSeed = new long[8];
         private boolean[] ctxSprays = new boolean[8];
-        /** Frozen visibility state of each source ({@link SmokeGrid.Source#visibility}), and the context of the puff being planned. */
+        /**
+         * Frozen visibility state of each source ({@link SmokeGrid.Source#visibility}), and the context of the puff
+         * being planned.
+         */
         private double[] ctxVis = new double[8];
         private int contexts, ctx;
         /** Non-null while this instance plans a frame for the planner: its draw calls and veil go there. */
@@ -1252,36 +1336,42 @@ final class SmokePuffs {
         Recording record;
         /** Camera vectors of the frame this instance fills ({@link #cameraBasis}). */
         final org.joml.Vector3f[] basis = {new org.joml.Vector3f(), new org.joml.Vector3f(), new org.joml.Vector3f()};
-        /** Места трубок кадра, что ждут плана: по {@link #PLACE_FIELDS} чисел; зерно клубов и трубка — отдельно. */
+        /**
+         * Tube spots of the frame waiting for the plan: {@link #PLACE_FIELDS} numbers each; puff grain and tube —
+         * separately.
+         */
         private double[] places = new double[64 * PLACE_FIELDS];
         private long[] placeSeed = new long[64], placeTube = new long[64];
         private boolean[] placeGone = new boolean[64];
         private int placeCount;
-        /** Виды и приёмники мест (в игре у всех мест кадра — одни). */
+        /** Looks and sinks of spots (in the game all of the frame's spots are the same). */
         private FarView[] placeView = new FarView[4];
         private Out[] placeOut = new Out[4];
         private int placeContexts;
         /**
-         * Ленты кадра, что ждут плана: концы (6), полуширины (2), непрозрачности (2), свет мира (2), цвет (3), поперёк у a (3),
-         * вид, заливка, заметность.
+         * Ribbons of the frame waiting for the plan: ends (6), half-widths (2), opacities (2), world light (2), color
+         * (3), across at a (3), look, fill, visibility.
          */
         private double[] ribbons = new double[16 * RIBBON_FIELDS];
         private int ribbonCount;
         private int[] ribbonEntry = new int[16];
         private final FarSprites.RibbonShape shape = new FarSprites.RibbonShape();
         private final float[] ribbonJoint = new float[3];
-        /** Вещества мест кадра — цвет и степень тени ({@link #material}). */
+        /** Substances of the frame's spots — color and shade level ({@link #material}). */
         private final float[] materials = new float[4 * MATERIALS];
         private int materialCount;
-        /** Запись плана у клуба облака и у места (−1 — квадратов нет). */
+        /** Plan record of a cloud puff and of a spot (−1 — no squares). */
         private int[] blobEntry = new int[16], placeEntry = new int[64];
-        /** Выжившие слияния уровня — их план заново. */
+        /** Survivors of the level's merge — their plan anew. */
         private int[] dirty = new int[64];
         private boolean[] isDirty = new boolean[64];
         private final Cells cells = new Cells();
-        /** Трубки в группах слитых мест кадра ({@link #mergeLevel}). */
+        /** Tubes in the groups of the frame's merged spots ({@link #mergeLevel}). */
         private final TubeGroups groups = new TubeGroups();
-        /** Вуаль кадра: гауссы вещества у глаза ({@link #VEIL_FIELDS} чисел на гаусс); толщу по лучам считает {@link #veilFlush}. */
+        /**
+         * Veil of the frame: substance Gaussians at the eye ({@link #VEIL_FIELDS} numbers per Gaussian); the thickness
+         * along rays is computed by {@link #veilFlush}.
+         */
         private double[] veils = new double[8 * VEIL_FIELDS];
         private boolean[] veilGone = new boolean[8];
         private int veilCount, veilLevel;
@@ -1290,22 +1380,26 @@ final class SmokePuffs {
         private FarView veilView;
         private final Veil veil = new Veil();
         /**
-         * Замер прошлого кадра: заливка квадратами, экранов; пол — по клубу на гаусс и место, что остались квадратами (не выше
-         * бюджета), и пол до слияния и вуали; доля кучек; уровень слияния; гауссов вуали; кучек-квадратов.
+         * Measurement of the last frame: fill by squares, in screens; floor — one per Gaussian and spot that stayed as
+         * squares (not above the budget), and the floor before merging and veil; share of clusters; merge level; veil
+         * Gaussians; cluster squares.
          */
         double lastFill, lastFloor, lastRaw, lastShare = 1;
         int level, lastVeils, lastItems, lastBlobs, lastPlaces, lastRefused, refused, lastReused;
         double lastPlaceMatter, placeMatter;
-        /** Режим прохода {@link #blob} и {@link #club}: план (только цена) или квадраты с долей кучки {@link #share}. */
+        /**
+         * Mode of the {@link #blob} and {@link #club} pass: plan (cost only) or squares with the cluster share
+         * {@link #share}.
+         */
         private boolean planning;
         private double share = 1;
         private boolean shareReady;
-        /** Чей план пишется ({@link #planCluster}): клуб облака i — i, место p — ~p. */
+        /** Whose plan is written ({@link #planCluster}): cloud cluster i — i, spot p — ~p. */
         private int current;
-        /** Пол кадра — сумма записей плана, что остались квадратами (по клубу на гаусс и место), экранов. */
+        /** Floor of the frame — sum of plan records that stayed as squares (one per Gaussian and spot), in screens. */
         private double floor;
 
-        /** Клуб-точку источника — в ожидание: слияние с соседями и бюджет — в {@link #flush}. */
+        /** Source's point puff — into waiting: merge with neighbors and budget — in {@link #flush}. */
         private void hold(double x, double y, double z, double sh, double sv, double soot, double dust, double water, float dr, float dg, float db,
                           int id, double smoke, boolean vary) {
             if (holding * FIELDS + FIELDS > held.length) held = java.util.Arrays.copyOf(held, 2 * held.length);
@@ -1330,8 +1424,9 @@ final class SmokePuffs {
         }
 
         /**
-         * Last merge of a source ({@link #close}): its pending puffs and the result. A snapshot replayed unchanged gives the
-         * same puffs, and merging them pairwise again every frame took 0.5–0.7 ms of the 100-strike raid frame.
+         * Last merge of a source ({@link #close}): its pending puffs and the result. A snapshot replayed unchanged
+         * gives the same puffs, and merging them pairwise again every frame took 0.5–0.7 ms of the 100-strike raid
+         * frame.
          */
         private static final class Merged {
             double[] in = new double[0], out = new double[0];
@@ -1345,8 +1440,8 @@ final class SmokePuffs {
         private int reused;
 
         /**
-         * Клубы источника, что кончился, — слиты между собой ({@link #merge}). Merging is a function of the pending puffs
-         * alone: the same puffs as the source's last merge take its result.
+         * Puffs of a source that has ended — merged among themselves ({@link #merge}). Merging is a function of the
+         * pending puffs alone: the same puffs as the source's last merge take its result.
          */
         private void close() {
             int n = holding - from;
@@ -1379,7 +1474,10 @@ final class SmokePuffs {
             from = holding;
         }
 
-        /** Plan of the frame: pending puffs of the last source merged, the cloud puff limit, and each puff and place's quads. */
+        /**
+         * Plan of the frame: pending puffs of the last source merged, the cloud puff limit, and each puff and place's
+         * quads.
+         */
         private void plan() {
             close();
             lastReused = reused;
@@ -1394,7 +1492,7 @@ final class SmokePuffs {
             java.util.Arrays.fill(placeEntry, 0, placeCount, -1);
             groups.reset();
             for (int p = 0; p < placeCount; p++) groups.add(p, placeTube[p]);
-            // план: у каждого клуба и места — его квадраты на экране и полное число клубов в кучке
+            // plan: for each puff and spot — its squares on screen and the full number of puffs in the cluster
             planning = true;
             floor = 0;
             plans = 0;
@@ -1409,14 +1507,14 @@ final class SmokePuffs {
         }
 
         /**
-         * Frame: pending cloud puffs and tube places draw as quads within {@link #FILL_BUDGET}, regardless of their count.
-         * The plan estimates how many screens each puff or place covers with one quad (the floor) and with a cluster.
-         * If the floor exceeds the budget:
+         * Frame: pending cloud puffs and tube places draw as quads within {@link #FILL_BUDGET}, regardless of their
+         * count. The plan estimates how many screens each puff or place covers with one quad (the floor) and with a
+         * cluster. If the floor exceeds the budget:
          * <ol>
          * <li>overlapping puffs and places from different sources merge in levels using the same mass-and-moment law as
          * {@link #merge}, until the floor fits ({@link #mergeLevel});</li>
-         * <li>if it still does not fit, less opaque puffs fade into the near-eye veil with the same optical depth along rays
-         * ({@link Veil}), just enough for the rest to fit ({@link #fit}); the whole veil costs one screen.</li>
+         * <li>if it still does not fit, less opaque puffs fade into the near-eye veil with the same optical depth along
+         * rays ({@link Veil}), just enough for the rest to fit ({@link #fit}); the whole veil costs one screen.</li>
          * </ol>
          * Clusters then take enough puffs to fit the fill limit, each retaining its center opacity. All draw as quads;
          * the veil uses one grid.
@@ -1427,19 +1525,20 @@ final class SmokePuffs {
             if (lastRaw > budget) conceal(budget);
             int was = level;
             level = 0;
-            // уровень прошлого кадра держится и тогда, когда пол чуть под бюджетом (до {@link #HYSTERESIS} от него): иначе у
-            // границы бюджета кадр за кадром слияние то шло, то нет, и кучки мигали
+            // the past frame's level is kept also when the floor is a bit under the budget (down to {@link #HYSTERESIS}
+            // of it): otherwise at the budget boundary, from frame to frame, merging went on and off, and the clusters
+            // flickered
             if (floor > budget || was > 0 && floor > HYSTERESIS * budget) {
-                // уровень прошлого кадра держится, пока ниже него пол не ляжет заметно под бюджет: иначе на границе бюджета
-                // слитые клубы расходились бы и сходились кадр за кадром
+                // the past frame's level is kept while the floor does not fall noticeably below the budget: otherwise
+                // at the budget boundary merged puffs would separate and reconverge frame by frame
                 while (level < LEVELS && (floor > budget || level < was && floor > HYSTERESIS * budget)) mergeLevel(level++);
             }
             // The last 15% of the budget fades before overflow; otherwise crossing the boundary
             // would enable or remove the entire veil of these entries at once.
             if (floor > FIT_FADE * budget) fit(budget);
-            // Detail stays between two fill thresholds. Turning within the remaining capacity does not rebuild clusters;
-            // after overflow, leave headroom to the next threshold. The limit is still checked against actual quads in this
-            // frame, including transitions between horizontal and upright puffs.
+            // Detail stays between two fill thresholds. Turning within the remaining capacity does not rebuild
+            // clusters; after overflow, leave headroom to the next threshold. The limit is still checked against actual
+            // quads in this frame, including transitions between horizontal and upright puffs.
             double previousFill = shareReady ? drawn(lastShare) : 0;
             double target = shareReady && previousFill > budget ? Math.max(floor, HYSTERESIS * budget) : budget;
             double s = 1;
@@ -1452,7 +1551,8 @@ final class SmokePuffs {
                 }
                 s = lo;
             }
-            // оценка — по краю кучки; настоящие квадраты (их разброс размера и места) — проверка: больше бюджета — доля меньше
+            // estimate — by the cluster's edge; real squares (their size and spot scatter) — check: above the budget —
+            // the share smaller
             for (int it = 0; it < 24 && s > 0 && drawn(s) > target; it++) s = it < 23 ? 0.8 * s : 0;
             if (shareReady && previousFill <= budget && (s <= lastShare || drawn(s) > HYSTERESIS * budget)) s = lastShare;
             planning = false;
@@ -1472,11 +1572,13 @@ final class SmokePuffs {
         }
 
         /**
-         * Клубов облаков больше {@link #BLOBS} (их ~8 на удар: налёт в сотни ударов) — до плана: план, слияние и квадраты
-         * стоят процессора на каждый клуб, и работа кадра росла бы с налётом. Сперва лежащие друг на друге сливаются тем же
-         * законом ({@link #absorb}) в ячейках мира в 0,5/1/2 края (≈ 3σ), как {@link #mergeLevel}, — дальше слияние
-         * размазало бы вещество по чистому небу; не хватило — остаются {@link #BLOBS} самых заметных (непрозрачность середины
-         * × телесный угол), прочие не рисуются (отбор по вкладу: их на экране меньше всех). Ждущие — подряд, без слитых.
+         * Cloud puffs more than {@link #BLOBS} (about 8 per strike: a raid of hundreds of strikes) — before the plan:
+         * plan, merge and squares cost CPU per puff, and the frame's work would grow with the raid. First the ones
+         * lying on top of each other merge by the same law ({@link #absorb}) in world cells of 0.5/1/2 of the edge (≈
+         * 3σ), as {@link #mergeLevel}; further merging would smear the substance over the clear sky; if that was not
+         * enough — the {@link #BLOBS} most visible remain (opacity of the middle × solid angle), the others are not
+         * drawn (selection by contribution: they are the least visible on screen). Pending — in a row, without merged
+         * ones.
          */
         private void thin() {
             int alive = compact();
@@ -1510,7 +1612,7 @@ final class SmokePuffs {
                     double dx = held[o] - eye.x, dy = held[o + 1] - eye.y, dz = held[o + 2] - eye.z;
                     double seen = held[o + 13] * -Math.expm1(-ext / (2 * Math.PI * area)) * area / Math.max(dx * dx + dy * dy + dz * dz, area);
                     if (n == order.length) order = java.util.Arrays.copyOf(order, 2 * n);
-                    // от заметного к незаметному: ключ — 2 − заметность (положительные float сортируются как целые)
+                    // from the most visible to the least: key — 2 − visibility (positive floats sort as integers)
                     order[n++] = (long) Float.floatToIntBits((float) (2 - Math.min(1, seen))) << 32 | i;
                 }
                 java.util.Arrays.sort(order, 0, n);
@@ -1519,7 +1621,7 @@ final class SmokePuffs {
             compact();
         }
 
-        /** Ждущие клубы облаков — подряд, без слитых (проходы плана идут по живым); сколько их. */
+        /** Pending cloud puffs — in a row, without merged ones (plan passes go over live ones); how many of them. */
         private int compact() {
             int k = 0;
             for (int i = 0; i < holding; i++) {
@@ -1531,7 +1633,7 @@ final class SmokePuffs {
             return k;
         }
 
-        /** Ждущие клубы, места, источники и план — заново (конец кадра, выход из мира). */
+        /** Pending puffs, spots, sources and plan — anew (end of frame, leaving the world). */
         void forget() {
             holding = from = contexts = placeCount = placeContexts = materialCount = plans = ribbonCount = refused = 0;
             placeMatter = 0;
@@ -1553,9 +1655,10 @@ final class SmokePuffs {
         private int[] planOwner = new int[64];
         private boolean[] planNear = new boolean[64], planDead = new boolean[64];
         /**
-         * Чем квадраты кучки записи лягут на экран ({@link #drawnFill}): зерно клубов, рост квадрата пикселем (полуразмер на
-         * экране / край в мире), разброс середины по вертикали (м, у клуба облака — по толщине слоя), лежит ли клуб, место ли
-         * трубки (у него и одиночный клуб — со своим размером 0,8–1,2).
+         * How the cluster's squares of a record will land on screen ({@link #drawnFill}): puff grain, growth of the
+         * square by pixel (half-size on screen / edge in world), scatter of the middle vertically (m, for a cloud puff
+         * — by the layer's thickness), whether the puff lies, whether a tube spot (and a single puff — with its own
+         * size 0.8–1.2).
          */
         private long[] planSeed = new long[64];
         private double[] planGrow = new double[64], planOffV = new double[64], planFlat = new double[64];
@@ -1563,9 +1666,9 @@ final class SmokePuffs {
         private int plans;
 
         /**
-         * Add the cluster of puff or place {@link #current} to the frame plan: position from the eye, edge half-axes (m), full puff count.
-         * near means the eye is within its edge (some material is in the veil; these entries do not merge);
-         * shown is opacity (for a tube place, the entire tube on its axis).
+         * Add the cluster of puff or place {@link #current} to the frame plan: position from the eye, edge half-axes
+         * (m), full puff count. near means the eye is within its edge (some material is in the veil; these entries do
+         * not merge); shown is opacity (for a tube place, the entire tube on its axis).
          */
         private void planCluster(FarView view, double px, double py, double pz, double ra, double rb, double most, boolean near,
                                  double opacity, double shown, long seed, double grow, double offV, double lying, boolean place) {
@@ -1615,14 +1718,14 @@ final class SmokePuffs {
             plans++;
         }
 
-        /** Запись e больше не рисуется (её клуб или место слиты; план выжившего — заново). */
+        /** Record e is no longer drawn (its puff or spot is merged; the survivor's plan — anew). */
         private void drop(int e) {
             if (e < 0 || planDead[e]) return;
             planDead[e] = true;
             if (planVeil[e] < 1) floor -= planCover0[e];
         }
 
-        /** Заливка всех записей плана, что остались квадратами, при доле кучки s, экранов. */
+        /** Fill of all plan records that stayed as squares, at cluster share s, in screens. */
         private double planned(double s) {
             double f = 0;
             for (int e = 0; e < plans; e++) {
@@ -1635,9 +1738,10 @@ final class SmokePuffs {
         }
 
         /**
-         * Сколько экранов зальют квадраты кучки записи e при доле s — те же квадраты, что нарисует {@link #blob} или
-         * {@link #club}: их число ⌈1 + (most − 1)·s⌉, размер с разбросом 0,8–1,2 по зерну, сдвиг середины по зерну, у лежащего —
-         * высота на экране по своему месту ({@link #cover} каждого, обрезан кадром).
+         * How many screens the squares of the cluster of record e will fill at share s — the same squares that
+         * {@link #blob} or {@link #club} will draw: their number ⌈1 + (most − 1)·s⌉, size with scatter 0.8–1.2 by
+         * grain, middle offset by grain, for a lying one — height on screen by its own spot ({@link #cover} of each,
+         * cut by the frame).
          */
         private double drawnFill(int e, double s) {
             int o = 6 * e;
@@ -1674,7 +1778,10 @@ final class SmokePuffs {
             return polygonFill(v, flat);
         }
 
-        /** Что зальют квадраты всех записей плана, что остались квадратами, при доле s ({@link #drawnFill}), экранов. */
+        /**
+         * What the squares of all plan records that stayed as squares will fill, at share s ({@link #drawnFill}), in
+         * screens.
+         */
         private double drawn(double s) {
             double f = 0;
             for (int e = 0; e < plans; e++) if (!planDead[e] && planVeil[e] < 1)
@@ -1692,7 +1799,9 @@ final class SmokePuffs {
         private static final int OCCLUSION_BASE_CELLS = 48, OCCLUSION_VIEW_CELLS = 24, OCCLUSION_MAX_CELLS = 256;
         private int occlusionCells = OCCLUSION_BASE_CELLS, occlusionSide = occlusionCells + 1,
                 occlusionFace = occlusionSide * occlusionSide;
-        /** Presentation: map core and smooth edge band, like the previous 0.6 half-size used for screen-space occlusion. */
+        /**
+         * Presentation: map core and smooth edge band, like the previous 0.6 half-size used for screen-space occlusion.
+         */
         private static final double OCCLUSION_CORE = 0.6, OCCLUSION_INNER = 0.8;
         private double[] occlusion = new double[6 * occlusionFace];
         private double[] occlusionRays = occlusionRays();
@@ -1701,8 +1810,8 @@ final class SmokePuffs {
         /** In-cell offsets of the last {@link #occlusionCell}. */
         private double cellU, cellV;
         /**
-         * Per entry in distance order ({@link #conceal}): position from the eye, distance, view frame (forward, horizontal
-         * across, up) and core half-axes, computed once for its queries and its deposit.
+         * Per entry in distance order ({@link #conceal}): position from the eye, distance, view frame (forward,
+         * horizontal across, up) and core half-axes, computed once for its queries and its deposit.
          */
         private static final int CONCEAL_FIELDS = 14;
         private double[] concealFrame = new double[64 * CONCEAL_FIELDS];
@@ -1773,8 +1882,8 @@ final class SmokePuffs {
         }
 
         /**
-         * Bilinear cell of a direction: its base node q (the cell's nodes are q, q + 1, q + side, q + side + 1), with the
-         * in-cell offsets in {@link #cellU}, {@link #cellV}; −1 for a zero direction.
+         * Bilinear cell of a direction: its base node q (the cell's nodes are q, q + 1, q + side, q + side + 1), with
+         * the in-cell offsets in {@link #cellU}, {@link #cellV}; −1 for a zero direction.
          */
         private int occlusionCell(double x, double y, double z) {
             double ax = Math.abs(x), ay = Math.abs(y), az = Math.abs(z), m = Math.max(ax, Math.max(ay, az));
@@ -1798,7 +1907,10 @@ final class SmokePuffs {
                     + dv * ((1 - du) * occlusion[q + occlusionSide] + du * occlusion[q + occlusionSide + 1]));
         }
 
-        /** The entry e at distance rank k: its view frame and core, and the four nodes of each of its possible queries (at most 36 at any zoom). */
+        /**
+         * The entry e at distance rank k: its view frame and core, and the four nodes of each of its possible queries
+         * (at most 36 at any zoom).
+         */
         private void reserveOcclusion(int e, int k) {
             int o = 6 * e, g = CONCEAL_FIELDS * k;
             double x = plan[o], y = plan[o + 1], z = plan[o + 2], h = Math.hypot(x, z), d = Math.hypot(h, y);
@@ -1844,15 +1956,16 @@ final class SmokePuffs {
         }
 
         /**
-         * Puffs run in distance order from the eye. A distant puff has nine core rays fixed by its geometry;
-         * optical depth accumulated by nearer puffs on all nine rays hides it smoothly between 2 and 3 (14% to 5% light).
-         * The grid stores total overlap from any sources, with no "first N puffs" limit. Horizontal puffs and material
-         * near the eye are not discarded. Cost is covered angular cells times a bounded number of plan entries.
+         * Puffs run in distance order from the eye. A distant puff has nine core rays fixed by its geometry; optical
+         * depth accumulated by nearer puffs on all nine rays hides it smoothly between 2 and 3 (14% to 5% light). The
+         * grid stores total overlap from any sources, with no "first N puffs" limit. Horizontal puffs and material near
+         * the eye are not discarded. Cost is covered angular cells times a bounded number of plan entries.
          */
         private void conceal(double budget) {
             configureOcclusion();
             java.util.Arrays.fill(occlusionNodes, 0, words(6 * occlusionFace), 0);
-            // Occlusion is unnecessary with spare budget; beyond the limit it ramps in smoothly instead of switching the whole frame.
+            // Occlusion is unnecessary with spare budget; beyond the limit it ramps in smoothly instead of switching
+            // the whole frame.
             double strength = smoothstep(budget, 1.25 * budget, lastRaw);
             int n = 0;
             for (int e = 0; e < plans; e++) {
@@ -1921,8 +2034,8 @@ final class SmokePuffs {
                     double c = sign * (axis == 0 ? x : axis == 1 ? y : z);
                     if (c + radius <= 0) continue;
                     double u = axis == 0 ? y : x, v = axis == 2 ? y : z;
-                    // A cube face is the pyramid |u|≤c, |v|≤c. Distance to its side plane is (|u|−c)/√2.
-                    // Without this check a puff near the horizon traversed both entire ±Y faces, even though it touched neither.
+                    // A cube face is the pyramid |u|≤c, |v|≤c. Distance to its side plane is (|u|−c)/√2. Without this
+                    // check a puff near the horizon traversed both entire ±Y faces, even though it touched neither.
                     if (Math.abs(u) - c > Math.sqrt(2) * radius || Math.abs(v) - c > Math.sqrt(2) * radius) continue;
                     double u0 = -1, u1 = 1, v0 = -1, v1 = 1;
                     if (c > radius) {
@@ -1936,9 +2049,9 @@ final class SmokePuffs {
                             i1 = Math.min(occlusionCells, (int) Math.ceil((u1 + 1) * 0.5 * occlusionCells)),
                             j0 = Math.max(0, (int) Math.floor((v0 + 1) * 0.5 * occlusionCells)),
                             j1 = Math.min(occlusionCells, (int) Math.ceil((v1 + 1) * 0.5 * occlusionCells));
-                    // Along a row the node ray is (row constant) + u·(face axis), so den, a and b are affine in u and the
-                    // core is the interval where a² + b² − remaining²·den² < 0. Scanning only that interval, widened by a
-                    // node on each side (far beyond rounding), visits the same deposits as the whole box.
+                    // Along a row the node ray is (row constant) + u·(face axis), so den, a and b are affine in u and
+                    // the core is the interval where a² + b² − remaining²·den² < 0. Scanning only that interval,
+                    // widened by a node on each side (far beyond rounding), visits the same deposits as the whole box.
                     double fc, fu, fv, ac, au, av, bc, bu, bv;
                     if (axis == 0) {
                         fc = fx * sign; fu = fy; fv = fz; ac = ax * sign; au = 0; av = az; bc = bx * sign; bu = by; bv = bz;
@@ -1983,21 +2096,21 @@ final class SmokePuffs {
         }
 
         /**
-         * If the floor remains above budget after merging, keep the most opaque entries as quads
-         * ({@link #planShown}; for a tube place, the entire tube on its axis: a thin dark trail is visible even when each
-         * place contributes little) while their floor fits. The rest enters the near-eye veil with the same optical depth
-         * along rays; ribbons are not drawn. Entries selected in the last 15% of the budget ({@link #FIT_FADE}) fade into
-         * the veil smoothly, without a jump at the threshold. Previously the band spanned twice the visibility threshold,
-         * so a uniform scene (1000 identical tubes) faded every selected entry and spent its budget on invisible geometry.
-         * Dense foreground puffs retain the cloud's appearance; previously the largest entries entered the veil, turning
-         * the edge of a smoke wall into uniform haze. The fill limit therefore holds by construction.
+         * If the floor remains above budget after merging, keep the most opaque entries as quads ({@link #planShown};
+         * for a tube place, the entire tube on its axis: a thin dark trail is visible even when each place contributes
+         * little) while their floor fits. The rest enters the near-eye veil with the same optical depth along rays;
+         * ribbons are not drawn. Entries selected in the last 15% of the budget ({@link #FIT_FADE}) fade into the veil
+         * smoothly, without a jump at the threshold. Previously the band spanned twice the visibility threshold, so a
+         * uniform scene (1000 identical tubes) faded every selected entry and spent its budget on invisible geometry.
+         * Dense foreground puffs retain the cloud's appearance; previously the largest entries entered the veil,
+         * turning the edge of a smoke wall into uniform haze. The fill limit therefore holds by construction.
          */
         private void fit(double budget) {
             int n = 0;
             for (int e = 0; e < plans; e++) {
                 if (planDead[e] || planVeil[e] >= 1) continue;
                 if (n == order.length) order = java.util.Arrays.copyOf(order, 2 * n);
-                // по видной непрозрачности от большей к меньшей: ключ — 2 − видная (положительные float сортируются как целые)
+                // by visible opacity from larger to smaller: key — 2 − visible (positive floats sort as integers)
                 order[n++] = (long) Float.floatToIntBits((float) (2 - planShown[e] * planSeen[e])) << 32 | e;
             }
             java.util.Arrays.sort(order, 0, n);
@@ -2011,38 +2124,49 @@ final class SmokePuffs {
                     planVeil[e] = 1;
                     continue;
                 }
-                // The last 15% of the budget (the least visible selected entries) fades smoothly, so puffs do not pop at the threshold.
+                // The last 15% of the budget (the least visible selected entries) fades smoothly, so puffs do not pop
+                // at the threshold.
                 acc += planCover0[e];
                 planVeil[e] = smoothstep(FIT_FADE * budget, budget, acc);
             }
             floor = sum;
         }
 
-        /** Доля вещества клуба или места {@link #current}, что идёт в вуаль, а не квадратами ({@link #fit}). */
+        /**
+         * Share of the substance of cluster or spot {@link #current} that goes into the veil, not as squares
+         * ({@link #fit}).
+         */
         private double veilShare() {
             int e = current >= 0 ? blobEntry[current] : placeEntry[~current];
             return e < 0 ? 0 : planVeil[e];
         }
 
-        /** Сливать ли клуб или место с записью e: квадрат есть, не слит, глаз не в его краю. */
+        /** Whether to merge the puff or spot into record e: a square exists, not merged, the eye not at its edge. */
         private boolean mergeable(int e) {
             return e >= 0 && !planDead[e] && !planNear[e] && planVeil[e] == 0;
         }
 
-        /** Род клуба с o для ячеек слияния: вид ({@link SmokeGrid.Look}: свои кадры) и брызги ли — разные не сливаются. */
+        /**
+         * Kind of puff with o for merge cells: look ({@link SmokeGrid.Look}: own frames) and whether spray — different
+         * ones do not merge.
+         */
         private int kind(int o, boolean wet) {
             return 2 * (int) held[o + 15] + (wet ? 1 : 0);
         }
 
-        /** Брызги ли клуб с o: у источника с брызгами капель больше дыма и пыли — свои кадры, с дымом не сливаются. */
+        /**
+         * Whether the puff with o is spray: a source with spray has more droplets than smoke and dust — own frames,
+         * does not merge with smoke.
+         */
         private boolean wet(int o) {
             return ctxSprays[(int) held[o + 12]] && SmokeGrid.DROP_K * held[o + 7] > CloudModel.SOOT_K * held[o + 5]
                     + SmokeGrid.dustK((float) held[o + 8], (float) held[o + 9], (float) held[o + 10]) * held[o + 6];
         }
 
         /**
-         * Слитый клуб брызг с o — круглый (струя одного направления — круглого сечения): вытянутый гаусс слой рисует
-         * растянутым кадром — полосой с прямыми боками, «простынёй» ({@code WaterSalvoTest}); σ — средняя по осям.
+         * A merged spray puff with o — round (a jet of one direction is of round section): a stretched Gaussian layer
+         * draws with a stretched frame — a strip with straight sides, a “sheet” ({@code WaterSalvoTest}); σ — average
+         * over the axes.
          */
         private void round(int o) {
             double r = Math.sqrt((2 * held[o + 3] * held[o + 3] + held[o + 4] * held[o + 4]) / 3);
@@ -2050,7 +2174,7 @@ final class SmokePuffs {
             held[o + 4] = r;
         }
 
-        /** Выживший слияния i — в список на план заново (n — сколько в нём уже). */
+        /** Survivor of merge i — into the list for the plan anew (n — how many are already in it). */
         private int dirty(int i, int n) {
             if (isDirty.length <= i) isDirty = java.util.Arrays.copyOf(isDirty, 2 * (i + 1));
             if (isDirty[i]) return n;
@@ -2061,10 +2185,11 @@ final class SmokePuffs {
         }
 
         /**
-         * Уровень слияния разных источников: клубы облаков (и места трубок одного вещества), чьи середины — в одной ячейке
-         * мира в {@link #LOD_CELL}·2^уровень своего края (ячейки — по октавам края: размер — с точностью до вдвое), сливаются
-         * тем же законом, что {@link #merge} (масса, середина и моменты; места — {@link #absorbPlace}). Ячейки — в мире, а не на
-         * экране: поворот взгляда их не трогает, и слитое не мигает.
+         * Merge level of different sources: cloud puffs (and spots of one substance), whose centers are in one cell of
+         * the world at {@link #LOD_CELL}·2^level of their edge (cells — by octaves of the edge: size — to within a
+         * factor of two), merge by the same law as {@link #merge} (mass, center and moments; spots —
+         * {@link #absorbPlace}). Cells — in the world, not on screen: the view's turn does not touch them, and merged
+         * ones do not flicker.
          */
         private void mergeLevel(int level) {
             double cell = LOD_CELL * (1 << level);
@@ -2111,8 +2236,8 @@ final class SmokePuffs {
                         cells.put(key, p);
                         break;
                     }
-                    // место трубки, что уже есть в группе (и после прошлых уровней), — в следующую: места трубки подряд не
-                    // сливаются
+                    // a tube spot already in the group (and after past levels) — goes to the next: spots of one tube do
+                    // not merge
                     if (!groups.disjoint(first, p)) continue;
                     absorbPlace(first, p);
                     groups.join(first, p);
@@ -2132,10 +2257,11 @@ final class SmokePuffs {
         }
 
         /**
-         * Место b — в место a: соседние трубки одного вещества (шлейфы соседних пожаров, следы залпа) — одна трубка:
-         * ослабление — суммой, середина — средняя по нему, ось — средняя; σ² — средняя σ² плюс половина разброса середин
-         * поперёк оси (сечение круглое), кусок оси — от большего из кусков до их суммы по разносу вдоль оси, толща поперёк
-         * — по ним; кадр клуба и видимая доля — средние по ослаблению; зерно, вид и трубка — у того, чьего вещества больше.
+         * Spot b — into spot a: neighboring tubes of one substance (trails of neighboring fires, a salvo's trails) —
+         * one tube: attenuation — by sum, center — average over it, axis — average; σ² — average σ² plus half of the
+         * spread of centers across the axis (the section is round), piece of axis — from the larger of the pieces to
+         * their sum by the offset along the axis; thickness across — by them; frame of the puff and visible share —
+         * averages by attenuation; grain, look and tube — that of the one with more substance.
          */
         private void absorbPlace(int pa, int pb) {
             int a = pa * PLACE_FIELDS, b = pb * PLACE_FIELDS;
@@ -2153,10 +2279,11 @@ final class SmokePuffs {
             double dx = places[b] - places[a], dy = places[b + 1] - places[a + 1], dz = places[b + 2] - places[a + 2];
             double d2 = dx * dx + dy * dy + dz * dz, par = Math.abs(dx * ax + dy * ay + dz * az), perp2 = Math.max(0, d2 - par * par);
             double sa = places[a + 3], sb = places[b + 3], la = places[a + 6], lb = places[b + 6];
-            // поперёк оси середины отстоят от общей на fb·d и fa·d
+            // across the axis, the middles are offset from the common one by fb·d and fa·d
             double sigma = Math.sqrt(fa * (sa * sa + 0.5 * fb * fb * perp2) + fb * (sb * sb + 0.5 * fa * fa * perp2));
             double len = Math.clamp(par + 0.5 * (la + lb), Math.max(la, lb), la + lb);
-            // доля клубов во всей толще трубки (остальное — лента) — средняя: край — по толще всей трубки
+            // the share of puffs in the whole tube thickness (the rest — the ribbon) — average: the edge — by the
+            // thickness of the whole tube
             double clubs = fa * places[a + 4] / places[a + 5] + fb * places[b + 4] / places[b + 5];
             double tau = w / (Math.sqrt(2 * Math.PI) * sigma * len);
             if (eb > ea) {
@@ -2181,12 +2308,12 @@ final class SmokePuffs {
             places[a + P_AIR] = placeView[(int) places[a + P_CONTEXT]].air(Math.sqrt(px * px + py * py + pz * pz), py);
         }
 
-        /** Ослабление вещества места с o, м²: толща поперёк оси × √(2π)σ × его кусок оси. */
+        /** Attenuation of the substance of spot with o, m²: thickness across the axis × √(2π)σ × its piece of axis. */
         private double placeExt(int o) {
             return places[o + 4] * Math.sqrt(2 * Math.PI) * places[o + 3] * places[o + 6];
         }
 
-        /** Ждущий клуб i — в {@link #blob} с видом его источника. */
+        /** Pending puff i — into {@link #blob} with the look of its source. */
         private void held(int i) {
             int o = i * FIELDS, c = (int) held[o + 12];
             ctx = c;
@@ -2205,11 +2332,12 @@ final class SmokePuffs {
         }
 
         /**
-         * Место трубки — в ожидание кадра: середина (px, py, pz) от глаза, σ сечения, толща поперёк оси, что рисуют клубы
-         * (tau), и всей трубки (edgeTau), кусок оси along, цвет толстого слоя, степень тени, кадр клуба, зерно h, видимая доля
-         * vis, клубов в кучке — не больше most, vary — свой кадр и отражение у одиночного; ось (ax, ay, az); tube — трубка (её
-         * места между собой не сливаются). 0 — места не видно (бледное, в дымке, вне кадра и не у глаза), иначе 1 (и ещё 1,
-         * если глаз в его краю: вуаль) — для бюджета клубов трубок ({@code FarFlightView.CLUB_BUDGET}).
+         * Tube spot — into the wait for the frame: middle (px, py, pz) from the eye, section σ, thickness across the
+         * axis that the puffs draw (tau), and of the whole tube (edgeTau), piece of axis along, color of the thick
+         * layer, shade level, puff frame, grain h, visible share vis, puffs in the cluster — not more than most, vary —
+         * own frame and reflection for a single one; axis (ax, ay, az); tube — the tube (its spots do not merge among
+         * themselves). 0 — spot not visible (pale, in haze, out of frame and not at the eye), otherwise 1 (and one
+         * more, if the eye is at its edge: veil) — for the budget of tube puffs ({@code FarFlightView.CLUB_BUDGET}).
          */
         int holdPlace(FarView view, Out out, double px, double py, double pz, double sigma, double tau, double edgeTau, double along, float cr,
                       float cg, float cb, double shade, double age, long h, double vis, int most, boolean vary, double ax, double ay, double az,
@@ -2257,7 +2385,10 @@ final class SmokePuffs {
             return near ? 2 : 1;
         }
 
-        /** Номер вещества мест кадра с цветом (cr, cg, cb) и степенью тени shade; −1 — веществ больше {@link #MATERIALS} (не сливается). */
+        /**
+         * Index of the frame's spot substance with color (cr, cg, cb) and shade level shade; −1 — more substances than
+         * {@link #MATERIALS} (does not merge).
+         */
         private int material(float cr, float cg, float cb, double shade) {
             float s = (float) shade;
             for (int m = 0; m < materialCount; m++) {
@@ -2273,7 +2404,7 @@ final class SmokePuffs {
             return materialCount++;
         }
 
-        /** Вид и приёмник мест и лент кадра (у всех в игре — одни): номер. */
+        /** Look and sink of the frame's spots and ribbons (in the game all are the same): number. */
         private int context(FarView view, Out out) {
             if (placeContexts == 0 || placeView[placeContexts - 1] != view || placeOut[placeContexts - 1] != out) {
                 if (placeContexts == placeView.length) {
@@ -2287,7 +2418,7 @@ final class SmokePuffs {
             return placeContexts - 1;
         }
 
-        /** Отрезок ленты — в ожидание кадра ({@link SmokePuffs#ribbon}). */
+        /** Segment of a ribbon — into the wait for the frame ({@link SmokePuffs#ribbon}). */
         boolean holdRibbon(FarView view, Out out, double ax, double ay, double az, double halfA, float alphaA, int lightA, double bx, double by,
                            double bz, double halfB, float alphaB, int lightB, float r, float g, float b, float[] joint) {
             FarSprites.RibbonShape q = shape;
@@ -2309,7 +2440,10 @@ final class SmokePuffs {
             return strip;
         }
 
-        /** Ленты кадра — записями плана: заливка своя, не сливаются и не прячут; не влезли в бюджет — не рисуются ({@link #fit}). */
+        /**
+         * Frame's ribbons — as plan records: their own fill, they do not merge or hide; those that did not fit the
+         * budget are not drawn ({@link #fit}).
+         */
         private void planRibbons() {
             if (ribbonEntry.length < ribbonCount) ribbonEntry = new int[2 * ribbonCount];
             for (int k = 0; k < ribbonCount; k++) {
@@ -2325,7 +2459,10 @@ final class SmokePuffs {
             }
         }
 
-        /** Ленты, что остались в бюджете, — в кадр по порядку (поперёк у a — каким его дал прошлый отрезок той же ленты). */
+        /**
+         * Ribbons that stayed within the budget — into the frame in order (across at a — as the previous segment of the
+         * same ribbon gave it).
+         */
         private void drawRibbons() {
             for (int k = 0; k < ribbonCount; k++) {
                 int e = ribbonEntry[k], o = k * RIBBON_FIELDS;
@@ -2341,14 +2478,17 @@ final class SmokePuffs {
             }
         }
 
-        /** Tags the recorded quads of the current puff or place with its entry's visible opacity ({@link Recording#rank}). */
+        /**
+         * Tags the recorded quads of the current puff or place with its entry's visible opacity
+         * ({@link Recording#rank}).
+         */
         private void rankRecord() {
             if (record == null) return;
             int e = current >= 0 ? blobEntry[current] : placeEntry[~current];
             record.rank = e < 0 ? 0 : (float) (planShown[e] * planSeen[e]);
         }
 
-        /** Ждущее место p — в {@link #club}. */
+        /** Waiting spot p — into {@link #club}. */
         private void place(int p) {
             int o = p * PLACE_FIELDS, c = (int) places[o + P_CONTEXT];
             current = ~p;
@@ -2358,15 +2498,17 @@ final class SmokePuffs {
         }
 
         /**
-         * Клуб трубки с центром (px, py, pz) от глаза — место на оси, что стоит за along метров оси: σ сечения, толща трубки
-         * поперёк оси tau, что рисуют клубы (не одного гаусса: непрозрачность у оси — у трубки), видимый край — по толще всей
-         * трубки edgeTau (часть её вещества может рисовать лента) — кучкой запечённых клубов: цвет толстого слоя (cr, cg, cb; до
-         * света неба у глаза), степень тени карт shade, кадр клуба age (с дробью), зерно h, видимая доля vis, клубов в кучке —
-         * не больше most; vary — и одиночный клуб берёт свой кадр и отражение по зерну (клубы трубки идут рядом друг с другом:
-         * одинаковые лежали бы стопкой монет). Клуб на экране — почти ровный диск радиусом {@link #puffDisc} полуразмера квадрата
-         * (не гаусс): у оси его перекрывают соседи (2·диск / along), и каждый берёт свою долю непрозрачности трубки — вместе у
-         * оси выходит 1 − e^(−τ). Глаз в трубке — вуаль ({@link #veil}). air — дымка воздуха до места ({@link FarView#air}).
-         * В проходе плана — только запись плана.
+         * Tube puff with center (px, py, pz) from the eye — a spot on the axis that stands along meters of axis:
+         * section σ, tube thickness across the axis tau, which the puffs draw (not one Gaussian: opacity at the axis —
+         * of the tube), visible edge — by the thickness of the whole tube edgeTau (part of its substance may be drawn
+         * by a ribbon) — as a cluster of baked puffs: color of the thick layer (cr, cg, cb; before sky light at the
+         * eye), shade level of the shade maps, puff frame age (with a fraction), grain h, visible share vis, puffs in
+         * the cluster — not more than most; vary — a single puff also takes its own frame and reflection by grain (the
+         * tube's puffs lie next to each other: identical ones would lie like a stack of coins). A puff on screen — an
+         * almost flat disc with radius {@link #puffDisc} of the square's half-size (not a Gaussian): at the axis its
+         * neighbors overlap it (2·disc / along), and each takes its share of the tube's opacity — together at the axis
+         * they give 1 − e^(−τ). The eye inside the tube — a veil ({@link #veil}). air — air haze up to the spot
+         * ({@link FarView#air}). In the plan pass — only the plan record.
          */
         private void club(FarView view, Out out, double px, double py, double pz, double sigma, double tau, double edgeTau, double along,
                           float cr, float cg, float cb, double shade, double age, long h, double vis, int most, boolean vary, double air) {
@@ -2377,29 +2519,33 @@ final class SmokePuffs {
             double rh = edge * sh, rv = edge * sv, r = Math.max(rh, rv);
             double d = Math.sqrt(px * px + py * py + pz * pz);
             if (air < Sight.THRESHOLD) return;
-            // глаз входит в клуб — квадраты клуба тают (квадрат в десятки блоков у самой камеры закрыл бы экран краем), кроме
-            // клуба, чья середина впереди ({@link #ahead}); вещество, что квадрат не показывает (позади глаза, сбоку, у самого
-            // глаза), — вуаль ({@link Veil}: толща по лучам из глаза через гаусс); вне края у глаза его нет (у гаусса за спиной
-            // толща по лучу вперёд за краем — тысячные)
+            // the eye enters the puff — the puff's squares melt (a square tens of blocks wide right at the camera would
+            // fill the screen with its edge), except the puff whose center is ahead ({@link #ahead}); the substance
+            // that the square does not show (behind the eye, to the side, right at the eye) — a veil ({@link Veil}:
+            // thickness along rays from the eye through the Gaussian); outside the edge at the eye it is absent (for a
+            // Gaussian behind the eye, the thickness along the ray forward past the edge is thousandths)
             double gate = smoothstep(0.5 * r, r, d), outside = gate + (1 - gate) * ahead(view, px, py, pz, sh, sv);
             double veiled = gate < 1 ? 1 - front(view, px, py, pz) * outside : 0;
-            // пол кадра выше бюджета — малозаметное в вуаль той долей, что ему отвёл план ({@link #fit})
+            // frame floor above the budget — the barely visible goes into the veil at the share the plan gave it
+            // ({@link #fit})
             double whole = planning ? 0 : veilShare();
             if (!planning && (veiled > 0 || whole > 0)) {
-                // вещество места — толща трубки поперёк оси × √(2π)σ × его кусок оси
+                // substance of the spot — the tube's thickness across the axis × √(2π)σ × its piece of axis
                 double ext = tau * Math.sqrt(2 * Math.PI * sh * sv) * along;
                 veilAdd(out, view, px, py, pz, sh, sv, ext, cr, cg, cb, (veiled + (1 - veiled) * whole) * vis * air);
             }
             if (outside <= 0 || whole >= 1) return;
-            // вне кадра — не нужен: шар всего квадрата кучки (клуб — до 1,2 радиуса, его место — до ~0,9 от середины)
+            // out of frame — not needed: the ball of the whole puff square (a puff — up to 1.2 radius, its spot — up to
+            // ~0.9 from the middle)
             if (!FarFlightView.inFrame(view, px, py, pz, d, 2.2 * r)) return;
             Sight.point(rh, 1, 1, d, view.pixel(), point);
             double grow = point[0] / rh;
-            // кучка: чем крупнее гаусс на экране, тем больше клубов и тем они мельче (кадр 128 пикселей не растягивается на
-            // пол-экрана); дробная часть числа — доля последнего, без скачка
+            // cluster: the larger the Gaussian on screen, the more puffs and the smaller they are (the 128-pixel frame
+            // does not stretch to half the screen); the fractional part of the number — the share of the last one,
+            // without a jump
             double pixels = point[0] / Math.max(d * view.pixel(), 1e-12);
-            // крупнее экрана — подробность за его краем не видна, а заливка дорога: клубов меньше во столько раз, во сколько
-            // гаусс по площади больше экрана (полудиагональ кадра, пикселей)
+            // larger than the screen — detail beyond its edge is not visible, and fill is costly: puffs fewer by as
+            // many times as the Gaussian is larger than the screen in area (the frame's half-diagonal, pixels)
             double screen = view.edge() / Math.max(view.pixel(), 1e-12);
             double full = Math.clamp(Math.min(pixels / CLUSTER_PIXELS, most * Math.min(1, screen * screen / (pixels * pixels))), 1, most);
             if (planning) {
@@ -2410,16 +2556,18 @@ final class SmokePuffs {
                         grow, rv, 0, true);
                 return;
             }
-            // свет неба — яркость FarView.sky с разбросом клуба; оттенок — в шейдере у света неба (FxSkyTint)
+            // sky light — brightness of FarView.sky with the puff's scatter; the tint — in the shader for sky light
+            // only (FxSkyTint)
             float lit = (float) ((0.88 + 0.24 * unit(h)) * view.skyLight());
             float sr = cr * lit, sg = cg * lit, sb = cb * lit;
             float shown = (float) (a * vis * point[1] * air * outside * (1 - whole));
-            // бюджет заливки кадра ({@link #FILL_BUDGET}): кучка — между одним клубом и полной
+            // frame fill budget ({@link #FILL_BUDGET}): a cluster — between one puff and the full one
             double many = 1 + (full - 1) * share;
             int count = (int) Math.ceil(many - 1e-9);
             double size = clusterSize(many);
-            // в середине кучки перекрывается столько клубов, у оси — ещё соседние места трубки (диск клуба на экране — с полом в
-            // пиксель, как он нарисован): каждый берёт свою долю, вместе — то же пропускание
+            // at the middle of the cluster this many puffs overlap, and at the axis — also neighboring spots of the
+            // tube (the puff's disc on screen — with the floor at a pixel, as it is drawn): each takes its share,
+            // together — the same transmittance
             double disc = puffDisc(clusterFrame(age, h, many, vary));
             double spread = 1 - size;
             double overlap = centreCover(px, py, pz, d, h, count, many, size, spread, rh, rv, rv, grow, false, age, vary)
@@ -2441,10 +2589,11 @@ final class SmokePuffs {
         }
 
         /**
-         * Гаусс вещества у глаза — в вуаль кадра: середина (px, py, pz) от глаза, σ по горизонтали и вертикали, ослабление
-         * всей массы ext (м²), цвет толстого слоя (r, g, b), доля share (сколько его клубов растаяло). Гаусс, который ни по
-         * одному лучу не закроет и {@link #VEIL_MIN}, не идёт: толща по лучу из глаза — не больше толщи через середину вдоль
-         * самой тонкой оси, ext/(2π·σh·min(σh, σv)).
+         * Substance Gaussian at the eye — into the frame's veil: center (px, py, pz) from the eye, σ horizontally and
+         * vertically, attenuation of the whole mass ext (m²), color of the thick layer (r, g, b), share share (how many
+         * of its puffs melted). A Gaussian that along no ray reaches {@link #VEIL_MIN} is not used: thickness along a
+         * ray from the eye — not more than the thickness through the middle along the thinnest axis, ext/(2π·σh·min(σh,
+         * σv)).
          */
         boolean veilAdd(Out out, FarView view, double px, double py, double pz, double sh, double sv, double ext, float r, float g, float b,
                         double share) {
@@ -2485,8 +2634,8 @@ final class SmokePuffs {
         }
 
         /**
-         * The frame's inputs are complete: the last source's puffs merge here, on the client thread, and the plan's draw calls
-         * go to rec, anchored at this frame's eye.
+         * The frame's inputs are complete: the last source's puffs merge here, on the client thread, and the plan's
+         * draw calls go to rec, anchored at this frame's eye.
          */
         void seal(Recording rec) {
             close();
@@ -2498,7 +2647,10 @@ final class SmokePuffs {
             for (int c = 0; c < placeContexts; c++) placeOut[c] = rec;
         }
 
-        /** Client thread: a replayed plan's veil Gaussians, moved by (ox, oy, oz) to the eye of view, merged and laid into out. */
+        /**
+         * Client thread: a replayed plan's veil Gaussians, moved by (ox, oy, oz) to the eye of view, merged and laid
+         * into out.
+         */
         void lay(FarView view, Out out, double[] gaussians, int n, double ox, double oy, double oz) {
             if (veils.length < n * VEIL_FIELDS) veils = new double[Math.max(n, 2 * veils.length / VEIL_FIELDS) * VEIL_FIELDS];
             System.arraycopy(gaussians, 0, veils, 0, n * VEIL_FIELDS);
@@ -2514,8 +2666,8 @@ final class SmokePuffs {
         }
 
         /**
-         * Вуаль кадра — одна сетка по экрану ({@link Veil}): у каждой вершины толща по её лучу через все гауссы вуали; их больше
-         * {@link #VEIL_MAX} — близкие сливаются ({@link #veilMerge}).
+         * Frame veil — one grid over the screen ({@link Veil}): at each vertex the thickness along its ray through all
+         * the veil's Gaussians; if there are more than {@link #VEIL_MAX} — the close ones merge ({@link #veilMerge}).
          */
         private void veilFlush() {
             if (record != null) {
@@ -2536,10 +2688,11 @@ final class SmokePuffs {
         }
 
         /**
-         * Гауссов вуали больше {@link #VEIL_MAX} (толща — по лучу каждой вершины через каждый: цена процессора) — близкие
-         * сливаются тем же законом: ослабление — суммой, середина и моменты — по видимому (ослабление × доля), цвет — средний по
-         * нему (так вуаль и мешает цвета по толще). Ячейка — направление от глаза (грань куба, n × n на грани), октава
-         * расстояния и октава размера; с каждым уровнем крупнее, последний — по грани: их не больше семи.
+         * Veil Gaussians more than {@link #VEIL_MAX} (thickness along the ray of each vertex through each: CPU cost) —
+         * the close ones merge by the same law: attenuation — by sum, center and moments — by visible (attenuation ×
+         * share), color — average by it (so the veil and the colors mix by thickness). Cell — a direction from the eye
+         * (a cube face, n × n per face), an octave of distance and an octave of size; each level is larger, the last
+         * one — by the face: there are no more than seven.
          */
         private void veilMerge() {
             // Keep the previous coarsening until the finer level has headroom, just like the quad budget.
@@ -2600,7 +2753,7 @@ final class SmokePuffs {
             }
         }
 
-        /** Гаусс вуали с b — в гаусс с a ({@link #veilMerge}). */
+        /** Veil Gaussian with b — into the Gaussian with a ({@link #veilMerge}). */
         private void absorbVeil(int a, int b) {
             double wa = veils[a + 5] * veils[a + 9], wb = veils[b + 5] * veils[b + 9], w = wa + wb, ext = veils[a + 5] + veils[b + 5];
             if (!(w > 0)) return;
@@ -2620,19 +2773,20 @@ final class SmokePuffs {
         }
 
         /**
-         * Клуб: в проходе плана ({@link #planning}) — только сколько экранов закроет кучка при доле {@link #share}; иначе —
-         * квадраты и вуаль. vary — клуб отрезка: свой кадр, отражение и блуждание середины, как у клубов трубки ({@link Draw#club}).
-         * Возвращает заливку, экранов.
+         * Puff: in the plan pass ({@link #planning}) — only how many screens the cluster will close at share
+         * {@link #share}; otherwise — squares and veil. vary — a segment's puff: its own frame, reflection and wander
+         * of the center, as with tube puffs ({@link Draw#club}). Returns the fill, in screens.
          */
         private double blob(double x, double y, double z, double sh, double sv, double soot, double dust, double water, float dr, float dg, float db,
                             int id, double smoke, boolean vary) {
             Vec3 eye = view.camera();
-            // на экране — проекция гаусса по углу взгляда (толща по лучу и высота квадрата); в мире — его σ (разброс клубов
-            // кучки, край для рельефа и для глаза внутри)
+            // on screen — projection of the Gaussian by the view angle (thickness along the ray and the square's
+            // height); in the world — its σ (scatter of puffs of the cluster, edge for terrain and for the eye inside)
             double across = projected(sh, sv, x - eye.x, y - eye.y, z - eye.z);
             double ks = SmokeGrid.SOOT_K * soot, kd = SmokeGrid.dustK(dr, dg, db) * dust, kw = SmokeGrid.DROP_K * water;
             double tau = (ks + kd + kw) / (2 * Math.PI * sh * across);
-            // доля дыма — у непрозрачности, а не у массы: у шара сотни толщ, и сажа доли 1 % была бы уже непрозрачной
+            // smoke share — in the opacity, not in the mass: a fireball has hundreds of thicknesses, and soot at a
+            // share of 1 % would already be opaque
             double a = smoke * (1 - Math.exp(-tau));
             if (a < 0.004) return 0;
             double edge = edge(tau);
@@ -2643,7 +2797,8 @@ final class SmokePuffs {
             long h = mix(seed * 0x9E3779B97F4A7C15L + id);
             double px = x - cam.x, py = y - cam.y, pz = z - cam.z;
             if (vary) {
-                // клубы отрезка идут рядом: середина гуляет ({@link #meander}, ⚠ оценка), иначе — ровный ряд
+                // a segment's puffs go side by side: the middle wanders ({@link #meander}, ⚠ estimate), otherwise — an
+                // even row
                 double m = meander(Math.min(sh, sv), tau);
                 px += m * gauss(h >>> 3);
                 py += m * gauss(h >>> 11);
@@ -2652,49 +2807,55 @@ final class SmokePuffs {
             double d = Math.sqrt(px * px + py * py + pz * pz);
             double air = view.air(d, py);
             if (air < Sight.THRESHOLD) return 0;
-            // глаз входит в клуб — квадраты клуба тают (квадрат в десятки блоков у самой камеры закрыл бы экран краем), а
-            // вещество вокруг глаза — вуалью по экрану: толща по лучам из глаза через гаусс ({@link Veil}). «Внутри» — по эллипсоиду
-            // края (у плоского слоя пыли в сотню метров шириной и метр толщиной глаз над ним снаружи; по наибольшему
-            // радиусу он был «внутри», и вуаль слоя закрывала весь кадр)
+            // the eye enters the puff — the puff's squares melt (a square tens of blocks wide right at the camera would
+            // fill the screen with its edge), and the substance around the eye — by a veil over the screen: thickness
+            // along the rays from the eye through the Gaussian ({@link Veil}). “Inside” — by the ellipsoid of the edge
+            // (for a flat dust layer a hundred meters wide and a meter thick, the eye above it is outside; by the
+            // largest radius it was “inside”, and the layer's veil covered the whole frame)
             double q = Math.sqrt((px * px + pz * pz) / (rh * rh) + py * py / (rw * rw));
-            // гаусс, чья середина впереди по взгляду, — ещё клубы ({@link #ahead}); лежащий клуб — не проекция по взгляду: его
-            // квадрат лежит на горизонтали и впереди глаза, даже когда середина за спиной
+            // a Gaussian whose center is ahead along the view — still puffs ({@link #ahead}); a lying puff — is not a
+            // projection along the view: its square lies on the horizontal and ahead of the eye, even when the center
+            // is behind the eye
             double lying = lyingShare(sh, sv, py, d);
             double gate = smoothstep(0.5, 1, q);
             double facing = gate + (1 - gate) * ahead(view, px, py, pz, sh, sv);
             double outside = lying * gate + (1 - lying) * facing;
             double veiled = lying * (1 - gate) + (1 - lying) * (gate < 1 ? 1 - front(view, px, py, pz) * facing : 0);
-            // пол кадра выше бюджета — малозаметное в вуаль той долей, что ему отвёл план ({@link #fit})
+            // frame floor above the budget — the barely visible goes into the veil at the share the plan gave it
+            // ({@link #fit})
             double whole = planning ? 0 : veilShare();
             if (!planning && (veiled > 0 || whole > 0))
                 veil(this, px, py, pz, sh, sv, ks + kd + kw, ks, kd, kw, dr, dg, db, (veiled + (1 - veiled) * whole) * vis * air * smoke);
             if (outside <= 0 || whole >= 1) return 0;
-            // вне кадра — не нужен: шар всего квадрата кучки (клуб — до 1,2 радиуса, его место — до ~0,9 от середины)
+            // out of frame — not needed: the ball of the whole puff square (a puff — up to 1.2 radius, its spot — up to
+            // ~0.9 from the middle)
             if (!FarFlightView.inFrame(view, px, py, pz, d, 2.2 * r)) return 0;
             Sight.point(rh, 1, 1, d, view.pixel(), point);
             double grow = point[0] / rh;
-            // свет неба — яркость того, каким карта освещения светит блоки и частицы под открытым небом (FarView.sky), с
-            // разбросом клуба; его оттенок (ночью — сиреневый) — в шейдере только у света неба, не у огня (FxSkyTint)
+            // sky light — brightness of what the lightmap lights blocks and particles with under open sky
+            // (FarView.sky), with the puff's scatter; its tint (at night — lilac) — in the shader only for sky light,
+            // not for fire (FxSkyTint)
             float lit = (float) ((0.88 + 0.24 * unit(h)) * view.skyLight());
             float cr = thick(ks, kd, kw, dr) * lit, cg = thick(ks, kd, kw, dg) * lit, cb = thick(ks, kd, kw, db) * lit;
             double light = shade(ks, kd, kw, dg);
             float shade = (float) (light / BAKED_K), sprayShade = (float) (light / SPRAY_K);
             float shown = (float) (a * vis * point[1] * air * outside * (1 - whole));
-            // кучка: чем крупнее гаусс на экране, тем больше клубов и тем они мельче (кадр 128 пикселей не растягивается на
-            // пол-экрана); дробная часть числа — доля последнего, без скачка
+            // cluster: the larger the Gaussian on screen, the more puffs and the smaller they are (the 128-pixel frame
+            // does not stretch to half the screen); the fractional part of the number — the share of the last one,
+            // without a jump
             double pixels = point[0] / Math.max(d * view.pixel(), 1e-12);
-            // крупнее экрана — подробность за его краем не видна, а заливка дорога: клубов меньше во столько раз, во сколько
-            // гаусс по площади больше экрана (полудиагональ кадра, пикселей)
+            // larger than the screen — detail beyond its edge is not visible, and fill is costly: puffs fewer by as
+            // many times as the Gaussian is larger than the screen in area (the frame's half-diagonal, pixels)
             double screen = view.edge() / Math.max(view.pixel(), 1e-12);
             double most = Math.clamp(Math.min(pixels / CLUSTER_PIXELS, CLUSTER * Math.min(1, screen * screen / (pixels * pixels))), 1, CLUSTER);
-            // бюджет заливки кадра ({@link #flush}): кучка — между одним клубом и полной
+            // frame fill budget ({@link #flush}): a cluster — between one puff and the full one
             double many = 1 + (most - 1) * share;
             int count = (int) Math.ceil(many - 1e-9);
             double size = clusterSize(many);
-            // слоёв кучки в среднем по её площади (цена: заливка)
+            // layers of the cluster on average over its area (cost: fill)
             double overlap = Math.max(1, many * size * size);
-            // заливка: доля экрана под кругом края кучки (обрезан кадром) × перекрытие
-            // плоский клуб сверху лежит: его высота на экране — проекция диска
+            // fill: share of the screen under the disc of the cluster's edge (cut by the frame) × overlap
+            // a flat puff lies on top: its height on screen — the projection of the disc
             double reach = 1 + (1 - size) * 0.5;
             double ra = rh * grow, rb = rv * grow;
             if (planning) {
@@ -2703,34 +2864,38 @@ final class SmokePuffs {
             }
             double fill = overlap * cover(view, px, py, pz, ra * reach, rb * reach);
             double spread = 1 - size;
-            // у источника с брызгами (взрыв на воде) вещество — больше капли, чем дым и пыль: клубы брызг; клуб своего вида
-            // (завеса выброса, пыль дробления, облако разрыва в воздухе) — своими кадрами и своим кадром источника
+            // at a source with spray (a burst on water) the substance is more droplet than smoke and dust: spray puffs;
+            // a puff of its own look (emission curtain, crushing dust, a cloud burst in the air) — with its own frames
+            // and its own source frame
             boolean own = look != SmokeGrid.Look.SMOKE, spray = !own && sprays && kw > ks + kd;
             double clubAge = own ? lookFrame : spray ? sprayAge : age;
-            // каждый клуб берёт свою долю: по площади кучки в среднем перекрывается столько слоёв — вместе то же пропускание
-            // в среднем (SmokeFillTest; середину облака кучка закрывает гуще — прежнее приближение, ревью #443)
+            // each puff takes its share: by the cluster's area on average this many layers overlap — together the same
+            // transmittance on average (SmokeFillTest; the cluster covers the middle of a cloud more densely — the
+            // former approximation, review #443)
             float sub = (float) (1 - Math.pow(1 - Math.min(shown, 0.999), 1 / overlap));
             rankRecord();
-            // плоский клуб, на который смотрят сверху (проекция диска шире его толщи), лежит на горизонтали ({@code lying}):
-            // квадрат лицом к камере у слоя пыли у земли стоял бы стеной над ней (кадры F2a: «плита» под шаром в 0,1 с)
+            // a flat puff seen from above (the disc's projection is wider than its thickness) lies on the horizontal
+            // ({@code lying}): a square facing the camera of a dust layer at the ground would stand as a wall above it
+            // (frames F2a: a “slab” under the ball in 0.1 s)
             for (int j = 0; j < count; j++) {
                 long hj = mix(h + j * 0x632BE59BD9B4E019L);
-                // лежащий клуб — на высоте середины слоя: ниже он ушёл бы под рельеф
+                // a lying puff — at the height of the layer's middle: lower it would sink under the terrain
                 double ox = clubOffset(h, j, 0) * spread * rh * 0.5, oy = (1 - lying) * clubOffset(h, j, 7) * spread * rw * 0.5,
                         oz = clubOffset(h, j, 14) * spread * rh * 0.5;
-                // разброс размера — у клубов кучки (разнообразие); одиночный клуб — весь гаусс, без разброса: иначе его
-                // площадь, а с ней и вещество на экране, гуляла бы на ±44 %
+                // size scatter — for cluster puffs (variety); a single puff — the whole Gaussian, without scatter:
+                // otherwise its area, and with it the substance on screen, would wander by ±44 %
                 double k = clubScale(many, hj, false);
-                // Frame and mirroring belong to each puff, including distant single puffs: in a raid at 3 km, all 335 old
-                // single puffs used frame 14 without mirroring, and their identical outlines combined into a wall.
+                // Frame and mirroring belong to each puff, including distant single puffs: in a raid at 3 km, all 335
+                // old single puffs used frame 14 without mirroring, and their identical outlines combined into a wall.
                 double frame = clubFrame(clubAge, unit(hj >>> 28), true);
                 int f0 = (int) frame;
                 float last = j == count - 1 ? (float) (many - (count - 1)) : 1;
                 boolean mirror = (hj >>> 40 & 1) == 1;
                 FxAtlas.Sprite sprite = spray ? FxAtlas.spray6(f0, mirror) : FxAtlas.club(look, f0, mirror);
-                // лежащий клуб сверху — освещённый верх слоя: тени карт (они запечены для клуба лицом к камере, свет сбоку и
-                // сзади) нет, свет солнца, неба и огня — весь (степень тени 0; свет шаров — в каждом пикселе, fx.fsh); снизу —
-                // как обычно. Мягкость у рельефа — путь луча в слое до земли (rw / sin e), не полуразмер
+                // a lying puff from above — the lit top of the layer: no shadows of the maps (they are baked for a puff
+                // facing the camera, light from the side and behind), the light of sun, sky and fire is full (shade
+                // level 0; the balls' light is per pixel, fx.fsh); from below — as usual. Softness at the terrain — the
+                // ray's path in the layer down to the ground (rw / sin e), not the half-size
                 if (lying > 0) out.puff6Flat(px + ox, py + oy, pz + oz, rh * grow * k, rh * grow * k,
                         Math.min(rh, rw * d / Math.max(Math.abs(py), 1e-3)) * ua.zentix.incoming.client.fx.layer.FxQuads.SOFT, clubAngle(hj), sprite,
                         (float) (frame - f0), py < 0 ? 0 : (spray ? sprayShade : shade), cr, cg, cb, opticalShare(sub * last, lying));
@@ -2741,7 +2906,10 @@ final class SmokePuffs {
         }
     }
 
-    /** The two layer views share optical depth across an angular band, so raising the eye no longer switches the whole quad in one frame. */
+    /**
+     * The two layer views share optical depth across an angular band, so raising the eye no longer switches the whole
+     * quad in one frame.
+     */
     static double lyingShare(double sh, double sv, double dy, double d) {
         return smoothstep(2.5, 3.5, sh / sv) * smoothstep(0.7, 1.3, sh * Math.abs(dy) / Math.max(sv * d, 1e-12));
     }
@@ -2751,11 +2919,12 @@ final class SmokePuffs {
     }
 
     /**
-     * σ по вертикали экрана у гаусса с осями (σh, σh, σv), на который смотрят из (dx, dy, dz) от глаза: проекция гаусса —
-     * гаусс с осями σh (поперёк, по горизонтали) и √(σv²·cos²e + σh²·sin²e) (e — угол взгляда к горизонту), толща по лучу
-     * через середину — масса / (2π·σ₁·σ₂). Плоский клуб (слой пыли у земли: σh в десятки раз больше σv) сверху — круг на
-     * земле толщей слоя по лучу, сбоку — полоса; квадрат к камере высотой σv лёг бы тонкой чертой поперёк кадра (кадры
-     * шлагбаума F2a: тёмные полосы над землёй вокруг взрыва).
+     * σ along the screen's vertical for a Gaussian with axes (σh, σh, σv), seen from (dx, dy, dz) from the eye: the
+     * projection of the Gaussian — a Gaussian with axes σh (across, horizontally) and √(σv²·cos²e + σh²·sin²e) (e — the
+     * view angle to the horizon), thickness along the ray through the middle — mass / (2π·σ₁·σ₂). A flat puff (a dust
+     * layer at the ground: σh tens of times larger than σv) from above — a disc on the ground with the layer's
+     * thickness along the ray, from the side — a strip; a square facing the camera with height σv would lie as a thin
+     * line across the frame (frames of gate F2a: dark strips above the ground around the blast).
      */
     static double projected(double sh, double sv, double dx, double dy, double dz) {
         double d2 = dx * dx + dy * dy + dz * dz;
@@ -2764,100 +2933,117 @@ final class SmokePuffs {
         return Math.sqrt(sv * sv * (1 - sin2) + sh * sh * sin2);
     }
 
-    /** Уровень дробления отрезка длиной len с наименьшей σ сечения sigma: 2^уровень клубов кладут их через {@link #SEGMENT_STEP}·σ. */
+    /**
+     * Subdivision level of a segment of length len with the smallest section σ sigma: 2^level puffs, laid every
+     * {@link #SEGMENT_STEP}·σ.
+     */
     static double tubeLevel(double len, double sigma) {
         return Math.clamp(Math.log(Math.max(1, len / (SEGMENT_STEP * sigma))) / Math.log(2), 0, TUBE_LEVELS);
     }
 
-    /** Клубов на отрезке уровня level — 2 в этой степени. */
+    /** Puffs on a segment of level level: 2 to this power. */
     static int tubeDepth(double level) {
         return (int) Math.ceil(level - 1e-9);
     }
 
-    /** Доля места j (из 2^{@link #tubeDepth}) на уровне level: чётные — целые, нечётные верхнего уровня проявляются с дробью уровня. */
+    /**
+     * Share of spot j (of 2^{@link #tubeDepth}) at level level: even ones are whole; odd ones of the top level appear
+     * with the level's fraction.
+     */
     static double tubeWeight(int j, double level) {
         int k = tubeDepth(level);
         return k > 0 && (j & 1) == 1 ? level - (k - 1) : 1;
     }
 
-    /** Сумма долей мест уровня level: вещество места — его доля от неё. */
+    /** Sum of the shares of spots of level level: the spot's substance — its share of it. */
     static double tubeTotal(double level) {
         int k = tubeDepth(level);
         return k == 0 ? 1 : (1 << (k - 1)) * (1 + level - (k - 1));
     }
 
-    /** Клубов трубки на отрезок — не больше 2 в этой степени. */
+    /** Tube puffs per segment — no more than 2 to this power. */
     static final int TUBE_LEVELS = 7;
     /**
-     * Запечённый клуб на экране — почти ровный диск: радиус ровного диска с тем же покрытием по хорде через середину
-     * (∫ непрозрачности по радиусу / непрозрачность середины, в долях полуразмера квадрата), по кадрам
-     * ({@code PlumeContinuityTest} мерит по картинкам): шапка облака сверху — 0,71–0,80. Перекрытие клубов у оси трубки — это
-     * покрытие по хорде, а не радиус половины непрозрачности: у кадров с мягким хвостом края тот на 5–8 % меньше, и у оси
-     * тонкого следа вблизи выходило 1,4 закона. Не гаусс: гауссы через 1,2σ складываются в ровную трубку, а диски радиусом
-     * 0,5–0,9σ (край клуба тонкой трубки — 1,2σ) — в бусы.
+     * A baked puff on screen — an almost flat disc: the radius of a flat disc with the same coverage along the chord
+     * through the middle (∫ opacity over the radius / opacity of the middle, in fractions of the square's half-size),
+     * by frames ({@code PlumeContinuityTest} measures by pictures): a cloud's cap seen from above — 0.71–0.80. Puff
+     * overlap at the tube's axis is the coverage along the chord, not the radius of half-opacity: for frames with a
+     * soft tail the latter is 5–8 % smaller, and at the axis of a thin trail nearby it reached 1.4× the law. Not a
+     * Gaussian: Gaussians 1.2σ apart merge into an even tube, while discs of radius 0.5–0.9σ (the edge of a thin tube's
+     * puff — 1.2σ) — into beads.
      */
     static final double[] PUFF_DISCS = {0.71, 0.72, 0.72, 0.74, 0.75, 0.76, 0.76, 0.76, 0.77, 0.77, 0.77, 0.78, 0.78, 0.79, 0.79, 0.80};
-    /** Диск самого узкого кадра. */
+    /** Disc of the narrowest frame. */
     static final double PUFF_DISC_MIN = 0.71;
 
-    /** Диск клуба (доля полуразмера) у кадра frame с дробью. */
+    /** Disc of a puff (fraction of the half-size) for frame frame, with fraction. */
     static double puffDisc(double frame) {
         double f = Math.clamp(frame, 0, PUFF_DISCS.length - 1);
         int i = Math.min((int) f, PUFF_DISCS.length - 2);
         return PUFF_DISCS[i] + (PUFF_DISCS[i + 1] - PUFF_DISCS[i]) * (f - i);
     }
-    /** Размах размера клубов кучки и трубки: полуразмер × 0,8–1,2. */
+    /** Range of the size of cluster and tube puffs: half-size × 0.8–1.2. */
     static final double SIZE_LOW = 0.8;
 
     /**
-     * Шаг мест трубки σ с толщей поперёк оси tau: не шире {@link #SEGMENT_STEP}·σ (гауссы вещества сливаются) и не шире
-     * диска самого мелкого клуба — каждое место оси под двумя дисками ({@link #PUFF_DISC_MIN} × {@link #SIZE_LOW} × край).
+     * Tube spot step σ with thickness across the axis tau: no wider than {@link #SEGMENT_STEP}·σ (the substance's
+     * Gaussians merge) and no wider than the disc of the smallest puff — each spot of the axis under two discs
+     * ({@link #PUFF_DISC_MIN} × {@link #SIZE_LOW} × edge).
      */
     static double tubeStep(double sigma, double tau) {
         double disc = PUFF_DISC_MIN * SIZE_LOW * edge(tau) * sigma, off = MEANDER_MAX * meander(sigma, tau);
-        // ось пересекает диск клуба, сдвинутого блужданием на off, хордой 2√(диск² − off²); шаг — её половина
+        // the axis crosses the disc of a puff shifted by the wander by off, with the chord 2√(disc² − off²); the step
+        // is half of it
         return Math.min(SEGMENT_STEP * sigma, Math.sqrt(disc * disc - off * off));
     }
 
     /**
-     * Блуждание середины клуба трубки, м: {@link #TUBE_MEANDER}·σ, но не дальше половины диска самого мелкого клуба от
-     * оси (поперёк экрана — до {@link #MEANDER_MAX} блужданий): клубы гуляют каждый сам по себе, и сдвинутый дальше
-     * открывал бы ось — тонкая трубка рвалась бы на бусы. ⚠ Блуждание — оценка (вихри следа порядка его ширины).
+     * Wander of the middle of a tube's puff, m: {@link #TUBE_MEANDER}·σ, but no farther than half the disc of the
+     * smallest puff from the axis (across the screen — up to {@link #MEANDER_MAX} wanders): puffs wander each on their
+     * own, and one shifted farther would open the axis — a thin tube would break into beads. ⚠ The wander is an
+     * estimate (trail eddies of the order of its width).
      */
     static double meander(double sigma, double tau) {
         return Math.min(TUBE_MEANDER * sigma, 0.5 * PUFF_DISC_MIN * SIZE_LOW * edge(tau) * sigma / MEANDER_MAX);
     }
 
-    /** Сдвиг клуба поперёк оси на экране — не больше стольких блужданий: колокол {@link #gauss} до 1,725 по двум осям. */
+    /**
+     * Shift of a puff across the axis on screen — no more than this many wanders: the bell {@link #gauss} up to 1.725
+     * along both axes.
+     */
     static final double MEANDER_MAX = 1.725 * Math.sqrt(2);
     /**
-     * Середина клуба трубки гуляет на столько σ: крупные вихри следа — порядка его ширины, и сам след извивается на доли
-     * ширины (⚠ оценка).
+     * The middle of a tube's puff wanders this many σ: large trail eddies are of the order of its width, and the trail
+     * itself winds by fractions of its width (⚠ estimate).
      */
     static final double TUBE_MEANDER = 0.3;
-    /** Клубов в кучке у клуба трубки — не больше: подробность вдоль трубки дают соседние клубы. */
+    /** Puffs in a cluster of a tube's puff — no more than: detail along the tube comes from neighboring puffs. */
     static final int TUBE_CLUSTER = 3;
 
     /**
-     * Отрезок трубки следа ({@code TrailModel}: гауссово сечение σ, ослабление на метр e — у концов a и b, от глаза) — клубами
-     * вдоль оси, как облака: трубка из гауссов того же сечения через ≤ {@link #SEGMENT_STEP}·σ (до {@code 2^}{@link #TUBE_LEVELS}
-     * на отрезок, дальше шаг шире), у каждого — вещество своего
-     * куска оси (сумма гауссов вдоль оси даёт толщу трубки поперёк середины e/(√(2π)·σ)). Клубов на отрезок — 2^k
-     * ({@link #TUBE_LEVELS}): места уровня k — часть мест уровня k + 1, и новые (нечётные) проявляются долей, пока трубка
-     * сужается на экране, — без скачков, когда σ растёт.
+     * A segment of trail tube ({@code TrailModel}: Gaussian section σ, attenuation per meter e — at ends a and b, from
+     * the eye) — with puffs along the axis, like clouds: a tube of Gaussians of the same section through ≤
+     * {@link #SEGMENT_STEP}·σ (up to {@code 2^}{@link #TUBE_LEVELS} per segment, beyond that the step is wider), each
+     * with the substance of its own piece of the axis (the sum of the Gaussians along the axis gives the tube's
+     * thickness across the middle e/(√(2π)·σ)). Puffs per segment — 2^k ({@link #TUBE_LEVELS}): spots of level k are
+     * part of the spots of level k + 1, and new (odd) ones appear with a share while the tube narrows on screen — no
+     * jumps as σ grows.
      *
-     * @param wa     ширина трубки у конца a ({@code FarFlightView.puffShare}: на половине непрозрачности), у b — wb: доля
-     *               вещества, что рисуют клубы, — у каждого клуба по его ширине и расстоянию (остальное — лента, её доля у
-     *               концов — та же); от бюджета мест доля не зависит
-     * @param cr     цвет толстого слоя вещества на экране по каналам (cr, cg, cb; {@link #thick}; у следа — серый {@link #tubeColour})
-     * @param shade  степень тени карт клуба ({@link #shade}; у следа — {@link #tubeShade})
-     * @param sigma0 σ при рождении следа: кадр клуба — по росту σ с него ({@link FxAtlas#puffFrame})
-     * @param stride шаг мест — во столько раз шире закона ({@link #tubeStep}; ≥ 1, бюджет мест {@code FarFlightView.CLUB_BUDGET}):
-     *               мест на отрезок меньше, вещество отрезка у них то же — каждое стоит за свой, более длинный кусок оси
-     * @param tube   трубка (след снаряда, шлейф источника): её места ждут плана кадра ({@link Draw#holdPlace}) и между собой
-     *               не сливаются
-     * @return мест клубов и вуалей (бюджет клубов трубок); мест кадра уже нет ({@link #PLACES}) — −(мест отрезка + 1): мест не
-     *         взято, доли клубов у отрезка в этом кадре нет (бюджет на следующих кадрах растит шаг)
+     * @param wa     tube width at end a ({@code FarFlightView.puffShare}: at half opacity), at b — wb: the share
+     *               of the substance that the puffs draw — each puff by its width and distance (the rest is the
+     *               ribbon, whose share at the ends is the same); the spot budget does not change the share
+     * @param cr     color of the thick layer of the substance on screen by channel (cr, cg, cb; {@link #thick};
+     *               for a trail — gray {@link #tubeColour})
+     * @param shade  shade level of the puff maps ({@link #shade}; for a trail — {@link #tubeShade})
+     * @param sigma0 σ at the trail's birth: the puff frame — by the growth of σ from it ({@link FxAtlas#puffFrame})
+     * @param stride spot step — as many times wider than the law ({@link #tubeStep}; ≥ 1, spot budget
+     *               {@code FarFlightView.CLUB_BUDGET}): fewer spots per segment; the segment's substance is the same
+     *               at them — each stands for its own, longer piece of the axis
+     * @param tube   tube (a projectile's trail, a source's plume): its spots wait for the frame's plan
+     *               ({@link Draw#holdPlace}) and among themselves do not merge
+     * @return spots of puffs and veils (the puff spot budget); the frame's spots are already gone
+     *         ({@link #PLACES}) — −(segment spots + 1): no spots taken, the puffs' share of the segment is absent
+     *         in this frame (the budget in the next frames grows the step)
      */
     static int tube(FarView view, Out out, double ax, double ay, double az, double sa, double ea, double wa, double bx, double by, double bz,
                     double sb, double eb, double wb, float cr, float cg, float cb, double shade, double sigma0, long seed, double stride, double shown,
@@ -2865,14 +3051,14 @@ final class SmokePuffs {
         if (ea + eb <= 0 || !(sa > 0) || !(sb > 0)) return 0;
         double tx = bx - ax, ty = by - ay, tz = bz - az, len = Math.sqrt(tx * tx + ty * ty + tz * tz);
         if (!(len > 0)) return 0;
-        // места — не реже, чем у обоих концов диски клубов перекрывают ось вдвое ({@link #tubeStep}), с бюджетом мест — в stride
-        // раз реже; край клуба — у всей трубки (лента и клубы рисуют одно вещество, видимая ширина — его), доля клубов — только в
-        // непрозрачности
+        // spots — no sparser than the puff discs overlapping the axis twice at each end ({@link #tubeStep}); with the
+        // spot budget — stride times sparser; the edge of a puff — of the whole tube (ribbon and puffs draw one
+        // substance; the visible width is its), the share of puffs — only in opacity
         double step = Math.min(tubeStep(sa, ea / (Math.sqrt(2 * Math.PI) * sa)), tubeStep(sb, eb / (Math.sqrt(2 * Math.PI) * sb))) * stride;
         double level = tubeLevel(len, step / SEGMENT_STEP);
         int k = tubeDepth(level), n = 1 << k;
-        // мест кадра больше не взять ({@link #PLACES}): мест у отрезка нет, а его места идут в бюджет клубов трубок, и на следующих
-        // кадрах шаг мест растёт
+        // no more frame spots can be taken ({@link #PLACES}): the segment has no spots, and its spots go to the tube
+        // puff budget, and in the next frames the spot step grows
         if (fill.placeCount + n > PLACES) {
             fill.refused += n;
             return -(n + 1);
@@ -2886,13 +3072,15 @@ final class SmokePuffs {
             double cx = ax + tx * u, cy = ay + ty * u, cz = az + tz * u;
             double share = FarFlightView.puffShare(wa + (wb - wa) * u, Math.sqrt(cx * cx + cy * cy + cz * cz), view.pixel());
             if (share <= 0) continue;
-            // толща трубки поперёк оси — e/(√(2π)σ) (доля клубов — share); место стоит за свой кусок оси len/total (с долей места)
+            // thickness of the tube across the axis — e/(√(2π)σ) (the share of puffs — share); a spot stands for its
+            // piece of the axis len/total (with the spot's share)
             double full = e / (Math.sqrt(2 * Math.PI) * sigma), tau = share * full, along = len * weight / total;
             if (!(tau > 0) || !(along > 0)) continue;
             double age = FxAtlas.puffFrame(sigma / Math.max(sigma0, 1e-6));
-            // зерно — по месту на самом мелком уровне: клуб остаётся тем же, когда уровень меняется
+            // grain — by the spot at the finest level: the puff stays the same when the level changes
             long h = mix(seed * 0x9E3779B97F4A7C15L + ((long) j << (TUBE_LEVELS - k)));
-            // вихри следа — порядка σ: середина клуба гуляет ({@link #meander}, ⚠ оценка), иначе ровный ряд
+            // trail eddies — of the order of σ: the middle of the puff wanders ({@link #meander}, ⚠ estimate),
+            // otherwise — an even row
             double m = meander(sigma, tau);
             drawn += fill.holdPlace(view, out, cx + m * gauss(h >>> 3), cy + m * gauss(h >>> 11), cz + m * gauss(h >>> 19), sigma, tau, full, along,
                     cr, cg, cb, shade, age, h, shown, TUBE_CLUSTER, true, tx / len, ty / len, tz / len, tube);
@@ -2901,31 +3089,37 @@ final class SmokePuffs {
     }
 
     /**
-     * Цвет вещества следа с альбедо однократного рассеяния albedo (до дельта-Эддингтона, асимметрия {@link Smoke#ASYMMETRY}):
-     * двумя потоками после дельта-Эддингтона (f = g²), как у облаков ({@link SmokeGrid}). Толща трубки — полное ослабление,
-     * как у ленты и порога видимости следа (Кошмидер): рассеянное вперёд мелкими (~мкм) частицами уходит на десятки градусов
-     * и картинку за дымом не несёт.
+     * Color of the substance of a trail with single-scattering albedo albedo (up to delta-Eddington, asymmetry
+     * {@link Smoke#ASYMMETRY}): by two streams after delta-Eddington (f = g²), as for clouds ({@link SmokeGrid}). The
+     * tube's thickness — the full attenuation, as for the ribbon and the trail's visibility threshold (Koschmieder):
+     * forward-scattered by small (~µm) particles it leaves at tens of degrees and does not carry the picture behind the
+     * smoke.
      */
     static float tubeColour(double albedo) {
         double g = Smoke.ASYMMETRY, f = g * g;
         return thick((1 - f) * albedo / (1 - f * albedo), g / (1 + g));
     }
 
-    /** Степень тени карт клуба у вещества следа с альбедо albedo ({@link #tubeColour}). */
+    /** Shade level of the puff maps for the trail's substance with albedo albedo ({@link #tubeColour}). */
     static double tubeShade(double albedo) {
         double g = Smoke.ASYMMETRY, f = g * g;
         return twoStream((1 - f) * albedo / (1 - f * albedo), g / (1 + g)) / BAKED_K;
     }
 
-    /** Середина гаусса впереди по взгляду, в σ вдоль взгляда: с этого клубы начинают сменять вуаль, с того — сменили. */
+    /**
+     * Middle of a Gaussian ahead along the view, in σ along the view: from this point puffs begin to replace the veil,
+     * and past that point they have replaced it.
+     */
     static final double AHEAD_FROM = 1, AHEAD_FULL = 2.5;
 
     /**
-     * Сколько клубы гаусса с серединой (px, py, pz) от глаза и σ (σh, σh, σv) ещё рисуют его, когда глаз внутри его края:
-     * квадрат клуба — вещество, спроецированное по лучам из глаза, и он верен, пока вещество перед глазом. Середина впереди
-     * на {@link #AHEAD_FULL} σ вдоль взгляда — перед глазом 99 % вещества: клубы; ближе {@link #AHEAD_FROM} σ (сбоку или
-     * позади) — вуаль ({@link Veil}). Без этого клубы таяли, как только глаз входил в край гаусса (~3,7σ у густого) — у следа
-     * ЗРК в 18 м: клубящаяся трубка, к которой несёт камеру, задолго до неё становилась вуалью.
+     * How long the puffs of a Gaussian with center (px, py, pz) from the eye and σ (σh, σh, σv) still draw it when the
+     * eye is inside its edge: the puff's square — substance projected along the rays from the eye, and it is accurate
+     * while the substance is in front of the eye. The middle ahead by {@link #AHEAD_FULL} σ along the view — 99 % of
+     * the substance in front of the eye: puffs; closer than {@link #AHEAD_FROM} σ (to the side or behind) — the veil
+     * ({@link Veil}). Without this the puffs melted as soon as the eye entered the Gaussian's edge (~3.7σ for a dense
+     * one) — for a trail of a SAM at 18 m: a billowing tube that the camera is carried toward turned into a veil long
+     * before reaching it.
      */
     static double ahead(FarView view, double px, double py, double pz, double sh, double sv) {
         org.joml.Vector3f f = view.forward();
@@ -2934,65 +3128,79 @@ final class SmokePuffs {
     }
 
     /**
-     * Сколько видно квадрата клуба с серединой (px, py, pz) от глаза: он лицом к камере, весь на глубине своей середины —
-     * позади глаза его нет вовсе, у самого глаза он тает, как в {@code fx.fsh} (с {@link #NEAR_FROM} блока на
-     * {@link #NEAR_FADE}). Чего квадрат не показывает, когда глаз в краю клуба, — вуаль, а не ничто: клуб сбоку и сзади
-     * иначе терял ту долю вещества, что держал за квадратом.
+     * How much of the square of a puff with center (px, py, pz) from the eye is visible: it faces the camera, all at
+     * the depth of its middle — behind the eye it is absent altogether, right at the eye it melts, as in {@code fx.fsh}
+     * (from {@link #NEAR_FROM} blocks to {@link #NEAR_FADE}). What the square does not show, when the eye is at the
+     * puff's edge, is a veil, not nothing: a puff to the side and behind otherwise lost the share of substance it held
+     * behind the square.
      */
     static double front(FarView view, double px, double py, double pz) {
         org.joml.Vector3f f = view.forward();
         return Math.clamp((px * f.x + py * f.y + pz * f.z - NEAR_FROM) / NEAR_FADE, 0, 1);
     }
 
-    /** Квадрат слоя у самой камеры тает с этого расстояния, блоков, на столько (как {@code fx.fsh}: ближняя плоскость). */
+    /**
+     * The layer's square right at the camera melts from this distance, in blocks, over this much (as {@code fx.fsh}:
+     * the near plane).
+     */
     static final double NEAR_FROM = 0.3, NEAR_FADE = 1.2;
 
-    /** Свет мира под открытым небом без света блоков (упакованный, для карты освещения). */
+    /** World light under open sky without block light (packed, for the lightmap). */
     private static final int OPEN_SKY = LightTexture.pack(0, 15);
 
-    /** Вуаль облака вокруг глаза — на столько блоков перед ним (ближе квадраты слоя тают у ближней плоскости). */
+    /**
+     * Veil of a cloud around the eye — this many blocks in front of it (closer, the layer's squares melt at the near
+     * plane).
+     */
     static final double VEIL_AT = 2;
-    /** Гаусс, что ни по одному лучу вуали не закрывает больше этой доли, в вуаль не идёт. */
+    /** A Gaussian that along no veil ray covers more than this share is not put into the veil. */
     static final double VEIL_MIN = 0.004;
-    /** Чисел на гаусс вуали: середина от глаза (3), σh, σv, ослабление массы, цвет (3), доля. */
+    /** Numbers per veil Gaussian: center from the eye (3), σh, σv, mass attenuation, color (3), share. */
     static final int VEIL_FIELDS = 10;
     /**
-     * Клеток вуали по каждой оси экрана. Край вещества у глаза на экране — ~σ/расстояние, у следа ЗРК, проходящего сквозь
-     * камеру (σ ~5 м), — десятки градусов: клетка в ~13° (поле зрения 70°) его держит, а линейная смесь по клетке гладкая.
+     * Veil cells along each screen axis. The substance's edge at the eye on screen — ~σ/distance; for a SAM trail
+     * passing through the camera (σ ~5 m) — tens of degrees: a cell of ~13° (field of view 70°) holds it, and linear
+     * blending across a cell is smooth.
      */
     static final int VEIL_CELLS = 12;
 
     /**
-     * Вещество вокруг глаза — вуалью по экрану (клубы его гауссов растаяли: квадрат вплотную к глазу закрыл бы экран краем).
-     * Толща — по лучу каждой вершины сетки во весь экран ({@link #VEIL_CELLS}², квадрат в тангенсах ±tg угла до угла экрана,
-     * на {@link #VEIL_AT} блока перед глазом) через каждый гаусс ({@link #sightDepth}), непрозрачность вершины —
-     * 1 − e^(−Στ), цвет — средний по толще (рассеяние смеси веществ у глаза — доли по толще, как у {@link #thick}); между
-     * вершинами — линейно. Прежде вуаль была одним квадратом с толщей по одному лучу — середине экрана: след, проходящий
-     * сквозь камеру, ложился ровной белой пеленой на весь кадр (СКО яркости кадра 1,5–3 из 255), хотя вещество у глаза —
-     * полоса трубки, гуще вдоль неё и чистая над и под ней (жалоба 24.10, финальный проход 3.7.0, сцена sam-burst).
+     * The substance around the eye — a veil over the screen (its Gaussians' puffs melted: a square right up to the eye
+     * would fill the screen with its edge). Thickness — along each grid vertex's ray over the whole screen
+     * ({@link #VEIL_CELLS}², a square in tangents ±tg of the angle to the screen's edge, {@link #VEIL_AT} blocks in
+     * front of the eye) through each Gaussian ({@link #sightDepth}); vertex opacity — 1 − e^(−Στ), color — average by
+     * thickness (scattering of the mix of substances at the eye — shares by thickness, as for {@link #thick}); between
+     * vertices — linear. Before, the veil was one square with the thickness along one ray — the screen's middle: a
+     * trail passing through the camera lay as an even white pall over the whole frame (brightness SD 1.5–3 of 255),
+     * although the substance at the eye is a band of the tube, denser along it and clear above and below it (complaint
+     * 24.10, final pass 3.7.0, scene sam-burst).
      */
     static final class Veil {
-        /** Вершин по оси. */
+        /** Vertices along an axis. */
         static final int N = VEIL_CELLS + 1;
-        /** Полуразмер сетки в тангенсах от середины экрана. */
+        /** Half-size of the grid in tangents from the screen's middle. */
         double extent;
         final double[] tau = new double[N * N];
         final float[] r = new float[N * N], g = new float[N * N], b = new float[N * N];
         /**
-         * Мягкость вершины к миру, блоков: вещество по её лучу — не всё перед миром. Вершина тает, как квадрат слоя у мира
-         * ({@code fx.fsh}: × (мир − место вершины) / мягкость), и мир там, где по лучу набирается половина её непрозрачности
-         * ({@link #half}), берёт половину вуали: дом перед далёким облаком в вуали в него не тонет, а в густом дыме вокруг
-         * глаза стена в нескольких метрах уже почти скрыта. ⚠ Линейный спуск вместо доли толщи перед миром — приближение.
+         * Softness of a vertex to the world, blocks: the substance along its ray is not all in front of the world. The
+         * vertex melts like a layer's square at the world ({@code fx.fsh}: × (world − vertex place) / softness), and
+         * where along the ray half its opacity accumulates ({@link #half}), the world takes half of the veil: a house
+         * in front of a distant cloud does not sink into the veil, while in thick smoke around the eye a wall a few
+         * meters away is already almost hidden. ⚠ A linear falloff instead of a share of thickness before the world is
+         * an approximation.
          */
         final float[] soft = new float[N * N];
-        /** Distance to half opacity: the material location used for sorting, independent of the nearby grid geometry. */
+        /**
+         * Distance to half opacity: the material location used for sorting, independent of the nearby grid geometry.
+         */
         final float[] depth = new float[N * N];
 
         /**
-         * Где по лучу набирается половина непрозрачности вещества толщей tau, м: вещество — ровно по отрезку со средним по
-         * толще расстоянием mean и разбросом spread (СКО, м; отрезок — ±√3·СКО, не ближе глаза), непрозрачность на отрезке
-         * — 1 − e^(−tau·x): половина конечной — при x = −ln(1 − (1 − e^(−tau))/2)/tau (у тонкого — середина, у густого —
-         * ближе к началу).
+         * Where along the ray half the opacity of the substance of thickness tau, m, accumulates: the substance is
+         * exactly along a segment with the average distance mean over the thickness and spread spread (SD, m; the
+         * segment is ±√3·SD, no closer than the eye), opacity on the segment — 1 − e^(−tau·x): half of the final one —
+         * at x = −ln(1 − (1 − e^(−tau))/2)/tau (for a thin one — the middle; for a dense one — nearer the start).
          */
         static double half(double tau, double mean, double spread) {
             double from = Math.max(0, mean - Math.sqrt(3) * spread), to = Math.max(from, mean + Math.sqrt(3) * spread);
@@ -3002,22 +3210,22 @@ final class SmokePuffs {
         final org.joml.Vector3f forward = new org.joml.Vector3f(), left = new org.joml.Vector3f(), up = new org.joml.Vector3f();
         private final double[] moments = new double[2];
 
-        /** Тангенс вершины i по оси (влево экрана — по {@code left}, вверх — по {@code up}). */
+        /** Tangent of vertex i along an axis (left on screen — by {@code left}, up — by {@code up}). */
         double at(int i) {
             return extent * (2.0 * i / (N - 1) - 1);
         }
 
-        /** Номер вершины (i — по {@code left}, j — по {@code up}). */
+        /** Vertex number (i — by {@code left}, j — by {@code up}). */
         static int index(int i, int j) {
             return j * N + i;
         }
 
-        /** Непрозрачность вершины k. */
+        /** Opacity of vertex k. */
         float alpha(int k) {
             return (float) (1 - Math.exp(-tau[k]));
         }
 
-        /** Копия (проверки: сетка у приёмника переживает следующий кадр). */
+        /** Copy (checks: the grid at the sink survives the next frame). */
         Veil copy() {
             Veil c = new Veil();
             c.extent = extent;
@@ -3033,17 +3241,17 @@ final class SmokePuffs {
             return c;
         }
 
-        /** Есть ли что рисовать. */
+        /** Whether there is anything to draw. */
         boolean any() {
             for (double t : tau) if (-Math.expm1(-t) >= 0.002) return true;
             return false;
         }
 
         /**
-         * The mesh blends at its material depth (opacity-weighted over all nodes; transparent ones do not pull it toward
-         * the eye), one key for every cell: with a key per cell, neighbouring cells sorted to opposite sides of a club
-         * between their depths, and the lighter veil over the club on one side and under it on the other drew a hard
-         * screen-aligned rectangle into the smoke (0.1 of the frame diagonal per cell; RECT, 27.10).
+         * The mesh blends at its material depth (opacity-weighted over all nodes; transparent ones do not pull it
+         * toward the eye), one key for every cell: with a key per cell, neighbouring cells sorted to opposite sides of
+         * a club between their depths, and the lighter veil over the club on one side and under it on the other drew a
+         * hard screen-aligned rectangle into the smoke (0.1 of the frame diagonal per cell; RECT, 27.10).
          */
         float depth() {
             double sum = 0, distance = 0;
@@ -3055,7 +3263,10 @@ final class SmokePuffs {
             return sum > 0 ? (float) (distance / sum) : (float) VEIL_AT;
         }
 
-        /** Место вершины (i, j) от глаза, ось {@code axis} (0 — x, 1 — y, 2 — z): на {@link #VEIL_AT} блока по взгляду. */
+        /**
+         * Place of vertex (i, j) from the eye, axis {@code axis} (0 — x, 1 — y, 2 — z): at {@link #VEIL_AT} blocks
+         * along the view.
+         */
         double place(int i, int j, int axis) {
             double u = at(i), v = at(j);
             return switch (axis) {
@@ -3066,8 +3277,8 @@ final class SmokePuffs {
         }
 
         /**
-         * Пропускание вуали в точке экрана (u, v) в тангенсах — как её рисует видеокарта: непрозрачность линейно между
-         * вершинами клетки (проверки).
+         * Transmittance of the veil at a screen point (u, v) in tangents — as the GPU draws it: opacity linear between
+         * the vertices of the cell (checks).
          */
         double through(double u, double v) {
             double fu = Math.clamp((u + extent) / (2 * extent) * (N - 1), 0, N - 1 - 1e-9), fv = Math.clamp((v + extent) / (2 * extent) * (N - 1), 0, N - 1 - 1e-9);
@@ -3079,13 +3290,13 @@ final class SmokePuffs {
             return 1 - a;
         }
 
-        /** Сетка кадра view по гауссам вуали (count штук по {@link #VEIL_FIELDS} чисел в g). */
+        /** Grid of frame view over the veil's Gaussians (count of them, {@link #VEIL_FIELDS} numbers each in g). */
         void fill(FarView view, double[] gs, int count) {
             forward.set(view.forward());
             left.set(view.left());
             up.set(view.up());
-            // весь кадр при любом соотношении сторон (и у вертикального окна): круг до угла экрана, с запасом на кадр вывода
-            // другого размера, чем окно (Flashback)
+            // the whole frame at any aspect ratio (and for a portrait window): a circle to the screen's corner, with a
+            // margin for an output frame of a different size than the window (Flashback)
             extent = Math.min(Math.tan(Math.min(view.edge(), 1.45)) * 1.2, 8);
             java.util.Arrays.fill(tau, 0);
             java.util.Arrays.fill(r, 0);
@@ -3106,7 +3317,7 @@ final class SmokePuffs {
                     for (int c = 0; c < count; c++) {
                         int o = c * VEIL_FIELDS;
                         double along = sightDepth(gs[o], gs[o + 1], gs[o + 2], gs[o + 3], gs[o + 4], gs[o + 5], rx, ry, rz);
-                        // доля гаусса — у непрозрачности его вещества по лучу, как у растаявших клубов
+                        // the Gaussian's share — of its substance's opacity along the ray, as for melted puffs
                         double a = -Math.expm1(-along) * gs[o + 9];
                         if (!(a > 1e-6)) continue;
                         double t = -Math.log1p(-Math.min(a, 0.999));
@@ -3134,10 +3345,12 @@ final class SmokePuffs {
     }
 
     /**
-     * Вещество гаусса вокруг глаза (центр (px, py, pz) от глаза, σ по горизонтали и вертикали, ослабление всей массы ext,
-     * м²): клубы его растаяли — оно в вуаль кадра ({@link Veil}: толща по лучу каждой её вершины, {@link #sightDepth}). Тот же
-     * цвет вещества, что у клубов; свет — как у вещества под открытым небом (карта освещения: небо 15) и огонь кадра у глаза
-     * (FxLights), как у клубов этого же вещества снаружи. Доля share — сколько клубов растаяло.
+     * The substance of a Gaussian around the eye (center (px, py, pz) from the eye, σ horizontally and vertically,
+     * attenuation of the whole mass ext, m²): its puffs melted — the substance goes into the frame's veil
+     * ({@link Veil}: thickness along the ray of each of its vertices, {@link #sightDepth}). The same color of the
+     * substance as for the puffs; light — as for the substance under open sky (lightmap: sky 15) and the frame's fire
+     * at the eye (FxLights), as for the puffs of this same substance outside. Share share — how many of its puffs
+     * melted.
      */
     private static void veil(Draw d, double px, double py, double pz, double sh, double sv, double ext, double ks, double kd, double kw, float dr,
                              float dg, float db, double share) {
@@ -3146,30 +3359,33 @@ final class SmokePuffs {
     }
 
     /**
-     * Толща по лучу взгляда из глаза (направление f, единичное) через гаусс с осями (σh, σh, σv), центр — (px, py, pz) от
-     * глаза, ослабление всей массы ext (м²): в пространстве, где гаусс — шар единичного σ, луч идёт с шагом |f'| =
-     * √((fx² + fz²)/σh² + fy²/σv²), и толща — ext/((2π)^{3/2}σh²σv)·√(π/2)/|f'|·e^(−b'²/2)·(1 + erf(a'/√2)), a' — путь до
-     * ближайшей к середине точки луча, b' — её расстояние до середины (обе — в σ). У шара — прежняя формула вуали.
+     * Thickness along the view ray from the eye (direction f, unit) through a Gaussian with axes (σh, σh, σv), center —
+     * (px, py, pz) from the eye, attenuation of the whole mass ext (m²): in the space where the Gaussian is a sphere of
+     * unit σ, the ray steps by |f'| = √((fx² + fz²)/σh² + fy²/σv²), and the thickness is
+     * ext/((2π)^{3/2}σh²σv)·√(π/2)/|f'|·e^(−b'²/2)·(1 + erf(a'/√2)), a' — the path to the point of the ray nearest the
+     * middle, b' — its distance from the middle (both in σ). For a sphere — the former veil formula.
      */
     static double sightDepth(double px, double py, double pz, double sh, double sv, double ext, double fx, double fy, double fz) {
-        // вуаль зовёт это на каждую вершину сетки и гаусс у глаза: постоянные — по разу
+        // the veil calls this for each grid vertex and for the Gaussian at the eye: constants — once each
         double ux = fx / sh, uy = fy / sv, uz = fz / sh, len = Math.sqrt(ux * ux + uy * uy + uz * uz);
         if (!(len > 0)) return 0;
         ux /= len;
         uy /= len;
         uz /= len;
-        // середина от глаза в σ: луч из глаза — t·u, ближайшая к середине точка — t = a'
+        // middle from the eye in σ: the ray from the eye — t·u, the point nearest the middle — t = a'
         double cx = px / sh, cy = py / sv, cz = pz / sh;
         double a = cx * ux + cy * uy + cz * uz, b2 = Math.max(0, cx * cx + cy * cy + cz * cz - a * a);
-        // луч дальше 10σ от середины — e^(−50): у самого густого клуба толща миллиардные, erf не нужен
+        // a ray farther than 10σ from the middle — e^(−50): for the densest puff the thickness is billionths, erf is
+        // not needed
         if (b2 > 100) return 0;
         return ext * SIGHT / (sh * sh * sv * len) * Math.exp(-0.5 * b2) * (1 + SmokeGrid.erf(a * SQRT_HALF));
     }
 
     /**
-     * Где на луче из глаза f вещество гаусса (как у {@link #sightDepth}), м: вдоль луча оно — гаусс с серединой в ближайшей к
-     * середине гаусса точке луча a' (в σ луча) и единичной σ, от глаза — усечённый: среднее — a' + λ, дисперсия — 1 − λ(λ + a'),
-     * λ = φ(a')/Φ(a') (в метрах — делённые на |f'| и |f'|²). В out — среднее и дисперсия.
+     * Where along the ray f from the eye the substance of a Gaussian is (as for {@link #sightDepth}), m: along the ray
+     * it is a Gaussian with its middle at the point of the ray nearest the Gaussian's middle a' (in the ray's σ) and
+     * unit σ, from the eye — truncated: the mean — a' + λ, the variance — 1 − λ(λ + a'), λ = φ(a')/Φ(a') (in meters —
+     * divided by |f'| and |f'|²). Into out — the mean and the variance.
      */
     static void sightMoments(double px, double py, double pz, double sh, double sv, double fx, double fy, double fz, double[] out) {
         double ux = fx / sh, uy = fy / sv, uz = fz / sh, len = Math.sqrt(ux * ux + uy * uy + uz * uz);
@@ -3177,25 +3393,29 @@ final class SmokePuffs {
         if (!(len > 0)) return;
         double a = (px / sh * ux + py / sv * uy + pz / sh * uz) / len;
         double below = 0.5 * (1 + SmokeGrid.erf(a * SQRT_HALF));
-        // далеко за спиной: λ → −a − 1/a, вещество — у самого глаза
+        // far behind the eye: λ → −a − 1/a, the substance is right at the eye
         double lambda = below > 1e-12 ? Math.exp(-0.5 * a * a) / Math.sqrt(2 * Math.PI) / below : -a - 1 / a;
         out[0] = Math.max(0, a + lambda) / len;
         out[1] = Math.max(0, 1 - lambda * (lambda + a)) / (len * len);
     }
 
-    /** Постоянная толщи по лучу: √(π/2)/(2π)^{3/2}; √½. */
+    /** Constant of thickness along the ray: √(π/2)/(2π)^{3/2}; √½. */
     private static final double SIGHT = Math.sqrt(Math.PI / 2) / Math.pow(2 * Math.PI, 1.5), SQRT_HALF = Math.sqrt(0.5);
 
-    /** Видимый край гаусса толщи τ₀ поперёк середины, в σ: где толща падает до {@link #EDGE_TAU}. */
+    /**
+     * Visible edge of a Gaussian of thickness τ₀ across the middle, in σ: where the thickness falls to
+     * {@link #EDGE_TAU}.
+     */
     static double edge(double tau) {
         return Math.clamp(Math.sqrt(2 * Math.max(0, Math.log(Math.max(tau, 1e-6) / EDGE_TAU))), 1.2, 4.0);
     }
 
     /**
-     * Цвет толстого слоя смеси на экране (один канал): альбедо ω' и асимметрия g' — по долям ослабления сажи, пыли
-     * (альбедо {@code dustW}) и капель; отражение полубесконечного слоя двух потоков R∞ = (1 − s)/(1 + s),
-     * s = √((1 − ω')/(1 − ω'g')) (замыкание по средним полусфер; у Эддингтона s больше в 2/√3 раза, и у сажи — ω' ≈ 0,2 —
-     * отражение выходило бы отрицательным, сажа — чёрной дырой); на экран — степень 1/2,2. Обращение — {@link SmokeGrid#dustAlbedo}.
+     * Color of the thick layer of the mix on screen (one channel): albedo ω' and asymmetry g' — by the shares of the
+     * attenuation of soot, dust (albedo {@code dustW}) and droplets; reflection of a semi-infinite two-stream layer R∞
+     * = (1 − s)/(1 + s), s = √((1 − ω')/(1 − ω'g')) (closure by the hemisphere averages; for Eddington s is 2/√3 times
+     * larger, and for soot — ω' ≈ 0.2 — the reflection would come out negative, and soot would be a black hole); to the
+     * screen — power 1/2.2. Inverse — {@link SmokeGrid#dustAlbedo}.
      */
     static float thick(double soot, double dust, double water, float dustW) {
         double sum = soot + dust + water;
@@ -3204,37 +3424,45 @@ final class SmokePuffs {
         return thick(w, g);
     }
 
-    /** Цвет толстого слоя вещества с альбедо ω' и асимметрией g' (после дельта-Эддингтона), один канал. */
+    /** Color of the thick layer of a substance with albedo ω' and asymmetry g' (after delta-Eddington), one channel. */
     static float thick(double w, double g) {
         double u = Math.sqrt(Math.max((1 - w) / (1 - w * g), 0));
         return (float) Math.pow(Math.max(0, (1 - u) / (1 + u)), 1 / 2.2);
     }
 
     /**
-     * Альбедо и асимметрия вещества, с которыми запечены карты клуба дыма и клуба брызг ({@code tools/bake_fx/bake.py}:
-     * {@code PUFF_ALBEDO}, {@code PUFF_G}, {@code SPRAY_ALBEDO}, {@code SPRAY_G}).
+     * Albedo and asymmetry of the substance with which the smoke puff's and the spray puff's maps are baked
+     * ({@code tools/bake_fx/bake.py}: {@code PUFF_ALBEDO}, {@code PUFF_G}, {@code SPRAY_ALBEDO}, {@code SPRAY_G}).
      */
     static final double BAKED_W = 0.55, BAKED_G = 0.55, SPRAY_W = 0.99, SPRAY_G = 0.85;
-    /** Затухание света в толще k двух потоков у вещества запекания дыма и брызг (после дельта-Эддингтона, как у {@link SmokeGrid}). */
+    /**
+     * Light attenuation in the thickness k of two streams for the substance of smoke and spray baking (after
+     * delta-Eddington, as for {@link SmokeGrid}).
+     */
     static final double BAKED_K = deltaK(BAKED_W, BAKED_G), SPRAY_K = deltaK(SPRAY_W, SPRAY_G);
 
-    /** k двух потоков вещества с альбедо w и асимметрией g после дельта-Эддингтона (f = g²). */
+    /** k of two streams of a substance with albedo w and asymmetry g after delta-Eddington (f = g²). */
     static double deltaK(double w, double g) {
         double f = g * g;
         return twoStream((1 - f) * w / (1 - f * w), g / (1 + g));
     }
 
-    /** Затухание рассеянного света в толще, на единицу толщи: k = √(3(1 − ω')(1 − ω'g')) (два потока Эддингтона). */
+    /**
+     * Attenuation of scattered light in the thickness, per unit of thickness: k = √(3(1 − ω')(1 − ω'g')) (Eddington two
+     * streams).
+     */
     static double twoStream(double w, double g) {
         return Math.sqrt(Math.max(3 * (1 - w) * (1 - w * g), 0));
     }
 
     /**
-     * Затухание света в толще смеси, k двух потоков; степень тени карт — k смеси / k вещества запекания этого клуба
-     * ({@link #BAKED_K} у дыма, {@link #SPRAY_K} у брызг). Карты клуба — свет, прошедший его толщу τ (≈ e^(−kτ) против
-     * среднего по клубу), поэтому у смеси с другим альбедо карта берётся в этой степени ({@code fx.fsh}): белый дым окиси алюминия и капли (ω' ≈ 0,999) почти не дают тени — светлые насквозь,
-     * как облако; сажа (ω' ≈ 0,2) — темнее запечённого клуба. ⚠ Приближение: путь света в клубе один и тот же, меняется
-     * только затухание на нём. Доли — по ослаблению, как у {@link #thick}.
+     * Light attenuation in the thickness of the mix, k of two streams; shade level of the maps — k of the mix / k of
+     * the baked substance of this puff ({@link #BAKED_K} for smoke, {@link #SPRAY_K} for spray). The puff's maps are
+     * the light that passed its thickness τ (≈ e^(−kτ) against the average over the puff), so for a mix with a
+     * different albedo the map is taken to this power ({@code fx.fsh}): white aluminum-oxide smoke and droplets (ω' ≈
+     * 0.999) give almost no shadow — clear through, like a cloud; soot (ω' ≈ 0.2) — darker than the baked puff. ⚠ An
+     * approximation: the light's path in the puff is the same, only its attenuation on it changes. Shares — by
+     * attenuation, as for {@link #thick}.
      */
     static double shade(double soot, double dust, double water, float dustW) {
         double sum = soot + dust + water;
@@ -3244,7 +3472,10 @@ final class SmokePuffs {
         return twoStream(w, g);
     }
 
-    /** Ячейка мира слияния у клуба в (x, y, z) с краем r (м): размер — cell·2^октава края; kind — вещество (не смешиваются). */
+    /**
+     * World cell of the merge at a puff at (x, y, z) with edge radius r (m): size — cell·2^octave of the edge; kind —
+     * substance (not mixed).
+     */
     static long cell(double x, double y, double z, double r, double cell, int kind) {
         int octave = Math.getExponent(Math.max(r, 1e-3));
         double size = Math.scalb(cell, octave);
@@ -3252,9 +3483,11 @@ final class SmokePuffs {
     }
 
     /**
-     * Группы слитых мест трубок: у группы (номер — место, что её держит) — все трубки её мест, и между уровнями слияния тоже.
-     * Две группы сливаются, только если общих трубок нет: держатель группы хранит одну трубку, и без состава группы A+B и
-     * группа B+A следующего уровня слились бы — места одной трубки в одном клубе.
+     * Groups of merged tube places: a group (number — the place that holds it) — all the tubes of its places, and
+     * between merge levels too.
+     * Two groups merge only if they share no tube: the group's holder keeps one tube, and without the group's
+     * membership A+B and
+     * group B+A of the next level would merge, placing one tube's places in one puff.
      */
     static final class TubeGroups {
         private long[] tube = new long[64];
@@ -3265,7 +3498,7 @@ final class SmokePuffs {
             owners.clear();
         }
 
-        /** Место p трубки t — группа из одного. */
+        /** Place p of tube t — a group of one. */
         void add(int p, long t) {
             if (p >= tube.length) {
                 int n = Math.max(2 * tube.length, p + 1);
@@ -3279,13 +3512,13 @@ final class SmokePuffs {
             owners.put(key(p, t), p);
         }
 
-        /** Нет ли у групп a и b общей трубки. */
+        /** Whether groups a and b share a tube. */
         boolean disjoint(int a, int b) {
             for (int m = b; m >= 0; m = next[m]) if (owners.get(key(a, tube[m])) >= 0) return false;
             return true;
         }
 
-        /** Группа b — в группу a. */
+        /** Group b — into group a. */
         void join(int a, int b) {
             for (int m = b; m >= 0; m = next[m]) owners.put(key(a, tube[m]), a);
             next[tail[a]] = b;
@@ -3297,7 +3530,7 @@ final class SmokePuffs {
         }
     }
 
-    /** Ключ → номер, открытой адресацией (ячейки слияния без объектов на кадр). Номера — не меньше нуля. */
+    /** Key → number, by open addressing (merge cells, no objects per frame). Numbers are not less than zero. */
     private static final class Cells {
         private long[] keys = new long[1024];
         private int[] values = new int[1024];
@@ -3313,7 +3546,7 @@ final class SmokePuffs {
             size = 0;
         }
 
-        /** Номер у ключа; −1 — нет. */
+        /** Number of the key; −1 — none. */
         int get(long key) {
             int mask = keys.length - 1;
             for (int i = (int) mix(key) & mask; ; i = i + 1 & mask) {
@@ -3350,19 +3583,19 @@ final class SmokePuffs {
         }
     }
 
-    /** Перемешивание битов (splitmix64): своё случайное у каждого клуба без объектов на кадр. */
+    /** Bit mixing (splitmix64): its own random value for each puff without objects per frame. */
     private static long mix(long z) {
         z = (z ^ z >>> 30) * 0xBF58476D1CE4E5B9L;
         z = (z ^ z >>> 27) * 0x94D049BB133111EBL;
         return z ^ z >>> 31;
     }
 
-    /** Доля 0..1 из младших бит. */
+    /** Fraction 0..1 from the low bits. */
     private static double unit(long h) {
         return (h & 0xFFFFFF) / (double) 0x1000000;
     }
 
-    /** Колокол без хвостов из трёх долей (клуб не улетает от середины). */
+    /** Bell curve without tails from three fractions (a puff does not fly away from the middle). */
     private static double gauss(long h) {
         return (unit(h) + unit(h >>> 24) + unit(h >>> 40) - 1.5) * 1.15;
     }

@@ -109,40 +109,43 @@ import java.util.UUID;
 import java.util.concurrent.locks.LockSupport;
 
 /**
- * Проверки без окна ({@code ./gradlew runGameTestServer}): каждое оружие долетает и взрывается, шахед сходит
- * с пусковой, ракета пролетает незагруженный мир, бомба бурит,
- * залп выпускает все снаряды, прицел различает блок и сущность, данные переживают сохранение.
- * Шаблоны (scripts/gen_test_structures.py): «range» — площадка 64×64, дёрн на y = 11 (поверхность y = 12);
- * «runway» — полоса 32×256, дёрн на y = 3 (поверхность y = 4), высота 8 (стена из барьеров вокруг — не выше):
- * снаряды заходят с настоящей дистанции.
- * Полётным тестам нужен skyAccess: иначе GameTest накрывает площадку потолком из барьеров, и рельеф — это потолок.
+ * Checks without a window ({@code ./gradlew runGameTestServer}): every weapon reaches its target and explodes, the
+ * Shahed leaves the launcher, the missile flies over an unloaded world, the bunker buster bores in, the salvo fires all
+ * projectiles, the sight tells a block from an entity, data survives saving. Templates
+ * (scripts/gen_test_structures.py): “range” — a 64×64 pad, turf at y = 11 (surface y = 12); “runway” — a 32×256 strip,
+ * turf at y = 3 (surface y = 4), height 8 (a wall of barriers around it, no higher): projectiles approach from a real
+ * distance. Flight tests need skyAccess: otherwise GameTest covers the pad with a ceiling of barriers, and the relief
+ * is that ceiling.
  */
 @GameTestHolder(Incoming.MOD_ID)
 @PrefixGameTestTemplate(false)
 public final class StrikeGameTests {
     /** Preserve the fixture height formerly returned by Level.getSeaLevel(), even in flat worlds. */
     private static final int REFERENCE_SEA_LEVEL = 63;
-    /** Цель на полосе: дёрн в 200 блоках от начала (дальше рельеф «видит» стену полигона). */
+    /** Target on the strip: turf 200 blocks from the start (beyond it the relief “sees” the wall of the test area). */
     private static final BlockPos RUNWAY_TARGET = new BlockPos(16, 3, 200);
     /**
-     * Места пуска в проверках сектора с курсами назад и вбок — на столько блоков выше площадки. Подъём после взведения
-     * ({@code LaunchSite.clearAhead}: 96 + 256 блоков по курсу) уходит за площадку к площадкам прежних партий: сетка
-     * GameTest ставит их по 8 в ряд через 5–6 блоков и не убирает, а их стены и постройки — до ~70 блоков над площадкой.
-     * К +Z и +X площадок ещё нет: следующие партии ставятся позже.
+     * Launch positions in the sector checks with courses back and to the side — this many blocks above the pad. The
+     * climb after arming ({@code LaunchSite.clearAhead}: 96 + 256 blocks along the course) goes past the pad to the
+     * pads of earlier batches: the GameTest grid places them 8 in a row, 5–6 blocks apart, and does not clear them;
+     * their walls and structures rise up to ~70 blocks above the pad. There are no pads yet at +Z and +X: the next
+     * batches are placed later.
      */
     private static final int ABOVE_GRID = 100;
-    /** Середина площадки «range». */
+    /** Middle of the “range” pad. */
     private static final BlockPos RANGE_CENTER = new BlockPos(32, 11, 32);
 
     private StrikeGameTests() {}
 
     /**
-     * Неровный навес над округой стрелка {@code c} (±48 блоков, дальше всех мест пусковой {@code LaunchSite}): полосы на
-     * двух высотах над самым высоким блоком округи — под ним нет неба, на нём нет ровного места. Высота — от самого
-     * высокого блока, а не от стрелка: сетка GameTest не убирает площадки прошлых партий, и место нашлось бы на соседней
-     * выше навеса (CI 16.10, другой состав части: пусковая на y −17 у края площадки над навесом на −46). После проверки
-     * навес убирается: над чужой постройкой он выше, чем расчищает площадка следующей партии, и шахед соседней проверки
-     * разбивался о него (CI 16.10, {@code drone_dive_mast} сразу после {@code operator_route}).
+     * An uneven canopy over the surroundings of the arrow {@code c} (±48 blocks, farther than all LaunchSite spots):
+     * strips at two heights above the highest block of the surroundings — there is no sky under it, and no flat spot on
+     * it. The height is from the highest block, not from the arrow: the GameTest grid does not clear the pads of
+     * earlier batches, and a spot would be found on a neighboring one higher than the canopy (CI 16.10, a different
+     * make-up of the test structure: the launcher at y −17 at the edge of the pad, above the canopy at −46). After the
+     * check the canopy is removed: above someone else's structure it is higher than the next batch's pad clears, and
+     * the Shahed of a neighboring check crashed into it ({@code CI 16.10}, {@code drone_dive_mast} right after {@code
+     * operator_route}).
      */
     private static void roofOver(GameTestHelper h, BlockPos c) {
         ServerLevel level = h.getLevel();
@@ -164,28 +167,29 @@ public final class StrikeGameTests {
         }));
     }
 
-    /** Верх блока цели. */
+    /** Top of the target block. */
     private static Vec3 top(GameTestHelper h, BlockPos block) {
         return Vec3.atCenterOf(h.absolutePos(block)).add(0, 0.5, 0);
     }
 
-    /** Взрыв выбил воронку в точке цели (обломки потом могут лечь обратно, поэтому считаем объём). */
+    /** The blast dug a crater at the target point (debris may later land back, so the volume is counted). */
     private static void assertCrater(GameTestHelper h, BlockPos at) {
         assertCrater(h, at, "");
     }
 
     /**
-     * Снаряд взорвался у точки удара: подрыв по заряду не дальше 6 блоков ({@link BlastLog}). Воронка — по закону заряда
-     * и грунта ({@code craterMatchesChargeLaw}), у шахеда на камне её нет, поэтому полёт проверяется по подрыву. Источник
-     * каждого такого подрыва — снаряд мода ({@code Explosion.getDirectSourceEntity}): по нему моды взрывов и приваты
-     * отличают удар и оружие.
+     * The projectile exploded at the impact point: a detonation by the charge no farther than 6 blocks ({@link
+     * BlastLog}). The crater follows the charge law and the ground ({@code craterMatchesChargeLaw}); a Shahed on stone
+     * makes none, so the flight is checked by the detonation. The source of each such detonation is the mod's
+     * projectile ({@code Explosion.getDirectSourceEntity}): by it, explosion and protection mods tell the strike apart
+     * from the weapon.
      */
     private static void assertCrater(GameTestHelper h, BlockPos at, String flight) {
         List<BlastLog.Blast> blasts = BlastLog.around(h, at, 6);
-        h.assertTrue(!blasts.isEmpty(), "у точки удара нет подрыва" + (flight.isEmpty() ? "" : "; последнее: " + flight));
+        h.assertTrue(!blasts.isEmpty(), "no detonation at the impact point" + (flight.isEmpty() ? "" : "; last: " + flight));
         for (BlastLog.Blast b : blasts) {
             h.assertTrue(b.source() != null && BuiltInRegistries.ENTITY_TYPE.getKey(b.source()).getNamespace().equals(Incoming.MOD_ID),
-                    "источник подрыва — не снаряд мода: " + (b.source() == null ? "нет" : BuiltInRegistries.ENTITY_TYPE.getKey(b.source())));
+                    "detonation source is not a mod projectile: " + (b.source() == null ? "none" : BuiltInRegistries.ENTITY_TYPE.getKey(b.source())));
         }
     }
 
@@ -197,16 +201,16 @@ public final class StrikeGameTests {
         drone.launch(start, new Target.Point(top(h, RUNWAY_TARGET)), top(h, RUNWAY_TARGET), null);
         level.addFreshEntity(drone);
         h.succeedWhen(() -> {
-            h.assertTrue(drone.isRemoved(), "шахед ещё летит: " + drone.position());
-            h.assertTrue(drone.getRemovalReason() == net.minecraft.world.entity.Entity.RemovalReason.DISCARDED, "шахед пропал: " + drone.getRemovalReason());
+            h.assertTrue(drone.isRemoved(), "the Shahed is still flying: " + drone.position());
+            h.assertTrue(drone.getRemovalReason() == net.minecraft.world.entity.Entity.RemovalReason.DISCARDED, "the Shahed vanished: " + drone.getRemovalReason());
             assertCrater(h, RUNWAY_TARGET);
         });
     }
 
     /**
-     * Высокая стена на линии пике между крейсером и целью. С 47 блоков над целью пике на 18° под горизонтом, начатое
-     * в 145 блоках от неё, шло бы в стену высотой 25 в 30 блоках перед целью; шахед ждёт свободной прямой и
-     * взрывается у цели, стена цела.
+     * A tall wall on the dive line between the cruiser and the target. A dive at 18° below the horizon, from 47 blocks
+     * above the target and begun 145 blocks from it, would hit a wall 25 high 30 blocks before the target; the Shahed
+     * waits for a clear line and explodes at the target, and the wall stays intact.
      */
     @GameTest(template = "runway", timeoutTicks = 400, batch = "drone_dive_wall", skyAccess = true)
     public static void droneDivesOverWallOnDiveLine(GameTestHelper h) {
@@ -228,20 +232,20 @@ public final class StrikeGameTests {
             if (f != null) last[0] = f.position();
         });
         h.succeedWhen(() -> {
-            h.assertTrue(flight(level, id) == null, "шахед ещё летит: " + h.relativeVec(last[0]));
+            h.assertTrue(flight(level, id) == null, "the Shahed is still flying: " + h.relativeVec(last[0]));
             long broken = wall.stream().filter(p -> !h.getBlockState(p).is(Blocks.STONE)).count();
-            h.assertTrue(broken == 0, "шахед попал в стену: выбито " + broken + " блоков, последнее место " + h.relativeVec(last[0]));
-            h.assertTrue(last[0].distanceTo(aim) < 8, "шахед взорвался в " + String.format(Locale.ROOT, "%.1f", last[0].distanceTo(aim))
-                    + " блоках от цели: " + h.relativeVec(last[0]));
+            h.assertTrue(broken == 0, "the Shahed hit the wall: " + broken + " blocks knocked out, last position " + h.relativeVec(last[0]));
+            h.assertTrue(last[0].distanceTo(aim) < 8, "the Shahed exploded " + String.format(Locale.ROOT, "%.1f", last[0].distanceTo(aim))
+                    + " blocks from the target: " + h.relativeVec(last[0]));
             assertCrater(h, RUNWAY_TARGET);
         });
     }
 
     /**
-     * Шахед ждёт свободной прямой над низкой стеной у цели (как в {@link #droneDivesOverWallOnDiveLine}), а на его курсе
-     * в 100 блоках до цели — мачта из забора на 6 блоков выше крейсера. Датчик из трёх точек до 45 блоков увидел бы
-     * её поздно: набор не круче 15° не успевает, и шахед бьёт в мачту. Шахед проходит над ней, мачта цела, удар —
-     * у цели.
+     * The Shahed waits for a clear line over a low wall at the target (as in {@link #droneDivesOverWallOnDiveLine}),
+     * and on its course 100 blocks before the target there is a fence mast 6 blocks above the cruiser. A sensor of
+     * three points up to 45 blocks would see it too late: a climb no steeper than 15° does not make it in time, and the
+     * Shahed hits the mast. The Shahed passes over it, the mast is intact, the impact is at the target.
      */
     @GameTest(template = "runway", timeoutTicks = 400, batch = "drone_dive_mast", skyAccess = true)
     public static void droneWaitingForLineClimbsOverMast(GameTestHelper h) {
@@ -263,19 +267,20 @@ public final class StrikeGameTests {
             if (f != null) last[0] = f.position();
         });
         h.succeedWhen(() -> {
-            h.assertTrue(flight(level, id) == null, "шахед ещё летит: " + h.relativeVec(last[0]));
+            h.assertTrue(flight(level, id) == null, "the Shahed is still flying: " + h.relativeVec(last[0]));
             assertMastStands(h, mast, last[0]);
-            h.assertTrue(last[0].distanceTo(aim) < 8, "шахед взорвался в " + String.format(Locale.ROOT, "%.1f", last[0].distanceTo(aim))
-                    + " блоках от цели: " + h.relativeVec(last[0]));
+            h.assertTrue(last[0].distanceTo(aim) < 8, "the Shahed exploded " + String.format(Locale.ROOT, "%.1f", last[0].distanceTo(aim))
+                    + " blocks from the target: " + h.relativeVec(last[0]));
             assertCrater(h, RUNWAY_TARGET);
         });
     }
 
     /**
-     * Ракета с пусковой, на пути набора высоты — мачта из забора 1×1 выше и бреющего полёта, и набора над рельефом.
-     * Датчик из трёх точек по курсу тонкую колонку между точками не видит, а фильтр высоты сглаживает короткий пик:
-     * с ними ракета на маршруте бьётся в мачту. Ракета проходит над ней: мачта цела, ракета не разбилась. Цель — далеко
-     * за площадкой (её чанк сгенерирован сразу); пройдя мачту, ракета убирается.
+     * A missile from a launcher, on its climb path: a 1×1 fence mast above the low-level flight, and the climb over the
+     * relief. A sensor of three points along the course does not see a thin column between its points, and the height
+     * filter smooths a short peak: with them the missile crashes into the mast on its route. The missile passes over
+     * it: the mast is intact, the missile did not crash. The target is far beyond the pad (its chunk is generated at
+     * once); after passing the mast, the missile is removed.
      */
     @GameTest(template = "runway", timeoutTicks = 400, batch = "missile_mast", skyAccess = true)
     public static void missileClimbsOverFenceMast(GameTestHelper h) {
@@ -306,15 +311,15 @@ public final class StrikeGameTests {
         });
         h.succeedWhen(() -> {
             assertMastStands(h, mast, last[0]);
-            h.assertTrue(log.total(FlightLog.Event.CRASHED) == crashed, "ракета разбилась: " + state[0]);
-            h.assertTrue(last[0].z > passZ, "ракета не прошла мачту: " + state[0]);
+            h.assertTrue(log.total(FlightLog.Event.CRASHED) == crashed, "the missile crashed: " + state[0]);
+            h.assertTrue(last[0].z > passZ, "the missile did not pass the mast: " + state[0]);
             StrikeProjectile f = flight(level, id);
-            h.assertTrue(f != null, "ракета пропала до мачты: " + state[0]);
+            h.assertTrue(f != null, "the missile vanished before the mast: " + state[0]);
             if (!f.isVirtual()) f.discard();
         });
     }
 
-    /** Мачта из дубового забора от {@code base} (относительно площадки) до {@code top} включительно. */
+    /** Mast of oak fence from {@code base} (relative to the pad) up to {@code top} inclusive. */
     private static List<BlockPos> fenceMast(GameTestHelper h, BlockPos base, int top) {
         List<BlockPos> mast = new ArrayList<>();
         for (int y = base.getY(); y <= top; y++) {
@@ -327,14 +332,15 @@ public final class StrikeGameTests {
 
     private static void assertMastStands(GameTestHelper h, List<BlockPos> mast, Vec3 last) {
         long broken = mast.stream().filter(p -> !h.getBlockState(p).is(Blocks.OAK_FENCE)).count();
-        h.assertTrue(broken == 0, "снаряд попал в мачту: выбито " + broken + " блоков, последнее место " + h.relativeVec(last));
+        h.assertTrue(broken == 0, "the projectile hit the mast: " + broken + " blocks knocked out, last position " + h.relativeVec(last));
     }
 
     /**
-     * Цель умерла посреди полёта (игрок, по которому идёт залп, умирает раз за разом, и шахеды с «цель потеряна» не
-     * должны летать минутами). Сначала цель уходит туда-обратно на 100 блоков (запас хода растёт на 2000 блоков
-     * погони ×1,5), потом умирает в воздухе, лежит мёртвой, как игрок на экране смерти, и «возрождается» — сущность с тем же
-     * UUID в начале полосы. Шахед за ней не идёт: запас хода после потери — только на полёт до точки смерти, и бьёт он туда.
+     * The target died mid-flight (the player the salvo is aimed at dies over and over, and Shaheds with “target lost”
+     * must not fly for minutes). First the target goes back and forth 100 blocks (endurance grows by 2000 blocks of
+     * pursuit ×1.5), then dies in the air, lies dead like a player on the death screen, and “respawns” — an entity with
+     * the same UUID at the start of the strip. The Shahed does not follow it: its endurance after the loss covers only
+     * the flight to the point of death, and it strikes there.
      */
     @GameTest(template = "runway", timeoutTicks = 600, batch = "drone_lost", skyAccess = true)
     public static void droneStrikesWhereTargetDied(GameTestHelper h) {
@@ -360,7 +366,7 @@ public final class StrikeGameTests {
         h.onEachTick(() -> {
             int t = ++tick[0];
             if (t <= 20) {
-                // цель уходит и возвращается: 20 сдвигов по 100 блоков погони
+                // the target goes away and comes back: 20 shifts of 100 blocks of pursuit
                 Vec3 to = t % 2 == 1 ? alive.add(0, 0, -100) : alive;
                 cow.teleportTo(to.x, to.y, to.z);
             } else if (t == 25) {
@@ -380,25 +386,27 @@ public final class StrikeGameTests {
             last[0] = f.position();
             if (lostAt[0] < 0 && f.targetLost()) {
                 lostAt[0] = t;
-                // запас хода — полёт до точки с запасом ×1.5 и 10 с на маршевой (здесь с допуском на тики между потерей и
-                // проверкой); в тиках — на нынешней скорости, как время до удара; без ограничения — ещё полторы тысячи тиков погони
+                // endurance — flight to the point with a margin ×1.5 and 10 s at cruise (here with a tolerance for the
+                // ticks between the loss and the check); in ticks — at the current speed, like the time to impact;
+                // unrestricted — another 1500 ticks of pursuit
                 bound[0] = 2 * f.etaTicks() + 200;
                 int left = (int) (f.rangeLeft() / Math.max(f.cruiseSpeed(), f.speed()));
-                h.assertTrue(left <= bound[0], "после потери цели запас хода на " + left + " тиков, а полёт до точки — " + f.etaTicks());
+                h.assertTrue(left <= bound[0], "after the target loss, endurance is " + left + " ticks, but the flight to the point is " + f.etaTicks());
             }
         });
         h.succeedWhen(() -> {
-            h.assertTrue(died[0] != null && respawned[0], "цель не умерла и не возродилась");
-            h.assertTrue(lostAt[0] >= 0, "шахед не потерял цель");
-            h.assertTrue(flight(level, id) == null, "шахед ещё летит: " + h.relativeVec(last[0]) + ", с потери цели " + (tick[0] - lostAt[0]) + " тиков");
-            h.assertTrue(tick[0] - lostAt[0] <= bound[0], "с потери цели до удара " + (tick[0] - lostAt[0]) + " тиков");
-            h.assertTrue(last[0].distanceTo(died[0]) < 10, "шахед взорвался не у точки смерти цели: " + last[0].subtract(died[0]));
+            h.assertTrue(died[0] != null && respawned[0], "the target did not die and did not respawn");
+            h.assertTrue(lostAt[0] >= 0, "the Shahed did not lose the target");
+            h.assertTrue(flight(level, id) == null, "the Shahed is still flying: " + h.relativeVec(last[0]) + ", since the loss of the target " + (tick[0] - lostAt[0]) + " ticks");
+            h.assertTrue(tick[0] - lostAt[0] <= bound[0], "from the loss of the target to impact " + (tick[0] - lostAt[0]) + " ticks");
+            h.assertTrue(last[0].distanceTo(died[0]) < 10, "the Shahed exploded away from the target's death point: " + last[0].subtract(died[0]));
         });
     }
 
     /**
-     * Цель умерла и возродилась между двумя тиками снаряда ({@code doImmediateRespawn}): новая сущность с тем же UUID —
-     * уже не та цель, слежение её не подхватывает, даже если мёртвой снаряд её так и не увидел.
+     * The target died and respawned between two ticks of the projectile ({@code doImmediateRespawn}): a new entity with
+     * the same UUID — it is no longer that target; tracking does not pick it up, even if the projectile never saw it
+     * dead.
      */
     @GameTest(template = "range", timeoutTicks = 20, skyAccess = true)
     public static void respawnedTargetIsLost(GameTestHelper h) {
@@ -406,23 +414,24 @@ public final class StrikeGameTests {
         Cow cow = h.spawn(EntityType.COW, RANGE_CENTER.above());
         TargetTracker tracker = new TargetTracker(Target.OfEntity.center(cow), cow.getBoundingBox().getCenter());
         tracker.tick(level, q -> false);
-        h.assertFalse(tracker.isLost(), "живая цель потеряна");
+        h.assertFalse(tracker.isLost(), "live target lost");
         cow.discard();
         Cow again = EntityType.COW.create(level);
         again.setUUID(cow.getUUID());
         Vec3 at = Vec3.atBottomCenterOf(h.absolutePos(RANGE_CENTER.offset(10, 1, 0)));
         again.moveTo(at.x, at.y, at.z);
         level.addFreshEntity(again);
-        h.assertTrue(level.getEntity(cow.getUUID()) == again, "новая сущность не нашлась по UUID");
+        h.assertTrue(level.getEntity(cow.getUUID()) == again, "new entity not found by UUID");
         tracker.tick(level, q -> false);
-        h.assertTrue(tracker.isLost(), "слежение подхватило новую сущность с тем же UUID");
+        h.assertTrue(tracker.isLost(), "tracking picked up a new entity with the same UUID");
         h.succeed();
     }
 
     /**
-     * Цель сбоку, внутри круга разворота (промах в пике, точка в воздухе, где пропала цель): шахед не кружит вокруг неё
-     * до конца срока жизни, а уходит прямо, набирает высоту и заходит снова. Всё — выше барьерной стены площадки
-     * (шаблон 8 блоков): круг разворота шахеда шире полосы.
+     * The target to the side, inside the turn circle (a miss in the dive, a point in the air where the target
+     * vanished): the Shahed does not circle around it until the end of its lifetime, but flies straight off, gains
+     * height and comes back. All of it is above the pad's barrier wall (template 8 blocks): the Shahed's turn circle is
+     * wider than the strip.
      */
     @GameTest(template = "runway", timeoutTicks = 700, batch = "drone_reattack", skyAccess = true)
     public static void droneReattacksInsteadOfCircling(GameTestHelper h) {
@@ -430,8 +439,9 @@ public final class StrikeGameTests {
     }
 
     /**
-     * То же, но цель — сущность, которая погибает в тот же тик, когда шахед её взял: её последняя точка внутри круга
-     * разворота, и повторный заход должен уложиться в срок после потери цели (полёт до точки ×1.5 и 10 с).
+     * The same, but the target is an entity that dies in the same tick the Shahed picked it up: its last point is
+     * inside the circle of the turn, and the repeat approach must fit within the time after the target is lost (flight
+     * to the point ×1.5 and 10 s).
      */
     @GameTest(template = "runway", timeoutTicks = 700, batch = "drone_reattack_lost", skyAccess = true)
     public static void droneReattacksLostTargetInTime(GameTestHelper h) {
@@ -445,10 +455,10 @@ public final class StrikeGameTests {
         DroneEntity drone = ModEntities.DRONE.get().create(level);
         Vec3 start = Vec3.atCenterOf(h.absolutePos(new BlockPos(-8, 110, 20)));
         drone.launch(start, new Target.Point(start.add(0, 0, 400)), start.add(0, 0, 400), null);
-        // старт за краем площадки: чанк там может не тикать — в мир шахед вернётся сам
+        // start past the edge of the pad: the chunk there may not tick — the Shahed returns to the world itself
         VirtualFlights.launch(level, drone);
         UUID id = drone.getUUID();
-        // цель, которая погибнет: висит в точке, центром тела в ней
+        // target that will die: hangs at the point, its body center in it
         Cow cow = targetDies ? EntityType.COW.create(level) : null;
         if (cow != null) {
             cow.setNoAi(true);
@@ -466,37 +476,37 @@ public final class StrikeGameTests {
             StrikeProjectile f = flight(level, id);
             if (f == null) return;
             last[0] = f.position();
-            // цель — в 24 блоках сбоку, чуть впереди и на 25 блоков ниже: круто под крылом
+            // target — 24 blocks to the side, a bit ahead and 25 blocks lower: steeply under the wing
             if (retargetedAt[0] < 0 && f.getZ() >= point.z - 4) {
                 retargetedAt[0] = tick[0];
                 Target target = cow != null ? Target.OfEntity.center(cow) : new Target.Point(point);
-                h.assertTrue(f.retarget(target, point), "шахед не принял цель");
+                h.assertTrue(f.retarget(target, point), "the Shahed did not accept the target");
                 if (cow != null) cow.kill();
             }
             if (targetDies && lostAt[0] < 0 && f.targetLost()) {
                 lostAt[0] = tick[0];
                 bound[0] = (int) (f.rangeLeft() / Math.max(f.cruiseSpeed(), f.speed()));
-                h.assertTrue(bound[0] <= 2 * f.etaTicks() + 200, "после потери цели запас хода на " + bound[0] + " тиков, полёт до точки — " + f.etaTicks());
+                h.assertTrue(bound[0] <= 2 * f.etaTicks() + 200, "after the target loss, endurance is " + bound[0] + " ticks, flight to the point is " + f.etaTicks());
             }
         });
         h.succeedWhen(() -> {
-            h.assertTrue(retargetedAt[0] >= 0, "шахед не дошёл до места перенацеливания: " + h.relativeVec(last[0]));
-            if (targetDies) h.assertTrue(lostAt[0] >= 0, "шахед не потерял цель");
-            h.assertTrue(flight(level, id) == null, "шахед ещё летит: " + h.relativeVec(last[0]) + ", до цели " + (int) last[0].distanceTo(point));
-            h.assertTrue(last[0].distanceTo(point) < 10, "шахед взорвался не у цели: " + last[0].subtract(point));
-            if (targetDies) h.assertTrue(tick[0] - lostAt[0] < bound[0], "повторный заход не уложился в срок: " + (tick[0] - lostAt[0]) + " из " + bound[0]);
+            h.assertTrue(retargetedAt[0] >= 0, "the Shahed did not reach the retargeting point: " + h.relativeVec(last[0]));
+            if (targetDies) h.assertTrue(lostAt[0] >= 0, "the Shahed did not lose the target");
+            h.assertTrue(flight(level, id) == null, "the Shahed is still flying: " + h.relativeVec(last[0]) + ", distance to target " + (int) last[0].distanceTo(point));
+            h.assertTrue(last[0].distanceTo(point) < 10, "the Shahed exploded away from the target: " + last[0].subtract(point));
+            if (targetDies) h.assertTrue(tick[0] - lostAt[0] < bound[0], "repeat approach did not fit the time limit: " + (tick[0] - lostAt[0]) + " of " + bound[0]);
         });
     }
 
-    /** Край прорисовки 12 чанков: отсюда игрок у цели видит подлетающую ракету. */
+    /** Edge of the 12-chunk render distance: from here the player at the target sees the approaching missile. */
     private static final double VIEW_EDGE = 192;
-    /** Подлёт от края прорисовки должен длиться хотя бы столько тиков (2 с при 20 TPS): его должно быть видно. */
+    /** The approach from the render edge must last at least this many ticks (2 s at 20 TPS): it must be visible. */
     private static final int MIN_VISIBLE_APPROACH = 40;
 
     /**
-     * 199 блоков до цели: бреющий полёт, горка и пикирование. Подлёт видно: от края прорисовки (192 блока) до удара —
-     * не меньше {@link #MIN_VISIBLE_APPROACH} тиков (на 11.5 блока/тик — 17), а время до удара, которое ракета
-     * называет на старте (HUD, сирена), сходится с настоящим.
+     * 199 blocks to the target: low flight, a climb and a dive. The approach is visible: from the render edge (192
+     * blocks) to impact no less than {@link #MIN_VISIBLE_APPROACH} ticks (at 11.5 blocks/tick — 17), and the time to
+     * impact, which the missile announces at the start (HUD, siren), matches the real one.
      */
     @GameTest(template = "runway", timeoutTicks = 300, batch = "missile", skyAccess = true)
     public static void missileStrikesAfterPopUp(GameTestHelper h) {
@@ -516,20 +526,20 @@ public final class StrikeGameTests {
             if (missile.flightPhase() == FlightPhase.POP_UP) poppedUp[0] = true;
         });
         h.succeedWhen(() -> {
-            h.assertTrue(missile.isRemoved(), "ракета ещё летит: " + missile.position());
-            h.assertTrue(missile.getRemovalReason() == net.minecraft.world.entity.Entity.RemovalReason.DISCARDED, "ракета пропала: " + missile.getRemovalReason());
+            h.assertTrue(missile.isRemoved(), "the missile is still flying: " + missile.position());
+            h.assertTrue(missile.getRemovalReason() == net.minecraft.world.entity.Entity.RemovalReason.DISCARDED, "the missile vanished: " + missile.getRemovalReason());
             assertCrater(h, RUNWAY_TARGET);
-            h.assertTrue(poppedUp[0], "горки не было");
-            h.assertTrue(inView[0] > 0, "ракета не входила в прорисовку у цели");
+            h.assertTrue(poppedUp[0], "no pop-up");
+            h.assertTrue(inView[0] > 0, "the missile did not enter the render distance at the target");
             int visible = ticks[0] - inView[0];
-            h.assertTrue(visible >= MIN_VISIBLE_APPROACH, "подлёт от края прорисовки — " + visible + " тиков, меньше " + MIN_VISIBLE_APPROACH);
-            h.assertTrue(Math.abs(ticks[0] - eta) <= eta / 4, "время до удара на старте " + eta + " тиков, на деле " + ticks[0]);
+            h.assertTrue(visible >= MIN_VISIBLE_APPROACH, "approach from the render edge — " + visible + " ticks, less than " + MIN_VISIBLE_APPROACH);
+            h.assertTrue(Math.abs(ticks[0] - eta) <= eta / 4, "time to impact at start " + eta + " ticks, in fact " + ticks[0]);
         });
     }
 
     /**
-     * Пуск с пусковой: стоит на направляющей до поджига, разгонный блок, отделение ускорителя (он падает рядом),
-     * набор высоты — и удар по цели в конце полосы.
+     * Launch from a launcher: it stands on the rail until ignition, the booster stage, separation of the booster (it
+     * falls nearby), the climb — and the impact on the target at the end of the strip.
      */
     @GameTest(template = "runway", timeoutTicks = 900, batch = "launcher", skyAccess = true)
     public static void droneLaunchesFromLauncher(GameTestHelper h) {
@@ -548,32 +558,37 @@ public final class StrikeGameTests {
             if (level.getEntity(drone.getUUID()) instanceof DroneEntity d) last[0] = d.flightPhase() + " " + h.relativeVec(d.position()) + " v=" + d.speed();
         });
         h.runAfterDelay(20, () -> {
-            h.assertTrue(drone.flightPhase() == FlightPhase.READY && !drone.isActive(), "пакет ещё поднимается — шахеда не видно");
-            h.assertTrue(drone.position().distanceTo(rail) < 0.01, "шахед сошёл с направляющей раньше поджига");
+            h.assertTrue(drone.flightPhase() == FlightPhase.READY && !drone.isActive(), "the pod is still rising — the Shahed is not visible");
+            h.assertTrue(drone.position().distanceTo(rail) < 0.01, "the Shahed left the rail before ignition");
         });
-        h.runAfterDelay(ready + 4, () -> h.assertTrue(drone.flightPhase() == FlightPhase.IGNITION, "нет поджига: " + drone.flightPhase()));
+        h.runAfterDelay(ready + 4, () -> h.assertTrue(drone.flightPhase() == FlightPhase.IGNITION, "no ignition: " + drone.flightPhase()));
         h.runAfterDelay(ready + 70, () -> {
-            h.assertTrue(drone.isRemoved() || drone.flightPhase().ordinal() >= FlightPhase.CLIMB.ordinal(), "ускоритель не отделился: " + drone.flightPhase());
-            h.assertFalse(level.getEntitiesOfClass(SpentBoosterEntity.class, h.getBounds().inflate(64)).isEmpty(), "нет отработавшего ускорителя");
+            h.assertTrue(drone.isRemoved() || drone.flightPhase().ordinal() >= FlightPhase.CLIMB.ordinal(), "booster did not separate: " + drone.flightPhase());
+            h.assertFalse(level.getEntitiesOfClass(SpentBoosterEntity.class, h.getBounds().inflate(64)).isEmpty(), "no spent booster");
         });
         h.succeedWhen(() -> {
-            // уйдя из загруженных чанков, шахед летит вне мира и возвращается новой сущностью с тем же UUID
-            h.assertTrue(level.getEntity(drone.getUUID()) == null && VirtualFlights.get(level).flights().isEmpty(), "шахед ещё летит: " + last[0]);
+            // after leaving the loaded chunks, the Shahed flies outside the world and returns as a new entity with the
+            // same UUID
+            h.assertTrue(level.getEntity(drone.getUUID()) == null && VirtualFlights.get(level).flights().isEmpty(), "the Shahed is still flying: " + last[0]);
             assertCrater(h, RUNWAY_TARGET, last[0]);
         });
     }
 
     /**
-     * Шахед с пусковой, перед которой стена выше его набора высоты: разбивается о неё на разгоне, до взведения (без подрыва
-     * боевой части), а не проходит сквозь неё на ускорителе — и это видно в логе строкой {@link FlightLog.Event#CRASHED}. Без неё залп, целиком разбившийся о дом у пусковой,
-     * выглядит как пропавший: ни удара, ни ошибки, ни срока жизни.
+     * A Shahed from a launcher with a wall in front of it higher than its climb: it crashes into it on the run-up,
+     * before arming (without a detonation of the warhead), rather than passing through it on the booster — and this is
+     * visible in the log as a {@link FlightLog.Event#CRASHED} line. Without it, a salvo that crashed entirely into a
+     * house at the launcher looks like it vanished: no impact, no error, no lifetime.
      */
     @GameTest(template = "runway", timeoutTicks = 300, batch = "launcher_wall", skyAccess = true)
     public static void droneCrashIntoWallIsLogged(GameTestHelper h) {
         crashIntoWallIsLogged(h, WeaponType.DRONE);
     }
 
-    /** То же у ракеты: у неё круче направляющая и короче разгон (без строки ракета пропадает на наборе высоты). */
+    /**
+     * The same for the missile: its rail is steeper and its run-up shorter (without the line, the missile vanishes
+     * during the climb).
+     */
     @GameTest(template = "runway", timeoutTicks = 300, batch = "launcher_wall_missile", skyAccess = true)
     public static void missileCrashIntoWallIsLogged(GameTestHelper h) {
         crashIntoWallIsLogged(h, WeaponType.MISSILE);
@@ -583,7 +598,7 @@ public final class StrikeGameTests {
         ServerLevel level = h.getLevel();
         for (int x = 4; x <= 28; x++) for (int y = 4; y <= 40; y++) h.setBlock(new BlockPos(x, y, 40), Blocks.STONE);
         Vec3 site = Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(16, 4, 12)));
-        h.assertFalse(LaunchSite.clearAhead(level, site, 0, weapon, top(h, RUNWAY_TARGET)), "стена по курсу не видна");
+        h.assertFalse(LaunchSite.clearAhead(level, site, 0, weapon, top(h, RUNWAY_TARGET)), "wall along the course is not visible");
         LauncherEntity launcher = LauncherEntity.create(level, site, 0, weapon, null, false);
         level.addFreshEntity(launcher);
         Vec3 point = top(h, RUNWAY_TARGET);
@@ -600,52 +615,56 @@ public final class StrikeGameTests {
             if (level.getEntity(drone.getUUID()) instanceof StrikeProjectile d) last[0] = d.flightPhase() + " " + h.relativeVec(d.position()) + " v=" + d.speed();
         });
         h.succeedWhen(() -> {
-            h.assertTrue(level.getEntity(drone.getUUID()) == null && VirtualFlights.get(level).flights().isEmpty(), weapon + " ещё летит: " + last[0]);
-            h.assertTrue(log.total(FlightLog.Event.CRASHED) == before + 1, "разбившийся о стену снаряд не попал в лог; последний раз: " + last[0]
-                    + ", ударов " + StrikeWorld.get(level).impacts().size());
-            h.assertTrue(StrikeWorld.get(level).impacts().isEmpty(), "разбился, а боевая часть сработала");
+            h.assertTrue(level.getEntity(drone.getUUID()) == null && VirtualFlights.get(level).flights().isEmpty(), weapon + " is still flying: " + last[0]);
+            h.assertTrue(log.total(FlightLog.Event.CRASHED) == before + 1, "projectile that crashed into the wall was not logged; last seen: " + last[0]
+                    + ", impacts " + StrikeWorld.get(level).impacts().size());
+            h.assertTrue(StrikeWorld.get(level).impacts().isEmpty(), "crashed, yet the warhead detonated");
         });
     }
 
     /**
-     * Сектор пуска: из двух курсов (обход маршрута с одной и с другой стороны) пусковая берёт тот, что не упирается
-     * в дом до взведения взрывателя; оба заняты — поворачивается, но не дальше 90° от цели (залп не уходит от неё);
-     * пакет, который поворачивать нельзя, — никуда (снаряд заходит издалека). Пакет, смотрящий на первую точку
-     * маршрута со случайной стороны, в городе разбивал бы о дом у пусковой каждый второй залп.
+     * Launch sector: of two courses (going around the route on one side or the other) the launcher takes the one that
+     * does not run into a house before the fuze is armed; if both are blocked, it turns, but no farther than 90° from
+     * the target (the salvo does not turn away from it); a pod that cannot turn — nowhere (the projectile approaches
+     * from afar). A pod facing the first point of the route from a random side would, in town, crash every second salvo
+     * into a house at the launcher.
      */
     @GameTest(template = "runway", timeoutTicks = 20, batch = "launch_sector", skyAccess = true)
     public static void launchSectorAvoidsHouse(GameTestHelper h) {
         ServerLevel level = h.getLevel();
-        // курсы во все стороны: подъём после взведения уходит к площадкам прежних партий — место выше них
+        // courses in all directions: the climb after arming goes to the pads of earlier batches — the spot is above
+        // them
         int y0 = 4 + ABOVE_GRID;
         Vec3 site = Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(16, y0, 120)));
         float[] sides = {0, 180};
         Vec3 far = site.add(0, 0, 400);
         LaunchSite.Pick free = LaunchSite.pickOn(level, site, WeaponType.DRONE, sides, far, 90);
-        h.assertTrue(free != null && free.preferred() == 0, "без домов — первый курс: " + free);
-        // дом в 30 блоках по первому курсу (+Z), выше набора шахеда до взведения
+        h.assertTrue(free != null && free.preferred() == 0, "no houses — first course: " + free);
+        // house 30 blocks along the first course (+Z), higher than the Shahed's climb before arming
         afterTest(h, () -> {
             for (int z : new int[]{90, 150}) for (int x = 4; x <= 28; x++) for (int y = y0; y <= y0 + 46; y++) h.setBlock(new BlockPos(x, y, z), Blocks.AIR);
         });
         for (int x = 4; x <= 28; x++) for (int y = y0; y <= y0 + 46; y++) h.setBlock(new BlockPos(x, y, 150), Blocks.STONE);
-        h.assertFalse(LaunchSite.clearAhead(level, site, 0, WeaponType.DRONE, far), "дом по курсу не виден");
-        h.assertFalse(LaunchSite.clearAhead(level, site, 0, WeaponType.MISSILE, far), "дом по курсу ракеты не виден");
+        h.assertFalse(LaunchSite.clearAhead(level, site, 0, WeaponType.DRONE, far), "house along the course is not visible");
+        h.assertFalse(LaunchSite.clearAhead(level, site, 0, WeaponType.MISSILE, far), "house along the missile course is not visible");
         LaunchSite.Pick other = LaunchSite.pickOn(level, site, WeaponType.DRONE, sides, far, 90);
-        h.assertTrue(other != null && other.preferred() == 1 && other.yaw() == 180, "курс не сменился на свободный: " + other);
-        // и по второму (−Z): пакет поворачивается от первого курса, пока сектор не освободится, — не дальше 90° от цели
+        h.assertTrue(other != null && other.preferred() == 1 && other.yaw() == 180, "course did not change to a free one: " + other);
+        // and along the second (−Z): the pod turns from the first course until the sector is clear — no farther than
+        // 90° from the target
         for (int x = 4; x <= 28; x++) for (int y = y0; y <= y0 + 46; y++) h.setBlock(new BlockPos(x, y, 90), Blocks.STONE);
         LaunchSite.Pick turned = LaunchSite.pickOn(level, site, WeaponType.DRONE, sides, far, 90);
         h.assertTrue(turned != null && turned.preferred() == -1 && Math.abs(turned.yaw()) >= 30 && Math.abs(turned.yaw()) <= 90
-                && LaunchSite.clearAhead(level, site, turned.yaw(), WeaponType.DRONE, far), "курс в дом или от цели: " + turned);
-        h.assertTrue(LaunchSite.pickOn(level, site, WeaponType.DRONE, sides, far, 0) == null, "пакет повернулся, хотя поворачивать нельзя");
+                && LaunchSite.clearAhead(level, site, turned.yaw(), WeaponType.DRONE, far), "course into a house or away from the target: " + turned);
+        h.assertTrue(LaunchSite.pickOn(level, site, WeaponType.DRONE, sides, far, 0) == null, "pod turned although it may not turn");
         h.succeed();
     }
 
     /**
-     * Подъём после взведения: башня за точкой взведения, выше, чем шахед и ракета успевают набрать по закону автопилота,
-     * закрывает сектор пуска, хотя путь до взведения свободен (пусковая на улице: иначе шахед
-     * через 40 блоков после взведения — в башню). Дом ниже набора сектор не закрывает. Курс — на +Z, пусковая — над
-     * сеткой площадок ({@link #laneSite}): подъём читает только свою полосу.
+     * Climb after arming: a tower behind the arming point, higher than the Shahed and the missile can gain under the
+     * autopilot law, closes the launch sector, although the path to arming is clear (the launcher is on a street:
+     * otherwise the Shahed 40 blocks after arming goes into the tower). A house below the climb does not close the
+     * sector. Course — +Z, the launcher — above the grid of pads ({@link #laneSite}): the climb reads only its own
+     * strip.
      */
     @GameTest(template = "runway", timeoutTicks = 20, batch = "launch_climb_out", skyAccess = true)
     public static void launchSectorNeedsClimbOut(GameTestHelper h) {
@@ -654,26 +673,27 @@ public final class StrikeGameTests {
         Vec3 far = site.add(0, 0, 1000);
         float[] ahead = {0};
         for (WeaponType weapon : new WeaponType[]{WeaponType.DRONE, WeaponType.MISSILE}) {
-            h.assertTrue(LaunchSite.clearAhead(level, site, 0, weapon, far), weapon + ": пустая полоса закрыта");
-            // к точке взведения шахед поднимается на ~15 блоков над направляющей, ракета — на ~24
+            h.assertTrue(LaunchSite.clearAhead(level, site, 0, weapon, far), weapon + ": empty strip is blocked");
+            // by the arming point the Shahed climbs ~15 blocks above the rail, the missile ~24
             Vec3 rail = LauncherEntity.railPoint(site, 0, weapon, 0);
             BlockPos house = BlockPos.containing(rail.x, site.y, rail.z + ProximityFuse.ARM_DISTANCE + 40);
             build(level, house, Mth.floor(rail.y) + 6, Blocks.STONE);
-            h.assertTrue(LaunchSite.clearAhead(level, site, 0, weapon, far), weapon + ": дом ниже набора закрыл сектор");
+            h.assertTrue(LaunchSite.clearAhead(level, site, 0, weapon, far), weapon + ": house below the climb blocked the sector");
             build(level, house, Mth.floor(rail.y) + 40, Blocks.STONE);
-            h.assertFalse(LaunchSite.clearAhead(level, site, 0, weapon, far), weapon + ": башня выше набора после взведения не видна");
-            h.assertTrue(LaunchSite.pickOn(level, site, weapon, ahead, far, 0) == null, weapon + ": пусковая встала перед башней");
+            h.assertFalse(LaunchSite.clearAhead(level, site, 0, weapon, far), weapon + ": tower above the climb after arming is not visible");
+            h.assertTrue(LaunchSite.pickOn(level, site, weapon, ahead, far, 0) == null, weapon + ": launcher stopped in front of the tower");
             build(level, house, Mth.floor(rail.y) + 40, Blocks.AIR);
         }
         h.succeed();
     }
 
     /**
-     * Сектор пуска ракеты — из обоих контейнеров и по настоящему пути разгона. Столб, который стоит только на пути
-     * второго контейнера (в 1.24 блока вбок от первого), и навес над прямой под углом набора, через который ракета
-     * идёт на разгоне (с направляющей под 40° она выше прямой под 14°: в 13 блоках — на ~6), закрывают сектор.
-     * Сектор только из первой ячейки и только по прямой пропускает такое: из залпа 20 ракет на разгоне разбивается
-     * ровно каждая вторая — все из одного контейнера, об один и тот же блок.
+     * Missile launch sector — from both containers and along the real run-up path. A post that stands only on the path
+     * of the second container (1.24 blocks to the side of the first), and a canopy over the line at the climb angle,
+     * through which the missile flies on the run-up (with a rail at 40° it is higher than the line at 14°: at 13 blocks
+     * — by ~6), close the sector. A sector from the first cell only, and only along a straight line, lets such through:
+     * of a salvo of 20 missiles on the run-up exactly every second one crashes — all from one container, into the same
+     * block.
      */
     @GameTest(template = "runway", timeoutTicks = 20, batch = "launch_sector_cells", skyAccess = true)
     public static void launchSectorCoversEveryCellAndBoost(GameTestHelper h) {
@@ -681,29 +701,29 @@ public final class StrikeGameTests {
         Vec3 site = laneSite(h);
         Vec3 far = site.add(0, 0, 1000);
         WeaponType weapon = WeaponType.MISSILE;
-        h.assertTrue(LaunchSite.clearAhead(level, site, 0, weapon, far), "пустая полоса закрыта");
+        h.assertTrue(LaunchSite.clearAhead(level, site, 0, weapon, far), "empty strip is blocked");
         Vec3 first = LauncherEntity.railPoint(site, 0, weapon, 0), second = LauncherEntity.railPoint(site, 0, weapon, 1);
         int y = Mth.floor(first.y), z = Mth.floor(first.z);
-        // столб в 30 блоках по курсу у второго контейнера: путь первого идёт мимо
+        // a post 30 blocks along the course at the second container: the path of the first goes past it
         int postX = Mth.floor(second.x);
-        h.assertTrue(Mth.floor(first.x) != postX, "столб на пути первого контейнера");
+        h.assertTrue(Mth.floor(first.x) != postX, "post on the path of the first container");
         Iterable<BlockPos> post = BlockPos.betweenClosed(postX, Mth.floor(site.y), z + 30, postX, y + 30, z + 30);
         post.forEach(p -> level.setBlock(p, Blocks.STONE.defaultBlockState(), 2));
-        h.assertFalse(LaunchSite.clearAhead(level, site, 0, weapon, far), "столб на пути второго контейнера не виден");
+        h.assertFalse(LaunchSite.clearAhead(level, site, 0, weapon, far), "post on the path of the second container is not visible");
         post.forEach(p -> level.setBlock(p, Blocks.AIR.defaultBlockState(), 2));
-        h.assertTrue(LaunchSite.clearAhead(level, site, 0, weapon, far), "без столба полоса закрыта");
-        // навес в 11–15 блоках по курсу на 8–11 над направляющей: прямая под 14° — на 3–4 блока выше неё
+        h.assertTrue(LaunchSite.clearAhead(level, site, 0, weapon, far), "without the post, the strip is blocked");
+        // a canopy 11–15 blocks along the course at 8–11 above the rail: the line at 14° is 3–4 blocks above it
         BlockPos.betweenClosed(Mth.floor(site.x) - 12, y + 8, z + 11, Mth.floor(site.x) + 12, y + 11, z + 15)
                 .forEach(p -> level.setBlock(p, Blocks.STONE.defaultBlockState(), 2));
-        h.assertFalse(LaunchSite.clearAhead(level, site, 0, weapon, far), "навес на пути разгона не виден");
+        h.assertFalse(LaunchSite.clearAhead(level, site, 0, weapon, far), "canopy on the run-up path is not visible");
         h.succeed();
     }
 
     /**
-     * Предел цены выбора пусковой ({@link LaunchSite.Budget}): проверка сектора, которой предела не хватило, отвечает
-     * «занято» и говорит, что вышел предел ({@code out}), — удар тогда идёт издалека, а не стоит сотни миллисекунд в тике;
-     * хватило — ответ прежний, и закрытый сектор закрыт блоками, а не пределом. Считаются клетки, а не время: CI не мерит
-     * настенное время.
+     * Limit on the cost of choosing a launcher ({@link LaunchSite.Budget}): a sector check that ran out of budget
+     * answers “occupied” and says the limit was exceeded ({@code out}) — the strike then comes from afar, rather than
+     * spending hundreds of milliseconds in a tick; if the budget sufficed, the answer is unchanged, and a blocked
+     * sector is blocked by blocks, not by the limit. Cells are counted, not time: CI does not measure wall-clock time.
      */
     @GameTest(template = "runway", timeoutTicks = 20, batch = "launch_sector_budget", skyAccess = true)
     public static void launchSectorStopsAtBudget(GameTestHelper h) {
@@ -712,32 +732,32 @@ public final class StrikeGameTests {
         Vec3 far = site.add(0, 0, 1000);
         WeaponType weapon = WeaponType.MISSILE;
         LaunchSite.Budget open = new LaunchSite.Budget();
-        h.assertTrue(LaunchSite.clearAhead(level, site, 0, weapon, far, open), "пустая полоса закрыта");
-        h.assertTrue(!open.out() && open.spent() > 0, "пустая полоса: предел вышел или не тратился: " + open.spent());
+        h.assertTrue(LaunchSite.clearAhead(level, site, 0, weapon, far, open), "empty strip is blocked");
+        h.assertTrue(!open.out() && open.spent() > 0, "empty strip: limit exceeded or not spent: " + open.spent());
         LaunchSite.Budget none = new LaunchSite.Budget(0);
-        h.assertFalse(LaunchSite.clearAhead(level, site, 0, weapon, far, none), "пустая полоса проверена без предела");
-        h.assertTrue(none.out() && none.spent() == 0, "предел 0 не вышел: " + none.spent());
-        // навес над путём разгона, как в launchSectorCoversEveryCellAndBoost
+        h.assertFalse(LaunchSite.clearAhead(level, site, 0, weapon, far, none), "empty strip checked without a limit");
+        h.assertTrue(none.out() && none.spent() == 0, "limit 0 was not exceeded: " + none.spent());
+        // canopy over the run-up path, as in launchSectorCoversEveryCellAndBoost
         Vec3 rail = LauncherEntity.railPoint(site, 0, weapon, 0);
         int y = Mth.floor(rail.y), z = Mth.floor(rail.z);
         Iterable<BlockPos> roof = BlockPos.betweenClosed(Mth.floor(site.x) - 12, y + 8, z + 11, Mth.floor(site.x) + 12, y + 11, z + 15);
         roof.forEach(p -> level.setBlock(p, Blocks.STONE.defaultBlockState(), 2));
         LaunchSite.Budget small = new LaunchSite.Budget(50);
-        h.assertFalse(LaunchSite.clearAhead(level, site, 0, weapon, far, small), "навес под малым пределом не закрыл сектор");
-        h.assertTrue(small.out() && small.spent() <= 50, "малый предел: out " + small.out() + ", клеток " + small.spent());
+        h.assertFalse(LaunchSite.clearAhead(level, site, 0, weapon, far, small), "canopy under a small limit did not block the sector");
+        h.assertTrue(small.out() && small.spent() <= 50, "small limit: out " + small.out() + ", cells " + small.spent());
         LaunchSite.Budget full = new LaunchSite.Budget();
-        h.assertFalse(LaunchSite.clearAhead(level, site, 0, weapon, far, full), "навес на пути разгона не виден");
-        h.assertFalse(full.out(), "навес закрыл сектор пределом, а не блоками: клеток " + full.spent());
+        h.assertFalse(LaunchSite.clearAhead(level, site, 0, weapon, far, full), "canopy on the run-up path is not visible");
+        h.assertFalse(full.out(), "canopy blocked the sector by the limit, not by blocks: cells " + full.spent());
         LaunchSite.Budget pick = new LaunchSite.Budget(50);
         h.assertTrue(LaunchSite.pickOn(level, site, weapon, new float[]{0}, far, 90, pick) == null && pick.out(),
-                "поиск курса под малым пределом: out " + pick.out() + ", клеток " + pick.spent());
+                "course search under a small limit: out " + pick.out() + ", cells " + pick.spent());
         h.succeed();
     }
 
     /**
-     * Проверка сектора пакета РСЗО без единого отсева по карте высот (крыша высоко над всей дугой: каждый отрезок
-     * проверяется лучами всех 40 труб) по цели в 400 блоках помещается в предел по умолчанию: пусковую РСЗО в городе
-     * предел не отвергает.
+     * Sector check of an MLRS pod without a single heightmap cull (a roof high above the whole arc: each segment is
+     * checked by rays from all 40 tubes) for a target 400 blocks away fits the default limit: an MLRS launcher in town
+     * is not rejected by the limit.
      */
     @GameTest(template = "runway", timeoutTicks = 20, batch = "launch_sector_budget_tubes", skyAccess = true)
     public static void rocketSectorFitsBudget(GameTestHelper h) {
@@ -749,14 +769,16 @@ public final class StrikeGameTests {
         roof.forEach(p -> level.setBlock(p, Blocks.STONE.defaultBlockState(), 2));
         afterTest(h, () -> roof.forEach(p -> level.setBlock(p, Blocks.AIR.defaultBlockState(), 2)));
         LaunchSite.Budget budget = new LaunchSite.Budget();
-        h.assertTrue(LaunchSite.clearAhead(level, site, 0, WeaponType.ROCKET, target, budget), "крыша над дугой закрыла сектор");
+        h.assertTrue(LaunchSite.clearAhead(level, site, 0, WeaponType.ROCKET, target, budget), "roof over the arc blocked the sector");
         h.assertTrue(!budget.out() && budget.spent() > LaunchSite.Budget.CELLS / 2,
-                "дуга под крышей: out " + budget.out() + ", клеток " + budget.spent());
-        Incoming.LOG.info("GameTest: сектор РСЗО под крышей — {} клеток из {}", budget.spent(), LaunchSite.Budget.CELLS);
+                "arc under the roof: out " + budget.out() + ", cells " + budget.spent());
+        Incoming.LOG.info("GameTest: MLRS sector under the roof — {} cells of {}", budget.spent(), LaunchSite.Budget.CELLS);
         h.succeed();
     }
 
-    /** Стенка поперёк полосы (13 блоков шириной, 2 в толщину) от земли {@code base} до высоты {@code top} включительно. */
+    /**
+     * Wall across the strip (13 blocks wide, 2 thick) from the ground {@code base} up to height {@code top} inclusive.
+     */
     private static void build(ServerLevel level, BlockPos base, int top, Block block) {
         for (int x = -6; x <= 6; x++) for (int z = 0; z <= 1; z++) for (int y = base.getY(); y <= top; y++) {
             level.setBlock(new BlockPos(base.getX() + x, y, base.getZ() + z), block.defaultBlockState(), 2);
@@ -764,8 +786,8 @@ public final class StrikeGameTests {
     }
 
     /**
-     * Сектор пуска у других пакетов — по их пути разгона из паспорта: катапульта «Ланцета» — прямая под её углом,
-     * трубы РСЗО — дуга из трубы (навес над пакетом её закрывает).
+     * Launch sector for other pods — by their run-up path from the spec: the Lancet catapult — a line at its angle, the
+     * MLRS tubes — an arc from the tube (the canopy over the pod blocks it).
      */
     @GameTest(template = "runway", timeoutTicks = 20, batch = "launch_sector_other", skyAccess = true)
     public static void launchSectorOfCatapultAndTubes(GameTestHelper h) {
@@ -773,23 +795,23 @@ public final class StrikeGameTests {
         Vec3 site = Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(16, 4, 120)));
         float[] ahead = {0};
         Vec3 far = site.add(0, 0, 400);
-        h.assertTrue(LaunchSite.pickOn(level, site, WeaponType.LOITER, ahead, far, 0) != null, "катапульте мешает пустая полоса");
-        h.assertTrue(LaunchSite.pickOn(level, site, WeaponType.ROCKET, ahead, far, 0) != null, "пакету РСЗО мешает пустая полоса");
-        // навес над пакетом
+        h.assertTrue(LaunchSite.pickOn(level, site, WeaponType.LOITER, ahead, far, 0) != null, "empty strip gets in the way of the catapult");
+        h.assertTrue(LaunchSite.pickOn(level, site, WeaponType.ROCKET, ahead, far, 0) != null, "empty strip gets in the way of the MLRS pod");
+        // canopy over the pod
         for (int x = 8; x <= 24; x++) for (int z = 104; z <= 140; z++) h.setBlock(new BlockPos(x, 12, z), Blocks.STONE);
-        h.assertTrue(LaunchSite.pickOn(level, site, WeaponType.ROCKET, ahead, far, 0) == null, "РСЗО под навесом: сектор свободен");
+        h.assertTrue(LaunchSite.pickOn(level, site, WeaponType.ROCKET, ahead, far, 0) == null, "MLRS under the canopy: sector is free");
         for (int x = 8; x <= 24; x++) for (int z = 104; z <= 140; z++) h.setBlock(new BlockPos(x, 12, z), Blocks.AIR);
-        // стена в 20 блоках перед катапультой
+        // wall 20 blocks in front of the catapult
         for (int x = 4; x <= 28; x++) for (int y = 4; y <= 40; y++) h.setBlock(new BlockPos(x, y, 140), Blocks.STONE);
-        h.assertTrue(LaunchSite.pickOn(level, site, WeaponType.LOITER, ahead, far, 0) == null, "катапульта смотрит в стену");
+        h.assertTrue(LaunchSite.pickOn(level, site, WeaponType.LOITER, ahead, far, 0) == null, "catapult faces a wall");
         h.succeed();
     }
 
     /**
-     * Дуга РСЗО на близкую цель ниже, чем на дальнюю (скорость задаёт дальность): башня в 20 блоках по курсу высотой
-     * между ними (по дуге: ≈16 блоков над трубой при цели в 60 блоках, ≈22 при цели в 400) закрывает сектор только
-     * близкой цели. Прямая на маршевой скорости (≈23 блока на 20 блоках) шла бы над башней и пропускала пакет, а ракета
-     * врезалась бы в неё невзведённой.
+     * The MLRS arc at a near target is lower than at a far one (speed sets the range): a tower 20 blocks along the
+     * course, of a height between them (on the arc: ≈16 blocks above the tube at a 60-block target, ≈22 at a 400-block
+     * one), blocks the sector only for the near target. A line at cruise speed (≈23 blocks over 20 blocks) would pass
+     * over the tower and let the pod through, and the missile would crash into it unarmed.
      */
     @GameTest(template = "runway", timeoutTicks = 20, batch = "launch_sector_tubes", skyAccess = true)
     public static void rocketSectorFollowsArc(GameTestHelper h) {
@@ -799,18 +821,21 @@ public final class StrikeGameTests {
         Vec3 near = new Vec3(site.x, site.y, rail.z + 60);
         Vec3 far = site.add(0, 0, 400);
         float[] ahead = {0};
-        h.assertTrue(LaunchSite.pickOn(level, site, WeaponType.ROCKET, ahead, near, 0) != null, "пакету РСЗО мешает пустая полоса");
+        h.assertTrue(LaunchSite.pickOn(level, site, WeaponType.ROCKET, ahead, near, 0) != null, "empty strip gets in the way of the MLRS pod");
         int towerZ = Mth.floor(rail.z + 20);
         int towerTop = Mth.floor(rail.y + 19);
         for (int x = -12; x <= 12; x++) for (int y = Mth.floor(site.y); y <= towerTop; y++) {
             level.setBlock(new BlockPos(Mth.floor(site.x) + x, y, towerZ), Blocks.STONE.defaultBlockState(), 2);
         }
-        h.assertTrue(LaunchSite.pickOn(level, site, WeaponType.ROCKET, ahead, near, 0) == null, "дуга на близкую цель прошла сквозь башню");
-        h.assertTrue(LaunchSite.pickOn(level, site, WeaponType.ROCKET, ahead, far, 0) != null, "дуга на дальнюю цель задела башню");
+        h.assertTrue(LaunchSite.pickOn(level, site, WeaponType.ROCKET, ahead, near, 0) == null, "arc to the near target passed through the tower");
+        h.assertTrue(LaunchSite.pickOn(level, site, WeaponType.ROCKET, ahead, far, 0) != null, "arc to the far target grazed the tower");
         h.succeed();
     }
 
-    /** МБР со стола под навесом: разгон столкновений не считает (у неё нет {@code advance}), уходит вверх, не разбившись. */
+    /**
+     * ICBM from a table under a canopy: the run-up does not count collisions (it has no {@code advance}), goes up
+     * without crashing.
+     */
     @GameTest(template = "range", timeoutTicks = 200, batch = "icbm_roof", skyAccess = true)
     public static void icbmUnderRoofStillClimbs(GameTestHelper h) {
         ServerLevel level = h.getLevel();
@@ -827,22 +852,22 @@ public final class StrikeGameTests {
             if (!icbm.isRemoved()) top[0] = Math.max(top[0], icbm.getY());
         });
         h.succeedWhen(() -> {
-            h.assertTrue(log.total(FlightLog.Event.CRASHED) == crashed, "МБР разбилась о навес");
-            h.assertTrue(top[0] > roof.getY() + 20, "МБР не ушла выше навеса: " + top[0]);
+            h.assertTrue(log.total(FlightLog.Event.CRASHED) == crashed, "ICBM crashed into the canopy");
+            h.assertTrue(top[0] > roof.getY() + 20, "ICBM did not go above the canopy: " + top[0]);
         });
     }
 
     /**
-     * МБР со дна шахты (стенка из камня 25 блоков с проёмом 4×4 — как шахта Minuteman, ~24 м глубины и ~3,7 м
-     * в поперечнике): пока хвост в шахте, ракета идёт по оси — не дальше 0,5 блока от неё (корпус 2×2 до стенки не
-     * достаёт и при 1 блоке), — и уходит выше шахты на 20 блоков. Столкновений на разгоне у МБР нет
-     * ({@link #icbmUnderRoofStillClimbs}), так что проверка шахты — это ось.
+     * ICBM from the bottom of a silo (a stone wall 25 blocks with a 4×4 opening — like a Minuteman silo, ~24 m deep and
+     * ~3.7 m across): while the tail is in the silo, the missile flies along the axis — no farther than 0.5 blocks from
+     * it (the 2×2 body does not reach the wall even at 1 block) — and goes 20 blocks above the silo. An ICBM has no
+     * collisions on the run-up ({@link #icbmUnderRoofStillClimbs}), so the silo check is the axis.
      */
     @GameTest(template = "range", timeoutTicks = 200, batch = "icbm_silo", skyAccess = true)
     public static void icbmClimbsOutOfSilo(GameTestHelper h) {
         ServerLevel level = h.getLevel();
         BlockPos c = h.absolutePos(RANGE_CENTER);
-        // ось шахты — между четырьмя блоками: проём — блоки −2…1 от неё, стенка — кольцо −3 и 2
+        // the silo axis — between four blocks: the opening is blocks −2…1 from it, the wall is the ring at −3 and 2
         Vec3 pad = new Vec3(c.getX(), c.getY(), c.getZ());
         int depth = 25, wallTop = c.getY() + depth;
         List<BlockPos> wall = new ArrayList<>();
@@ -870,21 +895,22 @@ public final class StrikeGameTests {
             if (icbm.getY() - half < wallTop) off[0] = Math.max(off[0], Math.hypot(icbm.getX() - pad.x, icbm.getZ() - pad.z));
             else if (out[0] < 0) {
                 out[0] = icbm.age();
-                Incoming.LOG.info("МБР из шахты: хвост вышел на {}-м тике, отклонение от оси в шахте {} блока", out[0],
+                Incoming.LOG.info("ICBM from the silo: tail out on tick {}, deviation from the axis in the silo {} blocks", out[0],
                         String.format(Locale.ROOT, "%.3f", off[0]));
             }
         });
         h.succeedWhen(() -> {
-            h.assertTrue(log.total(FlightLog.Event.CRASHED) == crashed, "МБР разбилась о шахту");
-            h.assertTrue(off[0] <= 0.5, "МБР в шахте ушла от оси на " + off[0] + " блока");
-            h.assertTrue(top[0] > wallTop + 20, "МБР не вышла выше шахты: " + top[0]);
+            h.assertTrue(log.total(FlightLog.Event.CRASHED) == crashed, "ICBM crashed into the silo");
+            h.assertTrue(off[0] <= 0.5, "ICBM in the silo deviated from the axis by " + off[0] + " blocks");
+            h.assertTrue(top[0] > wallTop + 20, "ICBM did not go above the silo: " + top[0]);
         });
     }
 
     /**
-     * МБР со стола на обычной высоте земли (y 64) видно около девяти секунд: от старта до ухода за потолок мира — 8–11 с
-     * (160–220 тиков), и уходит она именно там, а не раньше, на краю тикающих чанков. Стол — в воздухе над площадкой:
-     * столкновений на разгоне нет, а высота площадки GameTest не та, что у поверхности мира.
+     * An ICBM from a table at normal ground height (y 64) is visible for about nine seconds: from launch until it
+     * leaves through the world ceiling — 8–11 s (160–220 ticks), and it leaves exactly there, not earlier, at the edge
+     * of the ticking chunks. The table is in the air above the pad: there are no collisions on the run-up, and the
+     * GameTest pad height is not that of the world surface.
      */
     @GameTest(template = "range", timeoutTicks = 300, batch = "icbm_sky", skyAccess = true)
     public static void icbmStaysInTheSkyNineSeconds(GameTestHelper h) {
@@ -906,26 +932,26 @@ public final class StrikeGameTests {
             if (icbm.isRemoved()) return;
             last[0] = icbm.getY();
             age[0] = icbm.age();
-            if (age[0] % 20 == 0) bySecond.append(String.format(Locale.ROOT, " %d с: +%.0f (%.2f бл/тик);", age[0] / 20, icbm.getY() - 9 - pad.y, icbm.speed()));
+            if (age[0] % 20 == 0) bySecond.append(String.format(Locale.ROOT, " %d s: +%.0f (%.2f blocks/tick);", age[0] / 20, icbm.getY() - 9 - pad.y, icbm.speed()));
         });
         boolean[] told = {false};
         h.succeedWhen(() -> {
-            h.assertTrue(icbm.isRemoved(), "МБР ещё в небе");
+            h.assertTrue(icbm.isRemoved(), "ICBM still in the sky");
             if (!told[0]) {
                 told[0] = true;
-                Incoming.LOG.info("МБР в небе: {} тиков, последняя высота {} (потолок {});{}", age[0], String.format(Locale.ROOT, "%.0f", last[0]),
+                Incoming.LOG.info("ICBM in the sky: {} ticks, last altitude {} (ceiling {});{}", age[0], String.format(Locale.ROOT, "%.0f", last[0]),
                         level.getMaxBuildHeight(), bySecond);
             }
             double ceiling = level.getMaxBuildHeight() + WeaponSpec.NUKE.ascent().ceiling();
-            h.assertTrue(last[0] > ceiling - 10, "МБР убрана до потолка " + ceiling + ": на " + last[0]);
-            h.assertTrue(age[0] >= 160 && age[0] <= 220, "МБР в небе " + age[0] + " тиков");
+            h.assertTrue(last[0] > ceiling - 10, "ICBM removed before the ceiling " + ceiling + ": at " + last[0]);
+            h.assertTrue(age[0] >= 160 && age[0] <= 220, "ICBM in the sky " + age[0] + " ticks");
         });
     }
 
     /**
-     * Пуск от имени игрока: пусковая с курсом, свободным до взведения, первая точка маршрута — на этом курсе в дальности
-     * взведения (до неё снаряд идёт по проверенному сектору). Места пусковой нет (неровный навес над всей округой) — заход
-     * издалека, без пусковой.
+     * Launch on behalf of a player: a launcher with a course clear until arming, the first route point — on this course
+     * within the arming range (up to it the projectile goes through the checked sector). There is no launcher spot (an
+     * uneven canopy over the whole surroundings) — the approach from afar, without a launcher.
      */
     @GameTest(template = "runway", timeoutTicks = 20, batch = "launch_gate", skyAccess = true)
     public static void launcherRouteStartsOnCheckedSector(GameTestHelper h) {
@@ -936,27 +962,27 @@ public final class StrikeGameTests {
         StrikeProjectile p = StrikeService.launchGuided(level, WeaponType.DRONE, point, 0, shooter, Waypoints.NONE);
         List<LauncherEntity> launchers = level.getEntitiesOfClass(LauncherEntity.class, h.getBounds().inflate(64));
         StrikeGameTests.afterTest(h, () -> launchers.forEach(Entity::discard));
-        h.assertTrue(p != null && !p.isVirtual() && launchers.size() == 1, "шахед не с пусковой: " + p + ", пусковых " + launchers.size());
+        h.assertTrue(p != null && !p.isVirtual() && launchers.size() == 1, "the Shahed is not from a launcher: " + p + ", launchers " + launchers.size());
         LauncherEntity launcher = launchers.getFirst();
-        h.assertTrue(LaunchSite.clearAhead(level, launcher, point, new LaunchSite.Budget()), "пусковая смотрит в занятый сектор");
+        h.assertTrue(LaunchSite.clearAhead(level, launcher, point, new LaunchSite.Budget()), "launcher faces an occupied sector");
         Vec3 gate = launcher.railPoint(0).add(Local.horizontal(launcher.getYRot()).scale(ProximityFuse.ARM_DISTANCE));
         Vec3 first = p.route().points().getFirst();
-        h.assertTrue(Math.abs(first.x - gate.x) < 1.5 && Math.abs(first.z - gate.z) < 1.5, "первая точка не на курсе пусковой: " + first + " против " + gate);
+        h.assertTrue(Math.abs(first.x - gate.x) < 1.5 && Math.abs(first.z - gate.z) < 1.5, "first point is not on the launcher's course: " + first + " against " + gate);
         launcher.discard();
-        // навес над всей округой, полосами на двух высотах: ни одного места под пусковую ни под ним, ни на нём
+        // canopy over the whole surroundings, in strips at two heights: no spot for a launcher either under it or on it
         roofOver(h, BlockPos.containing(shooter.position()));
         StrikeProjectile far = StrikeService.launchGuided(level, WeaponType.DRONE, point, 0, shooter, Waypoints.NONE);
-        h.assertTrue(far != null && far.isVirtual(), "без места пусковой шахед не зашёл издалека: " + far);
-        h.assertTrue(level.getEntitiesOfClass(LauncherEntity.class, h.getBounds().inflate(64), LauncherEntity::isAlive).isEmpty(), "пусковая поставлена под навес");
+        h.assertTrue(far != null && far.isVirtual(), "without a launcher spot the Shahed did not approach from afar: " + far);
+        h.assertTrue(level.getEntitiesOfClass(LauncherEntity.class, h.getBounds().inflate(64), LauncherEntity::isAlive).isEmpty(), "launcher placed under a canopy");
         VirtualFlights.get(level).clear(level, f -> f == far);
         h.succeed();
     }
 
     /**
-     * Маршрут оператора ({@link Waypoints}): пусковая смотрит на первую точку, путь — ворота взведения, точки, цель, а
-     * запас хода — по пути через точки (полтора пути и запас, как у петли). Без места пусковой шахед и «Ланцет» заходят
-     * издалека — перед первой точкой на продолжении первого участка. Перенацеливание бросает оставшиеся точки, залп
-     * помнит маршрут в сохранении.
+     * Operator route ({@link Waypoints}): the launcher faces the first point, the path — the arming gate, points, the target, and
+     * the range — by the path through the points (one and a half paths plus a margin, as for the loop). Without a launch site a Shahed and the “Lancet”
+     * approach from afar — before the first point, on the extension of the first leg. A redirect drops the remaining points; a salvo
+     * remembers the route in the save.
      */
     @GameTest(template = "runway", timeoutTicks = 20, batch = "operator_route", skyAccess = true)
     public static void operatorRouteGuidesLaunch(GameTestHelper h) {
@@ -969,54 +995,54 @@ public final class StrikeGameTests {
         StrikeProjectile p = StrikeService.launchGuided(level, WeaponType.DRONE, point, 0, shooter, via);
         List<LauncherEntity> launchers = level.getEntitiesOfClass(LauncherEntity.class, h.getBounds().inflate(64));
         StrikeGameTests.afterTest(h, () -> launchers.forEach(Entity::discard));
-        h.assertTrue(p != null && !p.isVirtual() && launchers.size() == 1, "шахед по маршруту не с пусковой: " + p + ", пусковых " + launchers.size());
+        h.assertTrue(p != null && !p.isVirtual() && launchers.size() == 1, "Shahed on the route not from a launcher: " + p + ", launchers " + launchers.size());
         LauncherEntity launcher = launchers.getFirst();
         float toFirst = (float) Math.toDegrees(Math.atan2(-(a.x - launcher.getX()), a.z - launcher.getZ()));
-        h.assertTrue(Math.abs(Mth.wrapDegrees(launcher.getYRot() - toFirst)) < 3, "пусковая не смотрит на первую точку: курс " + launcher.getYRot() + ", на точку " + toFirst);
+        h.assertTrue(Math.abs(Mth.wrapDegrees(launcher.getYRot() - toFirst)) < 3, "launcher not facing the first point: heading " + launcher.getYRot() + ", to point " + toFirst);
         Vec3 gate = launcher.railPoint(0).add(Local.horizontal(launcher.getYRot()).scale(ProximityFuse.ARM_DISTANCE));
         List<Vec3> path = p.route().points();
         h.assertTrue(path.size() == 3 && flat(path.get(0), gate) < 1.5 && flat(path.get(1), a) < 1e-6 && flat(path.get(2), b) < 1e-6,
-                "маршрут не ворота → точки: " + path + ", ворота " + gate);
+                "route not gate → points: " + path + ", gate " + gate);
         double planned = p.route().remaining(p.position(), point);
-        h.assertTrue(planned > flat(p.position(), point), "путь по точкам " + planned + " не длиннее прямого " + flat(p.position(), point));
-        h.assertTrue(p.rangeLeft() >= 1.5 * planned, "запас хода " + p.rangeLeft() + " меньше полутора путей по точкам " + planned);
+        h.assertTrue(planned > flat(p.position(), point), "path along points " + planned + " not longer than the direct " + flat(p.position(), point));
+        h.assertTrue(p.rangeLeft() >= 1.5 * planned, "range left " + p.rangeLeft() + " less than one and a half paths along points " + planned);
         launcher.discard();
-        // места пусковой нет — заход издалека
+        // no launch site — approach from afar
         roofOver(h, BlockPos.containing(shooter.position()));
         StrikeProjectile far = StrikeService.launchGuided(level, WeaponType.DRONE, point, 0, shooter, via);
-        h.assertTrue(far != null && far.isVirtual(), "без места пусковой шахед по маршруту не зашёл издалека: " + far);
+        h.assertTrue(far != null && far.isVirtual(), "without a launch site the Shahed on the route did not approach from afar: " + far);
         Vec3 entry = via.afar(point, WeaponType.DRONE.spec().finalLeg());
         h.assertTrue(flat(far.position(), entry) < 1e-6 && far.route().points().equals(via.points()),
-                "заход издалека не перед первой точкой: " + far.position() + " против " + entry + ", маршрут " + far.route().points());
-        h.assertTrue(far.position().y > point.y, "заход издалека ниже цели: " + far.position().y);
+                "approach from afar not before the first point: " + far.position() + " versus " + entry + ", route " + far.route().points());
+        h.assertTrue(far.position().y > point.y, "approach from afar below the target: " + far.position().y);
         StrikeService.Result loiter = StrikeService.launch(level, WeaponType.LOITER, new Target.Point(point), point, 0, null, false, Loadout.Nuke.DEFAULT, via, null);
         StrikeProjectile lancet = VirtualFlights.get(level).flights().stream().filter(f -> f.weapon() == WeaponType.LOITER && f.aimPoint().distanceTo(point) < 1)
                 .findFirst().orElse(null);
-        h.assertTrue(loiter.ok() && lancet != null && lancet.route() != null && lancet.route().points().equals(via.points()), "«Ланцет» без маршрута: " + lancet);
+        h.assertTrue(loiter.ok() && lancet != null && lancet.route() != null && lancet.route().points().equals(via.points()), "“Lancet” without a route: " + lancet);
         Vec3 lancetEntry = via.afar(point, WeaponType.LOITER.spec().standoff());
-        h.assertTrue(flat(lancet.position(), lancetEntry) < 1e-6, "«Ланцет» заходит не перед первой точкой: " + lancet.position() + " против " + lancetEntry);
-        // перенацеливание из камеры: дальше прямо на новую цель
+        h.assertTrue(flat(lancet.position(), lancetEntry) < 1e-6, "“Lancet” approaches not before the first point: " + lancet.position() + " versus " + lancetEntry);
+        // retarget from the camera: straight at the new target after that
         Vec3 other = point.add(40, 0, 0);
-        h.assertTrue(far.retarget(new Target.Point(other), other) && far.route().finished(), "перенацеливание не бросило точки маршрута");
+        h.assertTrue(far.retarget(new Target.Point(other), other) && far.route().finished(), "retarget did not drop the route points");
         VirtualFlights.get(level).clear(level, f -> f == far || f == lancet);
-        // залп помнит маршрут
+        // salvo remembers the route
         SalvoData.start(level, WeaponType.DRONE, 3, 6, new Target.Point(point), point, 0, null, Loadout.Nuke.DEFAULT, via, null, false);
         CompoundTag saved = SalvoData.get(level).save(new CompoundTag(), level.registryAccess());
         SalvoData.get(level).cancel(level, null, List.of());
         ListTag salvos = saved.getList("salvos", Tag.TAG_COMPOUND);
         CompoundTag salvo = salvos.getCompound(salvos.size() - 1);
         Waypoints kept = Waypoints.CODEC.parse(NbtOps.INSTANCE, salvo.get("route")).result().orElse(Waypoints.NONE);
-        h.assertTrue(kept.equals(via), "залп сохранил маршрут " + kept.points() + " вместо " + via.points());
+        h.assertTrue(kept.equals(via), "salvo kept route " + kept.points() + " instead of " + via.points());
         h.succeed();
     }
 
     /**
-     * Место пуска и маршрут из команды ({@code /incoming salvo … from x z via x z …}) от консоли: пусковая встаёт на
-     * самом месте пуска (у консоли без владельца) и смотрит на первую точку, путь — ворота взведения и точки; второй
-     * приказ с того же места — с той же пусковой. Место пуска в неготовом чанке — приказ и одного снаряда ждёт его залпом
-     * ({@link LaunchPlaces}), а не стартует вне мира уже на маршевом участке.
-     * Точек у B-2 команда не разбирает, путь длиннее дальности и точки вне мира (NaN, бесконечность, за границей) не принимает. Пусковые на местах пуска лишними у владельца
-     * не считаются, а залп помнит место пуска в сохранении.
+     * Launch site and route from a command ({@code /incoming salvo … from x z via x z …}) from the console: the launcher stands on
+     * the launch site itself (the console has no owner) and faces the first point; the path — arming gate and points; a second
+     * order from the same place — from the same launcher. A launch site in an unready chunk — an order, even for one projectile, waits for it as a salvo
+     * ({@link LaunchPlaces}), and does not start outside the world already on the cruise leg.
+     * The command does not parse points for the B-2; it does not accept a path longer than the range, or points outside the world (NaN, infinity, beyond the border). Launchers at launch sites are not counted as excess for the owner
+     * and a salvo remembers the launch site in the save.
      */
     @GameTest(template = "runway", timeoutTicks = 20, batch = "launch_from", skyAccess = true)
     public static void commandLaunchPointAndRoute(GameTestHelper h) {
@@ -1026,86 +1052,86 @@ public final class StrikeGameTests {
         String at = String.format(Locale.ROOT, " at %.2f %.2f %.2f", point.x, point.y, point.z);
         String via = String.format(Locale.ROOT, " via %.2f %.2f %.2f %.2f", a.x, a.z, b.x, b.z);
         java.util.function.Predicate<LauncherEntity> placed = l -> l.isAlive() && flat(l.position(), from) < PLACE_SLACK;
-        // пусковые и снаряды на них — до пуска: на полосе после теста ничего не взлетает
+        // launchers and projectiles on them — before launch: nothing takes off on the strip after the test
         StrikeGameTests.afterTest(h, () -> {
             level.getEntitiesOfClass(StrikeProjectile.class, h.getBounds().inflate(64)).forEach(Entity::discard);
             level.getEntitiesOfClass(LauncherEntity.class, h.getBounds().inflate(64)).forEach(Entity::discard);
         });
 
         placeReady(h, from);
-        h.assertTrue(command(h, "incoming salvo drone 1 0" + at + fromArg(from) + via) == 1, "приказ с места пуска не принят");
+        h.assertTrue(command(h, "incoming salvo drone 1 0" + at + fromArg(from) + via) == 1, "order from the launch site not accepted");
         List<LauncherEntity> launchers = level.getEntitiesOfClass(LauncherEntity.class, h.getBounds().inflate(64), LauncherEntity::isAlive);
-        h.assertTrue(launchers.size() == 1 && placed.test(launchers.getFirst()), "пусковая не на месте пуска " + from + ": "
+        h.assertTrue(launchers.size() == 1 && placed.test(launchers.getFirst()), "launcher not at the launch site " + from + ": "
                 + launchers.stream().map(Entity::position).toList());
         LauncherEntity launcher = launchers.getFirst();
-        h.assertTrue(launcher.ordered() && launcher.ownerId() == null, "пусковая консоли: на месте пуска " + launcher.ordered() + ", владелец " + launcher.ownerId());
+        h.assertTrue(launcher.ordered() && launcher.ownerId() == null, "console launcher: at the launch site " + launcher.ordered() + ", owner " + launcher.ownerId());
         float toFirst = (float) Math.toDegrees(Math.atan2(-(a.x - launcher.getX()), a.z - launcher.getZ()));
-        h.assertTrue(Math.abs(Mth.wrapDegrees(launcher.getYRot() - toFirst)) < 3, "пусковая не смотрит на первую точку: курс " + launcher.getYRot() + ", на точку " + toFirst);
+        h.assertTrue(Math.abs(Mth.wrapDegrees(launcher.getYRot() - toFirst)) < 3, "launcher not facing the first point: heading " + launcher.getYRot() + ", to point " + toFirst);
         List<StrikeProjectile> onRail = level.getEntitiesOfClass(StrikeProjectile.class, h.getBounds().inflate(64), launcher::serves);
-        h.assertTrue(onRail.size() == 1, "на пусковой не один шахед: " + onRail.size());
-        // свой чанк — с входа в мир, ещё до первого тика: место пуска бывает там, где сущности не тикают, и без тикета
-        // снаряд на направляющей не тикнул бы ни разу
+        h.assertTrue(onRail.size() == 1, "not one Shahed on the launcher: " + onRail.size());
+        // its own chunk — from entry into the world, before the first tick: a launch site can be where entities do not tick, and without a ticket
+        // a projectile on the rail would never tick
         StrikeProjectile first = onRail.getFirst();
-        h.assertTrue(ChunkTickets.holds(level, first.getUUID(), ChunkPos.asLong(first.blockPosition())), "шахед на пусковой места пуска не держит свой чанк");
+        h.assertTrue(ChunkTickets.holds(level, first.getUUID(), ChunkPos.asLong(first.blockPosition())), "Shahed on a launch-site launcher does not hold its own chunk");
         List<Vec3> path = first.route().points();
-        h.assertTrue(path.size() == 3 && flat(path.get(1), a) < 0.01 && flat(path.get(2), b) < 0.01, "маршрут не ворота → точки: " + path);
-        h.assertTrue(command(h, "incoming salvo drone 1 0" + at + fromArg(from)) == 1, "второй приказ с места пуска не принят");
+        h.assertTrue(path.size() == 3 && flat(path.get(1), a) < 0.01 && flat(path.get(2), b) < 0.01, "route not gate → points: " + path);
+        h.assertTrue(command(h, "incoming salvo drone 1 0" + at + fromArg(from)) == 1, "second order from the launch site not accepted");
         h.assertTrue(level.getEntitiesOfClass(LauncherEntity.class, h.getBounds().inflate(64), LauncherEntity::isAlive).size() == 1
                 && level.getEntitiesOfClass(StrikeProjectile.class, h.getBounds().inflate(64), launcher::serves).size() == 2,
-                "второй приказ с того же места — не с той же пусковой");
-        // отметка перенесена на 50 блоков (в районе прежней): новый приказ — с новой пусковой у новой отметки, а не со
-        // старой, что смотрит на прежнюю цель (пусковая помнит свою отметку)
+                "second order from the same place — not from the same launcher");
+        // marker moved 50 blocks (in the area of the former one): a new order — from a new launcher at the new marker, not from the
+        // old one, which faces the former target (the launcher remembers its marker)
         Vec3 moved = from.add(0, 0, 50);
         placeReady(h, moved);
-        h.assertTrue(command(h, "incoming salvo drone 1 0" + at + fromArg(moved)) == 1, "приказ с перенесённой отметки не принят");
+        h.assertTrue(command(h, "incoming salvo drone 1 0" + at + fromArg(moved)) == 1, "order from the moved marker not accepted");
         List<LauncherEntity> both = level.getEntitiesOfClass(LauncherEntity.class, h.getBounds().inflate(64), LauncherEntity::isAlive);
         h.assertTrue(both.size() == 2 && both.stream().anyMatch(l -> flat(l.position(), moved) < PLACE_SLACK),
-                "перенесённая отметка взяла старую пусковую: " + both.stream().map(Entity::position).toList());
+                "moved marker took the old launcher: " + both.stream().map(Entity::position).toList());
 
-        // место пуска далеко, чанк не готов: один снаряд ждёт его залпом (залп грузит место), вне мира без пуска не стартует
+        // launch site far away, chunk not ready: one projectile waits for it as a salvo (the salvo loads the site); does not start outside the world without a launch
         Vec3 far = from.add(0, 0, 20_000);
         java.util.function.Predicate<StrikeProjectile> fromFar = f -> flat(f.position(), far) < 1e-6;
-        h.assertTrue(LaunchPlaces.waits(level, WeaponType.DRONE, new LaunchOrigin.Place(far)), "далёкое место пуска уже готово");
+        h.assertTrue(LaunchPlaces.waits(level, WeaponType.DRONE, new LaunchOrigin.Place(far)), "distant launch site already ready");
         int pending = SalvoData.get(level).size();
-        h.assertTrue(command(h, "incoming salvo drone 1 0" + at + fromArg(far)) == 1, "приказ с далёкого места пуска не принят");
-        h.assertTrue(command(h, "incoming salvo rocket 1 0" + at + fromArg(far)) == 1, "залп РСЗО с далёкого места пуска не принят");
-        h.assertTrue(SalvoData.get(level).size() == pending + 2, "один снаряд с неготового места пуска не ждёт его залпом: залпов "
+        h.assertTrue(command(h, "incoming salvo drone 1 0" + at + fromArg(far)) == 1, "order from a distant launch site not accepted");
+        h.assertTrue(command(h, "incoming salvo rocket 1 0" + at + fromArg(far)) == 1, "MLRS salvo from a distant launch site not accepted");
+        h.assertTrue(SalvoData.get(level).size() == pending + 2, "one projectile from an unready launch site does not wait for it as a salvo: salvos "
                 + (SalvoData.get(level).size() - pending));
-        h.assertTrue(VirtualFlights.get(level).flights().stream().noneMatch(fromFar), "снаряд с неготового места пуска стартовал вне мира без пуска");
-        // у B-2 место пуска — только курс захода: ему ждать нечего
-        h.assertTrue(!LaunchPlaces.waits(level, WeaponType.BUNKER, new LaunchOrigin.Place(far)), "B-2 ждёт места пуска");
+        h.assertTrue(VirtualFlights.get(level).flights().stream().noneMatch(fromFar), "projectile from an unready launch site started outside the world without a launch");
+        // for the B-2 the launch site is only the approach heading: it has nothing to wait for
+        h.assertTrue(!LaunchPlaces.waits(level, WeaponType.BUNKER, new LaunchOrigin.Place(far)), "B-2 waits for a launch site");
         SalvoData.get(level).cancel(level, null, List.of());
 
-        // точек у B-2 нет, путь дальше дальности оружия — отказ
-        h.assertTrue(command(h, "incoming salvo bunker 1 0" + at + via) == -1, "команда разобрала точки маршрута у B-2");
+        // the B-2 has no points; a path beyond the weapon's range — refused
+        h.assertTrue(command(h, "incoming salvo bunker 1 0" + at + via) == -1, "command parsed route points for the B-2");
         Vec3 beyond = from.add(0, 0, -WeaponType.DRONE.spec().route().reach());
         h.assertTrue(command(h, "incoming salvo drone 1 0" + at + String.format(Locale.ROOT, " via %.2f %.2f", beyond.x, beyond.z)) == 0,
-                "маршрут длиннее дальности принят");
+                "route longer than the range accepted");
 
-        // залп помнит место пуска
-        h.assertTrue(command(h, "incoming salvo missile 3 6" + at + fromArg(far)) == 1, "залп с места пуска не принят");
+        // salvo remembers the launch site
+        h.assertTrue(command(h, "incoming salvo missile 3 6" + at + fromArg(far)) == 1, "salvo from the launch site not accepted");
         CompoundTag saved = SalvoData.get(level).save(new CompoundTag(), level.registryAccess());
         SalvoData.get(level).cancel(level, null, List.of());
         ListTag salvos = saved.getList("salvos", Tag.TAG_COMPOUND);
         CompoundTag salvo = salvos.getCompound(salvos.size() - 1);
         h.assertTrue(Math.abs(salvo.getDouble("from_x") - far.x) < 0.01 && Math.abs(salvo.getDouble("from_z") - far.z) < 0.01,
-                "залп сохранил место пуска " + salvo.getDouble("from_x") + " " + salvo.getDouble("from_z") + " вместо " + far);
+                "salvo kept launch site " + salvo.getDouble("from_x") + " " + salvo.getDouble("from_z") + " instead of " + far);
 
-        // точек вне мира (NaN и бесконечность — из подделанного пакета карты, за границей мира — из команды) нет ни у места
-        // пуска, ни у маршрута; те же точки в границах мира проходят
+        // no points outside the world (NaN and infinity — from a forged map packet, beyond the border — from a command) exist either at the launch site
+        // or on the route; the same points within the world's bounds pass
         Vec3 beyondBorder = new Vec3(level.getWorldBorder().getMaxX() + 100, 0, from.z);
         for (Vec3 bad : List.of(new Vec3(Double.NaN, 0, from.z), new Vec3(from.x, 0, Double.POSITIVE_INFINITY), beyondBorder)) {
             h.assertTrue(outsideWorld(ServerActions.routeProblem(level, null, false, WeaponType.DRONE, new LaunchOrigin.Place(bad), Waypoints.NONE, point)),
-                    "место пуска " + bad + " не названо вне мира");
-            // путь через такую точку и так длиннее дальности: отказ должен быть именно «вне мира»
+                    "launch site " + bad + " not named as outside the world");
+            // a path through such a point is longer than the range anyway: the refusal must be exactly “outside the world”
             h.assertTrue(outsideWorld(ServerActions.routeProblem(level, null, false, WeaponType.DRONE, new LaunchOrigin.Place(from), new Waypoints(List.of(a, bad)), point)),
-                    "точка маршрута " + bad + " не названа вне мира");
+                    "route point " + bad + " not named as outside the world");
         }
         h.assertTrue(ServerActions.routeProblem(level, null, false, WeaponType.DRONE, new LaunchOrigin.Place(from), new Waypoints(List.of(a, b)), point) == null,
-                "место пуска и маршрут в границах мира не приняты");
-        h.assertTrue(command(h, "incoming salvo drone 1 0" + at + fromArg(beyondBorder)) == 0, "команда приняла место пуска за границей мира");
+                "launch site and route within the world's bounds not accepted");
+        h.assertTrue(command(h, "incoming salvo drone 1 0" + at + fromArg(beyondBorder)) == 0, "command accepted a launch site beyond the world border");
 
-        // пусковые на местах пуска стоят, сколько бы их ни было; у стреляющего — не больше трёх своих, что идут за ним
+        // launchers at launch sites stand however many there are; the shooter has no more than three of its own following it
         UUID owner = UUID.randomUUID();
         Vec3 c = Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(16, 4, 120)));
         for (int i = 0; i < LaunchSite.MAX_PER_OWNER + 1; i++) {
@@ -1115,14 +1141,14 @@ public final class StrikeGameTests {
         List<LauncherEntity> mine = level.getEntitiesOfClass(LauncherEntity.class, h.getBounds().inflate(64), l -> l.isAlive() && owner.equals(l.ownerId()));
         h.assertTrue(mine.stream().filter(LauncherEntity::ordered).count() == LaunchSite.MAX_PER_OWNER + 1
                         && mine.stream().filter(l -> !l.ordered()).count() == LaunchSite.MAX_PER_OWNER,
-                "пусковых на местах пуска " + mine.stream().filter(LauncherEntity::ordered).count() + ", за владельцем " + mine.stream().filter(l -> !l.ordered()).count());
+                "launchers at launch sites " + mine.stream().filter(LauncherEntity::ordered).count() + ", for the owner " + mine.stream().filter(l -> !l.ordered()).count());
         h.succeed();
     }
 
     /**
-     * Место пуска с карты пульта ({@code C2S.Fire#from}, {@link ServerActions#launchSiteProblem}): его выбирает только
-     * оператор (или хост), не дальше {@code map_range} от себя, в границах мира. Приказ оператора с пульта идёт по правилам
-     * (боеприпас снят), пусковая встаёт на месте пуска — его, и его «Отбой» её убирает.
+     * Launch site from the remote's map ({@code C2S.Fire#from}, {@link ServerActions#launchSiteProblem}): only the
+     * operator (or the host) chooses it, no farther than {@code map_range} from themselves, within the world's bounds. An operator's order from the remote follows the rules
+     * (munition taken); the launcher stands at his launch site, and his “Stand down” removes it.
      */
     @GameTest(template = "runway", timeoutTicks = 20, batch = "launch_from_map", skyAccess = true)
     public static void designatorLaunchSite(GameTestHelper h) {
@@ -1139,34 +1165,34 @@ public final class StrikeGameTests {
         Ranked op = new Ranked(level, "site_operator", 2);
         op.moveTo(stand);
 
-        h.assertTrue(key(ServerActions.launchSiteProblem(player, from)).equals("incoming.map.launch.ops_only"), "место пуска принято не у оператора");
-        h.assertTrue(ServerActions.launchSiteProblem(op, from) == null, "место пуска оператора рядом не принято");
+        h.assertTrue(key(ServerActions.launchSiteProblem(player, from)).equals("incoming.map.launch.ops_only"), "launch site accepted not from the operator");
+        h.assertTrue(ServerActions.launchSiteProblem(op, from) == null, "operator's nearby launch site not accepted");
         double range = IncomingConfig.SERVER.mapRange.get();
         h.assertTrue(key(ServerActions.launchSiteProblem(op, stand.add(range + 10, 0, 0))).equals("incoming.map.launch.out_of_range"),
-                "место пуска дальше map_range принято");
-        h.assertTrue(outsideWorld(ServerActions.launchSiteProblem(op, new Vec3(Double.NaN, 0, from.z))), "место пуска NaN не названо вне мира");
+                "launch site beyond map_range accepted");
+        h.assertTrue(outsideWorld(ServerActions.launchSiteProblem(op, new Vec3(Double.NaN, 0, from.z))), "NaN launch site not named as outside the world");
 
         Item shahed = ModItems.SHAHED.get();
         MunitionGameTests.give(op, shahed, 1);
         ServerActions.Aim aim = new ServerActions.Aim(new Target.Point(point), point, null);
         placeReady(h, from);
         h.assertTrue(ServerActions.strike(op, WeaponType.DRONE, 1, 0, aim, Loadout.Nuke.DEFAULT, Waypoints.NONE, new LaunchOrigin.Place(from), true),
-                "приказ оператора с места пуска не принят");
-        h.assertTrue(MunitionGameTests.held(op, shahed) == 0, "приказ с пульта не снял боеприпас: осталось " + MunitionGameTests.held(op, shahed));
+                "operator's order from the launch site not accepted");
+        h.assertTrue(MunitionGameTests.held(op, shahed) == 0, "order from the remote did not take the munition: left " + MunitionGameTests.held(op, shahed));
         List<LauncherEntity> launchers = level.getEntitiesOfClass(LauncherEntity.class, h.getBounds().inflate(64), LauncherEntity::isAlive);
-        h.assertTrue(launchers.size() == 1 && flat(launchers.getFirst().position(), from) < PLACE_SLACK, "пусковая не на месте пуска " + from + ": "
+        h.assertTrue(launchers.size() == 1 && flat(launchers.getFirst().position(), from) < PLACE_SLACK, "launcher not at the launch site " + from + ": "
                 + launchers.stream().map(Entity::position).toList());
         LauncherEntity launcher = launchers.getFirst();
-        h.assertTrue(launcher.ordered() && op.getUUID().equals(launcher.ownerId()), "пусковая места пуска: на месте " + launcher.ordered() + ", владелец " + launcher.ownerId());
+        h.assertTrue(launcher.ordered() && op.getUUID().equals(launcher.ownerId()), "launch-site launcher: at the site " + launcher.ordered() + ", owner " + launcher.ownerId());
         List<StrikeProjectile> onRail = level.getEntitiesOfClass(StrikeProjectile.class, h.getBounds().inflate(64), launcher::serves);
-        h.assertTrue(onRail.size() == 1 && op.getUUID().equals(onRail.getFirst().ownerId()), "на пусковой не шахед оператора: " + onRail.size());
+        h.assertTrue(onRail.size() == 1 && op.getUUID().equals(onRail.getFirst().ownerId()), "not the operator's Shahed on the launcher: " + onRail.size());
 
         ServerActions.recall(level.getServer(), op.getUUID(), op.getGameProfile().getName());
-        h.assertTrue(level.getEntitiesOfClass(LauncherEntity.class, h.getBounds().inflate(64), LauncherEntity::isAlive).isEmpty(), "«Отбой» не убрал пусковую места пуска");
+        h.assertTrue(level.getEntitiesOfClass(LauncherEntity.class, h.getBounds().inflate(64), LauncherEntity::isAlive).isEmpty(), "“Stand down” did not remove the launch-site launcher");
         h.succeed();
     }
 
-    /** Игрок GameTest с правами {@code level} (оператор — 2): пакетов не шлёт, в списке игроков его нет. */
+    /** GameTest player with {@code level} permissions (operator — 2): sends no packets, is not in the player list. */
     private static final class Ranked extends FakePlayer {
         private final int level;
 
@@ -1181,16 +1207,16 @@ public final class StrikeGameTests {
         }
     }
 
-    /** Ключ перевода строки отказа; пусто — отказа нет. */
+    /** Refusal translation key; empty — no refusal. */
     private static String key(@Nullable Component problem) {
         return problem != null && problem.getContents() instanceof TranslatableContents t ? t.getKey() : "";
     }
 
     /**
-     * Цель команды «at x z» — место на земле ({@link Target.Ground}), как с карты пульта: высоту находит сервер, и у
-     * команды залпа, и у одного снаряда (снаряды заходят издалека, вне мира: место пуска из приказа ждёт своего района,
-     * {@link LaunchPlaces}, — это {@link #farLaunchPlaceLoadsThenLaunches}). «at x y z» — точка как есть, и над землёй тоже. Ведущий высоты далёкого
-     * места не знает, а точка выше земли — взрыв в воздухе.
+     * The command target “at x z” — a place on the ground ({@link Target.Ground}), as from the remote's map: the server finds the height, and both
+     * the salvo command and a single projectile (projectiles approach from afar, outside the world: the launch site from the order waits for its area,
+     * {@link LaunchPlaces} — this is {@link #farLaunchPlaceLoadsThenLaunches}). “at x y z” — a point as is, also above the ground. The host does not know the height of a distant
+     * site, and a point above the ground is an explosion in the air.
      */
     @GameTest(template = "runway", timeoutTicks = 20, batch = "command_place", skyAccess = true)
     public static void commandAtPlaceTargetsGround(GameTestHelper h) {
@@ -1204,24 +1230,24 @@ public final class StrikeGameTests {
             level.getEntitiesOfClass(LauncherEntity.class, h.getBounds().inflate(64)).forEach(Entity::discard);
         });
 
-        h.assertTrue(command(h, "incoming salvo drone 1 0" + place) == 1, "залп «at x z» не принят");
-        assertOnGround(h, aimingAt(level, near), point, "залп «at x z»");
-        h.assertTrue(command(h, "incoming drone" + place) == 1, "«drone at x z» не принято");
+        h.assertTrue(command(h, "incoming salvo drone 1 0" + place) == 1, "salvo “at x z” not accepted");
+        assertOnGround(h, aimingAt(level, near), point, "salvo “at x z”");
+        h.assertTrue(command(h, "incoming drone" + place) == 1, "“drone at x z” not accepted");
         assertOnGround(h, aimingAt(level, near), point, "«drone at x z»");
 
         double air = point.y + 30;
         h.assertTrue(command(h, "incoming salvo drone 1 0" + String.format(Locale.ROOT, " at %.2f %.2f %.2f", point.x, air, point.z)) == 1,
-                "«at x y z» не принято");
+                "“at x y z” not accepted");
         StrikeProjectile exact = aimingAt(level, near);
-        h.assertTrue(exact.target() instanceof Target.Point p && p.pos().y == air, "«at x y z» — не точка на своей высоте: " + exact.target());
+        h.assertTrue(exact.target() instanceof Target.Point p && p.pos().y == air, "“at x y z” — not a point at its own height: " + exact.target());
         h.succeed();
     }
 
     /**
-     * Залп с разбросом по далёкой точке, чей район к пуску ещё не загружен: снаряды бьют в землю у своих мест, а не в
-     * воздух на высоте центра. Центр — в 60 блоках над землёй, как высота, которую ведущий поставил наугад; место
-     * снаряда берёт высоту, как только его чанк готов. Район загружается после первого снаряда — остальные всё равно
-     * бьют в землю: в воздухе центр или нет, решает первый снаряд, и залп не делится.
+     * A salvo with spread at a distant point whose area is not yet loaded for the launch: the projectiles hit the ground at their own places, not in
+     * the air at the centre's height. The centre is 60 blocks above the ground, as the height the host set at random; the place
+     * of a projectile takes the height as soon as its chunk is ready. The area loads after the first projectile — the others hit the ground anyway:
+     * whether the centre is in the air or not is decided by the first projectile, and the salvo does not split.
      */
     @GameTest(template = "range", timeoutTicks = 120, batch = "spread_far_ground", skyAccess = true)
     public static void salvoSpreadAtFarPointLandsOnGround(GameTestHelper h) {
@@ -1229,7 +1255,7 @@ public final class StrikeGameTests {
         java.util.UUID owner = java.util.UUID.randomUUID();
         Vec3 center = Vec3.atCenterOf(h.absolutePos(RANGE_CENTER)).add(5000, 60, 0);
         int radius = 20;
-        h.assertFalse(Terrain.ready(level, BlockPos.containing(center)), "район цели уже загружен");
+        h.assertFalse(Terrain.ready(level, BlockPos.containing(center)), "target area already loaded");
         SalvoData.start(level, WeaponType.DRONE, 3, radius, new Target.Point(center), center, 0, owner, Loadout.Nuke.DEFAULT, Waypoints.NONE, null, false);
         List<ChunkPos> held = new ArrayList<>();
         StrikeGameTests.afterTest(h, () -> {
@@ -1239,8 +1265,8 @@ public final class StrikeGameTests {
             held.forEach(c -> level.getChunkSource().removeRegionTicket(READY_ONLY, c, 0, c));
         });
         h.runAfterDelay(3, () -> {
-            h.assertTrue(fired(level, owner).size() == 1, "к третьему тику залп выпустил не один снаряд: " + fired(level, owner).size());
-            // район цели готов и держится (в игре его грузит подлёт): центр теперь виден в воздухе
+            h.assertTrue(fired(level, owner).size() == 1, "by the third tick the salvo fired not one projectile: " + fired(level, owner).size());
+            // the target area is ready and held (in play, the approach loads it): the centre is now visible in the air
             ChunkPos middle = new ChunkPos(BlockPos.containing(center));
             for (int x = -2; x <= 2; x++) {
                 for (int z = -2; z <= 2; z++) {
@@ -1250,24 +1276,24 @@ public final class StrikeGameTests {
                     held.add(c);
                 }
             }
-            h.assertTrue(center.y - surface(level, center) > 30, "центр не над землёй: земля " + surface(level, center) + ", центр " + center.y);
+            h.assertTrue(center.y - surface(level, center) > 30, "centre not above the ground: ground " + surface(level, center) + ", centre " + center.y);
         });
         h.succeedWhen(() -> {
             List<StrikeProjectile> fired = fired(level, owner);
-            if (fired.size() < 3) throw new GameTestAssertException("залп выпустил " + fired.size() + " из 3");
+            if (fired.size() < 3) throw new GameTestAssertException("salvo fired " + fired.size() + " of 3");
             for (StrikeProjectile p : fired) {
-                h.assertTrue(p.target() instanceof Target.Ground, "снаряд залпа бьёт в точку на высоте центра: " + p.target());
+                h.assertTrue(p.target() instanceof Target.Ground, "salvo projectile aims at a point at the centre's height: " + p.target());
                 Vec3 place = ((Target.Ground) p.target()).pos();
                 level.getChunk(Mth.floor(place.x) >> 4, Mth.floor(place.z) >> 4);
                 double ground = surface(level, place);
                 Vec3 aim = p.target().resolve(level).orElseThrow();
                 h.assertTrue(Math.abs(aim.y - ground) < 1e-6 && aim.y < center.y - 30,
-                        "место снаряда не на земле: y " + aim.y + ", земля " + ground + ", центр " + center.y);
+                        "projectile place not on the ground: y " + aim.y + ", ground " + ground + ", centre " + center.y);
             }
         });
     }
 
-    /** Снаряды владельца проверки — в мире и вне его. */
+    /** The test owner's projectiles — in the world and outside it. */
     private static List<StrikeProjectile> fired(ServerLevel level, java.util.UUID owner) {
         List<StrikeProjectile> fired = new ArrayList<>(VirtualFlights.get(level).flights());
         fired.addAll(level.getEntities(EntityTypeTest.forClass(StrikeProjectile.class), p -> true));
@@ -1275,11 +1301,11 @@ public final class StrikeGameTests {
         return fired;
     }
 
-    /** Свой снаряд проверки (в мире или вне его) по предикату — ровно один; он же убирается, чтобы не мешать следующему. */
+    /** The test's own projectile (in the world or outside it) by predicate — exactly one; it is also removed so as not to disturb the next. */
     private static StrikeProjectile aimingAt(ServerLevel level, java.util.function.Predicate<StrikeProjectile> which) {
         List<StrikeProjectile> found = new ArrayList<>(VirtualFlights.get(level).flights().stream().filter(which).toList());
         found.addAll(level.getEntities(EntityTypeTest.forClass(StrikeProjectile.class), which));
-        if (found.size() != 1) throw new GameTestAssertException("снарядов у цели " + found.size() + " вместо одного");
+        if (found.size() != 1) throw new GameTestAssertException("projectiles at the target " + found.size() + " instead of one");
         StrikeProjectile p = found.getFirst();
         VirtualFlights.get(level).clear(level, f -> f == p);
         if (!p.isVirtual()) p.discard();
@@ -1287,43 +1313,43 @@ public final class StrikeGameTests {
     }
 
     /**
-     * Цель снаряда — место на земле {@code at}: прицел с пуска — на верхе этой колонки, а само место (со сдвигом промаха)
-     * — на верхе своей.
+     * Projectile target — a place on the ground {@code at}: the aim from the launch — on top of this column, and the place itself (with the miss offset)
+     * — on its own top.
      */
     private static void assertOnGround(GameTestHelper h, StrikeProjectile p, Vec3 at, String what) {
         ServerLevel level = h.getLevel();
-        h.assertTrue(p.target() instanceof Target.Ground, what + ": цель не место на земле: " + p.target());
+        h.assertTrue(p.target() instanceof Target.Ground, what + ": target not a place on the ground: " + p.target());
         double here = surface(level, at);
-        h.assertTrue(Math.abs(p.aimPoint().y - here) < 1e-3, what + ": прицел y " + p.aimPoint().y + " не на земле " + here);
+        h.assertTrue(Math.abs(p.aimPoint().y - here) < 1e-3, what + ": aim y " + p.aimPoint().y + " not on the ground " + here);
         Vec3 place = ((Target.Ground) p.target()).pos();
         Vec3 aim = p.target().resolve(level).orElseThrow();
-        h.assertTrue(Math.abs(aim.y - surface(level, place)) < 1e-6, what + ": место y " + aim.y + " не на земле " + surface(level, place));
+        h.assertTrue(Math.abs(aim.y - surface(level, place)) < 1e-6, what + ": place y " + aim.y + " not on the ground " + surface(level, place));
     }
 
-    /** Середина верхнего блока колонки (с листвой), как у места с карты. */
+    /** Middle of the top block of the column (with foliage), as for a place from the map. */
     private static double surface(ServerLevel level, Vec3 column) {
         return level.getHeight(Heightmap.Types.MOTION_BLOCKING, Mth.floor(column.x), Mth.floor(column.z)) - 0.5;
     }
 
-    /** Отказ приказа — «точка за границей мира» ({@code incoming.route.outside_world}). */
+    /** Refusal of an order — “point beyond the world border” ({@code incoming.route.outside_world}). */
     private static boolean outsideWorld(@Nullable Component problem) {
         return problem != null && problem.getContents() instanceof TranslatableContents t && t.getKey().equals("incoming.route.outside_world");
     }
 
-    /** Пусковая на месте пуска из приказа — в центре блока самого места (поправка {@code LaunchSite.check}). */
+    /** Launcher at the order's launch site — at the centre of the site's own block (correction {@code LaunchSite.check}). */
     private static final double PLACE_SLACK = 1;
 
-    /** « from x z» для команды. */
+    /** “ from x z” for the command. */
     /**
-     * Место пуска дальше загруженных чанков ({@link LaunchPlaces}): залп из одного «Града» берёт район места, пока ждёт,
-     * и стреляет, как только место готово (раньше {@link LaunchPlaces#WAIT}), — с пусковой на месте, и снаряд проходит
-     * пуск в мире (видно издалека). Ровного места рядом с ним в случайном рельефе мира GameTest может не быть — тогда
-     * старт без пусковой, как и у места в загруженных чанках; это строка в лог, а не провал.
+     * A launch site beyond the loaded chunks ({@link LaunchPlaces}): a salvo of a single Grad takes the site's area while it waits,
+     * and fires as soon as the site is ready (before {@link LaunchPlaces#WAIT}) — with a launcher at the site, and the projectile passes
+     * the launch in the world (visible from afar). GameTest may have no flat place next to it in the world's random terrain — then
+     * the start is without a launcher, as at a site in loaded chunks; this is a log line, not a failure.
      */
     @GameTest(template = "runway", timeoutTicks = 900, batch = "launch_place", skyAccess = true)
     public static void farLaunchPlaceLoadsThenLaunches(GameTestHelper h) {
         ServerLevel level = h.getLevel();
-        // ожидание места мод меряет тиками, а свежий район генерируется в своём темпе: тест — в темпе игры
+        // the mod measures the wait for a site in ticks, while a fresh area generates at its own pace: the test runs at game pace
         gameSpeed(h);
         Vec3 far = h.absoluteVec(new Vec3(16.5, 0, 60.5)).add(-20_000, 0, 0);
         Vec3 aim = far.add(0, 0, 400);
@@ -1334,16 +1360,16 @@ public final class StrikeGameTests {
             level.getEntitiesOfClass(StrikeProjectile.class, new AABB(far, far).inflate(600, 512, 600)).forEach(Entity::discard);
             level.getEntitiesOfClass(LauncherEntity.class, new AABB(far, far).inflate(LaunchSite.PLACE_REACH + 8, 256, LaunchSite.PLACE_REACH + 8)).forEach(Entity::discard);
         });
-        h.assertTrue(LaunchPlaces.waits(level, WeaponType.ROCKET, place), "далёкое место пуска уже готово");
+        h.assertTrue(LaunchPlaces.waits(level, WeaponType.ROCKET, place), "distant launch site already ready");
         int salvos = SalvoData.get(level).size();
         h.assertTrue(command(h, String.format(Locale.ROOT, "incoming salvo rocket 1 0 at %.2f %.2f", aim.x, aim.z) + fromArg(far)) == 1,
-                "приказ с далёкого места пуска не принят");
-        h.assertTrue(SalvoData.get(level).size() == salvos + 1, "приказ с неготового места не ждёт его залпом");
+                "order from a distant launch site not accepted");
+        h.assertTrue(SalvoData.get(level).size() == salvos + 1, "order from an unready site does not wait for it as a salvo");
         long start = level.getGameTime();
         h.succeedWhen(() -> {
-            h.assertTrue(LaunchPlaces.ready(level, place), "район места пуска ещё не готов");
-            h.assertTrue(SalvoData.get(level).size() == salvos, "залп ещё не выстрелил с готового места");
-            h.assertTrue(level.getGameTime() - start < LaunchPlaces.WAIT, "залп дождался места только к пределу ожидания");
+            h.assertTrue(LaunchPlaces.ready(level, place), "launch site area not yet ready");
+            h.assertTrue(SalvoData.get(level).size() == salvos, "salvo has not fired from the ready site yet");
+            h.assertTrue(level.getGameTime() - start < LaunchPlaces.WAIT, "salvo waited for the site only up to the wait limit");
             List<LauncherEntity> pads = level.getEntitiesOfClass(LauncherEntity.class, new AABB(far, far).inflate(LaunchSite.PLACE_REACH + 8, 256, LaunchSite.PLACE_REACH + 8), l -> l.isAlive() && near.test(l));
             List<StrikeProjectile> rockets = level.getEntitiesOfClass(StrikeProjectile.class, new AABB(far, far).inflate(LaunchSite.PLACE_REACH + 8, 256, LaunchSite.PLACE_REACH + 8),
                     p -> p.weapon() == WeaponType.ROCKET && near.test(p));
@@ -1352,7 +1378,7 @@ public final class StrikeGameTests {
                 return;
             }
             h.assertTrue(!rockets.isEmpty() && rockets.stream().allMatch(r -> r.flightPhase().launching()),
-                    "у пусковой на далёком месте нет «Града» на пуске: " + rockets.stream().map(r -> r.flightPhase()).toList());
+                    "launcher at the distant site has no Grad on the launch: " + rockets.stream().map(r -> r.flightPhase()).toList());
         });
     }
 
@@ -1361,9 +1387,9 @@ public final class StrikeGameTests {
     }
 
     /**
-     * Район места пуска {@code at} готов сразу ({@link LaunchPlaces#ready}: чанки на {@link LaunchSite#PLACE_REACH} вокруг):
-     * GameTest грузит только свою площадку, а место у её края иначе ждало бы своего района залпом, и пусковая
-     * не встала бы в этом тике. У игрока в игре район места рядом с ним и так в его дальности прорисовки.
+     * The area of the launch site {@code at} is ready at once ({@link LaunchPlaces#ready}: chunks within {@link LaunchSite#PLACE_REACH} around):
+     * GameTest loads only its own pad, and a site at its edge would otherwise wait for its area as a salvo, and the launcher
+     * would not stand up in this tick. In play, a player's site area next to them is within their draw distance anyway.
      */
     static void placeReady(GameTestHelper h, Vec3 at) {
         ServerLevel level = h.getLevel();
@@ -1371,11 +1397,11 @@ public final class StrikeGameTests {
         for (int cx = Mth.floor(at.x - r) >> 4; cx <= Mth.floor(at.x + r) >> 4; cx++) {
             for (int cz = Mth.floor(at.z - r) >> 4; cz <= Mth.floor(at.z + r) >> 4; cz++) level.getChunk(cx, cz);
         }
-        h.assertTrue(LaunchPlaces.ready(level, new LaunchOrigin.Place(at)), "район места пуска " + at + " не готов");
+        h.assertTrue(LaunchPlaces.ready(level, new LaunchOrigin.Place(at)), "launch site area " + at + " not ready");
     }
 
     /**
-     * Команда от консоли сервера, как её даёт ведущий: итог команды; −1 — не разобрана (нет такой ветки в дереве).
+     * A command from the server console, as the host gives it: the command's result; −1 — not parsed (no such branch in the tree).
      */
     static int command(GameTestHelper h, String command) {
         net.minecraft.server.MinecraftServer server = h.getLevel().getServer();
@@ -1387,17 +1413,17 @@ public final class StrikeGameTests {
         }
     }
 
-    /** Расстояние по горизонтали. */
+    /** Horizontal distance. */
     private static double flat(Vec3 p, Vec3 q) {
         return Math.hypot(p.x - q.x, p.z - q.z);
     }
 
     /**
-     * Снаряд, сохранённый в полёте со сроком жизни (ключа {@code mission} нет): остаток срока (ожидание района цели
-     * в нём не считается) и дробные тики погони становятся запасом хода на маршевой скорости сохранения, флаг
-     * «урезан после потери цели» переносится. Ракета без ключа {@code cruise_speed} (11.5 блока/тик, на горке)
-     * летит с нынешней маршевой, а её запас — 11.5 блока на тик остатка: путь от скорости не зависит. Сохранённая
-     * с ключом {@code mission} — без изменений.
+     * A projectile saved in flight with a lifetime (no {@code mission} key): the remaining lifetime (the wait for the target's area
+     * is not counted in it) and the fractional pursuit ticks become range at the cruise speed of the save; the
+     * “capped after losing the target” flag carries over. A missile without the {@code cruise_speed} key (11.5 blocks/tick, on the climb)
+     * flies at the present cruise speed, and its range is 11.5 blocks per tick of what is left: the path does not depend on speed. A save
+     * with the {@code mission} key — unchanged.
      */
     @GameTest(template = "range", timeoutTicks = 20, skyAccess = true)
     public static void legacyFlightKeepsRange(GameTestHelper h) {
@@ -1411,9 +1437,9 @@ public final class StrikeGameTests {
         tag.getCompound("mission").putDouble("range", 1234.5);
         CruiseMissileEntity fresh = ModEntities.CRUISE_MISSILE.get().create(level);
         fresh.load(tag);
-        h.assertTrue(fresh.rangeLeft() == 1234.5, "сохранённая новой версией: запас " + fresh.rangeLeft() + " вместо 1234.5");
+        h.assertTrue(fresh.rangeLeft() == 1234.5, "saved by the new version: range " + fresh.rangeLeft() + " instead of 1234.5");
 
-        // без mission: срок 400 при возрасте 100, из них 20 тиков ждала район цели, полтика погони в запасе
+        // without mission: lifetime 400 at age 100, of which 20 ticks waited for the target's area, half a tick of pursuit in range
         tag.remove("mission");
         tag.putInt("age", 100);
         tag.putInt("area_wait", 20);
@@ -1423,24 +1449,24 @@ public final class StrikeGameTests {
         double cruise = WeaponSpec.MISSILE.airframe().cruiseSpeed();
         CruiseMissileEntity saved = ModEntities.CRUISE_MISSILE.get().create(level);
         saved.load(tag);
-        h.assertTrue(Math.abs(saved.rangeLeft() - 320.5 * cruise) < 1e-9, "срок 2.3.x: запас " + saved.rangeLeft() + " вместо " + 320.5 * cruise);
-        // урезанный после потери цели запас не урежется снова, а погоня его больше не растит: флаг перенесён
-        h.assertTrue(saved.saveWithoutId(new CompoundTag()).getCompound("mission").getBoolean("lost_capped"), "флаг «урезан» не перенесён");
+        h.assertTrue(Math.abs(saved.rangeLeft() - 320.5 * cruise) < 1e-9, "lifetime 2.3.x: range " + saved.rangeLeft() + " instead of " + 320.5 * cruise);
+        // range capped after losing the target is not capped again, and pursuit no longer grows it: the flag is carried over
+        h.assertTrue(saved.saveWithoutId(new CompoundTag()).getCompound("mission").getBoolean("lost_capped"), "“capped” flag not carried over");
 
         tag.remove("cruise_speed");
         tag.putDouble("speed", 11.5);
         CruiseMissileEntity old = ModEntities.CRUISE_MISSILE.get().create(level);
         old.load(tag);
-        h.assertTrue(old.speed() <= cruise, "старая ракета летит " + old.speed() + " блока/тик");
-        h.assertTrue(Math.abs(old.rangeLeft() - 320.5 * 11.5) < 1e-9, "ракета 2.3.0: запас " + old.rangeLeft() + " вместо " + 320.5 * 11.5);
+        h.assertTrue(old.speed() <= cruise, "old missile flies " + old.speed() + " blocks/tick");
+        h.assertTrue(Math.abs(old.rangeLeft() - 320.5 * 11.5) < 1e-9, "missile 2.3.0: range " + old.rangeLeft() + " instead of " + 320.5 * 11.5);
         h.succeed();
     }
 
     /**
-     * РСЗО на 5 км, сохранённая в начале дуги со сроком жизни (тики траектории + 200, ключа
-     * {@code mission} нет): на дальней дуге снаряд быстрее маршевой (здесь ≈ 11 блоков/тик), и остаток срока × маршевая
-     * кончается на полпути. После загрузки запас — остаток дуги от сохранённого времени и перелёт; расход — пройденный
-     * путь, так что его хватает до точки падения. Без переноса по дуге запас меньше дуги (проверено ниже).
+     * MLRS at 5 km, saved at the start of the arc with a lifetime (trajectory ticks + 200, no
+     * {@code mission} key): on the far arc the projectile is faster than cruise (here ≈ 11 blocks/tick), and the remaining lifetime × cruise
+     * runs out halfway. After loading, the range is the remaining arc from the saved time plus the overshoot; the usage is the distance covered,
+     * so it is enough to reach the impact point. Without carrying over along the arc the range is less than the arc (checked below).
      */
     @GameTest(template = "range", timeoutTicks = 20, skyAccess = true)
     public static void legacyRocketKeepsArc(GameTestHelper h) {
@@ -1459,30 +1485,30 @@ public final class StrikeGameTests {
         saved.load(tag);
 
         Vec3 start = ua.zentix.incoming.util.Nbt.getVec(tag, "start"), v0 = ua.zentix.incoming.util.Nbt.getVec(tag, "v0");
-        // путь — тем же законом, что у снаряда: тяжесть, сопротивление, ветер мира (данных стрельбы нет — ветер целиком)
+        // the path — by the same law as the projectile's: gravity, drag, the world's wind (there is no firing data — the wind entirely)
         var path = ua.zentix.incoming.guidance.Ballistics.fly(start, v0, WeaponSpec.ROCKET.airframe().drag(),
                 ua.zentix.incoming.guidance.Ballistics.Wind.of(ua.zentix.incoming.util.Air.of(level)), point.y - 64, flightTicks + 400);
         double arc = path.at(11).distanceTo(path.at(t));
         for (int k = 11; k < flightTicks; k++) arc += path.at(k + 1).distanceTo(path.at(k));
         double cruise = WeaponSpec.ROCKET.airframe().cruiseSpeed();
         double old = (flightTicks + 200 - 10) * cruise;
-        h.assertTrue(old < arc, "на 5 км старый перенос (" + Math.round(old) + ") уже покрывал дугу " + Math.round(arc) + " — тест ничего не ловит");
+        h.assertTrue(old < arc, "at 5 km the old carry-over (" + Math.round(old) + ") already covered the arc " + Math.round(arc) + " — the test catches nothing");
         double expected = arc + 200 * cruise;
         h.assertTrue(Math.abs(saved.rangeLeft() - expected) < 1e-6 * expected,
-                "РСЗО 2.3.x: запас " + Math.round(saved.rangeLeft()) + " вместо дуги " + Math.round(arc) + " + перелёт");
+                "MLRS 2.3.x: range " + Math.round(saved.rangeLeft()) + " instead of arc " + Math.round(arc) + " + overshoot");
         h.succeed();
     }
 
     /**
-     * Крылатая ракета с пусковой по маршруту с обходом (пуск, разгон, набор, маршрут вне мира, горка, пикирование):
-     * скорость не проседает на переходах разгон → набор → маршрут (ускоритель разгоняет ниже маршевой, дальше турбина),
-     * а время до удара, названное на пусковой (HUD, сирена, «удар через ~N с»), сходится с настоящим в пределах 10 %.
-     * В темпе игры: путь уходит за площадку, район цели грузится в фоне. Цель — на помосте в 48 блоках над полосой:
-     * маршрут идёт над площадками соседних тестов, и ракета, которая держит высоту цели + 12, проходит над их стенами
-     * из барьеров (у «range» — 40 блоков; на бреющем врезалась бы в стену соседа в 110 блоках сбоку). Обход — на восток:
-     * GameTest ставит площадки рядами с запада на восток, и восточнее этой, пока она идёт, площадок нет, а западнее в
-     * 5 блоках от полосы может стоять «range» — на разгоне ракета ещё в 20 блоках над землёй и врезалась бы в его стену
-     * (при GameTest по частям сосед бывает любой).
+     * Cruise missile with a launcher along a route with a detour (launch, acceleration, climb, route outside the world, climb, dive):
+     * the speed does not sag at the transitions acceleration → climb → route (the booster accelerates below cruise, then the turbine),
+     * and the time to impact announced at the launcher (HUD, siren, “impact in ~N s”) matches the real one within 10 %.
+     * At game pace: the path goes beyond the pad, the target's area loads in the background. The target is on a platform 48 blocks above the strip:
+     * the route goes over the pads of neighbouring tests, and a missile holding the target's height + 12 passes over their walls
+     * of barriers (for “range” — 40 blocks; at low level it would hit the neighbour's wall 110 blocks to the side). The detour — to the east:
+     * GameTest places pads in rows from west to east, and east of this one, while it runs, there are no pads, but west of it, within
+     * 5 blocks of the strip, a “range” may stand — on acceleration the missile is still 20 blocks above the ground and would hit its wall
+     * (with GameTest in parts, the neighbour can be any).
      */
     @GameTest(template = "runway", timeoutTicks = 1200, batch = "missile_launcher", skyAccess = true)
     public static void missileFromLauncherKeepsSpeedAndEta(GameTestHelper h) {
@@ -1491,8 +1517,8 @@ public final class StrikeGameTests {
         BlockPos deck = new BlockPos(RUNWAY_TARGET.getX(), 47, RUNWAY_TARGET.getZ());
         for (BlockPos b : BlockPos.betweenClosed(deck.offset(-4, -3, -4), deck.offset(4, 0, 4))) h.setBlock(b, Blocks.STONE);
         Vec3 point = Vec3.atBottomCenterOf(h.absolutePos(deck.above()));
-        // 600 блоков пути: точка обхода в ~220 блоках к востоку от полосы, вход в 150 блоках до цели; пакет, как в игре
-        // (StrikeService.fromLauncher), смотрит на первую точку маршрута
+        // 600 blocks of path: the detour point ~220 blocks east of the strip, entry 150 blocks before the target; the packet, as in play
+        // (StrikeService.fromLauncher), faces the route's first point
         Vec3 site = Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(16, 4, 12)));
         Vec3 approach = new Vec3(0, 0, 1);
         Vec3 first = Route.plan(site, point, approach, 600, 150, -1).current();
@@ -1516,8 +1542,8 @@ public final class StrikeGameTests {
         h.onEachTick(() -> {
             StrikeProjectile p = findProjectile(level, id);
             if (p == null) {
-                // как ушла: взрыв (DISCARDED), выгрузка с чанком, из мира или вне его — для сообщения о провале
-                if (seen[0] != null) last[0] += ", пропала: " + seen[0].getRemovalReason() + (seen[0].isVirtual() ? " вне мира" : " в мире");
+                // how it left: explosion (DISCARDED), unloaded with its chunk, out of the world or beyond it — for the failure message
+                if (seen[0] != null) last[0] += ", gone: " + seen[0].getRemovalReason() + (seen[0].isVirtual() ? " outside the world" : " in the world");
                 seen[0] = null;
                 return;
             }
@@ -1528,21 +1554,21 @@ public final class StrikeGameTests {
             if (ph == FlightPhase.CRUISE) cruised[0] = true;
             boolean steady = ph == FlightPhase.BOOST || ph == FlightPhase.CLIMB || ph == FlightPhase.CRUISE;
             if (steady && prev[0] >= 0 && p.speed() < prev[0] - 1e-9 && drop[0] == null) {
-                drop[0] = "скорость упала " + prev[0] + " → " + p.speed() + " на " + ph;
+                drop[0] = "speed dropped " + prev[0] + " → " + p.speed() + " at " + ph;
             }
             prev[0] = steady ? p.speed() : -1;
         });
         h.succeedWhen(() -> {
-            h.assertTrue(findProjectile(level, id) == null, "ракета ещё летит: " + last[0]);
+            h.assertTrue(findProjectile(level, id) == null, "missile still flying: " + last[0]);
             assertCrater(h, deck, last[0]);
-            h.assertTrue(cruised[0], "ракета не выходила на маршрут");
+            h.assertTrue(cruised[0], "missile did not enter the route");
             h.assertTrue(drop[0] == null, drop[0]);
-            h.assertTrue(Math.abs(ticks[0] - eta) <= eta / 10, "время до удара на пусковой " + eta + " тиков, на деле " + ticks[0]);
-            h.assertTrue(FlightTickets.held(level, id) == 0, "ракета не отпустила районы");
+            h.assertTrue(Math.abs(ticks[0] - eta) <= eta / 10, "time to impact at the launcher " + eta + " ticks, in fact " + ticks[0]);
+            h.assertTrue(FlightTickets.held(level, id) == 0, "missile did not release the areas");
         });
     }
 
-    /** Снаряд по UUID: в мире или вне его (уходя из загруженных чанков, он становится новой сущностью). */
+    /** Projectile by UUID: in the world or outside it (leaving the loaded chunks, it becomes a new entity). */
     private static StrikeProjectile findProjectile(ServerLevel level, UUID id) {
         if (level.getEntity(id) instanceof StrikeProjectile e) return e;
         for (StrikeProjectile p : VirtualFlights.get(level).flights()) {
@@ -1552,9 +1578,9 @@ public final class StrikeGameTests {
     }
 
     /**
-     * Район цели грузится заранее, а тикает только последние {@link StrikeProjectile#AREA_TICK_LEAD} тиков подлёта:
-     * ракета издалека вне мира (без игрока у цели — без полосы подлёта) берёт район без тика с пуска (до цели меньше
-     * {@code PRELOAD_TICKS} полёта), тикающим — когда до удара осталось не больше этого, и отпускает всё после удара.
+     * The target's area loads in advance, and ticks only the last {@link StrikeProjectile#AREA_TICK_LEAD} ticks of the approach:
+     * a missile from afar outside the world (no player at the target — no approach strip) takes the area without ticking from launch (to the target less than
+     * {@code PRELOAD_TICKS} of flight), ticking when no more than this is left before impact, and releases everything after impact.
      */
     @GameTest(template = "runway", timeoutTicks = 1200, batch = "missile_area_late_tick", skyAccess = true)
     public static void targetAreaTicksOnlyNearArrival(GameTestHelper h) {
@@ -1562,9 +1588,9 @@ public final class StrikeGameTests {
     }
 
     /**
-     * То же на настоящей скорости (шкала полёта 1): район грузится с пуска и тикает последние {@link
-     * StrikeProjectile#AREA_TICK_LEAD} тиков — время подлёта считается по настоящей маршевой, а не по игровой (иначе
-     * район тикал бы втрое раньше или ракета прилетала бы в нетикающий).
+     * The same at real speed (flight scale 1): the area loads from launch and ticks the last {@link
+     * StrikeProjectile#AREA_TICK_LEAD} ticks — the approach time is computed from the real cruise, not the game one (otherwise
+     * the area would tick three times earlier, or the missile would arrive at a non-ticking one).
      */
     @GameTest(template = "runway", timeoutTicks = 1200, batch = "flight_scale_area", skyAccess = true)
     public static void targetAreaTicksOnlyNearArrivalAtRealSpeed(GameTestHelper h) {
@@ -1572,7 +1598,7 @@ public final class StrikeGameTests {
         areaTicksOnlyNearArrival(h, 1200 * WeaponSpec.MISSILE.airframe().stretch(1));
     }
 
-    /** Ракета в {@code distance} блоках от цели вне мира: район цели грузится с пуска, тикает только на подлёте. */
+    /** Missile {@code distance} blocks from the target outside the world: the target's area loads from launch, ticks only on the approach. */
     private static void areaTicksOnlyNearArrival(GameTestHelper h, double distance) {
         ServerLevel level = h.getLevel();
         Vec3 point = top(h, RUNWAY_TARGET);
@@ -1588,25 +1614,25 @@ public final class StrikeGameTests {
             int eta = p.etaTicks();
             if (eta > StrikeProjectile.AREA_TICK_LEAD + 1) {
                 if (FlightTickets.held(level, id) > 0) loadedEarly[0] = true;
-                if (FlightTickets.ticking(level, id) > 0 && early[0] == null) early[0] = "район тикает за " + eta + " тиков до удара";
+                if (FlightTickets.ticking(level, id) > 0 && early[0] == null) early[0] = "area ticks " + eta + " ticks before impact";
             } else if (eta < StrikeProjectile.AREA_TICK_LEAD - 1 && FlightTickets.ticking(level, id) == 1) {
                 tickedLate[0] = true;
             }
         });
         h.succeedWhen(() -> {
-            h.assertTrue(findProjectile(level, id) == null, "ракета ещё летит");
+            h.assertTrue(findProjectile(level, id) == null, "missile still flying");
             h.assertTrue(early[0] == null, early[0]);
-            h.assertTrue(loadedEarly[0], "район цели не грузился заранее");
-            h.assertTrue(tickedLate[0], "район цели так и не стал тикающим на подлёте");
+            h.assertTrue(loadedEarly[0], "target area did not load in advance");
+            h.assertTrue(tickedLate[0], "target area never became ticking on the approach");
             assertCrater(h, RUNWAY_TARGET, "");
-            h.assertTrue(FlightTickets.held(level, id) == 0, "ракета не отпустила районы");
+            h.assertTrue(FlightTickets.held(level, id) == 0, "missile did not release the areas");
         });
     }
 
     /**
-     * Снаряд, которого не видит ни один игрок, держит только свой чанк ({@link ChunkTickets}), а не чанк впереди: иначе
-     * тикет на нём грузил квадрат вокруг, и снаряд тянул бы тикающие чанки за собой до цели. Ракета с пусковой без
-     * игроков: на старте — свой и впереди, в полёте — не больше одного, и за площадкой она уходит в полёт вне мира.
+     * A projectile that no player sees holds only its own chunk ({@link ChunkTickets}), not the chunk ahead: otherwise
+     * the ticket on it would load the square around, and the projectile would drag ticking chunks along to the target. A missile with a launcher without
+     * players: at the start — its own and the one ahead; in flight — no more than one; and beyond the pad it goes into flight outside the world.
      */
     @GameTest(template = "runway", timeoutTicks = 1200, batch = "missile_unseen_chunks", skyAccess = true)
     public static void unseenMissileHoldsOnlyItsChunk(GameTestHelper h) {
@@ -1623,7 +1649,7 @@ public final class StrikeGameTests {
         missile.setRoute(Route.direct());
         level.addFreshEntity(missile);
         UUID id = missile.getUUID();
-        // долетев, ракета взорвалась бы в 900 блоках — там, где сетка ставит площадки следующих партий
+        // had it arrived, the missile would have exploded 900 blocks away — where the grid places the pads of the next batches
         afterTest(h, () -> {
             VirtualFlights.get(level).clear(level, p -> p.getUUID().equals(id));
             if (level.getEntity(id) != null) level.getEntity(id).discard();
@@ -1633,22 +1659,22 @@ public final class StrikeGameTests {
         h.onEachTick(() -> {
             if (!(findProjectile(level, id) instanceof StrikeProjectile p)) return;
             if (p.isVirtual()) virtual[0] = true;
-            // тикет снимается в следующем переносе после смены фазы: первый тик после старта — ещё со стартовыми
+            // the ticket is dropped at the next transfer after the phase change: the first tick after launch still has the launch
             else if (p.flightPhase().launching()) flying[0] = 0;
             else if (++flying[0] > 1) most[0] = Math.max(most[0], ChunkTickets.held(level, id));
         });
         h.succeedWhen(() -> {
-            h.assertTrue(virtual[0], "ракета не ушла в полёт вне мира");
-            h.assertTrue(most[0] <= 1, "в полёте без игроков ракета держала " + most[0] + " чанков");
+            h.assertTrue(virtual[0], "missile did not go into flight outside the world");
+            h.assertTrue(most[0] <= 1, "in flight without players the missile held " + most[0] + " chunks");
         });
     }
 
     /**
-     * Ракета издалека вне мира возвращается в мир на краю полосы подлёта ({@link CruiseMissileEntity#VISIBLE_LEG}),
-     * а не у района цели (±40 блоков): её подлёт видно игроку у цели и при дистанции симуляции меньше прорисовки.
-     * Заход — поперёк полосы: чанки самой площадки держит GameTest, и ракета вдоль неё вошла бы в мир и без полосы подлёта.
-     * Чанки полосы сгенерированы заранее: время фоновой генерации меряет стенд, а не GameTest. В темпе игры: районы
-     * растут по тикам. Без полосы ракета входит в мир в 38 блоках. Удар — и все районы отпущены.
+     * A missile from afar outside the world returns to the world at the edge of the approach strip ({@link CruiseMissileEntity#VISIBLE_LEG}),
+     * not at the target's area (±40 blocks): its approach is visible to the player at the target, and at a simulation distance less than the draw distance.
+     * The approach is across the strip: GameTest holds the pad's own chunks, and a missile along it would enter the world even without the approach strip.
+     * The strip's chunks are generated in advance: the bench, not GameTest, measures the background generation time. At game pace: areas
+     * grow by ticks. Without the strip the missile enters the world at 38 blocks. Impact — and all areas are released.
      */
     @GameTest(template = "runway", timeoutTicks = 1200, batch = "missile_approach", skyAccess = true)
     public static void missileEntersWorldAtApproachEdge(GameTestHelper h) {
@@ -1671,24 +1697,24 @@ public final class StrikeGameTests {
         h.onEachTick(() -> {
             if (level.getEntity(id) instanceof CruiseMissileEntity m && !m.isVirtual()) {
                 if (entered[0] < 0) entered[0] = Math.hypot(m.getX() - point.x, m.getZ() - point.z);
-                last[0] = "в мире " + m.flightPhase() + " " + h.relativeVec(m.position());
+                last[0] = "in the world " + m.flightPhase() + " " + h.relativeVec(m.position());
             } else if (findProjectile(level, id) instanceof StrikeProjectile p) {
-                last[0] = "вне мира " + p.flightPhase() + " " + h.relativeVec(p.position());
+                last[0] = "outside the world " + p.flightPhase() + " " + h.relativeVec(p.position());
             }
         });
         h.succeedWhen(() -> {
-            h.assertTrue(findProjectile(level, id) == null, "ракета ещё летит: " + last[0]);
+            h.assertTrue(findProjectile(level, id) == null, "missile still flying: " + last[0]);
             assertCrater(h, RUNWAY_TARGET, last[0]);
-            h.assertTrue(entered[0] >= 224, "ракета вернулась в мир в " + Math.round(entered[0]) + " блоках от цели, а не на краю полосы подлёта");
-            h.assertTrue(FlightTickets.held(level, id) == 0, "ракета не отпустила районы");
+            h.assertTrue(entered[0] >= 224, "missile returned to the world at " + Math.round(entered[0]) + " blocks from the target, not at the edge of the approach strip");
+            h.assertTrue(FlightTickets.held(level, id) == 0, "missile did not release the areas");
         });
     }
 
     /**
-     * Полоса подлёта — только когда у цели есть кому смотреть, общая для залпа и в пределах {@link FlightTickets#APPROACH_LIMIT}
-     * на мир (полоса на каждую ракету — ~150 чанков, у залпа из 30 ракет — тысячи чанков в очереди генерации).
-     * Две ракеты по одной точке с одного направления держат один набор районов; игрок ушёл — полоса отпущена; полоса,
-     * которой не хватает места в мире, не берётся.
+     * The approach strip — only when there is someone to watch at the target; shared by a salvo and within {@link FlightTickets#APPROACH_LIMIT}
+     * per world (a strip per missile — ~150 chunks; a salvo of 30 missiles — thousands of chunks in the generation queue).
+     * Two missiles to one point from one direction hold one set of areas; the player left — the strip is released; a strip
+     * that does not fit in the world is not taken.
      */
     @GameTest(template = "runway", timeoutTicks = 200, batch = "missile_approach_shared", skyAccess = true)
     public static void missileApproachOnlyWatchedSharedAndCapped(GameTestHelper h) {
@@ -1699,7 +1725,7 @@ public final class StrikeGameTests {
             StrikeProjectile p = findProjectile(level, m.getUUID());
             if (p != null) p.discard();
         }));
-        // вне мира, в 1000 блоках: район цели берётся сразу, до удара далеко
+        // outside the world, 1000 blocks away: the target's area is taken at once, impact is far off
         for (int i = 0; i < 2; i++) {
             CruiseMissileEntity m = ModEntities.CRUISE_MISSILE.get().create(level);
             m.launch(point.add(1000, 80, 0), new Target.Point(point), point, null);
@@ -1716,13 +1742,13 @@ public final class StrikeGameTests {
             if (fail[0] != null) return;
             int areas = FlightTickets.approachAreas(level);
             int held = FlightTickets.held(level, made.getFirst().getUUID());
-            if (t == 30 && (areas != 0 || held != 1)) fail[0] = "без игрока у цели районов полосы " + areas + ", у ракеты районов " + held;
+            if (t == 30 && (areas != 0 || held != 1)) fail[0] = "without a player at the target: strip areas " + areas + ", missile areas " + held;
             if (t == 31) player[0] = watcher(h, point);
             if (t == 60 && (areas != n || held != 1 + n || FlightTickets.held(level, made.get(1).getUUID()) != 1 + n)) {
-                fail[0] = "с игроком у цели районов полосы " + areas + " (нужно " + n + " — одна полоса на обе ракеты), у ракеты " + held;
+                fail[0] = "with a player at the target: strip areas " + areas + " (need " + n + " — one strip for both missiles), missile " + held;
             }
             if (t == 61) {
-                // полосы других направлений: мир набирает предел, лишняя полоса не берётся целиком
+                // strips of other directions: the world reaches the limit, an extra strip is not taken whole
                 UUID other = UUID.randomUUID();
                 int taken = 0;
                 for (int k = 1; k < 64; k++) {
@@ -1733,27 +1759,28 @@ public final class StrikeGameTests {
                     taken++;
                 }
                 int full = FlightTickets.approachAreas(level);
-                if (full > FlightTickets.APPROACH_LIMIT || taken == 0) fail[0] = "предел полос: районов " + full + ", взято полос " + taken;
+                if (full > FlightTickets.APPROACH_LIMIT || taken == 0) fail[0] = "strip limit: areas " + full + ", strips taken " + taken;
                 for (int k = 1; k <= taken; k++) {
                     double a = Math.toRadians(k * 5.625);
                     FlightTickets.releaseApproach(level, FlightTickets.approach(List.of(point, point.add(1000 * Math.sin(a), 0, -1000 * Math.cos(a))),
                             WeaponSpec.MISSILE.airframe().visibleLeg()), other);
                 }
-                if (FlightTickets.approachAreas(level) != n) fail[0] = "после отпуска чужих полос районов " + FlightTickets.approachAreas(level) + ", нужно " + n;
+                if (FlightTickets.approachAreas(level) != n) fail[0] = "after releasing others' strips, areas " + FlightTickets.approachAreas(level) + ", need " + n;
                 level.players().remove(player[0]);
             }
-            if (t == 90 && (areas != 0 || held != 1)) fail[0] = "игрок ушёл, а районов полосы " + areas + ", у ракеты " + held;
+            if (t == 90 && (areas != 0 || held != 1)) fail[0] = "player left, but strip areas " + areas + ", missile " + held;
         });
         h.runAtTickTime(100, () -> {
             if (fail[0] != null) throw new GameTestAssertException(fail[0]);
-            h.assertTrue(n >= 6, "полоса из " + n + " районов");
+            h.assertTrue(n >= 6, "strip of " + n + " areas");
             h.succeed();
         });
     }
 
     /**
-     * Игрок у цели для полосы подлёта ({@link FlightTickets#watched}): {@code FakePlayer} NeoForge только в списке игроков
-     * мира — без тикетов чанков (его нет в {@code ChunkMap}) и без пакетов. Убирается после теста.
+     * Player at the target for the approach strip ({@link FlightTickets#watched}): a NeoForge {@code FakePlayer} only
+     * in the world's player list — without chunk tickets (it is not in {@code ChunkMap}) and without packets. Removed
+     * after the test.
      */
     private static FakePlayer watcher(GameTestHelper h, Vec3 at) {
         ServerLevel level = h.getLevel();
@@ -1765,8 +1792,8 @@ public final class StrikeGameTests {
     }
 
     /**
-     * РСЗО: три снаряда из труб одного пакета — очередь, а не разом (даже заказанные, пока пакет поднимается),
-     * баллистическая дуга выше полусотни блоков и попадание в цель в конце полосы.
+     * MLRS: three rockets from the tubes of one rack — a queue, not at once (even when ordered while the rack rises), a
+     * ballistic arc above fifty blocks and a hit on the target at the end of the strip.
      */
     @GameTest(template = "runway", timeoutTicks = 600, batch = "rocket", skyAccess = true)
     public static void rocketsRippleFromLauncher(GameTestHelper h) {
@@ -1797,16 +1824,16 @@ public final class StrikeGameTests {
             }
         });
         h.succeedWhen(() -> {
-            for (RocketEntity r : rockets) h.assertTrue(r.isRemoved(), "снаряд ещё летит: " + last[0]);
+            for (RocketEntity r : rockets) h.assertTrue(r.isRemoved(), "rocket still flying: " + last[0]);
             for (int i = 1; i < 3; i++) {
-                h.assertTrue(fired[i] - fired[i - 1] >= LauncherEntity.spacing(WeaponType.ROCKET), "сход не очередью: " + java.util.Arrays.toString(fired));
+                h.assertTrue(fired[i] - fired[i - 1] >= LauncherEntity.spacing(WeaponType.ROCKET), "departure not as a queue: " + java.util.Arrays.toString(fired));
             }
-            h.assertTrue(apex[0] > 40, "не баллистика: вершина дуги " + apex[0] + " над целью");
+            h.assertTrue(apex[0] > 40, "not ballistic: arc apex " + apex[0] + " above the target");
             assertCrater(h, RUNWAY_TARGET, last[0]);
         });
     }
 
-    /** РСЗО без стреляющего: снаряд с позиции за 600 блоков, полёт вне мира и попадание. */
+    /** MLRS without a launcher: a rocket from a position 600 blocks away, flight outside the world and a hit. */
     @GameTest(template = "runway", timeoutTicks = 800, batch = "rocket_far", skyAccess = true)
     public static void rocketFromAfar(GameTestHelper h) {
         ServerLevel level = h.getLevel();
@@ -1817,17 +1844,18 @@ public final class StrikeGameTests {
         java.util.UUID id = r.getUUID();
         String[] last = {""};
         h.onEachTick(() -> {
-            if (level.getEntity(id) instanceof RocketEntity e) last[0] = "в мире " + e.flightPhase() + " " + h.relativeVec(e.position());
+            if (level.getEntity(id) instanceof RocketEntity e) last[0] = "in the world " + e.flightPhase() + " " + h.relativeVec(e.position());
         });
         h.succeedWhen(() -> {
-            h.assertTrue(VirtualFlights.get(level).flights().isEmpty() && level.getEntity(id) == null, "снаряд ещё летит: " + last[0]);
+            h.assertTrue(VirtualFlights.get(level).flights().isEmpty() && level.getEntity(id) == null, "rocket still flying: " + last[0]);
             assertCrater(h, RUNWAY_TARGET, last[0]);
         });
     }
 
     /**
-     * РСЗО без стреляющего на настоящей шкале полёта (1): пакет за выносом паспорта на этой шкале (~19 км), сход на
-     * настоящих 683 м/с (±3 %) с настоящим сопротивлением и кривой Маха, полёт вне мира больше минуты и попадание.
+     * MLRS without a launcher on the real flight scale (1): the rack at the passport standoff for this scale (~19 km),
+     * exit at the real 683 m/s (±3 %) with real drag and the Mach curve, flight outside the world for more than a
+     * minute and a hit.
      */
     @GameTest(template = "runway", timeoutTicks = 2400, batch = "flight_scale_rocket", skyAccess = true)
     public static void rocketFromAfarAtRealSpeed(GameTestHelper h) {
@@ -1840,28 +1868,29 @@ public final class StrikeGameTests {
         VirtualFlights.launch(level, r);
         java.util.UUID id = r.getUUID();
         String[] last = {""};
-        // сход — по первому шагу пути (за тик сопротивление и тяжесть отнимают у 683 м/с меньше процента)
+        // exit — by the first step of the path (in a tick, drag and gravity take less than a percent from 683 m/s)
         double[] exit = {Double.NaN};
         h.onEachTick(() -> {
-            if (level.getEntity(id) instanceof RocketEntity e) last[0] = "в мире " + e.flightPhase() + " " + h.relativeVec(e.position());
+            if (level.getEntity(id) instanceof RocketEntity e) last[0] = "in the world " + e.flightPhase() + " " + h.relativeVec(e.position());
             if (Double.isNaN(exit[0]) && findProjectile(level, id) instanceof StrikeProjectile p && p.position().distanceTo(from) > 1) {
                 exit[0] = p.position().distanceTo(from);
             }
         });
         h.succeedWhen(() -> {
             double want = WeaponSpec.ROCKET.airframe().cruiseSpeed();
-            h.assertTrue(Math.abs(exit[0] - want) < 0.03 * want, "сход " + Math.round(exit[0] * 20) + " м/с, а не " + Math.round(want * 20));
-            h.assertTrue(VirtualFlights.get(level).flights().isEmpty() && level.getEntity(id) == null, "снаряд ещё летит: " + last[0]);
+            h.assertTrue(Math.abs(exit[0] - want) < 0.03 * want, "exit " + Math.round(exit[0] * 20) + " m/s, not " + Math.round(want * 20));
+            h.assertTrue(VirtualFlights.get(level).flights().isEmpty() && level.getEntity(id) == null, "rocket still flying: " + last[0]);
             assertCrater(h, RUNWAY_TARGET, last[0]);
         });
     }
 
     /**
-     * Снаряд вне мира у дальних игроков: снаряд РСЗО летит «виртуально» в 600 блоках от цели — путь (фаза, где он,
-     * скорость — его сдвиг за тик, куда он летит) уходит с каждым пакетом слышимых тому, кто его слышит: докуда — выводит
-     * {@link Hearing} из паспорта звука и пути до уха. Вне мира снаряд летит уже по инерции, и его вой слышно в сотнях
-     * блоков: в половине выведенной дальности слышно, в полутора — не слышно, но видно (путь уходит только с пакетом
-     * видимых, без отметки «слышно»); дальше {@code far_range} — никак.
+     * Projectile outside the world for distant players: an MLRS rocket flies “virtually” 600 blocks from the target —
+     * its path (phase, where it is, speed — its shift per tick, where it goes) goes out with each packet to those who
+     * hear it: how far — {@link Hearing} derives from the sound passport and the path to the ear. Outside the world the
+     * rocket flies on inertia, and its howl is heard for hundreds of blocks: at half the derived range it is heard, at
+     * one and a half it is not heard but seen (the path goes out only with the packet of visible ones, without an
+     * “audible” mark); beyond {@code far_range} — not at all.
      */
     @GameTest(template = "runway", timeoutTicks = 100, batch = "heard", skyAccess = true)
     public static void virtualFlightReachesOnlyThoseWhoHearOrSeeIt(GameTestHelper h) {
@@ -1874,36 +1903,39 @@ public final class StrikeGameTests {
         h.runAfterDelay(9, () -> before[0] = r.position());
         h.runAfterDelay(10, () -> {
             var flights = FarFlights.flights(level);
-            h.assertTrue(flights.stream().anyMatch(f -> f.getUUID().equals(r.getUUID()) && f.isVirtual()), "снаряда нет среди летящих вне мира");
+            h.assertTrue(flights.stream().anyMatch(f -> f.getUUID().equals(r.getUUID()) && f.isVirtual()), "rocket is not among those flying outside the world");
             Vec3 at = r.position();
             Propagation.Weather weather = ua.zentix.incoming.util.Air.weather(level);
             double heard = Hearing.range(r, 0, weather);
-            h.assertTrue(heard > 50 && heard < 0.5 * FarFlights.range(), "по инерции слышно до " + heard);
-            // только свой снаряд: в партии и в части CI летят и снаряды других проверок (порядок партий зависит от деления)
+            h.assertTrue(heard > 50 && heard < 0.5 * FarFlights.range(), "heard on inertia up to " + heard);
+            // only its own rocket: other checks' projectiles fly in the batch and in the CI shard too
+            // (the batch order depends on the split)
             java.util.function.Predicate<ua.zentix.incoming.net.S2C.FarFlight> own = p -> p.id().equals(r.getUUID());
             var near = FarFlights.sample(level, flights, at.add(0.5 * heard, 0, 0), null, false).stream().filter(own).toList();
             h.assertTrue(near.size() == 1 && near.getFirst().audible(),
-                    "в " + Math.round(0.5 * heard) + " блоках (половина слышимости) не слышно: " + near);
+                    "at " + Math.round(0.5 * heard) + " blocks (half the audibility range) not heard: " + near);
             var f = near.getFirst();
-            h.assertTrue(f.pos().distanceTo(at) < 1.0e-6 && f.weapon() == WeaponType.ROCKET.id() && !f.bomber(), "не тот путь: " + f);
-            h.assertTrue(f.aim().distanceTo(r.aimPoint()) < 1.0e-6, "цель: " + f.aim());
+            h.assertTrue(f.pos().distanceTo(at) < 1.0e-6 && f.weapon() == WeaponType.ROCKET.id() && !f.bomber(), "wrong path: " + f);
+            h.assertTrue(f.aim().distanceTo(r.aimPoint()) < 1.0e-6, "aim: " + f.aim());
             Vec3 step = at.subtract(before[0]);
-            h.assertTrue(step.length() > 1 && f.velocity().distanceTo(step) < 1.0e-6, "скорость " + f.velocity() + ", а сдвиг за тик " + step);
+            h.assertTrue(step.length() > 1 && f.velocity().distanceTo(step) < 1.0e-6, "speed " + f.velocity() + ", but the shift per tick " + step);
             Vec3 beyond = at.add(1.5 * heard, 0, 0);
-            h.assertTrue(FarFlights.sample(level, flights, beyond, null, false).stream().noneMatch(own), "слышно в полутора дальностях слышимости");
+            h.assertTrue(FarFlights.sample(level, flights, beyond, null, false).stream().noneMatch(own), "heard at one and a half audibility ranges");
             var seen = FarFlights.sample(level, flights, beyond, null, true).stream().filter(own).toList();
-            h.assertTrue(seen.size() == 1 && !seen.getFirst().audible(), "в " + Math.round(1.5 * heard) + " блоках не видно или слышно: " + seen);
-            h.assertTrue(FarFlights.sample(level, flights, at.add(FarFlights.range() + 100, 0, 0), null, true).stream().noneMatch(own), "видно дальше far_range");
-            // не долетать: в партии теста больше никого, а снаряд, упавший после конца теста, упал бы на чужую площадку
+            h.assertTrue(seen.size() == 1 && !seen.getFirst().audible(), "at " + Math.round(1.5 * heard) + " blocks not visible or audible: " + seen);
+            h.assertTrue(FarFlights.sample(level, flights, at.add(FarFlights.range() + 100, 0, 0), null, true).stream().noneMatch(own), "seen beyond far_range");
+            // do not let it land: no one else is in the batch,
+            // and a rocket landing after the test ends would land on another test's pad
             VirtualFlights.get(level).clear(level, p -> true);
             h.succeed();
         });
     }
 
     /**
-     * Крылатая ракета на атаке, у которой цель оказалась сбоку внутри круга разворота (на 4 блоках/тик и 3°/тик —
-     * радиус ~80 блоков, с запасом {@code TURN_MARGIN} ~90): уходит прямо, пока цель не выйдет из круга, и заходит
-     * снова. Иначе она кружит вокруг цели, пока не выйдет срок жизни, и убирается на атаке в сотнях блоков от цели.
+     * Cruise missile on attack whose target ended up to the side, inside its turn circle (at 4 blocks/tick and 3°/tick
+     * — radius ~80 blocks, with the margin {@code TURN_MARGIN} ~90): it flies straight until the target leaves the
+     * circle, and turns in again. Otherwise it circles the target until its lifetime runs out, and is removed on attack
+     * hundreds of blocks from the target.
      */
     @GameTest(template = "range", timeoutTicks = 400, batch = "missile_reattack", skyAccess = true)
     public static void missileReattacksTargetInsideTurn(GameTestHelper h) {
@@ -1912,7 +1944,7 @@ public final class StrikeGameTests {
         CruiseMissileEntity m = ModEntities.CRUISE_MISSILE.get().create(level);
         m.launch(target.add(0, 0, -150), new Target.Point(target), target, null);
         m.setRoute(Route.direct());
-        // курс на восток, цель в 150 блоках к югу, фаза — уже атака, срока жизни — на заход с запасом
+        // heading east, target 150 blocks to the south, phase already attack, lifetime with margin for the approach
         CompoundTag tag = new CompoundTag();
         m.saveWithoutId(tag);
         tag.getCompound("flight").putFloat("yaw", -90);
@@ -1933,17 +1965,20 @@ public final class StrikeGameTests {
             lastPos[0] = p.position();
             lastAge[0] = p.age();
             if (p.flightPhase() == FlightPhase.CRUISE) reattacked[0] = true;
-            last[0] = p.flightPhase() + " " + h.relativeVec(p.position()) + " возраст " + p.age();
+            last[0] = p.flightPhase() + " " + h.relativeVec(p.position()) + " age " + p.age();
         });
         h.succeedWhen(() -> {
             h.assertTrue(level.getEntity(id) == null && VirtualFlights.get(level).flights().stream().noneMatch(f -> f.getUUID().equals(id)),
-                    "ракета ещё летит: " + last[0]);
-            h.assertTrue(reattacked[0], "атака не отменялась: " + last[0]);
-            h.assertTrue(lastPos[0].distanceTo(target) < 20, "ракета убрана не у цели (кружила до конца срока жизни?): " + last[0]);
+                    "missile still flying: " + last[0]);
+            h.assertTrue(reattacked[0], "attack was not cancelled: " + last[0]);
+            h.assertTrue(lastPos[0].distanceTo(target) < 20, "missile removed not at the target (circled until the end of its lifetime?): " + last[0]);
         });
     }
 
-    /** Барражирующий по UUID: в мире или вне его (уходя из загруженных чанков, он становится новой сущностью). */
+    /**
+     * Loitering munition by UUID: in the world or outside it (when it leaves loaded chunks it becomes
+     * a new entity).
+     */
     private static LoiterEntity findLoiter(ServerLevel level, java.util.UUID id) {
         if (level.getEntity(id) instanceof LoiterEntity e) return e;
         for (StrikeProjectile p : VirtualFlights.get(level).flights()) {
@@ -1953,16 +1988,16 @@ public final class StrikeGameTests {
     }
 
     /**
-     * Цель барражирующего — в воздухе на 60 блоков над полосой: круг (ещё на 45 выше) и пике идут над барьерной
-     * стеной полигона, а круг радиусом 40 шире полосы.
+     * Target of the loitering munition — in the air 60 blocks above the strip: the circle (another 45 higher) and the
+     * dive run over the test site's barrier wall, and the circle of radius 40 is wider than the strip.
      */
     private static Vec3 airTarget(GameTestHelper h) {
         return top(h, RUNWAY_TARGET).add(0, 60, 0);
     }
 
     /**
-     * Барражирующий: подлёт, круги над целью всё время барража (из настроек, ±20%) на своём радиусе, потом пике
-     * и подрыв у цели.
+     * Loitering munition: approach, circles over the target the whole loiter time (from settings, ±20%) at its own
+     * radius, then a dive and a detonation at the target.
      */
     @GameTest(template = "runway", timeoutTicks = 1400, batch = "loiter", skyAccess = true)
     public static void loiterCirclesThenDives(GameTestHelper h) {
@@ -1975,7 +2010,7 @@ public final class StrikeGameTests {
         java.util.UUID id = e.getUUID();
         int[] loiter = {0};
         boolean[] dived = {false};
-        // сильнее всего отклонение от своего круга (боеприпас на круг выходит по касательной — с первого тика)
+        // the largest deviation from its own circle (the munition enters the circle tangentially — from the first tick)
         double[] drift = {0, 0};
         Vec3[] lastPos = {null};
         String[] last = {""};
@@ -1995,12 +2030,12 @@ public final class StrikeGameTests {
             if (l.flightPhase() == FlightPhase.TERMINAL) dived[0] = true;
         });
         h.succeedWhen(() -> {
-            h.assertTrue(findLoiter(level, id) == null, "барражирующий ещё летит: " + last[0]);
+            h.assertTrue(findLoiter(level, id) == null, "loitering munition still flying: " + last[0]);
             int min = (int) (ua.zentix.incoming.IncomingConfig.SERVER.loiterTime.get() * 20 * 0.8);
-            h.assertTrue(loiter[0] >= min, "кружил " + loiter[0] + " тиков, а должен не меньше " + min);
-            h.assertTrue(Math.abs(drift[0]) <= ua.zentix.incoming.guidance.Orbit.TOLERANCE, "ушёл с круга радиусом " + drift[1] + " на " + drift[0]);
-            h.assertTrue(dived[0], "не пикировал: " + last[0]);
-            h.assertTrue(lastPos[0].distanceTo(point) < 8, "подрыв не у цели: " + last[0]);
+            h.assertTrue(loiter[0] >= min, "circled " + loiter[0] + " ticks, but must be at least " + min);
+            h.assertTrue(Math.abs(drift[0]) <= ua.zentix.incoming.guidance.Orbit.TOLERANCE, "left the circle of radius " + drift[1] + " at " + drift[0]);
+            h.assertTrue(dived[0], "did not dive: " + last[0]);
+            h.assertTrue(lastPos[0].distanceTo(point) < 8, "detonation not at the target: " + last[0]);
         });
     }
 
@@ -2036,26 +2071,29 @@ public final class StrikeGameTests {
             lastPos[0] = l.position();
             left[0] = l.rangeLeft();
             if (l.flightPhase() != FlightPhase.TERMINAL) beforeDive[0] = l.rangeLeft();
-            last[0] = l.flightPhase() + " " + h.relativeVec(l.position()) + " запас " + Math.round(l.rangeLeft());
-            // по часам фазы самого снаряда, а не по тикам теста: пока он уходит из мира или возвращается, тест его
-            // не находит (на CI так пропадают тики круга)
+            last[0] = l.flightPhase() + " " + h.relativeVec(l.position()) + " reserve " + Math.round(l.rangeLeft());
+            // Counted by the munition's own phase clock, not by test ticks: while it leaves the world or returns, the
+            // test does not find it (on CI this is how circle ticks go missing).
             if (l.flightPhase() == FlightPhase.LOITER) loiter[0] = Math.max(loiter[0], l.phaseAge() + 1);
         });
         h.succeedWhen(() -> {
-            h.assertTrue(findLoiter(level, id) == null, "барражирующий ещё летит: " + last[0]);
-            h.assertTrue(loiter[0] >= longest, "кружил " + loiter[0] + " тиков, а должен " + longest);
-            h.assertTrue(lastPos[0].distanceTo(point) < 8, "подрыв не у цели: " + last[0]);
-            h.assertTrue(left[0] >= reserve, "план не покрыл полёт: к подрыву осталось " + Math.round(left[0]) + " блоков из резерва " + Math.round(reserve));
+            h.assertTrue(findLoiter(level, id) == null, "loitering munition still flying: " + last[0]);
+            h.assertTrue(loiter[0] >= longest, "circled " + loiter[0] + " ticks, but must " + longest);
+            h.assertTrue(lastPos[0].distanceTo(point) < 8, "detonation not at the target: " + last[0]);
+            h.assertTrue(left[0] >= reserve, "plan did not cover the flight: left for detonation " + Math.round(left[0]) + " blocks out of reserve " + Math.round(reserve));
             WeaponSpec.Airframe air = WeaponSpec.LOITER.airframe();
             double dive = beforeDive[0] - left[0];
             h.assertTrue(dive > WeaponSpec.LOITER.airframe().handling().loiter().diveTicks() * air.cruiseSpeed(),
-                    "пике " + Math.round(dive) + " блоков укладывается в тики на маршевой — тест не отличает план пике от плана круга");
+                    "dive " + Math.round(dive) + " blocks fits in ticks at cruise speed — the test does not tell the dive plan from the circle plan");
             h.assertTrue(dive <= WeaponSpec.LOITER.airframe().handling().loiter().diveTicks() * air.diveSpeed(),
-                    "пике " + Math.round(dive) + " блоков больше заложенных " + Math.round(WeaponSpec.LOITER.airframe().handling().loiter().diveTicks() * air.diveSpeed()));
+                    "dive " + Math.round(dive) + " blocks more than planned " + Math.round(WeaponSpec.LOITER.airframe().handling().loiter().diveTicks() * air.diveSpeed()));
         });
     }
 
-    /** Цель из камеры во время барража: пике сразу, не дожидаясь конца круга, и подрыв у новой цели. */
+    /**
+     * Target set from the camera during the loiter: dive at once, without waiting for the end of the circle,
+     * and detonation at the new target.
+     */
     @GameTest(template = "runway", timeoutTicks = 700, batch = "loiter", skyAccess = true)
     public static void loiterStrikesOnRetarget(GameTestHelper h) {
         ServerLevel level = h.getLevel();
@@ -2076,28 +2114,29 @@ public final class StrikeGameTests {
             lastPos[0] = l.position();
             last[0] = l.flightPhase() + " " + h.relativeVec(l.position()) + " v=" + l.speed();
             if (l.flightPhase() == FlightPhase.LOITER && ++loiter[0] == 60) {
-                h.assertTrue(l.retarget(new Target.Point(other), other), "не принял цель");
+                h.assertTrue(l.retarget(new Target.Point(other), other), "did not accept the target");
                 retargeted[0] = level.getGameTime();
             }
             if (l.flightPhase() == FlightPhase.TERMINAL && dived[0] == 0) dived[0] = level.getGameTime();
         });
         h.succeedWhen(() -> {
-            h.assertTrue(retargeted[0] > 0 && findLoiter(level, id) == null, "барражирующий ещё летит: " + last[0]);
-            h.assertTrue(dived[0] - retargeted[0] <= 120, "пике не сразу: через " + (dived[0] - retargeted[0]) + " тиков");
-            h.assertTrue(lastPos[0].distanceTo(other) < 8, "подрыв не у новой цели: " + last[0]);
+            h.assertTrue(retargeted[0] > 0 && findLoiter(level, id) == null, "loitering munition still flying: " + last[0]);
+            h.assertTrue(dived[0] - retargeted[0] <= 120, "dive not at once: after " + (dived[0] - retargeted[0]) + " ticks");
+            h.assertTrue(lastPos[0].distanceTo(other) < 8, "detonation not at the new target: " + last[0]);
         });
     }
 
     /**
-     * Цель ходит (моб, игрок в полёте кружит): барражирующий кружит за ней и в пике попадает с упреждением
-     * по её скорости. Пике туда, где цель сейчас, проходит мимо неё, и снаряд петляет вверх-вниз до конца срока.
+     * Target moves (a mob, a player flying in circles): the loitering munition circles after it and in the dive hits
+     * with a lead on its speed. A dive to where the target is now passes by it, and the munition weaves up and down
+     * until its lifetime ends.
      */
     @GameTest(template = "runway", timeoutTicks = 900, batch = "loiter_moving", skyAccess = true)
     public static void loiterHitsMovingTarget(GameTestHelper h) {
         ServerLevel level = h.getLevel();
-        // высоко над барьерной стеной вокруг площадки: круг цели доходит до края полосы (x = 32), и пике у края
-        // на высоте стены, как и выход из пике после промаха (до 45 блоков ниже цели) и повторный заход, били бы
-        // в барьер (снаряд пропадает в 12 блоках от цели)
+        // High above the barrier wall around the pad: the target's circle reaches the strip's edge (x = 32), and a dive
+        // at the edge at the wall's height, as well as the pull-out after a miss (up to 45 blocks below the target) and
+        // the re-approach, would hit the barrier (the munition vanishes 12 blocks from the target).
         Vec3 center = airTarget(h).add(0, 100, 0);
         ArmorStand stand = new ArmorStand(level, center.x + 16, center.y, center.z);
         stand.setNoGravity(true);
@@ -2111,28 +2150,29 @@ public final class StrikeGameTests {
         Vec3[] lastPos = {null};
         String[] last = {""};
         h.onEachTick(() -> {
-            // кружит радиусом 16 блоков со скоростью 0.5 блока/тик, как игрок в полёте на стенде нагрузки
+            // circles at radius 16 blocks at 0.5 blocks/tick, like a player flying on the stress bench
             double a = ++tick[0] * 0.5 / 16;
             stand.teleportTo(center.x + 16 * Math.cos(a), center.y, center.z + 16 * Math.sin(a));
             LoiterEntity l = findLoiter(level, id);
             if (l == null) return;
             lastPos[0] = l.position();
-            last[0] = l.flightPhase() + " " + h.relativeVec(l.position()) + " до цели " + String.format(Locale.ROOT, "%.1f", l.position().distanceTo(stand.position()));
+            last[0] = l.flightPhase() + " " + h.relativeVec(l.position()) + " to target " + String.format(Locale.ROOT, "%.1f", l.position().distanceTo(stand.position()));
             if (l.flightPhase() == FlightPhase.LOITER && ++loiter[0] == 60) {
-                h.assertTrue(l.retarget(new Target.OfEntity(stand.getUUID(), Vec3.ZERO), stand.position()), "не принял цель");
+                h.assertTrue(l.retarget(new Target.OfEntity(stand.getUUID(), Vec3.ZERO), stand.position()), "did not accept the target");
             }
         });
         h.succeedWhen(() -> {
-            h.assertTrue(loiter[0] >= 60, "не вышел на круг над идущей целью: " + last[0]);
-            h.assertTrue(findLoiter(level, id) == null, "барражирующий ещё летит: " + last[0]);
-            h.assertTrue(lastPos[0].distanceTo(stand.position()) < 10, "подрыв не у цели: " + last[0]);
+            h.assertTrue(loiter[0] >= 60, "did not enter the circle over the moving target: " + last[0]);
+            h.assertTrue(findLoiter(level, id) == null, "loitering munition still flying: " + last[0]);
+            h.assertTrue(lastPos[0].distanceTo(stand.position()) < 10, "detonation not at the target: " + last[0]);
             stand.discard();
         });
     }
 
     /**
-     * Залп по цели на краю обрыва: точка снаряда с разбросом — на земле под ней, а не в воздухе на высоте цели
-     * (иначе «Ланцет» пикирует на точку в 64 блоках над землёй и петляет до конца срока).
+     * Salvo at a target on a cliff edge: the munition's point, with spread, lands on the ground below it, not in the
+     * air at the target's height (otherwise the Lancet dives on a point 64 blocks above the ground and weaves until its
+     * lifetime ends).
      */
     @GameTest(template = "range", timeoutTicks = 40, batch = "spread_ground", skyAccess = true)
     public static void salvoSpreadAroundEntityLandsOnGround(GameTestHelper h) {
@@ -2144,19 +2184,19 @@ public final class StrikeGameTests {
         level.addFreshEntity(stand);
         Target spread = new Target.OfEntity(stand.getUUID(), new Vec3(0, 1, 0)).offset(new Vec3(12, 0, 0));
         h.runAfterDelay(10, () -> {
-            h.assertTrue(stand.onGround(), "стойка не стоит на столбе");
+            h.assertTrue(stand.onGround(), "armor stand is not standing on the pillar");
             Vec3 p = spread.resolve(level).orElseThrow();
             double ground = Vec3.atBottomCenterOf(h.absolutePos(base.above())).y;
             h.assertTrue(Math.abs(p.y - ground) < 1.5 && Math.abs(p.x - (stand.getX() + 12)) < 1e-6,
-                    "точка залпа не на земле: " + h.relativeVec(p) + ", земля на " + (ground - h.absolutePos(BlockPos.ZERO).getY()));
+                    "salvo point not on the ground: " + h.relativeVec(p) + ", ground at " + (ground - h.absolutePos(BlockPos.ZERO).getY()));
             stand.discard();
             h.succeed();
         });
     }
 
     /**
-     * Место с карты: высота с клиента — только оценка (здесь на 40 блоков под землёй), шахед всё равно бьёт в поверхность
-     * этого места, как только знает её.
+     * Map target: the height from the client is only an estimate (here 40 blocks underground), but the Shahed still
+     * strikes the surface of this spot as soon as it knows it.
      */
     @GameTest(template = "runway", timeoutTicks = 400, batch = "map_target", skyAccess = true)
     public static void mapTargetHitsSurface(GameTestHelper h) {
@@ -2168,12 +2208,15 @@ public final class StrikeGameTests {
         drone.launch(start, ground, ground.surface(level), null);
         level.addFreshEntity(drone);
         h.succeedWhen(() -> {
-            h.assertTrue(drone.isRemoved(), "шахед ещё летит: " + h.relativeVec(drone.position()));
+            h.assertTrue(drone.isRemoved(), "Shahed still flying: " + h.relativeVec(drone.position()));
             assertCrater(h, RUNWAY_TARGET);
         });
     }
 
-    /** Место с карты берёт высоту земли в своей колонке: и в центре, и у снаряда залпа со сдвигом (на столбе). */
+    /**
+     * A map target takes the ground height in its own column: both at the center and for a salvo munition
+     * offset (on a pillar).
+     */
     @GameTest(template = "range", timeoutTicks = 20, skyAccess = true)
     public static void groundTargetTakesSurface(GameTestHelper h) {
         ServerLevel level = h.getLevel();
@@ -2182,38 +2225,39 @@ public final class StrikeGameTests {
         Target.Ground center = new Target.Ground(Vec3.atCenterOf(h.absolutePos(RANGE_CENTER)).add(0, 50, 0));
         double surface = h.absolutePos(RANGE_CENTER).getY() + 0.5;
         Vec3 c = center.resolve(level).orElseThrow();
-        h.assertTrue(Math.abs(c.y - surface) < 1e-6, "центр не на земле: " + h.relativeVec(c));
+        h.assertTrue(Math.abs(c.y - surface) < 1e-6, "center not on the ground: " + h.relativeVec(c));
         Vec3 shot = center.offset(new Vec3(12, 7, 0)).resolve(level).orElseThrow();
         h.assertTrue(Math.abs(shot.y - (surface + 6)) < 1e-6 && Math.abs(shot.x - (c.x + 12)) < 1e-6,
-                "сдвиг залпа не на столбе: " + h.relativeVec(shot));
+                "salvo offset not on the pillar: " + h.relativeVec(shot));
         h.succeed();
     }
 
     /**
-     * Место с карты: высоту знает только сервер. У готового чанка — верх земли, у незагруженного — рельеф генератора,
-     * а не дно мира, и чанк при этом не грузится.
+     * Map target: only the server knows the height. For a ready chunk — the top of the ground; for an unloaded one —
+     * the generator's terrain, not the bottom of the world, and the chunk is not loaded.
      */
     @GameTest(template = "range", timeoutTicks = 20, skyAccess = true)
     public static void groundAtFindsHeightWithoutLoading(GameTestHelper h) {
         ServerLevel level = h.getLevel();
         Vec3 here = Vec3.atCenterOf(h.absolutePos(RANGE_CENTER));
         Vec3 near = Target.Ground.at(level, here.x, here.z).pos();
-        h.assertTrue(Math.abs(near.y - (h.absolutePos(RANGE_CENTER).getY() + 0.5)) < 1e-6, "у готового чанка не верх земли: " + h.relativeVec(near));
+        h.assertTrue(Math.abs(near.y - (h.absolutePos(RANGE_CENTER).getY() + 0.5)) < 1e-6, "ready chunk not at the top of the ground: " + h.relativeVec(near));
         Vec3 far = here.add(4096, 0, 0);
         BlockPos column = BlockPos.containing(far);
-        h.assertFalse(Terrain.ready(level, column), "район вдали уже загружен");
+        h.assertFalse(Terrain.ready(level, column), "distant area is already loaded");
         Vec3 estimate = Target.Ground.at(level, far.x, far.z).pos();
         int bottom = level.getMinBuildHeight();
-        h.assertTrue(estimate.y > bottom + 1 && estimate.y < level.getMaxBuildHeight(), "вдали не рельеф генератора: y " + estimate.y);
-        h.assertTrue(estimate.x == far.x && estimate.z == far.z, "место сдвинулось");
-        h.assertFalse(Terrain.ready(level, column), "оценка загрузила чанк");
+        h.assertTrue(estimate.y > bottom + 1 && estimate.y < level.getMaxBuildHeight(), "distant, not the generator's terrain: y " + estimate.y);
+        h.assertTrue(estimate.x == far.x && estimate.z == far.z, "the spot moved");
+        h.assertFalse(Terrain.ready(level, column), "the estimate loaded the chunk");
         h.succeed();
     }
 
     /**
-     * Место с карты в неготовом чанке — подсказкой пульта, как её шлёт клиент: оценка высоты — верх по карте клиента,
-     * а не рельеф генератора (у города из сохранения тот под крышами: 63 вместо 107); верх, чей
-     * блок вне высот мира, не в счёт. У готового чанка — его поверхность, что бы ни показывала карта.
+     * Map target in an unready chunk — by the console hint, as the client sends it: the height estimate is the top from
+     * the client's map, not the generator's terrain (for a city from a save, the generator's is under roofs: 63 instead
+     * of 107); a top whose block is outside the world's heights does not count. For a ready chunk — its surface,
+     * whatever the map shows.
      */
     @GameTest(template = "range", timeoutTicks = 20, skyAccess = true)
     public static void groundAimPrefersMapHeightOverGenerator(GameTestHelper h) {
@@ -2221,77 +2265,80 @@ public final class StrikeGameTests {
         Vec3 here = Vec3.atCenterOf(h.absolutePos(RANGE_CENTER));
         int ground = h.absolutePos(RANGE_CENTER).getY();
         Vec3 near = mapAim(level, here, OptionalInt.of(ground + 40));
-        h.assertTrue(Math.abs(near.y - (ground + 0.5)) < 1e-6, "у готового чанка не его верх: " + h.relativeVec(near));
+        h.assertTrue(Math.abs(near.y - (ground + 0.5)) < 1e-6, "ready chunk not its top: " + h.relativeVec(near));
         Vec3 far = here.add(4096, 0, 0);
         BlockPos column = BlockPos.containing(far);
-        h.assertFalse(Terrain.ready(level, column), "район вдали уже загружен");
+        h.assertFalse(Terrain.ready(level, column), "distant area is already loaded");
         int map = level.getMaxBuildHeight() - 7;
-        h.assertTrue(mapAim(level, far, OptionalInt.of(map)).y == map - 0.5, "оценка не по карте");
-        // верх на самом верху мира — блок под ним ещё в мире; верх на дне мира — блока под ним нет
+        h.assertTrue(mapAim(level, far, OptionalInt.of(map)).y == map - 0.5, "estimate not from the map");
+        // top at the very top of the world — the block below it is still in the world;
+        // top at the bottom of the world — there is no block below it
         int top = level.getMaxBuildHeight();
-        h.assertTrue(mapAim(level, far, OptionalInt.of(top)).y == top - 0.5, "верх у потолка мира не принят");
+        h.assertTrue(mapAim(level, far, OptionalInt.of(top)).y == top - 0.5, "top at the world ceiling not accepted");
         double generator = mapAim(level, far, OptionalInt.empty()).y;
-        h.assertTrue(generator == Target.Ground.at(level, far.x, far.z).pos().y, "без карты не генератор: y " + generator);
+        h.assertTrue(generator == Target.Ground.at(level, far.x, far.z).pos().y, "without the map, not the generator: y " + generator);
         for (int outside : new int[]{level.getMinBuildHeight(), top + 1}) {
             double y = mapAim(level, far, OptionalInt.of(outside)).y;
-            h.assertTrue(y == generator, "верх вне мира (" + outside + ") принят: y " + y + ", генератор " + generator);
+            h.assertTrue(y == generator, "top outside the world (" + outside + ") accepted: y " + y + ", generator " + generator);
         }
-        h.assertFalse(Terrain.ready(level, column), "оценка загрузила чанк");
+        h.assertFalse(Terrain.ready(level, column), "the estimate loaded the chunk");
         h.succeed();
     }
 
     /**
-     * Один ответ на «где земля» ({@link Terrain#estimate}) в настоящем мире: у готового чанка — его карта высот;
-     * у неготового приказ берёт карту клиента, без неё — генератор (не ниже моря), полёт вне мира — уровень моря
-     * генератора, код в мире — ничего (низ мира). Ни один ответ чанк не грузит. В Незере карта высот — потолок: в мире
-     * ответ «потолок», для полёта вне мира — море.
+     * One answer to “where is the ground” ({@link Terrain#estimate}) in the real world: for a ready chunk — its height
+     * map; for an unready one, an order takes the client's map, without it — the generator (not below sea level),
+     * flight outside the world — the generator's sea level, in-world tick code — nothing (the bottom of the world). No
+     * answer loads the chunk. In the Nether the height map is the ceiling: in the world the answer is “ceiling”, for
+     * flight outside the world — sea.
      */
     @GameTest(template = "range", timeoutTicks = 20, skyAccess = true)
     public static void terrainSourcesAnswerWithoutLoading(GameTestHelper h) {
         ServerLevel level = h.getLevel();
-        BlockPos here = h.absolutePos(RANGE_CENTER); // верхний блок земли площадки
+        BlockPos here = h.absolutePos(RANGE_CENTER); // top ground block of the pad
         Heightmap.Types type = Heightmap.Types.MOTION_BLOCKING;
         for (Terrain.Allowed a : new Terrain.Allowed[]{Terrain.Allowed.CHUNK, Terrain.Allowed.FLIGHT, Terrain.Allowed.ORDER}) {
             Terrain.Surface s = Terrain.estimate(level, type, here.getX(), here.getZ(), a);
-            h.assertTrue(s.equals(new Terrain.Surface(here.getY() + 1, Terrain.Source.CHUNK)), "готовый чанк: " + s);
+            h.assertTrue(s.equals(new Terrain.Surface(here.getY() + 1, Terrain.Source.CHUNK)), "ready chunk: " + s);
         }
         int x = here.getX() + 4096, z = here.getZ();
-        h.assertFalse(Terrain.ready(level, x >> 4, z >> 4), "район вдали уже загружен");
+        h.assertFalse(Terrain.ready(level, x >> 4, z >> 4), "distant area is already loaded");
         int sea = level.getChunkSource().getGenerator().getSeaLevel();
         Terrain.Surface generator = Terrain.estimate(level, type, x, z, Terrain.Allowed.ORDER);
-        h.assertTrue(generator.source() == Terrain.Source.GENERATOR && generator.y() >= sea, "приказ без карты: " + generator);
+        h.assertTrue(generator.source() == Terrain.Source.GENERATOR && generator.y() >= sea, "order without a map: " + generator);
         Terrain.Surface map = Terrain.estimate(level, type, x, z, Terrain.Allowed.ORDER.withMap(Optional.of(sea + 50)));
-        h.assertTrue(map.equals(new Terrain.Surface(sea + 50, Terrain.Source.CLIENT_MAP)), "приказ с картой: " + map);
+        h.assertTrue(map.equals(new Terrain.Surface(sea + 50, Terrain.Source.CLIENT_MAP)), "order with a map: " + map);
         Terrain.Surface flight = Terrain.estimate(level, type, x, z, Terrain.Allowed.FLIGHT);
-        h.assertTrue(flight.equals(new Terrain.Surface(sea, Terrain.Source.SEA)), "полёт вне мира: " + flight);
+        h.assertTrue(flight.equals(new Terrain.Surface(sea, Terrain.Source.SEA)), "flight outside the world: " + flight);
         Terrain.Surface tick = Terrain.estimate(level, type, x, z, Terrain.Allowed.CHUNK);
-        h.assertTrue(tick.equals(new Terrain.Surface(level.getMinBuildHeight(), Terrain.Source.UNKNOWN)), "в мире: " + tick);
-        h.assertFalse(Terrain.ready(level, x >> 4, z >> 4), "оценка загрузила чанк");
+        h.assertTrue(tick.equals(new Terrain.Surface(level.getMinBuildHeight(), Terrain.Source.UNKNOWN)), "in world: " + tick);
+        h.assertFalse(Terrain.ready(level, x >> 4, z >> 4), "the estimate loaded the chunk");
 
         ServerLevel nether = level.getServer().getLevel(Level.NETHER);
-        h.assertTrue(nether != null, "нет Незера");
+        h.assertTrue(nether != null, "no Nether");
         int nx = here.getX(), nz = here.getZ();
         nether.getChunk(nx >> 4, nz >> 4);
-        h.assertTrue(Terrain.ready(nether, nx >> 4, nz >> 4), "чанк Незера не готов");
+        h.assertTrue(Terrain.ready(nether, nx >> 4, nz >> 4), "Nether chunk not ready");
         int roof = Terrain.height(nether, type, nx, nz);
         Terrain.Surface ceiling = Terrain.estimate(nether, type, nx, nz, Terrain.Allowed.CHUNK);
-        h.assertTrue(ceiling.equals(new Terrain.Surface(roof, Terrain.Source.CEILING)), "Незер в мире: " + ceiling);
+        h.assertTrue(ceiling.equals(new Terrain.Surface(roof, Terrain.Source.CEILING)), "Nether in the world: " + ceiling);
         Terrain.Surface netherFlight = Terrain.estimate(nether, type, nx, nz, Terrain.Allowed.FLIGHT);
         h.assertTrue(netherFlight.equals(new Terrain.Surface(nether.getChunkSource().getGenerator().getSeaLevel(), Terrain.Source.SEA)),
-                "Незер вне мира: " + netherFlight);
+                "Nether outside the world: " + netherFlight);
         h.succeed();
     }
 
-    /** Точка цели по подсказке пульта «место с карты», как её разбирает сервер. */
+    /** Target point from the console hint “map target”, as the server parses it. */
     private static Vec3 mapAim(ServerLevel level, Vec3 at, OptionalInt mapSurface) {
         return ServerActions.groundAim(level, C2S.AimHint.ground(at.x, at.z, mapSurface)).point();
     }
 
     /**
-     * РСЗО по месту с карты: высота у пуска — оценка на 30 блоков выше земли, точка падения — с разбросом в 40 блоках
-     * (больше двух чанков) от места. Как только чанк точки падения готов, она встаёт на поверхность: снаряд бьёт в землю,
-     * а не рвётся в воздухе над ней, и метка цели (прицел снаряда) — тоже там, а не у места без разброса: район цели
-     * идёт за меткой, и у места он увёл бы загрузку от точки падения — снаряд ждал бы её до удаления.
+     * MLRS at a map target: the launch height is an estimate 30 blocks above the ground, and the impact point is spread
+     * 40 blocks (more than two chunks) from the spot. As soon as the impact point's chunk is ready, the point settles
+     * onto the surface: the rocket hits the ground rather than bursting in the air above it. The target mark (the
+     * rocket's aim) is there too, not at the unspread spot: the target's area follows the mark, and at the spot it
+     * would have pulled the load away from the impact point — the rocket would wait for it until it was removed.
      */
     @GameTest(template = "runway", timeoutTicks = 800, batch = "rocket_map_target", skyAccess = true)
     public static void rocketMapTargetSettlesOnSurface(GameTestHelper h) {
@@ -2308,21 +2355,22 @@ public final class StrikeGameTests {
             StrikeProjectile p = VirtualFlights.get(level).flights().stream().filter(f -> f.getUUID().equals(id)).findFirst()
                     .orElseGet(() -> level.getEntity(id) instanceof StrikeProjectile e && !e.isRemoved() ? e : null);
             if (p == null) return;
-            // прицел синхронизирован float: у площадок GameTest за миллионы блоков — с точностью до полблока
+            // the aim is synced as float: for GameTest pads millions of blocks away — to within half a block
             aim[0] = p.aimPoint();
-            last[0] = (p.isVirtual() ? "вне мира " : "в мире ") + p.flightPhase() + " " + h.relativeVec(p.position());
+            last[0] = (p.isVirtual() ? "outside the world " : "in the world ") + p.flightPhase() + " " + h.relativeVec(p.position());
         });
         h.succeedWhen(() -> {
-            h.assertTrue(VirtualFlights.get(level).flights().isEmpty() && level.getEntity(id) == null, "снаряд ещё летит: " + last[0]);
-            h.assertTrue(aim[0] != null && aim[0].distanceTo(settled) < 1, "метка цели не на точке падения: "
-                    + (aim[0] == null ? "нет" : h.relativeVec(aim[0])) + ", ждём " + h.relativeVec(settled));
+            h.assertTrue(VirtualFlights.get(level).flights().isEmpty() && level.getEntity(id) == null, "rocket still flying: " + last[0]);
+            h.assertTrue(aim[0] != null && aim[0].distanceTo(settled) < 1, "target mark not at the impact point: "
+                    + (aim[0] == null ? "none" : h.relativeVec(aim[0])) + ", expected " + h.relativeVec(settled));
             assertCrater(h, RUNWAY_TARGET, last[0]);
         });
     }
 
     /**
-     * Полёт вне загруженных чанков: ракета стартует в 1.5 км от цели, где мира нет, летит «виртуально» и возвращается
-     * в мир у цели (чанки цели загружает её же тикет), не трогая по пути незагруженное.
+     * Flight outside loaded chunks: the missile starts 1.5 km from the target, where there is no world, flies
+     * “virtually” and returns to the world at the target (the target's chunks are loaded by its own ticket), without
+     * touching anything unloaded along the way.
      */
     @GameTest(template = "runway", timeoutTicks = 900, batch = "virtual", skyAccess = true)
     public static void missileFliesThroughUnloadedWorld(GameTestHelper h) {
@@ -2330,8 +2378,9 @@ public final class StrikeGameTests {
     }
 
     /**
-     * То же на настоящей скорости (шкала полёта 1: 250 м/с, вдвое с лишним быстрее игровой): из втрое дальнего места —
-     * столько же тиков полёта вне мира, возврат в мир у цели и подрыв в точке.
+     * The same at real speed (flight scale 1: 250 m/s, more than twice the game speed): from a place three times as far
+     * — the same number of ticks in flight outside the world, a return to the world at the target and a detonation at
+     * the point.
      */
     @GameTest(template = "runway", timeoutTicks = 900, batch = "flight_scale_virtual", skyAccess = true)
     public static void missileFliesThroughUnloadedWorldAtRealSpeed(GameTestHelper h) {
@@ -2339,12 +2388,15 @@ public final class StrikeGameTests {
         missileThroughUnloadedWorld(h, 1500 * WeaponSpec.MISSILE.airframe().stretch(1));
     }
 
-    /** Ракета в {@code distance} блоках от цели, вне мира, по прямой: возвращается в мир у цели и бьёт в точку. */
+    /**
+     * Missile {@code distance} blocks from the target, outside the world, in a straight line: it returns to the world
+     * at the target and strikes the point.
+     */
     private static void missileThroughUnloadedWorld(GameTestHelper h, double distance) {
         ServerLevel level = h.getLevel();
         Vec3 point = top(h, RUNWAY_TARGET);
         CruiseMissileEntity missile = ModEntities.CRUISE_MISSILE.get().create(level);
-        // выше барьерной стены вокруг площадки теста: иначе ракета бьётся в неё на входе
+        // above the barrier wall around the test pad: otherwise the missile hits it on entry
         missile.launch(point.add(0, 80, -distance), new Target.Point(point), point, null);
         missile.setRoute(Route.direct());
         VirtualFlights.launch(level, missile);
@@ -2354,25 +2406,25 @@ public final class StrikeGameTests {
         h.onEachTick(() -> {
             if (level.getEntity(id) instanceof CruiseMissileEntity m && !m.isVirtual()) {
                 seen[0] = true;
-                last[0] = "в мире " + m.flightPhase() + " " + h.relativeVec(m.position()) + " v=" + m.speed();
+                last[0] = "in the world " + m.flightPhase() + " " + h.relativeVec(m.position()) + " v=" + m.speed();
             }
             for (StrikeProjectile p : VirtualFlights.get(level).flights()) {
-                if (p.getUUID().equals(id)) last[0] = "вне мира " + p.flightPhase() + " " + h.relativeVec(p.position()) + " v=" + p.speed();
+                if (p.getUUID().equals(id)) last[0] = "outside the world " + p.flightPhase() + " " + h.relativeVec(p.position()) + " v=" + p.speed();
             }
         });
         h.succeedWhen(() -> {
-            h.assertTrue(VirtualFlights.get(level).flights().isEmpty(), "ракета ещё вне мира");
-            h.assertTrue(seen[0], "ракета не вернулась в мир");
-            h.assertTrue(level.getEntity(id) == null, "ракета ещё летит");
+            h.assertTrue(VirtualFlights.get(level).flights().isEmpty(), "missile still outside the world");
+            h.assertTrue(seen[0], "missile did not return to the world");
+            h.assertTrue(level.getEntity(id) == null, "missile still flying");
             assertCrater(h, RUNWAY_TARGET, last[0]);
         });
     }
 
     /**
-     * «/tick freeze»: ракета вне мира стоит, как стоят сущности в мире, и летит дальше после разморозки (иначе снаряды
-     * вне мира уходили бы вперёд замороженного мира — трейлер замораживает мир, пока камера ждёт прогрузки).
-     * Замороженный мир останавливает и сам тест (его часы — время мира), поэтому размораживает сервер через
-     * секунду: за неё сервер делает ~20 тиков с замороженным миром.
+     * “/tick freeze”: a missile outside the world stands still, as entities in the world do, and flies on after thawing
+     * (otherwise projectiles outside the world would run ahead of the frozen world — the trailer freezes the world
+     * while the camera waits for chunks to load). The frozen world also stops the test itself (its clock is world
+     * time), so the server thaws it after one second: in that second the server makes ~20 ticks with the frozen world.
      */
     @GameTest(template = "runway", timeoutTicks = 900, batch = "frozen", skyAccess = true)
     public static void virtualFlightStopsWhileFrozen(GameTestHelper h) {
@@ -2400,16 +2452,17 @@ public final class StrikeGameTests {
             }));
         });
         h.succeedWhen(() -> {
-            h.assertTrue(thawed[0], "ещё заморожено");
-            h.assertTrue(held[0], "ракета вне мира двигалась, пока мир заморожен");
-            h.assertTrue(VirtualFlights.get(level).flights().isEmpty() && level.getEntity(id) == null, "ракета ещё летит");
-            assertCrater(h, RUNWAY_TARGET, "после разморозки");
+            h.assertTrue(thawed[0], "still frozen");
+            h.assertTrue(held[0], "missile outside the world moved while the world was frozen");
+            h.assertTrue(VirtualFlights.get(level).flights().isEmpty() && level.getEntity(id) == null, "missile still flying");
+            assertCrater(h, RUNWAY_TARGET, "after thawing");
         });
     }
 
     /**
-     * Движущаяся цель вне загруженного мира: ракета берёт район цели, пока та в начале полосы, а цель уходит на 160
-     * блоков — район должен уйти за ней, иначе ракета ждёт у цели загрузки и пропадает по сроку жизни.
+     * A moving target outside the loaded world: the missile takes the target's area while the target is at the start of
+     * the strip, and the target moves 160 blocks — the area must move after it, or the missile waits at the target for
+     * loading and vanishes when its lifetime ends.
      */
     @GameTest(template = "runway", timeoutTicks = 900, batch = "virtual_moving", skyAccess = true)
     public static void missileFollowsMovingTargetArea(GameTestHelper h) {
@@ -2430,69 +2483,72 @@ public final class StrikeGameTests {
         h.onEachTick(() -> {
             for (StrikeProjectile p : VirtualFlights.get(level).flights()) {
                 if (!p.getUUID().equals(id)) continue;
-                last[0] = "вне мира " + p.flightPhase() + " " + h.relativeVec(p.position());
-                // ракета уже взяла район у начала полосы — цель уходит к концу
+                last[0] = "outside the world " + p.flightPhase() + " " + h.relativeVec(p.position());
+                // the missile has already taken the area at the start of the strip — the target moves toward the end
                 if (!moved[0] && p.position().distanceTo(start) < 700) {
                     moved[0] = true;
                     stand.teleportTo(end.x, end.y, end.z);
                 }
             }
             if (level.getEntity(id) instanceof CruiseMissileEntity m && !m.isVirtual()) {
-                last[0] = "в мире " + m.flightPhase() + " " + h.relativeVec(m.position());
+                last[0] = "in the world " + m.flightPhase() + " " + h.relativeVec(m.position());
             }
         });
         h.succeedWhen(() -> {
-            h.assertTrue(moved[0], "цель не сдвинулась");
-            h.assertTrue(VirtualFlights.get(level).flights().isEmpty() && level.getEntity(id) == null, "ракета ещё летит: " + last[0]);
+            h.assertTrue(moved[0], "target did not move");
+            h.assertTrue(VirtualFlights.get(level).flights().isEmpty() && level.getEntity(id) == null, "missile still flying: " + last[0]);
             assertCrater(h, RUNWAY_TARGET, last[0]);
         });
     }
 
     /**
-     * Взрыв у неготовых чанков не читает их в тике (сервер встал бы на секунду с лишним): ждёт, пока район станет
-     * готовым, и срабатывает, когда всё в его досягаемости готово. Фоновая генерация за 4 км идёт сколько угодно
-     * против тиков сервера GameTest (он тикает без пауз), поэтому район здесь догружает сам тест — синхронно, после
-     * тика, в котором взрыв уже ждал: срок теста зависит только от тиков, не от скорости машины.
+     * A blast near unready chunks does not read them in a tick (the server would stall for more than a second): it
+     * waits until the area is ready, and fires when everything within its reach is ready. Background generation 4 km
+     * away runs as long as it needs against GameTest's server ticks (it ticks without pauses), so the test itself loads
+     * the area here — synchronously, after the tick in which the blast was already waiting: the test's timeout depends
+     * only on ticks, not on the machine's speed.
      */
     @GameTest(template = "range", timeoutTicks = 100, batch = "deferred_blast")
     public static void blastWaitsForUnreadyChunks(GameTestHelper h) {
         ServerLevel level = h.getLevel();
         Vec3 far = Vec3.atCenterOf(h.absolutePos(RANGE_CENTER)).add(4096, 0, 0);
         double reach = Warheads.reach(4);
-        h.assertFalse(Terrain.readyAround(level, far, reach), "район вдали уже загружен");
+        h.assertFalse(Terrain.readyAround(level, far, reach), "distant area is already loaded");
         boolean[] ran = new boolean[1];
         boolean[] readyWhenRan = new boolean[1];
         Warheads.whenReady(level, far, reach, l -> {
             ran[0] = true;
             readyWhenRan[0] = Terrain.readyAround(l, far, reach);
         });
-        h.assertFalse(ran[0], "взрыв сработал сразу, не дождавшись района");
+        h.assertFalse(ran[0], "blast fired at once, without waiting for the area");
         h.runAfterDelay(2, () -> {
-            // взрыв уже тикал в очереди: если район к этому времени сам не догрузился, взрыва быть не должно
-            h.assertTrue(!ran[0] || readyWhenRan[0], "взрыв сработал до готовности района");
+            // the blast was already ticking in the queue: if the area has not loaded itself by then,
+            // the blast must not have happened
+            h.assertTrue(!ran[0] || readyWhenRan[0], "blast fired before the area was ready");
             for (int cx = Mth.floor(far.x - reach) >> 4; cx <= Mth.floor(far.x + reach) >> 4; cx++) {
                 for (int cz = Mth.floor(far.z - reach) >> 4; cz <= Mth.floor(far.z + reach) >> 4; cz++) level.getChunk(cx, cz);
             }
-            h.assertTrue(Terrain.readyAround(level, far, reach), "район не стал готовым после загрузки");
+            h.assertTrue(Terrain.readyAround(level, far, reach), "the area did not become ready after loading");
         });
         h.succeedWhen(() -> {
-            h.assertTrue(ran[0], "взрыв всё ещё ждёт района");
-            h.assertTrue(readyWhenRan[0], "взрыв сработал до готовности района");
+            h.assertTrue(ran[0], "blast is still waiting for the area");
+            h.assertTrue(readyWhenRan[0], "blast fired before the area was ready");
         });
     }
 
     /**
-     * Стенд нагрузки засчитывает взрыв снаряду по источнику урона ({@code StressDirector.blastBy}), а не по месту:
-     * боевая часть у неготового района ждёт его загрузки, и отложенный взрыв — уже после уборки снаряда — несёт тот же
-     * снаряд. Район догружает сам тест после тика, в котором взрыв уже ждал (как {@link #blastWaitsForUnreadyChunks}).
+     * The stress bench credits a blast to its projectile by the damage source ({@code StressDirector.blastBy}), not by
+     * place: a warhead near an unready area waits for its loading, and a deferred blast — already after the
+     * projectile's cleanup — still carries the same projectile. The test loads the area itself after the tick in which
+     * the blast was already waiting (as {@link #blastWaitsForUnreadyChunks}).
      */
     @GameTest(template = "runway", timeoutTicks = 100, batch = "deferred_blast_owner", skyAccess = true)
     public static void deferredBlastKeepsItsProjectile(GameTestHelper h) {
         ServerLevel level = h.getLevel();
         Vec3 at = Vec3.atCenterOf(FarSite.DEFERRED_BLAST.at(h));
-        // район удара — до ~23 блоков от точки (лучи волны, Warheads.chargeReach): с запасом
+        // strike area — up to ~23 blocks from the point (wave rays, Warheads.chargeReach): with margin
         double area = 32;
-        h.assertFalse(Terrain.readyAround(level, at, area), "район вдали уже загружен");
+        h.assertFalse(Terrain.readyAround(level, at, area), "distant area is already loaded");
         RocketEntity rocket = ModEntities.ROCKET.get().create(level);
         int[] tick = {0};
         List<String> foreign = new ArrayList<>();
@@ -2502,38 +2558,42 @@ public final class StrikeGameTests {
             Vec3 c = e.getExplosion().center();
             if (e.getLevel() != level || c.distanceTo(at) > area) return;
             UUID by = ua.zentix.incoming.stress.StressDirector.blastBy(e.getExplosion());
-            if (!rocket.getUUID().equals(by)) foreign.add(by + " у " + c.subtract(at));
+            if (!rocket.getUUID().equals(by)) foreign.add(by + " at " + c.subtract(at));
             else if (own[0]++ == 0) firstAt[0] = tick[0];
         };
         net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(onBlast);
         afterTest(h, () -> net.neoforged.neoforge.common.NeoForge.EVENT_BUS.unregister(onBlast));
         h.onEachTick(() -> tick[0]++);
         Warheads.detonate(level, WeaponType.ROCKET, at, rocket, null);
-        h.assertTrue(own[0] == 0, "взрыв сработал сразу, не дождавшись района");
+        h.assertTrue(own[0] == 0, "blast fired at once, without waiting for the area");
         h.runAfterDelay(2, () -> {
             for (int cx = Mth.floor(at.x - area) >> 4; cx <= Mth.floor(at.x + area) >> 4; cx++)
                 for (int cz = Mth.floor(at.z - area) >> 4; cz <= Mth.floor(at.z + area) >> 4; cz++) level.getChunk(cx, cz);
         });
         h.succeedWhen(() -> {
-            h.assertTrue(foreign.isEmpty(), "взрыв без снаряда или с чужим: " + foreign);
-            h.assertTrue(own[0] == 1, "взрывов снаряда " + own[0] + " (ждём один подрыв заряда)");
-            h.assertTrue(firstAt[0] > 0, "первый взрыв снаряда на тике " + firstAt[0] + " — не отложен");
+            h.assertTrue(foreign.isEmpty(), "blast without a projectile or with a foreign one: " + foreign);
+            h.assertTrue(own[0] == 1, "projectile blasts " + own[0] + " (expecting one charge detonation)");
+            h.assertTrue(firstAt[0] > 0, "the projectile's first blast at tick " + firstAt[0] + " — not deferred");
         });
     }
 
-    /** Вердикт проб стенда (растяжения и до поверхности): отказ мода по сроку ожидания — «не проверено», провал проверки важнее. */
+    /**
+     * Verdict of the stress bench probes (stretch and to-surface): a mod refusal by the wait deadline is “not checked”;
+     * a failed check matters more.
+     */
     @GameTest(template = "range", batch = "stress_verdict")
     public static void stressProbeVerdict(GameTestHelper h) {
-        h.assertTrue(ua.zentix.incoming.stress.StressDirector.probeVerdict(List.of(), 0).equals("ok"), "без отказов — ok");
-        h.assertTrue(ua.zentix.incoming.stress.StressDirector.probeVerdict(List.of(), 3).startsWith("не проверено"), "отказы — не проверено");
-        h.assertTrue(ua.zentix.incoming.stress.StressDirector.probeVerdict(List.of("x"), 3).startsWith("провал"), "провал важнее отказов");
+        h.assertTrue(ua.zentix.incoming.stress.StressDirector.probeVerdict(List.of(), 0).equals("ok"), "no refusals — ok");
+        h.assertTrue(ua.zentix.incoming.stress.StressDirector.probeVerdict(List.of(), 3).startsWith("not checked"), "refusals — not checked");
+        h.assertTrue(ua.zentix.incoming.stress.StressDirector.probeVerdict(List.of("x"), 3).startsWith("failed"), "a failed check outweighs refusals");
         h.succeed();
     }
 
     /**
-     * Бомба в мире падает туда, куда её падение проигрывает B-2 перед сбросом ({@link BombDrop#miss}): и в точку
-     * (с эшелона за 145 блоков), и мимо — ближе ближнего края окна, где бомба со скоростью B-2 не успевает опустить нос
-     * (со 140 за 126, со 170 за 118, с 200 за 110, со 100 за 60).
+     * A bomb in the world falls where the B-2 simulates its fall before the drop ({@link BombDrop#miss}): both on the
+     * point (from an altitude, 145 blocks out) and off it — closer than the near edge of the window, where a bomb at
+     * the B-2's speed has no time to lower its nose (from 140 at 126, from 170 at 118, from 200 at 110, from 100 at
+     * 60).
      */
     @GameTest(template = "runway", timeoutTicks = 300, batch = "bunker_predict", skyAccess = true)
     public static void bunkerBusterFallsWhereBombDropPredicts(GameTestHelper h) {
@@ -2541,51 +2601,55 @@ public final class StrikeGameTests {
         Vec3[] releases = new Vec3[drops.length];
         Vec3[] aims = new Vec3[drops.length];
         double[] predicted = new double[drops.length];
-        // места входа в грунт не ближе 24 блоков друг к другу: бомба, вошедшая в грунт первой, взрывается под землёй
-        // через ~10 тиков, и воронка у соседнего места (в 6 блоках) засчитала бы соседке попадание; промах уходит вперёд
-        // по курсу (+z) и остаётся на площадке, сброс — над ней (z ≥ 0)
+        // Ground entry points are at least 24 blocks apart: a bomb that entered the ground first detonates underground
+        // after ~10 ticks, and a crater at a neighboring spot (6 blocks away) would count a hit for its neighbor; a
+        // miss goes ahead along the heading (+z) and stays on the pad, the drop is over it (z ≥ 0).
         int[][] at = {{4, 150}, {28, 150}, {4, 180}, {28, 170}, {4, 160}};
         for (int i = 0; i < drops.length; i++) {
             aims[i] = dropPoint(h, new BlockPos(at[i][0], 3, at[i][1]));
             releases[i] = aims[i].add(0, drops[i][0], -drops[i][1]);
             predicted[i] = BombDrop.miss(releases[i], BomberEntity.levelVelocity(0), aims[i]);
         }
-        h.assertTrue(predicted[0] == 0 && Arrays.stream(predicted, 1, drops.length).allMatch(m -> m > 10), "проигрыш: " + Arrays.toString(predicted));
+        h.assertTrue(predicted[0] == 0 && Arrays.stream(predicted, 1, drops.length).allMatch(m -> m > 10), "predicted: " + Arrays.toString(predicted));
         bombsEnter(h, releases, aims, predicted);
     }
 
     /**
-     * Там, где B-2 сбрасывает бомбу ({@link BombDrop#releaseNow}) с разной высоты над точкой и с разного места на
-     * подходе, бомба в мире приходит в точку: ниже ~170 блоков — с края окна, выше — с черты для своей высоты.
+     * Where the B-2 drops the bomb ({@link BombDrop#releaseNow}) from different heights above the point and from
+     * different places on the approach, the bomb in the world arrives at the point: below ~170 blocks — from the edge
+     * of the window, above — from the threshold for its height.
      */
     @GameTest(template = "runway", timeoutTicks = 300, batch = "bunker_release_points", skyAccess = true)
     public static void bomberReleasePointsHitInWorld(GameTestHelper h) {
         double[] heights = {60, 100, 140, 170, 214, 250};
-        // точки — не ближе 24 блоков друг к другу (см. выше: воронка соседки), сброс — над полосой (z ≥ 0)
+        // points at least 24 blocks apart (see above: the neighbor's crater), the drop is over the strip (z ≥ 0)
         int[][] at = {{16, 165}, {28, 190}, {4, 190}, {16, 215}, {28, 240}, {4, 240}};
         Vec3[] releases = new Vec3[heights.length];
         Vec3[] aims = new Vec3[heights.length];
         for (int i = 0; i < heights.length; i++) {
             aims[i] = dropPoint(h, new BlockPos(at[i][0], 3, at[i][1]));
             Vec3 step = new Vec3(0, 0, WeaponSpec.BUNKER.airframe().cruiseSpeed());
-            // подход по прямой с курсом +z; сдвиг начала — чтобы попасть в разные места окна
+            // approach in a straight line on heading +z; the start offset is to hit different places in the window
             for (Vec3 pos = aims[i].add(0, heights[i], -600 - 2 * i); pos.z < aims[i].z; pos = pos.add(step)) {
                 if (BombDrop.releaseNow(pos, step, aims[i], WeaponSpec.BUNKER.route().gameFinalLeg() / WeaponSpec.BUNKER.airframe().gameHeight())) {
                     releases[i] = pos;
                     break;
                 }
             }
-            h.assertTrue(releases[i] != null, "с " + (int) heights[i] + " не сбросил");
+            h.assertTrue(releases[i] != null, "from " + (int) heights[i] + " did not drop");
         }
         bombsEnter(h, releases, aims, new double[heights.length]);
     }
 
-    /** Куда B-2 целит бомбу над блоком: середина верхнего блока ({@code BomberEntity.surfaceUnder}). */
+    /** Where the B-2 aims the bomb above a block: the middle of the top block ({@code BomberEntity.surfaceUnder}). */
     private static Vec3 dropPoint(GameTestHelper h, BlockPos block) {
         return top(h, block).add(0, -BombDrop.GROUND_ABOVE_AIM, 0);
     }
 
-    /** Бомбы, сброшенные из {@code releases} по точкам {@code aims}, входят в грунт в {@code expected} блоках от них (±2). */
+    /**
+     * Bombs dropped from {@code releases} at the points {@code aims} enter the ground
+     * {@code expected} blocks from them (±2).
+     */
     private static void bombsEnter(GameTestHelper h, Vec3[] releases, Vec3[] aims, double[] expected) {
         ServerLevel level = h.getLevel();
         BunkerBusterEntity[] bombs = new BunkerBusterEntity[releases.length];
@@ -2600,20 +2664,20 @@ public final class StrikeGameTests {
         });
         h.succeedWhen(() -> {
             for (int i = 0; i < releases.length; i++) {
-                String from = "бомба с " + Math.round(releases[i].y - aims[i].y) + " за "
+                String from = "bomb from " + Math.round(releases[i].y - aims[i].y) + " at "
                         + String.format(Locale.ROOT, "%.1f", releases[i].subtract(aims[i]).horizontalDistance());
-                h.assertTrue(entries[i] != null, from + " ещё не вошла в грунт");
+                h.assertTrue(entries[i] != null, from + " has not entered the ground yet");
                 double miss = entries[i].subtract(aims[i]).horizontalDistance();
-                h.assertTrue(Math.abs(miss - expected[i]) < 2, from + " вошла в грунт в " + String.format(Locale.ROOT, "%.1f", miss)
-                        + " блоках от точки, ждали " + String.format(Locale.ROOT, "%.1f", expected[i]));
+                h.assertTrue(Math.abs(miss - expected[i]) < 2, from + " entered the ground at " + String.format(Locale.ROOT, "%.1f", miss)
+                        + " blocks from the point, expected " + String.format(Locale.ROOT, "%.1f", expected[i]));
             }
         });
     }
 
     /**
-     * Телепорт стенда, чей игрок не в игре (вышел по сценарию, пока телепорт ждал района), ждёт его входа и держит район,
-     * а не пропускает шаг; сводка отпускает тикет района, который так и не дождался игрока (упал клиент), и новых
-     * телепортов после неё нет.
+     * A stress-bench teleport whose player is not in the game (left by the scenario while the teleport waited for the
+     * area) waits for the player's entry and holds the area, rather than skipping the step; the summary releases the
+     * area's ticket that never got its player (the client crashed), and there are no new teleports after it.
      */
     @GameTest(template = "range", timeoutTicks = 100, batch = "stress_teleport")
     public static void stressTeleportWaitsForOfflinePlayer(GameTestHelper h) {
@@ -2621,28 +2685,29 @@ public final class StrikeGameTests {
         var director = new ua.zentix.incoming.stress.StressDirector(null);
         BlockPos at = h.absolutePos(new BlockPos(32, 2, 32));
         director.begin(level.getServer(), "Nobody", level, at.getX(), at.getY(), at.getZ(), 0);
-        h.assertTrue(director.teleportTicketCount() == 1, "тикет района не поставлен");
-        // район готов сразу (его держит тикет телепорта): иначе телепорт ждал бы района, а не игрока
+        h.assertTrue(director.teleportTicketCount() == 1, "area ticket not placed");
+        // the area is ready at once (the teleport's ticket holds it): otherwise the teleport would wait
+        // for the area, not the player
         int area = ua.zentix.incoming.stress.StressDirector.teleportArea(level.getServer());
         ChunkPos centre = new ChunkPos(at);
         for (int dx = -area; dx <= area; dx++)
             for (int dz = -area; dz <= area; dz++) level.getChunk(centre.x + dx, centre.z + dz);
         for (int dx = -area; dx <= area; dx++)
             for (int dz = -area; dz <= area; dz++)
-                h.assertTrue(ua.zentix.incoming.util.Terrain.ready(level, centre.x + dx, centre.z + dz), "чанк района не готов");
+                h.assertTrue(ua.zentix.incoming.util.Terrain.ready(level, centre.x + dx, centre.z + dz), "area chunk not ready");
         h.onEachTick(director::runWaits);
         h.runAfterDelay(40, () -> {
             int released;
             try {
-                h.assertTrue(director.teleportTicketCount() == 1, "район отпущен без игрока");
-                h.assertTrue(director.problemList().stream().noneMatch(p -> p.contains("шаг пропущен")), "шаг пропущен: " + director.problemList());
+                h.assertTrue(director.teleportTicketCount() == 1, "area released without the player");
+                h.assertTrue(director.problemList().stream().noneMatch(p -> p.contains("step skipped")), "step skipped: " + director.problemList());
             } finally {
                 released = director.closeTeleports();
             }
-            h.assertTrue(released == 1, "сводка отпустила тикетов района " + released);
-            h.assertTrue(director.teleportTicketCount() == 0, "тикет района остался после сводки");
+            h.assertTrue(released == 1, "summary released area tickets " + released);
+            h.assertTrue(director.teleportTicketCount() == 0, "area ticket remained after the summary");
             director.begin(level.getServer(), "Nobody", level, at.getX(), at.getY(), at.getZ(), 40);
-            h.assertTrue(director.teleportTicketCount() == 0, "телепорт начался после сводки");
+            h.assertTrue(director.teleportTicketCount() == 0, "teleport started after the summary");
             h.succeed();
         });
     }
@@ -2651,38 +2716,43 @@ public final class StrikeGameTests {
     public static void bunkerBusterDrillsAndDetonatesUnderground(GameTestHelper h) {
         ServerLevel level = h.getLevel();
         BunkerBusterEntity bomb = ModEntities.BUNKER_BUSTER.get().create(level);
-        // как со штатного B-2: сброс на 170 блоков выше цели за 145 блоков до неё, со скоростью B-2
+        // as from a standard B-2: a drop 170 blocks above the target, 145 blocks before it, at the B-2's speed
         Vec3 surface = top(h, RUNWAY_TARGET);
         bomb.drop(surface.add(0, 170, -145), BomberEntity.levelVelocity(0), surface, null, null);
         level.addFreshEntity(bomb);
         h.succeedWhen(() -> {
-            h.assertTrue(bomb.isRemoved(), "бомба ещё не взорвалась");
-            h.assertFalse(h.getBlockState(RUNWAY_TARGET).is(Blocks.GRASS_BLOCK), "нет входного отверстия");
-            h.assertFalse(h.getBlockState(RUNWAY_TARGET.below()).is(Blocks.DIRT), "бомба не пробила грунт");
+            h.assertTrue(bomb.isRemoved(), "bomb has not detonated yet");
+            h.assertFalse(h.getBlockState(RUNWAY_TARGET).is(Blocks.GRASS_BLOCK), "no entry hole");
+            h.assertFalse(h.getBlockState(RUNWAY_TARGET.below()).is(Blocks.DIRT), "bomb did not breach the ground");
         });
     }
 
     /**
-     * Подрыв бомбы в скале под песком (камень до y = 14, выше до y = 22 песок с прослойками гравия, заряд на глубине 14,
-     * под ним — слой воды, который взрыв вскрывает на дне полости): песок над полостью, щебень бомбы и труба обрушения
-     * осыпаются сотнями блоков. Когда подрыв кончился, из-под штабеля песка в районе взрыва убирается его каменная полка
-     * (осыпание уже без взрывов; полка — кирпичная, свод из породы в зоне трещин рушится сам). Живых падающих блоков в районе не больше {@link CraterFalls#LIVE_CAP} (у воронок B-2
-     * без предела их по 151 и больше), сверх них блоки легли сразу; ни один не пропал (песка и
-     * гравия — блоками, падающими и предметами — в конце столько же, сколько до обрушения полки), и, когда падение
-     * кончилось, ни один сыпучий блок не висит над пустотой или водой. Без {@link CraterFalls} живых разом — 1384.
+     * Bomb detonation in rock under sand (stone to y = 14, above it to y = 22 sand with gravel layers, the charge at
+     * depth 14, under it a water layer that the blast opens at the bottom of the cavity): the sand over the cavity, the
+     * bomb's rubble and the collapse pipe slump in hundreds of blocks. When the detonation is over, the stone shelf
+     * under the sand stack in the blast area is removed (the slumping is already without blasts; the shelf is brick — a
+     * rock vault in the fracture zone collapses by itself). Live falling blocks in the area are no more than {@link
+     * CraterFalls#LIVE_CAP} (for B-2 craters without a limit they are 151 or more each); beyond them the blocks landed
+     * at once. None disappeared (sand and gravel — as blocks, falling ones and items — at the end are as many as before
+     * the shelf collapsed), and when the fall is over, no loose block hangs over a void or water. Without {@link
+     * CraterFalls}, falling blocks at once: 1384.
      */
     @GameTest(template = "range", timeoutTicks = 400, batch = "crater_falls", skyAccess = true)
     public static void craterFallsStayUnderCap(GameTestHelper h) {
         ServerLevel level = h.getLevel();
-        // только чанки, чьи соседи тоже на площадке (x и z от 16 до 47): им не ждать фоновой загрузки
+        // only chunks whose neighbors are also on the pad (x and z from 16 to 47): they need not wait for background
+        // loading
         BlockPos lo = new BlockPos(16, 1, 16), hi = new BlockPos(47, 22, 47);
         sandBed(h, lo, hi, 15);
         for (BlockPos p : BlockPos.betweenClosed(new BlockPos(24, 3, 24), new BlockPos(40, 3, 40))) {
             level.setBlock(h.absolutePos(p), Blocks.WATER.defaultBlockState(), Block.UPDATE_CLIENTS);
         }
-        // штабель 6×6×8 на каменной полке над грунтом, в углу площадки — дальше, чем достаёт взрыв в скале
+        // stack 6×6×8 on a stone shelf above the ground, in a corner of the pad — farther than the blast reaches in
+        // rock
         BlockPos shelfLo = new BlockPos(17, 26, 42), shelfHi = new BlockPos(22, 26, 47);
-        // полка — кладка, а не порода: свод из породы над пустотой в зоне трещин подземного взрыва рушится сам
+        // shelf is masonry, not rock: a rock vault over a void in the fracture zone of an underground blast collapses
+        // by itself
         for (BlockPos p : BlockPos.betweenClosed(shelfLo, shelfHi)) {
             level.setBlock(h.absolutePos(p), Blocks.STONE_BRICKS.defaultBlockState(), Block.UPDATE_CLIENTS);
         }
@@ -2692,10 +2762,11 @@ public final class StrikeGameTests {
         BlockPos top = new BlockPos(hi.getX(), shelfHi.getY() + 8, hi.getZ());
         AABB box = craterBox(h, lo, top);
         Vec3 charge = Vec3.atCenterOf(h.absolutePos(new BlockPos(32, 8, 32)));
-        // район взрыва (досягаемость силы 20 — 41 блок) — сразу: иначе подрыв ждал бы фоновой генерации за краем площадки
+        // blast area (reach of force 20 — 41 blocks) — at once: otherwise the detonation would wait for background
+        // generation beyond the pad's edge
         generateNow(level, new ChunkPos(BlockPos.containing(charge)), 4);
-        // без огня в полости: предмет, который упал в огонь, сгорает (стопка в 16 блоков разом), и счёт ловил бы огонь,
-        // а не осыпание
+        // No fire in the cavity: an item that falls into fire burns (a stack of 16 at once), and the count would catch
+        // the fire rather than the slumping
         boolean fire = ua.zentix.incoming.IncomingConfig.SERVER.fire.get();
         ua.zentix.incoming.IncomingConfig.SERVER.fire.set(false);
         afterTest(h, () -> ua.zentix.incoming.IncomingConfig.SERVER.fire.set(fire));
@@ -2706,12 +2777,12 @@ public final class StrikeGameTests {
         long[] settledShelf = {-1};
         h.onEachTick(() -> {
             int live = level.getEntitiesOfClass(FallingBlockEntity.class, box).size();
-            h.assertTrue(live <= CraterFalls.LIVE_CAP, "живых падающих блоков " + live + " больше предела " + CraterFalls.LIVE_CAP);
-            // подрыв и вся его работа (полость, дробление, трещины, труба обрушения — единицами) кончились, и обломки
-            // выброса легли: они ложатся блоком грунта — песком, а самые высокие летят дольше 120 тиков. Тогда счёт,
-            // потом полка — дальше
-            // песок и гравий только осыпаются; район ещё открыт (до конца подрыва + GRACE)
-            // и ничего не падает: падающий блок, чьё место осыпание уже заняло, считался бы дважды
+            h.assertTrue(live <= CraterFalls.LIVE_CAP, "live falling blocks " + live + " more than the limit " + CraterFalls.LIVE_CAP);
+            // The detonation and all its work (cavity, crushing, fractures, collapse pipe — in units) ended, and the
+            // ejecta debris landed: they land as a block of ground — sand, and the tallest fly for more than 120 ticks.
+            // Then the count, then the shelf, later. Sand and gravel only slump; the area is still open (until the end
+            // of the detonation + GRACE) and nothing is falling: a falling block whose place the slumping has already
+            // taken would be counted twice.
             if (loose[0] >= 0 || h.getTick() < 120 || !StrikeWorld.get(level).impacts().isEmpty()
                     || !level.getEntitiesOfClass(DebrisEntity.class, column).isEmpty()
                     || !level.getEntitiesOfClass(FallingBlockEntity.class, box).isEmpty()) return;
@@ -2720,20 +2791,21 @@ public final class StrikeGameTests {
             for (BlockPos p : BlockPos.betweenClosed(shelfLo, shelfHi)) level.setBlock(h.absolutePos(p), Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
         });
         h.succeedWhen(() -> {
-            h.assertTrue(loose[0] >= 0, "подрыв ещё идёт");
-            h.assertTrue(CraterFalls.get(level).settled() > settledShelf[0], "штабель с полки не лёг сразу ни одним блоком: сохранение не проверено");
-            h.assertTrue(CraterFalls.get(level).settled() > settledBefore, "ни один блок не лёг сразу: осыпалось не больше предела, проверять нечего");
-            h.assertTrue(level.getEntitiesOfClass(FallingBlockEntity.class, box).isEmpty(), "блоки ещё падают");
+            h.assertTrue(loose[0] >= 0, "detonation still in progress");
+            h.assertTrue(CraterFalls.get(level).settled() > settledShelf[0], "no block of the stack fell from the shelf at once: conservation not checked");
+            h.assertTrue(CraterFalls.get(level).settled() > settledBefore, "no block landed at once: slumping did not exceed the limit, nothing to check");
+            h.assertTrue(level.getEntitiesOfClass(FallingBlockEntity.class, box).isEmpty(), "blocks still falling");
             assertSettled(h, lo, top);
             int now = looseCount(level, box);
-            h.assertTrue(now == loose[0], "песка и гравия было " + loose[0] + ", стало " + now + ": блоки пропали или удвоились");
+            h.assertTrue(now == loose[0], "sand and gravel were " + loose[0] + ", became " + now + ": blocks disappeared or doubled");
         });
     }
 
     /**
-     * Три подрыва в песке на полосе, в 88 блоках друг от друга (районы взрывов не пересекаются) и в одном тике, как залп
-     * с большим разбросом: живых падающих блоков на всех — не больше {@link CraterFalls#TOTAL_CAP}, хотя каждый район
-     * пустил бы свои {@link CraterFalls#LIVE_CAP}, и больше одного районного предела (падают у нескольких воронок).
+     * Three detonations in sand on the strip, 88 blocks apart (the blast areas do not overlap) and in one tick, like a
+     * salvo with a large spread: live falling blocks across all of them — no more than {@link CraterFalls#TOTAL_CAP},
+     * although each area would let out its own {@link CraterFalls#LIVE_CAP}, and more than one area limit at once
+     * (falling at several craters).
      */
     @GameTest(template = "runway", timeoutTicks = 400, batch = "crater_falls_salvo", skyAccess = true)
     public static void craterFallsShareWorldCap(GameTestHelper h) {
@@ -2741,22 +2813,23 @@ public final class StrikeGameTests {
         int[] centres = {40, 128, 216};
         List<Vec3> charges = new ArrayList<>();
         for (int z : centres) {
-            // заряд под песком глубже прорыва (приведённая глубина ~1,3): полость доходит до песка, и он сыплется в неё,
-            // пока полость не засыпана, — у трёх воронок разом
+            // Charge under the sand deeper than the breakthrough (scaled depth ~1.3): the cavity reaches the sand,
+            // which pours into it until the cavity is filled — at three craters at once.
             BlockPos lo = new BlockPos(4, 1, z - 12), hi = new BlockPos(27, 27, z + 12);
             sandBed(h, lo, hi, 13);
             Vec3 charge = Vec3.atCenterOf(h.absolutePos(new BlockPos(16, 10, z)));
             generateNow(level, new ChunkPos(BlockPos.containing(charge)), 4);
             charges.add(charge);
         }
-        // часы полосы попаданий — считающие: работа трёх подрывов (полости, трещины, трубы обрушения) делится по тикам
-        // одинаково на любой машине; по настенным часам на занятой машине воронки осыпались по очереди, а не разом
+        // The impact-strip clock is a counting one: the work of the three detonations (cavities, fractures, collapse
+        // pipes) is split by ticks the same way on any machine; on a busy machine by wall-clock time the craters
+        // slumped in turn, not at once.
         net.minecraft.server.MinecraftServer server = level.getServer();
         ua.zentix.incoming.work.WorkScheduler.useImpactClock(server, ua.zentix.incoming.nuclear.world.WorkClock.counting(1_000_000L));
         afterTest(h, () -> ua.zentix.incoming.work.WorkScheduler.useImpactClock(server, ua.zentix.incoming.work.WorkScheduler.newImpactClock()));
         for (Vec3 c : charges) Warheads.bunker(level, c, c.add(0, 14, 0), null, null);
-        // только своя полоса: площадки соседних партий — в 5 блоках от неё, и их падающие блоки (после партии чанки
-        // соседей не тикают — блок висит) не про эту проверку
+        // Only its own strip: the pads of neighboring batches are 5 blocks away, and their falling blocks (after a
+        // batch, the neighbors' chunks do not tick — a block hangs) are not about this check
         AABB box = new AABB(Vec3.atLowerCornerOf(h.absolutePos(new BlockPos(0, 1, 0))),
                 Vec3.atLowerCornerOf(h.absolutePos(new BlockPos(32, 28, 256)))).inflate(0, 16, 0);
         long settledBefore = CraterFalls.get(level).settled();
@@ -2764,43 +2837,47 @@ public final class StrikeGameTests {
         h.onEachTick(() -> {
             int live = level.getEntitiesOfClass(FallingBlockEntity.class, box).size();
             max[0] = Math.max(max[0], live);
-            h.assertTrue(live <= CraterFalls.TOTAL_CAP, "живых падающих блоков " + live + " больше общего предела " + CraterFalls.TOTAL_CAP);
+            h.assertTrue(live <= CraterFalls.TOTAL_CAP, "live falling blocks " + live + " more than the total limit " + CraterFalls.TOTAL_CAP);
         });
         h.succeedWhen(() -> {
-            h.assertTrue(CraterFalls.get(level).settled() > settledBefore, "ни один блок не лёг сразу: проверять нечего");
-            h.assertTrue(max[0] > CraterFalls.LIVE_CAP, "живых разом было не больше " + max[0] + ": падали у одной воронки, общий предел не проверен");
+            h.assertTrue(CraterFalls.get(level).settled() > settledBefore, "no block landed at once: nothing to check");
+            h.assertTrue(max[0] > CraterFalls.LIVE_CAP, "live at once there were no more than " + max[0] + ": they fell at one crater, the total limit was not checked");
             List<FallingBlockEntity> falling = level.getEntitiesOfClass(FallingBlockEntity.class, box);
             if (falling.isEmpty()) return;
-            // где висят: место и откуда начал падать (от начала площадки), тиков в полёте, тикает ли чанк сущностями
+            // where they hang: the place and where it started to fall (from the start of the pad), ticks in flight,
+            // whether the chunk ticks entities
             StringBuilder where = new StringBuilder();
             for (FallingBlockEntity f : falling.subList(0, Math.min(5, falling.size()))) {
                 BlockPos origin = h.absolutePos(BlockPos.ZERO);
-                where.append(String.format(java.util.Locale.ROOT, " %s от %s, %d тиков, тикает %b;", f.blockPosition().subtract(origin).toShortString(),
+                where.append(String.format(java.util.Locale.ROOT, " %s from %s, %d ticks, ticking %b;", f.blockPosition().subtract(origin).toShortString(),
                         f.getStartPos().subtract(origin).toShortString(), f.time, level.isPositionEntityTicking(f.blockPosition())));
             }
-            h.fail("блоки ещё падают: " + falling.size() + ";" + where);
+            h.fail("blocks still falling: " + falling.size() + ";" + where);
         });
     }
 
     /**
-     * Падение в районе воронки там, где чанк тикает блоками, но не сущностями (уровень 32 — рядом с тикающими чанками
-     * площадки), ложится сразу: тик блока его начал, а сущность там не тикает и висела бы в воздухе (CI 22.10: гравий
-     * свода под соседней площадкой, обрушенный зоной трещин бомбы на краю района, висел до конца
-     * {@link #craterFallsShareWorldCap} — там, где район взрыва ещё не дорос до края, а потом был отпущен).
+     * A fall in a crater area where the chunk ticks blocks but not entities (level 32 — next to the pad's ticking
+     * chunks) lands at once: the block tick has started it, but the entity does not tick there and would hang in the
+     * air (CI 22.10: gravel of a vault under a neighboring pad, brought down by the bomb's fracture zone at the edge of
+     * the area, hung until the end of {@link #craterFallsShareWorldCap} — where the blast area had not yet grown to the
+     * edge, and was then released).
      */
     @GameTest(template = "range", timeoutTicks = 100, batch = "crater_falls_edge", skyAccess = true)
     public static void craterFallWithoutEntityTicksLandsAtOnce(GameTestHelper h) {
         ServerLevel level = h.getLevel();
-        // столбец за краем площадки к +X (там площадок ещё нет): первый, чей чанк тикает блоками, но не сущностями
+        // column beyond the pad's edge toward +X (there are no pads there yet): the first whose chunk ticks blocks but
+        // not entities
         BlockPos column = null;
         for (int x = 64; x < 96 && column == null; x++) {
             BlockPos p = h.absolutePos(new BlockPos(x, 0, 32));
             if (level.shouldTickBlocksAt(p) && !level.isPositionEntityTicking(p)) column = p;
         }
-        h.assertTrue(column != null, "за площадкой нет чанка, что тикает блоками без сущностей");
+        h.assertTrue(column != null, "no chunk beyond the pad ticks blocks without entities");
         int top = level.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING, column.getX(), column.getZ());
         BlockPos rest = new BlockPos(column.getX(), top, column.getZ()), from = rest.above(3);
-        // район взрыва над столбцом: малый заряд высоко в воздухе (район — в пару блоков, тика сущностям не даёт)
+        // blast area above the column: a small charge high in the air (the area is a couple of blocks, it does not give
+        // entities a tick)
         Warheads.testCharge(level, Vec3.atCenterOf(from).add(0, 20, 0), 0.05);
         long settledBefore = CraterFalls.get(level).settled();
         level.setBlock(from, Blocks.GRAVEL.defaultBlockState(), Block.UPDATE_ALL);
@@ -2811,14 +2888,16 @@ public final class StrikeGameTests {
         AABB around = new AABB(rest).inflate(1, 6, 1);
         h.succeedWhen(() -> {
             List<FallingBlockEntity> hanging = level.getEntitiesOfClass(FallingBlockEntity.class, around);
-            h.assertTrue(hanging.isEmpty(), "падающий гравий висит: " + hanging.stream().map(f -> f.position() + " " + f.time + " тиков").toList());
-            h.assertTrue(level.getBlockState(rest).is(Blocks.GRAVEL) && level.getBlockState(from).isAir(), "гравий не лёг на опору: "
-                    + level.getBlockState(from) + " над " + level.getBlockState(rest));
-            h.assertTrue(CraterFalls.get(level).settled() > settledBefore, "гравий лёг не через осыпание воронки");
+            h.assertTrue(hanging.isEmpty(), "falling gravel hangs: " + hanging.stream().map(f -> f.position() + " " + f.time + " ticks").toList());
+            h.assertTrue(level.getBlockState(rest).is(Blocks.GRAVEL) && level.getBlockState(from).isAir(), "gravel did not land on the support: "
+                    + level.getBlockState(from) + " above " + level.getBlockState(rest));
+            h.assertTrue(CraterFalls.get(level).settled() > settledBefore, "gravel landed not through the crater's slumping");
         });
     }
 
-    /** Грунт {@code lo}…{@code hi}: камень ниже {@code sandFrom}, выше — песок с прослойкой гравия через три слоя. */
+    /**
+     * Ground {@code lo}…{@code hi}: stone below {@code sandFrom}, above — sand with a gravel layer every three layers.
+     */
     private static void sandBed(GameTestHelper h, BlockPos lo, BlockPos hi, int sandFrom) {
         for (BlockPos p : BlockPos.betweenClosed(lo, hi)) {
             BlockState s = p.getY() < sandFrom ? Blocks.STONE.defaultBlockState()
@@ -2827,12 +2906,12 @@ public final class StrikeGameTests {
         }
     }
 
-    /** Коробка грунта {@code lo}…{@code hi} с запасом: осыпание, предметы и обломки не уходят за неё. */
+    /** Ground box {@code lo}…{@code hi} with a margin: slumping, items and debris do not leave it. */
     private static AABB craterBox(GameTestHelper h, BlockPos lo, BlockPos hi) {
         return new AABB(Vec3.atLowerCornerOf(h.absolutePos(lo)), Vec3.atLowerCornerOf(h.absolutePos(hi.offset(1, 1, 1)))).inflate(8, 16, 8);
     }
 
-    /** Песок и гравий в коробке: блоки, падающие блоки и предметы (предметы — на всю высоту мира над коробкой). */
+    /** Sand and gravel in the box: blocks, falling blocks and items (items — over the full world height above the box). */
     private static int looseCount(ServerLevel level, AABB box) {
         int n = 0;
         for (BlockPos p : BlockPos.betweenClosed(BlockPos.containing(box.minX, box.minY, box.minZ), BlockPos.containing(box.maxX - 1, box.maxY - 1, box.maxZ - 1))) {
@@ -2852,51 +2931,53 @@ public final class StrikeGameTests {
         return s.is(Blocks.SAND) || s.is(Blocks.GRAVEL);
     }
 
-    /** Ни один сыпучий блок в {@code lo}…{@code hi} не висит над пустотой, огнём, водой или травой. */
+    /** No loose block in {@code lo}…{@code hi} hangs over a void, fire, water or grass. */
     private static void assertSettled(GameTestHelper h, BlockPos lo, BlockPos hi) {
         for (BlockPos p : BlockPos.betweenClosed(lo.offset(0, 1, 0), hi)) {
             BlockState s = h.getBlockState(p);
             h.assertFalse(s.getBlock() instanceof FallingBlock && FallingBlock.isFree(h.getBlockState(p.below())),
-                    "сыпучий блок висит над пустотой: " + s + " на " + p);
+                    "loose block hangs over a void: " + s + " at " + p);
         }
     }
 
     /**
-     * B-2, у которого точка сброса оказалась внутри круга разворота (перенацелили сбоку, в 200 блоках от него), уходит
-     * прямо, заходит снова и сбрасывает бомбу, а не кружит на пределе поворота вокруг точки в 300–480 блоках от неё
-     * до «Отбоя».
+     * B-2 whose drop point ended up inside its turn circle (retargeted from the side, 200 blocks from it) goes
+     * straight, comes back in and drops the bomb, rather than circling at the limit of its turn around a point 300–480
+     * blocks away until “Abort”.
      */
     @GameTest(template = "runway", timeoutTicks = 2000, batch = "bomber_reattack", skyAccess = true)
     public static void bomberReattacksAimInsideItsTurn(GameTestHelper h) {
         ServerLevel level = h.getLevel();
         Vec3 start = top(h, RUNWAY_TARGET);
-        // курс на +z, далеко вперёд; сразу перенацеливание на 150 блоков вбок и 60 вперёд — внутрь круга разворота
+        // heading +z, far ahead; at once a retarget 150 blocks to the side and 60 ahead — inside the turn circle
         Vec3 aside = start.add(150, 0, 60);
-        // точка за краем площадки: её район — сразу, иначе бомба ждала бы фоновой генерации, а сервер GameTest тикает
-        // без пауз, и на CI срок теста прошёл бы раньше (бомба сброшена, но не вошла бы в грунт за 2000 тиков)
+        // Point beyond the pad's edge: its area — at once, otherwise the bomb would wait for background generation, and
+        // the GameTest server ticks without pauses, and on CI the test's time would run out first (the bomb is dropped
+        // but would not enter the ground within 2000 ticks).
         generateNow(level, new ChunkPos(BlockPos.containing(aside)), FlightTickets.DISTANCE);
-        // бомба входит в грунт под точкой — ждать её там, а не на высоте площадки
+        // the bomb enters the ground under the point — wait for it there, not at the pad's height
         Vec3 ground = new Vec3(aside.x, level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, Mth.floor(aside.x), Mth.floor(aside.z)), aside.z);
         bomberEntersNear(h, start, start.add(0, 0, 3000), aside, ground);
     }
 
     /**
-     * B-2, перенацеленный на точку за спиной ближе дальности сброса, не бросает бомбу назад: сброшенная так бомба
-     * падает круто вниз по курсу (не выравнивается и не рулит, когда цель позади) и уходит в землю в ~150 блоках
-     * от точки. Он уходит, заходит снова, и бомба попадает.
+     * B-2 retargeted to a point behind it, closer than the release distance, does not drop the bomb backward: a bomb
+     * dropped so falls steeply down its heading (it does not level out or steer when the target is behind) and goes
+     * into the ground ~150 blocks from the point. It leaves, comes back in, and the bomb hits.
      */
     @GameTest(template = "runway", timeoutTicks = 1500, batch = "bomber_behind", skyAccess = true)
     public static void bomberRetargetedJustBehindHitsOnReattack(GameTestHelper h) {
         Vec3 start = top(h, RUNWAY_TARGET);
-        // курс на +z; точка сброса — в 60 блоках позади, ближе RELEASE_DISTANCE
+        // heading +z; drop point 60 blocks behind, closer than RELEASE_DISTANCE
         Vec3 behind = start.add(0, 0, -60);
         bomberEntersNear(h, start, start.add(0, 0, 3000), behind, behind);
     }
 
     /*
-     * Эшелон B-2 — над тем местом, куда упадёт бомба, а не над первой оценкой поверхности у пуска: перенацеленный
-     * на точку ниже прежней на 43 блока B-2 со старого эшелона сбросил бы бомбу с 214 блоков вместо 170, и она вошла бы
-     * в грунт в 42 блоках за точкой. Он меняет эшелон и сбрасывает только на нём (или заходит снова).
+     * The B-2's flight level is above the place where the bomb will fall, not above the first surface estimate at
+     * launch: retargeted to a point 43 blocks lower than before, a B-2 from the old flight level would drop the bomb
+     * from 214 blocks instead of 170, and it would enter the ground 42 blocks past the point. It changes flight level
+     * and drops only from it (or re-attacks).
      */
 
     @GameTest(template = "runway", timeoutTicks = 1500, batch = "bomber_lower", skyAccess = true)
@@ -2928,10 +3009,11 @@ public final class StrikeGameTests {
     }
 
     /*
-     * B-2 выше эшелона на подходе (эшелон на 43 блока ниже, чем у пуска; пуск в 650 и 690 блоках) сбрасывает с той
-     * высоты, где он есть, оттуда, откуда бомба придёт в точку, — с первого захода. При сбросе только на эшелоне у
-     * черты 145 блоков он, не успев снизиться к ней, уходил бы на второй заход, а вышедший на эшелон уже внутри черты
-     * сбрасывал бы оттуда, и бомба перелетала бы точку на десятки блоков.
+     * On approach, a B-2 above the flight level (the level is 43 blocks lower than at launch; launches at 650 and 690
+     * blocks) drops from the height it is at, from where the bomb will reach the point — on the first pass. Dropping
+     * only at the flight level at the 145-block line, it would not have had time to descend to it and would go around
+     * for a second pass, while one that reached the level already inside the line would drop from there, and the bomb
+     * would overshoot the point by tens of blocks.
      */
 
     @GameTest(template = "runway", timeoutTicks = 1500, batch = "bomber_level_650", skyAccess = true)
@@ -2946,7 +3028,8 @@ public final class StrikeGameTests {
         bomberEntersNear(h, start.add(0, 0, -690), start.add(0, 43, 0), null, start, true);
     }
 
-    /* Перенацеленный на точку в 40 блоках впереди, сбросив сразу, промахнулся бы на ~150: оттуда бомба не попадёт — заход снова. */
+    /* Retargeted to a point 40 blocks ahead, dropping at once, it would miss by ~150:
+     * the bomb would not hit from there — re-attack. */
 
     @GameTest(template = "runway", timeoutTicks = 2500, batch = "bomber_ahead_40", skyAccess = true)
     public static void bomberRetargetedJustAheadReattacks(GameTestHelper h) {
@@ -2956,29 +3039,32 @@ public final class StrikeGameTests {
     }
 
     /*
-     * B-2 возвращается в мир над городом или холмом. Подъём у возврата на 120 блоков над самым высоким, что впереди
-     * на 80 блоков, над домом в 70 блоков дал бы 20 блоков выше эшелона, и с оставшихся ~230 блоков он не успел бы
-     * снизиться и ушёл бы на второй заход. Бомба — в грунте с первого захода, без второго.
+     * B-2 returns to the world over a city or a hill. A climb at the return of 120 blocks above the tallest thing
+     * ahead, within 80 blocks, over a 70-block house would give 20 blocks above the flight level, and from the
+     * remaining ~230 blocks it would not have had time to descend and would go around for a second pass. The bomb is in
+     * the ground on the first pass, without a second.
      */
     @GameTest(template = "runway", timeoutTicks = 2500, batch = "bomber_tall_entry", skyAccess = true)
     public static void bomberEnteringWorldOverTallBuildingHitsOnFirstPass(GameTestHelper h) {
         ServerLevel level = h.getLevel();
         Vec3 start = top(h, RUNWAY_TARGET);
         int x = Mth.floor(start.x), z0 = Mth.floor(start.z);
-        // полоса тикающих чанков на курсе от 320 до 120 блоков до цели: B-2 возвращается в мир у её дальнего края
+        // strip of ticking chunks on the heading from 320 to 120 blocks from the target: the B-2 returns to the world
+        // at its far edge
         List<ChunkPos> forced = new ArrayList<>();
         for (int dz = -320; dz <= -120; dz += 16) forced.add(new ChunkPos(x >> 4, (z0 + dz) >> 4));
-        // полоса и по два столбца чанков с каждой стороны — готовы сразу (генерация в фоне не успела бы к сроку теста:
-        // на медленной машине B-2 возвращался бы в мир у края площадки, и тест не ловил бы подъём у полосы)
+        // The strip and two chunk columns on each side — ready at once (background generation would not finish by the
+        // test's deadline: on a slow machine the B-2 would return to the world at the pad's edge, and the test would
+        // not catch the climb at the strip).
         for (ChunkPos c : forced) for (int dx = -2; dx <= 2; dx++) level.getChunk(c.x + dx, c.z);
         for (ChunkPos c : forced) level.setChunkForced(c.x, c.z, true);
-        // дом в 70 блоков над грунтом у цели — впереди точки возврата в пределах 80 блоков
+        // house 70 blocks above the ground at the target — ahead of the return point within 80 blocks
         int groundY = Mth.floor(start.y);
         for (int dx = -3; dx <= 3; dx++) for (int dz = -3; dz <= 3; dz++) for (int y = 0; y < 70; y++) {
             level.setBlock(new BlockPos(x + dx, groundY + y, z0 - 290 + dz), Blocks.STONE.defaultBlockState(), 2);
         }
         bomberEntersNear(h, start.add(0, 0, -2000), start, null, start, true);
-        // полоса нужна только для возврата в мир, дальше — район цели
+        // the strip is needed only for the return to the world, beyond it — the target's area
         h.onEachTick(() -> {
             if (!forced.isEmpty() && level.getEntitiesOfClass(BunkerBusterEntity.class, new AABB(start, start).inflate(400)).stream().anyMatch(BunkerBusterEntity::isDrilling)) {
                 for (ChunkPos c : forced) level.setChunkForced(c.x, c.z, false);
@@ -2988,10 +3074,10 @@ public final class StrikeGameTests {
     }
 
     /**
-     * B-2 после сброса держит свой чанк, пока уходит. Без своего тикета он входит в чанк, который тикает по тикету
-     * встречного B-2 залпа, тот уходит — и B-2 замирает в чанке без тика («в полёте выгружен вместе с чанком»).
-     * Проверка — в двух чанках от места сброса и дальше: чанк впереди по курсу, взятый в тике сброса, держится и без
-     * своего тикета.
+     * After release the B-2 holds its own chunk while it leaves. Without its own ticket it enters a chunk that ticks by
+     * the ticket of an oncoming salvo B-2; that one leaves, and the B-2 freezes in an unticked chunk (“in flight,
+     * unloaded with the chunk”). The check is two chunks from the release point and beyond: the chunk ahead on the
+     * heading, taken in the release tick, holds even without its own ticket.
      */
     @GameTest(template = "runway", timeoutTicks = 200, batch = "bomber_egress", skyAccess = true)
     public static void bomberHoldsChunkAfterRelease(GameTestHelper h) {
@@ -3003,18 +3089,21 @@ public final class StrikeGameTests {
         UUID id = bomber.getUUID();
         ChunkPos[] release = {null};
         h.succeedWhen(() -> {
-            h.assertTrue(level.getEntity(id) instanceof BomberEntity b && !b.isRemoved(), "B-2 убран"
-                    + (release[0] == null ? " до сброса" : " у " + bomber.blockPosition().toShortString() + ", сброс в чанке " + release[0]));
+            h.assertTrue(level.getEntity(id) instanceof BomberEntity b && !b.isRemoved(), "B-2 removed"
+                    + (release[0] == null ? " before the release" : " at " + bomber.blockPosition().toShortString() + ", release in chunk " + release[0]));
             BomberEntity b = (BomberEntity) level.getEntity(id);
-            h.assertTrue(b.hasReleased(), "B-2 ещё не сбросил бомбу");
+            h.assertTrue(b.hasReleased(), "B-2 has not released the bomb yet");
             ChunkPos here = b.chunkPosition();
             if (release[0] == null) release[0] = here;
-            h.assertTrue(here.getChessboardDistance(release[0]) >= 2, "B-2 ещё у места сброса");
-            h.assertTrue(ChunkTickets.holds(level, id, here.toLong()), "B-2 после сброса не держит свой чанк " + here);
+            h.assertTrue(here.getChessboardDistance(release[0]) >= 2, "B-2 still at the release point");
+            h.assertTrue(ChunkTickets.holds(level, id, here.toLong()), "B-2 does not hold its chunk after release " + here);
         });
     }
 
-    /** Без перенацеливания: над целью башня в 40 блоков, которой не было в оценке поверхности у пуска (крыша, чанк не готов). */
+    /**
+     * Without a retarget: a tower 40 blocks above the target that was not in the surface estimate at launch
+     * (roof, chunk not ready).
+     */
     @GameTest(template = "runway", timeoutTicks = 1500, batch = "bomber_tower", skyAccess = true)
     public static void bomberHitsTowerTopMissingFromFirstEstimate(GameTestHelper h) {
         Vec3 start = top(h, RUNWAY_TARGET);
@@ -3022,7 +3111,7 @@ public final class StrikeGameTests {
         bomberEntersNear(h, start.add(0, 0, -2000), start, null, start.add(0, 40, 0));
     }
 
-    /** Точка в воздухе (игрок в полёте) позади: бомба — в грунт под ней, эшелон — над грунтом. */
+    /** Airborne point (a player in flight) behind: the bomb — into the ground under it, flight level — above the ground. */
     @GameTest(template = "runway", timeoutTicks = 1500, batch = "bomber_airborne", skyAccess = true)
     public static void bomberRetargetedAtAirbornePointHitsGroundUnder(GameTestHelper h) {
         Vec3 start = top(h, RUNWAY_TARGET);
@@ -3031,26 +3120,29 @@ public final class StrikeGameTests {
     }
 
     /**
-     * B-2 с пуска {@code from} на поверхность {@code aim} (эшелон — над ней), сразу перенацеленный на {@code retarget}
-     * (null — нет); бомба, одна, должна войти в грунт в 4 блоках от {@code expect} по горизонтали и на его высоте
-     * (не в стену барьеров площадки) — сброшена не раньше и не позже, не пропала.
+     * B-2 from launch {@code from} onto surface {@code aim} (the flight level above it), at once retargeted to {@code
+     * retarget} (null — no); the bomb, one, must enter the ground 4 blocks from {@code expect} horizontally and at its
+     * height (not into the pad's barrier wall) — dropped no earlier and no later, and not lost.
      */
     private static void bomberEntersNear(GameTestHelper h, Vec3 from, Vec3 aim, @Nullable Vec3 retarget, Vec3 expect) {
         bomberEntersNear(h, from, aim, retarget, expect, false);
     }
 
-    /** {@code onePass} — и без второго захода: B-2, прошедший черту сброса без сброса, провалит тест. */
+    /**
+     * {@code onePass} — also without a second pass: a B-2 that passes the release line without dropping fails
+     * the test.
+     */
     private static void bomberEntersNear(GameTestHelper h, Vec3 from, Vec3 aim, @Nullable Vec3 retarget, Vec3 expect, boolean onePass) {
         ServerLevel level = h.getLevel();
         BomberEntity bomber = ModEntities.BOMBER.get().create(level);
-        // свой владелец — считать только свою бомбу
+        // its own owner — count only its own bomb
         UUID owner = UUID.randomUUID();
         bomber.launch(from, aim, null, owner);
-        // запас хода по плану полёта, как у боевого пуска (StrikeService.launchBomber)
+        // flight-plan range margin, as for a combat launch (StrikeService.launchBomber)
         bomber.setRoute(null);
-        if (retarget != null) h.assertTrue(bomber.retarget(new Target.Point(retarget), retarget), "бомбардировщик не принял перенацеливание");
-        // как боевой пуск: начало полёта — вне мира, в загруженном месте он вернётся в мир в ближайшем тике (пуск
-        // издалека через addFreshEntity в незагруженный чанк не тикал бы)
+        if (retarget != null) h.assertTrue(bomber.retarget(new Target.Point(retarget), retarget), "bomber did not accept the retarget");
+        // As a combat launch: the start of the flight is outside the world; in a loaded place it returns to the world
+        // on the nearest tick (a launch from afar through addFreshEntity into an unloaded chunk would not tick).
         VirtualFlights.launch(level, bomber);
         UUID id = bomber.getUUID();
         BomberEntity[] last = {bomber};
@@ -3064,8 +3156,8 @@ public final class StrikeGameTests {
                 last[0] = b;
                 double d = b.position().subtract(expect).horizontalDistance();
                 if (onePass && !b.hasReleased() && d < BomberEntity.releaseLine(WeaponSpec.BUNKER.airframe().cruiseHeight()) - WeaponSpec.BUNKER.airframe().cruiseSpeed()) {
-                    h.fail("B-2 прошёл черту сброса без сброса (второй заход): в " + (int) d + " блоках от точки, на высоте "
-                            + (int) (b.getY() - expect.y) + ", вне мира " + b.isVirtual());
+                    h.fail("B-2 passed the release line without dropping (second pass): at " + (int) d + " blocks from the point, at height "
+                            + (int) (b.getY() - expect.y) + ", outside the world " + b.isVirtual());
                 }
             }
             List<BunkerBusterEntity> seen = new ArrayList<>(level.getEntitiesOfClass(BunkerBusterEntity.class, new AABB(expect, expect).inflate(400, 400, 400)));
@@ -3078,24 +3170,25 @@ public final class StrikeGameTests {
             }
         });
         h.succeedWhen(() -> {
-            h.assertTrue(entry[0] != null, "бомба ещё не вошла в грунт (бомб " + bombs.size() + "); B-2 в "
-                    + (int) last[0].position().subtract(expect).horizontalDistance() + " блоках от точки, на высоте " + (int) (last[0].getY() - expect.y)
-                    + ", вне мира " + last[0].isVirtual() + ", сброс " + last[0].hasReleased() + ", убран " + last[0].isRemoved()
-                    + (bomb[0] == null ? "" : "; бомба в " + (int) bomb[0].position().subtract(expect).horizontalDistance() + " блоках от точки, на высоте "
-                    + (int) (bomb[0].getY() - expect.y) + ", вне мира " + bomb[0].isVirtual() + ", убрана " + bomb[0].isRemoved()));
-            h.assertTrue(bombs.size() == 1, "бомб " + bombs.size());
+            h.assertTrue(entry[0] != null, "bomb has not entered the ground yet (bombs " + bombs.size() + "); B-2 at "
+                    + (int) last[0].position().subtract(expect).horizontalDistance() + " blocks from the point, at height " + (int) (last[0].getY() - expect.y)
+                    + ", outside the world " + last[0].isVirtual() + ", released " + last[0].hasReleased() + ", removed " + last[0].isRemoved()
+                    + (bomb[0] == null ? "" : "; bomb at " + (int) bomb[0].position().subtract(expect).horizontalDistance() + " blocks from the point, at height "
+                    + (int) (bomb[0].getY() - expect.y) + ", outside the world " + bomb[0].isVirtual() + ", removed " + bomb[0].isRemoved()));
+            h.assertTrue(bombs.size() == 1, "bombs " + bombs.size());
             double miss = entry[0].subtract(expect).horizontalDistance();
-            h.assertTrue(miss < 4 && Math.abs(entry[0].y - expect.y) < 4, "бомба вошла в грунт в " + (int) miss
-                    + " блоках от точки, на высоте " + (int) (entry[0].y - expect.y));
+            h.assertTrue(miss < 4 && Math.abs(entry[0].y - expect.y) < 4, "bomb entered the ground at " + (int) miss
+                    + " blocks from the point, at height " + (int) (entry[0].y - expect.y));
         });
     }
 
     /**
-     * B-2 на настоящей шкале полёта (1): эшелон 12 км над точкой, 250 м/с, сброс у черты в ~10 км по горизонтали (тот же
-     * угол на точку, что на игровом эшелоне). Бомба падает ~50 с — вне загруженного мира и в нём — и входит в грунт у
-     * точки со скоростью удара GBU-57 из паспорта (511 м/с, здесь не меньше 450): пробитие у цели (S5) — по этой
-     * скорости, а не по игровой (~235 м/с). Игрок прямо под B-2 получает его путь для дальнего вида: 12 км высоты
-     * дальность видимости не съедают.
+     * B-2 on the real flight scale (1): flight level 12 km above the point, 250 m/s, drop at the release line at ~10 km
+     * horizontally (the same angle to the point as at the game flight level). The bomb falls ~50 s — outside the loaded
+     * world and in it — and enters the ground at the point at the GBU-57 impact speed from the passport (511 m/s, here
+     * not less than 450): penetration at the target (S5) — by this speed, not by the game one (~235 m/s). The player
+     * directly under the B-2 gets its path for the distant view: the 12 km of height does not eat into the visibility
+     * range.
      */
     @GameTest(template = "runway", timeoutTicks = 1600, batch = "flight_scale_bomber", skyAccess = true)
     public static void bomberAtRealEchelonDropsAtPassportSpeed(GameTestHelper h) {
@@ -3106,7 +3199,8 @@ public final class StrikeGameTests {
         double line = BomberEntity.releaseLine(b2.cruiseHeight());
         BomberEntity bomber = ModEntities.BOMBER.get().create(level);
         UUID owner = UUID.randomUUID();
-        // как боевой пуск (StrikeService.launchBomber): на эшелоне над точкой, издалека — здесь за 60 тиков до черты
+        // as a combat launch (StrikeService.launchBomber): at flight level above the point, from afar — here 60 ticks
+        // before the line
         bomber.launch(surface.add(0, 0, -(line + 60 * b2.cruiseSpeed())), surface, null, owner);
         bomber.setRoute(null);
         VirtualFlights.launch(level, bomber);
@@ -3115,8 +3209,8 @@ public final class StrikeGameTests {
         Vec3[] entered = {null};
         boolean[] overhead = {false};
         h.onEachTick(() -> {
-            // дальний вид: B-2 в 12 км над головой игрока под ним — в пути снарядов, которые тот видит (far_range — по
-            // горизонтали)
+            // Distant view: a B-2 at 12 km above the player's head beneath it — in the path of the projectiles the
+            // player sees (far_range — horizontally).
             if (!overhead[0] && findProjectile(level, id) instanceof BomberEntity b) {
                 Vec3 under = new Vec3(b.getX(), surface.y, b.getZ());
                 overhead[0] = FarFlights.sample(level, FarFlights.flights(level), under, null, true).stream().anyMatch(f -> f.id().equals(id));
@@ -3125,7 +3219,7 @@ public final class StrikeGameTests {
             for (StrikeProjectile p : VirtualFlights.get(level).flights()) if (p instanceof BunkerBusterEntity b) seen.add(b);
             for (BunkerBusterEntity b : seen) {
                 if (!owner.equals(b.ownerId()) || entered[0] != null) continue;
-                // сброс — где бомба появилась (B-2 вне мира после сброса сразу убирается)
+                // release — where the bomb appeared (a B-2 outside the world is removed at once after release)
                 if (Double.isNaN(release[0])) {
                     release[0] = b.position().subtract(surface).horizontalDistance();
                     release[1] = b.getY() + BombDrop.DROP_BELOW - surface.y;
@@ -3135,22 +3229,23 @@ public final class StrikeGameTests {
             }
         });
         h.succeedWhen(() -> {
-            h.assertTrue(overhead[0], "B-2 на эшелоне не видно игроку прямо под ним");
-            h.assertTrue(!Double.isNaN(release[0]), "B-2 не сбросил бомбу");
+            h.assertTrue(overhead[0], "the B-2 at flight level is not visible to the player directly beneath it");
+            h.assertTrue(!Double.isNaN(release[0]), "B-2 did not release the bomb");
             h.assertTrue(Math.abs(release[1] - b2.cruiseHeight()) < 200 && Math.abs(release[0] - line) < 600,
-                    "сброс в " + (int) release[0] + " блоках от точки на высоте " + (int) release[1] + " (черта " + (int) line + ")");
-            h.assertTrue(entered[0] != null, "бомба ещё не вошла в грунт (последняя скорость " + entry[0] + ")");
+                    "release at " + (int) release[0] + " blocks from the point at height " + (int) release[1] + " (release line " + (int) line + ")");
+            h.assertTrue(entered[0] != null, "bomb has not entered the ground yet (last speed " + entry[0] + ")");
             double miss = entered[0].subtract(surface).horizontalDistance();
-            h.assertTrue(miss < 6, "бомба вошла в грунт в " + (int) miss + " блоках от точки");
-            h.assertTrue(entry[0] * 20 > 450, "удар на " + Math.round(entry[0] * 20) + " м/с");
+            h.assertTrue(miss < 6, "bomb entered the ground at " + (int) miss + " blocks from the point");
+            h.assertTrue(entry[0] * 20 > 450, "impact at " + Math.round(entry[0] * 20) + " m/s");
         });
     }
 
     /**
-     * Шахед издалека на настоящей шкале полёта (1): заход на эшелоне 2 км над целью, пике оттуда — и подрыв в точке, а не
-     * самоликвидация в воздухе: запас хода по плану считает и снижение к цели (маршрут — по горизонтали). Точка — та, куда
-     * шахед целится: пуск сдвигает её от цели на промах паспорта (СКО 3 м по оси, {@code WeaponSpec.Route#miss}), и с
-     * целью тест расходился в e⁻² ≈ 13 % пусков (CI 22.10); сам промах — не дальше 5 СКО.
+     * Shahed from afar on the real flight scale (1): approach at a flight level 2 km above the target, a dive from
+     * there — and detonation at the point, not self-destruction in the air: the range margin of the plan also counts
+     * the descent to the target (the route — horizontally). The point is the one the Shahed aims at: the launch shifts
+     * it from the target by the passport's miss (SD 3 m along the axis, {@code WeaponSpec.Route#miss}), and with the
+     * target the test diverged in e⁻² ≈ 13 % of launches (CI 22.10); the miss itself — no more than 5 SD.
      */
     @GameTest(template = "runway", timeoutTicks = 1600, batch = "flight_scale_drone", skyAccess = true)
     public static void droneFromRealEchelonDivesIntoTarget(GameTestHelper h) {
@@ -3162,7 +3257,7 @@ public final class StrikeGameTests {
         Vec3 point = top(h, RUNWAY_TARGET);
         UUID owner = UUID.randomUUID();
         h.assertTrue(StrikeService.launch(level, WeaponType.DRONE, new Target.Point(point), point, 0, owner, false, Loadout.Nuke.DEFAULT,
-                Waypoints.NONE, null).ok(), "пуск не принят");
+                Waypoints.NONE, null).ok(), "launch not accepted");
         String[] last = {""};
         boolean[] high = {false};
         Vec3[] aim = {null};
@@ -3173,27 +3268,28 @@ public final class StrikeGameTests {
                 if (!owner.equals(p.ownerId())) continue;
                 if (p.getY() - point.y > 1500) high[0] = true;
                 aim[0] = p.aimPoint();
-                last[0] = p.flightPhase() + " " + h.relativeVec(p.position()) + " запас " + Math.round(p.rangeLeft()) + ", целится в " + h.relativeVec(aim[0]);
+                last[0] = p.flightPhase() + " " + h.relativeVec(p.position()) + " reserve " + Math.round(p.rangeLeft()) + ", aims at " + h.relativeVec(aim[0]);
             }
         });
         h.succeedWhen(() -> {
-            h.assertTrue(high[0], "шахед не шёл на настоящем эшелоне: " + last[0]);
+            h.assertTrue(high[0], "Shahed did not fly at the real flight level: " + last[0]);
             h.assertTrue(VirtualFlights.get(level).flights().stream().noneMatch(p -> owner.equals(p.ownerId()))
-                    && level.getEntitiesOfClass(DroneEntity.class, new AABB(point, point).inflate(600, 3000, 600)).isEmpty(), "шахед ещё летит: " + last[0]);
+                    && level.getEntitiesOfClass(DroneEntity.class, new AABB(point, point).inflate(600, 3000, 600)).isEmpty(), "Shahed still flying: " + last[0]);
             double miss = Math.hypot(aim[0].x - point.x, aim[0].z - point.z);
-            h.assertTrue(miss <= 5 * WeaponType.DRONE.spec().route().error(), String.format(Locale.ROOT, "промах пуска %.1f м — больше 5 СКО", miss));
-            // от начала площадки — вычитанием: relativePos в 1.21.1 поворачивает на 180°
+            h.assertTrue(miss <= 5 * WeaponType.DRONE.spec().route().error(), String.format(Locale.ROOT, "launch miss %.1f m — more than 5 SD", miss));
+            // from the pad's start — by subtraction: relativePos in 1.21.1 turns by 180°
             assertCrater(h, BlockPos.containing(aim[0]).subtract(h.absolutePos(BlockPos.ZERO)), last[0]);
         });
     }
 
     /**
-     * «Ланцет» на настоящей шкале полёта (1): круг в 700 м над целью, цель (корова) погибает, пока он кружит, — он
-     * докруживает и пикирует оттуда на её последнюю точку, а не самоликвидируется в воздухе: запас хода после потери
-     * цели урезается до пути по плану ({@code Mission.lose}), и план закладывает пике с высоты круга
-     * ({@code LoiterEntity.diveTicks}), а не 25 тиков пике с игрового круга. Зерно снаряда закреплено (круг, время
-     * барража) — то, с которым пике кончается отвесно, а цель позади курса: тангаж упирается в 89°, и до доворота над
-     * целью ({@code Dive.steer}) остаточный снос уводил «Ланцет» на 10 м (CI 22.10, 2 зерна из 40).
+     * Lancet on the real flight scale (1): a circle 700 m above the target; the target (a cow) dies while it circles —
+     * it finishes the circle and dives from there onto its last point, rather than self-destructing in the air: the
+     * range margin after losing the target is cut to the path per the plan ({@code Mission.lose}), and the plan lays
+     * the dive from the circle's height ({@code LoiterEntity.diveTicks}), not 25 ticks of dive from the game circle.
+     * The munition's seed is fixed (circle, loiter time) — the one with which the dive ends vertically, with the target
+     * behind the heading: the pitch hits 89°, and before the correction over the target ({@code Dive.steer}) the
+     * residual drift took the Lancet 10 m off (CI 22.10, 2 seeds out of 40).
      */
     @GameTest(template = "runway", timeoutTicks = 1600, batch = "flight_scale_loiter", skyAccess = true)
     public static void loiterLosingTargetAtRealHeightStillDives(GameTestHelper h) {
@@ -3224,17 +3320,19 @@ public final class StrikeGameTests {
                 killed[0] = true;
                 cow.kill();
             }
-            last[0] = l.flightPhase() + " " + h.relativeVec(l.position()) + " запас " + Math.round(l.rangeLeft());
+            last[0] = l.flightPhase() + " " + h.relativeVec(l.position()) + " reserve " + Math.round(l.rangeLeft());
         });
         h.succeedWhen(() -> {
-            h.assertTrue(high[0], "круг не на настоящей высоте: " + last[0]);
-            h.assertTrue(killed[0], "цель не погибла на круге: " + last[0]);
-            h.assertTrue(findLoiter(level, id) == null, "барражирующий ещё летит: " + last[0]);
+            h.assertTrue(high[0], "circle not at the real height: " + last[0]);
+            h.assertTrue(killed[0], "target did not die on the circle: " + last[0]);
+            h.assertTrue(findLoiter(level, id) == null, "loitering munition still flying: " + last[0]);
             assertCrater(h, RUNWAY_TARGET, last[0]);
         });
     }
 
-    /** Шкала полёта мира {@code x} на время проверки (пресет {@code CUSTOM}); после неё — прежние пресет и число. */
+    /**
+     * Flight scale {@code x} for the check (preset {@code CUSTOM}); afterwards the former preset and value.
+     */
     static void flightScale(GameTestHelper h, double x) {
         IncomingConfig.ScalePreset preset = IncomingConfig.SERVER.scalePreset.get();
         double was = IncomingConfig.SERVER.flightSpeed.get();
@@ -3247,9 +3345,10 @@ public final class StrikeGameTests {
     }
 
     /**
-     * Бомба, сброшенная под точку на своей высоте (цель в воздухе: игрок в полёте, а чанк под ним у пуска не был
-     * готов), не выравнивается и не кружит, а падает на землю задолго до конца срока жизни, а не тянется к точке,
-     * проходя под ней и уходя на круг радиусом ~240 блоков до конца срока.
+     * A bomb dropped under the point at its own height (the target in the air: a player in flight, and the chunk under
+     * him was not ready at launch), does not level out or circle, but falls to the ground long before the end of its
+     * lifetime, rather than stretching to the point, passing under it and going to a circle of radius ~240 blocks until
+     * the end of its lifetime.
      */
     @GameTest(template = "runway", timeoutTicks = 200, batch = "bunker_air", skyAccess = true)
     public static void bunkerBusterFallsUnderAirborneAim(GameTestHelper h) {
@@ -3262,32 +3361,34 @@ public final class StrikeGameTests {
         boolean[] drilled = {false};
         h.onEachTick(() -> {
             if (bomb.isRemoved()) return;
-            h.assertTrue(bomb.getY() <= lastY[0] + 1e-6, "бомба набирает высоту: " + lastY[0] + " → " + bomb.getY());
+            h.assertTrue(bomb.getY() <= lastY[0] + 1e-6, "bomb gains height: " + lastY[0] + " → " + bomb.getY());
             lastY[0] = bomb.getY();
             if (bomb.isDrilling()) drilled[0] = true;
         });
         h.succeedWhen(() -> {
-            h.assertTrue(drilled[0], "бомба не вошла в грунт");
-            h.assertTrue(bomb.isRemoved(), "бомба ещё не взорвалась");
+            h.assertTrue(drilled[0], "bomb did not enter the ground");
+            h.assertTrue(bomb.isRemoved(), "bomb has not detonated yet");
             Vec3 entry = bomb.entry();
             h.assertTrue(Math.abs(entry.x - aim.x) < 16 && entry.z > aim.z - 85 && entry.z < aim.z + 120,
-                    "бомба упала далеко от цели: " + entry);
+                    "bomb fell far from the target: " + entry);
         });
     }
 
     /**
-     * Снаряд вне мира, который прошёл мимо цели, не уходит под землю: вне мира нет столкновений, и такой снаряд падал
-     * бы без взрыва до конца срока жизни или до низа мира (бомба на точку позади B-2 — под миром на y=−3022).
-     * Путь вне мира кончается на поверхности (карта высот готового чанка, у неготового — уровень моря): снаряд
-     * ждёт загрузки этого места, возвращается в мир на поверхности и взрывается обычным попаданием. Бомба на точку
-     * позади себя не рулит и падает круто вниз по курсу — должна войти в грунт там, где её путь встречает рельеф.
+     * A projectile outside the world that passed the target does not go underground: outside the world there are no
+     * collisions, and such a projectile would fall without a blast until the end of its lifetime or to the bottom of
+     * the world (a bomb at a point behind the B-2 — below the world at y=−3022). The path outside the world ends on the
+     * surface (the height map of a ready chunk; for an unready one, sea level): the projectile waits for that place to
+     * load, returns to the world on the surface and detonates on an ordinary hit. A bomb at a point behind itself does
+     * not steer and falls steeply down its heading — it must enter the ground where its path meets the terrain.
      */
     @GameTest(template = "runway", timeoutTicks = 1500, batch = "virtual_ground", skyAccess = true)
     public static void virtualMissNeverFallsBelowGround(GameTestHelper h) {
         ServerLevel level = h.getLevel();
-        // место падения заранее не известно, оно грузится в фоне, пока бомба ждёт: время ожидания — игровое
+        // the impact place is not known in advance; it loads in the background while the bomb waits: the waiting time
+        // is game time
         gameSpeed(h);
-        // далеко за площадкой: вокруг ничего не загружено, бомба сразу летит вне мира
+        // far beyond the pad: nothing is loaded around, the bomb flies outside the world at once
         BlockPos origin = FarSite.MISS_BELOW_GROUND.at(h);
         Vec3 from = new Vec3(origin.getX() + 0.5, REFERENCE_SEA_LEVEL + 200, origin.getZ() + 0.5);
         Vec3 behind = from.add(0, -150, -300);
@@ -3305,37 +3406,39 @@ public final class StrikeGameTests {
             lowest[0] = Math.min(lowest[0], p.getY());
             if (entry[0] == null && p instanceof BunkerBusterEntity b && b.isDrilling()) {
                 entry[0] = b.entry();
-                // рельеф рядом со скважиной: в самой скважине бомба уже выбрала грунт
+                // terrain beside the hole: inside the hole the bomb has already chosen the ground
                 ground[0] = Terrain.height(level, Heightmap.Types.MOTION_BLOCKING, Mth.floor(entry[0].x) + 24, Mth.floor(entry[0].z));
             }
         });
         h.succeedWhen(() -> {
-            h.assertTrue(lowest[0] > level.getMinBuildHeight(), "бомба ушла под мир: y=" + (int) lowest[0]);
-            h.assertTrue(entry[0] != null, "бомба не вошла в грунт, ниже всего y=" + (int) lowest[0]);
-            // вход на 1 блок выше точки попадания (дым из скважины)
-            h.assertTrue(Math.abs(entry[0].y - 1 - ground[0]) < 2, "бомба вошла в грунт не на поверхности: y=" + (int) entry[0].y + ", рельеф " + ground[0]);
-            // падает вперёд по курсу (+z), не рулит: вбок не уходит, вперёд — не дальше двух высот падения
+            h.assertTrue(lowest[0] > level.getMinBuildHeight(), "bomb went under the world: y=" + (int) lowest[0]);
+            h.assertTrue(entry[0] != null, "bomb did not enter the ground, lowest y=" + (int) lowest[0]);
+            // entry 1 block above the impact point (smoke from the hole)
+            h.assertTrue(Math.abs(entry[0].y - 1 - ground[0]) < 2, "bomb entered the ground not at the surface: y=" + (int) entry[0].y + ", terrain " + ground[0]);
+            // falls forward on its heading (+z), does not steer: it does not drift sideways, forward — no further than
+            // two fall heights
             h.assertTrue(entry[0].z > from.z && entry[0].z - from.z < 2 * (from.y - ground[0]) && Math.abs(entry[0].x - from.x) < 8,
-                    "бомба вошла в грунт не на своём пути: " + entry[0].subtract(from));
+                    "bomb entered the ground off its path: " + entry[0].subtract(from));
             assertFlightReleased(h, id);
         });
     }
 
     /**
-     * Бомба вне мира падает над неготовым чанком, где пол полёта — уровень моря, а чанк посреди падения становится
-     * готовым, и настоящая поверхность выше бомбы. Бомба не рулит вверх: ниже поверхности она уже в земле и попадает
-     * в поверхность над собой: пол «встал» выше неё, пересечения сверху вниз нет, и иначе она падала бы под мир.
+     * A bomb outside the world falls over an unready chunk, where the flight floor is sea level, and the chunk becomes
+     * ready in the middle of the fall, and the real surface is above the bomb. The bomb does not steer up: below the
+     * surface it is already in the ground, and it hits the surface above it: the floor has “risen” above it, there is
+     * no top-down crossing, and otherwise it would fall under the world.
      */
     @GameTest(template = "runway", timeoutTicks = 1500, batch = "virtual_risen_ground", skyAccess = true)
     public static void virtualBombUnderRisenSurfaceHitsIt(GameTestHelper h) {
         ServerLevel level = h.getLevel();
-        // место падения грузится в фоне, пока бомба ждёт: время ожидания — игровое
+        // the impact place loads in the background while the bomb waits: the waiting time is game time
         gameSpeed(h);
         BlockPos origin = FarSite.BOMB_RISEN_SURFACE.at(h);
         Vec3 from = new Vec3(origin.getX() + 0.5, REFERENCE_SEA_LEVEL + 200, origin.getZ() + 0.5);
         Vec3 behind = from.add(0, -150, -300);
         int sea = level.getChunkSource().getGenerator().getSeaLevel();
-        // «рельеф», которого вне мира не видно: плита на 80 блоков выше моря генератора
+        // “terrain” not visible outside the world: a slab 80 blocks above the generator's sea
         int roof = sea + 80;
         BunkerBusterEntity bomb = ModEntities.BUNKER_BUSTER.get().create(level);
         bomb.drop(from, BomberEntity.levelVelocity(0), behind, null, null);
@@ -3351,19 +3454,22 @@ public final class StrikeGameTests {
             StrikeProjectile p = flight(level, id);
             if (p == null) return;
             lowest[0] = Math.min(lowest[0], p.getY());
-            // бомба вне мира ниже будущей плиты, но выше моря — её чанки готовы, а плита уже над ней
+            // the bomb outside the world is below the future slab but above the sea — its chunks are ready, and the
+            // slab is already above it
             if (!risen[0] && p.isVirtual() && p.getY() < roof - 20 && p.getY() > sea + 5) {
                 risen[0] = true;
                 risenZ[0] = p.getZ();
                 BlockPos at = p.blockPosition();
-                // плита короткая: за ней бомба уходит ниже низа мира лишь через ~35 блоков по курсу — туда плита не
-                // достаёт, и в неё попадает только бомба, которая упала в поверхность там, где плита встала над ней
+                // The slab is short: beyond it the bomb goes below the bottom of the world only ~35 blocks along the
+                // heading — the slab does not reach there, and only a bomb that fell into the surface where the slab
+                // rose over it hits it
                 for (int dx = -3; dx <= 3; dx++) {
                     for (int dz = -8; dz <= 16; dz++) {
                         BlockPos b = new BlockPos(at.getX() + dx, roof, at.getZ() + dz);
                         ChunkPos c = new ChunkPos(b);
                         if (!held.contains(c)) {
-                            // уровень 33: чанк готов (FULL), но не тикает — бомба над ним остаётся вне мира
+                            // level 33: the chunk is ready (FULL), but does not tick — the bomb above it stays outside
+                            // the world
                             level.getChunkSource().addRegionTicket(READY_ONLY, c, 0, c);
                             level.getChunk(c.x, c.z);
                             held.add(c);
@@ -3375,28 +3481,30 @@ public final class StrikeGameTests {
             if (entry[0] == null && p instanceof BunkerBusterEntity b && b.isDrilling()) entry[0] = b.entry();
         });
         h.succeedWhen(() -> {
-            h.assertTrue(risen[0], "плита не встала над бомбой");
-            h.assertTrue(lowest[0] > level.getMinBuildHeight(), "бомба ушла под мир: y=" + (int) lowest[0]);
-            h.assertTrue(entry[0] != null, "бомба не вошла в грунт, ниже всего y=" + (int) lowest[0]);
-            // вход на 1 блок выше точки попадания (дым из скважины); попадание — верх плиты
-            h.assertTrue(Math.abs(entry[0].y - 1 - (roof + 1)) < 2, "бомба вошла не в плиту над собой: y=" + (int) entry[0].y + ", плита " + roof);
-            h.assertTrue(Math.abs(entry[0].z - risenZ[0]) < 4, "бомба вошла в плиту не там, где плита встала над ней: " + (entry[0].z - risenZ[0]));
-            // под плитой — воздух до земли: бомба проходит его в грунте и уходит в соседние чанки
+            h.assertTrue(risen[0], "slab did not rise above the bomb");
+            h.assertTrue(lowest[0] > level.getMinBuildHeight(), "bomb went under the world: y=" + (int) lowest[0]);
+            h.assertTrue(entry[0] != null, "bomb did not enter the ground, lowest y=" + (int) lowest[0]);
+            // entry 1 block above the impact point (smoke from the hole); the impact is the slab's top
+            h.assertTrue(Math.abs(entry[0].y - 1 - (roof + 1)) < 2, "bomb entered not the slab above it: y=" + (int) entry[0].y + ", slab " + roof);
+            h.assertTrue(Math.abs(entry[0].z - risenZ[0]) < 4, "bomb entered the slab not where the slab rose over it: " + (entry[0].z - risenZ[0]));
+            // under the slab — air down to the ground: the bomb passes through it in the ground and goes into
+            // neighboring chunks
             assertFlightReleased(h, id);
         });
     }
 
     /**
-     * Цель ниже рельефа (пещера, карьер, овраг; в обычном мире — всё, что ниже уровня моря 63, у неготовых чанков это
-     * и есть поверхность вне мира): вне мира снаряд летит на высоте цели — пуск издалека над ней, РСЗО с её высоты — и
-     * под поверхностью, пока не ниже цели, летит дальше. Здесь над местом пуска — «рельеф» из готового, но не тикающего
-     * чанка на 60 блоков выше цели; иначе первый же шаг вне мира кончается на нём, и взрыв — в 1500 блоках от цели.
+     * A target below the terrain (cave, quarry, ravine; in a normal world — everything below sea level 63; for unready
+     * chunks that is the surface outside the world): outside the world a projectile flies at the target's height — a
+     * launch from afar above it, an MLRS from its height — and beneath the surface, until it is not below the target,
+     * it flies on. Here above the launch place is a “terrain” from a ready but unticked chunk, 60 blocks above the
+     * target; otherwise the very first step outside the world ends on it, and the blast is 1500 blocks from the target.
      */
     @GameTest(template = "runway", timeoutTicks = 900, batch = "virtual_deep_missile", skyAccess = true)
     public static void virtualMissileUnderTerrainReachesDeepTarget(GameTestHelper h) {
         Vec3 aim = top(h, RUNWAY_TARGET);
         CruiseMissileEntity missile = ModEntities.CRUISE_MISSILE.get().create(h.getLevel());
-        // как пуск издалека (StrikeService.fromAfar): над целью на 12 блоков
+        // as a launch from afar (StrikeService.fromAfar): 12 blocks above the target
         Vec3 start = aim.add(0, 12, -1500);
         missile.launch(start, new Target.Point(aim), aim, null);
         missile.setRoute(Route.direct());
@@ -3407,7 +3515,7 @@ public final class StrikeGameTests {
     public static void virtualRocketUnderTerrainReachesDeepTarget(GameTestHelper h) {
         Vec3 aim = top(h, RUNWAY_TARGET);
         RocketEntity rocket = ModEntities.ROCKET.get().create(h.getLevel());
-        // как пуск РСЗО издалека (StrikeService): с высоты цели, в 600 блоках
+        // as an MLRS launch from afar (StrikeService): from the target's height, 600 blocks away
         Vec3 start = aim.add(0, 0, -600);
         rocket.launchFrom(start, new Target.Point(aim), aim, null);
         reachesUnderTerrain(h, rocket, start, aim);
@@ -3416,21 +3524,23 @@ public final class StrikeGameTests {
     private static final TicketType<ChunkPos> READY_ONLY = TicketType.create("incoming_test_ready", Comparator.comparingLong(ChunkPos::toLong));
 
     /**
-     * Цель, за которой снаряд держит высоту, поднялась на 40 блоков (игрок вышел из оврага, телепорт), и в тот же тик
-     * над снарядом встал «рельеф» (готовый, но не тикающий чанк догрузился): пол полёта вне мира ({@code BELOW_AIM} под
-     * целью) встал выше снаряда. Снаряд на бреющем не падает там, где его это застало (в 1500 блоках от цели), а
-     * набирает высоту над рельефом и за целью и бьёт по ней. Рельеф встаёт только тогда: заранее ракета видела бы его
-     * датчиком ({@code StrikeProjectile.relief}) и шла бы над ним, ниже пола не оказавшись.
+     * The target that the projectile holds its height on rose 40 blocks (the player climbed out of a ravine, a
+     * teleport), and in the same tick a “terrain” rose over the projectile (a ready but unticked chunk loaded): the
+     * flight floor outside the world ({@code BELOW_AIM} under the target) rose above the projectile. A projectile at
+     * low altitude does not fall where it was caught (1500 blocks from the target), but climbs over the terrain and
+     * behind the target and hits it. The terrain rises only then: in advance, the rocket would see it with its sensor
+     * ({@code StrikeProjectile.relief}) and would fly over it, never being below the floor.
      */
     @GameTest(template = "runway", timeoutTicks = 900, batch = "virtual_rising_aim", skyAccess = true)
     public static void virtualMissileClimbsAfterRisingAim(GameTestHelper h) {
-        // ракета спустилась под «рельеф» на свою высоту над целью (+12)
+        // the missile descended under the “terrain” to its height over the target (+12)
         climbsAfterRisingAim(h, 0, (y, floor, dy) -> y < floor - 11);
     }
 
     /**
-     * То же, но цель поднимается, пока ракета ещё снижается к её прежней высоте, — в тот тик, после которого шаг ракеты
-     * прошёл бы через новый пол: пол встал выше неё сам, это не пересечение сверху вниз.
+     * The same, but the target rises while the missile is still descending to its former height — in the tick after
+     * which a missile step would pass through the new floor: the floor rose above it by itself; this is not a top-down
+     * crossing.
      */
     @GameTest(template = "runway", timeoutTicks = 900, batch = "virtual_rising_aim_descent", skyAccess = true)
     public static void virtualMissileClimbsAfterAimRisesMidDescent(GameTestHelper h) {
@@ -3439,7 +3549,7 @@ public final class StrikeGameTests {
 
     @FunctionalInterface
     private interface RiseWhen {
-        /** Поднять цель сейчас: высота ракеты, пол после подъёма цели, снижение ракеты за прошлый тик. */
+        /** Raise the target now: missile height, floor after the target's rise, missile descent in the previous tick. */
         boolean test(double y, double floorAfter, double descent);
     }
 
@@ -3450,16 +3560,18 @@ public final class StrikeGameTests {
         stand.setNoGravity(true);
         stand.moveTo(low.x, low.y, low.z);
         level.addFreshEntity(stand);
-        // +Z от площадки ещё пуст: на -Z стоят прежние партии, и датчик видит их стены/крыши на всём пути.
+        // +Z of the pad is still empty: the earlier batches stand on -Z, and the sensor sees their walls/roofs along
+        // the whole path.
         Vec3 start = low.add(0, 12, 1500);
         int direction = -1;
         int roofLength = 1000;
-        // Короткий гребень даёт высоту для настоящего снижения. Длинный навес появится только при подъёме цели.
+        // A short ridge gives height for a real descent. A long canopy appears only when the target rises.
         if (ridge > 0) roofOverStart(h, start, Mth.floor(low.y) + 60, ridge, direction);
         CruiseMissileEntity missile = ModEntities.CRUISE_MISSILE.get().create(level);
         UUID id = missile.getUUID();
         Vec3 high = low.add(0, 40, 0);
-        // пол полёта вне мира после подъёма: центр цели на 16 блоков ниже (рельеф над путём выше)
+        // flight floor outside the world after the rise: the target's center 16 blocks lower (terrain over the path is
+        // higher)
         double floorAfter = high.y + stand.getBbHeight() / 2 - 16;
         Vec3[] last = {start};
         boolean[] launched = {false}, raised = {false}, climbed = {false};
@@ -3467,14 +3579,15 @@ public final class StrikeGameTests {
         List<String> crossing = new ArrayList<>();
         h.onEachTick(() -> {
             if (!launched[0]) {
-                // getChunk() при постройке вернул FULL, но его держатель может ещё не быть в видимой карте.
-                // launch() читает высоту только getChunkNow: иначе старт с +12, и короткий гребень не всегда
-                // успевает поднять ракету выше нового пола. Ждём именно готовности, не заданное число тиков.
+                // getChunk() returned FULL when built, but its holder may not yet be in the visible map. launch() reads
+                // the height only through getChunkNow: otherwise the start is at +12, and the short ridge does not
+                // always manage to raise the missile above the new floor. We wait for readiness itself, not a set
+                // number of ticks.
                 if (ridge > 0 && !Terrain.ready(level, BlockPos.containing(start))) return;
                 missile.launch(start, Target.OfEntity.center(stand), low, null);
                 missile.setRoute(Route.direct());
                 h.assertTrue(ridge == 0 || missile.getY() > floorAfter,
-                        "подготовка снижения: старт y=" + missile.getY() + " не выше будущего пола " + floorAfter);
+                        "descent preparation: start y=" + missile.getY() + " not above the future floor " + floorAfter);
                 last[0] = missile.position();
                 VirtualFlights.launch(level, missile);
                 launched[0] = true;
@@ -3495,21 +3608,22 @@ public final class StrikeGameTests {
                 raised[0] = true;
                 raisedAt[0] = f.getY();
                 stand.teleportTo(high.x, high.y, high.z);
-                // «рельеф» над ракетой и впереди до конца прежнего навеса: пол встал выше неё и с этой стороны
+                // “terrain” above the missile and ahead to the end of the former canopy: the floor rose above it, on
+                // this side too
                 roofOverStart(h, new Vec3(start.x, start.y, Math.floor(f.getZ())), Mth.floor(low.y) + 60, (int) Math.abs(start.z + direction * roofLength - Math.floor(f.getZ())), direction);
             }
         });
         h.succeedWhen(() -> {
-            h.assertTrue(launched[0], "гребень не готов, ракета не запущена");
-            h.assertTrue(raised[0], "цель не поднялась; пол " + floorAfter + "; высоты до 900 м " + java.util.Arrays.toString(range) + "; снижение " + crossing + "; последнее место " + last[0].subtract(low));
-            h.assertTrue(climbed[0], "ракета не набрала высоту после подъёма цели");
-            h.assertFalse(flight(level, id) != null, "ракета ещё летит, до цели " + (int) last[0].distanceTo(high));
-            h.assertTrue(last[0].distanceTo(high) < 24, "ракета взорвалась не у цели: " + last[0].subtract(high));
+            h.assertTrue(launched[0], "ridge not ready, missile not launched");
+            h.assertTrue(raised[0], "target did not rise; floor " + floorAfter + "; heights up to 900 m " + java.util.Arrays.toString(range) + "; descent " + crossing + "; last place " + last[0].subtract(low));
+            h.assertTrue(climbed[0], "missile did not gain height after the target's rise");
+            h.assertFalse(flight(level, id) != null, "missile still flying, to the target " + (int) last[0].distanceTo(high));
+            h.assertTrue(last[0].distanceTo(high) < 24, "missile detonated not at the target: " + last[0].subtract(high));
             assertFlightReleased(h, id);
         });
     }
 
-    /** Снаряд по UUID — вне мира или в мире (null — его уже нет). */
+    /** Projectile by UUID — outside the world or inside it (null — it is already gone). */
     @Nullable
     private static StrikeProjectile flight(ServerLevel level, UUID id) {
         return VirtualFlights.get(level).flights().stream().filter(v -> v.getUUID().equals(id)).findFirst()
@@ -3517,24 +3631,28 @@ public final class StrikeGameTests {
     }
 
     /**
-     * Полёт кончился — снаряда нет ни в мире, ни вне его — и удары отработали, а у мода не осталось ни одного тикета
-     * с ключом снаряда: ни своих чанков ({@code incoming_projectile}), ни района цели и полосы ({@code incoming_flight}),
-     * ни их тикетов загрузки. Снаряд, который застрял в мире там, где не тикает, держал бы их до остановки сервера.
+     * The flight is over: the projectile is neither in the world nor outside it, the impacts have run, and the mod has
+     * no tickets left with the projectile's key: neither its own chunks ({@code incoming_projectile}) nor the target
+     * area and strip ({@code incoming_flight}), nor their load tickets. A projectile stuck in the world where nothing
+     * ticks would hold them until the server stopped.
      */
     private static void assertFlightReleased(GameTestHelper h, UUID id) {
         ServerLevel level = h.getLevel();
         StrikeProjectile p = flight(level, id);
         if (p != null) {
             BlockPos at = p.blockPosition();
-            throw new GameTestAssertException("снаряд не кончился: " + (p.isVirtual() ? "вне мира" : level.isPositionEntityTicking(at) ? "в мире" : "в мире без тика")
-                    + " на " + at.toShortString() + ", фаза " + p.flightPhase() + "; его тикеты " + TicketProbe.types(level, id));
+            throw new GameTestAssertException("projectile did not end: " + (p.isVirtual() ? "outside the world" : level.isPositionEntityTicking(at) ? "in the world" : "in the world, not ticking")
+                    + " at " + at.toShortString() + ", phase " + p.flightPhase() + "; its tickets " + TicketProbe.types(level, id));
         }
-        h.assertTrue(StrikeWorld.get(level).impacts().size() == 0, "удары ещё в очереди");
+        h.assertTrue(StrikeWorld.get(level).impacts().size() == 0, "impacts still queued");
         List<String> left = TicketProbe.types(level, id);
-        h.assertTrue(left.isEmpty(), "после полёта остались его тикеты: " + left + "; районы " + StrikeWorld.get(level).areas().describe());
+        h.assertTrue(left.isEmpty(), "after the flight its tickets remain: " + left + "; areas " + StrikeWorld.get(level).areas().describe());
     }
 
-    /** Снаряд под «рельефом» на 60 блоков выше цели над местом пуска долетает до цели и взрывается у неё. */
+    /**
+     * A projectile under the “relief” 60 blocks above the target, over the launch site, reaches the target and explodes
+     * there.
+     */
     private static void reachesUnderTerrain(GameTestHelper h, StrikeProjectile p, Vec3 start, Vec3 aim) {
         ServerLevel level = h.getLevel();
         roofOverStart(h, start, Mth.floor(aim.y) + 60, 64);
@@ -3546,24 +3664,25 @@ public final class StrikeGameTests {
             if (f != null) last[0] = f.position();
         });
         h.succeedWhen(() -> {
-            h.assertFalse(flight(level, id) != null, "снаряд ещё летит, до цели " + (int) last[0].distanceTo(aim));
-            h.assertTrue(last[0].distanceTo(aim) < 24, "снаряд взорвался не у цели: " + last[0].subtract(aim));
-            assertCrater(h, RUNWAY_TARGET, "у цели");
+            h.assertFalse(flight(level, id) != null, "projectile still flying, distance to target " + (int) last[0].distanceTo(aim));
+            h.assertTrue(last[0].distanceTo(aim) < 24, "projectile exploded away from the target: " + last[0].subtract(aim));
+            assertCrater(h, RUNWAY_TARGET, "at target");
             assertFlightReleased(h, id);
         });
     }
 
     /**
-     * «Рельеф» на высоте {@code roof} над местом пуска и {@code length} блоками пути вперёд (+z): готовые чанки, где
-     * сущности не тикают, — снаряд над ними летит вне мира. Тикеты и сам «рельеф» снимаются после теста при любом
-     * исходе: оставленная полоса камня висела над площадками следующих партий в той же колонне сетки (бомба B-2 входила
-     * в неё в 61 блоке над грунтом, гребень закрывал шахед от ЗРК).
+     * The “relief” at height {@code roof} above the launch site and {@code length} blocks of path ahead (+z): ready
+     * chunks where entities do not tick — the projectile flies outside the world over them. The tickets and the
+     * “relief” itself are removed after the test in any outcome: a left-over strip of stone hung over the pads of the
+     * next batches in the same grid column (the B-2 bunker buster entered it at 61 blocks above the ground, the ridge
+     * hid the Shahed from the SAM).
      */
     private static void roofOverStart(GameTestHelper h, Vec3 start, int roof, int length) {
         roofOverStart(h, start, roof, length, 1);
     }
 
-    /** direction — знак направления пути по Z. */
+    /** direction — sign of the path direction along Z. */
     private static void roofOverStart(GameTestHelper h, Vec3 start, int roof, int length, int direction) {
         ServerLevel level = h.getLevel();
         List<ChunkPos> held = new ArrayList<>();
@@ -3572,7 +3691,7 @@ public final class StrikeGameTests {
             BlockPos b = BlockPos.containing(start.x, roof, start.z + direction * dz);
             ChunkPos c = new ChunkPos(b);
             if (!held.contains(c)) {
-                // уровень 33: чанк готов (FULL), но не тикает
+                // level 33: chunk is ready (FULL), but not ticking
                 level.getChunkSource().addRegionTicket(READY_ONLY, c, 0, c);
                 level.getChunk(c.x, c.z);
                 held.add(c);
@@ -3581,15 +3700,15 @@ public final class StrikeGameTests {
             laid.add(b);
         }
         afterTest(h, () -> {
-            // камень — пока чанки ещё держит свой тикет
+            // stone — while the chunks still hold their ticket
             for (BlockPos b : laid) if (level.getBlockState(b).is(Blocks.STONE)) level.setBlock(b, Blocks.AIR.defaultBlockState(), Block.UPDATE_CLIENTS);
             held.forEach(c -> level.getChunkSource().removeRegionTicket(READY_ONLY, c, 0, c));
         });
     }
 
     /**
-     * Уборка после теста — и когда он прошёл, и когда упал или вышел по сроку (в {@code succeedWhen} она шла бы только
-     * после успеха). Открыта: ею пользуются и другие классы тестов, и сценарии полёта.
+     * Cleanup after the test — both when it passed and when it failed or timed out (in {@code succeedWhen} it would run
+     * only after success). Public: other test classes and flight scenarios use it as well.
      */
     public static void afterTest(GameTestHelper h, Runnable cleanup) {
         h.testInfo.addListener(new GameTestListener() {
@@ -3614,22 +3733,24 @@ public final class StrikeGameTests {
     }
 
     /**
-     * Снаряд вне мира, долетевший до цели, чей район уже тикает, взрывается у цели, даже если за целью чанки не тикают.
-     * В мир он возвращается, только когда тикает и место впереди по курсу (запас от прыжков на границе); у цели в чанке,
-     * который тикает один (игрок в воздухе над краем загрузки), этого не бывает, и снаряд пролетел бы цель без взрыва
-     * и падал бы по баллистике до конца срока жизни — до сотен блоков под миром.
+     * A projectile outside the world that reached the target, whose area already ticks, explodes at the target even if
+     * the chunks beyond the target do not tick. It returns to the world only when the area ticks and the place ahead
+     * along its course does too (margin against jumps at the border); at the target, in a chunk that ticks alone (a
+     * player in the air over the edge of loading) this does not happen, and the projectile would fly past the target
+     * without exploding and would fall ballistically until the end of its lifetime — hundreds of blocks below the
+     * world.
      */
     @GameTest(template = "runway", timeoutTicks = 600, batch = "virtual_arrival", skyAccess = true)
     public static void virtualRocketDetonatesAtTickingAim(GameTestHelper h) {
         ServerLevel level = h.getLevel();
-        // далеко за площадкой: тикает только чанк цели (принудительно), соседи — нет
+        // far beyond the pad: only the target's chunk ticks (forced), the neighbors do not
         BlockPos origin = FarSite.ROCKET_TICKING_AIM.at(h);
         ChunkPos chunk = new ChunkPos(origin);
         level.setChunkForced(chunk.x, chunk.z, true);
         afterTest(h, () -> level.setChunkForced(chunk.x, chunk.z, false));
-        // сущности в чанке цели тикают, только когда готовы соседи (5×5), а их фоновая генерация на CI (сервер тикает без
-        // пауз) идёт дольше срока теста — снаряд ждал бы района у цели («ещё летит, до цели 65»); соседи — готовые,
-        // но не тикающие
+        // entities in the target's chunk tick only when the neighbors (5×5) are ready, and their background generation
+        // on CI (the server ticks without pauses) takes longer than the test time limit — the projectile would wait for
+        // the target's area (“still flying, distance to target 65”); neighbors are ready, but not ticking
         generateNow(level, chunk);
         Vec3 aim = new Vec3(chunk.getMiddleBlockX() + 0.5, REFERENCE_SEA_LEVEL + 140, chunk.getMiddleBlockZ() + 0.5);
         RocketEntity rocket = ModEntities.ROCKET.get().create(level);
@@ -3643,23 +3764,24 @@ public final class StrikeGameTests {
                     .orElseGet(() -> level.getEntity(id) instanceof StrikeProjectile e && !e.isRemoved() ? e : null);
             if (p == null) return;
             last[0] = p.position();
-            // пролетел цель: дальше неё по курсу (снаряд идёт по +x)
+            // flew past the target: beyond it along the course (the projectile goes along +x)
             if (p.getX() > aim.x + 16) passed[0] = true;
         });
         h.succeedWhen(() -> {
-            h.assertFalse(passed[0], "снаряд пролетел цель: " + last[0].subtract(aim));
+            h.assertFalse(passed[0], "projectile flew past the target: " + last[0].subtract(aim));
             boolean flying = level.getEntity(id) != null && !level.getEntity(id).isRemoved()
                     || VirtualFlights.get(level).flights().stream().anyMatch(f -> f.getUUID().equals(id));
-            h.assertFalse(flying, "снаряд ещё летит, до цели " + (int) last[0].distanceTo(aim));
-            h.assertTrue(last[0].distanceTo(aim) < 16, "снаряд пропал не у цели: " + last[0].subtract(aim));
+            h.assertFalse(flying, "projectile still flying, distance to target " + (int) last[0].distanceTo(aim));
+            h.assertTrue(last[0].distanceTo(aim) < 16, "projectile vanished away from the target: " + last[0].subtract(aim));
         });
     }
 
     /**
-     * Цель ниже рельефа (3 блока под землёй), а за ней по курсу — скала на 50 блоков выше: снаряд возвращается в мир
-     * у края района цели (в ~40 блоках) и встаёт над рельефом только своего оставшегося пути. Рельеф на 80 блоков
-     * вперёд — и за целью — поднял бы ракету РСЗО на скалу, и она рвалась бы в воздухе или на склоне рядом
-     * с целью (в 10 блоках от цели — с y 51 выше 95).
+     * The target below the relief (3 blocks underground), and beyond it along the course — a cliff 50 blocks higher:
+     * the projectile returns to the world at the edge of the target's area (~40 blocks), and it rises above the relief
+     * only along its remaining path. A relief 80 blocks ahead — and beyond the target — would lift an MLRS rocket onto
+     * the cliff, and it would burst in the air or on the slope next to the target (10 blocks from the target — with y
+     * 51 above 95).
      */
     @GameTest(template = "runway", timeoutTicks = 900, batch = "virtual_rocket_hill_beyond", skyAccess = true)
     public static void virtualRocketIgnoresTerrainBeyondAim(GameTestHelper h) {
@@ -3672,33 +3794,39 @@ public final class StrikeGameTests {
 
     @GameTest(template = "runway", timeoutTicks = 900, batch = "virtual_missile_hill_beyond", skyAccess = true)
     public static void virtualMissileIgnoresTerrainBeyondAim(GameTestHelper h) {
-        // скала дальше, чем у ракеты: крылатая в пике проскакивает цель примерно на 10 блоков
+        // the cliff is farther than for the rocket: the cruise missile in a dive overshoots the target by about 10
+        // blocks
         returnsUnderOwnTerrain(h, 12, 28, FarSite.MISSILE_HILL_BEYOND, (level, aim) -> {
             CruiseMissileEntity missile = ModEntities.CRUISE_MISSILE.get().create(level);
-            // как пуск издалека (StrikeService.fromAfar): над целью на 12 блоков
+            // like a launch from afar (StrikeService.fromAfar): 12 blocks above the target
             missile.launch(aim.add(-300, 12, 0), new Target.Point(aim), aim, null);
             missile.setRoute(Route.direct());
             return missile;
         });
     }
 
-    /** Скала за целью выше рельефа над ней на столько блоков. */
+    /** The cliff behind the target is this many blocks above the relief over it. */
     private static final int HILL_BEYOND = 50;
 
-    /** Ближе к цели по горизонтали — взрыв у цели (а не на скале за ней). */
+    /** Closer to the target horizontally — the blast at the target (not on the cliff behind it). */
     private static final double BURST_NEAR_AIM = 5;
-    /** Район цели теста — как у снаряда ({@link FlightTickets}), но с первого тика: путь возврата в мир один и тот же. */
+    /**
+     * Target area of the test — as for the projectile ({@link FlightTickets}), but from the first tick: the return path
+     * to the world is the same.
+     */
     private static final TicketType<ChunkPos> AIM_AREA = TicketType.create("incoming_test_aim_area", Comparator.comparingLong(ChunkPos::toLong));
 
     /**
-     * {@code clearance} — запас снаряда над рельефом при возврате в мир ({@code StrikeProjectile.clearance}),
-     * {@code cliff} — на сколько блоков за целью по курсу начинается скала, {@code site} — своё место теста.
+     * {@code clearance} — the projectile's margin above the relief when returning to the world ({@code
+     * StrikeProjectile.clearance}), {@code cliff} — how many blocks behind the target along the course the cliff
+     * starts, {@code site} — the test's own place.
      */
     private static void returnsUnderOwnTerrain(GameTestHelper h, int clearance, int cliff, FarSite site, java.util.function.BiFunction<ServerLevel, Vec3, StrikeProjectile> make) {
         ServerLevel level = h.getLevel();
-        // далеко за площадкой, как virtualRocketDetonatesAtTickingAim. Район цели сгенерирован сразу и тикает с первого
-        // тика (сущности — 5×5 чанков, ±40 блоков): снаряд вне мира всегда возвращается у края района, а не когда тикет
-        // района цели самого снаряда догрузит его в фоне (тогда путь зависел бы от скорости генерации)
+        // far beyond the pad, as in virtualRocketDetonatesAtTickingAim. The target area is generated at once and ticks
+        // from the first tick (entities — 5×5 chunks, ±40 blocks): a projectile outside the world always returns at the
+        // edge of the area, not when the ticket of the projectile's own target area loads it in the background (then
+        // the path would depend on the generation speed)
         BlockPos origin = site.at(h);
         ChunkPos chunk = new ChunkPos(origin);
         generateNow(level, chunk, FlightTickets.DISTANCE);
@@ -3707,15 +3835,16 @@ public final class StrikeGameTests {
         int x = chunk.getMiddleBlockX(), z = chunk.getMiddleBlockZ();
         int surface = Terrain.height(level, Heightmap.Types.MOTION_BLOCKING, x, z);
         Vec3 aim = new Vec3(x + 0.5, surface - 3, z + 0.5);
-        // скала за целью по курсу (+x)
+        // a cliff behind the target along the course (+x)
         for (int bx = x + cliff; bx <= x + cliff + 1; bx++)
             for (int bz = z - 1; bz <= z + 1; bz++)
                 for (int by = surface - 4; by < surface + HILL_BEYOND; by++)
                     level.setBlockAndUpdate(new BlockPos(bx, by, bz), Blocks.STONE.defaultBlockState());
         StrikeProjectile p = make.apply(level, aim);
         UUID id = p.getUUID();
-        // первый взрыв у цели (в 16 блоках по горизонтали: остальные тесты — за тысячи блоков); чанки вокруг цели
-        // готовы — взрыв не откладывается. Взрыв дальше (на скале крылатой) не ловится, и тест падает «без взрыва у цели»
+        // the first detonation at the target (16 blocks horizontally: the other tests are thousands of blocks away);
+        // the chunks around the target are ready — the detonation is not postponed. A detonation farther away (on the
+        // cruise missile's cliff) is not caught, and the test fails “without a detonation at the target”
         Vec3[] burst = {null};
         java.util.function.Consumer<net.neoforged.neoforge.event.level.ExplosionEvent.Start> onBlast = e -> {
             Vec3 c = e.getExplosion().center();
@@ -3725,7 +3854,8 @@ public final class StrikeGameTests {
         afterTest(h, () -> net.neoforged.neoforge.common.NeoForge.EVENT_BUS.unregister(onBlast));
         VirtualFlights.launch(level, p);
         Vec3[] last = {p.position()};
-        // высота в первом тике в мире и в последнем тике вне мира: возврат поднимает снаряд только над рельефом своего пути
+        // height in the first tick in the world and in the last tick outside it: the return lifts the projectile only
+        // above the relief of its own path
         double[] back = {Double.NaN, Double.NaN};
         h.onEachTick(() -> {
             StrikeProjectile f = flight(level, id);
@@ -3735,24 +3865,26 @@ public final class StrikeGameTests {
             last[0] = f.position();
         });
         h.succeedWhen(() -> {
-            h.assertFalse(flight(level, id) != null, "снаряд ещё летит, до цели " + (int) last[0].distanceTo(aim));
-            h.assertFalse(Double.isNaN(back[0]) || Double.isNaN(back[1]), "снаряд не прилетел вне мира и не вернулся в мир");
-            // не выше своего пути и рельефа над целью с запасом снаряда — не на скале за целью
+            h.assertFalse(flight(level, id) != null, "projectile still flying, distance to target " + (int) last[0].distanceTo(aim));
+            h.assertFalse(Double.isNaN(back[0]) || Double.isNaN(back[1]), "projectile did not arrive outside the world and did not return to the world");
+            // not higher than its own path and the relief over the target with the projectile's margin — not on the
+            // cliff behind the target
             h.assertTrue(back[0] <= Math.max(back[1], surface + clearance) + 2,
-                    "снаряд у цели поднят на рельеф за ней: y " + (int) back[0] + " (вне мира " + (int) back[1] + "), рельеф над целью " + surface);
-            h.assertTrue(burst[0] != null, "снаряд убран без взрыва у цели, последний раз у " + last[0].subtract(aim));
+                    "projectile at the target lifted onto the relief behind it: y " + (int) back[0] + " (outside the world " + (int) back[1] + "), relief over the target " + surface);
+            h.assertTrue(burst[0] != null, "projectile removed without a detonation at the target, last seen at " + last[0].subtract(aim));
             Vec3 off = burst[0].subtract(aim);
             h.assertTrue(Math.hypot(off.x, off.z) < BURST_NEAR_AIM && burst[0].y <= surface + 2,
-                    "взрыв не у цели: " + off + " от неё, рельеф над целью " + surface + " (скала — с " + cliff + " блоков за целью по курсу)");
+                    "detonation not at the target: " + off + " from it, relief over the target " + surface + " (cliff — from " + cliff + " blocks behind the target along the course)");
         });
     }
 
     /**
-     * Снаряд РСЗО по свежему району рядом: сходит с пакета сразу (без ожидания в трубе) и до взрыва движется каждый тик.
-     * Полёт (~100 тиков) не длиннее загрузки района: конец полёта вне мира растягивается во времени, а снаряд не
-     * замирает в воздухе у цели (вой не обрывается на 8–40 тиков). В игровом темпе:
-     * без пауз фоновая генерация идёт тысячи тиков, и снаряд вставал бы у черты; растяжение на всю длину, до готовности
-     * района, проверяет тест с удержанным районом ({@link #rocketStretchesFlightWhileAimAreaLoads}).
+     * An MLRS projectile in a fresh area nearby: it leaves the pod at once (without waiting in the tube) and moves
+     * every tick until the detonation. The flight (~100 ticks) is no longer than the area loading: the end of the
+     * flight outside the world is stretched in time, and the projectile does not freeze in the air at the target (the
+     * whine does not cut off for 8–40 ticks). At game pace: without pauses background generation takes thousands of
+     * ticks, and the projectile would stop at the edge; the stretch over its whole length, until the area is ready, is
+     * checked by the test holding the area ({@link #rocketStretchesFlightWhileAimAreaLoads}).
      */
     @GameTest(template = "runway", timeoutTicks = 1200, batch = "rocket_fresh_near", skyAccess = true)
     public static void rocketToFreshNearAreaNeverFreezes(GameTestHelper h) {
@@ -3761,8 +3893,9 @@ public final class StrikeGameTests {
     }
 
     /**
-     * Район цели грузится дольше полёта (тест держит его незагруженным 300 тиков при полёте ~100): снаряд сходит сразу,
-     * вне мира подходит к цели всё медленнее, ни одного тика не стоит и, когда район готов, взрывается у цели.
+     * The target area loads longer than the flight (the test keeps it unloaded for 300 ticks at a flight of ~100): the
+     * projectile leaves at once, outside the world it approaches the target ever more slowly, never stands still for a
+     * tick, and when the area is ready, explodes at the target.
      */
     @GameTest(template = "runway", timeoutTicks = 1500, batch = "rocket_slow_area", skyAccess = true)
     public static void rocketStretchesFlightWhileAimAreaLoads(GameTestHelper h) {
@@ -3770,8 +3903,10 @@ public final class StrikeGameTests {
     }
 
     /**
-     * Конец растяжения без скачка: район цели готов, снаряд вне мира разгоняется обратно плавно. Скорость — та, что уходит клиентам в пути звука ({@code velocity()}): скачок
-     * в ней — ступенька тона и громкости воя. Шаг в саму цель на последнем тике не считается.
+     * The end of the stretch without a jump: the target area is ready, the projectile outside the world speeds up
+     * smoothly again. The speed — the one that goes to clients in the sound's travel time ({@code velocity()}): a jump
+     * in it — a step in the pitch and loudness of the whine. The step into the target itself on the last tick is not
+     * counted.
      */
     @GameTest(template = "runway", timeoutTicks = 1500, batch = "rocket_stretch_end", skyAccess = true)
     public static void rocketStretchEndsWithoutSpeedStep(GameTestHelper h) {
@@ -3795,22 +3930,24 @@ public final class StrikeGameTests {
                     .orElseGet(() -> level.getEntity(id) instanceof StrikeProjectile e && !e.isRemoved() ? e : null);
             if (p != null) FlightTickets.hold(level, aimChunk, FlightTickets.DISTANCE, id, tick[0] >= withhold);
             if (tick[0] == withhold) generateNow(level, aimChunk);
-            // после выгорания: дальше скорость меняют только тяготение и темп растяжения
+            // after burnout: from then on only gravity and the stretch rate change the speed
             if (p == null || p.flightPhase() == FlightPhase.BOOST || p.flightPhase().onLauncher() || p.flightPhase() == FlightPhase.IGNITION) return;
             last[0] = p.position();
             double rate = ((RocketEntity) p).timeRate();
             minRate[0] = Math.min(minRate[0], rate);
             speeds.add(p.velocity().length());
-            track.add(String.format(Locale.ROOT, "тик %d (вне мира %s, темп %.2f, до цели %.0f)", tick[0], p.isVirtual(), rate, p.position().distanceTo(aim)));
+            track.add(String.format(Locale.ROOT, "tick %d (outside the world %s, rate %.2f, to target %.0f)", tick[0], p.isVirtual(), rate, p.position().distanceTo(aim)));
         });
         h.succeedWhen(() -> {
             boolean flying = level.getEntity(id) != null && !level.getEntity(id).isRemoved()
                     || VirtualFlights.get(level).flights().stream().anyMatch(f -> f.getUUID().equals(id));
-            h.assertFalse(flying, "снаряд ещё летит");
-            // взрыв у цели, а не конец ожидания района (AREA_WAIT_LIMIT): иначе конца растяжения и не было
-            h.assertTrue(last[0].distanceTo(aim) < 16, "снаряд пропал не у цели: " + last[0].subtract(aim));
-            h.assertTrue(minRate[0] < 0.5, "полёт не растягивался (темп не ниже " + minRate[0] + ")");
-            // последний тик — шаг в саму цель (доходит до неё, а не на длину шага), его не считаем
+            h.assertFalse(flying, "projectile still flying");
+            // detonation at the target, not the end of the area wait (AREA_WAIT_LIMIT): otherwise there would be no end
+            // of the stretch
+            h.assertTrue(last[0].distanceTo(aim) < 16, "projectile vanished away from the target: " + last[0].subtract(aim));
+            h.assertTrue(minRate[0] < 0.5, "flight was not stretched (rate not below " + minRate[0] + ")");
+            // last tick — the step into the target itself (it reaches it, rather than by a whole step length), not
+            // counted
             double worst = 0;
             String where = "";
             for (int i = 1; i < speeds.size() - 1; i++) {
@@ -3820,24 +3957,29 @@ public final class StrikeGameTests {
                     where = String.format(Locale.ROOT, "%.2f → %.2f, %s", speeds.get(i - 1), speeds.get(i), track.get(i));
                 }
             }
-            Incoming.LOG.info("Замер РСЗО: наибольший скачок скорости за тик {}", where);
-            // темп меняется не быстрее 0,05 за тик: при скорости до ~8 блоков/тик это до 0,4, плюс тяготение
-            h.assertTrue(worst <= 0.6, "скачок скорости снаряда " + where);
+            Incoming.LOG.info("MLRS measurement: largest speed jump per tick {}", where);
+            // the rate changes no faster than 0.05 per tick: at a speed up to ~8 blocks/tick that is up to 0.4, plus
+            // gravity
+            h.assertTrue(worst <= 0.6, "projectile speed jump " + where);
         });
     }
 
-    /** Дальний свежий район: полёт длиннее загрузки района — сход на тике приказа, без растяжения и остановок. */
+    /**
+     * Far fresh area: the flight is longer than the area loading — departure at the order's tick, without stretching
+     * and stops.
+     */
     @GameTest(template = "runway", timeoutTicks = 1200, batch = "rocket_fresh_far", skyAccess = true)
     public static void rocketToFreshFarAreaLaunchesAtOnce(GameTestHelper h) {
-        // «полёт длиннее загрузки района» — в игровом времени: без паузы 1200 тиков срока проходят быстрее генерации
+        // “flight longer than the area loading” — in game time: without a pause, 1200 ticks of the limit pass faster
+        // than generation
         gameSpeed(h);
         rocketLaunchesAtOnceAndNeverFreezes(h, 1750, 0);
     }
 
     /**
-     * Места тестов далеко за площадкой (вокруг ничего не загружено, снаряд летит вне мира) — у каждого теста своё,
-     * в тысяче блоков и больше от остальных: что тест оставил в мире (скала, воронка), не встаёт на путь другого, если
-     * их площадки рядом. Новый тест вдали — новое место здесь.
+     * Test places far beyond the pad (nothing is loaded around, the projectile flies outside the world) — each test has
+     * its own, a thousand blocks or more from the others: what a test left in the world (a cliff, a crater) does not
+     * stand on another's path, if their pads are near. A new test far away — a new place here.
      */
     private enum FarSite {
         MISS_BELOW_GROUND(-4000, 4000),
@@ -3860,51 +4002,60 @@ public final class StrikeGameTests {
     }
 
     /**
-     * Район цели, отпущенный тестом, готов сразу: чанки 5×5 вокруг — синхронно, тикет уже стоит. Растяжение меряется
-     * тиками, а сервер GameTest тикает без пауз (на CI ~2000 тиков в секунду): фоновая генерация после срока идёт
-     * тысячи тиков, и снаряд успевал бы встать у черты («стоял в воздухе 522 тиков»). Так момент
-     * готовности — тик срока, на любой скорости раннера.
+     * The target area released by the test is ready at once: the 5×5 chunks around are synchronous, the ticket is
+     * already in place. The stretch is measured in ticks, and the GameTest server ticks without pauses (on CI ~2000
+     * ticks per second): background generation after the limit takes thousands of ticks, and the projectile would have
+     * time to stop at the edge (“stood in the air 522 ticks”). So the moment of readiness is the tick of the limit, at
+     * any speed of the runner.
      */
     private static void generateNow(ServerLevel level, ChunkPos centre) {
         generateNow(level, centre, 2);
     }
 
-    /** Чанки в {@code radius} чанков вокруг {@code centre} — синхронно. */
+    /** Chunks within {@code radius} chunks around {@code centre} — synchronously. */
     private static void generateNow(ServerLevel level, ChunkPos centre, int radius) {
         for (int dx = -radius; dx <= radius; dx++)
             for (int dz = -radius; dz <= radius; dz++) level.getChunk(centre.x + dx, centre.z + dz);
     }
 
     /**
-     * Темп игры (20 тиков в секунду) на время теста, который ждёт фоновой загрузки района: мод меряет ожидание тиками
-     * (предел {@code AREA_WAIT_LIMIT} — 1200 тиков, минута игры), а сервер GameTest тикает без пауз — на CI около
-     * 2000 тиков в секунду, и минута игры проходит за полсекунды, раньше генерации свежего района.
+     * Game pace (20 ticks per second) for the test that waits for background area loading: the mod measures the wait in
+     * ticks (limit {@code AREA_WAIT_LIMIT} — 1200 ticks, a minute of play), and the GameTest server ticks without
+     * pauses — on CI about 2000 ticks per second, and a minute of play passes in half a second, before generation of
+     * the fresh area.
      */
     /**
-     * Место пусковой проверок сектора пуска — над серединой взлётной полосы, высоко над сеткой площадок: площадки части
-     * GameTest ставятся все сразу, и впереди по +Z стоят стены барьеров и постройки других проверок, а подъём ракеты
-     * после взведения смотрит рельеф на сотни блоков вперёд ({@code Airframe.reliefLookahead}): у самой полосы проверка
-     * зависела от того, какая проверка оказалась в следующем ряду (CI FV: «пустая полоса закрыта»). Над всем этим полоса
-     * пуста при любом составе части; то, что ставит сама проверка, — от направляющей, как прежде.
+     * Place of the launcher for the launch-sector checks — above the middle of the runway, high above the grid of pads:
+     * the pads of the GameTest structure are placed all at once, and ahead along +Z stand walls of barriers and
+     * structures of other checks, and the missile's climb after arming looks at the relief hundreds of blocks ahead
+     * ({@code Airframe.reliefLookahead}): at the strip itself the check depended on which check ended up in the next
+     * row (CI FV: “empty strip is blocked”). Over all of this the strip is empty for any make-up of the structure; what
+     * the check places itself is from the rail, as before.
      */
     static Vec3 laneSite(GameTestHelper h) {
         return Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(16, 4 + LANE_LIFT, 8)));
     }
 
-    /** Насколько выше полосы стоит пусковая проверок сектора, блоков: выше стен и построек соседних площадок. */
+    /**
+     * How much higher than the strip the launcher of the sector checks stands, in blocks: above the walls and
+     * structures of neighboring pads.
+     */
     static final int LANE_LIFT = 120;
 
     public static void gameSpeed(GameTestHelper h) {
         long[] last = {System.nanoTime()};
         h.onEachTick(() -> {
-            // parkNanos просыпается раньше (задачи чанков будят поток сервера): ждать до срока в цикле
+            // parkNanos wakes earlier (chunk tasks wake the server thread): wait until the deadline in a loop
             long deadline = last[0] + 50_000_000L, left;
             while ((left = deadline - System.nanoTime()) > 0) LockSupport.parkNanos(left);
             last[0] = System.nanoTime();
         });
     }
 
-    /** @param withhold сколько тиков район цели не грузится (тест снимает тикет снаряда, потом ставит его сам) */
+    /**
+     * @param withhold how many ticks the target area is not loaded (the test takes the projectile's ticket off, then
+     * puts it back itself)
+     */
     private static void rocketLaunchesAtOnceAndNeverFreezes(GameTestHelper h, int distance, int withhold) {
         ServerLevel level = h.getLevel();
         Vec3 rail = Vec3.atCenterOf(h.absolutePos(RUNWAY_TARGET)).add(0, 3, 0);
@@ -3930,14 +4081,16 @@ public final class StrikeGameTests {
             if (areaReadyAt[0] < 0 && Terrain.ready(level, aimPos) && level.isPositionEntityTicking(aimPos)) areaReadyAt[0] = tick[0];
             StrikeProjectile p = VirtualFlights.get(level).flights().stream().filter(f -> f.getUUID().equals(id)).findFirst()
                     .orElseGet(() -> level.getEntity(id) instanceof StrikeProjectile e && !e.isRemoved() ? e : null);
-            // район «грузится долго»: тикет снаряда снимается, пока не выйдет срок, потом ставится снова (снимет его снаряд)
+            // area “loads slowly”: the projectile's ticket is removed until the limit passes, then put back (the
+            // projectile will remove it)
             if (withhold > 0 && p != null) FlightTickets.hold(level, aimChunk, FlightTickets.DISTANCE, id, tick[0] >= withhold);
             if (withhold > 0 && tick[0] == withhold) generateNow(level, aimChunk);
             if (p == null) return;
             lastSeen[0] = tick[0];
             boolean moved = p.position().distanceToSqr(last[0]) > 1.0e-6;
             last[0] = p.position();
-            // сход — первый сдвиг из трубы; дальше каждый тик до взрыва снаряд движется
+            // departure — the first shift from the tube; from then on the projectile moves every tick until the
+            // detonation
             if (leftTube[0] < 0) {
                 if (moved) {
                     leftTube[0] = tick[0];
@@ -3950,26 +4103,27 @@ public final class StrikeGameTests {
         h.succeedWhen(() -> {
             boolean flying = level.getEntity(id) != null && !level.getEntity(id).isRemoved()
                     || VirtualFlights.get(level).flights().stream().anyMatch(f -> f.getUUID().equals(id));
-            h.assertFalse(flying, "снаряд ещё летит, до цели " + (int) last[0].distanceTo(aim));
-            // замер для PR: задержка схода и растяжение полёта вне мира (тики сверх расчётного времени полёта)
-            if (!reported[0]) Incoming.LOG.info("Замер РСЗО {} блоков: сход на тике {} (готов к {}), полёт {} тиков при расчётных {}, растяжение {}, район цели готов на тике {}, {} мс",
+            h.assertFalse(flying, "projectile still flying, distance to target " + (int) last[0].distanceTo(aim));
+            // measurement for the PR: departure delay and stretch of the flight outside the world (ticks beyond the
+            // calculated flight time)
+            if (!reported[0]) Incoming.LOG.info("MLRS measurement {} blocks: departure at tick {} (ready at {}), flight {} ticks against calculated {}, stretch {}, target area ready at tick {}, {} ms",
                     distance, leftTube[0], ready + WeaponSpec.ROCKET.airframe().ballistic().rocket().ignitionTicks(), lastSeen[0] - leftTube[0], eta[0],
                     lastSeen[0] - leftTube[0] - eta[0], areaReadyAt[0],
                     (System.nanoTime() - orderedAt) / 1_000_000);
             reported[0] = true;
             h.assertTrue(leftTube[0] > 0 && leftTube[0] <= ready + WeaponSpec.ROCKET.airframe().ballistic().rocket().ignitionTicks() + 2,
-                    "снаряд сошёл с пакета на тике " + leftTube[0] + ", а готов к " + (ready + WeaponSpec.ROCKET.airframe().ballistic().rocket().ignitionTicks()));
-            h.assertTrue(stalls[0] == 0, "снаряд стоял в воздухе " + stalls[0] + " тиков");
-            if (withhold > 0) h.assertTrue(areaReadyAt[0] >= withhold, "район цели загрузился раньше, чем тест его отпустил");
-            h.assertTrue(last[0].distanceTo(aim) < 16, "снаряд пропал не у цели: " + last[0].subtract(aim));
+                    "projectile left the pod at tick " + leftTube[0] + ", but ready at " + (ready + WeaponSpec.ROCKET.airframe().ballistic().rocket().ignitionTicks()));
+            h.assertTrue(stalls[0] == 0, "projectile stood in the air " + stalls[0] + " ticks");
+            if (withhold > 0) h.assertTrue(areaReadyAt[0] >= withhold, "target area loaded before the test released it");
+            h.assertTrue(last[0].distanceTo(aim) < 16, "projectile vanished away from the target: " + last[0].subtract(aim));
         });
     }
 
     /**
-     * Подсказка карты под спамом: два игрока кликают по новому месту каждый тик 100 тиков. У каждого в любой тик не
-     * больше одного района подсказки (и не больше одного тикета региона), новый — не чаще раза в
-     * {@link PickHints#MIN_INTERVAL} тиков, последний клик берётся (отложенный), а через {@link PickHints#LIFESPAN}
-     * тиков район отпускается сам — ни тикета региона, ни тикета загрузки.
+     * Map hint under spam: two players click a new place every tick for 100 ticks. Each of them, in any tick, has at
+     * most one hint area (and at most one region ticket), a new one no more often than once per {@link
+     * PickHints#MIN_INTERVAL} ticks, the last click is taken (deferred), and after {@link PickHints#LIFESPAN} ticks the
+     * area is released on its own — no region ticket and no load ticket remains.
      */
     @GameTest(template = "runway", timeoutTicks = 1000, batch = "pick_spam", skyAccess = true)
     public static void mapPickSpamHoldsOneAreaPerPlayer(GameTestHelper h) {
@@ -3986,7 +4140,7 @@ public final class StrikeGameTests {
             tick[0]++;
             for (int i = 0; i < 2; i++) {
                 if (tick[0] <= spam) {
-                    // каждый клик — другой свежий район (шаг 500 блоков), у второго игрока — в другую сторону
+                    // each click — another fresh area (step 500 blocks), for the second player in the other direction
                     double x = origin.getX() + (i == 0 ? 1 : -1) * 500.0 * tick[0], z = origin.getZ() + 3000 * i;
                     PickHints.pick(level, who[i], slots[i], x, z);
                     lastClick[i] = new ChunkPos(BlockPos.containing(x, 0, z));
@@ -3995,32 +4149,32 @@ public final class StrikeGameTests {
                 if (slots[i].held() != null && !slots[i].held().equals(lastHeld[i])) taken[i]++;
                 lastHeld[i] = slots[i].held();
                 int held = pickTickets(level, who[i]), areas = PickHints.areas(level, who[i]);
-                if (held > 1 || areas > 1) throw new GameTestAssertException("у игрока " + i + " районов подсказки: " + areas + ", тикетов " + held + " на тике " + tick[0]);
+                if (held > 1 || areas > 1) throw new GameTestAssertException("player " + i + " hint areas: " + areas + ", tickets " + held + " at tick " + tick[0]);
             }
         });
         h.runAtTickTime(spam + PickHints.MIN_INTERVAL + 1, () -> {
             for (int i = 0; i < 2; i++) {
-                h.assertTrue(lastClick[i].equals(slots[i].held()), "последний клик не взят: держится " + slots[i].held() + ", клик " + lastClick[i]);
+                h.assertTrue(lastClick[i].equals(slots[i].held()), "last click not taken: holds " + slots[i].held() + ", click " + lastClick[i]);
                 int limit = spam / PickHints.MIN_INTERVAL + 2;
-                h.assertTrue(taken[i] <= limit, "новых районов " + taken[i] + " за " + spam + " тиков, предел " + limit);
-                h.assertTrue(PickHints.areas(level, who[i]) == 1, "район последнего клика не взят");
+                h.assertTrue(taken[i] <= limit, "new areas " + taken[i] + " in " + spam + " ticks, limit " + limit);
+                h.assertTrue(PickHints.areas(level, who[i]) == 1, "last click's area not taken");
             }
         });
         h.runAtTickTime(spam + PickHints.MIN_INTERVAL + PickHints.LIFESPAN + 20, () -> {
             for (int i = 0; i < 2; i++) {
                 h.assertTrue(PickHints.areas(level, who[i]) == 0 && pickTickets(level, who[i]) == 0 && loadTickets(level, who[i]) == 0,
-                        "район подсказки не отпущен за " + PickHints.LIFESPAN + " тиков");
+                        "hint area not released in " + PickHints.LIFESPAN + " ticks");
             }
             h.succeed();
         });
     }
 
-    /** Тикеты подсказки карты с ключом {@code who} во всём мире (из очереди тикетов ванили). */
+    /** Map hint tickets with key {@code who} in the whole world (from the vanilla ticket queue). */
     private static int pickTickets(ServerLevel level, UUID who) {
         return TicketProbe.count(level, PickHints::isPickTicket, who);
     }
 
-    /** Тикеты загрузки района ({@code AreaLoader}) с ключом {@code who}. */
+    /** Area load tickets ({@code AreaLoader}) with key {@code who}. */
     private static int loadTickets(ServerLevel level, UUID who) {
         return TicketProbe.count(level, "incoming_area_load", who);
     }
@@ -4031,39 +4185,39 @@ public final class StrikeGameTests {
         Vec3 c = top(h, RUNWAY_TARGET);
         SalvoData.start(level, WeaponType.DRONE, 3, 6, new Target.Point(c), c, 0, null, Loadout.Nuke.DEFAULT, Waypoints.NONE, null, false);
         h.succeedWhen(() -> {
-            h.assertTrue(SalvoData.get(level).size() == 0, "залп ещё не закончился");
-            h.assertTrue(VirtualFlights.get(level).flights().isEmpty(), "ещё летят вне мира: " + VirtualFlights.get(level).flights().size());
+            h.assertTrue(SalvoData.get(level).size() == 0, "salvo has not ended yet");
+            h.assertTrue(VirtualFlights.get(level).flights().isEmpty(), "still flying outside the world: " + VirtualFlights.get(level).flights().size());
             List<StrikeProjectile> flying = level.getEntitiesOfClass(StrikeProjectile.class, h.getBounds().inflate(128));
-            h.assertTrue(flying.isEmpty(), "ещё летят: " + flying.stream().map(p -> p.flightPhase() + " " + h.relativeVec(p.position())
-                    + " возраст " + p.age() + " до цели " + (int) p.position().distanceTo(p.aimPoint())).toList());
+            h.assertTrue(flying.isEmpty(), "still flying: " + flying.stream().map(p -> p.flightPhase() + " " + h.relativeVec(p.position())
+                    + " age " + p.age() + " distance to target " + (int) p.position().distanceTo(p.aimPoint())).toList());
         });
     }
 
     /**
-     * Ядерных залпов нет: приказ от консоли с ядерной БЧ на ракете — одна ракета, а не залп (как у игрока), и снаряды
-     * залпа ядерной БЧ не несут, даже если она попала в залп.
+     * No nuclear salvos: a console order with a nuclear warhead on the missile is one missile, not a salvo (as for a
+     * player), and the projectiles of a salvo do not carry a nuclear warhead, even if it got into the salvo.
      */
     @GameTest(template = "range", timeoutTicks = 20, batch = "salvo_nuke", skyAccess = true)
     public static void salvoNeverCarriesNuke(GameTestHelper h) {
         ServerLevel level = h.getLevel();
-        // далеко за площадкой: до конца теста никто не долетит
+        // far beyond the pad: nobody reaches it before the end of the test
         Vec3 far = Vec3.atCenterOf(h.absolutePos(RANGE_CENTER)).add(0, 0, 3000);
         Loadout.Nuke nuke = new Loadout.Nuke(15, true, true);
         ServerActions.Aim aim = new ServerActions.Aim(new Target.Point(far), far, null);
-        // свои снаряды — по точке цели (в мире теста могут лететь и чужие)
+        // own projectiles — by the target point (other projectiles may be flying in the test world too)
         java.util.function.Predicate<StrikeProjectile> ours = p -> p.aimPoint().distanceTo(far) < 40;
-        h.assertTrue(ServerActions.dispatch(level, "GameTest", 0, WeaponType.MISSILE, 5, 20, aim, nuke, Waypoints.NONE, null), "пуск от консоли не прошёл");
-        h.assertTrue(SalvoData.get(level).size() == 0, "ядерный приказ стал залпом");
+        h.assertTrue(ServerActions.dispatch(level, "GameTest", 0, WeaponType.MISSILE, 5, 20, aim, nuke, Waypoints.NONE, null), "launch from console did not pass");
+        h.assertTrue(SalvoData.get(level).size() == 0, "nuclear order became a salvo");
         boolean carriers = ua.zentix.incoming.IncomingConfig.SERVER.carrierNukes.get();
         List<StrikeProjectile> single = VirtualFlights.get(level).flights().stream().filter(ours).toList();
         h.assertTrue(single.size() == 1 && single.getFirst().isNuclear() == carriers,
-                "не одна ракета с ядерной БЧ: " + single.stream().map(StrikeProjectile::isNuclear).toList());
+                "not a single missile with a nuclear warhead: " + single.stream().map(StrikeProjectile::isNuclear).toList());
         VirtualFlights.get(level).clear(level, ours);
         SalvoData.start(level, WeaponType.MISSILE, 3, 20, new Target.Point(far), far, 0, null, nuke, Waypoints.NONE, null, false);
         h.runAfterDelay(3, () -> {
             List<StrikeProjectile> fired = VirtualFlights.get(level).flights().stream().filter(ours).toList();
             h.assertTrue(!fired.isEmpty() && fired.stream().noneMatch(StrikeProjectile::isNuclear),
-                    "снаряды залпа: " + fired.stream().map(StrikeProjectile::isNuclear).toList());
+                    "salvo projectiles: " + fired.stream().map(StrikeProjectile::isNuclear).toList());
             SalvoData.get(level).cancel(level, null, List.of());
             VirtualFlights.get(level).clear(level, ours);
             h.succeed();
@@ -4071,8 +4225,9 @@ public final class StrikeGameTests {
     }
 
     /**
-     * Предел ударов у игрока ({@code max_active_per_player}) считает всё его в работе: невыпущенные снаряды залпа,
-     * снаряды в мире и вне его; чужие — нет. Выпущенный снаряд залпа переходит из одного в другое, итог тот же.
+     * The player's strike limit ({@code max_active_per_player}) counts everything in work: the salvo's unfired
+     * projectiles, projectiles in the world and outside it; others' — no. A fired salvo projectile moves from one to
+     * the other, the total is the same.
      */
     @GameTest(template = "range", timeoutTicks = 20, batch = "active_count", skyAccess = true)
     public static void activeShotsCountEverythingOfOwner(GameTestHelper h) {
@@ -4091,11 +4246,11 @@ public final class StrikeGameTests {
             m.setRoute(Route.direct());
             VirtualFlights.launch(level, m);
         }
-        h.assertTrue(StrikeWorld.active(level.getServer(), owner) == 7, "в работе: " + StrikeWorld.active(level.getServer(), owner));
+        h.assertTrue(StrikeWorld.active(level.getServer(), owner) == 7, "in work: " + StrikeWorld.active(level.getServer(), owner));
         h.runAfterDelay(3, () -> {
-            h.assertTrue(SalvoData.get(level).remaining(owner) < 5, "залп не выпустил ни одного снаряда");
-            h.assertTrue(StrikeWorld.active(level.getServer(), owner) == 7, "после пуска из залпа: " + StrikeWorld.active(level.getServer(), owner));
-            h.assertTrue(StrikeWorld.active(level.getServer(), other) == 1, "у другого игрока: " + StrikeWorld.active(level.getServer(), other));
+            h.assertTrue(SalvoData.get(level).remaining(owner) < 5, "salvo did not fire a single projectile");
+            h.assertTrue(StrikeWorld.active(level.getServer(), owner) == 7, "after the launch from the salvo: " + StrikeWorld.active(level.getServer(), owner));
+            h.assertTrue(StrikeWorld.active(level.getServer(), other) == 1, "for the other player: " + StrikeWorld.active(level.getServer(), other));
             SalvoData.get(level).cancel(level, null, List.of());
             VirtualFlights.get(level).clear(level, p -> owner.equals(p.ownerId()) || other.equals(p.ownerId()));
             onRail.discard();
@@ -4104,8 +4259,9 @@ public final class StrikeGameTests {
     }
 
     /**
-     * Залп по сущности, которая погибла: остаток бьёт по месту гибели, а не по новой сущности с тем же UUID (игрок
-     * возрождается новым {@code ServerPlayer} с прежним UUID — иначе залп перешёл бы на место возрождения).
+     * A salvo at an entity that died: the remainder hits the place of death, not a new entity with the same UUID (the
+     * player respawns as a new {@code ServerPlayer} with the same UUID — otherwise the salvo would switch to the
+     * respawn place).
      */
     @GameTest(template = "range", timeoutTicks = 120, batch = "salvo_target_died", skyAccess = true)
     public static void salvoKeepsLastPointOfDeadTarget(GameTestHelper h) {
@@ -4123,21 +4279,23 @@ public final class StrikeGameTests {
             VirtualFlights.get(level).clear(level, p -> owner.equals(p.ownerId()));
         };
         h.runAfterDelay(3, () -> {
-            h.assertTrue(SalvoData.get(level).centers(owner).equals(List.of(target)), "залп не идёт за живой целью: " + SalvoData.get(level).centers(owner));
+            h.assertTrue(SalvoData.get(level).centers(owner).equals(List.of(target)), "salvo does not follow the live target: " + SalvoData.get(level).centers(owner));
             pig.kill();
         });
         h.runAfterDelay(30, () -> {
-            // «возрождение»: новая сущность с тем же UUID в стороне
+            // “respawn”: a new entity with the same UUID to the side
             Pig again = EntityType.PIG.create(level);
             again.setUUID(pig.getUUID());
             again.moveTo(at.x + 40, at.y, at.z, 0, 0);
             again.setNoAi(true);
-            h.assertTrue(level.getEntity(pig.getUUID()) == null && level.addFreshEntity(again), "вторая сущность с тем же UUID не встала в мир");
+            h.assertTrue(level.getEntity(pig.getUUID()) == null && level.addFreshEntity(again), "second entity with the same UUID did not enter the world");
         });
-        // пауза залпа шахедов 20–40 тиков: к 90-му после гибели (3-й тик) пущен хоть один снаряд остатка
+        // pause of the Shahed salvo 20–40 ticks: by the 90th tick after the death (the 3rd tick) at least one remainder
+        // projectile is fired
         h.runAfterDelay(90, () -> {
             List<Target> centers = SalvoData.get(level).centers(owner);
-            // снаряды остатка — с целью-точкой (до гибели — с целью-сущностью); в мире и вне его
+            // remainder projectiles — with the point target (before the death — with the entity target); in and outside
+            // the world
             List<StrikeProjectile> mine = new ArrayList<>(VirtualFlights.get(level).flights());
             mine.addAll(level.getEntities(EntityTypeTest.forClass(StrikeProjectile.class), p -> true));
             List<Vec3> aims = mine.stream().filter(p -> owner.equals(p.ownerId()) && p.target() instanceof Target.Point)
@@ -4145,25 +4303,25 @@ public final class StrikeGameTests {
             cleanup.run();
             level.getEntities(EntityType.PIG, h.getBounds().inflate(64), p -> p.getUUID().equals(pig.getUUID())).forEach(Entity::discard);
             h.assertTrue(centers.size() == 1 && centers.getFirst() instanceof Target.Point p && p.pos().distanceTo(at) < 1,
-                    "залп после гибели цели идёт не по месту гибели: " + centers);
-            h.assertTrue(!aims.isEmpty(), "после гибели цели не пущено ни одного снаряда остатка");
-            // у шахеда свой промах (паспорт): 5 СКО — с запасом, а место возрождения в 40 блоках
+                    "salvo after the target's death does not go to the place of death: " + centers);
+            h.assertTrue(!aims.isEmpty(), "after the target's death, not a single remainder projectile was fired");
+            // the Shahed has its own miss (spec sheet): 5 SD — with a margin, and the respawn place is 40 blocks away
             double miss = 2 + 5 * WeaponType.DRONE.spec().route().error();
             h.assertTrue(aims.stream().allMatch(a -> a.distanceTo(at) < miss),
-                    "снаряды остатка летят не к месту гибели " + at + ": " + aims);
+                    "remainder projectiles fly not to the place of death " + at + ": " + aims);
             h.succeed();
         });
     }
 
     /**
-     * Ударная волна выбивает стёкла и листву в своём кубе, по секциям чанков: каждый такой блок внутри (и на
-     * стыках секций), ни одного снаружи и ничего другого.
+     * The blast wave knocks out glass and leaves in its cube, by chunk sections: each such block inside (and on
+     * section boundaries), none outside, and nothing else.
      */
     @GameTest(template = "range", timeoutTicks = 20, skyAccess = true)
     public static void shatterBreaksGlassAndLeavesInBox(GameTestHelper h) {
         ServerLevel level = h.getLevel();
         BlockPos c = h.absolutePos(RANGE_CENTER.above(8));
-        // по углам и серединам куба 2r+1 — точки в разных секциях; снаружи — на блок за краем
+        // at the corners and middles of the 2r+1 cube — points in different sections; outside — a block beyond the edge
         int r = 9;
         List<BlockPos> inside = new ArrayList<>();
         for (int dx : new int[]{-r, 0, r}) {
@@ -4181,21 +4339,21 @@ public final class StrikeGameTests {
         level.setBlock(stone, Blocks.STONE.defaultBlockState(), 3);
         Vec3 centre = Vec3.atCenterOf(c);
         int glass = Warheads.shatter(level, centre, r, 3, 5, ua.zentix.incoming.registry.ModTags.SHATTERS);
-        h.assertTrue(glass == inside.size(), "выбито стёкол " + glass + " из " + inside.size());
-        for (BlockPos p : inside) h.assertTrue(level.getBlockState(p).isAir(), "стекло осталось в " + h.relativePos(p));
-        for (BlockPos p : outside) h.assertTrue(level.getBlockState(p).is(Blocks.GLASS), "выбито стекло за краем в " + h.relativePos(p));
-        h.assertTrue(level.getBlockState(leaves).is(Blocks.OAK_LEAVES) && level.getBlockState(stone).is(Blocks.STONE), "волна по стёклам тронула не стекло");
+        h.assertTrue(glass == inside.size(), "glass knocked out " + glass + " of " + inside.size());
+        for (BlockPos p : inside) h.assertTrue(level.getBlockState(p).isAir(), "glass remained at " + h.relativePos(p));
+        for (BlockPos p : outside) h.assertTrue(level.getBlockState(p).is(Blocks.GLASS), "glass knocked out beyond the edge at " + h.relativePos(p));
+        h.assertTrue(level.getBlockState(leaves).is(Blocks.OAK_LEAVES) && level.getBlockState(stone).is(Blocks.STONE), "the wave at the glass touched something other than glass");
         h.assertTrue(Warheads.shatter(level, centre, r, 3, 5, net.minecraft.tags.BlockTags.LEAVES) == 1 && level.getBlockState(leaves).isAir(),
-                "листва не выбита");
-        h.assertTrue(level.getBlockState(stone).is(Blocks.STONE), "волна по листве тронула камень");
+                "leaves not knocked out");
+        h.assertTrue(level.getBlockState(stone).is(Blocks.STONE), "the wave at the leaves touched stone");
         h.succeed();
     }
 
     /**
-     * Волна наземного взрыва выбивает стёкла по давлению, шаром во все стороны: цветные, тонированное и панели — как
-     * прозрачные. Ближе дальности, где давление выше порога стекла при любом разбросе, — все, к которым подходит воздух
-     * с улицы (и на дне ямы ниже точки взрыва, куда коробка не доставала), стекло в грунте без воздуха рядом — цело,
-     * дальше шара — ни одного, и ничего, кроме стёкол.
+     * The ground-explosion wave knocks out glass by pressure, in a ball in all directions: colored, tinted and panes —
+     * as transparent. Closer than the range where pressure exceeds the glass threshold at any spread: all that air from
+     * the street reaches (and at the bottom of a pit below the blast point, which the box did not reach), glass in the
+     * ground with no air beside it — intact, beyond the ball — none, and nothing but glass.
      */
     @GameTest(template = "range", timeoutTicks = 20, skyAccess = true)
     public static void shockwaveBreaksGlassByPressure(GameTestHelper h) {
@@ -4203,46 +4361,47 @@ public final class StrikeGameTests {
         BlockPos c = h.absolutePos(RANGE_CENTER.above(8));
         Vec3 centre = Vec3.atCenterOf(c);
         double kg = 0.3;
-        // ~11,8 и ~15,3 блока: шар держится в чанках площадки, чьи соседи тоже на ней
+        // ~11.8 and ~15.3 blocks: the ball is held in the pad's chunks, whose neighbors are also on it
         double sure = BlastModel.rangeForSurfaceOverpressure(BlastModel.kpa(BlockResponse.FRAGILE_PSI * BlockResponse.JITTER_MAX), kg);
         double reach = Warheads.glassReach(kg);
-        h.assertTrue(sure > 11 && reach < 16, "дальности волны " + sure + " и " + reach + " не по площадке");
+        h.assertTrue(sure > 11 && reach < 16, "wave ranges " + sure + " and " + reach + " not on the pad");
         List<BlockState> kinds = List.of(Blocks.RED_STAINED_GLASS.defaultBlockState(), Blocks.LIGHT_BLUE_STAINED_GLASS_PANE.defaultBlockState(),
                 Blocks.TINTED_GLASS.defaultBlockState(), Blocks.GLASS.defaultBlockState(), Blocks.BLACK_STAINED_GLASS.defaultBlockState(),
                 Blocks.GLASS_PANE.defaultBlockState());
         List<BlockPos> inside = List.of(c.below(10), c.above(10), c.east(10), c.offset(-7, 0, 7), c.offset(0, -7, -7), c.offset(6, 6, 6));
         int out = Mth.ceil(reach) + 1;
         List<BlockPos> outside = List.of(c.west(out), c.north(out), c.below(out), c.offset(12, 0, -12));
-        // ниже точки взрыва — в грунте на дне ямы до неба; рядом, в 3 блоках, — такое же стекло в грунте без ямы
+        // below the blast point — in the ground at the bottom of the pit up to the sky; nearby, 3 blocks away — the
+        // same glass in the ground without a pit
         BlockPos sealed = c.offset(3, -10, 0);
         h.assertTrue(Math.sqrt(centre.distanceToSqr(Vec3.atCenterOf(sealed))) < sure && !level.getBlockState(sealed.above()).isAir(),
-                "стекло в грунте не ближе верной дальности или не под грунтом");
+                "glass in the ground not nearer than the true range or not under the ground");
         for (BlockPos p = c.below(9); !level.getBlockState(p).isAir(); p = p.above()) level.setBlock(p, Blocks.AIR.defaultBlockState(), 3);
         level.setBlock(sealed, Blocks.RED_STAINED_GLASS.defaultBlockState(), 3);
         for (int i = 0; i < inside.size(); i++) {
-            h.assertTrue(Math.sqrt(centre.distanceToSqr(Vec3.atCenterOf(inside.get(i)))) < sure, "стекло " + i + " не ближе верной дальности");
+            h.assertTrue(Math.sqrt(centre.distanceToSqr(Vec3.atCenterOf(inside.get(i)))) < sure, "glass " + i + " not nearer than the true range");
             level.setBlock(inside.get(i), kinds.get(i % kinds.size()), 3);
         }
         for (int i = 0; i < outside.size(); i++) {
-            h.assertTrue(Math.sqrt(centre.distanceToSqr(Vec3.atCenterOf(outside.get(i)))) > reach, "стекло " + i + " не дальше шара");
+            h.assertTrue(Math.sqrt(centre.distanceToSqr(Vec3.atCenterOf(outside.get(i)))) > reach, "glass " + i + " not farther than the ball");
             level.setBlock(outside.get(i), kinds.get(i % kinds.size()), 3);
         }
         BlockPos stone = c.offset(2, 1, -2);
         level.setBlock(stone, Blocks.STONE.defaultBlockState(), 3);
         int glass = Warheads.shatterGlass(level, centre, kg);
-        h.assertTrue(glass == inside.size(), "выбито стёкол " + glass + " из " + inside.size());
-        for (BlockPos p : inside) h.assertTrue(level.getBlockState(p).isAir(), "стекло осталось в " + h.relativePos(p));
+        h.assertTrue(glass == inside.size(), "glass knocked out " + glass + " of " + inside.size());
+        for (BlockPos p : inside) h.assertTrue(level.getBlockState(p).isAir(), "glass remained at " + h.relativePos(p));
         for (int i = 0; i < outside.size(); i++) {
-            h.assertTrue(level.getBlockState(outside.get(i)) == kinds.get(i % kinds.size()), "выбито стекло за шаром в " + h.relativePos(outside.get(i)));
+            h.assertTrue(level.getBlockState(outside.get(i)) == kinds.get(i % kinds.size()), "glass knocked out beyond the ball at " + h.relativePos(outside.get(i)));
         }
-        h.assertTrue(level.getBlockState(stone).is(Blocks.STONE), "волна по стёклам тронула камень");
-        h.assertTrue(level.getBlockState(sealed).is(Blocks.RED_STAINED_GLASS), "выбито стекло в грунте, к которому не подходит воздух");
+        h.assertTrue(level.getBlockState(stone).is(Blocks.STONE), "the wave at the glass touched stone");
+        h.assertTrue(level.getBlockState(sealed).is(Blocks.RED_STAINED_GLASS), "glass knocked out in the ground, which air does not reach");
         h.succeed();
     }
 
     /**
-     * Стеклянные стены 14×14 через блок у взрыва: в секциях сотни стёкол, больше порции работы, — порции продолжаются
-     * с места, где кончилась прошлая, и выбивают всё, ни одного дважды и ни одного мимо.
+     * Glass walls 14×14 one block from the blast: in the sections there are hundreds of panes, more than one batch of
+     * work — batches continue from where the previous one ended, and knock out everything: none twice and none missed.
      */
     @GameTest(template = "range", timeoutTicks = 20, skyAccess = true)
     public static void shockwaveBreaksGlassCubeInPortions(GameTestHelper h) {
@@ -4251,10 +4410,10 @@ public final class StrikeGameTests {
         Vec3 centre = Vec3.atCenterOf(c);
         double kg = 2;
         int half = 7;
-        // дальний угол стен — ~12 блоков, ближе верной дальности (~22); стёкол 7 × 14 × 14
+        // the far corner of the walls — ~12 blocks, nearer than the true range (~22); panes 7 × 14 × 14
         h.assertTrue(BlastModel.rangeForSurfaceOverpressure(BlastModel.kpa(BlockResponse.FRAGILE_PSI * BlockResponse.JITTER_MAX), kg) > half * Math.sqrt(3) + 1,
-                "стены не ближе верной дальности");
-        // стены поперёк X через блок: у каждого стекла сбоку — воздух с улицы
+                "walls not nearer than the true range");
+        // walls across X, one block away: each pane has air from the street at its side
         int placed = 0;
         for (BlockPos p : BlockPos.betweenClosed(c.offset(-half, -half, -half), c.offset(half - 1, half - 1, half - 1))) {
             if (((p.getX() - c.getX()) & 1) != 0) continue;
@@ -4262,23 +4421,24 @@ public final class StrikeGameTests {
             placed++;
         }
         int glass = Warheads.shatterGlass(level, centre, kg);
-        h.assertTrue(glass == placed, "выбито стёкол " + glass + " из " + placed);
+        h.assertTrue(glass == placed, "glass knocked out " + glass + " of " + placed);
         for (BlockPos p : BlockPos.betweenClosed(c.offset(-half, -half, -half), c.offset(half - 1, half - 1, half - 1))) {
-            h.assertTrue(level.getBlockState(p).isAir(), "стекло осталось в " + h.relativePos(p));
+            h.assertTrue(level.getBlockState(p).isAir(), "glass remained at " + h.relativePos(p));
         }
         h.succeed();
     }
 
     /**
-     * Звон стёкол — из выбитых окон, а не из места взрыва (BLASTSEQ D13): два окна по разные стороны в 10 блоках звучат
-     * каждое у себя, громкость — √ числа стёкол порции, звука у самого взрыва нет.
+     * The ringing of glass comes from the knocked-out windows, not from the blast point (BLASTSEQ D13): two windows on
+     * opposite sides, 10 blocks apart, each from its own place, volume is √ of the pane count in the batch, and there
+     * is no sound at the blast point itself.
      */
     @GameTest(template = "range", timeoutTicks = 20, batch = "glass_sound", skyAccess = true)
     public static void glassSoundsFromItsWindow(GameTestHelper h) {
         ServerLevel level = h.getLevel();
         BlockPos c = h.absolutePos(RANGE_CENTER.above(8));
         Vec3 centre = Vec3.atCenterOf(c);
-        // окно 1×3 к востоку и одно стекло к западу — в разных секциях
+        // a 1×3 window to the east and one pane to the west — in different sections
         List<BlockPos> east = List.of(c.offset(10, -1, 0), c.offset(10, 0, 0), c.offset(10, 1, 0)), west = List.of(c.offset(-10, 0, 0));
         for (BlockPos p : east) level.setBlock(p, Blocks.GLASS.defaultBlockState(), 3);
         for (BlockPos p : west) level.setBlock(p, Blocks.GLASS_PANE.defaultBlockState(), 3);
@@ -4289,17 +4449,17 @@ public final class StrikeGameTests {
         net.neoforged.neoforge.common.NeoForge.EVENT_BUS.addListener(ear);
         try {
             int glass = Warheads.shatterGlass(level, centre, 0.3);
-            h.assertTrue(glass == 4, "выбито стёкол " + glass + " из 4");
+            h.assertTrue(glass == 4, "glass knocked out " + glass + " of 4");
         } finally {
             net.neoforged.neoforge.common.NeoForge.EVENT_BUS.unregister(ear);
         }
-        h.assertTrue(heard.size() == 2, "звуков стекла " + heard.size() + " вместо двух окон");
+        h.assertTrue(heard.size() == 2, "glass sounds " + heard.size() + " instead of two windows");
         for (var e : heard) {
-            h.assertTrue(e.getPosition().distanceTo(centre) > 9, "стекло звучит у места взрыва: " + e.getPosition());
+            h.assertTrue(e.getPosition().distanceTo(centre) > 9, "glass sounds at the blast place: " + e.getPosition());
             boolean three = e.getPosition().x > centre.x;
             Vec3 window = three ? Vec3.atCenterOf(c.offset(10, 0, 0)) : Vec3.atCenterOf(c.offset(-10, 0, 0));
-            h.assertTrue(e.getPosition().distanceTo(window) < 0.01, "звук не из середины выбитого окна: " + e.getPosition() + " вместо " + window);
-            h.assertTrue(Math.abs(e.getNewVolume() - Math.sqrt(three ? 3 : 1)) < 1e-4, "громкость " + e.getNewVolume() + " у окна из " + (three ? 3 : 1));
+            h.assertTrue(e.getPosition().distanceTo(window) < 0.01, "sound not from the middle of the knocked-out window: " + e.getPosition() + " instead of " + window);
+            h.assertTrue(Math.abs(e.getNewVolume() - Math.sqrt(three ? 3 : 1)) < 1e-4, "volume " + e.getNewVolume() + " for a window of " + (three ? 3 : 1));
         }
         h.succeed();
     }
@@ -4312,37 +4472,39 @@ public final class StrikeGameTests {
         Vec3 down = Vec3.atCenterOf(h.absolutePos(new BlockPos(32, 11, 20))).subtract(eye).normalize();
 
         TargetPicker.Pick ground = TargetPicker.pick(level, viewer, eye, down, 200);
-        h.assertTrue(ground != null && ground.kind() == TargetPicker.Kind.BLOCK, "должен видеть землю: " + (ground == null ? null : ground.kind()));
+        h.assertTrue(ground != null && ground.kind() == TargetPicker.Kind.BLOCK, "must see the ground: " + (ground == null ? null : ground.kind()));
 
         Cow cow = h.spawn(EntityType.COW, new BlockPos(32, 12, 12));
         cow.setNoAi(true);
         Vec3 atCow = cow.getBoundingBox().getCenter().subtract(eye).normalize();
         TargetPicker.Pick pick = TargetPicker.pick(level, viewer, eye, atCow, 200);
-        h.assertTrue(pick != null && pick.entity() == cow, "должен видеть корову, а видит " + (pick == null ? null : pick.kind() + " " + pick.label().getString() + " " + pick.point()) + ", корова " + cow.getBoundingBox());
-        h.assertTrue(pick.target() instanceof Target.OfEntity, "цель — сущность");
+        h.assertTrue(pick != null && pick.entity() == cow, "must see the cow, but sees " + (pick == null ? null : pick.kind() + " " + pick.label().getString() + " " + pick.point()) + ", cow " + cow.getBoundingBox());
+        h.assertTrue(pick.target() instanceof Target.OfEntity, "target is an entity");
         h.succeed();
     }
 
     @GameTest(template = "pad", timeoutTicks = 5)
     public static void dataSurvivesSaving(GameTestHelper h) {
         Loadout l = new Loadout(WeaponType.BUNKER, 7, 33, TargetMode.PLAYER, "Steve", new Loadout.Nuke(100, false, true));
-        h.assertTrue(l.nuclear(), "B-2 с ядерной БЧ");
+        h.assertTrue(l.nuclear(), "B-2 with a nuclear warhead");
         Loadout back = Loadout.CODEC.parse(NbtOps.INSTANCE, Loadout.CODEC.encodeStart(NbtOps.INSTANCE, l).getOrThrow()).getOrThrow();
-        h.assertTrue(l.equals(back), "пульт не пережил сохранение: " + back);
+        h.assertTrue(l.equals(back), "console did not survive saving: " + back);
 
         Target t = new Target.OfSubLevel(new Vec3(1.5, 2.5, 3.5));
         Target tb = Target.CODEC.parse(NbtOps.INSTANCE, Target.CODEC.encodeStart(NbtOps.INSTANCE, t).getOrThrow()).getOrThrow();
-        h.assertTrue(t.equals(tb), "цель не пережила сохранение: " + tb);
+        h.assertTrue(t.equals(tb), "target did not survive saving: " + tb);
         Target g = new Target.Ground(new Vec3(-1234.5, 70, 987.25));
         Target gb = Target.CODEC.parse(NbtOps.INSTANCE, Target.CODEC.encodeStart(NbtOps.INSTANCE, g).getOrThrow()).getOrThrow();
-        h.assertTrue(g.equals(gb), "место с карты не пережило сохранение: " + gb);
+        h.assertTrue(g.equals(gb), "map place did not survive saving: " + gb);
 
         Loadout huge = new Loadout(WeaponType.DRONE, 10_000, -5, TargetMode.LOOK, "x".repeat(40), new Loadout.Nuke(0, true));
-        h.assertTrue(huge.count() == Loadout.MAX_COUNT && huge.spread() == 0 && huge.player().length() == 16, "зажим значений");
+        h.assertTrue(huge.count() == Loadout.MAX_COUNT && huge.spread() == 0 && huge.player().length() == 16, "clamping of values");
         h.succeed();
     }
 
-    /** Обёртка дробления аппаратов Sable встала (CI гоняет GameTest с Sable): иначе дробление роняет тик мира. */
+    /**
+     * Sable craft split wrapper is in place (CI runs GameTest with Sable): otherwise splitting drops the world tick.
+     */
     @GameTest(template = "pad", timeoutTicks = 5)
     public static void sableSplitGuardApplied(GameTestHelper h) throws ClassNotFoundException {
         if (!ModList.get().isLoaded("sable")) {
@@ -4350,12 +4512,12 @@ public final class StrikeGameTests {
             return;
         }
         Class<?> heat = Class.forName("dev.ryanhcode.sable.sublevel.plot.heat.SubLevelHeatMapManager");
-        h.assertTrue(SplitGuard.class.isAssignableFrom(heat), "миксин SubLevelSplitGuardMixin не применился к Sable");
-        // интерфейс вливается и тогда, когда обёртка не встала (require = 0): проверяем саму обёртку
+        h.assertTrue(SplitGuard.class.isAssignableFrom(heat), "SubLevelSplitGuardMixin not applied to Sable");
+        // the interface merges in even when the wrapper is not in place (require = 0): we check the wrapper itself
         h.assertTrue(java.util.Arrays.stream(heat.getDeclaredMethods()).anyMatch(m -> m.getName().contains("guardSplit")),
-                "обёртка split не встала: " + java.util.Arrays.stream(heat.getDeclaredMethods()).map(java.lang.reflect.Method::getName).toList());
-        h.assertTrue(SplitGuard.isRemovedPlot(new RuntimeException(SplitGuard.REMOVED_PLOT)), "узнаёт сбой Sable");
-        h.assertFalse(SplitGuard.isRemovedPlot(new RuntimeException("другое")), "чужие исключения не глотает");
+                "split wrapper not in place: " + java.util.Arrays.stream(heat.getDeclaredMethods()).map(java.lang.reflect.Method::getName).toList());
+        h.assertTrue(SplitGuard.isRemovedPlot(new RuntimeException(SplitGuard.REMOVED_PLOT)), "recognizes a Sable failure");
+        h.assertFalse(SplitGuard.isRemovedPlot(new RuntimeException("other")), "does not swallow other exceptions");
         h.succeed();
     }
 
@@ -4366,40 +4528,41 @@ public final class StrikeGameTests {
         DebrisEntity d = DebrisEntity.create(level, at, Blocks.COBBLESTONE.defaultBlockState(), false, true, new Vec3(0.2, 0.5, 0));
         level.addFreshEntity(d);
         h.succeedWhen(() -> {
-            h.assertTrue(d.isRemoved(), "обломок ещё летит");
+            h.assertTrue(d.isRemoved(), "debris still flying");
             boolean found = false;
             for (BlockPos p : BlockPos.betweenClosed(new BlockPos(28, 12, 28), new BlockPos(44, 13, 36))) {
                 if (h.getBlockState(p).is(Blocks.COBBLESTONE)) found = true;
             }
-            h.assertTrue(found, "обломок не лёг блоком");
+            h.assertTrue(found, "debris did not land as a block");
         });
     }
 
     /**
-     * Обломок, улетевший за тикающие чанки, рассыпается, а не застывает в воздухе: площадку держат принудительно
-     * загруженные чанки (сущности тикают только в них), к +Z от неё пусто — чанк за краем не тикает сущностями.
+     * Debris that flew beyond the ticking chunks crumbles instead of freezing in the air: the pad is held by forced
+     * loaded chunks (entities tick only in them); there is nothing at +Z of it — the chunk past the edge does not tick
+     * entities.
      */
     @GameTest(template = "range", timeoutTicks = 100, batch = "debris", skyAccess = true)
     public static void debrisCrumblesBeyondTickingChunks(GameTestHelper h) {
         ServerLevel level = h.getLevel();
-        // выше стены из барьеров (высота площадки 40), к +Z — за край площадки
+        // above the wall of barriers (pad height 40), toward +Z — beyond the pad's edge
         Vec3 at = Vec3.atCenterOf(h.absolutePos(new BlockPos(32, 45, 58)));
         DebrisEntity d = DebrisEntity.create(level, at, Blocks.COBBLESTONE.defaultBlockState(), false, false, new Vec3(0, 0.3, 1.5));
         level.addFreshEntity(d);
         h.succeedWhen(() -> {
-            h.assertTrue(d.isRemoved(), "обломок висит у края тикающих чанков: " + d.blockPosition());
-            h.assertTrue(d.getRemovalReason() == Entity.RemovalReason.DISCARDED, "обломок убран не им самим: " + d.getRemovalReason());
-            h.assertFalse(level.isPositionEntityTicking(d.blockPosition()), "обломок рассыпался в тикающем чанке: " + d.blockPosition());
+            h.assertTrue(d.isRemoved(), "debris hangs at the edge of the ticking chunks: " + d.blockPosition());
+            h.assertTrue(d.getRemovalReason() == Entity.RemovalReason.DISCARDED, "debris removed by something other than itself: " + d.getRemovalReason());
+            h.assertFalse(level.isPositionEntityTicking(d.blockPosition()), "debris crumbled in a ticking chunk: " + d.blockPosition());
         });
     }
 
-    /** Обломки и ускорители живут секунды: в мир (чанк при выгрузке, сохранение) они не пишутся. */
+    /** Debris and boosters live for seconds: they are not written to the world (chunk unload, save). */
     @GameTest(template = "pad", timeoutTicks = 5, batch = "debris")
     public static void shortLivedEffectsNotSaved(GameTestHelper h) {
         ServerLevel level = h.getLevel();
         DebrisEntity d = DebrisEntity.create(level, Vec3.atCenterOf(h.absolutePos(BlockPos.ZERO)), Blocks.GRAVEL.defaultBlockState(), false, false, Vec3.ZERO);
-        h.assertFalse(d.save(new CompoundTag()), "обломок сохраняется в мир");
-        h.assertFalse(ModEntities.SPENT_BOOSTER.get().create(level).save(new CompoundTag()), "ускоритель сохраняется в мир");
+        h.assertFalse(d.save(new CompoundTag()), "debris is saved to the world");
+        h.assertFalse(ModEntities.SPENT_BOOSTER.get().create(level).save(new CompoundTag()), "booster is saved to the world");
         h.succeed();
     }
 }

@@ -29,36 +29,40 @@ import java.util.concurrent.ConcurrentLinkedQueue;
  * sections asynchronously instead of dropping the fresh update. Never load a world chunk for LOD delivery.
  */
 public final class DhUpdates {
-    /** Вызовов DH за тик сервера (400 чанков в секунду). */
+    /** DH calls per server tick (400 chunks per second). */
     static final int PER_TICK = 20;
-    /** Раньше этого после прошлой отправки чанк снова не отправляется: DH ещё держит его в очереди (250 мс и пакет ~1 с). */
+    /** Not resent sooner than this after the last send: DH still queues it (250 ms, and a packet of ~1 s). */
     static final int RESEND = 40;
-    /** Сколько тиков после изменения ждать следующих порций того же взрыва. */
+    /** Ticks after a change to wait for the next batches of the same explosion. */
     public static final int SETTLE = 10;
-    /** Собранных чанков не в мире ждут отправки, не больше: за ними — память (секции целиком). */
+    /** Collected chunks not in the world waiting to be sent, at most: beyond them is memory (whole sections). */
     static final int OFFER_LIMIT = 512;
     /**
-     * Отметок за тик просматривается, не больше: не наступившие встают в конец (по кругу) — очередь (руины ядерки —
-     * тысячи чанков) не обходится вся каждый тик, а наступившая за ними ждёт не дольше нескольких тиков.
+     * At most this many marks are scanned per tick: marks not yet due go to the end (round-robin) — the queue (nuke
+     * ruins —
+     * thousands of chunks) is not walked whole each tick, and a mark that is due waits no more than a few ticks.
      */
     static final int SCAN = 256;
     /**
-     * Своя задержка DH от вызова до записи LOD в базу, тиков, — наименьшая ({@link DhQueue#LEAD}): держанная копия
-     * ({@link #sendHeld}) уходит за столько до прихода фронта — LOD меняется не раньше него.
+     * DH's own delay from the call to the LOD write in its database, in ticks — the smallest ({@link DhQueue#LEAD}): a
+     * held copy
+     * ({@link #sendHeld}) goes out this long before the front arrives — the LOD changes no earlier than it.
      */
     public static final int LEAD = DhQueue.LEAD;
     /**
-     * Сколько DH держит отданную копию чанка не в мире, нс, не меньше: до записи в базу (без подтверждения — до срока
-     * {@link DhQueue#TIMEOUT_NANOS}) и ещё {@link DhQueue#CACHE_NANOS} в своём кэше: память копии, отданной к фронту, —
-     * столько после отдачи.
+     * How long DH holds a handed-over chunk copy not in the world, ns, at least: until it is written to the database
+     * (without
+     * confirmation — until the {@link DhQueue#TIMEOUT_NANOS} deadline) and a further {@link DhQueue#CACHE_NANOS} in its
+     * own cache:
+     * the memory of a copy handed to the front — this long after handing over.
      */
     public static final long HOLD_NANOS = DhQueue.TIMEOUT_NANOS + DhQueue.CACHE_NANOS;
 
-    /** Чанк → тик, не раньше которого его отправить; по порядку отметок. */
+    /** Chunk → tick not before which to send it; in order of marks. */
     private final Long2LongLinkedOpenHashMap due = new Long2LongLinkedOpenHashMap();
-    /** Чанк → более поздняя отметка, чем ближайшая в {@link #due}: после отправки чанк ждёт её снова. */
+    /** Chunk → a later mark than the nearest in {@link #due}: after sending, the chunk waits for it again. */
     private final Long2LongOpenHashMap later = new Long2LongOpenHashMap();
-    /** Чанк → тик последней отправки (старше {@link #RESEND} — забываются). */
+    /** Chunk → tick of the last send (older than {@link #RESEND} — forgotten). */
     private final Long2LongOpenHashMap sent = new Long2LongOpenHashMap();
     /** At most four asynchronous reads; marks remain pending until a fresh copy is delivered. */
     static final class SavedRead {
@@ -70,16 +74,19 @@ public final class DhUpdates {
 
     private final Long2ObjectOpenHashMap<SavedRead> unloaded = new Long2ObjectOpenHashMap<>();
     private final ArrayDeque<ChunkAccess> offered = new ArrayDeque<>();
-    /** Чанки в {@link #offered} (сколько копий каждого ждёт отправки). */
+    /** Chunks in {@link #offered} (how many copies of each are waiting to be sent). */
     private final Long2IntOpenHashMap offeredCount = new Long2IntOpenHashMap();
-    /** Держанные копии, отданные и не подтверждённые ({@link #sendHeld}). */
+    /** Held copies, handed over and not confirmed ({@link #sendHeld}). */
     private final DhQueue held = new DhQueue();
-    /** Подтверждения из потока DH ({@link #saved}): чанк и когда. */
+    /** Confirmations from DH's stream ({@link #saved}): chunk and when. */
     private final ConcurrentLinkedQueue<long[]> acks = new ConcurrentLinkedQueue<>();
     private long sentTotal, offeredTotal;
-    /** Для проверок: больше всего отметок, просмотренных за один тик. */
+    /** For checks: the most marks scanned in a single tick. */
     private int scannedMax;
-    /** Куда уходят чанки: в игре — {@link DhChunks} и {@link VoxyLods}; проверки подставляют свой приёмник ({@link #testSink}). */
+    /**
+     * Where chunks go: in the game — {@link DhChunks} and {@link VoxyLods}; checks substitute their own sink ({@link
+     * #testSink}).
+     */
     private Sink sink = DhUpdates::deliver;
     private boolean test;
     private boolean listening;
@@ -97,32 +104,35 @@ public final class DhUpdates {
         waitingLevels = 0;
     }
 
-    /** Приёмник чанков. */
+    /** Chunk sink. */
     public interface Sink {
         void overwrite(ServerLevel level, ChunkAccess chunk);
     }
 
-    /** Для {@link ModAttachments#DH_UPDATES}: своё у каждого мира, не сохраняется. */
+    /** For {@link ModAttachments#DH_UPDATES}: each world has its own, not saved. */
     public DhUpdates() {}
 
-    /** Очередь мира, если есть куда отдавать (DH стоит, в мире игрок с Voxy или проверка подставила приёмник), иначе null. */
+    /**
+     * The world's queue, if there is somewhere to hand chunks (DH is installed, a player with Voxy is in the world, or
+     * a check substituted a sink), else null.
+     */
     private static DhUpdates active(ServerLevel level) {
         DhUpdates u = level.getData(ModAttachments.DH_UPDATES);
         return u.test || DhChunks.available() || VoxyLods.wanted(level) ? u : null;
     }
 
-    /** Чанк — в DH (если стоит) и игрокам с Voxy (если есть). Поток сервера. */
+    /** Chunk — to DH (if installed) and to players with Voxy (if any). Server thread. */
     private static void deliver(ServerLevel level, ChunkAccess chunk) {
         DhChunks.overwrite(level, chunk);
         VoxyLods.send(level, chunk);
     }
 
-    /** Темп держит очередь DH (подтверждения записи): DH стоит или проверка подставила приёмник. */
+    /** The pace is held by the DH queue (write confirmations): DH is installed or a check substituted a sink. */
     private boolean paced() {
         return test || DhChunks.available();
     }
 
-    /** Проверки: чанки мира {@code level} уходят в {@code sink} (и без DH); null — снова в DH, очередь пуста. */
+    /** Checks: chunks of world {@code level} go to {@code sink} (and not to DH); null — back to DH, queue empty. */
     public static void testSink(ServerLevel level, @Nullable Sink sink) {
         DhUpdates u = level.getData(ModAttachments.DH_UPDATES);
         u.sink = sink != null ? sink : DhUpdates::deliver;
@@ -139,7 +149,7 @@ public final class DhUpdates {
         }
     }
 
-    /** Мод изменил блоки загруженного чанка: в DH не раньше тика {@code at}. Поток сервера. */
+    /** The mod changed blocks of a loaded chunk: to DH not before tick {@code at}. Server thread. */
     public static void mark(ServerLevel level, ChunkPos pos, long at) {
         DhUpdates u = active(level);
         if (u == null) return;
@@ -147,7 +157,8 @@ public final class DhUpdates {
         if (read != null) read.obsolete = true; // A later change must not reuse the previous save's result.
         Long2LongLinkedOpenHashMap due = u.due;
         long key = pos.toLong();
-        // повторная отметка не откладывает раннюю, а встаёт за ней: после отправки чанк ждёт и её
+        // a repeated mark does not postpone the early one, it queues behind it: after sending, the chunk waits for that
+        // one too
         if (!due.containsKey(key)) {
             due.put(key, at);
             return;
@@ -158,7 +169,7 @@ public final class DhUpdates {
         if (last > due.get(key) && last > u.later.get(key)) u.later.put(key, last);
     }
 
-    /** {@link #mark} всех чанков квадрата вокруг {@code centre} радиусом {@code reach} блоков. */
+    /** {@link #mark} of all chunks of the square around {@code centre} with radius {@code reach} blocks. */
     public static void markArea(ServerLevel level, Vec3 centre, double reach, long at) {
         if (active(level) == null) return;
         int x0 = Mth.floor(centre.x - reach) >> 4, x1 = Mth.floor(centre.x + reach) >> 4;
@@ -166,20 +177,21 @@ public final class DhUpdates {
         for (int x = x0; x <= x1; x++) for (int z = z0; z <= z1; z++) mark(level, new ChunkPos(x, z), at);
     }
 
-    /** Отметка загруженного чанка ещё ждёт отправки в DH ({@link #mark}). Поток сервера. */
+    /** Mark of a loaded chunk still waiting to be sent to DH ({@link #mark}). Server thread. */
     public static boolean pending(ServerLevel level, long chunk) {
         DhUpdates u = active(level);
         return u != null && u.due.containsKey(chunk);
     }
 
-    /** Есть куда отдавать: DH стоит (или проверка подставила приёмник). */
+    /** Somewhere to hand chunks: DH is installed (or a check substituted a sink). */
     public static boolean enabled(ServerLevel level) {
         return active(level) != null;
     }
 
     /**
-     * Есть ли куда отдавать, и сколько ещё собранных чанков не в мире можно отдать ({@link #offer}) прямо сейчас: и не
-     * больше, чем осталось места в очередях игроков с Voxy ({@link VoxyLods#room}).
+     * Whether there is somewhere to hand chunks, and how many more collected chunks not in the world can be handed over
+     * ({@link #offer}) right now: no more than the room left in the queues of players with Voxy ({@link
+     * VoxyLods#room}).
      */
     public static int room(ServerLevel level) {
         DhUpdates u = active(level);
@@ -187,8 +199,9 @@ public final class DhUpdates {
     }
 
     /**
-     * Чанк не из мира (его копия с изменениями, {@code ProtoChunk}) — в LOD как есть: после этого его не менять.
-     * Поток сервера.
+     * A chunk not from the world (its copy with changes, {@code ProtoChunk}) — into the LOD as is: do not change it
+     * after this.
+     * Server thread.
      */
     public static void offer(ServerLevel level, ChunkAccess chunk) {
         DhUpdates u = active(level);
@@ -199,8 +212,9 @@ public final class DhUpdates {
     }
 
     /**
-     * Сколько ещё держанных копий можно отдать сейчас ({@link #sendHeld}): окно — половина наименьшей очереди DH на мир
-     * по числу его потоков ({@link DhQueue#window}), минус отданные и не подтверждённые; без DH — 0.
+     * How many more held copies can be handed over now ({@link #sendHeld}): the window is half the smallest DH queue
+     * per world
+     * by its number of threads ({@link DhQueue#window}), minus those handed over and not confirmed; without DH — 0.
      */
     public static int heldRoom(ServerLevel level) {
         DhUpdates u = active(level);
@@ -210,18 +224,21 @@ public final class DhUpdates {
     }
 
     /**
-     * Держанная копия чанка не в мире (собрана заранее, {@code ProtoChunk}) — в DH сейчас, мимо {@link #PER_TICK}: её
-     * срок — приход фронта, а темп держит окно ({@link #heldRoom}); после этого копию не менять. Поток сервера.
+     * A held copy of a chunk not in the world (assembled in advance, {@code ProtoChunk}) — to DH now, past {@link
+     * #PER_TICK}: its
+     * deadline is the arrival of the front, and the pace is held by the window ({@link #heldRoom}); do not change the
+     * copy after this.
      *
-     * @return false — не сейчас: тот же чанк отдан DH меньше {@link #RESEND} тиков назад или ждёт отправки
-     * ({@link #offer}) — DH пропустил бы копию или накрыл бы её той
+     * @return false — not now: the same chunk was handed to DH less than {@link #RESEND} ticks ago or is waiting to be
+     * sent
+     * ({@link #offer}) — DH would skip the copy or overlap it with that one
      */
     public static boolean sendHeld(ServerLevel level, ChunkAccess copy) {
         DhUpdates u = active(level);
         if (u == null) return true;
         long key = copy.getPos().toLong(), now = level.getGameTime();
         if (u.offeredCount.containsKey(key) || u.sent.containsKey(key) && now - u.sent.get(key) < RESEND) return false;
-        // подтверждения записи — только от DH: без него темп держит место в очередях Voxy (heldRoom)
+        // write confirmations — only from DH: without it the pace holds room in the Voxy queues (heldRoom)
         boolean paced = u.paced();
         if (paced && u.held.waiting() == 0) {
             u.setListening(true);
@@ -231,7 +248,8 @@ public final class DhUpdates {
             u.sink.overwrite(level, copy);
         } else {
             DhChunks.overwrite(level, copy);
-            // DH ставит LOD через LEAD тиков после вызова, Voxy — сразу: копия игрокам с Voxy — к самому фронту
+            // DH sets the LOD LEAD ticks after the call, Voxy — at once: the copy for players with Voxy — right up to
+            // the front
             VoxyLods.send(level, copy, now + LEAD);
         }
         if (paced) u.held.sent(key, System.nanoTime());
@@ -240,8 +258,9 @@ public final class DhUpdates {
     }
 
     /**
-     * DH записал LOD чанка в свою базу ({@code DhApiChunkModifiedEvent}; поток DH, проверки — любой): подтверждение
-     * держанной копии ({@link #sendHeld}). Мир — тот, что DH обёртывает ({@code getWrappedMcObject}).
+     * DH wrote the chunk's LOD to its database ({@code DhApiChunkModifiedEvent}; DH's thread, checks — any): the
+     * confirmation of a
+     * held copy ({@link #sendHeld}). The world — the one DH wraps ({@code getWrappedMcObject}).
      */
     public static void saved(Object level, int x, int z) {
         if (waitingLevels == 0 || !(level instanceof ServerLevel world)) return;
@@ -257,8 +276,9 @@ public final class DhUpdates {
     }
 
     /**
-     * Держанные копии мира с прошлого вызова (счёт начинается заново): отдано, подтверждено, без подтверждения за срок,
-     * задержка подтверждённых — средняя и наибольшая (мс), ждут подтверждения сейчас.
+     * Held copies of the world since the last call (counting starts over): handed over, confirmed, unconfirmed past the
+     * deadline,
+     * the delay of confirmed ones — average and maximum (ms), waiting for confirmation now.
      */
     public static long[] takeHeldStats(ServerLevel level) {
         return level.getData(ModAttachments.DH_UPDATES).held.take();
@@ -277,10 +297,12 @@ public final class DhUpdates {
             if (held.waiting() == 0) setListening(false);
         }
         if (due.isEmpty() && offered.isEmpty()) return;
-        // игроки с Voxy (и с DH): темп — и место в их очередях, иначе лишнее они бы не получили
+        // players with Voxy (and with DH): the pace — and the room in their queues, or they would not get the extra
         int budget = Math.min(PER_TICK, VoxyLods.room(level));
-        // собранные чанки — первыми: отметки чанков в мире подождут тик, а собранные держат память; чанк, отданный DH
-        // меньше RESEND тиков назад (держанной копией или прошлой собранной), — в конец: DH пропустил бы его молча
+        // collected chunks first: marks of chunks in the world will wait a tick, while collected ones hold memory; a
+        // chunk handed to DH
+        // less than RESEND ticks ago (as a held copy or as a previous collected one) — to the end: DH would skip it
+        // silently
         for (int i = 0, n = offered.size(); budget > 0 && i < n; i++) {
             ChunkAccess c = offered.poll();
             long key = c.getPos().toLong();
@@ -293,7 +315,7 @@ public final class DhUpdates {
             sent.put(key, now);
             budget--;
         }
-        // отправленных за RESEND тиков — не больше (PER_TICK + окно держанных копий) × RESEND
+        // of those sent within RESEND ticks — no more than (PER_TICK + the window of held copies) × RESEND
         sent.long2LongEntrySet().removeIf(e -> now - e.getLongValue() >= RESEND);
         Pending pending = new Pending();
         LongArrayList notYet = new LongArrayList();
@@ -349,12 +371,12 @@ public final class DhUpdates {
             budget--;
         }
         scannedMax = Math.max(scannedMax, scanned);
-        // обошли не всё: не наступившие — в конец, следующий тик смотрит дальше
+        // did not go through everything: not-yet-due marks go to the end, the next tick looks further
         if (it.hasNext()) for (int i = 0; i < notYet.size(); i++) due.getAndMoveToLast(notYet.getLong(i));
         for (int i = 0; i < pending.keys.size(); i++) due.put(pending.keys.getLong(i), pending.ats.getLong(i));
     }
 
-    /** Отметки, которые встают снова после отправки (в карту — после обхода). */
+    /** Marks that stand again after sending (into the map — after the walk). */
     private static final class Pending {
         final LongArrayList keys = new LongArrayList(), ats = new LongArrayList();
 
@@ -365,8 +387,9 @@ public final class DhUpdates {
     }
 
     /**
-     * Для проверок: ждут отправки (чанки мира, собранные), отправлено с запуска мира (чанки мира, собранные), больше
-     * всего отметок, просмотренных за тик.
+     * For checks: waiting to be sent (chunks of the world, collected), sent since the world's start (chunks of the
+     * world, collected), the most
+     * marks scanned per tick.
      */
     public static long[] stats(ServerLevel level) {
         DhUpdates u = level.getData(ModAttachments.DH_UPDATES);

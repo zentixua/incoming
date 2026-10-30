@@ -33,30 +33,32 @@ import java.util.UUID;
 import java.util.function.BooleanSupplier;
 
 /**
- * Осколки наземного взрыва ({@link FragmentModel}) единицами в очереди попаданий, после главного взрыва удара: каждый
- * осколок — луч из точки взрыва с массой и скоростью по закону (тысячи лучей, но не сущности), по готовым чанкам
- * ({@link FragmentTrace}). Луч останавливается в первом теле или твёрдом блоке; по пути бьёт стёкла, в кладке
- * оставляет выбоину (блок становится треснувшим — не по физике: ямка от осколка — сантиметры, а меняется весь блок).
- * Тело ранит по энергии удара каждого попавшего осколка ({@link FragmentModel#injury}, {@link FragmentModel#death}),
- * сколько здоровья это стоит — как у волны ({@link BlastInjury#lostShare}); за стеной, за листвой и в воде осколки не
- * достают. Аппараты Sable осколки не задерживают и не ломают (их блоки — не в мире).
+ * Fragments of a ground explosion ({@link FragmentModel}) as units in the impact queue, after the strike's main blast:
+ * each fragment is a ray from the explosion point with mass and speed by law (thousands of rays, not entities), over
+ * ready chunks ({@link FragmentTrace}). A ray stops at the first body or solid block; on the way it breaks glass, and
+ * in masonry it leaves a chip (the block becomes cracked — not physical: a fragment's dent is centimetres, but the
+ * whole block changes). A body is hurt by the energy of each fragment that hits it ({@link FragmentModel#injury},
+ * {@link FragmentModel#death}), and by how much health that costs — as for the wave ({@link BlastInjury#lostShare});
+ * behind a wall, behind foliage and in water fragments do not reach. Sable craft neither stop nor break fragments
+ * (their blocks are not in the world).
  * <p>
- * Единицы: список тел (снимок живых в мире, не дальше {@link FragmentModel#reach}), лучи — порциями по
- * {@link #TRACE_NANOS}, стёкла и выбоины — порциями по {@link #BLOCK_PORTION}, урон — по {@link #BODY_PORTION} тел.
- * Зерно и ось — те же, что в пакете взрыва: первые лучи клиент ведёт сам и рисует пыль и искры там же.
+ * Units: the list of bodies (a snapshot of live ones in the world, not farther than {@link FragmentModel#reach}), rays
+ * in portions of {@link #TRACE_NANOS}, glass and chips in portions of {@link #BLOCK_PORTION}, damage in portions of
+ * {@link #BODY_PORTION} bodies. Seed and axis match the blast packet: the client traces the first rays itself and draws
+ * dust and sparks there too.
  */
 public final class FragmentStrike implements UnitQueue.Job {
-    /** Лучи одной единицы — не дольше, нс (и хоть {@link #MIN_RAYS}). */
+    /** Rays of one unit: no longer than this, ns (and at least {@link #MIN_RAYS}). */
     static final long TRACE_NANOS = 2_000_000;
     static final int MIN_RAYS = 32;
     static final int BLOCK_PORTION = 64;
     static final int BODY_PORTION = 8;
     /**
-     * Силуэт тела занимает такую долю его рамки: человек стоя — ~0,6 м² сбоку (G&D §12.44, {@link BlastInjury}) из
-     * 0,6 × 1,8 м рамки игрока; у мобов — так же (оценка).
+     * A body's silhouette takes this share of its box: a standing person is ~0.6 m² from the side (G&D §12.44,
+     * {@link BlastInjury}) of the player's 0.6 × 1.8 m box; mobs the same (est.).
      */
     static final double BODY_FILL = 0.55;
-    /** Кладка с треснувшим видом в ванили: выбоина — она. */
+    /** Masonry with a cracked variant in vanilla: the chip is that block. */
     static final Map<Block, Block> CRACKED = Map.of(
             Blocks.STONE_BRICKS, Blocks.CRACKED_STONE_BRICKS,
             Blocks.DEEPSLATE_BRICKS, Blocks.CRACKED_DEEPSLATE_BRICKS,
@@ -82,7 +84,7 @@ public final class FragmentStrike implements UnitQueue.Job {
     private long[] blockList;
     private int blockNext;
     private final LongOpenHashSet touched = new LongOpenHashSet();
-    /** Для проверок: попаданий в тело по UUID (с весом лучей), сколько стёкол и выбоин. */
+    /** For checks: hits on a body by UUID (weighted by rays), and how many glass panes and chips. */
     private final Map<UUID, Double> hits = new HashMap<>();
     private int glassBroken, chipped;
     private boolean done;
@@ -102,7 +104,10 @@ public final class FragmentStrike implements UnitQueue.Job {
         this.blockRule = blockRule;
     }
 
-    /** Поставить осколки удара в очередь попаданий: после взрывов {@code after}, если главный был ({@code happened}). */
+    /**
+     * Queue the strike's fragments as impacts: after the explosions {@code after}, if the main one happened ({@code
+     * happened}).
+     */
     static FragmentStrike queue(ServerLevel level, @Nullable BlastArea area, List<StagedExplosion> after, BooleanSupplier happened,
                                 FragmentModel model, Vec3 centre, Vec3 axis, long seed, @Nullable Entity direct, @Nullable Entity owner,
                                 boolean glassRule, boolean blockRule) {
@@ -159,7 +164,7 @@ public final class FragmentStrike implements UnitQueue.Job {
         else StrikeWorld.get(level).impactCost().add(ImpactCost.Kind.FRAGMENTS, took, n);
     }
 
-    /** Живые тела, до которых долетает хоть один осколок: снимок (лут и смерти не меняют список). */
+    /** Live bodies that at least one fragment reaches: a snapshot (loot and deaths do not change the list). */
     private List<Body> bodies(ServerLevel level) {
         double reach = model.reach(), r2 = reach * reach;
         List<Body> out = new ArrayList<>();
@@ -172,7 +177,7 @@ public final class FragmentStrike implements UnitQueue.Job {
         return out;
     }
 
-    /** Порция лучей: каждый — настоящий осколок; тело на пути раньше блока забирает его. */
+    /** A portion of rays: each is a real fragment; a body on the path before a block takes it. */
     private int trace(ServerLevel level, long t0) {
         int n = 0;
         int total = model.traced();
@@ -184,7 +189,8 @@ public final class FragmentStrike implements UnitQueue.Job {
             double range = f.range();
             if (range <= 0) continue;
             SplittableRandom r = new SplittableRandom(seed * 31 + i);
-            // тело на пути: ближайшее, чей силуэт осколок задел (рамка шире силуэта — доля BODY_FILL)
+            // body on the path: the nearest one whose silhouette the fragment grazed (the box is wider — share
+            // BODY_FILL)
             Body hit = null;
             double at = range;
             for (Body b : bodies) {
@@ -207,13 +213,13 @@ public final class FragmentStrike implements UnitQueue.Job {
                     if (blockRule && cracked != null && FragmentModel.chips(f.mass(), f.speedAt(s))) chips.put(pos.asLong(), cracked.defaultBlockState());
                 }
             });
-            // тело забирает осколок, только если до него ничего твёрдого и всё по пути готово
+            // a body takes the fragment only if nothing solid lies before it and everything on the path is ready
             if (hit != null && stopped >= at) hit.add(f.energyAt(at), w);
         }
         return n;
     }
 
-    /** Путь по лучу до входа в рамку, м; −1 — мимо (или дальше {@code max}). */
+    /** Path along the ray to the box entry, m; −1 — a miss (or farther than {@code max}). */
     static double enter(AABB box, Vec3 o, Vec3 d, double max) {
         double t0 = 0, t1 = max;
         double[] lo = {box.minX, box.minY, box.minZ}, hi = {box.maxX, box.maxY, box.maxZ};
@@ -236,7 +242,7 @@ public final class FragmentStrike implements UnitQueue.Job {
         return t0;
     }
 
-    /** Порция стёкол и выбоин: только в готовых чанках, блок тот же, что видел луч. */
+    /** A portion of glass and chips: only in ready chunks, the same block the ray saw. */
     private int applyBlocks(ServerLevel level) {
         int n = 0;
         BlockPos.MutableBlockPos m = new BlockPos.MutableBlockPos();
@@ -264,7 +270,9 @@ public final class FragmentStrike implements UnitQueue.Job {
         return n;
     }
 
-    /** Урон по телам: по всем попаданиям сразу, как у волны — гибель или доля здоровья по своей случайности тела. */
+    /**
+     * Damage to bodies: all hits at once, as for the wave — death or a share of health by the body's own random draw.
+     */
     private int hurt(ServerLevel level) {
         int n = 0;
         for (; bodyNext < bodies.size() && n < BODY_PORTION; bodyNext++) {
@@ -278,7 +286,8 @@ public final class FragmentStrike implements UnitQueue.Job {
             double lost = BlastInjury.lostShare(1 - b.noDeath, 1 - b.noInjury, fate);
             float dmg = lost >= 1 ? Float.MAX_VALUE : (float) (lost * e.getMaxHealth());
             if (dmg < 0.5f) continue;
-            // осколки — свои раны, а не повтор удара волны: окно неуязвимости после волны их не съедает
+            // fragments make their own wounds, not a repeat of the wave's hit: the wave's invulnerability window does
+            // not absorb them
             e.invulnerableTime = 0;
             e.hurt(ModDamageTypes.source(level, ModDamageTypes.FRAGMENT, direct, owner), dmg);
         }
@@ -297,13 +306,13 @@ public final class FragmentStrike implements UnitQueue.Job {
         return "Fragments at " + Mth.floor(centre.x) + " " + Mth.floor(centre.y) + " " + Mth.floor(centre.z);
     }
 
-    // ---- для проверок
+    // ---- for checks
 
     public boolean done() {
         return done;
     }
 
-    /** Попаданий в тело {@code id} (с весом лучей). */
+    /** Hits on body {@code id} (weighted by rays). */
     public double hits(UUID id) {
         return hits.getOrDefault(id, 0.0);
     }
@@ -316,11 +325,11 @@ public final class FragmentStrike implements UnitQueue.Job {
         return chipped;
     }
 
-    /** Тело в списке: рамка на момент взрыва и что в него попало. */
+    /** A body in the list: its box at the moment of the explosion and what hit it. */
     private static final class Body {
         final LivingEntity entity;
         final AABB box;
-        /** Ближняя точка рамки от взрыва, м: дальше пути осколка — не проверять. */
+        /** Nearest point of the box to the explosion, m: if beyond the fragment's path, do not check. */
         final double near;
         double hits, noDeath = 1, noInjury = 1;
 

@@ -1,26 +1,29 @@
-// Пелена после ударной волны (client/nuclear/PallField — законы, client/fx/layer/PallPass — проходы): поле одного
-// подрыва по таблице радиуса. Общее у объёма (fx_pall) и у квадратов слоя эффектов (fx.vsh: что пелена закрывает
-// перед частицей). Числа и законы — копии PallField и VolumeNoise.shape (PallGlslTest считает эти функции и сверяет с Java).
+// Pall after the blast wave (client/nuclear/PallField — laws, client/fx/layer/PallPass — passes): the field of one
+// detonation from a radius table. Shared by the volume (fx_pall) and the squares of the effects layer (fx.vsh: what the pall
+// covers in front of a particle). Numbers and laws are copies of PallField and VolumeNoise.shape (PallGlslTest computes
+// these functions and checks them against Java).
 //
-// Слот подрыва — mat4 по столбцам:
-//   [0] = (эпицентр x, z от глаза; земля под эпицентром от глаза по y; докуда таблица, блоки)
-//   [1] = (снос ветром x, z того, что подняло в миг подрыва, блоки — у пыли и брызг его доля по их возрасту (строка мглы,
-//          a), у базисной волны весь; длина шлейфа мглы, блоки; 1 — слот есть)
-//   [2] = (ветер x, z — единичный; v строки пыли в таблице; v строки мглы)
-//   [3] = (ослабление густой пыли — мера густоты клубов, 1/блок; плитка шума, блоки; секунды после подрыва; v строки брызг)
-// Таблица: по ширине — радиус 0..reach, строки — пыль (ослабление у земли, высота, доля дыма; 0), брызги над водой
-// (ослабление у воды, их высота — свой слой; 0; 0) и мгла (ослабление, высота, свет пожаров снизу; доля сноса пыли того
-// же радиуса — PallField.share: ветер несёт пыль с прихода фронта, у фронта она на месте). Пыль и брызги моложе
-// положительной фазы — голова стены (pallWall*), таблица у фронта их отдаёт ей.
-// Вода слота W — vec4: (радиус базисной волны, её верх — блоки; её ослабление в самой густой части, 1/блок, 0 — волны нет;
-// 1 — под пеленой есть вода и её карта — канал g карты рельефа слота, PallGround; 0 — всюду суша).
+// Detonation slot — mat4 by columns:
+//   [0] = (epicenter x, z from the eye; ground under the epicenter from the eye by y; how far the table goes, blocks)
+//   [1] = (drift by wind x, z of what was lifted at the moment of detonation, blocks — for dust and spray its share by their
+//          age (haze row, a), for the basic wave all of it; length of the haze trail, blocks; 1 — slot exists)
+//   [2] = (wind x, z — unit; v of the dust row in the table; v of the haze row)
+//   [3] = (attenuation of dense dust — a measure of puff density, 1/block; noise tile, blocks; seconds after detonation;
+//          v of the spray row)
+// Table: across the width — radius 0..reach; rows — dust (attenuation at ground, height, smoke share; 0), spray over water
+// (attenuation over water, its height — own layer; 0; 0) and haze (attenuation, height, fire light from below; share of dust
+// drift at the same radius — PallField.share: wind carries dust from the arrival of the front, at the front it stays in
+// place). Dust and spray younger than the positive phase belong to the wall head (pallWall*); the table at the front hands
+// them over to it.
+// Water of slot W — vec4: (radius of the basic wave, its top — blocks; its attenuation in the densest part, 1/block, 0 — no
+// wave; 1 — there is water under the pall and its map — channel g of the slot's relief map, PallGround; 0 — everywhere land).
 
-// Вещество пелены (client/nuclear/PallLight; PallGlslTest сверяет): альбедо однократного рассеяния ω' по каналам и
-// асимметрия g' после дельта-Эддингтона (пик вперёд f = g² — в непрорассеянный свет, остаток g' = g / (1 + g)). Ослабление
-// таблицы (по видимости, которую видит глаз) — уже σ' дельта-Эддингтона: по нему идут и луч зрения, и свет к точке.
-// ω' — из цвета толстого слоя (fx_pall: DUST, SMOKE, HAZE, MIST; сажа шторма — SOOT; в линейном — pallLinear) обращением
-// отражения двух потоков: толстая пелена — того же цвета, что стена пыли и брызг. Пыль, дым и мгла — g = 0,6, капли
-// водяной пыли — 0,85, сажа — 0,5.
+// Substance of the pall (client/nuclear/PallLight; PallGlslTest checks): single-scattering albedo ω' by channel and asymmetry
+// g' after delta-Eddington (the forward peak f = g² goes into unscattered light, the remainder g' = g / (1 + g)). The
+// attenuation of the table (by visibility, as the eye sees it) — already σ' of delta-Eddington: both the view ray and the
+// light to the point use it. ω' — from the color of the thick layer (fx_pall: DUST, SMOKE, HAZE, MIST; storm soot — SOOT;
+// in linear — pallLinear) by inverting the two-stream reflection: thick pall — the same color as the wall of dust and spray.
+// Dust, smoke and haze — g = 0.6, water droplets — 0.85, soot — 0.5.
 const vec3 PALL_DUST_W = vec3(0.8687934, 0.8099112, 0.7286264);
 const vec3 PALL_SMOKE_W = vec3(0.5520492, 0.5170717, 0.4837395);
 const vec3 PALL_HAZE_W = vec3(0.7175592, 0.6833941, 0.6480812);
@@ -29,66 +32,69 @@ const vec3 PALL_SOOT_W = vec3(0.4368484, 0.4180439, 0.4008365);
 const float PALL_DUST_G = 0.375;
 const float PALL_MIST_G = 0.4594595;
 const float PALL_SOOT_G = 0.3333333;
-// Масштаб высоты чистого воздуха в масштабах высоты дымки (Sight.HAZE_HEIGHT / AIR_HEIGHT)
+// Scale of the height of clean air in units of the haze height scale (Sight.HAZE_HEIGHT / AIR_HEIGHT)
 const float PALL_AIR_HEIGHTS = 0.15;
 
-// Средняя по отрезку доля ослабления у его начала, когда отрезок поднимается на x масштабов высоты: (1 − e^−x) / x
-// (Sight.along). Вниз больше 80 масштабов — как 80, чтобы exp не переполнил float (предел — e^88): даже при наименьшем
-// effects_scale 0,005 это спуск на 480 блоков, больше высоты мира
+// Mean over a segment of the attenuation share at its start, when the segment rises by x height scales: (1 − e^−x) / x
+// (Sight.along). Going down more than 80 scales — as 80, so that exp does not overflow float (the limit is e^88): even at
+// the smallest effects_scale 0.005 this is a descent of 480 blocks, more than the height of the world
 float pallAlong(float x) {
     if (abs(x) < 1e-3) return 1.0 - 0.5 * x;
     float y = max(x, -80.0);
     return (1.0 - exp(-y)) / y;
 }
 
-// Толща воздуха от глаза на t блоков по лучу с вертикальной долей dy (Sight.Air.transmittance): у глаза дымка, чистый
-// воздух и погода — haze, clean, weather (1/блок); kh — 1 / масштаб высоты дымки (1/блок). Отрезок за глазом (t < 0) —
-// пустой
+// Thickness of air from the eye over t blocks along a ray with vertical share dy (Sight.Air.transmittance): near the eye —
+// haze, clean air and weather — haze, clean, weather (1/block); kh — 1 / haze height scale (1/block). A segment behind the
+// eye (t < 0) — empty
 float pallAirDepth(float t, float dy, float haze, float clean, float weather, float kh) {
     float d = max(t, 0.0), rise = dy * d * kh;
     return d * (haze * pallAlong(rise) + clean * pallAlong(rise * PALL_AIR_HEIGHTS) + weather);
 }
 
-// Доля света точки в t блоках от глаза по лучу с вертикальной долей dy, дошедшая через воздух кадра air (uniform PallAir:
-// PallPass, Sight.Air в блоках модели — в effects_scale раз мельче метров): дымка, чистый воздух и погода у глаза,
-// 1/блок; 1 / масштаб высоты дымки, 1/блок. Дымка вдали: гриб, пелена и стена тают в небе за ними — по воздуху до них,
-// который редеет с высотой (шапка в 5 км видна сквозь дымку нижних километров, а не сквозь 5 км дымки у земли)
+// Share of the light of a point at t blocks from the eye along a ray with vertical share dy, reaching through the air of the
+// frame air (uniform PallAir: PallPass, Sight.Air in the model's blocks — effects_scale times smaller than meters): haze,
+// clean air and weather at the eye, 1/block; 1 / haze height scale, 1/block. Haze in the distance: the mushroom, the pall and
+// the wall fade into the sky behind them — through the air to them, which thins with height (a cap at 5 km is seen through
+// the haze of the lower kilometers, not through 5 km of haze at ground level)
 float pallAir(vec4 air, float t, float dy) {
     return exp(-pallAirDepth(t, dy, air.x, air.y, air.z, air.w));
 }
 
-// альбедо земли под пеленой: суша и вода (PallLight.LAND, SEA)
+// albedo of the ground under the pall: land and water (PallLight.LAND, SEA)
 const float PALL_LAND = 0.2;
 const float PALL_SEA = 0.06;
 
-// Пелена слота в точке (pallField)
+// Pall of the slot at a point (pallField)
 struct PallAt {
-    // ослабление без шума (1/блок): пыль, мгла, водяная пыль (брызги и базисная волна)
+    // attenuation without noise (1/block): dust, haze, water droplets (spray and the basic wave)
     vec3 sigma;
-    // столбы над точкой (ослабление × блоки): то же
+    // columns above the point (attenuation × blocks): the same
     vec3 column;
-    // столбы всей пелены над полом слоя (pallField: floorUp; точка ниже него — над точкой): толща слоя, в котором точка
+    // columns of the whole pall above the floor of the layer (pallField: floorUp; a point below it — above the point):
+    // thickness of the layer in which the point is
     vec3 slab;
-    // доля дыма в пыли; свет пожаров снизу
+    // share of smoke in the dust; light of fires from below
     float smoke;
     float fire;
-    // высота точки в долях пелены: пыль, мгла
+    // height of the point in shares of the pall: dust, haze
     vec2 height;
-    // доля самой густой пыли (с водяной пылью — по всему поднятому)
+    // share of the densest dust (with water droplets — over all that is lifted)
     float dense;
-    // доля воды там, откуда подняло пыль и брызги (в первые секунды, пока снос мал, — под точкой)
+    // share of water there, from where dust and spray were lifted (in the first seconds, while the drift is small — under
+    // the point)
     float wet;
-    // насколько слой пыли перемешан (PallField.mixed): клочья молодого слоя расходятся (pallMixed)
+    // how much the dust layer is mixed (PallField.mixed): tufts of the young layer spread out (pallMixed)
     float mixed;
 };
 
-// доля густоты у земли на высоте x пелены (PallField.profile)
+// share of density at the ground at height x of the pall (PallField.profile)
 float pallProfile(float x) {
     if (x <= 0.0) return smoothstep(-1.0, -0.4, x);
     return (1.0 - smoothstep(0.45, 1.0, x)) * (0.55 + 0.45 * exp(-2.5 * x));
 }
 
-// интеграл профиля от x до верха, в долях высоты (PallField.column)
+// integral of the profile from x to the top, in shares of the height (PallField.column)
 float pallColumn(float x) {
     float xa = clamp(x, 0.0, 1.0);
     float above = 0.548 * pow(1.0 - xa, 2.45) * (1.0 + 0.83 * xa);
@@ -97,35 +103,39 @@ float pallColumn(float x) {
     return above + min(-x, 0.4) + 0.6 * (f - f * f * f + 0.5 * f * f * f * f);
 }
 
-// край таблицы: к нему поле тает (PallField.edge)
+// edge of the table: the pall fades toward it (PallField.edge)
 float pallEdge(float u) {
     return 1.0 - smoothstep(0.96, 1.0, u);
 }
 
-// базисная волна по радиусу (PallField.surgeProfile): u — доля её радиуса; у края катится вал — гуще
+// basic wave by radius (PallField.surgeProfile): u — share of its radius; a rim rolls at the edge — denser
 float pallSurge(float u) {
     return (0.35 + 0.65 * smoothstep(0.2, 0.85, u)) * (1.0 - smoothstep(0.9, 1.05, u));
 }
 
-// верх базисной волны по радиусу, доля её высоты (PallField.surgeTop): вал у края выше
+// top of the basic wave by radius, share of its height (PallField.surgeTop): the rim at the edge is higher
 float pallSurgeTop(float u) {
     return 0.55 + 0.45 * smoothstep(0.3, 0.95, u);
 }
 
-// доля воды под точкой rel (от эпицентра по земле) по карте слота (PallGround.water); карты нет (G.x = 0) — суша
+// share of water under the point rel (from the epicenter along the ground) by the slot's map (PallGround.water); no map
+// (G.x = 0) — land
 float pallWater(sampler2D ground, vec4 G, vec2 rel) {
     if (G.x <= 0.0) return 0.0;
     return clamp(textureLod(ground, rel / (2.0 * G.x) + 0.5, 0.0).g, 0.0, 1.0);
 }
 
-// Поле слота S в точке p (от глаза), без шума (среднее по шуму — оно); ground, G — карта рельефа и воды слота, W — вода
-// слота; floorUp — пол слоя под точкой (верх рельефа по карте, блоки над землёй под эпицентром; 0 — земля под
-// эпицентром): от него считается slab, и над холмом слой встаёт от него — пыль поднимает ветер с его склона (в долину
-// она стекает: там слой от земли под эпицентром, pallProfile; PallField.sigma — то же). Вещество — по воде там, откуда его подняло (PallField: пыль, снесённая на воду, остаётся пылью): пыль и брызги —
-// у точки за вычетом сноса (доля по возрасту пыли — по узлу самой точки, PallField.source), где читается и таблица; мгла — у её источника на оси шлейфа (над водой пожаров нет), только
-// если она здесь есть; базисная волна — вода, поднятая у эпицентра, над чем бы ни катилась (W.z = 0 — её нет). Без воды
-// под пеленой (W.w = 0) карта не читается.
-// bumps — верх слоя пыли над точкой в долях верха таблицы (бугры верха, PallField.BUMPS; без шума — 1)
+// Field of slot S at point p (from the eye), without noise (the average over noise is that); ground, G — relief and water
+// maps of the slot; W — water of the slot; floorUp — floor of the layer under the point (top of the relief by the map,
+// blocks above the ground under the epicenter; 0 — ground under the epicenter): slab is computed from it, and above a hill
+// the layer rises from it — the dust is lifted by the wind from its slope (it drains into the valley: there the layer is
+// from the ground under the epicenter, pallProfile; PallField.sigma is the same). Substance — by the water where it was
+// lifted from (PallField: dust blown onto water stays dust): dust and spray — at the point, minus the drift (share by the
+// age of the dust — by the node of the point itself, PallField.source), where the table is also read; haze — at its source on
+// the axis of the trail (there are no fire over water), only if it is here; the basic wave — water lifted at the epicenter,
+// over whatever it rolls on (W.z = 0 — there is none). Without water under the pall (W.w = 0) the map is not read.
+// bumps — top of the dust layer above the point in shares of the table's top (bumps of the top, PallField.BUMPS; without
+// noise — 1)
 PallAt pallField(sampler2D table, sampler2D ground, mat4 S, vec4 G, vec4 W, vec3 p, float floorUp, float bumps) {
     vec2 q = p.xz - S[0].xy;
     float hill = max(floorUp, 0.0);
@@ -144,7 +154,7 @@ PallAt pallField(sampler2D table, sampler2D ground, mat4 S, vec4 G, vec4 W, vec3
     float topH = max(haze.g, 1.0), sh = haze.r * (1.0 - 0.5 * along / max(len, 1.0)) * pallEdge(uh), fire = haze.b;
     float wet = 0.0, sg = 0.0, topG = 1.0;
     if (W.w > 0.5) {
-        // брызги — своя строка таблицы (своя высота): её читает только подрыв, под пеленой которого есть вода
+        // spray — its own table row (its own height): only the detonation under whose pall there is water reads it
         vec4 spray = texture(table, vec2(min(ud, 1.0), S[3].w));
         ss = spray.r * edge;
         topS = max(spray.g, 1.0);
@@ -158,7 +168,7 @@ PallAt pallField(sampler2D table, sampler2D ground, mat4 S, vec4 G, vec4 W, vec3
         }
     }
     if (W.z > 0.0) {
-        // базисную волну сносит весь снос: она поднялась в первые секунды
+        // the basic wave is carried entirely by the drift: it was lifted in the first seconds
         float ug = length(q - S[1].xy) / max(W.x, 1.0);
         sg = W.z * pallSurge(ug);
         topG = max(W.y * pallSurgeTop(ug), 1.0);
@@ -179,31 +189,32 @@ PallAt pallField(sampler2D table, sampler2D ground, mat4 S, vec4 G, vec4 W, vec3
     return a;
 }
 
-// Неровность верха слоя пыли (PallField.BUMPS): верх над точкой — (1 ± она) верха таблицы
+// Unevenness of the top of the dust layer (PallField.BUMPS): the top above the point — (1 ± it) of the table's top
 const float PALL_BUMPS = 0.3;
-// Колебания густоты перемешанного слоя — доля прежних (PallField.MIXED)
+// Fluctuations of density of the mixed layer — share of the former (PallField.MIXED)
 const float PALL_MIXED = 0.2;
 
-// Клубы пелены в перемешанном слое (PallField.clumps): множитель густоты shape (в среднем 1), колебания убывают от клочьев
-// молодого слоя к PALL_MIXED по mixed; среднее — 1
+// Puffs of the pall in the mixed layer (PallField.clumps): density multiplier shape (on average 1), fluctuations fade from the
+// tufts of the young layer toward PALL_MIXED by mixed; average — 1
 float pallMixed(float shape, float mixed) {
     return 1.0 + (shape - 1.0) * (1.0 - (1.0 - PALL_MIXED) * mixed);
 }
 
-// Форма клубов по шуму (VolumeNoise.shape): n — каналы плитки (клубы, мелкие края), fill — насколько пелена сплошная;
-// среднее по плитке — 1, густота — плавно от просветов до вдвое (у края — втрое) гуще средней.
+// Shape of puffs by noise (VolumeNoise.shape): n — channels of the noise tile (puffs, small edges), fill — how solid the pall is;
+// the average over the tile — 1, density — smoothly from gaps to twice (at the edge three times) denser than average.
 float pallShape(vec2 n, float fill) {
     return smoothstep(0.4 - 0.45 * fill, 0.7, n.x - 0.3 * (1.0 - n.y)) / (0.3 + 0.225 * fill);
 }
 
-// Мелкие клубы (VolumeNoise.detail): r — канал клубов плитки вчетверо мельче; множитель густоты 0,3..1,7, в среднем по
-// плитке — 1 (канал равномерен), поэтому средняя густота поля остаётся его густотой. Пелена — каскад: крупные клубы,
-// внутри них мелкие; мельче того, что луч различает (пиксель, шаг), мелкие — их среднее, 1 (fx_pall: fineAt).
+// Small puffs (VolumeNoise.detail): r — the puff channel of the tile four times finer; density multiplier 0.3..1.7, on average
+// over the tile — 1 (the channel is uniform), so the average density of the field stays its density. The pall is a cascade:
+// large puffs, small ones inside them; finer than what a ray distinguishes (pixel, step), small ones — their average, 1
+// (fx_pall: fineAt).
 float pallDetail(float r) {
     return 0.3 + 1.4 * smoothstep(0.2, 0.8, r);
 }
 
-// Отрезок луча (из глаза, dir — единичный) в рамке [lo, hi]: (вход, выход); вход > выхода — мимо.
+// Segment of a ray (from the eye, dir — unit) in the box [lo, hi]: (entry, exit); entry > exit — misses.
 vec2 pallBox(vec3 dir, vec3 lo, vec3 hi) {
     vec3 inv = 1.0 / (dir + vec3(equal(dir, vec3(0.0))) * 1e-6);
     vec3 a = lo * inv, b = hi * inv;
@@ -211,39 +222,41 @@ vec2 pallBox(vec3 dir, vec3 lo, vec3 hi) {
     return vec2(max(max(t0.x, t0.y), max(t0.z, 0.0)), min(min(t1.x, t1.y), t1.z));
 }
 
-// ---------------------------------------------------------------- рельеф под пеленой (client/nuclear/PallGround)
-// Карта слота: r — высоты верха рельефа над землёй под эпицентром, g — доля воды (pallWater); середина карты — эпицентр,
-// края — как у края; G = (полсторона карты; низ и верх карты; клетка — блоки), G.x = 0 — карты нет.
+// ---------------------------------------------------------------- relief under the pall (client/nuclear/PallGround)
+// Map of the slot: r — heights of the top of the relief above the ground under the epicenter, g — share of water (pallWater);
+// the middle of the map is the epicenter, the edges — as at the edge; G = (half-side of the map; bottom and top of the map;
+// cell — blocks), G.x = 0 — there is no map.
 
-// верх рельефа под точкой xz (от глаза) — от глаза по y (PallGround.at)
+// top of the relief under point xz (from the eye) — from the eye by y (PallGround.at)
 float pallGroundAt(sampler2D ground, mat4 S, vec4 G, vec2 xz) {
     return S[0].z + textureLod(ground, (xz - S[0].xy) / (2.0 * G.x) + 0.5, 0.0).r;
 }
 
-// Рельеф под точкой xz (от глаза) над землёй под эпицентром, блоки: пол слоя пелены (pallField: floorUp); карты нет —
-// земля под эпицентром
+// Relief under point xz (from the eye) above the ground under the epicenter, blocks: the floor of the pall layer (pallField:
+// floorUp); no map — the ground under the epicenter
 float pallRelief(sampler2D ground, mat4 S, vec4 G, vec2 xz) {
     if (G.x <= 0.0) return 0.0;
     return pallGroundAt(ground, S, G, xz) - S[0].z;
 }
 
-// Где луч dir из глаза (единичный) уходит под рельеф слота, до end; 1e9 — не уходит. Мира за пикселем нет: луч прошёл
-// всё, что нарисовано (дальше from по земле от глаза — дальность прорисовки), ничего не задев, — ищем только дальше.
-// Шаги растут как расстояние (вдали клетка карты на экране мельче), начало сдвинуто на jitter шага, последний — на end;
-// между шагом над рельефом и шагом под ним — по секущей. Карта грубее мира: если у начала она выше луча (он прошёл над
-// настоящим рельефом), там она опускается под луч и к четырём клеткам дальше — снова как есть.
+// Where the ray dir from the eye (unit) goes under the slot's relief, up to end; 1e9 — it does not. There is no world behind
+// the pixel: the ray has passed everything drawn (further than from along the ground from the eye — the draw distance) and
+// hit nothing, so we search only farther. Steps grow with distance (far away a map cell is smaller on screen), the start is
+// shifted by a jitter of the step, the last is at end; between a step above the relief and a step below it — by a secant.
+// The map is coarser than the world: if at the start it is above the ray (the ray passed over the real relief), there it
+// drops under the ray and, four cells farther, again as is.
 float pallFloor(sampler2D ground, mat4 S, vec4 G, vec3 dir, float from, float end, int steps, float jitter) {
     if (G.x <= 0.0 || S[1].w < 0.5) return 1e9;
-    // рамка карты: по земле — карта, сверху — верх рельефа, снизу — без края (луч вниз кончится под рельефом)
+    // frame of the map: along the ground — the map, above — the top of the relief, below — without edge (a ray downward ends under the relief)
     vec2 span = pallBox(dir, vec3(S[0].x - G.x, -1e6, S[0].y - G.x), vec3(S[0].x + G.x, S[0].z + G.z, S[0].y + G.x));
     float fade = 4.0 * G.w, near = from / max(length(dir.xz), 1e-3);
     float ta = max(max(span.x, near), 1.0);
     float tb = min(span.y, end);
-    // ниже самого низкого места карты луч точно под рельефом (и там, где карта у начала опущена, — уже нет)
+    // below the lowest place of the map the ray is surely under the relief (and where the map is lowered at the start — no longer)
     if (dir.y < 0.0) tb = min(tb, max((S[0].z + G.y) / dir.y, ta) + fade);
     if (tb <= ta) return 1e9;
     float g0 = pallGroundAt(ground, S, G, dir.xz * ta);
-    // опускать — только там, где луч прошёл нарисованный мир; вошёл в карту дальше — до неё он шёл над неизвестным
+    // lower only where the ray has passed the drawn world; entered the map farther — until then it went over the unknown
     float lift = max(g0 + 1.0 - dir.y * ta, 0.0) * step(ta, near + 1.0);
     float ratio = pow(tb / ta, 1.0 / float(steps));
     float prevT = ta, prevD = dir.y * ta - g0 + lift;
@@ -252,7 +265,8 @@ float pallFloor(sampler2D ground, mat4 S, vec4 G, vec3 dir, float from, float en
         float tt = min(t, tb);
         vec3 q = dir * tt;
         float d = q.y - pallGroundAt(ground, S, G, q.xz) + lift * max(1.0 - (tt - ta) / fade, 0.0);
-        // начало уже под картой (верх рамки — по высотам до R16F, текстура бывает чуть выше) — луч кончается в начале
+        // the start is already under the map (the top of the frame — by heights in R16F, the texture may be a bit higher) —
+        // the ray ends at the start
         if (d <= 0.0) return prevT + (tt - prevT) * max(prevD, 0.0) / max(prevD - d, 1e-6);
         prevT = tt;
         prevD = d;
@@ -261,19 +275,21 @@ float pallFloor(sampler2D ground, mat4 S, vec4 G, vec3 dir, float from, float en
     return 1e9;
 }
 
-// Окно наружного воздуха у глаза (client/fx/layer/OpenAir), блоки
+// Window of outside air near the eye (client/fx/layer/OpenAir), blocks
 const vec3 PALL_OPEN_SIZE = vec3(96.0, 64.0, 96.0);
 
-// Доля наружного воздуха в точке p (от глаза): свет неба Minecraft / 15 в блоке точки (OpenAir) — пыль, мгла и голова
-// стены там, где воздух связан с открытым небом; в штольне — нет. at — нижний угол окна от глаза (w — 1, если окно
-// есть), wrap — где этот угол в текстуре (окно в ней по модулю размера). За окном — выше грубой карты рельефа слота S
-// (ground, G: pallRelief) наружный воздух, ниже — доля того блока, где луч из глаза вышел из окна.
+// Share of outside air at point p (from the eye): the Minecraft sky light / 15 in the point's block (OpenAir) — dust, haze and
+// the head of the wall are where the air is connected to the open sky; in an adit — no. at — the lower corner of the window
+// from the eye (w — 1, if the window exists), wrap — where this corner is in the texture (the window in it modulo its size).
+// Beyond the window — above the coarse relief map of the slot S (ground, G: pallRelief) — outside air, below — the share of
+// the block where the ray from the eye left the window.
 float pallOpen(sampler3D open, vec4 at, vec3 wrap, sampler2D ground, mat4 S, vec4 G, vec3 p) {
     if (at.w < 0.5) return 1.0;
     vec3 q = p - at.xyz;
     if (any(lessThan(q, vec3(0.0))) || any(greaterThanEqual(q, PALL_OPEN_SIZE))) {
-        // над рельефом — открыто (пелена за устьем штольни видна из её глубины); под ним — по лучу: все места пелены и
-        // тени — на лучах из глаза, а луч идёт по воздуху, и длинная штольня и большая пещера за окном остаются закрытыми
+        // above the relief — open (the pall beyond the mouth of an adit is seen from its depth); below it — along the ray: all places
+        // of the pall and shadows are on rays from the eye, and the ray goes through air, so a long adit and a big cave beyond the
+        // window stay closed
         if (p.y > S[0].z + pallRelief(ground, S, G, p.xz)) return 1.0;
         vec3 e = -at.xyz, d = q - e, t = vec3(1e9);
         if (abs(d.x) > 1e-6) t.x = (step(0.0, d.x) * PALL_OPEN_SIZE.x - e.x) / d.x;
@@ -281,29 +297,30 @@ float pallOpen(sampler3D open, vec4 at, vec3 wrap, sampler2D ground, mat4 S, vec
         if (abs(d.z) > 1e-6) t.z = (step(0.0, d.z) * PALL_OPEN_SIZE.z - e.z) / d.z;
         q = clamp(e + d * clamp(min(min(t.x, t.y), t.z), 0.0, 1.0), vec3(0.5), PALL_OPEN_SIZE - 0.5);
     }
-    // целочисленно: mod по float на краю (x = 96 при обратной величине на ulp меньше) давал бы 96 — за текстурой
+    // integer: mod on float at the edge (x = 96 with a reciprocal one ulp smaller) would give 96 — past the texture
     return texelFetch(open, (ivec3(floor(q)) + ivec3(wrap)) % ivec3(PALL_OPEN_SIZE), 0).r;
 }
 
-// Расстояние до мира за пикселем (SceneDepth), годное для пелены: неба, а ещё NaN, бесконечность и «за глазом» (чужая
-// глубина LOD, дальняя плоскость) — 1e9, мира за пикселем нет. Иначе луч шёл бы сквозь километры пыли или NaN
-// попадал бы в накопленную пелену — чёрный кадр.
+// Distance to the world behind the pixel (SceneDepth), fit for the pall: sky, and also NaN, infinity and “behind the eye”
+// (foreign LOD depth, far plane) — 1e9, there is no world behind the pixel. Otherwise the ray would go through kilometers
+// of dust, or a NaN would get into the accumulated pall — a black frame.
 float pallScene(float d) {
     if (d < 0.0) return 1e9;
     if (d < 1e8) return d;
     return 1e9;
 }
 
-// Насколько расстояния d и e до мира — одно место (1 — одно, к 0 — разные): вес пикселя кадра пелены у соседа по
-// экрану (fx_pall_resolve, fx_pall_composite) — у края предмета пелена неба не ложится на стену и наоборот
+// How much the distances d and e to the world are one place (1 — one, toward 0 — different): the weight of a pixel of the pall
+// frame of its neighbor on screen (fx_pall_resolve, fx_pall_composite) — at the edge of an object the pall of the sky does not
+// lie on the wall and vice versa
 float pallAlike(float d, float e) {
     float rel = abs(d - e) / max(min(d, e), 0.1);
     return 1.0 / (1.0 + 400.0 * rel * rel);
 }
 
-// Наклон обратного расстояния до мира у пикселя at полного кадра (на пиксель по x и y): у плоскости 1/расстояние по экрану
-// линейно, и место соседа на той же поверхности — pallAhead. На каждой оси — разность с тем соседом, что ближе к
-// самому пикселю: на краю предмета другой сосед — фон
+// Slope of the inverse distance to the world at pixel at of the full frame (per pixel in x and y): on a plane 1/distance is
+// linear on screen, and the place of the neighbor on the same surface — pallAhead. On each axis — the difference with the
+// neighbor that is closer to the pixel itself: at the edge of an object the other neighbor is background
 vec2 pallSlope(sampler2D scene, ivec2 at, ivec2 size, float depth) {
     float w = 1.0 / depth;
     float r = 1.0 / pallScene(texelFetch(scene, clamp(at + ivec2(1, 0), ivec2(0), size - 1), 0).r) - w;
@@ -313,46 +330,48 @@ vec2 pallSlope(sampler2D scene, ivec2 at, ivec2 size, float depth) {
     vec2 s = vec2(r, u);
     if (abs(l) < abs(r)) s.x = l;
     if (abs(d) < abs(u)) s.y = d;
-    // гребень или щель в пиксель (оба соседа — другое место, по разные стороны дальше допуска pallAlike, 5 %): наклона
-    // поверхности тут не узнать, наклон через край вёл бы «то же место» к фону
+    // a ridge or a gap one pixel wide (both neighbors are another place, on opposite sides beyond the pallAlike tolerance, 5%):
+    // the slope of the surface cannot be learned here, a slope across the edge would lead “the same place” to the background
     if (l * r < 0.0 && min(abs(l), abs(r)) > 0.05 * w) s.x = 0.0;
     if (d * u < 0.0 && min(abs(d), abs(u)) > 0.05 * w) s.y = 0.0;
     return s;
 }
 
-// Расстояние до мира, какое было бы на той же поверхности, что у пикселя (расстояние depth, наклон slope — pallSlope), в
-// offset пикселях полного кадра от него: сосед — то же место, если его расстояние близко к этому (pallAlike), а не к
-// расстоянию самого пикселя: у земли вдали под скользящим лучом расстояние за несколько пикселей меняется на десятки
-// процентов, и без наклона ровная земля выходила «краем» у каждого ряда лучей
+// Distance to the world that would be on the same surface as the pixel (distance depth, slope — pallSlope), at offset
+// full-frame pixels from it: a neighbor is the same place if its distance is close to this one (pallAlike), not to the pixel's
+// own distance: near the ground far away under a grazing ray the distance changes by tens of percent over a few pixels, and
+// without the slope flat ground would come out as an “edge” at every row of rays
 float pallAhead(float depth, vec2 slope, vec2 offset) {
     return 1.0 / max(1.0 / depth + dot(slope, offset), 1e-9);
 }
 
-// Место p по оси (пиксели полного кадра, середина пикселя — +0,5) в решётке лучей кадра пелены, в factor раз мельче: луч
-// его пикселя t идёт через середину пикселя полного кадра floor((t + 0,5)·factor) (fx_pall) — целое t там, где луч
+// Place p along the axis (full-frame pixels, the pixel center is +0.5) in the lattice of rays of the pall frame, factor times
+// smaller: the ray of its pixel t goes through the center of the full-frame pixel floor((t + 0.5)·factor) (fx_pall) — an
+// integer t where the ray
 float pallLattice(float p, float factor) {
     return (p - 0.5 - floor(0.5 * factor)) / factor;
 }
 
-// Пиксель пелены годен: свет конечен (и в половинной точности кадра), пропускание 0..1; NaN не годен.
+// A pall pixel is valid: light is finite (also in half precision of the frame), transmittance 0..1; NaN is not valid.
 bool pallValid(vec4 v) {
     return all(lessThan(abs(v.rgb), vec3(6.0e4))) && v.a >= 0.0 && v.a <= 1.0;
 }
 
-// Отсвет пожаров под пылью, как у стены пыли (CloudPuffs.burn — её свет; fx_pall берёт его, чтобы пелена за фронтом
-// продолжала цвет стены): r — по земле от эпицентра, up — доля высоты пыли 0..1 (низ темнее: земля и обломки), glow —
-// накал пожаров 0..1, fireR — край зоны поджига (мягкий, от 0,92 до 1,04); r и fireR — в одних единицах (блоки).
+// Glare of fires under the dust, like at the wall of dust (CloudPuffs.burn — its light; fx_pall takes it so the pall beyond the
+// front continues the color of the wall): r — along the ground from the epicenter, up — share of the dust height 0..1 (the
+// bottom is darker: ground and debris), glow — heat of fires 0..1, fireR — edge of the ignition zone (soft, from 0.92 to 1.04);
+// r and fireR — in the same units (blocks).
 float pallBurn(float r, float up, float glow, float fireR) {
     float e = max(fireR, 1e-3);
     return (1.0 - smoothstep(0.92 * e, 1.04 * e, r)) * (0.95 - 0.45 * up) * glow;
 }
 
-// ---------------------------------------------------------------- свет в пелене (client/nuclear/PallLight)
-// Два потока Эддингтона в плоском слое после дельта-Эддингтона: излучение I(τ, μ) = I0 + μ·I1, μ — косинус к вертикали
-// (вверх — плюс), τ — толща от верха слоя вниз. Законы и вывод — PallLight (PallGlslTest сверяет числа).
+// ---------------------------------------------------------------- light in the pall (client/nuclear/PallLight)
+// Two Eddington streams in a flat layer after delta-Eddington: radiance I(τ, μ) = I0 + μ·I1, μ — cosine to the vertical (up —
+// plus), τ — thickness from the top of the layer down. Laws and derivation — PallLight (PallGlslTest checks the numbers).
 
-// Свет пелены считается в линейных долях (перенос линеен по излучению), кадр Minecraft — значения экрана (sRGB без
-// перевода): v экрана — v^2,2 линейного (PallLight.GAMMA). Чистая степень: перевод произведения — произведение переводов
+// Light of the pall is computed in linear shares (transfer is linear in radiance); the Minecraft frame — screen values (sRGB
+// without conversion): screen v is v^2.2 of linear (PallLight.GAMMA). A pure power: the conversion of a product is the product of conversions
 float pallLinear(float v) {
     return pow(max(v, 0.0), 2.2);
 }
@@ -365,8 +384,8 @@ float pallDisplay(float v) {
     return pow(max(v, 0.0), 0.4545455);
 }
 
-// Свет, что на экране прибавляет x к белой стене поверх света неба base (тоже на экране: отсвет стены пыли, зарево
-// пожаров — CloudPuffs складывает их на экране), в линейном: (base + x)^γ − base^γ (PallLight.lift)
+// Light that on screen adds x to a white wall over the sky light base (also on screen: the glare of the wall of dust, the glow
+// of fires — CloudPuffs adds them on screen), in linear: (base + x)^γ − base^γ (PallLight.lift)
 float pallLift(float base, float x) {
     return pow(max(base + x, 0.0), 2.2) - pow(max(base, 0.0), 2.2);
 }
@@ -375,24 +394,26 @@ vec3 pallLift3(float base, vec3 x) {
     return vec3(pallLift(base, x.r), pallLift(base, x.g), pallLift(base, x.b));
 }
 
-// Свет огня (пожары, шторм, смерч), что на экране прибавляет x к белой стене поверх света неба base, в линейном — не
-// ярче самого пламени: его цвет на экране flame, излучение — pallLinear(flame). Рассеивающее вещество не ярче своего
-// источника (по каждому каналу): белая стена, вся в огне, — цвета огня, а не ярче. Отсвет, что на экране уже доходит до
-// цвета пламени (стена пыли над пожарами ночью — CloudPuffs: на экране и есть цвет огня), обращением через цвет пыли
-// (/ DUST, pallLift) давал свет в разы ярче пламени (PallLight.flame)
+// Light of fire (fires, storm, tornado), which on screen adds x to a white wall over the sky light base, in linear — not
+// brighter than the flame itself: its color on screen is flame, the radiance — pallLinear(flame). A scattering substance is
+// not brighter than its source (per channel): a white wall, all in fire, has the color of the fire, not brighter. A glare that
+// on screen already reaches the color of the flame (a wall of dust above fires at night — CloudPuffs: on screen it is the color
+// of the fire itself), converted through the color of the dust (/ DUST, pallLift), gave light several times brighter than the
+// flame (PallLight.flame)
 vec3 pallFlame(float base, vec3 x, vec3 flame) {
     return min(pallLift3(base, x), vec3(pallLinear(flame.r), pallLinear(flame.g), pallLinear(flame.b)));
 }
 
-// Затухание рассеянного света с толщей: k² = 3(1 − ω)(1 − ωg) (в густой пыли — e^(−kτ), а не e^(−τ))
+// Attenuation of scattered light with thickness: k² = 3(1 − ω)(1 − ωg) (in thick dust — e^(−kτ), not e^(−τ))
 float pallK(float w, float g) {
     return sqrt(max(3.0 * (1.0 - w) * (1.0 - w * g), 1e-6));
 }
 
-// Косинус пучка в частном решении (pallDiffuse): у пучка, что гаснет так же, как рассеянный свет (kμ = 1), знаменатель
-// частного решения k²μ² − 1 обнуляется. В полосе |k²μ² − 1| < 0,05 пучок сдвинут к её краю — весь: в частном решении,
-// в своём пропускании и на земле. Решение остаётся решением уравнения, косинус — в пределах 2,5%; зажатый знаменатель
-// при прежнем μ решением не был: у дыма (k > 1) около полудня свет в слое выходил в разы не тот
+// Cosine of the beam in the particular solution (pallDiffuse): for a beam that fades the same way as scattered light (kμ = 1),
+// the denominator of the particular solution k²μ² − 1 vanishes. In the band |k²μ² − 1| < 0.05 the beam is shifted to its
+// edge — all of it: in the particular solution, in its transmission and on the ground. The solution remains a solution of the
+// equation, the cosine — within 2.5%; a clamped denominator at the former μ was not a solution: for smoke (k > 1) near noon
+// the light in the layer came out several times wrong
 float pallBeamMu(float k, float mu) {
     float d = k * k * mu * mu - 1.0;
     if (abs(d) >= 0.05) return mu;
@@ -400,12 +421,13 @@ float pallBeamMu(float k, float mu) {
     return 1.0246951 / k;
 }
 
-// Рассеянный свет на глубине tau слоя толщи tc (альбедо w, асимметрия g, земля под ним — альбедо ground): I0 + c·I1.
-// c = g·μ глаза — то, что точка рассеивает к глазу (без ω); c = ±2/3 — поток вверх или вниз, делённый на π. Источники:
-// два пучка сверху (косинус к вертикали mu, сила f — что отражает белая стена к пучку), небо сверху top и свет снизу
-// bottom (излучение вверх, сверх отражённого землёй). Решение — в затухающих экспонентах: e^(−kτ) от верха и e^(−k(tc − τ))
-// от низа — без переполнения в толстом слое; k ≥ 10⁻³ — и у непоглощающего тумана (k = 0) матрица не вырождена.
-// Пучок, что гаснет так же, как рассеянный свет (kμ = 1), — со сдвинутым косинусом (pallBeamMu): не делит на 0.
+// Scattered light at depth tau of the layer of thickness tc (albedo w, asymmetry g, ground under it with albedo ground): I0 + c·I1.
+// c = g·μ of the eye — what the point scatters to the eye (without ω); c = ±2/3 — flux up or down, divided by π. Sources:
+// two beams from above (cosine to the vertical mu, strength f — what the white wall reflects to the beam), sky above top and
+// light from below bottom (radiance up, over what the ground reflects). The solution is in decaying exponentials: e^(−kτ) from
+// the top and e^(−k(tc − τ)) from the bottom — without overflow in a thick layer; k ≥ 10⁻³ — so that the matrix is not degenerate
+// even for a non-absorbing fog (k = 0).
+// A beam that fades the same way as scattered light (kμ = 1) — with a shifted cosine (pallBeamMu): it does not divide by 0.
 float pallDiffuse(float w, float g, float tau, float tc, float ground, float mu1, float f1, float mu2, float f2, float top, float bottom, float c) {
     float q = 1.0 - w * g;
     float k = sqrt(max(3.0 * (1.0 - w) * q, 1e-6));
@@ -430,43 +452,45 @@ float pallDiffuse(float w, float g, float tau, float tc, float ground, float mu1
     return i0 + c * i1;
 }
 
-// ---------------------------------------------------------------- голова слоя пыли (client/nuclear/BlastWall)
-// Голова — самая молодая, низкая и густая часть того же слоя пыли, что пелена (законы — nuclear/model/DustModel): клин за
-// фронтом ударной волны на его путь за положительную фазу, кольцом вокруг эпицентра (пыль у фронта ветер ещё не снёс —
-// PallField.share). У переднего края слой нулевой высоты, назад поднятое растёт как импульс скоростного напора, верх — как
-// u^(5/6) (Kuhl); за клином место переходит к таблице пелены. Законы — копии BlastWall (PallGlslTest сверяет). Слот
-// стены V — mat4 по столбцам (BlastWall.slot):
-//   [0] = (передний край пыли от эпицентра, длина клина, его верх в конце — блоки; ослабление-масштаб, 1/блок; 0 — головы
-//          нет)
-//   [1] = (угол вала, рад; над водой — брызги: отставание от края пыли, блоки; доля верха; ослабление, 1/блок)
-//   [2] = (клубы — две фазы шума вдоль кольца: окружность головы в плитках у каждой; вес первой; плитка шума, блоки)
-//   [3] = (номера фаз — у каждой свои клубы; ослабление пыли у земли в конце фазы волны у края и в конце клина — доли
-//          масштаба)
-// Облако Вильсона слота — vec4 (там же): радиус середины оболочки от точки подрыва, её полутолщина (блоки), ослабление
-// в середине (1/блок; 0 — облака нет), высота точки подрыва над землёй под эпицентром.
+// ---------------------------------------------------------------- head of the dust layer (client/nuclear/BlastWall)
+// The head is the youngest, lowest and densest part of the same dust layer as the pall (laws — nuclear/model/DustModel): a
+// wedge behind the blast wave front, over its path during the positive phase, as a ring around the epicenter (the dust at
+// the front has not yet been carried by the wind — PallField.share). At the leading edge the layer has zero height; the lifted
+// part grows behind as the dynamic pressure impulse, the top — as u^(5/6) (Kuhl); behind the wedge the place passes to the
+// table of the pall. Laws — copies of BlastWall (PallGlslTest checks). The wall slot V — mat4 by columns (BlastWall.slot):
+//   [0] = (leading edge of the dust from the epicenter, length of the wedge, its top at the end — blocks; attenuation scale,
+//          1/block; 0 — no head)
+//   [1] = (angle of the rim, rad; over water — spray: its lag behind the edge of the dust, blocks; share of the top;
+//          attenuation, 1/block)
+//   [2] = (puffs — two phases of noise along the ring: the circumference of the head in tiles for each; weight of the first;
+//          noise tile, blocks)
+//   [3] = (phase numbers — each has its own puffs; attenuation of dust at the ground at the end of the wave phase at the rim
+//          and at the end of the wedge — shares of the scale)
+// The Wilson cloud of the slot — vec4 (same place): radius of the middle of the shell from the detonation point, its half-thickness
+// (blocks), attenuation in the middle (1/block; 0 — no cloud), height of the detonation point above the ground under the epicenter.
 
-// Поднятое к доле s положительной фазы (DustModel.lifted): импульс скоростного напора, ∫(1 − x)²e^(−2x)dx на весь
+// Lifted to the share s of the positive phase (DustModel.lifted): dynamic pressure impulse, ∫(1 − x)²e^(−2x)dx over all
 float pallLifted(float s) {
     float x = clamp(s, 0.0, 1.0), y = 1.0 - x;
     return (0.25 - exp(-2.0 * x) * (y * y / 2.0 - y / 2.0 + 0.25)) / 0.2161662;
 }
 
-// Верх клина по доле u его длины за краем, доля верха в конце (BlastWall.top): u^(5/6), за клином — весь
+// Top of the wedge by the share u of its length behind the edge, share of the top at the end (BlastWall.top): u^(5/6), behind the wedge — all
 float pallWallTop(float u) {
     return pow(clamp(u, 0.0, 1.0), 0.8333333);
 }
 
-// Доля пути пыли с ветром за фронтом за долю u положительной фазы (BlastWall.carriedShare): u·e^(1 − u); за фазой
-// ветер разрежения обратный, и доля падает к нулю
+// Share of the path of dust with the wind behind the front for the share u of the positive phase (BlastWall.carriedShare): u·e^(1 − u);
+// behind the phase the wind is rarefaction (reverse), and the share falls to zero
 float pallWallCarried(float u) {
     float x = max(u, 0.0);
     return x * exp(1.0 - x);
 }
 
-// Место пыли головы в координатах её самой (BlastWall.origin): точка (rel — от эпицентра по земле, z — над рельефом,
-// блоки) за вычетом пути с ветром за фронтом — carried (блоки) за долю u фазы; у земли воздух стоит, выше идёт по закону
-// 1/7 турбулентного пограничного слоя (z против верха в конце клина top), вверх — 0,02–0,08 пути (Kuhl §3.4: вертикальная
-// скорость в слое — 0,02 u∞ у дна и 0,04–0,12 у верха). (x, высота, z), блоки
+// Place of the dust of the head in its own coordinates (BlastWall.origin): point (rel — from the epicenter along the ground, z — above
+// the relief, blocks) minus the path with the wind behind the front — carried (blocks) for the share u of the phase; at the ground the
+// air stands still, higher it goes by the 1/7 law of the turbulent boundary layer (z against the top at the end of the wedge top), up —
+// 0.02–0.08 of the path (Kuhl §3.4: vertical speed in the layer — 0.02 u∞ at the bottom and 0.04–0.12 at the top). (x, height, z), blocks
 vec3 pallWallOrigin(vec2 rel, float z, float u, float top, float carried) {
     float zr = clamp(z / max(top, 0.001), 0.0, 1.0);
     float x = carried * pallWallCarried(u) * pow(zr, 1.0 / 7.0);
@@ -474,25 +498,25 @@ vec3 pallWallOrigin(vec2 rel, float z, float u, float top, float carried) {
     return vec3(rel.x - out1.x * x, z - x * (0.02 + 0.06 * zr), rel.y - out1.y * x);
 }
 
-// Густота у земли по доле u клина против густоты в его конце (BlastWall.shape): поднятое в слое верха pallWallTop
+// Density at the ground by the share u of the wedge against its density at its end (BlastWall.shape): the lifted part in the layer of the top pallWallTop
 float pallWallShape(float u) {
     if (u <= 0.0) return 0.0;
     float x = min(u, 1.0);
     return pallLifted(x) / pow(max(x, 0.0001), 0.8333333);
 }
 
-// Где голова за клином переходит к пелене, в длинах клина от переднего края пыли (BlastWall.HANDOFF_FROM, HANDOFF_TO):
-// от его конца до полутора длин
+// Where the head behind the wedge passes to the pall, in lengths of the wedge from the leading edge of the dust (BlastWall.HANDOFF_FROM,
+// HANDOFF_TO): from its end to one and a half lengths
 const float PALL_WALL_HANDOFF_FROM = 1.0;
 const float PALL_WALL_HANDOFF_TO = 1.5;
 
-// Доля головы за клином (BlastWall.handoff)
+// Share of the head behind the wedge (BlastWall.handoff)
 float pallWallFade(float u) {
     return 1.0 - smoothstep(PALL_WALL_HANDOFF_FROM, PALL_WALL_HANDOFF_TO, u);
 }
 
-// Точка в рамке головы (BlastWall.sigma): s — за передним краем пыли, z — над рельефом (блоки), len, top — длина и верх
-// клина слота, lag — отставание брызг слота. Вне — 0, внутри — 1
+// Point in the frame of the head (BlastWall.sigma): s — beyond the leading edge of the dust, z — above the relief (blocks), len, top —
+// length and top of the wedge of the slot, lag — lag of the spray of the slot. Outside — 0, inside — 1
 float pallWallInside(float s, float z, float len, float top, float lag) {
     if (s < -1.0) return 0.0;
     if (s > PALL_WALL_HANDOFF_TO * len + lag) return 0.0;
@@ -501,17 +525,17 @@ float pallWallInside(float s, float z, float len, float top, float lag) {
     return 1.0;
 }
 
-// Ослабление-множитель головы s блоков за краем пыли с отставанием брызг (BlastWall.density): пыль — от доли edge у края
-// до end в конце клина длины len (× scale; пыль, поднятая ближе к эпицентру, — своей густоты), брызги spray — свои; wet —
-// доля воды под точкой
+// Attenuation multiplier of the head at s blocks beyond the edge of the dust with the lag of the spray (BlastWall.density): dust — from
+// the share edge at the edge to end at the end of the wedge of length len (× scale; dust lifted closer to the epicenter — of its own
+// density), spray — its own; wet — share of water under the point
 float pallWallDensity(float s, float len, float scale, float edge, float end, float spray, float wet) {
     float dust = scale * (edge + (end - edge) * clamp(s / max(len, 0.001), 0.0, 1.0));
     return dust + (spray - dust) * wet;
 }
 
-// Доля густоты головы без шума (BlastWall.mean): s — за передним краем пыли (блоки; впереди — меньше нуля), z — над
-// рельефом (блоки), len — длина клина, top — его верх в конце. По высоте — профиль пелены до верха клина здесь; под
-// рельефом карты — до половины верха (карта грубее мира: в низинах под ней голова не висит)
+// Share of the density of the head without noise (BlastWall.mean): s — beyond the leading edge of the dust (blocks; ahead — less than zero),
+// z — above the relief (blocks), len — length of the wedge, top — its top at the end. By height — the profile of the pall up to the top
+// of the wedge here; under the relief of the map — up to half the top (the map is coarser than the world: in the lowlands under it the head does not hang)
 float pallWallMean(float s, float z, float len, float top) {
     float u = s / max(len, 0.001);
     if (u <= 0.0) return 0.0;
@@ -520,23 +544,24 @@ float pallWallMean(float s, float z, float len, float top) {
     return k * pallProfile(z / max(h, 0.001));
 }
 
-// Голова стены в точке
+// Head of the wall at a point
 struct WallAt {
-    // с поправкой на воду под точкой: длина клина, его верх в конце, сдвиг назад (блоки), ослабление здесь
-    // (pallWallDensity, 1/блок); P.w = 0 — точка вне головы
+    // with the correction for water under the point: length of the wedge, its top at the end, shift back (blocks), attenuation here
+    // (pallWallDensity, 1/block); P.w = 0 — the point is outside the head
     vec4 P;
-    // за передним краем пыли и над рельефом, блоки
+    // beyond the leading edge of the dust and above the relief, blocks
     float s;
     float z;
-    // доля воды под точкой: над водой голова — брызги, ниже и позади
+    // share of water under the point: over water the head is spray, lower and behind
     float wet;
-    // точка от оси кольца (эпицентр: пыль у фронта ветер ещё не снёс — PallField.share), блоки
+    // the point from the axis of the ring (the epicenter: the dust at the front has not yet been carried by the wind — PallField.share), blocks
     vec2 rel;
 };
 
-// Голова стены слота S, V в точке p (от глаза): floorUp — верх рельефа под точкой над землёй под эпицентром (блоки),
-// ground, G, W — карта рельефа и воды слота и её числа, вода слота (воду карта читает, только если она под пеленой есть).
-// Ослабление пыли — от края к концу клина (пыль, поднятая ближе к эпицентру, — своей густоты), брызг — своё
+// Head of the wall of slot S, V at point p (from the eye): floorUp — top of the relief under the point above the ground under the
+// epicenter (blocks), ground, G, W — relief and water maps of the slot and their numbers, water of the slot (the map is read for
+// water only if it is under the pall). Attenuation of dust — from the edge toward the end of the wedge (dust lifted closer to the
+// epicenter — of its own density); spray — its own
 WallAt pallWallAt(sampler2D ground, mat4 S, mat4 V, vec4 G, vec4 W, vec3 p, float floorUp) {
     WallAt h;
     h.rel = p.xz - S[0].xy;
@@ -551,15 +576,15 @@ WallAt pallWallAt(sampler2D ground, mat4 S, mat4 V, vec4 G, vec4 W, vec3 p, floa
     return h;
 }
 
-// Отрезки луча dir из глаза на [ta, tb], где может быть голова слота: кольцо от переднего края пыли до полутора длин клина
-// за ним (с брызгами), по высоте — от низа карты рельефа до её верха с головой. (x, y) и (z, w) — вход и выход; выход ≤
-// входа — мимо
+// Segments of the ray dir from the eye on [ta, tb] where the head of the slot may be: the ring from the leading edge of the dust to one
+// and a half lengths of the wedge beyond it (with the spray), by height — from the bottom of the relief map to its top with the head.
+// (x, y) and (z, w) — entry and exit; exit ≤ entry — misses
 vec4 pallWallSpans(mat4 S, mat4 V, vec4 G, vec3 dir, float ta, float tb) {
     vec4 none = vec4(1.0, 0.0, 1.0, 0.0);
     if (V[0].w <= 0.0 || S[1].w < 0.5) return none;
     vec2 c = S[0].xy;
     float top = V[0].z, outer = V[0].x + 1.0, inner = max(V[0].x - PALL_WALL_HANDOFF_TO * V[0].y - V[1].y, 0.0);
-    // по высоте: карта рельефа (нет её — земля под эпицентром) с головой
+    // by height: the relief map (without it — the ground under the epicenter) with the head
     float lo = S[0].z + min(G.y, 0.0) - 0.5 * top, hi = S[0].z + max(G.z, 0.0) + top;
     if (abs(dir.y) > 1e-6) {
         float y0 = lo / dir.y, y1 = hi / dir.y;
@@ -584,8 +609,8 @@ vec4 pallWallSpans(mat4 S, mat4 V, vec4 G, vec3 dir, float ta, float tb) {
     return spans;
 }
 
-// Толща головы слота без шума на отрезке луча [ta, tb] (dir из глаза), steps шагов на каждом её отрезке (pallWallSpans):
-// что голова закрывает перед квадратом слоя (fx.vsh). Пол — рельеф карты под каждой точкой
+// Thickness of the head of the slot without noise on the ray segment [ta, tb] (dir from the eye), steps steps on each of its segments
+// (pallWallSpans): what the head covers in front of the square of the layer (fx.vsh). The floor — the relief of the map under each point
 float pallWallTau(sampler2D ground, mat4 S, mat4 V, vec4 G, vec4 W, vec3 dir, float ta, float tb, int steps) {
     vec4 spans = pallWallSpans(S, V, G, dir, ta, tb);
     float tau = 0.0;
@@ -603,10 +628,10 @@ float pallWallTau(sampler2D ground, mat4 S, mat4 V, vec4 G, vec4 W, vec3 dir, fl
     return tau;
 }
 
-// Облако Вильсона слота на луче dir из глаза до end: до двух мест, где луч проходит оболочку (x, z — где, блоки), и толща
-// там (y, w; 0 — мимо). Оболочка гауссова поперёк: толща на проходе — √π·полутолщина·ослабление на косинус луча к
-// оболочке; по касательной — не больше, чем у оболочки радиуса r (косинус не меньше 0,35), и дальше от середины —
-// тает. Ниже земли под эпицентром облака нет
+// Wilson cloud of the slot on the ray dir from the eye up to end: up to two places where the ray passes the shell (x, z — where, blocks),
+// and the thickness there (y, w; 0 — misses). The shell is Gaussian across: the thickness on the pass — √π·half-thickness·attenuation
+// times the cosine of the ray to the shell; along the tangent — no more than that of a shell of radius r (cosine not less than 0.35), and
+// farther from the middle — it fades. Below the ground under the epicenter there is no cloud
 vec4 pallWilson(mat4 S, vec4 L, vec3 dir, float end) {
     vec4 none = vec4(0.0);
     if (L.z <= 0.0 || S[1].w < 0.5) return none;
@@ -623,51 +648,51 @@ vec4 pallWilson(mat4 S, vec4 L, vec3 dir, float end) {
         float x = (q - r) / w;
         hit = vec4(along, 2.0 * base / 0.35 * exp(-x * x), 1.0, 0.0);
     }
-    // за глазом, за миром и под землёй — нет
+    // behind the eye, behind the world and under the ground — no
     if (hit.x < 0.0 || hit.x > end || dir.y * hit.x < S[0].z) hit.y = 0.0;
     if (hit.z < 0.0 || hit.z > end || dir.y * hit.z < S[0].z) hit.w = 0.0;
     return hit;
 }
 
-// ---------------------------------------------------------------- огненный шторм (client/nuclear/FireStorm)
-// Законы — копии FireStorm (PallGlslTest сверяет). Слот огня F — mat4 по столбцам, у каждого слота подрыва S свой:
-//   [0] = (половина стороны карты огня, блоки (0 — шторма нет); клетка карты, блоки; верх столбов над землёй под
-//          эпицентром, блоки; высота, на которой снос столба вдвое больше прямого, блоки)
-//   [1] = (снос столба по ветру x, z на блок подъёма — ветер против подъёма дыма; подъём дыма, блоков/с;
-//          зарево снизу — сила с ночью и доверием)
-//   [2] = (пламя на поверхностях — сила с днём и доверием; ослабление в столбе на единицу подачи дыма, 1/блок;
-//          секунды после подрыва; 0)
-//   [3] = (свет пожаров на экране rgb; облака Minecraft от глаза по y — пламя на поверхностях только ниже них)
-// Карта огня: R — пламя, G — подача дыма в столбы, B — G × доля подъёма столба; уменьшенные копии — скопления
-// источников (свет и дым на высоте h — с уровня, где клетка карты — ширина столба или зарева там).
+// ---------------------------------------------------------------- fire storm (client/nuclear/FireStorm)
+// Laws — copies of FireStorm (PallGlslTest checks). The fire slot F — mat4 by columns; each detonation slot S has its own:
+//   [0] = (half-side of the fire map, blocks (0 — there is no storm); cell of the map, blocks; top of the columns above the
+//          ground under the epicenter, blocks; height at which the drift of a column is twice the direct one, blocks)
+//   [1] = (drift of the column by wind x, z per block of rise — the wind against the rise of smoke; rise of smoke, blocks/s;
+//          glow from below — strength with night and confidence)
+//   [2] = (flame on surfaces — strength with day and confidence; attenuation in the column per unit of smoke supply, 1/block;
+//          seconds after detonation; 0)
+//   [3] = (light of fires on screen rgb; Minecraft clouds from the eye by y — flame on surfaces only below them)
+// Fire map: R — flame, G — smoke supply into the columns, B — G × share of the column's rise; reduced copies — clusters of
+// sources (light and smoke at height h — from the level where the map cell is the width of the column, or the glow there).
 
-// снос столба на высоте h над землёй, блоки на единицу отношения ветра к подъёму (FireStorm.bend)
+// drift of the column at height h above the ground, blocks per unit of the ratio of wind to rise (FireStorm.bend)
 float fireBend(float h, float hb) {
     float x = max(h, 0.0);
     return x * (1.0 + x / hb);
 }
 
-// полуширина столба на высоте h, блоки (FireStorm.width): у земли уже клетки, выше растёт
+// half-width of the column at height h, blocks (FireStorm.width): at the ground — already cells, higher it grows
 float fireWidth(float h, float cell) {
     return 0.3 * cell + 0.22 * max(h, 0.0);
 }
 
-// уровень карты огня, где клетка — ширина w (FireStorm.lod)
+// level of the fire map where the cell is the width w (FireStorm.lod)
 float fireLod(float w, float cell) {
     return log2(max(2.0 * w / cell, 1.0));
 }
 
-// уровень карты для зарева на высоте h: свет с площади шириной ~2h (FireStorm.glowLod)
+// map level for the glow at height h: light from an area about 2h wide (FireStorm.glowLod)
 float fireGlowLod(float h, float cell) {
     return log2(max(2.0 * max(h, 6.0) / cell, 1.0));
 }
 
-// столб по высоте: от низин до верха, где он растекается в мглу (FireStorm.column)
+// the column by height: from the lowlands to the top, where it spreads into haze (FireStorm.column)
 float fireColumn(float h, float top) {
     return smoothstep(-40.0, 0.0, h) * (1.0 - smoothstep(0.65 * top, top, h));
 }
 
-// место на карте огня слота под точкой xz (от глаза)
+// place on the fire map of the slot under point xz (from the eye)
 vec2 fireUv(mat4 S, mat4 F, vec2 xz) {
     return (xz - S[0].xy) / (2.0 * F[0].x) + 0.5;
 }

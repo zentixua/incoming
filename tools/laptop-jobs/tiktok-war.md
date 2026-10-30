@@ -1,36 +1,38 @@
-# Задание ноутбуку: война 06.10 — превью TikTok, ночные проходы FPV мимо самых жарких ударов
+# Laptop job: war 06.10 — TikTok preview, night FPV passes past the hottest strikes
 
-Коммит zentixua/incoming — в сообщении координатора. Повтор — копия войны `2026-10-09T15_24_55` (Incoming 2.10.3).
-На видеокарте — одна тяжёлая задача (между частями трейлера, не рядом с ними), не во время игры Артёма
-(`pgrep -f 'instances/Airstrike Pack'` пусто). Инстанс, его миры и настройки не трогать.
-Пути — от `/mnt/data/projects/airstrike`, `JAVA_HOME` — `java-runtime-delta` из Prism,
-`W=/mnt/data/projects/airstrike/mod/run/claude-work`, `T=$W/tiktok/war`, `R=2026-10-09T15_24_55`.
+Commit zentixua/incoming — in the coordinator's message. Repeat — copy of the war `2026-10-09T15_24_55` (Incoming
+2.10.3). The GPU — one heavy task (between trailer parts, not next to them), not during Artem's game
+(`pgrep -f 'instances/Airstrike Pack'` is empty). Do not touch the instance, its worlds or settings. Paths — from
+`/mnt/data/projects/incoming`, `JAVA_HOME` — `java-runtime-delta` from Prism,
+`W=/mnt/data/projects/incoming/mod/run/claude-work`, `T=$W/tiktok/war`, `R=2026-10-09T15_24_55`.
 
-`$T/clips`…`$T/clips9` — не трогать. Снимается в `$T/clips10`. Артём 13.10: ролик из нескольких проходов камеры, как у
-FPV-дрона, ночью (время суток Flashback — огни снарядов видны), низко над самыми жаркими ударами; один проход — у
-ударов по порту 25:17–25:21, остальные — где ударов больше всего за всю запись. Монтаж под музыку — в облаке, поэтому
-каждый проход выдаётся отдельным видео. Путь прокладывает пилот съёмки (камера `pilot`) по миру повтора у клиента, дыму
-ударов во времени и снаряду — как пилот FPV, который видит всё наперёд; поверх — руки и толчки взрывов. Дым — по коду
-картинки Incoming (облако шара, вал пыли, столб `FarBlasts`). Прошлая съёмка (`clips9`, 3 из 9): пилот обходил и дым
-ударов раньше начала живого повтора, которого в кадре нет (вывод проходит их перемоткой, Incoming их не рисует), —
-держался в стороне, снаряд был в кадре пятую часть подлёта; а кадр в дыму проверял только серединой кадра на 24 блока, и
-два лучших прохода в конце влетели в облако. Теперь пилот берёт только дым ударов живого повтора и меряет кадр в дыму
-той же сеткой лучей, что проверка кадров (`smother`). Тряску самого Incoming съёмка выключает (`camera_shake = 0` в
-настройке клиента этой игры, не инстанса).
+`$T/clips`…`$T/clips9` — do not touch. Shot into `$T/clips10`. Artem, 13.10: a video of several camera passes, like an
+FPV drone's, at night (Flashback's time of day — the projectiles' lights are visible), low over the hottest strikes; one
+pass — over the strikes on the port at 25:17–25:21, the rest — where strikes are most numerous across the whole
+recording. Music edit — in the cloud, so each pass is delivered as a separate video. The path is laid by the shoot's
+pilot (camera `pilot`) using the replay world on the client, the smoke of the strikes over time, and the projectile —
+like an FPV pilot who sees everything ahead; over it — hands and explosion jolts. Smoke — by the code of Incoming's
+rendering (fireball cloud, dust wall, `FarBlasts` column). Previous shoot (`clips9`, 3 of 9): the pilot went around the
+smoke of the strikes before the start of the live replay, which is not in the frame (the output passes them by
+fast-forward; Incoming does not draw them), held off to the side, the projectile was in the frame for a fifth of its
+approach; but the frame in smoke was checked only by the middle of the frame over 24 blocks, and two best passes at the
+end flew into the cloud. Now the pilot takes only the smoke of the strikes of the live replay and measures the frame in
+smoke with the same grid of rays as the frame check (`smother`). Shaking of Incoming itself is turned off by the shoot
+(`camera_shake = 0` in the client setting of this game, not the instance).
 
-## 1. Сборка
+## 1. Build
 ```sh
-git -C $W/tiktok-war-wt fetch origin <коммит> && git -C $W/tiktok-war-wt checkout --detach <коммит>; S=$W/tiktok-war-wt/tools
+git -C $W/tiktok-war-wt fetch origin <commit> && git -C $W/tiktok-war-wt checkout --detach <commit>; S=$W/tiktok-war-wt/tools
 $W/tiktok-war-wt/mod/gradlew -p $S/replayscan build
-G=$W/tiktok/game/2.10.3; J=$(ls $G/day/*.jar); echo "$J"            # клиент первой съёмки; jar мода — один
+G=$W/tiktok/game/2.10.3; J=$(ls $G/day/*.jar); echo "$J"            # client of the first shoot; mod jar — one
 rm $G/mods/replayscan-*.jar && cp $S/replayscan/build/libs/replayscan-1.0.0.jar $G/mods/
-C=$G/config/airstrike-client.toml                                    # Incoming 2.10.3: id мода ещё airstrike
+C=$G/config/airstrike-client.toml                                    # Incoming 2.10.3: mod id still airstrike
 if grep -q '^\s*camera_shake' $C 2>/dev/null; then sed -i 's/^\(\s*\)camera_shake\s*=.*/\1camera_shake = 0.0/' $C
 else { echo 'camera_shake = 0.0'; cat $C 2>/dev/null; } > $C.new && mv $C.new $C; fi
 grep -n camera_shake $C                                              # camera_shake = 0.0
 ```
 
-## 2. Моменты и план
+## 2. Moments and plan
 ```sh
 uv run $S/clips/moments.py $W/replayscan/out/$R/replay.duckdb --out $T/clips10 --pov-top 0 \
   --fpv 'search=25:14/25:26 near=-320,-405,90 shots=1 seconds=9 time=night' \
@@ -38,31 +40,33 @@ uv run $S/clips/moments.py $W/replayscan/out/$R/replay.duckdb --out $T/clips10 -
 uv run $S/clips/plan.py $T/clips10/candidates.json --all fly --replays $W/replayscan/replays
 python3 -c "import json; s=json.load(open('$T/clips10/film/$R/plan.json'))['shots']; print([(x['name'], x['a'], x['b'], x.get('time'), x['cameras'][0]['kind'], len(x['smoke']), len(x['smoke'][0]) if x['smoke'] else 0, x['need'].get('smother')) for x in s])"
 ```
-В `moments10.txt` — строки «FPV …» и «проход N: <с>–<по>: FPV мимо удара …» (до девяти проходов: один у порта в
-25:1x и восемь самых жарких). У каждого плана в выводе последней команды `time` 18000, камера `pilot`, строки дыма по 6 чисел
-(удар и вид взрыва) и `smother` 0.03. Проходов
-меньше — так и снимать, в отчёт — строка «пропущено ударов без снаряда …, тесных …». Строка «у удара … чанки в 128 блоках
-только по N направлениям из 16 — снимается: место названо» — проход у порта, где записавший не облетал всё вокруг:
-снимать как есть.
+In `moments10.txt` — lines “FPV …” and “pass N: <s>–<to>: FPV past strike …” (up to nine passes: one at the port at
+25:1x and eight of the hottest). Each plan has, in the output of its last command, `time` 18000, camera `pilot`, smoke
+lines of 6 numbers (strike and explosion view) and `smother` 0.03. Passes fewer — shoot as is; in the report, a line
+“skipped strikes without a projectile …, tight …”. The line “at strike … chunks within 128 blocks only in N of 16
+directions — is shot: the place is named” — the pass at the port, where the recorder did not fly all around: shoot as
+is.
 
-## 3. Съёмка (видеокарта)
+## 3. Shoot (GPU)
 ```sh
 $S/laptop_job.sh tiktok-war10 -- python3 $S/prod_client.py --no-copy --dir $G --incoming-jar $J --jvm=-Xmx12g \
   --prop replayscan.film=$T/clips10/film/$R/plan.json
 ```
-Успех: в `$G/logs/latest.log` — `Film: done`; перед каждым планом — `Film: <план>: replay played from the start to
-tick …` (строки `replay stopped at tick … on the way` нет), `Film: <план>: pilot planned 3 flights past the hit …` и над
-ней по строке на полёт (`pilot-h…: seed … → …`, в ней `smoke fills the frame N`); у плана — `Film: verdict <план> <камера>: PASS` (в `verdict.json` —
-`dh_world` 0, `low_out` — до 2 % кадров, `smoke_columns` true, `smothered` — не больше 3 % кадров); строки `effect particles stay` нет. Не прошедший все три полёта план
-переснимать не надо: его лучший вывод всё равно идёт в видео (шаг 4, с `-FAIL`), в отчёт — его `why`.
+Success: in `$G/logs/latest.log` — `Film: done`; before each plan —
+`Film: <plan>: replay played from the start to tick …` (no `replay stopped at tick … on the way` lines),
+`Film: <plan>: pilot planned 3 flights past the hit …` and above it, one line per flight (`pilot-h…: seed … → …`, which
+holds `smoke fills the frame N`); per plan — `Film: verdict <plan> <camera>: PASS` (in `verdict.json` — `dh_world` 0,
+`low_out` — up to 2 % of frames, `smoke_columns` true, `smothered` — no more than 3 % of frames); no
+`effect particles stay` line. A plan that did not pass all three flights does not need re-shooting: its best output
+still goes into the video (step 4, with `-FAIL`); in the report, its `why`.
 
-## 4. Видео проходов и выдача
+## 4. Pass videos and delivery
 ```sh
 uv run $S/clips/edit.py $T/clips10/film --out $T/clips10/out --soon
 mkdir -p $T/clips10/passes && python3 - <<EOF
 import json, os, subprocess
 for name, b in json.load(open("$T/clips10/film/$R/film/best.json")).items():
-    # и не прошедшие проверку: ночью низ кадра за чанками бывает не виден — решает монтаж по кадрам
+    # and failed checks: at night the bottom of the frame behind chunks is sometimes not visible — editing decides by frames
     if b.get("dir") and os.path.exists(b["dir"] + "/video.mkv"):
         out = "$T/clips10/passes/" + name + ("" if b.get("pass") else "-FAIL") + ".mp4"
         subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-i", b["dir"] + "/video.mkv", "-c:v", "libx264", "-preset", "slow",
@@ -71,11 +75,11 @@ for name, b in json.load(open("$T/clips10/film/$R/film/best.json")).items():
 EOF
 ls -la $T/clips10/passes
 ```
-В файлы проекта: каждый `$T/clips10/passes/*.mp4` (проход ~9 с; больше 20 МиБ — CRF 23), `report.md`, `moments10.txt`,
-`$T/clips10/film/$R/plan.json` и `$T/clips10/film/$R/film` архивом без видео и кадров (`tar --exclude='*.mkv'
---exclude='*.png' -czf …`: `qa.jsonl`, `verdict.json`, `path.json` и отчёты — по ним и плану проходы сверяются с кадрами в
-облаке).
-Прислать: `report.md`, строки «проход» из `moments10.txt`, строки `Film: verdict`, `replay played from the start`,
-`pilot planned` и строки полётов над ними (`pilot-h…`),
-ошибки (`Exception`, `ERROR`) лога съёмки; по кадру из 1, 3, 5 и 7 с каждого прохода (`ffmpeg -ss <с> -frames:v 1`);
-по проходу — число кадров `qa.jsonl` со `smother` от 0,6 и первая секунда такого кадра.
+Into the project files: each `$T/clips10/passes/*.mp4` (pass ~9 s; over 20 MiB — CRF 23), `report.md`, `moments10.txt`,
+`$T/clips10/film/$R/plan.json` and `$T/clips10/film/$R/film` as an archive without video and frames
+(`tar --exclude='*.mkv' --exclude='*.png' -czf …`: `qa.jsonl`, `verdict.json`, `path.json` and the reports — by them and
+the plan, the passes are checked against frames in the cloud). Send: `report.md`, the “pass” lines from `moments10.txt`,
+the `Film: verdict` lines, `replay played from the start`, `pilot planned` and the flight lines above them (`pilot-h…`),
+errors (`Exception`, `ERROR`) of the shoot's log; a frame at 1, 3, 5 and 7 s of each pass
+(`ffmpeg -ss <s> -frames:v 1`); per pass — the number of `qa.jsonl` frames with `smother` from 0.6, and the first second
+of such a frame.
