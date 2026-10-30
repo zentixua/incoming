@@ -2,6 +2,7 @@ package ua.zentix.incoming.client.far;
 
 import net.minecraft.world.phys.Vec3;
 import org.joml.Vector3f;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import ua.zentix.incoming.client.fx.smoke.SmokeGrid;
 
@@ -20,6 +21,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
  * actual puff planes, smooth radial alpha profiles and the veil to check appearance stability, not visual quality.
  * For steps, natural parallax is separated using the model material, as in {@link SmokeRaidTest#truth}.
  */
+// One of the three slowest unit test classes (1–3 min): CI runs each in its own JVM (build.gradle, testGroup).
+@Tag("slow")
 class SmokeSteadinessProbe {
     static final int STEPS = 60, COLS = 32, ROWS = 18;
     // At 0.60 with the tilted inside camera, the outermost ray ended the turn 0.042 pixels outside the viewport.

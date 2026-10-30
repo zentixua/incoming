@@ -123,7 +123,8 @@ The short layout is in the root CLAUDE.md; here, what each script does.
   docs/store/                            ← Modrinth and CurseForge page texts
   docs/media/                            ← icon (also the mod logo incoming.png), the hero.webp loop for README and pages,
                                            frames for the gallery
-  .github/workflows/build.yml            ← CI: what changed → build and unit tests, GameTest in parts, summary; jar in artifacts; release
+  .github/workflows/build.yml            ← CI: what changed → build, unit tests (4 JVMs), GameTest in parts, summary; jar in
+                                           artifacts; release; an already checked tree takes that run's jar (tools/ci_reuse.py)
   .github/PULL_REQUEST_TEMPLATE.md       ← PR description template: what changes for the player, how it was checked
   .github/workflows/publish.yml          ← Modrinth and CurseForge pages, manual runs only: draft (hidden
                                            Modrinth draft), submit, release; fields — docs/store/modrinth.json
@@ -136,8 +137,14 @@ The short layout is in the root CLAUDE.md; here, what each script does.
   NeoForge/Mojang/Parchment/Modrinth is open).
 - `Что изменилось` in `build.yml`: a change only in `tools/` (except `fetch_runtime_mods.py`, `paths.py`), `docs/`, `*.md`
   does not build the mod or run GameTest (`tools/replayscan` has its own build and unit tests, `tools/look_gate` the run
-  validity test, `tools/stand` the wrapper build, its unit tests and test_gate.py); `mod/`, CI and unknown paths get
-  the full check, and a manual run (release) always runs everything. The jar is the artifact `incoming-jar`.
+  validity test, `tools/stand` the wrapper build, its unit tests and test_gate.py); store pages (`docs/store`,
+  `docs/media`, `docs/guide`, README, `.github/scripts`, `publish.yml`) only their check `test_store*.py`; `mod/`, CI and
+  unknown paths get the full check, and a manual run (release) always runs everything. The jar is the artifact
+  `incoming-jar`.
+- A push to `main` and a release do not recheck a tree that already fully passed a successful run of this repository
+  (a PR merged without `main` moving gives the same tree): `Что изменилось` finds the tag `tested-tree-<tree>`
+  (`tools/ci_reuse.py`), and the job “Сборка из проверенного прогона” takes the jar from there. If `main` moved, the full
+  check runs.
 - Release: bump `mod_version`, write `docs/releases/<version>.md` (in English), merge into `main` and run `build`
   manually on `main` with `release=true`: after all checks, the workflow releases `v<version>` with the jar (friends take it
   from there). If `main` has moved on from the commit checked in the game, a branch `claude/release-…` from that commit with only

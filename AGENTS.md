@@ -73,7 +73,9 @@ Scripts using numpy/scipy/soundfile/Pillow declare dependencies in `# /// script
 `uv run tools/<script>.py`, install nothing into system Python. Without an instance (cloud/CI):
 `python3 tools/fetch_runtime_mods.py` → `./gradlew runGameTestServer -PmcModsDir=run/ci-mods`.
 CI checks each commit once, on `main` push and PR; branches without PRs get no CI, so open a draft immediately.
-Checks follow changed paths (only `tools/`, `docs/`, `*.md` skip mod build; exceptions in `tools.md`); releases run all.
+Checks follow changed paths (only `tools/`, `docs/`, `*.md` skip mod build; store pages run store checks only;
+exceptions in `tools.md`); releases run all. A main push or release whose tree a successful PR run already checked
+reuses that jar (`tools/ci_reuse.py`): merge a PR up to date with `main` and its release takes ~2 min, not a rerun.
 Итог decides merge, failing if any needed check fails or is canceled. Release: `mod_version`,
 `docs/releases/<version>.md`, manual `build` with `release=true`; the pack follows by itself (`tools.md`).
 A PR changing packet/entity-data formats bumps `IncomingNetwork.PROTOCOL`. A release with behavior/lang keys different
@@ -190,17 +192,19 @@ actually works, fix the real cause.
   ./gradlew runGameTestServer -PgametestOnly=…`). Numeric claims get unit tests/GameTest; comment/guide promises held
   by tests. Open draft immediately (CI only on PRs); split large work.
 - **Visual/audio:** edit → sandbox frame/WAV (`tools/sandbox.sh shot`) beside same `main` frame; before/after frames/
-  WAV in PR. Effect changes require scene bench: 100-strike frame cost versus `main`, before/during review on latest
-  PR head; never merge above frame-cost limit. No full-pack Iris recording per PR.
+  WAV in PR. Scene bench (100-strike frame cost versus `main`) only for changes that can change frame cost: render/FX
+  code, shaders, particle or draw counts (Artem, 30.10); once, on the final PR head after review. Colors, textures,
+  sounds, text, server and tool changes skip it. Never merge above frame-cost limit. No full-pack Iris recording per PR.
 - **Performance starts with measurement:** GPU time by layer parts (mod markers, bench line, F3), RenderDoc frame
   (`mod/run/renderdoc/`, Python analysis); edit the numerically identified cause, not a presumed model.
 - **One visual session at a time:** one GPU (`tools/gpu_lease.sh`: other sessions' clients/`--gpu` jobs refuse, naming
   holder); finish with `tools/sandbox.sh stop`, then `tools/gpu_lease.sh release`.
-- **One review round**, model that did not write code: Claude PRs → Codex GPT-6 Astra (effort max), Codex PRs → Claude.
+- **One review round** by the other vendor's model (Claude PRs → Codex, Codex PRs → Claude), at the effort the change
+  needs (high for routine code, xhigh for physics/render/performance); max only after xhigh missed a serious error.
   Reviewer reads diff/surrounding code, not PR description or author's conversation/conclusions; checks PR frames,
   plus WAV for player-visible/audible changes. Only serious errors block: wrong behavior, crash, tick-budget or
   frame-cost breach; other findings optional, author fixes minor issues without another round. Second round only
-  for serious first-round fixes, no third. Parallel tasks/measurements: Codex GPT-6.1 Sol (effort max).
+  for serious first-round fixes, no third. Parallel tasks/measurements: GPT-6.1 Sol at medium (high for diagnosis).
 - **Author merges:** green Итог (sole required check), review without serious errors. No repeated verification by
   someone else; CI-missed bugs get tests, not extra manual steps.
 - End commits with your own agent's name/address in `Co-Authored-By:`, never another agent's.
