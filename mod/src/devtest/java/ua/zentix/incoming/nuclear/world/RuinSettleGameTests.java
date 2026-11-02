@@ -200,6 +200,41 @@ public final class RuinSettleGameTests {
         h.succeed();
     }
 
+    /** Disk windows arrive in batches; eviction must preserve them before a worker can be submitted. */
+    @GameTest(template = "range", batch = "nuke_settle_window", timeoutTicks = 400, skyAccess = true)
+    public static void snapshotTrimProtectsIncompleteDiskWindows(GameTestHelper h) {
+        StrikeGameTests.gameSpeed(h);
+        ServerLevel level = h.getLevel();
+        ChunkPos center = new ChunkPos(14000, 14000);
+        Detonation d = new Detonation(NuclearEvents.get(level).nextId(),
+                new Vec3(center.getMiddleBlockX(), 65, center.getMiddleBlockZ()),
+                65, 7, true, -10000, 0, 0, 20000, 42, 0.03f, false, 1);
+        RuinContext ctx = new RuinContext(level, d);
+        for (int x = -2; x <= 2; x++) for (int z = -2; z <= 2; z++) {
+            ChunkPos pos = new ChunkPos(center.x + x, center.z + z);
+            CompoundTag tag = ChunkSerializer.write(level, fixture(level, pos, 64));
+            tag.remove("Heightmaps"); // old editor maps: only four snapshots are primed per requestWindow call
+            level.getChunkSource().chunkMap.write(pos, tag);
+        }
+        boolean[] partial = {false};
+        h.onEachTick(() -> {
+            int missing = ctx.requestWindow(level, center);
+            int captured = ctx.shotCount();
+            if (captured > 0 && missing > 0) partial[0] = true;
+            WorkClock clock = WorkClock.counting(1_000_000);
+            clock.start(30_000_000);
+            ctx.trimShots(Long.MAX_VALUE, clock);
+            h.assertTrue(ctx.shotCount() == captured, "trim discarded a window awaiting disk reads or worker admission");
+            if (missing > 0) return;
+            h.assertTrue(partial[0] && captured == 25, "partial disk window was not exercised");
+            ctx.cancelTasks();
+            clock.start(30_000_000);
+            ctx.trimShots(Long.MAX_VALUE, clock);
+            h.assertTrue(ctx.shotCount() == 0, "cancel retained the protected window");
+            h.succeed();
+        });
+    }
+
     /** A grass field with an exposed glass wall; allocated as chunk data, never installed in the live world. */
     private static LevelChunk fixture(ServerLevel level, ChunkPos pos, int ground) {
         LevelChunk chunk = new LevelChunk(level, pos);

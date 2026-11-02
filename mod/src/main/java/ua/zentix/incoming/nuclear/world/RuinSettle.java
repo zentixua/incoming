@@ -75,7 +75,7 @@ final class RuinSettle {
             world.trimSettleCache(detonation.id(), clock);
             room = Math.max(0, world.settleMemoryRoom(level.getHeight()) - (long) order.length * Long.BYTES);
         }
-        boolean admit = !heap.tight() && room > 0;
+        boolean admit = world.settleCanAdmit() && !heap.tight() && room > 0;
         if (now >= adaptAt) {
             window.adapt(externalMillis(level), IncomingConfig.SERVER.workBudgetMs.get(), spare, admit);
             adaptAt = now + 20;

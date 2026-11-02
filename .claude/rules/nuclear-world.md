@@ -238,8 +238,10 @@ paths:
   the saved cursor format; an older development cursor restarts at zero while retaining pending positions and
   checking saved scars (do not overwrite a pending entry/ticket when the new scan revisits it).
   When less than 64 MiB of admission headroom remains, evict cold, re-readable snapshots and their cached fractures
-  under the same clock, at most 64 MiB per context per pass. Snapshot access order is LRU; active worker windows
-  are protected. Old changed-block deltas and pre-wave shadow heights stay: re-reading ruined disk chunks uses
+  under the same clock, at most 64 MiB from this detonation per pass. Snapshot access order is LRU; active worker windows and windows
+  awaiting disk reads/worker admission are protected. Editor maps prime only four missing-heightmap snapshots per
+  request: dropping each partial batch would livelock the window (`nuke_settle_window`). Preparation gating is
+  separate from memory headroom: another launch must not trigger eviction of a healthy cache. Old changed-block deltas and pre-wave shadow heights stay: re-reading ruined disk chunks uses
   these deltas to reconstruct the original world (`nuke_settle_cache`). A growing circular frontier otherwise
   fills the snapshot cache and leaves an idle server at zero admission indefinitely. A held chunk waiting for
   neighbors takes `ScarQueue.holdForTile` within `tileHoldsLeft`, as in preparation: a job born under another scar's

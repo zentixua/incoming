@@ -182,6 +182,8 @@ final class RuinContext {
     private static final int PUTS_PER_WINDOW = (2 * RuinPlanner.REACH + 1) * (2 * RuinPlanner.REACH + 1);
     /** Window neighbors being read from disk ({@link #requestWindow}), plus read results not yet taken by server thread. */
     private final LongOpenHashSet reading = new LongOpenHashSet();
+    /** Windows assembling snapshots, awaiting worker admission, or rebuilding on the server thread. */
+    private final LongOpenHashSet pendingWindows = new LongOpenHashSet();
     private final java.util.concurrent.ConcurrentLinkedQueue<DiskShots.Read> reads = new java.util.concurrent.ConcurrentLinkedQueue<>();
     /** Window neighbors not whole on disk (unfinished generation): solid window mass like world edge. */
     private final LongOpenHashSet absent = new LongOpenHashSet();
@@ -205,6 +207,7 @@ final class RuinContext {
 
     /** Same, parse read neighbors at ruin-pool {@code priority}. */
     int requestWindow(ServerLevel level, ChunkPos pos, RuinWorkers.Priority priority) {
+        pendingWindows.add(pos.toLong());
         // read results limited to window per call: server thread builds disk snapshot; while paused, background
         // reads continue, accumulating unlimited results, rest taken by subsequent windows. Only this thread takes them:
         // peeked chunk same as later polled chunk
@@ -286,7 +289,8 @@ final class RuinContext {
                 int x = ChunkPos.getX(key), z = ChunkPos.getZ(key);
                 for (int dx = -RuinPlanner.REACH; !inUse && dx <= RuinPlanner.REACH; dx++)
                     for (int dz = -RuinPlanner.REACH; !inUse && dz <= RuinPlanner.REACH; dz++)
-                        inUse = tasks.containsKey(ChunkPos.asLong(x + dx, z + dz));
+                        inUse = tasks.containsKey(ChunkPos.asLong(x + dx, z + dz))
+                                || pendingWindows.contains(ChunkPos.asLong(x + dx, z + dz));
                 if (inUse) shots.getAndMoveToLast(key);
                 else {
                     dropShot(key);
@@ -478,6 +482,7 @@ final class RuinContext {
      * false one fracture computed.
      */
     boolean blastsReady(ServerLevel level, ChunkPos pos) {
+        pendingWindows.add(pos.toLong());
         Grid g = grid(level, pos, false);
         for (int k = 0; k < 9; k++) {
             int dx = k % 3 - 1, dz = k / 3 - 1;
@@ -542,6 +547,7 @@ final class RuinContext {
             RuinWorkers.checkStop();
             return RuinPlanner.finish(g, c);
         }, priority), chunkId, level.getGameTime(), priority));
+        pendingWindows.remove(key);
         return true;
     }
 
@@ -657,6 +663,7 @@ final class RuinContext {
 
     /** Chunk unloaded: live-chunk background plan/snapshot invalid (disk-snapshot plan remains valid). */
     void forget(long chunk) {
+        pendingWindows.remove(chunk);
         Task t = tasks.get(chunk);
         if (t != null && t.chunkId != 0) {
             tasks.remove(chunk);
@@ -669,10 +676,12 @@ final class RuinContext {
     void cancelTasks() {
         for (Task t : tasks.values()) t.future.cancel(false);
         tasks.clear();
+        pendingWindows.clear();
     }
 
     /** Chunk plan built: release fractures needed only by surrounding plans. */
     void planned(ChunkPos pos) {
+        pendingWindows.remove(pos.toLong());
         planned.add(pos.toLong());
         forget(pos, 1, planned, k -> blasts.remove(k));
         forget(pos, RuinPlanner.REACH, planned, this::dropShot);
@@ -688,6 +697,7 @@ final class RuinContext {
 
     /** Empty plans also complete their neighbors' old-world retention window. */
     void finished(ChunkPos pos) {
+        pendingWindows.remove(pos.toLong());
         planned.add(pos.toLong());
         stood.add(pos.toLong());
         forget(pos, 1, stood, k -> blasts.remove(k));

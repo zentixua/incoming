@@ -152,8 +152,10 @@ public final class NuclearWorld {
     long settleMemoryRoom(int height) {
         long bytes = RuinWorkers.residentBufferBytes(height);
         for (RuinContext ctx : ruins.values()) bytes += ctx.retainedBytes();
-        return prep.idle() ? Math.max(0, NuclearPrep.PLANS_CAP / 2 - bytes) : 0;
+        return Math.max(0, NuclearPrep.PLANS_CAP / 2 - bytes);
     }
+
+    boolean settleCanAdmit() { return prep.idle(); }
 
     /** Settlement grows a long ring: cold snapshots are re-readable, old changed blocks/heights are not. */
     void trimSettleCache(int detonation, WorkClock clock) {
