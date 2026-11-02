@@ -46,10 +46,10 @@ to apply the settings. The most useful ones are below; the rest are in the same 
 | `world.block_damage`, `world.fire` | on | conventional strike destruction and fires; nuclear strikes have separate switches below |
 | `nuclear.enabled`, `ops_only` | on, on | nuclear weapons exist; only operators launch them |
 | `nuclear.block_damage`, `nuclear.fires` | on | nuclear ruins/craters and thermal fires; independent of `world.block_damage` and `world.fire` |
-| `scale.scale_preset` | GAME | GAME: game flight speeds/heights, full nuclear radii, distant nuclear wave at 0.20 of the speed of sound; REAL: reference flight speeds/heights, full radii and physical wave timing; CUSTOM: the three numbers below. Flight and air defense remain a game model in every preset; see [Not physical](not-physical.md) |
+| `scale.scale_preset` | GAME | GAME: game flight speeds/heights, full nuclear radii, distant nuclear wave at 0.25 of the speed of sound; REAL: reference flight speeds/heights, full radii and physical wave timing; CUSTOM: the three numbers below. Flight and air defense remain a game model in every preset; see [Not physical](not-physical.md) |
 | `scale.flight_speed` | 0 | with CUSTOM: [flight speeds and heights](weapons.md#how-they-fly), 0 the game values, 1 true to life; in between every weapon goes the same share of the way. Turns stay game values. Flight times stay, so a faster weapon starts further away |
 | `nuclear.effects_scale` | 1.0 | with CUSTOM: scale of nuclear strike radii (1.0 is true to life) |
-| `nuclear.wave_speed` | 0.20 | with CUSTOM: speed of the blast wave away from the fireball, as a share of the speed of sound (1.0 is true to life) |
+| `nuclear.wave_speed` | 0.25 | with CUSTOM: speed of the blast wave away from the fireball, as a share of the speed of sound (1.0 is true to life) |
 | `air_defense.rails`, `air_defense.reload_seconds` | 4, 8 | ready SAM rails and seconds to load one missile from stock, including the first |
 | `grid.enabled` | on | [blackout](blackout.md) |
 | `grid.nuke_blackout`, `grid.max_radius` | on, 4096 | nuclear blackout without a substation; maximum radius of any single outage in blocks |

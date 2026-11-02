@@ -145,11 +145,11 @@ The mod must be the most physically accurate in its niche and spectacular like g
   (`strike/FlightScale`: 0 game, 1 real, between v_game·(v_real/v_game)^x per weapon; cruise/dive, B-2 route/drop height,
   interceptor speed, Grad launch rail exit/drag; speed-derived range, leg, waypoint capture, attack geometry, approach
   lane grow with cruise, `Airframe.stretch`; maneuver remains game). Never derive game speed from render distance:
-  each player's differs, server flight is shared. Default distant nuclear wave also game speed, 0.20 sound speed.
-  `scale_preset`: `GAME` default flight 0/wave 0.20, `REAL` real life, `CUSTOM` uses `flight_speed`,
+  each player's differs, server flight is shared. Default distant nuclear wave also game speed, 0.25 sound speed.
+  `scale_preset`: `GAME` default flight 0/wave 0.25, `REAL` real life, `CUSTOM` uses `flight_speed`,
   `nuclear.wave_speed`, `nuclear.effects_scale` as set.
 - **Physics deviations** only preset scale or Artem's explicit decision; mark every one “not physical” in code and
-  guide deviation list (game flight speeds/heights, wave 0.20 let players see approach/wave; real values in weapon
+  guide deviation list (game flight speeds/heights, wave 0.25 let players see approach/wave; real values in weapon
   table). No silent deviations. Presentation boosts change no facts, so are not deviations.
 - **Complaints never repeat:** each fix gets a test/check that would catch recurrence.
 

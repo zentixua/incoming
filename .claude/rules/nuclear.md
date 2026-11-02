@@ -348,7 +348,7 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   same air path as head dust, `BlastWall.carriedShare`); masonry-breach dust (mass for all positions represented by
   sample, `S2C.NukeDebris.weight`) forms downwind effects-layer billow streaks (`BlastDust`: grouped in 4-block cells
   within 48 blocks of camera, one per chunk beyond, to `NukeDust.NEAR`; fades into Kuhl layer). With game wave
-  (`wave_speed` 0.2), near-burst front is slower than real wind behind it: cap wind at in-game front speed, air path
+  (`wave_speed` 0.25), near-burst front is slower than real wind behind it: cap wind at in-game front speed, air path
   at front position, no wind ahead (`BlastGustTest.piecesStayBehindTheFront`: without speed cap, a leaf clump at 600 m
   reached 7 blocks/tick in one tick and overtook front). Wind clock uses detonation ID (`ClientNuclear.ticksOf`): entry
   and seek replace detonation records while airborne pieces remain. Surface litter is only turf, litter and leaves
