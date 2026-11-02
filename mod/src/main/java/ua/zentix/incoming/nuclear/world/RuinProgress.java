@@ -14,6 +14,7 @@ import java.util.Map;
 final class RuinProgress extends SavedData {
     static final class Pass {
         long cursor;
+        boolean complete;
         final LongOpenHashSet pending = new LongOpenHashSet();
     }
 
@@ -33,7 +34,10 @@ final class RuinProgress extends SavedData {
             if (!tag.contains(key, Tag.TAG_COMPOUND)) continue;
             CompoundTag saved = tag.getCompound(key);
             Pass p = progress.pass(Integer.parseInt(key));
-            p.cursor = Math.max(0, saved.getLong("cursor"));
+            // Early development builds used a north-to-south cursor. Restart that scan safely;
+            // storage scar marks make revisiting completed positions harmless.
+            p.cursor = saved.getBoolean("radial") ? Math.max(0, saved.getLong("cursor")) : 0;
+            p.complete = saved.getBoolean("radial") && saved.getBoolean("complete");
             p.pending.addAll(new LongOpenHashSet(saved.getLongArray("pending")));
         }
         return progress;
@@ -44,6 +48,8 @@ final class RuinProgress extends SavedData {
         passes.forEach((id, p) -> {
             CompoundTag saved = new CompoundTag();
             saved.putLong("cursor", p.cursor);
+            saved.putBoolean("radial", true);
+            saved.putBoolean("complete", p.complete);
             saved.putLongArray("pending", p.pending.toLongArray());
             tag.put(Integer.toString(id), saved);
         });

@@ -7,6 +7,8 @@ import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.neoforged.neoforge.attachment.AttachmentHolder;
 import ua.zentix.incoming.Incoming;
+import ua.zentix.incoming.IncomingConfig;
+import ua.zentix.incoming.work.WorkScheduler;
 import ua.zentix.incoming.nuclear.Detonation;
 import ua.zentix.incoming.nuclear.NuclearEvents;
 import ua.zentix.incoming.registry.ModAttachments;
@@ -24,13 +26,18 @@ import java.util.concurrent.CompletableFuture;
 /** Visits saved, final-block chunks after the wave; the ordinary scar queue and vanilla saving do all writes. */
 final class RuinSettle {
     private static final TicketType<UUID> TYPE = TicketType.create("incoming_ruin_settle", Comparator.<UUID>naturalOrder());
-    static final int LOADING = 8, PENDING = 128, VISITS = 32, READS = 8;
+    static final int PENDING = 2048, READS = 128;
+    private final SettleWindow window = new SettleWindow();
+    private CompletableFuture<long[]> layout;
+    private long[] order;
+    private int loadingLimit;
+    private long adaptAt;
+    private boolean spare = true;
     private static final int RETRY = 20;
     private final HeapWatch.Tracker heap = new HeapWatch.Tracker();
     private final Map<Long, Entry> entries = new LinkedHashMap<>();
     private Detonation detonation;
     private RuinProgress.Pass pass;
-    private int minX, minZ, sideX, sideZ;
     private long nextReport, settled, loaded, began, checkAt;
     private boolean busy;
 
@@ -56,8 +63,24 @@ final class RuinSettle {
             try { select(level, events, progress); } finally { clock.end(unit); }
             if (detonation == null) { checkAt = level.getGameTime() + 100; return; }
         }
+        if (order == null) {
+            if (!layout.isDone()) return;
+            order = layout.join();
+            layout = null;
+        }
         long now = level.getGameTime();
-        boolean admit = !heap.tight() && NuclearWorld.get(level).settleMemoryAvailable(level.getHeight());
+        NuclearWorld world = NuclearWorld.get(level);
+        long room = Math.max(0, world.settleMemoryRoom(level.getHeight()) - (long) order.length * Long.BYTES);
+        if (room < NuclearPrep.PLANS_CAP / 8) {
+            world.trimSettleCache(detonation.id(), clock);
+            room = Math.max(0, world.settleMemoryRoom(level.getHeight()) - (long) order.length * Long.BYTES);
+        }
+        boolean admit = !heap.tight() && room > 0;
+        if (now >= adaptAt) {
+            window.adapt(externalMillis(level), IncomingConfig.SERVER.workBudgetMs.get(), spare, admit);
+            adaptAt = now + 20;
+        }
+        loadingLimit = admit ? window.limit(room, level.getHeight()) : 0;
         int holding = (int) entries.values().stream().filter(e -> e.held).count();
         int reading = (int) entries.values().stream().filter(e -> e.read != null).count();
         int visits = 0;
@@ -113,7 +136,7 @@ final class RuinSettle {
                     e.finalBlocks = true;
                     e.retryAt = now + RETRY;
                 }
-                if (e.finalBlocks && !e.applied && !e.held && admit && holding < LOADING) {
+                if (e.finalBlocks && !e.applied && !e.held && admit && holding < loadingLimit) {
                     StrikeWorld.get(level).areas().hold(level, area(e));
                     e.held = true;
                     e.heldAt = now;
@@ -129,20 +152,21 @@ final class RuinSettle {
                 entries.put(e.pos.toLong(), e);
             } finally { clock.end(unit); }
         }
-        for (int n = 0; n < VISITS && admit && entries.size() < PENDING && pass.cursor < total() && clock.canStart(); n++) {
+        while (admit && entries.size() < PENDING && pass.cursor < total() && clock.canStart()) {
             long unit = clock.begin();
             try {
-                ChunkPos pos = position(pass.cursor++);
-                if (ScarQueue.inRange(pos, detonation)) {
-                    pass.pending.add(pos.toLong());
-                    entries.put(pos.toLong(), new Entry(pos.toLong()));
-                }
+                ChunkPos pos = new ChunkPos(order[(int) pass.cursor++]);
+                if (pass.pending.add(pos.toLong())) entries.put(pos.toLong(), new Entry(pos.toLong()));
                 progress.setDirty();
             } finally { clock.end(unit); }
         }
+        spare = !clock.overdue();
         if (pass.cursor >= total() && entries.isEmpty()) {
             report(now, true);
+            pass.complete = true;
+            progress.setDirty();
             detonation = null;
+            order = null;
             pass = null;
             busy = false;
         } else if (now >= nextReport) {
@@ -158,13 +182,13 @@ final class RuinSettle {
         all.sort(Comparator.comparingInt(Detonation::id));
         busy = false;
         for (Detonation d : all) {
-            bounds(d);
             RuinProgress.Pass p = progress.pass(d.id());
-            if (p.cursor >= total() && p.pending.isEmpty()) continue;
+            if (p.complete && p.pending.isEmpty()) continue;
             busy = true;
             if (level.getGameTime() < d.gameTime() + d.arrivalTicks(Math.hypot(d.ruinRadius() + 32, d.burst().y - d.groundY()))) continue;
             detonation = d;
             pass = p;
+            layout = CompletableFuture.supplyAsync(() -> layout(d), net.minecraft.Util.backgroundExecutor());
             for (long key : p.pending) entries.put(key, new Entry(key));
             began = level.getGameTime();
             nextReport = began + 1200;
@@ -173,16 +197,36 @@ final class RuinSettle {
         }
     }
 
-    private void bounds(Detonation d) {
-        double r = d.ruinRadius();
-        minX = Math.floorDiv((int) Math.floor(d.burst().x - r), 16);
-        minZ = Math.floorDiv((int) Math.floor(d.burst().z - r), 16);
-        sideX = Math.floorDiv((int) Math.floor(d.burst().x + r), 16) - minX + 1;
-        sideZ = Math.floorDiv((int) Math.floor(d.burst().z + r), 16) - minZ + 1;
+    /** Same compact distance sort as distant LOD rings, built off-thread. Quantization: 1/16 block. */
+    static long[] layout(Detonation d) {
+        int cx = (int) Math.floor(d.burst().x / 16), cz = (int) Math.floor(d.burst().z / 16);
+        int radius = (int) Math.ceil(d.ruinRadius() / 16) + 1;
+        var keyed = new it.unimi.dsi.fastutil.longs.LongArrayList();
+        for (int x = cx - radius; x <= cx + radius; x++) for (int z = cz - radius; z <= cz + radius; z++) {
+            ChunkPos pos = new ChunkPos(x, z);
+            if (ScarQueue.inRange(pos, d)) {
+                long distance = (long) (NuclearPrep.horizontal(pos, d) * 16);
+                keyed.add(distance << 32 | (long) (x - cx + 0x8000) << 16 | (z - cz + 0x8000));
+            }
+        }
+        long[] result = keyed.toLongArray();
+        java.util.Arrays.sort(result);
+        for (int i = 0; i < result.length; i++) result[i] = ChunkPos.asLong(
+                cx + (int) (result[i] >> 16 & 0xffff) - 0x8000, cz + (int) (result[i] & 0xffff) - 0x8000);
+        return result;
     }
 
-    private long total() { return (long) sideX * sideZ; }
-    private ChunkPos position(long cursor) { return new ChunkPos(minX + (int) (cursor % sideX), minZ + (int) (cursor / sideX)); }
+    private long total() { return order.length; }
+
+    private static double externalMillis(ServerLevel level) {
+        var server = level.getServer();
+        int tick = server.getTickCount();
+        long[] times = server.getTickTimesNanos();
+        long sum = 0;
+        for (int i = 1; i <= 20; i++) sum += Math.max(0,
+                times[Math.floorMod(tick - i, times.length)] - WorkScheduler.ownNanos(tick - i));
+        return sum / 20e6;
+    }
 
     private static CompletableFuture<Header> read(ServerLevel level, ChunkPos pos) {
         // ChunkStorage reads on its I/O thread and observes pending vanilla saves. No join until complete.
@@ -206,6 +250,9 @@ final class RuinSettle {
         entries.clear();
         detonation = null;
         pass = null;
+        order = null;
+        if (layout != null) layout.cancel(false);
+        layout = null;
         busy = false;
         checkAt = 0;
     }
@@ -214,7 +261,8 @@ final class RuinSettle {
     int reads() { return (int) entries.values().stream().filter(e -> e.read != null).count(); }
 
     private void report(long now, boolean done) {
-        Incoming.LOG.info("Ruin settlement #{}: {} of {} positions scanned, {} saved chunks confirmed, {} loads, {} pending, {} ticks{}",
-                detonation.id(), pass.cursor, total(), settled, loaded, entries.size(), now - began, done ? "; complete" : "");
+        Incoming.LOG.info("Ruin settlement #{}: {} of {} positions scanned, {} saved chunks confirmed, {} loads, {} pending ({} held, admission {}, {} reads), {} ticks{}",
+                detonation.id(), pass.cursor, total(), settled, loaded, entries.size(), held(), loadingLimit, reads(),
+                now - began, done ? "; complete" : "");
     }
 }

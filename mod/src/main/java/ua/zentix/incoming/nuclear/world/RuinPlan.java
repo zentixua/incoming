@@ -720,13 +720,14 @@ public final class RuinPlan {
      */
     public boolean apply(ServerLevel level, LevelChunk chunk, Detonation d, ColumnScar.Budget budget) {
         if (this == EMPTY) {
+            RuinContext kept = NuclearWorld.get(level).ruinsIfKept(d.id());
             // ruins change no blocks, layer ignited fire: wave extinguishes all (otherwise remains unticked)
             if (FlashScorch.marked(chunk, d.id())) {
-                RuinContext kept = NuclearWorld.get(level).ruinsIfKept(d.id());
                 RuinPlan flash = kept == null ? null : kept.flashed(chunk.getPos().toLong());
                 write(level, chunk, budget, System.nanoTime(), false, flash, flash == null, false);
                 FlashScorch.unmark(chunk, d.id());
             }
+            if (kept != null) kept.finished(chunk.getPos());
             return true;
         }
         long t = System.nanoTime();

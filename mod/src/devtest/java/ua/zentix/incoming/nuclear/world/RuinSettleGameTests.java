@@ -34,6 +34,7 @@ public final class RuinSettleGameTests {
         RuinProgress progress = RuinProgress.get(level);
         RuinProgress.Pass pass = progress.pass(detonation);
         pass.cursor = Long.MAX_VALUE;
+        pass.complete = true;
         pass.pending.clear();
         progress.setDirty();
     }
@@ -43,6 +44,7 @@ public final class RuinSettleGameTests {
         RuinProgress progress = RuinProgress.get(level);
         RuinProgress.Pass pass = progress.pass(detonation);
         pass.cursor = Long.MAX_VALUE;
+        pass.complete = true;
         pass.pending.add(chunk.toLong());
         progress.setDirty();
     }
@@ -138,6 +140,64 @@ public final class RuinSettleGameTests {
                     restart, changes, (System.nanoTime() - started) / 1_000_000, nanos[0] / 1_000_000.0, nanos[1] / 1_000_000.0);
             h.succeed();
         });
+    }
+
+    /** Unchanged neighbors are finished too: they must not pin old city plans for the whole zone. */
+    @GameTest(template = "range", batch = "nuke_settle_empty", timeoutTicks = 100, skyAccess = true)
+    public static void emptyPlansReleaseSurroundingOldBlocks(GameTestHelper h) {
+        ServerLevel level = h.getLevel();
+        ChunkPos center = new ChunkPos(10000, 10000);
+        Detonation d = new Detonation(NuclearEvents.get(level).nextId(),
+                new Vec3(center.getMiddleBlockX() - 48, 65, center.getMiddleBlockZ()),
+                65, 7, true, -10000, 0, 0, 20000, 42, 0.03f, false, 1);
+        RuinContext ctx = NuclearWorld.get(level).ruins(level, d, level.getGameTime());
+        LevelChunk source = fixture(level, center, 64);
+        ctx.putDisk(level, DiskShots.parse(level, center, ChunkSerializer.write(level, source)));
+        RuinContext.Grid grid = ctx.cachedGridForTest(level, center);
+        RuinPlan plan = RuinPlanner.finish(grid, Collapse.solve(grid));
+        h.assertTrue(plan.changedBlocks() > 0, "fixture needs a nonempty retained plan");
+        ctx.applied(source, plan, new short[256]);
+        h.assertTrue(ctx.applied(center.toLong()).plan() != null, "plan was not retained");
+        for (int x = -2; x <= 2; x++) for (int z = -2; z <= 2; z++) {
+            if (x == 0 && z == 0) continue;
+            RuinPlan.EMPTY.apply(level, new LevelChunk(level, new ChunkPos(center.x + x, center.z + z)), d, null);
+        }
+        h.assertTrue(ctx.applied(center.toLong()).plan() == null,
+                "empty neighbors pin old plan despite the entire window being settled");
+        NuclearWorld.get(level).clear(level);
+        h.succeed();
+    }
+
+    /** Evicting a re-readable snapshot preserves the old-world data needed to reconstruct neighboring ruins. */
+    @GameTest(template = "range", batch = "nuke_settle_cache", timeoutTicks = 100, skyAccess = true)
+    public static void snapshotTrimKeepsOriginalBlocksAndUsesWorkClock(GameTestHelper h) {
+        ServerLevel level = h.getLevel();
+        ChunkPos center = new ChunkPos(12000, 12000);
+        Detonation d = new Detonation(NuclearEvents.get(level).nextId(),
+                new Vec3(center.getMiddleBlockX() - 48, 65, center.getMiddleBlockZ()),
+                65, 7, true, -10000, 0, 0, 20000, 42, 0.03f, false, 1);
+        RuinContext ctx = NuclearWorld.get(level).ruins(level, d, level.getGameTime());
+        LevelChunk source = fixture(level, center, 64);
+        var before = ChunkSerializer.write(level, source);
+        ctx.putDisk(level, DiskShots.parse(level, center, before));
+        var grid = ctx.cachedGridForTest(level, center);
+        var plan = RuinPlanner.finish(grid, Collapse.solve(grid));
+        h.assertTrue(plan.changedBlocks() > 0, "fixture has no changes");
+        LevelChunkSection[] ruined = plan.testAppliedCopy(level, source);
+        for (int i = 0; i < ruined.length; i++) source.getSections()[i] = ruined[i];
+        ctx.applied(source, plan, new short[256]);
+        WorkClock clock = WorkClock.counting(1_000_000);
+        clock.start(1_000_000);
+        ctx.trimShots(Long.MAX_VALUE, clock);
+        h.assertTrue(clock.usedThisTickNanos() <= 1_000_000 && !ctx.hasShot(center.toLong()), "trim bypassed budget or kept cold snapshot");
+        h.assertTrue(ctx.applied(center.toLong()).plan() == plan, "trim discarded original block deltas");
+        ctx.putDisk(level, DiskShots.parse(level, center, ChunkSerializer.write(level, source)));
+        var rebuilt = ctx.cachedGridForTest(level, center);
+        // Re-read ruined blocks must reconstruct exactly the original snapshot through the retained delta.
+        for (int x = 0; x < 16; x++) for (int z = 0; z < 16; z++) for (int y = 64; y < 70; y++)
+            h.assertTrue(rebuilt.at(0, 0).get(x, y, z) == grid.at(0, 0).get(x, y, z), "trim changed original world at " + x + "," + y + "," + z);
+        NuclearWorld.get(level).clear(level);
+        h.succeed();
     }
 
     /** A grass field with an exposed glass wall; allocated as chunk data, never installed in the live world. */
@@ -258,6 +318,7 @@ public final class RuinSettleGameTests {
     /** Admission and polling share the counting deadline; even an exhausted lane performs no unbounded scan. */
     @GameTest(template = "range", batch = "nuke_settle_budget", timeoutTicks = 100, skyAccess = true)
     public static void admissionUsesSharedBudgetAndStopsCleanly(GameTestHelper h) {
+        StrikeGameTests.gameSpeed(h);
         ServerLevel level = h.getLevel();
         RuinSettle settle = new RuinSettle();
         NuclearEvents events = new NuclearEvents();
@@ -265,17 +326,20 @@ public final class RuinSettleGameTests {
         events.add(new Detonation(id, new Vec3(80000, 64, 80000), 64, 7, true, -10000, 0, 0, 20000, 3, 0.03f, false, 1));
         WorkClock clock = WorkClock.counting(1_000_000);
         RuinProgress.Pass p = RuinProgress.get(level).pass(id);
-        for (int i = 0; i < 40; i++) {
+        int[] ticks = {0};
+        h.onEachTick(() -> {
             long before = p.cursor;
             clock.start(3_000_000);
             settle.work(level, events, clock);
             h.assertTrue(clock.usedThisTickNanos() <= 3_000_000, "settlement exceeded common budget");
             h.assertTrue(p.cursor - before <= 3, "scan bypassed work clock");
-            h.assertTrue(settle.held() <= RuinSettle.LOADING && settle.reads() <= RuinSettle.READS, "unbounded loading or reads");
+            h.assertTrue(settle.held() <= RuinSettle.PENDING && settle.reads() <= RuinSettle.READS, "unbounded loading or reads");
             h.assertTrue(p.pending.size() <= RuinSettle.PENDING, "unbounded saved backlog");
-        }
-        settle.clear(level);
-        h.assertTrue(settle.held() == 0 && settle.reads() == 0, "stop retained tickets or work");
-        h.succeed();
+            if (++ticks[0] < 40) return;
+            h.assertTrue(p.cursor > 0, "budget check never reached scan admission");
+            settle.clear(level);
+            h.assertTrue(settle.held() == 0 && settle.reads() == 0, "stop retained tickets or work");
+            h.succeed();
+        });
     }
 }

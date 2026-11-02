@@ -149,10 +149,16 @@ public final class NuclearWorld {
     }
 
     /** Leave room for loaded-player work and its background windows before admitting settlement chunks. */
-    boolean settleMemoryAvailable(int height) {
+    long settleMemoryRoom(int height) {
         long bytes = RuinWorkers.residentBufferBytes(height);
         for (RuinContext ctx : ruins.values()) bytes += ctx.retainedBytes();
-        return prep.idle() && bytes < NuclearPrep.PLANS_CAP / 2;
+        return prep.idle() ? Math.max(0, NuclearPrep.PLANS_CAP / 2 - bytes) : 0;
+    }
+
+    /** Settlement grows a long ring: cold snapshots are re-readable, old changed blocks/heights are not. */
+    void trimSettleCache(int detonation, WorkClock clock) {
+        RuinContext ctx = ruins.get(detonation);
+        if (ctx != null) ctx.trimShots(NuclearPrep.PLANS_CAP / 8, clock);
     }
 
     /** Ruin-queue jobs inspected last tick (budget tests). */
