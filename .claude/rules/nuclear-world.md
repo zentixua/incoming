@@ -229,9 +229,19 @@ paths:
   (`RuinContext.applied`).
 
 ## Pitfalls
-- Full-zone settlement must use the normal ruin queue and vanilla chunk saving, independently of LOD clients.
-  Keep admission bounded and below player work; persist progress only after the corresponding chunk data is saved.
-  Old retained detonations need the same pass on upgrade, including those in `NuclearEvents.past`.
+- `RuinSettle` settles the entire saved ruin zone after its wave, including `NuclearEvents.past` from old saves,
+  without players or LOD clients. Scan final-block disk chunks (`DiskStatus.blocksFinal`), skip absent/PARTIAL ones;
+  old FINAL/retrogen chunks may need vanilla's asynchronous upgrade generation. Load through `AreaLoader` with
+  non-ticking level-33 tickets (8 held), reuse `ScarQueue`, and let vanilla save. Even an empty plan needs its saved
+  `CHUNK_SCAR`; no direct region edits. At most 8 reads and 128 unconfirmed positions; poll all bounded entries so
+  completed reads do not wait behind a large queue of idle ones. Admission and polling use the common nuclear clock,
+  after player ruins, preparation and fallout. Preparation must be idle; heap pressure and retained ruin data plus
+  worker buffers at half `PLANS_CAP` pause admission (the remainder is for player windows). An idle context is evicted
+  normally, allowing a long pass to resume. `RuinContext.retainedBytes` counts old applied plans as well as snapshots.
+  `RuinProgress` saves cursor AND unconfirmed positions: confirm a chunk only after an asynchronous storage read sees
+  its scar (reads observe pending vanilla saves). A restart must retry those positions, even when the cursor is ahead.
+  Shutdown releases settlement tickets before `StopDrain`; storage reads only return detached headers. No settings.
+  Regressions: `nuke_settle_disk`, `nuke_settle_restart`, `nuke_settle_budget`, `nuke_settle_load`, `nuke_settle_many`.
 - Bodies not in memory when the pulse or the front crossed their place (`LateExposure`): `PulseJob` and `BlastFront` see only
   loaded entities, so on `EntityJoinLevelEvent` a body loaded from disk is queued for what it missed — `NuclearWarhead.expose`
   with `late` (burns and prompt dose, sickness from the detonation via `RadiationTicker.addDose(…, at)`; no flash panic or

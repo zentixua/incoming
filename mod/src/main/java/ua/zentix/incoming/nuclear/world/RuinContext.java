@@ -33,6 +33,7 @@ final class RuinContext {
      * Server-thread writes only, immutable values; missing means no terrain (like unloaded chunk).
      */
     private final java.util.concurrent.ConcurrentHashMap<Long, int[]> heights = new java.util.concurrent.ConcurrentHashMap<>();
+    private long appliedBytes;
     private final Long2ObjectOpenHashMap<Applied> applied = new Long2ObjectOpenHashMap<>();
     private final LongOpenHashSet planned = new LongOpenHashSet(), stood = new LongOpenHashSet();
     /** Last context use (game time), for queue to forget long-idle contexts. */
@@ -343,10 +344,13 @@ final class RuinContext {
         return ThermalShadow.visible(d.burst(), p, (x, z) -> height(x, z, minY));
     }
 
-    /**
-     * Bytes retained by detonation snapshots, heightmaps, flash-layer plans (detonation memory, toward plan cap
-     * {@link NuclearPrep#PLANS_CAP}).
-     */
+    /** Conservative retained-plan accounting for long disk settlement passes, including old blocks and marks. */
+    long retainedBytes() {
+        long bytes = shotBytes() + applied.size() * 640L + (planned.size() + stood.size()) * 32L;
+        return bytes + appliedBytes;
+    }
+
+    /** Snapshots, heightmaps and flash-layer plans, toward {@link NuclearPrep#PLANS_CAP}. */
     long shotBytes() {
         return shotBytes + heights.size() * 1100L + flashedBytes;
     }
@@ -655,14 +659,18 @@ final class RuinContext {
     /** Chunk ruins applied from plan. */
     void applied(LevelChunk chunk, RuinPlan plan, short[] motion) {
         ChunkPos pos = chunk.getPos();
-        applied.put(pos.toLong(), new Applied(plan, motion));
+        Applied old = applied.put(pos.toLong(), new Applied(plan, motion));
+        appliedBytes += plan.bytes() - (old == null || old.plan == null ? 0 : old.plan.bytes());
         planned.add(pos.toLong());
         stood.add(pos.toLong());
         forget(pos, 1, stood, k -> blasts.remove(k));
         forget(pos, RuinPlanner.REACH, stood, this::dropShot);
         forget(pos, 2, stood, k -> {
             Applied a = applied.get(k);
-            if (a != null && a.plan != null) applied.put(k, new Applied(null, a.motion));
+            if (a != null && a.plan != null) {
+                appliedBytes -= a.plan.bytes();
+                applied.put(k, new Applied(null, a.motion));
+            }
             // pre-flash world no longer needed: surrounding windows built
             RuinPlan f = flashed.remove(k);
             if (f != null) flashedBytes -= f.bytes();

@@ -40,6 +40,7 @@ public final class NuclearWorld {
      */
     private static final int RUINS_SWEEP = 100, RUINS_IDLE = 600;
     private final NuclearPrep prep = new NuclearPrep();
+    private final RuinSettle settle = new RuinSettle();
     private final List<PulseJob> pulses = new ArrayList<>();
     /** Flash silhouettes per detonation ({@link FlashShadows}): bodies snapshotted at detonation tick. */
     private final List<FlashShadows> shadows = new ArrayList<>();
@@ -49,7 +50,7 @@ public final class NuclearWorld {
     private final MobFallout mobFallout = new MobFallout();
     private final LateExposure late = new LateExposure();
     private final BlastFront blast = new BlastFront();
-    private long lastFrontNanos, lastPulseNanos, lastScorchNanos, lastCraterNanos, lastScarNanos, lastPrepNanos, lastFalloutNanos;
+    private long lastFrontNanos, lastPulseNanos, lastScorchNanos, lastCraterNanos, lastScarNanos, lastPrepNanos, lastFalloutNanos, lastSettleNanos;
     /**
      * Chunks loaded since with flash-layer fire from forgotten detonation (no ruins coming): schedule fire ticks on world tick
      * ({@link FlashScorch#burnOut}; no ticks scheduled during chunk load).
@@ -144,7 +145,14 @@ public final class NuclearWorld {
      * do not take entire shared budget).
      */
     public boolean busy() {
-        return !pulses.isEmpty() || late.busy() || !shadows.isEmpty() || !scorches.isEmpty() || !craters.isEmpty() || scars.size() > 0 || !prep.idle() || blast.busy();
+        return !pulses.isEmpty() || late.busy() || !shadows.isEmpty() || !scorches.isEmpty() || !craters.isEmpty() || scars.size() > 0 || !prep.idle() || blast.busy() || settle.busy();
+    }
+
+    /** Leave room for loaded-player work and its background windows before admitting settlement chunks. */
+    boolean settleMemoryAvailable(int height) {
+        long bytes = RuinWorkers.bufferBytes(height);
+        for (RuinContext ctx : ruins.values()) bytes += ctx.retainedBytes();
+        return prep.idle() && bytes < NuclearPrep.PLANS_CAP / 2;
     }
 
     /** Ruin-queue jobs inspected last tick (budget tests). */
@@ -192,10 +200,10 @@ public final class NuclearWorld {
 
     /**
      * Last-tick times for front on entities/craft, light/radiation (including flash silhouettes), ground flash layer,
-     * craters, ruin queue, prebuilt ruins and mob fallout, ns.
+     * craters, ruin queue, prebuilt ruins, mob fallout and disk settlement, ns.
      */
     public long[] lastNanos() {
-        return new long[]{lastFrontNanos, lastPulseNanos, lastScorchNanos, lastCraterNanos, lastScarNanos, lastPrepNanos, lastFalloutNanos};
+        return new long[]{lastFrontNanos, lastPulseNanos, lastScorchNanos, lastCraterNanos, lastScarNanos, lastPrepNanos, lastFalloutNanos, lastSettleNanos};
     }
 
     /** Last-tick ruin queue: “inspected N, waited M” (slow nuclear-tick line). */
@@ -323,6 +331,7 @@ public final class NuclearWorld {
     /** Cancel: queues stopped (destruction not restored). */
     public void clear(ServerLevel level) {
         // preparation before FarLods: copies return claimed requests there, to be removed with its queues
+        settle.clear(level);
         prep.clear(level, scars);
         FarLods.get(level).clear(level);
         scars.clear(level);
@@ -448,7 +457,10 @@ public final class NuclearWorld {
             Incoming.LOG.error("Mob fallout failed with an exception; pass reset", e);
             mobFallout.clear();
         }
-        lastFalloutNanos = System.nanoTime() - falloutStart;
+        long settleStart = System.nanoTime();
+        lastFalloutNanos = settleStart - falloutStart;
+        settle.work(level, events, clock);
+        lastSettleNanos = System.nanoTime() - settleStart;
     }
 
     /**
