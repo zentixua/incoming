@@ -61,4 +61,5 @@ would catch it. Do not substitute repeated manual verification for that regressi
 Merging a PR does not authorize a public release. Releases and store/video publishing require the maintainer's
 explicit instruction. Release preparation includes a new version, player-facing notes in both languages,
 compatibility checks and the network protocol bump required by the repository rules. The manual release
-workflow runs the full checks before publishing.
+workflow runs the full checks before publishing; the same release instruction covers Modrinth and CurseForge, which
+receive the released jar automatically.

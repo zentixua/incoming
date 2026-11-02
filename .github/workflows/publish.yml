@@ -1,14 +1,24 @@
-# Manual store publishing: draft creates/updates the private Modrinth page; submit requests review;
-# submit and release upload the selected version only if its jar is missing. Pages/media use the workflow revision only when explicitly requested
+# Store publishing. A successful build release run (build.yml with release=true on main or claude/release-*,
+# job “Релиз” green) triggers step=release for that version by itself, so one release command reaches GitHub,
+# Modrinth and CurseForge. Manual runs: draft creates/updates the private Modrinth page; submit requests review;
+# release re-sends a version. submit and release upload the selected version only if its jar is missing, so a repeat
+# after an automatic run changes nothing. Pages/media use the workflow revision only when explicitly requested
 # (always for draft). The jar, changelog and environment come from the selected GitHub release tag;
-# The jar must also match the artifact of a successful release build for that exact tag commit.
+# the jar must also match the artifact of a successful release build for that exact tag commit.
 # No CURSEFORGE_ID disables CurseForge with a warning. A set ID requires both the upload token and
 # the separate CURSEFORGE_API_KEY used to check existing files before upload. Required page media
-# must all exist before any remote mutation. No release or publishing runs automatically.
+# must all exist before any remote mutation.
 name: publish
-run-name: publish ${{ inputs.step }} ${{ inputs.version || '(latest release)' }}
+run-name: >-
+  publish ${{ inputs.step || 'release' }}
+  ${{ inputs.version || (github.event_name == 'workflow_run' && format('after build #{0}', github.event.workflow_run.run_number)) || '(latest release)' }}
 
 on:
+  # After the build run finishes, so prepare_publish.py finds it completed and successful.
+  workflow_run:
+    workflows: [build]
+    types: [completed]
+    branches: [main, 'claude/release-*']
   workflow_dispatch:
     inputs:
       step:
@@ -25,17 +35,58 @@ on:
         type: boolean
         default: false
 
-# Concurrent runs must not create the project twice.
-concurrency:
-  group: publish
-  cancel-in-progress: false
-
 permissions:
   contents: read
 
 jobs:
+  # Automatic run: only a successful manual release build of this repository whose “Релиз” job created a release.
+  # Other build runs (pushes, PRs, flake reruns, failed or canceled releases) skip publishing without an error.
+  release_build:
+    name: Release build
+    if: >-
+      github.event_name == 'workflow_run' && github.event.workflow_run.event == 'workflow_dispatch'
+      && github.event.workflow_run.conclusion == 'success'
+      && github.event.workflow_run.head_repository.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    permissions:
+      contents: read
+      actions: read
+    outputs:
+      version: ${{ steps.find.outputs.version }}
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          persist-credentials: false
+      - name: Find the released version
+        id: find
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          SHA: ${{ github.event.workflow_run.head_sha }}
+        run: |
+          released=$(gh api "repos/{owner}/{repo}/actions/runs/$RUN_ID/jobs?filter=latest&per_page=100" \
+            --jq '[.jobs[] | select(.name == "Релиз" and .conclusion == "success")] | length')
+          if [ "$released" != 1 ]; then
+            echo "Build run $RUN_ID released nothing; stores are not touched."
+            exit 0
+          fi
+          git fetch --no-tags --depth=1 origin "$SHA"
+          v=$(git show "$SHA:mod/gradle.properties" | sed -n 's/^mod_version=//p')
+          echo "Build run $RUN_ID released v$v; publishing it to the stores."
+          echo "version=$v" >> "$GITHUB_OUTPUT"
+
   publish:
-    name: ${{ inputs.step }}
+    name: ${{ inputs.step || 'release' }}
+    needs: release_build
+    # !cancelled(): on a manual run release_build is skipped, and the implicit success() would skip this job too.
+    if: ${{ !cancelled() && (github.event_name == 'workflow_dispatch' || needs.release_build.outputs.version != '') }}
+    # Concurrent runs must not create the project twice. Job-level, so the frequent no-op automatic runs (which skip
+    # this job) never enter the group and cannot displace a pending real run.
+    concurrency:
+      group: publish
+      cancel-in-progress: false
     environment: store-publish
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -44,6 +95,7 @@ jobs:
       actions: read
       deployments: write
     env:
+      STEP: ${{ inputs.step || 'release' }}
       HAS_MODRINTH: ${{ secrets.MODRINTH_TOKEN != '' }}
       HAS_CURSEFORGE: ${{ secrets.CURSEFORGE_TOKEN != '' && vars.CURSEFORGE_ID != '' }}
       # Optional; slug as on CurseForge (Create Aeronautics is only on Modrinth).
@@ -66,7 +118,6 @@ jobs:
           CURSEFORGE_TOKEN: ${{ secrets.CURSEFORGE_TOKEN }}
           CURSEFORGE_ID: ${{ vars.CURSEFORGE_ID }}
           CURSEFORGE_API_KEY: ${{ secrets.CURSEFORGE_API_KEY }}
-          STEP: ${{ inputs.step }}
         run: python3 tools/release_checks.py stores "$STEP"
       - name: Validate store drafts
         run: python3 -m unittest discover -s .github/scripts -p 'test_store*.py' -v
@@ -76,26 +127,24 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           GH_REPO: ${{ github.repository }}
-          VERSION: ${{ inputs.version }}
+          VERSION: ${{ inputs.version || needs.release_build.outputs.version }}
         run: |
           python3 tools/prepare_publish.py
 
       - name: "Modrinth: page"
         id: page
-        if: env.HAS_MODRINTH == 'true' && (inputs.step == 'draft' || (inputs.step == 'release' && inputs.update_page))
+        if: env.HAS_MODRINTH == 'true' && (env.STEP == 'draft' || (env.STEP == 'release' && inputs.update_page))
         env:
           MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
-          STEP: ${{ inputs.step }}
           JAR: ${{ steps.rel.outputs.jar }}
         run: bash .github/scripts/modrinth.sh page "$STEP" "$JAR"
 
       - name: "Modrinth: check selected jar without changing the page"
         id: version
-        if: env.HAS_MODRINTH == 'true' && (inputs.step == 'submit' || (inputs.step == 'release' && !inputs.update_page))
+        if: env.HAS_MODRINTH == 'true' && (env.STEP == 'submit' || (env.STEP == 'release' && !inputs.update_page))
         env:
           MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
           JAR: ${{ steps.rel.outputs.jar }}
-          STEP: ${{ inputs.step }}
         run: bash .github/scripts/modrinth.sh version "$JAR" "$STEP"
 
       # Kira-NT/mc-publish v3.3.1 pinned by commit: receives tokens; stores without tokens skipped.
@@ -117,7 +166,7 @@ jobs:
           dependencies: ${{ env.DEPENDENCIES }}
 
       - name: "Modrinth: submit for review"
-        if: env.HAS_MODRINTH == 'true' && inputs.step == 'submit'
+        if: env.HAS_MODRINTH == 'true' && env.STEP == 'submit'
         env:
           MODRINTH_TOKEN: ${{ secrets.MODRINTH_TOKEN }}
         run: bash .github/scripts/modrinth.sh submit
@@ -125,7 +174,7 @@ jobs:
       # Check and publish each store independently, including after a failure on the other store.
       - name: "CurseForge: check for an existing jar"
         id: curseforge
-        if: ${{ !cancelled() && steps.rel.outcome == 'success' && env.HAS_CURSEFORGE == 'true' && inputs.step != 'draft' }}
+        if: ${{ !cancelled() && steps.rel.outcome == 'success' && env.HAS_CURSEFORGE == 'true' && env.STEP != 'draft' }}
         env:
           CURSEFORGE_ID: ${{ vars.CURSEFORGE_ID }}
           CURSEFORGE_API_KEY: ${{ secrets.CURSEFORGE_API_KEY }}
