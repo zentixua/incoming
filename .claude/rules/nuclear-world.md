@@ -236,8 +236,9 @@ paths:
   `CHUNK_SCAR`; no direct region edits. At most 8 reads and 128 unconfirmed positions; poll all bounded entries so
   completed reads do not wait behind a large queue of idle ones. Admission and polling use the common nuclear clock,
   after player ruins, preparation and fallout. Preparation must be idle; heap pressure and retained ruin data plus
-  worker buffers at half `PLANS_CAP` pause admission (the remainder is for player windows). An idle context is evicted
-  normally, allowing a long pass to resume. `RuinContext.retainedBytes` counts old applied plans as well as snapshots.
+  live-worker buffers at half `PLANS_CAP` pause admission (the remainder is for player windows). An idle context is evicted
+  normally, allowing a long pass to resume. Count live pool threads, not configured cores: idle threads expire
+  after 30 seconds; a fixed 46-thread estimate alone exceeds 256 MiB and would stop a 48-core server forever. `RuinContext.retainedBytes` counts old applied plans as well as snapshots.
   `RuinProgress` saves cursor AND unconfirmed positions: confirm a chunk only after an asynchronous storage read sees
   its scar (reads observe pending vanilla saves). A restart must retry those positions, even when the cursor is ahead.
   Shutdown releases settlement tickets before `StopDrain`; storage reads only return detached headers. No settings.

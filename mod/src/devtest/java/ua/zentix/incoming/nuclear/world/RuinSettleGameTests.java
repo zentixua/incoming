@@ -29,6 +29,15 @@ import java.util.concurrent.CompletableFuture;
 public final class RuinSettleGameTests {
     private RuinSettleGameTests() {}
 
+    /** Isolate older ticket-order tests whose fixture deliberately keeps an existing neighbor unloaded. */
+    public static void manualLoadingOnly(ServerLevel level, int detonation) {
+        RuinProgress progress = RuinProgress.get(level);
+        RuinProgress.Pass pass = progress.pass(detonation);
+        pass.cursor = Long.MAX_VALUE;
+        pass.pending.clear();
+        progress.setDirty();
+    }
+
     /** Real disk-only chunk outside 5 psi: neither a player nor a LOD client ever brings it into memory. */
     @GameTest(template = "range", batch = "nuke_settle_disk", timeoutTicks = 2400, skyAccess = true)
     public static void oldDiskChunkGetsPlannedRuinsWithoutPlayers(GameTestHelper h) {

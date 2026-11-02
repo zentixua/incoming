@@ -150,7 +150,7 @@ public final class NuclearWorld {
 
     /** Leave room for loaded-player work and its background windows before admitting settlement chunks. */
     boolean settleMemoryAvailable(int height) {
-        long bytes = RuinWorkers.bufferBytes(height);
+        long bytes = RuinWorkers.residentBufferBytes(height);
         for (RuinContext ctx : ruins.values()) bytes += ctx.retainedBytes();
         return prep.idle() && bytes < NuclearPrep.PLANS_CAP / 2;
     }

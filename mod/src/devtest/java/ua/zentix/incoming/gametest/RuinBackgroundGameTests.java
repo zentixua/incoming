@@ -793,6 +793,9 @@ public final class RuinBackgroundGameTests {
                 case 1 -> {
                     if (level.getChunkSource().getChunkNow(q.x, q.z) == null) return;
                     det[0] = NuclearWarhead.detonate(level, new Vec3(p.getMinBlockX(), chests[1].getY(), p.getMinBlockZ() + 8.5), 1, false, null, 0.1f);
+                    // This fixture tests ScarQueue's neighbor handoff. Full-zone settlement would intentionally load R
+                    // after the wave, invalidating the deliberately isolated deadlock before holdForTile is exercised.
+                    ua.zentix.incoming.nuclear.world.RuinSettleGameTests.manualLoadingOnly(level, det[0].id());
                     since[0] = now;
                     stage[0] = 2;
                 }
