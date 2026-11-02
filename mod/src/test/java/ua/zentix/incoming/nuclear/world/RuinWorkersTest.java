@@ -9,6 +9,25 @@ import java.util.concurrent.PriorityBlockingQueue;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 class RuinWorkersTest {
+    @Test
+    void expiredPoolThreadsDoNotPermanentlyBlockSettlementOnLargeCoreServers() {
+        var live = new java.util.concurrent.atomic.AtomicInteger(46);
+        var executor = new java.util.concurrent.ThreadPoolExecutor(46, 46, 30, java.util.concurrent.TimeUnit.SECONDS,
+                new java.util.concurrent.LinkedBlockingQueue<>()) {
+            @Override public int getPoolSize() { return live.get(); }
+        };
+        try {
+            org.junit.jupiter.api.Assertions.assertTrue(RuinWorkers.residentBufferBytes(executor, 384) > NuclearPrep.PLANS_CAP / 2);
+            live.set(0); // allowCoreThreadTimeOut releases idle threads and their ThreadLocal solver buffers
+            assertEquals(46, executor.getCorePoolSize());
+            assertEquals(0, RuinWorkers.residentBufferBytes(executor, 384));
+            live.set(8);
+            org.junit.jupiter.api.Assertions.assertTrue(RuinWorkers.residentBufferBytes(executor, 384) < NuclearPrep.PLANS_CAP / 2);
+        } finally {
+            executor.shutdownNow();
+        }
+    }
+
     /**
      * Ruins pool queue: first the tasks of the chunks that the player sees, then the rest near the wave, then the distant ones; inside the
      *  stage - according to setting. The count of level tasks is also removed from the task abandoned before the start.

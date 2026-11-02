@@ -741,6 +741,16 @@ public final class RuinBackgroundGameTests {
      */
     @GameTest(template = "range", timeoutTicks = 1600, batch = "nuke_tile_hold", skyAccess = true)
     public static void tileReleaseHoldsWaitingNeighbours(GameTestHelper h) {
+        waitingNeighbours(h, false);
+    }
+
+    /** A resumed settlement entry must acquire the same neighbor ticket without waiting for its five-minute timeout. */
+    @GameTest(template = "range", timeoutTicks = 1600, batch = "nuke_settle_neighbours", skyAccess = true)
+    public static void settlementHoldsWaitingNeighbours(GameTestHelper h) {
+        waitingNeighbours(h, true);
+    }
+
+    private static void waitingNeighbours(GameTestHelper h, boolean settlement) {
         ServerLevel level = h.getLevel();
         ChunkPos pad = new ChunkPos(h.absolutePos(NuclearGameTests.CENTER));
         ChunkPos q = new ChunkPos(pad.x + 40, pad.z), p = new ChunkPos(q.x + 1, q.z), r = new ChunkPos(q.x + 2, q.z);
@@ -793,6 +803,9 @@ public final class RuinBackgroundGameTests {
                 case 1 -> {
                     if (level.getChunkSource().getChunkNow(q.x, q.z) == null) return;
                     det[0] = NuclearWarhead.detonate(level, new Vec3(p.getMinBlockX(), chests[1].getY(), p.getMinBlockZ() + 8.5), 1, false, null, 0.1f);
+                    // This fixture tests ScarQueue's neighbor handoff. Full-zone settlement would intentionally load R
+                    // after the wave, invalidating the deliberately isolated deadlock before holdForTile is exercised.
+                    ua.zentix.incoming.nuclear.world.RuinSettleGameTests.manualLoadingOnly(level, det[0].id());
                     since[0] = now;
                     stage[0] = 2;
                 }
@@ -818,12 +831,15 @@ public final class RuinBackgroundGameTests {
                     if (now - since[0] < 200) return;
                     waited[0] = scars.diagState(p.toLong(), now);
                     h.assertTrue(scars.waitsNeighbours(p.toLong()), "P is not waiting for neighbors: " + waited[0]);
-                    h.assertTrue(scars.holdForTile(level, p.toLong()), "P did not take a ticket with neighbors");
+                    if (settlement) ua.zentix.incoming.nuclear.world.RuinSettleGameTests.resumeOnly(level, det[0].id(), p);
+                    else h.assertTrue(scars.holdForTile(level, p.toLong()), "P did not take a ticket with neighbors");
                     // chest - place of the plan; a block entity not from vanilla instead: the old states are not the same, the plan is new,
                     //  and a new one is waiting for neighbors r2
                     h.assertTrue(depot.isPresent(), "no create:depot (Create not loaded)");
                     level.setBlock(chests[1], depot.get().defaultBlockState(), 3);
-                    areas.release(level, tile(p));
+                    // Keep the fixture's radius-zero ticket until the pass takes over: an unload/reload would create
+                    // a different queue job with mayHold=true and would no longer reproduce the missing handoff.
+                    if (!settlement) areas.release(level, tile(p));
                     since[0] = now;
                     stage[0] = 5;
                 }

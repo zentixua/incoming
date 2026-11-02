@@ -26,13 +26,14 @@ final class RuinContext {
     /** Chunk fractures: also computed by background tasks ({@link RuinWorkers}), hence shared map. */
     private final java.util.concurrent.ConcurrentHashMap<Long, Blast> blasts = new java.util.concurrent.ConcurrentHashMap<>();
     /** Chunk snapshots (server thread) retained while unfinished plan windows read them. Outside-memory chunks from disk ({@link DiskShots}). */
-    private final Long2ObjectOpenHashMap<ChunkShot> shots = new Long2ObjectOpenHashMap<>();
+    private final it.unimi.dsi.fastutil.longs.Long2ObjectLinkedOpenHashMap<ChunkShot> shots = new it.unimi.dsi.fastutil.longs.Long2ObjectLinkedOpenHashMap<>();
     /**
      * Pre-wave {@code MOTION_BLOCKING} heightmaps (first air) for light-pulse shadow
      * ({@link #lit}) on any thread: in-memory from live chunk (pre-ruin for ruined chunk), others disk.
      * Server-thread writes only, immutable values; missing means no terrain (like unloaded chunk).
      */
     private final java.util.concurrent.ConcurrentHashMap<Long, int[]> heights = new java.util.concurrent.ConcurrentHashMap<>();
+    private long appliedBytes;
     private final Long2ObjectOpenHashMap<Applied> applied = new Long2ObjectOpenHashMap<>();
     private final LongOpenHashSet planned = new LongOpenHashSet(), stood = new LongOpenHashSet();
     /** Last context use (game time), for queue to forget long-idle contexts. */
@@ -73,11 +74,11 @@ final class RuinContext {
         long key = ChunkPos.asLong(cx, cz);
         if (c == null) {
             // outside memory: disk snapshot if read (and property table not reset since)
-            ChunkShot disk = shots.get(key);
+            ChunkShot disk = shots.getAndMoveToLast(key);
             return disk != null && disk.fromDisk() && disk.fresh() ? disk : null;
         }
         Applied a = applied.get(key);
-        ChunkShot s = shots.get(key);
+        ChunkShot s = shots.getAndMoveToLast(key);
         if (s == null || !s.current(c, a)) {
             RuinPlan flash = flashed.get(key);
             // flash layer present but plan forgotten (detonation ruins forgotten/restart): snapshot fire is air
@@ -111,7 +112,7 @@ final class RuinContext {
     boolean beforeFlash(ServerLevel level, LevelChunk chunk) {
         ChunkPos pos = chunk.getPos();
         captureHeights(level, pos.x, pos.z);
-        ChunkShot s = shots.get(pos.toLong());
+        ChunkShot s = shots.getAndMoveToLast(pos.toLong());
         return s != null && !s.fromDisk() && s.current(chunk, applied.get(pos.toLong()));
     }
 
@@ -123,7 +124,7 @@ final class RuinContext {
         long key = chunk.getPos().toLong();
         RuinPlan was = flashed.put(key, plan);
         flashedBytes += plan.bytes() - (was == null ? 0 : was.bytes());
-        ChunkShot s = shots.get(key);
+        ChunkShot s = shots.getAndMoveToLast(key);
         if (s == null) return;
         if (shotCurrent) s.relive(chunk, plan);
         else dropShot(key);
@@ -155,7 +156,7 @@ final class RuinContext {
      */
     void putDisk(ServerLevel level, DiskShots.Read read) {
         long key = read.pos().toLong();
-        ChunkShot now = shots.get(key);
+        ChunkShot now = shots.getAndMoveToLast(key);
         // shadow heights only with snapshot: retained live snapshot already captured in-memory heights
         if (now == null || now.fromDisk() || level.getChunkSource().getChunkNow(read.pos().x, read.pos().z) == null) {
             DiskShots.Read primed = read.primed(Blast.SERVER);
@@ -170,7 +171,7 @@ final class RuinContext {
     /** Plan snapshot exists: fully in-memory chunk or disk read (property table not reset since). */
     boolean shotAvailable(ServerLevel level, long chunk) {
         if (level.getChunkSource().getChunkNow(ChunkPos.getX(chunk), ChunkPos.getZ(chunk)) != null) return true;
-        ChunkShot s = shots.get(chunk);
+        ChunkShot s = shots.getAndMoveToLast(chunk);
         return s != null && s.fromDisk() && s.fresh();
     }
 
@@ -181,6 +182,8 @@ final class RuinContext {
     private static final int PUTS_PER_WINDOW = (2 * RuinPlanner.REACH + 1) * (2 * RuinPlanner.REACH + 1);
     /** Window neighbors being read from disk ({@link #requestWindow}), plus read results not yet taken by server thread. */
     private final LongOpenHashSet reading = new LongOpenHashSet();
+    /** Windows assembling snapshots, awaiting worker admission, or rebuilding on the server thread. */
+    private final LongOpenHashSet pendingWindows = new LongOpenHashSet();
     private final java.util.concurrent.ConcurrentLinkedQueue<DiskShots.Read> reads = new java.util.concurrent.ConcurrentLinkedQueue<>();
     /** Window neighbors not whole on disk (unfinished generation): solid window mass like world edge. */
     private final LongOpenHashSet absent = new LongOpenHashSet();
@@ -204,6 +207,7 @@ final class RuinContext {
 
     /** Same, parse read neighbors at ruin-pool {@code priority}. */
     int requestWindow(ServerLevel level, ChunkPos pos, RuinWorkers.Priority priority) {
+        pendingWindows.add(pos.toLong());
         // read results limited to window per call: server thread builds disk snapshot; while paused, background
         // reads continue, accumulating unlimited results, rest taken by subsequent windows. Only this thread takes them:
         // peeked chunk same as later polled chunk
@@ -264,13 +268,36 @@ final class RuinContext {
     private long shotBytes;
 
     private void putShot(long key, ChunkShot shot) {
-        ChunkShot was = shots.put(key, shot);
+        ChunkShot was = shots.putAndMoveToLast(key, shot);
         shotBytes += shot.bytes - (was == null ? 0 : was.bytes);
     }
 
     void dropShot(long key) {
         ChunkShot was = shots.remove(key);
         if (was != null) shotBytes -= was.bytes;
+    }
+
+    /** Re-readable cache only: keep old changed blocks and shadow heights, and snapshots held by worker grids. */
+    void trimShots(long bytesToFree, WorkClock clock) {
+        long limit = Math.max(0, shotBytes - bytesToFree);
+        int visits = shots.size();
+        while (shotBytes > limit && visits-- > 0 && !shots.isEmpty() && clock.canStart()) {
+            long unit = clock.begin();
+            try {
+                long key = shots.firstLongKey();
+                boolean inUse = false;
+                int x = ChunkPos.getX(key), z = ChunkPos.getZ(key);
+                for (int dx = -RuinPlanner.REACH; !inUse && dx <= RuinPlanner.REACH; dx++)
+                    for (int dz = -RuinPlanner.REACH; !inUse && dz <= RuinPlanner.REACH; dz++)
+                        inUse = tasks.containsKey(ChunkPos.asLong(x + dx, z + dz))
+                                || pendingWindows.contains(ChunkPos.asLong(x + dx, z + dz));
+                if (inUse) shots.getAndMoveToLast(key);
+                else {
+                    dropShot(key);
+                    blasts.remove(key);
+                }
+            } finally { clock.end(unit); }
+        }
     }
 
     /** For tests: discard snapshots/fractures, as detonation ruins starting chunks anew. */
@@ -343,10 +370,13 @@ final class RuinContext {
         return ThermalShadow.visible(d.burst(), p, (x, z) -> height(x, z, minY));
     }
 
-    /**
-     * Bytes retained by detonation snapshots, heightmaps, flash-layer plans (detonation memory, toward plan cap
-     * {@link NuclearPrep#PLANS_CAP}).
-     */
+    /** Conservative retained-plan accounting for long disk settlement passes, including old blocks and marks. */
+    long retainedBytes() {
+        long bytes = shotBytes() + applied.size() * 640L + (planned.size() + stood.size()) * 32L;
+        return bytes + appliedBytes;
+    }
+
+    /** Snapshots, heightmaps and flash-layer plans, toward {@link NuclearPrep#PLANS_CAP}. */
     long shotBytes() {
         return shotBytes + heights.size() * 1100L + flashedBytes;
     }
@@ -427,7 +457,7 @@ final class RuinContext {
     Grid cachedGridForTest(ServerLevel level, ChunkPos centre) {
         ChunkShot[] g = new ChunkShot[Grid.SIDE * Grid.SIDE];
         for (int dz = -Grid.R; dz <= Grid.R; dz++) {
-            for (int dx = -Grid.R; dx <= Grid.R; dx++) g[(dz + Grid.R) * Grid.SIDE + dx + Grid.R] = shots.get(ChunkPos.asLong(centre.x + dx, centre.z + dz));
+            for (int dx = -Grid.R; dx <= Grid.R; dx++) g[(dz + Grid.R) * Grid.SIDE + dx + Grid.R] = shots.getAndMoveToLast(ChunkPos.asLong(centre.x + dx, centre.z + dz));
         }
         captureBand(level, centre);
         RuinPlanner.ensureOwnStates();
@@ -452,6 +482,7 @@ final class RuinContext {
      * false one fracture computed.
      */
     boolean blastsReady(ServerLevel level, ChunkPos pos) {
+        pendingWindows.add(pos.toLong());
         Grid g = grid(level, pos, false);
         for (int k = 0; k < 9; k++) {
             int dx = k % 3 - 1, dz = k / 3 - 1;
@@ -516,6 +547,7 @@ final class RuinContext {
             RuinWorkers.checkStop();
             return RuinPlanner.finish(g, c);
         }, priority), chunkId, level.getGameTime(), priority));
+        pendingWindows.remove(key);
         return true;
     }
 
@@ -631,6 +663,7 @@ final class RuinContext {
 
     /** Chunk unloaded: live-chunk background plan/snapshot invalid (disk-snapshot plan remains valid). */
     void forget(long chunk) {
+        pendingWindows.remove(chunk);
         Task t = tasks.get(chunk);
         if (t != null && t.chunkId != 0) {
             tasks.remove(chunk);
@@ -643,10 +676,12 @@ final class RuinContext {
     void cancelTasks() {
         for (Task t : tasks.values()) t.future.cancel(false);
         tasks.clear();
+        pendingWindows.clear();
     }
 
     /** Chunk plan built: release fractures needed only by surrounding plans. */
     void planned(ChunkPos pos) {
+        pendingWindows.remove(pos.toLong());
         planned.add(pos.toLong());
         forget(pos, 1, planned, k -> blasts.remove(k));
         forget(pos, RuinPlanner.REACH, planned, this::dropShot);
@@ -655,14 +690,24 @@ final class RuinContext {
     /** Chunk ruins applied from plan. */
     void applied(LevelChunk chunk, RuinPlan plan, short[] motion) {
         ChunkPos pos = chunk.getPos();
-        applied.put(pos.toLong(), new Applied(plan, motion));
+        Applied old = applied.put(pos.toLong(), new Applied(plan, motion));
+        appliedBytes += plan.bytes() - (old == null || old.plan == null ? 0 : old.plan.bytes());
+        finished(pos);
+    }
+
+    /** Empty plans also complete their neighbors' old-world retention window. */
+    void finished(ChunkPos pos) {
+        pendingWindows.remove(pos.toLong());
         planned.add(pos.toLong());
         stood.add(pos.toLong());
         forget(pos, 1, stood, k -> blasts.remove(k));
         forget(pos, RuinPlanner.REACH, stood, this::dropShot);
         forget(pos, 2, stood, k -> {
             Applied a = applied.get(k);
-            if (a != null && a.plan != null) applied.put(k, new Applied(null, a.motion));
+            if (a != null && a.plan != null) {
+                appliedBytes -= a.plan.bytes();
+                applied.put(k, new Applied(null, a.motion));
+            }
             // pre-flash world no longer needed: surrounding windows built
             RuinPlan f = flashed.remove(k);
             if (f != null) flashedBytes -= f.bytes();

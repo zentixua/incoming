@@ -353,6 +353,18 @@ public final class RuinWorkers {
         return (long) size * RuinWindow.SIDE * RuinWindow.SIDE * height * 7;
     }
 
+    /**
+     * Conservative buffer estimate for currently live pool threads. Core threads expire after 30 idle seconds;
+     * using configured size here would permanently stop settlement on large-core machines even after they exit.
+     */
+    static long residentBufferBytes(int height) {
+        return residentBufferBytes(pool, height);
+    }
+
+    static long residentBufferBytes(@Nullable ThreadPoolExecutor executor, int height) {
+        return executor == null ? 0 : (long) executor.getPoolSize() * RuinWindow.SIDE * RuinWindow.SIDE * height * 7;
+    }
+
     /** Fraction of thread time busy since pool start (for “ready” line). */
     static double utilisation() {
         if (pool == null) return 0;

@@ -253,6 +253,7 @@ public final class IncomingConfig {
             nukeFarZone = b.comment("When players use Distant Horizons: the heavy-damage zone that is not fully generated on disk (the edge of the explored",
                             "world) is generated in the background behind the wave (at most two 5×5 squares at a time), so the ruins are",
                             "visible from afar at once. Off: ruins appear there only when a player gets there.")
+                    .comment("Existing final-block chunks throughout the ruin zone are always settled in the background, independently of this setting.")
                     .translation("incoming.config.nuke_far_zone").define("far_zone", true);
             nukeRuinThreads = b.comment("How many background threads build ruin plans (breaks, collapse and fill from chunk snapshots, parsing chunks",
                             "from disk). 0: automatic, all cores but three (server thread, rendering, world I/O and generation;", "on a dedicated server all but two), at least one. The mod adjusts how many of them work",

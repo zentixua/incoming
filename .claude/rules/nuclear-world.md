@@ -229,6 +229,42 @@ paths:
   (`RuinContext.applied`).
 
 ## Pitfalls
+- `RuinSettle` settles the entire saved ruin zone after its wave, including `NuclearEvents.past` from old saves,
+  without players or LOD clients. Scan final-block disk chunks (`DiskStatus.blocksFinal`), skip absent/PARTIAL ones;
+  old FINAL/retrogen chunks may need vanilla's asynchronous upgrade generation. Load through `AreaLoader` with
+  non-ticking level-33 tickets, reuse `ScarQueue`, and let vanilla save. Layout is built off-thread in circular
+  distance order (1/16-block distance keys, as in far LOD rings), then consumed by a durable index. Never scan the
+  bounding square row by row: that leaves a north-to-south map seam and delays nearby chunks. `radial` identifies
+  the saved cursor format; an older development cursor restarts at zero while retaining pending positions and
+  checking saved scars (do not overwrite a pending entry/ticket when the new scan revisits it).
+  When less than 64 MiB of admission headroom remains, evict cold, re-readable snapshots and their cached fractures
+  under the same clock, at most 64 MiB from this detonation per pass. Snapshot access order is LRU; active worker windows and windows
+  awaiting disk reads/worker admission are protected. Editor maps prime only four missing-heightmap snapshots per
+  request: dropping each partial batch would livelock the window (`nuke_settle_window`). Preparation gating is
+  separate from memory headroom: another launch must not trigger eviction of a healthy cache. Old changed-block deltas and pre-wave shadow heights stay: re-reading ruined disk chunks uses
+  these deltas to reconstruct the original world (`nuke_settle_cache`). A growing circular frontier otherwise
+  fills the snapshot cache and leaves an idle server at zero admission indefinitely. A held chunk waiting for
+  neighbors takes `ScarQueue.holdForTile` within `tileHoldsLeft`, as in preparation: a job born under another scar's
+  ticket has `mayHold=false`, so a radius-zero settlement ticket alone would stall until timeout. Regression
+  `nuke_settle_neighbours` resumes a completed scan with only such a chunk pending, including a stale Create-block
+  plan needing radius 2; it must finish without waiting for timeout. Even an empty plan needs its saved
+  `CHUNK_SCAR`; no direct region edits. The loading window starts at 8, grows by a quarter per second with spare lane time and low external MSPT,
+  and shrinks by a quarter under pressure. Like workers, external MSPT excludes mod lanes; the threshold is
+  50 minus the common configured work budget, with a 5 ms margin. Available plan memory further limits roots,
+  reserving two uncompressed chunk snapshots (at least 1 MiB) per root; already held work drains when the limit
+  falls. No fixed eight-ticket throughput ceiling. At most 128 reads and 2048 unconfirmed positions; poll all bounded entries so
+  completed reads do not wait behind a large queue of idle ones. Admission and polling use the common nuclear clock,
+  after player ruins, preparation and fallout. Preparation must be idle; heap pressure and retained ruin data plus
+  live-worker buffers at half `PLANS_CAP` limit admission (the remainder is for player windows). An idle context is evicted
+  normally, allowing a long pass to resume. Count live pool threads, not configured cores: idle threads expire
+  after 30 seconds; a fixed 46-thread estimate alone exceeds 256 MiB and would stop a 48-core server forever. `RuinContext.retainedBytes` counts old applied plans as well as snapshots. Empty plans must call
+  `RuinContext.finished` too: otherwise unchanged streets/water leave holes in `stood`, pinning all neighboring
+  old plans until the memory guard throttles a large saved-world pass (`nuke_settle_empty`).
+  `RuinProgress` saves cursor AND unconfirmed positions: confirm a chunk only after an asynchronous storage read sees
+  its scar (reads observe pending vanilla saves). A restart must retry those positions, even when the cursor is ahead.
+  Shutdown releases settlement tickets before `StopDrain`; storage reads only return detached headers. No settings.
+  Regressions: `nuke_settle_disk`, `nuke_settle_restart`, `nuke_settle_budget`, `nuke_settle_load`, `nuke_settle_many`; `RuinSettleTest` checks circular order,
+  cursor restoration/migration and growth/backoff of admission.
 - Bodies not in memory when the pulse or the front crossed their place (`LateExposure`): `PulseJob` and `BlastFront` see only
   loaded entities, so on `EntityJoinLevelEvent` a body loaded from disk is queued for what it missed — `NuclearWarhead.expose`
   with `late` (burns and prompt dose, sickness from the detonation via `RadiationTicker.addDose(…, at)`; no flash panic or
