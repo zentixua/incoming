@@ -191,7 +191,7 @@ class ReleaseTests(unittest.TestCase):
         needs = re.search(r"needs: \[([^\]]*)\]", jobs["ci"])[1].split(", ")
         self.assertEqual(set(needs) - {"changes"}, set(jobs) - {"changes", "ci", "release"})
         script = textwrap.dedent(jobs["ci"].split("run: |\n", 1)[1])
-        mod = ("build", "unit", "gametest", "clean_install")
+        mod = ("build", "unit", "gametest", "lss_gametest", "clean_install")
 
         def passes(release, results):
             def expression(match):
