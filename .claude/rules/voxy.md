@@ -80,14 +80,25 @@ paths:
   for a uniform one); a heavy-zone copy goes to DH `DhUpdates.LEAD` before the front, but Voxy ingests immediately —
   give it a “not before front” deadline (`VoxyLods.send(…, notBefore)`). Regressions: `VoxyLodsTest`, `LodBatchFlowTest`
   and GameTest batch `voxy_backpressure`.
-- LOD Server Support (server) broadcasts chunks on save (hash, every 200 ticks), live or from disk, thus already with
-  ruins, and on client entry replies “unchanged” by timestamp: it leaves the mod's copies alone. Only the client's
-  first check (or after clearing its storage) overwrites them with disk chunks lacking distant ruins: the client
-  detects this through its LSS subscriber (`client/LssVoxyWatch`, subscribes only with Voxy: a subscriber without Voxy
-  would make LSS download LODs) and names the chunks to the server (`C2S.VoxyStale`: client 12 per tick, server accepts
-  up to 256 per second per player); the server resends a copy **only to that player**, and only if it differs from disk
-  (`FarLods.refresh`: ruin plan, trace outside the heavy zone, district darkness). Not to everyone or to DH: their LODs
-  are correct, and the ruin plan is short-lived (`ZONE_HOLD`, restart) — broadcasting a copy without a plan would
-  restore the intact city over ruins in DH's database (review #391). A player absent from the world during the strike
-  will not see distant ruins in Voxy until approaching (DH stores them in the server's DH database). Packets are not
-  ingested during Flashback replay (Voxy shows the live database there).
+- LOD Server Support 0.19/0.20 (server) observes `ChunkSerializer.write` at RETURN, not block-change events:
+  `ChunkSaveDataHook` → `ServerReceiverGlue.onChunkSaveData` → `DirtyContentFilter.observeSave`. It hashes serialized
+  block states, biomes and light. A changed observation marks the column dirty and immediately deletes its old store
+  row; `DirtyColumnBroadcaster` drains marks every 200 ticks by default, invalidates timestamps/store/in-flight reads,
+  and notifies clients to request fresh data. Incoming's direct section writes already set `setUnsaved(true)`;
+  missing `setBlock` events alone do not bypass this path. A store miss is normal after an edit: fresh data is
+  deposited by LSS's delivery path, not by the save hook. Count changed columns, not all loaded/scar-marked chunks.
+  Load-time hash seeding is a baseline, not a comparison against SQLite: loading a previously stale saved column
+  does not itself prove the stored row has been repaired. Do not promise that every save/store hit contains ruins.
+  LSS exposes a public client API, but no public server column-invalidation API in these versions. Do not invoke its
+  networking/filter/store implementation from Incoming main code or synthesize saves just to trip its mixin.
+  Integration checks (`-PwithLss`, batches `lss_.*`) use the real optional LSS runtime, save hook and SQLite store;
+  test-only implementation calls arrange/inspect fixtures and are excluded from the release jar.
+- Speculative distant ruin copies can still be overwritten by LSS before the world chunk is settled. The client
+  detects this through `client/LssVoxyWatch` (subscribes only with Voxy: without it a subscriber would make LSS
+  download LODs) and reports chunks through `C2S.VoxyStale` (client 12/tick, server 256/second/player). The server
+  resends a copy only to that player, and only if it differs from disk (`FarLods.refresh`: ruin plan, trace outside
+  the heavy zone, district darkness). Never broadcast that repair to DH/other players: without the short-lived plan
+  it could restore intact terrain over their correct ruins. `RuinSettle` now writes saved-zone ruins into vanilla
+  chunks without a player visit; later clients depend on LSS's ordinary save/store invalidation. This must be tested
+  separately from Incoming's immediate copy delivery. Packets are not ingested during Flashback replay (Voxy shows
+  the live database there).

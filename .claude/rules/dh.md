@@ -58,7 +58,10 @@ paths:
   `TerrainTiles.stats()` (`target-map` scenario logs it). API readiness and loaded DH worlds come from events
   (`DhApiAfterDhInitEvent`, `DhApiLevelLoadEvent`/`…Unload`); the mod targets API 7 (`DhApi.getApiMajorVersion() == 7`),
   other major versions disable the DH layer; `mods.toml` has optional dependency `distanthorizons` (`dh_version_range`).
-- The same path (`DhUpdates`) also sends changes to players' Voxy LODs — `voxy.md`.
+- The same path (`DhUpdates`) also sends changes to players' Voxy LODs — `voxy.md`. LSS's persistent server store is
+  a separate path: its save hook hashes live section/biome/light bytes and invalidates changed rows before dirty
+  broadcasts. Do not infer store freshness from an Incoming copy being delivered. See `voxy.md` and the optional
+  `lss_.*` GameTests (`-PwithLss`) for real-store checks.
 - Distant Horizons builds LODs for chunks outside the world itself (its generator reads region files with lit lamps)
   and updates on chunk load. Thus the mod supplies DH with extinguished or relit districts and nuclear ruins behind
   the wave for chunks outside the world within `FarLods.FAR_CHUNKS` of a player: a disk-chunk copy with grid-correct

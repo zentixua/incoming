@@ -31,6 +31,7 @@ configurations {
     devtestImplementation.extendsFrom implementation
     // effects sandbox mods (copyRuntimeMods_scenario with INCOMING_SANDBOX)
     sandboxMods { transitive = false }
+    lssGameTestMods { transitive = false }
 }
 
 repositories {
@@ -193,6 +194,7 @@ neoForge {
         }
         gameTestServer {
             type = 'gameTestServer'
+            if (project.hasProperty('withLss')) systemProperty 'lss.test.integratedServer', 'true'
             gameDirectory = project.file('run/gametest')
             systemProperty 'neoforge.enabledGameTestNamespaces', project.mod_id
             // own share of batches on the CI machine: -PgametestShard=i/n (devtest GameTestShards); without the
@@ -257,6 +259,8 @@ dependencies {
     jarJar("dev.ryanhcode.sable-companion:sable-companion-common-${minecraft_version}") {
         version { strictly "[${sable_companion_version},2.0)"; prefer sable_companion_version }
     }
+
+    if (project.hasProperty('withLss')) lssGameTestMods "maven.modrinth:lod-server-support:${project.findProperty('lssTestVersion') ?: lss_version}"
 
     sandboxMods "dev.ryanhcode.sable-companion:sable-companion-common-${minecraft_version}:${sable_companion_version}"
 
@@ -368,6 +372,7 @@ def copyRuntimeMods = { String runDir ->
         // sandbox — without Create and Sable (starts in seconds); sable-companion is not embedded in dev — its jar sits
         // next to it
         if (sandbox && runDir == 'scenario') from(configurations.sandboxMods)
+        if (runDir == 'gametest' && project.hasProperty('withLss')) from(configurations.lssGameTestMods)
         def patterns = runDir == 'scenario' ? (sandbox ? [] : runtimeModPatterns) + shaderModPatterns + dhModPatterns + voxyModPatterns + lssModPatterns
                 : runDir in ['gametest', 'scenario-sweep', 'scenario-record'] ? runtimeModPatterns + lithiumModPatterns : runtimeModPatterns
         // without from() patterns it would take the whole mods directory; the patterns are in this from(): in the

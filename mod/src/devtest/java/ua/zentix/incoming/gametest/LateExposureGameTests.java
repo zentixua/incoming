@@ -10,6 +10,7 @@ import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 import ua.zentix.incoming.Incoming;
+import ua.zentix.incoming.IncomingConfig;
 import ua.zentix.incoming.nuclear.Detonation;
 import ua.zentix.incoming.nuclear.NuclearEvents;
 import ua.zentix.incoming.nuclear.NuclearStrikes;
@@ -55,6 +56,11 @@ public final class LateExposureGameTests {
 
     @GameTest(template = "range", timeoutTicks = 200, batch = "nuke_late_bodies", skyAccess = true)
     public static void bodiesLoadedAfterTheDetonationReceiveIt(GameTestHelper h) {
+        // Saved-zone settlement can lay ordinary ground fire under the herd while exposure is queued.
+        // This fixture tests past pulse/wave damage, independently of aftermath fire (inFire).
+        boolean fires = IncomingConfig.SERVER.nukeFires.get();
+        IncomingConfig.SERVER.nukeFires.set(false);
+        StrikeGameTests.afterTest(h, () -> IncomingConfig.SERVER.nukeFires.set(fires));
         ServerLevel level = h.getLevel();
         NuclearWorld world = NuclearWorld.get(level);
         List<Mob> late = new ArrayList<>(), born = new ArrayList<>();
@@ -84,14 +90,14 @@ public final class LateExposureGameTests {
                     h.assertTrue(m.getRemainingFireTicks() <= 0, "clothes caught fire long after the flash");
                 }
                 for (Mob m : born) {
-                    h.assertTrue(m.isAlive() && m.getHealth() == m.getMaxHealth(), "a cow born after the detonation was hit");
+                    h.assertTrue(m.isAlive() && m.getHealth() == m.getMaxHealth(), "a cow born after the detonation was hit: " + damage(m));
                     h.assertTrue(RadiationTicker.dose(m).doseGy() == 0 && !m.hasEffect(ModEffects.BURNS), "a cow born after the detonation got light or dose");
                     // loading it again later brings nothing either: it is marked
                     world.onEntityJoin(level, m, true);
                 }
                 h.runAfterDelay(20, () -> {
                     try {
-                        for (Mob m : born) h.assertTrue(m.isAlive() && m.getHealth() == m.getMaxHealth(), "a born cow was hit on reload");
+                        for (Mob m : born) h.assertTrue(m.isAlive() && m.getHealth() == m.getMaxHealth(), "a born cow was hit on reload: " + damage(m));
                         h.succeed();
                     } finally {
                         for (Mob m : born) m.discard();
@@ -105,6 +111,12 @@ public final class LateExposureGameTests {
                 throw e;
             }
         });
+    }
+
+    private static String damage(Mob mob) {
+        return "health=" + mob.getHealth() + " alive=" + mob.isAlive() + " at=" + mob.position()
+                + " fire=" + mob.getRemainingFireTicks() + " source="
+                + (mob.getLastDamageSource() == null ? "none" : mob.getLastDamageSource().getMsgId());
     }
 
     /**
