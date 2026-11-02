@@ -27,6 +27,10 @@ Final code head: `1de4d8021d1cbae1084d6be925d43e40c4a284df`. `./gradlew --daemon
 
 The original final-head attempt failed `nuke_late_bodies` twice. A local diagnostic reproduction identified ordinary `inFire` damage to a born cow (health 9, fire ticks 148), not duplicate pulse/wave exposure. Saved-zone settlement can ignite the synthetic herd's ground. The fixture now disables `nukeFires` only within that test and restores it through `afterTest`; health/dose/burn assertions remain. Both late-exposure tests pass locally after the fix, with unchanged production code. Before/after logs are included.
 
+## Final CI
+
+Required Итог is green on head `1de4d8021d1cbae1084d6be925d43e40c4a284df`: https://github.com/zentixua/incoming/actions/runs/41431592513, attempt 2. All six ordinary GameTest shards, both LSS versions, build/unit checks and clean NeoForge installation passed. A `loiterHitsMovingTarget` failure on the final head passed when shard 4/6 was rerun; no flight code was changed. The preceding late-exposure ground-fire failure was reproduced and fixed in the fixture, not waived by rerunning.
+
 ## Limitations and upstream handoff
 
 No multiplayer client was launched, no large live-world reproduction was attempted, and the original incident remains unresolved. No supported public server invalidation API was found in either LSS release. A command invocation, implementation call or synthetic-save integration would exceed the requested compatibility boundary without a proven cause. `upstream-issue.md` is exact proposed issue text, not an issue posted on the user's behalf.
