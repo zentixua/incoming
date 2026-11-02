@@ -232,7 +232,11 @@ paths:
 - `RuinSettle` settles the entire saved ruin zone after its wave, including `NuclearEvents.past` from old saves,
   without players or LOD clients. Scan final-block disk chunks (`DiskStatus.blocksFinal`), skip absent/PARTIAL ones;
   old FINAL/retrogen chunks may need vanilla's asynchronous upgrade generation. Load through `AreaLoader` with
-  non-ticking level-33 tickets (8 held), reuse `ScarQueue`, and let vanilla save. Even an empty plan needs its saved
+  non-ticking level-33 tickets (8 held), reuse `ScarQueue`, and let vanilla save. A held chunk waiting for
+  neighbors takes `ScarQueue.holdForTile` within `tileHoldsLeft`, as in preparation: a job born under another scar's
+  ticket has `mayHold=false`, so a radius-zero settlement ticket alone would stall until timeout. Regression
+  `nuke_settle_neighbours` resumes a completed scan with only such a chunk pending, including a stale Create-block
+  plan needing radius 2; it must finish without waiting for timeout. Even an empty plan needs its saved
   `CHUNK_SCAR`; no direct region edits. At most 8 reads and 128 unconfirmed positions; poll all bounded entries so
   completed reads do not wait behind a large queue of idle ones. Admission and polling use the common nuclear clock,
   after player ruins, preparation and fallout. Preparation must be idle; heap pressure and retained ruin data plus

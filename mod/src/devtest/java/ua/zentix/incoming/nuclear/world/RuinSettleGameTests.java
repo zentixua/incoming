@@ -38,6 +38,15 @@ public final class RuinSettleGameTests {
         progress.setDirty();
     }
 
+    /** Model a restarted scan with only this already-queued chunk still unconfirmed on disk. */
+    public static void resumeOnly(ServerLevel level, int detonation, ChunkPos chunk) {
+        RuinProgress progress = RuinProgress.get(level);
+        RuinProgress.Pass pass = progress.pass(detonation);
+        pass.cursor = Long.MAX_VALUE;
+        pass.pending.add(chunk.toLong());
+        progress.setDirty();
+    }
+
     /** Real disk-only chunk outside 5 psi: neither a player nor a LOD client ever brings it into memory. */
     @GameTest(template = "range", batch = "nuke_settle_disk", timeoutTicks = 2400, skyAccess = true)
     public static void oldDiskChunkGetsPlannedRuinsWithoutPlayers(GameTestHelper h) {

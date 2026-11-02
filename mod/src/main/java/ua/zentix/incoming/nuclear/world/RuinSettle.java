@@ -76,11 +76,16 @@ final class RuinSettle {
                 if (e.held) {
                     LevelChunk chunk = NuclearTickets.inMemory(level, e.pos.toLong());
                     if (chunk != null) {
-                        NuclearWorld.get(level).scars().offer(chunk, detonation);
+                        ScarQueue scars = NuclearWorld.get(level).scars();
+                        scars.offer(chunk, detonation);
                         if (chunk.getExistingData(ModAttachments.CHUNK_SCAR).orElse(0) >= detonation.id()) {
                             e.applied = true;
                             release(level, e);
                             holding--;
+                        } else if (scars.waitsNeighbours(e.pos.toLong()) && scars.tileHoldsLeft() > 0) {
+                            // A job loaded under another scar's neighbor ticket cannot acquire its own by default.
+                            // Give it the normal bounded handoff, otherwise every settlement slot can wait forever.
+                            scars.holdForTile(level, e.pos.toLong());
                         }
                     }
                 }
