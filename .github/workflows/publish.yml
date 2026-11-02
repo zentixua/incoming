@@ -35,11 +35,6 @@ on:
         type: boolean
         default: false
 
-# Concurrent runs must not create the project twice.
-concurrency:
-  group: publish
-  cancel-in-progress: false
-
 permissions:
   contents: read
 
@@ -87,6 +82,11 @@ jobs:
     needs: release_build
     # !cancelled(): on a manual run release_build is skipped, and the implicit success() would skip this job too.
     if: ${{ !cancelled() && (github.event_name == 'workflow_dispatch' || needs.release_build.outputs.version != '') }}
+    # Concurrent runs must not create the project twice. Job-level, so the frequent no-op automatic runs (which skip
+    # this job) never enter the group and cannot displace a pending real run.
+    concurrency:
+      group: publish
+      cancel-in-progress: false
     environment: store-publish
     runs-on: ubuntu-latest
     timeout-minutes: 15
