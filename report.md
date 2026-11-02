@@ -19,6 +19,14 @@ Pinned compile/runtime ID `ydDRzPcM` is LSS 0.19.0 NeoForge 1.21.1. Additional t
 
 These are small CPU-only synthetic fixtures, not a performance guarantee for 367,000 detailed city chunks. Nuclear-work timings exclude LSS's save hook; overall test MSPT includes the deliberate game-pace test parking. No production per-chunk work was added, so no additional runtime pacing cost is introduced by this PR.
 
+## Final validation
+
+Final code head: `1de4d8021d1cbae1084d6be925d43e40c4a284df`. `./gradlew --daemon build -PmcModsDir=run/ruinlss/runtime -PtestForks=4` passed: 1740 unit tests, zero failures/errors/skips, no compiler warnings. Prior full builds also passed. The final-head build passed in 4m 34s. Final bare-runtime GameTest passed after the optional-type isolation fix. Both independent review results contain no serious findings; the follow-up review covered the test-discovery and release-dependency fixes.
+
+## CI fixture isolation discovered during validation
+
+The original final-head attempt failed `nuke_late_bodies` twice. A local diagnostic reproduction identified ordinary `inFire` damage to a born cow (health 9, fire ticks 148), not duplicate pulse/wave exposure. Saved-zone settlement can ignite the synthetic herd's ground. The fixture now disables `nukeFires` only within that test and restores it through `afterTest`; health/dose/burn assertions remain. Both late-exposure tests pass locally after the fix, with unchanged production code. Before/after logs are included.
+
 ## Limitations and upstream handoff
 
 No multiplayer client was launched, no large live-world reproduction was attempted, and the original incident remains unresolved. No supported public server invalidation API was found in either LSS release. A command invocation, implementation call or synthetic-save integration would exceed the requested compatibility boundary without a proven cause. `upstream-issue.md` is exact proposed issue text, not an issue posted on the user's behalf.

@@ -1,6 +1,8 @@
-Серьёзных замечаний по поведению, аварийным завершениям или бюджету тика/памяти не обнаружено.
+English translation of the independent follow-up review result. The original response is retained locally.
 
-- Перенос в `Checks` убирает LSS-типы из сигнатур сканируемого класса; проверено по исходникам регистрации NeoForge и существующему байткоду.
-- Добавление `lss_gametest` согласовано с зависимостями и условиями итоговой проверки CI.
+No serious findings concerning behavior, crashes, or tick/memory budgets.
 
-Ревью выполнено только чтением. Файлы не менял, сборки и тесты не запускал.
+- Moving implementation methods into Checks removes LSS types from the scanned holder's signatures; checked against NeoForge registration source and existing bytecode.
+- Adding lss_gametest agrees with the dependencies and conditions in the aggregate CI check.
+
+Read-only review. No files were changed; builds and tests were not run.

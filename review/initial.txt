@@ -1,3 +1,5 @@
-Серьёзных замечаний по diff не обнаружено: блокирующих ошибок поведения, падений или нарушений бюджета тика/памяти не выявлено.
+English translation of the independent review result. The original response is retained locally.
 
-Проверка статическая, включая окружающий код и API обеих версий LSS. Файлы не изменял, сборки и тесты не запускал.
+No serious findings in the diff: no blocking behavior errors, crashes, or tick/memory-budget violations were identified.
+
+Static review, including surrounding code and APIs of both LSS versions. No files were changed; builds and tests were not run.
