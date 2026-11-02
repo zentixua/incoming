@@ -478,9 +478,9 @@ jobs:
   release:
     name: Релиз
     needs: ci
-    # always(): a reused release skips build/unit/GameTest, and the implicit success() also checks
+    # !cancelled(): a reused release skips build/unit/GameTest, and the implicit success() also checks
     # those transitive needs, so without it the release job is skipped even when “Итог” is green.
-    if: always() && needs.ci.result == 'success' && github.event_name == 'workflow_dispatch' && inputs.release && inputs.gametest_only == '' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/claude/release-'))
+    if: !cancelled() && needs.ci.result == 'success' && github.event_name == 'workflow_dispatch' && inputs.release && inputs.gametest_only == '' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/claude/release-'))
     runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:

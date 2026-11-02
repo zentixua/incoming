@@ -187,7 +187,7 @@ class ReleaseTests(unittest.TestCase):
         self.assertRegex(jobs["release"], r"needs: ci\n")
         self.assertIn("needs.ci.result == 'success'", jobs["release"])
         # Implicit success() also sees the build/unit/GameTest jobs a reused release skips (3.10.3 run 41404224487).
-        self.assertRegex(jobs["release"], r"\n    if: always\(\) && ")
+        self.assertRegex(jobs["release"], r"\n    if: !cancelled\(\) && ")
         needs = re.search(r"needs: \[([^\]]*)\]", jobs["ci"])[1].split(", ")
         self.assertEqual(set(needs) - {"changes"}, set(jobs) - {"changes", "ci", "release"})
         script = textwrap.dedent(jobs["ci"].split("run: |\n", 1)[1])
