@@ -16,7 +16,7 @@ import java.util.function.DoubleSupplier;
  * they were torn away: pieces and dust travel tens of blocks, over which pressure barely changes (⚠ approximation).
  * <p>
  * No wind ahead of the front: air behind the shock is always slower than the shock itself, but the distant game front travels at
- * {@code nuclear.wave_speed} (default 0.2 of sound speed, {@link Detonation#wave}), while wind and phase are real, so air in a strong
+ * {@code nuclear.wave_speed} (default 0.25 of sound speed, {@link Detonation#wave}), while wind and phase are real, so air in a strong
  * wave would overtake the front. Thus wind is capped at game front speed, displacement cannot pass the front, and wind does not act on anything already
  * ahead of it (⚠ not physical — consequence of game wave speed; changes nothing for a wave at real speed).
  * <p>

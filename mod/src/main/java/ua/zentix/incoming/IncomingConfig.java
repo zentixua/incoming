@@ -30,7 +30,7 @@ public final class IncomingConfig {
      * Distant nuclear-wave speed in {@link ScalePreset#GAME}, as a fraction of sound speed: not physical — the server
      * has more time for ruins, and the rolling wall is visible (Artem's decision, 18.10; used on his servers).
      */
-    public static final double GAME_WAVE_SPEED = 0.20;
+    public static final double GAME_WAVE_SPEED = 0.25;
 
     /**
      * Scale preset (a map-scale setting): flight speed, distant nuclear-wave speed and nuclear radii
@@ -150,7 +150,7 @@ public final class IncomingConfig {
 
         Server(ModConfigSpec.Builder b) {
             b.translation("incoming.config.scale").push("scale");
-            scalePreset = b.comment("GAME (default): game flight speeds and heights, full nuclear radii, distant nuclear wave at 0.20 of sound speed.",
+            scalePreset = b.comment("GAME (default): game flight speeds and heights, full nuclear radii, distant nuclear wave at 0.25 of sound speed.",
                             "REAL: reference flight speeds and heights, full nuclear radii and physical wave timing. Flight and air defense use a game model.",
                             "CUSTOM uses flight_speed, nuclear.wave_speed and nuclear.effects_scale as set; effects_scale below 1 shrinks nuclear effects.")
                     .translation("incoming.config.scale_preset").defineEnum("scale_preset", ScalePreset.GAME);
@@ -226,7 +226,7 @@ public final class IncomingConfig {
             nukeEffectsScale = b.comment("Works with scale.scale_preset = CUSTOM. Scale of all radii: 1.0 is true to life (1 block = 1 m); lower for small worlds.")
                     .translation("incoming.config.nuke_effects_scale").defineInRange("effects_scale", 1.0, 0.005, 1.0);
             nukeWaveSpeed = b.comment("Works with scale.scale_preset = CUSTOM. Speed of the blast wave and its dust wall away from the fireball,",
-                            "as a share of the speed of sound (1.0 is true to life, 0.20 is the GAME preset). Lower is not true to life: it",
+                            "as a share of the speed of sound (1.0 is true to life, 0.25 is the GAME preset). Lower is not true to life: it",
                             "gives the server more time to build ruins ahead of the wave and lets players watch the wall roll in. Near the",
                             "fireball the wave is always true to life; beyond the dust wall only the sound travels on, at the speed of sound.")
                     .translation("incoming.config.nuke_wave_speed").defineInRange("wave_speed", GAME_WAVE_SPEED, 0.15, 1.0);
