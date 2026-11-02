@@ -80,8 +80,9 @@ paths:
   for a uniform one); a heavy-zone copy goes to DH `DhUpdates.LEAD` before the front, but Voxy ingests immediately —
   give it a “not before front” deadline (`VoxyLods.send(…, notBefore)`). Regressions: `VoxyLodsTest`, `LodBatchFlowTest`
   and GameTest batch `voxy_backpressure`.
-- LOD Server Support (server) broadcasts chunks on save (hash, every 200 ticks), live or from disk, thus already with
-  ruins, and on client entry replies “unchanged” by timestamp: it leaves the mod's copies alone. Only the client's
+- LOD Server Support detects changes at chunk serialization for saving and broadcasts dirty positions (by default
+  every 200 ticks). This does not guarantee freshness of every stored ruin column; verify its load-seeded content
+  filter and save/store invalidation path, rather than assuming direct section writes are observed. Only the client's
   first check (or after clearing its storage) overwrites them with disk chunks lacking distant ruins: the client
   detects this through its LSS subscriber (`client/LssVoxyWatch`, subscribes only with Voxy: a subscriber without Voxy
   would make LSS download LODs) and names the chunks to the server (`C2S.VoxyStale`: client 12 per tick, server accepts
