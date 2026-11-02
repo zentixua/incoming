@@ -11,7 +11,7 @@ import ua.zentix.incoming.strike.ServerActions;
  * incompatible change, letting NeoForge report different mod versions instead of crashing.
  */
 public final class IncomingNetwork {
-    public static final String PROTOCOL = "50";
+    public static final String PROTOCOL = "51";
 
     private IncomingNetwork() {}
 
