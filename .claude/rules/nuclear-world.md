@@ -229,6 +229,9 @@ paths:
   (`RuinContext.applied`).
 
 ## Pitfalls
+- Full-zone settlement must use the normal ruin queue and vanilla chunk saving, independently of LOD clients.
+  Keep admission bounded and below player work; persist progress only after the corresponding chunk data is saved.
+  Old retained detonations need the same pass on upgrade, including those in `NuclearEvents.past`.
 - Bodies not in memory when the pulse or the front crossed their place (`LateExposure`): `PulseJob` and `BlastFront` see only
   loaded entities, so on `EntityJoinLevelEvent` a body loaded from disk is queued for what it missed — `NuclearWarhead.expose`
   with `late` (burns and prompt dose, sickness from the detonation via `RadiationTicker.addDose(…, at)`; no flash panic or
