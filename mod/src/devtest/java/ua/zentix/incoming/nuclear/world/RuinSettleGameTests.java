@@ -236,7 +236,7 @@ public final class RuinSettleGameTests {
     }
 
     /** A grass field with an exposed glass wall; allocated as chunk data, never installed in the live world. */
-    private static LevelChunk fixture(ServerLevel level, ChunkPos pos, int ground) {
+    static LevelChunk fixture(ServerLevel level, ChunkPos pos, int ground) {
         LevelChunk chunk = new LevelChunk(level, pos);
         for (int x = 0; x < 16; x++) for (int z = 0; z < 16; z++) {
             for (int y = level.getMinBuildHeight(); y < ground; y++) chunk.getSection(chunk.getSectionIndex(y)).setBlockState(x, y & 15, z, Blocks.STONE.defaultBlockState(), false);
@@ -253,6 +253,10 @@ public final class RuinSettleGameTests {
     /** Sustained, saved-world pass across a 10 by 10 field with glass structures, with bounded I/O and tickets. */
     @GameTest(template = "range", batch = "nuke_settle_many", timeoutTicks = 3000, skyAccess = true)
     public static void wholeSavedAreaSettles(GameTestHelper h) {
+        wholeSavedAreaSettles(h, false);
+    }
+
+    static void wholeSavedAreaSettles(GameTestHelper h, boolean checkLss) {
         StrikeGameTests.gameSpeed(h);
         ServerLevel level = h.getLevel();
         ChunkPos pad = new ChunkPos(h.absolutePos(new BlockPos(32, 1, 32)));
@@ -261,20 +265,30 @@ public final class RuinSettleGameTests {
         Detonation d = new Detonation(events.nextId(), new Vec3(center.getMiddleBlockX() - 130, 65, center.getMiddleBlockZ()),
                 65, 7, true, level.getGameTime() - 10000, 0, 0, 20000, 42, 0.1f, false, 1, 0, false);
         java.util.List<ChunkPos> targets = new java.util.ArrayList<>();
+        LssSettleCheck lss = checkLss ? new LssSettleCheck(h) : null;
         for (int x = -5; x < 5; x++) for (int z = -5; z < 5; z++) {
             ChunkPos pos = new ChunkPos(center.x + x, center.z + z);
             targets.add(pos);
-            level.getChunkSource().chunkMap.write(pos, ChunkSerializer.write(level, fixture(level, pos, 64)));
+            LevelChunk source = fixture(level, pos, 64);
+            level.getChunkSource().chunkMap.write(pos, ChunkSerializer.write(level, source));
+            if (lss != null) lss.add(source);
         }
-        events.past().add(d);
-        events.setDirty();
+        boolean[] started = {false};
         StrikeGameTests.afterTest(h, () -> { events.past().remove(d); events.setDirty(); NuclearWorld.get(level).clear(level); });
-        long began = System.nanoTime();
+        long[] began = {System.nanoTime()};
         long[] cost = {0, 0};
         int[] ticks = {0}, confirmed = {0};
         java.util.ArrayDeque<ChunkPos> remaining = new java.util.ArrayDeque<>(targets);
         java.util.Map<ChunkPos, CompletableFuture<Optional<CompoundTag>>> reads = new java.util.LinkedHashMap<>();
         h.onEachTick(() -> {
+            if (!started[0]) {
+                if (lss != null && !lss.ready()) return;
+                events.past().add(d);
+                events.setDirty();
+                began[0] = System.nanoTime();
+                started[0] = true;
+            }
+            if (lss != null) lss.sample();
             long took = java.util.Arrays.stream(NuclearWorld.get(level).lastNanos()).sum();
             cost[0] += took;
             cost[1] = Math.max(cost[1], took);
@@ -284,8 +298,10 @@ public final class RuinSettleGameTests {
                 var e = iterator.next();
                 if (!e.getValue().isDone()) continue;
                 CompoundTag tag = e.getValue().join().orElseThrow();
-                if (tag.getCompound(AttachmentHolder.ATTACHMENTS_NBT_KEY).getInt("incoming:chunk_scar") >= d.id()) confirmed[0]++;
-                else remaining.addLast(e.getKey());
+                if (tag.getCompound(AttachmentHolder.ATTACHMENTS_NBT_KEY).getInt("incoming:chunk_scar") >= d.id()) {
+                    confirmed[0]++;
+                    if (lss != null) lss.saved(e.getKey());
+                } else remaining.addLast(e.getKey());
                 iterator.remove();
             }
             while (reads.size() < 4 && !remaining.isEmpty()) {
@@ -294,8 +310,9 @@ public final class RuinSettleGameTests {
             }
             if (confirmed[0] < targets.size()) return;
             Incoming.LOG.info("SETTLEBENCH chunks={} wallMs={} ticks={} nuclearTotalMs={} nuclearMeanMs={} nuclearMaxMs={}",
-                    confirmed[0], (System.nanoTime() - began) / 1_000_000, ticks[0], cost[0] / 1_000_000.0,
+                    confirmed[0], (System.nanoTime() - began[0]) / 1_000_000, ticks[0], cost[0] / 1_000_000.0,
                     cost[0] / 1_000_000.0 / ticks[0], cost[1] / 1_000_000.0);
+            if (lss != null) lss.report();
             h.succeed();
         });
     }
