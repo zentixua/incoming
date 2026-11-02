@@ -1,0 +1,10 @@
+allprojects {
+    afterEvaluate {
+        sourceSets.devtest.java.srcDir project.file('run/ruinzone/bench-src')
+        neoForge.runs.server {
+            jvmArgument '-Xmx8g'
+            jvmArgument '-XX:ActiveProcessorCount=12'
+            systemProperty 'incoming.settleBench', 'true'
+        }
+    }
+}

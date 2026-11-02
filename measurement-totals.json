@@ -1,0 +1,19 @@
+{
+  "complete_chunks": 85849,
+  "active_wall_seconds": 913.001474116,
+  "raw_complete_chunks_per_second": 94.02942101831982,
+  "final_head_complete": {
+    "seconds": 468.001474116,
+    "cursor": 484901,
+    "saved": 39440
+  },
+  "final_head_city_interval": {
+    "seconds": 319.967921176,
+    "cursor": 115615,
+    "saved": 36604
+  },
+  "city_chunks_per_second": 114.39896807613343,
+  "empty_positions_per_second": 2560.0017536296446,
+  "modeled_saved_seconds_per_chunk": 0.00881922786980999,
+  "projected_385k_seconds": 3434.4265312700904
+}

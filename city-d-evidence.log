@@ -1,0 +1,31 @@
+[11:33:40] [Server thread/INFO] [ua.ze.in.Incoming/]: CITYBENCH resume cursor=40160 pending=2048 confirmedBefore=38112
+[11:33:40] [Server thread/INFO] [ua.ze.in.Incoming/]: CITYBENCH start id=1 cores=12 maxHeapMiB=8192 radius=6275.78925911954
+[11:33:50] [Server thread/INFO] [ua.ze.in.Incoming/]: CITYBENCH memory shotsMiB=115 appliedMiB=1 liveHeapMiB=916
+[11:33:50] [Server thread/INFO] [ua.ze.in.Incoming/]: CITYBENCH progress saved=698 loaded=749 limit=25 held=25 totalConfirmed=38810
+[11:33:50] [Server thread/INFO] [ua.ze.in.Incoming/]: CITYBENCH seconds=10.006596186 cursor=40851 pending=2041 complete=false msptMean=17.017886505 msptP95=33.081619 msptMax=56.601412 nuclearMean=4.366193515 nuclearMax=26.363398 heapMiB=1797 peakHeapMiB=2262 retainedMiB=176
+[11:34:00] [Server thread/INFO] [ua.ze.in.Incoming/]: CITYBENCH memory shotsMiB=121 appliedMiB=3 liveHeapMiB=957
+[11:34:00] [Server thread/INFO] [ua.ze.in.Incoming/]: CITYBENCH progress saved=1797 loaded=1840 limit=25 held=25 totalConfirmed=39909
+[11:34:00] [Server thread/INFO] [ua.ze.in.Incoming/]: CITYBENCH seconds=20.009136361 cursor=41957 pending=2048 complete=false msptMean=19.767310945000002 msptP95=49.016636 msptMax=56.601412 nuclearMean=4.2524738425 nuclearMax=26.363398 heapMiB=1408 peakHeapMiB=2489 retainedMiB=185
+[11:34:10] [Server thread/INFO] [ua.ze.in.Incoming/]: Mod work over 30 s: server tick avg 16.3 ms (max 54.8), of which mod lanes avg — impacts 0.0, nuke 3.8, blackout 0.0 ms; the rest (vanilla, other mods) 12.5 ms; impact early window 47.3% of ticks, early avg 0.0 ms, late avg 0.0 ms; mandatory unload debt 89.2% of ticks
+[11:34:10] [Server thread/INFO] [ua.ze.in.Incoming/]: CITYBENCH memory shotsMiB=110 appliedMiB=5 liveHeapMiB=904
+[11:34:10] [Server thread/INFO] [ua.ze.in.Incoming/]: CITYBENCH progress saved=2910 loaded=2950 limit=24 held=24 totalConfirmed=41022
+[11:34:10] [Server thread/INFO] [ua.ze.in.Incoming/]: CITYBENCH seconds=29.976237488 cursor=43065 pending=2043 complete=false msptMean=20.66774947 msptP95=49.499054 msptMax=56.924345 nuclearMean=4.172928673333334 nuclearMax=26.363398 heapMiB=2442 peakHeapMiB=2504 retainedMiB=176
+[11:34:20] [Server thread/INFO] [ua.ze.in.Incoming/]: CITYBENCH memory shotsMiB=71 appliedMiB=8 liveHeapMiB=930
+[11:34:20] [Server thread/INFO] [ua.ze.in.Incoming/]: CITYBENCH progress saved=4137 loaded=4156 limit=28 held=20 totalConfirmed=42249
+[11:34:20] [Server thread/INFO] [ua.ze.in.Incoming/]: CITYBENCH seconds=39.974634203 cursor=44297 pending=2048 complete=false msptMean=21.474360538750002 msptP95=49.900238 msptMax=56.924345 nuclearMean=4.08946525375 nuclearMax=26.363398 heapMiB=2530 peakHeapMiB=3124 retainedMiB=117
+[11:34:30] [Server thread/INFO] [ua.ze.in.Incoming/]: CITYBENCH memory shotsMiB=120 appliedMiB=10 liveHeapMiB=1120
+[11:34:30] [Server thread/INFO] [ua.ze.in.Incoming/]: CITYBENCH progress saved=5182 loaded=5195 limit=22 held=20 totalConfirmed=43294
+[11:34:30] [Server thread/INFO] [ua.ze.in.Incoming/]: CITYBENCH seconds=49.973502958 cursor=45342 pending=2048 complete=false msptMean=22.076971299 msptP95=50.663677 msptMax=58.359824 nuclearMean=3.974319676 nuclearMax=26.363398 heapMiB=2310 peakHeapMiB=3166 retainedMiB=175
+[11:34:40] [Server thread/INFO] [ua.ze.in.Incoming/]: Mod work over 30 s: server tick avg 20.6 ms (max 57.4), of which mod lanes avg — impacts 0.0, nuke 3.4, blackout 0.0 ms; the rest (vanilla, other mods) 17.3 ms; impact early window 30.5% of ticks, early avg 0.0 ms, late avg 0.0 ms; mandatory unload debt 90.8% of ticks
+[11:34:40] [Server thread/INFO] [ua.ze.in.Incoming/]: CITYBENCH memory shotsMiB=92 appliedMiB=12 liveHeapMiB=1022
+[11:34:40] [Server thread/INFO] [ua.ze.in.Incoming/]: CITYBENCH progress saved=6304 loaded=6300 limit=21 held=21 totalConfirmed=44416
+[11:34:40] [Server thread/INFO] [ua.ze.in.Incoming/]: CITYBENCH seconds=59.97762781 cursor=46464 pending=2048 complete=false msptMean=22.5685087825 msptP95=50.872406 msptMax=59.63534 nuclearMean=3.957228699166667 nuclearMax=26.363398 heapMiB=1628 peakHeapMiB=3166 retainedMiB=167
+[11:34:40] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruin settlement #1: 46472 of 484901 positions scanned, 6312 saved chunks confirmed, 6313 loads, 2048 pending (21 held, admission 21, 8 reads), 1200 ticks
+[11:34:50] [Server thread/INFO] [ua.ze.in.Incoming/]: CITYBENCH memory shotsMiB=105 appliedMiB=13 liveHeapMiB=1130
+[11:34:50] [Server thread/INFO] [ua.ze.in.Incoming/]: CITYBENCH progress saved=7344 loaded=7347 limit=22 held=22 totalConfirmed=45456
+[11:34:50] [Server thread/INFO] [ua.ze.in.Incoming/]: CITYBENCH seconds=69.977622371 cursor=47504 pending=2048 complete=false msptMean=22.79145921857143 msptP95=51.158889 msptMax=59.63534 nuclearMean=3.898494435714286 nuclearMax=26.363398 heapMiB=2269 peakHeapMiB=3166 retainedMiB=183
+[11:34:59] [Server thread/INFO] [minecraft/MinecraftServer]: Stopping server
+[11:34:59] [Server thread/INFO] [minecraft/MinecraftServer]: ThreadedAnvilChunkStorage (world): All chunks are saved
+[11:34:59] [Server thread/INFO] [minecraft/MinecraftServer]: ThreadedAnvilChunkStorage (DIM1): All chunks are saved
+[11:34:59] [Server thread/INFO] [minecraft/MinecraftServer]: ThreadedAnvilChunkStorage (DIM-1): All chunks are saved
+laptop_job ruinzone-city-d: exit 143

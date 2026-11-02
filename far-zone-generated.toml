@@ -1,0 +1,5 @@
+	#When players use Distant Horizons: the heavy-damage zone that is not fully generated on disk (the edge of the explored
+	#world) is generated in the background behind the wave (at most two 5×5 squares at a time), so the ruins are
+	#visible from afar at once. Off: ruins appear there only when a player gets there.
+	#Existing final-block chunks throughout the ruin zone are always settled in the background, independently of this setting.
+	far_zone = true
