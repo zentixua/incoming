@@ -30,7 +30,9 @@ paths:
 - Optional LSS integration: `./gradlew runGameTestServer -PwithLss '-PgametestOnly=lss_.*'`. The runtime jar defaults
   to `lss_version`; `-PlssTestVersion=<Modrinth version ID>` checks another supported LSS runtime without changing the
   compile API. The GameTest server needs `lss.test.integratedServer=true` (the Gradle flag supplies it). Tests register
-  only when LSS is installed; ordinary shards remain independent of it. SQLite and the 200-tick dirty broadcaster
+  only when LSS is installed; ordinary shards remain independent of it. Keep LSS implementation calls in an
+  unannotated nested class: NeoForge reflects every method on the holder, including synthetic lambda capture
+  signatures, before calling the generator's optional-mod guard. SQLite and the 200-tick dirty broadcaster
   use background threads/wall time, so these tests run at game pace and wait for actual receipts/rows, never a fixed
   sleep. A no-op store-policy receipt fences queued deletes before a test deposits replacement bytes; the asynchronous
   store can otherwise apply an older unconditional delete after the test's new deposit.
@@ -120,3 +122,8 @@ paths:
   radius adjustment.
 
 - Fixed surface-baseline seeds and `blast_crater_seed` regression: see `warhead.md`.
+
+- Late-exposure fixtures measure pulse/wave damage, independently of ground fire. Saved-zone settlement can lay
+  ordinary fire under the herd even for a detonation inserted directly into `NuclearEvents`; `inFire` damage then
+  violates a full-health assertion without any duplicate exposure. Disable `nukeFires` within that fixture and
+  restore it with `StrikeGameTests.afterTest`; retain dose/burn/health assertions and report the last damage source.
