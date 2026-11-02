@@ -77,7 +77,8 @@ Checks follow changed paths (only `tools/`, `docs/`, `*.md` skip mod build; stor
 exceptions in `tools.md`); releases run all. A main push or release whose tree a successful PR run already checked
 reuses that jar (`tools/ci_reuse.py`): merge a PR up to date with `main` and its release takes ~2 min, not a rerun.
 Итог decides merge, failing if any needed check fails or is canceled. Release: `mod_version`,
-`docs/releases/<version>.md`, manual `build` with `release=true`; the pack follows by itself (`tools.md`).
+`docs/releases/<version>.md`, manual `build` with `release=true`; Modrinth, CurseForge and the pack follow by themselves
+(`tools.md`).
 A PR changing packet/entity-data formats bumps `IncomingNetwork.PROTOCOL`. A release with behavior/lang keys different
 from the last shipped jar bumps it if not already bumped during that release: old jars must not join new hosts
 (NeoForge reports different mod versions).

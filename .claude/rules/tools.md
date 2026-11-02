@@ -126,8 +126,9 @@ The short layout is in the root CLAUDE.md; here, what each script does.
   .github/workflows/build.yml            ← CI: what changed → build, unit tests (4 JVMs), GameTest in parts, summary; jar in
                                            artifacts; release; an already checked tree takes that run's jar (tools/ci_reuse.py)
   .github/PULL_REQUEST_TEMPLATE.md       ← PR description template: what changes for the player, how it was checked
-  .github/workflows/publish.yml          ← Modrinth and CurseForge pages, manual runs only: draft (hidden
-                                           Modrinth draft), submit, release; fields — docs/store/modrinth.json
+  .github/workflows/publish.yml          ← Modrinth and CurseForge: release runs by itself after a release build;
+                                           manual draft (hidden Modrinth draft), submit, release (re-send);
+                                           fields — docs/store/modrinth.json
   docs/releases/<version>.md             ← release notes
 ```
 
@@ -147,7 +148,8 @@ The short layout is in the root CLAUDE.md; here, what each script does.
   check runs.
 - Release: bump `mod_version`, write `docs/releases/<version>.md` (in English), merge into `main` and run `build`
   manually on `main` with `release=true`: after all checks, the workflow releases `v<version>` with the jar (friends take it
-  from there). If `main` has moved on from the commit checked in the game, a branch `claude/release-…` from that commit with only
+  from there), and `publish` then uploads the same jar to Modrinth and CurseForge by itself (step `release`; a manual
+  `publish release` re-sends a version and skips stores that already have the jar). If `main` has moved on from the commit checked in the game, a branch `claude/release-…` from that commit with only
   the notes, and the run on it. After the release, the open-skies build takes the jar by itself (its `update` workflow
   runs there every 3 hours; to run it at once, start it manually on `main`), checks it and releases it; players with
   auto-update get it on their next launch. Create, Sable and Aeronautics are pinned in the pack: a new version of them is a PR in
