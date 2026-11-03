@@ -13,6 +13,7 @@ import java.util.concurrent.FutureTask;
 import java.util.concurrent.PriorityBlockingQueue;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicIntegerArray;
 import java.util.concurrent.atomic.AtomicLong;
@@ -113,7 +114,13 @@ public final class RuinWorkers {
         boolean integrated = integrated();
         int n = threads(integrated);
         if (pool != null && size == n) return pool;
-        if (pool != null) pool.shutdown();
+        if (pool != null) {
+            // Resize the same lifetime: queued work and its captured snapshots must not drain in a
+            // second pool outside adaptation, capacity and buffer accounting.
+            resize(pool, n);
+            size = active = n;
+            return pool;
+        }
         size = active = n;
         lowered = raised = 0;
         pool = new ThreadPoolExecutor(n, n, 30, TimeUnit.SECONDS, new PriorityBlockingQueue<>(), r -> {
@@ -205,8 +212,9 @@ public final class RuinWorkers {
 
     /** Submit task at {@code priority} (server thread). */
     static <T> Future<T> submit(Callable<T> task, Priority priority) {
-        Task<T> t = new Task<>(task, priority);
-        execute(pool(), t);
+        ThreadPoolExecutor executor = pool();
+        Task<T> t = new Task<>(task, priority, IN_FLIGHT, executor);
+        execute(executor, t);
         return t;
     }
 
@@ -216,7 +224,9 @@ public final class RuinWorkers {
      */
     static Executor executor(Priority priority) {
         ThreadPoolExecutor p = pool();
-        return r -> execute(p, new Task<>(java.util.concurrent.Executors.callable(r, null), priority));
+        AtomicIntegerArray counts = IN_FLIGHT;
+        // Capture accounting with the executor, not when a late I/O callback submits in the next world.
+        return r -> execute(p, new Task<>(java.util.concurrent.Executors.callable(r, null), priority, counts, p));
     }
 
     private static void execute(ThreadPoolExecutor p, Task<?> t) {
@@ -224,6 +234,7 @@ public final class RuinWorkers {
             p.execute(t);
         } catch (java.util.concurrent.RejectedExecutionException e) {
             // pool closed (shutdown): task absent, so not counted
+            t.cancel(false);
             t.uncount();
             throw e;
         }
@@ -239,10 +250,14 @@ public final class RuinWorkers {
     @Nullable
     static <T> Future<T> promote(Future<T> future, Priority priority) {
         ThreadPoolExecutor p = pool;
-        if (p == null || !(future instanceof Task<T> t) || t.priority <= priority.ordinal() || !p.remove(t)) return null;
-        // removed before start: run will not be called
+        if (p == null || !(future instanceof Task<T> t) || t.owner != p || t.isDone()
+                || t.priority <= priority.ordinal() || !p.remove(t)) return null;
+        // The removed future is terminal and releases its captured callable; only the new task owns it.
+        Callable<T> callable = t.callable;
+        t.cancel(false);
         t.uncount();
-        Task<T> moved = new Task<>(t.callable, priority);
+        if (callable == null) return null; // cancelled concurrently after removal
+        Task<T> moved = new Task<>(callable, priority, t.counts, p);
         try {
             execute(p, moved);
         } catch (java.util.concurrent.RejectedExecutionException e) {
@@ -260,21 +275,29 @@ public final class RuinWorkers {
 
     /**
      * Pool task: queue by priority, within priority by submission; priority count from submission to
-     * completion (also abandoned tasks: pool still calls {@code run}, which exits immediately).
+     * actual completion; cancelled queued tasks release their slot immediately. Running cancellation
+     * retains the slot until the worker exits, even though Future.isDone() is already true.
      */
     static final class Task<T> extends FutureTask<T> implements Comparable<Task<?>> {
-        private final Callable<T> callable;
+        private volatile Callable<T> callable;
         private final int priority;
         private final long sequence;
         private final AtomicIntegerArray counts;
+        @Nullable private final ThreadPoolExecutor owner;
+        private final AtomicBoolean counted = new AtomicBoolean(true);
         private volatile boolean started;
 
         Task(Callable<T> task, Priority priority) {
+            this(task, priority, IN_FLIGHT, null);
+        }
+
+        Task(Callable<T> task, Priority priority, AtomicIntegerArray counts, @Nullable ThreadPoolExecutor owner) {
             super(task);
             this.callable = task;
             this.priority = priority.ordinal();
             this.sequence = SEQUENCE.getAndIncrement();
-            this.counts = IN_FLIGHT;
+            this.counts = counts;
+            this.owner = owner;
             counts.incrementAndGet(this.priority);
         }
 
@@ -290,8 +313,16 @@ public final class RuinWorkers {
             }
         }
 
+        @Override
+        protected void done() {
+            callable = null;
+            // Running cancellation is not completion: retain its slot until run() actually exits.
+            // A queued cancellation, however, must immediately free queue ownership and snapshots.
+            if (owner != null && owner.remove(this)) uncount();
+        }
+
         private void uncount() {
-            counts.decrementAndGet(priority);
+            if (counted.compareAndSet(true, false)) counts.decrementAndGet(priority);
         }
 
         @Override
@@ -328,14 +359,18 @@ public final class RuinWorkers {
             raised++;
         }
         if (active == now) return;
-        if (active < now) {
-            p.setCorePoolSize(active);
-            p.setMaximumPoolSize(active);
-        } else {
-            p.setMaximumPoolSize(active);
-            p.setCorePoolSize(active);
-        }
+        resize(p, active);
         Incoming.LOG.info("Ruins: background threads working {} of {} (server tick without mod lanes {} ms)", active, size, String.format(java.util.Locale.ROOT, "%.1f", ms));
+    }
+
+    private static void resize(ThreadPoolExecutor executor, int threads) {
+        if (threads < executor.getCorePoolSize()) {
+            executor.setCorePoolSize(threads);
+            executor.setMaximumPoolSize(threads);
+        } else {
+            executor.setMaximumPoolSize(threads);
+            executor.setCorePoolSize(threads);
+        }
     }
 
     /** Background plan abandoned: not ready by deadline ({@link RuinContext#TASK_AGE_LIMIT}). */
@@ -350,7 +385,7 @@ public final class RuinWorkers {
 
     /** All pool-thread solver buffers, bytes ((est.) for 48×48 window through world height: 7 bytes per position). */
     static long bufferBytes(int height) {
-        return (long) size * RuinWindow.SIDE * RuinWindow.SIDE * height * 7;
+        return (long) Math.max(size, pool == null ? 0 : pool.getPoolSize()) * RuinWindow.SIDE * RuinWindow.SIDE * height * 7;
     }
 
     /**
@@ -389,7 +424,10 @@ public final class RuinWorkers {
         if (p == null) return true;
         java.util.List<Runnable> queued = p.shutdownNow();
         // run will not be called: remove from priority counts
-        for (Runnable r : queued) if (r instanceof Task<?> t) t.uncount();
+        for (Runnable r : queued) if (r instanceof Task<?> t) {
+            t.cancel(false);
+            t.uncount();
+        }
         IN_FLIGHT = new AtomicIntegerArray(Priority.values().length);
         int dropped = queued.size();
         boolean done;

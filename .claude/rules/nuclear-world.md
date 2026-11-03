@@ -87,7 +87,7 @@ paths:
   (prebuilt ruins during ICBM flight: in-memory chunks in ruin radius (plus chunks loaded during flight, every 40 ticks)
   with loaded `REACH` neighbors — snapshots under `WorkScheduler.PREP_SHARE` of the common budget, plan in background;
   zone layout (chunks, outer zone without prebuilt plans, loading squares by distance, `NuclearPrep.layout`: ~33 thousand
-  chunks for 15 kt, 50–65 ms) is background too; a detonation preceding completion waits for it (`handOff`); preparation
+  chunks for 15 kt, 50–65 ms) is background too; a detonation preceding completion discards the unfinished layout without waiting (`handOff`); the normal scar and durable-settlement paths cover that strike; preparation
   loads nothing into the world (city plan 13 ms/chunk: the server thread could not plan 32 thousand zone chunks during
   90 s flight); heavy zone outside memory (phase 2) reads disk in wave-arrival order: `ChunkStorage.read` (I/O thread),
   data upgrade and parsing in background (`DiskShots`, only final blocks, `DiskStatus.State.blocksFinal`: whole chunks
@@ -312,3 +312,18 @@ paths:
   `ChunkSendGate` holds unruined chunks there, so the ruin queue checks “player sees chunk” with
   `getChunkTrackingView().contains` (`ScarQueue.watched`). Otherwise chunks awaited after teleport queue behind unseen
   ones and reach players before ruins.
+
+- Preparation admission sums retained preparation/context estimates across all server dimensions, with worker
+  buffers counted once (`NuclearPrep.memory`). Disk reads check the shared headroom before each reservation;
+  near snapshots leave estimated room for their 5x5 window. Front copies include other preparations' copies while
+  excluding their own bytes from the room given back to FrontLods. Settlement shares retained-memory estimates
+  and pauses new admission while any dimension prepares; it still drains existing work. These are estimates,
+  not a proven total heap bound: unfinished solver-result sizes, all graph/layout metadata, ordinary world chunks
+  and adapter/network ownership still need full accounting before increasing yields.
+- Worker lifetime (`RuinWorkers`): configuration changes resize the same executor, never drain an old pool beside
+  a new one. Cancellation removes queued tasks and clears their captured callable immediately; a running task
+  remains counted until its actual run exits, not Future.isDone. Promotion terminates the removed future. Queued
+  shutdown futures are cancelled, and executors retained by I/O callbacks keep their original accounting lifetime.
+  RuinInbox invalidates cancelled asynchronous results while keeping outstanding work charged until completion;
+  it retains no world/preparation owner. Regressions: RuinWorkersTest, RuinInboxTest and nuke_lifecycle_* GameTests
+  (cancel/resize/shutdown, nonblocking layout handoff, cross-strike/dimension admission).

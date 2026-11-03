@@ -70,12 +70,12 @@ final class RuinSettle {
         }
         long now = level.getGameTime();
         NuclearWorld world = NuclearWorld.get(level);
-        long room = Math.max(0, world.settleMemoryRoom(level.getHeight()) - (long) order.length * Long.BYTES);
+        long room = Math.max(0, world.settleMemoryRoom(level) - (long) order.length * Long.BYTES);
         if (room < NuclearPrep.PLANS_CAP / 8) {
             world.trimSettleCache(detonation.id(), clock);
-            room = Math.max(0, world.settleMemoryRoom(level.getHeight()) - (long) order.length * Long.BYTES);
+            room = Math.max(0, world.settleMemoryRoom(level) - (long) order.length * Long.BYTES);
         }
-        boolean admit = world.settleCanAdmit() && !heap.tight() && room > 0;
+        boolean admit = world.settleCanAdmit(level) && !heap.tight() && room > 0;
         if (now >= adaptAt) {
             window.adapt(externalMillis(level), IncomingConfig.SERVER.workBudgetMs.get(), spare, admit);
             adaptAt = now + 20;
