@@ -549,6 +549,7 @@ final class Sandbox {
      * Clear all effects: at the client — as on leaving the world, at the server — projectiles and fire at the point.
      */
     private void clear() {
+        Minecraft.getInstance().setScreen(null);
         raid.clear();
         turnYaw = Float.NaN;
         IncomingClient.resetSession();
@@ -649,6 +650,44 @@ final class Sandbox {
         // houses)
         if (armed != null && armed.times[0] < 0 && !c.near()) throw new IllegalArgumentException("frames before the effect's start — only for nuke … near");
         switch (c.verb()) {
+            case UI -> {
+                var loadout = ua.zentix.incoming.strike.Loadout.DEFAULT.withWeapon(WeaponType.NUKE)
+                        .withMode(ua.zentix.incoming.strike.TargetMode.MAP);
+                var stack = new net.minecraft.world.item.ItemStack(ua.zentix.incoming.registry.ModItems.DESIGNATOR.get());
+                stack.set(ua.zentix.incoming.registry.ModDataComponents.LOADOUT.get(), loadout);
+                mc.player.setItemInHand(net.minecraft.world.InteractionHand.MAIN_HAND, stack);
+                var target = site.add(1000, 0, -1000);
+                ua.zentix.incoming.client.map.MapTarget.set(level, new ua.zentix.incoming.client.map.MapTarget.Place(target.x, target.z));
+                var remote = new ua.zentix.incoming.client.screen.RemoteScreen();
+                String which = c.args().getFirst();
+                if (which.equals("remote")) mc.setScreen(remote);
+                else if (which.equals("map")) {
+                    var map = new ua.zentix.incoming.client.screen.MapScreen(remote);
+                    mc.setScreen(map);
+                    map.mouseClicked(30, 30, 0);
+                    map.mouseReleased(30, 30, 0);
+                } else {
+                    var order = new ua.zentix.incoming.net.C2S.Fire(loadout, Optional.empty(), Optional.empty(),
+                            ua.zentix.incoming.strike.Waypoints.NONE, Optional.empty());
+                    var screen = new ua.zentix.incoming.client.screen.NuclearReviewScreen(new S2C.NuclearReview(
+                            java.util.UUID.randomUUID(), order, target, 20000, 1));
+                    mc.setScreen(screen);
+                    if (which.equals("keyboard")) {
+                        screen.setFocused(screen.children().getFirst());
+                        screen.tick(); // opening-key guard sees released native keys
+                        screen.keyPressed(org.lwjgl.glfw.GLFW.GLFW_KEY_SPACE, 0, 0);
+                        try {
+                            var holding = screen.getClass().getDeclaredField("holding");
+                            holding.setAccessible(true);
+                            if (!holding.getBoolean(screen)) throw new IllegalStateException("focused Space did not start hold");
+                            screen.keyReleased(org.lwjgl.glfw.GLFW.GLFW_KEY_SPACE, 0, 0);
+                            if (holding.getBoolean(screen)) throw new IllegalStateException("Space release did not cancel hold");
+                            Incoming.LOG.info("SANDBOX nuclear review keyboard: focused Space begins hold, release cancels; no commitment");
+                        } catch (ReflectiveOperationException e) { throw new IllegalStateException(e); }
+                    }
+                }
+                begin();
+            }
             case BLAST -> {
                 sameAir(mc);
                 placeCamera();

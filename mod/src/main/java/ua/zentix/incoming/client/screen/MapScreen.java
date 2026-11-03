@@ -16,6 +16,9 @@ import net.neoforged.neoforge.network.PacketDistributor;
 import org.jetbrains.annotations.Nullable;
 import org.lwjgl.glfw.GLFW;
 import ua.zentix.incoming.Incoming;
+import ua.zentix.incoming.IncomingConfig;
+import ua.zentix.incoming.nuclear.model.ImpactPreview;
+import ua.zentix.incoming.util.Visibility;
 import ua.zentix.incoming.client.hud.ClientFlights;
 import ua.zentix.incoming.client.hud.HudDraw;
 import ua.zentix.incoming.client.map.MapPlayers;
@@ -54,8 +57,8 @@ import java.util.Optional;
  * Thick dark-outlined symbols over terrain ({@link HudDraw#HALO}): thin dotted lines would vanish over a varied city.
  */
 public class MapScreen extends Screen {
-    /** Pixels per block: from 32 blocks per pixel to 8 pixels per block. */
-    private static final double MIN_SCALE = 1.0 / 32, MAX_SCALE = 8;
+    /** Pixels per block: from 1024 blocks per pixel to 8 pixels per block. */
+    private static final double MIN_SCALE = 1.0 / 1024, MAX_SCALE = 8;
     private static final double ZOOM_STEP = 1.25;
     /** Mouse movement beyond this (pixels) means map drag, rather than site selection. */
     private static final double DRAG_THRESHOLD = 3;
@@ -69,7 +72,7 @@ public class MapScreen extends Screen {
      * Top: title and cursor; bottom: target line (separate, clear of grid label), route line and buttons,
      * plus launch-site line for players allowed to choose it ({@link #LAUNCH_LINE}).
      */
-    private static final int TOP = 22, BOTTOM = 56, LAUNCH_LINE = 12;
+    private static final int TOP = 44, BOTTOM = 56, LAUNCH_LINE = 12;
     /** Buttons below map: no wider than this many pixels, separated by {@link #BUTTON_GAP}. */
     private static final int BUTTON_W = 100, BUTTON_GAP = 4;
 
@@ -92,6 +95,29 @@ public class MapScreen extends Screen {
     private static ResourceKey<Level> placedIn;
 
     private final RemoteScreen remote;
+    private boolean extraContours;
+    @Nullable private ImpactPreview preview;
+
+    private ImpactPreview preview() {
+        var l = remote.loadout();
+        var level = Minecraft.getInstance().level;
+        double visibility = level != null && level.isThundering() ? Visibility.THUNDER
+                : level != null && level.isRaining() ? Visibility.RAIN : Visibility.CLEAR;
+        boolean air = l.weapon().spec().warhead().chooseBurst() && l.nuke().airBurst();
+        double effectScale = IncomingConfig.SERVER.effectsScale();
+        if (preview == null || preview.yieldKt() != l.nuke().yieldKt() || preview.air() != air
+                || preview.visibility() != visibility || preview.scale() != effectScale)
+            preview = ImpactPreview.of(l.nuke().yieldKt(), air, visibility, effectScale);
+        return preview;
+    }
+
+    private void fitEffects() {
+        aimPoint().ifPresent(at -> {
+            viewX = at.x; viewZ = at.z;
+            scale = ImpactPreview.fitScale(preview().extent(extraContours), width, height - panel() - TOP);
+        });
+    }
+
     private Button fireButton, clearRouteButton, launchButton;
     /** Player selects launch site ({@link #mayPickLaunchSite}, decided on opening): button, line and icon. */
     private boolean launchAllowed;
@@ -151,9 +177,15 @@ public class MapScreen extends Screen {
             addRenderableWidget(b);
             x += w + BUTTON_GAP;
         }
+        if (remote.loadout().nuclear()) {
+            addRenderableWidget(Button.builder(Component.translatable("incoming.nuke.preview.fit"), b -> fitEffects())
+                    .bounds(4, 22, 100, 18).build());
+            addRenderableWidget(Button.builder(Component.translatable("incoming.nuke.preview.extra"), b -> extraContours = !extraContours)
+                    .bounds(108, 22, 160, 18).build());
+        }
         updateButtons();
         // Map opened with a selected site: prefetch its area too (server only extends the same area).
-        if (!ceiling() && selectedPlayer().isEmpty()) selected().ifPresent(MapScreen::preload);
+        if (!remote.loadout().nuclear() && !ceiling() && selectedPlayer().isEmpty()) selected().ifPresent(MapScreen::preload);
     }
 
     @Override
@@ -316,7 +348,7 @@ public class MapScreen extends Screen {
             MapTarget.Place place = new MapTarget.Place(map.worldX(screenX), map.worldZ(screenY));
             MapTarget.set(mc.level, place);
             remote.aimAtPlace();
-            preload(place);
+            if (!remote.loadout().nuclear()) preload(place);
         }
         updateButtons();
     }
@@ -537,8 +569,9 @@ public class MapScreen extends Screen {
         boolean routed = routed() && !route.isEmpty();
         if (aim != null && !routed) HudDraw.dashed(g, start[0], start[1], aim[0], aim[1], 1, AIM_LINE);
         if (!route.isEmpty()) drawRoute(g, map, start, aim, route, mouseX, mouseY);
+        if (aim != null && l.nuclear()) drawContours(g, aim);
         if (aim != null) {
-            if (l.spread() > 0) {
+            if (!l.nuclear() && l.spread() > 0) {
                 float r = (float) (l.spread() * scale);
                 HudDraw.disc(g, aim[0], aim[1], r, SPREAD_FILL);
                 HudDraw.ring(g, aim[0], aim[1], r, 2, SPREAD);
@@ -611,6 +644,34 @@ public class MapScreen extends Screen {
         HudDraw.heading(g, op[0], op[1], p.getViewYRot(partialTick), OPERATOR);
         label(g, Component.translatable("incoming.map.you"), op[0], op[1] + 10, OPERATOR);
         g.disableScissor();
+    }
+
+    /** Fixed 128-segment contours. No terrain queries, entity search, planning or server requests. */
+    private void drawContours(GuiGraphics g, int[] aim) {
+        ImpactPreview p = preview();
+        int row = 0;
+        for (var c : p.contours().subList(0, extraContours ? 5 : 3)) {
+            double r = c.radius() * scale;
+            for (int i = 0; i < 128; i++) {
+                if (c.stride() > 1 && i % c.stride() == c.stride() - 1) continue;
+                double a = 2 * Math.PI * i / 128, b = 2 * Math.PI * (i + 1) / 128;
+                HudDraw.haloLine(g, aim[0] + (float) (r * Math.cos(a)), aim[1] + (float) (r * Math.sin(a)),
+                        aim[0] + (float) (r * Math.cos(b)), aim[1] + (float) (r * Math.sin(b)), 1, c.color());
+            }
+            Component label = Component.translatable("incoming.nuke.preview." + c.key(), ImpactPreview.distance(c.radius()));
+            int y = TOP + 24 + row++ * 12;
+            g.fill(4, y - 1, 12 + font.width(label), y + 10, PANEL);
+            g.drawString(font, label, 8, y, c.color());
+        }
+        Component mode = Component.translatable(!remote.loadout().weapon().spec().warhead().chooseBurst() ? "incoming.nuke.preview.buried" : p.air() ? "incoming.nuke.preview.air" : "incoming.nuke.preview.ground", ImpactPreview.distance(p.height()));
+        int y = TOP + 26 + row * 12;
+        g.fill(4, y - 1, 12 + font.width(mode), y + 10, PANEL);
+        g.drawString(font, mode, 8, y, INK);
+        y += 12;
+        for (var line : font.split(Component.translatable("incoming.nuke.preview.reference", ImpactPreview.distance(p.visibility())), Math.min(width - 16, 280))) {
+            g.fill(4, y - 1, 12 + font.width(line), y + 10, PANEL);
+            g.drawString(font, line, 8, y, DIM); y += 10;
+        }
     }
 
     /**

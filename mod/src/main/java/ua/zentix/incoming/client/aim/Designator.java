@@ -25,7 +25,6 @@ import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
 import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.IncomingConfig;
-import ua.zentix.incoming.client.nuclear.NukeArming;
 import ua.zentix.incoming.compat.SubLevels;
 import ua.zentix.incoming.item.DesignatorItem;
 import ua.zentix.incoming.launcher.LauncherLinks;
@@ -109,8 +108,8 @@ public final class Designator {
         }
         Loadout l = loadout().withMode(TargetMode.LOOK);
         C2S.Fire packet = new C2S.Fire(l, Optional.of(hint), Optional.empty(), Waypoints.NONE, Optional.empty());
-        if (l.weapon().spec().warhead().always()) {
-            NukeArming.toggle(() -> PacketDistributor.sendToServer(packet));
+        if (l.nuclear()) {
+            PacketDistributor.sendToServer(new C2S.ReviewNuclear(packet));
         } else {
             PacketDistributor.sendToServer(packet);
         }

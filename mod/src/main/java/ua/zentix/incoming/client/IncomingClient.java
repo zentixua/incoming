@@ -439,6 +439,14 @@ public final class IncomingClient {
         }
 
         @Override
+        public void nuclearReview(S2C.NuclearReview p) {
+            if (Replay.active()) return;
+            if (p.finished()) {
+                if (Minecraft.getInstance().screen instanceof ua.zentix.incoming.client.screen.NuclearReviewScreen screen) screen.complete(p.id());
+            } else Minecraft.getInstance().setScreen(new ua.zentix.incoming.client.screen.NuclearReviewScreen(p));
+        }
+
+        @Override
         public void openRemote() {
             // the recorded player opened the remote, not the replay viewer
             if (!Replay.active()) Minecraft.getInstance().setScreen(new RemoteScreen());

@@ -27,6 +27,19 @@ import java.util.UUID;
 public final class S2C {
     private S2C() {}
 
+    /** Server-approved order snapshot. This is a review, not a claim of prepared terrain/LOD readiness. */
+    public record NuclearReview(UUID id, C2S.Fire order, Vec3 target, float visibility, float scale, boolean finished) implements CustomPacketPayload {
+        public NuclearReview(UUID id, C2S.Fire order, Vec3 target, float visibility, float scale) {
+            this(id, order, target, visibility, scale, false);
+        }
+        public static final Type<NuclearReview> TYPE = new Type<>(Incoming.id("nuclear_review"));
+        public static final StreamCodec<ByteBuf, NuclearReview> CODEC = StreamCodec.composite(
+                UUIDUtil.STREAM_CODEC, NuclearReview::id, C2S.Fire.CODEC, NuclearReview::order,
+                StreamCodecs.VEC3, NuclearReview::target, ByteBufCodecs.FLOAT, NuclearReview::visibility,
+                ByteBufCodecs.FLOAT, NuclearReview::scale, ByteBufCodecs.BOOL, NuclearReview::finished, NuclearReview::new);
+        @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }
+    }
+
     /**
      * Explosion: kind (0 — Shahed, 1 — missile, 2 — buried bomb, 3 — MLRS projectile — how explosion occurs), ground, surface
      * height above point (bomb: top above charge, {@code BunkerCover}; others: impact-point height — client sees

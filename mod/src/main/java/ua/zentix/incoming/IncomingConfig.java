@@ -219,7 +219,7 @@ public final class IncomingConfig {
                     .translation("incoming.config.nuke_enabled").define("enabled", true);
             nukeOpsOnly = b.comment("Only operators can launch nuclear strikes. Off: other players need a second key from a player nearby.")
                     .translation("incoming.config.nuke_ops_only").define("ops_only", true);
-            nukeDefaultYield = b.comment("Yield of /incoming nuke without a number, kt (15 is Hiroshima). On the console the yield is chosen with a button.")
+            nukeDefaultYield = b.comment("Yield of /incoming nuke without a number, kt (15 is Hiroshima). On the console the yield is entered in whole kt.")
                     .translation("incoming.config.nuke_default_yield").defineInRange("default_yield", 15, 1, Loadout.Nuke.MAX_YIELD);
             nukeMaxYield = b.comment("Largest yield, kt.")
                     .translation("incoming.config.nuke_max_yield").defineInRange("max_yield", Loadout.Nuke.MAX_YIELD, 1, Loadout.Nuke.MAX_YIELD);

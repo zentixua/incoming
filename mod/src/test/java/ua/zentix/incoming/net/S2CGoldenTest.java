@@ -151,6 +151,10 @@ class S2CGoldenTest {
                 golden(S2C.MapPlayers.TYPE, S2C.MapPlayers.CODEC, new S2C.MapPlayers(List.of(
                         new S2C.MapPlayer(A, "Player01", -100.5, 2000.25, Sightings.Kind.PLAYER, true, 0),
                         new S2C.MapPlayer(B, "", 7, -8, Sightings.Kind.AIRCRAFT, false, 12)), true)),
+                golden(S2C.NuclearReview.TYPE, S2C.NuclearReview.CODEC, new S2C.NuclearReview(A,
+                        new C2S.Fire(ua.zentix.incoming.strike.Loadout.DEFAULT.withWeapon(ua.zentix.incoming.strike.WeaponType.NUKE),
+                                Optional.of(new C2S.AimHint(C2S.AimHint.POINT, P, 0, Vec3.ZERO)), Optional.empty(),
+                                ua.zentix.incoming.strike.Waypoints.NONE, Optional.empty()), P, 20000, 1)),
                 golden(S2C.OpenRemote.TYPE, S2C.OpenRemote.CODEC, new S2C.OpenRemote()),
                 golden(S2C.ReplayTick.TYPE, S2C.ReplayTick.CODEC, new S2C.ReplayTick(123_456, true)),
                 golden(S2C.Intercept.TYPE, S2C.Intercept.CODEC, new S2C.Intercept(P, true, Optional.of(B), 99)),

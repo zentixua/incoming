@@ -70,6 +70,22 @@ public final class C2S {
         }
     }
 
+    /** Request a read-only nuclear order review; no payment or planning starts here. */
+    public record ReviewNuclear(Fire order) implements CustomPacketPayload {
+        public static final Type<ReviewNuclear> TYPE = new Type<>(Incoming.id("review_nuclear"));
+        public static final StreamCodec<ByteBuf, ReviewNuclear> CODEC = Fire.CODEC.map(ReviewNuclear::new, ReviewNuclear::order);
+        @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }
+    }
+
+    /** Exact reviewed order: begin hold, cancel/release hold, commit, or discard review. */
+    public record NuclearAction(UUID id, int action) implements CustomPacketPayload {
+        public static final int BEGIN = 0, RELEASE = 1, COMMIT = 2, DISCARD = 3;
+        public static final Type<NuclearAction> TYPE = new Type<>(Incoming.id("nuclear_action"));
+        public static final StreamCodec<ByteBuf, NuclearAction> CODEC = StreamCodec.composite(
+                UUIDUtil.STREAM_CODEC, NuclearAction::id, ByteBufCodecs.VAR_INT, NuclearAction::action, NuclearAction::new);
+        @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }
+    }
+
     /**
      * Projectile camera aboard owned {@code projectile} looks along {@code yaw}/{@code pitch}: client
      * sends every tick while viewing ({@code strike.CameraLink}). No more packets means camera closed.

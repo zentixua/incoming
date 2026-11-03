@@ -28,6 +28,10 @@ import java.util.function.Supplier;
 public final class ModAttachments {
     public static final DeferredRegister<AttachmentType<?>> REGISTER = DeferredRegister.create(NeoForgeRegistries.Keys.ATTACHMENT_TYPES, Incoming.MOD_ID);
 
+    /** One unpaid nuclear review per player; discarded on logout/restart/death. */
+    public static final Supplier<AttachmentType<ua.zentix.incoming.strike.NuclearReview>> NUCLEAR_REVIEW = REGISTER.register("nuclear_review",
+            () -> AttachmentType.builder(ua.zentix.incoming.strike.NuclearReview::new).build());
+
     /** Player dose and contamination; reset on death (not copied). */
     public static final Supplier<AttachmentType<RadiationDose>> RADIATION = REGISTER.register("radiation",
             () -> AttachmentType.builder(() -> RadiationDose.NONE).serialize(RadiationDose.CODEC).build());
