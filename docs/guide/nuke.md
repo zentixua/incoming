@@ -23,7 +23,8 @@ By default only operators can.
    for three seconds, or focus it with Tab and hold Space or Enter. Releasing, moving the pointer off the button,
    losing window focus or closing the review cancels the hold. On small screens, scroll or use Page Up/Down to read the details.
 
-The targeting map shows flat-ground reference contours for the maximum fireball silhouette, 5 psi and 1 psi.
+The targeting map shows flat-ground reference contours for the fireball reference silhouette, 5 psi and 1 psi.
+The fireball reference is its radius at the second light maximum; it can expand farther later.
 “Fit effects” fits them in the viewport; “Thermal / glass” also shows the 0.5 psi glazing reference and the median
 first-degree burn radius for exposed skin at the shown weather visibility. These are estimates, not uniform damage
 boundaries: terrain, shelter, clothing and materials matter. A dashed elevated fireball silhouette is not a ground-contact disk.

@@ -462,6 +462,7 @@ public final class IncomingClient {
                 FlightTracks.reset();
                 ProjectileCamera.reset();
                 NukeArming.cancel();
+                if (Minecraft.getInstance().screen instanceof ua.zentix.incoming.client.screen.NuclearReviewScreen screen) screen.abort();
             } else {
                 // ordinary cancel: nuclear projectiles keep flying; their sound, camera and two-step ICBM launch remain
                 ClientSounds.cancelled(p.projectiles());

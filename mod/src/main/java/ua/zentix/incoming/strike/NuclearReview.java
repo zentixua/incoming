@@ -6,6 +6,7 @@ import net.minecraft.resources.ResourceKey;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.network.PacketDistributor;
+import net.neoforged.neoforge.event.entity.living.LivingDeathEvent;
 import net.neoforged.neoforge.network.handling.IPayloadContext;
 import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.IncomingConfig;
@@ -42,6 +43,7 @@ public final class NuclearReview {
     }
 
     public static void request(ServerPlayer p, C2S.Fire order) {
+        if (!p.isAlive() || p.isRemoved()) { cancel(p); return; }
         NuclearReview state = p.getData(ModAttachments.NUCLEAR_REVIEW);
         long now = p.serverLevel().getGameTime();
         if (state.lastRequest != Long.MIN_VALUE && now - state.lastRequest < 4) return;
@@ -98,12 +100,36 @@ public final class NuclearReview {
         if (ctx.player() instanceof ServerPlayer p) act(p, packet.id(), packet.action());
     }
 
+    /** Discard authority before notifying the client, so an already queued COMMIT cannot survive cancellation. */
+    private static boolean cancel(ServerPlayer p) {
+        if (!p.hasData(ModAttachments.NUCLEAR_REVIEW)) return false;
+        NuclearReview state = p.getData(ModAttachments.NUCLEAR_REVIEW);
+        Entry e = state.entry;
+        state.entry = null;
+        if (e == null) return false;
+        finish(p, e);
+        return true;
+    }
+
+    /** Global nuclear abort includes unpaid reviews across all dimensions. No inventory was reserved. */
+    public static int cancelAll(java.util.Collection<? extends ServerPlayer> players) {
+        int cancelled = 0;
+        for (ServerPlayer p : players) if (cancel(p)) cancelled++;
+        return cancelled;
+    }
+
+    /** Respawn attachment loss happens too late: invalidate on the actual, non-cancelled death event. */
+    public static void onDeath(LivingDeathEvent event) {
+        if (event.getEntity() instanceof ServerPlayer p) cancel(p);
+    }
+
     private static void finish(ServerPlayer p, Entry e) {
         PacketDistributor.sendToPlayer(p, new S2C.NuclearReview(e.id, e.order, e.aim.point(), e.visibility, e.scale, true));
     }
 
     /** Public for counted-tick GameTests; identity and all authority live server-side. */
     public static boolean act(ServerPlayer p, UUID id, int action) {
+        if (!p.isAlive() || p.isRemoved()) { cancel(p); return false; }
         NuclearReview state = p.getData(ModAttachments.NUCLEAR_REVIEW);
         Entry e = state.entry;
         if (e == null || !e.id.equals(id)) return false;

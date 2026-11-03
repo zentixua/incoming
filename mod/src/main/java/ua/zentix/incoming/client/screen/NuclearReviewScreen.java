@@ -81,7 +81,14 @@ public final class NuclearReviewScreen extends Screen {
     /** Only the server can finish a reviewed launch; a lagging server never loses the confirmation silently. */
     public void complete(java.util.UUID id) {
         if (!review.id().equals(id)) return;
+        abort();
+    }
+
+    /** Server-wide abort also closes a held review when its individual completion packet has already expired. */
+    public void abort() {
         sent = true;
+        holding = false;
+        held = 0;
         minecraft.setScreen(null);
     }
 
