@@ -20,6 +20,8 @@ Recomputed directly from `perf-559-final/{A1,B,A2}/none/frames.csv`, with the or
 | Median sampled GPU clock, MHz | 2,250 | 2,092.5 | 2,400 |
 | Whole-frame interval p95, ms | 7.0938 | 6.9750 | 7.2430 |
 
+The heat/quads/count rows average the one-second probes timestamped inside the window; the frame and effects-stage rows use per-frame CSV data.
+
 `4.0205 / 3.443 - 1 = 16.773%`. In four consecutive five-second bins, GPU p50 is A1 `[3.4985, 3.3920, 3.6150, 3.3980]`, B `[3.9135, 4.2690, 4.0580, 3.9225]`, A2 `[2.7610, 2.8210, 2.8055, 2.7865]`. Thus the difference persists throughout the window.
 
 What explains the classification:
@@ -43,4 +45,4 @@ Both were taken:
 
 Main `9b099a981` was merged with merge commit `4e53302c0`; no rebase or force-push. The follow-up changes only the program-generation predicate, numerical tests and area notes. The cloud/render equations, shaders, draw counts and steady-state passes are unchanged, so the existing three-pack capture remains the performance evidence for those paths; it is not relabeled as a capture of the new head. No new GPU run is needed to remeasure an unchanged draw path.
 
-Follow-up head: `4e1c513ab`. Full local build passed: **1,755 tests, 280 suites, zero failures/errors/skips**, including all six `CloudBuildTest` cases. Final CI is running on this merged head. No release, server action or MT-B6 work.
+Follow-up head: `4e1c513ab`. Full local build passed: **1,755 tests, 280 suites, zero failures/errors/skips**, including all six `CloudBuildTest` cases. Final **Итог is green** on this merged head (`4e1c513ab`), confirmed with `tools/pr_ci.sh 559`. [Build log](review/build.log), [CI receipt](review/ci.log), [six permanent cloud-build tests](review/CloudBuildTest.xml). The PR remains open; no PR merge was performed. No release, server action or MT-B6 work.

@@ -1,0 +1,24 @@
+Starting a Gradle Daemon, 1 busy Daemon could not be reused, use --status for details
+> Task :createMinecraftArtifacts UP-TO-DATE
+> Task :compileJava UP-TO-DATE
+> Task :generateModMetadata UP-TO-DATE
+> Task :processResources UP-TO-DATE
+> Task :classes UP-TO-DATE
+> Task :jarJar UP-TO-DATE
+> Task :jar
+> Task :assemble
+> Task :compileDevtestJava UP-TO-DATE
+> Task :compileSandboxAgentJava UP-TO-DATE
+> Task :processDevtestResources UP-TO-DATE
+> Task :devtestClasses UP-TO-DATE
+> Task :processSandboxAgentResources NO-SOURCE
+> Task :sandboxAgentClasses UP-TO-DATE
+> Task :compileTestJava
+> Task :processTestResources UP-TO-DATE
+> Task :testClasses
+> Task :test
+> Task :check
+> Task :build
+
+BUILD SUCCESSFUL in 2m 37s
+12 actionable tasks: 3 executed, 9 up-to-date
