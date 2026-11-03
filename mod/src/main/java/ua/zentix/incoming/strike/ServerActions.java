@@ -70,6 +70,15 @@ public final class ServerActions {
 
     public static void fire(C2S.Fire p, IPayloadContext ctx) {
         if (!(ctx.player() instanceof ServerPlayer player)) return;
+        if (p.loadout().nuclear()) {
+            NuclearReview.request(player, p);
+            return;
+        }
+        fire(player, p, null);
+    }
+
+    /** Shared reviewed/unreviewed dispatch. A reviewed aim is immutable until this call. */
+    static void fire(ServerPlayer player, C2S.Fire p, @Nullable Aim reviewed) {
         if (!mayUse(player)) {
             player.displayClientMessage(Component.translatable("incoming.no_permission").withStyle(ChatFormatting.RED), true);
             return;
@@ -77,7 +86,7 @@ public final class ServerActions {
         if (tooSoon(player, ModAttachments.LAST_FIRE.get())) return;
 
         Loadout l = p.loadout();
-        Aim aim = p.aim().isPresent() ? fromHint(player, p.aim().get()) : fromMode(player, l, p.aircraft().orElse(null));
+        Aim aim = reviewed != null ? reviewed : fireAim(player, p);
         if (aim == null) return;
         // Designator linked to fixed launchers assigns missions instead of launching itself: they launch from their sites.
         ItemStack designator = designator(player);
@@ -104,6 +113,57 @@ public final class ServerActions {
         strike(player, l.weapon(), l.count(), l.spread(), aim, l.nuke(), p.via(), from, true);
     }
 
+    @Nullable
+    private static Aim fireAim(ServerPlayer player, C2S.Fire p) {
+        return p.aim().isPresent() ? fromHint(player, p.aim().get()) : fromMode(player, p.loadout(), p.aircraft().orElse(null));
+    }
+
+    @Nullable
+    static Aim reviewAim(ServerPlayer player, C2S.Fire p) {
+        if (p.aim().isEmpty() && p.loadout().mode() == TargetMode.PLAYER)
+            return reviewPlayer(player, findPlayer(player.server, p.loadout().player()));
+        Aim aim = fireAim(player, p);
+        // Crosshair hints and mounted targets must obey the same disclosure policy as a named player.
+        if (aim != null && aim.target().subject() instanceof Target.OfEntity target
+                && player.serverLevel().getEntity(target.uuid()) instanceof Entity entity && rider(entity) instanceof ServerPlayer victim) {
+            Aim known = reviewPlayer(player, victim);
+            if (known == null || known.target() instanceof Target.Point) return known;
+        }
+        return aim;
+    }
+
+    /** Read-only coordinate disclosure is stricter than launch permission, including friendly players and sight_rules=false. */
+    @Nullable
+    private static Aim reviewPlayer(ServerPlayer viewer, @Nullable ServerPlayer victim) {
+        if (victim == null || !mapPlayerEligible(viewer, victim)) {
+            notFound(viewer);
+            return null;
+        }
+        Aim aim = atPlayer(victim);
+        if (IncomingConfig.SERVER.sightRules.get() && !Sides.friendly(viewer, victim) && !seesNow(viewer, aim.target())) {
+            Sightings.Contact contact = Sightings.contact(viewer.serverLevel(), Sides.side(viewer), victim.getUUID());
+            if (contact == null) {
+                notFound(viewer);
+                return null;
+            }
+            // A fresh contact licenses its recorded position, never unseen live movement during CURRENT's grace period.
+            Vec3 known = contact.pos().add(0, 1, 0);
+            viewer.sendSystemMessage(Component.translatable("incoming.target.last_seen", victim.getDisplayName(),
+                    Math.max(1, contact.age(viewer.serverLevel().getGameTime()) / 20)));
+            aim = new Aim(new Target.Point(known), known, null);
+        }
+        if (!withinMapRange(viewer, aim.point().x, aim.point().z)) {
+            notFound(viewer);
+            return null;
+        }
+        return aim;
+    }
+
+    /** Shared exclusions for map markers and unpaid order reviews; never expose invisible/spectator coordinates. */
+    private static boolean mapPlayerEligible(ServerPlayer viewer, ServerPlayer other) {
+        return other != viewer && other.level() == viewer.level() && !other.isSpectator() && !other.isInvisible();
+    }
+
     /**
      * Problem with launch site {@code at} (horizontal) chosen on designator map; null if valid. Only
      * operator/host may choose ({@link NuclearKeys#trusted}: nuclear orders also bypass second key), only where a
@@ -125,7 +185,7 @@ public final class ServerActions {
      * Designator issuing “Fire”: the one viewed through (binoculars), otherwise first in hands as on designator
      * screen; empty means absent.
      */
-    private static ItemStack designator(ServerPlayer player) {
+    static ItemStack designator(ServerPlayer player) {
         if (player.isUsingItem() && player.getUseItem().getItem() instanceof DesignatorItem) return player.getUseItem();
         for (InteractionHand hand : InteractionHand.values()) {
             ItemStack stack = player.getItemInHand(hand);
@@ -245,7 +305,7 @@ public final class ServerActions {
         List<S2C.MapPlayer> marks = new ArrayList<>();
         Map<UUID, ServerPlayer> others = new HashMap<>();
         for (ServerPlayer other : players) {
-            if (other == viewer || other.level() != level || other.isSpectator() || other.isInvisible()) continue;
+            if (!mapPlayerEligible(viewer, other)) continue;
             boolean friendly = Sides.friendly(viewer, other);
             if (!friendly && rules) {
                 others.put(other.getUUID(), other);
@@ -333,6 +393,11 @@ public final class ServerActions {
         if (rules) {
             aim = ruled(player, aim);
             if (aim == null) return false;
+        }
+        if ((weapon.spec().warhead().always() || nuke.onCarrier() && Loadout.carriesNuke(weapon))
+                && nuke.yieldKt() > IncomingConfig.SERVER.nukeMaxYield.get()) {
+            player.sendSystemMessage(Component.translatable("incoming.nuke.review.cap", IncomingConfig.SERVER.nukeMaxYield.get()));
+            return false;
         }
         Loadout l = order(weapon, count, spread, nuke);
         if (l.nuclear() && !mayUseNuke(player)) {
@@ -743,6 +808,7 @@ public final class ServerActions {
             }
         }
         if (nuclear) {
+            n += NuclearReview.cancelAll(server.getPlayerList().getPlayers());
             n += NuclearKeys.cancelAll(server, server.getPlayerList().getPlayers(),
                     Component.translatable("incoming.nuke.key.cancelled").withStyle(ChatFormatting.GRAY), "nuclear clear — " + who);
         }

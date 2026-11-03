@@ -7,6 +7,9 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.AbstractSliderButton;
 import net.minecraft.client.gui.components.AbstractWidget;
 import net.minecraft.client.gui.components.Button;
+import net.minecraft.client.gui.components.EditBox;
+import ua.zentix.incoming.IncomingConfig;
+import ua.zentix.incoming.nuclear.model.ImpactPreview;
 import net.minecraft.client.gui.components.Tooltip;
 import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.player.LocalPlayer;
@@ -25,12 +28,10 @@ import ua.zentix.incoming.client.aim.Designator;
 import ua.zentix.incoming.client.map.MapPlayers;
 import ua.zentix.incoming.client.map.MapTarget;
 import ua.zentix.incoming.client.map.TerrainTiles;
-import ua.zentix.incoming.client.nuclear.NukeArming;
 import ua.zentix.incoming.compat.SubLevels;
 import ua.zentix.incoming.item.DesignatorItem;
 import ua.zentix.incoming.launcher.LauncherLinks;
 import ua.zentix.incoming.net.C2S;
-import ua.zentix.incoming.nuclear.model.Yield;
 import ua.zentix.incoming.registry.ModDataComponents;
 import ua.zentix.incoming.strike.Loadout;
 import ua.zentix.incoming.strike.TargetMode;
@@ -49,7 +50,7 @@ import java.util.function.IntFunction;
 
 /**
  * Remote screen (replaces chat menu): weapon, count, spread and target: where I look, around me, player from list,
- * nearby craft, or map location ({@link MapScreen}); nuclear weapon adds yield and burst, launch after 3 s arming.
+ * nearby craft, or map location ({@link MapScreen}); nuclear weapon adds yield and burst, a reviewed three-second launch hold.
  * Settings saved in remote; server validates launch.
  */
 public class RemoteScreen extends Screen {
@@ -71,6 +72,7 @@ public class RemoteScreen extends Screen {
     @Nullable
     private UUID aircraft;
     private int page;
+    private boolean validYield = true;
     private final List<Choice> choices = new ArrayList<>();
     /** Weapon description lines and window height: computed in {@link #init()} from font. */
     private int descLines = 1, h = BASE_H + (1 + HINT_LINES) * LINE;
@@ -103,7 +105,7 @@ public class RemoteScreen extends Screen {
     protected void init() {
         List<WeaponType> menu = WeaponType.menu();
         descLines = Math.max(1, menu.stream().mapToInt(w -> font.split(w.description(), W - 8).size()).max().orElse(1));
-        h = BASE_H + (descLines + HINT_LINES) * LINE;
+        h = BASE_H + (descLines + HINT_LINES) * LINE + (loadout.nuclear() ? 22 : 0);
         int x0 = (width - W) / 2, y0 = (height - h) / 2;
         int y = y0 + 22;
 
@@ -125,12 +127,25 @@ public class RemoteScreen extends Screen {
             WeaponSpec.Warhead warhead = loadout.weapon().spec().warhead();
             List<Cell> nuke = new ArrayList<>();
             if (!warhead.always()) nuke.add(new Cell(warheadButton(n, 0, y, 0)));
-            // Yield: any integer 1 to MAX_YIELD, as in command and Loadout.Nuke (server caps at max_yield);
-            // preset names at their values; row width from longest label.
-            List<Component> yields = new ArrayList<>();
-            for (int kt = 1; kt <= Loadout.Nuke.MAX_YIELD; kt++) yields.add(yieldLabel(kt));
-            nuke.add(new Cell(new IntSlider(0, y, 0, 20, RemoteScreen::yieldLabel, 1, Loadout.Nuke.MAX_YIELD, n.yieldKt(),
-                    v -> commit(loadout.withNuke(loadout.nuke().withYield(v)))), yields));
+            int cap = IncomingConfig.SERVER.nukeMaxYield.get();
+            EditBox yield = new EditBox(font, 0, y, 100, 20, Component.translatable("incoming.remote.yield.input", cap)) {
+                @Override public void renderWidget(GuiGraphics g, int mx, int my, float partial) {
+                    super.renderWidget(g, mx, my, partial);
+                    g.drawString(font, "kt", getX() + getWidth() - 18, getY() + 6, 0xFFA0A0A0);
+                }
+            };
+            yield.setMaxLength(7);
+            yield.setValue(Integer.toString(n.yieldKt()));
+            yield.setFilter(text -> text.chars().allMatch(c -> c >= '0' && c <= '9'));
+            yield.setTooltip(Tooltip.create(Component.translatable("incoming.remote.yield.input", cap)));
+            yield.setResponder(text -> {
+                var value = ImpactPreview.parseYield(text, IncomingConfig.SERVER.nukeMaxYield.get());
+                validYield = value.isPresent();
+                yield.setTextColor(validYield ? 0xFFFFFF : 0xFF6060);
+                if (validYield) commit(loadout.withNuke(loadout.nuke().withYield(value.getAsInt())));
+            });
+            validYield = n.yieldKt() <= cap;
+            nuke.add(new Cell(yield, List.of(Component.literal("1000 kt"))));
             if (warhead.chooseBurst()) {
                 Component air = Component.translatable("incoming.remote.burst.air"), ground = Component.translatable("incoming.remote.burst.ground");
                 nuke.add(new Cell(Button.builder(n.airBurst() ? air : ground,
@@ -148,6 +163,16 @@ public class RemoteScreen extends Screen {
             addRenderableWidget(new IntSlider(x0 + 8 + sw, y, sw, 20, "incoming.remote.spread", 0, 150, loadout.spread(), v -> commit(loadout.withSpread(v))));
         }
         y += 26;
+
+        if (loadout.nuclear()) {
+            List<Cell> presets = new ArrayList<>();
+            for (int kt : ImpactPreview.suggestions(IncomingConfig.SERVER.nukeMaxYield.get())) {
+                presets.add(new Cell(Button.builder(Component.literal(ImpactPreview.yieldText(kt)),
+                        b -> set(loadout.withNuke(loadout.nuke().withYield(kt)))).bounds(0, y, 0, 18).build()));
+            }
+            row(presets, x0);
+            y += 22;
+        }
 
         // Target mode.
         List<Cell> modes = new ArrayList<>();
@@ -263,14 +288,6 @@ public class RemoteScreen extends Screen {
                 .tooltip(Tooltip.create(Component.translatable("incoming.remote.warhead.tooltip"))).build();
     }
 
-    /** "15 kt (Hiroshima)"; no name for a yield outside presets. */
-    private static Component yieldLabel(int kt) {
-        for (Yield y : Yield.values()) {
-            if ((int) y.kt() == kt) return Component.translatable("incoming.remote.yield", kt, Component.translatable(y.key()));
-        }
-        return Component.translatable("incoming.remote.yield", kt, Component.empty());
-    }
-
     /** Selection yellow with underline, not bold: bold is wider and would expand the {@link #row}. */
     private static Component label(Component text, boolean selected) {
         return selected ? text.copy().withStyle(ChatFormatting.YELLOW, ChatFormatting.UNDERLINE) : text.copy().withStyle(ChatFormatting.GRAY);
@@ -358,6 +375,7 @@ public class RemoteScreen extends Screen {
      * here rather than the screen field.
      */
     void fire(Waypoints via, Optional<Vec3> from) {
+        if (loadout.nuclear() && !validYield) return;
         if (loadout.mode() == TargetMode.AIRCRAFT && aircraft == null) return;
         if (loadout.mode() == TargetMode.PLAYER && loadout.player().isEmpty()) return;
         if (!loadout.weapon().spec().route().waypoints()) via = Waypoints.NONE;
@@ -379,7 +397,7 @@ public class RemoteScreen extends Screen {
         C2S.Fire packet = new C2S.Fire(loadout, aim, Optional.ofNullable(aircraft), via, from);
         Minecraft.getInstance().setScreen(null);
         if (loadout.nuclear()) {
-            NukeArming.toggle(() -> PacketDistributor.sendToServer(packet));
+            PacketDistributor.sendToServer(new C2S.ReviewNuclear(packet));
         } else {
             PacketDistributor.sendToServer(packet);
         }
