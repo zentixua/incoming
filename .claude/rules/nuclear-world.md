@@ -231,7 +231,8 @@ paths:
 ## Pitfalls
 - Nuclear timber members use ordinary pressure fracture; the log tag is not immunity. Recognized rooted
   vertical trunks use the whole-tree path first, scanning through the snapshot's actual world height rather
-  than stopping at 24 blocks. Untagged hard breakable blocks use the existing strongest nuclear proxy;
+  than stopping at 24 blocks. Recognition precedes the load/config check: surviving trunks stay out of
+  per-block fracture in every breach round, including when `nukeTreeFall` is disabled. Untagged hard breakable blocks use the existing strongest nuclear proxy;
   this fallback does not alter conventional weapons' `BlockResponse.of` table.
 - `Collapse.detached` reconciles closed bearing components after the short-span solve. It compares original
   connectivity to real anchors with the surviving component, reusing the span solver's buffers. An already

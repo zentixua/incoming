@@ -108,6 +108,27 @@ public final class StructuralRuinGameTests {
         helper.succeed();
     }
 
+    @GameTest(template = "pad", timeoutTicks = 100, batch = "nuke_structure_tree_load", skyAccess = true)
+    public static void recognizedTreeBelowTopplingLoadKeepsItsTrunk(GameTestHelper helper) {
+        var context = fixture(helper.getLevel(), tree(30, true), 4);
+        var grid = context.cachedGridForTest(helper.getLevel(), new ChunkPos(0, 0));
+        var collapse = Collapse.solve(grid);
+        for (int y = 65; y < 95; y++)
+            helper.assertTrue(!collapse.isGone(24, y, 24), "Tree entered the timber-fracture path below its whole-tree load at " + y);
+        helper.succeed();
+    }
+
+    @GameTest(template = "pad", timeoutTicks = 100, batch = "nuke_structure_tree_rule", skyAccess = true)
+    public static void disabledTreeFallDoesNotTurnTreesIntoTimberColumns(GameTestHelper helper) {
+        var context = fixture(helper.getLevel(), tree(30, true), 20);
+        var g = context.cachedGridForTest(helper.getLevel(), new ChunkPos(0, 0));
+        var grid = new RuinContext.Grid(g.ctx(), g.centre(), g.minY(), g.maxY(), g.shots(), g.view(), true, false, g.fires());
+        var collapse = Collapse.solve(grid);
+        for (int y = 65; y < 95; y++)
+            helper.assertTrue(!collapse.isGone(24, y, 24), "Disabled tree fall was bypassed by timber fracture at " + y);
+        helper.succeed();
+    }
+
     @GameTest(template = "pad", timeoutTicks = 100, batch = "nuke_structure_seam", skyAccess = true)
     public static void roofReleaseCrossesTheChunkSeam(GameTestHelper helper) {
         Shape original = hall(Blocks.STONE);
