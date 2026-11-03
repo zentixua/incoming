@@ -1,0 +1,14 @@
+test_coherent_overlap_reports_overload_instead_of_normalizing_it_away (test_audition_sounds.AuditionTest.test_coherent_overlap_reports_overload_instead_of_normalizing_it_away) ... ok
+test_every_audition_uses_one_gain_and_measurements_stay_unscaled (test_audition_sounds.AuditionTest.test_every_audition_uses_one_gain_and_measurements_stay_unscaled) ... ok
+test_mixed_case_adds_one_near_to_the_far_copies (test_audition_sounds.AuditionTest.test_mixed_case_adds_one_near_to_the_far_copies) ... ok
+test_mono_audition_preserves_stereo_cancellation (test_audition_sounds.AuditionTest.test_mono_audition_preserves_stereo_cancellation) ... ok
+test_offsets_keep_the_complete_last_tail (test_audition_sounds.AuditionTest.test_offsets_keep_the_complete_last_tail) ... ok
+test_oversampled_meter_detects_an_intersample_peak (test_audition_sounds.AuditionTest.test_oversampled_meter_detects_an_intersample_peak) ... ok
+test_silence_is_valid_json_and_long_overlap_is_rejected (test_audition_sounds.AuditionTest.test_silence_is_valid_json_and_long_overlap_is_rejected) ... ok
+test_small_speaker_removes_sub_bass_without_makeup_gain (test_audition_sounds.AuditionTest.test_small_speaker_removes_sub_bass_without_makeup_gain) ... ok
+
+----------------------------------------------------------------------
+Ran 8 tests in 0.056s
+
+OK
+laptop_job ol-audio-final: exit 0

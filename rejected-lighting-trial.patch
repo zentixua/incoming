@@ -1,0 +1,45 @@
+diff --git a/mod/src/main/resources/assets/incoming/shaders/core/fx.fsh b/mod/src/main/resources/assets/incoming/shaders/core/fx.fsh
+index c20a25c10..7d384bf31 100644
+--- a/mod/src/main/resources/assets/incoming/shaders/core/fx.fsh
++++ b/mod/src/main/resources/assets/incoming/shaders/core/fx.fsh
+@@ -207,6 +207,12 @@ vec3 bloomLight(vec4 c, float cover, float gain) {
+     return light * min(1.0, BLOOM_WHITE / max(max(light.r, max(light.g, light.b)), 1e-6)) * a;
+ }
+ 
++// presentation: shallow relief on the top of a flat dust puff, using its existing front-light map.
++// Bounded sky-light contrast only; the sprite opacity and per-pixel fire light keep their original paths.
++float puffTopRelief(float front, float reference) {
++    return 1.0 + 0.2 * clamp(front / max(reference, 1e-6) - 1.0, -1.0, 1.0);
++}
++
+ void main() {
+     // derivatives — before the branch (outside it they are defined for all pixels)
+     vec2 dx = dFdx(texCoord0), dy = dFdy(texCoord0);
+@@ -236,16 +242,20 @@ void main() {
+         // at the eye, and not brighter than the fire on screen (FxLights). The sum — in linear, to the screen — exponent 1/2.2
+         // map shadow — for baked matter; for this one — in the exponent of its light attenuation against the baked (SmokePuffs.shade,
+         // byte −13…−50 in Normal.y: FxQuads.sixWay)
+-        // exponent not below 0.001 and the base not zero: pow(0, 0) is undefined in GLSL (NaN — a black pixel in blending)
+-        float shade = max((-nearest * 127.0 - 13.0) / 37.0 * 1.5, 0.001);
+-        float key = pow(max(sixLight(a.rgb, b, sixKeyDir) / FxSixLight.z, 1e-6), shade);
+-        float diffuse = pow(max((a.r + a.g + a.b + b.r + b.g + b.b) / 6.0 / FxSixLight.z, 1e-6), shade);
+-        float sky = sixKey * key + (1.0 - sixKey) * diffuse;
+-        vec3 fire = sixBall * pow(max(sixLight(a.rgb, b, sixBallDir) / FxSixLight.z, 1e-6), shade);
+-        // a puff lying on the horizontal (shadow exponent 0 — the top of the layer lit from above): the balls' light — in this pixel
++        float sky;
++        vec3 fire;
++        // A flat top uses front-facing map relief, not the side/back shadows of a vertical billow.
+         if (-nearest * 127.0 - 13.0 < 0.5) {
++            sky = puffTopRelief(b.b, FxSixLight.y);
+             vec3 bd;
+             fire = ballsToward(worldPos, bd);
++        } else {
++            // Nonzero bases and exponent avoid undefined pow(0, 0) in blending.
++            float shade = max((-nearest * 127.0 - 13.0) / 37.0 * 1.5, 0.001);
++            float key = pow(max(sixLight(a.rgb, b, sixKeyDir) / FxSixLight.z, 1e-6), shade);
++            float diffuse = pow(max((a.r + a.g + a.b + b.r + b.g + b.b) / 6.0 / FxSixLight.z, 1e-6), shade);
++            sky = sixKey * key + (1.0 - sixKey) * diffuse;
++            fire = sixBall * pow(max(sixLight(a.rgb, b, sixBallDir) / FxSixLight.z, 1e-6), shade);
+         }
+         // sky tint (at night — the lilac light of the moon) — only for sky light: the vertex colour carries its brightness, and the puff's fire
+         // has its own (the tint on the fire turned the dust around a ball pink at night)

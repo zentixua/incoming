@@ -1,0 +1,191 @@
+{
+  "sample_rate": 48000,
+  "copies": [
+    1,
+    4,
+    16
+  ],
+  "spacing_seconds": 0.075,
+  "spacing_samples": 3600,
+  "audition_gain_db": -8.229904424927117,
+  "margin_db": 6,
+  "inputs": {
+    "near": {
+      "path": "/mnt/data/projects/incoming/mod/run/wt-OL/mod/run/sandbox/fx/out/ol-main-grass/ol-main-grass.wav",
+      "sha256": "86666ab0f6307a146e42c5be5df50cb2b6afea81e8efa56693b3103e8bfd0954"
+    },
+    "far": {
+      "path": "/mnt/data/projects/incoming/mod/run/wt-OL/mod/run/sandbox/fx/out/ol-main-grass-far/ol-main-grass-far.wav",
+      "sha256": "0f9bf2780bb1f411c0c166da1acc8d2337f786a07f8cf8de9b722f8369cef9f6"
+    }
+  },
+  "measurement": "Unscaled decoded mixes; 4x FIR peak estimate, not certified true peak. RMS is not LUFS.",
+  "scope": "Copies sum without the runtime voice budget, limiter or dynamic mix. Captured WAVs may already contain output limiting.",
+  "mixed": "One near recording plus N far copies, first copy simultaneous with near; N is the filename count.",
+  "small_speaker": "Mono average, second-order 180 Hz highpass then 4 kHz lowpass; no makeup gain. Illustrative, not calibrated.",
+  "audition": "All WAVs share one attenuation, never boosted; near/far and speaker level differences remain. Includes 0.5 s filter tail.",
+  "cases": {
+    "near-001-full": {
+      "sample_peak_dbfs": -5.541050435568943,
+      "oversampled_peak_4x_dbfs": -5.53552306053787,
+      "rms_dbfs": -25.270216831865206,
+      "samples_over_full_scale": 0,
+      "sample_count": 1200000,
+      "headroom_db": 5.53552306053787,
+      "peak_increase_vs_one_db": 0.0
+    },
+    "near-001-small": {
+      "sample_peak_dbfs": -11.627483905311909,
+      "oversampled_peak_4x_dbfs": -11.619170267194905,
+      "rms_dbfs": -34.928423782184375,
+      "samples_over_full_scale": 0,
+      "sample_count": 600000,
+      "headroom_db": 11.619170267194905,
+      "peak_increase_vs_one_db": 0.0
+    },
+    "near-004-full": {
+      "sample_peak_dbfs": -0.6409618132108181,
+      "oversampled_peak_4x_dbfs": -0.6354344381797468,
+      "rms_dbfs": -19.980582000494564,
+      "samples_over_full_scale": 0,
+      "sample_count": 1221600,
+      "headroom_db": 0.6354344381797468,
+      "peak_increase_vs_one_db": 4.9000886223581235
+    },
+    "near-004-small": {
+      "sample_peak_dbfs": -6.22389856607731,
+      "oversampled_peak_4x_dbfs": -6.215162765279695,
+      "rms_dbfs": -29.062368732693148,
+      "samples_over_full_scale": 0,
+      "sample_count": 610800,
+      "headroom_db": 6.215162765279695,
+      "peak_increase_vs_one_db": 5.40400750191521
+    },
+    "near-016-full": {
+      "sample_peak_dbfs": 2.2243770498960465,
+      "oversampled_peak_4x_dbfs": 2.229904424927118,
+      "rms_dbfs": -14.509946814154377,
+      "samples_over_full_scale": 2236,
+      "sample_count": 1308000,
+      "headroom_db": -2.229904424927118,
+      "peak_increase_vs_one_db": 7.765427485464988
+    },
+    "near-016-small": {
+      "sample_peak_dbfs": -4.21868316853501,
+      "oversampled_peak_4x_dbfs": -4.210625853943536,
+      "rms_dbfs": -23.164204134776156,
+      "samples_over_full_scale": 0,
+      "sample_count": 654000,
+      "headroom_db": 4.210625853943536,
+      "peak_increase_vs_one_db": 7.408544413251369
+    },
+    "far-001-full": {
+      "sample_peak_dbfs": -10.135292315290997,
+      "oversampled_peak_4x_dbfs": -10.129764940259925,
+      "rms_dbfs": -32.597812182802464,
+      "samples_over_full_scale": 0,
+      "sample_count": 1200000,
+      "headroom_db": 10.129764940259925,
+      "peak_increase_vs_one_db": 0.0
+    },
+    "far-001-small": {
+      "sample_peak_dbfs": -16.11282481897036,
+      "oversampled_peak_4x_dbfs": -16.10729744393929,
+      "rms_dbfs": -40.65606872832439,
+      "samples_over_full_scale": 0,
+      "sample_count": 600000,
+      "headroom_db": 16.10729744393929,
+      "peak_increase_vs_one_db": 0.0
+    },
+    "far-004-full": {
+      "sample_peak_dbfs": -5.17704884393745,
+      "oversampled_peak_4x_dbfs": -5.171521468906379,
+      "rms_dbfs": -27.27376110045367,
+      "samples_over_full_scale": 0,
+      "sample_count": 1221600,
+      "headroom_db": 5.171521468906379,
+      "peak_increase_vs_one_db": 4.958243471353546
+    },
+    "far-004-small": {
+      "sample_peak_dbfs": -12.12319537121217,
+      "oversampled_peak_4x_dbfs": -12.11712825442338,
+      "rms_dbfs": -34.91365468992066,
+      "samples_over_full_scale": 0,
+      "sample_count": 610800,
+      "headroom_db": 12.11712825442338,
+      "peak_increase_vs_one_db": 3.990169189515912
+    },
+    "far-016-full": {
+      "sample_peak_dbfs": -3.1858035000563683,
+      "oversampled_peak_4x_dbfs": -3.180276125025297,
+      "rms_dbfs": -22.293322273497573,
+      "samples_over_full_scale": 0,
+      "sample_count": 1308000,
+      "headroom_db": 3.180276125025297,
+      "peak_increase_vs_one_db": 6.949488815234628
+    },
+    "far-016-small": {
+      "sample_peak_dbfs": -10.168324383725722,
+      "oversampled_peak_4x_dbfs": -10.16279700869465,
+      "rms_dbfs": -29.238817489044457,
+      "samples_over_full_scale": 0,
+      "sample_count": 654000,
+      "headroom_db": 10.16279700869465,
+      "peak_increase_vs_one_db": 5.944500435244642
+    },
+    "mixed-001-full": {
+      "sample_peak_dbfs": -5.541050435568943,
+      "oversampled_peak_4x_dbfs": -5.53552306053787,
+      "rms_dbfs": -24.577475888003516,
+      "samples_over_full_scale": 0,
+      "sample_count": 1200000,
+      "headroom_db": 5.53552306053787,
+      "peak_increase_vs_one_db": 0.0
+    },
+    "mixed-001-small": {
+      "sample_peak_dbfs": -11.62766771182983,
+      "oversampled_peak_4x_dbfs": -11.61935266553497,
+      "rms_dbfs": -33.963655361154935,
+      "samples_over_full_scale": 0,
+      "sample_count": 600000,
+      "headroom_db": 11.61935266553497,
+      "peak_increase_vs_one_db": 0.0
+    },
+    "mixed-004-full": {
+      "sample_peak_dbfs": -4.121932240818758,
+      "oversampled_peak_4x_dbfs": -4.115954429250144,
+      "rms_dbfs": -23.229237658668662,
+      "samples_over_full_scale": 0,
+      "sample_count": 1221600,
+      "headroom_db": 4.115954429250144,
+      "peak_increase_vs_one_db": 1.419568631287726
+    },
+    "mixed-004-small": {
+      "sample_peak_dbfs": -11.176686700695297,
+      "oversampled_peak_4x_dbfs": -11.171159325664227,
+      "rms_dbfs": -31.986029663290054,
+      "samples_over_full_scale": 0,
+      "sample_count": 610800,
+      "headroom_db": 11.171159325664227,
+      "peak_increase_vs_one_db": 0.44819333987074295
+    },
+    "mixed-016-full": {
+      "sample_peak_dbfs": -2.6441844538898778,
+      "oversampled_peak_4x_dbfs": -2.6386570788588064,
+      "rms_dbfs": -20.641094271083077,
+      "samples_over_full_scale": 0,
+      "sample_count": 1308000,
+      "headroom_db": 2.6386570788588064,
+      "peak_increase_vs_one_db": 2.896865981679064
+    },
+    "mixed-016-small": {
+      "sample_peak_dbfs": -8.912232853662116,
+      "oversampled_peak_4x_dbfs": -8.906705478631046,
+      "rms_dbfs": -28.309461465166216,
+      "samples_over_full_scale": 0,
+      "sample_count": 654000,
+      "headroom_db": 8.906705478631046,
+      "peak_increase_vs_one_db": 2.712647186903924
+    }
+  }
+}

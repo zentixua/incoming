@@ -1,0 +1,47 @@
+{
+  "note": "Code-derived illustration after positive phase, fixed 1 m layer. Not a complete GroundDust trajectory; not measured frames.",
+  "rows": [
+    {
+      "seconds": 0,
+      "coarse_front_fraction": 1.0,
+      "illustrative_one_meter_layer_mass": 1.0,
+      "illustrative_one_meter_layer_extinction": 1.0,
+      "ol_low_residue_fraction": 1.0
+    },
+    {
+      "seconds": 0.5,
+      "coarse_front_fraction": 0.7508581988142218,
+      "illustrative_one_meter_layer_mass": 0.8943930146759445,
+      "illustrative_one_meter_layer_extinction": 0.988282782785685,
+      "ol_low_residue_fraction": 0.8464817248906141
+    },
+    {
+      "seconds": 2,
+      "coarse_front_fraction": 0.31785694810081133,
+      "illustrative_one_meter_layer_mass": 0.75995712165637,
+      "illustrative_one_meter_layer_extinction": 0.9636379195373088,
+      "ol_low_residue_fraction": 0.513417119032592
+    },
+    {
+      "seconds": 6,
+      "coarse_front_fraction": 0.0321140535788209,
+      "illustrative_one_meter_layer_mass": 0.6179198335249463,
+      "illustrative_one_meter_layer_extinction": 0.9214501157878093,
+      "ol_low_residue_fraction": 0.1353352832366127
+    },
+    {
+      "seconds": 12,
+      "coarse_front_fraction": 0.0010313124372633793,
+      "illustrative_one_meter_layer_mass": 0.512800740896965,
+      "illustrative_one_meter_layer_extinction": 0.8794090680373765,
+      "ol_low_residue_fraction": 0.01831563888873418
+    },
+    {
+      "seconds": 60,
+      "coarse_front_fraction": 1.166678718941633e-15,
+      "illustrative_one_meter_layer_mass": 0.2935602631189746,
+      "illustrative_one_meter_layer_extinction": 0.7390274571845238,
+      "ol_low_residue_fraction": 2.061153622438558e-09
+    }
+  ]
+}

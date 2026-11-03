@@ -1,0 +1,2 @@
+ol-trial-grass: INVALID for comparison. First conventional blast immediately after returning from a distant nuke site; BLAST changes site to HOME and emits before the teleport/client terrain is ready. Missing local FrontDust/litter and bare fallback invalidate the pair. Use ol-trial-grass-ready versus ol-main-grass and ol-main-repeat-grass.
+Frames have requested t and measured age in capture.json; the 300 m pre-front request is late and must use measured age.

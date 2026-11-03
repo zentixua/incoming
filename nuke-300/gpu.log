@@ -1,0 +1,8 @@
+adapter: NVIDIA GeForce RTX 4060 Laptop GPU
+compile: 28 ms
+00: pass 11.36 ms (median of 1)
+01: pass 15.25 ms (median of 1)
+02: pass 13.30 ms (median of 1)
+03: pass 15.15 ms (median of 1)
+04: pass 22.14 ms (median of 1)
+05: pass 22.58 ms (median of 1)

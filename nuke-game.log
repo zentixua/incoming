@@ -1,0 +1,28 @@
+fx clear → ok
+fx cam 10 2 0 2 → ok
+fx time day → ok
+fx overlay off → ok
+fx shots ol-game-nuke-300 -.2,.1,.5,2,6,12 14 → ok armed /mnt/data/projects/incoming/mod/run/wt-OL/mod/run/sandbox/fx/out/ol-game-nuke-300
+fx nuke 15 ground near 290 → ok /mnt/data/projects/incoming/mod/run/wt-OL/mod/run/sandbox/fx/out/ol-game-nuke-300
+audio: /mnt/data/projects/incoming/mod/run/wt-OL/mod/run/sandbox/fx/out/ol-game-nuke-300/ol-game-nuke-300.wav (14.0 s, 48000 Hz)
+frame: /mnt/data/projects/incoming/mod/run/wt-OL/mod/run/sandbox/fx/out/ol-game-nuke-300/ol-game-nuke-300_-00.20s.png
+frame: /mnt/data/projects/incoming/mod/run/wt-OL/mod/run/sandbox/fx/out/ol-game-nuke-300/ol-game-nuke-300_000.10s.png
+frame: /mnt/data/projects/incoming/mod/run/wt-OL/mod/run/sandbox/fx/out/ol-game-nuke-300/ol-game-nuke-300_000.50s.png
+frame: /mnt/data/projects/incoming/mod/run/wt-OL/mod/run/sandbox/fx/out/ol-game-nuke-300/ol-game-nuke-300_002.00s.png
+frame: /mnt/data/projects/incoming/mod/run/wt-OL/mod/run/sandbox/fx/out/ol-game-nuke-300/ol-game-nuke-300_006.00s.png
+frame: /mnt/data/projects/incoming/mod/run/wt-OL/mod/run/sandbox/fx/out/ol-game-nuke-300/ol-game-nuke-300_012.00s.png
+from command to last frame and audio: 18.7 s
+fx clear → ok
+fx cam 10 2 0 2 → ok
+fx time day → ok
+fx overlay off → ok
+fx shots ol-game-nuke-700 -.2,.1,.5,2,6,12 14 → ok armed /mnt/data/projects/incoming/mod/run/wt-OL/mod/run/sandbox/fx/out/ol-game-nuke-700
+fx nuke 15 ground near 690 → ok /mnt/data/projects/incoming/mod/run/wt-OL/mod/run/sandbox/fx/out/ol-game-nuke-700
+audio: /mnt/data/projects/incoming/mod/run/wt-OL/mod/run/sandbox/fx/out/ol-game-nuke-700/ol-game-nuke-700.wav (14.0 s, 48000 Hz)
+frame: /mnt/data/projects/incoming/mod/run/wt-OL/mod/run/sandbox/fx/out/ol-game-nuke-700/ol-game-nuke-700_-00.20s.png
+frame: /mnt/data/projects/incoming/mod/run/wt-OL/mod/run/sandbox/fx/out/ol-game-nuke-700/ol-game-nuke-700_000.10s.png
+frame: /mnt/data/projects/incoming/mod/run/wt-OL/mod/run/sandbox/fx/out/ol-game-nuke-700/ol-game-nuke-700_000.50s.png
+frame: /mnt/data/projects/incoming/mod/run/wt-OL/mod/run/sandbox/fx/out/ol-game-nuke-700/ol-game-nuke-700_002.00s.png
+frame: /mnt/data/projects/incoming/mod/run/wt-OL/mod/run/sandbox/fx/out/ol-game-nuke-700/ol-game-nuke-700_006.00s.png
+frame: /mnt/data/projects/incoming/mod/run/wt-OL/mod/run/sandbox/fx/out/ol-game-nuke-700/ol-game-nuke-700_012.00s.png
+from command to last frame and audio: 20.5 s
