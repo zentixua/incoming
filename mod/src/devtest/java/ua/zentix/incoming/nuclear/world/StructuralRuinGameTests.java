@@ -107,4 +107,46 @@ public final class StructuralRuinGameTests {
                 "Tree recognition stopped below the crown");
         helper.succeed();
     }
+
+    @GameTest(template = "pad", timeoutTicks = 100, batch = "nuke_structure_seam", skyAccess = true)
+    public static void roofReleaseCrossesTheChunkSeam(GameTestHelper helper) {
+        Shape original = hall(Blocks.STONE);
+        Shape shifted = (x, y, z) -> original.at(x - 8, y, z - 8);
+        var context = fixture(helper.getLevel(), shifted, 2);
+        for (int cz = 0; cz <= 1; cz++) for (int cx = 0; cx <= 1; cx++) {
+            var collapse = Collapse.solve(context.cachedGridForTest(helper.getLevel(), new ChunkPos(cx, cz)));
+            for (int z = 0; z < 16; z++) for (int x = 0; x < 16; x++) {
+                if (!shifted.at(cx * 16 + x, 70, cz * 16 + z).is(Blocks.STONE)) continue;
+                helper.assertTrue(collapse.isGone(x + 16, 70, z + 16), "Roof seam retained in " + cx + "," + cz + " at " + x + "," + z);
+            }
+        }
+        helper.succeed();
+    }
+
+    @GameTest(template = "pad", timeoutTicks = 100, batch = "nuke_structure_existing", skyAccess = true)
+    public static void preexistingFloatingStoneDoesNotAcquireGravity(GameTestHelper helper) {
+        Shape shape = (x, y, z) -> {
+            if (x >= 0 && x < 16 && z >= 0 && z < 16 && y == 80) return Blocks.STONE.defaultBlockState();
+            if (x == 8 && z == 8 && y < 70) return Blocks.GLASS.defaultBlockState();
+            return AIR;
+        };
+        var context = fixture(helper.getLevel(), shape, 2);
+        var collapse = Collapse.solve(context.cachedGridForTest(helper.getLevel(), new ChunkPos(0, 0)));
+        helper.assertTrue(!collapse.isGone(24, 80, 24), "Unrelated preexisting floating roof fell");
+        helper.succeed();
+    }
+
+    @GameTest(template = "pad", timeoutTicks = 100, batch = "nuke_structure_protection", skyAccess = true)
+    public static void protectedBlocksRemainAnchors(GameTestHelper helper) {
+        var context = fixture(helper.getLevel(), hall(Blocks.OBSIDIAN), 20);
+        var collapse = Collapse.solve(context.cachedGridForTest(helper.getLevel(), new ChunkPos(0, 0)));
+        helper.assertTrue(!collapse.isGone(24, 70, 24), "Protected material was detached");
+        helper.assertTrue(Blast.props(Blocks.ANCIENT_DEBRIS.defaultBlockState()).response().kind() != BlockResponse.Kind.NONE,
+                "Hard breakable material gained fallback immunity");
+        helper.assertTrue(BlockResponse.of(Blocks.ANCIENT_DEBRIS.defaultBlockState()).kind() == BlockResponse.Kind.NONE,
+                "The nuclear change leaked into conventional weapon response");
+        helper.assertTrue(BlockResponse.of(Blocks.BEDROCK.defaultBlockState()).kind() == BlockResponse.Kind.NONE,
+                "Unbreakable material lost protection");
+        helper.succeed();
+    }
 }

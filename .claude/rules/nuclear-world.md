@@ -229,6 +229,16 @@ paths:
   (`RuinContext.applied`).
 
 ## Pitfalls
+- Nuclear timber members use ordinary pressure fracture; the log tag is not immunity. Recognized rooted
+  vertical trunks use the whole-tree path first, scanning through the snapshot's actual world height rather
+  than stopping at 24 blocks. Untagged hard breakable blocks use the existing strongest nuclear proxy;
+  this fallback does not alter conventional weapons' `BlockResponse.of` table.
+- `Collapse.detached` reconciles closed bearing components after the short-span solve. It compares original
+  connectivity to real anchors with the surviving component, reusing the span solver's buffers. An already
+  floating component stays unchanged; a newly detached stone slab does not survive because both support
+  distances saturated. Unknown horizontal boundaries are unresolved, not anchors: this local pass does not
+  solve arbitrary bridges/components extending outside the snapshot window. Full boundary continuation and
+  conserved, staged material deposition are still absent. Regression batches: `nuke_structure_*`.
 - `RuinSettle` settles the entire saved ruin zone after its wave, including `NuclearEvents.past` from old saves,
   without players or LOD clients. Scan final-block disk chunks (`DiskStatus.blocksFinal`), skip absent/PARTIAL ones;
   old FINAL/retrogen chunks may need vanilla's asynchronous upgrade generation. Load through `AreaLoader` with
