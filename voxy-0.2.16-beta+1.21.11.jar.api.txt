@@ -1,0 +1,88 @@
+Compiled from "VoxelIngestService.java"
+public class me.cortex.voxy.common.world.service.VoxelIngestService {
+  public me.cortex.voxy.common.world.service.VoxelIngestService(me.cortex.voxy.common.thread.ServiceManager);
+  public boolean enqueueIngest(me.cortex.voxy.common.world.WorldEngine, net.minecraft.class_2818);
+  public int getTaskCount();
+  public void shutdown();
+  public static boolean tryIngestChunk(me.cortex.voxy.commonImpl.WorldIdentifier, net.minecraft.class_2818);
+  public static boolean tryAutoIngestChunk(net.minecraft.class_2818);
+  public static boolean rawIngest(me.cortex.voxy.commonImpl.WorldIdentifier, net.minecraft.class_2826, int, int, int, net.minecraft.class_2804, net.minecraft.class_2804);
+  public static boolean rawIngest(me.cortex.voxy.common.world.WorldEngine, net.minecraft.class_2826, int, int, int, net.minecraft.class_2804, net.minecraft.class_2804);
+}
+Compiled from "WorldEngine.java"
+public class me.cortex.voxy.common.world.WorldEngine {
+  public static final int MAX_LOD_LAYER;
+  public static final int UPDATE_TYPE_BLOCK_BIT;
+  public static final int UPDATE_TYPE_CHILD_EXISTENCE_BIT;
+  public static final int UPDATE_TYPE_DONT_SAVE;
+  public static final int DEFAULT_UPDATE_FLAGS;
+  public final me.cortex.voxy.common.config.section.SectionStorage storage;
+  public final me.cortex.voxy.commonImpl.VoxyInstance instanceIn;
+  public static final int POS_FORMAT_VERSION;
+  public void setDirtyCallback(me.cortex.voxy.common.world.WorldEngine$ISectionChangeCallback);
+  public void setSaveCallback(me.cortex.voxy.common.world.WorldEngine$ISectionSaveCallback);
+  public me.cortex.voxy.common.world.other.Mapper getMapper();
+  public boolean isLive();
+  public me.cortex.voxy.common.world.WorldEngine(me.cortex.voxy.common.config.section.SectionStorage);
+  public me.cortex.voxy.common.world.WorldEngine(me.cortex.voxy.common.config.section.SectionStorage, me.cortex.voxy.commonImpl.VoxyInstance);
+  public me.cortex.voxy.common.world.WorldSection acquireIfExists(int, int, int, int);
+  public me.cortex.voxy.common.world.WorldSection acquire(int, int, int, int);
+  public me.cortex.voxy.common.world.WorldSection acquire(long);
+  public me.cortex.voxy.common.world.WorldSection acquireIfExists(long);
+  public static long getWorldSectionId(int, int, int, int);
+  public static int getLevel(long);
+  public static int getX(long);
+  public static int getY(long);
+  public static int getZ(long);
+  public static java.lang.String pprintPos(long);
+  public void markDirty(me.cortex.voxy.common.world.WorldSection);
+  public void markDirty(me.cortex.voxy.common.world.WorldSection, int, int);
+  public void addDebugData(java.util.List<java.lang.String>);
+  public int getActiveSectionCount();
+  public void free();
+  public boolean isWorldUsed();
+  public boolean isWorldIdle();
+  public void markActive();
+  public void acquireRef();
+  public void releaseRef();
+  public boolean saveSection(me.cortex.voxy.common.world.WorldSection);
+  public boolean saveSection(me.cortex.voxy.common.world.WorldSection, boolean, boolean);
+}
+Compiled from "WorldSection.java"
+public final class me.cortex.voxy.common.world.WorldSection {
+  public static final int SECTION_VOLUME;
+  public static final boolean VERIFY_WORLD_SECTION_EXECUTION;
+  public final int lvl;
+  public final int x;
+  public final int y;
+  public final int z;
+  public final long key;
+  public static int RELEASE_HINT_POSSIBLE_REUSE;
+  public long[] _unsafeGetRawDataArray();
+  public int hashCode();
+  public boolean tryAcquire();
+  public int acquire();
+  public int acquire(int);
+  public int getRefCount();
+  public int release();
+  public int release(int);
+  public void assertNotFree();
+  public static int getIndex(int, int, int);
+  public long set(int, int, int, long);
+  public long[] copyData();
+  public void copyDataTo(long[]);
+  public void copyDataTo(long[], int);
+  public static int getChildIndex(int, int, int);
+  public byte getNonEmptyChildren();
+  public int updateEmptyChildState(me.cortex.voxy.common.world.WorldSection);
+  public int getNonEmptyBlockCount();
+  public int addNonEmptyBlockCount(int);
+  public boolean updateLvl0State();
+  public void _unsafeSetNonEmptyChildren(byte);
+  public static me.cortex.voxy.common.world.WorldSection _createRawUntrackedUnsafeSection(int, int, int, int);
+  public void markDirty();
+  public boolean exchangeIsInSaveQueue(boolean);
+  public boolean setNotDirty();
+  public boolean shouldSave();
+  public boolean isFreed();
+}

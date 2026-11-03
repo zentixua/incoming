@@ -1,0 +1,28 @@
+Compiled from "LSSApi.java"
+public final class dev.vox.lss.api.LSSApi {
+  public static dev.vox.lss.api.LSSApi$IngestFailureHandle captureIngestFailureHandle();
+  public static void withIngestFailureHandle(net.minecraft.resources.ResourceKey<net.minecraft.world.level.Level>, int, int, dev.vox.lss.api.LSSApi$IngestFailureHandle, java.lang.Runnable);
+  public static void registerColumnConsumer(dev.vox.lss.api.VoxelColumnConsumer);
+  public static void removeColumnConsumer(dev.vox.lss.api.VoxelColumnConsumer);
+  public static boolean hasVoxelConsumers();
+  public static boolean hasVoxelConsumersOtherThan(java.util.Collection<? extends dev.vox.lss.api.VoxelColumnConsumer>);
+  public static boolean isServerEnabled();
+  public static int getServerLodDistance();
+  public static void reportIngestFailure(net.minecraft.resources.ResourceKey<net.minecraft.world.level.Level>, int, int);
+  public static int maxReportedIngestBacklog();
+  public static void dispatchColumn(net.minecraft.client.multiplayer.ClientLevel, net.minecraft.resources.ResourceKey<net.minecraft.world.level.Level>, int, int, dev.vox.lss.api.VoxelColumnData);
+}
+Compiled from "VoxelColumnConsumer.java"
+public interface dev.vox.lss.api.VoxelColumnConsumer {
+  public abstract void onVoxelColumnReceived(net.minecraft.client.multiplayer.ClientLevel, net.minecraft.resources.ResourceKey<net.minecraft.world.level.Level>, int, int, dev.vox.lss.api.VoxelColumnData);
+  public default int pendingIngestBacklog();
+}
+Compiled from "VoxelColumnData.java"
+public final class dev.vox.lss.api.VoxelColumnData extends java.lang.Record {
+  public dev.vox.lss.api.VoxelColumnData(dev.vox.lss.api.VoxelColumnData$SectionData[], long);
+  public final java.lang.String toString();
+  public final int hashCode();
+  public final boolean equals(java.lang.Object);
+  public dev.vox.lss.api.VoxelColumnData$SectionData[] sections();
+  public long columnTimestamp();
+}

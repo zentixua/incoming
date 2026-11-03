@@ -1,0 +1,132 @@
+{
+  "production_head": "638c18597de8932728aaf8affa378e2fd2d7d632",
+  "unit_tests": {
+    "tests": 1744,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "local_build": "final-build-retry.log: BUILD SUCCESSFUL; production code identical to final head",
+  "extended_gametest": {
+    "passed": 45,
+    "lss": "0.19.0",
+    "log": "gametest.log"
+  },
+  "focused_gametest": {
+    "passed": 9,
+    "lss": "0.20.0",
+    "log": "focused.log",
+    "head": "638c18597de8932728aaf8affa378e2fd2d7d632"
+  },
+  "gate_probe": {
+    "passed": 1,
+    "renderer_proof": false
+  },
+  "ci": [
+    {
+      "bucket": "skipping",
+      "link": "https://github.com/zentixua/incoming/actions/runs/41730421836/job/126249719307",
+      "name": "\u0420\u0435\u043b\u0438\u0437"
+    },
+    {
+      "bucket": "pass",
+      "link": "https://github.com/zentixua/incoming/actions/runs/41730421836/job/126249669502",
+      "name": "\u0418\u0442\u043e\u0433"
+    },
+    {
+      "bucket": "pass",
+      "link": "https://github.com/zentixua/incoming/actions/runs/41730421836/job/126246710325",
+      "name": "Clean NeoForge installation"
+    },
+    {
+      "bucket": "pass",
+      "link": "https://github.com/zentixua/incoming/actions/runs/41730421836/job/126246084150",
+      "name": "GameTest 1/6"
+    },
+    {
+      "bucket": "pass",
+      "link": "https://github.com/zentixua/incoming/actions/runs/41730421836/job/126246084327",
+      "name": "GameTest 5/6"
+    },
+    {
+      "bucket": "pass",
+      "link": "https://github.com/zentixua/incoming/actions/runs/41730421836/job/126246084048",
+      "name": "GameTest 3/6"
+    },
+    {
+      "bucket": "pass",
+      "link": "https://github.com/zentixua/incoming/actions/runs/41730421836/job/126246083947",
+      "name": "\u042e\u043d\u0438\u0442-\u0442\u0435\u0441\u0442\u044b (rest)"
+    },
+    {
+      "bucket": "pass",
+      "link": "https://github.com/zentixua/incoming/actions/runs/41730421836/job/126246084163",
+      "name": "LSS GameTest jxJ4956L"
+    },
+    {
+      "bucket": "pass",
+      "link": "https://github.com/zentixua/incoming/actions/runs/41730421836/job/126246083754",
+      "name": "\u0421\u0442\u0440\u0430\u043d\u0438\u0446\u044b \u043c\u0430\u0433\u0430\u0437\u0438\u043d\u043e\u0432"
+    },
+    {
+      "bucket": "pass",
+      "link": "https://github.com/zentixua/incoming/actions/runs/41730421836/job/126246084035",
+      "name": "GameTest 4/6"
+    },
+    {
+      "bucket": "pass",
+      "link": "https://github.com/zentixua/incoming/actions/runs/41730421836/job/126246084073",
+      "name": "GameTest 2/6"
+    },
+    {
+      "bucket": "pass",
+      "link": "https://github.com/zentixua/incoming/actions/runs/41730421836/job/126246084043",
+      "name": "GameTest 6/6"
+    },
+    {
+      "bucket": "pass",
+      "link": "https://github.com/zentixua/incoming/actions/runs/41730421836/job/126246084381",
+      "name": "LSS GameTest ydDRzPcM"
+    },
+    {
+      "bucket": "pass",
+      "link": "https://github.com/zentixua/incoming/actions/runs/41730421836/job/126246083768",
+      "name": "\u042e\u043d\u0438\u0442-\u0442\u0435\u0441\u0442\u044b (slow)"
+    },
+    {
+      "bucket": "pass",
+      "link": "https://github.com/zentixua/incoming/actions/runs/41730421836/job/126246084129",
+      "name": "\u0421\u0431\u043e\u0440\u043a\u0430"
+    },
+    {
+      "bucket": "skipping",
+      "link": "https://github.com/zentixua/incoming/actions/runs/41730421836/job/126246085624",
+      "name": "\u041e\u0441\u0442\u0430\u043d\u043e\u0432\u043a\u0430 \u043f\u0440\u043e\u0432\u0435\u0440\u043e\u043a"
+    },
+    {
+      "bucket": "skipping",
+      "link": "https://github.com/zentixua/incoming/actions/runs/41730421836/job/126246087064",
+      "name": "\u0420\u0430\u0437\u0431\u043e\u0440 \u043f\u043e\u0432\u0442\u043e\u0440\u043e\u0432"
+    },
+    {
+      "bucket": "skipping",
+      "link": "https://github.com/zentixua/incoming/actions/runs/41730421836/job/126246087160",
+      "name": "\u0428\u043b\u0430\u0433\u0431\u0430\u0443\u043c"
+    },
+    {
+      "bucket": "skipping",
+      "link": "https://github.com/zentixua/incoming/actions/runs/41730421836/job/126246086216",
+      "name": "\u0421\u0442\u0435\u043d\u0434: \u0441\u0431\u043e\u0440\u043a\u0430 \u0438 \u0448\u043b\u0430\u0433\u0431\u0430\u0443\u043c"
+    },
+    {
+      "bucket": "skipping",
+      "link": "https://github.com/zentixua/incoming/actions/runs/41730421836/job/126246085173",
+      "name": "\u0421\u0431\u043e\u0440\u043a\u0430 \u0438\u0437 \u043f\u0440\u043e\u0432\u0435\u0440\u0435\u043d\u043d\u043e\u0433\u043e \u043f\u0440\u043e\u0433\u043e\u043d\u0430"
+    },
+    {
+      "bucket": "pass",
+      "link": "https://github.com/zentixua/incoming/actions/runs/41730421836/job/126245964204",
+      "name": "\u0427\u0442\u043e \u0438\u0437\u043c\u0435\u043d\u0438\u043b\u043e\u0441\u044c"
+    }
+  ]
+}
