@@ -102,3 +102,8 @@ paths:
   chunks without a player visit; later clients depend on LSS's ordinary save/store invalidation. This must be tested
   separately from Incoming's immediate copy delivery. Packets are not ingested during Flashback replay (Voxy shows
   the live database there).
+- A client-owned arrival buffer can hold encoded columns before calling the existing ingestion path, but does not
+  reserve a hidden Voxy revision. Measure submission, database readiness and rendered visibility separately; a
+  zero ingest queue is not a renderer fence. LSS 0.20's public `dispatchColumn` invokes all registered consumers;
+  their callback returns void, so an Incoming observer cannot veto Voxy's ingestion of an old column. Reapplying
+  retained ruins is a repair after overwrite, not stale-replay suppression. Do not remove another mod's consumer.

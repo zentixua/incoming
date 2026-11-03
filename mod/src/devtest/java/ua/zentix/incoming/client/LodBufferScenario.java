@@ -69,12 +69,18 @@ public final class LodBufferScenario {
     private long phaseStarted, lastFrame, frames, frameSum, frameMax;
     private int shots;
     private LodProbeReadback readback;
+    private int witnessYield;
+    private double visibleBaseline;
+    private boolean visibleLogged;
+    private final java.nio.FloatBuffer depthPixel = org.lwjgl.BufferUtils.createFloatBuffer(1);
 
     public LodBufferScenario() {
         active = this;
         NeoForge.EVENT_BUS.addListener(this::screen);
         NeoForge.EVENT_BUS.addListener(this::tick);
         NeoForge.EVENT_BUS.addListener(this::frame);
+        // Read before FxLayer marks this frame's LOD depth consumed.
+        NeoForge.EVENT_BUS.addListener(net.neoforged.bus.api.EventPriority.HIGH, this::renderWitness);
         NeoForge.EVENT_BUS.addListener(this::serverTick);
     }
     private void screen(ScreenEvent.Init.Post e) {
@@ -131,10 +137,13 @@ public final class LodBufferScenario {
         if (!started && ticks > 100) {
             started = true;
             if (!VoxyIngest.available()) { fail("Voxy ingestion unavailable"); return; }
-            mc.options.hideGui = true; mc.options.fov().set(90); mc.options.renderDistance().set(2);
+            mc.options.hideGui = true; mc.options.fov().set(90); mc.options.renderDistance().set(3);
             mc.options.pauseOnLostFocus = false;
             worker = new Thread(this::work, "Incoming LOD buffer probe"); worker.setDaemon(true); worker.start();
-            mc.getSingleplayerServer().execute(() -> producer = new Producer(mc.getSingleplayerServer().overworld(), mc.player.getUUID()));
+            mc.getSingleplayerServer().execute(() -> {
+                mc.getSingleplayerServer().overworld().setDayTime(6000);
+                producer = new Producer(mc.getSingleplayerServer().overworld(), mc.player.getUUID());
+            });
         }
         int count = receipts.getAndSet(0);
         if (count > 0) PacketDistributor.sendToServer(new LodProbeWire.Ack(epoch, count));
@@ -187,6 +196,52 @@ public final class LodBufferScenario {
             String name = String.format(Locale.ROOT, "lod_%d_%d_tick%d.png", yield, shots++, now);
             Screenshot.grab(mc.gameDirectory, name, mc.getMainRenderTarget(), c -> {});
             log("FRAME file=%s now=%d first=%d last=%d submitted=%d fps=%d", name, now, first, last, accepted, mc.getFps());
+        }
+    }
+    /** Read only the existing Voxy depth texture: database readiness alone is not rendered visibility. */
+    private void renderWitness(net.neoforged.neoforge.client.event.RenderLevelStageEvent e) {
+        if (e.getStage() != net.neoforged.neoforge.client.event.RenderLevelStageEvent.Stage.AFTER_LEVEL || phase < 0 || phase > 1) return;
+        if (witnessYield != yield) { witnessYield = yield; visibleBaseline = 0; visibleLogged = false; }
+        if (phase == 1 && visibleLogged) return;
+        var view = new ua.zentix.incoming.client.render.LodDepth.View();
+        if (!ua.zentix.incoming.client.render.LodDepth.current(view)) return;
+        var camera = Minecraft.getInstance().gameRenderer.getMainCamera();
+        int z = (int) Math.floor(radius(yield) / 16);
+        Vec3 delta = new Vec3(8, 120.5, z * 16 + 8).subtract(camera.getPosition());
+        var look = camera.getLookVector(); var left = camera.getLeftVector(); var up = camera.getUpVector();
+        var projected = new org.joml.Vector4f((float) -(delta.x * left.x + delta.y * left.y + delta.z * left.z),
+                (float) (delta.x * up.x + delta.y * up.y + delta.z * up.z),
+                (float) -(delta.x * look.x + delta.y * look.y + delta.z * look.z), 1);
+        new org.joml.Matrix4f(view.inverseProjection).invert().transform(projected);
+        if (projected.w <= 0) return;
+        float nx = projected.x / projected.w, ny = projected.y / projected.w;
+        if (Math.abs(nx) >= .98 || Math.abs(ny) >= .98) return;
+        int width = org.lwjgl.opengl.GL45.glGetTextureLevelParameteri(view.texture, 0, org.lwjgl.opengl.GL11.GL_TEXTURE_WIDTH);
+        int height = org.lwjgl.opengl.GL45.glGetTextureLevelParameteri(view.texture, 0, org.lwjgl.opengl.GL11.GL_TEXTURE_HEIGHT);
+        int px = (int) ((nx * .5 + .5) * width), py = (int) ((ny * .5 + .5) * height);
+        double nearest = Double.POSITIVE_INFINITY;
+        long before = System.nanoTime();
+        for (int dx = -1; dx <= 1; dx++) {
+            depthPixel.clear();
+            org.lwjgl.opengl.GL45.glGetTextureSubImage(view.texture, 0, px + dx, py, 0, 1, 1, 1,
+                    org.lwjgl.opengl.GL11.GL_DEPTH_COMPONENT, org.lwjgl.opengl.GL11.GL_FLOAT, depthPixel);
+            float depth = depthPixel.get(0);
+            if (depth == view.empty || depth == view.world) continue;
+            var hit = new org.joml.Vector4f((float) ((px + dx + .5) / width * 2 - 1), (float) ((py + .5) / height * 2 - 1),
+                    view.negativeOneToOne ? depth * 2 - 1 : depth, 1);
+            view.inverseProjection.transform(hit);
+            nearest = Math.min(nearest, Math.sqrt(hit.x * hit.x + hit.y * hit.y + hit.z * hit.z) / Math.abs(hit.w));
+        }
+        if (phase == 0 && visibleBaseline == 0 && Math.abs(nearest - delta.length()) < 40) {
+            visibleBaseline = nearest;
+            log("VISIBLE_BASELINE kt=%d tick=%d pixelX=%d pixelY=%d depthMeters=%.4f targetMeters=%.4f readNs=%d", yield, now, px, py, nearest, delta.length(), System.nanoTime() - before);
+        }
+        if (phase == 1 && visibleBaseline > 0 && nearest > visibleBaseline + 20 && nearest < visibleBaseline + 800) {
+            visibleLogged = true;
+            long due = burstTick + (long) Math.ceil(detonation(yield, burstTick).arrivalTicks(Math.hypot(z * 16.0, Yield.optimalBurstHeight(yield))));
+            double seen = now + e.getPartialTick().getGameTimeDeltaPartialTick(false);
+            log("VISIBLE_RUIN kt=%d due=%d seen=%.4f latenessTicks=%.4f depthMeters=%.4f baseline=%.4f readNs=%d footprintPixels=3", yield, due, seen, seen - due, nearest, visibleBaseline, System.nanoTime() - before);
+            shot("visible_ruin_" + yield);
         }
     }
     private void work() {
@@ -257,7 +312,7 @@ public final class LodBufferScenario {
             while (readback.air(x * 16 + 8, 120, z * 16 + 8) && System.nanoTime() < limit) Thread.sleep(2);
             if (readback.air(x * 16 + 8, 120, z * 16 + 8)) { fail("LSS replay did not reach the Voxy database"); return; }
             log("REPLAY_OVERWROTE round=%d tick=%d elapsedMs=%.4f", round, now, (System.nanoTime() - began) / 1e6);
-            if (round == 0) { shot("replay_stale_unrepaired"); waitTicks(40); }
+            if (round == 0) { waitTicks(40); shot("replay_stale_unrepaired"); waitTicks(2); }
             else replayFrame = 0;
             while (VoxyIngest.backlogged()) Thread.sleep(2);
             long repairAt = now, repairNs = System.nanoTime();
