@@ -760,7 +760,8 @@ public final class PallPass {
         previousEye = eye;
         history = true;
         drawn++;
-        prepared = march;
+        prepared = m;
+        preparedProgram = m.getId();
         if (preparing != 0) Incoming.LOG.info("Nuclear volume shaders prepared in {} ms", (System.nanoTime() - preparing) / 1_000_000);
         return true;
     }
@@ -768,10 +769,11 @@ public final class PallPass {
     /** Last program drawn with the actual pass resources; no world references. */
     @Nullable
     private static ShaderInstance prepared;
+    private static int preparedProgram = -1;
 
-    /** A new shader must run with the real texture state, once noise upload is ready. */
+    /** Resource reloads replace the shader; runtime recompilation can replace its GL program in place. */
     static boolean cold() {
-        return !failed && march != null && prepared != march;
+        return !failed && march != null && (prepared != march || preparedProgram != march.getId());
     }
 
     /** Full-frame quad with custom shader; ray pass also binds 3D noise at its own texture unit. */

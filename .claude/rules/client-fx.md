@@ -13,7 +13,8 @@ paths:
 - The first nuclear ray draw can spend seconds compiling in the driver (NVIDIA, cold shader cache).
   `FxLayer` submits an empty `PallPass.Frame` on world entry until the real pass completes: noise builds
   asynchronously, so a single attempt in the layer's first frame is insufficient. `PallPass.cold` tracks the
-  actual shader instance, allowing another warm-up after resource reload. Use the real pass resources/state;
+  actual shader instance and compiled GL program ID: Veil can recompile a program in place, while a
+  resource reload replaces the instance. Use the real pass resources/state;
   a one-pixel dummy pass with placeholder textures did not remove the first-flash compilation stall.
   Check a fresh process with the driver cache disabled; a second detonation cannot verify this fix.
 - The vanilla shader `position_tex_color` discards fragments with alpha below 0.1: faint things (distant smoke, glow,
