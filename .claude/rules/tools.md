@@ -104,6 +104,8 @@ The short layout is in the root CLAUDE.md; here, what each script does.
                                            synth_mod_sounds.py; writes sounds.json and SOUND-CREDITS.md (numpy, scipy, soundfile);
                                            blasts and motor loops — from the originals without loss, loudness by EBU R128 (the blast's angles
                                            are exactly `BlastMix`; loops are quieter than their own projectile's blast; evenness is checked)
+    audition_sounds.py --near WAV --far WAV --out DIR ← offline near/far, small-speaker and overlap/headroom check;
+                                           docs/sound-audition.md; read-only inputs, no runtime or asset changes
     freesound.py login|fetch             ← Freesound originals (OAuth2): login outside the repository (~/.config/incoming); files go to
                                            tools/.sound-cache/orig; downloaded ones need no login
     gen_textures.py                      ← textures (Pillow), fixed seed; each group has its own random generator,

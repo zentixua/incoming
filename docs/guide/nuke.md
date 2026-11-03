@@ -17,11 +17,27 @@ By default only operators can.
 
 1. You need an ICBM item, or a missile or bomb plus a Nuclear Warhead ([recipes](munitions.md#recipes)).
 2. On the console: the Nuclear weapon, or the nuclear warhead option of the Missile and the Bomb; the yield
-   slider, any whole number from 1 kt ("tactical") to 15 kt ("Hiroshima"); for the ICBM and the missile a ground burst
+   numeric field in whole kt and suggested values, up to the world’s configured maximum (at most 15 kt); for the ICBM and the missile a ground burst
    (the default, with a crater and fallout trail) or an air burst (wider destruction). The bomb explodes underground.
-3. LMB in the binoculars or FIRE. A 3-second countdown follows, and LMB again cancels it.
+3. LMB in the binoculars or FIRE opens a review of the server-resolved target and yield. Hold the launch button
+   for three seconds, or focus it with Tab and hold Space or Enter. Releasing, moving the pointer off the button,
+   losing window focus or closing the review cancels the hold. On small screens, scroll or use Page Up/Down to read the details.
 
-![Console with the nuclear warhead: yield slider and burst mode](img/remote-nuke.png)
+The targeting map shows flat-ground reference contours for the fireball reference silhouette, 5 psi and 1 psi.
+The fireball reference is its radius at the second light maximum; it can expand farther later.
+“Fit effects” fits them in the viewport; “Thermal / glass” also shows the 0.5 psi glazing reference and the median
+first-degree burn radius for exposed skin at the shown weather visibility. These are estimates, not uniform damage
+boundaries: terrain, shelter, clothing and materials matter. A dashed elevated fireball silhouette is not a ground-contact disk.
+The review shows your distance and a north-up downwind arrow. Unknown ground height remains an estimate.
+Viewing a wider footprint does not increase targeting range or reveal hidden players.
+
+Reviewing a strike reserves no ammunition and starts no preparation or alarm. Payment and the existing second-key
+window begin only after confirmation. A changed target, weather, server limit or flight configuration requires a new
+review. An unpaid review expires after one minute and is discarded on disconnect, death or restart. The existing
+flight duration and operator immediate-detonation commands are unchanged; this review does not guarantee prepared
+terrain or LOD readiness for a cold observer arriving during flight.
+
+![Console with the nuclear warhead: yield and burst mode](img/remote-nuke.png)
 
 Existing worlds need no config edit: burst mode is not stored in `incoming-server.toml`. Older versions normally
 omitted AIR from saved designator settings because it was the default, so those designators switch to GROUND after
@@ -102,5 +118,6 @@ The detailed timings, visual behavior and model limits are in the [nuclear effec
 After the wave has crossed the ruin zone, the server gradually applies ruins and ground traces to existing chunks
 throughout that zone, even without nearby players or a distant-terrain mod. Maps that read the saved world receive
 these changes through their normal updates. The pass expands outward from the burst; a large zone takes time to finish.
-Concurrency follows spare server time and available memory. Player-visible ruins take priority.
+Concurrency follows spare server time and available memory. Simultaneous strikes share preparation memory across
+dimensions; busy preparation can leave distant updates for this background pass. Player-visible ruins take priority.
 The pass resumes after a server restart and also catches up retained nuclear strikes from older versions.

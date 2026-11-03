@@ -1394,7 +1394,11 @@ public final class RuinBackgroundGameTests {
         h.assertTrue(ua.zentix.incoming.nuclear.world.RuinWorkers.awaitForTest(far, 30_000), "the pool of ruins has not been freed from previous tasks");
         try {
             for (int i = 0; i < 3 * threads; i++) fillers.add(ua.zentix.incoming.nuclear.world.RuinWorkers.submitForTest(filler, far));
-            java.util.concurrent.Future<String> task = ua.zentix.incoming.nuclear.world.RuinWorkers.submitForTest(() -> "plan", far);
+            java.util.concurrent.atomic.AtomicInteger executions = new java.util.concurrent.atomic.AtomicInteger();
+            java.util.concurrent.Future<String> task = ua.zentix.incoming.nuclear.world.RuinWorkers.submitForTest(() -> {
+                executions.incrementAndGet();
+                return "plan";
+            }, far);
             // all threads are busy: the task is still in queue
             long until = System.nanoTime() + 10_000_000_000L;
             while (started.get() < threads && System.nanoTime() < until) java.util.concurrent.locks.LockSupport.parkNanos(1_000_000L);
@@ -1406,7 +1410,8 @@ public final class RuinBackgroundGameTests {
             running.countDown();
             String result = moved.get(10, java.util.concurrent.TimeUnit.SECONDS);
             h.assertTrue("plan".equals(result), "the transferred task gave " + result);
-            h.assertFalse(task.isDone(), "the previous task was also completed");
+            h.assertTrue(task.isCancelled(), "the removed future still owns unfinished work");
+            h.assertTrue(executions.get() == 1, "promotion executed the plan more than once");
             h.assertTrue(started.get() <= 2 * threads, "the transferred task followed the distant ones: queue tasks started " + (started.get() - threads));
         } catch (java.util.concurrent.ExecutionException | java.util.concurrent.TimeoutException e) {
             throw new net.minecraft.gametest.framework.GameTestAssertException("the transferred task did not complete in 10 s while the queue tasks are waiting: " + e);

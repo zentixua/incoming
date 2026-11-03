@@ -133,3 +133,14 @@ paths:
   `C2S.CameraView` (camera rotation) every tick, fresh for 10 ticks, 25° cone, out to `REACH` (1024), `Sight.within`,
   clear `Sight.clear` ray, craft uses `SubLevels.visibleFrom` (ray can hit craft itself); player has one view,
   one guided projectile. Without rules target is `OfEntity`/`OfSubLevel`, followed without camera.
+
+## Unpaid nuclear review
+- `NuclearReview` is separate player state, not a `NuclearKeys` order. Global nuclear abort invalidates it on the
+  server before sending cancellation; actual death invalidates it through `LivingDeathEvent`, with dead/removed
+  guards on requests and actions. Respawn attachment loss is not death-time invalidation. Regressions:
+  `NuclearReviewSafetyGameTests` (`nuclear_review_abort`, `nuclear_review_death`).
+- A read-only review may disclose coordinates without inventory/payment. Launch permission (`ruled`/`sighted`)
+  alone is insufficient: map exclusions apply even for teammates and with `sight_rules=false`. Unseen hostile
+  players use the remembered position, including during `Sightings.CURRENT`'s grace period, never unobserved live
+  movement. Keep ordinary launch resolution separate from review disclosure. Packet-level regressions:
+  `nuclear_review_disclosure`, `nuclear_review_last_seen`.

@@ -16,6 +16,7 @@ import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.IncomingConfig;
+import ua.zentix.incoming.registry.ModAttachments;
 import ua.zentix.incoming.util.DiskStatus;
 import ua.zentix.incoming.work.WorkScheduler;
 import ua.zentix.incoming.nuclear.Detonation;
@@ -229,7 +230,7 @@ public final class NuclearPrep {
         DiskShots.Format format;
         /** In-flight disk reads (submitted, result not yet parsed) and background results. */
         final LongOpenHashSet reading = new LongOpenHashSet();
-        final ConcurrentLinkedQueue<DiskShots.Read> reads = new ConcurrentLinkedQueue<>();
+        final RuinInbox<DiskShots.Read> reads = new RuinInbox<>();
         /** Chunks absent as fully generated disk chunks: no preplans for them/neighbors. */
         final LongOpenHashSet unreadable = new LongOpenHashSet();
         /** Unread reasons ({@link DiskShots.Read#skip} before colon), for “ready” line. */
@@ -279,9 +280,31 @@ public final class NuclearPrep {
         }
     }
 
-    /** Prebuilt-ruin memory: plans, snapshots, in-flight reads, thread buffers. */
-    private static long memory(ServerLevel level, Prep p) {
-        return p.planBytes + p.ruins.shotBytes() + p.reading.size() * READ_BYTES + RuinWorkers.bufferBytes(level.getHeight());
+    /** Retained preparation estimates; handed-off contexts are counted by NuclearWorld, not twice here. */
+    long retainedBytes() {
+        long bytes = 0;
+        for (Prep p : preps) {
+            bytes += p.planBytes + p.lods.bytes() + (long) p.reads.pending() * READ_BYTES;
+            if (p.ruins != null && p.detonation < 0) bytes += p.ruins.retainedBytes();
+            bytes += (long) (p.order.length + p.edge.length + p.toScan.size()) * Long.BYTES;
+        }
+        return bytes;
+    }
+
+    /** One server-wide preparation admission estimate; multiple strikes/dimensions share the cap. */
+    static long memory(ServerLevel level) {
+        return memory(level, true);
+    }
+
+    static long memory(ServerLevel level, boolean reserveWorkers) {
+        long bytes = 0;
+        int height = level.getHeight();
+        for (ServerLevel other : level.getServer().getAllLevels()) {
+            if (!other.hasData(ModAttachments.NUCLEAR_WORLD)) continue;
+            height = Math.max(height, other.getHeight());
+            bytes += NuclearWorld.get(other).retainedRuinBytes();
+        }
+        return bytes + (reserveWorkers ? RuinWorkers.bufferBytes(height) : RuinWorkers.residentBufferBytes(height));
     }
 
     /** Squares held by tickets (tests). */
@@ -313,7 +336,7 @@ public final class NuclearPrep {
             Prep p = it.next();
             try {
                 if (p.draining) {
-                    p.plans.clear();
+                    discardPreparation(p);
                     p.lods.clear(level);
                     // before detonation preparation tasks not handed off: abandon
                     if (p.ruins != null && p.detonation < 0) p.ruins.cancelTasks();
@@ -538,20 +561,19 @@ public final class NuclearPrep {
             }
         }
         // window read-ahead in wave order
-        while (p.nextRead < p.order.length && p.reading.size() < READS && memory(level, p) < PLANS_CAP) {
+        while (p.nextRead < p.order.length && p.reading.size() < READS && memory(level) + READ_BYTES <= PLANS_CAP) {
             long c = p.order[p.nextRead];
             boolean all = true;
             for (int dx = -RuinPlanner.REACH; all && dx <= RuinPlanner.REACH; dx++) {
                 for (int dz = -RuinPlanner.REACH; all && dz <= RuinPlanner.REACH; dz++) {
                     long k = ChunkPos.asLong(ChunkPos.getX(c) + dx, ChunkPos.getZ(c) + dz);
                     if (p.reading.contains(k) || p.unreadable.contains(k) || p.ruins.shotAvailable(level, k)) continue;
-                    if (p.reading.size() >= READS) {
+                    if (p.reading.size() >= READS || memory(level) + READ_BYTES > PLANS_CAP) {
                         all = false;
                         continue;
                     }
                     p.reading.add(k);
-                    ConcurrentLinkedQueue<DiskShots.Read> out = p.reads;
-                    DiskShots.read(p.format, new ChunkPos(k), RuinWorkers.Priority.FAR).thenAccept(out::add);
+                    DiskShots.read(p.format, new ChunkPos(k), RuinWorkers.Priority.FAR).thenAccept(p.reads.expect());
                 }
             }
             if (!all) break;
@@ -621,7 +643,7 @@ public final class NuclearPrep {
             return;
         }
         boolean plansDone = p.capped || p.nextFar >= p.order.length && p.farRunning.isEmpty();
-        p.lods.tick(level, p.plans, PLANS_CAP - memory(level, p), plansDone, now);
+        p.lods.tick(level, p.plans, Math.max(0, PLANS_CAP - memory(level) + p.lods.bytes()), plansDone, now);
     }
 
     /** Preparation front holds chunk LOD copy ({@link FrontLods#claim}): {@link FrontLods#NONE} if not. */
@@ -663,6 +685,9 @@ public final class NuclearPrep {
     /** Chunks in order to background threads (snapshots per work unit), while detonation has task capacity. */
     private void submit(ServerLevel level, Prep p, WorkClock shared) {
         while (p.nextTodo < p.todo.size() && RuinWorkers.admit(RuinWorkers.Priority.NEAR) && clock.canStart() && shared.canStart()) {
+            // Reserve estimated headroom for a whole new 5x5 snapshot window before capturing it.
+            // Final result sizes remain measured estimates, not a total-heap guarantee.
+            if (memory(level) + (long) (2 * RuinPlanner.REACH + 1) * (2 * RuinPlanner.REACH + 1) * READ_BYTES > PLANS_CAP) return;
             long c = p.todo.getLong(p.nextTodo++);
             if (p.plans.containsKey(c) || p.ruins.running(c)) continue;
             // chunk without loaded neighbors (loaded-world edge) gets no preplan: unreadable window
@@ -1057,10 +1082,17 @@ public final class NuclearPrep {
     Handoff handOff(ServerLevel level, Detonation d, long now) {
         for (Prep p : preps) {
             if (!preparedFor(p, d)) continue;
-            // layout still building (location known only tick or two before burst): await it, otherwise no behind-wave zone
+            // A late layout must not block the detonation tick. No plans exist until layout installation;
+            // normal scar delivery and durable settlement cover this unprepared strike.
             if (p.layout != null) {
                 try {
-                    install(p, p.layout.join());
+                    Layout ready = p.layout.getNow(null);
+                    if (ready == null) {
+                        p.draining = true;
+                        discardPreparation(p);
+                        continue;
+                    }
+                    install(p, ready);
                 } catch (RuntimeException e) {
                     Incoming.LOG.error("Ruin preparation for strike #{} failed with an exception; dropped", p.strike, e);
                     failed.add(p.strike);
@@ -1184,10 +1216,23 @@ public final class NuclearPrep {
         p.tiles.clear();
     }
 
+    /** Release unused asynchronous ownership; detached late reads cannot refill a cancelled preparation. */
+    private static void discardPreparation(Prep p) {
+        if (p.layout != null) {
+            p.layout.cancel(false);
+            p.layout = null;
+        }
+        p.reads.invalidate();
+        p.reading.clear();
+        p.plans.clear();
+        p.planBytes = 0;
+    }
+
     /** Cancellation, world unload, error: release all tickets; queues no longer need ready ruins handed to detonation. */
     public void clear(ServerLevel level, ScarQueue scars) {
         for (Prep p : preps) {
             release(level, p);
+            discardPreparation(p);
             p.lods.clear(level);
             if (p.ruins != null && p.detonation < 0) p.ruins.cancelTasks();
             if (p.detonation >= 0 && !p.draining) scars.dropPrepared(p.detonation, zone(p));

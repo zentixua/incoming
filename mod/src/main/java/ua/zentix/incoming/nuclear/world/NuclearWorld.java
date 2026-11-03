@@ -148,14 +148,24 @@ public final class NuclearWorld {
         return !pulses.isEmpty() || late.busy() || !shadows.isEmpty() || !scorches.isEmpty() || !craters.isEmpty() || scars.size() > 0 || !prep.idle() || blast.busy() || settle.busy();
     }
 
-    /** Leave room for loaded-player work and its background windows before admitting settlement chunks. */
-    long settleMemoryRoom(int height) {
-        long bytes = RuinWorkers.residentBufferBytes(height);
+    /** Retained preparation and active-context estimates, without the shared worker buffers. */
+    long retainedRuinBytes() {
+        long bytes = prep.retainedBytes();
         for (RuinContext ctx : ruins.values()) bytes += ctx.retainedBytes();
-        return Math.max(0, NuclearPrep.PLANS_CAP / 2 - bytes);
+        return bytes;
     }
 
-    boolean settleCanAdmit() { return prep.idle(); }
+    /** Leave room for loaded-player work and its background windows before admitting settlement chunks. */
+    long settleMemoryRoom(ServerLevel level) {
+        return Math.max(0, NuclearPrep.PLANS_CAP / 2 - NuclearPrep.memory(level, false));
+    }
+
+    boolean settleCanAdmit(ServerLevel level) {
+        for (ServerLevel other : level.getServer().getAllLevels()) {
+            if (other.hasData(ModAttachments.NUCLEAR_WORLD) && !get(other).prep.idle()) return false;
+        }
+        return true;
+    }
 
     /** Settlement grows a long ring: cold snapshots are re-readable, old changed blocks/heights are not. */
     void trimSettleCache(int detonation, WorkClock clock) {
