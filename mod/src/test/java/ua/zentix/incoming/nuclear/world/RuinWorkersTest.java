@@ -51,4 +51,62 @@ class RuinWorkersTest {
         assertEquals(List.of("seen 1", "seen 2", "near 1", "near 2", "far 1"), ran);
         assertEquals(0, RuinWorkers.inFlight());
     }
+
+    @Test
+    void cancelledQueuedTaskImmediatelyReleasesQueueAndCount() throws Exception {
+        var counts = new java.util.concurrent.atomic.AtomicIntegerArray(3);
+        var executor = new java.util.concurrent.ThreadPoolExecutor(1, 1, 1, java.util.concurrent.TimeUnit.SECONDS,
+                new PriorityBlockingQueue<>());
+        var started = new java.util.concurrent.CountDownLatch(1);
+        var release = new java.util.concurrent.CountDownLatch(1);
+        try {
+            executor.execute(() -> {
+                started.countDown();
+                try { release.await(); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+            });
+            org.junit.jupiter.api.Assertions.assertTrue(started.await(5, java.util.concurrent.TimeUnit.SECONDS));
+            var queued = new RuinWorkers.Task<>(() -> { throw new AssertionError("cancelled task ran"); },
+                    RuinWorkers.Priority.FAR, counts, executor);
+            executor.execute(queued);
+            assertEquals(1, counts.get(2));
+            queued.cancel(false);
+            org.junit.jupiter.api.Assertions.assertTrue(executor.getQueue().isEmpty());
+            assertEquals(0, counts.get(2));
+            // An executor/cancellation race may still call run; accounting must be exactly once.
+            queued.run();
+            assertEquals(0, counts.get(2));
+        } finally {
+            release.countDown();
+            executor.shutdownNow();
+            org.junit.jupiter.api.Assertions.assertTrue(executor.awaitTermination(5, java.util.concurrent.TimeUnit.SECONDS));
+        }
+    }
+
+    @Test
+    void cancelledRunningTaskKeepsReservationUntilWorkerActuallyExits() throws Exception {
+        var counts = new java.util.concurrent.atomic.AtomicIntegerArray(3);
+        var executor = new java.util.concurrent.ThreadPoolExecutor(1, 1, 1, java.util.concurrent.TimeUnit.SECONDS,
+                new PriorityBlockingQueue<>());
+        var started = new java.util.concurrent.CountDownLatch(1);
+        var release = new java.util.concurrent.CountDownLatch(1);
+        try {
+            var running = new RuinWorkers.Task<>(() -> {
+                started.countDown();
+                release.await();
+                return true;
+            }, RuinWorkers.Priority.SEEN, counts, executor);
+            executor.execute(running);
+            org.junit.jupiter.api.Assertions.assertTrue(started.await(5, java.util.concurrent.TimeUnit.SECONDS));
+            running.cancel(false);
+            org.junit.jupiter.api.Assertions.assertTrue(running.isDone());
+            assertEquals(1, counts.get(0), "Future completion is not worker completion");
+            release.countDown();
+            executor.shutdown();
+            org.junit.jupiter.api.Assertions.assertTrue(executor.awaitTermination(5, java.util.concurrent.TimeUnit.SECONDS));
+            assertEquals(0, counts.get(0));
+        } finally {
+            release.countDown();
+            executor.shutdownNow();
+        }
+    }
 }

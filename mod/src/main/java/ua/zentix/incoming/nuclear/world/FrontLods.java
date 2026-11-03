@@ -15,7 +15,6 @@ import ua.zentix.incoming.grid.PowerGrid;
 import ua.zentix.incoming.nuclear.Detonation;
 
 import java.util.ArrayDeque;
-import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
  * Distant Horizons heavy-zone LODs arrive with front, like player chunks. {@link FarLods} requests outside-world chunk copy
@@ -77,16 +76,15 @@ final class FrontLods {
     }
 
     /** Ready background copy: copy null if build failed (absent on disk, stale plan). */
-    private record Built(long chunk, @Nullable ProtoChunk copy, boolean ruined, int[] lamps, long bytes) {}
+    private record Built(long chunk, int index, @Nullable ProtoChunk copy, boolean ruined, int[] lamps, long bytes) {}
 
     private final int strike;
     /** Zone chunks with ready disk plans, in plan (wave) order; cursor tracks read submissions. */
     private final LongArrayList candidates = new LongArrayList();
     private int next;
     private final Long2ObjectOpenHashMap<Copy> copies = new Long2ObjectOpenHashMap<>();
-    private final ConcurrentLinkedQueue<Built> built = new ConcurrentLinkedQueue<>();
+    private final RuinInbox<Built> built = new RuinInbox<>();
     private final FrontSchedule schedule = new FrontSchedule();
-    private int reading;
     /** Bytes in held copies. */
     private long readyBytes;
     /** Sent copies still held by DH ({@link DhUpdates#HOLD_NANOS}): send times/bytes; total bytes. */
@@ -114,7 +112,7 @@ final class FrontLods {
 
     /** Copy bytes: held, sent but still held by DH, in-flight reads. */
     long bytes() {
-        return readyBytes + dhBytes + (long) reading * READ_BYTES;
+        return readyBytes + dhBytes + (long) built.pending() * READ_BYTES;
     }
 
     /**
@@ -142,10 +140,9 @@ final class FrontLods {
     /** Ready background copies: hold until detonation, then enqueue for send. */
     private void harvest(ServerLevel level) {
         for (Built b; (b = built.poll()) != null; ) {
-            reading--;
             Copy c = copies.get(b.chunk);
             // removed while reading (loaded, front early, cancellation)
-            if (c == null || c.state != BUILDING) continue;
+            if (c == null || c.state != BUILDING || c.index != b.index) continue;
             if (b.copy == null) {
                 copies.remove(b.chunk);
                 failed++;
@@ -184,7 +181,7 @@ final class FrontLods {
     /** Read new copies in queue order while capacity, reads and background pool available. */
     private void start(ServerLevel level, Long2ObjectOpenHashMap<RuinPlan> plans, long room, long now) {
         boolean fires = IncomingConfig.SERVER.nukeFires.get();
-        for (int started = 0; next < candidates.size() && started < PER_TICK && reading < READS && bytes() + READ_BYTES <= room; ) {
+        for (int started = 0; next < candidates.size() && started < PER_TICK && built.pending() < READS && bytes() + READ_BYTES <= room; ) {
             // after detonation use at most half pool: player-chunk ruins more important
             if (!RuinWorkers.admit(RuinWorkers.Priority.FAR) || d != null && RuinWorkers.inFlight() >= RuinWorkers.capacity() / 2) return;
             int index = next++;
@@ -196,22 +193,21 @@ final class FrontLods {
             Copy c = new Copy(index);
             if (d != null) c.due = ScarQueue.due(d, new ChunkPos(chunk));
             copies.put(chunk, c);
-            reading++;
             started++;
             if (format == null) format = DiskShots.Format.of(level);
             DiskShots.Format f = format;
-            DiskShots.readSections(f, new ChunkPos(chunk)).thenApply(s -> build(f, s, plan, fires))
-                    .exceptionally(e -> new Built(chunk, null, false, NO_LAMPS, 0)).thenAccept(built::add);
+            DiskShots.readSections(f, new ChunkPos(chunk)).thenApply(s -> build(f, s, plan, fires, index))
+                    .exceptionally(e -> new Built(chunk, index, null, false, NO_LAMPS, 0)).thenAccept(built.expect());
         }
     }
 
     /** Chunk copy with plan ruins and lit-lamp positions (background thread). */
-    private static Built build(DiskShots.Format f, DiskShots.Sections s, RuinPlan plan, boolean fires) {
+    private static Built build(DiskShots.Format f, DiskShots.Sections s, RuinPlan plan, boolean fires, int index) {
         FarLods.Built b = FarLods.build(f, s, plan, fires, false, false);
-        if (b.copy() == null) return new Built(b.chunk(), null, false, NO_LAMPS, 0);
+        if (b.copy() == null) return new Built(b.chunk(), index, null, false, NO_LAMPS, 0);
         LevelChunkSection[] sections = b.copy().getSections();
         int[] lamps = ChunkLights.litLamps(sections);
-        return new Built(b.chunk(), b.copy(), b.ruined(), lamps, bytes(sections) + 4L * lamps.length);
+        return new Built(b.chunk(), index, b.copy(), b.ruined(), lamps, bytes(sections) + 4L * lamps.length);
     }
 
     /** Copy memory, bytes: section palettes (estimated like {@code ChunkShot}) and chunk-copy object. */
@@ -396,6 +392,8 @@ final class FrontLods {
             }
         }
         copies.clear();
+        // Late completion belongs to the old set of copies, even if the same coordinate is offered again.
+        built.invalidate();
         schedule.clear();
         candidates.clear();
         next = 0;
@@ -420,6 +418,6 @@ final class FrontLods {
      */
     long[] stats() {
         return new long[] {made, sent, late, sent == 0 ? 0 : offsetMin, sent == 0 ? 0 : offsetMax, loaded, evicted, abandoned, failed, unchanged,
-                schedule.size(), bytes(), reading, candidates.size() - next};
+                schedule.size(), bytes(), built.pending(), candidates.size() - next};
     }
 }

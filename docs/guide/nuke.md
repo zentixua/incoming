@@ -118,5 +118,6 @@ The detailed timings, visual behavior and model limits are in the [nuclear effec
 After the wave has crossed the ruin zone, the server gradually applies ruins and ground traces to existing chunks
 throughout that zone, even without nearby players or a distant-terrain mod. Maps that read the saved world receive
 these changes through their normal updates. The pass expands outward from the burst; a large zone takes time to finish.
-Concurrency follows spare server time and available memory. Player-visible ruins take priority.
+Concurrency follows spare server time and available memory. Simultaneous strikes share preparation memory across
+dimensions; busy preparation can leave distant updates for this background pass. Player-visible ruins take priority.
 The pass resumes after a server restart and also catches up retained nuclear strikes from older versions.
