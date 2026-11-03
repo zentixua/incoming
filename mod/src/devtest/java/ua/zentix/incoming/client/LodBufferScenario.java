@@ -50,6 +50,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 /** Opt-in real Voxy ingestion experiment; synthetic city columns, real clocks, no changes to playable strikes. */
 public final class LodBufferScenario {
     private static final int SECTIONS = 24, CHANGED = 4, WINDOW = 1024, PASS = 32;
+    private static final boolean CHANGED_ONLY = Boolean.getBoolean("incoming.lodProbe.changedOnly");
     private static final long BYTES = 48L << 20;
     private static LodBufferScenario active;
     private final TimedLodBuffer<LodProbeWire.Column> buffer = new TimedLodBuffer<>(WINDOW, BYTES);
@@ -117,7 +118,8 @@ public final class LodBufferScenario {
             return;
         }
         if (p.epoch() != s.epoch) { s.log("OLD_PACKET epoch=%d", p.epoch()); return; }
-        var t = s.buffer.reserve(net.minecraft.world.level.ChunkPos.asLong(p.column().x(), p.column().z()), p.due(), p.column().sections().length, SECTIONS);
+        int sections = p.phase() == 1 && CHANGED_ONLY ? CHANGED : SECTIONS;
+        var t = s.buffer.reserve(net.minecraft.world.level.ChunkPos.asLong(p.column().x(), p.column().z()), p.due(), p.column().sections().length, sections);
         if (t == null) { s.fail("buffer admission exceeded"); return; }
         s.buffer.complete(t, p);
         s.received++;
@@ -264,7 +266,7 @@ public final class LodBufferScenario {
                                 synchronized (witnesses) { witnesses.add(r.value()); }
                             }
                             log("SUBMIT epoch=%d phase=%d x=%d z=%d due=%d now=%d ns=%d sections=%d changed=%d bytes=%d",
-                                    epoch, phase, r.value().column().x(), r.value().column().z(), r.ticket().due(), now, end - begin, SECTIONS, phase == 1 ? CHANGED : SECTIONS, r.ticket().bytes());
+                                    epoch, phase, r.value().column().x(), r.value().column().z(), r.ticket().due(), now, end - begin, r.ticket().sections(), phase == 1 ? CHANGED : SECTIONS, r.ticket().bytes());
                         }
                         buffer.finish(r); receipts.incrementAndGet();
                     }
@@ -383,8 +385,8 @@ public final class LodBufferScenario {
                 prepared = true; count = Math.toIntExact(envelope.columns()); start = level.getGameTime();
                 event = detonation(yields[which], start + 200);
                 PacketDistributor.sendToPlayer(p, new LodProbeWire.Column(generation, stage, event.gameTime(), count, yields[which], new S2C.VoxyChunk(level.dimension().location(), 0, 0, new byte[0])));
-                log("ENVELOPE kt=%d radius=%.3f columns=%d headers=%d intactBytes=%d ruinBytes=%d window=%d sectionBudget=%d",
-                        yields[which], radius(yields[which]), count, envelope.headers(), intact.length, ruined.length, credits, PASS * SECTIONS);
+                log("ENVELOPE kt=%d radius=%.3f columns=%d headers=%d intactBytes=%d ruinBytes=%d window=%d sectionBudget=%d ruinSections=%d",
+                        yields[which], radius(yields[which]), count, envelope.headers(), intact.length, ruined.length, credits, PASS * SECTIONS, CHANGED_ONLY ? CHANGED : SECTIONS);
             }
             for (int n = 0; n < 512 && credits > 0 && !exhausted; n++) {
                 var c = envelope.next();
@@ -423,8 +425,12 @@ public final class LodBufferScenario {
         var biomes = level.registryAccess().registryOrThrow(Registries.BIOME);
         FriendlyByteBuf out = new FriendlyByteBuf(Unpooled.buffer());
         try {
-            out.writeVarInt(-4); out.writeVarInt(SECTIONS);
-            for (int sy = -4; sy < 20; sy++) {
+            // Existing wire format supports a section span. The fixture's verified baseline has changes only
+            // in sections 4..7, including the three now-empty sections. Unknown baselines still need full columns.
+            int first = ruin && CHANGED_ONLY ? 4 : -4;
+            int count = ruin && CHANGED_ONLY ? CHANGED : SECTIONS;
+            out.writeVarInt(first); out.writeVarInt(count);
+            for (int sy = first; sy < first + count; sy++) {
                 LevelChunkSection s = new LevelChunkSection(biomes);
                 for (int y = 0; y < 16; y++) for (int z = 0; z < 16; z++) for (int x = 0; x < 16; x++) {
                     int h = sy * 16 + y;
