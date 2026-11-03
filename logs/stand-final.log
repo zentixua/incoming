@@ -1,0 +1,36 @@
+23:55:30 perf-559-final warm-up: pack none, 20 steps
+23:55:35 waiting for quiet: foreign 0.27 cores, GPU ['kwin_wayland:4', 'plasmashell:5'], services {'incoming-codex-OL.service': 0.11}
+23:58:49 perf-559-final warm-up: pack none — exit 0, 3.3 min
+23:58:49 perf-559-final A1: pack none, 20 steps
+00:01:49 perf-559-final A1: pack none — exit 0, 3.0 min
+00:01:49 perf-559-final B: pack none, 20 steps
+00:04:40 perf-559-final B: pack none — exit 0, 2.9 min
+00:04:40 perf-559-final A2: pack none, 20 steps
+00:07:31 perf-559-final A2: pack none — exit 0, 2.9 min
+00:07:34 perf-559-final: pack none, pair 1 — pass
+00:07:34 perf-559-final A1: pack complementary, 20 steps
+00:11:00 perf-559-final A1: pack complementary — exit 0, 3.4 min
+00:11:00 perf-559-final B: pack complementary, 20 steps
+00:14:19 perf-559-final B: pack complementary — exit 0, 3.3 min
+00:14:19 perf-559-final A2: pack complementary, 20 steps
+00:17:39 perf-559-final A2: pack complementary — exit 0, 3.3 min
+00:17:42 perf-559-final: pack complementary, pair 1 — pass
+00:17:42 perf-559-final A1: pack photon, 20 steps
+00:21:00 perf-559-final A1: pack photon — exit 0, 3.3 min
+00:21:00 perf-559-final B: pack photon, 20 steps
+00:24:12 perf-559-final B: pack photon — exit 0, 3.2 min
+00:24:12 perf-559-final A2: pack photon, 20 steps
+00:27:21 perf-559-final A2: pack photon — exit 0, 3.2 min
+00:27:25 perf-559-final: pack photon, pair 1 — pass
+00:27:26 A1 none: valid
+00:27:26 A1 complementary: valid
+00:27:26 A1 photon: valid
+00:27:27 A2 none: valid
+00:27:27 A2 complementary: valid
+00:27:27 A2 photon: valid
+00:27:29 B none: valid
+00:27:29 B complementary: valid
+00:27:29 B photon: valid
+00:27:32 perf-559-final: pass; results in /mnt/data/projects/incoming/mod/run/stand/out/perf-559-final
+laptop_job stand-perf-559-final: exit 0
+stand perf-559-final: exit 0

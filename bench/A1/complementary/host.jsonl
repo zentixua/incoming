@@ -1,0 +1,242 @@
+{"kind": "gpu", "epoch": 1793747254.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": null}
+{"kind": "gpu", "epoch": 1793747255.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": null}
+{"kind": "gpu", "epoch": 1793747256.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": null}
+{"kind": "gpu", "epoch": 1793747257.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": null}
+{"kind": "cpu", "epoch": 1793747259.4986975, "dt": 5.001, "phase": "wait", "load1": 2.35, "cpu_total": 0.09, "cpu_own": 0.02, "cpu_foreign": 0.08, "units": {}, "gpu": {"foreign_sm": 0, "foreign_mean": 0.0, "who": [], "cycles": 4, "temp": 65.0, "clock": 210.0}, "profile": "performance"}
+{"kind": "gpu", "epoch": 1793747258.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": null}
+{"kind": "gpu", "epoch": 1793747259.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": null}
+{"kind": "gpu", "epoch": 1793747260.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": null}
+{"kind": "gpu", "epoch": 1793747261.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": null}
+{"kind": "gpu", "epoch": 1793747262.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": null}
+{"kind": "cpu", "epoch": 1793747264.5378647, "dt": 5.039, "phase": "wait", "load1": 2.16, "cpu_total": 0.1, "cpu_own": 0.02, "cpu_foreign": 0.08, "units": {}, "gpu": {"foreign_sm": 0, "foreign_mean": 0.0, "who": [], "cycles": 5, "temp": 64.0, "clock": 210.0}, "profile": "performance"}
+{"kind": "gpu", "epoch": 1793747263.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": null}
+{"kind": "gpu", "epoch": 1793747264.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": null}
+{"kind": "gpu", "epoch": 1793747265.5, "dt": 1.0, "foreign_sm": 0, "who": ["kwin_wayland:0"], "own_sm": null}
+{"kind": "gpu", "epoch": 1793747266.5, "dt": 1.0, "foreign_sm": 0, "who": ["kwin_wayland:0"], "own_sm": null}
+{"kind": "gpu", "epoch": 1793747267.5, "dt": 1.0, "foreign_sm": 0, "who": ["kwin_wayland:0"], "own_sm": null}
+{"kind": "cpu", "epoch": 1793747269.5801451, "dt": 5.042, "phase": "run", "load1": 3.11, "cpu_total": 5.24, "cpu_own": 5.27, "cpu_foreign": 0.0, "units": {"app-com.anthropic.Claude-183212.scope": 0.11}, "gpu": {"foreign_sm": 0, "foreign_mean": 0.0, "who": [], "cycles": 5, "temp": 66.0, "clock": 1890.0}, "profile": "performance"}
+{"kind": "gpu", "epoch": 1793747268.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": null}
+{"kind": "gpu", "epoch": 1793747269.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": null}
+{"kind": "gpu", "epoch": 1793747270.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": null}
+{"kind": "gpu", "epoch": 1793747271.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": null}
+{"kind": "gpu", "epoch": 1793747272.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": null}
+{"kind": "cpu", "epoch": 1793747274.644271, "dt": 5.064, "phase": "run", "load1": 3.34, "cpu_total": 6.49, "cpu_own": 6.47, "cpu_foreign": 0.02, "units": {"app-com.anthropic.Claude-183212.scope": 0.14}, "gpu": {"foreign_sm": 0, "foreign_mean": 0.0, "who": [], "cycles": 5, "temp": 63.0, "clock": 270.0}, "profile": "performance"}
+{"kind": "gpu", "epoch": 1793747273.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": null}
+{"kind": "gpu", "epoch": 1793747274.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 37}
+{"kind": "gpu", "epoch": 1793747276.5, "dt": 2.0, "foreign_sm": 0, "who": [], "own_sm": null}
+{"kind": "gpu", "epoch": 1793747277.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": null}
+{"kind": "gpu", "epoch": 1793747278.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": null}
+{"kind": "cpu", "epoch": 1793747279.7037673, "dt": 5.059, "phase": "run", "load1": 3.16, "cpu_total": 1.39, "cpu_own": 1.31, "cpu_foreign": 0.08, "units": {}, "gpu": {"foreign_sm": 0, "foreign_mean": 0.0, "who": [], "cycles": 5, "temp": 62.0, "clock": 210.0}, "profile": "performance"}
+{"kind": "gpu", "epoch": 1793747279.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": null}
+{"kind": "gpu", "epoch": 1793747280.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": null}
+{"kind": "gpu", "epoch": 1793747281.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": null}
+{"kind": "gpu", "epoch": 1793747282.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": null}
+{"kind": "gpu", "epoch": 1793747283.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": null}
+{"kind": "cpu", "epoch": 1793747284.7483728, "dt": 5.045, "phase": "run", "load1": 2.98, "cpu_total": 1.17, "cpu_own": 1.04, "cpu_foreign": 0.13, "units": {"app-com.anthropic.Claude-183212.scope": 0.11}, "gpu": {"foreign_sm": 0, "foreign_mean": 0.0, "who": [], "cycles": 5, "temp": 61.0, "clock": 210.0}, "profile": "performance"}
+{"kind": "gpu", "epoch": 1793747284.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": null}
+{"kind": "gpu", "epoch": 1793747285.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": null}
+{"kind": "gpu", "epoch": 1793747286.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": null}
+{"kind": "gpu", "epoch": 1793747287.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": null}
+{"kind": "gpu", "epoch": 1793747288.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": null}
+{"kind": "cpu", "epoch": 1793747289.7966518, "dt": 5.048, "phase": "run", "load1": 2.82, "cpu_total": 1.93, "cpu_own": 1.85, "cpu_foreign": 0.08, "units": {}, "gpu": {"foreign_sm": 0, "foreign_mean": 0.0, "who": [], "cycles": 5, "temp": 61.0, "clock": 210.0}, "profile": "performance"}
+{"kind": "gpu", "epoch": 1793747289.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": null}
+{"kind": "gpu", "epoch": 1793747290.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": null}
+{"kind": "gpu", "epoch": 1793747291.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": null}
+{"kind": "gpu", "epoch": 1793747292.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": null}
+{"kind": "gpu", "epoch": 1793747293.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": null}
+{"kind": "cpu", "epoch": 1793747294.8527088, "dt": 5.056, "phase": "run", "load1": 2.68, "cpu_total": 1.19, "cpu_own": 1.11, "cpu_foreign": 0.08, "units": {}, "gpu": {"foreign_sm": 0, "foreign_mean": 0.0, "who": [], "cycles": 5, "temp": 60.0, "clock": 210.0}, "profile": "performance"}
+{"kind": "gpu", "epoch": 1793747294.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": null}
+{"kind": "gpu", "epoch": 1793747295.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": null}
+{"kind": "gpu", "epoch": 1793747296.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": null}
+{"kind": "gpu", "epoch": 1793747297.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": null}
+{"kind": "gpu", "epoch": 1793747298.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": null}
+{"kind": "cpu", "epoch": 1793747299.9010496, "dt": 5.048, "phase": "run", "load1": 2.54, "cpu_total": 1.27, "cpu_own": 1.18, "cpu_foreign": 0.09, "units": {}, "gpu": {"foreign_sm": 0, "foreign_mean": 0.0, "who": [], "cycles": 5, "temp": 60.0, "clock": 210.0}, "profile": "performance"}
+{"kind": "gpu", "epoch": 1793747299.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": null}
+{"kind": "gpu", "epoch": 1793747300.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": null}
+{"kind": "gpu", "epoch": 1793747301.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": null}
+{"kind": "gpu", "epoch": 1793747302.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 24}
+{"kind": "gpu", "epoch": 1793747303.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 1}
+{"kind": "cpu", "epoch": 1793747304.9467797, "dt": 5.046, "phase": "run", "load1": 3.14, "cpu_total": 3.71, "cpu_own": 3.79, "cpu_foreign": 0.0, "units": {}, "gpu": {"foreign_sm": 0, "foreign_mean": 0.0, "who": [], "cycles": 5, "temp": 60.0, "clock": 420.0}, "profile": "performance"}
+{"kind": "gpu", "epoch": 1793747304.5, "dt": 1.0, "foreign_sm": 0, "who": ["kwin_wayland:0"], "own_sm": 0}
+{"kind": "gpu", "epoch": 1793747305.5, "dt": 1.0, "foreign_sm": 1, "who": ["kwin_wayland:1"], "own_sm": null}
+{"kind": "gpu", "epoch": 1793747306.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": null}
+{"kind": "gpu", "epoch": 1793747307.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": null}
+{"kind": "gpu", "epoch": 1793747308.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": null}
+{"kind": "cpu", "epoch": 1793747309.991092, "dt": 5.044, "phase": "run", "load1": 2.97, "cpu_total": 1.58, "cpu_own": 1.56, "cpu_foreign": 0.02, "units": {}, "gpu": {"foreign_sm": 1, "foreign_mean": 0.2, "who": ["kwin_wayland:1"], "cycles": 5, "temp": 59.0, "clock": 210.0}, "profile": "performance"}
+{"kind": "gpu", "epoch": 1793747309.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": null}
+{"kind": "gpu", "epoch": 1793747310.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": null}
+{"kind": "gpu", "epoch": 1793747311.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": null}
+{"kind": "gpu", "epoch": 1793747312.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": null}
+{"kind": "gpu", "epoch": 1793747313.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": null}
+{"kind": "cpu", "epoch": 1793747315.0344036, "dt": 5.043, "phase": "run", "load1": 2.81, "cpu_total": 1.28, "cpu_own": 1.25, "cpu_foreign": 0.03, "units": {}, "gpu": {"foreign_sm": 0, "foreign_mean": 0.0, "who": [], "cycles": 5, "temp": 58.0, "clock": 210.0}, "profile": "performance"}
+{"kind": "gpu", "epoch": 1793747314.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": null}
+{"kind": "gpu", "epoch": 1793747315.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": null}
+{"kind": "gpu", "epoch": 1793747316.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 88}
+{"kind": "gpu", "epoch": 1793747317.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 95}
+{"kind": "gpu", "epoch": 1793747318.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 98}
+{"kind": "cpu", "epoch": 1793747320.0781868, "dt": 5.044, "phase": "run", "load1": 2.67, "cpu_total": 1.95, "cpu_own": 2.03, "cpu_foreign": 0.0, "units": {}, "gpu": {"foreign_sm": 0, "foreign_mean": 0.0, "who": [], "cycles": 5, "temp": 84.0, "clock": 2265.0}, "profile": "performance"}
+{"kind": "gpu", "epoch": 1793747319.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 99}
+{"kind": "gpu", "epoch": 1793747320.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 97}
+{"kind": "gpu", "epoch": 1793747322.5, "dt": 2.0, "foreign_sm": 0, "who": [], "own_sm": 99}
+{"kind": "gpu", "epoch": 1793747323.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 99}
+{"kind": "gpu", "epoch": 1793747324.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 99}
+{"kind": "cpu", "epoch": 1793747325.1217241, "dt": 5.044, "phase": "run", "load1": 2.61, "cpu_total": 2.59, "cpu_own": 2.7, "cpu_foreign": 0.0, "units": {}, "gpu": {"foreign_sm": 0, "foreign_mean": 0.0, "who": [], "cycles": 5, "temp": 85.0, "clock": 2550.0}, "profile": "performance"}
+{"kind": "gpu", "epoch": 1793747325.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 99}
+{"kind": "gpu", "epoch": 1793747326.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 99}
+{"kind": "gpu", "epoch": 1793747327.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 99}
+{"kind": "gpu", "epoch": 1793747328.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 79}
+{"kind": "cpu", "epoch": 1793747330.1601715, "dt": 5.038, "phase": "run", "load1": 2.4, "cpu_total": 0.42, "cpu_own": 0.48, "cpu_foreign": 0.0, "units": {}, "gpu": {"foreign_sm": 0, "foreign_mean": 0.0, "who": [], "cycles": 4, "temp": 85.0, "clock": 2175.0}, "profile": "performance"}
+{"kind": "gpu", "epoch": 1793747329.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 79}
+{"kind": "gpu", "epoch": 1793747330.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 99}
+{"kind": "gpu", "epoch": 1793747331.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 99}
+{"kind": "gpu", "epoch": 1793747332.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 98}
+{"kind": "gpu", "epoch": 1793747333.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 99}
+{"kind": "cpu", "epoch": 1793747335.199036, "dt": 5.039, "phase": "run", "load1": 2.37, "cpu_total": 1.87, "cpu_own": 1.96, "cpu_foreign": 0.0, "units": {}, "gpu": {"foreign_sm": 0, "foreign_mean": 0.0, "who": [], "cycles": 5, "temp": 86.0, "clock": 2175.0}, "profile": "performance"}
+{"kind": "gpu", "epoch": 1793747334.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 99}
+{"kind": "gpu", "epoch": 1793747335.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 99}
+{"kind": "gpu", "epoch": 1793747336.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 99}
+{"kind": "gpu", "epoch": 1793747337.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 86}
+{"kind": "gpu", "epoch": 1793747338.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 90}
+{"kind": "cpu", "epoch": 1793747340.2468038, "dt": 5.048, "phase": "run", "load1": 2.18, "cpu_total": 1.71, "cpu_own": 1.76, "cpu_foreign": 0.0, "units": {"app-com.anthropic.Claude-183212.scope": 0.11}, "gpu": {"foreign_sm": 0, "foreign_mean": 0.0, "who": [], "cycles": 5, "temp": 84.0, "clock": 1980.0}, "profile": "performance"}
+{"kind": "gpu", "epoch": 1793747339.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 84}
+{"kind": "gpu", "epoch": 1793747340.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 89}
+{"kind": "gpu", "epoch": 1793747341.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 92}
+{"kind": "gpu", "epoch": 1793747342.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 94}
+{"kind": "gpu", "epoch": 1793747343.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 95}
+{"kind": "cpu", "epoch": 1793747345.287671, "dt": 5.041, "phase": "run", "load1": 2.09, "cpu_total": 1.82, "cpu_own": 1.88, "cpu_foreign": 0.0, "units": {"app-com.anthropic.Claude-183212.scope": 0.11}, "gpu": {"foreign_sm": 0, "foreign_mean": 0.0, "who": [], "cycles": 5, "temp": 85.0, "clock": 2100.0}, "profile": "performance"}
+{"kind": "gpu", "epoch": 1793747344.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 98}
+{"kind": "gpu", "epoch": 1793747345.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 98}
+{"kind": "gpu", "epoch": 1793747346.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 97}
+{"kind": "gpu", "epoch": 1793747347.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 95}
+{"kind": "gpu", "epoch": 1793747348.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 43}
+{"kind": "cpu", "epoch": 1793747350.334429, "dt": 5.047, "phase": "run", "load1": 2.0, "cpu_total": 5.65, "cpu_own": 5.71, "cpu_foreign": 0.0, "units": {"app-com.anthropic.Claude-183212.scope": 0.11}, "gpu": {"foreign_sm": 0, "foreign_mean": 0.0, "who": [], "cycles": 5, "temp": 73.0, "clock": 1680.0}, "profile": "performance"}
+{"kind": "gpu", "epoch": 1793747349.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 12}
+{"kind": "gpu", "epoch": 1793747350.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 15}
+{"kind": "gpu", "epoch": 1793747351.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 22}
+{"kind": "gpu", "epoch": 1793747352.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 26}
+{"kind": "gpu", "epoch": 1793747353.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 34}
+{"kind": "cpu", "epoch": 1793747355.384638, "dt": 5.05, "phase": "run", "load1": 2.24, "cpu_total": 4.44, "cpu_own": 4.49, "cpu_foreign": 0.0, "units": {"app-com.anthropic.Claude-183212.scope": 0.11}, "gpu": {"foreign_sm": 0, "foreign_mean": 0.0, "who": [], "cycles": 5, "temp": 84.0, "clock": 2550.0}, "profile": "performance"}
+{"kind": "gpu", "epoch": 1793747354.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 42}
+{"kind": "gpu", "epoch": 1793747355.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 48}
+{"kind": "gpu", "epoch": 1793747356.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 57}
+{"kind": "gpu", "epoch": 1793747357.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 77}
+{"kind": "gpu", "epoch": 1793747358.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 85}
+{"kind": "cpu", "epoch": 1793747360.4274457, "dt": 5.043, "phase": "run", "load1": 2.3, "cpu_total": 3.2, "cpu_own": 3.21, "cpu_foreign": 0.0, "units": {"app-com.anthropic.Claude-183212.scope": 0.11}, "gpu": {"foreign_sm": 0, "foreign_mean": 0.0, "who": [], "cycles": 5, "temp": 86.0, "clock": 2445.0}, "profile": "performance"}
+{"kind": "gpu", "epoch": 1793747359.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 87}
+{"kind": "gpu", "epoch": 1793747360.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 96}
+{"kind": "gpu", "epoch": 1793747361.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 97}
+{"kind": "gpu", "epoch": 1793747362.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 99}
+{"kind": "gpu", "epoch": 1793747363.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 99}
+{"kind": "cpu", "epoch": 1793747365.4686387, "dt": 5.041, "phase": "run", "load1": 2.2, "cpu_total": 1.79, "cpu_own": 1.83, "cpu_foreign": 0.0, "units": {}, "gpu": {"foreign_sm": 0, "foreign_mean": 0.0, "who": [], "cycles": 5, "temp": 85.0, "clock": 1875.0}, "profile": "performance"}
+{"kind": "gpu", "epoch": 1793747364.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 99}
+{"kind": "gpu", "epoch": 1793747365.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 99}
+{"kind": "gpu", "epoch": 1793747366.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 99}
+{"kind": "gpu", "epoch": 1793747367.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 99}
+{"kind": "gpu", "epoch": 1793747368.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 99}
+{"kind": "cpu", "epoch": 1793747370.5111117, "dt": 5.042, "phase": "run", "load1": 2.1, "cpu_total": 1.61, "cpu_own": 1.67, "cpu_foreign": 0.0, "units": {}, "gpu": {"foreign_sm": 0, "foreign_mean": 0.0, "who": [], "cycles": 5, "temp": 86.0, "clock": 1935.0}, "profile": "performance"}
+{"kind": "gpu", "epoch": 1793747369.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 99}
+{"kind": "gpu", "epoch": 1793747371.5, "dt": 2.0, "foreign_sm": 0, "who": [], "own_sm": 99}
+{"kind": "gpu", "epoch": 1793747372.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 99}
+{"kind": "gpu", "epoch": 1793747373.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 99}
+{"kind": "gpu", "epoch": 1793747374.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 99}
+{"kind": "cpu", "epoch": 1793747375.5559022, "dt": 5.045, "phase": "run", "load1": 2.01, "cpu_total": 1.47, "cpu_own": 1.54, "cpu_foreign": 0.0, "units": {}, "gpu": {"foreign_sm": 0, "foreign_mean": 0.0, "who": [], "cycles": 5, "temp": 86.0, "clock": 1905.0}, "profile": "performance"}
+{"kind": "gpu", "epoch": 1793747375.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 99}
+{"kind": "gpu", "epoch": 1793747376.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 98}
+{"kind": "gpu", "epoch": 1793747377.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 99}
+{"kind": "gpu", "epoch": 1793747378.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 99}
+{"kind": "gpu", "epoch": 1793747379.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 82}
+{"kind": "cpu", "epoch": 1793747380.6016014, "dt": 5.046, "phase": "run", "load1": 1.93, "cpu_total": 1.52, "cpu_own": 1.58, "cpu_foreign": 0.0, "units": {}, "gpu": {"foreign_sm": 0, "foreign_mean": 0.0, "who": [], "cycles": 5, "temp": 86.0, "clock": 1950.0}, "profile": "performance"}
+{"kind": "gpu", "epoch": 1793747380.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 99}
+{"kind": "gpu", "epoch": 1793747381.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 66}
+{"kind": "gpu", "epoch": 1793747382.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 99}
+{"kind": "gpu", "epoch": 1793747383.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 99}
+{"kind": "gpu", "epoch": 1793747384.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 99}
+{"kind": "cpu", "epoch": 1793747385.644559, "dt": 5.043, "phase": "run", "load1": 1.85, "cpu_total": 1.38, "cpu_own": 1.44, "cpu_foreign": 0.0, "units": {}, "gpu": {"foreign_sm": 0, "foreign_mean": 0.0, "who": [], "cycles": 5, "temp": 86.0, "clock": 1980.0}, "profile": "performance"}
+{"kind": "gpu", "epoch": 1793747385.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 99}
+{"kind": "gpu", "epoch": 1793747386.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 99}
+{"kind": "gpu", "epoch": 1793747387.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 98}
+{"kind": "gpu", "epoch": 1793747388.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 98}
+{"kind": "gpu", "epoch": 1793747389.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 98}
+{"kind": "cpu", "epoch": 1793747390.688934, "dt": 5.044, "phase": "run", "load1": 1.79, "cpu_total": 1.53, "cpu_own": 1.61, "cpu_foreign": 0.0, "units": {}, "gpu": {"foreign_sm": 0, "foreign_mean": 0.0, "who": [], "cycles": 5, "temp": 87.0, "clock": 1980.0}, "profile": "performance"}
+{"kind": "gpu", "epoch": 1793747390.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 98}
+{"kind": "gpu", "epoch": 1793747391.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 98}
+{"kind": "gpu", "epoch": 1793747392.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 98}
+{"kind": "gpu", "epoch": 1793747393.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 98}
+{"kind": "gpu", "epoch": 1793747394.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 98}
+{"kind": "cpu", "epoch": 1793747395.7314038, "dt": 5.042, "phase": "run", "load1": 1.72, "cpu_total": 1.65, "cpu_own": 1.71, "cpu_foreign": 0.0, "units": {}, "gpu": {"foreign_sm": 0, "foreign_mean": 0.0, "who": [], "cycles": 5, "temp": 82.0, "clock": 2520.0}, "profile": "performance"}
+{"kind": "gpu", "epoch": 1793747395.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 98}
+{"kind": "gpu", "epoch": 1793747396.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 80}
+{"kind": "gpu", "epoch": 1793747397.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 94}
+{"kind": "gpu", "epoch": 1793747398.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 99}
+{"kind": "gpu", "epoch": 1793747399.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 99}
+{"kind": "cpu", "epoch": 1793747400.8025708, "dt": 5.071, "phase": "run", "load1": 1.83, "cpu_total": 2.99, "cpu_own": 3.03, "cpu_foreign": 0.0, "units": {"app-com.anthropic.Claude-183212.scope": 0.13}, "gpu": {"foreign_sm": 0, "foreign_mean": 0.0, "who": [], "cycles": 5, "temp": 87.0, "clock": 1980.0}, "profile": "performance"}
+{"kind": "gpu", "epoch": 1793747400.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 99}
+{"kind": "gpu", "epoch": 1793747401.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 99}
+{"kind": "gpu", "epoch": 1793747402.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 99}
+{"kind": "gpu", "epoch": 1793747403.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 99}
+{"kind": "gpu", "epoch": 1793747404.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 99}
+{"kind": "cpu", "epoch": 1793747405.8440042, "dt": 5.041, "phase": "run", "load1": 1.92, "cpu_total": 1.43, "cpu_own": 1.41, "cpu_foreign": 0.01, "units": {"app-com.anthropic.Claude-183212.scope": 0.13}, "gpu": {"foreign_sm": 0, "foreign_mean": 0.0, "who": [], "cycles": 5, "temp": 87.0, "clock": 1890.0}, "profile": "performance"}
+{"kind": "gpu", "epoch": 1793747405.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 98}
+{"kind": "gpu", "epoch": 1793747406.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 98}
+{"kind": "gpu", "epoch": 1793747407.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 99}
+{"kind": "gpu", "epoch": 1793747408.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 99}
+{"kind": "gpu", "epoch": 1793747409.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 99}
+{"kind": "cpu", "epoch": 1793747410.8920245, "dt": 5.048, "phase": "run", "load1": 1.85, "cpu_total": 1.19, "cpu_own": 1.26, "cpu_foreign": 0.0, "units": {}, "gpu": {"foreign_sm": 0, "foreign_mean": 0.0, "who": [], "cycles": 5, "temp": 87.0, "clock": 1905.0}, "profile": "performance"}
+{"kind": "gpu", "epoch": 1793747410.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 99}
+{"kind": "gpu", "epoch": 1793747411.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 99}
+{"kind": "gpu", "epoch": 1793747412.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 99}
+{"kind": "gpu", "epoch": 1793747413.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 99}
+{"kind": "gpu", "epoch": 1793747414.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 99}
+{"kind": "cpu", "epoch": 1793747415.934383, "dt": 5.042, "phase": "run", "load1": 1.78, "cpu_total": 1.07, "cpu_own": 1.13, "cpu_foreign": 0.0, "units": {}, "gpu": {"foreign_sm": 0, "foreign_mean": 0.0, "who": [], "cycles": 5, "temp": 86.0, "clock": 1905.0}, "profile": "performance"}
+{"kind": "gpu", "epoch": 1793747415.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 99}
+{"kind": "gpu", "epoch": 1793747416.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 99}
+{"kind": "gpu", "epoch": 1793747417.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 99}
+{"kind": "gpu", "epoch": 1793747418.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 99}
+{"kind": "cpu", "epoch": 1793747420.975693, "dt": 5.041, "phase": "run", "load1": 1.72, "cpu_total": 1.05, "cpu_own": 1.09, "cpu_foreign": 0.0, "units": {}, "gpu": {"foreign_sm": 0, "foreign_mean": 0.0, "who": [], "cycles": 4, "temp": 87.0, "clock": 1905.0}, "profile": "performance"}
+{"kind": "gpu", "epoch": 1793747419.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 99}
+{"kind": "gpu", "epoch": 1793747421.5, "dt": 2.0, "foreign_sm": 0, "who": [], "own_sm": 99}
+{"kind": "gpu", "epoch": 1793747422.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 99}
+{"kind": "gpu", "epoch": 1793747423.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 99}
+{"kind": "gpu", "epoch": 1793747424.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 99}
+{"kind": "cpu", "epoch": 1793747426.017833, "dt": 5.042, "phase": "run", "load1": 1.58, "cpu_total": 1.22, "cpu_own": 1.27, "cpu_foreign": 0.0, "units": {}, "gpu": {"foreign_sm": 0, "foreign_mean": 0.0, "who": [], "cycles": 5, "temp": 87.0, "clock": 1905.0}, "profile": "performance"}
+{"kind": "gpu", "epoch": 1793747425.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 99}
+{"kind": "gpu", "epoch": 1793747426.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 99}
+{"kind": "gpu", "epoch": 1793747427.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 97}
+{"kind": "gpu", "epoch": 1793747428.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 99}
+{"kind": "gpu", "epoch": 1793747429.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 99}
+{"kind": "cpu", "epoch": 1793747431.05915, "dt": 5.041, "phase": "run", "load1": 1.53, "cpu_total": 1.41, "cpu_own": 1.47, "cpu_foreign": 0.0, "units": {}, "gpu": {"foreign_sm": 0, "foreign_mean": 0.0, "who": [], "cycles": 5, "temp": 86.0, "clock": 1890.0}, "profile": "performance"}
+{"kind": "gpu", "epoch": 1793747430.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 99}
+{"kind": "gpu", "epoch": 1793747431.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 99}
+{"kind": "gpu", "epoch": 1793747432.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 99}
+{"kind": "gpu", "epoch": 1793747433.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 99}
+{"kind": "gpu", "epoch": 1793747434.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 99}
+{"kind": "cpu", "epoch": 1793747436.1009483, "dt": 5.042, "phase": "run", "load1": 1.49, "cpu_total": 1.14, "cpu_own": 1.17, "cpu_foreign": 0.0, "units": {"app-com.anthropic.Claude-183212.scope": 0.1}, "gpu": {"foreign_sm": 0, "foreign_mean": 0.0, "who": [], "cycles": 5, "temp": 86.0, "clock": 1875.0}, "profile": "performance"}
+{"kind": "gpu", "epoch": 1793747435.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 99}
+{"kind": "gpu", "epoch": 1793747436.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 98}
+{"kind": "gpu", "epoch": 1793747437.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 98}
+{"kind": "gpu", "epoch": 1793747438.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 84}
+{"kind": "gpu", "epoch": 1793747439.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 98}
+{"kind": "cpu", "epoch": 1793747441.1467726, "dt": 5.046, "phase": "run", "load1": 1.37, "cpu_total": 1.35, "cpu_own": 1.41, "cpu_foreign": 0.0, "units": {}, "gpu": {"foreign_sm": 0, "foreign_mean": 0.0, "who": [], "cycles": 5, "temp": 87.0, "clock": 1860.0}, "profile": "performance"}
+{"kind": "gpu", "epoch": 1793747440.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 98}
+{"kind": "gpu", "epoch": 1793747441.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 98}
+{"kind": "gpu", "epoch": 1793747442.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 98}
+{"kind": "gpu", "epoch": 1793747443.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 98}
+{"kind": "gpu", "epoch": 1793747444.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 98}
+{"kind": "cpu", "epoch": 1793747446.1897914, "dt": 5.043, "phase": "run", "load1": 1.26, "cpu_total": 1.05, "cpu_own": 1.1, "cpu_foreign": 0.0, "units": {}, "gpu": {"foreign_sm": 0, "foreign_mean": 0.0, "who": [], "cycles": 5, "temp": 87.0, "clock": 1875.0}, "profile": "performance"}
+{"kind": "gpu", "epoch": 1793747445.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 98}
+{"kind": "gpu", "epoch": 1793747446.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 98}
+{"kind": "gpu", "epoch": 1793747447.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 99}
+{"kind": "gpu", "epoch": 1793747448.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 99}
+{"kind": "gpu", "epoch": 1793747449.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 99}
+{"kind": "cpu", "epoch": 1793747451.2312455, "dt": 5.041, "phase": "run", "load1": 1.24, "cpu_total": 1.07, "cpu_own": 1.1, "cpu_foreign": 0.0, "units": {"app-com.anthropic.Claude-183212.scope": 0.11}, "gpu": {"foreign_sm": 0, "foreign_mean": 0.0, "who": [], "cycles": 5, "temp": 86.0, "clock": 1875.0}, "profile": "performance"}
+{"kind": "gpu", "epoch": 1793747450.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 99}
+{"kind": "gpu", "epoch": 1793747451.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 99}
+{"kind": "gpu", "epoch": 1793747452.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 99}
+{"kind": "gpu", "epoch": 1793747453.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 99}
+{"kind": "gpu", "epoch": 1793747454.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 99}
+{"kind": "cpu", "epoch": 1793747456.2722661, "dt": 5.041, "phase": "run", "load1": 1.14, "cpu_total": 1.04, "cpu_own": 1.1, "cpu_foreign": 0.0, "units": {}, "gpu": {"foreign_sm": 0, "foreign_mean": 0.0, "who": [], "cycles": 5, "temp": 86.0, "clock": 1875.0}, "profile": "performance"}
+{"kind": "gpu", "epoch": 1793747455.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 99}
+{"kind": "gpu", "epoch": 1793747456.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 99}
+{"kind": "gpu", "epoch": 1793747457.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 99}
+{"kind": "gpu", "epoch": 1793747458.5, "dt": 1.0, "foreign_sm": 0, "who": [], "own_sm": 99}
+{"kind": "cpu", "epoch": 1793747460.4879231, "dt": 4.216, "phase": "end", "load1": 1.05, "cpu_total": 1.79, "cpu_own": 1.82, "cpu_foreign": 0.0, "units": {}, "gpu": {"foreign_sm": 0, "foreign_mean": 0.0, "who": [], "cycles": 4, "temp": 77.0, "clock": 2550.0}, "profile": "performance"}

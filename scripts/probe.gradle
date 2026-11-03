@@ -1,0 +1,12 @@
+allprojects {
+ afterEvaluate {
+  if (plugins.hasPlugin('java')) {
+   sourceSets.test.java.srcDir('run/perf-work/probe')
+   tasks.withType(Test).configureEach {
+    maxParallelForks=1
+    jvmArgs '-XX:StartFlightRecording=filename=run/perf-work/cloud-optimized.jfr,settings=profile,dumponexit=true'
+    testLogging.showStandardStreams=true
+   }
+  }
+ }
+}

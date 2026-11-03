@@ -1,0 +1,2128 @@
+[
+  {
+    "window": "incoming-drone-field-day-100-point/t0-3",
+    "frame": "76843",
+    "start_ms": 48918.499,
+    "interval_ms": 127.11,
+    "render_wall_ms": 0.137,
+    "render_thread_cpu_ms": 0.135,
+    "cycle_thread_cpu_ms": 122.052,
+    "gpu_elapsed_ms": 0.157,
+    "events": [
+      {
+        "type": "cmd",
+        "t_ms": 48865.025,
+        "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+        "tag": "incoming-drone-field-day-100-point",
+        "ok": true,
+        "result": 1,
+        "sent_ms": 48864.647,
+        "ran_ms": 48864.666,
+        "due_ms": 48863.8384
+      },
+      {
+        "type": "cmd",
+        "t_ms": 48865.073,
+        "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+        "tag": "incoming-drone-field-day-100-point",
+        "ok": true,
+        "result": 1,
+        "sent_ms": 48864.6565,
+        "ran_ms": 48865.04,
+        "due_ms": 48863.8384
+      },
+      {
+        "type": "cmd",
+        "t_ms": 48865.134,
+        "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+        "tag": "incoming-drone-field-day-100-point",
+        "ok": true,
+        "result": 1,
+        "sent_ms": 48864.6589,
+        "ran_ms": 48865.0804,
+        "due_ms": 48863.8384
+      },
+      {
+        "type": "cmd",
+        "t_ms": 48865.165,
+        "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+        "tag": "incoming-drone-field-day-100-point",
+        "ok": true,
+        "result": 1,
+        "sent_ms": 48864.6601,
+        "ran_ms": 48865.1397,
+        "due_ms": 48863.8384
+      },
+      {
+        "type": "cmd",
+        "t_ms": 48865.19,
+        "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+        "tag": "incoming-drone-field-day-100-point",
+        "ok": true,
+        "result": 1,
+        "sent_ms": 48864.6612,
+        "ran_ms": 48865.1706,
+        "due_ms": 48863.8384
+      },
+      {
+        "type": "cmd",
+        "t_ms": 48865.213,
+        "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+        "tag": "incoming-drone-field-day-100-point",
+        "ok": true,
+        "result": 1,
+        "sent_ms": 48864.6624,
+        "ran_ms": 48865.1955,
+        "due_ms": 48863.8384
+      },
+      {
+        "type": "cmd",
+        "t_ms": 48865.236,
+        "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+        "tag": "incoming-drone-field-day-100-point",
+        "ok": true,
+        "result": 1,
+        "sent_ms": 48864.6648,
+        "ran_ms": 48865.2181,
+        "due_ms": 48863.8384
+      },
+      {
+        "type": "cmd",
+        "t_ms": 48865.257,
+        "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+        "tag": "incoming-drone-field-day-100-point",
+        "ok": true,
+        "result": 1,
+        "sent_ms": 48864.666,
+        "ran_ms": 48865.2407,
+        "due_ms": 48863.8384
+      },
+      {
+        "type": "cmd",
+        "t_ms": 48865.283,
+        "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+        "tag": "incoming-drone-field-day-100-point",
+        "ok": true,
+        "result": 1,
+        "sent_ms": 48864.6684,
+        "ran_ms": 48865.2632,
+        "due_ms": 48863.8384
+      },
+      {
+        "type": "cmd",
+        "t_ms": 48865.352,
+        "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+        "tag": "incoming-drone-field-day-100-point",
+        "ok": true,
+        "result": 1,
+        "sent_ms": 48864.6696,
+        "ran_ms": 48865.2881,
+        "due_ms": 48863.8384
+      },
+      {
+        "type": "tick",
+        "t_ms": 48948.649,
+        "n": 586,
+        "wall_ms": 57.4422,
+        "cpu_ms": 56.5463
+      },
+      {
+        "type": "blast",
+        "t_ms": 48982.275,
+        "at": [
+          0.0,
+          65.0,
+          0.0
+        ],
+        "radius": 22.6046,
+        "source": "none",
+        "uuid": null,
+        "damage": "incoming:strike"
+      },
+      {
+        "type": "blast",
+        "t_ms": 48983.103,
+        "at": [
+          0.0,
+          65.0,
+          0.0
+        ],
+        "radius": 22.6046,
+        "source": "none",
+        "uuid": null,
+        "damage": "incoming:strike"
+      },
+      {
+        "type": "blast",
+        "t_ms": 48983.407,
+        "at": [
+          0.0,
+          65.0,
+          0.0
+        ],
+        "radius": 22.6046,
+        "source": "none",
+        "uuid": null,
+        "damage": "incoming:strike"
+      },
+      {
+        "type": "blast",
+        "t_ms": 48983.456,
+        "at": [
+          0.0,
+          65.0,
+          0.0
+        ],
+        "radius": 22.6046,
+        "source": "none",
+        "uuid": null,
+        "damage": "incoming:strike"
+      },
+      {
+        "type": "tick",
+        "t_ms": 48984.879,
+        "n": 587,
+        "wall_ms": 36.143,
+        "cpu_ms": 35.1594
+      },
+      {
+        "type": "blast",
+        "t_ms": 49000.114,
+        "at": [
+          0.0,
+          65.0,
+          0.0
+        ],
+        "radius": 22.6046,
+        "source": "none",
+        "uuid": null,
+        "damage": "incoming:strike"
+      },
+      {
+        "type": "blast",
+        "t_ms": 49000.244,
+        "at": [
+          0.0,
+          65.0,
+          0.0
+        ],
+        "radius": 22.6046,
+        "source": "none",
+        "uuid": null,
+        "damage": "incoming:strike"
+      },
+      {
+        "type": "blast",
+        "t_ms": 49000.287,
+        "at": [
+          0.0,
+          65.0,
+          0.0
+        ],
+        "radius": 22.6046,
+        "source": "none",
+        "uuid": null,
+        "damage": "incoming:strike"
+      },
+      {
+        "type": "blast",
+        "t_ms": 49000.327,
+        "at": [
+          0.0,
+          65.0,
+          0.0
+        ],
+        "radius": 22.6046,
+        "source": "none",
+        "uuid": null,
+        "damage": "incoming:strike"
+      },
+      {
+        "type": "blast",
+        "t_ms": 49000.364,
+        "at": [
+          0.0,
+          65.0,
+          0.0
+        ],
+        "radius": 22.6046,
+        "source": "none",
+        "uuid": null,
+        "damage": "incoming:strike"
+      },
+      {
+        "type": "blast",
+        "t_ms": 49000.402,
+        "at": [
+          0.0,
+          65.0,
+          0.0
+        ],
+        "radius": 22.6046,
+        "source": "none",
+        "uuid": null,
+        "damage": "incoming:strike"
+      },
+      {
+        "type": "tick",
+        "t_ms": 49025.256,
+        "n": 588,
+        "wall_ms": 34.0415,
+        "cpu_ms": 32.1325
+      },
+      {
+        "type": "tick",
+        "t_ms": 49087.42,
+        "n": 589,
+        "wall_ms": 46.2007,
+        "cpu_ms": 42.5647
+      },
+      {
+        "type": "tick",
+        "t_ms": 49138.178,
+        "n": 590,
+        "wall_ms": 46.9891,
+        "cpu_ms": 44.6307
+      }
+    ]
+  },
+  {
+    "window": "incoming-drone-field-day-100-point/t0-3",
+    "frame": "76844",
+    "start_ms": 49045.609,
+    "interval_ms": 61.055,
+    "render_wall_ms": 40.939,
+    "render_thread_cpu_ms": 38.591,
+    "cycle_thread_cpu_ms": 57.357,
+    "gpu_elapsed_ms": 4.184,
+    "events": [
+      {
+        "type": "tick",
+        "t_ms": 48948.649,
+        "n": 586,
+        "wall_ms": 57.4422,
+        "cpu_ms": 56.5463
+      },
+      {
+        "type": "blast",
+        "t_ms": 48982.275,
+        "at": [
+          0.0,
+          65.0,
+          0.0
+        ],
+        "radius": 22.6046,
+        "source": "none",
+        "uuid": null,
+        "damage": "incoming:strike"
+      },
+      {
+        "type": "blast",
+        "t_ms": 48983.103,
+        "at": [
+          0.0,
+          65.0,
+          0.0
+        ],
+        "radius": 22.6046,
+        "source": "none",
+        "uuid": null,
+        "damage": "incoming:strike"
+      },
+      {
+        "type": "blast",
+        "t_ms": 48983.407,
+        "at": [
+          0.0,
+          65.0,
+          0.0
+        ],
+        "radius": 22.6046,
+        "source": "none",
+        "uuid": null,
+        "damage": "incoming:strike"
+      },
+      {
+        "type": "blast",
+        "t_ms": 48983.456,
+        "at": [
+          0.0,
+          65.0,
+          0.0
+        ],
+        "radius": 22.6046,
+        "source": "none",
+        "uuid": null,
+        "damage": "incoming:strike"
+      },
+      {
+        "type": "tick",
+        "t_ms": 48984.879,
+        "n": 587,
+        "wall_ms": 36.143,
+        "cpu_ms": 35.1594
+      },
+      {
+        "type": "blast",
+        "t_ms": 49000.114,
+        "at": [
+          0.0,
+          65.0,
+          0.0
+        ],
+        "radius": 22.6046,
+        "source": "none",
+        "uuid": null,
+        "damage": "incoming:strike"
+      },
+      {
+        "type": "blast",
+        "t_ms": 49000.244,
+        "at": [
+          0.0,
+          65.0,
+          0.0
+        ],
+        "radius": 22.6046,
+        "source": "none",
+        "uuid": null,
+        "damage": "incoming:strike"
+      },
+      {
+        "type": "blast",
+        "t_ms": 49000.287,
+        "at": [
+          0.0,
+          65.0,
+          0.0
+        ],
+        "radius": 22.6046,
+        "source": "none",
+        "uuid": null,
+        "damage": "incoming:strike"
+      },
+      {
+        "type": "blast",
+        "t_ms": 49000.327,
+        "at": [
+          0.0,
+          65.0,
+          0.0
+        ],
+        "radius": 22.6046,
+        "source": "none",
+        "uuid": null,
+        "damage": "incoming:strike"
+      },
+      {
+        "type": "blast",
+        "t_ms": 49000.364,
+        "at": [
+          0.0,
+          65.0,
+          0.0
+        ],
+        "radius": 22.6046,
+        "source": "none",
+        "uuid": null,
+        "damage": "incoming:strike"
+      },
+      {
+        "type": "blast",
+        "t_ms": 49000.402,
+        "at": [
+          0.0,
+          65.0,
+          0.0
+        ],
+        "radius": 22.6046,
+        "source": "none",
+        "uuid": null,
+        "damage": "incoming:strike"
+      },
+      {
+        "type": "tick",
+        "t_ms": 49025.256,
+        "n": 588,
+        "wall_ms": 34.0415,
+        "cpu_ms": 32.1325
+      },
+      {
+        "type": "tick",
+        "t_ms": 49087.42,
+        "n": 589,
+        "wall_ms": 46.2007,
+        "cpu_ms": 42.5647
+      },
+      {
+        "type": "tick",
+        "t_ms": 49138.178,
+        "n": 590,
+        "wall_ms": 46.9891,
+        "cpu_ms": 44.6307
+      },
+      {
+        "type": "tick",
+        "t_ms": 49187.635,
+        "n": 591,
+        "wall_ms": 46.4216,
+        "cpu_ms": 46.1558
+      }
+    ]
+  },
+  {
+    "window": "incoming-drone-field-day-100-point/t0-3",
+    "frame": "76845",
+    "start_ms": 49106.664,
+    "interval_ms": 49.976,
+    "render_wall_ms": 42.427,
+    "render_thread_cpu_ms": 41.009,
+    "cycle_thread_cpu_ms": 48.342,
+    "gpu_elapsed_ms": 1.406,
+    "events": [
+      {
+        "type": "tick",
+        "t_ms": 49025.256,
+        "n": 588,
+        "wall_ms": 34.0415,
+        "cpu_ms": 32.1325
+      },
+      {
+        "type": "tick",
+        "t_ms": 49087.42,
+        "n": 589,
+        "wall_ms": 46.2007,
+        "cpu_ms": 42.5647
+      },
+      {
+        "type": "tick",
+        "t_ms": 49138.178,
+        "n": 590,
+        "wall_ms": 46.9891,
+        "cpu_ms": 44.6307
+      },
+      {
+        "type": "tick",
+        "t_ms": 49187.635,
+        "n": 591,
+        "wall_ms": 46.4216,
+        "cpu_ms": 46.1558
+      },
+      {
+        "type": "tick",
+        "t_ms": 49233.713,
+        "n": 592,
+        "wall_ms": 42.5236,
+        "cpu_ms": 41.5791
+      }
+    ]
+  },
+  {
+    "window": "incoming-drone-field-day-100-point/t0-3",
+    "frame": "76846",
+    "start_ms": 49156.641,
+    "interval_ms": 56.839,
+    "render_wall_ms": 52.45,
+    "render_thread_cpu_ms": 50.059,
+    "cycle_thread_cpu_ms": 54.377,
+    "gpu_elapsed_ms": 50.183,
+    "events": [
+      {
+        "type": "tick",
+        "t_ms": 49087.42,
+        "n": 589,
+        "wall_ms": 46.2007,
+        "cpu_ms": 42.5647
+      },
+      {
+        "type": "tick",
+        "t_ms": 49138.178,
+        "n": 590,
+        "wall_ms": 46.9891,
+        "cpu_ms": 44.6307
+      },
+      {
+        "type": "tick",
+        "t_ms": 49187.635,
+        "n": 591,
+        "wall_ms": 46.4216,
+        "cpu_ms": 46.1558
+      },
+      {
+        "type": "tick",
+        "t_ms": 49233.713,
+        "n": 592,
+        "wall_ms": 42.5236,
+        "cpu_ms": 41.5791
+      },
+      {
+        "type": "tick",
+        "t_ms": 49281.202,
+        "n": 593,
+        "wall_ms": 39.9495,
+        "cpu_ms": 39.6089
+      }
+    ]
+  },
+  {
+    "window": "incoming-drone-field-day-100-point/t0-3",
+    "frame": "76847",
+    "start_ms": 49213.48,
+    "interval_ms": 38.354,
+    "render_wall_ms": 30.247,
+    "render_thread_cpu_ms": 28.054,
+    "cycle_thread_cpu_ms": 35.848,
+    "gpu_elapsed_ms": 6.877,
+    "events": [
+      {
+        "type": "tick",
+        "t_ms": 49138.178,
+        "n": 590,
+        "wall_ms": 46.9891,
+        "cpu_ms": 44.6307
+      },
+      {
+        "type": "tick",
+        "t_ms": 49187.635,
+        "n": 591,
+        "wall_ms": 46.4216,
+        "cpu_ms": 46.1558
+      },
+      {
+        "type": "tick",
+        "t_ms": 49233.713,
+        "n": 592,
+        "wall_ms": 42.5236,
+        "cpu_ms": 41.5791
+      },
+      {
+        "type": "tick",
+        "t_ms": 49281.202,
+        "n": 593,
+        "wall_ms": 39.9495,
+        "cpu_ms": 39.6089
+      },
+      {
+        "type": "tick",
+        "t_ms": 49330.595,
+        "n": 594,
+        "wall_ms": 39.4473,
+        "cpu_ms": 39.1891
+      }
+    ]
+  },
+  {
+    "window": "incoming-drone-field-day-100-point/t0-3",
+    "frame": "76857",
+    "start_ms": 49400.529,
+    "interval_ms": 58.685,
+    "render_wall_ms": 14.39,
+    "render_thread_cpu_ms": 14.144,
+    "cycle_thread_cpu_ms": 54.852,
+    "gpu_elapsed_ms": 2.373,
+    "events": [
+      {
+        "type": "tick",
+        "t_ms": 49330.595,
+        "n": 594,
+        "wall_ms": 39.4473,
+        "cpu_ms": 39.1891
+      },
+      {
+        "type": "tick",
+        "t_ms": 49382.617,
+        "n": 595,
+        "wall_ms": 41.3518,
+        "cpu_ms": 40.6476
+      },
+      {
+        "type": "tick",
+        "t_ms": 49432.849,
+        "n": 596,
+        "wall_ms": 41.7008,
+        "cpu_ms": 41.3634
+      },
+      {
+        "type": "tick",
+        "t_ms": 49480.061,
+        "n": 597,
+        "wall_ms": 38.9023,
+        "cpu_ms": 37.2231
+      },
+      {
+        "type": "tick",
+        "t_ms": 49527.579,
+        "n": 598,
+        "wall_ms": 36.3674,
+        "cpu_ms": 36.0235
+      }
+    ]
+  },
+  {
+    "window": "incoming-drone-field-day-100-point/t0-3",
+    "frame": "76977",
+    "start_ms": 50388.71,
+    "interval_ms": 59.511,
+    "render_wall_ms": 4.252,
+    "render_thread_cpu_ms": 4.236,
+    "cycle_thread_cpu_ms": 58.996,
+    "gpu_elapsed_ms": 1.681,
+    "events": [
+      {
+        "type": "cmd",
+        "t_ms": 50368.489,
+        "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+        "tag": "incoming-drone-field-day-100-point",
+        "ok": true,
+        "result": 1,
+        "sent_ms": 50368.3262,
+        "ran_ms": 50368.344,
+        "due_ms": 50363.8384
+      },
+      {
+        "type": "cmd",
+        "t_ms": 50368.663,
+        "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+        "tag": "incoming-drone-field-day-100-point",
+        "ok": true,
+        "result": 1,
+        "sent_ms": 50368.3357,
+        "ran_ms": 50368.5542,
+        "due_ms": 50363.8384
+      },
+      {
+        "type": "cmd",
+        "t_ms": 50368.743,
+        "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+        "tag": "incoming-drone-field-day-100-point",
+        "ok": true,
+        "result": 1,
+        "sent_ms": 50368.3369,
+        "ran_ms": 50368.6824,
+        "due_ms": 50363.8384
+      },
+      {
+        "type": "cmd",
+        "t_ms": 50368.781,
+        "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+        "tag": "incoming-drone-field-day-100-point",
+        "ok": true,
+        "result": 1,
+        "sent_ms": 50368.3393,
+        "ran_ms": 50368.7513,
+        "due_ms": 50363.8384
+      },
+      {
+        "type": "cmd",
+        "t_ms": 50368.817,
+        "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+        "tag": "incoming-drone-field-day-100-point",
+        "ok": true,
+        "result": 1,
+        "sent_ms": 50368.3405,
+        "ran_ms": 50368.7917,
+        "due_ms": 50363.8384
+      },
+      {
+        "type": "cmd",
+        "t_ms": 50368.845,
+        "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+        "tag": "incoming-drone-field-day-100-point",
+        "ok": true,
+        "result": 1,
+        "sent_ms": 50368.3429,
+        "ran_ms": 50368.8237,
+        "due_ms": 50363.8384
+      },
+      {
+        "type": "cmd",
+        "t_ms": 50368.874,
+        "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+        "tag": "incoming-drone-field-day-100-point",
+        "ok": true,
+        "result": 1,
+        "sent_ms": 50368.344,
+        "ran_ms": 50368.8522,
+        "due_ms": 50363.8384
+      },
+      {
+        "type": "cmd",
+        "t_ms": 50368.901,
+        "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+        "tag": "incoming-drone-field-day-100-point",
+        "ok": true,
+        "result": 1,
+        "sent_ms": 50368.3452,
+        "ran_ms": 50368.8795,
+        "due_ms": 50363.8384
+      },
+      {
+        "type": "cmd",
+        "t_ms": 50368.937,
+        "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+        "tag": "incoming-drone-field-day-100-point",
+        "ok": true,
+        "result": 1,
+        "sent_ms": 50368.3476,
+        "ran_ms": 50368.9068,
+        "due_ms": 50363.8384
+      },
+      {
+        "type": "cmd",
+        "t_ms": 50368.963,
+        "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+        "tag": "incoming-drone-field-day-100-point",
+        "ok": true,
+        "result": 1,
+        "sent_ms": 50368.3488,
+        "ran_ms": 50368.9436,
+        "due_ms": 50363.8384
+      },
+      {
+        "type": "blast",
+        "t_ms": 50414.044,
+        "at": [
+          0.0,
+          65.0,
+          0.0
+        ],
+        "radius": 22.6046,
+        "source": "none",
+        "uuid": null,
+        "damage": "incoming:strike"
+      },
+      {
+        "type": "blast",
+        "t_ms": 50433.747,
+        "at": [
+          0.0,
+          65.0,
+          0.0
+        ],
+        "radius": 22.6046,
+        "source": "none",
+        "uuid": null,
+        "damage": "incoming:strike"
+      },
+      {
+        "type": "tick",
+        "t_ms": 50441.221,
+        "n": 616,
+        "wall_ms": 50.0583,
+        "cpu_ms": 48.6952
+      },
+      {
+        "type": "blast",
+        "t_ms": 50441.656,
+        "at": [
+          0.0,
+          65.0,
+          0.0
+        ],
+        "radius": 22.6046,
+        "source": "none",
+        "uuid": null,
+        "damage": "incoming:strike"
+      },
+      {
+        "type": "blast",
+        "t_ms": 50441.741,
+        "at": [
+          0.0,
+          65.0,
+          0.0
+        ],
+        "radius": 22.6046,
+        "source": "none",
+        "uuid": null,
+        "damage": "incoming:strike"
+      },
+      {
+        "type": "blast",
+        "t_ms": 50441.794,
+        "at": [
+          0.0,
+          65.0,
+          0.0
+        ],
+        "radius": 22.6046,
+        "source": "none",
+        "uuid": null,
+        "damage": "incoming:strike"
+      },
+      {
+        "type": "blast",
+        "t_ms": 50441.865,
+        "at": [
+          0.0,
+          65.0,
+          0.0
+        ],
+        "radius": 22.6046,
+        "source": "none",
+        "uuid": null,
+        "damage": "incoming:strike"
+      },
+      {
+        "type": "blast",
+        "t_ms": 50446.354,
+        "at": [
+          0.0,
+          65.0,
+          0.0
+        ],
+        "radius": 22.6046,
+        "source": "none",
+        "uuid": null,
+        "damage": "incoming:strike"
+      },
+      {
+        "type": "blast",
+        "t_ms": 50446.431,
+        "at": [
+          0.0,
+          65.0,
+          0.0
+        ],
+        "radius": 22.6046,
+        "source": "none",
+        "uuid": null,
+        "damage": "incoming:strike"
+      },
+      {
+        "type": "blast",
+        "t_ms": 50446.487,
+        "at": [
+          0.0,
+          65.0,
+          0.0
+        ],
+        "radius": 22.6046,
+        "source": "none",
+        "uuid": null,
+        "damage": "incoming:strike"
+      },
+      {
+        "type": "blast",
+        "t_ms": 50446.557,
+        "at": [
+          0.0,
+          65.0,
+          0.0
+        ],
+        "radius": 22.6046,
+        "source": "none",
+        "uuid": null,
+        "damage": "incoming:strike"
+      },
+      {
+        "type": "tick",
+        "t_ms": 50488.747,
+        "n": 617,
+        "wall_ms": 47.4498,
+        "cpu_ms": 37.168
+      },
+      {
+        "type": "tick",
+        "t_ms": 50531.701,
+        "n": 618,
+        "wall_ms": 40.4708,
+        "cpu_ms": 39.4134
+      }
+    ]
+  },
+  {
+    "window": "incoming-drone-field-day-100-point/t0-3",
+    "frame": "76986",
+    "start_ms": 50599.355,
+    "interval_ms": 54.327,
+    "render_wall_ms": 33.44,
+    "render_thread_cpu_ms": 22.366,
+    "cycle_thread_cpu_ms": 37.775,
+    "gpu_elapsed_ms": 2.576,
+    "events": [
+      {
+        "type": "tick",
+        "t_ms": 50531.701,
+        "n": 618,
+        "wall_ms": 40.4708,
+        "cpu_ms": 39.4134
+      },
+      {
+        "type": "tick",
+        "t_ms": 50590.818,
+        "n": 619,
+        "wall_ms": 49.5988,
+        "cpu_ms": 42.3449
+      },
+      {
+        "type": "tick",
+        "t_ms": 50641.25,
+        "n": 620,
+        "wall_ms": 48.6324,
+        "cpu_ms": 42.0204
+      },
+      {
+        "type": "tick",
+        "t_ms": 50686.763,
+        "n": 621,
+        "wall_ms": 45.3328,
+        "cpu_ms": 38.5606
+      },
+      {
+        "type": "tick",
+        "t_ms": 50737.869,
+        "n": 622,
+        "wall_ms": 46.6389,
+        "cpu_ms": 46.1646
+      }
+    ]
+  },
+  {
+    "window": "incoming-drone-field-day-100-point/t0-3",
+    "frame": "77101",
+    "start_ms": 51630.557,
+    "interval_ms": 109.673,
+    "render_wall_ms": 104.101,
+    "render_thread_cpu_ms": 104.063,
+    "cycle_thread_cpu_ms": 109.331,
+    "gpu_elapsed_ms": 2.355,
+    "events": []
+  },
+  {
+    "window": "incoming-drone-field-day-100-point/t3-15",
+    "frame": "77365",
+    "start_ms": 53387.749,
+    "interval_ms": 42.989,
+    "render_wall_ms": 3.62,
+    "render_thread_cpu_ms": 3.617,
+    "cycle_thread_cpu_ms": 42.791,
+    "gpu_elapsed_ms": 1.942,
+    "events": [
+      {
+        "type": "cmd",
+        "t_ms": 53366.297,
+        "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+        "tag": "incoming-drone-field-day-100-point",
+        "ok": true,
+        "result": 1,
+        "sent_ms": 53366.1648,
+        "ran_ms": 53366.1802,
+        "due_ms": 53363.8384
+      },
+      {
+        "type": "cmd",
+        "t_ms": 53366.341,
+        "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+        "tag": "incoming-drone-field-day-100-point",
+        "ok": true,
+        "result": 1,
+        "sent_ms": 53366.1731,
+        "ran_ms": 53366.3132,
+        "due_ms": 53363.8384
+      },
+      {
+        "type": "cmd",
+        "t_ms": 53366.377,
+        "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+        "tag": "incoming-drone-field-day-100-point",
+        "ok": true,
+        "result": 1,
+        "sent_ms": 53366.1743,
+        "ran_ms": 53366.3476,
+        "due_ms": 53363.8384
+      },
+      {
+        "type": "cmd",
+        "t_ms": 53366.407,
+        "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+        "tag": "incoming-drone-field-day-100-point",
+        "ok": true,
+        "result": 1,
+        "sent_ms": 53366.1755,
+        "ran_ms": 53366.3844,
+        "due_ms": 53363.8384
+      },
+      {
+        "type": "cmd",
+        "t_ms": 53366.441,
+        "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+        "tag": "incoming-drone-field-day-100-point",
+        "ok": true,
+        "result": 1,
+        "sent_ms": 53366.1767,
+        "ran_ms": 53366.4141,
+        "due_ms": 53363.8384
+      },
+      {
+        "type": "cmd",
+        "t_ms": 53366.466,
+        "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+        "tag": "incoming-drone-field-day-100-point",
+        "ok": true,
+        "result": 1,
+        "sent_ms": 53366.179,
+        "ran_ms": 53366.4474,
+        "due_ms": 53363.8384
+      },
+      {
+        "type": "cmd",
+        "t_ms": 53366.491,
+        "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+        "tag": "incoming-drone-field-day-100-point",
+        "ok": true,
+        "result": 1,
+        "sent_ms": 53366.1802,
+        "ran_ms": 53366.4735,
+        "due_ms": 53363.8384
+      },
+      {
+        "type": "cmd",
+        "t_ms": 53366.522,
+        "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+        "tag": "incoming-drone-field-day-100-point",
+        "ok": true,
+        "result": 1,
+        "sent_ms": 53366.1826,
+        "ran_ms": 53366.4972,
+        "due_ms": 53363.8384
+      },
+      {
+        "type": "cmd",
+        "t_ms": 53366.545,
+        "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+        "tag": "incoming-drone-field-day-100-point",
+        "ok": true,
+        "result": 1,
+        "sent_ms": 53366.1838,
+        "ran_ms": 53366.5281,
+        "due_ms": 53363.8384
+      },
+      {
+        "type": "cmd",
+        "t_ms": 53366.567,
+        "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+        "tag": "incoming-drone-field-day-100-point",
+        "ok": true,
+        "result": 1,
+        "sent_ms": 53366.1862,
+        "ran_ms": 53366.5495,
+        "due_ms": 53363.8384
+      },
+      {
+        "type": "blast",
+        "t_ms": 53413.081,
+        "at": [
+          0.0,
+          65.0,
+          0.0
+        ],
+        "radius": 22.6046,
+        "source": "none",
+        "uuid": null,
+        "damage": "incoming:strike"
+      },
+      {
+        "type": "blast",
+        "t_ms": 53422.16,
+        "at": [
+          0.0,
+          65.0,
+          0.0
+        ],
+        "radius": 22.6046,
+        "source": "none",
+        "uuid": null,
+        "damage": "incoming:strike"
+      },
+      {
+        "type": "blast",
+        "t_ms": 53422.231,
+        "at": [
+          0.0,
+          65.0,
+          0.0
+        ],
+        "radius": 22.6046,
+        "source": "none",
+        "uuid": null,
+        "damage": "incoming:strike"
+      },
+      {
+        "type": "blast",
+        "t_ms": 53422.274,
+        "at": [
+          0.0,
+          65.0,
+          0.0
+        ],
+        "radius": 22.6046,
+        "source": "none",
+        "uuid": null,
+        "damage": "incoming:strike"
+      },
+      {
+        "type": "blast",
+        "t_ms": 53422.313,
+        "at": [
+          0.0,
+          65.0,
+          0.0
+        ],
+        "radius": 22.6046,
+        "source": "none",
+        "uuid": null,
+        "damage": "incoming:strike"
+      },
+      {
+        "type": "blast",
+        "t_ms": 53422.35,
+        "at": [
+          0.0,
+          65.0,
+          0.0
+        ],
+        "radius": 22.6046,
+        "source": "none",
+        "uuid": null,
+        "damage": "incoming:strike"
+      },
+      {
+        "type": "blast",
+        "t_ms": 53426.236,
+        "at": [
+          0.0,
+          65.0,
+          0.0
+        ],
+        "radius": 22.6046,
+        "source": "none",
+        "uuid": null,
+        "damage": "incoming:strike"
+      },
+      {
+        "type": "blast",
+        "t_ms": 53426.288,
+        "at": [
+          0.0,
+          65.0,
+          0.0
+        ],
+        "radius": 22.6046,
+        "source": "none",
+        "uuid": null,
+        "damage": "incoming:strike"
+      },
+      {
+        "type": "blast",
+        "t_ms": 53426.327,
+        "at": [
+          0.0,
+          65.0,
+          0.0
+        ],
+        "radius": 22.6046,
+        "source": "none",
+        "uuid": null,
+        "damage": "incoming:strike"
+      },
+      {
+        "type": "blast",
+        "t_ms": 53426.363,
+        "at": [
+          0.0,
+          65.0,
+          0.0
+        ],
+        "radius": 22.6046,
+        "source": "none",
+        "uuid": null,
+        "damage": "incoming:strike"
+      },
+      {
+        "type": "tick",
+        "t_ms": 53432.976,
+        "n": 676,
+        "wall_ms": 41.8279,
+        "cpu_ms": 40.4618
+      },
+      {
+        "type": "tick",
+        "t_ms": 53489.032,
+        "n": 677,
+        "wall_ms": 47.8749,
+        "cpu_ms": 46.4926
+      },
+      {
+        "type": "tick",
+        "t_ms": 53530.482,
+        "n": 678,
+        "wall_ms": 39.331,
+        "cpu_ms": 39.2232
+      }
+    ]
+  },
+  {
+    "window": "incoming-drone-field-day-100-point/t3-15",
+    "frame": "77587",
+    "start_ms": 54888.809,
+    "interval_ms": 46.913,
+    "render_wall_ms": 4.191,
+    "render_thread_cpu_ms": 4.165,
+    "cycle_thread_cpu_ms": 46.731,
+    "gpu_elapsed_ms": 2.168,
+    "events": [
+      {
+        "type": "cmd",
+        "t_ms": 54867.328,
+        "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+        "tag": "incoming-drone-field-day-100-point",
+        "ok": true,
+        "result": 1,
+        "sent_ms": 54867.1856,
+        "ran_ms": 54867.2034,
+        "due_ms": 54863.8384
+      },
+      {
+        "type": "cmd",
+        "t_ms": 54867.372,
+        "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+        "tag": "incoming-drone-field-day-100-point",
+        "ok": true,
+        "result": 1,
+        "sent_ms": 54867.1927,
+        "ran_ms": 54867.3447,
+        "due_ms": 54863.8384
+      },
+      {
+        "type": "cmd",
+        "t_ms": 54867.402,
+        "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+        "tag": "incoming-drone-field-day-100-point",
+        "ok": true,
+        "result": 1,
+        "sent_ms": 54867.1951,
+        "ran_ms": 54867.3803,
+        "due_ms": 54863.8384
+      },
+      {
+        "type": "cmd",
+        "t_ms": 54867.443,
+        "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+        "tag": "incoming-drone-field-day-100-point",
+        "ok": true,
+        "result": 1,
+        "sent_ms": 54867.1963,
+        "ran_ms": 54867.4076,
+        "due_ms": 54863.8384
+      },
+      {
+        "type": "cmd",
+        "t_ms": 54867.472,
+        "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+        "tag": "incoming-drone-field-day-100-point",
+        "ok": true,
+        "result": 1,
+        "sent_ms": 54867.1987,
+        "ran_ms": 54867.4504,
+        "due_ms": 54863.8384
+      },
+      {
+        "type": "cmd",
+        "t_ms": 54867.499,
+        "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+        "tag": "incoming-drone-field-day-100-point",
+        "ok": true,
+        "result": 1,
+        "sent_ms": 54867.1999,
+        "ran_ms": 54867.4789,
+        "due_ms": 54863.8384
+      },
+      {
+        "type": "cmd",
+        "t_ms": 54867.525,
+        "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+        "tag": "incoming-drone-field-day-100-point",
+        "ok": true,
+        "result": 1,
+        "sent_ms": 54867.201,
+        "ran_ms": 54867.505,
+        "due_ms": 54863.8384
+      },
+      {
+        "type": "cmd",
+        "t_ms": 54867.549,
+        "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+        "tag": "incoming-drone-field-day-100-point",
+        "ok": true,
+        "result": 1,
+        "sent_ms": 54867.2022,
+        "ran_ms": 54867.5311,
+        "due_ms": 54863.8384
+      },
+      {
+        "type": "cmd",
+        "t_ms": 54867.575,
+        "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+        "tag": "incoming-drone-field-day-100-point",
+        "ok": true,
+        "result": 1,
+        "sent_ms": 54867.2034,
+        "ran_ms": 54867.5561,
+        "due_ms": 54863.8384
+      },
+      {
+        "type": "cmd",
+        "t_ms": 54867.6,
+        "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+        "tag": "incoming-drone-field-day-100-point",
+        "ok": true,
+        "result": 1,
+        "sent_ms": 54867.2058,
+        "ran_ms": 54867.5822,
+        "due_ms": 54863.8384
+      },
+      {
+        "type": "blast",
+        "t_ms": 54907.536,
+        "at": [
+          0.0,
+          65.0,
+          0.0
+        ],
+        "radius": 22.6046,
+        "source": "none",
+        "uuid": null,
+        "damage": "incoming:strike"
+      },
+      {
+        "type": "blast",
+        "t_ms": 54907.62,
+        "at": [
+          0.0,
+          65.0,
+          0.0
+        ],
+        "radius": 22.6046,
+        "source": "none",
+        "uuid": null,
+        "damage": "incoming:strike"
+      },
+      {
+        "type": "blast",
+        "t_ms": 54907.661,
+        "at": [
+          0.0,
+          65.0,
+          0.0
+        ],
+        "radius": 22.6046,
+        "source": "none",
+        "uuid": null,
+        "damage": "incoming:strike"
+      },
+      {
+        "type": "blast",
+        "t_ms": 54907.699,
+        "at": [
+          0.0,
+          65.0,
+          0.0
+        ],
+        "radius": 22.6046,
+        "source": "none",
+        "uuid": null,
+        "damage": "incoming:strike"
+      },
+      {
+        "type": "blast",
+        "t_ms": 54907.736,
+        "at": [
+          0.0,
+          65.0,
+          0.0
+        ],
+        "radius": 22.6046,
+        "source": "none",
+        "uuid": null,
+        "damage": "incoming:strike"
+      },
+      {
+        "type": "blast",
+        "t_ms": 54907.772,
+        "at": [
+          0.0,
+          65.0,
+          0.0
+        ],
+        "radius": 22.6046,
+        "source": "none",
+        "uuid": null,
+        "damage": "incoming:strike"
+      },
+      {
+        "type": "blast",
+        "t_ms": 54907.807,
+        "at": [
+          0.0,
+          65.0,
+          0.0
+        ],
+        "radius": 22.6046,
+        "source": "none",
+        "uuid": null,
+        "damage": "incoming:strike"
+      },
+      {
+        "type": "blast",
+        "t_ms": 54907.843,
+        "at": [
+          0.0,
+          65.0,
+          0.0
+        ],
+        "radius": 22.6046,
+        "source": "none",
+        "uuid": null,
+        "damage": "incoming:strike"
+      },
+      {
+        "type": "blast",
+        "t_ms": 54907.878,
+        "at": [
+          0.0,
+          65.0,
+          0.0
+        ],
+        "radius": 22.6046,
+        "source": "none",
+        "uuid": null,
+        "damage": "incoming:strike"
+      },
+      {
+        "type": "blast",
+        "t_ms": 54907.914,
+        "at": [
+          0.0,
+          65.0,
+          0.0
+        ],
+        "radius": 22.6046,
+        "source": "none",
+        "uuid": null,
+        "damage": "incoming:strike"
+      },
+      {
+        "type": "tick",
+        "t_ms": 54934.79,
+        "n": 706,
+        "wall_ms": 43.6385,
+        "cpu_ms": 43.1541
+      },
+      {
+        "type": "tick",
+        "t_ms": 54980.145,
+        "n": 707,
+        "wall_ms": 38.9047,
+        "cpu_ms": 38.8356
+      },
+      {
+        "type": "tick",
+        "t_ms": 55030.199,
+        "n": 708,
+        "wall_ms": 38.9902,
+        "cpu_ms": 38.9408
+      }
+    ]
+  },
+  {
+    "window": "incoming-drone-field-day-100-point/t3-15",
+    "frame": "77819",
+    "start_ms": 56391.459,
+    "interval_ms": 40.817,
+    "render_wall_ms": 4.271,
+    "render_thread_cpu_ms": 4.269,
+    "cycle_thread_cpu_ms": 40.472,
+    "gpu_elapsed_ms": 2.462,
+    "events": [
+      {
+        "type": "cmd",
+        "t_ms": 56368.231,
+        "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+        "tag": "incoming-drone-field-day-100-point",
+        "ok": true,
+        "result": 1,
+        "sent_ms": 56368.0758,
+        "ran_ms": 56368.0936,
+        "due_ms": 56363.8384
+      },
+      {
+        "type": "cmd",
+        "t_ms": 56368.28,
+        "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+        "tag": "incoming-drone-field-day-100-point",
+        "ok": true,
+        "result": 1,
+        "sent_ms": 56368.0841,
+        "ran_ms": 56368.2527,
+        "due_ms": 56363.8384
+      },
+      {
+        "type": "cmd",
+        "t_ms": 56368.309,
+        "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+        "tag": "incoming-drone-field-day-100-point",
+        "ok": true,
+        "result": 1,
+        "sent_ms": 56368.0853,
+        "ran_ms": 56368.2872,
+        "due_ms": 56363.8384
+      },
+      {
+        "type": "cmd",
+        "t_ms": 56368.335,
+        "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+        "tag": "incoming-drone-field-day-100-point",
+        "ok": true,
+        "result": 1,
+        "sent_ms": 56368.0877,
+        "ran_ms": 56368.3145,
+        "due_ms": 56363.8384
+      },
+      {
+        "type": "cmd",
+        "t_ms": 56368.358,
+        "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+        "tag": "incoming-drone-field-day-100-point",
+        "ok": true,
+        "result": 1,
+        "sent_ms": 56368.0889,
+        "ran_ms": 56368.3406,
+        "due_ms": 56363.8384
+      },
+      {
+        "type": "cmd",
+        "t_ms": 56368.407,
+        "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+        "tag": "incoming-drone-field-day-100-point",
+        "ok": true,
+        "result": 1,
+        "sent_ms": 56368.0901,
+        "ran_ms": 56368.3715,
+        "due_ms": 56363.8384
+      },
+      {
+        "type": "cmd",
+        "t_ms": 56368.533,
+        "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+        "tag": "incoming-drone-field-day-100-point",
+        "ok": true,
+        "result": 1,
+        "sent_ms": 56368.0912,
+        "ran_ms": 56368.432,
+        "due_ms": 56363.8384
+      },
+      {
+        "type": "cmd",
+        "t_ms": 56368.566,
+        "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+        "tag": "incoming-drone-field-day-100-point",
+        "ok": true,
+        "result": 1,
+        "sent_ms": 56368.0936,
+        "ran_ms": 56368.5401,
+        "due_ms": 56363.8384
+      },
+      {
+        "type": "cmd",
+        "t_ms": 56368.591,
+        "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+        "tag": "incoming-drone-field-day-100-point",
+        "ok": true,
+        "result": 1,
+        "sent_ms": 56368.0948,
+        "ran_ms": 56368.5721,
+        "due_ms": 56363.8384
+      },
+      {
+        "type": "cmd",
+        "t_ms": 56368.614,
+        "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+        "tag": "incoming-drone-field-day-100-point",
+        "ok": true,
+        "result": 1,
+        "sent_ms": 56368.1031,
+        "ran_ms": 56368.597,
+        "due_ms": 56363.8384
+      },
+      {
+        "type": "blast",
+        "t_ms": 56406.851,
+        "at": [
+          0.0,
+          65.0,
+          0.0
+        ],
+        "radius": 22.6046,
+        "source": "none",
+        "uuid": null,
+        "damage": "incoming:strike"
+      },
+      {
+        "type": "blast",
+        "t_ms": 56406.926,
+        "at": [
+          0.0,
+          65.0,
+          0.0
+        ],
+        "radius": 22.6046,
+        "source": "none",
+        "uuid": null,
+        "damage": "incoming:strike"
+      },
+      {
+        "type": "blast",
+        "t_ms": 56406.967,
+        "at": [
+          0.0,
+          65.0,
+          0.0
+        ],
+        "radius": 22.6046,
+        "source": "none",
+        "uuid": null,
+        "damage": "incoming:strike"
+      },
+      {
+        "type": "blast",
+        "t_ms": 56407.005,
+        "at": [
+          0.0,
+          65.0,
+          0.0
+        ],
+        "radius": 22.6046,
+        "source": "none",
+        "uuid": null,
+        "damage": "incoming:strike"
+      },
+      {
+        "type": "blast",
+        "t_ms": 56407.047,
+        "at": [
+          0.0,
+          65.0,
+          0.0
+        ],
+        "radius": 22.6046,
+        "source": "none",
+        "uuid": null,
+        "damage": "incoming:strike"
+      },
+      {
+        "type": "blast",
+        "t_ms": 56407.084,
+        "at": [
+          0.0,
+          65.0,
+          0.0
+        ],
+        "radius": 22.6046,
+        "source": "none",
+        "uuid": null,
+        "damage": "incoming:strike"
+      },
+      {
+        "type": "blast",
+        "t_ms": 56407.128,
+        "at": [
+          0.0,
+          65.0,
+          0.0
+        ],
+        "radius": 22.6046,
+        "source": "none",
+        "uuid": null,
+        "damage": "incoming:strike"
+      },
+      {
+        "type": "blast",
+        "t_ms": 56407.163,
+        "at": [
+          0.0,
+          65.0,
+          0.0
+        ],
+        "radius": 22.6046,
+        "source": "none",
+        "uuid": null,
+        "damage": "incoming:strike"
+      },
+      {
+        "type": "blast",
+        "t_ms": 56407.198,
+        "at": [
+          0.0,
+          65.0,
+          0.0
+        ],
+        "radius": 22.6046,
+        "source": "none",
+        "uuid": null,
+        "damage": "incoming:strike"
+      },
+      {
+        "type": "blast",
+        "t_ms": 56407.236,
+        "at": [
+          0.0,
+          65.0,
+          0.0
+        ],
+        "radius": 22.6046,
+        "source": "none",
+        "uuid": null,
+        "damage": "incoming:strike"
+      },
+      {
+        "type": "tick",
+        "t_ms": 56434.979,
+        "n": 736,
+        "wall_ms": 43.7596,
+        "cpu_ms": 43.3454
+      },
+      {
+        "type": "tick",
+        "t_ms": 56480.164,
+        "n": 737,
+        "wall_ms": 38.97,
+        "cpu_ms": 38.832
+      },
+      {
+        "type": "tick",
+        "t_ms": 56529.999,
+        "n": 738,
+        "wall_ms": 38.805,
+        "cpu_ms": 38.715
+      }
+    ]
+  },
+  {
+    "window": "incoming-drone-field-day-100-point/t3-15",
+    "frame": "78209",
+    "start_ms": 59387.51,
+    "interval_ms": 33.882,
+    "render_wall_ms": 5.872,
+    "render_thread_cpu_ms": 5.84,
+    "cycle_thread_cpu_ms": 33.131,
+    "gpu_elapsed_ms": 3.113,
+    "events": [
+      {
+        "type": "cmd",
+        "t_ms": 59365.443,
+        "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+        "tag": "incoming-drone-field-day-100-point",
+        "ok": true,
+        "result": 1,
+        "sent_ms": 59365.3195,
+        "ran_ms": 59365.3373,
+        "due_ms": 59363.8384
+      },
+      {
+        "type": "cmd",
+        "t_ms": 59365.489,
+        "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+        "tag": "incoming-drone-field-day-100-point",
+        "ok": true,
+        "result": 1,
+        "sent_ms": 59365.3278,
+        "ran_ms": 59365.4631,
+        "due_ms": 59363.8384
+      },
+      {
+        "type": "cmd",
+        "t_ms": 59365.512,
+        "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+        "tag": "incoming-drone-field-day-100-point",
+        "ok": true,
+        "result": 1,
+        "sent_ms": 59365.3302,
+        "ran_ms": 59365.4964,
+        "due_ms": 59363.8384
+      },
+      {
+        "type": "cmd",
+        "t_ms": 59365.532,
+        "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+        "tag": "incoming-drone-field-day-100-point",
+        "ok": true,
+        "result": 1,
+        "sent_ms": 59365.3325,
+        "ran_ms": 59365.5178,
+        "due_ms": 59363.8384
+      },
+      {
+        "type": "cmd",
+        "t_ms": 59365.552,
+        "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+        "tag": "incoming-drone-field-day-100-point",
+        "ok": true,
+        "result": 1,
+        "sent_ms": 59365.3325,
+        "ran_ms": 59365.5391,
+        "due_ms": 59363.8384
+      },
+      {
+        "type": "cmd",
+        "t_ms": 59365.596,
+        "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+        "tag": "incoming-drone-field-day-100-point",
+        "ok": true,
+        "result": 1,
+        "sent_ms": 59365.3337,
+        "ran_ms": 59365.5747,
+        "due_ms": 59363.8384
+      },
+      {
+        "type": "cmd",
+        "t_ms": 59365.614,
+        "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+        "tag": "incoming-drone-field-day-100-point",
+        "ok": true,
+        "result": 1,
+        "sent_ms": 59365.3361,
+        "ran_ms": 59365.602,
+        "due_ms": 59363.8384
+      },
+      {
+        "type": "cmd",
+        "t_ms": 59365.636,
+        "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+        "tag": "incoming-drone-field-day-100-point",
+        "ok": true,
+        "result": 1,
+        "sent_ms": 59365.3373,
+        "ran_ms": 59365.6199,
+        "due_ms": 59363.8384
+      },
+      {
+        "type": "cmd",
+        "t_ms": 59365.658,
+        "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+        "tag": "incoming-drone-field-day-100-point",
+        "ok": true,
+        "result": 1,
+        "sent_ms": 59365.3397,
+        "ran_ms": 59365.6424,
+        "due_ms": 59363.8384
+      },
+      {
+        "type": "cmd",
+        "t_ms": 59365.678,
+        "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+        "tag": "incoming-drone-field-day-100-point",
+        "ok": true,
+        "result": 1,
+        "sent_ms": 59365.3408,
+        "ran_ms": 59365.6626,
+        "due_ms": 59363.8384
+      },
+      {
+        "type": "blast",
+        "t_ms": 59406.278,
+        "at": [
+          0.0,
+          65.0,
+          0.0
+        ],
+        "radius": 22.6046,
+        "source": "none",
+        "uuid": null,
+        "damage": "incoming:strike"
+      },
+      {
+        "type": "blast",
+        "t_ms": 59406.39,
+        "at": [
+          0.0,
+          65.0,
+          0.0
+        ],
+        "radius": 22.6046,
+        "source": "none",
+        "uuid": null,
+        "damage": "incoming:strike"
+      },
+      {
+        "type": "blast",
+        "t_ms": 59406.429,
+        "at": [
+          0.0,
+          65.0,
+          0.0
+        ],
+        "radius": 22.6046,
+        "source": "none",
+        "uuid": null,
+        "damage": "incoming:strike"
+      },
+      {
+        "type": "blast",
+        "t_ms": 59406.465,
+        "at": [
+          0.0,
+          65.0,
+          0.0
+        ],
+        "radius": 22.6046,
+        "source": "none",
+        "uuid": null,
+        "damage": "incoming:strike"
+      },
+      {
+        "type": "blast",
+        "t_ms": 59406.5,
+        "at": [
+          0.0,
+          65.0,
+          0.0
+        ],
+        "radius": 22.6046,
+        "source": "none",
+        "uuid": null,
+        "damage": "incoming:strike"
+      },
+      {
+        "type": "blast",
+        "t_ms": 59406.535,
+        "at": [
+          0.0,
+          65.0,
+          0.0
+        ],
+        "radius": 22.6046,
+        "source": "none",
+        "uuid": null,
+        "damage": "incoming:strike"
+      },
+      {
+        "type": "blast",
+        "t_ms": 59406.568,
+        "at": [
+          0.0,
+          65.0,
+          0.0
+        ],
+        "radius": 22.6046,
+        "source": "none",
+        "uuid": null,
+        "damage": "incoming:strike"
+      },
+      {
+        "type": "blast",
+        "t_ms": 59406.601,
+        "at": [
+          0.0,
+          65.0,
+          0.0
+        ],
+        "radius": 22.6046,
+        "source": "none",
+        "uuid": null,
+        "damage": "incoming:strike"
+      },
+      {
+        "type": "blast",
+        "t_ms": 59406.636,
+        "at": [
+          0.0,
+          65.0,
+          0.0
+        ],
+        "radius": 22.6046,
+        "source": "none",
+        "uuid": null,
+        "damage": "incoming:strike"
+      },
+      {
+        "type": "blast",
+        "t_ms": 59406.674,
+        "at": [
+          0.0,
+          65.0,
+          0.0
+        ],
+        "radius": 22.6046,
+        "source": "none",
+        "uuid": null,
+        "damage": "incoming:strike"
+      },
+      {
+        "type": "tick",
+        "t_ms": 59435.353,
+        "n": 796,
+        "wall_ms": 44.1681,
+        "cpu_ms": 44.0683
+      },
+      {
+        "type": "tick",
+        "t_ms": 59480.329,
+        "n": 797,
+        "wall_ms": 39.1125,
+        "cpu_ms": 38.8905
+      }
+    ]
+  },
+  {
+    "window": "incoming-drone-field-day-100-point/t3-15",
+    "frame": "78401",
+    "start_ms": 61037.258,
+    "interval_ms": 35.292,
+    "render_wall_ms": 30.547,
+    "render_thread_cpu_ms": 10.206,
+    "cycle_thread_cpu_ms": 14.921,
+    "gpu_elapsed_ms": 3.848,
+    "events": [
+      {
+        "type": "tick",
+        "t_ms": 60989.873,
+        "n": 827,
+        "wall_ms": 48.3949,
+        "cpu_ms": 48.3134
+      },
+      {
+        "type": "tick",
+        "t_ms": 61031.429,
+        "n": 828,
+        "wall_ms": 40.225,
+        "cpu_ms": 40.1398
+      },
+      {
+        "type": "tick",
+        "t_ms": 61072.082,
+        "n": 829,
+        "wall_ms": 30.9343,
+        "cpu_ms": 9.8543
+      },
+      {
+        "type": "tick",
+        "t_ms": 61137.639,
+        "n": 830,
+        "wall_ms": 46.4382,
+        "cpu_ms": 45.3924
+      }
+    ]
+  },
+  {
+    "window": "incoming-drone-field-day-100-point/t15-35",
+    "frame": "78808",
+    "start_ms": 64579.213,
+    "interval_ms": 50.401,
+    "render_wall_ms": 47.658,
+    "render_thread_cpu_ms": 6.182,
+    "cycle_thread_cpu_ms": 8.896,
+    "gpu_elapsed_ms": 36.845,
+    "events": []
+  }
+]

@@ -1,0 +1,32 @@
+{
+  "args": {
+    "name": "inc-100-async",
+    "kind": "incoming",
+    "counts": "1,10,50,100",
+    "spreads": "point,spread",
+    "terrain": "field",
+    "light": "day",
+    "pack": "none",
+    "profile": "async",
+    "prop": [],
+    "server_config": "{}",
+    "client_config": "{}",
+    "extra_mod": [],
+    "exclude_mod": [],
+    "plan": "/mnt/data/projects/incoming/mod/run/perf-audit/data/inc-100-async-plan.json",
+    "jar": null,
+    "prepare_only": false,
+    "modpack": null,
+    "production": false,
+    "renderdoc_window": null
+  },
+  "main": "341c2ea6f",
+  "utc": "2026-11-02T22:08:14Z",
+  "mods": {
+    "incoming-3.10.4.jar": "a1095e2fc00e1e9745a35ac0464c6b732fd142967905682ccf5f3ba2b8efc26f",
+    "iris-neoforge-1.8.14-beta.1+mc1.21.1.jar": "60d5f8bf52f25e9986440f4a4270a6bd986d9cff994510e1108ac1547063b314",
+    "sodium-neoforge-0.8.13+mc1.21.1.jar": "575d187b15328d7bddd8a9b1bee64333c22c14735f5780ec49eac0cd5503c08d"
+  },
+  "power_profile": "performance",
+  "stand_jar_sha256": "0d6e713a3145e42596f45445843a063f658246b873d3a2241e1dbbe597951352"
+}

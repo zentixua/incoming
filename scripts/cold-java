@@ -1,0 +1,3 @@
+#!/bin/bash
+export __GL_SHADER_DISK_CACHE=0
+exec /mnt/data/projects/incoming/mod/run/jbr/jbr-21.0.11-linux-x64-b1163.116/bin/java "$@"

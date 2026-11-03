@@ -1,0 +1,256 @@
+{
+  "source": "async.jfr.cpu.collapsed",
+  "scope": "profile-window.json; running CPU samples; inclusive terms overlap and must not be added",
+  "threads": {
+    "[Render thread tid=86270]": {
+      "total": 24732,
+      "CloudModel": 4862,
+      "LocalWind": 307,
+      "Air.of": 5,
+      "ParticleEngine": 2102,
+      "BlastSounds": 221,
+      "BlastPulse": 18,
+      "GroundDust": 2762,
+      "SmokePuffs": 12971
+    },
+    "[Incoming Smoke tid=86705]": {
+      "total": 12453,
+      "SmokePuffs": 12441
+    },
+    "[C2 CompilerThre tid=86284]": {
+      "total": 3993
+    },
+    "[Server thread tid=86677]": {
+      "total": 2669,
+      "WorkScheduler": 878
+    },
+    "[tid=87002]": {
+      "total": 1454
+    },
+    "[tid=87004]": {
+      "total": 1420
+    },
+    "[tid=87003]": {
+      "total": 1415
+    },
+    "[tid=87005]": {
+      "total": 1362
+    },
+    "[tid=87006]": {
+      "total": 1155
+    },
+    "[tid=87007]": {
+      "total": 1121
+    },
+    "[G1 Conc#1 tid=86328]": {
+      "total": 615
+    },
+    "[G1 Conc#0 tid=86274]": {
+      "total": 612
+    },
+    "[G1 Conc#2 tid=86329]": {
+      "total": 611
+    },
+    "[tid=87106]": {
+      "total": 380
+    },
+    "[Chunk Render Task Executor #9 tid=86704]": {
+      "total": 358
+    },
+    "[Chunk Render Task Executor #0 tid=86695]": {
+      "total": 355
+    },
+    "[Chunk Render Task Executor #4 tid=86699]": {
+      "total": 350
+    },
+    "[Chunk Render Task Executor #6 tid=86701]": {
+      "total": 350
+    },
+    "[IO-Worker-3 tid=86679]": {
+      "total": 342
+    },
+    "[Chunk Render Task Executor #5 tid=86700]": {
+      "total": 335
+    },
+    "[Chunk Render Task Executor #1 tid=86696]": {
+      "total": 333
+    },
+    "[Chunk Render Task Executor #8 tid=86703]": {
+      "total": 330
+    },
+    "[Chunk Render Task Executor #2 tid=86697]": {
+      "total": 329
+    },
+    "[Chunk Render Task Executor #7 tid=86702]": {
+      "total": 328
+    },
+    "[Chunk Render Task Executor #3 tid=86698]": {
+      "total": 325
+    },
+    "[C1 CompilerThre tid=86285]": {
+      "total": 293
+    },
+    "[tid=87008]": {
+      "total": 199
+    },
+    "[tid=87009]": {
+      "total": 198
+    },
+    "[tid=87012]": {
+      "total": 163
+    },
+    "[IO-Worker-2 tid=86678]": {
+      "total": 154
+    },
+    "[tid=87107]": {
+      "total": 145
+    },
+    "[tid=87137]": {
+      "total": 131
+    },
+    "[JFR Thread Samp tid=86309]": {
+      "total": 125
+    },
+    "[tid=87295]": {
+      "total": 119
+    },
+    "[tid=87136]": {
+      "total": 93
+    },
+    "[JFR Periodic Tasks tid=86295]": {
+      "total": 68
+    },
+    "[Worker-Main-11 tid=86485]": {
+      "total": 64
+    },
+    "[tid=87108]": {
+      "total": 57
+    },
+    "[Sound engine tid=86691]": {
+      "total": 49
+    },
+    "[Netty Server IO #1 tid=86688]": {
+      "total": 47
+    },
+    "[Netty Local Client IO #0 tid=86687]": {
+      "total": 46
+    },
+    "[Download-7 tid=86511]": {
+      "total": 43
+    },
+    "[Worker-Main-3 tid=86476]": {
+      "total": 42
+    },
+    "[tid=87335]": {
+      "total": 39
+    },
+    "[tid=87124]": {
+      "total": 39
+    },
+    "[GC Thread#10 tid=86305]": {
+      "total": 35
+    },
+    "[GC Thread#12 tid=86351]": {
+      "total": 35
+    },
+    "[GC Thread#6 tid=86301]": {
+      "total": 35
+    },
+    "[GC Thread#0 tid=86272]": {
+      "total": 35
+    },
+    "[GC Thread#8 tid=86303]": {
+      "total": 35
+    },
+    "[GC Thread#11 tid=86306]": {
+      "total": 34
+    },
+    "[GC Thread#5 tid=86300]": {
+      "total": 34
+    },
+    "[GC Thread#1 tid=86296]": {
+      "total": 34
+    },
+    "[GC Thread#7 tid=86302]": {
+      "total": 34
+    },
+    "[tid=87128]": {
+      "total": 34
+    },
+    "[GC Thread#4 tid=86299]": {
+      "total": 33
+    },
+    "[GC Thread#9 tid=86304]": {
+      "total": 33
+    },
+    "[GC Thread#3 tid=86298]": {
+      "total": 32
+    },
+    "[GC Thread#2 tid=86297]": {
+      "total": 32
+    },
+    "[Download-1 tid=86434]": {
+      "total": 30
+    },
+    "[Download-21 tid=86525]": {
+      "total": 30
+    },
+    "[Worker-Main-15 tid=86489]": {
+      "total": 29
+    },
+    "[JFR Recorder Thread tid=86291]": {
+      "total": 23
+    },
+    "[tid=87238]": {
+      "total": 22
+    },
+    "[Worker-Main-9 tid=86483]": {
+      "total": 22
+    },
+    "[Download-18 tid=86522]": {
+      "total": 17
+    },
+    "[Worker-Main-4 tid=86478]": {
+      "total": 14
+    },
+    "[tid=87293]": {
+      "total": 10
+    },
+    "[VM Thread tid=86278]": {
+      "total": 9
+    },
+    "[tid=87257]": {
+      "total": 7
+    },
+    "[Worker-Main-12 tid=86486]": {
+      "total": 4
+    },
+    "[tid=86275]": {
+      "total": 4
+    },
+    "[config-file-watcher-0-0 tid=86473]": {
+      "total": 3
+    },
+    "[tid=86277]": {
+      "total": 3
+    },
+    "[incoming-stall-watch tid=86685]": {
+      "total": 2
+    },
+    "[tid=86273]": {
+      "total": 2
+    },
+    "[Async-profiler Timer tid=86289]": {
+      "total": 2
+    },
+    "[IO-Worker-4 tid=86681]": {
+      "total": 1
+    },
+    "[tid=86276]": {
+      "total": 1
+    },
+    "[Service Thread tid=86282]": {
+      "total": 1
+    }
+  }
+}

@@ -1,0 +1,3080 @@
+{
+  "origin_epoch_ms": 1793657321608.64,
+  "gc": [
+    {
+      "end_ms": -5682.639892578125,
+      "duration_ms": 3.241
+    },
+    {
+      "end_ms": -5499.639892578125,
+      "duration_ms": 5.542
+    },
+    {
+      "end_ms": -5436.639892578125,
+      "duration_ms": 3.819
+    },
+    {
+      "end_ms": -5388.639892578125,
+      "duration_ms": 2.499
+    },
+    {
+      "end_ms": -5137.639892578125,
+      "duration_ms": 3.608
+    },
+    {
+      "end_ms": -5132.639892578125,
+      "duration_ms": 1.064
+    },
+    {
+      "end_ms": -5131.639892578125,
+      "duration_ms": 0.018
+    },
+    {
+      "end_ms": -4555.639892578125,
+      "duration_ms": 3.581
+    },
+    {
+      "end_ms": -4371.639892578125,
+      "duration_ms": 3.968
+    },
+    {
+      "end_ms": -4309.639892578125,
+      "duration_ms": 2.715
+    },
+    {
+      "end_ms": -4246.639892578125,
+      "duration_ms": 1.611
+    },
+    {
+      "end_ms": -4233.639892578125,
+      "duration_ms": 4.478
+    },
+    {
+      "end_ms": -4231.639892578125,
+      "duration_ms": 0.029
+    },
+    {
+      "end_ms": -4197.639892578125,
+      "duration_ms": 2.116
+    },
+    {
+      "end_ms": -4177.639892578125,
+      "duration_ms": 2.759
+    },
+    {
+      "end_ms": -4110.639892578125,
+      "duration_ms": 2.097
+    },
+    {
+      "end_ms": -4054.639892578125,
+      "duration_ms": 2.824
+    },
+    {
+      "end_ms": -3954.639892578125,
+      "duration_ms": 2.305
+    },
+    {
+      "end_ms": -3816.639892578125,
+      "duration_ms": 3.972
+    },
+    {
+      "end_ms": -3647.639892578125,
+      "duration_ms": 3.054
+    },
+    {
+      "end_ms": -3492.639892578125,
+      "duration_ms": 3.706
+    },
+    {
+      "end_ms": -2794.639892578125,
+      "duration_ms": 8.44
+    },
+    {
+      "end_ms": -2462.639892578125,
+      "duration_ms": 7.573
+    },
+    {
+      "end_ms": -2439.639892578125,
+      "duration_ms": 2.603
+    },
+    {
+      "end_ms": -2427.639892578125,
+      "duration_ms": 0.081
+    },
+    {
+      "end_ms": -2075.639892578125,
+      "duration_ms": 7.123
+    },
+    {
+      "end_ms": -1621.639892578125,
+      "duration_ms": 9.732
+    },
+    {
+      "end_ms": -949.639892578125,
+      "duration_ms": 5.446
+    },
+    {
+      "end_ms": -294.639892578125,
+      "duration_ms": 7.651
+    },
+    {
+      "end_ms": -45.639892578125,
+      "duration_ms": 5.483
+    },
+    {
+      "end_ms": 12.360107421875,
+      "duration_ms": 6.598
+    },
+    {
+      "end_ms": 29.360107421875,
+      "duration_ms": 0.058
+    },
+    {
+      "end_ms": 201.360107421875,
+      "duration_ms": 4.919
+    },
+    {
+      "end_ms": 575.360107421875,
+      "duration_ms": 6.77
+    },
+    {
+      "end_ms": 915.360107421875,
+      "duration_ms": 4.914
+    },
+    {
+      "end_ms": 1023.360107421875,
+      "duration_ms": 4.976
+    },
+    {
+      "end_ms": 1059.360107421875,
+      "duration_ms": 11.232
+    },
+    {
+      "end_ms": 1073.360107421875,
+      "duration_ms": 0.074
+    },
+    {
+      "end_ms": 1187.360107421875,
+      "duration_ms": 7.405
+    },
+    {
+      "end_ms": 1302.360107421875,
+      "duration_ms": 6.71
+    },
+    {
+      "end_ms": 1338.360107421875,
+      "duration_ms": 3.182
+    },
+    {
+      "end_ms": 1441.360107421875,
+      "duration_ms": 9.212
+    },
+    {
+      "end_ms": 1475.360107421875,
+      "duration_ms": 0.074
+    },
+    {
+      "end_ms": 1549.360107421875,
+      "duration_ms": 3.756
+    },
+    {
+      "end_ms": 1620.360107421875,
+      "duration_ms": 5.337
+    },
+    {
+      "end_ms": 1655.360107421875,
+      "duration_ms": 3.286
+    },
+    {
+      "end_ms": 1659.360107421875,
+      "duration_ms": 3.034
+    },
+    {
+      "end_ms": 1731.360107421875,
+      "duration_ms": 2.565
+    },
+    {
+      "end_ms": 1754.360107421875,
+      "duration_ms": 0.068
+    },
+    {
+      "end_ms": 2190.360107421875,
+      "duration_ms": 12.022
+    },
+    {
+      "end_ms": 14889.360107421875,
+      "duration_ms": 11.6
+    },
+    {
+      "end_ms": 15664.360107421875,
+      "duration_ms": 7.474
+    },
+    {
+      "end_ms": 15757.360107421875,
+      "duration_ms": 3.596
+    },
+    {
+      "end_ms": 15788.360107421875,
+      "duration_ms": 0.088
+    },
+    {
+      "end_ms": 17562.360107421875,
+      "duration_ms": 12.092
+    },
+    {
+      "end_ms": 18662.360107421875,
+      "duration_ms": 12.194
+    },
+    {
+      "end_ms": 18759.360107421875,
+      "duration_ms": 6.556
+    },
+    {
+      "end_ms": 18800.360107421875,
+      "duration_ms": 0.069
+    },
+    {
+      "end_ms": 19641.360107421875,
+      "duration_ms": 7.923
+    },
+    {
+      "end_ms": 20551.360107421875,
+      "duration_ms": 5.865
+    },
+    {
+      "end_ms": 21570.360107421875,
+      "duration_ms": 4.263
+    },
+    {
+      "end_ms": 21671.360107421875,
+      "duration_ms": 4.772
+    },
+    {
+      "end_ms": 21721.360107421875,
+      "duration_ms": 0.068
+    },
+    {
+      "end_ms": 22431.360107421875,
+      "duration_ms": 3.019
+    },
+    {
+      "end_ms": 23158.360107421875,
+      "duration_ms": 5.31
+    },
+    {
+      "end_ms": 23949.360107421875,
+      "duration_ms": 5.506
+    },
+    {
+      "end_ms": 24058.360107421875,
+      "duration_ms": 3.705
+    },
+    {
+      "end_ms": 24109.360107421875,
+      "duration_ms": 0.077
+    },
+    {
+      "end_ms": 25128.360107421875,
+      "duration_ms": 3.867
+    },
+    {
+      "end_ms": 26783.360107421875,
+      "duration_ms": 3.125
+    },
+    {
+      "end_ms": 28414.360107421875,
+      "duration_ms": 2.06
+    },
+    {
+      "end_ms": 28525.360107421875,
+      "duration_ms": 3.99
+    },
+    {
+      "end_ms": 28579.360107421875,
+      "duration_ms": 0.082
+    },
+    {
+      "end_ms": 30071.360107421875,
+      "duration_ms": 1.977
+    },
+    {
+      "end_ms": 31711.360107421875,
+      "duration_ms": 3.124
+    },
+    {
+      "end_ms": 33389.360107421875,
+      "duration_ms": 2.01
+    },
+    {
+      "end_ms": 33498.360107421875,
+      "duration_ms": 3.233
+    },
+    {
+      "end_ms": 33554.360107421875,
+      "duration_ms": 0.091
+    },
+    {
+      "end_ms": 35094.360107421875,
+      "duration_ms": 2.024
+    },
+    {
+      "end_ms": 36790.360107421875,
+      "duration_ms": 3.528
+    },
+    {
+      "end_ms": 38485.360107421875,
+      "duration_ms": 2.042
+    },
+    {
+      "end_ms": 38599.360107421875,
+      "duration_ms": 3.491
+    },
+    {
+      "end_ms": 38656.360107421875,
+      "duration_ms": 0.079
+    },
+    {
+      "end_ms": 40214.360107421875,
+      "duration_ms": 1.971
+    },
+    {
+      "end_ms": 41912.360107421875,
+      "duration_ms": 3.073
+    },
+    {
+      "end_ms": 43619.360107421875,
+      "duration_ms": 2.105
+    },
+    {
+      "end_ms": 43733.360107421875,
+      "duration_ms": 8.301
+    },
+    {
+      "end_ms": 43788.360107421875,
+      "duration_ms": 0.072
+    },
+    {
+      "end_ms": 45344.360107421875,
+      "duration_ms": 2.324
+    },
+    {
+      "end_ms": 47695.360107421875,
+      "duration_ms": 6.529
+    },
+    {
+      "end_ms": 49333.360107421875,
+      "duration_ms": 5.002
+    },
+    {
+      "end_ms": 49465.360107421875,
+      "duration_ms": 3.469
+    },
+    {
+      "end_ms": 49530.360107421875,
+      "duration_ms": 0.077
+    },
+    {
+      "end_ms": 51950.360107421875,
+      "duration_ms": 4.348
+    },
+    {
+      "end_ms": 54158.360107421875,
+      "duration_ms": 4.588
+    },
+    {
+      "end_ms": 56447.360107421875,
+      "duration_ms": 4.506
+    },
+    {
+      "end_ms": 56568.360107421875,
+      "duration_ms": 5.163
+    },
+    {
+      "end_ms": 56631.360107421875,
+      "duration_ms": 0.093
+    },
+    {
+      "end_ms": 58194.360107421875,
+      "duration_ms": 4.002
+    },
+    {
+      "end_ms": 60184.360107421875,
+      "duration_ms": 5.458
+    },
+    {
+      "end_ms": 62746.360107421875,
+      "duration_ms": 3.022
+    },
+    {
+      "end_ms": 62868.360107421875,
+      "duration_ms": 3.32
+    },
+    {
+      "end_ms": 62927.360107421875,
+      "duration_ms": 0.093
+    },
+    {
+      "end_ms": 65601.36010742188,
+      "duration_ms": 2.004
+    },
+    {
+      "end_ms": 68151.36010742188,
+      "duration_ms": 2.244
+    },
+    {
+      "end_ms": 70630.36010742188,
+      "duration_ms": 1.932
+    },
+    {
+      "end_ms": 70745.36010742188,
+      "duration_ms": 2.853
+    },
+    {
+      "end_ms": 70804.36010742188,
+      "duration_ms": 0.086
+    },
+    {
+      "end_ms": 73233.36010742188,
+      "duration_ms": 1.872
+    },
+    {
+      "end_ms": 75623.36010742188,
+      "duration_ms": 2.491
+    },
+    {
+      "end_ms": 77906.36010742188,
+      "duration_ms": 2.063
+    },
+    {
+      "end_ms": 78023.36010742188,
+      "duration_ms": 2.814
+    },
+    {
+      "end_ms": 78082.36010742188,
+      "duration_ms": 0.1
+    },
+    {
+      "end_ms": 80301.36010742188,
+      "duration_ms": 1.832
+    },
+    {
+      "end_ms": 82626.36010742188,
+      "duration_ms": 2.515
+    },
+    {
+      "end_ms": 84980.36010742188,
+      "duration_ms": 2.098
+    },
+    {
+      "end_ms": 85099.36010742188,
+      "duration_ms": 3.232
+    },
+    {
+      "end_ms": 85158.36010742188,
+      "duration_ms": 0.082
+    },
+    {
+      "end_ms": 87294.36010742188,
+      "duration_ms": 1.875
+    },
+    {
+      "end_ms": 89546.36010742188,
+      "duration_ms": 2.933
+    },
+    {
+      "end_ms": 91852.36010742188,
+      "duration_ms": 2.254
+    },
+    {
+      "end_ms": 91968.36010742188,
+      "duration_ms": 2.578
+    },
+    {
+      "end_ms": 92026.36010742188,
+      "duration_ms": 0.084
+    },
+    {
+      "end_ms": 94243.36010742188,
+      "duration_ms": 1.915
+    },
+    {
+      "end_ms": 96591.36010742188,
+      "duration_ms": 2.871
+    },
+    {
+      "end_ms": 99043.36010742188,
+      "duration_ms": 1.553
+    },
+    {
+      "end_ms": 99162.36010742188,
+      "duration_ms": 2.496
+    },
+    {
+      "end_ms": 99222.36010742188,
+      "duration_ms": 0.085
+    },
+    {
+      "end_ms": 99446.36010742188,
+      "duration_ms": 2.207
+    },
+    {
+      "end_ms": 99551.36010742188,
+      "duration_ms": 3.752
+    }
+  ],
+  "windows": {
+    "incoming-field-day-100-point/baseline": {
+      "power_profiles": [
+        "performance"
+      ],
+      "foreign_cpu_cores": {
+        "n": 2,
+        "p50": 0.16,
+        "p95": 0.29,
+        "p99": 0.29,
+        "max": 0.29,
+        "mean": 0.22499999999999998,
+        "over33": 0,
+        "over50": 0,
+        "over100": 0,
+        "over250": 0
+      },
+      "gpu_clock_mhz": {
+        "n": 2,
+        "p50": 2550.0,
+        "p95": 2550.0,
+        "p99": 2550.0,
+        "max": 2550.0,
+        "mean": 2550.0,
+        "over33": 2,
+        "over50": 2,
+        "over100": 2,
+        "over250": 2
+      },
+      "gpu_temperature_c": {
+        "n": 2,
+        "p50": 83.0,
+        "p95": 83.0,
+        "p99": 83.0,
+        "max": 83.0,
+        "mean": 83.0,
+        "over33": 2,
+        "over50": 2,
+        "over100": 0,
+        "over250": 0
+      },
+      "foreign_gpu_percent": {
+        "n": 2,
+        "p50": 0.0,
+        "p95": 2.8,
+        "p99": 2.8,
+        "max": 2.8,
+        "mean": 1.4,
+        "over33": 0,
+        "over50": 0,
+        "over100": 0,
+        "over250": 0
+      },
+      "gc_pause_ms": {
+        "n": 10,
+        "p50": 2.105,
+        "p95": 8.301,
+        "p99": 8.301,
+        "max": 8.301,
+        "mean": 2.6986,
+        "over33": 0,
+        "over50": 0,
+        "over100": 0,
+        "over250": 0
+      },
+      "packets_per_tick": {
+        "c2s": {
+          "n": 201,
+          "p50": 0,
+          "p95": 0,
+          "p99": 1,
+          "max": 1,
+          "mean": 0.04975124378109453,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        },
+        "s2c": {
+          "n": 201,
+          "p50": 0,
+          "p95": 0,
+          "p99": 1,
+          "max": 1,
+          "mean": 0.04975124378109453,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        },
+        "incoming": {
+          "n": 201,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0,
+          "mean": 0,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        }
+      },
+      "block_writes_per_tick": {
+        "total": {
+          "n": 201,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0,
+          "mean": 0,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        },
+        "air": {
+          "n": 201,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0,
+          "mean": 0,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        },
+        "fire": {
+          "n": 201,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0,
+          "mean": 0,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        }
+      },
+      "block_writes_total": {
+        "total": 0,
+        "air": 0,
+        "fire": 0
+      },
+      "packet_counter_available": true,
+      "block_counter_available": true,
+      "native_entry_wall_ms": null,
+      "native_entry_wall_sum_ms": null
+    },
+    "incoming-drone-field-day-100-point/t0-3": {
+      "power_profiles": [],
+      "foreign_cpu_cores": null,
+      "gpu_clock_mhz": null,
+      "gpu_temperature_c": null,
+      "foreign_gpu_percent": null,
+      "gc_pause_ms": {
+        "n": 1,
+        "p50": 6.529,
+        "p95": 6.529,
+        "p99": 6.529,
+        "max": 6.529,
+        "mean": 6.529,
+        "over33": 0,
+        "over50": 0,
+        "over100": 0,
+        "over250": 0
+      },
+      "packets_per_tick": {
+        "c2s": {
+          "n": 60,
+          "p50": 0,
+          "p95": 0,
+          "p99": 1,
+          "max": 1,
+          "mean": 0.05,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        },
+        "s2c": {
+          "n": 60,
+          "p50": 17,
+          "p95": 79,
+          "p99": 107,
+          "max": 107,
+          "mean": 27.483333333333334,
+          "over33": 26,
+          "over50": 16,
+          "over100": 1,
+          "over250": 0
+        },
+        "incoming": {
+          "n": 60,
+          "p50": 0,
+          "p95": 8,
+          "p99": 10,
+          "max": 10,
+          "mean": 0.8166666666666667,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        }
+      },
+      "block_writes_per_tick": {
+        "total": {
+          "n": 60,
+          "p50": 1,
+          "p95": 14,
+          "p99": 27,
+          "max": 27,
+          "mean": 4.083333333333333,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        },
+        "air": {
+          "n": 60,
+          "p50": 0,
+          "p95": 0,
+          "p99": 14,
+          "max": 14,
+          "mean": 0.43333333333333335,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        },
+        "fire": {
+          "n": 60,
+          "p50": 0,
+          "p95": 2,
+          "p99": 10,
+          "max": 10,
+          "mean": 0.43333333333333335,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        }
+      },
+      "block_writes_total": {
+        "total": 245,
+        "air": 26,
+        "fire": 26
+      },
+      "packet_counter_available": true,
+      "block_counter_available": true,
+      "native_entry_wall_ms": {
+        "n": 20,
+        "p50": 0.230158,
+        "p95": 0.583696,
+        "p99": 23.896842,
+        "max": 23.896842,
+        "mean": 1.43825115,
+        "over33": 0,
+        "over50": 0,
+        "over100": 0,
+        "over250": 0
+      },
+      "native_entry_wall_sum_ms": 28.765023
+    },
+    "incoming-drone-field-day-100-point/t3-15": {
+      "power_profiles": [
+        "performance"
+      ],
+      "foreign_cpu_cores": {
+        "n": 2,
+        "p50": 0.0,
+        "p95": 0.0,
+        "p99": 0.0,
+        "max": 0.0,
+        "mean": 0.0,
+        "over33": 0,
+        "over50": 0,
+        "over100": 0,
+        "over250": 0
+      },
+      "gpu_clock_mhz": {
+        "n": 2,
+        "p50": 2550.0,
+        "p95": 2550.0,
+        "p99": 2550.0,
+        "max": 2550.0,
+        "mean": 2550.0,
+        "over33": 2,
+        "over50": 2,
+        "over100": 2,
+        "over250": 2
+      },
+      "gpu_temperature_c": {
+        "n": 2,
+        "p50": 80.0,
+        "p95": 86.0,
+        "p99": 86.0,
+        "max": 86.0,
+        "mean": 83.0,
+        "over33": 2,
+        "over50": 2,
+        "over100": 0,
+        "over250": 0
+      },
+      "foreign_gpu_percent": {
+        "n": 2,
+        "p50": 0.0,
+        "p95": 1.75,
+        "p99": 1.75,
+        "max": 1.75,
+        "mean": 0.875,
+        "over33": 0,
+        "over50": 0,
+        "over100": 0,
+        "over250": 0
+      },
+      "gc_pause_ms": {
+        "n": 10,
+        "p50": 4.348,
+        "p95": 5.458,
+        "p99": 5.458,
+        "max": 5.458,
+        "mean": 3.6706,
+        "over33": 0,
+        "over50": 0,
+        "over100": 0,
+        "over250": 0
+      },
+      "packets_per_tick": {
+        "c2s": {
+          "n": 242,
+          "p50": 0,
+          "p95": 0,
+          "p99": 1,
+          "max": 1,
+          "mean": 0.049586776859504134,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        },
+        "s2c": {
+          "n": 242,
+          "p50": 55,
+          "p95": 127,
+          "p99": 177,
+          "max": 211,
+          "mean": 60.19421487603306,
+          "over33": 146,
+          "over50": 124,
+          "over100": 57,
+          "over250": 0
+        },
+        "incoming": {
+          "n": 242,
+          "p50": 0,
+          "p95": 10,
+          "p99": 10,
+          "max": 10,
+          "mean": 0.6198347107438017,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        }
+      },
+      "block_writes_per_tick": {
+        "total": {
+          "n": 242,
+          "p50": 7,
+          "p95": 17,
+          "p99": 22,
+          "max": 23,
+          "mean": 7.871900826446281,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        },
+        "air": {
+          "n": 242,
+          "p50": 0,
+          "p95": 0,
+          "p99": 6,
+          "max": 8,
+          "mean": 0.1859504132231405,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        },
+        "fire": {
+          "n": 242,
+          "p50": 0,
+          "p95": 2,
+          "p99": 6,
+          "max": 6,
+          "mean": 0.32644628099173556,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        }
+      },
+      "block_writes_total": {
+        "total": 1905,
+        "air": 45,
+        "fire": 79
+      },
+      "packet_counter_available": true,
+      "block_counter_available": true,
+      "native_entry_wall_ms": {
+        "n": 70,
+        "p50": 0.10703,
+        "p95": 0.298756,
+        "p99": 0.3818,
+        "max": 0.3818,
+        "mean": 0.12778622857142857,
+        "over33": 0,
+        "over50": 0,
+        "over100": 0,
+        "over250": 0
+      },
+      "native_entry_wall_sum_ms": 8.945036
+    },
+    "incoming-drone-field-day-100-point/t15-35": {
+      "power_profiles": [
+        "performance"
+      ],
+      "foreign_cpu_cores": {
+        "n": 4,
+        "p50": 0.0,
+        "p95": 0.05,
+        "p99": 0.05,
+        "max": 0.05,
+        "mean": 0.0125,
+        "over33": 0,
+        "over50": 0,
+        "over100": 0,
+        "over250": 0
+      },
+      "gpu_clock_mhz": {
+        "n": 4,
+        "p50": 2415.0,
+        "p95": 2550.0,
+        "p99": 2550.0,
+        "max": 2550.0,
+        "mean": 2460.0,
+        "over33": 4,
+        "over50": 4,
+        "over100": 4,
+        "over250": 4
+      },
+      "gpu_temperature_c": {
+        "n": 4,
+        "p50": 84.0,
+        "p95": 85.0,
+        "p99": 85.0,
+        "max": 85.0,
+        "mean": 84.25,
+        "over33": 4,
+        "over50": 4,
+        "over100": 0,
+        "over250": 0
+      },
+      "foreign_gpu_percent": {
+        "n": 4,
+        "p50": 0.0,
+        "p95": 0.0,
+        "p99": 0.0,
+        "max": 0.0,
+        "mean": 0.0,
+        "over33": 0,
+        "over50": 0,
+        "over100": 0,
+        "over250": 0
+      },
+      "gc_pause_ms": {
+        "n": 14,
+        "p50": 2.004,
+        "p95": 3.32,
+        "p99": 3.32,
+        "max": 3.32,
+        "mean": 1.909,
+        "over33": 0,
+        "over50": 0,
+        "over100": 0,
+        "over250": 0
+      },
+      "packets_per_tick": {
+        "c2s": {
+          "n": 401,
+          "p50": 0,
+          "p95": 0,
+          "p99": 1,
+          "max": 1,
+          "mean": 0.04987531172069826,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        },
+        "s2c": {
+          "n": 401,
+          "p50": 0,
+          "p95": 13,
+          "p99": 78,
+          "max": 102,
+          "mean": 3.2169576059850375,
+          "over33": 17,
+          "over50": 12,
+          "over100": 1,
+          "over250": 0
+        },
+        "incoming": {
+          "n": 401,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0,
+          "mean": 0,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        }
+      },
+      "block_writes_per_tick": {
+        "total": {
+          "n": 401,
+          "p50": 0,
+          "p95": 5,
+          "p99": 8,
+          "max": 15,
+          "mean": 0.6458852867830424,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        },
+        "air": {
+          "n": 401,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 2,
+          "mean": 0.007481296758104738,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        },
+        "fire": {
+          "n": 401,
+          "p50": 0,
+          "p95": 2,
+          "p99": 2,
+          "max": 4,
+          "mean": 0.17955112219451372,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        }
+      },
+      "block_writes_total": {
+        "total": 259,
+        "air": 3,
+        "fire": 72
+      },
+      "packet_counter_available": true,
+      "block_counter_available": true,
+      "native_entry_wall_ms": null,
+      "native_entry_wall_sum_ms": null
+    },
+    "incoming-drone-field-day-100-point/t35-50": {
+      "power_profiles": [
+        "performance"
+      ],
+      "foreign_cpu_cores": {
+        "n": 3,
+        "p50": 0.0,
+        "p95": 0.0,
+        "p99": 0.0,
+        "max": 0.0,
+        "mean": 0.0,
+        "over33": 0,
+        "over50": 0,
+        "over100": 0,
+        "over250": 0
+      },
+      "gpu_clock_mhz": {
+        "n": 3,
+        "p50": 2550.0,
+        "p95": 2550.0,
+        "p99": 2550.0,
+        "max": 2550.0,
+        "mean": 2525.0,
+        "over33": 3,
+        "over50": 3,
+        "over100": 3,
+        "over250": 3
+      },
+      "gpu_temperature_c": {
+        "n": 3,
+        "p50": 86.0,
+        "p95": 86.0,
+        "p99": 86.0,
+        "max": 86.0,
+        "mean": 85.66666666666667,
+        "over33": 3,
+        "over50": 3,
+        "over100": 0,
+        "over250": 0
+      },
+      "foreign_gpu_percent": {
+        "n": 3,
+        "p50": 0.0,
+        "p95": 0.0,
+        "p99": 0.0,
+        "max": 0.0,
+        "mean": 0.0,
+        "over33": 0,
+        "over50": 0,
+        "over100": 0,
+        "over250": 0
+      },
+      "gc_pause_ms": {
+        "n": 10,
+        "p50": 2.098,
+        "p95": 3.232,
+        "p99": 3.232,
+        "max": 3.232,
+        "mean": 1.9566,
+        "over33": 0,
+        "over50": 0,
+        "over100": 0,
+        "over250": 0
+      },
+      "packets_per_tick": {
+        "c2s": {
+          "n": 300,
+          "p50": 0,
+          "p95": 0,
+          "p99": 1,
+          "max": 1,
+          "mean": 0.05,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        },
+        "s2c": {
+          "n": 300,
+          "p50": 0,
+          "p95": 1,
+          "p99": 1,
+          "max": 2,
+          "mean": 0.06,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        },
+        "incoming": {
+          "n": 300,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0,
+          "mean": 0,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        }
+      },
+      "block_writes_per_tick": {
+        "total": {
+          "n": 300,
+          "p50": 0,
+          "p95": 1,
+          "p99": 2,
+          "max": 2,
+          "mean": 0.09333333333333334,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        },
+        "air": {
+          "n": 300,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 1,
+          "mean": 0.0033333333333333335,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        },
+        "fire": {
+          "n": 300,
+          "p50": 0,
+          "p95": 0,
+          "p99": 2,
+          "max": 2,
+          "mean": 0.09,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        }
+      },
+      "block_writes_total": {
+        "total": 28,
+        "air": 1,
+        "fire": 27
+      },
+      "packet_counter_available": true,
+      "block_counter_available": true,
+      "native_entry_wall_ms": null,
+      "native_entry_wall_sum_ms": null
+    },
+    "incoming-drone-field-day-100-point/total": {
+      "power_profiles": [
+        "performance"
+      ],
+      "foreign_cpu_cores": {
+        "n": 10,
+        "p50": 0.0,
+        "p95": 0.13,
+        "p99": 0.13,
+        "max": 0.13,
+        "mean": 0.018000000000000002,
+        "over33": 0,
+        "over50": 0,
+        "over100": 0,
+        "over250": 0
+      },
+      "gpu_clock_mhz": {
+        "n": 10,
+        "p50": 2550.0,
+        "p95": 2550.0,
+        "p99": 2550.0,
+        "max": 2550.0,
+        "mean": 2473.5,
+        "over33": 10,
+        "over50": 10,
+        "over100": 10,
+        "over250": 10
+      },
+      "gpu_temperature_c": {
+        "n": 10,
+        "p50": 84.0,
+        "p95": 86.0,
+        "p99": 86.0,
+        "max": 86.0,
+        "mean": 83.2,
+        "over33": 10,
+        "over50": 10,
+        "over100": 0,
+        "over250": 0
+      },
+      "foreign_gpu_percent": {
+        "n": 10,
+        "p50": 0.0,
+        "p95": 1.75,
+        "p99": 1.75,
+        "max": 1.75,
+        "mean": 0.175,
+        "over33": 0,
+        "over50": 0,
+        "over100": 0,
+        "over250": 0
+      },
+      "gc_pause_ms": {
+        "n": 35,
+        "p50": 2.491,
+        "p95": 5.458,
+        "p99": 6.529,
+        "max": 6.529,
+        "mean": 2.557914285714286,
+        "over33": 0,
+        "over50": 0,
+        "over100": 0,
+        "over250": 0
+      },
+      "packets_per_tick": {
+        "c2s": {
+          "n": 1007,
+          "p50": 0,
+          "p95": 0,
+          "p99": 1,
+          "max": 1,
+          "mean": 0.04965243296921549,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        },
+        "s2c": {
+          "n": 1007,
+          "p50": 0,
+          "p95": 104,
+          "p99": 129,
+          "max": 211,
+          "mean": 17.586891757696126,
+          "over33": 192,
+          "over50": 154,
+          "over100": 59,
+          "over250": 0
+        },
+        "incoming": {
+          "n": 1007,
+          "p50": 0,
+          "p95": 0,
+          "p99": 10,
+          "max": 10,
+          "mean": 0.20754716981132076,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        }
+      },
+      "block_writes_per_tick": {
+        "total": {
+          "n": 1007,
+          "p50": 0,
+          "p95": 12,
+          "p99": 17,
+          "max": 27,
+          "mean": 2.4538232373386295,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        },
+        "air": {
+          "n": 1007,
+          "p50": 0,
+          "p95": 0,
+          "p99": 6,
+          "max": 14,
+          "mean": 0.0804369414101291,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        },
+        "fire": {
+          "n": 1007,
+          "p50": 0,
+          "p95": 2,
+          "p99": 6,
+          "max": 10,
+          "mean": 0.21052631578947367,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        }
+      },
+      "block_writes_total": {
+        "total": 2471,
+        "air": 81,
+        "fire": 212
+      },
+      "packet_counter_available": true,
+      "block_counter_available": true,
+      "native_entry_wall_ms": {
+        "n": 100,
+        "p50": 0.128128,
+        "p95": 0.377842,
+        "p99": 0.583696,
+        "max": 23.896842,
+        "mean": 0.39589806,
+        "over33": 0,
+        "over50": 0,
+        "over100": 0,
+        "over250": 0
+      },
+      "native_entry_wall_sum_ms": 39.589806
+    }
+  },
+  "native_entries": [
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 23.896842,
+      "start_ms": 45842.212946
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.44599,
+      "start_ms": 45867.05752
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.275412,
+      "start_ms": 45867.587947
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.242761,
+      "start_ms": 45867.921908
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.228214,
+      "start_ms": 45868.226204
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.217625,
+      "start_ms": 45868.511394
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.218326,
+      "start_ms": 45868.784542
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.224978,
+      "start_ms": 45869.088177
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.250135,
+      "start_ms": 45869.368238
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.297573,
+      "start_ms": 45869.673265
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.583696,
+      "start_ms": 47342.234468
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.259382,
+      "start_ms": 47343.125906
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.221191,
+      "start_ms": 47343.484854
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.219368,
+      "start_ms": 47343.78412
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.250606,
+      "start_ms": 47344.104506
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.230158,
+      "start_ms": 47344.455238
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.23119,
+      "start_ms": 47344.769222
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.18859,
+      "start_ms": 47345.088266
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.154788,
+      "start_ms": 47345.362716
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.128198,
+      "start_ms": 47345.593165
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.383283,
+      "start_ms": 48842.250218
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.237091,
+      "start_ms": 48842.85874
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.167371,
+      "start_ms": 48843.253334
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.145691,
+      "start_ms": 48843.526682
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.126766,
+      "start_ms": 48843.804028
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.1452,
+      "start_ms": 48844.000734
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.156762,
+      "start_ms": 48844.278641
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.267498,
+      "start_ms": 48844.542151
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.132847,
+      "start_ms": 48844.929712
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.117238,
+      "start_ms": 48845.124334
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.3818,
+      "start_ms": 50342.244142
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.170046,
+      "start_ms": 50342.946218
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.125624,
+      "start_ms": 50343.255393
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.098152,
+      "start_ms": 50343.435739
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.094015,
+      "start_ms": 50343.580177
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.089035,
+      "start_ms": 50343.738081
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.10224,
+      "start_ms": 50343.869325
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.135152,
+      "start_ms": 50344.034051
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.139028,
+      "start_ms": 50344.255193
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.11778,
+      "start_ms": 50344.455705
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.298756,
+      "start_ms": 51842.217376
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.171849,
+      "start_ms": 51842.695115
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.148125,
+      "start_ms": 51842.93441
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.132767,
+      "start_ms": 51843.270144
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.099766,
+      "start_ms": 51843.458434
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.130513,
+      "start_ms": 51843.637457
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.109584,
+      "start_ms": 51843.847047
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.112068,
+      "start_ms": 51844.061316
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.130363,
+      "start_ms": 51844.236241
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.128128,
+      "start_ms": 51844.440591
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.265594,
+      "start_ms": 53342.172861
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.120574,
+      "start_ms": 53342.6128
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.092442,
+      "start_ms": 53342.787625
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.114353,
+      "start_ms": 53342.935019
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.086551,
+      "start_ms": 53343.095247
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.088425,
+      "start_ms": 53343.226
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.088936,
+      "start_ms": 53343.380517
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.082423,
+      "start_ms": 53343.515579
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.133638,
+      "start_ms": 53343.636103
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.099054,
+      "start_ms": 53343.836255
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.298725,
+      "start_ms": 54842.224183
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.144118,
+      "start_ms": 54842.701651
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.131876,
+      "start_ms": 54842.930406
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.111738,
+      "start_ms": 54843.126902
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.112729,
+      "start_ms": 54843.299393
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.130833,
+      "start_ms": 54843.59903
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.101689,
+      "start_ms": 54843.796447
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.109594,
+      "start_ms": 54843.944753
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.103553,
+      "start_ms": 54844.117484
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.116817,
+      "start_ms": 54844.267283
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.377842,
+      "start_ms": 56342.194497
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.147003,
+      "start_ms": 56342.762764
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.142324,
+      "start_ms": 56342.977243
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.097812,
+      "start_ms": 56343.184588
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.08629,
+      "start_ms": 56343.329939
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.127517,
+      "start_ms": 56343.467124
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.078136,
+      "start_ms": 56343.637781
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.079789,
+      "start_ms": 56343.757093
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.078175,
+      "start_ms": 56343.873931
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.093975,
+      "start_ms": 56343.994835
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.321217,
+      "start_ms": 57842.242513
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.101358,
+      "start_ms": 57842.90749
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.095338,
+      "start_ms": 57843.077606
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.087413,
+      "start_ms": 57843.245188
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.077574,
+      "start_ms": 57843.369149
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.082674,
+      "start_ms": 57843.500533
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.080289,
+      "start_ms": 57843.633561
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.082564,
+      "start_ms": 57843.766608
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.135181,
+      "start_ms": 57843.900728
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.083425,
+      "start_ms": 57844.088727
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.245066,
+      "start_ms": 59342.251039
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.122899,
+      "start_ms": 59342.700174
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.101148,
+      "start_ms": 59342.878887
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.10703,
+      "start_ms": 59343.024397
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.078265,
+      "start_ms": 59343.171952
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.077584,
+      "start_ms": 59343.285313
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.075902,
+      "start_ms": 59343.396369
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.074018,
+      "start_ms": 59343.50444
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.083495,
+      "start_ms": 59343.610648
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.0,
+        65.0,
+        0.0
+      ],
+      "entry_ms": 0.07528,
+      "start_ms": 59343.728808
+    }
+  ],
+  "screenlocker_mentions": [],
+  "commands": [
+    {
+      "cmd": "gamemode spectator Dev",
+      "t_ms": 17207.865,
+      "execution_wall_ms": 4.37250000000131,
+      "queue_wait_ms": 0.495600000002014
+    },
+    {
+      "cmd": "time set 6000",
+      "t_ms": 17208.564,
+      "execution_wall_ms": 0.6343999999990046,
+      "queue_wait_ms": 4.3990000000012515
+    },
+    {
+      "cmd": "weather clear 1000000",
+      "t_ms": 17208.87,
+      "execution_wall_ms": 0.24919999999838183,
+      "queue_wait_ms": 5.087500000001455
+    },
+    {
+      "cmd": "gamerule doFireTick true",
+      "t_ms": 17209.221,
+      "execution_wall_ms": 0.3110000000015134,
+      "queue_wait_ms": 5.3751999999985856
+    },
+    {
+      "cmd": "tp Dev -180.00 93.38 0.00 facing 0.00 80.00 0.00",
+      "t_ms": 22253.978,
+      "execution_wall_ms": 2.1872000000003027,
+      "queue_wait_ms": 0.00999999999839929
+    },
+    {
+      "cmd": "forceload add -160 -160 160 0",
+      "t_ms": 27654.439,
+      "execution_wall_ms": 4.9693999999981315,
+      "queue_wait_ms": 0.009200000000419095
+    },
+    {
+      "cmd": "forceload add -160 16 160 160",
+      "t_ms": 27657.272,
+      "execution_wall_ms": 2.788300000000163,
+      "queue_wait_ms": 5.016999999999825
+    },
+    {
+      "cmd": "time set 6000",
+      "t_ms": 35699.224,
+      "execution_wall_ms": 0.5033000000039465,
+      "queue_wait_ms": 0.010799999996379483
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 45799.71,
+      "execution_wall_ms": 0.34470000000146683,
+      "queue_wait_ms": 0.016100000000733417
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 45799.787,
+      "execution_wall_ms": 0.044299999994109385,
+      "queue_wait_ms": 0.38440000000264263
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 45799.82,
+      "execution_wall_ms": 0.027399999999033753,
+      "queue_wait_ms": 0.433100000002014
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 45799.851,
+      "execution_wall_ms": 0.026499999999941792,
+      "queue_wait_ms": 0.46440000000438886
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 45799.875,
+      "execution_wall_ms": 0.019500000002153683,
+      "queue_wait_ms": 0.4948999999978696
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 45799.897,
+      "execution_wall_ms": 0.018199999998614658,
+      "queue_wait_ms": 0.5178000000014435
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 45799.918,
+      "execution_wall_ms": 0.017199999994772952,
+      "queue_wait_ms": 0.5394000000014785
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 45799.939,
+      "execution_wall_ms": 0.016999999999825377,
+      "queue_wait_ms": 0.5600999999951455
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 45799.976,
+      "execution_wall_ms": 0.03320000000530854,
+      "queue_wait_ms": 0.5804999999963911
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 45800.008,
+      "execution_wall_ms": 0.027800000003480818,
+      "queue_wait_ms": 0.617500000000291
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 47303.779,
+      "execution_wall_ms": 0.1631000000052154,
+      "queue_wait_ms": 0.01299999999901047
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 47303.882,
+      "execution_wall_ms": 0.06749999999738066,
+      "queue_wait_ms": 0.20139999999810243
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 47303.944,
+      "execution_wall_ms": 0.04700000000593718,
+      "queue_wait_ms": 0.2827999999935855
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 47304.026,
+      "execution_wall_ms": 0.06789999999455176,
+      "queue_wait_ms": 0.3430000000007567
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 47304.064,
+      "execution_wall_ms": 0.027399999999033753,
+      "queue_wait_ms": 0.4210000000020955
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 47304.093,
+      "execution_wall_ms": 0.022400000001653098,
+      "queue_wait_ms": 0.4544999999998254
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 47304.222,
+      "execution_wall_ms": 0.12340000000403961,
+      "queue_wait_ms": 0.48189999999885913
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 47304.292,
+      "execution_wall_ms": 0.050900000002002344,
+      "queue_wait_ms": 0.6238999999986845
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 47304.337,
+      "execution_wall_ms": 0.03319999999803258,
+      "queue_wait_ms": 0.6862000000037369
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 47304.377,
+      "execution_wall_ms": 0.030400000003282912,
+      "queue_wait_ms": 0.7284999999974389
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 48803.079,
+      "execution_wall_ms": 0.11950000000069849,
+      "queue_wait_ms": 0.015899999998509884
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 48803.156,
+      "execution_wall_ms": 0.059300000000803266,
+      "queue_wait_ms": 0.14640000000508735
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 48803.195,
+      "execution_wall_ms": 0.02569999999832362,
+      "queue_wait_ms": 0.2180999999982305
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 48803.23,
+      "execution_wall_ms": 0.02950000000419095,
+      "queue_wait_ms": 0.24809999999706633
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 48803.267,
+      "execution_wall_ms": 0.02870000000257278,
+      "queue_wait_ms": 0.2852999999959138
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 48803.321,
+      "execution_wall_ms": 0.0326000000059139,
+      "queue_wait_ms": 0.33489999999437714
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 48803.359,
+      "execution_wall_ms": 0.02809999999590218,
+      "queue_wait_ms": 0.3767999999981839
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 48803.395,
+      "execution_wall_ms": 0.02779999999620486,
+      "queue_wait_ms": 0.41270000000076834
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 48803.43,
+      "execution_wall_ms": 0.02599999999802094,
+      "queue_wait_ms": 0.44900000000052387
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 48803.469,
+      "execution_wall_ms": 0.030199999993783422,
+      "queue_wait_ms": 0.4833000000071479
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 50306.182,
+      "execution_wall_ms": 0.15619999999762513,
+      "queue_wait_ms": 0.1352000000042608
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 50306.228,
+      "execution_wall_ms": 0.030700000002980232,
+      "queue_wait_ms": 0.29950000000098953
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 50306.262,
+      "execution_wall_ms": 0.027800000003480818,
+      "queue_wait_ms": 0.3352000000013504
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 50306.292,
+      "execution_wall_ms": 0.02419999999983702,
+      "queue_wait_ms": 0.3669999999983702
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 50306.322,
+      "execution_wall_ms": 0.024899999996705446,
+      "queue_wait_ms": 0.39540000000124564
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 50306.349,
+      "execution_wall_ms": 0.02140000000508735,
+      "queue_wait_ms": 0.42519999999785796
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 50306.376,
+      "execution_wall_ms": 0.021600000000034925,
+      "queue_wait_ms": 0.4512999999933527
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 50306.402,
+      "execution_wall_ms": 0.020400000001245644,
+      "queue_wait_ms": 0.47780000000057044
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 50306.427,
+      "execution_wall_ms": 0.020100000001548324,
+      "queue_wait_ms": 0.5024000000048545
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 50306.451,
+      "execution_wall_ms": 0.01959999999962747,
+      "queue_wait_ms": 0.5262999999977183
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 51800.668,
+      "execution_wall_ms": 0.1055999999953201,
+      "queue_wait_ms": 0.01269999999931315
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 51800.732,
+      "execution_wall_ms": 0.031000000002677552,
+      "queue_wait_ms": 0.1434000000008382
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 51800.76,
+      "execution_wall_ms": 0.02320000000327127,
+      "queue_wait_ms": 0.1782999999995809
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 51800.802,
+      "execution_wall_ms": 0.037800000005518086,
+      "queue_wait_ms": 0.20509999999922002
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 51800.829,
+      "execution_wall_ms": 0.022700000001350418,
+      "queue_wait_ms": 0.24669999999605352
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 51800.854,
+      "execution_wall_ms": 0.02089999999589054,
+      "queue_wait_ms": 0.27290000000357395
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 51800.877,
+      "execution_wall_ms": 0.01929999999993015,
+      "queue_wait_ms": 0.2969999999986612
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 51800.925,
+      "execution_wall_ms": 0.043600000004516914,
+      "queue_wait_ms": 0.32009999999718275
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 51800.986,
+      "execution_wall_ms": 0.04609999999956926,
+      "queue_wait_ms": 0.3778999999994994
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 51801.023,
+      "execution_wall_ms": 0.030700000002980232,
+      "queue_wait_ms": 0.4297999999980675
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 53302.429,
+      "execution_wall_ms": 0.11909999999625143,
+      "queue_wait_ms": 0.011500000000523869
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 53302.473,
+      "execution_wall_ms": 0.02960000000166474,
+      "queue_wait_ms": 0.13819999999395804
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 53302.501,
+      "execution_wall_ms": 0.022199999999429565,
+      "queue_wait_ms": 0.17289999999775318
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 53302.527,
+      "execution_wall_ms": 0.020600000003469177,
+      "queue_wait_ms": 0.19989999999961583
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 53302.55,
+      "execution_wall_ms": 0.018900000002759043,
+      "queue_wait_ms": 0.22419999999692664
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 53302.584,
+      "execution_wall_ms": 0.026200000000244472,
+      "queue_wait_ms": 0.25050000000192085
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 53302.694,
+      "execution_wall_ms": 0.10500000000320142,
+      "queue_wait_ms": 0.2813000000023749
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 53302.74,
+      "execution_wall_ms": 0.03480000000126893,
+      "queue_wait_ms": 0.39689999999973224
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 53302.77,
+      "execution_wall_ms": 0.024099999995087273,
+      "queue_wait_ms": 0.4372000000003027
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 53302.811,
+      "execution_wall_ms": 0.03600000000005821,
+      "queue_wait_ms": 0.4657999999981257
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 54805.384,
+      "execution_wall_ms": 0.2114000000001397,
+      "queue_wait_ms": 0.014299999995273538
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 54805.426,
+      "execution_wall_ms": 0.0239000000001397,
+      "queue_wait_ms": 0.23479999999835854
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 54805.447,
+      "execution_wall_ms": 0.016100000000733417,
+      "queue_wait_ms": 0.26260000000183936
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 54805.465,
+      "execution_wall_ms": 0.01389999999810243,
+      "queue_wait_ms": 0.28220000000146683
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 54805.486,
+      "execution_wall_ms": 0.017099999997299165,
+      "queue_wait_ms": 0.29950000000098953
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 54805.503,
+      "execution_wall_ms": 0.012499999997089617,
+      "queue_wait_ms": 0.3205999999991036
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 54805.519,
+      "execution_wall_ms": 0.012000000002444722,
+      "queue_wait_ms": 0.3365999999950873
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 54805.535,
+      "execution_wall_ms": 0.012200000004668254,
+      "queue_wait_ms": 0.3519000000014785
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 54805.55,
+      "execution_wall_ms": 0.011800000000221189,
+      "queue_wait_ms": 0.3669000000008964
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 54805.564,
+      "execution_wall_ms": 0.010699999998905696,
+      "queue_wait_ms": 0.3815000000031432
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 56306.971,
+      "execution_wall_ms": 0.10619999999471474,
+      "queue_wait_ms": 0.01239999999961583
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 56307.039,
+      "execution_wall_ms": 0.05109999999694992,
+      "queue_wait_ms": 0.12810000000172295
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 56307.064,
+      "execution_wall_ms": 0.01840000000083819,
+      "queue_wait_ms": 0.18469999999797437
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 56307.083,
+      "execution_wall_ms": 0.01479999999719439,
+      "queue_wait_ms": 0.20660000000498258
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 56307.1,
+      "execution_wall_ms": 0.013399999996181577,
+      "queue_wait_ms": 0.2245000000038999
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 56307.121,
+      "execution_wall_ms": 0.017099999997299165,
+      "queue_wait_ms": 0.24120000000402797
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 56307.137,
+      "execution_wall_ms": 0.01209999999991851,
+      "queue_wait_ms": 0.2617000000027474
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 56307.156,
+      "execution_wall_ms": 0.015500000001338776,
+      "queue_wait_ms": 0.2767999999996391
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 56307.176,
+      "execution_wall_ms": 0.016199999998207204,
+      "queue_wait_ms": 0.2955000000001746
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 56307.193,
+      "execution_wall_ms": 0.013099999996484257,
+      "queue_wait_ms": 0.31520000000455184
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 57804.264,
+      "execution_wall_ms": 0.1977000000042608,
+      "queue_wait_ms": 0.014299999995273538
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 57804.298,
+      "execution_wall_ms": 0.02019999999902211,
+      "queue_wait_ms": 0.2175000000061118
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 57804.316,
+      "execution_wall_ms": 0.01299999999901047,
+      "queue_wait_ms": 0.24160000000119908
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 57804.33,
+      "execution_wall_ms": 0.010399999999208376,
+      "queue_wait_ms": 0.25749999999970896
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 57804.344,
+      "execution_wall_ms": 0.010199999996984843,
+      "queue_wait_ms": 0.2710000000006403
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 57804.357,
+      "execution_wall_ms": 0.009800000007089693,
+      "queue_wait_ms": 0.2837999999974272
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 57804.37,
+      "execution_wall_ms": 0.00960000000486616,
+      "queue_wait_ms": 0.2963999999992666
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 57804.382,
+      "execution_wall_ms": 0.00879999999597203,
+      "queue_wait_ms": 0.3087000000014086
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 57804.395,
+      "execution_wall_ms": 0.009299999997892883,
+      "queue_wait_ms": 0.32080000000132713
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 57804.408,
+      "execution_wall_ms": 0.00960000000486616,
+      "queue_wait_ms": 0.33299999999871943
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 59300.176,
+      "execution_wall_ms": 0.09850000000005821,
+      "queue_wait_ms": 0.011099999996076804
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 59300.208,
+      "execution_wall_ms": 0.018799999998009298,
+      "queue_wait_ms": 0.11559999999735737
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 59300.228,
+      "execution_wall_ms": 0.014200000005075708,
+      "queue_wait_ms": 0.13919999999779975
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 59300.245,
+      "execution_wall_ms": 0.012200000004668254,
+      "queue_wait_ms": 0.15759999999863794
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 59300.261,
+      "execution_wall_ms": 0.011699999995471444,
+      "queue_wait_ms": 0.17350000000442378
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 59300.276,
+      "execution_wall_ms": 0.010699999998905696,
+      "queue_wait_ms": 0.1889999999984866
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 59300.291,
+      "execution_wall_ms": 0.010999999998603016,
+      "queue_wait_ms": 0.20300000000133878
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 59300.305,
+      "execution_wall_ms": 0.010800000003655441,
+      "queue_wait_ms": 0.21669999999721767
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 59300.319,
+      "execution_wall_ms": 0.0102000000042608,
+      "queue_wait_ms": 0.23079999999754364
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.0 65 0.0",
+      "t_ms": 59300.332,
+      "execution_wall_ms": 0.00960000000486616,
+      "queue_wait_ms": 0.2438999999940279
+    },
+    {
+      "cmd": "forceload remove all",
+      "t_ms": 96204.667,
+      "execution_wall_ms": 2.3858000000036554,
+      "queue_wait_ms": 0.014800000004470348
+    }
+  ],
+  "native_counts": {
+    "incoming-drone": 100
+  },
+  "native_expected": {
+    "incoming-drone": 100
+  },
+  "contract_issues": []
+}
