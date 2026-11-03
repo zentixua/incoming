@@ -110,7 +110,7 @@ record SandboxCommand(Verb verb, List<String> args) {
         switch (verb) {
             case UI -> {
                 need(1, 1);
-                if (!List.of("remote", "map", "review", "keyboard").contains(args.getFirst())) throw new IllegalArgumentException("ui remote|map|review|keyboard");
+                if (!List.of("remote", "map", "review", "keyboard", "air", "mapair").contains(args.getFirst())) throw new IllegalArgumentException("ui remote|map|review|keyboard|air|mapair");
             }
             case BLAST, REAL -> {
                 need(1, verb == Verb.BLAST && water() ? 4 : 3);

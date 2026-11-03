@@ -652,7 +652,8 @@ final class Sandbox {
         switch (c.verb()) {
             case UI -> {
                 var loadout = ua.zentix.incoming.strike.Loadout.DEFAULT.withWeapon(WeaponType.NUKE)
-                        .withMode(ua.zentix.incoming.strike.TargetMode.MAP);
+                        .withMode(ua.zentix.incoming.strike.TargetMode.MAP)
+                        .withNuke(new ua.zentix.incoming.strike.Loadout.Nuke(15, c.args().getFirst().contains("air")));
                 var stack = new net.minecraft.world.item.ItemStack(ua.zentix.incoming.registry.ModItems.DESIGNATOR.get());
                 stack.set(ua.zentix.incoming.registry.ModDataComponents.LOADOUT.get(), loadout);
                 mc.player.setItemInHand(net.minecraft.world.InteractionHand.MAIN_HAND, stack);
@@ -661,7 +662,7 @@ final class Sandbox {
                 var remote = new ua.zentix.incoming.client.screen.RemoteScreen();
                 String which = c.args().getFirst();
                 if (which.equals("remote")) mc.setScreen(remote);
-                else if (which.equals("map")) {
+                else if (which.equals("map") || which.equals("mapair")) {
                     var map = new ua.zentix.incoming.client.screen.MapScreen(remote);
                     mc.setScreen(map);
                     map.mouseClicked(30, 30, 0);

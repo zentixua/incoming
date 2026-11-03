@@ -24,8 +24,8 @@ does not fire for other players.
 - **Mouse wheel**: weapon (Shahed, Lancet, Missile, Grad, Bomb, Nuclear).
 - **LMB**: launch.
 
-The binoculars reach 400 blocks; farther away, strike [from the map](map.md). A nuclear launch follows a 3-second
-countdown, and pressing LMB again cancels it.
+The binoculars reach 400 blocks; farther away, strike [from the map](map.md). For a nuclear launch, review the target and
+hold the final launch control for three seconds. Releasing cancels the hold. [Nuclear strike](nuke.md#how-to-launch).
 
 ## Console
 
