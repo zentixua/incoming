@@ -1,0 +1,389 @@
+package ua.zentix.incoming.client;
+
+import io.netty.buffer.Unpooled;
+import net.minecraft.client.Minecraft;
+import net.minecraft.client.Screenshot;
+import net.minecraft.client.gui.screens.TitleScreen;
+import net.minecraft.core.registries.Registries;
+import net.minecraft.network.FriendlyByteBuf;
+import net.minecraft.server.level.ServerLevel;
+import net.minecraft.server.level.ServerPlayer;
+import net.minecraft.world.Difficulty;
+import net.minecraft.world.level.GameRules;
+import net.minecraft.world.level.GameType;
+import net.minecraft.world.level.LevelSettings;
+import net.minecraft.world.level.WorldDataConfiguration;
+import net.minecraft.world.level.biome.Biomes;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.chunk.LevelChunkSection;
+import net.minecraft.world.level.levelgen.FlatLevelSource;
+import net.minecraft.world.level.levelgen.WorldDimensions;
+import net.minecraft.world.level.levelgen.WorldOptions;
+import net.minecraft.world.level.levelgen.flat.FlatLayerInfo;
+import net.minecraft.world.level.levelgen.flat.FlatLevelGeneratorSettings;
+import net.minecraft.world.level.levelgen.presets.WorldPresets;
+import net.minecraft.world.phys.Vec3;
+import net.neoforged.neoforge.client.event.ClientTickEvent;
+import net.neoforged.neoforge.client.event.RenderFrameEvent;
+import net.neoforged.neoforge.client.event.ScreenEvent;
+import net.neoforged.neoforge.common.NeoForge;
+import net.neoforged.neoforge.event.tick.ServerTickEvent;
+import net.neoforged.neoforge.network.PacketDistributor;
+import ua.zentix.incoming.Incoming;
+import ua.zentix.incoming.compat.LodSections;
+import ua.zentix.incoming.net.S2C;
+import ua.zentix.incoming.nuclear.Detonation;
+import ua.zentix.incoming.nuclear.model.HobBlast;
+import ua.zentix.incoming.nuclear.model.Yield;
+import ua.zentix.incoming.scenario.lod.LodPanorama;
+import ua.zentix.incoming.scenario.lod.TimedLodBuffer;
+
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.Locale;
+import java.util.Optional;
+import java.util.concurrent.ConcurrentLinkedQueue;
+import java.util.concurrent.atomic.AtomicInteger;
+
+/** Opt-in real Voxy ingestion experiment; synthetic city columns, real clocks, no changes to playable strikes. */
+public final class LodBufferScenario {
+    private static final int SECTIONS = 24, CHANGED = 4, WINDOW = 1024, PASS = 32;
+    private static final long BYTES = 48L << 20;
+    private static LodBufferScenario active;
+    private final TimedLodBuffer<LodProbeWire.Column> buffer = new TimedLodBuffer<>(WINDOW, BYTES);
+    private final AtomicInteger receipts = new AtomicInteger();
+    private final ConcurrentLinkedQueue<String> lines = new ConcurrentLinkedQueue<>();
+    private final List<LodProbeWire.Column> witnesses = new ArrayList<>();
+    private final Path output = Minecraft.getInstance().gameDirectory.toPath().resolve("lod-probe");
+    private volatile long now, sampled, accepted, lateSum, lateMax, peakBytes, firstSubmit, lastSubmit;
+    private volatile int phase = -1, epoch, yield, total;
+    private volatile long burstTick, received;
+    private volatile boolean done, failed, replayRequested;
+    private volatile int replayFrame = -1;
+    private volatile Producer producer;
+    private Thread worker;
+    private boolean opened, started;
+    private int ticks, lastLogged, finishedAt = -1;
+    private long phaseStarted, lastFrame, frames, frameSum, frameMax;
+    private int shots;
+    private LodProbeReadback readback;
+
+    public LodBufferScenario() {
+        active = this;
+        NeoForge.EVENT_BUS.addListener(this::screen);
+        NeoForge.EVENT_BUS.addListener(this::tick);
+        NeoForge.EVENT_BUS.addListener(this::frame);
+        NeoForge.EVENT_BUS.addListener(this::serverTick);
+    }
+    private void screen(ScreenEvent.Init.Post e) {
+        if (opened || !(e.getScreen() instanceof TitleScreen)) return;
+        opened = true;
+        var mc = Minecraft.getInstance();
+        String world = "incoming_lod_probe_" + System.currentTimeMillis(); // never delete/reuse a user world
+        GameRules rules = new GameRules();
+        rules.getRule(GameRules.RULE_DAYLIGHT).set(false, null);
+        rules.getRule(GameRules.RULE_WEATHER_CYCLE).set(false, null);
+        rules.getRule(GameRules.RULE_DOMOBSPAWNING).set(false, null);
+        LevelSettings settings = new LevelSettings(world, GameType.SPECTATOR, false, Difficulty.PEACEFUL, true, rules, WorldDataConfiguration.DEFAULT);
+        mc.createWorldOpenFlows().createFreshLevel(world, settings, new WorldOptions(20261104L, false, false), registries -> {
+            var biomes = registries.lookupOrThrow(Registries.BIOME);
+            var flat = FlatLevelGeneratorSettings.getDefault(biomes, registries.lookupOrThrow(Registries.STRUCTURE_SET), registries.lookupOrThrow(Registries.PLACED_FEATURE))
+                    .withBiomeAndLayers(List.of(new FlatLayerInfo(1, Blocks.BEDROCK), new FlatLayerInfo(127, Blocks.STONE)), Optional.empty(), biomes.getOrThrow(Biomes.PLAINS));
+            WorldDimensions dims = WorldPresets.createNormalWorldDimensions(registries);
+            return dims.replaceOverworldGenerator(registries, new FlatLevelSource(flat));
+        }, e.getScreen());
+    }
+    public static void receive(LodProbeWire.Column p) {
+        LodBufferScenario s = active;
+        if (s == null || s.done) return;
+        if (p.column().sections().length == 0) {
+            s.buffer.stop();
+            s.phase = p.phase(); s.epoch = p.epoch(); s.yield = p.yield(); s.total = p.total();
+            s.burstTick = p.due(); s.accepted = s.received = s.lateSum = s.lateMax = s.sampled = 0;
+            s.firstSubmit = s.lastSubmit = s.peakBytes = 0; s.phaseStarted = System.nanoTime();
+            synchronized (s.witnesses) { s.witnesses.clear(); }
+            s.shots = 0;
+            Minecraft.getInstance().execute(() -> { s.frames = s.frameSum = s.frameMax = 0; s.lastFrame = 0; });
+            s.log("BEGIN epoch=%d phase=%d kt=%d columns=%d burstTick=%d", p.epoch(), p.phase(), p.yield(), p.total(), p.due());
+            Minecraft.getInstance().execute(s::camera);
+            return;
+        }
+        if (p.epoch() != s.epoch) { s.log("OLD_PACKET epoch=%d", p.epoch()); return; }
+        var t = s.buffer.reserve(net.minecraft.world.level.ChunkPos.asLong(p.column().x(), p.column().z()), p.due(), p.column().sections().length, SECTIONS);
+        if (t == null) { s.fail("buffer admission exceeded"); return; }
+        s.buffer.complete(t, p);
+        s.received++;
+        s.peakBytes = Math.max(s.peakBytes, s.buffer.bytes());
+    }
+    public static void ack(LodProbeWire.Ack p) {
+        if (active != null && active.producer != null) active.producer.ack(p);
+    }
+    private void serverTick(ServerTickEvent.Post e) {
+        Producer p = producer;
+        if (p != null) p.tick();
+    }
+    private void tick(ClientTickEvent.Post e) {
+        var mc = Minecraft.getInstance();
+        if (mc.level == null || mc.player == null) return;
+        now = mc.level.getGameTime(); ticks++;
+        if (!started && ticks > 100) {
+            started = true;
+            if (!VoxyIngest.available()) { fail("Voxy ingestion unavailable"); return; }
+            mc.options.hideGui = true; mc.options.fov().set(90); mc.options.renderDistance().set(2);
+            mc.options.pauseOnLostFocus = false;
+            worker = new Thread(this::work, "Incoming LOD buffer probe"); worker.setDaemon(true); worker.start();
+            mc.getSingleplayerServer().execute(() -> producer = new Producer(mc.getSingleplayerServer().overworld(), mc.player.getUUID()));
+        }
+        int count = receipts.getAndSet(0);
+        if (count > 0) PacketDistributor.sendToServer(new LodProbeWire.Ack(epoch, count));
+        if (ticks - lastLogged >= 20 && phase >= 0) {
+            lastLogged = ticks;
+            log("PROGRESS epoch=%d phase=%d kt=%d now=%d received=%d submitted=%d held=%d bytes=%d backlog=%s lateMaxTicks=%d heapBytes=%d",
+                    epoch, phase, yield, now, received, accepted, buffer.size(), buffer.bytes(), VoxyIngest.backlogged(), lateMax,
+                    Runtime.getRuntime().totalMemory() - Runtime.getRuntime().freeMemory());
+            flush();
+        }
+        if (done && finishedAt < 0) { finishedAt = ticks; flush(); }
+        if (finishedAt >= 0 && ticks - finishedAt > 40) mc.stop();
+        if (ticks > 24000) fail("scenario exceeded 20 minutes without completing");
+    }
+    private void camera() {
+        var mc = Minecraft.getInstance();
+        if (mc.player == null) return;
+        double r = radius(yield);
+        // One fixed 90-degree panorama per yield, outside vanilla loaded chunks and within ~8 km of witnesses.
+        double y = 64 + r * .25, z = 8 + r * 1.5;
+        mc.player.setPos(8, y, z);
+        mc.player.setYRot(180);
+        mc.player.setXRot((float) Math.toDegrees(Math.atan2(y - 80, z - (8 + r * .85))));
+        mc.player.yRotO = mc.player.getYRot(); mc.player.xRotO = mc.player.getXRot();
+        var server = mc.getSingleplayerServer();
+        server.execute(() -> {
+            ServerPlayer p = server.getPlayerList().getPlayer(mc.player.getUUID());
+            if (p != null) p.teleportTo(server.overworld(), 8, y, z, 180, mc.player.getXRot());
+        });
+    }
+    private void frame(RenderFrameEvent.Post e) {
+        long t = System.nanoTime();
+        if (lastFrame != 0) { long d = t - lastFrame; frameSum += d; frameMax = Math.max(frameMax, d); frames++; }
+        lastFrame = t;
+        if (phase == 2 && replayFrame >= 0 && replayFrame < 90) {
+            var mc = Minecraft.getInstance();
+            String name = String.format(Locale.ROOT, "replay_%03d_tick%d.png", replayFrame++, now);
+            Screenshot.grab(mc.gameDirectory, name, mc.getMainRenderTarget(), c -> {});
+            log("REPLAY_FRAME file=%s now=%d", name, now);
+        }
+        if (phase != 1 || failed) return;
+        // Before and across the measured front. Frame timestamps are recorded, not inferred from send logs.
+        double r = radius(yield), h = Yield.optimalBurstHeight(yield);
+        Detonation d = detonation(yield, burstTick);
+        long first = burstTick + (long) Math.ceil(d.arrivalTicks(Math.hypot(r * .8, h)));
+        long last = burstTick + (long) Math.ceil(d.arrivalTicks(Math.hypot(r, h)));
+        long[] at = {first - 20, first, first + 2, first + 10, (first + last) / 2, last, last + 20, last + 100};
+        if (shots < at.length && now >= at[shots]) {
+            var mc = Minecraft.getInstance();
+            String name = String.format(Locale.ROOT, "lod_%d_%d_tick%d.png", yield, shots++, now);
+            Screenshot.grab(mc.gameDirectory, name, mc.getMainRenderTarget(), c -> {});
+            log("FRAME file=%s now=%d first=%d last=%d submitted=%d fps=%d", name, now, first, last, accepted, mc.getFps());
+        }
+    }
+    private void work() {
+        try {
+            while (!done) {
+                if (replayRequested) { replay(); break; }
+                if (!VoxyIngest.backlogged()) {
+                    for (int n = 0; n < PASS; n++) {
+                        var r = buffer.take(now);
+                        if (r == null) break;
+                        if (buffer.current(r.ticket())) {
+                            long begin = System.nanoTime();
+                            VoxyIngest.accept(r.value().column()); // exact existing decode/light/rawIngest path
+                            long end = System.nanoTime();
+                            if (firstSubmit == 0) firstSubmit = begin;
+                            lastSubmit = end;
+                            long late = phase == 1 ? Math.max(0, now - r.ticket().due()) : 0;
+                            lateSum += late; lateMax = Math.max(lateMax, late); accepted++;
+                            if (accepted == 1 || accepted % Math.max(1, total / 32) == 0) {
+                                synchronized (witnesses) { witnesses.add(r.value()); }
+                            }
+                            log("SUBMIT epoch=%d phase=%d x=%d z=%d due=%d now=%d ns=%d sections=%d changed=%d bytes=%d",
+                                    epoch, phase, r.value().column().x(), r.value().column().z(), r.ticket().due(), now, end - begin, SECTIONS, phase == 1 ? CHANGED : SECTIONS, r.ticket().bytes());
+                        }
+                        buffer.finish(r); receipts.incrementAndGet();
+                    }
+                }
+                if (ticks % 2 == 0 && phase >= 0 && phase <= 1) witness();
+                Thread.sleep(2);
+            }
+        } catch (Exception e) { fail("worker: " + e); }
+    }
+    private void witness() throws ReflectiveOperationException {
+        if (readback == null) readback = new LodProbeReadback(Minecraft.getInstance().level);
+        synchronized (witnesses) {
+            for (var it = witnesses.iterator(); it.hasNext();) {
+                var p = it.next();
+                if (readback.air(p.column().x() * 16 + 8, 120, p.column().z() * 16 + 8) == (phase == 1)) {
+                    log("DB_READY epoch=%d x=%d z=%d due=%d seen=%d lateTicks=%d", epoch, p.column().x(), p.column().z(), p.due(), now, Math.max(0, now - p.due()));
+                    sampled++; it.remove();
+                }
+            }
+        }
+    }
+    /** Public LSS dispatch is observational: consumers cannot veto another consumer. Repair only after ingest drains. */
+    private void replay() throws Exception {
+        phase = 2;
+        var mc = Minecraft.getInstance();
+        int x = 0, z = (int) (radius(1000) * .9 / 16);
+        var packet = new S2C.VoxyChunk(mc.level.dimension().location(), x, z, producer.ruined);
+        mc.execute(() -> {
+            mc.player.setPos(8, 160, z * 16 + 608);
+            mc.player.setYRot(180); mc.player.setXRot(4);
+            mc.player.yRotO = 180; mc.player.xRotO = 4;
+            var server = mc.getSingleplayerServer();
+            server.execute(() -> server.getPlayerList().getPlayer(producer.player).teleportTo(server.overworld(), 8, 160, z * 16 + 608, 180, 4));
+        });
+        waitTicks(100);
+        shot("replay_before");
+        var sections = LodSections.read(producer.intact, mc.level.registryAccess().registryOrThrow(Registries.BIOME));
+        var data = sections.stream().map(v -> new dev.vox.lss.api.VoxelColumnData.SectionData(v.y(), v.blocks(), v.blockLight(), v.skyLight()))
+                .toArray(dev.vox.lss.api.VoxelColumnData.SectionData[]::new);
+        for (int round = 0; round < 2; round++) {
+            long sentAt = now, began = System.nanoTime();
+            dev.vox.lss.api.LSSApi.dispatchColumn(mc.level, mc.level.dimension(), x, z, new dev.vox.lss.api.VoxelColumnData(data, 1));
+            log("REPLAY_DISPATCH round=%d tick=%d oldTimestamp=1 publicConsumerCanVeto=false", round, sentAt);
+            long limit = System.nanoTime() + 10_000_000_000L;
+            while (readback.air(x * 16 + 8, 120, z * 16 + 8) && System.nanoTime() < limit) Thread.sleep(2);
+            if (readback.air(x * 16 + 8, 120, z * 16 + 8)) { fail("LSS replay did not reach the Voxy database"); return; }
+            log("REPLAY_OVERWROTE round=%d tick=%d elapsedMs=%.4f", round, now, (System.nanoTime() - began) / 1e6);
+            if (round == 0) { shot("replay_stale_unrepaired"); waitTicks(40); }
+            else replayFrame = 0;
+            while (VoxyIngest.backlogged()) Thread.sleep(2);
+            long repairAt = now, repairNs = System.nanoTime();
+            VoxyIngest.accept(packet);
+            limit = System.nanoTime() + 10_000_000_000L;
+            while (!readback.air(x * 16 + 8, 120, z * 16 + 8) && System.nanoTime() < limit) Thread.sleep(2);
+            if (!readback.air(x * 16 + 8, 120, z * 16 + 8)) { fail("retained column repair did not converge"); return; }
+            log("REPLAY_REPAIRED round=%d callTick=%d seenTick=%d repairMs=%.4f totalMs=%.4f", round, repairAt, now,
+                    (System.nanoTime() - repairNs) / 1e6, (System.nanoTime() - began) / 1e6);
+            waitTicks(80); shot("replay_repaired_" + round);
+        }
+        log("COMPLETE panorama and stale replay probe"); done = true;
+    }
+    private void waitTicks(int count) throws InterruptedException {
+        long target = now + count;
+        while (!done && now < target) Thread.sleep(5);
+    }
+    private void shot(String name) {
+        Minecraft.getInstance().execute(() -> {
+            var mc = Minecraft.getInstance();
+            Screenshot.grab(mc.gameDirectory, name + ".png", mc.getMainRenderTarget(), c -> {});
+            log("REPLAY_SHOT file=%s.png tick=%d", name, now);
+        });
+    }
+    private void log(String format, Object... args) { lines.add(String.format(Locale.ROOT, format, args)); }
+    private synchronized void flush() {
+        try {
+            Files.createDirectories(output);
+            List<String> batch = new ArrayList<>();
+            for (String line; (line = lines.poll()) != null;) batch.add(line);
+            Files.write(output.resolve("events.tsv"), batch, java.nio.file.StandardOpenOption.CREATE, java.nio.file.StandardOpenOption.APPEND);
+        } catch (Exception e) { Incoming.LOG.error("LODPROBE log failed", e); failed = done = true; }
+    }
+    private void fail(String reason) { Incoming.LOG.error("LODPROBE FAILED {}", reason); log("FAILED %s", reason); failed = done = true; }
+    private static double radius(int kt) { return HobBlast.rangeFor(5, Yield.optimalBurstHeight(kt), kt); }
+    private static Detonation detonation(int kt, long at) {
+        return new Detonation(1, new Vec3(8, 64 + Yield.optimalBurstHeight(kt), 8), 64, kt, false, at, 0, 0, 20000, 1, 1, false, .25f);
+    }
+
+    private final class Producer {
+        final ServerLevel level;
+        final java.util.UUID player;
+        final int[] yields = {15, 100, 1000};
+        final byte[] intact, ruined;
+        LodPanorama envelope;
+        int which, stage, generation = 1, credits, sent, acked, count;
+        boolean prepared, exhausted;
+        long start, completed = -1;
+        Detonation event;
+        Producer(ServerLevel level, java.util.UUID player) {
+            this.level = level; this.player = player;
+            intact = template(level, false); ruined = template(level, true);
+            reset();
+        }
+        void reset() {
+            envelope = new LodPanorama(radius(yields[which]));
+            prepared = exhausted = false; sent = acked = count = 0; completed = -1;
+            credits = Math.min(WINDOW, (int) (BYTES / Math.max(intact.length, ruined.length)));
+            event = detonation(yields[which], level.getGameTime() + 200);
+        }
+        void ack(LodProbeWire.Ack p) { if (p.epoch() == generation) { credits += p.count(); acked += p.count(); } }
+        void tick() {
+            if (done || replayRequested) return;
+            ServerPlayer p = level.getServer().getPlayerList().getPlayer(player);
+            if (p == null) return;
+            if (!prepared) {
+                if (!envelope.prepare(16)) return;
+                prepared = true; count = Math.toIntExact(envelope.columns()); start = level.getGameTime();
+                event = detonation(yields[which], start + 200);
+                PacketDistributor.sendToPlayer(p, new LodProbeWire.Column(generation, stage, event.gameTime(), count, yields[which], new S2C.VoxyChunk(level.dimension().location(), 0, 0, new byte[0])));
+                log("ENVELOPE kt=%d radius=%.3f columns=%d headers=%d intactBytes=%d ruinBytes=%d window=%d sectionBudget=%d",
+                        yields[which], radius(yields[which]), count, envelope.headers(), intact.length, ruined.length, credits, PASS * SECTIONS);
+            }
+            for (int n = 0; n < 512 && credits > 0 && !exhausted; n++) {
+                var c = envelope.next();
+                if (c == null) { exhausted = true; break; }
+                long due = stage == 0 ? Long.MIN_VALUE : event.gameTime() + (long) Math.ceil(event.arrivalTicks(Math.hypot(c.radius(), Yield.optimalBurstHeight(yields[which]))));
+                var packet = new LodProbeWire.Column(generation, stage, due, count, yields[which], new S2C.VoxyChunk(level.dimension().location(), c.x(), c.z(), stage == 0 ? intact : ruined));
+                // Integrated connections may bypass byte encoding. Explicit round-trip measures the actual codec too.
+                var bytes = Unpooled.buffer();
+                try { LodProbeWire.Column.CODEC.encode(bytes, packet); packet = LodProbeWire.Column.CODEC.decode(bytes); }
+                finally { bytes.release(); }
+                PacketDistributor.sendToPlayer(p, packet); credits--; sent++;
+            }
+            if (exhausted && acked >= count && !VoxyIngest.backlogged()) {
+                if (completed < 0) {
+                    completed = level.getGameTime();
+                    shot("panorama_" + yields[which] + "_" + stage + "_complete");
+                    log("SUMMARY kt=%d phase=%d columns=%d ticks=%d submitSeconds=%.6f lateMeanTicks=%.4f lateMaxTicks=%d peakBytes=%d dbWitnesses=%d frameMeanMs=%.4f frameMaxMs=%.4f",
+                            yields[which], stage, count, completed - start, (lastSubmit - firstSubmit) / 1e9,
+                            count == 0 ? 0 : lateSum / (double) count, lateMax, peakBytes, sampled, frames == 0 ? 0 : frameSum / (double) frames / 1e6, frameMax / 1e6);
+                }
+                if (level.getGameTime() - completed < 120) return;
+                synchronized (witnesses) {
+                    if (!witnesses.isEmpty()) {
+                        if (level.getGameTime() - completed > 1200) fail("database witnesses never converged");
+                        return;
+                    }
+                }
+                if (stage == 0) stage = 1;
+                else { stage = 0; which++; }
+                if (which == yields.length) { log("COMPLETE all panorama envelopes"); replayRequested = true; return; }
+                generation++; reset();
+            }
+        }
+    }
+    private static byte[] template(ServerLevel level, boolean ruin) {
+        var biomes = level.registryAccess().registryOrThrow(Registries.BIOME);
+        FriendlyByteBuf out = new FriendlyByteBuf(Unpooled.buffer());
+        try {
+            out.writeVarInt(-4); out.writeVarInt(SECTIONS);
+            for (int sy = -4; sy < 20; sy++) {
+                LevelChunkSection s = new LevelChunkSection(biomes);
+                for (int y = 0; y < 16; y++) for (int z = 0; z < 16; z++) for (int x = 0; x < 16; x++) {
+                    int h = sy * 16 + y;
+                    if (sy == 3) s.setBlockState(x, y, z, Blocks.STONE.defaultBlockState(), false);
+                    else if (ruin && h >= 64 && h < 67 + ((x * 7 + z * 13) & 3)) s.setBlockState(x, y, z, Blocks.COBBLESTONE.defaultBlockState(), false);
+                    else if (!ruin && h >= 64 && h < 128 && x >= 2 && x <= 13 && z >= 2 && z <= 13) {
+                        boolean wall = x == 2 || x == 13 || z == 2 || z == 13;
+                        if (h % 8 == 0 || wall) s.setBlockState(x, y, z, wall && h % 8 > 1 ? Blocks.GLASS.defaultBlockState() : Blocks.WHITE_CONCRETE.defaultBlockState(), false);
+                    }
+                }
+                out.writeByte(s.hasOnlyAir() ? 8 : 9); // same LodSections wire flags: blocks + full sky
+                if (!s.hasOnlyAir()) s.write(out);
+            }
+            byte[] data = new byte[out.readableBytes()]; out.readBytes(data); return data;
+        } finally { out.release(); }
+    }
+}
