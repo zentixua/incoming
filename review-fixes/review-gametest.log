@@ -1,0 +1,212 @@
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.14.3/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :createMinecraftArtifacts UP-TO-DATE
+> Task :compileJava
+> Task :generateModMetadata UP-TO-DATE
+> Task :processResources UP-TO-DATE
+> Task :classes
+> Task :compileDevtestJava
+> Task :copyRuntimeMods_gametest UP-TO-DATE
+> Task :processDevtestResources UP-TO-DATE
+> Task :devtestClasses
+> Task :downloadAssets UP-TO-DATE
+> Task :writeGameTestServerLegacyClasspath UP-TO-DATE
+> Task :prepareGameTestServerRun
+
+> Task :runGameTestServer
+WARN StatusConsoleListener Advanced terminal features are not available in this environment
+[00:38:55] [main/INFO] [cp.mo.mo.Launcher/MODLAUNCHER]: ModLauncher running: args [--launchTarget, forgeserverdev, --gameDir, ., --fml.fmlVersion, 4.0.45, --fml.mcVersion, 1.21.1, --fml.neoForgeVersion, 21.1.264, --fml.neoFormVersion, 20240808.144430]
+[00:38:55] [main/INFO] [cp.mo.mo.Launcher/MODLAUNCHER]: JVM identified as Microsoft OpenJDK 64-Bit Server VM 21.0.7+6-LTS
+[00:38:55] [main/INFO] [cp.mo.mo.Launcher/MODLAUNCHER]: ModLauncher 11.0.5+main.901c6ea8 starting: java version 21.0.7 by Microsoft; OS Linux arch amd64 version 7.3.1-1-cachyos
+[00:38:55] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Configuration file /mnt/data/projects/incoming/mod/run/wt-MT-B4/mod/run/gametest/config/fml.toml is not correct. Correcting
+[00:38:55] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [disableConfigWatcher] was corrected from null to false
+[00:38:55] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowControl] was corrected from null to true
+[00:38:55] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [maxThreads] was corrected from null to -1
+[00:38:55] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [versionCheck] was corrected from null to true
+[00:38:55] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [defaultConfigPath] was corrected from null to defaultconfigs
+[00:38:55] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [disableOptimizedDFU] was corrected from null to true
+[00:38:55] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowProvider] was corrected from null to fmlearlywindow
+[00:38:55] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowWidth] was corrected from null to 854
+[00:38:55] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowHeight] was corrected from null to 480
+[00:38:55] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowFBScale] was corrected from null to 1
+[00:38:55] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowMaximized] was corrected from null to false
+[00:38:55] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowSkipGLVersions] was corrected from null to []
+[00:38:55] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowSquir] was corrected from null to false
+[00:38:55] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: ****************************** Found dependency overrides ******************************
+[00:38:55] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: Dependency overrides for mod 'aeronautics': adding explicit AFTER ordering against 'simulated', adding explicit AFTER ordering against 'offroad'
+[00:38:55] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: Dependency overrides for mod 'simulated': adding explicit AFTER ordering against 'create', adding explicit AFTER ordering against 'sable'
+[00:38:55] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: Dependency overrides for mod 'offroad': adding explicit AFTER ordering against 'simulated'
+[00:38:55] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: ****************************************************************************************
+[00:38:55] [main/INFO] [ne.ne.fm.lo.ImmediateWindowHandler/]: ImmediateWindowProvider not loading because launch target is forgeserverdev
+[00:38:55] [main/INFO] [mixin/]: SpongePowered MIXIN Subsystem Version=0.8.7 Source=union:/home/artem/.gradle/caches/modules-2/files-2.1/net.fabricmc/sponge-mixin/0.16.4+mixin.0.8.7/26d01f0567ab46e9ca0d2ed89d0ecc11aadbd433/sponge-mixin-0.16.4+mixin.0.8.7.jar%2394!/ Service=ModLauncher Env=SERVER
+[00:38:55] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: ****************************** Found dependency overrides ******************************
+[00:38:55] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: Dependency overrides for mod 'aeronautics': adding explicit AFTER ordering against 'simulated', adding explicit AFTER ordering against 'offroad'
+[00:38:55] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: Dependency overrides for mod 'simulated': adding explicit AFTER ordering against 'create', adding explicit AFTER ordering against 'sable'
+[00:38:55] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: Dependency overrides for mod 'offroad': adding explicit AFTER ordering against 'simulated'
+[00:38:55] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: ****************************************************************************************
+[00:38:56] [main/INFO] [ne.ne.fm.lo.mo.lo.JarInJarDependencyLocator/]: Found 13 dependencies adding them to mods collection
+[00:38:56] [main/INFO] [ne.ne.fm.lo.mo.ModDiscoverer/]: 
+     Mod List:
+		Name Version (Mod Id)
+
+		Create 6.0.10 (create)
+		Create Aeronautics 1.3.2 (aeronautics)
+		Create Aeronautics 1.3.2 (aeronautics_bundled)
+		Create Offroad 1.3.2 (offroad)
+		Create Simulated 1.3.2 (simulated)
+		Flywheel 1.0.6 (flywheel)
+		Incoming 3.10.4 (incoming)
+		Minecraft 1.21.1 (minecraft)
+		NeoForge 21.1.264 (neoforge)
+		Ponder 1.0.82+mc1.21.1 (ponder)
+		Sable 2.0.6 (sable)
+		Sable Companion 1.6.0 (sablecompanion)
+		Veil 4.3.2 (veil)
+[00:38:56] [main/INFO] [mixin/]: Compatibility level set to JAVA_21
+[00:38:56] [main/INFO] [cp.mo.mo.LaunchServiceHandler/MODLAUNCHER]: Launching target 'forgeserverdev' with arguments [--gameDir, .]
+[00:38:56] [main/WARN] [mixin/]: Reference map 'ponder.refmap.json' for ponder-common.mixins.json could not be read. If this is a development environment you can ignore this message
+[00:38:56] [main/INFO] [de.ry.sa.mi.AbstractSableMixinPlugin/]: Using Vanilla renderer mixins
+[00:38:56] [main/INFO] [de.ry.sa.mi.AbstractSableMixinPlugin/]: Using Vanilla renderer mixins
+[00:38:56] [main/WARN] [mixin/]: Reference map 'simulated.refmap.json' for simulated.mixins.json could not be read. If this is a development environment you can ignore this message
+[00:38:56] [main/WARN] [mixin/]: Reference map 'offroad.refmap.json' for offroad.mixins.json could not be read. If this is a development environment you can ignore this message
+[00:38:56] [main/WARN] [mixin/]: Reference map 'aeronautics.refmap.json' for aeronautics.mixins.json could not be read. If this is a development environment you can ignore this message
+[00:38:57] [main/WARN] [mixin/]: Error loading class: org/jetbrains/annotations/ApiStatus$ScheduledForRemoval (java.lang.ClassNotFoundException: org.jetbrains.annotations.ApiStatus$ScheduledForRemoval)
+[00:38:57] [main/INFO] [MixinExtras|Service/]: Initializing MixinExtras via com.llamalad7.mixinextras.service.MixinExtrasServiceImpl(version=0.5.5).
+[00:39:00] [main/WARN] [minecraft/Commands]: Ambiguity between arguments [teleport, location] and [teleport, destination] with inputs: [0.1 -0.5 .9, 0 0 0]
+[00:39:00] [main/WARN] [minecraft/Commands]: Ambiguity between arguments [teleport, location] and [teleport, targets] with inputs: [0.1 -0.5 .9, 0 0 0]
+[00:39:00] [main/WARN] [minecraft/Commands]: Ambiguity between arguments [teleport, destination] and [teleport, targets] with inputs: [Player, 0123, @e, dd12be42-52a9-4a91-a8a1-11c01849e498]
+[00:39:00] [main/WARN] [minecraft/Commands]: Ambiguity between arguments [teleport, targets] and [teleport, destination] with inputs: [Player, 0123, dd12be42-52a9-4a91-a8a1-11c01849e498]
+[00:39:00] [main/WARN] [minecraft/Commands]: Ambiguity between arguments [teleport, targets, location] and [teleport, targets, destination] with inputs: [0.1 -0.5 .9, 0 0 0]
+[00:39:00] [modloading-worker-0/INFO] [Veil/]: Veil is initializing.
+[00:39:00] [modloading-worker-0/INFO] [ne.ne.ne.co.NeoForgeMod/NEOFORGE-MOD]: NeoForge mod loading, version 21.1.264, for MC 1.21.1
+[00:39:00] [modloading-worker-0/INFO] [co.si.cr.Create/]: Create 6.0.10 initializing! Commit hash: ac0c444d9828da3453ae8cc65338e8de063286fb
+[00:39:01] [modloading-worker-0/INFO] [de.ry.sa.Sable/]: Sable loaded!
+[00:39:03] [main/INFO] [mojang/YggdrasilAuthenticationService]: Environment: Environment[sessionHost=https://sessionserver.mojang.com, servicesHost=https://api.minecraftservices.com, name=PROD]
+[00:39:03] [NeoForge Version Check/INFO] [ne.ne.fm.VersionChecker/]: [create] Starting version check at https://api.modrinth.com/updates/create/forge_updates.json?neoforge=only
+[00:39:03] [main/WARN] [minecraft/VanillaPackResourcesBuilder]: Assets URL 'union:/mnt/data/projects/incoming/mod/run/wt-MT-B4/mod/build/moddev/artifacts/neoforge-21.1.264.jar%23128!/assets/.mcassetsroot' uses unexpected schema
+[00:39:03] [main/WARN] [minecraft/VanillaPackResourcesBuilder]: Assets URL 'union:/mnt/data/projects/incoming/mod/run/wt-MT-B4/mod/build/moddev/artifacts/neoforge-21.1.264.jar%23128!/data/.mcassetsroot' uses unexpected schema
+[00:39:03] [main/INFO] [co.si.cr.Create/]: Created 157 recipes which will be injected into the game
+[00:39:03] [main/INFO] [co.si.cr.Create/]: Created 0 tags which will be injected into the game
+[00:39:03] [main/INFO] [ne.ne.ne.ga.GameTestHooks/]: Enabled Gametest Namespaces: [incoming]
+[00:39:03] [NeoForge Version Check/INFO] [ne.ne.fm.VersionChecker/]: [create] Found status: OUTDATED Current: 6.0.10 Target: 6.0.10+mc1.21.1
+[00:39:03] [main/INFO] [minecraft/RecipeManager]: Loaded 2954 recipes
+[00:39:04] [main/INFO] [minecraft/AdvancementTree]: Loaded 2645 advancements
+[00:39:04] [Server thread/INFO] [ua.ze.in.Incoming/]: GameTest: only batch “nuclear_review.*|nuclear_keys.*” - tests 13 from 680
+[00:39:04] [Server thread/INFO] [de.ry.sa.Sable/]: Creating physics pipeline for ResourceKey[minecraft:dimension / minecraft:overworld] using RapierPhysicsPipelineProvider
+[00:39:04] [Server thread/INFO] [de.ry.sa.Sable/]: Using game directory relative Sable Rapier native directory /mnt/data/projects/incoming/mod/run/wt-MT-B4/mod/run/gametest/.sable/natives
+[2026-11-03T22:39:05.056694320Z] [[32mINFO[0m] (sable_rapier) Rapier scene initialized
+[00:39:05] [Server thread/INFO] [de.ry.sa.Sable/]: Creating physics pipeline for ResourceKey[minecraft:dimension / minecraft:the_nether] using RapierPhysicsPipelineProvider
+[2026-11-03T22:39:05.294617274Z] [[32mINFO[0m] (sable_rapier) Rapier scene initialized
+[00:39:05] [Server thread/INFO] [de.ry.sa.Sable/]: Creating physics pipeline for ResourceKey[minecraft:dimension / minecraft:the_end] using RapierPhysicsPipelineProvider
+[2026-11-03T22:39:05.310725688Z] [[32mINFO[0m] (sable_rapier) Rapier scene initialized
+[00:39:05] [Server thread/INFO] [minecraft/MinecraftServer]: Preparing start region for dimension minecraft:overworld
+[00:39:05] [worldgen/INFO] [minecraft/LoggerChunkProgressListener]: Preparing spawn area: 2%
+[00:39:05] [Server thread/INFO] [minecraft/LoggerChunkProgressListener]: Time elapsed: 106 ms
+[00:39:05] [Server thread/INFO] [minecraft/GameTestServer]: Started game test server
+[00:39:05] [Server thread/INFO] [ne.ne.ne.se.pe.PermissionAPI/]: Successfully initialized permission handler neoforge:default_handler
+[00:39:05] [Server thread/INFO] [minecraft/GameTestServer]: 13 tests are now running at position 8060750, -59, -11736995!
+[00:39:05] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuclear_keys_expiry:0' (1 tests)...
+[00:39:06] [Server thread/INFO] [minecraft/GameTestServer]: [             ]
+[00:39:06] [Server thread/INFO] [ua.ze.in.Incoming/]: Nuclear launch waits 5 s for a second key: nuke at 8060766 -56 -11736795 — keys_expiry
+[00:39:06] [Server thread/INFO] [minecraft/GameTestServer]: [_            ]
+[00:39:06] [Server thread/INFO] [minecraft/GameTestServer]: [_            ]
+[00:39:06] [Server thread/INFO] [minecraft/GameTestServer]: [_            ]
+[00:39:06] [Server thread/INFO] [minecraft/GameTestServer]: [_            ]
+[00:39:06] [Server thread/INFO] [minecraft/GameTestServer]: [_            ]
+[00:39:06] [Server thread/INFO] [ua.ze.in.Incoming/]: Munitions refund (no second key): nuke ×1 — keys_expiry
+[00:39:06] [Server thread/INFO] [ua.ze.in.Incoming/]: No second key within 5 s: nuclear launch nuke cancelled — keys_expiry
+[00:39:06] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuclear_review_last_seen:0' (1 tests)...
+[00:39:06] [Server thread/INFO] [minecraft/GameTestServer]: [+            ]
+[00:39:06] [Server thread/INFO] [minecraft/GameTestServer]: [+            ]
+[00:39:07] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuclear_review_commit:0' (1 tests)...
+[00:39:07] [Server thread/INFO] [minecraft/GameTestServer]: [++           ]
+[00:39:07] [Server thread/INFO] [minecraft/GameTestServer]: [++_          ]
+[00:39:07] [Server thread/INFO] [minecraft/GameTestServer]: [++_          ]
+[00:39:07] [Server thread/INFO] [minecraft/GameTestServer]: [++_          ]
+[00:39:07] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuclear_keys:0' (1 tests)...
+[00:39:07] [Server thread/INFO] [minecraft/GameTestServer]: [+++          ]
+[00:39:08] [Server thread/INFO] [minecraft/GameTestServer]: [+++          ]
+[00:39:08] [Server thread/INFO] [ua.ze.in.Incoming/]: Nuclear launch waits 30 s for a second key: nuke at 8060973 -56 -11736795 — keys_launcher
+[00:39:08] [Server thread/INFO] [ua.ze.in.Incoming/]: Second key: keys_near confirmed nuclear launch nuke — keys_launcher
+[00:39:08] [Server thread/INFO] [ua.ze.in.Incoming/]: Strike: nuke ×1 spread 0 at 8060973 -56 -11736795 (point) — keys_launcher (second key — keys_near)
+[00:39:08] [Server thread/INFO] [ua.ze.in.Incoming/]: ICBM #1: 15 kt at 8060973 -56 -11736795, detonation in 90 s
+[00:39:08] [Server thread/INFO] [ua.ze.in.Incoming/]: Nuclear launch detected: nuke from area 8060928 -11736832 — keys_launcher
+[00:39:08] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuclear_review_disclosure:0' (1 tests)...
+[00:39:08] [Server thread/INFO] [minecraft/GameTestServer]: [++++         ]
+[00:39:08] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuclear_keys_alone:0' (1 tests)...
+[00:39:08] [Server thread/INFO] [minecraft/GameTestServer]: [+++++        ]
+[00:39:08] [Server thread/INFO] [minecraft/GameTestServer]: [+++++        ]
+[00:39:09] [Server thread/INFO] [ua.ze.in.Incoming/]: Strike: nuke ×1 spread 0 at 8061079 -56 -11736795 (point) — keys_alone
+[00:39:09] [Server thread/INFO] [ua.ze.in.Incoming/]: ICBM #2: 15 kt at 8061079 -56 -11736795, detonation in 90 s
+[00:39:09] [Server thread/INFO] [ua.ze.in.Incoming/]: Nuclear launch detected: nuke from area 8061184 -11736832 — keys_alone
+[00:39:09] [Server thread/INFO] [ua.ze.in.Incoming/]: Strike: nuke ×1 spread 0 at 8061079 -56 -11736795 (point) — keys_op_command
+[00:39:09] [Server thread/INFO] [ua.ze.in.Incoming/]: ICBM #3: 15 kt at 8061079 -56 -11736795, detonation in 10 s
+[00:39:09] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuclear_review:0' (2 tests)...
+[00:39:09] [Server thread/INFO] [minecraft/GameTestServer]: [++++++       ]
+[00:39:09] [Server thread/INFO] [minecraft/GameTestServer]: [++++++__     ]
+[00:39:09] [Server thread/INFO] [minecraft/GameTestServer]: [++++++_+     ]
+[00:39:09] [Server thread/INFO] [minecraft/GameTestServer]: [++++++_+     ]
+[00:39:10] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuclear_review_launch:0' (1 tests)...
+[00:39:10] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++     ]
+[00:39:10] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++     ]
+[00:39:10] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++_    ]
+[00:39:10] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++_    ]
+[00:39:10] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++_    ]
+[00:39:10] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++_    ]
+[00:39:10] [Server thread/INFO] [ua.ze.in.Incoming/]: Strike: nuke ×1 spread 0 at 8060770 -56 -11736713 (point) — review
+[00:39:10] [Server thread/INFO] [ua.ze.in.Incoming/]: ICBM #4: 15 kt at 8060770 -56 -11736713, detonation in 90 s
+[00:39:10] [Server thread/INFO] [ua.ze.in.Incoming/]: Nuclear launch detected: nuke from area 8060672 -11736576 — review
+[00:39:10] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuclear_review_permissions:0' (1 tests)...
+[00:39:10] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++    ]
+[00:39:11] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuclear_review_death:0' (1 tests)...
+[00:39:11] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++   ]
+[00:39:11] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++   ]
+[00:39:11] [Server thread/INFO] [minecraft/MinecraftServer]: review_722acb19 was killed
+[00:39:11] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++_  ]
+[00:39:11] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++_  ]
+[00:39:11] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++_  ]
+[00:39:11] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuclear_review_abort:0' (1 tests)...
+[00:39:11] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++  ]
+[00:39:11] [Server thread/INFO] [ua.ze.in.Incoming/]: Clear with nukes — nuclear review abort regression: projectiles 0 (off-world 0), launchers 0, salvos 0
+[00:39:11] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++_ ]
+[00:39:11] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++_ ]
+[00:39:12] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++_ ]
+[00:39:12] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++_ ]
+[00:39:12] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuclear_keys_carrier:0' (1 tests)...
+[00:39:12] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++ ]
+[00:39:12] [Server thread/INFO] [ua.ze.in.Incoming/]: Nuclear launch waits 30 s for a second key: missile at 8061042 -56 -11736533 — keys_carrier
+[00:39:12] [Server thread/INFO] [ua.ze.in.Incoming/]: Second key: keys_carrier_near confirmed nuclear launch missile — keys_carrier
+[00:39:12] [Server thread/INFO] [ua.ze.in.Incoming/]: Nuclear alarm at target 8061042 -56 -11736533: missile — launch in 90 s — keys_carrier
+[00:39:12] [Server thread/INFO] [ua.ze.in.Incoming/]: Clear — check: non-operator hang up: projectiles 0 (off-world 0), launchers 0, salvos 0
+[00:39:12] [Server thread/INFO] [ua.ze.in.Incoming/]: Munitions refund (nuclear clear — check: nuclear shutdown): missile ×1, nuclear warheads ×1 — keys_carrier
+[00:39:12] [Server thread/INFO] [ua.ze.in.Incoming/]: Nuclear launch missile cancelled (nuclear clear — check: nuclear shutdown) — keys_carrier
+[00:39:12] [Server thread/INFO] [ua.ze.in.Incoming/]: Clear with nukes — check: nuclear shutdown: projectiles 0 (off-world 0), launchers 0, salvos 0
+[00:39:12] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++]
+[00:39:12] [Server thread/INFO] [minecraft/GameTestServer]: ========= 13 GAME TESTS COMPLETE IN 6.914 s ======================
+[00:39:12] [Server thread/INFO] [minecraft/GameTestServer]: All 13 required tests passed :)
+[00:39:12] [Server thread/INFO] [minecraft/GameTestServer]: ====================================================
+[00:39:12] [Server thread/INFO] [minecraft/MinecraftServer]: Stopping server
+[00:39:12] [Server thread/INFO] [minecraft/MinecraftServer]: Saving players
+[00:39:12] [Server thread/INFO] [minecraft/MinecraftServer]: Saving worlds
+[00:39:12] [Server thread/INFO] [minecraft/MinecraftServer]: Saving chunks for level 'ServerLevel[Test Level]'/minecraft:overworld
+[00:39:12] [Server thread/INFO] [de.ry.sa.Sable/]: Saving sub-levels for level 'ServerLevel[Test Level]'/minecraft:overworld
+[00:39:14] [Server thread/INFO] [minecraft/MinecraftServer]: Saving chunks for level 'ServerLevel[Test Level]'/minecraft:the_nether
+[00:39:14] [Server thread/INFO] [de.ry.sa.Sable/]: Saving sub-levels for level 'ServerLevel[Test Level]'/minecraft:the_nether
+[00:39:14] [Server thread/INFO] [minecraft/MinecraftServer]: Saving chunks for level 'ServerLevel[Test Level]'/minecraft:the_end
+[00:39:14] [Server thread/INFO] [de.ry.sa.Sable/]: Saving sub-levels for level 'ServerLevel[Test Level]'/minecraft:the_end
+[00:39:14] [Server thread/INFO] [minecraft/MinecraftServer]: ThreadedAnvilChunkStorage (world): All chunks are saved
+[00:39:14] [Server thread/INFO] [minecraft/MinecraftServer]: ThreadedAnvilChunkStorage (DIM-1): All chunks are saved
+[00:39:14] [Server thread/INFO] [minecraft/MinecraftServer]: ThreadedAnvilChunkStorage (DIM1): All chunks are saved
+[00:39:14] [Server thread/INFO] [minecraft/MinecraftServer]: ThreadedAnvilChunkStorage: All dimensions are saved
+[00:39:14] [Server thread/INFO] [minecraft/GameTestServer]: Game test server shutting down
+
+[Incubating] Problems report is available at: file:///mnt/data/projects/incoming/mod/run/wt-MT-B4/mod/build/reports/problems/problems-report.html
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 9.0.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/8.14.3/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD SUCCESSFUL in 29s
+11 actionable tasks: 4 executed, 7 up-to-date
