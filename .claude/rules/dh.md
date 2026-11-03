@@ -133,3 +133,8 @@ paths:
   A later `mark` invalidates an older saved read, including an already-completed result held by backpressure;
   keep the old read counted until completion before retrying, so invalidation cannot bypass the four-read cap.
   GameTest `voxy_saved_revision` saves gold, holds that read, saves diamond and marks again; only diamond may arrive.
+
+- FrontLods copy completion owns a candidate index and a RuinInbox generation. Clear/cancel invalidates queued
+  results; a late old read cannot replace a newly offered copy at the same coordinate. Outstanding invalidated
+  reads remain in the admission count until they complete. Do not zero that count on clear or retain whole
+  preparations in completion callbacks.
