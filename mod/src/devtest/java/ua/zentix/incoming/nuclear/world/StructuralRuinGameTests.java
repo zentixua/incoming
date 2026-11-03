@@ -127,11 +127,14 @@ public final class StructuralRuinGameTests {
     public static void preexistingFloatingStoneDoesNotAcquireGravity(GameTestHelper helper) {
         Shape shape = (x, y, z) -> {
             if (x >= 0 && x < 16 && z >= 0 && z < 16 && y == 80) return Blocks.STONE.defaultBlockState();
+            // This pedestal breaks and releases its cap, so reconciliation really runs beside the floating roof.
+            if (x == 8 && z == 8 && y == 70) return Blocks.STONE.defaultBlockState();
             if (x == 8 && z == 8 && y < 70) return Blocks.GLASS.defaultBlockState();
             return AIR;
         };
         var context = fixture(helper.getLevel(), shape, 2);
         var collapse = Collapse.solve(context.cachedGridForTest(helper.getLevel(), new ChunkPos(0, 0)));
+        helper.assertTrue(collapse.isGone(24, 70, 24), "Broken pedestal did not release its cap");
         helper.assertTrue(!collapse.isGone(24, 80, 24), "Unrelated preexisting floating roof fell");
         helper.succeed();
     }
