@@ -1,0 +1,4 @@
+GPU held by MT-LOD (/mnt/data/projects/incoming/mod/run/wt-MT), since 00:27, last work 0 min ago (free — tools/gpu_lease.sh release in its tree or after 10 min without work); queued: MT-B2 (/mnt/data/projects/incoming/mod/run/wt-MT-B2/mod/run/mt-b2/main-material) since 00:46
+  incoming-job-mt-b2-material-profiles-492914.service
+  incoming-job-mt-lod-sections-490958.service
+  incoming-job-perf-review-build-493032.service

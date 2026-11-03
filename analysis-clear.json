@@ -1,0 +1,402 @@
+{
+  "envelopes": [
+    {
+      "begin": {
+        "kind": "BEGIN",
+        "epoch": 1,
+        "phase": 0,
+        "kt": 15,
+        "columns": 2862,
+        "burstTick": 322
+      },
+      "summary": {
+        "kind": "SUMMARY",
+        "kt": 15,
+        "phase": 0,
+        "columns": 2862,
+        "ticks": 34,
+        "submitSeconds": 1.635741,
+        "lateMeanTicks": 0.0,
+        "lateMaxTicks": 0,
+        "peakBytes": 10554077,
+        "dbWitnesses": 33,
+        "frameMeanMs": 10.4426,
+        "frameMaxMs": 74.5879
+      },
+      "submit_cpu_ms": {
+        "n": 2862,
+        "min": 0.09261,
+        "mean": 0.17573860482180292,
+        "p50": 0.129417,
+        "p95": 0.199468,
+        "max": 60.777113
+      },
+      "submission_lateness_ticks": null,
+      "database_lateness_ticks": null,
+      "bytes": 29584494,
+      "transmitted_sections": 68688,
+      "changed_sections": 68688,
+      "peak_demand_columns_per_tick": null,
+      "peak_demand_columns_per_second": null,
+      "submit_columns_per_wall_second": 1749.6657478170446,
+      "completion_columns_per_game_second": 1683.5294117647059
+    },
+    {
+      "begin": {
+        "kind": "BEGIN",
+        "epoch": 2,
+        "phase": 1,
+        "kt": 15,
+        "columns": 2862,
+        "burstTick": 479
+      },
+      "summary": {
+        "kind": "SUMMARY",
+        "kt": 15,
+        "phase": 1,
+        "columns": 2862,
+        "ticks": 492,
+        "submitSeconds": 3.500979,
+        "lateMeanTicks": 0.0154,
+        "lateMaxTicks": 1,
+        "peakBytes": 4247552,
+        "dbWitnesses": 33,
+        "frameMeanMs": 8.3827,
+        "frameMaxMs": 14.668
+      },
+      "submit_cpu_ms": {
+        "n": 2862,
+        "min": 0.068863,
+        "mean": 0.08900164360587003,
+        "p50": 0.086673,
+        "p95": 0.099734,
+        "max": 4.771792
+      },
+      "submission_lateness_ticks": {
+        "n": 2862,
+        "min": 0,
+        "mean": 0.015373864430468204,
+        "p50": 0,
+        "p95": 0,
+        "max": 1
+      },
+      "database_lateness_ticks": {
+        "n": 33,
+        "min": 0,
+        "mean": 0.6060606060606061,
+        "p50": 1,
+        "p95": 1,
+        "max": 2
+      },
+      "bytes": 11871576,
+      "transmitted_sections": 68688,
+      "changed_sections": 11448,
+      "peak_demand_columns_per_tick": 56,
+      "peak_demand_columns_per_second": 886,
+      "submit_columns_per_wall_second": 817.4856233070807,
+      "completion_columns_per_game_second": 116.34146341463413
+    },
+    {
+      "begin": {
+        "kind": "BEGIN",
+        "epoch": 3,
+        "phase": 0,
+        "kt": 100,
+        "columns": 10103,
+        "burstTick": 1097
+      },
+      "summary": {
+        "kind": "SUMMARY",
+        "kt": 100,
+        "phase": 0,
+        "columns": 10103,
+        "ticks": 67,
+        "submitSeconds": 3.274012,
+        "lateMeanTicks": 0.0,
+        "lateMaxTicks": 0,
+        "peakBytes": 10523066,
+        "dbWitnesses": 33,
+        "frameMeanMs": 8.7703,
+        "frameMaxMs": 41.5225
+      },
+      "submit_cpu_ms": {
+        "n": 10103,
+        "min": 0.090235,
+        "mean": 0.13360761813322775,
+        "p50": 0.127042,
+        "p95": 0.146038,
+        "max": 6.676234
+      },
+      "submission_lateness_ticks": null,
+      "database_lateness_ticks": null,
+      "bytes": 104434711,
+      "transmitted_sections": 242472,
+      "changed_sections": 242472,
+      "peak_demand_columns_per_tick": null,
+      "peak_demand_columns_per_second": null,
+      "submit_columns_per_wall_second": 3085.8164233973484,
+      "completion_columns_per_game_second": 3015.820895522388
+    },
+    {
+      "begin": {
+        "kind": "BEGIN",
+        "epoch": 4,
+        "phase": 1,
+        "kt": 100,
+        "columns": 10103,
+        "burstTick": 1290
+      },
+      "summary": {
+        "kind": "SUMMARY",
+        "kt": 100,
+        "phase": 1,
+        "columns": 10103,
+        "ticks": 834,
+        "submitSeconds": 6.552615,
+        "lateMeanTicks": 0.0084,
+        "lateMaxTicks": 1,
+        "peakBytes": 4247552,
+        "dbWitnesses": 33,
+        "frameMeanMs": 8.3847,
+        "frameMaxMs": 15.004
+      },
+      "submit_cpu_ms": {
+        "n": 10103,
+        "min": 0.067677,
+        "mean": 0.08778325606255567,
+        "p50": 0.086674,
+        "p95": 0.100921,
+        "max": 5.626654
+      },
+      "submission_lateness_ticks": {
+        "n": 10103,
+        "min": 0,
+        "mean": 0.008413342571513412,
+        "p50": 0,
+        "p95": 0,
+        "max": 1
+      },
+      "database_lateness_ticks": {
+        "n": 33,
+        "min": 0,
+        "mean": 0.6060606060606061,
+        "p50": 1,
+        "p95": 1,
+        "max": 1
+      },
+      "bytes": 41907244,
+      "transmitted_sections": 242472,
+      "changed_sections": 40412,
+      "peak_demand_columns_per_tick": 101,
+      "peak_demand_columns_per_second": 1688,
+      "submit_columns_per_wall_second": 1541.8271941812543,
+      "completion_columns_per_game_second": 242.27817745803355
+    },
+    {
+      "begin": {
+        "kind": "BEGIN",
+        "epoch": 5,
+        "phase": 0,
+        "kt": 1000,
+        "columns": 46843,
+        "burstTick": 2255
+      },
+      "summary": {
+        "kind": "SUMMARY",
+        "kt": 1000,
+        "phase": 0,
+        "columns": 46843,
+        "ticks": 259,
+        "submitSeconds": 12.86333,
+        "lateMeanTicks": 0.0,
+        "lateMaxTicks": 0,
+        "peakBytes": 10223293,
+        "dbWitnesses": 33,
+        "frameMeanMs": 8.6056,
+        "frameMaxMs": 27.6132
+      },
+      "submit_cpu_ms": {
+        "n": 46843,
+        "min": 0.086673,
+        "mean": 0.1311189366180646,
+        "p50": 0.129416,
+        "p95": 0.149601,
+        "max": 7.210524
+      },
+      "submission_lateness_ticks": null,
+      "database_lateness_ticks": null,
+      "bytes": 484216091,
+      "transmitted_sections": 1124232,
+      "changed_sections": 1124232,
+      "peak_demand_columns_per_tick": null,
+      "peak_demand_columns_per_second": null,
+      "submit_columns_per_wall_second": 3641.592029435613,
+      "completion_columns_per_game_second": 3617.220077220077
+    },
+    {
+      "begin": {
+        "kind": "BEGIN",
+        "epoch": 6,
+        "phase": 1,
+        "kt": 1000,
+        "columns": 46843,
+        "burstTick": 2645
+      },
+      "summary": {
+        "kind": "SUMMARY",
+        "kt": 1000,
+        "phase": 1,
+        "columns": 46843,
+        "ticks": 1692,
+        "submitSeconds": 14.045655,
+        "lateMeanTicks": 0.0183,
+        "lateMaxTicks": 1,
+        "peakBytes": 4247552,
+        "dbWitnesses": 33,
+        "frameMeanMs": 8.404,
+        "frameMaxMs": 32.3672
+      },
+      "submit_cpu_ms": {
+        "n": 46843,
+        "min": 0.070051,
+        "mean": 0.09506757498452277,
+        "p50": 0.094985,
+        "p95": 0.11042,
+        "max": 4.157955
+      },
+      "submission_lateness_ticks": {
+        "n": 46843,
+        "min": 0,
+        "mean": 0.018316504066776252,
+        "p50": 0,
+        "p95": 0,
+        "max": 1
+      },
+      "database_lateness_ticks": {
+        "n": 33,
+        "min": 0,
+        "mean": 0.5757575757575758,
+        "p50": 1,
+        "p95": 1,
+        "max": 2
+      },
+      "bytes": 194304764,
+      "transmitted_sections": 1124232,
+      "changed_sections": 187372,
+      "peak_demand_columns_per_tick": 207,
+      "peak_demand_columns_per_second": 3638,
+      "submit_columns_per_wall_second": 3335.0527262701526,
+      "completion_columns_per_game_second": 553.6997635933807
+    }
+  ],
+  "visible": [
+    {
+      "kind": "VISIBLE_BASELINE",
+      "kt": 15,
+      "tick": 151,
+      "pixelX": 640,
+      "pixelY": 330,
+      "depthMeters": 905.5195,
+      "targetMeters": 878.9551,
+      "readNs": 2386489
+    },
+    {
+      "kind": "VISIBLE_RUIN",
+      "kt": 15,
+      "due": 767,
+      "seen": 767.56,
+      "latenessTicks": 0.56,
+      "depthMeters": 1007.656,
+      "baseline": 905.5195,
+      "readNs": 2394800,
+      "footprintPixels": 3
+    },
+    {
+      "kind": "VISIBLE_BASELINE",
+      "kt": 100,
+      "tick": 956,
+      "pixelX": 640,
+      "pixelY": 325,
+      "depthMeters": 1702.1661,
+      "targetMeters": 1676.9388,
+      "readNs": 2200082
+    },
+    {
+      "kind": "VISIBLE_RUIN",
+      "kt": 100,
+      "due": 1919,
+      "seen": 1920.6799,
+      "latenessTicks": 1.6799,
+      "depthMeters": 1816.3229,
+      "baseline": 1702.1661,
+      "readNs": 2154964,
+      "footprintPixels": 3
+    },
+    {
+      "kind": "VISIBLE_BASELINE",
+      "kt": 1000,
+      "tick": 2303,
+      "pixelX": 640,
+      "pixelY": 320,
+      "depthMeters": 3654.8208,
+      "targetMeters": 3625.8344,
+      "readNs": 2601393
+    },
+    {
+      "kind": "VISIBLE_RUIN",
+      "kt": 1000,
+      "due": 4132,
+      "seen": 4132.6602,
+      "latenessTicks": 0.6602,
+      "depthMeters": 3741.4289,
+      "baseline": 3654.8208,
+      "readNs": 2466040,
+      "footprintPixels": 3
+    }
+  ],
+  "replay": [
+    {
+      "kind": "REPLAY_DISPATCH",
+      "round": 0,
+      "tick": 4356,
+      "oldTimestamp": 1,
+      "publicConsumerCanVeto": "false"
+    },
+    {
+      "kind": "REPLAY_OVERWROTE",
+      "round": 0,
+      "tick": 4356,
+      "elapsedMs": 1.0045
+    },
+    {
+      "kind": "REPLAY_REPAIRED",
+      "round": 0,
+      "callTick": 4398,
+      "seenTick": 4398,
+      "repairMs": 0.1995,
+      "totalMs": 2047.1279
+    },
+    {
+      "kind": "REPLAY_DISPATCH",
+      "round": 1,
+      "tick": 4478,
+      "oldTimestamp": 1,
+      "publicConsumerCanVeto": "false"
+    },
+    {
+      "kind": "REPLAY_OVERWROTE",
+      "round": 1,
+      "tick": 4478,
+      "elapsedMs": 0.482
+    },
+    {
+      "kind": "REPLAY_REPAIRED",
+      "round": 1,
+      "callTick": 4478,
+      "seenTick": 4478,
+      "repairMs": 0.127,
+      "totalMs": 0.7124
+    }
+  ],
+  "failures": []
+}

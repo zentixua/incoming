@@ -1,0 +1,12 @@
+[
+  {
+    "jar": "voxy-0.2.16-beta+1.21.11.jar",
+    "sha256": "7f8226cf64a4f5dc064e1075965714b718ac5f42fb28f826135a37c64e66e10b",
+    "javap_exit": 0
+  },
+  {
+    "jar": "lod-server-support-neoforge-0.20.0+1.21.1.jar",
+    "sha256": "2bc87a9f65b7b9450455035d1ec3502e6ab338ab736af90dada484de3fd0139e",
+    "javap_exit": 0
+  }
+]
