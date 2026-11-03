@@ -1,0 +1,14 @@
+swap: classes 0, resources 0, 4.2 s
+fx clear → ok
+fx cam 85 28 25 10 → ok
+fx time day → ok
+fx overlay off → ok
+fx shots final-tree -0.25,0.1,1,3,10 4 → ok armed /mnt/data/projects/incoming/mod/run/wt-MT-B2/mod/run/mt-b2/branch/mod/run/sandbox/fx/out/final-tree
+fx nuke 15 air near 1000 → ok /mnt/data/projects/incoming/mod/run/wt-MT-B2/mod/run/mt-b2/branch/mod/run/sandbox/fx/out/final-tree
+audio: /mnt/data/projects/incoming/mod/run/wt-MT-B2/mod/run/mt-b2/branch/mod/run/sandbox/fx/out/final-tree/final-tree.wav (4.0 s, 48000 Hz)
+frame: /mnt/data/projects/incoming/mod/run/wt-MT-B2/mod/run/mt-b2/branch/mod/run/sandbox/fx/out/final-tree/final-tree_-00.25s.png
+frame: /mnt/data/projects/incoming/mod/run/wt-MT-B2/mod/run/mt-b2/branch/mod/run/sandbox/fx/out/final-tree/final-tree_000.10s.png
+frame: /mnt/data/projects/incoming/mod/run/wt-MT-B2/mod/run/mt-b2/branch/mod/run/sandbox/fx/out/final-tree/final-tree_001.00s.png
+frame: /mnt/data/projects/incoming/mod/run/wt-MT-B2/mod/run/mt-b2/branch/mod/run/sandbox/fx/out/final-tree/final-tree_003.00s.png
+frame: /mnt/data/projects/incoming/mod/run/wt-MT-B2/mod/run/mt-b2/branch/mod/run/sandbox/fx/out/final-tree/final-tree_010.00s.png
+from command to last frame and audio: 19.8 s

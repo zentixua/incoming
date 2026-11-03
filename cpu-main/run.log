@@ -1,0 +1,283 @@
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.14.3/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :createMinecraftArtifacts UP-TO-DATE
+> Task :compileJava UP-TO-DATE
+> Task :generateModMetadata UP-TO-DATE
+> Task :processResources UP-TO-DATE
+> Task :classes UP-TO-DATE
+> Task :compileDevtestJava
+> Task :copyRuntimeMods_gametest
+> Task :processDevtestResources UP-TO-DATE
+> Task :devtestClasses
+> Task :downloadAssets UP-TO-DATE
+> Task :writeGameTestServerLegacyClasspath
+> Task :prepareGameTestServerRun
+
+> Task :runGameTestServer
+WARN StatusConsoleListener Advanced terminal features are not available in this environment
+[00:21:02] [main/INFO] [cp.mo.mo.Launcher/MODLAUNCHER]: ModLauncher running: args [--launchTarget, forgeserverdev, --gameDir, ., --fml.fmlVersion, 4.0.45, --fml.mcVersion, 1.21.1, --fml.neoForgeVersion, 21.1.264, --fml.neoFormVersion, 20240808.144430]
+[00:21:02] [main/INFO] [cp.mo.mo.Launcher/MODLAUNCHER]: JVM identified as Microsoft OpenJDK 64-Bit Server VM 21.0.7+6-LTS
+[00:21:02] [main/INFO] [cp.mo.mo.Launcher/MODLAUNCHER]: ModLauncher 11.0.5+main.901c6ea8 starting: java version 21.0.7 by Microsoft; OS Linux arch amd64 version 7.3.1-1-cachyos
+[00:21:02] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Configuration file /mnt/data/projects/incoming/mod/run/wt-MT-B2/mod/run/mt-b2/main/mod/run/gametest/config/fml.toml is not correct. Correcting
+[00:21:02] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [disableConfigWatcher] was corrected from null to false
+[00:21:02] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowControl] was corrected from null to true
+[00:21:02] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [maxThreads] was corrected from null to -1
+[00:21:02] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [versionCheck] was corrected from null to true
+[00:21:02] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [defaultConfigPath] was corrected from null to defaultconfigs
+[00:21:02] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [disableOptimizedDFU] was corrected from null to true
+[00:21:02] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowProvider] was corrected from null to fmlearlywindow
+[00:21:02] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowWidth] was corrected from null to 854
+[00:21:02] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowHeight] was corrected from null to 480
+[00:21:02] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowFBScale] was corrected from null to 1
+[00:21:02] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowMaximized] was corrected from null to false
+[00:21:02] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowSkipGLVersions] was corrected from null to []
+[00:21:02] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowSquir] was corrected from null to false
+[00:21:02] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: ****************************** Found dependency overrides ******************************
+[00:21:02] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: Dependency overrides for mod 'aeronautics': adding explicit AFTER ordering against 'simulated', adding explicit AFTER ordering against 'offroad'
+[00:21:02] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: Dependency overrides for mod 'simulated': adding explicit AFTER ordering against 'create', adding explicit AFTER ordering against 'sable'
+[00:21:02] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: Dependency overrides for mod 'offroad': adding explicit AFTER ordering against 'simulated'
+[00:21:02] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: ****************************************************************************************
+[00:21:02] [main/INFO] [ne.ne.fm.lo.ImmediateWindowHandler/]: ImmediateWindowProvider not loading because launch target is forgeserverdev
+[00:21:02] [main/INFO] [mixin/]: SpongePowered MIXIN Subsystem Version=0.8.7 Source=union:/home/artem/.gradle/caches/modules-2/files-2.1/net.fabricmc/sponge-mixin/0.16.4+mixin.0.8.7/26d01f0567ab46e9ca0d2ed89d0ecc11aadbd433/sponge-mixin-0.16.4+mixin.0.8.7.jar%2394!/ Service=ModLauncher Env=SERVER
+[00:21:02] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: ****************************** Found dependency overrides ******************************
+[00:21:02] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: Dependency overrides for mod 'aeronautics': adding explicit AFTER ordering against 'simulated', adding explicit AFTER ordering against 'offroad'
+[00:21:02] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: Dependency overrides for mod 'simulated': adding explicit AFTER ordering against 'create', adding explicit AFTER ordering against 'sable'
+[00:21:02] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: Dependency overrides for mod 'offroad': adding explicit AFTER ordering against 'simulated'
+[00:21:02] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: ****************************************************************************************
+[00:21:04] [main/INFO] [ne.ne.fm.lo.mo.lo.JarInJarDependencyLocator/]: Found 13 dependencies adding them to mods collection
+[00:21:04] [main/INFO] [ne.ne.fm.lo.mo.ModDiscoverer/]: 
+     Mod List:
+		Name Version (Mod Id)
+
+		Create 6.0.10 (create)
+		Create Aeronautics 1.3.2 (aeronautics)
+		Create Aeronautics 1.3.2 (aeronautics_bundled)
+		Create Offroad 1.3.2 (offroad)
+		Create Simulated 1.3.2 (simulated)
+		Flywheel 1.0.6 (flywheel)
+		Incoming 3.10.4 (incoming)
+		Minecraft 1.21.1 (minecraft)
+		NeoForge 21.1.264 (neoforge)
+		Ponder 1.0.82+mc1.21.1 (ponder)
+		Sable 2.0.6 (sable)
+		Sable Companion 1.6.0 (sablecompanion)
+		Veil 4.3.2 (veil)
+[00:21:05] [main/INFO] [mixin/]: Compatibility level set to JAVA_21
+[00:21:05] [main/INFO] [cp.mo.mo.LaunchServiceHandler/MODLAUNCHER]: Launching target 'forgeserverdev' with arguments [--gameDir, .]
+[00:21:06] [main/WARN] [mixin/]: Reference map 'ponder.refmap.json' for ponder-common.mixins.json could not be read. If this is a development environment you can ignore this message
+[00:21:06] [main/INFO] [de.ry.sa.mi.AbstractSableMixinPlugin/]: Using Vanilla renderer mixins
+[00:21:06] [main/INFO] [de.ry.sa.mi.AbstractSableMixinPlugin/]: Using Vanilla renderer mixins
+[00:21:06] [main/WARN] [mixin/]: Reference map 'simulated.refmap.json' for simulated.mixins.json could not be read. If this is a development environment you can ignore this message
+[00:21:06] [main/WARN] [mixin/]: Reference map 'offroad.refmap.json' for offroad.mixins.json could not be read. If this is a development environment you can ignore this message
+[00:21:06] [main/WARN] [mixin/]: Reference map 'aeronautics.refmap.json' for aeronautics.mixins.json could not be read. If this is a development environment you can ignore this message
+[00:21:07] [main/WARN] [mixin/]: Error loading class: org/jetbrains/annotations/ApiStatus$ScheduledForRemoval (java.lang.ClassNotFoundException: org.jetbrains.annotations.ApiStatus$ScheduledForRemoval)
+[00:21:07] [main/INFO] [MixinExtras|Service/]: Initializing MixinExtras via com.llamalad7.mixinextras.service.MixinExtrasServiceImpl(version=0.5.5).
+[00:21:16] [main/WARN] [minecraft/Commands]: Ambiguity between arguments [teleport, location] and [teleport, destination] with inputs: [0.1 -0.5 .9, 0 0 0]
+[00:21:16] [main/WARN] [minecraft/Commands]: Ambiguity between arguments [teleport, location] and [teleport, targets] with inputs: [0.1 -0.5 .9, 0 0 0]
+[00:21:16] [main/WARN] [minecraft/Commands]: Ambiguity between arguments [teleport, destination] and [teleport, targets] with inputs: [Player, 0123, @e, dd12be42-52a9-4a91-a8a1-11c01849e498]
+[00:21:16] [main/WARN] [minecraft/Commands]: Ambiguity between arguments [teleport, targets] and [teleport, destination] with inputs: [Player, 0123, dd12be42-52a9-4a91-a8a1-11c01849e498]
+[00:21:16] [main/WARN] [minecraft/Commands]: Ambiguity between arguments [teleport, targets, location] and [teleport, targets, destination] with inputs: [0.1 -0.5 .9, 0 0 0]
+[00:21:16] [modloading-worker-0/INFO] [Veil/]: Veil is initializing.
+[00:21:16] [modloading-worker-0/INFO] [ne.ne.ne.co.NeoForgeMod/NEOFORGE-MOD]: NeoForge mod loading, version 21.1.264, for MC 1.21.1
+[00:21:16] [modloading-worker-0/INFO] [co.si.cr.Create/]: Create 6.0.10 initializing! Commit hash: ac0c444d9828da3453ae8cc65338e8de063286fb
+[00:21:17] [modloading-worker-0/INFO] [de.ry.sa.Sable/]: Sable loaded!
+[00:21:18] [main/ERROR] [minecraft/Settings]: Failed to load properties from file: server.properties
+java.nio.file.NoSuchFileException: server.properties
+	at java.base/sun.nio.fs.UnixException.translateToIOException(UnixException.java:92) ~[?:?] {}
+	at java.base/sun.nio.fs.UnixException.rethrowAsIOException(UnixException.java:106) ~[?:?] {}
+	at java.base/sun.nio.fs.UnixException.rethrowAsIOException(UnixException.java:111) ~[?:?] {}
+	at java.base/sun.nio.fs.UnixFileSystemProvider.newByteChannel(UnixFileSystemProvider.java:261) ~[?:?] {}
+	at java.base/java.nio.file.Files.newByteChannel(Files.java:380) ~[?:?] {}
+	at java.base/java.nio.file.Files.newByteChannel(Files.java:432) ~[?:?] {}
+	at java.base/java.nio.file.spi.FileSystemProvider.newInputStream(FileSystemProvider.java:420) ~[?:?] {}
+	at java.base/java.nio.file.Files.newInputStream(Files.java:160) ~[?:?] {}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.dedicated.Settings.loadFromFile(Settings.java:38) ~[neoforge-21.1.264.jar%23128!/:?] {re:classloading}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.dedicated.DedicatedServerProperties.fromFile(DedicatedServerProperties.java:132) ~[neoforge-21.1.264.jar%23128!/:?] {re:classloading}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.dedicated.DedicatedServerSettings.<init>(DedicatedServerSettings.java:12) ~[neoforge-21.1.264.jar%23128!/:?] {re:classloading}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.Main.main(Main.java:125) ~[neoforge-21.1.264.jar%23128!/:?] {re:classloading}
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103) ~[?:?] {}
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580) ~[?:?] {}
+	at MC-BOOTSTRAP/fml_loader@4.0.45/net.neoforged.fml.loading.targets.CommonLaunchHandler.runTarget(CommonLaunchHandler.java:136) ~[loader-4.0.45.jar%23102!/:4.0] {}
+	at MC-BOOTSTRAP/fml_loader@4.0.45/net.neoforged.fml.loading.targets.CommonLaunchHandler.serverService(CommonLaunchHandler.java:128) ~[loader-4.0.45.jar%23102!/:4.0] {}
+	at MC-BOOTSTRAP/fml_loader@4.0.45/net.neoforged.fml.loading.targets.NeoForgeServerDevLaunchHandler.runService(NeoForgeServerDevLaunchHandler.java:23) ~[loader-4.0.45.jar%23102!/:4.0] {}
+	at MC-BOOTSTRAP/fml_loader@4.0.45/net.neoforged.fml.loading.targets.CommonLaunchHandler.lambda$launchService$4(CommonLaunchHandler.java:118) ~[loader-4.0.45.jar%23102!/:4.0] {}
+	at MC-BOOTSTRAP/cpw.mods.modlauncher@11.0.5/cpw.mods.modlauncher.LaunchServiceHandlerDecorator.launch(LaunchServiceHandlerDecorator.java:30) [modlauncher-11.0.5.jar%2382!/:?] {}
+	at MC-BOOTSTRAP/cpw.mods.modlauncher@11.0.5/cpw.mods.modlauncher.LaunchServiceHandler.launch(LaunchServiceHandler.java:53) [modlauncher-11.0.5.jar%2382!/:?] {}
+	at MC-BOOTSTRAP/cpw.mods.modlauncher@11.0.5/cpw.mods.modlauncher.LaunchServiceHandler.launch(LaunchServiceHandler.java:71) [modlauncher-11.0.5.jar%2382!/:?] {}
+	at MC-BOOTSTRAP/cpw.mods.modlauncher@11.0.5/cpw.mods.modlauncher.Launcher.run(Launcher.java:103) [modlauncher-11.0.5.jar%2382!/:?] {}
+	at MC-BOOTSTRAP/cpw.mods.modlauncher@11.0.5/cpw.mods.modlauncher.Launcher.main(Launcher.java:74) [modlauncher-11.0.5.jar%2382!/:?] {}
+	at MC-BOOTSTRAP/cpw.mods.modlauncher@11.0.5/cpw.mods.modlauncher.BootstrapLaunchConsumer.accept(BootstrapLaunchConsumer.java:26) [modlauncher-11.0.5.jar%2382!/:?] {}
+	at MC-BOOTSTRAP/cpw.mods.modlauncher@11.0.5/cpw.mods.modlauncher.BootstrapLaunchConsumer.accept(BootstrapLaunchConsumer.java:23) [modlauncher-11.0.5.jar%2382!/:?] {}
+	at cpw.mods.bootstraplauncher@2.0.2/cpw.mods.bootstraplauncher.BootstrapLauncher.run(BootstrapLauncher.java:210) [bootstraplauncher-2.0.2.jar:?] {}
+	at cpw.mods.bootstraplauncher@2.0.2/cpw.mods.bootstraplauncher.BootstrapLauncher.main(BootstrapLauncher.java:69) [bootstraplauncher-2.0.2.jar:?] {}
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103) ~[?:?] {}
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580) ~[?:?] {}
+	at net.neoforged.devlaunch.Main.main(Main.java:57) [DevLaunch-1.0.2.jar:?] {}
+[00:21:18] [main/INFO] [mojang/YggdrasilAuthenticationService]: Environment: Environment[sessionHost=https://sessionserver.mojang.com, servicesHost=https://api.minecraftservices.com, name=PROD]
+[00:21:18] [NeoForge Version Check/INFO] [ne.ne.fm.VersionChecker/]: [create] Starting version check at https://api.modrinth.com/updates/create/forge_updates.json?neoforge=only
+[00:21:18] [main/WARN] [minecraft/VanillaPackResourcesBuilder]: Assets URL 'union:/mnt/data/projects/incoming/mod/run/wt-MT-B2/mod/run/mt-b2/main/mod/build/moddev/artifacts/neoforge-21.1.264.jar%23128!/assets/.mcassetsroot' uses unexpected schema
+[00:21:18] [main/WARN] [minecraft/VanillaPackResourcesBuilder]: Assets URL 'union:/mnt/data/projects/incoming/mod/run/wt-MT-B2/mod/run/mt-b2/main/mod/build/moddev/artifacts/neoforge-21.1.264.jar%23128!/data/.mcassetsroot' uses unexpected schema
+[00:21:18] [main/INFO] [co.si.cr.Create/]: Created 157 recipes which will be injected into the game
+[00:21:18] [main/INFO] [co.si.cr.Create/]: Created 0 tags which will be injected into the game
+[00:21:18] [main/INFO] [ne.ne.ne.ga.GameTestHooks/]: Enabled Gametest Namespaces: [incoming]
+[00:21:19] [NeoForge Version Check/INFO] [ne.ne.fm.VersionChecker/]: [create] Found status: OUTDATED Current: 6.0.10 Target: 6.0.10+mc1.21.1
+[00:21:19] [main/INFO] [minecraft/RecipeManager]: Loaded 2954 recipes
+[00:21:19] [main/INFO] [minecraft/AdvancementTree]: Loaded 2645 advancements
+[00:21:20] [Server thread/INFO] [ua.ze.in.Incoming/]: GameTest: only batch “mt_ruin” - tests 1 from 672
+[00:21:20] [Server thread/INFO] [de.ry.sa.Sable/]: Creating physics pipeline for ResourceKey[minecraft:dimension / minecraft:overworld] using RapierPhysicsPipelineProvider
+[00:21:20] [Server thread/INFO] [de.ry.sa.Sable/]: Using game directory relative Sable Rapier native directory /mnt/data/projects/incoming/mod/run/wt-MT-B2/mod/run/mt-b2/main/mod/run/gametest/.sable/natives
+[2026-11-03T22:21:21.003452588Z] [[32mINFO[0m] (sable_rapier) Rapier scene initialized
+[00:21:21] [Server thread/INFO] [de.ry.sa.Sable/]: Creating physics pipeline for ResourceKey[minecraft:dimension / minecraft:the_end] using RapierPhysicsPipelineProvider
+[2026-11-03T22:21:21.267548330Z] [[32mINFO[0m] (sable_rapier) Rapier scene initialized
+[00:21:21] [Server thread/INFO] [de.ry.sa.Sable/]: Creating physics pipeline for ResourceKey[minecraft:dimension / minecraft:the_nether] using RapierPhysicsPipelineProvider
+[2026-11-03T22:21:21.293299607Z] [[32mINFO[0m] (sable_rapier) Rapier scene initialized
+[00:21:21] [Server thread/INFO] [minecraft/MinecraftServer]: Preparing start region for dimension minecraft:overworld
+[00:21:21] [worldgen/INFO] [minecraft/LoggerChunkProgressListener]: Preparing spawn area: 2%
+[00:21:21] [Server thread/INFO] [minecraft/LoggerChunkProgressListener]: Time elapsed: 140 ms
+[00:21:21] [Server thread/INFO] [minecraft/GameTestServer]: Started game test server
+[00:21:21] [Server thread/INFO] [ne.ne.ne.se.pe.PermissionAPI/]: Successfully initialized permission handler neoforge:default_handler
+[00:21:21] [Server thread/INFO] [minecraft/GameTestServer]: 1 tests are now running at position 12478375, -59, -12141379!
+[00:21:21] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'mt_ruin:0' (1 tests)...
+[00:21:21] [Server thread/INFO] [minecraft/GameTestServer]: [ ]
+[00:21:21] [Server thread/INFO] [ua.ze.in.Incoming/]: MTRUIN material=Block{minecraft:stone} kind=GROUND threshold=15.0 span=6 rubble=true breakable=true
+[00:21:21] [Server thread/INFO] [ua.ze.in.Incoming/]: MTRUIN material=Block{minecraft:white_concrete} kind=BREAK threshold=12.0 span=6 rubble=true breakable=true
+[00:21:21] [Server thread/INFO] [ua.ze.in.Incoming/]: MTRUIN material=Block{minecraft:iron_block} kind=BREAK threshold=12.0 span=6 rubble=true breakable=true
+[00:21:21] [Server thread/INFO] [ua.ze.in.Incoming/]: MTRUIN material=Block{minecraft:glass} kind=BREAK threshold=0.8 span=0 rubble=false breakable=true
+[00:21:21] [Server thread/INFO] [ua.ze.in.Incoming/]: MTRUIN material=Block{minecraft:oak_log} kind=LOG threshold=5.0 span=6 rubble=true breakable=false
+[00:21:21] [Server thread/INFO] [ua.ze.in.Incoming/]: MTRUIN material=Block{minecraft:oak_leaves} kind=LEAVES threshold=2.0 span=4 rubble=false breakable=true
+[00:21:21] [Server thread/INFO] [ua.ze.in.Incoming/]: MTRUIN material=Block{minecraft:smooth_stone_slab} kind=BREAK threshold=12.0 span=6 rubble=true breakable=true
+[00:21:21] [Server thread/INFO] [ua.ze.in.Incoming/]: MTRUIN material=Block{minecraft:chain} kind=BREAK threshold=12.0 span=6 rubble=true breakable=true
+[00:21:21] [Server thread/INFO] [ua.ze.in.Incoming/]: MTRUIN loads kt=15.0 psi=0.5 range=7186.2011 phase=1.3666 qKpa=0.0417 wind=8.2170
+[00:21:21] [Server thread/INFO] [ua.ze.in.Incoming/]: MTRUIN loads kt=15.0 psi=1.0 range=4457.1283 phase=1.2578 qKpa=0.1660 wind=16.2059
+[00:21:21] [Server thread/INFO] [ua.ze.in.Incoming/]: MTRUIN loads kt=15.0 psi=2.0 range=2835.3298 phase=1.0027 qKpa=0.6575 wind=31.5540
+[00:21:21] [Server thread/INFO] [ua.ze.in.Incoming/]: MTRUIN loads kt=15.0 psi=5.0 range=1605.2055 phase=0.8712 qKpa=3.9950 wind=73.3472
+[00:21:21] [Server thread/INFO] [ua.ze.in.Incoming/]: MTRUIN loads kt=15.0 psi=10.0 range=999.4011 phase=0.7388 qKpa=15.2723 wind=132.4970
+[00:21:21] [Server thread/INFO] [ua.ze.in.Incoming/]: MTRUIN loads kt=15.0 psi=20.0 range=358.8100 phase=0.5227 qKpa=56.1171 wind=226.5323
+[00:21:22] [Server thread/INFO] [ua.ze.in.Incoming/]: MTRUIN case=hall-stone-natural rep=0 kt=15.0 psi=2.0 inject=false initial=1105 left=49 glassBefore=480 glassAfter=0 floating=49 added=0 rubbleEligible=576 highGroundRubbleColumns=0 outsideLogs=0 trees=0 logsBefore=0 logsAfter=0 maxY=70 planKiB=57.0703 totalMs=181.5841 blastMs=82.4832 collapseMs=77.5863 finishMs=21.5146 graphMs=5.4526
+[00:21:22] [Server thread/INFO] [ua.ze.in.Incoming/]: MTRUIN case=hall-concrete-natural rep=0 kt=15.0 psi=2.0 inject=false initial=1105 left=0 glassBefore=480 glassAfter=0 floating=0 added=0 rubbleEligible=625 highGroundRubbleColumns=0 outsideLogs=0 trees=0 logsBefore=0 logsAfter=0 maxY=0 planKiB=60.8984 totalMs=64.8395 blastMs=23.5189 collapseMs=29.1378 finishMs=12.1828 graphMs=3.9268
+[00:21:22] [Server thread/INFO] [ua.ze.in.Incoming/]: MTRUIN case=hall-stone-controlled rep=0 kt=15.0 psi=0.05 inject=true initial=1105 left=49 glassBefore=480 glassAfter=0 floating=49 added=0 rubbleEligible=576 highGroundRubbleColumns=0 outsideLogs=0 trees=0 logsBefore=0 logsAfter=0 maxY=70 planKiB=56.3203 totalMs=43.0826 blastMs=0.1425 collapseMs=35.3194 finishMs=7.6208 graphMs=1.1803
+[00:21:22] [Server thread/INFO] [ua.ze.in.Incoming/]: MTRUIN case=hall-concrete-controlled rep=0 kt=15.0 psi=0.05 inject=true initial=1105 left=0 glassBefore=480 glassAfter=0 floating=0 added=0 rubbleEligible=625 highGroundRubbleColumns=0 outsideLogs=0 trees=0 logsBefore=0 logsAfter=0 maxY=0 planKiB=60.1484 totalMs=44.8163 blastMs=0.0534 collapseMs=38.9445 finishMs=5.8183 graphMs=1.2575
+[00:21:22] [Server thread/INFO] [ua.ze.in.Incoming/]: MTRUIN case=tower-concrete-6 rep=0 kt=15.0 psi=6.0 inject=false initial=8192 left=776 glassBefore=3584 glassAfter=0 floating=0 added=392 rubbleEligible=4352 highGroundRubbleColumns=0 outsideLogs=0 trees=0 logsBefore=0 logsAfter=0 maxY=69 planKiB=118.6055 totalMs=208.2734 blastMs=76.4250 collapseMs=115.5393 finishMs=16.3090 graphMs=7.7110
+[00:21:23] [Server thread/INFO] [ua.ze.in.Incoming/]: MTRUIN case=tower-concrete-20 rep=0 kt=15.0 psi=20.0 inject=false initial=8192 left=8 glassBefore=3584 glassAfter=0 floating=0 added=0 rubbleEligible=5200 highGroundRubbleColumns=0 outsideLogs=0 trees=0 logsBefore=0 logsAfter=0 maxY=68 planKiB=126.4453 totalMs=144.0965 blastMs=37.6681 collapseMs=82.6316 finishMs=23.7968 graphMs=2.0851
+[00:21:23] [Server thread/INFO] [ua.ze.in.Incoming/]: MTRUIN case=tower-stone-20 rep=0 kt=15.0 psi=20.0 inject=false initial=8192 left=776 glassBefore=3584 glassAfter=0 floating=0 added=392 rubbleEligible=4352 highGroundRubbleColumns=0 outsideLogs=0 trees=0 logsBefore=0 logsAfter=0 maxY=69 planKiB=118.5703 totalMs=93.5925 blastMs=35.8454 collapseMs=48.5637 finishMs=9.1834 graphMs=1.2385
+[00:21:23] [Server thread/INFO] [ua.ze.in.Incoming/]: MTRUIN case=tower-log-20 rep=0 kt=15.0 psi=20.0 inject=false initial=8192 left=2304 glassBefore=3584 glassAfter=0 floating=0 added=0 rubbleEligible=0 highGroundRubbleColumns=0 outsideLogs=0 trees=0 logsBefore=4608 logsAfter=2304 maxY=145 planKiB=87.0703 totalMs=151.6745 blastMs=41.6471 collapseMs=97.7508 finishMs=12.2766 graphMs=1.3204
+[00:21:23] [Server thread/INFO] [ua.ze.in.Incoming/]: MTRUIN case=column-concrete-6 rep=0 kt=15.0 psi=6.0 inject=false initial=81 left=4 glassBefore=0 glassAfter=0 floating=0 added=0 rubbleEligible=81 highGroundRubbleColumns=0 outsideLogs=0 trees=0 logsBefore=0 logsAfter=0 maxY=68 planKiB=3.0000 totalMs=70.0747 blastMs=16.2330 collapseMs=50.9967 finishMs=2.8450 graphMs=0.9559
+[00:21:23] [Server thread/INFO] [ua.ze.in.Incoming/]: MTRUIN case=bare-log-column rep=0 kt=15.0 psi=20.0 inject=false initial=16 left=16 glassBefore=0 glassAfter=0 floating=0 added=0 rubbleEligible=0 highGroundRubbleColumns=0 outsideLogs=0 trees=0 logsBefore=16 logsAfter=16 maxY=80 planKiB=1.4727 totalMs=20.6288 blastMs=15.9409 collapseMs=2.6740 finishMs=2.0138 graphMs=0.9487
+[00:21:23] [Server thread/INFO] [ua.ze.in.Incoming/]: MTRUIN case=tree-16 rep=0 kt=15.0 psi=20.0 inject=false initial=16 left=8 glassBefore=0 glassAfter=0 floating=0 added=7 rubbleEligible=0 highGroundRubbleColumns=0 outsideLogs=8 trees=1 logsBefore=16 logsAfter=8 maxY=65 planKiB=3.5039 totalMs=52.8965 blastMs=26.3010 collapseMs=24.2326 finishMs=2.3629 graphMs=0.9262
+[00:21:24] [Server thread/INFO] [ua.ze.in.Incoming/]: MTRUIN case=tree-30 rep=0 kt=15.0 psi=20.0 inject=false initial=30 left=30 glassBefore=0 glassAfter=0 floating=0 added=0 rubbleEligible=0 highGroundRubbleColumns=0 outsideLogs=0 trees=0 logsBefore=30 logsAfter=30 maxY=94 planKiB=2.7969 totalMs=34.0809 blastMs=22.4717 collapseMs=8.0767 finishMs=3.5325 graphMs=1.1126
+[00:21:24] [Server thread/INFO] [ua.ze.in.Incoming/]: MTRUIN case=hall-stone-natural rep=1 kt=15.0 psi=2.0 inject=false initial=1105 left=49 glassBefore=480 glassAfter=0 floating=49 added=0 rubbleEligible=576 highGroundRubbleColumns=0 outsideLogs=0 trees=0 logsBefore=0 logsAfter=0 maxY=70 planKiB=57.0703 totalMs=45.9538 blastMs=19.7287 collapseMs=20.5338 finishMs=5.6912 graphMs=0.9464
+[00:21:24] [Server thread/INFO] [ua.ze.in.Incoming/]: MTRUIN case=hall-concrete-natural rep=1 kt=15.0 psi=2.0 inject=false initial=1105 left=0 glassBefore=480 glassAfter=0 floating=0 added=0 rubbleEligible=625 highGroundRubbleColumns=0 outsideLogs=0 trees=0 logsBefore=0 logsAfter=0 maxY=0 planKiB=60.8984 totalMs=47.4012 blastMs=19.8807 collapseMs=22.1404 finishMs=5.3801 graphMs=0.9428
+[00:21:24] [Server thread/INFO] [ua.ze.in.Incoming/]: MTRUIN case=hall-stone-controlled rep=1 kt=15.0 psi=0.05 inject=true initial=1105 left=49 glassBefore=480 glassAfter=0 floating=49 added=0 rubbleEligible=576 highGroundRubbleColumns=0 outsideLogs=0 trees=0 logsBefore=0 logsAfter=0 maxY=70 planKiB=56.3203 totalMs=22.5073 blastMs=0.0570 collapseMs=18.6743 finishMs=3.7759 graphMs=1.0319
+[00:21:24] [Server thread/INFO] [ua.ze.in.Incoming/]: MTRUIN case=hall-concrete-controlled rep=1 kt=15.0 psi=0.05 inject=true initial=1105 left=0 glassBefore=480 glassAfter=0 floating=0 added=0 rubbleEligible=625 highGroundRubbleColumns=0 outsideLogs=0 trees=0 logsBefore=0 logsAfter=0 maxY=0 planKiB=60.1484 totalMs=22.6628 blastMs=0.0392 collapseMs=18.9308 finishMs=3.6928 graphMs=0.9523
+[00:21:24] [Server thread/INFO] [ua.ze.in.Incoming/]: MTRUIN case=tower-concrete-6 rep=1 kt=15.0 psi=6.0 inject=false initial=8192 left=776 glassBefore=3584 glassAfter=0 floating=0 added=392 rubbleEligible=4352 highGroundRubbleColumns=0 outsideLogs=0 trees=0 logsBefore=0 logsAfter=0 maxY=69 planKiB=118.6055 totalMs=88.0378 blastMs=30.1957 collapseMs=52.1912 finishMs=5.6509 graphMs=1.0140
+[00:21:24] [Server thread/INFO] [ua.ze.in.Incoming/]: MTRUIN case=tower-concrete-20 rep=1 kt=15.0 psi=20.0 inject=false initial=8192 left=8 glassBefore=3584 glassAfter=0 floating=0 added=0 rubbleEligible=5200 highGroundRubbleColumns=0 outsideLogs=0 trees=0 logsBefore=0 logsAfter=0 maxY=68 planKiB=126.4453 totalMs=100.0365 blastMs=30.0212 collapseMs=61.6643 finishMs=8.3510 graphMs=0.9167
+[00:21:24] [Server thread/INFO] [ua.ze.in.Incoming/]: MTRUIN case=tower-stone-20 rep=1 kt=15.0 psi=20.0 inject=false initial=8192 left=776 glassBefore=3584 glassAfter=0 floating=0 added=392 rubbleEligible=4352 highGroundRubbleColumns=0 outsideLogs=0 trees=0 logsBefore=0 logsAfter=0 maxY=69 planKiB=118.5703 totalMs=80.6426 blastMs=30.0319 collapseMs=45.8944 finishMs=4.7164 graphMs=0.9654
+[00:21:25] [Server thread/INFO] [ua.ze.in.Incoming/]: MTRUIN case=tower-log-20 rep=1 kt=15.0 psi=20.0 inject=false initial=8192 left=2304 glassBefore=3584 glassAfter=0 floating=0 added=0 rubbleEligible=0 highGroundRubbleColumns=0 outsideLogs=0 trees=0 logsBefore=4608 logsAfter=2304 maxY=145 planKiB=87.0703 totalMs=81.1485 blastMs=27.4053 collapseMs=48.1719 finishMs=5.5713 graphMs=0.9808
+[00:21:25] [Server thread/INFO] [ua.ze.in.Incoming/]: MTRUIN case=column-concrete-6 rep=1 kt=15.0 psi=6.0 inject=false initial=81 left=4 glassBefore=0 glassAfter=0 floating=0 added=0 rubbleEligible=81 highGroundRubbleColumns=0 outsideLogs=0 trees=0 logsBefore=0 logsAfter=0 maxY=68 planKiB=3.0000 totalMs=53.3311 blastMs=18.8073 collapseMs=32.9386 finishMs=1.5852 graphMs=0.9713
+[00:21:25] [Server thread/INFO] [ua.ze.in.Incoming/]: MTRUIN case=bare-log-column rep=1 kt=15.0 psi=20.0 inject=false initial=16 left=16 glassBefore=0 glassAfter=0 floating=0 added=0 rubbleEligible=0 highGroundRubbleColumns=0 outsideLogs=0 trees=0 logsBefore=16 logsAfter=16 maxY=80 planKiB=1.4727 totalMs=22.2639 blastMs=17.4275 collapseMs=3.2772 finishMs=1.5591 graphMs=1.0200
+[00:21:25] [Server thread/INFO] [ua.ze.in.Incoming/]: MTRUIN case=tree-16 rep=1 kt=15.0 psi=20.0 inject=false initial=16 left=8 glassBefore=0 glassAfter=0 floating=0 added=7 rubbleEligible=0 highGroundRubbleColumns=0 outsideLogs=8 trees=1 logsBefore=16 logsAfter=8 maxY=65 planKiB=3.5039 totalMs=22.6830 blastMs=16.0122 collapseMs=5.2697 finishMs=1.4011 graphMs=0.8965
+[00:21:25] [Server thread/INFO] [ua.ze.in.Incoming/]: MTRUIN case=tree-30 rep=1 kt=15.0 psi=20.0 inject=false initial=30 left=30 glassBefore=0 glassAfter=0 floating=0 added=0 rubbleEligible=0 highGroundRubbleColumns=0 outsideLogs=0 trees=0 logsBefore=30 logsAfter=30 maxY=94 planKiB=2.7969 totalMs=22.2769 blastMs=15.9967 collapseMs=5.0500 finishMs=1.2302 graphMs=0.8787
+[00:21:25] [Server thread/INFO] [ua.ze.in.Incoming/]: MTRUIN case=hall-stone-natural rep=2 kt=15.0 psi=2.0 inject=false initial=1105 left=49 glassBefore=480 glassAfter=0 floating=49 added=0 rubbleEligible=576 highGroundRubbleColumns=0 outsideLogs=0 trees=0 logsBefore=0 logsAfter=0 maxY=70 planKiB=57.0703 totalMs=37.1385 blastMs=16.3375 collapseMs=17.6377 finishMs=3.1632 graphMs=0.8917
+[00:21:25] [Server thread/INFO] [ua.ze.in.Incoming/]: MTRUIN case=hall-concrete-natural rep=2 kt=15.0 psi=2.0 inject=false initial=1105 left=0 glassBefore=480 glassAfter=0 floating=0 added=0 rubbleEligible=625 highGroundRubbleColumns=0 outsideLogs=0 trees=0 logsBefore=0 logsAfter=0 maxY=0 planKiB=60.8984 totalMs=38.4636 blastMs=16.8065 collapseMs=17.9239 finishMs=3.7332 graphMs=0.9760
+[00:21:25] [Server thread/INFO] [ua.ze.in.Incoming/]: MTRUIN case=hall-stone-controlled rep=2 kt=15.0 psi=0.05 inject=true initial=1105 left=49 glassBefore=480 glassAfter=0 floating=49 added=0 rubbleEligible=576 highGroundRubbleColumns=0 outsideLogs=0 trees=0 logsBefore=0 logsAfter=0 maxY=70 planKiB=56.3203 totalMs=21.4873 blastMs=0.0368 collapseMs=18.1863 finishMs=3.2642 graphMs=0.9309
+[00:21:25] [Server thread/INFO] [ua.ze.in.Incoming/]: MTRUIN case=hall-concrete-controlled rep=2 kt=15.0 psi=0.05 inject=true initial=1105 left=0 glassBefore=480 glassAfter=0 floating=0 added=0 rubbleEligible=625 highGroundRubbleColumns=0 outsideLogs=0 trees=0 logsBefore=0 logsAfter=0 maxY=0 planKiB=60.1484 totalMs=21.8233 blastMs=0.0332 collapseMs=18.1721 finishMs=3.6180 graphMs=0.9784
+[00:21:25] [Server thread/INFO] [ua.ze.in.Incoming/]: MTRUIN case=tower-concrete-6 rep=2 kt=15.0 psi=6.0 inject=false initial=8192 left=776 glassBefore=3584 glassAfter=0 floating=0 added=392 rubbleEligible=4352 highGroundRubbleColumns=0 outsideLogs=0 trees=0 logsBefore=0 logsAfter=0 maxY=69 planKiB=118.6055 totalMs=83.9507 blastMs=29.2125 collapseMs=50.1026 finishMs=4.6356 graphMs=1.0117
+[00:21:25] [Server thread/INFO] [ua.ze.in.Incoming/]: MTRUIN case=tower-concrete-20 rep=2 kt=15.0 psi=20.0 inject=false initial=8192 left=8 glassBefore=3584 glassAfter=0 floating=0 added=0 rubbleEligible=5200 highGroundRubbleColumns=0 outsideLogs=0 trees=0 logsBefore=0 logsAfter=0 maxY=68 planKiB=126.4453 totalMs=97.8125 blastMs=29.9677 collapseMs=59.6968 finishMs=8.1480 graphMs=0.9760
+[00:21:26] [Server thread/INFO] [ua.ze.in.Incoming/]: MTRUIN case=tower-stone-20 rep=2 kt=15.0 psi=20.0 inject=false initial=8192 left=776 glassBefore=3584 glassAfter=0 floating=0 added=392 rubbleEligible=4352 highGroundRubbleColumns=0 outsideLogs=0 trees=0 logsBefore=0 logsAfter=0 maxY=69 planKiB=118.5703 totalMs=80.3529 blastMs=30.6837 collapseMs=44.9089 finishMs=4.7603 graphMs=0.9689
+[00:21:26] [Server thread/INFO] [ua.ze.in.Incoming/]: MTRUIN case=tower-log-20 rep=2 kt=15.0 psi=20.0 inject=false initial=8192 left=2304 glassBefore=3584 glassAfter=0 floating=0 added=0 rubbleEligible=0 highGroundRubbleColumns=0 outsideLogs=0 trees=0 logsBefore=4608 logsAfter=2304 maxY=145 planKiB=87.0703 totalMs=77.9128 blastMs=26.2927 collapseMs=46.4620 finishMs=5.1581 graphMs=1.0378
+[00:21:26] [Server thread/INFO] [ua.ze.in.Incoming/]: MTRUIN case=column-concrete-6 rep=2 kt=15.0 psi=6.0 inject=false initial=81 left=4 glassBefore=0 glassAfter=0 floating=0 added=0 rubbleEligible=81 highGroundRubbleColumns=0 outsideLogs=0 trees=0 logsBefore=0 logsAfter=0 maxY=68 planKiB=3.0000 totalMs=46.3741 blastMs=15.8020 collapseMs=29.2458 finishMs=1.3263 graphMs=0.9286
+[00:21:26] [Server thread/INFO] [ua.ze.in.Incoming/]: MTRUIN case=bare-log-column rep=2 kt=15.0 psi=20.0 inject=false initial=16 left=16 glassBefore=0 glassAfter=0 floating=0 added=0 rubbleEligible=0 highGroundRubbleColumns=0 outsideLogs=0 trees=0 logsBefore=16 logsAfter=16 maxY=80 planKiB=1.4727 totalMs=19.1089 blastMs=15.5313 collapseMs=2.5458 finishMs=1.0319 graphMs=0.9107
+[00:21:26] [Server thread/INFO] [ua.ze.in.Incoming/]: MTRUIN case=tree-16 rep=2 kt=15.0 psi=20.0 inject=false initial=16 left=8 glassBefore=0 glassAfter=0 floating=0 added=7 rubbleEligible=0 highGroundRubbleColumns=0 outsideLogs=8 trees=1 logsBefore=16 logsAfter=8 maxY=65 planKiB=3.5039 totalMs=22.6106 blastMs=15.9860 collapseMs=5.3386 finishMs=1.2860 graphMs=0.9274
+[00:21:26] [Server thread/INFO] [ua.ze.in.Incoming/]: MTRUIN case=tree-30 rep=2 kt=15.0 psi=20.0 inject=false initial=30 left=30 glassBefore=0 glassAfter=0 floating=0 added=0 rubbleEligible=0 highGroundRubbleColumns=0 outsideLogs=0 trees=0 logsBefore=30 logsAfter=30 maxY=94 planKiB=2.7969 totalMs=22.6177 blastMs=16.2081 collapseMs=5.2365 finishMs=1.1732 graphMs=0.9570
+[00:21:26] [Server thread/INFO] [minecraft/GameTestServer]: [+]
+[00:21:26] [Server thread/INFO] [minecraft/GameTestServer]: ========= 1 GAME TESTS COMPLETE IN 4.853 s ======================
+[00:21:26] [Server thread/INFO] [minecraft/GameTestServer]: All 1 required tests passed :)
+[00:21:26] [Server thread/INFO] [minecraft/GameTestServer]: ====================================================
+[00:21:26] [Server thread/INFO] [minecraft/MinecraftServer]: Stopping server
+[00:21:26] [Server thread/INFO] [minecraft/MinecraftServer]: Saving players
+[00:21:26] [Server thread/INFO] [minecraft/MinecraftServer]: Saving worlds
+[00:21:26] [incoming-stall-watch/WARN] [ua.ze.in.Incoming/]: Server thread stalled for 4.5 s in a tick, stack samples 5:
+  samples 1:
+    at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.world.MtRuinBench.run(MtRuinBench.java:109)
+    at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.world.MtRuinBench.measure(MtRuinBench.java:141)
+    at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+    at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestRegistry.lambda$turnMethodIntoConsumer$5(GameTestRegistry.java:169)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.TestFunction.run(TestFunction.java:40)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestInfo.startTest(GameTestInfo.java:162)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestInfo.tickInternal(GameTestInfo.java:124)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestInfo.tick(GameTestInfo.java:107)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestTicker.lambda$tick$0(GameTestTicker.java:39)
+    at java.base/java.util.concurrent.CopyOnWriteArrayList.forEach(CopyOnWriteArrayList.java:891)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestTicker.tick(GameTestTicker.java:39)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.tickChildren(MinecraftServer.java:1070)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.tickServer(MinecraftServer.java:932)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestServer.tickServer(GameTestServer.java:171)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.runServer(MinecraftServer.java:713)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.lambda$spin$2(MinecraftServer.java:267)
+    at java.base/java.lang.Thread.run(Thread.java:1583)
+  samples 1:
+    at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.world.MtRuinBench.run(MtRuinBench.java:93)
+    at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.world.MtRuinBench.measure(MtRuinBench.java:133)
+    at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+    at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestRegistry.lambda$turnMethodIntoConsumer$5(GameTestRegistry.java:169)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.TestFunction.run(TestFunction.java:40)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestInfo.startTest(GameTestInfo.java:162)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestInfo.tickInternal(GameTestInfo.java:124)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestInfo.tick(GameTestInfo.java:107)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestTicker.lambda$tick$0(GameTestTicker.java:39)
+    at java.base/java.util.concurrent.CopyOnWriteArrayList.forEach(CopyOnWriteArrayList.java:891)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestTicker.tick(GameTestTicker.java:39)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.tickChildren(MinecraftServer.java:1070)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.tickServer(MinecraftServer.java:932)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestServer.tickServer(GameTestServer.java:171)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.runServer(MinecraftServer.java:713)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.lambda$spin$2(MinecraftServer.java:267)
+    at java.base/java.lang.Thread.run(Thread.java:1583)
+  samples 1:
+    at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.world.Collapse.distances(Collapse.java:548)
+    at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.world.Collapse.support(Collapse.java:217)
+    at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.world.Collapse.run(Collapse.java:200)
+    at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.world.Collapse.solve(Collapse.java:129)
+    at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.world.MtRuinBench.run(MtRuinBench.java:98)
+    at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.world.MtRuinBench.measure(MtRuinBench.java:137)
+    at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+    at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestRegistry.lambda$turnMethodIntoConsumer$5(GameTestRegistry.java:169)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.TestFunction.run(TestFunction.java:40)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestInfo.startTest(GameTestInfo.java:162)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestInfo.tickInternal(GameTestInfo.java:124)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestInfo.tick(GameTestInfo.java:107)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestTicker.lambda$tick$0(GameTestTicker.java:39)
+    at java.base/java.util.concurrent.CopyOnWriteArrayList.forEach(CopyOnWriteArrayList.java:891)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestTicker.tick(GameTestTicker.java:39)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.tickChildren(MinecraftServer.java:1070)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.tickServer(MinecraftServer.java:932)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestServer.tickServer(GameTestServer.java:171)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.runServer(MinecraftServer.java:713)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.lambda$spin$2(MinecraftServer.java:267)
+    at java.base/java.lang.Thread.run(Thread.java:1583)
+[00:21:26] [Server thread/INFO] [minecraft/MinecraftServer]: Saving chunks for level 'ServerLevel[Test Level]'/minecraft:overworld
+[00:21:26] [Server thread/INFO] [de.ry.sa.Sable/]: Saving sub-levels for level 'ServerLevel[Test Level]'/minecraft:overworld
+[00:21:28] [Server thread/INFO] [minecraft/MinecraftServer]: Saving chunks for level 'ServerLevel[Test Level]'/minecraft:the_end
+[00:21:28] [Server thread/INFO] [de.ry.sa.Sable/]: Saving sub-levels for level 'ServerLevel[Test Level]'/minecraft:the_end
+[00:21:28] [Server thread/INFO] [minecraft/MinecraftServer]: Saving chunks for level 'ServerLevel[Test Level]'/minecraft:the_nether
+[00:21:28] [Server thread/INFO] [de.ry.sa.Sable/]: Saving sub-levels for level 'ServerLevel[Test Level]'/minecraft:the_nether
+[00:21:28] [Server thread/INFO] [minecraft/MinecraftServer]: ThreadedAnvilChunkStorage (world): All chunks are saved
+[00:21:28] [Server thread/INFO] [minecraft/MinecraftServer]: ThreadedAnvilChunkStorage (DIM1): All chunks are saved
+[00:21:28] [Server thread/INFO] [minecraft/MinecraftServer]: ThreadedAnvilChunkStorage (DIM-1): All chunks are saved
+[00:21:28] [Server thread/INFO] [minecraft/MinecraftServer]: ThreadedAnvilChunkStorage: All dimensions are saved
+[00:21:28] [Server thread/INFO] [minecraft/GameTestServer]: Game test server shutting down
+
+[Incubating] Problems report is available at: file:///mnt/data/projects/incoming/mod/run/wt-MT-B2/mod/run/mt-b2/main/mod/build/reports/problems/problems-report.html
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 9.0.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/8.14.3/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD SUCCESSFUL in 38s
+11 actionable tasks: 5 executed, 6 up-to-date
+laptop_job mt-b2-main-cpu: exit 0

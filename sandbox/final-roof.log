@@ -1,0 +1,15 @@
+swap: 1 ok 90 ua.zentix.incoming.Incoming ua.zentix.incoming.command.GridCommand ua.zentix.incoming.compat.DhUpdates ua.zentix.incoming.compat.DhUpdates$Sink ua.zentix.incoming.compat.VoxyLods ua.zentix.incoming.compat.VoxyLods$Viewer ua.zentix.incoming.defense.DefenseWorld ua.zentix.incoming.grid.Blackou
+swap: classes 127, resources 0, 10.4 s
+fx clear → ok
+fx cam 85 28 25 10 → ok
+fx time day → ok
+fx overlay off → ok
+fx shots final-roof -0.25,0.1,1,3,10 4 → ok armed /mnt/data/projects/incoming/mod/run/wt-MT-B2/mod/run/mt-b2/branch/mod/run/sandbox/fx/out/final-roof
+fx nuke 15 air near 2835 → ok /mnt/data/projects/incoming/mod/run/wt-MT-B2/mod/run/mt-b2/branch/mod/run/sandbox/fx/out/final-roof
+audio: /mnt/data/projects/incoming/mod/run/wt-MT-B2/mod/run/mt-b2/branch/mod/run/sandbox/fx/out/final-roof/final-roof.wav (4.0 s, 48000 Hz)
+frame: /mnt/data/projects/incoming/mod/run/wt-MT-B2/mod/run/mt-b2/branch/mod/run/sandbox/fx/out/final-roof/final-roof_-00.25s.png
+frame: /mnt/data/projects/incoming/mod/run/wt-MT-B2/mod/run/mt-b2/branch/mod/run/sandbox/fx/out/final-roof/final-roof_000.10s.png
+frame: /mnt/data/projects/incoming/mod/run/wt-MT-B2/mod/run/mt-b2/branch/mod/run/sandbox/fx/out/final-roof/final-roof_001.00s.png
+frame: /mnt/data/projects/incoming/mod/run/wt-MT-B2/mod/run/mt-b2/branch/mod/run/sandbox/fx/out/final-roof/final-roof_003.00s.png
+frame: /mnt/data/projects/incoming/mod/run/wt-MT-B2/mod/run/mt-b2/branch/mod/run/sandbox/fx/out/final-roof/final-roof_010.00s.png
+from command to last frame and audio: 34.2 s

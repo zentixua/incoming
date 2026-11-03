@@ -1,0 +1,26 @@
+{
+  "sandbox/main-roof/main-roof.wav": {
+    "channels": 2,
+    "sample_rate": 48000,
+    "sample_bytes": 2,
+    "seconds": 4.0
+  },
+  "sandbox/main-tree/main-tree.wav": {
+    "channels": 2,
+    "sample_rate": 48000,
+    "sample_bytes": 2,
+    "seconds": 4.0
+  },
+  "sandbox/final-roof/final-roof.wav": {
+    "channels": 2,
+    "sample_rate": 48000,
+    "sample_bytes": 2,
+    "seconds": 4.0
+  },
+  "sandbox/final-tree/final-tree.wav": {
+    "channels": 2,
+    "sample_rate": 48000,
+    "sample_bytes": 2,
+    "seconds": 4.0
+  }
+}
