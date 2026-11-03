@@ -110,9 +110,9 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
             return response.thresholdPsi();
         }
 
-        /** Wave-breakable (log only as tree trunk, not per block). */
+        /** Timber is a material, not a tree: only recognized trunks take the whole-tree path. */
         boolean breakable() {
-            return response.kind() != BlockResponse.Kind.NONE && !log;
+            return response.kind() != BlockResponse.Kind.NONE;
         }
     }
 
@@ -176,7 +176,7 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
             WATER = net.minecraft.world.level.block.Blocks.WATER.defaultBlockState();
 
     private static Props computeProps(BlockState st) {
-        BlockResponse r = BlockResponse.of(st);
+        BlockResponse r = BlockResponse.structural(st);
         boolean liquid = st.getBlock() instanceof LiquidBlock;
         var shape = st.getCollisionShape(EmptyBlockGetter.INSTANCE, BlockPos.ZERO);
         boolean full = !liquid && Block.isShapeFullBlock(shape);
@@ -706,7 +706,7 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
                         if (d.psi(new Vec3(x + 0.5, y + 0.5, z + 0.5)) < p.threshold()) continue;
                         // trunk only if tree: leaves above (otherwise log wall or pillar)
                         int height = 0;
-                        while (height < 24 && y + height <= yt && w.props(wx, y + height, wz).log()) height++;
+                        while (y + height <= yt && w.props(wx, y + height, wz).log()) height++;
                         if (!w.props(wx, y + height, wz).leaves() && !nearLeaves(wx, y + height - 1, wz)) continue;
                         BlockState st = w.get(wx, y, wz);
                         for (int i = 0; i < height; i++) set(gone, idx(wx, y + i, wz));

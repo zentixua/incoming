@@ -52,6 +52,17 @@ public record BlockResponse(float thresholdPsi, Kind kind) {
         return CACHE.computeIfAbsent(s, BlockResponse::classify);
     }
 
+    /** Nuclear structures: an unknown hard material is not an indestructible anchor. */
+    static BlockResponse structural(BlockState state) {
+        BlockResponse response = of(state);
+        float hardness = state.getBlock().defaultDestroyTime();
+        // Strong-material game proxy (est.), not engineering strength. Preserve the conventional
+        // response table and the existing unbreakable/ultra-strong protection boundary.
+        if (response.kind == Kind.NONE && hardness > 9 && hardness < 50)
+            return new BlockResponse(25f, Kind.BREAK);
+        return response;
+    }
+
     /** Tags may change: /reload or different single-player world (own datapacks). */
     public static synchronized void clearCache() {
         CACHE.clear();
