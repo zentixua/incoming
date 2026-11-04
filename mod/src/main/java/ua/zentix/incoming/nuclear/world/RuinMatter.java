@@ -15,7 +15,6 @@ import ua.zentix.incoming.nuclear.Detonation;
 import ua.zentix.incoming.nuclear.model.StructuralResponse;
 import ua.zentix.incoming.util.Terrain;
 
-import java.util.ArrayDeque;
 import java.util.List;
 
 /**
@@ -30,7 +29,12 @@ public final class RuinMatter extends LedgerData {
     private static final double DT = 1.0 / 20;
     /** A work unit advances at most this many half-metre trajectory segments. */
     private static final int SEGMENTS = 8;
-    private ArrayDeque<Piece> moving = new ArrayDeque<>();
+    static final int PIECE_BYTES = 157;
+    private RuinPalette palette = new RuinPalette();
+    private final it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<CompoundTag> inventories = new it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<>();
+    private long nextInventory;
+    private int inventoryCapacity;
+    private RuinRecords<Piece> moving = new RuinRecords<>(PIECE_BYTES, this::encodePiece, this::decodePiece);
     /** Outside build height: retained material, but no repeated world reads/ticket churn. */
     private record ReservoirKey(BlockState state, CompoundTag contents) {}
     private static final class Reservoir {
@@ -40,18 +44,23 @@ public final class RuinMatter extends LedgerData {
     private final java.util.Map<ReservoirKey, Reservoir> stranded = new java.util.HashMap<>();
     private int strandedCount;
     private long movingBytes, strandedBytes, supportBacking;
-    private int movingCapacity;
 
     /** Conservative owned representation, including cargo and collection growth slack; the frozen save shares this owner. */
     long retainedBytes() {
         supportBacking = Math.max(supportBacking, 2048L + supportSources.size() * 4096L
                 + supports.size() * 256L + uncertain.size() * 256L + originals.size() * 256L);
-        movingCapacity = Math.max(movingCapacity, moving.size());
-        return IO_BYTES + 1024L + movingBytes + strandedBytes + movingCapacity * 32L + supportBacking
+        inventoryCapacity = Math.max(inventoryCapacity, inventories.size());
+        return IO_BYTES + 1024L + movingBytes + moving.bytes() + strandedBytes + palette.bytes()
+                + inventoryCapacity * 64L + supportBacking
+                + Math.max(0, supportSources.bytes() - 4096L * supportSources.size())
                 + materials.size() * 512L + (search == null ? 2048 : search.retainedBytes());
     }
 
-    static long removalBytes(Piece piece) { return piece.retainedBytes() + 8192; }
+    long queueGrowthBytes(int pieces) { return moving.growthBytes(pieces) + supportSources.growthBytes(pieces); }
+
+    static long removalBytes(ServerLevel level, Piece piece) {
+        return piece.retainedBytes() + 8192 + get(level).queueGrowthBytes(1);
+    }
 
 
     /** A terminal record has no trajectory to resume. Preserve state, cargo and totals only. */
@@ -66,7 +75,7 @@ public final class RuinMatter extends LedgerData {
         strandedCount++;
     }
     private record SupportSeed(BlockPos source, BlockState state, int event) {}
-    private ArrayDeque<SupportSeed> supportSources = new ArrayDeque<>();
+    private RuinRecords<SupportSeed> supportSources = new RuinRecords<>(16, this::encodeSource, this::decodeSource);
     private long loadTick = Long.MIN_VALUE;
     private long released, deposited;
     /** Per block type: released, deposited and dispersed solid volume/mass. Moving owns the remainder. */
@@ -214,6 +223,7 @@ public final class RuinMatter extends LedgerData {
         double volume, mass;
         double x, y, z, vx, vy, vz;
         double tick, releasedTick, windX, windZ, drag, pulse;
+        private long cargoKey;
         private final long retained;
         long retainedBytes() { return retained; }
 
@@ -306,8 +316,7 @@ public final class RuinMatter extends LedgerData {
                 dispersedMass += piece.mass;
             } else {
                 moving.addLast(piece);
-                movingCapacity = Math.max(movingCapacity, moving.size());
-                movingBytes += piece.retainedBytes();
+                movingBytes += piece.retainedBytes() - 512;
             }
         }
         setDirty();
@@ -403,13 +412,15 @@ public final class RuinMatter extends LedgerData {
             for (int i = 0; i < 16 && left > 0 && !moving.isEmpty(); i++, left--) {
                 Piece piece = moving.removeFirst();
                 if (step(level, piece)) {
-                    movingBytes -= piece.retainedBytes();
+                    movingBytes -= piece.retainedBytes() - 512;
+                    inventories.remove(piece.cargoKey);
                     account(piece, 2);
                     deposited++;
                     depositedVolume += piece.volume;
                     depositedMass += piece.mass;
                 } else if (piece.outside) {
-                    movingBytes -= piece.retainedBytes();
+                    movingBytes -= piece.retainedBytes() - 512;
+                    inventories.remove(piece.cargoKey);
                     strand(piece);
                 }
                 else moving.addLast(piece);
@@ -425,8 +436,12 @@ public final class RuinMatter extends LedgerData {
             supportBacking = 2048;
             setDirty();
         }
-        if (moving.isEmpty() && movingCapacity > 0) { moving = new ArrayDeque<>(); movingCapacity = 0; }
-        if (supports.isEmpty() && supportSources.isEmpty() && originals.isEmpty()) supportSources = new ArrayDeque<>();
+        if (moving.isEmpty() && moving.bytes() > 128) moving = new RuinRecords<>(PIECE_BYTES, this::encodePiece, this::decodePiece);
+        if (supports.isEmpty() && supportSources.isEmpty() && originals.isEmpty() && supportSources.bytes() > 128)
+            supportSources = new RuinRecords<>(16, this::encodeSource, this::decodeSource);
+        if (moving.isEmpty() && supportSources.isEmpty() && (palette.bytes() > 512 || inventoryCapacity > 0)) {
+            palette = new RuinPalette(); inventories.clear(); inventories.trim(); inventoryCapacity = 0;
+        }
         if (moving.isEmpty() && supports.isEmpty() && supportSources.isEmpty()) unload(level);
     }
 
@@ -612,7 +627,7 @@ public final class RuinMatter extends LedgerData {
             if (p.outside) result.strand(p);
             else {
                 result.moving.addLast(p);
-                result.movingBytes += p.retainedBytes();
+                result.movingBytes += p.retainedBytes() - 512;
             }
         }
         ListTag reservoirs = tag.getList("stranded", Tag.TAG_COMPOUND);
@@ -690,6 +705,39 @@ public final class RuinMatter extends LedgerData {
         p.volume = n.getDouble("volume");
         p.mass = n.getDouble("mass");
         p.outside = n.getBoolean("outside");
+        return p;
+    }
+
+    private void encodeSource(java.nio.ByteBuffer b, SupportSeed row) {
+        b.putLong(row.source.asLong()).putInt(palette.index(row.state)).putInt(row.event);
+    }
+
+    private SupportSeed decodeSource(java.nio.ByteBuffer b) {
+        return new SupportSeed(BlockPos.of(b.getLong()), palette.state(b.getInt()), b.getInt());
+    }
+
+    /** Internal queue pages only. The B5 streaming disk schema and frozen-owner interval stay unchanged. */
+    private void encodePiece(java.nio.ByteBuffer b, Piece p) {
+        if (p.contents != null && p.cargoKey == 0) p.cargoKey = ++nextInventory;
+        if (p.contents != null) inventories.put(p.cargoKey, p.contents);
+        b.putLong(p.source.asLong()).putLong(p.id).putLong(p.scorchTime).putLong(p.cargoKey);
+        b.putInt(p.scorch).putInt(p.scorchEvent).putInt(palette.index(p.state)).put((byte) (p.outside ? 1 : 0));
+        b.putDouble(p.volume).putDouble(p.mass).putDouble(p.x).putDouble(p.y).putDouble(p.z);
+        b.putDouble(p.vx).putDouble(p.vy).putDouble(p.vz).putDouble(p.tick).putDouble(p.releasedTick);
+        b.putDouble(p.windX).putDouble(p.windZ).putDouble(p.drag).putDouble(p.pulse);
+    }
+
+    private Piece decodePiece(java.nio.ByteBuffer b) {
+        BlockPos source = BlockPos.of(b.getLong());
+        long id = b.getLong(), scorchTime = b.getLong(), cargoKey = b.getLong();
+        int scorch = b.getInt(), event = b.getInt(); BlockState state = palette.state(b.getInt());
+        // Iteration also runs on the I/O worker while the ledger is frozen. Never query block callbacks.
+        Piece p = new Piece(source, state, inventories.get(cargoKey), Vec3.ZERO, 0, true);
+        p.id = id; p.scorchTime = scorchTime; p.scorch = scorch; p.scorchEvent = event; p.cargoKey = cargoKey;
+        p.outside = b.get() != 0;
+        p.volume = b.getDouble(); p.mass = b.getDouble(); p.x = b.getDouble(); p.y = b.getDouble(); p.z = b.getDouble();
+        p.vx = b.getDouble(); p.vy = b.getDouble(); p.vz = b.getDouble(); p.tick = b.getDouble(); p.releasedTick = b.getDouble();
+        p.windX = b.getDouble(); p.windZ = b.getDouble(); p.drag = b.getDouble(); p.pulse = b.getDouble();
         return p;
     }
 

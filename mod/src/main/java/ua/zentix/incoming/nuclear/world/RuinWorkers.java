@@ -383,9 +383,9 @@ public final class RuinWorkers {
         return size + " (working " + active + ", lowered " + lowered + ", raised " + raised + ", tasks abandoned " + expired + ")";
     }
 
-    /** All pool-thread solver buffers, bytes ((est.) for 48×48 window through world height: 7 bytes per position). */
+    /** All pool-thread solver buffers, bytes ((est.) for 48×48 window through world height: 15 bytes per position, including an uncompressed property reference). */
     static long bufferBytes(int height) {
-        return (long) Math.max(size, pool == null ? 0 : pool.getPoolSize()) * RuinWindow.SIDE * RuinWindow.SIDE * height * 7;
+        return (long) Math.max(size, pool == null ? 0 : pool.getPoolSize()) * RuinWindow.SIDE * RuinWindow.SIDE * height * 15;
     }
 
     /**
@@ -397,7 +397,7 @@ public final class RuinWorkers {
     }
 
     static long residentBufferBytes(@Nullable ThreadPoolExecutor executor, int height) {
-        return executor == null ? 0 : (long) executor.getPoolSize() * RuinWindow.SIDE * RuinWindow.SIDE * height * 7;
+        return executor == null ? 0 : (long) executor.getPoolSize() * RuinWindow.SIDE * RuinWindow.SIDE * height * 15;
     }
 
     /** Fraction of thread time busy since pool start (for “ready” line). */
