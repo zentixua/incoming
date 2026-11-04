@@ -1,0 +1,86 @@
+{
+  "head": "ee0cd0f96c1d762f59477c5a6e3990090b36192c",
+  "production_reviewed": "a76c115eddc3d7f8a8cd5efd1ff615833687c9c7",
+  "production_diff_a76_to_head": "empty; later commits add only one fault GameTest and area rules",
+  "full_local_unit_build": {
+    "head": "167632a71",
+    "tests": 1825,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "duration": "4m14s"
+  },
+  "touched_union": {
+    "head": "a76c115ed",
+    "tests": 99,
+    "failed": 0,
+    "test_duration": "1.601min",
+    "gradle_duration": "1m55s"
+  },
+  "latest_extra_fault_fixture": {
+    "head": "ee0cd0f96",
+    "selected_fresh_batches": 2,
+    "failed": 0,
+    "helper_exact_3GT_red_green": "442ba33d599cd18acb0bda51140f020f999b5deb"
+  },
+  "review": "RPROD-S2B completed corrective a76 within same second round; no remaining serious source finding",
+  "CI": {
+    "head": "ee0cd0f96",
+    "run": 41859919912,
+    "observed_utc": "2026-11-04 15:45:09",
+    "state": "pending GameTest2/3/4/5/6; see exact snapshot",
+    "local_read_waiter": "stopped intentionally for explicit model/session handoff; remote CI untouched"
+  },
+  "runtime_100_1000kt": "LEAD2 owns; not accepted by this evidence",
+  "handoff": "Explicit owner transfer to fresh Astra/high MT-S3, no new S2 engineering",
+  "logs": {
+    "mt-s2-cache-check.log.gz": {
+      "uncompressed_sha256": "bcd87a912324adc4d00be44dbe1139d0ee281f5069b7980f9e1a5b7cba3da842",
+      "bytes": 20972
+    },
+    "mt-s2-cache-optional.log.gz": {
+      "uncompressed_sha256": "661e3c8f5d0c2be19611c9157b077322981251646f693200a856811bd6429d5a",
+      "bytes": 15570
+    },
+    "mt-s2-cache-policy.log.gz": {
+      "uncompressed_sha256": "66ba8a8f1a8f73a4a4c361003c36ce59c2bc4c0deafa111d735a9c72bb913007",
+      "bytes": 31246
+    },
+    "mt-s2-fresh-final.log.gz": {
+      "uncompressed_sha256": "5cd8b52be874b92612cf041ca013fb50aa8437cbbb23596cfecc67af96ebc951",
+      "bytes": 15948
+    },
+    "mt-s2-input-fixture.log.gz": {
+      "uncompressed_sha256": "4f0590e96121284d9e532b6d0fecea70e1790ba63014eed5d48b298ef7c41e8a",
+      "bytes": 20698
+    },
+    "mt-s2-producer-ci-reviewed.log.gz": {
+      "uncompressed_sha256": "0fc1e9e6c1b86510b46df8e3b5dd5dbbb94dcbab9d5bcf6ae33e41261ce268de",
+      "bytes": 84
+    },
+    "mt-s2-producer-final.log.gz": {
+      "uncompressed_sha256": "9150ca76551e0b3b16db142f7e0a1d8c8f4d9f435f5e7d81de053d1669138202",
+      "bytes": 187638
+    },
+    "mt-s2-producer-final2.log.gz": {
+      "uncompressed_sha256": "0131a28d2b56f2f93140ff5f925bd187c7f7b5fff22f278f9995bd1a625fbcda",
+      "bytes": 5831107
+    },
+    "mt-s2-producer-flow.log.gz": {
+      "uncompressed_sha256": "2997ad97df64f5bbf9d6ad421db13c0d223529e2de47bb0cd0758c0a375ede86",
+      "bytes": 20710
+    },
+    "mt-s2-producer-focused.log.gz": {
+      "uncompressed_sha256": "91e51dd07c5e7719cf74387b63bfad0d46bd559015a322b3ca6853a8717c3ca9",
+      "bytes": 16304
+    },
+    "mt-s2-producer-union.log.gz": {
+      "uncompressed_sha256": "b70c2e83690de2bb97697cc63010a043f5d00d141b75846f8c26c10dbf1604d2",
+      "bytes": 160842
+    },
+    "mt-s2-source-collectors.log.gz": {
+      "uncompressed_sha256": "7bde11648e9dbb4a2bb6bf4a0d1b266f98cb36f0a87668d507048c1ec33eec80",
+      "bytes": 29935
+    }
+  }
+}
