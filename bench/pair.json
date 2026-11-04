@@ -1,0 +1,38 @@
+{
+ "name": "mt-b6-final",
+ "cand": {
+  "label": "d20c74eca",
+  "file": "incoming-3.10.4.jar",
+  "sha256": "d430f22c56ccf64255e325ae9ee1bed4ca3bd45d4b274a789c55588a1da65163",
+  "spec": "mod/build/libs/incoming-3.10.4.jar"
+ },
+ "base": {
+  "label": "ec326bcf0@ec326bcf",
+  "file": "incoming-3.10.4.jar",
+  "sha256": "e9a95ea310a3d8970f941a5ce38f6c60d42ebdb5165649526d57d7452551bd64",
+  "spec": "ci:ec326bcf0"
+ },
+ "context": {
+  "stand": "93bda32d0c451bce411c92d25b38305be7260fb92b1e2711f567b3cc75d149f5",
+  "mods": {
+   "sodium": "4f537696af95411e9daf15795fb5fcbc49913d488a96fa912fa8f1d7db408710995e8a1461190f3cd0f8217bf9e35e9539176592428ed587ca2d7aa84450a390",
+   "iris": "33fddb430e16222902eac75b8b3d57c381b0f3cc729f3b56c4628df12ca108f23a0b11e2feb167923d6d14d1fc7e8ee1a977ec421b19d1951bdca74c4092b9c5"
+  },
+  "packs": {
+   "none": "none"
+  },
+  "scenes": [
+   "100"
+  ],
+  "gpu": "NVIDIA GeForce RTX 4060 Laptop GPU",
+  "driver": "615.78.08",
+  "size": "2560x1600",
+  "java": "21.0.7",
+  "kwin": "kwin 6.8.2",
+  "power": "performance"
+ },
+ "packs": [
+  "none"
+ ],
+ "started": "2026-11-04T00:33:13+00:00"
+}

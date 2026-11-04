@@ -35,7 +35,7 @@ Additional sequences (rain/128 captured before the depth correction, same geomet
 - In the final 100-arrival Iris sandbox (`head/depth-100`), quad GPU mean was 0.100–0.104 ms, with existing world-depth copy about 0.05 ms and whole measured effects passes about 0.16 ms. Effects-layer wall time was 0.211–0.213 ms; this includes collection/sorting/upload and is **not** an isolated 0.10 ms path-selection measurement. No such CPU target achievement is claimed. Raw `SANDBOX shot depth-100` log lines are included.
 - Full snapshots cost about 107 bytes for the one-record golden fixture; 100 concurrent paths at 20 Hz are approximately 0.2 MB/s per observing connection before framing/compression. They are sent only while terminal approaches are active, plus launch/join/completion state. This avoids a second sparse state protocol and restores replay/late joins.
 
-Final paired scene bench and CI results are added below when complete. The normal scene bench uses 100 conventional impacts to catch regressions in the shared layer; arrival-only GPU work is measured separately above. No merge or release is authorized by this handoff.
+Final paired scene bench and CI both passed; details are below. The normal scene bench uses 100 conventional impacts to catch regressions in the shared layer; arrival-only GPU work is measured separately above. No merge or release is authorized by this handoff.
 
 
 | View | Main | PR head |
@@ -46,3 +46,24 @@ Final paired scene bench and CI results are added below when complete. The norma
 | Night audio | [WAV](main/main-night-clean/main-night-clean.wav) | [WAV](head/depth-night/depth-night.wav) |
 | Day audio | [WAV](main/main-day/main-day.wav) | [WAV](head/depth-day/depth-day.wav) |
 | Masonry cover | [Before depth correction](head/final-wall/final-wall_011.95s.png) | [Corrected](head/depth-wall/depth-wall_011.95s.png) |
+
+
+CI first attempt (`41746632201`) failed only `heavyZoneLodsGoWithTheFront`: one copy sent at 6282, expected at most 6281 (detonation 6279). This exact three-tick timing failure predates this PR (MG #536 memory). The same server code in prior commit `8f8e954f9` passed GameTest 3/6 ([job](https://github.com/zentixua/incoming/actions/runs/41745839605/job/126298550547)); final commit only changes glow depth and its note. The new arrival GameTest passed. The one failed-job retry passed; final Итог is green on `d20c74eca` ([run, attempt 2](https://github.com/zentixua/incoming/actions/runs/41746632201/attempts/2)). No test tolerance or LOD/destruction code was changed.
+
+
+## Final scene bench: PASS
+
+One final-head pair, with warmup: main A1 → PR B → main A2; all valid. `--packs none --scenes 100 --tries 1`, requested 2560×1600, RTX 4060. Raw CSVs are gzip-compressed in this archive; the original output is retained on the laptop. Gated-window screenshots are included.
+
+| Window | Metric | Main A1 / A2 (ms) | PR (ms) | Change vs slower main |
+|---|---|---:|---:|---:|
+| 100/edge | gpu.p50 | 3.592 / 3.561 | 3.923 | +9.2% |
+| 100/edge | thread.p95 | 5.032 / 5.340 | 5.185 | -2.9% |
+| 100/inside | gpu.p50 | 3.752 / 3.511 | 3.455 | -7.9% |
+| 100/inside | thread.p95 | 4.571 / 4.872 | 4.809 | -1.3% |
+| 100/outside | gpu.p50 | 2.361 / 2.336 | 2.354 | -0.3% |
+| 100/outside | thread.p95 | 5.415 / 5.823 | 5.769 | -0.9% |
+
+The repository gate passes with its existing 25% tolerance: the largest gated GPU change is +9.2% at the edge; render-thread p95 is lower in all three gated windows. This is not a claim that every metric improved. The non-gated impact window was higher: GPU median +7.8%, thread p95 +19.4%, frame interval p95 +49.7%; raw results retain those numbers. A neighboring CPU job was present before A1 (the quiet wait reached its two-minute limit); per-window host logs are retained. No second pair was run.
+
+Final CI: [green Итог, attempt 2](https://github.com/zentixua/incoming/actions/runs/41746632201/attempts/2). All own sandbox/bench clients and jobs finished; GPU lease released. PR remains draft for the requested separate review. No merge, deployment, release or server action.

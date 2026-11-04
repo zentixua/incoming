@@ -1,0 +1,20 @@
+01:27:38 GPU held by MT-B2 (/mnt/data/projects/incoming/mod/run/wt-MT-B2/mod/run/mt-b2/branch-material), since 01:27, last work 0 min ago (free — tools/gpu_lease.sh release in its tree or after 10 min without work) — waiting (queue position 1)
+01:33:13 mt-b6-final warm-up: pack none, 20 steps
+01:33:18 waiting for quiet: foreign 5.95 cores, GPU [], services {'incoming-job-mt-b2-scorch-crater-576611.service': 5.98}
+01:36:42 mt-b6-final warm-up: pack none — exit 0, 3.5 min
+01:36:42 mt-b6-final A1: pack none, 20 steps
+01:36:47 waiting for quiet: foreign 3.52 cores, GPU ['kwin_wayland:0', 'plasmashell:0'], services {'incoming-job-mt-b2-final-build-578302.service': 3.5}
+01:37:48 waiting for quiet: foreign 1.15 cores, GPU [], services {'incoming-job-mt-b2-final-build-578302.service': 1.07}
+01:38:43 not quiet after 2 min — proceeding (window load is reported)
+01:41:37 mt-b6-final A1: pack none — exit 0, 4.9 min
+01:41:37 mt-b6-final B: pack none, 20 steps
+01:44:27 mt-b6-final B: pack none — exit 0, 2.8 min
+01:44:27 mt-b6-final A2: pack none, 20 steps
+01:47:19 mt-b6-final A2: pack none — exit 0, 2.9 min
+01:47:21 mt-b6-final: pack none, pair 1 — pass
+01:47:22 A1 none: valid
+01:47:23 A2 none: valid
+01:47:24 B none: valid
+01:47:27 mt-b6-final: pass; results in /mnt/data/projects/incoming/mod/run/stand/out/mt-b6-final
+laptop_job stand-mt-b6-final: exit 0
+stand mt-b6-final: exit 0
