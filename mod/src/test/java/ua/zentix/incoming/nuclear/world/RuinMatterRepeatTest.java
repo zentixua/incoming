@@ -65,6 +65,52 @@ class RuinMatterRepeatTest {
         verifyNoInteractions(state);
     }
 
+    @Test void legacyFlagsClassifyOnceAndRotationKeepsEveryFieldAndCargo() throws Exception {
+        for (int outside = 0; outside < 2; outside++) {
+            var ledger = new RuinMatter();
+            var state = mock(BlockState.class);
+            var piece = restored(state);
+            CompoundTag cargo = new CompoundTag(); cargo.putString("cargo", "seven diamonds");
+            // The restored constructor accepts cargo without block callbacks.
+            var constructor = RuinMatter.Piece.class.getDeclaredConstructor(BlockPos.class, BlockState.class,
+                    CompoundTag.class, Vec3.class, long.class, boolean.class);
+            constructor.setAccessible(true);
+            piece = constructor.newInstance(piece.source, state, cargo, new Vec3(1, -2, 3), 17L, true);
+            piece.id = 123; piece.scorch = 456; piece.scorchEvent = 789; piece.scorchTime = 42;
+            piece.volume = 0.5; piece.mass = 1300; piece.x = -123.25; piece.y = 72.5; piece.z = 345.75;
+            piece.tick = 19.5; piece.releasedTick = 17; piece.windX = -3; piece.windZ = 4;
+            piece.drag = 5; piece.pulse = 6; piece.outside = outside != 0;
+            queue(ledger).addLast(piece);
+            byte[] legacy = queue(ledger).snapshot().getFirst();
+            assertEquals(157, legacy.length, "Internal row width changed");
+            // Original layout: four longs, three ints, then the old 0/1 outside byte.
+            legacy[44] = (byte) outside;
+            queue(ledger).removeFirst();
+            queue(ledger).restore(legacy);
+            when(state.is(BlockTags.LEAVES)).thenReturn(true);
+            var decoded = queue(ledger).removeFirst();
+            assertTrue(decoded.fine, "Legacy row did not classify current tags");
+            assertEquals(piece.outside, decoded.outside);
+            assertSame(cargo, decoded.contents);
+            for (Field f : RuinMatter.Piece.class.getDeclaredFields()) {
+                f.setAccessible(true);
+                if (!f.getName().equals("fine")) assertEquals(f.get(piece), f.get(decoded), f.getName());
+            }
+            queue(ledger).addLast(decoded);
+            long retained = ledger.retainedBytes();
+            clearInvocations(state);
+            for (int i = 0; i < 64; i++) {
+                var next = queue(ledger).removeFirst();
+                assertTrue(next.fine);
+                assertEquals(decoded.outside, next.outside);
+                assertSame(cargo, next.contents);
+                queue(ledger).addLast(next);
+            }
+            assertEquals(retained, ledger.retainedBytes(), "Rotation grew retained ownership");
+            verifyNoInteractions(state);
+        }
+    }
+
     @Test void blockedWindowIsPolledOncePerInvocationAndRefreshedInSameTick() throws Exception {
         var ledger = new RuinMatter();
         var level = mock(ServerLevel.class);
