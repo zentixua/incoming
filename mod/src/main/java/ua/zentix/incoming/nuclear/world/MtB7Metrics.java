@@ -80,6 +80,31 @@ public final class MtB7Metrics {
             // Do not call NuclearWorld.get: a diagnostic must not poll/admit cold ledgers.
             if (!level.hasData(ModAttachments.NUCLEAR_WORLD)) continue;
             var world = level.getData(ModAttachments.NUCLEAR_WORLD);
+            var pending = world.scars().mtB7Pending;
+            if (pending != null && level.dimension().location().toString().equals(
+                    System.getProperty("incoming.mtB7.pendingDimension", "minecraft:overworld"))) {
+                long observerStart = System.nanoTime();
+                // Existing cache only: NuclearEvents.get could read disk/create SavedData.
+                var cached = level.getDataStorage().cache.get("incoming_nuclear");
+                ua.zentix.incoming.nuclear.Detonation selected = null;
+                int examined = 0;
+                if (cached instanceof ua.zentix.incoming.nuclear.NuclearEvents events) {
+                    for (var list : java.util.List.of(events.detonations(), events.past())) {
+                        for (var d : list) {
+                            if (++examined > MtB7Pending.EVENT_LIMIT) break;
+                            if (d.id() == pending.event) { selected = d; break; }
+                        }
+                        if (selected != null || examined > MtB7Pending.EVENT_LIMIT) break;
+                    }
+                }
+                var census = pending.census(level, world.scars(), selected, level.getGameTime(), System::nanoTime);
+                progress.add("wall_ms="+System.currentTimeMillis()+" mono_ns="+System.nanoTime()
+                        +" server_session="+serverSession+" tick="+server.getTickCount()
+                        +" dimension="+level.dimension().location()+" game_time="+level.getGameTime()
+                        +" event_game_time="+(selected == null ? -1 : selected.gameTime())
+                        +pending.row(census)+" observer_pre_enqueue_ns="+(System.nanoTime()-observerStart)
+                        +" event_scan="+examined+" progress_drops="+progress.dropped.get());
+            }
             progress.add("wall_ms="+System.currentTimeMillis()+" mono_ns="+System.nanoTime()+" tick="+server.getTickCount()
                     +" dimension="+level.dimension().location()+" game_time="+level.getGameTime()
                     +" lanes_ns="+Arrays.toString(world.lastNanos())+" queued="+world.queuedChunks()
