@@ -1,0 +1,50 @@
+diff --git a/mod/src/devtest/java/ua/zentix/incoming/gametest/NuclearReviewGameTests.java b/mod/src/devtest/java/ua/zentix/incoming/gametest/NuclearReviewGameTests.java
+index 7d11816ed..ea772b159 100644
+--- a/mod/src/devtest/java/ua/zentix/incoming/gametest/NuclearReviewGameTests.java
++++ b/mod/src/devtest/java/ua/zentix/incoming/gametest/NuclearReviewGameTests.java
+@@ -115,8 +115,27 @@ public final class NuclearReviewGameTests {
+     }
+     @GameTest(template = "range", batch = "nuclear_review_launch", timeoutTicks = 100, skyAccess = true)
+     public static void paidCommitSchedulesOnlyOneStrike(GameTestHelper h) {
+-        var p = setup(h);
+         var level = h.getLevel();
++        var weather = (net.minecraft.world.level.storage.ServerLevelData) level.getLevelData();
++        int clearTime = weather.getClearWeatherTime(), rainTime = weather.getRainTime(), thunderTime = weather.getThunderTime();
++        boolean raining = weather.isRaining(), thundering = weather.isThundering();
++        float rain = level.getRainLevel(1);
++        // getThunderLevel includes the rain factor; sample raw thunder at unit rain, without advancing a tick.
++        level.setRainLevel(1);
++        float thunder = level.getThunderLevel(1);
++        level.setRainLevel(rain);
++        StrikeGameTests.afterTest(h, () -> {
++            level.setWeatherParameters(clearTime, rainTime, raining, thundering);
++            weather.setThunderTime(thunderTime);
++            level.setRainLevel(rain);
++            level.setThunderLevel(thunder);
++        });
++        // The preceding rain batch leaves a fading rain level after switching its weather flag off.
++        // Review authority correctly expires when that visibility changes during the hold.
++        level.setWeatherParameters(24000, 0, false, false);
++        level.setRainLevel(0);
++        level.setThunderLevel(0);
++        var p = setup(h);
+         int before = ua.zentix.incoming.nuclear.NuclearEvents.get(level).scheduled().size();
+         StrikeGameTests.afterTest(h, () -> {
+             ua.zentix.incoming.nuclear.NuclearStrikes.clear(level);
+@@ -126,13 +145,15 @@ public final class NuclearReviewGameTests {
+         NuclearReview.request(p, order(h, 15));
+         UUID id = id(p);
+         prepared(p, id);
+-        NuclearReview.act(p, id, C2S.NuclearAction.BEGIN);
++        h.assertTrue(NuclearReview.act(p, id, C2S.NuclearAction.BEGIN), "ready hold refused");
+         h.runAfterDelay(65, () -> {
+             h.assertTrue(NuclearReview.act(p, id, C2S.NuclearAction.COMMIT), "valid request not dispatched");
+             h.assertValueEqual(held(p, ModItems.ICBM.get()), 0, "launch did not pay once");
+             h.assertValueEqual(ua.zentix.incoming.nuclear.NuclearEvents.get(level).scheduled().size(), before + 1, "strike not scheduled");
+             h.assertFalse(NuclearReview.act(p, id, C2S.NuclearAction.COMMIT), "duplicate accepted");
+             h.assertValueEqual(ua.zentix.incoming.nuclear.NuclearEvents.get(level).scheduled().size(), before + 1, "duplicate scheduled");
++            h.assertValueEqual(held(p, ModItems.ICBM.get()), 0, "duplicate changed payment");
++            h.assertTrue(p.last("incoming.munitions.refunded") == null, "accepted launch refunded payment");
+             h.succeed();
+         });
+     }

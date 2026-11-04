@@ -1,0 +1,27 @@
+diff --git a/mod/src/devtest/java/ua/zentix/incoming/gametest/NuclearReviewGameTests.java b/mod/src/devtest/java/ua/zentix/incoming/gametest/NuclearReviewGameTests.java
+index 7d11816ed..98789df02 100644
+--- a/mod/src/devtest/java/ua/zentix/incoming/gametest/NuclearReviewGameTests.java
++++ b/mod/src/devtest/java/ua/zentix/incoming/gametest/NuclearReviewGameTests.java
+@@ -126,9 +126,20 @@ public final class NuclearReviewGameTests {
+         NuclearReview.request(p, order(h, 15));
+         UUID id = id(p);
+         prepared(p, id);
+-        NuclearReview.act(p, id, C2S.NuclearAction.BEGIN);
++        boolean began = NuclearReview.act(p, id, C2S.NuclearAction.BEGIN);
++        Incoming.LOG.info("CTRL-PROBE begin={} status={} review={} visibility={} messages={}", began,
++                ua.zentix.incoming.nuclear.world.RuinPreparation.status(level, id),
++                p.getData(ModAttachments.NUCLEAR_REVIEW).snapshot(), NuclearReview.visibility(p), p.said);
++        for (int tick : new int[]{1, 10, 30, 60, 64}) h.runAfterDelay(tick, () ->
++                Incoming.LOG.info("CTRL-PROBE tick={} status={} review={} visibility={} messages={}", tick,
++                        ua.zentix.incoming.nuclear.world.RuinPreparation.status(level, id),
++                        p.getData(ModAttachments.NUCLEAR_REVIEW).snapshot(), NuclearReview.visibility(p), p.said));
+         h.runAfterDelay(65, () -> {
+-            h.assertTrue(NuclearReview.act(p, id, C2S.NuclearAction.COMMIT), "valid request not dispatched");
++            var status = ua.zentix.incoming.nuclear.world.RuinPreparation.status(level, id);
++            boolean committed = NuclearReview.act(p, id, C2S.NuclearAction.COMMIT);
++            Incoming.LOG.info("CTRL-PROBE commit={} beforeStatus={} review={} visibility={} messages={}", committed, status,
++                    p.getData(ModAttachments.NUCLEAR_REVIEW).snapshot(), NuclearReview.visibility(p), p.said);
++            h.assertTrue(committed, "valid request not dispatched");
+             h.assertValueEqual(held(p, ModItems.ICBM.get()), 0, "launch did not pay once");
+             h.assertValueEqual(ua.zentix.incoming.nuclear.NuclearEvents.get(level).scheduled().size(), before + 1, "strike not scheduled");
+             h.assertFalse(NuclearReview.act(p, id, C2S.NuclearAction.COMMIT), "duplicate accepted");

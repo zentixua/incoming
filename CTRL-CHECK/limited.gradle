@@ -1,0 +1,8 @@
+allprojects {
+    plugins.withId('net.neoforged.moddev') {
+        neoForge.runs.configureEach {
+            jvmArgument '-Xmx2g'
+            jvmArgument '-XX:ActiveProcessorCount=4'
+        }
+    }
+}
