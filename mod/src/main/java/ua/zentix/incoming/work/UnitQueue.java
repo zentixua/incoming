@@ -105,6 +105,16 @@ public final class UnitQueue {
      * callback. That head joins the end of the list and can run in the same head pass if time permits.
      */
     public void work(ServerLevel level, long now, WorkClock clock) {
+        long usedBefore = clock.usedThisTickNanos();
+        long began = clock.begin();
+        try {
+            workWindow(level, now, clock);
+        } finally {
+            clock.accountWindow(began, usedBefore);
+        }
+    }
+
+    private void workWindow(ServerLevel level, long now, WorkClock clock) {
         long currentWindow = ++window;
         for (int i = 0; i < heads.size(); ) {
             Entry e = heads.get(i);
