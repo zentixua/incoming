@@ -228,15 +228,16 @@ final class RuinContext {
                 if (absent.add(key)) windowAbsent++;
                 continue;
             }
+            DiskShots.Read current = r.disk().primed(Blast.SERVER);
             boolean restored = false;
             if (r.cached() != null && r.cached().isPresent()) {
                 try {
-                    restored = restoreArchived(key, r.cached().get(), r.disk());
+                    restored = restoreArchived(key, r.cached().get(), current);
                 } catch (RuntimeException error) {
                     Incoming.LOG.warn("Prepared window snapshot rejected for {}", new ChunkPos(key), error);
                 }
             }
-            if (!restored) putDisk(level, r.disk());
+            if (!restored) putDisk(level, current);
         }
         int missing = 0;
         for (int dz = -RuinPlanner.REACH; dz <= RuinPlanner.REACH; dz++) {
@@ -577,11 +578,11 @@ final class RuinContext {
      */
     private record Task(java.util.concurrent.Future<RuinPlan> future, int chunkId, long since, RuinWorkers.Priority priority) {}
 
-    /** Background-plan timeout, ticks: abandon task beyond, build on server thread. */
+    /** Background-plan timeout, ticks: interrupt an expired attempt, then retry in the pool. */
     static final int TASK_AGE_LIMIT = 600;
 
     private final Long2ObjectOpenHashMap<Task> tasks = new Long2ObjectOpenHashMap<>();
-    /** Chunks whose background plan failed, stalled or stale at replacement ({@link #planOnServer}): plan on server thread. */
+    /** Chunks whose last background attempt failed or expired; preparation reports failure until a new attempt is admitted. */
     private final LongOpenHashSet failed = new LongOpenHashSet();
     private int failures;
 
@@ -622,6 +623,7 @@ final class RuinContext {
             RuinWorkers.checkStop();
             return RuinPlanner.finish(g, c);
         }, priority), chunkId, level.getGameTime(), priority));
+        failed.remove(key);
         pendingWindows.remove(key);
         return true;
     }
@@ -650,28 +652,25 @@ final class RuinContext {
     /** Background chunk plan ready (collect in one work unit). */
     boolean done(long chunk) {
         Task t = tasks.get(chunk);
-        return t != null && t.future.isDone();
+        return t != null && RuinWorkers.finished(t.future);
     }
 
-    /** Background plan failed/stalled: build on server thread. */
+    /** Last admitted background attempt failed or expired; never authorizes a synchronous solver. */
     boolean failed(long chunk) {
         return failed.contains(chunk);
     }
 
-    /**
-     * Background plan stale at replacement, plan-position blocks changed during build (server thread): fresh
-     * plan from current chunk on server thread. New snapshot plan could stale again (redstone clock,
-     * Create mechanism), leaving chunk awaiting ruins indefinitely.
-     */
-    void planOnServer(long chunk) {
-        failed.add(chunk);
+    /** Applied positions changed: discard completion markers and retry from validated current snapshots. */
+    void retry(long chunk) {
+        planned.remove(chunk);
+        doneAt.remove(chunk);
+        pendingWindows.add(chunk);
     }
 
     /**
-     * Background plans running over {@link #TASK_AGE_LIMIT} ticks (server thread, every tick): abandon task
-     * ({@code cancel(true)} interrupts solver thread if stuck), add chunk to {@link #failed}, plan on
-     * server thread. Deadline from work start: distant task awaiting higher-priority tasks in pool queue is
-     * not stuck.
+     * Interrupt background work after its running deadline. Keep the task/window owned until the
+     * worker actually exits: Future cancellation alone must not admit overlapping replacement work.
+     * A queued task's deadline starts when it begins running, not when it entered the pool.
      */
     void expire(long now) {
         this.now = now;
@@ -688,10 +687,9 @@ final class RuinContext {
             }
             if (now - t.since < TASK_AGE_LIMIT) continue;
             t.future.cancel(true);
-            it.remove();
             failed.add(e.getLongKey());
             RuinWorkers.expired();
-            Incoming.LOG.warn("Ruins for detonation #{}: background plan for chunk {} not ready in {} ticks — abandoned, building on the server thread",
+            Incoming.LOG.warn("Ruins for detonation #{}: background plan for chunk {} not ready in {} ticks — interrupted; awaiting worker exit before retry",
                     d.id(), new ChunkPos(e.getLongKey()), TASK_AGE_LIMIT);
         }
     }
@@ -704,7 +702,7 @@ final class RuinContext {
     @Nullable
     RuinPlan collect(ServerLevel level, LevelChunk chunk) {
         Task t = tasks.get(chunk.getPos().toLong());
-        if (t != null && t.chunkId != 0 && t.future.isDone() && System.identityHashCode(chunk) != t.chunkId) {
+        if (t != null && t.chunkId != 0 && RuinWorkers.finished(t.future) && System.identityHashCode(chunk) != t.chunkId) {
             // chunk unloaded/reloaded: snapshots from different chunk
             tasks.remove(chunk.getPos().toLong());
             submit(level, chunk, t.priority);
@@ -718,7 +716,7 @@ final class RuinContext {
     RuinPlan collect(ChunkPos pos) {
         long key = pos.toLong();
         Task t = tasks.get(key);
-        if (t == null || !t.future.isDone()) return null;
+        if (t == null || !RuinWorkers.finished(t.future)) return null;
         tasks.remove(key);
         RuinPlan plan;
         try {
@@ -726,7 +724,7 @@ final class RuinContext {
         } catch (java.util.concurrent.ExecutionException e) {
             failed.add(key);
             // solver error repeats across many chunks: log first occurrences
-            if (failures++ < 3) Incoming.LOG.error("Ruins for detonation #{}: background plan for chunk {} failed; building on the server thread", d.id(), pos, e.getCause());
+            if (failures++ < 3) Incoming.LOG.error("Ruins for detonation #{}: background plan for chunk {} failed; leaving the chunk pending for background retry", d.id(), pos, e.getCause());
             return null;
         } catch (InterruptedException | java.util.concurrent.CancellationException e) {
             return null;

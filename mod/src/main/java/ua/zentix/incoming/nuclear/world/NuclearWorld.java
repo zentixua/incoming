@@ -99,6 +99,11 @@ public final class NuclearWorld {
         return prep.frontStats(strike);
     }
 
+    /** Deterministic front send-budget clock for an existing preparation; other clocks stay real (tests). */
+    public boolean useFrontClockForTest(int strike, java.util.function.LongSupplier time) {
+        return prep.useFrontClockForTest(strike, time);
+    }
+
     /** Prebuilt ruins: ready plans also needed by distant LODs ({@link FarLods}). */
     NuclearPrep prep() {
         return prep;
@@ -442,7 +447,7 @@ public final class NuclearWorld {
         NuclearEvents events = NuclearEvents.get(level);
         if (!restored) restore(level, events);
         sweepRuins(now);
-        // background plans: stuck ones fall back to server thread; active threads follow server tick
+        // Expired background attempts are interrupted for retry; active threads follow server tick.
         for (RuinContext ctx : ruins.values()) ctx.expire(now);
         RuinWorkers.adapt(level.getServer());
         // light before wave: faster; wave-killed bodies already received pulse

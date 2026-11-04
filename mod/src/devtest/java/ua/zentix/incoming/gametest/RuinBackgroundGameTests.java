@@ -387,6 +387,10 @@ public final class RuinBackgroundGameTests {
     public static void stopMidZoneLeavesNoWork(GameTestHelper h) {
         ServerLevel level = h.getLevel();
         double scale = ua.zentix.incoming.IncomingConfig.SERVER.nukeEffectsScale.get();
+        StrikeGameTests.afterTest(h, () -> {
+            ua.zentix.incoming.IncomingConfig.SERVER.nukeEffectsScale.set(scale);
+            NuclearStrikes.clear(level);
+        });
         ua.zentix.incoming.IncomingConfig.SERVER.nukeEffectsScale.set(0.02);
         NuclearWorld w = NuclearWorld.get(level);
         ua.zentix.incoming.nuclear.NuclearEvents events = ua.zentix.incoming.nuclear.NuclearEvents.get(level);
@@ -399,22 +403,20 @@ public final class RuinBackgroundGameTests {
             boolean midZone = detonated && (w.prepTiles() > 0 || w.plannedChunks() > 0 || w.queuedChunks() > 0);
             if (!midZone) {
                 if (level.getGameTime() > now + 850) {
-                    ua.zentix.incoming.IncomingConfig.SERVER.nukeEffectsScale.set(scale);
-                    NuclearStrikes.clear(level);
                     throw new net.minecraft.gametest.framework.GameTestAssertException("the zone behind the wave never started: detonation " + detonated);
                 }
                 return;
             }
+            Incoming.LOG.info("Nuclear stop fixture before shutdown: {}",
+                    ua.zentix.incoming.strike.StrikeWorld.get(level).areas().describe());
             boolean stopped = NuclearWorld.onServerStopping(level.getServer());
-            ua.zentix.incoming.IncomingConfig.SERVER.nukeEffectsScale.set(scale);
-            int held = ruinTickets(level);
+            List<String> held = ruinTickets(level);
             long threads = ruinThreadsLeft();
             String left = "squares " + w.prepTiles() + ", in preparation " + w.plannedChunks() + ", in line " + w.queuedChunks()
                     + ", ticket ruins " + held + ", streams of ruins " + threads;
-            NuclearStrikes.clear(level);
             h.assertTrue(stopped, "background threads did not stop within the time limit; " + left);
             h.assertTrue(ua.zentix.incoming.nuclear.world.RuinWorkers.stopped() && threads == 0, "streams of ruins remained; " + left);
-            h.assertTrue(w.prepTiles() == 0 && w.plannedChunks() == 0 && w.queuedChunks() == 0 && held == 0, "after stopping there is still work left: " + left);
+            h.assertTrue(w.prepTiles() == 0 && w.plannedChunks() == 0 && w.queuedChunks() == 0 && held.isEmpty(), "after stopping there is still work left: " + left);
             h.succeed();
         });
     }
@@ -440,7 +442,7 @@ public final class RuinBackgroundGameTests {
     }
 
     /** ticket the nuke on the world distance map: yours and downloads of areas whose area is nuclear (preparation, zone). */
-    private static int ruinTickets(ServerLevel level) {
+    private static List<String> ruinTickets(ServerLevel level) {
         try {
             java.lang.reflect.Field f = net.minecraft.server.level.DistanceManager.class.getDeclaredField("tickets");
             f.setAccessible(true);
@@ -449,16 +451,17 @@ public final class RuinBackgroundGameTests {
                     f.get(level.getChunkSource().chunkMap.getDistanceManager());
             java.lang.reflect.Field key = net.minecraft.server.level.Ticket.class.getDeclaredField("key");
             key.setAccessible(true);
-            int n = 0;
-            for (var set : map.values()) {
+            List<String> tickets = new ArrayList<>();
+            for (var entry : map.long2ObjectEntrySet()) {
+                var set = entry.getValue();
                 for (net.minecraft.server.level.Ticket<?> t : set) {
                     String type = t.getType().toString();
-                    if (type.startsWith("incoming_nuclear")) n++;
+                    if (type.startsWith("incoming_nuclear")) tickets.add(t + " at " + new ChunkPos(entry.getLongKey()) + " key " + key.get(t));
                     else if (type.equals("incoming_area_load") && key.get(t) instanceof ua.zentix.incoming.strike.AreaLoader.Area a
-                            && a.type().toString().startsWith("incoming_nuclear")) n++;
+                            && a.type().toString().startsWith("incoming_nuclear")) tickets.add(t + " at " + new ChunkPos(entry.getLongKey()) + " area " + a);
                 }
             }
-            return n;
+            return tickets;
         } catch (ReflectiveOperationException e) {
             throw new IllegalStateException(e);
         }
@@ -1193,7 +1196,9 @@ public final class RuinBackgroundGameTests {
     }
 
     /**
-     * The chunk that the wave reached while its ruins are being built (background - not earlier than the next tick) is not given to the player: it is removed from the sending queue; when the ruins stand up, it gives away.
+     * A wave-reached chunk stays out of the player send queue until its asynchronous ruins finish.
+     * Hold worker admission until the first post-wave request, then release it and verify the actual replacement.
+     * A fast worker must not finish before the fixture has exercised the gate.
      */
     @GameTest(template = "range", timeoutTicks = 1200, batch = "nuke_send_hold", skyAccess = true)
     public static void chunkWithheldUntilRuins(GameTestHelper h) {
@@ -1202,6 +1207,12 @@ public final class RuinBackgroundGameTests {
         h.setBlock(glass, Blocks.GLASS);
         long chunk = new ChunkPos(h.absolutePos(glass)).toLong();
         NuclearWorld w = NuclearWorld.get(level);
+        var release = new java.util.concurrent.CountDownLatch(1);
+        StrikeGameTests.afterTest(h, () -> {
+            release.countDown();
+            NuclearStrikes.clear(level);
+        });
+        RuinWorkers.fillForTest(release, RuinWorkers.Priority.SEEN);
         Detonation d = NuclearWarhead.detonate(level, Vec3.atBottomCenterOf(h.absolutePos(NuclearGameTests.CENTER)), 1, false, null, 0.1f);
         boolean[] held = {false};
         h.succeedWhen(() -> {
@@ -1213,12 +1224,13 @@ public final class RuinBackgroundGameTests {
                 if (w.withholds(level, chunk)) {
                     h.assertTrue(out != null && out.contains(chunk) && pending.isEmpty(), "chunk without ruins remained in the sending queue");
                     held[0] = true;
+                    release.countDown();
                 }
                 h.fail("the ruins have not yet risen");
             }
             h.assertTrue(out == null && pending.contains(chunk), "chunk with ruins is not given to the player");
             h.assertTrue(held[0], "chunk never waited for ruins: not verified");
-            NuclearStrikes.clear(level);
+            h.assertBlockNotPresent(Blocks.GLASS, glass);
         });
     }
 
@@ -1335,12 +1347,12 @@ public final class RuinBackgroundGameTests {
     }
 
     /**
-     * The background plan, which became outdated while it was being built (the player replaced the glass between snapshots and replacement), is not placed and is not
-     *  counted: the chunk receives the plan in the server thread on its own, as is, in the same queue. Previously, the replacement did not silently
-     * , and the chunk received the mark of ruins and remained intact.
+     * A player changes the planned glass after snapshot capture. While worker admission is held,
+     * stale output must neither mark the chunk ruined nor fall back to a synchronous solver.
+     * Releasing the workers allows a fresh plan to remove the changed glass and mark the chunk.
      */
     @GameTest(template = "range", timeoutTicks = 40, batch = "nuke_stale_background", skyAccess = true)
-    public static void staleBackgroundPlanRebuiltOnServer(GameTestHelper h) {
+    public static void staleBackgroundPlanRequeuedInBackground(GameTestHelper h) {
         ServerLevel level = h.getLevel();
         BlockPos glass = NuclearGameTests.CENTER.west(8);
         h.setBlock(glass, Blocks.GLASS);
@@ -1351,6 +1363,7 @@ public final class RuinBackgroundGameTests {
             for (int dz = -RuinPlanner.REACH; dz <= RuinPlanner.REACH; dz++) level.getChunk(pos.x + dx, pos.z + dz);
         }
         ScarQueue q = new ScarQueue();
+        var release = new java.util.concurrent.CountDownLatch(1);
         try {
             q.offer(chunk, d);
             long wave = ScarQueue.due(d, pos);
@@ -1360,17 +1373,73 @@ public final class RuinBackgroundGameTests {
             h.assertTrue("plan in the background".equals(q.diagState(pos.toLong(), wave)), "the plan is not sent to the background: " + q.diagState(pos.toLong(), wave));
             h.assertTrue(ua.zentix.incoming.nuclear.world.RuinWorkers.awaitForTest(ua.zentix.incoming.nuclear.world.RuinWorkers.Priority.NEAR, 60_000),
                     "the background is not ready in a minute");
-            // the player replaced the glass while the plan was being built
+            // Prevent a replacement task from racing the assertion: even an unlimited lane
+            // cannot borrow the server thread to solve this now-stale chunk.
+            RuinWorkers.fillForTest(release, RuinWorkers.Priority.SEEN);
             h.setBlock(glass, Blocks.WHITE_STAINED_GLASS);
-            for (long now = wave; now < wave + 10 && chunk.getExistingData(ModAttachments.CHUNK_SCAR).orElse(0) != d.id(); now++) {
-                clock.start(10_000_000_000L);
-                q.work(level, now, clock);
-            }
-            h.assertTrue(chunk.getExistingData(ModAttachments.CHUNK_SCAR).orElse(0) == d.id(), "no ruins: " + q.diagState(pos.toLong(), wave + 10));
+            clock.start(10_000_000_000L);
+            q.work(level, wave, clock);
+            h.assertTrue(chunk.getExistingData(ModAttachments.CHUNK_SCAR).orElse(0) != d.id(),
+                    "stale plan was synchronously rebuilt or marked applied while workers were unavailable");
+            h.assertBlockPresent(Blocks.WHITE_STAINED_GLASS, glass);
+            release.countDown();
+            h.assertTrue(RuinWorkers.awaitForTest(RuinWorkers.Priority.NEAR, 60_000), "worker gate did not release");
+            clock.start(10_000_000_000L);
+            q.work(level, wave + 1, clock);
+            h.assertTrue(RuinWorkers.awaitForTest(RuinWorkers.Priority.NEAR, 60_000), "replacement plan did not finish");
+            clock.start(10_000_000_000L);
+            q.work(level, wave + 2, clock);
+            h.assertTrue(chunk.getExistingData(ModAttachments.CHUNK_SCAR).orElse(0) == d.id(), "no ruins: " + q.diagState(pos.toLong(), wave + 2));
             h.assertBlockNotPresent(Blocks.WHITE_STAINED_GLASS, glass);
             h.assertTrue(q.ruinStats()[2] == 1, "outdated plans " + q.ruinStats()[2] + " instead of one");
         } finally {
+            release.countDown();
+            RuinWorkers.awaitForTest(RuinWorkers.Priority.NEAR, 60_000);
             q.clear(level);
+        }
+        h.succeed();
+    }
+
+    /** Disabling structural damage must not move ground-trace planning back onto the tick thread. */
+    @GameTest(template = "range", timeoutTicks = 40, batch = "nuke_background_damage_off", skyAccess = true)
+    public static void groundTraceWithoutBlockDamageUsesWorkers(GameTestHelper h) {
+        var config = ua.zentix.incoming.IncomingConfig.SERVER.nukeBlockDamage;
+        boolean damage = config.get();
+        StrikeGameTests.afterTest(h, () -> config.set(damage));
+        config.set(false);
+        ServerLevel level = h.getLevel();
+        BlockPos glass = NuclearGameTests.CENTER.west(8);
+        h.setBlock(glass, Blocks.GLASS);
+        Detonation d = NuclearGameTests.detonation(h, NuclearGameTests.CENTER, 0, 15, 0.025f);
+        LevelChunk chunk = level.getChunkAt(h.absolutePos(glass));
+        ChunkPos pos = chunk.getPos();
+        for (int dx = -RuinPlanner.REACH; dx <= RuinPlanner.REACH; dx++)
+            for (int dz = -RuinPlanner.REACH; dz <= RuinPlanner.REACH; dz++) level.getChunk(pos.x + dx, pos.z + dz);
+        ScarQueue q = new ScarQueue();
+        var release = new java.util.concurrent.CountDownLatch(1);
+        try {
+            RuinWorkers.fillForTest(release, RuinWorkers.Priority.SEEN);
+            q.offer(chunk, d);
+            long wave = ScarQueue.due(d, pos);
+            WorkClock clock = WorkClock.counting(1_000_000);
+            clock.start(10_000_000_000L);
+            q.work(level, wave, clock);
+            h.assertTrue(chunk.getExistingData(ModAttachments.CHUNK_SCAR).orElse(0) != d.id(),
+                    "ground trace was solved synchronously while workers were unavailable");
+            release.countDown();
+            h.assertTrue(RuinWorkers.awaitForTest(RuinWorkers.Priority.NEAR, 60_000), "worker gate did not release");
+            clock.start(10_000_000_000L);
+            q.work(level, wave + 1, clock);
+            h.assertTrue(RuinWorkers.awaitForTest(RuinWorkers.Priority.NEAR, 60_000), "ground trace did not finish");
+            clock.start(10_000_000_000L);
+            q.work(level, wave + 2, clock);
+            h.assertTrue(chunk.getExistingData(ModAttachments.CHUNK_SCAR).orElse(0) == d.id(), "ground trace did not apply");
+            h.assertBlockPresent(Blocks.GLASS, glass);
+        } finally {
+            release.countDown();
+            RuinWorkers.awaitForTest(RuinWorkers.Priority.NEAR, 60_000);
+            q.clear(level);
+            config.set(damage);
         }
         h.succeed();
     }
