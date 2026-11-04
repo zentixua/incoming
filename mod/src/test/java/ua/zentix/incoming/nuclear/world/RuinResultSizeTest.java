@@ -15,13 +15,24 @@ class RuinResultSizeTest {
                 new int[7], new long[8], new long[9], new long[10], new LongArrayList(new long[11]),
                 Arrays.asList(new BlockState[12]), null, new long[13], new ScorchedBiomes.Cells(new byte[16], new int[16]));
         plan.flash(new int[14]); plan.blown(new int[15]); plan.material(new long[16]);
-        long expected = 64 + 1024 + 4L * 2 + 8L * 5 + 8L * 4 + 8L * 6 + 4L * 7 + 8L * 8
+        long expected = 64 + 2048 + 4L * 2 + 8L * 5 + 8L * 4 + 8L * 6 + 4L * 7 + 8L * 8
                 + 8L * (3 + 9 + 10 + 11 + 12 + 13 + 16 + 1) + 96 + 4L * (14 + 15);
         assertEquals(expected, plan.bytes());
         long before = plan.bytes(); plan.touches(0); plan.hasFire(0);
         assertEquals(before, plan.bytes());
         assertEquals(before, plan.detached().bytes());
         assertEquals(0, RuinPlan.EMPTY.bytes());
+    }
+
+    @Test
+    void oldColumnCachePrepaysBothSurfaceAndSupportingTopBands() throws Exception {
+        var plan = new RuinPlan(new int[0], new long[0], new BlockState[0], new BlockState[0], new int[0],
+                new int[0], new long[0], null, null, null, null, null, new long[0], null);
+        long before = plan.bytes();
+        int[] tops = plan.oldTops(0);
+        assertEquals(2 * 256, tops.length);
+        assertTrue(before >= 4L * tops.length);
+        assertEquals(before, plan.bytes());
     }
 
     @Test

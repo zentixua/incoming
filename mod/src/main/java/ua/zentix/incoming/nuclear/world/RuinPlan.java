@@ -670,8 +670,8 @@ public final class RuinPlan {
                             long fluids, long biomes, long flash, long blown, long material, long sectionWords) {
         // Eight-byte reference estimate; registry BlockStates/context are borrowed, not deep-copied here.
         // Fire keys and section bits are charged before their lazy allocation so bytes never grows on lookup.
-        // oldTops is an optional int[256]; prepay it too so all lazy caches are stable.
-        return 64 + 4L * 256 + 4 * cells + 8 * olds + 8 * states + 8 * fires + 4 * heights + 8 * light
+        // oldTops is an optional int[512]; prepay it too so all lazy caches are stable.
+        return 64 + 4L * 512 + 4 * cells + 8 * olds + 8 * states + 8 * fires + 4 * heights + 8 * light
                 + 8 * (hashes + prints + normals + outside + outsideStates + fluids + material + sectionWords)
                 + 6 * biomes + 4 * (flash + blown);
     }
