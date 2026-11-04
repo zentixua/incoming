@@ -103,6 +103,29 @@ public final class NuclearKeyGameTests {
         h.succeed();
     }
 
+    @GameTest(template = "runway", batch = "nuclear_keys_owner_lifecycle", skyAccess = true)
+    public static void unarmedOwnerDeathDimensionAndLogoutRefundExactlyOnce(GameTestHelper h) {
+        setUp(h);
+        var level = h.getLevel();
+        Listener owner = at(h, "keys_lifecycle", LAUNCHER);
+        Listener near = at(h, "keys_lifecycle_near", LAUNCHER.east(3));
+        give(owner, ModItems.ICBM.get(), 1);
+        List<Listener> online = List.of(owner, near);
+        for (int reason = 0; reason < 3; reason++) {
+            h.assertTrue(order(owner, online, nuke(WeaponType.NUKE, false), h), "ready key order refused");
+            h.assertValueEqual(held(owner, ModItems.ICBM.get()), 0, "pending order did not pay");
+            if (reason == 0) NuclearKeys.onDeath(new net.neoforged.neoforge.event.entity.living.LivingDeathEvent(owner, level.damageSources().genericKill()));
+            else if (reason == 1) NuclearKeys.onDimension(new net.neoforged.neoforge.event.entity.player.PlayerEvent.PlayerChangedDimensionEvent(
+                    owner, level.dimension(), net.minecraft.world.level.Level.NETHER));
+            else NuclearKeys.onLogout(new net.neoforged.neoforge.event.entity.player.PlayerEvent.PlayerLoggedOutEvent(owner));
+            h.assertValueEqual(NuclearKeys.get(level).pending(), 0, "unarmed order retained after owner exit");
+            h.assertValueEqual(held(owner, ModItems.ICBM.get()), 1, "unarmed order not refunded once");
+            h.assertFalse(NuclearKeys.confirm(near, online), "exited owner order still accepted second key");
+            h.assertValueEqual(held(owner, ModItems.ICBM.get()), 1, "duplicate cancellation refunded twice");
+        }
+        h.succeed();
+    }
+
     /**
      * Alone on the network (server GameTest without players): the order from the remote control goes immediately, without a key, but ICBM flies 90 s, and not 10 s
      *  settings. Operator command ({@code rules = false}) - without a key and by configuration.
@@ -192,6 +215,36 @@ public final class NuclearKeyGameTests {
         h.assertValueEqual(NuclearKeys.get(level).pending(), 0, "nuclear shutdown did not lift launch");
         h.assertTrue(held(a, missile) == 1 && held(a, warhead) == 1, "the missile and warhead did not return: " + held(a, missile) + ", " + held(a, warhead));
         h.assertTrue(a.last("incoming.nuke.key.cancelled") != null, "the launcher is not told about the hang up");
+        h.succeed();
+    }
+
+    @GameTest(template = "range", batch = "nuclear_keys_armed_dimension", skyAccess = true)
+    public static void armedCarrierWarningStillLaunchesAfterOwnerChangesDimension(GameTestHelper h) throws ReflectiveOperationException {
+        setUp(h);
+        var level = h.getLevel();
+        Listener owner = at(h, "keys_armed_dimension", new BlockPos(32, 12, 32));
+        Listener near = at(h, "keys_armed_dimension_near", new BlockPos(35, 12, 32));
+        give(owner, ModItems.CRUISE_MISSILE.get(), 1);
+        give(owner, Munitions.warhead(), 1);
+        h.assertTrue(order(owner, List.of(owner, near), nuke(WeaponType.MISSILE, true), h), "carrier order refused");
+        h.assertTrue(NuclearKeys.confirm(near, List.of(owner, near)), "second key refused");
+        var nether = level.getServer().getLevel(net.minecraft.world.level.Level.NETHER);
+        h.assertTrue(nether != null, "second dimension absent");
+        var moved = net.neoforged.neoforge.common.util.FakePlayerFactory.get(nether, owner.getGameProfile());
+        NuclearKeys.onDimension(new net.neoforged.neoforge.event.entity.player.PlayerEvent.PlayerChangedDimensionEvent(
+                moved, level.dimension(), nether.dimension()));
+        h.assertValueEqual(NuclearKeys.get(level).pending(), 1, "dimension change cancelled an armed warning");
+        var ordersField = NuclearKeys.class.getDeclaredField("orders"); ordersField.setAccessible(true);
+        Object pending = ((List<?>) ordersField.get(NuclearKeys.get(level))).getFirst();
+        var launchAt = pending.getClass().getDeclaredField("launchAt"); launchAt.setAccessible(true);
+        h.assertValueEqual(launchAt.getLong(pending) - level.getGameTime(), (long) NuclearKeys.MIN_WARNING, "warning duration changed");
+        launchAt.setLong(pending, level.getGameTime()); // Advance only this accepted warning's due edge.
+        var tick = NuclearKeys.class.getDeclaredMethod("tick", ServerLevel.class, java.util.Collection.class); tick.setAccessible(true);
+        tick.invoke(NuclearKeys.get(level), level, List.of(moved, near));
+        h.assertValueEqual(NuclearKeys.get(level).pending(), 0, "due carrier retained pending order");
+        h.assertTrue(StrikeWorld.projectiles(level).stream().anyMatch(projectile -> owner.getUUID().equals(projectile.ownerId())
+                && projectile.nuclearPreparation() >= 0), "dimension change refused prepared carrier launch");
+        h.assertValueEqual(held(owner, ModItems.CRUISE_MISSILE.get()), 0, "armed carrier refunded instead of launching");
         h.succeed();
     }
 

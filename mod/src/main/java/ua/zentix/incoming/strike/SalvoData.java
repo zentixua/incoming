@@ -91,6 +91,20 @@ public final class SalvoData extends SavedData {
         return n;
     }
 
+    /** An unlaunched prepared site continuation has no armed carrier warning to preserve. */
+    int cancelPrepared(ServerLevel level, ServerPlayer owner, String why) {
+        int count = 0;
+        for (Iterator<Salvo> it = salvos.iterator(); it.hasNext();) {
+            Salvo s = it.next();
+            if (s.preparation == null || s.remaining <= 0 || !owner.getUUID().equals(s.owner)) continue;
+            it.remove();
+            refund(level, s, List.of(owner), why);
+            count++;
+        }
+        if (count > 0) setDirty();
+        return count;
+    }
+
     public int size() {
         return salvos.size();
     }

@@ -306,7 +306,7 @@ public final class MunitionGameTests {
         Item missile = ModItems.CRUISE_MISSILE.get(), warhead = Munitions.warhead();
         give(p, missile, 1);
         give(p, warhead, 1);
-        LaunchOrigin far = new LaunchOrigin.Place(p.position().add(-20_000, 0, 0));
+        LaunchOrigin far = new LaunchOrigin.Place(p.position().add(-2_048, 0, 0));
         h.assertTrue(LaunchPlaces.waits(level, WeaponType.MISSILE, far), "the distant launch site is ready");
         h.assertTrue(ServerActions.strikePrepared(p, WeaponType.MISSILE, 1, 0, aim(h), new Loadout.Nuke(15, true, true), Waypoints.NONE, far, true,
                 NuclearReadyFixture.prepare(h, p, Loadout.DEFAULT.withWeapon(WeaponType.MISSILE).withNuke(new Loadout.Nuke(15, true, true)), aim(h))),

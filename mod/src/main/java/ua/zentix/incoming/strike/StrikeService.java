@@ -90,7 +90,8 @@ public final class StrikeService {
     public static Result launchPrepared(ServerLevel level, WeaponType weapon, Target target, Vec3 point, float approachYaw,
                                         @Nullable UUID owner, @Nullable ServerPlayer shooter, boolean siren, Loadout.Nuke nuke,
                                         Waypoints via, @Nullable LaunchOrigin from, UUID preparation, int flightTicks) {
-        if (owner == null || shooter != null && shooter.level() != level || !IncomingConfig.SERVER.nukeEnabled.get()
+        if (shooter != null && shooter.level() != level) shooter = null;
+        if (owner == null || !IncomingConfig.SERVER.nukeEnabled.get()
                 || nuke.yieldKt() > IncomingConfig.SERVER.nukeMaxYield.get() || from instanceof LaunchOrigin.Fixed
                 || !RuinPreparation.keepAlive(level, preparation, owner)) return Result.FAILED;
         var state = RuinPreparation.status(level, preparation);
