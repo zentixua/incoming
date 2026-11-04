@@ -1,0 +1,15 @@
+{
+  "base": "452f1f78af23779200baf4aef804e8e92d6dca40",
+  "candidate": "68a48e2f5",
+  "pr": 600,
+  "files": {
+    "clock-green.log": "01723a834466fc98b79df1ccb86c436f7e181257753443a806c23a409aa48b6d",
+    "wrong-clock-red.log": "1d0b38eb03ad96fecb321002c076eab34698beb450fe929cc6528f615e4db72d",
+    "correct-clock-green.log": "26c44eb41695247597d0d10b62bf4447222e73959de0f1ee3836f0beb6829814",
+    "clock_control.py": "987f88a092c1907b4ba73cdbf8309be6245ee669157272d43be44382f4837343",
+    "wrong-clock-red-xml/TEST-ua.zentix.incoming.client.nuclear.StemSourceTest.xml": "7c8e5d0816f380e81639185066c89c55f203caec6a17296dbe3531872556d203",
+    "wrong-clock-red-xml/TEST-ua.zentix.incoming.nuclear.model.StemClockTest.xml": "de8f5ea7aa8f0ef57d6a9e25bdeb6c078bee965f8abb84ec45e2a96e4bdefe36",
+    "correct-clock-green-xml/TEST-ua.zentix.incoming.client.nuclear.StemSourceTest.xml": "dc8ab6333b8bf65d8f93111db8e7eab7a7a924aa205b8f42ffee239f16df31b5",
+    "correct-clock-green-xml/TEST-ua.zentix.incoming.nuclear.model.StemClockTest.xml": "6b9b4f0d72a086687f6b435d3b98203087d5c112c3b10e1f0028aa0f1c5020e4"
+  }
+}

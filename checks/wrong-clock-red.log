@@ -1,0 +1,46 @@
+Picked up JAVA_TOOL_OPTIONS: -XX:ActiveProcessorCount=4 -Xmx2g
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.14.3/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :createMinecraftArtifacts UP-TO-DATE
+> Task :compileJava
+> Task :generateModMetadata UP-TO-DATE
+> Task :processResources UP-TO-DATE
+> Task :classes
+> Task :compileDevtestJava
+> Task :compileSandboxAgentJava UP-TO-DATE
+> Task :processDevtestResources UP-TO-DATE
+> Task :devtestClasses
+> Task :processSandboxAgentResources NO-SOURCE
+> Task :sandboxAgentClasses UP-TO-DATE
+> Task :compileTestJava
+> Task :processTestResources UP-TO-DATE
+> Task :testClasses
+
+> Task :test FAILED
+Picked up JAVA_TOOL_OPTIONS: -XX:ActiveProcessorCount=4 -Xmx2g
+
+StemSourceTest > footUsesTheSupplyingLayersClockForBothBurstModesAndScales() FAILED
+    org.opentest4j.AssertionFailedError at StemSourceTest.java:32
+
+StemClockTest > scaleUsesSlantBlocksAndModelSecondsAtEverySource() FAILED
+    org.opentest4j.AssertionFailedError at StemClockTest.java:73
+
+StemClockTest > actualGameAndRealClocksAtIdenticalGeometry() FAILED
+    org.opentest4j.AssertionFailedError at StemClockTest.java:52
+
+StemClockTest > interpolationDoesNotBorrowPositiveDustBeforeArrivalAndInflow() FAILED
+    org.opentest4j.AssertionFailedError at StemClockTest.java:88
+
+5 tests completed, 4 failed
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':test'.
+> There were failing tests. See the report at: file:///mnt/data/projects/incoming/mod/run/wt-AIR5/mod/build/reports/tests/test/index.html
+
+* Try:
+> Run with --scan to get full insights.
+
+BUILD FAILED in 6s
+10 actionable tasks: 4 executed, 6 up-to-date

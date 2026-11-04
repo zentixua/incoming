@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.client.nuclear.StemSourceTest" tests="1" skipped="0" failures="1" errors="0" timestamp="2026-11-04T23:05:11.593Z" hostname="zentixua-pc" time="0.315">
+  <properties/>
+  <testcase name="footUsesTheSupplyingLayersClockForBothBurstModesAndScales()" classname="ua.zentix.incoming.client.nuclear.StemSourceTest" time="0.315">
+    <failure message="org.opentest4j.AssertionFailedError: expected: &lt;95.37312042974412&gt; but was: &lt;95.37315081358057&gt;" type="org.opentest4j.AssertionFailedError">org.opentest4j.AssertionFailedError: expected: &lt;95.37312042974412&gt; but was: &lt;95.37315081358057&gt;
+	at app//org.junit.jupiter.api.AssertionFailureBuilder.build(AssertionFailureBuilder.java:151)
+	at app//org.junit.jupiter.api.AssertionFailureBuilder.buildAndThrow(AssertionFailureBuilder.java:132)
+	at app//org.junit.jupiter.api.AssertEquals.failNotEqual(AssertEquals.java:197)
+	at app//org.junit.jupiter.api.AssertEquals.assertEquals(AssertEquals.java:86)
+	at app//org.junit.jupiter.api.AssertEquals.assertEquals(AssertEquals.java:81)
+	at app//org.junit.jupiter.api.Assertions.assertEquals(Assertions.java:1014)
+	at app//ua.zentix.incoming.client.nuclear.StemSourceTest.footUsesTheSupplyingLayersClockForBothBurstModesAndScales(StemSourceTest.java:32)
+	at java.base@21.0.7/java.lang.reflect.Method.invoke(Method.java:580)
+	at java.base@21.0.7/java.util.ArrayList.forEach(ArrayList.java:1596)
+	at java.base@21.0.7/java.util.ArrayList.forEach(ArrayList.java:1596)
+</failure>
+  </testcase>
+  <system-out><![CDATA[WARN StatusConsoleListener Advanced terminal features are not available in this environment
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

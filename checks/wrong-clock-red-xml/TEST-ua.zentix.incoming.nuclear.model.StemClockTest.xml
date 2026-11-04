@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.nuclear.model.StemClockTest" tests="4" skipped="0" failures="3" errors="0" timestamp="2026-11-04T23:05:11.909Z" hostname="zentixua-pc" time="0.156">
+  <properties/>
+  <testcase name="scaleUsesSlantBlocksAndModelSecondsAtEverySource()" classname="ua.zentix.incoming.nuclear.model.StemClockTest" time="0.017">
+    <failure message="org.opentest4j.AssertionFailedError: expected: &lt;131757.30412978362&gt; but was: &lt;131757.2971494397&gt;" type="org.opentest4j.AssertionFailedError">org.opentest4j.AssertionFailedError: expected: &lt;131757.30412978362&gt; but was: &lt;131757.2971494397&gt;
+	at app//org.junit.jupiter.api.AssertionFailureBuilder.build(AssertionFailureBuilder.java:151)
+	at app//org.junit.jupiter.api.AssertionFailureBuilder.buildAndThrow(AssertionFailureBuilder.java:132)
+	at app//org.junit.jupiter.api.AssertEquals.failNotEqual(AssertEquals.java:197)
+	at app//org.junit.jupiter.api.AssertEquals.assertEquals(AssertEquals.java:86)
+	at app//org.junit.jupiter.api.AssertEquals.assertEquals(AssertEquals.java:81)
+	at app//org.junit.jupiter.api.Assertions.assertEquals(Assertions.java:1014)
+	at app//ua.zentix.incoming.nuclear.model.StemClockTest.scaleUsesSlantBlocksAndModelSecondsAtEverySource(StemClockTest.java:73)
+	at java.base@21.0.7/java.lang.reflect.Method.invoke(Method.java:580)
+	at java.base@21.0.7/java.util.ArrayList.forEach(ArrayList.java:1596)
+	at java.base@21.0.7/java.util.ArrayList.forEach(ArrayList.java:1596)
+</failure>
+  </testcase>
+  <testcase name="completeValueIdentityIsSharedBySynchronousAndBackgroundCache()" classname="ua.zentix.incoming.nuclear.model.StemClockTest" time="0.123"/>
+  <testcase name="actualGameAndRealClocksAtIdenticalGeometry()" classname="ua.zentix.incoming.nuclear.model.StemClockTest" time="0.01">
+    <failure message="org.opentest4j.AssertionFailedError: both modes must use their source clock ==&gt; expected: &lt;true&gt; but was: &lt;false&gt;" type="org.opentest4j.AssertionFailedError">org.opentest4j.AssertionFailedError: both modes must use their source clock ==&gt; expected: &lt;true&gt; but was: &lt;false&gt;
+	at app//org.junit.jupiter.api.AssertionFailureBuilder.build(AssertionFailureBuilder.java:151)
+	at app//org.junit.jupiter.api.AssertionFailureBuilder.buildAndThrow(AssertionFailureBuilder.java:132)
+	at app//org.junit.jupiter.api.AssertTrue.failNotTrue(AssertTrue.java:63)
+	at app//org.junit.jupiter.api.AssertTrue.assertTrue(AssertTrue.java:36)
+	at app//org.junit.jupiter.api.Assertions.assertTrue(Assertions.java:214)
+	at app//ua.zentix.incoming.nuclear.model.StemClockTest.actualGameAndRealClocksAtIdenticalGeometry(StemClockTest.java:52)
+	at java.base@21.0.7/java.lang.reflect.Method.invoke(Method.java:580)
+	at java.base@21.0.7/java.util.ArrayList.forEach(ArrayList.java:1596)
+	at java.base@21.0.7/java.util.ArrayList.forEach(ArrayList.java:1596)
+</failure>
+  </testcase>
+  <testcase name="interpolationDoesNotBorrowPositiveDustBeforeArrivalAndInflow()" classname="ua.zentix.incoming.nuclear.model.StemClockTest" time="0.005">
+    <failure message="org.opentest4j.AssertionFailedError: no source yet at 46.0, begins 46.518054848921764 ==&gt; expected: &lt;0.0&gt; but was: &lt;1255583.3482424307&gt;" type="org.opentest4j.AssertionFailedError">org.opentest4j.AssertionFailedError: no source yet at 46.0, begins 46.518054848921764 ==&gt; expected: &lt;0.0&gt; but was: &lt;1255583.3482424307&gt;
+	at app//org.junit.jupiter.api.AssertionFailureBuilder.build(AssertionFailureBuilder.java:151)
+	at app//org.junit.jupiter.api.AssertionFailureBuilder.buildAndThrow(AssertionFailureBuilder.java:132)
+	at app//org.junit.jupiter.api.AssertEquals.failNotEqual(AssertEquals.java:197)
+	at app//org.junit.jupiter.api.AssertEquals.assertEquals(AssertEquals.java:86)
+	at app//org.junit.jupiter.api.Assertions.assertEquals(Assertions.java:1024)
+	at app//ua.zentix.incoming.nuclear.model.StemClockTest.interpolationDoesNotBorrowPositiveDustBeforeArrivalAndInflow(StemClockTest.java:88)
+	at java.base@21.0.7/java.lang.reflect.Method.invoke(Method.java:580)
+	at java.base@21.0.7/java.util.ArrayList.forEach(ArrayList.java:1596)
+	at java.base@21.0.7/java.util.ArrayList.forEach(ArrayList.java:1596)
+</failure>
+  </testcase>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

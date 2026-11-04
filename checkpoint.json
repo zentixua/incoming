@@ -1,0 +1,17 @@
+{
+  "source": "2a3b46140c59c2153b762453472010204234501e",
+  "component": "68a48e2f5a0c410a6ce14d9e3c75091f8377121f",
+  "base": "3efac357cc368045f6fe821ac02c561ab99af4c8",
+  "built_jar_sha256": "408df942e5774b9f741d92beb4936ada8c7b9e4b0cfe82a3f562560cfc3bb198",
+  "build_pin": "68a48e2f5a0c410a6ce14d9e3c75091f8377121f",
+  "build": {
+    "tests": 1845,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "native_gametest": "nuke_stem_clock:1 passed",
+  "frames": "pending GPU window",
+  "independent_review": "RAIR8 pending",
+  "CI": "pending; pr_ci follows current head"
+}
