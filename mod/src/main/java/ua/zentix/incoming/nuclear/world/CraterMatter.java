@@ -10,7 +10,6 @@ import net.minecraft.nbt.NbtUtils;
 import net.minecraft.nbt.Tag;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.state.BlockState;
-import net.minecraft.world.level.saveddata.SavedData;
 
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -21,13 +20,14 @@ import java.util.Map;
  * rubble. Other materials inside the vaporization bowl and glazed surfaces are thermally transformed.
  * Counts and original solid volume/mass are retained per source state, including restart progress.
  */
-public final class CraterMatter extends SavedData {
+public final class CraterMatter extends LedgerData {
     private static final String NAME = "incoming_crater_matter";
     private final Map<Integer, Pass> passes = new LinkedHashMap<>();
     /** Settled events need material totals, not a second permanent copy of every excavated column. */
     private final Map<BlockState, double[]> settled = new LinkedHashMap<>();
 
     void complete(int event) {
+        requireWritable();
         Pass pass = passes.remove(event);
         if (pass == null) return;
         for (var entry : pass.materials.entrySet()) {
@@ -44,13 +44,14 @@ public final class CraterMatter extends SavedData {
     double[] settled(BlockState state) { return settled.getOrDefault(state, new double[8]).clone(); }
 
     static CraterMatter get(ServerLevel level) {
-        return level.getDataStorage().computeIfAbsent(new Factory<>(CraterMatter::new, CraterMatter::load, null), NAME);
+        NuclearWorld world = level.getData(ua.zentix.incoming.registry.ModAttachments.NUCLEAR_WORLD);
+        return world.ledgers.get(level, world, NAME, CraterMatter::new);
     }
 
-    Pass pass(int event) { return passes.computeIfAbsent(event, ignored -> new Pass()); }
+    Pass pass(int event) { requireWritable(); return passes.computeIfAbsent(event, ignored -> new Pass()); }
 
     long retainedBytes() {
-        long bytes = 1024L + settled.size() * 512L;
+        long bytes = IO_BYTES + 1024L + settled.size() * 512L;
         for (Pass pass : passes.values()) bytes += 1024L + pass.materials.size() * 768L
                 + pass.ground.size() * 96L + pass.done.size() * 96L;
         return bytes;
@@ -113,7 +114,10 @@ public final class CraterMatter extends SavedData {
     }
 
     static CraterMatter load(CompoundTag tag, HolderLookup.Provider lookup) {
-        CraterMatter result = new CraterMatter();
+        return read(tag, lookup, new CraterMatter());
+    }
+
+    static CraterMatter read(CompoundTag tag, HolderLookup.Provider lookup, CraterMatter result) {
         ListTag passes = tag.getList("passes", Tag.TAG_COMPOUND);
         for (int i = 0; i < passes.size(); i++) {
             CompoundTag data = passes.getCompound(i);
@@ -185,5 +189,37 @@ public final class CraterMatter extends SavedData {
         }
         tag.put("settled", totals);
         return tag;
+    }
+
+    @Override void write(LedgerWriter writer, HolderLookup.Provider lookup) throws java.io.IOException {
+        writer.list("passes", passes.size());
+        for (var entry : passes.entrySet()) {
+            CompoundTag data = new CompoundTag();
+            data.putInt("event", entry.getKey());
+            Pass pass = entry.getValue();
+            data.putString("soil", pass.soil);
+            writer.fields(data);
+            writer.longs("columns", pass.ground.keySet());
+            writer.ints("ground", pass.ground.values());
+            writer.longs("done", pass.done);
+            writer.list("materials", pass.materials.size());
+            for (var material : pass.materials.entrySet()) {
+                CompoundTag row = new CompoundTag();
+                row.put("state", NbtUtils.writeBlockState(material.getKey()));
+                for (int j = 0; j < material.getValue().length; j++) row.putDouble("v" + j, material.getValue()[j]);
+                row.putLong("available", pass.available.getOrDefault(material.getKey(), 0L));
+                writer.row(row);
+            }
+            writer.end();
+        }
+
+        writer.list("settled", settled.size());
+        for (var entry : settled.entrySet()) {
+            CompoundTag row = new CompoundTag();
+            row.put("state", NbtUtils.writeBlockState(entry.getKey()));
+            for (int j = 0; j < entry.getValue().length; j++) row.putDouble("v" + j, entry.getValue()[j]);
+            writer.row(row);
+        }
+
     }
 }

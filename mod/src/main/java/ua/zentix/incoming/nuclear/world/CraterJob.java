@@ -83,6 +83,7 @@ public final class CraterJob {
 
     /** One column. WAIT — required chunk still loading, resume next tick. */
     public Step step(ServerLevel level, RandomSource random) {
+        if (!CraterMatter.get(level).writable()) return Step.WAIT;
         // Both row preparation and replaying a legacy chunk cursor are bounded tick units.
         if (!chunks.prepared()) {
             try (var reservation = RuinMemory.reserve(level, 4096)) {

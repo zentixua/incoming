@@ -167,4 +167,60 @@ public final class RuinMemoryFlowGameTests {
             settle.clear(level); crater.release(level);
         });
     }
+    @GameTest(template = "range", batch = "nuke_ledger_parked", timeoutTicks = 200, skyAccess = true)
+    public static void severalRefusedFreshPlansKeepTheirMemoryOwner(GameTestHelper h) throws ReflectiveOperationException {
+        var level = h.getLevel();
+        NuclearStrikes.clear(level); RuinMatterGameTests.clearFixture(level);
+        var world = NuclearWorld.get(level);
+        var at = h.absolutePos(new BlockPos(20, 30, 20));
+        var d = event(h, at, 1);
+        var chunks = new java.util.ArrayList<net.minecraft.world.level.chunk.LevelChunk>();
+        for (int i = 0; i < 3; i++) {
+            BlockPos position = at.offset(i * 16, 0, 0);
+            level.setBlock(position.below(), Blocks.OBSIDIAN.defaultBlockState(), 2);
+            level.setBlock(position, Blocks.GLASS.defaultBlockState(), 2);
+            var chunk = level.getChunkSource().getChunkNow(position.getX() >> 4, position.getZ() >> 4);
+            var plan = RuinPlanner.plan(level, d, chunk);
+            h.assertTrue(plan.changedBlocks() > 0, "Empty refusal fixture");
+            // Real solver results at the completed-worker boundary; production collect() must
+            // transfer each result before its destructive apply is refused.
+            var ctx = world.ruins(level, d, level.getGameTime());
+            var taskType = Class.forName(RuinContext.class.getName() + "$Task");
+            var constructor = taskType.getDeclaredConstructors()[0]; constructor.setAccessible(true);
+            var tasks = RuinContext.class.getDeclaredField("tasks"); tasks.setAccessible(true);
+            @SuppressWarnings("unchecked") var pending = (Long2ObjectOpenHashMap<Object>) tasks.get(ctx);
+            pending.put(chunk.getPos().toLong(), constructor.newInstance(java.util.concurrent.CompletableFuture.completedFuture(plan),
+                    System.identityHashCode(chunk), level.getGameTime(), RuinWorkers.Priority.NEAR));
+            chunks.add(chunk);
+        }
+        var method = ScarQueue.class.getDeclaredMethod("ruin", net.minecraft.server.level.ServerLevel.class,
+                Detonation.class, net.minecraft.world.level.chunk.LevelChunk.class, ColumnScar.Budget.class, long.class, boolean.class);
+        method.setAccessible(true);
+        var queue = world.scars();
+        long before = queue.retainedBytes();
+        var other = level.getServer().getLevel(Level.NETHER);
+        try (var occupied = RuinMemory.reserve(other, NuclearPrep.PLANS_CAP - NuclearPrep.memory(other, false) - 1024)) {
+            h.assertTrue(occupied != null, "Could not occupy controlled admission");
+            long previous = before;
+            for (var chunk : chunks) {
+                for (int attempt = 0; attempt < 32 && queue.retainedBytes() == previous; attempt++)
+                    method.invoke(queue, level, d, chunk, new ColumnScar.Budget(false), 0L, false);
+                h.assertTrue(queue.retainedBytes() > previous, "Refused fresh plan acquired an uncharged owner");
+                previous = queue.retainedBytes();
+            }
+            long owned = queue.retainedBytes();
+            for (var chunk : chunks) method.invoke(queue, level, d, chunk, new ColumnScar.Budget(false), 0L, false);
+            h.assertTrue(queue.retainedBytes() == owned, "Retry duplicated a parked charge");
+            h.assertTrue(NuclearPrep.residentMemory(level) >= owned + occupiedBytes(other), "Parked plans absent from global ownership");
+        } finally {
+            queue.clear(level); NuclearStrikes.clear(level); RuinMatterGameTests.clearFixture(level);
+        }
+        h.assertTrue(queue.retainedBytes() == 0, "Clear retained parked ownership");
+        h.succeed();
+    }
+
+    private static long occupiedBytes(net.minecraft.server.level.ServerLevel level) {
+        return NuclearWorld.get(level).materialReservation;
+    }
+
 }

@@ -386,8 +386,8 @@ paths:
 - Completed crater chunks discard column checkpoints after advancing the saved chunk cursor. Completed passes
   retain only material totals; terminal out-of-height material groups identical state/cargo without trajectory data.
   Active moving pieces, support provenance/graph and crater passes are charged by `retainedRuinBytes`. The counter
-  includes collection/serialization slack; it does not bound all Minecraft/mod heap or guarantee a finite completion
-  time for an arbitrarily large component at capacity.
+  includes collection slack and a fixed I/O workspace; it does not bound all Minecraft/mod heap or guarantee a finite
+  completion time for an arbitrarily large component at capacity.
 - Crater traversal uses the bounded row-head iterator's inclusive 15-block edge to preserve old saved chunk order.
   Settlement uses the default 16-block edge and versioned cursors; legacy unfinished cursors restart through scar
   marks. Never substitute the crater ordering without a cursor migration test.
@@ -398,3 +398,21 @@ paths:
   follows put/remove/clear so consumed preplans no longer contribute historical bytes. These are admission estimates,
   not a complete nuclear heap bound. FarLods tags copies, snapshots and headers by cancellation generation; late
   results release their slots but cannot publish. Regressions: `nuke_lifecycle_detached`, `nuke_lifecycle_far`.
+
+- Material persistence (`LedgerData`) overrides the real `SavedData.save(File, Provider)` wrapper. The ledger itself
+  is the frozen snapshot until NeoForge's queued atomic I/O completes; material mutation pauses, but existing
+  ownership remains charged. Repeated autosaves cannot enqueue another snapshot. Streaming NBT writes bounded
+  rows/primitive arrays off-thread; moving numeric fields use a 145-byte big-endian payload, with ordinary registry
+  state/cargo NBT. Legacy named-field rows still load. Never restore the inherited whole-tree/copy save wrapper.
+- Cold material/progress lookup installs a placeholder without calling `DimensionDataStorage.computeIfAbsent`.
+  `LedgerScan` checks live/import ownership without allocating payload arrays, then `LedgerReader` imports one row
+  at a time under a cross-dimension reservation. Completed legacy crater arrays are skipped before allocation
+  (event IDs can follow their arrays); active checkpoints and material totals survive. Import publication transfers
+  ownership before releasing its reservation. Unknown cold ownership blocks new admission, not just same-dimension
+  work. An active legacy component exceeding the global cap remains durably paused on disk, never replaced by an
+  empty ledger; graph paging is still absent. Cold I/O/decode failures likewise preserve the source file and log.
+  Background restore must not call `Blast.props` or arbitrary block collision callbacks: use saved quantities.
+- Collected/fresh plans waiting in `ScarQueue.parked` have their own counted owner. Keep it through replacement
+  admission; release/transfer on success, staleness, unload and clear. Prepared plans keep their `RetainedPlans`
+  owner through admission and are not counted twice. `nuke_ledger_*` covers delayed real-wrapper I/O, packed/legacy
+  parity, several refused collected plans, cold cross-dimension admission and large completed legacy checkpoints.

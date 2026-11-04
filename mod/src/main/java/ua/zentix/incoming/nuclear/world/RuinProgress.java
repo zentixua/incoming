@@ -5,13 +5,12 @@ import net.minecraft.core.HolderLookup;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.level.saveddata.SavedData;
 
 import java.util.HashMap;
 import java.util.Map;
 
 /** Durable scan cursor and unconfirmed chunks. A cursor alone can run ahead of vanilla chunk saves. */
-final class RuinProgress extends SavedData {
+final class RuinProgress extends LedgerData {
     static final class Pass {
         long cursor;
         boolean complete;
@@ -31,21 +30,26 @@ final class RuinProgress extends SavedData {
     private final Map<Integer, Pass> passes = new HashMap<>();
 
     static RuinProgress get(ServerLevel level) {
-        return level.getDataStorage().computeIfAbsent(new Factory<>(RuinProgress::new, RuinProgress::load, null), "incoming_ruin_settle");
+        NuclearWorld world = level.getData(ua.zentix.incoming.registry.ModAttachments.NUCLEAR_WORLD);
+        return world.ledgers.get(level, world, "incoming_ruin_settle", RuinProgress::new);
     }
 
     Pass pass(int id) {
+        requireWritable();
         return passes.computeIfAbsent(id, ignored -> new Pass());
     }
 
     long retainedBytes() {
-        long bytes = 256L;
+        long bytes = IO_BYTES + 256L;
         for (Pass pass : passes.values()) bytes += pass.retainedBytes();
         return bytes;
     }
 
     static RuinProgress load(CompoundTag tag, HolderLookup.Provider registries) {
-        RuinProgress progress = new RuinProgress();
+        return read(tag, registries, new RuinProgress());
+    }
+
+    static RuinProgress read(CompoundTag tag, HolderLookup.Provider registries, RuinProgress progress) {
         for (String key : tag.getAllKeys()) {
             if (!tag.contains(key, Tag.TAG_COMPOUND)) continue;
             CompoundTag saved = tag.getCompound(key);
@@ -71,5 +75,18 @@ final class RuinProgress extends SavedData {
             tag.put(Integer.toString(id), saved);
         });
         return tag;
+    }
+    @Override void write(LedgerWriter writer, HolderLookup.Provider registries) throws java.io.IOException {
+        for (var entry : passes.entrySet()) {
+            writer.compound(Integer.toString(entry.getKey()));
+            Pass p = entry.getValue();
+            CompoundTag row = new CompoundTag();
+            row.putLong("cursor", p.cursor);
+            row.putInt("scan_version", 2);
+            row.putBoolean("complete", p.complete);
+            writer.fields(row);
+            writer.longs("pending", p.pending);
+            writer.end();
+        }
     }
 }

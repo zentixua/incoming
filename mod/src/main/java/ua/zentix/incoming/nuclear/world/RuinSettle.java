@@ -62,6 +62,7 @@ final class RuinSettle {
     void work(ServerLevel level, NuclearEvents events, WorkClock clock) {
         if (detonation == null && (level.getGameTime() < checkAt || events.past().isEmpty() && events.detonations().isEmpty())) return;
         RuinProgress progress = RuinProgress.get(level);
+        if (!progress.writable()) return;
         if (detonation == null) {
             if (!clock.canStart()) return;
             long unit = clock.begin();

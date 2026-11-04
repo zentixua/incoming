@@ -112,7 +112,9 @@ A surface-burst crater supplies its rim from the ground actually excavated; rema
 
 If the shared nuclear working-memory reservation is full, further material removal waits while already moving
 material can settle. Pending material and support checks survive a restart. Completed movement and crater
-checkpoints are compacted into material totals; container contents are retained.
+checkpoints are compacted into material totals; container contents are retained. Saving can pause material
+movement until its file is written. An old active journal too large for the shared memory limit stays preserved
+on disk and paused; it is never replaced with an empty aftermath.
 
 These are reduced block-scale rules: joint properties, drag and the pile's repose angle are estimates.
 

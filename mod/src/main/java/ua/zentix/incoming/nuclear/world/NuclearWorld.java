@@ -150,18 +150,25 @@ public final class NuclearWorld {
      * Whether nuclear queues have server-thread work (NUCLEAR lane {@code WorkScheduler}: while present, impacts
      * do not take entire shared budget).
      */
+    final LedgerLoads ledgers = new LedgerLoads();
     private RuinMatter matter;
     private CraterMatter craterMatter;
     private RuinProgress ruinProgress;
     long materialReservation;
 
+    void ledger(LedgerData value) {
+        if (value instanceof RuinMatter material) matter = material;
+        else if (value instanceof CraterMatter crater) craterMatter = crater;
+        else if (value instanceof RuinProgress progress) ruinProgress = progress;
+    }
+
     public boolean busy() {
-        return matter != null && matter.busy() || !pulses.isEmpty() || late.busy() || !shadows.isEmpty() || !scorches.isEmpty() || !craters.isEmpty() || scars.size() > 0 || !prep.idle() || blast.busy() || settle.busy();
+        return ledgers.pending() || matter != null && matter.busy() || !pulses.isEmpty() || late.busy() || !shadows.isEmpty() || !scorches.isEmpty() || !craters.isEmpty() || scars.size() > 0 || !prep.idle() || blast.busy() || settle.busy();
     }
 
     /** Retained preparation and active-context estimates, without the shared worker buffers. */
     long retainedRuinBytes() {
-        long bytes = prep.retainedBytes() + materialReservation;
+        long bytes = prep.retainedBytes() + materialReservation + scars.retainedBytes();
         if (matter != null) bytes += matter.retainedBytes();
         if (craterMatter != null) bytes += craterMatter.retainedBytes();
         if (ruinProgress != null) bytes += ruinProgress.retainedBytes();
@@ -404,6 +411,9 @@ public final class NuclearWorld {
 
     /** @param clock server-tick budget, shared across dimensions (already started) */
     public void tick(ServerLevel level, WorkClock clock) {
+        get(level);
+        if (!matter.loaded() || !craterMatter.loaded() || !ruinProgress.loaded()) return;
+        if (!restored && !craterMatter.writable()) return;
         long now = level.getGameTime();
         NuclearEvents events = NuclearEvents.get(level);
         if (!restored) restore(level, events);
