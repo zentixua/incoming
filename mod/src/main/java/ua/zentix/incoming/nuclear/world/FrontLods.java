@@ -191,6 +191,7 @@ final class FrontLods {
             int index = next++;
             long chunk = candidates.getLong(index);
             RuinPlan plan = plans.get(chunk);
+            if (plan == null && RetainedPlans.waiting(plans, chunk)) { next--; return; }
             // chunk in world (world supplies ruins/LODs), far from players (DH does not send), front precedes copy
             if (plan == null || copies.containsKey(chunk) || FarLods.inWorld(level, chunk) || !FarLods.nearPlayer(level, chunk)
                     || d != null && ScarQueue.due(d, new ChunkPos(chunk)) - now <= DhUpdates.LEAD) continue;

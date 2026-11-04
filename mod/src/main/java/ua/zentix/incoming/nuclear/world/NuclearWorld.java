@@ -107,6 +107,7 @@ public final class NuclearWorld {
     RuinContext ruins(ServerLevel level, Detonation d, long now) {
         RuinContext ctx = ruins.get(d.id());
         if (ctx == null) ruins.put(d.id(), ctx = new RuinContext(level, d));
+        prep.restore(level, ctx);
         ctx.used = now;
         return ctx;
     }
@@ -337,15 +338,23 @@ public final class NuclearWorld {
      * @return background threads stopped within deadline
      */
     public static boolean onServerStopping(net.minecraft.server.MinecraftServer server) {
+        var storage = new java.util.ArrayList<java.util.concurrent.CompletableFuture<Void>>();
         for (ServerLevel level : server.getAllLevels()) {
             if (!level.hasData(ModAttachments.NUCLEAR_WORLD)) continue;
             try {
-                get(level).clear(level);
+                NuclearWorld world = get(level);
+                storage.add(world.prep.closeStorage());
+                for (RuinContext ctx : world.ruins.values()) storage.add(ctx.closeStorage());
+                world.clear(level);
             } catch (RuntimeException e) {
                 Incoming.LOG.error("Ruins: shutdown in {} failed with an exception", level.dimension().location(), e);
             }
         }
-        return RuinWorkers.shutdown();
+        boolean stopped = RuinWorkers.shutdown();
+        // Shutdown only, never an autosave/tick wait. Pages already admitted are bounded and detached.
+        try { java.util.concurrent.CompletableFuture.allOf(storage.toArray(java.util.concurrent.CompletableFuture[]::new)).join(); }
+        catch (RuntimeException e) { Incoming.LOG.error("Could not finish prepared ruin pages on shutdown", e); }
+        return stopped;
     }
 
     /** Cancel: queues stopped (destruction not restored). */

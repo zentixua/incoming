@@ -16,7 +16,6 @@ import ua.zentix.incoming.nuclear.Detonation;
 import ua.zentix.incoming.nuclear.model.StructuralResponse;
 import ua.zentix.incoming.util.Terrain;
 
-import java.util.ArrayDeque;
 import java.util.List;
 
 /**
@@ -31,11 +30,14 @@ public final class RuinMatter extends SavedData {
     private static final double DT = 1.0 / 20;
     /** A work unit advances at most this many half-metre trajectory segments. */
     private static final int SEGMENTS = 8;
-    private final ArrayDeque<Piece> moving = new ArrayDeque<>();
+    private RuinPalette palette = new RuinPalette();
+    private final it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<CompoundTag> inventories = new it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<>();
+    private final RuinRecords<Piece> moving = new RuinRecords<>(PIECE_BYTES, this::encodePiece, this::decodePiece);
     /** Outside build height: retained material, but no repeated world reads/ticket churn. */
-    private final ArrayDeque<Piece> stranded = new ArrayDeque<>();
+    private final RuinRecords<Piece> stranded = new RuinRecords<>(PIECE_BYTES, this::encodePiece, this::decodePiece);
     private record SupportSeed(BlockPos source, BlockState state, int event) {}
-    private final ArrayDeque<SupportSeed> supportSources = new ArrayDeque<>();
+    private final RuinRecords<SupportSeed> supportSources = new RuinRecords<>(16, this::encodeSource, this::decodeSource);
+    private final RuinRecords<SupportSeed> originalJournal = new RuinRecords<>(16, this::encodeSource, this::decodeSource);
     private long loadTick = Long.MIN_VALUE;
     private long released, deposited;
     /** Per block type: released, deposited and dispersed solid volume/mass. Moving owns the remainder. */
@@ -87,7 +89,8 @@ public final class RuinMatter extends SavedData {
 
     void support(ServerLevel level, List<Piece> pieces, Detonation d) {
         for (Piece piece : pieces) if (Blast.props(piece.state).bearing()) {
-            originals.putIfAbsent(piece.source.asLong(), new Original(piece.state, d.id()));
+            if (originals.putIfAbsent(piece.source.asLong(), new Original(piece.state, d.id())) == null)
+                originalJournal.addLast(new SupportSeed(piece.source, piece.state, d.id()));
             supportSources.addLast(new SupportSeed(piece.source, piece.state, d.id()));
         }
         if (!pieces.isEmpty()) setDirty();
@@ -317,6 +320,7 @@ public final class RuinMatter extends SavedData {
             for (int i = 0; i < 16 && left > 0 && !moving.isEmpty(); i++, left--) {
                 Piece piece = moving.removeFirst();
                 if (step(level, piece)) {
+                    inventories.remove(piece.id);
                     account(piece, 2);
                     deposited++;
                     depositedVolume += piece.volume;
@@ -331,6 +335,7 @@ public final class RuinMatter extends SavedData {
             // All affected components have been reconciled, including cold edges. A later failure
             // starts from that settled world; completed contact journals are not permanent history.
             originals.clear();
+            originalJournal.clear();
             setDirty();
         }
         if (moving.isEmpty() && supports.isEmpty() && supportSources.isEmpty()) unload(level);
@@ -457,7 +462,9 @@ public final class RuinMatter extends SavedData {
     }
 
     private Iterable<Piece> allPending() {
-        return () -> java.util.stream.Stream.concat(moving.stream(), stranded.stream()).iterator();
+        return () -> java.util.stream.Stream.concat(
+                java.util.stream.StreamSupport.stream(moving.spliterator(), false),
+                java.util.stream.StreamSupport.stream(stranded.spliterator(), false)).iterator();
     }
 
     static RuinMatter load(CompoundTag tag, HolderLookup.Provider lookup) {
@@ -480,6 +487,10 @@ public final class RuinMatter extends SavedData {
             for (int k = 0; k < balance.length; k++) balance[k] = row.getDouble("v" + k);
             result.materials.put(block, balance);
         }
+        if (tag.contains("format")) {
+            if (tag.getInt("format") != 2) throw new IllegalStateException("Unknown nuclear material format");
+            readCompact(result, tag);
+        } else {
         ListTag originalTags = tag.getList("support_originals", Tag.TAG_COMPOUND);
         for (int i = 0; i < originalTags.size(); i++) {
             CompoundTag row = originalTags.getCompound(i);
@@ -525,6 +536,9 @@ public final class RuinMatter extends SavedData {
             p.outside = n.getBoolean("outside");
             (p.outside ? result.stranded : result.moving).addLast(p);
         }
+        }
+        if (!tag.contains("format")) for (var row : result.originals.long2ObjectEntrySet())
+            result.originalJournal.addLast(new SupportSeed(BlockPos.of(row.getLongKey()), row.getValue().state, row.getValue().event));
         if (result.released != result.deposited + result.dispersed + result.pending())
             throw new IllegalStateException("Nuclear material ledger does not balance");
         double volume = result.depositedVolume + result.dispersedVolume;
@@ -566,52 +580,140 @@ public final class RuinMatter extends SavedData {
         tag.putLong("dispersed", dispersed);
         tag.putDouble("dispersed_volume", dispersedVolume);
         tag.putDouble("dispersed_mass", dispersedMass);
-        ListTag originalTags = new ListTag();
-        for (var entry : originals.long2ObjectEntrySet()) {
-            CompoundTag row = new CompoundTag();
-            row.putInt("event", entry.getValue().event); row.putLong("position", entry.getLongKey());
-            row.put("state", NbtUtils.writeBlockState(entry.getValue().state)); originalTags.add(row);
-        }
-        tag.put("support_originals", originalTags);
-        ListTag sourceTags = new ListTag();
-        for (SupportSeed source : supportSources) {
-            CompoundTag n = new CompoundTag();
-            n.putLong("position", source.source.asLong()); n.putInt("event", source.event);
-            n.put("state", NbtUtils.writeBlockState(source.state)); sourceTags.add(n);
-        }
-        tag.put("support_sources", sourceTags);
-        tag.putLongArray("supports", supports.keySet().toLongArray());
-        tag.putIntArray("support_events", supports.values().toIntArray());
-        ListTag cold = new ListTag();
-        for (var entry : uncertain.long2ObjectEntrySet()) {
-            CompoundTag edge = new CompoundTag();
-            edge.putLong("position", entry.getLongKey());
-            BlockState[] faces = entry.getValue();
-            for (int face = 0; face < faces.length; face++) if (faces[face] != null)
-                edge.put("face_" + face, NbtUtils.writeBlockState(faces[face]));
-            cold.add(edge);
-        }
-        tag.put("cold_edges", cold);
-        ListTag list = new ListTag();
-        for (Piece p : allPending()) {
-            CompoundTag n = new CompoundTag();
-            n.putBoolean("outside", p.outside);
-            n.putLong("source", p.source.asLong());
-            n.putLong("id", p.id);
-            n.putInt("scorch", p.scorch); n.putInt("scorch_event", p.scorchEvent); n.putLong("scorch_time", p.scorchTime);
-            n.putDouble("volume", p.volume);
-            n.putDouble("mass", p.mass);
-            n.put("state", NbtUtils.writeBlockState(p.state));
-            if (p.contents != null) n.put("contents", p.contents.copy());
-            n.putDouble("x", p.x); n.putDouble("y", p.y); n.putDouble("z", p.z);
-            n.putDouble("vx", p.vx); n.putDouble("vy", p.vy); n.putDouble("vz", p.vz);
-            n.putDouble("tick", p.tick);
-            n.putDouble("released_tick", p.releasedTick);
-            n.putDouble("wind_x", p.windX); n.putDouble("wind_z", p.windZ);
-            n.putDouble("drag", p.drag); n.putDouble("pulse", p.pulse);
-            list.add(n);
-        }
-        tag.put("moving", list);
+        writeCompact(tag);
         return tag;
+    }
+
+    /** Fixed-size numeric pages avoid a CompoundTag, property map and boxing for every voxel. */
+    private static final int PAGE_ROWS = 1024, PIECE_BYTES = 149;
+
+    private static ListTag rows(int count, int width, java.util.function.Consumer<java.nio.ByteBuffer> write) {
+        ListTag pages = new ListTag();
+        for (int from = 0; from < count; from += PAGE_ROWS) {
+            int size = Math.min(PAGE_ROWS, count - from);
+            byte[] bytes = new byte[size * width];
+            var buffer = java.nio.ByteBuffer.wrap(bytes);
+            for (int i = 0; i < size; i++) write.accept(buffer);
+            if (buffer.hasRemaining()) throw new IllegalStateException("Incomplete nuclear material page");
+            pages.add(new net.minecraft.nbt.ByteArrayTag(bytes));
+        }
+        return pages;
+    }
+
+    private static void readRows(CompoundTag tag, String name, int width, java.util.function.Consumer<java.nio.ByteBuffer> read) {
+        ListTag pages = tag.getList(name, Tag.TAG_BYTE_ARRAY);
+        for (Tag page : pages) {
+            byte[] bytes = ((net.minecraft.nbt.ByteArrayTag) page).getAsByteArray();
+            if (bytes.length % width != 0 || bytes.length > PAGE_ROWS * width)
+                throw new IllegalStateException("Invalid nuclear material page: " + name);
+            var buffer = java.nio.ByteBuffer.wrap(bytes);
+            while (buffer.hasRemaining()) read.accept(buffer);
+        }
+    }
+
+    private static ListTag recordPages(RuinRecords<?> records) {
+        ListTag pages = new ListTag();
+        for (byte[] bytes : records.snapshot()) pages.add(new net.minecraft.nbt.ByteArrayTag(bytes));
+        return pages;
+    }
+
+    private static void restoreRecords(RuinRecords<?> records, CompoundTag tag, String name) {
+        for (Tag page : tag.getList(name, Tag.TAG_BYTE_ARRAY)) records.restore(((net.minecraft.nbt.ByteArrayTag) page).getAsByteArray());
+    }
+
+    private void encodeSource(java.nio.ByteBuffer b, SupportSeed row) {
+        b.putLong(row.source.asLong()).putInt(palette.index(row.state)).putInt(row.event);
+    }
+
+    private SupportSeed decodeSource(java.nio.ByteBuffer b) {
+        return new SupportSeed(BlockPos.of(b.getLong()), palette.state(b.getInt()), b.getInt());
+    }
+
+    private void encodePiece(java.nio.ByteBuffer b, Piece p) {
+        b.putLong(p.source.asLong()).putLong(p.id).putLong(p.scorchTime);
+        b.putInt(p.scorch).putInt(p.scorchEvent).putInt(palette.index(p.state)).put((byte) (p.outside ? 1 : 0));
+        b.putDouble(p.volume).putDouble(p.mass).putDouble(p.x).putDouble(p.y).putDouble(p.z);
+        b.putDouble(p.vx).putDouble(p.vy).putDouble(p.vz).putDouble(p.tick).putDouble(p.releasedTick);
+        b.putDouble(p.windX).putDouble(p.windZ).putDouble(p.drag).putDouble(p.pulse);
+        if (p.contents != null) inventories.put(p.id, p.contents);
+    }
+
+    private Piece decodePiece(java.nio.ByteBuffer b) {
+        BlockPos pos = BlockPos.of(b.getLong()); long id = b.getLong(), scorchTime = b.getLong();
+        int scorch = b.getInt(), event = b.getInt(); BlockState state = palette.state(b.getInt());
+        Piece p = new Piece(pos, state, inventories.get(id), Vec3.ZERO, 0);
+        p.id = id; p.scorchTime = scorchTime; p.scorch = scorch; p.scorchEvent = event; p.outside = b.get() != 0;
+        p.volume = b.getDouble(); p.mass = b.getDouble(); p.x = b.getDouble(); p.y = b.getDouble(); p.z = b.getDouble();
+        p.vx = b.getDouble(); p.vy = b.getDouble(); p.vz = b.getDouble(); p.tick = b.getDouble(); p.releasedTick = b.getDouble();
+        p.windX = b.getDouble(); p.windZ = b.getDouble(); p.drag = b.getDouble(); p.pulse = b.getDouble();
+        return p;
+    }
+
+    private void writeCompact(CompoundTag tag) {
+        tag.putInt("format", 2);
+        tag.put("original_pages", recordPages(originalJournal));
+        tag.put("source_pages", recordPages(supportSources));
+        var support = supports.long2IntEntrySet().fastIterator();
+        tag.put("support_pages", rows(supports.size(), 12, b -> {
+            var row = support.next(); b.putLong(row.getLongKey()).putInt(row.getIntValue());
+        }));
+        var cold = uncertain.long2ObjectEntrySet().fastIterator();
+        tag.put("cold_pages", rows(uncertain.size(), 32, b -> {
+            var row = cold.next(); b.putLong(row.getLongKey());
+            for (BlockState face : row.getValue()) b.putInt(face == null ? -1 : palette.index(face));
+        }));
+        ListTag pending = recordPages(moving);
+        pending.addAll(recordPages(stranded));
+        tag.put("piece_pages", pending);
+        ListTag contents = new ListTag();
+        for (var entry : inventories.long2ObjectEntrySet()) {
+            CompoundTag row = new CompoundTag();
+            row.putLong("id", entry.getLongKey()); row.put("data", entry.getValue().copy()); contents.add(row);
+        }
+        tag.put("contents", contents);
+        tag.put("palette", palette.save());
+    }
+
+    private static void readCompact(RuinMatter result, CompoundTag tag) {
+        result.palette = RuinPalette.load(tag.getList("palette", Tag.TAG_COMPOUND));
+        RuinPalette palette = result.palette;
+        restoreRecords(result.originalJournal, tag, "original_pages");
+        for (SupportSeed row : result.originalJournal) result.originals.put(row.source.asLong(), new Original(row.state, row.event));
+        restoreRecords(result.supportSources, tag, "source_pages");
+        readRows(tag, "support_pages", 12, b -> result.supports.put(b.getLong(), b.getInt()));
+        readRows(tag, "cold_pages", 32, b -> {
+            long pos = b.getLong(); BlockState[] faces = new BlockState[6];
+            for (int i = 0; i < faces.length; i++) { int state = b.getInt(); if (state != -1) faces[i] = palette.state(state); }
+            result.uncertain.put(pos, faces);
+        });
+        for (Tag entry : tag.getList("contents", Tag.TAG_COMPOUND)) {
+            CompoundTag row = (CompoundTag) entry; result.inventories.put(row.getLong("id"), row.getCompound("data"));
+        }
+        // The compact stream preserves queue order. Stranded rows have their own flag; they never tick again.
+        readRows(tag, "piece_pages", PIECE_BYTES, b -> {
+            Piece p = result.decodePiece(b);
+            (p.outside ? result.stranded : result.moving).addLast(p);
+        });
+    }
+
+    private final java.util.concurrent.atomic.AtomicBoolean writeFailed = new java.util.concurrent.atomic.AtomicBoolean();
+
+    @Override public boolean isDirty() { return super.isDirty() || writeFailed.get(); }
+
+    /** Every compact page owns fresh arrays and inventory tags; no second whole-ledger deep copy. */
+    @Override public void save(java.io.File file, HolderLookup.Provider lookup) {
+        if (!isDirty()) return;
+        CompoundTag root = new CompoundTag();
+        root.put("data", save(new CompoundTag(), lookup));
+        NbtUtils.addCurrentDataVersion(root);
+        writeFailed.set(false);
+        setDirty(false);
+        net.neoforged.neoforge.common.IOUtilities.withIOWorker(() -> {
+            try { net.neoforged.neoforge.common.IOUtilities.writeNbtCompressed(root, file.toPath()); }
+            catch (java.io.IOException e) {
+                writeFailed.set(true);
+                ua.zentix.incoming.Incoming.LOG.error("Could not save nuclear material to {}", file, e);
+            }
+        });
     }
 }

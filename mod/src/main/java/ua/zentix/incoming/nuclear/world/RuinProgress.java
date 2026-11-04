@@ -15,6 +15,7 @@ final class RuinProgress extends SavedData {
     static final class Pass {
         long cursor;
         boolean complete;
+        String archive = "";
         final LongOpenHashSet pending = new LongOpenHashSet();
     }
 
@@ -28,6 +29,8 @@ final class RuinProgress extends SavedData {
         return passes.computeIfAbsent(id, ignored -> new Pass());
     }
 
+    String archive(int id) { Pass pass = passes.get(id); return pass == null ? "" : pass.archive; }
+
     static RuinProgress load(CompoundTag tag, HolderLookup.Provider registries) {
         RuinProgress progress = new RuinProgress();
         for (String key : tag.getAllKeys()) {
@@ -38,6 +41,7 @@ final class RuinProgress extends SavedData {
             // storage scar marks make revisiting completed positions harmless.
             p.cursor = saved.getBoolean("radial") ? Math.max(0, saved.getLong("cursor")) : 0;
             p.complete = saved.getBoolean("radial") && saved.getBoolean("complete");
+            p.archive = saved.getString("archive");
             p.pending.addAll(new LongOpenHashSet(saved.getLongArray("pending")));
         }
         return progress;
@@ -48,6 +52,7 @@ final class RuinProgress extends SavedData {
         passes.forEach((id, p) -> {
             CompoundTag saved = new CompoundTag();
             saved.putLong("cursor", p.cursor);
+            if (!p.archive.isEmpty()) saved.putString("archive", p.archive);
             saved.putBoolean("radial", true);
             saved.putBoolean("complete", p.complete);
             saved.putLongArray("pending", p.pending.toLongArray());

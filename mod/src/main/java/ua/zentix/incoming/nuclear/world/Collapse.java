@@ -43,6 +43,7 @@ final class Collapse {
     static final int C = 8, INF = C + 1;
     private static final int SIDE = RuinWindow.SIDE, LO = 16, HI = 32;
     private static final int MAX_DRAIN = 4096, DRAIN_WIDTH = 16, LEAF_REACH = 6;
+    private static final Direction[] DIRECTIONS = Direction.values();
     private static final BlockState AIR = Blocks.AIR.defaultBlockState();
 
     /** Traversal buffers per thread (no reentry): grow and reuse. */
@@ -54,6 +55,9 @@ final class Collapse {
     private static final ThreadLocal<Buffers> BUFFERS = ThreadLocal.withInitial(Buffers::new);
     private byte[] before, after;
     private int[] ring;
+    private Blast.Props[] properties;
+    private final boolean[] present = new boolean[SIDE * SIDE];
+    boolean directSupport;
 
     final RuinWindow w;
     final Blast[] blasts = new Blast[9];
@@ -110,6 +114,7 @@ final class Collapse {
         this.yb = Math.max(w.minY, low - 16);
         this.yt = Math.min(w.maxY - 1, Math.max(high, yb) + 1);
         this.h = yt - yb + 1;
+        for (int z = 0; z < SIDE; z++) for (int x = 0; x < SIDE; x++) present[z * SIDE + x] = w.has(x, z);
         this.gone = new long[(SIDE * SIDE * h + 63) >> 6];
         this.drained = new long[gone.length];
         for (int k = 0; k < 9; k++) {
@@ -162,7 +167,7 @@ final class Collapse {
     }
 
     Blast.Props props(int wx, int y, int wz) {
-        return w.props(wx, y, wz);
+        return properties != null && inside(wx, y, wz) ? properties[idx(wx, y, wz)] : w.props(wx, y, wz);
     }
 
     // ---------------------------------------------------------------- solution
@@ -198,14 +203,41 @@ final class Collapse {
         }
         if (!logs) for (int k = 0; k < 9 && !logs; k++) logs = blasts[k] != null && !blasts[k].trees().isEmpty();
         if (support) {
-            support();
-            detached();
+            // One palette decode per cell, shared by all traversals in this solve. The grid is immutable.
+            properties = new Blast.Props[SIDE * SIDE * h];
+            int i = 0;
+            for (int y = yb; y <= yt; y++) for (int z = 0; z < SIDE; z++) for (int x = 0; x < SIDE; x++)
+                properties[i++] = w.props(x, y, z);
+            directSupport = verticallySupported();
+            if (!directSupport) { support(); detached(); }
         }
         // Support reconciliation can release timber even when the pressure broke only its pedestal.
         if (logs || support) leaves();
         if (!breaks.isEmpty()) drain();
         attachments();
         collect();
+    }
+
+    /**
+     * Exact early exit, independent of block family or map: every surviving bearing cell has a
+     * touching vertical chain to a surviving anchor. Hence its after-distance is zero, it cannot
+     * satisfy any fall predicate, and every detached component is anchored. Trees/leaves, water
+     * and attachments still run normally. Any gap, overhang or partial-face mismatch uses the solver.
+     */
+    private boolean verticallySupported() {
+        for (int z = 0; z < SIDE; z++) for (int x = 0; x < SIDE; x++) {
+            if (!present[z * SIDE + x]) continue;
+            Blast.Props below = null;
+            for (int y = yb; y <= yt; y++) {
+                int i = idx(x, y, z);
+                Blast.Props p = properties[i];
+                if (!p.bearing() || bit(gone, i)) { below = null; continue; }
+                if (y != yb && y > surface && !p.fixed()
+                        && (below == null || !below.touches(Direction.UP, p))) return false;
+                below = p;
+            }
+        }
+        return true;
     }
 
     private boolean standing(int wx, int y, int wz) {
@@ -225,7 +257,7 @@ final class Collapse {
         java.util.Arrays.fill(after, 0, n, (byte) 0);
         int tail = 0;
         for (int y = yb; y <= yt; y++) for (int wz = 0; wz < SIDE; wz++) for (int wx = 0; wx < SIDE; wx++) {
-            if (!w.has(wx, wz)) continue;
+            if (!present[wz * SIDE + wx]) continue;
             Blast.Props p = props(wx, y, wz);
             if (!p.bearing() || !(y <= surface || y == yb || p.fixed())) continue;
             int i = idx(wx, y, wz);
@@ -234,9 +266,9 @@ final class Collapse {
         }
         for (int q = 0; q < tail; q++) {
             int i = ring[q], wx = i % SIDE, wz = i / SIDE % SIDE, y = i / (SIDE * SIDE) + yb;
-            for (Direction dir : Direction.values()) {
+            for (Direction dir : DIRECTIONS) {
                 int x = wx + dir.getStepX(), yy = y + dir.getStepY(), z = wz + dir.getStepZ();
-                if (!inside(x, yy, z) || !w.has(x, z)) continue;
+                if (!inside(x, yy, z) || !present[z * SIDE + x]) continue;
                 int next = idx(x, yy, z);
                 if (before[next] != 0 || !props(x, yy, z).bearing()
                         || !props(wx, y, wz).touches(dir, props(x, yy, z))) continue;
@@ -247,7 +279,7 @@ final class Collapse {
         for (int start = 0; start < n; start++) {
             if (after[start] != 0 || bit(gone, start) || before[start] == 0) continue;
             int sx = start % SIDE, sz = start / SIDE % SIDE, sy = start / (SIDE * SIDE) + yb;
-            if (!w.has(sx, sz) || !props(sx, sy, sz).bearing()) continue;
+            if (!present[sz * SIDE + sx] || !props(sx, sy, sz).bearing()) continue;
             tail = 1;
             ring[0] = start;
             after[start] = 1;
@@ -255,10 +287,10 @@ final class Collapse {
             for (int q = 0; q < tail; q++) {
                 int i = ring[q], wx = i % SIDE, wz = i / SIDE % SIDE, y = i / (SIDE * SIDE) + yb;
                 anchored |= y <= surface || y == yb || props(wx, y, wz).fixed();
-                for (Direction dir : Direction.values()) {
+                for (Direction dir : DIRECTIONS) {
                     int x = wx + dir.getStepX(), yy = y + dir.getStepY(), z = wz + dir.getStepZ();
                     if (yy > yt || yy < yb) continue;
-                    if (!inside(x, yy, z) || !w.has(x, z)) {
+                    if (!inside(x, yy, z) || !present[z * SIDE + x]) {
                         open = true;
                         continue;
                     }
@@ -334,7 +366,7 @@ final class Collapse {
         for (int q = 0; q < queue.size(); q++) {
             int i = queue.getInt(q), wx = i % SIDE, wz = (i / SIDE) % SIDE, y = i / (SIDE * SIDE) + yb;
             fall.add(i);
-            for (Direction dir : Direction.values()) {
+            for (Direction dir : DIRECTIONS) {
                 int nx = wx + dir.getStepX(), ny = y + dir.getStepY(), nz = wz + dir.getStepZ();
                 if (nx < LO - C || nx >= HI + C || nz < LO - C || nz >= HI + C || !inside(nx, ny, nz)) continue;
                 int m = idx(nx, ny, nz);
@@ -355,7 +387,7 @@ final class Collapse {
 
     /** Touches broken/falling load-bearing block (nearby flower, torch, leaves do not start cascade). */
     private boolean touches(int wx, int y, int wz, long[] bits) {
-        for (Direction dir : Direction.values()) {
+        for (Direction dir : DIRECTIONS) {
             int nx = wx + dir.getStepX(), ny = y + dir.getStepY(), nz = wz + dir.getStepZ();
             if (inside(nx, ny, nz) && bit(bits, idx(nx, ny, nz)) && props(nx, ny, nz).bearing()) return true;
         }
@@ -424,7 +456,7 @@ final class Collapse {
             set(seen, i);
             int wx = i % SIDE, wz = (i / SIDE) % SIDE, y = i / (SIDE * SIDE) + yb;
             boolean held = false;
-            for (Direction dir : Direction.values()) {
+            for (Direction dir : DIRECTIONS) {
                 int nx = wx + dir.getStepX(), ny = y + dir.getStepY(), nz = wz + dir.getStepZ();
                 if (!standingAfter(nx, ny, nz, down)) continue;
                 int m = idx(nx, ny, nz);
@@ -443,7 +475,7 @@ final class Collapse {
         for (int q = 0; q < out.size(); q++) after[out.getInt(q)] = INF;
         for (int q = 0; q < out.size(); q++) {
             int i = out.getInt(q), wx = i % SIDE, wz = (i / SIDE) % SIDE, y = i / (SIDE * SIDE) + yb, best = INF;
-            for (Direction dir : Direction.values()) {
+            for (Direction dir : DIRECTIONS) {
                 int nx = wx + dir.getStepX(), ny = y + dir.getStepY(), nz = wz + dir.getStepZ();
                 if (!standingAfter(nx, ny, nz, down)) continue;
                 int m = idx(nx, ny, nz);
@@ -459,7 +491,7 @@ final class Collapse {
             for (int q = 0; b != null && q < b.size(); q++) {
                 int i = b.getInt(q), wx = i % SIDE, wz = (i / SIDE) % SIDE, y = i / (SIDE * SIDE) + yb;
                 if (after[i] != d || !leads(i, wx, y, wz)) continue;
-                for (Direction dir : Direction.values()) {
+                for (Direction dir : DIRECTIONS) {
                     int nx = wx + dir.getStepX(), ny = y + dir.getStepY(), nz = wz + dir.getStepZ();
                     if (!standingAfter(nx, ny, nz, down)) continue;
                     int m = idx(nx, ny, nz), nd = d + (dir == Direction.UP ? 0 : 1);
@@ -475,7 +507,7 @@ final class Collapse {
     /** Queue standing neighbors for {@link #reroute} whose support may pass through {@code i} (one step farther, above same distance). */
     private void successors(int i, LongHeapPriorityQueue queue, long[] down, long[] lost) {
         int wx = i % SIDE, wz = (i / SIDE) % SIDE, y = i / (SIDE * SIDE) + yb, di = after[i];
-        for (Direction dir : Direction.values()) {
+        for (Direction dir : DIRECTIONS) {
             int nx = wx + dir.getStepX(), ny = y + dir.getStepY(), nz = wz + dir.getStepZ();
             if (!standingAfter(nx, ny, nz, down)) continue;
             int m = idx(nx, ny, nz), nd = di + (dir == Direction.UP ? 0 : 1);
@@ -567,7 +599,7 @@ final class Collapse {
                     if (!(ground || bit(fixed, i)) || !bearing(i, wx, y, wz, afterBlast)) continue;
                     dist[i] = 0;
                     ring[tail] = i;
-                    tail = (tail + 1) % cap;
+                    if (++tail == cap) tail = 0;
                 }
             }
             if (!ground && y > surface) {
@@ -582,7 +614,7 @@ final class Collapse {
                         if (!bearing(i, wx, yy, wz, afterBlast)) continue;
                         dist[i] = 0;
                         ring[tail] = i;
-                        tail = (tail + 1) % cap;
+                        if (++tail == cap) tail = 0;
                     }
                 }
                 break;
@@ -590,11 +622,11 @@ final class Collapse {
         }
         while (head != tail) {
             int i = ring[head];
-            head = (head + 1) % cap;
+            if (++head == cap) head = 0;
             int di = dist[i];
             int wx = i % SIDE, wz = (i / SIDE) % SIDE, y = i / (SIDE * SIDE) + yb;
             if (afterBlast && di > 0 && falls(i, di, props(wx, y, wz))) continue;
-            for (Direction dir : Direction.values()) {
+            for (Direction dir : DIRECTIONS) {
                 int nx = wx + dir.getStepX(), ny = y + dir.getStepY(), nz = wz + dir.getStepZ();
                 if (!inside(nx, ny, nz)) continue;
                 int cost = dir == Direction.UP ? 0 : 1, nd = di + cost;
@@ -603,11 +635,11 @@ final class Collapse {
                 if (dist[m] <= nd || !bearing(m, nx, ny, nz, afterBlast)) continue;
                 dist[m] = (byte) nd;
                 if (cost == 0) {
-                    head = (head - 1 + cap) % cap;
+                    if (--head < 0) head = cap - 1;
                     ring[head] = m;
                 } else {
                     ring[tail] = m;
-                    tail = (tail + 1) % cap;
+                    if (++tail == cap) tail = 0;
                 }
             }
         }
@@ -664,7 +696,7 @@ final class Collapse {
             int i = queue.getInt(q), di = reach.get(i);
             if (di > 2 * LEAF_REACH) continue;
             int wx = i % SIDE, wz = (i / SIDE) % SIDE, y = i / (SIDE * SIDE) + yb;
-            for (Direction dir : Direction.values()) {
+            for (Direction dir : DIRECTIONS) {
                 int nx = wx + dir.getStepX(), ny = y + dir.getStepY(), nz = wz + dir.getStepZ();
                 if (!inside(nx, ny, nz)) continue;
                 int m = idx(nx, ny, nz);
@@ -703,7 +735,7 @@ final class Collapse {
             int i = queue.getInt(q), di = dist.get(i);
             if (di >= LEAF_REACH) continue;
             int wx = i % SIDE, wz = (i / SIDE) % SIDE, y = i / (SIDE * SIDE) + yb;
-            for (Direction dir : Direction.values()) {
+            for (Direction dir : DIRECTIONS) {
                 int nx = wx + dir.getStepX(), ny = y + dir.getStepY(), nz = wz + dir.getStepZ();
                 if (!inside(nx, ny, nz)) continue;
                 int m = idx(nx, ny, nz);
@@ -737,7 +769,7 @@ final class Collapse {
                     int x0 = wx, x1 = wx, z0 = wz, z1 = wz;
                     for (int q = 0; q < body.size() && !stop; q++) {
                         int i = body.getInt(q), bx = i % SIDE, bz = (i / SIDE) % SIDE, by = i / (SIDE * SIDE) + yb;
-                        for (Direction dir : Direction.values()) {
+                        for (Direction dir : DIRECTIONS) {
                             int nx = bx + dir.getStepX(), ny = by + dir.getStepY(), nz = bz + dir.getStepZ();
                             if (!inside(nx, ny, nz)) {
                                 if (ny <= yt && props(nx, ny, nz).fluid()) stop = true;
@@ -866,7 +898,7 @@ final class Collapse {
                     if (bit(gone, i) || !props(wx, y, wz).fluid()) continue;
                     boolean mine = wx >= LO && wx < HI && wz >= LO && wz < HI;
                     boolean near = false;
-                    for (Direction dir : Direction.values()) {
+                    for (Direction dir : DIRECTIONS) {
                         int nx = wx + dir.getStepX(), ny = y + dir.getStepY(), nz = wz + dir.getStepZ();
                         if (!isGone(nx, ny, nz)) continue;
                         if (mine || nx >= LO && nx < HI && nz >= LO && nz < HI) near = true;
@@ -879,7 +911,7 @@ final class Collapse {
 
     /** Waterlogged block broken beside remaining water (river pier) becomes water; isolated high block becomes air. */
     private boolean wet(int wx, int y, int wz) {
-        for (Direction dir : Direction.values()) {
+        for (Direction dir : DIRECTIONS) {
             if (dir == Direction.DOWN) continue;
             int nx = wx + dir.getStepX(), ny = y + dir.getStepY(), nz = wz + dir.getStepZ();
             if (!inside(nx, ny, nz) || bit(drained, idx(nx, ny, nz))) continue;

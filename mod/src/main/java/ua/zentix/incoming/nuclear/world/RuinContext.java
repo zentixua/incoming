@@ -32,7 +32,8 @@ final class RuinContext {
      * ({@link #lit}) on any thread: in-memory from live chunk (pre-ruin for ruined chunk), others disk.
      * Server-thread writes only, immutable values; missing means no terrain (like unloaded chunk).
      */
-    private final java.util.concurrent.ConcurrentHashMap<Long, int[]> heights = new java.util.concurrent.ConcurrentHashMap<>();
+    private final java.util.concurrent.ConcurrentHashMap<Long, RuinHeights> heights = new java.util.concurrent.ConcurrentHashMap<>();
+    private long heightBytes;
     private long appliedBytes;
     private final Long2ObjectOpenHashMap<Applied> applied = new Long2ObjectOpenHashMap<>();
     private final LongOpenHashSet planned = new LongOpenHashSet(), stood = new LongOpenHashSet();
@@ -247,7 +248,7 @@ final class RuinContext {
         if (planned.add(chunk)) {
             ChunkPos pos = new ChunkPos(chunk);
             forget(pos, 1, planned, k -> blasts.remove(k));
-            forget(pos, RuinPlanner.REACH, planned, this::dropShot);
+            forget(pos, RuinPlanner.REACH, planned, this::retireShot);
         }
     }
 
@@ -266,6 +267,36 @@ final class RuinContext {
     private long now;
 
     private long shotBytes;
+    @Nullable private RuinSnapshots archive;
+
+    boolean archiveChecked, archivePending;
+    @Nullable RetainedPlans restoredPlans;
+    private java.util.concurrent.CompletableFuture<Void> closing = java.util.concurrent.CompletableFuture.completedFuture(null);
+
+    void archive(RuinSnapshots snapshots) { archive = snapshots; archiveChecked = true; archivePending = false; }
+
+    java.util.concurrent.CompletableFuture<Void> closeStorage() {
+        closing = java.util.concurrent.CompletableFuture.allOf(closing,
+                archive == null ? java.util.concurrent.CompletableFuture.completedFuture(null) : archive.close(),
+                restoredPlans == null ? java.util.concurrent.CompletableFuture.completedFuture(null) : restoredPlans.closeStorage());
+        return closing;
+    }
+
+    private void retireShot(long key) {
+        ChunkShot shot = shots.get(key);
+        if (shot == null || archive == null || archive.evictable(key, shot)) dropShot(key);
+    }
+
+    RuinSnapshots archive() { return archive; }
+
+    void restoreShot(long key, ChunkShot shot) {
+        putShot(key, shot);
+        if (archive != null) archive.restored(key, shot);
+        int[] motion = new int[256];
+        System.arraycopy(shot.heights, ChunkShot.type(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING) * 256,
+                motion, 0, 256);
+        putHeights(key, motion);
+    }
 
     private void putShot(long key, ChunkShot shot) {
         ChunkShot was = shots.putAndMoveToLast(key, shot);
@@ -293,8 +324,9 @@ final class RuinContext {
                                 || pendingWindows.contains(ChunkPos.asLong(x + dx, z + dz));
                 if (inUse) shots.getAndMoveToLast(key);
                 else {
-                    dropShot(key);
-                    blasts.remove(key);
+                    ChunkShot shot = shots.get(key);
+                    if (archive != null && !archive.evictable(key, shot)) shots.getAndMoveToLast(key);
+                    else { dropShot(key); blasts.remove(key); }
                 }
             } finally { clock.end(unit); }
         }
@@ -321,7 +353,10 @@ final class RuinContext {
 
     /** Disk chunk heightmap (server thread): first {@code MOTION_BLOCKING} air, if absent. */
     void putHeights(long chunk, int[] firstAir) {
-        heights.putIfAbsent(chunk, firstAir);
+        if (heights.containsKey(chunk)) return;
+        var tile = new RuinHeights(firstAir);
+        heights.put(chunk, tile);
+        heightBytes += tile.bytes() + 48;
     }
 
     /** In-memory heightmap (server thread), if absent: ruined chunk uses higher of pre-ruin/live values. */
@@ -336,7 +371,7 @@ final class RuinContext {
             int now = c.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING, col & 15, col >> 4) + 1;
             h[col] = a == null ? now : Math.max(now, a.motion[col]);
         }
-        heights.put(key, h);
+        putHeights(key, h);
     }
 
     /**
@@ -355,8 +390,8 @@ final class RuinContext {
 
     /** First pre-wave air over {@code MOTION_BLOCKING} (any thread); chunk absent from maps means world bottom. */
     private int height(int x, int z, int minY) {
-        int[] h = heights.get(ChunkPos.asLong(x >> 4, z >> 4));
-        return h == null ? minY : h[(z & 15) << 4 | (x & 15)];
+        RuinHeights h = heights.get(ChunkPos.asLong(x >> 4, z >> 4));
+        return h == null ? minY : h.get((z & 15) << 4 | (x & 15));
     }
 
     /** Light pulse at position as pre-wave world saw it (any thread). */
@@ -373,12 +408,12 @@ final class RuinContext {
     /** Conservative retained-plan accounting for long disk settlement passes, including old blocks and marks. */
     long retainedBytes() {
         long bytes = shotBytes() + applied.size() * 640L + (planned.size() + stood.size()) * 32L;
-        return bytes + appliedBytes;
+        return bytes + appliedBytes + (restoredPlans == null ? 0 : restoredPlans.bytes());
     }
 
     /** Snapshots, heightmaps and flash-layer plans, toward {@link NuclearPrep#PLANS_CAP}. */
     long shotBytes() {
-        return shotBytes + heights.size() * 1100L + flashedBytes;
+        return shotBytes + heightBytes + flashedBytes + (archive == null ? 0 : archive.bytes());
     }
 
     /**
@@ -677,6 +712,9 @@ final class RuinContext {
         for (Task t : tasks.values()) t.future.cancel(false);
         tasks.clear();
         pendingWindows.clear();
+        closeStorage();
+        if (restoredPlans != null) { restoredPlans.clear(); restoredPlans = null; }
+        archive = null;
     }
 
     /** Chunk plan built: release fractures needed only by surrounding plans. */
@@ -684,7 +722,7 @@ final class RuinContext {
         pendingWindows.remove(pos.toLong());
         planned.add(pos.toLong());
         forget(pos, 1, planned, k -> blasts.remove(k));
-        forget(pos, RuinPlanner.REACH, planned, this::dropShot);
+        forget(pos, RuinPlanner.REACH, planned, this::retireShot);
     }
 
     /** Chunk ruins applied from plan. */
@@ -701,7 +739,7 @@ final class RuinContext {
         planned.add(pos.toLong());
         stood.add(pos.toLong());
         forget(pos, 1, stood, k -> blasts.remove(k));
-        forget(pos, RuinPlanner.REACH, stood, this::dropShot);
+        forget(pos, RuinPlanner.REACH, stood, this::retireShot);
         forget(pos, 2, stood, k -> {
             Applied a = applied.get(k);
             if (a != null && a.plan != null) {

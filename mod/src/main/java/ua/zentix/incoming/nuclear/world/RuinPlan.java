@@ -374,6 +374,74 @@ public final class RuinPlan {
         return (h ^ System.identityHashCode(normal)) * 0x9E3779B97F4A7C15L + 1;
     }
 
+    /** Immutable plan payload; named states, rather than runtime registry/object identities, survive restart. */
+    net.minecraft.nbt.CompoundTag store() {
+        var tag = new net.minecraft.nbt.CompoundTag();
+        tag.putInt("version", 1);
+        var palette = new RuinPalette();
+        tag.putIntArray("states", palette.indices(states));
+        tag.putIntArray("old", palette.indices(olds));
+        tag.putIntArray("cells", cells);
+        tag.putInt("sections", oldHashes.length);
+        tag.putIntArray("fires", fires);
+        tag.putIntArray("heights", heights);
+        tag.putLongArray("light", lightAt);
+        tag.putLongArray("fluids", fluidTicks);
+        if (outside != null) {
+            tag.putLongArray("outside", outside.toLongArray());
+            tag.putIntArray("outside_states", palette.indices(outsideState.toArray(BlockState[]::new)));
+        }
+        if (biomes != null) {
+            tag.putByteArray("biomes", biomes.levels());
+            tag.putIntArray("biome_from", biomes.from());
+        }
+        if (flash != null) tag.putIntArray("flash", flash);
+        if (blown != null) tag.putIntArray("blown", blown);
+        tag.put("palette", palette.save());
+        return tag;
+    }
+
+    /** Disk callbacks must not keep a cancelled detonation context (and its entire snapshot cache) alive. */
+    RuinPlan detached() {
+        var copy = new RuinPlan(cells, oldHashes, states, olds, fires, heights, lightAt, prints, normals,
+                outside, outsideState, null, fluidTicks, biomes);
+        copy.flash = flash;
+        copy.blown = blown;
+        return copy;
+    }
+
+    /** Server thread: rebuild process-local hashes. Section fast checks fall back to the normal column rescan. */
+    static RuinPlan restore(net.minecraft.nbt.CompoundTag tag, RuinContext ctx) {
+        if (tag.getInt("version") != 1) throw new IllegalArgumentException("Unknown ruin plan version");
+        var palette = RuinPalette.load(tag.getList("palette", net.minecraft.nbt.Tag.TAG_COMPOUND));
+        int[] cells = tag.getIntArray("cells");
+        BlockState[] states = palette.states(tag.getIntArray("states")), olds = palette.states(tag.getIntArray("old"));
+        int sections = tag.getInt("sections");
+        if (sections < 0 || sections > 256 || cells.length != olds.length || states.length > MAX_STATES)
+            throw new IllegalArgumentException("Invalid ruin plan dimensions");
+        long[] hashes = new long[sections];
+        int previous = -1;
+        for (int i = 0; i < cells.length; i++) {
+            int c = cells[i], key = c & KEY_MASK;
+            if (key <= previous || section(c) >= sections || (c >>> STATE_SHIFT & STATE_MASK) >= states.length)
+                throw new IllegalArgumentException("Invalid ruin plan cell");
+            previous = key;
+            hashes[section(c)] = mix(hashes[section(c)], olds[i]);
+        }
+        var outside = tag.contains("outside") ? new LongArrayList(tag.getLongArray("outside")) : null;
+        var outsideStates = outside == null ? null : java.util.Arrays.asList(palette.states(tag.getIntArray("outside_states")));
+        if (outside != null && outside.size() != outsideStates.size()) throw new IllegalArgumentException("Invalid outside logs");
+        ScorchedBiomes.Cells biomes = tag.contains("biomes")
+                ? new ScorchedBiomes.Cells(tag.getByteArray("biomes"), tag.getIntArray("biome_from")) : null;
+        if (biomes != null && (biomes.levels().length != 16 || biomes.from().length != 16))
+            throw new IllegalArgumentException("Invalid biome cells");
+        var plan = new RuinPlan(cells, hashes, states, olds, tag.getIntArray("fires"), tag.getIntArray("heights"),
+                tag.getLongArray("light"), null, null, outside, outsideStates, ctx, tag.getLongArray("fluids"), biomes);
+        if (tag.contains("flash")) plan.flash = tag.getIntArray("flash");
+        if (tag.contains("blown")) plan.blown = tag.getIntArray("blown");
+        return plan;
+    }
+
     /** For tests: differences from another plan (same positions, new/old states, fires); null if none. */
     @Nullable
     public String differs(RuinPlan o) {

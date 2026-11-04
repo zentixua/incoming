@@ -4,6 +4,7 @@ import net.minecraft.util.BitStorage;
 import net.minecraft.util.ZeroBitStorage;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.BaseFireBlock;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
@@ -39,6 +40,48 @@ import java.util.concurrent.atomic.AtomicReferenceArray;
  */
 final class ChunkShot {
     private static final BlockState AIR = Blocks.AIR.defaultBlockState();
+    private static final com.mojang.serialization.Codec<PalettedContainer<BlockState>> STORE_CODEC =
+            PalettedContainer.codecRW(Block.BLOCK_STATE_REGISTRY, BlockState.CODEC,
+                    PalettedContainer.Strategy.SECTION_STATES, AIR);
+
+    /** Immutable detached payload; encoding neither retains a context nor calls live world code. */
+    record Saved(int x, int z, int minY, PalettedContainer<BlockState>[] states, int[] heights, int[] sky,
+                 boolean ruined, @Nullable RuinPlan old) {
+        net.minecraft.nbt.CompoundTag encode() {
+            var tag = new net.minecraft.nbt.CompoundTag();
+            tag.putInt("version", 1);
+            tag.putInt("x", x); tag.putInt("z", z); tag.putInt("min_y", minY);
+            tag.putInt("sections", states.length);
+            tag.putIntArray("heights", heights);
+            if (sky != null) tag.putIntArray("sky", sky);
+            tag.putBoolean("ruined", ruined);
+            if (old != null) tag.put("old", old.store());
+            for (int i = 0; i < states.length; i++) if (states[i] != null)
+                tag.put("s" + i, STORE_CODEC.encodeStart(net.minecraft.nbt.NbtOps.INSTANCE, states[i]).getOrThrow());
+            return tag;
+        }
+    }
+
+    Saved saved() {
+        return new Saved(x, z, minY, states, heights, sky, ruined, old == null ? null : old.detached());
+    }
+
+    /** Server thread publishes properties and recomputes process-local fingerprints. */
+    @SuppressWarnings("unchecked")
+    static ChunkShot restore(net.minecraft.nbt.CompoundTag tag, RuinContext ctx) {
+        int sections = tag.getInt("sections");
+        if (tag.getInt("version") != 1 || sections < 1 || sections > 256)
+            throw new IllegalArgumentException("Invalid stored snapshot dimensions");
+        var states = (PalettedContainer<BlockState>[]) new PalettedContainer<?>[sections];
+        for (int i = 0; i < sections; i++) if (tag.contains("s" + i))
+            states[i] = STORE_CODEC.parse(net.minecraft.nbt.NbtOps.INSTANCE, tag.get("s" + i)).getOrThrow();
+        int[] heights = tag.getIntArray("heights"), sky = tag.contains("sky") ? tag.getIntArray("sky") : null;
+        if (heights.length != RuinPlan.HEIGHTMAP_TYPES.length * 256 || sky != null && sky.length != 256)
+            throw new IllegalArgumentException("Invalid stored snapshot heightmaps");
+        RuinPlan old = tag.contains("old") ? RuinPlan.restore(tag.getCompound("old"), ctx) : null;
+        return new ChunkShot(tag.getInt("x"), tag.getInt("z"), 0, old, tag.getBoolean("ruined"),
+                tag.getInt("min_y"), states, heights, sky, null, null, null);
+    }
 
     private static final java.util.concurrent.atomic.AtomicLong SERIALS = new java.util.concurrent.atomic.AtomicLong();
     /** Fingerprint of an all-air section (absent from the snapshot). */

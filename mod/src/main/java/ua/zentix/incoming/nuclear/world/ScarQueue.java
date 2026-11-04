@@ -873,7 +873,11 @@ public final class ScarQueue {
         if (chunk == null) return false;
         Detonation d = job.events.get(job.event);
         Long2ObjectOpenHashMap<RuinPlan> plans = prepared.get(d.id());
+        RuinContext restored = NuclearWorld.get(level).ruins(level, d, now);
+        if (plans == null) plans = restored.restoredPlans;
+        if (restored.archivePending) return false;
         RuinPlan plan = plans != null ? plans.get(job.chunk) : null;
+        if (plan == null && RetainedPlans.waiting(plans, job.chunk)) return false;
         Parked kept = parked.get(job.chunk);
         if (plan == null && kept != null && kept.detonation() == d.id()) return false;
         long[] st = preparedStats.computeIfAbsent(d.id(), k -> new long[STATS]);
@@ -920,7 +924,11 @@ public final class ScarQueue {
     private int ruin(ServerLevel level, Detonation d, LevelChunk chunk, ColumnScar.Budget budget, long lag, boolean seen) {
         long key = chunk.getPos().toLong();
         Long2ObjectOpenHashMap<RuinPlan> plans = prepared.get(d.id());
+        RuinContext restored = NuclearWorld.get(level).ruins(level, d, level.getGameTime());
+        if (plans == null) plans = restored.restoredPlans;
+        if (restored.archivePending) return WAIT;
         RuinPlan plan = plans != null ? plans.get(key) : null;
+        if (plan == null && RetainedPlans.waiting(plans, key)) return WAIT;
         if (plan != null && (waitRadius = plan.waitsNeighbours(level, chunk)) > 0) return WAIT;
         if (plan != null) plans.remove(key);
         long[] st = preparedStats.computeIfAbsent(d.id(), k -> new long[STATS]);
