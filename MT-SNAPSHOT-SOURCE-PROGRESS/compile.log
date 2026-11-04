@@ -1,0 +1,12 @@
+Picked up JAVA_TOOL_OPTIONS: -XX:ActiveProcessorCount=4 -Xmx2G
+Starting a Gradle Daemon (subsequent builds will be faster)
+> Task :createMinecraftArtifacts UP-TO-DATE
+> Task :compileJava
+> Task :generateModMetadata UP-TO-DATE
+> Task :processResources
+> Task :classes
+> Task :compileDevtestJava
+
+BUILD SUCCESSFUL in 13s
+5 actionable tasks: 3 executed, 2 up-to-date
+laptop_job mt-source-progress-compile: exit 0

@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.nuclear.world.RuinInboxPublicationTest" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-11-04T15:08:49.894Z" hostname="zentixua-pc" time="0.008">
+  <properties/>
+  <testcase name="readySlotFundsPublicationAtCapacityAndSurvivesInvalidation()" classname="ua.zentix.incoming.nuclear.world.RuinInboxPublicationTest" time="0.007"/>
+  <testcase name="refusedGrowthKeepsTheSameHeadAndLateCancelledCallbackStaysOwned()" classname="ua.zentix.incoming.nuclear.world.RuinInboxPublicationTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>
