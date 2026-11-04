@@ -133,9 +133,10 @@ Burns, radiation and falling debris can still hurt you after the flash, so stay 
 
 ![A dust wave approaches beneath the mushroom cloud at dusk](../media/blast-wave-dusk-hq.jpg)
 
-Distant Horizons and Voxy can show ruins without you visiting them. Ordinary nuclear orders prepare the hardest-hit area before launch. Broken windows and fallen trees farther
-out appear when you approach. In Voxy, players who missed the strike also need to approach to see its distant ruins.
-Incoming keeps a bounded list of recent distant updates and asks the server to refresh terrain overwritten by LOD Server Support. This recovery is best effort; saved world changes remain the durable source of ruins.
+Nearby terrain changes as the pressure wave passes. Distant Horizons can show distant damage through its supported
+integration. Voxy receives remote terrain through LOD Server Support after the changed world chunks are saved;
+these updates can arrive later than the wave. Without a server terrain provider, Voxy only knows terrain the
+client has loaded. Saved world changes remain the source of ruins, including for players who join later.
 
 The detailed timings, visual behavior and model limits are in the [nuclear effects reference](../dev/nuclear-effects-reference.md).
 
