@@ -24,6 +24,12 @@ public final class RuinWorkerAdmissionGameTests {
     @GameTest(template = "range", timeoutTicks = 300, batch = "nuke_worker_admission", skyAccess = true)
     public static void pressureBoundsBirthGrowthAndCapturedCallbackRebirth(GameTestHelper h) throws ReflectiveOperationException {
         StrikeGameTests.gameSpeed(h);
+        // This fixture holds non-worker ownership constant. Previous batches can leave cached
+        // snapshots and material that normal tick reclamation legitimately frees under pressure.
+        for (var previous : h.getLevel().getServer().getAllLevels()) {
+            ua.zentix.incoming.nuclear.NuclearStrikes.clear(previous);
+            RuinMatterGameTests.clearFixture(previous);
+        }
         RuinWorkers.shutdown();
         var level = h.getLevel();
         var other = level.getServer().getLevel(net.minecraft.world.level.Level.NETHER);
@@ -58,14 +64,16 @@ public final class RuinWorkerAdmissionGameTests {
         }, RuinWorkers.Priority.NEAR));
         int[] stage = {0};
         h.onEachTick(() -> {
-            h.assertTrue(NuclearPrep.residentMemory(level) <= NuclearPrep.PLANS_CAP, "workspace producer exceeded global cap");
+            long resident = NuclearPrep.residentMemory(level);
+            h.assertTrue(resident <= NuclearPrep.PLANS_CAP, "workspace producer exceeded global cap: " + resident);
             if (stage[0] == 0) {
                 if (progress.get() < 8) return;
                 h.assertTrue(fieldValue(field) == pool, "growth replaced executor lifetime");
                 stage[0] = 1;
             } else if (stage[0] == 1) {
                 if (progress.get() < 8) return;
-                h.assertTrue(progress.get() == 8 && pool.getPoolSize() == 8, "pressure must admit eight workers, never nine");
+                h.assertTrue(progress.get() == 8 && pool.getPoolSize() == 8, "pressure must admit eight workers, never nine: progress=" + progress.get()
+                                + ", pool=" + pool.getPoolSize() + ", resident=" + resident);
                 first.cancel(false);
                 h.assertFalse(RuinWorkers.finished(first), "running cancellation released actual execution");
                 h.assertTrue(RuinWorkers.residentBufferBytes(384) == 8 * RuinWorkers.threadBufferBytes(384), "cancel lent live workspace");
@@ -83,7 +91,7 @@ public final class RuinWorkerAdmissionGameTests {
             } else if (stage[0] == 3) {
                 if (RuinWorkers.inFlight() == 0) return;
                 h.assertTrue(progress.get() == 10 && pool.getPoolSize() == 0, "callback borrowed charged material workspace");
-                h.assertTrue(NuclearPrep.residentMemory(level) == NuclearPrep.PLANS_CAP, "material charge lost before callback drain");
+                h.assertTrue(resident == NuclearPrep.PLANS_CAP, "material charge lost before callback drain: resident=" + resident);
                 owner.materialReservation -= RuinWorkers.threadBufferBytes(384);
                 stage[0] = 4;
             } else if (stage[0] == 4) {
