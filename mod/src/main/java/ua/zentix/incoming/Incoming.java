@@ -120,6 +120,8 @@ public final class Incoming {
         NeoForge.EVENT_BUS.addListener(ArrivalTickets::onRespawn);
         NeoForge.EVENT_BUS.addListener(ArrivalTickets::onLogout);
         NeoForge.EVENT_BUS.addListener(NuclearKeys::onLogout);
+        NeoForge.EVENT_BUS.addListener(NuclearKeys::onDimension);
+        NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, NuclearKeys::onDeath);
         NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, ua.zentix.incoming.strike.NuclearReview::onDeath);
         NeoForge.EVENT_BUS.addListener(ua.zentix.incoming.strike.NuclearReview::onLogout);
         NeoForge.EVENT_BUS.addListener(ua.zentix.incoming.strike.NuclearReview::onDimension);

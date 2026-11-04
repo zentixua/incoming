@@ -419,16 +419,28 @@ public final class NuclearKeys {
      * already warning target launches without them.
      */
     public static void onLogout(PlayerEvent.PlayerLoggedOutEvent e) {
-        if (!(e.getEntity() instanceof ServerPlayer player)) return;
+        if (e.getEntity() instanceof ServerPlayer player) cancelUnarmed(player, "launching player left before the second key");
+    }
+
+    public static void onDeath(net.neoforged.neoforge.event.entity.living.LivingDeathEvent e) {
+        if (e.getEntity() instanceof ServerPlayer player) cancelUnarmed(player, "launching player died before the second key");
+    }
+
+    public static void onDimension(PlayerEvent.PlayerChangedDimensionEvent e) {
+        if (e.getEntity() instanceof ServerPlayer player) cancelUnarmed(player, "launching player changed dimension before the second key");
+    }
+
+    private static void cancelUnarmed(ServerPlayer player, String why) {
         for (ServerLevel level : player.server.getAllLevels()) {
+            SalvoData.get(level).cancelPrepared(level, player, why);
             if (!level.hasData(ModAttachments.STRIKE_WORLD)) continue;
             NuclearKeys keys = get(level);
             for (Order o : List.copyOf(keys.orders)) {
                 if (o.launchAt >= 0 || !o.ownerId.equals(player.getUUID())) continue;
                 keys.orders.remove(o);
                 release(o);
-                if (o.paid != null) Munitions.refund(List.of(player), o.ownerId, o.paid, "launching player left before the second key");
-                Incoming.LOG.info("Nuclear launch {} cancelled: {} left before the second key", o.loadout.weapon().getSerializedName(), o.name);
+                if (o.paid != null) Munitions.refund(List.of(player), o.ownerId, o.paid, why);
+                Incoming.LOG.info("Nuclear launch {} cancelled ({}) — {}", o.loadout.weapon().getSerializedName(), why, o.name);
             }
         }
     }

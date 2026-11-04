@@ -34,8 +34,9 @@ public final class NuclearReadyFixture {
             var prep = NuclearWorld.get(level).prep();
             for (Object p : (List<?>) field(prep, "preps").get(prep)) {
                 if (!handle.equals(field(p, "handle").get(p)) || field(p, "draining").getBoolean(p)) continue;
-                field(p, "geometry").set(p, NuclearWarhead.geometry(level, resolvedTarget, yieldKt, airBurst,
-                        (float) IncomingConfig.SERVER.effectsScale()));
+                var geometry = NuclearWarhead.geometry(level, resolvedTarget, yieldKt, airBurst, (float) IncomingConfig.SERVER.effectsScale());
+                field(p, "geometry").set(p, geometry);
+                field(p, "ruins").set(p, new RuinContext(level, geometry));
                 field(p, "resolvedTarget").set(p, resolvedTarget);
                 field(p, "order").set(p, new long[0]);
                 field(p, "nextFar").setInt(p, 0);
