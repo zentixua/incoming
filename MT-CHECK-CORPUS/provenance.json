@@ -1,0 +1,13 @@
+{
+  "manifest_sha256": "abc7d17082f7219b826774bdc6deee333419dd13f53a5b6cdf6c9d5d0b16db83",
+  "roots": 190,
+  "cases": 760,
+  "chunks": 2177,
+  "raw_bytes": 179140007,
+  "seed": -1905315873147090944,
+  "minY": -64,
+  "height": 384,
+  "dataVersion": 3955,
+  "provider_sha256": "5525a3a0c8b1c476cbc467d021e9d1492b58c78de31ed269eb04f169d42db0a1",
+  "provider_bytes": 1707765
+}

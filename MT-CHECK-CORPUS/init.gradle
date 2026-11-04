@@ -1,0 +1,16 @@
+gradle.projectsEvaluated {
+    def p = rootProject
+    p.sourceSets.devtest.java.srcDir(p.file('run/mt-check-corpus/generated'))
+    p.tasks.named('runGameTestServer').configure {
+        gameDirectory = p.file('run/mt-check-corpus/game')
+    }
+    p.tasks.named('copyRuntimeMods_gametest').configure {
+        from('/mnt/data/projects/incoming/mod/run/wt-MT-OPT/mod/run/mt-s2/runtime-hold/createpropulsion-1.1.5.jar')
+        doLast {
+            def jar = p.file('run/mt-check-corpus/game/mods/createpropulsion-1.1.5.jar')
+            def sha = java.security.MessageDigest.getInstance('SHA-256').digest(jar.bytes).encodeHex().toString()
+            assert sha == '5525a3a0c8b1c476cbc467d021e9d1492b58c78de31ed269eb04f169d42db0a1'
+            println('CACHE_PROVIDER sha256=' + sha)
+        }
+    }
+}

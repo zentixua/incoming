@@ -1,0 +1,22 @@
+{
+  "public_sha256": {
+    "REPORT.md": "573dfb5fdca680668cf708095b16898e564c563dca62dbc89a4e52216635b6d2",
+    "pairs.csv": "382b38b3e04beb696863cbb7e2b155d3671eb6533b19aa96537492b1ea1bc98a",
+    "cases.csv": "61010ade3cd9833e2825d0849c42d93ae9b5ac15c48d31d7d078adbf6f895395",
+    "summary.json": "668ed21bab350f6786a158661458565c85c12bfb7dd6e2ed17a0ec2f3ad875aa",
+    "cache-numeric.log": "4f15ea063c50c40ffac84cc3022d3b6e87797a5f970c17b73d9ca928c8176327",
+    "provenance.json": "a6533f506772427cbd96d62c82dbe985a20feab1993612dacf159b7b764337f8",
+    "chunk-hashes.csv": "0898a583dbec8fb2c505dd53af0b6c518891a2afa0aee85ee2a3941bd0fcd248",
+    "environment.json": "c98b44629afc82e8e873c62b35792ebfe87730e9bf7b29ebed1a1e1610cb052a",
+    "noise.jsonl": "69fe7a22abc965d5f00cb9afa51f27f04bc8f9113843c55d3f005c0b0aebac58",
+    "runtime-proof.json": "e659d4212a74d38585ece36441e28ab3619275216d10db812382d38e4b51ff6b",
+    "compiled-hashes.json": "fa2bc545b70f2756841a82223541cb236375ad3c0ba5ec9ded8f9da55124eb97",
+    "CacheCorpusBench.java": "c7be9d3bad4186948204c229c8a7f89b28511f5642dff5ce8183090aff9bfafd",
+    "init.gradle": "fea975737228c41191f34518458d9ce5c96d9004ba3976b57243c944b61681db",
+    "verify_corpus.py": "c684685269617183bf4c545425a68215561406dd3822bd50474e414d5fef2455",
+    "analyze.py": "4251af88f087e36dca84e40fa8a5d45fc29bce903e3496f0aff01d9e6340e7a5"
+  },
+  "private_full_jvm_log_sha256": "2a82b341347d89f3e6dedb107d88270bafd12de8fbf34b96bbdfe8dffdd8467c",
+  "private_compile_log_sha256": "be0b2d58082569afecbf398676248236abdaf6efd9c2bfa04f968ac22b55cfb4",
+  "private_binary_and_nbt_uploaded": false
+}

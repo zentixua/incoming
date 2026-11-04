@@ -1,0 +1,2 @@
+{"utc": "2026-11-04T14:44:33.333914+00:00", "pairs": 1448, "last_case": 361, "mem_available_kib": 21378292, "loadavg": ["4.29", "6.20", "5.24"], "active_services": ["incoming-job-mt-check-corpus-paired-526188.service", "incoming-job-MT-S2-producer-final-529766.service"]}
+{"utc": "2026-11-04T14:47:28.740264+00:00", "pairs": 1792, "last_case": 447, "mem_available_kib": 22359508, "loadavg": ["3.03", "5.16", "5.03"], "active_services": ["incoming-job-mt-check-corpus-paired-526188.service"]}

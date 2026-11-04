@@ -1,0 +1,21 @@
+{
+  "captured_utc": "2026-11-04T14:44:02.182208+00:00",
+  "base": "6eb589d59df2a1ebdd41a3e2f8577dcd04448c32",
+  "tracked_status": "",
+  "sha256": {
+    "mod/src/main/java/ua/zentix/incoming/nuclear/world/Blast.java": "dc98bb5946021114552d315ddd17b80ff3d534c89e97375cef40aec4e4fec287",
+    "mod/src/main/java/ua/zentix/incoming/nuclear/world/Collapse.java": "1129b590d7fd9c621f55a8eb11f11fa0c094017b1a87d7828ccdcf25e3c31535",
+    "mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinContext.java": "588d4c04c4ee2d22140e8497d6051a76ae5d5168b1ef6bb9fcc8e5ee85c9b110",
+    "mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinPlanner.java": "ded85de373dd3385ab4f21f2a0438cd85793f5a23feb55cfdc83d7f457dfed80",
+    "mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinPlan.java": "793e3e8302bde296532e1da2b7344df7acab8884e65a68f9f0bd9d3969dfc206",
+    "mod/run/mt-check-corpus/generated/ua/zentix/incoming/nuclear/world/CacheCorpusBench.java": "c7be9d3bad4186948204c229c8a7f89b28511f5642dff5ce8183090aff9bfafd",
+    "mod/run/mt-check-corpus/init.gradle": "fea975737228c41191f34518458d9ce5c96d9004ba3976b57243c944b61681db",
+    "mod/run/mt-check-corpus/verify_corpus.py": "c684685269617183bf4c545425a68215561406dd3822bd50474e414d5fef2455",
+    "mod/run/mt-check-corpus/analyze.py": "4251af88f087e36dca84e40fa8a5d45fc29bce903e3496f0aff01d9e6340e7a5"
+  },
+  "runtime_cpu": 4,
+  "runtime_max_heap_gib": 2,
+  "cpu_quiet": false,
+  "background": "LEAD2 corrected15kt observed client active; other team focused jobs may overlap",
+  "measurement": "single-process server-thread paired solver; no GPU/timing isolation; order alternates per case"
+}
