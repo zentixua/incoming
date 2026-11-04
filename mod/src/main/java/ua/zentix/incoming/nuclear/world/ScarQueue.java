@@ -205,7 +205,9 @@ public final class ScarQueue {
         if (old != null) parkedBytes -= old.plan.bytes() + 64;
     }
 
-    private record Parked(int detonation, RuinPlan plan) {}
+    private record Parked(int detonation, RuinPlan plan, boolean prepared) {
+        Parked(int detonation, RuinPlan plan) { this(detonation, plan, false); }
+    }
 
     private final Long2ObjectOpenHashMap<Job> jobs = new Long2ObjectOpenHashMap<>();
     /** Chunks under live neighbor tickets (holder square ± {@link RuinPlanner#REACH}): ticket count. */
@@ -227,6 +229,47 @@ public final class ScarQueue {
     private record Log(long at, net.minecraft.world.level.block.state.BlockState state) {}
 
     private final LinkedHashSet<Job> readySeen = new LinkedHashSet<>(), readyUnseen = new LinkedHashSet<>();
+    private boolean completionSeen;
+
+    /** Hand a completed demanded page directly to its live scar before cache trimming can evict
+     * it again. Unloaded/no-longer-needed demand remains ordinary spillable cache data. */
+    void collectPrepared(ServerLevel level, RuinContext ctx, RetainedPlans source, long key, RuinPlan plan) {
+        Job job = jobs.get(key);
+        if (job == null || job.event >= job.events.size() || parked.containsKey(key)) return;
+        int event = job.events.get(job.event).id();
+        if (NuclearWorld.get(level).ruinsIfKept(event) != ctx) return;
+        var preferred = prepared.get(event);
+        if (preferred != null && preferred != source && preferred.containsKey(key)) return;
+        // Install the new counted owner before releasing the page-map owner. Applying it still
+        // goes through the normal chunk identity, current-state, neighbour and capacity checks.
+        park(key, new Parked(event, plan, true));
+        source.remove(key);
+    }
+
+    /** Collect already-finished, owned work independently of destructive admission. Otherwise a
+     * dense visible refusal can retain an unseen result and all its input pins indefinitely.
+     * Only readiness/ownership is serviced here; normal priority still decides world changes. */
+    boolean collectReady(ServerLevel level, WorkClock clock) {
+        for (int checked = 0; checked < 16 && clock.canStart(); checked++) {
+            var queue = (completionSeen = !completionSeen) ? readySeen : readyUnseen;
+            if (queue.isEmpty()) continue;
+            Job job = queue.removeFirst();
+            if (jobs.get(job.chunk) != job || job.event >= job.events.size()) continue;
+            queue.addLast(job);
+            int event = job.events.get(job.event).id();
+            RuinContext ctx = NuclearWorld.get(level).ruinsIfKept(event);
+            if (ctx == null || !ctx.done(job.chunk) || hasPlan(event, job.chunk)) continue;
+            LevelChunk chunk = level.getChunkSource().getChunkNow(ChunkPos.getX(job.chunk), ChunkPos.getZ(job.chunk));
+            if (chunk == null) continue;
+            long began = clock.begin();
+            try {
+                RuinPlan plan = ctx.collect(level, chunk);
+                if (plan != null) park(job.chunk, new Parked(event, plan));
+            } finally { clock.end(began); }
+            return true;
+        }
+        return false;
+    }
     /** Trunks fallen into not-yet-ruined chunk: placed after its ruins (otherwise stale its plan). */
     private final Long2ObjectOpenHashMap<List<Log>> logs = new Long2ObjectOpenHashMap<>();
     private final Map<Integer, ColumnScar.Budget> budgets = new HashMap<>();
@@ -974,6 +1017,9 @@ public final class ScarQueue {
         if (plans == null) plans = restored.restoredPlans;
         if (restored.archivePending) return WAIT;
         RuinPlan plan = plans != null ? plans.get(key) : null;
+        Parked kept = parked.get(key);
+        boolean preparedParked = plan == null && kept != null && kept.detonation() == d.id() && kept.prepared();
+        if (preparedParked) plan = kept.plan();
         if (plan == null && RetainedPlans.waiting(plans, key)) return WAIT;
         if (plan != null && (waitRadius = plan.waitsNeighbours(level, chunk)) > 0) return WAIT;
         long[] st = preparedStats.computeIfAbsent(d.id(), k -> new long[STATS]);
@@ -985,7 +1031,8 @@ public final class ScarQueue {
             RuinPlan.Debris debris = debris(level, chunk, plan);
             long t0 = System.nanoTime();
             if (plan.apply(level, chunk, d, budget)) {
-                plans.remove(key);
+                if (preparedParked) unpark(key);
+                else plans.remove(key);
                 long took = System.nanoTime() - t0;
                 buried(level, d, free);
                 thrown(level, d, chunk, debris);
@@ -1010,7 +1057,8 @@ public final class ScarQueue {
                 return RUINED;
             }
             if (plan.memoryWaiting()) return MEMORY;
-            plans.remove(key);
+            if (preparedParked) unpark(key);
+            else plans.remove(key);
             stalePlans++;
             st[1]++;
             // Stale input is resnapshotted by the background path in a later unit.
@@ -1018,7 +1066,7 @@ public final class ScarQueue {
         }
         long t0 = System.nanoTime();
         RuinContext ctx = NuclearWorld.get(level).ruins(level, d, level.getGameTime());
-        Parked kept = parked.get(key);
+        kept = parked.get(key);
         diagSource = "parked";
         if (kept != null && kept.detonation() == d.id()) {
             plan = kept.plan();

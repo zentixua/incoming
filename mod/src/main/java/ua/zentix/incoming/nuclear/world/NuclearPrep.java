@@ -617,12 +617,12 @@ public final class NuclearPrep {
      * the reclamation that funds it. This never opens fresh reads or admits another solver.
      */
     boolean reclaim(ServerLevel level, WorkClock shared) {
-        int slots = preps.size() * 3;
+        int slots = preps.size() * 4;
         for (int checked = 0; checked < slots && shared.canStart(); checked++) {
             int slot = Math.floorMod(reclaimNext++, slots);
-            Prep p = preps.get(slot / 3);
+            Prep p = preps.get(slot / 4);
             if (p.draining || p.detonation < 0 || p.ruins == null) continue;
-            switch (slot % 3) {
+            switch (slot % 4) {
                 case 0 -> {
                     ArchivedShot head = p.archived.peek();
                     if (head == null) continue;
@@ -646,6 +646,13 @@ public final class NuclearPrep {
                     if (ready < 0) continue;
                     long began = shared.begin();
                     try { collectFar(level, p, ready); }
+                    finally { shared.end(began); }
+                }
+                case 3 -> {
+                    if (p.plans.pendingReads() == 0) continue;
+                    long began = shared.begin();
+                    try { p.plans.collectReady((key, plan) ->
+                            NuclearWorld.get(level).scars().collectPrepared(level, p.ruins, p.plans, key, plan)); }
                     finally { shared.end(began); }
                 }
                 default -> throw new AssertionError("Unknown completion lane");

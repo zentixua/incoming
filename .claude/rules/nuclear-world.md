@@ -394,6 +394,12 @@ paths:
   aligned with those counters; an unrelated per-cell allowance can refuse an already funded ready plan.
   `nuke_large_plan_admission` compares a 22,054-cell reference with the identical fixed-owner application,
   including measured server-thread allocation, retained growth and conserved material/support.
+- Support ownership separates actual fastutil table capacity, live original/cold-face payload and future
+  expansion (at most five contacts per deferred source). The projected tables include rehash scratch;
+  consuming sources transfers/releases their future credit even while other support work remains pending.
+  Never keep spent source credits in a historical payload maximum or refund still-allocated arrays by live size.
+  Capture credit transfers to the counted material owner before further admission. `nuke_support_capacity`
+  uses dense removals, partial support reconciliation, fixed competing ownership and full real ledger reload.
 - Completed crater chunks discard column checkpoints after advancing the saved chunk cursor. Completed passes
   retain only material totals; terminal out-of-height material groups identical state/cargo without trajectory data.
   Active moving pieces, support provenance/graph and crater passes are charged by `retainedRuinBytes`. The counter
@@ -512,6 +518,10 @@ paths:
   it must not suppress reclamation in its own or another context (`nuke_reclaim_publication`,
   `nuke_reclaim_other_owner`). Queue rotation itself needs its existing page-growth allowance in a
   fixed-pressure fixture; do not mislabel an unfunded moving FIFO as collector starvation.
+- Maintenance also rotates requested plan-page completions and collects completed scar Tasks independently
+  of destructive admission. Refused large publications yield to other owned reads; unloaded demand does not
+  orphan a completed page. Task collection parks its result without applying it out of wave/visibility order.
+  `nuke_consumer_completion` combines real reads, a completed unseen solver and dense visible capacity pressure.
 - Explicit preparation unload, loss of FULL readiness, terminal failure and heap stop release abandoned
   assembly claims independently of read/task collectors. Inspect unready todos before checking worker
   admission, with a bounded skip pass: decoder saturation cannot prevent retiring a dead assembly head.
