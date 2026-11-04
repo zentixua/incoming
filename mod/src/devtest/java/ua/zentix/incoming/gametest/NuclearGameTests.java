@@ -1191,6 +1191,12 @@ public final class NuclearGameTests {
         WorkClock clock = WorkClock.counting(1_000_000L);
         NuclearWorld.useClock(level.getServer(), clock);
         NuclearEvents events = NuclearEvents.get(level);
+        StrikeGameTests.afterTest(h, () -> {
+            unwatch.run();
+            IncomingConfig.SERVER.nukeEffectsScale.set(scale);
+            NuclearWorld.useClock(level.getServer(), new WorkClock());
+            NuclearStrikes.clear(level);
+        });
         long now = level.getGameTime();
         Vec3 target = Vec3.atBottomCenterOf(h.absolutePos(CENTER));
         events.schedule(new NuclearEvents.ScheduledStrike(events.nextId(), target, 15, true, now, now + 300, target, java.util.Optional.empty(), false));
@@ -1200,6 +1206,8 @@ public final class NuclearGameTests {
             String failure = null;
             if (!events.scheduled().isEmpty()) {
                 plannedBefore[0] = w.plannedChunks();
+                // Wait for an actual asynchronous plan before accelerating the remaining flight.
+                if (plannedBefore[0] <= 0) RuinBackgroundGameTests.gamePace(tickAt);
                 if (plannedBefore[0] > 0) {
                     // it started to rain during the flight: the explosion was still with the visibility that was used to prepare the ruins
                     Detonation f = NuclearWarhead.geometry(level, target, 15, true, IncomingConfig.SERVER.nukeEffectsScale.get().floatValue());
@@ -1228,22 +1236,14 @@ public final class NuclearGameTests {
                     // we wait until preparation releases the ticket; didn’t let go by the deadline - failure with her score lower, not a timeout
                     if (level.getGameTime() <= now + 850) return;
                 } else {
-                    unwatch.run();
                     h.assertTrue(clock.maxUnitsPerTick() <= IncomingConfig.SERVER.workBudgetMs.get(), "per tick " + clock.maxUnitsPerTick() + " units");
                     h.assertTrue(diag.isEmpty(), "diagnostic lines without property: " + diag);
                     h.assertTrue(Thread.getAllStackTraces().keySet().stream().noneMatch(t -> t.getName().equals("incoming-nuke-diag")), "diagnostic flow without property");
-                    IncomingConfig.SERVER.nukeEffectsScale.set(scale);
-                    NuclearWorld.useClock(level.getServer(), new WorkClock());
-                    NuclearStrikes.clear(level);
                     h.succeed();
                     return;
                 }
             }
             if (failure != null || level.getGameTime() > now + 850) {
-                unwatch.run();
-                IncomingConfig.SERVER.nukeEffectsScale.set(scale);
-                NuclearWorld.useClock(level.getServer(), new WorkClock());
-                NuclearStrikes.clear(level);
                 throw new net.minecraft.gametest.framework.GameTestAssertException(failure != null ? failure
                         : "the detonation did not go through to the end: ready " + plannedBefore[0] + ", according to plan " + w.ruinStats()[0] + ", left " + w.plannedChunks()
                         + ", squares " + w.prepTiles() + ", detonation " + (d != null) + ", glass " + glassGone[0]);
