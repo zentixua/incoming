@@ -249,6 +249,8 @@ paths:
   Continuation removals AND deposition use `RuinPlan.callbackRadius`: non-vanilla block entities require a radius-2
   ready neighbourhood for `onRemove`/`onPlace`, not just the two-block Sable guard. Source expansion, search, validation and
   release run in bounded batches under the nuclear work clock; no fixed bridge length declares equilibrium.
+  Original-contact journals retire when all affected support queues drain, including cold edges; later failures
+  start from the reconciled world rather than retaining every completed strike's contact history.
 - `RuinMatter` (`incoming_ruin_matter` SavedData) owns material after successful source removal. Capture live
   states and block-entity contents before writing; never resurrect flash-consumed blocks. Handoff IDs prevent
   repeated release of the same records. Original block state, represented solid volume/mass, trajectory/time,

@@ -92,6 +92,8 @@ public final class RuinReviewGameTests {
             for (int i = 0; i < 200; i++) unit(level, ledger);
             h.assertTrue(ledger.released() == 57 && ledger.pending() == 56, "Registered support loss failed to transfer the complete cross-chunk roof");
             h.assertTrue(ledger.pendingSupport() == 0, "Released cells left redundant support searches behind");
+            h.assertTrue(ledger.save(new CompoundTag(), level.registryAccess()).getList("support_originals", 10).isEmpty(),
+                    "Completed support journals retained all removed contacts forever");
             for (int x = 0; x < 56; x++) h.assertTrue(level.getBlockState(start.east(x)).isAir(), "Detached roof remains at a seam");
         } finally {
             NuclearEvents.get(level).detonations().remove(d);

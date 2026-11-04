@@ -63,7 +63,7 @@ public final class RuinMatter extends SavedData {
     private RuinSupport search;
     private int heldRadius;
 
-    @net.neoforged.bus.api.SubscribeEvent
+    @net.neoforged.bus.api.SubscribeEvent(receiveCanceled = true)
     public static void onNeighbour(net.neoforged.neoforge.event.level.BlockEvent.NeighborNotifyEvent event) {
         if (event.getLevel() instanceof ServerLevel level) {
             changed(level, event.getPos());
@@ -326,6 +326,12 @@ public final class RuinMatter extends SavedData {
                 else moving.addLast(piece);
             }
             clock.end(began);
+            setDirty();
+        }
+        if (supports.isEmpty() && supportSources.isEmpty() && !originals.isEmpty()) {
+            // All affected components have been reconciled, including cold edges. A later failure
+            // starts from that settled world; completed contact journals are not permanent history.
+            originals.clear();
             setDirty();
         }
         if (moving.isEmpty() && supports.isEmpty() && supportSources.isEmpty()) unload(level);
