@@ -1,0 +1,18 @@
+--- a/mod/src/devtest/java/ua/zentix/incoming/scenario/Sandbox.java
++++ b/mod/src/devtest/java/ua/zentix/incoming/scenario/Sandbox.java
+@@ -1251,7 +1251,14 @@
+                 Incoming.LOG.error("SANDBOX frame {} not written", to, ex);
+             }
+         });
+-        cap.frames.add(String.format(Locale.ROOT, "{\"t\": %.2f, \"age\": %.3f, \"file\": \"%s\", \"fps\": %d}", t, age, file, mc.getFps()));
++        // AIR5 PRIVATE measurement metadata; production renderer and simulation stay unchanged.
++        var air5Detonations = ua.zentix.incoming.client.nuclear.ClientNuclear.detonations();
++        double nuclearAge = air5Detonations.isEmpty() ? -1 : air5Detonations.getFirst().seconds(partial);
++        var air5Camera = mc.gameRenderer.getMainCamera();
++        Vec3 air5Eye = air5Camera.getPosition();
++        cap.frames.add(String.format(Locale.ROOT,
++                "{\"t\": %.2f, \"age\": %.3f, \"nuclearAge\": %.6f, \"file\": \"%s\", \"fps\": %d, \"eye\": [%.9f, %.9f, %.9f], \"yaw\": %.6f, \"pitch\": %.6f, \"fovSetting\": %d}",
++                t, age, nuclearAge, file, mc.getFps(), air5Eye.x, air5Eye.y, air5Eye.z, air5Camera.getYRot(), air5Camera.getXRot(), mc.options.fov().get()));
+         Incoming.LOG.info("SANDBOX shot {} age {} s fps {}; layer: {}; smoke: {}; flight: {}; air: {}", file, String.format(Locale.ROOT, "%.3f", age), mc.getFps(),
+                 ua.zentix.incoming.client.fx.layer.FxLayer.describeTiming(), ua.zentix.incoming.client.far.FarRenderer.describeSmoke(),
+                 ua.zentix.incoming.client.far.FarFlightView.describe(), ua.zentix.incoming.client.fx.ClientAir.now());

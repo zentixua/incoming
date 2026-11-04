@@ -6,13 +6,13 @@ Source commit: [476355384](https://github.com/zentixua/incoming/tree/476355384f9
 
 ## Source basis
 
-[Glasstone and Dolan1977 ch2](https://atomicarchive.com/resources/documents/effects/glasstone-dolan/chapter2.html), sections2.06-2.11/2.17-2.19, describes cloud entrainment, column development and terrain-dependent surface debris. [NRC1985 p22](https://nap.nationalacademies.org/books/540/gif/22.gif) records detached dusty stems in approximately10kt balloon tests. [National Academies2025, section2.3.3/figure2-3](https://www.nationalacademies.org/read/27515/chapter/4) explicitly discusses a cap/stem air gap and condensed water within the darker stem. These sources support possible separation; they do not calibrate this implementation's exact timing, opacity or gap.
+[Glasstone and Dolan 1977 ch2](https://atomicarchive.com/resources/documents/effects/glasstone-dolan/chapter2.html), sections2.06-2.11/2.17-2.19, describes cloud entrainment, column development and terrain-dependent surface debris. [NRC 1985 p22](https://nap.nationalacademies.org/books/540/gif/22.gif) records detached dusty stems in approximately10kt balloon tests. [National Academies 2025, section2.3.3/figure2-3](https://www.nationalacademies.org/read/27515/chapter/4) explicitly discusses a cap/stem air gap and condensed water within the darker stem. These sources support possible separation; they do not calibrate this implementation's exact timing, opacity or gap.
 
 The local original source images were inspected. Complete copyrighted page images are not redistributed here. No single photograph is treated as a matched-age calibration.
 
 ## Native model data
 
-[native-model.csv](numeric/native-model.csv), [full execution log](numeric/native-model.log), [probe](numeric/Air5ModelProbe.java). The probe invokes unmodified production model classes with Java21, one CPU/128MiB, without Minecraft or graphics. Execution completed successfully in0.49s. Reproduction: `java -XX:ActiveProcessorCount=1 -Xmx128m --class-path /path/to/pinned.jar numeric/Air5ModelProbe.java`.
+[native-model.csv](numeric/native-model.csv), [full execution log](numeric/native-model.log), [probe](numeric/Air5ModelProbe.java). The probe invokes unmodified production model classes with Java 21, one CPU/128 MiB, without Minecraft or graphics. Execution completed successfully in 0.49 s. Reproduction: `java -XX:ActiveProcessorCount=1 -Xmx128m --class-path /path/to/pinned.jar numeric/Air5ModelProbe.java`.
 
 Inputs:5/15kt, explicitAIR/GROUND, regular built-in AIR heights410.394/591.891m,20km visibility. Ages are model seconds, lengths metres above epicentre ground. Scale1 interpretation. No camera, weather shader or rendering is involved. The skirt is intentionally excluded from the probe; all reported cloud/stem fields are independent of that argument. Axis ground dust uses REAL-front age, as the current StemDust builder does; this is not a GAME0.25 pixel measurement.
 
@@ -29,7 +29,7 @@ Inputs:5/15kt, explicitAIR/GROUND, regular built-in AIR heights410.394/591.891m,
 |5GROUND|30|932.3|1118.7|281.0|
 |15GROUND|30|1454.7|1745.6|261.1|
 
-All72 rows are retained. Mean surfaces exclude billow displacement; optical depth is not screen opacity. The AIR15s stem tops lie below the reference axis ground-layer tops135.6/192.9m (5/15kt); early masking is plausible but has not yet been rendered in a controlled current scene.
+All 72 rows are retained. Mean surfaces exclude billow displacement; optical depth is not screen opacity. The AIR15s stem tops lie below the reference axis ground-layer tops135.6/192.9m (5/15kt); early masking is plausible but has not yet been rendered in a controlled current scene.
 
 ## Interpretation and open checks
 
@@ -42,3 +42,5 @@ An independent source review found two existing inconsistencies requiring separa
 The `prepared-fixture` directory contains a PRIVATE replacement for the existing devtest ArrivalScene, to be applied only in a disposable sandbox and restored afterward. It does not modify production classes/shaders. Mapping for this diagnostic only: `arrival 5 flash`=5ktAIR; `arrival 5`=5ktGROUND; likewise15. The normal carrier sequence is deliberately absent. Fixed seed1234, wind0, clear visibility20km, scale1, GAMEwave0.25; firesfalse is an explicit synthetic-source isolation. `initialAge=0` gives live time sequences, nonzero is an explicitly labelled age-seek control. `quality=OFF` also lowers mushroom sampling toLOW and therefore is not a pure foreground-only change.
 
 Planned first series:5/15AIR/GROUND at equal age, same camera8km south/300mAGL looking2000mAGL, FOV70, same world/weather/output and verified shader state; capture0.1/0.5/1/3/5/10/15/30/60/120s plus raw WAV/log/metadata. Initial source-isolated scene does not certify full-pack world destruction. Pair15AIR pallOFF and actual-Iris AIR/GROUND only as discriminators. GPU capture awaits the shared runtime resource handoff.
+
+The prepared Sandbox metadata patch adds actual client detonation age, camera coordinates/angles and FOV to each native screenshot record. `git apply --check` passed against the pinned source; Java compilation and execution remain pending. Use `hud on` during initial flash captures, because the sandbox otherwise suppresses the game GUI layers containing the nuclear flash.
