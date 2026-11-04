@@ -21,6 +21,17 @@ public final class RuinPreparation {
         NuclearWorld.get(level).prep().prepare(level, handle, owner, target, yieldKt, surface, airBurst);
     }
 
+    /** Server-owned route error and nominal terminal law; the accepted target remains separate. */
+    public static void prepareCarrier(ServerLevel level, UUID handle, UUID owner, Vec3 target, double yieldKt,
+                                      boolean surface, boolean airBurst, ua.zentix.incoming.strike.WeaponType weapon) {
+        NuclearWorld.get(level).prep().prepareCarrier(level, handle, owner, target, yieldKt, surface, airBurst, weapon);
+    }
+
+    /** Same sample throughout the request lifetime, including warning/site continuations. */
+    public static @Nullable Vec3 carrierMiss(ServerLevel level, UUID handle, ua.zentix.incoming.strike.WeaponType weapon) {
+        return NuclearWorld.get(level).prep().carrierMiss(handle, weapon);
+    }
+
     public static Status status(ServerLevel level, UUID handle) {
         return NuclearWorld.get(level).prep().status(level, handle);
     }

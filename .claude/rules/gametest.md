@@ -114,6 +114,8 @@ paths:
   enables entity ticking in rings as neighbors become ready and releases at explosion end: on slow CI machines,
   falling at the area edge would hang — `CraterFalls` places it immediately. Each platform has an air layer beneath:
   the bomb fracture zone collapses the neighboring platform's floor.
+- Exact server aim assertions use `TargetTracker.point()`. `StrikeProjectile.aimPoint()` reads the synchronized
+  HUD `Vector3f`, which rounds X/Z at distant test coordinates; it is not an exact geometry certificate.
 - `StrikeService` launch offsets aim by the spec's miss (`WeaponSpec.Route#miss`, Shahed axial standard deviation 3 m):
   compare hits with the projectile's aim point (`aimPoint`), not the target. Explosion work uses counting clocks
   (`WorkClock.counting`) if the check depends on how it is split across ticks.

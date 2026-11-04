@@ -207,8 +207,12 @@ public final class NuclearReview {
             if (action == C2S.NuclearAction.PREPARE && !e.preparing) {
                 e.preparing = true;
                 var l = e.order.loadout();
-                RuinPreparation.prepare(p.serverLevel(), e.id, p.getUUID(), e.aim.point(), l.nuke().yieldKt(),
-                        e.aim.target() instanceof Target.Ground, l.weapon().spec().warhead().chooseBurst() && l.nuke().airBurst());
+                if (Loadout.carriesNuke(l.weapon()))
+                    RuinPreparation.prepareCarrier(p.serverLevel(), e.id, p.getUUID(), e.aim.point(), l.nuke().yieldKt(),
+                            e.aim.target() instanceof Target.Ground, l.weapon().spec().warhead().chooseBurst() && l.nuke().airBurst(), l.weapon());
+                else
+                    RuinPreparation.prepare(p.serverLevel(), e.id, p.getUUID(), e.aim.point(), l.nuke().yieldKt(),
+                            e.aim.target() instanceof Target.Ground, l.weapon().spec().warhead().chooseBurst() && l.nuke().airBurst());
             }
             if (e.preparing) {
                 RuinPreparation.keepAlive(p.serverLevel(), e.id, p.getUUID());

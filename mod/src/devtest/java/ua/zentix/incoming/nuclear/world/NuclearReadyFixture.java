@@ -21,8 +21,12 @@ public final class NuclearReadyFixture {
     public static UUID prepare(GameTestHelper h, ServerPlayer player, Loadout loadout, ServerActions.Aim aim) {
         UUID handle = UUID.randomUUID();
         boolean air = loadout.weapon().spec().warhead().chooseBurst() && loadout.nuke().airBurst();
-        RuinPreparation.prepare(player.serverLevel(), handle, player.getUUID(), aim.point(), loadout.nuke().yieldKt(),
-                aim.target() instanceof Target.Ground, air);
+        if (Loadout.carriesNuke(loadout.weapon()))
+            RuinPreparation.prepareCarrier(player.serverLevel(), handle, player.getUUID(), aim.point(), loadout.nuke().yieldKt(),
+                    aim.target() instanceof Target.Ground, air, loadout.weapon());
+        else
+            RuinPreparation.prepare(player.serverLevel(), handle, player.getUUID(), aim.point(), loadout.nuke().yieldKt(),
+                    aim.target() instanceof Target.Ground, air);
         StrikeGameTests.afterTest(h, () -> RuinPreparation.cancel(h.getLevel(), handle));
         ready(player.serverLevel(), handle, aim.point(), loadout.nuke().yieldKt(), air);
         return handle;
@@ -34,7 +38,15 @@ public final class NuclearReadyFixture {
             var prep = NuclearWorld.get(level).prep();
             for (Object p : (List<?>) field(prep, "preps").get(prep)) {
                 if (!handle.equals(field(p, "handle").get(p)) || field(p, "draining").getBoolean(p)) continue;
-                var geometry = NuclearWarhead.geometry(level, resolvedTarget, yieldKt, airBurst, (float) IncomingConfig.SERVER.effectsScale());
+                var weapon = (ua.zentix.incoming.strike.WeaponType) field(p, "carrierWeapon").get(p);
+                Vec3 terminal = resolvedTarget.add((Vec3) field(p, "miss").get(p));
+                if (weapon == ua.zentix.incoming.strike.WeaponType.BUNKER)
+                    terminal = NuclearWarhead.surfaceAt(level, terminal).add(0, -.5, 0);
+                else if (weapon != null && field(p, "surface").getBoolean(p))
+                    terminal = new Target.Ground(terminal).surface(level);
+                if (weapon == ua.zentix.incoming.strike.WeaponType.MISSILE)
+                    terminal = ua.zentix.incoming.nuclear.NuclearStrikes.ground(level, terminal);
+                var geometry = NuclearWarhead.geometry(level, terminal, yieldKt, airBurst, (float) IncomingConfig.SERVER.effectsScale());
                 field(p, "geometry").set(p, geometry);
                 field(p, "ruins").set(p, new RuinContext(level, geometry));
                 field(p, "resolvedTarget").set(p, resolvedTarget);
