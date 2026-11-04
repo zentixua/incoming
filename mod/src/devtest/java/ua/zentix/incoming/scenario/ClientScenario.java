@@ -183,6 +183,10 @@ public final class ClientScenario {
             new LeakCheck(); // entries into the world and memory measurements in the menu are their own (LeakCheck), the world is opened by itself on each entry
             return;
         }
+        if ("lod-buffer".equals(scenario)) {
+            new ua.zentix.incoming.client.LodBufferScenario();
+            return;
+        }
         if ("sandbox".equals(scenario)) {
             new Sandbox(); // sandbox effects: your own flat world, commands /fx, hot swap (tools/sandbox.sh)
             return;

@@ -537,7 +537,8 @@ public final class DhGameTests {
      * {@code max(detonation, front arrival at DH section center − LEAD)}; one DH section (4×4 chunks) in one tick, once:
      * a {@code FarLods} request on wave arrival (and light from a quarter blacked out by detonation) does not repeat it.
      * Log output is delivery minus front arrival by chunk. The receiver immediately sends DH write confirmation (absent
-     * without DH). Flight and wave run at game pace: disk reads, plans and copies follow wall-clock time.
+     * without DH). Await actual asynchronous preparation first, then move the deadline near the current tick;
+     * the flight/front assertions advance only by game ticks, without pacing sleeps.
      */
     @GameTest(template = "range", timeoutTicks = 6000, batch = "dh_front", skyAccess = true)
     public static void heavyZoneLodsGoWithTheFront(GameTestHelper h) {
@@ -573,7 +574,7 @@ public final class DhGameTests {
         NuclearWorld w = NuclearWorld.get(level);
         NuclearEvents events = NuclearEvents.get(level);
         int[] stage = {0}, strike = {0};
-        long[] since = {0}, tickAt = {System.nanoTime()};
+        long[] since = {0};
         Detonation[] det = {null};
         // counting copies - while the preparation is alive (the zone behind the wave has ended - it no longer exists)
         long[][] stats = {null};
@@ -586,7 +587,7 @@ public final class DhGameTests {
                     for (ChunkPos c : area) if (map.getVisibleChunkIfPresent(c.toLong()) != null || map.pendingUnloads.containsKey(c.toLong())) return;
                     IncomingConfig.SERVER.nukeEffectsScale.set(0.25);
                     strike[0] = events.nextId();
-                    events.schedule(new NuclearEvents.ScheduledStrike(strike[0], target, 1, false, now, now + 1200, target, java.util.Optional.empty(), true));
+                    events.schedule(new NuclearEvents.ScheduledStrike(strike[0], target, 1, false, now, now + 100_000, target, java.util.Optional.empty(), true));
                     since[0] = now;
                     stage[0] = 1;
                 }
@@ -599,13 +600,17 @@ public final class DhGameTests {
                         stage[0] = 2;
                         return;
                     }
-                    // plans and copies build background flows according to the wall clock: flight - at the pace of the game until the copies are ready
-                    if (!prepared[0] || s == null || s[0] == 0 || s[12] > 0 || s[13] > 0) RuinBackgroundGameTests.gamePace(tickAt);
-                    else tickAt[0] = System.nanoTime();
+                    // This tests publication timing, not disk throughput. Arm the fixture only after its
+                    // asynchronous prerequisite completes; the ensuing front advances strictly by game ticks.
+                    if (prepared[0] && s != null && s[0] > 0 && s[12] == 0 && s[13] == 0 && since[0] >= 0) {
+                        var scheduled = events.scheduled().stream().filter(x -> x.id() == strike[0]).findFirst().orElseThrow();
+                        events.unschedule(scheduled);
+                        events.schedule(new NuclearEvents.ScheduledStrike(strike[0], target, 1, false,
+                                scheduled.launchTime(), now + 20, target, java.util.Optional.empty(), true));
+                        since[0] = -1;
+                    }
                 }
                 case 2 -> {
-                    // wave - at the pace of the game (the path of FarLods upon the arrival of the wave reads from the disk according to the wall clock)
-                    RuinBackgroundGameTests.gamePace(tickAt);
                     long[] s = w.frontLodStats(strike[0]);
                     if (s != null) stats[0] = s;
                     if (now < det[0].gameTime() + 200) return;

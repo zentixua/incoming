@@ -393,3 +393,8 @@ paths:
   marks. Never substitute the crater ordering without a cursor migration test.
 
 - Settlement must trim re-readable snapshots before reserving traversal rows. Otherwise a full budget can block the cleanup that a retained scar needs to resume; cover this through `NuclearWorld.tick` with no moving pieces or external reservation release.
+- Cancelled preparations retain disk/front-copy reservations in their NuclearPrep lifetime counter until completion,
+  even after the preparation is removed. Ready results release at collection or invalidation. `RetainedPlans`
+  follows put/remove/clear so consumed preplans no longer contribute historical bytes. These are admission estimates,
+  not a complete nuclear heap bound. FarLods tags copies, snapshots and headers by cancellation generation; late
+  results release their slots but cannot publish. Regressions: `nuke_lifecycle_detached`, `nuke_lifecycle_far`.

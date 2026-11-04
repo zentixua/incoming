@@ -102,3 +102,8 @@ paths:
   chunks without a player visit; later clients depend on LSS's ordinary save/store invalidation. This must be tested
   separately from Incoming's immediate copy delivery. Packets are not ingested during Flashback replay (Voxy shows
   the live database there).
+
+- The `lod-buffer` development scenario is excluded from the release jar. Its database witnesses run outside the
+  producer/reset monitor (`WitnessesTest` holds a read while both progress). Values carry their epoch; stale read
+  confirmation cannot consume a new witness. `TimedLodBuffer.current` is an ownership snapshot, never a fence
+  against foreign ingestion already crossing stop. Submission timings are elapsed nanoseconds, not CPU time.
