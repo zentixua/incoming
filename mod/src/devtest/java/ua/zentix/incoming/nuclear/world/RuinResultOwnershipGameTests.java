@@ -33,6 +33,7 @@ public final class RuinResultOwnershipGameTests {
             long bound = RuinPlan.maxResultBytes(grid);
             long fullHeight = 256L * (grid.maxY() - grid.minY());
             h.assertTrue(bound < fullHeight * 40, "Sparse source lost its tighter section-domain admission");
+            long fragmentBound = RuinPlan.maxFragmentBytes(grid);
             RuinPlan[] plans = {RuinPlanner.finish(grid, Collapse.solve(grid)), RuinPlanner.flash(grid), RuinPlanner.scorch(grid)};
             for (var plan : plans) {
                 h.assertTrue(plan != RuinPlan.EMPTY, "Fixture did not produce an owned plan");
@@ -56,6 +57,11 @@ public final class RuinResultOwnershipGameTests {
                     h.assertTrue(RuinResults.bytes() == baseline, "Counted consumer did not release producer charge");
                 } finally { lease.cancel(); lease.actualExit(); }
             }
+            long fragments = 0;
+            for (int dz = -1; dz <= 1; dz++) for (int dx = -1; dx <= 1; dx++)
+                if (grid.at(dx, dz) != null) fragments += RuinPlan.fragmentBytes(grid.blast(dx, dz));
+            h.assertTrue(fragments <= fragmentBound, "Actual retained fracture cache exceeded source bound");
+            Incoming.LOG.info("Separate fragment estimate pressure={} bound={} actual={}", pressure, fragmentBound, fragments);
             Incoming.LOG.info("Result ownership fixture pressure={} bound={} ruin={} flash={} scorch={}", pressure,
                     bound, plans[0].bytes(), plans[1].bytes(), plans[2].bytes());
         }

@@ -702,6 +702,46 @@ public final class RuinPlan {
                 (centre.sections + 63L) / 64);
     }
 
+    /**
+     * Separate retained-cache estimate; NOT part of a lease that shrinks to plan.bytes(). The context owner
+     * must reserve before production and retain/transfer it for the cache's actual lifetime. A solver may
+     * publish all nine chunk fractures even when its centre plan is empty or its future is cancelled.
+     */
+    static long maxFragmentBytes(RuinContext.Grid grid) {
+        long bytes = 0;
+        for (int dz = -1; dz <= 1; dz++) for (int dx = -1; dx <= 1; dx++) {
+            ChunkShot shot = grid.at(dx, dz);
+            if (shot == null) continue;
+            long cells = populatedCells(shot, 256);
+            // Blast.run emits each non-air centre position once. fellTrees records at most one root per
+            // centre column (break after recording); each record is long[]{position,height,direction}.
+            long trees = Math.min(cells, 256);
+            bytes += fragmentBytes(cells, 9, trees, trees, 3 * trees);
+        }
+        return bytes;
+    }
+
+    /** The same element/capacity law for an actually retained Blast, with its nine numeric snapshot IDs. */
+    static long fragmentBytes(Blast blast) {
+        long treeLongs = 0;
+        for (long[] tree : blast.trees()) treeLongs += tree.length;
+        return fragmentBytes(blast.removed().length, blast.stamp().serials().length,
+                blast.trees().size(), blast.treeLogs().size(), treeLongs);
+    }
+
+    static long fragmentBytes(long removed, long serials, long trees, long treeLogs, long treeLongs) {
+        // Estimated record shell 56, stamp shell 24, map/key allowance 64; array headers 16 each;
+        // two ArrayList shells 24 each. Eight-byte references keep this independent of compressed oops.
+        return 64 + 56 + 24 + 16 + 8 * serials + 16 + 4 * removed + 2 * (24 + 16)
+                + 8 * (listCapacity(trees) + listCapacity(treeLogs)) + 16 * trees + 8 * treeLongs;
+    }
+
+    private static long listCapacity(long size) {
+        // These producer lists only append: ArrayList starts at 10 then grows by 1.5, hence <=2n.
+        // This is a backing-capacity bound, not a guessed payload multiplier.
+        return size == 0 ? 0 : Math.max(10, 2 * size);
+    }
+
     private static long populatedCells(ChunkShot shot, int columns) {
         long result = 0;
         for (int i = 0; i < shot.sections; i++) if (shot.mayHave(i, state -> !state.isAir())) result += 16L * columns;
