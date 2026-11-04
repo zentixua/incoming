@@ -240,12 +240,16 @@ paths:
   finite-element model. Reloading tags or block data maps invalidates the snapshot property table.
 - `Collapse.detached` compares original contact connectivity with surviving components inside its window.
   Pre-existing detached builds remain untouched. Actual removed support faces seed `RuinSupport`: a resumable
-  contact graph across ready chunks. The saved removed-contact journal first reconstructs the original graph:
+  contact graph across ready chunks. The saved removed-contact journal is shared across all still-pending strikes,
+  with the first removed state at each position retained until reconciliation drains (event IDs only attribute
+  removals). Per-event reconstruction loses foundations broken by overlapping strikes. It reconstructs the original graph:
   release requires an original path to a protected block/world floor and no surviving path. A broken decoration
   does not give an End island or floating build global gravity; lower neighbours are not support-loss seeds.
   Unknown faces wait behind a separate non-ticking material ticket, never become anchors. Loader neighbour
   notifications invalidate the entire in-progress certificate, including contacts scanned in earlier slices;
-  release also rechecks each cell and its external contacts. Never bypass notifications when adding supports.
+  release also rechecks each cell and its external contacts. Traversal, validation and release use the same
+  load-bearing face criterion: a colliding leaf is not an anchor or a new structural contact. Never bypass
+  notifications when adding supports. Registered-event regressions: `nuke_review_foliage`, `nuke_review_overlap*`.
   Continuation removals AND deposition use `RuinPlan.callbackRadius`: non-vanilla block entities require a radius-2
   ready neighbourhood for `onRemove`/`onPlace`, not just the two-block Sable guard. Source expansion, search, validation and
   release run in bounded batches under the nuclear work clock; no fixed bridge length declares equilibrium.

@@ -94,15 +94,7 @@ final class RuinSupport {
                 }
                 // A newly added connection invalidates the closed component, even if none of its
                 // original blocks changed. Reconcile it instead of deleting an edited structure.
-                for (Direction direction : ORDER) {
-                    BlockPos next = at.relative(direction);
-                    Blast.Props own = Blast.props(component.get(cells[cursor]));
-                    Blast.Props neighbour = Blast.props(level.getBlockState(next));
-                    if (!component.containsKey(next.asLong()) && neighbour.bearing() && own.touches(direction, neighbour)) {
-                        restart();
-                        return false;
-                    }
-                }
+                if (newContact(level, at)) { restart(); return false; }
                 cursor++;
                 continue;
             }
@@ -127,7 +119,7 @@ final class RuinSupport {
                 frontier.removeLong(frontier.size() - 1);
                 continue;
             }
-            BlockState state = original ? ledger.original(level, at, d.id()) : level.getBlockState(at);
+            BlockState state = original ? ledger.original(level, at) : level.getBlockState(at);
             Blast.Props props = Blast.props(state);
             if (props.bearing() && !ledger.ready(level, at, true)) { waiting = true; return false; }
             frontier.removeLong(frontier.size() - 1);
@@ -148,8 +140,8 @@ final class RuinSupport {
             // connected bedrock. Roof components still follow their complete boundary graph.
             for (Direction direction : ORDER) {
                 BlockPos next = at.relative(direction);
-                Blast.Props neighbour = Blast.props(original ? ledger.original(level, next, d.id()) : level.getBlockState(next));
-                if (!seen.contains(next.asLong()) && neighbour.bearing() && props.touches(direction, neighbour))
+                Blast.Props neighbour = Blast.props(original ? ledger.original(level, next) : level.getBlockState(next));
+                if (!seen.contains(next.asLong()) && bearingContact(props, direction, neighbour))
                     frontier.add(next.asLong());
             }
         }
@@ -168,9 +160,13 @@ final class RuinSupport {
         Blast.Props own = Blast.props(component.get(at.asLong()));
         for (Direction direction : ORDER) {
             BlockPos next = at.relative(direction);
-            if (!component.containsKey(next.asLong()) && own.touches(direction, Blast.props(level.getBlockState(next)))) return true;
+            if (!component.containsKey(next.asLong()) && bearingContact(own, direction, Blast.props(level.getBlockState(next)))) return true;
         }
         return false;
+    }
+
+    private static boolean bearingContact(Blast.Props own, Direction direction, Blast.Props neighbour) {
+        return neighbour.bearing() && own.touches(direction, neighbour);
     }
 
     // Package diagnostics also let tests insert edits at the actual resumable phase boundary.

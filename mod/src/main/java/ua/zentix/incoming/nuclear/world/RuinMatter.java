@@ -57,9 +57,10 @@ public final class RuinMatter extends SavedData {
     private final it.unimi.dsi.fastutil.longs.Long2IntLinkedOpenHashMap supports = new it.unimi.dsi.fastutil.longs.Long2IntLinkedOpenHashMap();
     /** Only cold edges need to remember the removed face until their neighbour can be inspected. */
     private final it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<BlockState[]> uncertain = new it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<>();
-    /** Removed contacts reconstruct the pre-failure graph; absence of a current anchor alone is
-     * never evidence that this strike detached an originally floating build. */
-    private final java.util.Map<Integer, it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<BlockState>> originals = new java.util.HashMap<>();
+    private record Original(BlockState state, int event) {}
+    /** One pre-failure graph for all still-pending removals, including overlapping strikes.
+     * First removal at a position wins until reconciliation drains; event IDs only attribute it. */
+    private final it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<Original> originals = new it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<>();
     private RuinSupport search;
     private int heldRadius;
 
@@ -77,18 +78,16 @@ public final class RuinMatter extends SavedData {
         if (ledger != null && ledger.search != null) ledger.search.changed(at);
     }
 
-    BlockState original(ServerLevel level, BlockPos at, int event) {
-        var removed = originals.get(event);
-        BlockState state = removed == null ? null : removed.get(at.asLong());
-        return state == null ? level.getBlockState(at) : state;
+    BlockState original(ServerLevel level, BlockPos at) {
+        Original removed = originals.get(at.asLong());
+        return removed == null ? level.getBlockState(at) : removed.state;
     }
 
     private net.minecraft.world.level.ChunkPos held;
 
     void support(ServerLevel level, List<Piece> pieces, Detonation d) {
         for (Piece piece : pieces) if (Blast.props(piece.state).bearing()) {
-            originals.computeIfAbsent(d.id(), ignored -> new it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<>())
-                    .putIfAbsent(piece.source.asLong(), piece.state);
+            originals.putIfAbsent(piece.source.asLong(), new Original(piece.state, d.id()));
             supportSources.addLast(new SupportSeed(piece.source, piece.state, d.id()));
         }
         if (!pieces.isEmpty()) setDirty();
@@ -484,8 +483,10 @@ public final class RuinMatter extends SavedData {
         ListTag originalTags = tag.getList("support_originals", Tag.TAG_COMPOUND);
         for (int i = 0; i < originalTags.size(); i++) {
             CompoundTag row = originalTags.getCompound(i);
-            result.originals.computeIfAbsent(row.getInt("event"), ignored -> new it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<>())
-                    .put(row.getLong("position"), NbtUtils.readBlockState(lookup.lookupOrThrow(Registries.BLOCK), row.getCompound("state")));
+            Original removed = new Original(NbtUtils.readBlockState(lookup.lookupOrThrow(Registries.BLOCK), row.getCompound("state")), row.getInt("event"));
+            // Older per-event saves may repeat a position in unspecified map order. Event IDs
+            // increase with registration; retain the earliest strike's contact when importing them.
+            result.originals.merge(row.getLong("position"), removed, (a, b) -> a.event <= b.event ? a : b);
         }
         ListTag sourceTags = tag.getList("support_sources", Tag.TAG_COMPOUND);
         for (int i = 0; i < sourceTags.size(); i++) {
@@ -566,10 +567,10 @@ public final class RuinMatter extends SavedData {
         tag.putDouble("dispersed_volume", dispersedVolume);
         tag.putDouble("dispersed_mass", dispersedMass);
         ListTag originalTags = new ListTag();
-        for (var event : originals.entrySet()) for (var entry : event.getValue().long2ObjectEntrySet()) {
+        for (var entry : originals.long2ObjectEntrySet()) {
             CompoundTag row = new CompoundTag();
-            row.putInt("event", event.getKey()); row.putLong("position", entry.getLongKey());
-            row.put("state", NbtUtils.writeBlockState(entry.getValue())); originalTags.add(row);
+            row.putInt("event", entry.getValue().event); row.putLong("position", entry.getLongKey());
+            row.put("state", NbtUtils.writeBlockState(entry.getValue().state)); originalTags.add(row);
         }
         tag.put("support_originals", originalTags);
         ListTag sourceTags = new ListTag();

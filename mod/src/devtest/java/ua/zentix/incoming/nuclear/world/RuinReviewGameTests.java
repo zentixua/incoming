@@ -102,6 +102,92 @@ public final class RuinReviewGameTests {
         h.succeed();
     }
 
+    @GameTest(template = "range", batch = "nuke_review_foliage", timeoutTicks = 40, skyAccess = true)
+    public static void foliageContactDoesNotRestartRegisteredSupportRelease(GameTestHelper h) {
+        var level = h.getLevel();
+        RuinMatterGameTests.clearFixture(level);
+        var ledger = RuinMatter.get(level);
+        BlockPos start = h.absolutePos(new BlockPos(4, 30, 32));
+        var d = register(level, start);
+        try {
+            for (int x = 0; x < 56; x++) level.setBlock(start.east(x), Blocks.WHITE_CONCRETE.defaultBlockState(), 2);
+            level.setBlock(start.below(), Blocks.GLASS.defaultBlockState(), 2);
+            level.setBlock(start.below(2), Blocks.OBSIDIAN.defaultBlockState(), 2);
+            var leaves = Blocks.OAK_LEAVES.defaultBlockState()
+                    .setValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.PERSISTENT, true);
+            level.setBlock(start.north(), leaves, 2);
+            h.assertTrue(!Blast.props(leaves).bearing() && Blast.props(level.getBlockState(start))
+                    .touches(net.minecraft.core.Direction.NORTH, Blast.props(leaves)), "Fixture needs a non-bearing contact at the release seed");
+            remove(level, ledger, d, start.below());
+            for (int i = 0; i < 500; i++) unit(level, ledger);
+            h.assertTrue(ledger.released() == 57 && ledger.pending() == 56,
+                    "Foliage contact prevented beam release: released=" + ledger.released() + ", support=" + ledger.pendingSupport());
+            h.assertTrue(ledger.pendingSupport() == 0, "Foliage contact left support work looping");
+            h.assertTrue(level.getBlockState(start.north()) == leaves, "Non-bearing foliage was consumed as structure");
+            for (int x = 0; x < 56; x++) h.assertTrue(level.getBlockState(start.east(x)).isAir(), "Beam remains at a seam beside foliage");
+        } finally {
+            NuclearEvents.get(level).detonations().remove(d);
+            RuinMatterGameTests.clearFixture(level);
+        }
+        h.succeed();
+    }
+
+    @GameTest(template = "range", batch = "nuke_review_overlap", timeoutTicks = 40, skyAccess = true)
+    public static void overlappingRegisteredRemovalsKeepTheirSharedFoundationProof(GameTestHelper h) {
+        overlap(h, false, false);
+    }
+
+    @GameTest(template = "range", batch = "nuke_review_overlap_reload", timeoutTicks = 40, skyAccess = true)
+    public static void overlappingRegisteredRemovalsKeepTheirProofAfterReload(GameTestHelper h) {
+        overlap(h, false, true);
+    }
+
+    @GameTest(template = "range", batch = "nuke_review_overlap_reverse", timeoutTicks = 40, skyAccess = true)
+    public static void overlappingRegisteredRemovalsAreIndependentOfOrder(GameTestHelper h) {
+        overlap(h, true, true);
+    }
+
+    private static void overlap(GameTestHelper h, boolean upperFirst, boolean reload) {
+        var level = h.getLevel();
+        RuinMatterGameTests.clearFixture(level);
+        var ledger = RuinMatter.get(level);
+        BlockPos start = h.absolutePos(new BlockPos(4, 30, 24));
+        BlockPos floating = start.offset(0, 8, 16);
+        var lowerEvent = register(level, start);
+        var upperEvent = register(level, start);
+        try {
+            for (int x = 0; x < 56; x++) level.setBlock(start.east(x), Blocks.WHITE_CONCRETE.defaultBlockState(), 2);
+            for (int x = 0; x < 8; x++) level.setBlock(floating.east(x), Blocks.WHITE_CONCRETE.defaultBlockState(), 2);
+            level.setBlock(start.below(3), Blocks.OBSIDIAN.defaultBlockState(), 2);
+            for (BlockPos beam : List.of(start, floating)) {
+                level.setBlock(beam.below(), Blocks.GLASS.defaultBlockState(), 2);
+                level.setBlock(beam.below(2), Blocks.GLASS.defaultBlockState(), 2);
+                // No work between the two registered removals: both provenance records must
+                // contribute to one pre-failure graph, even after a SavedData round trip.
+                remove(level, ledger, upperFirst ? upperEvent : lowerEvent, beam.below(upperFirst ? 1 : 2));
+                remove(level, ledger, upperFirst ? lowerEvent : upperEvent, beam.below(upperFirst ? 2 : 1));
+            }
+            if (reload) {
+                ledger = RuinMatter.load(ledger.save(new CompoundTag(), level.registryAccess()), level.registryAccess());
+                level.getDataStorage().set("incoming_ruin_matter", ledger);
+            }
+            for (int i = 0; i < 500; i++) unit(level, ledger);
+            h.assertTrue(ledger.released() == 60 && ledger.pending() == 56,
+                    "Overlapping strikes lost the original foundation: released=" + ledger.released() + ", support=" + ledger.pendingSupport());
+            h.assertTrue(ledger.pendingSupport() == 0, "Overlapping support work did not drain");
+            for (int x = 0; x < 56; x++) h.assertTrue(level.getBlockState(start.east(x)).isAir(), "Previously anchored beam remained suspended");
+            for (int x = 0; x < 8; x++) h.assertTrue(level.getBlockState(floating.east(x)).is(Blocks.WHITE_CONCRETE),
+                    "Combined provenance gave an originally floating beam global gravity");
+            h.assertTrue(ledger.save(new CompoundTag(), level.registryAccess()).getList("support_originals", 10).isEmpty(),
+                    "Reconciled overlapping contacts were not retired");
+        } finally {
+            NuclearEvents.get(level).detonations().remove(lowerEvent);
+            NuclearEvents.get(level).detonations().remove(upperEvent);
+            RuinMatterGameTests.clearFixture(level);
+        }
+        h.succeed();
+    }
+
     @GameTest(template = "range", batch = "nuke_review_callback", timeoutTicks = 40, skyAccess = true)
     public static void slopingBeltContinuationWaitsForCallbackChunks(GameTestHelper h) {
         var level = h.getLevel();
