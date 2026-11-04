@@ -144,3 +144,22 @@ paths:
   players use the remembered position, including during `Sightings.CURRENT`'s grace period, never unobserved live
   movement. Keep ordinary launch resolution separate from review disclosure. Packet-level regressions:
   `nuclear_review_disclosure`, `nuclear_review_last_seen`.
+
+## Prepared nuclear orders
+- `NuclearReview` remains unpaid. PREPARE starts a leased `RuinPreparation` handle; status packets update the same
+  screen, never reconstruct it (`removed()` discards authority). Polling renews a one-minute inactivity lease; the
+  initial PREPARE must not be swallowed by the polling rate limit. BEGIN/COMMIT require server READY and the exact
+  current review, target, policy and launch-site authority. A hold begun before readiness cannot become a launch.
+- Ordinary nuclear commands enter `NuclearCommands` unpaid, then execute the accepted command once READY. Their
+  explicit command is firing authority, while the remote requires a fresh hold after READY. Operator `nuke now`
+  remains diagnostic. Unlaunched command state belongs to `StrikeWorld`, clears on death/logout/dimension/abort,
+  and never survives a restart. Do not inspect hidden quarry movement when retaining an accepted sighted point.
+- Carry the UUID through payment, `NuclearKeys` warning/second-key waits and one-shot launch-site continuations;
+  renew accepted pending work from server ticks, rather than requiring its screen to remain open. Another review
+  must not silently cancel a paid pending warning. Ordinary owner Abort cancels unpaid reviews/commands while
+  preserving accepted paid nuclear orders. Preserve the accepted Ground Y through continuation; resolving
+  `Target.Ground` again changes its surface convention by half a block and invalidates exact readiness.
+- ICBM binding uses its actual scheduled ID before warnings. Carriers use an explicit one-shot identity through
+  save/virtual transitions/B-2 payload transfer; detonation forwards that identity to the backend. No geometry
+  proximity lookup identifies a request. Physical off-target/penetrating impacts must not be snapped to cache
+  geometry. The backend decides whether plans match and handles changed geometry under its normal bounds.

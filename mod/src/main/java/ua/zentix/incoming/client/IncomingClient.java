@@ -440,6 +440,12 @@ public final class IncomingClient {
         }
 
         @Override
+        public void nuclearPreparation(S2C.NuclearPreparation p) {
+            if (!Replay.active() && Minecraft.getInstance().screen instanceof ua.zentix.incoming.client.screen.NuclearReviewScreen screen)
+                screen.update(p);
+        }
+
+        @Override
         public void nuclearReview(S2C.NuclearReview p) {
             if (Replay.active()) return;
             if (p.finished()) {

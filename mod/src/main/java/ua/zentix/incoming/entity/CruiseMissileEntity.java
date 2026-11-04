@@ -98,8 +98,9 @@ public class CruiseMissileEntity extends StrikeProjectile {
             super.impact(level, point, hitEntity);
             return;
         }
+        int identity = takeNuclearPreparation();
         discard();
-        NuclearWarhead.detonate(level, NuclearStrikes.ground(level, point), nuclear.yieldKt(), nuclear.airBurst(), ownerId());
+        NuclearWarhead.detonatePrepared(level, NuclearStrikes.ground(level, point), nuclear.yieldKt(), nuclear.airBurst(), ownerId(), identity);
     }
 
     @Override

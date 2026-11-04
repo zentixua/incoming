@@ -36,6 +36,15 @@ The separate `nuke` syntax is below; it has no entity target, `at <x z>` form or
 Without a number: the world's `nuclear.default_yield` (15 kt by default). Without a burst mode: ground burst.
 `air` or `ground` only after the number: `/incoming nuke 15 air` selects an air burst.
 
+An ordinary nuclear command first prepares destruction at the selected point without spending ammunition. It reports
+progress in chat and launches that exact order automatically when preparation is ready; the command itself is the
+launch instruction, so it needs no screen confirmation. The configured flight time starts after preparation.
+A new nuclear command from the same player replaces the previous unlaunched command. Disconnecting, dying, changing
+dimension or a global nuclear abort cancels it; changed permissions, settings or a moving target can also cancel it.
+Before readiness, use the remote's Abort button or `/incoming clear` to cancel your unpaid command. Once accepted,
+existing nuclear second-key and warning cancellation rules apply.
+`nuke now` remains an immediate operator diagnostic and does not wait for preparation.
+
 ## Other commands
 
 | Command | What it does |

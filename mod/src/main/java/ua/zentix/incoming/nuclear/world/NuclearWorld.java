@@ -84,6 +84,11 @@ public final class NuclearWorld {
         return prep.planned(fresh);
     }
 
+    /** Explicit scheduled-strike identity for bound prelaunch handles. */
+    public Detonation planned(Detonation fresh, int strikeId) {
+        return prep.planned(fresh, strikeId);
+    }
+
     /**
      * For tests: heavy-zone LOD copies for {@code strike} front while preparation alive: built, sent, late,
      * send minus front arrival (minimum/maximum), loaded, evicted, front early, build failures,
@@ -118,6 +123,7 @@ public final class NuclearWorld {
     RuinContext ruins(ServerLevel level, Detonation d, long now) {
         RuinContext ctx = ruins.get(d.id());
         if (ctx == null) ruins.put(d.id(), ctx = new RuinContext(level, d));
+        prep.restore(level, ctx);
         ctx.used = now;
         return ctx;
     }
@@ -286,6 +292,11 @@ public final class NuclearWorld {
      * @param owner launcher (credited for damage)
      */
     public void onDetonation(ServerLevel level, Detonation d, @Nullable UUID owner) {
+        onDetonation(level, d, owner, -1);
+    }
+
+    /** Transfer the exact accepted strike's prepared pages to the actual event ID. */
+    public void onDetonation(ServerLevel level, Detonation d, @Nullable UUID owner, int strikeId) {
         pulses.add(new PulseJob(level, d, owner));
         // snapshot bodies before walls now: pulse (PulseJob) and wave later burn, kill or move them
         FlashShadows flash = FlashShadows.of(level, d);
@@ -293,7 +304,7 @@ public final class NuclearWorld {
         // ground light during pulse, before wave: burned ground, scorch, fires (chunks collected by first work unit)
         scorches.add(new FlashScorch(d));
         blast.onDetonation(d, owner);
-        NuclearPrep.Handoff ready = prep.handOff(level, d, level.getGameTime());
+        NuclearPrep.Handoff ready = prep.handOff(level, d, level.getGameTime(), strikeId);
         if (ready != null) {
             // prebuilt and on-site ruins identical: preparation fractures/applied ruins pass to detonation
             ready.ruins().used = level.getGameTime();
@@ -363,15 +374,23 @@ public final class NuclearWorld {
      * @return background threads stopped within deadline
      */
     public static boolean onServerStopping(net.minecraft.server.MinecraftServer server) {
+        var storage = new java.util.ArrayList<java.util.concurrent.CompletableFuture<Void>>();
         for (ServerLevel level : server.getAllLevels()) {
             if (!level.hasData(ModAttachments.NUCLEAR_WORLD)) continue;
             try {
-                get(level).clear(level);
+                NuclearWorld world = get(level);
+                storage.add(world.prep.closeStorage());
+                for (RuinContext ctx : world.ruins.values()) storage.add(ctx.closeStorage());
+                world.clear(level);
             } catch (RuntimeException e) {
                 Incoming.LOG.error("Ruins: shutdown in {} failed with an exception", level.dimension().location(), e);
             }
         }
-        return RuinWorkers.shutdown();
+        boolean stopped = RuinWorkers.shutdown();
+        // Shutdown only, never an autosave/tick wait. Pages already admitted are bounded and detached.
+        try { java.util.concurrent.CompletableFuture.allOf(storage.toArray(java.util.concurrent.CompletableFuture[]::new)).join(); }
+        catch (RuntimeException e) { Incoming.LOG.error("Could not finish prepared ruin pages on shutdown", e); }
+        return stopped;
     }
 
     /** Cancel: queues stopped (destruction not restored). */

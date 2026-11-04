@@ -19,6 +19,8 @@ import ua.zentix.incoming.entity.LauncherEntity;
 import ua.zentix.incoming.gametest.MunitionGameTests.Listener;
 import ua.zentix.incoming.nuclear.NuclearEvents;
 import ua.zentix.incoming.nuclear.NuclearStrikes;
+import ua.zentix.incoming.nuclear.world.NuclearReadyFixture;
+import ua.zentix.incoming.strike.NuclearCommands;
 import ua.zentix.incoming.registry.ModItems;
 import ua.zentix.incoming.strike.Loadout;
 import ua.zentix.incoming.strike.Munitions;
@@ -101,6 +103,29 @@ public final class NuclearKeyGameTests {
         h.succeed();
     }
 
+    @GameTest(template = "runway", batch = "nuclear_keys_owner_lifecycle", skyAccess = true)
+    public static void unarmedOwnerDeathDimensionAndLogoutRefundExactlyOnce(GameTestHelper h) {
+        setUp(h);
+        var level = h.getLevel();
+        Listener owner = at(h, "keys_lifecycle", LAUNCHER);
+        Listener near = at(h, "keys_lifecycle_near", LAUNCHER.east(3));
+        give(owner, ModItems.ICBM.get(), 1);
+        List<Listener> online = List.of(owner, near);
+        for (int reason = 0; reason < 3; reason++) {
+            h.assertTrue(order(owner, online, nuke(WeaponType.NUKE, false), h), "ready key order refused");
+            h.assertValueEqual(held(owner, ModItems.ICBM.get()), 0, "pending order did not pay");
+            if (reason == 0) NuclearKeys.onDeath(new net.neoforged.neoforge.event.entity.living.LivingDeathEvent(owner, level.damageSources().genericKill()));
+            else if (reason == 1) NuclearKeys.onDimension(new net.neoforged.neoforge.event.entity.player.PlayerEvent.PlayerChangedDimensionEvent(
+                    owner, level.dimension(), net.minecraft.world.level.Level.NETHER));
+            else NuclearKeys.onLogout(new net.neoforged.neoforge.event.entity.player.PlayerEvent.PlayerLoggedOutEvent(owner));
+            h.assertValueEqual(NuclearKeys.get(level).pending(), 0, "unarmed order retained after owner exit");
+            h.assertValueEqual(held(owner, ModItems.ICBM.get()), 1, "unarmed order not refunded once");
+            h.assertFalse(NuclearKeys.confirm(near, online), "exited owner order still accepted second key");
+            h.assertValueEqual(held(owner, ModItems.ICBM.get()), 1, "duplicate cancellation refunded twice");
+        }
+        h.succeed();
+    }
+
     /**
      * Alone on the network (server GameTest without players): the order from the remote control goes immediately, without a key, but ICBM flies 90 s, and not 10 s
      *  settings. Operator command ({@code rules = false}) - without a key and by configuration.
@@ -113,7 +138,8 @@ public final class NuclearKeyGameTests {
         Listener a = at(h, "keys_alone", LAUNCHER);
         give(a, ModItems.ICBM.get(), 1);
         ServerActions.Aim aim = aim(h);
-        h.assertTrue(ServerActions.strike(a, WeaponType.NUKE, 1, 0, aim, new Loadout.Nuke(15, true), Waypoints.NONE, null, true), "launch of one on the network is not accepted");
+        h.assertTrue(ServerActions.strikePrepared(a, WeaponType.NUKE, 1, 0, aim, new Loadout.Nuke(15, true), Waypoints.NONE, null, true,
+                NuclearReadyFixture.prepare(h, a, nuke(WeaponType.NUKE, false), aim)), "launch of one on the network is not accepted");
         h.assertValueEqual(NuclearKeys.get(level).pending(), 0, "there's one on the network waiting for the key");
         NuclearEvents.ScheduledStrike s = mine(level, a.getUUID());
         h.assertTrue(s != null, "ICBM alone on the network is not running");
@@ -121,7 +147,8 @@ public final class NuclearKeyGameTests {
         h.assertTrue(a.last("incoming.nuke.launch_detected") != null, "no line \"detected by launch\"");
 
         Listener op = at(h, "keys_op_command", LAUNCHER.east(8));
-        h.assertTrue(ServerActions.strike(op, WeaponType.NUKE, 1, 0, aim, new Loadout.Nuke(15, true), Waypoints.NONE, null, false), "operator command not accepted");
+        h.assertTrue(ServerActions.strikePrepared(op, WeaponType.NUKE, 1, 0, aim, new Loadout.Nuke(15, true), Waypoints.NONE, null, false,
+                NuclearReadyFixture.prepare(h, op, nuke(WeaponType.NUKE, false), aim)), "operator command not accepted");
         NuclearEvents.ScheduledStrike o = mine(level, op.getUUID());
         h.assertTrue(o != null, "Operator command ICBM is not running");
         h.assertValueEqual(o.detonateTime() - o.launchTime(), (long) SHORT_FLIGHT, "flight ICBM operator commands, tick");
@@ -191,6 +218,36 @@ public final class NuclearKeyGameTests {
         h.succeed();
     }
 
+    @GameTest(template = "range", batch = "nuclear_keys_armed_dimension", skyAccess = true)
+    public static void armedCarrierWarningStillLaunchesAfterOwnerChangesDimension(GameTestHelper h) throws ReflectiveOperationException {
+        setUp(h);
+        var level = h.getLevel();
+        Listener owner = at(h, "keys_armed_dimension", new BlockPos(32, 12, 32));
+        Listener near = at(h, "keys_armed_dimension_near", new BlockPos(35, 12, 32));
+        give(owner, ModItems.CRUISE_MISSILE.get(), 1);
+        give(owner, Munitions.warhead(), 1);
+        h.assertTrue(order(owner, List.of(owner, near), nuke(WeaponType.MISSILE, true), h), "carrier order refused");
+        h.assertTrue(NuclearKeys.confirm(near, List.of(owner, near)), "second key refused");
+        var nether = level.getServer().getLevel(net.minecraft.world.level.Level.NETHER);
+        h.assertTrue(nether != null, "second dimension absent");
+        var moved = net.neoforged.neoforge.common.util.FakePlayerFactory.get(nether, owner.getGameProfile());
+        NuclearKeys.onDimension(new net.neoforged.neoforge.event.entity.player.PlayerEvent.PlayerChangedDimensionEvent(
+                moved, level.dimension(), nether.dimension()));
+        h.assertValueEqual(NuclearKeys.get(level).pending(), 1, "dimension change cancelled an armed warning");
+        var ordersField = NuclearKeys.class.getDeclaredField("orders"); ordersField.setAccessible(true);
+        Object pending = ((List<?>) ordersField.get(NuclearKeys.get(level))).getFirst();
+        var launchAt = pending.getClass().getDeclaredField("launchAt"); launchAt.setAccessible(true);
+        h.assertValueEqual(launchAt.getLong(pending) - level.getGameTime(), (long) NuclearKeys.MIN_WARNING, "warning duration changed");
+        launchAt.setLong(pending, level.getGameTime()); // Advance only this accepted warning's due edge.
+        var tick = NuclearKeys.class.getDeclaredMethod("tick", ServerLevel.class, java.util.Collection.class); tick.setAccessible(true);
+        tick.invoke(NuclearKeys.get(level), level, List.of(moved, near));
+        h.assertValueEqual(NuclearKeys.get(level).pending(), 0, "due carrier retained pending order");
+        h.assertTrue(StrikeWorld.projectiles(level).stream().anyMatch(projectile -> owner.getUUID().equals(projectile.ownerId())
+                && projectile.nuclearPreparation() >= 0), "dimension change refused prepared carrier launch");
+        h.assertValueEqual(held(owner, ModItems.CRUISE_MISSILE.get()), 0, "armed carrier refunded instead of launching");
+        h.succeed();
+    }
+
     // ---------------------------------------------------------------- assistants
 
     /**
@@ -202,6 +259,7 @@ public final class NuclearKeyGameTests {
         boolean opsOnly = IncomingConfig.SERVER.nukeOpsOnly.get();
         int flight = IncomingConfig.SERVER.nukeFlightTime.get();
         StrikeGameTests.afterTest(h, () -> {
+            NuclearCommands.cancelAll(level.getServer());
             NuclearKeys.cancelAll(level.getServer(), List.of(), null, "check completed");
             NuclearStrikes.clear(level);
             VirtualFlights.get(level).clear(level, p -> p instanceof IcbmEntity);
@@ -234,7 +292,8 @@ public final class NuclearKeyGameTests {
     private static boolean order(Listener owner, List<Listener> online, Loadout l, GameTestHelper h) {
         Munitions.Bill bill = Munitions.Bill.of(l);
         if (!Munitions.pay(owner, bill)) throw new GameTestAssertException("not paid: " + l);
-        return NuclearKeys.order(owner, online, l, aim(h), Waypoints.NONE, bill);
+        return NuclearKeys.order(owner, online, l, aim(h), Waypoints.NONE, bill,
+                NuclearReadyFixture.prepare(h, owner, l, aim(h)));
     }
 
     @Nullable

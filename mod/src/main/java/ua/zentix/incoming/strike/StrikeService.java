@@ -29,6 +29,7 @@ import ua.zentix.incoming.guidance.Route;
 import ua.zentix.incoming.launcher.FixedLauncherBlockEntity;
 import ua.zentix.incoming.net.S2C;
 import ua.zentix.incoming.nuclear.NuclearStrikes;
+import ua.zentix.incoming.nuclear.world.RuinPreparation;
 import ua.zentix.incoming.util.Terrain;
 import ua.zentix.incoming.registry.ModEntities;
 import ua.zentix.incoming.target.Target;
@@ -85,6 +86,25 @@ public final class StrikeService {
         return launch(level, weapon, target, point, approachYaw, owner, siren, nuke, via, from, 0);
     }
 
+    /** Exact server-owned prepared order. Refusal never leaves a live projectile or scheduled event. */
+    public static Result launchPrepared(ServerLevel level, WeaponType weapon, Target target, Vec3 point, float approachYaw,
+                                        @Nullable UUID owner, @Nullable ServerPlayer shooter, boolean siren, Loadout.Nuke nuke,
+                                        Waypoints via, @Nullable LaunchOrigin from, UUID preparation, int flightTicks) {
+        if (shooter != null && shooter.level() != level) shooter = null;
+        if (owner == null || !IncomingConfig.SERVER.nukeEnabled.get()
+                || nuke.yieldKt() > IncomingConfig.SERVER.nukeMaxYield.get() || from instanceof LaunchOrigin.Fixed
+                || !RuinPreparation.keepAlive(level, preparation, owner)) return Result.FAILED;
+        var state = RuinPreparation.status(level, preparation);
+        if (state.stage() != RuinPreparation.Stage.READY || !point.equals(state.resolvedTarget())) return Result.FAILED;
+        if (weapon.spec().launch() == WeaponSpec.Launch.ICBM) {
+            boolean ok = NuclearStrikes.launchPrepared(level, point, target instanceof Target.Ground, nuke.yieldKt(), nuke.airBurst(),
+                    shooter, owner, flightTicks, preparation);
+            return new Result(ok, flightTicks);
+        }
+        if (!nuke.onCarrier() || !Loadout.carriesNuke(weapon) || !IncomingConfig.SERVER.carrierNukes.get()) return Result.FAILED;
+        return launch(level, weapon, target, point, approachYaw, owner, shooter, siren, nuke, via, from, null, 0, preparation);
+    }
+
     /**
      * Salvo projectile ({@link SalvoData}) as {@link #launch}, in its own lane: route shifted sideways {@code
      * lane} blocks ({@link WeaponSpec.Lanes}, {@link Route#inLane}); 0 follows path itself.
@@ -124,7 +144,7 @@ public final class StrikeService {
         }
         boolean ok = false;
         try {
-            Result r = launch(level, weapon, target, point, approachYaw, owner, shooter, siren, nuke, via, from, fixed, lane);
+            Result r = launch(level, weapon, target, point, approachYaw, owner, shooter, siren, nuke, via, from, fixed, lane, null);
             ok = r.ok();
             return r;
         } finally {
@@ -135,9 +155,11 @@ public final class StrikeService {
 
     private static Result launch(ServerLevel level, WeaponType weapon, Target target, Vec3 point, float approachYaw, @Nullable UUID owner,
                                  @Nullable ServerPlayer shooter, boolean siren, Loadout.Nuke nuke, Waypoints via, @Nullable LaunchOrigin from,
-                                 @Nullable FixedLauncherBlockEntity fixed, double lane) {
+                                 @Nullable FixedLauncherBlockEntity fixed, double lane, @Nullable UUID preparation) {
         if (siren) StrikeWorld.get(level).newOrder(owner, weapon);
         WeaponSpec spec = weapon.spec();
+        Vec3 preparedPoint = point;
+        boolean preparedSurface = target instanceof Target.Ground;
         // This launch's miss (spec): aim at shifted target, relative offset for entity.
         Vec3 miss = spec.route().miss(level.random);
         if (!miss.equals(Vec3.ZERO)) {
@@ -155,24 +177,28 @@ public final class StrikeService {
             case ICBM -> throw new IllegalStateException("ICBMs are launched by NuclearStrikes");
         };
         if (p == null) return Result.FAILED;
-        p.setNuclear(warhead);
-        if (siren && IncomingConfig.SERVER.siren.get()) p.armSiren(spec.sirenLead());
-        int eta = p.etaTicks();
-        if (!p.isVirtual()) {
-            // On launcher: acquire tickets before world entry; ordered site may not entity-tick.
-            p.holdChunks(level);
-            boolean added = false;
-            try {
-                added = level.addFreshEntity(p);
-            } finally {
-                // Entry rejected or handler threw (claim-protection mods): projectile is neither in world nor
-                // virtual flights; without discard, pre-entry tickets would hold chunks until server stop;
-                // propagate exception: failed launch refunds payment.
-                if (!added) p.discard();
+        boolean launched = false;
+        try {
+            p.setNuclear(warhead);
+            if (preparation != null) {
+                int identity = RuinPreparation.bindCarrier(level, preparation, owner, preparedPoint, nuke.yieldKt(), preparedSurface,
+                        spec.warhead().chooseBurst() && nuke.airBurst());
+                if (identity < 0) return Result.FAILED;
+                p.setNuclearPreparation(identity);
             }
-            if (!added) return Result.FAILED;
+            if (siren && IncomingConfig.SERVER.siren.get()) p.armSiren(spec.sirenLead());
+            int eta = p.etaTicks();
+            if (!p.isVirtual()) {
+                // Acquire before entry: an ordered site may not entity-tick. Any failed entry releases all ownership.
+                p.holdChunks(level);
+                if (!level.addFreshEntity(p)) return Result.FAILED;
+            }
+            launched = true;
+            return new Result(true, eta);
+        } finally {
+            // Includes preparation refusal, claim-protection exceptions, and pre-entry ticket failures.
+            if (!launched) p.discard();
         }
-        return new Result(true, eta);
     }
 
     /**

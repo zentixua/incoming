@@ -119,7 +119,15 @@ public final class Incoming {
         NeoForge.EVENT_BUS.addListener(ArrivalTickets::onRespawn);
         NeoForge.EVENT_BUS.addListener(ArrivalTickets::onLogout);
         NeoForge.EVENT_BUS.addListener(NuclearKeys::onLogout);
+        NeoForge.EVENT_BUS.addListener(NuclearKeys::onDimension);
+        NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, NuclearKeys::onDeath);
         NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, ua.zentix.incoming.strike.NuclearReview::onDeath);
+        NeoForge.EVENT_BUS.addListener(ua.zentix.incoming.strike.NuclearReview::onLogout);
+        NeoForge.EVENT_BUS.addListener(ua.zentix.incoming.strike.NuclearReview::onDimension);
+        NeoForge.EVENT_BUS.addListener(ua.zentix.incoming.strike.NuclearReview::onTick);
+        NeoForge.EVENT_BUS.addListener(ua.zentix.incoming.strike.NuclearCommands::onLogout);
+        NeoForge.EVENT_BUS.addListener(ua.zentix.incoming.strike.NuclearCommands::onDimension);
+        NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, ua.zentix.incoming.strike.NuclearCommands::onDeath);
         NeoForge.EVENT_BUS.addListener(ArrivalTickets::onPlayerTick);
         NeoForge.EVENT_BUS.addListener(ArrivalTickets::onLevelTick);
         NeoForge.EVENT_BUS.addListener(OldNamespace::onServerAboutToStart);

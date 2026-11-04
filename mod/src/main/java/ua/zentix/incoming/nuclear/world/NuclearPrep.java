@@ -94,9 +94,13 @@ public final class NuclearPrep {
      * thread buffers. Beyond cap new reads await plans releasing snapshots; no further plans built above cap.
      */
     static final long PLANS_CAP = 512L << 20;
+    /** Keep write-encoding room free: a full read window must still be able to spill. */
+    private static final long WINDOW_CAP = PLANS_CAP - (32L << 20);
     /** Concurrent disk reads and estimated memory per read (parsed city chunk tens of KB). */
     private static final int READS = 64;
     private static final long READ_BYTES = 96L << 10;
+    private static final long SPILL_READ_BYTES = (4L << 20) + READ_BYTES;
+    private record ArchivedShot(long key, java.util.Optional<net.minecraft.nbt.CompoundTag> data, DiskShots.Read current) {}
     /** Allowed detonation-location difference from plan, blocks. */
     private static final double SAME_PLACE = 8;
 
@@ -169,8 +173,8 @@ public final class NuclearPrep {
     }
 
     private static final class Prep {
-        final int strike;
-        final long detonateTime;
+        int strike;
+        long detonateTime;
         @Nullable
         Detonation geometry;
         /** Zone layout ({@link #layout}) while built in background; null if ready or not started. */
@@ -190,6 +194,7 @@ public final class NuclearPrep {
         final LongArrayList submitted = new LongArrayList();
         long nextRefresh;
         boolean capped;
+        String archivePath = "";
         long nextZoneReport;
         /** Chunks beyond heavy-zone edge within {@link RuinPlanner#REACH}: no prebuilt plans. */
         long[] edge = new long[0];
@@ -228,7 +233,12 @@ public final class NuclearPrep {
         DiskShots.Format format;
         /** In-flight disk reads (submitted, result not yet parsed) and background results. */
         final LongOpenHashSet reading = new LongOpenHashSet();
+        final java.util.concurrent.atomic.AtomicLong asyncBytes = new java.util.concurrent.atomic.AtomicLong();
+        final java.util.function.LongConsumer accounting;
         final RuinInbox<DiskShots.Read> reads;
+        final RuinInbox<DiskShots.Read> terrainReads;
+        boolean resolvingRead;
+        final RuinInbox<ArchivedShot> archived;
         /** Chunks absent as fully generated disk chunks: no preplans for them/neighbors. */
         final LongOpenHashSet unreadable = new LongOpenHashSet();
         /** Unread reasons ({@link DiskShots.Read#skip} before colon), for “ready” line. */
@@ -238,28 +248,196 @@ public final class NuclearPrep {
         /** Chunks whose disk-snapshot plans background threads build. */
         final LongArrayList farRunning = new LongArrayList();
         int farPlans, diskShots, farSkipped;
+        boolean farInitialized;
         /** {@link #order} cursor: wave-reached chunks submitted to distant LODs ({@link FarLods}). */
         int nextLod;
-        /** Heavy-zone chunks outside memory at detonation, for “far rings” line. */
-        @Nullable
-        long[] farAtDetonation;
         /** Zone LOD copies from ready disk plans, into DH with front. */
         final FrontLods lods;
+
+        UUID handle, owner;
+        final UUID cacheId = UUID.randomUUID();
+        Vec3 target, resolvedTarget;
+        double yieldKt;
+        boolean surface, airBurst, bound, carrier, noRuins, archiveWritten;
+        long expires;
+        int generation;
+        String configuration;
+        RuinPreparation.Reason failure = RuinPreparation.Reason.NONE;
 
         Prep(int strike, long detonateTime, java.util.function.LongConsumer accounting) {
             this.strike = strike;
             this.detonateTime = detonateTime;
-            this.lods = new FrontLods(strike, accounting);
-            this.reads = new RuinInbox<>(accounting, READ_BYTES);
+            var owned = asyncBytes; // Detached callbacks must not retain Prep or its world.
+            this.accounting = delta -> { owned.addAndGet(delta); accounting.accept(delta); };
+            this.lods = new FrontLods(strike, this.accounting);
+            this.reads = new RuinInbox<>(this.accounting, READ_BYTES);
+            this.terrainReads = new RuinInbox<>(this.accounting, READ_BYTES);
+            this.archived = new RuinInbox<>(this.accounting, SPILL_READ_BYTES);
         }
     }
 
     // The completion retains this counter, never the abandoned preparation/world.
     private final java.util.concurrent.atomic.AtomicLong readBytes = new java.util.concurrent.atomic.AtomicLong();
+    java.util.function.LongConsumer readAccounting() { return readBytes::addAndGet; }
+
+    private CompletableFuture<String> policy;
+    private int policyGeneration = -1;
     private final List<Prep> preps = new ArrayList<>();
+    /** Optional cache hints outlive a drained preparation while its ledger is frozen. */
+    private final it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap<String> archiveHints = new it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap<>();
     /** Strikes whose preparation failed: do not restart (otherwise error logged every tick). */
     private final java.util.Set<Integer> failed = new java.util.HashSet<>();
     private final WorkClock clock = WorkClock.decaying(0.5);
+
+    // A server-wide handle limit bounds metadata as well as the shared byte admission budget.
+    static final int REQUEST_LIMIT = 8;
+    static final long LEASE_TICKS = 1200;
+    private int nextHandleStrike = -2;
+
+    void prepare(ServerLevel level, UUID handle, UUID owner, Vec3 target, double yieldKt, boolean surface, boolean airBurst) {
+        java.util.Objects.requireNonNull(handle);
+        java.util.Objects.requireNonNull(owner);
+        java.util.Objects.requireNonNull(target);
+        Prep old = request(handle);
+        if (old != null) {
+            if (!owner.equals(old.owner) || old.bound) return;
+            if (compatible(old) && old.failure == RuinPreparation.Reason.NONE && level.getGameTime() < old.expires
+                    && old.target.equals(target) && old.yieldKt == yieldKt && old.surface == surface && old.airBurst == airBurst) {
+                keepAlive(level, handle, owner);
+                return;
+            }
+            old.draining = true;
+        }
+        int count = 0;
+        for (ServerLevel other : level.getServer().getAllLevels()) {
+            if (!other.hasData(ModAttachments.NUCLEAR_WORLD)) continue;
+            for (Prep p : NuclearWorld.get(other).prep().preps) {
+                if (p.handle == null) continue;
+                if (!p.draining && p.handle.equals(handle)) return; // Handles cannot migrate between dimensions.
+                if (p.owner.equals(owner) && !p.bound) p.draining = true;
+                count++;
+            }
+        }
+        if (count >= REQUEST_LIMIT) return;
+        Prep p = new Prep(nextHandleStrike--, Long.MAX_VALUE, readBytes::addAndGet);
+        p.handle = handle;
+        p.owner = owner;
+        p.target = target;
+        p.yieldKt = yieldKt;
+        p.surface = surface;
+        p.airBurst = airBurst;
+        p.expires = level.getGameTime() + LEASE_TICKS;
+        p.generation = Blast.generation;
+        p.configuration = configuration();
+        if (!Double.isFinite(target.x) || !Double.isFinite(target.y) || !Double.isFinite(target.z)
+                || Math.abs(target.x) > 29_999_984 || Math.abs(target.z) > 29_999_984
+                || !Double.isFinite(yieldKt) || yieldKt <= 0 || yieldKt > IncomingConfig.SERVER.nukeMaxYield.get())
+            p.failure = RuinPreparation.Reason.INVALID;
+        preps.add(p);
+    }
+
+    private Prep request(UUID handle) {
+        for (Prep p : preps) if (handle.equals(p.handle) && !p.draining) return p;
+        return null;
+    }
+
+    private static String configuration() {
+        return IncomingConfig.SERVER.nukeMaxYield.get() + ":" + IncomingConfig.SERVER.effectsScale() + ":" + IncomingConfig.SERVER.waveSpeed() + ":"
+                + IncomingConfig.SERVER.nukeBlockDamage.get() + ":" + IncomingConfig.SERVER.nukeTreeFall.get()
+                + ":" + IncomingConfig.SERVER.nukeFires.get();
+    }
+
+    private static boolean compatible(Prep p) {
+        return p.generation == Blast.generation && p.configuration.equals(configuration());
+    }
+
+    boolean keepAlive(ServerLevel level, UUID handle, UUID owner) {
+        Prep p = request(handle);
+        if (p == null || !owner.equals(p.owner) || !p.bound && level.getGameTime() >= p.expires) return false;
+        p.expires = level.getGameTime() + LEASE_TICKS;
+        return true;
+    }
+
+    void cancel(UUID handle) {
+        Prep p = request(handle);
+        if (p != null) { p.draining = true; if (p.bound) failed.add(p.strike); }
+    }
+
+    void cancelOwner(UUID owner) {
+        for (Prep p : preps) if (owner.equals(p.owner) && !p.bound) p.draining = true;
+    }
+
+    RuinPreparation.Status status(ServerLevel level, UUID handle) {
+        Prep p = request(handle);
+        if (p == null) return new RuinPreparation.Status(RuinPreparation.Stage.ABSENT, 0, 0, 0, 0, 0, 0,
+                RuinPreparation.Reason.NONE, null);
+        var reason = p.failure;
+        var stage = RuinPreparation.Stage.PLANNING;
+        if (!p.bound && level.getGameTime() >= p.expires) reason = RuinPreparation.Reason.EXPIRED;
+        if (!compatible(p)) reason = RuinPreparation.Reason.INCOMPATIBLE;
+        if (p.geometry != null && p.detonation < 0) {
+            var under = Terrain.estimate(level, net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
+                    Mth.floor(p.target.x), Mth.floor(p.target.z), Terrain.Allowed.CHUNK);
+            if (under.source() == Terrain.Source.CHUNK) {
+                double ground = p.surface ? under.y() : Math.min(under.y(), p.target.y);
+                if (ground <= level.getMinBuildHeight()) ground = p.target.y;
+                if (ground != p.geometry.groundY()) reason = RuinPreparation.Reason.INCOMPATIBLE;
+            }
+        }
+        int writing = p.plans.pendingWrites() + (p.ruins == null || p.ruins.archive() == null ? 0 : p.ruins.archive().pendingWrites());
+        int reading = p.reading.size() + p.plans.pendingReads() + (p.resolvingRead ? 1 : 0);
+        int planning = p.farRunning.size() + p.submitted.size();
+        long complete = p.plans.size() + (long) p.farSkipped;
+        if (reason != RuinPreparation.Reason.NONE) stage = RuinPreparation.Stage.FAILED;
+        else if (p.heapStop && !p.bound) { stage = RuinPreparation.Stage.FAILED; reason = RuinPreparation.Reason.MEMORY; }
+        else if (p.noRuins && p.geometry != null) stage = RuinPreparation.Stage.READY;
+        else if (p.geometry == null && memory(level) >= WINDOW_CAP) {
+            stage = RuinPreparation.Stage.PAUSED; reason = RuinPreparation.Reason.MEMORY;
+        }
+        else if (p.geometry == null) { stage = RuinPreparation.Stage.RESOLVING; reason = RuinPreparation.Reason.RESOLVING; }
+        else if (p.layout != null) stage = RuinPreparation.Stage.PLANNING;
+        else if (p.nextFar >= p.order.length && planning == 0 && reading == 0 && complete == p.order.length) {
+            stage = writing == 0 ? RuinPreparation.Stage.READY : RuinPreparation.Stage.STORING;
+        } else if (p.heapStop || memory(level) >= WINDOW_CAP) {
+            stage = RuinPreparation.Stage.PAUSED;
+            reason = RuinPreparation.Reason.MEMORY;
+        }
+        long resident = p.asyncBytes.get() + p.plans.bytes() + p.lods.retainedBytes()
+                + (long) (p.order.length + p.edge.length + p.toScan.size()) * Long.BYTES
+                + (p.ruins == null ? 0 : p.ruins.retainedBytes());
+        return new RuinPreparation.Status(stage, Math.max(0, complete - writing), p.order.length, reading, planning,
+                writing, resident, reason, p.resolvedTarget);
+    }
+
+    boolean bind(ServerLevel level, UUID handle, int strikeId) {
+        Prep p = request(handle);
+        if (p == null) return false;
+        if (p.bound) return p.strike == strikeId && compatible(p) && p.failure == RuinPreparation.Reason.NONE;
+        if (status(level, handle).stage() != RuinPreparation.Stage.READY) return false;
+        var s = NuclearEvents.get(level).scheduled().stream().filter(x -> x.id() == strikeId).findFirst().orElse(null);
+        if (s == null || s.owner().isEmpty() || !s.owner().get().equals(p.owner) || s.yieldKt() != p.yieldKt
+                || s.surface() != p.surface || s.airBurst() != p.airBurst
+                || !s.target().equals(p.resolvedTarget) || preps.stream().anyMatch(x -> x != p && x.strike == strikeId)) return false;
+        p.strike = strikeId;
+        p.detonateTime = s.detonateTime();
+        p.bound = true;
+        return true;
+    }
+
+    int bindCarrier(ServerLevel level, UUID handle, UUID owner, Vec3 target, double yieldKt, boolean surface, boolean airBurst) {
+        Prep p = request(handle);
+        if (p == null || p.bound || !owner.equals(p.owner) || !target.equals(p.resolvedTarget)
+                || yieldKt != p.yieldKt || surface != p.surface || airBurst != p.airBurst) return -1;
+        if (status(level, handle).stage() != RuinPreparation.Stage.READY) return -1;
+        p.strike = NuclearEvents.get(level).nextId();
+        p.carrier = true;
+        p.bound = true;
+        return p.strike;
+    }
+
+    void cancelCarrier(int identity) {
+        for (Prep p : preps) if (p.carrier && p.detonation < 0 && p.strike == identity) p.draining = true;
+    }
 
     /** Total prebuilt ruins across strikes (tests, status). */
     public int plannedChunks() {
@@ -268,7 +446,7 @@ public final class NuclearPrep {
 
     /** No preparations: release ruin-solver buffers. */
     public boolean idle() {
-        return preps.isEmpty();
+        return preps.isEmpty() && archiveHints.isEmpty();
     }
 
     /** Chunk unloaded: background plan unnecessary. */
@@ -276,18 +454,19 @@ public final class NuclearPrep {
         for (Prep p : preps) {
             p.submitted.rem(chunk);
             // before detonation preparation ruins outside NuclearWorld: preparation removes task itself
-            if (p.ruins != null && p.detonation < 0) p.ruins.forget(chunk);
+            if (p.handle == null && p.ruins != null && p.detonation < 0) p.ruins.forget(chunk);
             p.considered.remove(chunk);
         }
     }
 
     /** Retained preparation estimates; handed-off contexts are counted by NuclearWorld, not twice here. */
     long retainedBytes() {
-        long bytes = readBytes.get();
+        long bytes = readBytes.get() + 64L * archiveHints.size();
+        for (String path : archiveHints.values()) bytes += 2L * path.length();
         for (Prep p : preps) {
             bytes += p.plans.bytes() + p.lods.retainedBytes();
             if (p.ruins != null && p.detonation < 0) bytes += p.ruins.retainedBytes();
-            bytes += (long) (p.order.length + p.edge.length + p.toScan.size()) * Long.BYTES;
+            bytes += 1024L + 2L * p.archivePath.length() + (long) (p.order.length + p.edge.length + p.toScan.size()) * Long.BYTES;
         }
         return bytes;
     }
@@ -319,6 +498,7 @@ public final class NuclearPrep {
             bytes += world.retainedRuinBytes();
             cold |= world.ledgers.pending();
         }
+        RuinWorkers.configureHeight(height);
         // Unknown old ownership has priority over new preparation/removals. Import uses only the
         // already-resident counter above and takes its reservation before decoding anything.
         if (cold) return Math.max(bytes, PLANS_CAP);
@@ -340,6 +520,7 @@ public final class NuclearPrep {
      */
     public void tick(ServerLevel level, NuclearEvents events, ScarQueue scars, WorkClock shared) {
         long now = level.getGameTime();
+        flushArchiveHints(level);
         long cap = WorkScheduler.prepCapNanos();
         // new strikes: preparation from launch
         for (NuclearEvents.ScheduledStrike s : events.scheduled()) {
@@ -362,7 +543,9 @@ public final class NuclearPrep {
                     if (releaseSome(level, p, RELEASE_PER_TICK) == 0) it.remove();
                     continue;
                 }
+                p.plans.pump(Math.max(0, PLANS_CAP - memory(level)));
                 if (p.detonation >= 0) {
+                    rememberArchive(level, p);
                     // handed to detonation: behind-wave zone loads squares, releases when ruins applied
                     if (!p.heapStop && heapTight()) stopForHeap(p);
                     Detonation d = events.detonations().stream().filter(x -> x.id() == p.detonation).findFirst().orElse(null);
@@ -378,6 +561,20 @@ public final class NuclearPrep {
                     }
                     continue;
                 }
+                if (p.handle != null && !compatible(p)) {
+                    p.failure = RuinPreparation.Reason.INCOMPATIBLE;
+                    if (p.bound) { p.draining = true; continue; }
+                }
+                if (p.handle != null && !p.bound) {
+                    if (now >= p.expires) { p.draining = true; continue; }
+                    if (!compatible(p)) p.failure = RuinPreparation.Reason.INCOMPATIBLE;
+                    if (p.failure == RuinPreparation.Reason.NONE && (p.geometry != null || !IncomingConfig.SERVER.nukeBlockDamage.get() || memory(level) < WINDOW_CAP)) work(level, null, p, shared);
+                    continue;
+                }
+                if (p.carrier) {
+                    work(level, null, p, shared);
+                    continue;
+                }
                 NuclearEvents.ScheduledStrike s = events.scheduled().stream().filter(x -> x.id() == p.strike).findFirst().orElse(null);
                 if (s == null) {
                     // cancelled or detonation differs from planned location
@@ -388,6 +585,7 @@ public final class NuclearPrep {
             } catch (RuntimeException e) {
                 Incoming.LOG.error("Ruin preparation for strike #{} failed with an exception; dropped", p.strike, e);
                 failed.add(p.strike);
+                if (p.handle != null) p.failure = RuinPreparation.Reason.IO;
                 if (p.draining) {
                     // failed while releasing squares: release all, do not retry (otherwise error every tick)
                     it.remove();
@@ -406,29 +604,60 @@ public final class NuclearPrep {
 
     private void work(ServerLevel level, NuclearEvents.ScheduledStrike s, Prep p, WorkClock shared) {
         if (p.geometry == null) {
-            // detonation location as for actual burst: ground beneath target from ready chunk (target area held since launch)
-            if (!Terrain.ready(level, BlockPos.containing(s.target()))) return;
-            p.geometry = NuclearWarhead.geometry(level, s.surface() ? NuclearWarhead.surfaceAt(level, s.target()) : s.target(), s.yieldKt(), s.airBurst(),
-                    (float) IncomingConfig.SERVER.effectsScale());
+            String content = IncomingConfig.SERVER.nukeBlockDamage.get() ? content(level) : "";
+            if (content == null) return;
+            if (p.handle == null) {
+                // Existing scheduled-flight preparation retains its loaded target behavior.
+                if (!Terrain.ready(level, BlockPos.containing(s.target()))) return;
+                p.geometry = NuclearWarhead.geometry(level, s.surface() ? NuclearWarhead.surfaceAt(level, s.target()) : s.target(), s.yieldKt(), s.airBurst(),
+                        (float) IncomingConfig.SERVER.effectsScale());
+            } else {
+                Terrain.Surface under = resolveSurface(level, p, shared);
+                if (under == null) return;
+                double ground = under.source() == Terrain.Source.CEILING ? p.target.y : p.surface ? under.y() : Math.min(under.y(), p.target.y);
+                if (ground <= level.getMinBuildHeight()) ground = p.target.y;
+                p.resolvedTarget = p.surface ? new Vec3(p.target.x, ground, p.target.z) : p.target;
+                float scale = (float) IncomingConfig.SERVER.effectsScale();
+                double hob = p.airBurst ? ua.zentix.incoming.nuclear.model.Yield.optimalBurstHeight(p.yieldKt) * scale : 0;
+                boolean surfaceBurst = hob / scale < ua.zentix.incoming.nuclear.model.FireballModel.maxRadius(p.yieldKt, true);
+                float visibility = (float) (level.isThundering() ? ua.zentix.incoming.nuclear.model.ThermalModel.VISIBILITY_THUNDER
+                        : level.isRaining() ? ua.zentix.incoming.nuclear.model.ThermalModel.VISIBILITY_RAIN
+                        : ua.zentix.incoming.nuclear.model.ThermalModel.VISIBILITY_CLEAR);
+                p.geometry = new Detonation(-1, new Vec3(p.target.x, ground + hob, p.target.z), ground, p.yieldKt,
+                        surfaceBurst, 0, 0, 0, visibility, 0, scale, false, (float) IncomingConfig.SERVER.waveSpeed());
+            }
+            p.noRuins = !IncomingConfig.SERVER.nukeBlockDamage.get();
+            if (p.noRuins) return; // Truthful empty work: flash/radiation-only mode has no ruin zone.
             Detonation g = p.geometry;
             // background layout: 15 kt zone ~33 thousand chunks/~1400 squares, costing 50–65 ms on tick
             p.layout = CompletableFuture.supplyAsync(() -> layout(g), Util.backgroundExecutor());
             p.ruins = new RuinContext(level, p.geometry);
+            var info = new net.minecraft.world.level.chunk.storage.RegionStorageInfo(
+                    level.getServer().getWorldData().getLevelName(), level.dimension(), "incoming_preparation");
+            p.archivePath = (p.handle == null ? String.valueOf(p.strike) : p.cacheId.toString()) + "/" + preparationKey(p.geometry) + "/" + content;
+            var root = net.minecraft.world.level.dimension.DimensionType.getStorageFolder(level.dimension(),
+                            level.getServer().getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT))
+                            .resolve("data/incoming-preparation/" + p.archivePath);
+            p.plans.spill(new RuinPages(info, root.resolve("plans-v" + RuinPlan.STORAGE_VERSION)),
+                    p.ruins, p.accounting, () -> Math.max(0, PLANS_CAP - memory(level)));
+            p.ruins.archive(new RuinSnapshots(new RuinPages(info, root.resolve("shots")), p.accounting,
+                    () -> Math.max(0, PLANS_CAP - memory(level))));
         }
+        if (p.noRuins) return;
         if (p.layout != null) {
             Layout l = p.layout.getNow(null);
             if (l == null) return;
             install(p, l);
         }
         long now = level.getGameTime();
-        if (now >= p.nextRefresh) {
+        if (p.handle == null && now >= p.nextRefresh) {
             p.nextRefresh = now + REFRESH;
             refresh(level, p);
         }
         if (!p.heapStop && p.nextTodo < p.todo.size() && heapTight()) stopForHeap(p);
         p.ruins.expire(now);
         harvest(level, p, shared);
-        if (!p.heapStop && !p.capped) submit(level, p, shared);
+        if (p.handle == null && !p.heapStop && !p.capped) submit(level, p, shared);
         far(level, p, shared);
         frontLods(level, p, now);
         if (!p.announced && p.nextTodo >= p.todo.size() && p.submitted.isEmpty() && p.nextFar >= p.order.length && p.farRunning.isEmpty()) {
@@ -442,6 +671,100 @@ public final class NuclearPrep {
                     p.plans.bytes() >> 20, p.ruins.shotBytes() >> 20, RuinWorkers.summary(), Math.round(RuinWorkers.utilisation() * 100),
                     (rt.totalMemory() - rt.freeMemory()) >> 20, rt.maxMemory() >> 20);
         }
+    }
+
+    /** One bounded async region read also handles editor chunks with missing heightmaps. */
+    private Terrain.@Nullable Surface resolveSurface(ServerLevel level, Prep p, WorkClock shared) {
+        // A ceiling heightmap describes the roof, never the ground beneath an in-cavern target.
+        // Match NuclearWarhead.surfaceAt/geometry for both ready and cold ceiling chunks.
+        if (level.dimensionType().hasCeiling()) return new Terrain.Surface(Mth.floor(p.target.y), Terrain.Source.CEILING);
+        var type = net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING_NO_LEAVES;
+        var live = Terrain.estimate(level, type, Mth.floor(p.target.x), Mth.floor(p.target.z), Terrain.Allowed.CHUNK);
+        if (!p.resolvingRead && live.source() == Terrain.Source.CHUNK) return live;
+        if (!p.resolvingRead) {
+            if (memory(level) + READ_BYTES > WINDOW_CAP) return null;
+            p.resolvingRead = true;
+            p.format = DiskShots.Format.of(level);
+            DiskShots.read(p.format, new ChunkPos(BlockPos.containing(p.target)), RuinWorkers.Priority.FAR)
+                    .thenAccept(p.terrainReads.expect());
+        }
+        if (!clock.canStart() || !shared.canStart()) return null;
+        DiskShots.Read read = p.terrainReads.poll();
+        if (read == null) return null;
+        p.resolvingRead = false;
+        if (live.source() == Terrain.Source.CHUNK) return live;
+        if (read.skip() != null) {
+            p.failure = read.skip().equals("not on disk") || read.skip().equals("not fully generated on disk")
+                    ? RuinPreparation.Reason.INVALID : RuinPreparation.Reason.IO;
+            return null;
+        }
+        long unit = shared.begin();
+        try {
+            read = read.primed(Blast.SERVER);
+            int column = (Mth.floor(p.target.z) & 15) * 16 + (Mth.floor(p.target.x) & 15);
+            return new Terrain.Surface(read.heights()[ChunkShot.type(type) * 256 + column], Terrain.Source.DISK);
+        } finally { clock.record(shared.end(unit)); }
+    }
+
+    private String content(ServerLevel level) {
+        if (policy == null || policyGeneration != Blast.generation) {
+            policyGeneration = Blast.generation;
+            var resources = level.getServer().getResourceManager();
+            String mods = net.neoforged.fml.ModList.get().getMods().stream()
+                    .map(mod -> mod.getModId() + "=" + mod.getVersion()).sorted().collect(java.util.stream.Collectors.joining("\n"));
+            policy = CompletableFuture.supplyAsync(() -> RuinPolicy.fingerprint(resources, mods), Util.ioPool());
+        }
+        try { return policy.getNow(null); }
+        catch (java.util.concurrent.CompletionException failure) {
+            Incoming.LOG.warn("Prepared page reuse disabled for this resource generation", failure);
+            // A unique process-local namespace permits fresh planning while rejecting every
+            // previous generation's pages; a failed optional cache identity cannot halt ruins.
+            String fresh = (java.util.UUID.randomUUID().toString() + java.util.UUID.randomUUID()).replace("-", "");
+            policy = CompletableFuture.completedFuture(fresh);
+            return fresh;
+        }
+    }
+
+    /** Reopen the bounded cache after a detonation's preparation owner has disappeared on restart. */
+    void restore(ServerLevel level, RuinContext ctx) {
+        if (ctx.archiveChecked) {
+            if (ctx.restoredPlans != null) ctx.restoredPlans.pump(Math.max(0, PLANS_CAP - memory(level)));
+            return;
+        }
+        String path = RuinProgress.get(level).archive(ctx.d.id());
+        if (!path.matches("(?:[0-9]+|[0-9a-f-]{36})/[0-9a-f-]{36}/[0-9a-f]{64}")) { ctx.archiveChecked = true; return; }
+        String content = content(level);
+        if (content == null) { ctx.archivePending = true; return; }
+        ctx.archivePending = false;
+        ctx.archiveChecked = true;
+        if (!path.endsWith("/" + content)) return; // Data packs/mods changed: ordinary solver rebuilds.
+        var root = net.minecraft.world.level.dimension.DimensionType.getStorageFolder(level.dimension(),
+                level.getServer().getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT))
+                .resolve("data/incoming-preparation/" + path);
+        var info = new net.minecraft.world.level.chunk.storage.RegionStorageInfo(
+                level.getServer().getWorldData().getLevelName(), level.dimension(), "incoming_preparation");
+        ctx.restoredPlans = new RetainedPlans();
+        ctx.restoredPlans.spill(new RuinPages(info, root.resolve("plans-v" + RuinPlan.STORAGE_VERSION)), ctx, readBytes::addAndGet,
+                () -> Math.max(0, PLANS_CAP - memory(level)));
+        ctx.restoredPlans.discover();
+        ctx.archive(new RuinSnapshots(new RuinPages(info, root.resolve("shots")), readBytes::addAndGet,
+                () -> Math.max(0, PLANS_CAP - memory(level))));
+    }
+
+    CompletableFuture<Void> closeStorage() {
+        var closing = new java.util.ArrayList<CompletableFuture<Void>>();
+        for (Prep p : preps) {
+            closing.add(p.plans.closeStorage());
+            if (p.ruins != null) closing.add(p.ruins.closeStorage());
+        }
+        return CompletableFuture.allOf(closing.toArray(CompletableFuture[]::new));
+    }
+
+    /** Geometry and policy separate reusable pages from another order/configuration. */
+    private static String preparationKey(Detonation d) {
+        String policy = "1:" + d + ":" + IncomingConfig.SERVER.nukeBlockDamage.get() + ":"
+                + IncomingConfig.SERVER.nukeTreeFall.get() + ":" + IncomingConfig.SERVER.nukeFires.get();
+        return java.util.UUID.nameUUIDFromBytes(policy.getBytes(java.nio.charset.StandardCharsets.UTF_8)).toString();
     }
 
     /** Reasons descending by chunk count: “: not on disk 1200, not fully generated on disk 30”; empty if none. */
@@ -511,15 +834,31 @@ public final class NuclearPrep {
         }
     }
 
-    /** Add ready plan to prebuilt ruins; halt further building beyond capacity. */
+    /** Shared far-read completion: preserve scarred originals, reject later unscarred edits. */
+    private static void acceptArchived(ServerLevel level, Prep p, ArchivedShot stored) {
+        p.reading.remove(stored.key());
+        DiskShots.Read current = stored.current();
+        if (current.skip() != null) {
+            if (p.handle != null && !current.skip().equals("not on disk") && !current.skip().equals("not fully generated on disk"))
+                p.failure = RuinPreparation.Reason.IO;
+            p.unreadable.add(stored.key());
+            p.unreadWhy.addTo(current.skip().split(":", 2)[0], 1);
+            return;
+        }
+        boolean restored = false;
+        try {
+            if (stored.data().isPresent()) restored = p.ruins.restoreArchived(stored.key(), stored.data().get(), current);
+        } catch (RuntimeException error) {
+            Incoming.LOG.warn("Prepared snapshot cache rejected for {}", new ChunkPos(stored.key()), error);
+        }
+        if (!restored) p.ruins.putDisk(level, current);
+        p.diskShots++;
+    }
+
+    /** Add ready plan to the resident window; completed spill receipts free it for subsequent chunks. */
     private static void keep(ServerLevel level, Prep p, long c, RuinPlan plan) {
         p.plans.put(c, plan);
         p.planned.add(c);
-        if (p.plans.bytes() + RuinWorkers.bufferBytes(level.getHeight()) > PLANS_CAP && !p.capped) {
-            p.capped = true;
-            Incoming.LOG.warn("Ruins for strike #{}: finished plans take {} MB — no more ruins are pre-built (plans {}, heavy zone chunks {})",
-                    p.strike, p.plans.bytes() >> 20, p.plans.size(), p.order.length);
-        }
     }
 
     /**
@@ -530,10 +869,23 @@ public final class NuclearPrep {
      */
     private void far(ServerLevel level, Prep p, WorkClock shared) {
         if (p.heapStop || !IncomingConfig.SERVER.nukeBlockDamage.get()) return;
-        if (p.format == null) {
-            p.format = DiskShots.Format.of(level);
+        if (p.format == null) p.format = DiskShots.Format.of(level);
+        if (!p.farInitialized) {
+            p.farInitialized = true;
             // no preplans beyond heavy-zone edge: neighbor snapshots do not await them
             for (long k : p.edge) p.ruins.markNoPlan(k);
+        }
+        // Cached originals are checked against a fresh source read before joining the window.
+        // Count unprimed editor chunks as four units, as in the ordinary window path.
+        int archivedCost = 0;
+        for (ArchivedShot stored; clock.canStart() && shared.canStart()
+                && (stored = p.archived.peek()) != null && (archivedCost == 0 || archivedCost + stored.current().cost() <= 4); ) {
+            p.archived.poll();
+            archivedCost += stored.current().cost();
+            long unit = shared.begin();
+            try {
+                acceptArchived(level, p, stored);
+            } finally { clock.record(shared.end(unit)); }
         }
         // disk results: snapshots into ruins (states into property table), one work unit per chunk
         for (DiskShots.Read r; clock.canStart() && shared.canStart() && (r = p.reads.poll()) != null; ) {
@@ -542,6 +894,8 @@ public final class NuclearPrep {
             long c0 = shared.begin();
             try {
                 if (r.skip() != null) {
+                    if (p.handle != null && !r.skip().equals("not on disk") && !r.skip().equals("not fully generated on disk"))
+                        p.failure = RuinPreparation.Reason.IO;
                     p.unreadable.add(c);
                     p.unreadWhy.addTo(r.skip().split(":", 2)[0], 1);
                 } else {
@@ -563,7 +917,10 @@ public final class NuclearPrep {
                 continue;
             }
             p.farRunning.removeLong(i);
-            if (!p.ruins.done(c)) continue; // collected elsewhere (ruin queue) or task abandoned
+            if (!p.ruins.done(c)) {
+                if (p.handle != null && !p.bound) p.failure = RuinPreparation.Reason.IO;
+                continue; // collected elsewhere (ruin queue) or task abandoned
+            }
             long c0 = shared.begin();
             try {
                 RuinPlan plan = p.ruins.collect(new ChunkPos(c));
@@ -571,36 +928,63 @@ public final class NuclearPrep {
                     keep(level, p, c, plan);
                     p.farPlans++;
                     p.lods.offer(c);
-                }
+                } else if (p.handle != null && !p.bound) p.failure = RuinPreparation.Reason.IO;
             } catch (RuntimeException e) {
+                if (p.handle != null) p.failure = RuinPreparation.Reason.IO;
                 Incoming.LOG.error("Pre-built ruins: plan for chunk {} from disk failed with an exception; its ruins will be built on the spot", new ChunkPos(c), e);
             } finally {
                 clock.record(shared.end(c0));
             }
         }
         // window read-ahead in wave order
-        while (p.nextRead < p.order.length && p.reading.size() < READS && memory(level) + READ_BYTES <= PLANS_CAP) {
+        while (p.nextRead < p.order.length && p.reading.size() < READS && memory(level) + READ_BYTES <= WINDOW_CAP) {
             long c = p.order[p.nextRead];
             boolean all = true;
             for (int dx = -RuinPlanner.REACH; all && dx <= RuinPlanner.REACH; dx++) {
                 for (int dz = -RuinPlanner.REACH; all && dz <= RuinPlanner.REACH; dz++) {
                     long k = ChunkPos.asLong(ChunkPos.getX(c) + dx, ChunkPos.getZ(c) + dz);
                     if (p.reading.contains(k) || p.unreadable.contains(k) || p.ruins.shotAvailable(level, k)) continue;
-                    if (p.reading.size() >= READS || memory(level) + READ_BYTES > PLANS_CAP) {
+                    if (p.reading.size() >= READS || memory(level) + READ_BYTES > WINDOW_CAP) {
                         all = false;
                         continue;
                     }
+                    var archive = p.ruins.archive();
+                    boolean stored = archive != null && archive.mayHave(k);
+                    if (stored && memory(level) + SPILL_READ_BYTES > WINDOW_CAP) { all = false; continue; }
                     p.reading.add(k);
-                    DiskShots.read(p.format, new ChunkPos(k), RuinWorkers.Priority.FAR).thenAccept(p.reads.expect());
+                    if (stored) {
+                        var accept = p.archived.expect();
+                        var current = DiskShots.read(p.format, new ChunkPos(k), RuinWorkers.Priority.FAR);
+                        archive.read(k).handle((data, failure) -> failure == null ? data : java.util.Optional.<net.minecraft.nbt.CompoundTag>empty())
+                                .thenCombine(current, (data, read) -> new ArchivedShot(k, data, read)).thenAccept(accept);
+                    }
+                    else DiskShots.read(p.format, new ChunkPos(k), RuinWorkers.Priority.FAR).thenAccept(p.reads.expect());
                 }
             }
             if (!all) break;
             p.nextRead++;
         }
+        // Retire cold snapshots as writes finish; a frontier must not retain the whole completed disk.
+        if (p.ruins.shotBytes() > (64L << 20)) p.ruins.trimShots(8L << 20, shared);
         // plans in wave order: ready window goes to background threads; pending reads stop cursor
+        p.plans.prefetch(p.order, p.nextFar);
         while (p.nextFar < p.order.length && !p.capped && clock.canStart() && shared.canStart()) {
             long c = p.order[p.nextFar];
-            if (p.plans.containsKey(c) || p.ruins.running(c) || p.ruins.failed(c) || p.ruins.doneAt(c) >= 0 || readyChunk(level, c) != null) {
+            if (!p.plans.containsKey(c) && !p.ruins.running(c) && p.ruins.doneAt(c) < 0 && readyChunk(level, c) == null) {
+                long restoreUnit = shared.begin();
+                int restored;
+                try { restored = p.plans.probe(c); }
+                finally { clock.record(shared.end(restoreUnit)); }
+                if (restored == 0) break;
+                if (restored > 0) {
+                    p.planned.add(c);
+                    p.farPlans++;
+                    p.lods.offer(c);
+                    p.ruins.noPlan(c);
+                }
+            }
+            if (p.handle != null && p.ruins.failed(c)) p.failure = RuinPreparation.Reason.IO;
+            if (p.plans.containsKey(c) || p.ruins.running(c) || p.ruins.failed(c) || p.ruins.doneAt(c) >= 0 || p.handle == null && readyChunk(level, c) != null) {
                 // ready, building, or in-memory chunk with neighbors, preplanned by near preparation
                 p.nextFar++;
                 continue;
@@ -610,8 +994,9 @@ public final class NuclearPrep {
             for (int dx = -RuinPlanner.REACH; dx <= RuinPlanner.REACH; dx++) {
                 for (int dz = -RuinPlanner.REACH; dz <= RuinPlanner.REACH; dz++) {
                     long k = ChunkPos.asLong(ChunkPos.getX(c) + dx, ChunkPos.getZ(c) + dz);
-                    if (p.unreadable.contains(k) && !p.ruins.shotAvailable(level, k)) skip = true;
-                    else if (!p.ruins.shotAvailable(level, k)) missing++;
+                    if (p.unreadable.contains(k) && !p.ruins.shotAvailable(level, k)) {
+                        if (p.handle == null || k == c) skip = true;
+                    } else if (!p.ruins.shotAvailable(level, k)) missing++;
                 }
             }
             if (skip) {
@@ -630,6 +1015,7 @@ public final class NuclearPrep {
                 p.nextFar++;
             } catch (RuntimeException e) {
                 p.nextFar++;
+                if (p.handle != null) p.failure = RuinPreparation.Reason.IO;
                 Incoming.LOG.error("Pre-built ruins: snapshots of chunk {} from disk failed with an exception; its ruins will be built on the spot", new ChunkPos(c), e);
             } finally {
                 clock.record(shared.end(c0));
@@ -714,7 +1100,7 @@ public final class NuclearPrep {
         while (p.nextTodo < p.todo.size() && RuinWorkers.admit(RuinWorkers.Priority.NEAR) && clock.canStart() && shared.canStart()) {
             // Reserve estimated headroom for a whole new 5x5 snapshot window before capturing it.
             // Final result sizes remain measured estimates, not a total-heap guarantee.
-            if (memory(level) + (long) (2 * RuinPlanner.REACH + 1) * (2 * RuinPlanner.REACH + 1) * READ_BYTES > PLANS_CAP) return;
+            if (memory(level) + (long) (2 * RuinPlanner.REACH + 1) * (2 * RuinPlanner.REACH + 1) * READ_BYTES > WINDOW_CAP) return;
             long c = p.todo.getLong(p.nextTodo++);
             if (p.plans.containsKey(c) || p.ruins.running(c)) continue;
             // chunk without loaded neighbors (loaded-world edge) gets no preplan: unreadable window
@@ -1020,35 +1406,12 @@ public final class NuclearPrep {
         Incoming.LOG.info("DIAG ruin queue: {}", NukeDiag.takeWaits());
     }
 
-    /** Test line: ruined heavy-zone chunks (in memory at detonation and loaded behind wave). */
+    /** Constant-time progress: diagnostic reporting must not scan a whole large-yield zone on tick. */
     private static void zoneReport(Prep p, ScarQueue scars, @Nullable Detonation d, long now) {
-        int done = 0;
-        for (long c : p.order) if (scars.ruined(p.detonation, c)) done++;
-        Incoming.LOG.info("Detonation #{}: zone behind the wave — {} of {} chunks done, tiles held {}", p.detonation, done, p.order.length, heldTiles(p));
-        if (d == null || p.farAtDetonation == null || p.ruins == null) return;
-        // distant rings: outside-memory chunks at detonation already wave-reached, whether plan ready at arrival
-        int passed = 0, ready = 0, late = 0, none = 0, unreadable = 0;
-        long lateSum = 0, lateMax = 0;
-        for (long c : p.farAtDetonation) {
-            long wave = d.gameTime() + (long) Math.ceil(d.arrivalTicks(nearest(new ChunkPos(c), d)));
-            if (wave > now) continue;
-            passed++;
-            long at = p.ruins.doneAt(c);
-            if (at >= 0 && at <= wave) {
-                ready++;
-            } else if (at >= 0) {
-                late++;
-                lateSum += at - wave;
-                lateMax = Math.max(lateMax, at - wave);
-            } else if (p.unreadable.contains(c)) {
-                unreadable++;
-            } else {
-                none++;
-            }
-        }
-        Incoming.LOG.info("Detonation #{}: far rings: ready for the wave {} of {} (after the wave {}: avg {} ticks late, max {}; "
-                        + "no plan yet {}, not from disk {}; wave still ahead for {})", p.detonation, ready, passed, late, late == 0 ? 0 : lateSum / late, lateMax,
-                none, unreadable, p.farAtDetonation.length - passed);
+        Incoming.LOG.info("Detonation #{}: heavy-zone preparation — {} loaded and {} disk plans built, {} chunks in zone, "
+                        + "{} plan pages resident, {} reading, {} building, {} unreadable; {} zone tiles", p.detonation,
+                p.nearPlans, p.farPlans, p.order.length, p.plans.size(), p.reading.size(),
+                p.submitted.size() + p.farRunning.size(), p.unreadable.size(), p.tiles.size());
     }
 
     private static boolean ready(ServerLevel level, Tile t) {
@@ -1107,8 +1470,17 @@ public final class NuclearPrep {
      */
     @Nullable
     Handoff handOff(ServerLevel level, Detonation d, long now) {
+        return handOff(level, d, now, -1);
+    }
+
+    Handoff handOff(ServerLevel level, Detonation d, long now, int strikeId) {
         for (Prep p : preps) {
-            if (!preparedFor(p, d)) continue;
+            if (!preparedFor(p, d, strikeId)) {
+                // A moving carrier can hit elsewhere: retire its exact identity, never claim another target's pages.
+                if (p.carrier && p.strike == strikeId) p.draining = true;
+                continue;
+            }
+            if (p.noRuins) { p.draining = true; return null; }
             // A late layout must not block the detonation tick. No plans exist until layout installation;
             // normal scar delivery and durable settlement cover this unprepared strike.
             if (p.layout != null) {
@@ -1128,17 +1500,38 @@ public final class NuclearPrep {
                 }
             }
             p.detonation = d.id();
+            rememberArchive(level, p);
             p.handedOff = now;
-            p.farAtDetonation = java.util.Arrays.stream(p.order).filter(c -> level.getChunkSource().getChunkNow(ChunkPos.getX(c), ChunkPos.getZ(c)) == null).toArray();
             Incoming.LOG.info("Detonation #{}: pre-built ruins — plans for loaded chunks {} (chunks loaded during flight {}), still building {}; from disk {} "
-                            + "(zone chunks not loaded at detonation {}), still building {}, not from disk {}; background threads {}", d.id(), p.nearPlans, p.everInMemory.size(),
+                            + "(heavy zone {} chunks), still building {}, not from disk {}; background threads {}", d.id(), p.nearPlans, p.everInMemory.size(),
                     p.submitted.size(), p.farPlans,
-                    p.farAtDetonation.length, p.farRunning.size(), p.farSkipped, RuinWorkers.summary());
+                    p.order.length, p.farRunning.size(), p.farSkipped, RuinWorkers.summary());
             p.nextZoneReport = now + ZONE_REPORT;
             p.lods.handOff(d);
             return new Handoff(p.plans, p.planned.toLongArray(), p.ruins);
         }
         return null;
+    }
+
+    /** Optional restart hint must never mutate a frozen ledger or delay the physical detonation. */
+    private void rememberArchive(ServerLevel level, Prep p) {
+        if (p.archiveWritten || p.archivePath.isEmpty()) return;
+        archiveHints.put(p.detonation, p.archivePath);
+        p.archiveWritten = true; // This bounded owner now survives preparation retirement.
+        flushArchiveHints(level);
+    }
+
+    private void flushArchiveHints(ServerLevel level) {
+        if (archiveHints.isEmpty()) return;
+        RuinProgress progress = RuinProgress.get(level);
+        if (!progress.writable()) return;
+        var pending = archiveHints.int2ObjectEntrySet().fastIterator();
+        for (int left = 4; left > 0 && pending.hasNext(); left--) {
+            var hint = pending.next();
+            progress.pass(hint.getIntKey()).archive = hint.getValue();
+            progress.setDirty();
+            pending.remove();
+        }
     }
 
     record Handoff(Long2ObjectOpenHashMap<RuinPlan> plans, long[] order, RuinContext ruins) {}
@@ -1149,20 +1542,26 @@ public final class NuclearPrep {
      * forgotten (derived from detonation), even if weather changed during ICBM flight.
      */
     Detonation planned(Detonation fresh) {
-        for (Prep p : preps) if (preparedFor(p, fresh)) return p.geometry;
+        return planned(fresh, -1);
+    }
+
+    Detonation planned(Detonation fresh, int strikeId) {
+        for (Prep p : preps) if (preparedFor(p, fresh, strikeId)) return p.geometry;
         return fresh;
     }
 
     /** Preparation matches detonation: not handed off, same location, yield and scale. */
-    private static boolean preparedFor(Prep p, Detonation d) {
+    private static boolean preparedFor(Prep p, Detonation d, int strikeId) {
         Detonation g = p.geometry;
-        return p.detonation < 0 && !p.draining && g != null && g.yieldKt() == d.yieldKt() && g.surface() == d.surface() && g.scale() == d.scale()
-                && g.burst().distanceTo(d.burst()) <= SAME_PLACE;
+        return (strikeId < 0 ? p.handle == null : p.strike == strikeId && (p.handle == null || p.bound && compatible(p))) && p.detonation < 0 && !p.draining && g != null && g.yieldKt() == d.yieldKt() && g.surface() == d.surface() && g.scale() == d.scale()
+                && (p.handle == null ? g.burst().distanceTo(d.burst()) <= SAME_PLACE : g.burst().equals(d.burst()) && g.groundY() == d.groundY());
     }
 
     /** Chunks in zone behind wave (ruin summary). */
     private static java.util.function.LongPredicate zone(Prep p) {
-        return new LongOpenHashSet(p.order)::contains;
+        Detonation geometry = p.geometry;
+        double radius = heavyRadius(geometry) + 16;
+        return key -> horizontal(new ChunkPos(key), geometry) <= radius;
     }
 
     private static int heldTiles(Prep p) {
@@ -1250,6 +1649,9 @@ public final class NuclearPrep {
             p.layout = null;
         }
         p.reads.invalidate();
+        p.terrainReads.invalidate();
+        p.resolvingRead = false;
+        p.archived.invalidate();
         p.reading.clear();
         p.plans.clear();
     }
@@ -1264,5 +1666,6 @@ public final class NuclearPrep {
             if (p.detonation >= 0 && !p.draining) scars.dropPrepared(p.detonation, zone(p));
         }
         preps.clear();
+        archiveHints.clear();
     }
 }
