@@ -276,7 +276,7 @@ public final class CraterJob {
                 }
             }
             BlockState bottom = level.getBlockState(m.setY(floor - 1));
-            if (glaze != null && depth > lift && random.nextFloat() < 0.3f && !bottom.isAir() && bottom.getFluidState().isEmpty()
+            if (glaze != null && bottom != glaze && depth > lift && random.nextFloat() < 0.3f && !bottom.isAir() && bottom.getFluidState().isEmpty()
                     && bottom.getBlock().defaultDestroyTime() >= 0) {
                 ColumnScar.replace(level, m, bottom, glaze);
                 if (matter != null && level.getBlockState(m) == glaze) matter.removed(bottom, false);

@@ -31,13 +31,14 @@ public final class CraterMatterGameTests {
         level.setBlock(source.above(), Blocks.OAK_PLANKS.defaultBlockState(), 2);
         var ledger = new CraterMatter();
         var pass = ledger.pass(1);
+        h.assertTrue(RandomSource.create(4096).nextFloat() < 0.3f, "Fixture must exercise the glazing branch");
         Vec3 centre = Vec3.atCenterOf(source);
         CraterJob.Profile profile = new CraterJob.Profile() {
             public double depth(double r) { return r < 1 ? 2 : 0; }
             public double rim(double r) { return r >= 1 ? 3 : 0; }
         };
         CraterJob.digColumn(level, source.getX(), source.getZ(), centre, 8, 0, profile,
-                List.of(Blocks.DIRT.defaultBlockState()), null, CraterJob.Mode.VAPORIZE, RandomSource.create(1), pass);
+                List.of(Blocks.DIRT.defaultBlockState()), Blocks.STONE.defaultBlockState(), CraterJob.Mode.VAPORIZE, RandomSource.create(4096), pass);
         h.assertTrue(level.getBlockState(source.below()).isAir(), "Bowl did not remove two source blocks");
         h.assertTrue(pass.available.getOrDefault(Blocks.STONE.defaultBlockState(), 0L) == 2, "Excavated stock differs from actual removals");
         var restored = CraterMatter.load(ledger.save(new CompoundTag(), level.registryAccess()), level.registryAccess());
@@ -51,7 +52,7 @@ public final class CraterMatterGameTests {
         h.assertTrue(level.getBlockState(rim.above(3)).isAir(), "Rim invented material after source stock ran out");
         double[] rock = saved.materials.get(Blocks.STONE.defaultBlockState());
         double[] wood = saved.materials.get(Blocks.OAK_PLANKS.defaultBlockState());
-        h.assertTrue(rock[0] == 2 && rock[2] == 2 && rock[4] == 0, "Rock ledger lost volume");
+        h.assertTrue(rock[0] == 2 && rock[2] == 2 && rock[4] == 0 && rock[6] == 0, "Rock ledger counted unchanged glazing or lost volume");
         h.assertTrue(wood[0] > 0 && wood[0] == wood[6] && wood[1] == wood[7], "Vaporized building lost its thermal reservoir");
         CraterMatter.load(restored.save(new CompoundTag(), level.registryAccess()), level.registryAccess());
         h.succeed();
