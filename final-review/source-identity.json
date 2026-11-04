@@ -1,0 +1,14 @@
+{
+  "reproduced_head": "f92dabaaac30bb04b3e9b07296be44a2602114c8",
+  "production_fix": "dd44488c7e0127884db8f0503f4d235fbe621427",
+  "final_head": "bd7b3ef096c7a77ca50bd3350ba2dbd4306dd81a",
+  "main": "8e3e2dc2848268dc1cb6953bf8900ece3a06598e",
+  "changed_files": {
+    ".claude/rules/nuclear-world.md": "e53a32cf46da2b1b051959c9463dc870b7e3c4a36f0c0ec37f4f34a89902c43c",
+    "mod/src/devtest/java/ua/zentix/incoming/gametest/NuclearGameTests.java": "1306bcb5738f2c75246d67185848ef7da6816ede1cfe06073d5246048b54b546",
+    "mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinReviewGameTests.java": "3b53aa311242a24ac73e7105a60f857e66578bf35d8dbbb6ac46b16016a63f99",
+    "mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinMatter.java": "e079c40d0730cd37e573e781ee0f4be66e29fa60bae3870f0a2efb9ee3e4c064",
+    "mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinSupport.java": "a54c35cb998bcac66da0eb43329cd7556e50b820f0e3586343af9b8e34d53070"
+  },
+  "new_media": false
+}

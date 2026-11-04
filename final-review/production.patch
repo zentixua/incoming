@@ -1,0 +1,277 @@
+diff --git a/.claude/rules/nuclear-world.md b/.claude/rules/nuclear-world.md
+index 94234c53f..21c8d4771 100644
+--- a/.claude/rules/nuclear-world.md
++++ b/.claude/rules/nuclear-world.md
+@@ -240,12 +240,16 @@ paths:
+   finite-element model. Reloading tags or block data maps invalidates the snapshot property table.
+ - `Collapse.detached` compares original contact connectivity with surviving components inside its window.
+   Pre-existing detached builds remain untouched. Actual removed support faces seed `RuinSupport`: a resumable
+-  contact graph across ready chunks. The saved removed-contact journal first reconstructs the original graph:
++  contact graph across ready chunks. The saved removed-contact journal is shared across all still-pending strikes,
++  with the first removed state at each position retained until reconciliation drains (event IDs only attribute
++  removals). Per-event reconstruction loses foundations broken by overlapping strikes. It reconstructs the original graph:
+   release requires an original path to a protected block/world floor and no surviving path. A broken decoration
+   does not give an End island or floating build global gravity; lower neighbours are not support-loss seeds.
+   Unknown faces wait behind a separate non-ticking material ticket, never become anchors. Loader neighbour
+   notifications invalidate the entire in-progress certificate, including contacts scanned in earlier slices;
+-  release also rechecks each cell and its external contacts. Never bypass notifications when adding supports.
++  release also rechecks each cell and its external contacts. Traversal, validation and release use the same
++  load-bearing face criterion: a colliding leaf is not an anchor or a new structural contact. Never bypass
++  notifications when adding supports. Registered-event regressions: `nuke_review_foliage`, `nuke_review_overlap*`.
+   Continuation removals AND deposition use `RuinPlan.callbackRadius`: non-vanilla block entities require a radius-2
+   ready neighbourhood for `onRemove`/`onPlace`, not just the two-block Sable guard. Source expansion, search, validation and
+   release run in bounded batches under the nuclear work clock; no fixed bridge length declares equilibrium.
+diff --git a/mod/src/devtest/java/ua/zentix/incoming/gametest/NuclearGameTests.java b/mod/src/devtest/java/ua/zentix/incoming/gametest/NuclearGameTests.java
+index 0deabd080..6fc115fed 100644
+--- a/mod/src/devtest/java/ua/zentix/incoming/gametest/NuclearGameTests.java
++++ b/mod/src/devtest/java/ua/zentix/incoming/gametest/NuclearGameTests.java
+@@ -851,16 +851,18 @@ public final class NuclearGameTests {
+         }
+         Detonation d = detonation(h, CENTER, Yield.optimalBurstHeight(15) * 0.3, 15, 0.3f);
+         scarAll(h, d, new ColumnScar.Budget(false));
+-        h.runAfterDelay(60, () -> {
+-            for (BlockPos q : bed) if (h.getBlockState(q).isAir()) h.fail("the shore or bottom is knocked out: " + q.toShortString());
+-            for (int dx = 0; dx < 5; dx++) {
+-                for (int dz = 0; dz < 5; dz++) {
+-                    for (int y = 5; y < 60; y++) {
+-                        BlockState st = h.getBlockState(t.offset(dx, y, dz));
+-                        if (!st.isAir() && st.getFluidState().isEmpty()) h.fail("the tower on the shore stands: " + st + " in " + t.offset(dx, y, dz).toShortString());
+-                    }
++        // Assert structural removal before transport can place conserved rubble back in the
++        // tower's footprint. The later check is for water flow, not an empty rubble volume.
++        for (int dx = 0; dx < 5; dx++) {
++            for (int dz = 0; dz < 5; dz++) {
++                for (int y = 5; y < 60; y++) {
++                    BlockState st = h.getBlockState(t.offset(dx, y, dz));
++                    if (!st.isAir() && st.getFluidState().isEmpty()) h.fail("the tower on the shore stands: " + st + " in " + t.offset(dx, y, dz).toShortString());
+                 }
+             }
++        }
++        h.runAfterDelay(60, () -> {
++            for (BlockPos q : bed) if (h.getBlockState(q).isAir()) h.fail("the shore or bottom is knocked out: " + q.toShortString());
+             for (BlockPos p : BlockPos.betweenClosed(t.offset(-3, -3, -3), t.offset(10, 60, 8))) {
+                 if (!h.getBlockState(p).getFluidState().isEmpty() && h.getBlockState(p.below()).isAir()) h.fail("water over the void " + p.toShortString());
+             }
+diff --git a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinReviewGameTests.java b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinReviewGameTests.java
+index a59b99287..f80e52f7e 100644
+--- a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinReviewGameTests.java
++++ b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinReviewGameTests.java
+@@ -102,6 +102,92 @@ public final class RuinReviewGameTests {
+         h.succeed();
+     }
+ 
++    @GameTest(template = "range", batch = "nuke_review_foliage", timeoutTicks = 40, skyAccess = true)
++    public static void foliageContactDoesNotRestartRegisteredSupportRelease(GameTestHelper h) {
++        var level = h.getLevel();
++        RuinMatterGameTests.clearFixture(level);
++        var ledger = RuinMatter.get(level);
++        BlockPos start = h.absolutePos(new BlockPos(4, 30, 32));
++        var d = register(level, start);
++        try {
++            for (int x = 0; x < 56; x++) level.setBlock(start.east(x), Blocks.WHITE_CONCRETE.defaultBlockState(), 2);
++            level.setBlock(start.below(), Blocks.GLASS.defaultBlockState(), 2);
++            level.setBlock(start.below(2), Blocks.OBSIDIAN.defaultBlockState(), 2);
++            var leaves = Blocks.OAK_LEAVES.defaultBlockState()
++                    .setValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.PERSISTENT, true);
++            level.setBlock(start.north(), leaves, 2);
++            h.assertTrue(!Blast.props(leaves).bearing() && Blast.props(level.getBlockState(start))
++                    .touches(net.minecraft.core.Direction.NORTH, Blast.props(leaves)), "Fixture needs a non-bearing contact at the release seed");
++            remove(level, ledger, d, start.below());
++            for (int i = 0; i < 500; i++) unit(level, ledger);
++            h.assertTrue(ledger.released() == 57 && ledger.pending() == 56,
++                    "Foliage contact prevented beam release: released=" + ledger.released() + ", support=" + ledger.pendingSupport());
++            h.assertTrue(ledger.pendingSupport() == 0, "Foliage contact left support work looping");
++            h.assertTrue(level.getBlockState(start.north()) == leaves, "Non-bearing foliage was consumed as structure");
++            for (int x = 0; x < 56; x++) h.assertTrue(level.getBlockState(start.east(x)).isAir(), "Beam remains at a seam beside foliage");
++        } finally {
++            NuclearEvents.get(level).detonations().remove(d);
++            RuinMatterGameTests.clearFixture(level);
++        }
++        h.succeed();
++    }
++
++    @GameTest(template = "range", batch = "nuke_review_overlap", timeoutTicks = 40, skyAccess = true)
++    public static void overlappingRegisteredRemovalsKeepTheirSharedFoundationProof(GameTestHelper h) {
++        overlap(h, false, false);
++    }
++
++    @GameTest(template = "range", batch = "nuke_review_overlap_reload", timeoutTicks = 40, skyAccess = true)
++    public static void overlappingRegisteredRemovalsKeepTheirProofAfterReload(GameTestHelper h) {
++        overlap(h, false, true);
++    }
++
++    @GameTest(template = "range", batch = "nuke_review_overlap_reverse", timeoutTicks = 40, skyAccess = true)
++    public static void overlappingRegisteredRemovalsAreIndependentOfOrder(GameTestHelper h) {
++        overlap(h, true, true);
++    }
++
++    private static void overlap(GameTestHelper h, boolean upperFirst, boolean reload) {
++        var level = h.getLevel();
++        RuinMatterGameTests.clearFixture(level);
++        var ledger = RuinMatter.get(level);
++        BlockPos start = h.absolutePos(new BlockPos(4, 30, 24));
++        BlockPos floating = start.offset(0, 8, 16);
++        var lowerEvent = register(level, start);
++        var upperEvent = register(level, start);
++        try {
++            for (int x = 0; x < 56; x++) level.setBlock(start.east(x), Blocks.WHITE_CONCRETE.defaultBlockState(), 2);
++            for (int x = 0; x < 8; x++) level.setBlock(floating.east(x), Blocks.WHITE_CONCRETE.defaultBlockState(), 2);
++            level.setBlock(start.below(3), Blocks.OBSIDIAN.defaultBlockState(), 2);
++            for (BlockPos beam : List.of(start, floating)) {
++                level.setBlock(beam.below(), Blocks.GLASS.defaultBlockState(), 2);
++                level.setBlock(beam.below(2), Blocks.GLASS.defaultBlockState(), 2);
++                // No work between the two registered removals: both provenance records must
++                // contribute to one pre-failure graph, even after a SavedData round trip.
++                remove(level, ledger, upperFirst ? upperEvent : lowerEvent, beam.below(upperFirst ? 1 : 2));
++                remove(level, ledger, upperFirst ? lowerEvent : upperEvent, beam.below(upperFirst ? 2 : 1));
++            }
++            if (reload) {
++                ledger = RuinMatter.load(ledger.save(new CompoundTag(), level.registryAccess()), level.registryAccess());
++                level.getDataStorage().set("incoming_ruin_matter", ledger);
++            }
++            for (int i = 0; i < 500; i++) unit(level, ledger);
++            h.assertTrue(ledger.released() == 60 && ledger.pending() == 56,
++                    "Overlapping strikes lost the original foundation: released=" + ledger.released() + ", support=" + ledger.pendingSupport());
++            h.assertTrue(ledger.pendingSupport() == 0, "Overlapping support work did not drain");
++            for (int x = 0; x < 56; x++) h.assertTrue(level.getBlockState(start.east(x)).isAir(), "Previously anchored beam remained suspended");
++            for (int x = 0; x < 8; x++) h.assertTrue(level.getBlockState(floating.east(x)).is(Blocks.WHITE_CONCRETE),
++                    "Combined provenance gave an originally floating beam global gravity");
++            h.assertTrue(ledger.save(new CompoundTag(), level.registryAccess()).getList("support_originals", 10).isEmpty(),
++                    "Reconciled overlapping contacts were not retired");
++        } finally {
++            NuclearEvents.get(level).detonations().remove(lowerEvent);
++            NuclearEvents.get(level).detonations().remove(upperEvent);
++            RuinMatterGameTests.clearFixture(level);
++        }
++        h.succeed();
++    }
++
+     @GameTest(template = "range", batch = "nuke_review_callback", timeoutTicks = 40, skyAccess = true)
+     public static void slopingBeltContinuationWaitsForCallbackChunks(GameTestHelper h) {
+         var level = h.getLevel();
+diff --git a/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinMatter.java b/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinMatter.java
+index ae12e1a69..fb502bc39 100644
+--- a/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinMatter.java
++++ b/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinMatter.java
+@@ -57,9 +57,10 @@ public final class RuinMatter extends SavedData {
+     private final it.unimi.dsi.fastutil.longs.Long2IntLinkedOpenHashMap supports = new it.unimi.dsi.fastutil.longs.Long2IntLinkedOpenHashMap();
+     /** Only cold edges need to remember the removed face until their neighbour can be inspected. */
+     private final it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<BlockState[]> uncertain = new it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<>();
+-    /** Removed contacts reconstruct the pre-failure graph; absence of a current anchor alone is
+-     * never evidence that this strike detached an originally floating build. */
+-    private final java.util.Map<Integer, it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<BlockState>> originals = new java.util.HashMap<>();
++    private record Original(BlockState state, int event) {}
++    /** One pre-failure graph for all still-pending removals, including overlapping strikes.
++     * First removal at a position wins until reconciliation drains; event IDs only attribute it. */
++    private final it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<Original> originals = new it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<>();
+     private RuinSupport search;
+     private int heldRadius;
+ 
+@@ -77,18 +78,16 @@ public final class RuinMatter extends SavedData {
+         if (ledger != null && ledger.search != null) ledger.search.changed(at);
+     }
+ 
+-    BlockState original(ServerLevel level, BlockPos at, int event) {
+-        var removed = originals.get(event);
+-        BlockState state = removed == null ? null : removed.get(at.asLong());
+-        return state == null ? level.getBlockState(at) : state;
++    BlockState original(ServerLevel level, BlockPos at) {
++        Original removed = originals.get(at.asLong());
++        return removed == null ? level.getBlockState(at) : removed.state;
+     }
+ 
+     private net.minecraft.world.level.ChunkPos held;
+ 
+     void support(ServerLevel level, List<Piece> pieces, Detonation d) {
+         for (Piece piece : pieces) if (Blast.props(piece.state).bearing()) {
+-            originals.computeIfAbsent(d.id(), ignored -> new it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<>())
+-                    .putIfAbsent(piece.source.asLong(), piece.state);
++            originals.putIfAbsent(piece.source.asLong(), new Original(piece.state, d.id()));
+             supportSources.addLast(new SupportSeed(piece.source, piece.state, d.id()));
+         }
+         if (!pieces.isEmpty()) setDirty();
+@@ -484,8 +483,10 @@ public final class RuinMatter extends SavedData {
+         ListTag originalTags = tag.getList("support_originals", Tag.TAG_COMPOUND);
+         for (int i = 0; i < originalTags.size(); i++) {
+             CompoundTag row = originalTags.getCompound(i);
+-            result.originals.computeIfAbsent(row.getInt("event"), ignored -> new it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<>())
+-                    .put(row.getLong("position"), NbtUtils.readBlockState(lookup.lookupOrThrow(Registries.BLOCK), row.getCompound("state")));
++            Original removed = new Original(NbtUtils.readBlockState(lookup.lookupOrThrow(Registries.BLOCK), row.getCompound("state")), row.getInt("event"));
++            // Older per-event saves may repeat a position in unspecified map order. Event IDs
++            // increase with registration; retain the earliest strike's contact when importing them.
++            result.originals.merge(row.getLong("position"), removed, (a, b) -> a.event <= b.event ? a : b);
+         }
+         ListTag sourceTags = tag.getList("support_sources", Tag.TAG_COMPOUND);
+         for (int i = 0; i < sourceTags.size(); i++) {
+@@ -566,10 +567,10 @@ public final class RuinMatter extends SavedData {
+         tag.putDouble("dispersed_volume", dispersedVolume);
+         tag.putDouble("dispersed_mass", dispersedMass);
+         ListTag originalTags = new ListTag();
+-        for (var event : originals.entrySet()) for (var entry : event.getValue().long2ObjectEntrySet()) {
++        for (var entry : originals.long2ObjectEntrySet()) {
+             CompoundTag row = new CompoundTag();
+-            row.putInt("event", event.getKey()); row.putLong("position", entry.getLongKey());
+-            row.put("state", NbtUtils.writeBlockState(entry.getValue())); originalTags.add(row);
++            row.putInt("event", entry.getValue().event); row.putLong("position", entry.getLongKey());
++            row.put("state", NbtUtils.writeBlockState(entry.getValue().state)); originalTags.add(row);
+         }
+         tag.put("support_originals", originalTags);
+         ListTag sourceTags = new ListTag();
+diff --git a/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinSupport.java b/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinSupport.java
+index 26e15a969..cb567c424 100644
+--- a/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinSupport.java
++++ b/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinSupport.java
+@@ -94,15 +94,7 @@ final class RuinSupport {
+                 }
+                 // A newly added connection invalidates the closed component, even if none of its
+                 // original blocks changed. Reconcile it instead of deleting an edited structure.
+-                for (Direction direction : ORDER) {
+-                    BlockPos next = at.relative(direction);
+-                    Blast.Props own = Blast.props(component.get(cells[cursor]));
+-                    Blast.Props neighbour = Blast.props(level.getBlockState(next));
+-                    if (!component.containsKey(next.asLong()) && neighbour.bearing() && own.touches(direction, neighbour)) {
+-                        restart();
+-                        return false;
+-                    }
+-                }
++                if (newContact(level, at)) { restart(); return false; }
+                 cursor++;
+                 continue;
+             }
+@@ -127,7 +119,7 @@ final class RuinSupport {
+                 frontier.removeLong(frontier.size() - 1);
+                 continue;
+             }
+-            BlockState state = original ? ledger.original(level, at, d.id()) : level.getBlockState(at);
++            BlockState state = original ? ledger.original(level, at) : level.getBlockState(at);
+             Blast.Props props = Blast.props(state);
+             if (props.bearing() && !ledger.ready(level, at, true)) { waiting = true; return false; }
+             frontier.removeLong(frontier.size() - 1);
+@@ -148,8 +140,8 @@ final class RuinSupport {
+             // connected bedrock. Roof components still follow their complete boundary graph.
+             for (Direction direction : ORDER) {
+                 BlockPos next = at.relative(direction);
+-                Blast.Props neighbour = Blast.props(original ? ledger.original(level, next, d.id()) : level.getBlockState(next));
+-                if (!seen.contains(next.asLong()) && neighbour.bearing() && props.touches(direction, neighbour))
++                Blast.Props neighbour = Blast.props(original ? ledger.original(level, next) : level.getBlockState(next));
++                if (!seen.contains(next.asLong()) && bearingContact(props, direction, neighbour))
+                     frontier.add(next.asLong());
+             }
+         }
+@@ -168,11 +160,15 @@ final class RuinSupport {
+         Blast.Props own = Blast.props(component.get(at.asLong()));
+         for (Direction direction : ORDER) {
+             BlockPos next = at.relative(direction);
+-            if (!component.containsKey(next.asLong()) && own.touches(direction, Blast.props(level.getBlockState(next)))) return true;
++            if (!component.containsKey(next.asLong()) && bearingContact(own, direction, Blast.props(level.getBlockState(next)))) return true;
+         }
+         return false;
+     }
+ 
++    private static boolean bearingContact(Blast.Props own, Direction direction, Blast.Props neighbour) {
++        return neighbour.bearing() && own.touches(direction, neighbour);
++    }
++
+     // Package diagnostics also let tests insert edits at the actual resumable phase boundary.
+     boolean validating() { return validating && !releasing && cursor > 0; }
+     boolean releasing() { return releasing; }

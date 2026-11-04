@@ -1,3 +1,5 @@
+> Second and final review: [pre-fix reproductions and corrections for foliage/overlapping strikes](final-review/README.md), production fixes dd44488c7, final PR head bd7b3ef09. The prior paired media retains its f92dabaaa identity.
+
 > Final-head follow-up completed (4 November): [new registered apply-plus-support cost, B5 memory deferral, and fresh f92dabaaa/main paired frames](final-head-pairs/README.md). The earlier capture status below is historical.
 
 > Review correction (4 November): the original PipelineBench did not register its synthetic events. Its MTMAT rows exclude live support reconciliation. See [registered continuation measurements and B1–B4 fixes](review-fixes/README.md). Earlier frames/source identity below belong to reviewed head ad1f7c064, not the later fixes.

@@ -1,0 +1,16 @@
+{
+  "README.md": "491848d6c9da17bee54e7373820c137984412b832f1d4dbd45f0585ab085e721",
+  "RuinReviewGameTests.before-fix.java.txt": "3b53aa311242a24ac73e7105a60f857e66578bf35d8dbbb6ac46b16016a63f99",
+  "build.log": "674a80278beecd235538e29b915a576f25b73874bd177d6d6395c13aad8a79d8",
+  "ci-first-failure.log": "fdd5219e14c4fc7918261fee1e69df0dd5947eb94afea2cb6bbcfe1652321266",
+  "final-ci.json": "9d97fa0d52ff8d5820ae4a8651749920c9d0e13adad10bf29042c09511047fb4",
+  "fixed-tests.log": "c152276bd99a60cb03eb53987a70d806f4bdfa7ffe0f5b716c358e13d1012dcb",
+  "pr-ci-first.log": "0dd330649759d6fb0c9ff52f10b7d7d2b87a1fa3eb8c48d90955bcfca8e968e7",
+  "pr-ci.log": "657c47147da07af78fcf178fd390e432ee37bbcf09a10266865b88d7cd93f766",
+  "production.patch": "a8378fb568caec6ba06fd6dff34c8dfb54b38643cdc8f9aa66cddce3cd6ee83d",
+  "reproduce.log": "aaba8bd1bc5e5e923905f9f53d62ff08891ead0c689827d47d228e113c7c32c6",
+  "shore-diagnosis.log": "23e73486283a03b1c6267f0552424cf4e06e8afc2910bf1c568424b844030ff7",
+  "shore-fixed.log": "f35ffbba328296aac6856a19993e0021c634db2471c8578f026c5a9ca9ae2fc5",
+  "source-identity.json": "fbeb0e13809b261ebc9f206970efdf76f71a87a6ee5d3ecbf71aeb0a72af8cbe",
+  "unit-counts.json": "3cf038d8d67eab615595f224e79bdf59866c2f05c2b557c51f16ed111b448b40"
+}
