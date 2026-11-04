@@ -1,5 +1,5 @@
 {
-  "source_head": "bcf53f23f0a8a48f6c41baa67ffd623d2af758fa",
+  "source_head": "63e460d328ac4fc342a00d4c3a0979c372655887",
   "full_build": {
     "head": "94ec0756c",
     "unit_tests": 1783,
@@ -21,6 +21,20 @@
   "files": {
     "check.log": "68a6dd1e62311dd6d5f99d56a2709125de1155df9f862b8f3c59b47e6eccab89",
     "final.log": "9ed2db843fea273d031154061fbf801878b568d6e637d453c5f0c9f54dba7cbc",
-    "last.log": "947a6c2f0f9bb09dbcd55699c8008269f3d3650cfe45f8a9a109475be0efdc10"
-  }
+    "last.log": "947a6c2f0f9bb09dbcd55699c8008269f3d3650cfe45f8a9a109475be0efdc10",
+    "carrier-final.log": "7d62d53a3ca4f230226ea3525891702bd63676d3ac6c5fdf817299c08d9c6cbe",
+    "ci.log": "05c59f2c6424cc61b537648302dc672c2afd727808afaf3033411b70662cd945"
+  },
+  "final_validation": {
+    "head": "63e460d328ac4fc342a00d4c3a0979c372655887",
+    "full_build_seconds": 233,
+    "unit_tests": 1783,
+    "failures": 0,
+    "gametests": 16,
+    "gametest_seconds": 23,
+    "ci_run": 41800103217,
+    "ci_result": "success; \u0418\u0442\u043e\u0433 green through tools/pr_ci.sh",
+    "independent_review": "MT-S2 owns fresh integrated review; explicitly no spawning here"
+  },
+  "carrier_acceptance": "Only intended exact geometry is prepared. Off-target missile/B2 penetration retires the incompatible identity and uses reactive fallback; full carrier contingency is an unresolved integration gate."
 }
