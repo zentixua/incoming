@@ -94,6 +94,11 @@ public final class NuclearWorld {
         return prep.frontStats(strike);
     }
 
+    /** Deterministic front send-budget clock for an existing preparation; other clocks stay real (tests). */
+    public boolean useFrontClockForTest(int strike, java.util.function.LongSupplier time) {
+        return prep.useFrontClockForTest(strike, time);
+    }
+
     /** Prebuilt ruins: ready plans also needed by distant LODs ({@link FarLods}). */
     NuclearPrep prep() {
         return prep;

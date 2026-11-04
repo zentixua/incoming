@@ -79,6 +79,8 @@ final class FrontLods {
     private record Built(long chunk, int index, @Nullable ProtoChunk copy, boolean ruined, int[] lamps, long bytes) {}
 
     private final int strike;
+    /** Per-preparation clock; tests advance send cost without depending on CI scheduling pauses. */
+    private java.util.function.LongSupplier sendTime = System::nanoTime;
     /** Zone chunks with ready disk plans, in plan (wave) order; cursor tracks read submissions. */
     private final LongArrayList candidates = new LongArrayList();
     private int next;
@@ -104,6 +106,10 @@ final class FrontLods {
     FrontLods(int strike, java.util.function.LongConsumer accounting) {
         this.strike = strike;
         built = new RuinInbox<>(accounting, READ_BYTES);
+    }
+
+    void useSendClockForTest(java.util.function.LongSupplier time) {
+        sendTime = java.util.Objects.requireNonNull(time);
     }
 
     /** Zone chunk's disk plan ready: enqueue copy (plan order, nearest first). Server thread. */
@@ -258,10 +264,10 @@ final class FrontLods {
 
     /** Send due sections whole to DH while DH window/tick time remain (first always if window available). */
     private void release(ServerLevel level, long now) {
-        long until = System.nanoTime() + SEND_NANOS;
+        long until = sendTime.getAsLong() + SEND_NANOS;
         boolean first = true;
         for (LongArrayList section; (section = schedule.head(now)) != null; first = false) {
-            if (!first && System.nanoTime() >= until || section.size() > DhUpdates.heldRoom(level)) return;
+            if (!first && sendTime.getAsLong() >= until || section.size() > DhUpdates.heldRoom(level)) return;
             long[] chunks = section.toLongArray();
             schedule.pop();
             for (long chunk : chunks) send(level, chunk, now);
