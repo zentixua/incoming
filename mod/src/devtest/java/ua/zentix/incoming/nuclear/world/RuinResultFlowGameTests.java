@@ -24,6 +24,7 @@ public final class RuinResultFlowGameTests {
         var ctx = StructuralRuinGameTests.fixture(level, StructuralRuinGameTests.hall(Blocks.STONE_BRICKS), 20);
         var grid = ctx.cachedGridForTest(level, new ChunkPos(0, 0));
         long baseline = RuinResults.bytes();
+        StrikeGameTests.afterTest(h, ctx::cancelTasks);
         long room = NuclearPrep.PLANS_CAP - NuclearPrep.residentMemory(level);
         var pressure = RuinResults.tryReserve(room - RuinResults.OWNER_BYTES, room);
         h.assertTrue(pressure != null, "Could not reserve the actual remaining producer room");
@@ -40,13 +41,13 @@ public final class RuinResultFlowGameTests {
             try {
                 var raw = future.get();
                 h.assertTrue(raw != RuinPlan.EMPTY && raw.changedBlocks() > 0, "Fixture has no actual material output");
-                h.assertTrue(RuinResults.bytes() == baseline + raw.bytes() + RuinResults.OWNER_BYTES,
+                h.assertTrue(RuinResults.bytes() == baseline + ctx.fragmentCacheBytes() + raw.bytes() + RuinResults.OWNER_BYTES,
                         "Completed output or temporary fragments have the wrong owner");
                 var plan = ctx.takeWorker(future);
                 h.assertTrue(RuinResults.bytes() > baseline, "Collection refunded output before the consumer counted it");
                 var plans = new RetainedPlans();
                 plans.put(0, plan);
-                h.assertTrue(plans.bytes() >= plan.bytes() && RuinResults.bytes() == baseline,
+                h.assertTrue(plans.bytes() >= plan.bytes() && RuinResults.bytes() == baseline + ctx.fragmentCacheBytes(),
                         "Counted consumer did not replace the producer reservation");
                 h.assertTrue(plan.differs(RuinPlanner.finish(grid, Collapse.solve(grid))) == null,
                         "Ownership changed the same-input physical/material output");
@@ -61,6 +62,7 @@ public final class RuinResultFlowGameTests {
         var ctx = StructuralRuinGameTests.fixture(level, StructuralRuinGameTests.hall(Blocks.STONE_BRICKS), 20);
         var grid = ctx.cachedGridForTest(level, new ChunkPos(0, 0));
         long baseline = RuinResults.bytes();
+        StrikeGameTests.afterTest(h, ctx::cancelTasks);
         var gate = new CountDownLatch(1);
         var entered = new AtomicBoolean();
         var future = ctx.submitPlanWorker(level, grid, () -> {
@@ -84,7 +86,9 @@ public final class RuinResultFlowGameTests {
                 gate.countDown();
             }
             h.assertTrue(RuinWorkers.finished(future), "Actual callable has not exited");
-            h.assertTrue(RuinResults.bytes() == baseline, "Abandoned output retained a producer reservation after actual exit");
+            h.assertTrue(RuinResults.bytes() == baseline + ctx.fragmentCacheBytes(), "Abandoned output retained a producer reservation after actual exit");
+            ctx.cancelTasks();
+            h.assertTrue(RuinResults.bytes() == baseline, "Context cancellation retained its optional cache budget");
         });
     }
 }

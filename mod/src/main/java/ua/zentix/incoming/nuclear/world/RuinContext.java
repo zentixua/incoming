@@ -29,6 +29,9 @@ final class RuinContext {
     private final java.util.concurrent.ConcurrentHashMap<Long, Blast> blasts = new java.util.concurrent.ConcurrentHashMap<>();
     /** Only diagnostic server-thread solvers keep this cache; background fragments stay task-owned. */
     private long blastBytes;
+    private long fragmentCacheLimit = 16L << 20;
+    @Nullable private volatile RuinFragmentCache fragmentCache;
+    private boolean fragmentCacheClosed;
     /** Chunk snapshots (server thread) retained while unfinished plan windows read them. Outside-memory chunks from disk ({@link DiskShots}). */
     private final it.unimi.dsi.fastutil.longs.Long2ObjectLinkedOpenHashMap<ChunkShot> shots = new it.unimi.dsi.fastutil.longs.Long2ObjectLinkedOpenHashMap<>();
     /**
@@ -333,7 +336,7 @@ final class RuinContext {
                 if (absent.contains(key) || shotAvailable(level, key)) continue;
                 missing++;
                 if (!reading.contains(key) && reads.pending() < WINDOW_READ_LIMIT
-                        && NuclearPrep.residentMemory(level) + WINDOW_READ_BYTES <= NuclearPrep.PLANS_CAP) {
+                        && WINDOW_READ_BYTES <= RuinMemory.sourceReadRoom(level)) {
                     reading.add(key);
                     if (archive != null && archive.mayHave(key)) {
                         var accept = reads.expect();
@@ -372,23 +375,45 @@ final class RuinContext {
                 continue;
             }
             DiskShots.Read current = r.disk();
-            // Keep ready input ownership through priming, validation and actual publication.
-            try (var reservation = RuinMemory.reserveInputs(level, diskPublicationBytes(current) + archivePublicationBytes(r.cached()))) {
-                if (reservation == null) break;
-                boolean restored = false;
-                if (r.cached() != null && r.cached().isPresent()) {
-                    try {
-                        restored = restoreArchived(key, r.cached().get(), current);
-                    } catch (RuntimeException error) {
-                        Incoming.LOG.warn("Prepared window snapshot rejected for {}", new ChunkPos(key), error);
-                    }
-                }
-                if (!restored) publishDisk(current);
+            // The completed slot already owns the detached source. Resize/transfer that owner,
+            // rather than demanding the same source/copies twice at a full shared budget.
+            long known = publicationBytes(current, r.cached());
+            try (var publication = reads.takeForPublication(r, known, NuclearPrep.PLANS_CAP - NuclearPrep.residentMemory(level))) {
+                if (publication == null) break;
+                long before = retainedBytes();
+                publishReserved(current, r.cached());
+                publication.releaseToCountedOwner(Math.max(0, retainedBytes() - before));
                 reading.remove(key);
                 windowReads++;
-                reads.poll();
             }
         }
+    }
+
+    /** Detached Read arrays remain live while priming or a flash/archived copy is published. */
+    static long diskSourceBytes(DiskShots.Read read) {
+        long bytes = 128 + 8L * read.states().length + 4L * read.heights().length;
+        for (var section : read.states()) if (section != null) bytes += section.getSerializedSize();
+        return bytes;
+    }
+
+    /** Combined known source/copy/output bound, reusable by other already-owned read collectors. */
+    long publicationBytes(DiskShots.Read current, @Nullable java.util.Optional<net.minecraft.nbt.CompoundTag> cached) {
+        return diskSourceBytes(current) + diskPublicationBytes(current) + archivePublicationBytes(cached);
+    }
+
+    /** Caller owns publicationBytes through a charged publication lease; this method never re-admits. */
+    void publishReserved(DiskShots.Read current, @Nullable java.util.Optional<net.minecraft.nbt.CompoundTag> cached) {
+        if (current.skip() != null) throw new IllegalArgumentException("Cannot publish a skipped source");
+        long key = current.pos().toLong();
+        boolean restored = false;
+        if (cached != null && cached.isPresent()) {
+            try {
+                restored = restoreArchived(key, cached.get(), current);
+            } catch (RuntimeException error) {
+                Incoming.LOG.warn("Prepared window snapshot rejected for {}", new ChunkPos(key), error);
+            }
+        }
+        if (!restored) publishDisk(current);
     }
 
     /** Archived codec scratch is not a full heap bound. Charge known section-domain publication before decoding. */
@@ -396,8 +421,9 @@ final class RuinContext {
         if (cached == null || cached.isEmpty()) return 0;
         var tag = cached.get();
         int sections = tag.getInt("sections");
-        // The decoder rejects this before allocating states. Keep normal fallback/error classification.
-        if (sections < 1 || sections > 256) return 0;
+        // Invalid dimensions allocate no decoded states, but the already-owned NBT stays live
+        // until validation/fallback finishes and must not disappear from the transition bound.
+        if (sections < 1 || sections > 256) return tag.sizeInBytes();
         long bytes = snapshotMetadata(sections, tag.contains("sky"));
         boolean ruined = tag.getBoolean("ruined");
         for (int i = 0; i < sections; i++)
@@ -706,10 +732,19 @@ final class RuinContext {
         Blast blast(int dx, int dz) {
             ChunkPos pos = new ChunkPos(centre.x + dx, centre.z + dz);
             ChunkShot[] w = window(dx, dz);
-            // A background task owns its nine fragments through actual exit. Sharing them in
-            // the context would give temporary solver output an unbounded cross-task lifetime.
-            if (view != Blast.SERVER)
-                return Blast.solve(new RuinWindow(pos, minY, maxY, w, view), ctx.d, blockDamage, treeFall);
+            // A background task owns its nine fragments through actual exit. Optional shared reuse
+            // has a separately prepaid fixed capacity, including entries borrowed by other tasks.
+            if (view != Blast.SERVER) {
+                // Only permit-owning workers may borrow entries: eviction/close does not end their input lifetime.
+                RuinFragmentCache cache = RuinResults.currentProducer() == null ? null : ctx.fragmentCache;
+                if (cache != null) {
+                    Blast hit = cache.get(pos.toLong(), RuinWindow.Stamp.of(w));
+                    if (hit != null) return hit;
+                }
+                Blast fresh = Blast.solve(new RuinWindow(pos, minY, maxY, w, view), ctx.d, blockDamage, treeFall);
+                if (cache != null) cache.put(pos.toLong(), fresh);
+                return fresh;
+            }
             Blast b = ctx.blasts.get(pos.toLong());
             if (b != null && b.stamp().same(RuinWindow.Stamp.of(w))) return b;
             b = Blast.solve(new RuinWindow(pos, minY, maxY, w, view), ctx.d, blockDamage, treeFall);
@@ -872,8 +907,9 @@ final class RuinContext {
         RuinResults.Lease owner = RuinResults.tryReserve(RuinPlan.maxResultBytes(grid), RuinPlan.maxFragmentBytes(grid), room);
         if (owner == null) return null;
         try {
+            ensureFragmentCache(level, height);
             var future = RuinWorkers.submit(() -> {
-                RuinPlan result = task.call();
+                RuinPlan result = RuinResults.producing(owner, task);
                 owner.markResult(result);
                 return result;
             }, priority, inputs, owner::actualExit);
@@ -884,6 +920,20 @@ final class RuinContext {
             owner.abortBeforeSubmit();
             throw failure;
         }
+    }
+
+    private void ensureFragmentCache(ServerLevel level, int height) {
+        if (fragmentCache != null || fragmentCacheClosed || fragmentCacheLimit == 0) return;
+        // Optional reuse cannot borrow the decoder/publication transition or the first solver's workspace.
+        long room = NuclearPrep.PLANS_CAP - NuclearPrep.residentMemory(level)
+                - RuinWorkers.threadBufferBytes(height) - RuinMemory.TRANSITION_ROOM;
+        var budget = RuinResults.tryReserveCache(fragmentCacheLimit, room);
+        if (budget != null) fragmentCache = new RuinFragmentCache(fragmentCacheLimit, budget);
+    }
+
+    long fragmentCacheBytes() {
+        RuinFragmentCache cache = fragmentCache;
+        return cache == null ? 0 : cache.reservedBytes();
     }
 
     /** Finished callable only: transfer its result permit to the returned plan. */
@@ -1046,6 +1096,8 @@ final class RuinContext {
 
     /** Background plans no longer needed (cancel, world unload): abandon tasks. */
     void cancelTasks() {
+        fragmentCacheClosed = true;
+        if (fragmentCache != null) fragmentCache.close();
         // Transfer before cancel: queued callbacks may release immediately; running callbacks may not.
         inputs.detach(currentBytes());
         for (Task t : tasks.values()) cancelWorker(t.future, false);

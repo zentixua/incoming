@@ -1,5 +1,6 @@
 package ua.zentix.incoming.grid;
 
+import it.unimi.dsi.fastutil.ints.IntOpenHashSet;
 import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
@@ -41,6 +42,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.function.LongConsumer;
 
 /**
  * Blackout in a dimension's world: brings chunks into line with the power grid ({@link PowerGrid}) within the tick time
@@ -95,7 +97,7 @@ public final class BlackoutWorld {
     private static final double DISTRICT_SOUND_RANGE = 96;
 
     /** Cascade of one outage (or power restoration): area chunks ordered by arrival time. */
-    private static final class Sweep {
+    static final class Sweep {
         final Outage outage;
         final boolean restore;
         final int minX, maxX, maxZ;
@@ -105,6 +107,11 @@ public final class BlackoutWorld {
         long first = Long.MAX_VALUE, last = Long.MIN_VALUE;
         /** Next time whose chunks have not yet been issued. */
         long cursor = Long.MIN_VALUE;
+
+        /** Resume within the current due bucket; near probes never scan the whole far bucket. */
+        int at, nearRadius, nearPlayer, nearCell;
+        long[] priorityPlayers;
+        IntOpenHashSet issuedNear;
 
         Sweep(Outage outage, boolean restore) {
             this.outage = outage;
@@ -134,6 +141,77 @@ public final class BlackoutWorld {
                 last = Math.max(last, due);
             }
             if (built() && cursor == Long.MIN_VALUE) cursor = first;
+        }
+
+        /** One bounded unit, including empty deadlines, near-player probes and already-issued entries. */
+        void issueBatch(long now, LongArrayList players, LongConsumer issue) {
+            for (int work = 0; work < CHUNKS_PER_UNIT && cursor <= now && cursor <= last; work++) {
+                LongArrayList chunks = byDue.get(cursor);
+                if (chunks == null) {
+                    cursor++;
+                    continue;
+                }
+                if (priorityPlayers == null) {
+                    if (chunks.size() <= CHUNKS_PER_UNIT) {
+                        // Bounded sort: closest lamps first even when this whole bucket fits in one unit.
+                        if (!players.isEmpty()) LongArrays.quickSort(chunks.elements(), 0, chunks.size(),
+                                (a, b) -> Integer.compare(playerDistance(a, players), playerDistance(b, players)));
+                        priorityPlayers = new long[0];
+                    } else priorityPlayers = players.toLongArray();
+                }
+                if (priorityPlayers.length > 0 && nearRadius <= NEAR_CHUNKS) {
+                    // Visit each distance ring across ALL players before any farther ring.
+                    int r = nearRadius, edge = r * 2, dx = 0, dz = 0;
+                    if (r > 0) {
+                        int segment = nearCell / edge, offset = nearCell % edge;
+                        dx = switch (segment) { case 0 -> -r + offset; case 1 -> r; case 2 -> r - offset; default -> -r; };
+                        dz = switch (segment) { case 0 -> -r; case 1 -> -r + offset; case 2 -> r; default -> r - offset; };
+                    }
+                    long p = priorityPlayers[nearPlayer];
+                    long c = ChunkPos.asLong(ChunkPos.getX(p) + dx, ChunkPos.getZ(p) + dz);
+                    int index = find(chunks, c);
+                    if (index >= 0) {
+                        if (issuedNear == null) issuedNear = new IntOpenHashSet();
+                        if (issuedNear.add(index)) issue.accept(c);
+                    }
+                    if (++nearCell == (r == 0 ? 1 : 8 * r)) {
+                        nearCell = 0;
+                        if (++nearPlayer == priorityPlayers.length) {
+                            nearPlayer = 0;
+                            nearRadius++;
+                        }
+                    }
+                    continue;
+                }
+                int index = at++;
+                if (issuedNear == null || !issuedNear.remove(index)) issue.accept(chunks.getLong(index));
+                if (at == chunks.size()) {
+                    byDue.remove(cursor++);
+                    at = nearRadius = nearPlayer = nearCell = 0;
+                    priorityPlayers = null;
+                    issuedNear = null;
+                }
+            }
+        }
+
+        /** buildRow appends in z/x order, so near chunks can be found without sorting or copying the far list. */
+        private static int find(LongArrayList chunks, long c) {
+            int low = 0, high = chunks.size() - 1;
+            while (low <= high) {
+                int mid = (low + high) >>> 1;
+                long value = chunks.getLong(mid);
+                int cmp = Integer.compare(ChunkPos.getZ(value), ChunkPos.getZ(c));
+                if (cmp == 0) cmp = Integer.compare(ChunkPos.getX(value), ChunkPos.getX(c));
+                if (cmp < 0) low = mid + 1;
+                else if (cmp > 0) high = mid - 1;
+                else return mid;
+            }
+            return -1;
+        }
+
+        /** Persist only fully issued deadlines; a partially issued bucket is replayed safely after restart. */
+        long issuedThrough() {
+            return done() ? Long.MAX_VALUE : cursor - 1;
         }
 
         boolean done() {
@@ -189,7 +267,7 @@ public final class BlackoutWorld {
      * {@link #STATS_WINDOW} ticks. A queue consuming units without advancing is visible here by kind.
      */
     public enum Work {
-        /** Chunk queue unit (includes everything below except relighting and cascade). */
+        /** Chunk queue unit (includes everything below except relighting, cascade construction and issuance). */
         UNIT,
         /** Chunk not in memory — dropped. */
         GONE,
@@ -214,7 +292,9 @@ public final class BlackoutWorld {
         /** Counterpart waiting for its chunk's neighbors (returns to the relight queue tail). */
         RELIGHT_WAIT,
         /** Cascade row (districts and deadlines of area chunks). */
-        BUILD
+        BUILD,
+        /** Bounded due-chunk issuance (including near-player probes). */
+        ISSUE
     }
 
     /** Work counter window, ticks. */
@@ -303,6 +383,10 @@ public final class BlackoutWorld {
 
     /** Nearest player distance in chunks (maximum axis distance); no players — {@code Integer.MAX_VALUE}. */
     private int playerDistance(long chunk) {
+        return playerDistance(chunk, players);
+    }
+
+    private static int playerDistance(long chunk, LongArrayList players) {
         int x = ChunkPos.getX(chunk), z = ChunkPos.getZ(chunk), best = Integer.MAX_VALUE;
         for (int i = 0; i < players.size(); i++) {
             long p = players.getLong(i);
@@ -589,7 +673,7 @@ public final class BlackoutWorld {
         for (Work w : Work.values()) {
             long n = count[w.ordinal()] - counted[w.ordinal()], t = nanos[w.ordinal()] - timed[w.ordinal()];
             // the whole unit (queue, relighting, cascade) is took
-            if (w == Work.UNIT || w == Work.RELIGHT || w == Work.BUILD || n == 0 && t == 0) continue;
+            if (w == Work.UNIT || w == Work.RELIGHT || w == Work.BUILD || w == Work.ISSUE || n == 0 && t == 0) continue;
             inKinds += t;
             kinds.append(' ').append(w.name().toLowerCase(Locale.ROOT)).append('=').append(n);
             if (t > 0) kinds.append('/').append(ms(t)).append("ms");
@@ -634,7 +718,7 @@ public final class BlackoutWorld {
         }
     }
 
-    /** Process cascades (a chunk row is a work unit) and issue chunks reached by the cascade. */
+    /** Build cascade rows and issue bounded batches of reached chunks under the same grid clock. */
     private void advanceSweeps(ServerLevel level, PowerGrid grid, long now, WorkClock clock) {
         Iterator<Sweep> it = sweeps.iterator();
         while (it.hasNext()) {
@@ -654,30 +738,30 @@ public final class BlackoutWorld {
                 if (slow(level, took)) logSlowUnit(level, "cascade", took, "row of " + (s.maxX - s.minX + 1) + " chunks", counted, timed);
             }
             if (!s.built()) continue;
-            while (s.cursor <= now && s.cursor <= s.last) {
-                LongArrayList chunks = s.byDue.remove(s.cursor);
-                if (chunks != null) {
-                    // district outward from the player: lamps near the player go dark and relight first
-                    if (!players.isEmpty()) {
-                        long[] order = chunks.toLongArray();
-                        LongArrays.quickSort(order, (a, b) -> Integer.compare(playerDistance(a), playerDistance(b)));
-                        chunks = LongArrayList.wrap(order);
-                    }
-                    for (int i = 0; i < chunks.size(); i++) {
-                        long c = chunks.getLong(i);
-                        if (inMemory(level, c) != null) enqueue(c);
-                        // not in memory: converts on load, with distant Distant Horizons LODs using a disk copy
-                        else FarLods.request(level, c, false);
-                    }
-                }
-                s.cursor++;
-            }
+            issueDue(s, now, clock, c -> {
+                if (inMemory(level, c) != null) enqueue(c);
+                // not in memory: converts on load, with distant Distant Horizons LODs using a disk copy
+                else FarLods.request(level, c, false);
+            });
             // save progress: fully processed — not repeated after restart
-            grid.swept(s.outage.id(), s.restore, s.done() ? Long.MAX_VALUE : Math.min(now, s.last));
+            grid.swept(s.outage.id(), s.restore, s.issuedThrough());
             if (s.done()) {
                 it.remove();
                 Incoming.LOG.info("Blackout #{} ({}): {} cascade covered the whole area", s.outage.id(), level.dimension().location(),
                         s.restore ? "restore" : "outage");
+            }
+        }
+    }
+
+    /** Issue due chunks of a built sweep; separate from world access so the scheduling contract can be checked. */
+    void issueDue(Sweep s, long now, WorkClock clock, LongConsumer issue) {
+        // Let admitted player-near lamps convert before spending another tick issuing the distant city.
+        while (near.isEmpty() && s.cursor <= now && s.cursor <= s.last && clock.canStart()) {
+            long began = clock.begin();
+            try {
+                s.issueBatch(now, players, issue);
+            } finally {
+                note(Work.ISSUE, 1, clock.end(began));
             }
         }
     }

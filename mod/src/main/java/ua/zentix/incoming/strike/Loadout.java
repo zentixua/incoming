@@ -21,12 +21,7 @@ public record Loadout(WeaponType weapon, int count, int spread, TargetMode mode,
      * instead of conventional ({@code onCarrier}; ICBM always nuclear).
      */
     public record Nuke(int yieldKt, boolean airBurst, boolean onCarrier) {
-        /**
-         * Maximum yield, kt. Heavy zone (5 psi at ground and above) grows as Y^⅔: 15 kt covers about 32 thousand
-         * chunks; higher yields exceed memory and destruction budget, leaving ruins behind the blast front. Older
-         * designators/saves with higher yield are clamped to this.
-         */
-        // TEST ONLY: disposable B7 trial composition, never ship. No readiness/flight bypass.
+        /** Supported yield ceiling, kt; individual worlds can impose a lower maximum. */
         public static final int MAX_YIELD = 1000;
         public static final Nuke DEFAULT = new Nuke(15, false, false);
         public static final Codec<Nuke> CODEC = RecordCodecBuilder.create(i -> i.group(

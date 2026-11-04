@@ -7,7 +7,7 @@ Incoming (https://github.com/zentixua/incoming): strikes by Shahed and Lancet dr
   from is the launch site (a launcher stands there until incoming clear), via is up to 5 waypoints in order (drone,
   missile, loiter). A single projectile is count 1, spread 0.
 - Nuclear strike: «incoming nuke [at x y z] [kt [air|ground]]» launches an ICBM; «incoming nuke now [at x y z]
-  [kt [air|ground]]» detonates immediately (operator only). Without kt, use nuclear.default_yield (15 kt by default);
+  [kt [air|ground]]» detonates immediately (operator only). Supported yield is 1–1000 kt, bounded by nuclear.max_yield (100 in new worlds; existing valid caps stay unchanged). Without kt, use nuclear.default_yield (15 kt by default);
   without a burst mode, use ground (surface contact, crater and fallout). Explicit «15 air» selects the existing
   airburst at its yield-dependent height. Burst mode is not stored in incoming-server.toml.
   Ordinary nuclear commands queue unpaid destruction preparation, report progress, and automatically launch the exact

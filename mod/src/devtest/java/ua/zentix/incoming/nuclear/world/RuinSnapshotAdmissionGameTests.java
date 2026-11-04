@@ -82,7 +82,7 @@ public final class RuinSnapshotAdmissionGameTests {
 
     @GameTest(template = "range", batch = "nuke_snapshot_inbox", timeoutTicks = 400, skyAccess = true)
     @SuppressWarnings("unchecked")
-    public static void refusedInboxHeadKeepsOwnerUntilActualPublication(GameTestHelper h) throws Exception {
+    public static void readyInboxSlotFundsActualPublicationAtCapacity(GameTestHelper h) throws Exception {
         var reference = RuinStorageGameTests.fixture(h, false);
         ServerLevel level = h.getLevel(); RuinContext ctx = registered(h, reference.ctx());
         ChunkPos cold = new ChunkPos(reference.centre().x + 1024, reference.centre().z + 1024);
@@ -91,18 +91,21 @@ public final class RuinSnapshotAdmissionGameTests {
         Class<?> record = Class.forName(RuinContext.class.getName() + "$WindowRead");
         var ctor = record.getDeclaredConstructors()[0]; ctor.setAccessible(true);
         Consumer<Object> accept = inbox.expect(); accept.accept(ctor.newInstance(cold.toLong(), read, null));
-        long bytes = ctx.pendingWindowBytes();
+        h.assertTrue(ctx.pendingWindowBytes() > 0, "Ready source has no input owner");
+        ChunkShot expected = ChunkShot.fromDisk(read, null, null, false);
         var other = NuclearWorld.get(level.getServer().getLevel(Level.NETHER));
         long previous = other.materialReservation;
         try {
             pressure(level, other, 0);
+            long held = other.materialReservation;
             ctx.drainWindowReads(level);
-            h.assertTrue(inbox.pending() == 1 && ctx.pendingWindowBytes() == bytes, "Memory refusal released detached input owner");
-            h.assertTrue(ctx.shotCount() == 0 && ctx.windowReads == 0 && ctx.windowAbsent == 0 && !ctx.windowFailed(), "Memory refusal became an absent/failed source");
-            other.materialReservation = previous;
-            ctx.drainWindowReads(level);
-            h.assertTrue(inbox.pending() == 0 && ctx.pendingWindowBytes() == 0 && ctx.hasShot(cold.toLong()), "Successful publication failed ownership transfer");
-            h.assertTrue(ctx.windowReads == 1 && ctx.windowAbsent == 0, "Retry changed source classification");
+            h.assertTrue(inbox.pending() == 0 && ctx.pendingWindowBytes() == 0 && ctx.hasShot(cold.toLong()),
+                    "Already-funded source could not publish without an external refund");
+            h.assertTrue(other.materialReservation == held, "Publication borrowed the fixed external owner");
+            h.assertTrue(NuclearPrep.residentMemory(level) <= NuclearPrep.PLANS_CAP, "Ready-source transfer exceeded the shared cap");
+            h.assertTrue(ctx.windowReads == 1 && ctx.windowAbsent == 0 && !ctx.windowFailed(), "Publication changed source classification");
+            h.assertTrue(ctx.shot(level, cold.x, cold.z).saved().encode().equals(expected.saved().encode()),
+                    "Funded publication changed the actual source snapshot");
             inbox.invalidate();
             h.assertTrue(ctx.pendingWindowBytes() == 0, "Finished inbox still owns reservation");
         } finally { other.materialReservation = previous; inbox.invalidate(); }

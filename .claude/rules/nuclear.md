@@ -200,10 +200,10 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   touches ground. Top behind fresh front starts at zero: first 0.1 s for 1 kt–1 Mt surface/low airbursts, no higher than
   ~7 m (previously up to 48 km for surface 1 Mt; `BlastWallTest.headTopIsTheBoundaryLayer`: 0.1 ms grid and high airbursts,
   1 kt at 240 m, 15 kt at 592 m; top is Kuhl law over front-normal path behind wedge end during local dust age,
-  no spikes, and while sphere is off ground, top never sags by more than 2 % and 5 cm). Known out-of-game limit: low
+  no spikes, and while sphere is off ground, top never sags by more than 2 % and 5 cm). Known low-airburst limit:
   airbursts above 15 kt (1 Mt at 700 m) touch ground behind the front, shrinking the wedge by 1.5 on that tick, top
   10–25 % lower, and pall handoff band (`PALL_WALL_HANDOFF_FROM/TO` shader constants) jumps away from sphere: slot has
-  no sphere radius (all 20 numbers used); game bursts (up to 15 kt, airbursts above 2.9 sphere radii) never do this.
+  no sphere radius (all 20 numbers used); airbursts above 2.9 sphere radii do not do this.
   Over wedge fraction u behind edge, lofted amount follows dynamic-pressure impulse (`DustModel.lifted`), top Kuhl
   dusty-layer law u^(5/6) (`top`), ground density their ratio (`shape`: 0 at edge, at u ≈ 0.1 2.6 times denser than wedge
   back); column depth grows rearward. Back top and edge/back density use the same `DustModel.Column` (`first`,

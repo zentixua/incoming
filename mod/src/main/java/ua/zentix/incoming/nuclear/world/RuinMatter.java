@@ -103,6 +103,8 @@ public final class RuinMatter extends LedgerData {
     private final it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<Original> originals = new it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<>();
     private RuinSupport search;
     private int heldRadius;
+    /** One held-window observation per work invocation; destination readiness always stays live. */
+    private boolean inWork, heldChecked, heldReady;
     private int lookupId = -1, lookupIndex, lookupSize;
     private boolean lookupPast, lookupDone;
     private Detonation lookupValue;
@@ -196,18 +198,27 @@ public final class RuinMatter extends LedgerData {
 
     private boolean request(ServerLevel level, BlockPos at, int radius) {
         if (loadTick == level.getGameTime() || held != null
-                && !NuclearTickets.neighbourhoodLoaded(level, held, heldRadius)) return false;
+                && !heldLoaded(level)) return false;
         loadTick = level.getGameTime();
         if (held != null) NuclearTickets.holdMatter(level, held, false, heldRadius);
         held = new net.minecraft.world.level.ChunkPos(at);
         heldRadius = radius;
+        heldChecked = false;
         NuclearTickets.holdMatter(level, held, true, radius);
         return false;
+    }
+
+    private boolean heldLoaded(ServerLevel level) {
+        if (inWork && heldChecked) return heldReady;
+        boolean ready = NuclearTickets.neighbourhoodLoaded(level, held, heldRadius);
+        if (inWork) { heldChecked = true; heldReady = ready; }
+        return ready;
     }
 
     void unload(ServerLevel level) {
         if (held != null) NuclearTickets.holdMatter(level, held, false, heldRadius);
         held = null;
+        heldChecked = false;
         search = null;
     }
 
@@ -232,6 +243,17 @@ public final class RuinMatter extends LedgerData {
         }
 
         private Piece(BlockPos source, BlockState state, CompoundTag contents, Vec3 velocity, long tick, boolean restored) {
+            this(source, state, contents, velocity, tick, restored, fine(state));
+        }
+
+        private static boolean fine(BlockState state) {
+            return state.is(net.minecraft.tags.BlockTags.LEAVES)
+                    || state.is(net.neoforged.neoforge.common.Tags.Blocks.GLASS_BLOCKS)
+                    || state.is(net.neoforged.neoforge.common.Tags.Blocks.GLASS_PANES);
+        }
+
+        private Piece(BlockPos source, BlockState state, CompoundTag contents, Vec3 velocity, long tick,
+                      boolean restored, boolean fine) {
             this.source = source.immutable();
             this.state = state;
             this.contents = contents;
@@ -239,9 +261,7 @@ public final class RuinMatter extends LedgerData {
             // A disk restore uses saved volume/mass and immutable registry identity. Never call
             // block collision callbacks or the server-thread Blast property cache on the I/O worker.
             Blast.Props material = restored ? null : Blast.props(state);
-            fine = state.is(net.minecraft.tags.BlockTags.LEAVES)
-                    || state.is(net.neoforged.neoforge.common.Tags.Blocks.GLASS_BLOCKS)
-                    || state.is(net.neoforged.neoforge.common.Tags.Blocks.GLASS_PANES);
+            this.fine = fine;
             volume = material == null ? 0 : material.volume();
             mass = material == null ? 0 : volume * material.density();
             x = source.getX() + 0.5;
@@ -357,6 +377,13 @@ public final class RuinMatter extends LedgerData {
     /** Existing ownership gets a bounded progress slice before new removals compete for memory. */
     void work(ServerLevel level, WorkClock clock, int units) {
         if (!writable()) return;
+        heldChecked = false;
+        inWork = true;
+        try { workBatch(level, clock, units); }
+        finally { inWork = false; heldChecked = false; }
+    }
+
+    private void workBatch(ServerLevel level, WorkClock clock, int units) {
         int left = moving.size();
         boolean waiting = false;
         while ((left > 0 || !supportSources.isEmpty() || !supports.isEmpty() && !waiting) && units-- > 0 && clock.canStart()) {
@@ -721,12 +748,14 @@ public final class RuinMatter extends LedgerData {
         return new SupportSeed(BlockPos.of(b.getLong()), palette.state(b.getInt()), b.getInt());
     }
 
-    /** Internal queue pages only. The B5 streaming disk schema and frozen-owner interval stay unchanged. */
+    /** Internal queue pages only. The B5 streaming disk schema and frozen-owner interval stay unchanged.
+     * Bit 1 marks captured classification, bit 2 stores fine; legacy 0/1 rows classify once on decode.
+     * Tag reloads affect new captures and disk restores as before, never reclassify a FIFO rotation. */
     private void encodePiece(java.nio.ByteBuffer b, Piece p) {
         if (p.contents != null && p.cargoKey == 0) p.cargoKey = ++nextInventory;
         if (p.contents != null) inventories.put(p.cargoKey, p.contents);
         b.putLong(p.source.asLong()).putLong(p.id).putLong(p.scorchTime).putLong(p.cargoKey);
-        b.putInt(p.scorch).putInt(p.scorchEvent).putInt(palette.index(p.state)).put((byte) (p.outside ? 1 : 0));
+        b.putInt(p.scorch).putInt(p.scorchEvent).putInt(palette.index(p.state)).put((byte) ((p.outside ? 1 : 0) | 2 | (p.fine ? 4 : 0)));
         b.putDouble(p.volume).putDouble(p.mass).putDouble(p.x).putDouble(p.y).putDouble(p.z);
         b.putDouble(p.vx).putDouble(p.vy).putDouble(p.vz).putDouble(p.tick).putDouble(p.releasedTick);
         b.putDouble(p.windX).putDouble(p.windZ).putDouble(p.drag).putDouble(p.pulse);
@@ -736,10 +765,12 @@ public final class RuinMatter extends LedgerData {
         BlockPos source = BlockPos.of(b.getLong());
         long id = b.getLong(), scorchTime = b.getLong(), cargoKey = b.getLong();
         int scorch = b.getInt(), event = b.getInt(); BlockState state = palette.state(b.getInt());
+        int flags = b.get();
         // Iteration also runs on the I/O worker while the ledger is frozen. Never query block callbacks.
-        Piece p = new Piece(source, state, inventories.get(cargoKey), Vec3.ZERO, 0, true);
+        Piece p = new Piece(source, state, inventories.get(cargoKey), Vec3.ZERO, 0, true,
+                (flags & 2) != 0 ? (flags & 4) != 0 : Piece.fine(state));
         p.id = id; p.scorchTime = scorchTime; p.scorch = scorch; p.scorchEvent = event; p.cargoKey = cargoKey;
-        p.outside = b.get() != 0;
+        p.outside = (flags & 1) != 0;
         p.volume = b.getDouble(); p.mass = b.getDouble(); p.x = b.getDouble(); p.y = b.getDouble(); p.z = b.getDouble();
         p.vx = b.getDouble(); p.vy = b.getDouble(); p.vz = b.getDouble(); p.tick = b.getDouble(); p.releasedTick = b.getDouble();
         p.windX = b.getDouble(); p.windZ = b.getDouble(); p.drag = b.getDouble(); p.pulse = b.getDouble();

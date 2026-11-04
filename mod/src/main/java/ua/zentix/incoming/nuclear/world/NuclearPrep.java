@@ -831,21 +831,29 @@ public final class NuclearPrep {
                     .thenAccept(p.terrainReads.expect());
         }
         if (!clock.canStart() || !shared.canStart()) return null;
-        DiskShots.Read read = p.terrainReads.poll();
+        DiskShots.Read read = p.terrainReads.peek();
         if (read == null) return null;
-        p.resolvingRead = false;
-        if (live.source() == Terrain.Source.CHUNK) return live;
+        if (live.source() == Terrain.Source.CHUNK) {
+            p.terrainReads.poll(); p.resolvingRead = false;
+            return live;
+        }
         if (read.skip() != null) {
+            p.terrainReads.poll(); p.resolvingRead = false;
             p.failure = read.skip().equals("not on disk") || read.skip().equals("not fully generated on disk")
                     ? RuinPreparation.Reason.INVALID : RuinPreparation.Reason.IO;
             return null;
         }
-        long unit = shared.begin();
-        try {
-            read = read.primed(Blast.SERVER);
-            int column = (Mth.floor(at.z) & 15) * 16 + (Mth.floor(at.x) & 15);
-            return new Terrain.Surface(read.heights()[ChunkShot.type(type) * 256 + column], Terrain.Source.DISK);
-        } finally { clock.record(shared.end(unit)); }
+        long known = RuinContext.diskSourceBytes(read) + 4L * RuinPlan.HEIGHTMAP_TYPES.length * 256 + 128;
+        try (var publication = p.terrainReads.takeForPublication(read, known, PLANS_CAP - residentMemory(level))) {
+            if (publication == null) return null;
+            p.resolvingRead = false;
+            long unit = shared.begin();
+            try {
+                read = read.primed(Blast.SERVER);
+                int column = (Mth.floor(at.z) & 15) * 16 + (Mth.floor(at.x) & 15);
+                return new Terrain.Surface(read.heights()[ChunkShot.type(type) * 256 + column], Terrain.Source.DISK);
+            } finally { clock.record(shared.end(unit)); }
+        }
     }
 
     private String content(ServerLevel level) {
@@ -989,27 +997,26 @@ public final class NuclearPrep {
     private static boolean acceptArchived(ServerLevel level, Prep p, ArchivedShot stored) {
         DiskShots.Read current = stored.current();
         if (current.skip() != null) {
+            p.archived.poll();
             if (p.handle != null && current.sourceFailure()) p.failure = RuinPreparation.Reason.IO;
             p.unreadable.add(stored.key());
             p.unreadWhy.addTo(current.skip().split(":", 2)[0], 1);
             p.reading.remove(stored.key());
             return true;
         }
-        try {
-            boolean restored = false;
+        long known = p.ruins.publicationBytes(current, stored.data());
+        try (var publication = p.archived.takeForPublication(stored, known,
+                PLANS_CAP - residentMemory(level))) {
+            if (publication == null) return false;
+            long before = p.ruins.retainedBytes();
             try {
-                if (stored.data().isPresent()) {
-                    Boolean admitted = p.ruins.restoreArchived(level, stored.key(), stored.data().get(), current);
-                    if (admitted == null) return false;
-                    restored = admitted;
-                }
+                p.ruins.publishReserved(current, stored.data());
+                p.diskShots++;
             } catch (RuntimeException error) {
-                Incoming.LOG.warn("Prepared snapshot cache rejected for {}", new ChunkPos(stored.key()), error);
+                failedSource(p, stored.key(), error);
+            } finally {
+                publication.releaseToCountedOwner(Math.max(0, p.ruins.retainedBytes() - before));
             }
-            if (!restored && !p.ruins.putDisk(level, current)) return false;
-            p.diskShots++;
-        } catch (RuntimeException error) {
-            failedSource(p, stored.key(), error);
         }
         p.reading.remove(stored.key());
         return true;
@@ -1050,29 +1057,36 @@ public final class NuclearPrep {
             long unit = shared.begin();
             try {
                 if (!acceptArchived(level, p, stored)) break;
-                p.archived.poll();
             } finally { clock.record(shared.end(unit)); }
         }
-        // disk results: snapshots into ruins (states into property table), one work unit per chunk
+        // Completed source ownership funds the known publication transition before its slot is released.
         for (DiskShots.Read r; clock.canStart() && shared.canStart() && (r = p.reads.peek()) != null; ) {
             long c = r.pos().toLong();
             long c0 = shared.begin();
             try {
                 if (r.skip() != null) {
-                    if (p.handle != null && r.sourceFailure())
-                        p.failure = RuinPreparation.Reason.IO;
+                    p.reads.poll();
+                    if (p.handle != null && r.sourceFailure()) p.failure = RuinPreparation.Reason.IO;
                     p.unreadable.add(c);
                     p.unreadWhy.addTo(r.skip().split(":", 2)[0], 1);
                 } else {
-                    if (!p.ruins.putDisk(level, r)) break;
-                    p.diskShots++;
+                    try (var publication = p.reads.takeForPublication(r, p.ruins.publicationBytes(r, null),
+                            PLANS_CAP - residentMemory(level))) {
+                        if (publication == null) break;
+                        long before = p.ruins.retainedBytes();
+                        try {
+                            p.ruins.publishReserved(r, null);
+                            p.diskShots++;
+                        } finally {
+                            publication.releaseToCountedOwner(Math.max(0, p.ruins.retainedBytes() - before));
+                        }
+                    }
                 }
-            } catch (RuntimeException e) {
-                failedSource(p, c, e);
+            } catch (RuntimeException error) {
+                failedSource(p, c, error);
             } finally {
                 clock.record(shared.end(c0));
             }
-            p.reads.poll();
             p.reading.remove(c);
         }
         // ready plans
