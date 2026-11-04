@@ -110,6 +110,39 @@ public final class RuinStorageGameTests {
             h.assertTrue(result.join().orElseThrow().equals(expected), "Region-file round trip changed plan data");
         });
     }
+    @GameTest(template = "range", timeoutTicks = 1200, batch = "nuke_store_demand", skyAccess = true)
+    public static void demandReadSurvivesFinishedPreparationCursor(GameTestHelper h) {
+        var grid = fixture(h, true);
+        var expected = plan(grid).store();
+        var level = h.getLevel();
+        var root = level.getServer().getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT)
+                .resolve("data/ruin-demand-test-" + java.util.UUID.randomUUID());
+        var info = new RegionStorageInfo("gametest", level.dimension(), "incoming_preparation");
+        var pages = new RuinPages(info, root);
+        long key = grid.centre().toLong();
+        var reopened = pages.write(key, () -> expected).thenCompose(unused -> pages.close())
+                .thenApply(unused -> new RuinPages(info, root));
+        var plans = new RetainedPlans();
+        var charged = new java.util.concurrent.atomic.AtomicLong();
+        boolean[] installed = {false};
+        ua.zentix.incoming.gametest.StrikeGameTests.gameSpeed(h);
+        h.succeedWhen(() -> {
+            h.assertTrue(reopened.isDone(), "Original write/close still pending");
+            if (!installed[0]) {
+                plans.spill(reopened.join(), grid.ctx(), charged::addAndGet, () -> 64L << 20);
+                plans.discover();
+                installed[0] = true;
+            }
+            // The scar consumer requests a page after the preparation cursor has reached the end.
+            var restored = plans.get(key);
+            plans.prefetch(new long[0], 0);
+            h.assertTrue(restored != null, "Demand read must survive preparation read-ahead cleanup");
+            h.assertTrue(expected.equals(restored.store()), "Demand result changed fields");
+            h.assertTrue(charged.get() == 0, "Completed read retained its reservation");
+            plans.clear();
+        });
+    }
+
     private static void compareCollapse(GameTestHelper h, boolean dense) {
         for (double psi : new double[]{1, 6, 20, 50}) {
             var grid = fixture(h, dense, psi);

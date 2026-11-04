@@ -15,9 +15,13 @@ final class RuinPolicy {
     static String fingerprint(ResourceManager resources, String mods) {
         try {
             MessageDigest digest = MessageDigest.getInstance("SHA-256");
+            digest.update("incoming-preparation/2\n".getBytes(StandardCharsets.UTF_8));
             digest.update(mods.getBytes(StandardCharsets.UTF_8));
             // Tags, data maps and biome data can alter an exact plan without changing geometry or mod version.
-            var files = resources.listResourceStacks("", id -> id.getPath().endsWith(".json"));
+            // A pack root is not a valid PathPackResources path. Hash the inputs used by ruin properties.
+            var files = new java.util.HashMap<net.minecraft.resources.ResourceLocation, java.util.List<net.minecraft.server.packs.resources.Resource>>();
+            for (String path : new String[]{"tags", "data_maps", "worldgen/biome"})
+                files.putAll(resources.listResourceStacks(path, id -> id.getPath().endsWith(".json")));
             var keys = new java.util.ArrayList<>(files.keySet());
             keys.sort(java.util.Comparator.comparing(Object::toString));
             byte[] buffer = new byte[8192];

@@ -5,7 +5,7 @@ import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 /** Shared preparation/scar ownership: applying or replacing a plan releases its actual retained bytes. */
 final class RetainedPlans extends Long2ObjectOpenHashMap<RuinPlan> {
     private static final long serialVersionUID = 1L;
-    private long bytes;
+    private long bytes, writeBytes;
     private transient RuinPages pages;
     private transient RuinContext context;
     private final transient it.unimi.dsi.fastutil.longs.Long2ObjectLinkedOpenHashMap<Write> writes =
@@ -18,6 +18,8 @@ final class RetainedPlans extends Long2ObjectOpenHashMap<RuinPlan> {
     private static final int IO_LIMIT = 64, READ_LIMIT = 16;
     private final transient it.unimi.dsi.fastutil.longs.LongLinkedOpenHashSet toWrite = new it.unimi.dsi.fastutil.longs.LongLinkedOpenHashSet();
     private final transient it.unimi.dsi.fastutil.longs.LongLinkedOpenHashSet hot = new it.unimi.dsi.fastutil.longs.LongLinkedOpenHashSet();
+    // Demand reads belong to the scar/front consumer, independently of the preparation cursor.
+    private final transient it.unimi.dsi.fastutil.longs.LongOpenHashSet demanded = new it.unimi.dsi.fastutil.longs.LongOpenHashSet();
     private long lastMiss = Long.MIN_VALUE;
     private boolean discover;
     private final transient it.unimi.dsi.fastutil.longs.LongLinkedOpenHashSet misses = new it.unimi.dsi.fastutil.longs.LongLinkedOpenHashSet();
@@ -37,7 +39,7 @@ final class RetainedPlans extends Long2ObjectOpenHashMap<RuinPlan> {
         room = headroom;
     }
 
-    long bytes() { return bytes + 48L * super.size(); }
+    long bytes() { return bytes + writeBytes + 48L * (super.size() + reads.size() + writes.size()); }
 
     /** Bound both write ownership and read results; no blocking future wait on the tick thread. */
     void pump(long room) {
@@ -47,6 +49,7 @@ final class RetainedPlans extends Long2ObjectOpenHashMap<RuinPlan> {
             var entry = it.next();
             Write write = entry.getValue();
             if (!write.receipt.isDone()) continue;
+            writeBytes -= write.plan.bytes();
             if (write.receipt.isCompletedExceptionally()) {
                 ua.zentix.incoming.Incoming.LOG.error("Could not spill prepared ruin plan at {}", new net.minecraft.world.level.ChunkPos(entry.getLongKey()));
                 // Keep the resident result. Admission stops safely if disk writes cannot make progress.
@@ -54,10 +57,7 @@ final class RetainedPlans extends Long2ObjectOpenHashMap<RuinPlan> {
                 it.remove();
                 continue;
             }
-            if (super.get(entry.getLongKey()) == write.plan) {
-                super.put(entry.getLongKey(), null);
-                bytes -= write.plan.bytes();
-            }
+            if (super.get(entry.getLongKey()) == write.plan) hot.addAndMoveToLast(entry.getLongKey());
             it.remove();
         }
         while (bytes > (16L << 20) && !hot.isEmpty()) {
@@ -79,6 +79,7 @@ final class RetainedPlans extends Long2ObjectOpenHashMap<RuinPlan> {
             var detached = plan.detached();
             var receipt = pages.write(key, detached::store).whenComplete((unused, failure) -> charge.accept(-reserve));
             writes.put(key, new Write(plan, receipt));
+            writeBytes += plan.bytes();
         }
     }
 
@@ -105,7 +106,11 @@ final class RetainedPlans extends Long2ObjectOpenHashMap<RuinPlan> {
     @Override
     public RuinPlan get(long key) {
         RuinPlan plan = super.get(key);
-        if (plan != null || pages == null) return plan;
+        if (plan != null) {
+            if (hot.contains(key)) hot.addAndMoveToLast(key);
+            return plan;
+        }
+        if (pages == null) return null;
         if (!super.containsKey(key)) {
             if (!discover) return null;
             return probe(key) > 0 ? super.get(key) : null;
@@ -121,7 +126,7 @@ final class RetainedPlans extends Long2ObjectOpenHashMap<RuinPlan> {
             boolean needed = false;
             for (int i = from; i < Math.min(order.length, from + READ_LIMIT); i++)
                 if (order[i] == key) { needed = true; break; }
-            if (!needed || super.containsKey(key) && super.get(key) != null) discardRead(key);
+            if (!demanded.contains(key) && (!needed || super.containsKey(key) && super.get(key) != null)) discardRead(key);
         }
         if (pages == null || !Boolean.TRUE.equals(pages.existing())) return;
         for (int i = from; i < Math.min(order.length, from + READ_LIMIT); i++) {
@@ -141,8 +146,10 @@ final class RetainedPlans extends Long2ObjectOpenHashMap<RuinPlan> {
             read = pages.read(key);
             reads.put(key, read);
         }
+        demanded.add(key);
         if (!read.isDone()) return null;
         reads.remove(key);
+        demanded.remove(key);
         accounting.accept(-READ_BYTES);
         try {
             var stored = read.join(); // already complete; no server-thread I/O
@@ -187,6 +194,7 @@ final class RetainedPlans extends Long2ObjectOpenHashMap<RuinPlan> {
     }
 
     private void discardRead(long key) {
+        demanded.remove(key);
         var read = reads.remove(key);
         if (read != null) {
             var charge = accounting;
@@ -203,7 +211,9 @@ final class RetainedPlans extends Long2ObjectOpenHashMap<RuinPlan> {
             read.whenComplete((unused, failure) -> charge.accept(-READ_BYTES));
         }
         reads.clear();
+        demanded.clear();
         writes.clear();
+        writeBytes = 0;
         toWrite.clear();
         hot.clear();
         closeStorage();
