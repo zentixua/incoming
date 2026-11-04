@@ -40,6 +40,7 @@ public final class NuclearCommandGameTests {
         c.nukeEnabled.set(true);
         StrikeGameTests.afterTest(h, () -> {
             NuclearCommands.cancelAll(h.getLevel().getServer());
+            ua.zentix.incoming.nuclear.NuclearStrikes.clear(h.getLevel());
             c.nukeEnabled.set(enabled);
         });
         return Vec3.atCenterOf(h.absolutePos(new BlockPos(32, 4, 32)));
@@ -62,13 +63,25 @@ public final class NuclearCommandGameTests {
         h.assertValueEqual(events.scheduled().size(), before + 1, "ready explicit command did not schedule");
         var scheduled = events.scheduled().getLast();
         StrikeGameTests.afterTest(h, () -> {
-            events.unschedule(scheduled);
+            ua.zentix.incoming.nuclear.NuclearStrikes.clear(level);
             RuinPreparation.cancel(level, handle);
         });
         h.assertTrue(scheduled.target().equals(target), "command target changed");
         h.assertTrue(RuinPreparation.status(level, handle).stage() == RuinPreparation.Stage.READY, "accepted order lost preparation");
         tick(level);
         h.assertValueEqual(events.scheduled().size(), before + 1, "command scheduled twice");
+        // Unscheduling the SavedData row alone loses the owner of the already acquired ground area.
+        Field ground = ua.zentix.incoming.nuclear.NuclearStrikes.class.getDeclaredField("GROUND");
+        ground.setAccessible(true);
+        @SuppressWarnings("unchecked")
+        var type = (net.minecraft.server.level.TicketType<UUID>) ground.get(null);
+        var area = new ua.zentix.incoming.strike.AreaLoader.Area(type,
+                new net.minecraft.world.level.ChunkPos(net.minecraft.core.BlockPos.containing(target)),
+                ua.zentix.incoming.strike.FlightTickets.DISTANCE, new UUID(0, scheduled.id()), false);
+        var areas = ua.zentix.incoming.strike.StrikeWorld.get(level).areas();
+        h.assertTrue(areas.holds(area), "scheduled command never acquired its ground area");
+        ua.zentix.incoming.nuclear.NuclearStrikes.clear(level);
+        h.assertTrue(!areas.holds(area), "fixture dropped scheduled row without releasing its ground owner");
         h.succeed();
     }
 
