@@ -29,20 +29,19 @@ import java.lang.invoke.MethodType;
  * method LOD Server Support ({@code compat/VoxyCompat}, MIT) uses for server chunks and Voxy for its own; via
  * {@link MethodHandle}, without mixins. World is {@code WorldIdentifier.of(Level)}. If unavailable, log one line,
  * tell the server Voxy is absent, and receive no packets. Voxy 0.2.16 (via Roxy) accepts sections from any thread:
- * decoding and ingestion run on the network thread.
+ * decoding and ingestion run on Incoming's serial horizon worker.
  * <p>
- * Remember which chunks the client received from the mod in this world (bounded recovery hints): if LOD Server Support later
+ * Remember which chunks the client received from the mod in this world (the bounded hint ledger): if LOD Server Support later
  * writes the same chunk from the server's disk to Voxy (its first check; no distant ruins on disk), the client names
  * it to the server ({@link C2S.VoxyStale}, {@link #tick}), which sends the copy again.
  */
 public final class VoxyIngest {
     @Nullable
     private static MethodHandle worldOf, rawIngest, instanceOf, ingestService, taskCount;
-    // Coordinate-only, best-effort recovery: history and a burst of callbacks must both stay bounded.
+    // Recovery is best effort and coordinate-only. Replaying retained sections could erase subsequent edits,
+    // support/fall updates or another strike. The server must build the replacement from its current authority.
     private static final LodRefreshHints HINTS = new LodRefreshHints(65536, 4096);
     private static volatile boolean broken;
-    @Nullable
-    private static volatile ClientLevel ingested;
 
     private VoxyIngest() {}
 
@@ -97,28 +96,35 @@ public final class VoxyIngest {
 
     /** World login: tell the server whether to send chunks. */
     static void login() {
-        reset();
+        ClientHorizon.reset();
         if (available()) PacketDistributor.sendToServer(new C2S.LodMods(true));
     }
 
-    /** Server chunk into Voxy; network thread. */
-    static void accept(S2C.VoxyChunk p) {
+    /** Network receipt holds the encoded sections until their authoritative front time. */
+    static void accept(S2C.VoxyChunk p, net.neoforged.neoforge.network.handling.IPayloadContext context) {
+        var minecraft = Minecraft.getInstance();
+        var connection = minecraft.getConnection();
+        // The dimension name alone is not a session identity: a late packet from a closed connection must
+        // never enter the new world's queue, even when both servers call the dimension "overworld".
+        if (connection == null || connection.getConnection() != context.connection()) return;
+        ClientLevel level = minecraft.level;
+        if (!available() || level == null || Replay.active() || !level.dimension().location().equals(p.dimension())) return;
+        if (!ClientHorizon.offer(level, p)) requestFresh(level, p);
+    }
+
+    /** Worker only. The level is captured before submission; never retarget taken work to a new world. */
+    static int ingest(ClientLevel level, S2C.VoxyChunk p) {
         MethodHandle of = worldOf, raw = rawIngest;
-        ClientLevel level = Minecraft.getInstance().level;
-        // Flashback replay: Voxy shows its live database there; past chunks from the recording do not belong in it.
-        if (of == null || raw == null || broken || level == null || Replay.active() || !level.dimension().location().equals(p.dimension())) return;
-        if (ingested != level) {
-            ingested = level;
-            HINTS.begin(level);
-        }
+        if (of == null || raw == null || broken) return -1;
         try {
             Object world = of.invoke((Level) level);
-            if (world == null) return;
-            for (LodSections.Section s : LodSections.read(p.sections(), level.registryAccess().registryOrThrow(Registries.BIOME))) {
+            if (world == null) return -1;
+            var sections = LodSections.read(p.sections(), level.registryAccess().registryOrThrow(Registries.BIOME));
+            for (LodSections.Section s : sections) {
                 boolean ok = (boolean) raw.invoke(world, s.blocks(), p.x(), s.y(), p.z(), s.blockLight(), s.skyLight());
-                if (!ok) return;
+                if (!ok) return -1;
             }
-            HINTS.remember(level, ChunkPos.asLong(p.x(), p.z()));
+            return sections.size();
         } catch (LinkageError e) {
             broken = true;
             Incoming.LOG.warn("Voxy: rawIngest no longer matches ({}) — strike damage far away shows in Voxy only when you get there", e.toString());
@@ -127,27 +133,32 @@ public final class VoxyIngest {
         } catch (Throwable e) {
             throw HandleFailures.propagate(e);
         }
+        return -1;
     }
 
-    /**
-     * LOD Server Support wrote a chunk of world {@code level} to Voxy (LSS thread): if sent by the mod, notify the server
-     * to resend it (LSS sends an unloaded chunk from disk, without ruins).
-     */
+    static void beginHints(ClientLevel level) { HINTS.begin(level); }
+
+    static void clearHints() { HINTS.reset(); }
+
+    static void requestFresh(ClientLevel level, S2C.VoxyChunk p) {
+        HINTS.request(level, ChunkPos.asLong(p.x(), p.z()));
+    }
+
+    /** Publish only after ClientHorizon checks the session, under its short ownership lock. */
+    static void remember(ClientLevel level, S2C.VoxyChunk p) {
+        HINTS.remember(level, ChunkPos.asLong(p.x(), p.z()));
+    }
+
+    /** LSS is observational; request current server state instead of replaying an old local section image. */
     static void overwritten(ClientLevel level, int x, int z) {
-        if (level != ingested) return;
         HINTS.overwritten(level, ChunkPos.asLong(x, z));
-    }
-
-    /** Release the previous world immediately on logout/reset, even if the next session has no LOD packets. */
-    static void reset() {
-        ingested = null;
-        HINTS.reset();
     }
 
     /** Client tick: report overwritten chunks at the server's bounded request rate. */
     static void tick() {
         var minecraft = Minecraft.getInstance();
         ClientLevel level = minecraft.level;
+        if (level != null) ClientHorizon.tick(level, level.getGameTime());
         if (level == null || minecraft.getConnection() == null) return;
         long[] batch = HINTS.take(level, C2S.VoxyStale.PER_TICK);
         if (batch.length > 0) PacketDistributor.sendToServer(new C2S.VoxyStale(batch));

@@ -239,8 +239,10 @@ public final class IncomingClient {
         Replay.tick();
         // flash traces update while paused too: replay can seek while paused
         ua.zentix.incoming.client.nuclear.FlashMarksClient.tick();
-        VoxyIngest.tick();
-        if (mc.isPaused()) return;
+        if (mc.isPaused()) {
+            VoxyIngest.tick();
+            return;
+        }
         Designator.tick();
         ClientFlights.tick();
         TerrainTiles.tick();
@@ -268,6 +270,7 @@ public final class IncomingClient {
         RadarScope.tick();
         NukeArming.tick();
         ClientNuclear.tick();
+        VoxyIngest.tick(); // snapshot the same post-tick event age that the next frame renders
     }
 
     /**
@@ -326,7 +329,7 @@ public final class IncomingClient {
 
     /** Everything the client holds about the world: sounds, tracks, effects, the nuke, map; world exit (and devtest effects sandbox). */
     public static void resetSession() {
-        VoxyIngest.reset();
+        ClientHorizon.reset();
         ua.zentix.incoming.client.fx.BlastTime.reset();
         ClientSounds.reset();
         FlightTracks.logout();
@@ -565,8 +568,8 @@ public final class IncomingClient {
         }
 
         @Override
-        public void voxyChunk(S2C.VoxyChunk p) {
-            VoxyIngest.accept(p);
+        public void voxyChunk(S2C.VoxyChunk p, net.neoforged.neoforge.network.handling.IPayloadContext context) {
+            VoxyIngest.accept(p, context);
         }
 
         @Override

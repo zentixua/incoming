@@ -124,19 +124,16 @@ public final class FarLods {
         final RuinContext ruins;
         /** Chunks (nearest horizontal point, {@link NuclearPrep#horizontal}) within {@code (skip, reach]}. */
         final double skip, reach;
-        /** Ring chunks by distance, computed in background; empty once traversed (memory). */
-        java.util.concurrent.CompletableFuture<long[]> order;
-        int next;
+        /** Incrementally prepared radial row heads, independent of zone area. */
+        final RadialChunks order;
+        long traversed;
 
         Ring(ServerLevel level, Detonation d, double skip) {
             this.d = d;
             this.ruins = new RuinContext(level, d);
             this.skip = skip;
             this.reach = RuinPlanner.scorchReach(d);
-            this.order = java.util.concurrent.CompletableFuture.supplyAsync(() -> layout(d, skip, reach), RuinWorkers.executor(RuinWorkers.Priority.FAR)).exceptionally(e -> {
-                Incoming.LOG.error("Far scorch of detonation #{}: ring layout failed", d.id(), e);
-                return new long[0];
-            });
+            this.order = new RadialChunks(d.burst().x, d.burst().z, skip, reach);
         }
 
         /** Ring trace on chunk: within radius and wave arrived (also heavy-zone chunk that timed out awaiting plan). */
@@ -146,27 +143,8 @@ public final class FarLods {
         }
 
         boolean done() {
-            long[] o = order.getNow(null);
-            return o != null && next >= o.length;
+            return order.done();
         }
-    }
-
-    /** Ring chunks ordered by epicenter distance (any thread): distance key, one numeric sort. */
-    private static long[] layout(Detonation d, double skip, double reach) {
-        int cx = net.minecraft.util.Mth.floor(d.burst().x) >> 4, cz = net.minecraft.util.Mth.floor(d.burst().z) >> 4;
-        int r = net.minecraft.util.Mth.ceil(reach / 16) + 1;
-        it.unimi.dsi.fastutil.longs.LongArrayList keyed = new it.unimi.dsi.fastutil.longs.LongArrayList();
-        for (int x = cx - r; x <= cx + r; x++) {
-            for (int z = cz - r; z <= cz + r; z++) {
-                double h = NuclearPrep.horizontal(new ChunkPos(x, z), d);
-                // key: distance (1/16 block) in high bits, chunk offset from epicenter in low bits
-                if (h > skip && h <= reach) keyed.add((long) (h * 16) << 32 | (long) (x - cx + 0x8000) << 16 | (z - cz + 0x8000));
-            }
-        }
-        long[] out = keyed.toLongArray();
-        java.util.Arrays.sort(out);
-        for (int i = 0; i < out.length; i++) out[i] = ChunkPos.asLong(cx + (int) (out[i] >> 16 & 0xFFFF) - 0x8000, cz + (int) (out[i] & 0xFFFF) - 0x8000);
-        return out;
     }
 
     /**
@@ -328,18 +306,26 @@ public final class FarLods {
 
     /** Trace rings feed wave-reached chunks while trace queue has room. */
     private void feedRings(ServerLevel level, long now) {
+        int visits = FEED_PER_TICK, rows = 64;
         for (Ring ring : rings) {
-            long[] order = ring.order.getNow(null);
-            if (order == null || ring.done()) continue;
-            for (int n = FEED_PER_TICK; n > 0 && ring.next < order.length && scorchQueue.size() < SCORCH_QUEUE; n--, ring.next++) {
-                if (ScarQueue.due(ring.d, new ChunkPos(order[ring.next])) > now) break;
-                request(level, order[ring.next], SCORCH);
+            if (!ring.order.prepared()) {
+                if (rows == 0) return;
+                boolean ready = ring.order.prepare(rows);
+                rows = 0;
+                if (!ready) continue;
             }
-            if (ring.next >= order.length) {
-                Incoming.LOG.info("Far scorch of detonation #{}: all {} chunks to {} m handed to the LOD queue", ring.d.id(), order.length, Math.round(ring.reach));
-                ring.order = java.util.concurrent.CompletableFuture.completedFuture(new long[0]);
-                ring.next = 0;
+            if (ring.done()) continue;
+            while (visits > 0 && !ring.done() && scorchQueue.size() < SCORCH_QUEUE) {
+                long chunk = ring.order.peek();
+                if (ScarQueue.due(ring.d, new ChunkPos(chunk)) > now) break;
+                visits--;
+                request(level, chunk, SCORCH);
+                ring.order.advance();
+                ring.traversed++;
             }
+            if (ring.done()) Incoming.LOG.info("Far scorch of detonation #{}: all {} chunks to {} m handed to the LOD queue",
+                    ring.d.id(), ring.traversed, Math.round(ring.reach));
+            if (visits == 0) return;
         }
     }
 
@@ -445,8 +431,8 @@ public final class FarLods {
     private String ringSummary() {
         StringBuilder b = new StringBuilder();
         for (Ring ring : rings) {
-            long[] o = ring.order.getNow(null);
-            if (o != null && ring.next < o.length) b.append(String.format(java.util.Locale.ROOT, "; scorch of detonation #%d: %d of %d chunks to %.0f m", ring.d.id(), ring.next, o.length, ring.reach));
+            if (!ring.done()) b.append(String.format(java.util.Locale.ROOT, "; scorch of detonation #%d: %d chunks traversed to %.0f m (%d row heads)",
+                    ring.d.id(), ring.traversed, ring.reach, ring.order.headers()));
         }
         return b.toString();
     }
@@ -715,6 +701,16 @@ public final class FarLods {
     /** Tests: {@link FarZone} square-generation deadline, ticks; negative restores {@link FarZone#LOAD_LIMIT}. */
     public static void testZoneLoadLimit(ServerLevel level, int ticks) {
         get(level).zone.loadLimit(ticks >= 0 ? ticks : FarZone.LOAD_LIMIT);
+    }
+
+    /** Admission estimate includes in-flight and completed-uncollected reads, ring heads and request metadata. */
+    static long retainedBytes(ServerLevel level) {
+        if (!level.hasData(ModAttachments.FAR_LODS)) return 0;
+        FarLods f = get(level);
+        long bytes = f.reading.size() * FrontLods.READ_BYTES + (f.queued.size() + f.again.size()) * 64L
+                + f.disk.size() * 24L + f.refreshFor.size() * 96L;
+        for (Ring ring : f.rings) bytes += ring.order.bytes() + ring.ruins.retainedBytes();
+        return bytes;
     }
 
     /** For tests: maximum queue visits per tick ({@link #VISITS}). */

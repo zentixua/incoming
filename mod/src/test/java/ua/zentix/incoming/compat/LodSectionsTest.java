@@ -155,4 +155,37 @@ class LodSectionsTest {
         // house in 4 section: stone, walls and light - less than 20 KB (light - only where it is not uniform)
         assertTrue(data.length < 20_000, data.length + " byte");
     }
+    @Test
+    void sparseUpdatesEraseTowersAndPreserveUntouchedSections() {
+        LevelChunkSection[] initial = sections((x, y, z) -> y >= 32 ? Blocks.STONE_BRICKS.defaultBlockState() : Blocks.AIR.defaultBlockState());
+        LevelChunkSection[] first = sections((x, y, z) -> y >= 48 ? Blocks.STONE_BRICKS.defaultBlockState() : Blocks.AIR.defaultBlockState());
+        LevelChunkSection[] second = sections((x, y, z) -> Blocks.AIR.defaultBlockState());
+        byte[][] a = LodSections.snapshot(initial, false), b = LodSections.snapshot(first, false), c = LodSections.snapshot(second, false);
+        byte[] one = LodSections.difference(-4, a, b), two = LodSections.difference(-4, b, c);
+        var read = LodSections.read(one, biomes);
+        assertEquals(1, read.size(), "only the erased section travels");
+        assertEquals(-2, read.getFirst().y());
+        assertTrue(read.getFirst().blocks().hasOnlyAir());
+        var next = LodSections.read(two, biomes);
+        assertEquals(1, next.size());
+        assertEquals(-1, next.getFirst().y());
+        assertTrue(next.getFirst().blocks().hasOnlyAir());
+        assertTrue(LodSections.read(LodSections.difference(-4, a, a), biomes).isEmpty());
+    }
+
+    @Test
+    void aPreparedColumnReplacesAnAbsentOrObsoleteRecipientBaseline() {
+        var server = sections((x, y, z) -> y < 10 ? Blocks.DIAMOND_BLOCK.defaultBlockState() : Blocks.AIR.defaultBlockState());
+        var copy = new ProtoChunk(new ChunkPos(0, 0), UpgradeData.EMPTY, LevelHeightAccessor.create(0, 64), biomes, null);
+        for (int i = 0; i < server.length; i++) copy.getSections()[i] = server[i];
+        byte[] delivered = VoxyLods.columnData(copy, false);
+        for (boolean absent : new boolean[]{true, false}) {
+            var client = sections((x, y, z) -> absent ? Blocks.AIR.defaultBlockState()
+                    : y < 10 || y >= 48 ? Blocks.STONE.defaultBlockState() : Blocks.AIR.defaultBlockState());
+            for (var section : LodSections.read(delivered, biomes)) client[section.y()] = section.blocks();
+            assertTrue(client[0].getBlockState(8, 5, 8).is(Blocks.DIAMOND_BLOCK), "unchanged rebuilt floor must travel too");
+            assertTrue(client[3].getBlockState(8, 5, 8).isAir(), "empty roof section must erase the old roof");
+        }
+    }
+
 }

@@ -49,9 +49,11 @@ import java.util.concurrent.atomic.AtomicInteger;
 
 /** Opt-in real Voxy ingestion experiment; synthetic city columns, real clocks, no changes to playable strikes. */
 public final class LodBufferScenario {
-    private static final int SECTIONS = 24, CHANGED = 4, WINDOW = 1024, PASS = 32;
+    private static final boolean SERVER_TRANSPORT = Boolean.getBoolean("incoming.lodProbe.serverTransport");
+    private static final boolean PRODUCTION = !Boolean.getBoolean("incoming.lodProbe.control");
+    private static final int SECTIONS = 24, CHANGED = 4, WINDOW = PRODUCTION ? 65536 : 1024, PASS = 32;
     private static final boolean CHANGED_ONLY = Boolean.getBoolean("incoming.lodProbe.changedOnly");
-    private static final long BYTES = 48L << 20;
+    private static final long BYTES = (PRODUCTION ? 128L : 48L) << 20;
     private static LodBufferScenario active;
     private final TimedLodBuffer<LodProbeWire.Column> buffer = new TimedLodBuffer<>(WINDOW, BYTES);
     private final AtomicInteger receipts = new AtomicInteger();
@@ -63,12 +65,13 @@ public final class LodBufferScenario {
     private volatile long burstTick, received;
     private volatile boolean done, failed, replayRequested;
     private volatile int replayFrame = -1;
+    private volatile int replayRound;
     private volatile Producer producer;
     private Thread worker;
     private boolean opened, started;
     private int ticks, lastLogged, finishedAt = -1;
     private long phaseStarted, lastFrame, frames, frameSum, frameMax;
-    private int shots;
+    private int shots, frontFrames;
     private LodProbeReadback readback;
     private int witnessYield;
     private double visibleBaseline;
@@ -77,6 +80,7 @@ public final class LodBufferScenario {
 
     public LodBufferScenario() {
         active = this;
+        if (PRODUCTION) ClientHorizon.observer = this::submitted;
         NeoForge.EVENT_BUS.addListener(this::screen);
         NeoForge.EVENT_BUS.addListener(this::tick);
         NeoForge.EVENT_BUS.addListener(this::frame);
@@ -107,23 +111,50 @@ public final class LodBufferScenario {
         if (s == null || s.done) return;
         if (p.column().sections().length == 0) {
             s.buffer.stop();
+            if (PRODUCTION) ClientHorizon.reset();
             s.phase = p.phase(); s.epoch = p.epoch(); s.yield = p.yield(); s.total = p.total();
             s.burstTick = p.due(); s.accepted = s.received = s.lateSum = s.lateMax = s.sampled = 0;
             s.firstSubmit = s.lastSubmit = s.peakBytes = 0; s.phaseStarted = System.nanoTime();
             synchronized (s.witnesses) { s.witnesses.clear(); }
-            s.shots = 0;
+            s.shots = s.frontFrames = 0;
             Minecraft.getInstance().execute(() -> { s.frames = s.frameSum = s.frameMax = 0; s.lastFrame = 0; });
             s.log("BEGIN epoch=%d phase=%d kt=%d columns=%d burstTick=%d", p.epoch(), p.phase(), p.yield(), p.total(), p.due());
             Minecraft.getInstance().execute(s::camera);
             return;
         }
         if (p.epoch() != s.epoch) { s.log("OLD_PACKET epoch=%d", p.epoch()); return; }
+        if (PRODUCTION) {
+            var column = p.column();
+            if (!ClientHorizon.offer(Minecraft.getInstance().level, new S2C.VoxyChunk(column.dimension(), column.x(), column.z(), column.sections(), p.due()))) {
+                s.fail("production buffer admission exceeded");
+            }
+            s.received++;
+            s.peakBytes = Math.max(s.peakBytes, ClientHorizon.bytes());
+            return;
+        }
         int sections = p.phase() == 1 && CHANGED_ONLY ? CHANGED : SECTIONS;
         var t = s.buffer.reserve(net.minecraft.world.level.ChunkPos.asLong(p.column().x(), p.column().z()), p.due(), p.column().sections().length, sections);
         if (t == null) { s.fail("buffer admission exceeded"); return; }
         s.buffer.complete(t, p);
         s.received++;
         s.peakBytes = Math.max(s.peakBytes, s.buffer.bytes());
+    }
+    private void submitted(ClientHorizon.Submission s) {
+        long end = System.nanoTime(), begin = end - s.elapsedNanos();
+        if (firstSubmit == 0) firstSubmit = begin;
+        lastSubmit = end;
+        long late = phase == 1 ? Math.max(0, s.tick() - s.packet().notBefore()) : 0;
+        lateSum += late;
+        lateMax = Math.max(lateMax, late);
+        accepted++;
+        peakBytes = Math.max(peakBytes, s.retainedBytes());
+        if (accepted == 1 || accepted % Math.max(1, total / 32) == 0) {
+            synchronized (witnesses) { witnesses.add(new LodProbeWire.Column(epoch, phase, s.packet().notBefore(), total, yield, s.packet())); }
+        }
+        receipts.incrementAndGet();
+        log("SUBMIT epoch=%d phase=%d x=%d z=%d due=%d now=%d elapsedNs=%d sections=%d changed=%d bytes=%d production=true",
+                epoch, phase, s.packet().x(), s.packet().z(), s.packet().notBefore(), s.tick(), s.elapsedNanos(), s.sections(),
+                phase == 1 ? CHANGED : SECTIONS, s.packet().sections().length);
     }
     public static void ack(LodProbeWire.Ack p) {
         if (active != null && active.producer != null) active.producer.ack(p);
@@ -165,10 +196,10 @@ public final class LodBufferScenario {
         if (mc.player == null) return;
         double r = radius(yield);
         // One fixed 90-degree panorama per yield, outside vanilla loaded chunks and within ~8 km of witnesses.
-        double y = 64 + r * .25, z = 8 + r * 1.5;
+        double y = 180, z = 8 + r + 600;
         mc.player.setPos(8, y, z);
         mc.player.setYRot(180);
-        mc.player.setXRot((float) Math.toDegrees(Math.atan2(y - 80, z - (8 + r * .85))));
+        mc.player.setXRot((float) Math.toDegrees(Math.atan2(y - 80, z - (8 + r * .95))));
         mc.player.yRotO = mc.player.getYRot(); mc.player.xRotO = mc.player.getXRot();
         var server = mc.getSingleplayerServer();
         server.execute(() -> {
@@ -182,7 +213,7 @@ public final class LodBufferScenario {
         lastFrame = t;
         if (phase == 2 && replayFrame >= 0 && replayFrame < 90) {
             var mc = Minecraft.getInstance();
-            String name = String.format(Locale.ROOT, "replay_%03d_tick%d.png", replayFrame++, now);
+            String name = String.format(Locale.ROOT, "replay_%d_%03d_tick%d.png", replayRound, replayFrame++, now);
             Screenshot.grab(mc.gameDirectory, name, mc.getMainRenderTarget(), c -> {});
             log("REPLAY_FRAME file=%s now=%d", name, now);
         }
@@ -192,6 +223,12 @@ public final class LodBufferScenario {
         Detonation d = detonation(yield, burstTick);
         long first = burstTick + (long) Math.ceil(d.arrivalTicks(Math.hypot(r * .8, h)));
         long last = burstTick + (long) Math.ceil(d.arrivalTicks(Math.hypot(r, h)));
+        if (now >= (first + last) / 2 - 10 && frontFrames < 90) {
+            var mc = Minecraft.getInstance();
+            String name = String.format(Locale.ROOT, "front_%d_%03d_tick%d.png", yield, frontFrames++, now);
+            Screenshot.grab(mc.gameDirectory, name, mc.getMainRenderTarget(), c -> {});
+            log("FRONT_FRAME file=%s now=%d", name, now);
+        }
         long[] at = {first - 20, first, first + 2, first + 10, (first + last) / 2, last, last + 20, last + 100};
         if (shots < at.length && now >= at[shots]) {
             var mc = Minecraft.getInstance();
@@ -250,14 +287,14 @@ public final class LodBufferScenario {
         try {
             while (!done) {
                 if (replayRequested) { replay(); break; }
-                if (!VoxyIngest.backlogged()) {
+                if (!PRODUCTION && !VoxyIngest.backlogged()) {
                     for (int n = 0; n < PASS; n++) {
                         var r = buffer.take(now);
                         if (r == null) break;
                         // An ownership check, not a fence: stop may race the following foreign call.
                         if (buffer.current(r.ticket())) {
                             long begin = System.nanoTime();
-                            VoxyIngest.accept(r.value().column()); // exact existing decode/light/rawIngest path
+                            VoxyIngest.ingest(Minecraft.getInstance().level, r.value().column()); // direct-ingestion control
                             long end = System.nanoTime();
                             if (firstSubmit == 0) firstSubmit = begin;
                             lastSubmit = end;
@@ -281,19 +318,23 @@ public final class LodBufferScenario {
         if (readback == null) readback = new LodProbeReadback(Minecraft.getInstance().level);
         ua.zentix.incoming.scenario.lod.Witnesses.check(witnesses, p -> {
             try {
+                // acquireIfExists may block on disk. Producer.tick and phase reset must remain independent.
                 return readback.air(p.column().x() * 16 + 8, 120, p.column().z() * 16 + 8) == (p.phase() == 1);
             } catch (ReflectiveOperationException e) {
-                throw new IllegalStateException("database witness read failed", e);
+                throw new IllegalStateException("Voxy witness failed", e);
             }
         }, p -> {
-            log("DB_READY epoch=%d x=%d z=%d due=%d seen=%d lateTicks=%d", p.epoch(), p.column().x(), p.column().z(), p.due(), now, Math.max(0, now - p.due()));
-            sampled++;
+            if (p.epoch() == epoch) {
+                log("DB_READY epoch=%d x=%d z=%d due=%d seen=%d lateTicks=%d", epoch, p.column().x(), p.column().z(), p.due(), now, Math.max(0, now - p.due()));
+                sampled++;
+            }
         });
     }
 
     /** Public LSS dispatch is observational: consumers cannot veto another consumer. Repair only after ingest drains. */
     private void replay() throws Exception {
         phase = 2;
+        ClientHorizon.observer = null;
         var mc = Minecraft.getInstance();
         int x = 0, z = (int) (radius(1000) * .9 / 16);
         var packet = new S2C.VoxyChunk(mc.level.dimension().location(), x, z, producer.ruined);
@@ -309,6 +350,42 @@ public final class LodBufferScenario {
         var sections = LodSections.read(producer.intact, mc.level.registryAccess().registryOrThrow(Registries.BIOME));
         var data = sections.stream().map(v -> new dev.vox.lss.api.VoxelColumnData.SectionData(v.y(), v.blocks(), v.blockLight(), v.skyLight()))
                 .toArray(dev.vox.lss.api.VoxelColumnData.SectionData[]::new);
+        if (PRODUCTION) {
+            // Prime the bounded coordinate history; production retains no local section-repair images.
+            for (int dx = -4; dx < 4; dx++) for (int dz = -4; dz < 4; dz++)
+                ClientHorizon.offer(mc.level, new S2C.VoxyChunk(packet.dimension(), x + dx, z + dz, packet.sections()));
+            waitTicks(20);
+            for (int round = 0; round < 3; round++) {
+                replayRound = round;
+                replayFrame = 0; // Each sequence starts BEFORE its stale producer is dispatched.
+                waitTicks(2);
+                long began = System.nanoTime();
+                if (round < 2) dev.vox.lss.api.LSSApi.dispatchColumn(mc.level, mc.level.dimension(), x, z, new dev.vox.lss.api.VoxelColumnData(data, 1));
+                else for (int dx = -4; dx < 4; dx++) for (int dz = -4; dz < 4; dz++)
+                    dev.vox.lss.api.LSSApi.dispatchColumn(mc.level, mc.level.dimension(), x + dx, z + dz, new dev.vox.lss.api.VoxelColumnData(data, 1));
+                log("REPLAY_DISPATCH round=%d tick=%d columns=%d production=true", round, now, round < 2 ? 1 : 64);
+                long endTick = now + 40, firstStale = -1, lastStale = -1, samples = 0;
+                while (!done && now < endTick) {
+                    // Database reads are witnesses, not a renderer fence. Never hold a tick-facing monitor here.
+                    if (!readback.air(x * 16 + 8, 120, z * 16 + 8)) {
+                        long elapsed = System.nanoTime() - began;
+                        if (firstStale < 0) firstStale = elapsed;
+                        lastStale = elapsed;
+                        samples++;
+                    }
+                    Thread.sleep(2);
+                }
+                if (!readback.air(x * 16 + 8, 120, z * 16 + 8)) { fail("production replay repair did not converge"); return; }
+                if (round == 2) for (int dx = -4; dx < 4; dx++) for (int dz = -4; dz < 4; dz++)
+                    if (!readback.air((x + dx) * 16 + 8, 120, (z + dz) * 16 + 8)) { fail("bunched replay repair did not converge"); return; }
+                log("REPLAY_OBSERVATION round=%d tick=%d observationElapsedMs=%.4f staleSamples=%d firstStaleElapsedMs=%.4f lastStaleElapsedMs=%.4f converged=true production=true",
+                        round, now, (System.nanoTime() - began) / 1e6, samples, firstStale / 1e6, lastStale / 1e6);
+            }
+            waitTicks(80);
+            log("COMPLETE production panorama and replay probe");
+            done = true;
+            return;
+        }
         for (int round = 0; round < 2; round++) {
             long sentAt = now, began = System.nanoTime();
             dev.vox.lss.api.LSSApi.dispatchColumn(mc.level, mc.level.dimension(), x, z, new dev.vox.lss.api.VoxelColumnData(data, 1));
@@ -321,7 +398,7 @@ public final class LodBufferScenario {
             else replayFrame = 0;
             while (VoxyIngest.backlogged()) Thread.sleep(2);
             long repairAt = now, repairNs = System.nanoTime();
-            VoxyIngest.accept(packet);
+            VoxyIngest.ingest(mc.level, packet);
             limit = System.nanoTime() + 10_000_000_000L;
             while (!readback.air(x * 16 + 8, 120, z * 16 + 8) && System.nanoTime() < limit) Thread.sleep(2);
             if (!readback.air(x * 16 + 8, 120, z * 16 + 8)) { fail("retained column repair did not converge"); return; }
@@ -360,12 +437,13 @@ public final class LodBufferScenario {
     private final class Producer {
         final ServerLevel level;
         final java.util.UUID player;
-        final int[] yields = {15, 100, 1000};
+        final int[] yields = Boolean.getBoolean("incoming.lodProbe.short") ? new int[]{15} : new int[]{15, 100, 1000};
         final byte[] intact, ruined;
         LodPanorama envelope;
         int which, stage, generation = 1, credits, sent, acked, count;
         boolean prepared, exhausted;
         long start, completed = -1;
+        LodPanorama.Column pending;
         Detonation event;
         Producer(ServerLevel level, java.util.UUID player) {
             this.level = level; this.player = player;
@@ -374,8 +452,8 @@ public final class LodBufferScenario {
         }
         void reset() {
             envelope = new LodPanorama(radius(yields[which]));
-            prepared = exhausted = false; sent = acked = count = 0; completed = -1;
-            credits = Math.min(WINDOW, (int) (BYTES / Math.max(intact.length, ruined.length)));
+            prepared = exhausted = false; pending = null; sent = acked = count = 0; completed = -1;
+            credits = Math.min(WINDOW, (int) (BYTES / (stage == 0 ? intact.length : ruined.length)));
             event = detonation(yields[which], level.getGameTime() + 200);
         }
         void ack(LodProbeWire.Ack p) { if (p.epoch() == generation) { credits += p.count(); acked += p.count(); } }
@@ -392,7 +470,7 @@ public final class LodBufferScenario {
                         yields[which], radius(yields[which]), count, envelope.headers(), intact.length, ruined.length, credits, PASS * SECTIONS, CHANGED_ONLY ? CHANGED : SECTIONS);
             }
             for (int n = 0; n < 512 && credits > 0 && !exhausted; n++) {
-                var c = envelope.next();
+                var c = pending != null ? pending : envelope.next();
                 if (c == null) { exhausted = true; break; }
                 long due = stage == 0 ? Long.MIN_VALUE : event.gameTime() + (long) Math.ceil(event.arrivalTicks(Math.hypot(c.radius(), Yield.optimalBurstHeight(yields[which]))));
                 var packet = new LodProbeWire.Column(generation, stage, due, count, yields[which], new S2C.VoxyChunk(level.dimension().location(), c.x(), c.z(), stage == 0 ? intact : ruined));
@@ -400,7 +478,17 @@ public final class LodBufferScenario {
                 var bytes = Unpooled.buffer();
                 try { LodProbeWire.Column.CODEC.encode(bytes, packet); packet = LodProbeWire.Column.CODEC.decode(bytes); }
                 finally { bytes.release(); }
-                PacketDistributor.sendToPlayer(p, packet); credits--; sent++;
+                if (SERVER_TRANSPORT) {
+                    var column = packet.column();
+                    if (!ua.zentix.incoming.compat.VoxyLods.offerPrepared(p,
+                            new S2C.VoxyChunk(column.dimension(), column.x(), column.z(), column.sections(), due))) {
+                        pending = c;
+                        break;
+                    }
+                    received++; // admitted to the production server queue, separately from observer-confirmed submission
+                } else PacketDistributor.sendToPlayer(p, packet);
+                pending = null;
+                credits--; sent++;
             }
             if (exhausted && acked >= count && !VoxyIngest.backlogged()) {
                 if (completed < 0) {
@@ -419,7 +507,7 @@ public final class LodBufferScenario {
                 }
                 if (stage == 0) stage = 1;
                 else { stage = 0; which++; }
-                if (which == yields.length) { log("COMPLETE all panorama envelopes"); replayRequested = true; return; }
+                if (which == yields.length) { log("COMPLETE all panorama envelopes"); if (Boolean.getBoolean("incoming.lodProbe.short")) done = true; else replayRequested = true; return; }
                 generation++; reset();
             }
         }

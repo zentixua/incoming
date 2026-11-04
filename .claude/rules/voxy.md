@@ -57,7 +57,7 @@ paths:
   (`C2S.LodMods` on entry) via `S2C.VoxyChunk`, except players viewing that chunk (their Voxy rebuilds it itself), no
   farther than `FarLods.FAR_CHUNKS`; the client submits sections with static
   `VoxelIngestService.rawIngest(WorldIdentifier, section, x, y, z, blockLight, skyLight)` via `MethodHandle`
-  (`client/VoxyIngest`; LOD Server Support does the same, `compat/VoxyCompat`) on the network thread. Voxy is client-only:
+  (`client/VoxyIngest`; LOD Server Support does the same, `compat/VoxyCompat`) on the serial `ClientHorizon` worker. Voxy is client-only:
   dedicated servers do not have it, hence a packet rather than a server call. Section light is supplied; Voxy does not
   calculate it: null means dark (black LODs); loaded chunks use the world's light engine (missing sky layer above
   terrain = 15), copies use `compat/CopyLight` from their blocks within the chunk (disk light would keep a dark district
@@ -70,15 +70,14 @@ paths:
   The three client handlers run on the same network thread. Before ack, poll Voxy's public
   `VoxyCommon.getInstance().getIngestService().getTaskCount()` on the event loop until its queue empties; never block
   the network thread. Running tasks remain bounded by its worker pool. Missing counter disables Incoming delivery.
-  Timing includes transfer and background queue drain. Calculator
+  The receive-rate sample ends at the finish marker; capacity/deadline waiting delays acknowledgement without falsifying the measured link rate. Calculator
   state belongs to the channel; batch IDs survive dimension changes and reject old/duplicate/early acknowledgements.
   Netty still gates every chunk: active/writable, at least 16 KiB headroom, no more than 32 KiB pending even with a
   raised watermark, and at most one outstanding chunk write including event-loop dispatch. A large indivisible
   chunk can cross the watermark once. There is no fixed byte-rate throttle. The waiting queue holds at most 48 MiB;
-  a fresh copy replaces a waiting copy. `VoxyLods.room` gates `DhUpdates`, `FarLods` and `FrontLods`, even with DH:
+  a fresh copy at the same coordinate/event/deadline replaces its waiting revision (different event deadlines stay separate). The server selects one immutable bounded batch; write callbacks advance it on the Netty event loop without waiting another server tick. `VoxyLods.room` gates `DhUpdates`, `FarLods` and `FrontLods`, even with DH:
   excess updates for Voxy players would otherwise be lost. Copy engine light layers (`getData` fills the live layer
-  for a uniform one); a heavy-zone copy goes to DH `DhUpdates.LEAD` before the front, but Voxy ingests immediately —
-  give it a “not before front” deadline (`VoxyLods.send(…, notBefore)`). Regressions: `VoxyLodsTest`, `LodBatchFlowTest`
+  for a uniform one); a heavy-zone copy goes to DH `DhUpdates.LEAD` before the front, and Voxy receives its “not before front” deadline and detonation identity (`VoxyLods.send(..., detonation)`). `ClientHorizon` holds encoded sections until the same client event clock used by the wave reaches that deadline. The server sends full columns, including light and empty sections: a server before/after snapshot does not prove any recipient holds its baseline. Sparse codec utilities belong to known-baseline development fixtures until a recipient baseline protocol exists. Regressions: `VoxyLodsTest`, `LodBatchFlowTest`
   and GameTest batch `voxy_backpressure`.
 - LOD Server Support 0.19/0.20 (server) observes `ChunkSerializer.write` at RETURN, not block-change events:
   `ChunkSaveDataHook` → `ServerReceiverGlue.onChunkSaveData` → `DirtyContentFilter.observeSave`. It hashes serialized
@@ -103,6 +102,17 @@ paths:
   separately from Incoming's immediate copy delivery. Packets are not ingested during Flashback replay (Voxy shows
   the live database there).
 
+- MT-B3 horizon buffer: 96 MiB queued encoded columns plus bounded worker/codec scratch and bookkeeping
+  (not total client heap/GPU limits). Recovery retains only 65,536 recent coordinates and 4,096 pending refresh
+  hints, never old section images: local replay can erase later player edits, material settlement or another strike.
+  Refresh requests use the existing server-authoritative path and rate limit; evicted hints are best effort, not
+  a persistent correctness record. Login, dimension change and reset clear the session identity and hints; late
+  callbacks cannot retarget the next session. A foreign delivery crossing submission keeps its refresh request.
+  This does not solve late join/reconnect or immutable stale replay. LSS's public void consumer cannot veto another
+  consumer. A zero Voxy task count is not an in-progress worker/renderer fence. Never claim the city cannot transiently
+  return from a successful later readback. `ClientHorizon.reset()` invalidates queued work and returns an asynchronous
+  barrier behind already submitted Incoming worker calls; it does not cancel/fence foreign Voxy work. No lock used by
+  a tick may span a Voxy database read. The development panorama is not real-city preparation or a total-memory proof.
 - The `lod-buffer` development scenario is excluded from the release jar. Its database witnesses run outside the
   producer/reset monitor (`WitnessesTest` holds a read while both progress). Values carry their epoch; stale read
   confirmation cannot consume a new witness. `TimedLodBuffer.current` is an ownership snapshot, never a fence
@@ -112,3 +122,13 @@ paths:
   in the session. Requests are deduplicated and drained at the existing server rate. Overflow evicts old hints, so
   recovery remains best effort, not a durable freshness record. A later Incoming submission cannot cancel a
   crossing foreign-delivery hint. Logout/reset clears the previous world and both collections immediately.
+
+- Horizon ownership retires on a client tick in a different level, independently of another terrain receipt: a full
+  old batch otherwise withholds its ACK and prevents the very packet that would reset it. Event queues have separate
+  heads and use each detonation's own visible clock; a future head cannot block a due different event. Clock sampling
+  follows ClientNuclear.tick, including a frozen sample while paused. Regressions: ClientHorizonTest, TimedLodBufferTest.
+
+- A horizon worker claims work with its expected buffer epoch under the same buffer lock as dequeue. A separate
+  epoch check followed by take can steal a newly refilled dimension's packet and submit it using the old world.
+  Already taken old work remains charged until finish; the reset barrier covers only Incoming calls. Regression:
+  TimedLodBufferTest.anOldWorkerCannotClaimRefilledSessionWorkWithoutAwaitingItsBarrier.

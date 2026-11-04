@@ -297,7 +297,7 @@ final class FrontLods {
             counting = true;
         }
         // same chunk just sent via another DH path: DH would skip copy, retry next tick
-        if (!DhUpdates.sendHeld(level, c.chunk)) {
+        if (!DhUpdates.sendHeld(level, c.chunk, c.due, d.id())) {
             schedule.add(chunk, now + 1);
             return;
         }

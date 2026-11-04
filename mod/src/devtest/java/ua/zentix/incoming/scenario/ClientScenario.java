@@ -171,6 +171,10 @@ public final class ClientScenario {
     public ClientScenario(IEventBus modBus) {
         String scenario = System.getProperty("incoming.scenario");
         if (scenario == null) return;
+        if ("lod-buffer".equals(scenario)) {
+            new ua.zentix.incoming.client.LodBufferScenario();
+            return;
+        }
         ua.zentix.incoming.gametest.TestScale.realWaveOnStart();
         FrameTimes.startIfRequested();
         // script lines, sandbox and samples write the layer time on the GPU in parts: the sample is always running

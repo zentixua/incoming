@@ -93,7 +93,7 @@ public final class NuclearPrep {
      * Prebuilt-ruin memory cap, bytes: ready plans, chunk snapshots (memory/disk), in-flight reads, background
      * thread buffers. Beyond cap new reads await plans releasing snapshots; no further plans built above cap.
      */
-    static final long PLANS_CAP = 512L << 20;
+    public static final long PLANS_CAP = 512L << 20;
     /** Keep write-encoding room free: a full read window must still be able to spill. */
     private static final long WINDOW_CAP = PLANS_CAP - (32L << 20);
     /** Concurrent disk reads and estimated memory per read (parsed city chunk tens of KB). */
@@ -470,30 +470,31 @@ public final class NuclearPrep {
     }
 
     /** One server-wide preparation admission estimate; multiple strikes/dimensions share the cap. */
-    static long memory(ServerLevel level) {
+    public static long memory(ServerLevel level) {
         return memory(level, true);
     }
 
     /** Already-owned bytes only: cold-load publication cannot recursively start another admission. */
     static long residentMemory(ServerLevel level) {
-        long bytes = 0;
+        long bytes = ua.zentix.incoming.compat.VoxyLods.retainedBytes(level.getServer());
         int height = level.getHeight();
         for (ServerLevel other : level.getServer().getAllLevels()) {
             height = Math.max(height, other.getHeight());
             if (other.hasData(ModAttachments.NUCLEAR_WORLD))
                 bytes += other.getData(ModAttachments.NUCLEAR_WORLD).retainedRuinBytes();
+            bytes += FarLods.retainedBytes(other);
         }
         return bytes + RuinWorkers.residentBufferBytes(height);
     }
 
     static long memory(ServerLevel level, boolean reserveWorkers) {
-        long bytes = 0;
+        long bytes = ua.zentix.incoming.compat.VoxyLods.retainedBytes(level.getServer());
         int height = level.getHeight();
         boolean cold = false;
         for (ServerLevel other : level.getServer().getAllLevels()) {
             height = Math.max(height, other.getHeight());
             NuclearWorld world = NuclearWorld.get(other);
-            bytes += world.retainedRuinBytes();
+            bytes += world.retainedRuinBytes() + FarLods.retainedBytes(other);
             cold |= world.ledgers.pending();
         }
         // Unknown old ownership has priority over new preparation/removals. Import uses only the

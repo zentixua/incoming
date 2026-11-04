@@ -7,6 +7,26 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class ClientLodBatchesTest {
     @Test
+    void deadlineBackpressureDoesNotBecomeAReceiveRateSample() {
+        class Measured extends net.minecraft.client.multiplayer.ChunkBatchSizeCalculator {
+            int now, finishedAt = -1, finishes;
+            @Override public void onBatchStart() {}
+            @Override public void onBatchFinished(int chunks) { finishedAt = now; finishes++; }
+            @Override public float getDesiredChunksPerTick() { return finishedAt == 1 ? 64 : .01f; }
+        }
+        Measured measured = new Measured();
+        ClientLodBatches receiver = new ClientLodBatches(measured);
+        receiver.begin(1);
+        measured.now = 1;
+        assertTrue(receiver.end(new S2C.LodBatchFinished(1, 64)));
+        assertEquals(1, measured.finishes);
+        for (measured.now = 2; measured.now < 10000; measured.now++) assertNull(receiver.acknowledge(true));
+        assertEquals(64, receiver.acknowledge(false).desiredChunksPerTick());
+        assertEquals(1, measured.finishedAt, "credit waits for the front; measured receipt does not");
+        assertEquals(1, measured.finishes);
+    }
+
+    @Test
     void acknowledgementWaitsForTheBackgroundIngestQueueWithoutBlocking() {
         ClientLodBatches receiver = new ClientLodBatches();
         receiver.begin(7);
