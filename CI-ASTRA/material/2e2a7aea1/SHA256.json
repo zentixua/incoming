@@ -4,8 +4,8 @@
     "sha256": "b8faff7b80b132eb1d31811b015ba55b1142fc60bb3aa5da0162cf65027940cb"
   },
   "README.md": {
-    "bytes": 3101,
-    "sha256": "1ce95dad470629992b9885fc556d56a2a3f641aeff8c94351aeca1fb72976e27"
+    "bytes": 3697,
+    "sha256": "5e4558fb4b0d3f1f4d209cd970db150c4d32393e9bde42e9a79f2789a9fa1bce"
   },
   "actual-probe2.txt": {
     "bytes": 41250,
@@ -18,6 +18,18 @@
   "cause-correction.patch": {
     "bytes": 3935,
     "sha256": "5ec99bdea9cba9111115ae9d3a7acf15fddce22600fa2882d49c4e96791f2000"
+  },
+  "ci-artifacts.json": {
+    "bytes": 3584,
+    "sha256": "f15535c31fb8256c4ca5bddee983f6ec3b60377ceac8d4a07d4c3fd784eaaf10"
+  },
+  "ci-build.log": {
+    "bytes": 48116,
+    "sha256": "78b9dd883edb013ce4484f16c96cf1feb72e18442dcf8c197f6d9f9c178ef9cc"
+  },
+  "ci-run.json": {
+    "bytes": 31630,
+    "sha256": "9c56c5be6c64e3f1f879f964f099cd24f9aaadb7de0d8aec4e1bd313cd1c3ae9"
   },
   "final-artifacts.json": {
     "bytes": 2779,
@@ -42,6 +54,10 @@
   "material-red160.log": {
     "bytes": 15781,
     "sha256": "9867b051462e280ae8ad5d2da4726fc49e56c76cba7bdf08684a59549caed284"
+  },
+  "pr595-ci.log": {
+    "bytes": 144,
+    "sha256": "7e358ddb28619064227c32984a3c90ffe5559c30c70350969fa49bf87e74a5f6"
   },
   "queue-helper.java.txt": {
     "bytes": 4431,

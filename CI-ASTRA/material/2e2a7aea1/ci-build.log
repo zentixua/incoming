@@ -1,0 +1,419 @@
+Сборка	Set up job	﻿2026-11-04T16:50:36.3860892Z Current runner version: '2.338.2'
+Сборка	Set up job	2026-11-04T16:50:36.3903963Z ##[group]Runner Image Provisioner
+Сборка	Set up job	2026-11-04T16:50:36.3905740Z Hosted Compute Agent
+Сборка	Set up job	2026-11-04T16:50:36.3906751Z Version: 20261028.624
+Сборка	Set up job	2026-11-04T16:50:36.3908023Z Commit: 54898b74c23fde5556c9b3c3a2290865feef0dfe
+Сборка	Set up job	2026-11-04T16:50:36.3909305Z Build Date: 2026-10-28T21:51:42Z
+Сборка	Set up job	2026-11-04T16:50:36.3910608Z Worker ID: {4da34635-7c38-4985-a86a-db090cd76bac}
+Сборка	Set up job	2026-11-04T16:50:36.3912084Z Region: eastus
+Сборка	Set up job	2026-11-04T16:50:36.3913056Z Cloud: Azure
+Сборка	Set up job	2026-11-04T16:50:36.3914006Z ##[endgroup]
+Сборка	Set up job	2026-11-04T16:50:36.3916510Z ##[group]Operating System
+Сборка	Set up job	2026-11-04T16:50:36.3917766Z Ubuntu
+Сборка	Set up job	2026-11-04T16:50:36.3918829Z 26.04.1
+Сборка	Set up job	2026-11-04T16:50:36.3919818Z LTS
+Сборка	Set up job	2026-11-04T16:50:36.3920733Z ##[endgroup]
+Сборка	Set up job	2026-11-04T16:50:36.3922033Z ##[group]Runner Image
+Сборка	Set up job	2026-11-04T16:50:36.3923096Z Image: ubuntu-26.04
+Сборка	Set up job	2026-11-04T16:50:36.3924254Z Version: 20261101.186.1
+Сборка	Set up job	2026-11-04T16:50:36.3926170Z Included Software: https://github.com/actions/runner-images/blob/ubuntu26/20261101.186/images/ubuntu/Ubuntu2604-Readme.md
+Сборка	Set up job	2026-11-04T16:50:36.3929602Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu26%2F20261101.186
+Сборка	Set up job	2026-11-04T16:50:36.3931543Z ##[endgroup]
+Сборка	Set up job	2026-11-04T16:50:36.3933773Z ##[group]GITHUB_TOKEN Permissions
+Сборка	Set up job	2026-11-04T16:50:36.3937142Z Contents: read
+Сборка	Set up job	2026-11-04T16:50:36.3938203Z Metadata: read
+Сборка	Set up job	2026-11-04T16:50:36.3939480Z ##[endgroup]
+Сборка	Set up job	2026-11-04T16:50:36.3943124Z Secret source: Actions
+Сборка	Set up job	2026-11-04T16:50:36.3944743Z Cache mode: write
+Сборка	Set up job	2026-11-04T16:50:36.3945979Z Prepare workflow directory
+Сборка	Set up job	2026-11-04T16:50:36.4568772Z Prepare all required actions
+Сборка	Set up job	2026-11-04T16:50:36.4642218Z Getting action download info
+Сборка	Set up job	2026-11-04T16:50:36.6525892Z Download action repository 'actions/checkout@v5' (SHA:fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09)
+Сборка	Set up job	2026-11-04T16:50:36.8685647Z Download action repository 'actions/setup-java@v5' (SHA:b6effb05e454b25005698d916606bdc6ffcbf961)
+Сборка	Set up job	2026-11-04T16:50:37.0973523Z Download action repository 'gradle/actions@v5' (SHA:0723195856401067f7a2779048b490ace7a47d7c)
+Сборка	Set up job	2026-11-04T16:50:37.7657700Z Download action repository 'actions/upload-artifact@v6' (SHA:b7c566a772e6b6bfb58ed0dc250532a479d7789f)
+Сборка	Set up job	2026-11-04T16:50:38.2066783Z Complete job name: Сборка
+Сборка	Run actions/checkout@v5	﻿2026-11-04T16:50:38.3180359Z ##[group]Run actions/checkout@v5
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:38.3181633Z with:
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:38.3182617Z   repository: zentixua/incoming
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:38.3186312Z   token: ***
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:38.3187173Z   ssh-strict: true
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:38.3187955Z   ssh-user: git
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:38.3188746Z   persist-credentials: true
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:38.3189566Z   clean: true
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:38.3190361Z   sparse-checkout-cone-mode: true
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:38.3191216Z   fetch-depth: 1
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:38.3192084Z   fetch-tags: false
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:38.3192865Z   show-progress: true
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:38.3193654Z   lfs: false
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:38.3194424Z   submodules: false
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:38.3195214Z   set-safe-directory: true
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:38.3196059Z   allow-unsafe-pr-checkout: false
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:38.3197220Z ##[endgroup]
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:38.6536673Z Syncing repository: zentixua/incoming
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:38.6540404Z ##[group]Getting Git version info
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:38.6542426Z Working directory is '/home/runner/work/incoming/incoming'
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:38.6545119Z [command]/usr/bin/git version
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:38.6558964Z git version 2.56.0
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:38.6585313Z ##[endgroup]
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:38.6608300Z Temporarily overriding HOME='/home/runner/work/_temp/0181ff22-90a9-493d-8f97-fbbdbaf6072b' before making global git config changes
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:38.6611627Z Adding repository directory to the temporary git global config as a safe directory
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:38.6625219Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/incoming/incoming
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:38.6749516Z Deleting the contents of '/home/runner/work/incoming/incoming'
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:38.6753571Z ##[group]Initializing the repository
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:38.6755603Z [command]/usr/bin/git init /home/runner/work/incoming/incoming
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:38.6909312Z hint: Using 'master' as the name for the initial branch. This default branch name
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:38.6912230Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:38.6914999Z hint: to use in all of your new repositories, which will suppress this warning,
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:38.6916993Z hint: call:
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:38.6918697Z hint:
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:38.6920645Z hint: 	git config --global init.defaultBranch <name>
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:38.6922722Z hint:
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:38.6924556Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:38.6926912Z hint: 'development'. The just-created branch can be renamed via this command:
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:38.6928856Z hint:
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:38.6930429Z hint: 	git branch -m <name>
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:38.6932157Z hint:
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:38.6934035Z hint: Disable this message with "git config set advice.defaultBranchName false"
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:38.6936531Z Initialized empty Git repository in /home/runner/work/incoming/incoming/.git/
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:38.6941150Z [command]/usr/bin/git remote add origin https://github.com/zentixua/incoming
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:38.6999146Z ##[endgroup]
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:38.7001671Z ##[group]Disabling automatic garbage collection
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:38.7003740Z [command]/usr/bin/git config --local gc.auto 0
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:38.7042700Z ##[endgroup]
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:38.7045053Z ##[group]Setting up auth
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:38.7049031Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:38.7089576Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:38.7649190Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:38.7687008Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:38.7976878Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:38.8018781Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:38.8315473Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:38.8361180Z ##[endgroup]
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:38.8362971Z ##[group]Fetching the repository
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:38.8371186Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +5e0980d64fcde1938e98145c2135845575705d33:refs/remotes/pull/595/merge
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:45.9277975Z From https://github.com/zentixua/incoming
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:45.9279586Z  * [new ref]         5e0980d64fcde1938e98145c2135845575705d33 -> pull/595/merge
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:45.9283638Z ##[endgroup]
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:45.9284549Z ##[group]Determining the checkout info
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:45.9286149Z ##[endgroup]
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:45.9292628Z [command]/usr/bin/git sparse-checkout disable
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:45.9348657Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:45.9383962Z ##[group]Checking out the ref
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:45.9387759Z [command]/usr/bin/git checkout --progress --force refs/remotes/pull/595/merge
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:46.2765249Z Note: switching to 'refs/remotes/pull/595/merge'.
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:46.2765912Z 
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:46.2766294Z You are in 'detached HEAD' state. You can look around, make experimental
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:46.2766896Z changes and commit them, and you can discard any commits you make in this
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:46.2767483Z state without impacting any branches by switching back to a branch.
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:46.2767917Z 
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:46.2768196Z If you want to create a new branch to retain commits you create, you may
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:46.2768972Z do so (now or later) by using -c with the switch command. Example:
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:46.2769278Z 
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:46.2769413Z   git switch -c <new-branch-name>
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:46.2769649Z 
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:46.2769806Z Or undo this operation with:
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:46.2770008Z 
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:46.2770121Z   git switch -
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:46.2770317Z 
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:46.2770563Z Turn off this advice by setting config variable advice.detachedHead to false
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:46.2770959Z 
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:46.2771345Z HEAD is now at 5e0980d Merge 2e2a7aea1c281c47be318b4b35f26858833bd452 into f9d1ac8ee13f612f7774d9a5e72dfb6a4e3c96e0
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:46.2804089Z ##[endgroup]
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:46.2871962Z [command]/usr/bin/git log -1 --format=%H
+Сборка	Run actions/checkout@v5	2026-11-04T16:50:46.2902034Z 5e0980d64fcde1938e98145c2135845575705d33
+Сборка	Run actions/setup-java@v5	﻿2026-11-04T16:50:46.3234493Z ##[group]Run actions/setup-java@v5
+Сборка	Run actions/setup-java@v5	2026-11-04T16:50:46.3234880Z with:
+Сборка	Run actions/setup-java@v5	2026-11-04T16:50:46.3235097Z   distribution: temurin
+Сборка	Run actions/setup-java@v5	2026-11-04T16:50:46.3235372Z   java-version: 21
+Сборка	Run actions/setup-java@v5	2026-11-04T16:50:46.3235605Z   java-package: jdk
+Сборка	Run actions/setup-java@v5	2026-11-04T16:50:46.3235838Z   check-latest: false
+Сборка	Run actions/setup-java@v5	2026-11-04T16:50:46.3236076Z   set-default: true
+Сборка	Run actions/setup-java@v5	2026-11-04T16:50:46.3236333Z   verify-signature: false
+Сборка	Run actions/setup-java@v5	2026-11-04T16:50:46.3236598Z   server-id: github
+Сборка	Run actions/setup-java@v5	2026-11-04T16:50:46.3236837Z   server-username: GITHUB_ACTOR
+Сборка	Run actions/setup-java@v5	2026-11-04T16:50:46.3237147Z   server-password: GITHUB_TOKEN
+Сборка	Run actions/setup-java@v5	2026-11-04T16:50:46.3237475Z   overwrite-settings: true
+Сборка	Run actions/setup-java@v5	2026-11-04T16:50:46.3237746Z   job-status: success
+Сборка	Run actions/setup-java@v5	2026-11-04T16:50:46.3240374Z   token: ***
+Сборка	Run actions/setup-java@v5	2026-11-04T16:50:46.3240610Z   show-download-progress: false
+Сборка	Run actions/setup-java@v5	2026-11-04T16:50:46.3240911Z ##[endgroup]
+Сборка	Run actions/setup-java@v5	2026-11-04T16:50:46.4878955Z ##[group]Installed distributions
+Сборка	Run actions/setup-java@v5	2026-11-04T16:50:46.5749470Z Resolved Java 21.0.13+9 from tool-cache
+Сборка	Run actions/setup-java@v5	2026-11-04T16:50:46.5750157Z Setting Java 21.0.13+9 as the default
+Сборка	Run actions/setup-java@v5	2026-11-04T16:50:46.5761529Z Creating toolchains.xml for JDK version 21 from temurin
+Сборка	Run actions/setup-java@v5	2026-11-04T16:50:46.5841072Z Writing to /home/runner/.m2/toolchains.xml
+Сборка	Run actions/setup-java@v5	2026-11-04T16:50:46.5841627Z 
+Сборка	Run actions/setup-java@v5	2026-11-04T16:50:46.5842050Z Java configuration:
+Сборка	Run actions/setup-java@v5	2026-11-04T16:50:46.5842482Z   Distribution: temurin
+Сборка	Run actions/setup-java@v5	2026-11-04T16:50:46.5842927Z   Version: 21.0.13+9
+Сборка	Run actions/setup-java@v5	2026-11-04T16:50:46.5843672Z   Path: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.13-9/x64
+Сборка	Run actions/setup-java@v5	2026-11-04T16:50:46.5844185Z 
+Сборка	Run actions/setup-java@v5	2026-11-04T16:50:46.5844712Z ##[endgroup]
+Сборка	Run actions/setup-java@v5	2026-11-04T16:50:46.5876998Z Creating settings.xml with server-id: github
+Сборка	Run actions/setup-java@v5	2026-11-04T16:50:46.5877434Z Writing to /home/runner/.m2/settings.xml
+Сборка	Run actions/setup-java@v5	2026-11-04T16:50:46.5878180Z Configured MAVEN_ARGS to include -ntp to suppress Maven transfer progress logs. Set 'show-download-progress: true' to keep the download progress output.
+Сборка	Run gradle/actions/setup-gradle@v5	﻿2026-11-04T16:50:46.6216679Z ##[group]Run gradle/actions/setup-gradle@v5
+Сборка	Run gradle/actions/setup-gradle@v5	2026-11-04T16:50:46.6217042Z with:
+Сборка	Run gradle/actions/setup-gradle@v5	2026-11-04T16:50:46.6217301Z   cache-disabled: false
+Сборка	Run gradle/actions/setup-gradle@v5	2026-11-04T16:50:46.6217569Z   cache-read-only: true
+Сборка	Run gradle/actions/setup-gradle@v5	2026-11-04T16:50:46.6217798Z   cache-write-only: false
+Сборка	Run gradle/actions/setup-gradle@v5	2026-11-04T16:50:46.6218048Z   cache-overwrite-existing: false
+Сборка	Run gradle/actions/setup-gradle@v5	2026-11-04T16:50:46.6218335Z   cache-cleanup: on-success
+Сборка	Run gradle/actions/setup-gradle@v5	2026-11-04T16:50:46.6218638Z   gradle-home-cache-includes: caches
+Сборка	Run gradle/actions/setup-gradle@v5	notifications
+Сборка	Run gradle/actions/setup-gradle@v5	
+Сборка	Run gradle/actions/setup-gradle@v5	2026-11-04T16:50:46.6219100Z   add-job-summary: always
+Сборка	Run gradle/actions/setup-gradle@v5	2026-11-04T16:50:46.6219532Z   add-job-summary-as-pr-comment: never
+Сборка	Run gradle/actions/setup-gradle@v5	2026-11-04T16:50:46.6219818Z   dependency-graph: disabled
+Сборка	Run gradle/actions/setup-gradle@v5	2026-11-04T16:50:46.6220120Z   dependency-graph-report-dir: dependency-graph-reports
+Сборка	Run gradle/actions/setup-gradle@v5	2026-11-04T16:50:46.6220479Z   dependency-graph-continue-on-failure: true
+Сборка	Run gradle/actions/setup-gradle@v5	2026-11-04T16:50:46.6220771Z   build-scan-publish: false
+Сборка	Run gradle/actions/setup-gradle@v5	2026-11-04T16:50:46.6221009Z   validate-wrappers: true
+Сборка	Run gradle/actions/setup-gradle@v5	2026-11-04T16:50:46.6247293Z   allow-snapshot-wrappers: false
+Сборка	Run gradle/actions/setup-gradle@v5	2026-11-04T16:50:46.6247690Z   gradle-home-cache-strict-match: false
+Сборка	Run gradle/actions/setup-gradle@v5	2026-11-04T16:50:46.6248062Z   workflow-job-context: null
+Сборка	Run gradle/actions/setup-gradle@v5	2026-11-04T16:50:46.6250742Z   github-token: ***
+Сборка	Run gradle/actions/setup-gradle@v5	2026-11-04T16:50:46.6250962Z env:
+Сборка	Run gradle/actions/setup-gradle@v5	2026-11-04T16:50:46.6251275Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.13-9/x64
+Сборка	Run gradle/actions/setup-gradle@v5	2026-11-04T16:50:46.6251780Z   JAVA_HOME_21_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.13-9/x64
+Сборка	Run gradle/actions/setup-gradle@v5	2026-11-04T16:50:46.6252741Z   MAVEN_ARGS: -ntp
+Сборка	Run gradle/actions/setup-gradle@v5	2026-11-04T16:50:46.6252955Z ##[endgroup]
+Сборка	Run gradle/actions/setup-gradle@v5	2026-11-04T16:50:55.0522909Z Merged default JDK locations into /home/runner/.m2/toolchains.xml
+Сборка	Run gradle/actions/setup-gradle@v5	2026-11-04T16:50:55.0533634Z ##[group]Restore Gradle state from cache
+Сборка	Run gradle/actions/setup-gradle@v5	2026-11-04T16:50:55.1403420Z Cache hit for restore-key: gradle-home-v1|Linux-X64|build[debe7e2089933f89baa724f718db4c25]-6bd2c7a7290c00516b1aa6c9aedda864b0194b23
+Сборка	Run gradle/actions/setup-gradle@v5	2026-11-04T16:50:56.1943176Z Received 234881024 of 1867813137 (12.6%), 224.0 MBs/sec
+Сборка	Run gradle/actions/setup-gradle@v5	2026-11-04T16:50:57.1900312Z Received 503316480 of 1867813137 (26.9%), 239.9 MBs/sec
+Сборка	Run gradle/actions/setup-gradle@v5	2026-11-04T16:50:58.1905493Z Received 729808896 of 1867813137 (39.1%), 231.8 MBs/sec
+Сборка	Run gradle/actions/setup-gradle@v5	2026-11-04T16:50:59.1913051Z Received 994050048 of 1867813137 (53.2%), 236.8 MBs/sec
+Сборка	Run gradle/actions/setup-gradle@v5	2026-11-04T16:51:00.1911648Z Received 1228931072 of 1867813137 (65.8%), 234.3 MBs/sec
+Сборка	Run gradle/actions/setup-gradle@v5	2026-11-04T16:51:01.1912996Z Received 1472200704 of 1867813137 (78.8%), 233.9 MBs/sec
+Сборка	Run gradle/actions/setup-gradle@v5	2026-11-04T16:51:02.1946478Z Received 1719664640 of 1867813137 (92.1%), 234.1 MBs/sec
+Сборка	Run gradle/actions/setup-gradle@v5	2026-11-04T16:51:02.7612242Z Received 1867813137 of 1867813137 (100.0%), 235.2 MBs/sec
+Сборка	Run gradle/actions/setup-gradle@v5	2026-11-04T16:51:02.7615498Z Cache Size: ~1781 MB (1867813137 B)
+Сборка	Run gradle/actions/setup-gradle@v5	2026-11-04T16:51:02.7658734Z [command]/usr/bin/tar -xf /home/runner/work/_temp/81ff3e01-8986-4263-8cf7-d592e21cca00/cache.tzst -P -C /home/runner/work/incoming/incoming --use-compress-program unzstd
+Сборка	Run gradle/actions/setup-gradle@v5	2026-11-04T16:51:06.1972086Z Cache restored successfully
+Сборка	Run gradle/actions/setup-gradle@v5	2026-11-04T16:51:06.9630538Z Restored cache entry with key gradle-home-v1|Linux-X64|build[debe7e2089933f89baa724f718db4c25]-5e0980d64fcde1938e98145c2135845575705d33 to /home/runner/.gradle/caches,/home/runner/.gradle/notifications,/home/runner/.gradle/.setup-gradle in 11908ms
+Сборка	Run gradle/actions/setup-gradle@v5	2026-11-04T16:51:07.1260130Z Cache hit for: gradle-instrumented-jars-v1-6187e9e745ac95643c13dfa45d4844e9
+Сборка	Run gradle/actions/setup-gradle@v5	2026-11-04T16:51:07.1770243Z Cache hit for: gradle-dependencies-v1-377ce3cca5aa57af4f7bb8b74998aa43
+Сборка	Run gradle/actions/setup-gradle@v5	2026-11-04T16:51:07.1876146Z Cache hit for: gradle-transforms-v1-9f8b54103f677bc94f62f23412731c04
+Сборка	Run gradle/actions/setup-gradle@v5	2026-11-04T16:51:07.1882898Z Cache hit for: gradle-groovy-dsl-v1-69a810634b7d72bf31e2f75e5c689b10
+Сборка	Run gradle/actions/setup-gradle@v5	2026-11-04T16:51:07.2683216Z Received 189108 of 189108 (100.0%), 1.9 MBs/sec
+Сборка	Run gradle/actions/setup-gradle@v5	2026-11-04T16:51:07.2683889Z Cache Size: ~0 MB (189108 B)
+Сборка	Run gradle/actions/setup-gradle@v5	2026-11-04T16:51:07.2707632Z [command]/usr/bin/tar -xf /home/runner/work/_temp/78bba19c-59b3-456a-a433-c175fe0c6e25/cache.tzst -P -C /home/runner/work/incoming/incoming --use-compress-program unzstd
+Сборка	Run gradle/actions/setup-gradle@v5	2026-11-04T16:51:07.2934143Z Cache restored successfully
+Сборка	Run gradle/actions/setup-gradle@v5	2026-11-04T16:51:07.2936595Z Restored cache entry with key gradle-instrumented-jars-v1-6187e9e745ac95643c13dfa45d4844e9 to /home/runner/.gradle/caches/jars-*/*/ in 328ms
+Сборка	Run gradle/actions/setup-gradle@v5	2026-11-04T16:51:07.4464777Z Cache hit for: gradle-wrapper-zips-v1-5ae5d3da5e8e0c748d04bcdd9bc97bdb
+Сборка	Run gradle/actions/setup-gradle@v5	2026-11-04T16:51:07.4683536Z Received 1334402 of 1334402 (100.0%), 5.8 MBs/sec
+Сборка	Run gradle/actions/setup-gradle@v5	2026-11-04T16:51:07.4709633Z Cache Size: ~1 MB (1334402 B)
+Сборка	Run gradle/actions/setup-gradle@v5	2026-11-04T16:51:07.6830374Z Received 712261 of 712261 (100.0%), 1.5 MBs/sec
+Сборка	Run gradle/actions/setup-gradle@v5	2026-11-04T16:51:07.6831225Z Cache Size: ~1 MB (712261 B)
+Сборка	Run gradle/actions/setup-gradle@v5	2026-11-04T16:51:07.6871755Z [command]/usr/bin/tar -xf /home/runner/work/_temp/f20d0f8a-345e-453a-9b6b-8f18aa604379/cache.tzst -P -C /home/runner/work/incoming/incoming --use-compress-program unzstd
+Сборка	Run gradle/actions/setup-gradle@v5	2026-11-04T16:51:07.7526283Z Cache restored successfully
+Сборка	Run gradle/actions/setup-gradle@v5	2026-11-04T16:51:07.7653803Z Restored cache entry with key gradle-transforms-v1-9f8b54103f677bc94f62f23412731c04 to /home/runner/.gradle/caches/transforms-4/*/,/home/runner/.gradle/caches/*/transforms/*/ in 800ms
+Сборка	Run gradle/actions/setup-gradle@v5	2026-11-04T16:51:07.9727271Z [command]/usr/bin/tar -xf /home/runner/work/_temp/7f9aa78c-7c85-4384-875e-cdf6fff781fc/cache.tzst -P -C /home/runner/work/incoming/incoming --use-compress-program unzstd
+Сборка	Run gradle/actions/setup-gradle@v5	2026-11-04T16:51:08.2023084Z Received 134217728 of 204605190 (65.6%), 127.6 MBs/sec
+Сборка	Run gradle/actions/setup-gradle@v5	2026-11-04T16:51:08.2156546Z Cache restored successfully
+Сборка	Run gradle/actions/setup-gradle@v5	2026-11-04T16:51:08.2445314Z Restored cache entry with key gradle-groovy-dsl-v1-69a810634b7d72bf31e2f75e5c689b10 to /home/runner/.gradle/caches/*/groovy-dsl/*/ in 1276ms
+Сборка	Run gradle/actions/setup-gradle@v5	2026-11-04T16:51:08.5003339Z Received 130023424 of 136712730 (95.1%), 124.0 MBs/sec
+Сборка	Run gradle/actions/setup-gradle@v5	2026-11-04T16:51:08.5642760Z Received 204605190 of 204605190 (100.0%), 142.9 MBs/sec
+Сборка	Run gradle/actions/setup-gradle@v5	2026-11-04T16:51:08.5645598Z Cache Size: ~195 MB (204605190 B)
+Сборка	Run gradle/actions/setup-gradle@v5	2026-11-04T16:51:08.5806152Z [command]/usr/bin/tar -xf /home/runner/work/_temp/c0d72794-f5c7-4527-9107-3213299fce83/cache.tzst -P -C /home/runner/work/incoming/incoming --use-compress-program unzstd
+Сборка	Run gradle/actions/setup-gradle@v5	2026-11-04T16:51:08.6127898Z Received 136712730 of 136712730 (100.0%), 117.1 MBs/sec
+Сборка	Run gradle/actions/setup-gradle@v5	2026-11-04T16:51:08.6131272Z Cache Size: ~130 MB (136712730 B)
+Сборка	Run gradle/actions/setup-gradle@v5	2026-11-04T16:51:08.6167223Z [command]/usr/bin/tar -xf /home/runner/work/_temp/e486d4ab-85ee-45fd-9b44-c143401f0e52/cache.tzst -P -C /home/runner/work/incoming/incoming --use-compress-program unzstd
+Сборка	Run gradle/actions/setup-gradle@v5	2026-11-04T16:51:08.9150359Z Cache restored successfully
+Сборка	Run gradle/actions/setup-gradle@v5	2026-11-04T16:51:08.9225826Z Restored cache entry with key gradle-wrapper-zips-v1-5ae5d3da5e8e0c748d04bcdd9bc97bdb to /home/runner/.gradle/wrapper/dists/gradle-8.14.3-bin/cv11ve7ro1n3o1j4so8xd9n66 in 1959ms
+Сборка	Run gradle/actions/setup-gradle@v5	2026-11-04T16:51:08.9808889Z Cache restored successfully
+Сборка	Run gradle/actions/setup-gradle@v5	2026-11-04T16:51:08.9891250Z Restored cache entry with key gradle-dependencies-v1-377ce3cca5aa57af4f7bb8b74998aa43 to /home/runner/.gradle/caches/modules-*/files-*/*/*/*/* in 2024ms
+Сборка	Run gradle/actions/setup-gradle@v5	2026-11-04T16:51:08.9974289Z ##[endgroup]
+Сборка	Run gradle/actions/setup-gradle@v5	2026-11-04T16:51:09.0270409Z ##[group]All Gradle Wrapper jars are valid
+Сборка	Run gradle/actions/setup-gradle@v5	2026-11-04T16:51:09.0271761Z ✓ Found known Gradle Wrapper JAR files:
+Сборка	Run gradle/actions/setup-gradle@v5	2026-11-04T16:51:09.0273006Z   7d3a4ac4de1c32b59bc6a4eb8ecb8e612ccd0cf1ae1e99f66902da64df296172 mod/gradle/wrapper/gradle-wrapper.jar
+Сборка	Run gradle/actions/setup-gradle@v5	2026-11-04T16:51:09.0274547Z ##[endgroup]
+Сборка	Build	﻿2026-11-04T16:51:09.0665726Z ##[group]Run ./gradlew assemble prepareGameTestServerRun --console=plain
+Сборка	Build	2026-11-04T16:51:09.0666437Z ^[[36;1m./gradlew assemble prepareGameTestServerRun --console=plain^[[0m
+Сборка	Build	2026-11-04T16:51:09.0719429Z shell: /usr/bin/bash -e {0}
+Сборка	Build	2026-11-04T16:51:09.0719742Z env:
+Сборка	Build	2026-11-04T16:51:09.0720113Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.13-9/x64
+Сборка	Build	2026-11-04T16:51:09.0720705Z   JAVA_HOME_21_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.13-9/x64
+Сборка	Build	2026-11-04T16:51:09.0721174Z   MAVEN_ARGS: -ntp
+Сборка	Build	2026-11-04T16:51:09.0721463Z   GRADLE_ACTION_ID: gradle/actions/setup-gradle
+Сборка	Build	2026-11-04T16:51:09.0721987Z   GRADLE_USER_HOME: /home/runner/.gradle
+Сборка	Build	2026-11-04T16:51:09.0722334Z   GRADLE_BUILD_ACTION_SETUP_COMPLETED: true
+Сборка	Build	2026-11-04T16:51:09.0722684Z   GRADLE_BUILD_ACTION_CACHE_RESTORED: true
+Сборка	Build	2026-11-04T16:51:09.0723187Z   DEVELOCITY_INJECTION_INIT_SCRIPT_NAME: gradle-actions.inject-develocity.init.gradle
+Сборка	Build	2026-11-04T16:51:09.0723739Z   DEVELOCITY_INJECTION_CUSTOM_VALUE: gradle-actions
+Сборка	Build	2026-11-04T16:51:09.0724146Z   GITHUB_DEPENDENCY_GRAPH_ENABLED: false
+Сборка	Build	2026-11-04T16:51:09.0724465Z ##[endgroup]
+Сборка	Build	2026-11-04T16:51:14.7235279Z To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.14.3/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Сборка	Build	2026-11-04T16:51:18.1206827Z Daemon will be stopped at the end of the build 
+Сборка	Build	2026-11-04T16:51:34.5237212Z 
+Сборка	Build	2026-11-04T16:51:34.5253490Z > Configure project :
+Сборка	Build	2026-11-04T16:51:34.5269530Z Creating Minecraft artifacts without recompilation.
+Сборка	Build	2026-11-04T16:52:00.0232450Z 
+Сборка	Build	2026-11-04T16:52:00.0262991Z > Task :createMinecraftArtifacts
+Сборка	Build	2026-11-04T16:52:00.0293243Z Loaded 131 artifacts from /home/runner/work/incoming/incoming/mod/build/tmp/createMinecraftArtifacts/nfrt_artifact_manifest.properties
+Сборка	Build	2026-11-04T16:52:00.0322994Z ^[[1m*** Started working on ^[[4mdownloadJson^[[23;0m^[[23;0m
+Сборка	Build	2026-11-04T16:52:00.0346793Z  ^[[1m^[[92m✓^[[23;0m Completed ^[[4mdownloadJson^[[23;0m in 0.02s
+Сборка	Build	2026-11-04T16:52:00.0348008Z ^[[1m*** Started working on ^[[4mdownloadClient^[[23;0m^[[23;0m
+Сборка	Build	2026-11-04T16:52:00.0349022Z ^[[1m*** Started working on ^[[4mdownloadClientMappings^[[23;0m^[[23;0m
+Сборка	Build	2026-11-04T16:52:00.0350032Z ^[[1m*** Started working on ^[[4mdownloadServer^[[23;0m^[[23;0m
+Сборка	Build	2026-11-04T16:52:00.0351008Z  ^[[1m^[[92m✓^[[23;0m Completed ^[[4mdownloadClient^[[23;0m in 0.04s
+Сборка	Build	2026-11-04T16:52:00.0352287Z  ^[[1m^[[92m✓^[[23;0m Completed ^[[4mdownloadClientMappings^[[23;0m in 0.04s
+Сборка	Build	2026-11-04T16:52:00.0353928Z  ^[[1m^[[92m✓^[[23;0m Completed ^[[4mdownloadServer^[[23;0m in 0.04s
+Сборка	Build	2026-11-04T16:52:00.0354794Z ^[[1m*** Started working on ^[[4mstripClient^[[23;0m^[[23;0m
+Сборка	Build	2026-11-04T16:52:00.0355676Z  ^[[1m^[[92m♻^[[23;0m Used cache of ^[[4mstripClient^[[23;0m in 0.00s
+Сборка	Build	2026-11-04T16:52:00.0356520Z ^[[1m*** Started working on ^[[4mmergeMappings^[[23;0m^[[23;0m
+Сборка	Build	2026-11-04T16:52:00.0357407Z  ^[[1m^[[92m♻^[[23;0m Used cache of ^[[4mmergeMappings^[[23;0m in 0.00s
+Сборка	Build	2026-11-04T16:52:00.0358258Z ^[[1m*** Started working on ^[[4mextractServer^[[23;0m^[[23;0m
+Сборка	Build	2026-11-04T16:52:00.0359126Z  ^[[1m^[[92m♻^[[23;0m Used cache of ^[[4mextractServer^[[23;0m in 0.00s
+Сборка	Build	2026-11-04T16:52:00.0359970Z ^[[1m*** Started working on ^[[4mstripServer^[[23;0m^[[23;0m
+Сборка	Build	2026-11-04T16:52:00.0360814Z  ^[[1m^[[92m♻^[[23;0m Used cache of ^[[4mstripServer^[[23;0m in 0.00s
+Сборка	Build	2026-11-04T16:52:00.0361616Z ^[[1m*** Started working on ^[[4mmerge^[[23;0m^[[23;0m
+Сборка	Build	2026-11-04T16:52:00.0362609Z  ^[[1m^[[92m♻^[[23;0m Used cache of ^[[4mmerge^[[23;0m in 0.00s
+Сборка	Build	2026-11-04T16:52:00.0363396Z ^[[1m*** Started working on ^[[4mrename^[[23;0m^[[23;0m
+Сборка	Build	2026-11-04T16:52:00.0364189Z  ^[[1m^[[92m♻^[[23;0m Used cache of ^[[4mrename^[[23;0m in 0.00s
+Сборка	Build	2026-11-04T16:52:00.0365018Z ^[[1m*** Started working on ^[[4mbinaryPatch^[[23;0m^[[23;0m
+Сборка	Build	2026-11-04T16:52:00.0365863Z  ^[[1m^[[92m♻^[[23;0m Used cache of ^[[4mbinaryPatch^[[23;0m in 0.00s
+Сборка	Build	2026-11-04T16:52:00.0366797Z ^[[1m*** Started working on ^[[4mcopyUnpatchedClasses^[[23;0m^[[23;0m
+Сборка	Build	2026-11-04T16:52:00.0367778Z  ^[[1m^[[92m♻^[[23;0m Used cache of ^[[4mcopyUnpatchedClasses^[[23;0m in 0.00s
+Сборка	Build	2026-11-04T16:52:00.0368860Z ^[[1m*** Started working on ^[[4mapplyDevTransforms^[[23;0m^[[23;0m
+Сборка	Build	2026-11-04T16:52:00.0370430Z  ↳ Running external tool net.neoforged.installertools:installertools:4.0.12:fatjar
+Сборка	Build	2026-11-04T16:52:02.1206154Z  ^[[1m^[[92m✓^[[23;0m Completed ^[[4mapplyDevTransforms^[[23;0m in 2.19s
+Сборка	Build	2026-11-04T16:52:02.3235123Z ^[[1m*** Started working on ^[[4mbinaryWithNeoForge^[[23;0m^[[23;0m
+Сборка	Build	2026-11-04T16:52:07.6204874Z  ^[[1m^[[92m✓^[[23;0m Completed ^[[4mbinaryWithNeoForge^[[23;0m in 5.35s
+Сборка	Build	2026-11-04T16:52:07.6205992Z Performing periodic cache maintenance on /home/runner/.gradle/caches/neoformruntime
+Сборка	Build	2026-11-04T16:52:07.6207223Z Cleaning intermediate results cache in /home/runner/.gradle/caches/neoformruntime/intermediate_results
+Сборка	Build	2026-11-04T16:52:07.6208143Z  Maximum age: 744h
+Сборка	Build	2026-11-04T16:52:07.6208581Z  Maximum cache size: 10 GiB
+Сборка	Build	2026-11-04T16:52:07.6209131Z  ^[[0;2;3m122 files found^[[23;0m
+Сборка	Build	2026-11-04T16:52:07.6209676Z  ^[[0;2;3m1 GiB overall size^[[23;0m
+Сборка	Build	2026-11-04T16:52:07.6210253Z  ^[[0;2;3m27 expired keys found^[[23;0m
+Сборка	Build	2026-11-04T16:52:07.7204636Z Freed up ^[[1m533 MiB^[[23;0m by deleting ^[[1m54 expired entries^[[23;0m
+Сборка	Build	2026-11-04T16:52:07.7205553Z ^[[0;2;3m Deleted 14 outdated lock files
+Сборка	Build	2026-11-04T16:52:07.7207448Z Total runtime: 9.12s
+Сборка	Build	2026-11-04T16:52:07.7207711Z 
+Сборка	Build	2026-11-04T16:52:26.8212931Z 
+Сборка	Build	2026-11-04T16:52:26.8223530Z > Task :compileJava
+Сборка	Build	2026-11-04T16:52:26.9206635Z > Task :generateModMetadata
+Сборка	Build	2026-11-04T16:52:27.4213080Z > Task :processResources
+Сборка	Build	2026-11-04T16:52:27.4213781Z > Task :classes
+Сборка	Build	2026-11-04T16:52:27.4214239Z > Task :jarJar
+Сборка	Build	2026-11-04T16:52:28.5205327Z > Task :jar
+Сборка	Build	2026-11-04T16:52:28.5206019Z > Task :assemble
+Сборка	Build	2026-11-04T16:52:29.2210590Z 
+Сборка	Build	2026-11-04T16:52:29.2233036Z > Task :downloadAssets
+Сборка	Build	2026-11-04T16:52:29.2255997Z Loaded 131 artifacts from /home/runner/work/incoming/incoming/mod/build/tmp/downloadAssets/nfrt_artifact_manifest.properties
+Сборка	Build	2026-11-04T16:52:29.2257598Z Downloading asset index 17
+Сборка	Build	2026-11-04T16:52:29.2258541Z Using Minecraft asset root: /home/runner/.gradle/caches/neoformruntime/assets
+Сборка	Build	2026-11-04T16:52:29.2260237Z   ↓ https://piston-meta.mojang.com/v1/packages/de573f83da62843433ec9951c66feec7ed0a60a1/17.json
+Сборка	Build	2026-11-04T16:52:29.3223456Z 
+Сборка	Build	2026-11-04T16:52:29.3224378Z > Task :writeGameTestServerLegacyClasspath
+Сборка	Build	2026-11-04T16:52:29.4223062Z > Task :prepareGameTestServerRun
+Сборка	Build	2026-11-04T16:52:29.4235885Z gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run-1793811084148.json
+Сборка	Build	2026-11-04T16:52:29.4239231Z 
+Сборка	Build	2026-11-04T16:52:29.4239521Z BUILD SUCCESSFUL in 1m 20s
+Сборка	Build	2026-11-04T16:52:29.4239994Z 9 actionable tasks: 9 executed
+Сборка	Run actions/upload-artifact@v6	﻿2026-11-04T16:52:29.7946767Z ##[group]Run actions/upload-artifact@v6
+Сборка	Run actions/upload-artifact@v6	2026-11-04T16:52:29.7947346Z with:
+Сборка	Run actions/upload-artifact@v6	2026-11-04T16:52:29.7947717Z   name: incoming-jar
+Сборка	Run actions/upload-artifact@v6	2026-11-04T16:52:29.7948144Z   path: mod/build/libs/*.jar
+Сборка	Run actions/upload-artifact@v6	2026-11-04T16:52:29.7948621Z   if-no-files-found: error
+Сборка	Run actions/upload-artifact@v6	2026-11-04T16:52:29.7949078Z   compression-level: 6
+Сборка	Run actions/upload-artifact@v6	2026-11-04T16:52:29.7949497Z   overwrite: false
+Сборка	Run actions/upload-artifact@v6	2026-11-04T16:52:29.7949905Z   include-hidden-files: false
+Сборка	Run actions/upload-artifact@v6	2026-11-04T16:52:29.7950363Z env:
+Сборка	Run actions/upload-artifact@v6	2026-11-04T16:52:29.7950919Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.13-9/x64
+Сборка	Run actions/upload-artifact@v6	2026-11-04T16:52:29.7952013Z   JAVA_HOME_21_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.13-9/x64
+Сборка	Run actions/upload-artifact@v6	2026-11-04T16:52:29.7952762Z   MAVEN_ARGS: -ntp
+Сборка	Run actions/upload-artifact@v6	2026-11-04T16:52:29.7953227Z   GRADLE_ACTION_ID: gradle/actions/setup-gradle
+Сборка	Run actions/upload-artifact@v6	2026-11-04T16:52:29.7953818Z   GRADLE_USER_HOME: /home/runner/.gradle
+Сборка	Run actions/upload-artifact@v6	2026-11-04T16:52:29.7954372Z   GRADLE_BUILD_ACTION_SETUP_COMPLETED: true
+Сборка	Run actions/upload-artifact@v6	2026-11-04T16:52:29.7955017Z   GRADLE_BUILD_ACTION_CACHE_RESTORED: true
+Сборка	Run actions/upload-artifact@v6	2026-11-04T16:52:29.7955844Z   DEVELOCITY_INJECTION_INIT_SCRIPT_NAME: gradle-actions.inject-develocity.init.gradle
+Сборка	Run actions/upload-artifact@v6	2026-11-04T16:52:29.7956802Z   DEVELOCITY_INJECTION_CUSTOM_VALUE: gradle-actions
+Сборка	Run actions/upload-artifact@v6	2026-11-04T16:52:29.7957397Z   GITHUB_DEPENDENCY_GRAPH_ENABLED: false
+Сборка	Run actions/upload-artifact@v6	2026-11-04T16:52:29.7957898Z ##[endgroup]
+Сборка	Run actions/upload-artifact@v6	2026-11-04T16:52:29.9742784Z With the provided path, there will be 1 file uploaded
+Сборка	Run actions/upload-artifact@v6	2026-11-04T16:52:29.9752604Z Artifact name is valid!
+Сборка	Run actions/upload-artifact@v6	2026-11-04T16:52:29.9753346Z Root directory input is valid!
+Сборка	Run actions/upload-artifact@v6	2026-11-04T16:52:30.1618833Z Beginning upload of artifact content to blob storage
+Сборка	Run actions/upload-artifact@v6	2026-11-04T16:52:30.7021663Z Uploaded bytes 8388608
+Сборка	Run actions/upload-artifact@v6	2026-11-04T16:52:30.9081127Z Uploaded bytes 16777216
+Сборка	Run actions/upload-artifact@v6	2026-11-04T16:52:31.1135383Z Uploaded bytes 23073238
+Сборка	Run actions/upload-artifact@v6	2026-11-04T16:52:31.1256861Z Finished uploading artifact content to blob storage!
+Сборка	Run actions/upload-artifact@v6	2026-11-04T16:52:31.1258328Z SHA256 digest of uploaded artifact zip is d6b6e6c0ec89ed1f507488c33e42962f7dba21cb45f57c65640c6f9f273f0642
+Сборка	Run actions/upload-artifact@v6	2026-11-04T16:52:31.1260363Z Finalizing artifact upload
+Сборка	Run actions/upload-artifact@v6	2026-11-04T16:52:31.6113567Z Artifact incoming-jar.zip successfully finalized. Artifact ID 13345425384
+Сборка	Run actions/upload-artifact@v6	2026-11-04T16:52:31.6115289Z Artifact incoming-jar has been successfully uploaded! Final size is 23073238 bytes. Artifact ID is 13345425384
+Сборка	Run actions/upload-artifact@v6	2026-11-04T16:52:31.6118441Z Artifact download URL: https://github.com/zentixua/incoming/actions/runs/41871195148/artifacts/13345425384
+Сборка	Tested tree marker	﻿2026-11-04T16:52:31.6296113Z ##[group]Run tree=$(git rev-parse 'HEAD^{tree}')
+Сборка	Tested tree marker	2026-11-04T16:52:31.6296610Z ^[[36;1mtree=$(git rev-parse 'HEAD^{tree}')^[[0m
+Сборка	Tested tree marker	2026-11-04T16:52:31.6297013Z ^[[36;1mecho "$GITHUB_SHA" > build/tested-tree^[[0m
+Сборка	Tested tree marker	2026-11-04T16:52:31.6297400Z ^[[36;1mecho "tree=$tree" >> "$GITHUB_OUTPUT"^[[0m
+Сборка	Tested tree marker	2026-11-04T16:52:31.6347696Z shell: /usr/bin/bash -e {0}
+Сборка	Tested tree marker	2026-11-04T16:52:31.6348034Z env:
+Сборка	Tested tree marker	2026-11-04T16:52:31.6348413Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.13-9/x64
+Сборка	Tested tree marker	2026-11-04T16:52:31.6349030Z   JAVA_HOME_21_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.13-9/x64
+Сборка	Tested tree marker	2026-11-04T16:52:31.6349542Z   MAVEN_ARGS: -ntp
+Сборка	Tested tree marker	2026-11-04T16:52:31.6349862Z   GRADLE_ACTION_ID: gradle/actions/setup-gradle
+Сборка	Tested tree marker	2026-11-04T16:52:31.6350251Z   GRADLE_USER_HOME: /home/runner/.gradle
+Сборка	Tested tree marker	2026-11-04T16:52:31.6350618Z   GRADLE_BUILD_ACTION_SETUP_COMPLETED: true
+Сборка	Tested tree marker	2026-11-04T16:52:31.6350988Z   GRADLE_BUILD_ACTION_CACHE_RESTORED: true
+Сборка	Tested tree marker	2026-11-04T16:52:31.6351519Z   DEVELOCITY_INJECTION_INIT_SCRIPT_NAME: gradle-actions.inject-develocity.init.gradle
+Сборка	Tested tree marker	2026-11-04T16:52:31.6352395Z   DEVELOCITY_INJECTION_CUSTOM_VALUE: gradle-actions
+Сборка	Tested tree marker	2026-11-04T16:52:31.6352789Z   GITHUB_DEPENDENCY_GRAPH_ENABLED: false
+Сборка	Tested tree marker	2026-11-04T16:52:31.6353124Z ##[endgroup]
+Сборка	Run actions/upload-artifact@v6	﻿2026-11-04T16:52:31.6546028Z ##[group]Run actions/upload-artifact@v6
+Сборка	Run actions/upload-artifact@v6	2026-11-04T16:52:31.6546412Z with:
+Сборка	Run actions/upload-artifact@v6	2026-11-04T16:52:31.6546737Z   name: tested-tree-035eed3a204be9ea9addea264e9e89171e8e8b12
+Сборка	Run actions/upload-artifact@v6	2026-11-04T16:52:31.6547136Z   path: mod/build/tested-tree
+Сборка	Run actions/upload-artifact@v6	2026-11-04T16:52:31.6547428Z   if-no-files-found: error
+Сборка	Run actions/upload-artifact@v6	2026-11-04T16:52:31.6547888Z   compression-level: 6
+Сборка	Run actions/upload-artifact@v6	2026-11-04T16:52:31.6548146Z   overwrite: false
+Сборка	Run actions/upload-artifact@v6	2026-11-04T16:52:31.6548399Z   include-hidden-files: false
+Сборка	Run actions/upload-artifact@v6	2026-11-04T16:52:31.6548670Z env:
+Сборка	Run actions/upload-artifact@v6	2026-11-04T16:52:31.6549010Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.13-9/x64
+Сборка	Run actions/upload-artifact@v6	2026-11-04T16:52:31.6549575Z   JAVA_HOME_21_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.13-9/x64
+Сборка	Run actions/upload-artifact@v6	2026-11-04T16:52:31.6550014Z   MAVEN_ARGS: -ntp
+Сборка	Run actions/upload-artifact@v6	2026-11-04T16:52:31.6550309Z   GRADLE_ACTION_ID: gradle/actions/setup-gradle
+Сборка	Run actions/upload-artifact@v6	2026-11-04T16:52:31.6550676Z   GRADLE_USER_HOME: /home/runner/.gradle
+Сборка	Run actions/upload-artifact@v6	2026-11-04T16:52:31.6551006Z   GRADLE_BUILD_ACTION_SETUP_COMPLETED: true
+Сборка	Run actions/upload-artifact@v6	2026-11-04T16:52:31.6551342Z   GRADLE_BUILD_ACTION_CACHE_RESTORED: true
+Сборка	Run actions/upload-artifact@v6	2026-11-04T16:52:31.6552114Z   DEVELOCITY_INJECTION_INIT_SCRIPT_NAME: gradle-actions.inject-develocity.init.gradle
+Сборка	Run actions/upload-artifact@v6	2026-11-04T16:52:31.6552660Z   DEVELOCITY_INJECTION_CUSTOM_VALUE: gradle-actions
+Сборка	Run actions/upload-artifact@v6	2026-11-04T16:52:31.6553024Z   GITHUB_DEPENDENCY_GRAPH_ENABLED: false
+Сборка	Run actions/upload-artifact@v6	2026-11-04T16:52:31.6553329Z ##[endgroup]
+Сборка	Run actions/upload-artifact@v6	2026-11-04T16:52:31.8241470Z With the provided path, there will be 1 file uploaded
+Сборка	Run actions/upload-artifact@v6	2026-11-04T16:52:31.8257893Z Artifact name is valid!
+Сборка	Run actions/upload-artifact@v6	2026-11-04T16:52:31.8259033Z Root directory input is valid!
+Сборка	Run actions/upload-artifact@v6	2026-11-04T16:52:32.0289822Z Beginning upload of artifact content to blob storage
+Сборка	Run actions/upload-artifact@v6	2026-11-04T16:52:32.0869969Z Uploaded bytes 176
+Сборка	Run actions/upload-artifact@v6	2026-11-04T16:52:32.1007313Z Finished uploading artifact content to blob storage!
+Сборка	Run actions/upload-artifact@v6	2026-11-04T16:52:32.1009203Z SHA256 digest of uploaded artifact zip is 953dc04f6613000b92be2025964785963bb5eb3921f12606de5171b26bead009
+Сборка	Run actions/upload-artifact@v6	2026-11-04T16:52:32.1010864Z Finalizing artifact upload
+Сборка	Run actions/upload-artifact@v6	2026-11-04T16:52:32.5502446Z Artifact tested-tree-035eed3a204be9ea9addea264e9e89171e8e8b12.zip successfully finalized. Artifact ID 13343914406
+Сборка	Run actions/upload-artifact@v6	2026-11-04T16:52:32.5505377Z Artifact tested-tree-035eed3a204be9ea9addea264e9e89171e8e8b12 has been successfully uploaded! Final size is 176 bytes. Artifact ID is 13343914406
+Сборка	Run actions/upload-artifact@v6	2026-11-04T16:52:32.5507554Z Artifact download URL: https://github.com/zentixua/incoming/actions/runs/41871195148/artifacts/13343914406
+Сборка	Post Run gradle/actions/setup-gradle@v5	﻿2026-11-04T16:52:32.5794424Z Post job cleanup.
+Сборка	Post Run gradle/actions/setup-gradle@v5	2026-11-04T16:52:32.9660401Z In post-action step
+Сборка	Post Run gradle/actions/setup-gradle@v5	2026-11-04T16:52:32.9671686Z Cache is read-only: will not save state for use in subsequent builds.
+Сборка	Post Run gradle/actions/setup-gradle@v5	2026-11-04T16:52:32.9679440Z Generating Job Summary
+Сборка	Post Run gradle/actions/setup-gradle@v5	2026-11-04T16:52:32.9717382Z Completed post-action step
+Сборка	Post Run actions/setup-java@v5	﻿2026-11-04T16:52:33.0071611Z Post job cleanup.
+Сборка	Post Run actions/checkout@v5	﻿2026-11-04T16:52:33.1651643Z Post job cleanup.
+Сборка	Post Run actions/checkout@v5	2026-11-04T16:52:33.2628780Z [command]/usr/bin/git version
+Сборка	Post Run actions/checkout@v5	2026-11-04T16:52:33.2675527Z git version 2.56.0
+Сборка	Post Run actions/checkout@v5	2026-11-04T16:52:33.2716814Z Temporarily overriding HOME='/home/runner/work/_temp/f5f5d4d1-622a-466d-a0a0-0142454bc352' before making global git config changes
+Сборка	Post Run actions/checkout@v5	2026-11-04T16:52:33.2718360Z Adding repository directory to the temporary git global config as a safe directory
+Сборка	Post Run actions/checkout@v5	2026-11-04T16:52:33.2722635Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/incoming/incoming
+Сборка	Post Run actions/checkout@v5	2026-11-04T16:52:33.2770398Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+Сборка	Post Run actions/checkout@v5	2026-11-04T16:52:33.2813389Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+Сборка	Post Run actions/checkout@v5	2026-11-04T16:52:33.3167101Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+Сборка	Post Run actions/checkout@v5	2026-11-04T16:52:33.3197638Z http.https://github.com/.extraheader
+Сборка	Post Run actions/checkout@v5	2026-11-04T16:52:33.3213757Z [command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
+Сборка	Post Run actions/checkout@v5	2026-11-04T16:52:33.3257444Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+Сборка	Post Run actions/checkout@v5	2026-11-04T16:52:33.3603257Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+Сборка	Post Run actions/checkout@v5	2026-11-04T16:52:33.3641100Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+Сборка	Complete job	﻿2026-11-04T16:52:33.4078338Z Cleaning up orphan processes
