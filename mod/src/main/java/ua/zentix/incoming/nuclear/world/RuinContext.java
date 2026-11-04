@@ -228,6 +228,35 @@ final class RuinContext {
     /** Same, parse read neighbors at ruin-pool {@code priority}. */
     int requestWindow(ServerLevel level, ChunkPos pos, RuinWorkers.Priority priority) {
         pendingWindows.add(pos.toLong());
+        drainWindowReads(level);
+        int missing = 0;
+        for (int dz = -RuinPlanner.REACH; dz <= RuinPlanner.REACH; dz++) {
+            for (int dx = -RuinPlanner.REACH; dx <= RuinPlanner.REACH; dx++) {
+                long key = ChunkPos.asLong(pos.x + dx, pos.z + dz);
+                if (absent.contains(key) || shotAvailable(level, key)) continue;
+                missing++;
+                if (!reading.contains(key) && reads.pending() < WINDOW_READ_LIMIT
+                        && NuclearPrep.memory(level) + WINDOW_READ_BYTES <= NuclearPrep.PLANS_CAP) {
+                    reading.add(key);
+                    if (archive != null && archive.mayHave(key)) {
+                        var accept = reads.expect();
+                        var disk = DiskShots.read(DiskShots.Format.of(level), new ChunkPos(key), priority);
+                        archive.read(key).handle((tag, failure) -> failure == null ? tag : java.util.Optional.<net.minecraft.nbt.CompoundTag>empty())
+                                .thenCombine(disk, (tag, current) -> new WindowRead(key, current, tag)).thenAccept(accept);
+                    } else readWindowDisk(level, key, priority);
+                }
+            }
+        }
+        return missing;
+    }
+
+    /** Pending source ownership survives a todo being overtaken by another planner. */
+    int pendingWindowReads() { return reads.pending(); }
+    long pendingWindowBytes() { return WINDOW_READ_BYTES * reads.pending(); }
+    boolean readyWindowReads() { return reads.peek() != null; }
+
+    /** Collect owned results independently of fresh planning/admission; never opens another read. */
+    void drainWindowReads(ServerLevel level) {
         // Results and delayed callbacks remain charged after cancellation. Decode at most one
         // window per call; archived snapshots enter the same bounded path after a clean restart.
         int put = 0;
@@ -252,25 +281,6 @@ final class RuinContext {
             }
             if (!restored) putDisk(level, current);
         }
-        int missing = 0;
-        for (int dz = -RuinPlanner.REACH; dz <= RuinPlanner.REACH; dz++) {
-            for (int dx = -RuinPlanner.REACH; dx <= RuinPlanner.REACH; dx++) {
-                long key = ChunkPos.asLong(pos.x + dx, pos.z + dz);
-                if (absent.contains(key) || shotAvailable(level, key)) continue;
-                missing++;
-                if (!reading.contains(key) && reads.pending() < WINDOW_READ_LIMIT
-                        && NuclearPrep.memory(level) + WINDOW_READ_BYTES <= NuclearPrep.PLANS_CAP) {
-                    reading.add(key);
-                    if (archive != null && archive.mayHave(key)) {
-                        var accept = reads.expect();
-                        var disk = DiskShots.read(DiskShots.Format.of(level), new ChunkPos(key), priority);
-                        archive.read(key).handle((tag, failure) -> failure == null ? tag : java.util.Optional.<net.minecraft.nbt.CompoundTag>empty())
-                                .thenCombine(disk, (tag, current) -> new WindowRead(key, current, tag)).thenAccept(accept);
-                    } else readWindowDisk(level, key, priority);
-                }
-            }
-        }
-        return missing;
     }
 
     /** Server-thread source validation shared by restart reads and live window read-ahead. */
@@ -729,7 +739,13 @@ final class RuinContext {
     RuinPlan collect(ServerLevel level, LevelChunk chunk) {
         Task t = tasks.get(chunk.getPos().toLong());
         if (t != null && t.chunkId != 0 && RuinWorkers.finished(t.future) && System.identityHashCode(chunk) != t.chunkId) {
-            // chunk unloaded/reloaded: snapshots from different chunk
+            // Observe the completed terminal outcome before replacing a stale instance. An explicit
+            // collector must still see failure/cancellation rather than a successful retry hiding it.
+            try { t.future.get(); } // actual execution is finished above, so this never waits
+            catch (java.util.concurrent.ExecutionException | InterruptedException | java.util.concurrent.CancellationException error) {
+                return collect(chunk.getPos());
+            }
+            // chunk unloaded/reloaded: successful snapshots from a different chunk
             tasks.remove(chunk.getPos().toLong());
             submit(level, chunk, t.priority);
             return null;

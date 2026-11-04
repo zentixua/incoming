@@ -396,7 +396,8 @@ public final class NuclearPrep {
             }
         }
         int writing = p.plans.pendingWrites() + (p.ruins == null || p.ruins.archive() == null ? 0 : p.ruins.archive().pendingWrites());
-        int reading = p.reading.size() + p.plans.pendingReads() + (p.resolvingRead ? 1 : 0);
+        int windowReads = p.ruins == null ? 0 : p.ruins.pendingWindowReads();
+        int reading = p.reading.size() + p.plans.pendingReads() + (p.resolvingRead ? 1 : 0) + windowReads;
         int planning = p.farRunning.size() + p.submitted.size();
         long complete = p.plans.size() + (long) p.farSkipped;
         long total = p.order.length;
@@ -421,7 +422,7 @@ public final class NuclearPrep {
         else if (p.layoutRequired) {
             stage = RuinPreparation.Stage.PAUSED; reason = RuinPreparation.Reason.MEMORY;
         }
-        else if (p.requiredInitialized && complete == total) {
+        else if (p.requiredInitialized && complete == total && windowReads == 0) {
             stage = writing == 0 ? RuinPreparation.Stage.READY : RuinPreparation.Stage.STORING;
         } else if (p.heapStop || memory(level) >= WINDOW_CAP) {
             stage = RuinPreparation.Stage.PAUSED;
@@ -429,7 +430,7 @@ public final class NuclearPrep {
         }
         long resident = p.asyncBytes.get() + p.plans.bytes() + p.lods.retainedBytes()
                 + metadataBytes(p)
-                + (p.ruins == null ? 0 : p.ruins.retainedBytes());
+                + (p.ruins == null ? 0 : p.ruins.retainedBytes() + p.ruins.pendingWindowBytes());
         return new RuinPreparation.Status(stage, Math.max(0, complete - writing), total, reading, planning,
                 writing, resident, reason, p.resolvedTarget);
     }
@@ -698,11 +699,21 @@ public final class NuclearPrep {
         }
         if (!p.heapStop && p.nextTodo < p.todo.size() && heapTight()) stopForHeap(p);
         p.ruins.expire(now);
+        if (p.handle != null && p.ruins.readyWindowReads() && clock.canStart() && shared.canStart()) {
+            long unit = shared.begin();
+            try { p.ruins.drainWindowReads(level); }
+            finally { clock.record(shared.end(unit)); }
+        }
+        if (p.handle != null && p.ruins.windowFailed()) {
+            p.failure = RuinPreparation.Reason.IO;
+            return;
+        }
         harvest(level, p, shared);
         if (!p.heapStop && !p.capped) submit(level, p, shared);
         far(level, p, shared);
         frontLods(level, p, now);
-        if (!p.announced && p.nextTodo >= p.todo.size() && p.submitted.isEmpty() && p.nextFar >= p.order.length && p.farRunning.isEmpty()) {
+        if (!p.announced && p.nextTodo >= p.todo.size() && p.submitted.isEmpty() && p.nextFar >= p.order.length && p.farRunning.isEmpty()
+                && p.ruins.pendingWindowReads() == 0 && !p.ruins.windowFailed()) {
             p.announced = true;
             // line for tests/recording: strike ruins prebuilt (later-loaded chunks still picked up)
             Runtime rt = Runtime.getRuntime();
