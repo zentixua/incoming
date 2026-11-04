@@ -227,6 +227,8 @@ public final class RuinStorageGameTests {
         h.assertTrue(java.util.Arrays.equals(old.gone, now.gone), sample + ": fallen positions");
         h.assertTrue(java.util.Arrays.equals(old.drained, now.drained), sample + ": drained positions");
         h.assertTrue(old.changes.equals(now.changes), sample + ": changed states");
+        h.assertTrue(java.util.Arrays.equals(old.changes.keySet().toLongArray(), now.changes.keySet().toLongArray()),
+                sample + ": structural candidate order feeding the material FIFO");
         h.assertTrue(java.util.Arrays.equals(old.removed, now.removed), sample + ": removed counts");
         h.assertTrue(java.util.Arrays.equals(old.wood, now.wood), sample + ": wood counts");
         h.assertTrue(java.util.Arrays.equals(old.ground, now.ground), sample + ": ground heights");
@@ -258,6 +260,8 @@ public final class RuinStorageGameTests {
             h.assertTrue(java.util.Arrays.equals(old.gone, now.gone), sample + ": fallen positions");
             h.assertTrue(java.util.Arrays.equals(old.drained, now.drained), sample + ": drained positions");
             h.assertTrue(old.changes.equals(now.changes), sample + ": changed states");
+        h.assertTrue(java.util.Arrays.equals(old.changes.keySet().toLongArray(), now.changes.keySet().toLongArray()),
+                sample + ": structural candidate order feeding the material FIFO");
             h.assertTrue(java.util.Arrays.equals(old.removed, now.removed), sample + ": removed counts");
             h.assertTrue(java.util.Arrays.equals(old.wood, now.wood), sample + ": wood counts");
             h.assertTrue(java.util.Arrays.equals(old.ground, now.ground), sample + ": ground heights");
