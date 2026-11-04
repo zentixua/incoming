@@ -1,0 +1,375 @@
+wall_ms=1793814552476 mono_ns=1053364175024636 thread=Server thread
+RuinWorkers=ua.zentix.incoming.nuclear.world.RuinWorkers@6fbbf56a MARGIN_MS:5.0 TICK_MS:50.0 ADAPT_EVERY:20 QUEUE_PER_THREAD:4 NUMBER:67 SEQUENCE:22004 IN_FLIGHT:[0, 0, 0] pool:OwnedPool@290c02c1 size:10 active:10 BUFFER_CAP:234881024 bufferHeight:384 WORKSPACE_BYTES:132710400 BIRTH_ROOM:ThreadLocal@3f4e960f BUSY:267929941438 startedAt:1052542647746764 lastAdapt:20070 lowered:0 raised:0 expired:0 JOIN_MS:3000 
+RuinResults=ua.zentix.incoming.nuclear.world.RuinResults@359d35c2 BYTES:17060744 OWNER_BYTES:128 
+RuinInputs=ua.zentix.incoming.nuclear.world.RuinInputs@21bb1bb6 DETACHED:0 
+poolMetrics size=10 active=0 queued=0 completed=22004 shutdown=false
+pool.head=null
+dimension[0] gameTime=2040659058 key=ResourceKey[minecraft:dimension / minecraft:overworld]
+dimension[0]=ua.zentix.incoming.nuclear.world.NuclearWorld@cf2fa19 scars:ScarQueue@1fbc5abd ruins:size=1 prep:NuclearPrep@6464e16c settle:RuinSettle@52778bac pulses:size=0 shadows:size=0 scorches:size=1 craters:size=0 mobFallout:MobFallout@494e91c9 late:LateExposure@34da43ef blast:BlastFront@7776bb99 lastFrontNanos:15835 lastPulseNanos:11639 lastScorchNanos:13732 lastCraterNanos:471 lastScarNanos:22492865 lastPrepNanos:1973 lastFalloutNanos:9625 lastSettleNanos:10316 unburnt:size=0 restored:true lastSlowLog:2040646183 ledgers:LedgerLoads@8455fc matter:RuinMatter@a9db228 craterMatter:CraterMatter@55fdc2a3 ruinProgress:RuinProgress@73155a9b materialReservation:0 
+dimension[0].matter=ua.zentix.incoming.nuclear.world.RuinMatter@a9db228 palette:RuinPalette@511ccab0 inventories:size=979 nextInventory:3163 inventoryCapacity:1195 moving:RuinRecords@36f73e49 stranded:size=0 strandedCount:0 movingBytes:831537 strandedBytes:0 supportBacking:2048 supportSources:RuinRecords@61eb2029 loadTick:2040659051 released:442419 deposited:195938 materials:size=276 releasedVolume:297683.1328907552 depositedVolume:140902.86703121488 releasedMass:6.029450009882812E8 depositedMass:3.4130918387109375E8 dispersed:77025 dispersedVolume:65419.65625 dispersedMass:5.8902290625E7 supports:size=0 uncertain:size=0 originals:size=0 search:null heldRadius:1 inWork:false heldChecked:false heldReady:false lookupId:2 lookupIndex:0 lookupSize:1 lookupPast:false lookupDone:true lookupValue:Detonation@543c4853 held:ChunkPos@34558c32 writing:false failed:false loading:false 
+dimension[0].matter.moving=ua.zentix.incoming.nuclear.world.RuinRecords@36f73e49 width:157 encode:RuinMatter$$Lambda/0x00007961be0eb7d8@775e0cc5 decode:RuinMatter$$Lambda/0x00007961be0eba10@664e831 pages:size=166 size:169456 pageCapacity:189 payloadBytes:26687488 
+dimension[0].matter.supportSources=ua.zentix.incoming.nuclear.world.RuinRecords@61eb2029 width:16 encode:RuinMatter$$Lambda/0x00007961be420690@3f4ee83c decode:RuinMatter$$Lambda/0x00007961be4208c8@41b5f436 pages:size=0 size:0 pageCapacity:0 payloadBytes:0 
+dimension[0].matter.search=null
+dimension[0].matter.palette=ua.zentix.incoming.nuclear.world.RuinPalette@511ccab0 states:size=1020 ids:size=1020 
+dimension[0].matter.order=null
+dimension[0].craterMatter=ua.zentix.incoming.nuclear.world.CraterMatter@55fdc2a3 passes:size=0 settled:size=921 writing:false failed:false loading:false 
+dimension[0].craterMatter.moving=null
+dimension[0].craterMatter.supportSources=null
+dimension[0].craterMatter.search=null
+dimension[0].craterMatter.palette=null
+dimension[0].craterMatter.order=null
+dimension[0].ruinProgress=ua.zentix.incoming.nuclear.world.RuinProgress@73155a9b passes:size=1 writing:false failed:false loading:false 
+dimension[0].ruinProgress.moving=null
+dimension[0].ruinProgress.supportSources=null
+dimension[0].ruinProgress.search=null
+dimension[0].ruinProgress.palette=null
+dimension[0].ruinProgress.order=null
+dimension[0].ledgers=ua.zentix.incoming.nuclear.world.LedgerLoads@8455fc loads:size=0 
+dimension[0].ledgers.moving=null
+dimension[0].ledgers.supportSources=null
+dimension[0].ledgers.search=null
+dimension[0].ledgers.palette=null
+dimension[0].ledgers.order=null
+dimension[0].settle=ua.zentix.incoming.nuclear.world.RuinSettle@52778bac window:SettleWindow@587cf8eb order:RadialChunks@79e77e41 replayed:0 loadingLimit:0 adaptAt:0 spare:true heap:Tracker@7978b6b5 entries:size=0 detonation:Detonation@543c4853 pass:Pass@614b4953 nextReport:2040658186 settled:0 loaded:0 began:2040656986 checkAt:2040651085 busy:true selecting:1 candidate:null selectingHistory:false retiring:size=0 
+dimension[0].settle.moving=null
+dimension[0].settle.supportSources=null
+dimension[0].settle.search=null
+dimension[0].settle.palette=null
+dimension[0].settle.order=ua.zentix.incoming.nuclear.world.RadialChunks@79e77e41 x:3104.5 z:560.5 inner:-1.0 outer:32839.18781542423 edge:16.0 lastX:2246 middleZ:35 nextX:-1860 heads:size=0 
+dimension[0].scars=ua.zentix.incoming.nuclear.world.ScarQueue@1fbc5abd inspected:25 waitedThisTick:0 diagSeen:0 diagUnseen:0 diagAhead:453 diagSeenLag:0 diagSource:parked tileHolds:47 tileHoldsPeak:47 waitRadius:0 parked:size=69 parkedBytes:7308916 jobs:size=5642 underHold:size=4360 lastSlowChunk:-4611686018427387904 byDue:size=25 ahead:size=259 readySeen:size=390 readyUnseen:size=5436 logs:size=0 budgets:size=1 scans:size=0 prepared:size=0 appliedPrepared:217 appliedFresh:228 stalePlans:151 preparedStats:size=1 awaitingMemory:size=0 sentEarly:size=0 ruinedBy:size=0 atDetonation:size=0 withNeighbours:size=0 background:size=0 
+dimension[0].scars.moving=null
+dimension[0].scars.supportSources=null
+dimension[0].scars.search=null
+dimension[0].scars.palette=null
+dimension[0].scars.order=null
+dimension[0].prep=ua.zentix.incoming.nuclear.world.NuclearPrep@6464e16c lastMeasured:11 heapStrikes:0 readBytes:0 policy:future(done=true,cancelled=false) policyGeneration:2 preps:size=0 layoutBuilder:NuclearPrep$$Lambda/0x00007961be0e9a48@439fc1cd archiveHints:size=0 failed:size=0 clock:WorkClock@3e30aa3 shotCacheLimit:67108864 nextHandleStrike:-3 
+dimension[0].prep.moving=null
+dimension[0].prep.supportSources=null
+dimension[0].prep.search=null
+dimension[0].prep.palette=null
+dimension[0].prep.order=null
+dimension[0].queueHeads readySeen scanned=9 stale=0 selected=8
+dimension[0].queueHeads readyUnseen scanned=5 stale=0 selected=4
+dimension[0].queueHeads.readySeen[0] key=-227633266688 x=0 z=-53 liveJob=true actualEvent=2
+dimension[0].queueHeads.readySeen[0].job=ua.zentix.incoming.nuclear.world.ScarQueue$Job@307d68db chunk:-227633266688 events:size=1 event:0 due:2040659035 wave:2040645530 mayHold:true held:0 ready:true waitsNeighbours:false needs:0 tileHold:false asked:-9223372036854775808 aheadEvent:2 diagWaits:null diagSkipped:0 
+dimension[0].queueHeads.readySeen[0] loadedMask=1ffffff (bit=(dz+2)*5+dx+2; getChunkNow only)
+dimension[0].queueHeads.readySeen[0].task=null
+dimension[0].queueHeads.readySeen[0].parked=null
+dimension[0].queueHeads.readySeen[0] noPreparedOwner
+dimension[0].queueHeads.readySeen[1] key=-219043332098 x=-2 z=-52 liveJob=true actualEvent=2
+dimension[0].queueHeads.readySeen[1].job=ua.zentix.incoming.nuclear.world.ScarQueue$Job@647c1bd2 chunk:-219043332098 events:size=1 event:0 due:2040659035 wave:2040645535 mayHold:true held:0 ready:true waitsNeighbours:false needs:0 tileHold:false asked:-9223372036854775808 aheadEvent:2 diagWaits:null diagSkipped:0 
+dimension[0].queueHeads.readySeen[1] loadedMask=1ffffff (bit=(dz+2)*5+dx+2; getChunkNow only)
+dimension[0].queueHeads.readySeen[1].task=null
+dimension[0].queueHeads.readySeen[1].parked=null
+dimension[0].queueHeads.readySeen[1] noPreparedOwner
+dimension[0].queueHeads.readySeen[2] key=-231928233998 x=-14 z=-55 liveJob=true actualEvent=2
+dimension[0].queueHeads.readySeen[2].job=ua.zentix.incoming.nuclear.world.ScarQueue$Job@3ebe681 chunk:-231928233998 events:size=1 event:0 due:2040659035 wave:2040645581 mayHold:true held:1 ready:true waitsNeighbours:false needs:0 tileHold:false asked:-9223372036854775808 aheadEvent:2 diagWaits:null diagSkipped:0 
+dimension[0].queueHeads.readySeen[2] loadedMask=1ffffff (bit=(dz+2)*5+dx+2; getChunkNow only)
+dimension[0].queueHeads.readySeen[2].task=null
+dimension[0].queueHeads.readySeen[2].parked=null
+dimension[0].queueHeads.readySeen[2] noPreparedOwner
+dimension[0].queueHeads.readySeen[3] key=-193273528329 x=-9 z=-46 liveJob=true actualEvent=2
+dimension[0].queueHeads.readySeen[3].job=ua.zentix.incoming.nuclear.world.ScarQueue$Job@33be796e chunk:-193273528329 events:size=1 event:0 due:2040659035 wave:2040645551 mayHold:true held:0 ready:true waitsNeighbours:false needs:0 tileHold:false asked:-9223372036854775808 aheadEvent:2 diagWaits:null diagSkipped:0 
+dimension[0].queueHeads.readySeen[3] loadedMask=1ffffff (bit=(dz+2)*5+dx+2; getChunkNow only)
+dimension[0].queueHeads.readySeen[3].task=null
+dimension[0].queueHeads.readySeen[3].parked=null
+dimension[0].queueHeads.readySeen[3] noPreparedOwner
+dimension[0].queueHeads.readySeen[4] key=-240518168589 x=-13 z=-57 liveJob=true actualEvent=2
+dimension[0].queueHeads.readySeen[4].job=ua.zentix.incoming.nuclear.world.ScarQueue$Job@14487f00 chunk:-240518168589 events:size=1 event:0 due:2040659035 wave:2040645581 mayHold:true held:0 ready:true waitsNeighbours:false needs:0 tileHold:false asked:-9223372036854775808 aheadEvent:2 diagWaits:null diagSkipped:0 
+dimension[0].queueHeads.readySeen[4] loadedMask=1ffffff (bit=(dz+2)*5+dx+2; getChunkNow only)
+dimension[0].queueHeads.readySeen[4].task=null
+dimension[0].queueHeads.readySeen[4].parked=null
+dimension[0].queueHeads.readySeen[4] noPreparedOwner
+dimension[0].queueHeads.readySeen[5] key=-223338299388 x=4 z=-52 liveJob=true actualEvent=2
+dimension[0].queueHeads.readySeen[5].job=ua.zentix.incoming.nuclear.world.ScarQueue$Job@7fb2adca chunk:-223338299388 events:size=1 event:0 due:2040659035 wave:2040645515 mayHold:true held:0 ready:true waitsNeighbours:false needs:0 tileHold:false asked:-9223372036854775808 aheadEvent:2 diagWaits:null diagSkipped:0 
+dimension[0].queueHeads.readySeen[5] loadedMask=f7ffff (bit=(dz+2)*5+dx+2; getChunkNow only)
+dimension[0].queueHeads.readySeen[5].task=null
+dimension[0].queueHeads.readySeen[5].parked=null
+dimension[0].queueHeads.readySeen[5] noPreparedOwner
+dimension[0].queueHeads.readySeen[6] key=-240518168588 x=-12 z=-57 liveJob=true actualEvent=2
+dimension[0].queueHeads.readySeen[6].job=ua.zentix.incoming.nuclear.world.ScarQueue$Job@2decdede chunk:-240518168588 events:size=1 event:0 due:2040659035 wave:2040645577 mayHold:true held:0 ready:true waitsNeighbours:false needs:0 tileHold:false asked:-9223372036854775808 aheadEvent:2 diagWaits:null diagSkipped:0 
+dimension[0].queueHeads.readySeen[6] loadedMask=1ffffff (bit=(dz+2)*5+dx+2; getChunkNow only)
+dimension[0].queueHeads.readySeen[6].task=null
+dimension[0].queueHeads.readySeen[6].parked=null
+dimension[0].queueHeads.readySeen[6] noPreparedOwner
+dimension[0].queueHeads.readySeen[7] key=-231928233991 x=-7 z=-55 liveJob=true actualEvent=2
+dimension[0].queueHeads.readySeen[7].job=ua.zentix.incoming.nuclear.world.ScarQueue$Job@59e838ed chunk:-231928233991 events:size=1 event:0 due:2040659035 wave:2040645557 mayHold:true held:0 ready:true waitsNeighbours:false needs:0 tileHold:false asked:-9223372036854775808 aheadEvent:2 diagWaits:null diagSkipped:0 
+dimension[0].queueHeads.readySeen[7] loadedMask=1ffffff (bit=(dz+2)*5+dx+2; getChunkNow only)
+dimension[0].queueHeads.readySeen[7].task=null
+dimension[0].queueHeads.readySeen[7].parked=null
+dimension[0].queueHeads.readySeen[7] noPreparedOwner
+dimension[0].queueHeads.readyUnseen[0] key=128849019084 x=204 z=30 liveJob=true actualEvent=2
+dimension[0].queueHeads.readyUnseen[0].job=ua.zentix.incoming.nuclear.world.ScarQueue$Job@5ed025f8 chunk:128849019084 events:size=1 event:0 due:2040656866 wave:2040644869 mayHold:true held:0 ready:true waitsNeighbours:false needs:1 tileHold:false asked:-9223372036854775808 aheadEvent:2 diagWaits:null diagSkipped:0 
+dimension[0].queueHeads.readyUnseen[0] loadedMask=1ffffff (bit=(dz+2)*5+dx+2; getChunkNow only)
+dimension[0].queueHeads.readyUnseen[0].task=ua.zentix.incoming.nuclear.world.RuinContext$Task@290c424e future:future(done=true,cancelled=false) chunkId:1924692725 since:2040656874 priority:NEAR 
+dimension[0].queueHeads.readyUnseen[0].parked=null
+dimension[0].queueHeads.readyUnseen[0] noPreparedOwner
+dimension[0].queueHeads.readyUnseen[1] key=98784248014 x=206 z=23 liveJob=true actualEvent=2
+dimension[0].queueHeads.readyUnseen[1].job=ua.zentix.incoming.nuclear.world.ScarQueue$Job@771bfcce chunk:98784248014 events:size=1 event:0 due:2040656866 wave:2040644869 mayHold:false held:0 ready:true waitsNeighbours:false needs:0 tileHold:false asked:-9223372036854775808 aheadEvent:2 diagWaits:null diagSkipped:0 
+dimension[0].queueHeads.readyUnseen[1] loadedMask=1ffffff (bit=(dz+2)*5+dx+2; getChunkNow only)
+dimension[0].queueHeads.readyUnseen[1].task=ua.zentix.incoming.nuclear.world.RuinContext$Task@47f6171d future:future(done=true,cancelled=false) chunkId:1869843584 since:2040656874 priority:NEAR 
+dimension[0].queueHeads.readyUnseen[1].parked=null
+dimension[0].queueHeads.readyUnseen[1] noPreparedOwner
+dimension[0].queueHeads.readyUnseen[2] key=163208757425 x=177 z=38 liveJob=true actualEvent=2
+dimension[0].queueHeads.readyUnseen[2].job=ua.zentix.incoming.nuclear.world.ScarQueue$Job@529da0cb chunk:163208757425 events:size=1 event:0 due:2040656866 wave:2040644869 mayHold:false held:0 ready:true waitsNeighbours:false needs:1 tileHold:false asked:-9223372036854775808 aheadEvent:2 diagWaits:null diagSkipped:0 
+dimension[0].queueHeads.readyUnseen[2] loadedMask=1ffffff (bit=(dz+2)*5+dx+2; getChunkNow only)
+dimension[0].queueHeads.readyUnseen[2].task=ua.zentix.incoming.nuclear.world.RuinContext$Task@5216cd4 future:future(done=true,cancelled=false) chunkId:1053770031 since:2040656874 priority:NEAR 
+dimension[0].queueHeads.readyUnseen[2].parked=null
+dimension[0].queueHeads.readyUnseen[2] noPreparedOwner
+dimension[0].queueHeads.readyUnseen[3] key=188978561190 x=166 z=44 liveJob=true actualEvent=2
+dimension[0].queueHeads.readyUnseen[3].job=ua.zentix.incoming.nuclear.world.ScarQueue$Job@1bf41efc chunk:188978561190 events:size=1 event:0 due:2040656866 wave:2040644870 mayHold:false held:0 ready:true waitsNeighbours:false needs:1 tileHold:false asked:-9223372036854775808 aheadEvent:2 diagWaits:null diagSkipped:0 
+dimension[0].queueHeads.readyUnseen[3] loadedMask=1ffffff (bit=(dz+2)*5+dx+2; getChunkNow only)
+dimension[0].queueHeads.readyUnseen[3].task=ua.zentix.incoming.nuclear.world.RuinContext$Task@3e1bbcf2 future:future(done=true,cancelled=false) chunkId:486471308 since:2040656874 priority:NEAR 
+dimension[0].queueHeads.readyUnseen[3].parked=null
+dimension[0].queueHeads.readyUnseen[3] noPreparedOwner
+dimension[0].queueHeads.byDue.head key=-227633266704 x=-16 z=-54 liveJob=true actualEvent=2
+dimension[0].queueHeads.byDue.head.job=ua.zentix.incoming.nuclear.world.ScarQueue$Job@ec455dd chunk:-227633266704 events:size=1 event:0 due:2040659059 wave:2040645586 mayHold:true held:0 ready:false waitsNeighbours:false needs:0 tileHold:false asked:-9223372036854775808 aheadEvent:2 diagWaits:null diagSkipped:0 
+dimension[0].queueHeads.byDue.head loadedMask=1ffffff (bit=(dz+2)*5+dx+2; getChunkNow only)
+dimension[0].queueHeads.byDue.head.task=null
+dimension[0].queueHeads.byDue.head.parked=null
+dimension[0].queueHeads.byDue.head noPreparedOwner
+dimension[0] testSeenOverride=null
+dimension[0] player[0] x=-96.5 z=-816.5
+dimension[0].playerView=net.minecraft.server.level.ChunkTrackingView$Positioned@54913e82 
+dimension[0] watchedQueued x=-5 z=-58 lag=13503 loaded=true
+dimension[0].watchedJob=ua.zentix.incoming.nuclear.world.ScarQueue$Job@5c7705f0 chunk:-244813135877 events:size=1 event:0 due:2040659047 wave:2040645555 mayHold:true held:1 ready:true waitsNeighbours:false needs:0 tileHold:false asked:-9223372036854775808 aheadEvent:2 diagWaits:null diagSkipped:0 
+dimension[0].watchedParked=null
+dimension[0] watchedQueued x=-7 z=-41 lag=13521 loaded=true
+dimension[0].watchedJob=ua.zentix.incoming.nuclear.world.ScarQueue$Job@7b693822 chunk:-171798691847 events:size=1 event:0 due:2040659052 wave:2040645537 mayHold:true held:1 ready:true waitsNeighbours:false needs:0 tileHold:false asked:-9223372036854775808 aheadEvent:2 diagWaits:null diagSkipped:0 
+dimension[0].watchedParked=null
+dimension[0] watchedQueued x=-7 z=-61 lag=13492 loaded=true
+dimension[0].watchedJob=ua.zentix.incoming.nuclear.world.ScarQueue$Job@551575a2 chunk:-257698037767 events:size=1 event:0 due:2040659053 wave:2040645566 mayHold:true held:0 ready:true waitsNeighbours:false needs:0 tileHold:false asked:-9223372036854775808 aheadEvent:2 diagWaits:null diagSkipped:0 
+dimension[0].watchedParked=null
+dimension[0] watchedQueued x=-11 z=-50 lag=13495 loaded=true
+dimension[0].watchedJob=ua.zentix.incoming.nuclear.world.ScarQueue$Job@6e6962cd chunk:-210453397515 events:size=1 event:0 due:2040659054 wave:2040645563 mayHold:true held:0 ready:true waitsNeighbours:false needs:0 tileHold:false asked:-9223372036854775808 aheadEvent:2 diagWaits:null diagSkipped:0 
+dimension[0].watchedParked=null
+dimension[0] watchedQueued x=-9 z=-55 lag=13494 loaded=true
+dimension[0].watchedJob=ua.zentix.incoming.nuclear.world.ScarQueue$Job@4eae8012 chunk:-231928233993 events:size=1 event:0 due:2040659058 wave:2040645564 mayHold:true held:0 ready:true waitsNeighbours:false needs:0 tileHold:false asked:-9223372036854775808 aheadEvent:2 diagWaits:null diagSkipped:0 
+dimension[0].watchedParked=null
+dimension[0] watchedQueued x=-8 z=-61 lag=13488 loaded=true
+dimension[0].watchedJob=ua.zentix.incoming.nuclear.world.ScarQueue$Job@6db3d150 chunk:-257698037768 events:size=1 event:0 due:2040659055 wave:2040645570 mayHold:true held:0 ready:true waitsNeighbours:false needs:0 tileHold:false asked:-9223372036854775808 aheadEvent:2 diagWaits:null diagSkipped:0 
+dimension[0].watchedParked=null
+dimension[0] watchedQueued x=-6 z=-56 lag=13503 loaded=true
+dimension[0].watchedJob=ua.zentix.incoming.nuclear.world.ScarQueue$Job@2dfb0610 chunk:-236223201286 events:size=1 event:0 due:2040659048 wave:2040645555 mayHold:true held:1 ready:true waitsNeighbours:false needs:0 tileHold:false asked:-9223372036854775808 aheadEvent:2 diagWaits:null diagSkipped:0 
+dimension[0].watchedParked=null
+dimension[0] watchedQueued x=-8 z=-48 lag=13508 loaded=true
+dimension[0].watchedJob=ua.zentix.incoming.nuclear.world.ScarQueue$Job@e79a456 chunk:-201863462920 events:size=1 event:0 due:2040659041 wave:2040645550 mayHold:true held:0 ready:true waitsNeighbours:false needs:0 tileHold:false asked:-9223372036854775808 aheadEvent:2 diagWaits:null diagSkipped:0 
+dimension[0].watchedParked=null
+dimension[0] watchedQueued x=-3 z=-60 lag=13507 loaded=true
+dimension[0].watchedJob=ua.zentix.incoming.nuclear.world.ScarQueue$Job@199f902e chunk:-253403070467 events:size=1 event:0 due:2040659042 wave:2040645551 mayHold:true held:0 ready:true waitsNeighbours:false needs:0 tileHold:false asked:-9223372036854775808 aheadEvent:2 diagWaits:null diagSkipped:0 
+dimension[0].watchedParked=null
+dimension[0] watchedQueued x=-2 z=-61 lag=13508 loaded=true
+dimension[0].watchedJob=ua.zentix.incoming.nuclear.world.ScarQueue$Job@7d87e5e7 chunk:-257698037762 events:size=1 event:0 due:2040659057 wave:2040645550 mayHold:true held:0 ready:true waitsNeighbours:false needs:0 tileHold:false asked:-9223372036854775808 aheadEvent:2 diagWaits:null diagSkipped:0 
+dimension[0].watchedParked=null
+dimension[0] watchedQueued x=4 z=-51 lag=13544 loaded=true
+dimension[0].watchedJob=ua.zentix.incoming.nuclear.world.ScarQueue$Job@78330c6 chunk:-219043332092 events:size=1 event:0 due:2040659046 wave:2040645514 mayHold:true held:0 ready:true waitsNeighbours:false needs:0 tileHold:false asked:-9223372036854775808 aheadEvent:2 diagWaits:null diagSkipped:0 
+dimension[0].watchedParked=null
+dimension[0] watchedQueued x=2 z=-60 lag=13523 loaded=true
+dimension[0].watchedJob=ua.zentix.incoming.nuclear.world.ScarQueue$Job@643c668d chunk:-257698037758 events:size=1 event:0 due:2040659038 wave:2040645535 mayHold:true held:0 ready:true waitsNeighbours:false needs:0 tileHold:false asked:-9223372036854775808 aheadEvent:2 diagWaits:null diagSkipped:0 
+dimension[0].watchedParked=null
+dimension[0] watchedQueued x=-8 z=-41 lag=13517 loaded=true
+dimension[0].watchedJob=ua.zentix.incoming.nuclear.world.ScarQueue$Job@743daeca chunk:-171798691848 events:size=1 event:0 due:2040659049 wave:2040645541 mayHold:true held:0 ready:true waitsNeighbours:false needs:0 tileHold:false asked:-9223372036854775808 aheadEvent:2 diagWaits:null diagSkipped:0 
+dimension[0].watchedParked=null
+dimension[0] watchedQueued x=-16 z=-45 lag=13484 loaded=true
+dimension[0].watchedJob=ua.zentix.incoming.nuclear.world.ScarQueue$Job@6d2afca5 chunk:-188978561040 events:size=1 event:0 due:2040659048 wave:2040645574 mayHold:true held:0 ready:true waitsNeighbours:false needs:0 tileHold:false asked:-9223372036854775808 aheadEvent:2 diagWaits:null diagSkipped:0 
+dimension[0].watchedParked=null
+dimension[0] watchedQueued x=-10 z=-46 lag=13504 loaded=true
+dimension[0].watchedJob=ua.zentix.incoming.nuclear.world.ScarQueue$Job@509842eb chunk:-193273528330 events:size=1 event:0 due:2040659059 wave:2040645554 mayHold:true held:0 ready:false waitsNeighbours:false needs:0 tileHold:false asked:-9223372036854775808 aheadEvent:2 diagWaits:null diagSkipped:0 
+dimension[0].watchedParked=null
+dimension[0] watchedQueued x=-17 z=-52 lag=13471 loaded=true
+dimension[0].watchedJob=ua.zentix.incoming.nuclear.world.ScarQueue$Job@64b13a1a chunk:-219043332113 events:size=1 event:0 due:2040659049 wave:2040645587 mayHold:true held:0 ready:true waitsNeighbours:false needs:0 tileHold:false asked:-9223372036854775808 aheadEvent:2 diagWaits:null diagSkipped:0 
+dimension[0].watchedParked=null
+dimension[0] watchedSummary players=1 scanned=5642 complete=true jobs=5642 watched=415 loaded=415 overdue=415 maxLag=13551
+dimension[0] preparedStats event=2 values=[0, 1, 13500, 0, 0, 12005, 37, 91637952, 13417636, 0, 0, 0, 0, 37, 454128, 13407, 0, 0, 0, 0, 0, 1977, 0, 0, 0, 13407, 0]
+dimension[0].prepClock=ua.zentix.incoming.nuclear.world.WorkClock@3e30aa3 time:WorkClock$$Lambda/0x00007961be0e9ea8@597ce03 unitCost:0 tickDecay:0.5 unitsLastTick:0 largest:0 largestBefore:0 ticks:20079 usedThisTick:0 maxTickNanos:67954528 fakeNow:0 sampled:0 deadline:1053364182835410 busyDeadline:1053364182835410 spare:WorkClock$$Lambda/0x00007961be0e9c88@3778e370 estimate:0.0 kindEstimate:length=0 worked:false lateStart:false unitsThisTick:0 maxUnitsPerTick:173 ticksWorked:2248 units:32997 
+dimension[0].sharedClock=ua.zentix.incoming.nuclear.world.WorkClock@c56e456 time:WorkClock$$Lambda/0x00007961be1a11d0@8beb17 unitCost:0 tickDecay:1.0 unitsLastTick:24 largest:1968323 largestBefore:2109273 ticks:20079 usedThisTick:22473546 maxTickNanos:67954528 fakeNow:0 sampled:0 deadline:1053364178212431 busyDeadline:1053364154212431 spare:WorkScheduler$$Lambda/0x00007961be1a0fa8@525cffd3 estimate:1479701.0 kindEstimate:length=0 worked:true lateStart:false unitsThisTick:26 maxUnitsPerTick:6531 ticksWorked:16423 units:30897885 
+dimension[0].context[0]=ua.zentix.incoming.nuclear.world.RuinContext@530e61be d:Detonation@5abe2d77 eventId:2 blasts:size=0 blastBytes:0 fragmentCacheLimit:16777216 fragmentCache:RuinFragmentCache@5ad390a3 fragmentCacheClosed:false shots:size=3577 heights:size=7596 heightBytes:1597600 appliedBytes:14627068 inputs:RuinInputs@71addb1b applied:size=445 planned:size=10924 stood:size=445 used:2040659058 ruinRadius:32807.18781542423 noise:WorldNoise@1d0ca25d flashed:size=452 flashedBytes:1290892 reading:size=0 pendingWindows:size=1065 reads:RuinInbox@67e82233 absent:size=0 windowReads:1977 windowAbsent:0 windowFailed:false doneAt:size=6236 now:2040659058 shotBytes:314199755 archive:RuinSnapshots@2178e0e5 archiveChecked:true archivePending:false restoredPlans:null closing:future(done=true,cancelled=false) tasks:size=7 resultOwners:size=7 failed:size=0 failures:0 
+dimension[0].context[0].inputs=ua.zentix.incoming.nuclear.world.RuinInputs@71addb1b workers:0 retired:0 detachedBytes:0 detached:false 
+dimension[0].context[0].fragmentCache=ua.zentix.incoming.nuclear.world.RuinFragmentCache@5ad390a3 limit:16777216 budget:CacheBudget@3e9292d2 entries:size=6057 bytes:16775380 hits:41248 closed:false 
+dimension[0].context[0].archive=ua.zentix.incoming.nuclear.world.RuinSnapshots@2178e0e5 pages:RuinPages@4674d117 charge:NuclearPrep$Prep$$Lambda/0x00007961be3674e8@602b9a50 room:NuclearPrep$$Lambda/0x00007961be37e288@6b23178 saved:size=5701 writes:size=63 
+dimension[0].context[0].restoredPlans=null
+dimension[0].context[0].reads=ua.zentix.incoming.nuclear.world.RuinInbox@67e82233 ready:size=0 generation:1 pending:0 accounting:NuclearPrep$$Lambda/0x00007961be37d538@2c9c377e reservation:4194304 
+dimension[0].context[0].reads.head=null
+dimension[0].context[0].reads.head.current=null
+dimension[0].context[0].reads.head.data=null
+dimension[0].context[0].reads.head.read=null
+dimension[0].context[0].result[0]=ua.zentix.incoming.nuclear.world.RuinResults$Lease@4700962c maximum:4638568 charged:151192 fragments:0 future:future(done=true,cancelled=false) marked:true empty:false exited:true cancelled:false released:false 
+dimension[0].context[0].result[1]=ua.zentix.incoming.nuclear.world.RuinResults$Lease@5b2e28a0 maximum:2483560 charged:14780 fragments:0 future:future(done=true,cancelled=false) marked:true empty:false exited:true cancelled:false released:false 
+dimension[0].context[0].result[2]=ua.zentix.incoming.nuclear.world.RuinResults$Lease@676b9bd8 maximum:2485608 charged:26736 fragments:0 future:future(done=true,cancelled=false) marked:true empty:false exited:true cancelled:false released:false 
+dimension[0].context[0].result[3]=ua.zentix.incoming.nuclear.world.RuinResults$Lease@36cc2173 maximum:2483560 charged:18280 fragments:0 future:future(done=true,cancelled=false) marked:true empty:false exited:true cancelled:false released:false 
+dimension[0].context[0].result[4]=ua.zentix.incoming.nuclear.world.RuinResults$Lease@3dbf21e maximum:2765800 charged:60520 fragments:0 future:future(done=true,cancelled=false) marked:true empty:false exited:true cancelled:false released:false 
+dimension[0].context[0].result[5]=ua.zentix.incoming.nuclear.world.RuinResults$Lease@40a9b5bf maximum:2214888 charged:4852 fragments:0 future:future(done=true,cancelled=false) marked:true empty:false exited:true cancelled:false released:false 
+dimension[0].context[0].result[6]=ua.zentix.incoming.nuclear.world.RuinResults$Lease@2a81678c maximum:3020648 charged:7040 fragments:0 future:future(done=true,cancelled=false) marked:true empty:false exited:true cancelled:false released:false 
+dimension[0].contextOwnership pinCategory=0 receiptCategory=0 shots=14 bytes=421205
+dimension[0].contextOwnership pinCategory=0 receiptCategory=1 shots=35 bytes=1013331
+dimension[0].contextOwnership pinCategory=0 receiptCategory=2 shots=0 bytes=0
+dimension[0].contextOwnership pinCategory=0 receiptCategory=3 shots=1002 bytes=68425804
+dimension[0].contextOwnership pinCategory=0 receiptCategory=4 shots=0 bytes=0
+dimension[0].contextOwnership pinCategory=1 receiptCategory=0 shots=116 bytes=3830484
+dimension[0].contextOwnership pinCategory=1 receiptCategory=1 shots=11 bytes=1171773
+dimension[0].contextOwnership pinCategory=1 receiptCategory=2 shots=0 bytes=0
+dimension[0].contextOwnership pinCategory=1 receiptCategory=3 shots=2226 bytes=232445455
+dimension[0].contextOwnership pinCategory=1 receiptCategory=4 shots=0 bytes=0
+dimension[0].contextOwnership pinCategory=2 receiptCategory=0 shots=9 bytes=287392
+dimension[0].contextOwnership pinCategory=2 receiptCategory=1 shots=0 bytes=0
+dimension[0].contextOwnership pinCategory=2 receiptCategory=2 shots=0 bytes=0
+dimension[0].contextOwnership pinCategory=2 receiptCategory=3 shots=92 bytes=3306657
+dimension[0].contextOwnership pinCategory=2 receiptCategory=4 shots=0 bytes=0
+dimension[0].contextOwnership pinCategory=3 receiptCategory=0 shots=2 bytes=67888
+dimension[0].contextOwnership pinCategory=3 receiptCategory=1 shots=0 bytes=0
+dimension[0].contextOwnership pinCategory=3 receiptCategory=2 shots=0 bytes=0
+dimension[0].contextOwnership pinCategory=3 receiptCategory=3 shots=70 bytes=3229766
+dimension[0].contextOwnership pinCategory=3 receiptCategory=4 shots=0 bytes=0
+pinCategory 0=none 1=pending 2=task 3=both; receiptCategory 0=exactSaved(orNoArchive) 1=exactCompletedWrite 2=pendingWrite 3=unsavedOrDifferentSerial 4=failedWrite
+dimension[0].contextOwnership pending key=-266287972344 x=8 z=-62 stored=15 job=true task=false
+dimension[0].contextOwnership.pendingJob=ua.zentix.incoming.nuclear.world.ScarQueue$Job@3c5f130b chunk:-266287972344 events:size=1 event:0 due:2040656876 wave:2040645518 mayHold:true held:0 ready:true waitsNeighbours:true needs:0 tileHold:false asked:-9223372036854775808 aheadEvent:2 diagWaits:null diagSkipped:0 
+dimension[0].contextOwnership pending key=-34359738195 x=173 z=-8 stored=21 job=true task=false
+dimension[0].contextOwnership.pendingJob=ua.zentix.incoming.nuclear.world.ScarQueue$Job@5512d2eb chunk:-34359738195 events:size=1 event:0 due:2040656866 wave:2040644914 mayHold:true held:0 ready:true waitsNeighbours:true needs:0 tileHold:false asked:-9223372036854775808 aheadEvent:2 diagWaits:null diagSkipped:0 
+dimension[0].contextOwnership pending key=-223338299393 x=-1 z=-53 stored=25 job=true task=false
+dimension[0].contextOwnership.pendingJob=ua.zentix.incoming.nuclear.world.ScarQueue$Job@3aa1d2ef chunk:-223338299393 events:size=1 event:0 due:2040659053 wave:2040645534 mayHold:true held:0 ready:true waitsNeighbours:false needs:0 tileHold:false asked:-9223372036854775808 aheadEvent:2 diagWaits:null diagSkipped:0 
+dimension[0].contextOwnership pending key=-244813135877 x=-5 z=-58 stored=25 job=true task=false
+dimension[0].contextOwnership.pendingJob=ua.zentix.incoming.nuclear.world.ScarQueue$Job@5c7705f0 chunk:-244813135877 events:size=1 event:0 due:2040659047 wave:2040645555 mayHold:true held:1 ready:true waitsNeighbours:false needs:0 tileHold:false asked:-9223372036854775808 aheadEvent:2 diagWaits:null diagSkipped:0 
+dimension[0].contextOwnership pending key=-94489280331 x=181 z=-22 stored=3 job=true task=false
+dimension[0].contextOwnership.pendingJob=ua.zentix.incoming.nuclear.world.ScarQueue$Job@4a37297d chunk:-94489280331 events:size=1 event:0 due:2040656868 wave:2040644954 mayHold:true held:0 ready:true waitsNeighbours:true needs:0 tileHold:false asked:-9223372036854775808 aheadEvent:2 diagWaits:null diagSkipped:0 
+dimension[0].contextOwnership pending key=-77309411112 x=216 z=-18 stored=12 job=true task=false
+dimension[0].contextOwnership.pendingJob=ua.zentix.incoming.nuclear.world.ScarQueue$Job@3ff75150 chunk:-77309411112 events:size=1 event:0 due:2040656876 wave:2040644951 mayHold:true held:0 ready:true waitsNeighbours:true needs:0 tileHold:false asked:-9223372036854775808 aheadEvent:2 diagWaits:null diagSkipped:0 
+dimension[0].contextOwnership pending key=-47244640069 x=187 z=-11 stored=21 job=true task=false
+dimension[0].contextOwnership.pendingJob=ua.zentix.incoming.nuclear.world.ScarQueue$Job@4a391dbe chunk:-47244640069 events:size=1 event:0 due:2040656876 wave:2040644909 mayHold:true held:0 ready:true waitsNeighbours:true needs:0 tileHold:false asked:-9223372036854775808 aheadEvent:2 diagWaits:null diagSkipped:0 
+dimension[0].contextOwnership pending key=-34359738188 x=180 z=-8 stored=22 job=true task=false
+dimension[0].contextOwnership.pendingJob=ua.zentix.incoming.nuclear.world.ScarQueue$Job@83b5319 chunk:-34359738188 events:size=1 event:0 due:2040656875 wave:2040644904 mayHold:true held:0 ready:true waitsNeighbours:true needs:0 tileHold:false asked:-9223372036854775808 aheadEvent:2 diagWaits:null diagSkipped:0 
+dimension[0].contextOwnership pending key=-51539607382 x=170 z=-12 stored=6 job=true task=false
+dimension[0].contextOwnership.pendingJob=ua.zentix.incoming.nuclear.world.ScarQueue$Job@29208772 chunk:-51539607382 events:size=1 event:0 due:2040656879 wave:2040644932 mayHold:true held:0 ready:true waitsNeighbours:true needs:0 tileHold:false asked:-9223372036854775808 aheadEvent:2 diagWaits:null diagSkipped:0 
+dimension[0].contextOwnership pending key=-171798691847 x=-7 z=-41 stored=25 job=true task=false
+dimension[0].contextOwnership.pendingJob=ua.zentix.incoming.nuclear.world.ScarQueue$Job@7b693822 chunk:-171798691847 events:size=1 event:0 due:2040659052 wave:2040645537 mayHold:true held:1 ready:true waitsNeighbours:false needs:0 tileHold:false asked:-9223372036854775808 aheadEvent:2 diagWaits:null diagSkipped:0 
+dimension[0].contextOwnership pending key=-249108103184 x=-16 z=-59 stored=25 job=true task=false
+dimension[0].contextOwnership.pendingJob=ua.zentix.incoming.nuclear.world.ScarQueue$Job@39b21d87 chunk:-249108103184 events:size=1 event:0 due:2040659057 wave:2040645594 mayHold:true held:0 ready:true waitsNeighbours:false needs:0 tileHold:false asked:-9223372036854775808 aheadEvent:2 diagWaits:null diagSkipped:0 
+dimension[0].contextOwnership pending key=-240518168587 x=-11 z=-57 stored=25 job=true task=false
+dimension[0].contextOwnership.pendingJob=ua.zentix.incoming.nuclear.world.ScarQueue$Job@707ee646 chunk:-240518168587 events:size=1 event:0 due:2040659058 wave:2040645574 mayHold:true held:0 ready:true waitsNeighbours:false needs:0 tileHold:false asked:-9223372036854775808 aheadEvent:2 diagWaits:null diagSkipped:0 
+dimension[0].contextOwnership pending key=-30064770882 x=190 z=-7 stored=19 job=true task=false
+dimension[0].contextOwnership.pendingJob=ua.zentix.incoming.nuclear.world.ScarQueue$Job@32f1739d chunk:-30064770882 events:size=1 event:0 due:2040656878 wave:2040644893 mayHold:false held:0 ready:true waitsNeighbours:true needs:0 tileHold:false asked:-9223372036854775808 aheadEvent:2 diagWaits:null diagSkipped:0 
+dimension[0].contextOwnership pending key=197568495820 x=204 z=46 stored=0 job=true task=false
+dimension[0].contextOwnership.pendingJob=ua.zentix.incoming.nuclear.world.ScarQueue$Job@7d775584 chunk:197568495820 events:size=1 event:0 due:2040656875 wave:2040644869 mayHold:true held:1 ready:true waitsNeighbours:false needs:1 tileHold:false asked:-9223372036854775808 aheadEvent:2 diagWaits:null diagSkipped:0 
+dimension[0].contextOwnership pending key=188978561241 x=217 z=44 stored=25 job=true task=false
+dimension[0].contextOwnership.pendingJob=ua.zentix.incoming.nuclear.world.ScarQueue$Job@7cdd910b chunk:188978561241 events:size=1 event:0 due:2040656872 wave:2040644870 mayHold:false held:0 ready:true waitsNeighbours:false needs:1 tileHold:false asked:-9223372036854775808 aheadEvent:2 diagWaits:null diagSkipped:0 
+dimension[0].contextOwnership pending key=-4294967084 x=212 z=-1 stored=25 job=true task=false
+dimension[0].contextOwnership.pendingJob=ua.zentix.incoming.nuclear.world.ScarQueue$Job@d8f5623 chunk:-4294967084 events:size=1 event:0 due:2040656870 wave:2040644887 mayHold:true held:1 ready:true waitsNeighbours:false needs:1 tileHold:false asked:-9223372036854775808 aheadEvent:2 diagWaits:null diagSkipped:0 
+dimension[0].contextOwnership pendingWindowStoredHistogram=[17, 11, 11, 25, 25, 19, 10, 21, 16, 18, 14, 22, 25, 20, 19, 39, 32, 27, 38, 41, 54, 33, 27, 32, 19, 450] hasJob=1064 hasTask=0 (presence only; absent/loaded/freshness not evaluated)
+dimension[0].contextOwnership taskKey=146028888230 hasJob=true
+dimension[0].contextOwnership.task=ua.zentix.incoming.nuclear.world.RuinContext$Task@616fc316 future:future(done=true,cancelled=false) chunkId:2121603937 since:2040656874 priority:NEAR 
+dimension[0].contextOwnership.taskJob=ua.zentix.incoming.nuclear.world.ScarQueue$Job@25be4a3e chunk:146028888230 events:size=1 event:0 due:2040656866 wave:2040644870 mayHold:true held:0 ready:true waitsNeighbours:false needs:1 tileHold:false asked:-9223372036854775808 aheadEvent:2 diagWaits:null diagSkipped:0 
+dimension[0].contextOwnership taskKey=98784248014 hasJob=true
+dimension[0].contextOwnership.task=ua.zentix.incoming.nuclear.world.RuinContext$Task@47f6171d future:future(done=true,cancelled=false) chunkId:1869843584 since:2040656874 priority:NEAR 
+dimension[0].contextOwnership.taskJob=ua.zentix.incoming.nuclear.world.ScarQueue$Job@771bfcce chunk:98784248014 events:size=1 event:0 due:2040656866 wave:2040644869 mayHold:false held:0 ready:true waitsNeighbours:false needs:0 tileHold:false asked:-9223372036854775808 aheadEvent:2 diagWaits:null diagSkipped:0 
+dimension[0].contextOwnership taskKey=188978561190 hasJob=true
+dimension[0].contextOwnership.task=ua.zentix.incoming.nuclear.world.RuinContext$Task@3e1bbcf2 future:future(done=true,cancelled=false) chunkId:486471308 since:2040656874 priority:NEAR 
+dimension[0].contextOwnership.taskJob=ua.zentix.incoming.nuclear.world.ScarQueue$Job@1bf41efc chunk:188978561190 events:size=1 event:0 due:2040656866 wave:2040644870 mayHold:false held:0 ready:true waitsNeighbours:false needs:1 tileHold:false asked:-9223372036854775808 aheadEvent:2 diagWaits:null diagSkipped:0 
+dimension[0].contextOwnership taskKey=128849019084 hasJob=true
+dimension[0].contextOwnership.task=ua.zentix.incoming.nuclear.world.RuinContext$Task@290c424e future:future(done=true,cancelled=false) chunkId:1924692725 since:2040656874 priority:NEAR 
+dimension[0].contextOwnership.taskJob=ua.zentix.incoming.nuclear.world.ScarQueue$Job@5ed025f8 chunk:128849019084 events:size=1 event:0 due:2040656866 wave:2040644869 mayHold:true held:0 ready:true waitsNeighbours:false needs:1 tileHold:false asked:-9223372036854775808 aheadEvent:2 diagWaits:null diagSkipped:0 
+dimension[0].contextOwnership taskKey=231928234214 hasJob=false
+dimension[0].contextOwnership.task=ua.zentix.incoming.nuclear.world.RuinContext$Task@50a4feb8 future:future(done=true,cancelled=false) chunkId:0 since:2040650987 priority:FAR 
+dimension[0].contextOwnership taskKey=-21474836306 hasJob=true
+dimension[0].contextOwnership.task=ua.zentix.incoming.nuclear.world.RuinContext$Task@2ba7aa7b future:future(done=true,cancelled=false) chunkId:1958851976 since:2040654476 priority:NEAR 
+dimension[0].contextOwnership.taskJob=ua.zentix.incoming.nuclear.world.ScarQueue$Job@6d4862b8 chunk:-21474836306 events:size=1 event:0 due:2040656877 wave:2040644902 mayHold:true held:0 ready:true waitsNeighbours:true needs:0 tileHold:false asked:-9223372036854775808 aheadEvent:2 diagWaits:null diagSkipped:0 
+dimension[0].contextOwnership taskKey=163208757425 hasJob=true
+dimension[0].contextOwnership.task=ua.zentix.incoming.nuclear.world.RuinContext$Task@5216cd4 future:future(done=true,cancelled=false) chunkId:1053770031 since:2040656874 priority:NEAR 
+dimension[0].contextOwnership.taskJob=ua.zentix.incoming.nuclear.world.ScarQueue$Job@529da0cb chunk:163208757425 events:size=1 event:0 due:2040656866 wave:2040644869 mayHold:false held:0 ready:true waitsNeighbours:false needs:1 tileHold:false asked:-9223372036854775808 aheadEvent:2 diagWaits:null diagSkipped:0 
+dimension[1] gameTime=2040659058 key=ResourceKey[minecraft:dimension / minecraft:the_end]
+dimension[1]=ua.zentix.incoming.nuclear.world.NuclearWorld@2d5dca97 scars:ScarQueue@21d58e9c ruins:size=0 prep:NuclearPrep@2ca27731 settle:RuinSettle@204ff5aa pulses:size=0 shadows:size=0 scorches:size=0 craters:size=0 mobFallout:MobFallout@63859a46 late:LateExposure@6e2959c4 blast:BlastFront@518db0cf lastFrontNanos:2553 lastPulseNanos:7613 lastScorchNanos:40 lastCraterNanos:791 lastScarNanos:1623 lastPrepNanos:129 lastFalloutNanos:351 lastSettleNanos:150 unburnt:size=0 restored:true lastSlowLog:-4611686018427387904 ledgers:LedgerLoads@eb0edf1 matter:RuinMatter@41a811cb craterMatter:CraterMatter@656b8743 ruinProgress:RuinProgress@59dc48e9 materialReservation:0 
+dimension[1].matter=ua.zentix.incoming.nuclear.world.RuinMatter@41a811cb palette:RuinPalette@508ae946 inventories:size=0 nextInventory:0 inventoryCapacity:0 moving:RuinRecords@51ad8cd5 stranded:size=0 strandedCount:0 movingBytes:0 strandedBytes:0 supportBacking:2048 supportSources:RuinRecords@68c5483c loadTick:-9223372036854775808 released:0 deposited:0 materials:size=0 releasedVolume:0.0 depositedVolume:0.0 releasedMass:0.0 depositedMass:0.0 dispersed:0 dispersedVolume:0.0 dispersedMass:0.0 supports:size=0 uncertain:size=0 originals:size=0 search:null heldRadius:0 inWork:false heldChecked:false heldReady:false lookupId:-1 lookupIndex:0 lookupSize:0 lookupPast:false lookupDone:false lookupValue:null held:null writing:false failed:false loading:false 
+dimension[1].matter.moving=ua.zentix.incoming.nuclear.world.RuinRecords@51ad8cd5 width:157 encode:RuinMatter$$Lambda/0x00007961be0eb7d8@5365decd decode:RuinMatter$$Lambda/0x00007961be0eba10@54a2cd3e pages:size=0 size:0 pageCapacity:0 payloadBytes:0 
+dimension[1].matter.supportSources=ua.zentix.incoming.nuclear.world.RuinRecords@68c5483c width:16 encode:RuinMatter$$Lambda/0x00007961be0ebc58@6954285b decode:RuinMatter$$Lambda/0x00007961be0f0000@2b9209e5 pages:size=0 size:0 pageCapacity:0 payloadBytes:0 
+dimension[1].matter.search=null
+dimension[1].matter.palette=ua.zentix.incoming.nuclear.world.RuinPalette@508ae946 states:size=0 ids:size=0 
+dimension[1].matter.order=null
+dimension[1].craterMatter=ua.zentix.incoming.nuclear.world.CraterMatter@656b8743 passes:size=0 settled:size=0 writing:false failed:false loading:false 
+dimension[1].craterMatter.moving=null
+dimension[1].craterMatter.supportSources=null
+dimension[1].craterMatter.search=null
+dimension[1].craterMatter.palette=null
+dimension[1].craterMatter.order=null
+dimension[1].ruinProgress=ua.zentix.incoming.nuclear.world.RuinProgress@59dc48e9 passes:size=0 writing:false failed:false loading:false 
+dimension[1].ruinProgress.moving=null
+dimension[1].ruinProgress.supportSources=null
+dimension[1].ruinProgress.search=null
+dimension[1].ruinProgress.palette=null
+dimension[1].ruinProgress.order=null
+dimension[1].ledgers=ua.zentix.incoming.nuclear.world.LedgerLoads@eb0edf1 loads:size=0 
+dimension[1].ledgers.moving=null
+dimension[1].ledgers.supportSources=null
+dimension[1].ledgers.search=null
+dimension[1].ledgers.palette=null
+dimension[1].ledgers.order=null
+dimension[1].settle=ua.zentix.incoming.nuclear.world.RuinSettle@204ff5aa window:SettleWindow@567c29ec order:null replayed:0 loadingLimit:0 adaptAt:0 spare:true heap:Tracker@14f5d520 entries:size=0 detonation:null pass:null nextReport:0 settled:0 loaded:0 began:0 checkAt:0 busy:false selecting:0 candidate:null selectingHistory:false retiring:size=0 
+dimension[1].settle.moving=null
+dimension[1].settle.supportSources=null
+dimension[1].settle.search=null
+dimension[1].settle.palette=null
+dimension[1].settle.order=null
+dimension[1].scars=ua.zentix.incoming.nuclear.world.ScarQueue@21d58e9c inspected:0 waitedThisTick:0 diagSeen:0 diagUnseen:0 diagAhead:0 diagSeenLag:0 diagSource: tileHolds:0 tileHoldsPeak:0 waitRadius:0 parked:size=0 parkedBytes:0 jobs:size=0 underHold:size=0 lastSlowChunk:-4611686018427387904 byDue:size=0 ahead:size=0 readySeen:size=0 readyUnseen:size=0 logs:size=0 budgets:size=0 scans:size=0 prepared:size=0 appliedPrepared:0 appliedFresh:0 stalePlans:0 preparedStats:size=0 awaitingMemory:size=0 sentEarly:size=0 ruinedBy:size=0 atDetonation:size=0 withNeighbours:size=0 background:size=0 
+dimension[1].scars.moving=null
+dimension[1].scars.supportSources=null
+dimension[1].scars.search=null
+dimension[1].scars.palette=null
+dimension[1].scars.order=null
+dimension[1].prep=ua.zentix.incoming.nuclear.world.NuclearPrep@2ca27731 lastMeasured:0 heapStrikes:0 readBytes:0 policy:null policyGeneration:-1 preps:size=0 layoutBuilder:NuclearPrep$$Lambda/0x00007961be0e9a48@439fc1cd archiveHints:size=0 failed:size=0 clock:WorkClock@5c2b3115 shotCacheLimit:67108864 nextHandleStrike:-2 
+dimension[1].prep.moving=null
+dimension[1].prep.supportSources=null
+dimension[1].prep.search=null
+dimension[1].prep.palette=null
+dimension[1].prep.order=null
+dimension[1].queueHeads readySeen scanned=0 stale=0 selected=0
+dimension[1].queueHeads readyUnseen scanned=0 stale=0 selected=0
+dimension[1] testSeenOverride=null
+dimension[1] watchedSummary players=0 scanned=0 complete=true jobs=0 watched=0 loaded=0 overdue=0 maxLag=0
+dimension[1].prepClock=ua.zentix.incoming.nuclear.world.WorkClock@5c2b3115 time:WorkClock$$Lambda/0x00007961be0e9ea8@597ce03 unitCost:0 tickDecay:0.5 unitsLastTick:0 largest:0 largestBefore:0 ticks:20079 usedThisTick:0 maxTickNanos:0 fakeNow:0 sampled:0 deadline:1053364182883696 busyDeadline:1053364182883696 spare:WorkClock$$Lambda/0x00007961be0e9c88@3778e370 estimate:0.0 kindEstimate:length=0 worked:false lateStart:false unitsThisTick:0 maxUnitsPerTick:0 ticksWorked:0 units:0 
+dimension[2] gameTime=2040659058 key=ResourceKey[minecraft:dimension / minecraft:the_nether]
+dimension[2]=ua.zentix.incoming.nuclear.world.NuclearWorld@674dd654 scars:ScarQueue@50c9a018 ruins:size=0 prep:NuclearPrep@6a2f33f4 settle:RuinSettle@6f09043d pulses:size=0 shadows:size=0 scorches:size=0 craters:size=0 mobFallout:MobFallout@66ff90fe late:LateExposure@7bab2559 blast:BlastFront@6808094b lastFrontNanos:440 lastPulseNanos:551 lastScorchNanos:160 lastCraterNanos:30 lastScarNanos:351 lastPrepNanos:210 lastFalloutNanos:60 lastSettleNanos:120 unburnt:size=0 restored:true lastSlowLog:-4611686018427387904 ledgers:LedgerLoads@4f87c09b matter:RuinMatter@55e5c1f5 craterMatter:CraterMatter@7746b7fd ruinProgress:RuinProgress@5f2cba0f materialReservation:0 
+dimension[2].matter=ua.zentix.incoming.nuclear.world.RuinMatter@55e5c1f5 palette:RuinPalette@2e5e3a69 inventories:size=0 nextInventory:0 inventoryCapacity:0 moving:RuinRecords@554fbc3e stranded:size=0 strandedCount:0 movingBytes:0 strandedBytes:0 supportBacking:2048 supportSources:RuinRecords@17740035 loadTick:-9223372036854775808 released:0 deposited:0 materials:size=0 releasedVolume:0.0 depositedVolume:0.0 releasedMass:0.0 depositedMass:0.0 dispersed:0 dispersedVolume:0.0 dispersedMass:0.0 supports:size=0 uncertain:size=0 originals:size=0 search:null heldRadius:0 inWork:false heldChecked:false heldReady:false lookupId:-1 lookupIndex:0 lookupSize:0 lookupPast:false lookupDone:false lookupValue:null held:null writing:false failed:false loading:false 
+dimension[2].matter.moving=ua.zentix.incoming.nuclear.world.RuinRecords@554fbc3e width:157 encode:RuinMatter$$Lambda/0x00007961be0eb7d8@2d323c16 decode:RuinMatter$$Lambda/0x00007961be0eba10@7260d6ab pages:size=0 size:0 pageCapacity:0 payloadBytes:0 
+dimension[2].matter.supportSources=ua.zentix.incoming.nuclear.world.RuinRecords@17740035 width:16 encode:RuinMatter$$Lambda/0x00007961be0ebc58@5a663a95 decode:RuinMatter$$Lambda/0x00007961be0f0000@6da4fc44 pages:size=0 size:0 pageCapacity:0 payloadBytes:0 
+dimension[2].matter.search=null
+dimension[2].matter.palette=ua.zentix.incoming.nuclear.world.RuinPalette@2e5e3a69 states:size=0 ids:size=0 
+dimension[2].matter.order=null
+dimension[2].craterMatter=ua.zentix.incoming.nuclear.world.CraterMatter@7746b7fd passes:size=0 settled:size=0 writing:false failed:false loading:false 
+dimension[2].craterMatter.moving=null
+dimension[2].craterMatter.supportSources=null
+dimension[2].craterMatter.search=null
+dimension[2].craterMatter.palette=null
+dimension[2].craterMatter.order=null
+dimension[2].ruinProgress=ua.zentix.incoming.nuclear.world.RuinProgress@5f2cba0f passes:size=0 writing:false failed:false loading:false 
+dimension[2].ruinProgress.moving=null
+dimension[2].ruinProgress.supportSources=null
+dimension[2].ruinProgress.search=null
+dimension[2].ruinProgress.palette=null
+dimension[2].ruinProgress.order=null
+dimension[2].ledgers=ua.zentix.incoming.nuclear.world.LedgerLoads@4f87c09b loads:size=0 
+dimension[2].ledgers.moving=null
+dimension[2].ledgers.supportSources=null
+dimension[2].ledgers.search=null
+dimension[2].ledgers.palette=null
+dimension[2].ledgers.order=null
+dimension[2].settle=ua.zentix.incoming.nuclear.world.RuinSettle@6f09043d window:SettleWindow@514aaf6a order:null replayed:0 loadingLimit:0 adaptAt:0 spare:true heap:Tracker@25ebfe66 entries:size=0 detonation:null pass:null nextReport:0 settled:0 loaded:0 began:0 checkAt:0 busy:false selecting:0 candidate:null selectingHistory:false retiring:size=0 
+dimension[2].settle.moving=null
+dimension[2].settle.supportSources=null
+dimension[2].settle.search=null
+dimension[2].settle.palette=null
+dimension[2].settle.order=null
+dimension[2].scars=ua.zentix.incoming.nuclear.world.ScarQueue@50c9a018 inspected:0 waitedThisTick:0 diagSeen:0 diagUnseen:0 diagAhead:0 diagSeenLag:0 diagSource: tileHolds:0 tileHoldsPeak:0 waitRadius:0 parked:size=0 parkedBytes:0 jobs:size=0 underHold:size=0 lastSlowChunk:-4611686018427387904 byDue:size=0 ahead:size=0 readySeen:size=0 readyUnseen:size=0 logs:size=0 budgets:size=0 scans:size=0 prepared:size=0 appliedPrepared:0 appliedFresh:0 stalePlans:0 preparedStats:size=0 awaitingMemory:size=0 sentEarly:size=0 ruinedBy:size=0 atDetonation:size=0 withNeighbours:size=0 background:size=0 
+dimension[2].scars.moving=null
+dimension[2].scars.supportSources=null
+dimension[2].scars.search=null
+dimension[2].scars.palette=null
+dimension[2].scars.order=null
+dimension[2].prep=ua.zentix.incoming.nuclear.world.NuclearPrep@6a2f33f4 lastMeasured:0 heapStrikes:0 readBytes:0 policy:null policyGeneration:-1 preps:size=0 layoutBuilder:NuclearPrep$$Lambda/0x00007961be0e9a48@439fc1cd archiveHints:size=0 failed:size=0 clock:WorkClock@4eb2dadc shotCacheLimit:67108864 nextHandleStrike:-2 
+dimension[2].prep.moving=null
+dimension[2].prep.supportSources=null
+dimension[2].prep.search=null
+dimension[2].prep.palette=null
+dimension[2].prep.order=null
+dimension[2].queueHeads readySeen scanned=0 stale=0 selected=0
+dimension[2].queueHeads readyUnseen scanned=0 stale=0 selected=0
+dimension[2] testSeenOverride=null
+dimension[2] watchedSummary players=0 scanned=0 complete=true jobs=0 watched=0 loaded=0 overdue=0 maxLag=0
+dimension[2].prepClock=ua.zentix.incoming.nuclear.world.WorkClock@4eb2dadc time:WorkClock$$Lambda/0x00007961be0e9ea8@597ce03 unitCost:0 tickDecay:0.5 unitsLastTick:0 largest:0 largestBefore:0 ticks:20079 usedThisTick:0 maxTickNanos:0 fakeNow:0 sampled:0 deadline:1053364182887852 busyDeadline:1053364182887852 spare:WorkClock$$Lambda/0x00007961be0e9c88@3778e370 estimate:0.0 kindEstimate:length=0 worked:false lateStart:false unitsThisTick:0 maxUnitsPerTick:0 ticksWorked:0 units:0 
+snapshot_nanos=40207782

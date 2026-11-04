@@ -1,0 +1,12 @@
+{
+  "case": "corrected1000kt-archive-material-on",
+  "label": "post-clean3",
+  "pid": "54565",
+  "start_ticks": "105233660",
+  "wall_ms": 1793814427006,
+  "probe_sha256": "58e73564ba99b5acb891400429207b07d06e3a956209c6cc0e290c00872e740a",
+  "source": "0f1a77ff88b4e6546212aec9ab34a834eda525d1",
+  "jar_sha256": "c468e9ccece478f8039f398a369ebe1c5a51be9398f7b5b585e0d30fa8ee7e10",
+  "attach_stdout": "Connected to remote JVM\nJVM response code = 0\nreturn code: 0\n\n",
+  "complete_wall_ms": 1793814427530
+}

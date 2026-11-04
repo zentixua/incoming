@@ -1,0 +1,134 @@
+{
+  "host": "vps",
+  "samples": [
+    {
+      "begin_wall_ns": 1793813536600188183,
+      "end_wall_ns": 1793813536658949345,
+      "begin_mono_ns": 285000180075,
+      "end_mono_ns": 285058933581,
+      "remote": {
+        "wall_ns": 1793813536618580615,
+        "mono_ns": 1052348317128638
+      },
+      "offset_low_ms": -40.36873,
+      "offset_high_ms": 18.392432,
+      "rtt_ms": 58.753506,
+      "local_wall_step_ms": 0.007656
+    },
+    {
+      "begin_wall_ns": 1793813536658957070,
+      "end_wall_ns": 1793813536758303040,
+      "begin_mono_ns": 285058942429,
+      "end_mono_ns": 285158287286,
+      "remote": {
+        "wall_ns": 1793813536718162875,
+        "mono_ns": 1052348416710468
+      },
+      "offset_low_ms": -40.140165,
+      "offset_high_ms": 59.205805,
+      "rtt_ms": 99.344857,
+      "local_wall_step_ms": 0.001113
+    },
+    {
+      "begin_wall_ns": 1793813536758314995,
+      "end_wall_ns": 1793813536813184580,
+      "begin_mono_ns": 285158300263,
+      "end_mono_ns": 285213169016,
+      "remote": {
+        "wall_ns": 1793813536774144123,
+        "mono_ns": 1052348472692117
+      },
+      "offset_low_ms": -39.040457,
+      "offset_high_ms": 15.829128,
+      "rtt_ms": 54.868753,
+      "local_wall_step_ms": 0.000832
+    },
+    {
+      "begin_wall_ns": 1793813536813191123,
+      "end_wall_ns": 1793813536870528001,
+      "begin_mono_ns": 285213176371,
+      "end_mono_ns": 285270512508,
+      "remote": {
+        "wall_ns": 1793813536829088923,
+        "mono_ns": 1052348527637147
+      },
+      "offset_low_ms": -41.439078,
+      "offset_high_ms": 15.8978,
+      "rtt_ms": 57.336137,
+      "local_wall_step_ms": 0.000741
+    },
+    {
+      "begin_wall_ns": 1793813536870533873,
+      "end_wall_ns": 1793813536923309034,
+      "begin_mono_ns": 285270519121,
+      "end_mono_ns": 285323293550,
+      "remote": {
+        "wall_ns": 1793813536883672950,
+        "mono_ns": 1052348582220794
+      },
+      "offset_low_ms": -39.636084,
+      "offset_high_ms": 13.139077,
+      "rtt_ms": 52.774429,
+      "local_wall_step_ms": 0.000732
+    },
+    {
+      "begin_wall_ns": 1793813536923315276,
+      "end_wall_ns": 1793813536978369001,
+      "begin_mono_ns": 285323300465,
+      "end_mono_ns": 285378353527,
+      "remote": {
+        "wall_ns": 1793813536938540429,
+        "mono_ns": 1052348637088403
+      },
+      "offset_low_ms": -39.828572,
+      "offset_high_ms": 15.225153,
+      "rtt_ms": 55.053062,
+      "local_wall_step_ms": 0.000663
+    },
+    {
+      "begin_wall_ns": 1793813536978374803,
+      "end_wall_ns": 1793813537044982954,
+      "begin_mono_ns": 285378359971,
+      "end_mono_ns": 285444967561,
+      "remote": {
+        "wall_ns": 1793813536998301592,
+        "mono_ns": 1052348696849546
+      },
+      "offset_low_ms": -46.681362,
+      "offset_high_ms": 19.926789,
+      "rtt_ms": 66.60759,
+      "local_wall_step_ms": 0.000561
+    },
+    {
+      "begin_wall_ns": 1793813537044987553,
+      "end_wall_ns": 1793813537104650686,
+      "begin_mono_ns": 285444972721,
+      "end_mono_ns": 285504635112,
+      "remote": {
+        "wall_ns": 1793813537064531589,
+        "mono_ns": 1052348763078671
+      },
+      "offset_low_ms": -40.119097,
+      "offset_high_ms": 19.544036,
+      "rtt_ms": 59.662391,
+      "local_wall_step_ms": 0.000742
+    },
+    {
+      "begin_wall_ns": 1793813537104657189,
+      "end_wall_ns": 1793813537163193042,
+      "begin_mono_ns": 285504642367,
+      "end_mono_ns": 285563177478,
+      "remote": {
+        "wall_ns": 1793813537123515768,
+        "mono_ns": 1052348822063822
+      },
+      "offset_low_ms": -39.677274,
+      "offset_high_ms": 18.858579,
+      "rtt_ms": 58.535111,
+      "local_wall_step_ms": 0.000742
+    }
+  ],
+  "server_minus_client_ms": -13.248503499999998,
+  "clock_uncertainty_ms": 26.3875805,
+  "limits": "A measured clock bracket, valid at sampling time; repeat after the trial to detect drift/steps. No assumption of symmetric latency."
+}

@@ -1,0 +1,134 @@
+{
+  "host": "vps",
+  "samples": [
+    {
+      "begin_wall_ns": 1793814342363073201,
+      "end_wall_ns": 1793814342415857968,
+      "begin_mono_ns": 1090763064280,
+      "end_mono_ns": 1090815842325,
+      "remote": {
+        "wall_ns": 1793814342382852627,
+        "mono_ns": 1053154081401173
+      },
+      "offset_low_ms": -33.005341,
+      "offset_high_ms": 19.779426,
+      "rtt_ms": 52.778045,
+      "local_wall_step_ms": 0.006722
+    },
+    {
+      "begin_wall_ns": 1793814342415866434,
+      "end_wall_ns": 1793814342474946656,
+      "begin_mono_ns": 1090815851823,
+      "end_mono_ns": 1090874930992,
+      "remote": {
+        "wall_ns": 1793814342442365257,
+        "mono_ns": 1053154140913091
+      },
+      "offset_low_ms": -32.581399,
+      "offset_high_ms": 26.498823,
+      "rtt_ms": 59.079169,
+      "local_wall_step_ms": 0.001053
+    },
+    {
+      "begin_wall_ns": 1793814342474957706,
+      "end_wall_ns": 1793814342530040346,
+      "begin_mono_ns": 1090874942965,
+      "end_mono_ns": 1090930024823,
+      "remote": {
+        "wall_ns": 1793814342497739366,
+        "mono_ns": 1053154196287430
+      },
+      "offset_low_ms": -32.30098,
+      "offset_high_ms": 22.78166,
+      "rtt_ms": 55.081858,
+      "local_wall_step_ms": 0.000782
+    },
+    {
+      "begin_wall_ns": 1793814342530045766,
+      "end_wall_ns": 1793814342595171768,
+      "begin_mono_ns": 1090930030974,
+      "end_mono_ns": 1090995156105,
+      "remote": {
+        "wall_ns": 1793814342562508040,
+        "mono_ns": 1053154261056054
+      },
+      "offset_low_ms": -32.663728,
+      "offset_high_ms": 32.462274,
+      "rtt_ms": 65.125131,
+      "local_wall_step_ms": 0.000871
+    },
+    {
+      "begin_wall_ns": 1793814342595177649,
+      "end_wall_ns": 1793814342650262342,
+      "begin_mono_ns": 1090995162827,
+      "end_mono_ns": 1091050246839,
+      "remote": {
+        "wall_ns": 1793814342617045453,
+        "mono_ns": 1053154315593487
+      },
+      "offset_low_ms": -33.216889,
+      "offset_high_ms": 21.867804,
+      "rtt_ms": 55.084012,
+      "local_wall_step_ms": 0.000681
+    },
+    {
+      "begin_wall_ns": 1793814342650268784,
+      "end_wall_ns": 1793814342705218697,
+      "begin_mono_ns": 1091050254073,
+      "end_mono_ns": 1091105203204,
+      "remote": {
+        "wall_ns": 1793814342672563266,
+        "mono_ns": 1053154371111800
+      },
+      "offset_low_ms": -32.655431,
+      "offset_high_ms": 22.294482,
+      "rtt_ms": 54.949131,
+      "local_wall_step_ms": 0.000782
+    },
+    {
+      "begin_wall_ns": 1793814342705224708,
+      "end_wall_ns": 1793814342761362640,
+      "begin_mono_ns": 1091105214495,
+      "end_mono_ns": 1091161347107,
+      "remote": {
+        "wall_ns": 1793814342727773609,
+        "mono_ns": 1053154426321723
+      },
+      "offset_low_ms": -33.589031,
+      "offset_high_ms": 22.548901,
+      "rtt_ms": 56.132612,
+      "local_wall_step_ms": 0.00532
+    },
+    {
+      "begin_wall_ns": 1793814342761368841,
+      "end_wall_ns": 1793814342825039598,
+      "begin_mono_ns": 1091161354019,
+      "end_mono_ns": 1091225024105,
+      "remote": {
+        "wall_ns": 1793814342792133936,
+        "mono_ns": 1053154490681660
+      },
+      "offset_low_ms": -32.905662,
+      "offset_high_ms": 30.765095,
+      "rtt_ms": 63.670086,
+      "local_wall_step_ms": 0.000671
+    },
+    {
+      "begin_wall_ns": 1793814342825043455,
+      "end_wall_ns": 1793814342881552036,
+      "begin_mono_ns": 1091225028653,
+      "end_mono_ns": 1091281536472,
+      "remote": {
+        "wall_ns": 1793814342847405144,
+        "mono_ns": 1053154545952907
+      },
+      "offset_low_ms": -34.146892,
+      "offset_high_ms": 22.361689,
+      "rtt_ms": 56.507819,
+      "local_wall_step_ms": 0.000762
+    }
+  ],
+  "server_minus_client_ms": -6.6129575,
+  "clock_uncertainty_ms": 26.3923835,
+  "limits": "A measured clock bracket, valid at sampling time; repeat after the trial to detect drift/steps. No assumption of symmetric latency."
+}

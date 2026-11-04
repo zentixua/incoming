@@ -1,0 +1,34 @@
+{
+  "case": "corrected1000kt-archive-material-on",
+  "source_world": "/home/ubuntu/airstrike-work/lead2/domain1000/source",
+  "source": "0f1a77ff88b4e6546212aec9ab34a834eda525d1",
+  "jar_sha256": "c468e9ccece478f8039f398a369ebe1c5a51be9398f7b5b585e0d30fa8ee7e10",
+  "protocol": 55,
+  "heap_gib": 8,
+  "active_processors": 12,
+  "yield_kt": 1000,
+  "post_flash_seconds": 480,
+  "minimum_since_request_seconds": 0,
+  "target": [
+    3104.5,
+    63,
+    560.5
+  ],
+  "camera": [
+    -96.5,
+    150,
+    -816.5,
+    -66.72369,
+    1.4302
+  ],
+  "native_camera_verified": true,
+  "game_flight_ticks": 1800,
+  "hashes": false,
+  "screenshots": false,
+  "telemetry": true,
+  "started": true,
+  "fresh_world_level_sha256": "f8563e2c4470bc17f10adf4f68d4eeb45ec486747b162f9d22cb0d54bfb57073",
+  "start_requested_wall_ms": 1793813524312,
+  "native_preflight": "lead3-actual1000-preflight.png",
+  "native_preflight_checked_wall_ms": 1793813655310
+}

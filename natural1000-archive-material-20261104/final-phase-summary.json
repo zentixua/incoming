@@ -1,0 +1,281 @@
+{
+  "identity": {
+    "case": "corrected1000kt-archive-material-on",
+    "source": "0f1a77ff88b4e6546212aec9ab34a834eda525d1",
+    "scope": "fixed clean phases from final closed server output; client shutdown completeness reported separately"
+  },
+  "clock": {
+    "server_minus_client_ms": -13.248503499999998,
+    "uncertainty_ms": 26.3875805,
+    "stand_epoch_drift_range_ms": [
+      -0.905029296875,
+      0.094970703125
+    ]
+  },
+  "coverage": {
+    "tick_footer": "# dropped=0 producer_shutdown=complete",
+    "max_tick_log_drops": 0,
+    "stand_stop_seen": false,
+    "gpu_ring_waits": 0,
+    "nonconsecutive_frame_pairs": 0,
+    "tcp_end": {
+      "kind": "end",
+      "client_returncode": 143,
+      "signals": [
+        15
+      ],
+      "wall_ms": 1793814612947,
+      "mono_ns": 1361347463360
+    },
+    "tcp_sample_errors": 0
+  },
+  "phases": {
+    "baseline": {
+      "start_ms": 1793813670794.2485,
+      "end_ms": 1793813730879.2485,
+      "server_ms": {
+        "n": 1201,
+        "p50": 10.894698,
+        "p99": 16.043618,
+        "max": 73.767601
+      },
+      "frame_interval_ms": {
+        "n": 2510,
+        "p50": 23.805999999999997,
+        "p99": 38.664,
+        "max": 100.845
+      },
+      "render_cpu_ms": {
+        "n": 2510,
+        "p50": 4.985,
+        "p99": 27.308,
+        "max": 71.647
+      },
+      "gpu_elapsed_ms": {
+        "n": 2510,
+        "p50": 22.9755,
+        "p99": 31.115,
+        "max": 36.407
+      },
+      "frames_over50ms": 11,
+      "frames_over100ms": 1,
+      "heap_used_max_bytes": 5562198984,
+      "tcp": {
+        "observed_start_ms": 1793813670883,
+        "observed_end_ms": 1793813730841,
+        "received_delta": 34023330,
+        "acked_delta": 99249,
+        "joined_socket_intervals": 264,
+        "counter_resets": 0,
+        "max_sampling_gap_ms": 237
+      }
+    },
+    "prepare": {
+      "start_ms": 1793813730879.2485,
+      "end_ms": 1793813753033.2485,
+      "server_ms": {
+        "n": 443,
+        "p50": 23.432265,
+        "p99": 57.199284,
+        "max": 88.483344
+      },
+      "frame_interval_ms": {
+        "n": 922,
+        "p50": 23.5475,
+        "p99": 35.072,
+        "max": 40.8
+      },
+      "render_cpu_ms": {
+        "n": 922,
+        "p50": 4.0275,
+        "p99": 9.788,
+        "max": 12.172
+      },
+      "gpu_elapsed_ms": {
+        "n": 922,
+        "p50": 23.7895,
+        "p99": 27.507,
+        "max": 35.484
+      },
+      "frames_over50ms": 0,
+      "frames_over100ms": 0,
+      "heap_used_max_bytes": 5918162944,
+      "tcp": {
+        "observed_start_ms": 1793813731069,
+        "observed_end_ms": 1793813752832,
+        "received_delta": 1604527,
+        "acked_delta": 6151,
+        "joined_socket_intervals": 96,
+        "counter_resets": 0,
+        "max_sampling_gap_ms": 233
+      }
+    },
+    "flight": {
+      "start_ms": 1793813753033.2485,
+      "end_ms": 1793813843016.2485,
+      "server_ms": {
+        "n": 1800,
+        "p50": 13.340455,
+        "p99": 21.495786,
+        "max": 54.320257
+      },
+      "frame_interval_ms": {
+        "n": 3679,
+        "p50": 23.856,
+        "p99": 35.583,
+        "max": 91.155
+      },
+      "render_cpu_ms": {
+        "n": 3679,
+        "p50": 4.089,
+        "p99": 9.48,
+        "max": 77.121
+      },
+      "gpu_elapsed_ms": {
+        "n": 3679,
+        "p50": 24.241,
+        "p99": 27.109,
+        "max": 29.204
+      },
+      "frames_over50ms": 1,
+      "frames_over100ms": 0,
+      "heap_used_max_bytes": 5953814528,
+      "tcp": {
+        "observed_start_ms": 1793813753060,
+        "observed_end_ms": 1793813842833,
+        "received_delta": 12430546,
+        "acked_delta": 41939,
+        "joined_socket_intervals": 395,
+        "counter_resets": 0,
+        "max_sampling_gap_ms": 234
+      }
+    },
+    "flash": {
+      "start_ms": 1793813843016.2485,
+      "end_ms": 1793813873016.2485,
+      "server_ms": {
+        "n": 600,
+        "p50": 43.274509,
+        "p99": 65.454578,
+        "max": 116.128668
+      },
+      "frame_interval_ms": {
+        "n": 875,
+        "p50": 34.77,
+        "p99": 67.423,
+        "max": 156.317
+      },
+      "render_cpu_ms": {
+        "n": 875,
+        "p50": 5.473,
+        "p99": 48.541,
+        "max": 92.509
+      },
+      "gpu_elapsed_ms": {
+        "n": 875,
+        "p50": 32.468,
+        "p99": 45.694,
+        "max": 51.849
+      },
+      "frames_over50ms": 25,
+      "frames_over100ms": 3,
+      "heap_used_max_bytes": 6041567008,
+      "tcp": {
+        "observed_start_ms": 1793813843059,
+        "observed_end_ms": 1793813872796,
+        "received_delta": 6104067,
+        "acked_delta": 11380,
+        "joined_socket_intervals": 130,
+        "counter_resets": 0,
+        "max_sampling_gap_ms": 249
+      }
+    },
+    "wave": {
+      "start_ms": 1793813873016.2485,
+      "end_ms": 1793813963016.2485,
+      "server_ms": {
+        "n": 1800,
+        "p50": 47.974497,
+        "p99": 55.661807,
+        "max": 377.586796
+      },
+      "frame_interval_ms": {
+        "n": 3059,
+        "p50": 29.663,
+        "p99": 45.68,
+        "max": 97.406
+      },
+      "render_cpu_ms": {
+        "n": 3059,
+        "p50": 6.729,
+        "p99": 20.532,
+        "max": 77.591
+      },
+      "gpu_elapsed_ms": {
+        "n": 3059,
+        "p50": 28.829,
+        "p99": 35.827,
+        "max": 47.272
+      },
+      "frames_over50ms": 15,
+      "frames_over100ms": 0,
+      "heap_used_max_bytes": 6387924992,
+      "tcp": {
+        "observed_start_ms": 1793813873023,
+        "observed_end_ms": 1793813963006,
+        "received_delta": 17367545,
+        "acked_delta": 45444,
+        "joined_socket_intervals": 393,
+        "counter_resets": 0,
+        "max_sampling_gap_ms": 246
+      }
+    },
+    "settle": {
+      "start_ms": 1793813963016.2485,
+      "end_ms": 1793814323016.2485,
+      "server_ms": {
+        "n": 7200,
+        "p50": 49.3569725,
+        "p99": 50.497837,
+        "max": 146.149887
+      },
+      "frame_interval_ms": {
+        "n": 10117,
+        "p50": 37.016,
+        "p99": 49.709,
+        "max": 183.36
+      },
+      "render_cpu_ms": {
+        "n": 10117,
+        "p50": 6.672,
+        "p99": 13.136,
+        "max": 88.314
+      },
+      "gpu_elapsed_ms": {
+        "n": 10117,
+        "p50": 35.457,
+        "p99": 44.71,
+        "max": 56.053
+      },
+      "frames_over50ms": 92,
+      "frames_over100ms": 4,
+      "heap_used_max_bytes": 6969812440,
+      "tcp": {
+        "observed_start_ms": 1793813963237,
+        "observed_end_ms": 1793814322987,
+        "received_delta": 89393738,
+        "acked_delta": 308048,
+        "joined_socket_intervals": 1580,
+        "counter_resets": 0,
+        "max_sampling_gap_ms": 237
+      }
+    }
+  },
+  "limits": [
+    "Tick and frame membership uses start time; a last sample can cross a phase boundary.",
+    "Tick work excludes between-tick tasks/sleep. Heap used is not live-set size.",
+    "Render CPU excludes client tick/task time; GPU elapsed includes CPU submission gaps.",
+    "TCP is all Minecraft payload on attributed sockets, not Incoming-only bytes; unobserved starts/tails are omitted.",
+    "Missing/incomplete footer, drops, clock drift, or diagnostic readbacks limit acceptance."
+  ]
+}

@@ -1,0 +1,46 @@
+{
+  "identity": {
+    "case": "corrected1000kt-archive-material-on",
+    "source": "0f1a77ff88b4e6546212aec9ab34a834eda525d1",
+    "scope": "fixed clean phases from final closed server output; client shutdown completeness reported separately"
+  },
+  "ticks": "mod/run/lead2/lead3-actual1000-evidence/server-logs/mt-b7/run-1793813540421-fe0adfbf-a440-41eb-9b74-3c89dfee1f0c/ticks.csv",
+  "stand": "mod/run/lead2/corrected1000kt-archive-material-on/stand-observe/run-10335219924685730785",
+  "tcp": "mod/run/lead2/corrected1000kt-archive-material-on-tcp.jsonl",
+  "server_minus_client_ms": -13.248503499999998,
+  "clock_uncertainty_ms": 26.3875805,
+  "phases": {
+    "baseline": [
+      1793813670794.2485,
+      1793813730879.2485
+    ],
+    "prepare": [
+      1793813730879.2485,
+      1793813753033.2485
+    ],
+    "flight": [
+      1793813753033.2485,
+      1793813843016.2485
+    ],
+    "flash": [
+      1793813843016.2485,
+      1793813873016.2485
+    ],
+    "wave": [
+      1793813873016.2485,
+      1793813963016.2485
+    ],
+    "settle": [
+      1793813963016.2485,
+      1793814323016.2485
+    ]
+  },
+  "timing": {
+    "accepted_server_ms": 1793813730866,
+    "launch_server_ms": 1793813753020,
+    "flash_server_ms": 1793813843003,
+    "prepare_seconds": 22.154,
+    "flight_seconds": 89.983,
+    "total_seconds": 112.137
+  }
+}
