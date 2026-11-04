@@ -141,9 +141,14 @@ public final class RuinPlanner {
      */
     public static RuinPlan planFresh(ServerLevel level, Detonation d, LevelChunk chunk, boolean background) {
         RuinContext ctx = new RuinContext(level, d);
-        if (!background) return plan(level, ctx, chunk);
-        if (!ctx.submit(level, chunk)) throw new IllegalStateException("ruin background threads busy");
-        return await(level, ctx, chunk);
+        try {
+            if (!background) return plan(level, ctx, chunk);
+            if (!ctx.submit(level, chunk)) throw new IllegalStateException("ruin background threads busy");
+            return await(level, ctx, chunk);
+        } finally {
+            // This helper owns the unregistered context, including its optional fragment cache.
+            ctx.cancelTasks();
+        }
     }
 
     /**
@@ -190,17 +195,21 @@ public final class RuinPlanner {
      */
     public static RuinPlan planWithWindow(ServerLevel level, Detonation d, LevelChunk chunk, int[] window) {
         RuinContext ctx = new RuinContext(level, d);
-        long until = System.nanoTime() + 60_000_000_000L;
-        while (ctx.requestWindow(level, chunk.getPos()) > 0) {
-            // This diagnostic blocks the normal server tick that services asynchronous decode admission.
-            RuinWorkers.adapt(level.getServer());
-            if (System.nanoTime() > until) throw new IllegalStateException("window neighbours not read from disk within a minute");
-            java.util.concurrent.locks.LockSupport.parkNanos(1_000_000L);
+        try {
+            long until = System.nanoTime() + 60_000_000_000L;
+            while (ctx.requestWindow(level, chunk.getPos()) > 0) {
+                // This diagnostic blocks the normal server tick that services asynchronous decode admission.
+                RuinWorkers.adapt(level.getServer());
+                if (System.nanoTime() > until) throw new IllegalStateException("window neighbours not read from disk within a minute");
+                java.util.concurrent.locks.LockSupport.parkNanos(1_000_000L);
+            }
+            window[0] = ctx.windowReads;
+            window[1] = ctx.windowAbsent;
+            if (!ctx.submit(level, chunk)) throw new IllegalStateException("ruin background threads busy");
+            return await(level, ctx, chunk);
+        } finally {
+            ctx.cancelTasks();
         }
-        window[0] = ctx.windowReads;
-        window[1] = ctx.windowAbsent;
-        if (!ctx.submit(level, chunk)) throw new IllegalStateException("ruin background threads busy");
-        return await(level, ctx, chunk);
     }
 
     /**

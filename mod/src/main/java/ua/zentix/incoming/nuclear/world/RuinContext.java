@@ -738,11 +738,11 @@ final class RuinContext {
                 // Only permit-owning workers may borrow entries: eviction/close does not end their input lifetime.
                 RuinFragmentCache cache = RuinResults.currentProducer() == null ? null : ctx.fragmentCache;
                 if (cache != null) {
-                    Blast hit = cache.get(pos.toLong(), RuinWindow.Stamp.of(w));
+                    Blast hit = cache.get(pos.toLong(), RuinWindow.Stamp.of(w), blockDamage, treeFall);
                     if (hit != null) return hit;
                 }
                 Blast fresh = Blast.solve(new RuinWindow(pos, minY, maxY, w, view), ctx.d, blockDamage, treeFall);
-                if (cache != null) cache.put(pos.toLong(), fresh);
+                if (cache != null) cache.put(pos.toLong(), fresh, blockDamage, treeFall);
                 return fresh;
             }
             Blast b = ctx.blasts.get(pos.toLong());

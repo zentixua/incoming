@@ -84,6 +84,9 @@ public final class RuinSourceFailureGameTests {
         h.assertTrue(status.stage() == RuinPreparation.Stage.FAILED && status.reason() == RuinPreparation.Reason.IO,
                 "Failed source publication certified preparation instead of FAILED/IO");
         h.assertTrue(field(request.owner(), "farSkipped").getInt(request.owner()) == 0, "Failed required root received absent-terrain completion credit");
+        h.assertTrue(((RuinInbox<?>) field(request.owner(), "reads").get(request.owner())).pending() == 0
+                        && ((RuinInbox<?>) field(request.owner(), "archived").get(request.owner())).pending() == 0,
+                "Terminal source publication failure retained a completed input head");
         h.assertTrue(RuinPreparation.bindCarrier(h.getLevel(), request.handle(), request.player(), request.target(), 15, false, false) == -1,
                 "Failed source publication allowed carrier binding");
     }
