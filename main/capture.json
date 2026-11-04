@@ -1,0 +1,1 @@
+{"name": "ctl2-main-review", "effect": "ui review", "site": [0.5, 65.0, 0.5], "camera": [60.0, 10.0, 90.0, 8.0], "audio": {"file": "/mnt/data/projects/incoming/mod/run/wt-LEAD2-CONTROL/mod/run/ctl2-main/mod/run/sandbox/audio.wav", "start": 8155204, "from": 0.00, "seconds": 1.00}, "frames": [{"t": 0.50, "age": 0.512, "file": "ctl2-main-review_000.50s.png", "fps": 60}]}

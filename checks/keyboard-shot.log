@@ -1,0 +1,8 @@
+fx clear → ok
+fx time day → ok
+fx overlay off → ok
+fx shots ctl2-keyboard 0.5 1 → ok armed /mnt/data/projects/incoming/mod/run/wt-LEAD2-CONTROL/mod/run/sandbox/fx/out/ctl2-keyboard
+fx ui keyboard → ok /mnt/data/projects/incoming/mod/run/wt-LEAD2-CONTROL/mod/run/sandbox/fx/out/ctl2-keyboard
+audio: /mnt/data/projects/incoming/mod/run/wt-LEAD2-CONTROL/mod/run/sandbox/fx/out/ctl2-keyboard/ctl2-keyboard.wav (1.0 s, 48000 Hz)
+frame: /mnt/data/projects/incoming/mod/run/wt-LEAD2-CONTROL/mod/run/sandbox/fx/out/ctl2-keyboard/ctl2-keyboard_000.50s.png
+from command to last frame and audio: 2.0 s

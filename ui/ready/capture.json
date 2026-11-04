@@ -1,0 +1,1 @@
+{"name": "ctl2-ready", "effect": "ui ready", "site": [0.5, 65.0, 0.5], "camera": [60.0, 10.0, 90.0, 8.0], "audio": {"file": "/mnt/data/projects/incoming/mod/run/wt-LEAD2-CONTROL/mod/run/sandbox/audio.wav", "start": 7798852, "from": 0.00, "seconds": 1.00}, "frames": [{"t": 0.50, "age": 0.506, "file": "ctl2-ready_000.50s.png", "fps": 60}]}

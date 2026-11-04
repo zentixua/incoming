@@ -1,0 +1,1 @@
+{"name": "ctl2-keyboard", "effect": "ui keyboard", "site": [0.5, 65.0, 0.5], "camera": [60.0, 10.0, 90.0, 8.0], "audio": {"file": "/mnt/data/projects/incoming/mod/run/wt-LEAD2-CONTROL/mod/run/sandbox/audio.wav", "start": 8597572, "from": 0.00, "seconds": 1.00}, "frames": [{"t": 0.50, "age": 0.501, "file": "ctl2-keyboard_000.50s.png", "fps": 59}]}
