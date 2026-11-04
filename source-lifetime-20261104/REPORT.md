@@ -28,3 +28,8 @@ Exact clean4b0aacb2a passed16/16 targeted GameTests in the final uninstrumented 
 Fresh Astra/high RMT-S3B independently reviewed the exact diff/surrounding code/rawlogs without author conclusions or prior review: no serious findings. The earlier RMT-S3 report is retained with its disclosed memory exposure; RMT-S3B is the replacement blinded review for the same scoped round. Both sessions/waits completed0; neither ran tests. Both reports explicitly distinguish the diagnostic pair from the final source and note sampled ownership/actual-sweep coverage limits.
 
 Exact CI41864060485 was still queued on GitHub after this local checkpoint; pr_ci589 remains active. No rerun was requested. Integration/main delivery was explicitly accepted by LEAD2 throughPR593, not an ancestor-only merge. Actual runtime has a separate measured far-progress issue, not resolved or certified by this fixture proof.
+
+
+## Required exact-head CI completed
+
+The required Итог check126698268974 for4b0aacb2ace682169f1f35f7e29f2a8e22742724 concluded success at2026-11-04T16:16:05Z, run41864060485. `tools/pr_ci.sh 589` completed0; both raw receipts are included. The GitHub run-level API still returned a stale queued status while the exact-head check-run API confirmed completed/success. No rerun requested. This completes the scoped fixture CI gate; integrated runtime readiness remains a separate failing investigation owned by LEAD2.
