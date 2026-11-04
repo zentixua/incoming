@@ -9,3 +9,7 @@ Local component validation: full Gradle build passes1848unit tests,0failures/err
 Independent review and exact CI are pending at this evidence checkpoint. No actual1Mt completeness, observer-cost, near-wave, renderer or release-readiness claim. LEAD4 owns the next already-required integrated runtime trial; this component starts no additional GPU trial.
 
 The original full raw file has967event-observed samples, all time-cutoff. Its positive partial counts remain valid failure witnesses; no complete-current-view inference follows. original-raw-summary.json covers the entire original file across all phases; its extrema are not a clean-phase summary or a benchmark for this component.
+
+## Explicit bounded handback
+
+LEAD4 requested immediate handback at22:18UTC to free the author slot, accepting source/edit and remaining review/CI responsibility. HANDBACK.md contains exact state. CI41923235479 remains pending (no failed jobs at last sample). No finished independent review: the earlier own reviewer was interrupted for capacity before a verdict; root must launch the prepared fresh RB7ALL2B neutral review. No completed-source/runtime/readiness claim.
