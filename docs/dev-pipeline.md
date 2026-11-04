@@ -50,7 +50,8 @@ is not a fix. Local batch selection, scenario controls and test pitfalls are doc
 Inspect frames and audio during implementation and include before/after evidence in the PR. Unit tests and
 code review alone cannot judge appearance, sound or frame cost.
 
-Effect changes also require the scene bench (`tools/stand`): compare frame cost at 100 strikes against `main`
+Changes that can affect frame cost also require the scene bench (`tools/stand`), with the scope and exceptions
+in AGENTS.md: compare frame cost at 100 strikes against `main`
 in the same GPU session. The reviewer checks the bench frames and the relevant WAV alongside the code.
 See [the scene bench instructions](../tools/stand/README.md) for sampling and paired runs.
 
