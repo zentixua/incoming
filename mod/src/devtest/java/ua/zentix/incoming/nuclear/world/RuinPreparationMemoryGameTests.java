@@ -2,6 +2,9 @@ package ua.zentix.incoming.nuclear.world;
 
 import java.lang.reflect.Field;
 import java.util.UUID;
+import java.util.ArrayList;
+import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.Future;
 import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.TimeUnit;
 import net.minecraft.core.BlockPos;
@@ -37,7 +40,9 @@ public final class RuinPreparationMemoryGameTests {
         RuinWorkers.shutdown();
         IncomingConfig.SERVER.nukeRuinThreads.set(desired);
         UUID owner = UUID.randomUUID(), handle = UUID.randomUUID();
+        CountDownLatch workersRelease = new CountDownLatch(1);
         StrikeGameTests.afterTest(h, () -> {
+            workersRelease.countDown();
             RuinPreparation.cancel(level, handle);
             RuinWorkers.shutdown();
             IncomingConfig.SERVER.nukeRuinThreads.set(previous);
@@ -49,16 +54,29 @@ public final class RuinPreparationMemoryGameTests {
         h.assertTrue(RuinWorkers.stopped(), "admission unexpectedly initialized the pool");
         RuinWorkers.submitForTest(() -> true, RuinWorkers.Priority.FAR).get(5, TimeUnit.SECONDS);
         ThreadPoolExecutor pool = pool();
-        pool.prestartAllCoreThreads();
         int admitted = RuinWorkers.memoryThreads(desired, level.getHeight());
+        h.assertTrue(pool.prestartAllCoreThreads() == 0, "direct prestart bypassed server workspace admission");
+        CountDownLatch workersStarted = new CountDownLatch(admitted);
+        var workers = new ArrayList<Future<?>>();
+        // Hold actual admitted work: direct ThreadPoolExecutor prestart has no shared-room grant.
+        // Submitting in one server step keeps this memory fixture independent of CPU tick adaptation.
+        for (int i = 0; i < admitted; i++) workers.add(RuinWorkers.submitForTest(() -> {
+            workersStarted.countDown();
+            workersRelease.await();
+            return null;
+        }, RuinWorkers.Priority.FAR));
+        h.assertTrue(workersStarted.await(5, TimeUnit.SECONDS), "admitted work did not start all funded workers");
         h.assertTrue(pool.getMaximumPoolSize() == admitted && pool.getPoolSize() == admitted,
                 "actual executor parallelism did not follow workspace admission");
         h.assertTrue(RuinWorkers.threads(false) == desired, "memory bound overwrote the configured upper bound");
         assertAdmission(h, handle, "after pool initialization");
+        workersRelease.countDown();
+        for (Future<?> worker : workers) worker.get(5, TimeUnit.SECONDS);
         pool.setKeepAliveTime(1, TimeUnit.MILLISECONDS);
         long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
         while (pool.getPoolSize() != 0 && System.nanoTime() < deadline) Thread.sleep(1);
         h.assertTrue(pool.getPoolSize() == 0, "fixture workers failed to expire");
+        h.assertTrue(RuinWorkers.inFlight() == 0, "expired workers retained task accounting");
         assertAdmission(h, handle, "after actual idle expiry");
         pool.setKeepAliveTime(30, TimeUnit.SECONDS);
         h.succeedWhen(() -> {
