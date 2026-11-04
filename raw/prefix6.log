@@ -1,0 +1,38 @@
+Picked up JAVA_TOOL_OPTIONS: -XX:ActiveProcessorCount=4 -Xmx2g 
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.14.3/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :createMinecraftArtifacts UP-TO-DATE
+> Task :compileJava UP-TO-DATE
+> Task :generateModMetadata UP-TO-DATE
+> Task :processResources UP-TO-DATE
+> Task :classes UP-TO-DATE
+
+> Task :compileDevtestJava FAILED
+/mnt/data/projects/incoming/mod/run/wt-CI-S6/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/CiS6Probe.java:11: error: cannot find symbol
+            ua.zentix.incoming.Incoming.LOG.info("CIS6 flash id={} pos={} way={} tasks={} inFlight={} capacity={} assemblyOwner={} own={} centre={} priority={} reads={} resident={} result={}", id, pos, way, ctx.tasks(), RuinWorkers.inFlight(), RuinWorkers.capacity(), field(assembly, "owner"), ctx, field(assembly, "centre"), field(assembly, "priority"), ctx.pendingWindowReads(), NuclearPrep.residentMemory(level), RuinResults.retainedBytes());
+                                                                                                                                                                                                                                                                                                                                                                                                                                           ^
+  symbol:   method retainedBytes()
+  location: class RuinResults
+1 error
+
+[Incubating] Problems report is available at: file:///mnt/data/projects/incoming/mod/run/wt-CI-S6/mod/build/reports/problems/problems-report.html
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':compileDevtestJava'.
+> Compilation failed; see the compiler output below.
+  /mnt/data/projects/incoming/mod/run/wt-CI-S6/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/CiS6Probe.java:11: error: cannot find symbol
+              ua.zentix.incoming.Incoming.LOG.info("CIS6 flash id={} pos={} way={} tasks={} inFlight={} capacity={} assemblyOwner={} own={} centre={} priority={} reads={} resident={} result={}", id, pos, way, ctx.tasks(), RuinWorkers.inFlight(), RuinWorkers.capacity(), field(assembly, "owner"), ctx, field(assembly, "centre"), field(assembly, "priority"), ctx.pendingWindowReads(), NuclearPrep.residentMemory(level), RuinResults.retainedBytes());
+                                                                                                                                                                                                                                                                                                                                                                                                                                             ^
+    symbol:   method retainedBytes()
+    location: class RuinResults
+  1 error
+
+* Try:
+> Check your code and dependencies to fix the compilation error(s)
+> Run with --scan to get full insights.
+
+BUILD FAILED in 4s
+5 actionable tasks: 1 executed, 4 up-to-date
+laptop_job ci-s6-prefix6: exit 1

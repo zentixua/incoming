@@ -1,0 +1,458 @@
+Picked up JAVA_TOOL_OPTIONS: -XX:ActiveProcessorCount=4 -Xmx2g -Dincoming.cis6.target=nuke_flash_unflash -Dincoming.cis6.seed=42
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.14.3/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :createMinecraftArtifacts UP-TO-DATE
+> Task :compileJava UP-TO-DATE
+> Task :generateModMetadata UP-TO-DATE
+> Task :processResources UP-TO-DATE
+> Task :classes UP-TO-DATE
+> Task :compileDevtestJava
+> Task :copyRuntimeMods_gametest
+> Task :processDevtestResources UP-TO-DATE
+> Task :devtestClasses
+> Task :downloadAssets UP-TO-DATE
+> Task :writeGameTestServerLegacyClasspath UP-TO-DATE
+> Task :prepareGameTestServerRun
+
+> Task :runGameTestServer
+Picked up JAVA_TOOL_OPTIONS: -XX:ActiveProcessorCount=4 -Xmx2g -Dincoming.cis6.target=nuke_flash_unflash -Dincoming.cis6.seed=42
+WARN StatusConsoleListener Advanced terminal features are not available in this environment
+[00:41:53] [main/INFO] [cp.mo.mo.Launcher/MODLAUNCHER]: ModLauncher running: args [--launchTarget, forgeserverdev, --gameDir, ., --fml.fmlVersion, 4.0.45, --fml.mcVersion, 1.21.1, --fml.neoForgeVersion, 21.1.264, --fml.neoFormVersion, 20240808.144430]
+[00:41:53] [main/INFO] [cp.mo.mo.Launcher/MODLAUNCHER]: JVM identified as Microsoft OpenJDK 64-Bit Server VM 21.0.7+6-LTS
+[00:41:53] [main/INFO] [cp.mo.mo.Launcher/MODLAUNCHER]: ModLauncher 11.0.5+main.901c6ea8 starting: java version 21.0.7 by Microsoft; OS Linux arch amd64 version 7.3.1-1-cachyos
+[00:41:53] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Configuration file /mnt/data/projects/incoming/mod/run/wt-CI-S6/mod/run/gametest/config/fml.toml is not correct. Correcting
+[00:41:53] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [disableConfigWatcher] was corrected from null to false
+[00:41:53] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowControl] was corrected from null to true
+[00:41:53] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [maxThreads] was corrected from null to -1
+[00:41:53] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [versionCheck] was corrected from null to true
+[00:41:53] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [defaultConfigPath] was corrected from null to defaultconfigs
+[00:41:53] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [disableOptimizedDFU] was corrected from null to true
+[00:41:53] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowProvider] was corrected from null to fmlearlywindow
+[00:41:53] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowWidth] was corrected from null to 854
+[00:41:53] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowHeight] was corrected from null to 480
+[00:41:53] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowFBScale] was corrected from null to 1
+[00:41:53] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowMaximized] was corrected from null to false
+[00:41:53] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowSkipGLVersions] was corrected from null to []
+[00:41:53] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowSquir] was corrected from null to false
+[00:41:53] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: ****************************** Found dependency overrides ******************************
+[00:41:53] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: Dependency overrides for mod 'aeronautics': adding explicit AFTER ordering against 'simulated', adding explicit AFTER ordering against 'offroad'
+[00:41:53] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: Dependency overrides for mod 'simulated': adding explicit AFTER ordering against 'create', adding explicit AFTER ordering against 'sable'
+[00:41:53] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: Dependency overrides for mod 'offroad': adding explicit AFTER ordering against 'simulated'
+[00:41:53] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: ****************************************************************************************
+[00:41:53] [main/INFO] [ne.ne.fm.lo.ImmediateWindowHandler/]: ImmediateWindowProvider not loading because launch target is forgeserverdev
+[00:41:53] [main/INFO] [mixin/]: SpongePowered MIXIN Subsystem Version=0.8.7 Source=union:/home/artem/.gradle/caches/modules-2/files-2.1/net.fabricmc/sponge-mixin/0.16.4+mixin.0.8.7/26d01f0567ab46e9ca0d2ed89d0ecc11aadbd433/sponge-mixin-0.16.4+mixin.0.8.7.jar%2394!/ Service=ModLauncher Env=SERVER
+[00:41:53] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: ****************************** Found dependency overrides ******************************
+[00:41:53] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: Dependency overrides for mod 'aeronautics': adding explicit AFTER ordering against 'simulated', adding explicit AFTER ordering against 'offroad'
+[00:41:53] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: Dependency overrides for mod 'simulated': adding explicit AFTER ordering against 'create', adding explicit AFTER ordering against 'sable'
+[00:41:53] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: Dependency overrides for mod 'offroad': adding explicit AFTER ordering against 'simulated'
+[00:41:53] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: ****************************************************************************************
+[00:41:53] [main/INFO] [ne.ne.fm.lo.mo.lo.JarInJarDependencyLocator/]: Found 13 dependencies adding them to mods collection
+[00:41:53] [main/INFO] [ne.ne.fm.lo.mo.ModDiscoverer/]: 
+     Mod List:
+		Name Version (Mod Id)
+
+		Create 6.0.10 (create)
+		Create Aeronautics 1.3.2 (aeronautics)
+		Create Aeronautics 1.3.2 (aeronautics_bundled)
+		Create Offroad 1.3.2 (offroad)
+		Create Simulated 1.3.2 (simulated)
+		Flywheel 1.0.6 (flywheel)
+		Incoming 3.11.0 (incoming)
+		Minecraft 1.21.1 (minecraft)
+		NeoForge 21.1.264 (neoforge)
+		Ponder 1.0.82+mc1.21.1 (ponder)
+		Sable 2.0.6 (sable)
+		Sable Companion 1.6.0 (sablecompanion)
+		Veil 4.3.2 (veil)
+[00:41:54] [main/INFO] [mixin/]: Compatibility level set to JAVA_21
+[00:41:54] [main/INFO] [cp.mo.mo.LaunchServiceHandler/MODLAUNCHER]: Launching target 'forgeserverdev' with arguments [--gameDir, .]
+[00:41:54] [main/WARN] [mixin/]: Reference map 'ponder.refmap.json' for ponder-common.mixins.json could not be read. If this is a development environment you can ignore this message
+[00:41:54] [main/INFO] [de.ry.sa.mi.AbstractSableMixinPlugin/]: Using Vanilla renderer mixins
+[00:41:54] [main/INFO] [de.ry.sa.mi.AbstractSableMixinPlugin/]: Using Vanilla renderer mixins
+[00:41:54] [main/WARN] [mixin/]: Reference map 'simulated.refmap.json' for simulated.mixins.json could not be read. If this is a development environment you can ignore this message
+[00:41:54] [main/WARN] [mixin/]: Reference map 'offroad.refmap.json' for offroad.mixins.json could not be read. If this is a development environment you can ignore this message
+[00:41:54] [main/WARN] [mixin/]: Reference map 'aeronautics.refmap.json' for aeronautics.mixins.json could not be read. If this is a development environment you can ignore this message
+[00:41:54] [main/WARN] [mixin/]: Error loading class: org/jetbrains/annotations/ApiStatus$ScheduledForRemoval (java.lang.ClassNotFoundException: org.jetbrains.annotations.ApiStatus$ScheduledForRemoval)
+[00:41:54] [main/INFO] [MixinExtras|Service/]: Initializing MixinExtras via com.llamalad7.mixinextras.service.MixinExtrasServiceImpl(version=0.5.5).
+[00:41:58] [main/WARN] [minecraft/Commands]: Ambiguity between arguments [teleport, location] and [teleport, destination] with inputs: [0.1 -0.5 .9, 0 0 0]
+[00:41:58] [main/WARN] [minecraft/Commands]: Ambiguity between arguments [teleport, location] and [teleport, targets] with inputs: [0.1 -0.5 .9, 0 0 0]
+[00:41:58] [main/WARN] [minecraft/Commands]: Ambiguity between arguments [teleport, destination] and [teleport, targets] with inputs: [Player, 0123, @e, dd12be42-52a9-4a91-a8a1-11c01849e498]
+[00:41:58] [main/WARN] [minecraft/Commands]: Ambiguity between arguments [teleport, targets] and [teleport, destination] with inputs: [Player, 0123, dd12be42-52a9-4a91-a8a1-11c01849e498]
+[00:41:58] [main/WARN] [minecraft/Commands]: Ambiguity between arguments [teleport, targets, location] and [teleport, targets, destination] with inputs: [0.1 -0.5 .9, 0 0 0]
+[00:41:58] [modloading-worker-0/INFO] [Veil/]: Veil is initializing.
+[00:41:58] [modloading-worker-0/INFO] [ne.ne.ne.co.NeoForgeMod/NEOFORGE-MOD]: NeoForge mod loading, version 21.1.264, for MC 1.21.1
+[00:41:58] [modloading-worker-0/INFO] [co.si.cr.Create/]: Create 6.0.10 initializing! Commit hash: ac0c444d9828da3453ae8cc65338e8de063286fb
+[00:41:58] [modloading-worker-0/INFO] [de.ry.sa.Sable/]: Sable loaded!
+[00:42:00] [main/ERROR] [minecraft/Settings]: Failed to load properties from file: server.properties
+java.nio.file.NoSuchFileException: server.properties
+	at java.base/sun.nio.fs.UnixException.translateToIOException(UnixException.java:92) ~[?:?] {}
+	at java.base/sun.nio.fs.UnixException.rethrowAsIOException(UnixException.java:106) ~[?:?] {}
+	at java.base/sun.nio.fs.UnixException.rethrowAsIOException(UnixException.java:111) ~[?:?] {}
+	at java.base/sun.nio.fs.UnixFileSystemProvider.newByteChannel(UnixFileSystemProvider.java:261) ~[?:?] {}
+	at java.base/java.nio.file.Files.newByteChannel(Files.java:380) ~[?:?] {}
+	at java.base/java.nio.file.Files.newByteChannel(Files.java:432) ~[?:?] {}
+	at java.base/java.nio.file.spi.FileSystemProvider.newInputStream(FileSystemProvider.java:420) ~[?:?] {}
+	at java.base/java.nio.file.Files.newInputStream(Files.java:160) ~[?:?] {}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.dedicated.Settings.loadFromFile(Settings.java:38) ~[neoforge-21.1.264.jar%23128!/:?] {re:classloading}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.dedicated.DedicatedServerProperties.fromFile(DedicatedServerProperties.java:132) ~[neoforge-21.1.264.jar%23128!/:?] {re:classloading}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.dedicated.DedicatedServerSettings.<init>(DedicatedServerSettings.java:12) ~[neoforge-21.1.264.jar%23128!/:?] {re:classloading}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.Main.main(Main.java:125) ~[neoforge-21.1.264.jar%23128!/:?] {re:classloading}
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103) ~[?:?] {}
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580) ~[?:?] {}
+	at MC-BOOTSTRAP/fml_loader@4.0.45/net.neoforged.fml.loading.targets.CommonLaunchHandler.runTarget(CommonLaunchHandler.java:136) ~[loader-4.0.45.jar%23102!/:4.0] {}
+	at MC-BOOTSTRAP/fml_loader@4.0.45/net.neoforged.fml.loading.targets.CommonLaunchHandler.serverService(CommonLaunchHandler.java:128) ~[loader-4.0.45.jar%23102!/:4.0] {}
+	at MC-BOOTSTRAP/fml_loader@4.0.45/net.neoforged.fml.loading.targets.NeoForgeServerDevLaunchHandler.runService(NeoForgeServerDevLaunchHandler.java:23) ~[loader-4.0.45.jar%23102!/:4.0] {}
+	at MC-BOOTSTRAP/fml_loader@4.0.45/net.neoforged.fml.loading.targets.CommonLaunchHandler.lambda$launchService$4(CommonLaunchHandler.java:118) ~[loader-4.0.45.jar%23102!/:4.0] {}
+	at MC-BOOTSTRAP/cpw.mods.modlauncher@11.0.5/cpw.mods.modlauncher.LaunchServiceHandlerDecorator.launch(LaunchServiceHandlerDecorator.java:30) [modlauncher-11.0.5.jar%2382!/:?] {}
+	at MC-BOOTSTRAP/cpw.mods.modlauncher@11.0.5/cpw.mods.modlauncher.LaunchServiceHandler.launch(LaunchServiceHandler.java:53) [modlauncher-11.0.5.jar%2382!/:?] {}
+	at MC-BOOTSTRAP/cpw.mods.modlauncher@11.0.5/cpw.mods.modlauncher.LaunchServiceHandler.launch(LaunchServiceHandler.java:71) [modlauncher-11.0.5.jar%2382!/:?] {}
+	at MC-BOOTSTRAP/cpw.mods.modlauncher@11.0.5/cpw.mods.modlauncher.Launcher.run(Launcher.java:103) [modlauncher-11.0.5.jar%2382!/:?] {}
+	at MC-BOOTSTRAP/cpw.mods.modlauncher@11.0.5/cpw.mods.modlauncher.Launcher.main(Launcher.java:74) [modlauncher-11.0.5.jar%2382!/:?] {}
+	at MC-BOOTSTRAP/cpw.mods.modlauncher@11.0.5/cpw.mods.modlauncher.BootstrapLaunchConsumer.accept(BootstrapLaunchConsumer.java:26) [modlauncher-11.0.5.jar%2382!/:?] {}
+	at MC-BOOTSTRAP/cpw.mods.modlauncher@11.0.5/cpw.mods.modlauncher.BootstrapLaunchConsumer.accept(BootstrapLaunchConsumer.java:23) [modlauncher-11.0.5.jar%2382!/:?] {}
+	at cpw.mods.bootstraplauncher@2.0.2/cpw.mods.bootstraplauncher.BootstrapLauncher.run(BootstrapLauncher.java:210) [bootstraplauncher-2.0.2.jar:?] {}
+	at cpw.mods.bootstraplauncher@2.0.2/cpw.mods.bootstraplauncher.BootstrapLauncher.main(BootstrapLauncher.java:69) [bootstraplauncher-2.0.2.jar:?] {}
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103) ~[?:?] {}
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580) ~[?:?] {}
+	at net.neoforged.devlaunch.Main.main(Main.java:57) [DevLaunch-1.0.2.jar:?] {}
+[00:42:00] [main/INFO] [mojang/YggdrasilAuthenticationService]: Environment: Environment[sessionHost=https://sessionserver.mojang.com, servicesHost=https://api.minecraftservices.com, name=PROD]
+[00:42:00] [NeoForge Version Check/INFO] [ne.ne.fm.VersionChecker/]: [create] Starting version check at https://api.modrinth.com/updates/create/forge_updates.json?neoforge=only
+[00:42:00] [main/WARN] [minecraft/VanillaPackResourcesBuilder]: Assets URL 'union:/mnt/data/projects/incoming/mod/run/wt-CI-S6/mod/build/moddev/artifacts/neoforge-21.1.264.jar%23128!/assets/.mcassetsroot' uses unexpected schema
+[00:42:00] [main/WARN] [minecraft/VanillaPackResourcesBuilder]: Assets URL 'union:/mnt/data/projects/incoming/mod/run/wt-CI-S6/mod/build/moddev/artifacts/neoforge-21.1.264.jar%23128!/data/.mcassetsroot' uses unexpected schema
+[00:42:00] [main/INFO] [co.si.cr.Create/]: Created 157 recipes which will be injected into the game
+[00:42:00] [main/INFO] [co.si.cr.Create/]: Created 0 tags which will be injected into the game
+[00:42:00] [main/INFO] [ne.ne.ne.ga.GameTestHooks/]: Enabled Gametest Namespaces: [incoming]
+[00:42:00] [NeoForge Version Check/INFO] [ne.ne.fm.VersionChecker/]: [create] Found status: OUTDATED Current: 6.0.10 Target: 6.0.10+mc1.21.1
+[00:42:00] [main/INFO] [minecraft/RecipeManager]: Loaded 2954 recipes
+[00:42:01] [main/INFO] [minecraft/AdvancementTree]: Loaded 2645 advancements
+[00:42:01] [Server thread/INFO] [ua.ze.in.Incoming/]: GameTest: only batch “.*” - tests 851 from 851
+[00:42:01] [Server thread/INFO] [ua.ze.in.Incoming/]: GameTest: shard 6 of 6 — 160 of 851 tests, 103 batches, ~174 s based on previous runs; batches: area_handover_ready, arrival_players, arrival_work_expiry, blast_breach_drone_thick, blast_breach_terrace, blast_fire_drone, blast_front_breach, blast_radius_wood, blast_surface_debris_source, bomb_cancelled, bomber_ahead_40, bomber_level_650, bomber_much_higher, bunker_release_points, dh_attachments, dh_ruins, dh_saved_update, dh_scan, drone_dive_mast, drone_reattack, fixed_assign, flight_scale_area, flight_scenarios_0, flight_scenarios_2, fragments, frozen, fuel_fire_roof, grid_dense, grid_palette, icbm_arrival, launch_place, launcher_wall, leave_loaded, loiter_moving, missile_approach_shared, munitions, nuclear_keys_armed_dimension, nuclear_review_commit, nuclear_review_launch_permission, nuke_aquarium, nuke_attached, nuke_background, nuke_blocks, nuke_carrier_retarget, nuke_cliff, nuke_command_player, nuke_cost_20, nuke_cost_6, nuke_eyes, nuke_flash_chars, nuke_flash_unflash, nuke_fluid_ticks, nuke_fresh_failure_lifetime, nuke_inputs_queued, nuke_late_order_budget, nuke_ledger_cleanup, nuke_ledger_totals, nuke_look_ahead, nuke_material_many, nuke_material_seam, nuke_near_assembly_refresh, nuke_near_late_decode, nuke_near_reload_success, nuke_normal_bomber, nuke_normal_void_point, nuke_plan_material, nuke_prelaunch_event_marker, nuke_prelaunch_surface, nuke_prepared_flight, nuke_result_flow, nuke_review_overlap_reverse, nuke_ruins, nuke_send_gate, nuke_send_promote, nuke_settle_many, nuke_shielding, nuke_snapshot_flash_heights, nuke_source_absent, nuke_store_dense, nuke_structure_existing, nuke_structure_tree_load, nuke_tower_floating, nuke_window_absent, nuke_worker_admission, operator_route, pick_spam, rocket_far, ruin_pool_promote, sam_friend, shutdown_park, sight, spotting_memory, surface_drone_nearby, surface_rocket, survey_no_wait, thickness_house_missile, tickets_release_busy, virtual_expiry, virtual_ground, work_changed, work_handoff_craft, work_impact_schedule, work_rays
+[00:42:01] [Server thread/INFO] [de.ry.sa.Sable/]: Creating physics pipeline for ResourceKey[minecraft:dimension / minecraft:overworld] using RapierPhysicsPipelineProvider
+[00:42:01] [Server thread/INFO] [de.ry.sa.Sable/]: Using game directory relative Sable Rapier native directory /mnt/data/projects/incoming/mod/run/wt-CI-S6/mod/run/gametest/.sable/natives
+[2026-11-04T22:42:01.837628169Z] [[32mINFO[0m] (sable_rapier) Rapier scene initialized
+[00:42:02] [Server thread/INFO] [de.ry.sa.Sable/]: Creating physics pipeline for ResourceKey[minecraft:dimension / minecraft:the_end] using RapierPhysicsPipelineProvider
+[2026-11-04T22:42:02.021755157Z] [[32mINFO[0m] (sable_rapier) Rapier scene initialized
+[00:42:02] [Server thread/INFO] [de.ry.sa.Sable/]: Creating physics pipeline for ResourceKey[minecraft:dimension / minecraft:the_nether] using RapierPhysicsPipelineProvider
+[2026-11-04T22:42:02.043250449Z] [[32mINFO[0m] (sable_rapier) Rapier scene initialized
+[00:42:02] [Server thread/INFO] [minecraft/MinecraftServer]: Preparing start region for dimension minecraft:overworld
+[00:42:02] [worldgen/INFO] [minecraft/LoggerChunkProgressListener]: Preparing spawn area: 2%
+[00:42:02] [Server thread/INFO] [minecraft/LoggerChunkProgressListener]: Time elapsed: 87 ms
+[00:42:02] [Server thread/INFO] [minecraft/GameTestServer]: Started game test server
+[00:42:02] [Server thread/INFO] [ne.ne.ne.se.pe.PermissionAPI/]: Successfully initialized permission handler neoforge:default_handler
+[00:42:02] [Server thread/INFO] [ua.ze.in.Incoming/]: CIS6 original shard prefix [nuke_near_assembly_refresh:0, nuke_prelaunch_surface:0, work_rays:0, nuke_cost_20:0, nuke_cliff:0, nuke_late_order_budget:0, nuke_result_flow:0, nuke_ruins:0, nuke_material_seam:0, sight:0, nuke_cost_6:0, nuke_settle_many:0, ruin_pool_promote:0, work_changed:0, tickets_release_busy:0, flight_scale_area:0, nuke_near_late_decode:0, frozen:0, bomber_ahead_40:0, virtual_expiry:0, arrival_players:0, nuke_blocks:0, blast_radius_wood:0, nuke_background:0, nuke_look_ahead:0, sam_friend:0, nuke_fluid_ticks:0, nuclear_review_launch_permission:0, nuke_flash_unflash:0]
+[00:42:02] [Server thread/INFO] [minecraft/GameTestServer]: 31 tests are now running at position -12568082, -59, 12392816!
+[00:42:02] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuke_near_assembly_refresh:0' (1 tests)...
+[00:42:02] [Server thread/INFO] [minecraft/GameTestServer]: [                               ]
+[00:42:03] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruins: background threads 2 (desired 2; automatic; cores 4, left to the game 2)
+[00:42:03] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuke_prelaunch_surface:0' (1 tests)...
+[00:42:03] [Server thread/INFO] [minecraft/GameTestServer]: [+                              ]
+[00:42:03] [Server thread/INFO] [minecraft/GameTestServer]: [+                              ]
+[00:42:04] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruins for strike #-3 ready: plans for loaded chunks 23 (chunks loaded during flight 23), from disk 0 (heavy zone 13 chunks), not from disk 0 (unread 0; 461168601842738786 s to detonation), plans 0 MB, snapshots 0 MB, background threads 2 (working 2, lowered 0, raised 0, tasks abandoned 0) busy 37 %, heap 753 of 2048 MB
+[00:42:04] [Server thread/INFO] [minecraft/GameTestServer]: [+_                             ]
+[00:42:04] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'work_rays:0' (1 tests)...
+[00:42:04] [Server thread/INFO] [minecraft/GameTestServer]: [++                             ]
+[00:42:05] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuke_cost_20:0' (1 tests)...
+[00:42:05] [Server thread/INFO] [minecraft/GameTestServer]: [+++                            ]
+[00:42:05] [Server thread/INFO] [minecraft/GameTestServer]: [+++                            ]
+[00:42:05] [Server thread/INFO] [ua.ze.in.Incoming/]: Price of ruins (20.0 psi): 4 plans, 6894 places; faults 16 pcs. for 108.1 ms, plans (support, ground, light) 92.8 ms, average 50.2 ms per chunk, longest 104.7 ms, average plan 46 KB
+[00:42:05] [Server thread/INFO] [ua.ze.in.Incoming/]: Price of ruins (20.0 psi): collapse on average 18.7 ms, completion in the server thread 4.5 ms per chunk
+[00:42:05] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuke_cliff:0' (1 tests)...
+[00:42:05] [Server thread/INFO] [minecraft/GameTestServer]: [++++                           ]
+[00:42:06] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuke_late_order_budget:0' (1 tests)...
+[00:42:06] [Server thread/INFO] [minecraft/GameTestServer]: [+++++                          ]
+[00:42:06] [Server thread/INFO] [ua.ze.in.Incoming/]: Nuclear: bodies loaded after the detonation — light and radiation 32, wave 32
+[00:42:06] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuke_result_flow:0' (1 tests)...
+[00:42:06] [Server thread/INFO] [minecraft/GameTestServer]: [++++++                         ]
+[00:42:06] [Server thread/INFO] [ua.ze.in.Incoming/]: Impact series summary (minecraft:overworld): strikes 5, units 41, total 28.4 ms, longest unit 10.6 ms, longest tick 11.5 ms, ticks over 50 ms 0, over 5 ticks
+[00:42:06] [Server thread/INFO] [minecraft/GameTestServer]: [++++++                         ]
+[00:42:06] [Server thread/INFO] [minecraft/GameTestServer]: [++++++                         ]
+[00:42:06] [Server thread/INFO] [minecraft/GameTestServer]: [++++++                         ]
+[00:42:06] [Server thread/INFO] [minecraft/GameTestServer]: [++++++                         ]
+[00:42:06] [Server thread/INFO] [minecraft/GameTestServer]: [++++++                         ]
+[00:42:06] [Server thread/INFO] [minecraft/GameTestServer]: [++++++                         ]
+[00:42:06] [Server thread/INFO] [minecraft/GameTestServer]: [++++++                         ]
+[00:42:06] [Server thread/INFO] [minecraft/GameTestServer]: [++++++                         ]
+[00:42:06] [Server thread/INFO] [minecraft/GameTestServer]: [++++++                         ]
+[00:42:06] [Server thread/INFO] [minecraft/GameTestServer]: [++++++                         ]
+[00:42:06] [Server thread/INFO] [minecraft/GameTestServer]: [++++++                         ]
+[00:42:06] [Server thread/INFO] [minecraft/GameTestServer]: [++++++_                        ]
+[00:42:06] [Server thread/INFO] [minecraft/GameTestServer]: [++++++_                        ]
+[00:42:06] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuke_ruins:0' (1 tests)...
+[00:42:06] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++                        ]
+[00:42:06] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++                        ]
+[00:42:07] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuke_material_seam:0' (1 tests)...
+[00:42:07] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++                       ]
+[00:42:07] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++                       ]
+[00:42:07] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++_                      ]
+[00:42:07] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++_                      ]
+[00:42:07] [Server thread/INFO] [ua.ze.in.Incoming/]: Mod work over 30 s: server tick avg 8.3 ms (max 680.0), of which mod lanes avg — impacts 0.0, nuke 0.0, blackout 0.0 ms; the rest (vanilla, other mods) 8.3 ms; impact early window 98.3% of ticks, early avg 0.0 ms, late avg 0.0 ms; mandatory unload debt 2.5% of ticks
+[00:42:07] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++_                      ]
+[00:42:07] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++_                      ]
+[00:42:07] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++_                      ]
+[00:42:07] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++_                      ]
+[00:42:07] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++_                      ]
+[00:42:07] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++_                      ]
+[00:42:07] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'sight:0' (3 tests)...
+[00:42:07] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++                      ]
+[00:42:08] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuke_cost_6:0' (1 tests)...
+[00:42:08] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++                   ]
+[00:42:08] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++                   ]
+[00:42:08] [Server thread/INFO] [ua.ze.in.Incoming/]: Price of ruins (6.0 psi): 4 plans, 5055 places; faults 16 pcs. for 104.0 ms, plans (support, ground, light) 83.0 ms, average 46.8 ms per chunk, longest 95.0 ms, average plan 33 KB
+[00:42:08] [Server thread/INFO] [ua.ze.in.Incoming/]: Price of ruins (6.0 psi): collapse on average 18.2 ms, completion in the server thread 2.5 ms per chunk
+[00:42:08] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuke_settle_many:0' (1 tests)...
+[00:42:08] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++                  ]
+[00:42:08] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++                  ]
+[00:42:09] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++_                 ]
+[00:42:10] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++_                 ]
+[00:42:11] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++_                 ]
+[00:42:12] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++_                 ]
+[00:42:13] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++_                 ]
+[00:42:14] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++_                 ]
+[00:42:15] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++_                 ]
+[00:42:16] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++_                 ]
+[00:42:17] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++_                 ]
+[00:42:18] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++_                 ]
+[00:42:19] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++_                 ]
+[00:42:20] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++_                 ]
+[00:42:21] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++_                 ]
+[00:42:22] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++_                 ]
+[00:42:23] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++_                 ]
+[00:42:24] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++_                 ]
+[00:42:25] [Server thread/INFO] [ua.ze.in.Incoming/]: SETTLEBENCH chunks=100 wallMs=16626 ticks=333 nuclearTotalMs=278.054257 nuclearMeanMs=0.8349977687687687 nuclearMaxMs=22.06028
+[00:42:25] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'ruin_pool_promote:0' (1 tests)...
+[00:42:25] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++                 ]
+[00:42:25] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++                 ]
+[00:42:26] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'work_changed:0' (1 tests)...
+[00:42:26] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++                ]
+[00:42:26] [Server thread/INFO] [ua.ze.in.Incoming/]: Mod work over 30 s: server tick avg 29.7 ms (max 612.5), of which mod lanes avg — impacts 0.0, nuke 0.4, blackout 0.0 ms; the rest (vanilla, other mods) 29.3 ms; impact early window 100.0% of ticks, early avg 0.0 ms, late avg 0.0 ms; mandatory unload debt 12.0% of ticks
+[00:42:26] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++                ]
+[00:42:26] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'tickets_release_busy:0' (1 tests)...
+[00:42:26] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++               ]
+[00:42:26] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++               ]
+[00:42:27] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++_              ]
+[00:42:28] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++_              ]
+[00:42:29] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++_              ]
+[00:42:30] [Server thread/INFO] [ua.ze.in.Incoming/]: Impact series summary (minecraft:overworld): strikes 1, units 231, total 96.8 ms, longest unit 3.1 ms, longest tick 32.3 ms, ticks over 50 ms 0, over 9 ticks
+[00:42:30] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++_              ]
+[00:42:31] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++_              ]
+[00:42:32] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++_              ]
+[00:42:33] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++_              ]
+[00:42:34] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++_              ]
+[00:42:35] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++_              ]
+[00:42:36] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++_              ]
+[00:42:37] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++_              ]
+[00:42:38] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++_              ]
+[00:42:39] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++_              ]
+[00:42:40] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++_              ]
+[00:42:41] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++_              ]
+[00:42:41] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++_              ]
+[00:42:42] [Server thread/INFO] [minecraft/MinecraftServer]: Sprint completed with 74 ticks per second, or 13,43 ms per tick
+[00:42:42] [Server thread/INFO] [ua.ze.in.Incoming/]: Vacation of areas without free time: the queue from 8 passed for 25 tick (term 45), at unloading at most 2916 (limit 2929), with generation holders 2916
+[00:42:42] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'flight_scale_area:0' (1 tests)...
+[00:42:42] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++              ]
+[00:42:42] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++              ]
+[00:42:42] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++_             ]
+[00:42:42] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++_             ]
+[00:42:42] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++_             ]
+[00:42:42] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++_             ]
+[00:42:42] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++_             ]
+[00:42:42] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++_             ]
+[00:42:42] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++_             ]
+[00:42:42] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++_             ]
+[00:42:42] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++_             ]
+[00:42:42] [Server thread/INFO] [ua.ze.in.Incoming/]: Mod work over 30 s: server tick avg 27.8 ms (max 225.5), of which mod lanes avg — impacts 0.4, nuke 0.0, blackout 0.0 ms; the rest (vanilla, other mods) 27.4 ms; impact early window 95.8% of ticks, early avg 0.0 ms, late avg 0.4 ms; mandatory unload debt 5.3% of ticks
+[00:42:42] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++_             ]
+[00:42:42] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++_             ]
+[00:42:42] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++_             ]
+[00:42:42] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++_             ]
+[00:42:42] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++_             ]
+[00:42:43] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++_             ]
+[00:42:43] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuke_near_late_decode:0' (1 tests)...
+[00:42:43] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++             ]
+[00:42:43] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'frozen:0' (1 tests)...
+[00:42:43] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++            ]
+[00:42:43] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++            ]
+[00:42:43] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++_           ]
+[00:42:43] [Server thread/INFO] [ua.ze.in.Incoming/]: Mod work over 30 s: server tick avg 1.6 ms (max 245.2), of which mod lanes avg — impacts 0.1, nuke 0.0, blackout 0.0 ms; the rest (vanilla, other mods) 1.5 ms; impact early window 31.0% of ticks, early avg 0.0 ms, late avg 0.1 ms; mandatory unload debt 0.8% of ticks
+[00:42:44] [Server thread/INFO] [de.ry.sa.Sable/]: Saving sub-levels for level 'ServerLevel[Test Level]'/minecraft:overworld
+[00:42:44] [Server thread/INFO] [de.ry.sa.Sable/]: Saving sub-levels for level 'ServerLevel[Test Level]'/minecraft:the_end
+[00:42:44] [Server thread/INFO] [de.ry.sa.Sable/]: Saving sub-levels for level 'ServerLevel[Test Level]'/minecraft:the_nether
+[00:42:44] [Server thread/INFO] [de.ry.sa.Sable/]: Saving sub-levels for level 'ServerLevel[Test Level]'/minecraft:overworld
+[00:42:44] [Server thread/INFO] [de.ry.sa.Sable/]: Saving sub-levels for level 'ServerLevel[Test Level]'/minecraft:the_end
+[00:42:44] [Server thread/INFO] [de.ry.sa.Sable/]: Saving sub-levels for level 'ServerLevel[Test Level]'/minecraft:the_nether
+[00:42:44] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++_           ]
+[00:42:44] [Server thread/INFO] [ua.ze.in.Incoming/]: Impact series summary (minecraft:overworld): strikes 1, units 7875, total 69.1 ms, longest unit 16.7 ms, longest tick 37.7 ms, ticks over 50 ms 0, over 4 ticks
+[00:42:44] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++_           ]
+[00:42:44] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++_           ]
+[00:42:44] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++_           ]
+[00:42:44] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++_           ]
+[00:42:45] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++_           ]
+[00:42:45] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++_           ]
+[00:42:45] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++_           ]
+[00:42:45] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++_           ]
+[00:42:45] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++_           ]
+[00:42:45] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++_           ]
+[00:42:45] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++_           ]
+[00:42:45] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++_           ]
+[00:42:45] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++_           ]
+[00:42:45] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++_           ]
+[00:42:45] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++_           ]
+[00:42:45] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++_           ]
+[00:42:45] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'bomber_ahead_40:0' (1 tests)...
+[00:42:45] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++           ]
+[00:42:45] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++           ]
+[00:42:45] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++           ]
+[00:42:45] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++           ]
+[00:42:45] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++_          ]
+[00:42:45] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++_          ]
+[00:42:45] [Server thread/INFO] [ua.ze.in.Incoming/]: Impact series summary (minecraft:overworld): strikes 1, units 9238, total 61.1 ms, longest unit 9.8 ms, longest tick 30.4 ms, ticks over 50 ms 0, over 4 ticks
+[00:42:45] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++_          ]
+[00:42:45] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++_          ]
+[00:42:45] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++_          ]
+[00:42:45] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++_          ]
+[00:42:45] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++_          ]
+[00:42:45] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++_          ]
+[00:42:45] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++_          ]
+[00:42:45] [Server thread/INFO] [ua.ze.in.Incoming/]: Mod work over 30 s: server tick avg 0.8 ms (max 155.0), of which mod lanes avg — impacts 0.1, nuke 0.0, blackout 0.0 ms; the rest (vanilla, other mods) 0.7 ms; impact early window 100.0% of ticks, early avg 0.0 ms, late avg 0.1 ms; mandatory unload debt 0.8% of ticks
+[00:42:45] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++_          ]
+[00:42:45] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++_          ]
+[00:42:45] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++_          ]
+[00:42:45] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++_          ]
+[00:42:45] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++_          ]
+[00:42:45] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++_          ]
+[00:42:45] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++_          ]
+[00:42:45] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++_          ]
+[00:42:45] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++_          ]
+[00:42:45] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++_          ]
+[00:42:45] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++_          ]
+[00:42:45] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++_          ]
+[00:42:45] [Server thread/INFO] [ua.ze.in.Incoming/]: B-2 584c9114-13e1-4a03-bf97-08b8ae686464 dropped bomb a0ac4122-cd8b-424a-9212-f90f7fb8d4d7 at BlockPos{x=-12567959, y=113, z=12393110}, 136 blocks from the aim point, 170 above it (off-world true)
+[00:42:45] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++_          ]
+[00:42:45] [Server thread/INFO] [ua.ze.in.Incoming/]: Bunker buster entered the ground at -12567854 -57 12393196: 235 m/s, 89° below the horizon, path 6.5 m (rest)
+[00:42:45] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'virtual_expiry:0' (1 tests)...
+[00:42:45] [Server thread/WARN] [ua.ze.in.Incoming/]: Projectiles: 1 × entity.incoming.bunker_buster removed externally at -12567854 -57 12393196, by: GameTestInfo (DISCARDED)
+[00:42:45] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++          ]
+[00:42:45] [Server thread/INFO] [ua.ze.in.Incoming/]: Projectiles: 1 × entity.incoming.cruise_missile ran out of endurance and self-destructed, target -12567501 -49 12392988
+[00:42:46] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'arrival_players:0' (1 tests)...
+[00:42:46] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++++         ]
+[00:42:46] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++++         ]
+[00:42:46] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuke_blocks:0' (1 tests)...
+[00:42:46] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++        ]
+[00:42:46] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++        ]
+[00:42:46] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'blast_radius_wood:0' (1 tests)...
+[00:42:47] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++++++       ]
+[00:42:47] [Server thread/INFO] [ua.ze.in.Incoming/]: Impact series summary (minecraft:overworld): strikes 1, units 191, total 36.5 ms, longest unit 2.2 ms, longest tick 30.0 ms, ticks over 50 ms 0, over 3 ticks
+[00:42:47] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++++++       ]
+[00:42:47] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++++++       ]
+[00:42:47] [Server thread/INFO] [ua.ze.in.Incoming/]: BLASTBENCH Block{minecraft:oak_planks}, 50.0 kg: broken to 0.80, intact from 0.90 of its Jarrett radius (5.8 m without spread); columns: 0.75x 1.26| 0.80x 1.20| 0.70x 1.35| 0.61x 0.90| 1.00| 1.10|
+[00:42:47] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuke_background:0' (1 tests)...
+[00:42:47] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++      ]
+[00:42:47] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++      ]
+[00:42:48] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruins in the background: 4 plans coincided, 6288 places, 17 charred edges
+[00:42:48] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuke_look_ahead:0' (1 tests)...
+[00:42:48] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++++++++     ]
+[00:42:48] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'sam_friend:0' (1 tests)...
+[00:42:48] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++    ]
+[00:42:48] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++    ]
+[00:42:48] [Server thread/INFO] [ua.ze.in.Incoming/]: Impact series summary (minecraft:overworld): strikes 1, units 18658, total 25.4 ms, longest unit 1.3 ms, longest tick 30.0 ms, ticks over 50 ms 0, over 2 ticks
+[00:42:48] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++_   ]
+[00:42:48] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++_   ]
+[00:42:48] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++_   ]
+[00:42:48] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++_   ]
+[00:42:48] [Server thread/INFO] [ua.ze.in.Incoming/]: Mod work over 30 s: server tick avg 5.4 ms (max 787.5), of which mod lanes avg — impacts 0.1, nuke 0.0, blackout 0.0 ms; the rest (vanilla, other mods) 5.3 ms; impact early window 100.0% of ticks, early avg 0.0 ms, late avg 0.1 ms; mandatory unload debt 3.0% of ticks
+[00:42:49] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuke_fluid_ticks:0' (1 tests)...
+[00:42:49] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++++++++++   ]
+[00:42:49] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++++++++++   ]
+[00:42:49] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuclear_review_launch_permission:0' (1 tests)...
+[00:42:49] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++  ]
+[00:42:49] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++  ]
+[00:42:49] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++  ]
+[00:42:49] [Server thread/INFO] [ua.ze.in.Incoming/]: Impact series summary (minecraft:overworld): strikes 2, units 60, total 23.8 ms, longest unit 2.0 ms, longest tick 16.3 ms, ticks over 50 ms 0, over 2 ticks
+[00:42:49] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++  ]
+[00:42:49] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++  ]
+[00:42:49] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++  ]
+[00:42:49] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++  ]
+[00:42:49] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++  ]
+[00:42:49] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++  ]
+[00:42:49] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++  ]
+[00:42:49] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++  ]
+[00:42:49] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++  ]
+[00:42:49] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++  ]
+[00:42:49] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++  ]
+[00:42:49] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++  ]
+[00:42:49] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++  ]
+[00:42:49] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++  ]
+[00:42:49] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++  ]
+[00:42:49] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++  ]
+[00:42:49] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuke_flash_unflash:0' (1 tests)...
+[00:42:49] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++++++++++++ ]
+[00:42:49] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++++++++++++ ]
+[00:42:50] [Server thread/INFO] [ua.ze.in.Incoming/]: Nuclear detonation #1000169: flash scorch — 9 of 9 chunks (0 seen by players) in 10000 ticks (pulse 1.1 ticks), 19 ms on the server thread; 3555 blocks, 1661 fires lit; 0 stale, 0 after the wave, 0 unloaded, 0 at aircraft without neighbours, 0 over the memory limit
+[00:42:50] [Server thread/INFO] [ua.ze.in.Incoming/]: CIS6 flash id=1000169 pos=[-785479, 774579] way=1 tasks=0 inFlight=0 capacity=8 assemblyOwner=ua.zentix.incoming.nuclear.world.RuinContext@27fda27e own=ua.zentix.incoming.nuclear.world.RuinContext@13fafafc centre=3326791472382890 priority=NEAR reads=0 resident=65766711 result=33592700
+[00:42:50] [Server thread/ERROR] [ua.ze.in.Incoming/]: CIS6 flash failure
+java.lang.IllegalStateException: ruin background threads busy
+	at TRANSFORMER/incoming@3.11.0/ua.zentix.incoming.nuclear.world.RuinPlanner.testPlanOverFlash(RuinPlanner.java:227) ~[%23133!/:?] {re:classloading}
+	at TRANSFORMER/incoming@3.11.0/ua.zentix.incoming.gametest.ScorchGameTests.ruinsOverFlashWithoutShots(ScorchGameTests.java:487) ~[%23133!/:?] {re:classloading}
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103) ~[?:?] {}
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580) ~[?:?] {}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestRegistry.lambda$turnMethodIntoConsumer$5(GameTestRegistry.java:169) ~[neoforge-21.1.264.jar%23128!/:?] {re:classloading}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.TestFunction.run(TestFunction.java:40) ~[neoforge-21.1.264.jar%23128!/:?] {re:classloading}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestInfo.startTest(GameTestInfo.java:162) ~[neoforge-21.1.264.jar%23128!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:sable.mixins.json:game_test.GameTestInfoMixin from mod sable,pl:mixin:A}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestInfo.tickInternal(GameTestInfo.java:124) ~[neoforge-21.1.264.jar%23128!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:sable.mixins.json:game_test.GameTestInfoMixin from mod sable,pl:mixin:A}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestInfo.tick(GameTestInfo.java:107) ~[neoforge-21.1.264.jar%23128!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:sable.mixins.json:game_test.GameTestInfoMixin from mod sable,pl:mixin:A}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestTicker.lambda$tick$0(GameTestTicker.java:39) ~[neoforge-21.1.264.jar%23128!/:?] {re:classloading}
+	at java.base/java.util.concurrent.CopyOnWriteArrayList.forEach(CopyOnWriteArrayList.java:891) ~[?:?] {}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestTicker.tick(GameTestTicker.java:39) ~[neoforge-21.1.264.jar%23128!/:?] {re:classloading}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.tickChildren(MinecraftServer.java:1070) ~[neoforge-21.1.264.jar%23128!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:veil.network.mixins.json:NetworkMinecraftServerMixin from mod veil,pl:mixin:APP:veil.scheduler.mixins.json:MinecraftServerMixin from mod veil,pl:mixin:APP:ponder-common.mixins.json:accessor.MinecraftServerAccessor from mod ponder,pl:mixin:APP:sable.mixins.json:udp.MinecraftServerMixin from mod sable,pl:mixin:A}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.tickServer(MinecraftServer.java:932) ~[neoforge-21.1.264.jar%23128!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:veil.network.mixins.json:NetworkMinecraftServerMixin from mod veil,pl:mixin:APP:veil.scheduler.mixins.json:MinecraftServerMixin from mod veil,pl:mixin:APP:ponder-common.mixins.json:accessor.MinecraftServerAccessor from mod ponder,pl:mixin:APP:sable.mixins.json:udp.MinecraftServerMixin from mod sable,pl:mixin:A}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestServer.tickServer(GameTestServer.java:171) ~[neoforge-21.1.264.jar%23128!/:?] {re:classloading}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.runServer(MinecraftServer.java:713) ~[neoforge-21.1.264.jar%23128!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:veil.network.mixins.json:NetworkMinecraftServerMixin from mod veil,pl:mixin:APP:veil.scheduler.mixins.json:MinecraftServerMixin from mod veil,pl:mixin:APP:ponder-common.mixins.json:accessor.MinecraftServerAccessor from mod ponder,pl:mixin:APP:sable.mixins.json:udp.MinecraftServerMixin from mod sable,pl:mixin:A}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.lambda$spin$2(MinecraftServer.java:267) ~[neoforge-21.1.264.jar%23128!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:veil.network.mixins.json:NetworkMinecraftServerMixin from mod veil,pl:mixin:APP:veil.scheduler.mixins.json:MinecraftServerMixin from mod veil,pl:mixin:APP:ponder-common.mixins.json:accessor.MinecraftServerAccessor from mod ponder,pl:mixin:APP:sable.mixins.json:udp.MinecraftServerMixin from mod sable,pl:mixin:A}
+	at java.base/java.lang.Thread.run(Thread.java:1583) [?:?] {}
+[00:42:50] [Server thread/ERROR] [minecraft/LogTestReporter]: ruinsoverflashwithoutshots failed at -12567700, -60, 12393218! ruin background threads busy
+[00:42:50] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++++++++++++X]
+[00:42:50] [Server thread/INFO] [minecraft/GameTestServer]: ========= 31 GAME TESTS COMPLETE IN 48.37 s ======================
+[00:42:50] [Server thread/INFO] [minecraft/GameTestServer]: 1 required tests failed :(
+[00:42:50] [Server thread/INFO] [minecraft/GameTestServer]:    - ruinsoverflashwithoutshots
+[00:42:50] [Server thread/INFO] [minecraft/GameTestServer]: ====================================================
+[00:42:50] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruins: background threads stopped (queued tasks dropped: 0)
+[00:42:50] [Server thread/INFO] [minecraft/MinecraftServer]: Stopping server
+[00:42:50] [Server thread/INFO] [minecraft/MinecraftServer]: Saving players
+[00:42:50] [Server thread/INFO] [minecraft/MinecraftServer]: Saving worlds
+[00:42:50] [Server thread/INFO] [minecraft/MinecraftServer]: Saving chunks for level 'ServerLevel[Test Level]'/minecraft:overworld
+[00:42:50] [Server thread/INFO] [de.ry.sa.Sable/]: Saving sub-levels for level 'ServerLevel[Test Level]'/minecraft:overworld
+[00:42:56] [Server thread/INFO] [minecraft/MinecraftServer]: Saving chunks for level 'ServerLevel[Test Level]'/minecraft:the_end
+[00:42:56] [Server thread/INFO] [de.ry.sa.Sable/]: Saving sub-levels for level 'ServerLevel[Test Level]'/minecraft:the_end
+[00:42:56] [Server thread/INFO] [minecraft/MinecraftServer]: Saving chunks for level 'ServerLevel[Test Level]'/minecraft:the_nether
+[00:42:56] [Server thread/INFO] [de.ry.sa.Sable/]: Saving sub-levels for level 'ServerLevel[Test Level]'/minecraft:the_nether
+[00:42:56] [Server thread/INFO] [minecraft/MinecraftServer]: ThreadedAnvilChunkStorage (world): All chunks are saved
+[00:42:56] [Server thread/INFO] [minecraft/MinecraftServer]: ThreadedAnvilChunkStorage (DIM1): All chunks are saved
+[00:42:56] [Server thread/INFO] [minecraft/MinecraftServer]: ThreadedAnvilChunkStorage (DIM-1): All chunks are saved
+[00:42:56] [Server thread/INFO] [minecraft/MinecraftServer]: ThreadedAnvilChunkStorage: All dimensions are saved
+[00:42:56] [Server thread/INFO] [minecraft/GameTestServer]: Game test server shutting down
+
+> Task :runGameTestServer FAILED
+
+[Incubating] Problems report is available at: file:///mnt/data/projects/incoming/mod/run/wt-CI-S6/mod/build/reports/problems/problems-report.html
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':runGameTestServer'.
+> Process 'command '/home/artem/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/java/java-runtime-delta/bin/java'' finished with non-zero exit value 1
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights.
+> Get more help at https://help.gradle.org.
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 9.0.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/8.14.3/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD FAILED in 1m 8s
+11 actionable tasks: 4 executed, 7 up-to-date
+laptop_job ci-s6-native-six: exit 1

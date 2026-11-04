@@ -1,0 +1,276 @@
+{
+  "source_base": "b57c36061db305408c25e07d9e563fc37bd64dde",
+  "source_head": "0798edf0859b8dfa3ce8f8879de9b33d0e66a35e",
+  "source_tree": "7ea29997b9ce70fd802ea1567315fd3b24211b5b",
+  "production_changed": false,
+  "resource_settings": {
+    "ActiveProcessorCount": 4,
+    "Xmx": "2g per JVM",
+    "gradle": "--no-daemon --max-workers=4",
+    "power_profile_readonly": "performance",
+    "peak_rss": "not measured"
+  },
+  "logs": {
+    "ci41925168739-original-failed-jobs.log": {
+      "sha256": "3d069135610edfbcdf81c4d75b1712a6bedae7cf06b67116034ce82c04e19249",
+      "pass_counts": [
+        "0",
+        "0"
+      ],
+      "fail_counts": [
+        "1",
+        "1"
+      ],
+      "wrapper_exit": [],
+      "origins": [
+        "13112766, -59, 13953392",
+        "-526336, -59, -6071778"
+      ]
+    },
+    "craft-green.log": {
+      "sha256": "0bc3d3592c4dc5139a67fe6ca9b1de65cb187e6ad3db9bfde560a879817d40fc",
+      "pass_counts": [
+        "1"
+      ],
+      "fail_counts": [],
+      "wrapper_exit": [
+        "0"
+      ],
+      "origins": [
+        "13112835, -59, 13954388"
+      ]
+    },
+    "craft-position.log": {
+      "sha256": "25092a47cef77eb2c1e4c2e1e38a8cdc6bdde7dbc8e4f52c88d15d372b6cbef4",
+      "pass_counts": [],
+      "fail_counts": [
+        "1"
+      ],
+      "wrapper_exit": [
+        "1"
+      ],
+      "origins": [
+        "13112835, -59, 13954388"
+      ]
+    },
+    "craft-trace.log": {
+      "sha256": "7a095076771ea81c80def91500363a732079967e89b8ec014e76d6d3f5c3ba75",
+      "pass_counts": [],
+      "fail_counts": [
+        "1"
+      ],
+      "wrapper_exit": [
+        "1"
+      ],
+      "origins": [
+        "13112835, -59, 13954388"
+      ]
+    },
+    "craft-wave.log": {
+      "sha256": "0d1a0d15892ad7671d8374d21ad6bb105d8b21b4f9bc169dd753e3028f4abec8",
+      "pass_counts": [],
+      "fail_counts": [
+        "1"
+      ],
+      "wrapper_exit": [
+        "1"
+      ],
+      "origins": [
+        "13112835, -59, 13954388"
+      ]
+    },
+    "final-build-touched.log": {
+      "sha256": "175661cd5649aa54fe770f090a76c4b81c274b9857db0c31cf9d5b930a4a4437",
+      "pass_counts": [],
+      "fail_counts": [],
+      "wrapper_exit": [],
+      "origins": []
+    },
+    "final-prefix-four.log": {
+      "sha256": "01f0b0bdceb7303b6508308f581f41f4b58988a96a378b10b6988fa03022c352",
+      "pass_counts": [
+        "50"
+      ],
+      "fail_counts": [],
+      "wrapper_exit": [
+        "0"
+      ],
+      "origins": [
+        "13112766, -59, 13953392"
+      ]
+    },
+    "final-prefix-six.log": {
+      "sha256": "93403f9710ef588bdcfd357f86ae103695f8dcb8590718181b89c51b7c491f09",
+      "pass_counts": [
+        "31"
+      ],
+      "fail_counts": [],
+      "wrapper_exit": [
+        "0"
+      ],
+      "origins": [
+        "-12568082, -59, 12392816"
+      ]
+    },
+    "native-four.log": {
+      "sha256": "456dacff09f215ea06f1771a1d88fead268ff6ecfdb95de9c33398638b29bd75",
+      "pass_counts": [
+        "50"
+      ],
+      "fail_counts": [],
+      "wrapper_exit": [
+        "0"
+      ],
+      "origins": [
+        "-12568082, -59, 12392816"
+      ]
+    },
+    "native-six.log": {
+      "sha256": "7505991ea4be6f00447a116bcdd8a66d90ae586056086d1ff55435fe2e13ee09",
+      "pass_counts": [],
+      "fail_counts": [
+        "1"
+      ],
+      "wrapper_exit": [
+        "1"
+      ],
+      "origins": [
+        "-12568082, -59, 12392816"
+      ]
+    },
+    "original.log": {
+      "sha256": "f25b8cb40136ae8ef6b05617b1a97134197176303255e51c40b4f20e8e749b70",
+      "pass_counts": [
+        "2"
+      ],
+      "fail_counts": [],
+      "wrapper_exit": [
+        "0"
+      ],
+      "origins": [
+        "2519847, -59, 1059288"
+      ]
+    },
+    "pair-green.log": {
+      "sha256": "aba7383d0ff7a96c5e05e788b78368d179d093a8b6424b587aebc63bac71b4b2",
+      "pass_counts": [
+        "2"
+      ],
+      "fail_counts": [],
+      "wrapper_exit": [
+        "0"
+      ],
+      "origins": [
+        "-12568082, -59, 12392816"
+      ]
+    },
+    "pair-red.log": {
+      "sha256": "5a2993cec934bc56f92681309b98b483c7c169f402a48f3807bb42d29b772f0c",
+      "pass_counts": [],
+      "fail_counts": [
+        "1"
+      ],
+      "wrapper_exit": [
+        "1"
+      ],
+      "origins": [
+        "-12568082, -59, 12392816"
+      ]
+    },
+    "prefix-six.log": {
+      "sha256": "da2522dc3529cab513aec16647cda0a146d547a5d5fc05ecb52fe3dde846d316",
+      "pass_counts": [
+        "31"
+      ],
+      "fail_counts": [],
+      "wrapper_exit": [
+        "0"
+      ],
+      "origins": [
+        "718213, -59, 9458757"
+      ]
+    },
+    "prefix6-native.log": {
+      "sha256": "346cc66fdc03211debfd1e1f981e960260f205060cfe8f0d4b58bee9f471fadb",
+      "pass_counts": [],
+      "fail_counts": [],
+      "wrapper_exit": [
+        "0"
+      ],
+      "origins": [
+        "8357675, -59, 124689"
+      ]
+    },
+    "prefix6.log": {
+      "sha256": "5fd638965ecbe622ab1b1f6aeeb0e7cf59243869806338904daa981300ef9c93",
+      "pass_counts": [],
+      "fail_counts": [],
+      "wrapper_exit": [
+        "1"
+      ],
+      "origins": []
+    },
+    "retirement-mutant.log": {
+      "sha256": "7f7c936ee59d04b9c5700da0351b371ec5978ed49a9d5aebf4be2054e7f16fd4",
+      "pass_counts": [],
+      "fail_counts": [
+        "2"
+      ],
+      "wrapper_exit": [
+        "1"
+      ],
+      "origins": [
+        "-12568082, -59, 12392816"
+      ]
+    }
+  },
+  "local_validation": {
+    "unit_tests": 1840,
+    "unit_failures": 0,
+    "unit_errors": 0,
+    "unit_skipped": 0,
+    "touched_gametest": 8,
+    "prefix6": 31,
+    "prefix4": 50,
+    "final_wrapper_exit": 0,
+    "review": "RCI-S6 Sol/high PASS exact0798"
+  },
+  "artifact_sha256": {
+    "RCI-S6-review.md": "deb9fad0aa00d6f5de81f2c096bb48dc12019d9a659535eb9a7e4f3a8c99239c",
+    "README.md": "72e86112ebb438d4f9c75d7a815399089cf8bbaa86e191aa7dcca5d1e58d03dd",
+    "controls/CiS6Probe.java": "4288dde23df4754f5894d9be2d2698bdc8fed98d2e45a1370779c60837b51308",
+    "controls/GameTestShards.last-instrumented.java": "cc078a4157f80a65fbdbbeac1ae6415717186bb47e0483a0990ce68075cb6d4f",
+    "controls/RuinBackgroundGameTests.green-instrumented.java": "3182b48634bcc63239dae43029c93be7bd0c9819e6c9daacbf31449ca38be237",
+    "controls/RuinBackgroundGameTests.last-instrumented.java": "bdc257fe4c622a1d2b3b06a8e8e951ff69e12a11dfd5039909377fa4b6226821",
+    "controls/RuinBackgroundGameTests.red.java": "82821bf1dce29ca76b52d9b83137eda5e2f4d873e932fd9716f7c239f6d5c381",
+    "controls/ScorchGameTests.last-instrumented.java": "76221e8fc9f29803ff07cd46a27c5a8eb5800f3011387be5deaf031ddcd82900",
+    "controls/WorkGameTests.last-instrumented.java": "d3277c50044588e1add434138fa15a8ae93515936bfb2bb140c63e475c5d6940",
+    "controls/WorkGameTests.red.java": "750c317ff9eedf515ba2bdd808eebad6ad34e55a5d179fb692dd1f6e37732ad8",
+    "controls/candidate-ci-commit.json": "88ad35b2d5f9ac104e782ac721b34d4adea675c36199e4e284adda13ab89f083",
+    "controls/diagnostic-and-controls.patch": "b064b003529efe7da53e8f2397154a0727db4441e755fabaf3f12de865dd8558",
+    "controls/final-selector.java": "cc078a4157f80a65fbdbbeac1ae6415717186bb47e0483a0990ce68075cb6d4f",
+    "controls/original-ci-commit.json": "620138b889b2cc9322ec2ff6d9f0fe86e836e437c108237c78ab42c97caaf312",
+    "controls/prefix4.txt": "bbbacad3e1795e10a3a981ee8e2e47f2ecc287d400ef4be1d6a8937a263da642",
+    "controls/prefix6.txt": "9cc61da4ea78ef8bcb761acf69e7398dbf15238e334ced210ee937a027df5bbf",
+    "final-unit-suites.json": "a7ccc5b1f7ce2f234cc27bea978748e6b6a9fe7d74f96621177c83f6348a61b5",
+    "own.patch": "c177cae55732c7698c3946c38f0cdfdc11455145617c03a844db96ee456bbb77",
+    "raw/ci41925168739-original-failed-jobs.log": "3d069135610edfbcdf81c4d75b1712a6bedae7cf06b67116034ce82c04e19249",
+    "raw/craft-green.log": "0bc3d3592c4dc5139a67fe6ca9b1de65cb187e6ad3db9bfde560a879817d40fc",
+    "raw/craft-position.log": "25092a47cef77eb2c1e4c2e1e38a8cdc6bdde7dbc8e4f52c88d15d372b6cbef4",
+    "raw/craft-trace.log": "7a095076771ea81c80def91500363a732079967e89b8ec014e76d6d3f5c3ba75",
+    "raw/craft-wave.log": "0d1a0d15892ad7671d8374d21ad6bb105d8b21b4f9bc169dd753e3028f4abec8",
+    "raw/final-build-touched.log": "f6cbae0344e3eaa8427d4aec720c34d116fe96e7a34af135caf8b89298d59b43",
+    "raw/final-prefix-four.log": "01f0b0bdceb7303b6508308f581f41f4b58988a96a378b10b6988fa03022c352",
+    "raw/final-prefix-six.log": "93403f9710ef588bdcfd357f86ae103695f8dcb8590718181b89c51b7c491f09",
+    "raw/native-four.log": "456dacff09f215ea06f1771a1d88fead268ff6ecfdb95de9c33398638b29bd75",
+    "raw/native-six.log": "7505991ea4be6f00447a116bcdd8a66d90ae586056086d1ff55435fe2e13ee09",
+    "raw/original.log": "f25b8cb40136ae8ef6b05617b1a97134197176303255e51c40b4f20e8e749b70",
+    "raw/pair-green.log": "aba7383d0ff7a96c5e05e788b78368d179d093a8b6424b587aebc63bac71b4b2",
+    "raw/pair-red.log": "5a2993cec934bc56f92681309b98b483c7c169f402a48f3807bb42d29b772f0c",
+    "raw/pr-ci599.log": "9f96d903cf4550912a2fe73b5045fbecf33fc3ba574788123cc2986ab694925f",
+    "raw/prefix-six.log": "da2522dc3529cab513aec16647cda0a146d547a5d5fc05ecb52fe3dde846d316",
+    "raw/prefix6-native.log": "346cc66fdc03211debfd1e1f981e960260f205060cfe8f0d4b58bee9f471fadb",
+    "raw/prefix6.log": "5fd638965ecbe622ab1b1f6aeeb0e7cf59243869806338904daa981300ef9c93",
+    "raw/retirement-mutant.log": "7f7c936ee59d04b9c5700da0351b371ec5978ed49a9d5aebf4be2054e7f16fd4"
+  }
+}

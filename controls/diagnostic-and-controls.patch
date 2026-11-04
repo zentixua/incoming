@@ -1,0 +1,151 @@
+diff --git a/mod/src/devtest/java/ua/zentix/incoming/gametest/GameTestShards.java b/mod/src/devtest/java/ua/zentix/incoming/gametest/GameTestShards.java
+index 4215c4072..e95597dc1 100644
+--- a/mod/src/devtest/java/ua/zentix/incoming/gametest/GameTestShards.java
++++ b/mod/src/devtest/java/ua/zentix/incoming/gametest/GameTestShards.java
+@@ -42,11 +42,53 @@ public final class GameTestShards {
+     private static final String RESOURCE = "/gametest-durations.json";
+ 
+     public GameTestShards() {
++        boolean[] seeded = {false};
++        NeoForge.EVENT_BUS.addListener(net.neoforged.bus.api.EventPriority.LOWEST, (net.neoforged.neoforge.event.tick.ServerTickEvent.Post e) -> {
++            if (e.getServer() instanceof GameTestServer && !seeded[0] && !System.getProperty("incoming.cis6.target", "").isBlank()) {
++                seeded[0] = true;
++                var level = e.getServer().overworld();
++                level.random.setSeed(Long.getLong("incoming.cis6.seed", 42L));
++                String origin = System.getProperty("incoming.cis6.origin", "");
++                if (!origin.isBlank()) {
++                    String[] coords = origin.split(",");
++                    int[] next = {0};
++                    var original = level.random;
++                    try {
++                        var field = net.minecraft.world.level.Level.class.getDeclaredField("random"); field.setAccessible(true);
++                        var pinned = (net.minecraft.util.RandomSource) java.lang.reflect.Proxy.newProxyInstance(net.minecraft.util.RandomSource.class.getClassLoader(), new Class<?>[]{net.minecraft.util.RandomSource.class}, (proxy, method, args) -> {
++                            if (method.getName().equals("nextIntBetweenInclusive") && (int) args[0] == -14999992 && (int) args[1] == 14999992) {
++                                original.nextIntBetweenInclusive(-14999992, 14999992);
++                                int value = Integer.parseInt(coords[next[0]++]);
++                                if (next[0] == 2) field.set(level, original);
++                                return value;
++                            }
++                            return method.invoke(original, args);
++                        });
++                        field.set(level, pinned);
++                    } catch (ReflectiveOperationException ex) { throw new IllegalStateException(ex); }
++                }
++            }
++        });
+         String spec = System.getProperty("incoming.gametest.shard", ""), only = System.getProperty("incoming.gametest.only", "");
+         if (!only.isBlank()) NeoForge.EVENT_BUS.addListener((ServerAboutToStartEvent e) -> only(e, only));
+         NeoForge.EVENT_BUS.addListener(net.neoforged.bus.api.EventPriority.LOWEST, BlastLog::onStart);
+         NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.event.server.ServerStartingEvent e) -> {
+             if (e.getServer() instanceof GameTestServer) TestScale.realWave();
++            if (e.getServer() instanceof GameTestServer server && !System.getProperty("incoming.cis6.target", "").isBlank()) {
++                List<net.minecraft.gametest.framework.GameTestBatch> batches = ObfuscationReflectionHelper.getPrivateValue(GameTestServer.class, server, "testBatches");
++                String sequence = System.getProperty("incoming.cis6.sequence", "");
++                if (!sequence.isBlank()) {
++                    var order = java.util.List.of(sequence.split(","));
++                    batches.removeIf(b -> !order.contains(b.name().split(":")[0]));
++                    batches.sort(Comparator.comparingInt(b -> order.indexOf(b.name().split(":")[0])));
++                }
++                String target = System.getProperty("incoming.cis6.target") + ":0";
++                int end = -1;
++                for (int i = 0; i < batches.size(); i++) if (batches.get(i).name().equals(target)) end = i + 1;
++                if (end < 0) throw new IllegalStateException("CIS6 target absent");
++                batches.subList(end, batches.size()).clear();
++                Incoming.LOG.info("CIS6 original shard prefix {}", batches.stream().map(b -> b.name()).toList());
++            }
+         });
+         if (!spec.isBlank()) NeoForge.EVENT_BUS.addListener((ServerAboutToStartEvent e) -> select(e, spec));
+     }
+diff --git a/mod/src/devtest/java/ua/zentix/incoming/gametest/RuinBackgroundGameTests.java b/mod/src/devtest/java/ua/zentix/incoming/gametest/RuinBackgroundGameTests.java
+index caccafd0e..bb19f432d 100644
+--- a/mod/src/devtest/java/ua/zentix/incoming/gametest/RuinBackgroundGameTests.java
++++ b/mod/src/devtest/java/ua/zentix/incoming/gametest/RuinBackgroundGameTests.java
+@@ -1342,7 +1342,14 @@ public final class RuinBackgroundGameTests {
+         } finally {
+             ScarQueue.seenForTest(null);
+             q.clear(level);
++            ua.zentix.incoming.nuclear.world.CiS6Probe.dump(level, d.id(), unseen.getPos(), -1);
++            // This standalone queue leaves an unseen consumer pending. It owns the synthetic
++            // detonation lifetime too; clearing only the queue cannot retire its assembling window.
++            // CIS6 negative control: omit only context retirement.
+         }
++        h.assertTrue(RuinWorkers.awaitForTest(RuinWorkers.Priority.NEAR, 60_000), "retired fixture workers did not exit");
++        h.assertTrue(RuinPlanner.planFresh(level, d, unseen, true).changedBlocks() > 0,
++                "retired fixture blocked an independent background consumer");
+         h.succeed();
+     }
+ 
+diff --git a/mod/src/devtest/java/ua/zentix/incoming/gametest/ScorchGameTests.java b/mod/src/devtest/java/ua/zentix/incoming/gametest/ScorchGameTests.java
+index 961320ff5..f6b309738 100644
+--- a/mod/src/devtest/java/ua/zentix/incoming/gametest/ScorchGameTests.java
++++ b/mod/src/devtest/java/ua/zentix/incoming/gametest/ScorchGameTests.java
+@@ -483,7 +483,12 @@ public final class ScorchGameTests {
+             for (int i = 0; i < n; i++) {
+                 LevelChunk c = inside.get(i);
+                 for (int way = 0; way < 3; way++) {
+-                    RuinPlan p = RuinPlanner.testPlanOverFlash(level, d, c, way);
++                    RuinPlan p;
++                    try { p = RuinPlanner.testPlanOverFlash(level, d, c, way); }
++                    catch (RuntimeException ex) {
++                        ua.zentix.incoming.nuclear.world.CiS6Probe.dump(level, d.id(), c.getPos(), way);
++                        Incoming.LOG.error("CIS6 flash failure", ex); throw ex;
++                    }
+                     String diff = p.differs(way == 2 ? beforeDisk[i] : before[i]);
+                     if (diff != null) h.fail("chunk " + c.getPos() + ": plan on top of layer " + ways[way] + " not the one around the world before the flash (above | to; y - from the bottom of the world): "
+                             + diff + "; " + roofs);
+diff --git a/mod/src/devtest/java/ua/zentix/incoming/gametest/WorkGameTests.java b/mod/src/devtest/java/ua/zentix/incoming/gametest/WorkGameTests.java
+index b19f15e53..435e73393 100644
+--- a/mod/src/devtest/java/ua/zentix/incoming/gametest/WorkGameTests.java
++++ b/mod/src/devtest/java/ua/zentix/incoming/gametest/WorkGameTests.java
+@@ -482,11 +482,20 @@ public final class WorkGameTests {
+         level.getServer().getCommands().performPrefixedCommand(level.getServer().createCommandSourceStack().withLevel(level).withPermission(4)
+                 .withSuppressedOutput(), String.format(Locale.ROOT, "sable assemble area %d %d %d %d %d %d",
+                 a.getX(), a.getY(), a.getZ(), b.getX(), b.getY(), b.getZ()));
+-        Vec3 c = Vec3.atBottomCenterOf(h.absolutePos(CENTER));
++        // Keep the charge above the platform, as the sight-line prerequisite assumes.
++        // A charge inside its floor may stay shielded after every hull block is removed.
++        Vec3 c = Vec3.atBottomCenterOf(h.absolutePos(CENTER.above()));
+         List<BlockPos> plot = new ArrayList<>();
+         long[] at = {-1}, damaged = {-1};
+         boolean[] hullGoneAtDamage = {false};
++        Object[] chargeJob = {null};
+         var body = new net.minecraft.world.entity.animal.Pig(net.minecraft.world.entity.EntityType.PIG, level) {
++            @Override public boolean ignoreExplosion(net.minecraft.world.level.Explosion explosion) {
++                boolean ignored = super.ignoreExplosion(explosion);
++                ua.zentix.incoming.nuclear.world.CiS6Probe.body(level, this, chargeJob[0]);
++                Incoming.LOG.info("CIS6 craft ignore={} at={} explosion={} ready={} seenBase={} seenUp={} alive={} passenger={}", ignored, level.getGameTime(), explosion.center(), Terrain.readyAlong(level, c, position()), net.minecraft.world.level.Explosion.getSeenPercent(c, this), net.minecraft.world.level.Explosion.getSeenPercent(c.add(0, 1e-5, 0), this), isAlive(), isPassenger());
++                return ignored;
++            }
+             @Override public boolean hurt(net.minecraft.world.damagesource.DamageSource source, float amount) {
+                 if (source.is(ua.zentix.incoming.registry.ModDamageTypes.STRIKE)) {
+                     damaged[0] = level.getGameTime();
+@@ -495,12 +504,14 @@ public final class WorkGameTests {
+                 return super.hurt(source, amount);
+             }
+         };
+-        body.setPos(c.add(7, 1, 0));
++        StrikeGameTests.afterTest(h, () -> Incoming.LOG.info("CIS6 craft origin={} body={} alive={} health={} pos={} velocity={} event={} damaged={} hullGone={} plot={} left={} seen={} impacts={}", c, body.getUUID(), body.isAlive(), body.getHealth(), body.position(), body.getDeltaMovement(), at[0], damaged[0], hullGoneAtDamage[0], plot.size(), plot.stream().filter(p -> !level.getBlockState(p).isAir()).count(), net.minecraft.world.level.Explosion.getSeenPercent(c.add(0, 1 + 1e-5, 0), body), StrikeWorld.get(level).impacts().size()));
++        body.setPos(c.add(7, 0, 0));
+         body.setNoAi(true);
+         body.setNoGravity(true);
+         level.addFreshEntity(body);
+         Consumer<ExplosionEvent.Detonate> onBlast = e -> {
+             if (e.getLevel() != level || e.getExplosion().center().distanceTo(c) > 1.001) return;
++            Incoming.LOG.info("CIS6 craft event at={} charge={} blocks={} bodyIncluded={} bodyPos={} seen={}", level.getGameTime(), Warheads.chargeOf(e.getExplosion()), e.getAffectedBlocks().size(), e.getAffectedEntities().contains(body), body.position(), net.minecraft.world.level.Explosion.getSeenPercent(c.add(0, 1 + 1e-5, 0), body));
+             for (BlockPos p : e.getAffectedBlocks()) {
+                 if (SubLevels.inPlotGrid(level, new ChunkPos(p)) && !level.getBlockState(p).isAir()) plot.add(p.immutable());
+             }
+@@ -525,10 +536,12 @@ public final class WorkGameTests {
+             // Sable need not finish assembly in the same tick: explode once the platform beneath the craft is empty
+             if (at[0] >= 0 || waited[0]++ != 5) return;
+             h.assertTrue(level.getBlockState(a).isAir(), "craft not assembled: " + level.getBlockState(a));
++            Incoming.LOG.info("CIS6 craft source={} block={} above={} inPlots={} nearOne={}", c, level.getBlockState(BlockPos.containing(c)), level.getBlockState(BlockPos.containing(c).above()), SubLevels.inPlotGrid(level, new ChunkPos(BlockPos.containing(c))), SubLevels.near(level, c, 1).size());
+             WorkScheduler.useImpactClock(level.getServer(), WorkClock.counting(MS));
+-            h.assertTrue(net.minecraft.world.level.Explosion.getSeenPercent(c.add(0, 1 + 1e-5, 0), body) == 0,
++            h.assertTrue(net.minecraft.world.level.Explosion.getSeenPercent(c.add(0, 1e-5, 0), body) == 0,
+                     "craft does not initially shield the body");
+             Warheads.detonate(level, WeaponType.MISSILE, c, null, null);
++            chargeJob[0] = ua.zentix.incoming.nuclear.world.CiS6Probe.capture(level);
+         });
+         StrikeGameTests.afterTest(h, () -> WorkScheduler.useImpactClock(level.getServer(), WorkScheduler.newImpactClock()));
+         h.succeedWhen(() -> {

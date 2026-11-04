@@ -1,0 +1,69 @@
+diff --git a/.claude/rules/gametest.md b/.claude/rules/gametest.md
+index 4e17f1ff1..7f593ea27 100644
+--- a/.claude/rules/gametest.md
++++ b/.claude/rules/gametest.md
+@@ -151,3 +151,9 @@ paths:
+   Direct map insertion leaves `used=0`: a later shard batch crosses the 100-tick sweep after the 600-tick
+   idle horizon, detaches the context, then resubmits through stale input ownership. `nuke_source_progress`
+   starts after that horizon and crosses a real sweep while preserving fixed external memory pressure.
++
++- A standalone `ScarQueue` fixture that ends with a pending consumer must also retire its synthetic
++  world context with `forgetRuinsForTest`. Queue clear releases jobs/tickets, not that context's assembling
++  window. `nuke_look_ahead` verifies that an independent background consumer can start after cleanup.
++- Craft hull-order checks place the charge above the platform and test initial shielding from that same
++  source. A charge inside the platform can remain shielded after the entire selected hull disappears.
+diff --git a/mod/src/devtest/java/ua/zentix/incoming/gametest/RuinBackgroundGameTests.java b/mod/src/devtest/java/ua/zentix/incoming/gametest/RuinBackgroundGameTests.java
+index caccafd0e..45f88d51d 100644
+--- a/mod/src/devtest/java/ua/zentix/incoming/gametest/RuinBackgroundGameTests.java
++++ b/mod/src/devtest/java/ua/zentix/incoming/gametest/RuinBackgroundGameTests.java
+@@ -1342,7 +1342,13 @@ public final class RuinBackgroundGameTests {
+         } finally {
+             ScarQueue.seenForTest(null);
+             q.clear(level);
++            // This standalone queue leaves an unseen consumer pending. It owns the synthetic
++            // detonation lifetime too; clearing only the queue cannot retire its assembling window.
++            NuclearWorld.get(level).forgetRuinsForTest(d.id());
+         }
++        h.assertTrue(RuinWorkers.awaitForTest(RuinWorkers.Priority.NEAR, 60_000), "retired fixture workers did not exit");
++        h.assertTrue(RuinPlanner.planFresh(level, d, unseen, true).changedBlocks() > 0,
++                "retired fixture blocked an independent background consumer");
+         h.succeed();
+     }
+ 
+diff --git a/mod/src/devtest/java/ua/zentix/incoming/gametest/WorkGameTests.java b/mod/src/devtest/java/ua/zentix/incoming/gametest/WorkGameTests.java
+index b19f15e53..4cf61375b 100644
+--- a/mod/src/devtest/java/ua/zentix/incoming/gametest/WorkGameTests.java
++++ b/mod/src/devtest/java/ua/zentix/incoming/gametest/WorkGameTests.java
+@@ -482,7 +482,9 @@ public final class WorkGameTests {
+         level.getServer().getCommands().performPrefixedCommand(level.getServer().createCommandSourceStack().withLevel(level).withPermission(4)
+                 .withSuppressedOutput(), String.format(Locale.ROOT, "sable assemble area %d %d %d %d %d %d",
+                 a.getX(), a.getY(), a.getZ(), b.getX(), b.getY(), b.getZ()));
+-        Vec3 c = Vec3.atBottomCenterOf(h.absolutePos(CENTER));
++        // Keep the charge above the platform, as the sight-line prerequisite assumes.
++        // A charge inside its floor may stay shielded after every hull block is removed.
++        Vec3 c = Vec3.atBottomCenterOf(h.absolutePos(CENTER.above()));
+         List<BlockPos> plot = new ArrayList<>();
+         long[] at = {-1}, damaged = {-1};
+         boolean[] hullGoneAtDamage = {false};
+@@ -495,7 +497,7 @@ public final class WorkGameTests {
+                 return super.hurt(source, amount);
+             }
+         };
+-        body.setPos(c.add(7, 1, 0));
++        body.setPos(c.add(7, 0, 0));
+         body.setNoAi(true);
+         body.setNoGravity(true);
+         level.addFreshEntity(body);
+@@ -525,8 +527,11 @@ public final class WorkGameTests {
+             // Sable need not finish assembly in the same tick: explode once the platform beneath the craft is empty
+             if (at[0] >= 0 || waited[0]++ != 5) return;
+             h.assertTrue(level.getBlockState(a).isAir(), "craft not assembled: " + level.getBlockState(a));
++            BlockPos source = BlockPos.containing(c);
++            h.assertTrue(level.getBlockState(source).getCollisionShape(level, source).isEmpty(),
++                    "craft ordering charge is inside the platform");
+             WorkScheduler.useImpactClock(level.getServer(), WorkClock.counting(MS));
+-            h.assertTrue(net.minecraft.world.level.Explosion.getSeenPercent(c.add(0, 1 + 1e-5, 0), body) == 0,
++            h.assertTrue(net.minecraft.world.level.Explosion.getSeenPercent(c.add(0, 1e-5, 0), body) == 0,
+                     "craft does not initially shield the body");
+             Warheads.detonate(level, WeaponType.MISSILE, c, null, null);
+         });
