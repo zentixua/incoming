@@ -113,7 +113,11 @@ class RuinWorkerAdmissionTest {
             release.countDown();
             old.get(5, TimeUnit.SECONDS);
             assertFalse(RuinWorkers.started(next), "a taller task must not enter its callable without the workspace delta");
-            pump(pool, base - 1, 1);
+            long until = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+            while (!next.isDone() && System.nanoTime() < until) {
+                pump(pool, base - 1, 1);
+                Thread.sleep(1); // wait for the actual beforeExecute ownership transition
+            }
             assertEquals(42, next.get(5, TimeUnit.SECONDS));
             assertEquals(grown, resident());
             assertEquals(CAP, base - 1 + resident());
@@ -150,6 +154,40 @@ class RuinWorkerAdmissionTest {
             assertEquals(true, next.get(5, TimeUnit.SECONDS));
             assertTrue(RuinWorkers.finished(running));
         } finally { release.countDown(); close(oldPool); close(nextPool); }
+        assertEquals(0, resident());
+    }
+
+    @Test
+    void cancellationAndShutdownWakeHeightWaitersWithoutLendingTheirLiveBuffers() throws Exception {
+        var pool = new RuinWorkers.OwnedPool(2, HEIGHT);
+        var counts = new AtomicIntegerArray(3);
+        var release = new CountDownLatch(1);
+        var entered = new CountDownLatch(2);
+        try {
+            var first = submit(pool, counts, () -> { entered.countDown(); release.await(); return null; }, RuinWorkers.Priority.SEEN);
+            var second = submit(pool, counts, () -> { entered.countDown(); release.await(); return null; }, RuinWorkers.Priority.SEEN);
+            pump(pool, 0, 2);
+            assertTrue(entered.await(5, TimeUnit.SECONDS));
+            pool.observeHeight(1024);
+            var cancelled = submit(pool, counts, () -> { throw new AssertionError("cancelled taller task ran"); }, RuinWorkers.Priority.SEEN);
+            var stopped = submit(pool, counts, () -> { throw new AssertionError("unfunded taller task ran"); }, RuinWorkers.Priority.SEEN);
+            release.countDown();
+            first.get(5, TimeUnit.SECONDS);
+            second.get(5, TimeUnit.SECONDS);
+            long until = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+            while (!pool.getQueue().isEmpty() && System.nanoTime() < until) Thread.sleep(1);
+            assertTrue(pool.getQueue().isEmpty(), "both taller tasks must reach the actual execution gate");
+            cancelled.cancel(false);
+            while (!RuinWorkers.finished(cancelled) && System.nanoTime() < until) Thread.sleep(1);
+            assertTrue(RuinWorkers.finished(cancelled));
+            assertEquals(2 * THREAD, resident(), "cancelled task does not release a resident thread");
+            pool.shutdownNow();
+            assertTrue(pool.awaitTermination(5, TimeUnit.SECONDS));
+            awaitExpiry(pool);
+            assertTrue(stopped.isCancelled());
+            assertTrue(RuinWorkers.finished(stopped));
+            assertEquals(0, counts.get(0));
+        } finally { release.countDown(); close(pool); }
         assertEquals(0, resident());
     }
 

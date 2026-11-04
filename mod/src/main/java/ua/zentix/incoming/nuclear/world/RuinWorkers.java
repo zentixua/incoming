@@ -160,6 +160,7 @@ public final class RuinWorkers {
     private static final class Workspace {
         final ConcurrentLinkedQueue<Credit> credits = new ConcurrentLinkedQueue<>();
         final ThreadLocal<Credit> current = new ThreadLocal<>();
+        final AtomicLong bytes = new AtomicLong();
         volatile int height;
 
         Workspace(int height) { this.height = height; }
@@ -168,6 +169,7 @@ public final class RuinWorkers {
             BirthRoom room = BIRTH_ROOM.get();
             long bytes = threadBufferBytes(height);
             if (room == null || !room.take(bytes)) return null;
+            this.bytes.addAndGet(bytes);
             Credit credit = new Credit(height);
             credits.add(credit);
             try {
@@ -179,6 +181,7 @@ public final class RuinWorkers {
                         synchronized (credit) {
                             credit.closed = true;
                             WORKSPACE_BYTES.addAndGet(-threadBufferBytes(credit.height));
+                            this.bytes.addAndGet(-threadBufferBytes(credit.height));
                             credits.remove(credit);
                         }
                     }
@@ -189,6 +192,7 @@ public final class RuinWorkers {
             } catch (RuntimeException | Error failure) {
                 credits.remove(credit);
                 WORKSPACE_BYTES.addAndGet(-bytes);
+                this.bytes.addAndGet(-bytes);
                 throw failure;
             }
         }
@@ -226,18 +230,19 @@ public final class RuinWorkers {
             Credit credit = workspace.current.get();
             // A taller dimension may need larger ThreadLocals. Keep the old buffers charged, and
             // wait for the server to fund the delta before entering any callable that can grow them.
+            boolean interrupted = false;
             synchronized (credit) {
                 while (credit.height < workspace.height && !isShutdown()
                         && (!(run instanceof Future<?> future) || !future.isCancelled())) {
                     try { credit.waiting = true; credit.wait(); }
-                    catch (InterruptedException interrupted) {
-                        if (run instanceof Future<?> future) future.cancel(false);
-                        thread.interrupt();
-                        credit.waiting = false;
-                        return;
-                    }
+                    catch (InterruptedException stop) { interrupted = true; break; }
                 }
                 credit.waiting = false;
+            }
+            // done() wakes other height waiters; never call it while holding one waiter's monitor.
+            if (interrupted) {
+                if (run instanceof Future<?> future) future.cancel(false);
+                thread.interrupt();
             }
         }
     }
@@ -257,6 +262,7 @@ public final class RuinWorkers {
             int height = owned.workspace.height;
             long extra = threadBufferBytes(height) - threadBufferBytes(credit.height);
             if (extra > 0 && budget.take(extra)) {
+                owned.workspace.bytes.addAndGet(extra);
                 credit.height = height;
                 credit.notifyAll();
             }
@@ -589,8 +595,9 @@ public final class RuinWorkers {
     static long bufferBytes(int height) {
         configureHeight(height);
         long current = residentBufferBytes(pool, bufferHeight);
-        return WORKSPACE_BYTES.get() - current
-                + Math.max(current, (long) memoryThreads(threads(integrated()), bufferHeight) * threadBufferBytes(bufferHeight));
+        long total = WORKSPACE_BYTES.get();
+        return Math.max(total, Math.max(0, total - current)
+                + (long) memoryThreads(threads(integrated()), bufferHeight) * threadBufferBytes(bufferHeight));
     }
 
     static long bufferBytes(@Nullable ThreadPoolExecutor executor, int desired, int height) {
@@ -608,13 +615,7 @@ public final class RuinWorkers {
     }
 
     static long residentBufferBytes(@Nullable ThreadPoolExecutor executor, int height) {
-        if (executor instanceof OwnedPool owned) {
-            long bytes = 0;
-            for (Credit credit : owned.workspace.credits) synchronized (credit) {
-                if (!credit.closed) bytes += threadBufferBytes(credit.height);
-            }
-            return bytes;
-        }
+        if (executor instanceof OwnedPool owned) return owned.workspace.bytes.get();
         return executor == null ? 0 : (long) executor.getPoolSize() * threadBufferBytes(height);
     }
 
