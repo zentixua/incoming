@@ -1,7 +1,8 @@
 from pathlib import Path
-import gzip,shutil,hashlib,json
-source=Path('/mnt/data/projects/incoming/mod/run/stand/out/mt-b5-final-dba2')
-target=Path(__file__).resolve().parent/'evidence'/'scene-bench';target.mkdir(exist_ok=True)
+import gzip,shutil,hashlib,json,sys
+name=sys.argv[1] if len(sys.argv)>1 else 'mt-b5-final-dba2'
+source=Path('/mnt/data/projects/incoming/mod/run/stand/out')/name
+target=Path(__file__).resolve().parent/'evidence'/('scene-bench' if name=='mt-b5-final-dba2' else 'scene-bench-isolated');target.mkdir(exist_ok=True)
 manifest={}
 for p in sorted(source.rglob('*')):
  if not p.is_file():continue
@@ -17,5 +18,6 @@ for p in sorted(source.rglob('*')):
  else:shutil.copy2(p,dst)
  manifest[str(rel)]={'sha256':hashlib.sha256(p.read_bytes()).hexdigest(),'bytes':p.stat().st_size,'archived':str(dst.relative_to(target))}
 (target/'archive-manifest.json').write_text(json.dumps(manifest,indent=2)+'\n')
-(target/'ARCHIVE.md').write_text('Raw frame CSVs are losslessly gzip-compressed. Uncompress into a separate copy before re-running the stand parser. The manifest records original raw hashes and paths. Individual conventional scene screenshots remain in the local stand directory; generated report contact sheets are retained here. Paired nuclear coverage frames are separately under ../frames. Original runner jar metadata snapshots the initial candidate: see ../bench-jar-identity.json for the observed per-pack correction.\n')
+identity_note = ('Original runner jar metadata snapshots the initial candidate: see ../bench-jar-identity.json for the observed per-pack correction.' if name=='mt-b5-final-dba2' else 'This isolated repeat uses the immutable final CI jar; pair.json contains its actual hash and the fresh-main baseline hash.')
+(target/'ARCHIVE.md').write_text('Raw frame CSVs are losslessly gzip-compressed. Uncompress into a separate copy before re-running the stand parser. The manifest records original raw hashes and paths. Individual conventional scene screenshots remain in the local stand directory; generated report contact sheets are retained here. Paired nuclear coverage frames are separately under ../frames. ' + identity_note + '\n')
 print('archived',len(manifest),'files')

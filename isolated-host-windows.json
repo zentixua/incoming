@@ -1,0 +1,814 @@
+[
+  {
+    "role": "A1",
+    "window": "100/outside",
+    "foreign_cpu_mean": 0.0,
+    "foreign_cpu_max": 0.0,
+    "samples": [
+      {
+        "kind": "cpu",
+        "epoch": 1793767523.991255,
+        "dt": 5.039,
+        "phase": "run",
+        "load1": 2.48,
+        "cpu_total": 1.46,
+        "cpu_own": 1.53,
+        "cpu_foreign": 0.0,
+        "units": {},
+        "gpu": {
+          "foreign_sm": 0,
+          "foreign_mean": 0.0,
+          "who": [],
+          "cycles": 5,
+          "temp": 86.0,
+          "clock": 1875.0
+        },
+        "profile": "performance"
+      },
+      {
+        "kind": "cpu",
+        "epoch": 1793767529.031097,
+        "dt": 5.04,
+        "phase": "run",
+        "load1": 2.36,
+        "cpu_total": 1.4,
+        "cpu_own": 1.48,
+        "cpu_foreign": 0.0,
+        "units": {},
+        "gpu": {
+          "foreign_sm": 0,
+          "foreign_mean": 0.0,
+          "who": [],
+          "cycles": 5,
+          "temp": 86.0,
+          "clock": 1920.0
+        },
+        "profile": "performance"
+      },
+      {
+        "kind": "cpu",
+        "epoch": 1793767534.0704541,
+        "dt": 5.039,
+        "phase": "run",
+        "load1": 2.26,
+        "cpu_total": 1.49,
+        "cpu_own": 1.57,
+        "cpu_foreign": 0.0,
+        "units": {},
+        "gpu": {
+          "foreign_sm": 0,
+          "foreign_mean": 0.0,
+          "who": [],
+          "cycles": 5,
+          "temp": 87.0,
+          "clock": 1995.0
+        },
+        "profile": "performance"
+      },
+      {
+        "kind": "cpu",
+        "epoch": 1793767539.1114378,
+        "dt": 5.041,
+        "phase": "run",
+        "load1": 2.32,
+        "cpu_total": 1.39,
+        "cpu_own": 1.46,
+        "cpu_foreign": 0.0,
+        "units": {},
+        "gpu": {
+          "foreign_sm": 0,
+          "foreign_mean": 0.0,
+          "who": [],
+          "cycles": 5,
+          "temp": 87.0,
+          "clock": 1920.0
+        },
+        "profile": "performance"
+      }
+    ]
+  },
+  {
+    "role": "A1",
+    "window": "100/edge",
+    "foreign_cpu_mean": 0.0,
+    "foreign_cpu_max": 0.0,
+    "samples": [
+      {
+        "kind": "cpu",
+        "epoch": 1793767554.2316856,
+        "dt": 5.04,
+        "phase": "run",
+        "load1": 2.52,
+        "cpu_total": 1.23,
+        "cpu_own": 1.3,
+        "cpu_foreign": 0.0,
+        "units": {},
+        "gpu": {
+          "foreign_sm": 0,
+          "foreign_mean": 0.0,
+          "who": [],
+          "cycles": 5,
+          "temp": 87.0,
+          "clock": 1905.0
+        },
+        "profile": "performance"
+      },
+      {
+        "kind": "cpu",
+        "epoch": 1793767559.271152,
+        "dt": 5.039,
+        "phase": "run",
+        "load1": 2.47,
+        "cpu_total": 1.0,
+        "cpu_own": 1.09,
+        "cpu_foreign": 0.0,
+        "units": {},
+        "gpu": {
+          "foreign_sm": 0,
+          "foreign_mean": 0.0,
+          "who": [],
+          "cycles": 4,
+          "temp": 87.0,
+          "clock": 1875.0
+        },
+        "profile": "performance"
+      },
+      {
+        "kind": "cpu",
+        "epoch": 1793767564.3118463,
+        "dt": 5.041,
+        "phase": "run",
+        "load1": 2.44,
+        "cpu_total": 1.04,
+        "cpu_own": 1.09,
+        "cpu_foreign": 0.0,
+        "units": {},
+        "gpu": {
+          "foreign_sm": 0,
+          "foreign_mean": 0.0,
+          "who": [],
+          "cycles": 5,
+          "temp": 86.0,
+          "clock": 1800.0
+        },
+        "profile": "performance"
+      },
+      {
+        "kind": "cpu",
+        "epoch": 1793767569.3522682,
+        "dt": 5.04,
+        "phase": "run",
+        "load1": 2.32,
+        "cpu_total": 1.13,
+        "cpu_own": 1.21,
+        "cpu_foreign": 0.0,
+        "units": {},
+        "gpu": {
+          "foreign_sm": 0,
+          "foreign_mean": 0.0,
+          "who": [],
+          "cycles": 5,
+          "temp": 86.0,
+          "clock": 1860.0
+        },
+        "profile": "performance"
+      }
+    ]
+  },
+  {
+    "role": "A1",
+    "window": "100/inside",
+    "foreign_cpu_mean": 0.0,
+    "foreign_cpu_max": 0.0,
+    "samples": [
+      {
+        "kind": "cpu",
+        "epoch": 1793767584.4747121,
+        "dt": 5.041,
+        "phase": "run",
+        "load1": 2.05,
+        "cpu_total": 1.22,
+        "cpu_own": 1.29,
+        "cpu_foreign": 0.0,
+        "units": {},
+        "gpu": {
+          "foreign_sm": 0,
+          "foreign_mean": 0.0,
+          "who": [],
+          "cycles": 5,
+          "temp": 87.0,
+          "clock": 1800.0
+        },
+        "profile": "performance"
+      },
+      {
+        "kind": "cpu",
+        "epoch": 1793767589.5148134,
+        "dt": 5.04,
+        "phase": "run",
+        "load1": 1.88,
+        "cpu_total": 1.1,
+        "cpu_own": 1.17,
+        "cpu_foreign": 0.0,
+        "units": {},
+        "gpu": {
+          "foreign_sm": 0,
+          "foreign_mean": 0.0,
+          "who": [],
+          "cycles": 5,
+          "temp": 86.0,
+          "clock": 1830.0
+        },
+        "profile": "performance"
+      },
+      {
+        "kind": "cpu",
+        "epoch": 1793767594.5572538,
+        "dt": 5.042,
+        "phase": "run",
+        "load1": 1.81,
+        "cpu_total": 1.24,
+        "cpu_own": 1.31,
+        "cpu_foreign": 0.0,
+        "units": {},
+        "gpu": {
+          "foreign_sm": 0,
+          "foreign_mean": 0.0,
+          "who": [],
+          "cycles": 5,
+          "temp": 86.0,
+          "clock": 1875.0
+        },
+        "profile": "performance"
+      },
+      {
+        "kind": "cpu",
+        "epoch": 1793767599.5969896,
+        "dt": 5.04,
+        "phase": "run",
+        "load1": 1.83,
+        "cpu_total": 1.07,
+        "cpu_own": 1.13,
+        "cpu_foreign": 0.0,
+        "units": {},
+        "gpu": {
+          "foreign_sm": 0,
+          "foreign_mean": 0.0,
+          "who": [],
+          "cycles": 5,
+          "temp": 87.0,
+          "clock": 1860.0
+        },
+        "profile": "performance"
+      }
+    ]
+  },
+  {
+    "role": "B",
+    "window": "100/outside",
+    "foreign_cpu_mean": 0.0175,
+    "foreign_cpu_max": 0.05,
+    "samples": [
+      {
+        "kind": "cpu",
+        "epoch": 1793767722.2699564,
+        "dt": 5.041,
+        "phase": "run",
+        "load1": 3.44,
+        "cpu_total": 1.44,
+        "cpu_own": 1.54,
+        "cpu_foreign": 0.0,
+        "units": {},
+        "gpu": {
+          "foreign_sm": 0,
+          "foreign_mean": 0.0,
+          "who": [],
+          "cycles": 5,
+          "temp": 87.0,
+          "clock": 1935.0
+        },
+        "profile": "performance"
+      },
+      {
+        "kind": "cpu",
+        "epoch": 1793767727.3100607,
+        "dt": 5.04,
+        "phase": "run",
+        "load1": 3.32,
+        "cpu_total": 1.6,
+        "cpu_own": 1.68,
+        "cpu_foreign": 0.0,
+        "units": {},
+        "gpu": {
+          "foreign_sm": 0,
+          "foreign_mean": 0.0,
+          "who": [],
+          "cycles": 5,
+          "temp": 87.0,
+          "clock": 1950.0
+        },
+        "profile": "performance"
+      },
+      {
+        "kind": "cpu",
+        "epoch": 1793767732.3504133,
+        "dt": 5.04,
+        "phase": "run",
+        "load1": 3.14,
+        "cpu_total": 1.46,
+        "cpu_own": 1.44,
+        "cpu_foreign": 0.02,
+        "units": {
+          "incoming-codex-MT-B7.service": 0.11
+        },
+        "gpu": {
+          "foreign_sm": 0,
+          "foreign_mean": 0.0,
+          "who": [],
+          "cycles": 5,
+          "temp": 86.0,
+          "clock": 1905.0
+        },
+        "profile": "performance"
+      },
+      {
+        "kind": "cpu",
+        "epoch": 1793767737.3916395,
+        "dt": 5.041,
+        "phase": "run",
+        "load1": 3.04,
+        "cpu_total": 1.39,
+        "cpu_own": 1.34,
+        "cpu_foreign": 0.05,
+        "units": {
+          "incoming-codex-MT-B7.service": 0.11
+        },
+        "gpu": {
+          "foreign_sm": 0,
+          "foreign_mean": 0.0,
+          "who": [],
+          "cycles": 5,
+          "temp": 87.0,
+          "clock": 1905.0
+        },
+        "profile": "performance"
+      }
+    ]
+  },
+  {
+    "role": "B",
+    "window": "100/edge",
+    "foreign_cpu_mean": 0.0175,
+    "foreign_cpu_max": 0.07,
+    "samples": [
+      {
+        "kind": "cpu",
+        "epoch": 1793767752.516659,
+        "dt": 5.04,
+        "phase": "run",
+        "load1": 2.74,
+        "cpu_total": 1.26,
+        "cpu_own": 1.33,
+        "cpu_foreign": 0.0,
+        "units": {},
+        "gpu": {
+          "foreign_sm": 0,
+          "foreign_mean": 0.0,
+          "who": [],
+          "cycles": 5,
+          "temp": 86.0,
+          "clock": 1830.0
+        },
+        "profile": "performance"
+      },
+      {
+        "kind": "cpu",
+        "epoch": 1793767757.5620408,
+        "dt": 5.045,
+        "phase": "run",
+        "load1": 2.52,
+        "cpu_total": 1.26,
+        "cpu_own": 1.19,
+        "cpu_foreign": 0.07,
+        "units": {
+          "incoming-codex-MT-B7.service": 0.12
+        },
+        "gpu": {
+          "foreign_sm": 12,
+          "foreign_mean": 3.0,
+          "who": [
+            "kwin_wayland:12"
+          ],
+          "cycles": 4,
+          "temp": 87.0,
+          "clock": 1875.0
+        },
+        "profile": "performance"
+      },
+      {
+        "kind": "cpu",
+        "epoch": 1793767762.6109476,
+        "dt": 5.049,
+        "phase": "run",
+        "load1": 2.4,
+        "cpu_total": 1.09,
+        "cpu_own": 1.15,
+        "cpu_foreign": 0.0,
+        "units": {},
+        "gpu": {
+          "foreign_sm": 0,
+          "foreign_mean": 0.0,
+          "who": [],
+          "cycles": 5,
+          "temp": 87.0,
+          "clock": 1875.0
+        },
+        "profile": "performance"
+      },
+      {
+        "kind": "cpu",
+        "epoch": 1793767767.6507623,
+        "dt": 5.04,
+        "phase": "run",
+        "load1": 2.36,
+        "cpu_total": 1.0,
+        "cpu_own": 1.06,
+        "cpu_foreign": 0.0,
+        "units": {},
+        "gpu": {
+          "foreign_sm": 0,
+          "foreign_mean": 0.0,
+          "who": [],
+          "cycles": 5,
+          "temp": 87.0,
+          "clock": 1890.0
+        },
+        "profile": "performance"
+      }
+    ]
+  },
+  {
+    "role": "B",
+    "window": "100/inside",
+    "foreign_cpu_mean": 0.745,
+    "foreign_cpu_max": 1.06,
+    "samples": [
+      {
+        "kind": "cpu",
+        "epoch": 1793767782.7749903,
+        "dt": 5.041,
+        "phase": "run",
+        "load1": 2.07,
+        "cpu_total": 1.24,
+        "cpu_own": 1.32,
+        "cpu_foreign": 0.0,
+        "units": {},
+        "gpu": {
+          "foreign_sm": 19,
+          "foreign_mean": 3.8,
+          "who": [
+            "kwin_wayland:19"
+          ],
+          "cycles": 5,
+          "temp": 86.0,
+          "clock": 1860.0
+        },
+        "profile": "performance"
+      },
+      {
+        "kind": "cpu",
+        "epoch": 1793767787.8171735,
+        "dt": 5.042,
+        "phase": "run",
+        "load1": 2.06,
+        "cpu_total": 2.58,
+        "cpu_own": 1.52,
+        "cpu_foreign": 1.06,
+        "units": {},
+        "gpu": {
+          "foreign_sm": 19,
+          "foreign_mean": 3.8,
+          "who": [
+            "kwin_wayland:19"
+          ],
+          "cycles": 5,
+          "temp": 87.0,
+          "clock": 1890.0
+        },
+        "profile": "performance"
+      },
+      {
+        "kind": "cpu",
+        "epoch": 1793767792.8622727,
+        "dt": 5.045,
+        "phase": "run",
+        "load1": 2.06,
+        "cpu_total": 2.35,
+        "cpu_own": 1.4,
+        "cpu_foreign": 0.96,
+        "units": {
+          "incoming-job-mt-b7-archive-893787.service": 0.99
+        },
+        "gpu": {
+          "foreign_sm": 16,
+          "foreign_mean": 3.2,
+          "who": [
+            "kwin_wayland:16"
+          ],
+          "cycles": 5,
+          "temp": 87.0,
+          "clock": 1770.0
+        },
+        "profile": "performance"
+      },
+      {
+        "kind": "cpu",
+        "epoch": 1793767797.9093487,
+        "dt": 5.047,
+        "phase": "run",
+        "load1": 2.21,
+        "cpu_total": 2.32,
+        "cpu_own": 1.36,
+        "cpu_foreign": 0.96,
+        "units": {
+          "incoming-job-mt-b7-archive-893787.service": 0.99
+        },
+        "gpu": {
+          "foreign_sm": 14,
+          "foreign_mean": 5.6,
+          "who": [
+            "kwin_wayland:14"
+          ],
+          "cycles": 5,
+          "temp": 86.0,
+          "clock": 1860.0
+        },
+        "profile": "performance"
+      }
+    ]
+  },
+  {
+    "role": "A2",
+    "window": "100/outside",
+    "foreign_cpu_mean": 0.0,
+    "foreign_cpu_max": 0.0,
+    "samples": [
+      {
+        "kind": "cpu",
+        "epoch": 1793767925.6548505,
+        "dt": 5.039,
+        "phase": "run",
+        "load1": 2.36,
+        "cpu_total": 1.5,
+        "cpu_own": 1.58,
+        "cpu_foreign": 0.0,
+        "units": {},
+        "gpu": {
+          "foreign_sm": 0,
+          "foreign_mean": 0.0,
+          "who": [],
+          "cycles": 5,
+          "temp": 87.0,
+          "clock": 1980.0
+        },
+        "profile": "performance"
+      },
+      {
+        "kind": "cpu",
+        "epoch": 1793767930.6955442,
+        "dt": 5.041,
+        "phase": "run",
+        "load1": 2.33,
+        "cpu_total": 1.42,
+        "cpu_own": 1.52,
+        "cpu_foreign": 0.0,
+        "units": {},
+        "gpu": {
+          "foreign_sm": 0,
+          "foreign_mean": 0.0,
+          "who": [],
+          "cycles": 5,
+          "temp": 86.0,
+          "clock": 1905.0
+        },
+        "profile": "performance"
+      },
+      {
+        "kind": "cpu",
+        "epoch": 1793767935.743101,
+        "dt": 5.048,
+        "phase": "run",
+        "load1": 2.3,
+        "cpu_total": 1.29,
+        "cpu_own": 1.39,
+        "cpu_foreign": 0.0,
+        "units": {},
+        "gpu": {
+          "foreign_sm": 0,
+          "foreign_mean": 0.0,
+          "who": [],
+          "cycles": 5,
+          "temp": 87.0,
+          "clock": 1905.0
+        },
+        "profile": "performance"
+      },
+      {
+        "kind": "cpu",
+        "epoch": 1793767940.7829206,
+        "dt": 5.04,
+        "phase": "run",
+        "load1": 2.28,
+        "cpu_total": 1.22,
+        "cpu_own": 1.28,
+        "cpu_foreign": 0.0,
+        "units": {},
+        "gpu": {
+          "foreign_sm": 0,
+          "foreign_mean": 0.0,
+          "who": [],
+          "cycles": 5,
+          "temp": 87.0,
+          "clock": 1920.0
+        },
+        "profile": "performance"
+      }
+    ]
+  },
+  {
+    "role": "A2",
+    "window": "100/edge",
+    "foreign_cpu_mean": 0.0,
+    "foreign_cpu_max": 0.0,
+    "samples": [
+      {
+        "kind": "cpu",
+        "epoch": 1793767955.9077744,
+        "dt": 5.041,
+        "phase": "run",
+        "load1": 2.7,
+        "cpu_total": 1.41,
+        "cpu_own": 1.47,
+        "cpu_foreign": 0.0,
+        "units": {},
+        "gpu": {
+          "foreign_sm": 0,
+          "foreign_mean": 0.0,
+          "who": [],
+          "cycles": 5,
+          "temp": 87.0,
+          "clock": 1920.0
+        },
+        "profile": "performance"
+      },
+      {
+        "kind": "cpu",
+        "epoch": 1793767960.947985,
+        "dt": 5.04,
+        "phase": "run",
+        "load1": 2.64,
+        "cpu_total": 1.03,
+        "cpu_own": 1.1,
+        "cpu_foreign": 0.0,
+        "units": {},
+        "gpu": {
+          "foreign_sm": 0,
+          "foreign_mean": 0.0,
+          "who": [],
+          "cycles": 5,
+          "temp": 87.0,
+          "clock": 1920.0
+        },
+        "profile": "performance"
+      },
+      {
+        "kind": "cpu",
+        "epoch": 1793767965.9881823,
+        "dt": 5.04,
+        "phase": "run",
+        "load1": 2.43,
+        "cpu_total": 1.14,
+        "cpu_own": 1.23,
+        "cpu_foreign": 0.0,
+        "units": {},
+        "gpu": {
+          "foreign_sm": 0,
+          "foreign_mean": 0.0,
+          "who": [],
+          "cycles": 5,
+          "temp": 87.0,
+          "clock": 1890.0
+        },
+        "profile": "performance"
+      },
+      {
+        "kind": "cpu",
+        "epoch": 1793767971.0274892,
+        "dt": 5.039,
+        "phase": "run",
+        "load1": 2.4,
+        "cpu_total": 0.95,
+        "cpu_own": 1.05,
+        "cpu_foreign": 0.0,
+        "units": {},
+        "gpu": {
+          "foreign_sm": 0,
+          "foreign_mean": 0.0,
+          "who": [],
+          "cycles": 5,
+          "temp": 87.0,
+          "clock": 1875.0
+        },
+        "profile": "performance"
+      }
+    ]
+  },
+  {
+    "role": "A2",
+    "window": "100/inside",
+    "foreign_cpu_mean": 0.0,
+    "foreign_cpu_max": 0.0,
+    "samples": [
+      {
+        "kind": "cpu",
+        "epoch": 1793767986.1491113,
+        "dt": 5.041,
+        "phase": "run",
+        "load1": 2.09,
+        "cpu_total": 1.26,
+        "cpu_own": 1.35,
+        "cpu_foreign": 0.0,
+        "units": {},
+        "gpu": {
+          "foreign_sm": 0,
+          "foreign_mean": 0.0,
+          "who": [],
+          "cycles": 5,
+          "temp": 86.0,
+          "clock": 1875.0
+        },
+        "profile": "performance"
+      },
+      {
+        "kind": "cpu",
+        "epoch": 1793767991.1888988,
+        "dt": 5.04,
+        "phase": "run",
+        "load1": 2.08,
+        "cpu_total": 1.08,
+        "cpu_own": 1.17,
+        "cpu_foreign": 0.0,
+        "units": {},
+        "gpu": {
+          "foreign_sm": 0,
+          "foreign_mean": 0.0,
+          "who": [],
+          "cycles": 5,
+          "temp": 87.0,
+          "clock": 1890.0
+        },
+        "profile": "performance"
+      },
+      {
+        "kind": "cpu",
+        "epoch": 1793767996.2289836,
+        "dt": 5.04,
+        "phase": "run",
+        "load1": 1.99,
+        "cpu_total": 1.24,
+        "cpu_own": 1.33,
+        "cpu_foreign": 0.0,
+        "units": {},
+        "gpu": {
+          "foreign_sm": 0,
+          "foreign_mean": 0.0,
+          "who": [],
+          "cycles": 5,
+          "temp": 87.0,
+          "clock": 1890.0
+        },
+        "profile": "performance"
+      },
+      {
+        "kind": "cpu",
+        "epoch": 1793768001.2700472,
+        "dt": 5.041,
+        "phase": "run",
+        "load1": 1.91,
+        "cpu_total": 1.08,
+        "cpu_own": 1.17,
+        "cpu_foreign": 0.0,
+        "units": {},
+        "gpu": {
+          "foreign_sm": 0,
+          "foreign_mean": 0.0,
+          "who": [],
+          "cycles": 5,
+          "temp": 87.0,
+          "clock": 1875.0
+        },
+        "profile": "performance"
+      }
+    ]
+  }
+]

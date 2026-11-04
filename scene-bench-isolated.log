@@ -1,0 +1,16 @@
+05:08:59 GPU held by MT-B7 (/mnt/data/projects/incoming/mod/run/wt-MT-B7), since 05:07, last work 0 min ago (free — tools/gpu_lease.sh release in its tree or after 10 min without work) — waiting (queue position 1)
+05:39:53 mt-b5-complementary-isolated warm-up: pack complementary, 20 steps
+05:43:17 mt-b5-complementary-isolated warm-up: pack complementary — exit 0, 3.4 min
+05:43:17 mt-b5-complementary-isolated A1: pack complementary, 20 steps
+05:46:46 mt-b5-complementary-isolated A1: pack complementary — exit 0, 3.5 min
+05:46:46 mt-b5-complementary-isolated B: pack complementary, 20 steps
+05:50:04 mt-b5-complementary-isolated B: pack complementary — exit 0, 3.3 min
+05:50:04 mt-b5-complementary-isolated A2: pack complementary, 20 steps
+05:53:26 mt-b5-complementary-isolated A2: pack complementary — exit 0, 3.4 min
+05:53:27 mt-b5-complementary-isolated: pack complementary, pair 1 — pass
+05:53:27 A1 complementary: valid
+05:53:27 A2 complementary: valid
+05:53:28 B complementary: valid
+05:53:28 mt-b5-complementary-isolated: pass; results in /mnt/data/projects/incoming/mod/run/stand/out/mt-b5-complementary-isolated
+laptop_job stand-mt-b5-complementary-isolated: exit 0
+stand mt-b5-complementary-isolated: exit 0

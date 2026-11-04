@@ -1,0 +1,512 @@
+{
+ "state": "pass",
+ "pass": true,
+ "packs": {
+  "complementary": {
+   "state": "pass",
+   "fails": [],
+   "rows": [
+    {
+     "pack": "complementary",
+     "window": "100-hit",
+     "metric": "gpu.p50",
+     "cand": 20.425,
+     "base": 20.387,
+     "bases": [
+      20.387,
+      20.323
+     ],
+     "change": 0.0018639328984155767,
+     "tol": null,
+     "gated": false,
+     "fail": false
+    },
+    {
+     "pack": "complementary",
+     "window": "100-hit",
+     "metric": "thread.p95",
+     "cand": 30.0493,
+     "base": 28.900799999999997,
+     "bases": [
+      28.900799999999997,
+      27.9204
+     ],
+     "change": 0.039739384376903164,
+     "tol": null,
+     "gated": false,
+     "fail": false
+    },
+    {
+     "pack": "complementary",
+     "window": "100-hit",
+     "metric": "cpu.p95",
+     "cand": 30.444949999999995,
+     "base": 29.55785,
+     "bases": [
+      29.55785,
+      28.149699999999996
+     ],
+     "change": 0.03001233174943363,
+     "tol": null,
+     "gated": false,
+     "fail": false
+    },
+    {
+     "pack": "complementary",
+     "window": "100-hit",
+     "metric": "interval.p95",
+     "cand": 38.4531,
+     "base": 38.3869,
+     "bases": [
+      37.567949999999996,
+      38.3869
+     ],
+     "change": 0.0017245466552391342,
+     "tol": null,
+     "gated": false,
+     "fail": false
+    },
+    {
+     "pack": "complementary",
+     "window": "100/edge",
+     "metric": "gpu.p50",
+     "cand": 11.791,
+     "base": 11.807,
+     "bases": [
+      11.807,
+      11.726
+     ],
+     "change": -0.001355128313712206,
+     "tol": 0.25,
+     "gated": true,
+     "fail": false
+    },
+    {
+     "pack": "complementary",
+     "window": "100/edge",
+     "metric": "thread.p95",
+     "cand": 6.60625,
+     "base": 6.528,
+     "bases": [
+      6.406,
+      6.528
+     ],
+     "change": 0.011986825980392357,
+     "tol": 0.25,
+     "gated": true,
+     "fail": false
+    },
+    {
+     "pack": "complementary",
+     "window": "100/edge",
+     "metric": "cpu.p95",
+     "cand": 6.6244000000000005,
+     "base": 6.546199999999999,
+     "bases": [
+      6.4277500000000005,
+      6.546199999999999
+     ],
+     "change": 0.011945861721304185,
+     "tol": null,
+     "gated": false,
+     "fail": false
+    },
+    {
+     "pack": "complementary",
+     "window": "100/edge",
+     "metric": "interval.p95",
+     "cand": 14.4067,
+     "base": 14.450700000000001,
+     "bases": [
+      14.450700000000001,
+      14.3996
+     ],
+     "change": -0.003044835198294904,
+     "tol": null,
+     "gated": false,
+     "fail": false
+    },
+    {
+     "pack": "complementary",
+     "window": "100/inside",
+     "metric": "gpu.p50",
+     "cand": 11.001,
+     "base": 11.265,
+     "bases": [
+      11.265,
+      11.021
+     ],
+     "change": -0.023435419440745786,
+     "tol": 0.25,
+     "gated": true,
+     "fail": false
+    },
+    {
+     "pack": "complementary",
+     "window": "100/inside",
+     "metric": "thread.p95",
+     "cand": 6.6991000000000005,
+     "base": 5.915900000000001,
+     "bases": [
+      5.915900000000001,
+      5.7463
+     ],
+     "change": 0.1323889856150373,
+     "tol": 0.25,
+     "gated": true,
+     "fail": false
+    },
+    {
+     "pack": "complementary",
+     "window": "100/inside",
+     "metric": "cpu.p95",
+     "cand": 6.7307,
+     "base": 5.927,
+     "bases": [
+      5.927,
+      5.758299999999999
+     ],
+     "change": 0.1355997975366965,
+     "tol": null,
+     "gated": false,
+     "fail": false
+    },
+    {
+     "pack": "complementary",
+     "window": "100/inside",
+     "metric": "interval.p95",
+     "cand": 13.811,
+     "base": 13.6573,
+     "bases": [
+      13.6573,
+      13.34465
+     ],
+     "change": 0.011254054608158315,
+     "tol": null,
+     "gated": false,
+     "fail": false
+    },
+    {
+     "pack": "complementary",
+     "window": "100/outside",
+     "metric": "gpu.p50",
+     "cand": 10.311,
+     "base": 10.346,
+     "bases": [
+      10.2715,
+      10.346
+     ],
+     "change": -0.003382949932341006,
+     "tol": 0.25,
+     "gated": true,
+     "fail": false
+    },
+    {
+     "pack": "complementary",
+     "window": "100/outside",
+     "metric": "thread.p95",
+     "cand": 7.2016,
+     "base": 7.13815,
+     "bases": [
+      7.13815,
+      6.953200000000001
+     ],
+     "change": 0.008888857757261892,
+     "tol": 0.25,
+     "gated": true,
+     "fail": false
+    },
+    {
+     "pack": "complementary",
+     "window": "100/outside",
+     "metric": "cpu.p95",
+     "cand": 7.22055,
+     "base": 7.15615,
+     "bases": [
+      7.15615,
+      6.9701
+     ],
+     "change": 0.008999252391299839,
+     "tol": null,
+     "gated": false,
+     "fail": false
+    },
+    {
+     "pack": "complementary",
+     "window": "100/outside",
+     "metric": "interval.p95",
+     "cand": 12.6308,
+     "base": 12.8472,
+     "bases": [
+      12.77115,
+      12.8472
+     ],
+     "change": -0.016844137243913093,
+     "tol": null,
+     "gated": false,
+     "fail": false
+    }
+   ],
+   "notes": [],
+   "tries": 1,
+   "earlier": []
+  }
+ },
+ "notes": [],
+ "fails": [],
+ "rows": [
+  {
+   "pack": "complementary",
+   "window": "100-hit",
+   "metric": "gpu.p50",
+   "cand": 20.425,
+   "base": 20.387,
+   "bases": [
+    20.387,
+    20.323
+   ],
+   "change": 0.0018639328984155767,
+   "tol": null,
+   "gated": false,
+   "fail": false
+  },
+  {
+   "pack": "complementary",
+   "window": "100-hit",
+   "metric": "thread.p95",
+   "cand": 30.0493,
+   "base": 28.900799999999997,
+   "bases": [
+    28.900799999999997,
+    27.9204
+   ],
+   "change": 0.039739384376903164,
+   "tol": null,
+   "gated": false,
+   "fail": false
+  },
+  {
+   "pack": "complementary",
+   "window": "100-hit",
+   "metric": "cpu.p95",
+   "cand": 30.444949999999995,
+   "base": 29.55785,
+   "bases": [
+    29.55785,
+    28.149699999999996
+   ],
+   "change": 0.03001233174943363,
+   "tol": null,
+   "gated": false,
+   "fail": false
+  },
+  {
+   "pack": "complementary",
+   "window": "100-hit",
+   "metric": "interval.p95",
+   "cand": 38.4531,
+   "base": 38.3869,
+   "bases": [
+    37.567949999999996,
+    38.3869
+   ],
+   "change": 0.0017245466552391342,
+   "tol": null,
+   "gated": false,
+   "fail": false
+  },
+  {
+   "pack": "complementary",
+   "window": "100/edge",
+   "metric": "gpu.p50",
+   "cand": 11.791,
+   "base": 11.807,
+   "bases": [
+    11.807,
+    11.726
+   ],
+   "change": -0.001355128313712206,
+   "tol": 0.25,
+   "gated": true,
+   "fail": false
+  },
+  {
+   "pack": "complementary",
+   "window": "100/edge",
+   "metric": "thread.p95",
+   "cand": 6.60625,
+   "base": 6.528,
+   "bases": [
+    6.406,
+    6.528
+   ],
+   "change": 0.011986825980392357,
+   "tol": 0.25,
+   "gated": true,
+   "fail": false
+  },
+  {
+   "pack": "complementary",
+   "window": "100/edge",
+   "metric": "cpu.p95",
+   "cand": 6.6244000000000005,
+   "base": 6.546199999999999,
+   "bases": [
+    6.4277500000000005,
+    6.546199999999999
+   ],
+   "change": 0.011945861721304185,
+   "tol": null,
+   "gated": false,
+   "fail": false
+  },
+  {
+   "pack": "complementary",
+   "window": "100/edge",
+   "metric": "interval.p95",
+   "cand": 14.4067,
+   "base": 14.450700000000001,
+   "bases": [
+    14.450700000000001,
+    14.3996
+   ],
+   "change": -0.003044835198294904,
+   "tol": null,
+   "gated": false,
+   "fail": false
+  },
+  {
+   "pack": "complementary",
+   "window": "100/inside",
+   "metric": "gpu.p50",
+   "cand": 11.001,
+   "base": 11.265,
+   "bases": [
+    11.265,
+    11.021
+   ],
+   "change": -0.023435419440745786,
+   "tol": 0.25,
+   "gated": true,
+   "fail": false
+  },
+  {
+   "pack": "complementary",
+   "window": "100/inside",
+   "metric": "thread.p95",
+   "cand": 6.6991000000000005,
+   "base": 5.915900000000001,
+   "bases": [
+    5.915900000000001,
+    5.7463
+   ],
+   "change": 0.1323889856150373,
+   "tol": 0.25,
+   "gated": true,
+   "fail": false
+  },
+  {
+   "pack": "complementary",
+   "window": "100/inside",
+   "metric": "cpu.p95",
+   "cand": 6.7307,
+   "base": 5.927,
+   "bases": [
+    5.927,
+    5.758299999999999
+   ],
+   "change": 0.1355997975366965,
+   "tol": null,
+   "gated": false,
+   "fail": false
+  },
+  {
+   "pack": "complementary",
+   "window": "100/inside",
+   "metric": "interval.p95",
+   "cand": 13.811,
+   "base": 13.6573,
+   "bases": [
+    13.6573,
+    13.34465
+   ],
+   "change": 0.011254054608158315,
+   "tol": null,
+   "gated": false,
+   "fail": false
+  },
+  {
+   "pack": "complementary",
+   "window": "100/outside",
+   "metric": "gpu.p50",
+   "cand": 10.311,
+   "base": 10.346,
+   "bases": [
+    10.2715,
+    10.346
+   ],
+   "change": -0.003382949932341006,
+   "tol": 0.25,
+   "gated": true,
+   "fail": false
+  },
+  {
+   "pack": "complementary",
+   "window": "100/outside",
+   "metric": "thread.p95",
+   "cand": 7.2016,
+   "base": 7.13815,
+   "bases": [
+    7.13815,
+    6.953200000000001
+   ],
+   "change": 0.008888857757261892,
+   "tol": 0.25,
+   "gated": true,
+   "fail": false
+  },
+  {
+   "pack": "complementary",
+   "window": "100/outside",
+   "metric": "cpu.p95",
+   "cand": 7.22055,
+   "base": 7.15615,
+   "bases": [
+    7.15615,
+    6.9701
+   ],
+   "change": 0.008999252391299839,
+   "tol": null,
+   "gated": false,
+   "fail": false
+  },
+  {
+   "pack": "complementary",
+   "window": "100/outside",
+   "metric": "interval.p95",
+   "cand": 12.6308,
+   "base": 12.8472,
+   "bases": [
+    12.77115,
+    12.8472
+   ],
+   "change": -0.016844137243913093,
+   "tol": null,
+   "gated": false,
+   "fail": false
+  }
+ ],
+ "cand": {
+  "label": "MT-B5-490a2aa84",
+  "file": "incoming-3.10.4.jar",
+  "sha256": "45f3df524107077f4c34c1f7c2d71943f52690c67263ebbee16c408d47a2c79e",
+  "spec": "mod/run/mt-b5/jars/490a2aa84/incoming-3.10.4.jar"
+ },
+ "base": {
+  "label": "1aca1654a71a@1aca1654",
+  "file": "incoming-3.10.4.jar",
+  "sha256": "8717214b0d8d401fbbb3acc43018860b0a37fd0d3d4c06442bf7624910ff8a8e",
+  "spec": "ci:1aca1654a71a80e21fea645006f71517b56de2cf"
+ },
+ "look": []
+}

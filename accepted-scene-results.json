@@ -1,0 +1,11 @@
+{
+  "pass": true,
+  "packs": {
+    "none": "scene-bench/verdict.json",
+    "photon": "scene-bench/verdict.json",
+    "complementary": "scene-bench-isolated/verdict.json"
+  },
+  "original_complementary": "Failed with author merge GameTest overlapping the inside window; raw failure retained, see bench-cpu-overlap.json.",
+  "final_head": "490a2aa84e889fd7320ff79313696756d1bac938",
+  "basis": "Initial pairs and final isolated repeat share identical production client/shader sources. Both main baselines share identical production client/shader sources. Actual jar/source identities are retained."
+}

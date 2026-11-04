@@ -1,0 +1,182 @@
+{
+  "A1/client-complementary.out": {
+    "sha256": "b4e710a7e02b608c2c3ccf66fa3cb3a0a9872ee8816daa4fce5a72f85dedd3e5",
+    "bytes": 148336,
+    "archived": "A1/client-complementary.out"
+  },
+  "A1/complementary/events.jsonl": {
+    "sha256": "fbc9517568dc5299571d163ead0ee82751171c4db8f7214ed6a9469721cb87a4",
+    "bytes": 274025,
+    "archived": "A1/complementary/events.jsonl"
+  },
+  "A1/complementary/frames.csv": {
+    "sha256": "33837d7bf9029fddccb851c9bb37d8954c6c3ab7ea8dc17922460ae019eb443d",
+    "bytes": 7997578,
+    "archived": "A1/complementary/frames.csv.gz"
+  },
+  "A1/complementary/host.jsonl": {
+    "sha256": "ac862e3422eda611439813a40219b60589b5f647644f253e02fe2dc6eaabd9dd",
+    "bytes": 32149,
+    "archived": "A1/complementary/host.jsonl"
+  },
+  "A1/complementary/latest.log": {
+    "sha256": "c018b66d8b77eae2752a40c5be724db6ec90a3bf8842211b0d8422a4f473f347",
+    "bytes": 144136,
+    "archived": "A1/complementary/latest.log"
+  },
+  "A1/complementary/stand-plan.json": {
+    "sha256": "82bcdfe07306366cfd0b44ca74879eb31d8df111ed335692658dd820058b4117",
+    "bytes": 10916,
+    "archived": "A1/complementary/stand-plan.json"
+  },
+  "A1/meta.json": {
+    "sha256": "1330bbee0b59906f962c2c79b2655d3720590bb20a6d3177a6f9b4a97d1d4fae",
+    "bytes": 1227,
+    "archived": "A1/meta.json"
+  },
+  "A1/results.json": {
+    "sha256": "7403788811f7d5423f884a7e1374419f07c1f0f1f0539b0b05e7715e1ef80131",
+    "bytes": 20710,
+    "archived": "A1/results.json"
+  },
+  "A2/client-complementary.out": {
+    "sha256": "924eab22c88942ffe9483fd34164298f90f9a59d64fdbcdc768473ea0682b305",
+    "bytes": 149537,
+    "archived": "A2/client-complementary.out"
+  },
+  "A2/complementary/events.jsonl": {
+    "sha256": "08cbff92494b0113e0c1c92ca972f21c1259b962c025609779293cf17f9f8e80",
+    "bytes": 275937,
+    "archived": "A2/complementary/events.jsonl"
+  },
+  "A2/complementary/frames.csv": {
+    "sha256": "c2891ab77f71388b0b7db4d27a313b3241fbf010197638cfc29f05eb131229d7",
+    "bytes": 8060094,
+    "archived": "A2/complementary/frames.csv.gz"
+  },
+  "A2/complementary/host.jsonl": {
+    "sha256": "b221814b8fb77d262e1e823c232095f8ea22afdd722e38f54e7cb9efade58282",
+    "bytes": 30729,
+    "archived": "A2/complementary/host.jsonl"
+  },
+  "A2/complementary/latest.log": {
+    "sha256": "21b98c4246f3aafd27d5831858c8238c0175cdbefbd0bafa9ce204af09bc8cdc",
+    "bytes": 144251,
+    "archived": "A2/complementary/latest.log"
+  },
+  "A2/complementary/stand-plan.json": {
+    "sha256": "82bcdfe07306366cfd0b44ca74879eb31d8df111ed335692658dd820058b4117",
+    "bytes": 10916,
+    "archived": "A2/complementary/stand-plan.json"
+  },
+  "A2/meta.json": {
+    "sha256": "79ed6f3703c7b95c286a19cb70a5a03458d74c8644b258515bd22d0bea3d5f54",
+    "bytes": 1227,
+    "archived": "A2/meta.json"
+  },
+  "A2/results.json": {
+    "sha256": "6e6d1dbb36f3db6e76d0f745f0193e8591f3c2fe3344147594edd1916c1ec8ea",
+    "bytes": 20679,
+    "archived": "A2/results.json"
+  },
+  "B/client-complementary.out": {
+    "sha256": "ff14baf010335338088edc9359ff4bc63bdc2c2b7807be0d16f97d2ba591bbe0",
+    "bytes": 148335,
+    "archived": "B/client-complementary.out"
+  },
+  "B/complementary/events.jsonl": {
+    "sha256": "6270f1a93fa66b47422a6e3312a000a17c8c1f2f23afbc7b415f29fe935872e6",
+    "bytes": 275332,
+    "archived": "B/complementary/events.jsonl"
+  },
+  "B/complementary/frames.csv": {
+    "sha256": "50c31e4c660f7f9d4646e1eb7f5695e3ccecad7fbb135bf8e7aa476b649285bb",
+    "bytes": 8056965,
+    "archived": "B/complementary/frames.csv.gz"
+  },
+  "B/complementary/host.jsonl": {
+    "sha256": "a04cc01eca17476f994b7ce5bd84dfeef3168b391de94ab3b68cf03bd9dc6ca0",
+    "bytes": 30268,
+    "archived": "B/complementary/host.jsonl"
+  },
+  "B/complementary/latest.log": {
+    "sha256": "2d7d6ff09790b2db25a055ec34858bb43528240a8d9a0298d8d348b856c67845",
+    "bytes": 144135,
+    "archived": "B/complementary/latest.log"
+  },
+  "B/complementary/stand-plan.json": {
+    "sha256": "82bcdfe07306366cfd0b44ca74879eb31d8df111ed335692658dd820058b4117",
+    "bytes": 10916,
+    "archived": "B/complementary/stand-plan.json"
+  },
+  "B/meta.json": {
+    "sha256": "306de6aaca9d2c3a1cee760c54441b83a9e48ba14de328a522d8a224ddede847",
+    "bytes": 1219,
+    "archived": "B/meta.json"
+  },
+  "B/results.json": {
+    "sha256": "0fc87e85a04e4bf4b1173242e2fbba616bb5e9664484148c769c1d2c34c7e69a",
+    "bytes": 21249,
+    "archived": "B/results.json"
+  },
+  "comment.md": {
+    "sha256": "36a2162da2938ddc2e5b64521a2e1acfabe258d42d64a00add40c5565a96fe2e",
+    "bytes": 794,
+    "archived": "comment.md"
+  },
+  "look.json": {
+    "sha256": "c59fb9d3d12696ce7a4a4baa3f16b31346b5947ce72ec920b9bc8206f98b9a04",
+    "bytes": 2349,
+    "archived": "look.json"
+  },
+  "pair.json": {
+    "sha256": "520bcf9dac4e63c7da414f4a8c1127e31add7d93def85574b3e78b32c90a8ce0",
+    "bytes": 1319,
+    "archived": "pair.json"
+  },
+  "report.md": {
+    "sha256": "812c3611b447f26465bbd61bf94e5a16ee721d910e34f89da3eb372fa6cd2832",
+    "bytes": 7101,
+    "archived": "report.md"
+  },
+  "sheet-complementary.png": {
+    "sha256": "b5ca217fa69b2fb2c840e847a6bcd8a077f7724978b31c927ebfe7888dab6734",
+    "bytes": 2470422,
+    "archived": "sheet-complementary.png"
+  },
+  "verdict.json": {
+    "sha256": "8adb7156cc2c24907e37604ac9265ce18f85f9cff02c35dc82b6f2dae01059a1",
+    "bytes": 9784,
+    "archived": "verdict.json"
+  },
+  "warmup/client-complementary.out": {
+    "sha256": "2f2b8b34ce2eeffe5fdda595711fa855f216c8af8d4e3dc5ee6f507ee89320de",
+    "bytes": 148336,
+    "archived": "warmup/client-complementary.out"
+  },
+  "warmup/complementary/events.jsonl": {
+    "sha256": "3aa5a7786e08f6f9108d99163684552d0fcf5edc52215c72a168199b77e7f165",
+    "bytes": 273784,
+    "archived": "warmup/complementary/events.jsonl"
+  },
+  "warmup/complementary/frames.csv": {
+    "sha256": "6b9fee045bdfd7b91a2b49f048f6b78378006d12c8cf02b4fe07a072f3bd47e0",
+    "bytes": 8066078,
+    "archived": "warmup/complementary/frames.csv.gz"
+  },
+  "warmup/complementary/host.jsonl": {
+    "sha256": "5f7115339656d1b82ff5aef2b8101a79386c953190300e4f933d4a06c8a4bbf6",
+    "bytes": 31255,
+    "archived": "warmup/complementary/host.jsonl"
+  },
+  "warmup/complementary/latest.log": {
+    "sha256": "85810950616f865841a4f722900a5809b865cffeaa0a40dc757e2a9787543ccd",
+    "bytes": 144136,
+    "archived": "warmup/complementary/latest.log"
+  },
+  "warmup/complementary/stand-plan.json": {
+    "sha256": "82bcdfe07306366cfd0b44ca74879eb31d8df111ed335692658dd820058b4117",
+    "bytes": 10916,
+    "archived": "warmup/complementary/stand-plan.json"
+  }
+}
