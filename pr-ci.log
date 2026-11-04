@@ -1,0 +1,3 @@
+04:31:59 new head dba2d153 — waiting for its checks
+04:36:45 no checks for dba2d153 after 5 min (mergeable=MERGEABLE) — still waiting
+PR 565 (dba2d153): Итог is green after 5 min of waiting

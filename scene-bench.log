@@ -1,0 +1,16 @@
+04:32:02 mt-b5-final-dba2 warm-up: pack none, 20 steps
+04:32:07 waiting for quiet: foreign 1.15 cores, GPU [], services {'incoming-job-mt-b5-final-build-780496.service': 1.03}
+04:33:08 waiting for quiet: foreign 1.93 cores, GPU [], services {'incoming-job-mt-b5-final-build-780496.service': 1.85}
+04:34:03 not quiet after 2 min — proceeding (window load is reported)
+04:36:52 mt-b5-final-dba2 warm-up: pack none — exit 0, 4.8 min
+04:36:52 mt-b5-final-dba2 A1: pack none, 20 steps
+04:39:51 mt-b5-final-dba2 A1: pack none — exit 0, 3.0 min
+04:39:51 mt-b5-final-dba2 B: pack none, 20 steps
+04:42:42 mt-b5-final-dba2 B: pack none — exit 0, 2.9 min
+04:42:42 mt-b5-final-dba2 A2: pack none, 20 steps
+04:45:37 mt-b5-final-dba2 A2: pack none — exit 0, 2.9 min
+04:45:41 mt-b5-final-dba2: pack none, pair 1 — pass
+04:45:41 mt-b5-final-dba2 A1: pack complementary, 20 steps
+04:45:46 waiting for quiet: foreign 2.14 cores, GPU [], services {'incoming-job-mt-b5-cache-fix-800533.service': 2.07}
+04:46:46 waiting for quiet: foreign 1.19 cores, GPU ['kwin_wayland:1'], services {'incoming-job-mt-b5-cache-fix-800533.service': 1.12}
+04:47:42 not quiet after 2 min — proceeding (window load is reported)
