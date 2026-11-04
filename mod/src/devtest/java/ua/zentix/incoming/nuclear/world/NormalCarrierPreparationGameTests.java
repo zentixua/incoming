@@ -56,6 +56,10 @@ public final class NormalCarrierPreparationGameTests {
         NuclearStrikes.clear(level);
         boolean carriers = IncomingConfig.SERVER.carrierNukes.get();
         boolean fires = IncomingConfig.SERVER.nukeFires.get();
+        var preset = IncomingConfig.SERVER.scalePreset.get();
+        double scale = IncomingConfig.SERVER.nukeEffectsScale.get();
+        IncomingConfig.SERVER.scalePreset.set(IncomingConfig.ScalePreset.CUSTOM);
+        IncomingConfig.SERVER.nukeEffectsScale.set(.02);
         IncomingConfig.SERVER.carrierNukes.set(true);
         IncomingConfig.SERVER.nukeFires.set(false);
         // A broad flat glass roof supplies actual nonempty changed-block plans at the sampled column.
@@ -68,7 +72,7 @@ public final class NormalCarrierPreparationGameTests {
         Vec3 target = Vec3.atCenterOf(h.absolutePos(new BlockPos(32, surface ? 2 : 12, 32)));
         Target order = surface ? new Target.Ground(target) : new Target.Point(target);
         UUID handle = UUID.randomUUID(), owner = UUID.randomUUID();
-        double yield = .00001;
+        int yield = 1;
         Object[] request = {null};
         Detonation[] expected = {null};
         long[] launchedAt = {-1};
@@ -84,6 +88,8 @@ public final class NormalCarrierPreparationGameTests {
             RuinMatterGameTests.clearFixture(level);
             IncomingConfig.SERVER.carrierNukes.set(carriers);
             IncomingConfig.SERVER.nukeFires.set(fires);
+            IncomingConfig.SERVER.scalePreset.set(preset);
+            IncomingConfig.SERVER.nukeEffectsScale.set(scale);
         });
         h.runAtTickTime(2, () -> RuinPreparation.prepareCarrier(level, handle, owner, target, yield, surface, air, weapon));
         h.onEachTick(() -> {
@@ -116,7 +122,7 @@ public final class NormalCarrierPreparationGameTests {
             identity[0] = carrier.nuclearPreparation();
             h.assertTrue(identity[0] >= 0, "normal launch lost explicit binding");
             if (surface && weapon == WeaponType.MISSILE)
-                h.assertTrue(carrier.aimPoint().equals(launch.add(miss)), "initial Ground launch height changed");
+                h.assertTrue(trackerPoint(carrier).equals(launch.add(miss)), "initial Ground launch height changed");
             h.assertTrue(!StrikeService.launchPrepared(level, weapon, order, launch, 0, owner, null, false,
                     new Loadout.Nuke(yield, air, true), Waypoints.NONE, null, handle, 1800).ok(), "duplicate commit launched");
             launchedAt[0] = level.getGameTime();
@@ -158,6 +164,13 @@ public final class NormalCarrierPreparationGameTests {
             RuinPreparation.cancel(level, handle);
         }
         h.succeed();
+    }
+
+    private static Vec3 trackerPoint(StrikeProjectile carrier) {
+        try {
+            Field f = StrikeProjectile.class.getDeclaredField("tracker"); f.setAccessible(true);
+            return ((ua.zentix.incoming.target.TargetTracker) f.get(carrier)).point();
+        } catch (ReflectiveOperationException e) { throw new AssertionError(e); }
     }
 
     private static StrikeProjectile carrier(ServerLevel level, UUID owner) {

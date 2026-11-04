@@ -656,7 +656,7 @@ public final class NuclearPrep {
                 Vec3 at = p.target.add(p.miss);
                 double ground;
                 if (p.carrierWeapon == null) {
-                    Terrain.Surface under = resolveSurface(level, p, shared, p.target, noLeaves);
+                    Terrain.Surface under = resolveSurface(level, p, shared);
                     if (under == null) return;
                     ground = terminalGround(p, under.y(), under.y(), under.source() == Terrain.Source.CEILING,
                             level.getMinBuildHeight());
@@ -746,6 +746,11 @@ public final class NuclearPrep {
                     p.plans.bytes() >> 20, p.ruins.shotBytes() >> 20, RuinWorkers.summary(), Math.round(RuinWorkers.utilisation() * 100),
                     (rt.totalMemory() - rt.freeMemory()) >> 20, rt.maxMemory() >> 20);
         }
+    }
+
+    private Terrain.@Nullable Surface resolveSurface(ServerLevel level, Prep p, WorkClock shared) {
+        return resolveSurface(level, p, shared, p.target,
+                net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING_NO_LEAVES);
     }
 
     /** One bounded async region read also handles editor chunks with missing heightmaps. */

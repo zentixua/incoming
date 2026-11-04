@@ -43,7 +43,7 @@ public final class NormalCarrierEquivalenceGameTests {
         Vec3 target = Vec3.atCenterOf(h.absolutePos(new BlockPos(32, 1, 32)));
         long seed = 781329L;
         level.random.setSeed(seed);
-        RuinPreparation.prepareCarrier(level, handle, preparedOwner, target, .000001, true, air, WeaponType.MISSILE);
+        RuinPreparation.prepareCarrier(level, handle, preparedOwner, target, 1, true, air, WeaponType.MISSILE);
         long[] launched = {-1};
         int[] compared = {0};
         StrikeGameTests.afterTest(h, () -> {
@@ -63,7 +63,7 @@ public final class NormalCarrierEquivalenceGameTests {
                 if (status.stage() != RuinPreparation.Stage.READY) return;
                 Vec3 point = status.resolvedTarget();
                 Target order = new Target.Ground(point);
-                Loadout.Nuke nuke = new Loadout.Nuke(.000001, air, true);
+                Loadout.Nuke nuke = new Loadout.Nuke(1, air, true);
                 // Control only the shared route RNG inputs, not flight state or terrain.
                 level.random.setSeed(seed);
                 Vec3 miss = WeaponType.MISSILE.spec().route().miss(level.random);
