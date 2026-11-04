@@ -40,8 +40,8 @@ unlaunched preparation. A confirmed order waiting for a second key or carrier wa
 The configured flight duration (90 seconds by default) starts at launch, after preparation. Ordinary nuclear commands
 prepare unpaid and then launch once ready, because the command itself is the instruction to fire. Operator `nuke now`
 remains immediate diagnostic behavior. Carrier preparation includes its usual randomly selected aim offset; launch keeps that same offset.
-Plans cover the normal arrival at that site. An earlier collision, moving target, terrain edit or server restart may
-require fresh destruction work at the actual impact site. It does not guarantee that every distant-terrain client already has the latest view.
+Plans cover the normal arrival for a fixed point or map-ground order. Entity/craft targeting, an earlier collision,
+terrain edit or server restart may require fresh destruction work at the actual impact site. It does not guarantee that every distant-terrain client already has the latest view.
 
 ![Console with the nuclear warhead: yield and burst mode](img/remote-nuke.png)
 

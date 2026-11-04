@@ -16,7 +16,8 @@ Incoming (https://github.com/zentixua/incoming): strikes by Shahed and Lancet dr
   authority/settings, moved target or a global nuclear abort cancels pending preparation. Console/command-block
   preparation requests are bounded; a refused command has not launched. The operator-only now form remains immediate.
   Nuclear carriers select their usual aim error once before preparation and keep it at launch. Plans cover the nominal
-  arrival; earlier contacts, moving targets, terrain edits or restart can require fresh work at the actual physical site.
+  arrival for fixed point/ground orders; entity/craft targeting, earlier contacts, terrain edits or restart can require
+  fresh work at the actual physical site.
 - Fixed launcher (block incoming:fixed_launcher): «incoming launcher x y z [mission <weapon> <count> <spread> x z
   [via …] | load N | fire | clear | owner <player>|none]»; the mission target is x z or x y z, as in salvo. A redstone
   signal at the block does the same as fire.
