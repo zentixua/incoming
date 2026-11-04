@@ -40,7 +40,7 @@ final class ClientHorizon {
             VoxyIngest.beginHints(level);
         }
         var ticket = QUEUE.reserve(ChunkPos.asLong(packet.x(), packet.z()), packet.notBefore(),
-                packet.sections().length + 128L, 1);
+                packet.sections().length + 128L, 1, packet.detonation());
         boolean accepted = ticket != null && QUEUE.complete(ticket, packet);
         if (accepted) kick(level);
         return accepted;
@@ -51,7 +51,12 @@ final class ClientHorizon {
     static synchronized boolean full() { return QUEUE.bytes() >= QUEUED_BYTES - (1 << 20) - 128 || QUEUE.size() >= QUEUED_COLUMNS - 64; }
 
     static synchronized void tick(ClientLevel level, long now) {
-        if (world != level) return;
+        // Retire the old dimension even when a full old batch prevents any new terrain packet.
+        if (world != level) {
+            reset();
+            world = level;
+            VoxyIngest.beginHints(level);
+        }
         java.util.Map<Integer, Double> clocks = new java.util.HashMap<>();
         for (var active : ua.zentix.incoming.client.nuclear.ClientNuclear.detonations()) {
             clocks.put(active.d.id(), ua.zentix.incoming.client.nuclear.ClientNuclear.horizonTime(active.d.id(), now));
@@ -79,13 +84,10 @@ final class ClientHorizon {
         try {
             if (VoxyIngest.backlogged()) return;
             int changedSections = 0;
+            java.util.function.IntToDoubleFunction clock = event -> clocks.getOrDefault(event, (double) now);
             for (int i = 0; i < 256 && changedSections < 1024 && QUEUE.epoch() == epoch; i++) {
-                var ready = QUEUE.take(Long.MAX_VALUE);
+                var ready = QUEUE.take(clock);
                 if (ready == null) break;
-                if (ready.ticket().due() > clocks.getOrDefault(ready.value().detonation(), (double) now)) {
-                    QUEUE.defer(ready);
-                    break;
-                }
                 try {
                     // A concurrent reset may occur here. The explicit level belongs to this session; reset's
                     // returned barrier completes AFTER this external call, never merely after a current() check.
@@ -124,6 +126,8 @@ final class ClientHorizon {
         if (world == level && QUEUE.epoch() == epoch) VoxyIngest.requestFresh(level, packet);
     }
 
+    static CompletableFuture<Void> barrier() { return CompletableFuture.runAsync(() -> {}, WORKER); }
+
     /** Nonblocking request. The returned future is the Incoming submission fence, not a Voxy renderer fence. */
     static synchronized CompletableFuture<Void> reset() {
         QUEUE.stop();
@@ -132,6 +136,6 @@ final class ClientHorizon {
         latestClocks = java.util.Map.of();
         VoxyIngest.clearHints();
         draining = false;
-        return CompletableFuture.runAsync(() -> {}, WORKER);
+        return barrier();
     }
 }

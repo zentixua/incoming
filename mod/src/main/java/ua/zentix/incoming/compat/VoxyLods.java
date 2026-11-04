@@ -249,7 +249,7 @@ public final class VoxyLods {
      * LODs must not change before the front.
      */
     public static void send(ServerLevel level, ChunkAccess chunk, long notBefore) {
-        send(level, chunk, notBefore, null, null, -1);
+        send(level, chunk, notBefore, null, -1);
     }
 
     /**
@@ -257,14 +257,15 @@ public final class VoxyLods {
      * {@code FarLods.refresh}): DH and other players already have correct LODs. Server thread.
      */
     public static void sendTo(ServerLevel level, ChunkAccess chunk, UUID player) {
-        send(level, chunk, Long.MIN_VALUE, player, null, -1);
+        send(level, chunk, Long.MIN_VALUE, player, -1);
     }
 
-    public static void sendChanged(ServerLevel level, ChunkAccess chunk, long notBefore, byte[][] baseline, int detonation) {
-        send(level, chunk, notBefore, null, baseline, detonation);
+    /** Full column: server before/after sections do not establish any recipient's cached baseline. */
+    public static void send(ServerLevel level, ChunkAccess chunk, long notBefore, int detonation) {
+        send(level, chunk, notBefore, null, detonation);
     }
 
-    private static void send(ServerLevel level, ChunkAccess chunk, long notBefore, @Nullable UUID only, @Nullable byte[][] baseline, int detonation) {
+    private static void send(ServerLevel level, ChunkAccess chunk, long notBefore, @Nullable UUID only, int detonation) {
         VoxyLods v = get(level.getServer());
         if (!v.levels.contains(level.dimension())) return;
         ChunkPos pos = chunk.getPos();
@@ -284,12 +285,14 @@ public final class VoxyLods {
         }
         boolean sky = level.dimensionType().hasSkyLight();
         v.building++;
-        CompletableFuture.supplyAsync(() -> baseline == null ? LodSections.ofCopy(chunk, sky)
-                : LodSections.difference(chunk.getMinSection(), baseline, LodSections.snapshot(chunk.getSections(), sky)), Util.backgroundExecutor()).whenComplete((data, error) -> {
+        CompletableFuture.supplyAsync(() -> columnData(chunk, sky), Util.backgroundExecutor()).whenComplete((data, error) -> {
             if (error != null) Incoming.LOG.warn("Voxy LOD of changed chunk {} not built", pos, error);
             v.built.add(new Built(dim, pos.toLong(), error == null ? data : null, to, notBefore, detonation));
         });
     }
+
+    /** No recipient baseline contract exists: even unchanged and empty sections must replace its cached view. */
+    static byte[] columnData(ChunkAccess chunk, boolean sky) { return LodSections.ofCopy(chunk, sky); }
 
     /** Admission for an already encoded, selected-viewer horizon column; false means retain and retry upstream. */
     public static boolean offerPrepared(ServerPlayer player, S2C.VoxyChunk packet) {

@@ -239,8 +239,10 @@ public final class IncomingClient {
         Replay.tick();
         // flash traces update while paused too: replay can seek while paused
         ua.zentix.incoming.client.nuclear.FlashMarksClient.tick();
-        VoxyIngest.tick();
-        if (mc.isPaused()) return;
+        if (mc.isPaused()) {
+            VoxyIngest.tick();
+            return;
+        }
         Designator.tick();
         ClientFlights.tick();
         TerrainTiles.tick();
@@ -268,6 +270,7 @@ public final class IncomingClient {
         RadarScope.tick();
         NukeArming.tick();
         ClientNuclear.tick();
+        VoxyIngest.tick(); // snapshot the same post-tick event age that the next frame renders
     }
 
     /**

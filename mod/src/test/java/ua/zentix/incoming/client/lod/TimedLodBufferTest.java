@@ -7,6 +7,24 @@ import java.util.HashSet;
 import static org.junit.jupiter.api.Assertions.*;
 
 class TimedLodBufferTest {
+    @Test void independentEventClocksDoNotBlockEachOther() {
+        var b = new TimedLodBuffer<String>(3, 30);
+        var a = b.reserve(1, 1400, 10, 1, 1);
+        var c = b.reserve(2, 1420, 10, 1, 2);
+        b.complete(a, "A is still before its front");
+        b.complete(c, "B has reached its front");
+        java.util.function.IntToDoubleFunction clocks = event -> event == 1 ? 1380 : 1430;
+        var due = b.take(clocks);
+        assertEquals(c, due.ticket());
+        b.finish(due);
+        assertNull(b.take(clocks));
+        assertEquals(10, b.bytes());
+        var later = b.take(event -> event == 1 ? 1400 : 1430);
+        assertEquals(a, later.ticket());
+        b.finish(later);
+        assertEquals(0, b.bytes());
+    }
+
     @Test void earlyDeliveryCannotMoveThePressureClock() {
         var b = new TimedLodBuffer<String>(2, 20);
         var t = b.reserve(1, 100, 10, 24);

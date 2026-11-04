@@ -173,4 +173,19 @@ class LodSectionsTest {
         assertTrue(LodSections.read(LodSections.difference(-4, a, a), biomes).isEmpty());
     }
 
+    @Test
+    void aPreparedColumnReplacesAnAbsentOrObsoleteRecipientBaseline() {
+        var server = sections((x, y, z) -> y < 10 ? Blocks.DIAMOND_BLOCK.defaultBlockState() : Blocks.AIR.defaultBlockState());
+        var copy = new ProtoChunk(new ChunkPos(0, 0), UpgradeData.EMPTY, LevelHeightAccessor.create(0, 64), biomes, null);
+        for (int i = 0; i < server.length; i++) copy.getSections()[i] = server[i];
+        byte[] delivered = VoxyLods.columnData(copy, false);
+        for (boolean absent : new boolean[]{true, false}) {
+            var client = sections((x, y, z) -> absent ? Blocks.AIR.defaultBlockState()
+                    : y < 10 || y >= 48 ? Blocks.STONE.defaultBlockState() : Blocks.AIR.defaultBlockState());
+            for (var section : LodSections.read(delivered, biomes)) client[section.y()] = section.blocks();
+            assertTrue(client[0].getBlockState(8, 5, 8).is(Blocks.DIAMOND_BLOCK), "unchanged rebuilt floor must travel too");
+            assertTrue(client[3].getBlockState(8, 5, 8).isAir(), "empty roof section must erase the old roof");
+        }
+    }
+
 }

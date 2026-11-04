@@ -351,7 +351,7 @@ public final class LodBufferScenario {
         var data = sections.stream().map(v -> new dev.vox.lss.api.VoxelColumnData.SectionData(v.y(), v.blocks(), v.blockLight(), v.skyLight()))
                 .toArray(dev.vox.lss.api.VoxelColumnData.SectionData[]::new);
         if (PRODUCTION) {
-            // Prime the production repair cache for this coordinate even if the panorama evicted it.
+            // Prime the bounded coordinate history; production retains no local section-repair images.
             for (int dx = -4; dx < 4; dx++) for (int dz = -4; dz < 4; dz++)
                 ClientHorizon.offer(mc.level, new S2C.VoxyChunk(packet.dimension(), x + dx, z + dz, packet.sections()));
             waitTicks(20);

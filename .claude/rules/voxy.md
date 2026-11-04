@@ -77,7 +77,7 @@ paths:
   chunk can cross the watermark once. There is no fixed byte-rate throttle. The waiting queue holds at most 48 MiB;
   a fresh copy at the same coordinate/event/deadline replaces its waiting revision (different event deadlines stay separate). The server selects one immutable bounded batch; write callbacks advance it on the Netty event loop without waiting another server tick. `VoxyLods.room` gates `DhUpdates`, `FarLods` and `FrontLods`, even with DH:
   excess updates for Voxy players would otherwise be lost. Copy engine light layers (`getData` fills the live layer
-  for a uniform one); a heavy-zone copy goes to DH `DhUpdates.LEAD` before the front, and Voxy receives its “not before front” deadline and detonation identity (`VoxyLods.sendChanged`). `ClientHorizon` holds encoded sections until the same client event clock used by the wave reaches that deadline. Exact before/after section comparisons include light and newly empty sections; unchanged sections carry skip flags. Unknown baselines still send full columns. Regressions: `VoxyLodsTest`, `LodBatchFlowTest`
+  for a uniform one); a heavy-zone copy goes to DH `DhUpdates.LEAD` before the front, and Voxy receives its “not before front” deadline and detonation identity (`VoxyLods.sendChanged`). `ClientHorizon` holds encoded sections until the same client event clock used by the wave reaches that deadline. The server sends full columns, including light and empty sections: a server before/after snapshot does not prove any recipient holds its baseline. Sparse codec utilities belong to known-baseline development fixtures until a recipient baseline protocol exists. Regressions: `VoxyLodsTest`, `LodBatchFlowTest`
   and GameTest batch `voxy_backpressure`.
 - LOD Server Support 0.19/0.20 (server) observes `ChunkSerializer.write` at RETURN, not block-change events:
   `ChunkSaveDataHook` → `ServerReceiverGlue.onChunkSaveData` → `DirtyContentFilter.observeSave`. It hashes serialized
@@ -122,3 +122,8 @@ paths:
   in the session. Requests are deduplicated and drained at the existing server rate. Overflow evicts old hints, so
   recovery remains best effort, not a durable freshness record. A later Incoming submission cannot cancel a
   crossing foreign-delivery hint. Logout/reset clears the previous world and both collections immediately.
+
+- Horizon ownership retires on a client tick in a different level, independently of another terrain receipt: a full
+  old batch otherwise withholds its ACK and prevents the very packet that would reset it. Event queues have separate
+  heads and use each detonation's own visible clock; a future head cannot block a due different event. Clock sampling
+  follows ClientNuclear.tick, including a frozen sample while paused. Regressions: ClientHorizonTest, TimedLodBufferTest.

@@ -6,16 +6,21 @@ import java.util.PriorityQueue;
 
 /** Bounded ownership ledger. Cancellation invalidates results; it is not an external ingestion fence. Time is supplied by the authoritative event clock. */
 public final class TimedLodBuffer<T> {
-    public record Ticket(long id, long epoch, long key, long due, long bytes, int sections) {}
+    public record Ticket(long id, long epoch, long key, long due, long bytes, int sections, int timeline) {}
     public record Ready<T>(Ticket ticket, T value) {}
     private final int limit;
     private final long byteLimit;
     private final Map<Long, Ticket> pending = new HashMap<>();
     private final Map<Long, Ready<T>> held = new HashMap<>();
-    private final PriorityQueue<Ready<T>> ready = new PriorityQueue<>((a, b) -> {
+    private final Map<Integer, PriorityQueue<Ready<T>>> timelines = new HashMap<>();
+    private static int order(Ready<?> a, Ready<?> b) {
         int time = Long.compare(a.ticket.due, b.ticket.due);
         return time != 0 ? time : Long.compare(a.ticket.id, b.ticket.id);
-    });
+    }
+
+    private PriorityQueue<Ready<T>> timeline(int id) {
+        return timelines.computeIfAbsent(id, unused -> new PriorityQueue<>(TimedLodBuffer::order));
+    }
     private long epoch, sequence, bytes;
 
     public TimedLodBuffer(int limit, long byteLimit) {
@@ -25,9 +30,13 @@ public final class TimedLodBuffer<T> {
     }
 
     public synchronized Ticket reserve(long key, long due, long size, int sections) {
+        return reserve(key, due, size, sections, -1);
+    }
+
+    public synchronized Ticket reserve(long key, long due, long size, int sections, int timeline) {
         if (size < 0 || sections <= 0) throw new IllegalArgumentException("invalid reservation");
         if (pending.size() + held.size() >= limit || size > byteLimit - bytes) return null;
-        Ticket t = new Ticket(++sequence, epoch, key, due, size, sections);
+        Ticket t = new Ticket(++sequence, epoch, key, due, size, sections, timeline);
         pending.put(t.id, t);
         bytes += size;
         return t;
@@ -39,7 +48,7 @@ public final class TimedLodBuffer<T> {
             if (t.epoch == epoch && value != null) {
                 Ready<T> r = new Ready<>(t, value);
                 held.put(t.id, r);
-                ready.add(r);
+                timeline(t.timeline).add(r);
                 return true;
             }
             bytes -= t.bytes;
@@ -48,14 +57,26 @@ public final class TimedLodBuffer<T> {
     }
 
     /** Taking a due column keeps ownership charged until finish, including while ingestion is executing. */
-    public synchronized Ready<T> take(long now) {
-        Ready<T> r = ready.peek();
-        return r != null && r.ticket.due <= now ? ready.poll() : null;
+    public synchronized Ready<T> take(long now) { return take(unused -> now); }
+
+    /** One head per event: a future event must not block another event whose own visible clock is due. */
+    public synchronized Ready<T> take(java.util.function.IntToDoubleFunction clock) {
+        Ready<T> first = null;
+        for (var queue : timelines.values()) {
+            Ready<T> head = queue.peek();
+            if (head.ticket.due <= clock.applyAsDouble(head.ticket.timeline)
+                    && (first == null || order(head, first) < 0)) first = head;
+        }
+        if (first == null) return null;
+        var queue = timelines.get(first.ticket.timeline);
+        queue.remove();
+        if (queue.isEmpty()) timelines.remove(first.ticket.timeline);
+        return first;
     }
 
     /** Return taken work whose event clock has not reached its deadline; retains the same reservation. */
     public synchronized void defer(Ready<T> r) {
-        if (r.ticket.epoch == epoch && held.get(r.ticket.id) == r) ready.add(r);
+        if (r.ticket.epoch == epoch && held.get(r.ticket.id) == r) timeline(r.ticket.timeline).add(r);
         else finish(r);
     }
 
@@ -66,8 +87,10 @@ public final class TimedLodBuffer<T> {
     public synchronized long stop() {
         epoch++;
         // Only ready objects can be released now. Pending reads and taken objects still own memory.
-        for (Ready<T> r : ready) if (held.remove(r.ticket.id, r)) bytes -= r.ticket.bytes;
-        ready.clear();
+        for (var queue : timelines.values()) {
+            for (Ready<T> r : queue) if (held.remove(r.ticket.id, r)) bytes -= r.ticket.bytes;
+        }
+        timelines.clear();
         return epoch;
     }
 
