@@ -304,6 +304,7 @@ public final class VoxyLods {
                 || ua.zentix.incoming.nuclear.world.NuclearPrep.memory(player.serverLevel()) + packet.sections().length
                 > ua.zentix.incoming.nuclear.world.NuclearPrep.PLANS_CAP) return false;
         viewer.offer(ChunkPos.asLong(packet.x(), packet.z()), packet);
+        MtB7Columns.offered(player.serverLevel(), packet);
         return true;
     }
 
@@ -318,6 +319,7 @@ public final class VoxyLods {
             Viewer viewer = viewers.get(id);
             if (viewer == null || viewer.dimension != b.dimension) continue;
             viewer.offer(b.chunk, packet);
+            MtB7Columns.offered(server.getLevel(b.dimension), packet);
         }
     }
 

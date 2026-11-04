@@ -27,7 +27,7 @@ final class ClientHorizon {
     private static boolean draining;
     private static long latestTick;
     private static java.util.Map<Integer, Double> latestClocks = java.util.Map.of();
-    record Submission(S2C.VoxyChunk packet, long tick, long elapsedNanos, int sections, long retainedBytes) {}
+    record Submission(ClientLevel level, S2C.VoxyChunk packet, long tick, long elapsedNanos, int sections, long retainedBytes) {}
     /** Optional development measurement, no per-column allocation when absent. */
     static volatile java.util.function.Consumer<Submission> observer;
 
@@ -98,7 +98,7 @@ final class ClientHorizon {
                         changedSections += sections;
                         remember(level, epoch, packet);
                         var measured = observer;
-                        if (measured != null) measured.accept(new Submission(ready.value(), now, System.nanoTime() - started, sections, bytes()));
+                        if (measured != null) measured.accept(new Submission(level, ready.value(), now, System.nanoTime() - started, sections, bytes()));
                     } else {
                         requestFresh(level, epoch, packet);
                     }
