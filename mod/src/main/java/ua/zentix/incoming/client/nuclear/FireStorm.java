@@ -496,6 +496,9 @@ public final class FireStorm {
         }
     }
 
+    /** Physical source spacing stays fixed when the bounded feed map becomes coarser. */
+    static double sourceCell(double mapCell) { return Math.min(CELL, mapCell); }
+
     /**
      * Detonation source grid: cells within ignition zone {@code reach} (ground blocks from ground zero), strength from the ignition
      * law with district and cell flammability, ignition by flash, partial blowout by wave; whirls. Pure function of the detonation
@@ -503,8 +506,9 @@ public final class FireStorm {
      */
     static Grid build(Detonation d, double reach) {
         if (reach <= 0) return empty(CELL, 0);
-        // cell width 32 blocks, smaller at small strike scale: at least 24 cells across the zone
-        double cell = Math.max(2, Math.min(CELL, 2 * reach / 24));
+        // Bound map storage, not its physical footprint. Large zones use a coarser feed map;
+        // the shader still resolves source columns at sourceCell(), so they do not grow with yield.
+        double cell = Math.max(Math.max(2, Math.min(CELL, 2 * reach / 24)), 2 * reach * 1.05 / (MAX_SIDE - 2));
         int side = Math.min(MAX_SIDE, 2 * (int) Math.ceil(reach * 1.05 / cell) + 2);
         double half = side * cell / 2;
         double inner = d.surface() ? d.fireballRadius() * 0.8 : 0;

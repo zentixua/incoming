@@ -28,8 +28,8 @@ final class RuinSettle {
     private static final TicketType<UUID> TYPE = TicketType.create("incoming_ruin_settle", Comparator.<UUID>naturalOrder());
     static final int PENDING = 2048, READS = 128;
     private final SettleWindow window = new SettleWindow();
-    private CompletableFuture<long[]> layout;
-    private long[] order;
+    private RadialChunks order;
+    private long replayed;
     private int loadingLimit;
     private long adaptAt;
     private boolean spare = true;
@@ -40,6 +40,11 @@ final class RuinSettle {
     private RuinProgress.Pass pass;
     private long nextReport, settled, loaded, began, checkAt;
     private boolean busy;
+    private int selecting;
+    private Detonation candidate;
+    private boolean selectingHistory;
+    private static final long READ_BYTES = 96L << 10;
+    private final ArrayList<CompletableFuture<Header>> retiring = new ArrayList<>();
 
     private record Header(boolean finalBlocks, int scar) {}
 
@@ -61,19 +66,35 @@ final class RuinSettle {
             if (!clock.canStart()) return;
             long unit = clock.begin();
             try { select(level, events, progress); } finally { clock.end(unit); }
-            if (detonation == null) { checkAt = level.getGameTime() + 100; return; }
+            if (detonation == null) {
+                if (!selectingHistory) checkAt = level.getGameTime() + 100;
+                return;
+            }
         }
-        if (order == null) {
-            if (!layout.isDone()) return;
-            order = layout.join();
-            layout = null;
+        if (!order.prepared()) {
+            if (clock.canStart()) {
+                long unit = clock.begin();
+                try (var reservation = RuinMemory.reserve(level, 4096)) {
+                    if (reservation != null) order.prepare(32);
+                } finally { clock.end(unit); }
+            }
+            return;
         }
+        // Old saves migrate by replaying scar-marked chunks once. Current saves resume their
+        // streamed cursor in bounded batches; no area-sized array is ever constructed or retained.
+        while (replayed < pass.cursor && !order.done() && clock.canStart()) {
+            long unit = clock.begin();
+            try {
+                for (int i = 0; i < 64 && replayed < pass.cursor && !order.done(); i++, replayed++) order.advance();
+            } finally { clock.end(unit); }
+        }
+        if (replayed < pass.cursor && !order.done()) return;
         long now = level.getGameTime();
         NuclearWorld world = NuclearWorld.get(level);
-        long room = Math.max(0, world.settleMemoryRoom(level) - (long) order.length * Long.BYTES);
+        long room = world.settleMemoryRoom(level);
         if (room < NuclearPrep.PLANS_CAP / 8) {
             world.trimSettleCache(detonation.id(), clock);
-            room = Math.max(0, world.settleMemoryRoom(level) - (long) order.length * Long.BYTES);
+            room = world.settleMemoryRoom(level);
         }
         boolean admit = world.settleCanAdmit(level) && !heap.tight() && room > 0;
         if (now >= adaptAt) {
@@ -143,7 +164,8 @@ final class RuinSettle {
                     holding++;
                     loaded++;
                 }
-                if (e.read == null && !e.held && (!e.finalBlocks || e.applied) && now >= e.retryAt && reading < READS) {
+                if (e.read == null && !e.held && (!e.finalBlocks || e.applied) && now >= e.retryAt && reading < READS
+                        && NuclearPrep.memory(level) + READ_BYTES <= NuclearPrep.PLANS_CAP) {
                     e.read = read(level, e.pos);
                     reading++;
                 }
@@ -152,18 +174,21 @@ final class RuinSettle {
                 entries.put(e.pos.toLong(), e);
             } finally { clock.end(unit); }
         }
-        while (admit && entries.size() < PENDING && pass.cursor < total() && clock.canStart()) {
+        while (admit && entries.size() < PENDING && !order.done() && clock.canStart()) {
             long unit = clock.begin();
-            try {
-                ChunkPos pos = new ChunkPos(order[(int) pass.cursor++]);
-                if (pass.pending.add(pos.toLong())) entries.put(pos.toLong(), new Entry(pos.toLong()));
+            try (var reservation = RuinMemory.reserve(level, 2048)) {
+                if (reservation == null) break;
+                ChunkPos pos = new ChunkPos(order.peek());
+                order.advance(); pass.cursor++; replayed++;
+                if (ScarQueue.inRange(pos, detonation) && pass.pending.add(pos.toLong())) entries.put(pos.toLong(), new Entry(pos.toLong()));
                 progress.setDirty();
             } finally { clock.end(unit); }
         }
         spare = !clock.overdue();
-        if (pass.cursor >= total() && entries.isEmpty()) {
+        if (order.done() && entries.isEmpty()) {
             report(now, true);
             pass.complete = true;
+            pass.compact();
             progress.setDirty();
             detonation = null;
             order = null;
@@ -176,47 +201,37 @@ final class RuinSettle {
     }
 
     private void select(ServerLevel level, NuclearEvents events, RuinProgress progress) {
-        // Retained pre-upgrade detonations have no progress entry and start at zero.
-        ArrayList<Detonation> all = new ArrayList<>(events.past());
-        all.addAll(events.detonations());
-        all.sort(Comparator.comparingInt(Detonation::id));
-        busy = false;
-        for (Detonation d : all) {
+        // Scan history in fixed-size slices. Do not copy/sort every old detonation in one tick.
+        if (!selectingHistory) { selectingHistory = true; selecting = 0; candidate = null; busy = false; }
+        int total = events.past().size() + events.detonations().size();
+        for (int i = 0; i < 16 && selecting < total; i++, selecting++) {
+            Detonation d = selecting < events.past().size() ? events.past().get(selecting)
+                    : events.detonations().get(selecting - events.past().size());
             RuinProgress.Pass p = progress.pass(d.id());
             if (p.complete && p.pending.isEmpty()) continue;
             busy = true;
             if (level.getGameTime() < d.gameTime() + d.arrivalTicks(Math.hypot(d.ruinRadius() + 32, d.burst().y - d.groundY()))) continue;
-            detonation = d;
-            pass = p;
-            layout = CompletableFuture.supplyAsync(() -> layout(d), net.minecraft.Util.backgroundExecutor());
-            for (long key : p.pending) entries.put(key, new Entry(key));
-            began = level.getGameTime();
-            nextReport = began + 1200;
-            settled = loaded = 0;
-            return;
+            if (candidate == null || d.id() < candidate.id()) candidate = d;
         }
+        if (selecting < total) return;
+        selectingHistory = false;
+        if (candidate == null) return;
+        detonation = candidate;
+        candidate = null;
+        pass = progress.pass(detonation.id());
+        order = new RadialChunks(detonation.burst().x, detonation.burst().z, -1, detonation.ruinRadius() + 32);
+        replayed = 0;
+        for (long key : pass.pending) entries.put(key, new Entry(key));
+        began = level.getGameTime();
+        nextReport = began + 1200;
+        settled = loaded = 0;
     }
 
-    /** Same compact distance sort as distant LOD rings, built off-thread. Quantization: 1/16 block. */
-    static long[] layout(Detonation d) {
-        int cx = (int) Math.floor(d.burst().x / 16), cz = (int) Math.floor(d.burst().z / 16);
-        int radius = (int) Math.ceil(d.ruinRadius() / 16) + 1;
-        var keyed = new it.unimi.dsi.fastutil.longs.LongArrayList();
-        for (int x = cx - radius; x <= cx + radius; x++) for (int z = cz - radius; z <= cz + radius; z++) {
-            ChunkPos pos = new ChunkPos(x, z);
-            if (ScarQueue.inRange(pos, d)) {
-                long distance = (long) (NuclearPrep.horizontal(pos, d) * 16);
-                keyed.add(distance << 32 | (long) (x - cx + 0x8000) << 16 | (z - cz + 0x8000));
-            }
-        }
-        long[] result = keyed.toLongArray();
-        java.util.Arrays.sort(result);
-        for (int i = 0; i < result.length; i++) result[i] = ChunkPos.asLong(
-                cx + (int) (result[i] >> 16 & 0xffff) - 0x8000, cz + (int) (result[i] & 0xffff) - 0x8000);
-        return result;
+    long retainedBytes() {
+        retiring.removeIf(CompletableFuture::isDone);
+        return 512L + entries.size() * 1024L + (reads() + retiring.size()) * READ_BYTES
+                + (order == null ? 0 : order.bytes());
     }
-
-    private long total() { return order.length; }
 
     private static double externalMillis(ServerLevel level) {
         var server = level.getServer();
@@ -246,23 +261,25 @@ final class RuinSettle {
     }
 
     void clear(ServerLevel level) {
-        for (Entry e : entries.values()) release(level, e);
+        for (Entry e : entries.values()) {
+            release(level, e);
+            if (e.read != null && !e.read.isDone()) retiring.add(e.read);
+        }
         entries.clear();
         detonation = null;
         pass = null;
         order = null;
-        if (layout != null) layout.cancel(false);
-        layout = null;
         busy = false;
         checkAt = 0;
+        selectingHistory = false; candidate = null; selecting = 0;
     }
 
     int held() { return (int) entries.values().stream().filter(e -> e.held).count(); }
     int reads() { return (int) entries.values().stream().filter(e -> e.read != null).count(); }
 
     private void report(long now, boolean done) {
-        Incoming.LOG.info("Ruin settlement #{}: {} of {} positions scanned, {} saved chunks confirmed, {} loads, {} pending ({} held, admission {}, {} reads), {} ticks{}",
-                detonation.id(), pass.cursor, total(), settled, loaded, entries.size(), held(), loadingLimit, reads(),
+        Incoming.LOG.info("Ruin settlement #{}: {} positions scanned, {} saved chunks confirmed, {} loads, {} pending ({} held, admission {}, {} reads), {} ticks{}",
+                detonation.id(), pass.cursor, settled, loaded, entries.size(), held(), loadingLimit, reads(),
                 now - began, done ? "; complete" : "");
     }
 }

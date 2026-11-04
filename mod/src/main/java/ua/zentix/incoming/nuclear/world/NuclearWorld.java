@@ -100,7 +100,13 @@ public final class NuclearWorld {
     }
 
     public static NuclearWorld get(ServerLevel level) {
-        return level.getData(ModAttachments.NUCLEAR_WORLD);
+        NuclearWorld world = level.getData(ModAttachments.NUCLEAR_WORLD);
+        // Include restored ledgers before the first preparation admission, even in an otherwise
+        // idle dimension. Refresh references because SavedData may be replaced during load/tests.
+        world.matter = RuinMatter.get(level);
+        world.craterMatter = CraterMatter.get(level);
+        world.ruinProgress = RuinProgress.get(level);
+        return world;
     }
 
     /** Detonation ruins across chunks, shared by preparation (after detonation), queue and tests. */
@@ -145,6 +151,9 @@ public final class NuclearWorld {
      * do not take entire shared budget).
      */
     private RuinMatter matter;
+    private CraterMatter craterMatter;
+    private RuinProgress ruinProgress;
+    long materialReservation;
 
     public boolean busy() {
         return matter != null && matter.busy() || !pulses.isEmpty() || late.busy() || !shadows.isEmpty() || !scorches.isEmpty() || !craters.isEmpty() || scars.size() > 0 || !prep.idle() || blast.busy() || settle.busy();
@@ -152,7 +161,12 @@ public final class NuclearWorld {
 
     /** Retained preparation and active-context estimates, without the shared worker buffers. */
     long retainedRuinBytes() {
-        long bytes = prep.retainedBytes();
+        long bytes = prep.retainedBytes() + materialReservation;
+        if (matter != null) bytes += matter.retainedBytes();
+        if (craterMatter != null) bytes += craterMatter.retainedBytes();
+        if (ruinProgress != null) bytes += ruinProgress.retainedBytes();
+        for (CraterJob crater : craters) bytes += crater.retainedBytes();
+        bytes += settle.retainedBytes();
         for (RuinContext ctx : ruins.values()) bytes += ctx.retainedBytes();
         return bytes;
     }
@@ -392,7 +406,7 @@ public final class NuclearWorld {
     public void tick(ServerLevel level, WorkClock clock) {
         long now = level.getGameTime();
         NuclearEvents events = NuclearEvents.get(level);
-        if (!restored) restore(events);
+        if (!restored) restore(level, events);
         sweepRuins(now);
         // background plans: stuck ones fall back to server thread; active threads follow server tick
         for (RuinContext ctx : ruins.values()) ctx.expire(now);
@@ -512,7 +526,8 @@ public final class NuclearWorld {
     }
 
     /** After world load: resume unfinished craters from stopped chunk. */
-    private void restore(NuclearEvents events) {
+    private void restore(ServerLevel level, NuclearEvents events) {
+        CraterMatter.get(level).retainActive(events.craters().keySet());
         restored = true;
         events.craters().forEach((id, done) -> events.detonations().stream().filter(d -> d.id() == id).findFirst()
                 .ifPresent(d -> craters.add(new CraterJob(d, done))));

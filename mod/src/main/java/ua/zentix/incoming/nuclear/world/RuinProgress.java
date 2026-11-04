@@ -16,6 +16,16 @@ final class RuinProgress extends SavedData {
         long cursor;
         boolean complete;
         final LongOpenHashSet pending = new LongOpenHashSet();
+        int capacity;
+
+        long retainedBytes() {
+            capacity = Math.max(capacity, pending.size());
+            return 128L + capacity * 64L;
+        }
+
+        void compact() {
+            if (pending.isEmpty()) { pending.trim(); capacity = 0; }
+        }
     }
 
     private final Map<Integer, Pass> passes = new HashMap<>();
@@ -28,16 +38,23 @@ final class RuinProgress extends SavedData {
         return passes.computeIfAbsent(id, ignored -> new Pass());
     }
 
+    long retainedBytes() {
+        long bytes = 256L;
+        for (Pass pass : passes.values()) bytes += pass.retainedBytes();
+        return bytes;
+    }
+
     static RuinProgress load(CompoundTag tag, HolderLookup.Provider registries) {
         RuinProgress progress = new RuinProgress();
         for (String key : tag.getAllKeys()) {
             if (!tag.contains(key, Tag.TAG_COMPOUND)) continue;
             CompoundTag saved = tag.getCompound(key);
             Pass p = progress.pass(Integer.parseInt(key));
-            // Early development builds used a north-to-south cursor. Restart that scan safely;
-            // storage scar marks make revisiting completed positions harmless.
-            p.cursor = saved.getBoolean("radial") ? Math.max(0, saved.getLong("cursor")) : 0;
-            p.complete = saved.getBoolean("radial") && saved.getBoolean("complete");
+            // The bounded row-head iterator has a different tie order from the former quantized
+            // whole-zone sort. Revisit unfinished legacy scans; saved scar marks prevent reapplying.
+            p.cursor = saved.getInt("scan_version") == 2 ? Math.max(0, saved.getLong("cursor")) : 0;
+            p.complete = saved.getBoolean("complete");
+            if (p.complete) p.cursor = Long.MAX_VALUE;
             p.pending.addAll(new LongOpenHashSet(saved.getLongArray("pending")));
         }
         return progress;
@@ -48,7 +65,7 @@ final class RuinProgress extends SavedData {
         passes.forEach((id, p) -> {
             CompoundTag saved = new CompoundTag();
             saved.putLong("cursor", p.cursor);
-            saved.putBoolean("radial", true);
+            saved.putInt("scan_version", 2);
             saved.putBoolean("complete", p.complete);
             saved.putLongArray("pending", p.pending.toLongArray());
             tag.put(Integer.toString(id), saved);

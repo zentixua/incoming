@@ -743,6 +743,9 @@ class PallGlslTest {
 
     @Test
     void fireLawsMatchJava() {
+        GlslFunction source = GlslFunction.parse(GLSL, "fireSourceCell");
+        for (double cell : new double[]{2, 4, 32, 64, 96, 512})
+            assertEquals(FireStorm.sourceCell(cell), source.call(Map.of("cell", cell)), 1e-9);
         GlslFunction bend = GlslFunction.parse(GLSL, "fireBend"), width = GlslFunction.parse(GLSL, "fireWidth"), lod = GlslFunction.parse(GLSL, "fireLod"),
                 glow = GlslFunction.parse(GLSL, "fireGlowLod"), column = GlslFunction.parse(GLSL, "fireColumn");
         for (double h = -60; h <= 400; h += 0.5) {

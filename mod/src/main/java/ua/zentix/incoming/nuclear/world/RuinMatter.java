@@ -31,11 +31,43 @@ public final class RuinMatter extends SavedData {
     private static final double DT = 1.0 / 20;
     /** A work unit advances at most this many half-metre trajectory segments. */
     private static final int SEGMENTS = 8;
-    private final ArrayDeque<Piece> moving = new ArrayDeque<>();
+    private ArrayDeque<Piece> moving = new ArrayDeque<>();
     /** Outside build height: retained material, but no repeated world reads/ticket churn. */
-    private final ArrayDeque<Piece> stranded = new ArrayDeque<>();
+    private record ReservoirKey(BlockState state, CompoundTag contents) {}
+    private static final class Reservoir {
+        long count;
+        double volume, mass;
+    }
+    private final java.util.Map<ReservoirKey, Reservoir> stranded = new java.util.HashMap<>();
+    private int strandedCount;
+    private long movingBytes, strandedBytes, supportBacking;
+    private int movingCapacity;
+
+    /** Conservative owned representation, including save copies and collection growth slack. */
+    long retainedBytes() {
+        supportBacking = Math.max(supportBacking, 2048L + supportSources.size() * 4096L
+                + supports.size() * 256L + uncertain.size() * 256L + originals.size() * 256L);
+        movingCapacity = Math.max(movingCapacity, moving.size());
+        return 1024L + movingBytes + strandedBytes + movingCapacity * 32L + supportBacking
+                + materials.size() * 512L + (search == null ? 2048 : search.retainedBytes());
+    }
+
+    static long removalBytes(Piece piece) { return piece.retainedBytes() + 8192; }
+
+
+    /** A terminal record has no trajectory to resume. Preserve state, cargo and totals only. */
+    private void strand(Piece piece) {
+        Reservoir value = stranded.computeIfAbsent(new ReservoirKey(piece.state, piece.contents), ignored -> {
+            strandedBytes += 256L + (piece.contents == null ? 0 : 3L * piece.contents.sizeInBytes());
+            return new Reservoir();
+        });
+        value.count++;
+        value.volume += piece.volume;
+        value.mass += piece.mass;
+        strandedCount++;
+    }
     private record SupportSeed(BlockPos source, BlockState state, int event) {}
-    private final ArrayDeque<SupportSeed> supportSources = new ArrayDeque<>();
+    private ArrayDeque<SupportSeed> supportSources = new ArrayDeque<>();
     private long loadTick = Long.MIN_VALUE;
     private long released, deposited;
     /** Per block type: released, deposited and dispersed solid volume/mass. Moving owns the remainder. */
@@ -63,6 +95,34 @@ public final class RuinMatter extends SavedData {
     private final it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<Original> originals = new it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<>();
     private RuinSupport search;
     private int heldRadius;
+    private int lookupId = -1, lookupIndex, lookupSize;
+    private boolean lookupPast, lookupDone;
+    private Detonation lookupValue;
+
+    /** A seed never scans an unbounded detonation history in one work unit. A cached position
+     * is checked against the live list, so clear/expiry cannot keep a removed event alive. */
+    private Detonation event(ua.zentix.incoming.nuclear.NuclearEvents events, int id) {
+        var list = lookupPast ? events.past() : events.detonations();
+        int size = events.past().size() + events.detonations().size();
+        boolean valid = lookupValue != null && lookupIndex < list.size() && list.get(lookupIndex) == lookupValue;
+        if (lookupId != id || lookupDone && (!valid || lookupSize != size)) {
+            lookupId = id; lookupIndex = 0; lookupPast = false; lookupDone = false; lookupValue = null;
+        }
+        if (lookupDone) return lookupValue;
+        lookupSize = size;
+        for (int i = 0; i < 16; i++) {
+            list = lookupPast ? events.past() : events.detonations();
+            if (lookupIndex >= list.size()) {
+                if (lookupPast) { lookupDone = true; return null; }
+                lookupPast = true; lookupIndex = 0; continue;
+            }
+            var value = list.get(lookupIndex);
+            if (value.id() == id) { lookupValue = value; lookupDone = true; return value; }
+            lookupIndex++;
+        }
+        return null;
+    }
+
 
     @net.neoforged.bus.api.SubscribeEvent(receiveCanceled = true)
     public static void onNeighbour(net.neoforged.neoforge.event.level.BlockEvent.NeighborNotifyEvent event) {
@@ -154,10 +214,14 @@ public final class RuinMatter extends SavedData {
         double volume, mass;
         double x, y, z, vx, vy, vz;
         double tick, releasedTick, windX, windZ, drag, pulse;
+        private final long retained;
+        long retainedBytes() { return retained; }
+
         Piece(BlockPos source, BlockState state, CompoundTag contents, Vec3 velocity, long tick) {
             this.source = source.immutable();
             this.state = state;
             this.contents = contents;
+            this.retained = 512L + (contents == null ? 0 : 3L * contents.sizeInBytes());
             Blast.Props material = Blast.props(state);
             fine = material.leaves()
                     || state.is(net.neoforged.neoforge.common.Tags.Blocks.GLASS_BLOCKS)
@@ -232,7 +296,11 @@ public final class RuinMatter extends SavedData {
                 dispersed++;
                 dispersedVolume += piece.volume;
                 dispersedMass += piece.mass;
-            } else moving.addLast(piece);
+            } else {
+                moving.addLast(piece);
+                movingCapacity = Math.max(movingCapacity, moving.size());
+                movingBytes += piece.retainedBytes();
+            }
         }
         setDirty();
     }
@@ -253,11 +321,11 @@ public final class RuinMatter extends SavedData {
 
     public long released() { return released; }
     public long deposited() { return deposited; }
-    public int pending() { return moving.size() + stranded.size(); }
+    public int pending() { return moving.size() + strandedCount; }
     public double releasedVolume() { return releasedVolume; }
     public double depositedVolume() { return depositedVolume; }
 
-    /** Material still travelling from a source volume, for diagnostics and phase-order checks. */
+    /** Active material still travelling from a source volume, for diagnostics and phase-order checks. */
     public int pendingFrom(BlockPos minimum, BlockPos maximum) {
         int count = 0;
         for (Piece p : allPending()) if (p.source.getX() >= minimum.getX() && p.source.getX() <= maximum.getX()
@@ -299,15 +367,21 @@ public final class RuinMatter extends SavedData {
                     }
                 }
                 var events = ua.zentix.incoming.nuclear.NuclearEvents.get(level);
-                Detonation d = events.detonations().stream().filter(event -> event.id() == id).findFirst()
-                        .orElseGet(() -> events.past().stream().filter(event -> event.id() == id).findFirst().orElse(null));
+                Detonation d = event(events, id);
                 if (d != null) {
-                    if (search == null) search = new RuinSupport(seed);
-                    if (search.step(level, this, d)) {
-                        supports.remove(seed);
-                        search = null;
-                    } else waiting = search.waiting;
-                } else {
+                    // A graph step adds at most sixteen cells and their six neighbours. Refusal
+                    // keeps the saved seed/provenance intact; transport can still free capacity.
+                    try (var reservation = RuinMemory.reserve(level, 32L << 10)) {
+                        if (reservation == null) waiting = true;
+                        else {
+                            if (search == null) search = new RuinSupport(seed);
+                            if (search.step(level, this, d)) {
+                                supports.remove(seed);
+                                search = null;
+                            } else waiting = search.waiting;
+                        }
+                    }
+                } else if (lookupDone) {
                     supports.remove(seed);
                     search = null;
                 }
@@ -317,11 +391,15 @@ public final class RuinMatter extends SavedData {
             for (int i = 0; i < 16 && left > 0 && !moving.isEmpty(); i++, left--) {
                 Piece piece = moving.removeFirst();
                 if (step(level, piece)) {
+                    movingBytes -= piece.retainedBytes();
                     account(piece, 2);
                     deposited++;
                     depositedVolume += piece.volume;
                     depositedMass += piece.mass;
-                } else if (piece.outside) stranded.addLast(piece);
+                } else if (piece.outside) {
+                    movingBytes -= piece.retainedBytes();
+                    strand(piece);
+                }
                 else moving.addLast(piece);
             }
             clock.end(began);
@@ -330,9 +408,13 @@ public final class RuinMatter extends SavedData {
         if (supports.isEmpty() && supportSources.isEmpty() && !originals.isEmpty()) {
             // All affected components have been reconciled, including cold edges. A later failure
             // starts from that settled world; completed contact journals are not permanent history.
-            originals.clear();
+            originals.clear(); originals.trim();
+            supports.trim(); uncertain.trim();
+            supportBacking = 2048;
             setDirty();
         }
+        if (moving.isEmpty() && movingCapacity > 0) { moving = new ArrayDeque<>(); movingCapacity = 0; }
+        if (supports.isEmpty() && supportSources.isEmpty() && originals.isEmpty()) supportSources = new ArrayDeque<>();
         if (moving.isEmpty() && supports.isEmpty() && supportSources.isEmpty()) unload(level);
     }
 
@@ -457,7 +539,7 @@ public final class RuinMatter extends SavedData {
     }
 
     private Iterable<Piece> allPending() {
-        return () -> java.util.stream.Stream.concat(moving.stream(), stranded.stream()).iterator();
+        return moving;
     }
 
     static RuinMatter load(CompoundTag tag, HolderLookup.Provider lookup) {
@@ -523,13 +605,33 @@ public final class RuinMatter extends SavedData {
             p.volume = n.getDouble("volume");
             p.mass = n.getDouble("mass");
             p.outside = n.getBoolean("outside");
-            (p.outside ? result.stranded : result.moving).addLast(p);
+            if (p.outside) result.strand(p);
+            else {
+                result.moving.addLast(p);
+                result.movingBytes += p.retainedBytes();
+            }
+        }
+        ListTag reservoirs = tag.getList("stranded", Tag.TAG_COMPOUND);
+        for (int i = 0; i < reservoirs.size(); i++) {
+            CompoundTag row = reservoirs.getCompound(i);
+            ReservoirKey key = new ReservoirKey(NbtUtils.readBlockState(lookup.lookupOrThrow(Registries.BLOCK), row.getCompound("state")),
+                    row.contains("contents") ? row.getCompound("contents") : null);
+            Reservoir value = result.stranded.computeIfAbsent(key, ignored -> {
+                result.strandedBytes += 256L + (key.contents == null ? 0 : 3L * key.contents.sizeInBytes());
+                return new Reservoir();
+            });
+            long count = row.getLong("count");
+            if (count <= 0) throw new IllegalStateException("Invalid stranded material count");
+            value.count += count;
+            value.volume += row.getDouble("volume"); value.mass += row.getDouble("mass");
+            result.strandedCount = Math.addExact(result.strandedCount, Math.toIntExact(count));
         }
         if (result.released != result.deposited + result.dispersed + result.pending())
             throw new IllegalStateException("Nuclear material ledger does not balance");
         double volume = result.depositedVolume + result.dispersedVolume;
         double mass = result.depositedMass + result.dispersedMass;
         for (Piece p : result.allPending()) { volume += p.volume; mass += p.mass; }
+        for (Reservoir reservoir : result.stranded.values()) { volume += reservoir.volume; mass += reservoir.mass; }
         if (!Double.isFinite(volume) || !Double.isFinite(mass)
                 || Math.abs(volume - result.releasedVolume) > 1e-9 * Math.max(1, volume)
                 || Math.abs(mass - result.releasedMass) > 1e-9 * Math.max(1, mass))
@@ -538,6 +640,10 @@ public final class RuinMatter extends SavedData {
         for (Piece p : result.allPending()) {
             double[] values = pending.computeIfAbsent(p.state.getBlock(), ignored -> new double[2]);
             values[0] += p.volume; values[1] += p.mass;
+        }
+        for (var row : result.stranded.entrySet()) {
+            double[] values = pending.computeIfAbsent(row.getKey().state.getBlock(), ignored -> new double[2]);
+            values[0] += row.getValue().volume; values[1] += row.getValue().mass;
         }
         for (var row : result.materials.entrySet()) for (int k = 0; k < 2; k++) {
             double[] values = row.getValue();
@@ -612,6 +718,17 @@ public final class RuinMatter extends SavedData {
             list.add(n);
         }
         tag.put("moving", list);
+        ListTag reservoirs = new ListTag();
+        for (var entry : stranded.entrySet()) {
+            CompoundTag row = new CompoundTag();
+            row.put("state", NbtUtils.writeBlockState(entry.getKey().state));
+            if (entry.getKey().contents != null) row.put("contents", entry.getKey().contents.copy());
+            Reservoir value = entry.getValue();
+            row.putLong("count", value.count);
+            row.putDouble("volume", value.volume); row.putDouble("mass", value.mass);
+            reservoirs.add(row);
+        }
+        tag.put("stranded", reservoirs);
         return tag;
     }
 }

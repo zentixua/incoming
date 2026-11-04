@@ -58,6 +58,70 @@ public final class RuinMatterGameTests {
         h.succeed();
     }
 
+    @GameTest(template = "pad", timeoutTicks = 20, batch = "nuke_material_compaction", skyAccess = true)
+    public static void terminalTrajectoriesCompactWithoutLosingCargoOrTotals(GameTestHelper h) {
+        var level = h.getLevel();
+        RuinMatter ledger = new RuinMatter();
+        var pieces = new ArrayList<RuinMatter.Piece>();
+        for (int i = 0; i < 1000; i++) {
+            var piece = new RuinMatter.Piece(new BlockPos(i, level.getMinBuildHeight() - 1, 0),
+                    Blocks.STONE.defaultBlockState(), null, Vec3.ZERO, level.getGameTime() - 1);
+            pieces.add(piece);
+        }
+        CompoundTag cargo = new CompoundTag();
+        cargo.putString("retained_inventory", "seven diamonds");
+        var barrel = new RuinMatter.Piece(new BlockPos(0, level.getMinBuildHeight() - 1, 0),
+                Blocks.BARREL.defaultBlockState(), cargo, Vec3.ZERO, level.getGameTime() - 1);
+        pieces.add(barrel);
+        ledger.release(pieces);
+        var clock = WorkClock.counting(1);
+        clock.start(10000); ledger.work(level, clock);
+        CompoundTag saved = ledger.save(new CompoundTag(), level.registryAccess());
+        h.assertTrue(saved.getList("moving", net.minecraft.nbt.Tag.TAG_COMPOUND).isEmpty(), "Terminal trajectories retained");
+        var reservoirs = saved.getList("stranded", net.minecraft.nbt.Tag.TAG_COMPOUND);
+        h.assertTrue(reservoirs.size() == 2, "Repeated state/cargo was not compacted");
+        boolean found = false;
+        for (int i = 0; i < reservoirs.size(); i++) if (reservoirs.getCompound(i).getCompound("contents").equals(cargo)) found = true;
+        h.assertTrue(found, "Terminal container contents discarded");
+        var restored = RuinMatter.load(saved, level.registryAccess());
+        h.assertTrue(restored.pending() == 1001 && restored.releasedVolume() == ledger.releasedVolume(), "Compaction changed ownership");
+        h.assertTrue(java.util.Arrays.equals(restored.balance(Blocks.STONE), ledger.balance(Blocks.STONE)), "Compaction changed material totals");
+        clock.start(10000); restored.work(level, clock);
+        h.assertTrue(clock.usedThisTickNanos() == 0, "Terminal reservoir resumed trajectory work");
+        h.succeed();
+    }
+
+    @GameTest(template = "pad", timeoutTicks = 20, batch = "nuke_material_compaction", skyAccess = true)
+    public static void completedCraterCheckpointsBecomeMaterialTotals(GameTestHelper h) {
+        var lookup = h.getLevel().registryAccess();
+        var ledger = new CraterMatter();
+        var stone = Blocks.STONE.defaultBlockState();
+        for (int event = 1; event <= 10; event++) {
+            var pass = ledger.pass(event);
+            for (int chunk = 0; chunk < 4; chunk++) {
+                for (int column = 0; column < 256; column++) {
+                    long key = chunk * 256L + column;
+                    pass.ground(key, 64); pass.removed(stone, true); pass.finish(key);
+                }
+                pass.chunkFinished();
+                h.assertTrue(pass.ground.isEmpty() && pass.done.isEmpty(), "Finished chunk kept column checkpoints");
+            }
+            pass.deposited(stone);
+            ledger.complete(event);
+        }
+        CompoundTag saved = ledger.save(new CompoundTag(), lookup);
+        h.assertTrue(saved.getList("passes", net.minecraft.nbt.Tag.TAG_COMPOUND).isEmpty(), "Finished events kept crater passes");
+        h.assertTrue(saved.getList("settled", net.minecraft.nbt.Tag.TAG_COMPOUND).size() == 1, "Settled totals grew per event");
+        var restored = CraterMatter.load(saved, lookup);
+        double[] total = restored.settled(stone);
+        h.assertTrue(total[0] == 10240 && total[2] == 10 && total[4] == 10230, "Crater compaction changed material ownership");
+        var unfinished = restored.pass(11);
+        unfinished.ground(123, 70); unfinished.removed(stone, true); unfinished.finish(123);
+        var again = CraterMatter.load(restored.save(new CompoundTag(), lookup), lookup);
+        h.assertTrue(again.pass(11).ground(123, 0) == 70 && again.pass(11).done.contains(123), "Active checkpoint was compacted early");
+        h.succeed();
+    }
+
     @GameTest(template = "pad", timeoutTicks = 30, batch = "nuke_material_overlap", skyAccess = true)
     public static void aLaterRemovalTransfersOnlyTheMaterialStillPresent(GameTestHelper h) {
         var level = h.getLevel();

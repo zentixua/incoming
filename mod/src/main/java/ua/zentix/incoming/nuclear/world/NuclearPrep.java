@@ -300,11 +300,11 @@ public final class NuclearPrep {
         long bytes = 0;
         int height = level.getHeight();
         for (ServerLevel other : level.getServer().getAllLevels()) {
-            if (!other.hasData(ModAttachments.NUCLEAR_WORLD)) continue;
             height = Math.max(height, other.getHeight());
             bytes += NuclearWorld.get(other).retainedRuinBytes();
         }
-        return bytes + (reserveWorkers ? RuinWorkers.bufferBytes(height) : RuinWorkers.residentBufferBytes(height));
+        return bytes + (reserveWorkers ? RuinWorkers.bufferBytes(height) + RuinMemory.TRANSITION_ROOM
+                : RuinWorkers.residentBufferBytes(height));
     }
 
     /** Squares held by tickets (tests). */

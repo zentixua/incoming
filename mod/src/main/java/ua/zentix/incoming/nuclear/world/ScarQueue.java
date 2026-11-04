@@ -955,6 +955,10 @@ public final class ScarQueue {
                 deferLogs(level, d, plan);
                 return RUINED;
             }
+            if (plan.memoryWaiting()) {
+                plans.put(key, plan);
+                return AGAIN;
+            }
             stalePlans++;
             st[1]++;
             // stale: on-site plan in subsequent units (background or window fractures)
@@ -988,6 +992,10 @@ public final class ScarQueue {
         if (plan != RuinPlan.EMPTY) NuclearWorld.get(level).beforeRuins(level, d, chunk);
         RuinPlan.Debris debris = debris(level, chunk, plan);
         boolean applied = plan.apply(level, chunk, d, budget);
+        if (plan.memoryWaiting()) {
+            parked.put(key, new Parked(d.id(), plan));
+            return AGAIN;
+        }
         if (applied) buried(level, d, free);
         if (!applied && !server) {
             // background-build positions changed: rebuild on server thread from current chunk

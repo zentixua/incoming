@@ -24,12 +24,37 @@ import java.util.Map;
 public final class CraterMatter extends SavedData {
     private static final String NAME = "incoming_crater_matter";
     private final Map<Integer, Pass> passes = new LinkedHashMap<>();
+    /** Settled events need material totals, not a second permanent copy of every excavated column. */
+    private final Map<BlockState, double[]> settled = new LinkedHashMap<>();
+
+    void complete(int event) {
+        Pass pass = passes.remove(event);
+        if (pass == null) return;
+        for (var entry : pass.materials.entrySet()) {
+            double[] total = settled.computeIfAbsent(entry.getKey(), ignored -> new double[8]);
+            for (int i = 0; i < total.length; i++) total[i] += entry.getValue()[i];
+        }
+        setDirty();
+    }
+
+    void retainActive(java.util.Set<Integer> active) {
+        for (int event : java.util.List.copyOf(passes.keySet())) if (!active.contains(event)) complete(event);
+    }
+
+    double[] settled(BlockState state) { return settled.getOrDefault(state, new double[8]).clone(); }
 
     static CraterMatter get(ServerLevel level) {
         return level.getDataStorage().computeIfAbsent(new Factory<>(CraterMatter::new, CraterMatter::load, null), NAME);
     }
 
     Pass pass(int event) { return passes.computeIfAbsent(event, ignored -> new Pass()); }
+
+    long retainedBytes() {
+        long bytes = 1024L + settled.size() * 512L;
+        for (Pass pass : passes.values()) bytes += 1024L + pass.materials.size() * 768L
+                + pass.ground.size() * 96L + pass.done.size() * 96L;
+        return bytes;
+    }
 
     final class Pass {
         String soil = "";
@@ -45,6 +70,14 @@ public final class CraterMatter extends SavedData {
         }
 
         void finish(long column) { done.add(column); setDirty(); }
+
+        /** The separately saved job cursor has advanced past this chunk. Only the current chunk
+         * can be replayed on clean restart, so earlier per-column checkpoints are redundant. */
+        void chunkFinished() {
+            ground.clear(); ground.trim();
+            done.clear(); done.trim();
+            setDirty();
+        }
 
         void removed(BlockState state, boolean excavatedGround) {
             Blast.Props props = Blast.props(state);
@@ -97,16 +130,29 @@ public final class CraterMatter extends SavedData {
                 BlockState state = NbtUtils.readBlockState(lookup.lookupOrThrow(Registries.BLOCK), row.getCompound("state"));
                 double[] balance = new double[8];
                 for (int j = 0; j < balance.length; j++) balance[j] = row.getDouble("v" + j);
-                for (int j = 0; j < 2; j++) {
-                    double accounted = balance[2 + j] + balance[4 + j] + balance[6 + j];
-                    if (!Double.isFinite(accounted) || Math.abs(accounted - balance[j]) > 1e-9 * Math.max(1, accounted))
-                        throw new IllegalStateException("Unbalanced crater material " + state);
-                }
+                validate(state, balance);
                 pass.materials.put(state, balance);
                 pass.available.put(state, row.getLong("available"));
             }
         }
+        ListTag totals = tag.getList("settled", Tag.TAG_COMPOUND);
+        for (int i = 0; i < totals.size(); i++) {
+            CompoundTag row = totals.getCompound(i);
+            BlockState state = NbtUtils.readBlockState(lookup.lookupOrThrow(Registries.BLOCK), row.getCompound("state"));
+            double[] balance = new double[8];
+            for (int j = 0; j < balance.length; j++) balance[j] = row.getDouble("v" + j);
+            validate(state, balance);
+            result.settled.put(state, balance);
+        }
         return result;
+    }
+
+    private static void validate(BlockState state, double[] balance) {
+        for (int j = 0; j < 2; j++) {
+            double accounted = balance[2 + j] + balance[4 + j] + balance[6 + j];
+            if (!Double.isFinite(accounted) || Math.abs(accounted - balance[j]) > 1e-9 * Math.max(1, accounted))
+                throw new IllegalStateException("Unbalanced crater material " + state);
+        }
     }
 
     @Override public CompoundTag save(CompoundTag tag, HolderLookup.Provider lookup) {
@@ -130,6 +176,14 @@ public final class CraterMatter extends SavedData {
             data.put("materials", rows); saved.add(data);
         }
         tag.put("passes", saved);
+        ListTag totals = new ListTag();
+        for (var entry : settled.entrySet()) {
+            CompoundTag row = new CompoundTag();
+            row.put("state", NbtUtils.writeBlockState(entry.getKey()));
+            for (int j = 0; j < entry.getValue().length; j++) row.putDouble("v" + j, entry.getValue()[j]);
+            totals.add(row);
+        }
+        tag.put("settled", totals);
         return tag;
     }
 }
