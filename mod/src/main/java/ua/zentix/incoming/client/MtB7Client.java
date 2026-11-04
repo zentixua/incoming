@@ -48,10 +48,15 @@ public final class MtB7Client {
                 ClientHorizon.observer = MtB7Client::submitted;
             }
             if (MtB7Capture.ENABLED) MtB7Capture.start();
+            MtB7Log.finalReport(() -> anchors.add("# received="+received.get()+" conflicts="+conflicts.get()+" history_omissions="+omitted.get()+" hash_ns="+hashNanos.get()+" capture_drops="+MtB7Capture.drops()));
             NeoForge.EVENT_BUS.addListener(MtB7Client::frame);
         } catch (IOException error) { Incoming.LOG.error("MT-B7 client initialization failed", error); }
     }
     private static void submitted(ClientHorizon.Submission submission) {
+        if (!MtB7Log.beginObservation()) return;
+        try { submittedObserved(submission); } finally { MtB7Log.endObservation(); }
+    }
+    private static void submittedObserved(ClientHorizon.Submission submission) {
         Scope state = scope;
         // Explicit producer level prevents late old-world work from being attributed to a new connection.
         if (state == null || state.level != submission.level() || incoming == null) { omitted.incrementAndGet(); return; }
@@ -69,6 +74,10 @@ public final class MtB7Client {
         } catch (RuntimeException error) { omitted.incrementAndGet(); }
     }
     static void lss(ClientLevel level, int x, int z, VoxelColumnData data) {
+        if (!MtB7Columns.ENABLED || !MtB7Log.beginObservation()) return;
+        try { lssObserved(level, x, z, data); } finally { MtB7Log.endObservation(); }
+    }
+    private static void lssObserved(ClientLevel level, int x, int z, VoxelColumnData data) {
         if (!MtB7Columns.ENABLED || columns == null) return;
         Scope state = scope;
         if (state == null || state.level != level) { omitted.incrementAndGet(); return; }
@@ -93,6 +102,10 @@ public final class MtB7Client {
         } catch (RuntimeException error) { omitted.incrementAndGet(); }
     }
     private static void frame(RenderFrameEvent.Post event) {
+        if (!MtB7Log.beginObservation()) return;
+        try { frameObserved(); } finally { MtB7Log.endObservation(); }
+    }
+    private static void frameObserved() {
         var mc = Minecraft.getInstance(); Scope state = scope;
         if (state == null ? mc.level != null : state.level != mc.level) {
             scope = state = mc.level == null ? null : new Scope(mc.level, ++epoch);

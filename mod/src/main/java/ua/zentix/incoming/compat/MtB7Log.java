@@ -19,7 +19,20 @@ public class MtB7Log implements AutoCloseable {
     private static final List<MtB7Log> LOGS = new CopyOnWriteArrayList<>();
     private static final List<Producer> PRODUCERS = new CopyOnWriteArrayList<>();
     private static volatile boolean stopping, closingLogs;
-    private static java.util.function.BooleanSupplier completion = () -> true;
+    private static volatile java.util.function.BooleanSupplier completion = () -> true;
+    private static volatile Runnable finalReport = () -> {};
+    private static final Observations OBSERVATIONS = new Observations();
+    /** Counter only: never retain a callback, wait, or hold this monitor during hashing. */
+    public static final class Observations {
+        private int active;
+        private boolean stopped;
+        public synchronized boolean begin() { if (stopped) return false; active++; return true; }
+        public synchronized void end() { if (--active < 0) throw new IllegalStateException("MT-B7 observation underflow"); }
+        public synchronized boolean stop() { stopped = true; return active == 0; }
+    }
+    public static boolean beginObservation() { return OBSERVATIONS.begin(); }
+    public static void endObservation() { OBSERVATIONS.end(); }
+    public static void finalReport(Runnable report) { finalReport = report; }
     public static void completeness(java.util.function.BooleanSupplier check) { completion = check; }
     static { Runtime.getRuntime().addShutdownHook(new Thread(MtB7Log::shutdown, "MT-B7 ordered shutdown")); }
     private final ArrayBlockingQueue<String> queue = new ArrayBlockingQueue<>(512);
@@ -38,12 +51,13 @@ public class MtB7Log implements AutoCloseable {
     }
     private static void shutdown() {
         stopping = true;
-        boolean complete = true;
+        boolean complete = OBSERVATIONS.stop();
         for (Producer producer : PRODUCERS) {
             complete &= drain(producer.executor, 3000);
             producer.report.run();
         }
         complete &= completion.getAsBoolean();
+        finalReport.run();
         synchronized (LOGS) { closingLogs = true; }
         for (MtB7Log log : LOGS) log.close(complete);
     }

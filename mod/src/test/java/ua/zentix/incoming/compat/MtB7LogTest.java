@@ -56,4 +56,34 @@ class MtB7LogTest {
         complete.close(true);
         assertTrue(Files.readString(directory.resolve("complete.csv")).contains("final result\n# dropped=0 producer_shutdown=complete"));
     }
+    @Test void directClientCallbackCannotOutliveACompleteFooterEvenWithoutServerMetrics() throws Exception {
+        var observations = new MtB7Log.Observations();
+        var pool = java.util.concurrent.Executors.newSingleThreadExecutor();
+        var began = new java.util.concurrent.CountDownLatch(1);
+        var gate = new java.util.concurrent.CountDownLatch(1);
+        var log = new MtB7Log(directory.resolve("client-callback.csv"), "header");
+        try {
+            pool.execute(() -> {
+                if (!observations.begin()) return;
+                began.countDown();
+                try { gate.await(); log.add("client hash result"); }
+                catch (InterruptedException error) { Thread.currentThread().interrupt(); }
+                finally { observations.end(); }
+            });
+            assertTrue(began.await(1, java.util.concurrent.TimeUnit.SECONDS));
+            boolean complete = observations.stop();
+            assertFalse(complete);
+            assertFalse(observations.begin(), "shutdown closes new callback admission atomically");
+            log.close(complete);
+            assertTrue(Files.readString(directory.resolve("client-callback.csv")).contains("producer_shutdown=incomplete"));
+        } finally { gate.countDown(); pool.shutdown(); assertTrue(pool.awaitTermination(1, java.util.concurrent.TimeUnit.SECONDS)); log.close(false); }
+        assertEquals(1, log.dropped.get());
+
+        var drained = new MtB7Log.Observations();
+        var clean = new MtB7Log(directory.resolve("client-drained.csv"), "header");
+        assertTrue(drained.begin()); clean.add("last accepted client row"); drained.end();
+        assertTrue(drained.stop()); clean.close(true);
+        assertTrue(Files.readString(directory.resolve("client-drained.csv")).contains("last accepted client row\n# dropped=0 producer_shutdown=complete"));
+    }
+
 }

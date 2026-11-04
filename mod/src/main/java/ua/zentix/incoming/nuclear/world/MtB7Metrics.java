@@ -65,6 +65,10 @@ public final class MtB7Metrics {
     }
     private static void before(ServerTickEvent.Pre event) { began = System.nanoTime(); wall = System.currentTimeMillis(); }
     private static void after(ServerTickEvent.Post event) {
+        if (!MtB7Log.beginObservation()) return;
+        try { afterObserved(event); } finally { MtB7Log.endObservation(); }
+    }
+    private static void afterObserved(ServerTickEvent.Post event) {
         if (ticks == null || progress == null || MtB7Log.stopping()) return;
         long now = System.nanoTime(); var server = event.getServer(); var rt = Runtime.getRuntime();
         ticks.add(serverSession+","+wall+","+began+","+System.currentTimeMillis()+","+now+","+server.getTickCount()+","+(now-began)+","+(rt.totalMemory()-rt.freeMemory())+","+rt.totalMemory()+","+rt.maxMemory()+","+(ticks.dropped.get()+progress.dropped.get()+saves.dropped.get()));
