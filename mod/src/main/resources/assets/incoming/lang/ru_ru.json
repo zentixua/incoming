@@ -575,6 +575,7 @@
   "incoming.compass.w": "запад",
   "incoming.compass.nw": "северо-запад",
   "incoming.remote.yield.input": "Мощность целым числом кт (1–%s)",
+  "incoming.nuke.prepare.pending": "Ядерный заказ уже ожидает ключа, предупреждения или стартовой площадки.",
   "incoming.nuke.prepare.button": "Подготовить цель",
   "incoming.nuke.prepare.inspect": "Проверьте удар, затем подготовьте цель.",
   "incoming.nuke.prepare.resolving": "Определяется поверхность цели…",

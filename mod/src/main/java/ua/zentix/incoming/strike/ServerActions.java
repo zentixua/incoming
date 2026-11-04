@@ -530,6 +530,8 @@ public final class ServerActions {
      */
     public static boolean dispatch(ServerLevel level, String who, float yaw, WeaponType weapon, int count, int spread, Aim aim, Loadout.Nuke nuke,
                                    Waypoints via, @Nullable LaunchOrigin from) {
+        if ((weapon.spec().warhead().always() || nuke.onCarrier() && Loadout.carriesNuke(weapon))
+                && nuke.yieldKt() > IncomingConfig.SERVER.nukeMaxYield.get()) return false;
         Loadout l = order(weapon, count, spread, nuke);
         if (l.nuclear()) return NuclearCommands.request(level, who, yaw, l, aim, via, from);
         return launch(level, who, null, null, yaw, l, aim, via, from, null);
@@ -558,6 +560,7 @@ public final class ServerActions {
      * @return true if launched (salvo started)
      */
     public static boolean fromLauncher(ServerLevel level, String who, @Nullable UUID owner, Loadout l, Aim aim, Waypoints via, LaunchOrigin.Fixed at) {
+        if (l.nuclear()) return false; // Fixed launchers do not support nuclear orders.
         return launch(level, who, null, owner, 0, clamp(l), aim, via, at, null);
     }
 

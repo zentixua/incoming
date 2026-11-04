@@ -95,6 +95,10 @@ public final class SalvoData extends SavedData {
         return salvos.size();
     }
 
+    boolean preparedPending(UUID owner) {
+        return salvos.stream().anyMatch(s -> owner.equals(s.owner) && s.preparation != null && s.remaining > 0);
+    }
+
     /** Salvo running from {@code origin} (fixed launcher busy until completion). */
     public static boolean busy(ServerLevel level, LaunchOrigin origin) {
         for (Salvo s : get(level).salvos) {
@@ -340,7 +344,7 @@ public final class SalvoData extends SavedData {
         }
 
         private StrikeService.Result fire(ServerLevel level) {
-            center.resolve(level).ifPresent(p -> lastCenter = p);
+            if (preparation == null) center.resolve(level).ifPresent(p -> lastCenter = p);
             int dx = 0, dz = 0;
             if (radius > 0) {
                 // Uniform circle: up to 8 attempts rejecting square points.

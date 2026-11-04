@@ -104,6 +104,44 @@ public final class NuclearPreparedFlightGameTests {
         h.succeed();
     }
 
+    @GameTest(template = "range", batch = "nuke_prepared_drop", skyAccess = true)
+    public static void bomberDropTransfersPreparationWithoutCancellingItsBomb(GameTestHelper h) throws ReflectiveOperationException {
+        ServerLevel level = h.getLevel();
+        NuclearStrikes.clear(level);
+        boolean carriers = IncomingConfig.SERVER.carrierNukes.get();
+        IncomingConfig.SERVER.carrierNukes.set(true);
+        UUID handle = UUID.randomUUID(), owner = UUID.randomUUID();
+        Vec3 target = Vec3.atCenterOf(h.absolutePos(new BlockPos(32, 1, 32)));
+        Loadout.Nuke nuke = new Loadout.Nuke(1, false, true);
+        try {
+            RuinPreparation.prepare(level, handle, owner, target, 1, false, false);
+            makeReady(level, handle, target);
+            h.assertTrue(StrikeService.launchPrepared(level, WeaponType.BUNKER, new Target.Point(target), target, 0, owner, null,
+                    false, nuke, Waypoints.NONE, null, handle, 1800).ok(), "ready bomber rejected");
+            var bomber = (BomberEntity) VirtualFlights.get(level).flights().stream()
+                    .filter(p -> owner.equals(p.ownerId()) && p instanceof BomberEntity).findFirst().orElseThrow();
+            int identity = bomber.nuclearPreparation();
+            var release = BomberEntity.class.getDeclaredMethod("release", ServerLevel.class, Vec3.class);
+            release.setAccessible(true);
+            release.invoke(bomber, level, target);
+            var bomb = VirtualFlights.get(level).flights().stream()
+                    .filter(p -> owner.equals(p.ownerId()) && p instanceof BunkerBusterEntity).findFirst().orElseThrow();
+            h.assertTrue(bomb.nuclearPreparation() == identity && bomber.nuclearPreparation() < 0, "drop duplicated or lost ownership");
+            bomber.discard();
+            h.assertTrue(RuinPreparation.status(level, handle).stage() == RuinPreparation.Stage.READY,
+                    "departing bomber cancelled its dropped bomb preparation");
+            bomb.discard();
+            h.assertTrue(RuinPreparation.status(level, handle).stage() == RuinPreparation.Stage.ABSENT,
+                    "lost bomb retained preparation");
+        } finally {
+            VirtualFlights.get(level).clear(level, p -> owner.equals(p.ownerId()));
+            RuinPreparation.cancel(level, handle);
+            NuclearStrikes.clear(level);
+            IncomingConfig.SERVER.carrierNukes.set(carriers);
+        }
+        h.succeed();
+    }
+
     @SuppressWarnings("unchecked")
     private static Object makeReady(ServerLevel level, UUID handle, Vec3 target) throws ReflectiveOperationException {
         var method = NuclearWorld.class.getDeclaredMethod("prep");

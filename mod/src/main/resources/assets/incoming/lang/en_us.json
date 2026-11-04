@@ -575,6 +575,7 @@
   "incoming.compass.w": "west",
   "incoming.compass.nw": "north-west",
   "incoming.remote.yield.input": "Yield in integer kt (1–%s)",
+  "incoming.nuke.prepare.pending": "A nuclear order is already awaiting its key, warning or launch site.",
   "incoming.nuke.prepare.button": "Prepare target",
   "incoming.nuke.prepare.inspect": "Inspect freely, then prepare the target.",
   "incoming.nuke.prepare.resolving": "Finding the target surface…",

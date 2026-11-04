@@ -126,6 +126,15 @@ public final class NuclearKeys {
         }
     }
 
+    /** A paid unlaunched order keeps its lease; a new preparation must not silently cancel its warning/key. */
+    public static boolean preparingOrder(ServerPlayer player) {
+        for (ServerLevel level : player.server.getAllLevels()) {
+            if (level.hasData(ModAttachments.STRIKE_WORLD) && get(level).waiting(player.getUUID()) > 0
+                    || SalvoData.get(level).preparedPending(player.getUUID())) return true;
+        }
+        return false;
+    }
+
     /** Bypass second key and advance warning: operator and singleplayer/LAN host. Also allowed nuclear abort. */
     public static boolean trusted(ServerPlayer player) {
         return player.hasPermissions(2) || player.server.isSingleplayerOwner(player.getGameProfile());

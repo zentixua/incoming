@@ -55,6 +55,9 @@ public final class NuclearReview {
 
     public static void request(ServerPlayer p, C2S.Fire order) {
         if (!p.isAlive() || p.isRemoved()) { cancel(p); return; }
+        if (NuclearKeys.preparingOrder(p)) {
+            p.sendSystemMessage(Component.translatable("incoming.nuke.prepare.pending")); return;
+        }
         NuclearReview state = p.getData(ModAttachments.NUCLEAR_REVIEW);
         long now = p.serverLevel().getGameTime();
         if (state.lastRequest != Long.MIN_VALUE && now - state.lastRequest < 4) return;
@@ -193,7 +196,8 @@ public final class NuclearReview {
             return false;
         }
         if (action == C2S.NuclearAction.POLL || action == C2S.NuclearAction.PREPARE) {
-            if (e.lastPoll != Long.MIN_VALUE && now - e.lastPoll < 10) return false;
+            boolean firstPreparation = action == C2S.NuclearAction.PREPARE && !e.preparing;
+            if (!firstPreparation && e.lastPoll != Long.MIN_VALUE && now - e.lastPoll < 10) return false;
             e.lastPoll = now;
             e.expires = now + EXPIRE_TICKS;
             if (action == C2S.NuclearAction.PREPARE && !e.preparing) {

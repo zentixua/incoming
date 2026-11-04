@@ -153,7 +153,9 @@ public final class NuclearReviewGameTests {
         NuclearReview.request(p, order(h, 1));
         UUID id = id(p);
         h.assertFalse(NuclearReview.act(p, id, C2S.NuclearAction.BEGIN), "inspection allowed hold");
-        h.assertTrue(NuclearReview.act(p, id, C2S.NuclearAction.PREPARE), "preparation refused");
+        h.assertTrue(NuclearReview.act(p, id, C2S.NuclearAction.POLL), "inspection heartbeat refused");
+        h.assertTrue(NuclearReview.act(p, id, C2S.NuclearAction.PREPARE), "heartbeat swallowed the one-shot prepare click");
+        h.assertFalse(NuclearReview.act(p, id, C2S.NuclearAction.PREPARE), "repeat prepare ignored poll bound");
         h.assertFalse(NuclearReview.act(p, id, C2S.NuclearAction.BEGIN), "unready preparation allowed hold");
         var snapshot = p.getData(ModAttachments.NUCLEAR_REVIEW).snapshot().orElseThrow();
         ua.zentix.incoming.nuclear.world.NuclearReadyFixture.ready(p.serverLevel(), id, snapshot.target(), 1, false);

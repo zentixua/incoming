@@ -43,6 +43,9 @@ public final class NuclearCommands {
     /** Replace any older unaccepted command by this player, including another dimension. No payment here. */
     public static boolean request(ServerPlayer player, Loadout loadout, ServerActions.Aim aim, Waypoints via,
                                   @Nullable LaunchOrigin from, boolean rules) {
+        if (NuclearKeys.preparingOrder(player)) {
+            player.sendSystemMessage(Component.translatable("incoming.nuke.prepare.pending")); return false;
+        }
         cancelPlayer(player);
         NuclearReview.cancel(player);
         if (!player.isAlive() || player.isRemoved() || !ServerActions.mayUse(player) || !ServerActions.mayUseNuke(player)
