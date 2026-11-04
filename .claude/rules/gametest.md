@@ -131,3 +131,5 @@ paths:
   ordinary fire under the herd even for a detonation inserted directly into `NuclearEvents`; `inFire` damage then
   violates a full-health assertion without any duplicate exposure. Disable `nukeFires` within that fixture and
   restore it with `StrikeGameTests.afterTest`; retain dose/burn/health assertions and report the last damage source.
+
+- Delayed nuclear review tests that mutate/restore global config need separate batches too. Sharing `nuclear_review` let one completion restore ops-only/cap while another flow was requesting its revised order, producing an empty review despite a valid fixture.
