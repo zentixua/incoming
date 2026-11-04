@@ -177,9 +177,10 @@ public final class ClientNuclear {
      */
     public static void detonation(S2C.NukeDetonation p, boolean live) {
         Detonation d = p.detonation();
+        ClientLevel level = Minecraft.getInstance().level;
         if (p.strikeId() >= 0) {
             WARNINGS.remove(p.strikeId());
-            APPROACHES.finish(p.strikeId());
+            APPROACHES.finish(p.strikeId(), live || level == null ? 0 : Math.max(0, level.getGameTime() - d.gameTime()));
         }
         // Old recordings have no scheduled-strike identity. Only those use the historical location match.
         // detonation can follow countdown: server waits for location loading (NuclearStrikes.GIVE_UP_TICKS). Detonation
@@ -189,7 +190,6 @@ public final class ClientNuclear {
                 .filter(w -> w.target().distanceToSqr(new Vec3(d.burst().x, w.target().y, d.burst().z)) < 4 && d.gameTime() >= w.detonateTime() - 40)
                 .min(Comparator.comparingLong(S2C.NukeWarning::detonateTime).thenComparingInt(S2C.NukeWarning::strikeId))
                 .ifPresent(w -> WARNINGS.remove(w.strikeId()));
-        ClientLevel level = Minecraft.getInstance().level;
         Active known = DETONATIONS.get(d.id());
         if ((known != null && (known.live || !live)) || level == null) return;
         // previous display of same detonation (from seek): remove its burning-city loops
