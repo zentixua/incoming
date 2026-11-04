@@ -51,8 +51,6 @@ import java.util.List;
  * sound path rather than vanilla attenuation; true direction (point 3 blocks from ear toward epicenter).
  */
 public final class NukeSounds {
-    /** Warhead entry visible for last 3 s, silent: at 7 km/s its sound arrives after the explosion. */
-    static final int REENTRY_TICKS = 60;
     /** Sirens on different sides of the listener's alarm-start position, like city streets, at native pitch. */
     private static final Vec3[] SIREN_AT = {new Vec3(140, 25, -90), new Vec3(-120, 25, 130)};
     private static final float[] SIREN_TONE = {1.0f, 0.98f};

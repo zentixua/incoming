@@ -290,3 +290,7 @@ with Iris.
   renders 3 fps after detonation; at 20 ticks, `Screenshot.grab` takes last rendered frame, repeating one frame for
   5 consecutive ticks, arcs passing between. `SCENARIO flash shot …` gives client marks, EMP arcs/wisps
   (`FlashAftermath.describe`).
+
+- `arrival [count] [flash]`: client-only 12-second terminal sequence (1–128 heads), warning and authoritative
+  approach packets, no siren or boost sound. Optional `flash` emits the unchanged 15 kt airburst for the first
+  head. `--cam '2000 2 0 800'` frames the ground observer's view; capture 10–12.2 seconds, day/night, with WAV.

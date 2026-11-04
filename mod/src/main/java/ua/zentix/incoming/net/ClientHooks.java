@@ -37,6 +37,7 @@ public interface ClientHooks {
 
     default void cleared(S2C.Cleared p) {}
 
+    default void nukeApproach(S2C.NukeApproach p) {}
     default void nukeWarning(S2C.NukeWarning p) {}
 
     default void nukeDetonation(S2C.NukeDetonation p) {}

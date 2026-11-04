@@ -670,7 +670,7 @@ public final class FarSprites implements SmokePuffs.Out {
      * puffs at the axis):
      * the smoke of its exhaust lies under the fire, not between its pieces; nearer smoke — over it. Glows (the {@code
      * FxBloom} glow):
-     * hdr0, hdr1 — brightness of the ends against the white screen before the clip ({@link Sight#onScreen}).
+     * hdr0, hdr1 — brightness of the ends against the white screen before the clip (zero skips bloom) ({@link Sight#onScreen}).
      */
     public void glowStrip(Vector3f a, Vector3f b, Vector3f c, Vector3f d, float r0, float g0, float b0, float r1, float g1, float b1, float soft,
                           float key, float hdr0, float hdr1) {
@@ -689,10 +689,10 @@ public final class FarSprites implements SmokePuffs.Out {
         b1 = Math.min(1, b1);
         out.glowShape(true);
         out.quad(key);
-        out.emission(Math.max(1, hdr0));
+        out.emission(hdr0 > 0 ? Math.max(1, hdr0) : 0);
         out.vertex(a.x * ka, a.y * ka, a.z * ka, s.u0(), v, r0, g0, b0, 0, soft, ka, LightTexture.FULL_BRIGHT, 0);
         out.vertex(b.x * kb, b.y * kb, b.z * kb, s.u1(), v, r0, g0, b0, 0, soft, kb, LightTexture.FULL_BRIGHT, 0);
-        out.emission(Math.max(1, hdr1));
+        out.emission(hdr1 > 0 ? Math.max(1, hdr1) : 0);
         out.vertex(c.x * kc, c.y * kc, c.z * kc, s.u1(), v, r1, g1, b1, 0, soft, kc, LightTexture.FULL_BRIGHT, 0);
         out.vertex(d.x * kd, d.y * kd, d.z * kd, s.u0(), v, r1, g1, b1, 0, soft, kd, LightTexture.FULL_BRIGHT, 0);
         out.emission(0);

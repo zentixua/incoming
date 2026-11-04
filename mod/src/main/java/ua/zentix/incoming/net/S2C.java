@@ -589,6 +589,16 @@ public final class S2C {
         }
     }
 
+    /** Full terminal snapshot and server epoch. Repeated snapshots also restore Flashback seek/late join. */
+    public record NukeApproach(long time, List<ua.zentix.incoming.nuclear.IcbmArrival> arrivals) implements CustomPacketPayload {
+        public static final Type<NukeApproach> TYPE = new Type<>(Incoming.id("nuke_approach"));
+        public static final StreamCodec<ByteBuf, NukeApproach> CODEC = StreamCodec.composite(
+                ByteBufCodecs.VAR_LONG, NukeApproach::time,
+                ua.zentix.incoming.nuclear.IcbmArrival.STREAM_CODEC.apply(ByteBufCodecs.list()), NukeApproach::arrivals,
+                NukeApproach::new);
+        @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }
+    }
+
     /**
      * Nuclear detonation: client computes everything else (flash, fireball, mushroom, wave, sound, rain) from model. Except
      * server settings: {@code blackout} — grid-outage radius ({@code Blackouts.nukeRadius}; 0 — no
@@ -599,7 +609,8 @@ public final class S2C {
      * predating them read “as before”: wall speed {@link Detonation#OLD_WAVE}, no EMP, time of day
      * unknown, fires enabled.
      */
-    public record NukeDetonation(Detonation detonation, float blackout) implements CustomPacketPayload {
+    public record NukeDetonation(Detonation detonation, float blackout, int strikeId) implements CustomPacketPayload {
+        public NukeDetonation(Detonation detonation, float blackout) { this(detonation, blackout, -1); }
         public static final Type<NukeDetonation> TYPE = new Type<>(Incoming.id("nuke_detonation"));
         public static final StreamCodec<ByteBuf, NukeDetonation> CODEC = StreamCodec.composite(
                 Detonation.STREAM_CODEC, NukeDetonation::detonation,
@@ -607,7 +618,8 @@ public final class S2C {
                 StreamCodecs.trailing(ByteBufCodecs.FLOAT, 0f), NukeDetonation::blackout,
                 StreamCodecs.trailing(ByteBufCodecs.VAR_LONG, Detonation.NO_DAY_TIME), p -> p.detonation.dayTime(),
                 StreamCodecs.trailing(ByteBufCodecs.BOOL, true), p -> p.detonation.fires(),
-                (d, wave, blackout, dayTime, fires) -> new NukeDetonation(d.withWave(wave).withDayTime(dayTime).withFires(fires), blackout));
+                StreamCodecs.trailing(ByteBufCodecs.VAR_INT, -1), NukeDetonation::strikeId,
+                (d, wave, blackout, dayTime, fires, strikeId) -> new NukeDetonation(d.withWave(wave).withDayTime(dayTime).withFires(fires), blackout, strikeId));
 
         @Override
         public Type<? extends CustomPacketPayload> type() {

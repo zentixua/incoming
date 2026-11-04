@@ -299,6 +299,7 @@ final class Sandbox {
             write(dir.resolve("ready"), String.format(Locale.ROOT, "%.1f", up));
         }
         try {
+            ArrivalScene.tick();
             raidNext(mc);
             advance(mc);
             if (!busy()) nextFromInbox();
@@ -551,6 +552,7 @@ final class Sandbox {
     private void clear() {
         Minecraft.getInstance().setScreen(null);
         raid.clear();
+        ArrivalScene.reset();
         turnYaw = Float.NaN;
         IncomingClient.resetSession();
         server("incoming clear");
@@ -613,6 +615,7 @@ final class Sandbox {
         double radius = c.number(1, 120), every = c.number(2, 3);
         java.util.Random rnd = new java.util.Random(7);
         raid.clear();
+        ArrivalScene.reset();
         raidWeapon = c.raidWeapon();
         for (int i = 0; i < n; i++) {
             double a = 2 * Math.PI * rnd.nextDouble(), r = radius * Math.sqrt(rnd.nextDouble());
@@ -650,6 +653,11 @@ final class Sandbox {
         // houses)
         if (armed != null && armed.times[0] < 0 && !c.near()) throw new IllegalArgumentException("frames before the effect's start — only for nuke … near");
         switch (c.verb()) {
+            case ARRIVAL -> {
+                placeCamera();
+                ArrivalScene.start(site, (int) c.number(0, 1), c.args().contains("flash"));
+                begin();
+            }
             case UI -> {
                 var loadout = ua.zentix.incoming.strike.Loadout.DEFAULT.withWeapon(WeaponType.NUKE)
                         .withMode(ua.zentix.incoming.strike.TargetMode.MAP)

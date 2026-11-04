@@ -45,6 +45,9 @@ updating, even if you selected AIR with the button. A saved `air_burst=true` fie
 air burst again on the console before launching. ICBMs already scheduled keep their burst mode.
 
 The ICBM lifts off behind you. By default, the strike follows 90 seconds later.
+Near the target, its final approach is a compact glowing head with a short fading wake, ending at the burst
+height. It is easier to see at night; haze and terrain can hide it. There is no incoming whistle. The nuclear
+bang still arrives with the blast front. The existing flight-speed scale also controls the visible approach.
 
 If the world owner has allowed nuclear weapons for everyone, a player without operator rights needs a second key
 whenever someone else is online: another player within 16 blocks presses `.` within 30 seconds. Every player is told

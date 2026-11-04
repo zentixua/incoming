@@ -107,6 +107,9 @@ public final class NuclearStrikes {
         Incoming.LOG.info("ICBM #{}: {} kt at {} {} {}, detonation in {} s", s.id(), Math.round(yieldKt), Mth.floor(target.x), Mth.floor(target.y),
                 Mth.floor(target.z), (s.detonateTime() - now) / 20);
         for (ServerPlayer p : level.players()) PacketDistributor.sendToPlayer(p, warning(s, p));
+        // Capability/state at launch too: new recordings never fall back to the legacy countdown graphic.
+        PacketDistributor.sendToPlayersInDimension(level, new S2C.NukeApproach(now,
+                events.scheduled().stream().flatMap(x -> x.arrival().stream()).toList()));
     }
 
     /** Warning for a specific player: alarm if within {@code warning_radius} of the target. */
@@ -197,19 +200,38 @@ public final class NuclearStrikes {
         NuclearEvents events = NuclearEvents.get(level);
         long now = level.getGameTime();
         List<NuclearEvents.ScheduledStrike> due = new ArrayList<>();
-        for (NuclearEvents.ScheduledStrike s : events.scheduled()) {
+        List<IcbmArrival> approaches = new ArrayList<>();
+        for (NuclearEvents.ScheduledStrike original : List.copyOf(events.scheduled())) {
+            NuclearEvents.ScheduledStrike s = original;
             boolean loaded = groundLoaded(level, s.target());
             // detonation position held from launch (and after world load: tickets are not saved): ground height and crater soil
             // must be known without stalling the server
             holdGround(level, s, true);
-            if (now >= s.detonateTime() && (loaded || now - s.detonateTime() > GIVE_UP_TICKS)) due.add(s);
+            long start = IcbmArrival.start(s.launchTime(), s.detonateTime());
+            if (s.arrival().isEmpty() && start < s.detonateTime() && now >= start && now < s.detonateTime() && loaded) {
+                Vec3 at = s.surface() ? NuclearWarhead.surfaceAt(level, s.target()) : s.target();
+                Detonation geometry = NuclearWorld.get(level).planned(NuclearWarhead.geometry(level, at, s.yieldKt(),
+                        s.airBurst(), (float) IncomingConfig.SERVER.effectsScale()));
+                IcbmArrival arrival = new IcbmArrival(s.id(), start, s.detonateTime(), geometry,
+                        IcbmArrival.velocity(s.launchPos(), geometry.burst(), ua.zentix.incoming.strike.WeaponSpec.NUKE.airframe().diveSpeed()));
+                events.commit(s, arrival);
+                s = s.withArrival(arrival);
+            }
+            if (now < s.detonateTime()) s.arrival().ifPresent(approaches::add);
+            if (now >= s.detonateTime() && (s.arrival().isPresent() || loaded || now - s.detonateTime() > GIVE_UP_TICKS)) due.add(s);
         }
         for (NuclearEvents.ScheduledStrike s : due) {
             events.unschedule(s);
             holdGround(level, s, false);
             Vec3 at = s.surface() ? NuclearWarhead.surfaceAt(level, s.target()) : s.target();
-            NuclearWarhead.detonate(level, at, s.yieldKt(), s.airBurst(), s.owner().orElse(null));
+            Detonation committed = s.arrival().map(IcbmArrival::geometry).orElse(null);
+            NuclearWarhead.detonate(level, at, s.yieldKt(), s.airBurst(), s.owner().orElse(null),
+                    committed == null ? (float) IncomingConfig.SERVER.effectsScale() : committed.scale(), committed, s.id());
         }
+        // One batched clocked snapshot per server tick, only during terminal flight. No client extrapolation to
+        // a nominal countdown: a stalled server stops motion upstream, never a spark hovering at the burst.
+        if (!approaches.isEmpty() || !due.isEmpty())
+            PacketDistributor.sendToPlayersInDimension(level, new S2C.NukeApproach(now, List.copyOf(approaches)));
         if (now % 1200 == 0) events.prune(now);
         long t1 = System.nanoTime();
         NuclearWorld world = NuclearWorld.get(level);
@@ -286,6 +308,8 @@ public final class NuclearStrikes {
         NuclearEvents events = NuclearEvents.get(p.serverLevel());
         PacketDistributor.sendToPlayer(p, new S2C.NukeSync(List.copyOf(events.detonations()),
                 events.scheduled().stream().map(s -> warning(s, p)).toList()));
+        PacketDistributor.sendToPlayer(p, new S2C.NukeApproach(p.serverLevel().getGameTime(),
+                events.scheduled().stream().flatMap(s -> s.arrival().stream()).toList()));
     }
 
     private static void sync(ServerLevel level) {

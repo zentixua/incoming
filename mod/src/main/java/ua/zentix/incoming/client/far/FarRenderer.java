@@ -63,6 +63,7 @@ public final class FarRenderer {
         // frame entity plume jets: after world, not through entity pipeline, or shader pack recolours them
         ua.zentix.incoming.client.render.PlumeRenderer.collect(view, SPRITES);
         NukeRenderer.fireballs(view, SPRITES, lights);
+        ua.zentix.incoming.client.nuclear.IcbmArrivalRenderer.collect(view, SPRITES);
         SPRITES.counts(LAST_FRAME);
     }
 

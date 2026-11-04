@@ -37,7 +37,15 @@ public final class NuclearEvents extends SavedData {
      * @param surface target is a ground position (from the map): surface detonation regardless of the launch height estimate
      */
     public record ScheduledStrike(int id, Vec3 target, double yieldKt, boolean airBurst, long launchTime, long detonateTime,
-                                  Vec3 launchPos, Optional<UUID> owner, boolean surface) {
+                                  Vec3 launchPos, Optional<UUID> owner, boolean surface, Optional<IcbmArrival> arrival) {
+        public ScheduledStrike(int id, Vec3 target, double yieldKt, boolean airBurst, long launchTime, long detonateTime,
+                               Vec3 launchPos, Optional<UUID> owner, boolean surface) {
+            this(id, target, yieldKt, airBurst, launchTime, detonateTime, launchPos, owner, surface, Optional.empty());
+        }
+
+        public ScheduledStrike withArrival(IcbmArrival a) {
+            return new ScheduledStrike(id, target, yieldKt, airBurst, launchTime, detonateTime, launchPos, owner, surface, Optional.of(a));
+        }
         public static final Codec<ScheduledStrike> CODEC = RecordCodecBuilder.create(i -> i.group(
                 Codec.INT.fieldOf("id").forGetter(ScheduledStrike::id),
                 Vec3.CODEC.fieldOf("target").forGetter(ScheduledStrike::target),
@@ -49,8 +57,17 @@ public final class NuclearEvents extends SavedData {
                 Codec.LONG.fieldOf("detonate_time").forGetter(ScheduledStrike::detonateTime),
                 Vec3.CODEC.fieldOf("launch_pos").forGetter(ScheduledStrike::launchPos),
                 UUIDUtil.CODEC.optionalFieldOf("owner").forGetter(ScheduledStrike::owner),
-                Codec.BOOL.optionalFieldOf("surface", false).forGetter(ScheduledStrike::surface)
+                Codec.BOOL.optionalFieldOf("surface", false).forGetter(ScheduledStrike::surface),
+                IcbmArrival.CODEC.optionalFieldOf("arrival").forGetter(ScheduledStrike::arrival)
         ).apply(i, ScheduledStrike::new));
+    }
+
+    public void commit(ScheduledStrike old, IcbmArrival arrival) {
+        int index = scheduled.indexOf(old);
+        if (index >= 0) {
+            scheduled.set(index, old.withArrival(arrival));
+            setDirty();
+        }
     }
 
     private final List<Detonation> detonations = new ArrayList<>();
