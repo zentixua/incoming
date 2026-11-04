@@ -246,6 +246,22 @@ class RuinWorkerAdmissionTest {
         assertEquals(0, resident());
     }
 
+    @Test
+    void failedExitCallbackStillTerminatesCountExactlyOnce() {
+        var counts = new AtomicIntegerArray(3);
+        var exits = new java.util.concurrent.atomic.AtomicInteger();
+        var task = new RuinWorkers.Task<>(() -> 42, RuinWorkers.Priority.SEEN, counts, null, () -> {
+            exits.incrementAndGet();
+            throw new IllegalStateException("controlled ownership callback failure");
+        });
+        assertThrows(IllegalStateException.class, task::run);
+        assertTrue(RuinWorkers.finished(task));
+        assertEquals(0, counts.get(0));
+        task.run();
+        assertEquals(1, exits.get());
+        assertEquals(0, counts.get(0));
+    }
+
     private static <T> Future<T> submit(RuinWorkers.OwnedPool pool, AtomicIntegerArray counts,
                                        java.util.concurrent.Callable<T> body, RuinWorkers.Priority priority) {
         var task = new RuinWorkers.Task<>(body, priority, counts, pool);

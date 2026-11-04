@@ -96,6 +96,76 @@ public final class RuinWorkerAdmissionGameTests {
         });
     }
 
+    @GameTest(template = "range", timeoutTicks = 200, batch = "nuke_worker_exit", skyAccess = true)
+    public static void additionalExitOwnershipFollowsPromotionCancellationAndShutdown(GameTestHelper h) {
+        StrikeGameTests.gameSpeed(h);
+        RuinWorkers.shutdown();
+        int configured = IncomingConfig.SERVER.nukeRuinThreads.get();
+        IncomingConfig.SERVER.nukeRuinThreads.set(1);
+        long baseline = RuinInputs.detachedBytes();
+        var release = new CountDownLatch(1);
+        var started = new CountDownLatch(1);
+        var exits = new AtomicInteger();
+        var inputs = new RuinInputs();
+        StrikeGameTests.afterTest(h, () -> {
+            release.countDown();
+            RuinWorkers.shutdown();
+            IncomingConfig.SERVER.nukeRuinThreads.set(configured);
+        });
+        Future<?> running = RuinWorkers.submit(() -> { started.countDown(); release.await(); return null; },
+                RuinWorkers.Priority.SEEN, inputs, exits::incrementAndGet);
+        int[] stage = {0};
+        Future<?>[] normal = {null}, stopRunning = {null};
+        var normalExits = new AtomicInteger();
+        var stopExits = new AtomicInteger();
+        var stopStarted = new CountDownLatch(1);
+        var stopRelease = new CountDownLatch(1);
+        StrikeGameTests.afterTest(h, stopRelease::countDown);
+        h.onEachTick(() -> {
+            if (stage[0] == 0) {
+                if (started.getCount() != 0) return;
+                var queuedInputs = new RuinInputs();
+                var queuedExits = new AtomicInteger();
+                Future<?> queued = RuinWorkers.submit(() -> { throw new AssertionError("cancelled promotion ran"); },
+                        RuinWorkers.Priority.FAR, queuedInputs, queuedExits::incrementAndGet);
+                Future<?> moved = RuinWorkers.promote(queued, RuinWorkers.Priority.NEAR);
+                h.assertTrue(moved != null && queued.isCancelled(), "queued task did not transfer through promotion");
+                h.assertTrue(queuedExits.get() == 0, "promotion signalled exit of transferred callable");
+                queuedInputs.detach(5678);
+                inputs.detach(12345);
+                moved.cancel(false);
+                h.assertTrue(queuedExits.get() == 1 && RuinWorkers.finished(moved), "queued removal missed or duplicated exit");
+                h.assertTrue(RuinInputs.detachedBytes() == baseline + 12345, "promotion released wrong input owner");
+                running.cancel(false);
+                h.assertTrue(exits.get() == 0 && !RuinWorkers.finished(running), "Future cancellation signalled actual exit");
+                release.countDown();
+                stage[0] = 1;
+            } else if (stage[0] == 1) {
+                if (!RuinWorkers.finished(running)) return;
+                h.assertTrue(exits.get() == 1 && RuinInputs.detachedBytes() == baseline, "actual exit did not release both owners once");
+                normal[0] = RuinWorkers.submit(() -> true, RuinWorkers.Priority.SEEN, new RuinInputs(), normalExits::incrementAndGet);
+                stage[0] = 2;
+            } else if (stage[0] == 2) {
+                if (!RuinWorkers.finished(normal[0])) return;
+                h.assertTrue(normalExits.get() == 1 && !normal[0].isCancelled(), "normal completion missed its exit hook");
+                stopRunning[0] = RuinWorkers.submit(() -> { stopStarted.countDown(); stopRelease.await(); return null; },
+                        RuinWorkers.Priority.SEEN, new RuinInputs(), stopExits::incrementAndGet);
+                stage[0] = 3;
+            } else if (stage[0] == 3) {
+                if (stopStarted.getCount() != 0) return;
+                var queuedExits = new AtomicInteger();
+                Future<?> queued = RuinWorkers.submit(() -> { throw new AssertionError("shutdown queue ran"); },
+                        RuinWorkers.Priority.FAR, new RuinInputs(), queuedExits::incrementAndGet);
+                h.assertTrue(RuinWorkers.shutdown(), "shutdown left executing work");
+                h.assertTrue(queued.isCancelled() && RuinWorkers.finished(queued), "shutdown queue retained ownership");
+                h.assertTrue(RuinWorkers.finished(stopRunning[0]) && stopExits.get() == 1 && queuedExits.get() == 1,
+                        "shutdown missed or duplicated an actual-exit callback");
+                h.assertTrue(RuinInputs.detachedBytes() == baseline, "exit hook changed input accounting");
+                h.succeed();
+            }
+        });
+    }
+
     private static Object fieldValue(java.lang.reflect.Field field) {
         try { return field.get(null); }
         catch (IllegalAccessException failure) { throw new AssertionError(failure); }
