@@ -23,7 +23,7 @@ import ua.zentix.incoming.nuclear.NuclearStrikes;
 @PrefixGameTestTemplate(false)
 public final class RuinQueueProgressGameTests {
     private static final int CELLS = 22_054;
-    private static final long ROOM = 128L << 20;
+    private static final long ROOM = 160L << 20;
 
     private RuinQueueProgressGameTests() {}
 
