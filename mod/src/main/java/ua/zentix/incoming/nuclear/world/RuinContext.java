@@ -37,6 +37,7 @@ final class RuinContext {
     private final java.util.concurrent.ConcurrentHashMap<Long, RuinHeights> heights = new java.util.concurrent.ConcurrentHashMap<>();
     private long heightBytes;
     private long appliedBytes;
+    private final RuinInputs inputs = new RuinInputs();
     private final Long2ObjectOpenHashMap<Applied> applied = new Long2ObjectOpenHashMap<>();
     private final LongOpenHashSet planned = new LongOpenHashSet(), stood = new LongOpenHashSet();
     /** Last context use (game time), for queue to forget long-idle contexts. */
@@ -350,12 +351,16 @@ final class RuinContext {
 
     private void putShot(long key, ChunkShot shot) {
         ChunkShot was = shots.putAndMoveToLast(key, shot);
+        if (was != null && was != shot) inputs.retire(was.bytes);
         shotBytes += shot.bytes - (was == null ? 0 : was.bytes);
     }
 
     void dropShot(long key) {
         ChunkShot was = shots.remove(key);
-        if (was != null) shotBytes -= was.bytes;
+        if (was != null) {
+            inputs.retire(was.bytes);
+            shotBytes -= was.bytes;
+        }
     }
 
     /** Re-readable cache only: keep old changed blocks and shadow heights, and snapshots held by worker grids. */
@@ -457,6 +462,10 @@ final class RuinContext {
 
     /** Conservative retained-plan accounting for long disk settlement passes, including old blocks and marks. */
     long retainedBytes() {
+        return inputs.retained(currentBytes());
+    }
+
+    private long currentBytes() {
         long bytes = shotBytes() + applied.size() * 640L + (planned.size() + stood.size()) * 32L;
         return bytes + appliedBytes + (restoredPlans == null ? 0 : restoredPlans.bytes());
     }
@@ -626,7 +635,7 @@ final class RuinContext {
         if (!RuinWorkers.admit(priority) || priority != RuinWorkers.Priority.SEEN && tasks.size() >= 2 * RuinWorkers.capacity()) return false;
         Grid g = grid(level, pos, true);
         if (g.at(0, 0) == null) throw new IllegalStateException("no snapshot of chunk " + pos);
-        tasks.put(key, new Task(RuinWorkers.submit(() -> {
+        tasks.put(key, new Task(submitWorker(() -> {
             RuinWorkers.checkStop();
             Collapse c = Collapse.solve(g);
             RuinWorkers.checkStop();
@@ -635,6 +644,11 @@ final class RuinContext {
         failed.remove(key);
         pendingWindows.remove(key);
         return true;
+    }
+
+    /** Ruin and flash-layer jobs share this context's actual input owner. */
+    <T> java.util.concurrent.Future<T> submitWorker(java.util.concurrent.Callable<T> task, RuinWorkers.Priority priority) {
+        return RuinWorkers.submit(task, priority, inputs);
     }
 
     /** Chunk has running or ready background plan. */
@@ -756,6 +770,8 @@ final class RuinContext {
 
     /** Background plans no longer needed (cancel, world unload): abandon tasks. */
     void cancelTasks() {
+        // Transfer before cancel: queued callbacks may release immediately; running callbacks may not.
+        inputs.detach(currentBytes());
         for (Task t : tasks.values()) t.future.cancel(false);
         tasks.clear();
         pendingWindows.clear();
