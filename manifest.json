@@ -1,0 +1,50 @@
+{
+  "original-preflight": {
+    "source": "/mnt/data/projects/incoming/mod/run/wt-LEAD2/mod/run/lead2/corrected15kt-diag-preflight-restart.png",
+    "sha256": "5fd2339c4b00a03bd50e4c5aa2f3af9ef8d0e21ac824adf196917cf5afffc57c"
+  },
+  "original-post106": {
+    "source": "/mnt/data/projects/incoming/mod/run/wt-LEAD2/mod/run/lead2/corrected15kt-diag-post-window.png",
+    "sha256": "e524d71d707c32e25e664e1f49eb1ad25f8c8fb07913e4d2d89ceb6a4aa62724"
+  },
+  "original-post250": {
+    "source": "/mnt/data/projects/incoming/mod/run/wt-LEAD2/mod/run/lead2/corrected15kt-diag-post-elevated.png",
+    "sha256": "4dee93e4ee490d842b82c1fb59f54497e8d4166226a5ea2dd0a2cd11e4fc786c"
+  },
+  "iris-only-near": {
+    "source": "/mnt/data/projects/incoming/mod/run/wt-RAIN2/mod/run/sandbox/fx/out/baseline/baseline_001.00s.png",
+    "sha256": "92044782ee90bfeaf1784e99d3c42f3196bd3e751e813629d4e64bf3b61e2790"
+  },
+  "fullpack-rain-near": {
+    "source": "/mnt/data/projects/incoming/mod/run/wt-RAIN2/mod/run/rain2/fullpack/fx/out/fullpack-baseline/fullpack-baseline_001.00s.png",
+    "sha256": "330d55f50c392d253f912cc3023715063abb1b5ef4afdeed04c9ed82944be901"
+  },
+  "fullpack-rain-far": {
+    "source": "/mnt/data/projects/incoming/mod/run/wt-RAIN2/mod/run/rain2/fullpack/fx/out/fullpack-far/fullpack-far_001.00s.png",
+    "sha256": "c6112b6d86a4a3eee37cef1bb8025b37e538c0923b46c5674da190ded3cf2347"
+  },
+  "aged-both-upward": {
+    "source": "/mnt/data/projects/incoming/mod/run/wt-RAIN2/mod/run/rain2/aged-fullpack/fx/out/aged-both-horizontal/aged-both-horizontal_001.00s.png",
+    "sha256": "4ae06b1e0aea1e454913192905f8e2626050803e05b3c2fceaaf662b9cfa7409"
+  },
+  "aged-no-drops-upward": {
+    "source": "/mnt/data/projects/incoming/mod/run/wt-RAIN2/mod/run/rain2/aged-fullpack/fx/out/aged-no-drops-horizontal/aged-no-drops-horizontal_001.00s.png",
+    "sha256": "f8b34637d808067d7e4b634ad7eb2dcbd734b44ef75a132d1deb0bf459961b59"
+  },
+  "aged-rain-zero-upward": {
+    "source": "/mnt/data/projects/incoming/mod/run/wt-RAIN2/mod/run/rain2/aged-fullpack/fx/out/aged-rain-off/aged-rain-off_001.00s.png",
+    "sha256": "ee490d3069387784af97e5c687e4c7ea6ce1c1db4adec05f159927cfdd342c2c"
+  },
+  "cleared-rain-zero-upward": {
+    "source": "/mnt/data/projects/incoming/mod/run/wt-RAIN2/mod/run/rain2/aged-fullpack/fx/out/cleared-rain-off/cleared-rain-off_001.00s.png",
+    "sha256": "f2d09c9506c9fd35be9653ab3bb5e19019044a2067477e6c1c4516a929a0a545"
+  },
+  "cleared-level": {
+    "source": "/mnt/data/projects/incoming/mod/run/wt-RAIN2/mod/run/rain2/aged-fullpack/fx/out/cleared-level/cleared-level_001.00s.png",
+    "sha256": "99dea792683be762d24a9daed5570ef840ef87311b3819df9a8e3fb26d8fda71"
+  },
+  "aged-level": {
+    "source": "/mnt/data/projects/incoming/mod/run/wt-RAIN2/mod/run/rain2/aged-fullpack/fx/out/aged-level-both/aged-level-both_000.10s.png",
+    "sha256": "7dee2d6e9cfcdebaa5acfe38e6012965fcd6614f3e739928d79fa58ca0bd0c14"
+  }
+}

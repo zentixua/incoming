@@ -1,0 +1,64 @@
+diff --git a/mod/src/devtest/java/ua/zentix/incoming/scenario/Sandbox.java b/mod/src/devtest/java/ua/zentix/incoming/scenario/Sandbox.java
+index fc49087da..a3af791d2 100644
+--- a/mod/src/devtest/java/ua/zentix/incoming/scenario/Sandbox.java
++++ b/mod/src/devtest/java/ua/zentix/incoming/scenario/Sandbox.java
+@@ -1201,6 +1201,19 @@ final class Sandbox {
+      * {@code track on}: before a frame the eye looks at the effect's projectile where it is on its path in this frame.
+      */
+     private void onFrameStart(RenderFrameEvent.Pre e) {
++        try {
++            var rain = ua.zentix.incoming.client.nuclear.NukeSky.class.getDeclaredField("rain");
++            rain.setAccessible(true);
++            rain.setFloat(null, Files.exists(dir.resolve("rain-off")) ? 0f : 1f);
++            if (ready && Files.exists(dir.resolve("aged-event")) && !Files.exists(dir.resolve("aged-event.done"))) {
++                var mc0 = Minecraft.getInstance();
++                var d = new ua.zentix.incoming.nuclear.Detonation(9000, HOME.add(-32, 0, 1009), HOME.y, 15, true,
++                    mc0.level.getGameTime() - 8400, 0, 5, 20000, 1234, 1, true, .25f, 6000, true);
++                ua.zentix.incoming.client.nuclear.ClientNuclear.sync(new ua.zentix.incoming.net.S2C.NukeSync(java.util.List.of(d), java.util.List.of()));
++                Files.writeString(dir.resolve("aged-event.done"), "15 kt ground age420s; offset(-32,1009), flat test terrain, wind0/5, day6000, seed1234");
++            }
++        } catch (ReflectiveOperationException | IOException ex) { throw new RuntimeException(ex); }
++
+         Minecraft mc = Minecraft.getInstance();
+         if (turn != 0 && effectTick >= 0 && mc.player != null) {
+             if (Float.isNaN(turnYaw)) turnYaw = mc.player.getYRot();
+diff --git a/mod/src/main/java/ua/zentix/incoming/client/nuclear/NukeRenderer.java b/mod/src/main/java/ua/zentix/incoming/client/nuclear/NukeRenderer.java
+index 5ea820547..a060ba50a 100644
+--- a/mod/src/main/java/ua/zentix/incoming/client/nuclear/NukeRenderer.java
++++ b/mod/src/main/java/ua/zentix/incoming/client/nuclear/NukeRenderer.java
+@@ -221,12 +221,19 @@ public final class NukeRenderer {
+ 
+     /** Dark heavy drops around the player in the fallout plume: like vanilla rain, but separate and local. */
+     private static void drawBlackRain(ClientLevel level, Vec3 cam, float partial) {
++        if (java.nio.file.Files.exists(java.nio.file.Path.of("fx/geometry-off"))) return;
+         float k = NukeSky.blackRain();
+         if (k <= 0) return;
+         int cx = Mth.floor(cam.x), cz = Mth.floor(cam.z);
+         int radius = 10;
+         float time = (level.getGameTime() % 100_000) + partial;
+         FarDraw.setup(RAIN, false);
++        if (level.getGameTime() % 100 == 0) {
++            ShaderInstance chosen = RenderSystem.getShader();
++            Incoming.LOG.info("RAIN2 chosen {} {} blend {}", chosen.getName(), chosen.getClass().getName(), org.lwjgl.opengl.GL11.glIsEnabled(org.lwjgl.opengl.GL11.GL_BLEND));
++            try { java.nio.file.Files.writeString(java.nio.file.Path.of("fx/rain-fragment.glsl"), shaderSource(chosen.getId())); }
++            catch (java.io.IOException ex) { throw new RuntimeException(ex); }
++        }
+         BufferBuilder b = Tesselator.getInstance().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_TEX_COLOR);
+         for (int x = cx - radius; x <= cx + radius; x++) {
+             for (int z = cz - radius; z <= cz + radius; z++) {
+@@ -253,6 +260,15 @@ public final class NukeRenderer {
+         FarDraw.draw(b);
+     }
+ 
++    private static String shaderSource(int program) {
++        int[] shaders = new int[org.lwjgl.opengl.GL20.glGetProgrami(program, org.lwjgl.opengl.GL20.GL_ATTACHED_SHADERS)];
++        org.lwjgl.opengl.GL20.glGetAttachedShaders(program, (int[]) null, shaders);
++        StringBuilder out = new StringBuilder();
++        for (int shader : shaders) if (org.lwjgl.opengl.GL20.glGetShaderi(shader, org.lwjgl.opengl.GL20.GL_SHADER_TYPE) == org.lwjgl.opengl.GL20.GL_FRAGMENT_SHADER)
++            out.append(org.lwjgl.opengl.GL20.glGetShaderSource(shader));
++        return out.toString();
++    }
++
+     // ---------------------------------------------------------------- shared
+ 
+     /** Icosphere: triangle vertex list {x, y, z, u, v} on a unit sphere, UV seam without stretching. */
