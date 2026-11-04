@@ -52,7 +52,7 @@ public final class RuinMatter extends LedgerData {
     long retainedBytes() {
         inventoryCapacity = Math.max(inventoryCapacity, inventories.size());
         return IO_BYTES + 1024L + movingBytes + moving.bytes() + strandedBytes + palette.bytes()
-                + inventoryCapacity * 64L + supportBytes(0) + supportSources.bytes()
+                + inventoryCapacity * 64L + supportBytes(0) + supportSources.bytes() + originals.bytes()
                 + materials.size() * 512L + (search == null ? 2048 : search.retainedBytes());
     }
 
@@ -61,9 +61,13 @@ public final class RuinMatter extends LedgerData {
     /** Capture objects coexist with the published compact rows and their indexes. Cargo grows
      * the reservation separately before mutation. Reserve each ownership term once, rather
      * than an unrelated per-cell envelope: dense ready chunks must fit when these owners fit. */
-    long removalBytes(int pieces) {
+    long removalBytes(long[] positions) {
+        return removalBytes(positions.length, originals.growthBytes(positions));
+    }
+
+    private long removalBytes(int pieces, long originalGrowth) {
         return pieces * (512L + REMOVAL_INDEX_BYTES) + queueGrowthBytes(pieces)
-                + supportBytes(pieces) - supportBytes(0);
+                + supportBytes(pieces) - supportBytes(0) + originalGrowth;
     }
 
     /** A deferred source can add at most five contacts (never its lower neighbour). Fund their
@@ -74,8 +78,7 @@ public final class RuinMatter extends LedgerData {
     private long supportBytes(int removals) {
         long contacts = 5L * (supportSources.size() + (long) removals);
         return supports.bytes(contacts) + uncertain.bytes(contacts)
-                + 96L * (uncertain.size() + contacts)
-                + originals.bytes(removals) + 64L * (originals.size() + (long) removals);
+                + 96L * (uncertain.size() + contacts);
     }
 
     private static long tableSize(long entries, float loadFactor) {
@@ -100,7 +103,8 @@ public final class RuinMatter extends LedgerData {
     }
 
     static long removalBytes(ServerLevel level, Piece piece) {
-        return get(level).removalBytes(1) + piece.retainedBytes() - 512;
+        RuinMatter ledger = get(level);
+        return ledger.removalBytes(1, ledger.originals.growthBytes(piece.source.asLong())) + piece.retainedBytes() - 512;
     }
 
 
@@ -138,10 +142,9 @@ public final class RuinMatter extends LedgerData {
     private final SupportMap supports = new SupportMap();
     /** Only cold edges need to remember the removed face until their neighbour can be inspected. */
     private final ContactMap<BlockState[]> uncertain = new ContactMap<>();
-    private record Original(BlockState state, int event) {}
     /** One pre-failure graph for all still-pending removals, including overlapping strikes.
      * First removal at a position wins until reconciliation drains; event IDs only attribute it. */
-    private final ContactMap<Original> originals = new ContactMap<>();
+    private final RuinOriginals originals = new RuinOriginals();
     private RuinSupport search;
     private int heldRadius;
     /** One held-window observation per work invocation; destination readiness always stays live. */
@@ -190,8 +193,8 @@ public final class RuinMatter extends LedgerData {
     }
 
     BlockState original(ServerLevel level, BlockPos at) {
-        Original removed = originals.get(at.asLong());
-        return removed == null ? level.getBlockState(at) : removed.state;
+        BlockState removed = originals.state(at.asLong());
+        return removed == null ? level.getBlockState(at) : removed;
     }
 
     private net.minecraft.world.level.ChunkPos held;
@@ -199,7 +202,7 @@ public final class RuinMatter extends LedgerData {
     void support(ServerLevel level, List<Piece> pieces, Detonation d) {
         requireWritable();
         for (Piece piece : pieces) if (Blast.props(piece.state).bearing()) {
-            originals.putIfAbsent(piece.source.asLong(), new Original(piece.state, d.id()));
+            originals.put(piece.source.asLong(), piece.state, d.id(), false);
             supportSources.addLast(new SupportSeed(piece.source, piece.state, d.id()));
         }
         if (!pieces.isEmpty()) setDirty();
@@ -499,7 +502,7 @@ public final class RuinMatter extends LedgerData {
         if (supports.isEmpty() && supportSources.isEmpty() && !originals.isEmpty()) {
             // All affected components have been reconciled, including cold edges. A later failure
             // starts from that settled world; completed contact journals are not permanent history.
-            originals.clear(); originals.trim();
+            originals.clear();
             supports.trim(); uncertain.trim();
             setDirty();
         }
@@ -664,11 +667,13 @@ public final class RuinMatter extends LedgerData {
         ListTag originalTags = tag.getList("support_originals", Tag.TAG_COMPOUND);
         for (int i = 0; i < originalTags.size(); i++) {
             CompoundTag row = originalTags.getCompound(i);
-            Original removed = new Original(NbtUtils.readBlockState(lookup.lookupOrThrow(Registries.BLOCK), row.getCompound("state")), row.getInt("event"));
             // Older per-event saves may repeat a position in unspecified map order. Event IDs
             // increase with registration; retain the earliest strike's contact when importing them.
-            result.originals.merge(row.getLong("position"), removed, (a, b) -> a.event <= b.event ? a : b);
+            result.originals.put(row.getLong("position"), NbtUtils.readBlockState(lookup.lookupOrThrow(Registries.BLOCK),
+                    row.getCompound("state")), row.getInt("event"), true);
         }
+        for (Tag row : tag.getList("original_sections", Tag.TAG_COMPOUND)) result.originals.read((CompoundTag) row);
+        if (finish) result.originals.loaded();
         ListTag sourceTags = tag.getList("support_sources", Tag.TAG_COMPOUND);
         for (int i = 0; i < sourceTags.size(); i++) {
             CompoundTag n = sourceTags.getCompound(i);
@@ -846,11 +851,11 @@ public final class RuinMatter extends LedgerData {
         tag.putDouble("dispersed_volume", dispersedVolume);
         tag.putDouble("dispersed_mass", dispersedMass);
         ListTag originalTags = new ListTag();
-        for (var entry : originals.long2ObjectEntrySet()) {
+        originals.forEach((position, state, event) -> {
             CompoundTag row = new CompoundTag();
-            row.putInt("event", entry.getValue().event); row.putLong("position", entry.getLongKey());
-            row.put("state", NbtUtils.writeBlockState(entry.getValue().state)); originalTags.add(row);
-        }
+            row.putInt("event", event); row.putLong("position", position);
+            row.put("state", NbtUtils.writeBlockState(state)); originalTags.add(row);
+        });
         tag.put("support_originals", originalTags);
         ListTag sourceTags = new ListTag();
         for (SupportSeed source : supportSources) {
@@ -924,12 +929,7 @@ public final class RuinMatter extends LedgerData {
         tag.putDouble("dispersed_volume", dispersedVolume);
         tag.putDouble("dispersed_mass", dispersedMass);
         writer.fields(tag);
-        writer.list("support_originals", originals.size());
-        for (var entry : originals.long2ObjectEntrySet()) {
-            CompoundTag row = new CompoundTag();
-            row.putInt("event", entry.getValue().event); row.putLong("position", entry.getLongKey());
-            row.put("state", NbtUtils.writeBlockState(entry.getValue().state)); writer.row(row);
-        }
+        originals.write(writer);
 
         writer.list("support_sources", supportSources.size());
         for (SupportSeed source : supportSources) {

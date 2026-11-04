@@ -12,6 +12,13 @@ import java.util.zip.GZIPInputStream;
 final class LedgerScan {
     private long bytes, cargo, checkpoints;
     private int event;
+    private int originalEntries;
+    private long originalPosition;
+    private boolean hasOriginalPosition;
+    // At most 196,620 bytes of primitive arrays, within the ledger's existing I/O workspace.
+    // Dense legacy cities need a section count, not a pessimistic per-block object estimate.
+    private it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap originalSections;
+    private static final int SECTION_COUNTS = 8192;
     private final long limit;
     private LedgerScan(long limit) { this.limit = limit; }
 
@@ -60,6 +67,7 @@ final class LedgerScan {
                         if (count > 0 && key.equals("support_sources")) owned += RuinRecords.ROWS * 16L + 1024;
                         for (int i = 0; i < count; i++) {
                             scan.bytes = 0; scan.cargo = 0; scan.checkpoints = 0; scan.event = -1;
+                            scan.originalEntries = -1; scan.hasOriginalPosition = false;
                             scan.payload(input, element, 0);
                             long rowBytes = key.equals("passes") && !activeCraters.contains(scan.event)
                                     ? scan.bytes - scan.checkpoints : scan.bytes;
@@ -68,7 +76,9 @@ final class LedgerScan {
                                 case "moving" -> RuinMatter.PIECE_BYTES + 192L + 3 * scan.cargo;
                                 case "stranded" -> 256 + 3 * scan.cargo;
                                 case "support_sources" -> 4096;
-                                case "support_originals", "cold_edges" -> 256;
+                                case "support_originals" -> scan.originalGrowth();
+                                case "original_sections" -> scan.originalEntries < 0 ? 0 : RuinOriginals.importBytes(scan.originalEntries);
+                                case "cold_edges" -> 256;
                                 case "materials", "settled" -> 768;
                                 // Old crater checkpoints can be large. Twelve times encoded tag
                                 // storage covers both maps/sets and their temporary primitive arrays.
@@ -94,6 +104,20 @@ final class LedgerScan {
         // IO_BYTES also pays the ordinary row; large non-cargo rows need explicit extra room.
         owned += Math.max(0, 2 * largest - 2 * cargoTotal - LedgerData.IO_BYTES);
         return new Measure(owned, Math.max(LedgerData.IO_BYTES, 2 * largest));
+    }
+
+    private long originalGrowth() throws IOException {
+        if (!hasOriginalPosition) throw new IOException("Original row has no position");
+        if (originalSections == null) originalSections = new it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap(SECTION_COUNTS);
+        long section = net.minecraft.core.SectionPos.asLong(net.minecraft.core.BlockPos.getX(originalPosition) >> 4,
+                net.minecraft.core.BlockPos.getY(originalPosition) >> 4, net.minecraft.core.BlockPos.getZ(originalPosition) >> 4);
+        int count = originalSections.get(section);
+        // Bounded scan scratch even for deliberately scattered old saves. A section outside the
+        // cache pays its maximum page for each row; no authoritative data is discarded on refusal.
+        if (count == 0 && originalSections.size() == SECTION_COUNTS) return RuinOriginals.importBytes(4096);
+        int next = Math.min(4096, count + 1);
+        originalSections.put(section, next);
+        return RuinOriginals.importBytes(next) - (count == 0 ? 0 : RuinOriginals.importBytes(count));
     }
 
     static int event(DataInputStream input) throws IOException {
@@ -149,6 +173,11 @@ final class LedgerScan {
                     long before = bytes;
                     if (key.equals("event") && depth == 0 && child == 3) {
                         add(12); event = input.readInt();
+                    } else if (key.equals("original_entries") && depth == 0 && child == 3) {
+                        add(12); originalEntries = input.readInt();
+                        if (originalEntries < 1 || originalEntries > 4096) throw new IOException("Invalid original section size");
+                    } else if (key.equals("position") && depth == 0 && child == 4) {
+                        add(16); originalPosition = input.readLong(); hasOriginalPosition = true;
                     } else payload(input, child, depth + 1);
                     if (depth == 0) {
                         if (key.equals("contents")) cargo += bytes - before;

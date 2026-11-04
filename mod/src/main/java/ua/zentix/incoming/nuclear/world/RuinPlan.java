@@ -963,7 +963,7 @@ public final class RuinPlan {
         if (!current(chunk, flash, marked)) return false;
         // Reserve the bounded capture/contact window before allocating it. Large container tags
         // extend that reservation before any source mutation; refusal keeps this exact plan pending.
-        try (var reservation = RuinMemory.reserve(level, RuinMatter.get(level).removalBytes(material.length))) {
+        try (var reservation = RuinMemory.reserve(level, RuinMatter.get(level).removalBytes(material))) {
             if (reservation == null) { memoryWaiting = true; return false; }
             java.util.List<RuinMatter.Piece> released = new java.util.ArrayList<>();
             RuinScorch scorch = new RuinScorch(chunk);

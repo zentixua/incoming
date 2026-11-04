@@ -116,7 +116,7 @@ public final class RuinSupportCapacityGameTests {
         ledger.release(List.of(piece)); ledger.support(level, List.of(piece), d);
         other.materialReservation = previous + COMPETING;
         long fixed = other.materialReservation;
-        h.assertTrue(NuclearPrep.residentMemory(level) + ledger.removalBytes(DENSITY[0]) + (1L << 20) < NuclearPrep.PLANS_CAP,
+        h.assertTrue(NuclearPrep.residentMemory(level) + ledger.removalBytes(dense.getFirst().positions) + (1L << 20) < NuclearPrep.PLANS_CAP,
                 "Fixture does not fund the initial real dense publication");
         world.scars().offer(dense.getFirst().chunk, d);
         clock.start(1_000_000); world.scars().work(level, time, clock);
@@ -130,7 +130,7 @@ public final class RuinSupportCapacityGameTests {
         }
         h.assertTrue(sources.isEmpty() && ledger.pendingSupport() > 0,
                 "Fixture must consume sources while support and provenance remain pending");
-        var originals = (Map<?, ?>) field(ledger, "originals").get(ledger);
+        var originals = (RuinOriginals) field(ledger, "originals").get(ledger);
         h.assertTrue(originals.size() >= DENSITY[0], "Pending provenance was discarded");
         Incoming.LOG.info("SUPPORT_CAPACITY expanded {} units, ledger {} -> {}, original {}, support {}, arrays {}",
                 expanded, chargedBefore, ledger.retainedBytes(), originals.size(), ledger.pendingSupport(), backing(ledger));
@@ -209,7 +209,8 @@ public final class RuinSupportCapacityGameTests {
 
     private static long backing(RuinMatter ledger) throws ReflectiveOperationException {
         long bytes = 0;
-        for (String name : List.of("supports", "uncertain", "originals")) {
+        bytes += ((RuinOriginals) field(ledger, "originals").get(ledger)).bytes();
+        for (String name : List.of("supports", "uncertain")) {
             Object map = field(ledger, name).get(ledger);
             for (String array : List.of("key", "value", "link")) {
                 Field f;
