@@ -981,7 +981,13 @@ public final class NuclearPrep {
         for (int i = 0; i < keyed.length; i++) keyed[i] = (long) (horizontal(new ChunkPos(rest.getLong(i)), d) * 16) << 24 | i;
         java.util.Arrays.sort(keyed);
         p.todo.clear();
-        for (long k : keyed) p.todo.add(rest.getLong((int) (k & 0xFFFFFF)));
+        // Preserve the admitted assembly before reprioritizing unadmitted demand. Otherwise a
+        // newly loaded nearer head waits for the token whose owner it just moved behind itself.
+        for (long c : rest) if (p.ruins.assembling(c)) { p.todo.add(c); break; }
+        for (long k : keyed) {
+            long c = rest.getLong((int) (k & 0xFFFFFF));
+            if (!p.ruins.assembling(c)) p.todo.add(c);
+        }
         p.nextTodo = 0;
     }
 
@@ -1381,6 +1387,7 @@ public final class NuclearPrep {
                 else p.nextTodo--;
             } catch (RuntimeException e) {
                 if (p.handle != null) p.failure = RuinPreparation.Reason.IO;
+                p.ruins.unpinWindow(c);
                 Incoming.LOG.error("Pre-built ruins: snapshots of chunk {} failed with an exception; its ruins will be built on the spot", new ChunkPos(c), e);
             } finally {
                 clock.record(shared.end(c0));

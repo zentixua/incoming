@@ -516,3 +516,8 @@ paths:
   assembly claims independently of read/task collectors. Inspect unready todos before checking worker
   admission, with a bounded skip pass: decoder saturation cannot prevent retiring a dead assembly head.
   `nuke_near_assembly_*` keeps late callbacks and completes another loaded required centre.
+
+- Reprioritizing remaining near todos must preserve the current active assembly ahead of unadmitted
+  work. A new closer FULL chunk cannot strand that owner behind a head waiting for its token.
+  `nuke_near_assembly_refresh` exercises real refresh, completes the held callback, and requires both
+  loaded centres to yield nonempty plans. Error paths that remove a consumer release its claim too.

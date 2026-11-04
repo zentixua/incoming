@@ -143,6 +143,56 @@ public final class RuinNearLifecycleGameTests {
         });
     }
 
+    @GameTest(template = "range", batch = "nuke_near_assembly_refresh", timeoutTicks = 400, skyAccess = true)
+    @SuppressWarnings("unchecked")
+    public static void refreshedNearQueueKeepsItsLiveAssemblyReachable(GameTestHelper h) throws Exception {
+        var f = fixture(h, true);
+        var level = h.getLevel();
+        var active = new ChunkPos(f.centre.x + 1, f.centre.z);
+        var fresh = f.centre;
+        h.assertTrue(NuclearPrep.horizontal(fresh, f.ctx.d) < NuclearPrep.horizontal(active, f.ctx.d),
+                "Newly visible centre must sort ahead of the active one");
+        var activeChunk = level.getChunkSource().getChunkNow(active.x, active.z);
+        h.assertTrue(activeChunk != null, "Active centre is not loaded");
+        var reads = (RuinInbox<Object>) field(f.ctx, "reads").get(f.ctx);
+        var source = DiskShots.parse(level, active, net.minecraft.world.level.chunk.storage.ChunkSerializer.write(level, activeChunk));
+        var ctor = Class.forName(RuinContext.class.getName() + "$WindowRead").getDeclaredConstructors()[0];
+        ctor.setAccessible(true);
+        var reply = ctor.newInstance(active.toLong(), source, null);
+        var callback = reads.expect();
+        StrikeGameTests.afterTest(h, () -> callback.accept(reply));
+        f.ctx.requestWindow(level, active, RuinWorkers.Priority.NEAR);
+        var todo = (LongArrayList) field(f.owner, "todo").get(f.owner);
+        todo.add(active.toLong());
+        ((LongOpenHashSet) field(f.owner, "required").get(f.owner)).add(active.toLong());
+        var considered = (LongOpenHashSet) field(f.owner, "considered").get(f.owner);
+        for (var holder : level.getChunkSource().chunkMap.getChunks()) considered.add(holder.getPos().toLong());
+        considered.remove(fresh.toLong());
+        var refresh = NuclearPrep.class.getDeclaredMethod("refresh", ServerLevel.class, f.owner.getClass());
+        refresh.setAccessible(true);
+        refresh.invoke(null, level, f.owner);
+        h.assertTrue(todo.size() == 2 && todo.contains(active.toLong()) && todo.contains(fresh.toLong()),
+                "Real refresh did not merge the new nearer required centre");
+        h.assertTrue(!f.ctx.running(active.toLong()) && reads.pending() > 0,
+                "Fixture must refresh before solver admission with an outstanding source");
+        callback.accept(reply);
+        h.succeedWhen(() -> {
+            try {
+                h.assertTrue(level.getChunkSource().getChunkNow(active.x, active.z) != null
+                                && level.getChunkSource().getChunkNow(fresh.x, fresh.z) != null,
+                        "Both required centres must stay FULL");
+                invoke(f, level, "submit");
+                invoke(f, level, "harvest");
+                var plans = (RetainedPlans) field(f.owner, "plans").get(f.owner);
+                var a = plans.get(active.toLong());
+                var b = plans.get(fresh.toLong());
+                h.assertTrue(a != null && b != null && a.changedBlocks() > 0 && b.changedBlocks() > 0,
+                        "Refreshed head stranded the still-live assembly owner");
+                h.assertTrue(reads.pending() == 0 && f.ctx.tasks() == 0, "Finished refreshed queue retained work owners");
+            } catch (ReflectiveOperationException failure) { throw new IllegalStateException(failure); }
+        });
+    }
+
     @GameTest(template = "range", batch = "nuke_near_failed_task", timeoutTicks = 400, skyAccess = true)
     public static void completedExceptionalNearTaskFailsRequest(GameTestHelper h) throws Exception { failedTask(h, false); }
 
