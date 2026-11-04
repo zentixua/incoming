@@ -1,0 +1,146 @@
+[
+  {
+    "name": "nuclear_review_preparation:0",
+    "tests": 1
+  },
+  {
+    "name": "nuke_flash_shadow:0",
+    "tests": 1
+  },
+  {
+    "name": "nuke_tile_full:0",
+    "tests": 1
+  },
+  {
+    "name": "sight:0",
+    "tests": 3
+  },
+  {
+    "name": "nuke_stripes:0",
+    "tests": 1
+  },
+  {
+    "name": "dh_far_zone_proto:0",
+    "tests": 1
+  },
+  {
+    "name": "nuke_roof_pool:0",
+    "tests": 1
+  },
+  {
+    "name": "nuke_memory_flow:0",
+    "tests": 1
+  },
+  {
+    "name": "ruin_pool_promote:0",
+    "tests": 1
+  },
+  {
+    "name": "nuke_near_window_read:0",
+    "tests": 1
+  },
+  {
+    "name": "tickets_release_busy:0",
+    "tests": 1
+  },
+  {
+    "name": "bunker_air:0",
+    "tests": 1
+  },
+  {
+    "name": "arrival_late_respawn:0",
+    "tests": 1
+  },
+  {
+    "name": "blast_radius_brick:0",
+    "tests": 1
+  },
+  {
+    "name": "blast_breach_drone:0",
+    "tests": 1
+  },
+  {
+    "name": "launch_sector_tubes:0",
+    "tests": 1
+  },
+  {
+    "name": "sam_friend:0",
+    "tests": 1
+  },
+  {
+    "name": "launcher_wall_missile:0",
+    "tests": 1
+  },
+  {
+    "name": "nuke_snapshot_disk:0",
+    "tests": 1
+  },
+  {
+    "name": "blast_crater_seed:0",
+    "tests": 1
+  },
+  {
+    "name": "stop_drain:0",
+    "tests": 1
+  },
+  {
+    "name": "grid_settle:0",
+    "tests": 1
+  },
+  {
+    "name": "dh_front_budget:0",
+    "tests": 1
+  },
+  {
+    "name": "blast_breach_rocket_thick:0",
+    "tests": 1
+  },
+  {
+    "name": "icbm_roof:0",
+    "tests": 1
+  },
+  {
+    "name": "nuke_prepared_drop:0",
+    "tests": 1
+  },
+  {
+    "name": "nuke_prelaunch_receipts:0",
+    "tests": 1
+  },
+  {
+    "name": "nuke_command_abort:0",
+    "tests": 1
+  },
+  {
+    "name": "blast_surface_chip:0",
+    "tests": 1
+  },
+  {
+    "name": "nuke_shore:0",
+    "tests": 1
+  },
+  {
+    "name": "deferred_blast:0",
+    "tests": 1
+  },
+  {
+    "name": "nuke_snapshot_window:0",
+    "tests": 1
+  },
+  {
+    "name": "flight_scenarios_1:0",
+    "tests": 20
+  },
+  {
+    "name": "nuke_store_demand:0",
+    "tests": 1
+  },
+  {
+    "name": "nuke_pool:0",
+    "tests": 1
+  },
+  {
+    "name": "nuke_worker_admission:0",
+    "tests": 1
+  }
+]

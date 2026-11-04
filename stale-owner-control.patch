@@ -1,0 +1,80 @@
+diff --git a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinWorkerAdmissionGameTests.java b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinWorkerAdmissionGameTests.java
+index 69680dcba..19c582ea0 100644
+--- a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinWorkerAdmissionGameTests.java
++++ b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinWorkerAdmissionGameTests.java
+@@ -22,9 +22,33 @@ public final class RuinWorkerAdmissionGameTests {
+     private RuinWorkerAdmissionGameTests() {}
+ 
+     @GameTest(template = "range", timeoutTicks = 300, batch = "nuke_worker_admission", skyAccess = true)
+-    public static void pressureBoundsBirthGrowthAndCapturedCallbackRebirth(GameTestHelper h) throws ReflectiveOperationException {
++    public static void pressureBoundsBirthGrowthAndCapturedCallbackRebirth(GameTestHelper h) {
+         StrikeGameTests.gameSpeed(h);
+-        RuinWorkers.shutdown();
++        // Exercise the reset with actual retained rows, even when this batch runs in isolation.
++        // Replacing SavedData must also refresh NuclearWorld's cached material reference.
++        RuinMatterGameTests.clearFixture(h.getLevel());
++        var previousMaterial = RuinMatter.get(h.getLevel());
++        long emptyBytes = previousMaterial.retainedBytes();
++        var pieces = new ArrayList<RuinMatter.Piece>();
++        for (int i = 0; i < 2048; i++) pieces.add(new RuinMatter.Piece(
++                h.absolutePos(new net.minecraft.core.BlockPos(i % 32, 1, i / 32)),
++                net.minecraft.world.level.block.Blocks.STONE.defaultBlockState(), null,
++                net.minecraft.world.phys.Vec3.ZERO, h.getLevel().getGameTime()));
++        previousMaterial.release(pieces);
++        h.assertTrue(previousMaterial.retainedBytes() - emptyBytes > 1L << 18,
++                "Previous material fixture must exceed the ninth-worker margin");
++        // This fixture holds non-worker ownership constant. Previous batches can leave cached
++        // snapshots and material that normal tick reclamation legitimately frees under pressure.
++        for (var previous : h.getLevel().getServer().getAllLevels()) {
++            ua.zentix.incoming.nuclear.NuclearStrikes.clear(previous);
++            RuinMatterGameTests.clearFixture(previous);
++        }
++        h.assertTrue(RuinWorkers.shutdown(), "Previous fixture workers did not exit");
++        try { checkPressure(h); }
++        catch (ReflectiveOperationException failure) { throw new AssertionError(failure); }
++    }
++
++    private static void checkPressure(GameTestHelper h) throws ReflectiveOperationException {
+         var level = h.getLevel();
+         var other = level.getServer().getLevel(net.minecraft.world.level.Level.NETHER);
+         h.assertTrue(other != null, "second dimension absent");
+@@ -50,6 +74,11 @@ public final class RuinWorkerAdmissionGameTests {
+         Future<?> first = RuinWorkers.submitForTest(() -> { progress.incrementAndGet(); release.await(); return null; }, RuinWorkers.Priority.SEEN);
+         h.assertTrue(pool.getPoolSize() == 1, "one-worker control did not start");
+         h.assertTrue(NuclearPrep.memory(level) > NuclearPrep.PLANS_CAP, "future-worker policy must refuse far admission");
++        long observedResident = NuclearPrep.residentMemory(level);
++        Incoming.LOG.info("CI6 stale-owner control resident={} expected={} delta={}", observedResident,
++                base + RuinWorkers.threadBufferBytes(384), base + RuinWorkers.threadBufferBytes(384) - observedResident);
++        h.assertTrue(observedResident == base + RuinWorkers.threadBufferBytes(384),
++                "Refreshing ledger owners changed the calibrated non-worker charge");
+         var futures = new ArrayList<Future<?>>();
+         // Submit in one server step: later CPU adaptation can legitimately retain just one active
+         // worker on a game-paced test server. The memory bound is independent of that CPU policy.
+@@ -58,14 +87,16 @@ public final class RuinWorkerAdmissionGameTests {
+         }, RuinWorkers.Priority.NEAR));
+         int[] stage = {0};
+         h.onEachTick(() -> {
+-            h.assertTrue(NuclearPrep.residentMemory(level) <= NuclearPrep.PLANS_CAP, "workspace producer exceeded global cap");
++            long resident = NuclearPrep.residentMemory(level);
++            h.assertTrue(resident <= NuclearPrep.PLANS_CAP, "workspace producer exceeded global cap: " + resident);
+             if (stage[0] == 0) {
+                 if (progress.get() < 8) return;
+                 h.assertTrue(fieldValue(field) == pool, "growth replaced executor lifetime");
+                 stage[0] = 1;
+             } else if (stage[0] == 1) {
+                 if (progress.get() < 8) return;
+-                h.assertTrue(progress.get() == 8 && pool.getPoolSize() == 8, "pressure must admit eight workers, never nine");
++                h.assertTrue(progress.get() == 8 && pool.getPoolSize() == 8, "pressure must admit eight workers, never nine: progress=" + progress.get()
++                                + ", pool=" + pool.getPoolSize() + ", resident=" + resident);
+                 first.cancel(false);
+                 h.assertFalse(RuinWorkers.finished(first), "running cancellation released actual execution");
+                 h.assertTrue(RuinWorkers.residentBufferBytes(384) == 8 * RuinWorkers.threadBufferBytes(384), "cancel lent live workspace");
+@@ -83,7 +114,7 @@ public final class RuinWorkerAdmissionGameTests {
+             } else if (stage[0] == 3) {
+                 if (RuinWorkers.inFlight() == 0) return;
+                 h.assertTrue(progress.get() == 10 && pool.getPoolSize() == 0, "callback borrowed charged material workspace");
+-                h.assertTrue(NuclearPrep.residentMemory(level) == NuclearPrep.PLANS_CAP, "material charge lost before callback drain");
++                h.assertTrue(resident == NuclearPrep.PLANS_CAP, "material charge lost before callback drain: resident=" + resident);
+                 owner.materialReservation -= RuinWorkers.threadBufferBytes(384);
+                 stage[0] = 4;
+             } else if (stage[0] == 4) {

@@ -1,0 +1,151 @@
+diff --git a/mod/src/devtest/java/ua/zentix/incoming/gametest/GameTestShards.java b/mod/src/devtest/java/ua/zentix/incoming/gametest/GameTestShards.java
+index 4215c4072..fba1cc0fb 100644
+--- a/mod/src/devtest/java/ua/zentix/incoming/gametest/GameTestShards.java
++++ b/mod/src/devtest/java/ua/zentix/incoming/gametest/GameTestShards.java
+@@ -46,7 +46,19 @@ public final class GameTestShards {
+         if (!only.isBlank()) NeoForge.EVENT_BUS.addListener((ServerAboutToStartEvent e) -> only(e, only));
+         NeoForge.EVENT_BUS.addListener(net.neoforged.bus.api.EventPriority.LOWEST, BlastLog::onStart);
+         NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.event.server.ServerStartingEvent e) -> {
+-            if (e.getServer() instanceof GameTestServer) TestScale.realWave();
++            if (e.getServer() instanceof GameTestServer server) {
++                TestScale.realWave();
++                if (Boolean.getBoolean("incoming.ci6.prefix")) {
++                    List<net.minecraft.gametest.framework.GameTestBatch> batches = ObfuscationReflectionHelper
++                            .getPrivateValue(GameTestServer.class, server, "testBatches");
++                    int end = -1;
++                    for (int i = 0; i < batches.size(); i++)
++                        if (batches.get(i).name().equals("nuke_worker_admission:0")) end = i + 1;
++                    if (end < 0) throw new IllegalStateException("CI6 target absent");
++                    batches.subList(end, batches.size()).clear();
++                    Incoming.LOG.info("CI6 original shard prefix {}", batches.stream().map(b -> b.name()).toList());
++                }
++            }
+         });
+         if (!spec.isBlank()) NeoForge.EVENT_BUS.addListener((ServerAboutToStartEvent e) -> select(e, spec));
+     }
+diff --git a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinWorkerAdmissionGameTests.java b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinWorkerAdmissionGameTests.java
+index 0ae650c7c..75b79a0c1 100644
+--- a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinWorkerAdmissionGameTests.java
++++ b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinWorkerAdmissionGameTests.java
+@@ -83,7 +83,9 @@ public final class RuinWorkerAdmissionGameTests {
+         long before = owner.materialReservation;
+         var release = new CountDownLatch(1);
+         var progress = new AtomicInteger();
++        var probe = new PressureProbe(h, progress);
+         StrikeGameTests.afterTest(h, () -> {
++            probe.dump();
+             release.countDown();
+             RuinWorkers.shutdown();
+             owner.materialReservation = before;
+@@ -95,9 +97,13 @@ public final class RuinWorkerAdmissionGameTests {
+         field.setAccessible(true);
+         var pool = (ThreadPoolExecutor) field.get(null);
+         long base = 417_653_525L;
+-        owner.materialReservation += base - NuclearPrep.residentMemory(level);
+-        h.assertTrue(NuclearPrep.residentMemory(level) == base, "shared non-worker fixture charge differs");
+-        Future<?> first = RuinWorkers.submitForTest(() -> { progress.incrementAndGet(); release.await(); return null; }, RuinWorkers.Priority.SEEN);
++        long initialResident = NuclearPrep.residentMemory(level);
++        probe.sample("before-charge", initialResident, pool);
++        owner.materialReservation += base - initialResident;
++        long chargedResident = NuclearPrep.residentMemory(level);
++        probe.sample("charged", chargedResident, pool);
++        h.assertTrue(chargedResident == base, "shared non-worker fixture charge differs");
++        Future<?> first = RuinWorkers.submitForTest(() -> { progress.incrementAndGet(); probe.enter(); try { release.await(); return null; } finally { probe.exit(); } }, RuinWorkers.Priority.SEEN);
+         h.assertTrue(pool.getPoolSize() == 1, "one-worker control did not start");
+         h.assertTrue(NuclearPrep.memory(level) > NuclearPrep.PLANS_CAP, "future-worker policy must refuse far admission");
+         h.assertTrue(NuclearPrep.residentMemory(level) == base + RuinWorkers.threadBufferBytes(384),
+@@ -106,8 +112,10 @@ public final class RuinWorkerAdmissionGameTests {
+         // Submit in one server step: later CPU adaptation can legitimately retain just one active
+         // worker on a game-paced test server. The memory bound is independent of that CPU policy.
+         for (int i = 0; i < 9; i++) futures.add(RuinWorkers.submitForTest(() -> {
+-            progress.incrementAndGet(); release.await(); return null;
++            progress.incrementAndGet(); probe.enter(); try { release.await(); return null; } finally { probe.exit(); }
+         }, RuinWorkers.Priority.NEAR));
++        probe.tasks.add(first); probe.tasks.addAll(futures);
++        probe.sample("submitted", -1, pool);
+         int[] stage = {0};
+         long[] lastTick = {Long.MIN_VALUE};
+         h.onEachTick(() -> {
+@@ -117,6 +125,7 @@ public final class RuinWorkerAdmissionGameTests {
+             if (lastTick[0] == now) return;
+             lastTick[0] = now;
+             long resident = NuclearPrep.residentMemory(level);
++            probe.sample("stage-" + stage[0], resident, pool);
+             h.assertTrue(resident <= NuclearPrep.PLANS_CAP, "workspace producer exceeded global cap: " + resident);
+             if (stage[0] == 0) {
+                 if (progress.get() < 8) return;
+@@ -310,6 +319,74 @@ public final class RuinWorkerAdmissionGameTests {
+         } catch (ReflectiveOperationException failure) { throw new AssertionError(failure); }
+     }
+ 
++    /** Temporary bounded observation: no owner getters, admission, service or ledger opens. */
++    private static final class PressureProbe {
++        final GameTestHelper helper;
++        final AtomicInteger progress;
++        final AtomicInteger entered = new AtomicInteger(), exited = new AtomicInteger();
++        final java.util.concurrent.atomic.AtomicLong firstEnter = new java.util.concurrent.atomic.AtomicLong();
++        final java.util.concurrent.atomic.AtomicLong lastExit = new java.util.concurrent.atomic.AtomicLong();
++        final ArrayList<Future<?>> tasks = new ArrayList<>();
++        final ArrayList<String> rows = new ArrayList<>();
++        final long began = System.nanoTime();
++        int samples;
++        PressureProbe(GameTestHelper helper, AtomicInteger progress) { this.helper = helper; this.progress = progress; }
++        void enter() { entered.incrementAndGet(); firstEnter.compareAndSet(0, System.nanoTime()); }
++        void exit() { exited.incrementAndGet(); lastExit.set(System.nanoTime()); }
++        void sample(String phase, long resident, ThreadPoolExecutor pool) {
++            if (++samples > 32 && samples % 50 != 0) return;
++            long workspace = ((java.util.concurrent.atomic.AtomicLong) read(RuinWorkers.class, null, "WORKSPACE_BYTES")).get();
++            var row = new StringBuilder("phase=").append(phase).append(" gameTick=").append(helper.getLevel().getGameTime())
++                    .append(" serverTick=").append(helper.getLevel().getServer().getTickCount())
++                    .append(" nanos=").append(System.nanoTime() - began).append(" resident=").append(resident)
++                    .append(" workspace=").append(workspace).append(" nonworker=").append(resident < 0 ? -1 : resident - workspace)
++                    .append(" progress=").append(progress.get()).append(" entered=").append(entered.get()).append(" exited=").append(exited.get())
++                    .append(" pool=").append(pool.getPoolSize()).append(" largest=").append(pool.getLargestPoolSize())
++                    .append(" core=").append(pool.getCorePoolSize()).append(" busy=").append(pool.getActiveCount())
++                    .append(" queue=").append(pool.getQueue().size()).append(" inFlight=").append(RuinWorkers.inFlight())
++                    .append(" detached=").append(RuinInputs.detachedBytes()).append(" results=").append(RuinResults.bytes());
++            for (Future<?> f : tasks) row.append(" task=").append(RuinWorkers.started(f)).append('/').append(f.isDone())
++                    .append('/').append(f.isCancelled()).append('/').append(RuinWorkers.finished(f));
++            for (var level : helper.getLevel().getServer().getAllLevels()) {
++                if (!level.hasData(ua.zentix.incoming.registry.ModAttachments.NUCLEAR_WORLD)) continue;
++                var world = level.getData(ua.zentix.incoming.registry.ModAttachments.NUCLEAR_WORLD);
++                row.append(" world=").append(level.dimension().location()).append(" reservation=").append(world.materialReservation);
++                Object prep = read(world, "prep"); row.append(" prep=").append(fields(prep, "readBytes", "preps", "archiveHints"));
++                var contexts = (java.util.Map<?, ?>) read(world, "ruins"); row.append(" contexts=").append(contexts.size());
++                int shown = 0;
++                for (var entry : contexts.entrySet()) {
++                    if (++shown > 8) break;
++                    Object ctx = entry.getValue();
++                    row.append(" ctx[").append(entry.getKey()).append("]=").append(fields(ctx, "shotBytes", "heightBytes", "flashedBytes", "blastBytes", "appliedBytes", "shots", "applied", "planned", "stood"));
++                    row.append(" inputs=").append(fields(read(ctx, "inputs"), "workers", "retired", "detachedBytes", "detached"));
++                }
++                row.append(" matter=").append(fields(read(world, "matter"), "movingBytes", "strandedBytes", "supportBacking", "inventoryCapacity"));
++                row.append(" settle=").append(fields(read(world, "settle"), "entries", "retiring", "busy"));
++            }
++            rows.add(row.toString());
++        }
++        void dump() {
++            for (String row : rows) Incoming.LOG.info("CI6 {}", row);
++            Incoming.LOG.info("CI6 terminal entered={} exited={} firstEnterNs={} lastExitNs={} samples={}", entered.get(), exited.get(), firstEnter.get() == 0 ? -1 : firstEnter.get()-began, lastExit.get() == 0 ? -1 : lastExit.get()-began, samples);
++        }
++        static String fields(Object target, String... names) {
++            if (target == null) return "absent";
++            var out = new StringBuilder();
++            for (String name : names) {
++                Object value = read(target, name);
++                if (value instanceof java.util.Collection<?> c) value = c.size();
++                else if (value instanceof java.util.Map<?,?> m) value = m.size();
++                out.append(name).append(':').append(value).append(',');
++            }
++            return out.toString();
++        }
++        static Object read(Object target, String name) { return read(target.getClass(), target, name); }
++        static Object read(Class<?> type, Object target, String name) {
++            try { var f = type.getDeclaredField(name); f.setAccessible(true); return f.get(target); }
++            catch (ReflectiveOperationException ex) { throw new AssertionError(ex); }
++        }
++    }
++
+     private static Object fieldValue(java.lang.reflect.Field field) {
+         try { return field.get(null); }
+         catch (IllegalAccessException failure) { throw new AssertionError(failure); }

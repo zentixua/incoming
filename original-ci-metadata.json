@@ -1,0 +1,134 @@
+{
+  "run": 41896220491,
+  "source": "f9d9f209c7c3f996ffc460d1ddac6e42d399a2f3",
+  "checkout": "1568376b4998ce5fb4dd4767bd258d8ab08feb3e",
+  "tree": "dc894d4727ca9ce984ec148ada3776d3628d31aa",
+  "jobs": [
+    {
+      "id": 126806330219,
+      "name": "Что изменилось",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 126806420156,
+      "name": "Страницы магазинов",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 126806420169,
+      "name": "Сборка",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 126806420194,
+      "name": "Юнит-тесты (slow)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 126806420251,
+      "name": "Юнит-тесты (rest)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 126806420336,
+      "name": "LSS GameTest ydDRzPcM",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 126806420354,
+      "name": "GameTest 3/6",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 126806420364,
+      "name": "GameTest 1/6",
+      "status": "completed",
+      "conclusion": "failure"
+    },
+    {
+      "id": 126806420399,
+      "name": "GameTest 2/6",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 126806420405,
+      "name": "GameTest 4/6",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 126806420408,
+      "name": "LSS GameTest jxJ4956L",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 126806420447,
+      "name": "GameTest 5/6",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 126806420456,
+      "name": "GameTest 6/6",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 126806422744,
+      "name": "Разбор повторов",
+      "status": "completed",
+      "conclusion": "skipped"
+    },
+    {
+      "id": 126806422820,
+      "name": "Шлагбаум",
+      "status": "completed",
+      "conclusion": "skipped"
+    },
+    {
+      "id": 126806422981,
+      "name": "Сборка из проверенного прогона",
+      "status": "completed",
+      "conclusion": "skipped"
+    },
+    {
+      "id": 126806423239,
+      "name": "Стенд: сборка и шлагбаум",
+      "status": "completed",
+      "conclusion": "skipped"
+    },
+    {
+      "id": 126806423343,
+      "name": "Остановка проверок",
+      "status": "completed",
+      "conclusion": "skipped"
+    },
+    {
+      "id": 126807135174,
+      "name": "Clean NeoForge installation",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 126810132963,
+      "name": "Итог",
+      "status": "completed",
+      "conclusion": "failure"
+    },
+    {
+      "id": 126810179074,
+      "name": "Релиз",
+      "status": "completed",
+      "conclusion": "skipped"
+    }
+  ]
+}

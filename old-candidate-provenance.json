@@ -1,0 +1,6 @@
+{
+  "candidate_head": "c444cd5ef9ae41cacf4e7aa9a928977f1b9ceabb",
+  "old_production": "b5610b3c91a2c1e2e2d09d28c0fd503464a43982",
+  "identical_fixture_sha256": "988544f0447dd79d70d0a093c4ec692272254a9c0f72b3c8aa865698f66601d9",
+  "old_result": "All 1 required tests passed; BUILD SUCCESSFUL; laptop_job ci6-old-closure exit0"
+}

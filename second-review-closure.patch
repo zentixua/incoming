@@ -1,0 +1,89 @@
+diff --git a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinWorkerAdmissionGameTests.java b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinWorkerAdmissionGameTests.java
+index fe4201ed3..0ae650c7c 100644
+--- a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinWorkerAdmissionGameTests.java
++++ b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinWorkerAdmissionGameTests.java
+@@ -39,17 +39,29 @@ public final class RuinWorkerAdmissionGameTests {
+                 "Previous material fixture must exceed the ninth-worker margin");
+         // This fixture holds non-worker ownership constant. Previous batches can leave cached
+         // snapshots and material that normal tick reclamation legitimately frees under pressure.
++        var heldReads = new ArrayList<java.util.concurrent.CompletableFuture<Object>>();
++        StrikeGameTests.afterTest(h, () -> heldReads.forEach(read -> read.complete(null)));
+         for (var previous : h.getLevel().getServer().getAllLevels()) {
++            var world = NuclearWorld.get(previous);
++            var read = holdSettlementRead(world);
++            heldReads.add(read);
+             ua.zentix.incoming.nuclear.NuclearStrikes.clear(previous);
+             RuinMatterGameTests.clearFixture(previous);
++            h.assertTrue(settlementRetiring(world).contains(read), "Clear dropped a live settlement header owner");
+         }
+         h.assertTrue(RuinWorkers.shutdown(), "Previous fixture workers did not exit");
++        h.runAfterDelay(2, () -> {
++            h.assertTrue(RuinWorkers.stopped(), "Pressure started before previous settlement headers completed");
++            heldReads.forEach(read -> read.complete(null));
++        });
+         h.startSequence().thenWaitUntil(() -> {
+             // Clear invalidates collectors; outstanding I/O still owns its bytes until completion.
+             // Resolve existing cold-load receipts here, before calibrating the fixed reservation.
+             for (var previous : h.getLevel().getServer().getAllLevels()) {
+                 var world = NuclearWorld.get(previous);
+                 h.assertFalse(world.ledgers.pending(), "Previous fixture ledger load is still pending");
++                h.assertTrue(settlementRetiring(world).stream().allMatch(java.util.concurrent.Future::isDone),
++                        "Previous fixture settlement headers are still pending");
+                 h.assertTrue(world.prep().retainedBytes() == 0 && world.materialReservation == 0,
+                         "Previous fixture asynchronous ownership is still pending");
+             }
+@@ -97,7 +109,13 @@ public final class RuinWorkerAdmissionGameTests {
+             progress.incrementAndGet(); release.await(); return null;
+         }, RuinWorkers.Priority.NEAR));
+         int[] stage = {0};
++        long[] lastTick = {Long.MIN_VALUE};
+         h.onEachTick(() -> {
++            // onEachTick registered after setup also schedules past test ticks; inspect each
++            // world tick only once so those callbacks cannot collapse several pressure stages.
++            long now = level.getGameTime();
++            if (lastTick[0] == now) return;
++            lastTick[0] = now;
+             long resident = NuclearPrep.residentMemory(level);
+             h.assertTrue(resident <= NuclearPrep.PLANS_CAP, "workspace producer exceeded global cap: " + resident);
+             if (stage[0] == 0) {
+@@ -258,6 +276,40 @@ public final class RuinWorkerAdmissionGameTests {
+         });
+     }
+ 
++    /** Controlled header completion exercises the actual clear-to-retiring ownership transfer. */
++    @SuppressWarnings("unchecked")
++    private static java.util.concurrent.CompletableFuture<Object> holdSettlementRead(NuclearWorld world) {
++        try {
++            Object settle = ownerField(world, "settle");
++            var entries = (java.util.Map<Long, Object>) ownerField(settle, "entries");
++            long key = 0;
++            while (entries.containsKey(key)) key++;
++            Class<?> entryType = Class.forName(RuinSettle.class.getName() + "$Entry");
++            var constructor = entryType.getDeclaredConstructor(long.class);
++            constructor.setAccessible(true);
++            Object entry = constructor.newInstance(key);
++            var read = new java.util.concurrent.CompletableFuture<Object>();
++            var field = entryType.getDeclaredField("read");
++            field.setAccessible(true);
++            field.set(entry, read);
++            entries.put(key, entry);
++            return read;
++        } catch (ReflectiveOperationException failure) { throw new AssertionError(failure); }
++    }
++
++    @SuppressWarnings("unchecked")
++    private static java.util.List<java.util.concurrent.CompletableFuture<?>> settlementRetiring(NuclearWorld world) {
++        return (java.util.List<java.util.concurrent.CompletableFuture<?>>) ownerField(ownerField(world, "settle"), "retiring");
++    }
++
++    private static Object ownerField(Object owner, String name) {
++        try {
++            var field = owner.getClass().getDeclaredField(name);
++            field.setAccessible(true);
++            return field.get(owner);
++        } catch (ReflectiveOperationException failure) { throw new AssertionError(failure); }
++    }
++
+     private static Object fieldValue(java.lang.reflect.Field field) {
+         try { return field.get(null); }
+         catch (IllegalAccessException failure) { throw new AssertionError(failure); }

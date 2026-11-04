@@ -1,0 +1,151 @@
+diff --git a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinWorkerAdmissionGameTests.java b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinWorkerAdmissionGameTests.java
+index 69680dcba..0ae650c7c 100644
+--- a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinWorkerAdmissionGameTests.java
++++ b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinWorkerAdmissionGameTests.java
+@@ -22,9 +22,59 @@ public final class RuinWorkerAdmissionGameTests {
+     private RuinWorkerAdmissionGameTests() {}
+ 
+     @GameTest(template = "range", timeoutTicks = 300, batch = "nuke_worker_admission", skyAccess = true)
+-    public static void pressureBoundsBirthGrowthAndCapturedCallbackRebirth(GameTestHelper h) throws ReflectiveOperationException {
++    public static void pressureBoundsBirthGrowthAndCapturedCallbackRebirth(GameTestHelper h) {
+         StrikeGameTests.gameSpeed(h);
+-        RuinWorkers.shutdown();
++        // Exercise the reset with actual retained rows, even when this batch runs in isolation.
++        // Replacing SavedData must also refresh NuclearWorld's cached material reference.
++        RuinMatterGameTests.clearFixture(h.getLevel());
++        var previousMaterial = RuinMatter.get(h.getLevel());
++        long emptyBytes = previousMaterial.retainedBytes();
++        var pieces = new ArrayList<RuinMatter.Piece>();
++        for (int i = 0; i < 2048; i++) pieces.add(new RuinMatter.Piece(
++                h.absolutePos(new net.minecraft.core.BlockPos(i % 32, 1, i / 32)),
++                net.minecraft.world.level.block.Blocks.STONE.defaultBlockState(), null,
++                net.minecraft.world.phys.Vec3.ZERO, h.getLevel().getGameTime()));
++        previousMaterial.release(pieces);
++        h.assertTrue(previousMaterial.retainedBytes() - emptyBytes > 1L << 18,
++                "Previous material fixture must exceed the ninth-worker margin");
++        // This fixture holds non-worker ownership constant. Previous batches can leave cached
++        // snapshots and material that normal tick reclamation legitimately frees under pressure.
++        var heldReads = new ArrayList<java.util.concurrent.CompletableFuture<Object>>();
++        StrikeGameTests.afterTest(h, () -> heldReads.forEach(read -> read.complete(null)));
++        for (var previous : h.getLevel().getServer().getAllLevels()) {
++            var world = NuclearWorld.get(previous);
++            var read = holdSettlementRead(world);
++            heldReads.add(read);
++            ua.zentix.incoming.nuclear.NuclearStrikes.clear(previous);
++            RuinMatterGameTests.clearFixture(previous);
++            h.assertTrue(settlementRetiring(world).contains(read), "Clear dropped a live settlement header owner");
++        }
++        h.assertTrue(RuinWorkers.shutdown(), "Previous fixture workers did not exit");
++        h.runAfterDelay(2, () -> {
++            h.assertTrue(RuinWorkers.stopped(), "Pressure started before previous settlement headers completed");
++            heldReads.forEach(read -> read.complete(null));
++        });
++        h.startSequence().thenWaitUntil(() -> {
++            // Clear invalidates collectors; outstanding I/O still owns its bytes until completion.
++            // Resolve existing cold-load receipts here, before calibrating the fixed reservation.
++            for (var previous : h.getLevel().getServer().getAllLevels()) {
++                var world = NuclearWorld.get(previous);
++                h.assertFalse(world.ledgers.pending(), "Previous fixture ledger load is still pending");
++                h.assertTrue(settlementRetiring(world).stream().allMatch(java.util.concurrent.Future::isDone),
++                        "Previous fixture settlement headers are still pending");
++                h.assertTrue(world.prep().retainedBytes() == 0 && world.materialReservation == 0,
++                        "Previous fixture asynchronous ownership is still pending");
++            }
++            h.assertTrue(RuinInputs.detachedBytes() == 0 && RuinResults.bytes() == 0
++                            && RuinWorkers.residentBufferBytes(384) == 0,
++                    "Previous fixture worker ownership is still pending");
++        }).thenExecute(() -> {
++            try { checkPressure(h); }
++            catch (ReflectiveOperationException failure) { throw new AssertionError(failure); }
++        });
++    }
++
++    private static void checkPressure(GameTestHelper h) throws ReflectiveOperationException {
+         var level = h.getLevel();
+         var other = level.getServer().getLevel(net.minecraft.world.level.Level.NETHER);
+         h.assertTrue(other != null, "second dimension absent");
+@@ -50,6 +100,8 @@ public final class RuinWorkerAdmissionGameTests {
+         Future<?> first = RuinWorkers.submitForTest(() -> { progress.incrementAndGet(); release.await(); return null; }, RuinWorkers.Priority.SEEN);
+         h.assertTrue(pool.getPoolSize() == 1, "one-worker control did not start");
+         h.assertTrue(NuclearPrep.memory(level) > NuclearPrep.PLANS_CAP, "future-worker policy must refuse far admission");
++        h.assertTrue(NuclearPrep.residentMemory(level) == base + RuinWorkers.threadBufferBytes(384),
++                "Refreshing ledger owners changed the calibrated non-worker charge");
+         var futures = new ArrayList<Future<?>>();
+         // Submit in one server step: later CPU adaptation can legitimately retain just one active
+         // worker on a game-paced test server. The memory bound is independent of that CPU policy.
+@@ -57,15 +109,23 @@ public final class RuinWorkerAdmissionGameTests {
+             progress.incrementAndGet(); release.await(); return null;
+         }, RuinWorkers.Priority.NEAR));
+         int[] stage = {0};
++        long[] lastTick = {Long.MIN_VALUE};
+         h.onEachTick(() -> {
+-            h.assertTrue(NuclearPrep.residentMemory(level) <= NuclearPrep.PLANS_CAP, "workspace producer exceeded global cap");
++            // onEachTick registered after setup also schedules past test ticks; inspect each
++            // world tick only once so those callbacks cannot collapse several pressure stages.
++            long now = level.getGameTime();
++            if (lastTick[0] == now) return;
++            lastTick[0] = now;
++            long resident = NuclearPrep.residentMemory(level);
++            h.assertTrue(resident <= NuclearPrep.PLANS_CAP, "workspace producer exceeded global cap: " + resident);
+             if (stage[0] == 0) {
+                 if (progress.get() < 8) return;
+                 h.assertTrue(fieldValue(field) == pool, "growth replaced executor lifetime");
+                 stage[0] = 1;
+             } else if (stage[0] == 1) {
+                 if (progress.get() < 8) return;
+-                h.assertTrue(progress.get() == 8 && pool.getPoolSize() == 8, "pressure must admit eight workers, never nine");
++                h.assertTrue(progress.get() == 8 && pool.getPoolSize() == 8, "pressure must admit eight workers, never nine: progress=" + progress.get()
++                                + ", pool=" + pool.getPoolSize() + ", resident=" + resident);
+                 first.cancel(false);
+                 h.assertFalse(RuinWorkers.finished(first), "running cancellation released actual execution");
+                 h.assertTrue(RuinWorkers.residentBufferBytes(384) == 8 * RuinWorkers.threadBufferBytes(384), "cancel lent live workspace");
+@@ -83,7 +143,7 @@ public final class RuinWorkerAdmissionGameTests {
+             } else if (stage[0] == 3) {
+                 if (RuinWorkers.inFlight() == 0) return;
+                 h.assertTrue(progress.get() == 10 && pool.getPoolSize() == 0, "callback borrowed charged material workspace");
+-                h.assertTrue(NuclearPrep.residentMemory(level) == NuclearPrep.PLANS_CAP, "material charge lost before callback drain");
++                h.assertTrue(resident == NuclearPrep.PLANS_CAP, "material charge lost before callback drain: resident=" + resident);
+                 owner.materialReservation -= RuinWorkers.threadBufferBytes(384);
+                 stage[0] = 4;
+             } else if (stage[0] == 4) {
+@@ -216,6 +276,40 @@ public final class RuinWorkerAdmissionGameTests {
+         });
+     }
+ 
++    /** Controlled header completion exercises the actual clear-to-retiring ownership transfer. */
++    @SuppressWarnings("unchecked")
++    private static java.util.concurrent.CompletableFuture<Object> holdSettlementRead(NuclearWorld world) {
++        try {
++            Object settle = ownerField(world, "settle");
++            var entries = (java.util.Map<Long, Object>) ownerField(settle, "entries");
++            long key = 0;
++            while (entries.containsKey(key)) key++;
++            Class<?> entryType = Class.forName(RuinSettle.class.getName() + "$Entry");
++            var constructor = entryType.getDeclaredConstructor(long.class);
++            constructor.setAccessible(true);
++            Object entry = constructor.newInstance(key);
++            var read = new java.util.concurrent.CompletableFuture<Object>();
++            var field = entryType.getDeclaredField("read");
++            field.setAccessible(true);
++            field.set(entry, read);
++            entries.put(key, entry);
++            return read;
++        } catch (ReflectiveOperationException failure) { throw new AssertionError(failure); }
++    }
++
++    @SuppressWarnings("unchecked")
++    private static java.util.List<java.util.concurrent.CompletableFuture<?>> settlementRetiring(NuclearWorld world) {
++        return (java.util.List<java.util.concurrent.CompletableFuture<?>>) ownerField(ownerField(world, "settle"), "retiring");
++    }
++
++    private static Object ownerField(Object owner, String name) {
++        try {
++            var field = owner.getClass().getDeclaredField(name);
++            field.setAccessible(true);
++            return field.get(owner);
++        } catch (ReflectiveOperationException failure) { throw new AssertionError(failure); }
++    }
++
+     private static Object fieldValue(java.lang.reflect.Field field) {
+         try { return field.get(null); }
+         catch (IllegalAccessException failure) { throw new AssertionError(failure); }

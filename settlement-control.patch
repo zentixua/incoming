@@ -1,0 +1,13 @@
+diff --git a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinWorkerAdmissionGameTests.java b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinWorkerAdmissionGameTests.java
+index 0ae650c7c..13d6416c6 100644
+--- a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinWorkerAdmissionGameTests.java
++++ b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinWorkerAdmissionGameTests.java
+@@ -60,8 +60,6 @@ public final class RuinWorkerAdmissionGameTests {
+             for (var previous : h.getLevel().getServer().getAllLevels()) {
+                 var world = NuclearWorld.get(previous);
+                 h.assertFalse(world.ledgers.pending(), "Previous fixture ledger load is still pending");
+-                h.assertTrue(settlementRetiring(world).stream().allMatch(java.util.concurrent.Future::isDone),
+-                        "Previous fixture settlement headers are still pending");
+                 h.assertTrue(world.prep().retainedBytes() == 0 && world.materialReservation == 0,
+                         "Previous fixture asynchronous ownership is still pending");
+             }

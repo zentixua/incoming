@@ -1,0 +1,2379 @@
+{
+  "source": "c444cd5ef9ae41cacf4e7aa9a928977f1b9ceabb",
+  "totals": {
+    "tests": 1840,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "suites": [
+    {
+      "file": "TEST-ua.zentix.hotswap.HotswapAgentTest.xml",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "33f7c8b77751f293e948cde8160943c8b8f4d8699432afe9bd2cbc7451b12fbe"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.BlastEffectsSettingTest.xml",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "dad60f1552097e7971f9904df1633b7cdda81ffd1274464468146b90f1a12e70"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.LangTest.xml",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "919cb7326ef786da91b12810910f6572c0f61527cc2b6cf8b4c838a9a9e0154d"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.NuclearYieldConfigTest.xml",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "31333567d54f606544f9486aeab00fa33a6063d852c961a48198abf4bd41b44f"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.ScalePresetTest.xml",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "4e6c283bcc1cafc1c2ca5233fe560eb5d90b2b6e4116d5f93732984e591e8bc0"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.FarLookTest.xml",
+      "tests": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "8cf751dacc21b77c9b97206ef529b4d60f239030a087f5e2aec2e5c9fd44b2a3"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.ServerCacheKeyTest.xml",
+      "tests": 31,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "6fc6cdec3731efa485d934e99b1da8746ec556af7f7d8c34d7123b51e9cfb606"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.StrikeEffectsFilterTest.xml",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "68d047524b24deebf461f97f1947b75e30064d6c8465c81620354302b4f6f377"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.far.BlastTargetSupportTest.xml",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "16e41635cc52600ddd3597524d4aded817ec6c9ce9d5d4256ada34116c141512"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.far.DustHeightCacheTest.xml",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "661f6eb488dfde044809b9d03f2ca6f260144aa783e3f0982df0e417a15583eb"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.far.ExposureSourceTest.xml",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "4a341109a6db843c4b4af7423660152b35ef9448785323fdc1fd78151d3dd29c"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.far.EyeInSmokeTest.xml",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "d46438fe0796057c6d2e2b9d6d05c7ecfc50a2ef8781a22053f9a71bad7306e3"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.far.FarBlastSoundTest.xml",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "11fbd120a2eab654f5915054d294a016fd1e2c0fa33d9e13575b131337d92a0a"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.far.FarBlastsTest.xml",
+      "tests": 12,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "e431a15335bc5b2f175bdd428b6f34fcca08728f0b165ae09e23c609221e5226"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.far.FarFlightViewTest.xml",
+      "tests": 20,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "0e009adc4a71990de61fd5a566e8b2b55bb5a47bcd58846854b45cc3625e9df0"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.far.FarSpritesTest.xml",
+      "tests": 8,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "81968ef3f910d8d24dd250edf2608dd857403ea64a6574ec0d482679ffa3c28b"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.far.FarTerrainTest.xml",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "44727b570eb5b5a4dbb5c3723a3d34f296c672ddfba930b17c383be960ce1cd8"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.far.FarViewSkyTest.xml",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "3168e602cb58668b6595cd9ae8c308574091adde19e0b0fbd0084bd74505bc51"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.far.LayerPartsTest.xml",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "9e45be743f186651a28e302bb6183a985126937971a6052d128e986dfbe70266"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.far.PlumeContinuityTest.xml",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "0de4fd5d7e95205dff9576e0ffdbf9ae9d91b5f29ac3bb353ecc83c7ca0c1ae8"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.far.SamTrailScreenTest.xml",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "9aafaf9b3d884cf5f8fdc8584b09c9e4c76cb8989e97a7c44a2040a52466de51"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.far.SightTest.xml",
+      "tests": 9,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "336812521a2bc6fc6e4dc182c4041381356a88d73acb80898e809733382b637a"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.far.SightlineTest.xml",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "f2af3ffcf46ca381264e285e068cc7e66113cff7011ded91aa1395689b862c54"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.far.SmokeConcealTest.xml",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "69b1f9b2dd332c90f8e4226d217d8e4f289ce87e0a5804ee00ce8450c2dc63e3"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.far.SmokeFillTest.xml",
+      "tests": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "aa8eb0b94a7432a62d0ef5287c4610256205c519d7ae7dae4a8dc1a44a24baa8"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.far.SmokeMergeCacheTest.xml",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "eba9497037c606f6b2b35c6277795325c0b24e9de59c6669f2398d922a14d52d"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.far.SmokeOcclusionTest.xml",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "aa4bad3bbd732f06ab11096b57923421fc0325594e48d29c60f4927f00109e0e"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.far.SmokePipelineTest.xml",
+      "tests": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "a6432fcacd0fccd4dc11082735420dbeaa32ce91f5d970f7808f34254e0dc0db"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.far.SmokePuffsTest.xml",
+      "tests": 10,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "9a2e33d3e9ee0bf56b2bf3e75e04c3ea4f8c0a5464c7aa55eba7e52b82c0bee4"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.far.SmokeRaidTest.xml",
+      "tests": 12,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "0ae14dcf2d4f6422f24b8f897bbc16526230a366398d5c9892cfd811ee15d465"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.far.SmokeSteadinessProbe.xml",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "bd394eb15b0a8c7f9c53ce6217c484f1af5f009f232193afb201197415f10054"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.far.SmokeTargetedProbe.xml",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "355c0acb26123b815e422506ae5034874a1896eed996224c43b331b11d57d460"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.far.SmokeVeilContinuityTest.xml",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "c96b31279532bf193015e483bfba63b52f1524ca21a6bacc6e5811ccc2ef75f3"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.far.SmokeVisibilityTest.xml",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "ba13783f840a98eb758f2dbabbf17ed85fcd651ca71d3cf3ba432adfc56b60e1"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.far.TrailPointsTest.xml",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "b2bb90200e43a64637aec01af52c59fff66844e847983953eac49caf4a6679d4"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.far.VeilDepthTest.xml",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "18e55900087420190ee3bf6029d23ff3183f8f9829808114eaef02207e15eb6a"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.far.WaterSalvoTest.xml",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "cbcd371fdd8635419ea3ac6db0d15cc4368987c33817d5822547458c545f7268"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.flight.FlightTrackTest.xml",
+      "tests": 14,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "9fd80e283569475d79d44b6599fc38298fd7c198e7f8063ab0afadb0f940c41d"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.flight.InterceptorTrackTest.xml",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "a50489f314f0ea4dfa108d82dc66a1a47b08b72598746faa5a64d5d8681b4a14"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.fx.BlastHitTest.xml",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "7050e54472ee932513e93fb702bc7e5a65befb913463ffa3b664a1107db3f88f"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.fx.BlastTimeTest.xml",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "d841bf2938a0bef1cf24b43b3dcdbf82316a868d7be482311111ef52df944d52"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.fx.BombSoundWaitTest.xml",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "586f3fd5150b453eb48e743b7a71c3f0ff8fdff1dae5cc4287aa807e4382fd37"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.fx.CameraShakeTest.xml",
+      "tests": 12,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "7f769eba9066b2227e7509b9d83c58bf9b6898343edf9385c3900d3b4b82c36a"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.fx.ConcussionTest.xml",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "7011b0dc40aa0059748e21a7ba30c08e6fee3ea40eb2a8efce2bed095e7896d7"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.fx.FarthestPoolTest.xml",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "aac87d219e5896d50383a3c17f98145629c7f2e5f252ee88784483080ca5b9b7"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.fx.FireMergeTest.xml",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "508a51e8646ee7aee4af76958c2625a3eb19d86d60732b1b6ccbf8dcb9296b3f"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.fx.FirePlumeLayTest.xml",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "c26f35c374a7ee1f8b6ede6b7798de5c2dcf8b859db36870e9783d3771c248b9"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.fx.FireWatchTest.xml",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "74f12bcc96a3a3fee34f1ed240b1842c6a6cad7ba534a91e588070bcddd8ac9c"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.fx.FlashFalloffTest.xml",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "0f7857a925f060e2719b687dd5db642994bf39a977d2e084ed9701945b10276a"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.fx.FragmentsTest.xml",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "aac6af3cb464cd87b901ebe4dbd7db7201cd2695c03b1d8f74c822dabd093433"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.fx.FrontDustTest.xml",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "f7fd5886a1876e3e994f90d0ae601228ef95b41818ec6f3951e08b585d6a6da5"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.fx.FrontLitterTest.xml",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "b4b47d751177f6229a3d454d3cb1601363a9eba274bab45ea4df5eca79444f44"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.fx.FuelBurnTest.xml",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "f4b2042b39c027c44e4f07c829d3bb22b90a0474e9e7af29cb663f2b493e5b72"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.fx.FuelCellsTest.xml",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "3a2ec85cc2dd45a83e8f47f1c956960873b59ff1c67de70f392fdb0652f90aa4"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.fx.GroundShakeTest.xml",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "6b8a8cd0abf917239512a054e623df799765f70c7fb858d214245e2889e7e939"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.fx.NearLitterTest.xml",
+      "tests": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "43fbdb2ddfea8f4f3bf2c8dad449158214c41c676a3caf3d8d99e7302ed6c232"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.fx.VapourCollarTest.xml",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "2a9e15a107fe15ccbb6aea259961c1aff1216f327f427ba80863e38463889c39"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.fx.layer.FarFirstTest.xml",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "7521096bd3ac3946e5fbf5d66e325cd7e117bdc1bb4c3bc6a9bcad7a6ce770a9"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.fx.layer.FxAtlasTest.xml",
+      "tests": 16,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "a6be204c434505dd72c0e2e3fddb0b442b2b6e5a4970034e063caa25b7752dc5"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.fx.layer.FxBloomTest.xml",
+      "tests": 11,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "d7d634ad1ed89eb1f1d187f0a6c85037479aee611fe2aa660c0e6d218beb4157"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.fx.layer.FxLightsTest.xml",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "df392272d7e0aa9fc1d3d83bb78d7532cda01d2f59cc413969f3f9521aa18bb7"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.fx.layer.FxQuadsGlowTest.xml",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "a149022ce8fe16ea15cbfe55d712a284f8f726c7cc23f176933099e1293ff294"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.fx.layer.HalfPassTest.xml",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "90cbc437c55810813beccf8608b1c437d1adf3dd64590c22a1dfe7fb46954c59"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.fx.layer.HazeTest.xml",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "415f33fd6018051d10201ce077619542a431a69c2a0c70a93d43a074fc5902ab"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.fx.layer.HeatAreaTest.xml",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "5a6ac30463763b95ae03fe5e8d4b2fd14cdcd4c35bf43c0fd579e269485a643e"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.fx.layer.HeatLightGlslTest.xml",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "ff320921b517902bb28739d81af98e8469ae4f67b94a1c47976eb2a7ed2c9a2c"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.fx.layer.HeatPassTest.xml",
+      "tests": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "d1fc7681db8dfda6ee18491e90b1637eee501d9b552f4fbbe7a5458d5528ec9b"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.fx.layer.LayerTimesTest.xml",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "315cf4bf5a0d0ffa0781bd8d5e46aeb27fd559271acbccb932410a93cf6c6426"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.fx.layer.OpenAirTest.xml",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "fd8cdcdf1d011b0b12058c0dc34642991de6c2192081ecf49ba0d4ab9712f284"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.fx.layer.PallDetailTest.xml",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "3a25e34b7e001a4e26de23197b0d96748787489828c225deaf1a8a9a60dcaa32"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.fx.layer.PallNoiseTest.xml",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "9d34d86f1038c81aa0c2497cd82f5a659d14fdd6f8818ebae7a542ee0e806968"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.fx.layer.PuffGeometryTest.xml",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "64fd18d2a31f577a4e9790daf24ad42a863a8be078850b50cfa3c992279628f9"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.fx.layer.SceneDepthTelemetryTest.xml",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "e8800bb1776379302bb795a91298d691dc3a9228aae30aacdc6a106cfbfc880f"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.fx.layer.ShaderSourceTest.xml",
+      "tests": 18,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "414c97ebe87cf5b2147f2668fb6223a42365d5a5e0409bd6f6176fa6b84278aa"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.fx.layer.SolidsTest.xml",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "1fd562bd42926b11d1a37d63c9b90962aafc3730c985328e0886f8dc0224ec16"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.fx.layer.SourceProbesTest.xml",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "f0e53164d6b29edc254cba89fc18aa82aa06a94756972609d8651d7ab4b30925"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.fx.layer.WaterDecalFailureTest.xml",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "8547a3ab498c9df2971860059c3cf3640cc6e02bfeb04592ff5c90bd7842c4c0"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.fx.particle.FxParticleTest.xml",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "4dc0914d2edfd177f1198b332e66b582eaffc54a2897be54b245dd55e98b4ec0"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.fx.plume.FlameModelTest.xml",
+      "tests": 8,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "16de19c2e6d8a152985fff09c7435076edcc41debc37440f2a7cd34382ca4f45"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.fx.plume.NozzleGlowTest.xml",
+      "tests": 12,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "2c404bc2eae26d9bf0c238ef6f76e7ccbd7bac3ad8b87fc1069906103a54dbbe"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.fx.plume.TrailModelTest.xml",
+      "tests": 14,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "532dc275783f83076e328a424f5f57118d0c4dce5006fbfba6b6a681e13baf57"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.fx.smoke.BlastTargetTest.xml",
+      "tests": 8,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "ec3ad9717d42c01abc4223e8d6ac0d41534b6c88aada1a226132d9a9386a6dd1"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.fx.smoke.CloudBuildTest.xml",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "23c1044e67a4b0ffa5550d4d5db0d23129a96cc210e2a3c6c57688ead8c27827"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.fx.smoke.CloudModelTest.xml",
+      "tests": 25,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "c1d73149e385ce8cb4d5ec828d4a9c3c9be4f6b91e6e52e1fe1615cb98aa9b86"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.fx.smoke.CloudReturnTest.xml",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "30f6c3bd1f078dc97ce5bd9a03b9ab0831a1f48e1d105f8fd4c27a30fa6446e7"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.fx.smoke.CondensationTest.xml",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "7894444462b8ccad76b7ebe10a64284e1b9f33eb78d95fc54e91001b325c55f8"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.fx.smoke.EjectaTest.xml",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "2d0b528a1f71314c9e3615eeace76088382a329fe1ecff25c0c813bffa1d8c2a"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.fx.smoke.FirePlumeTest.xml",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "d75e2a6d5d6664025328526454382fdb42d6540e7c829bf0a0a6bfd6ba31bc49"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.fx.smoke.FireballRadiationTest.xml",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "2dfdecdf22f6cc18e01a7b5a18149efef527b0b90ffa6a8cb88a82f9097e8b53"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.fx.smoke.GroundDustTest.xml",
+      "tests": 34,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "2b15cf4464e4deb507d156b15330e161138fe35fc8d47eab43b500b35905a879"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.fx.smoke.GroundDustWorkTest.xml",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "456da63bf0f872b11f38f86acbc851af113709883f9e84c049d1f018cffd151f"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.fx.smoke.HazeAtTheEyeTest.xml",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "d4653f727ec57a218be6de4cedcf292e6f9746c6c0f8bea3a088f66fdf04f3ad"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.fx.smoke.LaunchCloudTest.xml",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "2dc1a82ec28514c7987032bb2c282bf8e45e8bf3e43b28ddd419d6146119dc98"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.fx.smoke.PuffsTest.xml",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "9bdd0a1851bf5c1cd779ac316f0d7e26a3aa302a46792ef38996a8c27f04460e"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.fx.smoke.R483RoofTest.xml",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "dd033a36df25ef257de37bc4362430835727d925ab96fac0f1cc96c67a09c0c6"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.fx.smoke.R483Round2Test.xml",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "a87a0a2f8328ac154f4655724e3a62891f4e567d4188bedf4796c7137f3f4cab"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.fx.smoke.ShownLightTest.xml",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "542ac81fae5fa429350da6600332019f9e8ed3724e8b2347db8d114ece621961"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.fx.smoke.SmokeBoundsTest.xml",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "7214a8a09a8de658bbfdfe46c33fef08837dc20307c9a9f014c3f6487e7a1528"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.fx.smoke.SmokeGlslTest.xml",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "5eb0dc7a8b1f7352b76f4cd787c08013d1f40067e29b4521d4f872439e377b0b"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.fx.smoke.SmokeGridTest.xml",
+      "tests": 12,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "829652abd231c5a1057fdaf80238f88ffbcceaa2cffd14da3e2130420e051a1a"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.fx.smoke.SmokePreparationTest.xml",
+      "tests": 12,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "981ffa7bb700b58909619418d82d3181e47616e57614a944fc35c251950e35c1"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.fx.smoke.WallJetTest.xml",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "1f376f86d4b00ceeb65bd9492d6e3e53f2d55fea0f1a64332ee63eb56617ba9f"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.fx.smoke.WaterBlastTest.xml",
+      "tests": 10,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "2b50dedcff7c7c2babf58179a27a13c666b365d52143ba06ac7c71fc9961e307"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.hud.StrikesHudTest.xml",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "1e6a201d85e5e5bc96053b487ec8ef32d6f14b82b72448debc3e23ee8503cc38"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.map.LssColumnsTest.xml",
+      "tests": 10,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "3e4c71bcf7cb7490303fd44c0b39b46f3ad3d639bca811c265424383d41af2f9"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.map.TerrainTilesTest.xml",
+      "tests": 21,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "8b588e6fddc197fe2a9e9a7837a6c5b6b028b1d59ba2417def93514a27549746"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.map.VoxyColumnsTest.xml",
+      "tests": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "f9e2d7b9ab212a8f3c9a03ca50d1515eae0a1282f8ba73de0961c1adbcf24994"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.map.VoxyTerrainTest.xml",
+      "tests": 9,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "b019e17ca0530e951964ed3c17ab4ae6e9326ab1671c389d3f8d285135f396c1"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.nuclear.BlastGustTest.xml",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "154f8eaaef2737e51a54f550afc18fdfc5cfb2152115d7c68ad7c21c538ed929"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.nuclear.BlastWallTest.xml",
+      "tests": 11,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "864832e6404cb32b555f9230eada61892c9de2b1692159889879f09371a13afa"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.nuclear.ChemicalFrontGlslTest.xml",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "9121409d3cc6c6ea9a8fdc0c2717f76dbefb5bebfa11ade97a84d0e50ceb2797"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.nuclear.ClientNuclearTest.xml",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "ff7fb93d03bec2c0b3940ee74a060afcbca6f87f446f9e56509168a4dab5394d"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.nuclear.CloudPuffsTest.xml",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "dc86547cb122d88b27152c04491c42fc6519e884540b81cb4ddb6a1924c7abff"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.nuclear.FireFieldTest.xml",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "38398be1f80eb01f7e80e888522ebd07a1289da95052f966e8f2f60c139aa799"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.nuclear.FireStormTest.xml",
+      "tests": 13,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "57e5cec3676974ec2e48f6cf2ed204d280c9e6c1be57f315d0a52f472bada0d6"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.nuclear.FootColumnTest.xml",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "92975a43dc8bfc1ce6388bd71b75962de0a48b29b46ba39a6498230853ac0d61"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.nuclear.FrontMeetingTest.xml",
+      "tests": 10,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "2ba4f3de3634f734316dee1c2a214c36b4959f04ea1623e1751449f7bc722c5d"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.nuclear.HazeGlslTest.xml",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "e9bc8ea4c50d675dc96336bab9e077499059e91ba73df2d71f7de1e93dc3aafc"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.nuclear.MushroomFieldTest.xml",
+      "tests": 13,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "5e1e09e274526cb125badf25d156c1a5606b49234a91e686a126fbe1bbabca78"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.nuclear.MushroomGlslTest.xml",
+      "tests": 19,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "febf536c332b6b3961b30c932300385010ff40ef0e05aae7b2d32dbd05fb5034"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.nuclear.NukeBallSurfaceTest.xml",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "8a4cdfe8e4a9198f72bd1b279d425f469fd90096c79a8aec9442da8c79967487"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.nuclear.NukeExposureTest.xml",
+      "tests": 9,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "005143b14eb32852b675cff03d8315fd1e1f321c199b522cdf0b31c5cd4d6eac"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.nuclear.NukeTonesTest.xml",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "4e1cd93cb2384749813e0c8d9d74c17264a20db12e25a414b1d7fd30e52dc6f9"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.nuclear.NukeWaterTest.xml",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "d3b9ef718151790ff2a9863de701ff4549d2b64d5604521eab47ad5b71941629"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.nuclear.PallFieldTest.xml",
+      "tests": 34,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "fd1144576c9ff5b1764cac1094325245157e1d2d2a3b437edfb5c82aa51354f5"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.nuclear.PallGlslTest.xml",
+      "tests": 25,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "c82aaefae8337d5b47a5b4343e8d55f0d9776e69c22ccb152c2130c6f803b75c"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.nuclear.PallGroundTest.xml",
+      "tests": 9,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "1a6f6df56ce1c1d1be44fe41d8ba8b8454f1bdb591eda20daa58fb7aa949d5bb"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.nuclear.PallLightTest.xml",
+      "tests": 11,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "4186eb02e78fdf5e4602acf0a0cd4490f34a76a17cb446e6392b0da5ffbcf1d8"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.nuclear.PuffAtlasEdgeGlslTest.xml",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "ea4fa7f4d050e8a48e4dec4e37e024b2d23bc227a4a6a11071e64ffcdacf9e05"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.nuclear.ShockOpticsGlslTest.xml",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "cbe4b66e6146a75460d82ea0928c9b98544070a491473088a379a1f0632ac8c6"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.nuclear.StemFootTest.xml",
+      "tests": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "97c139e82ac8b7f44099fa85f3b29f587d3341173195d2b0589c9a117fa684e7"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.render.DhDepthTest.xml",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "749f3677b32730098afcfc9714b8f5f56331a093e13aa80aaa784cef640c2e9e"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.render.FarDrawTest.xml",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "b4ea0f2edfa2c6294e2a2ef5a085eded6cd3a2ebcb0f9e319d30eedc6bbc1fb9"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.render.FarModelsTest.xml",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "0f535345a9ca30d749bb1258d31316a7aed4020c33e724dff30dcc4a09d6974b"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.render.FovSourceTest.xml",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "45eb2e75d64a30984c06876f37dfe91efd5a267ba34bce5fac5539f574d35ba7"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.render.PlumeRendererTest.xml",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "cf3f447922fb020f4c25012be15a8ad6189962f5fe5117f77657714661afbcd2"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.render.ScreenProjectionTest.xml",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "e48e1ae5922097ef79a77c4b440b0b491d89985907a5c89b87317eecb237bfe1"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.render.VoxyDepthTest.xml",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "1346273126f2e3e909c922cb91658f45f8561ab00ee6d59d23f15fc82671559d"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.replay.ReplayTest.xml",
+      "tests": 9,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "72eb1284e2430ef0a3278542c0daf2656ec68bd85ddf5082d03467442542c19d"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.sound.AcousticsTest.xml",
+      "tests": 8,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "ba9111e7f65c7fd30a4838b3953db85b400ab56a3c70cf167e6d37067d92b7f2"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.sound.BlastMixTest.xml",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "21f5a0fc3454fe8317bbe187083ca9b0f4e12d1cfad077946640ea1f888f2601"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.sound.BlastPulseTest.xml",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "78bd7c760e3fe338dffb5dc2dc8b3255dd909cc795e2136314ba24ce124c2fac"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.sound.BlastVoicesTest.xml",
+      "tests": 15,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "4a8dbd85d20fcc6719e14b6a90d45f3d8e431550a03579f6df784c114914bdc2"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.sound.ClatterTest.xml",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "421558d846d0082235f52c4a6dbd3a9528c905fe34c800a72ec07b988f008416"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.sound.CraterFireTest.xml",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "91ba01e34198e58374b18996c669dd1bcce87ad212cf08d98aec856cf04527c0"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.sound.DuckingTest.xml",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "426317a5189a5c5c2915f313585f2df9b5439128aff9af12aba45d62ee76c00e"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.sound.EchoMixTest.xml",
+      "tests": 10,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "3fdfb461d4bb0b65b8575de2c96ea6b9567553a9ec66c22e3c4ac13c256ae9a0"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.sound.EngineSoundTest.xml",
+      "tests": 9,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "c3bc74551d8d3d4f053cd6d623e34558152c0408edbe5afff6889c8741dee3ae"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.sound.FireRaysTest.xml",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "6491da08cc90e1e7d76154c5159028a6699ffc10fc606752c1983e046a02e7b2"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.sound.FireRoarTest.xml",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "a0bd642fe6dc2ee7ee2363ebc3730983aaf9b4d1dcafae8feed078704fd5dd87"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.sound.GroundRumbleTest.xml",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "6a74a4821514939323eab3c773d221594b64ecb6df4a7686a867e3309ab8e27b"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.sound.InterceptorSoundTest.xml",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "c37a7174c6afdaf7a0e842bbdae35680566c215f525bde4907acd62609a520b8"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.sound.LoudnessTest.xml",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "8b22cae265b1d07e907749bc43ed9c8f47a3a2c26cdd98b2af7cc914ff642ba1"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.sound.MixTest.xml",
+      "tests": 11,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "aefbe9da3642479109fc036060310591aa226e7a25aa23026a0ae6fb7770bf71"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.sound.MixedShotTest.xml",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "808e2f10a0ab821a731de23428e36fda97f2ed6b8c9f8e54a633a6d775cbbc81"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.sound.OutdoorTest.xml",
+      "tests": 12,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "4f6f3795dd96193af05dce03edfebc6ea3447cd49226d40a1417747eb94e7e1d"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.sound.RumbleTest.xml",
+      "tests": 11,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "fa57effa7a9fa726a86c075bba067e5b0e6949b953f5a57f61d60f26f608b3db"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.sound.SoundAssetsTest.xml",
+      "tests": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "3d9b87165dec792383275d4545612f48e45040815ef3ae7f7e73bf787a1f196e"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.sound.SoundFiltersTest.xml",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "74a3ac4b1e72ba0c9801c278dbd723a6397a839d4df467e63fe097f4a6a68c7c"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.sound.TerrainEchoTest.xml",
+      "tests": 9,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "c3c3cc4211c46541af55263c08c12709319d854b9b606c28cbe18eaa55ca0bd0"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.sound.VoiceBudgetTest.xml",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "371b43136b5aa7d97434a4ac280a43b6aec6086557090cfff3daf80f06885c69"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.command.IncomingCommandTest.xml",
+      "tests": 9,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "e5fadf1d1b79f99ff12be1dea244018db83ff6364deec139d40b9f784db3c7eb"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.compat.DhCallbacksTest.xml",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "5a1876f2f3a8b779db137cb12b7c7933087b85f7a040833846ca4e3e9f24ba47"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.compat.DhQueueTest.xml",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "35cf3e770f877ab8a7b76430b4e701be9b00751d9ad78bd52cbf0b0fcffe3e64"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.defense.AirAlertTest.xml",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "02bb731aa2424ac4d62c4590ef22b51e1ee95d09e6a525412aa5ed26d81644ba"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.defense.InterceptShareTest.xml",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "623995944c2d97b5e6a148351aae91e75cebd23f3fa1365d85fcac6ef3737598"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.defense.InterceptorFlightTest.xml",
+      "tests": 8,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "92f13194ff319b8dca339342b556975577798cfe86aa06974495c2d282e14530"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.entity.ArrivalQueueTest.xml",
+      "tests": 9,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "000a20a6c371a65e7aedb78beaf82c475ce8df0491787d5c3a0eb2ff1ecfb335"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.entity.LaunchQueueTest.xml",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "17b70fa41f505d8e8b134eb044194c581873a35cb18b41f848783ab1aacb7a91"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.gametest.BlastPostLayoutTest.xml",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "c6eae90e893e79ff5dec952b04200cc8fb35955d087670e3ba12f60af4dc041f"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.gametest.GameTestShardsTest.xml",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "ef9c7591525fd2058ca68952af2ba9be60ab25629f7437c80b6dbf1bf7526743"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.grid.BlackoutQueueTest.xml",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "40b57583f37931128c5cd061e530040e6f96e60df34dbfe97cd7d4d0780fd617"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.grid.BlackoutSweepTest.xml",
+      "tests": 9,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "72129ab82c67bab8e338f0661ff4bb4742ebe3c50648d128c07411709c537438"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.grid.DistrictsTest.xml",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "de394429c1ac70633f036096f2e6c6664c0e837a61e31c71f7f17e180d874a3c"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.grid.OutageTest.xml",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "36d6d45799bb64d0a8470f46acdf1b7c25464cce55094071085951e95456ff66"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.guidance.AutopilotPropertiesTest.xml",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "ce965621c26f5af7e8050aebf7c14722e4da7e734e43e7e388f35b6d79434981"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.guidance.BallisticsTest.xml",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "411efb447244e14a569a0fcffa6ad66069f35b6d8a5011bc1f5b140ff31c3ec1"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.guidance.BombDropTest.xml",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "c1d25f724fc7ff0cdfb6f87d77d307373b10f1ff719a1a761e091b416f8c9df3"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.guidance.CorridorTest.xml",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "6ca033f8aa30d9428e9336ac942abd69bdc1f69e6b69f15022d8cf40fe078737"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.guidance.DiveTest.xml",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "621434159f6c0346d0ee091013bd45bcbeced5fe5956f83597a335d894dc7a5d"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.guidance.DroneDiveTest.xml",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "895fcf6862e26a0585113b63372bf707c29617ded1a25ba3a647be720d4878a3"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.guidance.FlightModelTest.xml",
+      "tests": 11,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "2c3b9bba90d96b679cf020a151a6c7b63798cff0b66e10db7dc60357abd440f8"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.guidance.HomingTest.xml",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "6dd60a24f694ff6a6963e561e599ecd114548a045b6573a9f72d9e1729a317ba"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.guidance.MissileSightlineTest.xml",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "88ce97422997d6c0f91c46c7a59d7a1a23c517bdc0d2a60afa679235e6fc04c3"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.guidance.MissionTest.xml",
+      "tests": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "8fb93a69835d9f95c426bc87c9415ec3f4031912cf03f7c0ceff3b9e3eea3ed9"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.guidance.OrbitTest.xml",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "713594181d465591fd2dff98ddac84f8889372e9da45abd4192edad8dad5153a"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.guidance.RouteLaneTest.xml",
+      "tests": 8,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "9a85fe3a3158cd78be896c2efc7408479595848f2c061d9d695b75295cac58d4"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.guidance.RouteTest.xml",
+      "tests": 8,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "b878809dcfad67b264f245113445d5dc91dc63c265a8be5c3ad2cc1b8bfc79b9"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.item.DesignatorItemTest.xml",
+      "tests": 9,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "4979a1894aec653972cd2562f7ab91886cdd99e24ac9e8795e501b58ce13fa4e"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.legacy.OldNamespaceTest.xml",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "cd08e9e756dbddcb408c3e3075c27b5a0d59d9fbbed6205be2239efa4967bbd9"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.net.AimHintCodecTest.xml",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "8c90f2b7d38dcd06f46c66fd886195b46d8916301b828853f8f28cf394c32c1f"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.net.BlastCodecTest.xml",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "fc14370b1e30ab2b992f50a102ca87a95f1ab5f80692ec134762bec548bb238a"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.net.DefenseCodecTest.xml",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "cd17b8c7094ddf0f4229998536a020b9304d1d4ae6c9f0a9af1ffc47fb841079"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.net.FarFlightCodecTest.xml",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "27a8906fe9d840919478028a987a3afd58b65c1721e5307c90498b96b666fd0c"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.net.MapPlayersCodecTest.xml",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "e454c3c028c20b31529e28bf378805b882fcd3e19787f487fa0c0bee13fe4aea"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.net.S2CGoldenTest.xml",
+      "tests": 49,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "ea4b7583c0987b758fd688b8492b523a9e0a70509a45fb892a1bc63e887e271a"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.nuclear.IcbmArrivalTest.xml",
+      "tests": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "659c811d24e64befb98859f082085fb4d8dd761fe3583bc9ced1eea335577fa4"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.nuclear.flash.FlashMarksTest.xml",
+      "tests": 8,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "1fd1c64940e68f9103b808a3f53b2919dc27fb1e8dc7de32ee735b3060ce18cd"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.nuclear.model.ArrivalTableTest.xml",
+      "tests": 9,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "77c841f423538d924beeaa621b6a34e1d43559226e1cc0ab3a0b21a06f7da8ac"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.nuclear.model.BlackBodyTest.xml",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "446f66adbb4ea09ecbd9737614bd8f1ab6399a7bed1d7eccc9220da590ee58be"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.nuclear.model.BlackRainModelTest.xml",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "3f59a035f594f49f9776243c8c961a54090287fe95d7fd9e83133bc94fa14b99"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.nuclear.model.BlastDamageTest.xml",
+      "tests": 18,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "a4b434d48deffd823d732a4fe3b8433b5ba4625b5c50f705b052c042d5bea6b5"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.nuclear.model.BlastInjuryTest.xml",
+      "tests": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "b1161a44e50bbb0019445e6cada8db76d8328ee19c755dcdf67b64ac9df5bd4b"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.nuclear.model.BlastLitterTest.xml",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "d50059bb6f2c8541440760129c400dc7b5ec0e6861ab0a4407c0ce1a5829334c"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.nuclear.model.BlastModelTest.xml",
+      "tests": 13,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "377b6d918c8eb33d075a1678bbdb035588d83d718654f4e43987d0d25f933238"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.nuclear.model.BodySwayTest.xml",
+      "tests": 12,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "5ef90f10d72966ec31d3602c198b692b13228c06785d398ab549d7e831dbce04"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.nuclear.model.BurnInjuryTest.xml",
+      "tests": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "c2105d22ff4780574cde660c0ae9b37c19c476814f46acb6b67e992e2c4f7d73"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.nuclear.model.ChemicalFrontTest.xml",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "1e42eea09670d5b6b4e7b28869f9174b16066872863aaa376dc529e61b03f552"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.nuclear.model.CloudModelTest.xml",
+      "tests": 8,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "f2547a7a758b342ba020faa17559453702deeac24ed7ba9f2f8ec5de417e0bff"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.nuclear.model.ConcussionDoseTest.xml",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "27d8cfafc646b0ec60f177e034f787bb679a16067935778c517871f89d1cd17f"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.nuclear.model.CraterModelTest.xml",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "f163cc8d5f17360792ee7e0e156d5bde5c17476cf4e2af7e712d0d1bc51cd97f"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.nuclear.model.DustModelTest.xml",
+      "tests": 12,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "12d23556fdafcf00fe6c87940d308e26db1396a1d1d08bd1c654c79d6de76b59"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.nuclear.model.EyeInjuryTest.xml",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "5732a1b31415e39397fb9fa8e30f17498693b97596b631f7429a156fe65e0785"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.nuclear.model.FalloutModelTest.xml",
+      "tests": 9,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "2fd5a9ee7f0c4c6810d0285b246da3673ef27cbaa3579cc272120c27582a5693"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.nuclear.model.FireballModelTest.xml",
+      "tests": 10,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "2ab47d35bd08d4f4db601f8b3b2be278b0c8071e118386cee9c5d7bfe6e52605"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.nuclear.model.FragilityTest.xml",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "a71bd027146d227c4a4f2305dbdfd4256472a5b37fd026c1a21dd03b81675fd6"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.nuclear.model.FrontProfileTest.xml",
+      "tests": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "8bc83f62c92aae1d82bf64b0b49629bccd4e0ab951020602538a78dc60000fed"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.nuclear.model.FuelFireballTest.xml",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "b6bce0d0f73a91999b9352689a3027123c15cdd44d4f8968452967dcff957318"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.nuclear.model.FuelPoolTest.xml",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "c000ceb3f3e2aeb99f619b8946f78ea96c931da8ebd1b622872047d72a2e861c"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.nuclear.model.GroundShockTest.xml",
+      "tests": 8,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "f749f8aa8b729cb0554624fd029545a1f7361704a6b497f64d6fc76616793b62"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.nuclear.model.HearingModelTest.xml",
+      "tests": 11,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "45fd0edac70bb1e656517418e5227c25332e0ae8e0b8a2fb90f40f369f94e186"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.nuclear.model.HobBlastTest.xml",
+      "tests": 43,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "5990838946f31c400a0aca934002eff1b15b5fb917b875bb949dca8cf9595bde"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.nuclear.model.ImpactPreviewTest.xml",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "034e0a60ed3d110ea6e05c9eb67d3ed8ca1d2536d4480d53fa399640c52a03b2"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.nuclear.model.LocalLitterTest.xml",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "800f12e7be7700e7887b05526b84807e119d2e3612f5c441bcf085738885ba38"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.nuclear.model.MushroomModelTest.xml",
+      "tests": 17,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "d73c3a1ee592dbbfa19a7548b866bdf31baf0e5387d6c315dca5125e78415194"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.nuclear.model.PromptRadiationModelTest.xml",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "5ba89f146e0c037b760ca833f6cfd3bc1d31ac6054293f94a9280ec2ea84301f"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.nuclear.model.PulseIgnitionTest.xml",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "1f57f56df3eb3e5d78050264cbf1dea5905358dcb7dbfa9f79f6238b6d54a9c3"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.nuclear.model.ShockAtBodyTest.xml",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "dc792a3963635eecf4abe38ff6f35bb7cb433a00f8bfae05d4868b011e7867fb"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.nuclear.model.ShockOpticsTest.xml",
+      "tests": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "5f41f117ee121bbd6e80b41ea5d6433818bed8d8f20107c247fb6893b7599ccf"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.nuclear.model.SicknessModelTest.xml",
+      "tests": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "45b2e27b6ba327161e947a4c5eb438c11038d9a40649a6efa84f8f16d3787245"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.nuclear.model.StemDustTest.xml",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "6dbd207d947bc3f82533309bff75ee9c858e16acbbf849c49252395044e4ab9a"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.nuclear.model.StructuralResponseTest.xml",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "2042dd66073cd9682a3de9c62767bf9accb2fbbfbc336300bb47fe17174c8780"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.nuclear.model.ThermalModelTest.xml",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "cf28b43bc85f98a50f6992e75425e545d567ab95d27838f05f532566d48bea43"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.nuclear.model.WaterModelTest.xml",
+      "tests": 10,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "fe23cd1844b9eae93ccfa3efb6579f236a335ac288ee14430eac3f9a4e135a71"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.nuclear.model.WorldNoiseTest.xml",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "26040c77252a298e8912ff24542cb12bcb933ab90f6bd656baa7d244a0c02090"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.nuclear.model.YieldTest.xml",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "e5ef45c0de0658e502b5a26eefbe4e09c51e558b9189356b92058903e361037c"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.nuclear.radiation.MobFalloutTest.xml",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "936219c64626c52fe09c68eaf74452a29c909fabc9ccb3f9fcb2f68abd63d000"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.nuclear.world.CraterTraversalTest.xml",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "8ea518cfe8608fcf8ad8b989a0c7dcbf79318369af8652b97aee35f124b829ec"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.nuclear.world.FrontScheduleTest.xml",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "f078b613c4c223179210726470576f98c45f5309656674d46f63d14182418431"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.nuclear.world.HeapWatchTest.xml",
+      "tests": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "2e4bf85ad98831afc66fb1c4329d7e651e1d24fd0772efcea8c28e2f812027e4"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.nuclear.world.RetainedPlansTest.xml",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "1af7388e01088d30ac45acca01bb46cbe36d3bc67b4b2eec038b892ae122f4fb"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.nuclear.world.RuinFragmentCacheBudgetTest.xml",
+      "tests": 11,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "16a4cfb4b089432651d8338721a2a577056c886fab711169768335b16258c1ab"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.nuclear.world.RuinHeightsTest.xml",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "9022ab916eebb517aca72eba81f8300765f7ebf66fc9fa4462f809253c74fd7e"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.nuclear.world.RuinInboxPublicationTest.xml",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "592dcae60e201879afdd897a22cc16d4507d94dfe4b8fd975cc30cd268e0f0cb"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.nuclear.world.RuinInboxTest.xml",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "48529d6638467962e30cffb75691f3dbe4477752bccad0b9b76fd705b3a2f943"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.nuclear.world.RuinInputsTest.xml",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "6a697d6f178e3ffb5ac25be9d250af54977daf07980bcfb39cb57d7b13ffb073"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.nuclear.world.RuinLayoutOwnershipTest.xml",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "f4ad3ad1c422a22bc75e9cb01c667666e288a4941f189f04ee712d0bbf91abb7"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.nuclear.world.RuinMatterRepeatTest.xml",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "06aa093979110c5cd2a8395821f85770f0a8d4bad494fd2b5f3b7251740f7252"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.nuclear.world.RuinRecordsTest.xml",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "e564859f43960fc3cd9254ba134f6d11587fb104833dfd6529366aa88fadfca7"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.nuclear.world.RuinResultSizeTest.xml",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "5413eeb03762ecf294b770b6a3b40de90069f650e9eca6f039e67875d212fe96"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.nuclear.world.RuinResultsTest.xml",
+      "tests": 14,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "b148d58e763ada5d6791d163122f02dee0ca50db697f5b43b9d53f0c15c838bc"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.nuclear.world.RuinSettleTest.xml",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "5de8042b4e65df92a8741bcdd2083eb8e486d91bc81077edea999c4cab412f5a"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.nuclear.world.RuinTemporaryFragmentsTest.xml",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "436000c928742d4cace45e2220f040e4eb23d313c06288d40343d94aff870319"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.nuclear.world.RuinWorkerAdmissionTest.xml",
+      "tests": 9,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "2baf054d27754e08e4fe87ed7029f15d7edb686e55a476e42aba51f1f2ef857e"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.nuclear.world.RuinWorkerMemoryTest.xml",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "1bdc4c009754f9a10dbe6ccf07dbb832301531e32682a6538eee54b46c75c15b"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.nuclear.world.RuinWorkersTest.xml",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "43bc2ffe7247d757c2507753797a196aafdf67730ab18205817792d5fd6faade"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.nuclear.world.WorkClockTest.xml",
+      "tests": 12,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "aa0d999f20424c2baec1fcf20208703f2b9700c6d9d133af951cca7bacce3e2b"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.registry.PenetrabilityTest.xml",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "9cf0c4bc5bcbb6d6234901951f856423a28851e444ce64ea9c4335ecd61386ed"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.scenario.CommandPlanTest.xml",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "d98a2ee8aeb9cfb623687d4bce4401ac48863abdf6e975a0a7a84bd6313a425d"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.scenario.SandboxCommandTest.xml",
+      "tests": 8,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "b551a750fe878fff63e43243e14fa4d10129427645689be2a9ebce0d20c020ea"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.sound.AirTest.xml",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "1361d8539e5a06e8a6714ceb5eb2368c5d7b1c7ee616b67d807c26e77d6d26f5"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.sound.PropagationBoundaryTest.xml",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "8a24fa455ea3dca81068973e76660b4fa8d4acc455a616cbd1bfece992b95b7f"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.sound.PropagationTest.xml",
+      "tests": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "1d9bd1aabe2616380d88613737d352490672f381c61069090661172eb811918c"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.sound.SonicBoomTest.xml",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "8708be64c779d39f241c8ebc35352b01b8f8e32291aafb757150124eea773297"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.strike.AreaLoaderReleaseTest.xml",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "cb3f2639fb0399bac7f9c9dd9b0af0f33578f4a0e3f1dab875b8612dcf63b55d"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.strike.FlightLogTest.xml",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "f4a26776adc51e95c4b90fd8915b0372065ca8b67063d6c4bf8357af4972bdd6"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.strike.FlightProfileRegressionTest.xml",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "43c8bc25707469458f20bfb1ecda8e591e5877e661c6c1678d36db4b11612101"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.strike.FlightScaleTest.xml",
+      "tests": 8,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "2e67963ab381b6a404ddf3ac09f8acb88ddc29844d3d3e8425e1b960281f46a4"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.strike.HearingTest.xml",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "cede2bbe9058f1bc8989be7e6aafe959452d917560349af49b671b19f09825ee"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.strike.IcbmBoostTest.xml",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "e863c04a6506ab600cbd448950a2ab6a5fef8939e651bef4287fb04529ccf178"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.strike.LaunchSiteTest.xml",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "26aef853a24108830d6b0765ba8b5a38f29765ecd27793eeb8d8cd4a19fb1d68"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.strike.LoadoutTest.xml",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "5213f7057d57952cb4f96edd1bc470eafa3abf0b42d1dac2f3e74a851c045265"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.strike.LoiterLaneTest.xml",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "fefe7b17326bbe05e23b7a3246ebb9881231c9e942252764846c237b52e16c0e"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.strike.SalvoLanesTest.xml",
+      "tests": 6,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "fbc74d9f99ee56fe151511ee82e10fcf7fa2991e3b2609c88d0e06dad63af739"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.strike.ThrustCurveTest.xml",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "f11ea2d0404bd3d75081b4d18a42749a13f2504027618f70bdb68f085d62a7e2"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.strike.VirtualFlightsTest.xml",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "790fb533216fb9a26cc164bb65abf7ca9b820c5bbb84127e59c02c4fac0e49dd"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.strike.WaypointsTest.xml",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "68140cec354e3b0624051b91fb7f040148ff9ad1f141f2c8751efc6908b4a3e0"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.strike.WeaponSpecTest.xml",
+      "tests": 24,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "6834e127106b25988d4ac5542d2e843ecdaa9d997f9c9557227bbba54c318b75"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.util.AirTest.xml",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "7934f7a036ffbf70fd92fb83a828a08437fb1f9948c8bcb3dc695a30d531efbf"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.util.DiskStatusTest.xml",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "1bb5465969c17cc73938a8ba7c4603d181d171f373850eb7cbc38bca14e6fd24"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.util.LineOfSightTest.xml",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "f22e8443da9107a9e9c120a3a421cb6fccb42ecdffb1c25c595a84ecfd19db39"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.util.LocalWindTest.xml",
+      "tests": 8,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "ce537e52f09658e57ad457c66cf6a171978b7231580e08b328d5872158b91054"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.util.ReliefTest.xml",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "d05c7f5182d9043feba4cfebccb211da45d9f367dfd8496961b422bfb3d16c75"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.util.TerrainSurveyTest.xml",
+      "tests": 10,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "c81e201255fc4cbc964600103d460276398c971cdd49860931e8b1c995d199c2"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.util.TerrainTest.xml",
+      "tests": 15,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "eb2777622d7b5429856ea7a3ab879a1ada99c476fb057bbcba2aef204b540bf2"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.util.WindTest.xml",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "b86ab2fba90d736b70ec7c71504df7177141cc5604fc071dc0bc643e9f9f6ecd"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.warhead.BreachModelTest.xml",
+      "tests": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "26d1fabc24ee8622540908172ae2b91f290f378f6456cfbb6829395cc7c94a39"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.warhead.BunkerCoverTest.xml",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "b865c88e596b1f71bf3cf9ca9370f00cd2204a23c96275f0a4b4786a1c507b38"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.warhead.BuriedBlastTest.xml",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "f00494cd317a6b3bb8f7e572a8bdb8b4d9b47339d2c2726b4458f1eecfd8e0f4"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.warhead.FragmentModelTest.xml",
+      "tests": 10,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "38e94b5f2b0a3f45a40cbae09d54aca228e8421c84b7c4c2a32ff2deb5412556"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.warhead.FuelFiresCodecTest.xml",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "acd9f31f6118e04715c5e2627a948954fb873b10c3362da226900e7ff56c0b51"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.warhead.MaterialPathTest.xml",
+      "tests": 2,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "a650805974b6621af5ff8c0c0d142ad8bbf566dd5c5b74e4c25a73272bd0cfa6"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.warhead.PenetrationTest.xml",
+      "tests": 8,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "12b93989e146a8238fd2cfc77cbd758440af83dbbe49aea3291783efe6bf4ab0"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.work.ImpactTimingTest.xml",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "babcdfc881380b11606cb509fb1d5721254b248faf8c28e56f44c53670d94766"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.work.UnitQueueTest.xml",
+      "tests": 11,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "db33d83d5f94ca002ccee133a7cfd0de5e2e58f06c7037104e5b574d757e4ab6"
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.work.WorkSchedulerTest.xml",
+      "tests": 12,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0,
+      "sha256": "9cd579abd091c68b00bd38b4e480d18718c0e23acdabaf4e2c7a194e8f772cfb"
+    }
+  ]
+}

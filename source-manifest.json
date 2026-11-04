@@ -1,0 +1,14 @@
+{
+  "source": "c444cd5ef9ae41cacf4e7aa9a928977f1b9ceabb",
+  "base": "f9d9f209c7c3f996ffc460d1ddac6e42d399a2f3",
+  "tree": "55ec886f657c003bc2257465809c2b66c63004c5",
+  "own_commits": [
+    "3978c8e3a827fd33de83940bf03ebb56b81e3bb1",
+    "3159f541d264eaf286a6e071108c3e54e246f9c5",
+    "8ca93cda2fcf74ed8a04cc7db81177c827e4bfbc",
+    "c444cd5ef9ae41cacf4e7aa9a928977f1b9ceabb"
+  ],
+  "fixture_sha256": "988544f0447dd79d70d0a093c4ec692272254a9c0f72b3c8aa865698f66601d9",
+  "jobs_remaining": 0,
+  "gpu_or_runtime_resources": 0
+}
