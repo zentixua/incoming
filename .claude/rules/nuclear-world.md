@@ -459,3 +459,9 @@ paths:
   owners. Invalidate their inbox generation so late callbacks release reservations instead of requiring an absent
   todo collector; the scar owner can request fresh windows. `nuke_near_handoff_reads` proves actual nonempty plan
   transfer, a still-charged outstanding read, and release/rejection of its late payload.
+
+- Far snapshot read-ahead follows the admitted planning frontier (at most worker queue capacity centres ahead).
+  Pin the current unadmitted window across cache trimming, transfer its protection to the admitted Task/Grid, and
+  rewind the read cursor to refill missing demand. Bounding only outstanding reads permits a zone-wide sweep to
+  evict the first needed window and leave every solver idle. `nuke_disk_frontier` uses real world/source-region and
+  snapshot-page reads with a tiny cache policy and shared admission pressure; complete material output must match.
