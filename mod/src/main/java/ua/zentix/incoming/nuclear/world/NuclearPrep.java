@@ -498,6 +498,7 @@ public final class NuclearPrep {
             bytes += world.retainedRuinBytes();
             cold |= world.ledgers.pending();
         }
+        RuinWorkers.configureHeight(height);
         // Unknown old ownership has priority over new preparation/removals. Import uses only the
         // already-resident counter above and takes its reservation before decoding anything.
         if (cold) return Math.max(bytes, PLANS_CAP);
