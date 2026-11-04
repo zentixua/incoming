@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.nuclear.world.RuinWorkerAdmissionTest" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-11-04T14:00:57.075Z" hostname="zentixua-pc" time="0.01">
+  <properties/>
+  <testcase name="oneToGrowthAndUnpressuredControlUseTheSameFactory()" classname="ua.zentix.incoming.nuclear.world.RuinWorkerAdmissionTest" time="0.002"/>
+  <testcase name="cancellationAndShutdownWakeHeightWaitersWithoutLendingTheirLiveBuffers()" classname="ua.zentix.incoming.nuclear.world.RuinWorkerAdmissionTest" time="0.0"/>
+  <testcase name="factoryResultDiscardedByShutdownReleasesItsUnstartedWorkspace()" classname="ua.zentix.incoming.nuclear.world.RuinWorkerAdmissionTest" time="0.001"/>
+  <testcase name="shutdownSurvivorKeepsWorkspaceWhileANewLifetimeWaits()" classname="ua.zentix.incoming.nuclear.world.RuinWorkerAdmissionTest" time="0.0"/>
+  <testcase name="tallerDimensionWaitsForDeltaInsteadOfRetroactivelyOverchargingLiveThreads()" classname="ua.zentix.incoming.nuclear.world.RuinWorkerAdmissionTest" time="0.002"/>
+  <testcase name="expiredPoolAndCapturedCallbacksRebirthOnlyWithinCurrentSharedRoom()" classname="ua.zentix.incoming.nuclear.world.RuinWorkerAdmissionTest" time="0.003"/>
+  <testcase name="stopBetweenDequeueAndHeightGateCannotEnterAnUnfundedCallable()" classname="ua.zentix.incoming.nuclear.world.RuinWorkerAdmissionTest" time="0.002"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>
