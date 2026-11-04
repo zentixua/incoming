@@ -55,8 +55,9 @@ existing nuclear second-key and warning cancellation rules apply.
 | `/incoming give [players]` | give a Strike Designator (operators only) |
 | `/incoming radiation [player]`, `radiation clear [players]` | radiation dose, clear radiation (operators only) |
 
-For ordinary players, Grad rockets already in flight and released bombs continue to their targets; nuclear orders
-cannot be recalled, including those waiting for a second key.
+For ordinary players, Grad rockets already in flight and released bombs continue to their targets. Unpaid nuclear
+preparation can be cancelled with Abort or `/incoming clear`; accepted nuclear orders cannot be recalled by an ordinary
+launching player, including while they wait for a second key.
 
 ## Power grid
 
