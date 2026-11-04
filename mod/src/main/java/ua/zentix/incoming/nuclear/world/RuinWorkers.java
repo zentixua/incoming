@@ -528,7 +528,11 @@ public final class RuinWorkers {
             Runnable exit = onExit;
             onExit = null;
             try { if (exit != null) exit.run(); }
-            finally {
+            catch (RuntimeException | Error failure) {
+                // FutureTask.done must return normally to clear its private callable, and shutdown
+                // must continue releasing the rest of its drained queue after one observer fails.
+                Incoming.LOG.error("Ruins: task exit ownership callback failed", failure);
+            } finally {
                 counts.decrementAndGet(priority);
                 counted.set(false);
             }

@@ -166,6 +166,56 @@ public final class RuinWorkerAdmissionGameTests {
         });
     }
 
+    @GameTest(template = "range", timeoutTicks = 200, batch = "nuke_worker_exit_failure", skyAccess = true)
+    public static void failedObserverCannotAbandonTheRestOfShutdownQueue(GameTestHelper h) {
+        StrikeGameTests.gameSpeed(h);
+        RuinWorkers.shutdown();
+        int configured = IncomingConfig.SERVER.nukeRuinThreads.get();
+        IncomingConfig.SERVER.nukeRuinThreads.set(1);
+        long baseline = RuinInputs.detachedBytes();
+        var release = new CountDownLatch(1);
+        var started = new CountDownLatch(1);
+        StrikeGameTests.afterTest(h, () -> {
+            release.countDown();
+            RuinWorkers.shutdown();
+            IncomingConfig.SERVER.nukeRuinThreads.set(configured);
+        });
+        var firstInputs = new RuinInputs();
+        var firstExits = new AtomicInteger();
+        Future<?> first = RuinWorkers.submit(() -> { started.countDown(); release.await(); return null; },
+                RuinWorkers.Priority.SEEN, firstInputs, firstExits::incrementAndGet);
+        h.onEachTick(() -> {
+            if (started.getCount() != 0) return;
+            var failedInputs = new RuinInputs();
+            var lastInputs = new RuinInputs();
+            var failedExits = new AtomicInteger();
+            var lastExits = new AtomicInteger();
+            Future<?> failed = RuinWorkers.submit(() -> { throw new AssertionError("shutdown failure probe ran"); },
+                    RuinWorkers.Priority.FAR, failedInputs, () -> {
+                        failedExits.incrementAndGet();
+                        throw new IllegalStateException("controlled shutdown ownership observer failure");
+                    });
+            Future<?> last = RuinWorkers.submit(() -> { throw new AssertionError("later shutdown probe ran"); },
+                    RuinWorkers.Priority.FAR, lastInputs, lastExits::incrementAndGet);
+            firstInputs.detach(1122);
+            failedInputs.detach(2233);
+            lastInputs.detach(3344);
+            h.assertTrue(RuinInputs.detachedBytes() == baseline + 6699, "fixture did not retain all three input owners");
+            RuntimeException escaped = null;
+            boolean stopped = false;
+            try { stopped = RuinWorkers.shutdown(); } catch (RuntimeException failure) { escaped = failure; }
+            h.assertTrue(failed.isCancelled() && last.isCancelled() && RuinWorkers.finished(first)
+                    && RuinWorkers.finished(failed) && RuinWorkers.finished(last), "shutdown abandoned a drained future");
+            h.assertTrue(stopped && escaped == null, "observer failure prevented complete shutdown");
+            h.assertTrue(firstExits.get() == 1 && failedExits.get() == 1 && lastExits.get() == 1,
+                    "shutdown observer failure skipped or duplicated another exit");
+            h.assertTrue(RuinInputs.detachedBytes() == baseline && RuinWorkers.inFlight() == 0,
+                    "shutdown observer failure retained input or task ownership");
+            h.assertTrue(RuinWorkers.shutdown(), "repeat shutdown changed terminal state");
+            h.succeed();
+        });
+    }
+
     private static Object fieldValue(java.lang.reflect.Field field) {
         try { return field.get(null); }
         catch (IllegalAccessException failure) { throw new AssertionError(failure); }
