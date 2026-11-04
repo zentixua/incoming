@@ -119,7 +119,11 @@ public final class NuclearReviewGameTests {
         var weather = (net.minecraft.world.level.storage.ServerLevelData) level.getLevelData();
         int clearTime = weather.getClearWeatherTime(), rainTime = weather.getRainTime(), thunderTime = weather.getThunderTime();
         boolean raining = weather.isRaining(), thundering = weather.isThundering();
-        float rain = level.getRainLevel(1), thunder = level.getThunderLevel(1);
+        float rain = level.getRainLevel(1);
+        // getThunderLevel includes the rain factor; sample raw thunder at unit rain, without advancing a tick.
+        level.setRainLevel(1);
+        float thunder = level.getThunderLevel(1);
+        level.setRainLevel(rain);
         StrikeGameTests.afterTest(h, () -> {
             level.setWeatherParameters(clearTime, rainTime, raining, thundering);
             weather.setThunderTime(thunderTime);
