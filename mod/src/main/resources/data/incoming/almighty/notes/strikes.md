@@ -17,7 +17,8 @@ Incoming (https://github.com/zentixua/incoming): strikes by Shahed and Lancet dr
   preparation requests are bounded; a refused command has not launched. The operator-only now form remains immediate.
   Nuclear carriers select their usual aim error once before preparation and keep it at launch. Plans cover the nominal
   arrival for fixed point/ground orders; entity/craft targeting, earlier contacts, terrain edits or restart can require
-  fresh work at the actual physical site.
+  fresh work at the actual physical site. The ordinary nuke command selects an ICBM, not a nuclear missile or B-2.
+  A nuclear B-2 bomb detonates on contact; only the conventional bunker-buster follows the drilling path.
 - Fixed launcher (block incoming:fixed_launcher): «incoming launcher x y z [mission <weapon> <count> <spread> x z
   [via …] | load N | fire | clear | owner <player>|none]»; the mission target is x z or x y z, as in salvo. A redstone
   signal at the block does the same as fire.

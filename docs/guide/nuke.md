@@ -20,7 +20,7 @@ By default only operators can.
    numeric field in whole kt and suggested values, up to the world’s configured maximum (at most 15 kt); for the ICBM and the missile a ground burst
    (the default, with a crater and fallout trail) or an air burst (wider destruction). The nuclear bomb detonates on impact; the conventional bunker-buster penetrates before exploding.
 3. LMB in the binoculars or FIRE opens the exact target, yield and effect estimates. Select **Prepare target**;
-   the server resolves the surface and prepares the hardest-hit area, showing actual progress. Cancel or close freely.
+   the server resolves the surface and prepares destruction for this order, showing actual progress. Cancel or close freely.
 4. When **Ready** appears, release the button, then hold the launch button for three seconds, or focus it with Tab
    and hold Space or Enter. Releasing, moving off the button or losing focus cancels the hold. Holding during preparation
    never launches automatically. On small screens, scroll or use Page Up/Down to read the details.
@@ -37,7 +37,8 @@ Inspection and preparation reserve no ammunition and start no alarm. Payment and
 only after confirmation. A changed target, weather, limit or configuration requires a new review. Preparation stays
 alive while the review is open; closing, death, disconnect, dimension change, abort or one minute without contact cancels
 unlaunched preparation. A confirmed order waiting for a second key or carrier warning keeps its preparation itself.
-The configured flight duration (90 seconds by default) starts at launch, after preparation. Ordinary nuclear commands
+The configured ICBM flight duration (90 seconds by default) starts at launch, after preparation. A required second key
+or carrier warning can add waiting before launch. Ordinary nuclear commands
 prepare unpaid and then launch once ready, because the command itself is the instruction to fire. Operator `nuke now`
 remains immediate diagnostic behavior. Carrier preparation includes its usual randomly selected aim offset; launch keeps that same offset.
 Plans cover the normal arrival for a fixed point or map-ground order. Entity/craft targeting, an earlier collision,
@@ -117,7 +118,7 @@ is saved with the world, so leaving and returning does not erase it. Leaves and 
 A surface-burst crater supplies its rim from the ground actually excavated; remaining ejecta and thermally transformed material stay accounted for.
 
 If the shared nuclear working-memory reservation is full, further material removal waits while already moving
-material can settle. Pending material and support checks survive a restart. Completed movement and crater
+material can settle. Pending material and support checks survive a normal world save and reload. Completed movement and crater
 checkpoints are compacted into material totals; container contents are retained. Saving can pause material
 movement until its file is written. An old active journal too large for the shared memory limit stays preserved
 on disk and paused; it is never replaced with an empty aftermath.
