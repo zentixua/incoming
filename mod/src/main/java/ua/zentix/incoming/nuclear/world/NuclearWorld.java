@@ -412,7 +412,12 @@ public final class NuclearWorld {
     /** @param clock server-tick budget, shared across dimensions (already started) */
     public void tick(ServerLevel level, WorkClock clock) {
         get(level);
-        if (!matter.loaded() || !craterMatter.loaded() || !ruinProgress.loaded()) return;
+        if (!matter.loaded() || !craterMatter.loaded() || !ruinProgress.loaded()) {
+            // Already-owned transport must be able to free room for another cold ledger's
+            // decoder. New removals/restoration still wait for every authoritative store.
+            if (matter.loaded()) matter.work(level, clock);
+            return;
+        }
         if (!restored && !craterMatter.writable()) return;
         long now = level.getGameTime();
         NuclearEvents events = NuclearEvents.get(level);

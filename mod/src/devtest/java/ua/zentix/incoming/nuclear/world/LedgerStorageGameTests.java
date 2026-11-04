@@ -144,6 +144,101 @@ public final class LedgerStorageGameTests {
                     .getCompound(0).getCompound("contents").equals(cargo), "Legacy import lost cargo");
         });
     }
+    @GameTest(template = "range", batch = "nuke_ledger_drain", timeoutTicks = 1200, skyAccess = true)
+    public static void loadedTransportFreesColdImportWorkspace(GameTestHelper h) throws Exception {
+        StrikeGameTests.gameSpeed(h);
+        var level = h.getLevel();
+        var world = NuclearWorld.get(level);
+        var storage = level.getDataStorage();
+        var oldFolder = storage.dataFolder;
+        var oldMatter = storage.cache.get("incoming_ruin_matter");
+        var oldProgress = storage.cache.get("incoming_ruin_settle");
+        var dir = Files.createTempDirectory(oldFolder.toPath(), "ledger-drain-");
+        var source = new RuinProgress();
+        var root = new CompoundTag(); root.put("data", source.save(new CompoundTag(), level.registryAccess()));
+        var file = dir.resolve("incoming_ruin_settle.dat");
+        NbtIo.writeCompressed(root, file);
+        long required = LedgerScan.measure(file, "incoming_ruin_settle", java.util.Set.of(), NuclearPrep.PLANS_CAP).owned();
+        var resident = new RuinMatter();
+        var pieces = new ArrayList<RuinMatter.Piece>();
+        for (int i = 0; i < 512; i++) {
+            var pos = h.absolutePos(new BlockPos(8 + i % 24, 3, 8 + i / 24));
+            pieces.add(new RuinMatter.Piece(pos, Blocks.STONE.defaultBlockState(), null, Vec3.ZERO, level.getGameTime() - 20));
+        }
+        resident.release(pieces);
+        folder(storage, dir.toFile());
+        storage.set("incoming_ruin_matter", resident);
+        storage.cache.remove("incoming_ruin_settle");
+        // Close admission before any poll can finish the small scan; retain a fixed reservation
+        // thereafter. Only real transport progress may supply the missing decoder workspace.
+        world.materialReservation += NuclearPrep.PLANS_CAP;
+        NuclearWorld.get(level);
+        long residentBytes = NuclearPrep.residentMemory(level) - NuclearPrep.PLANS_CAP;
+        long reserve = NuclearPrep.PLANS_CAP - residentBytes - required + (64L << 10);
+        world.materialReservation += reserve - NuclearPrep.PLANS_CAP;
+        h.assertTrue(reserve > 0, "Fixture has no admission headroom");
+        StrikeGameTests.afterTest(h, () -> {
+            world.materialReservation -= reserve;
+            folder(storage, oldFolder);
+            storage.set("incoming_ruin_matter", oldMatter);
+            storage.set("incoming_ruin_settle", oldProgress);
+            NuclearWorld.get(level);
+        });
+        var cold = RuinProgress.get(level);
+        h.assertFalse(cold.loaded(), "Cold fixture decoded on caller");
+        h.assertTrue(RuinMemory.reserve(level, 1) == null, "New removals admitted behind unknown ownership");
+        try (var progress = RuinMemory.reserveProgress(level, 32L << 10)) {
+            h.assertTrue(progress != null, "Resident support cannot reserve bounded progress behind cold ownership");
+        }
+        h.succeedWhen(() -> {
+            var clock = WorkClock.counting(1); clock.start(64);
+            world.tick(level, clock);
+            h.assertTrue(resident.deposited() > 0, "Loaded transport cannot drain behind a cold ledger");
+            h.assertTrue(RuinProgress.get(level).loaded(), "Transport did not free cold decoder workspace");
+            h.assertTrue(NuclearPrep.residentMemory(level) <= NuclearPrep.PLANS_CAP, "Cold import exceeded capacity");
+        });
+    }
+
+    @GameTest(template = "pad", batch = "nuke_ledger_totals", timeoutTicks = 200, skyAccess = true)
+    public static void retiredCraterAddsToSavedTotalsInEitherFieldOrder(GameTestHelper h) throws Exception {
+        var lookup = h.getLevel().registryAccess();
+        var dir = Files.createTempDirectory(h.getLevel().getDataStorage().dataFolder.toPath(), "ledger-totals-");
+        for (boolean settledFirst : new boolean[]{false, true}) {
+            var file = dir.resolve("order-" + settledFirst + ".dat");
+            try (var out = new java.io.DataOutputStream(new java.util.zip.GZIPOutputStream(Files.newOutputStream(file)))) {
+                var writer = new LedgerWriter(out); writer.compound(""); writer.compound("data");
+                if (settledFirst) writeSettledFixture(writer);
+                writer.list("passes", 1);
+                var pass = new CompoundTag(); pass.putInt("event", 7);
+                writer.fields(pass); writer.list("materials", 1);
+                writer.row(craterTotalsFixture(10)); writer.end();
+                if (!settledFirst) writeSettledFixture(writer);
+                writer.end(); writer.end();
+            }
+            var measured = LedgerScan.measure(file, "incoming_crater_matter", java.util.Set.of(), NuclearPrep.PLANS_CAP);
+            var restored = (CraterMatter) LedgerReader.read(file, "incoming_crater_matter", lookup, measured.row(), java.util.Set.of());
+            var again = CraterMatter.load(restored.save(new CompoundTag(), lookup), lookup);
+            double[] expected = {17, 45900, 0, 0, 17, 45900, 0, 0};
+            h.assertTrue(java.util.Arrays.equals(restored.settled(Blocks.STONE.defaultBlockState()), expected),
+                    "Retired totals overwritten, settledFirst=" + settledFirst);
+            h.assertTrue(java.util.Arrays.equals(again.settled(Blocks.STONE.defaultBlockState()), expected),
+                    "Second save/read changed merged totals");
+        }
+        h.succeed();
+    }
+
+    private static CompoundTag craterTotalsFixture(int count) {
+        var row = new CompoundTag(); row.put("state", net.minecraft.nbt.NbtUtils.writeBlockState(Blocks.STONE.defaultBlockState()));
+        row.putDouble("v0", count); row.putDouble("v1", count * 2700);
+        row.putDouble("v4", count); row.putDouble("v5", count * 2700);
+        row.putLong("available", count);
+        return row;
+    }
+
+    private static void writeSettledFixture(LedgerWriter writer) throws java.io.IOException {
+        writer.list("settled", 1); writer.row(craterTotalsFixture(7));
+    }
+
     @GameTest(template = "pad", batch = "nuke_ledger_legacy_crater", timeoutTicks = 1200, skyAccess = true)
     public static void retiredLegacyCraterSkipsLargeArraysBeforeAllocation(GameTestHelper h) throws Exception {
         StrikeGameTests.gameSpeed(h);

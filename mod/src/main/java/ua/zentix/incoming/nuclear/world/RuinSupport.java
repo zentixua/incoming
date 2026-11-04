@@ -79,7 +79,7 @@ final class RuinSupport {
                 }
                 RuinMatter.Piece piece = RuinMatter.capture(level, at, state, d, scorch);
                 if (piece != null) {
-                    try (var reservation = RuinMemory.reserve(level, RuinMatter.removalBytes(piece))) {
+                    try (var reservation = RuinMemory.reserveProgress(level, RuinMatter.removalBytes(piece))) {
                         if (reservation == null) { waiting = true; return false; }
                         ownRemoval = at;
                         try { ColumnScar.replace(level, at, state, Blocks.AIR.defaultBlockState()); }

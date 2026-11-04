@@ -383,7 +383,7 @@ public final class RuinMatter extends LedgerData {
                 if (d != null) {
                     // A graph step adds at most sixteen cells and their six neighbours. Refusal
                     // keeps the saved seed/provenance intact; transport can still free capacity.
-                    try (var reservation = RuinMemory.reserve(level, 32L << 10)) {
+                    try (var reservation = RuinMemory.reserveProgress(level, 32L << 10)) {
                         if (reservation == null) waiting = true;
                         else {
                             if (search == null) search = new RuinSupport(seed);

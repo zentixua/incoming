@@ -146,7 +146,10 @@ public final class CraterMatter extends LedgerData {
             double[] balance = new double[8];
             for (int j = 0; j < balance.length; j++) balance[j] = row.getDouble("v" + j);
             validate(state, balance);
-            result.settled.put(state, balance);
+            // Streaming import can already contain retired passes of the same material.
+            // Saved aggregates add to those totals, regardless of compound field order.
+            double[] total = result.settled.computeIfAbsent(state, ignored -> new double[8]);
+            for (int j = 0; j < total.length; j++) total[j] += balance[j];
         }
         return result;
     }
