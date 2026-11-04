@@ -414,16 +414,41 @@ public final class RuinPlan {
         return copy;
     }
 
+    /** Known source, decoded arrays and palette scratch; registry codec scratch is not a whole-heap bound. */
+    static long restorePublicationBytes(net.minecraft.nbt.CompoundTag tag) {
+        return tag.sizeInBytes() + storedBytes(tag)
+                + 512L + 96L * tag.getList("palette", net.minecraft.nbt.Tag.TAG_COMPOUND).size();
+    }
+
+    /** The same field law as bytes(), evaluated before allocating decoded arrays. */
+    static long storedBytes(net.minecraft.nbt.CompoundTag tag) {
+        int sections = tag.getInt("sections");
+        if (sections < 0 || sections > 256) throw new IllegalArgumentException("Invalid ruin plan sections");
+        return sourceBytes(arrayLength(tag, "cells"), arrayLength(tag, "old"), arrayLength(tag, "states"),
+                arrayLength(tag, "fires"), arrayLength(tag, "heights"), arrayLength(tag, "light"), sections, 0, 0,
+                arrayLength(tag, "outside"), arrayLength(tag, "outside_states"), arrayLength(tag, "fluids"),
+                arrayLength(tag, "biomes"), arrayLength(tag, "flash"), arrayLength(tag, "blown"),
+                arrayLength(tag, "material"), Math.max(1, (sections + 63) / 64));
+    }
+
+    private static int arrayLength(net.minecraft.nbt.CompoundTag tag, String key) {
+        var value = tag.get(key);
+        if (value instanceof net.minecraft.nbt.IntArrayTag array) return array.size();
+        if (value instanceof net.minecraft.nbt.LongArrayTag array) return array.size();
+        return value instanceof net.minecraft.nbt.ByteArrayTag array ? array.size() : 0;
+    }
+
     /** Server thread: rebuild process-local hashes. Section fast checks fall back to the normal column rescan. */
     static RuinPlan restore(net.minecraft.nbt.CompoundTag tag, RuinContext ctx) {
         if (tag.getInt("version") != STORAGE_VERSION || !tag.contains("material", net.minecraft.nbt.Tag.TAG_LONG_ARRAY))
             throw new IllegalArgumentException("Incomplete or unknown ruin plan version");
+        int sections = tag.getInt("sections");
+        if (sections < 0 || sections > 256 || arrayLength(tag, "cells") != arrayLength(tag, "old")
+                || arrayLength(tag, "states") > MAX_STATES)
+            throw new IllegalArgumentException("Invalid ruin plan dimensions");
         var palette = RuinPalette.load(tag.getList("palette", net.minecraft.nbt.Tag.TAG_COMPOUND));
         int[] cells = tag.getIntArray("cells");
         BlockState[] states = palette.states(tag.getIntArray("states")), olds = palette.states(tag.getIntArray("old"));
-        int sections = tag.getInt("sections");
-        if (sections < 0 || sections > 256 || cells.length != olds.length || states.length > MAX_STATES)
-            throw new IllegalArgumentException("Invalid ruin plan dimensions");
         long[] hashes = new long[sections];
         int previous = -1;
         for (int i = 0; i < cells.length; i++) {

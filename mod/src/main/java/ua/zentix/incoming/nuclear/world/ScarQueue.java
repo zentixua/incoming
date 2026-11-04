@@ -1193,7 +1193,12 @@ public final class ScarQueue {
         Detonation d = job.events.get(job.event);
         RuinContext ctx = NuclearWorld.get(level).ruins(level, d, now);
         boolean ready = hasPlan(d.id(), job.chunk);
+        if (!ready && ctx.restoredPlans != null) {
+            ready = ctx.restoredPlans.get(job.chunk) != null || RetainedPlans.waiting(ctx.restoredPlans, job.chunk);
+        }
         if (chunk == null) {
+            // Below FULL can precede ChunkEvent.Unload; release only unadmitted assembly.
+            ctx.unpinWindow(job.chunk);
             // below full loading (view edge): ruin when full
             waited(job, NukeDiag.Wait.BELOW_FULL);
             waitNeighbours(level, job, now, 0);

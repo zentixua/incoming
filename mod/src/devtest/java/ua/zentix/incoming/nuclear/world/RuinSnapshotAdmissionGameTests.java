@@ -154,11 +154,22 @@ public final class RuinSnapshotAdmissionGameTests {
         var ordinary = DiskShots.parse(level, reference.centre(), net.minecraft.world.level.chunk.storage.ChunkSerializer.write(level,
                 level.getChunkSource().getChunkNow(reference.centre().x, reference.centre().z)));
         ChunkShot ruined = ChunkShot.fromDisk(ordinary, new RuinContext.Applied(plan, new short[256]), null, false);
-        h.assertTrue(ruined.bytes >= plan.bytes() + ruined.sections * 4096L * 8, "Ruined lazy/embedded-plan arrays were not prepaid");
+        h.assertTrue(ruined.bytes >= plan.bytes() + touchedSections(plan, ruined.sections) * 4096L * 8, "Ruined lazy/embedded-plan arrays were not prepaid");
         charged = ruined.bytes;
-        for (int i = 0; i < ruined.sections; i++) ruined.props(i, Blast.SERVER);
+        for (int i = 0; i < ruined.sections; i++) {
+            var props = ruined.props(i, Blast.SERVER);
+            for (int cell = 0; cell < 4096; cell++) h.assertTrue(
+                    props.get(cell) == Blast.props(ruined.get(cell & 15, ruined.minY + i * 16 + (cell >> 8), (cell >> 4) & 15)),
+                    "Section property cache changed reconstructed original block");
+        }
         h.assertTrue(ruined.bytes == charged, "Lazy ruined properties escaped their prepaid charge");
         h.succeed();
+    }
+
+    private static int touchedSections(RuinPlan plan, int count) {
+        int touched = 0;
+        for (int i = 0; i < count; i++) if (plan.touches(i)) touched++;
+        return touched;
     }
 
     @GameTest(template = "range", batch = "nuke_snapshot_archive", timeoutTicks = 400, skyAccess = true)
@@ -175,7 +186,7 @@ public final class RuinSnapshotAdmissionGameTests {
         var current = new DiskShots.Read(cold, parsed.minY(), parsed.states(), parsed.heights(), parsed.unprimed(), null, 0, ctx.d.id());
         var old = ChunkShot.fromDisk(current.primed(Blast.SERVER), new RuinContext.Applied(plan, new short[256]), null, false);
         var stored = old.saved().encode(); ChunkShot expected = ChunkShot.restore(stored, ctx);
-        h.assertTrue(expected.bytes >= plan.detached().bytes() + expected.sections * 4096L * 8, "Restored old plan is unowned");
+        h.assertTrue(expected.bytes >= plan.detached().bytes() + touchedSections(plan, expected.sections) * 4096L * 8, "Restored old plan is unowned");
         var other = NuclearWorld.get(level.getServer().getLevel(Level.NETHER)); long previous = other.materialReservation;
         try {
             pressure(level, other, 0);
@@ -227,7 +238,7 @@ public final class RuinSnapshotAdmissionGameTests {
     }
 
     @SuppressWarnings("unchecked")
-    private static DiskShots.Read largeRead(ServerLevel level, ChunkPos pos) {
+    static DiskShots.Read largeRead(ServerLevel level, ChunkPos pos) {
         var states = (PalettedContainer<BlockState>[]) new PalettedContainer<?>[level.getSectionsCount()];
         for (int section = 0; section < states.length; section++) {
             var palette = new PalettedContainer<>(Block.BLOCK_STATE_REGISTRY, Blocks.AIR.defaultBlockState(), PalettedContainer.Strategy.SECTION_STATES);

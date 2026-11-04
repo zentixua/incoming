@@ -50,6 +50,9 @@ public final class NuclearWorld {
     private final MobFallout mobFallout = new MobFallout();
     private final LateExposure late = new LateExposure();
     private final BlastFront blast = new BlastFront();
+    private boolean reclaimTurn;
+    private int reclaimNext;
+    final RuinContext.Assembly assembly = new RuinContext.Assembly();
     private long lastFrontNanos, lastPulseNanos, lastScorchNanos, lastCraterNanos, lastScarNanos, lastPrepNanos, lastFalloutNanos, lastSettleNanos;
     /**
      * Chunks loaded since with flash-layer fire from forgotten detonation (no ruins coming): schedule fire ticks on world tick
@@ -433,6 +436,37 @@ public final class NuclearWorld {
         }
     }
 
+    /** Bounded completion/cache service survives preparation expiry and rotates across active owners. */
+    private void reclaim(ServerLevel level, WorkClock clock) {
+        int slots = 2 * ruins.size() + 1;
+        for (int checked = 0; checked < slots && clock.canStart(); checked++) {
+            int slot = Math.floorMod(reclaimNext++, slots);
+            if (slot == 0) {
+                if (prep.reclaim(level, clock)) return;
+                continue;
+            }
+            var contexts = ruins.values().iterator();
+            int context = (slot - 1) / 2;
+            for (int i = 0; i < context; i++) contexts.next();
+            RuinContext ctx = contexts.next();
+            // A ready payload may refuse publication. Collection and reclamation need separate
+            // turns so that refusal cannot suppress the operation that makes room for it.
+            if ((slot & 1) != 0) {
+                if (!ctx.readyWindowReads()) continue;
+                long began = clock.begin();
+                try { ctx.drainWindowReads(level); }
+                finally { clock.end(began); }
+                return;
+            }
+            if (ctx.shotBytes() > (64L << 20)
+                    || NuclearPrep.PLANS_CAP - NuclearPrep.residentMemory(level) < RuinMemory.TRANSITION_ROOM) {
+                if (ctx.shotCount() == 0) continue;
+                ctx.trimShots(8L << 20, clock, 16);
+                return;
+            }
+        }
+    }
+
     /** @param clock server-tick budget, shared across dimensions (already started) */
     public void tick(ServerLevel level, WorkClock clock) {
         get(level);
@@ -493,6 +527,10 @@ public final class NuclearWorld {
         // At capacity, existing material must progress before new removals can consume the
         // lane. One bounded batch avoids starving visible ruins while breaking that dependency.
         matter = RuinMatter.get(level);
+        // Ready input/results and spill receipts can free the memory these consumers need.
+        // They cannot wait behind an arbitrarily long material queue. Alternate the first
+        // opportunity while both owners have work, without granting another clock allowance.
+        if (!matter.busy() || (reclaimTurn = !reclaimTurn)) reclaim(level, clock);
         matter.work(level, clock, 1);
         long craterStart = System.nanoTime();
         digCraters(level, events, clock);

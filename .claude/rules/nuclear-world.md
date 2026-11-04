@@ -488,3 +488,31 @@ paths:
   tree-fall flags; close blocks late publications. Fresh diagnostic context owners close in `finally`; shared registered
   contexts keep their world lifecycle. GC never refunds scalar cache ownership. These field-law estimates are not a
   complete JVM-heap bound; raw chunk upgrading/codec allocations precede detached publication.
+
+- Completed preparation inputs/results and snapshot reclamation get a bounded service turn alternating with
+  material, under the same nuclear clock after pulse/front work. This service also visits surviving contexts
+  after preparation expires. Deferred window demands keep their queue keys; one assembling window is protected
+  server-wide, with visible work able to preempt lower priority assembly. Admitted tasks retain their windows
+  independently. Releasing/cancelling/preempting an assembly must release its token; pending I/O remains charged
+  until callbacks finish. This is finite-workload progress when the complete working set fits, not a guarantee
+  under arbitrary arrivals or an unfundable authoritative ledger (`nuke_sustained_progress`, `nuke_assembly`).
+- Demand retrieval of an existing plan uses resident headroom; speculative prefetch keeps the preparation reserve.
+  Retain the completed page's source/decode charge until the decoded plan is installed in its counted owner.
+  At preparation retirement, transfer retained plans to the shared context before dropping the preparation owner;
+  cancel unclaimed FAR/submitted tasks explicitly, retaining running input/result charges through actual exit.
+  Scar demand must consult the transferred/restored map before submitting another solver
+  (`nuke_demand_*`, `nuke_completion_retirement`).
+- Ruined snapshots need per-position property arrays only in sections touched by the old delta (or a global
+  palette). Other sections keep palette properties, with the same fire/flowing-water-to-air reconstruction.
+  Match the pre-allocation estimate to this representation; untouched empty sections must not reserve 4096
+  references apiece (`nuke_snapshot_lazy`, `nuke_snapshot_archive`). A funded live solver reuses its workspace;
+  only cold/taller pools need additional startup room. Cold source reads still reserve their publication slot.
+
+- Collection and trimming have independent maintenance turns. A ready read can still refuse publication;
+  it must not suppress reclamation in its own or another context (`nuke_reclaim_publication`,
+  `nuke_reclaim_other_owner`). Queue rotation itself needs its existing page-growth allowance in a
+  fixed-pressure fixture; do not mislabel an unfunded moving FIFO as collector starvation.
+- Explicit preparation unload, loss of FULL readiness, terminal failure and heap stop release abandoned
+  assembly claims independently of read/task collectors. Inspect unready todos before checking worker
+  admission, with a bounded skip pass: decoder saturation cannot prevent retiring a dead assembly head.
+  `nuke_near_assembly_*` keeps late callbacks and completes another loaded required centre.

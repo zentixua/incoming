@@ -170,8 +170,9 @@ final class ChunkShot {
         this.liveNormals = liveNormals;
         this.liveKnown = liveKnown;
         long size = 0;
-        for (PalettedContainer<BlockState> c : states) {
-            size += sectionBytes(c, ruined);
+        for (int i = 0; i < states.length; i++) {
+            PalettedContainer<BlockState> c = states[i];
+            size += sectionBytes(c, reconstructed(i));
             if (c != null) register(c);
         }
         int surfaceType = type(Heightmap.Types.WORLD_SURFACE), solidType = type(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES);
@@ -190,8 +191,8 @@ final class ChunkShot {
     }
 
     /** Known retained arrays, including Sec objects/references before their lazy publication. Not total object heap. */
-    static long sectionBytes(@Nullable PalettedContainer<BlockState> states, boolean ruined) {
-        long references = ruined || states != null && states.data.palette() instanceof GlobalPalette
+    static long sectionBytes(@Nullable PalettedContainer<BlockState> states, boolean reconstructed) {
+        long references = reconstructed || states != null && states.data.palette() instanceof GlobalPalette
                 ? 4096 : states == null ? 1 : states.data.palette().getSize();
         return (states == null ? 0 : states.getSerializedSize()) + 64 + 8 * references;
     }
@@ -434,10 +435,7 @@ final class ChunkShot {
                 BlockState o = old.oldState(lx, y, lz, minY);
                 if (o != null) return o;
             }
-            BlockState now = raw(lx, y, lz);
-            // ruin aftermath: fire and spread water occupy former air
-            if (now.getBlock() instanceof BaseFireBlock || !now.getFluidState().isEmpty() && !now.getFluidState().isSource()) return AIR;
-            return now;
+            return withoutAftermath(raw(lx, y, lz));
         }
         return raw(lx, y, lz);
     }
@@ -449,12 +447,22 @@ final class ChunkShot {
         return states[i] == null ? AIR : states[i].get(lx, y & 15, lz);
     }
 
+    private boolean reconstructed(int section) {
+        return ruined && old != null && old.touches(section);
+    }
+
+    private static BlockState withoutAftermath(BlockState state) {
+        // Ruin aftermath: fire and spread water occupy former air.
+        return state.getBlock() instanceof BaseFireBlock
+                || !state.getFluidState().isEmpty() && !state.getFluidState().isSource() ? AIR : state;
+    }
+
     /** Position properties of section {@code i} (index from world bottom). */
     Sec props(int i, Blast.PropsView view) {
         Sec p = props.get(i);
         if (p != null) return p;
         PalettedContainer<BlockState> c = states[i];
-        if (ruined || c != null && c.data.palette() instanceof GlobalPalette) {
+        if (reconstructed(i) || c != null && c.data.palette() instanceof GlobalPalette) {
             // by position: old plan blocks overlaid on section, or global palette (index in the whole registry)
             Blast.Props[] full = new Blast.Props[4096];
             int y0 = minY + (i << 4);
@@ -469,7 +477,10 @@ final class ChunkShot {
         } else {
             Palette<BlockState> palette = c.data.palette();
             Blast.Props[] local = new Blast.Props[palette.getSize()];
-            for (int k = 0; k < local.length; k++) local[k] = view.get(palette.valueFor(k));
+            for (int k = 0; k < local.length; k++) {
+                BlockState state = palette.valueFor(k);
+                local[k] = view.get(ruined ? withoutAftermath(state) : state);
+            }
             p = new Sec(c.data.storage(), local, null);
         }
         return props.compareAndSet(i, null, p) ? p : props.get(i);
