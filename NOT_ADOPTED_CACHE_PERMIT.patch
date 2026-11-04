@@ -1,0 +1,279 @@
+diff --git a/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinResults.java b/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinResults.java
+index 08e7aa470..d290562b9 100644
+--- a/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinResults.java
++++ b/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinResults.java
+@@ -2,12 +2,15 @@ package ua.zentix.incoming.nuclear.world;
+ 
+ import java.util.Objects;
+ import java.util.concurrent.Future;
++import java.util.concurrent.Callable;
+ import java.util.concurrent.atomic.AtomicLong;
+ import org.jetbrains.annotations.Nullable;
+ 
+ /** Numeric producer ownership between solver admission and an already-counted consumer. */
+ final class RuinResults {
+     private static final AtomicLong BYTES = new AtomicLong();
++    /** Scoped solver context only; restored/removed in finally, never a world-indexed registry. */
++    private static final ThreadLocal<Lease> PRODUCER = new ThreadLocal<>();
+     /** Fixed estimate for the lease, its future binding and the owner's map entry; no payload multiplier. */
+     static final long OWNER_BYTES = 128;
+ 
+@@ -18,29 +21,77 @@ final class RuinResults {
+     /** Server thread supplies free shared room, with existing result ownership already subtracted. */
+     @Nullable
+     static Lease tryReserve(long maxBytes, long room) {
+-        if (maxBytes < 0) throw new IllegalArgumentException("Negative result bound");
+-        if (maxBytes > Long.MAX_VALUE - OWNER_BYTES || room < maxBytes + OWNER_BYTES) return null;
+-        long amount = maxBytes + OWNER_BYTES;
++        return tryReserve(maxBytes, 0, room);
++    }
++
++    /** Plan and separately transferable fracture-cache output are reserved before either can be produced. */
++    @Nullable
++    static Lease tryReserve(long maxPlan, long maxFragments, long room) {
++        if (maxPlan < 0 || maxFragments < 0) throw new IllegalArgumentException("Negative result bound");
++        if (maxPlan > Long.MAX_VALUE - OWNER_BYTES || maxFragments > Long.MAX_VALUE - OWNER_BYTES - maxPlan) return null;
++        long amount = maxPlan + maxFragments + OWNER_BYTES;
++        if (room < amount) return null;
+         // Admission is server-thread-only. Asynchronous changes to this counter only release bytes.
+         long current;
+         do {
+             current = BYTES.get();
+             if (current > Long.MAX_VALUE - amount) return null;
+         } while (!BYTES.compareAndSet(current, current + amount));
+-        return new Lease(maxBytes, amount);
++        return new Lease(maxPlan, maxFragments, amount);
++    }
++
++    static <T> T producing(Lease lease, Callable<T> task) throws Exception {
++        Objects.requireNonNull(lease);
++        Objects.requireNonNull(task);
++        Lease previous = PRODUCER.get();
++        PRODUCER.set(lease);
++        try { return task.call(); }
++        finally {
++            if (previous == null) PRODUCER.remove();
++            else PRODUCER.set(previous);
++        }
++    }
++
++    @Nullable
++    static Lease currentProducer() { return PRODUCER.get(); }
++
++    /** Numeric cache ownership carved from a producer; neither context, payload nor world retained. */
++    static final class Cache {
++        private long charged;
++
++        private Cache(long charged) { this.charged = charged; }
++
++        synchronized long bytes() { return charged; }
++
++        synchronized void release() {
++            BYTES.addAndGet(-charged);
++            charged = 0;
++        }
+     }
+ 
+     static final class Lease {
+         private final long maximum;
+-        private long charged;
++        private long charged, fragments;
+         @Nullable private Future<?> future;
+         private boolean marked, empty, exited, cancelled, released;
+ 
+-        private Lease(long maximum, long charged) {
++        private Lease(long maximum, long fragments, long charged) {
+             this.maximum = maximum;
++            this.fragments = fragments;
+             this.charged = charged;
+         }
+ 
++        /** Transfer only after the context will own the cache; global bytes do not change at this seam. */
++        synchronized Cache splitCache(long bytes) {
++            if (bytes < 0) throw new IllegalArgumentException("Negative fracture bytes");
++            if (marked || exited || released || bytes > fragments)
++                throw new IllegalStateException("Fracture cache exceeds producer allowance or production ended");
++            Cache cache = new Cache(bytes);
++            fragments -= bytes;
++            charged -= bytes;
++            return cache;
++        }
++
+         /** Called inside the solver, before publishing its result into the Future. */
+         synchronized void markResult(RuinPlan plan) {
+             Objects.requireNonNull(plan);
+@@ -50,6 +101,7 @@ final class RuinResults {
+             // Attach before shrinking, so an invalid second owner cannot silently lose its reservation.
+             if (plan != RuinPlan.EMPTY) plan.attachResult(this);
+             marked = true;
++            fragments = 0;
+             empty = plan == RuinPlan.EMPTY;
+             changeCharge(actual + OWNER_BYTES);
+         }
+@@ -101,6 +153,7 @@ final class RuinResults {
+         private void release() {
+             if (released) return;
+             released = true;
++            fragments = 0;
+             future = null;
+             changeCharge(0);
+         }
+diff --git a/mod/src/test/java/ua/zentix/incoming/nuclear/world/RuinResultCacheTest.java b/mod/src/test/java/ua/zentix/incoming/nuclear/world/RuinResultCacheTest.java
+new file mode 100644
+index 000000000..6f7918edd
+--- /dev/null
++++ b/mod/src/test/java/ua/zentix/incoming/nuclear/world/RuinResultCacheTest.java
+@@ -0,0 +1,138 @@
++package ua.zentix.incoming.nuclear.world;
++
++import java.util.ArrayList;
++import java.util.concurrent.CompletableFuture;
++import java.util.concurrent.CancellationException;
++import net.minecraft.world.level.block.state.BlockState;
++import org.junit.jupiter.api.AfterEach;
++import org.junit.jupiter.api.Test;
++import static org.junit.jupiter.api.Assertions.*;
++
++class RuinResultCacheTest {
++    private final long baseline = RuinResults.bytes();
++    private final ArrayList<RuinResults.Lease> leases = new ArrayList<>();
++    private final ArrayList<RuinResults.Cache> caches = new ArrayList<>();
++
++    private RuinResults.Lease reserve(long plan, long fragments) {
++        var lease = RuinResults.tryReserve(plan, fragments, plan + fragments + RuinResults.OWNER_BYTES);
++        assertNotNull(lease); leases.add(lease); return lease;
++    }
++
++    private RuinResults.Cache split(RuinResults.Lease lease, long bytes) {
++        var cache = lease.splitCache(bytes); caches.add(cache); return cache;
++    }
++
++    private static RuinPlan plan() {
++        return new RuinPlan(new int[0], new long[0], new BlockState[0], new BlockState[0], new int[0],
++                new int[0], new long[0], null, null, null, null, null, new long[0], null);
++    }
++
++    @AfterEach
++    void clean() {
++        for (var lease : leases) { lease.cancel(); lease.actualExit(); }
++        for (var cache : caches) cache.release();
++        assertNull(RuinResults.currentProducer());
++        assertEquals(baseline, RuinResults.bytes());
++    }
++
++    @Test
++    void combinedAdmissionIncludesBothBoundsAndMetadataWithoutOverflow() {
++        assertNull(RuinResults.tryReserve(20, 30, 49 + RuinResults.OWNER_BYTES));
++        assertNull(RuinResults.tryReserve(Long.MAX_VALUE, 1, Long.MAX_VALUE));
++        assertNull(RuinResults.tryReserve(1, Long.MAX_VALUE, Long.MAX_VALUE));
++        assertThrows(IllegalArgumentException.class, () -> RuinResults.tryReserve(0, -1, 100));
++        var lease = reserve(20, 30);
++        assertEquals(baseline + 50 + RuinResults.OWNER_BYTES, RuinResults.bytes());
++        lease.abortBeforeSubmit();
++    }
++
++    @Test
++    void cacheTransferDoesNotChangeGlobalBytesOrSpendPlanAllowance() {
++        var plan = plan(); var lease = reserve(plan.bytes() + 500, 1000);
++        long before = RuinResults.bytes(); var first = split(lease, 300); var second = split(lease, 400);
++        assertEquals(before, RuinResults.bytes());
++        assertEquals(300, first.bytes()); assertEquals(400, second.bytes());
++        lease.markResult(plan); lease.actualExit();
++        assertEquals(baseline + plan.bytes() + RuinResults.OWNER_BYTES + 700, RuinResults.bytes());
++        plan.releaseResultToCountedOwner();
++        assertEquals(baseline + 700, RuinResults.bytes());
++        first.release(); second.release(); assertEquals(baseline, RuinResults.bytes());
++    }
++
++    @Test
++    void cancellationKeepsPrivateRemainderUntilExitAndPublishedCacheBeyondExit() {
++        var lease = reserve(200, 1000); var cache = split(lease, 300);
++        lease.cancel();
++        assertEquals(baseline + 1200 + RuinResults.OWNER_BYTES, RuinResults.bytes());
++        lease.actualExit();
++        assertEquals(baseline + 300, RuinResults.bytes());
++        lease.cancel(); lease.actualExit(); cache.release(); cache.release();
++        assertEquals(0, cache.bytes());
++    }
++
++    @Test
++    void failureAndEmptyReleaseUnusedOutputButCannotRefundPublishedCache() {
++        for (boolean empty : new boolean[]{false, true}) {
++            var lease = reserve(100, 1000); var cache = split(lease, 250);
++            if (empty) lease.markResult(RuinPlan.EMPTY);
++            else lease.bindFuture(CompletableFuture.failedFuture(new IllegalStateException()));
++            lease.actualExit();
++            assertEquals(baseline + 250, RuinResults.bytes());
++            cache.release(); assertEquals(baseline, RuinResults.bytes());
++        }
++    }
++
++    @Test
++    void releasedCacheDoesNotMintAdditionalProducerAllowance() {
++        var lease = reserve(100, 1000); var cache = split(lease, 900); cache.release();
++        assertThrows(IllegalStateException.class, () -> lease.splitCache(101));
++        split(lease, 100);
++        assertThrows(IllegalArgumentException.class, () -> lease.splitCache(-1));
++        lease.markResult(RuinPlan.EMPTY);
++        assertThrows(IllegalStateException.class, () -> lease.splitCache(0));
++        lease.actualExit();
++        assertThrows(IllegalStateException.class, () -> lease.splitCache(0));
++    }
++
++    @Test
++    void producingScopeRestoresNestedContextOnSuccessAndFailure() throws Exception {
++        var outer = reserve(0, 100); var inner = reserve(0, 100);
++        assertNull(RuinResults.currentProducer());
++        assertEquals(7, RuinResults.producing(outer, () -> {
++            assertSame(outer, RuinResults.currentProducer());
++            assertThrows(IllegalStateException.class, () -> RuinResults.producing(inner, () -> {
++                assertSame(inner, RuinResults.currentProducer()); throw new IllegalStateException();
++            }));
++            assertSame(outer, RuinResults.currentProducer()); return 7;
++        }));
++        assertNull(RuinResults.currentProducer());
++        assertThrows(CancellationException.class, () -> RuinResults.producing(outer, () -> {
++            throw new CancellationException();
++        }));
++        assertNull(RuinResults.currentProducer());
++    }
++
++    @Test
++    void producerScopeDoesNotLeakIntoAnotherThread() throws Exception {
++        var lease = reserve(0, 100);
++        RuinResults.producing(lease, () -> {
++            var observed = new java.util.concurrent.atomic.AtomicReference<RuinResults.Lease>();
++            var thread = Thread.ofPlatform().start(() -> observed.set(RuinResults.currentProducer()));
++            thread.join(); assertNull(observed.get());
++            assertSame(lease, RuinResults.currentProducer()); return null;
++        });
++        assertNull(RuinResults.currentProducer());
++    }
++
++    @Test
++    void cacheRefundAndProducerRefundAreIndependentUnderConcurrentRelease() throws Exception {
++        var lease = reserve(1000, 1000); var cache = split(lease, 700);
++        var threads = new ArrayList<Thread>();
++        for (int i = 0; i < 16; i++) threads.add(Thread.ofPlatform().start(cache::release));
++        lease.cancel(); lease.actualExit();
++        for (var thread : threads) thread.join();
++        assertEquals(baseline, RuinResults.bytes());
++        for (var field : RuinResults.Cache.class.getDeclaredFields())
++            assertTrue(field.getType().isPrimitive(), "Cache permit retained a payload/world reference");
++    }
++}
+diff --git a/mod/src/test/java/ua/zentix/incoming/nuclear/world/RuinResultSizeTest.java b/mod/src/test/java/ua/zentix/incoming/nuclear/world/RuinResultSizeTest.java
+index 1c8677666..e658028c1 100644
+--- a/mod/src/test/java/ua/zentix/incoming/nuclear/world/RuinResultSizeTest.java
++++ b/mod/src/test/java/ua/zentix/incoming/nuclear/world/RuinResultSizeTest.java
+@@ -45,8 +45,8 @@ class RuinResultSizeTest {
+             assertTrue(payload.contains(field.getName()) || prepaid.contains(field.getName()) || borrowedOrScalar.contains(field.getName()),
+                     "New field needs a byte/domain law: " + field.getName());
+         for (var field : RuinResults.class.getDeclaredFields()) if (Modifier.isStatic(field.getModifiers()))
+-            assertTrue(field.getType().isPrimitive() || field.getType() == java.util.concurrent.atomic.AtomicLong.class,
+-                    "Global result policy must be numeric only: " + field);
++            assertTrue(field.getType().isPrimitive() || field.getType() == java.util.concurrent.atomic.AtomicLong.class || field.getType() == ThreadLocal.class,
++                    "Global counter must be numeric; only scoped producer context may be thread-local: " + field);
+     }
+ 
+     @Test

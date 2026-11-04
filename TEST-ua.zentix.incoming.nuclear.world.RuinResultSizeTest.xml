@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite name="ua.zentix.incoming.nuclear.world.RuinResultSizeTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-11-04T14:23:09.151Z" hostname="zentixua-pc" time="0.313">
+<testsuite name="ua.zentix.incoming.nuclear.world.RuinResultSizeTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-11-04T14:28:53.288Z" hostname="zentixua-pc" time="0.41">
   <properties/>
   <testcase name="exhaustiveFieldInventorySeparatesBorrowedAndProducerOwnershipFromPayload()" classname="ua.zentix.incoming.nuclear.world.RuinResultSizeTest" time="0.009"/>
-  <testcase name="oldColumnCachePrepaysBothSurfaceAndSupportingTopBands()" classname="ua.zentix.incoming.nuclear.world.RuinResultSizeTest" time="0.298"/>
+  <testcase name="oldColumnCachePrepaysBothSurfaceAndSupportingTopBands()" classname="ua.zentix.incoming.nuclear.world.RuinResultSizeTest" time="0.395"/>
   <testcase name="everyOwnedFieldHasAnExplicitElementLawAndLazyCachesArePrepaid()" classname="ua.zentix.incoming.nuclear.world.RuinResultSizeTest" time="0.002"/>
   <testcase name="fragmentFieldLawIncludesStampTreesBothListsAndRemovedPositions()" classname="ua.zentix.incoming.nuclear.world.RuinResultSizeTest" time="0.002"/>
   <testcase name="maximumEncodedDimensionsCannotOverflowElementArithmetic()" classname="ua.zentix.incoming.nuclear.world.RuinResultSizeTest" time="0.0"/>

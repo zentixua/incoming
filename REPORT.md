@@ -2,7 +2,7 @@
 
 ## Source and ownership boundary
 
-Fresh `codex/nuke-result-ownership` from exact `6eb589d59df2a1ebdd41a3e2f8577dcd04448c32`, worktree `/mnt/data/projects/incoming/mod/run/wt-MT-RESULT`. Final component head `f91885460875828d3d39dc962513f504ebd9461b` (plan checkpoint `a1e3f19c8`, includes `c1f9ff3f4`, EMPTY follow-up `c99699b30`; separate fragment helper commit `f91885460`). Only RuinPlan.java, new RuinResults.java and three new dedicated test files changed. No independent PR, main merge, release or reviewer started; MT-S2 owns source composition, global producer/consumer glue and new scoped independent review.
+Fresh `codex/nuke-result-ownership` from exact `6eb589d59df2a1ebdd41a3e2f8577dcd04448c32`, worktree `/mnt/data/projects/incoming/mod/run/wt-MT-RESULT`. Final component head `a5b7ac60b9d092596f27939b163e221a766b39a8` (plan checkpoint `a1e3f19c8`, includes `c1f9ff3f4`, EMPTY follow-up `c99699b30`; separate fragment helper commit `f91885460`). Only RuinPlan.java, new RuinResults.java and four new dedicated test files changed. No independent PR, main merge, release or reviewer started; MT-S2 owns source composition, global producer/consumer glue and new scoped independent review.
 
 ## Contract
 
@@ -27,7 +27,7 @@ Important independent boundary: at base6eb, Grid.blast publishes up to nine Blas
 
 ## Validation
 
-All heavy jobs use tools/laptop_job.sh with explicit SESSION_TREES and unique INCOMING_GPU_OWNER=MT-RESULT-20261104; no GPU used. CPU limited to4, JVM2GiB. Initial13units, then16/17units passed; final separate-fragment follow-up19 focused units pass,0failure/error/skip. Compile main/devtest/test occurred through these checks, no duplicated full build.
+All heavy jobs use tools/laptop_job.sh with explicit SESSION_TREES and unique INCOMING_GPU_OWNER=MT-RESULT-20261104; no GPU used. CPU limited to4, JVM2GiB. Initial13units, then16/17units passed; final minimal temporary-fragment follow-up25 focused units pass,0failure/error/skip. Compile main/devtest/test occurred through these checks, no duplicated full build.
 
 New unit suites cover admission/owner metadata, scalar and aggregate long overflow, completed-uncollected/local handoff, explicit cancellation before actual exit, discard-after-mark, failure, queued never-started exit, success/cancel/failure before binding, queued promotion/rebinding, early counted transfer, EMPTY, oversized output, duplicate owner,100 concurrent release/cancel/mark rounds, complete field inventory, stable lazy caches and maximum encoded section dimensions.
 
@@ -46,3 +46,11 @@ No independent review/CI belongs to this component branch by explicit assignment
 One failed new unit attempt constructed a Blast in an unbootstrapped JVM and hit vanilla registry bootstrap (no production failure). Corrected fixture tests the pure scalar field law; actual Blast objects are tested in the registered GameTest. Failed/final raw logs are retained in evidence. No timeout/cap/config changes or blind reruns.
 
 Memory: added canonical ruin-result-ownership.md and its MEMORY.md index entry; numeric producer/consumer lifetimes, queued promotion binding, int[512] oldTops and independent Blast cache lifetime are durable facts with pinned source limits.
+
+## Final minimal temporary-fragment contract (MT-S2 direction 14:28)
+
+Final production component `a5b7ac60b` adds `tryReserve(maxPlan, maxFragments, room)`; the two-argument form delegates with zero temporary fragments. Admission includes BOTH source bounds plus128B fixed owner metadata, with overflow checks on the combined sum and global counter. `markResult` validates only maxPlan, shrinks only plan allowance, and keeps the full temporary-fragment allowance. `actualExit` refunds temporary fragments exactly once. If an already-counted consumer takes the finished plan before the callback, plan/metadata ownership releases but temporary fragments still stay charged until actualExit. EMPTY, failed, cancelled and pre-submit-aborted routes remain covered. The six new temporary tests bring final focused unit count to25.
+
+Root chose uncached background Grid.blast outputs rather than persistent background cache ownership. Root owns that caller/model-preserving cache bypass, separately counted server diagnostics and comparative cost measurement. These changes are not in this component branch; do not run the three-argument temporary lifetime over a still-persistent uncounted cache and call it fixed. No extra shared fields were edited here.
+
+A scalar Cache/ThreadLocal implementation was already complete and passed27focusedunits when its request was revoked. It is preserved ONLY in separate unadopted commit948628962 /codex/nuke-result-cache-permit-experiment, not an ancestor of the production branch. It is not adopted, reviewed or an alternative readiness claim. Final code contains neither Cache nor ThreadLocal.
