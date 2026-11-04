@@ -1,0 +1,14 @@
+{
+  "source": "ad13fe2bb926e6c95ed2c30cc31efb01af0537b9",
+  "scope": "Whole original15 server run sampled ticks/host; postGC only recorded360sJFR interval, not whole-run retained heap and not1Mt",
+  "heap_max_bytes": 8589934592,
+  "sampled_heap_used_max": 6593945776,
+  "jfr_post_gc_max": [
+    1793803055,
+    1687495192
+  ],
+  "jfr_post_gc_samples": 57,
+  "jfr_gc_count": 57,
+  "gc_pause_max_ns": 54698200,
+  "host_mem_available_min_bytes": 20043259904
+}
