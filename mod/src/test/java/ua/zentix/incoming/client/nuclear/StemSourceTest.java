@@ -5,6 +5,7 @@ import org.junit.jupiter.api.Test;
 import ua.zentix.incoming.nuclear.Detonation;
 import ua.zentix.incoming.nuclear.model.DustModel;
 import ua.zentix.incoming.nuclear.model.FireballModel;
+import ua.zentix.incoming.nuclear.model.HobBlast;
 import ua.zentix.incoming.nuclear.model.MushroomModel;
 import ua.zentix.incoming.nuclear.model.StemDust;
 
@@ -14,7 +15,7 @@ class StemSourceTest {
     @Test
     void footUsesTheSupplyingLayersClockForBothBurstModesAndScales() {
         for (boolean ground : new boolean[]{false, true}) {
-            for (float scale : new float[]{0.25f, 1, 2.5f}) {
+            for (float scale : new float[]{1, 0.25f, 2.5f}) {
                 for (float wave : new float[]{0.25f, 1}) {
                     double y = 15, hob = ground ? 0 : 592;
                     Detonation d = new Detonation(1, new Vec3(0, 64 + hob * scale, 0), 64, y, ground,
@@ -26,6 +27,10 @@ class StemSourceTest {
                         double wall = MushroomModel.stemRadius(0, shape.stemR(), MushroomModel.dustFlare(shape));
                         double from = d.arrivalTicks(d.slantOf(d.blocks(wall))) / (20 * scale)
                                 + DustModel.stemFrom(hob, y, FireballModel.maxRadius(y, ground));
+                        if (!ground && wave == 0.25f && scale == 1)
+                            assertTrue(from - HobBlast.arrivalSeconds(wall, hob, y)
+                                    - DustModel.stemFrom(hob, y, FireballModel.maxRadius(y, ground)) > 1,
+                                    "exercise a material GAME delay, not only arrival-table rounding");
                         double[] foot = new double[5];
                         MushroomField.foot(d, pall, PallField.Water.DRY, shape, t * 20 * scale, foot);
                         assertTrue(foot[1] > 0 && foot[2] > 0, "positive dry layer and stem required");

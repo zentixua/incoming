@@ -5,6 +5,8 @@ import org.junit.jupiter.api.Test;
 import ua.zentix.incoming.nuclear.Detonation;
 
 import java.util.Map;
+import java.util.LinkedHashMap;
+import java.util.concurrent.CompletableFuture;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -116,6 +118,68 @@ class StemClockTest {
         Map<?, ?> cache = (Map<?, ?>) field.get(null);
         synchronized (cache) { assertTrue(cache.size() <= StemDust.CACHE_LIMIT); }
         assertEquals(expected.lambda(60), StemDust.of(a).lambda(60), 0, "eviction/rebuild retains the full clock");
+    }
+
+    @Test
+    void backgroundFailureBetweenStatusAndResultStaysOutOfTheFrame() throws ReflectiveOperationException {
+        StemDust.Source source = source(burst(15, 592, false, 1, 0.25f, 20_000));
+        var failure = new IllegalStateException("controlled completion between status observation and result read");
+        CompletableFuture<StemDust> transition = new CompletableFuture<>() {
+            @Override
+            public boolean isDone() {
+                boolean observed = super.isDone();
+                completeExceptionally(failure);
+                return observed;
+            }
+
+            @Override
+            public boolean isCompletedExceptionally() {
+                boolean observed = super.isCompletedExceptionally();
+                completeExceptionally(failure);
+                return observed;
+            }
+        };
+        Map<StemDust.Source, CompletableFuture<StemDust>> cache = cache();
+        synchronized (cache) {
+            var previous = new LinkedHashMap<>(cache);
+            try {
+                cache.clear();
+                cache.put(source, transition);
+                assertNull(assertDoesNotThrow(() -> StemDust.ready(source)), "concurrent failure is still dust-free");
+                assertTrue(transition.isCompletedExceptionally(), "the transition must actually occur");
+                assertNull(assertDoesNotThrow(() -> StemDust.ready(source)), "terminal failure remains nonthrowing");
+            } finally {
+                cache.clear();
+                cache.putAll(previous);
+            }
+        }
+    }
+
+    @Test
+    void allPendingSlotsRemainBoundedWithoutEvictionOrResubmission() throws ReflectiveOperationException {
+        Map<StemDust.Source, CompletableFuture<StemDust>> cache = cache();
+        synchronized (cache) {
+            var previous = new LinkedHashMap<>(cache);
+            try {
+                cache.clear();
+                for (int i = 0; i < StemDust.CACHE_LIMIT; i++)
+                    cache.put(source(burst(1, 500 + i, false, 1, 0.25f, 20_000)), new CompletableFuture<>());
+                var pending = new LinkedHashMap<>(cache);
+                StemDust.Source next = source(burst(15, 592, false, 1, 0.25f, 20_000));
+                for (int frame = 0; frame < 20; frame++) assertNull(StemDust.ready(next));
+                assertEquals(pending, cache, "all eight pending owners survive without another queued computation");
+            } finally {
+                cache.clear();
+                cache.putAll(previous);
+            }
+        }
+    }
+
+    @SuppressWarnings("unchecked")
+    private static Map<StemDust.Source, CompletableFuture<StemDust>> cache() throws ReflectiveOperationException {
+        var field = StemDust.class.getDeclaredField("CACHE");
+        field.setAccessible(true);
+        return (Map<StemDust.Source, CompletableFuture<StemDust>>) field.get(null);
     }
 
     /** Independent one-second right-endpoint quadrature: source amounts/law are unchanged at the original nodes. */

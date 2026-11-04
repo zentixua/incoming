@@ -210,7 +210,9 @@ public final class StemDust {
         CompletableFuture<StemDust> entry;
         synchronized (CACHE) {
             entry = CACHE.get(source);
-            if (entry != null) return entry.isCompletedExceptionally() ? null : entry.getNow(null);
+            // A terminal result cannot change. Checking failure on a pending future before getNow races
+            // exceptional completion; return early while pending, then inspect only a terminal result.
+            if (entry != null) return !entry.isDone() || entry.isCompletedExceptionally() ? null : entry.getNow(null);
             if (!room()) return null;
             entry = new CompletableFuture<>();
             CACHE.put(source, entry);
