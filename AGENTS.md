@@ -37,7 +37,7 @@ including shell reads. New area rules/pitfalls go in their area file; only sessi
 - **Minimize “check in-game” requests**; they interrupt play. Verify ourselves: unit tests, GameTest, headless client
   (`tools/client_scenario.sh`), post-game `tools/logscan.py`.
 - Never delete user worlds/saves/files. Move surplus aside (`deploy.sh` uses `incoming-backup/`).
-- **Finish without questions:** once built/tested (including GameTest), merge your PR after green Итог and review
+- **Finish without questions:** once the applicable checks pass, merge your PR after green Итог and review
   (workflow below), deliver to the game: `tools/deploy.sh` for instances without pack auto-update, a release for
   those with it. Artem should find a playable mod, not a checklist. Ask only about goal changes or irreversible
   choices.
@@ -218,7 +218,7 @@ actually works, fix the real cause.
   plus WAV for player-visible/audible changes. Only serious errors block: wrong behavior, crash, tick-budget or
   frame-cost breach; other findings optional, author fixes minor issues without another round. Second round only
   for serious first-round fixes, no third. Parallel tasks/measurements: GPT-6.1 Sol at medium (high for diagnosis).
-- **Author merges:** green Итог (sole required check), review without serious errors. No repeated verification by
+- **Author or explicitly accepted work owner merges:** green Итог (sole required check), review without serious errors. No repeated verification by
   someone else; CI-missed bugs get tests, not extra manual steps.
 - End commits with your own agent's name/address in `Co-Authored-By:`, never another agent's.
 - Community standards versus our tools/replacements: `docs/dev-pipeline.md`.
