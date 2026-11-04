@@ -47,7 +47,7 @@ final class RuinSnapshots {
             if (saved.get(key) == shot.serial) return true;
         }
         long reserve = Math.max(4096, shot.bytes * 3);
-        if (writes.size() >= LIMIT || reserve > room.getAsLong()) return false;
+        if (writes.size() >= LIMIT || reserve + 48 > room.getAsLong()) return false;
         var detached = shot.saved();
         charge.accept(reserve);
         LongConsumer accounting = charge;
