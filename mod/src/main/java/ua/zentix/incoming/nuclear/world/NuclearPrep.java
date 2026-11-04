@@ -258,6 +258,7 @@ public final class NuclearPrep {
         final FrontLods lods;
 
         UUID handle, owner;
+        final UUID cacheId = UUID.randomUUID();
         Vec3 target, resolvedTarget;
         double yieldKt;
         boolean surface, airBurst, bound;
@@ -587,7 +588,7 @@ public final class NuclearPrep {
             p.ruins = new RuinContext(level, p.geometry);
             var info = new net.minecraft.world.level.chunk.storage.RegionStorageInfo(
                     level.getServer().getWorldData().getLevelName(), level.dimension(), "incoming_preparation");
-            p.archivePath = (p.handle == null ? String.valueOf(p.strike) : p.handle.toString()) + "/" + preparationKey(p.geometry) + "/" + content;
+            p.archivePath = (p.handle == null ? String.valueOf(p.strike) : p.cacheId.toString()) + "/" + preparationKey(p.geometry) + "/" + content;
             var root = net.minecraft.world.level.dimension.DimensionType.getStorageFolder(level.dimension(),
                             level.getServer().getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT))
                             .resolve("data/incoming-preparation/" + p.archivePath);
