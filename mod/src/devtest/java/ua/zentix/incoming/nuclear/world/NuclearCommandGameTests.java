@@ -136,6 +136,11 @@ public final class NuclearCommandGameTests {
         NuclearCommands.onDeath(new net.neoforged.neoforge.event.entity.living.LivingDeathEvent(player, level.damageSources().genericKill()));
         h.assertValueEqual(NuclearCommands.pending(level), 0, "death retained command");
         h.assertTrue(RuinPreparation.status(level, third).stage() == RuinPreparation.Stage.ABSENT, "death kept preparation");
+        h.assertTrue(NuclearCommands.request(player, loadout(), aim, Waypoints.NONE, null, true), "abort fixture command refused");
+        UUID fourth = handle(level);
+        ServerActions.recall(player);
+        h.assertValueEqual(NuclearCommands.pending(level), 0, "own abort retained an unpaid nuclear command");
+        h.assertTrue(RuinPreparation.status(level, fourth).stage() == RuinPreparation.Stage.ABSENT, "own abort kept preparation");
         h.assertValueEqual(player.getInventory().countItem(ammo), 1, "unaccepted commands spent ammunition");
         h.succeed();
     }
