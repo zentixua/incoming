@@ -32,6 +32,43 @@ public final class LedgerStorageGameTests {
         } catch (ReflectiveOperationException error) { throw new RuntimeException(error); }
     }
 
+    /** A cached test ledger owns live load tickets even though its material was restored from disk. */
+    private static void restoreMaterialFixture(net.minecraft.server.level.ServerLevel level,
+                                               net.minecraft.world.level.saveddata.SavedData previous) {
+        var storage = level.getDataStorage();
+        if (storage.cache.get("incoming_ruin_matter") instanceof RuinMatter current && current != previous)
+            current.unload(level);
+        storage.set("incoming_ruin_matter", previous);
+    }
+
+    @GameTest(template = "pad", batch = "nuke_ledger_cleanup", timeoutTicks = 40, skyAccess = true)
+    public static void replacingImportedFixtureReleasesItsMaterialTicket(GameTestHelper h) {
+        var level = h.getLevel();
+        NuclearWorld.get(level);
+        var previous = level.getDataStorage().cache.get("incoming_ruin_matter");
+        var at = h.absolutePos(new BlockPos(8192, 300, -8192));
+        var chunk = new net.minecraft.world.level.ChunkPos(at);
+        var key = new java.util.UUID(0, chunk.toLong());
+        var source = new RuinMatter();
+        source.release(java.util.List.of(new RuinMatter.Piece(at, Blocks.STONE.defaultBlockState(), null,
+                Vec3.ZERO, level.getGameTime())));
+        var imported = RuinMatter.load(source.save(new CompoundTag(), level.registryAccess()), level.registryAccess());
+        StrikeGameTests.afterTest(h, () -> {
+            restoreMaterialFixture(level, previous);
+            NuclearWorld.get(level);
+        });
+        level.getDataStorage().set("incoming_ruin_matter", imported);
+        h.assertFalse(ua.zentix.incoming.util.Terrain.ready(level, chunk.x, chunk.z), "Fixture destination already loaded");
+        h.assertFalse(imported.ready(level, at, false), "Imported material must wait for its destination");
+        h.assertTrue(ua.zentix.incoming.gametest.TicketProbe.count(level, t -> true, key) == 1,
+                "Imported fixture did not own a material load ticket");
+        restoreMaterialFixture(level, previous);
+        h.assertTrue(level.getDataStorage().cache.get("incoming_ruin_matter") == previous, "Previous material owner was not restored");
+        h.assertTrue(ua.zentix.incoming.gametest.TicketProbe.count(level, t -> true, key) == 0,
+                "Replaced imported fixture left its load ticket behind");
+        h.succeed();
+    }
+
     @GameTest(template = "pad", batch = "nuke_ledger_save", timeoutTicks = 1200, skyAccess = true)
     public static void delayedWrapperSaveOwnsTheLiveLedgerWithoutCopies(GameTestHelper h) throws Exception {
         var level = h.getLevel();
@@ -117,8 +154,8 @@ public final class LedgerStorageGameTests {
         StrikeGameTests.afterTest(h, () -> {
             if (!refunded[0]) owner.materialReservation -= reserve;
             folder(level.getDataStorage(), oldFolders[0]); folder(nether.getDataStorage(), oldFolders[1]);
-            level.getDataStorage().set("incoming_ruin_matter", oldMatter);
-            nether.getDataStorage().set("incoming_ruin_matter", oldNether);
+            restoreMaterialFixture(level, oldMatter);
+            restoreMaterialFixture(nether, oldNether);
             NuclearWorld.get(level); NuclearWorld.get(nether);
         });
         var cold = RuinMatter.get(level); var other = RuinMatter.get(nether);
