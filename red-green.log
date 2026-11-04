@@ -1,0 +1,8 @@
+EXPECTED RED: original measurement boundary fails the unchanged throughput assertion
+[12:02:02] [Server thread/INFO] [ua.ze.in.Incoming/]: GRIDBENCH lamp: setBlock 5.1 μs, ChunkLights.apply 21.2 μs, in the palette 12.8 μs (with passage of sections, according to 1024 and 1024 lamps)
+[12:02:03] [Server thread/INFO] [ua.ze.in.Incoming/]: GRIDBENCH counting clock (up to 3 units per tick): clearing 0.81 chunks per unit (1260 units, 420 tick), returning 1.74 (588 units, 196 tick)
+[12:02:03] [Server thread/INFO] [ua.ze.in.Incoming/]: GRIDBENCH real clock (budget 4 ms): clearing 68.3 chunks/tick (15 tick, longest 3.98 ms), returning 68.3 chunks/tick (15 tick, longest 3.98 ms)
+[12:02:03] [Server thread/ERROR] [minecraft/LogTestReporter]: cityqueuerunsmanychunkspertick failed at -2775517, -60, 4793739! chunks per unit of work: quenching 0.8126984126984127, return 1.7414965986394557 (you need at least 1.2)
+Final source restored byte-for-byte
+GREEN: restored final source passes grid_city
+laptop_job flake3-red-green: exit 0
