@@ -1,0 +1,47 @@
+{
+  "actual_server_source": "ad13fe2bb926e6c95ed2c30cc31efb01af0537b9",
+  "decoder_schema_source": "4d89b5b113a53b3cfe8822092e1813750516c9e9",
+  "files": [
+    {
+      "kind": "ruin",
+      "status": "pass",
+      "file_sha256": "d562736e369b3cec9f814dc776c576b9ce6a2b25701c628e12df15b5c8c321bc",
+      "file_bytes": 13020248,
+      "totals": {
+        "released": 1027493,
+        "deposited": 703884,
+        "dispersed": 154384,
+        "released_volume": 698537.6274995655,
+        "deposited_volume": 472201.4581638101,
+        "dispersed_volume": 122942.4609375,
+        "released_mass": 1571619026.9257812,
+        "deposited_mass": 1137748419.8457031,
+        "dispersed_mass": 188849652.34375
+      },
+      "cargo": {
+        "rows": 651,
+        "represented_pieces": 651,
+        "canonical_summary_bytes": 112931,
+        "note": "Cargo contents hashed structurally; no registry/item-stack guesses"
+      }
+    },
+    {
+      "kind": "crater",
+      "status": "pass",
+      "file_sha256": "e18c1b57430bbc970feb7840cab818609a64d063abfb6071b79e0a1152fc9aa8",
+      "file_bytes": 3684
+    },
+    {
+      "kind": "progress",
+      "status": "pass",
+      "file_sha256": "cecc541b689a96b1a12a9f3de1d103acc9d3801e866d62f17fe67549ecbcd210",
+      "file_bytes": 208
+    },
+    {
+      "kind": "nuclear",
+      "status": "pass",
+      "file_sha256": "0e34bebe450c2b2901347d35b293256cb9a7b165fd9251532ba11799f049cef8",
+      "file_bytes": 287
+    }
+  ]
+}

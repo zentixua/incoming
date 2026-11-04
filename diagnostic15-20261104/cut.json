@@ -1,0 +1,7 @@
+{
+  "stop_requested_wall_ms": 1793803337019,
+  "source": "ad13fe2bb926e6c95ed2c30cc31efb01af0537b9",
+  "stopped_wall_ms": 1793803344158,
+  "cut_complete_wall_ms": 1793803352474,
+  "cut": "/home/ubuntu/airstrike-work/lead2/corrected15kt-diag/clean-stop-A"
+}

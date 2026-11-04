@@ -1,0 +1,134 @@
+{
+  "host": "vps",
+  "samples": [
+    {
+      "begin_wall_ns": 1793803212966347436,
+      "end_wall_ns": 1793803213027578565,
+      "begin_mono_ns": 26207438008819,
+      "end_mono_ns": 26207499223327,
+      "remote": {
+        "wall_ns": 1793803212998796027,
+        "mono_ns": 1042024697344022
+      },
+      "offset_low_ms": -28.782538,
+      "offset_high_ms": 32.448591,
+      "rtt_ms": 61.214508,
+      "local_wall_step_ms": 0.016621
+    },
+    {
+      "begin_wall_ns": 1793803213027588815,
+      "end_wall_ns": 1793803213086600039,
+      "begin_mono_ns": 26207499235029,
+      "end_mono_ns": 26207558244801,
+      "remote": {
+        "wall_ns": 1793803213057222759,
+        "mono_ns": 1042024755770673
+      },
+      "offset_low_ms": -29.37728,
+      "offset_high_ms": 29.633944,
+      "rtt_ms": 59.009772,
+      "local_wall_step_ms": 0.001452
+    },
+    {
+      "begin_wall_ns": 1793803213086615157,
+      "end_wall_ns": 1793803213141074138,
+      "begin_mono_ns": 26207558261051,
+      "end_mono_ns": 26207612719080,
+      "remote": {
+        "wall_ns": 1793803213112427428,
+        "mono_ns": 1042024810975252
+      },
+      "offset_low_ms": -28.64671,
+      "offset_high_ms": 25.812271,
+      "rtt_ms": 54.458029,
+      "local_wall_step_ms": 0.000952
+    },
+    {
+      "begin_wall_ns": 1793803213141080420,
+      "end_wall_ns": 1793803213206360726,
+      "begin_mono_ns": 26207612726264,
+      "end_mono_ns": 26207678005268,
+      "remote": {
+        "wall_ns": 1793803213177195394,
+        "mono_ns": 1042024875742927
+      },
+      "offset_low_ms": -29.165332,
+      "offset_high_ms": 36.114974,
+      "rtt_ms": 65.279004,
+      "local_wall_step_ms": 0.001302
+    },
+    {
+      "begin_wall_ns": 1793803213206369382,
+      "end_wall_ns": 1793803213256169349,
+      "begin_mono_ns": 26207678015257,
+      "end_mono_ns": 26207727814392,
+      "remote": {
+        "wall_ns": 1793803213227310673,
+        "mono_ns": 1042024925858558
+      },
+      "offset_low_ms": -28.858676,
+      "offset_high_ms": 20.941291,
+      "rtt_ms": 49.799135,
+      "local_wall_step_ms": 0.000832
+    },
+    {
+      "begin_wall_ns": 1793803213256176683,
+      "end_wall_ns": 1793803213317097810,
+      "begin_mono_ns": 26207727822607,
+      "end_mono_ns": 26207788702406,
+      "remote": {
+        "wall_ns": 1793803213288521464,
+        "mono_ns": 1042024987069057
+      },
+      "offset_low_ms": -28.576346,
+      "offset_high_ms": 32.344781,
+      "rtt_ms": 60.879799,
+      "local_wall_step_ms": 0.041328
+    },
+    {
+      "begin_wall_ns": 1793803213317107228,
+      "end_wall_ns": 1793803213366303058,
+      "begin_mono_ns": 26207788753172,
+      "end_mono_ns": 26207837947830,
+      "remote": {
+        "wall_ns": 1793803213337490594,
+        "mono_ns": 1042025036038618
+      },
+      "offset_low_ms": -28.812464,
+      "offset_high_ms": 20.383366,
+      "rtt_ms": 49.194658,
+      "local_wall_step_ms": 0.001172
+    },
+    {
+      "begin_wall_ns": 1793803213366310973,
+      "end_wall_ns": 1793803213425827317,
+      "begin_mono_ns": 26207837963580,
+      "end_mono_ns": 26207897472250,
+      "remote": {
+        "wall_ns": 1793803213397065378,
+        "mono_ns": 1042025095613262
+      },
+      "offset_low_ms": -28.761939,
+      "offset_high_ms": 30.754405,
+      "rtt_ms": 59.50867,
+      "local_wall_step_ms": 0.007674
+    },
+    {
+      "begin_wall_ns": 1793803213425834651,
+      "end_wall_ns": 1793803213501236497,
+      "begin_mono_ns": 26207897480565,
+      "end_mono_ns": 26207972881309,
+      "remote": {
+        "wall_ns": 1793803213472431136,
+        "mono_ns": 1042025170979139
+      },
+      "offset_low_ms": -28.805361,
+      "offset_high_ms": 46.596485,
+      "rtt_ms": 75.400744,
+      "local_wall_step_ms": 0.001102
+    }
+  ],
+  "server_minus_client_ms": -4.214549,
+  "clock_uncertainty_ms": 24.597915,
+  "limits": "A measured clock bracket, valid at sampling time; repeat after the trial to detect drift/steps. No assumption of symmetric latency."
+}

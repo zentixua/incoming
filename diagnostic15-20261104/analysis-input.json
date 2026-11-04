@@ -1,0 +1,39 @@
+{
+  "identity": {
+    "source": "ad13fe2bb926e6c95ed2c30cc31efb01af0537b9",
+    "case": "corrected15kt-diag",
+    "status": "diagnostic; source lacks later snapshot/result guards; client early profile missing, wave/late recovery separate",
+    "jar_sha256": "6fd6b17dcf31e8ce0da5eae1bd8c199898858239ea4bc2545050783f9f6d3024"
+  },
+  "ticks": "/mnt/data/projects/incoming/mod/run/wt-LEAD2/mod/run/lead2/corrected15kt-diag-server/telemetry/ticks.csv",
+  "stand": "/mnt/data/projects/incoming/mod/run/wt-LEAD2/mod/run/lead2/corrected15kt-diag/stand-observe/run-3657188250266005071",
+  "tcp": "/mnt/data/projects/incoming/mod/run/wt-LEAD2/mod/run/lead2/corrected15kt-diag-tcp.jsonl",
+  "phases": {
+    "baseline": [
+      1793802673178.782,
+      1793802733178.782
+    ],
+    "prepare": [
+      1793802733178.782,
+      1793802751656.782
+    ],
+    "flight": [
+      1793802751656.782,
+      1793802841683.782
+    ],
+    "flash_30s": [
+      1793802841683.782,
+      1793802871683.782
+    ],
+    "wave_30to120s": [
+      1793802871683.782,
+      1793802961683.782
+    ],
+    "settle_120to300s": [
+      1793802961683.782,
+      1793803141683.782
+    ]
+  },
+  "server_minus_client_ms": -5.7818665,
+  "clock_uncertainty_ms": 24.9542425
+}

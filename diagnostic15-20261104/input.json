@@ -1,0 +1,31 @@
+{
+  "case": "corrected15kt-diag",
+  "source_world": "/home/ubuntu/airstrike-work/lead2/domain100/source",
+  "source": "ad13fe2bb926e6c95ed2c30cc31efb01af0537b9",
+  "jar_sha256": "6fd6b17dcf31e8ce0da5eae1bd8c199898858239ea4bc2545050783f9f6d3024",
+  "protocol": 55,
+  "heap_gib": 8,
+  "active_processors": 12,
+  "yield_kt": 15,
+  "post_flash_seconds": 300,
+  "minimum_since_request_seconds": 0,
+  "target": [
+    3104.5,
+    63,
+    560.5
+  ],
+  "camera": [
+    3136.5,
+    106,
+    -448.5,
+    1.82,
+    2.5
+  ],
+  "game_flight_ticks": 1800,
+  "hashes": false,
+  "screenshots": false,
+  "telemetry": true,
+  "started": true,
+  "fresh_world_level_sha256": "f8563e2c4470bc17f10adf4f68d4eeb45ec486747b162f9d22cb0d54bfb57073",
+  "start_requested_wall_ms": 1793802107797
+}
