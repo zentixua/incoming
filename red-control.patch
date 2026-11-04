@@ -1,0 +1,22 @@
+--- a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/LedgerStorageGameTests.java
++++ b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/LedgerStorageGameTests.java
+@@ -36,8 +36,6 @@
+     private static void restoreMaterialFixture(net.minecraft.server.level.ServerLevel level,
+                                                net.minecraft.world.level.saveddata.SavedData previous) {
+         var storage = level.getDataStorage();
+-        if (storage.cache.get("incoming_ruin_matter") instanceof RuinMatter current && current != previous)
+-            current.unload(level);
+         storage.set("incoming_ruin_matter", previous);
+     }
+ 
+--- a/mod/src/devtest/java/ua/zentix/incoming/gametest/DhGameTests.java
++++ b/mod/src/devtest/java/ua/zentix/incoming/gametest/DhGameTests.java
+@@ -665,7 +665,7 @@
+             double dx = sx * 64 + 32 - d.burst().x, dz = sz * 64 + 32 - d.burst().z, dy = d.burst().y - d.groundY();
+             long sectionDue = d.gameTime() + (long) d.arrivalTicks(Math.sqrt(dx * dx + dy * dy + dz * dz));
+             long expected = Math.max(d.gameTime(), sectionDue - DhUpdates.LEAD);
+-            h.assertTrue(exhaustedBudget ? at >= expected : at == expected, "chunk copy " + c + " went to " + at + ", term " + expected + " (detonation " + d.gameTime()
++            h.assertTrue(at >= expected && at <= expected + 2, "chunk copy " + c + " went to " + at + ", term " + expected + " (detonation " + d.gameTime()
+                     + ", front at the middle of the section " + sectionDue + ")");
+             if (exhaustedBudget) h.assertTrue(expected == d.gameTime(), "budget fixture needs all sections due at detonation");
+             Long was = sectionTick.putIfAbsent(((long) sx << 32) ^ (sz & 0xFFFFFFFFL), at);
