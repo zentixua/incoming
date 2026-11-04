@@ -567,10 +567,20 @@ public final class DhGameTests {
         // copies (ProtoChunk) by chunks: tick returns
         it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<LongArrayList> copies = new it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<>();
         long[] sendNanos = {0};
+        int[] otherCopies = {0};
         DhUpdates.testSink(level, (l, chunk) -> {
             if (chunk instanceof ProtoChunk) {
-                copies.computeIfAbsent(chunk.getPos().toLong(), k -> new LongArrayList()).add(l.getGameTime());
-                if (exhaustedBudget) sendNanos[0] += 2_000_000L;
+                // FarLods and saved-chunk updates share this sink. Only FrontLods.send spends
+                // the controlled section budget; identify the actual caller without changing production.
+                boolean held = StackWalker.getInstance().walk(frames -> frames.anyMatch(frame ->
+                        frame.getClassName().equals("ua.zentix.incoming.nuclear.world.FrontLods")
+                                && frame.getMethodName().equals("send")));
+                if (held) {
+                    copies.computeIfAbsent(chunk.getPos().toLong(), k -> new LongArrayList()).add(l.getGameTime());
+                    if (exhaustedBudget) sendNanos[0] += 2_000_000L;
+                } else if (otherCopies[0]++ == 0) {
+                    Incoming.LOG.info("DH front fixture: separate ordinary copy at {} on tick {}", chunk.getPos(), l.getGameTime());
+                }
             }
             DhUpdates.saved(l, chunk.getPos().x, chunk.getPos().z);
         });
