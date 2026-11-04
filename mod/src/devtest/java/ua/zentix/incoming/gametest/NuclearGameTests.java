@@ -1431,6 +1431,8 @@ public final class NuclearGameTests {
         NuclearWorld.useClock(level.getServer(), clock);
         Detonation d = NuclearWarhead.detonate(level, Vec3.atBottomCenterOf(h.absolutePos(CENTER)), 1, false, null, 0.1f);
         int budgetMs = IncomingConfig.SERVER.workBudgetMs.get();
+        h.runAtTickTime(1200, () -> ua.zentix.incoming.nuclear.world.RuinPipelineDiagnostic.capture(
+                level, w, d, h.absolutePos(glass), clock));
         h.succeedWhen(() -> {
             // chunks at the edge of the busy world are waiting for neighbors (otherwise Sable would load them on every block) - they are in line
             h.assertTrue(w.craterJobs() == 0, "crater is still digging");
