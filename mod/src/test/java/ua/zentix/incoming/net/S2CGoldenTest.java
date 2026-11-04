@@ -114,6 +114,9 @@ class S2CGoldenTest {
                 golden(S2C.Siren.TYPE, S2C.Siren.CODEC, new S2C.Siren(Q, S2C.Siren.MISSILE)),
                 golden(S2C.SalvoStatus.TYPE, S2C.SalvoStatus.CODEC, new S2C.SalvoStatus(6, 17, 40)),
                 golden(S2C.Cleared.TYPE, S2C.Cleared.CODEC, new S2C.Cleared(Optional.of(B), true, List.of(A, B))),
+                golden(S2C.NukeApproach.TYPE, S2C.NukeApproach.CODEC,
+                        new S2C.NukeApproach(2300, List.of(new ua.zentix.incoming.nuclear.IcbmArrival(9, 2260, 2500,
+                                D.withWave(Detonation.OLD_WAVE).withDayTime(Detonation.NO_DAY_TIME), Q)))),
                 golden(S2C.NukeWarning.TYPE, S2C.NukeWarning.CODEC, W),
                 // 1 - release 3.1.0; 2 - wave (wall speed); 3 - blackout (EMR); 4 — time of day of detonation; 5 - fires
                 golden(S2C.NukeDetonation.TYPE, S2C.NukeDetonation.CODEC,
@@ -121,7 +124,8 @@ class S2CGoldenTest {
                         new S2C.NukeDetonation(D.withDayTime(Detonation.NO_DAY_TIME), 0f),
                         new S2C.NukeDetonation(D.withDayTime(Detonation.NO_DAY_TIME), 242f),
                         new S2C.NukeDetonation(D, 242f),
-                        new S2C.NukeDetonation(D.withFires(false), 242f)),
+                        new S2C.NukeDetonation(D.withFires(false), 242f),
+                        new S2C.NukeDetonation(D.withFires(false), 242f, 9)),
                 golden(S2C.NukeDebris.TYPE, S2C.NukeDebris.CODEC, new S2C.NukeDebris(4, List.of(
                         new S2C.NukeDebris.Piece(new BlockPos(-100, 70, 2000), Blocks.STONE.defaultBlockState()),
                         new S2C.NukeDebris.Piece(new BlockPos(1, -60, -1), Blocks.OAK_PLANKS.defaultBlockState())), S2C.NukeDebris.OLD_REMOVED),

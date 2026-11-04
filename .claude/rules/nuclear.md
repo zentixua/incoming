@@ -474,3 +474,12 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   `stemFrom`: immediately for grounded sphere, after `STEM_FROM_S`·∛(Y/15) s for airburst) rises with stem air
   (`MushroomModel.stemRise`); airburst dusty stem may never catch cap (NRC 1985, p. 22), surface burst leaves sphere
   trail up to cap. Per-detonation table builds in background (`StemDust.ready`: first frames without dust).
+
+- ICBM terminal arrival (`IcbmArrival`, `IcbmApproaches`, `IcbmArrivalRenderer`) uses the existing NUKE airframe's
+  FlightScale speed (game value is not physical). Once ready ground is known during the final window, its exact
+  geometry is persisted in `ScheduledStrike.arrival` and used by detonation. The window is at most 12 seconds,
+  after nine seconds reserved for boost; no new flight setting. An unready target has no speculative head.
+  `NukeApproach` snapshots carry only active terminal paths and the server epoch; one tick of interpolation,
+  no countdown extrapolation. A stalled server pauses upstream like an entity, never at the burst endpoint.
+  `NukeDetonation.strikeId` consumes exactly its own head; the 0.2-second emitted wake survives warning removal.
+  Legacy detonation packets retain location matching. Clear/dimension/replay reset arrival state.

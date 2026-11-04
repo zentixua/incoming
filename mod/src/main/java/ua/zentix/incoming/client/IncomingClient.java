@@ -472,6 +472,12 @@ public final class IncomingClient {
         }
 
         @Override
+        public void nukeApproach(S2C.NukeApproach p) {
+            // Keep snapshot order with burst events and apply it after the replay seek reset.
+            Replay.event("nuke_approach", live -> ClientNuclear.approach(p));
+        }
+
+        @Override
         public void nukeWarning(S2C.NukeWarning p) {
             Replay.event("warning", live -> ClientNuclear.warning(p, live));
         }
