@@ -18,26 +18,34 @@ final class RuinResults {
     /** Server thread supplies free shared room, with existing result ownership already subtracted. */
     @Nullable
     static Lease tryReserve(long maxBytes, long room) {
-        if (maxBytes < 0) throw new IllegalArgumentException("Negative result bound");
-        if (maxBytes > Long.MAX_VALUE - OWNER_BYTES || room < maxBytes + OWNER_BYTES) return null;
-        long amount = maxBytes + OWNER_BYTES;
+        return tryReserve(maxBytes, 0, room);
+    }
+
+    /** Temporary fractures stay charged through actual exit, independently of a completed plan transfer. */
+    @Nullable
+    static Lease tryReserve(long maxPlan, long maxFragments, long room) {
+        if (maxPlan < 0 || maxFragments < 0) throw new IllegalArgumentException("Negative result bound");
+        if (maxPlan > Long.MAX_VALUE - OWNER_BYTES || maxFragments > Long.MAX_VALUE - OWNER_BYTES - maxPlan) return null;
+        long amount = maxPlan + maxFragments + OWNER_BYTES;
+        if (room < amount) return null;
         // Admission is server-thread-only. Asynchronous changes to this counter only release bytes.
         long current;
         do {
             current = BYTES.get();
             if (current > Long.MAX_VALUE - amount) return null;
         } while (!BYTES.compareAndSet(current, current + amount));
-        return new Lease(maxBytes, amount);
+        return new Lease(maxPlan, maxFragments, amount);
     }
 
     static final class Lease {
         private final long maximum;
-        private long charged;
+        private long charged, fragments;
         @Nullable private Future<?> future;
         private boolean marked, empty, exited, cancelled, released;
 
-        private Lease(long maximum, long charged) {
+        private Lease(long maximum, long fragments, long charged) {
             this.maximum = maximum;
+            this.fragments = fragments;
             this.charged = charged;
         }
 
@@ -51,12 +59,15 @@ final class RuinResults {
             if (plan != RuinPlan.EMPTY) plan.attachResult(this);
             marked = true;
             empty = plan == RuinPlan.EMPTY;
-            changeCharge(actual + OWNER_BYTES);
+            changeCharge(actual + OWNER_BYTES + fragments);
         }
 
         /** Pool callback: actual callable returned, or a queued callable was removed without execution. */
         synchronized void actualExit() {
+            if (exited) return;
             exited = true;
+            changeCharge(charged - fragments);
+            fragments = 0;
             if (future != null && failedOrCancelled(future)) cancelled = true;
             if (cancelled || !marked || empty) release();
         }
@@ -102,7 +113,8 @@ final class RuinResults {
             if (released) return;
             released = true;
             future = null;
-            changeCharge(0);
+            if (exited) fragments = 0;
+            changeCharge(fragments);
         }
 
         private void changeCharge(long amount) {
