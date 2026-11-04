@@ -1,0 +1,607 @@
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.14.3/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :createMinecraftArtifacts UP-TO-DATE
+> Task :compileJava UP-TO-DATE
+> Task :generateModMetadata UP-TO-DATE
+> Task :processResources UP-TO-DATE
+> Task :classes UP-TO-DATE
+> Task :compileDevtestJava UP-TO-DATE
+> Task :copyRuntimeMods_gametest UP-TO-DATE
+> Task :processDevtestResources UP-TO-DATE
+> Task :devtestClasses UP-TO-DATE
+> Task :downloadAssets UP-TO-DATE
+> Task :writeGameTestServerLegacyClasspath UP-TO-DATE
+> Task :prepareGameTestServerRun UP-TO-DATE
+
+> Task :runGameTestServer
+WARN StatusConsoleListener Advanced terminal features are not available in this environment
+[17:30:39] [main/INFO] [cp.mo.mo.Launcher/MODLAUNCHER]: ModLauncher running: args [--launchTarget, forgeserverdev, --gameDir, ., --fml.fmlVersion, 4.0.45, --fml.mcVersion, 1.21.1, --fml.neoForgeVersion, 21.1.264, --fml.neoFormVersion, 20240808.144430]
+[17:30:39] [main/INFO] [cp.mo.mo.Launcher/MODLAUNCHER]: JVM identified as Microsoft OpenJDK 64-Bit Server VM 21.0.7+6-LTS
+[17:30:39] [main/INFO] [cp.mo.mo.Launcher/MODLAUNCHER]: ModLauncher 11.0.5+main.901c6ea8 starting: java version 21.0.7 by Microsoft; OS Linux arch amd64 version 7.3.1-1-cachyos
+[17:30:39] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Configuration file /mnt/data/projects/incoming/mod/run/wt-GRID2/mod/run/gametest/config/fml.toml is not correct. Correcting
+[17:30:39] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [disableConfigWatcher] was corrected from null to false
+[17:30:39] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowControl] was corrected from null to true
+[17:30:39] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [maxThreads] was corrected from null to -1
+[17:30:39] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [versionCheck] was corrected from null to true
+[17:30:39] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [defaultConfigPath] was corrected from null to defaultconfigs
+[17:30:39] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [disableOptimizedDFU] was corrected from null to true
+[17:30:39] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowProvider] was corrected from null to fmlearlywindow
+[17:30:39] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowWidth] was corrected from null to 854
+[17:30:39] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowHeight] was corrected from null to 480
+[17:30:39] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowFBScale] was corrected from null to 1
+[17:30:39] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowMaximized] was corrected from null to false
+[17:30:39] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowSkipGLVersions] was corrected from null to []
+[17:30:39] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowSquir] was corrected from null to false
+[17:30:39] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: ****************************** Found dependency overrides ******************************
+[17:30:39] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: Dependency overrides for mod 'aeronautics': adding explicit AFTER ordering against 'simulated', adding explicit AFTER ordering against 'offroad'
+[17:30:39] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: Dependency overrides for mod 'simulated': adding explicit AFTER ordering against 'create', adding explicit AFTER ordering against 'sable'
+[17:30:39] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: Dependency overrides for mod 'offroad': adding explicit AFTER ordering against 'simulated'
+[17:30:39] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: ****************************************************************************************
+[17:30:39] [main/INFO] [ne.ne.fm.lo.ImmediateWindowHandler/]: ImmediateWindowProvider not loading because launch target is forgeserverdev
+[17:30:39] [main/INFO] [mixin/]: SpongePowered MIXIN Subsystem Version=0.8.7 Source=union:/home/artem/.gradle/caches/modules-2/files-2.1/net.fabricmc/sponge-mixin/0.16.4+mixin.0.8.7/26d01f0567ab46e9ca0d2ed89d0ecc11aadbd433/sponge-mixin-0.16.4+mixin.0.8.7.jar%2394!/ Service=ModLauncher Env=SERVER
+[17:30:39] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: ****************************** Found dependency overrides ******************************
+[17:30:39] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: Dependency overrides for mod 'aeronautics': adding explicit AFTER ordering against 'simulated', adding explicit AFTER ordering against 'offroad'
+[17:30:39] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: Dependency overrides for mod 'simulated': adding explicit AFTER ordering against 'create', adding explicit AFTER ordering against 'sable'
+[17:30:39] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: Dependency overrides for mod 'offroad': adding explicit AFTER ordering against 'simulated'
+[17:30:39] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: ****************************************************************************************
+[17:30:39] [main/INFO] [ne.ne.fm.lo.mo.lo.JarInJarDependencyLocator/]: Found 13 dependencies adding them to mods collection
+[17:30:39] [main/INFO] [ne.ne.fm.lo.mo.ModDiscoverer/]: 
+     Mod List:
+		Name Version (Mod Id)
+
+		Create 6.0.10 (create)
+		Create Aeronautics 1.3.2 (aeronautics)
+		Create Aeronautics 1.3.2 (aeronautics_bundled)
+		Create Offroad 1.3.2 (offroad)
+		Create Simulated 1.3.2 (simulated)
+		Flywheel 1.0.6 (flywheel)
+		Incoming 3.10.4 (incoming)
+		Minecraft 1.21.1 (minecraft)
+		NeoForge 21.1.264 (neoforge)
+		Ponder 1.0.82+mc1.21.1 (ponder)
+		Sable 2.0.6 (sable)
+		Sable Companion 1.6.0 (sablecompanion)
+		Veil 4.3.2 (veil)
+[17:30:40] [main/INFO] [mixin/]: Compatibility level set to JAVA_21
+[17:30:40] [main/INFO] [cp.mo.mo.LaunchServiceHandler/MODLAUNCHER]: Launching target 'forgeserverdev' with arguments [--gameDir, .]
+[17:30:40] [main/WARN] [mixin/]: Reference map 'ponder.refmap.json' for ponder-common.mixins.json could not be read. If this is a development environment you can ignore this message
+[17:30:40] [main/INFO] [de.ry.sa.mi.AbstractSableMixinPlugin/]: Using Vanilla renderer mixins
+[17:30:40] [main/INFO] [de.ry.sa.mi.AbstractSableMixinPlugin/]: Using Vanilla renderer mixins
+[17:30:40] [main/WARN] [mixin/]: Reference map 'simulated.refmap.json' for simulated.mixins.json could not be read. If this is a development environment you can ignore this message
+[17:30:40] [main/WARN] [mixin/]: Reference map 'offroad.refmap.json' for offroad.mixins.json could not be read. If this is a development environment you can ignore this message
+[17:30:40] [main/WARN] [mixin/]: Reference map 'aeronautics.refmap.json' for aeronautics.mixins.json could not be read. If this is a development environment you can ignore this message
+[17:30:40] [main/WARN] [mixin/]: Error loading class: org/jetbrains/annotations/ApiStatus$ScheduledForRemoval (java.lang.ClassNotFoundException: org.jetbrains.annotations.ApiStatus$ScheduledForRemoval)
+[17:30:40] [main/INFO] [MixinExtras|Service/]: Initializing MixinExtras via com.llamalad7.mixinextras.service.MixinExtrasServiceImpl(version=0.5.5).
+[17:30:45] [main/WARN] [minecraft/Commands]: Ambiguity between arguments [teleport, location] and [teleport, destination] with inputs: [0.1 -0.5 .9, 0 0 0]
+[17:30:45] [main/WARN] [minecraft/Commands]: Ambiguity between arguments [teleport, location] and [teleport, targets] with inputs: [0.1 -0.5 .9, 0 0 0]
+[17:30:45] [main/WARN] [minecraft/Commands]: Ambiguity between arguments [teleport, destination] and [teleport, targets] with inputs: [Player, 0123, @e, dd12be42-52a9-4a91-a8a1-11c01849e498]
+[17:30:45] [main/WARN] [minecraft/Commands]: Ambiguity between arguments [teleport, targets] and [teleport, destination] with inputs: [Player, 0123, dd12be42-52a9-4a91-a8a1-11c01849e498]
+[17:30:45] [main/WARN] [minecraft/Commands]: Ambiguity between arguments [teleport, targets, location] and [teleport, targets, destination] with inputs: [0.1 -0.5 .9, 0 0 0]
+[17:30:45] [modloading-worker-0/INFO] [Veil/]: Veil is initializing.
+[17:30:45] [modloading-worker-0/INFO] [ne.ne.ne.co.NeoForgeMod/NEOFORGE-MOD]: NeoForge mod loading, version 21.1.264, for MC 1.21.1
+[17:30:45] [modloading-worker-0/INFO] [co.si.cr.Create/]: Create 6.0.10 initializing! Commit hash: ac0c444d9828da3453ae8cc65338e8de063286fb
+[17:30:46] [modloading-worker-0/INFO] [de.ry.sa.Sable/]: Sable loaded!
+[17:30:47] [NeoForge Version Check/INFO] [ne.ne.fm.VersionChecker/]: [create] Starting version check at https://api.modrinth.com/updates/create/forge_updates.json?neoforge=only
+[17:30:47] [main/INFO] [mojang/YggdrasilAuthenticationService]: Environment: Environment[sessionHost=https://sessionserver.mojang.com, servicesHost=https://api.minecraftservices.com, name=PROD]
+[17:30:47] [main/WARN] [minecraft/VanillaPackResourcesBuilder]: Assets URL 'union:/mnt/data/projects/incoming/mod/run/wt-GRID2/mod/build/moddev/artifacts/neoforge-21.1.264.jar%23128!/assets/.mcassetsroot' uses unexpected schema
+[17:30:47] [main/WARN] [minecraft/VanillaPackResourcesBuilder]: Assets URL 'union:/mnt/data/projects/incoming/mod/run/wt-GRID2/mod/build/moddev/artifacts/neoforge-21.1.264.jar%23128!/data/.mcassetsroot' uses unexpected schema
+[17:30:47] [main/INFO] [co.si.cr.Create/]: Created 157 recipes which will be injected into the game
+[17:30:47] [main/INFO] [co.si.cr.Create/]: Created 0 tags which will be injected into the game
+[17:30:47] [main/INFO] [ne.ne.ne.ga.GameTestHooks/]: Enabled Gametest Namespaces: [incoming]
+[17:30:48] [NeoForge Version Check/INFO] [ne.ne.fm.VersionChecker/]: [create] Found status: OUTDATED Current: 6.0.10 Target: 6.0.10+mc1.21.1
+[17:30:48] [main/INFO] [minecraft/RecipeManager]: Loaded 2954 recipes
+[17:30:48] [main/INFO] [minecraft/AdvancementTree]: Loaded 2645 advancements
+[17:30:49] [Server thread/INFO] [ua.ze.in.Incoming/]: GameTest: only batch “(grid|work)_.*” - tests 44 from 737
+[17:30:49] [Server thread/INFO] [de.ry.sa.Sable/]: Creating physics pipeline for ResourceKey[minecraft:dimension / minecraft:overworld] using RapierPhysicsPipelineProvider
+[17:30:49] [Server thread/INFO] [de.ry.sa.Sable/]: Using game directory relative Sable Rapier native directory /mnt/data/projects/incoming/mod/run/wt-GRID2/mod/run/gametest/.sable/natives
+[2026-11-04T15:30:49.394396889Z] [[32mINFO[0m] (sable_rapier) Rapier scene initialized
+[17:30:49] [Server thread/INFO] [de.ry.sa.Sable/]: Creating physics pipeline for ResourceKey[minecraft:dimension / minecraft:the_end] using RapierPhysicsPipelineProvider
+[2026-11-04T15:30:49.668632809Z] [[32mINFO[0m] (sable_rapier) Rapier scene initialized
+[17:30:49] [Server thread/INFO] [de.ry.sa.Sable/]: Creating physics pipeline for ResourceKey[minecraft:dimension / minecraft:the_nether] using RapierPhysicsPipelineProvider
+[2026-11-04T15:30:49.695479619Z] [[32mINFO[0m] (sable_rapier) Rapier scene initialized
+[17:30:49] [Server thread/INFO] [minecraft/MinecraftServer]: Preparing start region for dimension minecraft:overworld
+[17:30:49] [worldgen/INFO] [minecraft/LoggerChunkProgressListener]: Preparing spawn area: 2%
+[17:30:49] [Server thread/INFO] [minecraft/LoggerChunkProgressListener]: Time elapsed: 127 ms
+[17:30:49] [Server thread/INFO] [minecraft/GameTestServer]: Started game test server
+[17:30:49] [Server thread/INFO] [ne.ne.ne.se.pe.PermissionAPI/]: Successfully initialized permission handler neoforge:default_handler
+[17:30:49] [Server thread/INFO] [minecraft/GameTestServer]: 44 tests are now running at position -607737, -59, 8426532!
+[17:30:50] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'work_handoff_craft:0' (1 tests)...
+[17:30:50] [Server thread/INFO] [minecraft/GameTestServer]: [                                            ]
+[17:30:50] [Server thread/INFO] [minecraft/GameTestServer]: [                                            ]
+[17:30:51] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'work_unready:0' (1 tests)...
+[17:30:51] [Server thread/INFO] [minecraft/GameTestServer]: [+                                           ]
+[17:30:51] [Server thread/INFO] [minecraft/GameTestServer]: [+                                           ]
+[17:30:51] [Server thread/WARN] [ua.ze.in.Incoming/]: Impacts (minecraft:overworld): 54 ms in a tick — explosions: rays 0 ms (0), explosions: blocks 0 ms (0), glass 6 ms (1), debris 3 ms (35), fire and ground 11 ms (610), explosions: Detonate and damage 0 ms (0), fragments 16 ms (7182); explosion steps [Start 0, vanilla explosion 0, game event 0, rays 0, entity search 0, Detonate 0, damage 0, split 0, aircraft blocks 0, snapshot 0 ms]; queued 7; such ticks since the last line: 0
+[17:30:51] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'grid_edge_signal_back:0' (1 tests)...
+[17:30:51] [Server thread/INFO] [minecraft/GameTestServer]: [++                                          ]
+[17:30:51] [Server thread/INFO] [minecraft/GameTestServer]: [++                                          ]
+[17:30:52] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #1 (minecraft:overworld): -608039 8426089, radius 200, power returns in 15 min
+[17:30:52] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #1 (minecraft:overworld): outage cascade covered the whole area
+[17:30:52] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #1 (minecraft:overworld): power restored by command
+[17:30:52] [Server thread/INFO] [minecraft/GameTestServer]: [++_                                         ]
+[17:30:52] [Server thread/INFO] [minecraft/GameTestServer]: [++_                                         ]
+[17:30:52] [Server thread/INFO] [minecraft/GameTestServer]: [++_                                         ]
+[17:30:52] [Server thread/INFO] [ua.ze.in.Incoming/]: Impact series summary (minecraft:overworld): strikes 3, units 80, total 139.3 ms, longest unit 45.1 ms, longest tick 54.7 ms, ticks over 50 ms 1, over 36 ticks
+[17:30:52] [Server thread/INFO] [minecraft/GameTestServer]: [++_                                         ]
+[17:30:52] [Server thread/INFO] [minecraft/GameTestServer]: [++_                                         ]
+[17:30:52] [Server thread/INFO] [minecraft/GameTestServer]: [++_                                         ]
+[17:30:52] [Server thread/INFO] [minecraft/GameTestServer]: [++_                                         ]
+[17:30:52] [Server thread/INFO] [minecraft/GameTestServer]: [++_                                         ]
+[17:30:52] [Server thread/INFO] [minecraft/GameTestServer]: [++_                                         ]
+[17:30:52] [Server thread/INFO] [minecraft/GameTestServer]: [++_                                         ]
+[17:30:52] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #1 (minecraft:overworld): restore cascade covered the whole area
+[17:30:52] [Server thread/INFO] [minecraft/GameTestServer]: [++_                                         ]
+[17:30:52] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'grid_lazy:0' (1 tests)...
+[17:30:52] [Server thread/INFO] [minecraft/GameTestServer]: [+++                                         ]
+[17:30:53] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #2 (minecraft:overworld): -607017 8426564, radius 200, power returns in 15 min
+[17:30:53] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #2 (minecraft:overworld): outage cascade covered the whole area
+[17:30:53] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #2 (minecraft:overworld): power restored by command
+[17:30:53] [Server thread/INFO] [minecraft/GameTestServer]: [+++_                                        ]
+[17:30:53] [Server thread/INFO] [minecraft/GameTestServer]: [+++_                                        ]
+[17:30:53] [Server thread/INFO] [minecraft/GameTestServer]: [+++_                                        ]
+[17:30:53] [Server thread/INFO] [minecraft/GameTestServer]: [+++_                                        ]
+[17:30:53] [Server thread/INFO] [minecraft/GameTestServer]: [+++_                                        ]
+[17:30:53] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'work_poi_blast:0' (1 tests)...
+[17:30:53] [Server thread/INFO] [minecraft/GameTestServer]: [++++                                        ]
+[17:30:54] [Server thread/INFO] [minecraft/GameTestServer]: [++++_                                       ]
+[17:30:54] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'work_impact_schedule:0' (1 tests)...
+[17:30:54] [Server thread/INFO] [minecraft/GameTestServer]: [+++++                                       ]
+[17:30:54] [Server thread/INFO] [minecraft/GameTestServer]: [+++++                                       ]
+[17:30:54] [Server thread/INFO] [minecraft/GameTestServer]: [+++++                                       ]
+[17:30:54] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #2 (minecraft:overworld): restore cascade covered the whole area
+[17:30:54] [Server thread/INFO] [minecraft/GameTestServer]: [+++++                                       ]
+[17:30:54] [Server thread/INFO] [ua.ze.in.Incoming/]: Mod work over 30 s: server tick avg 5.7 ms (max 314.8), of which mod lanes avg — impacts 0.3, nuke 0.0, blackout 0.0 ms; the rest (vanilla, other mods) 5.4 ms; impact early window 97.3% of ticks, early avg 0.0 ms, late avg 0.2 ms; mandatory unload debt 2.0% of ticks
+[17:30:54] [Server thread/INFO] [minecraft/GameTestServer]: [+++++                                       ]
+[17:30:54] [Server thread/INFO] [ua.ze.in.Incoming/]: Impact series summary (minecraft:overworld): strikes 1, units 75, total 25.0 ms, longest unit 6.4 ms, longest tick 16.8 ms, ticks over 50 ms 0, over 2 ticks
+[17:30:54] [Server thread/INFO] [minecraft/GameTestServer]: [+++++                                       ]
+[17:30:54] [Server thread/INFO] [ua.ze.in.Incoming/]: PL10 CLOCK mandatory=40 post_busy=600/600 impact_ms=10.0 max_tick_ms=50.25
+[17:30:54] [Server thread/INFO] [ua.ze.in.Incoming/]: PL10 CLOCK mandatory=43 post_busy=600/600 impact_ms=7.0 max_tick_ms=50.25
+[17:30:54] [Server thread/INFO] [ua.ze.in.Incoming/]: PL10 CLOCK mandatory=47 post_busy=600/600 impact_ms=3.0 max_tick_ms=50.25
+[17:30:54] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'grid_stray:0' (1 tests)...
+[17:30:54] [Server thread/INFO] [minecraft/GameTestServer]: [++++++                                      ]
+[17:30:54] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout: chunk [-37960, 526659] read from disk not for the world (chunk already in the world) — the blackout queue ignores it
+java.lang.Throwable: who reads it
+	at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.grid.ChunkSaves.foreignRead(ChunkSaves.java:151) ~[%23133!/:?] {re:classloading}
+	at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.grid.ChunkSaves.onLoad(ChunkSaves.java:113) ~[%23133!/:?] {re:classloading}
+	at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.gametest.GridGameTests.strayTwinRelightsInLitDistrict(GridGameTests.java:299) ~[%23133!/:?] {re:classloading}
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103) ~[?:?] {}
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580) ~[?:?] {}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestRegistry.lambda$turnMethodIntoConsumer$5(GameTestRegistry.java:169) ~[neoforge-21.1.264.jar%23128!/:?] {re:classloading}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.TestFunction.run(TestFunction.java:40) ~[neoforge-21.1.264.jar%23128!/:?] {re:classloading}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestInfo.startTest(GameTestInfo.java:162) ~[neoforge-21.1.264.jar%23128!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:sable.mixins.json:game_test.GameTestInfoMixin from mod sable,pl:mixin:A}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestInfo.tickInternal(GameTestInfo.java:124) ~[neoforge-21.1.264.jar%23128!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:sable.mixins.json:game_test.GameTestInfoMixin from mod sable,pl:mixin:A}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestInfo.tick(GameTestInfo.java:107) ~[neoforge-21.1.264.jar%23128!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:sable.mixins.json:game_test.GameTestInfoMixin from mod sable,pl:mixin:A}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestTicker.lambda$tick$0(GameTestTicker.java:39) ~[neoforge-21.1.264.jar%23128!/:?] {re:classloading}
+	at java.base/java.util.concurrent.CopyOnWriteArrayList.forEach(CopyOnWriteArrayList.java:891) ~[?:?] {}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestTicker.tick(GameTestTicker.java:39) ~[neoforge-21.1.264.jar%23128!/:?] {re:classloading}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.tickChildren(MinecraftServer.java:1070) ~[neoforge-21.1.264.jar%23128!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:veil.network.mixins.json:NetworkMinecraftServerMixin from mod veil,pl:mixin:APP:veil.scheduler.mixins.json:MinecraftServerMixin from mod veil,pl:mixin:APP:ponder-common.mixins.json:accessor.MinecraftServerAccessor from mod ponder,pl:mixin:APP:sable.mixins.json:udp.MinecraftServerMixin from mod sable,pl:mixin:A}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.tickServer(MinecraftServer.java:932) ~[neoforge-21.1.264.jar%23128!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:veil.network.mixins.json:NetworkMinecraftServerMixin from mod veil,pl:mixin:APP:veil.scheduler.mixins.json:MinecraftServerMixin from mod veil,pl:mixin:APP:ponder-common.mixins.json:accessor.MinecraftServerAccessor from mod ponder,pl:mixin:APP:sable.mixins.json:udp.MinecraftServerMixin from mod sable,pl:mixin:A}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestServer.tickServer(GameTestServer.java:171) ~[neoforge-21.1.264.jar%23128!/:?] {re:classloading}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.runServer(MinecraftServer.java:713) ~[neoforge-21.1.264.jar%23128!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:veil.network.mixins.json:NetworkMinecraftServerMixin from mod veil,pl:mixin:APP:veil.scheduler.mixins.json:MinecraftServerMixin from mod veil,pl:mixin:APP:ponder-common.mixins.json:accessor.MinecraftServerAccessor from mod ponder,pl:mixin:APP:sable.mixins.json:udp.MinecraftServerMixin from mod sable,pl:mixin:A}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.lambda$spin$2(MinecraftServer.java:267) ~[neoforge-21.1.264.jar%23128!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:veil.network.mixins.json:NetworkMinecraftServerMixin from mod veil,pl:mixin:APP:veil.scheduler.mixins.json:MinecraftServerMixin from mod veil,pl:mixin:APP:ponder-common.mixins.json:accessor.MinecraftServerAccessor from mod ponder,pl:mixin:APP:sable.mixins.json:udp.MinecraftServerMixin from mod sable,pl:mixin:A}
+	at java.base/java.lang.Thread.run(Thread.java:1583) [?:?] {}
+[17:30:54] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'work_rays:0' (1 tests)...
+[17:30:54] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++                                     ]
+[17:30:54] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++                                     ]
+[17:30:55] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'grid_city:0' (1 tests)...
+[17:30:55] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++                                    ]
+[17:30:55] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++                                    ]
+[17:30:55] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #3 (minecraft:overworld): -607704 8426635, radius 480, power returns in 15 min
+[17:30:55] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #4 (minecraft:overworld): -607704 8426635, radius 480, power returns in 15 min
+[17:30:55] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #5 (minecraft:overworld): -607704 8426635, radius 480, power returns in 15 min
+[17:30:55] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #6 (minecraft:overworld): -607704 8426635, radius 480, power returns in 15 min
+[17:30:55] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #3 (minecraft:overworld): power restored by command
+[17:30:55] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #4 (minecraft:overworld): power restored by command
+[17:30:55] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #5 (minecraft:overworld): power restored by command
+[17:30:55] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #6 (minecraft:overworld): power restored by command
+[17:30:56] [Server thread/INFO] [ua.ze.in.Incoming/]: GRIDBENCH lamp: setBlock 5.2 μs, ChunkLights.apply 24.4 μs, in the palette 14.7 μs (with passage of sections, according to 1024 and 1024 lamps)
+[17:30:56] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++_                                   ]
+[17:30:56] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++_                                   ]
+[17:30:56] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++_                                   ]
+[17:30:56] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #3 (minecraft:overworld): outage cascade covered the whole area
+[17:30:56] [Server thread/INFO] [ua.ze.in.Incoming/]: Impact series summary (minecraft:overworld): strikes 5, units 41, total 25.7 ms, longest unit 7.0 ms, longest tick 7.1 ms, ticks over 50 ms 0, over 5 ticks
+[17:30:56] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++_                                   ]
+[17:30:56] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #4 (minecraft:overworld): outage cascade covered the whole area
+[17:30:56] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++_                                   ]
+[17:30:56] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++_                                   ]
+[17:30:56] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #5 (minecraft:overworld): outage cascade covered the whole area
+[17:30:56] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++_                                   ]
+[17:30:56] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #6 (minecraft:overworld): outage cascade covered the whole area
+[17:30:56] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++_                                   ]
+[17:30:56] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++_                                   ]
+[17:30:56] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #3 (minecraft:overworld): restore cascade covered the whole area
+[17:30:56] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++_                                   ]
+[17:30:56] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #4 (minecraft:overworld): restore cascade covered the whole area
+[17:30:56] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++_                                   ]
+[17:30:56] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++_                                   ]
+[17:30:56] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #5 (minecraft:overworld): restore cascade covered the whole area
+[17:30:56] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++_                                   ]
+[17:30:56] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #6 (minecraft:overworld): restore cascade covered the whole area
+[17:30:56] [Server thread/INFO] [ua.ze.in.Incoming/]: GRIDBENCH drained 765 previous-work units before measurement
+[17:30:56] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #7 (minecraft:overworld): -607704 8426635, radius 480, power returns in 15 min
+[17:30:56] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++_                                   ]
+[17:30:56] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #7 (minecraft:overworld): outage cascade covered the whole area
+[17:30:56] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++_                                   ]
+[17:30:56] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++_                                   ]
+[17:30:56] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++_                                   ]
+[17:30:56] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++_                                   ]
+[17:30:56] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++_                                   ]
+[17:30:56] [Server thread/WARN] [ua.ze.in.Incoming/]: Blackout (minecraft:overworld): work unit (queue) 23.1 ms, chunks 2, first [-37984, 526665]: pass_done=2/23.1ms lamps=16; outside kinds 0.0ms
+[17:30:56] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++_                                   ]
+[17:30:56] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++_                                   ]
+[17:30:56] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++_                                   ]
+[17:30:56] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++_                                   ]
+[17:30:56] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #7 (minecraft:overworld): power restored by command
+[17:30:56] [Server thread/INFO] [ua.ze.in.Incoming/]: Mod work over 30 s: server tick avg 3.9 ms (max 793.6), of which mod lanes avg — impacts 0.0, nuke 0.0, blackout 2.3 ms; the rest (vanilla, other mods) 1.5 ms; impact early window 100.0% of ticks, early avg 0.0 ms, late avg 0.0 ms; mandatory unload debt 0.7% of ticks
+[17:30:56] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++_                                   ]
+[17:30:56] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #7 (minecraft:overworld): restore cascade covered the whole area
+[17:30:56] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++_                                   ]
+[17:30:56] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++_                                   ]
+[17:30:56] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++_                                   ]
+[17:30:56] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++_                                   ]
+[17:30:56] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++_                                   ]
+[17:30:56] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++_                                   ]
+[17:30:56] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++_                                   ]
+[17:30:56] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++_                                   ]
+[17:30:56] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++_                                   ]
+[17:30:56] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #8 (minecraft:overworld): -607704 8426635, radius 480, power returns in 15 min
+[17:30:56] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #8 (minecraft:overworld): outage cascade covered the whole area
+[17:30:56] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++_                                   ]
+[17:30:57] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #8 (minecraft:overworld): power restored by command
+[17:30:57] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #8 (minecraft:overworld): restore cascade covered the whole area
+[17:30:57] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++_                                   ]
+[17:30:57] [Server thread/INFO] [ua.ze.in.Incoming/]: GRIDBENCH counting clock (up to 3 units per tick): clearing 1.71 chunks per unit (599 units, 200 tick), returning 1.71 (599 units, 200 tick)
+[17:30:57] [Server thread/INFO] [ua.ze.in.Incoming/]: GRIDBENCH real clock (budget 4 ms): clearing 68.3 chunks/tick (15 tick, longest 9.64 ms), returning 56.9 chunks/tick (18 tick, longest 3.98 ms)
+[17:30:57] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'grid_loot:0' (1 tests)...
+[17:30:57] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++                                   ]
+[17:30:57] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'work_connected:0' (1 tests)...
+[17:30:57] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++                                  ]
+[17:30:58] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'work_stop:0' (1 tests)...
+[17:30:58] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++                                 ]
+[17:30:58] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++                                 ]
+[17:30:58] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++                                 ]
+[17:30:58] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++_                                ]
+[17:30:58] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'grid_tower:0' (1 tests)...
+[17:30:58] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++                                ]
+[17:30:59] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #9 (minecraft:overworld): -607919 8426625, radius 200, power returns in 15 min
+[17:30:59] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++_                               ]
+[17:30:59] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #9 (minecraft:overworld): outage cascade covered the whole area
+[17:31:00] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++_                               ]
+[17:31:01] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++_                               ]
+[17:31:02] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #9 (minecraft:overworld): power restored by command
+[17:31:02] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++_                               ]
+[17:31:02] [Server thread/INFO] [ua.ze.in.Incoming/]: Impact series summary (minecraft:overworld): strikes 2, units 423, total 175.8 ms, longest unit 10.2 ms, longest tick 22.8 ms, ticks over 50 ms 0, over 75 ticks
+[17:31:03] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #9 (minecraft:overworld): restore cascade covered the whole area
+[17:31:03] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++_                               ]
+[17:31:04] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++_                               ]
+[17:31:05] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #10 (minecraft:overworld): -607919 8426625, radius 200, power returns in 15 min
+[17:31:05] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++_                               ]
+[17:31:06] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++_                               ]
+[17:31:07] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #10 (minecraft:overworld): outage cascade covered the whole area
+[17:31:07] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++_                               ]
+[17:31:08] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++_                               ]
+[17:31:09] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++_                               ]
+[17:31:10] [Server thread/INFO] [ua.ze.in.Incoming/]: Mod work over 30 s: server tick avg 22.5 ms (max 348.6), of which mod lanes avg — impacts 0.4, nuke 0.0, blackout 2.3 ms; the rest (vanilla, other mods) 19.8 ms; impact early window 98.7% of ticks, early avg 0.0 ms, late avg 0.4 ms; mandatory unload debt 1.0% of ticks
+[17:31:10] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++_                               ]
+[17:31:11] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++_                               ]
+[17:31:12] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++_                               ]
+[17:31:13] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++_                               ]
+[17:31:14] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #10 (minecraft:overworld): power restored by command
+[17:31:14] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++_                               ]
+[17:31:15] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++_                               ]
+[17:31:16] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #10 (minecraft:overworld): restore cascade covered the whole area
+[17:31:16] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++_                               ]
+[17:31:17] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++_                               ]
+[17:31:18] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++_                               ]
+[17:31:19] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++_                               ]
+[17:31:20] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++_                               ]
+[17:31:21] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++_                               ]
+[17:31:22] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++_                               ]
+[17:31:23] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'work_lanes:0' (1 tests)...
+[17:31:23] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++                               ]
+[17:31:23] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++                               ]
+[17:31:23] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #11 (minecraft:overworld): -607359 8426635, radius 200, power returns in 15 min
+[17:31:24] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++_                              ]
+[17:31:24] [Server thread/INFO] [ua.ze.in.Incoming/]: Impacts (minecraft:overworld): 1 jobs queued, oldest waiting 21 ticks
+[17:31:24] [Server thread/INFO] [ua.ze.in.Incoming/]: WORKBENCH lanes: 26 shared ticks, blackout worked in 17
+[17:31:24] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'work_same_tick:0' (1 tests)...
+[17:31:24] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #11 (minecraft:overworld): power restored by command
+[17:31:24] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #11 (minecraft:overworld): restore cascade covered the whole area
+[17:31:24] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++                              ]
+[17:31:24] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++                              ]
+[17:31:24] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'work_handoff:0' (1 tests)...
+[17:31:24] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++                             ]
+[17:31:24] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++                             ]
+[17:31:25] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'work_craft_shield:0' (1 tests)...
+[17:31:25] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++                            ]
+[17:31:25] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++                            ]
+[17:31:25] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'grid_settle:0' (1 tests)...
+[17:31:25] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++                           ]
+[17:31:25] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++                           ]
+[17:31:25] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #12 (minecraft:overworld): -598635 8417705, radius 150, power returns in 15 min
+[17:31:25] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++_                          ]
+[17:31:25] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #12 (minecraft:overworld): outage cascade covered the whole area
+[17:31:26] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'grid_edge_signal:0' (1 tests)...
+[17:31:26] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++                          ]
+[17:31:26] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #12 (minecraft:overworld): power restored by command
+[17:31:26] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #13 (minecraft:overworld): -608039 8426713, radius 200, power returns in 15 min
+[17:31:26] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #12 (minecraft:overworld): restore cascade covered the whole area
+[17:31:26] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #13 (minecraft:overworld): outage cascade covered the whole area
+[17:31:26] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #13 (minecraft:overworld): power restored by command
+[17:31:26] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++_                         ]
+[17:31:26] [Server thread/INFO] [ua.ze.in.Incoming/]: Impact series summary (minecraft:overworld): strikes 9, units 551, total 121.1 ms, longest unit 6.7 ms, longest tick 11.6 ms, ticks over 50 ms 0, over 146 ticks
+[17:31:26] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++_                         ]
+[17:31:26] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++_                         ]
+[17:31:26] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++_                         ]
+[17:31:26] [Server thread/INFO] [ua.ze.in.Incoming/]: Mod work over 30 s: server tick avg 26.1 ms (max 318.8), of which mod lanes avg — impacts 0.9, nuke 0.0, blackout 1.4 ms; the rest (vanilla, other mods) 23.8 ms; impact early window 95.2% of ticks, early avg 0.0 ms, late avg 0.9 ms; mandatory unload debt 2.0% of ticks
+[17:31:26] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++_                         ]
+[17:31:26] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++_                         ]
+[17:31:26] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++_                         ]
+[17:31:26] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++_                         ]
+[17:31:26] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++_                         ]
+[17:31:26] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #13 (minecraft:overworld): restore cascade covered the whole area
+[17:31:26] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++_                         ]
+[17:31:26] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'grid_round_trip:0' (1 tests)...
+[17:31:26] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++                         ]
+[17:31:26] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++                         ]
+[17:31:26] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++                         ]
+[17:31:27] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'grid_edge:0' (1 tests)...
+[17:31:27] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++                        ]
+[17:31:27] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #14 (minecraft:overworld): -607431 8427193, radius 200, power returns in 15 min
+[17:31:27] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #14 (minecraft:overworld): outage cascade covered the whole area
+[17:31:27] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #14 (minecraft:overworld): power restored by command
+[17:31:27] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++_                       ]
+[17:31:27] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++_                       ]
+[17:31:27] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++_                       ]
+[17:31:27] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++_                       ]
+[17:31:27] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++_                       ]
+[17:31:27] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++_                       ]
+[17:31:27] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++_                       ]
+[17:31:27] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++_                       ]
+[17:31:27] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #14 (minecraft:overworld): restore cascade covered the whole area
+[17:31:27] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'work_order:0' (1 tests)...
+[17:31:27] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++                       ]
+[17:31:28] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'grid_palette:0' (1 tests)...
+[17:31:28] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++++                      ]
+[17:31:28] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++++                      ]
+[17:31:28] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'work_impact_debt:0' (1 tests)...
+[17:31:28] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++                     ]
+[17:31:28] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++_                    ]
+[17:31:28] [Server thread/INFO] [ua.ze.in.Incoming/]: Impacts (minecraft:overworld): 3 jobs queued, oldest waiting 21 ticks
+[17:31:28] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++_                    ]
+[17:31:28] [Server thread/INFO] [ua.ze.in.Incoming/]: PL10 PHASES first_block=24 main_done=30 summary=30 old_ignition_done=false old_shatter_done=false
+[17:31:28] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'grid_save_tags:0' (2 tests)...
+[17:31:29] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++++++                    ]
+[17:31:29] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++                   ]
+[17:31:29] [Server thread/WARN] [ua.ze.in.Incoming/]: Blackout: section -3 of chunk [-37978, 526673] in the save differs from memory (another mod changes the tag) — its unlit lamps are saved as they are
+[17:31:29] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'work_changed:0' (1 tests)...
+[17:31:29] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++++++++                  ]
+[17:31:29] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++++++++                  ]
+[17:31:29] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++++++++                  ]
+[17:31:29] [Server thread/INFO] [ua.ze.in.Incoming/]: Impact series summary (minecraft:overworld): strikes 4, units 375, total 64.5 ms, longest unit 10.2 ms, longest tick 13.5 ms, ticks over 50 ms 0, over 98 ticks
+[17:31:29] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++++++++                  ]
+[17:31:29] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'work_area_order:0' (1 tests)...
+[17:31:29] [Server thread/INFO] [ua.ze.in.Incoming/]: Mod work over 30 s: server tick avg 5.6 ms (max 422.5), of which mod lanes avg — impacts 0.7, nuke 0.0, blackout 0.0 ms; the rest (vanilla, other mods) 4.8 ms; impact early window 92.2% of ticks, early avg 0.0 ms, late avg 0.7 ms; mandatory unload debt 3.0% of ticks
+[17:31:29] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++                 ]
+[17:31:29] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++                 ]
+[17:31:29] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++                 ]
+[17:31:30] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++_                ]
+[17:31:30] [Server thread/INFO] [ua.ze.in.Incoming/]: Impacts (minecraft:overworld): 83 jobs queued, oldest waiting 21 ticks
+[17:31:30] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++_                ]
+[17:31:30] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'work_impact_modes:0' (1 tests)...
+[17:31:30] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++++++++++                ]
+[17:31:30] [Server thread/INFO] [ua.ze.in.Incoming/]: PL10 MODES frozen_posts=3 sprint_posts=3 overworld_units=119 nether_units=357 max_tick_work_ms=29.75
+[17:31:30] [Server thread/INFO] [minecraft/MinecraftServer]: Sprint completed with 4274 ticks per second, or 0,23 ms per tick
+[17:31:30] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'grid_signal:0' (1 tests)...
+[17:31:30] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++               ]
+[17:31:30] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++               ]
+[17:31:30] [Server thread/WARN] [ua.ze.in.Incoming/]: Blackout: MutableBlockPos{x=-607416, y=-47, z=8426772} was set to Block{minecraft:copper_bulb}[lit=false,powered=false], but holds Block{minecraft:copper_bulb}[lit=true,powered=true] — another mod changes the block; such lamps are skipped
+[17:31:30] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'work_craft:0' (1 tests)...
+[17:31:30] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++++++++++++              ]
+[17:31:30] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++++++++++++              ]
+[17:31:30] [Server thread/INFO] [ua.ze.in.Incoming/]: Impact series summary (minecraft:overworld): strikes 2, units 388, total 68.0 ms, longest unit 2.3 ms, longest tick 16.8 ms, ticks over 50 ms 0, over 104 ticks
+[17:31:30] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++++++++++++_             ]
+[17:31:31] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'grid_nuke:0' (1 tests)...
+[17:31:31] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++++             ]
+[17:31:31] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #16 (minecraft:overworld): -607269 8426775, radius 770, power returns in 15 min
+[17:31:31] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #17 (minecraft:overworld): -607277 8426775, radius 512, power returns in 15 min
+[17:31:31] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++++_            ]
+[17:31:31] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #16 (minecraft:overworld): power restored by command
+[17:31:31] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #17 (minecraft:overworld): power restored by command
+[17:31:31] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #16 (minecraft:overworld): outage cascade covered the whole area
+[17:31:31] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++++_            ]
+[17:31:31] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++++_            ]
+[17:31:31] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++++_            ]
+[17:31:31] [Server thread/INFO] [ua.ze.in.Incoming/]: Impact series summary (minecraft:overworld): strikes 1, units 181, total 49.3 ms, longest unit 17.3 ms, longest tick 24.8 ms, ticks over 50 ms 0, over 3 ticks
+[17:31:31] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++++_            ]
+[17:31:31] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++++_            ]
+[17:31:31] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'work_drop_decay:0' (1 tests)...
+[17:31:31] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++++++++++++++            ]
+[17:31:31] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++++++++++++++            ]
+[17:31:31] [Server thread/INFO] [ua.ze.in.Incoming/]: BLASTDROPS power-16 explosion: 2710 blocks removed, 181 items dropped
+[17:31:32] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'grid_foreign_read:0' (1 tests)...
+[17:31:32] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++++++           ]
+[17:31:32] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #16 (minecraft:overworld): power restored by command
+[17:31:32] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #17 (minecraft:overworld): power restored by command
+[17:31:32] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #18 (minecraft:overworld): -607644 8427316, radius 200, power returns in 15 min
+[17:31:32] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #16 (minecraft:overworld): restore cascade covered the whole area
+[17:31:32] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #17 (minecraft:overworld): restore cascade covered the whole area
+[17:31:32] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #18 (minecraft:overworld): outage cascade covered the whole area
+[17:31:32] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++++++_          ]
+[17:31:32] [gametest-foreign-reader/INFO] [ua.ze.in.Incoming/]: Blackout: chunk [-37978, 526707] read from disk not for the world (thread gametest-foreign-reader) — the blackout queue ignores it
+java.lang.Throwable: who reads it
+	at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.grid.ChunkSaves.foreignRead(ChunkSaves.java:151) ~[%23133!/:?] {re:classloading}
+	at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.grid.ChunkSaves.onLoad(ChunkSaves.java:108) ~[%23133!/:?] {re:classloading}
+	at MC-BOOTSTRAP/net.neoforged.bus/net.neoforged.bus.ConsumerEventHandler.invoke(ConsumerEventHandler.java:27) ~[bus-8.0.5.jar%23106!/:?] {}
+	at MC-BOOTSTRAP/net.neoforged.bus/net.neoforged.bus.EventBus.post(EventBus.java:360) ~[bus-8.0.5.jar%23106!/:?] {}
+	at MC-BOOTSTRAP/net.neoforged.bus/net.neoforged.bus.EventBus.post(EventBus.java:328) ~[bus-8.0.5.jar%23106!/:?] {}
+	at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.gametest.GridGameTests.lambda$foreignChunkReadsLeaveQueueAlone$71(GridGameTests.java:799) ~[%23133!/:?] {re:classloading}
+	at java.base/java.lang.Thread.run(Thread.java:1583) [?:?] {}
+[17:31:32] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #18 (minecraft:overworld): power restored by command
+[17:31:32] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #18 (minecraft:overworld): restore cascade covered the whole area
+[17:31:32] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'grid_restart:0' (1 tests)...
+[17:31:32] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++++++++++++++++          ]
+[17:31:32] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #19 (minecraft:overworld): -607566 8426845, radius 200, power returns in 15 min
+[17:31:32] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++++++++++++++++_         ]
+[17:31:32] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++++++++++++++++_         ]
+[17:31:32] [Server thread/INFO] [ua.ze.in.Incoming/]: Impact series summary (minecraft:overworld): strikes 1, units 19, total 23.9 ms, longest unit 5.0 ms, longest tick 17.6 ms, ticks over 50 ms 0, over 2 ticks
+[17:31:32] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++++++++++++++++_         ]
+[17:31:32] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #19 (minecraft:overworld): power restored by command
+[17:31:32] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #19 (minecraft:overworld): restore cascade covered the whole area
+[17:31:32] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'work_craft_reach:0' (1 tests)...
+[17:31:32] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++++++++         ]
+[17:31:32] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++++++++         ]
+[17:31:33] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'grid_cascade:0' (1 tests)...
+[17:31:33] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++++++++++++++++++        ]
+[17:31:33] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++++++++++++++++++        ]
+[17:31:33] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #21 (minecraft:overworld): -607428 8426845, radius 512, power returns in 15 min
+[17:31:33] [Server thread/INFO] [ua.ze.in.Incoming/]: Mod work over 30 s: server tick avg 6.1 ms (max 547.2), of which mod lanes avg — impacts 0.6, nuke 0.0, blackout 0.1 ms; the rest (vanilla, other mods) 5.4 ms; impact early window 92.7% of ticks, early avg 0.1 ms, late avg 0.5 ms; mandatory unload debt 2.8% of ticks
+[17:31:33] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++++++++++++++++++_       ]
+[17:31:33] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #21 (minecraft:overworld): power restored by command
+[17:31:33] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++++++++++++++++++_       ]
+[17:31:33] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++++++++++++++++++_       ]
+[17:31:33] [Server thread/INFO] [ua.ze.in.Incoming/]: Impact series summary (minecraft:overworld): strikes 1, units 3, total 3.3 ms, longest unit 3.3 ms, longest tick 3.4 ms, ticks over 50 ms 0, over 1 ticks
+[17:31:33] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++++++++++++++++++_       ]
+[17:31:33] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++++++++++++++++++_       ]
+[17:31:33] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++++++++++++++++++_       ]
+[17:31:33] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++++++++++++++++++_       ]
+[17:31:33] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++++++++++++++++++_       ]
+[17:31:33] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++++++++++++++++++_       ]
+[17:31:33] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++++++++++++++++++_       ]
+[17:31:33] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #21 (minecraft:overworld): outage cascade covered the whole area
+[17:31:33] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'work_impact_profiler:0' (1 tests)...
+[17:31:33] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++++++++++       ]
+[17:31:33] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #21 (minecraft:overworld): restore cascade covered the whole area
+[17:31:33] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++++++++++       ]
+[17:31:33] [Server thread/INFO] [ua.ze.in.Incoming/]: PL10 PROFILER real_ticks=4 chunk_unload_sections=12
+[17:31:34] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'work_portion_time:0' (1 tests)...
+[17:31:34] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++++++++++++++++++++      ]
+[17:31:34] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++++++++++++++++++++      ]
+[17:31:34] [Server thread/WARN] [ua.ze.in.Incoming/]: Blast: removing block minecraft:dirt took 11.0 ms at -607332 -55 8426845 (minecraft:overworld, block entity: no)
+[17:31:34] [Server thread/WARN] [ua.ze.in.Incoming/]: Blast: removing block minecraft:dirt took 11.0 ms at -607333 -55 8426843 (minecraft:overworld, block entity: no)
+[17:31:34] [Server thread/WARN] [ua.ze.in.Incoming/]: Blast: removing block minecraft:dirt took 11.0 ms at -607333 -56 8426845 (minecraft:overworld, block entity: no)
+[17:31:34] [Server thread/WARN] [ua.ze.in.Incoming/]: Blast: removing block minecraft:dirt took 11.0 ms at -607334 -55 8426845 (minecraft:overworld, block entity: no)
+[17:31:34] [Server thread/WARN] [ua.ze.in.Incoming/]: Blast: removing block minecraft:dirt took 11.0 ms at -607332 -55 8426844 (minecraft:overworld, block entity: no)
+[17:31:34] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'work_budget:0' (1 tests)...
+[17:31:34] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++++++++++++     ]
+[17:31:34] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++++++++++++_    ]
+[17:31:34] [Server thread/INFO] [ua.ze.in.Incoming/]: Impacts (minecraft:overworld): 1 jobs queued, oldest waiting 21 ticks
+[17:31:34] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++++++++++++_    ]
+[17:31:34] [Server thread/INFO] [ua.ze.in.Incoming/]: WORKBENCH salvo: 482 work units over 26 ticks (up to 20 per tick), explosions 6, blocks 459
+[17:31:34] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'grid_placed:0' (1 tests)...
+[17:31:35] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++++++++++++++++++++++    ]
+[17:31:35] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++++++++++++++++++++++    ]
+[17:31:35] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #22 (minecraft:overworld): -607704 8426915, radius 200, power returns in 15 min
+[17:31:35] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #22 (minecraft:overworld): outage cascade covered the whole area
+[17:31:35] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++++++++++++++++++++++_   ]
+[17:31:35] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'grid_dense:0' (1 tests)...
+[17:31:35] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++++++++++++++   ]
+[17:31:35] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++++++++++++++   ]
+[17:31:35] [Server thread/INFO] [ua.ze.in.Incoming/]: Impact series summary (minecraft:overworld): strikes 8, units 1084, total 99.7 ms, longest unit 11.3 ms, longest tick 15.7 ms, ticks over 50 ms 0, over 60 ticks
+[17:31:35] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #22 (minecraft:overworld): power restored by command
+[17:31:35] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #23 (minecraft:overworld): -607152 8427408, radius 200, power returns in 15 min
+[17:31:35] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #22 (minecraft:overworld): restore cascade covered the whole area
+[17:31:35] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++++++++++++++_  ]
+[17:31:35] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #23 (minecraft:overworld): outage cascade covered the whole area
+[17:31:35] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++++++++++++++_  ]
+[17:31:35] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++++++++++++++_  ]
+[17:31:35] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++++++++++++++_  ]
+[17:31:35] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++++++++++++++_  ]
+[17:31:35] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++++++++++++++_  ]
+[17:31:35] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++++++++++++++_  ]
+[17:31:35] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++++++++++++++_  ]
+[17:31:35] [Server thread/INFO] [ua.ze.in.Incoming/]: Mod work over 30 s: server tick avg 3.2 ms (max 341.2), of which mod lanes avg — impacts 0.8, nuke 0.0, blackout 1.1 ms; the rest (vanilla, other mods) 1.3 ms; impact early window 95.7% of ticks, early avg 0.0 ms, late avg 0.8 ms; mandatory unload debt 1.3% of ticks
+[17:31:35] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++++++++++++++_  ]
+[17:31:35] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++++++++++++++_  ]
+[17:31:35] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++++++++++++++_  ]
+[17:31:35] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++++++++++++++_  ]
+[17:31:35] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++++++++++++++_  ]
+[17:31:35] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++++++++++++++_  ]
+[17:31:35] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++++++++++++++_  ]
+[17:31:35] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++++++++++++++_  ]
+[17:31:35] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++++++++++++++_  ]
+[17:31:35] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++++++++++++++_  ]
+[17:31:35] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++++++++++++++_  ]
+[17:31:35] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++++++++++++++_  ]
+[17:31:35] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++++++++++++++_  ]
+[17:31:35] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++++++++++++++_  ]
+[17:31:35] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++++++++++++++_  ]
+[17:31:35] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++++++++++++++_  ]
+[17:31:35] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++++++++++++++_  ]
+[17:31:35] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++++++++++++++_  ]
+[17:31:35] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++++++++++++++_  ]
+[17:31:36] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++++++++++++++_  ]
+[17:31:36] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++++++++++++++_  ]
+[17:31:36] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #23 (minecraft:overworld): power restored by command
+[17:31:36] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++++++++++++++_  ]
+[17:31:36] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #23 (minecraft:overworld): restore cascade covered the whole area
+[17:31:36] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++++++++++++++_  ]
+[17:31:36] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++++++++++++++_  ]
+[17:31:36] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++++++++++++++_  ]
+[17:31:36] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++++++++++++++_  ]
+[17:31:36] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++++++++++++++_  ]
+[17:31:36] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++++++++++++++_  ]
+[17:31:36] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++++++++++++++_  ]
+[17:31:36] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++++++++++++++_  ]
+[17:31:36] [Server thread/INFO] [ua.ze.in.Incoming/]: GRIDBENCH dense chunks: 28672 light blocks, blanking 117 units, return 113 (no more than 136);  UNIT=230 GONE=0 IDLE=144 STALE=0 RESIGNAL=0 PASS_DONE=8 PASS_MORE=217 EDGE=7 LAMPS=57386 REVERTED=0 RELIGHT=0 RELIGHT_WAIT=0 BUILD=123 ISSUE=6
+[17:31:36] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'grid_sable:0' (1 tests)...
+[17:31:36] [Server thread/INFO] [ua.ze.in.Incoming/]: Mod work over 30 s: server tick avg 0.9 ms (max 236.5), of which mod lanes avg — impacts 0.0, nuke 0.0, blackout 0.3 ms; the rest (vanilla, other mods) 0.6 ms; impact early window 100.0% of ticks, early avg 0.0 ms, late avg 0.0 ms; mandatory unload debt 0.3% of ticks
+[17:31:36] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++++++++++++++++++++++++  ]
+[17:31:36] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++++++++++++++++++++++++  ]
+[17:31:36] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #24 (minecraft:overworld): -607566 8426915, radius 200, power returns in 15 min
+[17:31:36] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #24 (minecraft:overworld): outage cascade covered the whole area
+[17:31:36] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++++++++++++++++++++++++_ ]
+[17:31:36] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++++++++++++++++++++++++_ ]
+[17:31:36] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++++++++++++++++++++++++_ ]
+[17:31:36] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++++++++++++++++++++++++_ ]
+[17:31:36] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++++++++++++++++++++++++_ ]
+[17:31:36] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++++++++++++++++++++++++_ ]
+[17:31:36] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++++++++++++++++++++++++_ ]
+[17:31:36] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++++++++++++++++++++++++_ ]
+[17:31:36] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #24 (minecraft:overworld): power restored by command
+[17:31:36] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'grid_disk:0' (1 tests)...
+[17:31:36] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++++++++++++++++ ]
+[17:31:36] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++++++++++++++++ ]
+[17:31:36] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++++++++++++++++ ]
+[17:31:37] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #24 (minecraft:overworld): power restored by command
+[17:31:37] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #25 (minecraft:overworld): -607497 8426436, radius 200, power returns in 15 min
+[17:31:37] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #24 (minecraft:overworld): restore cascade covered the whole area
+[17:31:37] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #25 (minecraft:overworld): outage cascade covered the whole area
+[17:31:37] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++++++++++++++++_]
+[17:31:37] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++++++++++++++++_]
+[17:31:37] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #25 (minecraft:overworld): power restored by command
+[17:31:37] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++++++++++++++++_]
+[17:31:37] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++++++++++++++++_]
+[17:31:37] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++++++++++++++++_]
+[17:31:37] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++++++++++++++++_]
+[17:31:37] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++++++++++++++++_]
+[17:31:37] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++++++++++++++++_]
+[17:31:37] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++++++++++++++++++++++++++]
+[17:31:37] [Server thread/INFO] [minecraft/GameTestServer]: ========= 44 GAME TESTS COMPLETE IN 47.34 s ======================
+[17:31:37] [Server thread/INFO] [minecraft/GameTestServer]: All 44 required tests passed :)
+[17:31:37] [Server thread/INFO] [minecraft/GameTestServer]: ====================================================
+[17:31:37] [Server thread/INFO] [minecraft/MinecraftServer]: Stopping server
+[17:31:37] [Server thread/INFO] [minecraft/MinecraftServer]: Saving players
+[17:31:37] [Server thread/INFO] [minecraft/MinecraftServer]: Saving worlds
+[17:31:37] [Server thread/INFO] [minecraft/MinecraftServer]: Saving chunks for level 'ServerLevel[Test Level]'/minecraft:overworld
+[17:31:37] [Server thread/INFO] [de.ry.sa.Sable/]: Saving sub-levels for level 'ServerLevel[Test Level]'/minecraft:overworld
+[17:31:40] [Server thread/INFO] [minecraft/MinecraftServer]: Saving chunks for level 'ServerLevel[Test Level]'/minecraft:the_end
+[17:31:40] [Server thread/INFO] [de.ry.sa.Sable/]: Saving sub-levels for level 'ServerLevel[Test Level]'/minecraft:the_end
+[17:31:40] [Server thread/INFO] [minecraft/MinecraftServer]: Saving chunks for level 'ServerLevel[Test Level]'/minecraft:the_nether
+[17:31:40] [Server thread/INFO] [de.ry.sa.Sable/]: Saving sub-levels for level 'ServerLevel[Test Level]'/minecraft:the_nether
+[17:31:40] [Server thread/INFO] [minecraft/MinecraftServer]: ThreadedAnvilChunkStorage (world): All chunks are saved
+[17:31:40] [Server thread/INFO] [minecraft/MinecraftServer]: ThreadedAnvilChunkStorage (DIM1): All chunks are saved
+[17:31:40] [Server thread/INFO] [minecraft/MinecraftServer]: ThreadedAnvilChunkStorage (DIM-1): All chunks are saved
+[17:31:40] [Server thread/INFO] [minecraft/MinecraftServer]: ThreadedAnvilChunkStorage: All dimensions are saved
+[17:31:40] [Server thread/INFO] [minecraft/GameTestServer]: Game test server shutting down
+
+[Incubating] Problems report is available at: file:///mnt/data/projects/incoming/mod/run/wt-GRID2/mod/build/reports/problems/problems-report.html
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 9.0.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/8.14.3/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD SUCCESSFUL in 1m 6s
+11 actionable tasks: 1 executed, 10 up-to-date

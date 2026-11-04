@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.grid.BlackoutSweepTest" tests="2" skipped="0" failures="2" errors="0" timestamp="2026-11-04T15:12:37.947Z" hostname="zentixua-pc" time="0.078">
+  <properties/>
+  <testcase name="largeInstantBucketYieldsToTheExistingClockAndResumesWithoutLoss()" classname="ua.zentix.incoming.grid.BlackoutSweepTest" time="0.07">
+    <failure message="org.opentest4j.AssertionFailedError: due work must consume the shared clock ==&gt; expected: &lt;1&gt; but was: &lt;0&gt;" type="org.opentest4j.AssertionFailedError">org.opentest4j.AssertionFailedError: due work must consume the shared clock ==&gt; expected: &lt;1&gt; but was: &lt;0&gt;
+	at app//org.junit.jupiter.api.AssertionFailureBuilder.build(AssertionFailureBuilder.java:151)
+	at app//org.junit.jupiter.api.AssertionFailureBuilder.buildAndThrow(AssertionFailureBuilder.java:132)
+	at app//org.junit.jupiter.api.AssertEquals.failNotEqual(AssertEquals.java:197)
+	at app//org.junit.jupiter.api.AssertEquals.assertEquals(AssertEquals.java:150)
+	at app//org.junit.jupiter.api.Assertions.assertEquals(Assertions.java:563)
+	at app//ua.zentix.incoming.grid.BlackoutSweepTest.largeInstantBucketYieldsToTheExistingClockAndResumesWithoutLoss(BlackoutSweepTest.java:24)
+	at java.base@21.0.7/java.lang.reflect.Method.invoke(Method.java:580)
+	at java.base@21.0.7/java.util.ArrayList.forEach(ArrayList.java:1596)
+	at java.base@21.0.7/java.util.ArrayList.forEach(ArrayList.java:1596)
+</failure>
+  </testcase>
+  <testcase name="exhaustedSharedClockDoesNotIssueEvenOneDueChunk()" classname="ua.zentix.incoming.grid.BlackoutSweepTest" time="0.007">
+    <failure message="org.opentest4j.AssertionFailedError: due issuance bypassed an exhausted shared clock ==&gt; expected: &lt;true&gt; but was: &lt;false&gt;" type="org.opentest4j.AssertionFailedError">org.opentest4j.AssertionFailedError: due issuance bypassed an exhausted shared clock ==&gt; expected: &lt;true&gt; but was: &lt;false&gt;
+	at app//org.junit.jupiter.api.AssertionFailureBuilder.build(AssertionFailureBuilder.java:151)
+	at app//org.junit.jupiter.api.AssertionFailureBuilder.buildAndThrow(AssertionFailureBuilder.java:132)
+	at app//org.junit.jupiter.api.AssertTrue.failNotTrue(AssertTrue.java:63)
+	at app//org.junit.jupiter.api.AssertTrue.assertTrue(AssertTrue.java:36)
+	at app//org.junit.jupiter.api.Assertions.assertTrue(Assertions.java:214)
+	at app//ua.zentix.incoming.grid.BlackoutSweepTest.exhaustedSharedClockDoesNotIssueEvenOneDueChunk(BlackoutSweepTest.java:40)
+	at java.base@21.0.7/java.lang.reflect.Method.invoke(Method.java:580)
+	at java.base@21.0.7/java.util.ArrayList.forEach(ArrayList.java:1596)
+	at java.base@21.0.7/java.util.ArrayList.forEach(ArrayList.java:1596)
+</failure>
+  </testcase>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

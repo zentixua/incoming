@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.grid.BlackoutSweepTest" tests="1" skipped="0" failures="1" errors="0" timestamp="2026-11-04T15:23:18.044Z" hostname="zentixua-pc" time="0.056">
+  <properties/>
+  <testcase name="closestChunksOfEveryPlayerLeadEachDistanceRing()" classname="ua.zentix.incoming.grid.BlackoutSweepTest" time="0.056">
+    <failure message="org.opentest4j.AssertionFailedError: more distant near chunk overtook a closer player chunk ==&gt; expected: &lt;true&gt; but was: &lt;false&gt;" type="org.opentest4j.AssertionFailedError">org.opentest4j.AssertionFailedError: more distant near chunk overtook a closer player chunk ==&gt; expected: &lt;true&gt; but was: &lt;false&gt;
+	at app//org.junit.jupiter.api.AssertionFailureBuilder.build(AssertionFailureBuilder.java:151)
+	at app//org.junit.jupiter.api.AssertionFailureBuilder.buildAndThrow(AssertionFailureBuilder.java:132)
+	at app//org.junit.jupiter.api.AssertTrue.failNotTrue(AssertTrue.java:63)
+	at app//org.junit.jupiter.api.AssertTrue.assertTrue(AssertTrue.java:36)
+	at app//org.junit.jupiter.api.Assertions.assertTrue(Assertions.java:214)
+	at app//ua.zentix.incoming.grid.BlackoutSweepTest.lambda$closestChunksOfEveryPlayerLeadEachDistanceRing$2(BlackoutSweepTest.java:92)
+	at app//ua.zentix.incoming.grid.BlackoutWorld$Sweep.issueBatch(BlackoutWorld.java:165)
+	at app//ua.zentix.incoming.grid.BlackoutWorld.issueDue(BlackoutWorld.java:745)
+	at app//ua.zentix.incoming.grid.BlackoutSweepTest.closestChunksOfEveryPlayerLeadEachDistanceRing(BlackoutSweepTest.java:87)
+	at java.base@21.0.7/java.lang.reflect.Method.invoke(Method.java:580)
+	at java.base@21.0.7/java.util.ArrayList.forEach(ArrayList.java:1596)
+	at java.base@21.0.7/java.util.ArrayList.forEach(ArrayList.java:1596)
+</failure>
+  </testcase>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.grid.BlackoutSweepTest" tests="9" skipped="0" failures="0" errors="0" timestamp="2026-11-04T15:25:37.869Z" hostname="zentixua-pc" time="0.461">
+  <properties/>
+  <testcase name="productionNearFifoStartsWithBothPlayersInLargeAndSmallBuckets()" classname="ua.zentix.incoming.grid.BlackoutSweepTest" time="0.027"/>
+  <testcase name="closestChunksOfEveryPlayerLeadEachDistanceRing()" classname="ua.zentix.incoming.grid.BlackoutSweepTest" time="0.011"/>
+  <testcase name="partialBucketProgressSurvivesSavedDataRoundTrip()" classname="ua.zentix.incoming.grid.BlackoutSweepTest" time="0.308"/>
+  <testcase name="nearQueueGetsTheNextTickInsteadOfWaitingForWholeFarBucket()" classname="ua.zentix.incoming.grid.BlackoutSweepTest" time="0.006"/>
+  <testcase name="largeInstantBucketYieldsToTheExistingClockAndResumesWithoutLoss()" classname="ua.zentix.incoming.grid.BlackoutSweepTest" time="0.014"/>
+  <testcase name="exhaustedSharedClockDoesNotIssueEvenOneDueChunk()" classname="ua.zentix.incoming.grid.BlackoutSweepTest" time="0.006"/>
+  <testcase name="actualDistrictDeadlinesRemainOrderedAndPartialProgressReplaysOnRestart()" classname="ua.zentix.incoming.grid.BlackoutSweepTest" time="0.033"/>
+  <testcase name="restorationAndTwoSweepsUseTheSameClock()" classname="ua.zentix.incoming.grid.BlackoutSweepTest" time="0.012"/>
+  <testcase name="distantBucketTailNearTwoOverlappingPlayersIsIssuedFirst()" classname="ua.zentix.incoming.grid.BlackoutSweepTest" time="0.039"/>
+  <system-out><![CDATA[WARN StatusConsoleListener Advanced terminal features are not available in this environment
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>
