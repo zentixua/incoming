@@ -387,6 +387,10 @@ public final class RuinBackgroundGameTests {
     public static void stopMidZoneLeavesNoWork(GameTestHelper h) {
         ServerLevel level = h.getLevel();
         double scale = ua.zentix.incoming.IncomingConfig.SERVER.nukeEffectsScale.get();
+        StrikeGameTests.afterTest(h, () -> {
+            ua.zentix.incoming.IncomingConfig.SERVER.nukeEffectsScale.set(scale);
+            NuclearStrikes.clear(level);
+        });
         ua.zentix.incoming.IncomingConfig.SERVER.nukeEffectsScale.set(0.02);
         NuclearWorld w = NuclearWorld.get(level);
         ua.zentix.incoming.nuclear.NuclearEvents events = ua.zentix.incoming.nuclear.NuclearEvents.get(level);
@@ -399,8 +403,6 @@ public final class RuinBackgroundGameTests {
             boolean midZone = detonated && (w.prepTiles() > 0 || w.plannedChunks() > 0 || w.queuedChunks() > 0);
             if (!midZone) {
                 if (level.getGameTime() > now + 850) {
-                    ua.zentix.incoming.IncomingConfig.SERVER.nukeEffectsScale.set(scale);
-                    NuclearStrikes.clear(level);
                     throw new net.minecraft.gametest.framework.GameTestAssertException("the zone behind the wave never started: detonation " + detonated);
                 }
                 return;
@@ -408,12 +410,10 @@ public final class RuinBackgroundGameTests {
             Incoming.LOG.info("Nuclear stop fixture before shutdown: {}",
                     ua.zentix.incoming.strike.StrikeWorld.get(level).areas().describe());
             boolean stopped = NuclearWorld.onServerStopping(level.getServer());
-            ua.zentix.incoming.IncomingConfig.SERVER.nukeEffectsScale.set(scale);
             List<String> held = ruinTickets(level);
             long threads = ruinThreadsLeft();
             String left = "squares " + w.prepTiles() + ", in preparation " + w.plannedChunks() + ", in line " + w.queuedChunks()
                     + ", ticket ruins " + held + ", streams of ruins " + threads;
-            NuclearStrikes.clear(level);
             h.assertTrue(stopped, "background threads did not stop within the time limit; " + left);
             h.assertTrue(ua.zentix.incoming.nuclear.world.RuinWorkers.stopped() && threads == 0, "streams of ruins remained; " + left);
             h.assertTrue(w.prepTiles() == 0 && w.plannedChunks() == 0 && w.queuedChunks() == 0 && held.isEmpty(), "after stopping there is still work left: " + left);
@@ -1196,7 +1196,9 @@ public final class RuinBackgroundGameTests {
     }
 
     /**
-     * The chunk that the wave reached while its ruins are being built (background - not earlier than the next tick) is not given to the player: it is removed from the sending queue; when the ruins stand up, it gives away.
+     * A wave-reached chunk stays out of the player send queue until its asynchronous ruins finish.
+     * Hold worker admission until the first post-wave request, then release it and verify the actual replacement.
+     * A fast worker must not finish before the fixture has exercised the gate.
      */
     @GameTest(template = "range", timeoutTicks = 1200, batch = "nuke_send_hold", skyAccess = true)
     public static void chunkWithheldUntilRuins(GameTestHelper h) {
@@ -1205,6 +1207,12 @@ public final class RuinBackgroundGameTests {
         h.setBlock(glass, Blocks.GLASS);
         long chunk = new ChunkPos(h.absolutePos(glass)).toLong();
         NuclearWorld w = NuclearWorld.get(level);
+        var release = new java.util.concurrent.CountDownLatch(1);
+        StrikeGameTests.afterTest(h, () -> {
+            release.countDown();
+            NuclearStrikes.clear(level);
+        });
+        RuinWorkers.fillForTest(release, RuinWorkers.Priority.SEEN);
         Detonation d = NuclearWarhead.detonate(level, Vec3.atBottomCenterOf(h.absolutePos(NuclearGameTests.CENTER)), 1, false, null, 0.1f);
         boolean[] held = {false};
         h.succeedWhen(() -> {
@@ -1216,12 +1224,13 @@ public final class RuinBackgroundGameTests {
                 if (w.withholds(level, chunk)) {
                     h.assertTrue(out != null && out.contains(chunk) && pending.isEmpty(), "chunk without ruins remained in the sending queue");
                     held[0] = true;
+                    release.countDown();
                 }
                 h.fail("the ruins have not yet risen");
             }
             h.assertTrue(out == null && pending.contains(chunk), "chunk with ruins is not given to the player");
             h.assertTrue(held[0], "chunk never waited for ruins: not verified");
-            NuclearStrikes.clear(level);
+            h.assertBlockNotPresent(Blocks.GLASS, glass);
         });
     }
 

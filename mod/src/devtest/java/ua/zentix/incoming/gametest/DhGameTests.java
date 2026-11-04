@@ -534,7 +534,8 @@ public final class DhGameTests {
     /**
      * Heavy-zone LOD with the front ({@code FrontLods}): a strike with flight toward a place not in memory (zone chunks
      * and their ruin windows are on disk). A copy of each zone chunk with a plan is built during flight and sent to DH at tick
-     * {@code max(detonation, front arrival at DH section center − LEAD)}; one DH section (4×4 chunks) in one tick, once:
+     * {@code max(detonation, front arrival at DH section center − LEAD)} when the send budget and window have room;
+     * one DH section (4×4 chunks) in one tick, once:
      * a {@code FarLods} request on wave arrival (and light from a quarter blacked out by detonation) does not repeat it.
      * Log output is delivery minus front arrival by chunk. The receiver immediately sends DH write confirmation (absent
      * without DH). Await actual asynchronous preparation first, then move the deadline near the current tick;
@@ -542,6 +543,16 @@ public final class DhGameTests {
      */
     @GameTest(template = "range", timeoutTicks = 6000, batch = "dh_front", skyAccess = true)
     public static void heavyZoneLodsGoWithTheFront(GameTestHelper h) {
+        heavyZoneLods(h, false);
+    }
+
+    /** A whole section consumes the send budget: every due tick must still advance exactly one section. */
+    @GameTest(template = "range", timeoutTicks = 6000, batch = "dh_front_budget", skyAccess = true)
+    public static void heavyZoneLodsYieldBySectionWhenBudgetExhausted(GameTestHelper h) {
+        heavyZoneLods(h, true);
+    }
+
+    private static void heavyZoneLods(GameTestHelper h, boolean exhaustedBudget) {
         ServerLevel level = h.getLevel();
         // its place in the distance: zone 1 kt with a scale of 0,25 - 110 blocks, with the edge of the zone and windows of the ruins - 10 chunks from the middle
         ChunkPos t = farTile(h, -9000, 9000);
@@ -555,8 +566,12 @@ public final class DhGameTests {
         double scale = IncomingConfig.SERVER.nukeEffectsScale.get();
         // copies (ProtoChunk) by chunks: tick returns
         it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<LongArrayList> copies = new it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<>();
+        long[] sendNanos = {0};
         DhUpdates.testSink(level, (l, chunk) -> {
-            if (chunk instanceof ProtoChunk) copies.computeIfAbsent(chunk.getPos().toLong(), k -> new LongArrayList()).add(l.getGameTime());
+            if (chunk instanceof ProtoChunk) {
+                copies.computeIfAbsent(chunk.getPos().toLong(), k -> new LongArrayList()).add(l.getGameTime());
+                if (exhaustedBudget) sendNanos[0] += 2_000_000L;
+            }
             DhUpdates.saved(l, chunk.getPos().x, chunk.getPos().z);
         });
         FarLods.testViewer(level, t);
@@ -603,6 +618,7 @@ public final class DhGameTests {
                     // This tests publication timing, not disk throughput. Arm the fixture only after its
                     // asynchronous prerequisite completes; the ensuing front advances strictly by game ticks.
                     if (prepared[0] && s != null && s[0] > 0 && s[12] == 0 && s[13] == 0 && since[0] >= 0) {
+                        h.assertTrue(w.useFrontClockForTest(strike[0], () -> sendNanos[0]), "prepared front clock was not installed");
                         var scheduled = events.scheduled().stream().filter(x -> x.id() == strike[0]).findFirst().orElseThrow();
                         events.unschedule(scheduled);
                         events.schedule(new NuclearEvents.ScheduledStrike(strike[0], target, 1, false,
@@ -614,7 +630,7 @@ public final class DhGameTests {
                     long[] s = w.frontLodStats(strike[0]);
                     if (s != null) stats[0] = s;
                     if (now < det[0].gameTime() + 200) return;
-                    check(h, det[0], copies, stats[0]);
+                    check(h, det[0], copies, stats[0], exhaustedBudget);
                     h.succeed();
                     stage[0] = 3;
                 }
@@ -625,7 +641,7 @@ public final class DhGameTests {
     }
 
     /** Checking {@link #heavyZoneLodsGoWithTheFront}: zone copies - on time, by section, once; return minus the arrival of the front - in the log. */
-    private static void check(GameTestHelper h, Detonation d, it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<LongArrayList> copies, long[] s) {
+    private static void check(GameTestHelper h, Detonation d, it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<LongArrayList> copies, long[] s, boolean exhaustedBudget) {
         // zone, like preparation: chunks up to 5 psi near the ground and another 16 blocks
         double lo = 0, hi = d.radiusMax();
         for (int i = 0; i < 40; i++) {
@@ -649,13 +665,21 @@ public final class DhGameTests {
             double dx = sx * 64 + 32 - d.burst().x, dz = sz * 64 + 32 - d.burst().z, dy = d.burst().y - d.groundY();
             long sectionDue = d.gameTime() + (long) d.arrivalTicks(Math.sqrt(dx * dx + dy * dy + dz * dz));
             long expected = Math.max(d.gameTime(), sectionDue - DhUpdates.LEAD);
-            h.assertTrue(at >= expected && at <= expected + 2, "chunk copy " + c + " went to " + at + ", term " + expected + " (detonation " + d.gameTime()
+            h.assertTrue(exhaustedBudget ? at >= expected : at == expected, "chunk copy " + c + " went to " + at + ", term " + expected + " (detonation " + d.gameTime()
                     + ", front at the middle of the section " + sectionDue + ")");
+            if (exhaustedBudget) h.assertTrue(expected == d.gameTime(), "budget fixture needs all sections due at detonation");
             Long was = sectionTick.putIfAbsent(((long) sx << 32) ^ (sz & 0xFFFFFFFFL), at);
             if (was == null) sections++;
             else h.assertTrue(was == at, "section DH chunk " + c + " left with different ticks: " + was + " and " + at);
             offsets.add(at - ua.zentix.incoming.nuclear.world.ScarQueue.due(d, c));
             sent++;
+        }
+        if (exhaustedBudget) {
+            long[] delivery = sectionTick.values().stream().mapToLong(Long::longValue).sorted().toArray();
+            for (int i = 0; i < delivery.length; i++) {
+                h.assertTrue(delivery[i] == d.gameTime() + i, "exhausted send budget must advance one whole section per tick: "
+                        + java.util.Arrays.toString(delivery));
+            }
         }
         long[] o = offsets.toLongArray();
         java.util.Arrays.sort(o);
