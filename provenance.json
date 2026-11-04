@@ -1,0 +1,23 @@
+{
+  "base": "167632a71a0880343e45dcca45db7baa260dbe7a",
+  "fixed": "aa500e902ccb2ae4c11d6846c27970aeebd50851",
+  "sha256": {
+    "compile.log": "69c684887e850a3a8334680b205613bb81403adb914078bf3e9675915cc8b808",
+    "red.log": "e450c245e09ec8802014a57bcfb1f89347228ee8f954a205846a4fc54be0a60d",
+    "green.log": "a9b1b96092b1c408ea4a0b228a4f7d21a453f650398d747ca6f888a4dcc5c1a0",
+    "final.log": "0d633340818e9a5961d6e5d4b839da702a2eaa7ef9ad5d6bafa5ea7551485b8a",
+    "final-red.log": "c2278f2946a79fd18735193c44fdc78521d0d9b1505ebaa04a7759845108d4a8",
+    "restore-compile.log": "6d87265dc4e2c9bcc81a0569f90bbf55bc04362179f1cf04ae570e47790c1c81",
+    "RuinPlanner.old.java": "5ee4b531a1b3ed6854aced1b3cbd8bed4ce8801411bfb2f735c64741b867d99a",
+    "RuinPlanner.fixed.java": "2e7e00e85271eba5583d9cfb56ce1f0e473bf8577a1821ed89d20911eb92f32c",
+    "RuinFreshLifetimeGameTests.java": "a5b2ac5b3e8e26867a358afc0571462ebac9324da61d553c3db28c3bf268e1b4"
+  },
+  "resource_contract": {
+    "cpus": 4,
+    "max_heap_gib": 2,
+    "gradle_daemon": false,
+    "gpu": false,
+    "cpu_quiet": false
+  },
+  "runtime_provider_sha256": "5525a3a0c8b1c476cbc467d021e9d1492b58c78de31ed269eb04f169d42db0a1"
+}

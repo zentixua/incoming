@@ -1,0 +1,9 @@
+FRESH_PROVIDER sha256=5525a3a0c8b1c476cbc467d021e9d1492b58c78de31ed269eb04f169d42db0a1
+[17:28:24] [Server thread/INFO] [ua.ze.in.Incoming/]: FRESH_LIFETIME helper=fresh iteration=0 baseline=0 results=16777344 cache=16777344 detached=0 inputBaseline=0 changed=2347 material=2347 reads=0 absent=0
+[17:28:24] [Server thread/ERROR] [minecraft/LogTestReporter]: freshbackgroundcontextreleasesowners failed at -13155143, -60, -8835719! Fresh helper retained result/cache ownership: baseline=0 results=16777344 cache=16777344
+[17:28:25] [Server thread/INFO] [ua.ze.in.Incoming/]: FRESH_LIFETIME helper=window iteration=0 baseline=0 results=16777344 cache=16777344 detached=0 inputBaseline=0 changed=2511 material=2511 reads=0 absent=0
+[17:28:25] [Server thread/ERROR] [minecraft/LogTestReporter]: freshwindowcontextreleasesowners failed at -13155074, -60, -8835719! Fresh helper retained result/cache ownership: baseline=0 results=16777344 cache=16777344
+[17:28:25] [Server thread/INFO] [minecraft/GameTestServer]: 2 required tests failed :(
+[17:28:25] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruins: background threads stopped (queued tasks dropped: 0)
+BUILD FAILED in 21s
+laptop_job mt-check-fresh-red: exit 1
