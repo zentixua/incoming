@@ -1,0 +1,74 @@
+{
+  "matter-before": {
+    "count": 100000.0,
+    "saveNs": 45886126.5,
+    "copyNs": 152517423.5,
+    "nbtBytes": 308702531.0,
+    "allocated": 597266064.0,
+    "heap": 2270393088.0
+  },
+  "matter-after": {
+    "count": 100000.0,
+    "saveNs": 9145767.0,
+    "copyNs": 1643222.5,
+    "nbtBytes": 18111178.0,
+    "allocated": 36255656.0,
+    "heap": 987491648.0
+  },
+  "matter-pages": {
+    "count": 100000.0,
+    "saveNs": 130603.5,
+    "copyNs": 1878903.0,
+    "nbtBytes": 18111178.0,
+    "allocated": 18256976.0,
+    "heap": 812065416.0
+  },
+  "fixture-before": {
+    "dense": {
+      "blastNs": 78859553.5,
+      "collapseNs": 18376995.5,
+      "finishNs": 1414026.0,
+      "encodeNs": 29682.0,
+      "decodeNs": 308687.0,
+      "planBytes": 60756.0,
+      "nbtBytes": 32287.0,
+      "allocated": 27732736.0,
+      "heap": 875364784.0
+    },
+    "natural": {
+      "blastNs": 33462898.0,
+      "collapseNs": 8057334.0,
+      "finishNs": 1155203.0,
+      "encodeNs": 55801.0,
+      "decodeNs": 181651.0,
+      "planBytes": 8316.0,
+      "nbtBytes": 9937.0,
+      "allocated": 11543312.0,
+      "heap": 775189360.0
+    }
+  },
+  "fixture-after": {
+    "dense": {
+      "blastNs": 76897759.5,
+      "collapseNs": 15469312.0,
+      "finishNs": 1460970.5,
+      "encodeNs": 29682.5,
+      "decodeNs": 285545.5,
+      "planBytes": 60736.0,
+      "nbtBytes": 32279.0,
+      "allocated": 21344528.0,
+      "heap": 815395520.0
+    },
+    "natural": {
+      "blastNs": 31106031.5,
+      "collapseNs": 5276354.5,
+      "finishNs": 946277.0,
+      "encodeNs": 46304.5,
+      "decodeNs": 235678.5,
+      "planBytes": 8196.0,
+      "nbtBytes": 9401.0,
+      "allocated": 6931192.0,
+      "heap": 882781248.0
+    }
+  }
+}

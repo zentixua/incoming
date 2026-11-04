@@ -1,0 +1,57 @@
+> Task :createMinecraftArtifacts UP-TO-DATE
+> Task :compileJava
+> Task :generateModMetadata UP-TO-DATE
+> Task :processResources UP-TO-DATE
+> Task :classes
+> Task :jarJar
+> Task :jar
+> Task :assemble
+> Task :compileDevtestJava
+> Task :compileSandboxAgentJava UP-TO-DATE
+> Task :processDevtestResources UP-TO-DATE
+> Task :devtestClasses
+> Task :processSandboxAgentResources NO-SOURCE
+> Task :sandboxAgentClasses UP-TO-DATE
+> Task :compileTestJava
+> Task :processTestResources UP-TO-DATE
+> Task :testClasses
+The message received from the daemon indicates that the daemon has disappeared.
+Build request sent: Build{id=64c33c3d-1f78-4f56-8886-56179d815358, currentDir=/mnt/data/projects/incoming/mod/run/wt-MT-OPT/mod}
+Attempting to read last messages from the daemon log...
+Daemon pid: 1005646
+  log file: /home/artem/.gradle/daemon/8.14.3/daemon-1005646.out.log
+----- Last 20 lines from daemon log file - daemon-1005646.out.log -----
+2026-11-04T09:10:51.291+0200 [INFO] [org.gradle.launcher.daemon.server.exec.LogAndCheckHealth] Starting 2nd build in daemon [uptime: 5 mins 26.853 secs, performance: 100%, GC rate: 0.00/s, heap usage: 0% of 3 GiB]
+2026-11-04T09:10:51.291+0200 [DEBUG] [org.gradle.launcher.daemon.server.exec.ExecuteBuild] The daemon has started executing the build.
+2026-11-04T09:10:51.291+0200 [DEBUG] [org.gradle.launcher.daemon.server.exec.ExecuteBuild] Executing build with daemon context: DefaultDaemonContext[uid=164c8d68-f5fc-43c8-9b8b-634fe2a3ad24,javaHome=/home/artem/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/java/java-runtime-delta,javaVersion=21,javaVendor=Microsoft,daemonRegistryDir=/home/artem/.gradle/daemon,pid=1005646,idleTimeout=600000,priority=NORMAL,applyInstrumentationAgent=true,nativeServicesMode=ENABLED,daemonOpts=-Xmx3G,-Dfile.encoding=UTF-8,-Duser.country=UA,-Duser.language=ru,-Duser.variant]
+Daemon vm is shutting down... The daemon has exited normally or was terminated in response to a user interrupt.
+Remove shutdown hook failed
+java.lang.IllegalStateException: Shutdown in progress
+	at java.base/java.lang.ApplicationShutdownHooks.remove(ApplicationShutdownHooks.java:83)
+	at java.base/java.lang.Runtime.removeShutdownHook(Runtime.java:281)
+	at org.gradle.process.internal.shutdown.ShutdownHooks.removeShutdownHook(ShutdownHooks.java:38)
+	at org.gradle.process.internal.DefaultExecHandle.setEndStateInfo(DefaultExecHandle.java:208)
+	at org.gradle.process.internal.DefaultExecHandle.aborted(DefaultExecHandle.java:392)
+	at org.gradle.process.internal.ExecHandleRunner.completed(ExecHandleRunner.java:132)
+	at org.gradle.process.internal.ExecHandleRunner.lambda$run$2(ExecHandleRunner.java:97)
+	at org.gradle.internal.operations.CurrentBuildOperationRef.with(CurrentBuildOperationRef.java:85)
+	at org.gradle.process.internal.ExecHandleRunner.run(ExecHandleRunner.java:95)
+	at org.gradle.internal.concurrent.ExecutorPolicy$CatchAndRecordFailures.onExecute(ExecutorPolicy.java:64)
+	at org.gradle.internal.concurrent.AbstractManagedExecutor$1.run(AbstractManagedExecutor.java:48)
+	at java.base/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144)
+	at java.base/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642)
+	at java.base/java.lang.Thread.run(Thread.java:1583)----- End of the daemon log -----
+
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Gradle build daemon disappeared unexpectedly (it may have been killed or may have crashed)
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights.
+> Get more help at https://help.gradle.org.
+> Task :test
+laptop_job mt-opt-build: exit 1

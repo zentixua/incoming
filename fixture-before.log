@@ -1,0 +1,371 @@
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.14.3/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :createMinecraftArtifacts UP-TO-DATE
+> Task :compileJava
+> Task :generateModMetadata UP-TO-DATE
+> Task :processResources UP-TO-DATE
+> Task :classes
+> Task :compileDevtestJava
+> Task :copyRuntimeMods_gametest UP-TO-DATE
+> Task :processDevtestResources UP-TO-DATE
+> Task :devtestClasses
+> Task :downloadAssets UP-TO-DATE
+> Task :writeGameTestServerLegacyClasspath UP-TO-DATE
+> Task :prepareGameTestServerRun
+
+> Task :runGameTestServer
+WARN StatusConsoleListener Advanced terminal features are not available in this environment
+[08:36:59] [main/INFO] [cp.mo.mo.Launcher/MODLAUNCHER]: ModLauncher running: args [--launchTarget, forgeserverdev, --gameDir, ., --fml.fmlVersion, 4.0.45, --fml.mcVersion, 1.21.1, --fml.neoForgeVersion, 21.1.264, --fml.neoFormVersion, 20240808.144430]
+[08:36:59] [main/INFO] [cp.mo.mo.Launcher/MODLAUNCHER]: JVM identified as Microsoft OpenJDK 64-Bit Server VM 21.0.7+6-LTS
+[08:36:59] [main/INFO] [cp.mo.mo.Launcher/MODLAUNCHER]: ModLauncher 11.0.5+main.901c6ea8 starting: java version 21.0.7 by Microsoft; OS Linux arch amd64 version 7.3.1-1-cachyos
+[08:36:59] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Configuration file /mnt/data/projects/incoming/mod/run/wt-MT-OPT/mod/run/gametest/config/fml.toml is not correct. Correcting
+[08:36:59] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [disableConfigWatcher] was corrected from null to false
+[08:36:59] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowControl] was corrected from null to true
+[08:36:59] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [maxThreads] was corrected from null to -1
+[08:36:59] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [versionCheck] was corrected from null to true
+[08:36:59] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [defaultConfigPath] was corrected from null to defaultconfigs
+[08:36:59] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [disableOptimizedDFU] was corrected from null to true
+[08:36:59] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowProvider] was corrected from null to fmlearlywindow
+[08:36:59] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowWidth] was corrected from null to 854
+[08:36:59] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowHeight] was corrected from null to 480
+[08:36:59] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowFBScale] was corrected from null to 1
+[08:36:59] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowMaximized] was corrected from null to false
+[08:36:59] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowSkipGLVersions] was corrected from null to []
+[08:36:59] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowSquir] was corrected from null to false
+[08:36:59] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: ****************************** Found dependency overrides ******************************
+[08:36:59] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: Dependency overrides for mod 'aeronautics': adding explicit AFTER ordering against 'simulated', adding explicit AFTER ordering against 'offroad'
+[08:36:59] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: Dependency overrides for mod 'simulated': adding explicit AFTER ordering against 'create', adding explicit AFTER ordering against 'sable'
+[08:36:59] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: Dependency overrides for mod 'offroad': adding explicit AFTER ordering against 'simulated'
+[08:36:59] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: ****************************************************************************************
+[08:36:59] [main/INFO] [ne.ne.fm.lo.ImmediateWindowHandler/]: ImmediateWindowProvider not loading because launch target is forgeserverdev
+[08:36:59] [main/INFO] [mixin/]: SpongePowered MIXIN Subsystem Version=0.8.7 Source=union:/home/artem/.gradle/caches/modules-2/files-2.1/net.fabricmc/sponge-mixin/0.16.4+mixin.0.8.7/26d01f0567ab46e9ca0d2ed89d0ecc11aadbd433/sponge-mixin-0.16.4+mixin.0.8.7.jar%2394!/ Service=ModLauncher Env=SERVER
+[08:36:59] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: ****************************** Found dependency overrides ******************************
+[08:36:59] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: Dependency overrides for mod 'aeronautics': adding explicit AFTER ordering against 'simulated', adding explicit AFTER ordering against 'offroad'
+[08:36:59] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: Dependency overrides for mod 'simulated': adding explicit AFTER ordering against 'create', adding explicit AFTER ordering against 'sable'
+[08:36:59] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: Dependency overrides for mod 'offroad': adding explicit AFTER ordering against 'simulated'
+[08:36:59] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: ****************************************************************************************
+[08:36:59] [main/INFO] [ne.ne.fm.lo.mo.lo.JarInJarDependencyLocator/]: Found 13 dependencies adding them to mods collection
+[08:36:59] [main/INFO] [ne.ne.fm.lo.mo.ModDiscoverer/]: 
+     Mod List:
+		Name Version (Mod Id)
+
+		Create 6.0.10 (create)
+		Create Aeronautics 1.3.2 (aeronautics)
+		Create Aeronautics 1.3.2 (aeronautics_bundled)
+		Create Offroad 1.3.2 (offroad)
+		Create Simulated 1.3.2 (simulated)
+		Flywheel 1.0.6 (flywheel)
+		Incoming 3.10.4 (incoming)
+		Minecraft 1.21.1 (minecraft)
+		NeoForge 21.1.264 (neoforge)
+		Ponder 1.0.82+mc1.21.1 (ponder)
+		Sable 2.0.6 (sable)
+		Sable Companion 1.6.0 (sablecompanion)
+		Veil 4.3.2 (veil)
+[08:37:00] [main/INFO] [mixin/]: Compatibility level set to JAVA_21
+[08:37:00] [main/INFO] [cp.mo.mo.LaunchServiceHandler/MODLAUNCHER]: Launching target 'forgeserverdev' with arguments [--gameDir, .]
+[08:37:00] [main/WARN] [mixin/]: Reference map 'ponder.refmap.json' for ponder-common.mixins.json could not be read. If this is a development environment you can ignore this message
+[08:37:00] [main/INFO] [de.ry.sa.mi.AbstractSableMixinPlugin/]: Using Vanilla renderer mixins
+[08:37:00] [main/INFO] [de.ry.sa.mi.AbstractSableMixinPlugin/]: Using Vanilla renderer mixins
+[08:37:00] [main/WARN] [mixin/]: Reference map 'simulated.refmap.json' for simulated.mixins.json could not be read. If this is a development environment you can ignore this message
+[08:37:00] [main/WARN] [mixin/]: Reference map 'offroad.refmap.json' for offroad.mixins.json could not be read. If this is a development environment you can ignore this message
+[08:37:00] [main/WARN] [mixin/]: Reference map 'aeronautics.refmap.json' for aeronautics.mixins.json could not be read. If this is a development environment you can ignore this message
+[08:37:00] [main/WARN] [mixin/]: Error loading class: org/jetbrains/annotations/ApiStatus$ScheduledForRemoval (java.lang.ClassNotFoundException: org.jetbrains.annotations.ApiStatus$ScheduledForRemoval)
+[08:37:00] [main/INFO] [MixinExtras|Service/]: Initializing MixinExtras via com.llamalad7.mixinextras.service.MixinExtrasServiceImpl(version=0.5.5).
+[08:37:04] [main/WARN] [minecraft/Commands]: Ambiguity between arguments [teleport, location] and [teleport, destination] with inputs: [0.1 -0.5 .9, 0 0 0]
+[08:37:04] [main/WARN] [minecraft/Commands]: Ambiguity between arguments [teleport, location] and [teleport, targets] with inputs: [0.1 -0.5 .9, 0 0 0]
+[08:37:04] [main/WARN] [minecraft/Commands]: Ambiguity between arguments [teleport, destination] and [teleport, targets] with inputs: [Player, 0123, @e, dd12be42-52a9-4a91-a8a1-11c01849e498]
+[08:37:04] [main/WARN] [minecraft/Commands]: Ambiguity between arguments [teleport, targets] and [teleport, destination] with inputs: [Player, 0123, dd12be42-52a9-4a91-a8a1-11c01849e498]
+[08:37:04] [main/WARN] [minecraft/Commands]: Ambiguity between arguments [teleport, targets, location] and [teleport, targets, destination] with inputs: [0.1 -0.5 .9, 0 0 0]
+[08:37:04] [modloading-worker-0/INFO] [Veil/]: Veil is initializing.
+[08:37:04] [modloading-worker-0/INFO] [ne.ne.ne.co.NeoForgeMod/NEOFORGE-MOD]: NeoForge mod loading, version 21.1.264, for MC 1.21.1
+[08:37:04] [modloading-worker-0/INFO] [co.si.cr.Create/]: Create 6.0.10 initializing! Commit hash: ac0c444d9828da3453ae8cc65338e8de063286fb
+[08:37:05] [modloading-worker-0/INFO] [de.ry.sa.Sable/]: Sable loaded!
+[08:37:07] [main/INFO] [mojang/YggdrasilAuthenticationService]: Environment: Environment[sessionHost=https://sessionserver.mojang.com, servicesHost=https://api.minecraftservices.com, name=PROD]
+[08:37:07] [NeoForge Version Check/INFO] [ne.ne.fm.VersionChecker/]: [create] Starting version check at https://api.modrinth.com/updates/create/forge_updates.json?neoforge=only
+[08:37:07] [main/WARN] [minecraft/VanillaPackResourcesBuilder]: Assets URL 'union:/mnt/data/projects/incoming/mod/run/wt-MT-OPT/mod/build/moddev/artifacts/neoforge-21.1.264.jar%23128!/assets/.mcassetsroot' uses unexpected schema
+[08:37:07] [main/WARN] [minecraft/VanillaPackResourcesBuilder]: Assets URL 'union:/mnt/data/projects/incoming/mod/run/wt-MT-OPT/mod/build/moddev/artifacts/neoforge-21.1.264.jar%23128!/data/.mcassetsroot' uses unexpected schema
+[08:37:08] [main/INFO] [co.si.cr.Create/]: Created 157 recipes which will be injected into the game
+[08:37:08] [main/INFO] [co.si.cr.Create/]: Created 0 tags which will be injected into the game
+[08:37:08] [main/INFO] [ne.ne.ne.ga.GameTestHooks/]: Enabled Gametest Namespaces: [incoming]
+[08:37:08] [NeoForge Version Check/INFO] [ne.ne.fm.VersionChecker/]: [create] Found status: OUTDATED Current: 6.0.10 Target: 6.0.10+mc1.21.1
+[08:37:08] [main/INFO] [minecraft/RecipeManager]: Loaded 2954 recipes
+[08:37:09] [main/INFO] [minecraft/AdvancementTree]: Loaded 2645 advancements
+[08:37:10] [Server thread/INFO] [ua.ze.in.Incoming/]: GameTest: only batch “mt_opt_bench_.*” - tests 2 from 720
+[08:37:10] [Server thread/INFO] [de.ry.sa.Sable/]: Creating physics pipeline for ResourceKey[minecraft:dimension / minecraft:overworld] using RapierPhysicsPipelineProvider
+[08:37:10] [Server thread/INFO] [de.ry.sa.Sable/]: Using game directory relative Sable Rapier native directory /mnt/data/projects/incoming/mod/run/wt-MT-OPT/mod/run/gametest/.sable/natives
+[2026-11-04T06:37:10.272700387Z] [[32mINFO[0m] (sable_rapier) Rapier scene initialized
+[08:37:10] [Server thread/INFO] [de.ry.sa.Sable/]: Creating physics pipeline for ResourceKey[minecraft:dimension / minecraft:the_nether] using RapierPhysicsPipelineProvider
+[2026-11-04T06:37:10.555966105Z] [[32mINFO[0m] (sable_rapier) Rapier scene initialized
+[08:37:10] [Server thread/INFO] [de.ry.sa.Sable/]: Creating physics pipeline for ResourceKey[minecraft:dimension / minecraft:the_end] using RapierPhysicsPipelineProvider
+[2026-11-04T06:37:10.583904681Z] [[32mINFO[0m] (sable_rapier) Rapier scene initialized
+[08:37:10] [Server thread/INFO] [minecraft/MinecraftServer]: Preparing start region for dimension minecraft:overworld
+[08:37:10] [worldgen/INFO] [minecraft/LoggerChunkProgressListener]: Preparing spawn area: 2%
+[08:37:10] [Server thread/INFO] [minecraft/LoggerChunkProgressListener]: Time elapsed: 189 ms
+[08:37:10] [Server thread/INFO] [minecraft/GameTestServer]: Started game test server
+[08:37:10] [Server thread/INFO] [ne.ne.ne.se.pe.PermissionAPI/]: Successfully initialized permission handler neoforge:default_handler
+[08:37:10] [Server thread/INFO] [minecraft/GameTestServer]: 2 tests are now running at position 11861850, -59, -8511260!
+[08:37:11] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'mt_opt_bench_natural:0' (1 tests)...
+[08:37:11] [Server thread/INFO] [minecraft/GameTestServer]: [  ]
+[08:37:11] [Server thread/INFO] [minecraft/GameTestServer]: [  ]
+[08:37:12] [Server thread/INFO] [ua.ze.in.Incoming/]: MTOPT kind=natural sample=0 blastNs=282807477 collapseNs=92764110 finishNs=21007361 encodeNs=992548 decodeNs=727790 planBytes=8316 nbtBytes=9937 allocated=15488272 heap=1028730224
+[08:37:12] [Server thread/INFO] [ua.ze.in.Incoming/]: MTOPT kind=natural sample=1 blastNs=169407617 collapseNs=34140821 finishNs=2407761 encodeNs=137722 decodeNs=669614 planBytes=8316 nbtBytes=9937 allocated=12943312 heap=1041313136
+[08:37:13] [Server thread/INFO] [ua.ze.in.Incoming/]: MTOPT kind=natural sample=2 blastNs=93576195 collapseNs=29535445 finishNs=2095512 encodeNs=182838 decodeNs=696921 planBytes=8316 nbtBytes=9937 allocated=12943920 heap=1053896048
+[08:37:13] [Server thread/INFO] [ua.ze.in.Incoming/]: MTOPT kind=natural sample=3 blastNs=67616781 collapseNs=34286856 finishNs=1486449 encodeNs=130598 decodeNs=540203 planBytes=8316 nbtBytes=9937 allocated=12335848 heap=1066478960
+[08:37:13] [Server thread/INFO] [ua.ze.in.Incoming/]: MTOPT kind=natural sample=4 blastNs=70532690 collapseNs=25467895 finishNs=2095513 encodeNs=167403 decodeNs=635184 planBytes=8316 nbtBytes=9937 allocated=11783296 heap=592737136
+[08:37:13] [Server thread/INFO] [ua.ze.in.Incoming/]: MTOPT kind=natural sample=5 blastNs=40928384 collapseNs=32560581 finishNs=1694219 encodeNs=204208 decodeNs=338369 planBytes=8316 nbtBytes=9937 allocated=11543552 heap=605320048
+[08:37:13] [Server thread/INFO] [ua.ze.in.Incoming/]: MTOPT kind=natural sample=6 blastNs=37059106 collapseNs=11778797 finishNs=1694219 encodeNs=92606 decodeNs=332433 planBytes=8316 nbtBytes=9937 allocated=11543552 heap=617902960
+[08:37:13] [Server thread/INFO] [ua.ze.in.Incoming/]: MTOPT kind=natural sample=7 blastNs=35345891 collapseNs=10110699 finishNs=1801072 encodeNs=100917 decodeNs=268320 planBytes=8316 nbtBytes=9937 allocated=11543552 heap=630485872
+[08:37:13] [Server thread/INFO] [ua.ze.in.Incoming/]: MTOPT kind=natural sample=8 blastNs=33985292 collapseNs=8684801 finishNs=1494759 encodeNs=67674 decodeNs=303938 planBytes=8316 nbtBytes=9937 allocated=11543552 heap=638874480
+[08:37:13] [Server thread/INFO] [ua.ze.in.Incoming/]: MTOPT kind=natural sample=9 blastNs=33328738 collapseNs=8316750 finishNs=1295300 encodeNs=72423 decodeNs=335994 planBytes=8316 nbtBytes=9937 allocated=11543552 heap=651457392
+[08:37:13] [Server thread/INFO] [ua.ze.in.Incoming/]: MTOPT kind=natural sample=10 blastNs=31904027 collapseNs=8748913 finishNs=1374846 encodeNs=56988 decodeNs=352616 planBytes=8316 nbtBytes=9937 allocated=11543552 heap=664040304
+[08:37:13] [Server thread/INFO] [ua.ze.in.Incoming/]: MTOPT kind=natural sample=11 blastNs=34152696 collapseNs=8813025 finishNs=1234749 encodeNs=52239 decodeNs=390609 planBytes=8316 nbtBytes=9937 allocated=11543656 heap=676623216
+[08:37:13] [Server thread/INFO] [ua.ze.in.Incoming/]: MTOPT kind=natural sample=12 blastNs=35561972 collapseNs=8943623 finishNs=1222877 encodeNs=52239 decodeNs=218456 planBytes=8316 nbtBytes=9937 allocated=11543552 heap=685011824
+[08:37:13] [Server thread/INFO] [ua.ze.in.Incoming/]: MTOPT kind=natural sample=13 blastNs=33597058 collapseNs=9340168 finishNs=1336854 encodeNs=58175 decodeNs=227954 planBytes=8316 nbtBytes=9937 allocated=11544032 heap=697594736
+[08:37:13] [Server thread/INFO] [ua.ze.in.Incoming/]: MTOPT kind=natural sample=14 blastNs=41384291 collapseNs=9249936 finishNs=1982722 encodeNs=81921 decodeNs=307500 planBytes=8316 nbtBytes=9937 allocated=11543552 heap=710177648
+[08:37:13] [Server thread/INFO] [ua.ze.in.Incoming/]: MTOPT kind=natural sample=15 blastNs=42152448 collapseNs=9915988 finishNs=1357037 encodeNs=58176 decodeNs=214894 planBytes=8316 nbtBytes=9937 allocated=11543552 heap=722760560
+[08:37:13] [Server thread/INFO] [ua.ze.in.Incoming/]: MTOPT kind=natural sample=16 blastNs=37012803 collapseNs=11538971 finishNs=1246622 encodeNs=104479 decodeNs=161467 planBytes=8316 nbtBytes=9937 allocated=11543552 heap=735343472
+[08:37:13] [Server thread/INFO] [ua.ze.in.Incoming/]: MTOPT kind=natural sample=17 blastNs=37069792 collapseNs=9597802 finishNs=1174199 encodeNs=67674 decodeNs=187587 planBytes=8316 nbtBytes=9937 allocated=11543552 heap=743732080
+[08:37:13] [Server thread/INFO] [ua.ze.in.Incoming/]: MTOPT kind=natural sample=18 blastNs=54249431 collapseNs=11840535 finishNs=1980349 encodeNs=93793 decodeNs=869074 planBytes=8316 nbtBytes=9937 allocated=11543904 heap=756314992
+[08:37:14] [Server thread/INFO] [ua.ze.in.Incoming/]: MTOPT kind=natural sample=19 blastNs=47549728 collapseNs=8693112 finishNs=953369 encodeNs=48678 decodeNs=263571 planBytes=8316 nbtBytes=9937 allocated=11543312 heap=768897904
+[08:37:14] [Server thread/INFO] [ua.ze.in.Incoming/]: MTOPT kind=natural sample=20 blastNs=32720864 collapseNs=7797918 finishNs=1136207 encodeNs=54614 decodeNs=214894 planBytes=8316 nbtBytes=9937 allocated=11543312 heap=781480816
+[08:37:14] [Server thread/INFO] [ua.ze.in.Incoming/]: MTOPT kind=natural sample=21 blastNs=32470352 collapseNs=7628140 finishNs=954556 encodeNs=73610 decodeNs=175715 planBytes=8316 nbtBytes=9937 allocated=11542856 heap=789869424
+[08:37:14] [Server thread/INFO] [ua.ze.in.Incoming/]: MTOPT kind=natural sample=22 blastNs=35431376 collapseNs=7441741 finishNs=1302423 encodeNs=137722 decodeNs=146033 planBytes=8316 nbtBytes=9937 allocated=11542784 heap=802452336
+[08:37:14] [Server thread/INFO] [ua.ze.in.Incoming/]: MTOPT kind=natural sample=23 blastNs=34605044 collapseNs=7153236 finishNs=921313 encodeNs=52240 decodeNs=138909 planBytes=8316 nbtBytes=9937 allocated=11542784 heap=815035248
+[08:37:14] [Server thread/INFO] [ua.ze.in.Incoming/]: MTOPT kind=natural sample=24 blastNs=29495081 collapseNs=6698516 finishNs=761033 encodeNs=39180 decodeNs=136535 planBytes=8316 nbtBytes=9937 allocated=11542784 heap=827618160
+[08:37:14] [Server thread/INFO] [ua.ze.in.Incoming/]: MTOPT kind=natural sample=25 blastNs=30643160 collapseNs=6667648 finishNs=715917 encodeNs=39180 decodeNs=130598 planBytes=8316 nbtBytes=9937 allocated=11542784 heap=836006768
+[08:37:14] [Server thread/INFO] [ua.ze.in.Incoming/]: MTOPT kind=natural sample=26 blastNs=28028815 collapseNs=6738884 finishNs=774093 encodeNs=47490 decodeNs=162654 planBytes=8316 nbtBytes=9937 allocated=11542760 heap=848589680
+[08:37:14] [Server thread/INFO] [ua.ze.in.Incoming/]: MTOPT kind=natural sample=27 blastNs=31039705 collapseNs=6890852 finishNs=878572 encodeNs=41554 decodeNs=137722 planBytes=8316 nbtBytes=9937 allocated=11542760 heap=861172592
+[08:37:14] [Server thread/INFO] [ua.ze.in.Incoming/]: MTOPT kind=natural sample=28 blastNs=30481693 collapseNs=6776875 finishNs=657742 encodeNs=34430 decodeNs=104479 planBytes=8316 nbtBytes=9937 allocated=11526376 heap=873755504
+[08:37:14] [Server thread/INFO] [ua.ze.in.Incoming/]: MTOPT kind=natural sample=29 blastNs=30099396 collapseNs=7190041 finishNs=738476 encodeNs=41554 decodeNs=131785 planBytes=8316 nbtBytes=9937 allocated=11526376 heap=882144112
+[08:37:14] [Server thread/INFO] [ua.ze.in.Incoming/]: MTOPT kind=natural sample=30 blastNs=31682012 collapseNs=7148487 finishNs=724228 encodeNs=37993 decodeNs=134160 planBytes=8316 nbtBytes=9937 allocated=11526376 heap=894727024
+[08:37:14] [Server thread/INFO] [ua.ze.in.Incoming/]: MTOPT kind=natural sample=31 blastNs=30613479 collapseNs=6725823 finishNs=867887 encodeNs=62924 decodeNs=123475 planBytes=8316 nbtBytes=9937 allocated=11526376 heap=907309936
+[08:37:15] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'mt_opt_bench_dense:0' (1 tests)...
+[08:37:15] [Server thread/WARN] [minecraft/MinecraftServer]: Can't keep up! Is the server overloaded? Running 2127ms or 42 ticks behind
+[08:37:15] [Server thread/INFO] [minecraft/GameTestServer]: [+ ]
+[08:37:15] [incoming-stall-watch/WARN] [ua.ze.in.Incoming/]: Server thread stalled for 3.4 s in a tick, stack samples 3:
+  samples 1:
+    at java.base/java.lang.StrictMath.hypot(StrictMath.java:2202)
+    at java.base/java.lang.Math.hypot(Math.java:2768)
+    at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.model.HobBlast.brode(HobBlast.java:81)
+    at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.model.HobBlast.positivePhaseSeconds(HobBlast.java:200)
+    at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.Detonation.positivePhaseSeconds(Detonation.java:217)
+    at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.world.Blast$Solver.decide(Blast.java:570)
+    at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.world.Blast$Solver.run(Blast.java:467)
+    at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.world.Blast.solve(Blast.java:275)
+    at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.world.RuinContext$Grid.blast(RuinContext.java:415)
+    at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.world.OptBench.run(OptBench.java:20)
+    at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.world.OptBench.natural(OptBench.java:10)
+    at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+    at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestRegistry.lambda$turnMethodIntoConsumer$5(GameTestRegistry.java:169)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.TestFunction.run(TestFunction.java:40)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestInfo.startTest(GameTestInfo.java:162)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestInfo.tickInternal(GameTestInfo.java:124)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestInfo.tick(GameTestInfo.java:107)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestTicker.lambda$tick$0(GameTestTicker.java:39)
+    at java.base/java.util.concurrent.CopyOnWriteArrayList.forEach(CopyOnWriteArrayList.java:891)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestTicker.tick(GameTestTicker.java:39)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.tickChildren(MinecraftServer.java:1070)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.tickServer(MinecraftServer.java:932)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestServer.tickServer(GameTestServer.java:171)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.runServer(MinecraftServer.java:713)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.lambda$spin$2(MinecraftServer.java:267)
+    at java.base/java.lang.Thread.run(Thread.java:1583)
+  samples 1:
+    at java.base/java.lang.StrictMath.hypot(StrictMath.java:2202)
+    at java.base/java.lang.Math.hypot(Math.java:2768)
+    at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.world.Blast$Solver.decide(Blast.java:537)
+    at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.world.Blast$Solver.run(Blast.java:467)
+    at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.world.Blast.solve(Blast.java:275)
+    at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.world.RuinContext$Grid.blast(RuinContext.java:415)
+    at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.world.OptBench.run(OptBench.java:20)
+    at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.world.OptBench.natural(OptBench.java:10)
+    at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+    at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestRegistry.lambda$turnMethodIntoConsumer$5(GameTestRegistry.java:169)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.TestFunction.run(TestFunction.java:40)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestInfo.startTest(GameTestInfo.java:162)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestInfo.tickInternal(GameTestInfo.java:124)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestInfo.tick(GameTestInfo.java:107)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestTicker.lambda$tick$0(GameTestTicker.java:39)
+    at java.base/java.util.concurrent.CopyOnWriteArrayList.forEach(CopyOnWriteArrayList.java:891)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestTicker.tick(GameTestTicker.java:39)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.tickChildren(MinecraftServer.java:1070)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.tickServer(MinecraftServer.java:932)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestServer.tickServer(GameTestServer.java:171)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.runServer(MinecraftServer.java:713)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.lambda$spin$2(MinecraftServer.java:267)
+    at java.base/java.lang.Thread.run(Thread.java:1583)
+  samples 1:
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.world.level.Level.setBlock(Level.java:249)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.world.level.Level.setBlock(Level.java:229)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.commands.arguments.blocks.BlockInput.place(BlockInput.java:66)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.StructureUtils.clearBlock(StructureUtils.java:268)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.StructureUtils.lambda$clearSpaceForStructure$4(StructureUtils.java:176)
+    at java.base/java.util.Iterator.forEachRemaining(Iterator.java:133)
+    at java.base/java.util.Spliterators$IteratorSpliterator.forEachRemaining(Spliterators.java:1939)
+    at java.base/java.util.stream.ReferencePipeline$Head.forEach(ReferencePipeline.java:762)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.StructureUtils.clearSpaceForStructure(StructureUtils.java:176)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.StructureUtils.prepareTestStructure(StructureUtils.java:127)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestInfo.prepareTestStructure(GameTestInfo.java:265)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.StructureGridSpawner.spawnStructure(StructureGridSpawner.java:48)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestRunner.spawn(GameTestRunner.java:163)
+    at java.base/java.util.stream.ReferencePipeline$3$1.accept(ReferencePipeline.java:197)
+    at java.base/java.util.AbstractList$RandomAccessSpliterator.forEachRemaining(AbstractList.java:722)
+    at java.base/java.util.stream.AbstractPipeline.copyInto(AbstractPipeline.java:509)
+    at java.base/java.util.stream.AbstractPipeline.wrapAndCopyInto(AbstractPipeline.java:499)
+    at java.base/java.util.stream.AbstractPipeline.evaluate(AbstractPipeline.java:575)
+    at java.base/java.util.stream.AbstractPipeline.evaluateToArrayNode(AbstractPipeline.java:260)
+    at java.base/java.util.stream.ReferencePipeline.toArray(ReferencePipeline.java:616)
+    at java.base/java.util.stream.ReferencePipeline.toArray(ReferencePipeline.java:622)
+    at java.base/java.util.stream.ReferencePipeline.toList(ReferencePipeline.java:627)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestRunner.createStructuresForBatch(GameTestRunner.java:158)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestRunner.runBatch(GameTestRunner.java:90)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestRunner$1.testCompleted(GameTestRunner.java:104)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestRunner$1.testPassed(GameTestRunner.java:114)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestInfo.lambda$tick$2(GameTestInfo.java:112)
+    at java.base/java.util.ArrayList.forEach(ArrayList.java:1596)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestInfo.tick(GameTestInfo.java:112)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestTicker.lambda$tick$0(GameTestTicker.java:39)
+    at java.base/java.util.concurrent.CopyOnWriteArrayList.forEach(CopyOnWriteArrayList.java:891)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestTicker.tick(GameTestTicker.java:39)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.tickChildren(MinecraftServer.java:1070)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.tickServer(MinecraftServer.java:932)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestServer.tickServer(GameTestServer.java:171)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.runServer(MinecraftServer.java:713)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.lambda$spin$2(MinecraftServer.java:267)
+    at java.base/java.lang.Thread.run(Thread.java:1583)
+[08:37:15] [Server thread/INFO] [ua.ze.in.Incoming/]: MTOPT kind=dense sample=0 blastNs=106347563 collapseNs=33797710 finishNs=4922377 encodeNs=68861 decodeNs=499836 planBytes=60756 nbtBytes=32287 allocated=31103488 heap=821441072
+[08:37:15] [Server thread/INFO] [ua.ze.in.Incoming/]: MTOPT kind=dense sample=1 blastNs=77847404 collapseNs=22385774 finishNs=4839269 encodeNs=51052 decodeNs=510521 planBytes=60756 nbtBytes=32287 allocated=27773024 heap=850801200
+[08:37:15] [Server thread/INFO] [ua.ze.in.Incoming/]: MTOPT kind=dense sample=2 blastNs=77541091 collapseNs=25898874 finishNs=3097559 encodeNs=34431 decodeNs=375174 planBytes=60756 nbtBytes=32287 allocated=27773024 heap=880161328
+[08:37:16] [Server thread/INFO] [ua.ze.in.Incoming/]: MTOPT kind=dense sample=3 blastNs=77283457 collapseNs=20040938 finishNs=3395562 encodeNs=33243 decodeNs=368050 planBytes=60756 nbtBytes=32287 allocated=27773160 heap=905327152
+[08:37:16] [Server thread/INFO] [ua.ze.in.Incoming/]: MTOPT kind=dense sample=4 blastNs=83032171 collapseNs=21330302 finishNs=2949152 encodeNs=37992 decodeNs=410792 planBytes=60756 nbtBytes=32287 allocated=27773024 heap=934687280
+[08:37:16] [Server thread/INFO] [ua.ze.in.Incoming/]: MTOPT kind=dense sample=5 blastNs=84913977 collapseNs=19633708 finishNs=2819741 encodeNs=37992 decodeNs=403669 planBytes=60756 nbtBytes=32287 allocated=27773000 heap=959853104
+[08:37:16] [Server thread/INFO] [ua.ze.in.Incoming/]: MTOPT kind=dense sample=6 blastNs=85285589 collapseNs=20055186 finishNs=2078891 encodeNs=36805 decodeNs=417915 planBytes=60756 nbtBytes=32287 allocated=27772976 heap=989213232
+[08:37:16] [Server thread/INFO] [ua.ze.in.Incoming/]: MTOPT kind=dense sample=7 blastNs=80589979 collapseNs=17571438 finishNs=2072955 encodeNs=33243 decodeNs=398920 planBytes=60756 nbtBytes=32287 allocated=27772976 heap=1018573360
+[08:37:16] [Server thread/INFO] [ua.ze.in.Incoming/]: MTOPT kind=dense sample=8 blastNs=76838239 collapseNs=18313476 finishNs=1887742 encodeNs=35618 decodeNs=371612 planBytes=60756 nbtBytes=32287 allocated=27732800 heap=1043739184
+[08:37:16] [Server thread/INFO] [ua.ze.in.Incoming/]: MTOPT kind=dense sample=9 blastNs=76226800 collapseNs=17894373 finishNs=1740523 encodeNs=52239 decodeNs=378736 planBytes=60756 nbtBytes=32287 allocated=27732760 heap=1073099312
+[08:37:16] [Server thread/INFO] [ua.ze.in.Incoming/]: MTOPT kind=dense sample=10 blastNs=78989553 collapseNs=18533119 finishNs=1754769 encodeNs=37993 decodeNs=381110 planBytes=60756 nbtBytes=32287 allocated=27732760 heap=1102459440
+[08:37:16] [Server thread/INFO] [ua.ze.in.Incoming/]: MTOPT kind=dense sample=11 blastNs=79286368 collapseNs=29606687 finishNs=1745271 encodeNs=45116 decodeNs=376361 planBytes=60756 nbtBytes=32287 allocated=27732736 heap=579666352
+[08:37:16] [Server thread/INFO] [ua.ze.in.Incoming/]: MTOPT kind=dense sample=12 blastNs=80353714 collapseNs=18647095 finishNs=1594490 encodeNs=28494 decodeNs=377548 planBytes=60756 nbtBytes=32287 allocated=27732736 heap=609026480
+[08:37:17] [Server thread/INFO] [ua.ze.in.Incoming/]: MTOPT kind=dense sample=13 blastNs=76941534 collapseNs=18821624 finishNs=1688283 encodeNs=35618 decodeNs=391796 planBytes=60756 nbtBytes=32287 allocated=27732736 heap=634192304
+[08:37:17] [Server thread/INFO] [ua.ze.in.Incoming/]: MTOPT kind=dense sample=14 blastNs=80821500 collapseNs=18655408 finishNs=1709653 encodeNs=29682 decodeNs=438099 planBytes=60756 nbtBytes=32287 allocated=27732736 heap=663552432
+[08:37:17] [Server thread/INFO] [ua.ze.in.Incoming/]: MTOPT kind=dense sample=15 blastNs=80857118 collapseNs=18758699 finishNs=1674036 encodeNs=35618 decodeNs=369237 planBytes=60756 nbtBytes=32287 allocated=27732736 heap=692912560
+[08:37:17] [Server thread/INFO] [ua.ze.in.Incoming/]: MTOPT kind=dense sample=16 blastNs=80548431 collapseNs=19512609 finishNs=1668099 encodeNs=30869 decodeNs=454720 planBytes=60756 nbtBytes=32287 allocated=27732736 heap=718078384
+[08:37:17] [Server thread/INFO] [ua.ze.in.Incoming/]: MTOPT kind=dense sample=17 blastNs=80476007 collapseNs=18459510 finishNs=1615860 encodeNs=28494 decodeNs=383485 planBytes=60756 nbtBytes=32287 allocated=27732736 heap=747438512
+[08:37:17] [Server thread/INFO] [ua.ze.in.Incoming/]: MTOPT kind=dense sample=18 blastNs=78660688 collapseNs=18073651 finishNs=1468640 encodeNs=27306 decodeNs=298003 planBytes=60756 nbtBytes=32287 allocated=27732736 heap=776798640
+[08:37:17] [Server thread/INFO] [ua.ze.in.Incoming/]: MTOPT kind=dense sample=19 blastNs=77980388 collapseNs=18143699 finishNs=1400966 encodeNs=28494 decodeNs=295628 planBytes=60756 nbtBytes=32287 allocated=27732736 heap=801964464
+[08:37:17] [Server thread/INFO] [ua.ze.in.Incoming/]: MTOPT kind=dense sample=20 blastNs=77979201 collapseNs=17931179 finishNs=1304799 encodeNs=30868 decodeNs=307500 planBytes=60756 nbtBytes=32287 allocated=27732736 heap=831324592
+[08:37:17] [Server thread/INFO] [ua.ze.in.Incoming/]: MTOPT kind=dense sample=21 blastNs=83465526 collapseNs=19216982 finishNs=1415213 encodeNs=36805 decodeNs=313437 planBytes=60756 nbtBytes=32287 allocated=27732736 heap=860684720
+[08:37:17] [Server thread/INFO] [ua.ze.in.Incoming/]: MTOPT kind=dense sample=22 blastNs=82009946 collapseNs=19186113 finishNs=1412839 encodeNs=36805 decodeNs=309874 planBytes=60756 nbtBytes=32287 allocated=27732736 heap=890044848
+[08:37:18] [Server thread/INFO] [ua.ze.in.Incoming/]: MTOPT kind=dense sample=23 blastNs=80054534 collapseNs=17294810 finishNs=1243061 encodeNs=29681 decodeNs=281381 planBytes=60756 nbtBytes=32287 allocated=27732736 heap=915210672
+[08:37:18] [Server thread/INFO] [ua.ze.in.Incoming/]: MTOPT kind=dense sample=24 blastNs=76803819 collapseNs=17924057 finishNs=1240686 encodeNs=28495 decodeNs=105666 planBytes=60756 nbtBytes=32287 allocated=27732736 heap=940376496
+[08:37:18] [Server thread/INFO] [ua.ze.in.Incoming/]: MTOPT kind=dense sample=25 blastNs=76739707 collapseNs=17535823 finishNs=1189635 encodeNs=27307 decodeNs=97355 planBytes=60756 nbtBytes=32287 allocated=27732736 heap=969736624
+[08:37:18] [Server thread/INFO] [ua.ze.in.Incoming/]: MTOPT kind=dense sample=26 blastNs=76972410 collapseNs=17902687 finishNs=1195570 encodeNs=28494 decodeNs=100917 planBytes=60756 nbtBytes=32287 allocated=27732736 heap=999096752
+[08:37:18] [Server thread/INFO] [ua.ze.in.Incoming/]: MTOPT kind=dense sample=27 blastNs=77631339 collapseNs=17789897 finishNs=1178949 encodeNs=29681 decodeNs=100917 planBytes=60756 nbtBytes=32287 allocated=27732736 heap=1024262576
+[08:37:18] [Server thread/INFO] [ua.ze.in.Incoming/]: MTOPT kind=dense sample=28 blastNs=78729554 collapseNs=18440515 finishNs=1228814 encodeNs=28494 decodeNs=102104 planBytes=60756 nbtBytes=32287 allocated=27732736 heap=1053622704
+[08:37:18] [Server thread/INFO] [ua.ze.in.Incoming/]: MTOPT kind=dense sample=29 blastNs=80409527 collapseNs=18097397 finishNs=1228813 encodeNs=28494 decodeNs=100918 planBytes=60756 nbtBytes=32287 allocated=27732736 heap=1082982832
+[08:37:18] [Server thread/INFO] [ua.ze.in.Incoming/]: MTOPT kind=dense sample=30 blastNs=77365393 collapseNs=18121142 finishNs=1207443 encodeNs=29682 decodeNs=99729 planBytes=60756 nbtBytes=32287 allocated=27732736 heap=1108148656
+[08:37:18] [Server thread/INFO] [ua.ze.in.Incoming/]: MTOPT kind=dense sample=31 blastNs=82624952 collapseNs=18501066 finishNs=1313109 encodeNs=60550 decodeNs=188774 planBytes=60756 nbtBytes=32287 allocated=27732736 heap=588078056
+[08:37:18] [Server thread/INFO] [minecraft/GameTestServer]: [++]
+[08:37:18] [Server thread/INFO] [minecraft/GameTestServer]: ========= 2 GAME TESTS COMPLETE IN 7.988 s ======================
+[08:37:18] [Server thread/INFO] [minecraft/GameTestServer]: All 2 required tests passed :)
+[08:37:18] [Server thread/INFO] [minecraft/GameTestServer]: ====================================================
+[08:37:18] [Server thread/INFO] [minecraft/MinecraftServer]: Stopping server
+[08:37:18] [Server thread/INFO] [minecraft/MinecraftServer]: Saving players
+[08:37:18] [Server thread/INFO] [minecraft/MinecraftServer]: Saving worlds
+[08:37:19] [Server thread/INFO] [minecraft/MinecraftServer]: Saving chunks for level 'ServerLevel[Test Level]'/minecraft:overworld
+[08:37:19] [Server thread/INFO] [de.ry.sa.Sable/]: Saving sub-levels for level 'ServerLevel[Test Level]'/minecraft:overworld
+[08:37:19] [incoming-stall-watch/WARN] [ua.ze.in.Incoming/]: Server thread stalled for 3.7 s in a tick, stack samples 4:
+  samples 1:
+    at MC-BOOTSTRAP/it.unimi.dsi.fastutil@8.5.12/it.unimi.dsi.fastutil.ints.IntOpenHashSet.add(IntOpenHashSet.java:402)
+    at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.world.Blast$Solver.aroundBreaks(Blast.java:522)
+    at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.world.Blast$Solver.run(Blast.java:475)
+    at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.world.Blast.solve(Blast.java:275)
+    at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.world.RuinContext$Grid.blast(RuinContext.java:415)
+    at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.world.OptBench.run(OptBench.java:20)
+    at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.world.OptBench.dense(OptBench.java:8)
+    at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+    at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestRegistry.lambda$turnMethodIntoConsumer$5(GameTestRegistry.java:169)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.TestFunction.run(TestFunction.java:40)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestInfo.startTest(GameTestInfo.java:162)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestInfo.tickInternal(GameTestInfo.java:124)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestInfo.tick(GameTestInfo.java:107)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestTicker.lambda$tick$0(GameTestTicker.java:39)
+    at java.base/java.util.concurrent.CopyOnWriteArrayList.forEach(CopyOnWriteArrayList.java:891)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestTicker.tick(GameTestTicker.java:39)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.tickChildren(MinecraftServer.java:1070)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.tickServer(MinecraftServer.java:932)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestServer.tickServer(GameTestServer.java:171)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.runServer(MinecraftServer.java:713)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.lambda$spin$2(MinecraftServer.java:267)
+    at java.base/java.lang.Thread.run(Thread.java:1583)
+  samples 1:
+    at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.world.Blast$Solver.run(Blast.java:467)
+    at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.world.Blast.solve(Blast.java:275)
+    at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.world.RuinContext$Grid.blast(RuinContext.java:415)
+    at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.world.OptBench.run(OptBench.java:20)
+    at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.world.OptBench.dense(OptBench.java:8)
+    at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+    at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestRegistry.lambda$turnMethodIntoConsumer$5(GameTestRegistry.java:169)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.TestFunction.run(TestFunction.java:40)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestInfo.startTest(GameTestInfo.java:162)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestInfo.tickInternal(GameTestInfo.java:124)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestInfo.tick(GameTestInfo.java:107)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestTicker.lambda$tick$0(GameTestTicker.java:39)
+    at java.base/java.util.concurrent.CopyOnWriteArrayList.forEach(CopyOnWriteArrayList.java:891)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestTicker.tick(GameTestTicker.java:39)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.tickChildren(MinecraftServer.java:1070)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.tickServer(MinecraftServer.java:932)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestServer.tickServer(GameTestServer.java:171)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.runServer(MinecraftServer.java:713)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.lambda$spin$2(MinecraftServer.java:267)
+    at java.base/java.lang.Thread.run(Thread.java:1583)
+  samples 1:
+    at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.world.Blast$Solver.elementSpan(Blast.java:663)
+    at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.world.Blast$Solver.decide(Blast.java:569)
+    at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.world.Blast$Solver.run(Blast.java:467)
+    at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.world.Blast.solve(Blast.java:275)
+    at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.world.RuinContext$Grid.blast(RuinContext.java:415)
+    at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.world.OptBench.run(OptBench.java:20)
+    at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.world.OptBench.dense(OptBench.java:8)
+    at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+    at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestRegistry.lambda$turnMethodIntoConsumer$5(GameTestRegistry.java:169)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.TestFunction.run(TestFunction.java:40)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestInfo.startTest(GameTestInfo.java:162)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestInfo.tickInternal(GameTestInfo.java:124)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestInfo.tick(GameTestInfo.java:107)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestTicker.lambda$tick$0(GameTestTicker.java:39)
+    at java.base/java.util.concurrent.CopyOnWriteArrayList.forEach(CopyOnWriteArrayList.java:891)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestTicker.tick(GameTestTicker.java:39)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.tickChildren(MinecraftServer.java:1070)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.tickServer(MinecraftServer.java:932)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestServer.tickServer(GameTestServer.java:171)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.runServer(MinecraftServer.java:713)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.lambda$spin$2(MinecraftServer.java:267)
+    at java.base/java.lang.Thread.run(Thread.java:1583)
+[08:37:21] [Server thread/INFO] [minecraft/MinecraftServer]: Saving chunks for level 'ServerLevel[Test Level]'/minecraft:the_nether
+[08:37:21] [Server thread/INFO] [de.ry.sa.Sable/]: Saving sub-levels for level 'ServerLevel[Test Level]'/minecraft:the_nether
+[08:37:21] [Server thread/INFO] [minecraft/MinecraftServer]: Saving chunks for level 'ServerLevel[Test Level]'/minecraft:the_end
+[08:37:21] [Server thread/INFO] [de.ry.sa.Sable/]: Saving sub-levels for level 'ServerLevel[Test Level]'/minecraft:the_end
+[08:37:21] [Server thread/INFO] [minecraft/MinecraftServer]: ThreadedAnvilChunkStorage (world): All chunks are saved
+[08:37:21] [Server thread/INFO] [minecraft/MinecraftServer]: ThreadedAnvilChunkStorage (DIM-1): All chunks are saved
+[08:37:21] [Server thread/INFO] [minecraft/MinecraftServer]: ThreadedAnvilChunkStorage (DIM1): All chunks are saved
+[08:37:21] [Server thread/INFO] [minecraft/MinecraftServer]: ThreadedAnvilChunkStorage: All dimensions are saved
+[08:37:21] [Server thread/INFO] [minecraft/GameTestServer]: Game test server shutting down
+
+[Incubating] Problems report is available at: file:///mnt/data/projects/incoming/mod/run/wt-MT-OPT/mod/build/reports/problems/problems-report.html
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 9.0.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/8.14.3/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD SUCCESSFUL in 35s
+11 actionable tasks: 4 executed, 7 up-to-date
+laptop_job mt-opt-fixture-before: exit 0
