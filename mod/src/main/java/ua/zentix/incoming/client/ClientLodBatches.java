@@ -10,18 +10,20 @@ import org.jetbrains.annotations.Nullable;
 import java.util.concurrent.TimeUnit;
 
 /**
- * Vanilla's receive-rate measurement, on the same network thread as LOD ingestion. Start and finish surround both
- * transfer and Voxy's background queue drain, including a slow downstream behind a proxy. The queue must empty
- * before acknowledgement; jobs already running remain bounded by Voxy's worker pool. State belongs to the connection.
+ * Vanilla's receive-rate measurement on the network thread. Measure transfer at the finish marker; waiting for
+ * held columns' physical deadlines is backpressure, not a slower connection. Acknowledgement still waits for
+ * client capacity and Voxy's queue; jobs already running remain bounded by its worker pool. State belongs to the connection.
  */
 public final class ClientLodBatches {
     private static final AttributeKey<ClientLodBatches> STATE = AttributeKey.valueOf("incoming:lod_batches");
-    private final ChunkBatchSizeCalculator calculator = new ChunkBatchSizeCalculator();
+    private final ChunkBatchSizeCalculator calculator;
     private int id;
     private boolean active, finished;
     private int chunks;
 
-    ClientLodBatches() {}
+    ClientLodBatches() { this(new ChunkBatchSizeCalculator()); }
+
+    ClientLodBatches(ChunkBatchSizeCalculator calculator) { this.calculator = calculator; }
 
     void begin(int batch) {
         id = batch;
@@ -34,6 +36,7 @@ public final class ClientLodBatches {
         if (!active || finished || id != packet.id()) return false;
         chunks = packet.chunks();
         finished = true;
+        calculator.onBatchFinished(chunks);
         return true;
     }
 
@@ -41,7 +44,6 @@ public final class ClientLodBatches {
     C2S.LodBatchReceived acknowledge(boolean backlogged) {
         if (!active || !finished || backlogged) return null;
         active = false;
-        calculator.onBatchFinished(chunks);
         return new C2S.LodBatchReceived(id, calculator.getDesiredChunksPerTick());
     }
 

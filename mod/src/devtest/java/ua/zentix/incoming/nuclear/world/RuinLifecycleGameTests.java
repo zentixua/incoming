@@ -103,8 +103,8 @@ public final class RuinLifecycleGameTests {
         long before = NuclearPrep.memory(level);
         Object a = preparation(first, -1001), b = preparation(second, -1002);
         try {
-            field(a, "planBytes").setLong(a, 300L << 20);
-            field(b, "planBytes").setLong(b, 250L << 20);
+            field(field(a, "plans").get(a), "bytes").setLong(field(a, "plans").get(a), 300L << 20);
+            field(field(b, "plans").get(b), "bytes").setLong(field(b, "plans").get(b), 250L << 20);
             h.assertTrue(NuclearPrep.memory(level) == before + (550L << 20), "per-strike/dimension estimates were omitted or buffers duplicated");
             h.assertTrue(NuclearPrep.memory(level) > NuclearPrep.PLANS_CAP, "other dimension bypassed admission cap");
             h.assertTrue(!NuclearWorld.get(level).settleCanAdmit(level), "settlement ignored cross-dimension preparation");
@@ -120,9 +120,10 @@ public final class RuinLifecycleGameTests {
     // Test-only fixture injection: delayed completion and estimated byte counts without a large world/allocation.
     private static Object preparation(NuclearPrep prep, int id) throws ReflectiveOperationException {
         Class<?> type = Class.forName(NuclearPrep.class.getName() + "$Prep");
-        var ctor = type.getDeclaredConstructor(int.class, long.class);
+        var ctor = type.getDeclaredConstructor(int.class, long.class, java.util.function.LongConsumer.class);
         ctor.setAccessible(true);
-        Object value = ctor.newInstance(id, 100L);
+        var reads = (java.util.concurrent.atomic.AtomicLong) field(prep, "readBytes").get(prep);
+        Object value = ctor.newInstance(id, 100L, (java.util.function.LongConsumer) reads::addAndGet);
         preparations(prep).add(value);
         return value;
     }

@@ -13,8 +13,11 @@ import java.util.concurrent.Executors;
 
 /** Client-owned deadline queue. The only external calls run on a serial worker, outside every tick-facing lock. */
 final class ClientHorizon {
-    static final long QUEUED_BYTES = 24L << 20, REPAIR_BYTES = 24L << 20;
-    private static final int QUEUED_COLUMNS = 16384;
+    // The measured 1 Mt panorama needs ~3,638 columns/s at the front, above the transport's 1,280/s ceiling.
+    // 24 MiB prefilling left it 282 ticks late. Hold the encoded work earlier, without moving its deadlines.
+    // Shared by all strikes in this client; this is separate from the server's global 512 MiB working budget.
+    static final long QUEUED_BYTES = 96L << 20, REPAIR_BYTES = 24L << 20;
+    private static final int QUEUED_COLUMNS = 65536;
     private static final ScheduledExecutorService WORKER = Executors.newSingleThreadScheduledExecutor(r -> {
         Thread thread = new Thread(r, "Incoming horizon");
         thread.setDaemon(true);

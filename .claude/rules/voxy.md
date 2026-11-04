@@ -70,7 +70,7 @@ paths:
   The three client handlers run on the same network thread. Before ack, poll Voxy's public
   `VoxyCommon.getInstance().getIngestService().getTaskCount()` on the event loop until its queue empties; never block
   the network thread. Running tasks remain bounded by its worker pool. Missing counter disables Incoming delivery.
-  Timing includes transfer and background queue drain. Calculator
+  The receive-rate sample ends at the finish marker; capacity/deadline waiting delays acknowledgement without falsifying the measured link rate. Calculator
   state belongs to the channel; batch IDs survive dimension changes and reject old/duplicate/early acknowledgements.
   Netty still gates every chunk: active/writable, at least 16 KiB headroom, no more than 32 KiB pending even with a
   raised watermark, and at most one outstanding chunk write including event-loop dispatch. A large indivisible
@@ -102,7 +102,7 @@ paths:
   separately from Incoming's immediate copy delivery. Packets are not ingested during Flashback replay (Voxy shows
   the live database there).
 
-- MT-B3 horizon buffer: 24 MiB queued encoded columns and 24 MiB retained repair sections, plus bounded worker/codec
+- MT-B3 horizon buffer: 96 MiB queued encoded columns and 24 MiB retained repair sections, plus bounded worker/codec
   scratch and bookkeeping (these are not total client heap/GPU limits). A local repair merges changed section spans,
   not individual block intentions. Same-section plans still require authoritative chronological composition upstream.
   Repair retention is session-local and evicts by bytes; it does not solve late join/reconnect or immutable stale

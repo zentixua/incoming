@@ -51,9 +51,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 public final class LodBufferScenario {
     private static final boolean SERVER_TRANSPORT = Boolean.getBoolean("incoming.lodProbe.serverTransport");
     private static final boolean PRODUCTION = !Boolean.getBoolean("incoming.lodProbe.control");
-    private static final int SECTIONS = 24, CHANGED = 4, WINDOW = 16384, PASS = 32;
+    private static final int SECTIONS = 24, CHANGED = 4, WINDOW = 65536, PASS = 32;
     private static final boolean CHANGED_ONLY = Boolean.getBoolean("incoming.lodProbe.changedOnly");
-    private static final long BYTES = 48L << 20;
+    private static final long BYTES = 128L << 20;
     private static LodBufferScenario active;
     private final TimedLodBuffer<LodProbeWire.Column> buffer = new TimedLodBuffer<>(WINDOW, BYTES);
     private final AtomicInteger receipts = new AtomicInteger();
@@ -351,15 +351,18 @@ public final class LodBufferScenario {
                 .toArray(dev.vox.lss.api.VoxelColumnData.SectionData[]::new);
         if (PRODUCTION) {
             // Prime the production repair cache for this coordinate even if the panorama evicted it.
-            ClientHorizon.offer(mc.level, packet);
+            for (int dx = -4; dx < 4; dx++) for (int dz = -4; dz < 4; dz++)
+                ClientHorizon.offer(mc.level, new S2C.VoxyChunk(packet.dimension(), x + dx, z + dz, packet.sections()));
             waitTicks(20);
-            for (int round = 0; round < 2; round++) {
+            for (int round = 0; round < 3; round++) {
                 replayRound = round;
                 replayFrame = 0; // Each sequence starts BEFORE its stale producer is dispatched.
                 waitTicks(2);
                 long began = System.nanoTime();
-                dev.vox.lss.api.LSSApi.dispatchColumn(mc.level, mc.level.dimension(), x, z, new dev.vox.lss.api.VoxelColumnData(data, 1));
-                log("REPLAY_DISPATCH round=%d tick=%d production=true", round, now);
+                if (round < 2) dev.vox.lss.api.LSSApi.dispatchColumn(mc.level, mc.level.dimension(), x, z, new dev.vox.lss.api.VoxelColumnData(data, 1));
+                else for (int dx = -4; dx < 4; dx++) for (int dz = -4; dz < 4; dz++)
+                    dev.vox.lss.api.LSSApi.dispatchColumn(mc.level, mc.level.dimension(), x + dx, z + dz, new dev.vox.lss.api.VoxelColumnData(data, 1));
+                log("REPLAY_DISPATCH round=%d tick=%d columns=%d production=true", round, now, round < 2 ? 1 : 64);
                 long endTick = now + 40, firstStale = -1, lastStale = -1, samples = 0;
                 while (!done && now < endTick) {
                     // Database reads are witnesses, not a renderer fence. Never hold a tick-facing monitor here.
@@ -372,6 +375,8 @@ public final class LodBufferScenario {
                     Thread.sleep(2);
                 }
                 if (!readback.air(x * 16 + 8, 120, z * 16 + 8)) { fail("production replay repair did not converge"); return; }
+                if (round == 2) for (int dx = -4; dx < 4; dx++) for (int dz = -4; dz < 4; dz++)
+                    if (!readback.air((x + dx) * 16 + 8, 120, (z + dz) * 16 + 8)) { fail("bunched replay repair did not converge"); return; }
                 log("REPLAY_OBSERVATION round=%d tick=%d observationElapsedMs=%.4f staleSamples=%d firstStaleElapsedMs=%.4f lastStaleElapsedMs=%.4f converged=true production=true",
                         round, now, (System.nanoTime() - began) / 1e6, samples, firstStale / 1e6, lastStale / 1e6);
             }
