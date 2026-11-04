@@ -18,7 +18,7 @@ By default only operators can.
 1. You need an ICBM item, or a missile or bomb plus a Nuclear Warhead ([recipes](munitions.md#recipes)).
 2. On the console: the Nuclear weapon, or the nuclear warhead option of the Missile and the Bomb; the yield
    numeric field in whole kt and suggested values, up to the world’s configured maximum (at most 15 kt); for the ICBM and the missile a ground burst
-   (the default, with a crater and fallout trail) or an air burst (wider destruction). The bomb explodes underground.
+   (the default, with a crater and fallout trail) or an air burst (wider destruction). The nuclear bomb detonates on impact; the conventional bunker-buster penetrates before exploding.
 3. LMB in the binoculars or FIRE opens the exact target, yield and effect estimates. Select **Prepare target**;
    the server resolves the surface and prepares the hardest-hit area, showing actual progress. Cancel or close freely.
 4. When **Ready** appears, release the button, then hold the launch button for three seconds, or focus it with Tab

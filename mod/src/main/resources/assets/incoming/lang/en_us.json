@@ -434,7 +434,7 @@
   "key.incoming.camera": "Projectile camera",
   "incoming.remote.warhead.conventional": "Warhead: HE",
   "incoming.remote.warhead.nuclear": "Warhead: ☢ nuclear",
-  "incoming.remote.warhead.tooltip": "Nuclear warhead on the cruise missile or the B-2 bomb: a single round, yield of your choice. The missile bursts over the target or at the ground, the bomb underground after drilling.",
+  "incoming.remote.warhead.tooltip": "Nuclear warhead on the cruise missile or the B-2 bomb: a single round, yield of your choice. The missile bursts over the target or at the ground, the nuclear bomb on impact.",
   "incoming.config.launch_near_player": "Launch from a launcher near the player",
   "incoming.config.launch_near_player.tooltip": "Shaheds and missiles take off from a mobile launcher behind the player. Off: they come in from afar.",
   "incoming.config.drone_flight_time": "Shahed flight, s",
@@ -607,5 +607,5 @@
   "incoming.nuke.preview.wind": "Wind →",
   "incoming.nuke.preview.fit": "Fit effects",
   "incoming.nuke.preview.extra": "Thermal / glass: toggle",
-  "incoming.nuke.preview.buried": "Underground bomb · surface reference contours"
+  "incoming.nuke.preview.buried": "Impact bomb · surface reference contours"
 }
