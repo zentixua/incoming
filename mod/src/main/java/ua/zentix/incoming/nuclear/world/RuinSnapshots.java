@@ -26,6 +26,13 @@ final class RuinSnapshots {
         this.room = room;
     }
 
+    /** At most LIMIT receipts; failed writes cannot certify readiness. */
+    int pendingWrites() {
+        int pending = 0;
+        for (Write write : writes.values()) if (!write.done.isDone() || write.done.isCompletedExceptionally()) pending++;
+        return pending;
+    }
+
     long bytes() { return 48L * (saved.size() + writes.size()); }
 
     /** Do not drop the original snapshot until its exact payload has reached the region writer. */

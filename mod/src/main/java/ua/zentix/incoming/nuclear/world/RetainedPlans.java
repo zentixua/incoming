@@ -39,6 +39,9 @@ final class RetainedPlans extends Long2ObjectOpenHashMap<RuinPlan> {
         room = headroom;
     }
 
+    int pendingWrites() { return writes.size() + toWrite.size(); }
+    int pendingReads() { return reads.size(); }
+
     long bytes() { return bytes + writeBytes + 48L * (super.size() + reads.size() + writes.size()); }
 
     /** Bound both write ownership and read results; no blocking future wait on the tick thread. */
