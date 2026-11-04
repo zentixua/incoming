@@ -1,0 +1,189 @@
+diff --git a/.claude/rules/nuclear-world.md b/.claude/rules/nuclear-world.md
+index 0fff7b764..6f37a24a2 100644
+--- a/.claude/rules/nuclear-world.md
++++ b/.claude/rules/nuclear-world.md
+@@ -394,6 +394,12 @@ paths:
+   aligned with those counters; an unrelated per-cell allowance can refuse an already funded ready plan.
+   `nuke_large_plan_admission` compares a 22,054-cell reference with the identical fixed-owner application,
+   including measured server-thread allocation, retained growth and conserved material/support.
++- Support ownership separates actual fastutil table capacity, live original/cold-face payload and future
++  expansion (at most five contacts per deferred source). The projected tables include rehash scratch;
++  consuming sources transfers/releases their future credit even while other support work remains pending.
++  Never keep spent source credits in a historical payload maximum or refund still-allocated arrays by live size.
++  Capture credit transfers to the counted material owner before further admission. `nuke_support_capacity`
++  uses dense removals, partial support reconciliation, fixed competing ownership and full real ledger reload.
+ - Completed crater chunks discard column checkpoints after advancing the saved chunk cursor. Completed passes
+   retain only material totals; terminal out-of-height material groups identical state/cargo without trajectory data.
+   Active moving pieces, support provenance/graph and crater passes are charged by `retainedRuinBytes`. The counter
+@@ -512,6 +518,10 @@ paths:
+   it must not suppress reclamation in its own or another context (`nuke_reclaim_publication`,
+   `nuke_reclaim_other_owner`). Queue rotation itself needs its existing page-growth allowance in a
+   fixed-pressure fixture; do not mislabel an unfunded moving FIFO as collector starvation.
++- Maintenance also rotates requested plan-page completions and collects completed scar Tasks independently
++  of destructive admission. Refused large publications yield to other owned reads; unloaded demand does not
++  orphan a completed page. Task collection parks its result without applying it out of wave/visibility order.
++  `nuke_consumer_completion` combines real reads, a completed unseen solver and dense visible capacity pressure.
+ - Explicit preparation unload, loss of FULL readiness, terminal failure and heap stop release abandoned
+   assembly claims independently of read/task collectors. Inspect unready todos before checking worker
+   admission, with a bounded skip pass: decoder saturation cannot prevent retiring a dead assembly head.
+diff --git a/docs/guide/nuke.md b/docs/guide/nuke.md
+index c257daa4c..fd5a73529 100644
+--- a/docs/guide/nuke.md
++++ b/docs/guide/nuke.md
+@@ -120,8 +120,8 @@ is saved with the world, so leaving and returning does not erase it. Leaves and
+ A surface-burst crater supplies its rim from the ground actually excavated; remaining ejecta and thermally transformed material stay accounted for.
+ 
+ If the shared nuclear working-memory reservation is full, further material removal waits while already moving
+-material can settle. Completed preparation and cached ruin plans continue to receive processing time alongside
+-moving debris; later loaded chunks can reuse plans after the preparation window ends. Large strikes can
++material can settle. Already started plan reads and completed calculations receive processing time even
++while a dense visible chunk waits for space; later loaded chunks can reuse plans after the preparation window ends. Large strikes can
+ still leave chunks waiting for memory and processing time. Pending material and support checks survive a normal world save and reload. Completed movement and crater
+ checkpoints are compacted into material totals; container contents are retained. Saving can pause material
+ movement until its file is written. An old active journal too large for the shared memory limit stays preserved
+diff --git a/docs/guide/ru/nuke.md b/docs/guide/ru/nuke.md
+index bc4881b1a..739e15866 100644
+--- a/docs/guide/ru/nuke.md
++++ b/docs/guide/ru/nuke.md
+@@ -115,8 +115,8 @@ I степени открытой кожи при указанной погод
+ Ещё движущийся материал сохраняется вместе с миром и не исчезает при выходе. Листва и разбитое стекло учитываются как рассеянные мелкие обломки. При наземном взрыве вал воронки получает материал из действительно выкопанного грунта; оставшийся выброс и термически изменённый материал также учитываются.
+ 
+ Если общий рабочий резерв памяти ядерных ударов заполнен, новое удаление материала ждёт, пока уже движущиеся
+-обломки могут оседать. Готовые результаты подготовки и сохранённые планы руин получают время обработки наряду
+-с движением обломков; позднее загруженные чанки могут использовать планы и после завершения подготовки. После
++обломки могут оседать. Уже начатое чтение планов и готовые расчёты получают время обработки, даже когда
++плотно застроенный видимый чанк ждёт свободного места; позднее загруженные чанки могут использовать планы и после завершения подготовки. После
+ крупных ударов часть чанков всё ещё может ждать свободной памяти и времени обработки. Очередь материала и проверок опор сохраняется при обычном сохранении и повторной загрузке мира. Завершённые траектории
+ и контрольные точки воронки сворачиваются в итоги по материалам; содержимое контейнеров сохраняется. Сохранение
+ может приостановить движение обломков до окончания записи файла. Если активный журнал старого мира превышает
+diff --git a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinConsumerCompletionGameTests.java b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinConsumerCompletionGameTests.java
+index 0a5a3d534..6120aa14b 100644
+--- a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinConsumerCompletionGameTests.java
++++ b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinConsumerCompletionGameTests.java
+@@ -125,11 +125,22 @@ public final class RuinConsumerCompletionGameTests {
+                     Incoming.LOG.info("CONSUMER_COMPLETION start resident {} fixed {} readOwners {} tasks {} denseDebit {}",
+                             NuclearPrep.residentMemory(level), fixed[0], world.prep().readAccounting(), ctx.tasks(),
+                             RuinMatter.get(level).removalBytes(positions.length));
+-                    gate.complete(null);
+                 }
+                 h.assertTrue(other.materialReservation == fixed[0], "External ownership was released");
+                 h.assertTrue(NuclearPrep.residentMemory(level) <= NuclearPrep.PLANS_CAP, "Consumer publication exceeded capacity");
+-                h.assertTrue(world.scars().size() == 0 && ctx.tasks() == 0 && plans.pendingReads() == 0,
++                if (stage[0] == 1) {
++                    h.assertTrue(plans.pendingReads() == reads.length && !gate.isDone(), "Read ownership changed before its I/O fence");
++                    h.assertTrue(world.scars().queued(centre.toLong()) && level.getBlockState(BlockPos.of(positions[0])).is(Blocks.STONE_BRICKS),
++                            "Dense visible work must remain blocked during independent task collection");
++                    var parked = (Map<?, ?>) field(world.scars(), "parked").get(world.scars());
++                    h.assertTrue(!ctx.running(unseen.toLong()) && parked.containsKey(unseen.toLong()),
++                            "Completed unseen task was not transferred to its counted parked owner before visible admission");
++                    Incoming.LOG.info("CONSUMER_COMPLETION unseen result collected with all {} read owners still fenced", reads.length);
++                    stage[0] = 2;
++                    gate.complete(null);
++                }
++                h.assertTrue(!world.scars().queued(centre.toLong()) && !world.scars().queued(unseen.toLong())
++                                && !ctx.running(unseen.toLong()) && plans.pendingReads() == 0,
+                         "Funded consumers remain: scars=" + world.scars().size() + ", tasks=" + ctx.tasks() + ", reads=" + plans.pendingReads());
+                 for (long position : positions) h.assertFalse(level.getBlockState(BlockPos.of(position)).is(Blocks.STONE_BRICKS),
+                         "Dense watched source survived completion");
+diff --git a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinDemandProgressGameTests.java b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinDemandProgressGameTests.java
+index a82094696..74883fd55 100644
+--- a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinDemandProgressGameTests.java
++++ b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinDemandProgressGameTests.java
+@@ -26,6 +26,11 @@ public final class RuinDemandProgressGameTests {
+         var level = h.getLevel();
+         RuinMatterGameTests.clearFixture(level);
+         var grid = RuinStorageGameTests.fixture(h, true);
++        var held = new ua.zentix.incoming.strike.AreaLoader.Area(
++                net.minecraft.server.level.TicketType.create("incoming_demand_test", java.util.Comparator.<UUID>naturalOrder()),
++                grid.centre(), 2, UUID.randomUUID(), false);
++        ua.zentix.incoming.strike.StrikeWorld.get(level).areas().hold(level, held);
++        StrikeGameTests.afterTest(h, () -> ua.zentix.incoming.strike.StrikeWorld.get(level).areas().release(level, held));
+         var old = grid.ctx().d;
+         var d = new Detonation(190002, old.burst(), old.groundY(), old.yieldKt(), old.surface(),
+                 old.gameTime() - 20000, 0, 0, old.visibility(), 42, old.scale(), false, old.wave());
+@@ -56,6 +61,8 @@ public final class RuinDemandProgressGameTests {
+         });
+         h.succeedWhen(() -> {
+             try {
++                h.assertTrue(level.getChunkSource().getChunkNow(grid.centre().x, grid.centre().z) != null,
++                        "Watched fixture lost FULL readiness");
+                 if (stage[0] == 0) {
+                     String policy = (String) content.invoke(world.prep(), level);
+                     h.assertTrue(policy != null && RuinProgress.get(level).writable(), "Storage identity pending");
+diff --git a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinSupportCapacityGameTests.java b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinSupportCapacityGameTests.java
+index c1cb509a6..b3cbed466 100644
+--- a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinSupportCapacityGameTests.java
++++ b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinSupportCapacityGameTests.java
+@@ -11,8 +11,6 @@ import net.minecraft.gametest.framework.GameTest;
+ import net.minecraft.gametest.framework.GameTestHelper;
+ import net.minecraft.nbt.CompoundTag;
+ import net.minecraft.nbt.ListTag;
+-import net.minecraft.nbt.NbtAccounter;
+-import net.minecraft.nbt.NbtIo;
+ import net.minecraft.nbt.Tag;
+ import net.minecraft.server.level.ServerLevel;
+ import net.minecraft.world.item.ItemStack;
+@@ -37,7 +35,10 @@ import ua.zentix.incoming.nuclear.NuclearStrikes;
+ public final class RuinSupportCapacityGameTests {
+     private RuinSupportCapacityGameTests() {}
+     private static final int[] DENSITY = {22_054, 14_820, 9_214};
+-    private static final long COMPETING = 320L << 20;
++    // Both versions can publish the 22,054-cell seed plan. Once its 4 KiB/source credit has
++    // been spent, the old historical charge leaves less than the next 14,820-cell debit.
++    // This is fixed across the baseline/candidate, not fitted from either retained counter.
++    private static final long COMPETING = 344L << 20;
+ 
+     private record Dense(LevelChunk chunk, long[] positions, BlockPos barrel) {}
+ 
+@@ -154,8 +155,12 @@ public final class RuinSupportCapacityGameTests {
+             total += f.positions.length;
+             h.assertTrue(f.chunk.getExistingData(ua.zentix.incoming.registry.ModAttachments.CHUNK_SCAR).orElse(0) == d.id(),
+                     "Watched chunk was removed without its applied scar");
+-            for (long position : f.positions) h.assertTrue(!level.getBlockState(BlockPos.of(position)).is(Blocks.STONE_BRICKS),
+-                    "Dense source survived queue completion");
++            // Material can already land in a cleared source cell. The retained original journal
++            // records each actual removal, whereas testing the final block type confuses a deposit
++            // with an untouched source. Also require the top of each removed column to be open.
++            for (long position : f.positions) h.assertTrue(originals.containsKey(position), "Dense source has no removal provenance");
++            h.assertTrue(level.getBlockState(BlockPos.of(f.positions[f.positions.length - 1])).isAir(),
++                    "Dense column survived queue completion");
+         }
+         h.assertTrue(ledger.released() == total && ledger.pendingSupport() > 0, "Material duplicated/lost or support drained before completion");
+         CompoundTag expected = ledger.save(new CompoundTag(), level.registryAccess());
+@@ -167,17 +172,27 @@ public final class RuinSupportCapacityGameTests {
+         ledger.save(file.toFile(), level.registryAccess());
+         Incoming.LOG.info("SUPPORT_CAPACITY all {} dense watched plans / {} cells applied in {} ticks, fixed {}, retained {}",
+                 dense.size(), total, ticks, fixed, NuclearPrep.residentMemory(level));
++        var reloading = new java.util.concurrent.atomic.AtomicReference<java.util.concurrent.CompletableFuture<RuinMatter>>();
+         h.succeedWhen(() -> {
+             h.assertTrue(ledger.writable(), "Real ledger save is pending");
+-            try {
+-                var stored = NbtIo.readCompressed(file, NbtAccounter.create(32L << 20)).getCompound("data");
+-                var restored = RuinMatter.load(stored, level.registryAccess());
+-                h.assertTrue(normalized(restored.save(new CompoundTag(), level.registryAccess())).equals(normalized(expected)),
+-                        "Real save/reload changed complete material, cargo or support ownership");
+-                h.assertTrue(restored.retainedBytes() < NuclearPrep.PLANS_CAP - COMPETING,
+-                        "Restored live payload no longer fits the same competing ownership");
+-                restored.unload(level);
+-            } catch (java.io.IOException e) { throw new IllegalStateException(e); }
++            if (reloading.get() == null) reloading.set(java.util.concurrent.CompletableFuture.supplyAsync(() -> {
++                try {
++                    var measured = LedgerScan.measure(file, "incoming_ruin_matter", java.util.Set.of(), NuclearPrep.PLANS_CAP - COMPETING);
++                    if (measured.owned() > NuclearPrep.PLANS_CAP - COMPETING)
++                        throw new java.io.IOException("Saved ownership does not fit the same fixed competing owner");
++                    return (RuinMatter) LedgerReader.read(file, "incoming_ruin_matter", level.registryAccess(), measured.row(), java.util.Set.of());
++                } catch (java.io.IOException e) { throw new java.io.UncheckedIOException(e); }
++            }, net.minecraft.Util.ioPool()));
++            var read = reloading.get();
++            h.assertTrue(read.isDone(), "Real streaming ledger import is pending");
++            h.assertFalse(read.isCompletedExceptionally(), "Streaming import failed: "
++                    + (read.isCompletedExceptionally() ? read.exceptionNow() : ""));
++            var restored = read.join();
++            h.assertTrue(normalized(restored.save(new CompoundTag(), level.registryAccess())).equals(normalized(expected)),
++                    "Real save/reload changed complete material, cargo or support ownership");
++            h.assertTrue(restored.retainedBytes() < NuclearPrep.PLANS_CAP - COMPETING,
++                    "Restored live payload no longer fits the same competing ownership");
++            restored.unload(level);
+         });
+     }
+ 

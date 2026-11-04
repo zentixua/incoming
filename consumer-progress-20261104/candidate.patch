@@ -1,0 +1,793 @@
+diff --git a/.claude/rules/nuclear-world.md b/.claude/rules/nuclear-world.md
+index 0fff7b764..6f37a24a2 100644
+--- a/.claude/rules/nuclear-world.md
++++ b/.claude/rules/nuclear-world.md
+@@ -394,6 +394,12 @@ paths:
+   aligned with those counters; an unrelated per-cell allowance can refuse an already funded ready plan.
+   `nuke_large_plan_admission` compares a 22,054-cell reference with the identical fixed-owner application,
+   including measured server-thread allocation, retained growth and conserved material/support.
++- Support ownership separates actual fastutil table capacity, live original/cold-face payload and future
++  expansion (at most five contacts per deferred source). The projected tables include rehash scratch;
++  consuming sources transfers/releases their future credit even while other support work remains pending.
++  Never keep spent source credits in a historical payload maximum or refund still-allocated arrays by live size.
++  Capture credit transfers to the counted material owner before further admission. `nuke_support_capacity`
++  uses dense removals, partial support reconciliation, fixed competing ownership and full real ledger reload.
+ - Completed crater chunks discard column checkpoints after advancing the saved chunk cursor. Completed passes
+   retain only material totals; terminal out-of-height material groups identical state/cargo without trajectory data.
+   Active moving pieces, support provenance/graph and crater passes are charged by `retainedRuinBytes`. The counter
+@@ -512,6 +518,10 @@ paths:
+   it must not suppress reclamation in its own or another context (`nuke_reclaim_publication`,
+   `nuke_reclaim_other_owner`). Queue rotation itself needs its existing page-growth allowance in a
+   fixed-pressure fixture; do not mislabel an unfunded moving FIFO as collector starvation.
++- Maintenance also rotates requested plan-page completions and collects completed scar Tasks independently
++  of destructive admission. Refused large publications yield to other owned reads; unloaded demand does not
++  orphan a completed page. Task collection parks its result without applying it out of wave/visibility order.
++  `nuke_consumer_completion` combines real reads, a completed unseen solver and dense visible capacity pressure.
+ - Explicit preparation unload, loss of FULL readiness, terminal failure and heap stop release abandoned
+   assembly claims independently of read/task collectors. Inspect unready todos before checking worker
+   admission, with a bounded skip pass: decoder saturation cannot prevent retiring a dead assembly head.
+diff --git a/docs/guide/nuke.md b/docs/guide/nuke.md
+index c257daa4c..fd5a73529 100644
+--- a/docs/guide/nuke.md
++++ b/docs/guide/nuke.md
+@@ -120,8 +120,8 @@ is saved with the world, so leaving and returning does not erase it. Leaves and
+ A surface-burst crater supplies its rim from the ground actually excavated; remaining ejecta and thermally transformed material stay accounted for.
+ 
+ If the shared nuclear working-memory reservation is full, further material removal waits while already moving
+-material can settle. Completed preparation and cached ruin plans continue to receive processing time alongside
+-moving debris; later loaded chunks can reuse plans after the preparation window ends. Large strikes can
++material can settle. Already started plan reads and completed calculations receive processing time even
++while a dense visible chunk waits for space; later loaded chunks can reuse plans after the preparation window ends. Large strikes can
+ still leave chunks waiting for memory and processing time. Pending material and support checks survive a normal world save and reload. Completed movement and crater
+ checkpoints are compacted into material totals; container contents are retained. Saving can pause material
+ movement until its file is written. An old active journal too large for the shared memory limit stays preserved
+diff --git a/docs/guide/ru/nuke.md b/docs/guide/ru/nuke.md
+index bc4881b1a..739e15866 100644
+--- a/docs/guide/ru/nuke.md
++++ b/docs/guide/ru/nuke.md
+@@ -115,8 +115,8 @@ I степени открытой кожи при указанной погод
+ Ещё движущийся материал сохраняется вместе с миром и не исчезает при выходе. Листва и разбитое стекло учитываются как рассеянные мелкие обломки. При наземном взрыве вал воронки получает материал из действительно выкопанного грунта; оставшийся выброс и термически изменённый материал также учитываются.
+ 
+ Если общий рабочий резерв памяти ядерных ударов заполнен, новое удаление материала ждёт, пока уже движущиеся
+-обломки могут оседать. Готовые результаты подготовки и сохранённые планы руин получают время обработки наряду
+-с движением обломков; позднее загруженные чанки могут использовать планы и после завершения подготовки. После
++обломки могут оседать. Уже начатое чтение планов и готовые расчёты получают время обработки, даже когда
++плотно застроенный видимый чанк ждёт свободного места; позднее загруженные чанки могут использовать планы и после завершения подготовки. После
+ крупных ударов часть чанков всё ещё может ждать свободной памяти и времени обработки. Очередь материала и проверок опор сохраняется при обычном сохранении и повторной загрузке мира. Завершённые траектории
+ и контрольные точки воронки сворачиваются в итоги по материалам; содержимое контейнеров сохраняется. Сохранение
+ может приостановить движение обломков до окончания записи файла. Если активный журнал старого мира превышает
+diff --git a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinConsumerCompletionGameTests.java b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinConsumerCompletionGameTests.java
+new file mode 100644
+index 000000000..6120aa14b
+--- /dev/null
++++ b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinConsumerCompletionGameTests.java
+@@ -0,0 +1,160 @@
++package ua.zentix.incoming.nuclear.world;
++
++import java.lang.reflect.Field;
++import java.util.Map;
++import java.util.UUID;
++import java.util.concurrent.CompletableFuture;
++import net.minecraft.core.BlockPos;
++import net.minecraft.gametest.framework.GameTest;
++import net.minecraft.gametest.framework.GameTestHelper;
++import net.minecraft.world.level.ChunkPos;
++import net.minecraft.world.level.Level;
++import net.minecraft.world.level.block.Blocks;
++import net.minecraft.world.level.chunk.storage.RegionStorageInfo;
++import net.minecraft.world.phys.Vec3;
++import net.neoforged.neoforge.gametest.GameTestHolder;
++import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
++import ua.zentix.incoming.Incoming;
++import ua.zentix.incoming.IncomingConfig;
++import ua.zentix.incoming.gametest.StrikeGameTests;
++import ua.zentix.incoming.nuclear.Detonation;
++import ua.zentix.incoming.nuclear.NuclearEvents;
++import ua.zentix.incoming.nuclear.NuclearStrikes;
++
++/** Complete lower-priority work funds an actual dense visible removal under fixed ownership. */
++@GameTestHolder(Incoming.MOD_ID)
++@PrefixGameTestTemplate(false)
++public final class RuinConsumerCompletionGameTests {
++    private RuinConsumerCompletionGameTests() {}
++
++    @GameTest(template = "range", batch = "nuke_consumer_completion", timeoutTicks = 600, skyAccess = true)
++    @SuppressWarnings("unchecked")
++    public static void denseVisibleWaitCannotHideCompletedUnseenConsumers(GameTestHelper h) throws Exception {
++        StrikeGameTests.gameSpeed(h);
++        var level = h.getLevel();
++        NuclearStrikes.clear(level); RuinMatterGameTests.clearFixture(level);
++        var world = NuclearWorld.get(level);
++        var clock = WorkClock.counting(1_000_000);
++        clock.start(4_000_000); world.tick(level, clock);
++        var oldClock = NuclearWorld.clock(level.getServer());
++        NuclearWorld.useClock(level.getServer(), clock);
++        var other = NuclearWorld.get(level.getServer().getLevel(Level.NETHER));
++        long previous = other.materialReservation;
++        int threads = IncomingConfig.SERVER.nukeRuinThreads.get();
++        RuinWorkers.shutdown(); IncomingConfig.SERVER.nukeRuinThreads.set(1);
++        var gate = new CompletableFuture<Void>();
++        var root = level.getServer().getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT)
++                .resolve("data/consumer-completion-" + UUID.randomUUID());
++        var pages = new RuinPages(new RegionStorageInfo("gametest", level.dimension(), "incoming_preparation"), root);
++        var plans = new RetainedPlans(0);
++        StrikeGameTests.afterTest(h, () -> {
++            gate.complete(null);
++            other.materialReservation = previous;
++            ScarQueue.seenForTest(null);
++            NuclearWorld.useClock(level.getServer(), oldClock);
++            NuclearStrikes.clear(level); RuinMatterGameTests.clearFixture(level);
++            RuinWorkers.shutdown(); IncomingConfig.SERVER.nukeRuinThreads.set(threads);
++            plans.clear();
++        });
++        ChunkPos centre = new ChunkPos(h.absolutePos(new BlockPos(32, 1, 32)));
++        ChunkPos unseen = new ChunkPos(centre.x + 1, centre.z);
++        for (int z = -2; z <= 2; z++) for (int x = -2; x <= 3; x++) level.getChunk(centre.x + x, centre.z + z);
++        int bottom = h.absolutePos(new BlockPos(0, 6, 0)).getY();
++        long[] positions = new long[14_820];
++        for (int i = 0; i < positions.length; i++) {
++            BlockPos at = new BlockPos(centre.getMinBlockX() + (i & 15), bottom + (i >> 8), centre.getMinBlockZ() + ((i >> 4) & 15));
++            positions[i] = at.asLong();
++            level.setBlock(at, Blocks.STONE_BRICKS.defaultBlockState(), 18);
++        }
++        BlockPos glass = new BlockPos(unseen.getMiddleBlockX(), bottom + 70, unseen.getMiddleBlockZ());
++        level.setBlock(glass.below(), Blocks.OBSIDIAN.defaultBlockState(), 18);
++        level.setBlock(glass, Blocks.GLASS.defaultBlockState(), 18);
++        var d = new Detonation(NuclearEvents.get(level).nextId(),
++                new Vec3(centre.getMiddleBlockX() - 1000, bottom + 500, centre.getMiddleBlockZ()), bottom,
++                15, false, level.getGameTime() - 20000, 0, 0, 20000, 42, 1, false, .25f, 6000, false);
++        NuclearEvents.get(level).add(d);
++        var ctx = world.ruins(level, d, level.getGameTime());
++        var grid = ctx.grid(level, centre, false);
++        h.assertTrue(grid != null, "Dense live window missing");
++        var sections = new RuinPlanner.Sections(grid.at(0, 0), grid.view());
++        for (long position : positions) {
++            BlockPos at = BlockPos.of(position);
++            sections.set(at.getX() & 15, at.getY(), at.getZ() & 15, Blocks.AIR.defaultBlockState());
++        }
++        var dense = sections.finish(ctx, new long[0], null);
++        dense.material(positions);
++        // The dense resident plan belongs to the scar; the fourteen real stored empty plans have
++        // no remaining visible consumer, as after unloading. Their read reservations still do.
++        var prepared = new RetainedPlans(); prepared.put(centre.toLong(), dense);
++        ((Map<Integer, RetainedPlans>) field(world.scars(), "prepared").get(world.scars())).put(d.id(), prepared);
++        ctx.restoredPlans = plans;
++        plans.spill(pages, ctx, world.prep().readAccounting(),
++                () -> Math.max(0, NuclearPrep.PLANS_CAP - NuclearPrep.residentMemory(level)));
++        long[] reads = new long[14];
++        for (int i = 0; i < reads.length; i++) {
++            reads[i] = ChunkPos.asLong(centre.x + 64 + i, centre.z);
++            plans.put(reads[i], RuinPlan.nothing(ctx, null));
++        }
++        plans.pump(NuclearPrep.PLANS_CAP - NuclearPrep.residentMemory(level));
++        h.assertTrue(ctx.submit(level, level.getChunkSource().getChunkNow(unseen.x, unseen.z), RuinWorkers.Priority.NEAR),
++                "Actual unseen solver was not admitted");
++        int[] stage = {0};
++        long[] started = {0}, fixed = {0};
++        h.succeedWhen(() -> {
++            try {
++                world.ruins(level, d, level.getGameTime());
++                if (stage[0] == 0) {
++                    plans.pump(NuclearPrep.PLANS_CAP - NuclearPrep.residentMemory(level));
++                    h.assertTrue(plans.pendingWrites() == 0 && ctx.done(unseen.toLong()), "Real page writes/solver still running");
++                    h.assertTrue(plans.bytes() == reads.length * 48L, "Stored pages were not evicted");
++                    // Fence the actual vanilla reads, so admission/ownership is observed before
++                    // any can complete. Releasing this gate releases no memory reservation.
++                    field(pages, "tail").set(pages, gate);
++                    for (long key : reads) h.assertTrue(plans.get(key) == null, "Read completed before its I/O fence");
++                    h.assertTrue(plans.pendingReads() == reads.length, "Demand read owners missing");
++                    other.materialReservation = previous + (400L << 20);
++                    fixed[0] = other.materialReservation;
++                    h.assertTrue(NuclearPrep.residentMemory(level) <= NuclearPrep.PLANS_CAP, "Fixture overfilled its actual owned set");
++                    var chunk = level.getChunkSource().getChunkNow(centre.x, centre.z);
++                    h.assertFalse(dense.apply(level, chunk, d, new ColumnScar.Budget(false)), "Dense fixture must initially wait for consumer capacity");
++                    h.assertTrue(dense.memoryWaiting(), "Dense fixture is stale, not capacity-blocked");
++                    ScarQueue.seenForTest(key -> key == centre.toLong());
++                    world.scars().offer(chunk, d);
++                    world.scars().offer(level.getChunkSource().getChunkNow(unseen.x, unseen.z), d);
++                    started[0] = level.getGameTime(); stage[0] = 1;
++                    Incoming.LOG.info("CONSUMER_COMPLETION start resident {} fixed {} readOwners {} tasks {} denseDebit {}",
++                            NuclearPrep.residentMemory(level), fixed[0], world.prep().readAccounting(), ctx.tasks(),
++                            RuinMatter.get(level).removalBytes(positions.length));
++                }
++                h.assertTrue(other.materialReservation == fixed[0], "External ownership was released");
++                h.assertTrue(NuclearPrep.residentMemory(level) <= NuclearPrep.PLANS_CAP, "Consumer publication exceeded capacity");
++                if (stage[0] == 1) {
++                    h.assertTrue(plans.pendingReads() == reads.length && !gate.isDone(), "Read ownership changed before its I/O fence");
++                    h.assertTrue(world.scars().queued(centre.toLong()) && level.getBlockState(BlockPos.of(positions[0])).is(Blocks.STONE_BRICKS),
++                            "Dense visible work must remain blocked during independent task collection");
++                    var parked = (Map<?, ?>) field(world.scars(), "parked").get(world.scars());
++                    h.assertTrue(!ctx.running(unseen.toLong()) && parked.containsKey(unseen.toLong()),
++                            "Completed unseen task was not transferred to its counted parked owner before visible admission");
++                    Incoming.LOG.info("CONSUMER_COMPLETION unseen result collected with all {} read owners still fenced", reads.length);
++                    stage[0] = 2;
++                    gate.complete(null);
++                }
++                h.assertTrue(!world.scars().queued(centre.toLong()) && !world.scars().queued(unseen.toLong())
++                                && !ctx.running(unseen.toLong()) && plans.pendingReads() == 0,
++                        "Funded consumers remain: scars=" + world.scars().size() + ", tasks=" + ctx.tasks() + ", reads=" + plans.pendingReads());
++                for (long position : positions) h.assertFalse(level.getBlockState(BlockPos.of(position)).is(Blocks.STONE_BRICKS),
++                        "Dense watched source survived completion");
++                h.assertFalse(level.getBlockState(glass).is(Blocks.GLASS), "Unseen completion lost its real solver output");
++                for (ChunkPos pos : java.util.List.of(centre, unseen)) h.assertTrue(level.getChunkSource().getChunkNow(pos.x, pos.z)
++                        .getExistingData(ua.zentix.incoming.registry.ModAttachments.CHUNK_SCAR).orElse(0) == d.id(), "Missing applied scar");
++                h.assertTrue(RuinMatter.get(level).released() >= positions.length + 1, "Completed dense plan lost material ownership");
++                Incoming.LOG.info("CONSUMER_COMPLETION dense {}, all reads/tasks/scars drained in {} ticks, resident {}",
++                        positions.length, level.getGameTime() - started[0], NuclearPrep.residentMemory(level));
++            } catch (ReflectiveOperationException e) { throw new IllegalStateException(e); }
++        });
++    }
++
++    private static Field field(Object owner, String name) throws NoSuchFieldException {
++        Field result = owner.getClass().getDeclaredField(name); result.setAccessible(true); return result;
++    }
++}
+diff --git a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinDemandProgressGameTests.java b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinDemandProgressGameTests.java
+index a82094696..74883fd55 100644
+--- a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinDemandProgressGameTests.java
++++ b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinDemandProgressGameTests.java
+@@ -26,6 +26,11 @@ public final class RuinDemandProgressGameTests {
+         var level = h.getLevel();
+         RuinMatterGameTests.clearFixture(level);
+         var grid = RuinStorageGameTests.fixture(h, true);
++        var held = new ua.zentix.incoming.strike.AreaLoader.Area(
++                net.minecraft.server.level.TicketType.create("incoming_demand_test", java.util.Comparator.<UUID>naturalOrder()),
++                grid.centre(), 2, UUID.randomUUID(), false);
++        ua.zentix.incoming.strike.StrikeWorld.get(level).areas().hold(level, held);
++        StrikeGameTests.afterTest(h, () -> ua.zentix.incoming.strike.StrikeWorld.get(level).areas().release(level, held));
+         var old = grid.ctx().d;
+         var d = new Detonation(190002, old.burst(), old.groundY(), old.yieldKt(), old.surface(),
+                 old.gameTime() - 20000, 0, 0, old.visibility(), 42, old.scale(), false, old.wave());
+@@ -56,6 +61,8 @@ public final class RuinDemandProgressGameTests {
+         });
+         h.succeedWhen(() -> {
+             try {
++                h.assertTrue(level.getChunkSource().getChunkNow(grid.centre().x, grid.centre().z) != null,
++                        "Watched fixture lost FULL readiness");
+                 if (stage[0] == 0) {
+                     String policy = (String) content.invoke(world.prep(), level);
+                     h.assertTrue(policy != null && RuinProgress.get(level).writable(), "Storage identity pending");
+diff --git a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinSupportCapacityGameTests.java b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinSupportCapacityGameTests.java
+new file mode 100644
+index 000000000..b3cbed466
+--- /dev/null
++++ b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinSupportCapacityGameTests.java
+@@ -0,0 +1,231 @@
++package ua.zentix.incoming.nuclear.world;
++
++import java.lang.reflect.Field;
++import java.nio.file.Path;
++import java.util.ArrayList;
++import java.util.List;
++import java.util.Map;
++import java.util.UUID;
++import net.minecraft.core.BlockPos;
++import net.minecraft.gametest.framework.GameTest;
++import net.minecraft.gametest.framework.GameTestHelper;
++import net.minecraft.nbt.CompoundTag;
++import net.minecraft.nbt.ListTag;
++import net.minecraft.nbt.Tag;
++import net.minecraft.server.level.ServerLevel;
++import net.minecraft.world.item.ItemStack;
++import net.minecraft.world.item.Items;
++import net.minecraft.world.level.ChunkPos;
++import net.minecraft.world.level.Level;
++import net.minecraft.world.level.block.Blocks;
++import net.minecraft.world.level.block.entity.BarrelBlockEntity;
++import net.minecraft.world.level.chunk.LevelChunk;
++import net.minecraft.world.phys.Vec3;
++import net.neoforged.neoforge.gametest.GameTestHolder;
++import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
++import ua.zentix.incoming.Incoming;
++import ua.zentix.incoming.gametest.StrikeGameTests;
++import ua.zentix.incoming.nuclear.Detonation;
++import ua.zentix.incoming.nuclear.NuclearEvents;
++import ua.zentix.incoming.nuclear.NuclearStrikes;
++
++/** The actual dense-plan/material/support path, with one unresolved contact retaining provenance. */
++@GameTestHolder(Incoming.MOD_ID)
++@PrefixGameTestTemplate(false)
++public final class RuinSupportCapacityGameTests {
++    private RuinSupportCapacityGameTests() {}
++    private static final int[] DENSITY = {22_054, 14_820, 9_214};
++    // Both versions can publish the 22,054-cell seed plan. Once its 4 KiB/source credit has
++    // been spent, the old historical charge leaves less than the next 14,820-cell debit.
++    // This is fixed across the baseline/candidate, not fitted from either retained counter.
++    private static final long COMPETING = 344L << 20;
++
++    private record Dense(LevelChunk chunk, long[] positions, BlockPos barrel) {}
++
++    @GameTest(template = "range", batch = "nuke_support_capacity", timeoutTicks = 240, skyAccess = true)
++    @SuppressWarnings("unchecked")
++    public static void consumedSourcesFundEveryDenseWatchedPlanBeforeSupportDrains(GameTestHelper h) throws Exception {
++        StrikeGameTests.gameSpeed(h);
++        ServerLevel level = h.getLevel();
++        NuclearStrikes.clear(level);
++        RuinMatterGameTests.clearFixture(level);
++        var world = NuclearWorld.get(level);
++        var other = NuclearWorld.get(level.getServer().getLevel(Level.NETHER));
++        long previous = other.materialReservation, time = level.getGameTime();
++        var clock = WorkClock.counting(1_000_000);
++        clock.start(4_000_000); world.tick(level, clock);
++        RuinWorkers.shutdown();
++        StrikeGameTests.afterTest(h, () -> {
++            other.materialReservation = previous;
++            ScarQueue.seenForTest(null);
++            NuclearStrikes.clear(level);
++            RuinMatterGameTests.clearFixture(level);
++        });
++        ChunkPos centre = new ChunkPos(h.absolutePos(new BlockPos(32, 1, 32)));
++        for (int z = -2; z <= 2; z++) for (int x = -2; x <= 4; x++) level.getChunk(centre.x + x, centre.z + z);
++        int bottom = h.absolutePos(new BlockPos(0, 6, 0)).getY();
++        var dense = new ArrayList<Dense>();
++        for (int c = 0; c < DENSITY.length; c++) {
++            ChunkPos pos = new ChunkPos(centre.x + c, centre.z);
++            long[] positions = new long[DENSITY[c]];
++            for (int i = 0; i < positions.length; i++) {
++                BlockPos at = new BlockPos(pos.getMinBlockX() + (i & 15), bottom + (i >> 8), pos.getMinBlockZ() + ((i >> 4) & 15));
++                positions[i] = at.asLong();
++                level.setBlock(at, Blocks.STONE_BRICKS.defaultBlockState(), 18);
++            }
++            BlockPos barrel = BlockPos.of(positions[positions.length / 2]);
++            level.setBlock(barrel, Blocks.BARREL.defaultBlockState(), 18);
++            ((BarrelBlockEntity) level.getBlockEntity(barrel)).setItem(0, new ItemStack(Items.DIAMOND, 7));
++            dense.add(new Dense(level.getChunkSource().getChunkNow(pos.x, pos.z), positions, barrel));
++        }
++        var d = new Detonation(NuclearEvents.get(level).nextId(),
++                new Vec3(centre.getMiddleBlockX(), bottom + 120, centre.getMiddleBlockZ()), bottom,
++                15, false, time - 20000, 0, 0, 20000, 42, 1, false, .25f, 6000, false);
++        NuclearEvents.get(level).add(d);
++        var ctx = world.ruins(level, d, time);
++        var plans = new RetainedPlans();
++        for (Dense f : dense) {
++            var grid = ctx.grid(level, f.chunk.getPos(), false);
++            h.assertTrue(grid != null, "Dense source window missing");
++            var sections = new RuinPlanner.Sections(grid.at(0, 0), grid.view());
++            for (long position : f.positions) {
++                BlockPos at = BlockPos.of(position);
++                sections.set(at.getX() & 15, at.getY(), at.getZ() & 15, Blocks.AIR.defaultBlockState());
++            }
++            var plan = sections.finish(ctx, new long[0], null);
++            plan.material(f.positions);
++            h.assertTrue(plan.changedBlocks() == f.positions.length, "Dense encoder lost removals");
++            plans.put(f.chunk.getPos().toLong(), plan);
++        }
++        ((Map<Integer, RetainedPlans>) field(world.scars(), "prepared").get(world.scars())).put(d.id(), plans);
++        var keys = new it.unimi.dsi.fastutil.longs.LongOpenHashSet();
++        for (Dense f : dense) keys.add(f.chunk.getPos().toLong());
++        ScarQueue.seenForTest(keys::contains);
++
++        // A real removed boundary support leaves an unknown face. Its asynchronous ticket cannot
++        // promote a chunk during this synchronous sequence of bounded work invocations. Keep that
++        // source/provenance, rather than clearing maps to manufacture the memory release under test.
++        ChunkPos cold = new ChunkPos(centre.x + 128, centre.z + 128);
++        level.getChunk(cold.x, cold.z);
++        BlockPos source = new BlockPos(cold.getMaxBlockX(), bottom + 5, cold.getMaxBlockZ());
++        level.setBlock(source, Blocks.STONE_BRICKS.defaultBlockState(), 18);
++        var piece = RuinMatter.capture(level, source, level.getBlockState(source), d);
++        h.assertTrue(piece != null, "Boundary support was not captured");
++        level.setBlock(source, Blocks.AIR.defaultBlockState(), 18);
++        var ledger = RuinMatter.get(level);
++        ledger.release(List.of(piece)); ledger.support(level, List.of(piece), d);
++        other.materialReservation = previous + COMPETING;
++        long fixed = other.materialReservation;
++        h.assertTrue(NuclearPrep.residentMemory(level) + ledger.removalBytes(DENSITY[0]) + (1L << 20) < NuclearPrep.PLANS_CAP,
++                "Fixture does not fund the initial real dense publication");
++        world.scars().offer(dense.getFirst().chunk, d);
++        clock.start(1_000_000); world.scars().work(level, time, clock);
++        h.assertTrue(!world.scars().queued(dense.getFirst().chunk.getPos().toLong()), "Warm dense plan did not apply");
++        long chargedBefore = ledger.retainedBytes();
++        int expanded = 0;
++        var sources = (RuinRecords<?>) field(ledger, "supportSources").get(ledger);
++        while (!sources.isEmpty() && expanded++ < 2000) {
++            clock.start(1_000_000); ledger.work(level, clock, 1);
++            h.assertTrue(NuclearPrep.residentMemory(level) <= NuclearPrep.PLANS_CAP, "Source expansion exceeded its existing credit");
++        }
++        h.assertTrue(sources.isEmpty() && ledger.pendingSupport() > 0,
++                "Fixture must consume sources while support and provenance remain pending");
++        var originals = (Map<?, ?>) field(ledger, "originals").get(ledger);
++        h.assertTrue(originals.size() >= DENSITY[0], "Pending provenance was discarded");
++        Incoming.LOG.info("SUPPORT_CAPACITY expanded {} units, ledger {} -> {}, original {}, support {}, arrays {}",
++                expanded, chargedBefore, ledger.retainedBytes(), originals.size(), ledger.pendingSupport(), backing(ledger));
++        for (int i = 1; i < dense.size(); i++) world.scars().offer(dense.get(i).chunk, d);
++        int ticks = 0;
++        try {
++            for (; ticks < 120 && dense.stream().anyMatch(f -> world.scars().queued(f.chunk.getPos().toLong())); ticks++) {
++                ((net.minecraft.world.level.storage.ServerLevelData) level.getLevelData()).setGameTime(time + ticks + 1);
++                clock.start(4_000_000); world.tick(level, clock);
++                h.assertTrue(other.materialReservation == fixed, "Competing ownership changed");
++                h.assertTrue(NuclearPrep.residentMemory(level) <= NuclearPrep.PLANS_CAP, "Dense consumer exceeded the shared cap");
++            }
++        } finally { ((net.minecraft.world.level.storage.ServerLevelData) level.getLevelData()).setGameTime(time); }
++        for (Dense f : dense) Incoming.LOG.info("SUPPORT_CAPACITY consumer {} queued {} state {} scar {} retained {}",
++                f.chunk.getPos(), world.scars().queued(f.chunk.getPos().toLong()),
++                world.scars().diagState(f.chunk.getPos().toLong(), time + ticks),
++                f.chunk.getExistingData(ua.zentix.incoming.registry.ModAttachments.CHUNK_SCAR).orElse(0), NuclearPrep.residentMemory(level));
++        h.assertTrue(dense.stream().noneMatch(f -> world.scars().queued(f.chunk.getPos().toLong())),
++                "Dense watched work remains after spent source credit");
++        long total = 1;
++        for (Dense f : dense) {
++            total += f.positions.length;
++            h.assertTrue(f.chunk.getExistingData(ua.zentix.incoming.registry.ModAttachments.CHUNK_SCAR).orElse(0) == d.id(),
++                    "Watched chunk was removed without its applied scar");
++            // Material can already land in a cleared source cell. The retained original journal
++            // records each actual removal, whereas testing the final block type confuses a deposit
++            // with an untouched source. Also require the top of each removed column to be open.
++            for (long position : f.positions) h.assertTrue(originals.containsKey(position), "Dense source has no removal provenance");
++            h.assertTrue(level.getBlockState(BlockPos.of(f.positions[f.positions.length - 1])).isAir(),
++                    "Dense column survived queue completion");
++        }
++        h.assertTrue(ledger.released() == total && ledger.pendingSupport() > 0, "Material duplicated/lost or support drained before completion");
++        CompoundTag expected = ledger.save(new CompoundTag(), level.registryAccess());
++        h.assertTrue(ledger.released() == ledger.deposited() + ledger.pending() + expected.getLong("dispersed"), "Material count is not conserved");
++        h.assertTrue(expected.getList("moving", Tag.TAG_COMPOUND).stream().filter(t -> ((CompoundTag) t).contains("contents")).count() == 3,
++                "Dense capture lost live barrel cargo");
++        Path file = level.getServer().getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT)
++                .resolve("data/support-capacity-" + UUID.randomUUID() + ".dat");
++        ledger.save(file.toFile(), level.registryAccess());
++        Incoming.LOG.info("SUPPORT_CAPACITY all {} dense watched plans / {} cells applied in {} ticks, fixed {}, retained {}",
++                dense.size(), total, ticks, fixed, NuclearPrep.residentMemory(level));
++        var reloading = new java.util.concurrent.atomic.AtomicReference<java.util.concurrent.CompletableFuture<RuinMatter>>();
++        h.succeedWhen(() -> {
++            h.assertTrue(ledger.writable(), "Real ledger save is pending");
++            if (reloading.get() == null) reloading.set(java.util.concurrent.CompletableFuture.supplyAsync(() -> {
++                try {
++                    var measured = LedgerScan.measure(file, "incoming_ruin_matter", java.util.Set.of(), NuclearPrep.PLANS_CAP - COMPETING);
++                    if (measured.owned() > NuclearPrep.PLANS_CAP - COMPETING)
++                        throw new java.io.IOException("Saved ownership does not fit the same fixed competing owner");
++                    return (RuinMatter) LedgerReader.read(file, "incoming_ruin_matter", level.registryAccess(), measured.row(), java.util.Set.of());
++                } catch (java.io.IOException e) { throw new java.io.UncheckedIOException(e); }
++            }, net.minecraft.Util.ioPool()));
++            var read = reloading.get();
++            h.assertTrue(read.isDone(), "Real streaming ledger import is pending");
++            h.assertFalse(read.isCompletedExceptionally(), "Streaming import failed: "
++                    + (read.isCompletedExceptionally() ? read.exceptionNow() : ""));
++            var restored = read.join();
++            h.assertTrue(normalized(restored.save(new CompoundTag(), level.registryAccess())).equals(normalized(expected)),
++                    "Real save/reload changed complete material, cargo or support ownership");
++            h.assertTrue(restored.retainedBytes() < NuclearPrep.PLANS_CAP - COMPETING,
++                    "Restored live payload no longer fits the same competing ownership");
++            restored.unload(level);
++        });
++    }
++
++    private static CompoundTag normalized(CompoundTag tag) {
++        var result = tag.copy();
++        for (String key : List.of("materials", "support_originals", "cold_edges")) {
++            List<Tag> rows = new ArrayList<>(result.getList(key, Tag.TAG_COMPOUND));
++            String id = key.equals("materials") ? "block" : "position";
++            rows.sort(java.util.Comparator.comparing(row -> ((CompoundTag) row).get(id).toString()));
++            var ordered = new ListTag(); ordered.addAll(rows); result.put(key, ordered);
++        }
++        return result;
++    }
++
++    private static long backing(RuinMatter ledger) throws ReflectiveOperationException {
++        long bytes = 0;
++        for (String name : List.of("supports", "uncertain", "originals")) {
++            Object map = field(ledger, name).get(ledger);
++            for (String array : List.of("key", "value", "link")) {
++                Field f;
++                try { f = field(map, array); } catch (NoSuchFieldException absent) { continue; }
++                Object values = f.get(map);
++                bytes += 32L + java.lang.reflect.Array.getLength(values) * (values instanceof int[] ? 4L : 8L);
++            }
++        }
++        return bytes;
++    }
++
++    private static Field field(Object owner, String name) throws NoSuchFieldException {
++        for (Class<?> type = owner.getClass(); type != null; type = type.getSuperclass()) {
++            try { Field value = type.getDeclaredField(name); value.setAccessible(true); return value; }
++            catch (NoSuchFieldException ignored) { }
++        }
++        throw new NoSuchFieldException(name);
++    }
++}
+diff --git a/mod/src/main/java/ua/zentix/incoming/nuclear/world/NuclearPrep.java b/mod/src/main/java/ua/zentix/incoming/nuclear/world/NuclearPrep.java
+index ee7d91bc5..ff305642a 100644
+--- a/mod/src/main/java/ua/zentix/incoming/nuclear/world/NuclearPrep.java
++++ b/mod/src/main/java/ua/zentix/incoming/nuclear/world/NuclearPrep.java
+@@ -593,12 +593,12 @@ public final class NuclearPrep {
+      * the reclamation that funds it. This never opens fresh reads or admits another solver.
+      */
+     boolean reclaim(ServerLevel level, WorkClock shared) {
+-        int slots = preps.size() * 3;
++        int slots = preps.size() * 4;
+         for (int checked = 0; checked < slots && shared.canStart(); checked++) {
+             int slot = Math.floorMod(reclaimNext++, slots);
+-            Prep p = preps.get(slot / 3);
++            Prep p = preps.get(slot / 4);
+             if (p.draining || p.detonation < 0 || p.ruins == null) continue;
+-            switch (slot % 3) {
++            switch (slot % 4) {
+                 case 0 -> {
+                     ArchivedShot head = p.archived.peek();
+                     if (head == null) continue;
+@@ -624,6 +624,13 @@ public final class NuclearPrep {
+                     try { collectFar(level, p, ready); }
+                     finally { shared.end(began); }
+                 }
++                case 3 -> {
++                    if (p.plans.pendingReads() == 0) continue;
++                    long began = shared.begin();
++                    try { p.plans.collectReady((key, plan) ->
++                            NuclearWorld.get(level).scars().collectPrepared(level, p.ruins, p.plans, key, plan)); }
++                    finally { shared.end(began); }
++                }
+                 default -> throw new AssertionError("Unknown completion lane");
+             }
+             return true;
+diff --git a/mod/src/main/java/ua/zentix/incoming/nuclear/world/NuclearWorld.java b/mod/src/main/java/ua/zentix/incoming/nuclear/world/NuclearWorld.java
+index d9d02de3f..83e8f8213 100644
+--- a/mod/src/main/java/ua/zentix/incoming/nuclear/world/NuclearWorld.java
++++ b/mod/src/main/java/ua/zentix/incoming/nuclear/world/NuclearWorld.java
+@@ -438,26 +438,38 @@ public final class NuclearWorld {
+ 
+     /** Bounded completion/cache service survives preparation expiry and rotates across active owners. */
+     private void reclaim(ServerLevel level, WorkClock clock) {
+-        int slots = 2 * ruins.size() + 1;
++        int slots = 3 * ruins.size() + 2;
+         for (int checked = 0; checked < slots && clock.canStart(); checked++) {
+             int slot = Math.floorMod(reclaimNext++, slots);
+             if (slot == 0) {
+                 if (prep.reclaim(level, clock)) return;
+                 continue;
+             }
++            if (slot == 1) {
++                if (scars.collectReady(level, clock)) return;
++                continue;
++            }
+             var contexts = ruins.values().iterator();
+-            int context = (slot - 1) / 2;
++            int context = (slot - 2) / 3;
+             for (int i = 0; i < context; i++) contexts.next();
+             RuinContext ctx = contexts.next();
+             // A ready payload may refuse publication. Collection and reclamation need separate
+             // turns so that refusal cannot suppress the operation that makes room for it.
+-            if ((slot & 1) != 0) {
++            if ((slot - 2) % 3 == 0) {
+                 if (!ctx.readyWindowReads()) continue;
+                 long began = clock.begin();
+                 try { ctx.drainWindowReads(level); }
+                 finally { clock.end(began); }
+                 return;
+             }
++            if ((slot - 2) % 3 == 1) {
++                if (ctx.restoredPlans == null || ctx.restoredPlans.pendingReads() == 0) continue;
++                long began = clock.begin();
++                try { ctx.restoredPlans.collectReady((key, plan) ->
++                        scars.collectPrepared(level, ctx, ctx.restoredPlans, key, plan)); }
++                finally { clock.end(began); }
++                return;
++            }
+             if (ctx.shotBytes() > (64L << 20)
+                     || NuclearPrep.PLANS_CAP - NuclearPrep.residentMemory(level) < RuinMemory.TRANSITION_ROOM) {
+                 if (ctx.shotCount() == 0) continue;
+diff --git a/mod/src/main/java/ua/zentix/incoming/nuclear/world/RetainedPlans.java b/mod/src/main/java/ua/zentix/incoming/nuclear/world/RetainedPlans.java
+index e571ec076..dcde64a65 100644
+--- a/mod/src/main/java/ua/zentix/incoming/nuclear/world/RetainedPlans.java
++++ b/mod/src/main/java/ua/zentix/incoming/nuclear/world/RetainedPlans.java
+@@ -21,7 +21,7 @@ final class RetainedPlans extends Long2ObjectOpenHashMap<RuinPlan> {
+     private final transient it.unimi.dsi.fastutil.longs.LongLinkedOpenHashSet toWrite = new it.unimi.dsi.fastutil.longs.LongLinkedOpenHashSet();
+     private final transient it.unimi.dsi.fastutil.longs.LongLinkedOpenHashSet hot = new it.unimi.dsi.fastutil.longs.LongLinkedOpenHashSet();
+     // Demand reads belong to the scar/front consumer, independently of the preparation cursor.
+-    private final transient it.unimi.dsi.fastutil.longs.LongOpenHashSet demanded = new it.unimi.dsi.fastutil.longs.LongOpenHashSet();
++    private final transient it.unimi.dsi.fastutil.longs.LongLinkedOpenHashSet demanded = new it.unimi.dsi.fastutil.longs.LongLinkedOpenHashSet();
+     private long lastMiss = Long.MIN_VALUE;
+     private boolean discover;
+     private final transient it.unimi.dsi.fastutil.longs.LongLinkedOpenHashSet misses = new it.unimi.dsi.fastutil.longs.LongLinkedOpenHashSet();
+@@ -62,6 +62,24 @@ final class RetainedPlans extends Long2ObjectOpenHashMap<RuinPlan> {
+     boolean pendingWrite(long key) { return writes.containsKey(key) || toWrite.contains(key); }
+     int pendingReads() { return reads.size(); }
+ 
++    /** Funded reads keep a collector even when their scar is behind capacity-blocked visible
++     * work or has unloaded. Rotate refused publications too; one large page cannot hide a
++     * smaller completed page. A successful decode enters the normal spillable cache. */
++    boolean collectReady(java.util.function.BiConsumer<Long, RuinPlan> consumer) {
++        int remaining = demanded.size(); // at most READ_LIMIT
++        while (remaining-- > 0) {
++            long key = demanded.removeFirstLong();
++            var read = reads.get(key);
++            if (read == null) continue;
++            demanded.addAndMoveToLast(key);
++            if (!read.isDone()) continue;
++            RuinPlan plan = load(key, true);
++            if (plan != null) consumer.accept(key, plan);
++            return true;
++        }
++        return false;
++    }
++
+     long bytes() { return bytes + writeBytes + 48L * (super.size() + reads.size() + writes.size()); }
+ 
+     /** Bound both write ownership and read results; no blocking future wait on the tick thread. */
+diff --git a/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinMatter.java b/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinMatter.java
+index a70c00e67..bce776a9b 100644
+--- a/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinMatter.java
++++ b/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinMatter.java
+@@ -43,22 +43,16 @@ public final class RuinMatter extends LedgerData {
+     }
+     private final java.util.Map<ReservoirKey, Reservoir> stranded = new java.util.HashMap<>();
+     private int strandedCount;
+-    private long movingBytes, strandedBytes, supportBacking;
++    private long movingBytes, strandedBytes;
+ 
+-    /** Deferred source plus its eventual contact-map growth, already charged by retainedBytes. */
+-    private static final long SUPPORT_SOURCE_BYTES = 4096;
+-    private static final long SUPPORT_ENTRY_BYTES = 256;
+-    /** Worst case: one new provenance entry, material balance, palette state and inventory slot per removal. */
+-    private static final long REMOVAL_INDEX_BYTES = SUPPORT_ENTRY_BYTES + 512 + 96 + 64;
++    /** One material balance, palette state and inventory slot per removal, before deduplication. */
++    private static final long REMOVAL_INDEX_BYTES = 512 + 96 + 64;
+ 
+     /** Conservative owned representation, including cargo and collection growth slack; the frozen save shares this owner. */
+     long retainedBytes() {
+-        supportBacking = Math.max(supportBacking, 2048L + supportSources.size() * SUPPORT_SOURCE_BYTES
+-                + supports.size() * SUPPORT_ENTRY_BYTES + uncertain.size() * SUPPORT_ENTRY_BYTES + originals.size() * SUPPORT_ENTRY_BYTES);
+         inventoryCapacity = Math.max(inventoryCapacity, inventories.size());
+         return IO_BYTES + 1024L + movingBytes + moving.bytes() + strandedBytes + palette.bytes()
+-                + inventoryCapacity * 64L + supportBacking
+-                + Math.max(0, supportSources.bytes() - SUPPORT_SOURCE_BYTES * supportSources.size())
++                + inventoryCapacity * 64L + supportBytes(0) + supportSources.bytes()
+                 + materials.size() * 512L + (search == null ? 2048 : search.retainedBytes());
+     }
+ 
+@@ -68,7 +62,41 @@ public final class RuinMatter extends LedgerData {
+      * the reservation separately before mutation. Reserve each ownership term once, rather
+      * than an unrelated per-cell envelope: dense ready chunks must fit when these owners fit. */
+     long removalBytes(int pieces) {
+-        return pieces * (512L + SUPPORT_SOURCE_BYTES + REMOVAL_INDEX_BYTES) + queueGrowthBytes(pieces);
++        return pieces * (512L + REMOVAL_INDEX_BYTES) + queueGrowthBytes(pieces)
++                + supportBytes(pieces) - supportBytes(0);
++    }
++
++    /** A deferred source can add at most five contacts (never its lower neighbour). Fund their
++     * complete table growth and cold faces before removal, then transfer that credit to actual
++     * arrays/live entries as expansion runs. Spent source credit is not retained map capacity.
++     * The two-array allowance covers old/new tables during rehash, without a historical payload
++     * high-water mark. Registry block states are shared, not owned by these indexes. */
++    private long supportBytes(int removals) {
++        long contacts = 5L * (supportSources.size() + (long) removals);
++        return supports.bytes(contacts) + uncertain.bytes(contacts)
++                + 96L * (uncertain.size() + contacts)
++                + originals.bytes(removals) + 64L * (originals.size() + (long) removals);
++    }
++
++    private static long tableSize(long entries, float loadFactor) {
++        return Math.max(2, it.unimi.dsi.fastutil.HashCommon.nextPowerOfTwo((long) Math.ceil(entries / (double) loadFactor)));
++    }
++
++    private static final class SupportMap extends it.unimi.dsi.fastutil.longs.Long2IntLinkedOpenHashMap {
++        private static final long serialVersionUID = 1L;
++        long bytes(long additions) {
++            long capacity = Math.max(n, tableSize(size() + additions, f));
++            // long keys + int values + long links, including the null-key slot and array headers.
++            return 256L + 2 * 20L * (capacity + 1);
++        }
++    }
++
++    private static final class ContactMap<V> extends it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<V> {
++        private static final long serialVersionUID = 1L;
++        long bytes(long additions) {
++            long capacity = Math.max(n, tableSize(size() + additions, f));
++            return 192L + 2 * 16L * (capacity + 1); // long key + conservatively eight-byte reference
++        }
+     }
+ 
+     static long removalBytes(ServerLevel level, Piece piece) {
+@@ -107,13 +135,13 @@ public final class RuinMatter extends LedgerData {
+     private double releasedVolume, depositedVolume, releasedMass, depositedMass;
+     private long dispersed;
+     private double dispersedVolume, dispersedMass;
+-    private final it.unimi.dsi.fastutil.longs.Long2IntLinkedOpenHashMap supports = new it.unimi.dsi.fastutil.longs.Long2IntLinkedOpenHashMap();
++    private final SupportMap supports = new SupportMap();
+     /** Only cold edges need to remember the removed face until their neighbour can be inspected. */
+-    private final it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<BlockState[]> uncertain = new it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<>();
++    private final ContactMap<BlockState[]> uncertain = new ContactMap<>();
+     private record Original(BlockState state, int event) {}
+     /** One pre-failure graph for all still-pending removals, including overlapping strikes.
+      * First removal at a position wins until reconciliation drains; event IDs only attribute it. */
+-    private final it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<Original> originals = new it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<>();
++    private final ContactMap<Original> originals = new ContactMap<>();
+     private RuinSupport search;
+     private int heldRadius;
+     /** One held-window observation per work invocation; destination readiness always stays live. */
+@@ -473,7 +501,6 @@ public final class RuinMatter extends LedgerData {
+             // starts from that settled world; completed contact journals are not permanent history.
+             originals.clear(); originals.trim();
+             supports.trim(); uncertain.trim();
+-            supportBacking = 2048;
+             setDirty();
+         }
+         if (moving.isEmpty() && moving.bytes() > 128) moving = new RuinRecords<>(PIECE_BYTES, this::encodePiece, this::decodePiece);
+diff --git a/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinMemory.java b/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinMemory.java
+index cd4a8738a..cd39b6b34 100644
+--- a/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinMemory.java
++++ b/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinMemory.java
+@@ -60,6 +60,12 @@ final class RuinMemory {
+             bytes += extra;
+             return true;
+         }
++        /** Published payload has a counted owner now; keep only the still-private capture credit. */
++        void transfer(long published) {
++            if (published < 0 || published > bytes) throw new IllegalArgumentException("Unfunded material publication");
++            owner.materialReservation -= published;
++            bytes -= published;
++        }
+         @Override public void close() {
+             if (owner == null) return;
+             owner.materialReservation -= bytes;
+diff --git a/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinPlan.java b/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinPlan.java
+index 9653297c1..0e543560a 100644
+--- a/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinPlan.java
++++ b/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinPlan.java
+@@ -998,8 +998,14 @@ public final class RuinPlan {
+                     Blast.Props props = Blast.props(now);
+                     return now.getBlock() == piece.state.getBlock() || props.bearing() || props.leaves();
+                 });
+-                RuinMatter.get(level).release(released);
+-                RuinMatter.get(level).support(level, released, d);
++                RuinMatter ledger = RuinMatter.get(level);
++                long owned = ledger.retainedBytes();
++                try {
++                    ledger.release(released);
++                    ledger.support(level, released, d);
++                } finally {
++                    reservation.transfer(Math.max(0, ledger.retainedBytes() - owned));
++                }
+             }
+             if (ctx != null) ctx.applied(chunk, this, motion);
+             FlashScorch.unmark(chunk, d.id());
+diff --git a/mod/src/main/java/ua/zentix/incoming/nuclear/world/ScarQueue.java b/mod/src/main/java/ua/zentix/incoming/nuclear/world/ScarQueue.java
+index 4c7f9ccad..e1293f2c8 100644
+--- a/mod/src/main/java/ua/zentix/incoming/nuclear/world/ScarQueue.java
++++ b/mod/src/main/java/ua/zentix/incoming/nuclear/world/ScarQueue.java
+@@ -210,6 +210,47 @@ public final class ScarQueue {
+     private record Log(long at, net.minecraft.world.level.block.state.BlockState state) {}
+ 
+     private final LinkedHashSet<Job> readySeen = new LinkedHashSet<>(), readyUnseen = new LinkedHashSet<>();
++    private boolean completionSeen;
++
++    /** Hand a completed demanded page directly to its live scar before cache trimming can evict
++     * it again. Unloaded/no-longer-needed demand remains ordinary spillable cache data. */
++    void collectPrepared(ServerLevel level, RuinContext ctx, RetainedPlans source, long key, RuinPlan plan) {
++        Job job = jobs.get(key);
++        if (job == null || job.event >= job.events.size() || parked.containsKey(key)) return;
++        int event = job.events.get(job.event).id();
++        if (NuclearWorld.get(level).ruinsIfKept(event) != ctx) return;
++        var preferred = prepared.get(event);
++        if (preferred != null && preferred != source && preferred.containsKey(key)) return;
++        // Install the new counted owner before releasing the page-map owner. Applying it still
++        // goes through the normal chunk identity, current-state, neighbour and capacity checks.
++        park(key, new Parked(event, plan));
++        source.remove(key);
++    }
++
++    /** Collect already-finished, owned work independently of destructive admission. Otherwise a
++     * dense visible refusal can retain an unseen result and all its input pins indefinitely.
++     * Only readiness/ownership is serviced here; normal priority still decides world changes. */
++    boolean collectReady(ServerLevel level, WorkClock clock) {
++        for (int checked = 0; checked < 16 && clock.canStart(); checked++) {
++            var queue = (completionSeen = !completionSeen) ? readySeen : readyUnseen;
++            if (queue.isEmpty()) continue;
++            Job job = queue.removeFirst();
++            if (jobs.get(job.chunk) != job || job.event >= job.events.size()) continue;
++            queue.addLast(job);
++            int event = job.events.get(job.event).id();
++            RuinContext ctx = NuclearWorld.get(level).ruinsIfKept(event);
++            if (ctx == null || !ctx.done(job.chunk) || hasPlan(event, job.chunk)) continue;
++            LevelChunk chunk = level.getChunkSource().getChunkNow(ChunkPos.getX(job.chunk), ChunkPos.getZ(job.chunk));
++            if (chunk == null) continue;
++            long began = clock.begin();
++            try {
++                RuinPlan plan = ctx.collect(level, chunk);
++                if (plan != null) park(job.chunk, new Parked(event, plan));
++            } finally { clock.end(began); }
++            return true;
++        }
++        return false;
++    }
+     /** Trunks fallen into not-yet-ruined chunk: placed after its ruins (otherwise stale its plan). */
+     private final Long2ObjectOpenHashMap<List<Log>> logs = new Long2ObjectOpenHashMap<>();
+     private final Map<Integer, ColumnScar.Budget> budgets = new HashMap<>();

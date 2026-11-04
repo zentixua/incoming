@@ -1,0 +1,45 @@
+23:02:18 no checks for bbe615b7 after 5 min (mergeable=UNKNOWN) — still waiting
+PR 598 (bbe615b7): checks failed
+  fail: Итог https://github.com/zentixua/incoming/actions/runs/41920617598/job/126895578517
+  fail: GameTest 3/6 https://github.com/zentixua/incoming/actions/runs/41920617598/job/126891895007
+  fail: GameTest 4/6 https://github.com/zentixua/incoming/actions/runs/41920617598/job/126891894990
+UNKNOWN STEP	2026-11-04T22:01:58.5201376Z Finalizing artifact upload
+UNKNOWN STEP	2026-11-04T22:01:59.1019228Z Artifact logs-gametest-3.zip successfully finalized. Artifact ID 13366178674
+UNKNOWN STEP	2026-11-04T22:01:59.1020696Z Artifact logs-gametest-3 has been successfully uploaded! Final size is 58454 bytes. Artifact ID is 13366178674
+UNKNOWN STEP	2026-11-04T22:01:59.1024186Z Artifact download URL: https://github.com/zentixua/incoming/actions/runs/41920617598/artifacts/13366178674
+UNKNOWN STEP	2026-11-04T22:01:59.1270812Z Post job cleanup.
+UNKNOWN STEP	2026-11-04T22:01:59.4943307Z In post-action step
+UNKNOWN STEP	2026-11-04T22:01:59.4953149Z Cache is read-only: will not save state for use in subsequent builds.
+UNKNOWN STEP	2026-11-04T22:01:59.4959870Z Generating Job Summary
+UNKNOWN STEP	2026-11-04T22:01:59.4981769Z Completed post-action step
+UNKNOWN STEP	2026-11-04T22:01:59.5125758Z Post job cleanup.
+UNKNOWN STEP	2026-11-04T22:01:59.6626551Z Post job cleanup.
+UNKNOWN STEP	2026-11-04T22:01:59.7540811Z [command]/usr/bin/git version
+UNKNOWN STEP	2026-11-04T22:01:59.7587702Z git version 2.56.0
+UNKNOWN STEP	2026-11-04T22:01:59.7628241Z Temporarily overriding HOME='/home/runner/work/_temp/ef640358-bd25-4eef-bc6e-b01d362e7a0a' before making global git config changes
+UNKNOWN STEP	2026-11-04T22:01:59.7629947Z Adding repository directory to the temporary git global config as a safe directory
+UNKNOWN STEP	2026-11-04T22:01:59.7634390Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/incoming/incoming
+UNKNOWN STEP	2026-11-04T22:01:59.7677055Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+UNKNOWN STEP	2026-11-04T22:01:59.7720982Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+UNKNOWN STEP	2026-11-04T22:01:59.8030881Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+UNKNOWN STEP	2026-11-04T22:01:59.8061755Z http.https://github.com/.extraheader
+UNKNOWN STEP	2026-11-04T22:01:59.8079298Z [command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
+UNKNOWN STEP	2026-11-04T22:01:59.8119263Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+UNKNOWN STEP	2026-11-04T22:01:59.8449375Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+UNKNOWN STEP	2026-11-04T22:01:59.8495001Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+UNKNOWN STEP	2026-11-04T22:01:59.8915791Z Cleaning up orphan processes
+Required checks passed	﻿2026-11-04T22:02:59.1828522Z ##[group]Run echo 'changes: success; build: success; unit tests: success; GameTest: failure; LSS integration: success; clean install: success; reused checked run: skipped; store pages: skipped; rig shutdown: skipped; replay analysis: skipped; look gate: skipped; scene bench: skipped'
+Required checks passed	2026-11-04T22:02:59.1831076Z ^[[36;1mecho 'changes: success; build: success; unit tests: success; GameTest: failure; LSS integration: success; clean install: success; reused checked run: skipped; store pages: skipped; rig shutdown: skipped; replay analysis: skipped; look gate: skipped; scene bench: skipped'^[[0m
+Required checks passed	2026-11-04T22:02:59.1832768Z ^[[36;1m[ 'true' = false ]^[[0m
+Required checks passed	2026-11-04T22:02:59.1833707Z ^[[36;1m# Release: every check ran here, except mod checks reused from the run that passed them on this very tree.^[[0m
+Required checks passed	2026-11-04T22:02:59.1834486Z ^[[36;1mif [ 'false' = true ]; then^[[0m
+Required checks passed	2026-11-04T22:02:59.1835068Z ^[[36;1m  for result in 'skipped' 'skipped' 'skipped' 'skipped' 'skipped'; do^[[0m
+Required checks passed	2026-11-04T22:02:59.1835680Z ^[[36;1m    [ "$result" != skipped ]^[[0m
+Required checks passed	2026-11-04T22:02:59.1836158Z ^[[36;1m  done^[[0m
+Required checks passed	2026-11-04T22:02:59.1836538Z ^[[36;1m  [ 'skipped' = success ] || \^[[0m
+Required checks passed	2026-11-04T22:02:59.1837240Z ^[[36;1m    [ 'success success failure success success' = 'success success success success success' ]^[[0m
+Required checks passed	2026-11-04T22:02:59.1837922Z ^[[36;1mfi^[[0m
+Required checks passed	2026-11-04T22:02:59.2415143Z shell: /usr/bin/bash -e {0}
+Required checks passed	2026-11-04T22:02:59.2415916Z ##[endgroup]
+Required checks passed	2026-11-04T22:02:59.2591397Z changes: success; build: success; unit tests: success; GameTest: failure; LSS integration: success; clean install: success; reused checked run: skipped; store pages: skipped; rig shutdown: skipped; replay analysis: skipped; look gate: skipped; scene bench: skipped
+Required checks passed	2026-11-04T22:02:59.2606598Z ##[error]Process completed with exit code 1.

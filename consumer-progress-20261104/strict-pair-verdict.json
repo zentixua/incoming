@@ -1,0 +1,49 @@
+{
+  "all_expected_outcomes": true,
+  "native_world_seed": 0,
+  "first_tick_grid_seed": 57263017,
+  "rows": [
+    {
+      "variant": "base",
+      "batch": "support_capacity",
+      "expected_exit": 1,
+      "grid": "6853326, -59, 9086224",
+      "log": "mod/run/mt-s6/strict-base-support_capacity.log"
+    },
+    {
+      "variant": "candidate",
+      "batch": "support_capacity",
+      "expected_exit": 0,
+      "grid": "6853326, -59, 9086224",
+      "log": "mod/run/mt-s6/strict-candidate-support_capacity.log"
+    },
+    {
+      "variant": "base",
+      "batch": "consumer_completion",
+      "expected_exit": 1,
+      "grid": "6853326, -59, 9086224",
+      "log": "mod/run/mt-s6/strict-base-consumer_completion.log"
+    },
+    {
+      "variant": "candidate",
+      "batch": "consumer_completion",
+      "expected_exit": 0,
+      "grid": "6853326, -59, 9086224",
+      "log": "mod/run/mt-s6/strict-candidate-consumer_completion.log"
+    },
+    {
+      "variant": "prior",
+      "batch": "demand_progress",
+      "expected_exit": 1,
+      "grid": "6853326, -59, 9086224",
+      "log": "mod/run/mt-s6/strict-prior-demand_progress.log"
+    },
+    {
+      "variant": "candidate",
+      "batch": "demand_progress",
+      "expected_exit": 0,
+      "grid": "6853326, -59, 9086224",
+      "log": "mod/run/mt-s6/strict-candidate-demand_progress.log"
+    }
+  ]
+}

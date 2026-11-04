@@ -1,0 +1,47 @@
+base support_capacity expected=1 actual=1
+[00:24:34] [Server thread/INFO] [ua.ze.in.Incoming/]: PAIRED_ORIGIN first native tick seed 57263017; physical/world rules unchanged
+[00:24:34] [Server thread/INFO] [minecraft/GameTestServer]: 1 tests are now running at position 6853326, -59, 9086224!
+[00:24:35] [Server thread/INFO] [ua.ze.in.Incoming/]: SUPPORT_CAPACITY expanded 1379 units, ledger 99793100 -> 99965868, original 22055, support 989, arrays 566036
+[00:24:35] [Server thread/INFO] [ua.ze.in.Incoming/]: SUPPORT_CAPACITY consumer [428334, 567891] queued false state null scar 1 retained 464936332
+[00:24:35] [Server thread/INFO] [ua.ze.in.Incoming/]: SUPPORT_CAPACITY consumer [428335, 567891] queued true state due in 1 scar 0 retained 464936332
+[00:24:35] [Server thread/INFO] [ua.ze.in.Incoming/]: SUPPORT_CAPACITY consumer [428336, 567891] queued false state null scar 1 retained 464936332
+[00:24:35] [Server thread/ERROR] [minecraft/LogTestReporter]: consumedsourcesfundeverydensewatchedplanbeforesupportdrains failed at 6853326, -60, 9086224! Dense watched work remains after spent source credit
+[00:24:35] [Server thread/INFO] [minecraft/GameTestServer]: ========= 1 GAME TESTS COMPLETE IN 1.095 s ======================
+candidate support_capacity expected=0 actual=0
+[00:24:52] [Server thread/INFO] [ua.ze.in.Incoming/]: PAIRED_ORIGIN first native tick seed 57263017; physical/world rules unchanged
+[00:24:52] [Server thread/INFO] [minecraft/GameTestServer]: 1 tests are now running at position 6853326, -59, 9086224!
+[00:24:53] [Server thread/INFO] [ua.ze.in.Incoming/]: SUPPORT_CAPACITY expanded 1379 units, ledger 36091988 -> 6524244, original 22055, support 989, arrays 566036
+[00:24:53] [Server thread/INFO] [ua.ze.in.Incoming/]: SUPPORT_CAPACITY consumer [428334, 567891] queued false state null scar 1 retained 500124528
+[00:24:53] [Server thread/INFO] [ua.ze.in.Incoming/]: SUPPORT_CAPACITY consumer [428335, 567891] queued false state null scar 1 retained 500124528
+[00:24:53] [Server thread/INFO] [ua.ze.in.Incoming/]: SUPPORT_CAPACITY consumer [428336, 567891] queued false state null scar 1 retained 500124528
+[00:24:53] [Server thread/INFO] [ua.ze.in.Incoming/]: SUPPORT_CAPACITY all 3 dense watched plans / 46089 cells applied in 2 ticks, fixed 360710144, retained 500124528
+[00:24:54] [Server thread/INFO] [minecraft/GameTestServer]: ========= 1 GAME TESTS COMPLETE IN 2.309 s ======================
+[00:24:54] [Server thread/INFO] [minecraft/GameTestServer]: All 1 required tests passed :)
+base consumer_completion expected=1 actual=1
+[00:25:11] [Server thread/INFO] [ua.ze.in.Incoming/]: PAIRED_ORIGIN first native tick seed 57263017; physical/world rules unchanged
+[00:25:11] [Server thread/INFO] [minecraft/GameTestServer]: 1 tests are now running at position 6853326, -59, 9086224!
+[00:25:11] [Server thread/INFO] [ua.ze.in.Incoming/]: CONSUMER_COMPLETION start resident 511053379 fixed 419430400 readOwners ua.zentix.incoming.nuclear.world.NuclearPrep$$Lambda/0x0000000101727010@7e4a4c49 tasks 1 denseDebit 84703680
+[00:25:41] [Server thread/ERROR] [minecraft/LogTestReporter]: densevisiblewaitcannothidecompletedunseenconsumers failed at 6853326, -60, 9086224! Completed unseen task was not transferred to its counted parked owner before visible admission
+[00:25:41] [Server thread/INFO] [minecraft/GameTestServer]: ========= 1 GAME TESTS COMPLETE IN 30.76 s ======================
+candidate consumer_completion expected=0 actual=0
+[00:25:57] [Server thread/INFO] [ua.ze.in.Incoming/]: PAIRED_ORIGIN first native tick seed 57263017; physical/world rules unchanged
+[00:25:57] [Server thread/INFO] [minecraft/GameTestServer]: 1 tests are now running at position 6853326, -59, 9086224!
+[00:25:58] [Server thread/INFO] [ua.ze.in.Incoming/]: CONSUMER_COMPLETION start resident 511059451 fixed 419430400 readOwners ua.zentix.incoming.nuclear.world.NuclearPrep$$Lambda/0x0000000101724658@2ff4b7b0 tasks 1 denseDebit 38751552
+[00:25:58] [Server thread/INFO] [ua.ze.in.Incoming/]: CONSUMER_COMPLETION unseen result collected with all 14 read owners still fenced
+[00:25:59] [Server thread/INFO] [ua.ze.in.Incoming/]: CONSUMER_COMPLETION dense 14820, all reads/tasks/scars drained in 27 ticks, resident 461574956
+[00:25:59] [Server thread/INFO] [minecraft/GameTestServer]: ========= 1 GAME TESTS COMPLETE IN 2.254 s ======================
+[00:25:59] [Server thread/INFO] [minecraft/GameTestServer]: All 1 required tests passed :)
+prior demand_progress expected=1 actual=1
+[00:26:21] [Server thread/INFO] [ua.ze.in.Incoming/]: PAIRED_ORIGIN first native tick seed 57263017; physical/world rules unchanged
+[00:26:21] [Server thread/INFO] [minecraft/GameTestServer]: 1 tests are now running at position 6853326, -59, 9086224!
+[00:26:22] [Server thread/INFO] [ua.ze.in.Incoming/]: DEMAND_PROGRESS cold plan queued at 35, resident 511705088, future 605356032, fixed 503275201
+[00:26:34] [Server thread/ERROR] [minecraft/LogTestReporter]: watchedstoredplancompleteswithfixedresidentpressure failed at 6853326, -60, 9086224! Watched cold plan remains queued, lag=239, reads=0, future=600835641
+[00:26:34] [Server thread/INFO] [minecraft/GameTestServer]: ========= 1 GAME TESTS COMPLETE IN 13.01 s ======================
+candidate demand_progress expected=0 actual=0
+[00:26:50] [Server thread/INFO] [ua.ze.in.Incoming/]: PAIRED_ORIGIN first native tick seed 57263017; physical/world rules unchanged
+[00:26:50] [Server thread/INFO] [minecraft/GameTestServer]: 1 tests are now running at position 6853326, -59, 9086224!
+[00:26:51] [Server thread/INFO] [ua.ze.in.Incoming/]: DEMAND_PROGRESS cold plan queued at 33, resident 511705088, future 605356032, fixed 503275201
+[00:26:51] [Server thread/INFO] [ua.ze.in.Incoming/]: DEMAND_PROGRESS actual watched damage completed after 10 ticks under fixed pressure 503275201
+[00:26:51] [Server thread/INFO] [minecraft/GameTestServer]: ========= 1 GAME TESTS COMPLETE IN 1.653 s ======================
+[00:26:51] [Server thread/INFO] [minecraft/GameTestServer]: All 1 required tests passed :)
+laptop_job mt-s6-strict-pairs: exit 0
