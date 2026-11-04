@@ -1,0 +1,31 @@
+Starting a Gradle Daemon (subsequent builds will be faster)
+> Task :createMinecraftArtifacts UP-TO-DATE
+> Task :compileJava
+> Task :generateModMetadata UP-TO-DATE
+> Task :processResources UP-TO-DATE
+> Task :classes
+
+> Task :compileDevtestJava FAILED
+/mnt/data/projects/incoming/mod/run/wt-MT-B2/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/LedgerStorageGameTests.java:91: error: 'var' is not allowed in a compound declaration
+        var first = dir.resolve("overworld"), second = dir.resolve("nether");
+        ^
+1 error
+
+[Incubating] Problems report is available at: file:///mnt/data/projects/incoming/mod/run/wt-MT-B2/mod/build/reports/problems/problems-report.html
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':compileDevtestJava'.
+> Compilation failed; see the compiler output below.
+  /mnt/data/projects/incoming/mod/run/wt-MT-B2/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/LedgerStorageGameTests.java:91: error: 'var' is not allowed in a compound declaration
+          var first = dir.resolve("overworld"), second = dir.resolve("nether");
+          ^
+  1 error
+
+* Try:
+> Check your code and dependencies to fix the compilation error(s)
+> Run with --scan to get full insights.
+
+BUILD FAILED in 6s
+5 actionable tasks: 2 executed, 3 up-to-date
