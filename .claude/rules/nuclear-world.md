@@ -377,3 +377,9 @@ paths:
   it cannot create material when the bowl is protected or empty. Original soil, column heights and completed
   columns survive clean restart, so a resumed chunk cannot deepen its already-dug columns. Conventional
   `CraterJob.digColumn` callers retain their existing path. Region-file/SavedData power-loss atomicity is not claimed.
+
+- Cancelled preparations retain disk/front-copy reservations in their NuclearPrep lifetime counter until completion,
+  even after the preparation is removed. Ready results release at collection or invalidation. `RetainedPlans`
+  follows put/remove/clear so consumed preplans no longer contribute historical bytes. These are admission estimates,
+  not a complete nuclear heap bound. FarLods tags copies, snapshots and headers by cancellation generation; late
+  results release their slots but cannot publish. Regressions: `nuke_lifecycle_detached`, `nuke_lifecycle_far`.
