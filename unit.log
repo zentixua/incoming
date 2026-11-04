@@ -1,0 +1,19 @@
+Starting a Gradle Daemon, 2 busy and 1 stopped Daemons could not be reused, use --status for details
+> Task :createMinecraftArtifacts UP-TO-DATE
+> Task :compileJava
+> Task :generateModMetadata UP-TO-DATE
+> Task :processResources UP-TO-DATE
+> Task :classes
+> Task :compileDevtestJava
+> Task :compileSandboxAgentJava FROM-CACHE
+> Task :processDevtestResources
+> Task :devtestClasses
+> Task :processSandboxAgentResources NO-SOURCE
+> Task :sandboxAgentClasses UP-TO-DATE
+> Task :compileTestJava
+> Task :processTestResources
+> Task :testClasses
+> Task :test
+
+BUILD SUCCESSFUL in 13s
+10 actionable tasks: 6 executed, 1 from cache, 3 up-to-date

@@ -1,0 +1,43 @@
+Starting a Gradle Daemon, 2 busy and 1 stopped Daemons could not be reused, use --status for details
+> Task :createMinecraftArtifacts UP-TO-DATE
+> Task :compileJava
+> Task :generateModMetadata UP-TO-DATE
+> Task :processResources UP-TO-DATE
+> Task :classes
+> Task :compileMetaMeasurement UP-TO-DATE
+> Task :metaMeasurementAgent UP-TO-DATE
+
+> Task :measureActualLayout
+WARN StatusConsoleListener Advanced terminal features are not available in this environment
+LAYOUT yieldKt=1 allocatedBytes=36438880 elapsedNanos=379363346
+COUNTS order=2964 edge=512 tiles=140 tileBacking=163 askedKeys=4056 mapN=8192 keyBacking=8193 valueBacking=8193 askedRefs=11340 askedListCapacity=11340 scanSize=4056 scanBacking=4164
+GRAPH field=order bytes=23728
+GRAPH field=edge bytes=4112
+GRAPH field=tiles bytes=11896
+GRAPH field=askedBy bytes=320704
+GRAPH field=toScan bytes=33352
+RESULT retainedGraphBytes=382632 oldRetainedArrayEstimate=60256 missing=322376
+RESERVATION bytes=4575744
+LAYOUT yieldKt=100 allocatedBytes=22212792 elapsedNanos=42441257
+COUNTS order=58486 edge=2192 tiles=2434 tileBacking=2776 askedKeys=63086 mapN=131072 keyBacking=131073 valueBacking=131073 askedRefs=197154 askedListCapacity=197154 scanSize=63086 scanBacking=71140
+GRAPH field=order bytes=467904
+GRAPH field=edge bytes=17552
+GRAPH field=tiles bytes=205864
+GRAPH field=askedBy bytes=5101248
+GRAPH field=toScan bytes=569160
+RESULT retainedGraphBytes=6167048 oldRetainedArrayEstimate=990112 missing=5176936
+RESERVATION bytes=45003264
+LAYOUT yieldKt=1000 allocatedBytes=88877016 elapsedNanos=236829392
+COUNTS order=268082 edge=4688 tiles=10920 tileBacking=14053 askedKeys=277736 mapN=524288 keyBacking=524289 valueBacking=524289 askedRefs=884520 askedListCapacity=884520 scanSize=277736 scanBacking=360145
+GRAPH field=order bytes=2144672
+GRAPH field=edge bytes=37520
+GRAPH field=tiles bytes=929856
+GRAPH field=askedBy bytes=21881600
+GRAPH field=toScan bytes=2881200
+RESULT retainedGraphBytes=27001288 oldRetainedArrayEstimate=4404048 missing=22597240
+RESERVATION bytes=188453376
+
+> Task :compileDevtestJava
+
+BUILD SUCCESSFUL in 10s
+8 actionable tasks: 3 executed, 5 up-to-date

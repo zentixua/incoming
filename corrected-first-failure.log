@@ -1,0 +1,35 @@
+Starting a Gradle Daemon, 2 busy and 1 stopped Daemons could not be reused, use --status for details
+> Task :createMinecraftArtifacts UP-TO-DATE
+> Task :compileJava
+> Task :generateModMetadata UP-TO-DATE
+> Task :processResources UP-TO-DATE
+> Task :classes
+> Task :compileMetaMeasurement
+> Task :metaMeasurementAgent UP-TO-DATE
+
+> Task :measureActualLayout FAILED
+WARN StatusConsoleListener Advanced terminal features are not available in this environment
+Exception in thread "main" java.lang.reflect.InvocationTargetException
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:109)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at Measure.main(Measure.java:38)
+Caused by: java.lang.ClassCastException: class [Ljava.lang.Object; cannot be cast to class [Ljava.util.List; ([Ljava.lang.Object; and [Ljava.util.List; are in module java.base of loader 'bootstrap')
+	at ua.zentix.incoming.nuclear.world.NuclearPrep$LayoutMap.bytes(NuclearPrep.java:1250)
+	at ua.zentix.incoming.nuclear.world.NuclearPrep.layout(NuclearPrep.java:1324)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+	... 2 more
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':measureActualLayout'.
+> Process 'command '/home/artem/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/java/java-runtime-delta/bin/java'' finished with non-zero exit value 1
+
+* Try:
+> Run with --stacktrace option to get the stack trace.
+> Run with --info or --debug option to get more log output.
+> Run with --scan to get full insights.
+> Get more help at https://help.gradle.org.
+
+BUILD FAILED in 7s
+7 actionable tasks: 3 executed, 4 up-to-date

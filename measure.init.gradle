@@ -1,0 +1,29 @@
+allprojects {
+ afterEvaluate { p ->
+  if (p.plugins.hasPlugin('java')) {
+   def dir=p.file('run/mt-meta')
+   def comp=p.tasks.register('compileMetaMeasurement', JavaCompile) {
+    dependsOn p.tasks.named('classes')
+    source p.fileTree(dir) { include '*.java' }
+    destinationDirectory=p.layout.projectDirectory.dir('run/mt-meta/classes')
+    classpath=p.sourceSets.main.runtimeClasspath
+    javaCompiler=p.javaToolchains.compilerFor { languageVersion=JavaLanguageVersion.of(21) }
+   }
+   def agent=p.tasks.register('metaMeasurementAgent', Jar) {
+    dependsOn comp
+    from comp.flatMap { it.destinationDirectory }
+    include 'Agent.class'
+    archiveFileName='measurement-agent.jar'
+    destinationDirectory=p.layout.projectDirectory.dir('run/mt-meta')
+    manifest { attributes('Premain-Class':'Agent') }
+   }
+   p.tasks.register('measureActualLayout', JavaExec) {
+    dependsOn agent
+    mainClass='Measure'
+    classpath=p.files(comp.flatMap { it.destinationDirectory }) + p.sourceSets.main.runtimeClasspath
+    javaLauncher=p.javaToolchains.launcherFor { languageVersion=JavaLanguageVersion.of(21) }
+    jvmArgs '-Xmx2g', '-javaagent:'+new File(dir,'measurement-agent.jar'), '--add-opens=java.base/java.util=ALL-UNNAMED'
+   }
+  }
+ }
+}

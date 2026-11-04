@@ -1,0 +1,81 @@
+Starting a Gradle Daemon, 1 stopped Daemon could not be reused, use --status for details
+
+> Task :createMinecraftArtifacts
+Loaded 131 artifacts from /mnt/data/projects/incoming/mod/run/wt-MT-META/mod/build/tmp/createMinecraftArtifacts/nfrt_artifact_manifest.properties
+[1m*** Started working on [4mdownloadJson[23;0m[23;0m
+ [1m[92m✓[23;0m Completed [4mdownloadJson[23;0m in 0.01s
+[1m*** Started working on [4mdownloadClient[23;0m[23;0m
+[1m*** Started working on [4mdownloadServer[23;0m[23;0m
+[1m*** Started working on [4mdownloadClientMappings[23;0m[23;0m
+ [1m[92m✓[23;0m Completed [4mdownloadClient[23;0m in 0.02s
+ [1m[92m✓[23;0m Completed [4mdownloadServer[23;0m in 0.02s
+ [1m[92m✓[23;0m Completed [4mdownloadClientMappings[23;0m in 0.02s
+[1m*** Started working on [4mmergeMappings[23;0m[23;0m
+[1m*** Started working on [4mstripClient[23;0m[23;0m
+ [1m[92m♻[23;0m Used cache of [4mstripClient[23;0m in 0.00s
+ [1m[92m♻[23;0m Used cache of [4mmergeMappings[23;0m in 0.00s
+[1m*** Started working on [4mextractServer[23;0m[23;0m
+ [1m[92m♻[23;0m Used cache of [4mextractServer[23;0m in 0.00s
+[1m*** Started working on [4mstripServer[23;0m[23;0m
+ [1m[92m♻[23;0m Used cache of [4mstripServer[23;0m in 0.00s
+[1m*** Started working on [4mmerge[23;0m[23;0m
+ [1m[92m♻[23;0m Used cache of [4mmerge[23;0m in 0.00s
+[1m*** Started working on [4mrename[23;0m[23;0m
+ [1m[92m♻[23;0m Used cache of [4mrename[23;0m in 0.00s
+[1m*** Started working on [4mdecompile[23;0m[23;0m
+ [1m[92m♻[23;0m Used cache of [4mdecompile[23;0m in 0.00s
+[1m*** Started working on [4minject[23;0m[23;0m
+ [1m[92m♻[23;0m Used cache of [4minject[23;0m in 0.00s
+[1m*** Started working on [4mpatch[23;0m[23;0m
+ [1m[92m♻[23;0m Used cache of [4mpatch[23;0m in 0.00s
+[1m*** Started working on [4mapplyNeoforgePatches[23;0m[23;0m
+ [1m[92m♻[23;0m Used cache of [4mapplyNeoforgePatches[23;0m in 0.00s
+[1m*** Started working on [4mtransformSources[23;0m[23;0m
+ [1m[92m♻[23;0m Used cache of [4mtransformSources[23;0m in 0.00s
+[1m*** Started working on [4mrecompile[23;0m[23;0m
+ [1m[92m♻[23;0m Used cache of [4mrecompile[23;0m in 0.00s
+[1m*** Started working on [4msourcesWithNeoForge[23;0m[23;0m
+ [1m[92m♻[23;0m Used cache of [4msourcesWithNeoForge[23;0m in 0.00s
+[1m*** Started working on [4mcompiledWithNeoForge[23;0m[23;0m
+ [1m[92m♻[23;0m Used cache of [4mcompiledWithNeoForge[23;0m in 0.00s
+[1m*** Started working on [4msourcesAndCompiledWithNeoForge[23;0m[23;0m
+ [1m[92m♻[23;0m Used cache of [4msourcesAndCompiledWithNeoForge[23;0m in 0.00s
+Total runtime: 0.51s
+
+
+> Task :compileJava FROM-CACHE
+> Task :generateModMetadata
+> Task :processResources
+> Task :classes
+> Task :compileMetaMeasurement
+> Task :metaMeasurementAgent
+
+> Task :measureActualLayout
+WARN StatusConsoleListener Advanced terminal features are not available in this environment
+LAYOUT yieldKt=1 allocatedBytes=36335248 elapsedNanos=311351793
+COUNTS order=2964 edge=512 tiles=140 tileBacking=163 askedKeys=4056 mapN=8192 keyBacking=8193 valueBacking=8193 askedRefs=11340 askedListCapacity=11340 scanSize=4056 scanBacking=4164
+GRAPH field=order bytes=23728
+GRAPH field=edge bytes=4112
+GRAPH field=tiles bytes=11896
+GRAPH field=askedBy bytes=320704
+GRAPH field=toScan bytes=33352
+RESULT retainedGraphBytes=382624 oldRetainedArrayEstimate=60256 missing=322368
+LAYOUT yieldKt=100 allocatedBytes=22212664 elapsedNanos=59501996
+COUNTS order=58486 edge=2192 tiles=2434 tileBacking=2776 askedKeys=63086 mapN=131072 keyBacking=131073 valueBacking=131073 askedRefs=197154 askedListCapacity=197154 scanSize=63086 scanBacking=71140
+GRAPH field=order bytes=467904
+GRAPH field=edge bytes=17552
+GRAPH field=tiles bytes=205864
+GRAPH field=askedBy bytes=5101248
+GRAPH field=toScan bytes=569160
+RESULT retainedGraphBytes=6167040 oldRetainedArrayEstimate=990112 missing=5176928
+LAYOUT yieldKt=1000 allocatedBytes=95840488 elapsedNanos=142517945
+COUNTS order=268082 edge=4688 tiles=10920 tileBacking=14053 askedKeys=277736 mapN=524288 keyBacking=524289 valueBacking=524289 askedRefs=884520 askedListCapacity=884520 scanSize=277736 scanBacking=360145
+GRAPH field=order bytes=2144672
+GRAPH field=edge bytes=37520
+GRAPH field=tiles bytes=929856
+GRAPH field=askedBy bytes=21881600
+GRAPH field=toScan bytes=2881200
+RESULT retainedGraphBytes=27001280 oldRetainedArrayEstimate=4404048 missing=22597232
+
+BUILD SUCCESSFUL in 7s
+7 actionable tasks: 6 executed, 1 from cache
