@@ -1,7 +1,10 @@
 package ua.zentix.incoming.scenario.lod;
 
+<<<<<<< HEAD
 import ua.zentix.incoming.client.lod.TimedLodBuffer;
 
+=======
+>>>>>>> origin/main
 import org.junit.jupiter.api.Test;
 import java.util.HashSet;
 import static org.junit.jupiter.api.Assertions.*;
