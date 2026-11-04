@@ -10,6 +10,10 @@ paths:
 # Own particles, effects layer, trails
 
 ## Pitfalls
+- `FxLayer.describeTiming` must remain a lightweight telemetry query. `SceneDepth.describe` reports the LOD source
+  without reading textures; full-resolution depth coverage/readback is opt-in through `incoming.nukeDiag`.
+  Polling the ordinary line with Voxy used to synchronize with the GPU and scan millions of floats, injecting
+  pauses into the scene bench. `SceneDepthTelemetryTest` exercises a valid-sized LOD frame without a GL context.
 - The first nuclear ray draw can spend seconds compiling in the driver (NVIDIA, cold shader cache).
   `FxLayer` submits an empty `PallPass.Frame` on world entry until the real pass completes: noise builds
   asynchronously, so a single attempt in the layer's first frame is insufficient. `PallPass.cold` tracks the
