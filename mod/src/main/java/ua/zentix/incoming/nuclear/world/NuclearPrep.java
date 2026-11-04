@@ -506,7 +506,7 @@ public final class NuclearPrep {
                 bytes += other.getData(ModAttachments.NUCLEAR_WORLD).retainedRuinBytes();
             bytes += FarLods.retainedBytes(other);
         }
-        return bytes + RuinWorkers.residentBufferBytes(height);
+        return MtB7Stages.memory(0, bytes + RuinWorkers.residentBufferBytes(height));
     }
 
     static long memory(ServerLevel level, boolean reserveWorkers) {
@@ -522,9 +522,13 @@ public final class NuclearPrep {
         RuinWorkers.configureHeight(height);
         // Unknown old ownership has priority over new preparation/removals. Import uses only the
         // already-resident counter above and takes its reservation before decoding anything.
-        if (cold) return Math.max(bytes, PLANS_CAP);
-        return bytes + (reserveWorkers ? RuinWorkers.bufferBytes(height) + RuinMemory.TRANSITION_ROOM
-                : RuinWorkers.residentBufferBytes(height));
+        if (cold) {
+            MtB7Stages.memory(3, bytes);
+            return Math.max(bytes, PLANS_CAP);
+        }
+        return MtB7Stages.memory(reserveWorkers ? 1 : 2,
+                bytes + (reserveWorkers ? RuinWorkers.bufferBytes(height) + RuinMemory.TRANSITION_ROOM
+                : RuinWorkers.residentBufferBytes(height)));
     }
 
     /** Squares held by tickets (tests). */
