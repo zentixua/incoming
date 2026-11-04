@@ -1,0 +1,82 @@
+{
+  "independent-source-review.md": {
+    "bytes": 11939,
+    "sha256": "c95129743c0cd4618b5d92d55137cf37a289b3b1ebffef627f2513c92f8523be"
+  },
+  "initial-build-and-gametest.log": {
+    "bytes": 64420,
+    "sha256": "8054eb2a4f175bb54bd02901bb3cda719289848c814e2ec9fe46d4f47d91644a"
+  },
+  "initial-ci.log": {
+    "bytes": 60,
+    "sha256": "f7ef1a5488b366589e83d8e716d00785e2d55c017de16f292b40daa699a0015c"
+  },
+  "initial-unit-manifest.json": {
+    "bytes": 69377,
+    "sha256": "1358132f6b0b924083f9b24a7740c36d050d073fdddb710d1a9c9eb5bd0a4eef"
+  },
+  "integrated-checks.json": {
+    "bytes": 1692,
+    "sha256": "4395965b807a778da9d53eab76541089ddea3231481c5484fa3dfc03c4c68f3a"
+  },
+  "integrated-checks.log": {
+    "bytes": 57879,
+    "sha256": "50b84c01ccd29421c98575cbe1c8fda1f0e523748d453c9eecc123d7c3a2b21d"
+  },
+  "integrated-ci.log": {
+    "bytes": 60,
+    "sha256": "29d455fecd21e85f5018815334cea419a41cc392a099c70b40f8ddc0b3a00d72"
+  },
+  "integrated-unit-results/TEST-ua.zentix.incoming.client.map.VoxyColumnsTest.xml": {
+    "bytes": 1313,
+    "sha256": "49fa770cd3fd8ff8dc9c091db03b5b9c87e44f9297255ad7b92b5a456d252ca9"
+  },
+  "integrated-unit-results/TEST-ua.zentix.incoming.client.map.VoxyTerrainTest.xml": {
+    "bytes": 16174,
+    "sha256": "63233222393b4d41527861540351038a8229e1b66a6857cb01f5e6e63650d134"
+  },
+  "integrated-unit-results/TEST-ua.zentix.incoming.client.render.DhDepthTest.xml": {
+    "bytes": 715,
+    "sha256": "86726225aa4104351c52e2e4babb722327bbf6db389448f3ca04f0ac503c593d"
+  },
+  "integrated-unit-results/TEST-ua.zentix.incoming.client.render.VoxyDepthTest.xml": {
+    "bytes": 1305,
+    "sha256": "d90da4023e8692f8f2cdee4e10da5dfa0aadf4ba906bcb949ad203dce26894fb"
+  },
+  "integrated-unit-results/TEST-ua.zentix.incoming.compat.DhCallbacksTest.xml": {
+    "bytes": 1294,
+    "sha256": "a6b5259fb43fd03004ffca8aa8d0a1286ec4c4414dc47507f6279f618d336be4"
+  },
+  "integrated-unit-results/TEST-ua.zentix.incoming.compat.DhQueueTest.xml": {
+    "bytes": 763,
+    "sha256": "54ac8587e3af5935093b486fa611322fce2991cd557db997851a1adadaa7249b"
+  },
+  "integrated-unit-results/TEST-ua.zentix.incoming.net.S2CGoldenTest.xml": {
+    "bytes": 5145,
+    "sha256": "a91facc88e6f544bbb95363d335f6ba5e34812c57f9c7655a52e61d5506cb837"
+  },
+  "integration-identity.json": {
+    "bytes": 3057,
+    "sha256": "dd22273cdac6d290193b94f535b9ac7b8fe351b582955e11c98dc404cc7b9a8f"
+  },
+  "legacy-golden/lod_batch_finished.1.hex": {
+    "bytes": 7,
+    "sha256": "41a46ed2df80eaab5b665accf1664e5361fa991079886c15dba8e68c76745b86"
+  },
+  "legacy-golden/lod_batch_start.1.hex": {
+    "bytes": 5,
+    "sha256": "07c0b38c99dfae76b9bd747f90ef3328020d8f303e573f78daac7943679f60f5"
+  },
+  "legacy-golden/voxy_chunk.1.hex": {
+    "bytes": 70,
+    "sha256": "476db92bf3b70f2519be063b5855867cdbf8aae97835e483f90e7f0121a55192"
+  },
+  "legacy-golden-hashes.json": {
+    "bytes": 395,
+    "sha256": "85aee2a9776ad79dedaf09adefb7583b4779a26c54ef2276ea8554d8088cbc62"
+  },
+  "validation.md": {
+    "bytes": 5491,
+    "sha256": "88901ca3312e921390a9cbf2ee157da12abfa751c9efb67c6ab64ef3a2a75b21"
+  }
+}

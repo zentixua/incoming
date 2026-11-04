@@ -1,0 +1,14 @@
+{
+  "voxy_chunk.1.hex": {
+    "sha256": "476db92bf3b70f2519be063b5855867cdbf8aae97835e483f90e7f0121a55192",
+    "bytes": 70
+  },
+  "lod_batch_start.1.hex": {
+    "sha256": "07c0b38c99dfae76b9bd747f90ef3328020d8f303e573f78daac7943679f60f5",
+    "bytes": 5
+  },
+  "lod_batch_finished.1.hex": {
+    "sha256": "41a46ed2df80eaab5b665accf1664e5361fa991079886c15dba8e68c76745b86",
+    "bytes": 7
+  }
+}

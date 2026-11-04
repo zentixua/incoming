@@ -1,0 +1,69 @@
+{
+  "head": "5e68952d1a054ed90f1a48e36fbd76823076e350",
+  "jar_sha256": "540c7396f4f01c7ca6a000f56521c2aa3b05dda5bbeb747ae3a6cb0f2c8ba7a8",
+  "unit_counts": {
+    "tests": 77,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "unit_suites": [
+    {
+      "file": "TEST-ua.zentix.incoming.client.map.VoxyTerrainTest.xml",
+      "tests": 9,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.compat.DhCallbacksTest.xml",
+      "tests": 1,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.net.S2CGoldenTest.xml",
+      "tests": 48,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.render.VoxyDepthTest.xml",
+      "tests": 5,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.compat.DhQueueTest.xml",
+      "tests": 4,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.map.VoxyColumnsTest.xml",
+      "tests": 7,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    {
+      "file": "TEST-ua.zentix.incoming.client.render.DhDepthTest.xml",
+      "tests": 3,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    }
+  ],
+  "retired_production_classes_absent": true,
+  "legacy_replay_payload_classes_present": true,
+  "no_source_golden_changes": true,
+  "log_build_lines": [
+    "BUILD SUCCESSFUL in 11s",
+    "[13:57:32] [Server thread/INFO] [minecraft/GameTestServer]: All 23 required tests passed :)",
+    "BUILD SUCCESSFUL in 3m 1s"
+  ]
+}

@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.net.S2CGoldenTest" tests="48" skipped="0" failures="0" errors="0" timestamp="2026-11-04T11:54:34.336Z" hostname="zentixua-pc" time="0.146">
+  <properties/>
+  <testcase name="blast.1.hex" classname="ua.zentix.incoming.net.S2CGoldenTest" time="0.037"/>
+  <testcase name="blast.2.hex" classname="ua.zentix.incoming.net.S2CGoldenTest" time="0.001"/>
+  <testcase name="blast.3.hex" classname="ua.zentix.incoming.net.S2CGoldenTest" time="0.0"/>
+  <testcase name="blast.4.hex" classname="ua.zentix.incoming.net.S2CGoldenTest" time="0.001"/>
+  <testcase name="blast.5.hex" classname="ua.zentix.incoming.net.S2CGoldenTest" time="0.006"/>
+  <testcase name="fuel_fire.1.hex" classname="ua.zentix.incoming.net.S2CGoldenTest" time="0.004"/>
+  <testcase name="bunker_impact.1.hex" classname="ua.zentix.incoming.net.S2CGoldenTest" time="0.001"/>
+  <testcase name="bunker_impact.2.hex" classname="ua.zentix.incoming.net.S2CGoldenTest" time="0.001"/>
+  <testcase name="vent.1.hex" classname="ua.zentix.incoming.net.S2CGoldenTest" time="0.001"/>
+  <testcase name="vent.2.hex" classname="ua.zentix.incoming.net.S2CGoldenTest" time="0.001"/>
+  <testcase name="collapse.1.hex" classname="ua.zentix.incoming.net.S2CGoldenTest" time="0.001"/>
+  <testcase name="collapse.2.hex" classname="ua.zentix.incoming.net.S2CGoldenTest" time="0.001"/>
+  <testcase name="grid_failure.1.hex" classname="ua.zentix.incoming.net.S2CGoldenTest" time="0.002"/>
+  <testcase name="grid_district.1.hex" classname="ua.zentix.incoming.net.S2CGoldenTest" time="0.001"/>
+  <testcase name="quake.1.hex" classname="ua.zentix.incoming.net.S2CGoldenTest" time="0.002"/>
+  <testcase name="quake.2.hex" classname="ua.zentix.incoming.net.S2CGoldenTest" time="0.002"/>
+  <testcase name="siren.1.hex" classname="ua.zentix.incoming.net.S2CGoldenTest" time="0.0"/>
+  <testcase name="salvo_status.1.hex" classname="ua.zentix.incoming.net.S2CGoldenTest" time="0.001"/>
+  <testcase name="cleared.1.hex" classname="ua.zentix.incoming.net.S2CGoldenTest" time="0.001"/>
+  <testcase name="nuke_approach.1.hex" classname="ua.zentix.incoming.net.S2CGoldenTest" time="0.01"/>
+  <testcase name="nuke_warning.1.hex" classname="ua.zentix.incoming.net.S2CGoldenTest" time="0.005"/>
+  <testcase name="nuke_detonation.1.hex" classname="ua.zentix.incoming.net.S2CGoldenTest" time="0.002"/>
+  <testcase name="nuke_detonation.2.hex" classname="ua.zentix.incoming.net.S2CGoldenTest" time="0.0"/>
+  <testcase name="nuke_detonation.3.hex" classname="ua.zentix.incoming.net.S2CGoldenTest" time="0.001"/>
+  <testcase name="nuke_detonation.4.hex" classname="ua.zentix.incoming.net.S2CGoldenTest" time="0.0"/>
+  <testcase name="nuke_detonation.5.hex" classname="ua.zentix.incoming.net.S2CGoldenTest" time="0.001"/>
+  <testcase name="nuke_detonation.6.hex" classname="ua.zentix.incoming.net.S2CGoldenTest" time="0.001"/>
+  <testcase name="nuke_debris.1.hex" classname="ua.zentix.incoming.net.S2CGoldenTest" time="0.003"/>
+  <testcase name="nuke_debris.2.hex" classname="ua.zentix.incoming.net.S2CGoldenTest" time="0.001"/>
+  <testcase name="nuke_flash_marks.1.hex" classname="ua.zentix.incoming.net.S2CGoldenTest" time="0.004"/>
+  <testcase name="nuke_sync.1.hex" classname="ua.zentix.incoming.net.S2CGoldenTest" time="0.001"/>
+  <testcase name="nuke_sync.2.hex" classname="ua.zentix.incoming.net.S2CGoldenTest" time="0.001"/>
+  <testcase name="nuke_sync.3.hex" classname="ua.zentix.incoming.net.S2CGoldenTest" time="0.001"/>
+  <testcase name="radiation.1.hex" classname="ua.zentix.incoming.net.S2CGoldenTest" time="0.003"/>
+  <testcase name="flights.1.hex" classname="ua.zentix.incoming.net.S2CGoldenTest" time="0.005"/>
+  <testcase name="flights.2.hex" classname="ua.zentix.incoming.net.S2CGoldenTest" time="0.003"/>
+  <testcase name="far_flights.1.hex" classname="ua.zentix.incoming.net.S2CGoldenTest" time="0.003"/>
+  <testcase name="map_players.1.hex" classname="ua.zentix.incoming.net.S2CGoldenTest" time="0.003"/>
+  <testcase name="nuclear_review.1.hex" classname="ua.zentix.incoming.net.S2CGoldenTest" time="0.007"/>
+  <testcase name="open_remote.1.hex" classname="ua.zentix.incoming.net.S2CGoldenTest" time="0.002"/>
+  <testcase name="replay_tick.1.hex" classname="ua.zentix.incoming.net.S2CGoldenTest" time="0.001"/>
+  <testcase name="intercept.1.hex" classname="ua.zentix.incoming.net.S2CGoldenTest" time="0.003"/>
+  <testcase name="radar_scope.1.hex" classname="ua.zentix.incoming.net.S2CGoldenTest" time="0.003"/>
+  <testcase name="voxy_chunk.1.hex" classname="ua.zentix.incoming.net.S2CGoldenTest" time="0.001"/>
+  <testcase name="lod_batch_start.1.hex" classname="ua.zentix.incoming.net.S2CGoldenTest" time="0.0"/>
+  <testcase name="lod_batch_finished.1.hex" classname="ua.zentix.incoming.net.S2CGoldenTest" time="0.001"/>
+  <testcase name="retina_scars.1.hex" classname="ua.zentix.incoming.net.S2CGoldenTest" time="0.001"/>
+  <testcase name="everyClientboundPayloadHasGoldenBytes()" classname="ua.zentix.incoming.net.S2CGoldenTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

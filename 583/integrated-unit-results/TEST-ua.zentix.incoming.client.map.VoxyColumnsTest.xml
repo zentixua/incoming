@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.client.map.VoxyColumnsTest" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-11-04T11:54:33.269Z" hostname="zentixua-pc" time="0.02">
+  <properties/>
+  <testcase name="plantsDoNotStopTheHeightmapButGlassKeepsTheColourBelow()" classname="ua.zentix.incoming.client.map.VoxyColumnsTest" time="0.011"/>
+  <testcase name="colourlessDeeperThanEightBlocksIsUnknown()" classname="ua.zentix.incoming.client.map.VoxyColumnsTest" time="0.001"/>
+  <testcase name="blockInfoAsTheHeightmap()" classname="ua.zentix.incoming.client.map.VoxyColumnsTest" time="0.001"/>
+  <testcase name="groundAtBlockLevelIsExact()" classname="ua.zentix.incoming.client.map.VoxyColumnsTest" time="0.0"/>
+  <testcase name="waterDepthAcrossSectionsAndCapped()" classname="ua.zentix.incoming.client.map.VoxyColumnsTest" time="0.003"/>
+  <testcase name="sectionsGoTopDown()" classname="ua.zentix.incoming.client.map.VoxyColumnsTest" time="0.001"/>
+  <testcase name="coarseLevelTakesTheMiddleOfTheVoxel()" classname="ua.zentix.incoming.client.map.VoxyColumnsTest" time="0.002"/>
+  <system-out><![CDATA[WARN StatusConsoleListener Advanced terminal features are not available in this environment
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>
