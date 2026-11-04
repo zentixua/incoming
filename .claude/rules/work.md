@@ -53,6 +53,10 @@ paths:
   overrun forbids that extra guarantee. Even when the early window was skipped, Post with spare time is limited by
   the absolute next-tick deadline. Sprint and counting scenarios keep their full allowance; freeze stops both
   impact windows. Timing/reserve state is an unsaved overworld attachment, not static world state.
+- `UnitQueue` reconciles each entire window with `WorkClock.accountWindow`: readiness/dependency checks, queue
+  bookkeeping and releases count once alongside the already charged steps. Otherwise early-window overhead is
+  refunded when Post subtracts only step time from the common cap. Step estimates and counting-clock costs remain
+  unchanged; accounting does not preempt a running step or its synchronous release.
 - Regressions: `ImpactTimingTest` (mandatory unload classification), `WorkSchedulerTest` (including a skipped early
   window), `UnitQueueTest` (one readiness/dependency check per continuation window), and GameTests
   `work_impact_schedule` (40/43/47 ms plus background on controlled clocks), `work_impact_debt` (real Ignition/Shatter
