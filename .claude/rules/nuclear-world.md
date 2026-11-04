@@ -465,3 +465,15 @@ paths:
   rewind the read cursor to refill missing demand. Bounding only outstanding reads permits a zone-wide sweep to
   evict the first needed window and leave every solver idle. `nuke_disk_frontier` uses real world/source-region and
   snapshot-page reads with a tiny cache policy and shared admission pressure; complete material output must match.
+
+- Producer ownership: reserve known snapshot/height growth before copying and plan plus nine private fracture bounds
+  before solver allocation. `RuinResults` is one numeric server-wide counter, outside the dimension sum. Cancellation
+  keeps input/result ownership until actual callable exit; a completed plan stays charged until its consumer counts it.
+  New window reads leave one max-height worker startup allowance. `RuinInbox.Publication` transfers a completed slot
+  through known source/priming/publication bytes; do not require a duplicate full input reservation or release a running
+  callback's owner. Plain, archived and surface-resolution preparation reads use the same transition.
+- `RuinFragmentCache` is optional, prepaid fixed capacity; every borrowing worker still owns its nine-fragment bound
+  through actual exit. Cache refusal falls back to private solving. Validate snapshot IDs and captured block-damage/
+  tree-fall flags; close blocks late publications. Fresh diagnostic context owners close in `finally`; shared registered
+  contexts keep their world lifecycle. GC never refunds scalar cache ownership. These field-law estimates are not a
+  complete JVM-heap bound; raw chunk upgrading/codec allocations precede detached publication.
