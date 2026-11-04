@@ -188,7 +188,9 @@ public final class ScarQueue {
         if (old != null) parkedBytes -= old.plan.bytes() + 64;
     }
 
-    private record Parked(int detonation, RuinPlan plan) {}
+    private record Parked(int detonation, RuinPlan plan, boolean prepared) {
+        Parked(int detonation, RuinPlan plan) { this(detonation, plan, false); }
+    }
 
     private final Long2ObjectOpenHashMap<Job> jobs = new Long2ObjectOpenHashMap<>();
     /** Chunks under live neighbor tickets (holder square ± {@link RuinPlanner#REACH}): ticket count. */
@@ -223,7 +225,7 @@ public final class ScarQueue {
         if (preferred != null && preferred != source && preferred.containsKey(key)) return;
         // Install the new counted owner before releasing the page-map owner. Applying it still
         // goes through the normal chunk identity, current-state, neighbour and capacity checks.
-        park(key, new Parked(event, plan));
+        park(key, new Parked(event, plan, true));
         source.remove(key);
     }
 
@@ -990,6 +992,9 @@ public final class ScarQueue {
         if (plans == null) plans = restored.restoredPlans;
         if (restored.archivePending) return WAIT;
         RuinPlan plan = plans != null ? plans.get(key) : null;
+        Parked kept = parked.get(key);
+        boolean preparedParked = plan == null && kept != null && kept.detonation() == d.id() && kept.prepared();
+        if (preparedParked) plan = kept.plan();
         if (plan == null && RetainedPlans.waiting(plans, key)) return WAIT;
         if (plan != null && (waitRadius = plan.waitsNeighbours(level, chunk)) > 0) return WAIT;
         long[] st = preparedStats.computeIfAbsent(d.id(), k -> new long[STATS]);
@@ -1001,7 +1006,8 @@ public final class ScarQueue {
             RuinPlan.Debris debris = debris(level, chunk, plan);
             long t0 = System.nanoTime();
             if (plan.apply(level, chunk, d, budget)) {
-                plans.remove(key);
+                if (preparedParked) unpark(key);
+                else plans.remove(key);
                 long took = System.nanoTime() - t0;
                 buried(level, d, free);
                 thrown(level, d, chunk, debris);
@@ -1026,7 +1032,8 @@ public final class ScarQueue {
                 return RUINED;
             }
             if (plan.memoryWaiting()) return MEMORY;
-            plans.remove(key);
+            if (preparedParked) unpark(key);
+            else plans.remove(key);
             stalePlans++;
             st[1]++;
             // Stale input is resnapshotted by the background path in a later unit.
@@ -1034,7 +1041,7 @@ public final class ScarQueue {
         }
         long t0 = System.nanoTime();
         RuinContext ctx = NuclearWorld.get(level).ruins(level, d, level.getGameTime());
-        Parked kept = parked.get(key);
+        kept = parked.get(key);
         diagSource = "parked";
         if (kept != null && kept.detonation() == d.id()) {
             plan = kept.plan();
