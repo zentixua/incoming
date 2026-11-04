@@ -1,0 +1,977 @@
+﻿2026-11-04T14:32:04.7242361Z Current runner version: '2.338.2'
+2026-11-04T14:32:04.7267381Z ##[group]Runner Image Provisioner
+2026-11-04T14:32:04.7268281Z Hosted Compute Agent
+2026-11-04T14:32:04.7269230Z Version: 20261028.624
+2026-11-04T14:32:04.7269885Z Commit: 54898b74c23fde5556c9b3c3a2290865feef0dfe
+2026-11-04T14:32:04.7270673Z Build Date: 2026-10-28T21:51:42Z
+2026-11-04T14:32:04.7271395Z Worker ID: {c4597dc5-2c8a-418f-a99f-c80a2d263816}
+2026-11-04T14:32:04.7272110Z Region: westus2
+2026-11-04T14:32:04.7272717Z Cloud: Azure
+2026-11-04T14:32:04.7273304Z ##[endgroup]
+2026-11-04T14:32:04.7274782Z ##[group]Operating System
+2026-11-04T14:32:04.7275566Z Ubuntu
+2026-11-04T14:32:04.7276096Z 26.04.1
+2026-11-04T14:32:04.7276703Z LTS
+2026-11-04T14:32:04.7277232Z ##[endgroup]
+2026-11-04T14:32:04.7277784Z ##[group]Runner Image
+2026-11-04T14:32:04.7278472Z Image: ubuntu-26.04
+2026-11-04T14:32:04.7279240Z Version: 20261101.186.1
+2026-11-04T14:32:04.7280662Z Included Software: https://github.com/actions/runner-images/blob/ubuntu26/20261101.186/images/ubuntu/Ubuntu2604-Readme.md
+2026-11-04T14:32:04.7282223Z Image Release: https://github.com/actions/runner-images/releases/tag/ubuntu26%2F20261101.186
+2026-11-04T14:32:04.7283273Z ##[endgroup]
+2026-11-04T14:32:04.7284514Z ##[group]GITHUB_TOKEN Permissions
+2026-11-04T14:32:04.7286516Z Contents: read
+2026-11-04T14:32:04.7287133Z Metadata: read
+2026-11-04T14:32:04.7287772Z ##[endgroup]
+2026-11-04T14:32:04.7290593Z Secret source: Actions
+2026-11-04T14:32:04.7291688Z Cache mode: write
+2026-11-04T14:32:04.7292420Z Prepare workflow directory
+2026-11-04T14:32:04.7711090Z Prepare all required actions
+2026-11-04T14:32:04.7759063Z Getting action download info
+2026-11-04T14:32:05.1263371Z Download action repository 'actions/checkout@v5' (SHA:fbc6f3992d24b796d5a048ff273f7fcc4a7b6c09)
+2026-11-04T14:32:05.2604456Z Download action repository 'actions/setup-java@v5' (SHA:b6effb05e454b25005698d916606bdc6ffcbf961)
+2026-11-04T14:32:05.5344061Z Download action repository 'gradle/actions@v5' (SHA:0723195856401067f7a2779048b490ace7a47d7c)
+2026-11-04T14:32:06.5221054Z Download action repository 'actions/cache@v5' (SHA:caa296126883cff596d87d8935842f9db880ef25)
+2026-11-04T14:32:06.6315991Z Download action repository 'actions/upload-artifact@v6' (SHA:b7c566a772e6b6bfb58ed0dc250532a479d7789f)
+2026-11-04T14:32:07.0032350Z Complete job name: GameTest 5/6
+2026-11-04T14:32:07.1250125Z ##[group]Run actions/checkout@v5
+2026-11-04T14:32:07.1251549Z with:
+2026-11-04T14:32:07.1252373Z   repository: zentixua/incoming
+2026-11-04T14:32:07.1261134Z   token: ***
+2026-11-04T14:32:07.1261956Z   ssh-strict: true
+2026-11-04T14:32:07.1262776Z   ssh-user: git
+2026-11-04T14:32:07.1263626Z   persist-credentials: true
+2026-11-04T14:32:07.1264547Z   clean: true
+2026-11-04T14:32:07.1265383Z   sparse-checkout-cone-mode: true
+2026-11-04T14:32:07.1266382Z   fetch-depth: 1
+2026-11-04T14:32:07.1267201Z   fetch-tags: false
+2026-11-04T14:32:07.1268031Z   show-progress: true
+2026-11-04T14:32:07.1268985Z   lfs: false
+2026-11-04T14:32:07.1269757Z   submodules: false
+2026-11-04T14:32:07.1270621Z   set-safe-directory: true
+2026-11-04T14:32:07.1271592Z   allow-unsafe-pr-checkout: false
+2026-11-04T14:32:07.1272861Z ##[endgroup]
+2026-11-04T14:32:07.4300763Z Syncing repository: zentixua/incoming
+2026-11-04T14:32:07.4305231Z ##[group]Getting Git version info
+2026-11-04T14:32:07.4307753Z Working directory is '/home/runner/work/incoming/incoming'
+2026-11-04T14:32:07.4311675Z [command]/usr/bin/git version
+2026-11-04T14:32:07.4320528Z git version 2.56.0
+2026-11-04T14:32:07.4331048Z ##[endgroup]
+2026-11-04T14:32:07.4349180Z Temporarily overriding HOME='/home/runner/work/_temp/ff3f76b1-3b9b-4db0-b7c2-397e5613d761' before making global git config changes
+2026-11-04T14:32:07.4353811Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-04T14:32:07.4356448Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/incoming/incoming
+2026-11-04T14:32:07.4489865Z Deleting the contents of '/home/runner/work/incoming/incoming'
+2026-11-04T14:32:07.4496998Z ##[group]Initializing the repository
+2026-11-04T14:32:07.4502935Z [command]/usr/bin/git init /home/runner/work/incoming/incoming
+2026-11-04T14:32:07.4639052Z hint: Using 'master' as the name for the initial branch. This default branch name
+2026-11-04T14:32:07.4642639Z hint: will change to "main" in Git 3.0. To configure the initial branch name
+2026-11-04T14:32:07.4644930Z hint: to use in all of your new repositories, which will suppress this warning,
+2026-11-04T14:32:07.4646791Z hint: call:
+2026-11-04T14:32:07.4647800Z hint:
+2026-11-04T14:32:07.4649247Z hint: 	git config --global init.defaultBranch <name>
+2026-11-04T14:32:07.4650800Z hint:
+2026-11-04T14:32:07.4652632Z hint: Names commonly chosen instead of 'master' are 'main', 'trunk' and
+2026-11-04T14:32:07.4656152Z hint: 'development'. The just-created branch can be renamed via this command:
+2026-11-04T14:32:07.4659197Z hint:
+2026-11-04T14:32:07.4660778Z hint: 	git branch -m <name>
+2026-11-04T14:32:07.4662510Z hint:
+2026-11-04T14:32:07.4664746Z hint: Disable this message with "git config set advice.defaultBranchName false"
+2026-11-04T14:32:07.4668486Z Initialized empty Git repository in /home/runner/work/incoming/incoming/.git/
+2026-11-04T14:32:07.4674313Z [command]/usr/bin/git remote add origin https://github.com/zentixua/incoming
+2026-11-04T14:32:07.4740941Z ##[endgroup]
+2026-11-04T14:32:07.4742611Z ##[group]Disabling automatic garbage collection
+2026-11-04T14:32:07.4745747Z [command]/usr/bin/git config --local gc.auto 0
+2026-11-04T14:32:07.4784932Z ##[endgroup]
+2026-11-04T14:32:07.4787383Z ##[group]Setting up auth
+2026-11-04T14:32:07.4792372Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-04T14:32:07.4864742Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-04T14:32:07.5359010Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-04T14:32:07.5399262Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-04T14:32:07.5677186Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-04T14:32:07.5717197Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-04T14:32:07.6000397Z [command]/usr/bin/git config --local http.https://github.com/.extraheader AUTHORIZATION: basic ***
+2026-11-04T14:32:07.6043707Z ##[endgroup]
+2026-11-04T14:32:07.6046438Z ##[group]Fetching the repository
+2026-11-04T14:32:07.6056926Z [command]/usr/bin/git -c protocol.version=2 fetch --no-tags --prune --no-recurse-submodules --depth=1 origin +82d5c984fbc63fbf7c75f9d29a3e0bc4507afd58:refs/remotes/pull/588/merge
+2026-11-04T14:32:09.1679938Z From https://github.com/zentixua/incoming
+2026-11-04T14:32:09.1681164Z  * [new ref]         82d5c984fbc63fbf7c75f9d29a3e0bc4507afd58 -> pull/588/merge
+2026-11-04T14:32:09.1691677Z ##[endgroup]
+2026-11-04T14:32:09.1692576Z ##[group]Determining the checkout info
+2026-11-04T14:32:09.1693650Z ##[endgroup]
+2026-11-04T14:32:09.1699835Z [command]/usr/bin/git sparse-checkout disable
+2026-11-04T14:32:09.1756694Z [command]/usr/bin/git config --local --unset-all extensions.worktreeConfig
+2026-11-04T14:32:09.1793296Z ##[group]Checking out the ref
+2026-11-04T14:32:09.1797194Z [command]/usr/bin/git checkout --progress --force refs/remotes/pull/588/merge
+2026-11-04T14:32:09.5118496Z Note: switching to 'refs/remotes/pull/588/merge'.
+2026-11-04T14:32:09.5119846Z 
+2026-11-04T14:32:09.5120212Z You are in 'detached HEAD' state. You can look around, make experimental
+2026-11-04T14:32:09.5121074Z changes and commit them, and you can discard any commits you make in this
+2026-11-04T14:32:09.5122035Z state without impacting any branches by switching back to a branch.
+2026-11-04T14:32:09.5123061Z 
+2026-11-04T14:32:09.5123469Z If you want to create a new branch to retain commits you create, you may
+2026-11-04T14:32:09.5124341Z do so (now or later) by using -c with the switch command. Example:
+2026-11-04T14:32:09.5124842Z 
+2026-11-04T14:32:09.5125060Z   git switch -c <new-branch-name>
+2026-11-04T14:32:09.5125434Z 
+2026-11-04T14:32:09.5125649Z Or undo this operation with:
+2026-11-04T14:32:09.5126015Z 
+2026-11-04T14:32:09.5126209Z   git switch -
+2026-11-04T14:32:09.5126512Z 
+2026-11-04T14:32:09.5126933Z Turn off this advice by setting config variable advice.detachedHead to false
+2026-11-04T14:32:09.5127598Z 
+2026-11-04T14:32:09.5128321Z HEAD is now at 82d5c98 Merge 87d412c15a874c0910999af4128603e2108f031b into 5e065ece9f516c095b84c0ee2ca9bb8ff1a29d3b
+2026-11-04T14:32:09.5144878Z ##[endgroup]
+2026-11-04T14:32:09.5203235Z [command]/usr/bin/git log -1 --format=%H
+2026-11-04T14:32:09.5233157Z 82d5c984fbc63fbf7c75f9d29a3e0bc4507afd58
+2026-11-04T14:32:09.5570789Z ##[group]Run actions/setup-java@v5
+2026-11-04T14:32:09.5571134Z with:
+2026-11-04T14:32:09.5571350Z   distribution: temurin
+2026-11-04T14:32:09.5571578Z   java-version: 21
+2026-11-04T14:32:09.5571782Z   java-package: jdk
+2026-11-04T14:32:09.5571993Z   check-latest: false
+2026-11-04T14:32:09.5572198Z   set-default: true
+2026-11-04T14:32:09.5572439Z   verify-signature: false
+2026-11-04T14:32:09.5572664Z   server-id: github
+2026-11-04T14:32:09.5572871Z   server-username: GITHUB_ACTOR
+2026-11-04T14:32:09.5573126Z   server-password: GITHUB_TOKEN
+2026-11-04T14:32:09.5573372Z   overwrite-settings: true
+2026-11-04T14:32:09.5573594Z   job-status: success
+2026-11-04T14:32:09.5575906Z   token: ***
+2026-11-04T14:32:09.5576136Z   show-download-progress: false
+2026-11-04T14:32:09.5576393Z ##[endgroup]
+2026-11-04T14:32:09.7209426Z ##[group]Installed distributions
+2026-11-04T14:32:09.7282496Z Resolved Java 21.0.13+9 from tool-cache
+2026-11-04T14:32:09.7283263Z Setting Java 21.0.13+9 as the default
+2026-11-04T14:32:09.7300850Z Creating toolchains.xml for JDK version 21 from temurin
+2026-11-04T14:32:09.7421131Z Writing to /home/runner/.m2/toolchains.xml
+2026-11-04T14:32:09.7421664Z 
+2026-11-04T14:32:09.7421895Z Java configuration:
+2026-11-04T14:32:09.7422312Z   Distribution: temurin
+2026-11-04T14:32:09.7422724Z   Version: 21.0.13+9
+2026-11-04T14:32:09.7423564Z   Path: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.13-9/x64
+2026-11-04T14:32:09.7424127Z 
+2026-11-04T14:32:09.7424752Z ##[endgroup]
+2026-11-04T14:32:09.7461171Z Creating settings.xml with server-id: github
+2026-11-04T14:32:09.7461607Z Writing to /home/runner/.m2/settings.xml
+2026-11-04T14:32:09.7462387Z Configured MAVEN_ARGS to include -ntp to suppress Maven transfer progress logs. Set 'show-download-progress: true' to keep the download progress output.
+2026-11-04T14:32:09.7797036Z ##[group]Run gradle/actions/setup-gradle@v5
+2026-11-04T14:32:09.7797626Z with:
+2026-11-04T14:32:09.7797962Z   cache-read-only: true
+2026-11-04T14:32:09.7798338Z   cache-disabled: false
+2026-11-04T14:32:09.7798735Z   cache-write-only: false
+2026-11-04T14:32:09.7799320Z   cache-overwrite-existing: false
+2026-11-04T14:32:09.7799759Z   cache-cleanup: on-success
+2026-11-04T14:32:09.7800231Z   gradle-home-cache-includes: caches
+notifications
+
+2026-11-04T14:32:09.7800763Z   add-job-summary: always
+2026-11-04T14:32:09.7801172Z   add-job-summary-as-pr-comment: never
+2026-11-04T14:32:09.7801641Z   dependency-graph: disabled
+2026-11-04T14:32:09.7802150Z   dependency-graph-report-dir: dependency-graph-reports
+2026-11-04T14:32:09.7802782Z   dependency-graph-continue-on-failure: true
+2026-11-04T14:32:09.7803289Z   build-scan-publish: false
+2026-11-04T14:32:09.7803658Z   validate-wrappers: true
+2026-11-04T14:32:09.7804065Z   allow-snapshot-wrappers: false
+2026-11-04T14:32:09.7804569Z   gradle-home-cache-strict-match: false
+2026-11-04T14:32:09.7805045Z   workflow-job-context: {
+  "part": 5
+}
+2026-11-04T14:32:09.7808658Z   github-token: ***
+2026-11-04T14:32:09.7809094Z env:
+2026-11-04T14:32:09.7809530Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.13-9/x64
+2026-11-04T14:32:09.7810751Z   JAVA_HOME_21_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.13-9/x64
+2026-11-04T14:32:09.7811421Z   MAVEN_ARGS: -ntp
+2026-11-04T14:32:09.7811758Z ##[endgroup]
+2026-11-04T14:32:14.7666137Z Merged default JDK locations into /home/runner/.m2/toolchains.xml
+2026-11-04T14:32:14.7669548Z ##[group]Restore Gradle state from cache
+2026-11-04T14:32:15.0153620Z Cache hit for restore-key: gradle-home-v1|Linux-X64|build[debe7e2089933f89baa724f718db4c25]-6bd2c7a7290c00516b1aa6c9aedda864b0194b23
+2026-11-04T14:32:16.3145707Z Received 8388608 of 1867813137 (0.4%), 8.0 MBs/sec
+2026-11-04T14:32:17.3170521Z Received 130023424 of 1867813137 (7.0%), 61.9 MBs/sec
+2026-11-04T14:32:18.3159307Z Received 239075328 of 1867813137 (12.8%), 75.9 MBs/sec
+2026-11-04T14:32:19.3220055Z Received 343932928 of 1867813137 (18.4%), 82.0 MBs/sec
+2026-11-04T14:32:20.3190020Z Received 461373440 of 1867813137 (24.7%), 88.0 MBs/sec
+2026-11-04T14:32:21.3172154Z Received 570425344 of 1867813137 (30.5%), 90.6 MBs/sec
+2026-11-04T14:32:22.3182026Z Received 671088640 of 1867813137 (35.9%), 91.4 MBs/sec
+2026-11-04T14:32:23.3221051Z Received 771751936 of 1867813137 (41.3%), 91.9 MBs/sec
+2026-11-04T14:32:24.3202759Z Received 847249408 of 1867813137 (45.4%), 89.7 MBs/sec
+2026-11-04T14:32:25.3211284Z Received 939524096 of 1867813137 (50.3%), 89.5 MBs/sec
+2026-11-04T14:32:26.3229885Z Received 1023410176 of 1867813137 (54.8%), 88.7 MBs/sec
+2026-11-04T14:32:27.3227576Z Received 1073741824 of 1867813137 (57.5%), 85.3 MBs/sec
+2026-11-04T14:32:28.3234772Z Received 1170210816 of 1867813137 (62.7%), 85.8 MBs/sec
+2026-11-04T14:32:29.3240391Z Received 1207959552 of 1867813137 (64.7%), 82.2 MBs/sec
+2026-11-04T14:32:30.3237746Z Received 1270874112 of 1867813137 (68.0%), 80.7 MBs/sec
+2026-11-04T14:32:31.3229757Z Received 1333788672 of 1867813137 (71.4%), 79.5 MBs/sec
+2026-11-04T14:32:32.3242055Z Received 1379926016 of 1867813137 (73.9%), 77.4 MBs/sec
+2026-11-04T14:32:33.3243738Z Received 1451229184 of 1867813137 (77.7%), 76.8 MBs/sec
+2026-11-04T14:32:34.3250269Z Received 1476395008 of 1867813137 (79.0%), 74.1 MBs/sec
+2026-11-04T14:32:35.3257575Z Received 1547698176 of 1867813137 (82.9%), 73.8 MBs/sec
+2026-11-04T14:32:36.3263374Z Received 1610612736 of 1867813137 (86.2%), 73.1 MBs/sec
+2026-11-04T14:32:37.3259179Z Received 1665138688 of 1867813137 (89.1%), 72.1 MBs/sec
+2026-11-04T14:32:38.3529905Z Received 1744830464 of 1867813137 (93.4%), 72.2 MBs/sec
+2026-11-04T14:32:39.3515823Z Received 1799356416 of 1867813137 (96.3%), 71.4 MBs/sec
+2026-11-04T14:32:40.1802046Z Received 1867813137 of 1867813137 (100.0%), 71.6 MBs/sec
+2026-11-04T14:32:40.1805250Z Cache Size: ~1781 MB (1867813137 B)
+2026-11-04T14:32:40.1981592Z [command]/usr/bin/tar -xf /home/runner/work/_temp/07e8d274-79ea-459b-b48b-6e5245b1315e/cache.tzst -P -C /home/runner/work/incoming/incoming --use-compress-program unzstd
+2026-11-04T14:32:43.4614917Z Cache restored successfully
+2026-11-04T14:32:44.0659828Z Restored cache entry with key gradle-home-v1|Linux-X64|gametest[758482ff77f4c079b389c2887402e270]-82d5c984fbc63fbf7c75f9d29a3e0bc4507afd58 to /home/runner/.gradle/caches,/home/runner/.gradle/notifications,/home/runner/.gradle/.setup-gradle in 29297ms
+2026-11-04T14:32:44.3221634Z Cache hit for: gradle-transforms-v1-9f8b54103f677bc94f62f23412731c04
+2026-11-04T14:32:44.3279480Z Cache hit for: gradle-wrapper-zips-v1-5ae5d3da5e8e0c748d04bcdd9bc97bdb
+2026-11-04T14:32:44.3311318Z Cache hit for: gradle-groovy-dsl-v1-69a810634b7d72bf31e2f75e5c689b10
+2026-11-04T14:32:44.3364834Z Cache hit for: gradle-dependencies-v1-377ce3cca5aa57af4f7bb8b74998aa43
+2026-11-04T14:32:44.3411156Z Cache hit for: gradle-instrumented-jars-v1-6187e9e745ac95643c13dfa45d4844e9
+2026-11-04T14:32:45.1030658Z Received 189108 of 189108 (100.0%), 0.4 MBs/sec
+2026-11-04T14:32:45.1031322Z Cache Size: ~0 MB (189108 B)
+2026-11-04T14:32:45.1049549Z [command]/usr/bin/tar -xf /home/runner/work/_temp/ac6ef44f-206b-475a-835c-0f0f40d8b187/cache.tzst -P -C /home/runner/work/incoming/incoming --use-compress-program unzstd
+2026-11-04T14:32:45.1301072Z Cache restored successfully
+2026-11-04T14:32:45.1303485Z Restored cache entry with key gradle-instrumented-jars-v1-6187e9e745ac95643c13dfa45d4844e9 to /home/runner/.gradle/caches/jars-*/*/ in 1062ms
+2026-11-04T14:32:45.2910424Z Received 712261 of 712261 (100.0%), 1.0 MBs/sec
+2026-11-04T14:32:45.2936513Z Cache Size: ~1 MB (712261 B)
+2026-11-04T14:32:45.3010926Z [command]/usr/bin/tar -xf /home/runner/work/_temp/574e9c3a-6326-4833-83dc-9b7845993d55/cache.tzst -P -C /home/runner/work/incoming/incoming --use-compress-program unzstd
+2026-11-04T14:32:45.4455655Z Received 1334402 of 1334402 (100.0%), 1.6 MBs/sec
+2026-11-04T14:32:45.4456374Z Cache Size: ~1 MB (1334402 B)
+2026-11-04T14:32:45.4812325Z Cache restored successfully
+2026-11-04T14:32:45.4840383Z Restored cache entry with key gradle-groovy-dsl-v1-69a810634b7d72bf31e2f75e5c689b10 to /home/runner/.gradle/caches/*/groovy-dsl/*/ in 1413ms
+2026-11-04T14:32:45.4981415Z [command]/usr/bin/tar -xf /home/runner/work/_temp/b12af31a-61dc-4ccd-b4ee-6be713cecc70/cache.tzst -P -C /home/runner/work/incoming/incoming --use-compress-program unzstd
+2026-11-04T14:32:45.5312072Z Cache restored successfully
+2026-11-04T14:32:45.5320081Z Restored cache entry with key gradle-transforms-v1-9f8b54103f677bc94f62f23412731c04 to /home/runner/.gradle/caches/transforms-4/*/,/home/runner/.gradle/caches/*/transforms/*/ in 1463ms
+2026-11-04T14:32:45.5891323Z Received 25165824 of 136712730 (18.4%), 24.0 MBs/sec
+2026-11-04T14:32:45.6028427Z Received 25165824 of 204605190 (12.3%), 24.0 MBs/sec
+2026-11-04T14:32:46.5896576Z Received 130023424 of 136712730 (95.1%), 62.0 MBs/sec
+2026-11-04T14:32:46.6029827Z Received 134217728 of 204605190 (65.6%), 63.9 MBs/sec
+2026-11-04T14:32:46.7528263Z Received 136712730 of 136712730 (100.0%), 60.2 MBs/sec
+2026-11-04T14:32:46.7531164Z Cache Size: ~130 MB (136712730 B)
+2026-11-04T14:32:46.7719951Z [command]/usr/bin/tar -xf /home/runner/work/_temp/b80f8b67-7857-4ee5-adec-98250c270898/cache.tzst -P -C /home/runner/work/incoming/incoming --use-compress-program unzstd
+2026-11-04T14:32:47.0740089Z Cache restored successfully
+2026-11-04T14:32:47.0816059Z Restored cache entry with key gradle-wrapper-zips-v1-5ae5d3da5e8e0c748d04bcdd9bc97bdb to /home/runner/.gradle/wrapper/dists/gradle-8.14.3-bin/cv11ve7ro1n3o1j4so8xd9n66 in 3014ms
+2026-11-04T14:32:47.1159897Z Received 204605190 of 204605190 (100.0%), 77.6 MBs/sec
+2026-11-04T14:32:47.1160644Z Cache Size: ~195 MB (204605190 B)
+2026-11-04T14:32:47.1178116Z [command]/usr/bin/tar -xf /home/runner/work/_temp/45d36959-5beb-41f5-8d5b-7a32be6163fd/cache.tzst -P -C /home/runner/work/incoming/incoming --use-compress-program unzstd
+2026-11-04T14:32:47.4347238Z Cache restored successfully
+2026-11-04T14:32:47.4433078Z Restored cache entry with key gradle-dependencies-v1-377ce3cca5aa57af4f7bb8b74998aa43 to /home/runner/.gradle/caches/modules-*/files-*/*/*/*/* in 3375ms
+2026-11-04T14:32:47.4515739Z ##[endgroup]
+2026-11-04T14:32:47.4841930Z ##[group]All Gradle Wrapper jars are valid
+2026-11-04T14:32:47.4843181Z ✓ Found known Gradle Wrapper JAR files:
+2026-11-04T14:32:47.4843977Z   7d3a4ac4de1c32b59bc6a4eb8ecb8e612ccd0cf1ae1e99f66902da64df296172 mod/gradle/wrapper/gradle-wrapper.jar
+2026-11-04T14:32:47.4844950Z ##[endgroup]
+2026-11-04T14:32:47.5846793Z ##[group]Run actions/cache@v5
+2026-11-04T14:32:47.5847126Z with:
+2026-11-04T14:32:47.5847360Z   path: mod/run/ci-mods
+2026-11-04T14:32:47.5847801Z   key: runtime-mods-2531ba0b55307e870e74523e99b8c5d7f02685a979c86304904e172c58eb29d3
+2026-11-04T14:32:47.5848305Z   enableCrossOsArchive: false
+2026-11-04T14:32:47.5848606Z   fail-on-cache-miss: false
+2026-11-04T14:32:47.5849163Z   lookup-only: false
+2026-11-04T14:32:47.5849462Z   save-always: false
+2026-11-04T14:32:47.5849702Z env:
+2026-11-04T14:32:47.5850045Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.13-9/x64
+2026-11-04T14:32:47.5850577Z   JAVA_HOME_21_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.13-9/x64
+2026-11-04T14:32:47.5850996Z   MAVEN_ARGS: -ntp
+2026-11-04T14:32:47.5851511Z   GRADLE_ACTION_ID: gradle/actions/setup-gradle
+2026-11-04T14:32:47.5851856Z   GRADLE_USER_HOME: /home/runner/.gradle
+2026-11-04T14:32:47.5852179Z   GRADLE_BUILD_ACTION_SETUP_COMPLETED: true
+2026-11-04T14:32:47.5852548Z   GRADLE_BUILD_ACTION_CACHE_RESTORED: true
+2026-11-04T14:32:47.5853023Z   DEVELOCITY_INJECTION_INIT_SCRIPT_NAME: gradle-actions.inject-develocity.init.gradle
+2026-11-04T14:32:47.5853537Z   DEVELOCITY_INJECTION_CUSTOM_VALUE: gradle-actions
+2026-11-04T14:32:47.5853888Z   GITHUB_DEPENDENCY_GRAPH_ENABLED: false
+2026-11-04T14:32:47.5854190Z ##[endgroup]
+2026-11-04T14:32:47.9593638Z Cache hit for: runtime-mods-2531ba0b55307e870e74523e99b8c5d7f02685a979c86304904e172c58eb29d3
+2026-11-04T14:32:49.2393648Z Received 29360128 of 62469624 (47.0%), 28.0 MBs/sec
+2026-11-04T14:32:49.5870195Z Received 62469624 of 62469624 (100.0%), 44.2 MBs/sec
+2026-11-04T14:32:49.5873245Z Cache Size: ~60 MB (62469624 B)
+2026-11-04T14:32:49.5990868Z [command]/usr/bin/tar -xf /home/runner/work/_temp/515bd13d-50f0-4059-93da-6ae305f3eb4d/cache.tzst -P -C /home/runner/work/incoming/incoming --use-compress-program unzstd
+2026-11-04T14:32:49.6925796Z Cache restored successfully
+2026-11-04T14:32:49.7147560Z Cache restored from key: runtime-mods-2531ba0b55307e870e74523e99b8c5d7f02685a979c86304904e172c58eb29d3
+2026-11-04T14:32:49.7282145Z ##[group]Run python3 ../tools/fetch_runtime_mods.py run/ci-mods
+2026-11-04T14:32:49.7282734Z [36;1mpython3 ../tools/fetch_runtime_mods.py run/ci-mods[0m
+2026-11-04T14:32:49.7335771Z shell: /usr/bin/bash -e {0}
+2026-11-04T14:32:49.7336075Z env:
+2026-11-04T14:32:49.7336426Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.13-9/x64
+2026-11-04T14:32:49.7336976Z   JAVA_HOME_21_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.13-9/x64
+2026-11-04T14:32:49.7337404Z   MAVEN_ARGS: -ntp
+2026-11-04T14:32:49.7337688Z   GRADLE_ACTION_ID: gradle/actions/setup-gradle
+2026-11-04T14:32:49.7338030Z   GRADLE_USER_HOME: /home/runner/.gradle
+2026-11-04T14:32:49.7338352Z   GRADLE_BUILD_ACTION_SETUP_COMPLETED: true
+2026-11-04T14:32:49.7338697Z   GRADLE_BUILD_ACTION_CACHE_RESTORED: true
+2026-11-04T14:32:49.7339541Z   DEVELOCITY_INJECTION_INIT_SCRIPT_NAME: gradle-actions.inject-develocity.init.gradle
+2026-11-04T14:32:49.7340074Z   DEVELOCITY_INJECTION_CUSTOM_VALUE: gradle-actions
+2026-11-04T14:32:49.7340534Z   GITHUB_DEPENDENCY_GRAPH_ENABLED: false
+2026-11-04T14:32:49.7340842Z ##[endgroup]
+2026-11-04T14:32:50.5514695Z yes    create-1.21.1-6.0.10.jar
+2026-11-04T14:32:50.5515321Z yes    sable-neoforge-1.21.1-2.0.6.jar
+2026-11-04T14:32:50.5515828Z yes    create-aeronautics-bundled-1.21.1-1.3.2.jar
+2026-11-04T14:32:50.5516377Z yes    lithium-neoforge-0.15.4+mc1.21.1.jar
+2026-11-04T14:32:50.5516876Z /home/runner/work/incoming/incoming/mod/run/ci-mods
+2026-11-04T14:32:50.5683165Z ##[group]Run if [ -z "$ONLY" ]; then
+2026-11-04T14:32:50.5683572Z [36;1mif [ -z "$ONLY" ]; then[0m
+2026-11-04T14:32:50.5684115Z [36;1m  ./gradlew runGameTestServer -PmcModsDir=run/ci-mods -PgametestShard=$SHARD --console=plain[0m
+2026-11-04T14:32:50.5684796Z [36;1m  grep -E 'All [0-9]+ required tests passed' run/gametest/logs/latest.log[0m
+2026-11-04T14:32:50.5685211Z [36;1m  exit[0m
+2026-11-04T14:32:50.5685441Z [36;1mfi[0m
+2026-11-04T14:32:50.5685934Z [36;1m# Repeat: all matching batches on this machine, REPEAT times, each in a new world; failures do not stop repeats;[0m
+2026-11-04T14:32:50.5686720Z [36;1m# regex matching no batches also fails (“All 0 required tests passed” does not count).[0m
+2026-11-04T14:32:50.5687215Z [36;1mpassed=0[0m
+2026-11-04T14:32:50.5687473Z [36;1mfor i in $(seq "$REPEAT"); do[0m
+2026-11-04T14:32:50.5688044Z [36;1m  if ./gradlew runGameTestServer -PmcModsDir=run/ci-mods "-PgametestOnly=$ONLY" --console=plain --quiet \[0m
+2026-11-04T14:32:50.5689001Z [36;1m      && grep -qE 'All [1-9][0-9]* required tests passed' run/gametest/logs/latest.log; then[0m
+2026-11-04T14:32:50.5689520Z [36;1m    passed=$((passed + 1))[0m
+2026-11-04T14:32:50.5689813Z [36;1m  else[0m
+2026-11-04T14:32:50.5690427Z [36;1m    cp run/gametest/logs/latest.log "run/gametest/logs/failed-$i.log" 2>/dev/null || true[0m
+2026-11-04T14:32:50.5691077Z [36;1m    grep -E 'failed|::' run/gametest/logs/latest.log | grep -iE 'fail|exception' | head -5[0m
+2026-11-04T14:32:50.5691543Z [36;1m  fi[0m
+2026-11-04T14:32:50.5691768Z [36;1mdone[0m
+2026-11-04T14:32:50.5692242Z [36;1mecho "GameTest repeat: «$ONLY» passed $passed of $REPEAT (part $SHARD)" | tee -a "$GITHUB_STEP_SUMMARY"[0m
+2026-11-04T14:32:50.5692789Z [36;1m[ "$passed" = "$REPEAT" ][0m
+2026-11-04T14:32:50.5741333Z shell: /usr/bin/bash -e {0}
+2026-11-04T14:32:50.5741804Z env:
+2026-11-04T14:32:50.5742160Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.13-9/x64
+2026-11-04T14:32:50.5742722Z   JAVA_HOME_21_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.13-9/x64
+2026-11-04T14:32:50.5743161Z   MAVEN_ARGS: -ntp
+2026-11-04T14:32:50.5743451Z   GRADLE_ACTION_ID: gradle/actions/setup-gradle
+2026-11-04T14:32:50.5743792Z   GRADLE_USER_HOME: /home/runner/.gradle
+2026-11-04T14:32:50.5744126Z   GRADLE_BUILD_ACTION_SETUP_COMPLETED: true
+2026-11-04T14:32:50.5744458Z   GRADLE_BUILD_ACTION_CACHE_RESTORED: true
+2026-11-04T14:32:50.5744937Z   DEVELOCITY_INJECTION_INIT_SCRIPT_NAME: gradle-actions.inject-develocity.init.gradle
+2026-11-04T14:32:50.5745453Z   DEVELOCITY_INJECTION_CUSTOM_VALUE: gradle-actions
+2026-11-04T14:32:50.5745805Z   GITHUB_DEPENDENCY_GRAPH_ENABLED: false
+2026-11-04T14:32:50.5746107Z   ONLY: 
+2026-11-04T14:32:50.5746322Z   REPEAT: 1
+2026-11-04T14:32:50.5746536Z   SHARD: 5/6
+2026-11-04T14:32:50.5746754Z ##[endgroup]
+2026-11-04T14:32:54.2109555Z To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.14.3/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+2026-11-04T14:32:56.5097659Z Daemon will be stopped at the end of the build 
+2026-11-04T14:33:09.2105781Z 
+2026-11-04T14:33:09.2113503Z > Configure project :
+2026-11-04T14:33:09.2114327Z Creating Minecraft artifacts without recompilation.
+2026-11-04T14:33:14.4098093Z 
+2026-11-04T14:33:14.4113562Z > Task :createMinecraftArtifacts
+2026-11-04T14:33:14.4150629Z Loaded 131 artifacts from /home/runner/work/incoming/incoming/mod/build/tmp/createMinecraftArtifacts/nfrt_artifact_manifest.properties
+2026-11-04T14:33:14.4152475Z [1m*** Started working on [4mdownloadJson[23;0m[23;0m
+2026-11-04T14:33:14.4153635Z  [1m[92m✓[23;0m Completed [4mdownloadJson[23;0m in 0.03s
+2026-11-04T14:33:14.4154716Z [1m*** Started working on [4mdownloadClientMappings[23;0m[23;0m
+2026-11-04T14:33:14.4155613Z [1m*** Started working on [4mdownloadServer[23;0m[23;0m
+2026-11-04T14:33:14.4156973Z [1m*** Started working on [4mdownloadClient[23;0m[23;0m
+2026-11-04T14:33:14.4157834Z  [1m[92m✓[23;0m Completed [4mdownloadServer[23;0m in 0.04s
+2026-11-04T14:33:14.4158709Z  [1m[92m✓[23;0m Completed [4mdownloadClientMappings[23;0m in 0.05s
+2026-11-04T14:33:14.4159775Z  [1m[92m✓[23;0m Completed [4mdownloadClient[23;0m in 0.04s
+2026-11-04T14:33:14.4160552Z [1m*** Started working on [4mmergeMappings[23;0m[23;0m
+2026-11-04T14:33:14.4169261Z  [1m[92m♻[23;0m Used cache of [4mmergeMappings[23;0m in 0.00s
+2026-11-04T14:33:14.4170226Z [1m*** Started working on [4mextractServer[23;0m[23;0m
+2026-11-04T14:33:14.4171082Z  [1m[92m♻[23;0m Used cache of [4mextractServer[23;0m in 0.00s
+2026-11-04T14:33:14.4172193Z [1m*** Started working on [4mstripClient[23;0m[23;0m
+2026-11-04T14:33:14.4173022Z  [1m[92m♻[23;0m Used cache of [4mstripClient[23;0m in 0.01s
+2026-11-04T14:33:14.4173611Z [1m*** Started working on [4mstripServer[23;0m[23;0m
+2026-11-04T14:33:14.4174110Z  [1m[92m♻[23;0m Used cache of [4mstripServer[23;0m in 0.00s
+2026-11-04T14:33:14.4174606Z [1m*** Started working on [4mmerge[23;0m[23;0m
+2026-11-04T14:33:14.4175037Z  [1m[92m♻[23;0m Used cache of [4mmerge[23;0m in 0.00s
+2026-11-04T14:33:14.4175461Z [1m*** Started working on [4mrename[23;0m[23;0m
+2026-11-04T14:33:14.4176392Z  [1m[92m♻[23;0m Used cache of [4mrename[23;0m in 0.00s
+2026-11-04T14:33:14.4176859Z [1m*** Started working on [4mbinaryPatch[23;0m[23;0m
+2026-11-04T14:33:14.4177440Z  [1m[92m♻[23;0m Used cache of [4mbinaryPatch[23;0m in 0.00s
+2026-11-04T14:33:14.4178074Z [1m*** Started working on [4mcopyUnpatchedClasses[23;0m[23;0m
+2026-11-04T14:33:14.4179047Z  [1m[92m♻[23;0m Used cache of [4mcopyUnpatchedClasses[23;0m in 0.00s
+2026-11-04T14:33:14.4179974Z [1m*** Started working on [4mapplyDevTransforms[23;0m[23;0m
+2026-11-04T14:33:14.4181024Z  ↳ Running external tool net.neoforged.installertools:installertools:4.0.12:fatjar
+2026-11-04T14:33:16.4102826Z  [1m[92m✓[23;0m Completed [4mapplyDevTransforms[23;0m in 2.25s
+2026-11-04T14:33:16.6097276Z [1m*** Started working on [4mbinaryWithNeoForge[23;0m[23;0m
+2026-11-04T14:33:21.9096798Z  [1m[92m✓[23;0m Completed [4mbinaryWithNeoForge[23;0m in 5.34s
+2026-11-04T14:33:22.0098048Z Performing periodic cache maintenance on /home/runner/.gradle/caches/neoformruntime
+2026-11-04T14:33:22.0099992Z Cleaning intermediate results cache in /home/runner/.gradle/caches/neoformruntime/intermediate_results
+2026-11-04T14:33:22.0101361Z  Maximum age: 744h
+2026-11-04T14:33:22.0102383Z  Maximum cache size: 10 GiB
+2026-11-04T14:33:22.0103368Z  [0;2;3m122 files found[23;0m
+2026-11-04T14:33:22.0104115Z  [0;2;3m1 GiB overall size[23;0m
+2026-11-04T14:33:22.0104908Z  [0;2;3m27 expired keys found[23;0m
+2026-11-04T14:33:22.2096637Z Freed up [1m533 MiB[23;0m by deleting [1m54 expired entries[23;0m
+2026-11-04T14:33:22.2097666Z [0;2;3m Deleted 14 outdated lock files
+2026-11-04T14:33:22.2098146Z Total runtime: 9.17s
+2026-11-04T14:33:22.2098386Z 
+2026-11-04T14:33:39.8109409Z 
+2026-11-04T14:33:39.8110432Z > Task :compileJava
+2026-11-04T14:33:39.9096764Z > Task :generateModMetadata
+2026-11-04T14:33:40.4102720Z > Task :processResources
+2026-11-04T14:33:40.4103388Z > Task :classes
+2026-11-04T14:33:46.0096160Z > Task :compileDevtestJava
+2026-11-04T14:33:46.3110123Z > Task :copyRuntimeMods_gametest
+2026-11-04T14:33:46.3110842Z > Task :processDevtestResources
+2026-11-04T14:33:46.3111436Z > Task :devtestClasses
+2026-11-04T14:33:47.1099370Z 
+2026-11-04T14:33:47.1130531Z > Task :downloadAssets
+2026-11-04T14:33:47.1151207Z Loaded 131 artifacts from /home/runner/work/incoming/incoming/mod/build/tmp/downloadAssets/nfrt_artifact_manifest.properties
+2026-11-04T14:33:47.1152711Z Downloading asset index 17
+2026-11-04T14:33:47.1153779Z Using Minecraft asset root: /home/runner/.gradle/caches/neoformruntime/assets
+2026-11-04T14:33:47.1155877Z   ↓ https://piston-meta.mojang.com/v1/packages/de573f83da62843433ec9951c66feec7ed0a60a1/17.json
+2026-11-04T14:33:47.2096689Z 
+2026-11-04T14:33:47.2100159Z > Task :writeGameTestServerLegacyClasspath
+2026-11-04T14:33:47.3100523Z > Task :prepareGameTestServerRun
+2026-11-04T14:33:49.3096873Z 
+2026-11-04T14:33:49.3097584Z > Task :runGameTestServer
+2026-11-04T14:33:49.3098427Z WARN StatusConsoleListener Advanced terminal features are not available in this environment
+2026-11-04T14:33:49.6103990Z [14:33:49] [main/INFO] [cp.mo.mo.Launcher/MODLAUNCHER]: ModLauncher running: args [--launchTarget, forgeserverdev, --gameDir, ., --fml.fmlVersion, 4.0.45, --fml.mcVersion, 1.21.1, --fml.neoForgeVersion, 21.1.264, --fml.neoFormVersion, 20240808.144430]
+2026-11-04T14:33:49.6107142Z [14:33:49] [main/INFO] [cp.mo.mo.Launcher/MODLAUNCHER]: JVM identified as Eclipse Adoptium OpenJDK 64-Bit Server VM 21.0.13+9-LTS
+2026-11-04T14:33:49.6109358Z [14:33:49] [main/INFO] [cp.mo.mo.Launcher/MODLAUNCHER]: ModLauncher 11.0.5+main.901c6ea8 starting: java version 21.0.13 by Eclipse Adoptium; OS Linux arch amd64 version 7.0.0-1019-azure
+2026-11-04T14:33:49.7130955Z [14:33:49] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Configuration file /home/runner/work/incoming/incoming/mod/run/gametest/config/fml.toml is not correct. Correcting
+2026-11-04T14:33:49.7160192Z [14:33:49] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [disableConfigWatcher] was corrected from null to false
+2026-11-04T14:33:49.7189943Z [14:33:49] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowControl] was corrected from null to true
+2026-11-04T14:33:49.7219971Z [14:33:49] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [maxThreads] was corrected from null to -1
+2026-11-04T14:33:49.7229915Z [14:33:49] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [versionCheck] was corrected from null to true
+2026-11-04T14:33:49.7231498Z [14:33:49] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [defaultConfigPath] was corrected from null to defaultconfigs
+2026-11-04T14:33:49.7233131Z [14:33:49] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [disableOptimizedDFU] was corrected from null to true
+2026-11-04T14:33:49.7234927Z [14:33:49] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowProvider] was corrected from null to fmlearlywindow
+2026-11-04T14:33:49.7236516Z [14:33:49] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowWidth] was corrected from null to 854
+2026-11-04T14:33:49.7237956Z [14:33:49] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowHeight] was corrected from null to 480
+2026-11-04T14:33:49.7239474Z [14:33:49] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowFBScale] was corrected from null to 1
+2026-11-04T14:33:49.7240999Z [14:33:49] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowMaximized] was corrected from null to false
+2026-11-04T14:33:49.7242610Z [14:33:49] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowSkipGLVersions] was corrected from null to []
+2026-11-04T14:33:49.7244201Z [14:33:49] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowSquir] was corrected from null to false
+2026-11-04T14:33:49.7245677Z [14:33:49] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: ****************************** Found dependency overrides ******************************
+2026-11-04T14:33:49.7247605Z [14:33:49] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: Dependency overrides for mod 'aeronautics': adding explicit AFTER ordering against 'simulated', adding explicit AFTER ordering against 'offroad'
+2026-11-04T14:33:49.7250223Z [14:33:49] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: Dependency overrides for mod 'simulated': adding explicit AFTER ordering against 'create', adding explicit AFTER ordering against 'sable'
+2026-11-04T14:33:49.7252267Z [14:33:49] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: Dependency overrides for mod 'offroad': adding explicit AFTER ordering against 'simulated'
+2026-11-04T14:33:49.7253789Z [14:33:49] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: ****************************************************************************************
+2026-11-04T14:33:49.7255876Z [14:33:49] [main/INFO] [ne.ne.fm.lo.ImmediateWindowHandler/]: ImmediateWindowProvider not loading because launch target is forgeserverdev
+2026-11-04T14:33:49.8131955Z [14:33:49] [main/INFO] [mixin/]: SpongePowered MIXIN Subsystem Version=0.8.7 Source=union:/home/runner/.gradle/caches/modules-2/files-2.1/net.fabricmc/sponge-mixin/0.16.4+mixin.0.8.7/26d01f0567ab46e9ca0d2ed89d0ecc11aadbd433/sponge-mixin-0.16.4+mixin.0.8.7.jar%2394!/ Service=ModLauncher Env=SERVER
+2026-11-04T14:33:49.8135161Z [14:33:49] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: ****************************** Found dependency overrides ******************************
+2026-11-04T14:33:49.8160539Z [14:33:49] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: Dependency overrides for mod 'aeronautics': adding explicit AFTER ordering against 'simulated', adding explicit AFTER ordering against 'offroad'
+2026-11-04T14:33:49.8190508Z [14:33:49] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: Dependency overrides for mod 'simulated': adding explicit AFTER ordering against 'create', adding explicit AFTER ordering against 'sable'
+2026-11-04T14:33:49.8210130Z [14:33:49] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: Dependency overrides for mod 'offroad': adding explicit AFTER ordering against 'simulated'
+2026-11-04T14:33:49.8213913Z [14:33:49] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: ****************************************************************************************
+2026-11-04T14:33:50.6121989Z [14:33:50] [main/INFO] [ne.ne.fm.lo.mo.lo.JarInJarDependencyLocator/]: Found 13 dependencies adding them to mods collection
+2026-11-04T14:33:50.6123448Z [14:33:50] [main/INFO] [ne.ne.fm.lo.mo.ModDiscoverer/]: 
+2026-11-04T14:33:50.6159815Z      Mod List:
+2026-11-04T14:33:50.6160754Z 		Name Version (Mod Id)
+2026-11-04T14:33:50.6189481Z 
+2026-11-04T14:33:50.6195447Z 		Create 6.0.10 (create)
+2026-11-04T14:33:50.6196273Z 		Create Aeronautics 1.3.2 (aeronautics)
+2026-11-04T14:33:50.6197158Z 		Create Aeronautics 1.3.2 (aeronautics_bundled)
+2026-11-04T14:33:50.6198000Z 		Create Offroad 1.3.2 (offroad)
+2026-11-04T14:33:50.6198969Z 		Create Simulated 1.3.2 (simulated)
+2026-11-04T14:33:50.6199745Z 		Flywheel 1.0.6 (flywheel)
+2026-11-04T14:33:50.6200453Z 		Incoming 3.10.4 (incoming)
+2026-11-04T14:33:50.6201189Z 		Minecraft 1.21.1 (minecraft)
+2026-11-04T14:33:50.6201935Z 		NeoForge 21.1.264 (neoforge)
+2026-11-04T14:33:50.6202699Z 		Ponder 1.0.82+mc1.21.1 (ponder)
+2026-11-04T14:33:50.6203453Z 		Sable 2.0.6 (sable)
+2026-11-04T14:33:50.6204178Z 		Sable Companion 1.6.0 (sablecompanion)
+2026-11-04T14:33:50.6204954Z 		Veil 4.3.2 (veil)
+2026-11-04T14:33:51.5101180Z [14:33:51] [main/INFO] [mixin/]: Compatibility level set to JAVA_21
+2026-11-04T14:33:51.6110969Z [14:33:51] [main/INFO] [cp.mo.mo.LaunchServiceHandler/MODLAUNCHER]: Launching target 'forgeserverdev' with arguments [--gameDir, .]
+2026-11-04T14:33:51.7120929Z [14:33:51] [main/WARN] [mixin/]: Reference map 'ponder.refmap.json' for ponder-common.mixins.json could not be read. If this is a development environment you can ignore this message
+2026-11-04T14:33:51.8122512Z [14:33:51] [main/INFO] [de.ry.sa.mi.AbstractSableMixinPlugin/]: Using Vanilla renderer mixins
+2026-11-04T14:33:51.8160021Z [14:33:51] [main/INFO] [de.ry.sa.mi.AbstractSableMixinPlugin/]: Using Vanilla renderer mixins
+2026-11-04T14:33:51.8162085Z [14:33:51] [main/WARN] [mixin/]: Reference map 'simulated.refmap.json' for simulated.mixins.json could not be read. If this is a development environment you can ignore this message
+2026-11-04T14:33:51.8220665Z [14:33:51] [main/WARN] [mixin/]: Reference map 'offroad.refmap.json' for offroad.mixins.json could not be read. If this is a development environment you can ignore this message
+2026-11-04T14:33:51.8250325Z [14:33:51] [main/WARN] [mixin/]: Reference map 'aeronautics.refmap.json' for aeronautics.mixins.json could not be read. If this is a development environment you can ignore this message
+2026-11-04T14:33:53.1097783Z [14:33:53] [main/WARN] [mixin/]: Error loading class: org/jetbrains/annotations/ApiStatus$ScheduledForRemoval (java.lang.ClassNotFoundException: org.jetbrains.annotations.ApiStatus$ScheduledForRemoval)
+2026-11-04T14:33:53.4096603Z [14:33:53] [main/INFO] [MixinExtras|Service/]: Initializing MixinExtras via com.llamalad7.mixinextras.service.MixinExtrasServiceImpl(version=0.5.5).
+2026-11-04T14:34:02.4120852Z [14:34:02] [main/WARN] [minecraft/Commands]: Ambiguity between arguments [teleport, location] and [teleport, destination] with inputs: [0.1 -0.5 .9, 0 0 0]
+2026-11-04T14:34:02.4123200Z [14:34:02] [main/WARN] [minecraft/Commands]: Ambiguity between arguments [teleport, location] and [teleport, targets] with inputs: [0.1 -0.5 .9, 0 0 0]
+2026-11-04T14:34:02.4150375Z [14:34:02] [main/WARN] [minecraft/Commands]: Ambiguity between arguments [teleport, destination] and [teleport, targets] with inputs: [Player, 0123, @e, dd12be42-52a9-4a91-a8a1-11c01849e498]
+2026-11-04T14:34:02.4180343Z [14:34:02] [main/WARN] [minecraft/Commands]: Ambiguity between arguments [teleport, targets] and [teleport, destination] with inputs: [Player, 0123, dd12be42-52a9-4a91-a8a1-11c01849e498]
+2026-11-04T14:34:02.4210277Z [14:34:02] [main/WARN] [minecraft/Commands]: Ambiguity between arguments [teleport, targets, location] and [teleport, targets, destination] with inputs: [0.1 -0.5 .9, 0 0 0]
+2026-11-04T14:34:02.4239912Z [14:34:02] [modloading-worker-0/INFO] [Veil/]: Veil is initializing.
+2026-11-04T14:34:02.5101027Z [14:34:02] [modloading-worker-0/INFO] [ne.ne.ne.co.NeoForgeMod/NEOFORGE-MOD]: NeoForge mod loading, version 21.1.264, for MC 1.21.1
+2026-11-04T14:34:02.5120208Z [14:34:02] [modloading-worker-0/INFO] [co.si.cr.Create/]: Create 6.0.10 initializing! Commit hash: ac0c444d9828da3453ae8cc65338e8de063286fb
+2026-11-04T14:34:04.1139074Z [14:34:04] [modloading-worker-0/INFO] [de.ry.sa.Sable/]: Sable loaded!
+2026-11-04T14:34:06.9119738Z [14:34:06] [NeoForge Version Check/INFO] [ne.ne.fm.VersionChecker/]: [create] Starting version check at https://api.modrinth.com/updates/create/forge_updates.json?neoforge=only
+2026-11-04T14:34:06.9136482Z [14:34:06] [main/ERROR] [minecraft/Settings]: Failed to load properties from file: server.properties
+2026-11-04T14:34:06.9170222Z java.nio.file.NoSuchFileException: server.properties
+2026-11-04T14:34:06.9200268Z 	at java.base/sun.nio.fs.UnixException.translateToIOException(UnixException.java:92) ~[?:?] {}
+2026-11-04T14:34:06.9201908Z 	at java.base/sun.nio.fs.UnixException.rethrowAsIOException(UnixException.java:106) ~[?:?] {}
+2026-11-04T14:34:06.9205620Z 	at java.base/sun.nio.fs.UnixException.rethrowAsIOException(UnixException.java:111) ~[?:?] {}
+2026-11-04T14:34:06.9222283Z 	at java.base/sun.nio.fs.UnixFileSystemProvider.newByteChannel(UnixFileSystemProvider.java:261) ~[?:?] {}
+2026-11-04T14:34:06.9274886Z 	at java.base/java.nio.file.Files.newByteChannel(Files.java:380) ~[?:?] {}
+2026-11-04T14:34:06.9279999Z 	at java.base/java.nio.file.Files.newByteChannel(Files.java:432) ~[?:?] {}
+2026-11-04T14:34:06.9307799Z 	at java.base/java.nio.file.spi.FileSystemProvider.newInputStream(FileSystemProvider.java:420) ~[?:?] {}
+2026-11-04T14:34:06.9336067Z 	at java.base/java.nio.file.Files.newInputStream(Files.java:160) ~[?:?] {}
+2026-11-04T14:34:06.9338162Z 	at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.dedicated.Settings.loadFromFile(Settings.java:38) ~[neoforge-21.1.264.jar%23128!/:?] {re:classloading}
+2026-11-04T14:34:06.9350847Z 	at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.dedicated.DedicatedServerProperties.fromFile(DedicatedServerProperties.java:132) ~[neoforge-21.1.264.jar%23128!/:?] {re:classloading}
+2026-11-04T14:34:06.9356406Z 	at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.dedicated.DedicatedServerSettings.<init>(DedicatedServerSettings.java:12) ~[neoforge-21.1.264.jar%23128!/:?] {re:classloading}
+2026-11-04T14:34:06.9358655Z 	at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.Main.main(Main.java:125) ~[neoforge-21.1.264.jar%23128!/:?] {re:classloading}
+2026-11-04T14:34:06.9360661Z 	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103) ~[?:?] {}
+2026-11-04T14:34:06.9362594Z 	at java.base/java.lang.reflect.Method.invoke(Method.java:580) ~[?:?] {}
+2026-11-04T14:34:06.9364445Z 	at MC-BOOTSTRAP/fml_loader@4.0.45/net.neoforged.fml.loading.targets.CommonLaunchHandler.runTarget(CommonLaunchHandler.java:136) ~[loader-4.0.45.jar%23102!/:4.0] {}
+2026-11-04T14:34:06.9366874Z 	at MC-BOOTSTRAP/fml_loader@4.0.45/net.neoforged.fml.loading.targets.CommonLaunchHandler.serverService(CommonLaunchHandler.java:128) ~[loader-4.0.45.jar%23102!/:4.0] {}
+2026-11-04T14:34:06.9399244Z 	at MC-BOOTSTRAP/fml_loader@4.0.45/net.neoforged.fml.loading.targets.NeoForgeServerDevLaunchHandler.runService(NeoForgeServerDevLaunchHandler.java:23) ~[loader-4.0.45.jar%23102!/:4.0] {}
+2026-11-04T14:34:06.9402157Z 	at MC-BOOTSTRAP/fml_loader@4.0.45/net.neoforged.fml.loading.targets.CommonLaunchHandler.lambda$launchService$4(CommonLaunchHandler.java:118) ~[loader-4.0.45.jar%23102!/:4.0] {}
+2026-11-04T14:34:06.9404807Z 	at MC-BOOTSTRAP/cpw.mods.modlauncher@11.0.5/cpw.mods.modlauncher.LaunchServiceHandlerDecorator.launch(LaunchServiceHandlerDecorator.java:30) [modlauncher-11.0.5.jar%2382!/:?] {}
+2026-11-04T14:34:06.9407386Z 	at MC-BOOTSTRAP/cpw.mods.modlauncher@11.0.5/cpw.mods.modlauncher.LaunchServiceHandler.launch(LaunchServiceHandler.java:53) [modlauncher-11.0.5.jar%2382!/:?] {}
+2026-11-04T14:34:06.9409844Z 	at MC-BOOTSTRAP/cpw.mods.modlauncher@11.0.5/cpw.mods.modlauncher.LaunchServiceHandler.launch(LaunchServiceHandler.java:71) [modlauncher-11.0.5.jar%2382!/:?] {}
+2026-11-04T14:34:06.9412586Z 	at MC-BOOTSTRAP/cpw.mods.modlauncher@11.0.5/cpw.mods.modlauncher.Launcher.run(Launcher.java:103) [modlauncher-11.0.5.jar%2382!/:?] {}
+2026-11-04T14:34:06.9414428Z 	at MC-BOOTSTRAP/cpw.mods.modlauncher@11.0.5/cpw.mods.modlauncher.Launcher.main(Launcher.java:74) [modlauncher-11.0.5.jar%2382!/:?] {}
+2026-11-04T14:34:06.9416470Z 	at MC-BOOTSTRAP/cpw.mods.modlauncher@11.0.5/cpw.mods.modlauncher.BootstrapLaunchConsumer.accept(BootstrapLaunchConsumer.java:26) [modlauncher-11.0.5.jar%2382!/:?] {}
+2026-11-04T14:34:06.9418982Z 	at MC-BOOTSTRAP/cpw.mods.modlauncher@11.0.5/cpw.mods.modlauncher.BootstrapLaunchConsumer.accept(BootstrapLaunchConsumer.java:23) [modlauncher-11.0.5.jar%2382!/:?] {}
+2026-11-04T14:34:06.9421301Z 	at cpw.mods.bootstraplauncher@2.0.2/cpw.mods.bootstraplauncher.BootstrapLauncher.run(BootstrapLauncher.java:210) [bootstraplauncher-2.0.2.jar:?] {}
+2026-11-04T14:34:06.9423550Z 	at cpw.mods.bootstraplauncher@2.0.2/cpw.mods.bootstraplauncher.BootstrapLauncher.main(BootstrapLauncher.java:69) [bootstraplauncher-2.0.2.jar:?] {}
+2026-11-04T14:34:06.9425729Z 	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103) ~[?:?] {}
+2026-11-04T14:34:06.9427238Z 	at java.base/java.lang.reflect.Method.invoke(Method.java:580) ~[?:?] {}
+2026-11-04T14:34:06.9428400Z 	at net.neoforged.devlaunch.Main.main(Main.java:57) [DevLaunch-1.0.2.jar:?] {}
+2026-11-04T14:34:06.9452944Z [14:34:06] [main/INFO] [mojang/YggdrasilAuthenticationService]: Environment: Environment[sessionHost=https://sessionserver.mojang.com, servicesHost=https://api.minecraftservices.com, name=PROD]
+2026-11-04T14:34:07.0171383Z [14:34:06] [main/WARN] [minecraft/VanillaPackResourcesBuilder]: Assets URL 'union:/home/runner/work/incoming/incoming/mod/build/moddev/artifacts/neoforge-21.1.264.jar%23128!/assets/.mcassetsroot' uses unexpected schema
+2026-11-04T14:34:07.0174627Z [14:34:06] [main/WARN] [minecraft/VanillaPackResourcesBuilder]: Assets URL 'union:/home/runner/work/incoming/incoming/mod/build/moddev/artifacts/neoforge-21.1.264.jar%23128!/data/.mcassetsroot' uses unexpected schema
+2026-11-04T14:34:07.1097513Z [14:34:07] [main/INFO] [co.si.cr.Create/]: Created 157 recipes which will be injected into the game
+2026-11-04T14:34:07.1112072Z [14:34:07] [main/INFO] [co.si.cr.Create/]: Created 0 tags which will be injected into the game
+2026-11-04T14:34:07.1113625Z [14:34:07] [main/INFO] [ne.ne.ne.ga.GameTestHooks/]: Enabled Gametest Namespaces: [incoming]
+2026-11-04T14:34:07.4097179Z [14:34:07] [NeoForge Version Check/INFO] [ne.ne.fm.VersionChecker/]: [create] Found status: OUTDATED Current: 6.0.10 Target: 6.0.10+mc1.21.1
+2026-11-04T14:34:08.8110220Z [14:34:08] [main/INFO] [minecraft/RecipeManager]: Loaded 2954 recipes
+2026-11-04T14:34:09.0095651Z [14:34:08] [main/INFO] [minecraft/AdvancementTree]: Loaded 2645 advancements
+2026-11-04T14:34:10.4110173Z [14:34:10] [Server thread/INFO] [ua.ze.in.Incoming/]: GameTest: shard 5 of 6 — 127 of 815 tests, 98 batches, ~169 s based on previous runs; batches: arrival_dimension_scope, arrival_respawn_craft, blast_bodies, blast_breach_missile, blast_crater, blast_fire_missile, blast_front_loading, blast_room, blast_surface_debris_stay, bomb_deep, bomber_egress, bomber_tall_entry, bunker_predict, dh_blast, dh_far_order, dh_scorch, drone_reattack_lost, edge_guard_glass, empty_dimension, fixed_block, flight_scale_bomber, flight_scenarios_4, fuel_fire_drip, fuel_fire_smother, grid_edge, grid_edge_signal, grid_sable, grid_tower, icbm_silo, launch_sector_budget, launch_sector_other, launch_sector_tubes, loiter_range, missile_mast, missile_reattack, munitions_failed, nuclear_keys_carrier, nuclear_review_death, nuclear_review_lease, nuke_background_damage_off, nuke_be_reach, nuke_bunker, nuke_carrier_damage, nuke_columns, nuke_command_tracking, nuke_edge_apply, nuke_eyes_flash, nuke_flash_edge, nuke_floor_hole, nuke_fresh, nuke_icbm, nuke_late_bodies, nuke_late_order_pulse, nuke_ledger_drain, nuke_lifecycle_far, nuke_material_compaction, nuke_material_plan_memory, nuke_memory_flow, nuke_mob_fallout_starved, nuke_mob_radiation, nuke_near_late_read, nuke_near_unload, nuke_normal_miss_sample, nuke_opt_corpus, nuke_pending_unload, nuke_pool_off, nuke_prelaunch_identity, nuke_prelaunch_workers_46, nuke_prep_border, nuke_review_callback, nuke_review_release, nuke_ruins_dummy, nuke_settle_budget, nuke_settle_neighbours, nuke_stale_background, nuke_store_source, nuke_structure_timber, nuke_tower, nuke_worker_exit, panic_place, rocket_slow_area, salvo, salvo_busy_tickets, sam_kill, sight_range, spread_far_ground, spread_ground, stress_teleport, surface_layout, surface_rocket_nearby, survey_reuse, thickness_house_rocket, tracker_loss, virtual_moving, virtual_return_refused, work_connected, work_poi_blast, work_stop
+2026-11-04T14:34:10.4118754Z [14:34:10] [Server thread/INFO] [de.ry.sa.Sable/]: Creating physics pipeline for ResourceKey[minecraft:dimension / minecraft:overworld] using RapierPhysicsPipelineProvider
+2026-11-04T14:34:10.4120217Z [14:34:10] [Server thread/INFO] [de.ry.sa.Sable/]: Using game directory relative Sable Rapier native directory /home/runner/work/incoming/incoming/mod/run/gametest/.sable/natives
+2026-11-04T14:34:10.6120737Z [2026-11-04T14:34:10.532282795Z] [[32mINFO[0m] (sable_rapier) Rapier scene initialized
+2026-11-04T14:34:11.3101221Z [14:34:11] [Server thread/INFO] [de.ry.sa.Sable/]: Creating physics pipeline for ResourceKey[minecraft:dimension / minecraft:the_end] using RapierPhysicsPipelineProvider
+2026-11-04T14:34:11.3112071Z [2026-11-04T14:34:11.221764599Z] [[32mINFO[0m] (sable_rapier) Rapier scene initialized
+2026-11-04T14:34:11.3141472Z [14:34:11] [Server thread/INFO] [de.ry.sa.Sable/]: Creating physics pipeline for ResourceKey[minecraft:dimension / minecraft:the_nether] using RapierPhysicsPipelineProvider
+2026-11-04T14:34:11.3143727Z [2026-11-04T14:34:11.272974548Z] [[32mINFO[0m] (sable_rapier) Rapier scene initialized
+2026-11-04T14:34:11.3145390Z [14:34:11] [Server thread/INFO] [minecraft/MinecraftServer]: Preparing start region for dimension minecraft:overworld
+2026-11-04T14:34:11.4130443Z [14:34:11] [worldgen/INFO] [minecraft/LoggerChunkProgressListener]: Preparing spawn area: 2%
+2026-11-04T14:34:11.7095857Z [14:34:11] [Server thread/INFO] [minecraft/LoggerChunkProgressListener]: Time elapsed: 346 ms
+2026-11-04T14:34:11.7097018Z [14:34:11] [Server thread/INFO] [minecraft/GameTestServer]: Started game test server
+2026-11-04T14:34:11.7097933Z [14:34:11] [Server thread/INFO] [ne.ne.ne.se.pe.PermissionAPI/]: Successfully initialized permission handler neoforge:default_handler
+2026-11-04T14:34:11.8096595Z [14:34:11] [Server thread/INFO] [minecraft/GameTestServer]: 127 tests are now running at position -1277303, -59, 8804884!
+2026-11-04T14:34:12.9100675Z [14:34:12] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuke_carrier_damage:0' (1 tests)...
+2026-11-04T14:34:13.0101035Z [14:34:12] [Server thread/INFO] [minecraft/GameTestServer]: [                                                                                                                               ]
+2026-11-04T14:34:13.2101128Z [14:34:13] [Server thread/INFO] [minecraft/GameTestServer]: [                                                                                                                               ]
+2026-11-04T14:34:13.8101863Z [14:34:13] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #1 (minecraft:overworld): -1277278 8804909, radius 4096, power returns in 15 min
+2026-11-04T14:34:13.8106840Z [14:34:13] [Server thread/INFO] [ua.ze.in.Incoming/]: Nuclear detonation #1: 15 kt, air burst, -1277279 543 8804908, scale 1.0, 20 ms
+2026-11-04T14:34:13.8109275Z [14:34:13] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #2 (minecraft:overworld): -1277278 8804909, radius 4096, power returns in 15 min
+2026-11-04T14:34:13.8111216Z [14:34:13] [Server thread/INFO] [ua.ze.in.Incoming/]: Nuclear detonation #2: 15 kt, air burst, -1277279 543 8804908, scale 1.0, 1 ms
+2026-11-04T14:34:14.2105149Z [14:34:14] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuke_near_unload:0' (1 tests)...
+2026-11-04T14:34:14.2122142Z [14:34:14] [Server thread/INFO] [ua.ze.in.Incoming/]: Projectiles: 1 × entity.incoming.cruise_missile shot down by a SAM at -1277279 -35 8804908, GameTest
+2026-11-04T14:34:14.2124290Z [14:34:14] [Server thread/WARN] [ua.ze.in.Incoming/]: Projectiles: 1 × entity.incoming.cruise_missile shot down before fuze arming at -1277279 -35 8804908, damage generic
+2026-11-04T14:34:14.4126621Z [14:34:14] [Server thread/INFO] [minecraft/GameTestServer]: [+                                                                                                                              ]
+2026-11-04T14:34:15.5102824Z [14:34:15] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruins: background threads 2 (desired 2; automatic; cores 4, left to the game 2)
+2026-11-04T14:34:15.8096977Z [14:34:15] [Server thread/INFO] [minecraft/GameTestServer]: [+_                                                                                                                             ]
+2026-11-04T14:34:16.6097700Z [14:34:16] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'blast_fire_missile:0' (1 tests)...
+2026-11-04T14:34:16.7101154Z [14:34:16] [Server thread/INFO] [minecraft/GameTestServer]: [++                                                                                                                             ]
+2026-11-04T14:34:17.3099541Z [14:34:17] [Server thread/WARN] [ua.ze.in.Incoming/]: Impacts (minecraft:overworld): 53 ms in a tick — explosions: rays 15 ms (1), explosions: blocks 0 ms (0), glass 0 ms (0), debris 0 ms (0), fire and ground 0 ms (0), explosions: Detonate and damage 0 ms (0), fragments 0 ms (0); explosion steps [Start 0, vanilla explosion 0, game event 0, rays 14, entity search 0, Detonate 0, damage 0, split 0, aircraft blocks 0, snapshot 0 ms]; queued 1; such ticks since the last line: 0
+2026-11-04T14:34:17.4101290Z [14:34:17] [Server thread/INFO] [minecraft/GameTestServer]: [++_                                                                                                                            ]
+2026-11-04T14:34:17.8096892Z [14:34:17] [Server thread/INFO] [ua.ze.in.Incoming/]: BLASTBENCH MISSILE: fire ball 47 (for a thin 31, plants 16, for logs 0, on an empty floor 0) up to 16.3 m (ball 17.1 m), in the crown on 26 m - 169, fuel cells 9 (law 9)
+2026-11-04T14:34:18.0099210Z [14:34:17] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'virtual_return_refused:0' (1 tests)...
+2026-11-04T14:34:18.1097226Z [14:34:18] [Server thread/INFO] [minecraft/GameTestServer]: [+++                                                                                                                            ]
+2026-11-04T14:34:18.1130413Z [14:34:18] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #1 (minecraft:overworld): outage cascade covered the whole area
+2026-11-04T14:34:18.1151149Z [14:34:18] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #2 (minecraft:overworld): outage cascade covered the whole area
+2026-11-04T14:34:18.2120660Z [14:34:18] [Server thread/INFO] [minecraft/GameTestServer]: [+++                                                                                                                            ]
+2026-11-04T14:34:18.5100973Z [14:34:18] [Server thread/ERROR] [ne.ne.bu.EventBus/EVENTBUS]: Exception caught during firing event: check: entering the world crashes with an error
+2026-11-04T14:34:18.5119612Z 	Index: 9
+2026-11-04T14:34:18.5132909Z 	Listeners:
+2026-11-04T14:34:18.5134466Z 		0: @SubscribeEvent: net.neoforged.neoforge.common.NeoForgeEventHandler@169bf6d4 builtinMobSpawnBlocker(Lnet/neoforged/neoforge/event/entity/EntityJoinLevelEvent;)V
+2026-11-04T14:34:18.5136851Z 		1: @SubscribeEvent: net.neoforged.neoforge.common.NeoForgeEventHandler@169bf6d4 onEntityJoinWorld(Lnet/neoforged/neoforge/event/entity/EntityJoinLevelEvent;)V
+2026-11-04T14:34:18.5139302Z 		2: @SubscribeEvent: class com.simibubi.create.foundation.events.CommonEvents onEntityAdded(Lnet/neoforged/neoforge/event/entity/EntityJoinLevelEvent;)V
+2026-11-04T14:34:18.5141955Z 		3: @SubscribeEvent: class com.simibubi.create.foundation.events.CommonEvents attachData(Lnet/neoforged/neoforge/event/entity/EntityJoinLevelEvent;)V
+2026-11-04T14:34:18.5143465Z 		4: ua.zentix.incoming.Incoming$$Lambda/0x00007c2e59129f90@203da2c
+2026-11-04T14:34:18.5144441Z 		5: ua.zentix.incoming.Incoming$$Lambda/0x00007c2e5915c890@6829dac6
+2026-11-04T14:34:18.5145392Z 		6: ua.zentix.incoming.Incoming$$Lambda/0x00007c2e5915ea30@781ca536
+2026-11-04T14:34:18.5146593Z 		7: ua.zentix.incoming.Incoming$$Lambda/0x00007c2e5915f0d0@48921af3
+2026-11-04T14:34:18.6161894Z 		8: ua.zentix.incoming.Incoming$$Lambda/0x00007c2e59160cf0@313c7116
+2026-11-04T14:34:18.6189857Z 		9: ua.zentix.incoming.gametest.LifecycleGameTests$$Lambda/0x00007c2e597359f8@e2fc14e
+2026-11-04T14:34:18.6191085Z java.lang.IllegalStateException: check: entering the world crashes with an error
+2026-11-04T14:34:18.6192892Z 	at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.gametest.LifecycleGameTests.lambda$refusedReturnFromVirtualFlightLeavesNoTickets$16(LifecycleGameTests.java:415)
+2026-11-04T14:34:18.6195015Z 	at MC-BOOTSTRAP/net.neoforged.bus/net.neoforged.bus.ConsumerEventHandler$WithPredicate.invoke(ConsumerEventHandler.java:48)
+2026-11-04T14:34:18.6196458Z 	at MC-BOOTSTRAP/net.neoforged.bus/net.neoforged.bus.EventBus.post(EventBus.java:360)
+2026-11-04T14:34:18.6197587Z 	at MC-BOOTSTRAP/net.neoforged.bus/net.neoforged.bus.EventBus.post(EventBus.java:328)
+2026-11-04T14:34:18.6199451Z 	at TRANSFORMER/minecraft@1.21.1/net.minecraft.world.level.entity.PersistentEntitySectionManager.addEntity(PersistentEntitySectionManager.java:79)
+2026-11-04T14:34:18.6201659Z 	at TRANSFORMER/minecraft@1.21.1/net.minecraft.world.level.entity.PersistentEntitySectionManager.addNewEntity(PersistentEntitySectionManager.java:71)
+2026-11-04T14:34:18.6203483Z 	at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.level.ServerLevel.addEntity(ServerLevel.java:935)
+2026-11-04T14:34:18.6204949Z 	at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.level.ServerLevel.addFreshEntity(ServerLevel.java:894)
+2026-11-04T14:34:18.6206394Z 	at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.strike.VirtualFlights.tick(VirtualFlights.java:131)
+2026-11-04T14:34:18.6207787Z 	at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.strike.StrikeWorld.onLevelTick(StrikeWorld.java:144)
+2026-11-04T14:34:18.6209442Z 	at MC-BOOTSTRAP/net.neoforged.bus/net.neoforged.bus.ConsumerEventHandler.invoke(ConsumerEventHandler.java:27)
+2026-11-04T14:34:18.6210814Z 	at MC-BOOTSTRAP/net.neoforged.bus/net.neoforged.bus.EventBus.post(EventBus.java:360)
+2026-11-04T14:34:18.6212458Z 	at MC-BOOTSTRAP/net.neoforged.bus/net.neoforged.bus.EventBus.post(EventBus.java:328)
+2026-11-04T14:34:18.6213850Z 	at TRANSFORMER/neoforge@21.1.264/net.neoforged.neoforge.event.EventHooks.fireLevelTickPost(EventHooks.java:1013)
+2026-11-04T14:34:18.6215372Z 	at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.tickChildren(MinecraftServer.java:1043)
+2026-11-04T14:34:18.6216877Z 	at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.tickServer(MinecraftServer.java:917)
+2026-11-04T14:34:18.6218431Z 	at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestServer.tickServer(GameTestServer.java:168)
+2026-11-04T14:34:18.6220583Z 	at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.runServer(MinecraftServer.java:707)
+2026-11-04T14:34:18.6222061Z 	at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.lambda$spin$2(MinecraftServer.java:267)
+2026-11-04T14:34:18.6223265Z 	at java.base/java.lang.Thread.run(Thread.java:1583)
+2026-11-04T14:34:18.6223729Z 
+2026-11-04T14:34:18.6241045Z [14:34:18] [Server thread/ERROR] [ua.ze.in.Incoming/]: Projectile entity.incoming.drone 9d0d4398-1fe4-4772-badb-3ee3d1196d5a failed to return to the world at BlockPos{x=-1277074, y=2, z=8804914} with an exception and was removed
+2026-11-04T14:34:18.6243526Z java.lang.IllegalStateException: check: entering the world crashes with an error
+2026-11-04T14:34:18.6245703Z 	at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.gametest.LifecycleGameTests.lambda$refusedReturnFromVirtualFlightLeavesNoTickets$16(LifecycleGameTests.java:415) ~[%23133!/:?] {re:classloading}
+2026-11-04T14:34:18.6248342Z 	at MC-BOOTSTRAP/net.neoforged.bus/net.neoforged.bus.ConsumerEventHandler$WithPredicate.invoke(ConsumerEventHandler.java:48) ~[bus-8.0.5.jar%23106!/:?] {}
+2026-11-04T14:34:18.6250506Z 	at MC-BOOTSTRAP/net.neoforged.bus/net.neoforged.bus.EventBus.post(EventBus.java:360) ~[bus-8.0.5.jar%23106!/:?] {}
+2026-11-04T14:34:18.6252181Z 	at MC-BOOTSTRAP/net.neoforged.bus/net.neoforged.bus.EventBus.post(EventBus.java:328) ~[bus-8.0.5.jar%23106!/:?] {}
+2026-11-04T14:34:18.6255626Z 	at TRANSFORMER/minecraft@1.21.1/net.minecraft.world.level.entity.PersistentEntitySectionManager.addEntity(PersistentEntitySectionManager.java:79) ~[neoforge-21.1.264.jar%23128!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:sable.mixins.json:entity.entity_unloading.PersistentEntitySectionManagerMixin from mod sable,pl:mixin:A}
+2026-11-04T14:34:18.6261067Z 	at TRANSFORMER/minecraft@1.21.1/net.minecraft.world.level.entity.PersistentEntitySectionManager.addNewEntity(PersistentEntitySectionManager.java:71) ~[neoforge-21.1.264.jar%23128!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:sable.mixins.json:entity.entity_unloading.PersistentEntitySectionManagerMixin from mod sable,pl:mixin:A}
+2026-11-04T14:34:18.6272526Z 	at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.level.ServerLevel.addEntity(ServerLevel.java:935) ~[neoforge-21.1.264.jar%23128!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:veil.network.mixins.json:NetworkServerLevelMixin from mod veil,pl:mixin:APP:create.mixins.json:accessor.ServerLevelAccessor from mod create,pl:mixin:APP:sable.mixins.json:block_decal_render.ServerLevelMixin from mod sable,pl:mixin:APP:sable.mixins.json:entity.entity_aabb_lookup.ServerLevelMixin from mod sable,pl:mixin:APP:sable.mixins.json:entity.entity_kicking.ServerLevelMixin from mod sable,pl:mixin:APP:sable.mixins.json:entity.server_entities_tick.ServerLevelMixin from mod sable,pl:mixin:APP:sable.mixins.json:explosion.ServerLevelMixin from mod sable,pl:mixin:APP:sable.mixins.json:particle.ServerLevelMixin from mod sable,pl:mixin:APP:sable.mixins.json:physics.ServerLevelMixin from mod sable,pl:mixin:APP:sable.mixins.json:plot.ServerLevelMixin from mod sable,pl:mixin:APP:sable.mixins.json:plot.container.ServerLevelMixin from mod sable,pl:mixin:APP:sable.mixins.json:stop_lightning.ServerLevelMixin from mod sable,pl:mixin:APP:sable.mixins.json:water_occlusion.ServerLevelMixin from mod sable,pl:mixin:A}
+2026-11-04T14:34:18.6289736Z 	at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.level.ServerLevel.addFreshEntity(ServerLevel.java:894) ~[neoforge-21.1.264.jar%23128!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:veil.network.mixins.json:NetworkServerLevelMixin from mod veil,pl:mixin:APP:create.mixins.json:accessor.ServerLevelAccessor from mod create,pl:mixin:APP:sable.mixins.json:block_decal_render.ServerLevelMixin from mod sable,pl:mixin:APP:sable.mixins.json:entity.entity_aabb_lookup.ServerLevelMixin from mod sable,pl:mixin:APP:sable.mixins.json:entity.entity_kicking.ServerLevelMixin from mod sable,pl:mixin:APP:sable.mixins.json:entity.server_entities_tick.ServerLevelMixin from mod sable,pl:mixin:APP:sable.mixins.json:explosion.ServerLevelMixin from mod sable,pl:mixin:APP:sable.mixins.json:particle.ServerLevelMixin from mod sable,pl:mixin:APP:sable.mixins.json:physics.ServerLevelMixin from mod sable,pl:mixin:APP:sable.mixins.json:plot.ServerLevelMixin from mod sable,pl:mixin:APP:sable.mixins.json:plot.container.ServerLevelMixin from mod sable,pl:mixin:APP:sable.mixins.json:stop_lightning.ServerLevelMixin from mod sable,pl:mixin:APP:sable.mixins.json:water_occlusion.ServerLevelMixin from mod sable,pl:mixin:A}
+2026-11-04T14:34:18.6300073Z 	at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.strike.VirtualFlights.tick(VirtualFlights.java:131) ~[%23133!/:?] {re:classloading}
+2026-11-04T14:34:18.6302310Z 	at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.strike.StrikeWorld.onLevelTick(StrikeWorld.java:144) ~[%23133!/:?] {re:classloading}
+2026-11-04T14:34:18.6304519Z 	at MC-BOOTSTRAP/net.neoforged.bus/net.neoforged.bus.ConsumerEventHandler.invoke(ConsumerEventHandler.java:27) ~[bus-8.0.5.jar%23106!/:?] {}
+2026-11-04T14:34:18.6306527Z 	at MC-BOOTSTRAP/net.neoforged.bus/net.neoforged.bus.EventBus.post(EventBus.java:360) ~[bus-8.0.5.jar%23106!/:?] {}
+2026-11-04T14:34:18.6308201Z 	at MC-BOOTSTRAP/net.neoforged.bus/net.neoforged.bus.EventBus.post(EventBus.java:328) ~[bus-8.0.5.jar%23106!/:?] {}
+2026-11-04T14:34:18.6310538Z 	at TRANSFORMER/neoforge@21.1.264/net.neoforged.neoforge.event.EventHooks.fireLevelTickPost(EventHooks.java:1013) ~[neoforge-21.1.264.jar%23129!/:?] {re:classloading}
+2026-11-04T14:34:18.6315494Z 	at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.tickChildren(MinecraftServer.java:1043) ~[neoforge-21.1.264.jar%23128!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:veil.network.mixins.json:NetworkMinecraftServerMixin from mod veil,pl:mixin:APP:veil.scheduler.mixins.json:MinecraftServerMixin from mod veil,pl:mixin:APP:ponder-common.mixins.json:accessor.MinecraftServerAccessor from mod ponder,pl:mixin:APP:sable.mixins.json:udp.MinecraftServerMixin from mod sable,pl:mixin:A}
+2026-11-04T14:34:18.6323153Z 	at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.tickServer(MinecraftServer.java:917) ~[neoforge-21.1.264.jar%23128!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:veil.network.mixins.json:NetworkMinecraftServerMixin from mod veil,pl:mixin:APP:veil.scheduler.mixins.json:MinecraftServerMixin from mod veil,pl:mixin:APP:ponder-common.mixins.json:accessor.MinecraftServerAccessor from mod ponder,pl:mixin:APP:sable.mixins.json:udp.MinecraftServerMixin from mod sable,pl:mixin:A}
+2026-11-04T14:34:18.6328165Z 	at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestServer.tickServer(GameTestServer.java:168) ~[neoforge-21.1.264.jar%23128!/:?] {re:classloading}
+2026-11-04T14:34:18.6333800Z 	at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.runServer(MinecraftServer.java:707) ~[neoforge-21.1.264.jar%23128!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:veil.network.mixins.json:NetworkMinecraftServerMixin from mod veil,pl:mixin:APP:veil.scheduler.mixins.json:MinecraftServerMixin from mod veil,pl:mixin:APP:ponder-common.mixins.json:accessor.MinecraftServerAccessor from mod ponder,pl:mixin:APP:sable.mixins.json:udp.MinecraftServerMixin from mod sable,pl:mixin:A}
+2026-11-04T14:34:18.6341446Z 	at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.lambda$spin$2(MinecraftServer.java:267) ~[neoforge-21.1.264.jar%23128!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:veil.network.mixins.json:NetworkMinecraftServerMixin from mod veil,pl:mixin:APP:veil.scheduler.mixins.json:MinecraftServerMixin from mod veil,pl:mixin:APP:ponder-common.mixins.json:accessor.MinecraftServerAccessor from mod ponder,pl:mixin:APP:sable.mixins.json:udp.MinecraftServerMixin from mod sable,pl:mixin:A}
+2026-11-04T14:34:18.6345553Z 	at java.base/java.lang.Thread.run(Thread.java:1583) [?:?] {}
+2026-11-04T14:34:18.6347383Z [14:34:18] [Server thread/WARN] [ua.ze.in.Incoming/]: Projectile entity.incoming.drone ad6650c6-1ce1-4631-88c7-7e7b77f3bc91 could not return to the world at BlockPos{x=-1277074, y=2, z=8804918}
+2026-11-04T14:34:18.9105395Z [14:34:18] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuke_bunker:0' (1 tests)...
+2026-11-04T14:34:18.9112736Z [14:34:18] [Server thread/INFO] [minecraft/GameTestServer]: [++++                                                                                                                           ]
+2026-11-04T14:34:19.0096201Z [14:34:18] [Server thread/INFO] [minecraft/GameTestServer]: [++++                                                                                                                           ]
+2026-11-04T14:34:21.0120385Z [14:34:20] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'work_connected:0' (1 tests)...
+2026-11-04T14:34:21.1100781Z [14:34:21] [Server thread/INFO] [minecraft/GameTestServer]: [+++++                                                                                                                          ]
+2026-11-04T14:34:21.1121277Z [14:34:21] [Server thread/INFO] [ua.ze.in.Incoming/]: Impact series summary (minecraft:overworld): strikes 1, units 253, total 232.2 ms, longest unit 15.9 ms, longest tick 54.0 ms, ticks over 50 ms 1, over 13 ticks
+2026-11-04T14:34:21.1123989Z [14:34:21] [Server thread/INFO] [minecraft/GameTestServer]: [+++++                                                                                                                          ]
+2026-11-04T14:34:22.1102652Z [14:34:22] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'launch_sector_other:0' (1 tests)...
+2026-11-04T14:34:22.2096742Z [14:34:22] [Server thread/INFO] [minecraft/GameTestServer]: [++++++                                                                                                                         ]
+2026-11-04T14:34:22.2099156Z [14:34:22] [Server thread/INFO] [minecraft/GameTestServer]: [++++++                                                                                                                         ]
+2026-11-04T14:34:22.2110062Z [14:34:22] [Server thread/INFO] [minecraft/GameTestServer]: [++++++                                                                                                                         ]
+2026-11-04T14:34:22.3110660Z [14:34:22] [Server thread/INFO] [minecraft/GameTestServer]: [++++++                                                                                                                         ]
+2026-11-04T14:34:22.8100663Z [14:34:22] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuke_review_callback:0' (1 tests)...
+2026-11-04T14:34:22.9096861Z [14:34:22] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++                                                                                                                        ]
+2026-11-04T14:34:22.9099699Z [14:34:22] [Server thread/INFO] [ua.ze.in.Incoming/]: Impact series summary (minecraft:overworld): strikes 1, units 187, total 161.1 ms, longest unit 6.1 ms, longest tick 46.9 ms, ticks over 50 ms 0, over 7 ticks
+2026-11-04T14:34:23.0120733Z [14:34:22] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++                                                                                                                        ]
+2026-11-04T14:34:23.9100506Z [14:34:23] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'empty_dimension:0' (1 tests)...
+2026-11-04T14:34:24.6110930Z [14:34:24] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++                                                                                                                       ]
+2026-11-04T14:34:24.7098405Z [14:34:24] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++                                                                                                                       ]
+2026-11-04T14:34:27.3130717Z [14:34:27] [incoming-stall-watch/WARN] [ua.ze.in.Incoming/]: Server thread stalled for 2.5 s in a tick, stack samples 1:
+2026-11-04T14:34:27.3152924Z   samples 1:
+2026-11-04T14:34:27.3164674Z     at java.base/jdk.internal.misc.Unsafe.park(Native Method)
+2026-11-04T14:34:27.3190193Z     at java.base/java.util.concurrent.locks.LockSupport.parkNanos(LockSupport.java:269)
+2026-11-04T14:34:27.3215967Z     at TRANSFORMER/minecraft@1.21.1/net.minecraft.util.thread.BlockableEventLoop.waitForTasks(BlockableEventLoop.java:143)
+2026-11-04T14:34:27.3223436Z     at TRANSFORMER/minecraft@1.21.1/net.minecraft.util.thread.BlockableEventLoop.managedBlock(BlockableEventLoop.java:133)
+2026-11-04T14:34:27.3265827Z     at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.level.ServerChunkCache$MainThreadExecutor.managedBlock(ServerChunkCache.java:533)
+2026-11-04T14:34:27.3267761Z     at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.level.ServerChunkCache.getChunk(ServerChunkCache.java:159)
+2026-11-04T14:34:27.3292352Z     at TRANSFORMER/minecraft@1.21.1/net.minecraft.world.level.Level.getChunk(Level.java:202)
+2026-11-04T14:34:27.3330720Z     at TRANSFORMER/minecraft@1.21.1/net.minecraft.world.level.LevelReader.getChunk(LevelReader.java:134)
+2026-11-04T14:34:27.3358105Z     at TRANSFORMER/minecraft@1.21.1/net.minecraft.world.level.Level.getChunk(Level.java:196)
+2026-11-04T14:34:27.3387078Z     at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.gametest.LifecycleGameTests.strikeKeepsEmptyDimensionAwake(LifecycleGameTests.java:462)
+2026-11-04T14:34:27.3396710Z     at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+2026-11-04T14:34:27.3398721Z     at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+2026-11-04T14:34:27.3400656Z     at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestRegistry.lambda$turnMethodIntoConsumer$5(GameTestRegistry.java:157)
+2026-11-04T14:34:27.3402592Z     at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.TestFunction.run(TestFunction.java:22)
+2026-11-04T14:34:27.3404267Z     at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestInfo.startTest(GameTestInfo.java:162)
+2026-11-04T14:34:27.3406032Z     at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestInfo.tickInternal(GameTestInfo.java:124)
+2026-11-04T14:34:27.3407759Z     at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestInfo.tick(GameTestInfo.java:107)
+2026-11-04T14:34:27.3409670Z     at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestTicker.lambda$tick$0(GameTestTicker.java:42)
+2026-11-04T14:34:27.3411382Z     at java.base/java.util.concurrent.CopyOnWriteArrayList.forEach(CopyOnWriteArrayList.java:891)
+2026-11-04T14:34:27.3412988Z     at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestTicker.tick(GameTestTicker.java:42)
+2026-11-04T14:34:27.3414662Z     at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.tickChildren(MinecraftServer.java:1055)
+2026-11-04T14:34:27.3416308Z     at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.tickServer(MinecraftServer.java:917)
+2026-11-04T14:34:27.3418580Z     at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestServer.tickServer(GameTestServer.java:168)
+2026-11-04T14:34:27.3420541Z     at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.runServer(MinecraftServer.java:707)
+2026-11-04T14:34:27.3422190Z     at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.lambda$spin$2(MinecraftServer.java:267)
+2026-11-04T14:34:27.3423500Z     at java.base/java.lang.Thread.run(Thread.java:1583)
+2026-11-04T14:34:27.3424865Z [14:34:27] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++_                                                                                                                      ]
+2026-11-04T14:34:27.3426670Z [14:34:27] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++_                                                                                                                      ]
+2026-11-04T14:34:27.4096257Z [14:34:27] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++_                                                                                                                      ]
+2026-11-04T14:34:27.4098495Z [14:34:27] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++_                                                                                                                      ]
+2026-11-04T14:34:27.4101473Z [14:34:27] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++_                                                                                                                      ]
+2026-11-04T14:34:27.4103974Z [14:34:27] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++_                                                                                                                      ]
+2026-11-04T14:34:27.5097377Z [14:34:27] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++_                                                                                                                      ]
+2026-11-04T14:34:27.5100194Z [14:34:27] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++_                                                                                                                      ]
+2026-11-04T14:34:27.5102291Z [14:34:27] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++_                                                                                                                      ]
+2026-11-04T14:34:27.5106306Z [14:34:27] [Server thread/INFO] [ua.ze.in.Incoming/]: Mod work over 30 s: server tick avg 23.0 ms (max 2537.4), of which mod lanes avg — impacts 0.7, nuke 0.0, blackout 0.4 ms; the rest (vanilla, other mods) 21.9 ms; impact early window 82.2% of ticks, early avg 0.3 ms, late avg 0.4 ms; mandatory unload debt 2.7% of ticks
+2026-11-04T14:34:27.5110115Z [14:34:27] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++_                                                                                                                      ]
+2026-11-04T14:34:27.5112550Z [14:34:27] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++_                                                                                                                      ]
+2026-11-04T14:34:27.6114081Z [14:34:27] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++_                                                                                                                      ]
+2026-11-04T14:34:27.6116896Z [14:34:27] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++_                                                                                                                      ]
+2026-11-04T14:34:27.6128668Z [14:34:27] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++_                                                                                                                      ]
+2026-11-04T14:34:27.6130563Z [14:34:27] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++_                                                                                                                      ]
+2026-11-04T14:34:27.7096404Z [14:34:27] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++_                                                                                                                      ]
+2026-11-04T14:34:27.7100058Z [14:34:27] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++_                                                                                                                      ]
+2026-11-04T14:34:27.7101989Z [14:34:27] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++_                                                                                                                      ]
+2026-11-04T14:34:27.7103808Z [14:34:27] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++_                                                                                                                      ]
+2026-11-04T14:34:27.8096341Z [14:34:27] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++_                                                                                                                      ]
+2026-11-04T14:34:28.1110823Z [14:34:28] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'blast_front_loading:0' (1 tests)...
+2026-11-04T14:34:28.4100693Z [14:34:28] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++                                                                                                                      ]
+2026-11-04T14:34:28.5102568Z [14:34:28] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++                                                                                                                      ]
+2026-11-04T14:34:29.0110670Z [14:34:28] [Server thread/WARN] [ua.ze.in.Incoming/]: Explosion of power 2 at -1260872 -48 8821560 cancelled: area did not load within 6000 ticks
+2026-11-04T14:34:29.3098410Z [14:34:29] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'panic_place:0' (1 tests)...
+2026-11-04T14:34:29.6100700Z [14:34:29] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++                                                                                                                     ]
+2026-11-04T14:34:29.6130495Z [14:34:29] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++                                                                                                                     ]
+2026-11-04T14:34:29.6135330Z [14:34:29] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++                                                                                                                     ]
+2026-11-04T14:34:30.3096023Z [14:34:30] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'flight_scale_bomber:0' (1 tests)...
+2026-11-04T14:34:30.4108684Z [14:34:30] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++                                                                                                                    ]
+2026-11-04T14:34:30.4111248Z [14:34:30] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++                                                                                                                    ]
+2026-11-04T14:34:30.6130961Z [14:34:30] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++_                                                                                                                   ]
+2026-11-04T14:34:30.7123399Z [14:34:30] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++_                                                                                                                   ]
+2026-11-04T14:34:30.7174579Z [14:34:30] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++_                                                                                                                   ]
+2026-11-04T14:34:30.7204795Z [14:34:30] [Server thread/INFO] [ua.ze.in.Incoming/]: B-2 b4ca47be-2868-4270-ae48-cd2f75083dce dropped bomb ad546021-1de2-4406-bd1c-077f415dbd79 at BlockPos{x=-1277136, y=11943, z=8795111}, 10235 blocks from the aim point, 12000 above it (off-world true)
+2026-11-04T14:34:30.7249905Z [14:34:30] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++_                                                                                                                   ]
+2026-11-04T14:34:30.7262486Z [14:34:30] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++_                                                                                                                   ]
+2026-11-04T14:34:30.8095832Z [14:34:30] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++_                                                                                                                   ]
+2026-11-04T14:34:30.8097925Z [14:34:30] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++_                                                                                                                   ]
+2026-11-04T14:34:30.8100242Z [14:34:30] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++_                                                                                                                   ]
+2026-11-04T14:34:30.8102055Z [14:34:30] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++_                                                                                                                   ]
+2026-11-04T14:34:30.8104433Z [14:34:30] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++_                                                                                                                   ]
+2026-11-04T14:34:30.8106118Z [14:34:30] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++_                                                                                                                   ]
+2026-11-04T14:34:30.9095261Z [14:34:30] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++_                                                                                                                   ]
+2026-11-04T14:34:30.9099483Z [14:34:30] [Server thread/INFO] [ua.ze.in.Incoming/]: Mod work over 30 s: server tick avg 5.4 ms (max 844.5), of which mod lanes avg — impacts 0.0, nuke 0.0, blackout 0.0 ms; the rest (vanilla, other mods) 5.4 ms; impact early window 100.0% of ticks, early avg 0.0 ms, late avg 0.0 ms; mandatory unload debt 1.0% of ticks
+2026-11-04T14:34:30.9101195Z [14:34:30] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++_                                                                                                                   ]
+2026-11-04T14:34:30.9102253Z [14:34:30] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++_                                                                                                                   ]
+2026-11-04T14:34:30.9103286Z [14:34:30] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++_                                                                                                                   ]
+2026-11-04T14:34:30.9130648Z [14:34:30] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++_                                                                                                                   ]
+2026-11-04T14:34:30.9132671Z [14:34:30] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++_                                                                                                                   ]
+2026-11-04T14:34:30.9134643Z [14:34:30] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++_                                                                                                                   ]
+2026-11-04T14:34:31.0102854Z [14:34:30] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++_                                                                                                                   ]
+2026-11-04T14:34:31.0104705Z [14:34:30] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++_                                                                                                                   ]
+2026-11-04T14:34:31.0106879Z [14:34:30] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++_                                                                                                                   ]
+2026-11-04T14:34:31.0108504Z [14:34:30] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++_                                                                                                                   ]
+2026-11-04T14:34:31.0110280Z [14:34:30] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++_                                                                                                                   ]
+2026-11-04T14:34:31.1120968Z [14:34:31] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++_                                                                                                                   ]
+2026-11-04T14:34:31.1123334Z [14:34:31] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++_                                                                                                                   ]
+2026-11-04T14:34:31.1125334Z [14:34:31] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++_                                                                                                                   ]
+2026-11-04T14:34:31.1127895Z [14:34:31] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++_                                                                                                                   ]
+2026-11-04T14:34:31.1130015Z [14:34:31] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++_                                                                                                                   ]
+2026-11-04T14:34:31.1131851Z [14:34:31] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++_                                                                                                                   ]
+2026-11-04T14:34:31.1133623Z [14:34:31] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++_                                                                                                                   ]
+2026-11-04T14:34:31.1135577Z [14:34:31] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++_                                                                                                                   ]
+2026-11-04T14:34:31.2096028Z [14:34:31] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++_                                                                                                                   ]
+2026-11-04T14:34:31.2098169Z [14:34:31] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++_                                                                                                                   ]
+2026-11-04T14:34:31.2100420Z [14:34:31] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++_                                                                                                                   ]
+2026-11-04T14:34:31.2102421Z [14:34:31] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++_                                                                                                                   ]
+2026-11-04T14:34:31.2135684Z [14:34:31] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++_                                                                                                                   ]
+2026-11-04T14:34:31.2137471Z [14:34:31] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++_                                                                                                                   ]
+2026-11-04T14:34:31.3100869Z [14:34:31] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++_                                                                                                                   ]
+2026-11-04T14:34:31.3130725Z [14:34:31] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++_                                                                                                                   ]
+2026-11-04T14:34:31.3134974Z [14:34:31] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++_                                                                                                                   ]
+2026-11-04T14:34:31.3136435Z [14:34:31] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++_                                                                                                                   ]
+2026-11-04T14:34:31.3138060Z [14:34:31] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++_                                                                                                                   ]
+2026-11-04T14:34:31.4099246Z [14:34:31] [Server thread/INFO] [ua.ze.in.Incoming/]: Mod work over 30 s: server tick avg 0.7 ms (max 3.4), of which mod lanes avg — impacts 0.0, nuke 0.0, blackout 0.0 ms; the rest (vanilla, other mods) 0.7 ms; impact early window 100.0% of ticks, early avg 0.0 ms, late avg 0.0 ms; mandatory unload debt 0.0% of ticks
+2026-11-04T14:34:31.4102166Z [14:34:31] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++_                                                                                                                   ]
+2026-11-04T14:34:31.4104591Z [14:34:31] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++_                                                                                                                   ]
+2026-11-04T14:34:31.4107895Z [14:34:31] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++_                                                                                                                   ]
+2026-11-04T14:34:31.4109724Z [14:34:31] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++_                                                                                                                   ]
+2026-11-04T14:34:31.4111390Z [14:34:31] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++_                                                                                                                   ]
+2026-11-04T14:34:31.4119865Z [14:34:31] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++_                                                                                                                   ]
+2026-11-04T14:34:31.5096116Z [14:34:31] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++_                                                                                                                   ]
+2026-11-04T14:34:31.5098026Z [14:34:31] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++_                                                                                                                   ]
+2026-11-04T14:34:31.5100590Z [14:34:31] [Server thread/INFO] [ua.ze.in.Incoming/]: Bunker buster entered the ground at -1277136 -57 8805346: 513 m/s, 70° below the horizon, path 6.9 m (rest)
+2026-11-04T14:34:31.8097533Z [14:34:31] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'missile_mast:0' (1 tests)...
+2026-11-04T14:34:31.8099796Z [14:34:31] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++                                                                                                                   ]
+2026-11-04T14:34:31.8102554Z [14:34:31] [Server thread/WARN] [ua.ze.in.Incoming/]: Projectiles: 1 × entity.incoming.bunker_buster removed externally at -1277136 -57 8805346, by: GameTestInfo (DISCARDED)
+2026-11-04T14:34:31.8104446Z [14:34:31] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++                                                                                                                   ]
+2026-11-04T14:34:31.8105940Z [14:34:31] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++                                                                                                                   ]
+2026-11-04T14:34:31.9096395Z [14:34:31] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++                                                                                                                   ]
+2026-11-04T14:34:32.2133851Z [14:34:32] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++_                                                                                                                  ]
+2026-11-04T14:34:32.2171549Z [14:34:32] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++_                                                                                                                  ]
+2026-11-04T14:34:32.3097207Z [14:34:32] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++_                                                                                                                  ]
+2026-11-04T14:34:32.3103256Z [14:34:32] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++_                                                                                                                  ]
+2026-11-04T14:34:32.3118115Z [14:34:32] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++_                                                                                                                  ]
+2026-11-04T14:34:32.4096139Z [14:34:32] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++_                                                                                                                  ]
+2026-11-04T14:34:32.4120466Z [14:34:32] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++_                                                                                                                  ]
+2026-11-04T14:34:32.7095974Z [14:34:32] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuke_memory_flow:0' (1 tests)...
+2026-11-04T14:34:33.2096593Z [14:34:33] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++                                                                                                                  ]
+2026-11-04T14:34:33.2099420Z [14:34:33] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++                                                                                                                  ]
+2026-11-04T14:34:33.5102296Z [14:34:33] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruins: background threads stopped (queued tasks dropped: 0)
+2026-11-04T14:34:33.9099659Z [14:34:33] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuke_edge_apply:0' (1 tests)...
+2026-11-04T14:34:33.9123453Z [14:34:33] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++                                                                                                                 ]
+2026-11-04T14:34:34.0107924Z [14:34:33] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++                                                                                                                 ]
+2026-11-04T14:34:34.0111504Z [14:34:33] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++                                                                                                                 ]
+2026-11-04T14:34:34.4095182Z [14:34:34] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruins: background threads 2 (desired 2; automatic; cores 4, left to the game 2)
+2026-11-04T14:35:34.4095837Z [14:35:34] [Server thread/ERROR] [minecraft/MinecraftServer]: Encountered an unexpected exception
+2026-11-04T14:35:34.4097100Z java.lang.IllegalStateException: window neighbours not read from disk within a minute
+2026-11-04T14:35:34.4098700Z 	at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.world.RuinPlanner.planWithWindow(RuinPlanner.java:195) ~[%23133!/:?] {re:classloading}
+2026-11-04T14:35:34.4101306Z 	at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.gametest.RuinBackgroundGameTests.lambda$readyPlanSameWithoutNeighbours$10(RuinBackgroundGameTests.java:666) ~[%23133!/:?] {re:classloading}
+2026-11-04T14:35:34.4104497Z 	at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestSequence.executeWithoutFail(GameTestSequence.java:122) ~[neoforge-21.1.264.jar%23128!/:?] {re:classloading,pl:accesstransformer:B}
+2026-11-04T14:35:34.4107260Z 	at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestSequence.lambda$thenExecute$1(GameTestSequence.java:67) ~[neoforge-21.1.264.jar%23128!/:?] {re:classloading,pl:accesstransformer:B}
+2026-11-04T14:35:34.4110022Z 	at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestSequence.tick(GameTestSequence.java:132) ~[neoforge-21.1.264.jar%23128!/:?] {re:classloading,pl:accesstransformer:B}
+2026-11-04T14:35:34.4112619Z 	at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestSequence.tickAndContinue(GameTestSequence.java:107) ~[neoforge-21.1.264.jar%23128!/:?] {re:classloading,pl:accesstransformer:B}
+2026-11-04T14:35:34.4116012Z 	at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestInfo.lambda$tickInternal$4(GameTestInfo.java:152) ~[neoforge-21.1.264.jar%23128!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:sable.mixins.json:game_test.GameTestInfoMixin from mod sable,pl:mixin:A}
+2026-11-04T14:35:34.4118921Z 	at java.base/java.util.concurrent.CopyOnWriteArrayList.forEach(CopyOnWriteArrayList.java:891) ~[?:?] {}
+2026-11-04T14:35:34.4121959Z 	at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestInfo.tickInternal(GameTestInfo.java:152) ~[neoforge-21.1.264.jar%23128!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:sable.mixins.json:game_test.GameTestInfoMixin from mod sable,pl:mixin:A}
+2026-11-04T14:35:34.4125853Z 	at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestInfo.tick(GameTestInfo.java:107) ~[neoforge-21.1.264.jar%23128!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:sable.mixins.json:game_test.GameTestInfoMixin from mod sable,pl:mixin:A}
+2026-11-04T14:35:34.4129084Z 	at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestTicker.lambda$tick$0(GameTestTicker.java:42) ~[neoforge-21.1.264.jar%23128!/:?] {re:classloading}
+2026-11-04T14:35:34.4130959Z 	at java.base/java.util.concurrent.CopyOnWriteArrayList.forEach(CopyOnWriteArrayList.java:891) ~[?:?] {}
+2026-11-04T14:35:34.4132764Z 	at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestTicker.tick(GameTestTicker.java:42) ~[neoforge-21.1.264.jar%23128!/:?] {re:classloading}
+2026-11-04T14:35:34.4137364Z 	at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.tickChildren(MinecraftServer.java:1055) ~[neoforge-21.1.264.jar%23128!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:veil.network.mixins.json:NetworkMinecraftServerMixin from mod veil,pl:mixin:APP:veil.scheduler.mixins.json:MinecraftServerMixin from mod veil,pl:mixin:APP:ponder-common.mixins.json:accessor.MinecraftServerAccessor from mod ponder,pl:mixin:APP:sable.mixins.json:udp.MinecraftServerMixin from mod sable,pl:mixin:A}
+2026-11-04T14:35:34.4144536Z 	at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.tickServer(MinecraftServer.java:917) ~[neoforge-21.1.264.jar%23128!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:veil.network.mixins.json:NetworkMinecraftServerMixin from mod veil,pl:mixin:APP:veil.scheduler.mixins.json:MinecraftServerMixin from mod veil,pl:mixin:APP:ponder-common.mixins.json:accessor.MinecraftServerAccessor from mod ponder,pl:mixin:APP:sable.mixins.json:udp.MinecraftServerMixin from mod sable,pl:mixin:A}
+2026-11-04T14:35:34.4149356Z 	at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestServer.tickServer(GameTestServer.java:168) ~[neoforge-21.1.264.jar%23128!/:?] {re:classloading}
+2026-11-04T14:35:34.4154165Z 	at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.runServer(MinecraftServer.java:707) ~[neoforge-21.1.264.jar%23128!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:veil.network.mixins.json:NetworkMinecraftServerMixin from mod veil,pl:mixin:APP:veil.scheduler.mixins.json:MinecraftServerMixin from mod veil,pl:mixin:APP:ponder-common.mixins.json:accessor.MinecraftServerAccessor from mod ponder,pl:mixin:APP:sable.mixins.json:udp.MinecraftServerMixin from mod sable,pl:mixin:A}
+2026-11-04T14:35:34.4161318Z 	at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.lambda$spin$2(MinecraftServer.java:267) ~[neoforge-21.1.264.jar%23128!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:veil.network.mixins.json:NetworkMinecraftServerMixin from mod veil,pl:mixin:APP:veil.scheduler.mixins.json:MinecraftServerMixin from mod veil,pl:mixin:APP:ponder-common.mixins.json:accessor.MinecraftServerAccessor from mod ponder,pl:mixin:APP:sable.mixins.json:udp.MinecraftServerMixin from mod sable,pl:mixin:A}
+2026-11-04T14:35:34.4165213Z 	at java.base/java.lang.Thread.run(Thread.java:1583) [?:?] {}
+2026-11-04T14:35:34.7095381Z [14:35:34] [Server thread/FATAL] [ne.ne.ne.co.NeoForgeMod/]: Preparing crash report with UUID 84d8f97c-5d62-48b2-a46a-e961ac700c21
+2026-11-04T14:35:34.7097704Z [14:35:34] [Server thread/ERROR] [minecraft/MinecraftServer]: This crash report has been saved to: /home/runner/work/incoming/incoming/mod/run/gametest/crash-reports/crash-2026-11-04_14.35.34-server.txt
+2026-11-04T14:35:34.7100740Z [14:35:34] [Server thread/FATAL] [ne.ne.ne.co.NeoForgeMod/]: Preparing crash report with UUID 9a59805c-f2d7-4786-8161-04aaed978f50
+2026-11-04T14:35:34.7102111Z [14:35:34] [Server thread/ERROR] [minecraft/GameTestServer]: Game test server crashed
+2026-11-04T14:35:34.7102972Z ---- Minecraft Crash Report ----
+2026-11-04T14:35:34.7103332Z 
+2026-11-04T14:35:34.7103543Z // dude... thats so mossed up...
+2026-11-04T14:35:34.7104333Z Please make sure this issue is not caused by Sable before reporting it to other mod authors.
+2026-11-04T14:35:34.7105010Z If you cannot reproduce it without Sable, file a report on the issue tracker
+2026-11-04T14:35:34.7105504Z https://github.com/ryanhcode/sable/issues
+2026-11-04T14:35:34.7105748Z 
+2026-11-04T14:35:34.7105854Z // Ooh. Shiny.
+2026-11-04T14:35:34.7105998Z 
+2026-11-04T14:35:34.7106111Z Time: 2026-11-04 14:35:34
+2026-11-04T14:35:34.7106412Z Description: Exception in server tick loop
+2026-11-04T14:35:34.7106644Z 
+2026-11-04T14:35:34.7106941Z java.lang.IllegalStateException: window neighbours not read from disk within a minute
+2026-11-04T14:35:34.7107829Z 	at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.world.RuinPlanner.planWithWindow(RuinPlanner.java:195) ~[%23133!/:?] {re:classloading}
+2026-11-04T14:35:34.7109484Z 	at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.gametest.RuinBackgroundGameTests.lambda$readyPlanSameWithoutNeighbours$10(RuinBackgroundGameTests.java:666) ~[%23133!/:?] {re:classloading}
+2026-11-04T14:35:34.7111002Z 	at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestSequence.executeWithoutFail(GameTestSequence.java:122) ~[neoforge-21.1.264.jar%23128!/:?] {re:classloading,pl:accesstransformer:B}
+2026-11-04T14:35:34.7112474Z 	at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestSequence.lambda$thenExecute$1(GameTestSequence.java:67) ~[neoforge-21.1.264.jar%23128!/:?] {re:classloading,pl:accesstransformer:B}
+2026-11-04T14:35:34.7113867Z 	at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestSequence.tick(GameTestSequence.java:132) ~[neoforge-21.1.264.jar%23128!/:?] {re:classloading,pl:accesstransformer:B}
+2026-11-04T14:35:34.7115241Z 	at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestSequence.tickAndContinue(GameTestSequence.java:107) ~[neoforge-21.1.264.jar%23128!/:?] {re:classloading,pl:accesstransformer:B}
+2026-11-04T14:35:34.7117058Z 	at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestInfo.lambda$tickInternal$4(GameTestInfo.java:152) ~[neoforge-21.1.264.jar%23128!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:sable.mixins.json:game_test.GameTestInfoMixin from mod sable,pl:mixin:A}
+2026-11-04T14:35:34.7119079Z 	at java.base/java.util.concurrent.CopyOnWriteArrayList.forEach(CopyOnWriteArrayList.java:891) ~[?:?] {}
+2026-11-04T14:35:34.7120648Z 	at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestInfo.tickInternal(GameTestInfo.java:152) ~[neoforge-21.1.264.jar%23128!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:sable.mixins.json:game_test.GameTestInfoMixin from mod sable,pl:mixin:A}
+2026-11-04T14:35:34.7122752Z 	at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestInfo.tick(GameTestInfo.java:107) ~[neoforge-21.1.264.jar%23128!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:sable.mixins.json:game_test.GameTestInfoMixin from mod sable,pl:mixin:A}
+2026-11-04T14:35:34.7124388Z 	at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestTicker.lambda$tick$0(GameTestTicker.java:42) ~[neoforge-21.1.264.jar%23128!/:?] {re:classloading}
+2026-11-04T14:35:34.7125444Z 	at java.base/java.util.concurrent.CopyOnWriteArrayList.forEach(CopyOnWriteArrayList.java:891) ~[?:?] {}
+2026-11-04T14:35:34.7126462Z 	at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestTicker.tick(GameTestTicker.java:42) ~[neoforge-21.1.264.jar%23128!/:?] {re:classloading}
+2026-11-04T14:35:34.7129368Z 	at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.tickChildren(MinecraftServer.java:1055) ~[neoforge-21.1.264.jar%23128!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:veil.network.mixins.json:NetworkMinecraftServerMixin from mod veil,pl:mixin:APP:veil.scheduler.mixins.json:MinecraftServerMixin from mod veil,pl:mixin:APP:ponder-common.mixins.json:accessor.MinecraftServerAccessor from mod ponder,pl:mixin:APP:sable.mixins.json:udp.MinecraftServerMixin from mod sable,pl:mixin:A}
+2026-11-04T14:35:34.7133169Z 	at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.tickServer(MinecraftServer.java:917) ~[neoforge-21.1.264.jar%23128!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:veil.network.mixins.json:NetworkMinecraftServerMixin from mod veil,pl:mixin:APP:veil.scheduler.mixins.json:MinecraftServerMixin from mod veil,pl:mixin:APP:ponder-common.mixins.json:accessor.MinecraftServerAccessor from mod ponder,pl:mixin:APP:sable.mixins.json:udp.MinecraftServerMixin from mod sable,pl:mixin:A}
+2026-11-04T14:35:34.7135669Z 	at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestServer.tickServer(GameTestServer.java:168) ~[neoforge-21.1.264.jar%23128!/:?] {re:classloading}
+2026-11-04T14:35:34.7138165Z 	at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.runServer(MinecraftServer.java:707) ~[neoforge-21.1.264.jar%23128!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:veil.network.mixins.json:NetworkMinecraftServerMixin from mod veil,pl:mixin:APP:veil.scheduler.mixins.json:MinecraftServerMixin from mod veil,pl:mixin:APP:ponder-common.mixins.json:accessor.MinecraftServerAccessor from mod ponder,pl:mixin:APP:sable.mixins.json:udp.MinecraftServerMixin from mod sable,pl:mixin:A}
+2026-11-04T14:35:34.7142041Z 	at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.lambda$spin$2(MinecraftServer.java:267) ~[neoforge-21.1.264.jar%23128!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:veil.network.mixins.json:NetworkMinecraftServerMixin from mod veil,pl:mixin:APP:veil.scheduler.mixins.json:MinecraftServerMixin from mod veil,pl:mixin:APP:ponder-common.mixins.json:accessor.MinecraftServerAccessor from mod ponder,pl:mixin:APP:sable.mixins.json:udp.MinecraftServerMixin from mod sable,pl:mixin:A}
+2026-11-04T14:35:34.7144139Z 	at java.base/java.lang.Thread.run(Thread.java:1583) [?:?] {}
+2026-11-04T14:35:34.7144416Z 
+2026-11-04T14:35:34.7144422Z 
+2026-11-04T14:35:34.7144692Z A detailed walkthrough of the error, its code path and all known details is as follows:
+2026-11-04T14:35:34.7145403Z ---------------------------------------------------------------------------------------
+2026-11-04T14:35:34.7145710Z 
+2026-11-04T14:35:34.7145823Z -- System Details --
+2026-11-04T14:35:34.7146073Z Details:
+2026-11-04T14:35:34.7146301Z 	Minecraft Version: 1.21.1
+2026-11-04T14:35:34.7146587Z 	Minecraft Version ID: 1.21.1
+2026-11-04T14:35:34.7146934Z 	Operating System: Linux (amd64) version 7.0.0-1019-azure
+2026-11-04T14:35:34.7147311Z 	Java Version: 21.0.13, Eclipse Adoptium
+2026-11-04T14:35:34.7147765Z 	Java VM Version: OpenJDK 64-Bit Server VM (mixed mode, sharing), Eclipse Adoptium
+2026-11-04T14:35:34.7148379Z 	Memory: 410572760 bytes (391 MiB) / 1067450368 bytes (1018 MiB) up to 4190109696 bytes (3996 MiB)
+2026-11-04T14:35:34.7148940Z 	CPUs: 4
+2026-11-04T14:35:34.7149185Z 	Processor Vendor: AuthenticAMD
+2026-11-04T14:35:34.7149521Z 	Processor Name: AMD EPYC 7763 64-Core Processor
+2026-11-04T14:35:34.7149921Z 	Identifier: AuthenticAMD Family 25 Model 1 Stepping 1
+2026-11-04T14:35:34.7150288Z 	Microarchitecture: Zen 3
+2026-11-04T14:35:34.7150563Z 	Frequency (GHz): -0.00
+2026-11-04T14:35:34.7150833Z 	Number of physical packages: 1
+2026-11-04T14:35:34.7151121Z 	Number of physical CPUs: 2
+2026-11-04T14:35:34.7151394Z 	Number of logical CPUs: 4
+2026-11-04T14:35:34.7151811Z 	Graphics card #0 name: hyperv_drmdrmfb
+2026-11-04T14:35:34.7152135Z 	Graphics card #0 vendor: unknown
+2026-11-04T14:35:34.7152436Z 	Graphics card #0 VRAM (MiB): 0.00
+2026-11-04T14:35:34.7152746Z 	Graphics card #0 deviceId: unknown
+2026-11-04T14:35:34.7153057Z 	Graphics card #0 versionInfo: unknown
+2026-11-04T14:35:34.7153374Z 	Virtual memory max (MiB): 11063.52
+2026-11-04T14:35:34.7153667Z 	Virtual memory used (MiB): 3537.43
+2026-11-04T14:35:34.7153956Z 	Swap memory total (MiB): 3072.00
+2026-11-04T14:35:34.7154245Z 	Swap memory used (MiB): 0.00
+2026-11-04T14:35:34.7154584Z 	Space in storage for jna.tmpdir (MiB): <path not set>
+2026-11-04T14:35:34.7155094Z 	Space in storage for org.lwjgl.system.SharedLibraryExtractPath (MiB): <path not set>
+2026-11-04T14:35:34.7155676Z 	Space in storage for io.netty.native.workdir (MiB): <path not set>
+2026-11-04T14:35:34.7156194Z 	Space in storage for java.io.tmpdir (MiB): available: 87437.86, total: 147813.48
+2026-11-04T14:35:34.7156727Z 	Space in storage for workdir (MiB): available: 87437.86, total: 147813.48
+2026-11-04T14:35:34.7157220Z 	JVM Flags: 0 total; 
+2026-11-04T14:35:34.7157514Z 	Server Running: true
+2026-11-04T14:35:34.7157769Z 	Player Count: 0 / 1; []
+2026-11-04T14:35:34.7159241Z 	Active Data Packs: bundle, trade_rebalance, vanilla, mod_data, mod/veil (incompatible), mod/aeronautics_bundled, mod/sablecompanion, mod/flywheel (incompatible), mod/ponder (incompatible), mod/create (incompatible), mod/sable, mod/incoming, mod/simulated (incompatible), mod/offroad (incompatible), mod/aeronautics (incompatible), mod/neoforge, create:dynamic_data
+2026-11-04T14:35:34.7161714Z 	Available Data Packs: bundle, trade_rebalance, vanilla, mod/aeronautics (incompatible), mod/aeronautics_bundled, mod/create (incompatible), mod/flywheel (incompatible), mod/incoming, mod/neoforge, mod/offroad (incompatible), mod/ponder (incompatible), mod/sable, mod/sablecompanion, mod/simulated (incompatible), mod/veil (incompatible), mod_data, create:dynamic_data
+2026-11-04T14:35:34.7163257Z 	Enabled Feature Flags: minecraft:bundle, minecraft:vanilla, minecraft:trade_rebalance
+2026-11-04T14:35:34.7163723Z 	World Generation: Stable
+2026-11-04T14:35:34.7163988Z 	World Seed: 0
+2026-11-04T14:35:34.7164231Z 	Type: Game test server
+2026-11-04T14:35:34.7164499Z 	ModLauncher: 11.0.5+main.901c6ea8
+2026-11-04T14:35:34.7164814Z 	ModLauncher launch target: forgeserverdev
+2026-11-04T14:35:34.7165135Z 	ModLauncher services: 
+2026-11-04T14:35:34.7165479Z 		sponge-mixin-0.16.4+mixin.0.8.7.jar mixin PLUGINSERVICE 
+2026-11-04T14:35:34.7165884Z 		loader-4.0.45.jar slf4jfixer PLUGINSERVICE 
+2026-11-04T14:35:34.7166275Z 		loader-4.0.45.jar runtime_enum_extender PLUGINSERVICE 
+2026-11-04T14:35:34.7167364Z 		at-modlauncher-10.0.1.jar accesstransformer PLUGINSERVICE 
+2026-11-04T14:35:34.7168112Z 		loader-4.0.45.jar runtimedistcleaner PLUGINSERVICE 
+2026-11-04T14:35:34.7168969Z 		modlauncher-11.0.5.jar mixin TRANSFORMATIONSERVICE 
+2026-11-04T14:35:34.7169685Z 		modlauncher-11.0.5.jar fml TRANSFORMATIONSERVICE 
+2026-11-04T14:35:34.7170290Z 	FML Language Providers: 
+2026-11-04T14:35:34.7170759Z 		javafml@4.0
+2026-11-04T14:35:34.7171018Z 		lowcodefml@4.0
+2026-11-04T14:35:34.7171263Z 		minecraft@4.0
+2026-11-04T14:35:34.7171498Z 	Mod List: 
+2026-11-04T14:35:34.7171974Z 		create-1.21.1-6.0.10.jar                          |Create                        |create                        |6.0.10              |Manifest: NOSIGNATURE
+2026-11-04T14:35:34.7172867Z 		create-aeronautics-bundled-1.21.1-1.3.2.jar       |Create Aeronautics            |aeronautics_bundled           |1.3.2               |Manifest: NOSIGNATURE
+2026-11-04T14:35:34.7173887Z 		dev.eriksonn.aeronautics.aeronautics-neoforge-1.21|Create Aeronautics            |aeronautics                   |1.3.2               |Manifest: NOSIGNATURE
+2026-11-04T14:35:34.7174863Z 		dev.ryanhcode.offroad.offroad-neoforge-1.21.1-1.3.|Create Offroad                |offroad                       |1.3.2               |Manifest: NOSIGNATURE
+2026-11-04T14:35:34.7175809Z 		dev.simulated_team.simulated.simulated-neoforge-1.|Create Simulated              |simulated                     |1.3.2               |Manifest: NOSIGNATURE
+2026-11-04T14:35:34.7176899Z 		flywheel-neoforge-1.21.1-1.0.6.jar                |Flywheel                      |flywheel                      |1.0.6               |Manifest: NOSIGNATURE
+2026-11-04T14:35:34.7177659Z 		main                                              |Incoming                      |incoming                      |3.10.4              |Manifest: NOSIGNATURE
+2026-11-04T14:35:34.7178395Z 		neoforge-21.1.264.jar                             |Minecraft                     |minecraft                     |1.21.1              |Manifest: NOSIGNATURE
+2026-11-04T14:35:34.7179472Z 		neoforge-21.1.264.jar                             |NeoForge                      |neoforge                      |21.1.264            |Manifest: NOSIGNATURE
+2026-11-04T14:35:34.7180284Z 		ponder-neoforge-1.0.82+mc1.21.1.jar               |Ponder                        |ponder                        |1.0.82+mc1.21.1     |Manifest: NOSIGNATURE
+2026-11-04T14:35:34.7181083Z 		sable-neoforge-1.21.1-2.0.6.jar                   |Sable                         |sable                         |2.0.6               |Manifest: NOSIGNATURE
+2026-11-04T14:35:34.7181931Z 		sable-companion-common-1.21.1-1.6.0.jar           |Sable Companion               |sablecompanion                |1.6.0               |Manifest: NOSIGNATURE
+2026-11-04T14:35:34.7182761Z 		veil-neoforge-1.21.1-4.3.2.jar                    |Veil                          |veil                          |4.3.2               |Manifest: NOSIGNATURE
+2026-11-04T14:35:34.7183408Z 	Crash Report UUID: 9a59805c-f2d7-4786-8161-04aaed978f50
+2026-11-04T14:35:34.7183887Z 	FML: 4.0.45
+2026-11-04T14:35:34.7184128Z 	NeoForge: 21.1.264
+2026-11-04T14:35:35.2109458Z 
+2026-11-04T14:35:35.2129310Z 
+2026-11-04T14:35:35.2136225Z FAILURE: Build failed with an exception.
+2026-11-04T14:35:35.2136944Z > Task :runGameTestServer FAILED
+2026-11-04T14:35:35.2159119Z 
+2026-11-04T14:35:35.2160006Z gradle/actions: Writing build results to /home/runner/work/_temp/.gradle-actions/build-results/__run_2-1793802780469.json
+2026-11-04T14:35:35.2177618Z * What went wrong:
+2026-11-04T14:35:35.2177921Z 
+2026-11-04T14:35:35.2206496Z Execution failed for task ':runGameTestServer'.
+2026-11-04T14:35:35.2207308Z [Incubating] Problems report is available at: file:///home/runner/work/incoming/incoming/mod/build/reports/problems/problems-report.html
+2026-11-04T14:35:35.2208216Z > Process 'command '/usr/lib/jvm/temurin-21-jdk-amd64/bin/java'' finished with non-zero exit value 1
+2026-11-04T14:35:35.2208631Z 
+2026-11-04T14:35:35.2208730Z * Try:
+2026-11-04T14:35:35.2209389Z > Run with --stacktrace option to get the stack trace.
+2026-11-04T14:35:35.2210562Z > Run with --info or --debug option to get more log output.
+2026-11-04T14:35:35.2211318Z > Run with --scan to get full insights.
+2026-11-04T14:35:35.2211937Z > Get more help at https://help.gradle.org.
+2026-11-04T14:35:35.2212305Z 
+2026-11-04T14:35:35.2212514Z BUILD FAILED in 2m 44s
+2026-11-04T14:35:35.2212781Z 
+2026-11-04T14:35:35.2213254Z Deprecated Gradle features were used in this build, making it incompatible with Gradle 9.0.
+2026-11-04T14:35:35.2213951Z 
+2026-11-04T14:35:35.2214685Z You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+2026-11-04T14:35:35.2215585Z 
+2026-11-04T14:35:35.2216383Z For more on this, please refer to https://docs.gradle.org/8.14.3/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+2026-11-04T14:35:35.2217496Z 11 actionable tasks: 11 executed
+2026-11-04T14:35:35.6420103Z ##[error]Process completed with exit code 1.
+2026-11-04T14:35:35.6533182Z ##[group]Run actions/upload-artifact@v6
+2026-11-04T14:35:35.6533540Z with:
+2026-11-04T14:35:35.6533772Z   name: logs-gametest-5
+2026-11-04T14:35:35.6534050Z   path: mod/run/gametest/logs/
+2026-11-04T14:35:35.6534347Z   if-no-files-found: ignore
+2026-11-04T14:35:35.6534816Z   compression-level: 6
+2026-11-04T14:35:35.6535071Z   overwrite: false
+2026-11-04T14:35:35.6535341Z   include-hidden-files: false
+2026-11-04T14:35:35.6535630Z env:
+2026-11-04T14:35:35.6536064Z   JAVA_HOME: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.13-9/x64
+2026-11-04T14:35:35.6537013Z   JAVA_HOME_21_X64: /opt/hostedtoolcache/Java_Temurin-Hotspot_jdk/21.0.13-9/x64
+2026-11-04T14:35:35.6537495Z   MAVEN_ARGS: -ntp
+2026-11-04T14:35:35.6537954Z   GRADLE_ACTION_ID: gradle/actions/setup-gradle
+2026-11-04T14:35:35.6538325Z   GRADLE_USER_HOME: /home/runner/.gradle
+2026-11-04T14:35:35.6539018Z   GRADLE_BUILD_ACTION_SETUP_COMPLETED: true
+2026-11-04T14:35:35.6539390Z   GRADLE_BUILD_ACTION_CACHE_RESTORED: true
+2026-11-04T14:35:35.6540193Z   DEVELOCITY_INJECTION_INIT_SCRIPT_NAME: gradle-actions.inject-develocity.init.gradle
+2026-11-04T14:35:35.6540863Z   DEVELOCITY_INJECTION_CUSTOM_VALUE: gradle-actions
+2026-11-04T14:35:35.6541335Z   GITHUB_DEPENDENCY_GRAPH_ENABLED: false
+2026-11-04T14:35:35.6541677Z ##[endgroup]
+2026-11-04T14:35:35.8415658Z With the provided path, there will be 2 files uploaded
+2026-11-04T14:35:35.8440060Z Artifact name is valid!
+2026-11-04T14:35:35.8459660Z Root directory input is valid!
+2026-11-04T14:35:36.2496393Z Beginning upload of artifact content to blob storage
+2026-11-04T14:35:36.6410332Z Uploaded bytes 22390
+2026-11-04T14:35:36.7207601Z Finished uploading artifact content to blob storage!
+2026-11-04T14:35:36.7209239Z SHA256 digest of uploaded artifact zip is 8fdf8a6f174d5e56e578521306789cabf7bd9e0542cc8fd1334374218407ee29
+2026-11-04T14:35:36.7210326Z Finalizing artifact upload
+2026-11-04T14:35:37.3580414Z Artifact logs-gametest-5.zip successfully finalized. Artifact ID 13332132599
+2026-11-04T14:35:37.3581704Z Artifact logs-gametest-5 has been successfully uploaded! Final size is 22390 bytes. Artifact ID is 13332132599
+2026-11-04T14:35:37.3586836Z Artifact download URL: https://github.com/zentixua/incoming/actions/runs/41848231888/artifacts/13332132599
+2026-11-04T14:35:37.3857061Z Post job cleanup.
+2026-11-04T14:35:37.7831935Z In post-action step
+2026-11-04T14:35:37.7842866Z Cache is read-only: will not save state for use in subsequent builds.
+2026-11-04T14:35:37.7849048Z Generating Job Summary
+2026-11-04T14:35:37.7875248Z Completed post-action step
+2026-11-04T14:35:37.8018751Z Post job cleanup.
+2026-11-04T14:35:37.9570230Z Post job cleanup.
+2026-11-04T14:35:38.0557017Z [command]/usr/bin/git version
+2026-11-04T14:35:38.0605865Z git version 2.56.0
+2026-11-04T14:35:38.0658531Z Temporarily overriding HOME='/home/runner/work/_temp/e63e4c6f-831b-4012-b8c6-4c22018b1bef' before making global git config changes
+2026-11-04T14:35:38.0660594Z Adding repository directory to the temporary git global config as a safe directory
+2026-11-04T14:35:38.0672278Z [command]/usr/bin/git config --global --add safe.directory /home/runner/work/incoming/incoming
+2026-11-04T14:35:38.0715792Z [command]/usr/bin/git config --local --name-only --get-regexp core\.sshCommand
+2026-11-04T14:35:38.0761651Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'core\.sshCommand' && git config --local --unset-all 'core.sshCommand' || :"
+2026-11-04T14:35:38.1093118Z [command]/usr/bin/git config --local --name-only --get-regexp http\.https\:\/\/github\.com\/\.extraheader
+2026-11-04T14:35:38.1128521Z http.https://github.com/.extraheader
+2026-11-04T14:35:38.1137867Z [command]/usr/bin/git config --local --unset-all http.https://github.com/.extraheader
+2026-11-04T14:35:38.1193427Z [command]/usr/bin/git submodule foreach --recursive sh -c "git config --local --name-only --get-regexp 'http\.https\:\/\/github\.com\/\.extraheader' && git config --local --unset-all 'http.https://github.com/.extraheader' || :"
+2026-11-04T14:35:38.1544540Z [command]/usr/bin/git config --local --name-only --get-regexp ^includeIf\.gitdir:
+2026-11-04T14:35:38.1583375Z [command]/usr/bin/git submodule foreach --recursive git config --local --show-origin --name-only --get-regexp remote.origin.url
+2026-11-04T14:35:38.2031446Z Cleaning up orphan processes

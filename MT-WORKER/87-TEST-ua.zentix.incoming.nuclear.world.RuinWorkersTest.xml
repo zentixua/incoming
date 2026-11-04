@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.nuclear.world.RuinWorkersTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-11-04T14:38:51.207Z" hostname="zentixua-pc" time="0.002">
+  <properties/>
+  <testcase name="expiredPoolThreadsDoNotPermanentlyBlockSettlementOnLargeCoreServers()" classname="ua.zentix.incoming.nuclear.world.RuinWorkersTest" time="0.0"/>
+  <testcase name="cancelledQueuedTaskImmediatelyReleasesQueueAndCount()" classname="ua.zentix.incoming.nuclear.world.RuinWorkersTest" time="0.001"/>
+  <testcase name="queueGoesByPriorityThenByOrder()" classname="ua.zentix.incoming.nuclear.world.RuinWorkersTest" time="0.0"/>
+  <testcase name="cancelledRunningTaskKeepsReservationUntilWorkerActuallyExits()" classname="ua.zentix.incoming.nuclear.world.RuinWorkersTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

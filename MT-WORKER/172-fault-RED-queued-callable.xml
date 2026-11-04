@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.nuclear.world.RuinWorkerAdmissionTest" tests="1" skipped="0" failures="1" errors="0" timestamp="2026-11-04T14:32:40.522Z" hostname="zentixua-pc" time="0.027">
+  <properties/>
+  <testcase name="failedQueuedExitObserverCannotRetainTheFutureTaskCallable()" classname="ua.zentix.incoming.nuclear.world.RuinWorkerAdmissionTest" time="0.027">
+    <failure message="org.opentest4j.AssertionFailedError: the actual superclass callable must release the payload ==&gt; expected: &lt;null&gt; but was: &lt;ua.zentix.incoming.nuclear.world.RuinWorkerAdmissionTest$$Lambda/0x000000010028af80@60e9df3c&gt;" type="org.opentest4j.AssertionFailedError">org.opentest4j.AssertionFailedError: the actual superclass callable must release the payload ==&gt; expected: &lt;null&gt; but was: &lt;ua.zentix.incoming.nuclear.world.RuinWorkerAdmissionTest$$Lambda/0x000000010028af80@60e9df3c&gt;
+	at app//org.junit.jupiter.api.AssertionFailureBuilder.build(AssertionFailureBuilder.java:151)
+	at app//org.junit.jupiter.api.AssertionFailureBuilder.buildAndThrow(AssertionFailureBuilder.java:132)
+	at app//org.junit.jupiter.api.AssertNull.failNotNull(AssertNull.java:50)
+	at app//org.junit.jupiter.api.AssertNull.assertNull(AssertNull.java:35)
+	at app//org.junit.jupiter.api.Assertions.assertNull(Assertions.java:287)
+	at app//ua.zentix.incoming.nuclear.world.RuinWorkerAdmissionTest.failedQueuedExitObserverCannotRetainTheFutureTaskCallable(RuinWorkerAdmissionTest.java:286)
+	at java.base@21.0.7/java.lang.reflect.Method.invoke(Method.java:580)
+	at java.base@21.0.7/java.util.ArrayList.forEach(ArrayList.java:1596)
+	at java.base@21.0.7/java.util.ArrayList.forEach(ArrayList.java:1596)
+</failure>
+  </testcase>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>
