@@ -50,6 +50,25 @@ public final class NuclearReadyFixture {
         }
     }
 
+    public static UUID commandHandle(ServerLevel level) {
+        try {
+            var state = commands(level);
+            var entries = (java.util.Map<?, ?>) field(state, "entries").get(state);
+            if (entries.size() != 1) throw new AssertionError("Expected one fixture command, found " + entries.size());
+            return (UUID) entries.keySet().iterator().next();
+        } catch (ReflectiveOperationException failure) { throw new AssertionError(failure); }
+    }
+
+    public static void tickCommands(ServerLevel level) {
+        try { commands(level).tick(level); }
+        catch (ReflectiveOperationException failure) { throw new AssertionError(failure); }
+    }
+
+    private static ua.zentix.incoming.strike.NuclearCommands commands(ServerLevel level) throws ReflectiveOperationException {
+        var world = ua.zentix.incoming.strike.StrikeWorld.get(level);
+        return (ua.zentix.incoming.strike.NuclearCommands) field(world, "commands").get(world);
+    }
+
     private static Field field(Object value, String name) throws ReflectiveOperationException {
         Field result = value.getClass().getDeclaredField(name);
         result.setAccessible(true);
