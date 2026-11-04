@@ -39,3 +39,9 @@ Diagnostic accounting caveat: CiS6Probe's residentMemory call is not passive; it
 ## Final clean local validation
 
 At clean0798, laptop_job wrapper257796 exited0: build PASS1840 units/0failure/0error/0skip (296 suites, final-unit-suites.json), followed8/8 touched GameTests. Clean build3m48s; focusedGT21s. Commands use4ActiveProcessorCount/Xmx2g per JVM and no shared Gradle daemon. Full prefix helpers had been removed; working tree clean. Full original-order final prefixes were31/31 and50/50, with only the disposable selector outside the committed diff. No visual/frame-cost gate applies to this fixture-only delta.
+
+## Final remote CI and resource end
+
+[CI41928780767](https://github.com/zentixua/incoming/actions/runs/41928780767) completedSUCCESS2026-11-04T22:58:38Z; requiredИтогSUCCESS. tools/pr_ci.sh599 waiter90884 collectedexit0. All6 normal GameTest shards pass851/851; both optional LSS runtimes pass5/5 each; both unit partitions, build and clean NeoForge install succeed. Full raw run/job metadata and full CI log are preserved. Mergecheckoutec2c3de79123f96cb8a344c7932a7e4fa7738a31/tree638d3b7c1b077e2aec3a395b22d204144703d839 contains parente00fdfb71443905079eb09730737c6261b07f68c plus component0798. Local clean1840units/8GT apply to exact0798; do not mislabel the combined CI as its identical tree.
+
+All CI-S6 heavy wrappers/GameTest JVMs, reviewer and CI waiters ended and waits were collected. No owned heavy/GPU/client/server resource remains. Component stays an unmerged draft for MT-S6/LEAD4 integration; only0798 is the transferable source commit. The orphan evidence history contains no parent production tree.

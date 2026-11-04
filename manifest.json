@@ -237,7 +237,7 @@
   },
   "artifact_sha256": {
     "RCI-S6-review.md": "deb9fad0aa00d6f5de81f2c096bb48dc12019d9a659535eb9a7e4f3a8c99239c",
-    "README.md": "72e86112ebb438d4f9c75d7a815399089cf8bbaa86e191aa7dcca5d1e58d03dd",
+    "README.md": "6be62d3ee05edfbc82dfe4773f65d86ce82d35f2e1931eb731c966f53bced506",
     "controls/CiS6Probe.java": "4288dde23df4754f5894d9be2d2698bdc8fed98d2e45a1370779c60837b51308",
     "controls/GameTestShards.last-instrumented.java": "cc078a4157f80a65fbdbbeac1ae6415717186bb47e0483a0990ce68075cb6d4f",
     "controls/RuinBackgroundGameTests.green-instrumented.java": "3182b48634bcc63239dae43029c93be7bd0c9819e6c9daacbf31449ca38be237",
@@ -252,9 +252,12 @@
     "controls/original-ci-commit.json": "620138b889b2cc9322ec2ff6d9f0fe86e836e437c108237c78ab42c97caaf312",
     "controls/prefix4.txt": "bbbacad3e1795e10a3a981ee8e2e47f2ecc287d400ef4be1d6a8937a263da642",
     "controls/prefix6.txt": "9cc61da4ea78ef8bcb761acf69e7398dbf15238e334ced210ee937a027df5bbf",
+    "final-ci-jobs.json": "24abb99e59eef8166a9baa3383423aedd91ef870c699ede3d4ac17998e759ccb",
+    "final-ci-run.json": "f6b356617f32614d17eaac563b5539495794987011b6880d80e29eed52adfaa2",
     "final-unit-suites.json": "a7ccc5b1f7ce2f234cc27bea978748e6b6a9fe7d74f96621177c83f6348a61b5",
     "own.patch": "c177cae55732c7698c3946c38f0cdfdc11455145617c03a844db96ee456bbb77",
     "raw/ci41925168739-original-failed-jobs.log": "3d069135610edfbcdf81c4d75b1712a6bedae7cf06b67116034ce82c04e19249",
+    "raw/ci41928780767-final.log": "976864404b40e8bc52461073b91410fca0cdc5f4c7b5baccea76bf902e08d8c3",
     "raw/craft-green.log": "0bc3d3592c4dc5139a67fe6ca9b1de65cb187e6ad3db9bfde560a879817d40fc",
     "raw/craft-position.log": "25092a47cef77eb2c1e4c2e1e38a8cdc6bdde7dbc8e4f52c88d15d372b6cbef4",
     "raw/craft-trace.log": "7a095076771ea81c80def91500363a732079967e89b8ec014e76d6d3f5c3ba75",
@@ -267,10 +270,30 @@
     "raw/original.log": "f25b8cb40136ae8ef6b05617b1a97134197176303255e51c40b4f20e8e749b70",
     "raw/pair-green.log": "aba7383d0ff7a96c5e05e788b78368d179d093a8b6424b587aebc63bac71b4b2",
     "raw/pair-red.log": "5a2993cec934bc56f92681309b98b483c7c169f402a48f3807bb42d29b772f0c",
-    "raw/pr-ci599.log": "9f96d903cf4550912a2fe73b5045fbecf33fc3ba574788123cc2986ab694925f",
+    "raw/pr-ci599.log": "84f23eb3519447cfa916bf921954a4fc96c1298e135e82369f81d0ef06d46611",
     "raw/prefix-six.log": "da2522dc3529cab513aec16647cda0a146d547a5d5fc05ecb52fe3dde846d316",
     "raw/prefix6-native.log": "346cc66fdc03211debfd1e1f981e960260f205060cfe8f0d4b58bee9f471fadb",
     "raw/prefix6.log": "5fd638965ecbe622ab1b1f6aeeb0e7cf59243869806338904daa981300ef9c93",
     "raw/retirement-mutant.log": "7f7c936ee59d04b9c5700da0351b371ec5978ed49a9d5aebf4be2054e7f16fd4"
+  },
+  "ci": {
+    "run": 41928780767,
+    "status": "completed",
+    "conclusion": "success",
+    "summary": "\u0418\u0442\u043e\u0433 success",
+    "merge_sha": "ec2c3de79123f96cb8a344c7932a7e4fa7738a31",
+    "merge_tree": "638d3b7c1b077e2aec3a395b22d204144703d839",
+    "parent": "e00fdfb71443905079eb09730737c6261b07f68c",
+    "gametest_counts": {
+      "GameTest 3/6": 144,
+      "LSS GameTest ydDRzPcM": 5,
+      "GameTest 1/6": 123,
+      "GameTest 6/6": 160,
+      "GameTest 2/6": 168,
+      "GameTest 4/6": 124,
+      "LSS GameTest jxJ4956L": 5,
+      "GameTest 5/6": 132
+    },
+    "pr_ci_waiter_exit": 0
   }
 }
