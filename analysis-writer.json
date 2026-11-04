@@ -1,0 +1,114 @@
+{
+  "envelopes": [
+    {
+      "begin": {
+        "kind": "BEGIN",
+        "epoch": 1,
+        "phase": 0,
+        "kt": 15,
+        "columns": 2862,
+        "burstTick": 323
+      },
+      "summary": {
+        "kind": "SUMMARY",
+        "kt": 15,
+        "phase": 0,
+        "columns": 2862,
+        "ticks": 677,
+        "submitSeconds": 33.705482,
+        "lateMeanTicks": 0.0,
+        "lateMaxTicks": 0,
+        "peakBytes": 25231115,
+        "dbWitnesses": 33,
+        "frameMeanMs": 8.4218,
+        "frameMaxMs": 61.702
+      },
+      "submit_elapsed_ms": {
+        "n": 2862,
+        "min": 0.108045,
+        "mean": 0.15067314744933613,
+        "p50": 0.144852,
+        "p95": 0.192344,
+        "max": 1.719222
+      },
+      "submission_lateness_ticks": null,
+      "database_lateness_ticks": null,
+      "bytes": 29584494,
+      "transmitted_sections": 68688,
+      "changed_sections": 68688,
+      "peak_demand_columns_per_tick": null,
+      "peak_demand_columns_per_second": null,
+      "submit_columns_per_wall_second": 84.9120033352438,
+      "completion_columns_per_game_second": 84.54948301329394
+    },
+    {
+      "begin": {
+        "kind": "BEGIN",
+        "epoch": 2,
+        "phase": 1,
+        "kt": 15,
+        "columns": 2862,
+        "burstTick": 1123
+      },
+      "summary": {
+        "kind": "SUMMARY",
+        "kt": 15,
+        "phase": 1,
+        "columns": 2862,
+        "ticks": 492,
+        "submitSeconds": 3.496859,
+        "lateMeanTicks": 0.0,
+        "lateMaxTicks": 0,
+        "peakBytes": 6278559,
+        "dbWitnesses": 33,
+        "frameMeanMs": 8.5427,
+        "frameMaxMs": 33.7397
+      },
+      "submit_elapsed_ms": {
+        "n": 2862,
+        "min": 0.020184,
+        "mean": 0.04569890426275332,
+        "p50": 0.03087,
+        "p95": 0.039182,
+        "max": 6.628739
+      },
+      "submission_lateness_ticks": {
+        "n": 2862,
+        "min": 0,
+        "mean": 0,
+        "p50": 0,
+        "p95": 0,
+        "max": 0
+      },
+      "database_lateness_ticks": {
+        "n": 33,
+        "min": 0,
+        "mean": 0.696969696969697,
+        "p50": 1,
+        "p95": 1,
+        "max": 1
+      },
+      "bytes": 5910030,
+      "transmitted_sections": 11448,
+      "changed_sections": 11448,
+      "peak_demand_columns_per_tick": 56,
+      "peak_demand_columns_per_second": 886,
+      "submit_columns_per_wall_second": 818.44878503823,
+      "completion_columns_per_game_second": 116.34146341463413
+    }
+  ],
+  "visible": [
+    {
+      "kind": "VISIBLE_BASELINE",
+      "kt": 15,
+      "tick": 755,
+      "pixelX": 640,
+      "pixelY": 359,
+      "depthMeters": 618.2996,
+      "targetMeters": 608.284,
+      "readNs": 2784237
+    }
+  ],
+  "replay": [],
+  "failures": []
+}

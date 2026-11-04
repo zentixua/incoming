@@ -1,0 +1,17 @@
+03:54:30 mt-b3-merged warm-up: pack none, 20 steps
+03:54:36 waiting for quiet: foreign 3.45 cores, GPU [], services {'incoming-job-mt-b5-capacity-745217.service': 3.48}
+03:57:39 mt-b3-merged warm-up: pack none — exit 0, 3.1 min
+03:57:39 mt-b3-merged A1: pack none, 20 steps
+03:57:49 waiting for quiet: foreign 0.08 cores, GPU ['kwin_wayland:7'], services {}
+04:00:53 mt-b3-merged A1: pack none — exit 0, 3.2 min
+04:00:53 mt-b3-merged B: pack none, 20 steps
+04:03:48 mt-b3-merged B: pack none — exit 0, 2.9 min
+04:03:48 mt-b3-merged A2: pack none, 20 steps
+04:06:39 mt-b3-merged A2: pack none — exit 0, 2.9 min
+04:06:42 mt-b3-merged: pack none, pair 1 — pass
+04:06:43 A1 none: valid
+04:06:44 A2 none: valid
+04:06:45 B none: valid
+04:06:47 mt-b3-merged: pass; results in /mnt/data/projects/incoming/mod/run/stand/out/mt-b3-merged
+laptop_job stand-mt-b3-merged: exit 0
+stand mt-b3-merged: exit 0

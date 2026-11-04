@@ -1,0 +1,907 @@
+[
+  {
+    "file": "replay_before.png",
+    "strip_contrast": 0.2727272727272727,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_0_000_tick6954.png",
+    "strip_contrast": 0.2727272727272727,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_0_001_tick6954.png",
+    "strip_contrast": 0.23484848484848053,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_0_002_tick6954.png",
+    "strip_contrast": 0.22727272727272468,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_0_003_tick6954.png",
+    "strip_contrast": 0.2500000000000013,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_0_004_tick6954.png",
+    "strip_contrast": 0.25757575757575457,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_0_005_tick6955.png",
+    "strip_contrast": 0.28030303030303116,
+    "max_row_contrast": 1.0
+  },
+  {
+    "file": "replay_0_006_tick6955.png",
+    "strip_contrast": 0.265151515151513,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_0_007_tick6955.png",
+    "strip_contrast": 0.27272727272727015,
+    "max_row_contrast": 0.6666666666666856
+  },
+  {
+    "file": "replay_0_008_tick6955.png",
+    "strip_contrast": 0.2727272727272727,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_0_009_tick6955.png",
+    "strip_contrast": 0.23484848484848053,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_0_010_tick6955.png",
+    "strip_contrast": 0.22727272727272468,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_0_011_tick6956.png",
+    "strip_contrast": 0.2500000000000013,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_0_012_tick6956.png",
+    "strip_contrast": 0.25757575757575457,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_0_013_tick6956.png",
+    "strip_contrast": 0.28030303030303116,
+    "max_row_contrast": 1.0
+  },
+  {
+    "file": "replay_0_014_tick6956.png",
+    "strip_contrast": 0.265151515151513,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_0_015_tick6956.png",
+    "strip_contrast": 0.27272727272727015,
+    "max_row_contrast": 0.6666666666666856
+  },
+  {
+    "file": "replay_0_016_tick6956.png",
+    "strip_contrast": 0.2727272727272727,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_0_017_tick6957.png",
+    "strip_contrast": 0.23484848484848053,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_0_018_tick6957.png",
+    "strip_contrast": 0.22727272727272468,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_0_019_tick6957.png",
+    "strip_contrast": 0.2500000000000013,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_0_020_tick6958.png",
+    "strip_contrast": 0.25757575757575457,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_0_021_tick6958.png",
+    "strip_contrast": 0.28030303030303116,
+    "max_row_contrast": 1.0
+  },
+  {
+    "file": "replay_0_022_tick6958.png",
+    "strip_contrast": 0.265151515151513,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_0_023_tick6958.png",
+    "strip_contrast": 0.27272727272727015,
+    "max_row_contrast": 0.6666666666666856
+  },
+  {
+    "file": "replay_0_024_tick6959.png",
+    "strip_contrast": 0.2727272727272727,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_0_025_tick6959.png",
+    "strip_contrast": 0.23484848484848053,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_0_026_tick6959.png",
+    "strip_contrast": 0.22727272727272468,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_0_027_tick6959.png",
+    "strip_contrast": 0.2500000000000013,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_0_028_tick6960.png",
+    "strip_contrast": 0.25757575757575457,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_0_029_tick6960.png",
+    "strip_contrast": 0.28030303030303116,
+    "max_row_contrast": 1.0
+  },
+  {
+    "file": "replay_0_030_tick6960.png",
+    "strip_contrast": 0.265151515151513,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_0_031_tick6961.png",
+    "strip_contrast": 0.27272727272727015,
+    "max_row_contrast": 0.6666666666666856
+  },
+  {
+    "file": "replay_0_032_tick6961.png",
+    "strip_contrast": 0.2727272727272727,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_0_033_tick6961.png",
+    "strip_contrast": 0.23484848484848053,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_0_034_tick6961.png",
+    "strip_contrast": 0.22727272727272468,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_0_035_tick6962.png",
+    "strip_contrast": 0.2500000000000013,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_0_036_tick6962.png",
+    "strip_contrast": 0.25757575757575457,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_0_037_tick6962.png",
+    "strip_contrast": 0.28030303030303116,
+    "max_row_contrast": 1.0
+  },
+  {
+    "file": "replay_0_038_tick6962.png",
+    "strip_contrast": 0.265151515151513,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_0_039_tick6963.png",
+    "strip_contrast": 0.27272727272727015,
+    "max_row_contrast": 0.6666666666666856
+  },
+  {
+    "file": "replay_0_040_tick6963.png",
+    "strip_contrast": 0.2727272727272727,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_0_041_tick6963.png",
+    "strip_contrast": 0.23484848484848053,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_0_042_tick6964.png",
+    "strip_contrast": 0.22727272727272468,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_0_043_tick6964.png",
+    "strip_contrast": 0.2500000000000013,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_0_044_tick6964.png",
+    "strip_contrast": 0.25757575757575457,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_0_045_tick6964.png",
+    "strip_contrast": 0.28030303030303116,
+    "max_row_contrast": 1.0
+  },
+  {
+    "file": "replay_0_046_tick6965.png",
+    "strip_contrast": 0.265151515151513,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_0_047_tick6965.png",
+    "strip_contrast": 0.27272727272727015,
+    "max_row_contrast": 0.6666666666666856
+  },
+  {
+    "file": "replay_0_048_tick6965.png",
+    "strip_contrast": 0.2727272727272727,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_0_049_tick6966.png",
+    "strip_contrast": 0.23484848484848053,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_0_050_tick6966.png",
+    "strip_contrast": 0.22727272727272468,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_0_051_tick6966.png",
+    "strip_contrast": 0.2500000000000013,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_0_052_tick6967.png",
+    "strip_contrast": 0.25757575757575457,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_0_053_tick6967.png",
+    "strip_contrast": 0.28030303030303116,
+    "max_row_contrast": 1.0
+  },
+  {
+    "file": "replay_0_054_tick6967.png",
+    "strip_contrast": 0.265151515151513,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_0_055_tick6968.png",
+    "strip_contrast": 0.27272727272727015,
+    "max_row_contrast": 0.6666666666666856
+  },
+  {
+    "file": "replay_0_056_tick6968.png",
+    "strip_contrast": 0.2727272727272727,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_0_057_tick6968.png",
+    "strip_contrast": 0.23484848484848053,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_0_058_tick6969.png",
+    "strip_contrast": 0.22727272727272468,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_0_059_tick6969.png",
+    "strip_contrast": 0.2500000000000013,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_0_060_tick6969.png",
+    "strip_contrast": 0.25757575757575457,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_0_061_tick6970.png",
+    "strip_contrast": 0.28030303030303116,
+    "max_row_contrast": 1.0
+  },
+  {
+    "file": "replay_0_062_tick6970.png",
+    "strip_contrast": 0.265151515151513,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_0_063_tick6970.png",
+    "strip_contrast": 0.27272727272727015,
+    "max_row_contrast": 0.6666666666666856
+  },
+  {
+    "file": "replay_0_064_tick6970.png",
+    "strip_contrast": 0.2727272727272727,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_0_065_tick6971.png",
+    "strip_contrast": 0.23484848484848053,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_0_066_tick6971.png",
+    "strip_contrast": 0.22727272727272468,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_0_067_tick6971.png",
+    "strip_contrast": 0.2500000000000013,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_0_068_tick6972.png",
+    "strip_contrast": 0.25757575757575457,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_0_069_tick6972.png",
+    "strip_contrast": 0.28030303030303116,
+    "max_row_contrast": 1.0
+  },
+  {
+    "file": "replay_0_070_tick6972.png",
+    "strip_contrast": 0.265151515151513,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_0_071_tick6973.png",
+    "strip_contrast": 0.27272727272727015,
+    "max_row_contrast": 0.6666666666666856
+  },
+  {
+    "file": "replay_0_072_tick6973.png",
+    "strip_contrast": 0.2727272727272727,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_0_073_tick6973.png",
+    "strip_contrast": 0.23484848484848053,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_0_074_tick6974.png",
+    "strip_contrast": 0.22727272727272468,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_0_075_tick6974.png",
+    "strip_contrast": 0.2500000000000013,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_0_076_tick6975.png",
+    "strip_contrast": 0.25757575757575457,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_0_077_tick6975.png",
+    "strip_contrast": 0.28030303030303116,
+    "max_row_contrast": 1.0
+  },
+  {
+    "file": "replay_0_078_tick6975.png",
+    "strip_contrast": 0.265151515151513,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_0_079_tick6976.png",
+    "strip_contrast": 0.27272727272727015,
+    "max_row_contrast": 0.6666666666666856
+  },
+  {
+    "file": "replay_0_080_tick6976.png",
+    "strip_contrast": 0.2727272727272727,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_0_081_tick6976.png",
+    "strip_contrast": 0.23484848484848053,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_0_082_tick6976.png",
+    "strip_contrast": 0.22727272727272468,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_0_083_tick6977.png",
+    "strip_contrast": 0.2500000000000013,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_0_084_tick6977.png",
+    "strip_contrast": 0.25757575757575457,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_0_085_tick6977.png",
+    "strip_contrast": 0.28030303030303116,
+    "max_row_contrast": 1.0
+  },
+  {
+    "file": "replay_0_086_tick6977.png",
+    "strip_contrast": 0.265151515151513,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_0_087_tick6978.png",
+    "strip_contrast": 0.27272727272727015,
+    "max_row_contrast": 0.6666666666666856
+  },
+  {
+    "file": "replay_0_088_tick6978.png",
+    "strip_contrast": 0.2727272727272727,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_0_089_tick6978.png",
+    "strip_contrast": 0.23484848484848053,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_1_000_tick6996.png",
+    "strip_contrast": 0.27272727272727015,
+    "max_row_contrast": 0.6666666666666856
+  },
+  {
+    "file": "replay_1_001_tick6996.png",
+    "strip_contrast": 0.2727272727272727,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_1_002_tick6996.png",
+    "strip_contrast": 0.23484848484848053,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_1_003_tick6996.png",
+    "strip_contrast": 0.22727272727272468,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_1_004_tick6996.png",
+    "strip_contrast": 0.2500000000000013,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_1_005_tick6997.png",
+    "strip_contrast": 0.25757575757575457,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_1_006_tick6997.png",
+    "strip_contrast": 0.28030303030303116,
+    "max_row_contrast": 1.0
+  },
+  {
+    "file": "replay_1_007_tick6997.png",
+    "strip_contrast": 0.265151515151513,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_1_008_tick6997.png",
+    "strip_contrast": 0.27272727272727015,
+    "max_row_contrast": 0.6666666666666856
+  },
+  {
+    "file": "replay_1_009_tick6997.png",
+    "strip_contrast": 0.2727272727272727,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_1_010_tick6997.png",
+    "strip_contrast": 0.23484848484848053,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_1_011_tick6998.png",
+    "strip_contrast": 0.22727272727272468,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_1_012_tick6998.png",
+    "strip_contrast": 0.2500000000000013,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_1_013_tick6998.png",
+    "strip_contrast": 0.25757575757575457,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_1_014_tick6998.png",
+    "strip_contrast": 0.28030303030303116,
+    "max_row_contrast": 1.0
+  },
+  {
+    "file": "replay_1_015_tick6998.png",
+    "strip_contrast": 0.265151515151513,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_1_016_tick6999.png",
+    "strip_contrast": 0.27272727272727015,
+    "max_row_contrast": 0.6666666666666856
+  },
+  {
+    "file": "replay_1_017_tick6999.png",
+    "strip_contrast": 0.2727272727272727,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_1_018_tick6999.png",
+    "strip_contrast": 0.23484848484848053,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_1_019_tick6999.png",
+    "strip_contrast": 0.22727272727272468,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_1_020_tick7000.png",
+    "strip_contrast": 0.2500000000000013,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_1_021_tick7000.png",
+    "strip_contrast": 0.25757575757575457,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_1_022_tick7000.png",
+    "strip_contrast": 0.28030303030303116,
+    "max_row_contrast": 1.0
+  },
+  {
+    "file": "replay_1_023_tick7000.png",
+    "strip_contrast": 0.265151515151513,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_1_024_tick7000.png",
+    "strip_contrast": 0.27272727272727015,
+    "max_row_contrast": 0.6666666666666856
+  },
+  {
+    "file": "replay_1_025_tick7001.png",
+    "strip_contrast": 0.2727272727272727,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_1_026_tick7001.png",
+    "strip_contrast": 0.23484848484848053,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_1_027_tick7001.png",
+    "strip_contrast": 0.2121212121212104,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_1_028_tick7001.png",
+    "strip_contrast": 0.2500000000000013,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_1_029_tick7002.png",
+    "strip_contrast": 0.25757575757575457,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_1_030_tick7002.png",
+    "strip_contrast": 0.28030303030303116,
+    "max_row_contrast": 1.0
+  },
+  {
+    "file": "replay_1_031_tick7002.png",
+    "strip_contrast": 0.265151515151513,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_1_032_tick7002.png",
+    "strip_contrast": 0.27272727272727015,
+    "max_row_contrast": 0.6666666666666856
+  },
+  {
+    "file": "replay_1_033_tick7003.png",
+    "strip_contrast": 0.2727272727272727,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_1_034_tick7003.png",
+    "strip_contrast": 0.23484848484848053,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_1_035_tick7003.png",
+    "strip_contrast": 0.22727272727272468,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_1_036_tick7004.png",
+    "strip_contrast": 0.2500000000000013,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_1_037_tick7004.png",
+    "strip_contrast": 0.25757575757575457,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_1_038_tick7004.png",
+    "strip_contrast": 0.28030303030303116,
+    "max_row_contrast": 1.0
+  },
+  {
+    "file": "replay_1_039_tick7005.png",
+    "strip_contrast": 0.265151515151513,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_1_040_tick7005.png",
+    "strip_contrast": 0.27272727272727015,
+    "max_row_contrast": 0.6666666666666856
+  },
+  {
+    "file": "replay_1_041_tick7005.png",
+    "strip_contrast": 0.2727272727272727,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_1_042_tick7006.png",
+    "strip_contrast": 0.23484848484848053,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_1_043_tick7006.png",
+    "strip_contrast": 0.22727272727272468,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_1_044_tick7007.png",
+    "strip_contrast": 0.2500000000000013,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_1_045_tick7007.png",
+    "strip_contrast": 0.25757575757575457,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_1_046_tick7007.png",
+    "strip_contrast": 0.28030303030303116,
+    "max_row_contrast": 1.0
+  },
+  {
+    "file": "replay_1_047_tick7008.png",
+    "strip_contrast": 0.265151515151513,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_1_048_tick7008.png",
+    "strip_contrast": 0.27272727272727015,
+    "max_row_contrast": 0.6666666666666856
+  },
+  {
+    "file": "replay_1_049_tick7008.png",
+    "strip_contrast": 0.2727272727272727,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_1_050_tick7008.png",
+    "strip_contrast": 0.23484848484848053,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_1_051_tick7009.png",
+    "strip_contrast": 0.22727272727272468,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_1_052_tick7009.png",
+    "strip_contrast": 0.2500000000000013,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_1_053_tick7009.png",
+    "strip_contrast": 0.25757575757575457,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_1_054_tick7010.png",
+    "strip_contrast": 0.28030303030303116,
+    "max_row_contrast": 1.0
+  },
+  {
+    "file": "replay_1_055_tick7010.png",
+    "strip_contrast": 0.265151515151513,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_1_056_tick7011.png",
+    "strip_contrast": 0.27272727272727015,
+    "max_row_contrast": 0.6666666666666856
+  },
+  {
+    "file": "replay_1_057_tick7011.png",
+    "strip_contrast": 0.2727272727272727,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_1_058_tick7012.png",
+    "strip_contrast": 0.23484848484848053,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_1_059_tick7012.png",
+    "strip_contrast": 0.22727272727272468,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_1_060_tick7013.png",
+    "strip_contrast": 0.2500000000000013,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_1_061_tick7013.png",
+    "strip_contrast": 0.25757575757575457,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_1_062_tick7013.png",
+    "strip_contrast": 0.28030303030303116,
+    "max_row_contrast": 1.0
+  },
+  {
+    "file": "replay_1_063_tick7014.png",
+    "strip_contrast": 0.265151515151513,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_1_064_tick7014.png",
+    "strip_contrast": 0.27272727272727015,
+    "max_row_contrast": 0.6666666666666856
+  },
+  {
+    "file": "replay_1_065_tick7015.png",
+    "strip_contrast": 0.2727272727272727,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_1_066_tick7015.png",
+    "strip_contrast": 0.23484848484848053,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_1_067_tick7015.png",
+    "strip_contrast": 0.22727272727272468,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_1_068_tick7016.png",
+    "strip_contrast": 0.2500000000000013,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_1_069_tick7016.png",
+    "strip_contrast": 0.25757575757575457,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_1_070_tick7016.png",
+    "strip_contrast": 0.28030303030303116,
+    "max_row_contrast": 1.0
+  },
+  {
+    "file": "replay_1_071_tick7017.png",
+    "strip_contrast": 0.265151515151513,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_1_072_tick7017.png",
+    "strip_contrast": 0.27272727272727015,
+    "max_row_contrast": 0.6666666666666856
+  },
+  {
+    "file": "replay_1_073_tick7018.png",
+    "strip_contrast": 0.2727272727272727,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_1_074_tick7018.png",
+    "strip_contrast": 0.23484848484848053,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_1_075_tick7018.png",
+    "strip_contrast": 0.22727272727272468,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_1_076_tick7019.png",
+    "strip_contrast": 0.2500000000000013,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_1_077_tick7019.png",
+    "strip_contrast": 0.25757575757575457,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_1_078_tick7019.png",
+    "strip_contrast": 0.28030303030303116,
+    "max_row_contrast": 1.0
+  },
+  {
+    "file": "replay_1_079_tick7019.png",
+    "strip_contrast": 0.265151515151513,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_1_080_tick7020.png",
+    "strip_contrast": 0.27272727272727015,
+    "max_row_contrast": 0.6666666666666856
+  },
+  {
+    "file": "replay_1_081_tick7020.png",
+    "strip_contrast": 0.2727272727272727,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_1_082_tick7020.png",
+    "strip_contrast": 0.23484848484848053,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_1_083_tick7021.png",
+    "strip_contrast": 0.22727272727272468,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_1_084_tick7021.png",
+    "strip_contrast": 0.2500000000000013,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_1_085_tick7021.png",
+    "strip_contrast": 0.25757575757575457,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_1_086_tick7022.png",
+    "strip_contrast": 0.28030303030303116,
+    "max_row_contrast": 1.0
+  },
+  {
+    "file": "replay_1_087_tick7022.png",
+    "strip_contrast": 0.265151515151513,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_1_088_tick7022.png",
+    "strip_contrast": 0.27272727272727015,
+    "max_row_contrast": 0.6666666666666856
+  },
+  {
+    "file": "replay_1_089_tick7022.png",
+    "strip_contrast": 0.2727272727272727,
+    "max_row_contrast": 0.6666666666666572
+  }
+]

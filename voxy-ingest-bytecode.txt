@@ -1,0 +1,664 @@
+Compiled from "VoxelIngestService.java"
+public class me.cortex.voxy.common.world.service.VoxelIngestService {
+  private static final java.lang.ThreadLocal<me.cortex.voxy.common.voxelization.VoxelizedSection> SECTION_CACHE;
+
+  private final me.cortex.voxy.common.thread.Service service;
+
+  private final java.util.concurrent.ConcurrentLinkedDeque<me.cortex.voxy.common.world.service.VoxelIngestService$IngestSection> ingestQueue;
+
+  public me.cortex.voxy.common.world.service.VoxelIngestService(me.cortex.voxy.common.thread.ServiceManager);
+    Code:
+       0: aload_0
+       1: invokespecial #32                 // Method java/lang/Object."<init>":()V
+       4: aload_0
+       5: new           #34                 // class java/util/concurrent/ConcurrentLinkedDeque
+       8: dup
+       9: invokespecial #35                 // Method java/util/concurrent/ConcurrentLinkedDeque."<init>":()V
+      12: putfield      #37                 // Field ingestQueue:Ljava/util/concurrent/ConcurrentLinkedDeque;
+      15: aload_0
+      16: aload_1
+      17: aload_0
+      18: invokedynamic #56,  0             // InvokeDynamic #0:get:(Lme/cortex/voxy/common/world/service/VoxelIngestService;)Ljava/util/function/Supplier;
+      23: ldc2_w        #57                 // long 5000l
+      26: ldc           #60                 // String Ingest service
+      28: invokevirtual #66                 // Method me/cortex/voxy/common/thread/ServiceManager.createServiceNoCleanup:(Ljava/util/function/Supplier;JLjava/lang/String;)Lme/cortex/voxy/common/thread/Service;
+      31: putfield      #68                 // Field service:Lme/cortex/voxy/common/thread/Service;
+      34: return
+
+  private void processJob();
+    Code:
+       0: aload_0
+       1: getfield      #37                 // Field ingestQueue:Ljava/util/concurrent/ConcurrentLinkedDeque;
+       4: invokevirtual #75                 // Method java/util/concurrent/ConcurrentLinkedDeque.pop:()Ljava/lang/Object;
+       7: checkcast     #7                  // class me/cortex/voxy/common/world/service/VoxelIngestService$IngestSection
+      10: astore_1
+      11: aload_1
+      12: getfield      #79                 // Field me/cortex/voxy/common/world/service/VoxelIngestService$IngestSection.world:Lme/cortex/voxy/common/world/WorldEngine;
+      15: invokevirtual #84                 // Method me/cortex/voxy/common/world/WorldEngine.markActive:()V
+      18: aload_1
+      19: getfield      #88                 // Field me/cortex/voxy/common/world/service/VoxelIngestService$IngestSection.section:Lnet/minecraft/class_2826;
+      22: astore_2
+      23: getstatic     #90                 // Field SECTION_CACHE:Ljava/lang/ThreadLocal;
+      26: invokevirtual #94                 // Method java/lang/ThreadLocal.get:()Ljava/lang/Object;
+      29: checkcast     #96                 // class me/cortex/voxy/common/voxelization/VoxelizedSection
+      32: aload_1
+      33: getfield      #100                // Field me/cortex/voxy/common/world/service/VoxelIngestService$IngestSection.cx:I
+      36: aload_1
+      37: getfield      #103                // Field me/cortex/voxy/common/world/service/VoxelIngestService$IngestSection.cy:I
+      40: aload_1
+      41: getfield      #106                // Field me/cortex/voxy/common/world/service/VoxelIngestService$IngestSection.cz:I
+      44: invokevirtual #110                // Method me/cortex/voxy/common/voxelization/VoxelizedSection.setPosition:(III)Lme/cortex/voxy/common/voxelization/VoxelizedSection;
+      47: astore_3
+      48: aload_2
+      49: invokevirtual #116                // Method net/minecraft/class_2826.method_38292:()Z
+      52: ifeq          83
+      55: aload_1
+      56: getfield      #120                // Field me/cortex/voxy/common/world/service/VoxelIngestService$IngestSection.blockLight:Lnet/minecraft/class_2804;
+      59: ifnonnull     83
+      62: aload_1
+      63: getfield      #123                // Field me/cortex/voxy/common/world/service/VoxelIngestService$IngestSection.skyLight:Lnet/minecraft/class_2804;
+      66: ifnonnull     83
+      69: aload_1
+      70: getfield      #79                 // Field me/cortex/voxy/common/world/service/VoxelIngestService$IngestSection.world:Lme/cortex/voxy/common/world/WorldEngine;
+      73: aload_3
+      74: invokevirtual #127                // Method me/cortex/voxy/common/voxelization/VoxelizedSection.zero:()Lme/cortex/voxy/common/voxelization/VoxelizedSection;
+      77: invokestatic  #133                // Method me/cortex/voxy/common/world/WorldUpdater.insertUpdate:(Lme/cortex/voxy/common/world/WorldEngine;Lme/cortex/voxy/common/voxelization/VoxelizedSection;)V
+      80: goto          129
+      83: aload_3
+      84: aload_1
+      85: getfield      #79                 // Field me/cortex/voxy/common/world/service/VoxelIngestService$IngestSection.world:Lme/cortex/voxy/common/world/WorldEngine;
+      88: invokevirtual #137                // Method me/cortex/voxy/common/world/WorldEngine.getMapper:()Lme/cortex/voxy/common/world/other/Mapper;
+      91: aload_2
+      92: invokevirtual #141                // Method net/minecraft/class_2826.method_12265:()Lnet/minecraft/class_2841;
+      95: aload_2
+      96: invokevirtual #145                // Method net/minecraft/class_2826.method_38294:()Lnet/minecraft/class_7522;
+      99: aload_1
+     100: invokestatic  #149                // Method getLightingSupplier:(Lme/cortex/voxy/common/world/service/VoxelIngestService$IngestSection;)Lme/cortex/voxy/common/voxelization/ILightingSupplier;
+     103: invokestatic  #155                // Method me/cortex/voxy/common/voxelization/WorldConversionFactory.convert:(Lme/cortex/voxy/common/voxelization/VoxelizedSection;Lme/cortex/voxy/common/world/other/Mapper;Lnet/minecraft/class_2841;Lnet/minecraft/class_7522;Lme/cortex/voxy/common/voxelization/ILightingSupplier;)Lme/cortex/voxy/common/voxelization/VoxelizedSection;
+     106: astore        4
+     108: aload         4
+     110: aload_1
+     111: getfield      #79                 // Field me/cortex/voxy/common/world/service/VoxelIngestService$IngestSection.world:Lme/cortex/voxy/common/world/WorldEngine;
+     114: invokevirtual #137                // Method me/cortex/voxy/common/world/WorldEngine.getMapper:()Lme/cortex/voxy/common/world/other/Mapper;
+     117: invokestatic  #161                // Method me/cortex/voxy/common/voxelization/WorldVoxilizedSectionMipper.mipSection:(Lme/cortex/voxy/common/voxelization/VoxelizedSection;Lme/cortex/voxy/common/world/other/Mapper;)V
+     120: aload_1
+     121: getfield      #79                 // Field me/cortex/voxy/common/world/service/VoxelIngestService$IngestSection.world:Lme/cortex/voxy/common/world/WorldEngine;
+     124: aload         4
+     126: invokestatic  #133                // Method me/cortex/voxy/common/world/WorldUpdater.insertUpdate:(Lme/cortex/voxy/common/world/WorldEngine;Lme/cortex/voxy/common/voxelization/VoxelizedSection;)V
+     129: return
+
+  private static me.cortex.voxy.common.voxelization.ILightingSupplier getLightingSupplier(me.cortex.voxy.common.world.service.VoxelIngestService$IngestSection);
+    Code:
+       0: invokedynamic #177,  0            // InvokeDynamic #1:supply:()Lme/cortex/voxy/common/voxelization/ILightingSupplier;
+       5: astore_1
+       6: aload_0
+       7: getfield      #123                // Field me/cortex/voxy/common/world/service/VoxelIngestService$IngestSection.skyLight:Lnet/minecraft/class_2804;
+      10: astore_2
+      11: aload_0
+      12: getfield      #120                // Field me/cortex/voxy/common/world/service/VoxelIngestService$IngestSection.blockLight:Lnet/minecraft/class_2804;
+      15: astore_3
+      16: aload_2
+      17: ifnull        31
+      20: aload_2
+      21: invokevirtual #182                // Method net/minecraft/class_2804.method_12146:()Z
+      24: ifne          31
+      27: iconst_1
+      28: goto          32
+      31: iconst_0
+      32: istore        4
+      34: aload_3
+      35: ifnull        49
+      38: aload_3
+      39: invokevirtual #182                // Method net/minecraft/class_2804.method_12146:()Z
+      42: ifne          49
+      45: iconst_1
+      46: goto          50
+      49: iconst_0
+      50: istore        5
+      52: iload         4
+      54: ifne          62
+      57: iload         5
+      59: ifeq          105
+      62: iload         4
+      64: ifeq          83
+      67: iload         5
+      69: ifeq          83
+      72: aload_3
+      73: aload_2
+      74: invokedynamic #192,  0            // InvokeDynamic #2:supply:(Lnet/minecraft/class_2804;Lnet/minecraft/class_2804;)Lme/cortex/voxy/common/voxelization/ILightingSupplier;
+      79: astore_1
+      80: goto          105
+      83: iload         5
+      85: ifeq          98
+      88: aload_3
+      89: invokedynamic #200,  0            // InvokeDynamic #3:supply:(Lnet/minecraft/class_2804;)Lme/cortex/voxy/common/voxelization/ILightingSupplier;
+      94: astore_1
+      95: goto          105
+      98: aload_2
+      99: invokedynamic #205,  0            // InvokeDynamic #4:supply:(Lnet/minecraft/class_2804;)Lme/cortex/voxy/common/voxelization/ILightingSupplier;
+     104: astore_1
+     105: aload_1
+     106: areturn
+
+  private static boolean shouldIngestSection(net.minecraft.class_2826, int, int, int);
+    Code:
+       0: iconst_1
+       1: ireturn
+
+  public boolean enqueueIngest(me.cortex.voxy.common.world.WorldEngine, net.minecraft.class_2818);
+    Code:
+       0: aload_0
+       1: getfield      #68                 // Field service:Lme/cortex/voxy/common/thread/Service;
+       4: invokevirtual #225                // Method me/cortex/voxy/common/thread/Service.isLive:()Z
+       7: ifne          12
+      10: iconst_0
+      11: ireturn
+      12: aload_1
+      13: invokevirtual #226                // Method me/cortex/voxy/common/world/WorldEngine.isLive:()Z
+      16: ifne          29
+      19: new           #228                // class java/lang/IllegalStateException
+      22: dup
+      23: ldc           #230                // String Tried inserting chunk into WorldEngine that was not alive
+      25: invokespecial #233                // Method java/lang/IllegalStateException."<init>":(Ljava/lang/String;)V
+      28: athrow
+      29: aload_1
+      30: invokevirtual #84                 // Method me/cortex/voxy/common/world/WorldEngine.markActive:()V
+      33: aload_2
+      34: invokevirtual #239                // Method net/minecraft/class_2818.method_12200:()Lnet/minecraft/class_1937;
+      37: invokevirtual #245                // Method net/minecraft/class_1937.method_22336:()Lnet/minecraft/class_3568;
+      40: astore_3
+      41: iconst_0
+      42: istore        4
+      44: aload_2
+      45: invokevirtual #249                // Method net/minecraft/class_2818.method_32891:()I
+      48: iconst_1
+      49: isub
+      50: istore        5
+      52: iconst_1
+      53: istore        6
+      55: aload_2
+      56: invokevirtual #253                // Method net/minecraft/class_2818.method_12006:()[Lnet/minecraft/class_2826;
+      59: astore        7
+      61: aload         7
+      63: arraylength
+      64: istore        8
+      66: iconst_0
+      67: istore        9
+      69: iload         9
+      71: iload         8
+      73: if_icmpge     181
+      76: aload         7
+      78: iload         9
+      80: aaload
+      81: astore        10
+      83: iinc          5, 1
+      86: aload         10
+      88: ifnull        175
+      91: aload         10
+      93: aload_2
+      94: invokevirtual #261                // Method net/minecraft/class_2818.method_12004:()Lnet/minecraft/class_1923;
+      97: getfield      #266                // Field net/minecraft/class_1923.field_9181:I
+     100: iload         5
+     102: aload_2
+     103: invokevirtual #261                // Method net/minecraft/class_2818.method_12004:()Lnet/minecraft/class_1923;
+     106: getfield      #269                // Field net/minecraft/class_1923.field_9180:I
+     109: invokestatic  #271                // Method shouldIngestSection:(Lnet/minecraft/class_2826;III)Z
+     112: ifne          118
+     115: goto          175
+     118: iload         6
+     120: aload         10
+     122: invokevirtual #116                // Method net/minecraft/class_2826.method_38292:()Z
+     125: iand
+     126: istore        6
+     128: aload_2
+     129: invokevirtual #261                // Method net/minecraft/class_2818.method_12004:()Lnet/minecraft/class_1923;
+     132: iload         5
+     134: invokestatic  #277                // Method net/minecraft/class_4076.method_18681:(Lnet/minecraft/class_1923;I)Lnet/minecraft/class_4076;
+     137: astore        11
+     139: aload_3
+     140: getstatic     #283                // Field net/minecraft/class_1944.field_9284:Lnet/minecraft/class_1944;
+     143: aload         11
+     145: invokevirtual #287                // Method net/minecraft/class_3568.method_51560:(Lnet/minecraft/class_1944;Lnet/minecraft/class_4076;)Lnet/minecraft/class_3560$class_8530;
+     148: getstatic     #291                // Field net/minecraft/class_3560$class_8530.field_44726:Lnet/minecraft/class_3560$class_8530;
+     151: if_acmpeq     172
+     154: aload_3
+     155: getstatic     #294                // Field net/minecraft/class_1944.field_9282:Lnet/minecraft/class_1944;
+     158: aload         11
+     160: invokevirtual #287                // Method net/minecraft/class_3568.method_51560:(Lnet/minecraft/class_1944;Lnet/minecraft/class_4076;)Lnet/minecraft/class_3560$class_8530;
+     163: getstatic     #291                // Field net/minecraft/class_3560$class_8530.field_44726:Lnet/minecraft/class_3560$class_8530;
+     166: if_acmpeq     172
+     169: goto          175
+     172: iconst_1
+     173: istore        4
+     175: iinc          9, 1
+     178: goto          69
+     181: iload         6
+     183: ifeq          341
+     186: iload         4
+     188: ifne          341
+     191: aload_2
+     192: invokevirtual #249                // Method net/minecraft/class_2818.method_32891:()I
+     195: iconst_1
+     196: isub
+     197: istore        5
+     199: aload_2
+     200: invokevirtual #253                // Method net/minecraft/class_2818.method_12006:()[Lnet/minecraft/class_2826;
+     203: astore        7
+     205: aload         7
+     207: arraylength
+     208: istore        8
+     210: iconst_0
+     211: istore        9
+     213: iload         9
+     215: iload         8
+     217: if_icmpge     341
+     220: aload         7
+     222: iload         9
+     224: aaload
+     225: astore        10
+     227: iinc          5, 1
+     230: aload         10
+     232: ifnull        335
+     235: aload         10
+     237: aload_2
+     238: invokevirtual #261                // Method net/minecraft/class_2818.method_12004:()Lnet/minecraft/class_1923;
+     241: getfield      #266                // Field net/minecraft/class_1923.field_9181:I
+     244: iload         5
+     246: aload_2
+     247: invokevirtual #261                // Method net/minecraft/class_2818.method_12004:()Lnet/minecraft/class_1923;
+     250: getfield      #269                // Field net/minecraft/class_1923.field_9180:I
+     253: invokestatic  #271                // Method shouldIngestSection:(Lnet/minecraft/class_2826;III)Z
+     256: ifne          262
+     259: goto          335
+     262: aload_1
+     263: invokevirtual #84                 // Method me/cortex/voxy/common/world/WorldEngine.markActive:()V
+     266: aload_0
+     267: getfield      #37                 // Field ingestQueue:Ljava/util/concurrent/ConcurrentLinkedDeque;
+     270: new           #7                  // class me/cortex/voxy/common/world/service/VoxelIngestService$IngestSection
+     273: dup
+     274: aload_2
+     275: invokevirtual #261                // Method net/minecraft/class_2818.method_12004:()Lnet/minecraft/class_1923;
+     278: getfield      #266                // Field net/minecraft/class_1923.field_9181:I
+     281: iload         5
+     283: aload_2
+     284: invokevirtual #261                // Method net/minecraft/class_2818.method_12004:()Lnet/minecraft/class_1923;
+     287: getfield      #269                // Field net/minecraft/class_1923.field_9180:I
+     290: aload_1
+     291: aload         10
+     293: aconst_null
+     294: aconst_null
+     295: invokespecial #297                // Method me/cortex/voxy/common/world/service/VoxelIngestService$IngestSection."<init>":(IIILme/cortex/voxy/common/world/WorldEngine;Lnet/minecraft/class_2826;Lnet/minecraft/class_2804;Lnet/minecraft/class_2804;)V
+     298: invokevirtual #301                // Method java/util/concurrent/ConcurrentLinkedDeque.add:(Ljava/lang/Object;)Z
+     301: pop
+     302: aload_0
+     303: getfield      #68                 // Field service:Lme/cortex/voxy/common/thread/Service;
+     306: invokevirtual #304                // Method me/cortex/voxy/common/thread/Service.execute:()V
+     309: goto          335
+     312: astore        11
+     314: iconst_2
+     315: anewarray     #4                  // class java/lang/Object
+     318: dup
+     319: iconst_0
+     320: ldc_w         #306                // String Executing had an error: assume shutting down, aborting
+     323: aastore
+     324: dup
+     325: iconst_1
+     326: aload         11
+     328: aastore
+     329: invokestatic  #312                // Method me/cortex/voxy/common/Logger.error:([Ljava/lang/Object;)V
+     332: goto          341
+     335: iinc          9, 1
+     338: goto          213
+     341: iload         4
+     343: ifne          348
+     346: iconst_0
+     347: ireturn
+     348: aload_3
+     349: getstatic     #294                // Field net/minecraft/class_1944.field_9282:Lnet/minecraft/class_1944;
+     352: invokevirtual #316                // Method net/minecraft/class_3568.method_15562:(Lnet/minecraft/class_1944;)Lnet/minecraft/class_3562;
+     355: astore        7
+     357: aload_3
+     358: getstatic     #283                // Field net/minecraft/class_1944.field_9284:Lnet/minecraft/class_1944;
+     361: invokevirtual #316                // Method net/minecraft/class_3568.method_15562:(Lnet/minecraft/class_1944;)Lnet/minecraft/class_3562;
+     364: astore        8
+     366: aload_2
+     367: invokevirtual #249                // Method net/minecraft/class_2818.method_32891:()I
+     370: iconst_1
+     371: isub
+     372: istore        5
+     374: aload_2
+     375: invokevirtual #253                // Method net/minecraft/class_2818.method_12006:()[Lnet/minecraft/class_2826;
+     378: astore        9
+     380: aload         9
+     382: arraylength
+     383: istore        10
+     385: iconst_0
+     386: istore        11
+     388: iload         11
+     390: iload         10
+     392: if_icmpge     575
+     395: aload         9
+     397: iload         11
+     399: aaload
+     400: astore        12
+     402: iinc          5, 1
+     405: aload         12
+     407: ifnull        569
+     410: aload         12
+     412: aload_2
+     413: invokevirtual #261                // Method net/minecraft/class_2818.method_12004:()Lnet/minecraft/class_1923;
+     416: getfield      #266                // Field net/minecraft/class_1923.field_9181:I
+     419: iload         5
+     421: aload_2
+     422: invokevirtual #261                // Method net/minecraft/class_2818.method_12004:()Lnet/minecraft/class_1923;
+     425: getfield      #269                // Field net/minecraft/class_1923.field_9180:I
+     428: invokestatic  #271                // Method shouldIngestSection:(Lnet/minecraft/class_2826;III)Z
+     431: ifne          437
+     434: goto          569
+     437: aload_2
+     438: invokevirtual #261                // Method net/minecraft/class_2818.method_12004:()Lnet/minecraft/class_1923;
+     441: iload         5
+     443: invokestatic  #277                // Method net/minecraft/class_4076.method_18681:(Lnet/minecraft/class_1923;I)Lnet/minecraft/class_4076;
+     446: astore        13
+     448: aload         7
+     450: aload         13
+     452: invokeinterface #322,  2          // InterfaceMethod net/minecraft/class_3562.method_15544:(Lnet/minecraft/class_4076;)Lnet/minecraft/class_2804;
+     457: astore        14
+     459: aload         14
+     461: ifnull        471
+     464: aload         14
+     466: invokevirtual #326                // Method net/minecraft/class_2804.method_12144:()Lnet/minecraft/class_2804;
+     469: astore        14
+     471: aload         8
+     473: aload         13
+     475: invokeinterface #322,  2          // InterfaceMethod net/minecraft/class_3562.method_15544:(Lnet/minecraft/class_4076;)Lnet/minecraft/class_2804;
+     480: astore        15
+     482: aload         15
+     484: ifnull        494
+     487: aload         15
+     489: invokevirtual #326                // Method net/minecraft/class_2804.method_12144:()Lnet/minecraft/class_2804;
+     492: astore        15
+     494: aload_1
+     495: invokevirtual #84                 // Method me/cortex/voxy/common/world/WorldEngine.markActive:()V
+     498: aload_0
+     499: getfield      #37                 // Field ingestQueue:Ljava/util/concurrent/ConcurrentLinkedDeque;
+     502: new           #7                  // class me/cortex/voxy/common/world/service/VoxelIngestService$IngestSection
+     505: dup
+     506: aload_2
+     507: invokevirtual #261                // Method net/minecraft/class_2818.method_12004:()Lnet/minecraft/class_1923;
+     510: getfield      #266                // Field net/minecraft/class_1923.field_9181:I
+     513: iload         5
+     515: aload_2
+     516: invokevirtual #261                // Method net/minecraft/class_2818.method_12004:()Lnet/minecraft/class_1923;
+     519: getfield      #269                // Field net/minecraft/class_1923.field_9180:I
+     522: aload_1
+     523: aload         12
+     525: aload         14
+     527: aload         15
+     529: invokespecial #297                // Method me/cortex/voxy/common/world/service/VoxelIngestService$IngestSection."<init>":(IIILme/cortex/voxy/common/world/WorldEngine;Lnet/minecraft/class_2826;Lnet/minecraft/class_2804;Lnet/minecraft/class_2804;)V
+     532: invokevirtual #301                // Method java/util/concurrent/ConcurrentLinkedDeque.add:(Ljava/lang/Object;)Z
+     535: pop
+     536: aload_0
+     537: getfield      #68                 // Field service:Lme/cortex/voxy/common/thread/Service;
+     540: invokevirtual #304                // Method me/cortex/voxy/common/thread/Service.execute:()V
+     543: goto          569
+     546: astore        16
+     548: iconst_2
+     549: anewarray     #4                  // class java/lang/Object
+     552: dup
+     553: iconst_0
+     554: ldc_w         #306                // String Executing had an error: assume shutting down, aborting
+     557: aastore
+     558: dup
+     559: iconst_1
+     560: aload         16
+     562: aastore
+     563: invokestatic  #312                // Method me/cortex/voxy/common/Logger.error:([Ljava/lang/Object;)V
+     566: goto          575
+     569: iinc          11, 1
+     572: goto          388
+     575: iconst_1
+     576: ireturn
+    Exception table:
+       from    to  target type
+         302   309   312   Class java/lang/Exception
+         536   543   546   Class java/lang/Exception
+
+  public int getTaskCount();
+    Code:
+       0: aload_0
+       1: getfield      #68                 // Field service:Lme/cortex/voxy/common/thread/Service;
+       4: invokevirtual #343                // Method me/cortex/voxy/common/thread/Service.numJobs:()I
+       7: ireturn
+
+  public void shutdown();
+    Code:
+       0: aload_0
+       1: getfield      #68                 // Field service:Lme/cortex/voxy/common/thread/Service;
+       4: invokevirtual #346                // Method me/cortex/voxy/common/thread/Service.shutdown:()I
+       7: pop
+       8: return
+
+  public static boolean tryIngestChunk(me.cortex.voxy.commonImpl.WorldIdentifier, net.minecraft.class_2818);
+    Code:
+       0: aload_0
+       1: ifnonnull     6
+       4: iconst_0
+       5: ireturn
+       6: invokestatic  #355                // Method me/cortex/voxy/commonImpl/VoxyCommon.getInstance:()Lme/cortex/voxy/commonImpl/VoxyInstance;
+       9: astore_2
+      10: aload_2
+      11: ifnonnull     16
+      14: iconst_0
+      15: ireturn
+      16: aload_2
+      17: aload_0
+      18: invokevirtual #361                // Method me/cortex/voxy/commonImpl/VoxyInstance.isIngestEnabled:(Lme/cortex/voxy/commonImpl/WorldIdentifier;)Z
+      21: ifne          26
+      24: iconst_0
+      25: ireturn
+      26: aload_2
+      27: aload_0
+      28: invokevirtual #365                // Method me/cortex/voxy/commonImpl/VoxyInstance.getOrCreate:(Lme/cortex/voxy/commonImpl/WorldIdentifier;)Lme/cortex/voxy/common/world/WorldEngine;
+      31: astore_3
+      32: aload_3
+      33: ifnonnull     38
+      36: iconst_0
+      37: ireturn
+      38: aload_2
+      39: invokevirtual #369                // Method me/cortex/voxy/commonImpl/VoxyInstance.getIngestService:()Lme/cortex/voxy/common/world/service/VoxelIngestService;
+      42: aload_3
+      43: aload_1
+      44: invokevirtual #371                // Method enqueueIngest:(Lme/cortex/voxy/common/world/WorldEngine;Lnet/minecraft/class_2818;)Z
+      47: ireturn
+
+  public static boolean tryAutoIngestChunk(net.minecraft.class_2818);
+    Code:
+       0: aload_0
+       1: invokevirtual #239                // Method net/minecraft/class_2818.method_12200:()Lnet/minecraft/class_1937;
+       4: invokestatic  #382                // Method me/cortex/voxy/commonImpl/WorldIdentifier.of:(Lnet/minecraft/class_1937;)Lme/cortex/voxy/commonImpl/WorldIdentifier;
+       7: aload_0
+       8: invokestatic  #384                // Method tryIngestChunk:(Lme/cortex/voxy/commonImpl/WorldIdentifier;Lnet/minecraft/class_2818;)Z
+      11: ireturn
+
+  private boolean rawIngest0(me.cortex.voxy.common.world.WorldEngine, net.minecraft.class_2826, int, int, int, net.minecraft.class_2804, net.minecraft.class_2804);
+    Code:
+       0: aload_0
+       1: getfield      #37                 // Field ingestQueue:Ljava/util/concurrent/ConcurrentLinkedDeque;
+       4: new           #7                  // class me/cortex/voxy/common/world/service/VoxelIngestService$IngestSection
+       7: dup
+       8: iload_3
+       9: iload         4
+      11: iload         5
+      13: aload_1
+      14: aload_2
+      15: aload         6
+      17: aload         7
+      19: invokespecial #297                // Method me/cortex/voxy/common/world/service/VoxelIngestService$IngestSection."<init>":(IIILme/cortex/voxy/common/world/WorldEngine;Lnet/minecraft/class_2826;Lnet/minecraft/class_2804;Lnet/minecraft/class_2804;)V
+      22: invokevirtual #301                // Method java/util/concurrent/ConcurrentLinkedDeque.add:(Ljava/lang/Object;)Z
+      25: pop
+      26: aload_0
+      27: getfield      #68                 // Field service:Lme/cortex/voxy/common/thread/Service;
+      30: invokevirtual #304                // Method me/cortex/voxy/common/thread/Service.execute:()V
+      33: iconst_1
+      34: ireturn
+      35: astore        8
+      37: iconst_2
+      38: anewarray     #4                  // class java/lang/Object
+      41: dup
+      42: iconst_0
+      43: ldc_w         #306                // String Executing had an error: assume shutting down, aborting
+      46: aastore
+      47: dup
+      48: iconst_1
+      49: aload         8
+      51: aastore
+      52: invokestatic  #312                // Method me/cortex/voxy/common/Logger.error:([Ljava/lang/Object;)V
+      55: iconst_0
+      56: ireturn
+    Exception table:
+       from    to  target type
+          26    34    35   Class java/lang/Exception
+
+  public static boolean rawIngest(me.cortex.voxy.commonImpl.WorldIdentifier, net.minecraft.class_2826, int, int, int, net.minecraft.class_2804, net.minecraft.class_2804);
+    Code:
+       0: aload_0
+       1: ifnonnull     6
+       4: iconst_0
+       5: ireturn
+       6: aload_0
+       7: invokevirtual #396                // Method me/cortex/voxy/commonImpl/WorldIdentifier.getOrCreateEngine:()Lme/cortex/voxy/common/world/WorldEngine;
+      10: astore        7
+      12: aload         7
+      14: ifnonnull     19
+      17: iconst_0
+      18: ireturn
+      19: aload         7
+      21: aload_1
+      22: iload_2
+      23: iload_3
+      24: iload         4
+      26: aload         5
+      28: aload         6
+      30: invokestatic  #398                // Method rawIngest:(Lme/cortex/voxy/common/world/WorldEngine;Lnet/minecraft/class_2826;IIILnet/minecraft/class_2804;Lnet/minecraft/class_2804;)Z
+      33: ireturn
+
+  public static boolean rawIngest(me.cortex.voxy.common.world.WorldEngine, net.minecraft.class_2826, int, int, int, net.minecraft.class_2804, net.minecraft.class_2804);
+    Code:
+       0: aload_1
+       1: iload_2
+       2: iload_3
+       3: iload         4
+       5: invokestatic  #271                // Method shouldIngestSection:(Lnet/minecraft/class_2826;III)Z
+       8: ifne          13
+      11: iconst_0
+      12: ireturn
+      13: aload_0
+      14: getfield      #401                // Field me/cortex/voxy/common/world/WorldEngine.instanceIn:Lme/cortex/voxy/commonImpl/VoxyInstance;
+      17: ifnonnull     22
+      20: iconst_0
+      21: ireturn
+      22: aload_0
+      23: getfield      #401                // Field me/cortex/voxy/common/world/WorldEngine.instanceIn:Lme/cortex/voxy/commonImpl/VoxyInstance;
+      26: aconst_null
+      27: invokevirtual #361                // Method me/cortex/voxy/commonImpl/VoxyInstance.isIngestEnabled:(Lme/cortex/voxy/commonImpl/WorldIdentifier;)Z
+      30: ifne          35
+      33: iconst_0
+      34: ireturn
+      35: aload_0
+      36: getfield      #401                // Field me/cortex/voxy/common/world/WorldEngine.instanceIn:Lme/cortex/voxy/commonImpl/VoxyInstance;
+      39: invokevirtual #369                // Method me/cortex/voxy/commonImpl/VoxyInstance.getIngestService:()Lme/cortex/voxy/common/world/service/VoxelIngestService;
+      42: aload_0
+      43: aload_1
+      44: iload_2
+      45: iload_3
+      46: iload         4
+      48: aload         5
+      50: aload         6
+      52: invokevirtual #403                // Method rawIngest0:(Lme/cortex/voxy/common/world/WorldEngine;Lnet/minecraft/class_2826;IIILnet/minecraft/class_2804;Lnet/minecraft/class_2804;)Z
+      55: ireturn
+
+  private static byte lambda$getLightingSupplier$4(net.minecraft.class_2804, int, int, int);
+    Code:
+       0: iconst_0
+       1: istore        4
+       3: bipush        15
+       5: aload_0
+       6: iload_1
+       7: iload_2
+       8: iload_3
+       9: invokevirtual #407                // Method net/minecraft/class_2804.method_12139:(III)I
+      12: invokestatic  #413                // Method java/lang/Math.min:(II)I
+      15: istore        5
+      17: iload         5
+      19: iload         4
+      21: iconst_4
+      22: ishl
+      23: ior
+      24: i2b
+      25: ireturn
+
+  private static byte lambda$getLightingSupplier$3(net.minecraft.class_2804, int, int, int);
+    Code:
+       0: bipush        15
+       2: aload_0
+       3: iload_1
+       4: iload_2
+       5: iload_3
+       6: invokevirtual #407                // Method net/minecraft/class_2804.method_12139:(III)I
+       9: invokestatic  #413                // Method java/lang/Math.min:(II)I
+      12: istore        4
+      14: iconst_0
+      15: istore        5
+      17: iload         5
+      19: iload         4
+      21: iconst_4
+      22: ishl
+      23: ior
+      24: i2b
+      25: ireturn
+
+  private static byte lambda$getLightingSupplier$2(net.minecraft.class_2804, net.minecraft.class_2804, int, int, int);
+    Code:
+       0: bipush        15
+       2: aload_0
+       3: iload_2
+       4: iload_3
+       5: iload         4
+       7: invokevirtual #407                // Method net/minecraft/class_2804.method_12139:(III)I
+      10: invokestatic  #413                // Method java/lang/Math.min:(II)I
+      13: istore        5
+      15: bipush        15
+      17: aload_1
+      18: iload_2
+      19: iload_3
+      20: iload         4
+      22: invokevirtual #407                // Method net/minecraft/class_2804.method_12139:(III)I
+      25: invokestatic  #413                // Method java/lang/Math.min:(II)I
+      28: istore        6
+      30: iload         6
+      32: iload         5
+      34: iconst_4
+      35: ishl
+      36: ior
+      37: i2b
+      38: ireturn
+
+  private static byte lambda$getLightingSupplier$1(int, int, int);
+    Code:
+       0: iconst_0
+       1: ireturn
+
+  private java.lang.Runnable lambda$new$0();
+    Code:
+       0: aload_0
+       1: invokedynamic #423,  0            // InvokeDynamic #5:run:(Lme/cortex/voxy/common/world/service/VoxelIngestService;)Ljava/lang/Runnable;
+       6: areturn
+
+  static {};
+    Code:
+       0: invokedynamic #432,  0            // InvokeDynamic #6:get:()Ljava/util/function/Supplier;
+       5: invokestatic  #436                // Method java/lang/ThreadLocal.withInitial:(Ljava/util/function/Supplier;)Ljava/lang/ThreadLocal;
+       8: putstatic     #90                 // Field SECTION_CACHE:Ljava/lang/ThreadLocal;
+      11: return
+}

@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.client.map.VoxyColumnsTest" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-11-04T02:51:45.327Z" hostname="zentixua-pc" time="0.012">
+  <properties/>
+  <testcase name="plantsDoNotStopTheHeightmapButGlassKeepsTheColourBelow()" classname="ua.zentix.incoming.client.map.VoxyColumnsTest" time="0.005"/>
+  <testcase name="colourlessDeeperThanEightBlocksIsUnknown()" classname="ua.zentix.incoming.client.map.VoxyColumnsTest" time="0.004"/>
+  <testcase name="blockInfoAsTheHeightmap()" classname="ua.zentix.incoming.client.map.VoxyColumnsTest" time="0.0"/>
+  <testcase name="groundAtBlockLevelIsExact()" classname="ua.zentix.incoming.client.map.VoxyColumnsTest" time="0.0"/>
+  <testcase name="waterDepthAcrossSectionsAndCapped()" classname="ua.zentix.incoming.client.map.VoxyColumnsTest" time="0.002"/>
+  <testcase name="sectionsGoTopDown()" classname="ua.zentix.incoming.client.map.VoxyColumnsTest" time="0.001"/>
+  <testcase name="coarseLevelTakesTheMiddleOfTheVoxel()" classname="ua.zentix.incoming.client.map.VoxyColumnsTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

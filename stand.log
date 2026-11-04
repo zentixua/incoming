@@ -1,0 +1,18 @@
+03:28:10 mt-b3-final warm-up: pack none, 20 steps
+03:28:15 waiting for quiet: foreign 2.5 cores, GPU [], services {'incoming-job-mt-b2-shore-fixed-720671.service': 2.49}
+03:29:16 waiting for quiet: foreign 1.21 cores, GPU [], services {'incoming-job-mt-b2-shore-fixed-720671.service': 1.14}
+03:30:11 not quiet after 2 min — proceeding (window load is reported)
+03:33:00 mt-b3-final warm-up: pack none — exit 0, 4.8 min
+03:33:00 mt-b3-final A1: pack none, 20 steps
+03:36:00 mt-b3-final A1: pack none — exit 0, 3.0 min
+03:36:00 mt-b3-final B: pack none, 20 steps
+03:38:50 mt-b3-final B: pack none — exit 0, 2.8 min
+03:38:50 mt-b3-final A2: pack none, 20 steps
+03:41:41 mt-b3-final A2: pack none — exit 0, 2.9 min
+03:41:44 mt-b3-final: pack none, pair 1 — pass
+03:41:45 A1 none: valid
+03:41:46 A2 none: valid
+03:41:47 B none: valid
+03:41:49 mt-b3-final: pass; results in /mnt/data/projects/incoming/mod/run/stand/out/mt-b3-final
+laptop_job stand-mt-b3-final: exit 0
+stand mt-b3-final: exit 0

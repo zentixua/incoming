@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.scenario.lod.LodBufferTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-11-04T02:52:16.956Z" hostname="zentixua-pc" time="0.029">
+  <properties/>
+  <testcase name="earlyDeliveryCannotMoveThePressureClock()" classname="ua.zentix.incoming.scenario.lod.LodBufferTest" time="0.0"/>
+  <testcase name="stopRefireRejectsOldReadsEvenAtTheSameCoordinate()" classname="ua.zentix.incoming.scenario.lod.LodBufferTest" time="0.0"/>
+  <testcase name="neverCompletingReadsStayBoundedAcrossThousandsOfRefires()" classname="ua.zentix.incoming.scenario.lod.LodBufferTest" time="0.001"/>
+  <testcase name="bunchedOutOfOrderReadsDrainByDueTimeAndRespectBothLimits()" classname="ua.zentix.incoming.scenario.lod.LodBufferTest" time="0.0"/>
+  <testcase name="takenWorkStaysChargedAcrossStop()" classname="ua.zentix.incoming.scenario.lod.LodBufferTest" time="0.0"/>
+  <testcase name="panoramaYieldsWithoutWholeZoneEnumeration()" classname="ua.zentix.incoming.scenario.lod.LodBufferTest" time="0.027"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

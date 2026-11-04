@@ -1,0 +1,457 @@
+[
+  {
+    "file": "replay_before.png",
+    "strip_contrast": 0.28030303030303116,
+    "max_row_contrast": 1.0
+  },
+  {
+    "file": "replay_000_tick4506.png",
+    "strip_contrast": 0.28030303030303116,
+    "max_row_contrast": 1.0
+  },
+  {
+    "file": "replay_001_tick4506.png",
+    "strip_contrast": 0.265151515151513,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_002_tick4506.png",
+    "strip_contrast": 0.27272727272727015,
+    "max_row_contrast": 0.6666666666666856
+  },
+  {
+    "file": "replay_003_tick4506.png",
+    "strip_contrast": 0.2727272727272727,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_004_tick4506.png",
+    "strip_contrast": 0.23484848484848053,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_005_tick4507.png",
+    "strip_contrast": 0.22727272727272468,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_006_tick4507.png",
+    "strip_contrast": 0.2500000000000013,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_007_tick4507.png",
+    "strip_contrast": 0.25757575757575457,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_008_tick4507.png",
+    "strip_contrast": 0.28030303030303116,
+    "max_row_contrast": 1.0
+  },
+  {
+    "file": "replay_009_tick4507.png",
+    "strip_contrast": 0.265151515151513,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_010_tick4507.png",
+    "strip_contrast": 0.27272727272727015,
+    "max_row_contrast": 0.6666666666666856
+  },
+  {
+    "file": "replay_011_tick4508.png",
+    "strip_contrast": 0.2727272727272727,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_012_tick4508.png",
+    "strip_contrast": 0.23484848484848053,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_013_tick4508.png",
+    "strip_contrast": 0.4469696969696987,
+    "max_row_contrast": 1.8333333333333428
+  },
+  {
+    "file": "replay_014_tick4508.png",
+    "strip_contrast": 1.3333333333333337,
+    "max_row_contrast": 7.0
+  },
+  {
+    "file": "replay_015_tick4508.png",
+    "strip_contrast": 1.8560606060606064,
+    "max_row_contrast": 10.333333333333343
+  },
+  {
+    "file": "replay_016_tick4509.png",
+    "strip_contrast": 2.787878787878787,
+    "max_row_contrast": 12.666666666666657
+  },
+  {
+    "file": "replay_017_tick4509.png",
+    "strip_contrast": 2.3712121212121247,
+    "max_row_contrast": 11.666666666666657
+  },
+  {
+    "file": "replay_018_tick4509.png",
+    "strip_contrast": 1.9772727272727273,
+    "max_row_contrast": 12.5
+  },
+  {
+    "file": "replay_019_tick4509.png",
+    "strip_contrast": 0.2727272727272727,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_020_tick4510.png",
+    "strip_contrast": 0.23484848484848053,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_021_tick4510.png",
+    "strip_contrast": 0.22727272727272468,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_022_tick4510.png",
+    "strip_contrast": 0.2500000000000013,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_023_tick4510.png",
+    "strip_contrast": 0.25757575757575457,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_024_tick4510.png",
+    "strip_contrast": 0.28030303030303116,
+    "max_row_contrast": 1.0
+  },
+  {
+    "file": "replay_025_tick4511.png",
+    "strip_contrast": 0.265151515151513,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_026_tick4511.png",
+    "strip_contrast": 0.27272727272727015,
+    "max_row_contrast": 0.6666666666666856
+  },
+  {
+    "file": "replay_027_tick4511.png",
+    "strip_contrast": 0.2727272727272727,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_028_tick4511.png",
+    "strip_contrast": 0.23484848484848053,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_029_tick4511.png",
+    "strip_contrast": 0.22727272727272468,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_030_tick4512.png",
+    "strip_contrast": 0.2500000000000013,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_031_tick4512.png",
+    "strip_contrast": 0.25757575757575457,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_032_tick4512.png",
+    "strip_contrast": 0.28030303030303116,
+    "max_row_contrast": 1.0
+  },
+  {
+    "file": "replay_033_tick4513.png",
+    "strip_contrast": 0.265151515151513,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_034_tick4513.png",
+    "strip_contrast": 0.27272727272727015,
+    "max_row_contrast": 0.6666666666666856
+  },
+  {
+    "file": "replay_035_tick4513.png",
+    "strip_contrast": 0.2727272727272727,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_036_tick4513.png",
+    "strip_contrast": 0.23484848484848053,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_037_tick4513.png",
+    "strip_contrast": 0.22727272727272468,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_038_tick4514.png",
+    "strip_contrast": 0.2500000000000013,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_039_tick4514.png",
+    "strip_contrast": 0.25757575757575457,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_040_tick4514.png",
+    "strip_contrast": 0.28030303030303116,
+    "max_row_contrast": 1.0
+  },
+  {
+    "file": "replay_041_tick4514.png",
+    "strip_contrast": 0.265151515151513,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_042_tick4515.png",
+    "strip_contrast": 0.27272727272727015,
+    "max_row_contrast": 0.6666666666666856
+  },
+  {
+    "file": "replay_043_tick4515.png",
+    "strip_contrast": 0.2727272727272727,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_044_tick4515.png",
+    "strip_contrast": 0.23484848484848053,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_045_tick4515.png",
+    "strip_contrast": 0.22727272727272468,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_046_tick4515.png",
+    "strip_contrast": 0.2500000000000013,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_047_tick4516.png",
+    "strip_contrast": 0.25757575757575457,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_048_tick4516.png",
+    "strip_contrast": 0.28030303030303116,
+    "max_row_contrast": 1.0
+  },
+  {
+    "file": "replay_049_tick4516.png",
+    "strip_contrast": 0.265151515151513,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_050_tick4517.png",
+    "strip_contrast": 0.27272727272727015,
+    "max_row_contrast": 0.6666666666666856
+  },
+  {
+    "file": "replay_051_tick4517.png",
+    "strip_contrast": 0.2727272727272727,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_052_tick4517.png",
+    "strip_contrast": 0.23484848484848053,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_053_tick4518.png",
+    "strip_contrast": 0.22727272727272468,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_054_tick4518.png",
+    "strip_contrast": 0.2500000000000013,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_055_tick4519.png",
+    "strip_contrast": 0.25757575757575457,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_056_tick4519.png",
+    "strip_contrast": 0.28030303030303116,
+    "max_row_contrast": 1.0
+  },
+  {
+    "file": "replay_057_tick4519.png",
+    "strip_contrast": 0.265151515151513,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_058_tick4520.png",
+    "strip_contrast": 0.27272727272727015,
+    "max_row_contrast": 0.6666666666666856
+  },
+  {
+    "file": "replay_059_tick4520.png",
+    "strip_contrast": 0.2727272727272727,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_060_tick4521.png",
+    "strip_contrast": 0.23484848484848053,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_061_tick4521.png",
+    "strip_contrast": 0.22727272727272468,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_062_tick4521.png",
+    "strip_contrast": 0.2500000000000013,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_063_tick4521.png",
+    "strip_contrast": 0.25757575757575457,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_064_tick4522.png",
+    "strip_contrast": 0.28030303030303116,
+    "max_row_contrast": 1.0
+  },
+  {
+    "file": "replay_065_tick4522.png",
+    "strip_contrast": 0.265151515151513,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_066_tick4523.png",
+    "strip_contrast": 0.27272727272727015,
+    "max_row_contrast": 0.6666666666666856
+  },
+  {
+    "file": "replay_067_tick4523.png",
+    "strip_contrast": 0.2727272727272727,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_068_tick4523.png",
+    "strip_contrast": 0.23484848484848053,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_069_tick4523.png",
+    "strip_contrast": 0.22727272727272468,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_070_tick4524.png",
+    "strip_contrast": 0.2500000000000013,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_071_tick4524.png",
+    "strip_contrast": 0.25757575757575457,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_072_tick4524.png",
+    "strip_contrast": 0.28030303030303116,
+    "max_row_contrast": 1.0
+  },
+  {
+    "file": "replay_073_tick4525.png",
+    "strip_contrast": 0.265151515151513,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_074_tick4525.png",
+    "strip_contrast": 0.27272727272727015,
+    "max_row_contrast": 0.6666666666666856
+  },
+  {
+    "file": "replay_075_tick4525.png",
+    "strip_contrast": 0.2727272727272727,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_076_tick4526.png",
+    "strip_contrast": 0.23484848484848053,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_077_tick4526.png",
+    "strip_contrast": 0.22727272727272468,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_078_tick4526.png",
+    "strip_contrast": 0.2500000000000013,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_079_tick4526.png",
+    "strip_contrast": 0.25757575757575457,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_080_tick4526.png",
+    "strip_contrast": 0.28030303030303116,
+    "max_row_contrast": 1.0
+  },
+  {
+    "file": "replay_081_tick4527.png",
+    "strip_contrast": 0.265151515151513,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_082_tick4527.png",
+    "strip_contrast": 0.27272727272727015,
+    "max_row_contrast": 0.6666666666666856
+  },
+  {
+    "file": "replay_083_tick4527.png",
+    "strip_contrast": 0.2727272727272727,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_084_tick4527.png",
+    "strip_contrast": 0.23484848484848053,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_085_tick4527.png",
+    "strip_contrast": 0.22727272727272468,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_086_tick4528.png",
+    "strip_contrast": 0.2500000000000013,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_087_tick4528.png",
+    "strip_contrast": 0.25757575757575457,
+    "max_row_contrast": 0.6666666666666572
+  },
+  {
+    "file": "replay_088_tick4528.png",
+    "strip_contrast": 0.28030303030303116,
+    "max_row_contrast": 1.0
+  },
+  {
+    "file": "replay_089_tick4528.png",
+    "strip_contrast": 0.265151515151513,
+    "max_row_contrast": 0.6666666666666572
+  }
+]

@@ -1,0 +1,34 @@
+{
+  "sable-companion-common-1.21.1-1.6.0.jar": {
+    "bytes": 35444,
+    "sha256": "873633e35046e3761b277ff8a1ecad0d55d9a3014fa81a0b084c9aecba1f3bed"
+  },
+  "iris-neoforge-1.8.14-beta.1+mc1.21.1.jar": {
+    "bytes": 2540723,
+    "sha256": "60d5f8bf52f25e9986440f4a4270a6bd986d9cff994510e1108ac1547063b314"
+  },
+  "sodium-neoforge-0.8.13+mc1.21.1.jar": {
+    "bytes": 1292934,
+    "sha256": "575d187b15328d7bddd8a9b1bee64333c22c14735f5780ec49eac0cd5503c08d"
+  },
+  "forgified-fabric-api-0.116.15+2.3.6+1.21.1.jar": {
+    "bytes": 5612888,
+    "sha256": "bcbb5d8479032690d53debfcf61c0477080ff6d1d4dae9a9a85122b47377646a"
+  },
+  "roxy-1.21.1-NeoForge-0.4.1.jar": {
+    "bytes": 2718886,
+    "sha256": "d1417077483742d41d494fc0276c50992edefd11a444c8166ee3125590679498"
+  },
+  "voxy-0.2.16-beta+1.21.11.jar": {
+    "bytes": 12620254,
+    "sha256": "7f8226cf64a4f5dc064e1075965714b718ac5f42fb28f826135a37c64e66e10b"
+  },
+  "lod-server-support-neoforge-0.20.0+1.21.1.jar": {
+    "bytes": 14540420,
+    "sha256": "2bc87a9f65b7b9450455035d1ec3502e6ab338ab736af90dada484de3fd0139e"
+  },
+  "ComplementaryUnbound_r5.9.3.zip": {
+    "bytes": 553400,
+    "sha256": "98ac741dee294d2a3c82d153349148c3bb7fb688c30eb3b49c3b9ac37e968c5a"
+  }
+}

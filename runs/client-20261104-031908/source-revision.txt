@@ -1,0 +1,2 @@
+11f4c67f7
+production transport; receipt sampled at finish; client queued 96 MiB/65536 columns, repair 24 MiB; probe credits 128 MiB/65536; two single-column and one 64-column stale replay

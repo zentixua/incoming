@@ -1,0 +1,7 @@
+standLaunch: /mnt/data/projects/incoming/mod/run/wt-MT/tools/stand/build/launch/client.sh (game directory /mnt/data/projects/incoming/mod/run/stand/game)
+03:53:13 client script /mnt/data/projects/incoming/mod/run/wt-MT/tools/stand/build/launch/client.sh
+JAR	/mnt/data/projects/incoming/mod/run/wt-MT/mod/build/libs/incoming-3.10.4.jar	54b0198af
+standLaunch: /mnt/data/projects/incoming/mod/run/wt-MT/tools/stand/build/launch/client.sh (game directory /mnt/data/projects/incoming/mod/run/stand/game)
+03:53:29 client script /mnt/data/projects/incoming/mod/run/wt-MT/tools/stand/build/launch/client.sh
+JAR	/mnt/data/projects/incoming/mod/run/stand/dl/jars/ci-ab2741fa11d5/incoming-3.10.4.jar	main@ab2741fa
+laptop_job mt-b3-prepare-merged: exit 0

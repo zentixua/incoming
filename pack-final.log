@@ -1,0 +1,122 @@
+[
+  {
+    "run": "client-20261104-022302",
+    "sequence": "front_1000",
+    "video_bytes": 1053759,
+    "timing": "120 fps preview; original frame/tick timestamps in names and events.tsv are authoritative",
+    "count": 90
+  },
+  {
+    "run": "client-20261104-022302",
+    "sequence": "front_100",
+    "video_bytes": 1044941,
+    "timing": "120 fps preview; original frame/tick timestamps in names and events.tsv are authoritative",
+    "count": 90
+  },
+  {
+    "run": "client-20261104-022302",
+    "sequence": "front_15",
+    "video_bytes": 1978353,
+    "timing": "120 fps preview; original frame/tick timestamps in names and events.tsv are authoritative",
+    "count": 90
+  },
+  {
+    "run": "client-20261104-022302",
+    "sequence": "replay",
+    "video_bytes": 34065300,
+    "timing": "120 fps preview; original frame/tick timestamps in names and events.tsv are authoritative",
+    "count": 90
+  },
+  {
+    "run": "client-20261104-023441",
+    "sequence": "front_15",
+    "video_bytes": 2622173,
+    "timing": "120 fps preview; original frame/tick timestamps in names and events.tsv are authoritative",
+    "count": 90
+  },
+  {
+    "run": "client-20261104-025029",
+    "sequence": "front_15",
+    "video_bytes": 2549497,
+    "timing": "120 fps preview; original frame/tick timestamps in names and events.tsv are authoritative",
+    "count": 90
+  },
+  {
+    "run": "client-20261104-025954",
+    "sequence": "front_1000",
+    "video_bytes": 4806680,
+    "timing": "120 fps preview; original frame/tick timestamps in names and events.tsv are authoritative",
+    "count": 90
+  },
+  {
+    "run": "client-20261104-025954",
+    "sequence": "front_100",
+    "video_bytes": 3438698,
+    "timing": "120 fps preview; original frame/tick timestamps in names and events.tsv are authoritative",
+    "count": 90
+  },
+  {
+    "run": "client-20261104-025954",
+    "sequence": "front_15",
+    "video_bytes": 2553493,
+    "timing": "120 fps preview; original frame/tick timestamps in names and events.tsv are authoritative",
+    "count": 90
+  },
+  {
+    "run": "client-20261104-025954",
+    "sequence": "replay_0",
+    "video_bytes": 34073024,
+    "timing": "120 fps preview; original frame/tick timestamps in names and events.tsv are authoritative",
+    "count": 90
+  },
+  {
+    "run": "client-20261104-025954",
+    "sequence": "replay_1",
+    "video_bytes": 34117980,
+    "timing": "120 fps preview; original frame/tick timestamps in names and events.tsv are authoritative",
+    "count": 90
+  },
+  {
+    "run": "client-20261104-031908",
+    "sequence": "front_1000",
+    "video_bytes": 4791469,
+    "timing": "120 fps preview; original frame/tick timestamps in names and events.tsv are authoritative",
+    "count": 90
+  },
+  {
+    "run": "client-20261104-031908",
+    "sequence": "front_100",
+    "video_bytes": 3444831,
+    "timing": "120 fps preview; original frame/tick timestamps in names and events.tsv are authoritative",
+    "count": 90
+  },
+  {
+    "run": "client-20261104-031908",
+    "sequence": "front_15",
+    "video_bytes": 2554386,
+    "timing": "120 fps preview; original frame/tick timestamps in names and events.tsv are authoritative",
+    "count": 90
+  },
+  {
+    "run": "client-20261104-031908",
+    "sequence": "replay_0",
+    "video_bytes": 34051701,
+    "timing": "120 fps preview; original frame/tick timestamps in names and events.tsv are authoritative",
+    "count": 90
+  },
+  {
+    "run": "client-20261104-031908",
+    "sequence": "replay_1",
+    "video_bytes": 34059271,
+    "timing": "120 fps preview; original frame/tick timestamps in names and events.tsv are authoritative",
+    "count": 90
+  },
+  {
+    "run": "client-20261104-031908",
+    "sequence": "replay_2",
+    "video_bytes": 34100737,
+    "timing": "120 fps preview; original frame/tick timestamps in names and events.tsv are authoritative",
+    "count": 90
+  }
+]
+laptop_job mt-b3-pack-final: exit 0
