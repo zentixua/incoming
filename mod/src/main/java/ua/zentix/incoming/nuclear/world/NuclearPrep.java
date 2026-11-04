@@ -409,7 +409,7 @@ public final class NuclearPrep {
     boolean bind(ServerLevel level, UUID handle, int strikeId) {
         Prep p = request(handle);
         if (p == null) return false;
-        if (p.bound) return p.strike == strikeId;
+        if (p.bound) return p.strike == strikeId && compatible(p) && p.failure == RuinPreparation.Reason.NONE;
         if (status(level, handle).stage() != RuinPreparation.Stage.READY) return false;
         var s = NuclearEvents.get(level).scheduled().stream().filter(x -> x.id() == strikeId).findFirst().orElse(null);
         if (s == null || s.owner().isEmpty() || !s.owner().get().equals(p.owner) || s.yieldKt() != p.yieldKt

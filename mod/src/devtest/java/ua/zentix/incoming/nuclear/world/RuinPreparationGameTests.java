@@ -119,6 +119,7 @@ public final class RuinPreparationGameTests {
             } finally { all.remove(legacy); }
             field(p, "generation").setInt(p, Blast.generation - 1);
             h.assertTrue(RuinPreparation.status(level, handle).reason() == RuinPreparation.Reason.INCOMPATIBLE, "resource reload retained readiness");
+            h.assertTrue(!RuinPreparation.bind(level, handle, 124), "idempotent bind accepted invalidated resources");
         } finally {
             events.unschedule(right);
             RuinPreparation.cancel(level, handle);
