@@ -21,7 +21,7 @@ final class RetainedPlans extends Long2ObjectOpenHashMap<RuinPlan> {
     private final transient it.unimi.dsi.fastutil.longs.LongLinkedOpenHashSet toWrite = new it.unimi.dsi.fastutil.longs.LongLinkedOpenHashSet();
     private final transient it.unimi.dsi.fastutil.longs.LongLinkedOpenHashSet hot = new it.unimi.dsi.fastutil.longs.LongLinkedOpenHashSet();
     // Demand reads belong to the scar/front consumer, independently of the preparation cursor.
-    private final transient it.unimi.dsi.fastutil.longs.LongOpenHashSet demanded = new it.unimi.dsi.fastutil.longs.LongOpenHashSet();
+    private final transient it.unimi.dsi.fastutil.longs.LongLinkedOpenHashSet demanded = new it.unimi.dsi.fastutil.longs.LongLinkedOpenHashSet();
     private long lastMiss = Long.MIN_VALUE;
     private boolean discover;
     private final transient it.unimi.dsi.fastutil.longs.LongLinkedOpenHashSet misses = new it.unimi.dsi.fastutil.longs.LongLinkedOpenHashSet();
@@ -61,6 +61,23 @@ final class RetainedPlans extends Long2ObjectOpenHashMap<RuinPlan> {
     /** A launch-critical receipt cannot be substituted by unrelated distant writes. */
     boolean pendingWrite(long key) { return writes.containsKey(key) || toWrite.contains(key); }
     int pendingReads() { return reads.size(); }
+
+    /** Funded reads keep a collector even when their scar is behind capacity-blocked visible
+     * work or has unloaded. Rotate refused publications too; one large page cannot hide a
+     * smaller completed page. A successful decode enters the normal spillable cache. */
+    boolean collectReady() {
+        int remaining = demanded.size(); // at most READ_LIMIT
+        while (remaining-- > 0) {
+            long key = demanded.removeFirstLong();
+            var read = reads.get(key);
+            if (read == null) continue;
+            demanded.addAndMoveToLast(key);
+            if (!read.isDone()) continue;
+            load(key, true);
+            return true;
+        }
+        return false;
+    }
 
     long bytes() { return bytes + writeBytes + 48L * (super.size() + reads.size() + writes.size()); }
 

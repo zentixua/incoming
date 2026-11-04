@@ -210,6 +210,32 @@ public final class ScarQueue {
     private record Log(long at, net.minecraft.world.level.block.state.BlockState state) {}
 
     private final LinkedHashSet<Job> readySeen = new LinkedHashSet<>(), readyUnseen = new LinkedHashSet<>();
+    private boolean completionSeen;
+
+    /** Collect already-finished, owned work independently of destructive admission. Otherwise a
+     * dense visible refusal can retain an unseen result and all its input pins indefinitely.
+     * Only readiness/ownership is serviced here; normal priority still decides world changes. */
+    boolean collectReady(ServerLevel level, WorkClock clock) {
+        for (int checked = 0; checked < 16 && clock.canStart(); checked++) {
+            var queue = (completionSeen = !completionSeen) ? readySeen : readyUnseen;
+            if (queue.isEmpty()) continue;
+            Job job = queue.removeFirst();
+            if (jobs.get(job.chunk) != job || job.event >= job.events.size()) continue;
+            queue.addLast(job);
+            int event = job.events.get(job.event).id();
+            RuinContext ctx = NuclearWorld.get(level).ruinsIfKept(event);
+            if (ctx == null || !ctx.done(job.chunk) || hasPlan(event, job.chunk)) continue;
+            LevelChunk chunk = level.getChunkSource().getChunkNow(ChunkPos.getX(job.chunk), ChunkPos.getZ(job.chunk));
+            if (chunk == null) continue;
+            long began = clock.begin();
+            try {
+                RuinPlan plan = ctx.collect(level, chunk);
+                if (plan != null) park(job.chunk, new Parked(event, plan));
+            } finally { clock.end(began); }
+            return true;
+        }
+        return false;
+    }
     /** Trunks fallen into not-yet-ruined chunk: placed after its ruins (otherwise stale its plan). */
     private final Long2ObjectOpenHashMap<List<Log>> logs = new Long2ObjectOpenHashMap<>();
     private final Map<Integer, ColumnScar.Budget> budgets = new HashMap<>();
