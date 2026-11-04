@@ -363,6 +363,9 @@ final class RuinContext {
         return true;
     }
 
+    /** Pure queue-order query: an active assembly must stay reachable until admitted or abandoned. */
+    boolean assembling(long centre) { return pendingWindows.contains(centre); }
+
     void unpinWindow(long centre) {
         pendingWindows.remove(centre);
         assembly.release(this, centre);

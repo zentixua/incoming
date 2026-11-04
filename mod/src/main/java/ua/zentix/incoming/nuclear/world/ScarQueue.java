@@ -847,6 +847,10 @@ public final class ScarQueue {
                 result = work(level, job, now);
             } catch (RuntimeException e) {
                 Incoming.LOG.error("Damage to chunk {} failed with an exception; chunk removed from the queue", new ChunkPos(job.chunk), e);
+                if (job.event < job.events.size()) {
+                    var owner = NuclearWorld.get(level).ruinsIfKept(job.events.get(job.event).id());
+                    if (owner != null) owner.unpinWindow(job.chunk);
+                }
                 mtB7Removed(job, true);
                 jobs.remove(job.chunk);
                 logs.remove(job.chunk);
