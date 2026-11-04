@@ -30,6 +30,16 @@ final class RuinSupport {
     private int cursor;
     private BlockPos ownRemoval;
     boolean waiting;
+    private long frontierBacking, seenBacking, componentBacking;
+
+    long retainedBytes() {
+        // The component estimate includes its later validation/release array. Keep backing charges
+        // across clear/restart: fastutil keeps those arrays until the search itself is released.
+        frontierBacking = Math.max(frontierBacking, frontier.size() * 32L);
+        seenBacking = Math.max(seenBacking, seen.size() * 64L);
+        componentBacking = Math.max(componentBacking, component.size() * 128L);
+        return 2048L + frontierBacking + seenBacking + componentBacking;
+    }
 
     RuinSupport(long seed) {
         this.seed = seed;
@@ -69,12 +79,15 @@ final class RuinSupport {
                 }
                 RuinMatter.Piece piece = RuinMatter.capture(level, at, state, d, scorch);
                 if (piece != null) {
-                    ownRemoval = at;
-                    try { ColumnScar.replace(level, at, state, Blocks.AIR.defaultBlockState()); }
-                    finally { ownRemoval = null; }
-                    if (level.getBlockState(at).isAir()) {
-                        ledger.release(List.of(piece));
-                        ledger.support(level, List.of(piece), d);
+                    try (var reservation = RuinMemory.reserveProgress(level, RuinMatter.removalBytes(piece))) {
+                        if (reservation == null) { waiting = true; return false; }
+                        ownRemoval = at;
+                        try { ColumnScar.replace(level, at, state, Blocks.AIR.defaultBlockState()); }
+                        finally { ownRemoval = null; }
+                        if (level.getBlockState(at).isAir()) {
+                            ledger.release(List.of(piece));
+                            ledger.support(level, List.of(piece), d);
+                        }
                     }
                 }
                 cursor++;

@@ -75,6 +75,34 @@ class IcbmArrivalTest {
         tracks.snapshot(1001, List.of()); // capability also arrives before a target has ready ground
         assertTrue(tracks.supported());
     }
+    @Test void replayCatchUpDoesNotReviveAnExpiredWakeBetweenPacketsOrTicks() {
+        var tracks = new IcbmApproaches();
+        var arrival = path(1, 1000);
+        tracks.snapshot(999, List.of(arrival)); // snapshot packet caught up during seek
+        tracks.finish(1, 300); // historical burst at recording tick 1300, before a client tick
+        assertTrue(tracks.entries().isEmpty());
+        tracks.snapshot(1300, List.of());
+        assertTrue(tracks.entries().isEmpty());
+        tracks.tick();
+        assertTrue(tracks.entries().isEmpty());
+        tracks.snapshot(999, List.of(arrival)); // seek back before that burst still restores its head
+        assertTrue(tracks.entries().iterator().next().head());
+    }
+
+    @Test void recentHistoricalBurstRetainsOnlyTheRemainingWakeAndDuplicatesCannotRefreshIt() {
+        var tracks = new IcbmApproaches();
+        tracks.snapshot(999, List.of(path(1, 1000)));
+        tracks.finish(1, 2);
+        var wake = tracks.entries().iterator().next();
+        assertFalse(wake.head());
+        assertEquals(1002, wake.time(0, tracks.local(0)));
+        tracks.tick();
+        tracks.finish(1); // repeated live packet must not reset the age
+        assertEquals(1003, wake.time(0, tracks.local(0)));
+        tracks.finish(1, IcbmArrival.WAKE);
+        assertTrue(tracks.entries().isEmpty());
+    }
+
     @Test void everyBurstGeometryEndsAtItsOwnPointAndOnsetHasNoPrebuiltWake() {
         for (double yield : new double[]{15, 100, 1000}) for (boolean air : new boolean[]{false, true}) {
             double height = air ? ua.zentix.incoming.nuclear.model.Yield.optimalBurstHeight(yield) : 0;
