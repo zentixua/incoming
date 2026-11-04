@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.nuclear.world.RuinMatterRepeatTest" tests="3" skipped="0" failures="2" errors="0" timestamp="2026-11-04T15:15:45.189Z" hostname="zentixua-pc" time="0.969">
+  <properties/>
+  <testcase name="blockedWindowIsPolledOncePerInvocationAndRefreshedInSameTick()" classname="ua.zentix.incoming.nuclear.world.RuinMatterRepeatTest" time="0.843">
+    <failure message="org.mockito.exceptions.verification.TooManyActualInvocations: &#10;NuclearTickets.class.neighbourhoodLoaded(&#10;    Mock for ServerLevel, hashCode: 958955062,&#10;    [80, 80],&#10;    2&#10;);&#10;Wanted 1 time:&#10;-&gt; at ua.zentix.incoming.nuclear.world.NuclearTickets.neighbourhoodLoaded(NuclearTickets.java:56)&#10;But was 64 times:&#10;-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)&#10;-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)&#10;-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)&#10;-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)&#10;-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)&#10;-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)&#10;-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)&#10;-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)&#10;-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)&#10;-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)&#10;-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)&#10;-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)&#10;-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)&#10;-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)&#10;-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)&#10;-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)&#10;-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)&#10;-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)&#10;-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)&#10;-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)&#10;-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)&#10;-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)&#10;-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)&#10;-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)&#10;-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)&#10;-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)&#10;-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)&#10;-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)&#10;-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)&#10;-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)&#10;-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)&#10;-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)&#10;-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)&#10;-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)&#10;-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)&#10;-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)&#10;-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)&#10;-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)&#10;-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)&#10;-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)&#10;-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)&#10;-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)&#10;-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)&#10;-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)&#10;-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)&#10;-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)&#10;-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)&#10;-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)&#10;-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)&#10;-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)&#10;-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)&#10;-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)&#10;-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)&#10;-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)&#10;-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)&#10;-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)&#10;-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)&#10;-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)&#10;-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)&#10;-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)&#10;-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)&#10;-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)&#10;-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)&#10;-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)&#10;&#10;" type="org.mockito.exceptions.verification.TooManyActualInvocations">org.mockito.exceptions.verification.TooManyActualInvocations: 
+NuclearTickets.class.neighbourhoodLoaded(
+    Mock for ServerLevel, hashCode: 958955062,
+    [80, 80],
+    2
+);
+Wanted 1 time:
+-&gt; at ua.zentix.incoming.nuclear.world.NuclearTickets.neighbourhoodLoaded(NuclearTickets.java:56)
+But was 64 times:
+-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)
+-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)
+-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)
+-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)
+-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)
+-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)
+-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)
+-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)
+-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)
+-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)
+-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)
+-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)
+-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)
+-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)
+-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)
+-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)
+-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)
+-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)
+-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)
+-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)
+-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)
+-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)
+-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)
+-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)
+-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)
+-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)
+-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)
+-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)
+-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)
+-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)
+-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)
+-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)
+-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)
+-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)
+-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)
+-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)
+-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)
+-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)
+-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)
+-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)
+-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)
+-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)
+-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)
+-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)
+-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)
+-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)
+-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)
+-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)
+-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)
+-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)
+-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)
+-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)
+-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)
+-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)
+-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)
+-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)
+-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)
+-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)
+-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)
+-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)
+-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)
+-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)
+-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)
+-&gt; at ua.zentix.incoming.nuclear.world.RuinMatter.request(RuinMatter.java:199)
+
+
+	at app//ua.zentix.incoming.nuclear.world.NuclearTickets.neighbourhoodLoaded(NuclearTickets.java:56)
+	at app//ua.zentix.incoming.nuclear.world.RuinMatterRepeatTest.lambda$blockedWindowIsPolledOncePerInvocationAndRefreshedInSameTick$0(RuinMatterRepeatTest.java:81)
+	at app//ua.zentix.incoming.nuclear.world.RuinMatterRepeatTest.blockedWindowIsPolledOncePerInvocationAndRefreshedInSameTick(RuinMatterRepeatTest.java:81)
+	at java.base@21.0.7/java.lang.reflect.Method.invoke(Method.java:580)
+	at java.base@21.0.7/java.util.ArrayList.forEach(ArrayList.java:1596)
+	at java.base@21.0.7/java.util.ArrayList.forEach(ArrayList.java:1596)
+</failure>
+  </testcase>
+  <testcase name="readinessOutsideWorkAlwaysObservesCurrentWorld()" classname="ua.zentix.incoming.nuclear.world.RuinMatterRepeatTest" time="0.004"/>
+  <testcase name="fifoRotationKeepsCapturedClassificationWithoutTagQueries()" classname="ua.zentix.incoming.nuclear.world.RuinMatterRepeatTest" time="0.12">
+    <failure message="org.opentest4j.AssertionFailedError: FIFO rotation reclassified an existing piece ==&gt; expected: &lt;true&gt; but was: &lt;false&gt;" type="org.opentest4j.AssertionFailedError">org.opentest4j.AssertionFailedError: FIFO rotation reclassified an existing piece ==&gt; expected: &lt;true&gt; but was: &lt;false&gt;
+	at app//org.junit.jupiter.api.AssertionFailureBuilder.build(AssertionFailureBuilder.java:151)
+	at app//org.junit.jupiter.api.AssertionFailureBuilder.buildAndThrow(AssertionFailureBuilder.java:132)
+	at app//org.junit.jupiter.api.AssertTrue.failNotTrue(AssertTrue.java:63)
+	at app//org.junit.jupiter.api.AssertTrue.assertTrue(AssertTrue.java:36)
+	at app//org.junit.jupiter.api.Assertions.assertTrue(Assertions.java:214)
+	at app//ua.zentix.incoming.nuclear.world.RuinMatterRepeatTest.fifoRotationKeepsCapturedClassificationWithoutTagQueries(RuinMatterRepeatTest.java:62)
+	at java.base@21.0.7/java.lang.reflect.Method.invoke(Method.java:580)
+	at java.base@21.0.7/java.util.ArrayList.forEach(ArrayList.java:1596)
+	at java.base@21.0.7/java.util.ArrayList.forEach(ArrayList.java:1596)
+</failure>
+  </testcase>
+  <system-out><![CDATA[WARN StatusConsoleListener Advanced terminal features are not available in this environment
+]]></system-out>
+  <system-err><![CDATA[Mockito is currently self-attaching to enable the inline-mock-maker. This will no longer work in future releases of the JDK. Please add Mockito as an agent to your build what is described in Mockito's documentation: https://javadoc.io/doc/org.mockito/mockito-core/latest/org/mockito/Mockito.html#0.3
+WARNING: A Java agent has been loaded dynamically (/home/artem/.gradle/caches/modules-2/files-2.1/net.bytebuddy/byte-buddy-agent/1.15.4/58e850dde88f3cf20f41f659440bef33f6c4fe02/byte-buddy-agent-1.15.4.jar)
+WARNING: If a serviceability tool is in use, please run with -XX:+EnableDynamicAgentLoading to hide this warning
+WARNING: If a serviceability tool is not in use, please run with -Djdk.instrument.traceUsage for more information
+WARNING: Dynamic loading of agents will be disallowed by default in a future release
+]]></system-err>
+</testsuite>
