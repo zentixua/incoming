@@ -71,11 +71,12 @@ public final class RuinMemoryFlowGameTests {
             h.assertTrue(occupied != null, "Could not occupy the controlled budget");
             h.assertFalse(plan.apply(level, chunk, d, new ColumnScar.Budget(false)), "Fixture plan did not initially wait");
             h.assertTrue(plan.memoryWaiting(), "Fixture plan was stale rather than capacity-blocked");
-            for (int i = 0; i < 160 && !level.getBlockState(at).isAir(); i++) {
+            for (int i = 0; i < 160 && (!level.getBlockState(at).isAir() || ledger.deposited() == 0); i++) {
                 ((net.minecraft.world.level.storage.ServerLevelData) level.getLevelData()).setGameTime(time + i + 1);
                 clock.start(4_000_000); world.tick(level, clock);
             }
-            h.assertTrue(ledger.deposited() == 1, "Waiting scar starved the existing moving piece");
+            h.assertTrue(ledger.deposited() == 1, "Waiting scar starved the existing moving piece: elapsed=" + (level.getGameTime() - time)
+                    + ", deposited=" + ledger.deposited() + ", glass=" + level.getBlockState(at));
             h.assertTrue(level.getBlockState(at).isAir() && ledger.released() == 2,
                     "Freed capacity did not apply the same pending plan exactly once");
         } finally {

@@ -518,6 +518,9 @@ public final class NuclearPrep {
         for (Prep p : preps) {
             // Explicit handles retain their collector/context until the actual task can be harvested.
             if (p.handle == null) p.submitted.rem(chunk);
+            // The assembly claim is not the collector: an unloaded centre must yield while
+            // already admitted reads/results keep their original owner until completion.
+            if (p.ruins != null) p.ruins.unpinWindow(chunk);
             // before detonation preparation ruins outside NuclearWorld: preparation removes task itself
             if (p.handle == null && p.ruins != null && p.detonation < 0) p.ruins.forget(chunk);
             p.considered.remove(chunk);
@@ -685,6 +688,7 @@ public final class NuclearPrep {
                     if (now >= p.expires) { p.draining = true; continue; }
                     if (!compatible(p)) p.failure = RuinPreparation.Reason.INCOMPATIBLE;
                     if (p.failure == RuinPreparation.Reason.NONE && (p.geometry != null || !IncomingConfig.SERVER.nukeBlockDamage.get() || memory(level) < WINDOW_CAP)) work(level, null, p, shared);
+                    if (p.failure != RuinPreparation.Reason.NONE && p.ruins != null) p.ruins.releaseAssembly();
                     continue;
                 }
                 if (p.carrier) {
@@ -1335,7 +1339,10 @@ public final class NuclearPrep {
 
     /** Chunks in order to background threads (snapshots per work unit), while detonation has task capacity. */
     private void submit(ServerLevel level, Prep p, WorkClock shared) {
-        while (p.nextTodo < p.todo.size() && RuinWorkers.admit(RuinWorkers.Priority.NEAR) && clock.canStart() && shared.canStart()) {
+        // Retiring an unready todo must not wait behind decoder/solver admission. Bound the
+        // cheap skips too; a large stale todo list must not monopolize a clock's first unit.
+        int visits = RuinWorkers.capacity();
+        while (visits-- > 0 && p.nextTodo < p.todo.size() && clock.canStart() && shared.canStart()) {
             long c = p.todo.getLong(p.nextTodo++);
             if (p.plans.containsKey(c)) continue;
             if (p.ruins.running(c)) {
@@ -1349,17 +1356,20 @@ public final class NuclearPrep {
             LevelChunk chunk = p.handle == null ? readyChunk(level, c)
                     : level.getChunkSource().getChunkNow(ChunkPos.getX(c), ChunkPos.getZ(c));
             if (chunk == null) {
-                // neighbors not loaded (loaded-world edge): picked up again once loaded
+                // Neighbours/centre may lose FULL readiness without an unload event.
+                p.ruins.unpinWindow(c);
                 p.considered.remove(c);
                 if (p.handle != null && c != p.requiredTarget) p.required.remove(c);
                 continue;
             }
+            if (!RuinWorkers.admit(RuinWorkers.Priority.NEAR)) { p.nextTodo--; return; }
             long c0 = shared.begin();
             try {
                 if (p.handle != null) {
                     int missing = p.ruins.requestWindow(level, chunk.getPos());
                     if (p.ruins.windowFailed()) {
                         p.failure = RuinPreparation.Reason.IO;
+                        p.ruins.releaseAssembly();
                         return;
                     }
                     if (missing > 0) { p.nextTodo--; return; }
@@ -1821,6 +1831,10 @@ public final class NuclearPrep {
         Incoming.LOG.warn("Ruins for strike #{}: heap after GC {} of {} MB — no more ruins are pre-built (plans {}, heavy zone chunks {})",
                 p.strike, HeapWatch.get().live() >> 20, rt.maxMemory() >> 20, p.plans.size(), p.order.length);
         p.heapStop = true;
+        if (p.ruins != null) {
+            if (p.detonation < 0) p.ruins.releaseAssembly();
+            else if (p.nextFar < p.order.length) p.ruins.unpinWindow(p.order[p.nextFar]);
+        }
     }
 
     /** Chunk if it and radius-{@link RuinPlanner#REACH} neighbors ready (ruins read them). */

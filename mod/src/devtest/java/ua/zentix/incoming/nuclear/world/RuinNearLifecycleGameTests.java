@@ -83,6 +83,66 @@ public final class RuinNearLifecycleGameTests {
         });
     }
 
+    @GameTest(template = "range", batch = "nuke_near_assembly_unload", timeoutTicks = 400, skyAccess = true)
+    public static void registeredUnloadReleasesUnadmittedAssemblyButKeepsCallbacks(GameTestHelper h) throws Exception {
+        abandonedAssembly(h, false);
+    }
+
+    @GameTest(template = "range", batch = "nuke_near_assembly_skip", timeoutTicks = 400, skyAccess = true)
+    public static void skippedUnreadyCentreReleasesUnadmittedAssemblyButKeepsCallbacks(GameTestHelper h) throws Exception {
+        abandonedAssembly(h, true);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static void abandonedAssembly(GameTestHelper h, boolean skip) throws Exception {
+        var f = fixture(h, true);
+        var level = h.getLevel();
+        var next = new RuinContext(level, f.ctx.d);
+        StrikeGameTests.afterTest(h, next::cancelTasks);
+        var reads = (RuinInbox<Object>) field(f.ctx, "reads").get(f.ctx);
+        var callback = reads.expect();
+        var source = DiskShots.parse(level, f.centre, net.minecraft.world.level.chunk.storage.ChunkSerializer.write(level,
+                level.getChunkSource().getChunkNow(f.centre.x, f.centre.z)));
+        var ctor = Class.forName(RuinContext.class.getName() + "$WindowRead").getDeclaredConstructors()[0];
+        ctor.setAccessible(true);
+        var reply = ctor.newInstance(f.centre.toLong(), source, null);
+        StrikeGameTests.afterTest(h, () -> callback.accept(reply));
+        var active = skip ? new ChunkPos(f.centre.x + 1024, f.centre.z + 1024) : f.centre;
+        var contender = new ChunkPos(active.x + 8, active.z);
+        f.ctx.requestWindow(level, active, RuinWorkers.Priority.NEAR);
+        next.requestWindow(level, contender, RuinWorkers.Priority.NEAR);
+        h.assertTrue(next.pendingWindowReads() == 0, "Equal-priority contender bypassed active assembly");
+        int held = reads.pending();
+        h.assertTrue(held > 0 && !f.ctx.running(active.toLong()), "Fixture needs an unadmitted window with a held callback");
+        if (skip) {
+            ((LongArrayList) field(f.owner, "todo").get(f.owner)).add(active.toLong());
+            invoke(f, level, "submit");
+        } else {
+            NuclearWorld.get(level).onChunkUnload(level, level.getChunkSource().getChunkNow(active.x, active.z));
+        }
+        h.assertTrue(reads.pending() == held, "Abandoning assembly discarded the outstanding read owner");
+        next.requestWindow(level, contender, RuinWorkers.Priority.NEAR);
+        h.assertTrue(next.pendingWindowReads() > 0, "Abandoned preparation assembly blocks the next consumer");
+        next.retireWindowReads();
+        callback.accept(reply);
+        var required = new ChunkPos(f.centre.x + 1, f.centre.z);
+        h.assertTrue(level.getChunkSource().getChunkNow(required.x, required.z) != null, "Other required centre must stay loaded");
+        ((LongArrayList) field(f.owner, "todo").get(f.owner)).add(required.toLong());
+        ((LongOpenHashSet) field(f.owner, "required").get(f.owner)).add(required.toLong());
+        h.succeedWhen(() -> {
+            try {
+                f.ctx.drainWindowReads(level);
+                invoke(f, level, "submit");
+                invoke(f, level, "harvest");
+                h.assertTrue(reads.pending() == 0 && next.pendingWindowReads() == 0, "Late callbacks still retain ownership");
+                h.assertTrue(f.ctx.hasShot(f.centre.toLong()), "Preserved callback did not publish its real source");
+                var plan = ((RetainedPlans) field(f.owner, "plans").get(f.owner)).get(required.toLong());
+                h.assertTrue(plan != null && plan.changedBlocks() > 0,
+                        "Other required loaded centre did not finish without reloading/cancelling the preparation");
+            } catch (ReflectiveOperationException failure) { throw new IllegalStateException(failure); }
+        });
+    }
+
     @GameTest(template = "range", batch = "nuke_near_failed_task", timeoutTicks = 400, skyAccess = true)
     public static void completedExceptionalNearTaskFailsRequest(GameTestHelper h) throws Exception { failedTask(h, false); }
 

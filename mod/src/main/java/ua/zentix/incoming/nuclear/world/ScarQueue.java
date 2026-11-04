@@ -1174,6 +1174,8 @@ public final class ScarQueue {
             ready = ctx.restoredPlans.get(job.chunk) != null || RetainedPlans.waiting(ctx.restoredPlans, job.chunk);
         }
         if (chunk == null) {
+            // Below FULL can precede ChunkEvent.Unload; release only unadmitted assembly.
+            ctx.unpinWindow(job.chunk);
             // below full loading (view edge): ruin when full
             waited(job, NukeDiag.Wait.BELOW_FULL);
             waitNeighbours(level, job, now, 0);

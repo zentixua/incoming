@@ -507,3 +507,12 @@ paths:
   Match the pre-allocation estimate to this representation; untouched empty sections must not reserve 4096
   references apiece (`nuke_snapshot_lazy`, `nuke_snapshot_archive`). A funded live solver reuses its workspace;
   only cold/taller pools need additional startup room. Cold source reads still reserve their publication slot.
+
+- Collection and trimming have independent maintenance turns. A ready read can still refuse publication;
+  it must not suppress reclamation in its own or another context (`nuke_reclaim_publication`,
+  `nuke_reclaim_other_owner`). Queue rotation itself needs its existing page-growth allowance in a
+  fixed-pressure fixture; do not mislabel an unfunded moving FIFO as collector starvation.
+- Explicit preparation unload, loss of FULL readiness, terminal failure and heap stop release abandoned
+  assembly claims independently of read/task collectors. Inspect unready todos before checking worker
+  admission, with a bounded skip pass: decoder saturation cannot prevent retiring a dead assembly head.
+  `nuke_near_assembly_*` keeps late callbacks and completes another loaded required centre.

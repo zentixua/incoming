@@ -238,7 +238,7 @@ public final class RuinSnapshotAdmissionGameTests {
     }
 
     @SuppressWarnings("unchecked")
-    private static DiskShots.Read largeRead(ServerLevel level, ChunkPos pos) {
+    static DiskShots.Read largeRead(ServerLevel level, ChunkPos pos) {
         var states = (PalettedContainer<BlockState>[]) new PalettedContainer<?>[level.getSectionsCount()];
         for (int section = 0; section < states.length; section++) {
             var palette = new PalettedContainer<>(Block.BLOCK_STATE_REGISTRY, Blocks.AIR.defaultBlockState(), PalettedContainer.Strategy.SECTION_STATES);

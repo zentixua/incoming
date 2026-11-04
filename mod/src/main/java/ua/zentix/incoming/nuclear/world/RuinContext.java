@@ -1143,10 +1143,15 @@ final class RuinContext {
         dropShot(chunk);
     }
 
-    /** A new owner will request current windows; old callbacks retain reservations until they finish. */
-    void retireWindowReads() {
+    /** Stop protecting unadmitted input without discarding any callback or actual task owner. */
+    void releaseAssembly() {
         assembly.release(this);
         pendingWindows.clear();
+    }
+
+    /** A new owner will request current windows; old callbacks retain reservations until they finish. */
+    void retireWindowReads() {
+        releaseAssembly();
         reads.invalidate();
         reading.clear();
     }
