@@ -324,6 +324,8 @@ public final class PallPass {
          */
         public final Vector3f eyeDust = new Vector3f();
         public Quality quality = Quality.MEDIUM;
+        /** Optional ray pixel budget for the shallow conventional layer; zero keeps the nuclear setting. */
+        public int maxRayPixels;
         /** Slot firestorms. */
         public final Fire fire0 = new Fire(), fire1 = new Fire();
         /** Eye-relative storm bounds (columns, glow, whirls), blocks: denser ray steps there; min > max — no storm. */
@@ -555,8 +557,9 @@ public final class PallPass {
         }
         if (timer()) poll(System.nanoTime());
         Step step = LADDER[DETAIL.level];
-        if (!ensure(w, h, step.factor)) return false;
-        boolean open = mc.level != null && OpenAir.update(mc.level, eye);
+        int rayFactor = rayFactor(w, h, step.factor, f.maxRayPixels);
+        if (!ensure(w, h, rayFactor)) return false;
+        boolean open = f.maxRayPixels == 0 && mc.level != null && OpenAir.update(mc.level, eye);
         tableBuffer.clear();
         tableBuffer.put(f.table).flip();
         GlStateManager._bindTexture(table);
@@ -777,7 +780,7 @@ public final class PallPass {
     }
 
     /** Full-frame quad with custom shader; ray pass also binds 3D noise at its own texture unit. */
-    private static void quad(ShaderInstance s, boolean withNoise) {
+    static void quad(ShaderInstance s, boolean withNoise) {
         BufferBuilder b = Tesselator.getInstance().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION);
         b.addVertex(-1, -1, 0);
         b.addVertex(1, -1, 0);
@@ -1045,6 +1048,14 @@ public final class PallPass {
         return true;
     }
 
+    /** Preserve the nuclear setting; bound dust rays even for odd window dimensions. */
+    static int rayFactor(int width, int height, int minimum, int maxPixels) {
+        if (maxPixels <= 0) return minimum;
+        int f = Math.max(minimum, (int) Math.ceil(Math.sqrt((double) width * height / maxPixels)));
+        while ((long) ((width + f - 1) / f) * ((height + f - 1) / f) > maxPixels) f++;
+        return f;
+    }
+
     /** Reduced-resolution frames matching game frame size and quality (recreated on change). */
     private static boolean ensure(int w, int h, int f) {
         if (TEXTURES[0] >= 0 && w == fullW && h == fullH && f == factor) return true;
@@ -1148,7 +1159,7 @@ public final class PallPass {
         Step top = LADDER[Math.max(0, DETAIL.ceiling)];
         String gpu = timer < 0 ? "gpu n/a" : String.format(Locale.ROOT, "gpu %.2f ms (longest %.2f, budget %.1f)", lastGpuMean, lastGpuMax, Detail.BUDGET_MS);
         return String.format(Locale.ROOT, "%d frames, %d×%d, detail 1/%d × %d steps (step %d of %d, setting 1/%d × %d, %s, %d changes), %s",
-                lastDrawn, lowW, lowH, step.factor, step.steps, DETAIL.level, LADDER.length - 1, top.factor, top.steps,
+                lastDrawn, lowW, lowH, factor, step.steps, DETAIL.level, LADDER.length - 1, top.factor, top.steps,
                 DETAIL.pinned ? "pinned" : "by GPU budget", DETAIL.changes, gpu);
     }
 

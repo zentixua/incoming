@@ -24,6 +24,32 @@ class SmokePreparationTest {
         }
     }
 
+    @Test void cachedGroundKeepsItsVolumeRouteAndPhysicalInputs() {
+        var prep = new SmokePreparation();
+        Source source = new Source(0) {
+            @Override public boolean emit(double seconds, SmokeGrid.Sink out) {
+                out.ground(2, 3, 4, 5, .2, 7, .9f, .8f, .7f, 300);
+                return true;
+            }
+        };
+        int[] ground = {0};
+        SmokeGrid.Sink sink = new SmokeGrid.Sink() {
+            @Override public void segment(double x, double y, double z, double ax, double ay, double az,
+                    double sh, double sv, double soot, double dust, double water, float r, float g, float b,
+                    double kelvin, double rise) { fail("ground snapshot became a sprite"); }
+            @Override public void ground(double x, double y, double z, double sh, double sv, double dust,
+                    float r, float g, float b, double kelvin) {
+                ground[0]++;
+                assertEquals(2, x); assertEquals(3, y); assertEquals(4, z);
+                assertEquals(5, sh); assertEquals(.2, sv); assertEquals(7, dust);
+                assertEquals(.9f, r); assertEquals(.8f, g); assertEquals(.7f, b); assertEquals(300, kelvin);
+            }
+        };
+        for (int frame = 0; frame < 3; frame++) prep.draw(List.of(source), Set.of(), frame/60.0,
+                0, 0, 0, b -> true, (s,t) -> sink, () -> 0);
+        assertEquals(3, ground[0]);
+    }
+
     @Test void invisibleHistoryDoesNotEmitAndReentryUsesAbsoluteAge() {
         for (int hidden : new int[]{0, 100, 10_000}) {
             var prep = new SmokePreparation();

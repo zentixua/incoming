@@ -58,6 +58,14 @@ class ShaderSourceTest {
     }
 
     @Test
+    void dustProfileTextureSurvivesDefaultUniformSetup() throws IOException {
+        // PallPass.quad calls setDefaultUniforms: Minecraft replaces reserved Sampler0..11 bindings.
+        String source = Files.readString(Path.of("src/main/resources/assets/incoming/shaders/core/fx_dust_profile.fsh"));
+        assertFalse(Pattern.compile("uniform\\s+sampler2D\\s+Sampler\\d+\\s*;").matcher(source).find(),
+                "dust profiles must read their source table, never Minecraft's default texture");
+    }
+
+    @Test
     void noConditionalInsideAnExpression() throws IOException, URISyntaxException {
         List<String> bad = everyShader(ShaderSourceTest::nested);
         assertTrue(bad.isEmpty(), "“?:” inside an expression (Veil loses the brackets): " + bad);

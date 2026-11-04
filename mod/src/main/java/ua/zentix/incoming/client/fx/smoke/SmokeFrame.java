@@ -32,6 +32,7 @@ public final class SmokeFrame {
     public static void build(Vec3 eye, float partial) {
         SmokeGrid.enable(PallPass.available() && SmokePass.available());
         grid = SmokeGrid.frame(eye.x, eye.y, eye.z, SmokeGrid.seconds(partial));
+        DustGrid.begin(SmokeGrid.on() && grid.empty(), eye.x, eye.y, eye.z);
     }
 
     /**
@@ -41,6 +42,8 @@ public final class SmokeFrame {
      */
     @Nullable
     public static PallPass.Frame frame(ClientLevel level, Vec3 eye, float partial, @Nullable PallPass.Frame pall) {
+        if (pall != null) pall.maxRayPixels = 0;
+        if (DustGrid.active()) grid = DustGrid.finish();
         boolean on = PallPass.available() && SmokePass.available();
         if (!on || grid == null || grid.empty()) {
             if (pall != null) pall.smoke = null;
@@ -48,6 +51,11 @@ public final class SmokeFrame {
         }
         PallPass.Frame f = pall != null ? pall : NukePall.lightFrame(level, eye, partial);
         f.smoke = grid;
+        // Ground dust shares the temporal volume pass at quarter resolution; do not change nuclear quality.
+        if (pall == null && grid.dustCellY > 0) {
+            f.quality = PallPass.Quality.LOW;
+            f.maxRayPixels = 80_000;
+        }
         float tile = 32;
         double seconds = SmokeGrid.seconds(partial);
         f.smokeNoise.set((float) Math.floorMod((long) Math.floor(eye.x * 1024), (long) tile * 1024) / 1024f,

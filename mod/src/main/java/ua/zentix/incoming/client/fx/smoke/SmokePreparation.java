@@ -183,6 +183,12 @@ public final class SmokePreparation {
         void clear() { count = 0; look = SmokeGrid.Look.SMOKE; frame = 0; }
         @Override public void look(SmokeGrid.Look value, double at) { look = value; frame = at; }
 
+        @Override public void ground(double x, double y, double z, double sh, double sv, double dust,
+                                     float r, float g, float b, double kelvin) {
+            segment(x, y, z, 0, 0, 0, sh, sv, 0, dust, 0, r, g, b, kelvin, 0);
+            data[(count - 1) * WIDTH] = 2;
+        }
+
         private int next(boolean tube) {
             if ((count + 1) * WIDTH > data.length) data = java.util.Arrays.copyOf(data, data.length * 2);
             int i = count++ * WIDTH;
@@ -214,7 +220,9 @@ public final class SmokePreparation {
             for (int n = 0; n < count; n++) {
                 int b = n * WIDTH, i = b + 3;
                 out.look(LOOKS[(int) data[b+1]], data[b+2]);
-                if (data[b] == 0) out.segment(data[i], data[i+1], data[i+2], data[i+3], data[i+4], data[i+5], data[i+6], data[i+7],
+                if (data[b] == 2) out.ground(data[i], data[i+1], data[i+2], data[i+6], data[i+7], data[i+9],
+                        (float) data[i+11], (float) data[i+12], (float) data[i+13], data[i+14]);
+                else if (data[b] == 0) out.segment(data[i], data[i+1], data[i+2], data[i+3], data[i+4], data[i+5], data[i+6], data[i+7],
                         data[i+8], data[i+9], data[i+10], (float) data[i+11], (float) data[i+12], (float) data[i+13], data[i+14], data[i+15]);
                 else out.tube(data[i], data[i+1], data[i+2], data[i+3], data[i+4], data[i+5], data[i+6], data[i+7], data[i+8], data[i+9],
                         data[i+10], data[i+11], data[i+12], data[i+13], (float) data[i+14], (float) data[i+15], (float) data[i+16],

@@ -187,6 +187,12 @@ public final class SmokeGrid {
 
     /** Where source deposits clumps. */
     public interface Sink {
+        /** Cold ground-layer matter; other receivers retain their ordinary Gaussian path. */
+        default void ground(double x, double y, double z, double sh, double sv, double dust,
+                            float r, float g, float b, double kelvin) {
+            blob(x, y, z, sh, sv, 0, dust, 0, r, g, b, kelvin, 0);
+        }
+
         /**
          * Following source clumps use {@code look} and {@code frame} (fractional; {@link Look#SMOKE} frame
          * follows source growth, {@link Source#puffGrowth}, ignoring {@code frame}). Grid ignores look. Before first
@@ -228,6 +234,9 @@ public final class SmokeGrid {
 
     /** Grid frame: clumps, cascades and layers, uploaded by {@code SmokePass}. */
     public static final class Frame {
+        /** Ground-only grid: independently fitted vertical cell size; zero for legacy grids. */
+        public float dustCellY;
+
         /** Clump table: {@link #BLOB_ROWS} rows of {@link #MAX_BLOBS} RGBA (row 0: eye-relative center and σh…). */
         public final float[] blobs = new float[BLOB_ROWS * MAX_BLOBS * 4];
         /** Table clump count. */
@@ -650,7 +659,7 @@ public final class SmokeGrid {
         int[] lo = new int[f.count], hi = new int[f.count];
         for (int i = 0; i < f.count; i++) {
             int c = f.cascade[i];
-            float cell = f.corner[4 * c + 3];
+            float cell = f.dustCellY > 0 ? f.dustCellY : f.corner[4 * c + 3];
             float y = f.blobs[(i) * 4 + 1], v = f.blobs[(MAX_BLOBS + i) * 4], ay = Math.abs(f.blobs[(3 * MAX_BLOBS + i) * 4 + 2]);
             lo[i] = Math.max(0, (int) Math.floor((y - REACH * v - ay - f.corner[4 * c + 1]) / cell));
             hi[i] = Math.min(N - 1, (int) Math.floor((y + REACH * v + ay - f.corner[4 * c + 1]) / cell));
@@ -679,7 +688,7 @@ public final class SmokeGrid {
                     // NDC: page 0 is left half of width 2N, page 1 is right
                     float ax = (page * N + x0) / N - 1, bx = (page * N + x1) / N - 1;
                     float ay = z0 / N * 2 - 1, by = z1 / N * 2 - 1;
-                    at[l] = quad(f.vertices, at[l], ax, ay, bx, by, i);
+                    at[l] = quad(f.vertices, at[l], ax, ay, bx, by, i + l * MAX_BLOBS);
                 }
             }
         }

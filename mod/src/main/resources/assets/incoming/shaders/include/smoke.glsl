@@ -30,6 +30,13 @@ const float SMOKE_DROP_G = 0.45945945;
 // ambient air, K (SmokeGrid.AIR_K)
 const float SMOKE_AIR_K = 288.15;
 
+bool dustOn() { return SmokeCascade[3].y > 0.0; }
+vec3 smokeCellSize(int c) {
+    vec3 size = vec3(SmokeCascade[c].w);
+    if (dustOn()) size.y = SmokeCascade[3].y;
+    return size;
+}
+
 bool smokeOn() {
     return SmokeCascade[3].x > 0.5;
 }
@@ -47,7 +54,7 @@ vec4 smokeFetch(vec3 p, float page) {
     for (int c = 0; c < SMOKE_CASCADES; c++) {
         if (!smokeIn(p, c)) continue;
         vec4 C = SmokeCascade[c];
-        vec3 l = clamp((p - C.xyz) / C.w, vec3(0.5), vec3(n - 0.5));
+        vec3 l = clamp((p - C.xyz) / smokeCellSize(c), vec3(0.5), vec3(n - 0.5));
         sum += textureLod(SmokeGrid, vec3((page * n + l.x) / (2.0 * n), l.z / n, (float(c) * n + l.y) / (float(SMOKE_CASCADES) * n)), 0.0);
     }
     return sum;
@@ -62,7 +69,7 @@ float smokeSigma(vec3 p) {
 // Finest cascade cell whose box contains p, blocks (outside boxes, last cascade cell)
 float smokeCell(vec3 p) {
     for (int c = 0; c < SMOKE_CASCADES; c++) {
-        if (smokeIn(p, c)) return SmokeCascade[c].w;
+        if (smokeIn(p, c)) return min(SmokeCascade[c].w, smokeCellSize(c).y);
     }
     return SmokeCascade[SMOKE_CASCADES - 1].w;
 }

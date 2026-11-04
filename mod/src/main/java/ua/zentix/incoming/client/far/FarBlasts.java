@@ -370,13 +370,13 @@ public final class FarBlasts {
                     @Override
                     public void ground(double bx, double by, double bz, double sh, double sv, double dustKg, double kelvin) {
                         out.look(SmokeGrid.Look.SMOKE, 0);
-                        out.blob(x + bx, y + by, z + bz, sh, sv, 0, dustKg, 0, dustR, dustG, dustB, kelvin, 0);
+                        out.ground(x + bx, y + by, z + bz, sh, sv, dustKg, dustR, dustG, dustB, kelvin);
                     }
 
                     @Override
                     public void crushed(double bx, double by, double bz, double sh, double sv, double dustKg, double kelvin) {
                         out.look(crush, crushFrame);
-                        out.blob(x + bx, y + by, z + bz, sh, sv, 0, dustKg, 0, matterR, matterG, matterB, kelvin, 0);
+                        out.ground(x + bx, y + by, z + bz, sh, sv, dustKg, matterR, matterG, matterB, kelvin);
                     }
 
                     // the stem — as a tube, like a fire's trail (near and far without beads); its puffs' frame — by the cloud's growth, as for the cap

@@ -164,8 +164,9 @@ public final class FxLayer {
         }
         try {
             e.registerShader(new ShaderInstance(e.getResourceProvider(), Incoming.id("fx_smoke_fill"), DefaultVertexFormat.POSITION), s -> SmokePass.fill = s);
+            e.registerShader(new ShaderInstance(e.getResourceProvider(), Incoming.id("fx_dust_profile"), DefaultVertexFormat.POSITION), s -> SmokePass.profile = s);
         } catch (IOException ex) {
-            SmokePass.fill = null;
+            SmokePass.fill = SmokePass.profile = null;
             Incoming.LOG.error("Blast smoke grid shader failed to load: blast smoke is drawn as flat puffs", ex);
         }
     }
@@ -283,6 +284,7 @@ public final class FxLayer {
         pall = SmokeFrame.frame(level, view.camera(), view.partial(), pall);
         // First draw can compile the ray program in the driver. Run the actual pass while entering
         // the world (retry until background textures are ready), before the first nuclear flash.
+        SmokePass.prepare();
         if (pall == null && PallPass.cold()) pall = new PallPass.Frame();
         lastQuads = QUADS.size();
         if (QUADS.size() == 0 && pall == null && !WaterDecal.active() && !hot) {

@@ -1428,3 +1428,17 @@ paths:
   from another Post listener: the Shahed's front was already at 26 m on the first frame of age 0. `BlastEffects.Timeline`
   does not perform age 0 a second time in the same tick. The counter does not depend on world time sync packets; the
   nuke clock and the shared `Effects` queue are unchanged by this.
+
+## Conventional ground volume
+
+- `DustGrid` receives the ground channel from `SmokePuffs.Draw`; `SmokePreparation` must preserve this channel in
+  cached snapshots. Do not emit the old ground sprites as well. The shared 64³ field has independent vertical cells,
+  at most 512 records and no strike-owned GPU targets. `docs/DESIGN-ground-dust.md` explains the mass-conserving profiles.
+- `SmokePass` profile prepass uses `DustSources`, not `Sampler0`: `PallPass.quad` calls `setDefaultUniforms`, which
+  replaces Minecraft's reserved sampler bindings. A wrong binding can produce normalized profiles in the wrong place;
+  check both optical mass and position when diagnosing the volume. `ShaderSourceTest` guards the reserved name.
+- `SmokeLayers` must compile an actual fragment stage: Veil can detach stages from its linked core program, so copying
+  attached shader IDs can silently link a vertex/geometry-only program that writes no colour. Cache by both shader
+  object and GL program ID, warm after reload, and retain the slice-draw fallback.
+- Dust-only frames cap ray pixels; `SmokeFrame` resets that cap before returning a reused nuclear frame. Do not let
+  conventional detail settings leak into `NukePall`'s reusable frame. Nuclear density functions remain independent.

@@ -85,7 +85,7 @@ class SmokeGridTest {
             assertEquals(2 * 6, n, "two pages of two triangles");
             for (int v = f.layerStart[l]; v < f.layerStart[l + 1]; v++) {
                 assertTrue(Math.abs(f.vertices[3 * v]) <= 1 && Math.abs(f.vertices[3 * v + 1]) <= 1);
-                assertEquals(0, f.vertices[3 * v + 2]);
+                assertEquals(l * SmokeGrid.MAX_BLOBS, f.vertices[3 * v + 2], "encoded layer and blob");
             }
         }
         double cell = SmokeGrid.CELL[0], sv = Math.sqrt(4 * 4 + 1);

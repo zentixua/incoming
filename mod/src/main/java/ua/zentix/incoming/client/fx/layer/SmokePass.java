@@ -33,9 +33,30 @@ public final class SmokePass {
     /** Grid texture unit: after pall noise (12) and outdoor-air window (13). */
     static final int UNIT = 14;
     @Nullable
-    static ShaderInstance fill;
+    static ShaderInstance fill, profile;
     private static int grid = -1, blobs = -1, clearFbo = -1, sliceFbo = -1, vao = -1, vbo = -1;
     private static boolean failed;
+    private static int profiles = -1, profileFbo = -1;
+    private static ShaderInstance preparedFill, preparedProfile;
+    private static int preparedFillId = -1, preparedProfileId = -1;
+
+    /** Compile and exercise both dust uploads on world entry, before the first strike. */
+    static void prepare() {
+        if (!available() || (preparedFill == fill && preparedProfile == profile
+                && preparedFillId == fill.getId() && preparedProfileId == profile.getId())) return;
+        SmokeGrid.Frame f = new SmokeGrid.Frame();
+        f.count = 1;
+        f.dustCellY = f.corner[3] = 1;
+        f.blobs[3] = f.blobs[SmokeGrid.MAX_BLOBS * 4] = 1;
+        // Zero optical mass: exercise the actual resources without adding visible matter.
+        f.vertices = new float[]{-1,-1,0, 1,-1,0, 1,1,0, -1,-1,0, 1,1,0, -1,1,0};
+        java.util.Arrays.fill(f.layerStart, 1, f.layerStart.length, 6);
+        if (fill(f)) {
+            preparedFill = fill; preparedProfile = profile;
+            preparedFillId = fill.getId(); preparedProfileId = profile.getId();
+        }
+        filled = false;
+    }
     @Nullable
     private static FloatBuffer blobBuffer, vertexBuffer;
     /** This frame's grid is filled (its parameters are valid for shaders). */
@@ -46,7 +67,7 @@ public final class SmokePass {
 
     /** Grid is available: fill shader compiled and textures created. */
     public static boolean available() {
-        return fill != null && !failed;
+        return fill != null && profile != null && !failed;
     }
 
     /** Whether this frame has a grid (filled by {@link #fill}). */
@@ -87,6 +108,17 @@ public final class SmokePass {
 
         int previous = GlStateManager._getInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
         GL11.glGetIntegerv(GL11.GL_VIEWPORT, VIEWPORT);
+        if (f.dustCellY > 0 && profile != null) {
+            GlStateManager._glBindFramebuffer(GlConst.GL_FRAMEBUFFER, profileFbo);
+            RenderSystem.viewport(0, 0, n, 3 * f.count);
+            RenderSystem.disableDepthTest(); RenderSystem.depthMask(false); RenderSystem.disableBlend();
+            RenderSystem.colorMask(true, true, true, true);
+            // Sampler0 would be overwritten by ShaderInstance.setDefaultUniforms in quad().
+            profile.setSampler("DustSources", blobs);
+            profile.safeGetUniform("SmokeCorner").set(cornerMatrix(f));
+            // Use the same full-frame triangle helper as the other layer passes.
+            PallPass.quad(profile, false);
+        }
         // zero the entire grid (layered attachment: glClear clears every layer)
         GlStateManager._glBindFramebuffer(GlConst.GL_FRAMEBUFFER, clearFbo);
         RenderSystem.viewport(0, 0, 2 * n, n);
@@ -96,6 +128,7 @@ public final class SmokePass {
         RenderSystem.disableDepthTest();
         RenderSystem.depthMask(false);
         s.setSampler("Sampler0", blobs);
+        s.setSampler("Sampler1", profiles);
         s.safeGetUniform("SmokeCorner").set(cornerMatrix(f));
         s.apply();
         // additive blending after apply: a program without custom blending in JSON would disable it
@@ -103,7 +136,7 @@ public final class SmokePass {
         RenderSystem.blendFuncSeparate(GlStateManager.SourceFactor.ONE, GlStateManager.DestFactor.ONE, GlStateManager.SourceFactor.ONE,
                 GlStateManager.DestFactor.ONE);
         RenderSystem.blendEquation(GL14.GL_FUNC_ADD);
-        int slice = Uniform.glGetUniformLocation(s.getId(), "SmokeSlice");
+        int layered = SmokeLayers.program(s);
         GlStateManager._glBindFramebuffer(GlConst.GL_FRAMEBUFFER, sliceFbo);
         BufferUploader.invalidate();
         GL30.glBindVertexArray(vao);
@@ -111,11 +144,15 @@ public final class SmokePass {
         GL15.glBufferData(GL15.GL_ARRAY_BUFFER, vertexBuffer, GL15.GL_STREAM_DRAW);
         GL20.glVertexAttribPointer(0, 3, GL11.GL_FLOAT, false, 12, 0);
         GL20.glEnableVertexAttribArray(0);
-        for (int l = 0; l < layers; l++) {
+        if (layered != 0) {
+            GlStateManager._glBindFramebuffer(GlConst.GL_FRAMEBUFFER, clearFbo);
+            SmokeLayers.bind(layered, cornerMatrix(f));
+            GL11.glDrawArrays(GL11.GL_TRIANGLES, 0, vertices);
+            ProgramManager.glUseProgram(s.getId());
+        } else for (int l = 0; l < layers; l++) {
             int from = f.layerStart[l], count = f.layerStart[l + 1] - from;
             if (count == 0) continue;
             GL30.glFramebufferTextureLayer(GL30.GL_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0, grid, 0, l);
-            GL20.glUniform4f(slice, l / n, l % n, 0, 0);
             GL11.glDrawArrays(GL11.GL_TRIANGLES, from, count);
         }
         GL30.glBindVertexArray(0);
@@ -140,6 +177,7 @@ public final class SmokePass {
             CORNER.setColumn(c, new org.joml.Vector4f(f.corner[4 * c], f.corner[4 * c + 1], f.corner[4 * c + 2], f.corner[4 * c + 3]));
         }
         CORNER.m30(filled && !f.empty() ? 1 : 0);
+        CORNER.m31(f.dustCellY);
         return CORNER;
     }
 
@@ -207,12 +245,21 @@ public final class SmokePass {
         GlStateManager._texParameter(GlConst.GL_TEXTURE_2D, GlConst.GL_TEXTURE_MIN_FILTER, GlConst.GL_NEAREST);
         GlStateManager._texParameter(GlConst.GL_TEXTURE_2D, GlConst.GL_TEXTURE_MAG_FILTER, GlConst.GL_NEAREST);
         GL11.glTexImage2D(GL11.GL_TEXTURE_2D, 0, GL30.GL_RGBA32F, SmokeGrid.MAX_BLOBS, SmokeGrid.BLOB_ROWS, 0, GL11.GL_RGBA, GL11.GL_FLOAT, (FloatBuffer) null);
+        profiles = GlStateManager._genTexture();
+        GlStateManager._bindTexture(profiles);
+        GlStateManager._texParameter(GlConst.GL_TEXTURE_2D, GlConst.GL_TEXTURE_MIN_FILTER, GlConst.GL_NEAREST);
+        GlStateManager._texParameter(GlConst.GL_TEXTURE_2D, GlConst.GL_TEXTURE_MAG_FILTER, GlConst.GL_NEAREST);
+        GL11.glTexImage2D(GL11.GL_TEXTURE_2D, 0, GL30.GL_RG32F, n, 3*SmokeGrid.MAX_BLOBS, 0, GL30.GL_RG, GL11.GL_FLOAT, (FloatBuffer) null);
+        profileFbo = GlStateManager.glGenFramebuffers();
+        GlStateManager._glBindFramebuffer(GlConst.GL_FRAMEBUFFER, profileFbo);
+        GlStateManager._glFramebufferTexture2D(GlConst.GL_FRAMEBUFFER, GlConst.GL_COLOR_ATTACHMENT0, GlConst.GL_TEXTURE_2D, profiles, 0);
+        boolean profileOk = GlStateManager.glCheckFramebufferStatus(GlConst.GL_FRAMEBUFFER) == GlConst.GL_FRAMEBUFFER_COMPLETE;
         blobBuffer = MemoryUtil.memAllocFloat(SmokeGrid.BLOB_ROWS * SmokeGrid.MAX_BLOBS * 4);
 
         clearFbo = GlStateManager.glGenFramebuffers();
         GlStateManager._glBindFramebuffer(GlConst.GL_FRAMEBUFFER, clearFbo);
         GL32.glFramebufferTexture(GL30.GL_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0, grid, 0);
-        boolean ok = GlStateManager.glCheckFramebufferStatus(GlConst.GL_FRAMEBUFFER) == GlConst.GL_FRAMEBUFFER_COMPLETE;
+        boolean ok = profileOk && GlStateManager.glCheckFramebufferStatus(GlConst.GL_FRAMEBUFFER) == GlConst.GL_FRAMEBUFFER_COMPLETE;
         sliceFbo = GlStateManager.glGenFramebuffers();
         GlStateManager._glBindFramebuffer(GlConst.GL_FRAMEBUFFER, sliceFbo);
         GL30.glFramebufferTextureLayer(GL30.GL_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0, grid, 0, 0);

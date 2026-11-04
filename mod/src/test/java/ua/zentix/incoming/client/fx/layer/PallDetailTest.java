@@ -20,6 +20,15 @@ class PallDetailTest {
     }
 
     /** Stages - from HIGH to LOW, each one is no more than half the price of the previous one; MEDIUM is among them. */
+    @Test void dustRayBudgetIsIndependentOfWindowSizeAndDoesNotChangeNuclearQuality() {
+        for (int[] size : new int[][]{{1280,692},{2560,1600},{3840,2160},{7777,3333},{1919,1079}}) {
+            int f = PallPass.rayFactor(size[0],size[1],4,80_000);
+            assertTrue((long)((size[0]+f-1)/f)*((size[1]+f-1)/f) <= 80_000);
+            assertTrue(f >= 4);
+            assertEquals(2,PallPass.rayFactor(size[0],size[1],2,0));
+        }
+    }
+
     @Test
     void ladderRunsFromHighToLow() {
         assertEquals(0, PallPass.Quality.HIGH.step());

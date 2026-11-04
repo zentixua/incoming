@@ -305,6 +305,9 @@ clumps the whole time, near and far. The air mixes the cloud from the first seco
 The wind is stronger higher up: the top of the cloud runs ahead of its base, and the cloud leans and stretches downwind
 instead of drifting as one ball.
 
+Ground dust forms a continuous layer with uneven density and gaps. Looking down into it reveals a soft volume
+rather than the faces of separate puffs; the wind carries it and its grains settle as before.
+
 Turning your head leaves the smoke clumps and ground dust anchored in the world. Their detail changes gradually as
 you approach, and distant clumps keep their own shapes instead of repeating the same outline across a raid.
 

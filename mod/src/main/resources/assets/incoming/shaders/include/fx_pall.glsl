@@ -1433,7 +1433,7 @@ vec4 smokeStep(float t, float cone, out float gap, out float cell) {
     gap = 0.0;
     cell = smokeCell(p);
     float open = 1.0;
-    if (PallOpenAt.w > 0.5) {
+    if (!dustOn() && PallOpenAt.w > 0.5) {
         vec3 o = p - PallOpenAt.xyz;
         if (all(greaterThanEqual(o, vec3(0.0))) && all(lessThan(o, PALL_OPEN_SIZE))) open = pallOpenHere(p);
     }
@@ -1441,34 +1441,51 @@ vec4 smokeStep(float t, float cone, out float gap, out float cell) {
     vec4 b = smokeFetch(p, 1.0);
     float rise = b.w / sigma;
     vec3 v = vec3(SmokeWind.x, SmokeWind.y + rise, SmokeWind.z);
-    float clumps = smokeClumps(p, v, cone);
+    float clumps = 1.0;
+    if (!dustOn()) clumps = smokeClumps(p, v, cone);
     float st = sigma * clumps * open;
     if (st <= 1e-7) return vec4(0.0);
     vec3 dustW = b.rgb / max(a.y, 1e-7);
     vec3 w = (a.x * SMOKE_SOOT_W + a.y * dustW + a.z * SMOKE_DROP_W) / sigma;
     float g = (a.x * SMOKE_SOOT_G + a.y * SMOKE_DUST_G + a.z * SMOKE_DROP_G) / sigma;
-    // mean grid depths toward light: local point includes its billows (self-shadow), farther samples use mean field
-    float h = 2.0 * cell;
-    float self = st * h;
-    float up = self + smokeSigma(p + vec3(0.0, 3.0 * h, 0.0)) * 5.0 * h;
-    float down = self + smokeSigma(p - vec3(0.0, 3.0 * h, 0.0)) * 5.0 * h;
-    vec3 light = vec3(0.0);
-    if (PallSun.w > 0.0) {
-        float toSun = self + smokeSigma(p + gSun * h) * 1.5 * h + smokeSigma(p + gSun * 4.0 * h) * 4.5 * h;
-        float away = self + smokeSigma(p - gSun * 3.0 * h) * 5.0 * h;
-        float cs = g * dot(-gDir, gSun);
-        light += vec3(pallDiffuse(w.r, g, toSun, toSun + away, 0.0, 1.0, PallSunLight.r, 1.0, 0.0, 0.0, 0.0, cs),
-                pallDiffuse(w.g, g, toSun, toSun + away, 0.0, 1.0, PallSunLight.g, 1.0, 0.0, 0.0, 0.0, cs),
-                pallDiffuse(w.b, g, toSun, toSun + away, 0.0, 1.0, PallSunLight.b, 1.0, 0.0, 0.0, 0.0, cs));
-        light += PallSunLight * (0.25 * hg(g, gC) * exp(-toSun));
+    vec3 light;
+    if (dustOn()) {
+        // Shallow ground dust: single scattering, shared density for view and light extinction.
+        // Two samples toward each light approximate its column; no change to the material mass.
+        float h = (SmokeMax.y - SmokeMin.y) / 8.0;
+        float self = st * h;
+        float up = self + smokeSigma(p + vec3(0.0, 2.0*h, 0.0)) * 3.0*h;
+        float down = self + smokeSigma(p - vec3(0.0, 2.0*h, 0.0)) * 3.0*h;
+        light = 0.5 * PallSkyLight * exp(-up);
+        light += 0.5 * PallSunLight * (PALL_LAND * max(PallSun.y, 0.0)) * exp(-down);
+        if (PallSun.w > 0.0) {
+            float toSun = self + smokeSigma(p + gSun * (2.0*h)) * 3.0*h;
+            light += PallSunLight * (0.25 * hg(g, gC) * exp(-toSun));
+        }
+    } else {
+        // mean grid depths toward light: local point includes its billows (self-shadow), farther samples use mean field
+        float h = 2.0 * cell;
+        float self = st * h;
+        float up = self + smokeSigma(p + vec3(0.0, 3.0 * h, 0.0)) * 5.0 * h;
+        float down = self + smokeSigma(p - vec3(0.0, 3.0 * h, 0.0)) * 5.0 * h;
+        light = vec3(0.0);
+        if (PallSun.w > 0.0) {
+            float toSun = self + smokeSigma(p + gSun * h) * 1.5 * h + smokeSigma(p + gSun * 4.0 * h) * 4.5 * h;
+            float away = self + smokeSigma(p - gSun * 3.0 * h) * 5.0 * h;
+            float cs = g * dot(-gDir, gSun);
+            light += vec3(pallDiffuse(w.r, g, toSun, toSun + away, 0.0, 1.0, PallSunLight.r, 1.0, 0.0, 0.0, 0.0, cs),
+                    pallDiffuse(w.g, g, toSun, toSun + away, 0.0, 1.0, PallSunLight.g, 1.0, 0.0, 0.0, 0.0, cs),
+                    pallDiffuse(w.b, g, toSun, toSun + away, 0.0, 1.0, PallSunLight.b, 1.0, 0.0, 0.0, 0.0, cs));
+            light += PallSunLight * (0.25 * hg(g, gC) * exp(-toSun));
+        }
+        vec3 land = PallSunLight * (PALL_LAND * max(PallSun.y, 0.0));
+        float cv = g * gMv;
+        vec3 sky = PallSkyLight, bottom = land * exp(-min((up + down) / gMuS, 30.0));
+        vec3 vertical = vec3(pallDiffuse(w.r, g, up, up + down, PALL_LAND, 1.0, 0.0, 1.0, 0.0, sky.r, bottom.r, cv),
+                pallDiffuse(w.g, g, up, up + down, PALL_LAND, 1.0, 0.0, 1.0, 0.0, sky.g, bottom.g, cv),
+                pallDiffuse(w.b, g, up, up + down, PALL_LAND, 1.0, 0.0, 1.0, 0.0, sky.b, bottom.b, cv));
+        light += max(vertical, vec3(0.0));
     }
-    vec3 land = PallSunLight * (PALL_LAND * max(PallSun.y, 0.0));
-    float cv = g * gMv;
-    vec3 sky = PallSkyLight, bottom = land * exp(-min((up + down) / gMuS, 30.0));
-    vec3 vertical = vec3(pallDiffuse(w.r, g, up, up + down, PALL_LAND, 1.0, 0.0, 1.0, 0.0, sky.r, bottom.r, cv),
-            pallDiffuse(w.g, g, up, up + down, PALL_LAND, 1.0, 0.0, 1.0, 0.0, sky.g, bottom.g, cv),
-            pallDiffuse(w.b, g, up, up + down, PALL_LAND, 1.0, 0.0, 1.0, 0.0, sky.b, bottom.b, cv));
-    light += max(vertical, vec3(0.0));
     // frame fireballs: Lambertian sphere radius R radiates L·R²/max(d², R²), through smoke at half-path (single scattering;
     // cloud shines from within by its own emission below)
     for (int i = 0; i < 4; i++) {
@@ -1652,7 +1669,11 @@ void main() {
         vec2 ss = pallBox(dir, SmokeMin, SmokeMax);
         s0 = max(ss.x, 0.0);
         s1 = min(ss.y, scene);
-        if (s1 > s0) ts = s0 + jitter * min(smokeCell(dir * s0), 0.25 * (s1 - s0));
+        if (s1 > s0) {
+            float first = min(smokeCell(dir * s0), 0.25 * (s1 - s0));
+            if (dustOn()) first = (s1 - s0) / float(sSteps);
+            ts = s0 + jitter * first;
+        }
     }
     for (int it = 0; it < pallSteps + mSteps + sSteps + sEmpty; it++) {
         bool pallLeft = i < pallSteps && ta < t1;
@@ -1668,6 +1689,9 @@ void main() {
             // half to two cells, no finer than pixel
             float ds = gap > 0.0 ? gap + jitter * cell : clamp(0.5 / max(r.w, 1e-6), 0.5 * cell, 2.0 * cell);
             ds = min(max(ds, 0.35 * cone), max(s1 - ts, 1e-3));
+            // One bounded stratified integral covers the whole dust interval, including thin distant layers.
+            // Cell-sized stepping would exhaust the budget before reaching the far half of a grazing ray.
+            if (dustOn()) { ds = (s1 - s0) / float(sSteps); gap = 0.0; }
             if (r.w > 1e-7) {
                 passesBefore(ts, light, transmit, lost);
                 float tr = exp(-r.w * ds), air = pallAir(PallAir, ts, dir.y);

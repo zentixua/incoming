@@ -8,10 +8,11 @@
 // billow table (SmokeGrid.BLOB_ROWS rows per billow): 0 eye-relative center, σh; 1 σv, peak soot, dust, droplet extinction;
 // 2 dust albedo, half-segment x; 3 ΔT (kK), rise, half-segment y and z (billow spread along segment, SmokeGrid.line)
 uniform sampler2D Sampler0;
+uniform sampler2D Sampler1;
 // cascades: column c — eye-relative corner and cell size
 uniform mat4 SmokeCorner;
 // x — cascade, y — height layer within it
-uniform vec4 SmokeSlice;
+
 
 in float blob;
 
@@ -48,15 +49,28 @@ float smokeLine(vec3 q, vec3 a) {
 }
 
 void main() {
-    int i = int(floor(blob + 0.5));
+    int encoded = int(floor(blob + 0.5));
+    int i = encoded % 512, layer = encoded / 512;
+    vec2 SmokeSlice = vec2(layer / 64, layer % 64);
     vec4 b0 = texelFetch(Sampler0, ivec2(i, 0), 0), b1 = texelFetch(Sampler0, ivec2(i, 1), 0);
     vec4 b2 = texelFetch(Sampler0, ivec2(i, 2), 0), b3 = texelFetch(Sampler0, ivec2(i, 3), 0);
     float px = floor(gl_FragCoord.x);
     float page = step(SMOKE_N, px);
     vec4 C = SmokeCorner[int(SmokeSlice.x + 0.5)];
     vec3 cell = vec3(px - page * SMOKE_N, SmokeSlice.y, floor(gl_FragCoord.y)) + 0.5;
-    vec3 p = C.xyz + cell * C.w;
+    vec3 size = vec3(C.w);
+    if (SmokeCorner[3].y > 0.0) size.y = SmokeCorner[3].y;
+    vec3 p = C.xyz + cell * size;
     vec3 s = vec3(b0.w, b1.x, b0.w);
+    if (SmokeCorner[3].y > 0.0) {
+        vec2 x = texelFetch(Sampler1, ivec2(int(cell.x), 3*i), 0).rg;
+        vec2 y = texelFetch(Sampler1, ivec2(int(cell.y), 3*i+1), 0).rg;
+        vec2 z = texelFetch(Sampler1, ivec2(int(cell.z), 3*i+2), 0).rg;
+        vec2 density = x*y*z;
+        float sigma = b1.z * (0.6*density.x + 0.4*density.y);
+        fragColor = page < 0.5 ? vec4(0.0, sigma, 0.0, 0.0) : vec4(sigma * b2.rgb, 0.0);
+        return;
+    }
     float e = smokeLine((p - b0.xyz) / s, vec3(b2.w, b3.z, b3.w) / s);
     vec3 ext = b1.yzw * e;
     float total = ext.x + ext.y + ext.z;

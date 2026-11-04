@@ -1171,7 +1171,7 @@ final class SmokePuffs {
         Out out;
         private SmokeGrid.Source source;
         /** Puff frame by the substance's growth (with a fraction): smoke and spray. */
-        private double age, sprayAge;
+        private double age, sprayAge, sourceSeconds;
         private long seed;
         private boolean glow, sprays;
         private int index;
@@ -1185,6 +1185,7 @@ final class SmokePuffs {
             this.view = view;
             this.out = out;
             this.source = source;
+            this.sourceSeconds = seconds;
             double growth = source.puffGrowth(seconds);
             this.age = FxAtlas.puffFrame(growth);
             this.sprayAge = FxAtlas.sprayFrame(growth);
@@ -1292,6 +1293,17 @@ final class SmokePuffs {
             FarFlightView.ribbon(width, d, view.pixel(), point);
             float alpha = width > 0 ? (float) (smoke * (1 - Math.exp(-tau)) * point[1] * view.air(d, dy)) : 0;
             t.set(dx, dy, dz, sigma, e, width, point[0], alpha, OPEN_SKY).shown = smoke;
+        }
+
+        @Override
+        public void ground(double x, double y, double z, double sh, double sv, double dust,
+                           float r, float g, float b, double kelvin) {
+            if (ua.zentix.incoming.client.fx.smoke.DustGrid.active()) {
+                int at = index++;
+                double shown = smokeShare(glow, kelvin, view.skyLuminance());
+                ua.zentix.incoming.client.fx.smoke.DustGrid.add(x, y, z, sh, sv, dust * shown, r, g, b,
+                        seed + at * 0x9E3779B97F4A7C15L, sourceSeconds);
+            } else blob(x, y, z, sh, sv, 0, dust, 0, r, g, b, kelvin, 0);
         }
 
         @Override

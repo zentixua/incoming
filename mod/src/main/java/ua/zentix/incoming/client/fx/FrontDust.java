@@ -384,8 +384,8 @@ final class FrontDust implements SmokeGrid.Source {
         double v = Math.min(HEIGHT / 2, s), lift = v;
         double k = SmokeGrid.dustK(ALBEDO_R, ALBEDO_G, ALBEDO_B), edge = Math.max(EDGE_TAU, fullTau(p.area, p.contrast, p.sigma));
         double dust = s > 0 && v > 0 ? Math.min(COLUMN_TAU * p.area * p.contrast * left, edge * 2 * Math.PI * s * v) / k : 0;
-        out.blob(p.x + dx, p.y + lift, p.z + dz,
-                s, v, 0, dust, 0, ALBEDO_R, ALBEDO_G, ALBEDO_B, CloudModel.T_AIR_K, 0);
+        out.ground(p.x + dx, p.y + lift, p.z + dz,
+                s, v, dust, ALBEDO_R, ALBEDO_G, ALBEDO_B, CloudModel.T_AIR_K);
     }
 
     @Override
