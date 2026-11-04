@@ -229,6 +229,41 @@ public final class RuinNearLifecycleGameTests {
         });
     }
 
+    @GameTest(template = "range", batch = "nuke_near_handoff_reads", timeoutTicks = 400, skyAccess = true)
+    @SuppressWarnings("unchecked")
+    public static void partialHandoffRetiresLateWindowWithoutLosingReservation(GameTestHelper h) throws Exception {
+        var f = fixture(h, true); var level = h.getLevel();
+        var grid = f.ctx.grid(level, f.centre, false);
+        var actual = RuinPlanner.finish(grid, Collapse.solve(grid));
+        h.assertTrue(actual.changedBlocks() > 0, "Handoff ownership fixture has no actual physical output");
+        var plans = (RetainedPlans) field(f.owner, "plans").get(f.owner);
+        plans.put(f.centre.toLong(), actual);
+        var reads = (RuinInbox<Object>) field(f.ctx, "reads").get(f.ctx);
+        var complete = reads.expect();
+        long key = ChunkPos.asLong(f.centre.x + 1, f.centre.z);
+        ((LongOpenHashSet) field(f.ctx, "reading").get(f.ctx)).add(key);
+        ((LongOpenHashSet) field(f.ctx, "pendingWindows").get(f.ctx)).add(f.centre.toLong());
+        // This is an already accepted flight, not an empty READY or API binding certificate.
+        int identity = 1_904_010;
+        field(f.owner, "bound").setBoolean(f.owner, true); field(f.owner, "carrier").setBoolean(f.owner, true);
+        field(f.owner, "strike").setInt(f.owner, identity);
+        var geometry = f.ctx.d;
+        var event = new ua.zentix.incoming.nuclear.Detonation(geometry.id(), geometry.burst(), geometry.groundY(), geometry.yieldKt(),
+                geometry.surface(), level.getGameTime(), 0, 0, geometry.visibility(), 0, geometry.scale(), false, geometry.wave());
+        var handed = f.prep.handOff(level, event, level.getGameTime(), identity);
+        h.assertTrue(handed != null && handed.plans() == plans && handed.plans().get(f.centre.toLong()) == actual,
+                "Retiring window I/O changed the actual handed-off plan owner");
+        h.assertTrue(f.ctx.pendingWindowReads() == 1, "Handoff forgot a still-outstanding I/O reservation");
+        h.assertTrue(((LongOpenHashSet) field(f.ctx, "reading").get(f.ctx)).isEmpty()
+                && ((LongOpenHashSet) field(f.ctx, "pendingWindows").get(f.ctx)).isEmpty(), "New scar owner inherited obsolete read/window cursors");
+        var type = Class.forName(RuinContext.class.getName() + "$WindowRead");
+        var ctor = type.getDeclaredConstructor(long.class, DiskShots.Read.class, Optional.class); ctor.setAccessible(true);
+        complete.accept(ctor.newInstance(key, DiskShots.Read.skipped(new ChunkPos(key), "read error: obsolete flight window"), null));
+        h.assertTrue(f.ctx.pendingWindowReads() == 0 && !f.ctx.readyWindowReads(), "Late old callback retained its reservation/payload after handoff");
+        h.assertFalse(f.ctx.windowFailed(), "Obsolete callback contaminated the new scar owner's source state");
+        h.succeed();
+    }
+
     @SuppressWarnings("unchecked")
     private static void task(Fixture f, java.util.concurrent.Future<RuinPlan> future, int chunkId, long now) throws ReflectiveOperationException {
         var type = Class.forName(RuinContext.class.getName() + "$Task");
