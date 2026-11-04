@@ -1,0 +1,18 @@
+{
+  "manifest_sha256": "abc7d17082f7219b826774bdc6deee333419dd13f53a5b6cdf6c9d5d0b16db83",
+  "unique_centers": 190,
+  "chunks": 2177,
+  "all_raw_chunk_hashes_verified": true,
+  "raw_uncompressed_bytes": 179140007,
+  "minY": -64,
+  "height": 384,
+  "dataVersion": 3955,
+  "block_namespaces": [
+    "minecraft",
+    "create",
+    "createpropulsion"
+  ],
+  "extra_runtime_jar": "createpropulsion-1.1.5.jar",
+  "extra_runtime_sha256": "5525a3a0c8b1c476cbc467d021e9d1492b58c78de31ed269eb04f169d42db0a1",
+  "note": "Raw world NBT and JFR remain private/local. Missing registry sanity failures are excluded."
+}

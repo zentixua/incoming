@@ -1,3 +1,5 @@
+Current post-reboot evidence: [post-reboot-20261104/EVIDENCE.md](post-reboot-20261104/EVIDENCE.md). The historical checkpoint below is preserved with its original limits.
+
 # MT-OPT working evidence — stopped, not acceptance
 
 4 November 2026. Draft PR [#568](https://github.com/zentixua/incoming/pull/568).

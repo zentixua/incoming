@@ -1,0 +1,43 @@
+total=27233 groups={blast=6609, candidate=8633, finish=431, other=1299, parse=136, reference=10125}
+candidate
+1458 ua.zentix.incoming.nuclear.world.Blast$Props.touches
+1098 ua.zentix.incoming.nuclear.world.Collapse.distances
+1073 ua.zentix.incoming.nuclear.world.Blast$Solver.elementSpan
+730 ua.zentix.incoming.nuclear.world.Blast$Solver.aroundBreaks
+662 ua.zentix.incoming.nuclear.world.Collapse.props
+506 it.unimi.dsi.fastutil.ints.IntArrayList.grow
+494 ua.zentix.incoming.nuclear.world.Blast$Solver.decide
+482 ua.zentix.incoming.nuclear.world.Collapse.run
+213 java.lang.StrictMath.hypot
+195 ua.zentix.incoming.nuclear.world.Blast$Solver.thickness
+129 it.unimi.dsi.fastutil.ints.IntOpenHashSet.add
+125 ua.zentix.incoming.nuclear.world.Collapse.detached
+105 java.lang.Double.isFinite
+100 net.minecraft.world.level.chunk.PalettedContainer.get
+97 ua.zentix.incoming.nuclear.world.Blast$Solver.fellTrees
+89 ua.zentix.incoming.nuclear.model.HobBlast.positivePhaseSeconds
+75 it.unimi.dsi.fastutil.doubles.AbstractDoubleList.equals
+71 it.unimi.dsi.fastutil.ints.IntOpenHashSet.rehash
+68 net.minecraft.core.Direction.values
+64 ua.zentix.incoming.nuclear.world.RuinWindow.props
+reference
+2261 ua.zentix.incoming.nuclear.world.Blast$Props.touches
+1511 net.minecraft.core.Direction.values
+1057 ua.zentix.incoming.nuclear.world.Blast$Solver.elementSpan
+702 ua.zentix.incoming.nuclear.world.Blast$Solver.aroundBreaks
+688 ua.zentix.incoming.nuclear.world.RuinWindow.props
+487 ua.zentix.incoming.nuclear.world.Blast$Solver.decide
+474 it.unimi.dsi.fastutil.ints.IntArrayList.grow
+272 ua.zentix.incoming.nuclear.world.ReferenceCollapse.spanned
+254 ua.zentix.incoming.nuclear.world.ReferenceCollapse.support
+222 java.lang.StrictMath.hypot
+218 ua.zentix.incoming.nuclear.world.Blast$Solver.thickness
+139 ua.zentix.incoming.nuclear.world.ReferenceCollapse.attachments
+126 ua.zentix.incoming.nuclear.world.Blast$Solver.fellTrees
+117 ua.zentix.incoming.nuclear.world.ReferenceCollapse.detached
+110 it.unimi.dsi.fastutil.ints.IntOpenHashSet.add
+105 java.lang.Double.isFinite
+89 ua.zentix.incoming.nuclear.model.HobBlast.positivePhaseSeconds
+89 it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap.find
+87 ua.zentix.incoming.nuclear.world.ReferenceCollapse.standing
+81 it.unimi.dsi.fastutil.doubles.AbstractDoubleList.equals

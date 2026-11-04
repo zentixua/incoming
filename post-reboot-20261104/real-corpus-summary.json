@@ -1,0 +1,89 @@
+{
+  "rows": 3040,
+  "unique_grids": 190,
+  "cases": 760,
+  "postwarm_pairs": 1520,
+  "overall": {
+    "pairs": 1520,
+    "old_median_ms": 28.1478095,
+    "new_median_ms": 24.068592,
+    "median_paired_ratio": 0.8622493994083225,
+    "total_ratio": 0.880732910379306,
+    "old_alloc_median": 18929508.0,
+    "new_alloc_median": 8867380.0
+  },
+  "by_pressure": {
+    "1": {
+      "pairs": 380,
+      "old_median_ms": 31.9991835,
+      "new_median_ms": 27.5029875,
+      "median_paired_ratio": 0.8566891676692001,
+      "total_ratio": 0.8795714810478156,
+      "old_alloc_median": 19193644.0,
+      "new_alloc_median": 8451504.0
+    },
+    "6": {
+      "pairs": 380,
+      "old_median_ms": 30.096384,
+      "new_median_ms": 25.767942,
+      "median_paired_ratio": 0.8670217463418053,
+      "total_ratio": 0.886468685750561,
+      "old_alloc_median": 18386784.0,
+      "new_alloc_median": 8583508.0
+    },
+    "20": {
+      "pairs": 380,
+      "old_median_ms": 25.72496,
+      "new_median_ms": 21.9440235,
+      "median_paired_ratio": 0.8628321238843439,
+      "total_ratio": 0.8779987868209268,
+      "old_alloc_median": 18842028.0,
+      "new_alloc_median": 9558364.0
+    },
+    "50": {
+      "pairs": 380,
+      "old_median_ms": 25.5420645,
+      "new_median_ms": 21.539443,
+      "median_paired_ratio": 0.8600767256834092,
+      "total_ratio": 0.8781917546312548,
+      "old_alloc_median": 18975356.0,
+      "new_alloc_median": 9631176.0
+    }
+  },
+  "by_region": {
+    "west": {
+      "pairs": 416,
+      "old_median_ms": 33.774432,
+      "new_median_ms": 29.376179,
+      "median_paired_ratio": 0.8697340615224141,
+      "total_ratio": 0.8958884346972222,
+      "old_alloc_median": 21005864.0,
+      "new_alloc_median": 11134552.0
+    },
+    "east": {
+      "pairs": 1104,
+      "old_median_ms": 27.0758305,
+      "new_median_ms": 22.975351,
+      "median_paired_ratio": 0.8602275594053526,
+      "total_ratio": 0.8728190390597107,
+      "old_alloc_median": 18002116.0,
+      "new_alloc_median": 8482076.0
+    }
+  },
+  "cold_stage_median_ms": {
+    "parseNs": 8.537375,
+    "primeNs": 0.001057,
+    "snapshotNs": 0.432473,
+    "blastNs": 74.4585325
+  },
+  "hot_stage_median_ms": {
+    "finishNs": 2.2379435,
+    "encodeNs": 0.036659
+  },
+  "limitations": [
+    "Paired same input, shared process, 2 warm pairs +2 timed pairs/case.",
+    "190 selected dense/median contexts; not an unbiased whole-zone sample.",
+    "Blast and parse stages are cold full 5x5 contexts/9 fractures; production neighboring centers can reuse them.",
+    "Generated synthetic game level supplies current core mod/block-provider registries; no real-world application, full-pack client, full-zone preparation or heap bound proven."
+  ]
+}
