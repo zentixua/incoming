@@ -845,6 +845,7 @@ public final class NuclearPrep {
             p.unreadWhy.addTo(current.skip().split(":", 2)[0], 1);
             return;
         }
+        current = current.primed(Blast.SERVER);
         boolean restored = false;
         try {
             if (stored.data().isPresent()) restored = p.ruins.restoreArchived(stored.key(), stored.data().get(), current);

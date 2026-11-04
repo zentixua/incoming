@@ -228,15 +228,16 @@ final class RuinContext {
                 if (absent.add(key)) windowAbsent++;
                 continue;
             }
+            DiskShots.Read current = r.disk().primed(Blast.SERVER);
             boolean restored = false;
             if (r.cached() != null && r.cached().isPresent()) {
                 try {
-                    restored = restoreArchived(key, r.cached().get(), r.disk());
+                    restored = restoreArchived(key, r.cached().get(), current);
                 } catch (RuntimeException error) {
                     Incoming.LOG.warn("Prepared window snapshot rejected for {}", new ChunkPos(key), error);
                 }
             }
-            if (!restored) putDisk(level, r.disk());
+            if (!restored) putDisk(level, current);
         }
         int missing = 0;
         for (int dz = -RuinPlanner.REACH; dz <= RuinPlanner.REACH; dz++) {

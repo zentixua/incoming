@@ -323,10 +323,14 @@ public final class RuinPreparationGameTests {
                         NuclearEvents.ScheduledStrike.class, p.getClass(), WorkClock.class);
                 work.setAccessible(true);
                 // Avoid an unrelated asynchronous policy calculation; geometry is the acceptance here.
-                field(prep, "policy").set(prep, java.util.concurrent.CompletableFuture.completedFuture("0".repeat(64)));
-                field(prep, "policyGeneration").setInt(prep, Blast.generation);
-                var clock = WorkClock.counting(1_000_000); clock.start(10_000_000);
-                work.invoke(prep, level, null, p, clock);
+                var policy = field(prep, "policy"); Object previousPolicy = policy.get(prep);
+                var generation = field(prep, "policyGeneration"); int previousGeneration = generation.getInt(prep);
+                try {
+                    policy.set(prep, java.util.concurrent.CompletableFuture.completedFuture("0".repeat(64)));
+                    generation.setInt(prep, Blast.generation);
+                    var clock = WorkClock.counting(1_000_000); clock.start(10_000_000);
+                    work.invoke(prep, level, null, p, clock);
+                } finally { policy.set(prep, previousPolicy); generation.setInt(prep, previousGeneration); }
                 var ordinaryTarget = NuclearWarhead.surfaceAt(level, target);
                 var ordinary = NuclearWarhead.geometry(level, ordinaryTarget, 1, false, (float) IncomingConfig.SERVER.effectsScale());
                 var geometry = (ua.zentix.incoming.nuclear.Detonation) field(p, "geometry").get(p);
