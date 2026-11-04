@@ -473,7 +473,15 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
 - Mushroom stem dust is `nuclear/model/StemDust`: dust drawn from wave layer (`DustModel.Column.stem`, starting at
   `stemFrom`: immediately for grounded sphere, after `STEM_FROM_S`·∛(Y/15) s for airburst) rises with stem air
   (`MushroomModel.stemRise`); airburst dusty stem may never catch cap (NRC 1985, p. 22), surface burst leaves sphere
-  trail up to cap. Per-detonation table builds in background (`StemDust.ready`: first frames without dust).
+  trail up to cap. `PallField.stemSource` retains an immutable `StemDust.Source`: the actual `FrontProfile` supplies
+  each annulus and the moving foot, converting horizontal model meters to slant blocks and ticks back to model
+  seconds. Never substitute `HobBlast` arrival here: GAME would feed the stem before the supplying layer.
+  Source equality includes all 24 arrivals plus geometry/visibility. One eight-entry cache includes pending and
+  failed work; pending entries are not evicted. Per-detonation table builds in background (`StemDust.ready`: first
+  frames without dust). Every positive source onset is an interpolation knot; the original one-second quadrature
+  amounts remain at integer nodes. This is causal numerical reconstruction, not a new measured transport law.
+  `StemClockTest`, `StemSourceTest` and `nuke_stem_clock` cover the clock and scale contract. All-water terrestrial
+  stem supply remains a known limitation: filled `PallGround` values do not establish complete footprint coverage.
 
 - ICBM terminal arrival (`IcbmArrival`, `IcbmApproaches`, `IcbmArrivalRenderer`) uses the existing NUKE airframe's
   FlightScale speed (game value is not physical). Once ready ground is known during the final window, its exact

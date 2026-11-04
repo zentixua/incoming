@@ -5,6 +5,7 @@ import ua.zentix.incoming.nuclear.Detonation;
 import ua.zentix.incoming.nuclear.model.BlastModel;
 import ua.zentix.incoming.nuclear.model.DustModel;
 import ua.zentix.incoming.nuclear.model.FireballModel;
+import ua.zentix.incoming.nuclear.model.StemDust;
 import ua.zentix.incoming.nuclear.model.ThermalModel;
 import ua.zentix.incoming.nuclear.model.WaterModel;
 
@@ -42,6 +43,8 @@ import ua.zentix.incoming.nuclear.model.WaterModel;
  * ({@link #row}) is what the shader receives: all expensive work (dust model, front arrival) is done here.
  */
 public final class PallField {
+    /** One immutable source clock for both transported stem dust and its inflow at the foot; reused after replay seek. */
+    final StemDust.Source stemSource;
     /**
      * Dust-layer top unevenness: top above a point is (1 ± this) of table top (shader: {@code PALL_BUMPS}, tile noise).
      * Thermals make the mixed-layer top over heated ground bumpy — a convective entrainment zone 0.2–0.4
@@ -175,6 +178,7 @@ public final class PallField {
      */
     public PallField(Detonation d, long dayTime) {
         this.d = d;
+        this.stemSource = new StemDust.Source(d.yieldKt(), d.hobMetres(), d.surface(), d.visibility(), d.front(), d.scale());
         this.hazeEnd = hazeEndTicks(dayTime);
         this.end = hazeEnd;
         this.burstGame = d.gameTime();

@@ -13,7 +13,6 @@ import ua.zentix.incoming.nuclear.Detonation;
 import ua.zentix.incoming.nuclear.model.BlackBody;
 import ua.zentix.incoming.nuclear.model.DustModel;
 import ua.zentix.incoming.nuclear.model.FireballModel;
-import ua.zentix.incoming.nuclear.model.HobBlast;
 import ua.zentix.incoming.nuclear.model.MushroomModel;
 import ua.zentix.incoming.nuclear.model.ThermalModel;
 import ua.zentix.incoming.nuclear.model.WaterModel;
@@ -309,7 +308,7 @@ public final class MushroomField {
         double front = d.metres(d.frontRadius(a.ticks(partial)));
         double hob = Math.max(0, d.hobMetres());
         return MushroomModel.shape(t, d.yieldKt(), hob, d.surface(), Math.sqrt(Math.max(0, front * front - hob * hob)),
-                ua.zentix.incoming.nuclear.model.StemDust.ready(d.yieldKt(), hob, d.surface(), d.visibility()));
+                ua.zentix.incoming.nuclear.model.StemDust.ready(a.pall.stemSource));
     }
 
     /**
@@ -648,7 +647,7 @@ public final class MushroomField {
         double hob = Math.max(0, d.hobMetres()), y = d.yieldKt(), t = s.t();
         double wall = MushroomModel.stemRadius(0, s.stemR(), MushroomModel.dustFlare(s));
         pall.footLayer(d.blocks(wall), ticks, water, LAYER_AT);
-        double from = HobBlast.arrivalSeconds(wall, hob, y) + DustModel.stemFrom(hob, y, FireballModel.maxRadius(y, d.surface()));
+        double from = pall.stemSource.arrivalSeconds(wall) + DustModel.stemFrom(hob, y, FireballModel.maxRadius(y, d.surface()));
         if (t <= from || LAYER_AT[0] <= 0) return;
         out[0] = LAYER_AT[1];
         out[1] = LAYER_AT[0] * s.life();
