@@ -1,0 +1,104 @@
+diff --git a/mod/src/devtest/java/ua/zentix/incoming/gametest/NuclearGameTests.java b/mod/src/devtest/java/ua/zentix/incoming/gametest/NuclearGameTests.java
+index 48567f9c8..0740dc0c4 100644
+--- a/mod/src/devtest/java/ua/zentix/incoming/gametest/NuclearGameTests.java
++++ b/mod/src/devtest/java/ua/zentix/incoming/gametest/NuclearGameTests.java
+@@ -1431,6 +1431,8 @@ public final class NuclearGameTests {
+         NuclearWorld.useClock(level.getServer(), clock);
+         Detonation d = NuclearWarhead.detonate(level, Vec3.atBottomCenterOf(h.absolutePos(CENTER)), 1, false, null, 0.1f);
+         int budgetMs = IncomingConfig.SERVER.workBudgetMs.get();
++        h.runAtTickTime(1200, () -> ua.zentix.incoming.nuclear.world.RuinPipelineDiagnostic.capture(
++                level, w, d, h.absolutePos(glass), clock));
+         h.succeedWhen(() -> {
+             // chunks at the edge of the busy world are waiting for neighbors (otherwise Sable would load them on every block) - they are in line
+             h.assertTrue(w.craterJobs() == 0, "crater is still digging");
+diff --git a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinPipelineDiagnostic.java b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinPipelineDiagnostic.java
+new file mode 100644
+index 000000000..ae89ae6b3
+--- /dev/null
++++ b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinPipelineDiagnostic.java
+@@ -0,0 +1,85 @@
++package ua.zentix.incoming.nuclear.world;
++
++import it.unimi.dsi.fastutil.longs.LongSet;
++import java.lang.reflect.Field;
++import java.util.List;
++import java.util.Map;
++import java.util.concurrent.Future;
++import java.util.concurrent.ThreadPoolExecutor;
++import net.minecraft.core.BlockPos;
++import net.minecraft.server.level.ServerLevel;
++import net.minecraft.world.level.ChunkPos;
++import ua.zentix.incoming.Incoming;
++import ua.zentix.incoming.nuclear.Detonation;
++import ua.zentix.incoming.registry.ModAttachments;
++
++/** One deadline snapshot for the pipeline test, skipped when the test completes before tick 1200. */
++public final class RuinPipelineDiagnostic {
++    private RuinPipelineDiagnostic() {}
++
++    public static void capture(ServerLevel level, NuclearWorld world, Detonation detonation, BlockPos target, WorkClock clock) {
++        try {
++            long key = new ChunkPos(target).toLong(), now = level.getGameTime();
++            var chunk = level.getChunkSource().getChunkNow(target.getX() >> 4, target.getZ() >> 4);
++            var queue = world.scars();
++            Object job = ((Map<?, ?>) field(queue, "jobs")).get(key);
++            int queuedEvent = job == null ? -1
++                    : ((Detonation) ((List<?>) field(job, "events")).get((Integer) field(job, "event"))).id();
++            RuinContext ctx = world.ruinsIfKept(detonation.id());
++            Object task = ctx == null ? null : ((Map<?, ?>) field(ctx, "tasks")).get(key);
++            Future<?> future = task == null ? null : (Future<?>) field(task, "future");
++            ThreadPoolExecutor pool = (ThreadPoolExecutor) field(RuinWorkers.class, "pool");
++            Incoming.LOG.info("NUKE_PIPELINE_DEADLINE game={} age={} event={} queuedEvent={} target={} state={} scar={} "
++                            + "craters={} queue={} pendingPlan={} clockUsed={} maxUnits={} results={} detached={} "
++                            + "poolSize={} active={} queued={} nearInFlight={} capacity={}",
++                    now, now - detonation.gameTime(), detonation.id(), queuedEvent, target,
++                    chunk == null ? "unready" : chunk.getBlockState(target),
++                    chunk == null ? -1 : chunk.getExistingData(ModAttachments.CHUNK_SCAR).orElse(0),
++                    world.craterJobs(), queue.diagState(key, now), queue.pendingPlan(detonation.id(), key),
++                    clock.usedThisTickNanos(), clock.maxUnitsPerTick(),
++                    RuinResults.bytes(), RuinInputs.detachedBytes(), pool == null ? 0 : pool.getPoolSize(),
++                    pool == null ? 0 : pool.getActiveCount(), pool == null ? 0 : pool.getQueue().size(),
++                    RuinWorkers.inFlight(RuinWorkers.Priority.NEAR), pool == null ? 0 : RuinWorkers.capacity());
++            Incoming.LOG.info("NUKE_PIPELINE_CONTEXT present={} used={} tasks={} failed={} windowFailed={} pendingReads={} "
++                            + "readyReads={} shots={} bytes={} taskSince={} taskPriority={} started={} futureDone={} cancelled={} actualFinished={} "
++                            + "window={}",
++                    ctx != null, ctx == null ? -1 : ctx.used, ctx == null ? 0 : ctx.tasks(),
++                    ctx != null && ctx.failed(key), ctx != null && ctx.windowFailed(),
++                    ctx == null ? 0 : ctx.pendingWindowReads(), ctx != null && ctx.readyWindowReads(),
++                    ctx == null ? 0 : ctx.shotCount(), ctx == null ? 0 : ctx.retainedBytes(),
++                    task == null ? null : field(task, "since"), task == null ? null : field(task, "priority"),
++                    future != null && RuinWorkers.started(future), future != null && future.isDone(),
++                    future != null && future.isCancelled(), future != null && RuinWorkers.finished(future), window(level, ctx, target));
++        } catch (ReflectiveOperationException | RuntimeException failure) {
++            // Observation must not replace the original assertion or its failure message.
++            Incoming.LOG.warn("Could not capture nuclear pipeline deadline state", failure);
++        }
++    }
++
++    private static String window(ServerLevel level, RuinContext ctx, BlockPos target) throws ReflectiveOperationException {
++        if (ctx == null) return "no context";
++        var shots = (Map<?, ?>) field(ctx, "shots");
++        var absent = (LongSet) field(ctx, "absent");
++        var reading = (LongSet) field(ctx, "reading");
++        int loaded = 0, sourceReady = 0, pending = 0;
++        for (int z = -2, bit = 0; z <= 2; z++) for (int x = -2; x <= 2; x++, bit++) {
++            int cx = (target.getX() >> 4) + x, cz = (target.getZ() >> 4) + z;
++            long key = ChunkPos.asLong(cx, cz);
++            boolean live = level.getChunkSource().getChunkNow(cx, cz) != null;
++            ChunkShot shot = (ChunkShot) shots.get(key); // Plain lookup: do not refresh the LRU order.
++            if (live) loaded |= 1 << bit;
++            if (live || absent.contains(key) || shot != null && shot.fromDisk() && shot.fresh()) sourceReady |= 1 << bit;
++            if (reading.contains(key)) pending |= 1 << bit;
++        }
++        // Bit (z+2)*5+x+2 identifies the exact source key relative to the target chunk.
++        return "loadedMask=" + Integer.toHexString(loaded) + ",sourceReadyMask=" + Integer.toHexString(sourceReady)
++                + ",readingMask=" + Integer.toHexString(pending);
++    }
++
++    private static Object field(Object owner, String name) throws ReflectiveOperationException {
++        Class<?> type = owner instanceof Class<?> c ? c : owner.getClass();
++        Field field = type.getDeclaredField(name);
++        field.setAccessible(true);
++        return field.get(owner instanceof Class<?> ? null : owner);
++    }
++}

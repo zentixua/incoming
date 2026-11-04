@@ -1,0 +1,20 @@
+{
+  "source": "dec508cc2e444f0968848faafd385b7e750feb8b",
+  "tree": "b6d6305ed58460d449842f141ad3b8f3bc53e428",
+  "modified": " M mod/src/devtest/java/ua/zentix/incoming/gametest/NuclearGameTests.java\n M mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinInputLifetimeGameTests.java\n?? mod/src/devtest/java/ua/zentix/incoming/nuclear/world/CiAstraProbe.java\n",
+  "command": "JAVA_TOOL_OPTIONS=-XX:ActiveProcessorCount=4 -Xmx2g ./gradlew --no-daemon --max-workers=2 -Dorg.gradle.jvmargs=-Xmx2g -XX:ActiveProcessorCount=4 runGameTestServer -PgametestShard=6/6 --console=plain",
+  "files": {
+    "mod/build/classes/java/main/ua/zentix/incoming/nuclear/world/RuinContext.class": "cff894df2d14cf31026ff44b05ff618346e0d7d29ec6f701aeead3e6a3b7e640",
+    "mod/build/classes/java/main/ua/zentix/incoming/nuclear/world/RuinContext$Grid.class": "6b766d53371f39bd8c2956da0dc0179bee86a84159addecae321d779bba7e11f",
+    "mod/build/classes/java/main/ua/zentix/incoming/nuclear/world/RuinWorkers.class": "6b457a8ea4ef950c460e3451c7a46c5fd09bfcb3207d14efe39abb44fc33c3d6",
+    "mod/build/classes/java/main/ua/zentix/incoming/nuclear/world/RuinInputs.class": "71d43e421886c9f3f658a5dd50f20ba4bd6c615e239e92651f6583c503804cf2",
+    "mod/build/classes/java/main/ua/zentix/incoming/nuclear/world/RuinResults.class": "3ccfd8cb9000409bfe1acbe774d5fe7f2862007f797657a0f36360930ac8e8ad",
+    "mod/build/classes/java/main/ua/zentix/incoming/nuclear/world/NuclearWorld.class": "f0d1def0f16ac150962ae5898affd735b29bcadd4a2b34befe4a5273a5d8dbe8",
+    "mod/build/classes/java/main/ua/zentix/incoming/nuclear/world/ScarQueue.class": "35300b33efb396d5bf45a6b250cd2a68e9080c73e27231ef1a18d8b8a6575314",
+    "mod/build/classes/java/devtest/ua/zentix/incoming/nuclear/world/CiAstraProbe.class": "3e8c3b2baed12d2c444204641b45ef39172e7345f1708c306e55a0ab2b3aa9cd",
+    "mod/build/classes/java/devtest/ua/zentix/incoming/nuclear/world/RuinInputLifetimeGameTests.class": "39d9b9caa900dcfc3f6fa91caaf742815517304a78bc829742ae15b132c8d97d",
+    "mod/run/gametest/mods/create-1.21.1-6.0.10.jar": "ef87fe5709f1ba1f5b8bb20a2925b5afb4669e178fd6d8bf10c167759eefe37a",
+    "mod/run/gametest/mods/create-aeronautics-bundled-1.21.1-1.3.2.jar": "a3f330d4757640f8715d991a43eedb826e4d0e51558d859c843ae6693bd35f1e",
+    "mod/run/gametest/mods/sable-neoforge-1.21.1-2.0.6.jar": "9c199157843bf953a47dff625fc5bb41c01a90538d35ad18e6996bbcb8a617c2"
+  }
+}

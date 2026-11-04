@@ -1,0 +1,86 @@
+{
+  "23dd-green.log": {
+    "bytes": 22188,
+    "sha256": "20530fabea993d124d29e7a5893cd978eaea62e7bea45ed67be1c23f730e8a7b"
+  },
+  "593-shard6.log": {
+    "bytes": 235381,
+    "sha256": "97d28085f31dea852094f22c5117689bb46c9e972efaadc00446df4e28f441e6"
+  },
+  "CiAstraProbe-prefix.java": {
+    "bytes": 5041,
+    "sha256": "378bbbd00b808783a0dd411c33976937ec88f40f3b53edde9fd0a1bde2c48d5f"
+  },
+  "CiAstraProbe.java": {
+    "bytes": 3952,
+    "sha256": "2f9d1e6767a1591cb38bce0dc4a02300e854eda0dc96831fc4d219a8fc732a56"
+  },
+  "RCI-ASTRA-review.md": {
+    "bytes": 15692,
+    "sha256": "8f6e8de4d82b08cd963a136c7d72feb79b26e2af075ec6b85b102c3288d6bd91"
+  },
+  "RCI-TERM-review.md": {
+    "bytes": 10546,
+    "sha256": "4b9c632f9cbabe4ad8f347e5b56651db424692fdc086ca6d89cd3558fdfe5b16"
+  },
+  "README.md": {
+    "bytes": 2476,
+    "sha256": "baf2405df140208b8688ea549bacdefca67dc90a21b15d324f1397565ff76227"
+  },
+  "RMAT2-ci-shard1.log": {
+    "bytes": 610840,
+    "sha256": "6562c83e559187ad0651d56e2a1e2d645a1aaf1d7019f4343fd8448b5bc59c32"
+  },
+  "RMAT2-ci-shard2.log": {
+    "bytes": 364185,
+    "sha256": "788140c3fe188ffbc990e08675753647dbe37da88ea7472d014899e3ebcf1c01"
+  },
+  "RMAT2-ci-shard3.log": {
+    "bytes": 448720,
+    "sha256": "17d5dedd7b43f970653885d44ae99cb8b766ae248fffb2758fa36928ca8b5ad1"
+  },
+  "RMAT2-ci-shard4.log": {
+    "bytes": 322025,
+    "sha256": "4a31b1907be0fbb52aa297b760174692bc9bab419746dc7c3ea2505904ae0548"
+  },
+  "RMAT2-ci-shard6.log": {
+    "bytes": 354188,
+    "sha256": "3e491816c03c15b96fc30bf516ed3ee026ed45a9483467ccc1665edbc8c612c5"
+  },
+  "RuinInputLifetimeGameTests-red.java": {
+    "bytes": 12511,
+    "sha256": "cb2c7c5a43d5008b51617ba898c117893d393ffcf0e6a10bd2a03998b97c6673"
+  },
+  "dec508-probe.log": {
+    "bytes": 30523,
+    "sha256": "dffa1c6e3a012e4e3dd2789378a40bc9d2de541bd4f70c45c7b1b55c87120e3f"
+  },
+  "dec508-shard6-probe.log": {
+    "bytes": 260182,
+    "sha256": "98206bd01804bd0b54c9d7f0a469f011f18139a03f7b299ebf3a6e7a80ec2b76"
+  },
+  "failed-cases.json": {
+    "bytes": 12500,
+    "sha256": "9ec45e3bdde8595f9841588e71493e00f981d1026c9781cce0c751c50acf060c"
+  },
+  "green-probe.patch": {
+    "bytes": 4832,
+    "sha256": "46b1977045f0fed377bfe5560385ec90d6b61db2ca31d1c7dfff148aec5798e0"
+  },
+  "local-artifacts.json": {
+    "bytes": 2407,
+    "sha256": "48922cf28913ca3e5f5b92f97691623a926275f846517a42767c926ba040edd1"
+  },
+  "old-probe.patch": {
+    "bytes": 3696,
+    "sha256": "a00c00565507ed66ffc410813d8c80ce4bfedc2c8e1b83531bc80d1655786e2b"
+  },
+  "shard6-probe.patch": {
+    "bytes": 3696,
+    "sha256": "a00c00565507ed66ffc410813d8c80ce4bfedc2c8e1b83531bc80d1655786e2b"
+  },
+  "terminal-observer.patch": {
+    "bytes": 7180,
+    "sha256": "6591f6234b5698d04ead89f1270a58b932bbd2fed6304c0b1bf9bf713727ec82"
+  }
+}

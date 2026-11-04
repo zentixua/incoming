@@ -1,0 +1,193 @@
+Picked up JAVA_TOOL_OPTIONS: -XX:ActiveProcessorCount=4 -Xmx2g
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.14.3/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :createMinecraftArtifacts UP-TO-DATE
+> Task :compileJava UP-TO-DATE
+> Task :generateModMetadata UP-TO-DATE
+> Task :processResources UP-TO-DATE
+> Task :classes UP-TO-DATE
+> Task :compileDevtestJava
+> Task :copyRuntimeMods_gametest UP-TO-DATE
+> Task :processDevtestResources UP-TO-DATE
+> Task :devtestClasses
+> Task :downloadAssets UP-TO-DATE
+> Task :writeGameTestServerLegacyClasspath UP-TO-DATE
+> Task :prepareGameTestServerRun UP-TO-DATE
+
+> Task :runGameTestServer
+Picked up JAVA_TOOL_OPTIONS: -XX:ActiveProcessorCount=4 -Xmx2g
+WARN StatusConsoleListener Advanced terminal features are not available in this environment
+[17:53:48] [main/INFO] [cp.mo.mo.Launcher/MODLAUNCHER]: ModLauncher running: args [--launchTarget, forgeserverdev, --gameDir, ., --fml.fmlVersion, 4.0.45, --fml.mcVersion, 1.21.1, --fml.neoForgeVersion, 21.1.264, --fml.neoFormVersion, 20240808.144430]
+[17:53:48] [main/INFO] [cp.mo.mo.Launcher/MODLAUNCHER]: JVM identified as Microsoft OpenJDK 64-Bit Server VM 21.0.7+6-LTS
+[17:53:48] [main/INFO] [cp.mo.mo.Launcher/MODLAUNCHER]: ModLauncher 11.0.5+main.901c6ea8 starting: java version 21.0.7 by Microsoft; OS Linux arch amd64 version 7.3.1-1-cachyos
+[17:53:48] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Configuration file /mnt/data/projects/incoming/mod/run/wt-CI-ASTRA/mod/run/ci-astra/failed-dec508/mod/run/gametest/config/fml.toml is not correct. Correcting
+[17:53:48] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [disableConfigWatcher] was corrected from null to false
+[17:53:48] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowControl] was corrected from null to true
+[17:53:48] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [maxThreads] was corrected from null to -1
+[17:53:48] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [versionCheck] was corrected from null to true
+[17:53:48] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [defaultConfigPath] was corrected from null to defaultconfigs
+[17:53:48] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [disableOptimizedDFU] was corrected from null to true
+[17:53:48] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowProvider] was corrected from null to fmlearlywindow
+[17:53:48] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowWidth] was corrected from null to 854
+[17:53:48] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowHeight] was corrected from null to 480
+[17:53:48] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowFBScale] was corrected from null to 1
+[17:53:48] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowMaximized] was corrected from null to false
+[17:53:48] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowSkipGLVersions] was corrected from null to []
+[17:53:48] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowSquir] was corrected from null to false
+[17:53:48] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: ****************************** Found dependency overrides ******************************
+[17:53:48] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: Dependency overrides for mod 'aeronautics': adding explicit AFTER ordering against 'simulated', adding explicit AFTER ordering against 'offroad'
+[17:53:48] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: Dependency overrides for mod 'simulated': adding explicit AFTER ordering against 'create', adding explicit AFTER ordering against 'sable'
+[17:53:48] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: Dependency overrides for mod 'offroad': adding explicit AFTER ordering against 'simulated'
+[17:53:48] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: ****************************************************************************************
+[17:53:48] [main/INFO] [ne.ne.fm.lo.ImmediateWindowHandler/]: ImmediateWindowProvider not loading because launch target is forgeserverdev
+[17:53:48] [main/INFO] [mixin/]: SpongePowered MIXIN Subsystem Version=0.8.7 Source=union:/home/artem/.gradle/caches/modules-2/files-2.1/net.fabricmc/sponge-mixin/0.16.4+mixin.0.8.7/26d01f0567ab46e9ca0d2ed89d0ecc11aadbd433/sponge-mixin-0.16.4+mixin.0.8.7.jar%2394!/ Service=ModLauncher Env=SERVER
+[17:53:48] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: ****************************** Found dependency overrides ******************************
+[17:53:48] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: Dependency overrides for mod 'aeronautics': adding explicit AFTER ordering against 'simulated', adding explicit AFTER ordering against 'offroad'
+[17:53:48] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: Dependency overrides for mod 'simulated': adding explicit AFTER ordering against 'create', adding explicit AFTER ordering against 'sable'
+[17:53:48] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: Dependency overrides for mod 'offroad': adding explicit AFTER ordering against 'simulated'
+[17:53:48] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: ****************************************************************************************
+[17:53:49] [main/INFO] [ne.ne.fm.lo.mo.lo.JarInJarDependencyLocator/]: Found 13 dependencies adding them to mods collection
+[17:53:49] [main/INFO] [ne.ne.fm.lo.mo.ModDiscoverer/]: 
+     Mod List:
+		Name Version (Mod Id)
+
+		Create 6.0.10 (create)
+		Create Aeronautics 1.3.2 (aeronautics)
+		Create Aeronautics 1.3.2 (aeronautics_bundled)
+		Create Offroad 1.3.2 (offroad)
+		Create Simulated 1.3.2 (simulated)
+		Flywheel 1.0.6 (flywheel)
+		Incoming 3.10.4 (incoming)
+		Minecraft 1.21.1 (minecraft)
+		NeoForge 21.1.264 (neoforge)
+		Ponder 1.0.82+mc1.21.1 (ponder)
+		Sable 2.0.6 (sable)
+		Sable Companion 1.6.0 (sablecompanion)
+		Veil 4.3.2 (veil)
+[17:53:49] [main/INFO] [mixin/]: Compatibility level set to JAVA_21
+[17:53:49] [main/INFO] [cp.mo.mo.LaunchServiceHandler/MODLAUNCHER]: Launching target 'forgeserverdev' with arguments [--gameDir, .]
+[17:53:50] [main/WARN] [mixin/]: Reference map 'ponder.refmap.json' for ponder-common.mixins.json could not be read. If this is a development environment you can ignore this message
+[17:53:50] [main/INFO] [de.ry.sa.mi.AbstractSableMixinPlugin/]: Using Vanilla renderer mixins
+[17:53:50] [main/INFO] [de.ry.sa.mi.AbstractSableMixinPlugin/]: Using Vanilla renderer mixins
+[17:53:50] [main/WARN] [mixin/]: Reference map 'simulated.refmap.json' for simulated.mixins.json could not be read. If this is a development environment you can ignore this message
+[17:53:50] [main/WARN] [mixin/]: Reference map 'offroad.refmap.json' for offroad.mixins.json could not be read. If this is a development environment you can ignore this message
+[17:53:50] [main/WARN] [mixin/]: Reference map 'aeronautics.refmap.json' for aeronautics.mixins.json could not be read. If this is a development environment you can ignore this message
+[17:53:50] [main/WARN] [mixin/]: Error loading class: org/jetbrains/annotations/ApiStatus$ScheduledForRemoval (java.lang.ClassNotFoundException: org.jetbrains.annotations.ApiStatus$ScheduledForRemoval)
+[17:53:50] [main/INFO] [MixinExtras|Service/]: Initializing MixinExtras via com.llamalad7.mixinextras.service.MixinExtrasServiceImpl(version=0.5.5).
+[17:53:55] [main/WARN] [minecraft/Commands]: Ambiguity between arguments [teleport, location] and [teleport, destination] with inputs: [0.1 -0.5 .9, 0 0 0]
+[17:53:55] [main/WARN] [minecraft/Commands]: Ambiguity between arguments [teleport, location] and [teleport, targets] with inputs: [0.1 -0.5 .9, 0 0 0]
+[17:53:55] [main/WARN] [minecraft/Commands]: Ambiguity between arguments [teleport, destination] and [teleport, targets] with inputs: [Player, 0123, @e, dd12be42-52a9-4a91-a8a1-11c01849e498]
+[17:53:55] [main/WARN] [minecraft/Commands]: Ambiguity between arguments [teleport, targets] and [teleport, destination] with inputs: [Player, 0123, dd12be42-52a9-4a91-a8a1-11c01849e498]
+[17:53:55] [main/WARN] [minecraft/Commands]: Ambiguity between arguments [teleport, targets, location] and [teleport, targets, destination] with inputs: [0.1 -0.5 .9, 0 0 0]
+[17:53:55] [modloading-worker-0/INFO] [Veil/]: Veil is initializing.
+[17:53:55] [modloading-worker-0/INFO] [ne.ne.ne.co.NeoForgeMod/NEOFORGE-MOD]: NeoForge mod loading, version 21.1.264, for MC 1.21.1
+[17:53:55] [modloading-worker-0/INFO] [co.si.cr.Create/]: Create 6.0.10 initializing! Commit hash: ac0c444d9828da3453ae8cc65338e8de063286fb
+[17:53:56] [modloading-worker-0/INFO] [de.ry.sa.Sable/]: Sable loaded!
+[17:53:58] [main/INFO] [mojang/YggdrasilAuthenticationService]: Environment: Environment[sessionHost=https://sessionserver.mojang.com, servicesHost=https://api.minecraftservices.com, name=PROD]
+[17:53:58] [NeoForge Version Check/INFO] [ne.ne.fm.VersionChecker/]: [create] Starting version check at https://api.modrinth.com/updates/create/forge_updates.json?neoforge=only
+[17:53:58] [main/WARN] [minecraft/VanillaPackResourcesBuilder]: Assets URL 'union:/mnt/data/projects/incoming/mod/run/wt-CI-ASTRA/mod/run/ci-astra/failed-dec508/mod/build/moddev/artifacts/neoforge-21.1.264.jar%23128!/assets/.mcassetsroot' uses unexpected schema
+[17:53:58] [main/WARN] [minecraft/VanillaPackResourcesBuilder]: Assets URL 'union:/mnt/data/projects/incoming/mod/run/wt-CI-ASTRA/mod/run/ci-astra/failed-dec508/mod/build/moddev/artifacts/neoforge-21.1.264.jar%23128!/data/.mcassetsroot' uses unexpected schema
+[17:53:58] [main/INFO] [co.si.cr.Create/]: Created 157 recipes which will be injected into the game
+[17:53:58] [main/INFO] [co.si.cr.Create/]: Created 0 tags which will be injected into the game
+[17:53:58] [main/INFO] [ne.ne.ne.ga.GameTestHooks/]: Enabled Gametest Namespaces: [incoming]
+[17:53:58] [NeoForge Version Check/INFO] [ne.ne.fm.VersionChecker/]: [create] Found status: OUTDATED Current: 6.0.10 Target: 6.0.10+mc1.21.1
+[17:53:59] [main/INFO] [minecraft/RecipeManager]: Loaded 2954 recipes
+[17:53:59] [main/INFO] [minecraft/AdvancementTree]: Loaded 2645 advancements
+[17:54:00] [Server thread/INFO] [ua.ze.in.Incoming/]: GameTest: only batch “nuke_pipeline|nuke_inputs_(cancel|clear|forget|expiry)” - tests 5 from 826
+[17:54:00] [Server thread/INFO] [de.ry.sa.Sable/]: Creating physics pipeline for ResourceKey[minecraft:dimension / minecraft:overworld] using RapierPhysicsPipelineProvider
+[17:54:00] [Server thread/INFO] [de.ry.sa.Sable/]: Using game directory relative Sable Rapier native directory /mnt/data/projects/incoming/mod/run/wt-CI-ASTRA/mod/run/ci-astra/failed-dec508/mod/run/gametest/.sable/natives
+[2026-11-04T15:54:00.605336706Z] [[32mINFO[0m] (sable_rapier) Rapier scene initialized
+[17:54:00] [Server thread/INFO] [de.ry.sa.Sable/]: Creating physics pipeline for ResourceKey[minecraft:dimension / minecraft:the_end] using RapierPhysicsPipelineProvider
+[2026-11-04T15:54:00.893613694Z] [[32mINFO[0m] (sable_rapier) Rapier scene initialized
+[17:54:00] [Server thread/INFO] [de.ry.sa.Sable/]: Creating physics pipeline for ResourceKey[minecraft:dimension / minecraft:the_nether] using RapierPhysicsPipelineProvider
+[2026-11-04T15:54:00.926510841Z] [[32mINFO[0m] (sable_rapier) Rapier scene initialized
+[17:54:00] [Server thread/INFO] [minecraft/MinecraftServer]: Preparing start region for dimension minecraft:overworld
+[17:54:00] [worldgen/INFO] [minecraft/LoggerChunkProgressListener]: Preparing spawn area: 2%
+[17:54:01] [Server thread/INFO] [minecraft/LoggerChunkProgressListener]: Time elapsed: 147 ms
+[17:54:01] [Server thread/INFO] [minecraft/GameTestServer]: Started game test server
+[17:54:01] [Server thread/INFO] [ne.ne.ne.se.pe.PermissionAPI/]: Successfully initialized permission handler neoforge:default_handler
+[17:54:01] [Server thread/INFO] [minecraft/GameTestServer]: 5 tests are now running at position 5427837, -59, 13649511!
+[17:54:01] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuke_pipeline:0' (1 tests)...
+[17:54:01] [Server thread/INFO] [minecraft/GameTestServer]: [     ]
+[17:54:01] [Server thread/INFO] [minecraft/GameTestServer]: [     ]
+[17:54:02] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #1 (minecraft:overworld): 5427870 13649544, radius 242, power returns in 15 min
+[17:54:02] [Server thread/INFO] [ua.ze.in.Incoming/]: Nuclear detonation #1: 1 kt, ground burst, 5427869 -48 13649543, scale 0.1, 23 ms
+[17:54:02] [Server thread/INFO] [ua.ze.in.Incoming/]: CI_ASTRA_PIPE tick=0 game=44 target=BlockPos{x=5427853, y=-48, z=13649543} state=Block{minecraft:glass} scar=0 ready25=25 craters=1 queues=jobs=0,byDue=0,readySeen=0,readyUnseen=0,background=0,parked=0, job=none ctx=none task=none pool=null resident=2382720 results=0 detached=0 material=0
+[17:54:02] [Server thread/INFO] [ua.ze.in.Incoming/]: CI_ASTRA_PIPE tick=0 game=44 target=BlockPos{x=5427853, y=-48, z=13649543} state=Block{minecraft:glass} scar=0 ready25=25 craters=1 queues=jobs=0,byDue=0,readySeen=0,readyUnseen=0,background=0,parked=0, job=none ctx=none task=none pool=null resident=2382720 results=0 detached=0 material=0
+[17:54:02] [Server thread/INFO] [ua.ze.in.Incoming/]: Nuclear detonation #1: light and radiation — 0 of 0 entities in 1 ticks, 1 ms
+[17:54:02] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #1 (minecraft:overworld): outage cascade covered the whole area
+[17:54:02] [Server thread/INFO] [minecraft/GameTestServer]: [_    ]
+[17:54:02] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruins: background threads 2 (desired 2; automatic; cores 4, left to the game 2)
+[17:54:02] [Server thread/INFO] [minecraft/GameTestServer]: [_    ]
+[17:54:02] [Server thread/INFO] [minecraft/GameTestServer]: [_    ]
+[17:54:02] [Server thread/INFO] [minecraft/GameTestServer]: [_    ]
+[17:54:02] [Server thread/INFO] [minecraft/GameTestServer]: [_    ]
+[17:54:02] [Server thread/INFO] [minecraft/GameTestServer]: [_    ]
+[17:54:02] [Server thread/INFO] [minecraft/GameTestServer]: [_    ]
+[17:54:02] [Server thread/INFO] [minecraft/GameTestServer]: [_    ]
+[17:54:02] [Server thread/INFO] [minecraft/GameTestServer]: [_    ]
+[17:54:02] [Server thread/INFO] [minecraft/GameTestServer]: [_    ]
+[17:54:02] [Server thread/INFO] [ua.ze.in.Incoming/]: CI_ASTRA_PIPE tick=200 game=244 target=BlockPos{x=5427853, y=-48, z=13649543} state=Block{minecraft:glass} scar=0 ready25=25 craters=0 queues=jobs=81,byDue=73,readySeen=0,readyUnseen=0,background=8,parked=0, job=event=0,due=44,wave=44,held=0,ready=false,waitsNeighbours=false,needs=0,diagWaits=null, ctx=shots=59,heights=31,tasks=8,pendingWindows=73,reads=pending=32,ready=0,,failed=0,shotBytes=821848,heightBytes=6416,blastBytes=0,appliedBytes=0, task=since=63,started=true,done=false,cancel=false,finished=false pool=size=2,active=2,queued=38,completed=0 resident=172020264 results=8011136 detached=0 material=0
+[17:54:02] [Server thread/INFO] [minecraft/GameTestServer]: [_    ]
+[17:54:02] [Server thread/INFO] [ua.ze.in.Incoming/]: CI_ASTRA_PIPE tick=228 game=272 target=BlockPos{x=5427853, y=-48, z=13649543} state=Block{minecraft:air} scar=1 ready25=25 craters=0 queues=jobs=79,byDue=73,readySeen=0,readyUnseen=0,background=6,parked=0, job=none ctx=shots=59,heights=31,tasks=6,pendingWindows=73,reads=pending=32,ready=0,,failed=0,shotBytes=821848,heightBytes=6416,blastBytes=0,appliedBytes=17224, task=none pool=size=2,active=2,queued=36,completed=2 resident=170298896 results=6172320 detached=0 material=0
+[17:54:02] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuke_inputs_forget:0' (1 tests)...
+[17:54:02] [Server thread/INFO] [minecraft/GameTestServer]: [+    ]
+[17:54:02] [Server thread/INFO] [minecraft/GameTestServer]: [+    ]
+[17:54:03] [Server thread/INFO] [ua.ze.in.Incoming/]: CI_ASTRA_INPUT before route=forget shot=true light=0.0 hasBlast=false
+[17:54:03] [Server thread/INFO] [ua.ze.in.Incoming/]: INPUT_LIFETIME forget held known=386680 detached=386680 futureDone=true actualFinished=false otherRoom=0
+[17:54:03] [Incoming ruins #1/INFO] [ua.ze.in.Incoming/]: CI_ASTRA_INPUT after route=forget shot=true light=0.0 expectedLight=0.0 hasBlast=false sameStamp=true sameMinY=true sameRemoved=true sameLogs=true sameTrees=true
+[17:54:03] [Server thread/INFO] [ua.ze.in.Incoming/]: INPUT_LIFETIME forget exited detached=0 consumed=true otherRoom=193340
+[17:54:03] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuke_inputs_expiry:0' (1 tests)...
+[17:54:03] [Server thread/INFO] [minecraft/GameTestServer]: [++   ]
+[17:54:03] [Server thread/INFO] [ua.ze.in.Incoming/]: CI_ASTRA_INPUT before route=expiry shot=true light=0.0 hasBlast=false
+[17:54:03] [Server thread/WARN] [ua.ze.in.Incoming/]: Ruins for detonation #9191: background plan for chunk [339250, 853096] not ready in 600 ticks — interrupted; awaiting worker exit before retry
+[17:54:03] [Server thread/INFO] [ua.ze.in.Incoming/]: INPUT_LIFETIME expiry held known=386680 detached=386680 futureDone=true actualFinished=false otherRoom=0
+[17:54:03] [Incoming ruins #1/INFO] [ua.ze.in.Incoming/]: CI_ASTRA_INPUT after route=expiry shot=true light=0.0 expectedLight=0.0 hasBlast=false sameStamp=true sameMinY=true sameRemoved=true sameLogs=true sameTrees=true
+[17:54:03] [Server thread/INFO] [ua.ze.in.Incoming/]: INPUT_LIFETIME expiry exited detached=0 consumed=true otherRoom=193340
+[17:54:04] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuke_inputs_clear:0' (1 tests)...
+[17:54:04] [Server thread/INFO] [minecraft/GameTestServer]: [+++  ]
+[17:54:04] [Server thread/INFO] [minecraft/GameTestServer]: [+++  ]
+[17:54:04] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruins: background threads working 2 of 2 (server tick without mod lanes 0.7 ms)
+[17:54:04] [Server thread/INFO] [ua.ze.in.Incoming/]: CI_ASTRA_INPUT before route=clear shot=true light=0.0 hasBlast=false
+[17:54:04] [Server thread/INFO] [ua.ze.in.Incoming/]: INPUT_LIFETIME clear held known=386680 detached=386680 futureDone=true actualFinished=false otherRoom=0
+[17:54:04] [Incoming ruins #1/INFO] [ua.ze.in.Incoming/]: CI_ASTRA_INPUT after route=clear shot=true light=0.0 expectedLight=0.0 hasBlast=false sameStamp=true sameMinY=true sameRemoved=true sameLogs=true sameTrees=true
+[17:54:04] [Server thread/INFO] [ua.ze.in.Incoming/]: INPUT_LIFETIME clear exited detached=0 consumed=true otherRoom=193340
+[17:54:04] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuke_inputs_cancel:0' (1 tests)...
+[17:54:04] [Server thread/INFO] [minecraft/GameTestServer]: [++++ ]
+[17:54:04] [Server thread/INFO] [minecraft/GameTestServer]: [++++ ]
+[17:54:04] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruins: background threads working 2 of 2 (server tick without mod lanes 1.0 ms)
+[17:54:04] [Server thread/INFO] [ua.ze.in.Incoming/]: CI_ASTRA_INPUT before route=cancel shot=true light=0.0 hasBlast=false
+[17:54:04] [Server thread/INFO] [ua.ze.in.Incoming/]: INPUT_LIFETIME cancel held known=386680 detached=386680 futureDone=true actualFinished=false otherRoom=0
+[17:54:04] [Incoming ruins #1/INFO] [ua.ze.in.Incoming/]: CI_ASTRA_INPUT after route=cancel shot=true light=0.0 expectedLight=0.0 hasBlast=false sameStamp=true sameMinY=true sameRemoved=true sameLogs=true sameTrees=true
+[17:54:04] [Server thread/INFO] [ua.ze.in.Incoming/]: INPUT_LIFETIME cancel exited detached=0 consumed=true otherRoom=193340
+[17:54:04] [Server thread/INFO] [minecraft/GameTestServer]: [+++++]
+[17:54:04] [Server thread/INFO] [minecraft/GameTestServer]: ========= 5 GAME TESTS COMPLETE IN 3.696 s ======================
+[17:54:04] [Server thread/INFO] [minecraft/GameTestServer]: All 5 required tests passed :)
+[17:54:04] [Server thread/INFO] [minecraft/GameTestServer]: ====================================================
+[17:54:04] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruins: background threads stopped (queued tasks dropped: 0)
+[17:54:04] [Server thread/INFO] [minecraft/MinecraftServer]: Stopping server
+[17:54:04] [Server thread/INFO] [minecraft/MinecraftServer]: Saving players
+[17:54:04] [Server thread/INFO] [minecraft/MinecraftServer]: Saving worlds
+[17:54:05] [Server thread/INFO] [minecraft/MinecraftServer]: Saving chunks for level 'ServerLevel[Test Level]'/minecraft:overworld
+[17:54:05] [Server thread/INFO] [de.ry.sa.Sable/]: Saving sub-levels for level 'ServerLevel[Test Level]'/minecraft:overworld
+[17:54:07] [Server thread/INFO] [minecraft/MinecraftServer]: Saving chunks for level 'ServerLevel[Test Level]'/minecraft:the_end
+[17:54:07] [Server thread/INFO] [de.ry.sa.Sable/]: Saving sub-levels for level 'ServerLevel[Test Level]'/minecraft:the_end
+[17:54:07] [Server thread/INFO] [minecraft/MinecraftServer]: Saving chunks for level 'ServerLevel[Test Level]'/minecraft:the_nether
+[17:54:07] [Server thread/INFO] [de.ry.sa.Sable/]: Saving sub-levels for level 'ServerLevel[Test Level]'/minecraft:the_nether
+[17:54:07] [Server thread/INFO] [minecraft/MinecraftServer]: ThreadedAnvilChunkStorage (world): All chunks are saved
+[17:54:07] [Server thread/INFO] [minecraft/MinecraftServer]: ThreadedAnvilChunkStorage (DIM1): All chunks are saved
+[17:54:07] [Server thread/INFO] [minecraft/MinecraftServer]: ThreadedAnvilChunkStorage (DIM-1): All chunks are saved
+[17:54:07] [Server thread/INFO] [minecraft/MinecraftServer]: ThreadedAnvilChunkStorage: All dimensions are saved
+[17:54:07] [Server thread/INFO] [minecraft/GameTestServer]: Game test server shutting down
+
+[Incubating] Problems report is available at: file:///mnt/data/projects/incoming/mod/run/wt-CI-ASTRA/mod/run/ci-astra/failed-dec508/mod/build/reports/problems/problems-report.html
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 9.0.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/8.14.3/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD SUCCESSFUL in 26s
+11 actionable tasks: 2 executed, 9 up-to-date
+laptop_job ci-astra-23dd-green: exit 0

@@ -1,0 +1,57 @@
+diff --git a/mod/src/devtest/java/ua/zentix/incoming/gametest/NuclearGameTests.java b/mod/src/devtest/java/ua/zentix/incoming/gametest/NuclearGameTests.java
+index 48567f9c8..7dde3a4a4 100644
+--- a/mod/src/devtest/java/ua/zentix/incoming/gametest/NuclearGameTests.java
++++ b/mod/src/devtest/java/ua/zentix/incoming/gametest/NuclearGameTests.java
+@@ -1430,6 +1430,13 @@ public final class NuclearGameTests {
+         WorkClock clock = WorkClock.counting(1_000_000L);
+         NuclearWorld.useClock(level.getServer(), clock);
+         Detonation d = NuclearWarhead.detonate(level, Vec3.atBottomCenterOf(h.absolutePos(CENTER)), 1, false, null, 0.1f);
++        long probeStart = level.getGameTime();
++        ua.zentix.incoming.nuclear.world.CiAstraProbe.sample(level, h.absolutePos(glass), d.id(), 0);
++        h.onEachTick(() -> {
++            long elapsed = level.getGameTime() - probeStart;
++            if (elapsed % 200 == 0 || elapsed >= 1199)
++                ua.zentix.incoming.nuclear.world.CiAstraProbe.sample(level, h.absolutePos(glass), d.id(), elapsed);
++        });
+         int budgetMs = IncomingConfig.SERVER.workBudgetMs.get();
+         h.succeedWhen(() -> {
+             // chunks at the edge of the busy world are waiting for neighbors (otherwise Sable would load them on every block) - they are in line
+@@ -1439,6 +1446,7 @@ public final class NuclearGameTests {
+             h.assertTrue(scar >= d.id(), "chunk is not marked with detonation: " + scar + " < " + d.id());
+             h.assertTrue(clock.maxUnitsPerTick() <= budgetMs, "per tick " + clock.maxUnitsPerTick() + " units by 1 ms with budget " + budgetMs + " ms");
+             h.assertTrue(clock.ticksWorked() > 1, "all the work fit into one tick - the budget has not been verified");
++            ua.zentix.incoming.nuclear.world.CiAstraProbe.sample(level, h.absolutePos(glass), d.id(), level.getGameTime() - probeStart);
+             NuclearWorld.useClock(level.getServer(), new WorkClock());
+             NuclearStrikes.clear(level);
+         });
+diff --git a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinInputLifetimeGameTests.java b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinInputLifetimeGameTests.java
+index 81c08ef2f..199217819 100644
+--- a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinInputLifetimeGameTests.java
++++ b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinInputLifetimeGameTests.java
+@@ -72,7 +72,8 @@ public final class RuinInputLifetimeGameTests {
+                 "fixture must retain real snapshots and shadow heights");
+         long known = ctx.retainedBytes();
+         double light = grid.lit(BlockPos.containing(point));
+-        grid.blast(0, 0);
++        Blast fracture = grid.blast(0, 0);
++        Incoming.LOG.info("CI_ASTRA_INPUT before route={} shot={} light={} hasBlast={}", route, grid.at(0, 0) != null, light, grid.hasBlast(0, 0));
+         var failure = new AtomicReference<Throwable>();
+         var consumed = new AtomicBoolean();
+         Future<?> blocker = route.equals("queued") ? RuinWorkers.submit(() -> {
+@@ -92,8 +93,14 @@ public final class RuinInputLifetimeGameTests {
+                     catch (InterruptedException expected) { continue; }
+                     if (!open) throw new AssertionError("Grid gate not released");
+                 }
+-                if (grid.at(0, 0) == null || grid.lit(BlockPos.containing(point)) != light || !grid.hasBlast(0, 0))
+-                    throw new AssertionError("cancel mutated running Grid inputs");
++                Blast after = grid.blast(0, 0);
++                Incoming.LOG.info("CI_ASTRA_INPUT after route={} shot={} light={} expectedLight={} hasBlast={} sameStamp={} sameMinY={} sameRemoved={} sameLogs={} sameTrees={}", route, grid.at(0, 0) != null, grid.lit(BlockPos.containing(point)), light, grid.hasBlast(0, 0), fracture.stamp().same(after.stamp()), fracture.minY() == after.minY(), java.util.Arrays.equals(fracture.removed(), after.removed()), fracture.treeLogs().equals(after.treeLogs()), java.util.Arrays.deepEquals(fracture.trees().toArray(), after.trees().toArray()));
++                if (grid.at(0, 0) == null || grid.lit(BlockPos.containing(point)) != light
++                        || !fracture.stamp().same(after.stamp()) || fracture.minY() != after.minY()
++                        || !java.util.Arrays.equals(fracture.removed(), after.removed())
++                        || !fracture.treeLogs().equals(after.treeLogs())
++                        || !java.util.Arrays.deepEquals(fracture.trees().toArray(), after.trees().toArray()))
++                    throw new AssertionError("cancel mutated running Grid inputs or fracture output");
+                 var result = RuinPlanner.finish(grid, Collapse.solve(grid));
+                 consumed.set(true);
+                 return result;
