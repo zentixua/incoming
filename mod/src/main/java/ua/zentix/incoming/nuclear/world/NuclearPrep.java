@@ -488,7 +488,7 @@ public final class NuclearPrep {
 
     /** Already-owned bytes only: cold-load publication cannot recursively start another admission. */
     static long residentMemory(ServerLevel level) {
-        long bytes = 0;
+        long bytes = RuinInputs.detachedBytes();
         int height = level.getHeight();
         for (ServerLevel other : level.getServer().getAllLevels()) {
             height = Math.max(height, other.getHeight());
@@ -499,7 +499,7 @@ public final class NuclearPrep {
     }
 
     static long memory(ServerLevel level, boolean reserveWorkers) {
-        long bytes = 0;
+        long bytes = RuinInputs.detachedBytes();
         int height = level.getHeight();
         boolean cold = false;
         for (ServerLevel other : level.getServer().getAllLevels()) {
