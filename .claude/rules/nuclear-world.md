@@ -21,8 +21,8 @@ paths:
   hold up dozens of ready visible chunks (0.2 ms replacement), 38 ticks on netcup 16.10; visible chunks are prechecked
   `ScarQueue.LOOKAHEAD` (20) ticks before the wave: plans that became stale during flight (grass grew, player placed a
   block) and chunks without plans receive a background plan now, ready by the wave (GameTest
-  `staleSeenPlanReplannedBeforeWave`); a background plan stale at replacement is not applied — rebuild on the server
-  thread from the chunk as it is (`staleBackgroundPlanRebuiltOnServer`); trunks falling into a neighboring chunk wait
+  `staleSeenPlanReplannedBeforeWave`); a background plan stale at replacement is not applied — resnapshot and retry
+  in the worker pool (`staleBackgroundPlanRequeuedInBackground`); trunks falling into a neighboring chunk wait
   for its ruins; loads no neighbors: finished plans need none (except `RuinPlan.neighbourRadius`: world-path positions
   within 2 blocks of the edge or a nearby Sable craft need a radius-1 ticket; non-vanilla block entities through the
   world (Create belts remove chains up to 20 blocks) need radius 2); background plans use a 5×5 window of memory/disk
@@ -47,7 +47,7 @@ paths:
   thread fills from snapshot palettes (`Blast.publish`); light shadow uses detonation heightmaps (`RuinContext.lit`).
   GameTest `backgroundSolversCallNoWorld` walks bytecode along the call graph from background-task roots;
   `backgroundPlanMatchesServerPlan` and `diskPlanMatchesMemoryPlan` check equal plans; a background plan running over
-  600 ticks, measured from start rather than enqueue, is abandoned and planned on the server thread): `Blast` —
+  600 ticks, measured from start rather than enqueue, is interrupted and retried after its worker exits): `Blast` —
   pressure differences break thin elements: pressure reaches only faces beside sky-connected air (above terrain tops
   and 4 blocks into openings, then beyond breaches through all connected air in chunk columns ± 9; bunkers, sealed
   caves and basements stay untouched); blast-facing surfaces get reflected `max(p, Pr·cos θ)` (walls horizontally,

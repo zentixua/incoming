@@ -1393,6 +1393,7 @@ public final class RuinBackgroundGameTests {
     public static void groundTraceWithoutBlockDamageUsesWorkers(GameTestHelper h) {
         var config = ua.zentix.incoming.IncomingConfig.SERVER.nukeBlockDamage;
         boolean damage = config.get();
+        StrikeGameTests.afterTest(h, () -> config.set(damage));
         config.set(false);
         ServerLevel level = h.getLevel();
         BlockPos glass = NuclearGameTests.CENTER.west(8);
