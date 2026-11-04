@@ -64,3 +64,5 @@ Final merged-head verification: all seven targeted memory/cancellation integrati
 ## Final isolated scene result
 
 The final immutable CI jar 490a2aa84 versus main 1aca1654a passed the isolated Complementary main/candidate/main pair, all six gated metrics. Inside render-thread CPU p95 was 6.70 ms versus 5.92 ms for the worse main run; GPU p50 was 11.00 versus 11.27 ms. No B5 CPU check overlapped it; the raw host record includes a brief foreign CPU sample up to 1.06 cores. Initial none/Photon pairs already passed. `accepted-scene-results.json` references the accepted pairs without rewriting the original failed verdict. `scene-bench-isolated` contains the exact final pair and immutable jar hashes. GPU lease was released; no B5 game client remains.
+
+Probe identity: `probe-source-identity.json` hashes the actual measured working tree. Against 733c4b93c, its only production differences are the two archived timing/size-instrumented classes, `RuinMatter` and `RuinSupport`. Other production sources match that revision.
