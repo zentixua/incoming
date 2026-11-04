@@ -1,0 +1,10 @@
+{
+  "source": "ad13fe2bb926e6c95ed2c30cc31efb01af0537b9",
+  "jar_sha256": "6fd6b17dcf31e8ce0da5eae1bd8c199898858239ea4bc2545050783f9f6d3024",
+  "restart_requested_wall_ms": 1793803908221,
+  "ready_wall_ms": 1793803935250,
+  "post_tick_save_receipt": "[04Nov2026 15:53:19.395] [Server thread/INFO] [net.minecraft.server.MinecraftServer/]: Saved the game",
+  "save_complete_wall_ms": 1793804000298,
+  "stopped_wall_ms": 1793804009478,
+  "cut_complete_wall_ms": 1793804021453
+}
