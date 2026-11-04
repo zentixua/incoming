@@ -203,4 +203,15 @@ public final class NuclearReviewGameTests {
         });
     }
 
+    @GameTest(template = "range", batch = "nuclear_review_launch_permission", skyAccess = true)
+    public static void nuclearReviewCannotSmuggleAnOperatorLaunchSite(GameTestHelper h) {
+        var p = setup(h);
+        var original = order(h, 1);
+        var packet = new C2S.Fire(original.loadout(), original.aim(), original.aircraft(), original.via(), Optional.of(p.position()));
+        NuclearReview.request(p, packet);
+        h.assertTrue(p.getData(ModAttachments.NUCLEAR_REVIEW).snapshot().isEmpty(), "non-operator supplied a launch site through review");
+        h.assertValueEqual(held(p, ModItems.ICBM.get()), 1, "rejected site spent ammunition");
+        h.succeed();
+    }
+
 }

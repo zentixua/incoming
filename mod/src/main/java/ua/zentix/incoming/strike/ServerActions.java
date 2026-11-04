@@ -420,6 +420,10 @@ public final class ServerActions {
             }
         }
         if (l.nuclear()) {
+            if (rules && from instanceof LaunchOrigin.Place place) {
+                var problem = launchSiteProblem(player, place.at());
+                if (problem != null) { player.sendSystemMessage(problem); return false; }
+            }
             if (preparation == null) return NuclearCommands.request(player, l, aim, via, from, rules);
             if (!prepared(player.serverLevel(), preparation, aim, l)) return false;
             MutableComponent route = routeProblem(player.serverLevel(), player, rules, weapon, from, via, aim.point());

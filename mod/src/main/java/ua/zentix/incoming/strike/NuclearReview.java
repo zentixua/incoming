@@ -86,6 +86,10 @@ public final class NuclearReview {
     }
 
     private static boolean allowed(ServerPlayer p, C2S.Fire order) {
+        if (order.from().isPresent()) {
+            var problem = ServerActions.launchSiteProblem(p, order.from().get());
+            if (problem != null) { p.sendSystemMessage(problem); return false; }
+        }
         if (!ua.zentix.incoming.launcher.LauncherLinks.of(ServerActions.designator(p)).isEmpty()) {
             p.sendSystemMessage(Component.translatable("incoming.fixed_launcher.no_nuke"));
             return false;
