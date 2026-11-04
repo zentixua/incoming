@@ -1,0 +1,45 @@
+# Progress architecture decision after the actual 1 Mt failure
+
+Status: engineering choice for the next corrected trial, **not runtime acceptance**. The goal is authoritative, persistent destruction arriving with the front near players, plus consistent already-crossed terrain on later travel. A faster planner alone is insufficient. Finite hardware cannot promise zero delay after an arbitrary teleport or arbitrary concurrent workload; acceptance must expose pending work and actual visible geometry.
+
+## Causal chain and ownership
+
+The implemented chain is: ordinary command and paid launch → bounded immutable chunk/window capture or asynchronous disk read → pure worker fracture/collapse → counted plan/archive ownership → main-thread material/cargo admission and section delta → scar commit, normal section/biome/light updates → native client chunks and ordinary LSS publication → material settlement and normal save/reload. Preparation already continues after detonation in released `v3.10.4` (`NuclearPrep.far`); retaining that continuation is part of the choice.
+
+The new live evidence isolates a later boundary: the full post-clean snapshot has **zero active and queued workers**, dense completed plans waiting for material, and retained demand reads. The old ledger's historical support estimate mixes a spent future obligation with actual table storage. Independent source inspection also finds completion paths serviced only when particular consumers are visited. This explains why enlarging early-stage throughput cannot establish end-to-end progress. The snapshot does not prove permanent deadlock, the duration of every causal contribution, or an actual heap leak.
+
+The selected correction preserves the physical solver, full material/cargo and ordinary world/network ownership. It charges actual support-table capacity and live entries separately from future source expansion; unused future credit is spent as the representation changes. It services already-owned read/worker completions independently of a capacity-blocked visible application, and transfers decoded demanded plans to the live consumer before cache trimming. Real arrays and rehash overlap remain charged. World application retains normal current-state, neighbor, scar and material checks. Existing storage/reclamation and finite work budgets remain.
+
+## Alternatives considered
+
+| Approach | Expected benefit | Limit relevant to this failure | Decision |
+|---|---|---|---|
+| More worker threads or larger heap/cap | More concurrent preparation/headroom | At the observed stall the worker pool is idle; historical credits and consumer-dependent completion remain. More buffered results can worsen later pressure. | Do not substitute for a lifetime fix. |
+| Restore the entire released path | Simpler historical material behavior | Released rubble retained 12% of removals, at most four blocks per column. Reverting drops current full material/support/cargo behavior; it is not equivalent physics. | Reuse its traversal/continuation and ordinary saves, not the old material reduction. |
+| Precompute the whole zone before launch | More ready plans at first contact | More launch delay, disk work and stale-state revalidation; does not finish later material application or arbitrary newly loaded terrain. | Keep bounded flight preparation and near-player look-ahead. |
+| Compute only on demand | Smaller far cache | Moves capture/I/O/fracture into the arrival/traversal critical path. It cannot improve the demonstrated completed-plan admission stall. | Preserve as the necessary cold fallback, not the primary near-front strategy. |
+| Consumer completion and accurate lifetime accounting | Releases existing ownership without discarding world semantics | Requires composed dense tests and actual sustained progress; no proof yet for an arbitrarily large connected support graph. | Selected, subject to runtime gates. |
+| Replace live region files directly/offline | Fast large batch storage writes | Loaded world, entities, POIs, lighting, inventories, shared clients and restart ownership still need a transaction. A region file is not the authority for an already loaded chunk. | Keep existing delta application and ordinary saves. No direct region rewrite. |
+| Adopt WorldEdit/FAWE as the mutation engine | Established extents, section batching and disk history | Does not supply this mod's fracture/support/material semantics or wave ordering. Current FAWE distribution targets plugin/Bukkit integration; a NeoForge/Sable adapter and full compatibility validation would be additional work. | Reuse the batching/streaming principle already present; no demonstrated replacement of this bottleneck. |
+| Add C2ME or move the solver to GPU | Faster chunk I/O/generation or parallel numerical work | C2ME targets chunk management, not these credits/consumers. A GPU solver still needs bounded input/result transfer and authoritative CPU world commits; no solver-throughput bottleneck is demonstrated here. | No new backend without a measured residual compute/I/O bottleneck. |
+| Render synthetic ruins client-side ahead of authority | Earlier visual change | Can disagree with collisions, cargo, other players, saves and native chunks. Rendering completion does not commit server destruction. | Rejected as a substitute for authoritative progress. |
+
+These are source/ownership comparisons, not measured speed rankings of uninstalled libraries. No claim is made that every possible community implementation was surveyed.
+
+## Primary-source checks
+
+- [FAWE configuration](https://intellectualsites.gitbook.io/fastasyncworldedit/customization/configuration) describes streaming available chunks, main-thread dispatch and disk history rather than retaining a whole edit. [Current project README](https://github.com/IntellectualSites/FastAsyncWorldEdit) describes chunk-section placement and Bukkit-facing APIs. This supports the general streaming design; its performance claims are not benchmarks of Incoming.
+- [WorldEdit edit sessions](https://worldedit.enginehub.org/en/latest/api/concepts/edit-sessions/) expose an extent stack, batching, history and final queue flushing. An editing API does not remove the need to own the mod's additional material transaction.
+- [C2ME's project](https://github.com/RelativityMC/C2ME-fabric) identifies its scope as parallel chunk generation, loading and I/O and documents compatibility assumptions. Nothing there establishes a fix for Incoming's custom retained owners.
+- [HBM's batched ray implementation](https://github.com/HbmMods/Hbm-s-Nuclear-Tech-GIT/blob/master/src/main/java/com/hbm/explosion/ExplosionNukeRayBatched.java), fetched blob `1d97dfa38c694467fad31fb1991610fbd2919a2c`, stores ray tips by chunk, finishes tip collection before destruction, and processes world blocks in timed chunk batches. It is a concrete alternative explosion model, not a drop-in equivalent of pressure/support/full cargo. No timing comparison or reuse of its code is claimed.
+- [OpenCL specification](https://registry.khronos.org/OpenCL/) supplies a general heterogeneous-compute mechanism, not a Minecraft world-ownership solution. [Voxy](https://github.com/mcrcortex/voxy) is a LOD renderer; its visual result cannot certify native server terrain. Existing LSS integration and its previously reviewed limits remain in force.
+
+Sources checked 4 November 2026. Existing local `v3.10.4` source, current production `452f1f78`, diagnostic `41c718ad`, and the raw failed-case ownership/time series are the project-specific evidence. The selected MT-S6 delta and its independent reviews remain separately pinned; this note is the integration owner's rationale, not a new independent review.
+
+## Discriminating validation and fallback
+
+The candidate must first pass identical-input dense material/support RED/GREEN controls, completed demand reads behind a blocked visible consumer, an independently fenced unseen completion, and save/reload parity without relaxing the cap. These tests distinguish fixing lifetime ownership from simply passing a smaller isolated scene.
+
+Next, run the same fresh real 1 Mt case, then 100 kt: complete current loaded-view census, successful and pending wave age, far **world application** as well as plan count, material balance, server/client costs and host headroom. Exercise traversal into already crossed terrain, ordinary save/rejoin and selected changed LSS/native geometry. A complete zero-pending current cohort is necessary but cannot certify the whole zone or continuous movement by itself.
+
+If actual live material/support storage still blocks a dense transition after honest credits and completions drain, the next choice is smaller equivalent application transactions or paged support ownership, justified by the remaining owner and preserved material/cargo equivalence. Do not add unrelated telemetry, rewrite the solver, enlarge the cap, or claim arbitrary-load guarantees to hide that result. The next real failure, if any, determines the next scope.

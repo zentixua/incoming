@@ -1,0 +1,38 @@
+[
+  {
+    "path": "raw/progress.log.gz",
+    "bytes": 7094720,
+    "sha256_uncompressed": "3c112715b149cb1de458303d9da3fd5e4cf01f15ea39ed7d6cfc4c6bdfeffc3c",
+    "sha256_file": "b01c69652ff0488280651a7fab03f46c96fac10068f3bffaf7391dba5bda644d"
+  },
+  {
+    "path": "raw/ticks.csv.gz",
+    "bytes": 8582293,
+    "sha256_uncompressed": "ac2fdacfe7d4b604b211a7ec90b469a0b253abd59ab75bba8d5cd9ff96e802bf",
+    "sha256_file": "2f42938302c93eba487b1ae201dc25b35e6fb51d499c49744a9d5a767770b311"
+  },
+  {
+    "path": "raw/ledger.csv.gz",
+    "bytes": 6002,
+    "sha256_uncompressed": "a466f6388f38127a6da9114feeb0ca929fe29101472958f76ea95f1dafac017b",
+    "sha256_file": "ef488008c68aecb5ac600d9bd04fe91f406acf5fe796b57cad7a37f8125a80fd"
+  },
+  {
+    "path": "raw/ownership-post-clean.txt.gz",
+    "bytes": 51516,
+    "sha256_uncompressed": "1d7f219ec9b4663a0d98f70e0446187607df4500909ce261f078c0bb24090c62",
+    "sha256_file": "e2ec0b704de8cf0d2569042079f2d41935672bee3acd84acdce9f4c6140f70c1"
+  },
+  {
+    "path": "raw/driver.jsonl.gz",
+    "bytes": 3443,
+    "sha256_uncompressed": "749d97f18fea983c17b1c5304e1e25a073066f4b97d36188ae772557aaa9896d",
+    "sha256_file": "bb570c74c91d65e85aa0af0b611bd9fe97df8c725f4578f9eef1a16577a8fec4"
+  },
+  {
+    "path": "raw/frames.csv.gz",
+    "bytes": 11760687,
+    "sha256_uncompressed": "63e39e717c2c5244f145b5b05a271d580d9ecbab391567a1449d87abf295a27b",
+    "sha256_file": "af842ebce8650aa41f5d13c96546250e38f9d68a368e8ed0abd3e52b035542e6"
+  }
+]
