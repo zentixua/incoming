@@ -93,7 +93,16 @@ public final class NormalCarrierPreparationGameTests {
         });
         h.runAtTickTime(2, () -> RuinPreparation.prepareCarrier(level, handle, owner, target, yield, surface, air, weapon));
         h.onEachTick(() -> {
-            if (launchedAt[0] >= 0 || RuinPreparation.status(level, handle).stage() != RuinPreparation.Stage.READY) return;
+            if (launchedAt[0] >= 0) {
+                if (surface && weapon == WeaponType.MISSILE && level.getGameTime() == launchedAt[0] + 1) {
+                    StrikeProjectile active = carrier(level, owner);
+                    h.assertTrue(active != null, "carrier vanished before first tracker tick");
+                    var tracked = ((Target.Ground) tracker(active).target()).surface(level);
+                    h.assertTrue(trackerPoint(active).equals(tracked), "first tracker tick did not refine the original Ground target");
+                }
+                return;
+            }
+            if (RuinPreparation.status(level, handle).stage() != RuinPreparation.Stage.READY) return;
             Object p = request(level, handle);
             RetainedPlans plans = (RetainedPlans) value(p, "plans");
             h.assertTrue(plans.values().stream().anyMatch(plan -> plan != null && plan.changedBlocks() > 0),
@@ -166,12 +175,13 @@ public final class NormalCarrierPreparationGameTests {
         h.succeed();
     }
 
-    private static Vec3 trackerPoint(StrikeProjectile carrier) {
+    private static ua.zentix.incoming.target.TargetTracker tracker(StrikeProjectile carrier) {
         try {
             Field f = StrikeProjectile.class.getDeclaredField("tracker"); f.setAccessible(true);
-            return ((ua.zentix.incoming.target.TargetTracker) f.get(carrier)).point();
+            return (ua.zentix.incoming.target.TargetTracker) f.get(carrier);
         } catch (ReflectiveOperationException e) { throw new AssertionError(e); }
     }
+    private static Vec3 trackerPoint(StrikeProjectile carrier) { return tracker(carrier).point(); }
 
     private static StrikeProjectile carrier(ServerLevel level, UUID owner) {
         for (StrikeProjectile p : VirtualFlights.get(level).flights()) if (owner.equals(p.ownerId()) && !p.isRemoved()) return p;

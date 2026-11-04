@@ -65,14 +65,20 @@ public final class NormalCarrierEquivalenceGameTests {
                 Target order = new Target.Ground(point);
                 Loadout.Nuke nuke = new Loadout.Nuke(1, air, true);
                 // Control only the shared route RNG inputs, not flight state or terrain.
+                var expectedRandom = net.minecraft.util.RandomSource.create(seed);
+                WeaponType.MISSILE.spec().route().miss(expectedRandom);
+                expectedRandom.nextBoolean(); // Ordinary guided route side, following its two Gaussian draws.
+                long afterLaunch = expectedRandom.nextLong();
                 level.random.setSeed(seed);
                 Vec3 miss = WeaponType.MISSILE.spec().route().miss(level.random);
                 h.assertTrue(miss.equals(RuinPreparation.carrierMiss(level, handle, WeaponType.MISSILE)), "different route samples");
                 h.assertTrue(StrikeService.launchPrepared(level, WeaponType.MISSILE, order, point, 0, preparedOwner, null,
                         false, nuke, Waypoints.NONE, null, handle, 1800).ok(), "prepared launch refused");
+                h.assertTrue(level.random.nextLong() == afterLaunch, "prepared launch redrew miss or changed route RNG consumption");
                 level.random.setSeed(seed);
                 h.assertTrue(StrikeService.launch(level, WeaponType.MISSILE, order, point, 0, ordinaryOwner,
                         false, nuke, Waypoints.NONE, null).ok(), "ordinary launch refused");
+                h.assertTrue(level.random.nextLong() == afterLaunch, "ordinary launch changed RNG consumption");
                 launched[0] = level.getGameTime();
             }
             StrikeProjectile prepared = find(h, preparedOwner), ordinary = find(h, ordinaryOwner);
