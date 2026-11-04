@@ -68,6 +68,12 @@ public final class NuclearWarhead {
         return detonate(level, target, yieldKt, airBurst, owner, scale, null, -1);
     }
 
+    /** Carrier impact: use only its explicitly bound preparation identity, with fresh impact geometry as fallback. */
+    public static Detonation detonatePrepared(ServerLevel level, Vec3 target, double yieldKt, boolean airBurst,
+                                              @Nullable UUID owner, int preparationIdentity) {
+        return detonate(level, target, yieldKt, airBurst, owner, (float) IncomingConfig.SERVER.effectsScale(), null, preparationIdentity);
+    }
+
     /** A committed arrival consumes its exact endpoint; terrain edits cannot move a visible head's destination. */
     static Detonation detonate(ServerLevel level, Vec3 target, double yieldKt, boolean airBurst, @Nullable UUID owner,
                                float scale, @Nullable Detonation committed, int strikeId) {
@@ -76,7 +82,7 @@ public final class NuclearWarhead {
         yieldKt = Math.min(yieldKt, ua.zentix.incoming.strike.Loadout.Nuke.MAX_YIELD);
         NuclearEvents events = NuclearEvents.get(level);
         // prepared for this detonation: location, ground and visibility match the prebuilt ruins
-        Detonation g = committed != null ? committed : NuclearWorld.get(level).planned(geometry(level, target, yieldKt, airBurst, scale));
+        Detonation g = committed != null ? committed : NuclearWorld.get(level).planned(geometry(level, target, yieldKt, airBurst, scale), strikeId);
         int id = events.nextId();
         RandomSource random = SCENARIO ? RandomSource.create(SCENARIO_SEED + id) : level.random;
         // wind is world wind (same as client smoke and trails)
@@ -89,7 +95,7 @@ public final class NuclearWarhead {
         events.add(d);
         PacketDistributor.sendToPlayersInDimension(level, new S2C.NukeDetonation(d, (float) Blackouts.nukeRadius(d), strikeId));
 
-        NuclearWorld.get(level).onDetonation(level, d, owner);
+        NuclearWorld.get(level).onDetonation(level, d, owner, strikeId);
         Blackouts.nuke(level, d);
         Incoming.LOG.info("Nuclear detonation #{}: {} kt, {}, {} {} {}, scale {}, {} ms", d.id(), Math.round(yieldKt), d.surface() ? "ground burst" : "air burst",
                 Mth.floor(d.burst().x), Mth.floor(d.burst().y), Mth.floor(d.burst().z), scale, (System.nanoTime() - started) / 1_000_000);

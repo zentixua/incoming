@@ -227,6 +227,6 @@ public final class NuclearReview {
         boolean accepted = ServerActions.strikePrepared(p, l.weapon(), 1, 0, aim, l.nuke(), e.order.via(), from, true, e.id);
         if (!accepted) releasePreparation(p, e);
         finish(p, e);
-        return accepted;
+        return true; // exact confirmation consumed, even when ordinary payment or launch failed
     }
 }

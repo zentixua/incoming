@@ -38,6 +38,7 @@ import ua.zentix.incoming.IncomingConfig;
 import ua.zentix.incoming.entity.LauncherEntity;
 import ua.zentix.incoming.entity.StrikeProjectile;
 import ua.zentix.incoming.nuclear.NuclearEvents;
+import ua.zentix.incoming.nuclear.world.NuclearReadyFixture;
 import ua.zentix.incoming.registry.ModDataComponents;
 import ua.zentix.incoming.registry.ModItems;
 import ua.zentix.incoming.strike.ChunkTickets;
@@ -111,7 +112,8 @@ public final class MunitionGameTests {
         Item missile = ModItems.CRUISE_MISSILE.get(), warhead = Munitions.warhead();
         give(p, missile, 1);
         Loadout.Nuke onCarrier = new Loadout.Nuke(15, true, true);
-        h.assertFalse(ServerActions.strike(p, WeaponType.MISSILE, 1, 0, aim, onCarrier, Waypoints.NONE, null, true), "nuclear missile without warhead accepted");
+        h.assertFalse(ServerActions.strikePrepared(p, WeaponType.MISSILE, 1, 0, aim, onCarrier, Waypoints.NONE, null, true,
+                NuclearReadyFixture.prepare(h, p, Loadout.DEFAULT.withWeapon(WeaponType.MISSILE).withNuke(onCarrier), aim)), "nuclear missile without warhead accepted");
         h.assertValueEqual(held(p, missile), 1, "the missile was removed without a warhead");
         h.assertValueEqual(args(p.last("incoming.munitions.short")), List.of(warhead.getDescription(), 1, 0), "refusal line without warhead");
         // with a warhead, the account is a missile and a warhead (the launch of a nuclear missile itself is not needed in the test world)
@@ -267,7 +269,8 @@ public final class MunitionGameTests {
         Item icbm = ModItems.ICBM.get();
         give(p, icbm, 1);
         int scheduled = NuclearEvents.get(level).scheduled().size();
-        h.assertFalse(ServerActions.strike(p, WeaponType.NUKE, 1, 0, aim, new Loadout.Nuke(15, true), Waypoints.NONE, null, true), "launch ICBM without entering the world was a success");
+        h.assertFalse(ServerActions.strikePrepared(p, WeaponType.NUKE, 1, 0, aim, new Loadout.Nuke(15, true), Waypoints.NONE, null, true,
+                NuclearReadyFixture.prepare(h, p, Loadout.DEFAULT.withWeapon(WeaponType.NUKE).withNuke(new Loadout.Nuke(15, true)), aim)), "launch ICBM without entering the world was a success");
         h.assertValueEqual(vetoed[0], 2, "ICBM did not try to enter the world");
         h.assertValueEqual(held(p, icbm), 1, "ICBM after unsuccessful launch");
         h.assertValueEqual(NuclearEvents.get(level).scheduled().size(), scheduled, "failed launch recorded nuclear strike");
@@ -305,7 +308,8 @@ public final class MunitionGameTests {
         give(p, warhead, 1);
         LaunchOrigin far = new LaunchOrigin.Place(p.position().add(-20_000, 0, 0));
         h.assertTrue(LaunchPlaces.waits(level, WeaponType.MISSILE, far), "the distant launch site is ready");
-        h.assertTrue(ServerActions.strike(p, WeaponType.MISSILE, 1, 0, aim(h), new Loadout.Nuke(15, true, true), Waypoints.NONE, far, true),
+        h.assertTrue(ServerActions.strikePrepared(p, WeaponType.MISSILE, 1, 0, aim(h), new Loadout.Nuke(15, true, true), Waypoints.NONE, far, true,
+                NuclearReadyFixture.prepare(h, p, Loadout.DEFAULT.withWeapon(WeaponType.MISSILE).withNuke(new Loadout.Nuke(15, true, true)), aim(h))),
                 "nuclear missile from a distant launch site was not accepted");
         h.assertTrue(held(p, missile) == 0 && held(p, warhead) == 0, "payment: rockets " + held(p, missile) + ", warhead " + held(p, warhead));
         h.assertValueEqual(SalvoData.get(level).remaining(p.getUUID()), 1, "the rocket does not wait for a place in one gulp");

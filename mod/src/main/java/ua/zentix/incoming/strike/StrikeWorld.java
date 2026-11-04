@@ -48,6 +48,8 @@ public final class StrikeWorld {
     private final Map<String, Long> noLaunchSite = new HashMap<>();
     /** Non-operator nuclear orders awaiting second key or post-warning launch. */
     private final NuclearKeys keys = new NuclearKeys();
+    /** Unpaid explicit commands awaiting durable ruin preparation. */
+    private final NuclearCommands commands = new NuclearCommands();
 
     /** For {@link ModAttachments#STRIKE_WORLD}: per-world, lives while loaded, unsaved. */
     public StrikeWorld() {}
@@ -64,6 +66,10 @@ public final class StrikeWorld {
     /** Non-operator nuclear orders: second key and carrier pre-launch warning. */
     NuclearKeys keys() {
         return keys;
+    }
+
+    NuclearCommands commands() {
+        return commands;
     }
 
     /** Approach-strip areas and holding projectiles ({@link FlightTickets}). */
@@ -138,6 +144,7 @@ public final class StrikeWorld {
         VirtualFlights.get(level).tick(level);
         if (level.hasData(ModAttachments.STRIKE_WORLD)) {
             StrikeWorld world = get(level);
+            world.commands.tick(level);
             world.keys.tick(level, level.getServer().getPlayerList().getPlayers());
             world.tick(level);
             world.flightLog.flush();
@@ -155,7 +162,7 @@ public final class StrikeWorld {
 
     /** No pending timeline or impact unit, including delayed collapse/after-effects. An empty impact queue alone is not completion. */
     public boolean idle() {
-        return timelines.isEmpty() && pending.isEmpty() && impacts.isEmpty();
+        return timelines.isEmpty() && pending.isEmpty() && impacts.isEmpty() && commands.entriesEmpty();
     }
 
     private void tick(ServerLevel level) {
@@ -229,6 +236,7 @@ public final class StrikeWorld {
      * tickets after restart. Finish impact queue first without budget ({@link UnitQueue#finish(ServerLevel)}).
      */
     public static void onServerStopping(ServerStoppingEvent event) {
+        NuclearCommands.cancelAll(event.getServer());
         // Pending nuclear orders unsaved: refund owners while still online (players saved afterward).
         NuclearKeys.cancelAll(event.getServer(), event.getServer().getPlayerList().getPlayers(), null, "server stopping");
         for (ServerLevel level : event.getServer().getAllLevels()) {

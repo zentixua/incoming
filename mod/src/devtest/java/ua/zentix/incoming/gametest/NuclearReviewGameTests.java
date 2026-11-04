@@ -41,6 +41,13 @@ public final class NuclearReviewGameTests {
         return new C2S.Fire(l, Optional.of(new C2S.AimHint(C2S.AimHint.POINT, q, 0, Vec3.ZERO)), Optional.empty(), Waypoints.NONE, Optional.empty());
     }
 
+    private static void prepared(net.minecraft.server.level.ServerPlayer p, UUID id) {
+        if (!NuclearReview.act(p, id, C2S.NuclearAction.PREPARE)) throw new AssertionError("prepare refused");
+        var snapshot = p.getData(ModAttachments.NUCLEAR_REVIEW).snapshot().orElseThrow();
+        ua.zentix.incoming.nuclear.world.NuclearReadyFixture.ready(p.serverLevel(), id, snapshot.target(),
+                snapshot.order().loadout().nuke().yieldKt(), snapshot.order().loadout().nuke().airBurst());
+    }
+
     private static UUID id(MunitionGameTests.Listener p) {
         return p.getData(ModAttachments.NUCLEAR_REVIEW).snapshot().orElseThrow().id();
     }
@@ -52,6 +59,7 @@ public final class NuclearReviewGameTests {
         NuclearReview.request(p, order(h, 15));
         h.assertValueEqual(h.getLevel().getChunkSource().getLoadedChunksCount(), chunks, "review loaded world chunks");
         UUID first = id(p);
+        prepared(p, first);
         h.assertTrue(NuclearReview.act(p, first, C2S.NuclearAction.BEGIN), "hold refused");
         h.assertFalse(NuclearReview.act(p, first, C2S.NuclearAction.COMMIT), "early commit accepted");
         h.assertTrue(NuclearReview.act(p, first, C2S.NuclearAction.RELEASE), "release refused");
@@ -96,6 +104,7 @@ public final class NuclearReviewGameTests {
         p.getInventory().clearContent(); // test player's disposable inventory only
         NuclearReview.request(p, order(h, 15));
         UUID id = id(p);
+        prepared(p, id);
         NuclearReview.act(p, id, C2S.NuclearAction.BEGIN);
         h.runAfterDelay(65, () -> {
             h.assertTrue(NuclearReview.act(p, id, C2S.NuclearAction.COMMIT), "valid held request not dispatched");
@@ -116,6 +125,7 @@ public final class NuclearReviewGameTests {
         });
         NuclearReview.request(p, order(h, 15));
         UUID id = id(p);
+        prepared(p, id);
         NuclearReview.act(p, id, C2S.NuclearAction.BEGIN);
         h.runAfterDelay(65, () -> {
             h.assertTrue(NuclearReview.act(p, id, C2S.NuclearAction.COMMIT), "valid request not dispatched");
@@ -135,6 +145,60 @@ public final class NuclearReviewGameTests {
         h.assertTrue(p.getData(ModAttachments.NUCLEAR_REVIEW).snapshot().isEmpty(), "unauthorized review created");
         h.assertValueEqual(held(p, ModItems.ICBM.get()), 1, "unauthorized request paid");
         h.succeed();
+    }
+
+    @GameTest(template = "range", batch = "nuclear_review_preparation", timeoutTicks = 100, skyAccess = true)
+    public static void preparingHoldCannotBecomeAnAutomaticReadyLaunch(GameTestHelper h) {
+        var p = setup(h);
+        NuclearReview.request(p, order(h, 1));
+        UUID id = id(p);
+        h.assertFalse(NuclearReview.act(p, id, C2S.NuclearAction.BEGIN), "inspection allowed hold");
+        h.assertTrue(NuclearReview.act(p, id, C2S.NuclearAction.PREPARE), "preparation refused");
+        h.assertFalse(NuclearReview.act(p, id, C2S.NuclearAction.BEGIN), "unready preparation allowed hold");
+        var snapshot = p.getData(ModAttachments.NUCLEAR_REVIEW).snapshot().orElseThrow();
+        ua.zentix.incoming.nuclear.world.NuclearReadyFixture.ready(p.serverLevel(), id, snapshot.target(), 1, false);
+        h.runAfterDelay(65, () -> {
+            h.assertFalse(NuclearReview.act(p, id, C2S.NuclearAction.COMMIT), "hold started before READY survived transition");
+            h.assertValueEqual(held(p, ModItems.ICBM.get()), 1, "preparation spent ammunition");
+            h.assertTrue(NuclearReview.act(p, id, C2S.NuclearAction.DISCARD), "close refused");
+            h.assertTrue(ua.zentix.incoming.nuclear.world.RuinPreparation.status(p.serverLevel(), id).stage()
+                    == ua.zentix.incoming.nuclear.world.RuinPreparation.Stage.ABSENT, "close retained preparation");
+            h.succeed();
+        });
+    }
+
+    @GameTest(template = "range", batch = "nuclear_review_lost_ready", timeoutTicks = 100, skyAccess = true)
+    public static void lostReadyRevokesHoldAndCannotPay(GameTestHelper h) {
+        var p = setup(h);
+        NuclearReview.request(p, order(h, 1));
+        UUID id = id(p);
+        prepared(p, id);
+        h.assertTrue(NuclearReview.act(p, id, C2S.NuclearAction.BEGIN), "ready hold refused");
+        ua.zentix.incoming.nuclear.world.RuinPreparation.cancel(p.serverLevel(), id);
+        h.runAfterDelay(65, () -> {
+            h.assertFalse(NuclearReview.act(p, id, C2S.NuclearAction.COMMIT), "missing prepared receipt accepted");
+            h.assertValueEqual(held(p, ModItems.ICBM.get()), 1, "lost readiness paid ammunition");
+            NuclearReview.act(p, id, C2S.NuclearAction.DISCARD);
+            h.succeed();
+        });
+    }
+
+    @GameTest(template = "range", batch = "nuclear_review_lease", timeoutTicks = 1500, skyAccess = true)
+    public static void watchedPreparationOutlivesOldReviewTimeout(GameTestHelper h) {
+        var p = setup(h);
+        NuclearReview.request(p, order(h, 1));
+        UUID id = id(p);
+        prepared(p, id);
+        h.runAfterDelay(900, () -> {
+            h.assertTrue(NuclearReview.act(p, id, C2S.NuclearAction.POLL), "watched lease not renewed");
+            h.assertFalse(NuclearReview.act(p, id, C2S.NuclearAction.POLL), "unbounded polling accepted");
+        });
+        h.runAfterDelay(1300, () -> {
+            h.assertTrue(NuclearReview.act(p, id, C2S.NuclearAction.BEGIN), "watched prep expired after original minute");
+            NuclearReview.act(p, id, C2S.NuclearAction.DISCARD);
+            h.assertValueEqual(held(p, ModItems.ICBM.get()), 1, "lease renewal spent ammo");
+            h.succeed();
+        });
     }
 
 }

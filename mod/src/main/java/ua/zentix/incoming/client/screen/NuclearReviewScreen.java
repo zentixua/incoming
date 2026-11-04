@@ -63,6 +63,7 @@ public final class NuclearReviewScreen extends Screen {
     public void update(S2C.NuclearPreparation p) {
         if (!review.id().equals(p.id())) return;
         boolean wasReady = ready();
+        requested = true;
         preparation = p;
         p.target().ifPresent(at -> target = at);
         if (wasReady != ready()) {
@@ -211,6 +212,16 @@ public final class NuclearReviewScreen extends Screen {
                 default -> "failed";
             };
             status = Component.translatable("incoming.nuke.prepare." + key, preparation.ready(), preparation.total());
+            if (preparation.stage() == S2C.NuclearPreparation.FAILED || preparation.stage() == S2C.NuclearPreparation.ABSENT) {
+                String reason = switch (preparation.reason()) {
+                    case 3 -> "io";
+                    case 4 -> "incompatible";
+                    case 5 -> "expired";
+                    case 6 -> "limit";
+                    default -> null;
+                };
+                if (reason != null) status = Component.translatable("incoming.nuke.prepare.reason." + reason);
+            }
         } else if (requested) status = Component.translatable("incoming.nuke.prepare.resolving");
         g.drawCenteredString(font, status, width / 2, height - 86, ready() ? 0xFF90E090 : 0xFFFFFFA0);
         if (preparation != null && preparation.total() > 0) {

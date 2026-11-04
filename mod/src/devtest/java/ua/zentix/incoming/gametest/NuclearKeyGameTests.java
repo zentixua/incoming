@@ -19,6 +19,8 @@ import ua.zentix.incoming.entity.LauncherEntity;
 import ua.zentix.incoming.gametest.MunitionGameTests.Listener;
 import ua.zentix.incoming.nuclear.NuclearEvents;
 import ua.zentix.incoming.nuclear.NuclearStrikes;
+import ua.zentix.incoming.nuclear.world.NuclearReadyFixture;
+import ua.zentix.incoming.strike.NuclearCommands;
 import ua.zentix.incoming.registry.ModItems;
 import ua.zentix.incoming.strike.Loadout;
 import ua.zentix.incoming.strike.Munitions;
@@ -113,7 +115,8 @@ public final class NuclearKeyGameTests {
         Listener a = at(h, "keys_alone", LAUNCHER);
         give(a, ModItems.ICBM.get(), 1);
         ServerActions.Aim aim = aim(h);
-        h.assertTrue(ServerActions.strike(a, WeaponType.NUKE, 1, 0, aim, new Loadout.Nuke(15, true), Waypoints.NONE, null, true), "launch of one on the network is not accepted");
+        h.assertTrue(ServerActions.strikePrepared(a, WeaponType.NUKE, 1, 0, aim, new Loadout.Nuke(15, true), Waypoints.NONE, null, true,
+                NuclearReadyFixture.prepare(h, a, nuke(WeaponType.NUKE, false), aim)), "launch of one on the network is not accepted");
         h.assertValueEqual(NuclearKeys.get(level).pending(), 0, "there's one on the network waiting for the key");
         NuclearEvents.ScheduledStrike s = mine(level, a.getUUID());
         h.assertTrue(s != null, "ICBM alone on the network is not running");
@@ -121,7 +124,8 @@ public final class NuclearKeyGameTests {
         h.assertTrue(a.last("incoming.nuke.launch_detected") != null, "no line \"detected by launch\"");
 
         Listener op = at(h, "keys_op_command", LAUNCHER.east(8));
-        h.assertTrue(ServerActions.strike(op, WeaponType.NUKE, 1, 0, aim, new Loadout.Nuke(15, true), Waypoints.NONE, null, false), "operator command not accepted");
+        h.assertTrue(ServerActions.strikePrepared(op, WeaponType.NUKE, 1, 0, aim, new Loadout.Nuke(15, true), Waypoints.NONE, null, false,
+                NuclearReadyFixture.prepare(h, op, nuke(WeaponType.NUKE, false), aim)), "operator command not accepted");
         NuclearEvents.ScheduledStrike o = mine(level, op.getUUID());
         h.assertTrue(o != null, "Operator command ICBM is not running");
         h.assertValueEqual(o.detonateTime() - o.launchTime(), (long) SHORT_FLIGHT, "flight ICBM operator commands, tick");
@@ -202,6 +206,7 @@ public final class NuclearKeyGameTests {
         boolean opsOnly = IncomingConfig.SERVER.nukeOpsOnly.get();
         int flight = IncomingConfig.SERVER.nukeFlightTime.get();
         StrikeGameTests.afterTest(h, () -> {
+            NuclearCommands.cancelAll(level.getServer());
             NuclearKeys.cancelAll(level.getServer(), List.of(), null, "check completed");
             NuclearStrikes.clear(level);
             VirtualFlights.get(level).clear(level, p -> p instanceof IcbmEntity);
@@ -234,7 +239,8 @@ public final class NuclearKeyGameTests {
     private static boolean order(Listener owner, List<Listener> online, Loadout l, GameTestHelper h) {
         Munitions.Bill bill = Munitions.Bill.of(l);
         if (!Munitions.pay(owner, bill)) throw new GameTestAssertException("not paid: " + l);
-        return NuclearKeys.order(owner, online, l, aim(h), Waypoints.NONE, bill);
+        return NuclearKeys.order(owner, online, l, aim(h), Waypoints.NONE, bill,
+                NuclearReadyFixture.prepare(h, owner, l, aim(h)));
     }
 
     @Nullable

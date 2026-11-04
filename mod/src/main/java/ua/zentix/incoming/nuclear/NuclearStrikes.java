@@ -22,6 +22,7 @@ import ua.zentix.incoming.nuclear.radiation.FlashEyes;
 import ua.zentix.incoming.nuclear.radiation.RadiationTicker;
 import ua.zentix.incoming.util.Terrain;
 import ua.zentix.incoming.nuclear.world.NuclearWorld;
+import ua.zentix.incoming.nuclear.world.RuinPreparation;
 import ua.zentix.incoming.nuclear.world.WorkClock;
 import ua.zentix.incoming.registry.ModEntities;
 import ua.zentix.incoming.strike.AreaLoader;
@@ -76,13 +77,24 @@ public final class NuclearStrikes {
         return launchFrom(level, target, false, yieldKt, airBurst, launcher, yaw, owner, IncomingConfig.SERVER.nukeFlightTime.get());
     }
 
+    /** Accepted exact-order preparation; the request owner also identifies a console order. */
+    public static boolean launchPrepared(ServerLevel level, Vec3 target, boolean surface, double yieldKt, boolean airBurst,
+                                         @Nullable ServerPlayer shooter, UUID owner, int flightTicks, UUID preparation) {
+        return launchFrom(level, target, surface, yieldKt, airBurst, shooter == null ? null : shooter.position(),
+                shooter == null ? 0 : shooter.getYRot(), owner, flightTicks, preparation);
+    }
+
     private static boolean launchFrom(ServerLevel level, Vec3 target, boolean surface, double yieldKt, boolean airBurst, @Nullable Vec3 launcher,
                                       float yaw, @Nullable UUID owner, int flightTicks) {
+        return launchFrom(level, target, surface, yieldKt, airBurst, launcher, yaw, owner, flightTicks, null);
+    }
+
+    private static boolean launchFrom(ServerLevel level, Vec3 target, boolean surface, double yieldKt, boolean airBurst, @Nullable Vec3 launcher,
+                                      float yaw, @Nullable UUID owner, int flightTicks, @Nullable UUID preparation) {
         if (!IncomingConfig.SERVER.nukeEnabled.get()) return false;
         yieldKt = Math.min(yieldKt, IncomingConfig.SERVER.nukeMaxYield.get());
         if (launcher == null) {
-            schedule(level, target, surface, yieldKt, airBurst, target, owner, flightTicks);
-            return true;
+            return schedule(level, target, surface, yieldKt, airBurst, target, owner, flightTicks, preparation);
         }
         Vec3 back = Local.horizontal(yaw).scale(-30);
         int x = Mth.floor(launcher.x + back.x), z = Mth.floor(launcher.z + back.z);
@@ -90,26 +102,46 @@ public final class NuclearStrikes {
         IcbmEntity icbm = ModEntities.ICBM.get().create(level);
         if (icbm == null) return false;
         icbm.prepare(pad, target, owner);
-        if (!level.addFreshEntity(icbm)) return false;
-        schedule(level, target, surface, yieldKt, airBurst, pad, owner, flightTicks);
-        return true;
+        boolean launched = false;
+        try {
+            if (!level.addFreshEntity(icbm)) return false;
+            launched = schedule(level, target, surface, yieldKt, airBurst, pad, owner, flightTicks, preparation);
+            return launched;
+        } finally {
+            if (!launched) icbm.discard();
+        }
     }
 
     /** Record a strike: detonation time = now + flight time; warning and countdown to everyone in the dimension. */
-    private static void schedule(ServerLevel level, Vec3 target, boolean surface, double yieldKt, boolean airBurst, Vec3 launchPos, @Nullable UUID owner,
-                                 int flightTicks) {
+    private static boolean schedule(ServerLevel level, Vec3 target, boolean surface, double yieldKt, boolean airBurst, Vec3 launchPos, @Nullable UUID owner,
+                                    int flightTicks, @Nullable UUID preparation) {
         NuclearEvents events = NuclearEvents.get(level);
         long now = level.getGameTime();
         NuclearEvents.ScheduledStrike s = new NuclearEvents.ScheduledStrike(events.nextId(), target, yieldKt, airBurst, now,
                 now + flightTicks, launchPos, Optional.ofNullable(owner), surface);
         events.schedule(s);
-        holdGround(level, s, true);
-        Incoming.LOG.info("ICBM #{}: {} kt at {} {} {}, detonation in {} s", s.id(), Math.round(yieldKt), Mth.floor(target.x), Mth.floor(target.y),
-                Mth.floor(target.z), (s.detonateTime() - now) / 20);
-        for (ServerPlayer p : level.players()) PacketDistributor.sendToPlayer(p, warning(s, p));
-        // Capability/state at launch too: new recordings never fall back to the legacy countdown graphic.
-        PacketDistributor.sendToPlayersInDimension(level, new S2C.NukeApproach(now,
-                events.scheduled().stream().flatMap(x -> x.arrival().stream()).toList()));
+        boolean accepted = false, bound = false;
+        try {
+            if (preparation != null) {
+                if (!RuinPreparation.bind(level, preparation, s.id())) return false;
+                bound = true;
+            }
+            holdGround(level, s, true);
+            Incoming.LOG.info("ICBM #{}: {} kt at {} {} {}, detonation in {} s", s.id(), Math.round(yieldKt), Mth.floor(target.x), Mth.floor(target.y),
+                    Mth.floor(target.z), (s.detonateTime() - now) / 20);
+            for (ServerPlayer p : level.players()) PacketDistributor.sendToPlayer(p, warning(s, p));
+            // Capability/state at launch too: new recordings never fall back to the legacy countdown graphic.
+            PacketDistributor.sendToPlayersInDimension(level, new S2C.NukeApproach(now,
+                    events.scheduled().stream().flatMap(x -> x.arrival().stream()).toList()));
+            accepted = true;
+            return true;
+        } finally {
+            if (!accepted) {
+                events.unschedule(s);
+                holdGround(level, s, false);
+                if (bound) RuinPreparation.cancel(level, preparation);
+            }
+        }
     }
 
     /** Warning for a specific player: alarm if within {@code warning_radius} of the target. */
@@ -211,7 +243,7 @@ public final class NuclearStrikes {
             if (s.arrival().isEmpty() && start < s.detonateTime() && now >= start && now < s.detonateTime() && loaded) {
                 Vec3 at = s.surface() ? NuclearWarhead.surfaceAt(level, s.target()) : s.target();
                 Detonation geometry = NuclearWorld.get(level).planned(NuclearWarhead.geometry(level, at, s.yieldKt(),
-                        s.airBurst(), (float) IncomingConfig.SERVER.effectsScale()));
+                        s.airBurst(), (float) IncomingConfig.SERVER.effectsScale()), s.id());
                 IcbmArrival arrival = new IcbmArrival(s.id(), start, s.detonateTime(), geometry,
                         IcbmArrival.velocity(s.launchPos(), geometry.burst(), ua.zentix.incoming.strike.WeaponSpec.NUKE.airframe().diveSpeed()));
                 events.commit(s, arrival);
