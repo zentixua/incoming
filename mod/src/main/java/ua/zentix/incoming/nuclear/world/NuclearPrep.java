@@ -368,6 +368,9 @@ public final class NuclearPrep {
                 : p.carrierWeapon == ua.zentix.incoming.strike.WeaponType.BUNKER ? ground - 0.5
                 : p.carrierWeapon != null && p.surface ? canopy - 0.5 : p.target.y;
         double result = ceiling ? aimY : p.carrierWeapon == null && p.surface ? ground : Math.min(ground, aimY);
+        // Missile impact first calls NuclearStrikes.ground: the warhead's bottom fallback receives
+        // that already-clamped point. B-2 and scheduled geometry pass their terminal input directly.
+        if (p.carrierWeapon == ua.zentix.incoming.strike.WeaponType.MISSILE && !ceiling) return result;
         return result <= bottom ? aimY : result;
     }
 

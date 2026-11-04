@@ -175,6 +175,33 @@ public final class NormalCarrierPreparationGameTests {
         h.succeed();
     }
 
+    @GameTest(template = "range", batch = "nuke_normal_void_point", timeoutTicks = 200, skyAccess = true)
+    public static void voidPointRetainsTheMissilesExistingPreWarheadClamp(GameTestHelper h) {
+        var level = h.getLevel();
+        boolean damage = IncomingConfig.SERVER.nukeBlockDamage.get();
+        IncomingConfig.SERVER.nukeBlockDamage.set(false);
+        UUID handle = UUID.randomUUID(), owner = UUID.randomUUID();
+        Vec3 target = Vec3.atCenterOf(h.absolutePos(new BlockPos(32, 12, 32)));
+        RuinPreparation.prepareCarrier(level, handle, owner, target, 1, false, true, WeaponType.MISSILE);
+        Vec3 sampled = target.add(RuinPreparation.carrierMiss(level, handle, WeaponType.MISSILE));
+        BlockPos column = BlockPos.containing(sampled);
+        for (int y = level.getMinBuildHeight(); y < level.getMaxBuildHeight(); y++)
+            level.setBlock(new BlockPos(column.getX(), y, column.getZ()), Blocks.AIR.defaultBlockState(), 2);
+        StrikeGameTests.afterTest(h, () -> {
+            RuinPreparation.cancel(level, handle);
+            IncomingConfig.SERVER.nukeBlockDamage.set(damage);
+        });
+        h.succeedWhen(() -> {
+            h.assertTrue(RuinPreparation.status(level, handle).stage() == RuinPreparation.Stage.READY, "waiting for actual facade geometry");
+            var expected = NuclearWarhead.geometry(level, NuclearStrikes.ground(level, sampled), 1, true,
+                    (float) IncomingConfig.SERVER.effectsScale());
+            var prepared = (Detonation) value(request(level, handle), "geometry");
+            h.assertTrue(expected.groundY() == level.getMinBuildHeight(), "fixture is not a known empty column");
+            h.assertTrue(expected.burst().equals(prepared.burst()) && expected.groundY() == prepared.groundY(),
+                    "void Point lost the missile's pre-warhead ground clamp");
+        });
+    }
+
     private static ua.zentix.incoming.target.TargetTracker tracker(StrikeProjectile carrier) {
         try {
             Field f = StrikeProjectile.class.getDeclaredField("tracker"); f.setAccessible(true);
