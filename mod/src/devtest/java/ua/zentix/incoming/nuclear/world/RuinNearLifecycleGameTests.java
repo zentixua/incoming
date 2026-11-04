@@ -83,19 +83,30 @@ public final class RuinNearLifecycleGameTests {
     @GameTest(template = "range", batch = "nuke_near_cancelled_task", timeoutTicks = 400, skyAccess = true)
     public static void completedCancelledNearTaskFailsRequest(GameTestHelper h) throws Exception { failedTask(h, true); }
 
-    private static void failedTask(GameTestHelper h, boolean cancelled) throws Exception {
+    private static void failedTask(GameTestHelper h, boolean cancelled) throws Exception { failedTask(h, cancelled, false); }
+
+    private static void failedTask(GameTestHelper h, boolean cancelled, boolean reloaded) throws Exception {
         var f = fixture(h, true); var gate = new CountDownLatch(1);
         StrikeGameTests.afterTest(h, gate::countDown);
         var future = f.ctx.<RuinPlan>submitWorker(() -> {
             gate.await(10, TimeUnit.SECONDS);
             throw new IllegalStateException("Injected actual near solver failure");
         }, RuinWorkers.Priority.NEAR);
-        task(f, future, 0, h.getLevel().getGameTime());
+        var original = h.getLevel().getChunkSource().getChunkNow(f.centre.x, f.centre.z);
+        task(f, future, reloaded ? System.identityHashCode(original) : 0, h.getLevel().getGameTime());
         if (cancelled) future.cancel(true);
         gate.countDown();
         h.succeedWhen(() -> {
             try {
                 h.assertTrue(RuinWorkers.finished(future), "Actual execution has not exited");
+                if (reloaded && f.ctx.running(f.centre.toLong())) {
+                    NuclearWorld.get(h.getLevel()).onChunkUnload(h.getLevel(), original);
+                    // Exercise the actual different-instance collector boundary, without replacing vanilla holders.
+                    var replacement = new net.minecraft.world.level.chunk.LevelChunk(h.getLevel(), f.centre);
+                    h.assertTrue(System.identityHashCode(replacement) != System.identityHashCode(original), "Reload identity did not change");
+                    h.assertTrue(f.ctx.collect(h.getLevel(), replacement) == null, "Failed old task produced a plan");
+                    h.assertFalse(f.ctx.running(f.centre.toLong()), "Reload hid the failed old future behind a new task");
+                }
                 invoke(f, h.getLevel(), "harvest"); requireFailed(h, f);
                 h.assertFalse(f.ctx.running(f.centre.toLong()), "Failed actual task remained ownerless");
             } catch (ReflectiveOperationException e) { throw new IllegalStateException(e); }
@@ -146,6 +157,76 @@ public final class RuinNearLifecycleGameTests {
                 "Actual near failure left request ready/planning: " + status);
         h.assertTrue(RuinPreparation.bindCarrier(h.getLevel(), f.handle, f.player, f.target, 15, false, false) == -1, "Failed near source bound carrier");
         h.assertFalse(RuinPreparation.bind(h.getLevel(), f.handle, 1_903_123), "Failed near source bound scheduled strike");
+    }
+
+    @GameTest(template = "range", batch = "nuke_near_reload_failed", timeoutTicks = 400, skyAccess = true)
+    public static void failedOldInstanceCannotBecomeSuccessfulReload(GameTestHelper h) throws Exception { failedTask(h, false, true); }
+    @GameTest(template = "range", batch = "nuke_near_reload_cancelled", timeoutTicks = 400, skyAccess = true)
+    public static void cancelledOldInstanceCannotBecomeSuccessfulReload(GameTestHelper h) throws Exception { failedTask(h, true, true); }
+
+    @GameTest(template = "range", batch = "nuke_near_reload_success", timeoutTicks = 600, skyAccess = true)
+    public static void successfulOldInstanceStillReplans(GameTestHelper h) throws Exception {
+        var f = fixture(h, true); var level = h.getLevel();
+        var original = level.getChunkSource().getChunkNow(f.centre.x, f.centre.z);
+        var grid = f.ctx.grid(level, f.centre, true);
+        var future = f.ctx.submitWorker(() -> RuinPlanner.finish(grid, Collapse.solve(grid)), RuinWorkers.Priority.NEAR);
+        task(f, future, System.identityHashCode(original), level.getGameTime());
+        boolean[] replaced = {false};
+        h.succeedWhen(() -> {
+            try {
+                if (!replaced[0]) {
+                    h.assertTrue(RuinWorkers.finished(future), "Successful old worker still running");
+                    var replacement = new net.minecraft.world.level.chunk.LevelChunk(level, f.centre);
+                    h.assertTrue(f.ctx.collect(level, replacement) == null, "Stale successful result applied to another instance");
+                    h.assertTrue(f.ctx.running(f.centre.toLong()), "Successful reload did not resubmit");
+                    replaced[0] = true;
+                }
+                invoke(f, level, "harvest");
+                var plan = ((RetainedPlans) field(f.owner, "plans").get(f.owner)).get(f.centre.toLong());
+                h.assertTrue(plan != null && plan.changedBlocks() > 0, "Successful current-source replacement did not finish");
+                h.assertTrue(field(f.owner, "failure").get(f.owner) == RuinPreparation.Reason.NONE, "Successful reload became an error");
+            } catch (ReflectiveOperationException e) { throw new IllegalStateException(e); }
+        });
+    }
+
+    @GameTest(template = "range", batch = "nuke_near_late_success", timeoutTicks = 600, skyAccess = true)
+    public static void overtakenTodoStillDrainsSuccessfulWindowPayload(GameTestHelper h) throws Exception { late(h, null); }
+    @GameTest(template = "range", batch = "nuke_near_late_read", timeoutTicks = 600, skyAccess = true)
+    public static void overtakenTodoStillRejectsLateReadFailure(GameTestHelper h) throws Exception { late(h, "read error: delayed"); }
+    @GameTest(template = "range", batch = "nuke_near_late_decode", timeoutTicks = 600, skyAccess = true)
+    public static void overtakenTodoStillRejectsLateDecodeFailure(GameTestHelper h) throws Exception { late(h, "section 0 not parsed"); }
+
+    @SuppressWarnings("unchecked")
+    private static void late(GameTestHelper h, String reason) throws Exception {
+        var f = fixture(h, true); var level = h.getLevel();
+        var grid = f.ctx.grid(level, f.centre, false);
+        var actual = RuinPlanner.finish(grid, Collapse.solve(grid));
+        h.assertTrue(actual.changedBlocks() > 0, "Overtaking plan is empty");
+        ((RetainedPlans) field(f.owner, "plans").get(f.owner)).put(f.centre.toLong(), actual);
+        h.assertTrue(((LongArrayList) field(f.owner, "todo").get(f.owner)).isEmpty(), "Fixture still has a todo collector");
+        var neighbour = new ChunkPos(f.centre.x + 1, f.centre.z);
+        var reads = (RuinInbox<Object>) field(f.ctx, "reads").get(f.ctx);
+        long resident = RuinPreparation.status(level, f.handle).residentBytes();
+        var complete = reads.expect();
+        h.assertTrue(RuinPreparation.status(level, f.handle).residentBytes() >= resident + (4L << 20),
+                "Known pending window reservation disappeared from preparation status");
+        ((LongOpenHashSet) field(f.ctx, "reading").get(f.ctx)).add(neighbour.toLong());
+        var read = reason == null ? DiskShots.parse(level, neighbour, net.minecraft.world.level.chunk.storage.ChunkSerializer.write(level,
+                level.getChunkSource().getChunkNow(neighbour.x, neighbour.z))) : DiskShots.Read.skipped(neighbour, reason);
+        var type = Class.forName(RuinContext.class.getName() + "$WindowRead");
+        var ctor = type.getDeclaredConstructor(long.class, DiskShots.Read.class, Optional.class); ctor.setAccessible(true);
+        Object payload = ctor.newInstance(neighbour.toLong(), read, null);
+        h.assertTrue(RuinPreparation.status(level, f.handle).stage() != RuinPreparation.Stage.READY,
+                "Overtaking plan certified READY before its outstanding required source arrived");
+        h.runAfterDelay(2, () -> complete.accept(payload));
+        h.succeedWhen(() -> {
+            h.assertTrue(f.ctx.pendingWindowReads() == 0, "Late owned result lost its independent collector");
+            if (reason == null) {
+                h.assertTrue(RuinPreparation.status(level, f.handle).stage() == RuinPreparation.Stage.READY,
+                        "Successful late source never released readiness");
+                h.assertFalse(f.ctx.windowFailed(), "Successful late source became an error");
+            } else requireFailed(h, f);
+        });
     }
 
     @SuppressWarnings("unchecked")
