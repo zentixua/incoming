@@ -1,6 +1,5 @@
 package ua.zentix.incoming.client;
 
-import it.unimi.dsi.fastutil.longs.LongArrayList;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.registries.Registries;
@@ -13,6 +12,7 @@ import net.neoforged.neoforge.network.PacketDistributor;
 import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.client.replay.Replay;
+import ua.zentix.incoming.client.lod.LodRefreshHints;
 import ua.zentix.incoming.compat.LodSections;
 import ua.zentix.incoming.compat.HandleFailures;
 import ua.zentix.incoming.net.C2S;
@@ -21,8 +21,6 @@ import ua.zentix.incoming.net.S2C;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandles;
 import java.lang.invoke.MethodType;
-import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Chunks absent on the client go into Voxy LODs ({@link S2C.VoxyChunk} from {@code compat/VoxyLods}: distant ruins,
@@ -33,17 +31,15 @@ import java.util.concurrent.ConcurrentHashMap;
  * tell the server Voxy is absent, and receive no packets. Voxy 0.2.16 (via Roxy) accepts sections from any thread:
  * decoding and ingestion run on the network thread.
  * <p>
- * Remember which chunks the client received from the mod in this world ({@link #ours}): if LOD Server Support later
+ * Remember which chunks the client received from the mod in this world (bounded recovery hints): if LOD Server Support later
  * writes the same chunk from the server's disk to Voxy (its first check; no distant ruins on disk), the client names
  * it to the server ({@link C2S.VoxyStale}, {@link #tick}), which sends the copy again.
  */
 public final class VoxyIngest {
     @Nullable
     private static MethodHandle worldOf, rawIngest, instanceOf, ingestService, taskCount;
-    /** Chunks ({@code ChunkPos.toLong}) the mod wrote to Voxy in this world. */
-    private static final Set<Long> OURS = ConcurrentHashMap.newKeySet();
-    /** Those overwritten by LSS: report to the server ({@link #tick}). */
-    private static final Set<Long> STALE = ConcurrentHashMap.newKeySet();
+    // Coordinate-only, best-effort recovery: history and a burst of callbacks must both stay bounded.
+    private static final LodRefreshHints HINTS = new LodRefreshHints(65536, 4096);
     private static volatile boolean broken;
     @Nullable
     private static volatile ClientLevel ingested;
@@ -101,8 +97,7 @@ public final class VoxyIngest {
 
     /** World login: tell the server whether to send chunks. */
     static void login() {
-        OURS.clear();
-        STALE.clear();
+        reset();
         if (available()) PacketDistributor.sendToServer(new C2S.LodMods(true));
     }
 
@@ -114,8 +109,7 @@ public final class VoxyIngest {
         if (of == null || raw == null || broken || level == null || Replay.active() || !level.dimension().location().equals(p.dimension())) return;
         if (ingested != level) {
             ingested = level;
-            OURS.clear();
-            STALE.clear();
+            HINTS.begin(level);
         }
         try {
             Object world = of.invoke((Level) level);
@@ -124,9 +118,7 @@ public final class VoxyIngest {
                 boolean ok = (boolean) raw.invoke(world, s.blocks(), p.x(), s.y(), p.z(), s.blockLight(), s.skyLight());
                 if (!ok) return;
             }
-            long chunk = ChunkPos.asLong(p.x(), p.z());
-            OURS.add(chunk);
-            STALE.remove(chunk);
+            HINTS.remember(level, ChunkPos.asLong(p.x(), p.z()));
         } catch (LinkageError e) {
             broken = true;
             Incoming.LOG.warn("Voxy: rawIngest no longer matches ({}) — strike damage far away shows in Voxy only when you get there", e.toString());
@@ -143,19 +135,21 @@ public final class VoxyIngest {
      */
     static void overwritten(ClientLevel level, int x, int z) {
         if (level != ingested) return;
-        long chunk = ChunkPos.asLong(x, z);
-        if (OURS.remove(chunk)) STALE.add(chunk);
+        HINTS.overwritten(level, ChunkPos.asLong(x, z));
     }
 
-    /** Client tick: report LSS-overwritten chunks to the server, at most {@link C2S.VoxyStale#PER_TICK} per tick (server limit). */
+    /** Release the previous world immediately on logout/reset, even if the next session has no LOD packets. */
+    static void reset() {
+        ingested = null;
+        HINTS.reset();
+    }
+
+    /** Client tick: report overwritten chunks at the server's bounded request rate. */
     static void tick() {
-        if (STALE.isEmpty() || Minecraft.getInstance().getConnection() == null) return;
-        LongArrayList batch = new LongArrayList();
-        for (Long c : STALE) {
-            if (batch.size() >= C2S.VoxyStale.PER_TICK) break;
-            batch.add((long) c);
-        }
-        for (int i = 0; i < batch.size(); i++) STALE.remove(batch.getLong(i));
-        PacketDistributor.sendToServer(new C2S.VoxyStale(batch.toLongArray()));
+        var minecraft = Minecraft.getInstance();
+        ClientLevel level = minecraft.level;
+        if (level == null || minecraft.getConnection() == null) return;
+        long[] batch = HINTS.take(level, C2S.VoxyStale.PER_TICK);
+        if (batch.length > 0) PacketDistributor.sendToServer(new C2S.VoxyStale(batch));
     }
 }
