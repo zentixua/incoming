@@ -120,8 +120,8 @@ is saved with the world, so leaving and returning does not erase it. Leaves and 
 A surface-burst crater supplies its rim from the ground actually excavated; remaining ejecta and thermally transformed material stay accounted for.
 
 If the shared nuclear working-memory reservation is full, further material removal waits while already moving
-material can settle. Completed preparation and cached ruin plans continue to receive processing time alongside
-moving debris; later loaded chunks can reuse plans after the preparation window ends. Large strikes can
+material can settle. Already started plan reads and completed calculations receive processing time even
+while a dense visible chunk waits for space; later loaded chunks can reuse plans after the preparation window ends. Large strikes can
 still leave chunks waiting for memory and processing time. Pending material and support checks survive a normal world save and reload. Completed movement and crater
 checkpoints are compacted into material totals; container contents are retained. Saving can pause material
 movement until its file is written. An old active journal too large for the shared memory limit stays preserved

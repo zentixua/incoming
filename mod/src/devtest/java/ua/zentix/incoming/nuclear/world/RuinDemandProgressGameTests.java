@@ -26,6 +26,11 @@ public final class RuinDemandProgressGameTests {
         var level = h.getLevel();
         RuinMatterGameTests.clearFixture(level);
         var grid = RuinStorageGameTests.fixture(h, true);
+        var held = new ua.zentix.incoming.strike.AreaLoader.Area(
+                net.minecraft.server.level.TicketType.create("incoming_demand_test", java.util.Comparator.<UUID>naturalOrder()),
+                grid.centre(), 2, UUID.randomUUID(), false);
+        ua.zentix.incoming.strike.StrikeWorld.get(level).areas().hold(level, held);
+        StrikeGameTests.afterTest(h, () -> ua.zentix.incoming.strike.StrikeWorld.get(level).areas().release(level, held));
         var old = grid.ctx().d;
         var d = new Detonation(190002, old.burst(), old.groundY(), old.yieldKt(), old.surface(),
                 old.gameTime() - 20000, 0, 0, old.visibility(), 42, old.scale(), false, old.wave());
@@ -43,6 +48,7 @@ public final class RuinDemandProgressGameTests {
         h.assertTrue(level.getBlockState(glass).is(Blocks.GLASS), "Fixture glass missing");
         int[] stage = {0};
         long[] fixed = {0}, offered = {0};
+        int[] initialStats = new int[2];
         RuinContext[] owner = {null};
         RuinMaintenanceGameTests.Completion[] completed = {null};
         StrikeGameTests.afterTest(h, () -> {
@@ -56,6 +62,8 @@ public final class RuinDemandProgressGameTests {
         });
         h.succeedWhen(() -> {
             try {
+                h.assertTrue(level.getChunkSource().getChunkNow(grid.centre().x, grid.centre().z) != null,
+                        "Watched fixture lost FULL readiness");
                 if (stage[0] == 0) {
                     String policy = (String) content.invoke(world.prep(), level);
                     h.assertTrue(policy != null && RuinProgress.get(level).writable(), "Storage identity pending");
@@ -93,6 +101,8 @@ public final class RuinDemandProgressGameTests {
                     queue.offer(level.getChunkSource().getChunkNow(grid.centre().x, grid.centre().z), d);
                     h.assertTrue(queue.queued(key), "Visible chunk was not queued");
                     offered[0] = level.getGameTime();
+                    int[] stats = queue.ruinStats();
+                    initialStats[0] = stats[0]; initialStats[1] = stats[1];
                     Incoming.LOG.info("DEMAND_PROGRESS cold plan queued at {}, resident {}, future {}, fixed {}",
                             offered[0], NuclearPrep.residentMemory(level), NuclearPrep.memory(level), fixed[0]);
                     stage[0] = 2;
@@ -117,6 +127,9 @@ public final class RuinDemandProgressGameTests {
                         "Completed queue did not record the applied detonation");
                 h.assertTrue(!level.getBlockState(glass).is(Blocks.GLASS), "Queue completed without actual glass damage");
                 h.assertTrue(!plans.containsKey(key), "Consumed prepared plan was not released");
+                int[] stats = queue.ruinStats();
+                h.assertTrue(stats[0] == initialStats[0] + 1 && stats[1] == initialStats[1],
+                        "A reused stored plan was counted as an on-site calculation");
                 h.assertTrue(queue.size() == 0, "Pending visible work remains after the only queued chunk completed");
                 h.assertTrue(RuinMatter.get(level).pending() > 0, "Material backlog ended before visible damage");
                 h.assertTrue(completed[0].inbox().pending() == 0, "Ready source remained behind material/visible consumers");

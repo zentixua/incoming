@@ -60,6 +60,12 @@ final class RuinMemory {
             bytes += extra;
             return true;
         }
+        /** Published payload has a counted owner now; keep only the still-private capture credit. */
+        void transfer(long published) {
+            if (published < 0 || published > bytes) throw new IllegalArgumentException("Unfunded material publication");
+            owner.materialReservation -= published;
+            bytes -= published;
+        }
         @Override public void close() {
             if (owner == null) return;
             owner.materialReservation -= bytes;

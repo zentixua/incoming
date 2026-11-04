@@ -438,23 +438,35 @@ public final class NuclearWorld {
 
     /** Bounded completion/cache service survives preparation expiry and rotates across active owners. */
     private void reclaim(ServerLevel level, WorkClock clock) {
-        int slots = 2 * ruins.size() + 1;
+        int slots = 3 * ruins.size() + 2;
         for (int checked = 0; checked < slots && clock.canStart(); checked++) {
             int slot = Math.floorMod(reclaimNext++, slots);
             if (slot == 0) {
                 if (prep.reclaim(level, clock)) return;
                 continue;
             }
+            if (slot == 1) {
+                if (scars.collectReady(level, clock)) return;
+                continue;
+            }
             var contexts = ruins.values().iterator();
-            int context = (slot - 1) / 2;
+            int context = (slot - 2) / 3;
             for (int i = 0; i < context; i++) contexts.next();
             RuinContext ctx = contexts.next();
             // A ready payload may refuse publication. Collection and reclamation need separate
             // turns so that refusal cannot suppress the operation that makes room for it.
-            if ((slot & 1) != 0) {
+            if ((slot - 2) % 3 == 0) {
                 if (!ctx.readyWindowReads()) continue;
                 long began = clock.begin();
                 try { ctx.drainWindowReads(level); }
+                finally { clock.end(began); }
+                return;
+            }
+            if ((slot - 2) % 3 == 1) {
+                if (ctx.restoredPlans == null || ctx.restoredPlans.pendingReads() == 0) continue;
+                long began = clock.begin();
+                try { ctx.restoredPlans.collectReady((key, plan) ->
+                        scars.collectPrepared(level, ctx, ctx.restoredPlans, key, plan)); }
                 finally { clock.end(began); }
                 return;
             }

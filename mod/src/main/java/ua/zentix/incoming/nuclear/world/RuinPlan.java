@@ -998,8 +998,14 @@ public final class RuinPlan {
                     Blast.Props props = Blast.props(now);
                     return now.getBlock() == piece.state.getBlock() || props.bearing() || props.leaves();
                 });
-                RuinMatter.get(level).release(released);
-                RuinMatter.get(level).support(level, released, d);
+                RuinMatter ledger = RuinMatter.get(level);
+                long owned = ledger.retainedBytes();
+                try {
+                    ledger.release(released);
+                    ledger.support(level, released, d);
+                } finally {
+                    reservation.transfer(Math.max(0, ledger.retainedBytes() - owned));
+                }
             }
             if (ctx != null) ctx.applied(chunk, this, motion);
             FlashScorch.unmark(chunk, d.id());

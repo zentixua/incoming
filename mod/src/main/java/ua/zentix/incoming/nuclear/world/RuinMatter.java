@@ -43,22 +43,16 @@ public final class RuinMatter extends LedgerData {
     }
     private final java.util.Map<ReservoirKey, Reservoir> stranded = new java.util.HashMap<>();
     private int strandedCount;
-    private long movingBytes, strandedBytes, supportBacking;
+    private long movingBytes, strandedBytes;
 
-    /** Deferred source plus its eventual contact-map growth, already charged by retainedBytes. */
-    private static final long SUPPORT_SOURCE_BYTES = 4096;
-    private static final long SUPPORT_ENTRY_BYTES = 256;
-    /** Worst case: one new provenance entry, material balance, palette state and inventory slot per removal. */
-    private static final long REMOVAL_INDEX_BYTES = SUPPORT_ENTRY_BYTES + 512 + 96 + 64;
+    /** One material balance, palette state and inventory slot per removal, before deduplication. */
+    private static final long REMOVAL_INDEX_BYTES = 512 + 96 + 64;
 
     /** Conservative owned representation, including cargo and collection growth slack; the frozen save shares this owner. */
     long retainedBytes() {
-        supportBacking = Math.max(supportBacking, 2048L + supportSources.size() * SUPPORT_SOURCE_BYTES
-                + supports.size() * SUPPORT_ENTRY_BYTES + uncertain.size() * SUPPORT_ENTRY_BYTES + originals.size() * SUPPORT_ENTRY_BYTES);
         inventoryCapacity = Math.max(inventoryCapacity, inventories.size());
         return IO_BYTES + 1024L + movingBytes + moving.bytes() + strandedBytes + palette.bytes()
-                + inventoryCapacity * 64L + supportBacking
-                + Math.max(0, supportSources.bytes() - SUPPORT_SOURCE_BYTES * supportSources.size())
+                + inventoryCapacity * 64L + supportBytes(0) + supportSources.bytes()
                 + materials.size() * 512L + (search == null ? 2048 : search.retainedBytes());
     }
 
@@ -68,7 +62,41 @@ public final class RuinMatter extends LedgerData {
      * the reservation separately before mutation. Reserve each ownership term once, rather
      * than an unrelated per-cell envelope: dense ready chunks must fit when these owners fit. */
     long removalBytes(int pieces) {
-        return pieces * (512L + SUPPORT_SOURCE_BYTES + REMOVAL_INDEX_BYTES) + queueGrowthBytes(pieces);
+        return pieces * (512L + REMOVAL_INDEX_BYTES) + queueGrowthBytes(pieces)
+                + supportBytes(pieces) - supportBytes(0);
+    }
+
+    /** A deferred source can add at most five contacts (never its lower neighbour). Fund their
+     * complete table growth and cold faces before removal, then transfer that credit to actual
+     * arrays/live entries as expansion runs. Spent source credit is not retained map capacity.
+     * The two-array allowance covers old/new tables during rehash, without a historical payload
+     * high-water mark. Registry block states are shared, not owned by these indexes. */
+    private long supportBytes(int removals) {
+        long contacts = 5L * (supportSources.size() + (long) removals);
+        return supports.bytes(contacts) + uncertain.bytes(contacts)
+                + 96L * (uncertain.size() + contacts)
+                + originals.bytes(removals) + 64L * (originals.size() + (long) removals);
+    }
+
+    private static long tableSize(long entries, float loadFactor) {
+        return Math.max(2, it.unimi.dsi.fastutil.HashCommon.nextPowerOfTwo((long) Math.ceil(entries / (double) loadFactor)));
+    }
+
+    private static final class SupportMap extends it.unimi.dsi.fastutil.longs.Long2IntLinkedOpenHashMap {
+        private static final long serialVersionUID = 1L;
+        long bytes(long additions) {
+            long capacity = Math.max(n, tableSize(size() + additions, f));
+            // long keys + int values + long links, including the null-key slot and array headers.
+            return 256L + 2 * 20L * (capacity + 1);
+        }
+    }
+
+    private static final class ContactMap<V> extends it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<V> {
+        private static final long serialVersionUID = 1L;
+        long bytes(long additions) {
+            long capacity = Math.max(n, tableSize(size() + additions, f));
+            return 192L + 2 * 16L * (capacity + 1); // long key + conservatively eight-byte reference
+        }
     }
 
     static long removalBytes(ServerLevel level, Piece piece) {
@@ -107,13 +135,13 @@ public final class RuinMatter extends LedgerData {
     private double releasedVolume, depositedVolume, releasedMass, depositedMass;
     private long dispersed;
     private double dispersedVolume, dispersedMass;
-    private final it.unimi.dsi.fastutil.longs.Long2IntLinkedOpenHashMap supports = new it.unimi.dsi.fastutil.longs.Long2IntLinkedOpenHashMap();
+    private final SupportMap supports = new SupportMap();
     /** Only cold edges need to remember the removed face until their neighbour can be inspected. */
-    private final it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<BlockState[]> uncertain = new it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<>();
+    private final ContactMap<BlockState[]> uncertain = new ContactMap<>();
     private record Original(BlockState state, int event) {}
     /** One pre-failure graph for all still-pending removals, including overlapping strikes.
      * First removal at a position wins until reconciliation drains; event IDs only attribute it. */
-    private final it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<Original> originals = new it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<>();
+    private final ContactMap<Original> originals = new ContactMap<>();
     private RuinSupport search;
     private int heldRadius;
     /** One held-window observation per work invocation; destination readiness always stays live. */
@@ -473,7 +501,6 @@ public final class RuinMatter extends LedgerData {
             // starts from that settled world; completed contact journals are not permanent history.
             originals.clear(); originals.trim();
             supports.trim(); uncertain.trim();
-            supportBacking = 2048;
             setDirty();
         }
         if (moving.isEmpty() && moving.bytes() > 128) moving = new RuinRecords<>(PIECE_BYTES, this::encodePiece, this::decodePiece);
