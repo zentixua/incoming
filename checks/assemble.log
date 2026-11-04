@@ -1,0 +1,13 @@
+Starting a Gradle Daemon, 1 busy Daemon could not be reused, use --status for details
+> Task :createMinecraftArtifacts UP-TO-DATE
+> Task :compileJava UP-TO-DATE
+> Task :generateModMetadata UP-TO-DATE
+> Task :processResources
+> Task :classes
+> Task :jarJar UP-TO-DATE
+> Task :jar
+> Task :assemble
+
+BUILD SUCCESSFUL in 3s
+6 actionable tasks: 2 executed, 4 up-to-date
+laptop_job ctl2-assemble: exit 0
