@@ -85,6 +85,7 @@ public final class ColumnScar {
         }
         if (!old.is(with.getBlock())) PoiRecords.recordIfMissing(level, pos, old);
         level.setBlock(pos, with, flags);
+        RuinMatter.changed(level, pos);
     }
 
     /** Thermal fluence at a point with terrain and building shadows, cal/cm². */

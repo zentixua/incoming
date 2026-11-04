@@ -33,6 +33,14 @@ public final class NuclearTickets {
      * remove a crater ticket on the same chunk.
      */
     private static final TicketType<UUID> SCAR = TicketType.create("incoming_nuclear_scar", Comparator.<UUID>naturalOrder());
+    private static final TicketType<UUID> MATTER = TicketType.create("incoming_nuclear_matter", Comparator.<UUID>naturalOrder());
+
+    /** One non-ticking continuation window for structural support/material transport per dimension. */
+    static void holdMatter(ServerLevel level, ChunkPos pos, boolean hold, int radius) {
+        AreaLoader.Area area = new AreaLoader.Area(MATTER, pos, radius, new UUID(0, pos.toLong()), false);
+        if (hold) StrikeWorld.get(level).areas().hold(level, area);
+        else StrikeWorld.get(level).areas().release(level, area);
+    }
     /** Chunk and neighbors fully loaded (neighboring columns and crater edges too). */
     private static final int RADIUS = 1;
 
