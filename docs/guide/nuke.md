@@ -2,7 +2,7 @@
 
 English · [Русский](ru/nuke.md)
 
-A nuclear warhead of 1 to 15 kt on an ICBM, a cruise missile or a B-2 bomb: flash, mushroom cloud, blast wave, fires, and
+A nuclear warhead of 1 to 1000 kt on an ICBM, a cruise missile or a B-2 bomb: flash, mushroom cloud, blast wave, fires, and
 with a ground burst a crater and a fallout trail. By default, one block represents one meter and the distant wave is slowed so you can see it coming.
 Distances below assume full radii.
 See [Not physical](not-physical.md) and [world settings](settings.md#world-settings).
@@ -17,7 +17,7 @@ By default only operators can.
 
 1. You need an ICBM item, or a missile or bomb plus a Nuclear Warhead ([recipes](munitions.md#recipes)).
 2. On the console: the Nuclear weapon, or the nuclear warhead option of the Missile and the Bomb; the yield
-   numeric field in whole kt and suggested values, up to the world’s configured maximum (at most 15 kt); for the ICBM and the missile a ground burst
+   numeric field in whole kt and suggested values, up to the world’s configured maximum (100 kt in new worlds, configurable up to 1000 kt); for the ICBM and the missile a ground burst
    (the default, with a crater and fallout trail) or an air burst (wider destruction). The nuclear bomb detonates on impact; the conventional bunker-buster penetrates before exploding.
 3. LMB in the binoculars or FIRE opens the exact target, yield and effect estimates. Select **Prepare target**;
    the server resolves the surface and prepares destruction for this order, showing actual progress. Cancel or close freely.

@@ -1,10 +1,6 @@
 package ua.zentix.incoming.nuclear.model;
 
-/**
- * Yield presets (kilotons) with translation key and optimal airburst height. No yields above 15 kt in the mod
- * ({@code Loadout.Nuke.MAX_YIELD}): heavy zone (ground pressure from 5 psi) grows as Y^⅔; for 15 kt at 592 m it reaches
- * 1.6 km — about 32 thousand chunks.
- */
+/** Named yield references (kilotons) with translation key and optimal airburst height; not the supported yield range. */
 public enum Yield {
     TACTICAL(1, "tactical"),
     HIROSHIMA(15, "hiroshima");
