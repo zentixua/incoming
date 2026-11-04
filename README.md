@@ -1,6 +1,6 @@
 # MT-B3 horizon publication evidence
 
-Candidate: `11f4c67f7`, PR [#564](https://github.com/zentixua/incoming/pull/564), base `8e3e2dc28`.
+Panorama candidate: `11f4c67f7`; final source: `54b0198af` (B2 merged). PR [#564](https://github.com/zentixua/incoming/pull/564), base `8e3e2dc28`.
 **Functional gate FAIL. This is not completed B3 or acceptance of 1 Mt support.** See `MT-B1-gate.md` for the cumulative gate history and exact limits.
 
 ## What changed and what was actually measured
@@ -48,9 +48,9 @@ The central strip contrast peaks at 4.7576/255; the database witness sees old da
 
 The complete 512 MiB server ownership/tick-budget gate is not proven by these fixtures. Queue/cache payload bounds exclude foreign Voxy decoded jobs, storage, meshing, GPU data and other heap. Actual plan-producer prefill, durable revisions, reconnect/late join, legitimate newer chunk changes and chronologically overlapping physical plans remain open. A local section union is not a structural overlap proof. No test claims otherwise. Keep #564 unmerged and the yield ceiling unchanged; #561 remains a separate development probe with its archived baseline.
 
-Full build passed (`build.log`); all 17 selected local GameTests passed (`gametest.log`); `ci-final-11.log` records green Итог. Source/test fixes after the failed intermediate CI are visible in the PR. The scene comparison, when complete, is in `stand/` and is diagnostic separately from the failed horizon gate. No merge or release.
+Full build passed (`build.log`); all 17 selected local GameTests passed (`gametest.log`); `ci-final-11.log` records green Итог. Source/test fixes after the failed intermediate CI are visible in the PR. The final merged-head scene comparison is in `stand/`; the pre-merge comparison is in `stand-pre-merge/`. Both are separate from the failed horizon gate. No merge or release.
 
-Final normal scene comparison: **pass**, one main/candidate/main pair, pack `none`, 100 strikes.
+Pre-merge normal scene comparison: **pass**, one main/candidate/main pair, pack `none`, 100 strikes.
 Worst gated GPU p50 +12.12% (inside: 4.367 vs 3.895 ms), within 25%; every gated render-thread CPU p95
 comparison passes. Pre-merge raw frames, timings, host load and verdict are in `stand-pre-merge/`. Another CPU-only job
 prevented quiet before warm-up; the harness retained the paired measurements and reported the load.
@@ -64,7 +64,7 @@ not proof of readiness of a real strike.
 
 Final source head `54b0198af` merges main `ab2741fa1` (#560), without rebase. The panorama measurements above remain measurements of `11f4c67f7`. `FrontLods` consumes the merged B2 `RuinPlan.applyToCopy`: the copy represents structural failure, while live `RuinPlan.apply` also releases material into `RuinMatter` for subsequent support/fall/settlement. The detached copy does not execute those later stages. Thus this merge adopts B2 as the source but does not close stage-by-stage full-chunk/LOD agreement.
 
-Merged-head checks: `54b0198af`, build successful in 3m43s, 1782 unit tests with zero failures/errors/skips; all 17 selected GameTests pass. `ci-merged.log` confirms green Итог (run 41763135923). `build.log`/`gametest.log` now refer to this merged head. The preceding normal scene comparison was pre-merge; the merged-head comparison will be recorded separately.
+Merged-head checks: `54b0198af`, build successful in 3m43s, 1782 unit tests with zero failures/errors/skips; all 17 selected GameTests pass. `ci-merged.log` confirms green Итог (run 41763135923). `build.log`/`gametest.log` now refer to this merged head. The preceding normal scene comparison was pre-merge; the merged-head comparison is recorded below and in `stand/`.
 
 
 Final merged-head normal scene comparison: **PASS**, `54b0198af` versus main `ab2741fa1`, one A1/B/A2 pair, `none`, 100 strikes. All six gated GPU p50/render-thread p95 comparisons pass (candidate versus the harness-selected baseline: GPU −11.88% edge, −14.83% inside, −0.79% outside; thread −2.53%, −2.08%, −0.58%). These are one paired-run results with baseline variation, not a general performance improvement claim. `stand/` holds the final raw results, host logs and frames; `stand-pre-merge/` preserves the prior comparison. All clients exited; GPU lease released. Publication gate remains FAIL.
