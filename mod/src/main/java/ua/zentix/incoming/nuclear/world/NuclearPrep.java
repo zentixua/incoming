@@ -1708,6 +1708,9 @@ public final class NuclearPrep {
                     continue;
                 }
             }
+            // Flight-time near reads may outlive their centre. The scar queue owns fresh requests now;
+            // retire those callbacks without dropping their still-live I/O reservations.
+            p.ruins.retireWindowReads();
             p.ruins.bindEvent(d.id());
             p.detonation = d.id();
             rememberArchive(level, p);

@@ -455,3 +455,7 @@ paths:
   even if another planner overtook their centre. On reload, observe a completed old task's outcome before
   resubmitting successful stale input; failed/cancelled terminal outcomes remain visible to the handle collector.
   `nuke_near_late_*` and `nuke_near_reload_*` cover these distinct ownership transitions.
+  Partial handoff supersedes pending flight-window reads/cursors, without cancelling solver tasks or plan/page
+  owners. Invalidate their inbox generation so late callbacks release reservations instead of requiring an absent
+  todo collector; the scar owner can request fresh windows. `nuke_near_handoff_reads` proves actual nonempty plan
+  transfer, a still-charged outstanding read, and release/rejection of its late payload.

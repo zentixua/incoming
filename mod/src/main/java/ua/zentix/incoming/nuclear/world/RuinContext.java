@@ -787,15 +787,20 @@ final class RuinContext {
         dropShot(chunk);
     }
 
+    /** A new owner will request current windows; old callbacks retain reservations until they finish. */
+    void retireWindowReads() {
+        pendingWindows.clear();
+        reads.invalidate();
+        reading.clear();
+    }
+
     /** Background plans no longer needed (cancel, world unload): abandon tasks. */
     void cancelTasks() {
         // Transfer before cancel: queued callbacks may release immediately; running callbacks may not.
         inputs.detach(currentBytes());
         for (Task t : tasks.values()) t.future.cancel(false);
         tasks.clear();
-        pendingWindows.clear();
-        reads.invalidate();
-        reading.clear();
+        retireWindowReads();
         closeStorage();
         if (restoredPlans != null) { restoredPlans.clear(); restoredPlans = null; }
         archive = null;
