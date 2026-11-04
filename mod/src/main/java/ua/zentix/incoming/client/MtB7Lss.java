@@ -16,9 +16,10 @@ final class MtB7Lss {
     static void subscribe() {
         try {
             LSSApi.registerColumnConsumer(new VoxelColumnConsumer() {
+                private volatile boolean unavailable;
                 @Override public void onVoxelColumnReceived(ClientLevel level, ResourceKey<Level> dimension,
                         int x, int z, VoxelColumnData data) {
-                    if (!MtB7Log.beginObservation()) return;
+                    if (unavailable || !MtB7Log.beginObservation()) return;
                     try {
                         long scope = MtB7Client.scope(level);
                         if (scope < 0) { MtB7Client.omitted(); return; }
@@ -30,6 +31,11 @@ final class MtB7Lss {
                         }
                         MtB7Client.receipt(level, scope, x, z, wall, began, System.nanoTime()-began, hashes);
                     } catch (RuntimeException error) { MtB7Client.omitted(); }
+                    catch (LinkageError error) {
+                        unavailable = true;
+                        MtB7Client.omitted();
+                        Incoming.LOG.warn("MT-B7 natural LSS observer disabled: {}", error.toString());
+                    }
                     finally { MtB7Log.endObservation(); }
                 }
             });
