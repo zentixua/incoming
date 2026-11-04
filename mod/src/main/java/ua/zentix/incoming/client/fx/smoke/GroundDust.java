@@ -1007,14 +1007,47 @@ public final class GroundDust {
         emit(t, 1, true, out);
     }
 
+    /** Internal lifetime queries only return a scalar, so their moment work tables need no new ownership. */
+    private static final class Moments {
+        final double[][] m = new double[ANNULI][SECTORS], mr = new double[ANNULI][SECTORS],
+                mr2 = new double[ANNULI][SECTORS], wt = new double[ANNULI][SECTORS],
+                wtop = new double[ANNULI][SECTORS], aloft = new double[ANNULI][SECTORS];
+
+        void clear() {
+            for (int a = 0; a < ANNULI; a++) {
+                java.util.Arrays.fill(m[a], 0);
+                java.util.Arrays.fill(mr[a], 0);
+                java.util.Arrays.fill(mr2[a], 0);
+                java.util.Arrays.fill(wt[a], 0);
+                java.util.Arrays.fill(wtop[a], 0);
+                java.util.Arrays.fill(aloft[a], 0);
+            }
+        }
+    }
+
+    private Moments lifetimeMoments;
+
+    private Moments lifetimeMoments() {
+        if (lifetimeMoments == null) lifetimeMoments = new Moments();
+        else lifetimeMoments.clear();
+        return lifetimeMoments;
+    }
+
     /** Clumps at age t; {@code levels} gives resting surfaces (absent: source surface for layer depth). */
     private void emit(double t, double fade, boolean levels, Probe out) {
         if (total <= 0 || t <= 0) return;
         // one ring pass: each display ring in sector gets mass, mass radius and second moment, share still in wave phase,
         // airborne dust mass (layer gravity, {@link #airborne}, same calculation; otherwise reread per display
         // clump, all rings for every display ring, one fifth of smoke CPU in 100-strike raid)
-        double[][] m = new double[ANNULI][SECTORS], mr = new double[ANNULI][SECTORS], mr2 = new double[ANNULI][SECTORS],
-                wt = new double[ANNULI][SECTORS], wtop = new double[ANNULI][SECTORS], aloft = new double[ANNULI][SECTORS];
+        // Rendering keeps local tables: its caller's callback may query this model again. Only the private
+        // optical-depth callback uses levels=false and cannot re-enter through world/consumer code.
+        Moments work = levels ? null : lifetimeMoments();
+        double[][] m = work == null ? new double[ANNULI][SECTORS] : work.m,
+                mr = work == null ? new double[ANNULI][SECTORS] : work.mr,
+                mr2 = work == null ? new double[ANNULI][SECTORS] : work.mr2,
+                wt = work == null ? new double[ANNULI][SECTORS] : work.wt,
+                wtop = work == null ? new double[ANNULI][SECTORS] : work.wtop,
+                aloft = work == null ? new double[ANNULI][SECTORS] : work.aloft;
         for (int k = 0; k < SECTORS; k++) {
             for (int i = 0; i < RINGS; i++) {
                 if (ball[k][i]) continue;
