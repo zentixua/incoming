@@ -207,6 +207,8 @@ final class RuinContext {
     private final LongOpenHashSet absent = new LongOpenHashSet();
     /** Detonation log: disk window neighbors read, those not whole on disk. */
     int windowReads, windowAbsent;
+    private boolean windowFailed;
+    boolean windowFailed() { return windowFailed; }
 
     /**
      * Background-plan window for in-memory chunk (server thread): radius-{@link RuinPlanner#REACH} square neighbors not fully
@@ -226,29 +228,7 @@ final class RuinContext {
     /** Same, parse read neighbors at ruin-pool {@code priority}. */
     int requestWindow(ServerLevel level, ChunkPos pos, RuinWorkers.Priority priority) {
         pendingWindows.add(pos.toLong());
-        // Results and delayed callbacks remain charged after cancellation. Decode at most one
-        // window per call; archived snapshots enter the same bounded path after a clean restart.
-        int put = 0;
-        for (WindowRead r; (r = reads.peek()) != null && (put == 0 || put + r.cost() <= PUTS_PER_WINDOW); put += r.cost()) {
-            reads.poll();
-            long key = r.key();
-            reading.remove(key);
-            windowReads++;
-            if (r.disk().skip() != null) {
-                if (absent.add(key)) windowAbsent++;
-                continue;
-            }
-            DiskShots.Read current = r.disk().primed(Blast.SERVER);
-            boolean restored = false;
-            if (r.cached() != null && r.cached().isPresent()) {
-                try {
-                    restored = restoreArchived(key, r.cached().get(), current);
-                } catch (RuntimeException error) {
-                    Incoming.LOG.warn("Prepared window snapshot rejected for {}", new ChunkPos(key), error);
-                }
-            }
-            if (!restored) putDisk(level, current);
-        }
+        drainWindowReads(level);
         int missing = 0;
         for (int dz = -RuinPlanner.REACH; dz <= RuinPlanner.REACH; dz++) {
             for (int dx = -RuinPlanner.REACH; dx <= RuinPlanner.REACH; dx++) {
@@ -268,6 +248,39 @@ final class RuinContext {
             }
         }
         return missing;
+    }
+
+    /** Pending source ownership survives a todo being overtaken by another planner. */
+    int pendingWindowReads() { return reads.pending(); }
+    long pendingWindowBytes() { return WINDOW_READ_BYTES * reads.pending(); }
+    boolean readyWindowReads() { return reads.peek() != null; }
+
+    /** Collect owned results independently of fresh planning/admission; never opens another read. */
+    void drainWindowReads(ServerLevel level) {
+        // Results and delayed callbacks remain charged after cancellation. Decode at most one
+        // window per call; archived snapshots enter the same bounded path after a clean restart.
+        int put = 0;
+        for (WindowRead r; (r = reads.peek()) != null && (put == 0 || put + r.cost() <= PUTS_PER_WINDOW); put += r.cost()) {
+            reads.poll();
+            long key = r.key();
+            reading.remove(key);
+            windowReads++;
+            if (r.disk().skip() != null) {
+                windowFailed |= r.disk().sourceFailure();
+                if (absent.add(key)) windowAbsent++;
+                continue;
+            }
+            DiskShots.Read current = r.disk().primed(Blast.SERVER);
+            boolean restored = false;
+            if (r.cached() != null && r.cached().isPresent()) {
+                try {
+                    restored = restoreArchived(key, r.cached().get(), current);
+                } catch (RuntimeException error) {
+                    Incoming.LOG.warn("Prepared window snapshot rejected for {}", new ChunkPos(key), error);
+                }
+            }
+            if (!restored) putDisk(level, current);
+        }
     }
 
     /** Server-thread source validation shared by restart reads and live window read-ahead. */
@@ -726,7 +739,13 @@ final class RuinContext {
     RuinPlan collect(ServerLevel level, LevelChunk chunk) {
         Task t = tasks.get(chunk.getPos().toLong());
         if (t != null && t.chunkId != 0 && RuinWorkers.finished(t.future) && System.identityHashCode(chunk) != t.chunkId) {
-            // chunk unloaded/reloaded: snapshots from different chunk
+            // Observe the completed terminal outcome before replacing a stale instance. An explicit
+            // collector must still see failure/cancellation rather than a successful retry hiding it.
+            try { t.future.get(); } // actual execution is finished above, so this never waits
+            catch (java.util.concurrent.ExecutionException | InterruptedException | java.util.concurrent.CancellationException error) {
+                return collect(chunk.getPos());
+            }
+            // chunk unloaded/reloaded: successful snapshots from a different chunk
             tasks.remove(chunk.getPos().toLong());
             submit(level, chunk, t.priority);
             return null;
@@ -768,15 +787,20 @@ final class RuinContext {
         dropShot(chunk);
     }
 
+    /** A new owner will request current windows; old callbacks retain reservations until they finish. */
+    void retireWindowReads() {
+        pendingWindows.clear();
+        reads.invalidate();
+        reading.clear();
+    }
+
     /** Background plans no longer needed (cancel, world unload): abandon tasks. */
     void cancelTasks() {
         // Transfer before cancel: queued callbacks may release immediately; running callbacks may not.
         inputs.detach(currentBytes());
         for (Task t : tasks.values()) t.future.cancel(false);
         tasks.clear();
-        pendingWindows.clear();
-        reads.invalidate();
-        reading.clear();
+        retireWindowReads();
         closeStorage();
         if (restoredPlans != null) { restoredPlans.clear(); restoredPlans = null; }
         archive = null;

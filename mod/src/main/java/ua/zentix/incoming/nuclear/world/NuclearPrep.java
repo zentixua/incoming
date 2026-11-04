@@ -195,6 +195,10 @@ public final class NuclearPrep {
         final MetadataSet everInMemory = new MetadataSet();
         /** Plans for in-memory chunks (near preparation). */
         int nearPlans;
+        /** Launch-critical target and loaded surroundings; far physical work continues independently. */
+        final MetadataSet required = new MetadataSet();
+        boolean requiredInitialized;
+        long requiredTarget;
         /** Chunks with background plans running. */
         final LongArrayList submitted = new LongArrayList();
         long nextRefresh;
@@ -392,9 +396,21 @@ public final class NuclearPrep {
             }
         }
         int writing = p.plans.pendingWrites() + (p.ruins == null || p.ruins.archive() == null ? 0 : p.ruins.archive().pendingWrites());
-        int reading = p.reading.size() + p.plans.pendingReads() + (p.resolvingRead ? 1 : 0);
+        int windowReads = p.ruins == null ? 0 : p.ruins.pendingWindowReads();
+        int reading = p.reading.size() + p.plans.pendingReads() + (p.resolvingRead ? 1 : 0) + windowReads;
         int planning = p.farRunning.size() + p.submitted.size();
         long complete = p.plans.size() + (long) p.farSkipped;
+        long total = p.order.length;
+        if (p.requiredInitialized) {
+            complete = 0;
+            writing = 0;
+            total = p.required.size();
+            for (long key : p.required) {
+                if (p.plans.containsKey(key) || key == p.requiredTarget && p.unreadable.contains(key)
+                        && level.getChunkSource().getChunkNow(ChunkPos.getX(key), ChunkPos.getZ(key)) == null) complete++;
+                if (p.plans.pendingWrite(key)) writing++;
+            }
+        }
         if (reason != RuinPreparation.Reason.NONE) stage = RuinPreparation.Stage.FAILED;
         else if (p.heapStop && !p.bound) { stage = RuinPreparation.Stage.FAILED; reason = RuinPreparation.Reason.MEMORY; }
         else if (p.noRuins && p.geometry != null) stage = RuinPreparation.Stage.READY;
@@ -406,7 +422,7 @@ public final class NuclearPrep {
         else if (p.layoutRequired) {
             stage = RuinPreparation.Stage.PAUSED; reason = RuinPreparation.Reason.MEMORY;
         }
-        else if (p.nextFar >= p.order.length && planning == 0 && reading == 0 && complete == p.order.length) {
+        else if (p.requiredInitialized && complete == total && windowReads == 0) {
             stage = writing == 0 ? RuinPreparation.Stage.READY : RuinPreparation.Stage.STORING;
         } else if (p.heapStop || memory(level) >= WINDOW_CAP) {
             stage = RuinPreparation.Stage.PAUSED;
@@ -414,8 +430,8 @@ public final class NuclearPrep {
         }
         long resident = p.asyncBytes.get() + p.plans.bytes() + p.lods.retainedBytes()
                 + metadataBytes(p)
-                + (p.ruins == null ? 0 : p.ruins.retainedBytes());
-        return new RuinPreparation.Status(stage, Math.max(0, complete - writing), p.order.length, reading, planning,
+                + (p.ruins == null ? 0 : p.ruins.retainedBytes() + p.ruins.pendingWindowBytes());
+        return new RuinPreparation.Status(stage, Math.max(0, complete - writing), total, reading, planning,
                 writing, resident, reason, p.resolvedTarget);
     }
 
@@ -423,6 +439,7 @@ public final class NuclearPrep {
         Prep p = request(handle);
         if (p == null) return false;
         if (p.bound) return p.strike == strikeId && compatible(p) && p.failure == RuinPreparation.Reason.NONE;
+        if (p.requiredInitialized && !p.bound) refresh(level, p);
         if (status(level, handle).stage() != RuinPreparation.Stage.READY) return false;
         var s = NuclearEvents.get(level).scheduled().stream().filter(x -> x.id() == strikeId).findFirst().orElse(null);
         if (s == null || s.owner().isEmpty() || !s.owner().get().equals(p.owner) || s.yieldKt() != p.yieldKt
@@ -438,6 +455,7 @@ public final class NuclearPrep {
         Prep p = request(handle);
         if (p == null || p.bound || !owner.equals(p.owner) || !target.equals(p.resolvedTarget)
                 || yieldKt != p.yieldKt || surface != p.surface || airBurst != p.airBurst) return -1;
+        if (p.requiredInitialized) refresh(level, p);
         if (status(level, handle).stage() != RuinPreparation.Stage.READY) return -1;
         p.strike = NuclearEvents.get(level).nextId();
         p.carrier = true;
@@ -462,7 +480,8 @@ public final class NuclearPrep {
     /** Chunk unloaded: background plan unnecessary. */
     void forget(long chunk) {
         for (Prep p : preps) {
-            p.submitted.rem(chunk);
+            // Explicit handles retain their collector/context until the actual task can be harvested.
+            if (p.handle == null) p.submitted.rem(chunk);
             // before detonation preparation ruins outside NuclearWorld: preparation removes task itself
             if (p.handle == null && p.ruins != null && p.detonation < 0) p.ruins.forget(chunk);
             p.considered.remove(chunk);
@@ -669,17 +688,32 @@ public final class NuclearPrep {
             install(p, l);
         }
         long now = level.getGameTime();
-        if (p.handle == null && now >= p.nextRefresh) {
+        if (p.handle != null && !p.requiredInitialized) {
+            p.requiredInitialized = true;
+            p.requiredTarget = ChunkPos.asLong(Mth.floor(p.geometry.burst().x) >> 4, Mth.floor(p.geometry.burst().z) >> 4);
+            p.required.add(p.requiredTarget);
+        }
+        if (now >= p.nextRefresh) {
             p.nextRefresh = now + REFRESH;
             refresh(level, p);
         }
         if (!p.heapStop && p.nextTodo < p.todo.size() && heapTight()) stopForHeap(p);
         p.ruins.expire(now);
+        if (p.handle != null && p.ruins.readyWindowReads() && clock.canStart() && shared.canStart()) {
+            long unit = shared.begin();
+            try { p.ruins.drainWindowReads(level); }
+            finally { clock.record(shared.end(unit)); }
+        }
+        if (p.handle != null && p.ruins.windowFailed()) {
+            p.failure = RuinPreparation.Reason.IO;
+            return;
+        }
         harvest(level, p, shared);
-        if (p.handle == null && !p.heapStop && !p.capped) submit(level, p, shared);
+        if (!p.heapStop && !p.capped) submit(level, p, shared);
         far(level, p, shared);
         frontLods(level, p, now);
-        if (!p.announced && p.nextTodo >= p.todo.size() && p.submitted.isEmpty() && p.nextFar >= p.order.length && p.farRunning.isEmpty()) {
+        if (!p.announced && p.nextTodo >= p.todo.size() && p.submitted.isEmpty() && p.nextFar >= p.order.length && p.farRunning.isEmpty()
+                && p.ruins.pendingWindowReads() == 0 && !p.ruins.windowFailed()) {
             p.announced = true;
             // line for tests/recording: strike ruins prebuilt (later-loaded chunks still picked up)
             Runtime rt = Runtime.getRuntime();
@@ -801,9 +835,13 @@ public final class NuclearPrep {
         LongArrayList fresh = new LongArrayList();
         for (ChunkHolder holder : level.getChunkSource().chunkMap.getChunks()) {
             ChunkPos c = holder.getPos();
-            if (p.considered.contains(c.toLong()) || horizontal(c, d) > radius || NuclearTickets.inMemory(level, c.toLong()) == null) continue;
+            if (p.considered.contains(c.toLong()) || horizontal(c, d) > radius) continue;
+            // FULL data retained by generation/unload is not a ready player chunk. Do not add a key
+            // that submit() must immediately remove and bind() would re-add forever.
+            if (p.handle == null ? NuclearTickets.inMemory(level, c.toLong()) == null : !Terrain.ready(level, c.x, c.z)) continue;
             p.considered.add(c.toLong());
             p.everInMemory.add(c.toLong());
+            if (p.handle != null) p.required.add(c.toLong());
             fresh.add(c.toLong());
         }
         if (fresh.isEmpty()) return;
@@ -829,7 +867,11 @@ public final class NuclearPrep {
         for (int i = 0; i < p.submitted.size() && clock.canStart() && shared.canStart(); ) {
             long c = p.submitted.getLong(i);
             if (!p.ruins.done(c)) {
-                if (!p.ruins.running(c)) p.submitted.removeLong(i); // task removed (chunk unloaded)
+                if (p.handle != null && p.ruins.failed(c)) p.failure = RuinPreparation.Reason.IO;
+                if (!p.ruins.running(c)) {
+                    p.submitted.removeLong(i);
+                    if (p.handle != null) p.failure = RuinPreparation.Reason.IO;
+                } // task removed (chunk unloaded)
                 else i++;
                 continue;
             }
@@ -844,8 +886,9 @@ public final class NuclearPrep {
                     p.nearPlans++;
                 } else if (p.ruins.running(c)) {
                     p.submitted.add(c); // chunk reloaded: rebuild plan
-                }
+                } else if (p.handle != null) p.failure = RuinPreparation.Reason.IO;
             } catch (RuntimeException e) {
+                if (p.handle != null) p.failure = RuinPreparation.Reason.IO;
                 Incoming.LOG.error("Pre-built ruins: plan for chunk {} failed with an exception; its ruins will be built on the spot", new ChunkPos(c), e);
             } finally {
                 clock.record(shared.end(c0));
@@ -858,7 +901,7 @@ public final class NuclearPrep {
         p.reading.remove(stored.key());
         DiskShots.Read current = stored.current();
         if (current.skip() != null) {
-            if (p.handle != null && !current.skip().equals("not on disk") && !current.skip().equals("not fully generated on disk"))
+            if (p.handle != null && current.sourceFailure())
                 p.failure = RuinPreparation.Reason.IO;
             p.unreadable.add(stored.key());
             p.unreadWhy.addTo(current.skip().split(":", 2)[0], 1);
@@ -924,7 +967,7 @@ public final class NuclearPrep {
             long c0 = shared.begin();
             try {
                 if (r.skip() != null) {
-                    if (p.handle != null && !r.skip().equals("not on disk") && !r.skip().equals("not fully generated on disk"))
+                    if (p.handle != null && r.sourceFailure())
                         p.failure = RuinPreparation.Reason.IO;
                     p.unreadable.add(c);
                     p.unreadWhy.addTo(r.skip().split(":", 2)[0], 1);
@@ -1128,23 +1171,41 @@ public final class NuclearPrep {
     /** Chunks in order to background threads (snapshots per work unit), while detonation has task capacity. */
     private void submit(ServerLevel level, Prep p, WorkClock shared) {
         while (p.nextTodo < p.todo.size() && RuinWorkers.admit(RuinWorkers.Priority.NEAR) && clock.canStart() && shared.canStart()) {
-            // Reserve estimated headroom for a whole new 5x5 snapshot window before capturing it.
-            // Final result sizes remain measured estimates, not a total-heap guarantee.
-            if (memory(level) + (long) (2 * RuinPlanner.REACH + 1) * (2 * RuinPlanner.REACH + 1) * READ_BYTES > WINDOW_CAP) return;
             long c = p.todo.getLong(p.nextTodo++);
-            if (p.plans.containsKey(c) || p.ruins.running(c)) continue;
-            // chunk without loaded neighbors (loaded-world edge) gets no preplan: unreadable window
-            LevelChunk chunk = readyChunk(level, c);
+            if (p.plans.containsKey(c)) continue;
+            if (p.ruins.running(c)) {
+                if (p.handle != null) {
+                    p.ruins.promote(c, RuinWorkers.Priority.NEAR);
+                    if (!p.submitted.contains(c) && !p.farRunning.contains(c)) p.submitted.add(c);
+                }
+                continue;
+            }
+            // Explicit handles also prepare the loaded view edge using asynchronous disk neighbors.
+            LevelChunk chunk = p.handle == null ? readyChunk(level, c)
+                    : level.getChunkSource().getChunkNow(ChunkPos.getX(c), ChunkPos.getZ(c));
             if (chunk == null) {
                 // neighbors not loaded (loaded-world edge): picked up again once loaded
                 p.considered.remove(c);
+                if (p.handle != null && c != p.requiredTarget) p.required.remove(c);
                 continue;
             }
             long c0 = shared.begin();
             try {
+                if (p.handle != null) {
+                    int missing = p.ruins.requestWindow(level, chunk.getPos());
+                    if (p.ruins.windowFailed()) {
+                        p.failure = RuinPreparation.Reason.IO;
+                        return;
+                    }
+                    if (missing > 0) { p.nextTodo--; return; }
+                }
+                // Drain already owned window reads above before gating fresh snapshot admission.
+                long windowBytes = (long) (2 * RuinPlanner.REACH + 1) * (2 * RuinPlanner.REACH + 1) * READ_BYTES;
+                if (memory(level) + windowBytes > WINDOW_CAP) { p.nextTodo--; return; }
                 if (p.ruins.submit(level, chunk)) p.submitted.add(c);
                 else p.nextTodo--;
             } catch (RuntimeException e) {
+                if (p.handle != null) p.failure = RuinPreparation.Reason.IO;
                 Incoming.LOG.error("Pre-built ruins: snapshots of chunk {} failed with an exception; its ruins will be built on the spot", new ChunkPos(c), e);
             } finally {
                 clock.record(shared.end(c0));
@@ -1268,7 +1329,7 @@ public final class NuclearPrep {
         return 1024L + 2L * p.archivePath.length() + p.layoutMetadata
                 + arrayBytes(p.order) + arrayBytes(p.edge) + listBytes(p.toScan)
                 + listBytes(p.todo) + listBytes(p.submitted) + listBytes(p.planned) + listBytes(p.farRunning)
-                + p.considered.bytes() + p.everInMemory.bytes() + p.reading.bytes() + p.unreadable.bytes()
+                + p.required.bytes() + p.considered.bytes() + p.everInMemory.bytes() + p.reading.bytes() + p.unreadable.bytes()
                 + p.unreadWhy.bytes() + 80L * p.scanning;
     }
 
@@ -1647,6 +1708,9 @@ public final class NuclearPrep {
                     continue;
                 }
             }
+            // Flight-time near reads may outlive their centre. The scar queue owns fresh requests now;
+            // retire those callbacks without dropping their still-live I/O reservations.
+            p.ruins.retireWindowReads();
             p.ruins.bindEvent(d.id());
             p.detonation = d.id();
             rememberArchive(level, p);

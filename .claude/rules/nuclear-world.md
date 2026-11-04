@@ -439,3 +439,23 @@ paths:
   counters include detached inputs once across dimensions; the scalar owner retains no context/world references.
   `nuke_inputs_*` exercises populated Grids through registered cancel, clear, forget/world removal, expiry and
   queued promotion/cancellation. This preserves known estimates, not a complete JVM heap bound.
+
+- Explicit unpaid preparation gates launch on exact geometry, its target chunk and loaded chunks within the ruin
+  radius, rather than every distant heavy-zone plan. `required` is charged metadata; refresh before binding admits
+  newly loaded surroundings. Loaded-edge plans use the existing asynchronous window reader and NEAR priority.
+  Only these plans' own spill receipts block READY. Full physical disk planning, partial context handoff and durable
+  settlement continue during flight/after detonation; distant planning errors still invalidate an unbound request.
+  READY is a live launch condition, not persisted permission or a promise that distant ruins are already saved.
+  Critical membership uses `Terrain.ready`, not `Terrain.inMemory`: FULL chunks retained by generation/unload can
+  be unavailable to `getChunkNow`, so adding/removing them on every bind would oscillate READY forever. Unload
+  keeps explicit near collectors until actual completion; every failed/abandoned completion fails the request.
+  The window reader distinguishes source failure from legal absent/unfinished terrain. Drain owned read results
+  before fresh-snapshot admission. `nuke_near_*` covers those transitions, late loads and partial handoff.
+  Owned window completions drain independently of near todo/worker admission; pending window sources block READY
+  even if another planner overtook their centre. On reload, observe a completed old task's outcome before
+  resubmitting successful stale input; failed/cancelled terminal outcomes remain visible to the handle collector.
+  `nuke_near_late_*` and `nuke_near_reload_*` cover these distinct ownership transitions.
+  Partial handoff supersedes pending flight-window reads/cursors, without cancelling solver tasks or plan/page
+  owners. Invalidate their inbox generation so late callbacks release reservations instead of requiring an absent
+  todo collector; the scar owner can request fresh windows. `nuke_near_handoff_reads` proves actual nonempty plan
+  transfer, a still-charged outstanding read, and release/rejection of its late payload.
