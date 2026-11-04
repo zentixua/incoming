@@ -851,16 +851,18 @@ public final class NuclearGameTests {
         }
         Detonation d = detonation(h, CENTER, Yield.optimalBurstHeight(15) * 0.3, 15, 0.3f);
         scarAll(h, d, new ColumnScar.Budget(false));
-        h.runAfterDelay(60, () -> {
-            for (BlockPos q : bed) if (h.getBlockState(q).isAir()) h.fail("the shore or bottom is knocked out: " + q.toShortString());
-            for (int dx = 0; dx < 5; dx++) {
-                for (int dz = 0; dz < 5; dz++) {
-                    for (int y = 5; y < 60; y++) {
-                        BlockState st = h.getBlockState(t.offset(dx, y, dz));
-                        if (!st.isAir() && st.getFluidState().isEmpty()) h.fail("the tower on the shore stands: " + st + " in " + t.offset(dx, y, dz).toShortString());
-                    }
+        // Assert structural removal before transport can place conserved rubble back in the
+        // tower's footprint. The later check is for water flow, not an empty rubble volume.
+        for (int dx = 0; dx < 5; dx++) {
+            for (int dz = 0; dz < 5; dz++) {
+                for (int y = 5; y < 60; y++) {
+                    BlockState st = h.getBlockState(t.offset(dx, y, dz));
+                    if (!st.isAir() && st.getFluidState().isEmpty()) h.fail("the tower on the shore stands: " + st + " in " + t.offset(dx, y, dz).toShortString());
                 }
             }
+        }
+        h.runAfterDelay(60, () -> {
+            for (BlockPos q : bed) if (h.getBlockState(q).isAir()) h.fail("the shore or bottom is knocked out: " + q.toShortString());
             for (BlockPos p : BlockPos.betweenClosed(t.offset(-3, -3, -3), t.offset(10, 60, 8))) {
                 if (!h.getBlockState(p).getFluidState().isEmpty() && h.getBlockState(p.below()).isAir()) h.fail("water over the void " + p.toShortString());
             }
