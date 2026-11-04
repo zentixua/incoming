@@ -1,0 +1,39 @@
+{
+  "recorded_utc": "2026-11-04T17:00:06.491838+00:00",
+  "source_head": "5d431b337563be9f4fa7bae23e5af14ff535d80b",
+  "worktree_status": "",
+  "unit_results": {
+    "tests": 1840,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "targeted_gametest": {
+    "passed": 30,
+    "failed": 0
+  },
+  "wrapper_exit": 0,
+  "build_elapsed": "4m21s",
+  "artifact_sha256": {
+    "mod/build/libs/incoming-3.10.4.jar": "4d61a99df92e396bb79eafe472eea20c05c478927d34f2a4ba8faaf55638e6f8",
+    "mod/build/libs/incoming-3.11.0.jar": "35d3420459ac5c04b5372d457974463f9413e6fd1f6eb2dbc2ca2dd1d24f4f5a",
+    "mod/build/classes/java/main/ua/zentix/incoming/nuclear/world/NuclearPrep$ArchivedShot.class": "a732706e6a79b4f0d5ed2105f693ca49a3113c4fdfddbe0e3a4e50063910b522",
+    "mod/build/classes/java/main/ua/zentix/incoming/nuclear/world/NuclearPrep$TileState.class": "c2622954197c1f135f6dd00534c3a4295da17f7763203bce68b73f48b7b6edca",
+    "mod/build/classes/java/main/ua/zentix/incoming/nuclear/world/NuclearPrep$Tile.class": "6adb2ff030039d3fbe9c5789064ead242b6d77675d6b209e3426a43bf35fd689",
+    "mod/build/classes/java/main/ua/zentix/incoming/nuclear/world/NuclearPrep$Prep.class": "817904b324918e768c8e0d1de0be81a98bda21ae1d0aa8fd8badce962a7da10b",
+    "mod/build/classes/java/main/ua/zentix/incoming/nuclear/world/NuclearPrep$Layout.class": "67f997c297558473abe0afa81ec64efe8321dcfe857f29aa0ec3bc456ef56926",
+    "mod/build/classes/java/main/ua/zentix/incoming/nuclear/world/NuclearPrep$LayoutBuild.class": "c32c04e2c7902fde4e9b4d6d80bd940c7afb59392b4b5011d67b380f2e2241ff",
+    "mod/build/classes/java/main/ua/zentix/incoming/nuclear/world/NuclearPrep$MetadataSet.class": "c72f18a0f80b5c2509891105b41e81f00f1748a731165cf8d5ad96b38ec59f90",
+    "mod/build/classes/java/main/ua/zentix/incoming/nuclear/world/NuclearPrep$MetadataReasons.class": "c85ea8db050a670f26957e610a9b762d0e1d2ea781af742589b34e955a0896a8",
+    "mod/build/classes/java/main/ua/zentix/incoming/nuclear/world/NuclearPrep$LayoutMap.class": "adc48d856c98861f6a8ab288246386c5fab0a38b3c77f971ee7ad239119899d5",
+    "mod/build/classes/java/main/ua/zentix/incoming/nuclear/world/NuclearPrep$Handoff.class": "3b8a92fc98c5025aae439aac667f40712181ca6cd6ce80e7ce78c2b89afd61fd",
+    "mod/build/classes/java/main/ua/zentix/incoming/nuclear/world/NuclearPrep.class": "9af439523b353e537a011c35aec8de1709369a57573cc37b8c5196364540e7bc",
+    "mod/build/classes/java/main/ua/zentix/incoming/nuclear/world/RuinSnapshots.class": "59cf2bb193d08c510adce98b3f37e65ebcf8dc709ac75a81948f5272336ae1f0",
+    "mod/build/classes/java/main/ua/zentix/incoming/nuclear/world/RetainedPlans.class": "6c7878d067d3c270940c0cb5a811117b40aee1027a1e37ed3edabd9c22b7bda9",
+    "mod/build/classes/java/devtest/ua/zentix/incoming/nuclear/world/RuinLayoutAdmissionGameTests.class": "d43d244f70fdf2483d0783a0ae0df43fe728ab7a09b6aec762c105a27f59a43c",
+    "mod/build/classes/java/devtest/ua/zentix/incoming/nuclear/world/RuinSnapshotAdmissionGameTests.class": "eb1077be6e8f3327ea511fd6b63961bb7c6e771a8e82c24bee2dd91f5118bf77",
+    "mod/build/classes/java/devtest/ua/zentix/incoming/nuclear/world/RuinWorkerAdmissionGameTests.class": "9dca00dedfad3502683b92ac26c43f4c4a33a52414a1b3ce5ec587e89d36baad",
+    "mod/build/classes/java/devtest/ua/zentix/incoming/nuclear/world/RuinCacheAdmissionGameTests.class": "a99e7931f474ca96c83e18bcd9a56feb473c5c8cd240a60aa167db68534d4319",
+    "mod/build/classes/java/devtest/ua/zentix/incoming/nuclear/world/RuinArchiveProgressGameTests.class": "7d5e9d85002bc00551bc439ae741b94976642b1a52b69034d1a31cceb7c63548"
+  }
+}

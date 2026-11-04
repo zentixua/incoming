@@ -1,0 +1,185 @@
+diff --git a/.claude/rules/nuclear-world.md b/.claude/rules/nuclear-world.md
+index bc0480407..c441b5b09 100644
+--- a/.claude/rules/nuclear-world.md
++++ b/.claude/rules/nuclear-world.md
+@@ -96,9 +96,13 @@ paths:
+   primed from blocks like vanilla loading, `DiskShots.Read.primed` (the ruin-queue window takes at most 4 such chunks at
+   once: `Read.cost`); unread reasons appear in “Ruins for strike #N ready”); snapshot to server thread, plan in background
+   (`RuinContext.submitDisk`), continuing after detonation (half the pool for the ruin queue); line “far rings: X of Y
+-  ready for the wave”; memory — plans, snapshots, reads and thread buffers — capped at 512 MB (heavy-zone LOD copies
++  ready for the wave”; memory — plans, snapshots, reads and thread buffers — capped at 512 MB. Existing cache
++  spill/reload uses resident ownership (`NuclearPrep.storageRoom`), not reservations for future solver threads:
++  otherwise unpinned originals cannot reach disk to free the memory that planning/material needs
++  (`nuke_archive_progress` exercises the production archive supplier under fixed cross-dimension pressure).
++  Heavy-zone LOD copies
+   for the front, `FrontLods` in `dh.md`, use the remainder after plans: taken once disk plans are ready, heap stop drops
+-  them); one area, one preparation; a prepared detonation takes preparation's location, ground and visibility
++  them; one area, one preparation; a prepared detonation takes preparation's location, ground and visibility
+   (`NuclearPrep.planned`: weather changes during flight would leave a trace seam in later-loaded chunks); live heap is
+   old generation after full/major GC, a GC that freed it (mixed G1), or any GC leaving it over the limit (`HeapWatch`
+   via collector notifications: ZGC's young pool “after GC” includes allocations during the cycle; pool sum shows
+diff --git a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinArchiveProgressGameTests.java b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinArchiveProgressGameTests.java
+new file mode 100644
+index 000000000..a692f6448
+--- /dev/null
++++ b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinArchiveProgressGameTests.java
+@@ -0,0 +1,99 @@
++package ua.zentix.incoming.nuclear.world;
++
++import java.util.UUID;
++import java.util.concurrent.CompletableFuture;
++import net.minecraft.gametest.framework.GameTest;
++import net.minecraft.gametest.framework.GameTestHelper;
++import net.minecraft.nbt.CompoundTag;
++import net.minecraft.world.level.Level;
++import net.neoforged.neoforge.gametest.GameTestHolder;
++import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
++import ua.zentix.incoming.Incoming;
++import ua.zentix.incoming.gametest.StrikeGameTests;
++import ua.zentix.incoming.nuclear.Detonation;
++
++/** Reclaiming existing snapshots must not reserve an entire future solver pool first. */
++@GameTestHolder(Incoming.MOD_ID)
++@PrefixGameTestTemplate(false)
++public final class RuinArchiveProgressGameTests {
++    private RuinArchiveProgressGameTests() {}
++
++    @GameTest(template = "range", batch = "nuke_archive_progress", timeoutTicks = 200, skyAccess = true)
++    public static void unpinnedOriginalSpillsWithoutAnExternalRefund(GameTestHelper h) throws Exception {
++        StrikeGameTests.gameSpeed(h);
++        var level = h.getLevel();
++        var blueprint = RuinStorageGameTests.fixture(h, true);
++        var old = blueprint.ctx().d;
++        var event = new Detonation(150101, old.burst(), old.groundY(), old.yieldKt(), old.surface(),
++                old.gameTime(), 0, 0, old.visibility(), 0, old.scale(), false, old.wave());
++        var world = NuclearWorld.get(level);
++        var other = NuclearWorld.get(level.getServer().getLevel(Level.NETHER));
++        long originalReservation = other.materialReservation;
++        var prep = world.prep();
++        var content = NuclearPrep.class.getDeclaredMethod("content", net.minecraft.server.level.ServerLevel.class);
++        content.setAccessible(true);
++        RuinContext[] owner = {null};
++        RuinProgress.Pass[] pass = {null};
++        String[] previousArchive = {null};
++        CompoundTag[] expected = {null};
++        long[] fixed = {0}, peak = {0}, initial = {0};
++        int[] callbacks = {0};
++        var recovered = new java.util.concurrent.atomic.AtomicReference<CompletableFuture<java.util.Optional<CompoundTag>>>();
++        long key = blueprint.centre().toLong();
++        StrikeGameTests.afterTest(h, () -> {
++            other.materialReservation = originalReservation;
++            if (owner[0] != null) world.forgetRuinsForTest(owner[0].d.id());
++            if (pass[0] != null) pass[0].archive = previousArchive[0];
++            RuinWorkers.shutdown();
++        });
++        h.succeedWhen(() -> {
++            try {
++                if (owner[0] == null) {
++                    String policy = (String) content.invoke(prep, level);
++                    h.assertTrue(policy != null, "Waiting for the actual resource-policy fingerprint");
++                    var progress = RuinProgress.get(level);
++                    h.assertTrue(progress.writable(), "Waiting for the actual progress ledger");
++                    pass[0] = progress.pass(event.id());
++                    previousArchive[0] = pass[0].archive;
++                    pass[0].archive = UUID.randomUUID() + "/" + UUID.randomUUID() + "/" + policy;
++                    var ctx = world.ruins(level, event, level.getGameTime());
++                    h.assertTrue(ctx.archive() != null, "Production restore did not install the snapshot archive");
++                    var shot = ctx.shot(level, blueprint.centre().x, blueprint.centre().z);
++                    h.assertTrue(shot != null && shot.bytes > 4096, "Fixture has no nonempty original snapshot");
++                    expected[0] = shot.saved().encode();
++                    initial[0] = ctx.shotBytes();
++                    RuinWorkers.shutdown();
++                    RuinWorkers.executor(RuinWorkers.Priority.NEAR); // Configured capacity, no resident threads.
++                    long room = Math.max(4L << 20, shot.bytes * 6);
++                    h.assertTrue(room < RuinMemory.TRANSITION_ROOM, "Fixture leaves too much room to exercise the competing reserve");
++                    other.materialReservation += NuclearPrep.PLANS_CAP - room - NuclearPrep.residentMemory(level);
++                    fixed[0] = other.materialReservation;
++                    owner[0] = ctx;
++                    h.assertTrue(NuclearPrep.memory(level) > NuclearPrep.PLANS_CAP,
++                            "Future solver/transition reservation must exceed the remaining resident room");
++                    Incoming.LOG.info("ARCHIVE_PROGRESS fixed owner {}, resident {}, future admission {}, original {} bytes, spill room {}",
++                            fixed[0], NuclearPrep.residentMemory(level), NuclearPrep.memory(level), initial[0], room);
++                }
++                var ctx = owner[0];
++                world.ruins(level, ctx.d, level.getGameTime());
++                callbacks[0]++;
++                h.assertTrue(other.materialReservation == fixed[0], "External owner was refunded during archive reclamation");
++                var clock = WorkClock.counting(1_000_000);
++                clock.start(4_000_000);
++                ctx.trimShots(Long.MAX_VALUE, clock);
++                peak[0] = Math.max(peak[0], NuclearPrep.residentMemory(level));
++                h.assertTrue(peak[0] <= NuclearPrep.PLANS_CAP, "Archive reclamation exceeded known resident ownership");
++                h.assertTrue(ctx.shotCount() == 0,
++                        "Unpinned original cannot spill/reclaim: callbacks=" + callbacks[0] + ", cached=" + ctx.shotBytes()
++                                + ", writes=" + ctx.archive().pendingWrites() + ", resident=" + NuclearPrep.residentMemory(level)
++                                + ", future=" + NuclearPrep.memory(level));
++                if (recovered.get() == null) recovered.set(ctx.archive().read(key));
++                h.assertTrue(recovered.get().isDone(), "Waiting for the real archived original");
++                var stored = recovered.get().join();
++                h.assertTrue(stored.isPresent() && stored.get().equals(expected[0]), "Reclamation changed or lost the exact original payload");
++                Incoming.LOG.info("ARCHIVE_PROGRESS reclaimed exact original after {} callbacks, peak known {}, fixed owner {}",
++                        callbacks[0], peak[0], fixed[0]);
++            } catch (ReflectiveOperationException e) { throw new IllegalStateException(e); }
++        });
++    }
++}
+diff --git a/mod/src/main/java/ua/zentix/incoming/nuclear/world/NuclearPrep.java b/mod/src/main/java/ua/zentix/incoming/nuclear/world/NuclearPrep.java
+index 8406177f7..b9a51ff48 100644
+--- a/mod/src/main/java/ua/zentix/incoming/nuclear/world/NuclearPrep.java
++++ b/mod/src/main/java/ua/zentix/incoming/nuclear/world/NuclearPrep.java
+@@ -552,6 +552,12 @@ public final class NuclearPrep {
+         return bytes + RuinWorkers.residentBufferBytes(height);
+     }
+ 
++    /** Existing cache I/O can release counted ownership. Reserving future solvers here would
++     * block the snapshot spill needed to make room for those same solvers and material. */
++    private static long storageRoom(ServerLevel level) {
++        return Math.max(0, PLANS_CAP - residentMemory(level));
++    }
++
+     static long memory(ServerLevel level, boolean reserveWorkers) {
+         long bytes = RuinInputs.detachedBytes() + RuinResults.bytes();
+         int height = level.getHeight();
+@@ -607,7 +613,7 @@ public final class NuclearPrep {
+                     if (releaseSome(level, p, RELEASE_PER_TICK) == 0) it.remove();
+                     continue;
+                 }
+-                p.plans.pump(Math.max(0, PLANS_CAP - memory(level)));
++                p.plans.pump(storageRoom(level));
+                 if (p.detonation >= 0) {
+                     rememberArchive(level, p);
+                     // handed to detonation: behind-wave zone loads squares, releases when ruins applied
+@@ -738,9 +744,9 @@ public final class NuclearPrep {
+                             level.getServer().getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT))
+                             .resolve("data/incoming-preparation/" + p.archivePath);
+             p.plans.spill(new RuinPages(info, root.resolve("plans-v" + RuinPlan.STORAGE_VERSION)),
+-                    p.ruins, p.accounting, () -> Math.max(0, PLANS_CAP - memory(level)));
++                    p.ruins, p.accounting, () -> storageRoom(level));
+             p.ruins.archive(new RuinSnapshots(new RuinPages(info, root.resolve("shots")), p.accounting,
+-                    () -> Math.max(0, PLANS_CAP - memory(level))));
++                    () -> storageRoom(level)));
+         }
+         if (p.noRuins) return;
+         if (p.layout != null) {
+@@ -854,7 +860,7 @@ public final class NuclearPrep {
+     /** Reopen the bounded cache after a detonation's preparation owner has disappeared on restart. */
+     void restore(ServerLevel level, RuinContext ctx) {
+         if (ctx.archiveChecked) {
+-            if (ctx.restoredPlans != null) ctx.restoredPlans.pump(Math.max(0, PLANS_CAP - memory(level)));
++            if (ctx.restoredPlans != null) ctx.restoredPlans.pump(storageRoom(level));
+             return;
+         }
+         String path = RuinProgress.get(level).archive(ctx.d.id());
+@@ -871,10 +877,10 @@ public final class NuclearPrep {
+                 level.getServer().getWorldData().getLevelName(), level.dimension(), "incoming_preparation");
+         ctx.restoredPlans = new RetainedPlans();
+         ctx.restoredPlans.spill(new RuinPages(info, root.resolve("plans-v" + RuinPlan.STORAGE_VERSION)), ctx, readBytes::addAndGet,
+-                () -> Math.max(0, PLANS_CAP - memory(level)));
++                () -> storageRoom(level));
+         ctx.restoredPlans.discover();
+         ctx.archive(new RuinSnapshots(new RuinPages(info, root.resolve("shots")), readBytes::addAndGet,
+-                () -> Math.max(0, PLANS_CAP - memory(level))));
++                () -> storageRoom(level)));
+     }
+ 
+     CompletableFuture<Void> closeStorage() {
