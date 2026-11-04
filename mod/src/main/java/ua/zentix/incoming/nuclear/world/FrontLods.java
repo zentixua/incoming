@@ -83,7 +83,7 @@ final class FrontLods {
     private final LongArrayList candidates = new LongArrayList();
     private int next;
     private final Long2ObjectOpenHashMap<Copy> copies = new Long2ObjectOpenHashMap<>();
-    private final RuinInbox<Built> built = new RuinInbox<>();
+    private final RuinInbox<Built> built;
     private final FrontSchedule schedule = new FrontSchedule();
     /** Bytes in held copies. */
     private long readyBytes;
@@ -101,14 +101,18 @@ final class FrontLods {
     /** Front handoff logged (copies existed); DH stats ({@link DhUpdates#takeHeldStats}) active; summary logged. */
     private boolean announced, counting, reported;
 
-    FrontLods(int strike) {
+    FrontLods(int strike, java.util.function.LongConsumer accounting) {
         this.strike = strike;
+        built = new RuinInbox<>(accounting, READ_BYTES);
     }
 
     /** Zone chunk's disk plan ready: enqueue copy (plan order, nearest first). Server thread. */
     void offer(long chunk) {
         candidates.add(chunk);
     }
+
+    /** Read reservations remain in the preparation counter until completion, even after cancellation. */
+    long retainedBytes() { return readyBytes + dhBytes; }
 
     /** Copy bytes: held, sent but still held by DH, in-flight reads. */
     long bytes() {

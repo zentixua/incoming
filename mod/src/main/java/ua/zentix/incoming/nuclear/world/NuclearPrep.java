@@ -189,8 +189,6 @@ public final class NuclearPrep {
         /** Chunks with background plans running. */
         final LongArrayList submitted = new LongArrayList();
         long nextRefresh;
-        /** Bytes in ready plans. */
-        long planBytes;
         boolean capped;
         long nextZoneReport;
         /** Chunks beyond heavy-zone edge within {@link RuinPlanner#REACH}: no prebuilt plans. */
@@ -213,7 +211,7 @@ public final class NuclearPrep {
         /** Times ready square not released because neighbor-waiting chunks lack holds (whole detonation). */
         long diagRefused;
         long nextIoReport;
-        final Long2ObjectOpenHashMap<RuinPlan> plans = new Long2ObjectOpenHashMap<>();
+        final RetainedPlans plans = new RetainedPlans();
         /** All-chunk ruins (neighbor fractures): transferred to detonation with plans. */
         @Nullable
         RuinContext ruins;
@@ -230,7 +228,7 @@ public final class NuclearPrep {
         DiskShots.Format format;
         /** In-flight disk reads (submitted, result not yet parsed) and background results. */
         final LongOpenHashSet reading = new LongOpenHashSet();
-        final RuinInbox<DiskShots.Read> reads = new RuinInbox<>();
+        final RuinInbox<DiskShots.Read> reads;
         /** Chunks absent as fully generated disk chunks: no preplans for them/neighbors. */
         final LongOpenHashSet unreadable = new LongOpenHashSet();
         /** Unread reasons ({@link DiskShots.Read#skip} before colon), for “ready” line. */
@@ -248,13 +246,16 @@ public final class NuclearPrep {
         /** Zone LOD copies from ready disk plans, into DH with front. */
         final FrontLods lods;
 
-        Prep(int strike, long detonateTime) {
+        Prep(int strike, long detonateTime, java.util.function.LongConsumer accounting) {
             this.strike = strike;
             this.detonateTime = detonateTime;
-            this.lods = new FrontLods(strike);
+            this.lods = new FrontLods(strike, accounting);
+            this.reads = new RuinInbox<>(accounting, READ_BYTES);
         }
     }
 
+    // The completion retains this counter, never the abandoned preparation/world.
+    private final java.util.concurrent.atomic.AtomicLong readBytes = new java.util.concurrent.atomic.AtomicLong();
     private final List<Prep> preps = new ArrayList<>();
     /** Strikes whose preparation failed: do not restart (otherwise error logged every tick). */
     private final java.util.Set<Integer> failed = new java.util.HashSet<>();
@@ -282,9 +283,9 @@ public final class NuclearPrep {
 
     /** Retained preparation estimates; handed-off contexts are counted by NuclearWorld, not twice here. */
     long retainedBytes() {
-        long bytes = 0;
+        long bytes = readBytes.get();
         for (Prep p : preps) {
-            bytes += p.planBytes + p.lods.bytes() + (long) p.reads.pending() * READ_BYTES;
+            bytes += p.plans.bytes() + p.lods.retainedBytes();
             if (p.ruins != null && p.detonation < 0) bytes += p.ruins.retainedBytes();
             bytes += (long) (p.order.length + p.edge.length + p.toScan.size()) * Long.BYTES;
         }
@@ -329,7 +330,7 @@ public final class NuclearPrep {
             // one area, one preparation: second strike at same places prebuilds no ruins (single-zone memory)
             if (preps.stream().anyMatch(p -> p.geometry != null && p.detonation < 0
                     && Math.hypot(p.geometry.burst().x - s.target().x, p.geometry.burst().z - s.target().z) < 2 * heavyRadius(p.geometry) + 64)) continue;
-            preps.add(new Prep(s.id(), s.detonateTime()));
+            preps.add(new Prep(s.id(), s.detonateTime(), readBytes::addAndGet));
         }
         clock.start(Math.max(1_000_000L, cap));
         for (Iterator<Prep> it = preps.iterator(); it.hasNext(); ) {
@@ -420,7 +421,7 @@ public final class NuclearPrep {
                             + "(unread {}{}; {} s to detonation), plans {} MB, snapshots {} MB, background threads {} busy {} %, heap {} of {} MB",
                     p.strike, p.nearPlans, p.everInMemory.size(), p.farPlans, p.order.length, p.farSkipped, p.unreadable.size(), why(p.unreadWhy),
                     Math.max(0, p.detonateTime - now) / 20,
-                    p.planBytes >> 20, p.ruins.shotBytes() >> 20, RuinWorkers.summary(), Math.round(RuinWorkers.utilisation() * 100),
+                    p.plans.bytes() >> 20, p.ruins.shotBytes() >> 20, RuinWorkers.summary(), Math.round(RuinWorkers.utilisation() * 100),
                     (rt.totalMemory() - rt.freeMemory()) >> 20, rt.maxMemory() >> 20);
         }
     }
@@ -496,11 +497,10 @@ public final class NuclearPrep {
     private static void keep(ServerLevel level, Prep p, long c, RuinPlan plan) {
         p.plans.put(c, plan);
         p.planned.add(c);
-        p.planBytes += plan.bytes();
-        if (p.planBytes + RuinWorkers.bufferBytes(level.getHeight()) > PLANS_CAP && !p.capped) {
+        if (p.plans.bytes() + RuinWorkers.bufferBytes(level.getHeight()) > PLANS_CAP && !p.capped) {
             p.capped = true;
             Incoming.LOG.warn("Ruins for strike #{}: finished plans take {} MB — no more ruins are pre-built (plans {}, heavy zone chunks {})",
-                    p.strike, p.planBytes >> 20, p.plans.size(), p.order.length);
+                    p.strike, p.plans.bytes() >> 20, p.plans.size(), p.order.length);
         }
     }
 
@@ -1225,7 +1225,6 @@ public final class NuclearPrep {
         p.reads.invalidate();
         p.reading.clear();
         p.plans.clear();
-        p.planBytes = 0;
     }
 
     /** Cancellation, world unload, error: release all tickets; queues no longer need ready ruins handed to detonation. */

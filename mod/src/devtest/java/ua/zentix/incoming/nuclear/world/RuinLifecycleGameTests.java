@@ -103,8 +103,8 @@ public final class RuinLifecycleGameTests {
         long before = NuclearPrep.memory(level);
         Object a = preparation(first, -1001), b = preparation(second, -1002);
         try {
-            field(a, "planBytes").setLong(a, 300L << 20);
-            field(b, "planBytes").setLong(b, 250L << 20);
+            field(field(a, "plans").get(a), "bytes").setLong(field(a, "plans").get(a), 300L << 20);
+            field(field(b, "plans").get(b), "bytes").setLong(field(b, "plans").get(b), 250L << 20);
             h.assertTrue(NuclearPrep.memory(level) == before + (550L << 20), "per-strike/dimension estimates were omitted or buffers duplicated");
             h.assertTrue(NuclearPrep.memory(level) > NuclearPrep.PLANS_CAP, "other dimension bypassed admission cap");
             h.assertTrue(!NuclearWorld.get(level).settleCanAdmit(level), "settlement ignored cross-dimension preparation");
@@ -117,12 +117,79 @@ public final class RuinLifecycleGameTests {
         h.succeed();
     }
 
+    @GameTest(template = "range", timeoutTicks = 100, batch = "nuke_lifecycle_detached", skyAccess = true)
+    @SuppressWarnings("unchecked")
+    public static void removedPreparationKeepsUnfinishedReadsCharged(GameTestHelper h) throws ReflectiveOperationException {
+        var level = h.getLevel();
+        var prep = NuclearWorld.get(level).prep();
+        long before = NuclearPrep.memory(level);
+        Object old = preparation(prep, -1003);
+        var reads = (RuinInbox<Object>) field(old, "reads").get(old);
+        var copies = (RuinInbox<Object>) field(field(old, "lods").get(old), "built").get(field(old, "lods").get(old));
+        var delayed = reads.expect();
+        var delayedCopy = copies.expect();
+        long reserved = NuclearPrep.memory(level) - before;
+        h.assertTrue(reserved > FrontLods.READ_BYTES, "both reads must be reserved");
+        prep.clear(level, new ScarQueue());
+        h.assertTrue(prep.idle(), "cancelled preparation still attached");
+        h.assertTrue(NuclearPrep.memory(level) == before + reserved, "detached reads disappeared from admission");
+        Object next = preparation(prep, -1004);
+        try {
+            delayed.accept(new Object());
+            h.assertTrue(NuclearPrep.memory(level) == before + FrontLods.READ_BYTES, "disk completion did not release exactly its reservation");
+            delayedCopy.accept(new Object());
+            h.assertTrue(NuclearPrep.memory(level) == before, "front-copy completion retained detached bytes");
+            h.assertTrue(reads.poll() == null && copies.poll() == null, "cancelled results became publishable");
+        } finally {
+            delayed.accept(new Object());
+            delayedCopy.accept(new Object());
+            preparations(prep).remove(next);
+        }
+        h.succeed();
+    }
+
+    @GameTest(template = "range", timeoutTicks = 100, batch = "nuke_lifecycle_far", skyAccess = true)
+    @SuppressWarnings("unchecked")
+    public static void cancelledFarCopyCannotPublishAfterRefire(GameTestHelper h) throws ReflectiveOperationException {
+        var level = h.getLevel();
+        var far = FarLods.get(level);
+        var pos = new net.minecraft.world.level.ChunkPos(100000, 100000);
+        var copy = new net.minecraft.world.level.chunk.ProtoChunk(pos, net.minecraft.world.level.chunk.UpgradeData.EMPTY,
+                level, level.registryAccess().registryOrThrow(net.minecraft.core.registries.Registries.BIOME), null);
+        var reading = (it.unimi.dsi.fastutil.longs.LongOpenHashSet) field(far, "reading").get(far);
+        var queue = (java.util.Queue<Object>) field(far, "built").get(far);
+        Class<?> type = Class.forName(FarLods.class.getName() + "$Completion");
+        var ctor = type.getDeclaredConstructor(FarLods.Built.class, long.class);
+        ctor.setAccessible(true);
+        long epoch = field(far, "generation").getLong(far), sent = far.stats()[0];
+        reading.add(pos.toLong());
+        far.clear(level);
+        h.assertTrue(reading.contains(pos.toLong()), "cancel released an unfinished read");
+        // A new request at the same coordinate waits behind the cancelled read.
+        var again = (it.unimi.dsi.fastutil.longs.Long2ByteOpenHashMap) field(far, "again").get(far);
+        again.put(pos.toLong(), (byte) 1);
+        queue.add(ctor.newInstance(new FarLods.Built(pos.toLong(), copy, true, false, null), epoch));
+        var tick = FarLods.class.getDeclaredMethod("tick", net.minecraft.server.level.ServerLevel.class);
+        tick.setAccessible(true);
+        ua.zentix.incoming.compat.DhUpdates.testSink(level, (l, c) -> h.fail("cancelled copy reached LOD sink"));
+        try {
+            tick.invoke(far, level);
+            h.assertTrue(!reading.contains(pos.toLong()), "old completion did not release its read slot");
+            h.assertTrue(far.stats()[0] == sent, "cancelled copy was offered for publication");
+        } finally {
+            far.clear(level);
+            ua.zentix.incoming.compat.DhUpdates.testSink(level, null);
+        }
+        h.succeed();
+    }
+
     // Test-only fixture injection: delayed completion and estimated byte counts without a large world/allocation.
     private static Object preparation(NuclearPrep prep, int id) throws ReflectiveOperationException {
         Class<?> type = Class.forName(NuclearPrep.class.getName() + "$Prep");
-        var ctor = type.getDeclaredConstructor(int.class, long.class);
+        var ctor = type.getDeclaredConstructor(int.class, long.class, java.util.function.LongConsumer.class);
         ctor.setAccessible(true);
-        Object value = ctor.newInstance(id, 100L);
+        var reads = (java.util.concurrent.atomic.AtomicLong) field(prep, "readBytes").get(prep);
+        Object value = ctor.newInstance(id, 100L, (java.util.function.LongConsumer) reads::addAndGet);
         preparations(prep).add(value);
         return value;
     }
