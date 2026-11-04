@@ -129,7 +129,8 @@ public final class RuinMatterGameTests {
             level.setBlock(base.offset(x, 10, 0), Blocks.WHITE_CONCRETE.defaultBlockState(), 2);
         }
         // The only anchor is more than three chunks away, beyond the original local window.
-        level.setBlock(base.offset(55, 9, 0), Blocks.BEDROCK.defaultBlockState(), 2);
+        level.setBlock(base.offset(55, 8, 0), Blocks.BEDROCK.defaultBlockState(), 2);
+        level.setBlock(base.offset(55, 9, 0), Blocks.GLASS.defaultBlockState(), 2);
         long seed = base.above(10).asLong();
         RuinMatter ledger = new RuinMatter();
         RuinSupport[] search = {new RuinSupport(seed)};
@@ -142,6 +143,8 @@ public final class RuinMatterGameTests {
                     for (int x = 0; x <= 55; x++) h.assertTrue(level.getBlockState(base.offset(x, 10, 0)).is(Blocks.WHITE_CONCRETE),
                             "Cross-chunk anchor was ignored");
                     held[0] = true;
+                    var lost = new RuinMatter.Piece(base.offset(55, 9, 0), Blocks.GLASS.defaultBlockState(), null, Vec3.ZERO, level.getGameTime());
+                    ledger.support(level, java.util.List.of(lost), d);
                     level.setBlock(base.offset(55, 9, 0), Blocks.AIR.defaultBlockState(), 2);
                     search[0] = new RuinSupport(seed);
                 } else {
@@ -199,6 +202,14 @@ public final class RuinMatterGameTests {
             h.assertTrue(ledger[0].deposited() == 0, "Eight metre fall cannot finish in 0.25 seconds");
             ledger[0] = RuinMatter.load(ledger[0].save(new CompoundTag(), level.registryAccess()), level.registryAccess());
             h.assertTrue(ledger[0].pending() == 4, "Save must retain all moving material");
+            var obstructions = new net.minecraft.world.level.block.Block[]{Blocks.RAIL, Blocks.TORCH, Blocks.REDSTONE_WIRE, Blocks.RAIL};
+            for (int i = 0; i < obstructions.length; i++) {
+                var at = base.offset(i - 2, 0, 0);
+                var obstruction = obstructions[i].defaultBlockState();
+                h.assertTrue(!obstruction.canBeReplaced() && obstruction.getCollisionShape(level, at).isEmpty(),
+                        "Fixture must reproduce non-replaceable, non-colliding destinations");
+                level.setBlock(at, obstruction, 2);
+            }
         });
         h.runAtTickTime(100, () -> {
             h.assertTrue(ledger[0].pending() == 0 && ledger[0].deposited() == 4,
@@ -210,6 +221,12 @@ public final class RuinMatterGameTests {
                 double[] account = ledger[0].balance(types[i]);
                 h.assertTrue(account[0] > 0 && Math.abs(account[0] - account[2]) < 1e-9 && account[4] == 0,
                         "Material-specific balance changed on save: " + types[i]);
+            }
+            var drops = level.getEntitiesOfClass(net.minecraft.world.entity.item.ItemEntity.class,
+                    new net.minecraft.world.phys.AABB(base).inflate(8));
+            for (var item : java.util.List.of(Items.RAIL, Items.TORCH, Items.REDSTONE)) {
+                int count = drops.stream().filter(entity -> entity.getItem().is(item)).mapToInt(entity -> entity.getItem().getCount()).sum();
+                h.assertTrue(count == (item == Items.RAIL ? 2 : 1), "Displaced decoration lost or duplicated its ordinary drop: " + item);
             }
             BarrelBlockEntity barrel = (BarrelBlockEntity) level.getBlockEntity(base.offset(1, 0, 0));
             h.assertTrue(barrel != null && barrel.getItem(0).is(Items.DIAMOND) && barrel.getItem(0).getCount() == 7,

@@ -36,8 +36,8 @@ public final class NuclearTickets {
     private static final TicketType<UUID> MATTER = TicketType.create("incoming_nuclear_matter", Comparator.<UUID>naturalOrder());
 
     /** One non-ticking continuation window for structural support/material transport per dimension. */
-    static void holdMatter(ServerLevel level, ChunkPos pos, boolean hold) {
-        AreaLoader.Area area = new AreaLoader.Area(MATTER, pos, 1, new UUID(0, pos.toLong()), false);
+    static void holdMatter(ServerLevel level, ChunkPos pos, boolean hold, int radius) {
+        AreaLoader.Area area = new AreaLoader.Area(MATTER, pos, radius, new UUID(0, pos.toLong()), false);
         if (hold) StrikeWorld.get(level).areas().hold(level, area);
         else StrikeWorld.get(level).areas().release(level, area);
     }

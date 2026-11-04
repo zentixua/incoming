@@ -240,9 +240,14 @@ paths:
   finite-element model. Reloading tags or block data maps invalidates the snapshot property table.
 - `Collapse.detached` compares original contact connectivity with surviving components inside its window.
   Pre-existing detached builds remain untouched. Actual removed support faces seed `RuinSupport`: a resumable
-  contact graph across ready chunks, continuing to a protected block/world floor or a completely enumerated
-  detached component. Unknown faces wait behind a separate non-ticking material ticket, never become anchors.
-  State changes/new contacts invalidate the component before release. Source expansion, search, validation and
+  contact graph across ready chunks. The saved removed-contact journal first reconstructs the original graph:
+  release requires an original path to a protected block/world floor and no surviving path. A broken decoration
+  does not give an End island or floating build global gravity; lower neighbours are not support-loss seeds.
+  Unknown faces wait behind a separate non-ticking material ticket, never become anchors. Loader neighbour
+  notifications invalidate the entire in-progress certificate, including contacts scanned in earlier slices;
+  release also rechecks each cell and its external contacts. Never bypass notifications when adding supports.
+  Continuation removals AND deposition use `RuinPlan.callbackRadius`: non-vanilla block entities require a radius-2
+  ready neighbourhood for `onRemove`/`onPlace`, not just the two-block Sable guard. Source expansion, search, validation and
   release run in bounded batches under the nuclear work clock; no fixed bridge length declares equilibrium.
 - `RuinMatter` (`incoming_ruin_matter` SavedData) owns material after successful source removal. Capture live
   states and block-entity contents before writing; never resurrect flash-consumed blocks. Handoff IDs prevent
@@ -253,6 +258,8 @@ paths:
   half-metre substeps. It never advances beyond elapsed game time. Settlement uses the same block type and saved
   contents; logs rotate horizontally, waterlogging follows destination water. A one-block coarse repose step is
   an estimate, not measured universal friction. Fire/plants do not trap material above an otherwise valid floor.
+  Non-colliding non-replaceable decorations (rails, torches, wire) yield the destination with ordinary item drops;
+  protected blocks and block entities retain ownership. Collision and placement share the occupancy rule.
   No decorative 12%/four-block cap remains. Outside-height material stays in a saved dormant reservoir without
   acquiring chunks or consuming repeated work. Unloaded destinations remain pending, not discarded.
   These are normal-save invariants, not an atomic transaction across region files and SavedData under power loss.

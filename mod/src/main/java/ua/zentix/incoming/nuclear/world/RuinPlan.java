@@ -426,13 +426,19 @@ public final class RuinPlan {
         for (int c : cells) {
             if ((c & SLOW) == 0) continue;
             BlockState old = chunk.getBlockState(at(m, c, x0, z0, minY));
-            if (old.hasBlockEntity() && !"minecraft".equals(net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(old.getBlock()).getNamespace())) {
+            if (callbackRadius(old) > 0) {
                 return RuinPlanner.REACH;
             }
             int x = c & 15, z = (c >> 4) & 15;
             if (x < EDGE || x > 15 - EDGE || z < EDGE || z > 15 - EDGE) r = 1;
         }
         return r > 0 || SableTerrain.watched(level, chunk) ? 1 : 0;
+    }
+
+    /** Shared with post-plan support removal and material deposition (onRemove AND onPlace). */
+    static int callbackRadius(BlockState state) {
+        return state.hasBlockEntity() && !"minecraft".equals(net.minecraft.core.registries.BuiltInRegistries.BLOCK
+                .getKey(state.getBlock()).getNamespace()) ? RuinPlanner.REACH : 0;
     }
 
     /** Replacement needs neighbors ({@link #neighbourRadius}). */

@@ -25,6 +25,7 @@ import java.util.List;
  * an unloaded destination, collision or world-height limit cannot silently discard it.
  * Saved separately from the disposable planning cache, including block-entity contents.
  */
+@net.neoforged.fml.common.EventBusSubscriber(modid = "incoming")
 public final class RuinMatter extends SavedData {
     private static final String NAME = "incoming_ruin_matter";
     private static final double DT = 1.0 / 20;
@@ -56,16 +57,48 @@ public final class RuinMatter extends SavedData {
     private final it.unimi.dsi.fastutil.longs.Long2IntLinkedOpenHashMap supports = new it.unimi.dsi.fastutil.longs.Long2IntLinkedOpenHashMap();
     /** Only cold edges need to remember the removed face until their neighbour can be inspected. */
     private final it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<BlockState[]> uncertain = new it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<>();
+    /** Removed contacts reconstruct the pre-failure graph; absence of a current anchor alone is
+     * never evidence that this strike detached an originally floating build. */
+    private final java.util.Map<Integer, it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<BlockState>> originals = new java.util.HashMap<>();
     private RuinSupport search;
+    private int heldRadius;
+
+    @net.neoforged.bus.api.SubscribeEvent
+    public static void onNeighbour(net.neoforged.neoforge.event.level.BlockEvent.NeighborNotifyEvent event) {
+        if (event.getLevel() instanceof ServerLevel level) {
+            changed(level, event.getPos());
+        }
+    }
+
+    /** Our batched replacements deliberately omit vanilla neighbour cascades, so notify the
+     * continuation explicitly. Other ordinary edits arrive through the loader event above. */
+    static void changed(ServerLevel level, BlockPos at) {
+        RuinMatter ledger = level.getDataStorage().get(new Factory<>(RuinMatter::new, RuinMatter::load, null), NAME);
+        if (ledger != null && ledger.search != null) ledger.search.changed(at);
+    }
+
+    BlockState original(ServerLevel level, BlockPos at, int event) {
+        var removed = originals.get(event);
+        BlockState state = removed == null ? null : removed.get(at.asLong());
+        return state == null ? level.getBlockState(at) : state;
+    }
+
     private net.minecraft.world.level.ChunkPos held;
 
     void support(ServerLevel level, List<Piece> pieces, Detonation d) {
-        for (Piece piece : pieces) if (Blast.props(piece.state).bearing()) supportSources.addLast(new SupportSeed(piece.source, piece.state, d.id()));
+        for (Piece piece : pieces) if (Blast.props(piece.state).bearing()) {
+            originals.computeIfAbsent(d.id(), ignored -> new it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<>())
+                    .putIfAbsent(piece.source.asLong(), piece.state);
+            supportSources.addLast(new SupportSeed(piece.source, piece.state, d.id()));
+        }
         if (!pieces.isEmpty()) setDirty();
     }
 
     private void expandSupport(ServerLevel level, SupportSeed source) {
         for (var direction : net.minecraft.core.Direction.values()) {
+            // A decoration above a platform cannot have carried that platform. Side contacts and
+            // the upper face can carry a slab; the lower neighbour is not a support-loss seed.
+            if (direction == net.minecraft.core.Direction.DOWN) continue;
             BlockPos next = source.source.relative(direction);
             long key = next.asLong();
             if (Terrain.ready(level, next.getX() >> 4, next.getZ() >> 4)) {
@@ -80,19 +113,32 @@ public final class RuinMatter extends SavedData {
     }
 
     boolean ready(ServerLevel level, BlockPos at, boolean neighbours) {
-        boolean ready = neighbours ? NuclearTickets.aroundLoaded(level, at)
+        boolean loaded = neighbours ? NuclearTickets.aroundLoaded(level, at)
                 : Terrain.ready(level, at.getX() >> 4, at.getZ() >> 4);
-        if (ready) return true;
-        if (loadTick == level.getGameTime() || held != null && !NuclearTickets.neighbourhoodLoaded(level, held)) return false;
+        return loaded || request(level, at, 1);
+    }
+
+    /** Both onRemove and onPlace may traverse a mod's block-entity network. */
+    boolean readyToReplace(ServerLevel level, BlockPos at, BlockState old, BlockState placed) {
+        int radius = Math.max(RuinPlan.callbackRadius(old), RuinPlan.callbackRadius(placed));
+        if (radius == 0) return ready(level, at, true);
+        return NuclearTickets.neighbourhoodLoaded(level, new net.minecraft.world.level.ChunkPos(at), radius)
+                || request(level, at, radius);
+    }
+
+    private boolean request(ServerLevel level, BlockPos at, int radius) {
+        if (loadTick == level.getGameTime() || held != null
+                && !NuclearTickets.neighbourhoodLoaded(level, held, heldRadius)) return false;
         loadTick = level.getGameTime();
-        if (held != null) NuclearTickets.holdMatter(level, held, false);
+        if (held != null) NuclearTickets.holdMatter(level, held, false, heldRadius);
         held = new net.minecraft.world.level.ChunkPos(at);
-        NuclearTickets.holdMatter(level, held, true);
+        heldRadius = radius;
+        NuclearTickets.holdMatter(level, held, true, radius);
         return false;
     }
 
     void unload(ServerLevel level) {
-        if (held != null) NuclearTickets.holdMatter(level, held, false);
+        if (held != null) NuclearTickets.holdMatter(level, held, false, heldRadius);
         held = null;
         search = null;
     }
@@ -200,6 +246,10 @@ public final class RuinMatter extends SavedData {
         }
     }
 
+    int pendingSupport() { return supports.size() + supportSources.size(); }
+    boolean validatingSupport() { return search != null && search.validating(); }
+    boolean releasingSupport() { return search != null && search.releasing(); }
+
     boolean busy() { return !moving.isEmpty() || !supports.isEmpty() || !supportSources.isEmpty(); }
 
     public long released() { return released; }
@@ -306,7 +356,7 @@ public final class RuinMatter extends SavedData {
             }
             if (!ready(level, to, false)) return false;
             BlockState obstacle = level.getBlockState(to);
-            if (!obstacle.getCollisionShape(level, to).isEmpty()) {
+            if (!free(obstacle) || !obstacle.getCollisionShape(level, to).isEmpty()) {
                 // Collision dissipates normal momentum. The remaining piece falls beside the face;
                 // a horizontal surface may receive it only when the destination cell is empty.
                 BlockPos here = BlockPos.containing(p.x, p.y, p.z);
@@ -323,7 +373,7 @@ public final class RuinMatter extends SavedData {
                 // A wall removes horizontal momentum, not elapsed time or gravity. Otherwise
                 // each retry receives the same drag pulse and a piece sticks forever to the wall.
                 BlockPos vertical = BlockPos.containing(p.x, ny, p.z);
-                if (level.getBlockState(vertical).getCollisionShape(level, vertical).isEmpty()) {
+                if (free(level.getBlockState(vertical)) && level.getBlockState(vertical).getCollisionShape(level, vertical).isEmpty()) {
                     p.y = ny;
                     p.vy -= StructuralResponse.GRAVITY * dt;
                 } else if (ny < p.y) return settle(level, p, here);
@@ -343,13 +393,25 @@ public final class RuinMatter extends SavedData {
     }
 
     private static boolean free(BlockState state) {
-        return state.isAir() || Blast.props(state).fluid() || Blast.props(state).is(Blast.Props.REPLACEABLE);
+        Blast.Props props = Blast.props(state);
+        return state.isAir() || props.fluid() || props.is(Blast.Props.REPLACEABLE)
+                || !props.bearing() && !props.leaves() && !props.fixed() && !state.hasBlockEntity();
     }
 
     private boolean settle(ServerLevel level, Piece p, BlockPos at) {
         if (!ready(level, at, true) || at.getY() >= level.getMaxBuildHeight()) return false;
         BlockState old = level.getBlockState(at), below = level.getBlockState(at.below());
-        if (!free(old) || below.getCollisionShape(level, at.below()).isEmpty()) return false;
+        if (!free(old)) {
+            // Another owner occupied this cell during flight. Climb out of that occupied cell;
+            // do not erase a protected block or another block entity's inventory.
+            p.y = at.getY() + 1;
+            p.vx = p.vy = p.vz = 0;
+            p.tick = level.getGameTime();
+            return false;
+        }
+        // An occupied non-replaceable cell is also a discrete placement obstruction, even if its
+        // collision shape is empty. This is the same cell exclusion used above, not a retry loop.
+        if (free(below) && below.getCollisionShape(level, at.below()).isEmpty()) return false;
         // A one-block step is the estimated repose condition of coarse block-sized debris. A loose
         // column spills to a lower adjacent cell instead of building an arbitrarily tall needle.
         var directions = net.minecraft.core.Direction.Plane.HORIZONTAL.stream().toArray(net.minecraft.core.Direction[]::new);
@@ -370,8 +432,13 @@ public final class RuinMatter extends SavedData {
         if (placed.hasProperty(net.minecraft.world.level.block.state.properties.BlockStateProperties.WATERLOGGED))
             placed = placed.setValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.WATERLOGGED,
                     old.getFluidState().is(net.minecraft.tags.FluidTags.WATER));
+        if (!readyToReplace(level, at, old, placed)) return false;
+        // Non-colliding decorations yield the destination, with their ordinary drops exactly once.
+        // A block entity or protected block is never consumed by this displacement rule.
+        boolean decoration = !old.isAir() && !Blast.props(old).fluid() && !old.canBeReplaced();
         ColumnScar.replace(level, at, old, placed);
         if (level.getBlockState(at) != placed) return false;
+        if (decoration) net.minecraft.world.level.block.Block.dropResources(old, level, at);
         if (p.contents != null) {
             var entity = level.getBlockEntity(at);
             if (entity != null) {
@@ -407,6 +474,12 @@ public final class RuinMatter extends SavedData {
             double[] balance = new double[6];
             for (int k = 0; k < balance.length; k++) balance[k] = row.getDouble("v" + k);
             result.materials.put(block, balance);
+        }
+        ListTag originalTags = tag.getList("support_originals", Tag.TAG_COMPOUND);
+        for (int i = 0; i < originalTags.size(); i++) {
+            CompoundTag row = originalTags.getCompound(i);
+            result.originals.computeIfAbsent(row.getInt("event"), ignored -> new it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<>())
+                    .put(row.getLong("position"), NbtUtils.readBlockState(lookup.lookupOrThrow(Registries.BLOCK), row.getCompound("state")));
         }
         ListTag sourceTags = tag.getList("support_sources", Tag.TAG_COMPOUND);
         for (int i = 0; i < sourceTags.size(); i++) {
@@ -486,6 +559,13 @@ public final class RuinMatter extends SavedData {
         tag.putLong("dispersed", dispersed);
         tag.putDouble("dispersed_volume", dispersedVolume);
         tag.putDouble("dispersed_mass", dispersedMass);
+        ListTag originalTags = new ListTag();
+        for (var event : originals.entrySet()) for (var entry : event.getValue().long2ObjectEntrySet()) {
+            CompoundTag row = new CompoundTag();
+            row.putInt("event", event.getKey()); row.putLong("position", entry.getLongKey());
+            row.put("state", NbtUtils.writeBlockState(entry.getValue())); originalTags.add(row);
+        }
+        tag.put("support_originals", originalTags);
         ListTag sourceTags = new ListTag();
         for (SupportSeed source : supportSources) {
             CompoundTag n = new CompoundTag();
