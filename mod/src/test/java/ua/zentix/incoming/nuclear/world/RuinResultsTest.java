@@ -152,9 +152,11 @@ class RuinResultsTest {
         first.markResult(RuinPlan.EMPTY); second.markResult(RuinPlan.EMPTY);
         var field = RuinPlan.class.getDeclaredField("resultOwner"); field.setAccessible(true);
         assertNull(field.get(RuinPlan.EMPTY));
-        first.actualExit(); second.actualExit(); first.releaseToCountedOwner();
+        first.actualExit();
         assertEquals(baseline + RuinResults.OWNER_BYTES, RuinResults.bytes());
-        second.releaseToCountedOwner();
+        second.actualExit();
+        assertEquals(baseline, RuinResults.bytes());
+        first.releaseToCountedOwner(); second.releaseToCountedOwner();
     }
 
     @Test

@@ -34,7 +34,7 @@ final class RuinResults {
         private final long maximum;
         private long charged;
         @Nullable private Future<?> future;
-        private boolean marked, exited, cancelled, released;
+        private boolean marked, empty, exited, cancelled, released;
 
         private Lease(long maximum, long charged) {
             this.maximum = maximum;
@@ -50,6 +50,7 @@ final class RuinResults {
             // Attach before shrinking, so an invalid second owner cannot silently lose its reservation.
             if (plan != RuinPlan.EMPTY) plan.attachResult(this);
             marked = true;
+            empty = plan == RuinPlan.EMPTY;
             changeCharge(actual + OWNER_BYTES);
         }
 
@@ -57,7 +58,7 @@ final class RuinResults {
         synchronized void actualExit() {
             exited = true;
             if (future != null && failedOrCancelled(future)) cancelled = true;
-            if (cancelled || !marked) release();
+            if (cancelled || !marked || empty) release();
         }
 
         /** Must precede Future.cancel: cancellation does not establish actual callable exit. */
