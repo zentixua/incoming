@@ -422,3 +422,11 @@ paths:
   may admit another cold decoder before checking/charging headroom (`nuke_ledger_drain`, `nuke_ledger_admission`).
   Streaming crater retirement adds to saved aggregate totals in either compound field order; never overwrite
   totals from previously retired rows (`nuke_ledger_totals`).
+
+- `ScarQueue` never uses the synchronous `RuinPlanner.plan`/`blastsReady` path when a background plan is stale,
+  failed or expired. It retries from validated current snapshots through the bounded worker pool, including
+  ground traces with block damage disabled. No scar mark is written until a plan actually applies. A cancelled
+  future is not collectable until its worker exits (`RuinWorkers.finished`); keep its window owned meanwhile.
+  `nuke_stale_background` holds worker admission after changing planned glass and proves that the tick cannot
+  borrow a synchronous solver or mark stale output complete. Continuously edited inputs may need more retries;
+  the pressure clock and chunk-send deadline are unchanged.

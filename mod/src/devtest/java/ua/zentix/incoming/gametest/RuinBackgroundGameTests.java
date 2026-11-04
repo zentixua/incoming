@@ -1335,12 +1335,12 @@ public final class RuinBackgroundGameTests {
     }
 
     /**
-     * The background plan, which became outdated while it was being built (the player replaced the glass between snapshots and replacement), is not placed and is not
-     *  counted: the chunk receives the plan in the server thread on its own, as is, in the same queue. Previously, the replacement did not silently
-     * , and the chunk received the mark of ruins and remained intact.
+     * A player changes the planned glass after snapshot capture. While worker admission is held,
+     * stale output must neither mark the chunk ruined nor fall back to a synchronous solver.
+     * Releasing the workers allows a fresh plan to remove the changed glass and mark the chunk.
      */
     @GameTest(template = "range", timeoutTicks = 40, batch = "nuke_stale_background", skyAccess = true)
-    public static void staleBackgroundPlanRebuiltOnServer(GameTestHelper h) {
+    public static void staleBackgroundPlanRequeuedInBackground(GameTestHelper h) {
         ServerLevel level = h.getLevel();
         BlockPos glass = NuclearGameTests.CENTER.west(8);
         h.setBlock(glass, Blocks.GLASS);
@@ -1351,6 +1351,7 @@ public final class RuinBackgroundGameTests {
             for (int dz = -RuinPlanner.REACH; dz <= RuinPlanner.REACH; dz++) level.getChunk(pos.x + dx, pos.z + dz);
         }
         ScarQueue q = new ScarQueue();
+        var release = new java.util.concurrent.CountDownLatch(1);
         try {
             q.offer(chunk, d);
             long wave = ScarQueue.due(d, pos);
@@ -1360,16 +1361,28 @@ public final class RuinBackgroundGameTests {
             h.assertTrue("plan in the background".equals(q.diagState(pos.toLong(), wave)), "the plan is not sent to the background: " + q.diagState(pos.toLong(), wave));
             h.assertTrue(ua.zentix.incoming.nuclear.world.RuinWorkers.awaitForTest(ua.zentix.incoming.nuclear.world.RuinWorkers.Priority.NEAR, 60_000),
                     "the background is not ready in a minute");
-            // the player replaced the glass while the plan was being built
+            // Prevent a replacement task from racing the assertion: even an unlimited lane
+            // cannot borrow the server thread to solve this now-stale chunk.
+            RuinWorkers.fillForTest(release, RuinWorkers.Priority.SEEN);
             h.setBlock(glass, Blocks.WHITE_STAINED_GLASS);
-            for (long now = wave; now < wave + 10 && chunk.getExistingData(ModAttachments.CHUNK_SCAR).orElse(0) != d.id(); now++) {
-                clock.start(10_000_000_000L);
-                q.work(level, now, clock);
-            }
-            h.assertTrue(chunk.getExistingData(ModAttachments.CHUNK_SCAR).orElse(0) == d.id(), "no ruins: " + q.diagState(pos.toLong(), wave + 10));
+            clock.start(10_000_000_000L);
+            q.work(level, wave, clock);
+            h.assertTrue(chunk.getExistingData(ModAttachments.CHUNK_SCAR).orElse(0) != d.id(),
+                    "stale plan was synchronously rebuilt or marked applied while workers were unavailable");
+            h.assertBlockPresent(Blocks.WHITE_STAINED_GLASS, glass);
+            release.countDown();
+            h.assertTrue(RuinWorkers.awaitForTest(RuinWorkers.Priority.NEAR, 60_000), "worker gate did not release");
+            clock.start(10_000_000_000L);
+            q.work(level, wave + 1, clock);
+            h.assertTrue(RuinWorkers.awaitForTest(RuinWorkers.Priority.NEAR, 60_000), "replacement plan did not finish");
+            clock.start(10_000_000_000L);
+            q.work(level, wave + 2, clock);
+            h.assertTrue(chunk.getExistingData(ModAttachments.CHUNK_SCAR).orElse(0) == d.id(), "no ruins: " + q.diagState(pos.toLong(), wave + 2));
             h.assertBlockNotPresent(Blocks.WHITE_STAINED_GLASS, glass);
             h.assertTrue(q.ruinStats()[2] == 1, "outdated plans " + q.ruinStats()[2] + " instead of one");
         } finally {
+            release.countDown();
+            RuinWorkers.awaitForTest(RuinWorkers.Priority.NEAR, 60_000);
             q.clear(level);
         }
         h.succeed();

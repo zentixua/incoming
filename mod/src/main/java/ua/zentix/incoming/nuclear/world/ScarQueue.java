@@ -32,7 +32,7 @@ import java.util.PriorityQueue;
  * newer than its {@code chunk_scar} mark. Process no earlier than wave arrival
  * (immediately for later-loaded chunks), one whole chunk per work unit under shared time budget: write ruin
  * plan into sections ({@link RuinPlan}), either prebuilt during ICBM flight ({@link NuclearPrep}) or
- * planned on-site. Mark after ruins; unload before ruins means no mark, retry next load.
+ * planned in background from current snapshots. Mark after ruins; unload before ruins means no mark, retry next load.
  * <p>
  * Chunk stays queued while in memory, not only fully loaded: at view edge repeatedly falls below
  * full loading and returns without unloading; no further {@code ChunkEvent.Load}
@@ -40,8 +40,8 @@ import java.util.PriorityQueue;
  * detonation snapshot includes it. Otherwise lost forever, leaving untouched zone stripes.
  * <p>
  * Loaded-world edge chunk (loaded, neighbors not) need not await neighbors: ready plan needs none, background
- * plan reads disk snapshots ({@link #work}). Only edge/craft world-path replacement (radius 1) and
- * server-thread plan (window) wait; chunk holds neighbor ticket ({@link NuclearTickets#holdForScar}), vanilla
+ * plan reads disk snapshots ({@link #work}). Only replacement needing live edge/craft or block-entity
+ * access waits; the chunk holds a neighbor ticket ({@link NuclearTickets#holdForScar}), vanilla
  * loads in background, process then release. Chunks under live ticket ({@link #underHold}: square ± ticket
  * radius) take no own ticket, avoiding load spread across entire radius.
  * <p>
@@ -141,7 +141,7 @@ public final class ScarQueue {
     private static final int RUINED = 0, AGAIN = 1, WAIT = 2, MEMORY = 3;
     /**
      * Ready-queue inspection result ({@link #work(ServerLevel, Job, long)}): waiting without work (neighbors,
-     * window read, pool slot, background plan); awaiting neighbors after on-site plan; unit done (ruins, neighbor
+     * window read, pool slot, background plan); awaiting neighbors after collecting a plan; unit done (ruins, neighbor
      * fracture, window snapshots). Inspection without work is no clock unit ({@link WorkClock#spent}): test counting clock
      * would charge full unit, taking ruin budget. But all-waiting tick records no units,
      * clock always admits first unit, so entire queue would drain in tick: inspect only until
@@ -220,7 +220,7 @@ public final class ScarQueue {
     /**
      * Per detonation: [0] ready-plan ruins, [1] stale plans, [2] maximum wave lag
      * for player-visible chunks (ticks), [3] total ready-plan replacement time, [4] longest (ns),
-     * [5] maximum unseen lag, [6] on-site-plan ruins, [7] total on-site planning/replacement time,
+     * [5] maximum unseen lag, [6] fresh-plan ruins, [7] total fresh-plan collection/replacement time,
      * [8] longest (ns, server thread), [9] chunks in memory at detonation, [10] subset with loaded neighbors
      * ({@link RuinPlanner#REACH}), [11] subset using ready plan, [12] chunks sent to players before ruins,
      * [13] chunks loaded after detonation, [14]/[15] total/max wave lag (ticks),
@@ -229,7 +229,7 @@ public final class ScarQueue {
      * with loaded neighbors ([10]) using ready plan: [20]/[10] same-set fraction ([11] from all [9]),
      * [21] disk-read queue window neighbors ({@link RuinContext#requestWindow}), [22] not whole on disk,
      * [23] maximum player wait from first post-wave send request ({@link #withholds}) to ruins (ticks),
-     * [24]/[25] maximum visible-chunk lag for ready/on-site plans (ticks),
+     * [24]/[25] maximum visible-chunk lag for ready/fresh plans (ticks),
      * [26] visible chunks replanned before wave ({@link #lookAhead}: ready plan stale or absent).
      */
     private final Map<Integer, long[]> preparedStats = new HashMap<>();
@@ -457,7 +457,7 @@ public final class ScarQueue {
         return plans != null && plans.containsKey(chunk);
     }
 
-    /** Ready-plan, on-site, stale-plan counts (tests, status). */
+    /** Ready-plan, fresh-plan, stale-plan counts (tests, status). */
     public int[] ruinStats() {
         return new int[]{appliedPrepared, appliedFresh, stalePlans};
     }
@@ -905,12 +905,11 @@ public final class ScarQueue {
             st[1]++;
         }
         RuinContext ctx = NuclearWorld.get(level).ruins(level, d, now);
-        if (background(ctx, job.chunk) && ctx.running(job.chunk)) {
+        if (ctx.running(job.chunk)) {
             // plan running (preparation submitted at far priority): promote if still queued
             ctx.promote(job.chunk, RuinWorkers.Priority.SEEN);
             return plan != null;
         }
-        if (!background(ctx, job.chunk)) return plan != null;
         if (ctx.requestWindow(level, pos, RuinWorkers.Priority.SEEN) > 0) return plan != null;
         if (!ctx.submit(level, chunk, RuinWorkers.Priority.SEEN)) return plan != null;
         st[26]++;
@@ -935,8 +934,8 @@ public final class ScarQueue {
     }
 
     /**
-     * Chunk ruins: ready plan if valid, otherwise current-chunk plan. On-site plan awaits window
-     * fractures: cold neighbor fracture separate work unit; false computed it, ruins next unit.
+     * Apply a valid prepared/background plan. Stale input is resnapshotted and retried by the
+     * background queue; expensive fracture and collapse work never becomes a server-tick fallback.
      */
     private int ruin(ServerLevel level, Detonation d, LevelChunk chunk, ColumnScar.Budget budget, long lag, boolean seen) {
         long key = chunk.getPos().toLong();
@@ -984,18 +983,17 @@ public final class ScarQueue {
             plans.remove(key);
             stalePlans++;
             st[1]++;
-            // stale: on-site plan in subsequent units (background or window fractures)
+            // Stale input is resnapshotted by the background path in a later unit.
             return AGAIN;
         }
         long t0 = System.nanoTime();
         RuinContext ctx = NuclearWorld.get(level).ruins(level, d, level.getGameTime());
-        boolean server = false;
         Parked kept = parked.get(key);
         diagSource = "parked";
         if (kept != null && kept.detonation() == d.id()) {
             plan = kept.plan();
             if ((waitRadius = plan.waitsNeighbours(level, chunk)) > 0) return WAIT;
-        } else if (background(ctx, key)) {
+        } else {
             // background plan ready ({@link #work} takes only when ready): finish/apply
             diagSource = "background";
             plan = ctx.collect(level, chunk);
@@ -1004,11 +1002,6 @@ public final class ScarQueue {
                 park(key, new Parked(d.id(), plan));
                 return WAIT;
             }
-        } else {
-            if (!RuinPlanner.blastsReady(level, d, chunk)) return AGAIN;
-            plan = RuinPlanner.plan(level, d, chunk);
-            diagSource = "server thread";
-            server = true;
         }
         park(key, new Parked(d.id(), plan));
         List<LivingEntity> free = BlastBody.free(level, chunk);
@@ -1018,12 +1011,12 @@ public final class ScarQueue {
         if (plan.memoryWaiting()) return MEMORY;
         unpark(key);
         if (applied) buried(level, d, free);
-        if (!applied && !server) {
-            // background-build positions changed: rebuild on server thread from current chunk
-            // (otherwise intact chunk gets ruin mark). Server-thread plan built this tick, valid
+        if (!applied) {
+            // Changed positions require a fresh snapshot and background retry. Never mark an
+            // unapplied plan as ruined or run the solver inside this tick-budgeted lane.
             stalePlans++;
             st[1]++;
-            ctx.planOnServer(key);
+            ctx.retry(key);
             return AGAIN;
         }
         var memory = atDetonation.get(d.id());
@@ -1067,11 +1060,6 @@ public final class ScarQueue {
     private boolean hasPlan(int detonation, long chunk) {
         Parked p = parked.get(chunk);
         return pendingPlan(detonation, chunk) || p != null && p.detonation() == detonation;
-    }
-
-    /** Background plan building: destruction enabled, background plan not failed. */
-    private static boolean background(RuinContext ctx, long chunk) {
-        return ua.zentix.incoming.IncomingConfig.SERVER.nukeBlockDamage.get() && !ctx.failed(chunk);
     }
 
     /**
@@ -1162,10 +1150,10 @@ public final class ScarQueue {
      * radius {@link RuinPlanner#REACH} for non-vanilla block entities ({@link RuinPlan#neighbourRadius}); background
      * plan needs 5×5 window snapshots ({@link RuinPlanner#REACH}), memory neighbors snapshotted,
      * others disk ({@link RuinContext#requestWindow}) without world loading; non-whole disk neighbor
-     * (ungenerated) becomes solid mass like world edge; server-thread plan (destruction disabled or
-     * background plan failed) needs loaded window, neighbors loaded by ticket.
+     * (ungenerated) becomes solid mass like world edge. Failed or stale plans retry through the
+     * same bounded background path, including ground traces when block damage is disabled.
      *
-     * @return {@link #LOOKED} waiting without work; {@link #PLANNED_WAITS} on-site plan built, replacement awaits
+     * @return {@link #LOOKED} waiting without work; {@link #PLANNED_WAITS} plan collected, replacement awaits
      *      neighbors; {@link #WORKED} ruins, neighbor fracture, window snapshots
      */
     private int work(ServerLevel level, Job job, long now) {
@@ -1180,25 +1168,19 @@ public final class ScarQueue {
         LevelChunk chunk = level.getChunkSource().getChunkNow(pos.x, pos.z);
         Detonation d = job.events.get(job.event);
         RuinContext ctx = NuclearWorld.get(level).ruins(level, d, now);
-        boolean ready = hasPlan(d.id(), job.chunk), background = background(ctx, job.chunk);
+        boolean ready = hasPlan(d.id(), job.chunk);
         if (chunk == null) {
             // below full loading (view edge): ruin when full
             waited(job, NukeDiag.Wait.BELOW_FULL);
             waitNeighbours(level, job, now, 0);
             return LOOKED;
         }
-        if (!ready && !background && !NuclearTickets.neighbourhoodLoaded(level, pos, RuinPlanner.REACH)) {
-            // server-thread plan reads world window: ticket loads neighbors
-            waited(job, NukeDiag.Wait.SERVER_PLAN);
-            waitNeighbours(level, job, now, RuinPlanner.REACH);
-            return LOOKED;
-        }
         job.waitsNeighbours = false;
         boolean seen = watched(level, pos);
         // visible chunk first in ruin pool: distant tasks (LODs, disk ruins) keep pool full
         RuinWorkers.Priority priority = seen ? RuinWorkers.Priority.SEEN : RuinWorkers.Priority.NEAR;
-        boolean submit = !ready && background && !ctx.running(job.chunk);
-        if (!ready && background && ctx.running(job.chunk) && !ctx.done(job.chunk)) {
+        boolean submit = !ready && !ctx.running(job.chunk);
+        if (!ready && ctx.running(job.chunk) && !ctx.done(job.chunk)) {
             // plan building; far-priority preparation task not started promoted to wave-chunk priority
             ctx.promote(job.chunk, priority);
             waited(job, NukeDiag.Wait.BACKGROUND);
@@ -1238,10 +1220,8 @@ public final class ScarQueue {
             return CAPACITY_WAIT;
         }
         if (r == AGAIN) {
-            // neighbor fracture computed or plan stale: next unit behind already waiting jobs in same queue.
-            // At head would block all: on-site plan up to 9 one-unit window fractures plus collapse, each several ms,
-            // ready replacement 0.2 ms; netcup 16.10 one such chunk blocked 60–85 ready-plan visible chunks
-            // for 38 ticks. Plan independent of chunk order (RuinContext)
+            // Stale/failed plan: retry behind already waiting jobs. The next inspection submits
+            // fresh background work; unrelated ready plans keep progressing.
             waited(job, NukeDiag.Wait.AGAIN);
             job.ready = true;
             (seen ? readySeen : readyUnseen).addLast(job);
