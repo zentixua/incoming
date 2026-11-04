@@ -162,6 +162,7 @@ public final class NuclearPreparedFlightGameTests {
         constructor.setAccessible(true);
         field(request, "ruins").set(request, constructor.newInstance(level, geometry));
         field(request, "resolvedTarget").set(request, target);
+        ua.zentix.incoming.nuclear.world.NuclearReadyFixture.emptyWork(level, request);
         return request;
     }
 

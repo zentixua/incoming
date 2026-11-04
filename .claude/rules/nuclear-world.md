@@ -451,3 +451,7 @@ paths:
   keeps explicit near collectors until actual completion; every failed/abandoned completion fails the request.
   The window reader distinguishes source failure from legal absent/unfinished terrain. Drain owned read results
   before fresh-snapshot admission. `nuke_near_*` covers those transitions, late loads and partial handoff.
+  Owned window completions drain independently of near todo/worker admission; pending window sources block READY
+  even if another planner overtook their centre. On reload, observe a completed old task's outcome before
+  resubmitting successful stale input; failed/cancelled terminal outcomes remain visible to the handle collector.
+  `nuke_near_late_*` and `nuke_near_reload_*` cover these distinct ownership transitions.

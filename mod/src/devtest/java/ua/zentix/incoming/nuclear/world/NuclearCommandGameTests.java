@@ -234,6 +234,7 @@ public final class NuclearCommandGameTests {
             field(p, "resolvedTarget").set(p, target);
             field(p, "order").set(p, new long[0]);
             field(p, "nextFar").setInt(p, 0);
+            NuclearReadyFixture.emptyWork(level, p);
             hReady(level, handle);
             return;
         }
