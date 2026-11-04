@@ -178,22 +178,30 @@ public final class RuinWorkers {
                     try { run.run(); }
                     finally {
                         current.remove();
-                        synchronized (credit) {
-                            credit.closed = true;
-                            WORKSPACE_BYTES.addAndGet(-threadBufferBytes(credit.height));
-                            this.bytes.addAndGet(-threadBufferBytes(credit.height));
-                            credits.remove(credit);
-                        }
+                        release(credit);
                     }
                 }, "Incoming ruins #" + NUMBER.incrementAndGet());
                 thread.setDaemon(true);
                 thread.setPriority(Thread.MIN_PRIORITY);
+                // addWorker can discard a factory result if shutdown wins before Thread.start().
+                // The server's prestart call has resolved that race by the end of this grant scope.
+                room.unstarted.add(() -> {
+                    if (thread.getState() == Thread.State.NEW) release(credit);
+                });
                 return thread;
             } catch (RuntimeException | Error failure) {
-                credits.remove(credit);
-                WORKSPACE_BYTES.addAndGet(-bytes);
-                this.bytes.addAndGet(-bytes);
+                release(credit);
                 throw failure;
+            }
+        }
+
+        void release(Credit credit) {
+            synchronized (credit) {
+                if (credit.closed) return;
+                credit.closed = true;
+                WORKSPACE_BYTES.addAndGet(-threadBufferBytes(credit.height));
+                bytes.addAndGet(-threadBufferBytes(credit.height));
+                credits.remove(credit);
             }
         }
     }
@@ -206,6 +214,7 @@ public final class RuinWorkers {
 
     private static final class BirthRoom {
         long remaining;
+        final java.util.List<Runnable> unstarted = new java.util.ArrayList<>();
         BirthRoom(long remaining) { this.remaining = Math.max(0, remaining); }
         boolean take(long bytes) {
             if (bytes > remaining) return false;
@@ -240,9 +249,9 @@ public final class RuinWorkers {
                 credit.waiting = false;
             }
             // done() wakes other height waiters; never call it while holding one waiter's monitor.
-            if (interrupted) {
+            if (interrupted || isShutdown()) {
                 if (run instanceof Future<?> future) future.cancel(false);
-                thread.interrupt();
+                if (interrupted) thread.interrupt();
             }
         }
     }
@@ -275,7 +284,10 @@ public final class RuinWorkers {
             int waiting = owned.getQueue().size();
             for (int i = 0; i < waiting && owned.getPoolSize() < target; i++)
                 if (!owned.prestartCoreThread()) break;
-        } finally { BIRTH_ROOM.remove(); }
+        } finally {
+            BIRTH_ROOM.remove();
+            for (Runnable unstarted : budget.unstarted) unstarted.run();
+        }
     }
 
     private static void serviceCurrent() {

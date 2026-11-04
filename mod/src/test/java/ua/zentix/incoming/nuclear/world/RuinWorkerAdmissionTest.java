@@ -191,6 +191,61 @@ class RuinWorkerAdmissionTest {
         assertEquals(0, resident());
     }
 
+    @Test
+    void factoryResultDiscardedByShutdownReleasesItsUnstartedWorkspace() throws Exception {
+        var pool = new RuinWorkers.OwnedPool(1, HEIGHT);
+        try {
+            var factory = pool.getThreadFactory();
+            pool.setThreadFactory(run -> {
+                Thread thread = factory.newThread(run);
+                if (thread != null) pool.shutdownNow(); // STOP wins after factory grant, before start
+                return thread;
+            });
+            submit(pool, new AtomicIntegerArray(3), () -> null, RuinWorkers.Priority.SEEN);
+            pump(pool, 0, 1);
+            assertEquals(0, pool.getPoolSize());
+            assertEquals(0, resident(), "a never-started thread cannot retain workspace forever");
+        } finally { close(pool); }
+    }
+
+    @Test
+    void stopBetweenDequeueAndHeightGateCannotEnterAnUnfundedCallable() throws Exception {
+        var pool = new RuinWorkers.OwnedPool(1, HEIGHT);
+        var entered = new CountDownLatch(1);
+        var release = new CountDownLatch(1);
+        class First implements Runnable, Comparable<Object> {
+            @Override public int compareTo(Object ignored) { return 0; }
+            @Override public void run() {
+                entered.countDown();
+                try { release.await(); } catch (InterruptedException stop) { Thread.currentThread().interrupt(); }
+            }
+        }
+        try {
+            pool.execute(new First());
+            pump(pool, 0, 1);
+            assertTrue(entered.await(5, TimeUnit.SECONDS));
+            pool.observeHeight(1024);
+            var next = submit(pool, new AtomicIntegerArray(3), () -> {
+                throw new AssertionError("stopped height gate entered an unfunded callable");
+            }, RuinWorkers.Priority.SEEN);
+            var workspace = pool.getClass().getDeclaredField("workspace").get(pool);
+            var field = workspace.getClass().getDeclaredField("credits");
+            field.setAccessible(true);
+            Object credit = ((java.util.Queue<?>) field.get(workspace)).element();
+            synchronized (credit) {
+                release.countDown();
+                long until = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
+                while (!pool.getQueue().isEmpty() && System.nanoTime() < until) Thread.sleep(1);
+                assertTrue(pool.getQueue().isEmpty(), "task must be dequeued before STOP");
+                pool.shutdownNow(); // gate cannot acquire its monitor until STOP has become visible
+            }
+            assertTrue(pool.awaitTermination(5, TimeUnit.SECONDS));
+            assertTrue(next.isCancelled());
+            assertTrue(RuinWorkers.finished(next));
+        } finally { release.countDown(); close(pool); }
+        assertEquals(0, resident());
+    }
+
     private static <T> Future<T> submit(RuinWorkers.OwnedPool pool, AtomicIntegerArray counts,
                                        java.util.concurrent.Callable<T> body, RuinWorkers.Priority priority) {
         var task = new RuinWorkers.Task<>(body, priority, counts, pool);
