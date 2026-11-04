@@ -1,6 +1,7 @@
 package ua.zentix.incoming.nuclear.world;
 
 import java.util.Objects;
+import java.util.concurrent.Callable;
 import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicLong;
 import org.jetbrains.annotations.Nullable;
@@ -28,13 +29,65 @@ final class RuinResults {
         if (maxPlan > Long.MAX_VALUE - OWNER_BYTES || maxFragments > Long.MAX_VALUE - OWNER_BYTES - maxPlan) return null;
         long amount = maxPlan + maxFragments + OWNER_BYTES;
         if (room < amount) return null;
+        if (!claim(amount)) return null;
+        return new Lease(maxPlan, maxFragments, amount);
+    }
+
+    /** Fixed cache capacity remains fully owned, including when its bounded map is empty. */
+    @Nullable
+    static CacheBudget tryReserveCache(long limit, long room) {
+        if (limit < 0) throw new IllegalArgumentException("Negative cache limit");
+        if (limit > Long.MAX_VALUE - OWNER_BYTES) return null;
+        long amount = limit + OWNER_BYTES;
+        if (room < amount || !claim(amount)) return null;
+        return new CacheBudget(amount);
+    }
+
+    private static boolean claim(long amount) {
         // Admission is server-thread-only. Asynchronous changes to this counter only release bytes.
         long current;
         do {
             current = BYTES.get();
-            if (current > Long.MAX_VALUE - amount) return null;
+            if (current > Long.MAX_VALUE - amount) return false;
         } while (!BYTES.compareAndSet(current, current + amount));
-        return new Lease(maxPlan, maxFragments, amount);
+        return true;
+    }
+
+    /** Initialized only when a solver asks for a producer scope; no world-indexed registry. */
+    private static final class ProducerScope {
+        private static final ThreadLocal<Lease> CURRENT = new ThreadLocal<>();
+    }
+
+    static <T> T producing(Lease lease, Callable<T> task) throws Exception {
+        Objects.requireNonNull(lease);
+        Objects.requireNonNull(task);
+        Lease previous = ProducerScope.CURRENT.get();
+        ProducerScope.CURRENT.set(lease);
+        try { return task.call(); }
+        finally {
+            if (previous == null) ProducerScope.CURRENT.remove();
+            else ProducerScope.CURRENT.set(previous);
+        }
+    }
+
+    @Nullable
+    static Lease currentProducer() { return ProducerScope.CURRENT.get(); }
+
+    /** Numeric capacity ownership only. The caller clears its map before closing the budget. */
+    static final class CacheBudget implements AutoCloseable {
+        private long charged;
+
+        private CacheBudget(long charged) { this.charged = charged; }
+
+        synchronized long bytes() { return charged; }
+
+        synchronized void release() {
+            BYTES.addAndGet(-charged);
+            charged = 0;
+        }
+
+        @Override
+        public void close() { release(); }
     }
 
     static final class Lease {
