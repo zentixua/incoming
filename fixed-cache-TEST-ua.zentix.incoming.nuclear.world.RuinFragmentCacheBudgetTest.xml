@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.nuclear.world.RuinFragmentCacheBudgetTest" tests="11" skipped="0" failures="0" errors="0" timestamp="2026-11-04T14:58:18.984Z" hostname="zentixua-pc" time="0.309">
+  <properties/>
+  <testcase name="nestedScopesRestoreTheOuterProducerAfterBothSuccessAndFailure()" classname="ua.zentix.incoming.nuclear.world.RuinFragmentCacheBudgetTest" time="0.009"/>
+  <testcase name="cacheAndResultAdmissionShareTheSameOverflowSafeAtomicCounter()" classname="ua.zentix.incoming.nuclear.world.RuinFragmentCacheBudgetTest" time="0.0"/>
+  <testcase name="refusalAndScalarOverflowCannotChangeTheCounter()" classname="ua.zentix.incoming.nuclear.world.RuinFragmentCacheBudgetTest" time="0.0"/>
+  <testcase name="concurrentCacheCloseIsExactlyOnceWhileOtherOwnersStayCharged()" classname="ua.zentix.incoming.nuclear.world.RuinFragmentCacheBudgetTest" time="0.003"/>
+  <testcase name="cacheCloseAndResultCancellationRefundOnlyTheirOwnReservations()" classname="ua.zentix.incoming.nuclear.world.RuinFragmentCacheBudgetTest" time="0.289"/>
+  <testcase name="cancelledActualWorkerClearsScopeBeforeItsExitCallback()" classname="ua.zentix.incoming.nuclear.world.RuinFragmentCacheBudgetTest" time="0.001"/>
+  <testcase name="producerScopeIsNotInheritedByAnotherThreadOrGenericCallable()" classname="ua.zentix.incoming.nuclear.world.RuinFragmentCacheBudgetTest" time="0.001"/>
+  <testcase name="successfulScopeClearsBeforeResultPublicationAndActualExit()" classname="ua.zentix.incoming.nuclear.world.RuinFragmentCacheBudgetTest" time="0.0"/>
+  <testcase name="fixedBudgetRemainsFullWithoutAnyEntriesUntilClosed()" classname="ua.zentix.incoming.nuclear.world.RuinFragmentCacheBudgetTest" time="0.0"/>
+  <testcase name="budgetOwnsNoPayloadAndLeaseGetsNoCacheReferencesOrNewState()" classname="ua.zentix.incoming.nuclear.world.RuinFragmentCacheBudgetTest" time="0.0"/>
+  <testcase name="checkedExceptionCancellationAndErrorAlwaysRemoveTheScope()" classname="ua.zentix.incoming.nuclear.world.RuinFragmentCacheBudgetTest" time="0.001"/>
+  <system-out><![CDATA[WARN StatusConsoleListener Advanced terminal features are not available in this environment
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>
