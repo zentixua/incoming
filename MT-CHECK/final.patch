@@ -1,0 +1,139 @@
+diff --git a/mod/src/devtest/java/ua/zentix/incoming/gametest/DhGameTests.java b/mod/src/devtest/java/ua/zentix/incoming/gametest/DhGameTests.java
+index 0e7d88ab6..75d18830c 100644
+--- a/mod/src/devtest/java/ua/zentix/incoming/gametest/DhGameTests.java
++++ b/mod/src/devtest/java/ua/zentix/incoming/gametest/DhGameTests.java
+@@ -567,10 +567,20 @@ public final class DhGameTests {
+         // copies (ProtoChunk) by chunks: tick returns
+         it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<LongArrayList> copies = new it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<>();
+         long[] sendNanos = {0};
++        int[] otherCopies = {0};
+         DhUpdates.testSink(level, (l, chunk) -> {
+             if (chunk instanceof ProtoChunk) {
+-                copies.computeIfAbsent(chunk.getPos().toLong(), k -> new LongArrayList()).add(l.getGameTime());
+-                if (exhaustedBudget) sendNanos[0] += 2_000_000L;
++                // FarLods and saved-chunk updates share this sink. Only FrontLods.send spends
++                // the controlled section budget; identify the actual caller without changing production.
++                boolean held = StackWalker.getInstance().walk(frames -> frames.anyMatch(frame ->
++                        frame.getClassName().equals("ua.zentix.incoming.nuclear.world.FrontLods")
++                                && frame.getMethodName().equals("send")));
++                if (held) {
++                    copies.computeIfAbsent(chunk.getPos().toLong(), k -> new LongArrayList()).add(l.getGameTime());
++                    if (exhaustedBudget) sendNanos[0] += 2_000_000L;
++                } else if (otherCopies[0]++ == 0) {
++                    Incoming.LOG.info("DH front fixture: separate ordinary copy at {} on tick {}", chunk.getPos(), l.getGameTime());
++                }
+             }
+             DhUpdates.saved(l, chunk.getPos().x, chunk.getPos().z);
+         });
+diff --git a/mod/src/devtest/java/ua/zentix/incoming/gametest/FlashGameTests.java b/mod/src/devtest/java/ua/zentix/incoming/gametest/FlashGameTests.java
+index d60e095e6..323a98247 100644
+--- a/mod/src/devtest/java/ua/zentix/incoming/gametest/FlashGameTests.java
++++ b/mod/src/devtest/java/ua/zentix/incoming/gametest/FlashGameTests.java
+@@ -253,9 +253,13 @@ public final class FlashGameTests {
+         IncomingConfig.SERVER.nukeEffectsScale.set(hi);
+         NuclearWorld w = NuclearWorld.get(level);
+         NuclearWorld.useClock(level.getServer(), WorkClock.counting(1_000_000L));
++        NuclearEvents events = NuclearEvents.get(level);
++        int strike = events.nextId();
++        boolean[] prepared = {false};
+         java.util.List<String> handOffs = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
+         Runnable unwatch = NuclearGameTests.watchLog(line -> {
+             if (line.contains("pre-built ruins")) handOffs.add(line);
++            if (line.startsWith("Ruins for strike #" + strike + " ready:")) prepared[0] = true;
+         });
+         Runnable restore = () -> {
+             unwatch.run();
+@@ -264,9 +268,9 @@ public final class FlashGameTests {
+             NuclearStrikes.clear(level);
+             stand.discard();
+         };
+-        NuclearEvents events = NuclearEvents.get(level);
++        StrikeGameTests.afterTest(h, restore);
+         long now = level.getGameTime();
+-        events.schedule(new NuclearEvents.ScheduledStrike(events.nextId(), target, 15, true, now, now + 300, target, java.util.Optional.empty(), false));
++        events.schedule(new NuclearEvents.ScheduledStrike(strike, target, 15, true, now, now + 300, target, java.util.Optional.empty(), false));
+         BlockPos wallPos = h.absolutePos(CENTER.east(WALL_DX));
+         boolean[] checked = {false};
+         long[] tickAt = {System.nanoTime()};
+@@ -274,6 +278,9 @@ public final class FlashGameTests {
+             Detonation d = events.detonations().stream().filter(e -> e.burst().distanceTo(target) < 400).findFirst().orElse(null);
+             String failure = null;
+             if (d == null) {
++                // Layout, policy fingerprint and plans complete off-thread. Give them game time until
++                // this strike's real ready boundary, rather than consuming its flight in a few milliseconds.
++                if (!prepared[0]) RuinBackgroundGameTests.gamePace(tickAt);
+                 if (level.getGameTime() > now + 1150) failure = "there was no explosion";
+             } else if (!checked[0]) {
+                 RuinBackgroundGameTests.gamePace(tickAt);
+@@ -292,7 +299,8 @@ public final class FlashGameTests {
+                                 .append(l.shadows().length).append(" silhouettes;");
+                     }
+                     FlashMarks.Layer layer = m.layers().stream().filter(l -> l.detonation() == d.id()).findFirst().orElseThrow();
+-                    if (handOffs.stream().noneMatch(line -> line.startsWith("Detonation #" + d.id() + ":"))) failure = "the ruins were not prepared in advance: the explosion did not take preparation";
++                    if (!prepared[0]) failure = "the scheduled strike reached detonation before its real preparation completed";
++                    else if (handOffs.stream().noneMatch(line -> line.startsWith("Detonation #" + d.id() + ":"))) failure = "the ruins were not prepared in advance: the explosion did not take preparation";
+                     else if (m.layers().stream().anyMatch(l -> l.detonation() < 0) || layer.time() != d.gameTime() || layer.chars().length == 0) {
+                         failure = "scorch and wall silhouettes belong to different detonation layers #" + d.id() + " (time " + d.gameTime() + "):" + layers;
+                     }
+@@ -303,12 +311,10 @@ public final class FlashGameTests {
+                 if (level.getGameTime() < d.gameTime() + 2400) return;
+                 failure = "preparation did not release the squares: left " + w.plannedChunks() + ", squares " + w.prepTiles();
+             } else {
+-                restore.run();
+                 h.succeed();
+                 return;
+             }
+             if (failure != null) {
+-                restore.run();
+                 throw new net.minecraft.gametest.framework.GameTestAssertException(failure);
+             }
+         });
+diff --git a/mod/src/devtest/java/ua/zentix/incoming/gametest/NuclearGameTests.java b/mod/src/devtest/java/ua/zentix/incoming/gametest/NuclearGameTests.java
+index 6fc115fed..48567f9c8 100644
+--- a/mod/src/devtest/java/ua/zentix/incoming/gametest/NuclearGameTests.java
++++ b/mod/src/devtest/java/ua/zentix/incoming/gametest/NuclearGameTests.java
+@@ -1191,6 +1191,12 @@ public final class NuclearGameTests {
+         WorkClock clock = WorkClock.counting(1_000_000L);
+         NuclearWorld.useClock(level.getServer(), clock);
+         NuclearEvents events = NuclearEvents.get(level);
++        StrikeGameTests.afterTest(h, () -> {
++            unwatch.run();
++            IncomingConfig.SERVER.nukeEffectsScale.set(scale);
++            NuclearWorld.useClock(level.getServer(), new WorkClock());
++            NuclearStrikes.clear(level);
++        });
+         long now = level.getGameTime();
+         Vec3 target = Vec3.atBottomCenterOf(h.absolutePos(CENTER));
+         events.schedule(new NuclearEvents.ScheduledStrike(events.nextId(), target, 15, true, now, now + 300, target, java.util.Optional.empty(), false));
+@@ -1200,6 +1206,8 @@ public final class NuclearGameTests {
+             String failure = null;
+             if (!events.scheduled().isEmpty()) {
+                 plannedBefore[0] = w.plannedChunks();
++                // Wait for an actual asynchronous plan before accelerating the remaining flight.
++                if (plannedBefore[0] <= 0) RuinBackgroundGameTests.gamePace(tickAt);
+                 if (plannedBefore[0] > 0) {
+                     // it started to rain during the flight: the explosion was still with the visibility that was used to prepare the ruins
+                     Detonation f = NuclearWarhead.geometry(level, target, 15, true, IncomingConfig.SERVER.nukeEffectsScale.get().floatValue());
+@@ -1228,22 +1236,14 @@ public final class NuclearGameTests {
+                     // we wait until preparation releases the ticket; didn’t let go by the deadline - failure with her score lower, not a timeout
+                     if (level.getGameTime() <= now + 850) return;
+                 } else {
+-                    unwatch.run();
+                     h.assertTrue(clock.maxUnitsPerTick() <= IncomingConfig.SERVER.workBudgetMs.get(), "per tick " + clock.maxUnitsPerTick() + " units");
+                     h.assertTrue(diag.isEmpty(), "diagnostic lines without property: " + diag);
+                     h.assertTrue(Thread.getAllStackTraces().keySet().stream().noneMatch(t -> t.getName().equals("incoming-nuke-diag")), "diagnostic flow without property");
+-                    IncomingConfig.SERVER.nukeEffectsScale.set(scale);
+-                    NuclearWorld.useClock(level.getServer(), new WorkClock());
+-                    NuclearStrikes.clear(level);
+                     h.succeed();
+                     return;
+                 }
+             }
+             if (failure != null || level.getGameTime() > now + 850) {
+-                unwatch.run();
+-                IncomingConfig.SERVER.nukeEffectsScale.set(scale);
+-                NuclearWorld.useClock(level.getServer(), new WorkClock());
+-                NuclearStrikes.clear(level);
+                 throw new net.minecraft.gametest.framework.GameTestAssertException(failure != null ? failure
+                         : "the detonation did not go through to the end: ready " + plannedBefore[0] + ", according to plan " + w.ruinStats()[0] + ", left " + w.plannedChunks()
+                         + ", squares " + w.prepTiles() + ", detonation " + (d != null) + ", glass " + glassGone[0]);

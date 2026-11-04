@@ -1,0 +1,22 @@
+diff --git a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinSettleGameTests.java b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinSettleGameTests.java
+index 6114cb36a..e559087a1 100644
+--- a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinSettleGameTests.java
++++ b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinSettleGameTests.java
+@@ -357,7 +357,17 @@ public final class RuinSettleGameTests {
+             settle.clear(level);
+             NuclearWorld.get(level).clear(level);
+         });
++        int[] diagnosticTicks = {0};
+         h.onEachTick(() -> {
++            if (++diagnosticTicks[0] % 100 == 1) {
++                Incoming.LOG.info("FIXTUREDIAG settle tick={} admit={} room={} held={} reads={} pending={}",
++                        diagnosticTicks[0], NuclearWorld.get(level).settleCanAdmit(level),
++                        NuclearWorld.get(level).settleMemoryRoom(level), settle.held(), settle.reads(), p.pending.size());
++                for (ServerLevel other : level.getServer().getAllLevels()) {
++                    if (other.hasData(ModAttachments.NUCLEAR_WORLD)) Incoming.LOG.info("FIXTUREDIAG dimension={} prepIdle={} planned={} tiles={}",
++                            other.dimension().location(), NuclearWorld.get(other).prep().idle(), NuclearWorld.get(other).plannedChunks(), NuclearWorld.get(other).prepTiles());
++                }
++            }
+             clock.start(3_000_000);
+             inside[0] = true;
+             try { settle.work(level, events, clock); } finally { inside[0] = false; }
