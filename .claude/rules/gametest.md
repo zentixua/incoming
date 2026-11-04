@@ -151,3 +151,9 @@ paths:
   Direct map insertion leaves `used=0`: a later shard batch crosses the 100-tick sweep after the 600-tick
   idle horizon, detaches the context, then resubmits through stale input ownership. `nuke_source_progress`
   starts after that horizon and crosses a real sweep while preserving fixed external memory pressure.
+
+- A standalone `ScarQueue` fixture that ends with a pending consumer must also retire its synthetic
+  world context with `forgetRuinsForTest`. Queue clear releases jobs/tickets, not that context's assembling
+  window. `nuke_look_ahead` verifies that an independent background consumer can start after cleanup.
+- Craft hull-order checks place the charge above the platform and test initial shielding from that same
+  source. A charge inside the platform can remain shielded after the entire selected hull disappears.

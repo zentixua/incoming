@@ -482,7 +482,9 @@ public final class WorkGameTests {
         level.getServer().getCommands().performPrefixedCommand(level.getServer().createCommandSourceStack().withLevel(level).withPermission(4)
                 .withSuppressedOutput(), String.format(Locale.ROOT, "sable assemble area %d %d %d %d %d %d",
                 a.getX(), a.getY(), a.getZ(), b.getX(), b.getY(), b.getZ()));
-        Vec3 c = Vec3.atBottomCenterOf(h.absolutePos(CENTER));
+        // Keep the charge above the platform, as the sight-line prerequisite assumes.
+        // A charge inside its floor may stay shielded after every hull block is removed.
+        Vec3 c = Vec3.atBottomCenterOf(h.absolutePos(CENTER.above()));
         List<BlockPos> plot = new ArrayList<>();
         long[] at = {-1}, damaged = {-1};
         boolean[] hullGoneAtDamage = {false};
@@ -495,7 +497,7 @@ public final class WorkGameTests {
                 return super.hurt(source, amount);
             }
         };
-        body.setPos(c.add(7, 1, 0));
+        body.setPos(c.add(7, 0, 0));
         body.setNoAi(true);
         body.setNoGravity(true);
         level.addFreshEntity(body);
@@ -525,8 +527,11 @@ public final class WorkGameTests {
             // Sable need not finish assembly in the same tick: explode once the platform beneath the craft is empty
             if (at[0] >= 0 || waited[0]++ != 5) return;
             h.assertTrue(level.getBlockState(a).isAir(), "craft not assembled: " + level.getBlockState(a));
+            BlockPos source = BlockPos.containing(c);
+            h.assertTrue(level.getBlockState(source).getCollisionShape(level, source).isEmpty(),
+                    "craft ordering charge is inside the platform");
             WorkScheduler.useImpactClock(level.getServer(), WorkClock.counting(MS));
-            h.assertTrue(net.minecraft.world.level.Explosion.getSeenPercent(c.add(0, 1 + 1e-5, 0), body) == 0,
+            h.assertTrue(net.minecraft.world.level.Explosion.getSeenPercent(c.add(0, 1e-5, 0), body) == 0,
                     "craft does not initially shield the body");
             Warheads.detonate(level, WeaponType.MISSILE, c, null, null);
         });
