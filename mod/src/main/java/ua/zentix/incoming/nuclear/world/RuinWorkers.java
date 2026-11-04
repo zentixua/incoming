@@ -25,7 +25,7 @@ import java.util.concurrent.atomic.AtomicLong;
  * <p>
  * Thread count: {@code ruin_threads}, 0 automatic: all cores except game reserve, {@code cores − 1 (server thread)
  * − 1 (own game: client render thread for integrated server) − 1 (vanilla: chunk I/O, generation, garbage
- * collector)}, at least one. No cap: more cores build distant rings faster. Java thread priorities have no
+ * collector)}, at least one. This is an upper bound: solver-buffer memory also limits parallelism. Java thread priorities have no
  * effect on Linux, so only count and tick adaptation leave room for game: once per second, external tick
  * time over last second (tick minus mod lanes) above threshold ({@link #MARGIN_MS}) reduces active threads by
  * a quarter (at least one), below adds one (at most pool thread count). Chosen count and every
@@ -82,8 +82,12 @@ public final class RuinWorkers {
     private static volatile AtomicIntegerArray IN_FLIGHT = new AtomicIntegerArray(Priority.values().length);
     @Nullable
     private static ThreadPoolExecutor pool;
-    /** Configured (or core-derived) thread count and currently active count (tick adaptation). */
+    /** Memory-bounded thread count and currently active count (tick adaptation). */
     private static int size, active;
+    /** Split the shared cap between solver workspace and retained inputs/results; transition room stays free. */
+    static final long BUFFER_CAP = (NuclearPrep.PLANS_CAP - RuinMemory.TRANSITION_ROOM) / 2;
+    /** Highest dimension seen this pool lifetime: ThreadLocal arrays do not shrink between tasks. */
+    private static int bufferHeight = 384;
     /** Thread busy time since pool start, ns (thread utilization in summary). */
     private static final AtomicLong BUSY = new AtomicLong();
     private static long startedAt;
@@ -112,7 +116,10 @@ public final class RuinWorkers {
 
     private static ThreadPoolExecutor pool() {
         boolean integrated = integrated();
-        int n = threads(integrated);
+        MinecraftServer server = net.neoforged.neoforge.server.ServerLifecycleHooks.getCurrentServer();
+        if (server != null) for (var level : server.getAllLevels()) configureHeight(level.getHeight());
+        int desired = threads(integrated);
+        int n = memoryThreads(desired, bufferHeight);
         if (pool != null && size == n) return pool;
         if (pool != null) {
             // Resize the same lifetime: queued work and its captured snapshots must not drain in a
@@ -123,19 +130,25 @@ public final class RuinWorkers {
         }
         size = active = n;
         lowered = raised = 0;
-        pool = new ThreadPoolExecutor(n, n, 30, TimeUnit.SECONDS, new PriorityBlockingQueue<>(), r -> {
+        pool = newPool(n);
+        startedAt = System.nanoTime();
+        BUSY.set(0);
+        int manual = IncomingConfig.SERVER.nukeRuinThreads.get();
+        Incoming.LOG.info("Ruins: background threads {} (desired {}; {}; cores {}, left to the game {}{})", n, desired,
+                manual > 0 ? "from the ruin_threads setting" : "automatic", Runtime.getRuntime().availableProcessors(),
+                manual > 0 ? 0 : reserve(integrated), integrated ? ", integrated server" : "");
+        return pool;
+    }
+
+    static ThreadPoolExecutor newPool(int threads) {
+        var executor = new ThreadPoolExecutor(threads, threads, 30, TimeUnit.SECONDS, new PriorityBlockingQueue<>(), r -> {
             Thread t = new Thread(r, "Incoming ruins #" + NUMBER.incrementAndGet());
             t.setDaemon(true);
             t.setPriority(Thread.MIN_PRIORITY);
             return t;
         });
-        pool.allowCoreThreadTimeOut(true);
-        startedAt = System.nanoTime();
-        BUSY.set(0);
-        int manual = IncomingConfig.SERVER.nukeRuinThreads.get();
-        Incoming.LOG.info("Ruins: background threads {} ({}; cores {}, left to the game {}{})", n, manual > 0 ? "from the ruin_threads setting" : "automatic",
-                Runtime.getRuntime().availableProcessors(), manual > 0 ? 0 : reserve(integrated), integrated ? ", integrated server" : "");
-        return pool;
+        executor.allowCoreThreadTimeOut(true);
+        return executor;
     }
 
     /** Tasks held in pool at once (running/queued). */
@@ -363,7 +376,7 @@ public final class RuinWorkers {
         Incoming.LOG.info("Ruins: background threads working {} of {} (server tick without mod lanes {} ms)", active, size, String.format(java.util.Locale.ROOT, "%.1f", ms));
     }
 
-    private static void resize(ThreadPoolExecutor executor, int threads) {
+    static void resize(ThreadPoolExecutor executor, int threads) {
         if (threads < executor.getCorePoolSize()) {
             executor.setCorePoolSize(threads);
             executor.setMaximumPoolSize(threads);
@@ -383,9 +396,35 @@ public final class RuinWorkers {
         return size + " (working " + active + ", lowered " + lowered + ", raised " + raised + ", tasks abandoned " + expired + ")";
     }
 
-    /** All pool-thread solver buffers, bytes ((est.) for 48×48 window through world height: 15 bytes per position, including an uncompressed property reference). */
+    /** Full-height solver workspace estimate, including an uncompressed property reference (15 bytes/cell). */
+    static long threadBufferBytes(int height) {
+        return (long) RuinWindow.SIDE * RuinWindow.SIDE * height * 15;
+    }
+
+    static int memoryThreads(int desired, int height) {
+        return (int) Math.max(1, Math.min(desired, BUFFER_CAP / threadBufferBytes(height)));
+    }
+
+    /** Observe all server dimension heights before admission, including before a pool exists. */
+    static void configureHeight(int height) {
+        bufferHeight = Math.max(bufferHeight, height);
+        if (pool == null) return;
+        int bounded = memoryThreads(threads(integrated()), bufferHeight);
+        if (bounded == size) return;
+        size = bounded;
+        active = Math.min(active, size);
+        resize(pool, active);
+    }
+
+    /** Future admitted workers plus still-live downsized threads; never reserve the raw configured count. */
     static long bufferBytes(int height) {
-        return (long) Math.max(size, pool == null ? 0 : pool.getPoolSize()) * RuinWindow.SIDE * RuinWindow.SIDE * height * 15;
+        configureHeight(height);
+        return bufferBytes(pool, threads(integrated()), bufferHeight);
+    }
+
+    static long bufferBytes(@Nullable ThreadPoolExecutor executor, int desired, int height) {
+        return (long) Math.max(memoryThreads(desired, height), executor == null ? 0 : executor.getPoolSize())
+                * threadBufferBytes(height);
     }
 
     /**
@@ -393,11 +432,12 @@ public final class RuinWorkers {
      * using configured size here would permanently stop settlement on large-core machines even after they exit.
      */
     static long residentBufferBytes(int height) {
-        return residentBufferBytes(pool, height);
+        configureHeight(height);
+        return residentBufferBytes(pool, bufferHeight);
     }
 
     static long residentBufferBytes(@Nullable ThreadPoolExecutor executor, int height) {
-        return executor == null ? 0 : (long) executor.getPoolSize() * RuinWindow.SIDE * RuinWindow.SIDE * height * 15;
+        return executor == null ? 0 : (long) executor.getPoolSize() * threadBufferBytes(height);
     }
 
     /** Fraction of thread time busy since pool start (for “ready” line). */
@@ -421,6 +461,8 @@ public final class RuinWorkers {
         ThreadPoolExecutor p = pool;
         pool = null;
         lastAdapt = -ADAPT_EVERY;
+        bufferHeight = 384;
+        size = active = 0;
         if (p == null) return true;
         java.util.List<Runnable> queued = p.shutdownNow();
         // run will not be called: remove from priority counts
