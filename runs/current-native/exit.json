@@ -1,0 +1,19 @@
+{
+  "code": 0,
+  "start_epoch": 1793790013.265264,
+  "end_epoch": 1793790178.6978333,
+  "profiling": {
+    "origin_epoch_ms": 1793790028447.7842,
+    "baseline_t_ms": 85313.04,
+    "requested_start_epoch": 1793790122.2608242,
+    "duration_s": 5,
+    "pid": 309986,
+    "asprof_launch_epoch": 1793790122.2611167,
+    "jfr_command_epoch": 1793790122.261381,
+    "jfr_return_epoch": 1793790122.833382,
+    "jfr_start_returncode": 0,
+    "asprof_returncode": 0,
+    "controller_end_epoch": 1793790127.5158815,
+    "status": "collected"
+  }
+}

@@ -27,7 +27,7 @@ The code fix is functionally confirmed; the noisy end-to-end distribution does n
 
 ## Attribution and limits
 
-Separate native/JFR recordings identify the synchronous `Probes → FxLayer.describeTiming → SceneDepth.lodShare → glGetTexImage` path and the float scan. In the main diagnostic it appears in401 of23086 render CPU samples; AP diagnostic567 of22184. These are inclusive sampled counts, not exact durations. The main diagnostic's381.220ms cold frame has zero lodShare samples; its work is mixed client-tick/render/cold initialization. The AP diagnostic's381.135ms frame includes28/153 render samples through the probe. This does not attribute the whole hitch to readback.
+Separate native/JFR recordings identify the synchronous `Probes → FxLayer.describeTiming → SceneDepth.lodShare → glGetTexImage` path and the float scan. In the main diagnostic it appears in401 of23086 render CPU samples; AP diagnostic567 of22184. These are inclusive sampled counts, not exact durations. A later explicit TID audit confirms these original counts; the separate current-native name collision is corrected in DUST.md. The main diagnostic's381.220ms cold frame has zero lodShare samples; its work is mixed client-tick/render/cold initialization. The AP diagnostic's381.135ms frame includes28/153 render samples through the probe. This does not attribute the whole hitch to readback.
 
 The main native window has foreign CPU0.01mean/0.06max cores. The AP native window co-ran other work:1.42mean/3.01max cores, including a build. Its stacks establish active paths, not comparative latency. A separate AP late-frame clip concentrates render CPU in animated-texture upload; no supported-setting A/B was performed, and AP was rejected for correctness first. Main whole-window BlastPulse has only15 sampled render records; no DSP change was justified.
 
@@ -36,3 +36,7 @@ Smoke preparation, cloud drawing and vanilla particles remain substantial curren
 ## Source validation
 
 The no-context regression fails on the original GL readback and passes with the guard. Full build1784 units and touched blast-radius GameTest pass; fresh independent source review has no serious finding. Final PR head0744ff00d includes checked main fixture fixes and required green CI41812062730. Original AP compatibility PNGs and lossless audio, raw gzip frame/event/host rows, exact manifests/plans, review reports and native clips accompany this document. No new look/audio capture is required for this telemetry-only source change.
+
+## Subsequent current-main allocation fix
+
+[Conventional dust allocation and final native100 A/B/A](DUST.md) records the bounded current-source diagnosis, independent review,65.5% fixture allocation reduction and final runtime comparison for PR582. All three workloads pass; long frames remain, and complete client hitch resolution is not claimed.

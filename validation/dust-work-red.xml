@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.client.fx.smoke.GroundDustWorkTest" tests="1" skipped="0" failures="1" errors="0" timestamp="2026-11-04T11:21:10.893Z" hostname="zentixua-pc" time="0.081">
+  <properties/>
+  <testcase name="lifetimeProbesHaveBoundedAllocationAndRetainRewinds()" classname="ua.zentix.incoming.client.fx.smoke.GroundDustWorkTest" time="0.081">
+    <failure message="org.opentest4j.AssertionFailedError: Lifetime probes allocated 451328 bytes for 128 queries ==&gt; expected: &lt;true&gt; but was: &lt;false&gt;" type="org.opentest4j.AssertionFailedError">org.opentest4j.AssertionFailedError: Lifetime probes allocated 451328 bytes for 128 queries ==&gt; expected: &lt;true&gt; but was: &lt;false&gt;
+	at app//org.junit.jupiter.api.AssertionFailureBuilder.build(AssertionFailureBuilder.java:151)
+	at app//org.junit.jupiter.api.AssertionFailureBuilder.buildAndThrow(AssertionFailureBuilder.java:132)
+	at app//org.junit.jupiter.api.AssertTrue.failNotTrue(AssertTrue.java:63)
+	at app//org.junit.jupiter.api.AssertTrue.assertTrue(AssertTrue.java:36)
+	at app//org.junit.jupiter.api.Assertions.assertTrue(Assertions.java:214)
+	at app//ua.zentix.incoming.client.fx.smoke.GroundDustWorkTest.lifetimeProbesHaveBoundedAllocationAndRetainRewinds(GroundDustWorkTest.java:42)
+	at java.base@21.0.7/java.lang.reflect.Method.invoke(Method.java:580)
+	at java.base@21.0.7/java.util.ArrayList.forEach(ArrayList.java:1596)
+	at java.base@21.0.7/java.util.ArrayList.forEach(ArrayList.java:1596)
+</failure>
+  </testcase>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

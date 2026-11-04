@@ -1,0 +1,15 @@
+{
+  "base": "1126ffa3bf3f5f2c8eee1b2340da49c2a5663f98",
+  "candidate": "7c4b39c7987dcbc31e298c9b9a2dd93f3f58f2fb",
+  "baseline_method": "Candidate jar with entire GroundDust family compiled from pinned main using same JDK21; unchanged entries byte-identical",
+  "changed_payloads": [
+    "ua/zentix/incoming/client/fx/smoke/GroundDust$Moments.class",
+    "ua/zentix/incoming/client/fx/smoke/GroundDust$Path.class",
+    "ua/zentix/incoming/client/fx/smoke/GroundDust$Track.class",
+    "ua/zentix/incoming/client/fx/smoke/GroundDust.class"
+  ],
+  "jars": {
+    "main": "c78f7641ff997e1b8c52bb8b3c4f9c0bae40f49832353626a9eefdea4830fcb1",
+    "candidate": "1ac2669c6cb09a1f53c27aaf7e65848cb9950be8ab3fac7a0b89558d8826ed51"
+  }
+}

@@ -1,0 +1,4232 @@
+{
+  "origin_epoch_ms": 1793793504362.883,
+  "gc": [
+    {
+      "end_ms": -14850.883056640625,
+      "duration_ms": 2.428
+    },
+    {
+      "end_ms": -14679.883056640625,
+      "duration_ms": 2.665
+    },
+    {
+      "end_ms": -14528.883056640625,
+      "duration_ms": 1.994
+    },
+    {
+      "end_ms": -14430.883056640625,
+      "duration_ms": 2.107
+    },
+    {
+      "end_ms": -14176.883056640625,
+      "duration_ms": 3.584
+    },
+    {
+      "end_ms": -14170.883056640625,
+      "duration_ms": 1.36
+    },
+    {
+      "end_ms": -14170.883056640625,
+      "duration_ms": 0.024
+    },
+    {
+      "end_ms": -13466.883056640625,
+      "duration_ms": 7.118
+    },
+    {
+      "end_ms": -13088.883056640625,
+      "duration_ms": 10.854
+    },
+    {
+      "end_ms": -13080.883056640625,
+      "duration_ms": 4.647
+    },
+    {
+      "end_ms": -12886.883056640625,
+      "duration_ms": 6.769
+    },
+    {
+      "end_ms": -12822.883056640625,
+      "duration_ms": 8.78
+    },
+    {
+      "end_ms": -12800.883056640625,
+      "duration_ms": 1.246
+    },
+    {
+      "end_ms": -12785.883056640625,
+      "duration_ms": 0.036
+    },
+    {
+      "end_ms": -12565.883056640625,
+      "duration_ms": 3.891
+    },
+    {
+      "end_ms": -11940.883056640625,
+      "duration_ms": 3.181
+    },
+    {
+      "end_ms": -11910.883056640625,
+      "duration_ms": 2.413
+    },
+    {
+      "end_ms": -11901.883056640625,
+      "duration_ms": 0.925
+    },
+    {
+      "end_ms": -11890.883056640625,
+      "duration_ms": 1.475
+    },
+    {
+      "end_ms": -11886.883056640625,
+      "duration_ms": 0.024
+    },
+    {
+      "end_ms": -11768.883056640625,
+      "duration_ms": 2.335
+    },
+    {
+      "end_ms": -11618.883056640625,
+      "duration_ms": 4.231
+    },
+    {
+      "end_ms": -11607.883056640625,
+      "duration_ms": 2.086
+    },
+    {
+      "end_ms": -11595.883056640625,
+      "duration_ms": 1.164
+    },
+    {
+      "end_ms": -11590.883056640625,
+      "duration_ms": 0.036
+    },
+    {
+      "end_ms": -10835.883056640625,
+      "duration_ms": 3.712
+    },
+    {
+      "end_ms": -10711.883056640625,
+      "duration_ms": 1.81
+    },
+    {
+      "end_ms": -10690.883056640625,
+      "duration_ms": 0.774
+    },
+    {
+      "end_ms": -10678.883056640625,
+      "duration_ms": 1.077
+    },
+    {
+      "end_ms": -10674.883056640625,
+      "duration_ms": 0.031
+    },
+    {
+      "end_ms": -10476.883056640625,
+      "duration_ms": 2.774
+    },
+    {
+      "end_ms": -9986.883056640625,
+      "duration_ms": 3.169
+    },
+    {
+      "end_ms": -9617.883056640625,
+      "duration_ms": 4.281
+    },
+    {
+      "end_ms": -9597.883056640625,
+      "duration_ms": 1.649
+    },
+    {
+      "end_ms": -9590.883056640625,
+      "duration_ms": 0.044
+    },
+    {
+      "end_ms": -9444.883056640625,
+      "duration_ms": 5.467
+    },
+    {
+      "end_ms": -9206.883056640625,
+      "duration_ms": 4.269
+    },
+    {
+      "end_ms": -8962.883056640625,
+      "duration_ms": 6.02
+    },
+    {
+      "end_ms": -8937.883056640625,
+      "duration_ms": 1.893
+    },
+    {
+      "end_ms": -8930.883056640625,
+      "duration_ms": 0.047
+    },
+    {
+      "end_ms": -8657.883056640625,
+      "duration_ms": 8.076
+    },
+    {
+      "end_ms": -8436.883056640625,
+      "duration_ms": 8.241
+    },
+    {
+      "end_ms": -8278.883056640625,
+      "duration_ms": 7.781
+    },
+    {
+      "end_ms": -8240.883056640625,
+      "duration_ms": 4.041
+    },
+    {
+      "end_ms": -8227.883056640625,
+      "duration_ms": 0.057
+    },
+    {
+      "end_ms": -8130.883056640625,
+      "duration_ms": 7.14
+    },
+    {
+      "end_ms": -8003.883056640625,
+      "duration_ms": 5.768
+    },
+    {
+      "end_ms": -7890.883056640625,
+      "duration_ms": 6.278
+    },
+    {
+      "end_ms": -7843.883056640625,
+      "duration_ms": 1.903
+    },
+    {
+      "end_ms": -7827.883056640625,
+      "duration_ms": 0.051
+    },
+    {
+      "end_ms": -7637.883056640625,
+      "duration_ms": 6.762
+    },
+    {
+      "end_ms": -7451.883056640625,
+      "duration_ms": 7.754
+    },
+    {
+      "end_ms": -6602.883056640625,
+      "duration_ms": 6.674
+    },
+    {
+      "end_ms": -6548.883056640625,
+      "duration_ms": 2.21
+    },
+    {
+      "end_ms": -6531.883056640625,
+      "duration_ms": 0.051
+    },
+    {
+      "end_ms": -5918.883056640625,
+      "duration_ms": 10.593
+    },
+    {
+      "end_ms": -5493.883056640625,
+      "duration_ms": 9.614
+    },
+    {
+      "end_ms": -5019.883056640625,
+      "duration_ms": 8.158
+    },
+    {
+      "end_ms": -4947.883056640625,
+      "duration_ms": 3.207
+    },
+    {
+      "end_ms": -4924.883056640625,
+      "duration_ms": 0.07
+    },
+    {
+      "end_ms": -4434.883056640625,
+      "duration_ms": 9.134
+    },
+    {
+      "end_ms": -3723.883056640625,
+      "duration_ms": 12.532
+    },
+    {
+      "end_ms": -3500.883056640625,
+      "duration_ms": 7.908
+    },
+    {
+      "end_ms": -3421.883056640625,
+      "duration_ms": 5.088
+    },
+    {
+      "end_ms": -3391.883056640625,
+      "duration_ms": 0.061
+    },
+    {
+      "end_ms": -3088.883056640625,
+      "duration_ms": 9.167
+    },
+    {
+      "end_ms": -2514.883056640625,
+      "duration_ms": 11.236
+    },
+    {
+      "end_ms": -1979.883056640625,
+      "duration_ms": 11.534
+    },
+    {
+      "end_ms": -1883.883056640625,
+      "duration_ms": 3.239
+    },
+    {
+      "end_ms": -1854.883056640625,
+      "duration_ms": 0.055
+    },
+    {
+      "end_ms": -1766.883056640625,
+      "duration_ms": 8.066
+    },
+    {
+      "end_ms": -773.883056640625,
+      "duration_ms": 11.265
+    },
+    {
+      "end_ms": -255.883056640625,
+      "duration_ms": 10.101
+    },
+    {
+      "end_ms": -169.883056640625,
+      "duration_ms": 3.902
+    },
+    {
+      "end_ms": -136.883056640625,
+      "duration_ms": 0.058
+    },
+    {
+      "end_ms": 826.116943359375,
+      "duration_ms": 9.223
+    },
+    {
+      "end_ms": 1411.116943359375,
+      "duration_ms": 12.234
+    },
+    {
+      "end_ms": 2022.116943359375,
+      "duration_ms": 10.207
+    },
+    {
+      "end_ms": 2125.116943359375,
+      "duration_ms": 4.234
+    },
+    {
+      "end_ms": 2161.116943359375,
+      "duration_ms": 0.061
+    },
+    {
+      "end_ms": 2537.116943359375,
+      "duration_ms": 13.312
+    },
+    {
+      "end_ms": 2958.116943359375,
+      "duration_ms": 11.199
+    },
+    {
+      "end_ms": 3284.116943359375,
+      "duration_ms": 5.652
+    },
+    {
+      "end_ms": 3395.116943359375,
+      "duration_ms": 3.526
+    },
+    {
+      "end_ms": 3442.116943359375,
+      "duration_ms": 0.069
+    },
+    {
+      "end_ms": 3756.116943359375,
+      "duration_ms": 6.142
+    },
+    {
+      "end_ms": 3862.116943359375,
+      "duration_ms": 14.812
+    },
+    {
+      "end_ms": 3960.116943359375,
+      "duration_ms": 14.653
+    },
+    {
+      "end_ms": 4158.116943359375,
+      "duration_ms": 8.679
+    },
+    {
+      "end_ms": 4240.116943359375,
+      "duration_ms": 5.749
+    },
+    {
+      "end_ms": 4285.116943359375,
+      "duration_ms": 8.481
+    },
+    {
+      "end_ms": 4425.116943359375,
+      "duration_ms": 0.071
+    },
+    {
+      "end_ms": 4449.116943359375,
+      "duration_ms": 8.721
+    },
+    {
+      "end_ms": 4579.116943359375,
+      "duration_ms": 6.715
+    },
+    {
+      "end_ms": 4611.116943359375,
+      "duration_ms": 5.628
+    },
+    {
+      "end_ms": 4687.116943359375,
+      "duration_ms": 4.942
+    },
+    {
+      "end_ms": 4920.116943359375,
+      "duration_ms": 4.708
+    },
+    {
+      "end_ms": 4993.116943359375,
+      "duration_ms": 0.078
+    },
+    {
+      "end_ms": 5896.116943359375,
+      "duration_ms": 19.073
+    },
+    {
+      "end_ms": 22564.116943359375,
+      "duration_ms": 26.136
+    },
+    {
+      "end_ms": 25647.116943359375,
+      "duration_ms": 28.09
+    },
+    {
+      "end_ms": 25810.116943359375,
+      "duration_ms": 5.165
+    },
+    {
+      "end_ms": 25888.116943359375,
+      "duration_ms": 0.091
+    },
+    {
+      "end_ms": 38662.116943359375,
+      "duration_ms": 21.57
+    },
+    {
+      "end_ms": 40395.116943359375,
+      "duration_ms": 18.255
+    },
+    {
+      "end_ms": 40432.116943359375,
+      "duration_ms": 13.209
+    },
+    {
+      "end_ms": 40647.116943359375,
+      "duration_ms": 20.343
+    },
+    {
+      "end_ms": 40751.116943359375,
+      "duration_ms": 0.088
+    },
+    {
+      "end_ms": 54131.116943359375,
+      "duration_ms": 26.278
+    },
+    {
+      "end_ms": 54498.116943359375,
+      "duration_ms": 193.307
+    },
+    {
+      "end_ms": 54524.116943359375,
+      "duration_ms": 1.703
+    },
+    {
+      "end_ms": 54757.116943359375,
+      "duration_ms": 8.693
+    },
+    {
+      "end_ms": 54825.116943359375,
+      "duration_ms": 0.065
+    },
+    {
+      "end_ms": 64301.116943359375,
+      "duration_ms": 170.918
+    },
+    {
+      "end_ms": 64306.116943359375,
+      "duration_ms": 2.057
+    },
+    {
+      "end_ms": 64554.116943359375,
+      "duration_ms": 11.504
+    },
+    {
+      "end_ms": 64623.116943359375,
+      "duration_ms": 0.076
+    },
+    {
+      "end_ms": 67296.11694335938,
+      "duration_ms": 18.066
+    },
+    {
+      "end_ms": 68981.11694335938,
+      "duration_ms": 10.047
+    },
+    {
+      "end_ms": 69206.11694335938,
+      "duration_ms": 5.519
+    },
+    {
+      "end_ms": 69276.11694335938,
+      "duration_ms": 0.074
+    },
+    {
+      "end_ms": 77154.11694335938,
+      "duration_ms": 3.243
+    },
+    {
+      "end_ms": 88745.11694335938,
+      "duration_ms": 2.451
+    },
+    {
+      "end_ms": 88976.11694335938,
+      "duration_ms": 12.69
+    },
+    {
+      "end_ms": 89048.11694335938,
+      "duration_ms": 0.101
+    },
+    {
+      "end_ms": 98725.11694335938,
+      "duration_ms": 5.889
+    },
+    {
+      "end_ms": 99140.11694335938,
+      "duration_ms": 4.917
+    },
+    {
+      "end_ms": 99449.11694335938,
+      "duration_ms": 7.5
+    },
+    {
+      "end_ms": 99535.11694335938,
+      "duration_ms": 0.104
+    },
+    {
+      "end_ms": 101306.11694335938,
+      "duration_ms": 5.879
+    },
+    {
+      "end_ms": 103146.11694335938,
+      "duration_ms": 7.36
+    },
+    {
+      "end_ms": 105077.11694335938,
+      "duration_ms": 7.436
+    },
+    {
+      "end_ms": 105429.11694335938,
+      "duration_ms": 9.018
+    },
+    {
+      "end_ms": 105515.11694335938,
+      "duration_ms": 0.095
+    },
+    {
+      "end_ms": 106916.11694335938,
+      "duration_ms": 7.81
+    },
+    {
+      "end_ms": 108543.11694335938,
+      "duration_ms": 8.241
+    },
+    {
+      "end_ms": 110267.11694335938,
+      "duration_ms": 7.253
+    },
+    {
+      "end_ms": 110587.11694335938,
+      "duration_ms": 6.299
+    },
+    {
+      "end_ms": 110683.11694335938,
+      "duration_ms": 0.087
+    },
+    {
+      "end_ms": 111916.11694335938,
+      "duration_ms": 7.683
+    },
+    {
+      "end_ms": 114347.11694335938,
+      "duration_ms": 6.881
+    },
+    {
+      "end_ms": 118225.11694335938,
+      "duration_ms": 6.448
+    },
+    {
+      "end_ms": 118539.11694335938,
+      "duration_ms": 5.669
+    },
+    {
+      "end_ms": 118643.11694335938,
+      "duration_ms": 0.094
+    },
+    {
+      "end_ms": 122797.11694335938,
+      "duration_ms": 6.318
+    },
+    {
+      "end_ms": 127847.11694335938,
+      "duration_ms": 6.531
+    },
+    {
+      "end_ms": 132988.11694335938,
+      "duration_ms": 5.795
+    },
+    {
+      "end_ms": 133318.11694335938,
+      "duration_ms": 5.439
+    },
+    {
+      "end_ms": 133430.11694335938,
+      "duration_ms": 0.083
+    },
+    {
+      "end_ms": 138311.11694335938,
+      "duration_ms": 5.972
+    },
+    {
+      "end_ms": 143938.11694335938,
+      "duration_ms": 6.219
+    },
+    {
+      "end_ms": 149701.11694335938,
+      "duration_ms": 5.883
+    },
+    {
+      "end_ms": 149988.11694335938,
+      "duration_ms": 10.101
+    },
+    {
+      "end_ms": 150101.11694335938,
+      "duration_ms": 0.086
+    }
+  ],
+  "windows": {
+    "incoming-city-night-100-spread/baseline": {
+      "power_profiles": [
+        "performance"
+      ],
+      "foreign_cpu_cores": {
+        "n": 2,
+        "p50": 0.0,
+        "p95": 0.05,
+        "p99": 0.05,
+        "max": 0.05,
+        "mean": 0.025,
+        "over33": 0,
+        "over50": 0,
+        "over100": 0,
+        "over250": 0
+      },
+      "gpu_clock_mhz": {
+        "n": 2,
+        "p50": 2220.0,
+        "p95": 2550.0,
+        "p99": 2550.0,
+        "max": 2550.0,
+        "mean": 2385.0,
+        "over33": 2,
+        "over50": 2,
+        "over100": 2,
+        "over250": 2
+      },
+      "gpu_temperature_c": {
+        "n": 2,
+        "p50": 81.0,
+        "p95": 83.0,
+        "p99": 83.0,
+        "max": 83.0,
+        "mean": 82.0,
+        "over33": 2,
+        "over50": 2,
+        "over100": 0,
+        "over250": 0
+      },
+      "foreign_gpu_percent": {
+        "n": 2,
+        "p50": 2.2,
+        "p95": 5.6,
+        "p99": 5.6,
+        "max": 5.6,
+        "mean": 3.9,
+        "over33": 0,
+        "over50": 0,
+        "over100": 0,
+        "over250": 0
+      },
+      "gc_pause_ms": {
+        "n": 3,
+        "p50": 2.451,
+        "p95": 12.69,
+        "p99": 12.69,
+        "max": 12.69,
+        "mean": 5.080666666666667,
+        "over33": 0,
+        "over50": 0,
+        "over100": 0,
+        "over250": 0
+      },
+      "packets_per_tick": {
+        "c2s": null,
+        "s2c": null,
+        "incoming": null
+      },
+      "block_writes_per_tick": {
+        "total": null,
+        "air": null,
+        "fire": null
+      },
+      "block_writes_total": null,
+      "packet_counter_available": false,
+      "block_counter_available": false,
+      "native_entry_wall_ms": null,
+      "native_entry_wall_sum_ms": null
+    },
+    "incoming-drone-city-night-100-spread/t0-3": {
+      "power_profiles": [],
+      "foreign_cpu_cores": null,
+      "gpu_clock_mhz": null,
+      "gpu_temperature_c": null,
+      "foreign_gpu_percent": null,
+      "gc_pause_ms": {
+        "n": 4,
+        "p50": 4.917,
+        "p95": 7.5,
+        "p99": 7.5,
+        "max": 7.5,
+        "mean": 4.6025,
+        "over33": 0,
+        "over50": 0,
+        "over100": 0,
+        "over250": 0
+      },
+      "packets_per_tick": {
+        "c2s": null,
+        "s2c": null,
+        "incoming": null
+      },
+      "block_writes_per_tick": {
+        "total": null,
+        "air": null,
+        "fire": null
+      },
+      "block_writes_total": null,
+      "packet_counter_available": false,
+      "block_counter_available": false,
+      "native_entry_wall_ms": {
+        "n": 20,
+        "p50": 0.172096,
+        "p95": 0.409484,
+        "p99": 21.509984,
+        "max": 21.509984,
+        "mean": 1.25407065,
+        "over33": 0,
+        "over50": 0,
+        "over100": 0,
+        "over250": 0
+      },
+      "native_entry_wall_sum_ms": 25.081412999999998
+    },
+    "incoming-drone-city-night-100-spread/t3-15": {
+      "power_profiles": [
+        "performance"
+      ],
+      "foreign_cpu_cores": {
+        "n": 3,
+        "p50": 0.05,
+        "p95": 0.21,
+        "p99": 0.21,
+        "max": 0.21,
+        "mean": 0.08666666666666667,
+        "over33": 0,
+        "over50": 0,
+        "over100": 0,
+        "over250": 0
+      },
+      "gpu_clock_mhz": {
+        "n": 3,
+        "p50": 2565.0,
+        "p95": 2565.0,
+        "p99": 2565.0,
+        "max": 2565.0,
+        "mean": 2510.0,
+        "over33": 3,
+        "over50": 3,
+        "over100": 3,
+        "over250": 3
+      },
+      "gpu_temperature_c": {
+        "n": 3,
+        "p50": 69.0,
+        "p95": 69.0,
+        "p99": 69.0,
+        "max": 69.0,
+        "mean": 68.66666666666667,
+        "over33": 3,
+        "over50": 3,
+        "over100": 0,
+        "over250": 0
+      },
+      "foreign_gpu_percent": {
+        "n": 3,
+        "p50": 3.4,
+        "p95": 4.2,
+        "p99": 4.2,
+        "max": 4.2,
+        "mean": 3.2,
+        "over33": 0,
+        "over50": 0,
+        "over100": 0,
+        "over250": 0
+      },
+      "gc_pause_ms": {
+        "n": 10,
+        "p50": 7.253,
+        "p95": 9.018,
+        "p99": 9.018,
+        "max": 9.018,
+        "mean": 5.9478,
+        "over33": 0,
+        "over50": 0,
+        "over100": 0,
+        "over250": 0
+      },
+      "packets_per_tick": {
+        "c2s": null,
+        "s2c": null,
+        "incoming": null
+      },
+      "block_writes_per_tick": {
+        "total": null,
+        "air": null,
+        "fire": null
+      },
+      "block_writes_total": null,
+      "packet_counter_available": false,
+      "block_counter_available": false,
+      "native_entry_wall_ms": {
+        "n": 80,
+        "p50": 0.093787,
+        "p95": 0.483253,
+        "p99": 1.567863,
+        "max": 1.567863,
+        "mean": 0.1805936875,
+        "over33": 0,
+        "over50": 0,
+        "over100": 0,
+        "over250": 0
+      },
+      "native_entry_wall_sum_ms": 14.447495
+    },
+    "incoming-drone-city-night-100-spread/t15-35": {
+      "power_profiles": [
+        "performance"
+      ],
+      "foreign_cpu_cores": {
+        "n": 4,
+        "p50": 0.14,
+        "p95": 0.35,
+        "p99": 0.35,
+        "max": 0.35,
+        "mean": 0.195,
+        "over33": 0,
+        "over50": 0,
+        "over100": 0,
+        "over250": 0
+      },
+      "gpu_clock_mhz": {
+        "n": 4,
+        "p50": 2460.0,
+        "p95": 2550.0,
+        "p99": 2550.0,
+        "max": 2550.0,
+        "mean": 2475.0,
+        "over33": 4,
+        "over50": 4,
+        "over100": 4,
+        "over250": 4
+      },
+      "gpu_temperature_c": {
+        "n": 4,
+        "p50": 79.0,
+        "p95": 82.0,
+        "p99": 82.0,
+        "max": 82.0,
+        "mean": 79.5,
+        "over33": 4,
+        "over50": 4,
+        "over100": 0,
+        "over250": 0
+      },
+      "foreign_gpu_percent": {
+        "n": 4,
+        "p50": 0.0,
+        "p95": 5.6,
+        "p99": 5.6,
+        "max": 5.6,
+        "mean": 1.95,
+        "over33": 0,
+        "over50": 0,
+        "over100": 0,
+        "over250": 0
+      },
+      "gc_pause_ms": {
+        "n": 7,
+        "p50": 6.448,
+        "p95": 7.683,
+        "p99": 7.683,
+        "max": 7.683,
+        "mean": 5.660571428571428,
+        "over33": 0,
+        "over50": 0,
+        "over100": 0,
+        "over250": 0
+      },
+      "packets_per_tick": {
+        "c2s": null,
+        "s2c": null,
+        "incoming": null
+      },
+      "block_writes_per_tick": {
+        "total": null,
+        "air": null,
+        "fire": null
+      },
+      "block_writes_total": null,
+      "packet_counter_available": false,
+      "block_counter_available": false,
+      "native_entry_wall_ms": null,
+      "native_entry_wall_sum_ms": null
+    },
+    "incoming-drone-city-night-100-spread/t35-50": {
+      "power_profiles": [
+        "performance"
+      ],
+      "foreign_cpu_cores": {
+        "n": 3,
+        "p50": 0.07,
+        "p95": 0.21,
+        "p99": 0.21,
+        "max": 0.21,
+        "mean": 0.1,
+        "over33": 0,
+        "over50": 0,
+        "over100": 0,
+        "over250": 0
+      },
+      "gpu_clock_mhz": {
+        "n": 3,
+        "p50": 2220.0,
+        "p95": 2340.0,
+        "p99": 2340.0,
+        "max": 2340.0,
+        "mean": 2235.0,
+        "over33": 3,
+        "over50": 3,
+        "over100": 3,
+        "over250": 3
+      },
+      "gpu_temperature_c": {
+        "n": 3,
+        "p50": 84.0,
+        "p95": 85.0,
+        "p99": 85.0,
+        "max": 85.0,
+        "mean": 84.33333333333333,
+        "over33": 3,
+        "over50": 3,
+        "over100": 0,
+        "over250": 0
+      },
+      "foreign_gpu_percent": {
+        "n": 3,
+        "p50": 0.0,
+        "p95": 0.0,
+        "p99": 0.0,
+        "max": 0.0,
+        "mean": 0.0,
+        "over33": 0,
+        "over50": 0,
+        "over100": 0,
+        "over250": 0
+      },
+      "gc_pause_ms": {
+        "n": 5,
+        "p50": 5.795,
+        "p95": 6.219,
+        "p99": 6.219,
+        "max": 6.219,
+        "mean": 4.7016,
+        "over33": 0,
+        "over50": 0,
+        "over100": 0,
+        "over250": 0
+      },
+      "packets_per_tick": {
+        "c2s": null,
+        "s2c": null,
+        "incoming": null
+      },
+      "block_writes_per_tick": {
+        "total": null,
+        "air": null,
+        "fire": null
+      },
+      "block_writes_total": null,
+      "packet_counter_available": false,
+      "block_counter_available": false,
+      "native_entry_wall_ms": null,
+      "native_entry_wall_sum_ms": null
+    },
+    "incoming-drone-city-night-100-spread/total": {
+      "power_profiles": [
+        "performance"
+      ],
+      "foreign_cpu_cores": {
+        "n": 10,
+        "p50": 0.07,
+        "p95": 0.35,
+        "p99": 0.35,
+        "max": 0.35,
+        "mean": 0.134,
+        "over33": 0,
+        "over50": 0,
+        "over100": 0,
+        "over250": 0
+      },
+      "gpu_clock_mhz": {
+        "n": 10,
+        "p50": 2400.0,
+        "p95": 2565.0,
+        "p99": 2565.0,
+        "max": 2565.0,
+        "mean": 2413.5,
+        "over33": 10,
+        "over50": 10,
+        "over100": 10,
+        "over250": 10
+      },
+      "gpu_temperature_c": {
+        "n": 10,
+        "p50": 79.0,
+        "p95": 85.0,
+        "p99": 85.0,
+        "max": 85.0,
+        "mean": 77.7,
+        "over33": 10,
+        "over50": 10,
+        "over100": 0,
+        "over250": 0
+      },
+      "foreign_gpu_percent": {
+        "n": 10,
+        "p50": 0.0,
+        "p95": 5.6,
+        "p99": 5.6,
+        "max": 5.6,
+        "mean": 1.74,
+        "over33": 0,
+        "over50": 0,
+        "over100": 0,
+        "over250": 0
+      },
+      "gc_pause_ms": {
+        "n": 26,
+        "p50": 6.219,
+        "p95": 8.241,
+        "p99": 9.018,
+        "max": 9.018,
+        "mean": 5.423846153846154,
+        "over33": 0,
+        "over50": 0,
+        "over100": 0,
+        "over250": 0
+      },
+      "packets_per_tick": {
+        "c2s": null,
+        "s2c": null,
+        "incoming": null
+      },
+      "block_writes_per_tick": {
+        "total": null,
+        "air": null,
+        "fire": null
+      },
+      "block_writes_total": null,
+      "packet_counter_available": false,
+      "block_counter_available": false,
+      "native_entry_wall_ms": {
+        "n": 100,
+        "p50": 0.114667,
+        "p95": 0.483253,
+        "p99": 1.567863,
+        "max": 21.509984,
+        "mean": 0.39528908,
+        "over33": 0,
+        "over50": 0,
+        "over100": 0,
+        "over250": 0
+      },
+      "native_entry_wall_sum_ms": 39.528908
+    }
+  },
+  "native_entries": [
+    {
+      "kind": "incoming-drone",
+      "at": [
+        7.1,
+        81.0,
+        0.0
+      ],
+      "entry_ms": 21.509984,
+      "start_ms": 96768.242725
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        -9.0,
+        81.0,
+        8.3
+      ],
+      "entry_ms": 0.231177,
+      "start_ms": 96790.532213
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        1.4,
+        65.0,
+        -15.8
+      ],
+      "entry_ms": 0.14778,
+      "start_ms": 96790.790731
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        11.4,
+        65.0,
+        14.8
+      ],
+      "entry_ms": 0.28042,
+      "start_ms": 96790.956835
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        -20.9,
+        65.0,
+        -3.7
+      ],
+      "entry_ms": 0.12715,
+      "start_ms": 96791.258295
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        19.8,
+        65.0,
+        -12.6
+      ],
+      "entry_ms": 0.138552,
+      "start_ms": 96791.402838
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        -6.6,
+        65.0,
+        24.6
+      ],
+      "entry_ms": 0.124665,
+      "start_ms": 96791.558713
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        -12.6,
+        65.0,
+        -24.3
+      ],
+      "entry_ms": 0.249321,
+      "start_ms": 96791.699509
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        27.4,
+        65.0,
+        10.0
+      ],
+      "entry_ms": 0.137219,
+      "start_ms": 96791.962817
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        -28.5,
+        65.0,
+        11.8
+      ],
+      "entry_ms": 0.136628,
+      "start_ms": 96792.116888
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        13.7,
+        65.0,
+        -29.3
+      ],
+      "entry_ms": 0.409484,
+      "start_ms": 98268.218357
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        10.1,
+        65.0,
+        32.4
+      ],
+      "entry_ms": 0.151997,
+      "start_ms": 98268.814264
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        -30.6,
+        65.0,
+        -17.7
+      ],
+      "entry_ms": 0.178287,
+      "start_ms": 98269.000085
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        35.9,
+        81.0,
+        -7.9
+      ],
+      "entry_ms": 0.178237,
+      "start_ms": 98269.226392
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        -21.9,
+        65.0,
+        31.2
+      ],
+      "entry_ms": 0.165212,
+      "start_ms": 98269.466947
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        -5.1,
+        81.0,
+        -39.0
+      ],
+      "entry_ms": 0.180801,
+      "start_ms": 98269.687344
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        31.1,
+        65.0,
+        26.2
+      ],
+      "entry_ms": 0.207803,
+      "start_ms": 98269.918771
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        -41.8,
+        81.0,
+        1.7
+      ],
+      "entry_ms": 0.207492,
+      "start_ms": 98270.192278
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        30.5,
+        65.0,
+        -30.3
+      ],
+      "entry_ms": 0.172096,
+      "start_ms": 98270.450155
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        -2.0,
+        81.0,
+        44.1
+      ],
+      "entry_ms": 0.147108,
+      "start_ms": 98270.696321
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        -29.0,
+        65.0,
+        -34.8
+      ],
+      "entry_ms": 0.374468,
+      "start_ms": 99818.213257
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        46.0,
+        81.0,
+        6.2
+      ],
+      "entry_ms": 0.131098,
+      "start_ms": 99818.835363
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        -38.9,
+        65.0,
+        27.1
+      ],
+      "entry_ms": 0.110288,
+      "start_ms": 99819.002419
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        10.6,
+        65.0,
+        -47.3
+      ],
+      "entry_ms": 0.090912,
+      "start_ms": 99819.143054
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        24.6,
+        65.0,
+        42.9
+      ],
+      "entry_ms": 0.086904,
+      "start_ms": 99819.260587
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        -48.1,
+        65.0,
+        -15.3
+      ],
+      "entry_ms": 0.097585,
+      "start_ms": 99819.379391
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        46.7,
+        65.0,
+        -21.6
+      ],
+      "entry_ms": 0.090591,
+      "start_ms": 99819.536909
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        -20.2,
+        65.0,
+        48.4
+      ],
+      "entry_ms": 0.083888,
+      "start_ms": 99819.65372
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        -18.1,
+        65.0,
+        -50.2
+      ],
+      "entry_ms": 0.08987,
+      "start_ms": 99819.761153
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        48.1,
+        65.0,
+        25.3
+      ],
+      "entry_ms": 0.078849,
+      "start_ms": 99819.880168
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        -53.4,
+        65.0,
+        14.1
+      ],
+      "entry_ms": 1.47591,
+      "start_ms": 101268.60255
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        30.4,
+        65.0,
+        -47.2
+      ],
+      "entry_ms": 0.483253,
+      "start_ms": 101271.191233
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        9.7,
+        65.0,
+        56.2
+      ],
+      "entry_ms": 0.113945,
+      "start_ms": 101271.747865
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        -45.8,
+        81.0,
+        -35.4
+      ],
+      "entry_ms": 0.088107,
+      "start_ms": 101271.894582
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        58.5,
+        65.0,
+        -4.8
+      ],
+      "entry_ms": 0.080402,
+      "start_ms": 101272.006434
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        -40.5,
+        81.0,
+        43.7
+      ],
+      "entry_ms": 0.081885,
+      "start_ms": 101272.108066
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        0.3,
+        65.0,
+        -60.4
+      ],
+      "entry_ms": 0.093787,
+      "start_ms": 101272.212954
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        41.1,
+        81.0,
+        45.4
+      ],
+      "entry_ms": 0.073769,
+      "start_ms": 101272.330877
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        -61.8,
+        65.0,
+        -5.7
+      ],
+      "entry_ms": 0.06909,
+      "start_ms": 101272.425015
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        50.1,
+        65.0,
+        -38.0
+      ],
+      "entry_ms": 0.072647,
+      "start_ms": 101272.51766
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        -11.4,
+        65.0,
+        62.6
+      ],
+      "entry_ms": 0.244973,
+      "start_ms": 102768.204457
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        -34.3,
+        65.0,
+        -54.5
+      ],
+      "entry_ms": 0.114667,
+      "start_ms": 102768.58739
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        62.9,
+        65.0,
+        17.2
+      ],
+      "entry_ms": 0.102313,
+      "start_ms": 102768.755989
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        -58.7,
+        65.0,
+        30.1
+      ],
+      "entry_ms": 0.139774,
+      "start_ms": 102769.313954
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        23.2,
+        65.0,
+        -62.5
+      ],
+      "entry_ms": 0.10569,
+      "start_ms": 102769.4972
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        25.4,
+        65.0,
+        62.5
+      ],
+      "entry_ms": 0.083377,
+      "start_ms": 102769.636303
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        -61.6,
+        65.0,
+        -29.2
+      ],
+      "entry_ms": 0.082255,
+      "start_ms": 102769.771278
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        65.9,
+        65.0,
+        -20.3
+      ],
+      "entry_ms": 0.081614,
+      "start_ms": 102769.881306
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        -35.2,
+        65.0,
+        60.1
+      ],
+      "entry_ms": 0.082205,
+      "start_ms": 102769.985393
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        -14.8,
+        65.0,
+        -68.8
+      ],
+      "entry_ms": 0.089519,
+      "start_ms": 102770.127351
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        57.9,
+        65.0,
+        41.2
+      ],
+      "entry_ms": 1.021671,
+      "start_ms": 104268.41488
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        -71.2,
+        81.0,
+        8.9
+      ],
+      "entry_ms": 0.223973,
+      "start_ms": 104269.60504
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        47.0,
+        65.0,
+        -55.2
+      ],
+      "entry_ms": 0.162998,
+      "start_ms": 104269.911038
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        2.7,
+        81.0,
+        73.1
+      ],
+      "entry_ms": 0.090692,
+      "start_ms": 104270.115935
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        -51.8,
+        65.0,
+        -52.6
+      ],
+      "entry_ms": 0.077016,
+      "start_ms": 104270.227987
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        74.4,
+        81.0,
+        3.8
+      ],
+      "entry_ms": 0.092384,
+      "start_ms": 104270.323658
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        -57.9,
+        65.0,
+        47.9
+      ],
+      "entry_ms": 0.16944,
+      "start_ms": 104270.445779
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        10.5,
+        65.0,
+        -75.1
+      ],
+      "entry_ms": 0.085682,
+      "start_ms": 104270.648642
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        43.4,
+        65.0,
+        63.0
+      ],
+      "entry_ms": 0.093276,
+      "start_ms": 104270.956935
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        -75.2,
+        65.0,
+        -17.3
+      ],
+      "entry_ms": 0.081765,
+      "start_ms": 104271.087872
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        67.7,
+        65.0,
+        -38.3
+      ],
+      "entry_ms": 0.326346,
+      "start_ms": 105768.219459
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        -24.2,
+        65.0,
+        74.6
+      ],
+      "entry_ms": 0.125437,
+      "start_ms": 105768.752366
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        -32.8,
+        81.0,
+        -71.9
+      ],
+      "entry_ms": 0.08988,
+      "start_ms": 105768.910665
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        73.4,
+        81.0,
+        31.1
+      ],
+      "entry_ms": 0.083638,
+      "start_ms": 105769.01924
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        -75.7,
+        65.0,
+        26.8
+      ],
+      "entry_ms": 0.153971,
+      "start_ms": 105769.120642
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        38.0,
+        81.0,
+        -71.5
+      ],
+      "entry_ms": 0.088246,
+      "start_ms": 105769.314809
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        20.4,
+        65.0,
+        79.0
+      ],
+      "entry_ms": 0.076445,
+      "start_ms": 105769.427191
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        -68.9,
+        65.0,
+        -44.8
+      ],
+      "entry_ms": 0.116771,
+      "start_ms": 105769.521539
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        81.6,
+        65.0,
+        -13.6
+      ],
+      "entry_ms": 0.088197,
+      "start_ms": 105769.662125
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        -51.4,
+        65.0,
+        65.7
+      ],
+      "entry_ms": 0.072847,
+      "start_ms": 105769.771953
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        -6.5,
+        81.0,
+        -83.7
+      ],
+      "entry_ms": 0.219024,
+      "start_ms": 107268.20125
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        61.8,
+        65.0,
+        57.7
+      ],
+      "entry_ms": 0.113846,
+      "start_ms": 107268.515443
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        -85.1,
+        81.0,
+        -0.8
+      ],
+      "entry_ms": 0.085581,
+      "start_ms": 107268.65626
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        63.8,
+        65.0,
+        -57.3
+      ],
+      "entry_ms": 0.078579,
+      "start_ms": 107268.760276
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        -8.4,
+        81.0,
+        85.9
+      ],
+      "entry_ms": 0.074611,
+      "start_ms": 107268.855847
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        -52.2,
+        65.0,
+        -69.5
+      ],
+      "entry_ms": 0.077807,
+      "start_ms": 107268.946428
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        86.0,
+        65.0,
+        16.1
+      ],
+      "entry_ms": 0.072387,
+      "start_ms": 107269.043982
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        -74.7,
+        81.0,
+        46.5
+      ],
+      "entry_ms": 0.072728,
+      "start_ms": 107269.135585
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        23.8,
+        65.0,
+        -85.3
+      ],
+      "entry_ms": 0.071896,
+      "start_ms": 107269.233881
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        40.3,
+        81.0,
+        79.5
+      ],
+      "entry_ms": 0.06891,
+      "start_ms": 107269.320896
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        -84.0,
+        81.0,
+        -31.6
+      ],
+      "entry_ms": 1.567863,
+      "start_ms": 108818.499622
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        83.8,
+        81.0,
+        -33.6
+      ],
+      "entry_ms": 0.895733,
+      "start_ms": 108820.876254
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        -39.3,
+        81.0,
+        81.9
+      ],
+      "entry_ms": 0.164992,
+      "start_ms": 108821.941046
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        -26.5,
+        65.0,
+        -87.5
+      ],
+      "entry_ms": 0.176945,
+      "start_ms": 108822.146544
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        79.1,
+        81.0,
+        46.9
+      ],
+      "entry_ms": 0.094849,
+      "start_ms": 108822.349328
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        -90.5,
+        65.0,
+        19.0
+      ],
+      "entry_ms": 0.095922,
+      "start_ms": 108822.460758
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        54.2,
+        65.0,
+        -75.6
+      ],
+      "entry_ms": 0.099498,
+      "start_ms": 108822.573682
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        11.1,
+        65.0,
+        92.9
+      ],
+      "entry_ms": 0.13236,
+      "start_ms": 108822.697055
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        -71.3,
+        65.0,
+        -61.3
+      ],
+      "entry_ms": 0.085722,
+      "start_ms": 108822.850906
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        94.6,
+        65.0,
+        -3.0
+      ],
+      "entry_ms": 0.091843,
+      "start_ms": 108822.961084
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        -68.1,
+        65.0,
+        66.4
+      ],
+      "entry_ms": 0.43405,
+      "start_ms": 110318.225729
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        5.4,
+        65.0,
+        -95.5
+      ],
+      "entry_ms": 0.223512,
+      "start_ms": 110318.933066
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        60.9,
+        65.0,
+        74.4
+      ],
+      "entry_ms": 0.180141,
+      "start_ms": 110319.238012
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        -95.7,
+        65.0,
+        -13.8
+      ],
+      "entry_ms": 0.144984,
+      "start_ms": 110319.472565
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        80.3,
+        65.0,
+        -54.7
+      ],
+      "entry_ms": 0.138312,
+      "start_ms": 110319.660991
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        -22.4,
+        65.0,
+        95.1
+      ],
+      "entry_ms": 0.122291,
+      "start_ms": 110319.837245
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        -48.0,
+        81.0,
+        -85.7
+      ],
+      "entry_ms": 0.133593,
+      "start_ms": 110320.000032
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        93.8,
+        65.0,
+        30.9
+      ],
+      "entry_ms": 0.129345,
+      "start_ms": 110320.166687
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        -90.5,
+        65.0,
+        40.7
+      ],
+      "entry_ms": 0.143552,
+      "start_ms": 110320.370021
+    },
+    {
+      "kind": "incoming-drone",
+      "at": [
+        39.4,
+        65.0,
+        -91.6
+      ],
+      "entry_ms": 0.142309,
+      "start_ms": 110320.549741
+    }
+  ],
+  "screenlocker_mentions": [],
+  "commands": [
+    {
+      "cmd": "gamemode spectator Dev",
+      "t_ms": 54254.944,
+      "execution_wall_ms": 7.468600000000151,
+      "queue_wait_ms": 0.813800000003539
+    },
+    {
+      "cmd": "time set 18000",
+      "t_ms": 54255.624,
+      "execution_wall_ms": 0.5892000000021653,
+      "queue_wait_ms": 7.53360000000248
+    },
+    {
+      "cmd": "weather clear 1000000",
+      "t_ms": 54255.82,
+      "execution_wall_ms": 0.1635999999998603,
+      "queue_wait_ms": 8.152600000001257
+    },
+    {
+      "cmd": "gamerule doFireTick true",
+      "t_ms": 54256.57,
+      "execution_wall_ms": 0.7229999999981374,
+      "queue_wait_ms": 8.341899999999441
+    },
+    {
+      "cmd": "tp Dev -180.00 93.38 0.00 facing 0.00 80.00 0.00",
+      "t_ms": 64098.153,
+      "execution_wall_ms": 3.399299999997311,
+      "queue_wait_ms": 0.024300000004586764
+    },
+    {
+      "cmd": "time set 18000",
+      "t_ms": 71442.349,
+      "execution_wall_ms": 0.373699999996461,
+      "queue_wait_ms": 0.021900000007008202
+    },
+    {
+      "cmd": "forceload add -160 -160 160 0",
+      "t_ms": 71447.092,
+      "execution_wall_ms": 4.727599999998347,
+      "queue_wait_ms": 0.4043999999994412
+    },
+    {
+      "cmd": "forceload add -160 16 160 160",
+      "t_ms": 71449.678,
+      "execution_wall_ms": 2.5659000000014203,
+      "queue_wait_ms": 5.1511999999929685
+    },
+    {
+      "cmd": "fill -129 65 -129 -111 80 -111 stone_bricks hollow",
+      "t_ms": 76548.692,
+      "execution_wall_ms": 56.291199999992386,
+      "queue_wait_ms": 0.01630000000295695
+    },
+    {
+      "cmd": "fill -128 80 -128 -112 80 -112 oak_planks",
+      "t_ms": 76557.362,
+      "execution_wall_ms": 4.533299999995506,
+      "queue_wait_ms": 60.43080000000191
+    },
+    {
+      "cmd": "fill -127 68 -129 -113 72 -129 glass",
+      "t_ms": 76559.239,
+      "execution_wall_ms": 1.841100000005099,
+      "queue_wait_ms": 64.99829999999201
+    },
+    {
+      "cmd": "fill -127 68 -111 -113 72 -111 glass",
+      "t_ms": 76560.504,
+      "execution_wall_ms": 1.239000000001397,
+      "queue_wait_ms": 66.86440000000584
+    },
+    {
+      "cmd": "setblock -120 79 -120 sea_lantern",
+      "t_ms": 76561.469,
+      "execution_wall_ms": 0.9437000000034459,
+      "queue_wait_ms": 68.11069999999017
+    },
+    {
+      "cmd": "fill -129 65 -89 -111 80 -71 stone_bricks hollow",
+      "t_ms": 76588.59,
+      "execution_wall_ms": 27.101599999994505,
+      "queue_wait_ms": 69.07289999999921
+    },
+    {
+      "cmd": "fill -128 80 -88 -112 80 -72 oak_planks",
+      "t_ms": 76591.963,
+      "execution_wall_ms": 3.3352000000013504,
+      "queue_wait_ms": 96.21159999999509
+    },
+    {
+      "cmd": "fill -127 68 -89 -113 72 -89 glass",
+      "t_ms": 76592.99,
+      "execution_wall_ms": 0.9895000000105938,
+      "queue_wait_ms": 99.58339999998861
+    },
+    {
+      "cmd": "fill -127 68 -71 -113 72 -71 glass",
+      "t_ms": 76593.95,
+      "execution_wall_ms": 0.9409000000014203,
+      "queue_wait_ms": 100.5911999999953
+    },
+    {
+      "cmd": "setblock -120 79 -80 sea_lantern",
+      "t_ms": 76594.155,
+      "execution_wall_ms": 0.18809999999939464,
+      "queue_wait_ms": 101.54829999999492
+    },
+    {
+      "cmd": "fill -129 65 -49 -111 80 -31 stone_bricks hollow",
+      "t_ms": 76615.421,
+      "execution_wall_ms": 21.251799999998184,
+      "queue_wait_ms": 101.74980000000505
+    },
+    {
+      "cmd": "fill -128 80 -48 -112 80 -32 oak_planks",
+      "t_ms": 76621.775,
+      "execution_wall_ms": 2.826699999990524,
+      "queue_wait_ms": 126.52810000001045
+    },
+    {
+      "cmd": "fill -127 68 -49 -113 72 -49 glass",
+      "t_ms": 76622.682,
+      "execution_wall_ms": 0.875899999999092,
+      "queue_wait_ms": 129.3850999999995
+    },
+    {
+      "cmd": "fill -127 68 -31 -113 72 -31 glass",
+      "t_ms": 76623.388,
+      "execution_wall_ms": 0.6880000000091968,
+      "queue_wait_ms": 130.27829999999085
+    },
+    {
+      "cmd": "setblock -120 79 -40 sea_lantern",
+      "t_ms": 76623.498,
+      "execution_wall_ms": 0.09790000000793952,
+      "queue_wait_ms": 130.9765999999945
+    },
+    {
+      "cmd": "fill -129 65 -9 -111 80 9 stone_bricks hollow",
+      "t_ms": 76638.968,
+      "execution_wall_ms": 15.461999999999534,
+      "queue_wait_ms": 131.08169999999518
+    },
+    {
+      "cmd": "fill -128 80 -8 -112 80 8 oak_planks",
+      "t_ms": 76640.748,
+      "execution_wall_ms": 1.7307000000000698,
+      "queue_wait_ms": 146.5923000000039
+    },
+    {
+      "cmd": "fill -127 68 -9 -113 72 -9 glass",
+      "t_ms": 76641.504,
+      "execution_wall_ms": 0.7317000000039116,
+      "queue_wait_ms": 148.34659999998985
+    },
+    {
+      "cmd": "fill -127 68 9 -113 72 9 glass",
+      "t_ms": 76642.171,
+      "execution_wall_ms": 0.650500000003376,
+      "queue_wait_ms": 149.09410000000207
+    },
+    {
+      "cmd": "setblock -120 79 0 sea_lantern",
+      "t_ms": 76642.325,
+      "execution_wall_ms": 0.13889999999082647,
+      "queue_wait_ms": 149.75910000001022
+    },
+    {
+      "cmd": "fill -129 65 31 -111 80 49 stone_bricks hollow",
+      "t_ms": 76672.951,
+      "execution_wall_ms": 30.611799999998766,
+      "queue_wait_ms": 149.91150000000198
+    },
+    {
+      "cmd": "fill -128 80 32 -112 80 48 oak_planks",
+      "t_ms": 76679.111,
+      "execution_wall_ms": 2.7862000000022817,
+      "queue_wait_ms": 183.8963999999978
+    },
+    {
+      "cmd": "fill -127 68 31 -113 72 31 glass",
+      "t_ms": 76680.132,
+      "execution_wall_ms": 0.9660000000003492,
+      "queue_wait_ms": 186.73690000000352
+    },
+    {
+      "cmd": "fill -127 68 49 -113 72 49 glass",
+      "t_ms": 76681.283,
+      "execution_wall_ms": 1.1253999999898952,
+      "queue_wait_ms": 187.72780000000785
+    },
+    {
+      "cmd": "setblock -120 79 40 sea_lantern",
+      "t_ms": 76681.517,
+      "execution_wall_ms": 0.20920000001206063,
+      "queue_wait_ms": 188.87739999999758
+    },
+    {
+      "cmd": "fill -129 65 71 -111 80 89 stone_bricks hollow",
+      "t_ms": 76700.785,
+      "execution_wall_ms": 19.25340000000142,
+      "queue_wait_ms": 189.10050000000047
+    },
+    {
+      "cmd": "fill -128 80 72 -112 80 88 oak_planks",
+      "t_ms": 76702.435,
+      "execution_wall_ms": 1.6002000000007683,
+      "queue_wait_ms": 208.40119999999297
+    },
+    {
+      "cmd": "fill -127 68 71 -113 72 71 glass",
+      "t_ms": 76703.02,
+      "execution_wall_ms": 0.5639999999984866,
+      "queue_wait_ms": 210.0216000000073
+    },
+    {
+      "cmd": "fill -127 68 89 -113 72 89 glass",
+      "t_ms": 76703.551,
+      "execution_wall_ms": 0.5155000000086147,
+      "queue_wait_ms": 210.60039999999572
+    },
+    {
+      "cmd": "setblock -120 79 80 sea_lantern",
+      "t_ms": 76703.662,
+      "execution_wall_ms": 0.10069999999541324,
+      "queue_wait_ms": 211.12549999999464
+    },
+    {
+      "cmd": "fill -129 65 111 -111 80 129 stone_bricks hollow",
+      "t_ms": 76718.121,
+      "execution_wall_ms": 14.450599999996484,
+      "queue_wait_ms": 211.23390000000654
+    },
+    {
+      "cmd": "fill -128 80 112 -112 80 128 oak_planks",
+      "t_ms": 76721.946,
+      "execution_wall_ms": 3.7713999999978114,
+      "queue_wait_ms": 225.73739999999816
+    },
+    {
+      "cmd": "fill -127 68 111 -113 72 111 glass",
+      "t_ms": 76723.446,
+      "execution_wall_ms": 1.3847999999998137,
+      "queue_wait_ms": 229.62299999999232
+    },
+    {
+      "cmd": "fill -127 68 129 -113 72 129 glass",
+      "t_ms": 76724.773,
+      "execution_wall_ms": 1.2921000000060303,
+      "queue_wait_ms": 231.04179999999178
+    },
+    {
+      "cmd": "setblock -120 79 120 sea_lantern",
+      "t_ms": 76725.059,
+      "execution_wall_ms": 0.2479999999923166,
+      "queue_wait_ms": 232.37120000000868
+    },
+    {
+      "cmd": "fill -89 65 -129 -71 80 -111 stone_bricks hollow",
+      "t_ms": 76745.509,
+      "execution_wall_ms": 20.436000000001513,
+      "queue_wait_ms": 232.63250000000698
+    },
+    {
+      "cmd": "fill -88 80 -128 -72 80 -112 oak_planks",
+      "t_ms": 76750.953,
+      "execution_wall_ms": 2.2489999999961583,
+      "queue_wait_ms": 256.26290000000154
+    },
+    {
+      "cmd": "fill -87 68 -129 -73 72 -129 glass",
+      "t_ms": 76751.775,
+      "execution_wall_ms": 0.7878999999957159,
+      "queue_wait_ms": 258.5451999999932
+    },
+    {
+      "cmd": "fill -87 68 -111 -73 72 -111 glass",
+      "t_ms": 76752.568,
+      "execution_wall_ms": 0.7752000000036787,
+      "queue_wait_ms": 259.35020000000077
+    },
+    {
+      "cmd": "setblock -80 79 -120 sea_lantern",
+      "t_ms": 76752.726,
+      "execution_wall_ms": 0.14199999999254942,
+      "queue_wait_ms": 260.14070000000356
+    },
+    {
+      "cmd": "fill -89 65 -89 -71 80 -71 stone_bricks hollow",
+      "t_ms": 76770.5,
+      "execution_wall_ms": 17.762900000001537,
+      "queue_wait_ms": 260.29320000000007
+    },
+    {
+      "cmd": "fill -88 80 -88 -72 80 -72 oak_planks",
+      "t_ms": 76772.456,
+      "execution_wall_ms": 1.9184999999997672,
+      "queue_wait_ms": 278.0929000000033
+    },
+    {
+      "cmd": "fill -87 68 -89 -73 72 -89 glass",
+      "t_ms": 76773.083,
+      "execution_wall_ms": 0.5947000000014668,
+      "queue_wait_ms": 280.04299999999057
+    },
+    {
+      "cmd": "fill -87 68 -71 -73 72 -71 glass",
+      "t_ms": 76773.59,
+      "execution_wall_ms": 0.49210000000311993,
+      "queue_wait_ms": 280.6518999999971
+    },
+    {
+      "cmd": "setblock -80 79 -80 sea_lantern",
+      "t_ms": 76773.714,
+      "execution_wall_ms": 0.11210000001301523,
+      "queue_wait_ms": 281.15529999999853
+    },
+    {
+      "cmd": "fill -89 65 -49 -71 80 -31 stone_bricks hollow",
+      "t_ms": 76788.409,
+      "execution_wall_ms": 14.686600000000908,
+      "queue_wait_ms": 281.27509999999893
+    },
+    {
+      "cmd": "fill -88 80 -48 -72 80 -32 oak_planks",
+      "t_ms": 76790.832,
+      "execution_wall_ms": 2.3706999999994878,
+      "queue_wait_ms": 296.0133999999962
+    },
+    {
+      "cmd": "fill -87 68 -49 -73 72 -49 glass",
+      "t_ms": 76791.52,
+      "execution_wall_ms": 0.6542000000044936,
+      "queue_wait_ms": 298.4171999999962
+    },
+    {
+      "cmd": "fill -87 68 -31 -73 72 -31 glass",
+      "t_ms": 76792.046,
+      "execution_wall_ms": 0.5099000000045635,
+      "queue_wait_ms": 299.0868999999948
+    },
+    {
+      "cmd": "setblock -80 79 -40 sea_lantern",
+      "t_ms": 76792.226,
+      "execution_wall_ms": 0.1673000000009779,
+      "queue_wait_ms": 299.60879999998724
+    },
+    {
+      "cmd": "fill -89 65 -9 -71 80 9 stone_bricks hollow",
+      "t_ms": 76806.265,
+      "execution_wall_ms": 14.026199999992969,
+      "queue_wait_ms": 299.78820000000997
+    },
+    {
+      "cmd": "fill -88 80 -8 -72 80 8 oak_planks",
+      "t_ms": 76808.379,
+      "execution_wall_ms": 2.061600000000908,
+      "queue_wait_ms": 313.866200000004
+    },
+    {
+      "cmd": "fill -87 68 -9 -73 72 -9 glass",
+      "t_ms": 76809.158,
+      "execution_wall_ms": 0.7449999999953434,
+      "queue_wait_ms": 315.96110000000044
+    },
+    {
+      "cmd": "fill -87 68 9 -73 72 9 glass",
+      "t_ms": 76809.975,
+      "execution_wall_ms": 0.7894999999989523,
+      "queue_wait_ms": 316.73300000000745
+    },
+    {
+      "cmd": "setblock -80 79 0 sea_lantern",
+      "t_ms": 76810.166,
+      "execution_wall_ms": 0.16689999999653082,
+      "queue_wait_ms": 317.5460000000021
+    },
+    {
+      "cmd": "fill -89 65 31 -71 80 49 stone_bricks hollow",
+      "t_ms": 76824.924,
+      "execution_wall_ms": 14.740300000004936,
+      "queue_wait_ms": 317.7298999999912
+    },
+    {
+      "cmd": "fill -88 80 32 -72 80 48 oak_planks",
+      "t_ms": 76827.568,
+      "execution_wall_ms": 2.597200000003795,
+      "queue_wait_ms": 332.5162999999884
+    },
+    {
+      "cmd": "fill -87 68 31 -73 72 31 glass",
+      "t_ms": 76828.545,
+      "execution_wall_ms": 0.9395999999978812,
+      "queue_wait_ms": 335.1478000000061
+    },
+    {
+      "cmd": "fill -87 68 49 -73 72 49 glass",
+      "t_ms": 76829.223,
+      "execution_wall_ms": 0.6486000000004424,
+      "queue_wait_ms": 336.1157999999996
+    },
+    {
+      "cmd": "setblock -80 79 40 sea_lantern",
+      "t_ms": 76829.421,
+      "execution_wall_ms": 0.17220000000088476,
+      "queue_wait_ms": 336.78949999999895
+    },
+    {
+      "cmd": "fill -89 65 71 -71 80 89 stone_bricks hollow",
+      "t_ms": 76845.268,
+      "execution_wall_ms": 15.83159999999043,
+      "queue_wait_ms": 336.97630000000936
+    },
+    {
+      "cmd": "fill -88 80 72 -72 80 88 oak_planks",
+      "t_ms": 76847.344,
+      "execution_wall_ms": 2.0190999999904307,
+      "queue_wait_ms": 352.86410000000615
+    },
+    {
+      "cmd": "fill -87 68 71 -73 72 71 glass",
+      "t_ms": 76848.568,
+      "execution_wall_ms": 1.1803999999974621,
+      "queue_wait_ms": 354.92609999999695
+    },
+    {
+      "cmd": "fill -87 68 89 -73 72 89 glass",
+      "t_ms": 76849.31,
+      "execution_wall_ms": 0.695899999991525,
+      "queue_wait_ms": 310.1423000000068
+    },
+    {
+      "cmd": "setblock -80 79 80 sea_lantern",
+      "t_ms": 76849.523,
+      "execution_wall_ms": 0.19079999999667052,
+      "queue_wait_ms": 310.85349999999744
+    },
+    {
+      "cmd": "fill -89 65 111 -71 80 129 stone_bricks hollow",
+      "t_ms": 76862.664,
+      "execution_wall_ms": 13.126300000003539,
+      "queue_wait_ms": 311.0578999999998
+    },
+    {
+      "cmd": "fill -88 80 112 -72 80 128 oak_planks",
+      "t_ms": 76863.982,
+      "execution_wall_ms": 1.2603000000090105,
+      "queue_wait_ms": 324.2411999999895
+    },
+    {
+      "cmd": "fill -87 68 111 -73 72 111 glass",
+      "t_ms": 76864.713,
+      "execution_wall_ms": 0.706400000010035,
+      "queue_wait_ms": 325.5254999999888
+    },
+    {
+      "cmd": "fill -87 68 129 -73 72 129 glass",
+      "t_ms": 76865.284,
+      "execution_wall_ms": 0.5512000000016997,
+      "queue_wait_ms": 326.25100000000384
+    },
+    {
+      "cmd": "setblock -80 79 120 sea_lantern",
+      "t_ms": 76865.429,
+      "execution_wall_ms": 0.1292000000103144,
+      "queue_wait_ms": 326.81729999999516
+    },
+    {
+      "cmd": "fill -49 65 -129 -31 80 -111 stone_bricks hollow",
+      "t_ms": 76877.054,
+      "execution_wall_ms": 11.615700000009383,
+      "queue_wait_ms": 326.9551999999967
+    },
+    {
+      "cmd": "fill -48 80 -128 -32 80 -112 oak_planks",
+      "t_ms": 76878.439,
+      "execution_wall_ms": 1.3220000000001164,
+      "queue_wait_ms": 338.6330999999918
+    },
+    {
+      "cmd": "fill -47 68 -129 -33 72 -129 glass",
+      "t_ms": 76879.133,
+      "execution_wall_ms": 0.6680000000051223,
+      "queue_wait_ms": 339.98049999999057
+    },
+    {
+      "cmd": "fill -47 68 -111 -33 72 -111 glass",
+      "t_ms": 76879.668,
+      "execution_wall_ms": 0.5157000000035623,
+      "queue_wait_ms": 340.6671999999962
+    },
+    {
+      "cmd": "setblock -40 79 -120 sea_lantern",
+      "t_ms": 76879.798,
+      "execution_wall_ms": 0.11279999998805579,
+      "queue_wait_ms": 341.19950000000244
+    },
+    {
+      "cmd": "fill -49 65 -89 -31 80 -71 stone_bricks hollow",
+      "t_ms": 76890.654,
+      "execution_wall_ms": 10.845699999990757,
+      "queue_wait_ms": 341.3220000000001
+    },
+    {
+      "cmd": "fill -48 80 -88 -32 80 -72 oak_planks",
+      "t_ms": 76892.208,
+      "execution_wall_ms": 1.5068000000028405,
+      "queue_wait_ms": 352.21429999999236
+    },
+    {
+      "cmd": "fill -47 68 -89 -33 72 -89 glass",
+      "t_ms": 76892.929,
+      "execution_wall_ms": 0.6869000000006054,
+      "queue_wait_ms": 353.75450000001
+    },
+    {
+      "cmd": "fill -47 68 -71 -33 72 -71 glass",
+      "t_ms": 76893.563,
+      "execution_wall_ms": 0.608699999997043,
+      "queue_wait_ms": 354.46609999999055
+    },
+    {
+      "cmd": "setblock -40 79 -80 sea_lantern",
+      "t_ms": 76893.762,
+      "execution_wall_ms": 0.17669999999634456,
+      "queue_wait_ms": 355.09640000000945
+    },
+    {
+      "cmd": "fill -49 65 -49 -31 80 -31 stone_bricks hollow",
+      "t_ms": 76905.99,
+      "execution_wall_ms": 12.210700000010547,
+      "queue_wait_ms": 355.28979999999865
+    },
+    {
+      "cmd": "fill -48 80 -48 -32 80 -32 oak_planks",
+      "t_ms": 76907.267,
+      "execution_wall_ms": 1.20690000000468,
+      "queue_wait_ms": 367.56990000000224
+    },
+    {
+      "cmd": "fill -47 68 -49 -33 72 -49 glass",
+      "t_ms": 76907.835,
+      "execution_wall_ms": 0.5370000000111759,
+      "queue_wait_ms": 368.80719999999565
+    },
+    {
+      "cmd": "fill -47 68 -31 -33 72 -31 glass",
+      "t_ms": 76908.397,
+      "execution_wall_ms": 0.5388999999995576,
+      "queue_wait_ms": 369.3668000000034
+    },
+    {
+      "cmd": "setblock -40 79 -40 sea_lantern",
+      "t_ms": 76908.571,
+      "execution_wall_ms": 0.1523999999917578,
+      "queue_wait_ms": 369.92660000000615
+    },
+    {
+      "cmd": "fill -49 65 -9 -31 80 9 stone_bricks hollow",
+      "t_ms": 76918.32,
+      "execution_wall_ms": 9.732200000013108,
+      "queue_wait_ms": 370.0951999999961
+    },
+    {
+      "cmd": "fill -48 80 -8 -32 80 8 oak_planks",
+      "t_ms": 76920.246,
+      "execution_wall_ms": 1.8702999999950407,
+      "queue_wait_ms": 379.882500000007
+    },
+    {
+      "cmd": "fill -47 68 -9 -33 72 -9 glass",
+      "t_ms": 76920.885,
+      "execution_wall_ms": 0.609199999991688,
+      "queue_wait_ms": 381.7820000000065
+    },
+    {
+      "cmd": "fill -47 68 9 -33 72 9 glass",
+      "t_ms": 76921.368,
+      "execution_wall_ms": 0.4676000000035856,
+      "queue_wait_ms": 382.4060000000027
+    },
+    {
+      "cmd": "setblock -40 79 0 sea_lantern",
+      "t_ms": 76921.472,
+      "execution_wall_ms": 0.09269999999378342,
+      "queue_wait_ms": 382.88430000000517
+    },
+    {
+      "cmd": "fill -49 65 31 -31 80 49 stone_bricks hollow",
+      "t_ms": 76935.245,
+      "execution_wall_ms": 13.763899999990826,
+      "queue_wait_ms": 382.98540000000503
+    },
+    {
+      "cmd": "fill -48 80 32 -32 80 48 oak_planks",
+      "t_ms": 76936.926,
+      "execution_wall_ms": 1.6319000000075903,
+      "queue_wait_ms": 396.7978000000003
+    },
+    {
+      "cmd": "fill -47 68 31 -33 72 31 glass",
+      "t_ms": 76937.566,
+      "execution_wall_ms": 0.614400000005844,
+      "queue_wait_ms": 398.4545999999973
+    },
+    {
+      "cmd": "fill -47 68 49 -33 72 49 glass",
+      "t_ms": 76938.083,
+      "execution_wall_ms": 0.5016000000032363,
+      "queue_wait_ms": 399.08379999999306
+    },
+    {
+      "cmd": "setblock -40 79 40 sea_lantern",
+      "t_ms": 76938.19,
+      "execution_wall_ms": 0.09489999999641441,
+      "queue_wait_ms": 399.5969000000041
+    },
+    {
+      "cmd": "fill -49 65 71 -31 80 89 stone_bricks hollow",
+      "t_ms": 76950.866,
+      "execution_wall_ms": 12.667099999991478,
+      "queue_wait_ms": 399.70010000000184
+    },
+    {
+      "cmd": "fill -48 80 72 -32 80 88 oak_planks",
+      "t_ms": 76952.533,
+      "execution_wall_ms": 1.6137999999918975,
+      "queue_wait_ms": 412.4198000000033
+    },
+    {
+      "cmd": "fill -47 68 71 -33 72 71 glass",
+      "t_ms": 76953.135,
+      "execution_wall_ms": 0.544899999993504,
+      "queue_wait_ms": 414.0899999999965
+    },
+    {
+      "cmd": "fill -47 68 89 -33 72 89 glass",
+      "t_ms": 76953.623,
+      "execution_wall_ms": 0.4729000000079395,
+      "queue_wait_ms": 414.6493999999948
+    },
+    {
+      "cmd": "setblock -40 79 80 sea_lantern",
+      "t_ms": 76953.732,
+      "execution_wall_ms": 0.09769999999844003,
+      "queue_wait_ms": 415.13290000001143
+    },
+    {
+      "cmd": "fill -49 65 111 -31 80 129 stone_bricks hollow",
+      "t_ms": 76966.061,
+      "execution_wall_ms": 12.319600000002538,
+      "queue_wait_ms": 415.23940000000584
+    },
+    {
+      "cmd": "fill -48 80 112 -32 80 128 oak_planks",
+      "t_ms": 76967.556,
+      "execution_wall_ms": 1.4474999999947613,
+      "queue_wait_ms": 427.605899999995
+    },
+    {
+      "cmd": "fill -47 68 111 -33 72 111 glass",
+      "t_ms": 76968.151,
+      "execution_wall_ms": 0.5623000000050524,
+      "queue_wait_ms": 429.0853999999963
+    },
+    {
+      "cmd": "fill -47 68 129 -33 72 129 glass",
+      "t_ms": 76968.514,
+      "execution_wall_ms": 0.34749999998894054,
+      "queue_wait_ms": 429.66270000000077
+    },
+    {
+      "cmd": "setblock -40 79 120 sea_lantern",
+      "t_ms": 76968.605,
+      "execution_wall_ms": 0.08159999999043066,
+      "queue_wait_ms": 430.01900000000023
+    },
+    {
+      "cmd": "fill -9 65 -129 9 80 -111 stone_bricks hollow",
+      "t_ms": 76976.269,
+      "execution_wall_ms": 7.657399999996414,
+      "queue_wait_ms": 430.10659999999916
+    },
+    {
+      "cmd": "fill -8 80 -128 8 80 -112 oak_planks",
+      "t_ms": 76977.616,
+      "execution_wall_ms": 1.3131999999895925,
+      "queue_wait_ms": 437.7972000000009
+    },
+    {
+      "cmd": "fill -7 68 -129 7 72 -129 glass",
+      "t_ms": 76978.124,
+      "execution_wall_ms": 0.48320000000239816,
+      "queue_wait_ms": 439.1345000000001
+    },
+    {
+      "cmd": "fill -7 68 -111 7 72 -111 glass",
+      "t_ms": 76978.507,
+      "execution_wall_ms": 0.3680999999924097,
+      "queue_wait_ms": 439.63200000001234
+    },
+    {
+      "cmd": "setblock 0 79 -120 sea_lantern",
+      "t_ms": 76978.629,
+      "execution_wall_ms": 0.11000000000058208,
+      "queue_wait_ms": 440.01149999999325
+    },
+    {
+      "cmd": "fill -9 65 -89 9 80 -71 stone_bricks hollow",
+      "t_ms": 76986.386,
+      "execution_wall_ms": 7.745299999995041,
+      "queue_wait_ms": 440.1325999999972
+    },
+    {
+      "cmd": "fill -8 80 -88 8 80 -72 oak_planks",
+      "t_ms": 76987.667,
+      "execution_wall_ms": 1.236399999994319,
+      "queue_wait_ms": 447.921800000011
+    },
+    {
+      "cmd": "fill -7 68 -89 7 72 -89 glass",
+      "t_ms": 76988.103,
+      "execution_wall_ms": 0.4135999999998603,
+      "queue_wait_ms": 449.18000000000757
+    },
+    {
+      "cmd": "fill -7 68 -71 7 72 -71 glass",
+      "t_ms": 76988.583,
+      "execution_wall_ms": 0.46429999999236315,
+      "queue_wait_ms": 449.6087000000116
+    },
+    {
+      "cmd": "setblock 0 79 -80 sea_lantern",
+      "t_ms": 76988.703,
+      "execution_wall_ms": 0.10499999999592546,
+      "queue_wait_ms": 450.087400000004
+    },
+    {
+      "cmd": "fill -9 65 -49 9 80 -31 stone_bricks hollow",
+      "t_ms": 76997.077,
+      "execution_wall_ms": 8.361000000004424,
+      "queue_wait_ms": 450.2048000000068
+    },
+    {
+      "cmd": "fill -8 80 -48 8 80 -32 oak_planks",
+      "t_ms": 76998.6,
+      "execution_wall_ms": 1.4766000000090571,
+      "queue_wait_ms": 458.6116000000038
+    },
+    {
+      "cmd": "fill -7 68 -49 7 72 -49 glass",
+      "t_ms": 76999.142,
+      "execution_wall_ms": 0.5128000000113389,
+      "queue_wait_ms": 460.11679999998887
+    },
+    {
+      "cmd": "fill -7 68 -31 7 72 -31 glass",
+      "t_ms": 76999.61,
+      "execution_wall_ms": 0.44629999999597203,
+      "queue_wait_ms": 460.6506999999983
+    },
+    {
+      "cmd": "setblock 0 79 -40 sea_lantern",
+      "t_ms": 77000.031,
+      "execution_wall_ms": 0.40099999999802094,
+      "queue_wait_ms": 461.1154999999999
+    },
+    {
+      "cmd": "fill -9 65 -9 9 80 9 stone_bricks hollow",
+      "t_ms": 77007.4,
+      "execution_wall_ms": 7.350099999996019,
+      "queue_wait_ms": 461.5338000000047
+    },
+    {
+      "cmd": "fill -8 80 -8 8 80 8 oak_planks",
+      "t_ms": 77008.397,
+      "execution_wall_ms": 0.9526000000041677,
+      "queue_wait_ms": 468.9274999999907
+    },
+    {
+      "cmd": "fill -7 68 -9 7 72 -9 glass",
+      "t_ms": 77008.777,
+      "execution_wall_ms": 0.35970000000088476,
+      "queue_wait_ms": 469.8996000000043
+    },
+    {
+      "cmd": "fill -7 68 9 7 72 9 glass",
+      "t_ms": 77009.093,
+      "execution_wall_ms": 0.3052999999927124,
+      "queue_wait_ms": 470.26929999999993
+    },
+    {
+      "cmd": "setblock 0 79 0 sea_lantern",
+      "t_ms": 77009.22,
+      "execution_wall_ms": 0.11909999999625143,
+      "queue_wait_ms": 470.5819000000047
+    },
+    {
+      "cmd": "fill -9 65 31 9 80 49 stone_bricks hollow",
+      "t_ms": 77015.853,
+      "execution_wall_ms": 6.624599999995553,
+      "queue_wait_ms": 470.7088000000076
+    },
+    {
+      "cmd": "fill -8 80 32 8 80 48 oak_planks",
+      "t_ms": 77017.215,
+      "execution_wall_ms": 1.3153000000020256,
+      "queue_wait_ms": 477.37949999999546
+    },
+    {
+      "cmd": "fill -7 68 31 7 72 31 glass",
+      "t_ms": 77022.982,
+      "execution_wall_ms": 0.7480999999970663,
+      "queue_wait_ms": 433.46220000000903
+    },
+    {
+      "cmd": "fill -7 68 49 7 72 49 glass",
+      "t_ms": 77023.529,
+      "execution_wall_ms": 0.5207999999984168,
+      "queue_wait_ms": 434.2286000000022
+    },
+    {
+      "cmd": "setblock 0 79 40 sea_lantern",
+      "t_ms": 77023.652,
+      "execution_wall_ms": 0.10779999999795109,
+      "queue_wait_ms": 434.76320000000123
+    },
+    {
+      "cmd": "fill -9 65 71 9 80 89 stone_bricks hollow",
+      "t_ms": 77033.871,
+      "execution_wall_ms": 10.207599999994272,
+      "queue_wait_ms": 434.8813999999984
+    },
+    {
+      "cmd": "fill -8 80 72 8 80 88 oak_planks",
+      "t_ms": 77035.303,
+      "execution_wall_ms": 1.3861000000033528,
+      "queue_wait_ms": 445.133799999996
+    },
+    {
+      "cmd": "fill -7 68 71 7 72 71 glass",
+      "t_ms": 77035.875,
+      "execution_wall_ms": 0.5439999999944121,
+      "queue_wait_ms": 446.546800000011
+    },
+    {
+      "cmd": "fill -7 68 89 7 72 89 glass",
+      "t_ms": 77036.426,
+      "execution_wall_ms": 0.5320000000065193,
+      "queue_wait_ms": 447.1088000000018
+    },
+    {
+      "cmd": "setblock 0 79 80 sea_lantern",
+      "t_ms": 77036.557,
+      "execution_wall_ms": 0.11290000000735745,
+      "queue_wait_ms": 447.65789999999106
+    },
+    {
+      "cmd": "fill -9 65 111 9 80 129 stone_bricks hollow",
+      "t_ms": 77046.979,
+      "execution_wall_ms": 10.411500000001979,
+      "queue_wait_ms": 447.78020000000834
+    },
+    {
+      "cmd": "fill -8 80 112 8 80 128 oak_planks",
+      "t_ms": 77048.428,
+      "execution_wall_ms": 1.4038000000000466,
+      "queue_wait_ms": 458.2358999999997
+    },
+    {
+      "cmd": "fill -7 68 111 7 72 111 glass",
+      "t_ms": 77048.999,
+      "execution_wall_ms": 0.5467999999964377,
+      "queue_wait_ms": 459.6628000000055
+    },
+    {
+      "cmd": "fill -7 68 129 7 72 129 glass",
+      "t_ms": 77049.481,
+      "execution_wall_ms": 0.46450000000186265,
+      "queue_wait_ms": 460.2262999999948
+    },
+    {
+      "cmd": "setblock 0 79 120 sea_lantern",
+      "t_ms": 77049.634,
+      "execution_wall_ms": 0.13980000000447035,
+      "queue_wait_ms": 460.70320000000356
+    },
+    {
+      "cmd": "fill 31 65 -129 49 80 -111 stone_bricks hollow",
+      "t_ms": 77057.394,
+      "execution_wall_ms": 7.7510999999940395,
+      "queue_wait_ms": 460.8509000000049
+    },
+    {
+      "cmd": "fill 32 80 -128 48 80 -112 oak_planks",
+      "t_ms": 77058.892,
+      "execution_wall_ms": 1.4509000000107335,
+      "queue_wait_ms": 468.648199999996
+    },
+    {
+      "cmd": "fill 33 68 -129 47 72 -129 glass",
+      "t_ms": 77059.4,
+      "execution_wall_ms": 0.48249999999825377,
+      "queue_wait_ms": 470.12369999999646
+    },
+    {
+      "cmd": "fill 33 68 -111 47 72 -111 glass",
+      "t_ms": 77059.753,
+      "execution_wall_ms": 0.3410999999905471,
+      "queue_wait_ms": 470.6173000000126
+    },
+    {
+      "cmd": "setblock 40 79 -120 sea_lantern",
+      "t_ms": 77059.84,
+      "execution_wall_ms": 0.07799999999406282,
+      "queue_wait_ms": 470.96650000000955
+    },
+    {
+      "cmd": "fill 31 65 -89 49 80 -71 stone_bricks hollow",
+      "t_ms": 77067.42,
+      "execution_wall_ms": 7.572799999994459,
+      "queue_wait_ms": 471.05079999999725
+    },
+    {
+      "cmd": "fill 32 80 -88 48 80 -72 oak_planks",
+      "t_ms": 77068.344,
+      "execution_wall_ms": 0.8574999999982538,
+      "queue_wait_ms": 478.6892999999982
+    },
+    {
+      "cmd": "fill 33 68 -89 47 72 -89 glass",
+      "t_ms": 77068.7,
+      "execution_wall_ms": 0.3438000000023749,
+      "queue_wait_ms": 479.55809999999474
+    },
+    {
+      "cmd": "fill 33 68 -71 47 72 -71 glass",
+      "t_ms": 77069.018,
+      "execution_wall_ms": 0.3087999999988824,
+      "queue_wait_ms": 479.91019999999844
+    },
+    {
+      "cmd": "setblock 40 79 -80 sea_lantern",
+      "t_ms": 77069.101,
+      "execution_wall_ms": 0.07140000000072177,
+      "queue_wait_ms": 480.2296999999962
+    },
+    {
+      "cmd": "fill 31 65 -49 49 80 -31 stone_bricks hollow",
+      "t_ms": 77076.997,
+      "execution_wall_ms": 7.888099999996484,
+      "queue_wait_ms": 480.3081000000093
+    },
+    {
+      "cmd": "fill 32 80 -48 48 80 -32 oak_planks",
+      "t_ms": 77078.043,
+      "execution_wall_ms": 1.0024000000121305,
+      "queue_wait_ms": 488.23889999999665
+    },
+    {
+      "cmd": "fill 33 68 -49 47 72 -49 glass",
+      "t_ms": 77078.467,
+      "execution_wall_ms": 0.4086000000097556,
+      "queue_wait_ms": 489.2558999999892
+    },
+    {
+      "cmd": "fill 33 68 -31 47 72 -31 glass",
+      "t_ms": 77078.836,
+      "execution_wall_ms": 0.358299999992596,
+      "queue_wait_ms": 489.6744000000035
+    },
+    {
+      "cmd": "setblock 40 79 -40 sea_lantern",
+      "t_ms": 77078.921,
+      "execution_wall_ms": 0.07610000000568107,
+      "queue_wait_ms": 490.0408000000025
+    },
+    {
+      "cmd": "fill 31 65 -9 49 80 9 stone_bricks hollow",
+      "t_ms": 77085.757,
+      "execution_wall_ms": 6.82850000000326,
+      "queue_wait_ms": 490.1235999999917
+    },
+    {
+      "cmd": "fill 32 80 -8 48 80 8 oak_planks",
+      "t_ms": 77086.705,
+      "execution_wall_ms": 0.9002000000036787,
+      "queue_wait_ms": 496.99899999999616
+    },
+    {
+      "cmd": "fill 33 68 -9 47 72 -9 glass",
+      "t_ms": 77087.072,
+      "execution_wall_ms": 0.35000000000582077,
+      "queue_wait_ms": 497.9152999999933
+    },
+    {
+      "cmd": "fill 33 68 9 47 72 9 glass",
+      "t_ms": 77087.441,
+      "execution_wall_ms": 0.35890000000654254,
+      "queue_wait_ms": 498.2743000000046
+    },
+    {
+      "cmd": "setblock 40 79 0 sea_lantern",
+      "t_ms": 77087.561,
+      "execution_wall_ms": 0.1040999999968335,
+      "queue_wait_ms": 498.64820000001055
+    },
+    {
+      "cmd": "fill 31 65 31 49 80 49 stone_bricks hollow",
+      "t_ms": 77094.867,
+      "execution_wall_ms": 7.297399999995832,
+      "queue_wait_ms": 498.7600000000093
+    },
+    {
+      "cmd": "fill 32 80 32 48 80 48 oak_planks",
+      "t_ms": 77095.83,
+      "execution_wall_ms": 0.9214999999967404,
+      "queue_wait_ms": 506.0981000000029
+    },
+    {
+      "cmd": "fill 33 68 31 47 72 31 glass",
+      "t_ms": 77096.266,
+      "execution_wall_ms": 0.41840000000956934,
+      "queue_wait_ms": 507.0362999999925
+    },
+    {
+      "cmd": "fill 33 68 49 47 72 49 glass",
+      "t_ms": 77096.601,
+      "execution_wall_ms": 0.3217999999906169,
+      "queue_wait_ms": 507.4670000000042
+    },
+    {
+      "cmd": "setblock 40 79 40 sea_lantern",
+      "t_ms": 77096.689,
+      "execution_wall_ms": 0.07679999999527354,
+      "queue_wait_ms": 507.7991000000038
+    },
+    {
+      "cmd": "fill 31 65 71 49 80 89 stone_bricks hollow",
+      "t_ms": 77104.61,
+      "execution_wall_ms": 7.909400000004098,
+      "queue_wait_ms": 507.88649999999325
+    },
+    {
+      "cmd": "fill 32 80 72 48 80 88 oak_planks",
+      "t_ms": 77105.563,
+      "execution_wall_ms": 0.9122999999963213,
+      "queue_wait_ms": 515.8355999999912
+    },
+    {
+      "cmd": "fill 33 68 71 47 72 71 glass",
+      "t_ms": 77105.946,
+      "execution_wall_ms": 0.3668000000034226,
+      "queue_wait_ms": 516.7630999999965
+    },
+    {
+      "cmd": "fill 33 68 89 47 72 89 glass",
+      "t_ms": 77106.307,
+      "execution_wall_ms": 0.3493000000016764,
+      "queue_wait_ms": 517.1405999999988
+    },
+    {
+      "cmd": "setblock 40 79 80 sea_lantern",
+      "t_ms": 77106.411,
+      "execution_wall_ms": 0.09299999999348074,
+      "queue_wait_ms": 517.5
+    },
+    {
+      "cmd": "fill 31 65 111 49 80 129 stone_bricks hollow",
+      "t_ms": 77114.487,
+      "execution_wall_ms": 8.063099999999395,
+      "queue_wait_ms": 517.6049999999959
+    },
+    {
+      "cmd": "fill 32 80 112 48 80 128 oak_planks",
+      "t_ms": 77115.323,
+      "execution_wall_ms": 0.7980000000097789,
+      "queue_wait_ms": 525.7051999999967
+    },
+    {
+      "cmd": "fill 33 68 111 47 72 111 glass",
+      "t_ms": 77115.698,
+      "execution_wall_ms": 0.3668000000034226,
+      "queue_wait_ms": 526.510500000004
+    },
+    {
+      "cmd": "fill 33 68 129 47 72 129 glass",
+      "t_ms": 77116.037,
+      "execution_wall_ms": 0.3303999999916414,
+      "queue_wait_ms": 526.8849000000046
+    },
+    {
+      "cmd": "setblock 40 79 120 sea_lantern",
+      "t_ms": 77116.108,
+      "execution_wall_ms": 0.06289999998989515,
+      "queue_wait_ms": 527.2225000000035
+    },
+    {
+      "cmd": "fill 71 65 -129 89 80 -111 stone_bricks hollow",
+      "t_ms": 77122.45,
+      "execution_wall_ms": 6.335800000000745,
+      "queue_wait_ms": 527.2906999999977
+    },
+    {
+      "cmd": "fill 72 80 -128 88 80 -112 oak_planks",
+      "t_ms": 77123.241,
+      "execution_wall_ms": 0.7653999999893131,
+      "queue_wait_ms": 533.6512000000075
+    },
+    {
+      "cmd": "fill 73 68 -129 87 72 -129 glass",
+      "t_ms": 77123.599,
+      "execution_wall_ms": 0.3473999999987427,
+      "queue_wait_ms": 534.4262000000017
+    },
+    {
+      "cmd": "fill 73 68 -111 87 72 -111 glass",
+      "t_ms": 77123.894,
+      "execution_wall_ms": 0.2820999999967171,
+      "queue_wait_ms": 534.7854999999981
+    },
+    {
+      "cmd": "setblock 80 79 -120 sea_lantern",
+      "t_ms": 77123.991,
+      "execution_wall_ms": 0.08779999999387655,
+      "queue_wait_ms": 535.0758999999962
+    },
+    {
+      "cmd": "fill 71 65 -89 89 80 -71 stone_bricks hollow",
+      "t_ms": 77133.912,
+      "execution_wall_ms": 9.913000000000466,
+      "queue_wait_ms": 535.1707999999926
+    },
+    {
+      "cmd": "fill 72 80 -88 88 80 -72 oak_planks",
+      "t_ms": 77134.734,
+      "execution_wall_ms": 0.78169999999227,
+      "queue_wait_ms": 545.1232000000018
+    },
+    {
+      "cmd": "fill 73 68 -89 87 72 -89 glass",
+      "t_ms": 77135.056,
+      "execution_wall_ms": 0.31239999999525025,
+      "queue_wait_ms": 545.9135999999999
+    },
+    {
+      "cmd": "fill 73 68 -71 87 72 -71 glass",
+      "t_ms": 77135.338,
+      "execution_wall_ms": 0.27280000000610016,
+      "queue_wait_ms": 546.2341999999917
+    },
+    {
+      "cmd": "setblock 80 79 -80 sea_lantern",
+      "t_ms": 77135.414,
+      "execution_wall_ms": 0.06680000000051223,
+      "queue_wait_ms": 546.5152999999991
+    },
+    {
+      "cmd": "fill 71 65 -49 89 80 -31 stone_bricks hollow",
+      "t_ms": 77141.984,
+      "execution_wall_ms": 6.563699999998789,
+      "queue_wait_ms": 546.5874999999942
+    },
+    {
+      "cmd": "fill 72 80 -48 88 80 -32 oak_planks",
+      "t_ms": 77142.829,
+      "execution_wall_ms": 0.8120999999955529,
+      "queue_wait_ms": 553.1831999999995
+    },
+    {
+      "cmd": "fill 73 68 -49 87 72 -49 glass",
+      "t_ms": 77143.477,
+      "execution_wall_ms": 0.6278000000020256,
+      "queue_wait_ms": 554.0144999999902
+    },
+    {
+      "cmd": "fill 73 68 -31 87 72 -31 glass",
+      "t_ms": 77143.9,
+      "execution_wall_ms": 0.40499999999883585,
+      "queue_wait_ms": 554.6593999999895
+    },
+    {
+      "cmd": "setblock 80 79 -40 sea_lantern",
+      "t_ms": 77144.061,
+      "execution_wall_ms": 0.1493999999947846,
+      "queue_wait_ms": 555.0751000000018
+    },
+    {
+      "cmd": "fill 71 65 -9 89 80 9 stone_bricks hollow",
+      "t_ms": 77156.757,
+      "execution_wall_ms": 12.679000000003725,
+      "queue_wait_ms": 555.2393000000011
+    },
+    {
+      "cmd": "fill 72 80 -8 88 80 8 oak_planks",
+      "t_ms": 77159.577,
+      "execution_wall_ms": 0.8254000000015367,
+      "queue_wait_ms": 501.3261000000057
+    },
+    {
+      "cmd": "fill 73 68 -9 87 72 -9 glass",
+      "t_ms": 77159.943,
+      "execution_wall_ms": 0.3488999999972293,
+      "queue_wait_ms": 502.15840000000026
+    },
+    {
+      "cmd": "fill 73 68 9 87 72 9 glass",
+      "t_ms": 77160.281,
+      "execution_wall_ms": 0.3274999999994179,
+      "queue_wait_ms": 502.5158999999985
+    },
+    {
+      "cmd": "setblock 80 79 0 sea_lantern",
+      "t_ms": 77160.36,
+      "execution_wall_ms": 0.06909999999334104,
+      "queue_wait_ms": 502.85220000000845
+    },
+    {
+      "cmd": "fill 71 65 31 89 80 49 stone_bricks hollow",
+      "t_ms": 77168.676,
+      "execution_wall_ms": 8.308500000013737,
+      "queue_wait_ms": 502.92649999998685
+    },
+    {
+      "cmd": "fill 72 80 32 88 80 48 oak_planks",
+      "t_ms": 77170.482,
+      "execution_wall_ms": 1.6089999999967404,
+      "queue_wait_ms": 511.43090000000666
+    },
+    {
+      "cmd": "fill 73 68 31 87 72 31 glass",
+      "t_ms": 77171.396,
+      "execution_wall_ms": 0.8614999999990687,
+      "queue_wait_ms": 513.0913999999902
+    },
+    {
+      "cmd": "fill 73 68 49 87 72 49 glass",
+      "t_ms": 77171.856,
+      "execution_wall_ms": 0.4389999999984866,
+      "queue_wait_ms": 513.9728000000032
+    },
+    {
+      "cmd": "setblock 80 79 40 sea_lantern",
+      "t_ms": 77171.992,
+      "execution_wall_ms": 0.12489999999525025,
+      "queue_wait_ms": 514.4220000000059
+    },
+    {
+      "cmd": "fill 71 65 71 89 80 89 stone_bricks hollow",
+      "t_ms": 77180.002,
+      "execution_wall_ms": 7.998299999992014,
+      "queue_wait_ms": 514.5577000000048
+    },
+    {
+      "cmd": "fill 72 80 72 88 80 88 oak_planks",
+      "t_ms": 77181.168,
+      "execution_wall_ms": 1.117900000012014,
+      "queue_wait_ms": 522.6029999999882
+    },
+    {
+      "cmd": "fill 73 68 71 87 72 71 glass",
+      "t_ms": 77181.571,
+      "execution_wall_ms": 0.3791999999957625,
+      "queue_wait_ms": 523.7437999999966
+    },
+    {
+      "cmd": "fill 73 68 89 87 72 89 glass",
+      "t_ms": 77181.901,
+      "execution_wall_ms": 0.3162999999913154,
+      "queue_wait_ms": 524.1357000000135
+    },
+    {
+      "cmd": "setblock 80 79 80 sea_lantern",
+      "t_ms": 77181.992,
+      "execution_wall_ms": 0.08049999999639113,
+      "queue_wait_ms": 524.4615999999951
+    },
+    {
+      "cmd": "fill 71 65 111 89 80 129 stone_bricks hollow",
+      "t_ms": 77192.275,
+      "execution_wall_ms": 10.275999999998021,
+      "queue_wait_ms": 524.5479999999952
+    },
+    {
+      "cmd": "fill 72 80 112 88 80 128 oak_planks",
+      "t_ms": 77194.108,
+      "execution_wall_ms": 1.7406999999948312,
+      "queue_wait_ms": 534.9152000000031
+    },
+    {
+      "cmd": "fill 73 68 111 87 72 111 glass",
+      "t_ms": 77195.202,
+      "execution_wall_ms": 1.0262999999977183,
+      "queue_wait_ms": 536.7225000000035
+    },
+    {
+      "cmd": "fill 73 68 129 87 72 129 glass",
+      "t_ms": 77195.848,
+      "execution_wall_ms": 0.5809000000008382,
+      "queue_wait_ms": 537.8127999999997
+    },
+    {
+      "cmd": "setblock 80 79 120 sea_lantern",
+      "t_ms": 77196.172,
+      "execution_wall_ms": 0.29940000000351574,
+      "queue_wait_ms": 538.4171999999962
+    },
+    {
+      "cmd": "fill 111 65 -129 129 80 -111 stone_bricks hollow",
+      "t_ms": 77206.055,
+      "execution_wall_ms": 9.854599999991478,
+      "queue_wait_ms": 538.7440999999963
+    },
+    {
+      "cmd": "fill 112 80 -128 128 80 -112 oak_planks",
+      "t_ms": 77207.621,
+      "execution_wall_ms": 1.455099999991944,
+      "queue_wait_ms": 548.7087000000029
+    },
+    {
+      "cmd": "fill 113 68 -129 127 72 -129 glass",
+      "t_ms": 77208.567,
+      "execution_wall_ms": 0.9020000000018626,
+      "queue_wait_ms": 550.2067999999999
+    },
+    {
+      "cmd": "fill 113 68 -111 127 72 -111 glass",
+      "t_ms": 77209.393,
+      "execution_wall_ms": 0.7782999999908498,
+      "queue_wait_ms": 551.155700000003
+    },
+    {
+      "cmd": "setblock 120 79 -120 sea_lantern",
+      "t_ms": 77209.957,
+      "execution_wall_ms": 0.4887999999918975,
+      "queue_wait_ms": 552.0081999999966
+    },
+    {
+      "cmd": "fill 111 65 -89 129 80 -71 stone_bricks hollow",
+      "t_ms": 77219.361,
+      "execution_wall_ms": 9.378700000001118,
+      "queue_wait_ms": 552.5213000000076
+    },
+    {
+      "cmd": "fill 112 80 -88 128 80 -72 oak_planks",
+      "t_ms": 77221.803,
+      "execution_wall_ms": 2.3752999999996973,
+      "queue_wait_ms": 561.9657000000007
+    },
+    {
+      "cmd": "fill 113 68 -89 127 72 -89 glass",
+      "t_ms": 77222.379,
+      "execution_wall_ms": 0.5295999999943888,
+      "queue_wait_ms": 564.386400000003
+    },
+    {
+      "cmd": "fill 113 68 -71 127 72 -71 glass",
+      "t_ms": 77222.886,
+      "execution_wall_ms": 0.483299999992596,
+      "queue_wait_ms": 564.9386000000086
+    },
+    {
+      "cmd": "setblock 120 79 -80 sea_lantern",
+      "t_ms": 77223.109,
+      "execution_wall_ms": 0.200700000001234,
+      "queue_wait_ms": 565.4429999999993
+    },
+    {
+      "cmd": "fill 111 65 -49 129 80 -31 stone_bricks hollow",
+      "t_ms": 77232.892,
+      "execution_wall_ms": 9.769200000009732,
+      "queue_wait_ms": 565.6566000000021
+    },
+    {
+      "cmd": "fill 112 80 -48 128 80 -32 oak_planks",
+      "t_ms": 77234.441,
+      "execution_wall_ms": 1.4481000000087079,
+      "queue_wait_ms": 575.525999999998
+    },
+    {
+      "cmd": "fill 113 68 -49 127 72 -49 glass",
+      "t_ms": 77235.309,
+      "execution_wall_ms": 0.8293999999877997,
+      "queue_wait_ms": 577.0120000000024
+    },
+    {
+      "cmd": "fill 113 68 -31 127 72 -31 glass",
+      "t_ms": 77235.893,
+      "execution_wall_ms": 0.5236000000004424,
+      "queue_wait_ms": 577.9008000000031
+    },
+    {
+      "cmd": "setblock 120 79 -40 sea_lantern",
+      "t_ms": 77236.054,
+      "execution_wall_ms": 0.1374000000068918,
+      "queue_wait_ms": 578.4470999999903
+    },
+    {
+      "cmd": "fill 111 65 -9 129 80 9 stone_bricks hollow",
+      "t_ms": 77243.673,
+      "execution_wall_ms": 7.607799999997951,
+      "queue_wait_ms": 578.5945999999967
+    },
+    {
+      "cmd": "fill 112 80 -8 128 80 8 oak_planks",
+      "t_ms": 77244.751,
+      "execution_wall_ms": 1.0399000000033993,
+      "queue_wait_ms": 586.239499999996
+    },
+    {
+      "cmd": "fill 113 68 -9 127 72 -9 glass",
+      "t_ms": 77245.502,
+      "execution_wall_ms": 0.7185999999928754,
+      "queue_wait_ms": 587.3108000000066
+    },
+    {
+      "cmd": "fill 113 68 9 127 72 9 glass",
+      "t_ms": 77246.113,
+      "execution_wall_ms": 0.5519999999960419,
+      "queue_wait_ms": 588.087400000004
+    },
+    {
+      "cmd": "setblock 120 79 0 sea_lantern",
+      "t_ms": 77246.461,
+      "execution_wall_ms": 0.3179999999993015,
+      "queue_wait_ms": 588.668399999995
+    },
+    {
+      "cmd": "fill 111 65 31 129 80 49 stone_bricks hollow",
+      "t_ms": 77255.679,
+      "execution_wall_ms": 9.177800000004936,
+      "queue_wait_ms": 589.0256999999983
+    },
+    {
+      "cmd": "fill 112 80 32 128 80 48 oak_planks",
+      "t_ms": 77256.579,
+      "execution_wall_ms": 0.8424999999988358,
+      "queue_wait_ms": 598.2599999999948
+    },
+    {
+      "cmd": "fill 113 68 31 127 72 31 glass",
+      "t_ms": 77257.092,
+      "execution_wall_ms": 0.4741000000067288,
+      "queue_wait_ms": 599.1404999999941
+    },
+    {
+      "cmd": "fill 113 68 49 127 72 49 glass",
+      "t_ms": 77257.672,
+      "execution_wall_ms": 0.5099000000045635,
+      "queue_wait_ms": 599.6839000000036
+    },
+    {
+      "cmd": "setblock 120 79 40 sea_lantern",
+      "t_ms": 77257.867,
+      "execution_wall_ms": 0.17309999999997672,
+      "queue_wait_ms": 600.2146999999968
+    },
+    {
+      "cmd": "fill 111 65 71 129 80 89 stone_bricks hollow",
+      "t_ms": 77266.659,
+      "execution_wall_ms": 8.773700000005192,
+      "queue_wait_ms": 600.4049999999988
+    },
+    {
+      "cmd": "fill 112 80 72 128 80 88 oak_planks",
+      "t_ms": 77267.728,
+      "execution_wall_ms": 1.014500000004773,
+      "queue_wait_ms": 609.2321999999986
+    },
+    {
+      "cmd": "fill 113 68 71 127 72 71 glass",
+      "t_ms": 77268.52,
+      "execution_wall_ms": 0.7519000000029337,
+      "queue_wait_ms": 610.2857000000076
+    },
+    {
+      "cmd": "fill 113 68 89 127 72 89 glass",
+      "t_ms": 77269.336,
+      "execution_wall_ms": 0.7234000000025844,
+      "queue_wait_ms": 611.1291999999958
+    },
+    {
+      "cmd": "setblock 120 79 80 sea_lantern",
+      "t_ms": 77269.655,
+      "execution_wall_ms": 0.29119999999238644,
+      "queue_wait_ms": 611.879700000005
+    },
+    {
+      "cmd": "fill 111 65 111 129 80 129 stone_bricks hollow",
+      "t_ms": 77278.509,
+      "execution_wall_ms": 8.811100000006263,
+      "queue_wait_ms": 612.2128999999986
+    },
+    {
+      "cmd": "fill 112 80 112 128 80 128 oak_planks",
+      "t_ms": 77279.784,
+      "execution_wall_ms": 1.2188000000023749,
+      "queue_wait_ms": 621.0792999999976
+    },
+    {
+      "cmd": "fill 113 68 111 127 72 111 glass",
+      "t_ms": 77280.581,
+      "execution_wall_ms": 0.7613000000128523,
+      "queue_wait_ms": 622.3329999999987
+    },
+    {
+      "cmd": "fill 113 68 129 127 72 129 glass",
+      "t_ms": 77281.514,
+      "execution_wall_ms": 0.8845999999903142,
+      "queue_wait_ms": 623.1420000000071
+    },
+    {
+      "cmd": "setblock 120 79 120 sea_lantern",
+      "t_ms": 77282.4,
+      "execution_wall_ms": 0.8271999999997206,
+      "queue_wait_ms": 624.0846999999922
+    },
+    {
+      "cmd": "perfa impact incoming-drone 7.1 81 0.0",
+      "t_ms": 96743.11,
+      "execution_wall_ms": 0.3610999999946216,
+      "queue_wait_ms": 0.014999999999417923
+    },
+    {
+      "cmd": "perfa impact incoming-drone -9.0 81 8.3",
+      "t_ms": 96743.18,
+      "execution_wall_ms": 0.056099999987054616,
+      "queue_wait_ms": 0.3814000000129454
+    },
+    {
+      "cmd": "perfa impact incoming-drone 1.4 65 -15.8",
+      "t_ms": 96743.214,
+      "execution_wall_ms": 0.024900000003981404,
+      "queue_wait_ms": 0.4455000000016298
+    },
+    {
+      "cmd": "perfa impact incoming-drone 11.4 65 14.8",
+      "t_ms": 96743.232,
+      "execution_wall_ms": 0.013400000010733493,
+      "queue_wait_ms": 0.46649999999499414
+    },
+    {
+      "cmd": "perfa impact incoming-drone -20.9 65 -3.7",
+      "t_ms": 96743.246,
+      "execution_wall_ms": 0.01059999999415595,
+      "queue_wait_ms": 0.4826000000030035
+    },
+    {
+      "cmd": "perfa impact incoming-drone 19.8 65 -12.6",
+      "t_ms": 96743.263,
+      "execution_wall_ms": 0.013300000005983748,
+      "queue_wait_ms": 0.49640000000363216
+    },
+    {
+      "cmd": "perfa impact incoming-drone -6.6 65 24.6",
+      "t_ms": 96743.277,
+      "execution_wall_ms": 0.010099999999511056,
+      "queue_wait_ms": 0.513200000001234
+    },
+    {
+      "cmd": "perfa impact incoming-drone -12.6 65 -24.3",
+      "t_ms": 96743.299,
+      "execution_wall_ms": 0.019100000004982576,
+      "queue_wait_ms": 0.5257999999885214
+    },
+    {
+      "cmd": "perfa impact incoming-drone 27.4 65 10.0",
+      "t_ms": 96743.315,
+      "execution_wall_ms": 0.010999999998603016,
+      "queue_wait_ms": 0.5495999999984633
+    },
+    {
+      "cmd": "perfa impact incoming-drone -28.5 65 11.8",
+      "t_ms": 96743.329,
+      "execution_wall_ms": 0.01059999999415595,
+      "queue_wait_ms": 0.5636000000085915
+    },
+    {
+      "cmd": "perfa impact incoming-drone 13.7 65 -29.3",
+      "t_ms": 98257.914,
+      "execution_wall_ms": 0.16890000000421423,
+      "queue_wait_ms": 0.05000000000291038
+    },
+    {
+      "cmd": "perfa impact incoming-drone 10.1 65 32.4",
+      "t_ms": 98257.956,
+      "execution_wall_ms": 0.01780000000144355,
+      "queue_wait_ms": 0.2091999999975087
+    },
+    {
+      "cmd": "perfa impact incoming-drone -30.6 65 -17.7",
+      "t_ms": 98257.993,
+      "execution_wall_ms": 0.03190000000176951,
+      "queue_wait_ms": 0.23070000000006985
+    },
+    {
+      "cmd": "perfa impact incoming-drone 35.9 81 -7.9",
+      "t_ms": 98258.022,
+      "execution_wall_ms": 0.020699999993667006,
+      "queue_wait_ms": 0.27000000000407454
+    },
+    {
+      "cmd": "perfa impact incoming-drone -21.9 65 31.2",
+      "t_ms": 98258.052,
+      "execution_wall_ms": 0.01630000000295695,
+      "queue_wait_ms": 0.3037999999942258
+    },
+    {
+      "cmd": "perfa impact incoming-drone -5.1 81 -39.0",
+      "t_ms": 98258.073,
+      "execution_wall_ms": 0.014200000005075708,
+      "queue_wait_ms": 0.32630000000062864
+    },
+    {
+      "cmd": "perfa impact incoming-drone 31.1 65 26.2",
+      "t_ms": 98258.094,
+      "execution_wall_ms": 0.013999999995576218,
+      "queue_wait_ms": 0.3469000000040978
+    },
+    {
+      "cmd": "perfa impact incoming-drone -41.8 81 1.7",
+      "t_ms": 98258.113,
+      "execution_wall_ms": 0.013399999996181577,
+      "queue_wait_ms": 0.36569999999483116
+    },
+    {
+      "cmd": "perfa impact incoming-drone 30.5 65 -30.3",
+      "t_ms": 98258.133,
+      "execution_wall_ms": 0.013600000005681068,
+      "queue_wait_ms": 0.38439999999536667
+    },
+    {
+      "cmd": "perfa impact incoming-drone -2.0 81 44.1",
+      "t_ms": 98258.153,
+      "execution_wall_ms": 0.013600000005681068,
+      "queue_wait_ms": 0.40330000000540167
+    },
+    {
+      "cmd": "perfa impact incoming-drone -29.0 65 -34.8",
+      "t_ms": 99776.05,
+      "execution_wall_ms": 0.21250000000873115,
+      "queue_wait_ms": 0.9608999999909429
+    },
+    {
+      "cmd": "perfa impact incoming-drone 46.0 81 6.2",
+      "t_ms": 99776.102,
+      "execution_wall_ms": 0.03620000000228174,
+      "queue_wait_ms": 1.1790999999939231
+    },
+    {
+      "cmd": "perfa impact incoming-drone -38.9 65 27.1",
+      "t_ms": 99776.121,
+      "execution_wall_ms": 0.013399999996181577,
+      "queue_wait_ms": 1.220100000005914
+    },
+    {
+      "cmd": "perfa impact incoming-drone 10.6 65 -47.3",
+      "t_ms": 99776.138,
+      "execution_wall_ms": 0.011900000012246892,
+      "queue_wait_ms": 1.2378999999928055
+    },
+    {
+      "cmd": "perfa impact incoming-drone 24.6 65 42.9",
+      "t_ms": 99776.153,
+      "execution_wall_ms": 0.011200000008102506,
+      "queue_wait_ms": 1.2531999999919208
+    },
+    {
+      "cmd": "perfa impact incoming-drone -48.1 65 -15.3",
+      "t_ms": 99776.167,
+      "execution_wall_ms": 0.010099999999511056,
+      "queue_wait_ms": 1.2678000000014435
+    },
+    {
+      "cmd": "perfa impact incoming-drone 46.7 65 -21.6",
+      "t_ms": 99776.193,
+      "execution_wall_ms": 0.020699999993667006,
+      "queue_wait_ms": 1.2827000000106636
+    },
+    {
+      "cmd": "perfa impact incoming-drone -20.2 65 48.4",
+      "t_ms": 99776.208,
+      "execution_wall_ms": 0.010399999999208376,
+      "queue_wait_ms": 1.3076000000000931
+    },
+    {
+      "cmd": "perfa impact incoming-drone -18.1 65 -50.2",
+      "t_ms": 99776.222,
+      "execution_wall_ms": 0.00969999999506399,
+      "queue_wait_ms": 1.3218999999953667
+    },
+    {
+      "cmd": "perfa impact incoming-drone 48.1 65 25.3",
+      "t_ms": 99776.242,
+      "execution_wall_ms": 0.01570000000356231,
+      "queue_wait_ms": 1.3352999999915482
+    },
+    {
+      "cmd": "perfa impact incoming-drone -53.4 65 14.1",
+      "t_ms": 101258.88,
+      "execution_wall_ms": 0.13940000000002328,
+      "queue_wait_ms": 0.016700000007404014
+    },
+    {
+      "cmd": "perfa impact incoming-drone 30.4 65 -47.2",
+      "t_ms": 101258.921,
+      "execution_wall_ms": 0.017900000006193295,
+      "queue_wait_ms": 0.17149999999674037
+    },
+    {
+      "cmd": "perfa impact incoming-drone 9.7 65 56.2",
+      "t_ms": 101258.937,
+      "execution_wall_ms": 0.010800000003655441,
+      "queue_wait_ms": 0.19380000000819564
+    },
+    {
+      "cmd": "perfa impact incoming-drone -45.8 81 -35.4",
+      "t_ms": 101258.951,
+      "execution_wall_ms": 0.00960000000486616,
+      "queue_wait_ms": 0.20859999999811407
+    },
+    {
+      "cmd": "perfa impact incoming-drone 58.5 65 -4.8",
+      "t_ms": 101258.964,
+      "execution_wall_ms": 0.00900000000547152,
+      "queue_wait_ms": 0.22179999999934807
+    },
+    {
+      "cmd": "perfa impact incoming-drone -40.5 81 43.7",
+      "t_ms": 101258.976,
+      "execution_wall_ms": 0.008099999991827644,
+      "queue_wait_ms": 0.23440000000118744
+    },
+    {
+      "cmd": "perfa impact incoming-drone 0.3 65 -60.4",
+      "t_ms": 101258.988,
+      "execution_wall_ms": 0.008099999991827644,
+      "queue_wait_ms": 0.2459999999991851
+    },
+    {
+      "cmd": "perfa impact incoming-drone 41.1 81 45.4",
+      "t_ms": 101259.0,
+      "execution_wall_ms": 0.008000000001629815,
+      "queue_wait_ms": 0.2577000000019325
+    },
+    {
+      "cmd": "perfa impact incoming-drone -61.8 65 -5.7",
+      "t_ms": 101259.012,
+      "execution_wall_ms": 0.00819999999657739,
+      "queue_wait_ms": 0.2692000000097323
+    },
+    {
+      "cmd": "perfa impact incoming-drone 50.1 65 -38.0",
+      "t_ms": 101259.023,
+      "execution_wall_ms": 0.007500000006984919,
+      "queue_wait_ms": 0.2805999999982305
+    },
+    {
+      "cmd": "perfa impact incoming-drone -11.4 65 62.6",
+      "t_ms": 102767.489,
+      "execution_wall_ms": 0.11490000000048894,
+      "queue_wait_ms": 0.01989999999932479
+    },
+    {
+      "cmd": "perfa impact incoming-drone -34.3 65 -54.5",
+      "t_ms": 102767.535,
+      "execution_wall_ms": 0.015899999998509884,
+      "queue_wait_ms": 0.15650000001187436
+    },
+    {
+      "cmd": "perfa impact incoming-drone 62.9 65 17.2",
+      "t_ms": 102767.577,
+      "execution_wall_ms": 0.01660000000265427,
+      "queue_wait_ms": 0.19710000000486616
+    },
+    {
+      "cmd": "perfa impact incoming-drone -58.7 65 30.1",
+      "t_ms": 102767.592,
+      "execution_wall_ms": 0.00990000000456348,
+      "queue_wait_ms": 0.21820000000298023
+    },
+    {
+      "cmd": "perfa impact incoming-drone 23.2 65 -62.5",
+      "t_ms": 102767.606,
+      "execution_wall_ms": 0.00939999999536667,
+      "queue_wait_ms": 0.23200000000360887
+    },
+    {
+      "cmd": "perfa impact incoming-drone 25.4 65 62.5",
+      "t_ms": 102767.618,
+      "execution_wall_ms": 0.008600000001024455,
+      "queue_wait_ms": 0.24430000000575092
+    },
+    {
+      "cmd": "perfa impact incoming-drone -61.6 65 -29.2",
+      "t_ms": 102767.63,
+      "execution_wall_ms": 0.008300000001327135,
+      "queue_wait_ms": 0.2562000000034459
+    },
+    {
+      "cmd": "perfa impact incoming-drone 65.9 65 -20.3",
+      "t_ms": 102767.643,
+      "execution_wall_ms": 0.008900000000721775,
+      "queue_wait_ms": 0.26810000000114087
+    },
+    {
+      "cmd": "perfa impact incoming-drone -35.2 65 60.1",
+      "t_ms": 102767.654,
+      "execution_wall_ms": 0.00789999999688007,
+      "queue_wait_ms": 0.2795999999943888
+    },
+    {
+      "cmd": "perfa impact incoming-drone -14.8 65 -68.8",
+      "t_ms": 102767.666,
+      "execution_wall_ms": 0.00819999999657739,
+      "queue_wait_ms": 0.2908000000024913
+    },
+    {
+      "cmd": "perfa impact incoming-drone 57.9 65 41.2",
+      "t_ms": 104260.473,
+      "execution_wall_ms": 0.09549999999580905,
+      "queue_wait_ms": 0.018200000005890615
+    },
+    {
+      "cmd": "perfa impact incoming-drone -71.2 81 8.9",
+      "t_ms": 104260.514,
+      "execution_wall_ms": 0.01639999999315478,
+      "queue_wait_ms": 0.12919999999576248
+    },
+    {
+      "cmd": "perfa impact incoming-drone 47.0 65 -55.2",
+      "t_ms": 104260.529,
+      "execution_wall_ms": 0.01059999999415595,
+      "queue_wait_ms": 0.1489000000001397
+    },
+    {
+      "cmd": "perfa impact incoming-drone 2.7 81 73.1",
+      "t_ms": 104260.542,
+      "execution_wall_ms": 0.00909999999566935,
+      "queue_wait_ms": 0.1626000000105705
+    },
+    {
+      "cmd": "perfa impact incoming-drone -51.8 65 -52.6",
+      "t_ms": 104260.555,
+      "execution_wall_ms": 0.00939999999536667,
+      "queue_wait_ms": 0.17449999999371357
+    },
+    {
+      "cmd": "perfa impact incoming-drone 74.4 81 3.8",
+      "t_ms": 104260.567,
+      "execution_wall_ms": 0.008600000001024455,
+      "queue_wait_ms": 0.18660000000090804
+    },
+    {
+      "cmd": "perfa impact incoming-drone -57.9 65 47.9",
+      "t_ms": 104260.578,
+      "execution_wall_ms": 0.00789999999688007,
+      "queue_wait_ms": 0.1974999999947613
+    },
+    {
+      "cmd": "perfa impact incoming-drone 10.5 65 -75.1",
+      "t_ms": 104260.59,
+      "execution_wall_ms": 0.008399999991524965,
+      "queue_wait_ms": 0.20859999999811407
+    },
+    {
+      "cmd": "perfa impact incoming-drone 43.4 65 63.0",
+      "t_ms": 104260.603,
+      "execution_wall_ms": 0.010099999999511056,
+      "queue_wait_ms": 0.2180999999982305
+    },
+    {
+      "cmd": "perfa impact incoming-drone -75.2 65 -17.3",
+      "t_ms": 104260.614,
+      "execution_wall_ms": 0.00840000000607688,
+      "queue_wait_ms": 0.23019999999087304
+    },
+    {
+      "cmd": "perfa impact incoming-drone 67.7 65 -38.3",
+      "t_ms": 105747.918,
+      "execution_wall_ms": 0.17889999999897555,
+      "queue_wait_ms": 0.023600000000442378
+    },
+    {
+      "cmd": "perfa impact incoming-drone -24.2 65 74.6",
+      "t_ms": 105747.967,
+      "execution_wall_ms": 0.023300000000745058,
+      "queue_wait_ms": 0.21719999999913853
+    },
+    {
+      "cmd": "perfa impact incoming-drone -32.8 81 -71.9",
+      "t_ms": 105747.984,
+      "execution_wall_ms": 0.012499999997089617,
+      "queue_wait_ms": 0.24430000000575092
+    },
+    {
+      "cmd": "perfa impact incoming-drone 73.4 81 31.1",
+      "t_ms": 105747.999,
+      "execution_wall_ms": 0.010899999993853271,
+      "queue_wait_ms": 0.2603999999992084
+    },
+    {
+      "cmd": "perfa impact incoming-drone -75.7 65 26.8",
+      "t_ms": 105748.012,
+      "execution_wall_ms": 0.010000000009313226,
+      "queue_wait_ms": 0.2736999999906402
+    },
+    {
+      "cmd": "perfa impact incoming-drone 38.0 81 -71.5",
+      "t_ms": 105748.024,
+      "execution_wall_ms": 0.009200000000419095,
+      "queue_wait_ms": 0.286099999997532
+    },
+    {
+      "cmd": "perfa impact incoming-drone 20.4 65 79.0",
+      "t_ms": 105748.041,
+      "execution_wall_ms": 0.012099999992642552,
+      "queue_wait_ms": 0.29970000000321306
+    },
+    {
+      "cmd": "perfa impact incoming-drone -68.9 65 -44.8",
+      "t_ms": 105748.054,
+      "execution_wall_ms": 0.009500000000116415,
+      "queue_wait_ms": 0.314700000002631
+    },
+    {
+      "cmd": "perfa impact incoming-drone 81.6 65 -13.6",
+      "t_ms": 105748.066,
+      "execution_wall_ms": 0.00930000000516884,
+      "queue_wait_ms": 0.3264000000053784
+    },
+    {
+      "cmd": "perfa impact incoming-drone -51.4 65 65.7",
+      "t_ms": 105748.078,
+      "execution_wall_ms": 0.008999999990919605,
+      "queue_wait_ms": 0.33830000000307336
+    },
+    {
+      "cmd": "perfa impact incoming-drone -6.5 81 -83.7",
+      "t_ms": 107265.119,
+      "execution_wall_ms": 0.11680000000342261,
+      "queue_wait_ms": 0.016100000008009374
+    },
+    {
+      "cmd": "perfa impact incoming-drone 61.8 65 57.7",
+      "t_ms": 107265.161,
+      "execution_wall_ms": 0.017099999997299165,
+      "queue_wait_ms": 0.15069999999832362
+    },
+    {
+      "cmd": "perfa impact incoming-drone -85.1 81 -0.8",
+      "t_ms": 107265.177,
+      "execution_wall_ms": 0.011899999997694977,
+      "queue_wait_ms": 0.17119999999704305
+    },
+    {
+      "cmd": "perfa impact incoming-drone 63.8 65 -57.3",
+      "t_ms": 107265.191,
+      "execution_wall_ms": 0.010600000008707866,
+      "queue_wait_ms": 0.1860000000015134
+    },
+    {
+      "cmd": "perfa impact incoming-drone -8.4 81 85.9",
+      "t_ms": 107265.204,
+      "execution_wall_ms": 0.010099999999511056,
+      "queue_wait_ms": 0.1989999999932479
+    },
+    {
+      "cmd": "perfa impact incoming-drone -52.2 65 -69.5",
+      "t_ms": 107265.216,
+      "execution_wall_ms": 0.00909999999566935,
+      "queue_wait_ms": 0.2116000000096392
+    },
+    {
+      "cmd": "perfa impact incoming-drone 86.0 65 16.1",
+      "t_ms": 107265.228,
+      "execution_wall_ms": 0.0087000000057742,
+      "queue_wait_ms": 0.22349999999278225
+    },
+    {
+      "cmd": "perfa impact incoming-drone -74.7 81 46.5",
+      "t_ms": 107265.242,
+      "execution_wall_ms": 0.0102000000042608,
+      "queue_wait_ms": 0.23559999999997672
+    },
+    {
+      "cmd": "perfa impact incoming-drone 23.8 65 -85.3",
+      "t_ms": 107265.261,
+      "execution_wall_ms": 0.01609999999345746,
+      "queue_wait_ms": 0.24820000000181608
+    },
+    {
+      "cmd": "perfa impact incoming-drone 40.3 81 79.5",
+      "t_ms": 107265.273,
+      "execution_wall_ms": 0.00849999999627471,
+      "queue_wait_ms": 0.26730000000679865
+    },
+    {
+      "cmd": "perfa impact incoming-drone -84.0 81 -31.6",
+      "t_ms": 108775.601,
+      "execution_wall_ms": 0.08409999999275897,
+      "queue_wait_ms": 6.284500000008848
+    },
+    {
+      "cmd": "perfa impact incoming-drone 83.8 81 -33.6",
+      "t_ms": 108775.626,
+      "execution_wall_ms": 0.015200000008917414,
+      "queue_wait_ms": 6.372699999992619
+    },
+    {
+      "cmd": "perfa impact incoming-drone -39.3 81 81.9",
+      "t_ms": 108775.648,
+      "execution_wall_ms": 0.01810000000114087,
+      "queue_wait_ms": 6.3910999999934575
+    },
+    {
+      "cmd": "perfa impact incoming-drone -26.5 65 -87.5",
+      "t_ms": 108775.663,
+      "execution_wall_ms": 0.011199999993550591,
+      "queue_wait_ms": 6.412500000005821
+    },
+    {
+      "cmd": "perfa impact incoming-drone 79.1 81 46.9",
+      "t_ms": 108775.676,
+      "execution_wall_ms": 0.009500000000116415,
+      "queue_wait_ms": 6.426500000001397
+    },
+    {
+      "cmd": "perfa impact incoming-drone -90.5 65 19.0",
+      "t_ms": 108775.714,
+      "execution_wall_ms": 0.03440000000409782,
+      "queue_wait_ms": 6.439200000007986
+    },
+    {
+      "cmd": "perfa impact incoming-drone 54.2 65 -75.6",
+      "t_ms": 108775.729,
+      "execution_wall_ms": 0.011300000012852252,
+      "queue_wait_ms": 6.4768999999942025
+    },
+    {
+      "cmd": "perfa impact incoming-drone 11.1 65 92.9",
+      "t_ms": 108775.742,
+      "execution_wall_ms": 0.009799999999813735,
+      "queue_wait_ms": 6.491099999999278
+    },
+    {
+      "cmd": "perfa impact incoming-drone -71.3 65 -61.3",
+      "t_ms": 108775.755,
+      "execution_wall_ms": 0.009400000009918585,
+      "queue_wait_ms": 6.504099999991013
+    },
+    {
+      "cmd": "perfa impact incoming-drone 94.6 65 -3.0",
+      "t_ms": 108775.767,
+      "execution_wall_ms": 0.0087000000057742,
+      "queue_wait_ms": 6.516300000002957
+    },
+    {
+      "cmd": "perfa impact incoming-drone -68.1 65 66.4",
+      "t_ms": 110283.954,
+      "execution_wall_ms": 0.6058000000048196,
+      "queue_wait_ms": 12.793799999999464
+    },
+    {
+      "cmd": "perfa impact incoming-drone 5.4 65 -95.5",
+      "t_ms": 110284.121,
+      "execution_wall_ms": 0.1190000000060536,
+      "queue_wait_ms": 13.433399999994435
+    },
+    {
+      "cmd": "perfa impact incoming-drone 60.9 65 74.4",
+      "t_ms": 110284.148,
+      "execution_wall_ms": 0.017000000007101335,
+      "queue_wait_ms": 13.561399999991409
+    },
+    {
+      "cmd": "perfa impact incoming-drone -95.7 65 -13.8",
+      "t_ms": 110284.167,
+      "execution_wall_ms": 0.013000000006286427,
+      "queue_wait_ms": 13.583899999997811
+    },
+    {
+      "cmd": "perfa impact incoming-drone 80.3 65 -54.7",
+      "t_ms": 110284.188,
+      "execution_wall_ms": 0.014499999990221113,
+      "queue_wait_ms": 13.602899999998044
+    },
+    {
+      "cmd": "perfa impact incoming-drone -22.4 65 95.1",
+      "t_ms": 110284.215,
+      "execution_wall_ms": 0.01780000000144355,
+      "queue_wait_ms": 13.62609999999404
+    },
+    {
+      "cmd": "perfa impact incoming-drone -48.0 81 -85.7",
+      "t_ms": 110284.242,
+      "execution_wall_ms": 0.020399999993969686,
+      "queue_wait_ms": 13.650099999998929
+    },
+    {
+      "cmd": "perfa impact incoming-drone 93.8 65 30.9",
+      "t_ms": 110284.318,
+      "execution_wall_ms": 0.06769999999960419,
+      "queue_wait_ms": 13.67840000000433
+    },
+    {
+      "cmd": "perfa impact incoming-drone -90.5 65 40.7",
+      "t_ms": 110284.531,
+      "execution_wall_ms": 0.17859999999927823,
+      "queue_wait_ms": 13.780100000003586
+    },
+    {
+      "cmd": "perfa impact incoming-drone 39.4 65 -91.6",
+      "t_ms": 110284.68,
+      "execution_wall_ms": 0.1147999999957392,
+      "queue_wait_ms": 13.992499999993015
+    },
+    {
+      "cmd": "forceload remove all",
+      "t_ms": 146847.145,
+      "execution_wall_ms": 1.4085999999952037,
+      "queue_wait_ms": 0.022999999986495823
+    },
+    {
+      "cmd": "forceload remove all",
+      "t_ms": 146847.256,
+      "execution_wall_ms": 0.09209999997983687,
+      "queue_wait_ms": 1.4394000000029337
+    }
+  ],
+  "native_counts": {
+    "incoming-drone": 100
+  },
+  "native_expected": {
+    "incoming-drone": 100
+  },
+  "contract_issues": []
+}
