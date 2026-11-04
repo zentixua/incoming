@@ -472,10 +472,10 @@ public final class GridGameTests {
     @GameTest(template = "range", timeoutTicks = 4800, batch = "grid_city", skyAccess = true)
     public static void cityQueueRunsManyChunksPerTick(GameTestHelper h) {
         ServerLevel level = h.getLevel();
-        Vec3 at = Vec3.atCenterOf(h.absolutePos(CENTER));
+        Vec3 cityCenter = Vec3.atCenterOf(h.absolutePos(CENTER));
         // Reproduce earlier batches leaving restoration sweeps pending. quiet schedules their work;
         // it does not complete it. Four city-sized sweeps exceed this benchmark's spare unit margin.
-        for (int i = 0; i < 4; i++) Blackouts.blackout(level, at, CITY_RADIUS, 1000, -1);
+        for (int i = 0; i < 4; i++) Blackouts.blackout(level, cityCenter, CITY_RADIUS, 1000, -1);
         quiet(level);
         var chunks = level.getChunkSource();
         ChunkPos mid = new ChunkPos(h.absolutePos(CENTER));
@@ -539,7 +539,7 @@ public final class GridGameTests {
                     // Measure only this city's cascade, after all previous sweeps and queued lamps finish.
                     System.arraycopy(BlackoutWorld.get(level).totals(), 0, before, 0, before.length);
                     Blackouts.useClock(level.getServer(), counting);
-                    Blackouts.blackout(level, at, CITY_RADIUS, 1000, -1);
+                    Blackouts.blackout(level, cityCenter, CITY_RADIUS, 1000, -1);
                 })
                 .thenWaitUntil(() -> h.assertTrue(BlackoutWorld.get(level).idle(), "extinguishing is in progress"))
                 .thenExecute(() -> {
@@ -560,7 +560,7 @@ public final class GridGameTests {
                     // on a real blackout watch - just like in the game
                     real[0] = Blackouts.newClock();
                     Blackouts.useClock(level.getServer(), real[0]);
-                    Blackouts.blackout(level, at, CITY_RADIUS, 1000, -1);
+                    Blackouts.blackout(level, cityCenter, CITY_RADIUS, 1000, -1);
                 })
                 .thenWaitUntil(() -> h.assertTrue(BlackoutWorld.get(level).idle(), "extinguishing is in progress"))
                 .thenExecute(() -> {
