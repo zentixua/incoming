@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.client.fx.smoke.GroundDustTest" tests="34" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:52:52.217Z" hostname="zentixua-pc" time="2.368">
+  <properties/>
+  <testcase name="dustComesWithTheFront()" classname="ua.zentix.incoming.client.fx.smoke.GroundDustTest" time="0.002"/>
+  <testcase name="fallenDustStaysDown()" classname="ua.zentix.incoming.client.fx.smoke.GroundDustTest" time="0.02"/>
+  <testcase name="roofAndGroundAreOneLaw()" classname="ua.zentix.incoming.client.fx.smoke.GroundDustTest" time="0.016"/>
+  <testcase name="dustFollowsSlopes()" classname="ua.zentix.incoming.client.fx.smoke.GroundDustTest" time="0.113"/>
+  <testcase name="dustStaysAtTheGround()" classname="ua.zentix.incoming.client.fx.smoke.GroundDustTest" time="0.004"/>
+  <testcase name="[1] false" classname="ua.zentix.incoming.client.fx.smoke.GroundDustTest" time="0.006"/>
+  <testcase name="[2] true" classname="ua.zentix.incoming.client.fx.smoke.GroundDustTest" time="0.005"/>
+  <testcase name="dustFallingOffACliffLandsOnTheSlopeBelow()" classname="ua.zentix.incoming.client.fx.smoke.GroundDustTest" time="0.025"/>
+  <testcase name="[1] false" classname="ua.zentix.incoming.client.fx.smoke.GroundDustTest" time="0.018"/>
+  <testcase name="[2] true" classname="ua.zentix.incoming.client.fx.smoke.GroundDustTest" time="0.011"/>
+  <testcase name="equivalentYieldGivesTheSamePressure()" classname="ua.zentix.incoming.client.fx.smoke.GroundDustTest" time="0.0"/>
+  <testcase name="gullyAndSteepUpslopeKeepDustOnTheSurface()" classname="ua.zentix.incoming.client.fx.smoke.GroundDustTest" time="0.02"/>
+  <testcase name="oneDustLawBehindTheWave()" classname="ua.zentix.incoming.client.fx.smoke.GroundDustTest" time="0.083"/>
+  <testcase name="waterGivesNoDust()" classname="ua.zentix.incoming.client.fx.smoke.GroundDustTest" time="0.001"/>
+  <testcase name="dustNeverHangsOverTheVoid()" classname="ua.zentix.incoming.client.fx.smoke.GroundDustTest" time="1.14"/>
+  <testcase name="skirtGrowsFromTheImpact()" classname="ua.zentix.incoming.client.fx.smoke.GroundDustTest" time="0.004"/>
+  <testcase name="grassHoldsTheSoil()" classname="ua.zentix.incoming.client.fx.smoke.GroundDustTest" time="0.002"/>
+  <testcase name="fineDustOutlastsCoarse()" classname="ua.zentix.incoming.client.fx.smoke.GroundDustTest" time="0.0"/>
+  <testcase name="hardSurfaceHoldsOnlySettledDust()" classname="ua.zentix.incoming.client.fx.smoke.GroundDustTest" time="0.002"/>
+  <testcase name="skirtInTheTownDoesNotDependOnTheFrameRate()" classname="ua.zentix.incoming.client.fx.smoke.GroundDustTest" time="0.232"/>
+  <testcase name="narrowBeachKeepsTheDustOnIt()" classname="ua.zentix.incoming.client.fx.smoke.GroundDustTest" time="0.003"/>
+  <testcase name="airburstHasNoGroundDustInTheAir()" classname="ua.zentix.incoming.client.fx.smoke.GroundDustTest" time="0.011"/>
+  <testcase name="dustSheetSlumpsLikeAGravityCurrent()" classname="ua.zentix.incoming.client.fx.smoke.GroundDustTest" time="0.002"/>
+  <testcase name="crushedMaterialAtAnEdgeStartsAtTheImpactBeforeFalling()" classname="ua.zentix.incoming.client.fx.smoke.GroundDustTest" time="0.006"/>
+  <testcase name="skirtGoesDownTheStreets()" classname="ua.zentix.incoming.client.fx.smoke.GroundDustTest" time="0.138"/>
+  <testcase name="skirtLeavesAPitLikeAField()" classname="ua.zentix.incoming.client.fx.smoke.GroundDustTest" time="0.01"/>
+  <testcase name="skirtStaysBelowAWallBesideTheImpact()" classname="ua.zentix.incoming.client.fx.smoke.GroundDustTest" time="0.006"/>
+  <testcase name="skirtInTheWindStaysInTheStreets()" classname="ua.zentix.incoming.client.fx.smoke.GroundDustTest" time="0.394"/>
+  <testcase name="[1] false" classname="ua.zentix.incoming.client.fx.smoke.GroundDustTest" time="0.019"/>
+  <testcase name="[2] true" classname="ua.zentix.incoming.client.fx.smoke.GroundDustTest" time="0.012"/>
+  <testcase name="[1] false" classname="ua.zentix.incoming.client.fx.smoke.GroundDustTest" time="0.01"/>
+  <testcase name="[2] true" classname="ua.zentix.incoming.client.fx.smoke.GroundDustTest" time="0.009"/>
+  <testcase name="postsDoNotHoldTheLayer()" classname="ua.zentix.incoming.client.fx.smoke.GroundDustTest" time="0.011"/>
+  <testcase name="denseDustFallsLikeAThermal()" classname="ua.zentix.incoming.client.fx.smoke.GroundDustTest" time="0.023"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

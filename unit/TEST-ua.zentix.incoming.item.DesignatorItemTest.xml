@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.item.DesignatorItemTest" tests="9" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:54:10.382Z" hostname="zentixua-pc" time="0.154">
+  <properties/>
+  <testcase name="useAnimationDurationAndReleaseMatchTheSpyglassContract()" classname="ua.zentix.incoming.item.DesignatorItemTest" time="0.138"/>
+  <testcase name="[1] false, MAIN_HAND" classname="ua.zentix.incoming.item.DesignatorItemTest" time="0.004"/>
+  <testcase name="[2] false, OFF_HAND" classname="ua.zentix.incoming.item.DesignatorItemTest" time="0.001"/>
+  <testcase name="[3] true, MAIN_HAND" classname="ua.zentix.incoming.item.DesignatorItemTest" time="0.001"/>
+  <testcase name="[4] true, OFF_HAND" classname="ua.zentix.incoming.item.DesignatorItemTest" time="0.001"/>
+  <testcase name="[1] false, MAIN_HAND" classname="ua.zentix.incoming.item.DesignatorItemTest" time="0.001"/>
+  <testcase name="[2] false, OFF_HAND" classname="ua.zentix.incoming.item.DesignatorItemTest" time="0.001"/>
+  <testcase name="[3] true, MAIN_HAND" classname="ua.zentix.incoming.item.DesignatorItemTest" time="0.001"/>
+  <testcase name="[4] true, OFF_HAND" classname="ua.zentix.incoming.item.DesignatorItemTest" time="0.002"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.client.render.ScreenProjectionTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:53:51.509Z" hostname="zentixua-pc" time="0.0">
+  <properties/>
+  <testcase name="bodyFrameHasTheBodysAngularSizeAtAnyZoom()" classname="ua.zentix.incoming.client.render.ScreenProjectionTest" time="0.0"/>
+  <testcase name="frameHasTheTargetsAngularSizeAtAnyZoom()" classname="ua.zentix.incoming.client.render.ScreenProjectionTest" time="0.0"/>
+  <testcase name="behindTheEyeNoFrame()" classname="ua.zentix.incoming.client.render.ScreenProjectionTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

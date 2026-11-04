@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.client.far.TrailPointsTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:52:18.818Z" hostname="zentixua-pc" time="0.002">
+  <properties/>
+  <testcase name="frozenWorldStopsAgeing()" classname="ua.zentix.incoming.client.far.TrailPointsTest" time="0.0"/>
+  <testcase name="pointsMeltByTheirOwnLifetime()" classname="ua.zentix.incoming.client.far.TrailPointsTest" time="0.0"/>
+  <testcase name="finishedRibbonEndsUntilThePathResumes()" classname="ua.zentix.incoming.client.far.TrailPointsTest" time="0.0"/>
+  <testcase name="wholeRocketPackFitsQuarterOfBuffer()" classname="ua.zentix.incoming.client.far.TrailPointsTest" time="0.001"/>
+  <testcase name="fullBufferOverwritesOldestAndBreaksLinksToIt()" classname="ua.zentix.incoming.client.far.TrailPointsTest" time="0.001"/>
+  <testcase name="cancelledFlightTrailVanishesAtOnce()" classname="ua.zentix.incoming.client.far.TrailPointsTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.strike.LaunchSiteTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:54:13.281Z" hostname="zentixua-pc" time="0.015">
+  <properties/>
+  <testcase name="shoreTakesTheNearestFlatSpot()" classname="ua.zentix.incoming.strike.LaunchSiteTest" time="0.004"/>
+  <testcase name="openSeaHasNoSiteAndStaysInBudget()" classname="ua.zentix.incoming.strike.LaunchSiteTest" time="0.003"/>
+  <testcase name="areaGoesFromThePlaceOutwards()" classname="ua.zentix.incoming.strike.LaunchSiteTest" time="0.003"/>
+  <testcase name="forestSendsTheCrewToAClearing()" classname="ua.zentix.incoming.strike.LaunchSiteTest" time="0.003"/>
+  <testcase name="lakeSendsTheCrewToTheShore()" classname="ua.zentix.incoming.strike.LaunchSiteTest" time="0.002"/>
+  <testcase name="closedSectorClosesItsNeighbours()" classname="ua.zentix.incoming.strike.LaunchSiteTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

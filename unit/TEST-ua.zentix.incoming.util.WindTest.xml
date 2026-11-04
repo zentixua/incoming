@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.util.WindTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:54:13.462Z" hostname="zentixua-pc" time="0.004">
+  <properties/>
+  <testcase name="weakerNearTheGroundAndMoreSoAtNight()" classname="ua.zentix.incoming.util.WindTest" time="0.0"/>
+  <testcase name="turnsSmoothlyBetweenDays()" classname="ua.zentix.incoming.util.WindTest" time="0.003"/>
+  <testcase name="eachDayDrawsFromTheNukesRange()" classname="ua.zentix.incoming.util.WindTest" time="0.0"/>
+  <testcase name="standardAtmosphere()" classname="ua.zentix.incoming.util.WindTest" time="0.0"/>
+  <testcase name="sameForEveryoneAtTheSameTime()" classname="ua.zentix.incoming.util.WindTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

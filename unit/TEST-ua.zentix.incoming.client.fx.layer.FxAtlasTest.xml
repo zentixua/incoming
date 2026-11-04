@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.client.fx.layer.FxAtlasTest" tests="16" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:52:21.138Z" hostname="zentixua-pc" time="0.558">
+  <properties/>
+  <testcase name="puffFramesMatchTheBake()" classname="ua.zentix.incoming.client.fx.layer.FxAtlasTest" time="0.023"/>
+  <testcase name="cloudsKeepTheirClumps()" classname="ua.zentix.incoming.client.fx.layer.FxAtlasTest" time="0.001"/>
+  <testcase name="fireballRimIsWarmAndNotGhostly()" classname="ua.zentix.incoming.client.fx.layer.FxAtlasTest" time="0.045"/>
+  <testcase name="coolingSootIsRenderedWithoutGrain()" classname="ua.zentix.incoming.client.fx.layer.FxAtlasTest" time="0.0"/>
+  <testcase name="clubFramesMapOneTexelToOneSheetPixel()" classname="ua.zentix.incoming.client.fx.layer.FxAtlasTest" time="0.001"/>
+  <testcase name="fireballSlotsKeepTheTopAndTheirOwnSpace()" classname="ua.zentix.incoming.client.fx.layer.FxAtlasTest" time="0.0"/>
+  <testcase name="framesFitTheJarBudget()" classname="ua.zentix.incoming.client.fx.layer.FxAtlasTest" time="0.003"/>
+  <testcase name="fireballFramesMatchTheBake()" classname="ua.zentix.incoming.client.fx.layer.FxAtlasTest" time="0.088"/>
+  <testcase name="fireballFramesHoldAllTheirMatter()" classname="ua.zentix.incoming.client.fx.layer.FxAtlasTest" time="0.068"/>
+  <testcase name="cloudFramesHaveNoStraightEdge()" classname="ua.zentix.incoming.client.fx.layer.FxAtlasTest" time="0.096"/>
+  <testcase name="fireballFrameBlendIsContinuous()" classname="ua.zentix.incoming.client.fx.layer.FxAtlasTest" time="0.0"/>
+  <testcase name="clubSetsMatchTheBake()" classname="ua.zentix.incoming.client.fx.layer.FxAtlasTest" time="0.062"/>
+  <testcase name="puffFramesHaveBillowsInTheirLight()" classname="ua.zentix.incoming.client.fx.layer.FxAtlasTest" time="0.067"/>
+  <testcase name="puffFramesAreRound()" classname="ua.zentix.incoming.client.fx.layer.FxAtlasTest" time="0.052"/>
+  <testcase name="sprayFramesMatchTheBake()" classname="ua.zentix.incoming.client.fx.layer.FxAtlasTest" time="0.016"/>
+  <testcase name="burningFireballKeepsItsInteriorContrast()" classname="ua.zentix.incoming.client.fx.layer.FxAtlasTest" time="0.032"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

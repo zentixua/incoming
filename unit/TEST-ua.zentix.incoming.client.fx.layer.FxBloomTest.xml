@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.client.fx.layer.FxBloomTest" tests="11" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:52:21.697Z" hostname="zentixua-pc" time="5.078">
+  <properties/>
+  <testcase name="filmInverseUndoesTheBake()" classname="ua.zentix.incoming.client.fx.layer.FxBloomTest" time="0.031"/>
+  <testcase name="chainGivesTheShareOfTheEnergy()" classname="ua.zentix.incoming.client.fx.layer.FxBloomTest" time="0.259"/>
+  <testcase name="gainCodeCoversTheWhitePoint()" classname="ua.zentix.incoming.client.fx.layer.FxBloomTest" time="0.0"/>
+  <testcase name="spotKeepsItsEnergyWhereverItFalls()" classname="ua.zentix.incoming.client.fx.layer.FxBloomTest" time="0.02"/>
+  <testcase name="spotsCoverSmallAndThinEmitters()" classname="ua.zentix.incoming.client.fx.layer.FxBloomTest" time="0.001"/>
+  <testcase name="smokeInFrontAbsorbsTheHalo()" classname="ua.zentix.incoming.client.fx.layer.FxBloomTest" time="0.498"/>
+  <testcase name="movingSourceKeepsItsHalo()" classname="ua.zentix.incoming.client.fx.layer.FxBloomTest" time="4.057"/>
+  <testcase name="glowIsCutLikeTheColour()" classname="ua.zentix.incoming.client.fx.layer.FxBloomTest" time="0.001"/>
+  <testcase name="shadersSampleLikeTheReference()" classname="ua.zentix.incoming.client.fx.layer.FxBloomTest" time="0.001"/>
+  <testcase name="shaderLawsAreJavaLaws()" classname="ua.zentix.incoming.client.fx.layer.FxBloomTest" time="0.002"/>
+  <testcase name="haloFollowsTheEyeScatterLaw()" classname="ua.zentix.incoming.client.fx.layer.FxBloomTest" time="0.208"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

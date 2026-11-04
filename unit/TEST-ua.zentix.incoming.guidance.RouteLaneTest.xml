@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.guidance.RouteLaneTest" tests="8" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:54:10.376Z" hostname="zentixua-pc" time="0.003">
+  <properties/>
+  <testcase name="lastPointNearTargetIsTapered()" classname="ua.zentix.incoming.guidance.RouteLaneTest" time="0.001"/>
+  <testcase name="firstPointNearStartIsTapered()" classname="ua.zentix.incoming.guidance.RouteLaneTest" time="0.0"/>
+  <testcase name="cornerKeepsBothLegsInLane()" classname="ua.zentix.incoming.guidance.RouteLaneTest" time="0.0"/>
+  <testcase name="hairpinKeepsLaneSideOnBothLegs()" classname="ua.zentix.incoming.guidance.RouteLaneTest" time="0.0"/>
+  <testcase name="straightPathRunsParallelBetweenExitAndConvergence()" classname="ua.zentix.incoming.guidance.RouteLaneTest" time="0.0"/>
+  <testcase name="directPathGetsLaneOnlyWhenLongEnough()" classname="ua.zentix.incoming.guidance.RouteLaneTest" time="0.001"/>
+  <testcase name="loopRouteInLaneStaysNearPlan()" classname="ua.zentix.incoming.guidance.RouteLaneTest" time="0.001"/>
+  <testcase name="noOffsetKeepsRoute()" classname="ua.zentix.incoming.guidance.RouteLaneTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

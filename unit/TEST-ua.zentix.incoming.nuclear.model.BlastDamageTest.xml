@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.nuclear.model.BlastDamageTest" tests="18" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:54:10.673Z" hostname="zentixua-pc" time="0.017">
+  <properties/>
+  <testcase name="nuclearAnswerUnchanged()" classname="ua.zentix.incoming.nuclear.model.BlastDamageTest" time="0.012"/>
+  <testcase name="roomGasPressure()" classname="ua.zentix.incoming.nuclear.model.BlastDamageTest" time="0.0"/>
+  <testcase name="brokenBlockPassesTheRest()" classname="ua.zentix.incoming.nuclear.model.BlastDamageTest" time="0.0"/>
+  <testcase name="passportRadii()" classname="ua.zentix.incoming.nuclear.model.BlastDamageTest" time="0.0"/>
+  <testcase name="impulseScalesWithCubeRoot()" classname="ua.zentix.incoming.nuclear.model.BlastDamageTest" time="0.0"/>
+  <testcase name="thresholdsAreJarrettLevels()" classname="ua.zentix.incoming.nuclear.model.BlastDamageTest" time="0.0"/>
+  <testcase name="[1] 12, 3" classname="ua.zentix.incoming.nuclear.model.BlastDamageTest" time="0.0"/>
+  <testcase name="[2] 12, 50" classname="ua.zentix.incoming.nuclear.model.BlastDamageTest" time="0.0"/>
+  <testcase name="[3] 12, 150" classname="ua.zentix.incoming.nuclear.model.BlastDamageTest" time="0.0"/>
+  <testcase name="[4] 12, 2400" classname="ua.zentix.incoming.nuclear.model.BlastDamageTest" time="0.0"/>
+  <testcase name="[5] 5, 6.4" classname="ua.zentix.incoming.nuclear.model.BlastDamageTest" time="0.001"/>
+  <testcase name="[6] 5, 50" classname="ua.zentix.incoming.nuclear.model.BlastDamageTest" time="0.0"/>
+  <testcase name="[7] 5, 150" classname="ua.zentix.incoming.nuclear.model.BlastDamageTest" time="0.0"/>
+  <testcase name="[8] 2, 50" classname="ua.zentix.incoming.nuclear.model.BlastDamageTest" time="0.0"/>
+  <testcase name="[9] 0.8, 150" classname="ua.zentix.incoming.nuclear.model.BlastDamageTest" time="0.001"/>
+  <testcase name="craterAndFuelFireball()" classname="ua.zentix.incoming.nuclear.model.BlastDamageTest" time="0.0"/>
+  <testcase name="[1] 1, 134" classname="ua.zentix.incoming.nuclear.model.BlastDamageTest" time="0.0"/>
+  <testcase name="[2] 10, 18" classname="ua.zentix.incoming.nuclear.model.BlastDamageTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.client.sound.EngineSoundTest" tests="9" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:53:52.620Z" hostname="zentixua-pc" time="0.016">
+  <properties/>
+  <testcase name="rocketHowlsWhereverItIsAboveTheBackground()" classname="ua.zentix.incoming.client.sound.EngineSoundTest" time="0.004"/>
+  <testcase name="missileEngineDoesNotDipOnPassOrLayerHandoff()" classname="ua.zentix.incoming.client.sound.EngineSoundTest" time="0.005"/>
+  <testcase name="supersonicRoundCracksBeforeItIsHeard()" classname="ua.zentix.incoming.client.sound.EngineSoundTest" time="0.002"/>
+  <testcase name="clientProfilesKeepMainValues()" classname="ua.zentix.incoming.client.sound.EngineSoundTest" time="0.001"/>
+  <testcase name="shareKeepsPowerOfTwoLayers()" classname="ua.zentix.incoming.client.sound.EngineSoundTest" time="0.0"/>
+  <testcase name="missileWhistleWarnsFromWhereItBecomesAudible()" classname="ua.zentix.incoming.client.sound.EngineSoundTest" time="0.001"/>
+  <testcase name="layersOfOneEngineShareItsPower()" classname="ua.zentix.incoming.client.sound.EngineSoundTest" time="0.001"/>
+  <testcase name="propellerToneFollowsAirspeed()" classname="ua.zentix.incoming.client.sound.EngineSoundTest" time="0.0"/>
+  <testcase name="whistleFadesThroughThePassInsteadOfCuttingOff()" classname="ua.zentix.incoming.client.sound.EngineSoundTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

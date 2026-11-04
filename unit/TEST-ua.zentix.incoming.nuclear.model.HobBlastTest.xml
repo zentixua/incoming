@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.nuclear.model.HobBlastTest" tests="43" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:54:11.377Z" hostname="zentixua-pc" time="0.026">
+  <properties/>
+  <testcase name="[1] 0, 0.45" classname="ua.zentix.incoming.nuclear.model.HobBlastTest" time="0.0"/>
+  <testcase name="[2] 1000, 0.74" classname="ua.zentix.incoming.nuclear.model.HobBlastTest" time="0.001"/>
+  <testcase name="[3] 2000, 0.93" classname="ua.zentix.incoming.nuclear.model.HobBlastTest" time="0.0"/>
+  <testcase name="[4] 5000, 1.29" classname="ua.zentix.incoming.nuclear.model.HobBlastTest" time="0.0"/>
+  <testcase name="[5] 10000, 1.44" classname="ua.zentix.incoming.nuclear.model.HobBlastTest" time="0.0"/>
+  <testcase name="frontNeverSlowerThanSound()" classname="ua.zentix.incoming.nuclear.model.HobBlastTest" time="0.0"/>
+  <testcase name="farFieldIsTheWeakShockStandard()" classname="ua.zentix.incoming.nuclear.model.HobBlastTest" time="0.0"/>
+  <testcase name="freeAirMeetsTheGroundUnderTheBurst()" classname="ua.zentix.incoming.nuclear.model.HobBlastTest" time="0.001"/>
+  <testcase name="[1] 0, 0.79" classname="ua.zentix.incoming.nuclear.model.HobBlastTest" time="0.0"/>
+  <testcase name="[2] 600, 1.40" classname="ua.zentix.incoming.nuclear.model.HobBlastTest" time="0.0"/>
+  <testcase name="[3] 1000, 2.17" classname="ua.zentix.incoming.nuclear.model.HobBlastTest" time="0.0"/>
+  <testcase name="[4] 2000, 4.64" classname="ua.zentix.incoming.nuclear.model.HobBlastTest" time="0.001"/>
+  <testcase name="[5] 5000, 13.05" classname="ua.zentix.incoming.nuclear.model.HobBlastTest" time="0.0"/>
+  <testcase name="[6] 10000, 27.5" classname="ua.zentix.incoming.nuclear.model.HobBlastTest" time="0.0"/>
+  <testcase name="[1] 1, 20, 230" classname="ua.zentix.incoming.nuclear.model.HobBlastTest" time="0.001"/>
+  <testcase name="[2] 1, 5, 440" classname="ua.zentix.incoming.nuclear.model.HobBlastTest" time="0.0"/>
+  <testcase name="[3] 1, 3, 590" classname="ua.zentix.incoming.nuclear.model.HobBlastTest" time="0.0"/>
+  <testcase name="[4] 1, 1, 1300" classname="ua.zentix.incoming.nuclear.model.HobBlastTest" time="0.0"/>
+  <testcase name="[5] 1, 0.5, 2400" classname="ua.zentix.incoming.nuclear.model.HobBlastTest" time="0.0"/>
+  <testcase name="[6] 15, 20, 570" classname="ua.zentix.incoming.nuclear.model.HobBlastTest" time="0.0"/>
+  <testcase name="[7] 15, 5, 1090" classname="ua.zentix.incoming.nuclear.model.HobBlastTest" time="0.0"/>
+  <testcase name="[8] 15, 3, 1450" classname="ua.zentix.incoming.nuclear.model.HobBlastTest" time="0.0"/>
+  <testcase name="[9] 15, 1, 3200" classname="ua.zentix.incoming.nuclear.model.HobBlastTest" time="0.0"/>
+  <testcase name="[10] 15, 0.5, 6000" classname="ua.zentix.incoming.nuclear.model.HobBlastTest" time="0.0"/>
+  <testcase name="[11] 1000, 20, 2300" classname="ua.zentix.incoming.nuclear.model.HobBlastTest" time="0.0"/>
+  <testcase name="[12] 1000, 5, 4400" classname="ua.zentix.incoming.nuclear.model.HobBlastTest" time="0.0"/>
+  <testcase name="[13] 1000, 3, 5900" classname="ua.zentix.incoming.nuclear.model.HobBlastTest" time="0.0"/>
+  <testcase name="[14] 1000, 1, 13000" classname="ua.zentix.incoming.nuclear.model.HobBlastTest" time="0.001"/>
+  <testcase name="[15] 1000, 0.5, 24000" classname="ua.zentix.incoming.nuclear.model.HobBlastTest" time="0.0"/>
+  <testcase name="dynamicPressureAlongTheGround()" classname="ua.zentix.incoming.nuclear.model.HobBlastTest" time="0.0"/>
+  <testcase name="machStem()" classname="ua.zentix.incoming.nuclear.model.HobBlastTest" time="0.0"/>
+  <testcase name="[1] 20, 358" classname="ua.zentix.incoming.nuclear.model.HobBlastTest" time="0.0"/>
+  <testcase name="[2] 10, 998" classname="ua.zentix.incoming.nuclear.model.HobBlastTest" time="0.0"/>
+  <testcase name="[3] 5, 1603" classname="ua.zentix.incoming.nuclear.model.HobBlastTest" time="0.0"/>
+  <testcase name="[4] 2, 2833" classname="ua.zentix.incoming.nuclear.model.HobBlastTest" time="0.0"/>
+  <testcase name="fallsWithRangeAtEveryHeight()" classname="ua.zentix.incoming.nuclear.model.HobBlastTest" time="0.002"/>
+  <testcase name="positivePhaseLengthensWithoutStep()" classname="ua.zentix.incoming.nuclear.model.HobBlastTest" time="0.002"/>
+  <testcase name="underTheBurst()" classname="ua.zentix.incoming.nuclear.model.HobBlastTest" time="0.0"/>
+  <testcase name="tableMatchesFormula()" classname="ua.zentix.incoming.nuclear.model.HobBlastTest" time="0.011"/>
+  <testcase name="[1] 10, 1080" classname="ua.zentix.incoming.nuclear.model.HobBlastTest" time="0.0"/>
+  <testcase name="[2] 5, 1620" classname="ua.zentix.incoming.nuclear.model.HobBlastTest" time="0.0"/>
+  <testcase name="[3] 2, 2930" classname="ua.zentix.incoming.nuclear.model.HobBlastTest" time="0.0"/>
+  <testcase name="[4] 1, 4550" classname="ua.zentix.incoming.nuclear.model.HobBlastTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

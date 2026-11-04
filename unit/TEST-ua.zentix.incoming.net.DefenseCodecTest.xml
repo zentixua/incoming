@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.net.DefenseCodecTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:54:10.548Z" hostname="zentixua-pc" time="0.004">
+  <properties/>
+  <testcase name="radarScopeRoundTrip()" classname="ua.zentix.incoming.net.DefenseCodecTest" time="0.002"/>
+  <testcase name="blipLimit()" classname="ua.zentix.incoming.net.DefenseCodecTest" time="0.001"/>
+  <testcase name="interceptRoundTrip()" classname="ua.zentix.incoming.net.DefenseCodecTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

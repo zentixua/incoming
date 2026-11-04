@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.client.sound.CraterFireTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:53:52.209Z" hostname="zentixua-pc" time="0.203">
+  <properties/>
+  <testcase name="summedFiresPlayAsComputedUpToTheCeiling()" classname="ua.zentix.incoming.client.sound.CraterFireTest" time="0.087"/>
+  <testcase name="aSingleFireSoundsAsIn6763a1c8()" classname="ua.zentix.incoming.client.sound.CraterFireTest" time="0.08"/>
+  <testcase name="envelopeArrivesAtSoundSpeedAndEndsWithTheFuel()" classname="ua.zentix.incoming.client.sound.CraterFireTest" time="0.004"/>
+  <testcase name="burningFuelDoesNotFadeOrGoSilentAtTheOldRecordingBoundaries()" classname="ua.zentix.incoming.client.sound.CraterFireTest" time="0.004"/>
+  <testcase name="noFuelOrWaterMeansNoFireSound()" classname="ua.zentix.incoming.client.sound.CraterFireTest" time="0.004"/>
+  <testcase name="audibilityIsAtTheEarNotInTheFile()" classname="ua.zentix.incoming.client.sound.CraterFireTest" time="0.024"/>
+  <system-out><![CDATA[fire 200000 W heard to 1265 m (6763a1c8: 990 m)
+fire 2000000 W heard to 1955 m (6763a1c8: 1630 m)
+fire 20000000 W heard to 2735 m (6763a1c8: 2390 m)
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.client.far.PlumeContinuityTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:50:48.871Z" hostname="zentixua-pc" time="0.626">
+  <properties/>
+  <testcase name="puffDiscMatchesTheBakedFrames()" classname="ua.zentix.incoming.client.far.PlumeContinuityTest" time="0.02"/>
+  <testcase name="oldCloudsKeepVariedPuffs()" classname="ua.zentix.incoming.client.far.PlumeContinuityTest" time="0.0"/>
+  <testcase name="trailIsOneLineFromAnyDistance()" classname="ua.zentix.incoming.client.far.PlumeContinuityTest" time="0.15"/>
+  <testcase name="blastStemIsOneColumnFromAnyDistance()" classname="ua.zentix.incoming.client.far.PlumeContinuityTest" time="0.016"/>
+  <testcase name="fuelFireIsOneColumnFromAnyDistance()" classname="ua.zentix.incoming.client.far.PlumeContinuityTest" time="0.439"/>
+  <system-out><![CDATA[trail, e 0.3, 50.0 m: 149 clumps, 0 ribbons, 1807 axis points, 0 gaps, axis 1.19 of law
+trail, e 3.0, 50.0 m: 141 clumps, 0 ribbons, 1807 axis points, 0 gaps, axis 1.02 of law
+trail, e 30.0, 50.0 m: 130 clumps, 0 ribbons, 1807 axis points, 0 gaps, axis 0.96 of law
+trail, e 0.3, 300.0 m: 115 clumps, 1 ribbons, 1849 axis points, 0 gaps, axis 0.98 of law
+trail, e 3.0, 300.0 m: 78 clumps, 1 ribbons, 1849 axis points, 0 gaps, axis 0.96 of law
+trail, e 30.0, 300.0 m: 80 clumps, 0 ribbons, 1849 axis points, 0 gaps, axis 0.94 of law
+trail, e 0.3, 1000.0 m: 72 clumps, 4 ribbons, 663 axis points, 0 gaps, axis 0.95 of law
+trail, e 3.0, 1000.0 m: 62 clumps, 4 ribbons, 663 axis points, 0 gaps, axis 0.94 of law
+trail, e 30.0, 1000.0 m: 65 clumps, 2 ribbons, 663 axis points, 0 gaps, axis 0.94 of law
+trail, e 0.3, 1670.0 m: 45 clumps, 7 ribbons, 494 axis points, 0 gaps, axis 0.97 of law
+trail, e 3.0, 1670.0 m: 49 clumps, 7 ribbons, 494 axis points, 0 gaps, axis 0.96 of law
+trail, e 30.0, 1670.0 m: 50 clumps, 4 ribbons, 494 axis points, 0 gaps, axis 0.93 of law
+trail, e 0.3, 3000.0 m: 13 clumps, 12 ribbons, 414 axis points, 0 gaps, axis 1.00 of law
+trail, e 3.0, 3000.0 m: 34 clumps, 13 ribbons, 414 axis points, 0 gaps, axis 0.93 of law
+trail, e 30.0, 3000.0 m: 33 clumps, 9 ribbons, 414 axis points, 0 gaps, axis 0.92 of law
+stem after 10.0 s (top 30 m), 300.0 m: 12 clumps, 0 ribbons, 286 axis points, 0 gaps, axis 0.87 of law
+stem after 10.0 s (top 30 m), 1000.0 m: 6 clumps, 0 ribbons, 87 axis points, 0 gaps, axis 0.83 of law
+stem after 10.0 s (top 30 m), 3000.0 m: 6 clumps, 0 ribbons, 31 axis points, 0 gaps, axis 0.78 of law
+stem after 20.0 s (top 49 m), 300.0 m: 12 clumps, 0 ribbons, 499 axis points, 0 gaps, axis 0.79 of law
+stem after 20.0 s (top 49 m), 1000.0 m: 6 clumps, 0 ribbons, 154 axis points, 0 gaps, axis 0.83 of law
+stem after 20.0 s (top 49 m), 3000.0 m: 6 clumps, 0 ribbons, 52 axis points, 0 gaps, axis 0.80 of law
+stem after 40.0 s (top 77 m), 300.0 m: 16 clumps, 0 ribbons, 786 axis points, 0 gaps, axis 0.77 of law
+stem after 40.0 s (top 77 m), 1000.0 m: 7 clumps, 0 ribbons, 258 axis points, 0 gaps, axis 0.85 of law
+stem after 40.0 s (top 77 m), 3000.0 m: 7 clumps, 0 ribbons, 87 axis points, 0 gaps, axis 0.84 of law
+pool, wind 5 m/s, D, 50.0 m: 131 clumps, 0 ribbons, 1033 axis points, 0 gaps, axis 0.88 of law
+pool, calm 1.5 m/s, E, 50.0 m: 122 clumps, 0 ribbons, 1068 axis points, 0 gaps, axis 0.90 of law
+pool, evening 1 m/s, F, 50.0 m: 97 clumps, 0 ribbons, 1108 axis points, 0 gaps, axis 0.92 of law
+substation oil, 3 m/s, D, 50.0 m: 158 clumps, 0 ribbons, 1043 axis points, 0 gaps, axis 0.93 of law
+house, 4.9 m/s, D, 50.0 m: 66 clumps, 0 ribbons, 1049 axis points, 0 gaps, axis 0.98 of law
+pool, wind 5 m/s, D, 300.0 m: 170 clumps, 0 ribbons, 3500 axis points, 0 gaps, axis 0.98 of law
+pool, calm 1.5 m/s, E, 300.0 m: 156 clumps, 0 ribbons, 3459 axis points, 0 gaps, axis 0.89 of law
+pool, evening 1 m/s, F, 300.0 m: 126 clumps, 0 ribbons, 3426 axis points, 0 gaps, axis 0.88 of law
+substation oil, 3 m/s, D, 300.0 m: 179 clumps, 0 ribbons, 3501 axis points, 0 gaps, axis 0.91 of law
+house, 4.9 m/s, D, 300.0 m: 124 clumps, 0 ribbons, 3488 axis points, 0 gaps, axis 0.92 of law
+pool, wind 5 m/s, D, 1000.0 m: 133 clumps, 2 ribbons, 2701 axis points, 0 gaps, axis 1.01 of law
+pool, calm 1.5 m/s, E, 1000.0 m: 110 clumps, 1 ribbons, 2722 axis points, 0 gaps, axis 1.01 of law
+pool, evening 1 m/s, F, 1000.0 m: 91 clumps, 1 ribbons, 2750 axis points, 0 gaps, axis 1.01 of law
+substation oil, 3 m/s, D, 1000.0 m: 135 clumps, 1 ribbons, 2734 axis points, 0 gaps, axis 0.99 of law
+house, 4.9 m/s, D, 1000.0 m: 84 clumps, 0 ribbons, 2704 axis points, 0 gaps, axis 0.91 of law
+pool, wind 5 m/s, D, 3000.0 m: 102 clumps, 4 ribbons, 1036 axis points, 0 gaps, axis 1.00 of law
+pool, calm 1.5 m/s, E, 3000.0 m: 72 clumps, 2 ribbons, 978 axis points, 0 gaps, axis 1.01 of law
+pool, evening 1 m/s, F, 3000.0 m: 66 clumps, 2 ribbons, 978 axis points, 0 gaps, axis 1.00 of law
+substation oil, 3 m/s, D, 3000.0 m: 75 clumps, 3 ribbons, 1028 axis points, 0 gaps, axis 1.00 of law
+house, 4.9 m/s, D, 3000.0 m: 52 clumps, 1 ribbons, 943 axis points, 0 gaps, axis 1.01 of law
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

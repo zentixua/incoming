@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.util.LocalWindTest" tests="8" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:54:13.420Z" hostname="zentixua-pc" time="0.024">
+  <properties/>
+  <testcase name="roofIsMeasuredFromTheStreet()" classname="ua.zentix.incoming.util.LocalWindTest" time="0.006"/>
+  <testcase name="hillTopIsWindierAndHollowIsCalmer()" classname="ua.zentix.incoming.util.LocalWindTest" time="0.005"/>
+  <testcase name="streetIsShelteredBelowTheRoofs()" classname="ua.zentix.incoming.util.LocalWindTest" time="0.002"/>
+  <testcase name="runningWindowIsTheWindow()" classname="ua.zentix.incoming.util.LocalWindTest" time="0.007"/>
+  <testcase name="openFieldIsTheWorldWind()" classname="ua.zentix.incoming.util.LocalWindTest" time="0.001"/>
+  <testcase name="unknownIsOpen()" classname="ua.zentix.incoming.util.LocalWindTest" time="0.0"/>
+  <testcase name="slopeIsGroundNotBuildings()" classname="ua.zentix.incoming.util.LocalWindTest" time="0.001"/>
+  <testcase name="baseIsTheSourceNotTheCell()" classname="ua.zentix.incoming.util.LocalWindTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.client.fx.layer.PallNoiseTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:52:27.439Z" hostname="zentixua-pc" time="0.104">
+  <properties/>
+  <testcase name="channelsAreUniform()" classname="ua.zentix.incoming.client.fx.layer.PallNoiseTest" time="0.002"/>
+  <testcase name="tileHasNoSeams()" classname="ua.zentix.incoming.client.fx.layer.PallNoiseTest" time="0.001"/>
+  <testcase name="denseDustKeepsItsVisibility()" classname="ua.zentix.incoming.client.fx.layer.PallNoiseTest" time="0.04"/>
+  <testcase name="shapeKeepsMeanDensity()" classname="ua.zentix.incoming.client.fx.layer.PallNoiseTest" time="0.005"/>
+  <testcase name="detailKeepsMeanDensity()" classname="ua.zentix.incoming.client.fx.layer.PallNoiseTest" time="0.005"/>
+  <testcase name="blueNoiseIsEvenAndUnclumped()" classname="ua.zentix.incoming.client.fx.layer.PallNoiseTest" time="0.051"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

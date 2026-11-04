@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.client.nuclear.NukeWaterTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:53:44.189Z" hostname="zentixua-pc" time="0.003">
+  <properties/>
+  <testcase name="surfaceBlockUnderTheBurst()" classname="ua.zentix.incoming.client.nuclear.NukeWaterTest" time="0.001"/>
+  <testcase name="ringProfileIsDarkestAtTheFront()" classname="ua.zentix.incoming.client.nuclear.NukeWaterTest" time="0.001"/>
+  <testcase name="sprayWallTrailsTheDarkRing()" classname="ua.zentix.incoming.client.nuclear.NukeWaterTest" time="0.001"/>
+  <testcase name="seaLevelGuess()" classname="ua.zentix.incoming.client.nuclear.NukeWaterTest" time="0.0"/>
+  <testcase name="profileSamplesAreDenseAtTheFront()" classname="ua.zentix.incoming.client.nuclear.NukeWaterTest" time="0.0"/>
+  <testcase name="guessSettlesByOwnAge()" classname="ua.zentix.incoming.client.nuclear.NukeWaterTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

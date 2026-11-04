@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.warhead.FragmentModelTest" tests="10" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:54:13.469Z" hostname="zentixua-pc" time="0.045">
+  <properties/>
+  <testcase name="beltAcrossAxis()" classname="ua.zentix.incoming.warhead.FragmentModelTest" time="0.013"/>
+  <testcase name="dragRanges()" classname="ua.zentix.incoming.warhead.FragmentModelTest" time="0.001"/>
+  <testcase name="hazardDistanceByDdesb()" classname="ua.zentix.incoming.warhead.FragmentModelTest" time="0.002"/>
+  <testcase name="mottCountAndMasses()" classname="ua.zentix.incoming.warhead.FragmentModelTest" time="0.025"/>
+  <testcase name="sameSeedSameFragments()" classname="ua.zentix.incoming.warhead.FragmentModelTest" time="0.0"/>
+  <testcase name="table()" classname="ua.zentix.incoming.warhead.FragmentModelTest" time="0.004"/>
+  <testcase name="noFragmentsWithoutCasing()" classname="ua.zentix.incoming.warhead.FragmentModelTest" time="0.0"/>
+  <testcase name="gurneyGradInReferenceRange()" classname="ua.zentix.incoming.warhead.FragmentModelTest" time="0.0"/>
+  <testcase name="gurneyShahedBelowLimit()" classname="ua.zentix.incoming.warhead.FragmentModelTest" time="0.0"/>
+  <testcase name="injuryByEnergy()" classname="ua.zentix.incoming.warhead.FragmentModelTest" time="0.0"/>
+  <system-out><![CDATA[DRONE: V0 3045 m/s, N 7182, mean 1.39 g, wall 5.2 mm, d 390 mm, L 197 mm, reach 660 m, hazard(mean) 75 m, HFD 124 m, dens30 1.49/m2
+LOITER: V0 2988 m/s, N 6467, mean 0.11 g, wall 1.9 mm, d 116 mm, L 126 mm, reach 215 m, hazard(mean) 13 m, HFD 54 m, dens30 0.23/m2
+MISSILE: V0 1827 m/s, N 4859, mean 39.11 g, wall 34.3 mm, d 431 mm, L 482 mm, reach 1000 m, hazard(mean) 347 m, HFD 206 m, dens30 1.66/m2
+ROCKET: V0 1583 m/s, N 5053, mean 2.37 g, wall 9.3 mm, d 103 mm, L 463 mm, reach 732 m, hazard(mean) 74 m, HFD 114 m, dens30 0.99/m2
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

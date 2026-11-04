@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.util.TerrainTest" tests="15" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:54:13.458Z" hostname="zentixua-pc" time="0.004">
+  <properties/>
+  <testcase name="visitsEveryColumnTheSegmentCrosses()" classname="ua.zentix.incoming.util.TerrainTest" time="0.002"/>
+  <testcase name="otherSetsIgnoreSurvey()" classname="ua.zentix.incoming.util.TerrainTest" time="0.0"/>
+  <testcase name="unreadyStartGivesZero()" classname="ua.zentix.incoming.util.TerrainTest" time="0.0"/>
+  <testcase name="clientHasNoGenerator()" classname="ua.zentix.incoming.util.TerrainTest" time="0.0"/>
+  <testcase name="ceilingIsNotGroundForFlight()" classname="ua.zentix.incoming.util.TerrainTest" time="0.0"/>
+  <testcase name="stopsJustBeforeFirstUnreadyChunk()" classname="ua.zentix.incoming.util.TerrainTest" time="0.0"/>
+  <testcase name="clientMapBeforeGenerator()" classname="ua.zentix.incoming.util.TerrainTest" time="0.0"/>
+  <testcase name="negativeDirectionStopsBeforeBoundary()" classname="ua.zentix.incoming.util.TerrainTest" time="0.0"/>
+  <testcase name="readyChunkWinsOverEverySource()" classname="ua.zentix.incoming.util.TerrainTest" time="0.0"/>
+  <testcase name="generatorNotBelowSea()" classname="ua.zentix.incoming.util.TerrainTest" time="0.0"/>
+  <testcase name="allReadyReachesTheEnd()" classname="ua.zentix.incoming.util.TerrainTest" time="0.0"/>
+  <testcase name="tickSourcesNeverAskGenerator()" classname="ua.zentix.incoming.util.TerrainTest" time="0.0"/>
+  <testcase name="reliefTakesSurveyNeverAsksGenerator()" classname="ua.zentix.incoming.util.TerrainTest" time="0.0"/>
+  <testcase name="selectionDefersHeightReadsAndKeepsWorldCoordinates()" classname="ua.zentix.incoming.util.TerrainTest" time="0.0"/>
+  <testcase name="clientMapNeedsHint()" classname="ua.zentix.incoming.util.TerrainTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

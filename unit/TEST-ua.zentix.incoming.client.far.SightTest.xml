@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.client.far.SightTest" tests="9" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:50:49.527Z" hostname="zentixua-pc" time="0.002">
+  <properties/>
+  <testcase name="brightPointSpreadsIntoGlareInsteadOfExceedingWhite()" classname="ua.zentix.incoming.client.far.SightTest" time="0.0"/>
+  <testcase name="hazeThinsWithHeight()" classname="ua.zentix.incoming.client.far.SightTest" time="0.001"/>
+  <testcase name="selfLuminousOnScreen()" classname="ua.zentix.incoming.client.far.SightTest" time="0.0"/>
+  <testcase name="lightKeepsItsFluxBelowAPixel()" classname="ua.zentix.incoming.client.far.SightTest" time="0.0"/>
+  <testcase name="daylightFireballHasNoVeilButNightOneLightsDegrees()" classname="ua.zentix.incoming.client.far.SightTest" time="0.001"/>
+  <testcase name="contrastFallsToEyeThresholdAtVisibilityRange()" classname="ua.zentix.incoming.client.far.SightTest" time="0.0"/>
+  <testcase name="tinyPointKeepsItsLight()" classname="ua.zentix.incoming.client.far.SightTest" time="0.0"/>
+  <testcase name="largeDimPointIsDrawnAsItIs()" classname="ua.zentix.incoming.client.far.SightTest" time="0.0"/>
+  <testcase name="eyeAdaptsToNight()" classname="ua.zentix.incoming.client.far.SightTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

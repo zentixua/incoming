@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.client.sound.OutdoorTest" tests="12" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:53:57.014Z" hostname="zentixua-pc" time="0.093">
+  <properties/>
+  <testcase name="daytimeShadowZoneNightInversion()" classname="ua.zentix.incoming.client.sound.OutdoorTest" time="0.001"/>
+  <testcase name="shadowStartsWhereTheRayGrazesTheGround()" classname="ua.zentix.incoming.client.sound.OutdoorTest" time="0.0"/>
+  <testcase name="hillQuietensAndMufflesTheRumble()" classname="ua.zentix.incoming.client.sound.OutdoorTest" time="0.0"/>
+  <testcase name="openPathHasNoBarrierAndGrazingEdgeGivesFiveDecibels()" classname="ua.zentix.incoming.client.sound.OutdoorTest" time="0.0"/>
+  <testcase name="volumeFallsMonotonicallyWithDistanceAndDiesBeyondRange()" classname="ua.zentix.incoming.client.sound.OutdoorTest" time="0.091"/>
+  <testcase name="volumeContinuesTheNearModelAtItsEdge()" classname="ua.zentix.incoming.client.sound.OutdoorTest" time="0.001"/>
+  <testcase name="pressureVolumeHalvesTheDecibelsOfPressure()" classname="ua.zentix.incoming.client.sound.OutdoorTest" time="0.0"/>
+  <testcase name="pressureHighsLoseOnlyToTheEdgeAndTheShadow()" classname="ua.zentix.incoming.client.sound.OutdoorTest" time="0.0"/>
+  <testcase name="middleGroundCountsOnlyBeyondThirtyHeights()" classname="ua.zentix.incoming.client.sound.OutdoorTest" time="0.0"/>
+  <testcase name="rainMasksTheRumbleButKeepsItsTimbre()" classname="ua.zentix.incoming.client.sound.OutdoorTest" time="0.0"/>
+  <testcase name="barrierGrowsWithPathDifferenceFasterForHighs()" classname="ua.zentix.incoming.client.sound.OutdoorTest" time="0.0"/>
+  <testcase name="hardGroundReflectsHighsPorousGroundAbsorbsThem()" classname="ua.zentix.incoming.client.sound.OutdoorTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

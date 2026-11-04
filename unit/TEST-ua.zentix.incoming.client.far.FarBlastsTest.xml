@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.client.far.FarBlastsTest" tests="12" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:50:48.510Z" hostname="zentixua-pc" time="0.103">
+  <properties/>
+  <testcase name="cloudsGlowAtNightNotByDay()" classname="ua.zentix.incoming.client.far.FarBlastsTest" time="0.008"/>
+  <testcase name="waterWaveStartsAtItsOwnFrontWithASoftEdge()" classname="ua.zentix.incoming.client.far.FarBlastsTest" time="0.009"/>
+  <testcase name="cloudColourIsItsMatter()" classname="ua.zentix.incoming.client.far.FarBlastsTest" time="0.001"/>
+  <testcase name="hiddenCoolingBallsDoNotEnterParticleLights()" classname="ua.zentix.incoming.client.far.FarBlastsTest" time="0.048"/>
+  <testcase name="shockFrontIsSeenWhileItsJumpIs()" classname="ua.zentix.incoming.client.far.FarBlastsTest" time="0.0"/>
+  <testcase name="bunkerCloudsComeFromTheModel()" classname="ua.zentix.incoming.client.far.FarBlastsTest" time="0.024"/>
+  <testcase name="raysCoverTheBallDiscFacingTheEye()" classname="ua.zentix.incoming.client.far.FarBlastsTest" time="0.0"/>
+  <testcase name="puffsSinkBehindTheRidgeSmoothly()" classname="ua.zentix.incoming.client.far.FarBlastsTest" time="0.0"/>
+  <testcase name="hiddenBallGlowsNoBrighterThanItsVeil()" classname="ua.zentix.incoming.client.far.FarBlastsTest" time="0.007"/>
+  <testcase name="dustTakesTheColourOfDrySoilDust()" classname="ua.zentix.incoming.client.far.FarBlastsTest" time="0.0"/>
+  <testcase name="cloudsRiseByTheirHeat()" classname="ua.zentix.incoming.client.far.FarBlastsTest" time="0.001"/>
+  <testcase name="contactByWhatIsUnderThePoint()" classname="ua.zentix.incoming.client.far.FarBlastsTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

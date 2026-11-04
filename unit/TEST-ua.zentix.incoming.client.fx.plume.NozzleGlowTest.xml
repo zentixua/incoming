@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.client.fx.plume.NozzleGlowTest" tests="12" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:52:33.301Z" hostname="zentixua-pc" time="2.665">
+  <properties/>
+  <testcase name="graphiteHeatMatchesJanafMassUnits()" classname="ua.zentix.incoming.client.fx.plume.NozzleGlowTest" time="0.008"/>
+  <testcase name="burnoutIsNotASwitch()" classname="ua.zentix.incoming.client.fx.plume.NozzleGlowTest" time="0.119"/>
+  <testcase name="colourIsTheBlackBodyCurve()" classname="ua.zentix.incoming.client.fx.plume.NozzleGlowTest" time="0.009"/>
+  <testcase name="throatFromTheMotorsFlow()" classname="ua.zentix.incoming.client.fx.plume.NozzleGlowTest" time="0.083"/>
+  <testcase name="throatIsSeenOnlyThroughTheExit()" classname="ua.zentix.incoming.client.fx.plume.NozzleGlowTest" time="0.027"/>
+  <testcase name="temperatureHasNoSteps()" classname="ua.zentix.incoming.client.fx.plume.NozzleGlowTest" time="0.196"/>
+  <testcase name="tableIsTheSolutionNotTheGrid()" classname="ua.zentix.incoming.client.fx.plume.NozzleGlowTest" time="1.51"/>
+  <testcase name="coolsAsTheNoteSays()" classname="ua.zentix.incoming.client.fx.plume.NozzleGlowTest" time="0.084"/>
+  <testcase name="afterBurnoutItOnlyCoolsAndReddens()" classname="ua.zentix.incoming.client.fx.plume.NozzleGlowTest" time="0.119"/>
+  <testcase name="lightFadesWithoutSteps()" classname="ua.zentix.incoming.client.fx.plume.NozzleGlowTest" time="0.119"/>
+  <testcase name="cleanupCannotRemoveAVisibleHotNozzle()" classname="ua.zentix.incoming.client.fx.plume.NozzleGlowTest" time="0.305"/>
+  <testcase name="separationKeepsTheSameNozzle()" classname="ua.zentix.incoming.client.fx.plume.NozzleGlowTest" time="0.083"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

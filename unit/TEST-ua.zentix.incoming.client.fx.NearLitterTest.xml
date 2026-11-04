@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.client.fx.NearLitterTest" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:52:21.113Z" hostname="zentixua-pc" time="0.004">
+  <properties/>
+  <testcase name="grassUnderTheCrownAndNotTheRoof()" classname="ua.zentix.incoming.client.fx.NearLitterTest" time="0.002"/>
+  <testcase name="nothingVisibleNothingSampled()" classname="ua.zentix.incoming.client.fx.NearLitterTest" time="0.0"/>
+  <testcase name="hardAndWater()" classname="ua.zentix.incoming.client.fx.NearLitterTest" time="0.001"/>
+  <testcase name="piecesFlyAsTheBodyTheLawThrew()" classname="ua.zentix.incoming.client.fx.NearLitterTest" time="0.0"/>
+  <testcase name="groundCoverPicksTheSurfaceOfThePlace()" classname="ua.zentix.incoming.client.fx.NearLitterTest" time="0.0"/>
+  <testcase name="fineDustSettlesAsItsExtinction()" classname="ua.zentix.incoming.client.fx.NearLitterTest" time="0.0"/>
+  <testcase name="piecesOnlyWhereTheFrontThrowsThem()" classname="ua.zentix.incoming.client.fx.NearLitterTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

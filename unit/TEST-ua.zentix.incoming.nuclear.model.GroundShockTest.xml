@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.nuclear.model.GroundShockTest" tests="8" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:54:11.365Z" hostname="zentixua-pc" time="0.006">
+  <properties/>
+  <testcase name="earthPrecedesAirOnlyWhenItsSpeedExceedsTheAirFrontsPathAverage()" classname="ua.zentix.incoming.nuclear.model.GroundShockTest" time="0.0"/>
+  <testcase name="bunkerBombInRockIsFullyFeltNextToTheCrater()" classname="ua.zentix.incoming.nuclear.model.GroundShockTest" time="0.0"/>
+  <testcase name="timeDomainPulseMatchesTmPeakAccelerationAsWellAsVelocity()" classname="ua.zentix.incoming.nuclear.model.GroundShockTest" time="0.001"/>
+  <testcase name="perceptionIsTheDinKbEstimateWithoutBandEdges()" classname="ua.zentix.incoming.nuclear.model.GroundShockTest" time="0.0"/>
+  <testcase name="depthAndPerceptionGatesAreContinuousAndAmplitudesDecrease()" classname="ua.zentix.incoming.nuclear.model.GroundShockTest" time="0.001"/>
+  <testcase name="finitePulseHasNoPrearrivalMotionNoJumpAndThePromisedPeak()" classname="ua.zentix.incoming.nuclear.model.GroundShockTest" time="0.0"/>
+  <testcase name="publishedImperialExampleIsConvertedBeforeApplyingPowerLaw()" classname="ua.zentix.incoming.nuclear.model.GroundShockTest" time="0.0"/>
+  <testcase name="perceptibilityNeverGrowsWithRangeAndRecipientsEndAtItsContour()" classname="ua.zentix.incoming.nuclear.model.GroundShockTest" time="0.004"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

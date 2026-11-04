@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.client.fx.layer.ShaderSourceTest" tests="18" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:52:27.548Z" hostname="zentixua-pc" time="3.563">
+  <properties/>
+  <testcase name="findsTheIncrementsVeilBreaks()" classname="ua.zentix.incoming.client.fx.layer.ShaderSourceTest" time="0.0"/>
+  <testcase name="findsAnUnclosedBody()" classname="ua.zentix.incoming.client.fx.layer.ShaderSourceTest" time="0.0"/>
+  <testcase name="everyCallMatchesItsDeclaration()" classname="ua.zentix.incoming.client.fx.layer.ShaderSourceTest" time="2.953"/>
+  <testcase name="findsACallBeforeTheDeclaration()" classname="ua.zentix.incoming.client.fx.layer.ShaderSourceTest" time="0.0"/>
+  <testcase name="findsTheConditionalsVeilBreaks()" classname="ua.zentix.incoming.client.fx.layer.ShaderSourceTest" time="0.001"/>
+  <testcase name="fireLightOnSmokeCountsTheNightOnce()" classname="ua.zentix.incoming.client.fx.layer.ShaderSourceTest" time="0.0"/>
+  <testcase name="everyUniformIsBoundInItsProgram()" classname="ua.zentix.incoming.client.fx.layer.ShaderSourceTest" time="0.059"/>
+  <testcase name="noIncrementStatement()" classname="ua.zentix.incoming.client.fx.layer.ShaderSourceTest" time="0.017"/>
+  <testcase name="everyImportIsAnInclude()" classname="ua.zentix.incoming.client.fx.layer.ShaderSourceTest" time="0.003"/>
+  <testcase name="pallKnowsWhereTheOpenAirIs()" classname="ua.zentix.incoming.client.fx.layer.ShaderSourceTest" time="0.002"/>
+  <testcase name="footLightTableDimensionsMatchItsShader()" classname="ua.zentix.incoming.client.fx.layer.ShaderSourceTest" time="0.0"/>
+  <testcase name="everyFunctionIsDeclaredBeforeItsCall()" classname="ua.zentix.incoming.client.fx.layer.ShaderSourceTest" time="0.056"/>
+  <testcase name="noConditionalInsideAnExpression()" classname="ua.zentix.incoming.client.fx.layer.ShaderSourceTest" time="0.027"/>
+  <testcase name="veilPrintsEveryProgram()" classname="ua.zentix.incoming.client.fx.layer.ShaderSourceTest" time="0.429"/>
+  <testcase name="inflowAndCarpetUseOneLightingSource()" classname="ua.zentix.incoming.client.fx.layer.ShaderSourceTest" time="0.002"/>
+  <testcase name="everyBodyIsClosed()" classname="ua.zentix.incoming.client.fx.layer.ShaderSourceTest" time="0.01"/>
+  <testcase name="pallUnderTheCapIsInItsShadow()" classname="ua.zentix.incoming.client.fx.layer.ShaderSourceTest" time="0.001"/>
+  <testcase name="pallKeepsTheBackgroundOffTheEdges()" classname="ua.zentix.incoming.client.fx.layer.ShaderSourceTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

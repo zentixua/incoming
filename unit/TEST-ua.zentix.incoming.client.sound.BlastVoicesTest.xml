@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.client.sound.BlastVoicesTest" tests="15" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:53:51.555Z" hostname="zentixua-pc" time="0.652">
+  <properties/>
+  <testcase name="worldReserveSendsTheNewToTheRumbleWhenNoOneCanYield()" classname="ua.zentix.incoming.client.sound.BlastVoicesTest" time="0.001"/>
+  <testcase name="headroomResidueTooSmallForTheGroupSendsItToTheRumble()" classname="ua.zentix.incoming.client.sound.BlastVoicesTest" time="0.0"/>
+  <testcase name="loudestTakesAQuietTailWhenTheWorldUsedTheReserve()" classname="ua.zentix.incoming.client.sound.BlastVoicesTest" time="0.0"/>
+  <testcase name="refusedSoundsReachTheRumbleAtOnce()" classname="ua.zentix.incoming.client.sound.BlastVoicesTest" time="0.001"/>
+  <testcase name="stressSceneOf300KeepsTheNearVoice()" classname="ua.zentix.incoming.client.sound.BlastVoicesTest" time="0.399"/>
+  <testcase name="raidStaysUnderTheCeilingAndTheNearKeepsItsVoice()" classname="ua.zentix.incoming.client.sound.BlastVoicesTest" time="0.248"/>
+  <testcase name="quietNewGoesToTheRumbleWhenFull()" classname="ua.zentix.incoming.client.sound.BlastVoicesTest" time="0.0"/>
+  <testcase name="endedRecordingYieldsFirst()" classname="ua.zentix.incoming.client.sound.BlastVoicesTest" time="0.0"/>
+  <testcase name="attackIsKeptFromASlightlyLouderNew()" classname="ua.zentix.incoming.client.sound.BlastVoicesTest" time="0.0"/>
+  <testcase name="louderNewTakesTheQuietestTailAndSparesAttacks()" classname="ua.zentix.incoming.client.sound.BlastVoicesTest" time="0.001"/>
+  <testcase name="stoppedSoundsHoldTheirChannelsUntilTheEngineReleasesThem()" classname="ua.zentix.incoming.client.sound.BlastVoicesTest" time="0.0"/>
+  <testcase name="reserveNeverYieldsTheLoudestNorAProtectedAttack()" classname="ua.zentix.incoming.client.sound.BlastVoicesTest" time="0.0"/>
+  <testcase name="reserveIsKeptByTheQuietestAhead()" classname="ua.zentix.incoming.client.sound.BlastVoicesTest" time="0.0"/>
+  <testcase name="theReserveBelongsToTheLoudest()" classname="ua.zentix.incoming.client.sound.BlastVoicesTest" time="0.0"/>
+  <testcase name="ceilingFromTheChannelCount()" classname="ua.zentix.incoming.client.sound.BlastVoicesTest" time="0.0"/>
+  <system-out><![CDATA[stress 300: most channels 107 of 236, blast voices requested 99 started 99 refused by the engine 0, to rumble 567, yielded 1, near voice, kept to its end
+stress 300 (pool crowded at 9.75 s): most channels 236 of 236, blast voices requested 99 started 99 refused by the engine 0, to rumble 567, yielded 5, near voice, kept to its end
+raid cap 96: most voices 73, to rumble 0, yielded 0, near -0,05 dB vs alone
+raid cap 24: most voices 24, to rumble 6, yielded 89, near -0,05 dB vs alone
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

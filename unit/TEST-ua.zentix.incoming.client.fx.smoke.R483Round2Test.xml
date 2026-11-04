@@ -1,0 +1,110 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.client.fx.smoke.R483Round2Test" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:52:55.891Z" hostname="zentixua-pc" time="42.292">
+  <properties/>
+  <testcase name="hiddenReturnMatchesContinuousPath()" classname="ua.zentix.incoming.client.fx.smoke.R483Round2Test" time="8.76"/>
+  <testcase name="flickerAndTurn()" classname="ua.zentix.incoming.client.fx.smoke.R483Round2Test" time="33.532"/>
+  <system-out><![CDATA[R483SHIFT MISSILE kind 0 hidden 5-30 s, +0 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 67 blobs
+R483SHIFT MISSILE kind 0 hidden 5-30 s, +30 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 68 blobs
+R483SHIFT MISSILE kind 0 hidden 30-120 s, +0 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 68 blobs
+R483SHIFT MISSILE kind 0 hidden 30-120 s, +30 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 68 blobs
+R483SHIFT MISSILE kind 0 hidden 60-300 s, +0 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 68 blobs
+R483SHIFT MISSILE kind 0 hidden 60-300 s, +30 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 68 blobs
+R483SHIFT MISSILE kind 0 hidden 120-600 s, +0 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 67 blobs
+R483SHIFT MISSILE kind 0 hidden 120-600 s, +30 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 67 blobs
+R483SHIFT MISSILE kind 1 hidden 5-30 s, +0 s after return: max 0.000312 m (dy 0.000000 m, 0.000020 sigma), mass-weighted 0.000011 m, 60 blobs
+R483SHIFT MISSILE kind 1 hidden 5-30 s, +30 s after return: max 0.000312 m (dy 0.000000 m, 0.000014 sigma), mass-weighted 0.000011 m, 60 blobs
+R483SHIFT MISSILE kind 1 hidden 30-120 s, +0 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 60 blobs
+R483SHIFT MISSILE kind 1 hidden 30-120 s, +30 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 60 blobs
+R483SHIFT MISSILE kind 1 hidden 60-300 s, +0 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 59 blobs
+R483SHIFT MISSILE kind 1 hidden 60-300 s, +30 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 59 blobs
+R483SHIFT MISSILE kind 1 hidden 120-600 s, +0 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 58 blobs
+R483SHIFT MISSILE kind 1 hidden 120-600 s, +30 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 58 blobs
+R483SHIFT MISSILE kind 2 hidden 5-30 s, +0 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 63 blobs
+R483SHIFT MISSILE kind 2 hidden 5-30 s, +30 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 64 blobs
+R483SHIFT MISSILE kind 2 hidden 30-120 s, +0 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 64 blobs
+R483SHIFT MISSILE kind 2 hidden 30-120 s, +30 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 64 blobs
+R483SHIFT MISSILE kind 2 hidden 60-300 s, +0 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 64 blobs
+R483SHIFT MISSILE kind 2 hidden 60-300 s, +30 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 64 blobs
+R483SHIFT MISSILE kind 2 hidden 120-600 s, +0 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 63 blobs
+R483SHIFT MISSILE kind 2 hidden 120-600 s, +30 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 63 blobs
+R483SHIFT DRONE kind 0 hidden 5-30 s, +0 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 68 blobs
+R483SHIFT DRONE kind 0 hidden 5-30 s, +30 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 68 blobs
+R483SHIFT DRONE kind 0 hidden 30-120 s, +0 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 67 blobs
+R483SHIFT DRONE kind 0 hidden 30-120 s, +30 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 67 blobs
+R483SHIFT DRONE kind 0 hidden 60-300 s, +0 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 66 blobs
+R483SHIFT DRONE kind 0 hidden 60-300 s, +30 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 66 blobs
+R483SHIFT DRONE kind 0 hidden 120-600 s, +0 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 66 blobs
+R483SHIFT DRONE kind 0 hidden 120-600 s, +30 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 66 blobs
+R483SHIFT DRONE kind 1 hidden 5-30 s, +0 s after return: max 0.000007 m (dy 0.000000 m, 0.000001 sigma), mass-weighted 0.000001 m, 70 blobs
+R483SHIFT DRONE kind 1 hidden 5-30 s, +30 s after return: max 0.000007 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000001 m, 69 blobs
+R483SHIFT DRONE kind 1 hidden 30-120 s, +0 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 66 blobs
+R483SHIFT DRONE kind 1 hidden 30-120 s, +30 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 66 blobs
+R483SHIFT DRONE kind 1 hidden 60-300 s, +0 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 65 blobs
+R483SHIFT DRONE kind 1 hidden 60-300 s, +30 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 65 blobs
+R483SHIFT DRONE kind 1 hidden 120-600 s, +0 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 65 blobs
+R483SHIFT DRONE kind 1 hidden 120-600 s, +30 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 65 blobs
+R483SHIFT DRONE kind 2 hidden 5-30 s, +0 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 66 blobs
+R483SHIFT DRONE kind 2 hidden 5-30 s, +30 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 66 blobs
+R483SHIFT DRONE kind 2 hidden 30-120 s, +0 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 65 blobs
+R483SHIFT DRONE kind 2 hidden 30-120 s, +30 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 65 blobs
+R483SHIFT DRONE kind 2 hidden 60-300 s, +0 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 64 blobs
+R483SHIFT DRONE kind 2 hidden 60-300 s, +30 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 64 blobs
+R483SHIFT DRONE kind 2 hidden 120-600 s, +0 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 64 blobs
+R483SHIFT DRONE kind 2 hidden 120-600 s, +30 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 64 blobs
+R483SHIFT ROCKET kind 0 hidden 5-30 s, +0 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 67 blobs
+R483SHIFT ROCKET kind 0 hidden 5-30 s, +30 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 65 blobs
+R483SHIFT ROCKET kind 0 hidden 30-120 s, +0 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 65 blobs
+R483SHIFT ROCKET kind 0 hidden 30-120 s, +30 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 59 blobs
+R483SHIFT ROCKET kind 0 hidden 60-300 s, +0 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 59 blobs
+R483SHIFT ROCKET kind 0 hidden 60-300 s, +30 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 59 blobs
+R483SHIFT ROCKET kind 0 hidden 120-600 s, +0 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 59 blobs
+R483SHIFT ROCKET kind 0 hidden 120-600 s, +30 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 59 blobs
+R483SHIFT ROCKET kind 1 hidden 5-30 s, +0 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 67 blobs
+R483SHIFT ROCKET kind 1 hidden 5-30 s, +30 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 65 blobs
+R483SHIFT ROCKET kind 1 hidden 30-120 s, +0 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 65 blobs
+R483SHIFT ROCKET kind 1 hidden 30-120 s, +30 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 59 blobs
+R483SHIFT ROCKET kind 1 hidden 60-300 s, +0 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 59 blobs
+R483SHIFT ROCKET kind 1 hidden 60-300 s, +30 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 59 blobs
+R483SHIFT ROCKET kind 1 hidden 120-600 s, +0 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 59 blobs
+R483SHIFT ROCKET kind 1 hidden 120-600 s, +30 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 59 blobs
+R483SHIFT ROCKET kind 2 hidden 5-30 s, +0 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 67 blobs
+R483SHIFT ROCKET kind 2 hidden 5-30 s, +30 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 65 blobs
+R483SHIFT ROCKET kind 2 hidden 30-120 s, +0 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 65 blobs
+R483SHIFT ROCKET kind 2 hidden 30-120 s, +30 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 59 blobs
+R483SHIFT ROCKET kind 2 hidden 60-300 s, +0 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 59 blobs
+R483SHIFT ROCKET kind 2 hidden 60-300 s, +30 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 59 blobs
+R483SHIFT ROCKET kind 2 hidden 120-600 s, +0 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 59 blobs
+R483SHIFT ROCKET kind 2 hidden 120-600 s, +30 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 59 blobs
+R483SHIFT LOITER kind 0 hidden 5-30 s, +0 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 66 blobs
+R483SHIFT LOITER kind 0 hidden 5-30 s, +30 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 65 blobs
+R483SHIFT LOITER kind 0 hidden 30-120 s, +0 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 59 blobs
+R483SHIFT LOITER kind 0 hidden 30-120 s, +30 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 59 blobs
+R483SHIFT LOITER kind 0 hidden 60-300 s, +0 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 59 blobs
+R483SHIFT LOITER kind 0 hidden 60-300 s, +30 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 59 blobs
+R483SHIFT LOITER kind 0 hidden 120-600 s, +0 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 0 blobs
+R483SHIFT LOITER kind 0 hidden 120-600 s, +30 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 0 blobs
+R483SHIFT LOITER kind 1 hidden 5-30 s, +0 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 66 blobs
+R483SHIFT LOITER kind 1 hidden 5-30 s, +30 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 65 blobs
+R483SHIFT LOITER kind 1 hidden 30-120 s, +0 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 59 blobs
+R483SHIFT LOITER kind 1 hidden 30-120 s, +30 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 59 blobs
+R483SHIFT LOITER kind 1 hidden 60-300 s, +0 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 59 blobs
+R483SHIFT LOITER kind 1 hidden 60-300 s, +30 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 59 blobs
+R483SHIFT LOITER kind 1 hidden 120-600 s, +0 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 0 blobs
+R483SHIFT LOITER kind 1 hidden 120-600 s, +30 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 0 blobs
+R483SHIFT LOITER kind 2 hidden 5-30 s, +0 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 66 blobs
+R483SHIFT LOITER kind 2 hidden 5-30 s, +30 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 65 blobs
+R483SHIFT LOITER kind 2 hidden 30-120 s, +0 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 59 blobs
+R483SHIFT LOITER kind 2 hidden 30-120 s, +30 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 59 blobs
+R483SHIFT LOITER kind 2 hidden 60-300 s, +0 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 59 blobs
+R483SHIFT LOITER kind 2 hidden 60-300 s, +30 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 59 blobs
+R483SHIFT LOITER kind 2 hidden 120-600 s, +0 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 0 blobs
+R483SHIFT LOITER kind 2 hidden 120-600 s, +30 s after return: max 0.000000 m (dy 0.000000 m, 0.000000 sigma), mass-weighted 0.000000 m, 0 blobs
+R483R2 n=100 fps=60 emit=150us (deterministic clock): steady 0/1200 frames with a blinking cloud, 0.00 clouds/frame not drawn; prep mean 0.53 max 2.37 ms | turn: all drawn at frame 3, max drawn age 0.150 s, max prep 1.69 ms
+R483R2 n=100 fps=30 emit=150us (deterministic clock): steady 0/600 frames with a blinking cloud, 0.00 clouds/frame not drawn; prep mean 0.66 max 3.15 ms | turn: all drawn at frame 3, max drawn age 0.300 s, max prep 1.88 ms
+R483R2 n=100 fps=20 emit=150us (deterministic clock): steady 0/400 frames with a blinking cloud, 0.00 clouds/frame not drawn; prep mean 0.81 max 2.90 ms | turn: all drawn at frame 3, max drawn age 0.450 s, max prep 3.78 ms
+R483R2 n=128 fps=60 emit=150us (deterministic clock): steady 0/1200 frames with a blinking cloud, 0.00 clouds/frame not drawn; prep mean 0.62 max 3.15 ms | turn: all drawn at frame 4, max drawn age 0.183 s, max prep 1.96 ms
+R483R2 n=128 fps=30 emit=150us (deterministic clock): steady 0/600 frames with a blinking cloud, 0.00 clouds/frame not drawn; prep mean 0.77 max 3.16 ms | turn: all drawn at frame 4, max drawn age 0.367 s, max prep 2.25 ms
+R483R2 n=128 fps=20 emit=150us (deterministic clock): steady 0/399 frames with a blinking cloud, 0.00 clouds/frame not drawn; prep mean 0.97 max 3.81 ms | turn: all drawn at frame 4, max drawn age 0.550 s, max prep 2.21 ms
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.util.TerrainSurveyTest" tests="10" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:54:13.445Z" hostname="zentixua-pc" time="0.013">
+  <properties/>
+  <testcase name="generatorFailureStaysUnknownUntilRetryEvenWhenAskedEveryTick()" classname="ua.zentix.incoming.util.TerrainSurveyTest" time="0.001"/>
+  <testcase name="belowZeroRetrogenKeepsAlreadyShiftedHeightmap()" classname="ua.zentix.incoming.util.TerrainSurveyTest" time="0.0"/>
+  <testcase name="unloadInvalidatesEveryTypeAndLateAnswerCannotReplaceItsMap()" classname="ua.zentix.incoming.util.TerrainSurveyTest" time="0.0"/>
+  <testcase name="unloadCacheIsBoundedWithoutWaitingForPeriodicCleanup()" classname="ua.zentix.incoming.util.TerrainSurveyTest" time="0.006"/>
+  <testcase name="generatorCellTakesHighestOfFourNodes()" classname="ua.zentix.incoming.util.TerrainSurveyTest" time="0.0"/>
+  <testcase name="frequentlyReadHeightsSurviveUnrelatedChunkUnloads()" classname="ua.zentix.incoming.util.TerrainSurveyTest" time="0.001"/>
+  <testcase name="fullChunkGivesItsHeights()" classname="ua.zentix.incoming.util.TerrainSurveyTest" time="0.0"/>
+  <testcase name="untrustedHeightsAreRejected()" classname="ua.zentix.incoming.util.TerrainSurveyTest" time="0.001"/>
+  <testcase name="totalPendingIncludesJobsAlreadyWaitingForGenerator()" classname="ua.zentix.incoming.util.TerrainSurveyTest" time="0.003"/>
+  <testcase name="generatorQueueIsBoundedAndDemandPromotesAnExistingPrefetch()" classname="ua.zentix.incoming.util.TerrainSurveyTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

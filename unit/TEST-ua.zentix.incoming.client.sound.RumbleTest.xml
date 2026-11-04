@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.client.sound.RumbleTest" tests="11" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:53:57.107Z" hostname="zentixua-pc" time="0.082">
+  <properties/>
+  <testcase name="matchesTheExactSum()" classname="ua.zentix.incoming.client.sound.RumbleTest" time="0.001"/>
+  <testcase name="firesAddUpByPowerIntoQuarters()" classname="ua.zentix.incoming.client.sound.RumbleTest" time="0.0"/>
+  <testcase name="loopVolumePitchAndHighs()" classname="ua.zentix.incoming.client.sound.RumbleTest" time="0.0"/>
+  <testcase name="quarterByDirection()" classname="ua.zentix.incoming.client.sound.RumbleTest" time="0.0"/>
+  <testcase name="audibilityIsDecidedByTheSum()" classname="ua.zentix.incoming.client.sound.RumbleTest" time="0.0"/>
+  <testcase name="timbreFollowsWhatSoundsInTheRumble()" classname="ua.zentix.incoming.client.sound.RumbleTest" time="0.0"/>
+  <testcase name="energyProfileIsTheRecordingsOwn()" classname="ua.zentix.incoming.client.sound.RumbleTest" time="0.006"/>
+  <testcase name="endedMembersLeave()" classname="ua.zentix.incoming.client.sound.RumbleTest" time="0.0"/>
+  <testcase name="silentLoopIsReleasedAfterASecond()" classname="ua.zentix.incoming.client.sound.RumbleTest" time="0.0"/>
+  <testcase name="handoverKeepsThePower()" classname="ua.zentix.incoming.client.sound.RumbleTest" time="0.0"/>
+  <testcase name="rumbleTakesTheEnergyOfThePlayingVariant()" classname="ua.zentix.incoming.client.sound.RumbleTest" time="0.074"/>
+  <system-out><![CDATA[rumble: 80 members, loops -10,22 -8,79 -7,25 -10,37 dB vs ceiling, sum vs exact 0,0000 dB
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

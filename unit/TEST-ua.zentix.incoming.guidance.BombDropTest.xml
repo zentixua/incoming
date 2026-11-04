@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.guidance.BombDropTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:54:09.377Z" hostname="zentixua-pc" time="0.206">
+  <properties/>
+  <testcase name="edgeCountsTheNoseAndGround()" classname="ua.zentix.incoming.guidance.BombDropTest" time="0.0"/>
+  <testcase name="neverReleasesOverPointBehind()" classname="ua.zentix.incoming.guidance.BombDropTest" time="0.0"/>
+  <testcase name="releasesFromAnyHeight()" classname="ua.zentix.incoming.guidance.BombDropTest" time="0.203"/>
+  <testcase name="neverReleasesBelowThePoint()" classname="ua.zentix.incoming.guidance.BombDropTest" time="0.0"/>
+  <testcase name="releasesAtTheLineOnLevel()" classname="ua.zentix.incoming.guidance.BombDropTest" time="0.002"/>
+  <testcase name="doesNotReleaseWhereTheBombMisses()" classname="ua.zentix.incoming.guidance.BombDropTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

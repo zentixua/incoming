@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.scenario.SandboxCommandTest" tests="8" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:54:13.075Z" hostname="zentixua-pc" time="0.004">
+  <properties/>
+  <testcase name="badCommandsFailBeforeRunning()" classname="ua.zentix.incoming.scenario.SandboxCommandTest" time="0.001"/>
+  <testcase name="spentNeedsADroppableBooster()" classname="ua.zentix.incoming.scenario.SandboxCommandTest" time="0.0"/>
+  <testcase name="realTakesBridgeDeck()" classname="ua.zentix.incoming.scenario.SandboxCommandTest" time="0.001"/>
+  <testcase name="timeTakesDayNightOrTick()" classname="ua.zentix.incoming.scenario.SandboxCommandTest" time="0.0"/>
+  <testcase name="shotsKeepTimesInOrder()" classname="ua.zentix.incoming.scenario.SandboxCommandTest" time="0.0"/>
+  <testcase name="parsesEffectsFromChatAndFile()" classname="ua.zentix.incoming.scenario.SandboxCommandTest" time="0.001"/>
+  <testcase name="flightPassesOverThePointInAStraightLine()" classname="ua.zentix.incoming.scenario.SandboxCommandTest" time="0.0"/>
+  <testcase name="nukeNearTakesBurstAndRange()" classname="ua.zentix.incoming.scenario.SandboxCommandTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

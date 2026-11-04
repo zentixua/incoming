@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.client.nuclear.PallGroundTest" tests="9" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:53:48.550Z" hostname="zentixua-pc" time="0.13">
+  <properties/>
+  <testcase name="aLakeByTheViewerDoesNotFloodTheLand()" classname="ua.zentix.incoming.client.nuclear.PallGroundTest" time="0.03"/>
+  <testcase name="growingKeepsWhatIsKnown()" classname="ua.zentix.incoming.client.nuclear.PallGroundTest" time="0.032"/>
+  <testcase name="seenCellsStaySeen()" classname="ua.zentix.incoming.client.nuclear.PallGroundTest" time="0.033"/>
+  <testcase name="unknownTakesTheKnownAround()" classname="ua.zentix.incoming.client.nuclear.PallGroundTest" time="0.005"/>
+  <testcase name="coastContinuesAndOpenSeaStaysSea()" classname="ua.zentix.incoming.client.nuclear.PallGroundTest" time="0.008"/>
+  <testcase name="knowingNothingKeepsTheGroundUnderTheBurst()" classname="ua.zentix.incoming.client.nuclear.PallGroundTest" time="0.004"/>
+  <testcase name="knownCellsKeepTheirWater()" classname="ua.zentix.incoming.client.nuclear.PallGroundTest" time="0.006"/>
+  <testcase name="unknownWaterIsWhatIsUnderTheBurst()" classname="ua.zentix.incoming.client.nuclear.PallGroundTest" time="0.003"/>
+  <testcase name="refillsOnlyOnNewsAtMostOnceASecond()" classname="ua.zentix.incoming.client.nuclear.PallGroundTest" time="0.008"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

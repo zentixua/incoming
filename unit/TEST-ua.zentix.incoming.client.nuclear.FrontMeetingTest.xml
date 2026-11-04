@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.client.nuclear.FrontMeetingTest" tests="10" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:53:43.333Z" hostname="zentixua-pc" time="0.022">
+  <properties/>
+  <testcase name="cameraOnThePlayerMeetsTheFrontWithTheBody()" classname="ua.zentix.incoming.client.nuclear.FrontMeetingTest" time="0.001"/>
+  <testcase name="cameraBackAtTheBurstHearsNothing()" classname="ua.zentix.incoming.client.nuclear.FrontMeetingTest" time="0.0"/>
+  <testcase name="playerMovedBehindTheFrontIsNotHit()" classname="ua.zentix.incoming.client.nuclear.FrontMeetingTest" time="0.0"/>
+  <testcase name="cameraAlongTheFrontHearsItOnce()" classname="ua.zentix.incoming.client.nuclear.FrontMeetingTest" time="0.0"/>
+  <testcase name="cameraBackBehindTheFrontHearsNothing()" classname="ua.zentix.incoming.client.nuclear.FrontMeetingTest" time="0.001"/>
+  <testcase name="noPlayerNoHit()" classname="ua.zentix.incoming.client.nuclear.FrontMeetingTest" time="0.001"/>
+  <testcase name="playerAheadAgainHearsTheFrontAgain()" classname="ua.zentix.incoming.client.nuclear.FrontMeetingTest" time="0.0"/>
+  <testcase name="projectileCameraHearsTheBurstAndThePlayerTheWave()" classname="ua.zentix.incoming.client.nuclear.FrontMeetingTest" time="0.0"/>
+  <testcase name="movingTowardTheBurstMeetsTheFront()" classname="ua.zentix.incoming.client.nuclear.FrontMeetingTest" time="0.019"/>
+  <testcase name="cameraNearThePlayerMeetsTheFrontWithTheBody()" classname="ua.zentix.incoming.client.nuclear.FrontMeetingTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

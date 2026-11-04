@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.client.nuclear.MushroomFieldTest" tests="13" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:53:43.378Z" hostname="zentixua-pc" time="0.194">
+  <properties/>
+  <testcase name="wallReflectanceIsNeverNegative()" classname="ua.zentix.incoming.client.nuclear.MushroomFieldTest" time="0.001"/>
+  <testcase name="shadowAxesAreOrthonormal()" classname="ua.zentix.incoming.client.nuclear.MushroomFieldTest" time="0.001"/>
+  <testcase name="boundHoldsTheDriftedBody()" classname="ua.zentix.incoming.client.nuclear.MushroomFieldTest" time="0.001"/>
+  <testcase name="stemAndSkirtAreTheLayersDust()" classname="ua.zentix.incoming.client.nuclear.MushroomFieldTest" time="0.0"/>
+  <testcase name="steamMixesWithoutAJump()" classname="ua.zentix.incoming.client.nuclear.MushroomFieldTest" time="0.009"/>
+  <testcase name="capIsWhiteOutsideAndBrownInside()" classname="ua.zentix.incoming.client.nuclear.MushroomFieldTest" time="0.001"/>
+  <testcase name="boundsAreFiniteBeforeTheFrontReachesTheGround()" classname="ua.zentix.incoming.client.nuclear.MushroomFieldTest" time="0.009"/>
+  <testcase name="boundHoldsTheWaterColumn()" classname="ua.zentix.incoming.client.nuclear.MushroomFieldTest" time="0.001"/>
+  <testcase name="dustyCapAndBall()" classname="ua.zentix.incoming.client.nuclear.MushroomFieldTest" time="0.0"/>
+  <testcase name="groundUnderTheMushroomIsTheDustLayerOnIt()" classname="ua.zentix.incoming.client.nuclear.MushroomFieldTest" time="0.001"/>
+  <testcase name="boundsHoldTheStemFrontBillows()" classname="ua.zentix.incoming.client.nuclear.MushroomFieldTest" time="0.063"/>
+  <testcase name="shadowTileHoldsTheBound()" classname="ua.zentix.incoming.client.nuclear.MushroomFieldTest" time="0.105"/>
+  <testcase name="ballSurfaceFollowsTheBreakawayAndTheRollUp()" classname="ua.zentix.incoming.client.nuclear.MushroomFieldTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

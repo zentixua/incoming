@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.registry.PenetrabilityTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:54:13.064Z" hostname="zentixua-pc" time="0.009">
+  <properties/>
+  <testcase name="shippedDataRepresentsBuildingsAndPreservesNaturalMaterial()" classname="ua.zentix.incoming.registry.PenetrabilityTest" time="0.008"/>
+  <testcase name="thicknessRoundTripsAndRejectsInvalidDepths()" classname="ua.zentix.incoming.registry.PenetrabilityTest" time="0.001"/>
+  <testcase name="oldEntriesAndUnknownBlocksRemainSolidMetres()" classname="ua.zentix.incoming.registry.PenetrabilityTest" time="0.0"/>
+  <testcase name="representedPathConsumesYoungDepthOnce()" classname="ua.zentix.incoming.registry.PenetrabilityTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

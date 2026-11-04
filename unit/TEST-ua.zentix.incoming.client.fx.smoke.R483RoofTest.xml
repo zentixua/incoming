@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.client.fx.smoke.R483RoofTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:52:54.646Z" hostname="zentixua-pc" time="1.244">
+  <properties/>
+  <testcase name="streetDustOnRoofs()" classname="ua.zentix.incoming.client.fx.smoke.R483RoofTest" time="1.244"/>
+  <system-out><![CDATA[R483ROOF MISSILE hidden 2-6 s: ground dust above 10 m (roofs) 73.0% watched vs 73.0% returned
+R483ROOF MISSILE hidden 5-30 s: ground dust above 10 m (roofs) 0.0% watched vs 0.0% returned
+R483ROOF MISSILE hidden 30-120 s: ground dust above 10 m (roofs) 100.0% watched vs 100.0% returned
+R483ROOF MISSILE hidden 60-300 s: ground dust above 10 m (roofs) 100.0% watched vs 100.0% returned
+R483ROOF DRONE hidden 2-6 s: ground dust above 10 m (roofs) 51.8% watched vs 51.8% returned
+R483ROOF DRONE hidden 5-30 s: ground dust above 10 m (roofs) 0.0% watched vs 0.0% returned
+R483ROOF DRONE hidden 30-120 s: ground dust above 10 m (roofs) 100.0% watched vs 100.0% returned
+R483ROOF DRONE hidden 60-300 s: ground dust above 10 m (roofs) 100.0% watched vs 100.0% returned
+R483ROOF ROCKET hidden 2-6 s: ground dust above 10 m (roofs) 21.9% watched vs 21.9% returned
+R483ROOF ROCKET hidden 5-30 s: ground dust above 10 m (roofs) 0.0% watched vs 0.0% returned
+R483ROOF ROCKET hidden 30-120 s: ground dust above 10 m (roofs) 100.0% watched vs 100.0% returned
+R483ROOF ROCKET hidden 60-300 s: ground dust above 10 m (roofs) 100.0% watched vs 100.0% returned
+R483ROOF LOITER hidden 2-6 s: ground dust above 10 m (roofs) 21.8% watched vs 21.8% returned
+R483ROOF LOITER hidden 5-30 s: ground dust above 10 m (roofs) 0.0% watched vs 0.0% returned
+R483ROOF LOITER hidden 30-120 s: ground dust above 10 m (roofs) 100.0% watched vs 100.0% returned
+R483ROOF LOITER hidden 60-300 s: ground dust above 10 m (roofs) 100.0% watched vs 100.0% returned
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

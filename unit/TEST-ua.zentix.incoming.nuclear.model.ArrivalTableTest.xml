@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.nuclear.model.ArrivalTableTest" tests="9" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:54:10.663Z" hostname="zentixua-pc" time="0.004">
+  <properties/>
+  <testcase name="beyondTableAtSoundSpeed()" classname="ua.zentix.incoming.nuclear.model.ArrivalTableTest" time="0.0"/>
+  <testcase name="monotonic()" classname="ua.zentix.incoming.nuclear.model.ArrivalTableTest" time="0.001"/>
+  <testcase name="airBurstReachesTheGroundByBrode()" classname="ua.zentix.incoming.nuclear.model.ArrivalTableTest" time="0.001"/>
+  <testcase name="inverseMatches()" classname="ua.zentix.incoming.nuclear.model.ArrivalTableTest" time="0.0"/>
+  <testcase name="[1] 200, 0.07" classname="ua.zentix.incoming.nuclear.model.ArrivalTableTest" time="0.0"/>
+  <testcase name="[2] 1000, 1.6" classname="ua.zentix.incoming.nuclear.model.ArrivalTableTest" time="0.001"/>
+  <testcase name="[3] 2000, 4.3" classname="ua.zentix.incoming.nuclear.model.ArrivalTableTest" time="0.0"/>
+  <testcase name="[4] 5000, 12.8" classname="ua.zentix.incoming.nuclear.model.ArrivalTableTest" time="0.0"/>
+  <testcase name="[5] 10000, 27" classname="ua.zentix.incoming.nuclear.model.ArrivalTableTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

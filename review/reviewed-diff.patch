@@ -1,0 +1,643 @@
+diff --git a/docs/guide/nuke.md b/docs/guide/nuke.md
+index ff2d1228b..b529f8e34 100644
+--- a/docs/guide/nuke.md
++++ b/docs/guide/nuke.md
+@@ -39,8 +39,9 @@ alive while the review is open; closing, death, disconnect, dimension change, ab
+ unlaunched preparation. A confirmed order waiting for a second key or carrier warning keeps its preparation itself.
+ The configured flight duration (90 seconds by default) starts at launch, after preparation. Ordinary nuclear commands
+ prepare unpaid and then launch once ready, because the command itself is the instruction to fire. Operator `nuke now`
+-remains immediate diagnostic behavior. Preparation covers the intended target; an unexpected carrier impact or terrain
+-edits may need more work. It does not guarantee that every distant-terrain client already has the latest view.
++remains immediate diagnostic behavior. Carrier preparation includes its usual randomly selected aim offset; launch keeps that same offset.
++Plans cover the normal arrival at that site. An earlier collision, moving target, terrain edit or server restart may
++require fresh destruction work at the actual impact site. It does not guarantee that every distant-terrain client already has the latest view.
+ 
+ ![Console with the nuclear warhead: yield and burst mode](img/remote-nuke.png)
+ 
+diff --git a/docs/guide/ru/nuke.md b/docs/guide/ru/nuke.md
+index 763f65a86..60ce1ebe6 100644
+--- a/docs/guide/ru/nuke.md
++++ b/docs/guide/ru/nuke.md
+@@ -39,8 +39,9 @@ I степени открытой кожи при указанной погод
+ подготовку. Подтверждённый заказ сам сохраняет её во время ожидания второго ключа или предупреждения носителя.
+ Настроенное время полёта (по умолчанию 90 секунд) начинается с пуска, после подготовки. Обычная ядерная команда
+ сначала готовится без оплаты, затем выполняет один пуск: сама команда уже является указанием стрелять. Операторская
+-`nuke now` остаётся немедленной диагностической командой. Подготовка относится к выбранной цели: неожиданное попадание
+-носителя или изменения рельефа могут потребовать дополнительной работы. Она не гарантирует, что каждый клиент дальней
++`nuke now` остаётся немедленной диагностической командой. Подготовка носителя учитывает его обычное случайное отклонение прицеливания; при пуске оно сохраняется.
++Планы относятся к штатному прибытию в эту точку. Раннее столкновение, движение цели, изменение рельефа или перезапуск
++сервера могут потребовать новой подготовки разрушений в фактическом месте попадания. Она не гарантирует, что каждый клиент дальней
+ прорисовки уже получил свежий вид.
+ 
+ ![Экран пульта с ядерной боевой частью: мощность и тип подрыва](../img/remote-nuke.png)
+diff --git a/mod/src/devtest/java/ua/zentix/incoming/entity/NormalCarrierEquivalenceGameTests.java b/mod/src/devtest/java/ua/zentix/incoming/entity/NormalCarrierEquivalenceGameTests.java
+new file mode 100644
+index 000000000..3a57ea761
+--- /dev/null
++++ b/mod/src/devtest/java/ua/zentix/incoming/entity/NormalCarrierEquivalenceGameTests.java
+@@ -0,0 +1,105 @@
++package ua.zentix.incoming.entity;
++
++import java.util.UUID;
++import net.minecraft.core.BlockPos;
++import net.minecraft.gametest.framework.GameTest;
++import net.minecraft.gametest.framework.GameTestHelper;
++import net.minecraft.world.phys.Vec3;
++import net.neoforged.neoforge.gametest.GameTestHolder;
++import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
++import ua.zentix.incoming.Incoming;
++import ua.zentix.incoming.IncomingConfig;
++import ua.zentix.incoming.gametest.StrikeGameTests;
++import ua.zentix.incoming.nuclear.NuclearEvents;
++import ua.zentix.incoming.nuclear.NuclearStrikes;
++import ua.zentix.incoming.nuclear.world.RuinPreparation;
++import ua.zentix.incoming.strike.Loadout;
++import ua.zentix.incoming.strike.StrikeService;
++import ua.zentix.incoming.strike.VirtualFlights;
++import ua.zentix.incoming.strike.Waypoints;
++import ua.zentix.incoming.strike.WeaponType;
++import ua.zentix.incoming.target.Target;
++
++/** Same sampled error, route random input, air/time and readiness schedule through real registered flights. */
++@GameTestHolder(Incoming.MOD_ID)
++@PrefixGameTestTemplate(false)
++public final class NormalCarrierEquivalenceGameTests {
++    private NormalCarrierEquivalenceGameTests() {}
++
++    @GameTest(template = "range", batch = "nuke_carrier_equivalent_ground", timeoutTicks = 4000, skyAccess = true)
++    public static void groundFlightMatchesOrdinaryLaunch(GameTestHelper h) { pair(h, false); }
++
++    @GameTest(template = "range", batch = "nuke_carrier_equivalent_air", timeoutTicks = 4000, skyAccess = true)
++    public static void airFlightMatchesOrdinaryLaunch(GameTestHelper h) { pair(h, true); }
++
++    private static void pair(GameTestHelper h, boolean air) {
++        StrikeGameTests.gameSpeed(h);
++        var level = h.getLevel();
++        NuclearStrikes.clear(level);
++        boolean damage = IncomingConfig.SERVER.nukeBlockDamage.get(), carriers = IncomingConfig.SERVER.carrierNukes.get();
++        IncomingConfig.SERVER.nukeBlockDamage.set(false);
++        IncomingConfig.SERVER.carrierNukes.set(true);
++        UUID handle = UUID.randomUUID(), preparedOwner = UUID.randomUUID(), ordinaryOwner = UUID.randomUUID();
++        Vec3 target = Vec3.atCenterOf(h.absolutePos(new BlockPos(32, 1, 32)));
++        long seed = 781329L;
++        level.random.setSeed(seed);
++        RuinPreparation.prepareCarrier(level, handle, preparedOwner, target, 1, true, air, WeaponType.MISSILE);
++        long[] launched = {-1};
++        int[] compared = {0};
++        StrikeGameTests.afterTest(h, () -> {
++            VirtualFlights.get(level).clear(level, p -> preparedOwner.equals(p.ownerId()) || ordinaryOwner.equals(p.ownerId()));
++            var owned = new java.util.ArrayList<StrikeProjectile>();
++            for (var e : level.getAllEntities()) if (e instanceof StrikeProjectile p
++                    && (preparedOwner.equals(p.ownerId()) || ordinaryOwner.equals(p.ownerId()))) owned.add(p);
++            owned.forEach(StrikeProjectile::discard);
++            RuinPreparation.cancel(level, handle);
++            NuclearStrikes.clear(level);
++            IncomingConfig.SERVER.nukeBlockDamage.set(damage);
++            IncomingConfig.SERVER.carrierNukes.set(carriers);
++        });
++        h.onEachTick(() -> {
++            if (launched[0] < 0) {
++                var status = RuinPreparation.status(level, handle);
++                if (status.stage() != RuinPreparation.Stage.READY) return;
++                Vec3 point = status.resolvedTarget();
++                Target order = new Target.Ground(point);
++                Loadout.Nuke nuke = new Loadout.Nuke(1, air, true);
++                // Control only the shared route RNG inputs, not flight state or terrain.
++                level.random.setSeed(seed);
++                Vec3 miss = WeaponType.MISSILE.spec().route().miss(level.random);
++                h.assertTrue(miss.equals(RuinPreparation.carrierMiss(level, handle, WeaponType.MISSILE)), "different route samples");
++                h.assertTrue(StrikeService.launchPrepared(level, WeaponType.MISSILE, order, point, 0, preparedOwner, null,
++                        false, nuke, Waypoints.NONE, null, handle, 1800).ok(), "prepared launch refused");
++                level.random.setSeed(seed);
++                h.assertTrue(StrikeService.launch(level, WeaponType.MISSILE, order, point, 0, ordinaryOwner,
++                        false, nuke, Waypoints.NONE, null).ok(), "ordinary launch refused");
++                launched[0] = level.getGameTime();
++            }
++            StrikeProjectile prepared = find(h, preparedOwner), ordinary = find(h, ordinaryOwner);
++            if (prepared == null || ordinary == null) {
++                h.assertTrue(prepared == null && ordinary == null, "paired flights terminated on different ticks");
++                return;
++            }
++            h.assertTrue(prepared.position().equals(ordinary.position()) && prepared.aimPoint().equals(ordinary.aimPoint())
++                            && prepared.flightPhase() == ordinary.flightPhase() && prepared.speed == ordinary.speed,
++                    "paired flight state diverged at tick " + (level.getGameTime() - launched[0]));
++            compared[0]++;
++        });
++        h.succeedWhen(() -> {
++            var events = NuclearEvents.get(level).detonations();
++            h.assertTrue(events.size() == 2, "waiting for both actual terminal events");
++            var a = events.getFirst(); var b = events.getLast();
++            h.assertTrue(compared[0] > 100, "pair did not exercise an ordinary route");
++            h.assertTrue(a.burst().equals(b.burst()) && a.groundY() == b.groundY() && a.gameTime() == b.gameTime(),
++                    "preparation changed actual terminal geometry or flight duration");
++            Incoming.LOG.info("CARRIER paired air={} comparedTicks={} terminalTick={} burst={} ground={}",
++                    air, compared[0], a.gameTime() - launched[0], a.burst(), a.groundY());
++        });
++    }
++
++    private static StrikeProjectile find(GameTestHelper h, UUID owner) {
++        for (var p : VirtualFlights.get(h.getLevel()).flights()) if (owner.equals(p.ownerId()) && !p.isRemoved()) return p;
++        for (var e : h.getLevel().getAllEntities()) if (e instanceof StrikeProjectile p && owner.equals(p.ownerId()) && !p.isRemoved()) return p;
++        return null;
++    }
++}
+diff --git a/mod/src/devtest/java/ua/zentix/incoming/entity/NuclearCarrierGameTests.java b/mod/src/devtest/java/ua/zentix/incoming/entity/NuclearCarrierGameTests.java
+index f04f84a46..ed2470ebe 100644
+--- a/mod/src/devtest/java/ua/zentix/incoming/entity/NuclearCarrierGameTests.java
++++ b/mod/src/devtest/java/ua/zentix/incoming/entity/NuclearCarrierGameTests.java
+@@ -120,10 +120,13 @@ public final class NuclearCarrierGameTests {
+             h.assertTrue(p.aimPoint().distanceTo(target.position()) < 10, "Tracker retained old prepared target");
+             Vec3 outside = at.add(1200, 0, 0);
+             h.assertTrue(p.retarget(new Target.Point(outside), outside), "In-flight operator mechanism refused far point");
++            // A saved carrier can outlive the unsaved preparation owner after restart.
++            p.setNuclearPreparation(8_310_007);
+             CompoundTag saved = new CompoundTag(); p.saveWithoutId(saved);
+             var restored = new CruiseMissileEntity(ModEntities.CRUISE_MISSILE.get(), level);
+             restored.load(saved);
+             h.assertTrue(restored.isNuclear(), "Restart lost nuclear payload");
++            h.assertTrue(restored.nuclearPreparation() == 8_310_007, "Saved flight lost explicit identity");
+             var expected = NuclearWarhead.geometry(level, NuclearStrikes.ground(level, restored.position()), 15, false, 1);
+             h.assertTrue(restored.hurt(level.damageSources().generic(), Float.MAX_VALUE), "Reloaded carrier ignored lethal damage");
+             event(h, expected.burst(), expected.groundY(), expected.surface(), level.getGameTime());
+diff --git a/mod/src/devtest/java/ua/zentix/incoming/entity/NuclearPreparedFlightGameTests.java b/mod/src/devtest/java/ua/zentix/incoming/entity/NuclearPreparedFlightGameTests.java
+index aa60cdeb7..4a2173421 100644
+--- a/mod/src/devtest/java/ua/zentix/incoming/entity/NuclearPreparedFlightGameTests.java
++++ b/mod/src/devtest/java/ua/zentix/incoming/entity/NuclearPreparedFlightGameTests.java
+@@ -74,7 +74,7 @@ public final class NuclearPreparedFlightGameTests {
+         Vec3 target = Vec3.atCenterOf(h.absolutePos(new BlockPos(32, 1, 32)));
+         Loadout.Nuke nuke = new Loadout.Nuke(1, false, true);
+         try {
+-            RuinPreparation.prepare(level, handle, owner, target, 1, false, false);
++            RuinPreparation.prepareCarrier(level, handle, owner, target, 1, false, false, WeaponType.MISSILE);
+             makeReady(level, handle, target);
+             var accepted = StrikeService.launchPrepared(level, WeaponType.MISSILE, new Target.Point(target), target, 0, owner, null,
+                     false, nuke, Waypoints.NONE, null, handle, 1800);
+@@ -114,7 +114,7 @@ public final class NuclearPreparedFlightGameTests {
+         Vec3 target = Vec3.atCenterOf(h.absolutePos(new BlockPos(32, 1, 32)));
+         Loadout.Nuke nuke = new Loadout.Nuke(1, false, true);
+         try {
+-            RuinPreparation.prepare(level, handle, owner, target, 1, false, false);
++            RuinPreparation.prepareCarrier(level, handle, owner, target, 1, false, false, WeaponType.BUNKER);
+             makeReady(level, handle, target);
+             h.assertTrue(StrikeService.launchPrepared(level, WeaponType.BUNKER, new Target.Point(target), target, 0, owner, null,
+                     false, nuke, Waypoints.NONE, null, handle, 1800).ok(), "ready bomber rejected");
+@@ -152,7 +152,10 @@ public final class NuclearPreparedFlightGameTests {
+                     try { return handle.equals(field(p, "handle").get(p)) && !field(p, "draining").getBoolean(p); }
+                     catch (ReflectiveOperationException e) { throw new AssertionError(e); }
+                 }).findFirst().orElseThrow();
+-        var geometry = NuclearWarhead.geometry(level, target, 1, false, (float) IncomingConfig.SERVER.effectsScale());
++        var weapon = (WeaponType) field(request, "carrierWeapon").get(request);
++        Vec3 terminal = target.add((Vec3) field(request, "miss").get(request));
++        if (weapon == WeaponType.BUNKER) terminal = NuclearWarhead.surfaceAt(level, terminal).add(0, -.5, 0);
++        var geometry = NuclearWarhead.geometry(level, terminal, 1, false, (float) IncomingConfig.SERVER.effectsScale());
+         field(request, "geometry").set(request, geometry);
+         var contextType = Class.forName("ua.zentix.incoming.nuclear.world.RuinContext");
+         var constructor = contextType.getDeclaredConstructor(ServerLevel.class, ua.zentix.incoming.nuclear.Detonation.class);
+diff --git a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/NormalCarrierPreparationGameTests.java b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/NormalCarrierPreparationGameTests.java
+new file mode 100644
+index 000000000..f37a7a3ab
+--- /dev/null
++++ b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/NormalCarrierPreparationGameTests.java
+@@ -0,0 +1,191 @@
++package ua.zentix.incoming.nuclear.world;
++
++import java.lang.reflect.Field;
++import java.util.List;
++import java.util.UUID;
++import net.minecraft.core.BlockPos;
++import net.minecraft.gametest.framework.GameTest;
++import net.minecraft.gametest.framework.GameTestHelper;
++import net.minecraft.server.level.ServerLevel;
++import net.minecraft.util.RandomSource;
++import net.minecraft.world.level.block.Blocks;
++import net.minecraft.world.level.levelgen.Heightmap;
++import net.minecraft.world.phys.Vec3;
++import net.neoforged.neoforge.gametest.GameTestHolder;
++import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
++import ua.zentix.incoming.Incoming;
++import ua.zentix.incoming.IncomingConfig;
++import ua.zentix.incoming.entity.StrikeProjectile;
++import ua.zentix.incoming.gametest.StrikeGameTests;
++import ua.zentix.incoming.nuclear.Detonation;
++import ua.zentix.incoming.nuclear.NuclearEvents;
++import ua.zentix.incoming.nuclear.NuclearStrikes;
++import ua.zentix.incoming.nuclear.NuclearWarhead;
++import ua.zentix.incoming.strike.Loadout;
++import ua.zentix.incoming.strike.StrikeService;
++import ua.zentix.incoming.strike.VirtualFlights;
++import ua.zentix.incoming.strike.Waypoints;
++import ua.zentix.incoming.strike.WeaponType;
++import ua.zentix.incoming.target.Target;
++import ua.zentix.incoming.util.Terrain;
++
++/** Real facade receipts, registered flight and exact handoff; no injected READY or impact calls. */
++@GameTestHolder(Incoming.MOD_ID)
++@PrefixGameTestTemplate(false)
++public final class NormalCarrierPreparationGameTests {
++    private NormalCarrierPreparationGameTests() {}
++
++    @GameTest(template = "range", batch = "nuke_normal_missile_ground", timeoutTicks = 4000, skyAccess = true)
++    public static void missileGroundConsumesDurableNominalPlans(GameTestHelper h) { flight(h, WeaponType.MISSILE, true, false, false); }
++
++    @GameTest(template = "range", batch = "nuke_normal_missile_air", timeoutTicks = 4000, skyAccess = true)
++    public static void missileAirConsumesDurableNominalPlans(GameTestHelper h) { flight(h, WeaponType.MISSILE, true, true, false); }
++
++    @GameTest(template = "range", batch = "nuke_normal_missile_canopy", timeoutTicks = 4000, skyAccess = true)
++    public static void missileCanopyUsesBothHeightmaps(GameTestHelper h) { flight(h, WeaponType.MISSILE, true, false, true); }
++
++    @GameTest(template = "range", batch = "nuke_normal_bomber", timeoutTicks = 4000, skyAccess = true)
++    public static void bomberNormalContactConsumesDurableNominalPlans(GameTestHelper h) { flight(h, WeaponType.BUNKER, false, false, false); }
++
++    @GameTest(template = "range", batch = "nuke_normal_point", timeoutTicks = 4000, skyAccess = true)
++    public static void knownPointUsesExistingGroundClamp(GameTestHelper h) { flight(h, WeaponType.MISSILE, false, false, false); }
++
++    private static void flight(GameTestHelper h, WeaponType weapon, boolean surface, boolean air, boolean canopy) {
++        StrikeGameTests.gameSpeed(h);
++        ServerLevel level = h.getLevel();
++        NuclearStrikes.clear(level);
++        boolean carriers = IncomingConfig.SERVER.carrierNukes.get();
++        boolean fires = IncomingConfig.SERVER.nukeFires.get();
++        var preset = IncomingConfig.SERVER.scalePreset.get();
++        double scale = IncomingConfig.SERVER.nukeEffectsScale.get();
++        IncomingConfig.SERVER.scalePreset.set(IncomingConfig.ScalePreset.CUSTOM);
++        IncomingConfig.SERVER.nukeEffectsScale.set(.02);
++        IncomingConfig.SERVER.carrierNukes.set(true);
++        IncomingConfig.SERVER.nukeFires.set(false);
++        // A broad flat glass roof supplies actual nonempty changed-block plans at the sampled column.
++        for (int x = 16; x < 48; x++) for (int z = 16; z < 48; z++) {
++            h.setBlock(new BlockPos(x, 1, z), Blocks.STONE);
++            h.setBlock(new BlockPos(x, 2, z), Blocks.GLASS);
++            if (canopy) h.setBlock(new BlockPos(x, 5, z), Blocks.OAK_LEAVES.defaultBlockState()
++                    .setValue(net.minecraft.world.level.block.LeavesBlock.PERSISTENT, true));
++        }
++        Vec3 target = Vec3.atCenterOf(h.absolutePos(new BlockPos(32, surface ? 2 : 12, 32)));
++        Target order = surface ? new Target.Ground(target) : new Target.Point(target);
++        UUID handle = UUID.randomUUID(), owner = UUID.randomUUID();
++        int yield = 1;
++        Object[] request = {null};
++        Detonation[] expected = {null};
++        long[] launchedAt = {-1};
++        int[] identity = {-1};
++        long beforePrepared = number(NuclearWorld.get(level).scars(), "appliedPrepared");
++        StrikeGameTests.afterTest(h, () -> {
++            VirtualFlights.get(level).clear(level, p -> owner.equals(p.ownerId()));
++            var owned = new java.util.ArrayList<StrikeProjectile>();
++            for (var e : level.getAllEntities()) if (e instanceof StrikeProjectile p && owner.equals(p.ownerId())) owned.add(p);
++            owned.forEach(StrikeProjectile::discard);
++            RuinPreparation.cancel(level, handle);
++            NuclearStrikes.clear(level);
++            RuinMatterGameTests.clearFixture(level);
++            IncomingConfig.SERVER.carrierNukes.set(carriers);
++            IncomingConfig.SERVER.nukeFires.set(fires);
++            IncomingConfig.SERVER.scalePreset.set(preset);
++            IncomingConfig.SERVER.nukeEffectsScale.set(scale);
++        });
++        h.runAtTickTime(2, () -> RuinPreparation.prepareCarrier(level, handle, owner, target, yield, surface, air, weapon));
++        h.onEachTick(() -> {
++            if (launchedAt[0] >= 0 || RuinPreparation.status(level, handle).stage() != RuinPreparation.Stage.READY) return;
++            Object p = request(level, handle);
++            RetainedPlans plans = (RetainedPlans) value(p, "plans");
++            h.assertTrue(plans.values().stream().anyMatch(plan -> plan != null && plan.changedBlocks() > 0),
++                    "READY did not contain a nonempty actual ruin plan");
++            h.assertTrue(plans.pendingWrites() == 0, "READY preceded durable plan receipts");
++            request[0] = p;
++            expected[0] = (Detonation) value(p, "geometry");
++            var status = RuinPreparation.status(level, handle);
++            Vec3 miss = RuinPreparation.carrierMiss(level, handle, weapon);
++            Vec3 launch = status.resolvedTarget();
++            Vec3 sampled = target.add(miss);
++            var d = Terrain.estimate(level, Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
++                    (int) Math.floor(sampled.x), (int) Math.floor(sampled.z), Terrain.Allowed.CHUNK);
++            var m = Terrain.estimate(level, Heightmap.Types.MOTION_BLOCKING,
++                    (int) Math.floor(sampled.x), (int) Math.floor(sampled.z), Terrain.Allowed.CHUNK);
++            h.assertTrue(d.source() == Terrain.Source.CHUNK && m.source() == Terrain.Source.CHUNK, "fixture terrain unready");
++            double aimY = weapon == WeaponType.BUNKER ? d.y() - .5 : surface ? m.y() - .5 : target.y;
++            Detonation geometry = NuclearWarhead.geometry(level, new Vec3(sampled.x, aimY, sampled.z), yield, air,
++                    (float) IncomingConfig.SERVER.effectsScale());
++            h.assertTrue(geometry.burst().equals(expected[0].burst()) && geometry.groundY() == expected[0].groundY(),
++                    "preparation differs from existing nominal terminal law");
++            h.assertTrue(StrikeService.launchPrepared(level, weapon, surface ? new Target.Ground(launch) : order, launch,
++                    0, owner, null, false, new Loadout.Nuke(yield, air, true), Waypoints.NONE, null, handle, 1800).ok(), "normal launch refused");
++            StrikeProjectile carrier = carrier(level, owner);
++            h.assertTrue(carrier != null, "normal launch produced no carrier");
++            identity[0] = carrier.nuclearPreparation();
++            h.assertTrue(identity[0] >= 0, "normal launch lost explicit binding");
++            if (surface && weapon == WeaponType.MISSILE)
++                h.assertTrue(trackerPoint(carrier).equals(launch.add(miss)), "initial Ground launch height changed");
++            h.assertTrue(!StrikeService.launchPrepared(level, weapon, order, launch, 0, owner, null, false,
++                    new Loadout.Nuke(yield, air, true), Waypoints.NONE, null, handle, 1800).ok(), "duplicate commit launched");
++            launchedAt[0] = level.getGameTime();
++        });
++        h.succeedWhen(() -> {
++            h.assertTrue(launchedAt[0] >= 0, "waiting for real durable READY: " + RuinPreparation.status(level, handle));
++            var events = NuclearEvents.get(level).detonations();
++            h.assertTrue(events.size() == 1, "waiting for registered normal carrier flight termination");
++            var event = events.getFirst();
++            h.assertTrue(event.burst().equals(expected[0].burst()) && event.groundY() == expected[0].groundY(),
++                    "actual flight missed nominal exact geometry: actual=" + event.burst() + " expected=" + expected[0].burst());
++            h.assertTrue(number(request[0], "strike") == identity[0] && number(request[0], "detonation") == event.id(),
++                    "actual event did not consume explicit prepared identity");
++            h.assertTrue(number(NuclearWorld.get(level).scars(), "appliedPrepared") > beforePrepared,
++                    "waiting for actual prepared-plan replacement");
++            Incoming.LOG.info("CARRIER exact {} surface={} air={} canopy={} identity={} event={} burst={} ground={} flightTicks={}",
++                    weapon, surface, air, canopy, identity[0], event.id(), event.burst(), event.groundY(), level.getGameTime() - launchedAt[0]);
++        });
++    }
++
++    @GameTest(template = "range", batch = "nuke_normal_miss_sample", skyAccess = true)
++    public static void repeatedPreparePollAndLaunchReadNeverRedrawSpecError(GameTestHelper h) {
++        var level = h.getLevel();
++        var target = Vec3.atCenterOf(h.absolutePos(new BlockPos(32, 2, 32)));
++        for (WeaponType weapon : new WeaponType[]{WeaponType.MISSILE, WeaponType.BUNKER}) {
++            long seed = 879341L;
++            RandomSource expected = RandomSource.create(seed);
++            Vec3 sample = weapon.spec().route().miss(expected);
++            level.random.setSeed(seed);
++            UUID handle = UUID.randomUUID(), owner = UUID.randomUUID();
++            RuinPreparation.prepareCarrier(level, handle, owner, target, .00001, true, false, weapon);
++            for (int i = 0; i < 8; i++) {
++                RuinPreparation.prepareCarrier(level, handle, owner, target, .00001, true, false, weapon);
++                RuinPreparation.keepAlive(level, handle, owner);
++                RuinPreparation.status(level, handle);
++                h.assertTrue(sample.equals(RuinPreparation.carrierMiss(level, handle, weapon)), "sample changed during request");
++            }
++            h.assertTrue(level.random.nextLong() == expected.nextLong(), "request consumed additional random draws");
++            RuinPreparation.cancel(level, handle);
++        }
++        h.succeed();
++    }
++
++    private static Vec3 trackerPoint(StrikeProjectile carrier) {
++        try {
++            Field f = StrikeProjectile.class.getDeclaredField("tracker"); f.setAccessible(true);
++            return ((ua.zentix.incoming.target.TargetTracker) f.get(carrier)).point();
++        } catch (ReflectiveOperationException e) { throw new AssertionError(e); }
++    }
++
++    private static StrikeProjectile carrier(ServerLevel level, UUID owner) {
++        for (StrikeProjectile p : VirtualFlights.get(level).flights()) if (owner.equals(p.ownerId()) && !p.isRemoved()) return p;
++        for (var e : level.getAllEntities()) if (e instanceof StrikeProjectile p && owner.equals(p.ownerId()) && !p.isRemoved()) return p;
++        return null;
++    }
++
++    private static Object request(ServerLevel level, UUID handle) {
++        @SuppressWarnings("unchecked") var all = (List<Object>) value(NuclearWorld.get(level).prep(), "preps");
++        return all.stream().filter(p -> handle.equals(value(p, "handle")) && !Boolean.TRUE.equals(value(p, "draining"))).findFirst().orElseThrow();
++    }
++    private static Object value(Object o, String name) {
++        try { Field f = o.getClass().getDeclaredField(name); f.setAccessible(true); return f.get(o); }
++        catch (ReflectiveOperationException e) { throw new AssertionError(e); }
++    }
++    private static long number(Object o, String name) { return ((Number) value(o, name)).longValue(); }
++}
+diff --git a/mod/src/main/java/ua/zentix/incoming/nuclear/world/NuclearPrep.java b/mod/src/main/java/ua/zentix/incoming/nuclear/world/NuclearPrep.java
+index 22f137ce1..256dc0181 100644
+--- a/mod/src/main/java/ua/zentix/incoming/nuclear/world/NuclearPrep.java
++++ b/mod/src/main/java/ua/zentix/incoming/nuclear/world/NuclearPrep.java
+@@ -262,6 +262,9 @@ public final class NuclearPrep {
+         UUID handle, owner;
+         final UUID cacheId = UUID.randomUUID();
+         Vec3 target, resolvedTarget;
++        ua.zentix.incoming.strike.WeaponType carrierWeapon;
++        Vec3 miss = Vec3.ZERO;
++        Double terminalGround, terminalCanopy;
+         double yieldKt;
+         boolean surface, airBurst, bound, carrier, noRuins, archiveWritten;
+         long expires;
+@@ -343,6 +346,31 @@ public final class NuclearPrep {
+         preps.add(p);
+     }
+ 
++    void prepareCarrier(ServerLevel level, UUID handle, UUID owner, Vec3 target, double yieldKt, boolean surface,
++                        boolean airBurst, ua.zentix.incoming.strike.WeaponType weapon) {
++        if (!ua.zentix.incoming.strike.Loadout.carriesNuke(weapon)) throw new IllegalArgumentException("Not a nuclear carrier");
++        Prep old = request(handle);
++        prepare(level, handle, owner, target, yieldKt, surface, airBurst);
++        Prep p = request(handle);
++        if (p == null || p == old) return; // Repeated PREPARE never redraws route error.
++        p.carrierWeapon = weapon;
++        p.miss = weapon.spec().route().miss(level.random);
++    }
++
++    @Nullable Vec3 carrierMiss(UUID handle, ua.zentix.incoming.strike.WeaponType weapon) {
++        Prep p = request(handle);
++        return p == null || p.bound || p.carrierWeapon != weapon ? null : p.miss;
++    }
++
++    /** Existing impact(aim) branch only; an earlier collision keeps its own fresh geometry. */
++    private static double terminalGround(Prep p, double ground, double canopy, boolean ceiling, int bottom) {
++        double aimY = ceiling ? p.target.y
++                : p.carrierWeapon == ua.zentix.incoming.strike.WeaponType.BUNKER ? ground - 0.5
++                : p.carrierWeapon != null && p.surface ? canopy - 0.5 : p.target.y;
++        double result = ceiling ? aimY : p.carrierWeapon == null && p.surface ? ground : Math.min(ground, aimY);
++        return result <= bottom ? aimY : result;
++    }
++
+     private Prep request(UUID handle) {
+         for (Prep p : preps) if (handle.equals(p.handle) && !p.draining) return p;
+         return null;
+@@ -383,11 +411,13 @@ public final class NuclearPrep {
+         if (!p.bound && level.getGameTime() >= p.expires) reason = RuinPreparation.Reason.EXPIRED;
+         if (!compatible(p)) reason = RuinPreparation.Reason.INCOMPATIBLE;
+         if (p.geometry != null && p.detonation < 0) {
++            Vec3 at = p.target.add(p.miss);
+             var under = Terrain.estimate(level, net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
+-                    Mth.floor(p.target.x), Mth.floor(p.target.z), Terrain.Allowed.CHUNK);
++                    Mth.floor(at.x), Mth.floor(at.z), Terrain.Allowed.CHUNK);
+             if (under.source() == Terrain.Source.CHUNK) {
+-                double ground = p.surface ? under.y() : Math.min(under.y(), p.target.y);
+-                if (ground <= level.getMinBuildHeight()) ground = p.target.y;
++                var canopy = Terrain.estimate(level, net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING,
++                        Mth.floor(at.x), Mth.floor(at.z), Terrain.Allowed.CHUNK);
++                double ground = terminalGround(p, under.y(), canopy.y(), false, level.getMinBuildHeight());
+                 if (ground != p.geometry.groundY()) reason = RuinPreparation.Reason.INCOMPATIBLE;
+             }
+         }
+@@ -421,7 +451,7 @@ public final class NuclearPrep {
+ 
+     boolean bind(ServerLevel level, UUID handle, int strikeId) {
+         Prep p = request(handle);
+-        if (p == null) return false;
++        if (p == null || p.carrierWeapon != null) return false;
+         if (p.bound) return p.strike == strikeId && compatible(p) && p.failure == RuinPreparation.Reason.NONE;
+         if (status(level, handle).stage() != RuinPreparation.Stage.READY) return false;
+         var s = NuclearEvents.get(level).scheduled().stream().filter(x -> x.id() == strikeId).findFirst().orElse(null);
+@@ -622,18 +652,44 @@ public final class NuclearPrep {
+                 p.geometry = NuclearWarhead.geometry(level, s.surface() ? NuclearWarhead.surfaceAt(level, s.target()) : s.target(), s.yieldKt(), s.airBurst(),
+                         (float) IncomingConfig.SERVER.effectsScale());
+             } else {
+-                Terrain.Surface under = resolveSurface(level, p, shared);
+-                if (under == null) return;
+-                double ground = under.source() == Terrain.Source.CEILING ? p.target.y : p.surface ? under.y() : Math.min(under.y(), p.target.y);
+-                if (ground <= level.getMinBuildHeight()) ground = p.target.y;
+-                p.resolvedTarget = p.surface ? new Vec3(p.target.x, ground, p.target.z) : p.target;
++                var noLeaves = net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING_NO_LEAVES;
++                Vec3 at = p.target.add(p.miss);
++                double ground;
++                if (p.carrierWeapon == null) {
++                    Terrain.Surface under = resolveSurface(level, p, shared);
++                    if (under == null) return;
++                    ground = terminalGround(p, under.y(), under.y(), under.source() == Terrain.Source.CEILING,
++                            level.getMinBuildHeight());
++                    p.resolvedTarget = p.surface ? new Vec3(p.target.x, ground, p.target.z) : p.target;
++                } else {
++                    if (p.resolvedTarget == null) {
++                        Terrain.Surface original = resolveSurface(level, p, shared, p.target, noLeaves);
++                        if (original == null) return;
++                        double y = original.source() == Terrain.Source.CEILING ? p.target.y : original.y();
++                        if (y <= level.getMinBuildHeight()) y = p.target.y;
++                        p.resolvedTarget = p.surface ? new Vec3(p.target.x, y, p.target.z) : p.target;
++                    }
++                    if (p.terminalGround == null) {
++                        Terrain.Surface under = resolveSurface(level, p, shared, at, noLeaves);
++                        if (under == null) return;
++                        p.terminalGround = (double) under.y();
++                    }
++                    if (p.terminalCanopy == null) {
++                        Terrain.Surface canopy = resolveSurface(level, p, shared, at,
++                                net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING);
++                        if (canopy == null) return;
++                        p.terminalCanopy = (double) canopy.y();
++                    }
++                    ground = terminalGround(p, p.terminalGround, p.terminalCanopy,
++                            level.dimensionType().hasCeiling(), level.getMinBuildHeight());
++                }
+                 float scale = (float) IncomingConfig.SERVER.effectsScale();
+                 double hob = p.airBurst ? ua.zentix.incoming.nuclear.model.Yield.optimalBurstHeight(p.yieldKt) * scale : 0;
+                 boolean surfaceBurst = hob / scale < ua.zentix.incoming.nuclear.model.FireballModel.maxRadius(p.yieldKt, true);
+                 float visibility = (float) (level.isThundering() ? ua.zentix.incoming.nuclear.model.ThermalModel.VISIBILITY_THUNDER
+                         : level.isRaining() ? ua.zentix.incoming.nuclear.model.ThermalModel.VISIBILITY_RAIN
+                         : ua.zentix.incoming.nuclear.model.ThermalModel.VISIBILITY_CLEAR);
+-                p.geometry = new Detonation(-1, new Vec3(p.target.x, ground + hob, p.target.z), ground, p.yieldKt,
++                p.geometry = new Detonation(-1, new Vec3(at.x, ground + hob, at.z), ground, p.yieldKt,
+                         surfaceBurst, 0, 0, 0, visibility, 0, scale, false, (float) IncomingConfig.SERVER.waveSpeed());
+             }
+             p.noRuins = !IncomingConfig.SERVER.nukeBlockDamage.get();
+@@ -692,19 +748,23 @@ public final class NuclearPrep {
+         }
+     }
+ 
+-    /** One bounded async region read also handles editor chunks with missing heightmaps. */
+     private Terrain.@Nullable Surface resolveSurface(ServerLevel level, Prep p, WorkClock shared) {
++        return resolveSurface(level, p, shared, p.target,
++                net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING_NO_LEAVES);
++    }
++
++    /** One bounded async region read also handles editor chunks with missing heightmaps. */
++    private Terrain.@Nullable Surface resolveSurface(ServerLevel level, Prep p, WorkClock shared, Vec3 at, net.minecraft.world.level.levelgen.Heightmap.Types type) {
+         // A ceiling heightmap describes the roof, never the ground beneath an in-cavern target.
+         // Match NuclearWarhead.surfaceAt/geometry for both ready and cold ceiling chunks.
+-        if (level.dimensionType().hasCeiling()) return new Terrain.Surface(Mth.floor(p.target.y), Terrain.Source.CEILING);
+-        var type = net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING_NO_LEAVES;
+-        var live = Terrain.estimate(level, type, Mth.floor(p.target.x), Mth.floor(p.target.z), Terrain.Allowed.CHUNK);
++        if (level.dimensionType().hasCeiling()) return new Terrain.Surface(Mth.floor(at.y), Terrain.Source.CEILING);
++        var live = Terrain.estimate(level, type, Mth.floor(at.x), Mth.floor(at.z), Terrain.Allowed.CHUNK);
+         if (!p.resolvingRead && live.source() == Terrain.Source.CHUNK) return live;
+         if (!p.resolvingRead) {
+             if (memory(level) + READ_BYTES > WINDOW_CAP) return null;
+             p.resolvingRead = true;
+             p.format = DiskShots.Format.of(level);
+-            DiskShots.read(p.format, new ChunkPos(BlockPos.containing(p.target)), RuinWorkers.Priority.FAR)
++            DiskShots.read(p.format, new ChunkPos(BlockPos.containing(at)), RuinWorkers.Priority.FAR)
+                     .thenAccept(p.terrainReads.expect());
+         }
+         if (!clock.canStart() || !shared.canStart()) return null;
+@@ -720,7 +780,7 @@ public final class NuclearPrep {
+         long unit = shared.begin();
+         try {
+             read = read.primed(Blast.SERVER);
+-            int column = (Mth.floor(p.target.z) & 15) * 16 + (Mth.floor(p.target.x) & 15);
++            int column = (Mth.floor(at.z) & 15) * 16 + (Mth.floor(at.x) & 15);
+             return new Terrain.Surface(read.heights()[ChunkShot.type(type) * 256 + column], Terrain.Source.DISK);
+         } finally { clock.record(shared.end(unit)); }
+     }
+diff --git a/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinPreparation.java b/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinPreparation.java
+index 208afa2f6..568fdd1de 100644
+--- a/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinPreparation.java
++++ b/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinPreparation.java
+@@ -21,6 +21,17 @@ public final class RuinPreparation {
+         NuclearWorld.get(level).prep().prepare(level, handle, owner, target, yieldKt, surface, airBurst);
+     }
+ 
++    /** Server-owned route error and nominal terminal law; the accepted target remains separate. */
++    public static void prepareCarrier(ServerLevel level, UUID handle, UUID owner, Vec3 target, double yieldKt,
++                                      boolean surface, boolean airBurst, ua.zentix.incoming.strike.WeaponType weapon) {
++        NuclearWorld.get(level).prep().prepareCarrier(level, handle, owner, target, yieldKt, surface, airBurst, weapon);
++    }
++
++    /** Same sample throughout the request lifetime, including warning/site continuations. */
++    public static @Nullable Vec3 carrierMiss(ServerLevel level, UUID handle, ua.zentix.incoming.strike.WeaponType weapon) {
++        return NuclearWorld.get(level).prep().carrierMiss(handle, weapon);
++    }
++
+     public static Status status(ServerLevel level, UUID handle) {
+         return NuclearWorld.get(level).prep().status(level, handle);
+     }
+diff --git a/mod/src/main/java/ua/zentix/incoming/strike/NuclearCommands.java b/mod/src/main/java/ua/zentix/incoming/strike/NuclearCommands.java
+index ac720db26..7ede2f104 100644
+--- a/mod/src/main/java/ua/zentix/incoming/strike/NuclearCommands.java
++++ b/mod/src/main/java/ua/zentix/incoming/strike/NuclearCommands.java
+@@ -81,9 +81,14 @@ public final class NuclearCommands {
+ 
+     private static boolean add(ServerLevel level, Entry e) {
+         StrikeWorld.get(level).commands().entries.put(e.id, e);
+-        RuinPreparation.prepare(level, e.id, e.owner, e.aim.point(), e.loadout.nuke().yieldKt(),
+-                e.aim.target() instanceof Target.Ground,
+-                e.loadout.weapon().spec().warhead().chooseBurst() && e.loadout.nuke().airBurst());
++        if (Loadout.carriesNuke(e.loadout.weapon()))
++            RuinPreparation.prepareCarrier(level, e.id, e.owner, e.aim.point(), e.loadout.nuke().yieldKt(),
++                    e.aim.target() instanceof Target.Ground,
++                    e.loadout.weapon().spec().warhead().chooseBurst() && e.loadout.nuke().airBurst(), e.loadout.weapon());
++        else
++            RuinPreparation.prepare(level, e.id, e.owner, e.aim.point(), e.loadout.nuke().yieldKt(),
++                    e.aim.target() instanceof Target.Ground,
++                    e.loadout.weapon().spec().warhead().chooseBurst() && e.loadout.nuke().airBurst());
+         RuinPreparation.Status status = RuinPreparation.status(level, e.id);
+         if (status.stage() == RuinPreparation.Stage.FAILED || status.stage() == RuinPreparation.Stage.ABSENT) {
+             StrikeWorld.get(level).commands().entries.remove(e.id);
+diff --git a/mod/src/main/java/ua/zentix/incoming/strike/NuclearReview.java b/mod/src/main/java/ua/zentix/incoming/strike/NuclearReview.java
+index 121c22457..42bd23501 100644
+--- a/mod/src/main/java/ua/zentix/incoming/strike/NuclearReview.java
++++ b/mod/src/main/java/ua/zentix/incoming/strike/NuclearReview.java
+@@ -207,8 +207,12 @@ public final class NuclearReview {
+             if (action == C2S.NuclearAction.PREPARE && !e.preparing) {
+                 e.preparing = true;
+                 var l = e.order.loadout();
+-                RuinPreparation.prepare(p.serverLevel(), e.id, p.getUUID(), e.aim.point(), l.nuke().yieldKt(),
+-                        e.aim.target() instanceof Target.Ground, l.weapon().spec().warhead().chooseBurst() && l.nuke().airBurst());
++                if (Loadout.carriesNuke(l.weapon()))
++                    RuinPreparation.prepareCarrier(p.serverLevel(), e.id, p.getUUID(), e.aim.point(), l.nuke().yieldKt(),
++                            e.aim.target() instanceof Target.Ground, l.weapon().spec().warhead().chooseBurst() && l.nuke().airBurst(), l.weapon());
++                else
++                    RuinPreparation.prepare(p.serverLevel(), e.id, p.getUUID(), e.aim.point(), l.nuke().yieldKt(),
++                            e.aim.target() instanceof Target.Ground, l.weapon().spec().warhead().chooseBurst() && l.nuke().airBurst());
+             }
+             if (e.preparing) {
+                 RuinPreparation.keepAlive(p.serverLevel(), e.id, p.getUUID());
+diff --git a/mod/src/main/java/ua/zentix/incoming/strike/StrikeService.java b/mod/src/main/java/ua/zentix/incoming/strike/StrikeService.java
+index 230033283..bdba0125c 100644
+--- a/mod/src/main/java/ua/zentix/incoming/strike/StrikeService.java
++++ b/mod/src/main/java/ua/zentix/incoming/strike/StrikeService.java
+@@ -161,7 +161,8 @@ public final class StrikeService {
+         Vec3 preparedPoint = point;
+         boolean preparedSurface = target instanceof Target.Ground;
+         // This launch's miss (spec): aim at shifted target, relative offset for entity.
+-        Vec3 miss = spec.route().miss(level.random);
++        Vec3 miss = preparation == null ? spec.route().miss(level.random) : RuinPreparation.carrierMiss(level, preparation, weapon);
++        if (miss == null) return Result.FAILED;
+         if (!miss.equals(Vec3.ZERO)) {
+             target = target.offset(miss);
+             point = point.add(miss);
+diff --git a/mod/src/main/resources/data/incoming/almighty/notes/strikes.md b/mod/src/main/resources/data/incoming/almighty/notes/strikes.md
+index 18ef16f57..0dbf564e4 100644
+--- a/mod/src/main/resources/data/incoming/almighty/notes/strikes.md
++++ b/mod/src/main/resources/data/incoming/almighty/notes/strikes.md
+@@ -15,6 +15,8 @@ Incoming (https://github.com/zentixua/incoming): strikes by Shahed and Lancet dr
+   new command replaces their previous unlaunched nuclear command. Player logout, death, dimension change, changed
+   authority/settings, moved target or a global nuclear abort cancels pending preparation. Console/command-block
+   preparation requests are bounded; a refused command has not launched. The operator-only now form remains immediate.
++  Nuclear carriers select their usual aim error once before preparation and keep it at launch. Plans cover the nominal
++  arrival; earlier contacts, moving targets, terrain edits or restart can require fresh work at the actual physical site.
+ - Fixed launcher (block incoming:fixed_launcher): «incoming launcher x y z [mission <weapon> <count> <spread> x z
+   [via …] | load N | fire | clear | owner <player>|none]»; the mission target is x z or x y z, as in salvo. A redstone
+   signal at the block does the same as fire.

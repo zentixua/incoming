@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.defense.InterceptShareTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:54:00.104Z" hostname="zentixua-pc" time="1.674">
+  <properties/>
+  <testcase name="sharesByTargetClass()" classname="ua.zentix.incoming.defense.InterceptShareTest" time="1.674"/>
+  <system-out><![CDATA[InterceptShareTest:
+DRONE    shot down 100.0 % raids, defeats 100.0 % missiles (400 missiles on 400 raids)
+MISSILE  shot down 100.0 % raids, defeats 100.0 % missiles (400 missiles on 400 raids)
+BUNKER   shot down  77.8 % raids, defeats 100.0 % missiles (311 missiles on 400 raids)
+LOITER   shot down 100.0 % raids, defeats 100.0 % missiles (400 missiles on 400 raids)
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

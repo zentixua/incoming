@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.net.MapPlayersCodecTest" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:54:10.553Z" hostname="zentixua-pc" time="0.005">
+  <properties/>
+  <testcase name="roundTrip()" classname="ua.zentix.incoming.net.MapPlayersCodecTest" time="0.005"/>
+  <testcase name="nameLimit()" classname="ua.zentix.incoming.net.MapPlayersCodecTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

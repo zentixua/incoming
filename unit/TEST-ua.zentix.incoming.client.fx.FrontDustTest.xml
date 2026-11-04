@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.client.fx.FrontDustTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:52:19.182Z" hostname="zentixua-pc" time="0.15">
+  <properties/>
+  <testcase name="puffsStayBehindTheFrontIncludingTheirLiftAndDrift()" classname="ua.zentix.incoming.client.fx.FrontDustTest" time="0.001"/>
+  <testcase name="patchesAreFewAndStopWhenInvisible()" classname="ua.zentix.incoming.client.fx.FrontDustTest" time="0.001"/>
+  <testcase name="edgePuffsAreBoundedAndGrowFromTheGround()" classname="ua.zentix.incoming.client.fx.FrontDustTest" time="0.0"/>
+  <testcase name="expandingAndDriftingPuffsDoNotCreateDustOrEvaporateIt()" classname="ua.zentix.incoming.client.fx.FrontDustTest" time="0.0"/>
+  <testcase name="pressurePhaseEndsTheSupplyButDustSettlesOverSeconds()" classname="ua.zentix.incoming.client.fx.FrontDustTest" time="0.0"/>
+  <testcase name="sharedLimitHoldsWithoutLosingTheRings()" classname="ua.zentix.incoming.client.fx.FrontDustTest" time="0.146"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

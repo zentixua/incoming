@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.client.fx.smoke.CondensationTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:52:48.486Z" hostname="zentixua-pc" time="0.005">
+  <properties/>
+  <testcase name="noChargeOrWaterVaporProducesFiniteZero()" classname="ua.zentix.incoming.client.fx.smoke.CondensationTest" time="0.001"/>
+  <testcase name="renderedShellCannotPrecedeTheShock()" classname="ua.zentix.incoming.client.fx.smoke.CondensationTest" time="0.002"/>
+  <testcase name="cellsKeepTheirEmissionIndicesAsOtherShellsEvaporate()" classname="ua.zentix.incoming.client.fx.smoke.CondensationTest" time="0.001"/>
+  <testcase name="saturationRequiresCoolingBelowTheDewPoint()" classname="ua.zentix.incoming.client.fx.smoke.CondensationTest" time="0.0"/>
+  <testcase name="rainCloudAppearsBehindCompressionAndEvaporates()" classname="ua.zentix.incoming.client.fx.smoke.CondensationTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

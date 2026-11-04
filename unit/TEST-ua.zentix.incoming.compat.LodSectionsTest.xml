@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.compat.LodSectionsTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:53:59.983Z" hostname="zentixua-pc" time="0.059">
+  <properties/>
+  <testcase name="sectionsAndLightReachTheClientUnchanged()" classname="ua.zentix.incoming.compat.LodSectionsTest" time="0.034"/>
+  <testcase name="ruinsOpenTheSkyToRooms()" classname="ua.zentix.incoming.compat.LodSectionsTest" time="0.01"/>
+  <testcase name="skyLightSpreadsSidewaysUnderAnOverhang()" classname="ua.zentix.incoming.compat.LodSectionsTest" time="0.006"/>
+  <testcase name="anUnlitLampDoesNotLight()" classname="ua.zentix.incoming.compat.LodSectionsTest" time="0.003"/>
+  <testcase name="waterDimsTheSkyByOnePerBlock()" classname="ua.zentix.incoming.compat.LodSectionsTest" time="0.004"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

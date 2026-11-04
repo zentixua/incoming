@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.legacy.OldNamespaceTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:54:10.536Z" hostname="zentixua-pc" time="0.006">
+  <properties/>
+  <testcase name="newerDataIsNotOverwritten(Path)" classname="ua.zentix.incoming.legacy.OldNamespaceTest" time="0.002"/>
+  <testcase name="worldWithoutDataFolderIsFine(Path)" classname="ua.zentix.incoming.legacy.OldNamespaceTest" time="0.0"/>
+  <testcase name="savedDataOfAllDimensionsGetsTheNewName(Path)" classname="ua.zentix.incoming.legacy.OldNamespaceTest" time="0.004"/>
+  <system-out><![CDATA[[12:54:10] [Test worker/INFO] [ua.ze.in.Incoming/]: World data of the Airstrike mod renamed: airstrike_grid.dat -> incoming_grid.dat
+[12:54:10] [Test worker/INFO] [ua.ze.in.Incoming/]: World data of the Airstrike mod renamed: airstrike_nuclear.dat -> incoming_nuclear.dat
+[12:54:10] [Test worker/INFO] [ua.ze.in.Incoming/]: World data of the Airstrike mod renamed: airstrike_salvos.dat -> incoming_salvos.dat
+[12:54:10] [Test worker/INFO] [ua.ze.in.Incoming/]: World data of the Airstrike mod renamed: airstrike_nuclear.dat -> incoming_nuclear.dat
+[12:54:10] [Test worker/INFO] [ua.ze.in.Incoming/]: World data of the Airstrike mod renamed: airstrike_grid.dat -> incoming_grid.dat
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

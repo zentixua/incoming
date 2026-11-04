@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.nuclear.model.MushroomModelTest" tests="17" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:54:11.408Z" hostname="zentixua-pc" time="0.707">
+  <properties/>
+  <testcase name="coreGlowsForMinutesAtNight()" classname="ua.zentix.incoming.nuclear.model.MushroomModelTest" time="0.0"/>
+  <testcase name="ballTurnsIntoTheCapWithoutAJump()" classname="ua.zentix.incoming.nuclear.model.MushroomModelTest" time="0.055"/>
+  <testcase name="capHoldsDropsAndTheNo2OfTheBurst()" classname="ua.zentix.incoming.nuclear.model.MushroomModelTest" time="0.005"/>
+  <testcase name="shapeFollowsTheCloud()" classname="ua.zentix.incoming.nuclear.model.MushroomModelTest" time="0.003"/>
+  <testcase name="stemFollowsGlasstone()" classname="ua.zentix.incoming.nuclear.model.MushroomModelTest" time="0.018"/>
+  <testcase name="capCarriesSoilOnlyWhenTheBallTouchesTheGround()" classname="ua.zentix.incoming.nuclear.model.MushroomModelTest" time="0.0"/>
+  <testcase name="ballLightsItsSurroundings()" classname="ua.zentix.incoming.nuclear.model.MushroomModelTest" time="0.0"/>
+  <testcase name="riseSpeedIsTheSlopeOfTheTop()" classname="ua.zentix.incoming.nuclear.model.MushroomModelTest" time="0.0"/>
+  <testcase name="topAndRingNeverGoDown()" classname="ua.zentix.incoming.nuclear.model.MushroomModelTest" time="0.163"/>
+  <testcase name="ballRollsUpIntoARing()" classname="ua.zentix.incoming.nuclear.model.MushroomModelTest" time="0.0"/>
+  <testcase name="capChurnsWithTheRise()" classname="ua.zentix.incoming.nuclear.model.MushroomModelTest" time="0.45"/>
+  <testcase name="lifeGrowsWithYield()" classname="ua.zentix.incoming.nuclear.model.MushroomModelTest" time="0.001"/>
+  <testcase name="edgeCoolsAsTheBallRollsUp()" classname="ua.zentix.incoming.nuclear.model.MushroomModelTest" time="0.001"/>
+  <testcase name="stemRisesWithTheCloud()" classname="ua.zentix.incoming.nuclear.model.MushroomModelTest" time="0.001"/>
+  <testcase name="stemIsWidestAtItsEnds()" classname="ua.zentix.incoming.nuclear.model.MushroomModelTest" time="0.0"/>
+  <testcase name="coreCoolsWithoutAJump()" classname="ua.zentix.incoming.nuclear.model.MushroomModelTest" time="0.001"/>
+  <testcase name="skirtSticksOutOfTheStem()" classname="ua.zentix.incoming.nuclear.model.MushroomModelTest" time="0.009"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

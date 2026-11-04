@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.client.map.LssColumnsTest" tests="10" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:53:41.655Z" hostname="zentixua-pc" time="0.006">
+  <properties/>
+  <testcase name="colourlessTopLooksBelow()" classname="ua.zentix.incoming.client.map.LssColumnsTest" time="0.001"/>
+  <testcase name="coarseKeepsCellCentres()" classname="ua.zentix.incoming.client.map.LssColumnsTest" time="0.001"/>
+  <testcase name="packing()" classname="ua.zentix.incoming.client.map.LssColumnsTest" time="0.0"/>
+  <testcase name="fileRoundTrip()" classname="ua.zentix.incoming.client.map.LssColumnsTest" time="0.001"/>
+  <testcase name="plantsDoNotCountLeavesDo()" classname="ua.zentix.incoming.client.map.LssColumnsTest" time="0.001"/>
+  <testcase name="storeReplacesAndFindsChunks()" classname="ua.zentix.incoming.client.map.LssColumnsTest" time="0.0"/>
+  <testcase name="coarsensFarthestFirst()" classname="ua.zentix.incoming.client.map.LssColumnsTest" time="0.0"/>
+  <testcase name="trimsFarthestChunks()" classname="ua.zentix.incoming.client.map.LssColumnsTest" time="0.0"/>
+  <testcase name="waterDepthAndGaps()" classname="ua.zentix.incoming.client.map.LssColumnsTest" time="0.001"/>
+  <testcase name="groundTopAndColour()" classname="ua.zentix.incoming.client.map.LssColumnsTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

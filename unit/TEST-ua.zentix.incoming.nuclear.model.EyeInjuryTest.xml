@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.nuclear.model.EyeInjuryTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:54:11.311Z" hostname="zentixua-pc" time="0.0">
+  <properties/>
+  <testcase name="fifteenKilotons()" classname="ua.zentix.incoming.nuclear.model.EyeInjuryTest" time="0.0"/>
+  <testcase name="figureRangeGivesTenSeconds()" classname="ua.zentix.incoming.nuclear.model.EyeInjuryTest" time="0.0"/>
+  <testcase name="retinaRangeFollowsFigure()" classname="ua.zentix.incoming.nuclear.model.EyeInjuryTest" time="0.0"/>
+  <testcase name="darknessByLight()" classname="ua.zentix.incoming.nuclear.model.EyeInjuryTest" time="0.0"/>
+  <testcase name="longerCloserUpToFullBleach()" classname="ua.zentix.incoming.nuclear.model.EyeInjuryTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

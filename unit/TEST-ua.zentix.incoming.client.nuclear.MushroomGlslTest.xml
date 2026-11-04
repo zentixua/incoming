@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.client.nuclear.MushroomGlslTest" tests="19" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:53:43.573Z" hostname="zentixua-pc" time="0.302">
+  <properties/>
+  <testcase name="ballLightMatchesJava()" classname="ua.zentix.incoming.client.nuclear.MushroomGlslTest" time="0.002"/>
+  <testcase name="footMatchesJava()" classname="ua.zentix.incoming.client.nuclear.MushroomGlslTest" time="0.03"/>
+  <testcase name="capRollsUpTheMiddleAndDownTheOutside()" classname="ua.zentix.incoming.client.nuclear.MushroomGlslTest" time="0.001"/>
+  <testcase name="driftShareMatchesJava()" classname="ua.zentix.incoming.client.nuclear.MushroomGlslTest" time="0.001"/>
+  <testcase name="stemFrontSharesTheWallEdge()" classname="ua.zentix.incoming.client.nuclear.MushroomGlslTest" time="0.0"/>
+  <testcase name="ballLightsWhatFacesAway()" classname="ua.zentix.incoming.client.nuclear.MushroomGlslTest" time="0.0"/>
+  <testcase name="ballFaceMatchesJava()" classname="ua.zentix.incoming.client.nuclear.MushroomGlslTest" time="0.004"/>
+  <testcase name="ballSurfaceMapMatchesJava()" classname="ua.zentix.incoming.client.nuclear.MushroomGlslTest" time="0.004"/>
+  <testcase name="ballExposureMatchesJava()" classname="ua.zentix.incoming.client.nuclear.MushroomGlslTest" time="0.006"/>
+  <testcase name="stemRadiusMatchesJava()" classname="ua.zentix.incoming.client.nuclear.MushroomGlslTest" time="0.0"/>
+  <testcase name="wallReflectanceMatchesJava()" classname="ua.zentix.incoming.client.nuclear.MushroomGlslTest" time="0.002"/>
+  <testcase name="tableLayoutMatchesJava()" classname="ua.zentix.incoming.client.nuclear.MushroomGlslTest" time="0.0"/>
+  <testcase name="capBoilsWithoutJumps()" classname="ua.zentix.incoming.client.nuclear.MushroomGlslTest" time="0.218"/>
+  <testcase name="blackBodyNodesMatchJava()" classname="ua.zentix.incoming.client.nuclear.MushroomGlslTest" time="0.001"/>
+  <testcase name="shadowLawsMatchJava()" classname="ua.zentix.incoming.client.nuclear.MushroomGlslTest" time="0.005"/>
+  <testcase name="shadowCutLosesUnderAPercent()" classname="ua.zentix.incoming.client.nuclear.MushroomGlslTest" time="0.025"/>
+  <testcase name="ballSurfaceContrastMatchesTheBreakaway()" classname="ua.zentix.incoming.client.nuclear.MushroomGlslTest" time="0.0"/>
+  <testcase name="forwardLightSeenLikeTheCloud()" classname="ua.zentix.incoming.client.nuclear.MushroomGlslTest" time="0.0"/>
+  <testcase name="edgeLawsMatchJava()" classname="ua.zentix.incoming.client.nuclear.MushroomGlslTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

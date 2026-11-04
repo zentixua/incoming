@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.client.far.SmokeTargetedProbe" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:52:18.744Z" hostname="zentixua-pc" time="0.046">
+  <properties/>
+  <testcase name="clusterBoundary()" classname="ua.zentix.incoming.client.far.SmokeTargetedProbe" time="0.019"/>
+  <testcase name="flatOrientation()" classname="ua.zentix.incoming.client.far.SmokeTargetedProbe" time="0.001"/>
+  <testcase name="flatBoundary()" classname="ua.zentix.incoming.client.far.SmokeTargetedProbe" time="0.023"/>
+  <testcase name="distantSinglePuffsKeepSeededVariation()" classname="ua.zentix.incoming.client.far.SmokeTargetedProbe" time="0.002"/>
+  <system-out><![CDATA[THRESHOLD budget=unlimited seed=1 pixels=39.99996/40.00004 quads=1/1 mean=0.000000659 max=0.000006397
+THRESHOLD budget=unlimited seed=2 pixels=39.99996/40.00004 quads=1/1 mean=0.000000662 max=0.000006268
+THRESHOLD budget=unlimited seed=3 pixels=39.99996/40.00004 quads=1/1 mean=0.000000663 max=0.000006655
+THRESHOLD budget=unlimited seed=4 pixels=39.99996/40.00004 quads=1/1 mean=0.000000665 max=0.000006898
+THRESHOLD budget=unlimited seed=5 pixels=39.99996/40.00004 quads=1/1 mean=0.000000658 max=0.000006450
+THRESHOLD budget=unlimited seed=6 pixels=39.99996/40.00004 quads=1/1 mean=0.000000664 max=0.000006669
+THRESHOLD budget=unlimited seed=7 pixels=39.99996/40.00004 quads=1/1 mean=0.000000659 max=0.000006434
+THRESHOLD budget=unlimited seed=8 pixels=39.99996/40.00004 quads=1/1 mean=0.000000666 max=0.000007063
+THRESHOLD budget=unlimited seed=9 pixels=39.99996/40.00004 quads=1/1 mean=0.000000666 max=0.000007095
+THRESHOLD budget=unlimited seed=10 pixels=39.99996/40.00004 quads=1/1 mean=0.000000664 max=0.000006768
+THRESHOLD budget=unlimited seed=11 pixels=39.99996/40.00004 quads=1/1 mean=0.000000666 max=0.000007160
+THRESHOLD budget=unlimited seed=12 pixels=39.99996/40.00004 quads=1/1 mean=0.000000662 max=0.000006336
+THRESHOLD budget=unlimited seed=13 pixels=39.99996/40.00004 quads=1/1 mean=0.000000658 max=0.000006461
+THRESHOLD budget=unlimited seed=14 pixels=39.99996/40.00004 quads=1/1 mean=0.000000662 max=0.000006405
+THRESHOLD budget=unlimited seed=15 pixels=39.99996/40.00004 quads=1/1 mean=0.000000658 max=0.000006470
+THRESHOLD budget=unlimited seed=16 pixels=39.99996/40.00004 quads=1/1 mean=0.000000666 max=0.000007033
+THRESHOLD_SUMMARY budget=unlimited seeds=16 mean=0.000000663 peak_min=0.000006268 peak_max=0.000007160
+THRESHOLD budget=16 seed=1 pixels=39.99996/40.00004 quads=1/1 mean=0.000000659 max=0.000006397
+THRESHOLD budget=16 seed=2 pixels=39.99996/40.00004 quads=1/1 mean=0.000000662 max=0.000006268
+THRESHOLD budget=16 seed=3 pixels=39.99996/40.00004 quads=1/1 mean=0.000000663 max=0.000006655
+THRESHOLD budget=16 seed=4 pixels=39.99996/40.00004 quads=1/1 mean=0.000000665 max=0.000006898
+THRESHOLD budget=16 seed=5 pixels=39.99996/40.00004 quads=1/1 mean=0.000000658 max=0.000006450
+THRESHOLD budget=16 seed=6 pixels=39.99996/40.00004 quads=1/1 mean=0.000000664 max=0.000006669
+THRESHOLD budget=16 seed=7 pixels=39.99996/40.00004 quads=1/1 mean=0.000000659 max=0.000006434
+THRESHOLD budget=16 seed=8 pixels=39.99996/40.00004 quads=1/1 mean=0.000000666 max=0.000007063
+THRESHOLD budget=16 seed=9 pixels=39.99996/40.00004 quads=1/1 mean=0.000000666 max=0.000007095
+THRESHOLD budget=16 seed=10 pixels=39.99996/40.00004 quads=1/1 mean=0.000000664 max=0.000006768
+THRESHOLD budget=16 seed=11 pixels=39.99996/40.00004 quads=1/1 mean=0.000000666 max=0.000007160
+THRESHOLD budget=16 seed=12 pixels=39.99996/40.00004 quads=1/1 mean=0.000000662 max=0.000006336
+THRESHOLD budget=16 seed=13 pixels=39.99996/40.00004 quads=1/1 mean=0.000000658 max=0.000006461
+THRESHOLD budget=16 seed=14 pixels=39.99996/40.00004 quads=1/1 mean=0.000000662 max=0.000006405
+THRESHOLD budget=16 seed=15 pixels=39.99996/40.00004 quads=1/1 mean=0.000000658 max=0.000006470
+THRESHOLD budget=16 seed=16 pixels=39.99996/40.00004 quads=1/1 mean=0.000000666 max=0.000007033
+THRESHOLD_SUMMARY budget=16 seeds=16 mean=0.000000663 peak_min=0.000006268 peak_max=0.000007160
+FLAT_ORIENTATION budget=unlimited polygons=6/6 matched=6 yaw=0.5deg axis_max_deg=0.000000000 corner_shift_max_m=0.000000000
+FLAT_ORIENTATION budget=16 polygons=6/6 matched=6 yaw=0.5deg axis_max_deg=0.000000000 corner_shift_max_m=0.000000000
+FLAT_BOUNDARY budget=unlimited height=10.050378153 delta_eye_m=0.000002 seeds=8 mean=0.000000017 max=0.000001805
+FLAT_BOUNDARY budget=16 height=10.050378153 delta_eye_m=0.000002 seeds=8 mean=0.000000017 max=0.000001805
+DISTANT_SINGLE budget=unlimited seeds=32 frames=[6, 7, 8] mirrors=[false, true] most_common_pair=9/32 pairs={6:false=6, 6:true=3, 7:false=9, 7:true=6, 8:false=5, 8:true=3}
+DISTANT_SINGLE budget=16 seeds=32 frames=[6, 7, 8] mirrors=[false, true] most_common_pair=9/32 pairs={6:false=6, 6:true=3, 7:false=9, 7:true=6, 8:false=5, 8:true=3}
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

@@ -1,0 +1,57 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.guidance.DroneDiveTest" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:54:09.869Z" hostname="zentixua-pc" time="0.151">
+  <properties/>
+  <testcase name="divesPastTowerOnDiveLine()" classname="ua.zentix.incoming.guidance.DroneDiveTest" time="0.122"/>
+  <testcase name="climbsOverMastWhileWaitingForLine()" classname="ua.zentix.incoming.guidance.DroneDiveTest" time="0.028"/>
+  <system-out><![CDATA[DroneDiveTest:
+ house 20 to 20 to destination: hit, pitch up to 73°
+ house 20 to 30 to destination: hit, pitch up to 68°
+ house 20 to 45 to destination: hit, pitch up to 37°
+ house 20 to 54 to destination: hit, pitch up to 31°
+ house 20 to 70 to destination: hit, pitch up to 26°
+ house 20 to 90 to destination: hit, pitch up to 26°
+ house 20 to 130 to destination: hit, pitch up to 26°
+ house 20 to 190 to destination: hit, pitch up to 26°
+ house 30 to 20 to destination: hit, pitch up to 80°
+ house 30 to 30 to destination: hit, pitch up to 80°
+ house 30 to 45 to destination: hit, pitch up to 52°
+ house 30 to 54 to destination: hit, pitch up to 47°
+ house 30 to 70 to destination: hit, pitch up to 33°
+ house 30 to 90 to destination: hit, pitch up to 26°
+ house 30 to 130 to destination: hit, pitch up to 26°
+ house 30 to 190 to destination: hit, pitch up to 26°
+ house 40 to 20 to destination: hit, pitch up to 89°
+ house 40 to 30 to destination: hit, pitch up to 89°
+ house 40 to 45 to destination: hit, pitch up to 73°
+ house 40 to 54 to destination: hit, pitch up to 56°
+ house 40 to 70 to destination: hit, pitch up to 46°
+ house 40 to 90 to destination: hit, pitch up to 35°
+ house 40 to 130 to destination: hit, pitch up to 26°
+ house 40 to 190 to destination: hit, pitch up to 26°
+ house 50 to 20 to destination: hit, pitch up to 89°
+ house 50 to 30 to destination: hit, pitch up to 89°
+ house 50 to 45 to destination: hit, pitch up to 87°
+ house 50 to 54 to destination: hit, pitch up to 72°
+ house 50 to 70 to destination: hit, pitch up to 55°
+ house 50 to 90 to destination: hit, pitch up to 44°
+ house 50 to 130 to destination: hit, pitch up to 31°
+ house 50 to 190 to destination: hit, pitch up to 26°
+ house 60 to 20 to destination: hit, pitch up to 89°
+ house 60 to 30 to destination: hit, pitch up to 89°
+ house 60 to 45 to destination: hit, pitch up to 88°
+ house 60 to 54 to destination: hit, pitch up to 79°
+ house 60 to 70 to destination: hit, pitch up to 61°
+ house 60 to 90 to destination: hit, pitch up to 50°
+ house 60 to 130 to destination: hit, pitch up to 36°
+ house 60 to 190 to destination: hit, pitch up to 26°
+ house 70 to 20 to destination: crashed into (-1 64 14), 14 blocks from the target
+ house 70 to 30 to destination: crashed into (-1 64 14), 14 blocks from the target
+ house 70 to 45 to destination: hit, pitch up to 89°
+ house 70 to 54 to destination: hit, pitch up to 85°
+ house 70 to 70 to destination: hit, pitch up to 67°
+ house 70 to 90 to destination: hit, pitch up to 55°
+ house 70 to 130 to destination: hit, pitch up to 41°
+ house 70 to 190 to destination: hit, pitch up to 29°
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

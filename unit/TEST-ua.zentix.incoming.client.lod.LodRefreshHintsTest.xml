@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.client.lod.LodRefreshHintsTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:53:41.639Z" hostname="zentixua-pc" time="0.015">
+  <properties/>
+  <testcase name="aForeignDeliveryCrossingSubmissionKeepsItsRequestForCurrentServerState()" classname="ua.zentix.incoming.client.lod.LodRefreshHintsTest" time="0.0"/>
+  <testcase name="evictedHintsDoNotRetainTerrainAndRejectedColumnsCanStillRequestRefresh()" classname="ua.zentix.incoming.client.lod.LodRefreshHintsTest" time="0.0"/>
+  <testcase name="lateCallbacksCannotRetargetTheNextWorldOrReconnect()" classname="ua.zentix.incoming.client.lod.LodRefreshHintsTest" time="0.0"/>
+  <testcase name="aLongSessionAndAReplayBurstHaveFixedCoordinateBounds()" classname="ua.zentix.incoming.client.lod.LodRefreshHintsTest" time="0.015"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

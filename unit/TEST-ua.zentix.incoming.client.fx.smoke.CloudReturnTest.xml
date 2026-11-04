@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.client.fx.smoke.CloudReturnTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:52:36.409Z" hostname="zentixua-pc" time="12.077">
+  <properties/>
+  <testcase name="hundredCloudTurnReturnsWithinQuarterSecondWithoutFreezingVisibleClouds()" classname="ua.zentix.incoming.client.fx.smoke.CloudReturnTest" time="7.895"/>
+  <testcase name="unpreparedLongHistoryCannotBypassTheFrameSlice()" classname="ua.zentix.incoming.client.fx.smoke.CloudReturnTest" time="0.035"/>
+  <testcase name="youngInvisibleRealCloudNeverEmitsOrReadsTerrain()" classname="ua.zentix.incoming.client.fx.smoke.CloudReturnTest" time="0.002"/>
+  <testcase name="maintainedHistoryHasBoundedReturnWorkAndIsComplete()" classname="ua.zentix.incoming.client.fx.smoke.CloudReturnTest" time="4.144"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

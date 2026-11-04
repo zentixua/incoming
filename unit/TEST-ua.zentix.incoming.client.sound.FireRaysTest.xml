@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.client.sound.FireRaysTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:53:52.636Z" hostname="zentixua-pc" time="3.798">
+  <properties/>
+  <testcase name="knownOpennessIsTheNearestSectorWithRays()" classname="ua.zentix.incoming.client.sound.FireRaysTest" time="0.002"/>
+  <testcase name="heardFiresJoinTheMixOnTheirFirstTick()" classname="ua.zentix.incoming.client.sound.FireRaysTest" time="2.399"/>
+  <testcase name="reachEndsAtTheLastLoadedChunk()" classname="ua.zentix.incoming.client.sound.FireRaysTest" time="0.087"/>
+  <testcase name="raysPerTickStayBoundedAsFiresGrow()" classname="ua.zentix.incoming.client.sound.FireRaysTest" time="1.31"/>
+  <system-out><![CDATA[30 far fires: rays per tick 16 (before: 30), block+fluid reads per tick 11514 (before: 137454), chunk checks 2320, every fire refreshed within 2 ticks
+300 far fires: rays per tick 16 (before: 300), block+fluid reads per tick 12206 (before: 1375716), chunk checks 2373, every fire refreshed within 19 ticks
+3000 far fires: rays per tick 16 (before: 3000), block+fluid reads per tick 12326 (before: 13757044), chunk checks 2359, every fire refreshed within 188 ticks
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

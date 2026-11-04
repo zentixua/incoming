@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.nuclear.model.WaterModelTest" tests="10" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:54:12.322Z" hostname="zentixua-pc" time="0.003">
+  <properties/>
+  <testcase name="columnMatchesGlasstoneHundredKilotons()" classname="ua.zentix.incoming.nuclear.model.WaterModelTest" time="0.0"/>
+  <testcase name="sprayWallGrowsWithWind()" classname="ua.zentix.incoming.nuclear.model.WaterModelTest" time="0.001"/>
+  <testcase name="wetBurstFadesWithHeight()" classname="ua.zentix.incoming.nuclear.model.WaterModelTest" time="0.0"/>
+  <testcase name="whitecapsRiseBehindTheFront()" classname="ua.zentix.incoming.nuclear.model.WaterModelTest" time="0.0"/>
+  <testcase name="crownSitsOnTheColumn()" classname="ua.zentix.incoming.nuclear.model.WaterModelTest" time="0.0"/>
+  <testcase name="columnShowsAsTheBallCools()" classname="ua.zentix.incoming.nuclear.model.WaterModelTest" time="0.0"/>
+  <testcase name="windThresholdsFollowBeaufort()" classname="ua.zentix.incoming.nuclear.model.WaterModelTest" time="0.001"/>
+  <testcase name="darkRingIsSharpAtTheFrontAndFadesBehind()" classname="ua.zentix.incoming.nuclear.model.WaterModelTest" time="0.0"/>
+  <testcase name="baseSurgeMatchesBaker()" classname="ua.zentix.incoming.nuclear.model.WaterModelTest" time="0.0"/>
+  <testcase name="columnMatchesBaker()" classname="ua.zentix.incoming.nuclear.model.WaterModelTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

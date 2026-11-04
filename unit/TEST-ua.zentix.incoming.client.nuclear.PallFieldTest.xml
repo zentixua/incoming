@@ -1,0 +1,40 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.client.nuclear.PallFieldTest" tests="34" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:53:44.193Z" hostname="zentixua-pc" time="1.693">
+  <properties/>
+  <testcase name="headAndPallAreOneLayer()" classname="ua.zentix.incoming.client.nuclear.PallFieldTest" time="0.01"/>
+  <testcase name="layerFollowsHillsNotValleys()" classname="ua.zentix.incoming.client.nuclear.PallFieldTest" time="0.002"/>
+  <testcase name="tableFitsTheLayer()" classname="ua.zentix.incoming.client.nuclear.PallFieldTest" time="0.0"/>
+  <testcase name="withoutFiresNoHazeUntilMorning()" classname="ua.zentix.incoming.client.nuclear.PallFieldTest" time="0.003"/>
+  <testcase name="oldPallIsOneBlanket()" classname="ua.zentix.incoming.client.nuclear.PallFieldTest" time="0.002"/>
+  <testcase name="hazeEndsAtMorningWithSteadyOrStoppedClock()" classname="ua.zentix.incoming.client.nuclear.PallFieldTest" time="0.002"/>
+  <testcase name="smallerYieldSmallerPall()" classname="ua.zentix.incoming.client.nuclear.PallFieldTest" time="0.003"/>
+  <testcase name="sigmaFollowsTheTable()" classname="ua.zentix.incoming.client.nuclear.PallFieldTest" time="0.001"/>
+  <testcase name="clientClockLeadIsNotAJump()" classname="ua.zentix.incoming.client.nuclear.PallFieldTest" time="0.001"/>
+  <testcase name="profileThinsUpward()" classname="ua.zentix.incoming.client.nuclear.PallFieldTest" time="0.0"/>
+  <testcase name="tableHoldsOnlyWhatIsUnderThePall()" classname="ua.zentix.incoming.client.nuclear.PallFieldTest" time="0.002"/>
+  <testcase name="timeCommandsMoveTheMorning()" classname="ua.zentix.incoming.client.nuclear.PallFieldTest" time="0.003"/>
+  <testcase name="verticalDepthIsTheIntegral()" classname="ua.zentix.incoming.client.nuclear.PallFieldTest" time="1.624"/>
+  <testcase name="pallRisesOnlyBehindTheFront()" classname="ua.zentix.incoming.client.nuclear.PallFieldTest" time="0.001"/>
+  <testcase name="darkForTwentyMinutesAtHiroshima()" classname="ua.zentix.incoming.client.nuclear.PallFieldTest" time="0.002"/>
+  <testcase name="surgeFollowsTheWorldScale()" classname="ua.zentix.incoming.client.nuclear.PallFieldTest" time="0.001"/>
+  <testcase name="hazeUntilMorning()" classname="ua.zentix.incoming.client.nuclear.PallFieldTest" time="0.001"/>
+  <testcase name="noAshPaperOrHazeOverWater()" classname="ua.zentix.incoming.client.nuclear.PallFieldTest" time="0.002"/>
+  <testcase name="materialComesFromWhereItWasLifted()" classname="ua.zentix.incoming.client.nuclear.PallFieldTest" time="0.001"/>
+  <testcase name="dustRowIsTheDustLayer()" classname="ua.zentix.incoming.client.nuclear.PallFieldTest" time="0.001"/>
+  <testcase name="timeAddToDawnKeepsFiveMinutes()" classname="ua.zentix.incoming.client.nuclear.PallFieldTest" time="0.001"/>
+  <testcase name="lateJoinerWithStoppedClock()" classname="ua.zentix.incoming.client.nuclear.PallFieldTest" time="0.002"/>
+  <testcase name="dustEdgeStaysOnTheFrontInWind()" classname="ua.zentix.incoming.client.nuclear.PallFieldTest" time="0.002"/>
+  <testcase name="heightRisesOverHeatedGround()" classname="ua.zentix.incoming.client.nuclear.PallFieldTest" time="0.004"/>
+  <testcase name="columnIsIntegralOfProfile()" classname="ua.zentix.incoming.client.nuclear.PallFieldTest" time="0.007"/>
+  <testcase name="lateJoinerAfterSleepSeesTheMorning()" classname="ua.zentix.incoming.client.nuclear.PallFieldTest" time="0.003"/>
+  <testcase name="ashAfterTheWave()" classname="ua.zentix.incoming.client.nuclear.PallFieldTest" time="0.001"/>
+  <testcase name="sprayOverWaterGoneInMinutes()" classname="ua.zentix.incoming.client.nuclear.PallFieldTest" time="0.001"/>
+  <testcase name="noPallInTheFireball()" classname="ua.zentix.incoming.client.nuclear.PallFieldTest" time="0.001"/>
+  <testcase name="timeSetInALaterDayFollowsTheTimeOfDay()" classname="ua.zentix.incoming.client.nuclear.PallFieldTest" time="0.003"/>
+  <testcase name="rewindFollowsTheClockOfThePlace()" classname="ua.zentix.incoming.client.nuclear.PallFieldTest" time="0.001"/>
+  <testcase name="surgeOnlyForAWetBurst()" classname="ua.zentix.incoming.client.nuclear.PallFieldTest" time="0.001"/>
+  <testcase name="sleepingThroughTheNightEndsTheHaze()" classname="ua.zentix.incoming.client.nuclear.PallFieldTest" time="0.003"/>
+  <testcase name="sprayHasItsOwnHeight()" classname="ua.zentix.incoming.client.nuclear.PallFieldTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

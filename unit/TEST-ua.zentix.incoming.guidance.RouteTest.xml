@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.guidance.RouteTest" tests="8" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:54:10.379Z" hostname="zentixua-pc" time="0.002">
+  <properties/>
+  <testcase name="entryBehindLaunchIsTakenWhenOvershot()" classname="ua.zentix.incoming.guidance.RouteTest" time="0.0"/>
+  <testcase name="shortFlightGoesStraightToEntry()" classname="ua.zentix.incoming.guidance.RouteTest" time="0.0"/>
+  <testcase name="sideSwitchesWithSign()" classname="ua.zentix.incoming.guidance.RouteTest" time="0.0"/>
+  <testcase name="longFlightGetsSideWaypointOfRequestedLength()" classname="ua.zentix.incoming.guidance.RouteTest" time="0.001"/>
+  <testcase name="skipGoesStraightToTarget()" classname="ua.zentix.incoming.guidance.RouteTest" time="0.0"/>
+  <testcase name="waypointPassedWhenReachedOrOvershot()" classname="ua.zentix.incoming.guidance.RouteTest" time="0.0"/>
+  <testcase name="operatorMarkSurvivesGateAndSaving()" classname="ua.zentix.incoming.guidance.RouteTest" time="0.001"/>
+  <testcase name="survivesSaving()" classname="ua.zentix.incoming.guidance.RouteTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

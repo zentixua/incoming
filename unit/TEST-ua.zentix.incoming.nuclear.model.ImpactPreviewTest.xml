@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.nuclear.model.ImpactPreviewTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:54:11.403Z" hostname="zentixua-pc" time="0.002">
+  <properties/>
+  <testcase name="yieldEntryRejectsRatherThanClampsAndPresetsRespectTheCap()" classname="ua.zentix.incoming.nuclear.model.ImpactPreviewTest" time="0.001"/>
+  <testcase name="unitsIgnoreHostLocaleAndFitIncludesTheWholeLargestContour()" classname="ua.zentix.incoming.nuclear.model.ImpactPreviewTest" time="0.0"/>
+  <testcase name="acceptedReferenceRadiiUseTheProductionLaws()" classname="ua.zentix.incoming.nuclear.model.ImpactPreviewTest" time="0.001"/>
+  <testcase name="scalesEveryLengthOnceAndUsesWeatherForBurnsOnly()" classname="ua.zentix.incoming.nuclear.model.ImpactPreviewTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

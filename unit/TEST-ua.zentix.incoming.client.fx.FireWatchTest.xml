@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.client.fx.FireWatchTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:52:19.169Z" hostname="zentixua-pc" time="0.003">
+  <properties/>
+  <testcase name="frameHoldsDiscWithinSquare()" classname="ua.zentix.incoming.client.fx.FireWatchTest" time="0.003"/>
+  <testcase name="twoBurstsShareFrame()" classname="ua.zentix.incoming.client.fx.FireWatchTest" time="0.0"/>
+  <testcase name="farBurstHasNoFrame()" classname="ua.zentix.incoming.client.fx.FireWatchTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

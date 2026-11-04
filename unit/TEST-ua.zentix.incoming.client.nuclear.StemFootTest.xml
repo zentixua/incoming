@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.client.nuclear.StemFootTest" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:53:48.746Z" hostname="zentixua-pc" time="2.397">
+  <properties/>
+  <testcase name="denseFootIncludesItsOwnOverburden()" classname="ua.zentix.incoming.client.nuclear.StemFootTest" time="0.001"/>
+  <testcase name="carpetClimbsIntoTheStem()" classname="ua.zentix.incoming.client.nuclear.StemFootTest" time="2.157"/>
+  <testcase name="stemAwayFromTheFootIsAsBefore()" classname="ua.zentix.incoming.client.nuclear.StemFootTest" time="0.125"/>
+  <testcase name="noDensityStepFromCarpetIntoStem()" classname="ua.zentix.incoming.client.nuclear.StemFootTest" time="0.005"/>
+  <testcase name="everyCaseHasInflow()" classname="ua.zentix.incoming.client.nuclear.StemFootTest" time="0.001"/>
+  <testcase name="inflowRadianceJoinsTheCarpetBeforeItBecomesTheStem()" classname="ua.zentix.incoming.client.nuclear.StemFootTest" time="0.034"/>
+  <testcase name="movingCarpetIsConfinedToTheInflow()" classname="ua.zentix.incoming.client.nuclear.StemFootTest" time="0.074"/>
+  <system-out><![CDATA[15 kt on 0 m, 45 s: top 344, σ 1.353, share 1.00, rise 878, merge 2.02 top; way to 1.33 top, without suction - 0.000 threshold 
+15 kt on 0 m, 60 s: top 356, σ 0.870, share 1.00, rise 1105, merge 1.80 top; way to 1.19 top, without suction - 0.000 threshold 
+15 kt on 0 m, 120 s: top 256, σ 0.394, share 0.85, rise 1776, merge 1.60 top; way to 1.06 top, without suction - 0.154 threshold 
+15 kt on 0 m, 240 s: top 193, σ 0.255, share 0.44, rise 2434, merge 1.66 top; way to 1.10 top, without suction - 0.743 threshold 
+15 kt on 592 m, 60 s: top 396, σ 0.311, share 1.00, rise 870, merge 0.89 top; way to 0.59 top, without suction - 2.675 threshold 
+15 kt on 592 m, 120 s: top 363, σ 0.269, share 0.86, rise 1548, merge 1.40 top; way to 0.93 top, without suction - 0.003 threshold 
+1 kt on 0 m, 30 s: top 115, σ 11.782, share 1.00, rise 206, merge 1.79 top; way to 0.79 top, without suction - 0.839 threshold 
+1 kt on 0 m, 90 s: top 162, σ 1.215, share 1.00, rise 544, merge 1.04 top; way to 0.69 top, without suction - 0.804 threshold 
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

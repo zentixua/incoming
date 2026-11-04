@@ -1,0 +1,79 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.guidance.MissileSightlineTest" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:54:10.076Z" hostname="zentixua-pc" time="0.069">
+  <properties/>
+  <testcase name="climbsUntilTargetIsInSight()" classname="ua.zentix.incoming.guidance.MissileSightlineTest" time="0.065"/>
+  <testcase name="strikesRoofWhenTargetNeverInSight()" classname="ua.zentix.incoming.guidance.MissileSightlineTest" time="0.004"/>
+  <system-out><![CDATA[MissileSightlineTest:
+ from 800, house 20 to 20 to destination: hit, pitch up to 71°
+ from 800, house 20 to 30 to destination: hit, pitch up to 59°
+ from 800, house 20 to 45 to destination: hit, pitch up to 41°
+ from 800, house 20 to 70 to destination: hit, pitch up to 29°
+ from 800, house 20 to 100 to destination: hit, pitch up to 23°
+ from 800, house 20 to 130 to destination: hit, pitch up to 17°
+ from 800, house 20 to 190 to destination: hit, pitch up to 25°
+ from 800, house 30 to 20 to destination: hit, pitch up to 89°
+ from 800, house 30 to 30 to destination: hit, pitch up to 76°
+ from 800, house 30 to 45 to destination: hit, pitch up to 55°
+ from 800, house 30 to 70 to destination: hit, pitch up to 42°
+ from 800, house 30 to 100 to destination: hit, pitch up to 30°
+ from 800, house 30 to 130 to destination: hit, pitch up to 21°
+ from 800, house 30 to 190 to destination: hit, pitch up to 16°
+ from 800, house 40 to 20 to destination: hit, pitch up to 86°
+ from 800, house 40 to 30 to destination: hit, pitch up to 82°
+ from 800, house 40 to 45 to destination: hit, pitch up to 71°
+ from 800, house 40 to 70 to destination: hit, pitch up to 54°
+ from 800, house 40 to 100 to destination: hit, pitch up to 41°
+ from 800, house 40 to 130 to destination: hit, pitch up to 25°
+ from 800, house 40 to 190 to destination: hit, pitch up to 20°
+ from 800, house 50 to 20 to destination: crashed into (-20 87 -24), 38 blocks from the target
+ from 800, house 50 to 30 to destination: hit, pitch up to 83°
+ from 800, house 50 to 45 to destination: hit, pitch up to 76°
+ from 800, house 50 to 70 to destination: hit, pitch up to 59°
+ from 800, house 50 to 100 to destination: hit, pitch up to 46°
+ from 800, house 50 to 130 to destination: hit, pitch up to 30°
+ from 800, house 50 to 190 to destination: hit, pitch up to 24°
+ from 800, house 60 to 20 to destination: crashed into (-20 106 -26), 53 blocks from the target
+ from 800, house 60 to 30 to destination: hit, pitch up to 83°
+ from 800, house 60 to 45 to destination: hit, pitch up to 80°
+ from 800, house 60 to 70 to destination: hit, pitch up to 64°
+ from 800, house 60 to 100 to destination: hit, pitch up to 50°
+ from 800, house 60 to 130 to destination: hit, pitch up to 44°
+ from 800, house 60 to 190 to destination: hit, pitch up to 30°
+ from 800, house 70 to 20 to destination: crashed into (-20 109 -25), 55 blocks from the target
+ from 800, house 70 to 30 to destination: hit, pitch up to 80°
+ from 800, house 70 to 45 to destination: hit, pitch up to 89°
+ from 800, house 70 to 70 to destination: hit, pitch up to 76°
+ from 800, house 70 to 100 to destination: hit, pitch up to 61°
+ from 800, house 70 to 130 to destination: hit, pitch up to 48°
+ from 800, house 70 to 190 to destination: hit, pitch up to 34°
+ from 170, house 20 to 20 to destination: hit, pitch up to 76°
+ from 170, house 20 to 30 to destination: hit, pitch up to 52°
+ from 170, house 20 to 45 to destination: hit, pitch up to 44°
+ from 170, house 20 to 70 to destination: hit, pitch up to 30°
+ from 170, house 30 to 20 to destination: hit, pitch up to 86°
+ from 170, house 30 to 30 to destination: hit, pitch up to 69°
+ from 170, house 30 to 45 to destination: hit, pitch up to 58°
+ from 170, house 30 to 70 to destination: hit, pitch up to 42°
+ from 170, house 40 to 20 to destination: hit, pitch up to 83°
+ from 170, house 40 to 30 to destination: hit, pitch up to 85°
+ from 170, house 40 to 45 to destination: hit, pitch up to 64°
+ from 170, house 40 to 70 to destination: hit, pitch up to 48°
+ from 170, house 50 to 20 to destination: hit, pitch up to 81°
+ from 170, house 50 to 30 to destination: hit, pitch up to 89°
+ from 170, house 50 to 45 to destination: hit, pitch up to 78°
+ from 170, house 50 to 70 to destination: hit, pitch up to 60°
+ from 170, house 60 to 20 to destination: crashed into (-20 73 -21), 30 blocks from the target
+ from 170, house 60 to 30 to destination: hit, pitch up to 79°
+ from 170, house 60 to 45 to destination: hit, pitch up to 82°
+ from 170, house 60 to 70 to destination: hit, pitch up to 65°
+ from 170, house 70 to 20 to destination: hit, pitch up to 69°
+ from 170, house 70 to 30 to destination: hit, pitch up to 77°
+ from 170, house 70 to 45 to destination: hit, pitch up to 86°
+ from 170, house 70 to 70 to destination: hit, pitch up to 69°
+MissileSightlineTest, canopy, quarry 0.0, entry from 800.0: hit, pitch up to 82°
+MissileSightlineTest, canopy, quarry 0.0, entry from 170.0: hit, pitch up to 83°
+MissileSightlineTest, canopy, quarry 30.0, entry from 800.0: hit, pitch up to 82°
+MissileSightlineTest, canopy, quarry 30.0, entry from 170.0: hit, pitch up to 83°
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.gametest.GameTestShardsTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:54:01.911Z" hostname="zentixua-pc" time="0.01">
+  <properties/>
+  <testcase name="partsEvenWithinOneBatch()" classname="ua.zentix.incoming.gametest.GameTestShardsTest" time="0.005"/>
+  <testcase name="unknownBatchWeighsMedian()" classname="ua.zentix.incoming.gametest.GameTestShardsTest" time="0.001"/>
+  <testcase name="everyBatchInExactlyOnePart()" classname="ua.zentix.incoming.gametest.GameTestShardsTest" time="0.004"/>
+  <testcase name="sameOnEveryMachine()" classname="ua.zentix.incoming.gametest.GameTestShardsTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

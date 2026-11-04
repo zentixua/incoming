@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.client.far.EyeInSmokeTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:50:48.274Z" hostname="zentixua-pc" time="0.203">
+  <properties/>
+  <testcase name="tubeThroughTheEyeIsSeenRayByRay()" classname="ua.zentix.incoming.client.far.EyeInSmokeTest" time="0.203"/>
+  <system-out><![CDATA[EYE looking up at 0°: eye in the tube - part against the substance up to 0.098 (axis in 5.0 m: frame [0.16 0.19 0.20 0.20 0.17 0.13 / 0.10 0.13 0.14 0.14 0.11 0.07 / 0.09 0.12 0.12 0.13 0.11 0.07], substance [0.06 0.10 0.13 0.13 0.10 0.06 / 0.04 0.07 0.10 0.10 0.07 0.04 / 0.06 0.10 0.13 0.13 0.10 0.06]); top versus bottom - stock Infinity (); step to 0.060 (axis in -5.0 m: frame [0.63 0.67 0.70 0.70 0.67 0.62 / 0.61 0.66 0.69 0.70 0.67 0.61 / 0.59 0.63 0.67 0.67 0.64 0.59], substance [0.54 0.59 0.63 0.63 0.59 0.54 / 0.54 0.60 0.64 0.64 0.60 0.54 / 0.54 0.59 0.63 0.63 0.59 0.54])
+EYE looking up at 40°: eye in the tube - part against the substance up to 0.132 (axis in -5.0 m: frame [0.57 0.61 0.64 0.64 0.61 0.55 / 0.60 0.65 0.69 0.69 0.65 0.59 / 0.63 0.67 0.70 0.70 0.68 0.63], substance [0.44 0.50 0.54 0.54 0.50 0.44 / 0.50 0.56 0.60 0.60 0.56 0.50 / 0.55 0.60 0.64 0.64 0.60 0.55]); top versus bottom - stock 0.103 (axis in 3.5 m: frame [0.26 0.30 0.33 0.32 0.29 0.24 / 0.18 0.22 0.25 0.25 0.21 0.16 / 0.13 0.16 0.18 0.19 0.16 0.12], substance [0.16 0.21 0.25 0.25 0.21 0.16 / 0.09 0.13 0.17 0.17 0.13 0.09 / 0.07 0.10 0.13 0.13 0.10 0.07]); step to 0.069 (axis in 11.0 m: frame [0.90 0.89 0.88 0.87 0.87 0.87 / 0.60 0.68 0.70 0.67 0.60 0.57 / 0.17 0.28 0.31 0.31 0.22 0.15], substance [0.65 0.69 0.72 0.72 0.69 0.65 / 0.27 0.33 0.38 0.38 0.33 0.27 / 0.05 0.08 0.11 0.11 0.08 0.05])
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

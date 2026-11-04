@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.client.sound.LoudnessTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:53:56.439Z" hostname="zentixua-pc" time="0.002">
+  <properties/>
+  <testcase name="missileLaunchIsLouderUpClose()" classname="ua.zentix.incoming.client.sound.LoudnessTest" time="0.0"/>
+  <testcase name="numbersAreTheBuildScriptOnes()" classname="ua.zentix.incoming.client.sound.LoudnessTest" time="0.001"/>
+  <testcase name="nukeKeepsItsCeiling()" classname="ua.zentix.incoming.client.sound.LoudnessTest" time="0.001"/>
+  <testcase name="motorsGrowUpToTheCeiling()" classname="ua.zentix.incoming.client.sound.LoudnessTest" time="0.0"/>
+  <testcase name="quietLaunchCuesNeverReachTheirFile()" classname="ua.zentix.incoming.client.sound.LoudnessTest" time="0.0"/>
+  <testcase name="sourceFilesHoldTheirLoudestLevel()" classname="ua.zentix.incoming.client.sound.LoudnessTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

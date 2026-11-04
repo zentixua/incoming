@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.client.nuclear.NukeBallSurfaceTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:53:43.875Z" hostname="zentixua-pc" time="0.088">
+  <properties/>
+  <testcase name="patternKeepsTheModelPower()" classname="ua.zentix.incoming.client.nuclear.NukeBallSurfaceTest" time="0.083"/>
+  <testcase name="octahedralMapRoundTrips()" classname="ua.zentix.incoming.client.nuclear.NukeBallSurfaceTest" time="0.002"/>
+  <testcase name="framesCoverTheRiseUntilTheRingRollsUp()" classname="ua.zentix.incoming.client.nuclear.NukeBallSurfaceTest" time="0.003"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

@@ -1,0 +1,21 @@
+{
+  "head": "6b362f9f1124dec15bd97c8a770824c7f0f4c41f",
+  "unchanged_build_inputs": {
+    "mod/src/main": {
+      "full_build_439": "c42407121cfe767f04c0babe2eb93c197f234c70",
+      "current": "c42407121cfe767f04c0babe2eb93c197f234c70"
+    },
+    "mod/src/test": {
+      "full_build_439": "6465111fb9b74cba891a5e10d5e329320668fdcb",
+      "current": "6465111fb9b74cba891a5e10d5e329320668fdcb"
+    },
+    "mod/build.gradle": {
+      "full_build_439": "356fc177e0f8eceb6c81ecd38a0bea7edc59bd37",
+      "current": "356fc177e0f8eceb6c81ecd38a0bea7edc59bd37"
+    },
+    "mod/gradle.properties": {
+      "full_build_439": "8826dbce42e3a46d3bae7e7c275cc43572b15d8b",
+      "current": "8826dbce42e3a46d3bae7e7c275cc43572b15d8b"
+    }
+  }
+}

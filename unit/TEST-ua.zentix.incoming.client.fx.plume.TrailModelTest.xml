@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.client.fx.plume.TrailModelTest" tests="14" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:52:35.967Z" hostname="zentixua-pc" time="0.095">
+  <properties/>
+  <testcase name="riseTableReachesItsTop()" classname="ua.zentix.incoming.client.fx.plume.TrailModelTest" time="0.0"/>
+  <testcase name="ribbonIsDrawnAtHalfTheCentreOpacity()" classname="ua.zentix.incoming.client.fx.plume.TrailModelTest" time="0.0"/>
+  <testcase name="samTrailHangsForTensOfSeconds()" classname="ua.zentix.incoming.client.fx.plume.TrailModelTest" time="0.008"/>
+  <testcase name="wanderNoiseHasUnitSpread()" classname="ua.zentix.incoming.client.fx.plume.TrailModelTest" time="0.014"/>
+  <testcase name="contrailThresholdAtTwoAltitudes()" classname="ua.zentix.incoming.client.fx.plume.TrailModelTest" time="0.0"/>
+  <testcase name="bendsMakeUpTheAveragedPlume()" classname="ua.zentix.incoming.client.fx.plume.TrailModelTest" time="0.069"/>
+  <testcase name="bendsMoveSmoothly()" classname="ua.zentix.incoming.client.fx.plume.TrailModelTest" time="0.003"/>
+  <testcase name="boosterSmokeIsWhiteAndHangsForMinutes()" classname="ua.zentix.incoming.client.fx.plume.TrailModelTest" time="0.001"/>
+  <testcase name="slowerVehicleLaysThickerTrail()" classname="ua.zentix.incoming.client.fx.plume.TrailModelTest" time="0.0"/>
+  <testcase name="noTrailFromBatteryOrTurbofanByDay()" classname="ua.zentix.incoming.client.fx.plume.TrailModelTest" time="0.0"/>
+  <testcase name="bomberContrailOnlyWhereItForms()" classname="ua.zentix.incoming.client.fx.plume.TrailModelTest" time="0.0"/>
+  <testcase name="warmTrailRisesLessAtNight()" classname="ua.zentix.incoming.client.fx.plume.TrailModelTest" time="0.0"/>
+  <testcase name="pasquillTable()" classname="ua.zentix.incoming.client.fx.plume.TrailModelTest" time="0.0"/>
+  <testcase name="widthFollowsRichardsonUpToBriggsInTwoClasses()" classname="ua.zentix.incoming.client.fx.plume.TrailModelTest" time="0.0"/>
+  <system-out><![CDATA[SAM sustain: day life 141 s, opacity 15 s 0.23, 30 s 0.13; night life 1135 s
+DRONE class 1: life 220 s, width at 1 s 2.00 m, opacity 0.90, white 0.69, rise at life 69.9 m
+DRONE class 5: life 1200 s, width at 1 s 2.01 m, opacity 0.89, white 0.69, rise at life 36.9 m
+MISSILE class 1: life 981 s, width at 1 s 5.47 m, opacity 1.00, white 0.69, rise at life 136.5 m
+MISSILE class 5: life 1200 s, width at 1 s 5.48 m, opacity 1.00, white 0.69, rise at life 67.9 m
+ROCKET class 1: life 356 s, width at 1 s 3.45 m, opacity 0.94, white 0.44, rise at life 117.3 m
+ROCKET class 5: life 1200 s, width at 1 s 3.45 m, opacity 0.94, white 0.44, rise at life 58.4 m
+NUKE class 1: life 1200 s, width at 1 s 26.37 m, opacity 1.00, white 0.69, rise at life 428.8 m
+NUKE class 5: life 1200 s, width at 1 s 26.43 m, opacity 1.00, white 0.69, rise at life 213.4 m
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

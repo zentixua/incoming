@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.client.sound.EchoMixTest" tests="10" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:53:52.413Z" hostname="zentixua-pc" time="0.206">
+  <properties/>
+  <testcase name="tailTimeGrowsWithTheSpreadOfDelays()" classname="ua.zentix.incoming.client.sound.EchoMixTest" time="0.012"/>
+  <testcase name="lowerPitchStretchesTheGrain()" classname="ua.zentix.incoming.client.sound.EchoMixTest" time="0.0"/>
+  <testcase name="grainIsDecimatedMonoWithAFade()" classname="ua.zentix.incoming.client.sound.EchoMixTest" time="0.003"/>
+  <testcase name="oneEchoIsOneTrackAtItsTimeAndLevel()" classname="ua.zentix.incoming.client.sound.EchoMixTest" time="0.002"/>
+  <testcase name="manyLoudEchoesAreScaledNotClipped()" classname="ua.zentix.incoming.client.sound.EchoMixTest" time="0.001"/>
+  <testcase name="longExtraPathLosesHighs()" classname="ua.zentix.incoming.client.sound.EchoMixTest" time="0.006"/>
+  <testcase name="terrainEchoHasNoComb()" classname="ua.zentix.incoming.client.sound.EchoMixTest" time="0.177"/>
+  <testcase name="echoBetweenSidesSplitsWithEqualPower()" classname="ua.zentix.incoming.client.sound.EchoMixTest" time="0.001"/>
+  <testcase name="wideFacetSpreadsItsEnergyOverItsArrivals()" classname="ua.zentix.incoming.client.sound.EchoMixTest" time="0.002"/>
+  <testcase name="laterEchoesStartLaterInTheTrack()" classname="ua.zentix.incoming.client.sound.EchoMixTest" time="0.002"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

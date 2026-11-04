@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.client.far.FarViewSkyTest" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:50:48.821Z" hostname="zentixua-pc" time="0.002">
+  <properties/>
+  <testcase name="duskSmokeIsGreyLikeTheCloudsNotBlue()" classname="ua.zentix.incoming.client.far.FarViewSkyTest" time="0.002"/>
+  <testcase name="lightmapFixGivesTheSmokeLight()" classname="ua.zentix.incoming.client.far.FarViewSkyTest" time="0.0"/>
+  <system-out><![CDATA[ 6000: map 0.98 0.98 0.98 (b/r 1.00), cloud b/r 1.00, smoke 0.98 0.98 0.98 (b/r 1.00)
+11000: map 0.98 0.98 0.98 (b/r 1.00), cloud b/r 1.00, smoke 0.98 0.98 0.98 (b/r 1.00)
+12000: map 0.78 0.78 0.85 (b/r 1.10), cloud b/r 1.00, smoke 0.78 0.78 0.78 (b/r 1.00)
+12500: map 0.60 0.60 0.73 (b/r 1.22), cloud b/r 1.02, smoke 0.61 0.61 0.62 (b/r 1.02)
+13000: map 0.38 0.38 0.56 (b/r 1.48), cloud b/r 1.07, smoke 0.39 0.39 0.41 (b/r 1.07)
+13500: map 0.31 0.31 0.49 (b/r 1.56), cloud b/r 1.24, smoke 0.32 0.32 0.40 (b/r 1.24)
+14000: map 0.31 0.31 0.49 (b/r 1.56), cloud b/r 1.50, smoke 0.32 0.32 0.47 (b/r 1.50)
+18000: map 0.31 0.31 0.49 (b/r 1.56), cloud b/r 1.50, smoke 0.32 0.32 0.47 (b/r 1.50)
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

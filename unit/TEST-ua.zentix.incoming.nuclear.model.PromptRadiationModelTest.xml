@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.nuclear.model.PromptRadiationModelTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:54:12.116Z" hostname="zentixua-pc" time="0.001">
+  <properties/>
+  <testcase name="[1] 1000, 7.8" classname="ua.zentix.incoming.nuclear.model.PromptRadiationModelTest" time="0.001"/>
+  <testcase name="[2] 1500, 0.89" classname="ua.zentix.incoming.nuclear.model.PromptRadiationModelTest" time="0.0"/>
+  <testcase name="[3] 2000, 0.13" classname="ua.zentix.incoming.nuclear.model.PromptRadiationModelTest" time="0.0"/>
+  <testcase name="[4] 2500, 0.021" classname="ua.zentix.incoming.nuclear.model.PromptRadiationModelTest" time="0.0"/>
+  <testcase name="smallYieldRadiationOutrangesBlast()" classname="ua.zentix.incoming.nuclear.model.PromptRadiationModelTest" time="0.0"/>
+  <testcase name="transmissionByMass()" classname="ua.zentix.incoming.nuclear.model.PromptRadiationModelTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

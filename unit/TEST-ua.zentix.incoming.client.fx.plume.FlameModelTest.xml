@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.client.fx.plume.FlameModelTest" tests="8" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:52:31.131Z" hostname="zentixua-pc" time="2.17">
+  <properties/>
+  <testcase name="airBreathersAndElectricShowNoFlame()" classname="ua.zentix.incoming.client.fx.plume.FlameModelTest" time="0.0"/>
+  <testcase name="farLooksHaveNoFlameWithoutMotor()" classname="ua.zentix.incoming.client.fx.plume.FlameModelTest" time="0.0"/>
+  <testcase name="boosterLightFadesWithoutSteps()" classname="ua.zentix.incoming.client.fx.plume.FlameModelTest" time="2.084"/>
+  <testcase name="diamondsOnlyWhenExitPressureDiffersFromAir()" classname="ua.zentix.incoming.client.fx.plume.FlameModelTest" time="0.038"/>
+  <testcase name="flameColourIsTheBlackBodyAtItsTemperature()" classname="ua.zentix.incoming.client.fx.plume.FlameModelTest" time="0.031"/>
+  <testcase name="underExpandedJetIsWiderThanItsNozzle()" classname="ua.zentix.incoming.client.fx.plume.FlameModelTest" time="0.008"/>
+  <testcase name="coreFollowsEldred()" classname="ua.zentix.incoming.client.fx.plume.FlameModelTest" time="0.008"/>
+  <testcase name="passportMotorsAreSelfConsistent()" classname="ua.zentix.incoming.client.fx.plume.FlameModelTest" time="0.0"/>
+  <system-out><![CDATA[DRONE: core 1.1, flame 2.5, length 11.8 m, width 0.04, spread 0.50, T 2066/2678 K, eps 0.13, L 2.28/26.50/0.2385, diamonds false, light r 1.43 b 1.96
+MISSILE: core 2.8, flame 6.4, length 29.7 m, width 0.10, spread 1.10, T 2058/2675 K, eps 0.41, L 6.66/83.53/0.8046, diamonds false, light r 3.37 b 6.22
+ROCKET: core 2.6, flame 6.1, length 26.6 m, width 0.08, spread 0.93, T 1416/2503 K, eps 0.13, L 0.01/12.86/0.1249, diamonds true, light r 2.94 b 1.07
+NUKE: core 8.2, flame 18.4, length 83.9 m, width 0.49, spread 5.46, T 1930/2618 K, eps 0.76, L 5.55/136.33/1.5395, diamonds true, light r 12.60 b 10.72
+drone booster: thrust 4.2 kN, chamber 1.8 MPa, exit 101 kPa, exit r 0.044 m, Te 2066 K
+missile booster: thrust 26.7 kN, chamber 3.7 MPa, exit 101 kPa, exit r 0.096 m, Te 2058 K
+grad motor: thrust 21.1 kN, chamber 4.4 MPa, exit 337 kPa, exit r 0.055 m, Te 1759 K
+icbm stage: thrust 903.7 kN, chamber 8.0 MPa, exit 70 kPa, exit r 0.283 m, Te 1845 K
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

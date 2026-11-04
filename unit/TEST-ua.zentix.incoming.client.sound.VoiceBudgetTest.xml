@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.client.sound.VoiceBudgetTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:53:58.476Z" hostname="zentixua-pc" time="0.002">
+  <properties/>
+  <testcase name="silentLayerKeepsChannelForHoldTicksThenReleases()" classname="ua.zentix.incoming.client.sound.VoiceBudgetTest" time="0.001"/>
+  <testcase name="playingLayerYieldsOnlyToMuchLouder()" classname="ua.zentix.incoming.client.sound.VoiceBudgetTest" time="0.001"/>
+  <testcase name="silentLayerDoesNotStart()" classname="ua.zentix.incoming.client.sound.VoiceBudgetTest" time="0.0"/>
+  <testcase name="capKeepsLoudest()" classname="ua.zentix.incoming.client.sound.VoiceBudgetTest" time="0.0"/>
+  <testcase name="quietHeldLayersGiveWayFirst()" classname="ua.zentix.incoming.client.sound.VoiceBudgetTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

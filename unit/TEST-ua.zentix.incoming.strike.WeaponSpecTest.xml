@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.strike.WeaponSpecTest" tests="24" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:54:13.385Z" hostname="zentixua-pc" time="0.031">
+  <properties/>
+  <testcase name="surfaceBlastsHaveChargeAndFuelAtImpact()" classname="ua.zentix.incoming.strike.WeaponSpecTest" time="0.0"/>
+  <testcase name="finalLegFitsTurn()" classname="ua.zentix.incoming.strike.WeaponSpecTest" time="0.001"/>
+  <testcase name="chargesByDecision()" classname="ua.zentix.incoming.strike.WeaponSpecTest" time="0.0"/>
+  <testcase name="everyAirframeHasArticle()" classname="ua.zentix.incoming.strike.WeaponSpecTest" time="0.003"/>
+  <testcase name="sirenBeforeFinalLeg()" classname="ua.zentix.incoming.strike.WeaponSpecTest" time="0.0"/>
+  <testcase name="mopDropImpact()" classname="ua.zentix.incoming.strike.WeaponSpecTest" time="0.001"/>
+  <testcase name="chargeBreaksGlassAsDescribed()" classname="ua.zentix.incoming.strike.WeaponSpecTest" time="0.0"/>
+  <testcase name="popUpGeometryFitsTurnAndLegs()" classname="ua.zentix.incoming.strike.WeaponSpecTest" time="0.0"/>
+  <testcase name="tomahawkCruiseFromThrust()" classname="ua.zentix.incoming.strike.WeaponSpecTest" time="0.0"/>
+  <testcase name="rackHoldsSlotThroughLaunch()" classname="ua.zentix.incoming.strike.WeaponSpecTest" time="0.0"/>
+  <testcase name="gameSpeedsBelowReal()" classname="ua.zentix.incoming.strike.WeaponSpecTest" time="0.0"/>
+  <testcase name="turnRadiusIsSpeedOverTurnRate()" classname="ua.zentix.incoming.strike.WeaponSpecTest" time="0.0"/>
+  <testcase name="radarSignature()" classname="ua.zentix.incoming.strike.WeaponSpecTest" time="0.0"/>
+  <testcase name="munitionPerShotAndGradPack()" classname="ua.zentix.incoming.strike.WeaponSpecTest" time="0.0"/>
+  <testcase name="shahedCruiseFromPowerAndDrag()" classname="ua.zentix.incoming.strike.WeaponSpecTest" time="0.0"/>
+  <testcase name="sirenLeadIsSecondsInTicks()" classname="ua.zentix.incoming.strike.WeaponSpecTest" time="0.0"/>
+  <testcase name="lancetDiveFromWeight()" classname="ua.zentix.incoming.strike.WeaponSpecTest" time="0.0"/>
+  <testcase name="samPassportBy9M96()" classname="ua.zentix.incoming.strike.WeaponSpecTest" time="0.0"/>
+  <testcase name="reattackInsideTurnCircle()" classname="ua.zentix.incoming.strike.WeaponSpecTest" time="0.0"/>
+  <testcase name="missIsPerWeapon()" classname="ua.zentix.incoming.strike.WeaponSpecTest" time="0.003"/>
+  <testcase name="everyWeaponHasSpec()" classname="ua.zentix.incoming.strike.WeaponSpecTest" time="0.0"/>
+  <testcase name="gradRangeWithMachDrag()" classname="ua.zentix.incoming.strike.WeaponSpecTest" time="0.022"/>
+  <testcase name="noiseUsesArticleMotors()" classname="ua.zentix.incoming.strike.WeaponSpecTest" time="0.0"/>
+  <testcase name="waypointCaptureAndReach()" classname="ua.zentix.incoming.strike.WeaponSpecTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.strike.FlightProfileRegressionTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:54:13.261Z" hostname="zentixua-pc" time="0.002">
+  <properties/>
+  <testcase name="rocketKeepsMotorTimingAndTrajectoryLimits()" classname="ua.zentix.incoming.strike.FlightProfileRegressionTest" time="0.001"/>
+  <testcase name="loiterKeepsItsOrbitAndDiveSettings()" classname="ua.zentix.incoming.strike.FlightProfileRegressionTest" time="0.0"/>
+  <testcase name="bomberKeepsItsLevelChangeReleaseAndDeparture()" classname="ua.zentix.incoming.strike.FlightProfileRegressionTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

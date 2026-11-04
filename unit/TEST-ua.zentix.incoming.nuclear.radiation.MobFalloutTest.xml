@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.nuclear.radiation.MobFalloutTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:54:12.578Z" hostname="zentixua-pc" time="0.001">
+  <properties/>
+  <testcase name="emptySpan()" classname="ua.zentix.incoming.nuclear.radiation.MobFalloutTest" time="0.001"/>
+  <testcase name="longAccountIntegratesTheDecay()" classname="ua.zentix.incoming.nuclear.radiation.MobFalloutTest" time="0.0"/>
+  <testcase name="arrivalStepInsideTheSpan()" classname="ua.zentix.incoming.nuclear.radiation.MobFalloutTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

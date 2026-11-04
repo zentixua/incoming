@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.client.far.SmokePuffsTest" tests="10" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:51:00.549Z" hostname="zentixua-pc" time="0.03">
+  <properties/>
+  <testcase name="mapShadeFollowsAlbedo()" classname="ua.zentix.incoming.client.far.SmokePuffsTest" time="0.0"/>
+  <testcase name="sightDepthThroughAFlatLayer()" classname="ua.zentix.incoming.client.far.SmokePuffsTest" time="0.001"/>
+  <testcase name="tubeKeepsItsMatterAndSpacing()" classname="ua.zentix.incoming.client.far.SmokePuffsTest" time="0.009"/>
+  <testcase name="edgeOfThinAndThickClouds()" classname="ua.zentix.incoming.client.far.SmokePuffsTest" time="0.0"/>
+  <testcase name="tubeGroupsKeepEveryTubeAcrossLevels()" classname="ua.zentix.incoming.client.far.SmokePuffsTest" time="0.0"/>
+  <testcase name="flatClubProjectsByViewAngle()" classname="ua.zentix.incoming.client.far.SmokePuffsTest" time="0.0"/>
+  <testcase name="flatClubLiesWhenSeenFromAbove()" classname="ua.zentix.incoming.client.far.SmokePuffsTest" time="0.0"/>
+  <testcase name="bakedAlbedoMatchesBakeScript()" classname="ua.zentix.incoming.client.far.SmokePuffsTest" time="0.001"/>
+  <testcase name="sootIsDarkGreyNotBlack()" classname="ua.zentix.incoming.client.far.SmokePuffsTest" time="0.0"/>
+  <testcase name="veilFadesToTheWorldWhereItsMatterIs()" classname="ua.zentix.incoming.client.far.SmokePuffsTest" time="0.017"/>
+  <system-out><![CDATA[VEIL optical depth 32.53, softness 2.4: ramp differs from share before world by 0.34 at 5 m (without softness 0.52), at 20 m 1.00
+VEIL optical depth 3.00, softness 100.2: ramp differs from share before world by 0.36 at 41 m (without softness 1.00), at 20 m 0.18
+VEIL optical depth 0.15, softness 89.5: ramp differs from share before world by 0.08 at 50 m (without softness 0.97), at 20 m 0.20
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

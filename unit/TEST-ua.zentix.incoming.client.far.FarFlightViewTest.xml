@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.client.far.FarFlightViewTest" tests="20" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:50:48.614Z" hostname="zentixua-pc" time="0.095">
+  <properties/>
+  <testcase name="thinTrailKeepsItsCoverage()" classname="ua.zentix.incoming.client.far.FarFlightViewTest" time="0.0"/>
+  <testcase name="ribbonToneMatchesSmokeTextures()" classname="ua.zentix.incoming.client.far.FarFlightViewTest" time="0.012"/>
+  <testcase name="droneFadesWithDistanceLikeACamera()" classname="ua.zentix.incoming.client.far.FarFlightViewTest" time="0.0"/>
+  <testcase name="bodyIsTrueSizeAndCoversTheSameSky()" classname="ua.zentix.incoming.client.far.FarFlightViewTest" time="0.0"/>
+  <testcase name="modelReplacesTheDotBetweenTwoAndThreePixels()" classname="ua.zentix.incoming.client.far.FarFlightViewTest" time="0.0"/>
+  <testcase name="samplingInStepsGivesTheSameTrail()" classname="ua.zentix.incoming.client.far.FarFlightViewTest" time="0.042"/>
+  <testcase name="boosterTrailEndsWhereThePistonLeavesNone()" classname="ua.zentix.incoming.client.far.FarFlightViewTest" time="0.009"/>
+  <testcase name="modelOutsideTheScreenIsNotDrawn()" classname="ua.zentix.incoming.client.far.FarFlightViewTest" time="0.0"/>
+  <testcase name="nearFlameAtNightAdaptsTheEye()" classname="ua.zentix.incoming.client.far.FarFlightViewTest" time="0.001"/>
+  <testcase name="bomberLeavesAContrailFromEachEngine()" classname="ua.zentix.incoming.client.far.FarFlightViewTest" time="0.002"/>
+  <testcase name="rocketMotorIsSparkByDayAndGlareAtNight()" classname="ua.zentix.incoming.client.far.FarFlightViewTest" time="0.0"/>
+  <testcase name="bomberLeavesNoContrailWhereAirIsWarm()" classname="ua.zentix.incoming.client.far.FarFlightViewTest" time="0.0"/>
+  <testcase name="gradTrailCoversTheRealBurnPath()" classname="ua.zentix.incoming.client.far.FarFlightViewTest" time="0.0"/>
+  <testcase name="flameIsOneAcrossTheRenderDistanceEdge()" classname="ua.zentix.incoming.client.far.FarFlightViewTest" time="0.0"/>
+  <testcase name="everyTrailNozzleFitsTheFrameCache()" classname="ua.zentix.incoming.client.far.FarFlightViewTest" time="0.001"/>
+  <testcase name="rocketTrailRunsAlongTheRealBurnPath()" classname="ua.zentix.incoming.client.far.FarFlightViewTest" time="0.011"/>
+  <testcase name="wideTubeOnScreenIsPuffsNotARibbon()" classname="ua.zentix.incoming.client.far.FarFlightViewTest" time="0.0"/>
+  <testcase name="cruiseMissileEngineDoesNotGlow()" classname="ua.zentix.incoming.client.far.FarFlightViewTest" time="0.0"/>
+  <testcase name="trailSmokeStartsWhereTheFlameEnds()" classname="ua.zentix.incoming.client.far.FarFlightViewTest" time="0.01"/>
+  <testcase name="rocketTrailStartsAtTheMuzzleNotInTheTube()" classname="ua.zentix.incoming.client.far.FarFlightViewTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

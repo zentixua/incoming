@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.client.fx.smoke.SmokeGridTest" tests="12" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:53:40.721Z" hostname="zentixua-pc" time="0.14">
+  <properties/>
+  <testcase name="resolvedShareFollowsTheCascadeCell()" classname="ua.zentix.incoming.client.fx.smoke.SmokeGridTest" time="0.0"/>
+  <testcase name="cascadeBoxesHoldTheirBlobs()" classname="ua.zentix.incoming.client.fx.smoke.SmokeGridTest" time="0.001"/>
+  <testcase name="conventionalCloudsAreNotVolume()" classname="ua.zentix.incoming.client.fx.smoke.SmokeGridTest" time="0.074"/>
+  <testcase name="dustExtinctionIsDeltaScaled()" classname="ua.zentix.incoming.client.fx.smoke.SmokeGridTest" time="0.0"/>
+  <testcase name="segmentHoldsItsMassAlongItsLength()" classname="ua.zentix.incoming.client.fx.smoke.SmokeGridTest" time="0.039"/>
+  <testcase name="overflowDropsWholeFarClouds()" classname="ua.zentix.incoming.client.fx.smoke.SmokeGridTest" time="0.004"/>
+  <testcase name="gridRefusesWhatItsCellDoesNotResolve()" classname="ua.zentix.incoming.client.fx.smoke.SmokeGridTest" time="0.002"/>
+  <testcase name="sourcesEndAndShareFadesAtTheEdge()" classname="ua.zentix.incoming.client.fx.smoke.SmokeGridTest" time="0.001"/>
+  <testcase name="blobGoesToTheFinestCascadeThatHoldsIt()" classname="ua.zentix.incoming.client.fx.smoke.SmokeGridTest" time="0.0"/>
+  <testcase name="layersCoverTheBlob()" classname="ua.zentix.incoming.client.fx.smoke.SmokeGridTest" time="0.0"/>
+  <testcase name="cellsHoldTheBlobMass()" classname="ua.zentix.incoming.client.fx.smoke.SmokeGridTest" time="0.017"/>
+  <testcase name="cloudPastTheLastCascadeLeavesWhole()" classname="ua.zentix.incoming.client.fx.smoke.SmokeGridTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

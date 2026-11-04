@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.guidance.AutopilotPropertiesTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:54:02.056Z" hostname="zentixua-pc" time="7.32">
+  <properties/>
+  <testcase name="randomFlightsHitWithoutCircling()" classname="ua.zentix.incoming.guidance.AutopilotPropertiesTest" time="7.298"/>
+  <testcase name="missileClearsMast()" classname="ua.zentix.incoming.guidance.AutopilotPropertiesTest" time="0.012"/>
+  <testcase name="droneClearsTallHouse()" classname="ua.zentix.incoming.guidance.AutopilotPropertiesTest" time="0.009"/>
+  <system-out><![CDATA[AutopilotPropertiesTest: 10000 scripts, hits 10000, no stock 0, about the relief 0, the terrain covered the target on approach - 757
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

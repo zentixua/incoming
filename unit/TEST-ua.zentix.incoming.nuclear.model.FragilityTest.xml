@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.nuclear.model.FragilityTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:54:11.320Z" hostname="zentixua-pc" time="0.01">
+  <properties/>
+  <testcase name="medianIsHalf()" classname="ua.zentix.incoming.nuclear.model.FragilityTest" time="0.0"/>
+  <testcase name="tailTruncated()" classname="ua.zentix.incoming.nuclear.model.FragilityTest" time="0.0"/>
+  <testcase name="possibleBoundsHit()" classname="ua.zentix.incoming.nuclear.model.FragilityTest" time="0.0"/>
+  <testcase name="hitMatchesProbability()" classname="ua.zentix.incoming.nuclear.model.FragilityTest" time="0.01"/>
+  <testcase name="cdfAndInverseAgree()" classname="ua.zentix.incoming.nuclear.model.FragilityTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

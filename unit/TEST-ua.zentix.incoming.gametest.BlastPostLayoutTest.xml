@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.gametest.BlastPostLayoutTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:54:01.794Z" hostname="zentixua-pc" time="0.116">
+  <properties/>
+  <testcase name="nearbyPostsAvoidRayLatticeGapsAcrossThresholdHashes()" classname="ua.zentix.incoming.gametest.BlastPostLayoutTest" time="0.116"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

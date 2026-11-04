@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.strike.FlightLogTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:54:13.258Z" hostname="zentixua-pc" time="0.003">
+  <properties/>
+  <testcase name="eventsAndWeaponsAreSeparate()" classname="ua.zentix.incoming.strike.FlightLogTest" time="0.002"/>
+  <testcase name="crashedIsWarnedWithPlace()" classname="ua.zentix.incoming.strike.FlightLogTest" time="0.0"/>
+  <testcase name="salvoWithSpreadIsOneLine()" classname="ua.zentix.incoming.strike.FlightLogTest" time="0.0"/>
+  <testcase name="interceptedNamesLauncher()" classname="ua.zentix.incoming.strike.FlightLogTest" time="0.001"/>
+  <testcase name="shotDownSplitsByDamage()" classname="ua.zentix.incoming.strike.FlightLogTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

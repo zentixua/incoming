@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.nuclear.world.RuinRecordsTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:54:13.038Z" hostname="zentixua-pc" time="0.01">
+  <properties/>
+  <testcase name="fullPagesAreSharedAndOnlyPartialEndsCopied()" classname="ua.zentix.incoming.nuclear.world.RuinRecordsTest" time="0.003"/>
+  <testcase name="snapshotsStayImmutableAcrossAppendDrainAndRestore()" classname="ua.zentix.incoming.nuclear.world.RuinRecordsTest" time="0.006"/>
+  <testcase name="appendReservationCoversTailGrowthAndWholeBoundaryPages()" classname="ua.zentix.incoming.nuclear.world.RuinRecordsTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

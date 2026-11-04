@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.client.fx.smoke.BlastTargetTest" tests="8" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:52:36.063Z" hostname="zentixua-pc" time="0.009">
+  <properties/>
+  <testcase name="roofBreachDustOfAShahedIsAHazeNotAWall()" classname="ua.zentix.incoming.client.fx.smoke.BlastTargetTest" time="0.003"/>
+  <testcase name="plainCloudIsTheSoilCloud()" classname="ua.zentix.incoming.client.fx.smoke.BlastTargetTest" time="0.005"/>
+  <testcase name="familyFollowsMaterialAndSupport()" classname="ua.zentix.incoming.client.fx.smoke.BlastTargetTest" time="0.0"/>
+  <testcase name="crushedMassFollowsTheMaterial()" classname="ua.zentix.incoming.client.fx.smoke.BlastTargetTest" time="0.0"/>
+  <testcase name="crushedMatterFinesFollowTheContactBlastMeasurement()" classname="ua.zentix.incoming.client.fx.smoke.BlastTargetTest" time="0.0"/>
+  <testcase name="slabHoleFollowsTheBreachLaw()" classname="ua.zentix.incoming.client.fx.smoke.BlastTargetTest" time="0.0"/>
+  <testcase name="dustColourFollowsTheMatter()" classname="ua.zentix.incoming.client.fx.smoke.BlastTargetTest" time="0.001"/>
+  <testcase name="spallSpeedFollowsGurney()" classname="ua.zentix.incoming.client.fx.smoke.BlastTargetTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

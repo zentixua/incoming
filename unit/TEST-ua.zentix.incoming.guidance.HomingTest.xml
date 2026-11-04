@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.guidance.HomingTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:54:10.075Z" hostname="zentixua-pc" time="0.001">
+  <properties/>
+  <testcase name="repeatedTurnsConverge()" classname="ua.zentix.incoming.guidance.HomingTest" time="0.0"/>
+  <testcase name="oppositeTurnsSomewhere()" classname="ua.zentix.incoming.guidance.HomingTest" time="0.0"/>
+  <testcase name="smallTurnReachesWant()" classname="ua.zentix.incoming.guidance.HomingTest" time="0.0"/>
+  <testcase name="turnIsLimitedAndTowardsWant()" classname="ua.zentix.incoming.guidance.HomingTest" time="0.0"/>
+  <testcase name="closestApproachInsideTick()" classname="ua.zentix.incoming.guidance.HomingTest" time="0.0"/>
+  <testcase name="closestIsClampedToTick()" classname="ua.zentix.incoming.guidance.HomingTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

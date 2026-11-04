@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.client.fx.smoke.WaterBlastTest" tests="10" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:53:41.010Z" hostname="zentixua-pc" time="0.627">
+  <properties/>
+  <testcase name="jetsFlyAndFall()" classname="ua.zentix.incoming.client.fx.smoke.WaterBlastTest" time="0.0"/>
+  <testcase name="jetsAreRoundSegments()" classname="ua.zentix.incoming.client.fx.smoke.WaterBlastTest" time="0.002"/>
+  <testcase name="cachedSightMatchesTheDirectQuadrature()" classname="ua.zentix.incoming.client.fx.smoke.WaterBlastTest" time="0.021"/>
+  <testcase name="everyWeaponThrowsAColumnOfTheLawSize()" classname="ua.zentix.incoming.client.fx.smoke.WaterBlastTest" time="0.603"/>
+  <testcase name="sizeScalesWithTheCubeRoot()" classname="ua.zentix.incoming.client.fx.smoke.WaterBlastTest" time="0.0"/>
+  <testcase name="tableMatchesTheReportExample()" classname="ua.zentix.incoming.client.fx.smoke.WaterBlastTest" time="0.0"/>
+  <testcase name="deepChargeThrowsLess()" classname="ua.zentix.incoming.client.fx.smoke.WaterBlastTest" time="0.0"/>
+  <testcase name="mistSettlesFromAThinLayer()" classname="ua.zentix.incoming.client.fx.smoke.WaterBlastTest" time="0.001"/>
+  <testcase name="foamAndWaveOnTheWater()" classname="ua.zentix.incoming.client.fx.smoke.WaterBlastTest" time="0.0"/>
+  <testcase name="mistAfterTheColumn()" classname="ua.zentix.incoming.client.fx.smoke.WaterBlastTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

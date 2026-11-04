@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.client.fx.smoke.FireballRadiationTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:52:48.493Z" hostname="zentixua-pc" time="3.723">
+  <properties/>
+  <testcase name="emittedHighExplosiveLightFitsOneBudgetForEveryCharge()" classname="ua.zentix.incoming.client.fx.smoke.FireballRadiationTest" time="2.55"/>
+  <testcase name="fuelCoolingSharesTheFuelRadiationBudget()" classname="ua.zentix.incoming.client.fx.smoke.FireballRadiationTest" time="0.004"/>
+  <testcase name="broadPulseKeepsTheMeasuredIntegralAnchors()" classname="ua.zentix.incoming.client.fx.smoke.FireballRadiationTest" time="0.009"/>
+  <testcase name="noChargeOrFuelHasNoEmission()" classname="ua.zentix.incoming.client.fx.smoke.FireballRadiationTest" time="0.001"/>
+  <testcase name="broadPulseIsResolvedAcrossFrameRatesAndFrameOffsets()" classname="ua.zentix.incoming.client.fx.smoke.FireballRadiationTest" time="1.159"/>
+  <testcase name="visibleBandIsNotBolometricOrPhotopicPower()" classname="ua.zentix.incoming.client.fx.smoke.FireballRadiationTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

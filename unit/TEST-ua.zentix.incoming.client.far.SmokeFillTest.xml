@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.client.far.SmokeFillTest" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:50:53.834Z" hostname="zentixua-pc" time="1.113">
+  <properties/>
+  <testcase name="glowShareScalesOpacityNotMass()" classname="ua.zentix.incoming.client.far.SmokeFillTest" time="0.001"/>
+  <testcase name="differentLooksDoNotMerge()" classname="ua.zentix.incoming.client.far.SmokeFillTest" time="0.0"/>
+  <testcase name="fixedPuffKeepsWorldRayTransmittanceWhenCameraTurns()" classname="ua.zentix.incoming.client.far.SmokeFillTest" time="0.006"/>
+  <testcase name="raidSmokeStaysInTheFillBudgetAtTheSameDensity()" classname="ua.zentix.incoming.client.far.SmokeFillTest" time="1.011"/>
+  <testcase name="ejectaCurtainsStayInTheFillBudget()" classname="ua.zentix.incoming.client.far.SmokeFillTest" time="0.017"/>
+  <testcase name="mergeKeepsMassAndMoments()" classname="ua.zentix.incoming.client.far.SmokeFillTest" time="0.0"/>
+  <testcase name="clusterDetailNoise()" classname="ua.zentix.incoming.client.far.SmokeFillTest" time="0.078"/>
+  <system-out><![CDATA[FILL eye (0.0, 40.0, 0.0): at budget 16 floor 8.8 (before merging 8.8); free 1456 quads, 22.2 screens, transmittance 0.671; budget 4: 53, 3.6 (floor 3.6), 0.590; worst region against matter: full 0.109, budgeted 0.133
+FILL eye (-67.21250040573656, 25.0, -24.876708357107198): at budget 16 floor 5.4 (before merging 5.4); free 1237 quads, 12.4 screens, transmittance 0.829; budget 4: 223, 3.0 (floor 3.0), 0.781; worst region against matter: full 0.156, budgeted 0.099
+FILL eye (-3.778938868507904, 60.0, -12.33219462551613): at budget 16 floor 9.0 (before merging 9.0); free 1464 quads, 22.3 screens, transmittance 0.654; budget 4: 69, 3.8 (floor 3.9), 0.566; worst region against matter: full 0.127, budgeted 0.138
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

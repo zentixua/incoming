@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.client.map.TerrainTilesTest" tests="21" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:53:41.661Z" hostname="zentixua-pc" time="0.054">
+  <properties/>
+  <testcase name="urgencyOrder()" classname="ua.zentix.incoming.client.map.TerrainTilesTest" time="0.002"/>
+  <testcase name="gameThreadPrefetchStopsAtDeadlineAndResumes()" classname="ua.zentix.incoming.client.map.TerrainTilesTest" time="0.002"/>
+  <testcase name="firstRowShadedByNorthTile()" classname="ua.zentix.incoming.client.map.TerrainTilesTest" time="0.003"/>
+  <testcase name="composeOnlyFromFreshChildren()" classname="ua.zentix.incoming.client.map.TerrainTilesTest" time="0.004"/>
+  <testcase name="slopesAndWaterShade()" classname="ua.zentix.incoming.client.map.TerrainTilesTest" time="0.0"/>
+  <testcase name="cancelledBackgroundTileStopsBetweenColumns()" classname="ua.zentix.incoming.client.map.TerrainTilesTest" time="0.0"/>
+  <testcase name="readsInParallelOnlyWhileMapShown()" classname="ua.zentix.incoming.client.map.TerrainTilesTest" time="0.0"/>
+  <testcase name="levelFollowsScale()" classname="ua.zentix.incoming.client.map.TerrainTilesTest" time="0.0"/>
+  <testcase name="prefetchAroundPlayerNearestFirst()" classname="ua.zentix.incoming.client.map.TerrainTilesTest" time="0.001"/>
+  <testcase name="farLayerPrefersWorkingLss()" classname="ua.zentix.incoming.client.map.TerrainTilesTest" time="0.0"/>
+  <testcase name="firstRowShadedBySlopeInside()" classname="ua.zentix.incoming.client.map.TerrainTilesTest" time="0.001"/>
+  <testcase name="composeSamplesChildrenAtCellMiddles()" classname="ua.zentix.incoming.client.map.TerrainTilesTest" time="0.001"/>
+  <testcase name="changedChunkMarksTilesAtNegativeCoordinates()" classname="ua.zentix.incoming.client.map.TerrainTilesTest" time="0.0"/>
+  <testcase name="quarterReplacesOnlyItsPart()" classname="ua.zentix.incoming.client.map.TerrainTilesTest" time="0.001"/>
+  <testcase name="gameThreadPrefetchCostsNothingWhenNotWanted()" classname="ua.zentix.incoming.client.map.TerrainTilesTest" time="0.0"/>
+  <testcase name="backgroundTileReturnsEvenOnError()" classname="ua.zentix.incoming.client.map.TerrainTilesTest" time="0.0"/>
+  <testcase name="farSourceOrderForEachPack()" classname="ua.zentix.incoming.client.map.TerrainTilesTest" time="0.0"/>
+  <testcase name="arrivedChunkRefreshesOnlyTilesWithHoles()" classname="ua.zentix.incoming.client.map.TerrainTilesTest" time="0.0"/>
+  <testcase name="chunkArrivingMidBuildRebuildsTile()" classname="ua.zentix.incoming.client.map.TerrainTilesTest" time="0.001"/>
+  <testcase name="capacityHoldsTwoWidestViews()" classname="ua.zentix.incoming.client.map.TerrainTilesTest" time="0.037"/>
+  <testcase name="prefetchOnlyForMapUsers()" classname="ua.zentix.incoming.client.map.TerrainTilesTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

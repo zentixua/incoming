@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.client.far.SmokeOcclusionTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:50:55.655Z" hostname="zentixua-pc" time="0.203">
+  <properties/>
+  <testcase name="depositMatchesNormalizedRayPlaneIntersection()" classname="ua.zentix.incoming.client.far.SmokeOcclusionTest" time="0.187"/>
+  <testcase name="fitPriorityIsContinuousWhenConcealmentBegins()" classname="ua.zentix.incoming.client.far.SmokeOcclusionTest" time="0.001"/>
+  <testcase name="denseDepthIsClampedAfterSampling()" classname="ua.zentix.incoming.client.far.SmokeOcclusionTest" time="0.0"/>
+  <testcase name="exposedDistantPuffSurvivesAtNormalAndBinocularZoom()" classname="ua.zentix.incoming.client.far.SmokeOcclusionTest" time="0.007"/>
+  <testcase name="zoomGridHoldsItsTierAndReusesItsBuffers()" classname="ua.zentix.incoming.client.far.SmokeOcclusionTest" time="0.006"/>
+  <system-out><![CDATA[OCCLUSION_EQUIVALENCE nodes=921984 maxAbsTau=3.9968028886505635e-15 lowerBoundQueries=103216 positiveQueries=17900 maxExcessTau=1.1102230246251565e-16
+OCCLUSION_BUDGET raw=0.052120487698 budgets=0.052120482486/0.052120492910 maxTexturedTauChange=0.000007878467
+OCCLUSION_EXPOSED zoom=1 cells=48 cases=12 reservedNodesMax=0 exactMinTau=0 leastVisibility=1.000000000000 coveredControlHalfCellDropped=true
+OCCLUSION_EXPOSED zoom=4 cells=96 cases=12 reservedNodesMax=15 exactMinTau=0 leastVisibility=1.000000000000 coveredControlHalfCellDropped=true
+OCCLUSION_ZOOM normalCells=48 binocularCells=96 firstBoundaryZoom=2.856467187 jitterTier=96 buffersReused=true
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

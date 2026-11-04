@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.client.sound.MixTest" tests="11" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:53:56.441Z" hostname="zentixua-pc" time="0.564">
+  <properties/>
+  <testcase name="endedBlastLeavesTheMix()" classname="ua.zentix.incoming.client.sound.MixTest" time="0.0"/>
+  <testcase name="equalBlastsAtOnceAddInHalfDecibels()" classname="ua.zentix.incoming.client.sound.MixTest" time="0.0"/>
+  <testcase name="lateEchoKeepsItsOwnShare()" classname="ua.zentix.incoming.client.sound.MixTest" time="0.0"/>
+  <testcase name="oneBlastUnderTheCeilingIsUntouched()" classname="ua.zentix.incoming.client.sound.MixTest" time="0.0"/>
+  <testcase name="delayedLayerStartsOnTimeAndBlastFollowsTheRealStart()" classname="ua.zentix.incoming.client.sound.MixTest" time="0.0"/>
+  <testcase name="gradSalvoStaysUnderTheCeiling()" classname="ua.zentix.incoming.client.sound.MixTest" time="0.559"/>
+  <testcase name="nearStaysOverAHundredFar()" classname="ua.zentix.incoming.client.sound.MixTest" time="0.0"/>
+  <testcase name="shareKeepsLifeRatiosAndTheSumUnderTheCeiling()" classname="ua.zentix.incoming.client.sound.MixTest" time="0.003"/>
+  <testcase name="voicedEnergyIsTheEngineVoicesOnly()" classname="ua.zentix.incoming.client.sound.MixTest" time="0.0"/>
+  <testcase name="echoTracksJoinTheirBlastWhenTheirSourcesTakeThem()" classname="ua.zentix.incoming.client.sound.MixTest" time="0.001"/>
+  <testcase name="layersOfOneBlastAddUpToTheCeiling()" classname="ua.zentix.incoming.client.sound.MixTest" time="0.0"/>
+  <system-out><![CDATA[salvo: mixed -12,7 LUFS, unmixed -4,8 LUFS, peak 1,32, over full scale 62 samples (unmixed 11219)
+near over 100 far: near -0,043 dB vs alone, each far 40,0 dB, all far 20,0 dB below the near
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

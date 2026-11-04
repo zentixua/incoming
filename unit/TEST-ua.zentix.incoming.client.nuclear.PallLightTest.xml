@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.client.nuclear.PallLightTest" tests="11" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:53:48.680Z" hostname="zentixua-pc" time="0.04">
+  <properties/>
+  <testcase name="denseDustIsDuskBelow()" classname="ua.zentix.incoming.client.nuclear.PallLightTest" time="0.0"/>
+  <testcase name="beamThatFadesLikeDiffuseLightStillSolvesTheSlab()" classname="ua.zentix.incoming.client.nuclear.PallLightTest" time="0.034"/>
+  <testcase name="fireLightIsNoBrighterThanTheFlames()" classname="ua.zentix.incoming.client.nuclear.PallLightTest" time="0.002"/>
+  <testcase name="thinLightIsTheThinLimit()" classname="ua.zentix.incoming.client.nuclear.PallLightTest" time="0.0"/>
+  <testcase name="thickLayerHasItsColour()" classname="ua.zentix.incoming.client.nuclear.PallLightTest" time="0.0"/>
+  <testcase name="groundShadeFadesWithDepth()" classname="ua.zentix.incoming.client.nuclear.PallLightTest" time="0.0"/>
+  <testcase name="dustAbsorbsMoreTheThickerItIs()" classname="ua.zentix.incoming.client.nuclear.PallLightTest" time="0.0"/>
+  <testcase name="dustOverFiresKeepsItsShading()" classname="ua.zentix.incoming.client.nuclear.PallLightTest" time="0.001"/>
+  <testcase name="thinMistGlowsByItsDepthThickHasItsColour()" classname="ua.zentix.incoming.client.nuclear.PallLightTest" time="0.003"/>
+  <testcase name="liftedLightShowsAsOnTheWall()" classname="ua.zentix.incoming.client.nuclear.PallLightTest" time="0.0"/>
+  <testcase name="conservativeLayerKeepsAllLight()" classname="ua.zentix.incoming.client.nuclear.PallLightTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

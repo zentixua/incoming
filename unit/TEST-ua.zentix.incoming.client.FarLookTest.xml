@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.client.FarLookTest" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:50:47.908Z" hostname="zentixua-pc" time="0.107">
+  <properties/>
+  <testcase name="bodiesAreNoBiggerThanTheirSizeAndShadowFitsIt()" classname="ua.zentix.incoming.client.FarLookTest" time="0.069"/>
+  <testcase name="flameLightIsTheJetSeenFromAfar()" classname="ua.zentix.incoming.client.FarLookTest" time="0.036"/>
+  <testcase name="boostersBurnThenEnginesShowNoFlame()" classname="ua.zentix.incoming.client.FarLookTest" time="0.001"/>
+  <testcase name="icbmBurnsWholeFlight()" classname="ua.zentix.incoming.client.FarLookTest" time="0.0"/>
+  <testcase name="bomberHasOnlyItsEnginesTrailAndLoiterNothing()" classname="ua.zentix.incoming.client.FarLookTest" time="0.0"/>
+  <testcase name="rocketBurnsOnlyWhileMotorIsLit()" classname="ua.zentix.incoming.client.FarLookTest" time="0.0"/>
+  <testcase name="nothingOnPadOrUnderground()" classname="ua.zentix.incoming.client.FarLookTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

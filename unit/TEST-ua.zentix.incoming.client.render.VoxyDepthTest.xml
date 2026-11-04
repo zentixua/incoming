@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.client.render.VoxyDepthTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:53:51.509Z" hostname="zentixua-pc" time="0.003">
+  <properties/>
+  <testcase name="pinnedLodIsTellableFromBlocks()" classname="ua.zentix.incoming.client.render.VoxyDepthTest" time="0.0"/>
+  <testcase name="readsTextureAndProjectionOfTheFrame()" classname="ua.zentix.incoming.client.render.VoxyDepthTest" time="0.002"/>
+  <testcase name="noRendererNoDepth()" classname="ua.zentix.incoming.client.render.VoxyDepthTest" time="0.0"/>
+  <testcase name="withoutVoxyClassesThereIsNoSource()" classname="ua.zentix.incoming.client.render.VoxyDepthTest" time="0.0"/>
+  <testcase name="minecraftPixelsAreNotLodAtTheNearPlane()" classname="ua.zentix.incoming.client.render.VoxyDepthTest" time="0.0"/>
+  <system-out><![CDATA[[12:53:51] [Test worker/INFO] [ua.ze.in.Incoming/]: Voxy depth for the effects layer: forward Z, NDC -1..1, empty 1.0, nearest LOD 16.0 blocks, Minecraft pixels marked 0.0
+[12:53:51] [Test worker/INFO] [ua.ze.in.Incoming/]: Voxy depth for the effects layer: forward Z, NDC -1..1, empty 1.0, nearest LOD 16.0 blocks, Minecraft pixels marked 0.0
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

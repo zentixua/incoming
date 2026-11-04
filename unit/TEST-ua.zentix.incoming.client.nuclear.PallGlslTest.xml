@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.client.nuclear.PallGlslTest" tests="25" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:53:45.887Z" hostname="zentixua-pc" time="2.662">
+  <properties/>
+  <testcase name="pallBehindTheFrontTakesTheWallLight()" classname="ua.zentix.incoming.client.nuclear.PallGlslTest" time="0.006"/>
+  <testcase name="ballLightMatchesJava()" classname="ua.zentix.incoming.client.nuclear.PallGlslTest" time="0.001"/>
+  <testcase name="edgeMatchesJava()" classname="ua.zentix.incoming.client.nuclear.PallGlslTest" time="0.001"/>
+  <testcase name="glowFormulaIsThePicture()" classname="ua.zentix.incoming.client.nuclear.PallGlslTest" time="0.007"/>
+  <testcase name="clipWhereDepthReachesTwelve()" classname="ua.zentix.incoming.client.nuclear.PallGlslTest" time="0.002"/>
+  <testcase name="shapeMatchesJava()" classname="ua.zentix.incoming.client.nuclear.PallGlslTest" time="0.004"/>
+  <testcase name="displayMatchesJava()" classname="ua.zentix.incoming.client.nuclear.PallGlslTest" time="0.001"/>
+  <testcase name="profileMatchesJava()" classname="ua.zentix.incoming.client.nuclear.PallGlslTest" time="0.0"/>
+  <testcase name="airMatchesJava()" classname="ua.zentix.incoming.client.nuclear.PallGlslTest" time="0.002"/>
+  <testcase name="detailMatchesJava()" classname="ua.zentix.incoming.client.nuclear.PallGlslTest" time="0.0"/>
+  <testcase name="wallHeadSigmaMatchesJava()" classname="ua.zentix.incoming.client.nuclear.PallGlslTest" time="2.076"/>
+  <testcase name="mistIsTheSprayWallColour()" classname="ua.zentix.incoming.client.nuclear.PallGlslTest" time="0.002"/>
+  <testcase name="surgeMatchesJava()" classname="ua.zentix.incoming.client.nuclear.PallGlslTest" time="0.001"/>
+  <testcase name="columnMatchesJava()" classname="ua.zentix.incoming.client.nuclear.PallGlslTest" time="0.001"/>
+  <testcase name="wallHeadMatchesJava()" classname="ua.zentix.incoming.client.nuclear.PallGlslTest" time="0.286"/>
+  <testcase name="materialsHaveTheirColours()" classname="ua.zentix.incoming.client.nuclear.PallGlslTest" time="0.001"/>
+  <testcase name="pallPutsItsLightTogetherOnce()" classname="ua.zentix.incoming.client.nuclear.PallGlslTest" time="0.002"/>
+  <testcase name="burnMatchesJava()" classname="ua.zentix.incoming.client.nuclear.PallGlslTest" time="0.002"/>
+  <testcase name="fireLawsMatchJava()" classname="ua.zentix.incoming.client.nuclear.PallGlslTest" time="0.005"/>
+  <testcase name="lightMatchesJava()" classname="ua.zentix.incoming.client.nuclear.PallGlslTest" time="0.248"/>
+  <testcase name="sprayHasItsOwnRow()" classname="ua.zentix.incoming.client.nuclear.PallGlslTest" time="0.002"/>
+  <testcase name="blanketMatchesJava()" classname="ua.zentix.incoming.client.nuclear.PallGlslTest" time="0.002"/>
+  <testcase name="historyIsReadWhereTheRayWent()" classname="ua.zentix.incoming.client.nuclear.PallGlslTest" time="0.005"/>
+  <testcase name="sceneDistanceKeepsOnlyTheWorldInFront()" classname="ua.zentix.incoming.client.nuclear.PallGlslTest" time="0.0"/>
+  <testcase name="headNoiseIsInDustCoordinates()" classname="ua.zentix.incoming.client.nuclear.PallGlslTest" time="0.004"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

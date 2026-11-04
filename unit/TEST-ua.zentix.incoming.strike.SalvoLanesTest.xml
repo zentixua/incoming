@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.strike.SalvoLanesTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:54:13.300Z" hostname="zentixua-pc" time="0.041">
+  <properties/>
+  <testcase name="singleRoundFliesThePathItself()" classname="ua.zentix.incoming.strike.SalvoLanesTest" time="0.0"/>
+  <testcase name="lanesAreShuffledBySeed()" classname="ua.zentix.incoming.strike.SalvoLanesTest" time="0.0"/>
+  <testcase name="lanesScaleWithCruise()" classname="ua.zentix.incoming.strike.SalvoLanesTest" time="0.001"/>
+  <testcase name="passportLanes()" classname="ua.zentix.incoming.strike.SalvoLanesTest" time="0.0"/>
+  <testcase name="everyRoundHasItsOwnLaneWithinTheBand()" classname="ua.zentix.incoming.strike.SalvoLanesTest" time="0.039"/>
+  <testcase name="sameSeedSameLanes()" classname="ua.zentix.incoming.strike.SalvoLanesTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

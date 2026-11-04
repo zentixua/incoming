@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.nuclear.model.HearingModelTest" tests="11" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:54:11.371Z" hostname="zentixua-pc" time="0.005">
+  <properties/>
+  <testcase name="eardrumsRuptureLogNormally()" classname="ua.zentix.incoming.nuclear.model.HearingModelTest" time="0.0"/>
+  <testcase name="severalWavesAddWithinTwoMinutesAndKeepTheLongestRecovery()" classname="ua.zentix.incoming.nuclear.model.HearingModelTest" time="0.0"/>
+  <testcase name="loudSoundsLoseLessThanTheThresholdShift()" classname="ua.zentix.incoming.nuclear.model.HearingModelTest" time="0.0"/>
+  <testcase name="shiftStartsAtTheDailyNoiseDoseAndReachesTraumaAtFivePsi()" classname="ua.zentix.incoming.nuclear.model.HearingModelTest" time="0.0"/>
+  <testcase name="tornEardrumsMuffleUntilTheyHeal()" classname="ua.zentix.incoming.nuclear.model.HearingModelTest" time="0.0"/>
+  <testcase name="longWaveEnergyIsTheStepEnergy()" classname="ua.zentix.incoming.nuclear.model.HearingModelTest" time="0.0"/>
+  <testcase name="audibleRangeGrowsWithChargeAndEndsAtTheNightBackground()" classname="ua.zentix.incoming.nuclear.model.HearingModelTest" time="0.002"/>
+  <testcase name="normalDistribution()" classname="ua.zentix.incoming.nuclear.model.HearingModelTest" time="0.0"/>
+  <testcase name="shiftRecoversLinearlyInLogTime()" classname="ua.zentix.incoming.nuclear.model.HearingModelTest" time="0.0"/>
+  <testcase name="conventionalBlastShiftsHearingOnlyInsideTheThreshold()" classname="ua.zentix.incoming.nuclear.model.HearingModelTest" time="0.001"/>
+  <testcase name="stepEnergyWithAWeightingIsThePeakMinusThirtyNineDecibels()" classname="ua.zentix.incoming.nuclear.model.HearingModelTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

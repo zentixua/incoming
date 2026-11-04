@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.client.render.PlumeRendererTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:53:51.384Z" hostname="zentixua-pc" time="0.124">
+  <properties/>
+  <testcase name="endOnShowsTheCrossSection()" classname="ua.zentix.incoming.client.render.PlumeRendererTest" time="0.111"/>
+  <testcase name="sheathFadesAlongTheJet()" classname="ua.zentix.incoming.client.render.PlumeRendererTest" time="0.008"/>
+  <testcase name="fireIsNotDrawnThroughTheShaderPack()" classname="ua.zentix.incoming.client.render.PlumeRendererTest" time="0.005"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.client.render.FarDrawTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:53:51.145Z" hostname="zentixua-pc" time="0.001">
+  <properties/>
+  <testcase name="eyeIsCameraWithoutBobbing()" classname="ua.zentix.incoming.client.render.FarDrawTest" time="0.0"/>
+  <testcase name="foldedPointStaysOnScreenWhileWalking()" classname="ua.zentix.incoming.client.render.FarDrawTest" time="0.001"/>
+  <testcase name="orthographicEyeIsCamera()" classname="ua.zentix.incoming.client.render.FarDrawTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

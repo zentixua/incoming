@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.client.ClientLodBatchesTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:50:47.815Z" hostname="zentixua-pc" time="0.093">
+  <properties/>
+  <testcase name="acknowledgementWaitsForTheBackgroundIngestQueueWithoutBlocking()" classname="ua.zentix.incoming.client.ClientLodBatchesTest" time="0.093"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.client.far.SmokePipelineTest" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:50:55.859Z" hostname="zentixua-pc" time="4.69">
+  <properties/>
+  <testcase name="replayIsAnchoredAtTheCurrentEye()" classname="ua.zentix.incoming.client.far.SmokePipelineTest" time="0.471"/>
+  <testcase name="zoomPlansTheFrameAtOnceWithinTheBudget()" classname="ua.zentix.incoming.client.far.SmokePipelineTest" time="0.94"/>
+  <testcase name="plannedFrameDrawsTheInlineFrameOneLater()" classname="ua.zentix.incoming.client.far.SmokePipelineTest" time="0.548"/>
+  <testcase name="workerThreadMatchesAndDrainsOnWorldExit()" classname="ua.zentix.incoming.client.far.SmokePipelineTest" time="0.479"/>
+  <testcase name="turnsAndSmallZoomsKeepTheBudget()" classname="ua.zentix.incoming.client.far.SmokePipelineTest" time="1.337"/>
+  <testcase name="occlusionTierCarriesAcrossPlans()" classname="ua.zentix.incoming.client.far.SmokePipelineTest" time="0.505"/>
+  <testcase name="cameraBasisIsNeverAPlanningDraw()" classname="ua.zentix.incoming.client.far.SmokePipelineTest" time="0.408"/>
+  <system-out><![CDATA[PIPELINE from the edge: 1079 calls, veil true, identical one frame later
+PIPELINE inside: 660 calls, veil true, identical one frame later
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

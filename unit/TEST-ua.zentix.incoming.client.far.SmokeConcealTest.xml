@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.client.far.SmokeConcealTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:50:49.531Z" hostname="zentixua-pc" time="4.302">
+  <properties/>
+  <testcase name="concealMatchesTheReplacedAlgorithmOnRaids()" classname="ua.zentix.incoming.client.far.SmokeConcealTest" time="4.302"/>
+  <system-out><![CDATA[CONCEAL 100 edge, budget 16.00 (raw 31.78, cells 48): 2520 entries, 0 dropped, 2481 partly hidden; max |difference| 0.00, drop flips 0, identical true
+CONCEAL 100 edge, budget 28.89 (raw 31.78, cells 48): 2520 entries, 0 dropped, 2481 partly hidden; max |difference| 0.00, drop flips 0, identical true
+CONCEAL 100 inside, budget 16.00 (raw 59.24, cells 48): 3031 entries, 9 dropped, 2941 partly hidden; max |difference| 0.00, drop flips 0, identical true
+CONCEAL 100 inside, budget 53.86 (raw 59.24, cells 48): 3031 entries, 0 dropped, 2950 partly hidden; max |difference| 0.00, drop flips 0, identical true
+CONCEAL 400 outside, budget 16.00 (raw 24.76, cells 48): 3512 entries, 0 dropped, 1929 partly hidden; max |difference| 0.00, drop flips 0, identical true
+CONCEAL 400 outside, budget 22.51 (raw 24.76, cells 48): 3512 entries, 0 dropped, 1929 partly hidden; max |difference| 0.00, drop flips 0, identical true
+CONCEAL 400 edge, budget 16.00 (raw 34.42, cells 48): 2631 entries, 0 dropped, 2547 partly hidden; max |difference| 0.00, drop flips 0, identical true
+CONCEAL 400 edge, budget 31.29 (raw 34.42, cells 48): 2631 entries, 0 dropped, 2547 partly hidden; max |difference| 0.00, drop flips 0, identical true
+CONCEAL 100 binoculars, budget 16.00 (raw 224.08, cells 96): 2696 entries, 1 dropped, 2693 partly hidden; max |difference| 0.00, drop flips 0, identical true
+CONCEAL 100 binoculars, budget 203.71 (raw 224.08, cells 96): 2696 entries, 0 dropped, 2694 partly hidden; max |difference| 0.00, drop flips 0, identical true
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

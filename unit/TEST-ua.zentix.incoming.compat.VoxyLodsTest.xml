@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.compat.VoxyLodsTest" tests="8" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:54:00.043Z" hostname="zentixua-pc" time="0.059">
+  <properties/>
+  <testcase name="dimensionQueueResetDoesNotResetBatchIdsOrAcceptOldAcks()" classname="ua.zentix.incoming.compat.VoxyLodsTest" time="0.043"/>
+  <testcase name="noAckMeansNoNewBatchEvenWhenTransportWritesComplete()" classname="ua.zentix.incoming.compat.VoxyLodsTest" time="0.002"/>
+  <testcase name="unwritableConnectionKeeps48MiBInOurQueueFor1200Ticks()" classname="ua.zentix.incoming.compat.VoxyLodsTest" time="0.009"/>
+  <testcase name="normalTrafficHeadroomAndAbsolutePendingLimitBothApply()" classname="ua.zentix.incoming.compat.VoxyLodsTest" time="0.001"/>
+  <testcase name="freshCopyReplacesWaitingCopyAtCapacityAndEveryChunkEventuallyArrives()" classname="ua.zentix.incoming.compat.VoxyLodsTest" time="0.002"/>
+  <testcase name="largeChunksDoNotStallPermanentlyOrBuildAnOutboundBacklog()" classname="ua.zentix.incoming.compat.VoxyLodsTest" time="0.0"/>
+  <testcase name="eventLoopDispatchAndFailedWritesRemainBoundedInsideABatch()" classname="ua.zentix.incoming.compat.VoxyLodsTest" time="0.0"/>
+  <testcase name="fastProxyCannotAccumulateAMultiMiBBatchBeforeItsSlowClientAcknowledges()" classname="ua.zentix.incoming.compat.VoxyLodsTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

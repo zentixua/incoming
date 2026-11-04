@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.nuclear.world.RuinLayoutOwnershipTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:54:12.649Z" hostname="zentixua-pc" time="0.389">
+  <properties/>
+  <testcase name="supportedHighYieldsFitOneWorkspaceAndRetainEntireZone()" classname="ua.zentix.incoming.nuclear.world.RuinLayoutOwnershipTest" time="0.237"/>
+  <testcase name="cancelledActualBuilderKeepsWorkspaceUntilExecutionReturns()" classname="ua.zentix.incoming.nuclear.world.RuinLayoutOwnershipTest" time="0.101"/>
+  <testcase name="queuedCancellationReleasesWithoutConstructing()" classname="ua.zentix.incoming.nuclear.world.RuinLayoutOwnershipTest" time="0.001"/>
+  <testcase name="completedResultRetainsBackingUntilTransferOrDiscard()" classname="ua.zentix.incoming.nuclear.world.RuinLayoutOwnershipTest" time="0.05"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

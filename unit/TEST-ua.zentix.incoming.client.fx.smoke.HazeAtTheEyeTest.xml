@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.client.fx.smoke.HazeAtTheEyeTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:52:54.585Z" hostname="zentixua-pc" time="0.047">
+  <properties/>
+  <testcase name="airBurstOverTheStreetIsNotInTheStreetCalm()" classname="ua.zentix.incoming.client.fx.smoke.HazeAtTheEyeTest" time="0.008"/>
+  <testcase name="streetHitLeavesASeeThroughHaze()" classname="ua.zentix.incoming.client.fx.smoke.HazeAtTheEyeTest" time="0.006"/>
+  <testcase name="streetHitByALawnIsNotABrownWall()" classname="ua.zentix.incoming.client.fx.smoke.HazeAtTheEyeTest" time="0.005"/>
+  <testcase name="roofBreachIsThickerButNotAWall()" classname="ua.zentix.incoming.client.fx.smoke.HazeAtTheEyeTest" time="0.005"/>
+  <testcase name="streetCanyonHoldsTheHazeLonger()" classname="ua.zentix.incoming.client.fx.smoke.HazeAtTheEyeTest" time="0.022"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

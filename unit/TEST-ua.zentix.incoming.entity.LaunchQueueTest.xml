@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.entity.LaunchQueueTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:54:01.791Z" hostname="zentixua-pc" time="0.002">
+  <properties/>
+  <testcase name="silentAfterSettling()" classname="ua.zentix.incoming.entity.LaunchQueueTest" time="0.001"/>
+  <testcase name="firstLaunchWaitsForRaisedRack()" classname="ua.zentix.incoming.entity.LaunchQueueTest" time="0.0"/>
+  <testcase name="padRailsAboveBlock()" classname="ua.zentix.incoming.entity.LaunchQueueTest" time="0.001"/>
+  <testcase name="slotsInTurnWithSpacing()" classname="ua.zentix.incoming.entity.LaunchQueueTest" time="0.0"/>
+  <testcase name="turnsOnlySilentAndNotByTrifles()" classname="ua.zentix.incoming.entity.LaunchQueueTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

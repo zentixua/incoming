@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.client.sound.FireRoarTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:53:56.434Z" hostname="zentixua-pc" time="0.003">
+  <properties/>
+  <testcase name="doubleHeatThreeDecibels()" classname="ua.zentix.incoming.client.sound.FireRoarTest" time="0.001"/>
+  <testcase name="distanceAndSides()" classname="ua.zentix.incoming.client.sound.FireRoarTest" time="0.0"/>
+  <testcase name="singleFireIsTheLaw()" classname="ua.zentix.incoming.client.sound.FireRoarTest" time="0.0"/>
+  <testcase name="ringsMatchExactSum()" classname="ua.zentix.incoming.client.sound.FireRoarTest" time="0.002"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

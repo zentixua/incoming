@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.client.nuclear.FireFieldTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:53:42.812Z" hostname="zentixua-pc" time="0.009">
+  <properties/>
+  <testcase name="capCountsWhatTheWaveLeavesAsTheServerDoes()" classname="ua.zentix.incoming.client.nuclear.FireFieldTest" time="0.007"/>
+  <testcase name="animalsFallSilentThenComeBack()" classname="ua.zentix.incoming.client.nuclear.FireFieldTest" time="0.0"/>
+  <testcase name="secondaryBlastsAreDeterministicSpreadOverTimeAndInsideTheFire()" classname="ua.zentix.incoming.client.nuclear.FireFieldTest" time="0.001"/>
+  <testcase name="lightReachesTheThresholdWithinThePulse()" classname="ua.zentix.incoming.client.nuclear.FireFieldTest" time="0.0"/>
+  <testcase name="fireRisesWithTheFlashTheWaveBlowsSomeOutThenItDiesDown()" classname="ua.zentix.incoming.client.nuclear.FireFieldTest" time="0.001"/>
+  <testcase name="firesStopAtTheServerCapAndStartOutsideTheFireball()" classname="ua.zentix.incoming.client.nuclear.FireFieldTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

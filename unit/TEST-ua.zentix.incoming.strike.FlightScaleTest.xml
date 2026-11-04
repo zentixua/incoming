@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.strike.FlightScaleTest" tests="8" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:54:13.263Z" hostname="zentixua-pc" time="0.014">
+  <properties/>
+  <testcase name="interceptorSpeed()" classname="ua.zentix.incoming.strike.FlightScaleTest" time="0.0"/>
+  <testcase name="everyArticleAtZeroHalfOne()" classname="ua.zentix.incoming.strike.FlightScaleTest" time="0.001"/>
+  <testcase name="blendIsGameAtZeroRealAtOneGeometricBetween()" classname="ua.zentix.incoming.strike.FlightScaleTest" time="0.0"/>
+  <testcase name="bombAtRealScaleHitsAtPassportSpeed()" classname="ua.zentix.incoming.strike.FlightScaleTest" time="0.001"/>
+  <testcase name="gradFromAfarFiresAtTheBlendedSpeed()" classname="ua.zentix.incoming.strike.FlightScaleTest" time="0.01"/>
+  <testcase name="orderOfSpeedsKept()" classname="ua.zentix.incoming.strike.FlightScaleTest" time="0.0"/>
+  <testcase name="lengthsFollowSpeed()" classname="ua.zentix.incoming.strike.FlightScaleTest" time="0.0"/>
+  <testcase name="dragFromGameToArticle()" classname="ua.zentix.incoming.strike.FlightScaleTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

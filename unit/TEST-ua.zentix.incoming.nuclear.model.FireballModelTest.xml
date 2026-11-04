@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.nuclear.model.FireballModelTest" tests="10" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:54:11.314Z" hostname="zentixua-pc" time="0.005">
+  <properties/>
+  <testcase name="breakawayUnmasksTheInterior()" classname="ua.zentix.incoming.nuclear.model.FireballModelTest" time="0.0"/>
+  <testcase name="thermalPulseFractionAndItsInverse()" classname="ua.zentix.incoming.nuclear.model.FireballModelTest" time="0.001"/>
+  <testcase name="surfaceRiseIsTheRiseInRadii()" classname="ua.zentix.incoming.nuclear.model.FireballModelTest" time="0.0"/>
+  <testcase name="doubleFlashShape()" classname="ua.zentix.incoming.nuclear.model.FireballModelTest" time="0.0"/>
+  <testcase name="doubleFlashTimes()" classname="ua.zentix.incoming.nuclear.model.FireballModelTest" time="0.0"/>
+  <testcase name="maxRadius()" classname="ua.zentix.incoming.nuclear.model.FireballModelTest" time="0.001"/>
+  <testcase name="temperatureFollowsTheFlashAndTheFootage()" classname="ua.zentix.incoming.nuclear.model.FireballModelTest" time="0.0"/>
+  <testcase name="radiusGrowsThenCools()" classname="ua.zentix.incoming.nuclear.model.FireballModelTest" time="0.0"/>
+  <testcase name="risesAndSlowsDown()" classname="ua.zentix.incoming.nuclear.model.FireballModelTest" time="0.0"/>
+  <testcase name="mostLightWithinTenMaxima()" classname="ua.zentix.incoming.nuclear.model.FireballModelTest" time="0.002"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

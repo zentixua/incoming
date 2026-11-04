@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.nuclear.model.BlastModelTest" tests="13" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:54:10.706Z" hostname="zentixua-pc" time="0.019">
+  <properties/>
+  <testcase name="[1] 2, 8000, 0.67, 0.01" classname="ua.zentix.incoming.nuclear.model.BlastModelTest" time="0.0"/>
+  <testcase name="[2] 2000, 80000, 6.7, 0.1" classname="ua.zentix.incoming.nuclear.model.BlastModelTest" time="0.0"/>
+  <testcase name="[3] 0.001, 1000, 0.0568, 0.0005" classname="ua.zentix.incoming.nuclear.model.BlastModelTest" time="0.0"/>
+  <testcase name="[4] 1, 1000, 0.34, 0.085" classname="ua.zentix.incoming.nuclear.model.BlastModelTest" time="0.0"/>
+  <testcase name="[5] 1, 10000, 0.52, 0.13" classname="ua.zentix.incoming.nuclear.model.BlastModelTest" time="0.0"/>
+  <testcase name="[6] 1, 100000, 0.93, 0.23" classname="ua.zentix.incoming.nuclear.model.BlastModelTest" time="0.001"/>
+  <testcase name="dynamicPressure()" classname="ua.zentix.incoming.nuclear.model.BlastModelTest" time="0.0"/>
+  <testcase name="windBehindFront()" classname="ua.zentix.incoming.nuclear.model.BlastModelTest" time="0.0"/>
+  <testcase name="frontSlowsToSoundSpeed()" classname="ua.zentix.incoming.nuclear.model.BlastModelTest" time="0.0"/>
+  <testcase name="surfaceRangeForGlass()" classname="ua.zentix.incoming.nuclear.model.BlastModelTest" time="0.0"/>
+  <testcase name="noSuchPressureGivesZeroRange()" classname="ua.zentix.incoming.nuclear.model.BlastModelTest" time="0.0"/>
+  <testcase name="positivePhaseLengthensAndLevels()" classname="ua.zentix.incoming.nuclear.model.BlastModelTest" time="0.0"/>
+  <testcase name="chemicalFrontArrivalIsCausalAndConverged()" classname="ua.zentix.incoming.nuclear.model.BlastModelTest" time="0.017"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

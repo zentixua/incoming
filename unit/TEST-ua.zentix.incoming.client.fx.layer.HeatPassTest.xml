@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.client.fx.layer.HeatPassTest" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:52:27.055Z" hostname="zentixua-pc" time="0.307">
+  <properties/>
+  <testcase name="conventionalFrontKeepsPhysicalOpticsAndNukePriority()" classname="ua.zentix.incoming.client.fx.layer.HeatPassTest" time="0.0"/>
+  <testcase name="jetFarAwayIsTheBallOfTheSameArea()" classname="ua.zentix.incoming.client.fx.layer.HeatPassTest" time="0.0"/>
+  <testcase name="jetEndsWhereItsAxisMeetsTheGround()" classname="ua.zentix.incoming.client.fx.layer.HeatPassTest" time="0.0"/>
+  <testcase name="partBelowTheFaceDoesNotLight()" classname="ua.zentix.incoming.client.fx.layer.HeatPassTest" time="0.0"/>
+  <testcase name="blocksBetweenGroundAndFireCastAShadow()" classname="ua.zentix.incoming.client.fx.layer.HeatPassTest" time="0.001"/>
+  <testcase name="ballBehindARidgeIsPartlySeen()" classname="ua.zentix.incoming.client.fx.layer.HeatPassTest" time="0.0"/>
+  <testcase name="segmentLightIsTheIntegralOverTheVisiblePart()" classname="ua.zentix.incoming.client.fx.layer.HeatPassTest" time="0.306"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

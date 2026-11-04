@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.nuclear.model.BurnInjuryTest" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:54:10.800Z" hostname="zentixua-pc" time="0.001">
+  <properties/>
+  <testcase name="spreadMatchesExample1265()" classname="ua.zentix.incoming.nuclear.model.BurnInjuryTest" time="0.0"/>
+  <testcase name="shockBySection1262()" classname="ua.zentix.incoming.nuclear.model.BurnInjuryTest" time="0.0"/>
+  <testcase name="levelRoundsUpToTenthsAndHoldsNinetyUntilShock()" classname="ua.zentix.incoming.nuclear.model.BurnInjuryTest" time="0.0"/>
+  <testcase name="clothingIgnitesByTable735()" classname="ua.zentix.incoming.nuclear.model.BurnInjuryTest" time="0.001"/>
+  <testcase name="woundIsOnlyTheRiseOfTheLevel()" classname="ua.zentix.incoming.nuclear.model.BurnInjuryTest" time="0.0"/>
+  <testcase name="thresholdsFollowFigure1264()" classname="ua.zentix.incoming.nuclear.model.BurnInjuryTest" time="0.0"/>
+  <testcase name="degreeBySkin()" classname="ua.zentix.incoming.nuclear.model.BurnInjuryTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

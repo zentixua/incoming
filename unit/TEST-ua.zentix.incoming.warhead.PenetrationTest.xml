@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.warhead.PenetrationTest" tests="8" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:54:13.517Z" hostname="zentixua-pc" time="0.001">
+  <properties/>
+  <testcase name="stopAndFluid()" classname="ua.zentix.incoming.warhead.PenetrationTest" time="0.0"/>
+  <testcase name="uniformMediumIsOneLayerHoweverSliced()" classname="ua.zentix.incoming.warhead.PenetrationTest" time="0.0"/>
+  <testcase name="lowVelocityBranchIsLogarithmic()" classname="ua.zentix.incoming.warhead.PenetrationTest" time="0.0"/>
+  <testcase name="realImpactDepthsMatchTheReference()" classname="ua.zentix.incoming.warhead.PenetrationTest" time="0.0"/>
+  <testcase name="layerExitSpeed()" classname="ua.zentix.incoming.warhead.PenetrationTest" time="0.0"/>
+  <testcase name="bodyFromPassport()" classname="ua.zentix.incoming.warhead.PenetrationTest" time="0.0"/>
+  <testcase name="soilUnderConcreteIsHarderForSixCalibres()" classname="ua.zentix.incoming.warhead.PenetrationTest" time="0.001"/>
+  <testcase name="highVelocityBranchIsYoung()" classname="ua.zentix.incoming.warhead.PenetrationTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

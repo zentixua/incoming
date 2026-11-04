@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.client.sound.BlastMixTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:53:51.526Z" hostname="zentixua-pc" time="0.006">
+  <properties/>
+  <testcase name="durationScalesWithCubeRootOfCharge()" classname="ua.zentix.incoming.client.sound.BlastMixTest" time="0.001"/>
+  <testcase name="perspectivesAreOneRecordingAndQuietDownSmoothly()" classname="ua.zentix.incoming.client.sound.BlastMixTest" time="0.004"/>
+  <testcase name="louderWithChargeAtEveryDistance()" classname="ua.zentix.incoming.client.sound.BlastMixTest" time="0.0"/>
+  <testcase name="edgeOfTheNearModelIsTheFarModel()" classname="ua.zentix.incoming.client.sound.BlastMixTest" time="0.0"/>
+  <testcase name="crackIsTheNearPerspectiveUpCloseAndTheModelFurther()" classname="ua.zentix.incoming.client.sound.BlastMixTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

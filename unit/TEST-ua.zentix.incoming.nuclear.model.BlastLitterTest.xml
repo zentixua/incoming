@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.nuclear.model.BlastLitterTest" tests="3" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:54:10.692Z" hostname="zentixua-pc" time="0.013">
+  <properties/>
+  <testcase name="kickIsTheDragImpulse()" classname="ua.zentix.incoming.nuclear.model.BlastLitterTest" time="0.0"/>
+  <testcase name="frontTearsTheCoverAboveOneThreshold()" classname="ua.zentix.incoming.nuclear.model.BlastLitterTest" time="0.0"/>
+  <testcase name="shortKickIntegralMatchesAFineOne()" classname="ua.zentix.incoming.nuclear.model.BlastLitterTest" time="0.012"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.strike.HearingTest" tests="5" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:54:13.277Z" hostname="zentixua-pc" time="0.003">
+  <properties/>
+  <testcase name="shahedIsHeardForKilometresAtNightAndCloserByDay()" classname="ua.zentix.incoming.strike.HearingTest" time="0.001"/>
+  <testcase name="silentPartsAreSilent()" classname="ua.zentix.incoming.strike.HearingTest" time="0.0"/>
+  <testcase name="rangesKeepTheOrderOfTheOldCutoffsWhereTheyWereRight()" classname="ua.zentix.incoming.strike.HearingTest" time="0.001"/>
+  <testcase name="shahedSourceReproducesItsReferenceMeasurement()" classname="ua.zentix.incoming.strike.HearingTest" time="0.0"/>
+  <testcase name="lancetIsGoneBeyondAFewHundredMetres()" classname="ua.zentix.incoming.strike.HearingTest" time="0.0"/>
+  <system-out><![CDATA[shahed heard: night 12633 m, day 5877 m
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

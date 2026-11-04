@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.client.fx.smoke.CloudModelTest" tests="25" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:52:36.111Z" hostname="zentixua-pc" time="0.298">
+  <properties/>
+  <testcase name="airMixesTheCloudFromTheStart()" classname="ua.zentix.incoming.client.fx.smoke.CloudModelTest" time="0.005"/>
+  <testcase name="windAndHumidity()" classname="ua.zentix.incoming.client.fx.smoke.CloudModelTest" time="0.009"/>
+  <testcase name="topDriftsFasterThanBottom()" classname="ua.zentix.incoming.client.fx.smoke.CloudModelTest" time="0.015"/>
+  <testcase name="fireballFadesIntoSmokeByWhatTheEyeSees()" classname="ua.zentix.incoming.client.fx.smoke.CloudModelTest" time="0.018"/>
+  <testcase name="stemRisesFromTheGround()" classname="ua.zentix.incoming.client.fx.smoke.CloudModelTest" time="0.011"/>
+  <testcase name="riseFollowsMttInTwoStratifications()" classname="ua.zentix.incoming.client.fx.smoke.CloudModelTest" time="0.021"/>
+  <testcase name="groundDustLiesOnTheGround()" classname="ua.zentix.incoming.client.fx.smoke.CloudModelTest" time="0.05"/>
+  <testcase name="fireballFadesWithoutSteps()" classname="ua.zentix.incoming.client.fx.smoke.CloudModelTest" time="0.029"/>
+  <testcase name="matterFromCompositionAndCrater()" classname="ua.zentix.incoming.client.fx.smoke.CloudModelTest" time="0.003"/>
+  <testcase name="fuelFireballFollowsCcps()" classname="ua.zentix.incoming.client.fx.smoke.CloudModelTest" time="0.009"/>
+  <testcase name="serverFireballIsTheBallThePlayerSees()" classname="ua.zentix.incoming.client.fx.smoke.CloudModelTest" time="0.013"/>
+  <testcase name="stemIsOneTubeWithItsDust()" classname="ua.zentix.incoming.client.fx.smoke.CloudModelTest" time="0.004"/>
+  <testcase name="stableNightKeepsTheCloudLower()" classname="ua.zentix.incoming.client.fx.smoke.CloudModelTest" time="0.003"/>
+  <testcase name="sootCoverageChangesContinuouslyFromBallToCloud()" classname="ua.zentix.incoming.client.fx.smoke.CloudModelTest" time="0.038"/>
+  <testcase name="highExplosiveCloudFollowsChurch()" classname="ua.zentix.incoming.client.fx.smoke.CloudModelTest" time="0.01"/>
+  <testcase name="fuelSootIsBornAsTheFuelBurns()" classname="ua.zentix.incoming.client.fx.smoke.CloudModelTest" time="0.005"/>
+  <testcase name="wilsonWaterDoesNotExistInsideTheHotFireball()" classname="ua.zentix.incoming.client.fx.smoke.CloudModelTest" time="0.004"/>
+  <testcase name="blobsCarryTheMatter()" classname="ua.zentix.incoming.client.fx.smoke.CloudModelTest" time="0.007"/>
+  <testcase name="fireColourIsBlackBody()" classname="ua.zentix.incoming.client.fx.smoke.CloudModelTest" time="0.002"/>
+  <testcase name="fireballGrowsFromTheGroundWithoutJumps()" classname="ua.zentix.incoming.client.fx.smoke.CloudModelTest" time="0.009"/>
+  <testcase name="craterFuelBurnsForMinutes()" classname="ua.zentix.incoming.client.fx.smoke.CloudModelTest" time="0.005"/>
+  <testcase name="crushedMaterialFeedsColdDustOnPavingWithoutIncreasingItsSurfaceLoading()" classname="ua.zentix.incoming.client.fx.smoke.CloudModelTest" time="0.012"/>
+  <testcase name="lifeEndsWhenTheCloudIsThin()" classname="ua.zentix.incoming.client.fx.smoke.CloudModelTest" time="0.006"/>
+  <testcase name="layersKeepTheCloudsMoments()" classname="ua.zentix.incoming.client.fx.smoke.CloudModelTest" time="0.0"/>
+  <testcase name="fireballAndItsSmokeShareOnePlace()" classname="ua.zentix.incoming.client.fx.smoke.CloudModelTest" time="0.008"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

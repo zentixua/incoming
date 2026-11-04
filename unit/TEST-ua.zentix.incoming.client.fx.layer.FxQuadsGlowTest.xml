@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.client.fx.layer.FxQuadsGlowTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:52:26.792Z" hostname="zentixua-pc" time="0.008">
+  <properties/>
+  <testcase name="spotMagnitudeRoundTrips()" classname="ua.zentix.incoming.client.fx.layer.FxQuadsGlowTest" time="0.001"/>
+  <testcase name="spotCarriesItsLightInUv2()" classname="ua.zentix.incoming.client.fx.layer.FxQuadsGlowTest" time="0.0"/>
+  <testcase name="smallEmitterKeepsItsEnergyInTheGlowPass()" classname="ua.zentix.incoming.client.fx.layer.FxQuadsGlowTest" time="0.007"/>
+  <testcase name="glowPassTakesWhatStandsWithinTheFire()" classname="ua.zentix.incoming.client.fx.layer.FxQuadsGlowTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.client.fx.smoke.WallJetTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:53:40.936Z" hostname="zentixua-pc" time="0.073">
+  <properties/>
+  <testcase name="feedTimeIsThePathClock()" classname="ua.zentix.incoming.client.fx.smoke.WallJetTest" time="0.004"/>
+  <testcase name="puffSlowsAsItSweepsUpAirAndStopsWhereTheWindIsFaster()" classname="ua.zentix.incoming.client.fx.smoke.WallJetTest" time="0.0"/>
+  <testcase name="obliqueJetBlowsTheDustAheadAlongItsDirection()" classname="ua.zentix.incoming.client.fx.smoke.WallJetTest" time="0.005"/>
+  <testcase name="longFeedPushesAsItGoes()" classname="ua.zentix.incoming.client.fx.smoke.WallJetTest" time="0.01"/>
+  <testcase name="groundDustIsNeverMoreThanItsShare()" classname="ua.zentix.incoming.client.fx.smoke.WallJetTest" time="0.0"/>
+  <testcase name="shareKeepsTheFlowAndTheMomentumAlongTheGround()" classname="ua.zentix.incoming.client.fx.smoke.WallJetTest" time="0.053"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

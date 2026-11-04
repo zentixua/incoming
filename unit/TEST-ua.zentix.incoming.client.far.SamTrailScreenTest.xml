@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.client.far.SamTrailScreenTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:50:49.497Z" hostname="zentixua-pc" time="0.03">
+  <properties/>
+  <testcase name="distantSustainerLeavesAPixelTrailAt15Through60Seconds()" classname="ua.zentix.incoming.client.far.SamTrailScreenTest" time="0.03"/>
+  <system-out><![CDATA[SAM pixels 15 s: peak alpha 0,432, visible pixels 243, quads 52
+SAM pixels 30 s: peak alpha 0,266, visible pixels 352, quads 154
+SAM pixels 60 s: peak alpha 0,282, visible pixels 476, quads 272
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.client.sound.ClatterTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:53:52.207Z" hostname="zentixua-pc" time="0.002">
+  <properties/>
+  <testcase name="heardOnlyAfterFrontAndSoundPath()" classname="ua.zentix.incoming.client.sound.ClatterTest" time="0.001"/>
+  <testcase name="fartherIsQuieter()" classname="ua.zentix.incoming.client.sound.ClatterTest" time="0.0"/>
+  <testcase name="sidesAndKindsApart()" classname="ua.zentix.incoming.client.sound.ClatterTest" time="0.0"/>
+  <testcase name="holdGathersWithEnergyKept()" classname="ua.zentix.incoming.client.sound.ClatterTest" time="0.0"/>
+  <testcase name="sameMomentAddsByPower()" classname="ua.zentix.incoming.client.sound.ClatterTest" time="0.001"/>
+  <testcase name="sourceLawOfThrownGlass()" classname="ua.zentix.incoming.client.sound.ClatterTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

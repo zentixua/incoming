@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.util.DiskStatusTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:54:13.418Z" hostname="zentixua-pc" time="0.001">
+  <properties/>
+  <testcase name="fullWithoutRetrogenIsWhole()" classname="ua.zentix.incoming.util.DiskStatusTest" time="0.0"/>
+  <testcase name="absentAndProtoChunksAreTheSame()" classname="ua.zentix.incoming.util.DiskStatusTest" time="0.0"/>
+  <testcase name="finishedRetrogenHasFinalBlocks()" classname="ua.zentix.incoming.util.DiskStatusTest" time="0.0"/>
+  <testcase name="oldFormatByItsStatus()" classname="ua.zentix.incoming.util.DiskStatusTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

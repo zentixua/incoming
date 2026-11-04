@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.client.nuclear.ShockOpticsGlslTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:53:48.722Z" hostname="zentixua-pc" time="0.011">
+  <properties/>
+  <testcase name="fadeToTheEdgeIsSmooth()" classname="ua.zentix.incoming.client.nuclear.ShockOpticsGlslTest" time="0.0"/>
+  <testcase name="shaderLawsAreJavaLaws()" classname="ua.zentix.incoming.client.nuclear.ShockOpticsGlslTest" time="0.009"/>
+  <testcase name="jumpFallsWithTheFrontAndEndsAtTheEdge()" classname="ua.zentix.incoming.client.nuclear.ShockOpticsGlslTest" time="0.002"/>
+  <testcase name="shiftThresholdIsTheJavaOne()" classname="ua.zentix.incoming.client.nuclear.ShockOpticsGlslTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

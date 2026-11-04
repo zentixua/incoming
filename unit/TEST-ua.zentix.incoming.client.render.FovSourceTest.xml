@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.client.render.FovSourceTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:53:51.306Z" hostname="zentixua-pc" time="0.078">
+  <properties/>
+  <testcase name="screenSizesTakeTheFieldOfViewOnlyFromTheFrameMatrix()" classname="ua.zentix.incoming.client.render.FovSourceTest" time="0.078"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

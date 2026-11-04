@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.nuclear.model.BlastInjuryTest" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:54:10.690Z" hostname="zentixua-pc" time="0.002">
+  <properties/>
+  <testcase name="throwGrowsWithPressureAndYield()" classname="ua.zentix.incoming.nuclear.model.BlastInjuryTest" time="0.001"/>
+  <testcase name="wallDoublesPressure()" classname="ua.zentix.incoming.nuclear.model.BlastInjuryTest" time="0.0"/>
+  <testcase name="harmByFate()" classname="ua.zentix.incoming.nuclear.model.BlastInjuryTest" time="0.0"/>
+  <testcase name="impactByTable()" classname="ua.zentix.incoming.nuclear.model.BlastInjuryTest" time="0.0"/>
+  <testcase name="glassSpeedByTable()" classname="ua.zentix.incoming.nuclear.model.BlastInjuryTest" time="0.0"/>
+  <testcase name="standingDummyAt53Psi()" classname="ua.zentix.incoming.nuclear.model.BlastInjuryTest" time="0.001"/>
+  <testcase name="lungsByTable()" classname="ua.zentix.incoming.nuclear.model.BlastInjuryTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

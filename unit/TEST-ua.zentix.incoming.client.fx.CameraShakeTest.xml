@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.client.fx.CameraShakeTest" tests="12" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:52:18.948Z" hostname="zentixua-pc" time="0.156">
+  <properties/>
+  <testcase name="noLeanInTheAir()" classname="ua.zentix.incoming.client.fx.CameraShakeTest" time="0.004"/>
+  <testcase name="groundJoltNodsWithoutSteps()" classname="ua.zentix.incoming.client.fx.CameraShakeTest" time="0.0"/>
+  <testcase name="leanIsTheBodys()" classname="ua.zentix.incoming.client.fx.CameraShakeTest" time="0.006"/>
+  <testcase name="conventionalBlastRocksTheCameraAndItSettles()" classname="ua.zentix.incoming.client.fx.CameraShakeTest" time="0.005"/>
+  <testcase name="distortionEffectsScaleTheShake()" classname="ua.zentix.incoming.client.fx.CameraShakeTest" time="0.0"/>
+  <testcase name="nukeWindDoesNotJerkAndEnds()" classname="ua.zentix.incoming.client.fx.CameraShakeTest" time="0.081"/>
+  <testcase name="viewTurnsWithTheBody()" classname="ua.zentix.incoming.client.fx.CameraShakeTest" time="0.046"/>
+  <testcase name="nukeWindStopsAtTheBalanceLimit()" classname="ua.zentix.incoming.client.fx.CameraShakeTest" time="0.007"/>
+  <testcase name="nukeWindLeansAwayFromTheBurst()" classname="ua.zentix.incoming.client.fx.CameraShakeTest" time="0.003"/>
+  <testcase name="wavesAdd()" classname="ua.zentix.incoming.client.fx.CameraShakeTest" time="0.001"/>
+  <testcase name="blastTremorFollowsThePressure()" classname="ua.zentix.incoming.client.fx.CameraShakeTest" time="0.001"/>
+  <testcase name="swayStartsWhenTheFrontPassed()" classname="ua.zentix.incoming.client.fx.CameraShakeTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

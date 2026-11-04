@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.nuclear.IcbmArrivalTest" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:54:10.643Z" hostname="zentixua-pc" time="0.001">
+  <properties/>
+  <testcase name="everyBurstGeometryEndsAtItsOwnPointAndOnsetHasNoPrebuiltWake()" classname="ua.zentix.incoming.nuclear.IcbmArrivalTest" time="0.0"/>
+  <testcase name="burstConsumesOnlyItsOwnHeadAndRetainsAFiniteWake()" classname="ua.zentix.incoming.nuclear.IcbmArrivalTest" time="0.001"/>
+  <testcase name="packetsNeverRewindOrExtrapolateAHeadAndLatePacketsSeek()" classname="ua.zentix.incoming.nuclear.IcbmArrivalTest" time="0.0"/>
+  <testcase name="everySupportedDurationRetainsBoostAndTheConfiguredDeadline()" classname="ua.zentix.incoming.nuclear.IcbmArrivalTest" time="0.0"/>
+  <testcase name="replayCatchUpDoesNotReviveAnExpiredWakeBetweenPacketsOrTicks()" classname="ua.zentix.incoming.nuclear.IcbmArrivalTest" time="0.0"/>
+  <testcase name="endpointAndSpeedAreIndependentOfCameraYieldAndEffectsScale()" classname="ua.zentix.incoming.nuclear.IcbmArrivalTest" time="0.0"/>
+  <testcase name="recentHistoricalBurstRetainsOnlyTheRemainingWakeAndDuplicatesCannotRefreshIt()" classname="ua.zentix.incoming.nuclear.IcbmArrivalTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

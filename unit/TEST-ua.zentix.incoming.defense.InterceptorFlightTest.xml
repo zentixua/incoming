@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.defense.InterceptorFlightTest" tests="8" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:54:01.779Z" hostname="zentixua-pc" time="0.007">
+  <properties/>
+  <testcase name="catchesTargetPassingOverhead()" classname="ua.zentix.incoming.defense.InterceptorFlightTest" time="0.001"/>
+  <testcase name="fuzeIsSafeOnTheRail()" classname="ua.zentix.incoming.defense.InterceptorFlightTest" time="0.001"/>
+  <testcase name="catchesApproachingAndCrossingTargets()" classname="ua.zentix.incoming.defense.InterceptorFlightTest" time="0.002"/>
+  <testcase name="fuzeFiresAtClosestApproachWithinRadius()" classname="ua.zentix.incoming.defense.InterceptorFlightTest" time="0.0"/>
+  <testcase name="leavesTheRailUpwards()" classname="ua.zentix.incoming.defense.InterceptorFlightTest" time="0.0"/>
+  <testcase name="catchesRecedingSlowTargets()" classname="ua.zentix.incoming.defense.InterceptorFlightTest" time="0.0"/>
+  <testcase name="catchesDivingTargetOverhead()" classname="ua.zentix.incoming.defense.InterceptorFlightTest" time="0.002"/>
+  <testcase name="pitchOverIsAnArc()" classname="ua.zentix.incoming.defense.InterceptorFlightTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

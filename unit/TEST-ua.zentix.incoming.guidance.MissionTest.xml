@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.guidance.MissionTest" tests="7" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:54:10.146Z" hostname="zentixua-pc" time="0.02">
+  <properties/>
+  <testcase name="saveRoundTrip()" classname="ua.zentix.incoming.guidance.MissionTest" time="0.001"/>
+  <testcase name="migratesLifetime()" classname="ua.zentix.incoming.guidance.MissionTest" time="0.0"/>
+  <testcase name="stretchedBallisticsSpendsTheArc()" classname="ua.zentix.incoming.guidance.MissionTest" time="0.016"/>
+  <testcase name="chaseAddsMovedPath()" classname="ua.zentix.incoming.guidance.MissionTest" time="0.0"/>
+  <testcase name="planOnCruiseMatchesOldLifetime()" classname="ua.zentix.incoming.guidance.MissionTest" time="0.0"/>
+  <testcase name="loseCapsOnce()" classname="ua.zentix.incoming.guidance.MissionTest" time="0.0"/>
+  <testcase name="waitsAndSlowLegsSpendOnlyTheirPath()" classname="ua.zentix.incoming.guidance.MissionTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

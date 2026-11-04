@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.client.nuclear.NukeExposureTest" tests="9" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:53:43.964Z" hostname="zentixua-pc" time="0.199">
+  <properties/>
+  <testcase name="capIsTheBallOnScreen()" classname="ua.zentix.incoming.client.nuclear.NukeExposureTest" time="0.001"/>
+  <testcase name="shaderBlocksAreWhatTheJavaCopyModels()" classname="ua.zentix.incoming.client.nuclear.NukeExposureTest" time="0.0"/>
+  <testcase name="silentShaderEditsFailTheCheck()" classname="ua.zentix.incoming.client.nuclear.NukeExposureTest" time="0.007"/>
+  <testcase name="coolingBallDarkensOnScreen()" classname="ua.zentix.incoming.client.nuclear.NukeExposureTest" time="0.0"/>
+  <testcase name="dimGlowKeepsItsExposureAndTheCurveIsMonotonic()" classname="ua.zentix.incoming.client.nuclear.NukeExposureTest" time="0.001"/>
+  <testcase name="frameCatchesUpWithTheFlashInASecond()" classname="ua.zentix.incoming.client.nuclear.NukeExposureTest" time="0.0"/>
+  <testcase name="rolledCapIsComposedAsBeforeThroughHaze()" classname="ua.zentix.incoming.client.nuclear.NukeExposureTest" time="0.004"/>
+  <testcase name="wilsonShellSeesTheBallAsADisc()" classname="ua.zentix.incoming.client.nuclear.NukeExposureTest" time="0.051"/>
+  <testcase name="fireballKeepsItsPatternFromOneToFiveSeconds()" classname="ua.zentix.incoming.client.nuclear.NukeExposureTest" time="0.134"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

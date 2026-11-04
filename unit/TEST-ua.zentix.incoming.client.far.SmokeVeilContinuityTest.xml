@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.client.far.SmokeVeilContinuityTest" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:52:18.790Z" hostname="zentixua-pc" time="0.003">
+  <properties/>
+  <testcase name="emptyFrameAndWorldResetForgetTheVeilSelection()" classname="ua.zentix.incoming.client.far.SmokeVeilContinuityTest" time="0.002"/>
+  <testcase name="smallCountChangeKeepsTheVisibleVeilStable()" classname="ua.zentix.incoming.client.far.SmokeVeilContinuityTest" time="0.001"/>
+  <system-out><![CDATA[VEIL_BOUNDARY raw=50/48 groups=13/12 fresh=48 rawT=0.135335283237/0.135335283237 mergedT=0.981128959159/0.981128959159 freshT=0.135335283237 meshT=0.975826468933/0.975826468933
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

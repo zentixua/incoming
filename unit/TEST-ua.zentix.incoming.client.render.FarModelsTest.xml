@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.client.render.FarModelsTest" tests="4" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:53:51.146Z" hostname="zentixua-pc" time="0.16">
+  <properties/>
+  <testcase name="coarseCopiesKeepPointsOfTheFullMeshAndAreCheaper()" classname="ua.zentix.incoming.client.render.FarModelsTest" time="0.123"/>
+  <testcase name="tileHasFourTexelsPerScreenPixel()" classname="ua.zentix.incoming.client.render.FarModelsTest" time="0.0"/>
+  <testcase name="everyPoseFitsTheTileSphere()" classname="ua.zentix.incoming.client.render.FarModelsTest" time="0.037"/>
+  <testcase name="tileProjectionPutsTheModelSphereOnTheTile()" classname="ua.zentix.incoming.client.render.FarModelsTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

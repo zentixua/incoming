@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.client.nuclear.FireStormTest" tests="13" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:53:42.821Z" hostname="zentixua-pc" time="0.419">
+  <properties/>
+  <testcase name="whirlsAreRareShortAndAtTheStrongestFires()" classname="ua.zentix.incoming.client.nuclear.FireStormTest" time="0.045"/>
+  <testcase name="cellsIgniteWithTheFlash()" classname="ua.zentix.incoming.client.nuclear.FireStormTest" time="0.038"/>
+  <testcase name="waveBlowsOutPartOfTheFireThatTheFlashLit()" classname="ua.zentix.incoming.client.nuclear.FireStormTest" time="0.035"/>
+  <testcase name="sourcesFollowTheIgnitionLawInsideTheZone()" classname="ua.zentix.incoming.client.nuclear.FireStormTest" time="0.045"/>
+  <testcase name="mapIsTheLawAndGoesOutByMorning()" classname="ua.zentix.incoming.client.nuclear.FireStormTest" time="0.022"/>
+  <testcase name="noStormWhereTheServerStartsNoFires()" classname="ua.zentix.incoming.client.nuclear.FireStormTest" time="0.004"/>
+  <testcase name="mapRefreshesAndFollowsRewind()" classname="ua.zentix.incoming.client.nuclear.FireStormTest" time="0.025"/>
+  <testcase name="fullYieldEnvelopeIsCoveredWithoutGrowingSourceColumnsOrMapStorage()" classname="ua.zentix.incoming.client.nuclear.FireStormTest" time="0.128"/>
+  <testcase name="waterIceAndSnowThatTheClientKnowsDoNotBurn()" classname="ua.zentix.incoming.client.nuclear.FireStormTest" time="0.043"/>
+  <testcase name="smallScaleKeepsEnoughCells()" classname="ua.zentix.incoming.client.nuclear.FireStormTest" time="0.003"/>
+  <testcase name="sourcesAreDeterministicPerDetonation()" classname="ua.zentix.incoming.client.nuclear.FireStormTest" time="0.03"/>
+  <testcase name="lawsShapeTheColumns()" classname="ua.zentix.incoming.client.nuclear.FireStormTest" time="0.0"/>
+  <testcase name="flameGrowsPeaksAndDiesDown()" classname="ua.zentix.incoming.client.nuclear.FireStormTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

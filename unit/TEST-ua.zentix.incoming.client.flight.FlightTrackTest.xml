@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.client.flight.FlightTrackTest" tests="14" skipped="0" failures="0" errors="0" timestamp="2026-11-04T10:52:18.936Z" hostname="zentixua-pc" time="0.002">
+  <properties/>
+  <testcase name="longGapStartsHistoryOver()" classname="ua.zentix.incoming.client.flight.FlightTrackTest" time="0.0"/>
+  <testcase name="laterPacketOfTheSameTickWins()" classname="ua.zentix.incoming.client.flight.FlightTrackTest" time="0.0"/>
+  <testcase name="emissionTimeFollowsPacketPath()" classname="ua.zentix.incoming.client.flight.FlightTrackTest" time="0.0"/>
+  <testcase name="velocityBetweenTicksIsInterpolated()" classname="ua.zentix.incoming.client.flight.FlightTrackTest" time="0.0"/>
+  <testcase name="trailIsDrawnOnlyOverServerSamples()" classname="ua.zentix.incoming.client.flight.FlightTrackTest" time="0.0"/>
+  <testcase name="launchGroundKeptFromPackets()" classname="ua.zentix.incoming.client.flight.FlightTrackTest" time="0.0"/>
+  <testcase name="ticksBetweenPacketsFollowStraightLine()" classname="ua.zentix.incoming.client.flight.FlightTrackTest" time="0.0"/>
+  <testcase name="velocityIsWhatServerReportedNotUnevenArrival()" classname="ua.zentix.incoming.client.flight.FlightTrackTest" time="0.001"/>
+  <testcase name="anglesTurnTheShortWayBetweenTicks()" classname="ua.zentix.incoming.client.flight.FlightTrackTest" time="0.0"/>
+  <testcase name="blastEndsTheFlightWhenItHappened()" classname="ua.zentix.incoming.client.flight.FlightTrackTest" time="0.0"/>
+  <testcase name="predictionRunsAheadByLastVelocityButNotPastTheAim()" classname="ua.zentix.incoming.client.flight.FlightTrackTest" time="0.0"/>
+  <testcase name="lateBlastDoesNotStretchAnOldPath()" classname="ua.zentix.incoming.client.flight.FlightTrackTest" time="0.0"/>
+  <testcase name="silentWhenNothingIsKnownForThatMoment()" classname="ua.zentix.incoming.client.flight.FlightTrackTest" time="0.0"/>
+  <testcase name="ageCountsFromTheFirstPacketOfTheHistory()" classname="ua.zentix.incoming.client.flight.FlightTrackTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>
