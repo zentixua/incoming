@@ -45,8 +45,8 @@ class RuinResultSizeTest {
             assertTrue(payload.contains(field.getName()) || prepaid.contains(field.getName()) || borrowedOrScalar.contains(field.getName()),
                     "New field needs a byte/domain law: " + field.getName());
         for (var field : RuinResults.class.getDeclaredFields()) if (Modifier.isStatic(field.getModifiers()))
-            assertTrue(field.getType().isPrimitive() || field.getType() == java.util.concurrent.atomic.AtomicLong.class,
-                    "Global result policy must be numeric only: " + field);
+            assertTrue(field.getType().isPrimitive() || field.getType() == java.util.concurrent.atomic.AtomicLong.class || field.getType() == ThreadLocal.class,
+                    "Global counter must be numeric; only scoped producer context may be thread-local: " + field);
     }
 
     @Test
