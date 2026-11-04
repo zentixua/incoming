@@ -576,6 +576,9 @@ public final class ScarQueue {
         seenForTest = chunks;
     }
 
+    /** TEST ONLY: the passive census must include additive visibility outside native player views. */
+    static boolean mtB7HasSeenOverride() { return seenForTest != null; }
+
     /** Chunk visible under test override ({@link #seenForTest}). */
     static boolean seenInTest(long chunk) {
         java.util.function.LongPredicate test = seenForTest;
