@@ -20,7 +20,7 @@ public final class RuinLifecycleGameTests {
     private RuinLifecycleGameTests() {}
 
     @GameTest(template = "range", timeoutTicks = 300, batch = "nuke_lifecycle_pool", skyAccess = true)
-    public static void resizeKeepsOnePoolAndShutdownTerminatesQueuedFutures(GameTestHelper h) {
+    public static void resizeKeepsOnePoolAndShutdownTerminatesQueuedFutures(GameTestHelper h) throws ReflectiveOperationException {
         StrikeGameTests.gameSpeed(h);
         RuinWorkers.shutdown();
         int configured = IncomingConfig.SERVER.nukeRuinThreads.get();
@@ -33,6 +33,9 @@ public final class RuinLifecycleGameTests {
         });
         IncomingConfig.SERVER.nukeRuinThreads.set(1);
         Executor captured = RuinWorkers.executor(RuinWorkers.Priority.FAR);
+        var poolField = RuinWorkers.class.getDeclaredField("pool");
+        poolField.setAccessible(true);
+        Object originalPool = poolField.get(null);
         Future<?> running = RuinWorkers.submitForTest(() -> {
             started.countDown();
             release.await();
@@ -40,7 +43,6 @@ public final class RuinLifecycleGameTests {
         }, RuinWorkers.Priority.FAR);
         Future<?> queued = RuinWorkers.submitForTest(() -> { throw new AssertionError("old queued work ran"); }, RuinWorkers.Priority.FAR);
         int[] stage = {0};
-        CountDownLatch secondStarted = new CountDownLatch(1);
         Future<?>[] waiting = {null};
         h.onEachTick(() -> {
             if (stage[0] == 0) {
@@ -49,16 +51,22 @@ public final class RuinLifecycleGameTests {
                 h.assertTrue(RuinWorkers.inFlight() == 1, "cancelled queue retained its reservation");
                 IncomingConfig.SERVER.nukeRuinThreads.set(2);
                 RuinWorkers.executor(RuinWorkers.Priority.SEEN); // apply resize
-                // The executor captured BEFORE resize must still accept work in the same lifetime.
+                try {
+                    h.assertTrue(poolField.get(null) == originalPool, "resize replaced the worker pool lifetime");
+                } catch (IllegalAccessException failure) {
+                    throw new AssertionError("cannot inspect resized pool identity", failure);
+                }
+                // Configured parallelism is an upper bound; adaptation may keep one active worker.
+                // The captured executor must accept/count work even while its callback remains queued.
                 captured.execute(() -> {
-                    secondStarted.countDown();
                     try { release.await(); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
                 });
+                h.assertTrue(RuinWorkers.inFlight() == 2, "captured executor left the resized accounting lifetime");
                 stage[0] = 1;
             } else if (stage[0] == 1) {
-                if (secondStarted.getCount() != 0) return;
                 waiting[0] = RuinWorkers.submitForTest(() -> { throw new AssertionError("shutdown queue ran"); }, RuinWorkers.Priority.FAR);
-                RuinWorkers.shutdown();
+                h.assertFalse(RuinWorkers.started(waiting[0]), "shutdown probe was not queued behind blocked workers");
+                h.assertTrue(RuinWorkers.shutdown(), "shutdown left live worker threads");
                 h.assertTrue(running.isDone() && queued.isDone() && waiting[0].isCancelled(), "shutdown left unresolved futures");
                 try {
                     captured.execute(() -> { throw new AssertionError("old executor resurrected"); });
