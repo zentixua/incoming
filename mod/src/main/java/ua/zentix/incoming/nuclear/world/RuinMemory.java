@@ -33,6 +33,15 @@ final class RuinMemory {
         return new Reservation(owner, bytes);
     }
 
+    /** Pure producer admission: never opens a ledger or changes worker configuration. Server thread only. */
+    static Reservation reserveInputs(ServerLevel level, long bytes) {
+        if (bytes < 0) throw new IllegalArgumentException("Negative input reservation");
+        NuclearWorld owner = NuclearWorld.get(level);
+        if (bytes > NuclearPrep.PLANS_CAP - NuclearPrep.residentMemory(level)) return null;
+        owner.materialReservation += bytes;
+        return new Reservation(owner, bytes);
+    }
+
     static final class Reservation implements AutoCloseable {
         private NuclearWorld owner;
         private long bytes;
