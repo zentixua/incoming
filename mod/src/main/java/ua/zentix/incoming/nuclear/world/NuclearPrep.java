@@ -1072,6 +1072,15 @@ public final class NuclearPrep {
         return null;
     }
 
+    /** Replace only the front send-budget clock of an existing preparation (tests). */
+    boolean useFrontClockForTest(int strike, java.util.function.LongSupplier time) {
+        for (Prep p : preps) if (p.strike == strike) {
+            p.lods.useSendClockForTest(time);
+            return true;
+        }
+        return false;
+    }
+
     /** Ready ruin plan for chunk reached by its detonation's wave; null if none. */
     @Nullable
     RuinPlan arrivedPlan(ServerLevel level, NuclearEvents events, long chunk, long now) {
