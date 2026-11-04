@@ -159,7 +159,7 @@ public final class RuinMatter extends SavedData {
             state = state.setValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.AXIS,
                     Math.abs(away.x) > Math.abs(away.z) ? net.minecraft.core.Direction.Axis.X : net.minecraft.core.Direction.Axis.Z);
         Piece piece = new Piece(at, state, contents, Vec3.ZERO, level.getGameTime());
-        piece.scorch = scorch.capture(at, sourceState, state);
+        piece.scorch = scorch.capture(at, sourceState, state, away);
         piece.scorchEvent = d.id(); piece.scorchTime = d.gameTime();
         // Integrate drag while airborne: giving the entire pulse as an instantaneous kick would
         // move a short fall too far and ignore the reduction in relative air speed.

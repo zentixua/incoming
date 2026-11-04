@@ -238,6 +238,10 @@ public final class RuinMatterGameTests {
         ua.zentix.incoming.nuclear.flash.FlashSync.chars(level, chunk, d, new int[]{mark});
         var piece = RuinMatter.capture(level, source, state, d);
         h.assertTrue(piece != null && piece.scorch != 0, "Source scorch was not captured");
+        int mirrored = new RuinScorch(chunk).capture(source, state, piece.state, new Vec3(-1, 0, 0));
+        h.assertTrue((mirrored >>> (net.minecraft.core.Direction.WEST.get3DDataValue() * 3) & 7) == 6
+                && (mirrored >>> (net.minecraft.core.Direction.EAST.get3DDataValue() * 3) & 7) == 0,
+                "Scorch rotation ignored the signed fall direction");
         piece.drag = 0; // Isolate rigid face rotation and gravity from the separately tested pulse.
         ColumnScar.replace(level, source, state, Blocks.AIR.defaultBlockState());
         RuinMatter original = new RuinMatter(); original.release(java.util.List.of(piece));

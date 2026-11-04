@@ -19,7 +19,7 @@ final class RuinScorch {
             faces.computeIfAbsent(mark & FlashChar.PLACE_MASK, ignored -> new IntArrayList()).add(mark);
     }
 
-    int capture(BlockPos at, BlockState source, BlockState placed) {
+    int capture(BlockPos at, BlockState source, BlockState placed, net.minecraft.world.phys.Vec3 away) {
         IntArrayList marks = faces.get(FlashChar.key(at.getX() & 15, at.getY(), at.getZ() & 15, Direction.DOWN) & FlashChar.PLACE_MASK);
         if (marks == null) return 0;
         int packed = 0;
@@ -27,7 +27,8 @@ final class RuinScorch {
             if (!FlashChar.holds(source, mark)) continue;
             Direction face = FlashChar.face(mark);
             if (source.hasProperty(BlockStateProperties.AXIS) && placed.hasProperty(BlockStateProperties.AXIS))
-                face = rotate(face, source.getValue(BlockStateProperties.AXIS), placed.getValue(BlockStateProperties.AXIS));
+                face = rotate(face, source.getValue(BlockStateProperties.AXIS), placed.getValue(BlockStateProperties.AXIS),
+                        placed.getValue(BlockStateProperties.AXIS) == Direction.Axis.X ? (away.x < 0 ? -1 : 1) : (away.z < 0 ? -1 : 1));
             int shift = face.get3DDataValue() * 3;
             int tier = Math.max(packed >>> shift & 7, FlashChar.level(mark));
             packed = packed & ~(7 << shift) | tier << shift;
@@ -36,13 +37,13 @@ final class RuinScorch {
     }
 
     /** Rigid quarter turns through vertical, matching the log axis change (no new illumination). */
-    static Direction rotate(Direction face, Direction.Axis from, Direction.Axis to) {
+    static Direction rotate(Direction face, Direction.Axis from, Direction.Axis to, int sign) {
         if (from == to) return face;
         int x = face.getStepX(), y = face.getStepY(), z = face.getStepZ();
         if (from == Direction.Axis.X) { int oldX = x; x = -y; y = oldX; }
         else if (from == Direction.Axis.Z) { int oldZ = z; z = -y; y = oldZ; }
-        if (to == Direction.Axis.X) { int oldY = y; y = -x; x = oldY; }
-        else if (to == Direction.Axis.Z) { int oldY = y; y = -z; z = oldY; }
+        if (to == Direction.Axis.X) { int oldY = y; y = -sign * x; x = sign * oldY; }
+        else if (to == Direction.Axis.Z) { int oldY = y; y = -sign * z; z = sign * oldY; }
         return Direction.fromDelta(x, y, z);
     }
 }
