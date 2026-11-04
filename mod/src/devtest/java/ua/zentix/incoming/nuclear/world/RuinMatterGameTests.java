@@ -20,6 +20,13 @@ import java.util.ArrayList;
 public final class RuinMatterGameTests {
     private RuinMatterGameTests() {}
 
+    /** Synthetic synchronous ruin fixtures finish before normal material transport. Isolate their
+     * SavedData and tickets from subsequent, unrelated GameTest batches; never used by the mod. */
+    public static void clearFixture(net.minecraft.server.level.ServerLevel level) {
+        RuinMatter.get(level).unload(level);
+        level.getDataStorage().set("incoming_ruin_matter", new RuinMatter());
+    }
+
     @GameTest(template = "pad", timeoutTicks = 20, batch = "nuke_material_geometry", skyAccess = true)
     public static void supportUsesContactFacesAndPartialVolumes(GameTestHelper h) {
         var full = Blast.props(Blocks.STONE.defaultBlockState());
@@ -82,8 +89,33 @@ public final class RuinMatterGameTests {
             double[] organic = restored.balance(Blocks.OAK_LEAVES);
             h.assertTrue(organic[0] > 0 && organic[0] == organic[4] && organic[2] == 0,
                     "Dispersed foliage lost its material-specific reservoir");
+            var glass = new RuinMatter.Piece(at.above(4), Blocks.GLASS.defaultBlockState(), null, Vec3.ZERO, level.getGameTime());
+            restored.release(java.util.List.of(glass));
+            double[] glazing = restored.balance(Blocks.GLASS);
+            h.assertTrue(restored.pending() == 0 && glazing[0] == glazing[4], "Shattered glazing reformed a whole window block");
             restored.unload(level);
             h.succeed();
+        });
+    }
+
+    @GameTest(template = "pad", timeoutTicks = 120, batch = "nuke_material_wall", skyAccess = true)
+    public static void windAgainstAWallDoesNotStopGravityOrPulseTime(GameTestHelper h) {
+        var level = h.getLevel();
+        BlockPos base = h.absolutePos(new BlockPos(5, 3, 5));
+        for (int x = -2; x <= 2; x++) for (int z = -2; z <= 2; z++) {
+            level.setBlock(base.offset(x, -1, z), Blocks.BEDROCK.defaultBlockState(), 2);
+            for (int y = 0; y <= 10; y++) level.setBlock(base.offset(x, y, z),
+                    x == 1 ? Blocks.BEDROCK.defaultBlockState() : Blocks.AIR.defaultBlockState(), 2);
+        }
+        var piece = new RuinMatter.Piece(base.above(8), Blocks.OAK_PLANKS.defaultBlockState(), null, Vec3.ZERO, level.getGameTime());
+        piece.windX = 100; piece.drag = 5000; piece.pulse = 1;
+        RuinMatter ledger = new RuinMatter(); ledger.release(java.util.List.of(piece));
+        WorkClock clock = WorkClock.counting(1);
+        h.onEachTick(() -> { clock.start(1000); ledger.work(level, clock); });
+        h.runAtTickTime(100, () -> {
+            h.assertTrue(ledger.pending() == 0 && ledger.deposited() == 1, "Wall collision froze the drag pulse/fall");
+            h.assertTrue(level.getBlockState(base).is(Blocks.OAK_PLANKS), "Piece did not fall along the wall to its base");
+            ledger.unload(level); h.succeed();
         });
     }
 

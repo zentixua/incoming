@@ -127,6 +127,7 @@ public final class NuclearGameTests {
     }
 
     private static Detonation rawAt(GameTestHelper h, BlockPos g, double hob, double yieldKt, float scale) {
+        StrikeGameTests.afterTest(h, () -> ua.zentix.incoming.nuclear.world.RuinMatterGameTests.clearFixture(h.getLevel()));
         return new Detonation(IDS.incrementAndGet(), new Vec3(g.getX() + 0.5, g.getY() + hob, g.getZ() + 0.5), g.getY(),
                 yieldKt, hob <= 0, h.getLevel().getGameTime(), 0, 0, 20_000, 7, scale, false, Detonation.OLD_WAVE);
     }
@@ -290,18 +291,20 @@ public final class NuclearGameTests {
         Detonation d = detonation(h, CENTER, Yield.optimalBurstHeight(15) * 0.3, 15, 0.3f);
         // ruins in advance: plans for an untouched city, then replacement
         int built = tower(h, c);
+        long releasedBefore = ua.zentix.incoming.nuclear.world.RuinMatter.get(h.getLevel()).released();
         List<RuinPlan> ahead = new java.util.ArrayList<>();
         List<LevelChunk> chunks = chunks(h);
         for (LevelChunk chunk : chunks) ahead.add(RuinPlanner.plan(level, d, chunk));
         for (int i = 0; i < chunks.size(); i++) h.assertTrue(ahead.get(i).apply(level, chunks.get(i), d, new ColumnScar.Budget(false)), "the plan is already outdated");
-        int standingAhead = towerFell(h, d, c, built, "in advance");
+        int standingAhead = towerFell(h, d, c, built, "in advance", releasedBefore);
         // the same tower again - ruins in place, chunk by chunk at the time of the wave
         for (BlockPos p : BlockPos.betweenClosed(c.offset(-TOWER_HALF, 0, -TOWER_HALF), c.offset(TOWER_HALF, TOWER_HEIGHT, TOWER_HALF))) {
             level.setBlock(h.absolutePos(p), Blocks.AIR.defaultBlockState(), 2);
         }
         h.assertTrue(tower(h, c) == built, "the tower did not rise again");
+        releasedBefore = ua.zentix.incoming.nuclear.world.RuinMatter.get(level).released();
         scarAll(h, d, new ColumnScar.Budget(false));
-        int standingFresh = towerFell(h, d, c, built, "on site");
+        int standingFresh = towerFell(h, d, c, built, "on site", releasedBefore);
         h.assertTrue(standingAhead == standingFresh, "the ruins in advance and on site are different: above the rubble " + standingAhead + " and " + standingFresh + " blocks");
         h.succeed();
     }
@@ -342,8 +345,9 @@ public final class NuclearGameTests {
         Detonation d = detonation(h, CENTER, Yield.optimalBurstHeight(15) * 0.3, 15, 0.3f, false);
         h.assertTrue(h.getBlockState(BlockPos.ZERO.offset(5, 0, 5)).isAir(), "there is no air under the platform: the test does not check anything");
         int built = tower(h, c, true);
+        long releasedBefore = ua.zentix.incoming.nuclear.world.RuinMatter.get(h.getLevel()).released();
         scarAll(h, d, new ColumnScar.Budget(false));
-        towerFell(h, d, c, built, "concrete without backfill");
+        towerFell(h, d, c, built, "concrete without backfill", releasedBefore);
         h.succeed();
     }
 
@@ -389,7 +393,7 @@ public final class NuclearGameTests {
     }
 
     /** Failure leaves at most 5% of the upper structure, no floating survivors, and all removed material in transport. */
-    private static int towerFell(GameTestHelper h, Detonation d, BlockPos c, int built, String path) {
+    private static int towerFell(GameTestHelper h, Detonation d, BlockPos c, int built, String path, long releasedBefore) {
         int standing = 0, survivors = 0;
         for (int dx = -TOWER_HALF; dx <= TOWER_HALF; dx++) {
             for (int dz = -TOWER_HALF; dz <= TOWER_HALF; dz++) {
@@ -410,10 +414,9 @@ public final class NuclearGameTests {
         }
         h.assertTrue(standing * 20 <= built, path + ": the tower stands higher than the rubble " + standing + " blocks of " + built
                 + " (pressure at the tower " + String.format(Locale.ROOT, "%.0f", d.psi(Vec3.atCenterOf(h.absolutePos(c)))) + " psi)");
-        int pending = ua.zentix.incoming.nuclear.world.RuinMatter.get(h.getLevel()).pendingFrom(
-                h.absolutePos(c.offset(-TOWER_HALF, 0, -TOWER_HALF)), h.absolutePos(c.offset(TOWER_HALF, TOWER_HEIGHT - 1, TOWER_HALF)));
-        h.assertTrue(pending >= built - survivors, path + ": removed material did not enter transport: " + pending
-                + " pending for " + (built - survivors) + " removed blocks");
+        long transferred = ua.zentix.incoming.nuclear.world.RuinMatter.get(h.getLevel()).released() - releasedBefore;
+        h.assertTrue(transferred >= built - survivors, path + ": removed coarse/fine material has no owner: " + transferred
+                + " transferred for " + (built - survivors) + " removed blocks");
         return standing;
     }
 
@@ -477,9 +480,10 @@ public final class NuclearGameTests {
         BlockPos c = chunkCorner(h);
         Detonation d = detonation(h, c, Yield.optimalBurstHeight(15) * 0.3, 15, 0.3f);
         int built = tower(h, c);
+        long releasedBefore = ua.zentix.incoming.nuclear.world.RuinMatter.get(h.getLevel()).released();
         pool(h, c);
         scarAll(h, d, new ColumnScar.Budget(false));
-        towerFell(h, d, c, built, "with swimming pool");
+        towerFell(h, d, c, built, "with swimming pool", releasedBefore);
         h.succeed();
     }
 
@@ -489,9 +493,10 @@ public final class NuclearGameTests {
         BlockPos c = chunkCorner(h);
         Detonation d = detonation(h, CENTER, Yield.optimalBurstHeight(15) * 0.3, 15, 0.3f);
         int built = tower(h, c);
+        long releasedBefore = ua.zentix.incoming.nuclear.world.RuinMatter.get(h.getLevel()).released();
         pool(h, c);
         scarAll(h, d, new ColumnScar.Budget(false));
-        towerFell(h, d, c, built, "with a pool, the explosion is not above the core");
+        towerFell(h, d, c, built, "with a pool, the explosion is not above the core", releasedBefore);
         h.succeed();
     }
 

@@ -144,8 +144,10 @@ public final class NuclearWorld {
      * Whether nuclear queues have server-thread work (NUCLEAR lane {@code WorkScheduler}: while present, impacts
      * do not take entire shared budget).
      */
+    private RuinMatter matter;
+
     public boolean busy() {
-        return !pulses.isEmpty() || late.busy() || !shadows.isEmpty() || !scorches.isEmpty() || !craters.isEmpty() || scars.size() > 0 || !prep.idle() || blast.busy() || settle.busy();
+        return matter != null && matter.busy() || !pulses.isEmpty() || late.busy() || !shadows.isEmpty() || !scorches.isEmpty() || !craters.isEmpty() || scars.size() > 0 || !prep.idle() || blast.busy() || settle.busy();
     }
 
     /** Retained preparation and active-context estimates, without the shared worker buffers. */
@@ -440,7 +442,8 @@ public final class NuclearWorld {
         long scarStart = System.nanoTime();
         lastCraterNanos = scarStart - craterStart;
         scars.work(level, now, clock);
-        RuinMatter.get(level).work(level, clock);
+        matter = RuinMatter.get(level);
+        matter.work(level, clock);
         long scorchStart = System.nanoTime();
         lastScarNanos = scorchStart - scarStart;
         // ground light after wave-reached ruins using their remaining budget: when front crosses

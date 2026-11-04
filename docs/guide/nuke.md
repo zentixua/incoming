@@ -88,7 +88,7 @@ continues across chunk borders. Untouched floating builds stay as they were.
 
 Broken structural blocks fall and drift before settling on actual support. Coarse rubble keeps its block type;
 containers retain their contents. Loose piles spread into lower neighbouring spaces. Material still travelling
-is saved with the world, so leaving and returning does not erase it. Leaves become dispersed organic debris.
+is saved with the world, so leaving and returning does not erase it. Leaves and shattered glazing enter the dispersed debris reservoir.
 These are reduced block-scale rules: joint properties, drag and the pile's repose angle are estimates.
 
 With the default ground burst, the dust column joins the mushroom cap. With an explicitly selected air burst

@@ -60,7 +60,7 @@ public final class RuinMatter extends SavedData {
     private net.minecraft.world.level.ChunkPos held;
 
     void support(ServerLevel level, List<Piece> pieces, Detonation d) {
-        for (Piece piece : pieces) if (!piece.fine) supportSources.addLast(new SupportSeed(piece.source, piece.state, d.id()));
+        for (Piece piece : pieces) if (Blast.props(piece.state).bearing()) supportSources.addLast(new SupportSeed(piece.source, piece.state, d.id()));
         if (!pieces.isEmpty()) setDirty();
     }
 
@@ -112,7 +112,9 @@ public final class RuinMatter extends SavedData {
             this.state = state;
             this.contents = contents;
             Blast.Props material = Blast.props(state);
-            fine = material.leaves();
+            fine = material.leaves()
+                    || state.is(net.neoforged.neoforge.common.Tags.Blocks.GLASS_BLOCKS)
+                    || state.is(net.neoforged.neoforge.common.Tags.Blocks.GLASS_PANES);
             volume = material.volume();
             mass = volume * material.density();
             x = source.getX() + 0.5;
@@ -170,8 +172,8 @@ public final class RuinMatter extends SavedData {
             releasedVolume += piece.volume;
             releasedMass += piece.mass;
             if (piece.fine) {
-                // A foliage block represents a sparse crown, not a rigid metre-wide boulder.
-                // Its detached matter is dispersed litter, already represented by client fragments.
+                // Detached foliage and shattered glazing do not remain rigid metre-wide blocks.
+                // Preserve their material in the dispersed reservoir; existing fragments show it.
                 account(piece, 4);
                 dispersed++;
                 dispersedVolume += piece.volume;
@@ -188,6 +190,8 @@ public final class RuinMatter extends SavedData {
             uncertain.remove(position);
         }
     }
+
+    boolean busy() { return !moving.isEmpty() || !supports.isEmpty() || !supportSources.isEmpty(); }
 
     public long released() { return released; }
     public long deposited() { return deposited; }
@@ -305,11 +309,17 @@ public final class RuinMatter extends SavedData {
                     p.vx = p.vy = p.vz = 0;
                     return settle(level, p, here.above());
                 }
-                if (to.getY() < here.getY() && p.vy <= 0) return settle(level, p, here);
                 p.vx = 0;
                 p.vz = 0;
-                if (to.getY() > here.getY()) p.vy = Math.min(0, p.vy);
-                else if (to.equals(here)) return settle(level, p, to.above());
+                // A wall removes horizontal momentum, not elapsed time or gravity. Otherwise
+                // each retry receives the same drag pulse and a piece sticks forever to the wall.
+                BlockPos vertical = BlockPos.containing(p.x, ny, p.z);
+                if (level.getBlockState(vertical).getCollisionShape(level, vertical).isEmpty()) {
+                    p.y = ny;
+                    p.vy -= StructuralResponse.GRAVITY * dt;
+                } else if (ny < p.y) return settle(level, p, here);
+                else p.vy = Math.min(0, p.vy);
+                p.tick += dt / DT;
                 return false;
             }
             p.x = nx;

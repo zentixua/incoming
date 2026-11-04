@@ -248,7 +248,7 @@ paths:
   states and block-entity contents before writing; never resurrect flash-consumed blocks. Handoff IDs prevent
   repeated release of the same records. Original block state, represented solid volume/mass, trajectory/time,
   pending support sources and cold contact faces survive clean save/reload. Per-type and aggregate balances:
-  released = deposited + dispersed foliage + pending. Cosmetic particles own no additional mass.
+  released = deposited + dispersed foliage/glazing + pending. Cosmetic particles own no additional mass.
 - Coarse transport integrates gravity and triangular dynamic-pressure drag relative to the air, with adaptive
   half-metre substeps. It never advances beyond elapsed game time. Settlement uses the same block type and saved
   contents; logs rotate horizontally, waterlogging follows destination water. A one-block coarse repose step is
