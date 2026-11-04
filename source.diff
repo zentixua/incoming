@@ -1,0 +1,586 @@
+diff --git a/.claude/rules/nuclear-world.md b/.claude/rules/nuclear-world.md
+index 440c4ce19..fe4be78ce 100644
+--- a/.claude/rules/nuclear-world.md
++++ b/.claude/rules/nuclear-world.md
+@@ -430,3 +430,12 @@ paths:
+   `nuke_stale_background` holds worker admission after changing planned glass and proves that the tick cannot
+   borrow a synchronous solver or mark stale output complete. Continuously edited inputs may need more retries;
+   the pressure clock and chunk-send deadline are unchanged.
++
++- Actual solver input ownership is separate from pool slots/workspace. `RuinContext` transfers its existing
++  retained estimate to numeric `RuinInputs` ownership before cancellation/detachment; actual Task exit (or removed
++  queued callable) releases it. Both ruin and flash-layer submissions carry that callback through promotion.
++  Removed/replaced snapshots stay conservatively charged while any actual context worker remains, including tasks
++  forgotten from the task map. Keep shadow heights/fractures available to running Grids. Admission and resident
++  counters include detached inputs once across dimensions; the scalar owner retains no context/world references.
++  `nuke_inputs_*` exercises populated Grids through registered cancel, clear, forget/world removal, expiry and
++  queued promotion/cancellation. This preserves known estimates, not a complete JVM heap bound.
+diff --git a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinInputLifetimeGameTests.java b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinInputLifetimeGameTests.java
+new file mode 100644
+index 000000000..81c08ef2f
+--- /dev/null
++++ b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinInputLifetimeGameTests.java
+@@ -0,0 +1,203 @@
++package ua.zentix.incoming.nuclear.world;
++
++import java.lang.reflect.Field;
++import java.util.UUID;
++import java.util.concurrent.CountDownLatch;
++import java.util.concurrent.Future;
++import java.util.concurrent.TimeUnit;
++import java.util.concurrent.atomic.AtomicReference;
++import java.util.concurrent.atomic.AtomicBoolean;
++import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
++import net.minecraft.core.BlockPos;
++import net.minecraft.gametest.framework.GameTest;
++import net.minecraft.gametest.framework.GameTestHelper;
++import net.minecraft.world.level.Level;
++import net.minecraft.world.level.block.Blocks;
++import net.minecraft.world.level.ChunkPos;
++import net.minecraft.world.phys.Vec3;
++import net.neoforged.neoforge.gametest.GameTestHolder;
++import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
++import ua.zentix.incoming.Incoming;
++import ua.zentix.incoming.IncomingConfig;
++import ua.zentix.incoming.gametest.StrikeGameTests;
++import ua.zentix.incoming.nuclear.Detonation;
++
++/** Actual populated Grid consumers through registered preparation cancellation and world-owner removal. */
++@GameTestHolder(Incoming.MOD_ID)
++@PrefixGameTestTemplate(false)
++public final class RuinInputLifetimeGameTests {
++    private RuinInputLifetimeGameTests() {}
++
++    @GameTest(template = "range", batch = "nuke_inputs_cancel", timeoutTicks = 400, skyAccess = true)
++    public static void cancelledPreparationKeepsActualGridInputs(GameTestHelper h) throws Exception { run(h, "cancel"); }
++
++    @GameTest(template = "range", batch = "nuke_inputs_clear", timeoutTicks = 400, skyAccess = true)
++    public static void clearedPreparationKeepsActualGridInputs(GameTestHelper h) throws Exception { run(h, "clear"); }
++
++    @GameTest(template = "range", batch = "nuke_inputs_forget", timeoutTicks = 400, skyAccess = true)
++    public static void forgottenTaskAndWorldContextKeepActualGridInputs(GameTestHelper h) throws Exception { run(h, "forget"); }
++
++    @GameTest(template = "range", batch = "nuke_inputs_expiry", timeoutTicks = 400, skyAccess = true)
++    public static void expiredWorkerKeepsInputsUntilActualExit(GameTestHelper h) throws Exception { run(h, "expiry"); }
++
++    @GameTest(template = "range", batch = "nuke_inputs_queued", timeoutTicks = 400, skyAccess = true)
++    public static void queuedCancellationReleasesGridWithoutRunning(GameTestHelper h) throws Exception { run(h, "queued"); }
++
++    @SuppressWarnings("unchecked")
++    private static void run(GameTestHelper h, String route) throws Exception {
++        StrikeGameTests.gameSpeed(h);
++        var level = h.getLevel();
++        var other = level.getServer().getLevel(Level.NETHER);
++        h.assertTrue(other != null, "second dimension missing");
++        var world = NuclearWorld.get(level);
++        var prep = world.prep();
++        int threads = IncomingConfig.SERVER.nukeRuinThreads.get();
++        IncomingConfig.SERVER.nukeRuinThreads.set(1);
++        long initialDetached = RuinInputs.detachedBytes();
++        var release = new CountDownLatch(1);
++        var started = new CountDownLatch(1);
++        var blockerStarted = new CountDownLatch(1);
++        UUID owner = UUID.randomUUID(), handle = UUID.randomUUID();
++        var point = Vec3.atCenterOf(h.absolutePos(new BlockPos(32, 2, 32)));
++        h.setBlock(new BlockPos(32, 2, 32), Blocks.STONE);
++        h.setBlock(new BlockPos(32, 3, 32), Blocks.OAK_LOG);
++        var d = new Detonation(9191, point.add(0, 20, 0), point.y, 1, true, 100, 0, 0, 20000, 42, 0.25f, false, 1);
++        RuinPreparation.prepare(level, handle, owner, point, 1, true, false);
++        Object p = request(prep, handle);
++        var ctx = new RuinContext(level, d);
++        field(p, "ruins").set(p, ctx);
++        var centre = new ChunkPos(BlockPos.containing(point));
++        var grid = ctx.grid(level, centre, true);
++        h.assertTrue(grid.at(0, 0) != null && ctx.shotCount() > 0 && ctx.retainedBytes() > 0,
++                "fixture must retain real snapshots and shadow heights");
++        long known = ctx.retainedBytes();
++        double light = grid.lit(BlockPos.containing(point));
++        grid.blast(0, 0);
++        var failure = new AtomicReference<Throwable>();
++        var consumed = new AtomicBoolean();
++        Future<?> blocker = route.equals("queued") ? RuinWorkers.submit(() -> {
++            blockerStarted.countDown();
++            release.await();
++            return null;
++        }, RuinWorkers.Priority.SEEN) : null;
++        if (blocker != null) h.assertTrue(blockerStarted.await(5, TimeUnit.SECONDS), "blocker did not start");
++        var priority = blocker == null ? RuinWorkers.Priority.NEAR : RuinWorkers.Priority.FAR;
++        Future<RuinPlan> original = ctx.submitWorker(() -> {
++            started.countDown();
++            try {
++                // An interrupted/expired callable may still be unwinding or inside code ignoring interruption.
++                boolean open = false;
++                while (!open) {
++                    try { open = release.await(20, TimeUnit.SECONDS); }
++                    catch (InterruptedException expected) { continue; }
++                    if (!open) throw new AssertionError("Grid gate not released");
++                }
++                if (grid.at(0, 0) == null || grid.lit(BlockPos.containing(point)) != light || !grid.hasBlast(0, 0))
++                    throw new AssertionError("cancel mutated running Grid inputs");
++                var result = RuinPlanner.finish(grid, Collapse.solve(grid));
++                consumed.set(true);
++                return result;
++            } catch (Throwable t) {
++                failure.set(t); // Future cancellation hides callable exceptions: check independently after actual exit.
++                throw t;
++            }
++        }, priority);
++        var taskType = Class.forName(RuinContext.class.getName() + "$Task");
++        var constructor = taskType.getDeclaredConstructors()[0];
++        constructor.setAccessible(true);
++        var tasks = (Long2ObjectOpenHashMap<Object>) field(ctx, "tasks").get(ctx);
++        tasks.put(centre.toLong(), constructor.newInstance(original, 1, level.getGameTime(), priority));
++        if (blocker != null) ctx.promote(centre.toLong(), RuinWorkers.Priority.SEEN);
++        Future<RuinPlan> future = (Future<RuinPlan>) get(tasks.get(centre.toLong()), "future");
++        if (blocker != null) h.assertTrue(original.isCancelled() && original != future, "queued promotion did not transfer the actual callback");
++        if (blocker == null) h.assertTrue(started.await(5, TimeUnit.SECONDS), "actual Grid worker did not start");
++        var otherWorld = NuclearWorld.get(other);
++        long oldReservation = otherWorld.materialReservation;
++        StrikeGameTests.afterTest(h, () -> {
++            release.countDown();
++            RuinPreparation.cancel(level, handle);
++            world.forgetRuinsForTest(d.id());
++            ctx.cancelTasks();
++            otherWorld.materialReservation = oldReservation;
++            IncomingConfig.SERVER.nukeRuinThreads.set(threads);
++        });
++        if (route.equals("expiry")) {
++            ctx.expire(level.getGameTime() + RuinContext.TASK_AGE_LIMIT + 1);
++            h.assertTrue(future.isDone() && !ctx.done(centre.toLong()), "expiry confused cancellation with actual exit");
++            RuinPreparation.cancel(level, handle);
++        } else if (route.equals("forget")) {
++            ctx.forget(centre.toLong());
++            h.assertTrue(future.isDone() && !RuinWorkers.finished(future), "forget must cancel the running future");
++            h.assertTrue(ctx.retainedBytes() >= known, "forgotten Grid snapshots disappeared while context attached");
++            // A task removed from ctx.tasks must still keep the context charged when its world owner leaves.
++            var contexts = (it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap<RuinContext>) field(world, "ruins").get(world);
++            contexts.put(d.id(), ctx);
++            field(p, "ruins").set(p, null);
++            world.forgetRuinsForTest(d.id());
++            RuinPreparation.cancel(level, handle);
++        } else if (route.equals("clear")) {
++            prep.clear(level, new ScarQueue());
++        } else {
++            RuinPreparation.cancel(level, handle);
++        }
++        int[] phase = {0};
++        h.onEachTick(() -> {
++            if (phase[0] == 0) {
++                if (((java.util.List<?>) get(prep, "preps")).contains(p)) return; // Real registered drain.
++                h.assertTrue(future.isDone(), "drain did not cancel future");
++                if (blocker != null) {
++                    h.assertTrue(RuinWorkers.finished(future) && started.getCount() == 1,
++                            "queued Grid callable ran or retained its owner");
++                    h.assertTrue(RuinInputs.detachedBytes() == initialDetached, "queued cancellation leaked inputs");
++                    Incoming.LOG.info("INPUT_LIFETIME {} known={} detached={} queuedCallableStarted={}", route, known, RuinInputs.detachedBytes(), started.getCount() == 0);
++                    release.countDown();
++                    phase[0] = 1;
++                    return;
++                }
++                h.assertTrue(!RuinWorkers.finished(future), "gate failed to keep actual worker alive after Future.isDone");
++                h.assertTrue(RuinInputs.detachedBytes() >= initialDetached + known, "detached actual Grid input charge lost");
++                h.assertTrue(NuclearPrep.residentMemory(other) >= known, "resident cross-dimension counter omitted inputs");
++                // Fill only the remaining room. This reservation does not stand in for the actual Grid payload above.
++                long total = NuclearPrep.memory(other, false);
++                h.assertTrue(total < NuclearPrep.PLANS_CAP / 2, "fixture lacks admission headroom before filling room");
++                otherWorld.materialReservation += Math.max(0, NuclearPrep.PLANS_CAP / 2 - total + known / 2);
++                h.assertTrue(otherWorld.settleMemoryRoom(other) == 0, "another dimension spent running Grid room");
++                Incoming.LOG.info("INPUT_LIFETIME {} held known={} detached={} futureDone={} actualFinished={} otherRoom={}",
++                        route, known, RuinInputs.detachedBytes(), future.isDone(), RuinWorkers.finished(future), otherWorld.settleMemoryRoom(other));
++                release.countDown();
++                phase[0] = 1;
++            } else if (RuinWorkers.finished(future) && (blocker == null || RuinWorkers.finished(blocker))) {
++                h.assertTrue(failure.get() == null, "actual cancelled callable failed: " + failure.get());
++                h.assertTrue(consumed.get() == (blocker == null), "actual Grid was not consumed after cancellation");
++                h.assertTrue(RuinInputs.detachedBytes() == initialDetached, "actual exit did not refund exactly once");
++                if (blocker == null) h.assertTrue(otherWorld.settleMemoryRoom(other) > 0, "actual exit did not reopen admission");
++                ctx.cancelTasks();
++                h.assertTrue(RuinInputs.detachedBytes() == initialDetached, "repeated clear refunded twice");
++                Incoming.LOG.info("INPUT_LIFETIME {} exited detached={} consumed={} otherRoom={}",
++                        route, RuinInputs.detachedBytes(), consumed.get(), otherWorld.settleMemoryRoom(other));
++                h.succeed();
++            }
++        });
++    }
++
++    private static Object request(NuclearPrep prep, UUID handle) {
++        try {
++            var method = NuclearPrep.class.getDeclaredMethod("request", UUID.class);
++            method.setAccessible(true);
++            return method.invoke(prep, handle);
++        } catch (ReflectiveOperationException e) { throw new AssertionError(e); }
++    }
++
++    private static Object get(Object owner, String name) {
++        try { return field(owner, name).get(owner); }
++        catch (IllegalAccessException e) { throw new AssertionError(e); }
++    }
++
++    private static Field field(Object owner, String name) {
++        try {
++            var field = owner.getClass().getDeclaredField(name);
++            field.setAccessible(true);
++            return field;
++        } catch (ReflectiveOperationException e) { throw new AssertionError(e); }
++    }
++}
+diff --git a/mod/src/main/java/ua/zentix/incoming/nuclear/world/FlashScorch.java b/mod/src/main/java/ua/zentix/incoming/nuclear/world/FlashScorch.java
+index 85111c60f..4505e0db6 100644
+--- a/mod/src/main/java/ua/zentix/incoming/nuclear/world/FlashScorch.java
++++ b/mod/src/main/java/ua/zentix/incoming/nuclear/world/FlashScorch.java
+@@ -266,7 +266,7 @@ public final class FlashScorch {
+             long t0 = clock.begin();
+             try {
+                 RuinContext.Grid g = ctx.flashGrid(level, chunk.getPos(), true);
+-                building.put(k, new Build(RuinWorkers.submit(() -> {
++                building.put(k, new Build(ctx.submitWorker(() -> {
+                     RuinWorkers.checkStop();
+                     return RuinPlanner.flash(g);
+                 }, priority)));
+diff --git a/mod/src/main/java/ua/zentix/incoming/nuclear/world/NuclearPrep.java b/mod/src/main/java/ua/zentix/incoming/nuclear/world/NuclearPrep.java
+index eb6343e9a..9d3cf562d 100644
+--- a/mod/src/main/java/ua/zentix/incoming/nuclear/world/NuclearPrep.java
++++ b/mod/src/main/java/ua/zentix/incoming/nuclear/world/NuclearPrep.java
+@@ -488,7 +488,7 @@ public final class NuclearPrep {
+ 
+     /** Already-owned bytes only: cold-load publication cannot recursively start another admission. */
+     static long residentMemory(ServerLevel level) {
+-        long bytes = 0;
++        long bytes = RuinInputs.detachedBytes();
+         int height = level.getHeight();
+         for (ServerLevel other : level.getServer().getAllLevels()) {
+             height = Math.max(height, other.getHeight());
+@@ -499,7 +499,7 @@ public final class NuclearPrep {
+     }
+ 
+     static long memory(ServerLevel level, boolean reserveWorkers) {
+-        long bytes = 0;
++        long bytes = RuinInputs.detachedBytes();
+         int height = level.getHeight();
+         boolean cold = false;
+         for (ServerLevel other : level.getServer().getAllLevels()) {
+diff --git a/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinContext.java b/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinContext.java
+index c2e0e8086..c602e0209 100644
+--- a/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinContext.java
++++ b/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinContext.java
+@@ -37,6 +37,7 @@ final class RuinContext {
+     private final java.util.concurrent.ConcurrentHashMap<Long, RuinHeights> heights = new java.util.concurrent.ConcurrentHashMap<>();
+     private long heightBytes;
+     private long appliedBytes;
++    private final RuinInputs inputs = new RuinInputs();
+     private final Long2ObjectOpenHashMap<Applied> applied = new Long2ObjectOpenHashMap<>();
+     private final LongOpenHashSet planned = new LongOpenHashSet(), stood = new LongOpenHashSet();
+     /** Last context use (game time), for queue to forget long-idle contexts. */
+@@ -350,12 +351,16 @@ final class RuinContext {
+ 
+     private void putShot(long key, ChunkShot shot) {
+         ChunkShot was = shots.putAndMoveToLast(key, shot);
++        if (was != null && was != shot) inputs.retire(was.bytes);
+         shotBytes += shot.bytes - (was == null ? 0 : was.bytes);
+     }
+ 
+     void dropShot(long key) {
+         ChunkShot was = shots.remove(key);
+-        if (was != null) shotBytes -= was.bytes;
++        if (was != null) {
++            inputs.retire(was.bytes);
++            shotBytes -= was.bytes;
++        }
+     }
+ 
+     /** Re-readable cache only: keep old changed blocks and shadow heights, and snapshots held by worker grids. */
+@@ -457,6 +462,10 @@ final class RuinContext {
+ 
+     /** Conservative retained-plan accounting for long disk settlement passes, including old blocks and marks. */
+     long retainedBytes() {
++        return inputs.retained(currentBytes());
++    }
++
++    private long currentBytes() {
+         long bytes = shotBytes() + applied.size() * 640L + (planned.size() + stood.size()) * 32L;
+         return bytes + appliedBytes + (restoredPlans == null ? 0 : restoredPlans.bytes());
+     }
+@@ -626,7 +635,7 @@ final class RuinContext {
+         if (!RuinWorkers.admit(priority) || priority != RuinWorkers.Priority.SEEN && tasks.size() >= 2 * RuinWorkers.capacity()) return false;
+         Grid g = grid(level, pos, true);
+         if (g.at(0, 0) == null) throw new IllegalStateException("no snapshot of chunk " + pos);
+-        tasks.put(key, new Task(RuinWorkers.submit(() -> {
++        tasks.put(key, new Task(submitWorker(() -> {
+             RuinWorkers.checkStop();
+             Collapse c = Collapse.solve(g);
+             RuinWorkers.checkStop();
+@@ -637,6 +646,11 @@ final class RuinContext {
+         return true;
+     }
+ 
++    /** Ruin and flash-layer jobs share this context's actual input owner. */
++    <T> java.util.concurrent.Future<T> submitWorker(java.util.concurrent.Callable<T> task, RuinWorkers.Priority priority) {
++        return RuinWorkers.submit(task, priority, inputs);
++    }
++
+     /** Chunk has running or ready background plan. */
+     boolean running(long chunk) {
+         return tasks.containsKey(chunk);
+@@ -756,6 +770,8 @@ final class RuinContext {
+ 
+     /** Background plans no longer needed (cancel, world unload): abandon tasks. */
+     void cancelTasks() {
++        // Transfer before cancel: queued callbacks may release immediately; running callbacks may not.
++        inputs.detach(currentBytes());
+         for (Task t : tasks.values()) t.future.cancel(false);
+         tasks.clear();
+         pendingWindows.clear();
+diff --git a/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinInputs.java b/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinInputs.java
+new file mode 100644
+index 000000000..b851fc179
+--- /dev/null
++++ b/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinInputs.java
+@@ -0,0 +1,49 @@
++package ua.zentix.incoming.nuclear.world;
++
++import java.util.concurrent.atomic.AtomicLong;
++
++/** Numeric ownership of inputs still reachable by actual workers; never retains a context or world. */
++final class RuinInputs {
++    private static final AtomicLong DETACHED = new AtomicLong();
++    private int workers;
++    private long retired, detachedBytes;
++    private boolean detached;
++
++    synchronized void acquire() {
++        if (detached) throw new IllegalStateException("Ruin inputs already detached");
++        workers++;
++    }
++
++    /** Called exactly once by the pool after execution, or after removing an unstarted callable. */
++    synchronized void release() {
++        if (--workers < 0) throw new IllegalStateException("Ruin input owner released twice");
++        if (workers == 0) {
++            retired = 0;
++            DETACHED.addAndGet(-detachedBytes);
++            detachedBytes = 0;
++        }
++    }
++
++    /** Removed/replaced snapshots may still be in a Grid even while this context remains attached. */
++    synchronized void retire(long bytes) {
++        if (workers > 0) retired += bytes;
++    }
++
++    synchronized long retained(long current) {
++        return detached ? 0 : current + retired;
++    }
++
++    /** Transfer the existing estimate before clearing server-owned containers or removing the context. */
++    synchronized void detach(long current) {
++        if (detached) return;
++        detached = true;
++        if (workers > 0) {
++            detachedBytes = current + retired;
++            DETACHED.addAndGet(detachedBytes);
++        }
++    }
++
++    static long detachedBytes() {
++        return DETACHED.get();
++    }
++}
+diff --git a/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinWorkers.java b/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinWorkers.java
+index 6d4e65db1..048f5496b 100644
+--- a/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinWorkers.java
++++ b/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinWorkers.java
+@@ -231,6 +231,15 @@ public final class RuinWorkers {
+         return t;
+     }
+ 
++    /** Completion ownership follows the actual callable, including promotion and queued cancellation. */
++    static <T> Future<T> submit(Callable<T> task, Priority priority, RuinInputs inputs) {
++        ThreadPoolExecutor executor = pool();
++        inputs.acquire();
++        Task<T> t = new Task<>(task, priority, IN_FLIGHT, executor, inputs::release);
++        execute(executor, t);
++        return t;
++    }
++
+     /**
+      * Executor at {@code priority}: disk-chunk parsing (I/O thread submits into pool), distant LOD copies.
+      * Current pool (server thread): task arriving after shutdown rejected, never starts new pool from external thread.
+@@ -266,11 +275,20 @@ public final class RuinWorkers {
+         if (p == null || !(future instanceof Task<T> t) || t.owner != p || t.isDone()
+                 || t.priority <= priority.ordinal() || !p.remove(t)) return null;
+         // The removed future is terminal and releases its captured callable; only the new task owns it.
+-        Callable<T> callable = t.callable;
++        Callable<T> callable;
++        Runnable onExit;
++        synchronized (t) {
++            callable = t.callable;
++            onExit = t.onExit;
++            t.onExit = null;
++        }
+         t.cancel(false);
+         t.uncount();
+-        if (callable == null) return null; // cancelled concurrently after removal
+-        Task<T> moved = new Task<>(callable, priority, t.counts, p);
++        if (callable == null) {
++            if (onExit != null) onExit.run();
++            return null; // cancelled concurrently after removal
++        }
++        Task<T> moved = new Task<>(callable, priority, t.counts, p, onExit);
+         try {
+             execute(p, moved);
+         } catch (java.util.concurrent.RejectedExecutionException e) {
+@@ -288,7 +306,7 @@ public final class RuinWorkers {
+ 
+     /** A cancelled future is collectable only after its worker has released captured inputs. */
+     static boolean finished(Future<?> future) {
+-        return future.isDone() && (!future.isCancelled() || !(future instanceof Task<?> task) || !task.counted.get());
++        return future.isDone() && (!(future instanceof Task<?> task) || !task.counted.get());
+     }
+ 
+     /**
+@@ -304,18 +322,25 @@ public final class RuinWorkers {
+         @Nullable private final ThreadPoolExecutor owner;
+         private final AtomicBoolean counted = new AtomicBoolean(true);
+         private volatile boolean started;
++        @Nullable private Runnable onExit;
+ 
+         Task(Callable<T> task, Priority priority) {
+             this(task, priority, IN_FLIGHT, null);
+         }
+ 
+         Task(Callable<T> task, Priority priority, AtomicIntegerArray counts, @Nullable ThreadPoolExecutor owner) {
++            this(task, priority, counts, owner, null);
++        }
++
++        Task(Callable<T> task, Priority priority, AtomicIntegerArray counts, @Nullable ThreadPoolExecutor owner,
++             @Nullable Runnable onExit) {
+             super(task);
+             this.callable = task;
+             this.priority = priority.ordinal();
+             this.sequence = SEQUENCE.getAndIncrement();
+             this.counts = counts;
+             this.owner = owner;
++            this.onExit = onExit;
+             counts.incrementAndGet(this.priority);
+         }
+ 
+@@ -339,8 +364,14 @@ public final class RuinWorkers {
+             if (owner != null && owner.remove(this)) uncount();
+         }
+ 
+-        private void uncount() {
+-            if (counted.compareAndSet(true, false)) counts.decrementAndGet(priority);
++        private synchronized void uncount() {
++            if (!counted.get()) return;
++            if (onExit != null) {
++                onExit.run();
++                onExit = null;
++            }
++            counts.decrementAndGet(priority);
++            counted.set(false);
+         }
+ 
+         @Override
+diff --git a/mod/src/test/java/ua/zentix/incoming/nuclear/world/RuinInputsTest.java b/mod/src/test/java/ua/zentix/incoming/nuclear/world/RuinInputsTest.java
+new file mode 100644
+index 000000000..b67c68450
+--- /dev/null
++++ b/mod/src/test/java/ua/zentix/incoming/nuclear/world/RuinInputsTest.java
+@@ -0,0 +1,97 @@
++package ua.zentix.incoming.nuclear.world;
++
++import org.junit.jupiter.api.Test;
++import java.util.concurrent.CountDownLatch;
++import java.util.concurrent.PriorityBlockingQueue;
++import java.util.concurrent.ThreadPoolExecutor;
++import java.util.concurrent.TimeUnit;
++import java.util.concurrent.atomic.AtomicIntegerArray;
++import static org.junit.jupiter.api.Assertions.*;
++
++class RuinInputsTest {
++    @Test
++    void lastActualExitRefundsDetachedInputsOnce() throws Exception {
++        long before = RuinInputs.detachedBytes();
++        var inputs = new RuinInputs();
++        var started = new CountDownLatch(1);
++        var release = new CountDownLatch(1);
++        var executor = new ThreadPoolExecutor(1, 1, 1, TimeUnit.SECONDS, new PriorityBlockingQueue<>());
++        inputs.acquire();
++        var running = new RuinWorkers.Task<>(() -> {
++            started.countDown();
++            release.await();
++            return true;
++        }, RuinWorkers.Priority.NEAR, new AtomicIntegerArray(3), executor, inputs::release);
++        try {
++            executor.execute(running);
++            assertTrue(started.await(5, TimeUnit.SECONDS));
++            inputs.retire(70);
++            assertEquals(170, inputs.retained(100));
++            inputs.detach(100);
++            inputs.detach(999);
++            running.cancel(false);
++            assertTrue(running.isDone());
++            assertFalse(RuinWorkers.finished(running));
++            assertEquals(before + 170, RuinInputs.detachedBytes());
++            assertEquals(0, inputs.retained(100));
++            release.countDown();
++            executor.shutdown();
++            assertTrue(executor.awaitTermination(5, TimeUnit.SECONDS));
++            assertTrue(RuinWorkers.finished(running));
++            assertEquals(before, RuinInputs.detachedBytes());
++            running.run();
++            assertEquals(before, RuinInputs.detachedBytes());
++        } finally {
++            release.countDown();
++            executor.shutdownNow();
++            assertTrue(executor.awaitTermination(5, TimeUnit.SECONDS));
++        }
++    }
++
++    @Test
++    void queuedCancellationRefundsWithoutExecution() throws Exception {
++        long before = RuinInputs.detachedBytes();
++        var inputs = new RuinInputs();
++        var release = new CountDownLatch(1);
++        var started = new CountDownLatch(1);
++        var executor = new ThreadPoolExecutor(1, 1, 1, TimeUnit.SECONDS, new PriorityBlockingQueue<>());
++        try {
++            executor.execute(() -> {
++                started.countDown();
++                try { release.await(); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
++            });
++            assertTrue(started.await(5, TimeUnit.SECONDS));
++            inputs.acquire();
++            var queued = new RuinWorkers.Task<>(() -> { throw new AssertionError("cancelled callable ran"); },
++                    RuinWorkers.Priority.FAR, new AtomicIntegerArray(3), executor, inputs::release);
++            executor.execute(queued);
++            inputs.detach(123);
++            assertEquals(before + 123, RuinInputs.detachedBytes());
++            queued.cancel(false);
++            assertTrue(RuinWorkers.finished(queued));
++            assertEquals(before, RuinInputs.detachedBytes());
++            queued.run();
++            assertEquals(before, RuinInputs.detachedBytes());
++        } finally {
++            release.countDown();
++            executor.shutdownNow();
++            assertTrue(executor.awaitTermination(5, TimeUnit.SECONDS));
++        }
++    }
++
++    @Test
++    void attachedRetirementWaitsForEveryWorkerAndDoesNotLeakIntoAnotherOwner() {
++        var inputs = new RuinInputs();
++        inputs.acquire();
++        inputs.acquire();
++        inputs.retire(100);
++        inputs.release();
++        assertEquals(150, inputs.retained(50));
++        inputs.retire(80);
++        inputs.release();
++        assertEquals(50, inputs.retained(50));
++        inputs.acquire();
++        assertEquals(50, inputs.retained(50));
++        inputs.release();
++    }
++}
