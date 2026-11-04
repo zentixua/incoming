@@ -78,4 +78,49 @@ public final class RuinFreshLifetimeGameTests {
 
     @GameTest(template = "range", timeoutTicks = 200, batch = "nuke_window_lifetime", skyAccess = true)
     public static void freshWindowContextReleasesOwners(GameTestHelper h) { repeat(h, true); }
+
+    @GameTest(template = "range", timeoutTicks = 200, batch = "nuke_fresh_failure_lifetime", skyAccess = true)
+    public static void exceptionalAwaitClosesOnlyItsFreshOwner(GameTestHelper h) {
+        var level = h.getLevel();
+        var grid = RuinStorageGameTests.fixture(h, true);
+        long baseline = RuinResults.bytes(), inputs = RuinInputs.detachedBytes();
+        try {
+            for (boolean window : new boolean[]{false, true}) {
+                RuntimeException injected = new IllegalStateException("Injected fresh-helper await failure");
+                // Submission captures the real loaded centre through its position. Only the next
+                // argument access in await fails, after result/cache admission, without world edits.
+                class AwaitFailureChunk extends net.minecraft.world.level.chunk.LevelChunk {
+                    private int calls, allowed;
+                    private long admitted;
+                    AwaitFailureChunk() { super(level, grid.centre()); allowed = window ? 2 : 1; }
+                    @Override public net.minecraft.world.level.ChunkPos getPos() {
+                        if (allowed > 0 && ++calls > allowed) {
+                            admitted = RuinResults.bytes();
+                            throw injected;
+                        }
+                        return super.getPos();
+                    }
+                }
+                var argument = new AwaitFailureChunk();
+                try {
+                    if (window) RuinPlanner.planWithWindow(level, grid.ctx().d, argument, new int[2]);
+                    else RuinPlanner.planFresh(level, grid.ctx().d, argument, true);
+                    h.fail("Injected await failure was swallowed");
+                } catch (RuntimeException failure) {
+                    if (failure != injected) throw failure;
+                }
+                h.assertTrue(argument.admitted >= baseline + (16L << 20) + RuinResults.OWNER_BYTES,
+                        "Failure did not reach admitted result/cache ownership");
+                h.assertTrue(RuinWorkers.awaitForTest(RuinWorkers.Priority.FAR, 10_000),
+                        "Cancelled fresh helper worker did not actually exit");
+                Incoming.LOG.info("FRESH_FAILURE helper={} baseline={} admitted={} results={} detached={} inputBaseline={}",
+                        window ? "window" : "fresh", baseline, argument.admitted, RuinResults.bytes(), RuinInputs.detachedBytes(), inputs);
+                h.assertTrue(RuinResults.bytes() == baseline, "Exceptional helper leaked result/cache ownership");
+                h.assertTrue(RuinInputs.detachedBytes() == inputs, "Exceptional helper leaked detached inputs");
+            }
+            h.succeed();
+        } finally {
+            grid.ctx().cancelTasks();
+        }
+    }
 }
