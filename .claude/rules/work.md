@@ -19,7 +19,7 @@ paths:
   `GRID` gets what remains, capped at `GRID_SHARE` = 2/15; nuclear work reserves that share while grid work waits.
   One setting controls the total; shares have reasons in code. At 30 ms the old 4-ms grid and 8-ms preparation
   limits remain (`WorkSchedulerTest.sharesKeepTheOldLimitsAtTheDefaultBudget`). Each lane has its own `WorkClock`
-  and a one-unit progress guarantee: its deadline plus one final unit bounds the window.
+  and a one-unit progress guarantee. Admission uses estimated unit cost; running units are not preempted.
 - `ownNanos` records lane time per server tick. Every 600 ticks with work, `Mod work over 30 s` reports server time,
   lane time and the remainder. It also reports the percentage of ticks with an early impact window, mean early and
   late impact time, and the percentage with mandatory unload debt; all four use the same 600-tick denominator.
@@ -56,7 +56,9 @@ paths:
 - `UnitQueue` reconciles each entire window with `WorkClock.accountWindow`: readiness/dependency checks, queue
   bookkeeping and releases count once alongside the already charged steps. Otherwise early-window overhead is
   refunded when Post subtracts only step time from the common cap. Step estimates and counting-clock costs remain
-  unchanged; accounting does not preempt a running step or its synchronous release.
+  unchanged; accounting does not preempt a running step or its synchronous release. Readiness scans are also
+  indivisible: an all-waiting window can exceed its allowance without recording a unit. Do not infer a universal
+  deadline-plus-one-unit bound from the ready-job regression fixture.
 - Regressions: `ImpactTimingTest` (mandatory unload classification), `WorkSchedulerTest` (including a skipped early
   window), `UnitQueueTest` (one readiness/dependency check per continuation window), and GameTests
   `work_impact_schedule` (40/43/47 ms plus background on controlled clocks), `work_impact_debt` (real Ignition/Shatter
