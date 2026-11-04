@@ -85,7 +85,7 @@ public final class RuinFragmentCacheGameTests {
         var grid = ctx.cachedGridForTest(level, new ChunkPos(0, 0));
         long largest = 0;
         for (int dz = -1; dz <= 1; dz++) for (int dx = -1; dx <= 1; dx++)
-            largest = Math.max(largest, RuinPlan.fragmentBytes(grid.blast(dx, dz)));
+            largest = Math.max(largest, RuinFragmentCache.entryBytes(grid.blast(dx, dz)));
         var limit = RuinContext.class.getDeclaredField("fragmentCacheLimit"); limit.setAccessible(true); limit.setLong(ctx, largest);
         long baseline = RuinResults.bytes();
         var entered = new CountDownLatch(1); var release = new CountDownLatch(1);
@@ -94,18 +94,20 @@ public final class RuinFragmentCacheGameTests {
         var future = ctx.submitPlanWorker(level, grid, () -> {
             try {
                 Blast borrowed = grid.blast(0, 0);
+                var cache = cache(ctx);
+                if (cache.get(0, borrowed.stamp(), grid.blockDamage(), grid.treeFall()) != borrowed)
+                    throw new AssertionError("Borrowed entry was not cached before eviction");
                 int[] before = borrowed.removed().clone();
                 for (int dz = -1; dz <= 1; dz++) for (int dx = -1; dx <= 1; dx++)
                     if (dx != 0 || dz != 0) grid.blast(dx, dz);
-                var cache = cache(ctx);
-                if (cache.get(0, borrowed.stamp()) != null) throw new AssertionError("Fixture did not evict the borrowed centre");
+                if (cache.get(0, borrowed.stamp(), grid.blockDamage(), grid.treeFall()) != null) throw new AssertionError("Fixture did not evict the borrowed centre");
                 entered.countDown();
                 while (release.getCount() != 0) {
                     try { release.await(1, TimeUnit.SECONDS); }
                     catch (InterruptedException ignored) { /* Keep the actual borrowed reference alive after cancellation. */ }
                 }
                 if (!Arrays.equals(before, borrowed.removed())) throw new AssertionError("Eviction/cancel changed borrowed fracture data");
-                cache.put(0, borrowed); // A late producer may not reopen the closed cache.
+                cache.put(0, borrowed, grid.blockDamage(), grid.treeFall()); // A late producer may not reopen the closed cache.
                 if (cache.size() != 0) throw new AssertionError("Late publication reopened a closed cache");
                 return RuinPlan.EMPTY;
             } catch (Throwable error) { failure.set(error); throw error; }
@@ -143,9 +145,9 @@ public final class RuinFragmentCacheGameTests {
         long startup = RuinWorkers.threadBufferBytes(level.getHeight());
         long fixed = room - result - startup - (8L << 20);
         h.assertTrue(fixed > RuinResults.OWNER_BYTES, "No room for the held-pressure fixture");
-        var held = RuinResults.tryReserve(fixed - RuinResults.OWNER_BYTES, room);
+        var held = RuinResults.tryReserveCache(fixed - RuinResults.OWNER_BYTES, room);
         h.assertTrue(held != null, "Could not establish held producer pressure");
-        StrikeGameTests.afterTest(h, () -> { ctx.cancelTasks(); held.abortBeforeSubmit(); });
+        StrikeGameTests.afterTest(h, () -> { ctx.cancelTasks(); held.close(); });
         var future = ctx.submitPlanWorker(level, grid, () -> RuinPlanner.finish(grid, Collapse.solve(grid)), RuinWorkers.Priority.NEAR);
         h.assertTrue(future != null && ctx.fragmentCacheBytes() == 0, "Optional cache blocked the admitted uncached solver");
         h.succeedWhen(() -> {
@@ -154,9 +156,56 @@ public final class RuinFragmentCacheGameTests {
                 RuinPlan plan = ctx.takeWorker(future);
                 try { h.assertTrue(plan.changedBlocks() > 0, "Held-pressure solver produced no actual physical output"); }
                 finally { plan.discardResult(); }
-                h.assertTrue(ctx.fragmentCacheBytes() == 0 && RuinResults.bytes() == fixed,
+                h.assertTrue(ctx.fragmentCacheBytes() == 0 && held.bytes() == fixed && RuinResults.bytes() >= fixed,
                         "Cache allocated or pressure was refunded before real output completed");
             } catch (java.util.concurrent.ExecutionException | InterruptedException error) { throw new IllegalStateException(error); }
+        });
+    }
+
+    @GameTest(template = "pad", batch = "nuke_fragment_policy", timeoutTicks = 400, skyAccess = true)
+    public static void sameSnapshotCacheUsesCapturedDamageAndTreePolicy(GameTestHelper h) {
+        var level = h.getLevel();
+        var ctx = StructuralRuinGameTests.fixture(level, StructuralRuinGameTests.tree(30, true), 20);
+        var base = ctx.cachedGridForTest(level, new ChunkPos(0, 0));
+        var grids = new java.util.ArrayList<RuinContext.Grid>();
+        var references = new java.util.ArrayList<ReferenceCollapse>();
+        var expected = new java.util.ArrayList<RuinPlan>();
+        for (boolean[] flags : new boolean[][]{{true, true}, {false, true}, {true, false}, {true, true}}) {
+            var grid = new RuinContext.Grid(ctx, base.centre(), base.minY(), base.maxY(), base.shots(), base.view(),
+                    flags[0], flags[1], base.fires());
+            grids.add(grid);
+            references.add(ReferenceCollapse.solve(grid));
+            expected.add(RuinPlanner.finish(grid, Collapse.solve(grid)));
+        }
+        h.assertTrue(grids.getFirst().blast(0, 0).trees().size() == 1, "Policy fixture has no falling tree");
+        h.assertTrue(grids.get(1).blast(0, 0).removed().length == 0 && grids.get(1).blast(0, 0).trees().isEmpty(),
+                "Disabled damage is not a discriminating policy");
+        h.assertTrue(grids.get(2).blast(0, 0).trees().isEmpty(), "Disabled tree fall is not a discriminating policy");
+        StrikeGameTests.afterTest(h, ctx::cancelTasks);
+        var future = new AtomicReference<java.util.concurrent.Future<RuinPlan>>();
+        var actual = new AtomicReference<Collapse>();
+        int[] next = {0};
+        h.succeedWhen(() -> {
+            if (future.get() == null) {
+                var grid = grids.get(next[0]);
+                future.set(ctx.submitPlanWorker(level, grid, () -> {
+                    Collapse result = Collapse.solve(grid); actual.set(result);
+                    return RuinPlanner.finish(grid, result);
+                }, RuinWorkers.Priority.NEAR));
+                h.assertTrue(future.get() != null, "Policy solver not admitted");
+            }
+            h.assertTrue(RuinWorkers.finished(future.get()), "Policy solver still running");
+            try {
+                RuinPlan result = ctx.takeWorker(future.get());
+                try {
+                    RuinStorageGameTests.sameCollapse(h, references.get(next[0]), actual.get(), "Captured cache policy " + next[0]);
+                    h.assertTrue(expected.get(next[0]).differs(result) == null, "Cached policy changed complete material plan " + next[0]);
+                } finally { result.discardResult(); }
+            } catch (java.util.concurrent.ExecutionException | InterruptedException error) { throw new IllegalStateException(error); }
+            next[0]++;
+            future.set(null);
+            h.assertTrue(next[0] == grids.size(), "Policy sequence still running");
+            h.assertTrue(ctx.fragmentCacheBytes() > 0, "Policy test bypassed optional cache");
         });
     }
 
