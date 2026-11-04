@@ -129,6 +129,23 @@ public final class StructuralRuinGameTests {
         helper.succeed();
     }
 
+    @GameTest(template = "pad", timeoutTicks = 100, batch = "nuke_structure_branches", skyAccess = true)
+    public static void crownAtBranchEndBelongsToTheTree(GameTestHelper helper) {
+        Shape branched = (x, y, z) -> {
+            if (z == 8 && (x == 8 && y <= 75 || y == 75 && x >= 8 && x <= 12)) return Blocks.OAK_LOG.defaultBlockState();
+            if (x == 12 && z == 8 && y == 76) return Blocks.OAK_LEAVES.defaultBlockState();
+            return AIR;
+        };
+        var context = fixture(helper.getLevel(), branched, 20);
+        var g = context.cachedGridForTest(helper.getLevel(), new ChunkPos(0, 0));
+        var protectedGrid = new RuinContext.Grid(g.ctx(), g.centre(), g.minY(), g.maxY(), g.shots(), g.view(), true, false, g.fires());
+        var held = Collapse.solve(protectedGrid);
+        for (int x = 8; x <= 12; x++) helper.assertTrue(!held.isGone(x + 16, 75, 24), "Tree rule missed branch " + x);
+        var fallen = Collapse.solve(fixture(helper.getLevel(), branched, 20).cachedGridForTest(helper.getLevel(), new ChunkPos(0, 0)));
+        for (int x = 8; x <= 12; x++) helper.assertTrue(fallen.isGone(x + 16, 75, 24), "Whole-tree failure missed branch " + x);
+        helper.succeed();
+    }
+
     @GameTest(template = "pad", timeoutTicks = 100, batch = "nuke_structure_seam", skyAccess = true)
     public static void roofReleaseCrossesTheChunkSeam(GameTestHelper helper) {
         Shape original = hall(Blocks.STONE);

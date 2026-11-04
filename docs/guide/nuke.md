@@ -82,9 +82,14 @@ The siren warns players near the target. The flash comes first; the fireball ris
 Then the wave reaches the ground around it, breaking buildings and throwing up dust. The sound reaches you with the wave.
 Fires and thick dust can make the area hard to see through long after the strike.
 
-Timber beams and columns can break under the wave even without leaves. Straight tree trunks with crowns above
-24 blocks can also topple. A stone roof fragment fully separated from its former supports is removed when
-the local ruin calculation can resolve the whole fragment. Untouched floating builds stay as they were.
+Walls, floors, columns and timber respond to their shape, material, pressure and the duration of the blast.
+Tall and branched trees can topple too. When the strike cuts a structure's last support, the support check
+continues across chunk borders. Untouched floating builds stay as they were.
+
+Broken structural blocks fall and drift before settling on actual support. Coarse rubble keeps its block type;
+containers retain their contents. Loose piles spread into lower neighbouring spaces. Material still travelling
+is saved with the world, so leaving and returning does not erase it. Leaves become dispersed organic debris.
+These are reduced block-scale rules: joint properties, drag and the pile's repose angle are estimates.
 
 With the default ground burst, the dust column joins the mushroom cap. With an explicitly selected air burst
 at the standard burst height, the column starts rising later, with a billowing upper edge, and stays below the

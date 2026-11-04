@@ -35,7 +35,7 @@ paths:
   snapshots — section palettes, heightmaps and sky sources copied on the server thread or read from disk
   (`DiskShots`); a snapshot stays valid while chunk blocks match: section fingerprints, a lamp darkened by blackout
   remains the same lamp; fractures and plans remember their source snapshot IDs). Thus `Blast`, `Collapse` and
-  `RuinPlanner.finish` (fires, light, rubble, trunks, heightmaps, section deltas) run on background `RuinWorkers`
+  `RuinPlanner.finish` (fires, light, material sources, heightmaps, section deltas) run on background `RuinWorkers`
   threads (priority queue, `RuinWorkers.Priority`: player-visible chunks in the ruin queue, then other queued ruins
   and preparation of in-memory chunks, then distant disk plans and far LODs; a priority's task limit includes higher
   priorities: distant work keeps the pool full while the wave travels; the ruin queue promotes a chunk's queued
@@ -72,7 +72,7 @@ paths:
   traversal); structures already without visible support before the strike (beyond 8) cascade from broken blocks,
   natural ground arches and overhangs stand; leaves without trunks fall; small water bodies (up to 4096 positions and
   16 wide) with breached bottoms drain; attached blocks (doors, torches, signs) follow their support, liquids beside a
-  breach tick; where 3 or more blocks collapsed (outside the fireball), rubble forms; light ignites/burns; all
+  breach tick; removed structural material transfers to `RuinMatter`; light ignites/burns; all
   randomness comes from coordinate hashes; chunk ruins wait for ready chunks within `RuinPlanner.REACH` = 2),
   `RuinPlan` (delta only: 4 bytes per position, fires; heightmaps, lower sky sources of changed columns and light-check
   positions are calculated in the plan; on replacement, write plan positions and fire directly into sections, install
@@ -229,17 +229,34 @@ paths:
   (`RuinContext.applied`).
 
 ## Pitfalls
-- Nuclear timber members use ordinary pressure fracture; the log tag is not immunity. Recognized rooted
-  vertical trunks use the whole-tree path first, scanning through the snapshot's actual world height rather
-  than stopping at 24 blocks. Recognition precedes the load/config check: surviving trunks stay out of
-  per-block fracture in every breach round, including when `nukeTreeFall` is disabled. Untagged hard breakable blocks use the existing strongest nuclear proxy;
-  this fallback does not alter conventional weapons' `BlockResponse.of` table.
-- `Collapse.detached` reconciles closed bearing components after the short-span solve. It compares original
-  connectivity to real anchors with the surviving component, reusing the span solver's buffers. An already
-  floating component stays unchanged; a newly detached stone slab does not survive because both support
-  distances saturated. Unknown horizontal boundaries are unresolved, not anchors: this local pass does not
-  solve arbitrary bridges/components extending outside the snapshot window. Full boundary continuation and
-  conserved, staged material deposition are still absent. Regression batches: `nuke_structure_*`.
+- Nuclear timber members use ordinary pressure fracture; the log tag is not immunity. Rooted connected log
+  components with a neighbouring crown use the tree path first, including branches and the full snapshot height.
+  Below the whole-tree load, or with tree fall disabled, those logs do not leak into ordinary timber fracture.
+  Breakable blocks above the legacy hardness table use the strongest nuclear proxy; conventional response is unchanged.
+- `StructuralResponse` is the exact elastic SDOF response to a triangular pulse, including post-pulse motion.
+  `Blast` uses physical positive-phase duration, actual collision volume, the existing `penetration` data map's
+  represented thickness, and inferred span. Legacy pressure thresholds remain estimated long-pulse capacities;
+  `structural_material` supplies density and estimated connection displacement/span. This is not a calibrated
+  finite-element model. Reloading tags or block data maps invalidates the snapshot property table.
+- `Collapse.detached` compares original contact connectivity with surviving components inside its window.
+  Pre-existing detached builds remain untouched. Actual removed support faces seed `RuinSupport`: a resumable
+  contact graph across ready chunks, continuing to a protected block/world floor or a completely enumerated
+  detached component. Unknown faces wait behind a separate non-ticking material ticket, never become anchors.
+  State changes/new contacts invalidate the component before release. Source expansion, search, validation and
+  release run in bounded batches under the nuclear work clock; no fixed bridge length declares equilibrium.
+- `RuinMatter` (`incoming_ruin_matter` SavedData) owns material after successful source removal. Capture live
+  states and block-entity contents before writing; never resurrect flash-consumed blocks. Handoff IDs prevent
+  repeated release of the same records. Original block state, represented solid volume/mass, trajectory/time,
+  pending support sources and cold contact faces survive clean save/reload. Per-type and aggregate balances:
+  released = deposited + dispersed foliage + pending. Cosmetic particles own no additional mass.
+- Coarse transport integrates gravity and triangular dynamic-pressure drag relative to the air, with adaptive
+  half-metre substeps. It never advances beyond elapsed game time. Settlement uses the same block type and saved
+  contents; logs rotate horizontally, waterlogging follows destination water. A one-block coarse repose step is
+  an estimate, not measured universal friction. Fire/plants do not trap material above an otherwise valid floor.
+  No decorative 12%/four-block cap remains. Outside-height material stays in a saved dormant reservoir without
+  acquiring chunks or consuming repeated work. Unloaded destinations remain pending, not discarded.
+  These are normal-save invariants, not an atomic transaction across region files and SavedData under power loss.
+  Regression batches: `nuke_structure_*`, `nuke_material*`; numeric response: `StructuralResponseTest`.
 - `RuinSettle` settles the entire saved ruin zone after its wave, including `NuclearEvents.past` from old saves,
   without players or LOD clients. Scan final-block disk chunks (`DiskStatus.blocksFinal`), skip absent/PARTIAL ones;
   old FINAL/retrogen chunks may need vanilla's asynchronous upgrade generation. Load through `AreaLoader` with

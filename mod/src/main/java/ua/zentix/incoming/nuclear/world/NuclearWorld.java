@@ -348,6 +348,7 @@ public final class NuclearWorld {
 
     /** Cancel: queues stopped (destruction not restored). */
     public void clear(ServerLevel level) {
+        RuinMatter.get(level).unload(level);
         // preparation before FarLods: copies return claimed requests there, to be removed with its queues
         settle.clear(level);
         prep.clear(level, scars);
@@ -439,6 +440,7 @@ public final class NuclearWorld {
         long scarStart = System.nanoTime();
         lastCraterNanos = scarStart - craterStart;
         scars.work(level, now, clock);
+        RuinMatter.get(level).work(level, clock);
         long scorchStart = System.nanoTime();
         lastScarNanos = scorchStart - scarStart;
         // ground light after wave-reached ruins using their remaining budget: when front crosses

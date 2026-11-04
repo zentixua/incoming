@@ -73,6 +73,11 @@ public record BlockResponse(float thresholdPsi, Kind kind) {
         if (e.getUpdateCause() == TagsUpdatedEvent.UpdateCause.SERVER_DATA_LOAD) clearCache();
     }
 
+    public static void onDataMapsUpdated(net.neoforged.neoforge.registries.datamaps.DataMapsUpdatedEvent event) {
+        if (event.getCause() == net.neoforged.neoforge.registries.datamaps.DataMapsUpdatedEvent.UpdateCause.SERVER_RELOAD
+                && event.getRegistryKey() == net.minecraft.core.registries.Registries.BLOCK) clearCache();
+    }
+
     public boolean breaksAt(double psi, int jitterSeed) {
         if (thresholdPsi == NEVER) return false;
         // ±15%: neighboring identical blocks do not break along a ruler-straight line
