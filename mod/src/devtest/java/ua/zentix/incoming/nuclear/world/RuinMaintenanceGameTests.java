@@ -59,28 +59,10 @@ public final class RuinMaintenanceGameTests {
         h.assertTrue(source.skip() == null, "Actual source was not readable");
 
         // Install the already-handed-off boundary, without a synthetic empty source or I/O failure.
-        var prep = world.prep();
-        var type = Class.forName(NuclearPrep.class.getName() + "$Prep");
-        var constructor = type.getDeclaredConstructor(int.class, long.class, LongConsumer.class);
-        constructor.setAccessible(true);
-        AtomicLong readBytes = (AtomicLong) field(prep, "readBytes").get(prep);
-        Object request = constructor.newInstance(190001, level.getGameTime(), (LongConsumer) readBytes::addAndGet);
-        field(request, "geometry").set(request, d);
-        field(request, "detonation").setInt(request, d.id());
-        field(request, "handedOff").setLong(request, level.getGameTime());
-        field(request, "ruins").set(request, ctx);
-        field(request, "archiveWritten").setBoolean(request, true);
-        field(request, "nextZoneReport").setLong(request, Long.MAX_VALUE);
-        var plans = (RetainedPlans) field(request, "plans").get(request);
-        plans.put(centre.toLong(), RuinPlan.EMPTY); // Keeps the valid preparation owner alive.
-        ((Map<Integer, RetainedPlans>) field(world.scars(), "prepared").get(world.scars())).put(d.id(), plans);
-        ((List<Object>) field(prep, "preps").get(prep)).add(request);
-        var replyType = Class.forName(NuclearPrep.class.getName() + "$ArchivedShot");
-        var replyConstructor = replyType.getDeclaredConstructor(long.class, Optional.class, DiskShots.Read.class);
-        replyConstructor.setAccessible(true);
-        var inbox = (RuinInbox<Object>) field(request, "archived").get(request);
-        inbox.expect().accept(replyConstructor.newInstance(centre.toLong(), Optional.empty(), source));
-        long reserved = readBytes.get();
+        var completed = completedSource(level, ctx, source);
+        var inbox = completed.inbox();
+        var readBytes = completed.charged();
+        long reserved = completed.reserved();
         h.assertTrue(ctx.publicationBytes(source, Optional.empty()) < reserved,
                 "Fixture must shrink an already-owned source, not require an external refund");
 
@@ -97,12 +79,47 @@ public final class RuinMaintenanceGameTests {
                             + ", pending=" + inbox.pending() + ", material=" + matter.pending());
             h.assertTrue(readBytes.get() < reserved, "Consumed source reservation was not released");
             h.assertTrue(ctx.shotCount() > 0, "Completed source did not publish its actual snapshot");
+            h.assertTrue(ctx.shot(level, centre.x, centre.z).get(at.getX() & 15, at.getY(), at.getZ() & 15).is(Blocks.GLASS),
+                    "Completed source changed the actual glass snapshot");
             h.assertTrue(NuclearPrep.residentMemory(level) <= NuclearPrep.PLANS_CAP,
                     "Maintenance exceeded the unchanged shared ownership cap");
             Incoming.LOG.info("MAINTENANCE completed source with material remaining {}, reserved {}, baseline {}, resident {}",
                     matter.pending(), reserved, baseline, NuclearPrep.residentMemory(level));
             h.succeed();
         });
+    }
+
+    record Completion(RuinInbox<Object> inbox, AtomicLong charged, long reserved) {}
+
+    @SuppressWarnings("unchecked")
+    static Completion completedSource(net.minecraft.server.level.ServerLevel level, RuinContext ctx, DiskShots.Read source)
+            throws ReflectiveOperationException {
+        var world = NuclearWorld.get(level);
+        var d = ctx.d;
+        var centre = source.pos();
+        var prep = world.prep();
+        var type = Class.forName(NuclearPrep.class.getName() + "$Prep");
+        var constructor = type.getDeclaredConstructor(int.class, long.class, LongConsumer.class);
+        constructor.setAccessible(true);
+        AtomicLong readBytes = (AtomicLong) field(prep, "readBytes").get(prep);
+        Object request = constructor.newInstance(190001, level.getGameTime(), (LongConsumer) readBytes::addAndGet);
+        field(request, "geometry").set(request, d);
+        field(request, "detonation").setInt(request, d.id());
+        field(request, "handedOff").setLong(request, level.getGameTime());
+        field(request, "ruins").set(request, ctx);
+        field(request, "archiveWritten").setBoolean(request, true);
+        field(request, "nextZoneReport").setLong(request, Long.MAX_VALUE);
+        var plans = (RetainedPlans) field(request, "plans").get(request);
+        plans.put(centre.toLong(), RuinPlan.EMPTY); // Keeps the valid preparation owner alive.
+        ((Map<Integer, RetainedPlans>) field(world.scars(), "prepared").get(world.scars())).putIfAbsent(d.id(), plans);
+        ((List<Object>) field(prep, "preps").get(prep)).add(request);
+        var replyType = Class.forName(NuclearPrep.class.getName() + "$ArchivedShot");
+        var replyConstructor = replyType.getDeclaredConstructor(long.class, Optional.class, DiskShots.Read.class);
+        replyConstructor.setAccessible(true);
+        var inbox = (RuinInbox<Object>) field(request, "archived").get(request);
+        inbox.expect().accept(replyConstructor.newInstance(centre.toLong(), Optional.empty(), source));
+        long reserved = readBytes.get();
+        return new Completion(inbox, readBytes, reserved);
     }
 
     private static Field field(Object owner, String name) throws NoSuchFieldException {

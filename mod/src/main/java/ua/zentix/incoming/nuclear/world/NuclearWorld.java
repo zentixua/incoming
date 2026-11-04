@@ -51,6 +51,8 @@ public final class NuclearWorld {
     private final LateExposure late = new LateExposure();
     private final BlastFront blast = new BlastFront();
     private boolean reclaimTurn;
+    private int reclaimNext;
+    final RuinContext.Assembly assembly = new RuinContext.Assembly();
     private long lastFrontNanos, lastPulseNanos, lastScorchNanos, lastCraterNanos, lastScarNanos, lastPrepNanos, lastFalloutNanos, lastSettleNanos;
     /**
      * Chunks loaded since with flash-layer fire from forgotten detonation (no ruins coming): schedule fire ticks on world tick
@@ -434,6 +436,33 @@ public final class NuclearWorld {
         }
     }
 
+    /** Bounded completion/cache service survives preparation expiry and rotates across active owners. */
+    private void reclaim(ServerLevel level, WorkClock clock) {
+        int slots = ruins.size() + 1;
+        for (int checked = 0; checked < slots && clock.canStart(); checked++) {
+            int slot = Math.floorMod(reclaimNext++, slots);
+            if (slot == 0) {
+                if (prep.reclaim(level, clock)) return;
+                continue;
+            }
+            var contexts = ruins.values().iterator();
+            for (int i = 1; i < slot; i++) contexts.next();
+            RuinContext ctx = contexts.next();
+            if (ctx.readyWindowReads()) {
+                long began = clock.begin();
+                try { ctx.drainWindowReads(level); }
+                finally { clock.end(began); }
+                return;
+            }
+            if (ctx.shotBytes() > (64L << 20)
+                    || NuclearPrep.PLANS_CAP - NuclearPrep.residentMemory(level) < RuinMemory.TRANSITION_ROOM) {
+                if (ctx.shotCount() == 0) continue;
+                ctx.trimShots(8L << 20, clock, 16);
+                return;
+            }
+        }
+    }
+
     /** @param clock server-tick budget, shared across dimensions (already started) */
     public void tick(ServerLevel level, WorkClock clock) {
         get(level);
@@ -497,7 +526,7 @@ public final class NuclearWorld {
         // Ready input/results and spill receipts can free the memory these consumers need.
         // They cannot wait behind an arbitrarily long material queue. Alternate the first
         // opportunity while both owners have work, without granting another clock allowance.
-        if (!matter.busy() || (reclaimTurn = !reclaimTurn)) prep.reclaim(level, clock);
+        if (!matter.busy() || (reclaimTurn = !reclaimTurn)) reclaim(level, clock);
         matter.work(level, clock, 1);
         long craterStart = System.nanoTime();
         digCraters(level, events, clock);

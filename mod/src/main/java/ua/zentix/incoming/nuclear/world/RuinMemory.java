@@ -46,7 +46,7 @@ final class RuinMemory {
     static long sourceReadRoom(ServerLevel level) {
         int height = level.getHeight();
         for (ServerLevel other : level.getServer().getAllLevels()) height = Math.max(height, other.getHeight());
-        return NuclearPrep.PLANS_CAP - NuclearPrep.residentMemory(level) - RuinWorkers.threadBufferBytes(height);
+        return NuclearPrep.PLANS_CAP - NuclearPrep.residentMemory(level) - RuinWorkers.startupBytes(height);
     }
 
     static final class Reservation implements AutoCloseable {

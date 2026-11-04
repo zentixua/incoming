@@ -225,7 +225,7 @@ public final class NuclearPrep {
         /** Times ready square not released because neighbor-waiting chunks lack holds (whole detonation). */
         long diagRefused;
         long nextIoReport;
-        final RetainedPlans plans = new RetainedPlans();
+        RetainedPlans plans = new RetainedPlans();
         /** All-chunk ruins (neighbor fractures): transferred to detonation with plans. */
         @Nullable
         RuinContext ruins;
@@ -589,13 +589,13 @@ public final class NuclearPrep {
      * Rotate sources, completed solvers and cache receipts: a memory-blocked head must not prevent
      * the reclamation that funds it. This never opens fresh reads or admits another solver.
      */
-    void reclaim(ServerLevel level, WorkClock shared) {
-        int slots = preps.size() * 4;
+    boolean reclaim(ServerLevel level, WorkClock shared) {
+        int slots = preps.size() * 3;
         for (int checked = 0; checked < slots && shared.canStart(); checked++) {
             int slot = Math.floorMod(reclaimNext++, slots);
-            Prep p = preps.get(slot / 4);
+            Prep p = preps.get(slot / 3);
             if (p.draining || p.detonation < 0 || p.ruins == null) continue;
-            switch (slot % 4) {
+            switch (slot % 3) {
                 case 0 -> {
                     ArchivedShot head = p.archived.peek();
                     if (head == null) continue;
@@ -621,14 +621,11 @@ public final class NuclearPrep {
                     try { collectFar(level, p, ready); }
                     finally { shared.end(began); }
                 }
-                default -> {
-                    if (p.ruins.shotBytes() <= shotCacheLimit) continue;
-                    // A small receipt/cache batch, rather than a walk of every pinned city snapshot.
-                    p.ruins.trimShots(8L << 20, shared, 16);
-                }
+                default -> throw new AssertionError("Unknown completion lane");
             }
-            return;
+            return true;
         }
+        return false;
     }
 
     /**
@@ -654,6 +651,7 @@ public final class NuclearPrep {
             Prep p = it.next();
             try {
                 if (p.draining) {
+                    transferRemaining(p, scars);
                     discardPreparation(p);
                     p.lods.clear(level);
                     // before detonation preparation tasks not handed off: abandon
@@ -792,7 +790,7 @@ public final class NuclearPrep {
                             level.getServer().getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT))
                             .resolve("data/incoming-preparation/" + p.archivePath);
             p.plans.spill(new RuinPages(info, root.resolve("plans-v" + RuinPlan.STORAGE_VERSION)),
-                    p.ruins, p.accounting, () -> Math.max(0, PLANS_CAP - memory(level)));
+                    p.ruins, p.accounting, () -> Math.max(0, PLANS_CAP - memory(level)), () -> storageRoom(level));
             p.ruins.archive(new RuinSnapshots(new RuinPages(info, root.resolve("shots")), p.accounting,
                     () -> storageRoom(level)));
         }
@@ -925,7 +923,7 @@ public final class NuclearPrep {
                 level.getServer().getWorldData().getLevelName(), level.dimension(), "incoming_preparation");
         ctx.restoredPlans = new RetainedPlans();
         ctx.restoredPlans.spill(new RuinPages(info, root.resolve("plans-v" + RuinPlan.STORAGE_VERSION)), ctx, readBytes::addAndGet,
-                () -> Math.max(0, PLANS_CAP - memory(level)));
+                () -> Math.max(0, PLANS_CAP - memory(level)), () -> storageRoom(level));
         ctx.restoredPlans.discover();
         ctx.archive(new RuinSnapshots(new RuinPages(info, root.resolve("shots")), readBytes::addAndGet,
                 () -> storageRoom(level)));
@@ -1163,7 +1161,7 @@ public final class NuclearPrep {
         }
         // Bounded read-ahead follows solver admission. Otherwise the reader can sweep the whole
         // zone while LRU trimming evicts the still-unplanned first window and planning never resumes.
-        if (p.nextFar < p.order.length) p.ruins.pinWindow(p.order[p.nextFar]);
+        if (p.nextFar < p.order.length && !p.ruins.pinWindow(p.order[p.nextFar])) return;
         p.nextRead = Math.max(p.nextRead, p.nextFar); // Earlier centres already have a task/plan or were excluded.
         int readEnd = (int) Math.min(p.order.length, (long) p.nextFar + RuinWorkers.capacity());
         while (p.nextRead < readEnd && p.reading.size() < READS && memory(level) + READ_BYTES <= WINDOW_CAP) {
@@ -1199,7 +1197,7 @@ public final class NuclearPrep {
         p.plans.prefetch(p.order, p.nextFar);
         while (p.nextFar < p.order.length && !p.capped && clock.canStart() && shared.canStart()) {
             long c = p.order[p.nextFar];
-            p.ruins.pinWindow(c);
+            if (!p.ruins.pinWindow(c)) break;
             if (!p.plans.containsKey(c) && !p.ruins.running(c) && p.ruins.doneAt(c) < 0 && readyChunk(level, c) == null) {
                 long restoreUnit = shared.begin();
                 int restored;
@@ -2020,6 +2018,22 @@ public final class NuclearPrep {
             if (t.state == TileState.LOADING || t.state == TileState.READY) t.release(level, p.strike);
         }
         p.tiles.clear();
+    }
+
+    /** Retire the collector without abandoning shared results or the still-needed page owner. */
+    private static void transferRemaining(Prep p, ScarQueue scars) {
+        if (p.detonation < 0 || p.ruins == null) return;
+        if (p.ruins.restoredPlans == null || p.ruins.restoredPlans == p.plans) {
+            // Install the counted consumer before removing preparation's reference/charge.
+            p.ruins.restoredPlans = p.plans;
+            p.plans.discover();
+            p.plans = new RetainedPlans();
+        }
+        for (long key : p.farRunning) if (!scars.queued(key)) p.ruins.retireUnclaimed(key);
+        for (long key : p.submitted) if (!scars.queued(key)) p.ruins.retireUnclaimed(key);
+        p.farRunning.clear();
+        p.submitted.clear();
+        if (p.nextFar < p.order.length) p.ruins.unpinWindow(p.order[p.nextFar]);
     }
 
     /** Release unused asynchronous ownership; detached late reads cannot refill a cancelled preparation. */

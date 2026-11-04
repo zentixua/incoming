@@ -61,6 +61,7 @@ final class RuinContext {
      */
     RuinContext(net.minecraft.server.level.ServerLevel level, Detonation d) {
         this.d = d;
+        this.assembly = NuclearWorld.get(level.getServer().overworld()).assembly;
         this.eventId = d.id();
         this.noise = new ua.zentix.incoming.nuclear.model.WorldNoise(level.getSeed(), d.scale());
         this.ruinRadius = d.ruinRadius();
@@ -223,7 +224,8 @@ final class RuinContext {
             // unflash can restore a formerly empty section; only touched sections need the palette-growth bound.
             boolean edit = flash != null ? flash.touches(i) : unfire && !sections[i].hasOnlyAir();
             if (edit) bytes += editableSectionBytes();
-            else bytes += ChunkShot.sectionBytes(sections[i].hasOnlyAir() ? null : sections[i].getStates(), ruined);
+            else bytes += ChunkShot.sectionBytes(sections[i].hasOnlyAir() ? null : sections[i].getStates(),
+                    ruined && a.plan() != null && a.plan().touches(i));
         }
         return bytes;
     }
@@ -264,7 +266,7 @@ final class RuinContext {
         for (int i = 0; i < read.states().length; i++) {
             var section = read.states()[i];
             if (flash != null && flash.touches(i) || unfire && section != null) bytes += editableSectionBytes();
-            else bytes += ChunkShot.sectionBytes(section, ruined);
+            else bytes += ChunkShot.sectionBytes(section, ruined && a.plan() != null && a.plan().touches(i));
         }
         // Priming/cloning and motion extraction can overlap publication; height tile bound follows the section domain.
         return bytes + (heights.containsKey(read.pos().toLong()) ? 0 : heightTileBound(read.states().length * 16))
@@ -296,6 +298,7 @@ final class RuinContext {
     private final LongOpenHashSet reading = new LongOpenHashSet();
     /** Windows assembling snapshots, awaiting worker admission, or rebuilding on the server thread. */
     private final LongOpenHashSet pendingWindows = new LongOpenHashSet();
+    private final Assembly assembly;
     private static final long WINDOW_READ_BYTES = 4L << 20;
     private static final int WINDOW_READ_LIMIT = 32;
     private record WindowRead(long key, @Nullable DiskShots.Read disk,
@@ -327,8 +330,8 @@ final class RuinContext {
 
     /** Same, parse read neighbors at ruin-pool {@code priority}. */
     int requestWindow(ServerLevel level, ChunkPos pos, RuinWorkers.Priority priority) {
-        pendingWindows.add(pos.toLong());
         drainWindowReads(level);
+        if (!pinWindow(pos.toLong(), priority)) return 1;
         int missing = 0;
         for (int dz = -RuinPlanner.REACH; dz <= RuinPlanner.REACH; dz++) {
             for (int dx = -RuinPlanner.REACH; dx <= RuinPlanner.REACH; dx++) {
@@ -351,8 +354,47 @@ final class RuinContext {
     }
 
     /** Unadmitted far demand must survive re-readable snapshot cache trimming. */
-    void pinWindow(long centre) { pendingWindows.add(centre); }
-    void unpinWindow(long centre) { pendingWindows.remove(centre); }
+    boolean pinWindow(long centre) { return pinWindow(centre, RuinWorkers.Priority.FAR); }
+
+    /** One assembling window server-wide; deferred demands retain only their queue key. */
+    private boolean pinWindow(long centre, RuinWorkers.Priority priority) {
+        if (!assembly.claim(this, centre, priority)) return false;
+        pendingWindows.add(centre);
+        return true;
+    }
+
+    void unpinWindow(long centre) {
+        pendingWindows.remove(centre);
+        assembly.release(this, centre);
+    }
+
+    /** Server-thread state owned by the overworld attachment; no world reference or static lifetime. */
+    static final class Assembly {
+        private RuinContext owner;
+        private long centre;
+        private RuinWorkers.Priority priority;
+
+        boolean claim(RuinContext next, long key, RuinWorkers.Priority requested) {
+            if (owner != null) {
+                if (owner == next && centre == key) {
+                    if (requested.compareTo(priority) < 0) priority = requested;
+                    return true;
+                }
+                if (requested.compareTo(priority) >= 0) return false;
+                owner.pendingWindows.remove(centre);
+            }
+            owner = next;
+            centre = key;
+            priority = requested;
+            return true;
+        }
+
+        void release(RuinContext context, long key) {
+            if (owner == context && centre == key) owner = null;
+        }
+
+        void release(RuinContext context) { if (owner == context) owner = null; }
+    }
 
     /** Pending source ownership survives a todo being overtaken by another planner. */
     int pendingWindowReads() { return reads.pending(); }
@@ -486,7 +528,7 @@ final class RuinContext {
      * If later planned (post-wave ruin queue), snapshots retaken.
      */
     void noPlan(long chunk) {
-        pendingWindows.remove(chunk);
+        unpinWindow(chunk);
         if (planned.add(chunk)) {
             ChunkPos pos = new ChunkPos(chunk);
             forget(pos, 1, planned, this::retireBlast);
@@ -817,7 +859,7 @@ final class RuinContext {
      * false one fracture computed.
      */
     boolean blastsReady(ServerLevel level, ChunkPos pos) {
-        pendingWindows.add(pos.toLong());
+        if (!pinWindow(pos.toLong(), RuinWorkers.Priority.NEAR)) return false;
         Grid g = grid(level, pos, false);
         if (g == null) return false;
         for (int k = 0; k < 9; k++) {
@@ -880,6 +922,7 @@ final class RuinContext {
         // running and ready-uncollected tasks bounded: ready plan retains memory. Player-visible tasks use only
         // their priority capacity: tasks preparation handed to detonation do not block them
         if (!RuinWorkers.admit(priority) || priority != RuinWorkers.Priority.SEEN && tasks.size() >= 2 * RuinWorkers.capacity()) return false;
+        if (!pinWindow(key, priority)) return false;
         Grid g = grid(level, pos, true);
         if (g == null) return false;
         if (g.at(0, 0) == null) throw new IllegalStateException("no snapshot of chunk " + pos);
@@ -892,7 +935,7 @@ final class RuinContext {
         if (future == null) return false;
         tasks.put(key, new Task(future, chunkId, level.getGameTime(), priority));
         failed.remove(key);
-        pendingWindows.remove(key);
+        unpinWindow(key);
         return true;
     }
 
@@ -908,7 +951,7 @@ final class RuinContext {
         int height = level.getHeight();
         for (ServerLevel other : level.getServer().getAllLevels()) height = Math.max(height, other.getHeight());
         // A queued output permit must still leave enough shared room to start a solver after idle expiry.
-        long room = NuclearPrep.PLANS_CAP - NuclearPrep.residentMemory(level) - RuinWorkers.threadBufferBytes(height);
+        long room = NuclearPrep.PLANS_CAP - NuclearPrep.residentMemory(level) - RuinWorkers.startupBytes(height);
         RuinResults.Lease owner = RuinResults.tryReserve(RuinPlan.maxResultBytes(grid), RuinPlan.maxFragmentBytes(grid), room);
         if (owner == null) return null;
         try {
@@ -920,6 +963,7 @@ final class RuinContext {
             }, priority, inputs, owner::actualExit);
             owner.bindFuture(future);
             resultOwners.put(future, owner);
+            unpinWindow(grid.centre().toLong());
             return future;
         } catch (RuntimeException | Error failure) {
             owner.abortBeforeSubmit();
@@ -1004,7 +1048,7 @@ final class RuinContext {
     void retry(long chunk) {
         planned.remove(chunk);
         doneAt.remove(chunk);
-        pendingWindows.add(chunk);
+        unpinWindow(chunk);
     }
 
     /**
@@ -1081,9 +1125,16 @@ final class RuinContext {
         return plan;
     }
 
+    /** Its preparation collector disappeared; a scar job, if present, remains the consumer. */
+    void retireUnclaimed(long key) {
+        Task task = tasks.remove(key);
+        if (task != null) cancelWorker(task.future, true);
+        unpinWindow(key);
+    }
+
     /** Chunk unloaded: live-chunk background plan/snapshot invalid (disk-snapshot plan remains valid). */
     void forget(long chunk) {
-        pendingWindows.remove(chunk);
+        unpinWindow(chunk);
         Task t = tasks.get(chunk);
         if (t != null && t.chunkId != 0) {
             tasks.remove(chunk);
@@ -1094,6 +1145,7 @@ final class RuinContext {
 
     /** A new owner will request current windows; old callbacks retain reservations until they finish. */
     void retireWindowReads() {
+        assembly.release(this);
         pendingWindows.clear();
         reads.invalidate();
         reading.clear();
@@ -1116,7 +1168,7 @@ final class RuinContext {
 
     /** Chunk plan built: release fractures needed only by surrounding plans. */
     void planned(ChunkPos pos) {
-        pendingWindows.remove(pos.toLong());
+        unpinWindow(pos.toLong());
         planned.add(pos.toLong());
         forget(pos, 1, planned, this::retireBlast);
         forget(pos, RuinPlanner.REACH, planned, this::retireShot);
@@ -1133,7 +1185,7 @@ final class RuinContext {
 
     /** Empty plans also complete their neighbors' old-world retention window. */
     void finished(ChunkPos pos) {
-        pendingWindows.remove(pos.toLong());
+        unpinWindow(pos.toLong());
         planned.add(pos.toLong());
         stood.add(pos.toLong());
         forget(pos, 1, stood, this::retireBlast);

@@ -14,6 +14,7 @@ final class RetainedPlans extends Long2ObjectOpenHashMap<RuinPlan> {
             new it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<>();
     private transient java.util.function.LongConsumer accounting = n -> {};
     private transient java.util.function.LongSupplier room = () -> Long.MAX_VALUE;
+    private transient java.util.function.LongSupplier demandRoom = () -> Long.MAX_VALUE;
     private static final long READ_BYTES = 4L << 20;
     private static final int IO_LIMIT = 64, READ_LIMIT = 16;
     private final long residentTarget;
@@ -42,10 +43,17 @@ final class RetainedPlans extends Long2ObjectOpenHashMap<RuinPlan> {
     private record Write(RuinPlan plan, java.util.concurrent.CompletableFuture<Void> receipt) {}
 
     void spill(RuinPages store, RuinContext ctx, java.util.function.LongConsumer charge, java.util.function.LongSupplier headroom) {
+        spill(store, ctx, charge, headroom, headroom);
+    }
+
+    /** Existing consumer work needs resident space, not the reserve for future speculative solvers. */
+    void spill(RuinPages store, RuinContext ctx, java.util.function.LongConsumer charge,
+               java.util.function.LongSupplier headroom, java.util.function.LongSupplier consumerRoom) {
         pages = store;
         context = ctx;
         accounting = charge;
         room = headroom;
+        demandRoom = consumerRoom;
     }
 
     int pendingWrites() { return writes.size() + toWrite.size(); }
@@ -101,14 +109,16 @@ final class RetainedPlans extends Long2ObjectOpenHashMap<RuinPlan> {
     }
 
     /** Restart walk: 0 pending, 1 restored, -1 no compatible stored plan. One cursor, no whole-zone scan. */
-    int probe(long key) {
+    int probe(long key) { return probe(key, false); }
+
+    private int probe(long key, boolean demand) {
         if (pages == null || key == lastMiss || misses.contains(key)) return -1;
         Boolean existed = pages.existing();
         if (existed == null) return 0;
         if (!existed) return -1;
         if (super.containsKey(key)) return 1;
-        if (!reads.containsKey(key) && (reads.size() >= READ_LIMIT || room.getAsLong() < READ_BYTES)) return 0;
-        RuinPlan plan = load(key);
+        if (!reads.containsKey(key) && (reads.size() >= READ_LIMIT || available(demand) < READ_BYTES + 48)) return 0;
+        RuinPlan plan = load(key, demand);
         if (plan != null) return 1;
         if (reads.containsKey(key)) return 0;
         lastMiss = key;
@@ -130,9 +140,9 @@ final class RetainedPlans extends Long2ObjectOpenHashMap<RuinPlan> {
         if (pages == null) return null;
         if (!super.containsKey(key)) {
             if (!discover) return null;
-            return probe(key) > 0 ? super.get(key) : null;
+            return probe(key, true) > 0 ? super.get(key) : null;
         }
-        return load(key);
+        return load(key, true);
     }
 
     /** Bounded restart read-ahead; collecting the results still consumes the normal planning units. */
@@ -149,27 +159,40 @@ final class RetainedPlans extends Long2ObjectOpenHashMap<RuinPlan> {
         for (int i = from; i < Math.min(order.length, from + READ_LIMIT); i++) {
             long key = order[i];
             if (key == lastMiss || super.containsKey(key) || reads.containsKey(key)) continue;
-            if (reads.size() >= READ_LIMIT || room.getAsLong() < READ_BYTES) break;
+            if (reads.size() >= READ_LIMIT || room.getAsLong() < READ_BYTES + 48) break;
             accounting.accept(READ_BYTES);
             reads.put(key, pages.read(key));
         }
     }
 
-    private RuinPlan load(long key) {
+    private long available(boolean demand) { return (demand ? demandRoom : room).getAsLong(); }
+
+    private RuinPlan load(long key, boolean demand) {
         var read = reads.get(key);
         if (read == null) {
-            if (reads.size() >= READ_LIMIT || room.getAsLong() < READ_BYTES) return null;
+            if (reads.size() >= READ_LIMIT || available(demand) < READ_BYTES + 48) return null;
             accounting.accept(READ_BYTES);
             read = pages.read(key);
             reads.put(key, read);
         }
-        demanded.add(key);
+        if (demand) demanded.add(key);
         if (!read.isDone()) return null;
+        // The owned source stays charged until decoding and counted installation finish. A
+        // completed page may be larger than its I/O allowance; refusal keeps the same future.
+        java.util.Optional<net.minecraft.nbt.CompoundTag> stored;
+        long reservation;
+        try {
+            stored = read.join(); // already complete; no server-thread I/O
+            reservation = Math.max(READ_BYTES, stored.isPresent() ? RuinPlan.restorePublicationBytes(stored.get()) + 48 : 0);
+        } catch (RuntimeException e) {
+            discardRead(key);
+            return missing(key, e);
+        }
+        if (reservation - READ_BYTES > available(demand)) return null;
+        accounting.accept(reservation - READ_BYTES);
         reads.remove(key);
         demanded.remove(key);
-        accounting.accept(-READ_BYTES);
         try {
-            var stored = read.join(); // already complete; no server-thread I/O
             if (stored.isPresent()) {
                 RuinPlan plan = RuinPlan.restore(stored.get(), context);
                 super.put(key, plan);
@@ -178,8 +201,16 @@ final class RetainedPlans extends Long2ObjectOpenHashMap<RuinPlan> {
                 return plan;
             }
         } catch (RuntimeException e) {
-            ua.zentix.incoming.Incoming.LOG.error("Could not restore prepared ruin plan at {}", new net.minecraft.world.level.ChunkPos(key), e);
+            return missing(key, e);
+        } finally {
+            accounting.accept(-reservation);
         }
+        return missing(key, null);
+    }
+
+    private RuinPlan missing(long key, RuntimeException error) {
+        if (error != null) ua.zentix.incoming.Incoming.LOG.error(
+                "Could not restore prepared ruin plan at {}", new net.minecraft.world.level.ChunkPos(key), error);
         // Failed cache data is not authoritative; the normal solver will reconstruct it.
         super.remove(key);
         misses.addAndMoveToLast(key);

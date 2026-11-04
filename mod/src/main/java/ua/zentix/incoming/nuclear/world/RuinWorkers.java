@@ -295,6 +295,16 @@ public final class RuinWorkers {
         if (server != null) service(server);
     }
 
+    /** A live, funded worker can reuse its workspace; only a cold/taller pool needs a new grant. */
+    static long startupBytes(int height) {
+        if (pool instanceof OwnedPool owned && !owned.isShutdown()) {
+            for (Credit credit : owned.workspace.credits) synchronized (credit) {
+                if (!credit.closed && credit.height >= height) return 0;
+            }
+        }
+        return threadBufferBytes(height);
+    }
+
     /** Tasks held in pool at once (running/queued). */
     static int capacity() {
         if (pool == null) pool();
