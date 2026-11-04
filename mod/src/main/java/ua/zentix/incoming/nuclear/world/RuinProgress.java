@@ -14,12 +14,13 @@ final class RuinProgress extends LedgerData {
     static final class Pass {
         long cursor;
         boolean complete;
+        String archive = "";
         final LongOpenHashSet pending = new LongOpenHashSet();
         int capacity;
 
         long retainedBytes() {
             capacity = Math.max(capacity, pending.size());
-            return 128L + capacity * 64L;
+            return 128L + 2L * archive.length() + capacity * 64L;
         }
 
         void compact() {
@@ -38,6 +39,8 @@ final class RuinProgress extends LedgerData {
         requireWritable();
         return passes.computeIfAbsent(id, ignored -> new Pass());
     }
+
+    String archive(int id) { Pass pass = passes.get(id); return pass == null ? "" : pass.archive; }
 
     long retainedBytes() {
         long bytes = IO_BYTES + 256L;
@@ -59,6 +62,7 @@ final class RuinProgress extends LedgerData {
             p.cursor = saved.getInt("scan_version") == 2 ? Math.max(0, saved.getLong("cursor")) : 0;
             p.complete = saved.getBoolean("complete");
             if (p.complete) p.cursor = Long.MAX_VALUE;
+            p.archive = saved.getString("archive");
             p.pending.addAll(new LongOpenHashSet(saved.getLongArray("pending")));
         }
         return progress;
@@ -69,6 +73,7 @@ final class RuinProgress extends LedgerData {
         passes.forEach((id, p) -> {
             CompoundTag saved = new CompoundTag();
             saved.putLong("cursor", p.cursor);
+            if (!p.archive.isEmpty()) saved.putString("archive", p.archive);
             saved.putInt("scan_version", 2);
             saved.putBoolean("complete", p.complete);
             saved.putLongArray("pending", p.pending.toLongArray());
@@ -82,6 +87,7 @@ final class RuinProgress extends LedgerData {
             Pass p = entry.getValue();
             CompoundTag row = new CompoundTag();
             row.putLong("cursor", p.cursor);
+            if (!p.archive.isEmpty()) row.putString("archive", p.archive);
             row.putInt("scan_version", 2);
             row.putBoolean("complete", p.complete);
             writer.fields(row);

@@ -54,7 +54,7 @@ public final class RuinMemoryGameTests {
             level.setBlock(start.below(), Blocks.GLASS.defaultBlockState(), 2);
             level.setBlock(start.below(2), Blocks.OBSIDIAN.defaultBlockState(), 2);
             var piece = RuinMatter.capture(level, start.below(), level.getBlockState(start.below()), d);
-            try (var reservation = RuinMemory.reserve(level, RuinMatter.removalBytes(piece))) {
+            try (var reservation = RuinMemory.reserve(level, RuinMatter.removalBytes(level, piece))) {
                 h.assertTrue(reservation != null, "Fixture cannot reserve its initial removal");
                 ColumnScar.replace(level, start.below(), piece.state, Blocks.AIR.defaultBlockState());
                 ledger.release(List.of(piece)); ledger.support(level, List.of(piece), d);
@@ -136,7 +136,7 @@ public final class RuinMemoryGameTests {
                     level.setBlock(at, Blocks.WHITE_CONCRETE.defaultBlockState(), 2);
                     var d = registered.get(i % count);
                     var piece = RuinMatter.capture(level, at.below(), level.getBlockState(at.below()), d);
-                    try (var reserve = RuinMemory.reserve(level, RuinMatter.removalBytes(piece))) {
+                    try (var reserve = RuinMemory.reserve(level, RuinMatter.removalBytes(level, piece))) {
                         h.assertTrue(reserve != null, "Small registered fixture could not reserve material");
                         ColumnScar.replace(level, at.below(), piece.state, Blocks.AIR.defaultBlockState());
                         ledger.release(List.of(piece)); ledger.support(level, List.of(piece), d);
