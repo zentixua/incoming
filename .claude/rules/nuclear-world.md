@@ -383,6 +383,11 @@ paths:
   requeueing as `AGAIN`; `NuclearWorld` gives existing material one bounded batch before admitting new removals.
   Material/settlement admission charges resident workers (`memory(level, false)`), not an idle pool's configured
   future size. `nuke_memory_flow` and `nuke_memory_retired_workers` cover the resulting progress dependencies.
+- Dense-plan capture reserves the same ownership terms as the material ledger: temporary pieces, deferred support
+  and provenance, balance/palette/inventory indexes, and compact row growth. Keep `RuinMatter.removalBytes`
+  aligned with those counters; an unrelated per-cell allowance can refuse an already funded ready plan.
+  `nuke_large_plan_admission` compares a 22,054-cell reference with the identical fixed-owner application,
+  including measured server-thread allocation, retained growth and conserved material/support.
 - Completed crater chunks discard column checkpoints after advancing the saved chunk cursor. Completed passes
   retain only material totals; terminal out-of-height material groups identical state/cargo without trajectory data.
   Active moving pieces, support provenance/graph and crater passes are charged by `retainedRuinBytes`. The counter
