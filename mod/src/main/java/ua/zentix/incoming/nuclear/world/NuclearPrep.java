@@ -291,7 +291,8 @@ public final class NuclearPrep {
         Prep old = request(handle);
         if (old != null) {
             if (!owner.equals(old.owner) || old.bound) return;
-            if (old.target.equals(target) && old.yieldKt == yieldKt && old.surface == surface && old.airBurst == airBurst) {
+            if (compatible(old) && old.failure == RuinPreparation.Reason.NONE && level.getGameTime() < old.expires
+                    && old.target.equals(target) && old.yieldKt == yieldKt && old.surface == surface && old.airBurst == airBurst) {
                 keepAlive(level, handle, owner);
                 return;
             }
@@ -499,6 +500,10 @@ public final class NuclearPrep {
                         p.draining = true;
                     }
                     continue;
+                }
+                if (p.handle != null && !compatible(p)) {
+                    p.failure = RuinPreparation.Reason.INCOMPATIBLE;
+                    if (p.bound) { p.draining = true; continue; }
                 }
                 if (p.handle != null && !p.bound) {
                     if (now >= p.expires) { p.draining = true; continue; }
@@ -788,7 +793,10 @@ public final class NuclearPrep {
                 continue;
             }
             p.farRunning.removeLong(i);
-            if (!p.ruins.done(c)) continue; // collected elsewhere (ruin queue) or task abandoned
+            if (!p.ruins.done(c)) {
+                if (p.handle != null && !p.bound) p.failure = RuinPreparation.Reason.IO;
+                continue; // collected elsewhere (ruin queue) or task abandoned
+            }
             long c0 = shared.begin();
             try {
                 RuinPlan plan = p.ruins.collect(new ChunkPos(c));
@@ -796,8 +804,9 @@ public final class NuclearPrep {
                     keep(level, p, c, plan);
                     p.farPlans++;
                     p.lods.offer(c);
-                }
+                } else if (p.handle != null && !p.bound) p.failure = RuinPreparation.Reason.IO;
             } catch (RuntimeException e) {
+                if (p.handle != null) p.failure = RuinPreparation.Reason.IO;
                 Incoming.LOG.error("Pre-built ruins: plan for chunk {} from disk failed with an exception; its ruins will be built on the spot", new ChunkPos(c), e);
             } finally {
                 clock.record(shared.end(c0));
@@ -878,6 +887,7 @@ public final class NuclearPrep {
                 p.nextFar++;
             } catch (RuntimeException e) {
                 p.nextFar++;
+                if (p.handle != null) p.failure = RuinPreparation.Reason.IO;
                 Incoming.LOG.error("Pre-built ruins: snapshots of chunk {} from disk failed with an exception; its ruins will be built on the spot", new ChunkPos(c), e);
             } finally {
                 clock.record(shared.end(c0));
@@ -1406,7 +1416,7 @@ public final class NuclearPrep {
     /** Preparation matches detonation: not handed off, same location, yield and scale. */
     private static boolean preparedFor(Prep p, Detonation d, int strikeId) {
         Detonation g = p.geometry;
-        return (p.handle == null || p.bound && p.strike == strikeId) && p.detonation < 0 && !p.draining && g != null && g.yieldKt() == d.yieldKt() && g.surface() == d.surface() && g.scale() == d.scale()
+        return (p.handle == null || p.bound && p.strike == strikeId && compatible(p)) && p.detonation < 0 && !p.draining && g != null && g.yieldKt() == d.yieldKt() && g.surface() == d.surface() && g.scale() == d.scale()
                 && g.burst().distanceTo(d.burst()) <= SAME_PLACE;
     }
 

@@ -55,7 +55,11 @@ public final class RuinPreparationGameTests {
         field(p, "expires").setLong(p, level.getGameTime());
         h.assertTrue(!RuinPreparation.keepAlive(level, handle, owner), "expired handle revived");
         h.assertTrue(RuinPreparation.status(level, handle).reason() == RuinPreparation.Reason.EXPIRED, "expiry hidden");
-        RuinPreparation.cancel(level, handle);
+        var prep = NuclearWorld.get(level).prep();
+        var clock = WorkClock.counting(1_000_000);
+        clock.start(10_000_000);
+        prep.tick(level, new NuclearEvents(), new ScarQueue(), clock);
+        h.assertTrue(RuinPreparation.status(level, handle).stage() == RuinPreparation.Stage.ABSENT, "expired handle kept live ownership");
         h.succeed();
     }
 
@@ -92,8 +96,13 @@ public final class RuinPreparationGameTests {
             h.assertTrue(RuinPreparation.status(level, handle).stage() == RuinPreparation.Stage.READY, "scheduled binding expired");
             var geometry = (ua.zentix.incoming.nuclear.Detonation) field(p, "geometry").get(p);
             var prep = NuclearWorld.get(level).prep();
-            h.assertTrue(prep.planned(geometry) == geometry, "diagnostic changed unexpectedly");
-            h.assertTrue(prep.planned(geometry, 124) == geometry, "bound geometry unavailable by ID");
+            var fresh = new ua.zentix.incoming.nuclear.Detonation(999, geometry.burst(), geometry.groundY(), geometry.yieldKt(),
+                    geometry.surface(), 200, 0, 0, geometry.visibility(), 0, geometry.scale(), false, geometry.wave());
+            h.assertTrue(prep.planned(fresh) == fresh, "diagnostic stole bound preparation");
+            h.assertTrue(prep.planned(fresh, 123) == fresh, "other strike stole bound preparation");
+            h.assertTrue(prep.planned(fresh, 124) == geometry, "bound geometry unavailable by ID");
+            field(p, "generation").setInt(p, Blast.generation - 1);
+            h.assertTrue(RuinPreparation.status(level, handle).reason() == RuinPreparation.Reason.INCOMPATIBLE, "resource reload retained readiness");
         } finally {
             events.unschedule(right);
             RuinPreparation.cancel(level, handle);
@@ -117,6 +126,48 @@ public final class RuinPreparationGameTests {
             h.assertTrue(status.resolvedTarget().equals(expected), "client Y became authoritative surface");
             h.assertTrue(status.stage() == RuinPreparation.Stage.READY, "tiny real preparation not yet stored: " + status);
         });
+    }
+
+    @GameTest(template = "range", batch = "nuke_prelaunch_cap", skyAccess = true)
+    public static void requestsShareMetadataAndResidentCap(GameTestHelper h) throws ReflectiveOperationException {
+        var level = h.getLevel();
+        var other = level.getServer().getLevel(Level.NETHER);
+        UUID owner = UUID.randomUUID(), handle = UUID.randomUUID();
+        var target = Vec3.atCenterOf(h.absolutePos(new BlockPos(32, 1, 32)));
+        RuinPreparation.prepare(level, handle, owner, target, 1, true, false);
+        Object p = request(level, handle);
+        var plans = (RetainedPlans) field(p, "plans").get(p);
+        long before = field(plans, "bytes").getLong(plans);
+        field(plans, "bytes").setLong(plans, NuclearPrep.PLANS_CAP);
+        try {
+            UUID otherOwner = UUID.randomUUID(), otherHandle = UUID.randomUUID();
+            RuinPreparation.prepare(other, otherHandle, otherOwner, target, 1, true, false);
+            h.assertTrue(RuinPreparation.status(other, otherHandle).reason() == RuinPreparation.Reason.MEMORY,
+                    "other dimension bypassed shared resident cap");
+            RuinPreparation.cancelOwner(level.getServer(), otherOwner);
+        } finally {
+            field(plans, "bytes").setLong(plans, before);
+            RuinPreparation.cancel(level, handle);
+        }
+        // Count draining owners as well: replacing requests cannot grow unbounded metadata before the next tick.
+        var owners = new java.util.ArrayList<UUID>();
+        try {
+            for (int i = 0; i < NuclearPrep.REQUEST_LIMIT + 2; i++) {
+                UUID nextOwner = UUID.randomUUID(), next = UUID.randomUUID();
+                owners.add(nextOwner);
+                RuinPreparation.prepare(i % 2 == 0 ? level : other, next, nextOwner, target, 1, true, false);
+            }
+            int count = 0;
+            for (var dimension : level.getServer().getAllLevels()) {
+                if (!dimension.hasData(ua.zentix.incoming.registry.ModAttachments.NUCLEAR_WORLD)) continue;
+                for (Object entry : (List<?>) field(NuclearWorld.get(dimension).prep(), "preps").get(NuclearWorld.get(dimension).prep()))
+                    if (field(entry, "handle").get(entry) != null) count++;
+            }
+            h.assertTrue(count <= NuclearPrep.REQUEST_LIMIT, "request limit grew across dimensions");
+        } finally {
+            for (UUID id : owners) RuinPreparation.cancelOwner(level.getServer(), id);
+        }
+        h.succeed();
     }
 
     @SuppressWarnings("unchecked")
