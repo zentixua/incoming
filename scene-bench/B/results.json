@@ -1,0 +1,2108 @@
+{
+ "name": "mt-b5-final-dba2/B",
+ "label": "MT-B5-dba2d153d",
+ "jar": {
+  "label": "MT-B5-dba2d153d",
+  "file": "incoming-3.10.4.jar",
+  "sha256": "2f5d06077afb30bb506b4557f4542319e6bcc39947f31ffbe4cba4b562882e34",
+  "spec": "mod/build/libs/incoming-3.10.4.jar"
+ },
+ "context": {
+  "stand": "93bda32d0c451bce411c92d25b38305be7260fb92b1e2711f567b3cc75d149f5",
+  "mods": {
+   "sodium": "4f537696af95411e9daf15795fb5fcbc49913d488a96fa912fa8f1d7db408710995e8a1461190f3cd0f8217bf9e35e9539176592428ed587ca2d7aa84450a390",
+   "iris": "33fddb430e16222902eac75b8b3d57c381b0f3cc729f3b56c4628df12ca108f23a0b11e2feb167923d6d14d1fc7e8ee1a977ec421b19d1951bdca74c4092b9c5"
+  },
+  "packs": {
+   "none": "none",
+   "complementary": "a085d1d8cda67cd17a2b414eeba48bbd809da069f269bab46246235ec8fe714a275013c70d0504527b0987d810deddddba4564332414ab3b3bd7435932ff808c",
+   "photon": "2dec87084dccf91a72a06235ecbfb3627f066699b5f70583f06077cba61433aedbfa6af28eb68bf1cdc726149cc3d9a587517cfab59e6a24e9d6a40b6874d655"
+  },
+  "scenes": [
+   "100"
+  ],
+  "gpu": "NVIDIA GeForce RTX 4060 Laptop GPU",
+  "driver": "615.78.08",
+  "size": "2560x1600",
+  "java": "21.0.7",
+  "kwin": "kwin 6.8.2",
+  "power": "performance"
+ },
+ "started": "2026-11-04T03:39:51+00:00",
+ "packs": {
+  "none": {
+   "windows": {
+    "100-hit": {
+     "duration_s": 10.0,
+     "frames": 512,
+     "fps": 51.2,
+     "interval": {
+      "n": 512,
+      "mean": 19.178728515625,
+      "p50": 18.268500000000003,
+      "p95": 28.1253,
+      "p99": 38.43421999999997,
+      "max": 54.672
+     },
+     "cpu": {
+      "n": 512,
+      "mean": 15.71448046875,
+      "p50": 15.498000000000001,
+      "p95": 20.593449999999997,
+      "p99": 24.807569999999995,
+      "max": 30.113
+     },
+     "thread": {
+      "n": 512,
+      "mean": 15.565892578125,
+      "p50": 15.388,
+      "p95": 19.584799999999998,
+      "p99": 23.49791999999999,
+      "max": 29.726
+     },
+     "gpu": {
+      "n": 512,
+      "mean": 16.56709765625,
+      "p50": 16.262,
+      "p95": 22.7263,
+      "p99": 24.73332,
+      "max": 30.658
+     },
+     "stages": {
+      "after_block_entities": {
+       "p50": 0.001,
+       "mean": 0.0006328125
+      },
+      "after_block_entities+": {
+       "p50": 0.001,
+       "mean": 0.00069140625
+      },
+      "after_cutout_blocks": {
+       "p50": 0.001,
+       "mean": 0.00065234375
+      },
+      "after_cutout_blocks+": {
+       "p50": 0.001,
+       "mean": 0.00066015625
+      },
+      "after_cutout_mipped_blocks": {
+       "p50": 0.001,
+       "mean": 0.00066015625
+      },
+      "after_cutout_mipped_blocks+": {
+       "p50": 0.001,
+       "mean": 0.000662109375
+      },
+      "after_entities": {
+       "p50": 0.01,
+       "mean": 0.011212890625
+      },
+      "after_entities+": {
+       "p50": 0.001,
+       "mean": 0.00069921875
+      },
+      "after_level": {
+       "p50": 0.001,
+       "mean": 0.000859375
+      },
+      "after_level+": {
+       "p50": 5.564500000000001,
+       "mean": 5.837736328125
+      },
+      "after_particles": {
+       "p50": 0.035,
+       "mean": 3.104474609375
+      },
+      "after_particles+": {
+       "p50": 0.001,
+       "mean": 0.00072265625
+      },
+      "after_sky": {
+       "p50": 0.043,
+       "mean": 0.04425390625
+      },
+      "after_sky+": {
+       "p50": 0.001,
+       "mean": 0.000712890625
+      },
+      "after_solid_blocks": {
+       "p50": 0.117,
+       "mean": 0.51893359375
+      },
+      "after_solid_blocks+": {
+       "p50": 0.001,
+       "mean": 0.000716796875
+      },
+      "after_translucent_blocks": {
+       "p50": 9.036999999999999,
+       "mean": 6.974626953125
+      },
+      "after_translucent_blocks+": {
+       "p50": 0.001,
+       "mean": 0.00075
+      },
+      "after_tripwire_blocks": {
+       "p50": 0.001,
+       "mean": 0.0006640625
+      },
+      "after_tripwire_blocks+": {
+       "p50": 0.001,
+       "mean": 0.000703125
+      },
+      "after_weather": {
+       "p50": 0.002,
+       "mean": 0.002287109375
+      },
+      "after_weather+": {
+       "p50": 0.001,
+       "mean": 0.00074609375
+      },
+      "tail": {
+       "p50": 0.051,
+       "mean": 0.06255859375
+      }
+     },
+     "mspt": {
+      "n": 11,
+      "mean": 22.72169090909091,
+      "p50": 22.4919,
+      "p95": 27.82865,
+      "p99": 28.65709,
+      "max": 28.8642
+     },
+     "projectiles": 62,
+     "entities": 1077,
+     "bound": "gpu",
+     "probes": {
+      "FxLayer.describeTiming": "quads 8079, 11.122 ms (longest in the second 12.029; without GC 12.029, CPU 12.032; frames with GC 0), GPU 5.586 ms (longest 6.197, 62 frames; heat pass 1.503, longest 1.750, 62 frames — heat lights 4 hot 4 front 2 jets 0, area 1 rects (1 lit) 100.0% {R 320 L 2.8 dn 2.30e-06..2.30e-06 most 23.9 px} {R 60 L 2.5 dn 1.34e-05..1.34e-05 most 25.8 px} [r 16.5 h 33 dT 36 px 0.64] [r 9.3 h 19 dT 1196 px 0.97] [r 15.5 h 31 dT 45 px 0.76] [r 13.7 h 27 dT 71 px 1.04]; bloom FAST 0.297 ms (longest 0.315, 62 frames; glow pass 0.096, pyramid 0.121, out 0.078; 2560x1600, glow level 3, levels 3-9)), depth: world; GPU by pass (ms, mean of 62 frames; a pass's tail may spill into the next): models 0.03 depth 0.07 water 0.00 pall 0.00 heat 1.50 probes 0.03 quads 3.75 bloom 0.30 (sum 5.68); drained frame: none (F3 or -Dincoming.fx.drain=true); half-resolution smoke 1488 quads, full 7685 (a quad over both kinds of tiles counts in each), lays 1",
+      "FarRenderer.describeSmoke": "fill 12.56 screens (budget 16, one club per gaussian 12.56, before merging 12.56), cluster share 0.00, merge level 0, veil gaussians 0, clusters 4448, plan 4.69 ms off-thread"
+     },
+     "host": {
+      "samples": 3,
+      "covered": 1.0,
+      "gpu_covered": 1.0,
+      "cpu_foreign_max": 0.0,
+      "cpu_foreign": 0.0,
+      "gpu_foreign": 7,
+      "gpu_foreign_mean": 1.4,
+      "load1": 4.79,
+      "units": {},
+      "profiles": [
+       "performance"
+      ]
+     }
+    },
+    "100/outside": {
+     "duration_s": 20.003717000000005,
+     "frames": 3398,
+     "fps": 169.86842995229333,
+     "interval": {
+      "n": 3398,
+      "mean": 5.886909652736905,
+      "p50": 5.63,
+      "p95": 7.6503000000000005,
+      "p99": 8.26926000000001,
+      "max": 12.254
+     },
+     "cpu": {
+      "n": 3398,
+      "mean": 5.386937610359034,
+      "p50": 5.341,
+      "p95": 5.95915,
+      "p99": 6.404180000000001,
+      "max": 10.756
+     },
+     "thread": {
+      "n": 3398,
+      "mean": 5.349055326662743,
+      "p50": 5.319,
+      "p95": 5.8911500000000006,
+      "p99": 6.322030000000001,
+      "max": 7.063
+     },
+     "gpu": {
+      "n": 3398,
+      "mean": 2.4942401412595645,
+      "p50": 2.321,
+      "p95": 2.7691500000000002,
+      "p99": 7.7505400000000035,
+      "max": 8.338
+     },
+     "stages": {
+      "after_block_entities": {
+       "p50": 0.001,
+       "mean": 0.0010111830488522661
+      },
+      "after_block_entities+": {
+       "p50": 0.001,
+       "mean": 0.0009879340788699236
+      },
+      "after_cutout_blocks": {
+       "p50": 0.001,
+       "mean": 0.0005644496762801649
+      },
+      "after_cutout_blocks+": {
+       "p50": 0.001,
+       "mean": 0.0005532666274278988
+      },
+      "after_cutout_mipped_blocks": {
+       "p50": 0.001,
+       "mean": 0.0005570924072984108
+      },
+      "after_cutout_mipped_blocks+": {
+       "p50": 0.001,
+       "mean": 0.0005606238964096528
+      },
+      "after_entities": {
+       "p50": 0.008,
+       "mean": 0.008474396703943496
+      },
+      "after_entities+": {
+       "p50": 0.001,
+       "mean": 0.0013972925250147147
+      },
+      "after_level": {
+       "p50": 0.001,
+       "mean": 0.000544437904649794
+      },
+      "after_level+": {
+       "p50": 2.149,
+       "mean": 2.171881400824014
+      },
+      "after_particles": {
+       "p50": 0.009,
+       "mean": 0.15703060623896412
+      },
+      "after_particles+": {
+       "p50": 0.001,
+       "mean": 0.0005482636845203061
+      },
+      "after_sky": {
+       "p50": 0.034,
+       "mean": 0.036088875809299585
+      },
+      "after_sky+": {
+       "p50": 0.001,
+       "mean": 0.0009011183048852267
+      },
+      "after_solid_blocks": {
+       "p50": 0.07,
+       "mean": 0.06919776339022955
+      },
+      "after_solid_blocks+": {
+       "p50": 0.001,
+       "mean": 0.0005597410241318424
+      },
+      "after_translucent_blocks": {
+       "p50": 0.001,
+       "mean": 0.0010144202472042378
+      },
+      "after_translucent_blocks+": {
+       "p50": 0.001,
+       "mean": 0.0010005885815185403
+      },
+      "after_tripwire_blocks": {
+       "p50": 0.001,
+       "mean": 0.0010167745732783992
+      },
+      "after_tripwire_blocks+": {
+       "p50": 0.001,
+       "mean": 0.0009349617422012949
+      },
+      "after_weather": {
+       "p50": 0.002,
+       "mean": 0.0015523837551500884
+      },
+      "after_weather+": {
+       "p50": 0.001,
+       "mean": 0.0005576809888169511
+      },
+      "tail": {
+       "p50": 0.037,
+       "mean": 0.037014714537963504
+      }
+     },
+     "mspt": {
+      "n": 20,
+      "mean": 6.816625,
+      "p50": 6.830500000000001,
+      "p95": 6.874645,
+      "p99": 6.882929,
+      "max": 6.885
+     },
+     "projectiles": 0,
+     "entities": 308,
+     "bound": "cpu",
+     "probes": {
+      "FxLayer.describeTiming": "quads 2003, 4.733 ms (longest in the second 5.698; without GC 5.698, CPU 5.681; frames with GC 0), GPU 2.011 ms (longest 2.807, 179 frames; heat pass 0.287, longest 0.314, 179 frames — heat lights 4 hot 4 front 0 jets 0, area 1 rects (1 lit) 25.6% [r 2.5 h 21 dT 63 px 1.03] [r 2.5 h 21 dT 63 px 1.08] [r 2.5 h 21 dT 63 px 1.04] [r 2.5 h 21 dT 63 px 1.01]; bloom FAST 0.217 ms (longest 0.878, 179 frames; glow pass 0.056, pyramid 0.099, out 0.060; 2560x1600, glow level 3, levels 3-9)), depth: world; GPU by pass (ms, mean of 179 frames; a pass's tail may spill into the next): models 0.00 depth 0.05 water 0.00 pall 0.00 heat 0.29 probes 0.01 quads 1.49 bloom 0.22 (sum 2.06); drained frame: none (F3 or -Dincoming.fx.drain=true); half-resolution smoke 1547 quads, full 934 (a quad over both kinds of tiles counts in each), lays 1",
+      "FarRenderer.describeSmoke": "fill 14.48 screens (budget 16, one club per gaussian 14.48, before merging 33.39), cluster share 0.00, merge level 3, veil gaussians 0, clusters 1706, plan 3.56 ms off-thread"
+     },
+     "host": {
+      "samples": 5,
+      "covered": 1.0,
+      "gpu_covered": 1.0,
+      "cpu_foreign_max": 0.0,
+      "cpu_foreign": 0.0,
+      "gpu_foreign": 7,
+      "gpu_foreign_mean": 2.29,
+      "load1": 4.0,
+      "units": {
+       "app-com.anthropic.Claude-183212.scope": 0.11
+      },
+      "profiles": [
+       "performance"
+      ]
+     }
+    },
+    "100/edge": {
+     "duration_s": 20.04987699999999,
+     "frames": 3819,
+     "fps": 190.4749839612483,
+     "interval": {
+      "n": 3819,
+      "mean": 5.250013092432574,
+      "p50": 4.933,
+      "p95": 7.335,
+      "p99": 7.9904800000000025,
+      "max": 13.329
+     },
+     "cpu": {
+      "n": 3819,
+      "mean": 4.7233102906520035,
+      "p50": 4.638,
+      "p95": 5.3061,
+      "p99": 5.893420000000005,
+      "max": 10.738
+     },
+     "thread": {
+      "n": 3819,
+      "mean": 4.681083267871171,
+      "p50": 4.609,
+      "p95": 5.2371,
+      "p99": 5.7650200000000025,
+      "max": 7.041
+     },
+     "gpu": {
+      "n": 3819,
+      "mean": 3.7625606179628175,
+      "p50": 3.433,
+      "p95": 5.592199999999999,
+      "p99": 7.382280000000001,
+      "max": 9.221
+     },
+     "stages": {
+      "after_block_entities": {
+       "p50": 0.001,
+       "mean": 0.0005676878764074365
+      },
+      "after_block_entities+": {
+       "p50": 0.001,
+       "mean": 0.0005954438334642577
+      },
+      "after_cutout_blocks": {
+       "p50": 0.001,
+       "mean": 0.0005810421576328881
+      },
+      "after_cutout_blocks+": {
+       "p50": 0.001,
+       "mean": 0.0005815658549358471
+      },
+      "after_cutout_mipped_blocks": {
+       "p50": 0.001,
+       "mean": 0.0005739722440429433
+      },
+      "after_cutout_mipped_blocks+": {
+       "p50": 0.001,
+       "mean": 0.0005904687090861482
+      },
+      "after_entities": {
+       "p50": 0.008,
+       "mean": 0.008605394082220476
+      },
+      "after_entities+": {
+       "p50": 0.001,
+       "mean": 0.0005792092170725322
+      },
+      "after_level": {
+       "p50": 0.001,
+       "mean": 0.0005854935847080388
+      },
+      "after_level+": {
+       "p50": 3.148,
+       "mean": 3.361956271275203
+      },
+      "after_particles": {
+       "p50": 0.005,
+       "mean": 0.006820109976433621
+      },
+      "after_particles+": {
+       "p50": 0.001,
+       "mean": 0.0005920398009950249
+      },
+      "after_sky": {
+       "p50": 0.038,
+       "mean": 0.040720607488871435
+      },
+      "after_sky+": {
+       "p50": 0.001,
+       "mean": 0.0005813040062843677
+      },
+      "after_solid_blocks": {
+       "p50": 0.076,
+       "mean": 0.07934564021995287
+      },
+      "after_solid_blocks+": {
+       "p50": 0.001,
+       "mean": 0.0005878502225713538
+      },
+      "after_translucent_blocks": {
+       "p50": 0.005,
+       "mean": 0.20685284105786855
+      },
+      "after_translucent_blocks+": {
+       "p50": 0.001,
+       "mean": 0.0006305315527625032
+      },
+      "after_tripwire_blocks": {
+       "p50": 0.001,
+       "mean": 0.0006190102120974077
+      },
+      "after_tripwire_blocks+": {
+       "p50": 0.001,
+       "mean": 0.0005959675307672166
+      },
+      "after_weather": {
+       "p50": 0.005,
+       "mean": 0.004817229641267348
+      },
+      "after_weather+": {
+       "p50": 0.001,
+       "mean": 0.0005904687090861482
+      },
+      "tail": {
+       "p50": 0.042,
+       "mean": 0.04409714584969888
+      }
+     },
+     "mspt": {
+      "n": 20,
+      "mean": 6.87928,
+      "p50": 6.863849999999999,
+      "p95": 6.990444999999999,
+      "p99": 6.998729,
+      "max": 7.0008
+     },
+     "projectiles": 0,
+     "entities": 123,
+     "bound": "cpu",
+     "probes": {
+      "FxLayer.describeTiming": "quads 922, 4.158 ms (longest in the second 4.900; without GC 4.900, CPU 4.575; frames with GC 0), GPU 3.380 ms (longest 6.038, 195 frames; heat pass 1.424, longest 2.622, 196 frames — heat lights 4 hot 4 front 0 jets 0, area 1 rects (1 lit) 100.0% [r 2.5 h 21 dT 63 px 1.37] [r 2.3 h 19 dT 63 px 1.35] [r 2.5 h 21 dT 63 px 1.37] [r 2.5 h 21 dT 63 px 1.37]; bloom FAST 0.267 ms (longest 0.548, 196 frames; glow pass 0.087, pyramid 0.109, out 0.068; 2560x1600, glow level 3, levels 3-9)), depth: world; GPU by pass (ms, mean of 195 frames; a pass's tail may spill into the next): models 0.00 depth 0.06 water 0.01 pall 0.00 heat 1.42 probes 0.04 quads 1.64 bloom 0.27 (sum 3.45); drained frame: none (F3 or -Dincoming.fx.drain=true); half-resolution smoke 548 quads, full 463 (a quad over both kinds of tiles counts in each), lays 1",
+      "FarRenderer.describeSmoke": "fill 16.00 screens (budget 16, one club per gaussian 16.00, before merging 33.01), cluster share 0.00, merge level 3, veil gaussians 12, clusters 648, plan 2.78 ms off-thread"
+     },
+     "host": {
+      "samples": 5,
+      "covered": 1.0,
+      "gpu_covered": 1.0,
+      "cpu_foreign_max": 0.0,
+      "cpu_foreign": 0.0,
+      "gpu_foreign": 0,
+      "gpu_foreign_mean": 0.0,
+      "load1": 3.09,
+      "units": {},
+      "profiles": [
+       "performance"
+      ]
+     }
+    },
+    "100/inside": {
+     "duration_s": 20.048371000000014,
+     "frames": 4112,
+     "fps": 205.10394585176007,
+     "interval": {
+      "n": 4112,
+      "mean": 4.875562743190661,
+      "p50": 4.562,
+      "p95": 6.945,
+      "p99": 7.587459999999998,
+      "max": 14.681
+     },
+     "cpu": {
+      "n": 4112,
+      "mean": 4.385935068093385,
+      "p50": 4.306,
+      "p95": 4.894,
+      "p99": 5.39378,
+      "max": 14.281
+     },
+     "thread": {
+      "n": 4112,
+      "mean": 4.371307149805447,
+      "p50": 4.299,
+      "p95": 4.88945,
+      "p99": 5.33034,
+      "max": 6.995
+     },
+     "gpu": {
+      "n": 4112,
+      "mean": 3.4322937743190662,
+      "p50": 3.1790000000000003,
+      "p95": 5.235,
+      "p99": 5.658229999999999,
+      "max": 8.277
+     },
+     "stages": {
+      "after_block_entities": {
+       "p50": 0.001,
+       "mean": 0.0005651750972762645
+      },
+      "after_block_entities+": {
+       "p50": 0.001,
+       "mean": 0.0005963035019455253
+      },
+      "after_cutout_blocks": {
+       "p50": 0.001,
+       "mean": 0.0005790369649805448
+      },
+      "after_cutout_blocks+": {
+       "p50": 0.001,
+       "mean": 0.0005887645914396888
+      },
+      "after_cutout_mipped_blocks": {
+       "p50": 0.001,
+       "mean": 0.0005800097276264592
+      },
+      "after_cutout_mipped_blocks+": {
+       "p50": 0.001,
+       "mean": 0.0005846303501945525
+      },
+      "after_entities": {
+       "p50": 0.008,
+       "mean": 0.008777237354085603
+      },
+      "after_entities+": {
+       "p50": 0.001,
+       "mean": 0.0005914396887159533
+      },
+      "after_level": {
+       "p50": 0.001,
+       "mean": 0.0005678501945525292
+      },
+      "after_level+": {
+       "p50": 2.9745,
+       "mean": 3.1852614299610895
+      },
+      "after_particles": {
+       "p50": 0.001,
+       "mean": 0.005807392996108949
+      },
+      "after_particles+": {
+       "p50": 0.001,
+       "mean": 0.0005741731517509728
+      },
+      "after_sky": {
+       "p50": 0.042,
+       "mean": 0.04424051556420233
+      },
+      "after_sky+": {
+       "p50": 0.001,
+       "mean": 0.0006558852140077821
+      },
+      "after_solid_blocks": {
+       "p50": 0.065,
+       "mean": 0.06724805447470818
+      },
+      "after_solid_blocks+": {
+       "p50": 0.001,
+       "mean": 0.0005804961089494163
+      },
+      "after_translucent_blocks": {
+       "p50": 0.007,
+       "mean": 0.05897033073929961
+      },
+      "after_translucent_blocks+": {
+       "p50": 0.001,
+       "mean": 0.0005809824902723735
+      },
+      "after_tripwire_blocks": {
+       "p50": 0.001,
+       "mean": 0.000577091439688716
+      },
+      "after_tripwire_blocks+": {
+       "p50": 0.001,
+       "mean": 0.000581955252918288
+      },
+      "after_weather": {
+       "p50": 0.008,
+       "mean": 0.009035992217898832
+      },
+      "after_weather+": {
+       "p50": 0.001,
+       "mean": 0.0005960603112840468
+      },
+      "tail": {
+       "p50": 0.041,
+       "mean": 0.0433125
+      }
+     },
+     "mspt": {
+      "n": 20,
+      "mean": 6.906409999999999,
+      "p50": 6.9038,
+      "p95": 6.998975,
+      "p99": 7.001635,
+      "max": 7.0023
+     },
+     "projectiles": 0,
+     "entities": 1,
+     "bound": "cpu",
+     "probes": {
+      "FxLayer.describeTiming": "quads 473, 3.973 ms (longest in the second 4.654; without GC 4.654, CPU 4.657; frames with GC 0), GPU 2.949 ms (longest 5.300, 212 frames; heat pass 1.345, longest 2.577, 212 frames — heat lights 4 hot 4 front 0 jets 0, area 1 rects (1 lit) 100.0% [r 2.5 h 21 dT 63 px 1.37] [r 2.5 h 21 dT 63 px 1.37] [r 2.5 h 21 dT 63 px 1.37] [r 2.5 h 21 dT 63 px 1.37]; bloom FAST 0.000 ms (longest 0.000, 0 frames; glow pass 0.000, pyramid 0.000, out 0.000; 2560x1600, glow level 3, levels 3-9)), depth: world; GPU by pass (ms, mean of 212 frames; a pass's tail may spill into the next): models 0.00 depth 0.06 water 0.00 pall 0.00 heat 1.35 probes 0.03 quads 1.57 bloom 0.00 (sum 3.01); drained frame: none (F3 or -Dincoming.fx.drain=true); half-resolution smoke 376 quads, full 97 (a quad over both kinds of tiles counts in each), lays 1",
+      "FarRenderer.describeSmoke": "fill 15.99 screens (budget 16, one club per gaussian 15.99, before merging 91.19), cluster share 0.00, merge level 3, veil gaussians 11, clusters 347, plan 4.04 ms off-thread"
+     },
+     "host": {
+      "samples": 5,
+      "covered": 1.0,
+      "gpu_covered": 1.0,
+      "cpu_foreign_max": 0.0,
+      "cpu_foreign": 0.0,
+      "gpu_foreign": 0,
+      "gpu_foreign_mean": 0.0,
+      "load1": 3.28,
+      "units": {},
+      "profiles": [
+       "performance"
+      ]
+     }
+    }
+   },
+   "checks": [],
+   "meta": {
+    "gl": {
+     "renderer": "NVIDIA GeForce RTX 4060 Laptop GPU/PCIe/SSE2",
+     "version": "4.6.0 NVIDIA 615.78.08",
+     "vendor": "NVIDIA Corporation",
+     "width": 2560,
+     "height": 1600
+    },
+    "once": {
+     "net.irisshaders.iris.Iris#getCurrentPackName": "(off)",
+     "net.irisshaders.iris.Iris#isPackInUseQuick": "false"
+    },
+    "impacts": {
+     "100": {
+      "got": 100,
+      "expect": 100,
+      "why": "all",
+      "took_s": 1.2394
+     }
+    },
+    "done": {
+     "type": "done",
+     "t_ms": 161841.937,
+     "frames": 73610,
+     "repeated_stages": 0,
+     "steps_done": 20
+    },
+    "frames": 73609,
+    "duration_s": 146.601207,
+    "shots": [
+     "100-hit_0.2s",
+     "100-hit_10s",
+     "100-hit_1s",
+     "100-hit_3s",
+     "100_edge",
+     "100_inside",
+     "100_outside"
+    ],
+    "exit": 0,
+    "gpu_minutes": 2.85
+   },
+   "load": []
+  },
+  "complementary": {
+   "windows": {
+    "100-hit": {
+     "duration_s": 10.0,
+     "frames": 415,
+     "fps": 41.5,
+     "interval": {
+      "n": 415,
+      "mean": 23.482520481927708,
+      "p50": 20.717,
+      "p95": 38.2738,
+      "p99": 46.73772000000001,
+      "max": 68.316
+     },
+     "cpu": {
+      "n": 415,
+      "mean": 19.36081204819277,
+      "p50": 18.081,
+      "p95": 29.437900000000003,
+      "p99": 33.47966000000002,
+      "max": 37.24
+     },
+     "thread": {
+      "n": 415,
+      "mean": 19.214344578313256,
+      "p50": 18.07,
+      "p95": 28.632400000000004,
+      "p99": 30.99768,
+      "max": 35.274
+     },
+     "gpu": {
+      "n": 415,
+      "mean": 20.371539759036146,
+      "p50": 20.162,
+      "p95": 29.0576,
+      "p99": 31.508120000000005,
+      "max": 34.73
+     },
+     "stages": {
+      "after_block_entities": {
+       "p50": 0.001,
+       "mean": 0.0006048192771084338
+      },
+      "after_block_entities+": {
+       "p50": 0.001,
+       "mean": 0.0005783132530120482
+      },
+      "after_cutout_blocks": {
+       "p50": 0.001,
+       "mean": 0.0005855421686746988
+      },
+      "after_cutout_blocks+": {
+       "p50": 0.001,
+       "mean": 0.0006240963855421687
+      },
+      "after_cutout_mipped_blocks": {
+       "p50": 0.001,
+       "mean": 0.0005879518072289156
+      },
+      "after_cutout_mipped_blocks+": {
+       "p50": 0.001,
+       "mean": 0.0006120481927710844
+      },
+      "after_entities": {
+       "p50": 0.867,
+       "mean": 1.9086939759036143
+      },
+      "after_entities+": {
+       "p50": 0.001,
+       "mean": 0.000619277108433735
+      },
+      "after_level": {
+       "p50": 2.936,
+       "mean": 3.205720481927711
+      },
+      "after_level+": {
+       "p50": 4.094,
+       "mean": 4.207433734939759
+      },
+      "after_particles": {
+       "p50": 0.046,
+       "mean": 0.25973493975903617
+      },
+      "after_particles+": {
+       "p50": 0.001,
+       "mean": 0.0005590361445783132
+      },
+      "after_sky": {
+       "p50": 0.181,
+       "mean": 0.21367951807228913
+      },
+      "after_sky+": {
+       "p50": 0.001,
+       "mean": 0.0005951807228915662
+      },
+      "after_solid_blocks": {
+       "p50": 0.651,
+       "mean": 0.7437036144578313
+      },
+      "after_solid_blocks+": {
+       "p50": 0.001,
+       "mean": 0.0005927710843373494
+      },
+      "after_translucent_blocks": {
+       "p50": 0.076,
+       "mean": 0.0887156626506024
+      },
+      "after_translucent_blocks+": {
+       "p50": 0.001,
+       "mean": 0.0006096385542168675
+      },
+      "after_tripwire_blocks": {
+       "p50": 11.185,
+       "mean": 9.692404819277108
+      },
+      "after_tripwire_blocks+": {
+       "p50": 0.001,
+       "mean": 0.0006337349397590362
+      },
+      "after_weather": {
+       "p50": 0.001,
+       "mean": 0.0005783132530120482
+      },
+      "after_weather+": {
+       "p50": 0.001,
+       "mean": 0.000563855421686747
+      },
+      "tail": {
+       "p50": 0.037,
+       "mean": 0.04301686746987952
+      }
+     },
+     "mspt": {
+      "n": 10,
+      "mean": 23.96084,
+      "p50": 24.2929,
+      "p95": 28.85612,
+      "p99": 29.452424,
+      "max": 29.6015
+     },
+     "projectiles": 65,
+     "entities": 1078,
+     "bound": "gpu",
+     "probes": {
+      "FxLayer.describeTiming": "quads 7707, 10.321 ms (longest in the second 10.999; without GC 10.999, CPU 11.001; frames with GC 0), GPU 5.289 ms (longest 8.243, 58 frames; heat pass 1.408, longest 2.701, 58 frames — heat lights 4 hot 4 front 2 jets 0, area 1 rects (1 lit) 100.0% {R 269 L 2.8 dn 2.73e-06..2.73e-06 most 16.1 px} {R 96 L 2.7 dn 7.89e-06..7.89e-06 most 11.1 px} [r 13.3 h 27 dT 78 px 1.08] [r 10.4 h 21 dT 1082 px 1.01] [r 9.1 h 18 dT 1196 px 0.96] [r 15.9 h 32 dT 41 px 0.71]; bloom FAST 0.298 ms (longest 0.426, 58 frames; glow pass 0.092, pyramid 0.121, out 0.078; 2560x1600, glow level 3, levels 3-9)), depth: world; GPU by pass (ms, mean of 58 frames; a pass's tail may spill into the next): models 0.03 depth 0.08 water 0.00 pall 0.00 heat 1.41 probes 0.02 quads 3.55 bloom 0.30 (sum 5.39); drained frame: none (F3 or -Dincoming.fx.drain=true); half-resolution smoke 1477 quads, full 7460 (a quad over both kinds of tiles counts in each), lays 1",
+      "FarRenderer.describeSmoke": "fill 11.91 screens (budget 16, one club per gaussian 11.91, before merging 11.91), cluster share 0.00, merge level 0, veil gaussians 0, clusters 4359, plan 4.41 ms off-thread"
+     },
+     "host": {
+      "samples": 3,
+      "covered": 1.0,
+      "gpu_covered": 1.0,
+      "cpu_foreign_max": 0.08,
+      "cpu_foreign": 0.04,
+      "gpu_foreign": 0,
+      "gpu_foreign_mean": 0.0,
+      "load1": 3.11,
+      "units": {
+       "app-com.anthropic.Claude-183212.scope": 0.19
+      },
+      "profiles": [
+       "performance"
+      ]
+     }
+    },
+    "100/outside": {
+     "duration_s": 20.048199000000007,
+     "frames": 1904,
+     "fps": 94.97112433889943,
+     "interval": {
+      "n": 1904,
+      "mean": 10.529367647058825,
+      "p50": 10.319500000000001,
+      "p95": 13.062349999999999,
+      "p99": 15.2741,
+      "max": 17.223
+     },
+     "cpu": {
+      "n": 1904,
+      "mean": 6.192236869747899,
+      "p50": 6.1175,
+      "p95": 7.108649999999999,
+      "p99": 7.742,
+      "max": 11.436
+     },
+     "thread": {
+      "n": 1904,
+      "mean": 6.176712184873949,
+      "p50": 6.111,
+      "p95": 7.0745499999999995,
+      "p99": 7.66685,
+      "max": 8.839
+     },
+     "gpu": {
+      "n": 1904,
+      "mean": 10.350389705882353,
+      "p50": 10.130500000000001,
+      "p95": 11.707549999999998,
+      "p99": 15.011,
+      "max": 16.912
+     },
+     "stages": {
+      "after_block_entities": {
+       "p50": 0.001,
+       "mean": 0.0006092436974789915
+      },
+      "after_block_entities+": {
+       "p50": 0.001,
+       "mean": 0.0005777310924369748
+      },
+      "after_cutout_blocks": {
+       "p50": 0.001,
+       "mean": 0.0006029411764705883
+      },
+      "after_cutout_blocks+": {
+       "p50": 0.001,
+       "mean": 0.0006045168067226891
+      },
+      "after_cutout_mipped_blocks": {
+       "p50": 0.001,
+       "mean": 0.0005882352941176471
+      },
+      "after_cutout_mipped_blocks+": {
+       "p50": 0.001,
+       "mean": 0.0006218487394957983
+      },
+      "after_entities": {
+       "p50": 0.809,
+       "mean": 0.849859243697479
+      },
+      "after_entities+": {
+       "p50": 0.001,
+       "mean": 0.0005840336134453782
+      },
+      "after_level": {
+       "p50": 3.512,
+       "mean": 3.633081407563025
+      },
+      "after_level+": {
+       "p50": 2.682,
+       "mean": 2.7430829831932773
+      },
+      "after_particles": {
+       "p50": 0.047,
+       "mean": 0.047500525210084035
+      },
+      "after_particles+": {
+       "p50": 0.001,
+       "mean": 0.0005861344537815127
+      },
+      "after_sky": {
+       "p50": 0.221,
+       "mean": 0.23291491596638658
+      },
+      "after_sky+": {
+       "p50": 0.001,
+       "mean": 0.0005751050420168067
+      },
+      "after_solid_blocks": {
+       "p50": 0.794,
+       "mean": 0.8243340336134454
+      },
+      "after_solid_blocks+": {
+       "p50": 0.001,
+       "mean": 0.000582983193277311
+      },
+      "after_translucent_blocks": {
+       "p50": 0.091,
+       "mean": 0.09538340336134453
+      },
+      "after_translucent_blocks+": {
+       "p50": 0.001,
+       "mean": 0.0005966386554621849
+      },
+      "after_tripwire_blocks": {
+       "p50": 1.795,
+       "mean": 1.8657605042016807
+      },
+      "after_tripwire_blocks+": {
+       "p50": 0.001,
+       "mean": 0.0015635504201680671
+      },
+      "after_weather": {
+       "p50": 0.001,
+       "mean": 0.0006008403361344539
+      },
+      "after_weather+": {
+       "p50": 0.001,
+       "mean": 0.0005919117647058824
+      },
+      "tail": {
+       "p50": 0.047,
+       "mean": 0.04853623949579832
+      }
+     },
+     "mspt": {
+      "n": 20,
+      "mean": 6.523675,
+      "p50": 6.5151,
+      "p95": 6.5820099999999995,
+      "p99": 6.586722,
+      "max": 6.5879
+     },
+     "projectiles": 0,
+     "entities": 275,
+     "bound": "gpu",
+     "probes": {
+      "FxLayer.describeTiming": "quads 2119, 4.890 ms (longest in the second 8.420; without GC 5.750, CPU 5.728; frames with GC 1), GPU 2.440 ms (longest 3.183, 97 frames; heat pass 0.284, longest 0.553, 97 frames — heat lights 4 hot 4 front 0 jets 0, area 2 rects (2 lit) 17.8% [r 2.5 h 21 dT 63 px 1.01] [r 2.5 h 21 dT 63 px 1.06] [r 2.5 h 21 dT 63 px 1.03] [r 2.5 h 21 dT 63 px 1.02]; bloom FAST 0.277 ms (longest 0.588, 97 frames; glow pass 0.066, pyramid 0.120, out 0.073; 2560x1600, glow level 3, levels 3-9)), depth: world; GPU by pass (ms, mean of 97 frames; a pass's tail may spill into the next): models 0.00 depth 0.07 water 0.01 pall 0.00 heat 0.29 probes 0.02 quads 1.83 bloom 0.29 (sum 2.52); drained frame: none (F3 or -Dincoming.fx.drain=true); half-resolution smoke 1632 quads, full 965 (a quad over both kinds of tiles counts in each), lays 1",
+      "FarRenderer.describeSmoke": "fill 14.32 screens (budget 16, one club per gaussian 14.32, before merging 32.84), cluster share 0.00, merge level 3, veil gaussians 0, clusters 1819, plan 3.31 ms off-thread"
+     },
+     "host": {
+      "samples": 5,
+      "covered": 1.0,
+      "gpu_covered": 1.0,
+      "cpu_foreign_max": 0.0,
+      "cpu_foreign": 0.0,
+      "gpu_foreign": 0,
+      "gpu_foreign_mean": 0.0,
+      "load1": 2.43,
+      "units": {},
+      "profiles": [
+       "performance"
+      ]
+     }
+    },
+    "100/edge": {
+     "duration_s": 20.000603999999992,
+     "frames": 1675,
+     "fps": 83.74747082638108,
+     "interval": {
+      "n": 1675,
+      "mean": 11.940539701492536,
+      "p50": 11.905,
+      "p95": 14.2781,
+      "p99": 15.09606,
+      "max": 19.632
+     },
+     "cpu": {
+      "n": 1675,
+      "mean": 5.517240597014926,
+      "p50": 5.392,
+      "p95": 6.5497,
+      "p99": 7.42112,
+      "max": 11.602
+     },
+     "thread": {
+      "n": 1675,
+      "mean": 5.509823283582089,
+      "p50": 5.388,
+      "p95": 6.543199999999999,
+      "p99": 7.367819999999999,
+      "max": 8.948
+     },
+     "gpu": {
+      "n": 1675,
+      "mean": 11.75411223880597,
+      "p50": 11.722,
+      "p95": 12.588199999999999,
+      "p99": 14.151259999999999,
+      "max": 17.144
+     },
+     "stages": {
+      "after_block_entities": {
+       "p50": 0.001,
+       "mean": 0.0006000000000000001
+      },
+      "after_block_entities+": {
+       "p50": 0.001,
+       "mean": 0.0006053731343283582
+      },
+      "after_cutout_blocks": {
+       "p50": 0.001,
+       "mean": 0.0006149253731343283
+      },
+      "after_cutout_blocks+": {
+       "p50": 0.001,
+       "mean": 0.0006161194029850746
+      },
+      "after_cutout_mipped_blocks": {
+       "p50": 0.001,
+       "mean": 0.0005904477611940298
+      },
+      "after_cutout_mipped_blocks+": {
+       "p50": 0.001,
+       "mean": 0.000608955223880597
+      },
+      "after_entities": {
+       "p50": 0.966,
+       "mean": 0.9879391044776119
+      },
+      "after_entities+": {
+       "p50": 0.001,
+       "mean": 0.0005964179104477611
+      },
+      "after_level": {
+       "p50": 3.598,
+       "mean": 3.6564543283582087
+      },
+      "after_level+": {
+       "p50": 3.742,
+       "mean": 3.800322985074627
+      },
+      "after_particles": {
+       "p50": 0.067,
+       "mean": 0.06771820895522387
+      },
+      "after_particles+": {
+       "p50": 0.001,
+       "mean": 0.0005808955223880597
+      },
+      "after_sky": {
+       "p50": 0.264,
+       "mean": 0.2660489552238806
+      },
+      "after_sky+": {
+       "p50": 0.001,
+       "mean": 0.0005862686567164179
+      },
+      "after_solid_blocks": {
+       "p50": 0.854,
+       "mean": 0.8766411940298507
+      },
+      "after_solid_blocks+": {
+       "p50": 0.001,
+       "mean": 0.0005797014925373134
+      },
+      "after_translucent_blocks": {
+       "p50": 0.093,
+       "mean": 0.09669970149253732
+      },
+      "after_translucent_blocks+": {
+       "p50": 0.001,
+       "mean": 0.0005976119402985075
+      },
+      "after_tripwire_blocks": {
+       "p50": 1.91,
+       "mean": 1.9443862686567166
+      },
+      "after_tripwire_blocks+": {
+       "p50": 0.001,
+       "mean": 0.0006023880597014926
+      },
+      "after_weather": {
+       "p50": 0.001,
+       "mean": 0.0006143283582089552
+      },
+      "after_weather+": {
+       "p50": 0.001,
+       "mean": 0.0005898507462686567
+      },
+      "tail": {
+       "p50": 0.049,
+       "mean": 0.04914985074626866
+      }
+     },
+     "mspt": {
+      "n": 20,
+      "mean": 6.579179999999999,
+      "p50": 6.58975,
+      "p95": 6.72742,
+      "p99": 6.733804,
+      "max": 6.7354
+     },
+     "projectiles": 0,
+     "entities": 104,
+     "bound": "gpu",
+     "probes": {
+      "FxLayer.describeTiming": "quads 1078, 4.390 ms (longest in the second 5.525; without GC 5.525, CPU 5.526; frames with GC 0), GPU 3.750 ms (longest 4.632, 83 frames; heat pass 1.543, longest 1.865, 83 frames — heat lights 4 hot 4 front 0 jets 0, area 1 rects (1 lit) 100.0% [r 2.5 h 21 dT 63 px 1.37] [r 2.5 h 21 dT 63 px 1.37] [r 2.5 h 21 dT 63 px 1.37] [r 2.5 h 21 dT 63 px 1.37]; bloom FAST 0.320 ms (longest 0.608, 83 frames; glow pass 0.094, pyramid 0.127, out 0.075; 2560x1600, glow level 3, levels 3-9)), depth: world; GPU by pass (ms, mean of 83 frames; a pass's tail may spill into the next): models 0.00 depth 0.08 water 0.01 pall 0.00 heat 1.55 probes 0.05 quads 1.82 bloom 0.33 (sum 3.83); drained frame: none (F3 or -Dincoming.fx.drain=true); half-resolution smoke 560 quads, full 609 (a quad over both kinds of tiles counts in each), lays 1",
+      "FarRenderer.describeSmoke": "fill 15.96 screens (budget 16, one club per gaussian 15.96, before merging 31.17), cluster share 0.00, merge level 3, veil gaussians 12, clusters 708, plan 2.63 ms off-thread"
+     },
+     "host": {
+      "samples": 5,
+      "covered": 1.0,
+      "gpu_covered": 1.0,
+      "cpu_foreign_max": 0.0,
+      "cpu_foreign": 0.0,
+      "gpu_foreign": 0,
+      "gpu_foreign_mean": 0.0,
+      "load1": 1.85,
+      "units": {},
+      "profiles": [
+       "performance"
+      ]
+     }
+    },
+    "100/inside": {
+     "duration_s": 20.005652,
+     "frames": 1774,
+     "fps": 88.67494046182549,
+     "interval": {
+      "n": 1774,
+      "mean": 11.277138669673056,
+      "p50": 11.2085,
+      "p95": 14.1637,
+      "p99": 15.413939999999998,
+      "max": 20.266
+     },
+     "cpu": {
+      "n": 1774,
+      "mean": 6.549599210822999,
+      "p50": 6.3245000000000005,
+      "p95": 9.69775,
+      "p99": 10.41616,
+      "max": 13.177
+     },
+     "thread": {
+      "n": 1774,
+      "mean": 6.526405298759865,
+      "p50": 6.313,
+      "p95": 9.66005,
+      "p99": 10.32859,
+      "max": 11.201
+     },
+     "gpu": {
+      "n": 1774,
+      "mean": 11.099924464487035,
+      "p50": 11.09,
+      "p95": 11.58535,
+      "p99": 13.27916,
+      "max": 14.065
+     },
+     "stages": {
+      "after_block_entities": {
+       "p50": 0.001,
+       "mean": 0.0006065388951521985
+      },
+      "after_block_entities+": {
+       "p50": 0.001,
+       "mean": 0.0005952649379932357
+      },
+      "after_cutout_blocks": {
+       "p50": 0.001,
+       "mean": 0.0006155580608793687
+      },
+      "after_cutout_blocks+": {
+       "p50": 0.001,
+       "mean": 0.0005958286358511837
+      },
+      "after_cutout_mipped_blocks": {
+       "p50": 0.001,
+       "mean": 0.000608793686583991
+      },
+      "after_cutout_mipped_blocks+": {
+       "p50": 0.001,
+       "mean": 0.0006149943630214205
+      },
+      "after_entities": {
+       "p50": 0.796,
+       "mean": 0.816501691093574
+      },
+      "after_entities+": {
+       "p50": 0.001,
+       "mean": 0.000609357384441939
+      },
+      "after_level": {
+       "p50": 3.4,
+       "mean": 3.478374295377678
+      },
+      "after_level+": {
+       "p50": 3.338,
+       "mean": 3.4186369785794817
+      },
+      "after_particles": {
+       "p50": 0.061,
+       "mean": 0.061492108229988726
+      },
+      "after_particles+": {
+       "p50": 0.001,
+       "mean": 0.0005963923337091319
+      },
+      "after_sky": {
+       "p50": 0.308,
+       "mean": 0.3141341600901917
+      },
+      "after_sky+": {
+       "p50": 0.001,
+       "mean": 0.0005789177001127396
+      },
+      "after_solid_blocks": {
+       "p50": 0.847,
+       "mean": 0.8755264937993236
+      },
+      "after_solid_blocks+": {
+       "p50": 0.001,
+       "mean": 0.0006059751972942503
+      },
+      "after_translucent_blocks": {
+       "p50": 0.094,
+       "mean": 0.0955011273957159
+      },
+      "after_translucent_blocks+": {
+       "p50": 0.001,
+       "mean": 0.0006031567080045096
+      },
+      "after_tripwire_blocks": {
+       "p50": 1.94,
+       "mean": 1.9834171364148816
+      },
+      "after_tripwire_blocks+": {
+       "p50": 0.001,
+       "mean": 0.0006071025930101465
+      },
+      "after_weather": {
+       "p50": 0.001,
+       "mean": 0.0006071025930101465
+      },
+      "after_weather+": {
+       "p50": 0.001,
+       "mean": 0.0005992108229988726
+      },
+      "tail": {
+       "p50": 0.047,
+       "mean": 0.04723393461104848
+      }
+     },
+     "mspt": {
+      "n": 20,
+      "mean": 7.261015,
+      "p50": 6.89485,
+      "p95": 8.45857,
+      "p99": 8.474834,
+      "max": 8.4789
+     },
+     "projectiles": 0,
+     "entities": 2,
+     "bound": "gpu",
+     "probes": {
+      "FxLayer.describeTiming": "quads 558, 5.463 ms (longest in the second 7.830; without GC 7.830, CPU 7.835; frames with GC 0), GPU 3.369 ms (longest 4.404, 88 frames; heat pass 1.477, longest 1.791, 89 frames — heat lights 4 hot 4 front 0 jets 0, area 1 rects (1 lit) 100.0% [r 2.3 h 19 dT 63 px 1.35] [r 2.5 h 21 dT 63 px 1.37] [r 2.5 h 21 dT 63 px 1.37] [r 2.5 h 21 dT 63 px 1.37]; bloom FAST 0.000 ms (longest 0.000, 0 frames; glow pass 0.000, pyramid 0.000, out 0.000; 2560x1600, glow level 3, levels 3-9)), depth: world; GPU by pass (ms, mean of 88 frames; a pass's tail may spill into the next): models 0.00 depth 0.07 water 0.01 pall 0.00 heat 1.48 probes 0.03 quads 1.85 bloom 0.00 (sum 3.45); drained frame: none (F3 or -Dincoming.fx.drain=true); half-resolution smoke 450 quads, full 108 (a quad over both kinds of tiles counts in each), lays 1",
+      "FarRenderer.describeSmoke": "fill 15.98 screens (budget 16, one club per gaussian 15.98, before merging 89.41), cluster share 0.00, merge level 3, veil gaussians 10, clusters 437, plan 4.82 ms off-thread"
+     },
+     "host": {
+      "samples": 5,
+      "covered": 1.0,
+      "gpu_covered": 1.0,
+      "cpu_foreign_max": 7.1,
+      "cpu_foreign": 3.19,
+      "gpu_foreign": 0,
+      "gpu_foreign_mean": 0.0,
+      "load1": 2.85,
+      "units": {
+       "incoming-job-mt-b5-merge-memory-821839.service": 7.13,
+       "app-com.anthropic.Claude-183212.scope": 0.11
+      },
+      "profiles": [
+       "performance"
+      ]
+     }
+    }
+   },
+   "checks": [],
+   "meta": {
+    "gl": {
+     "renderer": "NVIDIA GeForce RTX 4060 Laptop GPU/PCIe/SSE2",
+     "version": "4.6.0 NVIDIA 615.78.08",
+     "vendor": "NVIDIA Corporation",
+     "width": 2560,
+     "height": 1600
+    },
+    "once": {
+     "net.irisshaders.iris.Iris#getCurrentPackName": "ComplementaryUnbound_r5.9.3.zip",
+     "net.irisshaders.iris.Iris#isPackInUseQuick": "true"
+    },
+    "impacts": {
+     "100": {
+      "got": 100,
+      "expect": 100,
+      "why": "all",
+      "took_s": 1.8483
+     }
+    },
+    "done": {
+     "type": "done",
+     "t_ms": 188308.925,
+     "frames": 13356,
+     "repeated_stages": 53208,
+     "steps_done": 20
+    },
+    "frames": 13353,
+    "duration_s": 158.920693,
+    "shots": [
+     "100-hit_0.2s",
+     "100-hit_10s",
+     "100-hit_1s",
+     "100-hit_3s",
+     "100_edge",
+     "100_inside",
+     "100_outside"
+    ],
+    "exit": 0,
+    "gpu_minutes": 3.31
+   },
+   "load": [
+    "window 100/inside: foreign jobs — up to 7.1 cores (allowed 1.0): {'incoming-job-mt-b5-merge-memory-821839.service': 7.13, 'app-com.anthropic.Claude-183212.scope': 0.11}"
+   ]
+  },
+  "photon": {
+   "windows": {
+    "100-hit": {
+     "duration_s": 10.0,
+     "frames": 371,
+     "fps": 37.1,
+     "interval": {
+      "n": 371,
+      "mean": 26.294716981132076,
+      "p50": 23.25,
+      "p95": 44.0135,
+      "p99": 54.76050000000001,
+      "max": 77.608
+     },
+     "cpu": {
+      "n": 371,
+      "mean": 21.612606469002696,
+      "p50": 19.435,
+      "p95": 34.1185,
+      "p99": 38.49540000000002,
+      "max": 61.639
+     },
+     "thread": {
+      "n": 371,
+      "mean": 21.37988140161725,
+      "p50": 19.378,
+      "p95": 33.7145,
+      "p99": 36.07260000000002,
+      "max": 40.74
+     },
+     "gpu": {
+      "n": 371,
+      "mean": 23.321714285714286,
+      "p50": 22.394,
+      "p95": 32.289500000000004,
+      "p99": 37.09680000000001,
+      "max": 60.07
+     },
+     "stages": {
+      "after_block_entities": {
+       "p50": 0.001,
+       "mean": 0.0005606469002695418
+      },
+      "after_block_entities+": {
+       "p50": 0.001,
+       "mean": 0.0005741239892183288
+      },
+      "after_cutout_blocks": {
+       "p50": 0.001,
+       "mean": 0.0005795148247978437
+      },
+      "after_cutout_blocks+": {
+       "p50": 0.001,
+       "mean": 0.0005902964959568734
+      },
+      "after_cutout_mipped_blocks": {
+       "p50": 0.001,
+       "mean": 0.0006091644204851753
+      },
+      "after_cutout_mipped_blocks+": {
+       "p50": 0.001,
+       "mean": 0.0005606469002695418
+      },
+      "after_entities": {
+       "p50": 0.224,
+       "mean": 1.6990053908355796
+      },
+      "after_entities+": {
+       "p50": 0.001,
+       "mean": 0.0006738544474393531
+      },
+      "after_level": {
+       "p50": 2.939,
+       "mean": 3.038628032345013
+      },
+      "after_level+": {
+       "p50": 4.22,
+       "mean": 4.3163719676549865
+      },
+      "after_particles": {
+       "p50": 0.046,
+       "mean": 0.11212938005390836
+      },
+      "after_particles+": {
+       "p50": 0.001,
+       "mean": 0.0005471698113207547
+      },
+      "after_sky": {
+       "p50": 0.115,
+       "mean": 0.12206738544474394
+      },
+      "after_sky+": {
+       "p50": 0.001,
+       "mean": 0.0006010781671159029
+      },
+      "after_solid_blocks": {
+       "p50": 0.119,
+       "mean": 0.1248679245283019
+      },
+      "after_solid_blocks+": {
+       "p50": 0.001,
+       "mean": 0.000568733153638814
+      },
+      "after_translucent_blocks": {
+       "p50": 0.13,
+       "mean": 0.6655822102425877
+      },
+      "after_translucent_blocks+": {
+       "p50": 0.001,
+       "mean": 0.0005525606469002696
+      },
+      "after_tripwire_blocks": {
+       "p50": 14.445,
+       "mean": 13.192611859838275
+      },
+      "after_tripwire_blocks+": {
+       "p50": 0.001,
+       "mean": 0.0006900269541778976
+      },
+      "after_weather": {
+       "p50": 0.001,
+       "mean": 0.0005929919137466307
+      },
+      "after_weather+": {
+       "p50": 0.001,
+       "mean": 0.0005660377358490566
+      },
+      "tail": {
+       "p50": 0.039,
+       "mean": 0.04228301886792453
+      }
+     },
+     "mspt": {
+      "n": 10,
+      "mean": 24.30898,
+      "p50": 24.7188,
+      "p95": 29.596285,
+      "p99": 30.189817,
+      "max": 30.3382
+     },
+     "projectiles": 64,
+     "entities": 1073,
+     "bound": "gpu",
+     "probes": {
+      "FxLayer.describeTiming": "quads 7697, 11.495 ms (longest in the second 19.009; without GC 12.287, CPU 12.263; frames with GC 1), GPU 4.213 ms (longest 7.386, 49 frames; heat pass 1.038, longest 1.678, 49 frames — heat lights 4 hot 4 front 2 jets 0, area 1 rects (1 lit) 100.0% {R 213 L 2.8 dn 3.46e-06..3.46e-06 most 13.5 px} {R 75 L 2.6 dn 1.04e-05..1.04e-05 most 48.7 px} [r 15.0 h 30 dT 51 px 0.82] [r 16.1 h 32 dT 40 px 0.68] [r 12.3 h 25 dT 108 px 1.26] [r 8.6 h 17 dT 1196 px 0.95]; bloom FAST 0.249 ms (longest 0.431, 49 frames; glow pass 0.078, pyramid 0.103, out 0.066; 2560x1600, glow level 3, levels 3-9)), depth: world; GPU by pass (ms, mean of 49 frames; a pass's tail may spill into the next): models 0.03 depth 0.08 water 0.00 pall 0.00 heat 1.04 probes 0.01 quads 2.91 bloom 0.25 (sum 4.32); drained frame: none (F3 or -Dincoming.fx.drain=true); half-resolution smoke 1402 quads, full 7450 (a quad over both kinds of tiles counts in each), lays 1",
+      "FarRenderer.describeSmoke": "fill 11.89 screens (budget 16, one club per gaussian 11.89, before merging 11.89), cluster share 0.00, merge level 0, veil gaussians 0, clusters 4437, plan 4.83 ms off-thread"
+     },
+     "host": {
+      "samples": 3,
+      "covered": 1.0,
+      "gpu_covered": 1.0,
+      "cpu_foreign_max": 0.0,
+      "cpu_foreign": 0.0,
+      "gpu_foreign": 5,
+      "gpu_foreign_mean": 1.9,
+      "load1": 2.49,
+      "units": {
+       "app-com.anthropic.Claude-183212.scope": 0.12
+      },
+      "profiles": [
+       "performance"
+      ]
+     }
+    },
+    "100/outside": {
+     "duration_s": 20.052230000000012,
+     "frames": 1786,
+     "fps": 89.06740048363693,
+     "interval": {
+      "n": 1786,
+      "mean": 11.227417693169095,
+      "p50": 11.189499999999999,
+      "p95": 13.393,
+      "p99": 13.773050000000001,
+      "max": 15.678
+     },
+     "cpu": {
+      "n": 1786,
+      "mean": 6.3861836506159015,
+      "p50": 6.281,
+      "p95": 7.268,
+      "p99": 7.997100000000003,
+      "max": 13.192
+     },
+     "thread": {
+      "n": 1786,
+      "mean": 6.37202967525196,
+      "p50": 6.2765,
+      "p95": 7.25025,
+      "p99": 7.8853,
+      "max": 9.081
+     },
+     "gpu": {
+      "n": 1786,
+      "mean": 11.044552071668534,
+      "p50": 11.021,
+      "p95": 11.556,
+      "p99": 13.2559,
+      "max": 13.784
+     },
+     "stages": {
+      "after_block_entities": {
+       "p50": 0.001,
+       "mean": 0.0005979843225083986
+      },
+      "after_block_entities+": {
+       "p50": 0.001,
+       "mean": 0.0005957446808510638
+      },
+      "after_cutout_blocks": {
+       "p50": 0.001,
+       "mean": 0.0006035834266517357
+      },
+      "after_cutout_blocks+": {
+       "p50": 0.001,
+       "mean": 0.0006035834266517357
+      },
+      "after_cutout_mipped_blocks": {
+       "p50": 0.001,
+       "mean": 0.0006164613661814109
+      },
+      "after_cutout_mipped_blocks+": {
+       "p50": 0.001,
+       "mean": 0.0006013437849944009
+      },
+      "after_entities": {
+       "p50": 0.159,
+       "mean": 0.16252855543113104
+      },
+      "after_entities+": {
+       "p50": 0.001,
+       "mean": 0.0005968645016797313
+      },
+      "after_level": {
+       "p50": 3.343,
+       "mean": 3.4146702127659574
+      },
+      "after_level+": {
+       "p50": 2.832,
+       "mean": 2.864233482642777
+      },
+      "after_particles": {
+       "p50": 0.038,
+       "mean": 0.037232922732362825
+      },
+      "after_particles+": {
+       "p50": 0.001,
+       "mean": 0.0006035834266517357
+      },
+      "after_sky": {
+       "p50": 0.135,
+       "mean": 0.1417821948488242
+      },
+      "after_sky+": {
+       "p50": 0.001,
+       "mean": 0.000593505039193729
+      },
+      "after_solid_blocks": {
+       "p50": 0.1335,
+       "mean": 0.14224916013437852
+      },
+      "after_solid_blocks+": {
+       "p50": 0.001,
+       "mean": 0.0005817469204927212
+      },
+      "after_translucent_blocks": {
+       "p50": 0.094,
+       "mean": 0.09797312430011197
+      },
+      "after_translucent_blocks+": {
+       "p50": 0.001,
+       "mean": 0.0005968645016797313
+      },
+      "after_tripwire_blocks": {
+       "p50": 4.053,
+       "mean": 4.124814669652856
+      },
+      "after_tripwire_blocks+": {
+       "p50": 0.001,
+       "mean": 0.0015783874580067188
+      },
+      "after_weather": {
+       "p50": 0.001,
+       "mean": 0.000593505039193729
+      },
+      "after_weather+": {
+       "p50": 0.001,
+       "mean": 0.000597424412094065
+      },
+      "tail": {
+       "p50": 0.049,
+       "mean": 0.04921724524076148
+      }
+     },
+     "mspt": {
+      "n": 20,
+      "mean": 6.559625,
+      "p50": 6.5451999999999995,
+      "p95": 6.675965,
+      "p99": 6.695193,
+      "max": 6.7
+     },
+     "projectiles": 0,
+     "entities": 272,
+     "bound": "gpu",
+     "probes": {
+      "FxLayer.describeTiming": "quads 1972, 5.033 ms (longest in the second 6.093; without GC 6.093, CPU 6.094; frames with GC 0), GPU 2.649 ms (longest 2.942, 90 frames; heat pass 0.295, longest 0.299, 90 frames — heat lights 4 hot 4 front 0 jets 0, area 2 rects (2 lit) 18.0% [r 2.5 h 21 dT 63 px 1.08] [r 2.5 h 21 dT 63 px 1.02] [r 2.5 h 21 dT 63 px 1.02] [r 2.5 h 21 dT 63 px 1.03]; bloom FAST 0.288 ms (longest 0.582, 90 frames; glow pass 0.070, pyramid 0.121, out 0.075; 2560x1600, glow level 3, levels 3-9)), depth: world; GPU by pass (ms, mean of 90 frames; a pass's tail may spill into the next): models 0.00 depth 0.09 water 0.01 pall 0.00 heat 0.30 probes 0.02 quads 2.04 bloom 0.29 (sum 2.75); drained frame: none (F3 or -Dincoming.fx.drain=true); half-resolution smoke 1651 quads, full 807 (a quad over both kinds of tiles counts in each), lays 1",
+      "FarRenderer.describeSmoke": "fill 14.68 screens (budget 16, one club per gaussian 14.68, before merging 33.69), cluster share 0.00, merge level 3, veil gaussians 0, clusters 1771, plan 3.45 ms off-thread"
+     },
+     "host": {
+      "samples": 5,
+      "covered": 1.0,
+      "gpu_covered": 1.0,
+      "cpu_foreign_max": 0.0,
+      "cpu_foreign": 0.0,
+      "gpu_foreign": 0,
+      "gpu_foreign_mean": 0.0,
+      "load1": 2.48,
+      "units": {},
+      "profiles": [
+       "performance"
+      ]
+     }
+    },
+    "100/edge": {
+     "duration_s": 20.039647,
+     "frames": 1611,
+     "fps": 80.39063761951496,
+     "interval": {
+      "n": 1611,
+      "mean": 12.439165114835506,
+      "p50": 12.381,
+      "p95": 15.012,
+      "p99": 15.884400000000015,
+      "max": 22.273
+     },
+     "cpu": {
+      "n": 1611,
+      "mean": 5.812399751707014,
+      "p50": 5.712,
+      "p95": 6.7245,
+      "p99": 7.662700000000002,
+      "max": 21.75
+     },
+     "thread": {
+      "n": 1611,
+      "mean": 5.796468032278089,
+      "p50": 5.708,
+      "p95": 6.6985,
+      "p99": 7.636100000000001,
+      "max": 8.719
+     },
+     "gpu": {
+      "n": 1611,
+      "mean": 12.255741775294847,
+      "p50": 12.232,
+      "p95": 12.7385,
+      "p99": 14.6949,
+      "max": 16.029
+     },
+     "stages": {
+      "after_block_entities": {
+       "p50": 0.001,
+       "mean": 0.0005878336436995655
+      },
+      "after_block_entities+": {
+       "p50": 0.001,
+       "mean": 0.0006244568590937306
+      },
+      "after_cutout_blocks": {
+       "p50": 0.001,
+       "mean": 0.0006294227188081937
+      },
+      "after_cutout_blocks+": {
+       "p50": 0.001,
+       "mean": 0.000590316573556797
+      },
+      "after_cutout_mipped_blocks": {
+       "p50": 0.001,
+       "mean": 0.0006201117318435754
+      },
+      "after_cutout_mipped_blocks+": {
+       "p50": 0.001,
+       "mean": 0.0006207324643078833
+      },
+      "after_entities": {
+       "p50": 0.17,
+       "mean": 0.17171446306641838
+      },
+      "after_entities+": {
+       "p50": 0.001,
+       "mean": 0.0006194909993792675
+      },
+      "after_level": {
+       "p50": 3.42,
+       "mean": 3.4741880819366857
+      },
+      "after_level+": {
+       "p50": 3.739,
+       "mean": 3.7852818125387957
+      },
+      "after_particles": {
+       "p50": 0.059,
+       "mean": 0.0609608938547486
+      },
+      "after_particles+": {
+       "p50": 0.001,
+       "mean": 0.0005965238981998759
+      },
+      "after_sky": {
+       "p50": 0.138,
+       "mean": 0.1449279950341403
+      },
+      "after_sky+": {
+       "p50": 0.001,
+       "mean": 0.0005772811918063315
+      },
+      "after_solid_blocks": {
+       "p50": 0.147,
+       "mean": 0.1507579143389199
+      },
+      "after_solid_blocks+": {
+       "p50": 0.001,
+       "mean": 0.000590937306021105
+      },
+      "after_translucent_blocks": {
+       "p50": 0.095,
+       "mean": 0.09906765983860957
+      },
+      "after_translucent_blocks+": {
+       "p50": 0.001,
+       "mean": 0.0006039726877715704
+      },
+      "after_tripwire_blocks": {
+       "p50": 4.262,
+       "mean": 4.308824953445065
+      },
+      "after_tripwire_blocks+": {
+       "p50": 0.001,
+       "mean": 0.000680943513345748
+      },
+      "after_weather": {
+       "p50": 0.001,
+       "mean": 0.0006151458721291123
+      },
+      "after_weather+": {
+       "p50": 0.001,
+       "mean": 0.0006021104903786468
+      },
+      "tail": {
+       "p50": 0.05,
+       "mean": 0.05027746741154562
+      }
+     },
+     "mspt": {
+      "n": 20,
+      "mean": 6.576295,
+      "p50": 6.5927,
+      "p95": 6.64672,
+      "p99": 6.651584,
+      "max": 6.6528
+     },
+     "projectiles": 0,
+     "entities": 88,
+     "bound": "gpu",
+     "probes": {
+      "FxLayer.describeTiming": "quads 1245, 4.356 ms (longest in the second 5.382; without GC 5.382, CPU 5.383; frames with GC 0), GPU 3.719 ms (longest 4.926, 80 frames; heat pass 1.469, longest 1.751, 80 frames — heat lights 4 hot 4 front 0 jets 0, area 1 rects (1 lit) 100.0% [r 2.3 h 19 dT 63 px 1.35] [r 2.5 h 21 dT 63 px 1.37] [r 2.5 h 21 dT 63 px 1.37] [r 2.5 h 21 dT 63 px 1.37]; bloom FAST 0.324 ms (longest 0.638, 80 frames; glow pass 0.099, pyramid 0.127, out 0.076; 2560x1600, glow level 3, levels 3-9)), depth: world; GPU by pass (ms, mean of 80 frames; a pass's tail may spill into the next): models 0.00 depth 0.10 water 0.01 pall 0.00 heat 1.49 probes 0.03 quads 1.87 bloom 0.33 (sum 3.82); drained frame: none (F3 or -Dincoming.fx.drain=true); half-resolution smoke 647 quads, full 697 (a quad over both kinds of tiles counts in each), lays 1",
+      "FarRenderer.describeSmoke": "fill 15.98 screens (budget 16, one club per gaussian 15.98, before merging 30.18), cluster share 0.00, merge level 3, veil gaussians 39, clusters 843, plan 2.80 ms off-thread"
+     },
+     "host": {
+      "samples": 5,
+      "covered": 1.0,
+      "gpu_covered": 1.0,
+      "cpu_foreign_max": 0.02,
+      "cpu_foreign": 0.01,
+      "gpu_foreign": 0,
+      "gpu_foreign_mean": 0.0,
+      "load1": 2.47,
+      "units": {
+       "app-com.anthropic.Claude-183212.scope": 0.1
+      },
+      "profiles": [
+       "performance"
+      ]
+     }
+    },
+    "100/inside": {
+     "duration_s": 20.054783999999984,
+     "frames": 1399,
+     "fps": 69.75891637626219,
+     "interval": {
+      "n": 1399,
+      "mean": 14.33485275196569,
+      "p50": 14.241,
+      "p95": 16.7717,
+      "p99": 18.0683,
+      "max": 19.965
+     },
+     "cpu": {
+      "n": 1399,
+      "mean": 5.283593995711222,
+      "p50": 5.174,
+      "p95": 6.1781999999999995,
+      "p99": 7.029959999999998,
+      "max": 14.561
+     },
+     "thread": {
+      "n": 1399,
+      "mean": 5.2726990707648325,
+      "p50": 5.168,
+      "p95": 6.1636999999999995,
+      "p99": 6.9994,
+      "max": 8.215
+     },
+     "gpu": {
+      "n": 1399,
+      "mean": 14.142690493209436,
+      "p50": 14.077,
+      "p95": 14.799499999999998,
+      "p99": 16.411739999999998,
+      "max": 17.041
+     },
+     "stages": {
+      "after_block_entities": {
+       "p50": 0.001,
+       "mean": 0.0006168691922802001
+      },
+      "after_block_entities+": {
+       "p50": 0.001,
+       "mean": 0.0006154395997140815
+      },
+      "after_cutout_blocks": {
+       "p50": 0.001,
+       "mean": 0.0006225875625446748
+      },
+      "after_cutout_blocks+": {
+       "p50": 0.001,
+       "mean": 0.0005796997855611151
+      },
+      "after_cutout_mipped_blocks": {
+       "p50": 0.001,
+       "mean": 0.0006261615439599714
+      },
+      "after_cutout_mipped_blocks+": {
+       "p50": 0.001,
+       "mean": 0.0006154395997140815
+      },
+      "after_entities": {
+       "p50": 0.146,
+       "mean": 0.14715225160829162
+      },
+      "after_entities+": {
+       "p50": 0.001,
+       "mean": 0.000596854896354539
+      },
+      "after_level": {
+       "p50": 3.43,
+       "mean": 3.4990250178699074
+      },
+      "after_level+": {
+       "p50": 5.337,
+       "mean": 5.430563259471051
+      },
+      "after_particles": {
+       "p50": 0.056,
+       "mean": 0.05717083631165118
+      },
+      "after_particles+": {
+       "p50": 0.001,
+       "mean": 0.000596854896354539
+      },
+      "after_sky": {
+       "p50": 0.136,
+       "mean": 0.13810078627591138
+      },
+      "after_sky+": {
+       "p50": 0.001,
+       "mean": 0.0006197283774124374
+      },
+      "after_solid_blocks": {
+       "p50": 0.147,
+       "mean": 0.15181486776268763
+      },
+      "after_solid_blocks+": {
+       "p50": 0.001,
+       "mean": 0.0006154395997140815
+      },
+      "after_translucent_blocks": {
+       "p50": 0.095,
+       "mean": 0.09596283059328092
+      },
+      "after_translucent_blocks+": {
+       "p50": 0.001,
+       "mean": 0.0006097212294496068
+      },
+      "after_tripwire_blocks": {
+       "p50": 4.48,
+       "mean": 4.5653152251608295
+      },
+      "after_tripwire_blocks+": {
+       "p50": 0.001,
+       "mean": 0.0006526090064331666
+      },
+      "after_weather": {
+       "p50": 0.001,
+       "mean": 0.0006068620443173695
+      },
+      "after_weather+": {
+       "p50": 0.001,
+       "mean": 0.0006018584703359542
+      },
+      "tail": {
+       "p50": 0.048,
+       "mean": 0.0476590421729807
+      }
+     },
+     "mspt": {
+      "n": 20,
+      "mean": 6.535855,
+      "p50": 6.50265,
+      "p95": 6.67091,
+      "p99": 6.674102,
+      "max": 6.6749
+     },
+     "projectiles": 0,
+     "entities": 1,
+     "bound": "gpu",
+     "probes": {
+      "FxLayer.describeTiming": "quads 535, 4.048 ms (longest in the second 4.748; without GC 4.748, CPU 4.749; frames with GC 0), GPU 5.343 ms (longest 6.315, 69 frames; heat pass 3.407, longest 3.442, 69 frames — heat lights 4 hot 4 front 0 jets 0, area 1 rects (1 lit) 100.0% [r 2.5 h 21 dT 63 px 1.37] [r 2.5 h 21 dT 63 px 1.37] [r 2.5 h 21 dT 63 px 1.37] [r 2.3 h 19 dT 63 px 1.35]; bloom FAST 0.000 ms (longest 0.000, 0 frames; glow pass 0.000, pyramid 0.000, out 0.000; 2560x1600, glow level 3, levels 3-9)), depth: world; GPU by pass (ms, mean of 69 frames; a pass's tail may spill into the next): models 0.00 depth 0.10 water 0.01 pall 0.00 heat 3.41 probes 0.09 quads 1.84 bloom 0.00 (sum 5.44); drained frame: none (F3 or -Dincoming.fx.drain=true); half-resolution smoke 434 quads, full 101 (a quad over both kinds of tiles counts in each), lays 1",
+      "FarRenderer.describeSmoke": "fill 16.00 screens (budget 16, one club per gaussian 16.00, before merging 91.59), cluster share 0.00, merge level 3, veil gaussians 13, clusters 407, plan 3.83 ms off-thread"
+     },
+     "host": {
+      "samples": 5,
+      "covered": 1.0,
+      "gpu_covered": 1.0,
+      "cpu_foreign_max": 0.0,
+      "cpu_foreign": 0.0,
+      "gpu_foreign": 0,
+      "gpu_foreign_mean": 0.0,
+      "load1": 1.88,
+      "units": {},
+      "profiles": [
+       "performance"
+      ]
+     }
+    }
+   },
+   "checks": [],
+   "meta": {
+    "gl": {
+     "renderer": "NVIDIA GeForce RTX 4060 Laptop GPU/PCIe/SSE2",
+     "version": "4.6.0 NVIDIA 615.78.08",
+     "vendor": "NVIDIA Corporation",
+     "width": 2560,
+     "height": 1600
+    },
+    "once": {
+     "net.irisshaders.iris.Iris#getCurrentPackName": "photon_v1.4.zip",
+     "net.irisshaders.iris.Iris#isPackInUseQuick": "true"
+    },
+    "impacts": {
+     "100": {
+      "got": 100,
+      "expect": 100,
+      "why": "all",
+      "took_s": 1.7419
+     }
+    },
+    "done": {
+     "type": "done",
+     "t_ms": 178904.551,
+     "frames": 12297,
+     "repeated_stages": 48960,
+     "steps_done": 20
+    },
+    "frames": 12294,
+    "duration_s": 153.986688,
+    "shots": [
+     "100-hit_0.2s",
+     "100-hit_10s",
+     "100-hit_1s",
+     "100-hit_3s",
+     "100_edge",
+     "100_inside",
+     "100_outside"
+    ],
+    "exit": 0,
+    "gpu_minutes": 3.15
+   },
+   "load": []
+  }
+ }
+}

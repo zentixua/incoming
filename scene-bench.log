@@ -14,3 +14,29 @@
 04:45:46 waiting for quiet: foreign 2.14 cores, GPU [], services {'incoming-job-mt-b5-cache-fix-800533.service': 2.07}
 04:46:46 waiting for quiet: foreign 1.19 cores, GPU ['kwin_wayland:1'], services {'incoming-job-mt-b5-cache-fix-800533.service': 1.12}
 04:47:42 not quiet after 2 min — proceeding (window load is reported)
+04:51:00 mt-b5-final-dba2 A1: pack complementary — exit 0, 5.3 min
+04:51:00 mt-b5-final-dba2 B: pack complementary, 20 steps
+04:54:18 mt-b5-final-dba2 B: pack complementary — exit 0, 3.3 min
+04:54:18 mt-b5-final-dba2 A2: pack complementary, 20 steps
+04:57:39 mt-b5-final-dba2 A2: pack complementary — exit 0, 3.3 min
+04:57:42 mt-b5-final-dba2: pack complementary, pair 1 — fail
+  complementary 100/inside thread.p95: 9.66 ms versus 5.89 for worst accepted (+64%, tolerance 25%)
+04:57:42 mt-b5-final-dba2 A1: pack photon, 20 steps
+05:00:59 mt-b5-final-dba2 A1: pack photon — exit 0, 3.3 min
+05:00:59 mt-b5-final-dba2 B: pack photon, 20 steps
+05:04:08 mt-b5-final-dba2 B: pack photon — exit 0, 3.2 min
+05:04:08 mt-b5-final-dba2 A2: pack photon, 20 steps
+05:07:17 mt-b5-final-dba2 A2: pack photon — exit 0, 3.2 min
+05:07:21 mt-b5-final-dba2: pack photon, pair 1 — pass
+05:07:22 A1 none: valid
+05:07:22 A1 complementary: valid
+05:07:22 A1 photon: valid
+05:07:23 A2 none: valid
+05:07:23 A2 complementary: valid
+05:07:23 A2 photon: valid
+05:07:25 B none: valid
+05:07:25 B complementary: valid
+05:07:25 B photon: valid
+05:07:28 mt-b5-final-dba2: fail; results in /mnt/data/projects/incoming/mod/run/stand/out/mt-b5-final-dba2
+laptop_job stand-mt-b5-final-dba2: exit 1
+stand mt-b5-final-dba2: exit 1

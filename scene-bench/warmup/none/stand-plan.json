@@ -1,0 +1,369 @@
+{
+ "seed": 20261025,
+ "day_time": 6000,
+ "settle_s": 4,
+ "limit_s": 1800,
+ "projectiles": [
+  "incoming:drone"
+ ],
+ "warheads": [
+  "incoming:strike"
+ ],
+ "probes": [
+  "ua.zentix.incoming.client.fx.layer.FxLayer#describeTiming",
+  "ua.zentix.incoming.client.far.FarRenderer#describeSmoke"
+ ],
+ "once": [
+  "net.irisshaders.iris.Iris#getCurrentPackName",
+  "net.irisshaders.iris.Iris#isPackInUseQuick"
+ ],
+ "steps": [
+  {
+   "do": "tp",
+   "eye": [
+    800.0,
+    95,
+    0.0
+   ],
+   "look": [
+    1000.0,
+    80,
+    0.0
+   ],
+   "settle_s": 8
+  },
+  {
+   "do": "salvo",
+   "id": "100",
+   "x": 1000.0,
+   "z": 0.0,
+   "radius": 160,
+   "expect": 100,
+   "cmds": [
+    "incoming salvo drone 1 0 at 992 2.8 from 717.2 282.8 via 992 2.8",
+    "incoming salvo drone 1 0 at 1006.9 -13 from 770.6 327.7 via 1006.9 -13",
+    "incoming salvo drone 1 0 at 1004.7 18.4 from 831 362.5 via 1004.7 18.4",
+    "incoming salvo drone 1 0 at 981.2 -12.2 from 896.5 386.4 via 981.2 -12.2",
+    "incoming salvo drone 1 0 at 1025.1 -4.2 from 965.1 398.5 via 1025.1 -4.2",
+    "incoming salvo drone 1 0 at 982.7 22.2 from 1034.9 398.5 via 982.7 22.2",
+    "incoming salvo drone 1 0 at 997.6 -30.5 from 1103.5 386.4 via 997.6 -30.5",
+    "incoming salvo drone 1 0 at 1024 22.4 from 1169 362.5 via 1024 22.4",
+    "incoming salvo drone 1 0 at 965 -0.3 from 1229.4 327.7 via 965 -0.3",
+    "incoming salvo drone 1 0 at 1027.5 -24.7 from 1282.8 282.8 via 1027.5 -24.7",
+    "incoming salvo drone 1 0 at 996.2 38.7 from 717.2 282.8 via 996.2 38.7",
+    "incoming salvo drone 1 0 at 975.6 -32.5 from 770.6 327.7 via 975.6 -32.5",
+    "incoming salvo drone 1 0 at 1041.7 7.8 from 831 362.5 via 1041.7 7.8",
+    "incoming salvo drone 1 0 at 962.6 23.3 from 896.5 386.4 via 962.6 23.3",
+    "incoming salvo drone 1 0 at 1012.3 -44 from 965.1 398.5 via 1012.3 -44",
+    "incoming salvo drone 1 0 at 1021.4 42.1 from 1034.9 398.5 via 1021.4 42.1",
+    "incoming salvo drone 1 0 at 954.4 -17.2 from 1103.5 386.4 via 954.4 -17.2",
+    "incoming salvo drone 1 0 at 1046.6 -18.7 from 1169 362.5 via 1046.6 -18.7",
+    "incoming salvo drone 1 0 at 977.7 46.5 from 1229.4 327.7 via 977.7 46.5",
+    "incoming salvo drone 1 0 at 984.6 -50.7 from 1282.8 282.8 via 984.6 -50.7",
+    "incoming salvo drone 1 0 at 1046.7 27.7 from 717.2 282.8 via 1046.7 27.7",
+    "incoming salvo drone 1 0 at 945.5 11.4 from 770.6 327.7 via 945.5 11.4",
+    "incoming salvo drone 1 0 at 1033.2 -46.2 from 831 362.5 via 1033.2 -46.2",
+    "incoming salvo drone 1 0 at 1006.9 57.8 from 896.5 386.4 via 1006.9 57.8",
+    "incoming salvo drone 1 0 at 955 -38.7 from 965.1 398.5 via 955 -38.7",
+    "incoming salvo drone 1 0 at 1060.6 -1.9 from 1034.9 398.5 via 1060.6 -1.9",
+    "incoming salvo drone 1 0 at 955.8 43.1 from 1103.5 386.4 via 955.8 43.1",
+    "incoming salvo drone 1 0 at 1003.5 -62.8 from 1169 362.5 via 1003.5 -62.8",
+    "incoming salvo drone 1 0 at 1040.6 49.6 from 1229.4 327.7 via 1040.6 49.6",
+    "incoming salvo drone 1 0 at 935.5 -9.3 from 1282.8 282.8 via 935.5 -9.3",
+    "incoming salvo drone 1 0 at 1054.8 -37.3 from 717.2 282.8 via 1054.8 -37.3",
+    "incoming salvo drone 1 0 at 984.6 65.6 from 770.6 327.7 via 984.6 65.6",
+    "incoming salvo drone 1 0 at 966.6 -59.7 from 831 362.5 via 966.6 -59.7",
+    "incoming salvo drone 1 0 at 1066 21.8 from 896.5 386.4 via 1066 21.8",
+    "incoming salvo drone 1 0 at 935.7 28.9 from 965.1 398.5 via 935.7 28.9",
+    "incoming salvo drone 1 0 at 1028.2 -65.7 from 1034.9 398.5 via 1028.2 -65.7",
+    "incoming salvo drone 1 0 at 1023.9 68.5 from 1103.5 386.4 via 1023.9 68.5",
+    "incoming salvo drone 1 0 at 935.3 -34.8 from 1169 362.5 via 935.3 -34.8",
+    "incoming salvo drone 1 0 at 1072.2 -18.3 from 1229.4 327.7 via 1072.2 -18.3",
+    "incoming salvo drone 1 0 at 958.6 63 from 1282.8 282.8 via 958.6 63",
+    "incoming salvo drone 1 0 at 987.8 -75.4 from 717.2 282.8 via 987.8 -75.4",
+    "incoming salvo drone 1 0 at 1060.7 47.9 from 770.6 327.7 via 1060.7 47.9",
+    "incoming salvo drone 1 0 at 922 5.7 from 831 362.5 via 922 5.7",
+    "incoming salvo drone 1 0 at 1054.3 -57.6 from 896.5 386.4 via 1054.3 -57.6",
+    "incoming salvo drone 1 0 at 998.8 80 from 965.1 398.5 via 998.8 80",
+    "incoming salvo drone 1 0 at 946.2 -60.5 from 1034.9 398.5 via 946.2 -60.5",
+    "incoming salvo drone 1 0 at 1081.4 8.3 from 1103.5 386.4 via 1081.4 8.3",
+    "incoming salvo drone 1 0 at 933.6 49.4 from 1169 362.5 via 933.6 49.4",
+    "incoming salvo drone 1 0 at 1015.8 -82.1 from 1229.4 327.7 via 1015.8 -82.1",
+    "incoming salvo drone 1 0 at 1044.3 71.9 from 1282.8 282.8 via 1044.3 71.9",
+    "incoming salvo drone 1 0 at 918 -23.3 from 717.2 282.8 via 918 -23.3",
+    "incoming salvo drone 1 0 at 1077 -38.6 from 770.6 327.7 via 1077 -38.6",
+    "incoming salvo drone 1 0 at 969 81.2 from 831 362.5 via 969 81.2",
+    "incoming salvo drone 1 0 at 967.7 -81.6 from 896.5 386.4 via 967.7 -81.6",
+    "incoming salvo drone 1 0 at 1079.7 38.7 from 965.1 398.5 via 1079.7 38.7",
+    "incoming salvo drone 1 0 at 914.3 25.5 from 1034.9 398.5 via 914.3 25.5",
+    "incoming salvo drone 1 0 at 1046.4 -77.4 from 1103.5 386.4 via 1046.4 -77.4",
+    "incoming salvo drone 1 0 at 1018.2 89.1 from 1169 362.5 via 1018.2 89.1",
+    "incoming salvo drone 1 0 at 925.7 -53.9 from 1229.4 327.7 via 925.7 -53.9",
+    "incoming salvo drone 1 0 at 1092 -10.6 from 1282.8 282.8 via 1092 -10.6",
+    "incoming salvo drone 1 0 at 938.8 70.5 from 717.2 282.8 via 938.8 70.5",
+    "incoming salvo drone 1 0 at 997.5 -94.1 from 770.6 327.7 via 997.5 -94.1",
+    "incoming salvo drone 1 0 at 1065.9 68.2 from 831 362.5 via 1065.9 68.2",
+    "incoming salvo drone 1 0 at 904.6 -5.8 from 896.5 386.4 via 904.6 -5.8",
+    "incoming salvo drone 1 0 at 1074.9 -60.7 from 965.1 398.5 via 1074.9 -60.7",
+    "incoming salvo drone 1 0 at 985.6 96.1 from 1034.9 398.5 via 985.6 96.1",
+    "incoming salvo drone 1 0 at 945.3 -81.1 from 1103.5 386.4 via 945.3 -81.1",
+    "incoming salvo drone 1 0 at 1095.9 23 from 1169 362.5 via 1095.9 23",
+    "incoming salvo drone 1 0 at 913.1 48.1 from 1229.4 327.7 via 913.1 48.1",
+    "incoming salvo drone 1 0 at 1031.8 -94.9 from 1282.8 282.8 via 1031.8 -94.9",
+    "incoming salvo drone 1 0 at 1040.9 92.1 from 717.2 282.8 via 1040.9 92.1",
+    "incoming salvo drone 1 0 at 907 -40.5 from 770.6 327.7 via 907 -40.5",
+    "incoming salvo drone 1 0 at 1096.6 -33.2 from 831 362.5 via 1096.6 -33.2",
+    "incoming salvo drone 1 0 at 950.8 90.4 from 896.5 386.4 via 950.8 90.4",
+    "incoming salvo drone 1 0 at 975.1 -100.5 from 965.1 398.5 via 975.1 -100.5",
+    "incoming salvo drone 1 0 at 1086.9 57.7 from 1034.9 398.5 via 1086.9 57.7",
+    "incoming salvo drone 1 0 at 896.3 16.3 from 1103.5 386.4 via 896.3 16.3",
+    "incoming salvo drone 1 0 at 1065.9 -82.6 from 1169 362.5 via 1065.9 -82.6",
+    "incoming salvo drone 1 0 at 1007.2 106.1 from 1229.4 327.7 via 1007.2 106.1",
+    "incoming salvo drone 1 0 at 922.5 -73.8 from 1282.8 282.8 via 922.5 -73.8",
+    "incoming salvo drone 1 0 at 1107.6 2.1 from 717.2 282.8 via 1107.6 2.1",
+    "incoming salvo drone 1 0 at 918.7 71.6 from 770.6 327.7 via 918.7 71.6",
+    "incoming salvo drone 1 0 at 1011.6 -108.4 from 831 362.5 via 1011.6 -108.4",
+    "incoming salvo drone 1 0 at 1065 88.3 from 896.5 386.4 via 1065 88.3",
+    "incoming salvo drone 1 0 at 891.8 -21.3 from 965.1 398.5 via 891.8 -21.3",
+    "incoming salvo drone 1 0 at 1094.8 -57.7 from 1034.9 398.5 via 1094.8 -57.7",
+    "incoming salvo drone 1 0 at 968.9 107.2 from 1103.5 386.4 via 968.9 107.2",
+    "incoming salvo drone 1 0 at 950.2 -100.6 from 1169 362.5 via 950.2 -100.6",
+    "incoming salvo drone 1 0 at 1105.3 40.8 from 1229.4 327.7 via 1105.3 40.8",
+    "incoming salvo drone 1 0 at 894.2 41.3 from 1282.8 282.8 via 894.2 41.3",
+    "incoming salvo drone 1 0 at 1050.4 -102.4 from 717.2 282.8 via 1050.4 -102.4",
+    "incoming salvo drone 1 0 at 1032.2 110.2 from 770.6 327.7 via 1032.2 110.2",
+    "incoming salvo drone 1 0 at 901.3 -59.8 from 831 362.5 via 901.3 -59.8",
+    "incoming salvo drone 1 0 at 1113.8 -22.7 from 896.5 386.4 via 1113.8 -22.7",
+    "incoming salvo drone 1 0 at 931.1 94.1 from 965.1 398.5 via 931.1 94.1",
+    "incoming salvo drone 1 0 at 987.2 -116.6 from 1034.9 398.5 via 987.2 -116.6",
+    "incoming salvo drone 1 0 at 1088.6 77.7 from 1103.5 386.4 via 1088.6 77.7",
+    "incoming salvo drone 1 0 at 881.5 2.6 from 1169 362.5 via 881.5 2.6",
+    "incoming salvo drone 1 0 at 1086 -82.3 from 1229.4 327.7 via 1086 -82.3",
+    "incoming salvo drone 1 0 at 992.1 119.4 from 1282.8 282.8 via 992.1 119.4"
+   ],
+   "delays": [
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    0.0,
+    1.5,
+    1.5,
+    1.5,
+    1.5,
+    1.5,
+    1.5,
+    1.5,
+    1.5,
+    1.5,
+    1.5,
+    3.0,
+    3.0,
+    3.0,
+    3.0,
+    3.0,
+    3.0,
+    3.0,
+    3.0,
+    3.0,
+    3.0,
+    4.5,
+    4.5,
+    4.5,
+    4.5,
+    4.5,
+    4.5,
+    4.5,
+    4.5,
+    4.5,
+    4.5,
+    6.0,
+    6.0,
+    6.0,
+    6.0,
+    6.0,
+    6.0,
+    6.0,
+    6.0,
+    6.0,
+    6.0,
+    7.5,
+    7.5,
+    7.5,
+    7.5,
+    7.5,
+    7.5,
+    7.5,
+    7.5,
+    7.5,
+    7.5,
+    9.0,
+    9.0,
+    9.0,
+    9.0,
+    9.0,
+    9.0,
+    9.0,
+    9.0,
+    9.0,
+    9.0,
+    10.5,
+    10.5,
+    10.5,
+    10.5,
+    10.5,
+    10.5,
+    10.5,
+    10.5,
+    10.5,
+    10.5,
+    12.0,
+    12.0,
+    12.0,
+    12.0,
+    12.0,
+    12.0,
+    12.0,
+    12.0,
+    12.0,
+    12.0,
+    13.5,
+    13.5,
+    13.5,
+    13.5,
+    13.5,
+    13.5,
+    13.5,
+    13.5,
+    13.5,
+    13.5
+   ]
+  },
+  {
+   "do": "impact_window",
+   "name": "100-hit",
+   "salvo": "100",
+   "n": 10,
+   "s": 10,
+   "shots": [
+    0.2,
+    1,
+    3,
+    10
+   ],
+   "prefix": "100-hit",
+   "timeout_s": 300
+  },
+  {
+   "do": "await",
+   "salvo": "100",
+   "timeout_s": 300,
+   "quiet_s": 10
+  },
+  {
+   "do": "tp",
+   "eye": [
+    800.0,
+    95,
+    0.0
+   ],
+   "look": [
+    1000.0,
+    80,
+    0.0
+   ],
+   "settle_s": 1.5
+  },
+  {
+   "do": "since",
+   "salvo": "100",
+   "s": 15.0
+  },
+  {
+   "do": "shot",
+   "name": "100_outside"
+  },
+  {
+   "do": "wait",
+   "s": 0.5
+  },
+  {
+   "do": "window",
+   "name": "100/outside",
+   "s": 20
+  },
+  {
+   "do": "tp",
+   "eye": [
+    1000.0,
+    75,
+    -120.0
+   ],
+   "look": [
+    1000.0,
+    75,
+    0.0
+   ],
+   "settle_s": 1.5
+  },
+  {
+   "do": "since",
+   "salvo": "100",
+   "s": 45.5
+  },
+  {
+   "do": "shot",
+   "name": "100_edge"
+  },
+  {
+   "do": "wait",
+   "s": 0.5
+  },
+  {
+   "do": "window",
+   "name": "100/edge",
+   "s": 20
+  },
+  {
+   "do": "tp",
+   "eye": [
+    1000.0,
+    69,
+    0.0
+   ],
+   "look": [
+    1100.0,
+    85,
+    0.0
+   ],
+   "settle_s": 1.5
+  },
+  {
+   "do": "since",
+   "salvo": "100",
+   "s": 76.0
+  },
+  {
+   "do": "shot",
+   "name": "100_inside"
+  },
+  {
+   "do": "wait",
+   "s": 0.5
+  },
+  {
+   "do": "window",
+   "name": "100/inside",
+   "s": 20
+  },
+  {
+   "do": "wait",
+   "s": 3
+  }
+ ]
+}

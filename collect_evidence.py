@@ -2,7 +2,7 @@ from pathlib import Path
 import shutil,json,hashlib,subprocess,re
 root=Path(__file__).resolve().parent
 out=root/'evidence';out.mkdir(exist_ok=True)
-for name in ('privacy-replay.log','ledger3.log','cursors.log','fire-grid.log','carriers2.log','carriers3.log','carriers4.log','many.log','review-repro2.log','review-repro3.log','review-fix.log','review.md','review-final.md','final-build.log','pr-ci.log','pipeline-final.log','scene-bench.log','pipeline-accounted.log','cache-repro.log','cache-fix.log','pr-ci-final.log','install_probe.py','install_media.py'):
+for name in ('privacy-replay.log','ledger3.log','cursors.log','fire-grid.log','carriers2.log','carriers3.log','carriers4.log','many.log','review-repro2.log','review-repro3.log','review-fix.log','review.md','review-final.md','final-build.log','pr-ci.log','pipeline-final.log','scene-bench.log','pipeline-accounted.log','cache-repro.log','cache-fix.log','pr-ci-final.log','merge-memory.log','pr-ci-merged.log','pr-ci-accepted.log','pr-ci-final-head.log','ci-gametest2.log','install_probe.py','install_media.py'):
  p=root/name
  if p.exists():shutil.copy2(p,out/name)
 for label in ('main','head'):
@@ -14,7 +14,7 @@ for name in ('RuinMatter','RuinSupport'):
  shutil.copy2('/mnt/data/projects/incoming/mod/run/wt-MT-B5-probe/mod/src/main/java/ua/zentix/incoming/nuclear/world/'+name+'.java',out/(name+'.instrumented.java'))
 repo=root.parents[2]
 ident={}
-for label,ref in [('main','ab2741fa1'),('frames-head','381bd8c57'),('bench-head','dba2d153d'),('validation-head','733c4b93c')]:
+for label,ref in [('main','ab2741fa1'),('frames-head','381bd8c57'),('bench-head','dba2d153d'),('pre-merge-head','733c4b93c'),('merge-head','e4338e65d'),('validation-head','490a2aa84')]:
  paths=subprocess.check_output(['git','-C',str(repo),'ls-tree','-r','--name-only',ref,'mod/src/main']).decode().splitlines()
  ident[label]={'commit':subprocess.check_output(['git','-C',str(repo),'rev-parse',ref]).decode().strip(),'files':{p:hashlib.sha256(subprocess.check_output(['git','-C',str(repo),'show',ref+':'+p])).hexdigest() for p in paths}}
 (out/'source-identity.json').write_text(json.dumps(ident,indent=2)+'\n')

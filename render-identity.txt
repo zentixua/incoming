@@ -1,1 +1,1 @@
-All production client and shader file SHA-256 values match between frames head 381bd8c57, scene-bench head dba2d153d and final validation head 733c4b93c. See source-identity.json.
+All production client and shader source SHA-256 values match between frames head 381bd8c57, initial stand head dba2d153d, corrected server head 733c4b93c, main merge e4338e65d and final validation head 490a2aa84. See source-identity.json. The isolated Complementary repeat uses the immutable CI jar for 490a2aa84.

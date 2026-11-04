@@ -1,0 +1,19 @@
+{
+  "reason": "Stand hashes the input jar once but copies it for each run. A final server-only build replaced that path between candidate packs. Original pair.json is retained unchanged; this file records actual identity.",
+  "candidate": {
+    "none": {
+      "commit": "dba2d153df297d1596898526fbb2d87e163f6ec9",
+      "sha256": "2f5d06077afb30bb506b4557f4542319e6bcc39947f31ffbe4cba4b562882e34"
+    },
+    "complementary": {
+      "commit": "733c4b93cafcec6d8a4b8c09a8fb1c957ca343e0",
+      "sha256": "268c6b0e88012814d3709ac315ae78274d071194e49edc732d82e22d31842457",
+      "observed_game_copy_sha256": "268c6b0e88012814d3709ac315ae78274d071194e49edc732d82e22d31842457"
+    },
+    "photon": {
+      "commit": "733c4b93cafcec6d8a4b8c09a8fb1c957ca343e0",
+      "sha256": "268c6b0e88012814d3709ac315ae78274d071194e49edc732d82e22d31842457"
+    }
+  },
+  "render_source_identity": "render-identity.txt"
+}
