@@ -37,7 +37,7 @@ including shell reads. New area rules/pitfalls go in their area file; only sessi
 - **Minimize “check in-game” requests**; they interrupt play. Verify ourselves: unit tests, GameTest, headless client
   (`tools/client_scenario.sh`), post-game `tools/logscan.py`.
 - Never delete user worlds/saves/files. Move surplus aside (`deploy.sh` uses `incoming-backup/`).
-- **Finish without questions:** once built/tested (including GameTest), merge your PR after green Итог and review
+- **Finish without questions:** once the applicable checks pass, merge your PR after green Итог and review
   (workflow below), deliver to the game: `tools/deploy.sh` for instances without pack auto-update, a release for
   those with it. Artem should find a playable mod, not a checklist. Ask only about goal changes or irreversible
   choices.
@@ -184,14 +184,24 @@ machine-specific job notes belong outside version control.
 Agent workflow: task → branch → code → build/tests → PR → CI → one review round → merge. Extra checks only for
 visuals/sound/FPS, since tests cannot judge beauty or lag. First principles throughout: derive from how the thing
 actually works, fix the real cause.
+- **Shared responsibility, one work owner:** contributors have equal engineering authority. Agree who owns each
+  goal before parallel work; ownership covers implementation, validation, review follow-up and merge, not authority
+  over another contributor. Coordinate overlapping edits. Transfer unfinished work explicitly with its branch/PR,
+  checked commit, measurements, remaining risks and next action; an absent contributor is not an approval gate.
+- **Decisions:** the work owner chooses the implementation. For a substantial decision, record context, alternatives,
+  the choice and consequences briefly in the PR or an existing design document. Consult available affected peers;
+  settle disagreements with code, tests or measurements. For an unresolved reversible choice, the owner decides and
+  records the tradeoff. A concrete correctness, data-loss or performance-budget defect blocks the affected change
+  until resolved; preference alone does not. Product scope and explicitly reserved actions remain Artem's call.
 - **Ready-made first** (Artem, 22.10): search mods/addons/libraries/tools before custom code (Modrinth, CurseForge,
   GitHub; Fabric via Roxy/Sinytra Connector). Custom only if no ready-made solution, reason in one PR line. Our ban
   on vanilla/other-mod mixins concerns our code, not an argument against other mods.
 - **Plan only large changes:** before coding, a few PR-description lines of what players see/hear and the law
   (existing mod law, new laws sourced). Small edits directly.
-- **Before PR:** build and touched-area GameTest (`./gradlew build`; GameTest through `tools/laptop_job.sh … --
+- **Validation:** code changes need build and touched-area GameTest (`./gradlew build`; GameTest through `tools/laptop_job.sh … --
   ./gradlew runGameTestServer -PgametestOnly=…`). Numeric claims get unit tests/GameTest; comment/guide promises held
-  by tests. Open draft immediately (CI only on PRs); split large work.
+  by tests. Documentation-only changes use the applicable CI checks, without a game run. Open draft immediately
+  (CI only on PRs); split large work.
 - **Visual/audio:** edit → sandbox frame/WAV (`tools/sandbox.sh shot`) beside same `main` frame; before/after frames/
   WAV in PR. Scene bench (100-strike frame cost versus `main`) only for changes that can change frame cost: render/FX
   code, shaders, particle or draw counts (Artem, 30.10); once, on the final PR head after review. Colors, textures,
@@ -200,13 +210,15 @@ actually works, fix the real cause.
   (`mod/run/renderdoc/`, Python analysis); edit the numerically identified cause, not a presumed model.
 - **One visual session at a time:** one GPU (`tools/gpu_lease.sh`: other sessions' clients/`--gpu` jobs refuse, naming
   holder); finish with `tools/sandbox.sh stop`, then `tools/gpu_lease.sh release`.
-- **One review round** by the other vendor's model (Claude PRs → Codex, Codex PRs → Claude), at the effort the change
-  needs (high for routine code, xhigh for physics/render/performance); max only after xhigh missed a serious error.
+- **One independent review round:** use the other vendor when available; during absence or quota exhaustion, use a
+  fresh session of the available vendor, given the diff and surrounding-code access without the author's conclusions.
+  Use the effort the change needs (high for routine code, xhigh for physics/render/performance); max only after xhigh
+  missed a serious error.
   Reviewer reads diff/surrounding code, not PR description or author's conversation/conclusions; checks PR frames,
   plus WAV for player-visible/audible changes. Only serious errors block: wrong behavior, crash, tick-budget or
   frame-cost breach; other findings optional, author fixes minor issues without another round. Second round only
   for serious first-round fixes, no third. Parallel tasks/measurements: GPT-6.1 Sol at medium (high for diagnosis).
-- **Author merges:** green Итог (sole required check), review without serious errors. No repeated verification by
+- **Author or explicitly accepted work owner merges:** green Итог (sole required check), review without serious errors. No repeated verification by
   someone else; CI-missed bugs get tests, not extra manual steps.
 - End commits with your own agent's name/address in `Co-Authored-By:`, never another agent's.
 - Community standards versus our tools/replacements: `docs/dev-pipeline.md`.
