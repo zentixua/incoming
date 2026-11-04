@@ -1,0 +1,13 @@
+{
+  "source_sha": "b5610b3c91a2c1e2e2d09d28c0fd503464a43982",
+  "tree": "de41573e090269a066b916c7058c15eae2bf93bc",
+  "checkout": "1aa7dce9e142dacecc9edce06bf5b900d1d9ed6c",
+  "run": 41873148325,
+  "artifact": 13345172928,
+  "zip_sha256": "8badb94437b7dbf24419d1b97424cebfb87ff85d329e115d2d41a10e896c294b",
+  "jar_sha256": "0de8fb1cc9a484d6e9c92716a8f782c921359c3f07e61decb61eea651a7333d8",
+  "version": "3.11.0",
+  "protocol": "55",
+  "no_MtB7_or_devtest": true,
+  "test_only_until_root_readiness": true
+}

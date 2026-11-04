@@ -1,0 +1,12 @@
+{
+  "pack_source": "68e77a75c1d4172c5a86e0d239ec3a09cc22a0f0",
+  "pack_version": "0.1.54",
+  "source_sha": "b5610b3c91a2c1e2e2d09d28c0fd503464a43982",
+  "jar_sha256": "0de8fb1cc9a484d6e9c92716a8f782c921359c3f07e61decb61eea651a7333d8",
+  "filename": "incoming-3.11.0.jar",
+  "version": "3.11.0",
+  "protocol": "55",
+  "pack_sha256": "38c77be99ce6aecaa4ef5888ab43739fedfecfa67f49f73315ab9157a3453ed7",
+  "index_sha256": "80474bcb73fb68681aec94a23937623abcf786a17a23ea01e49cf5d7078b85ba",
+  "upstream_pack_sha256": "ae93b00f619d27fe50a422c9dcf33bb16e028a615743dd05febf2e2503974af0"
+}
