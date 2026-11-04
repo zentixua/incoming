@@ -1,0 +1,102 @@
+diff --git a/mod/src/devtest/java/ua/zentix/incoming/gametest/GameTestShards.java b/mod/src/devtest/java/ua/zentix/incoming/gametest/GameTestShards.java
+index 4215c4072..21d06d778 100644
+--- a/mod/src/devtest/java/ua/zentix/incoming/gametest/GameTestShards.java
++++ b/mod/src/devtest/java/ua/zentix/incoming/gametest/GameTestShards.java
+@@ -46,7 +46,19 @@ public final class GameTestShards {
+         if (!only.isBlank()) NeoForge.EVENT_BUS.addListener((ServerAboutToStartEvent e) -> only(e, only));
+         NeoForge.EVENT_BUS.addListener(net.neoforged.bus.api.EventPriority.LOWEST, BlastLog::onStart);
+         NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.event.server.ServerStartingEvent e) -> {
+-            if (e.getServer() instanceof GameTestServer) TestScale.realWave();
++            if (e.getServer() instanceof GameTestServer server) {
++                TestScale.realWave();
++                if (Boolean.getBoolean("incoming.ci5.prefix")) {
++                    List<net.minecraft.gametest.framework.GameTestBatch> batches = ObfuscationReflectionHelper
++                            .getPrivateValue(GameTestServer.class, server, "testBatches");
++                    int end = -1;
++                    for (int i = 0; i < batches.size(); i++)
++                        if (batches.get(i).name().equals("nuke_fragment_optional:0")) end = i + 1;
++                    if (end < 0) throw new IllegalStateException("CI5 target absent");
++                    batches.subList(end, batches.size()).clear();
++                    Incoming.LOG.info("CI5 original shard prefix {}", batches.stream().map(b -> b.name()).toList());
++                }
++            }
+         });
+         if (!spec.isBlank()) NeoForge.EVENT_BUS.addListener((ServerAboutToStartEvent e) -> select(e, spec));
+     }
+diff --git a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinFragmentCacheGameTests.java b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinFragmentCacheGameTests.java
+index e1e479bb4..6b27e3e51 100644
+--- a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinFragmentCacheGameTests.java
++++ b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinFragmentCacheGameTests.java
+@@ -147,10 +147,20 @@ public final class RuinFragmentCacheGameTests {
+         h.assertTrue(fixed > RuinResults.OWNER_BYTES, "No room for the held-pressure fixture");
+         var held = RuinResults.tryReserveCache(fixed - RuinResults.OWNER_BYTES, room);
+         h.assertTrue(held != null, "Could not establish held producer pressure");
+-        StrikeGameTests.afterTest(h, () -> { ctx.cancelTasks(); held.close(); });
+-        var future = ctx.submitPlanWorker(level, grid, () -> RuinPlanner.finish(grid, Collapse.solve(grid)), RuinWorkers.Priority.NEAR);
++        var probe = new OptionalProbe(h, ctx, held, room, result, startup, fixed);
++        StrikeGameTests.afterTest(h, () -> { probe.dump("terminal-before-cleanup", true); ctx.cancelTasks(); held.close(); });
++        var future = ctx.submitPlanWorker(level, grid, () -> {
++            probe.thread.set(Thread.currentThread());
++            probe.enter.set(System.nanoTime());
++            try { return RuinPlanner.finish(grid, Collapse.solve(grid)); }
++            catch (Throwable error) { probe.error.set(error); throw error; }
++            finally { probe.exit.set(System.nanoTime()); }
++        }, RuinWorkers.Priority.NEAR);
++        probe.future = future;
++        probe.dump("submitted", false);
+         h.assertTrue(future != null && ctx.fragmentCacheBytes() == 0, "Optional cache blocked the admitted uncached solver");
+         h.succeedWhen(() -> {
++            if (++probe.callbacks % 100 == 0) probe.dump("poll", false);
+             h.assertTrue(RuinWorkers.finished(future), "Uncached solver has not progressed with pressure still held");
+             try {
+                 RuinPlan plan = ctx.takeWorker(future);
+@@ -209,6 +219,49 @@ public final class RuinFragmentCacheGameTests {
+         });
+     }
+ 
++
++    /** Temporary raw diagnosis, removed before any fixture correction is proposed. */
++    private static final class OptionalProbe {
++        final GameTestHelper h;
++        final RuinContext ctx;
++        final RuinResults.CacheBudget held;
++        final long epoch, start = System.nanoTime(), room, result, startup, fixed;
++        final java.util.concurrent.atomic.AtomicLong enter = new java.util.concurrent.atomic.AtomicLong();
++        final java.util.concurrent.atomic.AtomicLong exit = new java.util.concurrent.atomic.AtomicLong();
++        final AtomicReference<Thread> thread = new AtomicReference<>();
++        final AtomicReference<Throwable> error = new AtomicReference<>();
++        java.util.concurrent.Future<RuinPlan> future;
++        int callbacks;
++        OptionalProbe(GameTestHelper h, RuinContext ctx, RuinResults.CacheBudget held,
++                      long room, long result, long startup, long fixed) {
++            this.h = h; this.ctx = ctx; this.held = held; this.epoch = h.getLevel().getGameTime();
++            this.room = room; this.result = result; this.startup = startup; this.fixed = fixed;
++        }
++        static Object field(Class<?> type, Object owner, String name) throws ReflectiveOperationException {
++            var f = type.getDeclaredField(name); f.setAccessible(true); return f.get(owner);
++        }
++        void dump(String phase, boolean stacks) {
++            try {
++                var pool = (java.util.concurrent.ThreadPoolExecutor) field(RuinWorkers.class, null, "pool");
++                var workspace = (java.util.concurrent.atomic.AtomicLong) field(RuinWorkers.class, null, "WORKSPACE_BYTES");
++                Thread worker = thread.get();
++                Incoming.LOG.info("CI5 optional phase={} epoch={} tick={} callbacks={} wall_ns={} entered_ns={} exited_ns={} worker={} state={} cpu_ns={} error={} started={} done={} cancelled={} finished={} held={} initial_room={} bound={} startup={} results={} workspace={} detached={} cache={} pool={} pool_active={} queue={} inflight={} configuration={}",
++                        phase, epoch, h.getLevel().getGameTime(), callbacks, System.nanoTime() - start,
++                        enter.get() == 0 ? -1 : enter.get() - start, exit.get() == 0 ? -1 : exit.get() - start,
++                        worker == null ? "none" : worker.getName(), worker == null ? "none" : worker.getState(),
++                        worker == null ? -1 : java.lang.management.ManagementFactory.getThreadMXBean().getThreadCpuTime(worker.threadId()),
++                        error.get(), future != null && RuinWorkers.started(future), future != null && future.isDone(),
++                        future != null && future.isCancelled(), future != null && RuinWorkers.finished(future), held.bytes(),
++                        room, result, startup, RuinResults.bytes(), workspace.get(), RuinInputs.detachedBytes(), ctx.fragmentCacheBytes(),
++                        pool == null ? -1 : pool.getPoolSize(), pool == null ? -1 : pool.getActiveCount(),
++                        pool == null ? -1 : pool.getQueue().size(), RuinWorkers.inFlight(), RuinWorkers.summary());
++                if (stacks) for (var e : Thread.getAllStackTraces().entrySet())
++                    if (e.getKey().getName().startsWith("Incoming ruins"))
++                        Incoming.LOG.info("CI5 worker {} {} {}", e.getKey().getName(), e.getKey().getState(), Arrays.toString(e.getValue()));
++            } catch (ReflectiveOperationException failure) { throw new IllegalStateException(failure); }
++        }
++    }
++
+     private static RuinFragmentCache cache(RuinContext ctx) throws ReflectiveOperationException {
+         var field = RuinContext.class.getDeclaredField("fragmentCache"); field.setAccessible(true);
+         return (RuinFragmentCache) field.get(ctx);

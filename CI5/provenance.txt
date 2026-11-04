@@ -1,0 +1,8 @@
+Base f53ecbe1c3cfec751c1aa978362897a07adc2e7d
+Production diff: 
+Command:
+JAVA_HOME=/home/artem/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/java/java-runtime-delta SESSION_TREES=/mnt/data/projects/incoming/mod/run/wt-CI5 INCOMING_GPU_OWNER=CI5 tools/laptop_job.sh ci5-prefix -- env JAVA_TOOL_OPTIONS="-XX:ActiveProcessorCount=4 -Xmx2g -Dincoming.ci5.prefix=true" ./gradlew --no-daemon --max-workers=2 -Dorg.gradle.jvmargs=-Xmx768m runGameTestServer -PgametestShard=6/6 --console=plain
+Workdir mod/
+Service incoming-job-ci5-prefix-73523
+
+CI actually checked merge 2178866fcbd5168e035f6f6e2d1a2b97df70cbce. Its entire tree and f53 HEAD both equal d0b1cc1241f3e4f81df7ea49332be4589e8a023a (git diff empty). CI Temurin21.0.13+9, local Microsoft21.0.7+6-LTS; CI reported3996MB heap, assigned local2GiB. Both4CPUs. Random GameTest coordinates differ.
