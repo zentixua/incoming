@@ -1,0 +1,216 @@
+{
+  "audit_schema_version": 1,
+  "source_sha": "4d89b5b113a53b3cfe8822092e1813750516c9e9",
+  "files": [
+    {
+      "audit_schema_version": 1,
+      "source_sha": "4d89b5b113a53b3cfe8822092e1813750516c9e9",
+      "path": "/home/ubuntu/airstrike-work/lead2/corrected100kt-natural-on/clean-stop-A/world/data/incoming_ruin_matter.dat",
+      "status": "pass",
+      "file_sha256": "dc0cf4b4c87cf86dfaa7051332dc22b39f32349816a20f4cc7d711692bab82a9",
+      "file_bytes": 37735053,
+      "kind": "ruin",
+      "row_digests": {
+        "data/materials": {
+          "count": 320,
+          "sum_sha256_mod_2_256": "6af47d92b7c640b7c51a2b834c97c3502272987926000e4b0cf2880e536c711d",
+          "ordered_sha256": "5508443a617a96700de631c3706564884d204f4782e932f619c5f42df92151f7"
+        },
+        "data/support_originals": {
+          "count": 305437,
+          "sum_sha256_mod_2_256": "dc97448d5cb88c7310f4369e41004ac242b73c0c4486a9f90445a86ee342dff2",
+          "ordered_sha256": "d3606069005274f841f19af0818cf13a0cd6a00998a794fd19ea153ac3e02868"
+        },
+        "data/cold_edges": {
+          "count": 5945,
+          "sum_sha256_mod_2_256": "b5cd9fdee2d1d7b939b91917339123bde9416f52e66608cbd3ff8f3da17a68a9",
+          "ordered_sha256": "64a53071ff48a6dafdaadfbe930155401593a8252ba4515f0fc770004488f2be"
+        },
+        "data/moving": {
+          "count": 425271,
+          "sum_sha256_mod_2_256": "9fd03d376e3d63eac587b01cddef16fec8d52799fda267ba627855cfb36ad6f6",
+          "ordered_sha256": "ce4295614f1bbf93927504d742aa7494129394820ae5c9da5fc11e04e4ebe71d"
+        }
+      },
+      "totals": {
+        "released": 944063,
+        "deposited": 393168,
+        "dispersed": 125624,
+        "released_volume": 659976.7724800035,
+        "deposited_volume": 278179.81947260525,
+        "dispersed_volume": 96636.8359375,
+        "released_mass": 1471707610.4609375,
+        "deposited_mass": 644086420.9433594,
+        "dispersed_mass": 166114939.84375
+      },
+      "pending_count_volume_mass": [
+        425271,
+        285160.1170705844,
+        661506249.6738281
+      ],
+      "cargo": {
+        "rows": 2626,
+        "represented_pieces": 2626,
+        "canonical_summary_bytes": 420002,
+        "note": "Cargo contents hashed structurally; no registry/item-stack guesses"
+      },
+      "moving_and_stranded_count_volume_mass": {
+        "moving": [
+          425271,
+          285160.1170705844,
+          661506249.6738281
+        ]
+      },
+      "semantic_moving_digest": {
+        "count": 425271,
+        "sum_sha256_mod_2_256": "5defe22733bdc687ab27ee488afc117e60bf623af265a9cf681084a2e5e30813",
+        "ordered_sha256": "1fe274d792278dc4feb94bb469fb27aafc6c6a414a78a29a09391fb7635bcd4f"
+      },
+      "motion_formats": {
+        "packed145": 425271
+      },
+      "material_v0_to_v5": [
+        659976.7724804654,
+        1471707610.4609375,
+        278179.8194726569,
+        644086420.9433594,
+        96636.8359375,
+        166114939.84375
+      ],
+      "residuals": {
+        "count": 0,
+        "_volume": -6.861519068479538e-07,
+        "_mass": 0.0
+      },
+      "support_arrays": {
+        "supports": {
+          "nbt_array_type": 12,
+          "count": 35440,
+          "sum_sha256_mod_2_256": "c07100e145706a297c5e6bb5a1bdea4c2c52c681dd0fb47f0bb1f895d154de21",
+          "ordered_sha256": "5c8ce254444fe25195f9d660b62914b594d23959d1d81ec78cd8133c2d289469"
+        },
+        "support_events": {
+          "nbt_array_type": 11,
+          "count": 35440,
+          "sum_sha256_mod_2_256": "2344921f8186cd6441ee56eed41c502ed07e41563941e502f4c49bc9e2e57930",
+          "ordered_sha256": "32ccf3ca35e90038a8b1017fa8ca130dbb7ff739f3bfc441a8f27164099617bb"
+        }
+      },
+      "data_version": 3955,
+      "failures": []
+    },
+    {
+      "audit_schema_version": 1,
+      "source_sha": "4d89b5b113a53b3cfe8822092e1813750516c9e9",
+      "path": "/home/ubuntu/airstrike-work/lead2/corrected100kt-natural-on/clean-stop-A/world/data/incoming_crater_matter.dat",
+      "status": "pass",
+      "file_sha256": "a8a89c9e393583272c02dbacd30fee39dcb358ea832860f6954c15397c0197bf",
+      "file_bytes": 7905,
+      "kind": "crater",
+      "row_digests": {
+        "data/settled": {
+          "count": 373,
+          "sum_sha256_mod_2_256": "af9d49ead21184a18404fd1d015ccb6c13bd261677e135d8f38956ebf89a52b1",
+          "ordered_sha256": "1e284a6fe8a38f8217cc3cacc01cf5c1a97b1ab9e6e3ff0cb3ef8c4aa618d92a"
+        }
+      },
+      "pass_count": 0,
+      "pass_samples": [],
+      "samples_truncated": false,
+      "material_v0_to_v7": [
+        363748.12164075737,
+        840702420.59375,
+        81139.0,
+        186619700.0,
+        173140.0,
+        399315200.0,
+        109469.12164075792,
+        254767520.59375
+      ],
+      "available_count": 0,
+      "residuals": {
+        "0": -5.238689482212067e-10,
+        "1": 0.0
+      },
+      "data_version": 3955,
+      "failures": []
+    },
+    {
+      "audit_schema_version": 1,
+      "source_sha": "4d89b5b113a53b3cfe8822092e1813750516c9e9",
+      "path": "/home/ubuntu/airstrike-work/lead2/corrected100kt-natural-on/clean-stop-A/world/data/incoming_ruin_settle.dat",
+      "status": "pass",
+      "file_sha256": "684dc1ef004eab1d269bbb2be28a15a28835680bcc2bef4020c69238b9c3f706",
+      "file_bytes": 208,
+      "kind": "progress",
+      "row_digests": {},
+      "pending_chunk_count": 0,
+      "complete_events": 0,
+      "archives_digest": {
+        "count": 1,
+        "sum_sha256_mod_2_256": "4919daad418554c7744417866a7ddfe61c5cedf444e84c572c3ce28856c211fc",
+        "ordered_sha256": "d3c0f1edb60c86b5fae37c6a38034669002179fed20524328b1806f1f62af93e"
+      },
+      "events": 1,
+      "events_digest": {
+        "count": 1,
+        "sum_sha256_mod_2_256": "8fdf24fa3775f4c9212ee53719d5dd5c08122237fd2630fa38c7a888489dbfd4",
+        "ordered_sha256": "f1ab418bc2d8f7244b68ab54dbbcb1c21a7c44ad67d778b09964dbcff7895dfe"
+      },
+      "event_samples": [
+        {
+          "event": "2",
+          "cursor": 0,
+          "scan_version": 2,
+          "complete": 0,
+          "archive": "bba2f438-ff02-43e0-aeb8-63ca04afcc6a/cc378b1a-bd8b-342c-8be1-e5a86f903ea8/57662674698436e84725d3df5c22f047a764a8d3a120383f57c3ed246e0cfe47",
+          "pending": {
+            "nbt_array_type": 12,
+            "count": 0,
+            "sum_sha256_mod_2_256": "0000000000000000000000000000000000000000000000000000000000000000",
+            "ordered_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+          },
+          "effective_cursor": 0
+        }
+      ],
+      "samples_truncated": false,
+      "data_version": 3955,
+      "failures": []
+    },
+    {
+      "audit_schema_version": 1,
+      "source_sha": "4d89b5b113a53b3cfe8822092e1813750516c9e9",
+      "path": "/home/ubuntu/airstrike-work/lead2/corrected100kt-natural-on/clean-stop-A/world/data/incoming_nuclear.dat",
+      "status": "pass",
+      "file_sha256": "176b18bf71f04061791bd6499ffd637a4f21474a881128ce7b32ef2e532fc642",
+      "file_bytes": 284,
+      "kind": "nuclear",
+      "row_digests": {},
+      "crater_chunk_cursors": {},
+      "next_id": 3,
+      "late_from": 1,
+      "event_lists": {
+        "detonations": {
+          "nbt_list_type": 10,
+          "count": 1,
+          "sum_sha256_mod_2_256": "c867709b825d144698800e562aa2db5825a84d1f624f934f681cd68e4ee40637",
+          "ordered_sha256": "fa3c74a75af21e5ba958fc7d41c7462ab18c3e1a78b85a1cc774d1828c010ec8"
+        },
+        "past": {
+          "nbt_list_type": 0,
+          "count": 0,
+          "sum_sha256_mod_2_256": "0000000000000000000000000000000000000000000000000000000000000000",
+          "ordered_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "scheduled": {
+          "nbt_list_type": 0,
+          "count": 0,
+          "sum_sha256_mod_2_256": "0000000000000000000000000000000000000000000000000000000000000000",
+          "ordered_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "data_version": 3955,
+      "failures": []
+    }
+  ]
+}

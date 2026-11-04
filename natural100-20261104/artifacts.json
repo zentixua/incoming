@@ -1,0 +1,72 @@
+[
+  {
+    "file": "REPORT.md",
+    "sha256": "f7ca92ead638448d51aace24ce80114e23d20af098f00ba91c45e91635cc2e7f",
+    "bytes": 4235
+  },
+  {
+    "file": "analysis.json",
+    "sha256": "ef6cea1e1715629c0130771d094cc73f45b4838326e53bf3aa333307bbb587fe",
+    "bytes": 7131
+  },
+  {
+    "file": "ledger-A.json",
+    "sha256": "ae329405e7e5bb4ab875ac08b73c12094cdf85279912f892ae19cadadf0c3cfa",
+    "bytes": 8068
+  },
+  {
+    "file": "driver.jsonl",
+    "sha256": "b1ea18a3d39e31c5bd1cf273e6bf67e29fa4b3cea85cb8c79b1bf6cbf1ae7227",
+    "bytes": 2368
+  },
+  {
+    "file": "ticks.csv.gz",
+    "sha256": "e8d303c412bb4acb0511ca73915ee91cc9d335c3244213f5f7edb5fa352745be",
+    "bytes": 574822,
+    "raw_sha256": "3fa8f5d34e3b7cc236fbf67b6e21c8b481fa7ff682d891329e0392ec5fac64fa"
+  },
+  {
+    "file": "progress.log.gz",
+    "sha256": "a6205fb11c4b2059824119250ad38f2842bfa41fe39329cfa3ae8f0b0f2c066e",
+    "bytes": 168658,
+    "raw_sha256": "1768de00e640065ce9bf028a6d31b3213f1ada7581be85f52b9c977e1ec5745c"
+  },
+  {
+    "file": "ledger.csv.gz",
+    "sha256": "68ac0bba33f90950eb77b34e757f598b861141bc52f615a72184183fe0b55990",
+    "bytes": 794,
+    "raw_sha256": "bb65f59ae463b5311837e6f812c0113c9e571b19ec5233069a85dfa15172afc6"
+  },
+  {
+    "file": "stand-frames.csv.gz",
+    "sha256": "d7cea0664ff56cca400aa72dbd245fe19ef1649c2eff3e90b6baea9bcdc16198",
+    "bytes": 1938146,
+    "raw_sha256": "dcb2d1ac817608ac5f1a2de53fee287e1f8943be9c616b49e49ddddf469204e9"
+  },
+  {
+    "file": "stand-events.jsonl.gz",
+    "sha256": "a674e06b92abc7c6fa1fa521b7ab1219f0ea2bbce863f84c8eeef6ac396d0dfb",
+    "bytes": 28045,
+    "raw_sha256": "1484f2f5c446faaebec5fa48b16312558676cbf3a6ba33521bb36152d5144371"
+  },
+  {
+    "file": "preflight.png",
+    "sha256": "737c903922546eb7cf895a9805b4caaeac40deb2d56d3c9bbeee976442d4671d",
+    "bytes": 6128755
+  },
+  {
+    "file": "after-window.png",
+    "sha256": "b8146097cd75f43b58a8a01b38d772c516fcd3096b333701417f6389d9de3f16",
+    "bytes": 1626547
+  },
+  {
+    "file": "clock-before.json",
+    "sha256": "55f5ef8c8183180d844842f4108de02f074d4c250d5ed61401c6c0bd6290b1c7",
+    "bytes": 3978
+  },
+  {
+    "file": "clock-after.json",
+    "sha256": "7ce82578db9899e62cc1b1d9007807099969ca1cdaaa3679c2e0013512f1ce16",
+    "bytes": 3977
+  }
+]

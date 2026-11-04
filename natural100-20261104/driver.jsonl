@@ -1,0 +1,21 @@
+{"event": "client_joined", "wall_ms": 1793796997427, "mono_ns": 1035809125619204}
+{"event": "command", "wall_ms": 1793796997427, "mono_ns": 1035809125747264, "command": "gamemode spectator Dev"}
+{"event": "command", "wall_ms": 1793796997755, "mono_ns": 1035809454232834, "command": "tp Dev 3136.5 106 -448.5 1.82 2.5"}
+{"event": "command", "wall_ms": 1793796998073, "mono_ns": 1035809772457754, "command": "gamerule doDaylightCycle false"}
+{"event": "command", "wall_ms": 1793796998389, "mono_ns": 1035810088469354, "command": "gamerule doWeatherCycle false"}
+{"event": "command", "wall_ms": 1793796998710, "mono_ns": 1035810408989539, "command": "time set noon"}
+{"event": "command", "wall_ms": 1793796999026, "mono_ns": 1035810725389196, "command": "weather clear"}
+{"event": "command", "wall_ms": 1793796999343, "mono_ns": 1035811042383311, "command": "tick query"}
+{"event": "camera_ready", "wall_ms": 1793796999660, "mono_ns": 1035811359436670}
+{"event": "awaiting_measurement_gate", "wall_ms": 1793797089661, "mono_ns": 1035901359768439}
+{"event": "baseline_start", "wall_ms": 1793797135676, "mono_ns": 1035947375340775}
+{"event": "prepare_requested", "wall_ms": 1793797195677, "mono_ns": 1036007375711350}
+{"event": "command", "wall_ms": 1793797195677, "mono_ns": 1036007375882367, "command": "incoming nuke at 3104.5 63 560.5 100 ground"}
+{"event": "launch_observed", "wall_ms": 1793797214700, "mono_ns": 1036026398739869, "line": "[04Nov2026 14:00:14.290] [Server thread/INFO] [ua.zentix.incoming.Incoming/]: ICBM #1: 100 kt at 3104 63 560, detonation in 90 s"}
+{"event": "detonation_observed", "wall_ms": 1793797304730, "mono_ns": 1036116428914667, "line": "[04Nov2026 14:01:44.284] [Server thread/INFO] [ua.zentix.incoming.Incoming/]: Nuclear detonation #2: 100 kt, ground burst, 3104 63 560, scale 1.0, 19 ms"}
+{"event": "flash_window_end", "wall_ms": 1793797334730, "mono_ns": 1036146429310265}
+{"event": "wave_window_end", "wall_ms": 1793797424731, "mono_ns": 1036236429747142}
+{"event": "settle_window_end", "wall_ms": 1793797784731, "mono_ns": 1036596430217443}
+{"event": "command", "wall_ms": 1793797784731, "mono_ns": 1036596430352884, "command": "tick query"}
+{"event": "command", "wall_ms": 1793797784747, "mono_ns": 1036596446080068, "command": "save-all flush"}
+{"event": "driver_complete", "wall_ms": 1793797784763, "mono_ns": 1036596462022177}
