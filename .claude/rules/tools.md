@@ -50,12 +50,6 @@ The short layout is in the root CLAUDE.md; here, what each script does.
                                            is artem_playing (java in his instance's folder or in the Prism group); --wait:
                                            an honest queue (FIFO): a free GPU goes to the first waiter; status: who holds it and
                                            who waits; test: test_gpu_lease.sh
-    sessions/go.sh <S> [id message]      ← background claude2 session in its own systemd service (incoming-claude-<S>): task
-                                           <S>.txt and brief context.md from mod/run/incoming-sessions; the result of a turn is a line in
-                                           sessions.log; when the turn is done while its laptop jobs (from the tree wt-<S>, wt-<S>-*)
-                                           still run, it continues by itself at their end; --wait <S>, --status
-    laptop-jobs/<name>.md                ← tasks for the laptop: the coordinator sends the file by the commit's SHA, the laptop checks sha256;
-                                           done ones are deleted (history is in git)
     logtime.py                           ← time of Minecraft log lines for digests of laptop tasks
     free_port.py                         ← a free port on 127.0.0.1 for check servers (stress.sh, mp_scenario.sh)
     rig_procs.sh                         ← processes of checks in their own sessions (source from stress.sh, mp_scenario.sh): the script's exit kills them with the JVM
