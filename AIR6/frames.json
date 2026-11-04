@@ -1,0 +1,1681 @@
+[
+  {
+    "scene": "air6-framing-late",
+    "file": "mod/run/sandbox/fx/out/air6-framing-late/air6-framing-late_003.00s.png",
+    "requested_t": 3.0,
+    "nuclear_age": 123.010999,
+    "initial_age": 120.0,
+    "age_error": 0.010998999999998205,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fov": 70,
+    "quality": "MEDIUM",
+    "wave": "0.25",
+    "sha256": "842ca544ed5661688da85c7ac7d511cf47e0ae3637bcfacc043be2dee4d8c3a7",
+    "size": [
+      2560,
+      1412
+    ]
+  },
+  {
+    "scene": "air6-game-15-air",
+    "file": "mod/run/sandbox/fx/out/air6-game-15-air/air6-game-15-air_000.10s.png",
+    "requested_t": 0.1,
+    "nuclear_age": 0.108,
+    "initial_age": 0.0,
+    "age_error": 0.007999999999999993,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fov": 70,
+    "quality": "MEDIUM",
+    "wave": "0.25",
+    "sha256": "f83e76b69e1d77f8c75edfa1486459cba5874c2390ab7dea713a06ef67b7a650",
+    "size": [
+      2560,
+      1412
+    ]
+  },
+  {
+    "scene": "air6-game-15-air",
+    "file": "mod/run/sandbox/fx/out/air6-game-15-air/air6-game-15-air_000.50s.png",
+    "requested_t": 0.5,
+    "nuclear_age": 0.508,
+    "initial_age": 0.0,
+    "age_error": 0.008000000000000007,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fov": 70,
+    "quality": "MEDIUM",
+    "wave": "0.25",
+    "sha256": "805c39dffa092d2288c3d0e4d36e434f74accfa719cbc757e1c0bfcc70db5497",
+    "size": [
+      2560,
+      1412
+    ]
+  },
+  {
+    "scene": "air6-game-15-air",
+    "file": "mod/run/sandbox/fx/out/air6-game-15-air/air6-game-15-air_001.00s.png",
+    "requested_t": 1.0,
+    "nuclear_age": 1.008,
+    "initial_age": 0.0,
+    "age_error": 0.008000000000000007,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fov": 70,
+    "quality": "MEDIUM",
+    "wave": "0.25",
+    "sha256": "d5cbb2ebb8fc577ba90553862c20218265c980f5b21f265c6ff7585c0fd7996f",
+    "size": [
+      2560,
+      1412
+    ]
+  },
+  {
+    "scene": "air6-game-15-air",
+    "file": "mod/run/sandbox/fx/out/air6-game-15-air/air6-game-15-air_003.00s.png",
+    "requested_t": 3.0,
+    "nuclear_age": 3.008,
+    "initial_age": 0.0,
+    "age_error": 0.008000000000000007,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fov": 70,
+    "quality": "MEDIUM",
+    "wave": "0.25",
+    "sha256": "b0a4128dae84be7f37ccb0bede55c001b716642bb4d08003258937cd99498ded",
+    "size": [
+      2560,
+      1412
+    ]
+  },
+  {
+    "scene": "air6-game-15-air",
+    "file": "mod/run/sandbox/fx/out/air6-game-15-air/air6-game-15-air_005.00s.png",
+    "requested_t": 5.0,
+    "nuclear_age": 5.008,
+    "initial_age": 0.0,
+    "age_error": 0.008000000000000007,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fov": 70,
+    "quality": "MEDIUM",
+    "wave": "0.25",
+    "sha256": "1fa774f64c567426559e0e35cd5fa436f7ab23ddf4d422e5e9b475e8061d79ba",
+    "size": [
+      2560,
+      1412
+    ]
+  },
+  {
+    "scene": "air6-game-15-air",
+    "file": "mod/run/sandbox/fx/out/air6-game-15-air/air6-game-15-air_010.00s.png",
+    "requested_t": 10.0,
+    "nuclear_age": 10.008,
+    "initial_age": 0.0,
+    "age_error": 0.007999999999999119,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fov": 70,
+    "quality": "MEDIUM",
+    "wave": "0.25",
+    "sha256": "a959f703a7a9b1d696c783a3152377850770288d3cf8eb2c292b571726b3b69c",
+    "size": [
+      2560,
+      1412
+    ]
+  },
+  {
+    "scene": "air6-game-15-air",
+    "file": "mod/run/sandbox/fx/out/air6-game-15-air/air6-game-15-air_015.00s.png",
+    "requested_t": 15.0,
+    "nuclear_age": 15.008,
+    "initial_age": 0.0,
+    "age_error": 0.007999999999999119,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fov": 70,
+    "quality": "MEDIUM",
+    "wave": "0.25",
+    "sha256": "716a7767398111606c39177d1840239524b3cc24aca1da7df94093fec96fe566",
+    "size": [
+      2560,
+      1412
+    ]
+  },
+  {
+    "scene": "air6-game-15-air",
+    "file": "mod/run/sandbox/fx/out/air6-game-15-air/air6-game-15-air_030.00s.png",
+    "requested_t": 30.0,
+    "nuclear_age": 30.004001,
+    "initial_age": 0.0,
+    "age_error": 0.004000999999998811,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fov": 70,
+    "quality": "MEDIUM",
+    "wave": "0.25",
+    "sha256": "1f2c68c28460ea69c1b2ca0516284662b33f36b193eba5067875779cf97cacf2",
+    "size": [
+      2560,
+      1412
+    ]
+  },
+  {
+    "scene": "air6-game-15-air",
+    "file": "mod/run/sandbox/fx/out/air6-game-15-air/air6-game-15-air_060.00s.png",
+    "requested_t": 60.0,
+    "nuclear_age": 60.007001,
+    "initial_age": 0.0,
+    "age_error": 0.0070010000000024775,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fov": 70,
+    "quality": "MEDIUM",
+    "wave": "0.25",
+    "sha256": "79c66b14bf0ef644457b0af5d0b5d29808e9f09d5bf6b151b688f529bdee823b",
+    "size": [
+      2560,
+      1412
+    ]
+  },
+  {
+    "scene": "air6-game-15-air",
+    "file": "mod/run/sandbox/fx/out/air6-game-15-air/air6-game-15-air_120.00s.png",
+    "requested_t": 120.0,
+    "nuclear_age": 120.007996,
+    "initial_age": 0.0,
+    "age_error": 0.007996000000005665,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fov": 70,
+    "quality": "MEDIUM",
+    "wave": "0.25",
+    "sha256": "0b117072fa92d35292d068a9be7c291c766825464a4c76b0a8109f82bd62eed3",
+    "size": [
+      2560,
+      1412
+    ]
+  },
+  {
+    "scene": "air6-game-15-ground",
+    "file": "mod/run/sandbox/fx/out/air6-game-15-ground/air6-game-15-ground_000.10s.png",
+    "requested_t": 0.1,
+    "nuclear_age": 0.108001,
+    "initial_age": 0.0,
+    "age_error": 0.008000999999999994,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fov": 70,
+    "quality": "MEDIUM",
+    "wave": "0.25",
+    "sha256": "d7909ed713b82af2867544c5303727fafad5089647319c54958bb32c043252d7",
+    "size": [
+      2560,
+      1412
+    ]
+  },
+  {
+    "scene": "air6-game-15-ground",
+    "file": "mod/run/sandbox/fx/out/air6-game-15-ground/air6-game-15-ground_000.50s.png",
+    "requested_t": 0.5,
+    "nuclear_age": 0.509001,
+    "initial_age": 0.0,
+    "age_error": 0.009001000000000037,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fov": 70,
+    "quality": "MEDIUM",
+    "wave": "0.25",
+    "sha256": "311c74ee4e15af78ecc923b7e87d116260cb52d46edcc9f7991f08cb4e7fbd0f",
+    "size": [
+      2560,
+      1412
+    ]
+  },
+  {
+    "scene": "air6-game-15-ground",
+    "file": "mod/run/sandbox/fx/out/air6-game-15-ground/air6-game-15-ground_001.00s.png",
+    "requested_t": 1.0,
+    "nuclear_age": 1.008001,
+    "initial_age": 0.0,
+    "age_error": 0.008000999999999925,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fov": 70,
+    "quality": "MEDIUM",
+    "wave": "0.25",
+    "sha256": "d8bee45a02a05d47fc3a19c6da12605b8de87cbaffcae929028ff77cc52724cf",
+    "size": [
+      2560,
+      1412
+    ]
+  },
+  {
+    "scene": "air6-game-15-ground",
+    "file": "mod/run/sandbox/fx/out/air6-game-15-ground/air6-game-15-ground_003.00s.png",
+    "requested_t": 3.0,
+    "nuclear_age": 3.008001,
+    "initial_age": 0.0,
+    "age_error": 0.008001000000000147,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fov": 70,
+    "quality": "MEDIUM",
+    "wave": "0.25",
+    "sha256": "3586ce0e45229d7ef91db0b0c862bcbc1ea287cf42b75cbd0debbd60d338e880",
+    "size": [
+      2560,
+      1412
+    ]
+  },
+  {
+    "scene": "air6-game-15-ground",
+    "file": "mod/run/sandbox/fx/out/air6-game-15-ground/air6-game-15-ground_005.00s.png",
+    "requested_t": 5.0,
+    "nuclear_age": 5.008001,
+    "initial_age": 0.0,
+    "age_error": 0.008001000000000147,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fov": 70,
+    "quality": "MEDIUM",
+    "wave": "0.25",
+    "sha256": "e6ee6f195ef34ab437b816d707618d2a2d366442e97e516afd0d437fe807d4d1",
+    "size": [
+      2560,
+      1412
+    ]
+  },
+  {
+    "scene": "air6-game-15-ground",
+    "file": "mod/run/sandbox/fx/out/air6-game-15-ground/air6-game-15-ground_010.00s.png",
+    "requested_t": 10.0,
+    "nuclear_age": 10.008001,
+    "initial_age": 0.0,
+    "age_error": 0.008001000000000147,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fov": 70,
+    "quality": "MEDIUM",
+    "wave": "0.25",
+    "sha256": "6bc9ee07dec25d932eb670fb3b005fc44f92d1c7c3eec9c4c7a13b5bd873ca7d",
+    "size": [
+      2560,
+      1412
+    ]
+  },
+  {
+    "scene": "air6-game-15-ground",
+    "file": "mod/run/sandbox/fx/out/air6-game-15-ground/air6-game-15-ground_015.00s.png",
+    "requested_t": 15.0,
+    "nuclear_age": 15.008,
+    "initial_age": 0.0,
+    "age_error": 0.007999999999999119,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fov": 70,
+    "quality": "MEDIUM",
+    "wave": "0.25",
+    "sha256": "c6fd19ba30ef6959227e537c48716980b52f9b9432ba193b34962955c3710d39",
+    "size": [
+      2560,
+      1412
+    ]
+  },
+  {
+    "scene": "air6-game-15-ground",
+    "file": "mod/run/sandbox/fx/out/air6-game-15-ground/air6-game-15-ground_030.00s.png",
+    "requested_t": 30.0,
+    "nuclear_age": 30.008002,
+    "initial_age": 0.0,
+    "age_error": 0.008002000000001175,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fov": 70,
+    "quality": "MEDIUM",
+    "wave": "0.25",
+    "sha256": "2dddeadfb09939d743a1010692a2440715fcafd674e1e5c228545872e3243c55",
+    "size": [
+      2560,
+      1412
+    ]
+  },
+  {
+    "scene": "air6-game-15-ground",
+    "file": "mod/run/sandbox/fx/out/air6-game-15-ground/air6-game-15-ground_060.00s.png",
+    "requested_t": 60.0,
+    "nuclear_age": 60.008002,
+    "initial_age": 0.0,
+    "age_error": 0.008001999999997622,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fov": 70,
+    "quality": "MEDIUM",
+    "wave": "0.25",
+    "sha256": "9c94e21221612543a58419f7cf33dbd0b2df4d6059a031376d35cb2597734547",
+    "size": [
+      2560,
+      1412
+    ]
+  },
+  {
+    "scene": "air6-game-15-ground",
+    "file": "mod/run/sandbox/fx/out/air6-game-15-ground/air6-game-15-ground_120.00s.png",
+    "requested_t": 120.0,
+    "nuclear_age": 120.007996,
+    "initial_age": 0.0,
+    "age_error": 0.007996000000005665,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fov": 70,
+    "quality": "MEDIUM",
+    "wave": "0.25",
+    "sha256": "64e03a3439f47b50c3d970f00f194550055dffcf3421a393d85b5c1af267f1fc",
+    "size": [
+      2560,
+      1412
+    ]
+  },
+  {
+    "scene": "air6-game-5-air",
+    "file": "mod/run/sandbox/fx/out/air6-game-5-air/air6-game-5-air_000.10s.png",
+    "requested_t": 0.1,
+    "nuclear_age": 0.108,
+    "initial_age": 0.0,
+    "age_error": 0.007999999999999993,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fov": 70,
+    "quality": "MEDIUM",
+    "wave": "0.25",
+    "sha256": "de154991cdbe84794edff2d101773ad13f1c24f0dc1b42d68d840fbef1420b3d",
+    "size": [
+      2560,
+      1412
+    ]
+  },
+  {
+    "scene": "air6-game-5-air",
+    "file": "mod/run/sandbox/fx/out/air6-game-5-air/air6-game-5-air_000.50s.png",
+    "requested_t": 0.5,
+    "nuclear_age": 0.508,
+    "initial_age": 0.0,
+    "age_error": 0.008000000000000007,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fov": 70,
+    "quality": "MEDIUM",
+    "wave": "0.25",
+    "sha256": "63686fc89158cc0a6a59d254c57d558e5ec13c96c2390020bbe9520c61e4494b",
+    "size": [
+      2560,
+      1412
+    ]
+  },
+  {
+    "scene": "air6-game-5-air",
+    "file": "mod/run/sandbox/fx/out/air6-game-5-air/air6-game-5-air_001.00s.png",
+    "requested_t": 1.0,
+    "nuclear_age": 1.008,
+    "initial_age": 0.0,
+    "age_error": 0.008000000000000007,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fov": 70,
+    "quality": "MEDIUM",
+    "wave": "0.25",
+    "sha256": "1d72ead3151803c793e61613b7dea5bf4770c6333dd93ff55be1e88c934860ad",
+    "size": [
+      2560,
+      1412
+    ]
+  },
+  {
+    "scene": "air6-game-5-air",
+    "file": "mod/run/sandbox/fx/out/air6-game-5-air/air6-game-5-air_003.00s.png",
+    "requested_t": 3.0,
+    "nuclear_age": 3.008,
+    "initial_age": 0.0,
+    "age_error": 0.008000000000000007,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fov": 70,
+    "quality": "MEDIUM",
+    "wave": "0.25",
+    "sha256": "2e835ae3d941893849e7387e0cce47a7865b18cc882de62982c417cf1c2bcc9f",
+    "size": [
+      2560,
+      1412
+    ]
+  },
+  {
+    "scene": "air6-game-5-air",
+    "file": "mod/run/sandbox/fx/out/air6-game-5-air/air6-game-5-air_005.00s.png",
+    "requested_t": 5.0,
+    "nuclear_age": 5.008,
+    "initial_age": 0.0,
+    "age_error": 0.008000000000000007,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fov": 70,
+    "quality": "MEDIUM",
+    "wave": "0.25",
+    "sha256": "b8867e10a359c9859f76b05c61bad6e2cfc57be4cb1540e8bccc7b1eaf3f9828",
+    "size": [
+      2560,
+      1412
+    ]
+  },
+  {
+    "scene": "air6-game-5-air",
+    "file": "mod/run/sandbox/fx/out/air6-game-5-air/air6-game-5-air_010.00s.png",
+    "requested_t": 10.0,
+    "nuclear_age": 10.008,
+    "initial_age": 0.0,
+    "age_error": 0.007999999999999119,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fov": 70,
+    "quality": "MEDIUM",
+    "wave": "0.25",
+    "sha256": "78affda62d50dd8bcbb8e87e5ab8c7bea3d7316d00854c2c14699730ff30ad3f",
+    "size": [
+      2560,
+      1412
+    ]
+  },
+  {
+    "scene": "air6-game-5-air",
+    "file": "mod/run/sandbox/fx/out/air6-game-5-air/air6-game-5-air_015.00s.png",
+    "requested_t": 15.0,
+    "nuclear_age": 15.008,
+    "initial_age": 0.0,
+    "age_error": 0.007999999999999119,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fov": 70,
+    "quality": "MEDIUM",
+    "wave": "0.25",
+    "sha256": "11a9f6627c6618fad15360411a9a2df037a2ed49fee7c85035ee9e0af3685acb",
+    "size": [
+      2560,
+      1412
+    ]
+  },
+  {
+    "scene": "air6-game-5-air",
+    "file": "mod/run/sandbox/fx/out/air6-game-5-air/air6-game-5-air_030.00s.png",
+    "requested_t": 30.0,
+    "nuclear_age": 30.007999,
+    "initial_age": 0.0,
+    "age_error": 0.007999000000001644,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fov": 70,
+    "quality": "MEDIUM",
+    "wave": "0.25",
+    "sha256": "bcbe1e83e228bab66e996f7391b6fe1ffbb2a90a0a6e17437fd2d35b8f5854df",
+    "size": [
+      2560,
+      1412
+    ]
+  },
+  {
+    "scene": "air6-game-5-air",
+    "file": "mod/run/sandbox/fx/out/air6-game-5-air/air6-game-5-air_060.00s.png",
+    "requested_t": 60.0,
+    "nuclear_age": 60.008002,
+    "initial_age": 0.0,
+    "age_error": 0.008001999999997622,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fov": 70,
+    "quality": "MEDIUM",
+    "wave": "0.25",
+    "sha256": "a78dad56646b3669ed17e99fb5961ab7230c67e1d6e6e0f548e39931c234248b",
+    "size": [
+      2560,
+      1412
+    ]
+  },
+  {
+    "scene": "air6-game-5-air",
+    "file": "mod/run/sandbox/fx/out/air6-game-5-air/air6-game-5-air_120.00s.png",
+    "requested_t": 120.0,
+    "nuclear_age": 120.007996,
+    "initial_age": 0.0,
+    "age_error": 0.007996000000005665,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fov": 70,
+    "quality": "MEDIUM",
+    "wave": "0.25",
+    "sha256": "b2512c9cb9f4fa60f4269b6a35e93e5e428258479376ba74a2def439dd1f39b0",
+    "size": [
+      2560,
+      1412
+    ]
+  },
+  {
+    "scene": "air6-game-5-ground",
+    "file": "mod/run/sandbox/fx/out/air6-game-5-ground/air6-game-5-ground_000.10s.png",
+    "requested_t": 0.1,
+    "nuclear_age": 0.108,
+    "initial_age": 0.0,
+    "age_error": 0.007999999999999993,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fov": 70,
+    "quality": "MEDIUM",
+    "wave": "0.25",
+    "sha256": "4de8da6637cb1219b6c15fc2be70f0213a06220af43ad67481e75889579a640c",
+    "size": [
+      2560,
+      1412
+    ]
+  },
+  {
+    "scene": "air6-game-5-ground",
+    "file": "mod/run/sandbox/fx/out/air6-game-5-ground/air6-game-5-ground_000.50s.png",
+    "requested_t": 0.5,
+    "nuclear_age": 0.508,
+    "initial_age": 0.0,
+    "age_error": 0.008000000000000007,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fov": 70,
+    "quality": "MEDIUM",
+    "wave": "0.25",
+    "sha256": "7994f8c69d267d1f8a3deacb14860c0efa2495f7d6e1816315904470ef73b4af",
+    "size": [
+      2560,
+      1412
+    ]
+  },
+  {
+    "scene": "air6-game-5-ground",
+    "file": "mod/run/sandbox/fx/out/air6-game-5-ground/air6-game-5-ground_001.00s.png",
+    "requested_t": 1.0,
+    "nuclear_age": 1.008,
+    "initial_age": 0.0,
+    "age_error": 0.008000000000000007,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fov": 70,
+    "quality": "MEDIUM",
+    "wave": "0.25",
+    "sha256": "f5668b480450fdced903d414cb825a16f87578fc17f9dc0b86e6b5d498af48b3",
+    "size": [
+      2560,
+      1412
+    ]
+  },
+  {
+    "scene": "air6-game-5-ground",
+    "file": "mod/run/sandbox/fx/out/air6-game-5-ground/air6-game-5-ground_003.00s.png",
+    "requested_t": 3.0,
+    "nuclear_age": 3.006,
+    "initial_age": 0.0,
+    "age_error": 0.005999999999999783,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fov": 70,
+    "quality": "MEDIUM",
+    "wave": "0.25",
+    "sha256": "b6af5af1a812ab0409c4e1357e266e25fe09d423eea067fb3c515203a73a6d21",
+    "size": [
+      2560,
+      1412
+    ]
+  },
+  {
+    "scene": "air6-game-5-ground",
+    "file": "mod/run/sandbox/fx/out/air6-game-5-ground/air6-game-5-ground_005.00s.png",
+    "requested_t": 5.0,
+    "nuclear_age": 5.007,
+    "initial_age": 0.0,
+    "age_error": 0.006999999999999673,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fov": 70,
+    "quality": "MEDIUM",
+    "wave": "0.25",
+    "sha256": "f915e5c6cc5bc6207cb585a02d55c82aecef18a895afeab26070d813e3482b45",
+    "size": [
+      2560,
+      1412
+    ]
+  },
+  {
+    "scene": "air6-game-5-ground",
+    "file": "mod/run/sandbox/fx/out/air6-game-5-ground/air6-game-5-ground_010.00s.png",
+    "requested_t": 10.0,
+    "nuclear_age": 10.007,
+    "initial_age": 0.0,
+    "age_error": 0.006999999999999673,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fov": 70,
+    "quality": "MEDIUM",
+    "wave": "0.25",
+    "sha256": "967b2465523d40452d70fa611a9b0a8243b84f84571e1e2cf8ced66a7a65c7d9",
+    "size": [
+      2560,
+      1412
+    ]
+  },
+  {
+    "scene": "air6-game-5-ground",
+    "file": "mod/run/sandbox/fx/out/air6-game-5-ground/air6-game-5-ground_015.00s.png",
+    "requested_t": 15.0,
+    "nuclear_age": 15.008,
+    "initial_age": 0.0,
+    "age_error": 0.007999999999999119,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fov": 70,
+    "quality": "MEDIUM",
+    "wave": "0.25",
+    "sha256": "d3c6b51be438b0fefdc9cb6d98b9fdd7c368200d398b8026f6d49e3309371982",
+    "size": [
+      2560,
+      1412
+    ]
+  },
+  {
+    "scene": "air6-game-5-ground",
+    "file": "mod/run/sandbox/fx/out/air6-game-5-ground/air6-game-5-ground_030.00s.png",
+    "requested_t": 30.0,
+    "nuclear_age": 30.008002,
+    "initial_age": 0.0,
+    "age_error": 0.008002000000001175,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fov": 70,
+    "quality": "MEDIUM",
+    "wave": "0.25",
+    "sha256": "0e9c9e8138a3a756a2f3bd4a87c216e9a7509d7251f0319c66b2182b32b62aee",
+    "size": [
+      2560,
+      1412
+    ]
+  },
+  {
+    "scene": "air6-game-5-ground",
+    "file": "mod/run/sandbox/fx/out/air6-game-5-ground/air6-game-5-ground_060.00s.png",
+    "requested_t": 60.0,
+    "nuclear_age": 60.008002,
+    "initial_age": 0.0,
+    "age_error": 0.008001999999997622,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fov": 70,
+    "quality": "MEDIUM",
+    "wave": "0.25",
+    "sha256": "d55c9c65fe90ebea7e24a468249f97ff5e3bebb5faa3dac98a8409dde2bfd0cc",
+    "size": [
+      2560,
+      1412
+    ]
+  },
+  {
+    "scene": "air6-game-5-ground",
+    "file": "mod/run/sandbox/fx/out/air6-game-5-ground/air6-game-5-ground_120.00s.png",
+    "requested_t": 120.0,
+    "nuclear_age": 120.007996,
+    "initial_age": 0.0,
+    "age_error": 0.007996000000005665,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fov": 70,
+    "quality": "MEDIUM",
+    "wave": "0.25",
+    "sha256": "c5b65f9eb24ce8e3a1e4addaafb712aa3ce204c194da71d94bb96491375d9bae",
+    "size": [
+      2560,
+      1412
+    ]
+  },
+  {
+    "scene": "air6-iris-15-air",
+    "file": "mod/run/sandbox/fx/out/air6-iris-15-air/air6-iris-15-air_000.10s.png",
+    "requested_t": 0.1,
+    "nuclear_age": 0.113,
+    "initial_age": 0.0,
+    "age_error": 0.012999999999999998,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fov": 70,
+    "quality": "MEDIUM",
+    "wave": "0.25",
+    "sha256": "cf43ac7657219792198c285bfe4e954253a0c0346294c4719af62e0eb6507367",
+    "size": [
+      2560,
+      1412
+    ]
+  },
+  {
+    "scene": "air6-iris-15-air",
+    "file": "mod/run/sandbox/fx/out/air6-iris-15-air/air6-iris-15-air_000.50s.png",
+    "requested_t": 0.5,
+    "nuclear_age": 0.501,
+    "initial_age": 0.0,
+    "age_error": 0.0010000000000000009,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fov": 70,
+    "quality": "MEDIUM",
+    "wave": "0.25",
+    "sha256": "180396104daaa7a9f1ae70db61000caca60062695f8e87e8ded2a7561707ceee",
+    "size": [
+      2560,
+      1412
+    ]
+  },
+  {
+    "scene": "air6-iris-15-air",
+    "file": "mod/run/sandbox/fx/out/air6-iris-15-air/air6-iris-15-air_001.00s.png",
+    "requested_t": 1.0,
+    "nuclear_age": 1.002,
+    "initial_age": 0.0,
+    "age_error": 0.0020000000000000018,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fov": 70,
+    "quality": "MEDIUM",
+    "wave": "0.25",
+    "sha256": "523a810545c622959087633e1a8fe2d3a00ea26a7b75c6cf7c85f0e8b2b5c65a",
+    "size": [
+      2560,
+      1412
+    ]
+  },
+  {
+    "scene": "air6-iris-15-air",
+    "file": "mod/run/sandbox/fx/out/air6-iris-15-air/air6-iris-15-air_003.00s.png",
+    "requested_t": 3.0,
+    "nuclear_age": 3.005,
+    "initial_age": 0.0,
+    "age_error": 0.004999999999999893,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fov": 70,
+    "quality": "MEDIUM",
+    "wave": "0.25",
+    "sha256": "3290dd9d77fdc83d14fa9f8f5c2989702e6cc7b9fa0c6b09b6386157b38473ce",
+    "size": [
+      2560,
+      1412
+    ]
+  },
+  {
+    "scene": "air6-iris-15-air",
+    "file": "mod/run/sandbox/fx/out/air6-iris-15-air/air6-iris-15-air_005.00s.png",
+    "requested_t": 5.0,
+    "nuclear_age": 5.008,
+    "initial_age": 0.0,
+    "age_error": 0.008000000000000007,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fov": 70,
+    "quality": "MEDIUM",
+    "wave": "0.25",
+    "sha256": "073fde0fb7f6fcbc672f2dd8a991cb9a0f951365983fd7eee518cdb1be5e3025",
+    "size": [
+      2560,
+      1412
+    ]
+  },
+  {
+    "scene": "air6-iris-15-air",
+    "file": "mod/run/sandbox/fx/out/air6-iris-15-air/air6-iris-15-air_010.00s.png",
+    "requested_t": 10.0,
+    "nuclear_age": 10.011,
+    "initial_age": 0.0,
+    "age_error": 0.010999999999999233,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fov": 70,
+    "quality": "MEDIUM",
+    "wave": "0.25",
+    "sha256": "51d81589195e337cb91e173b0b0f08c921e9e643c06543117c7de20e45214723",
+    "size": [
+      2560,
+      1412
+    ]
+  },
+  {
+    "scene": "air6-iris-15-air",
+    "file": "mod/run/sandbox/fx/out/air6-iris-15-air/air6-iris-15-air_015.00s.png",
+    "requested_t": 15.0,
+    "nuclear_age": 15.012,
+    "initial_age": 0.0,
+    "age_error": 0.012000000000000455,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fov": 70,
+    "quality": "MEDIUM",
+    "wave": "0.25",
+    "sha256": "937f608415497aa593c1ea485ba4ca9c143111108d885eeca9c2fe9469b5abc0",
+    "size": [
+      2560,
+      1412
+    ]
+  },
+  {
+    "scene": "air6-iris-15-air",
+    "file": "mod/run/sandbox/fx/out/air6-iris-15-air/air6-iris-15-air_030.00s.png",
+    "requested_t": 30.0,
+    "nuclear_age": 30.013,
+    "initial_age": 0.0,
+    "age_error": 0.013000000000001677,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fov": 70,
+    "quality": "MEDIUM",
+    "wave": "0.25",
+    "sha256": "db8d0cc1e89a152b428abf6880cbe147ed85676bc17038670599198004769cc5",
+    "size": [
+      2560,
+      1412
+    ]
+  },
+  {
+    "scene": "air6-iris-15-air",
+    "file": "mod/run/sandbox/fx/out/air6-iris-15-air/air6-iris-15-air_060.00s.png",
+    "requested_t": 60.0,
+    "nuclear_age": 60.010999,
+    "initial_age": 0.0,
+    "age_error": 0.010998999999998205,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fov": 70,
+    "quality": "MEDIUM",
+    "wave": "0.25",
+    "sha256": "f062e4c42a34b93b8da1e20489ea01b75ebf653b240d0660f1f81377eefd8781",
+    "size": [
+      2560,
+      1412
+    ]
+  },
+  {
+    "scene": "air6-iris-15-ground",
+    "file": "mod/run/sandbox/fx/out/air6-iris-15-ground/air6-iris-15-ground_000.10s.png",
+    "requested_t": 0.1,
+    "nuclear_age": 0.1,
+    "initial_age": 0.0,
+    "age_error": 0.0,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fov": 70,
+    "quality": "MEDIUM",
+    "wave": "0.25",
+    "sha256": "d7909ed713b82af2867544c5303727fafad5089647319c54958bb32c043252d7",
+    "size": [
+      2560,
+      1412
+    ]
+  },
+  {
+    "scene": "air6-iris-15-ground",
+    "file": "mod/run/sandbox/fx/out/air6-iris-15-ground/air6-iris-15-ground_000.50s.png",
+    "requested_t": 0.5,
+    "nuclear_age": 0.5,
+    "initial_age": 0.0,
+    "age_error": 0.0,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fov": 70,
+    "quality": "MEDIUM",
+    "wave": "0.25",
+    "sha256": "dd276fe8494ebb89b69de408ca14b18e709d27baad217b6a18255456536d3da1",
+    "size": [
+      2560,
+      1412
+    ]
+  },
+  {
+    "scene": "air6-iris-15-ground",
+    "file": "mod/run/sandbox/fx/out/air6-iris-15-ground/air6-iris-15-ground_001.00s.png",
+    "requested_t": 1.0,
+    "nuclear_age": 1.001,
+    "initial_age": 0.0,
+    "age_error": 0.0009999999999998899,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fov": 70,
+    "quality": "MEDIUM",
+    "wave": "0.25",
+    "sha256": "f678d907c20a4fdb2b0486d83df88a9719a872b9ee3454a86f1d1a9b8286068d",
+    "size": [
+      2560,
+      1412
+    ]
+  },
+  {
+    "scene": "air6-iris-15-ground",
+    "file": "mod/run/sandbox/fx/out/air6-iris-15-ground/air6-iris-15-ground_003.00s.png",
+    "requested_t": 3.0,
+    "nuclear_age": 3.004,
+    "initial_age": 0.0,
+    "age_error": 0.0040000000000000036,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fov": 70,
+    "quality": "MEDIUM",
+    "wave": "0.25",
+    "sha256": "48989756741aa3ccd2f4c1c0d2b7acb2303e0f9a8468252468560512ba48d9e5",
+    "size": [
+      2560,
+      1412
+    ]
+  },
+  {
+    "scene": "air6-iris-15-ground",
+    "file": "mod/run/sandbox/fx/out/air6-iris-15-ground/air6-iris-15-ground_005.00s.png",
+    "requested_t": 5.0,
+    "nuclear_age": 5.007,
+    "initial_age": 0.0,
+    "age_error": 0.006999999999999673,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fov": 70,
+    "quality": "MEDIUM",
+    "wave": "0.25",
+    "sha256": "070e9b69d0d655cda496dfd0c805b7393b0909c3604cbd9770755bfc83390cc9",
+    "size": [
+      2560,
+      1412
+    ]
+  },
+  {
+    "scene": "air6-iris-15-ground",
+    "file": "mod/run/sandbox/fx/out/air6-iris-15-ground/air6-iris-15-ground_010.00s.png",
+    "requested_t": 10.0,
+    "nuclear_age": 10.011,
+    "initial_age": 0.0,
+    "age_error": 0.010999999999999233,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fov": 70,
+    "quality": "MEDIUM",
+    "wave": "0.25",
+    "sha256": "b0a16ae56fdd715dd34cba6c6d6beee3fd147dabca85d8b286b9ac3ec6776ebe",
+    "size": [
+      2560,
+      1412
+    ]
+  },
+  {
+    "scene": "air6-iris-15-ground",
+    "file": "mod/run/sandbox/fx/out/air6-iris-15-ground/air6-iris-15-ground_015.00s.png",
+    "requested_t": 15.0,
+    "nuclear_age": 15.012,
+    "initial_age": 0.0,
+    "age_error": 0.012000000000000455,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fov": 70,
+    "quality": "MEDIUM",
+    "wave": "0.25",
+    "sha256": "73012581c8e12c8419b25f92862da1b3ef90e0d1a5e1b3b0cbc8a995b62e203a",
+    "size": [
+      2560,
+      1412
+    ]
+  },
+  {
+    "scene": "air6-iris-15-ground",
+    "file": "mod/run/sandbox/fx/out/air6-iris-15-ground/air6-iris-15-ground_030.00s.png",
+    "requested_t": 30.0,
+    "nuclear_age": 30.013,
+    "initial_age": 0.0,
+    "age_error": 0.013000000000001677,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fov": 70,
+    "quality": "MEDIUM",
+    "wave": "0.25",
+    "sha256": "ba07a939b165af787294e3f6acd4ffe02f596a4cb7af685aedcca1f7f73b5219",
+    "size": [
+      2560,
+      1412
+    ]
+  },
+  {
+    "scene": "air6-iris-15-ground",
+    "file": "mod/run/sandbox/fx/out/air6-iris-15-ground/air6-iris-15-ground_060.00s.png",
+    "requested_t": 60.0,
+    "nuclear_age": 60.013,
+    "initial_age": 0.0,
+    "age_error": 0.012999999999998124,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fov": 70,
+    "quality": "MEDIUM",
+    "wave": "0.25",
+    "sha256": "f952fa158247459272813ee9cac9f14afb4f105fd094a29c80dbecfd3bbd908a",
+    "size": [
+      2560,
+      1412
+    ]
+  },
+  {
+    "scene": "air6-off-15",
+    "file": "mod/run/sandbox/fx/out/air6-off-15/air6-off-15_003.00s.png",
+    "requested_t": 3.0,
+    "nuclear_age": 15.011,
+    "initial_age": 12.0,
+    "age_error": 0.010999999999999233,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fov": 70,
+    "quality": "OFF",
+    "wave": "0.25",
+    "sha256": "f790e9f272de670a98da872456c7ec7af470b392a09869bf55ccc9784791ac00",
+    "size": [
+      2560,
+      1412
+    ]
+  },
+  {
+    "scene": "air6-off-30",
+    "file": "mod/run/sandbox/fx/out/air6-off-30/air6-off-30_003.00s.png",
+    "requested_t": 3.0,
+    "nuclear_age": 30.014999,
+    "initial_age": 27.0,
+    "age_error": 0.01499899999999954,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fov": 70,
+    "quality": "OFF",
+    "wave": "0.25",
+    "sha256": "553bce09a2e32fc42cfb665e432ce98b99f2db41e4fdf71669e2f9664f14836e",
+    "size": [
+      2560,
+      1412
+    ]
+  },
+  {
+    "scene": "air6-off-60",
+    "file": "mod/run/sandbox/fx/out/air6-off-60/air6-off-60_003.00s.png",
+    "requested_t": 3.0,
+    "nuclear_age": 60.003003,
+    "initial_age": 57.0,
+    "age_error": 0.003002999999999645,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fov": 70,
+    "quality": "OFF",
+    "wave": "0.25",
+    "sha256": "6ad5a92150d576100aa5c938418aaf94652e2c8f8cffbd110b10683537ff58c7",
+    "size": [
+      2560,
+      1412
+    ]
+  },
+  {
+    "scene": "air6-player60-MEDIUM",
+    "file": "mod/run/sandbox/fx/out/air6-player60-MEDIUM/air6-player60-MEDIUM_003.00s.png",
+    "requested_t": 3.0,
+    "nuclear_age": 60.007001,
+    "initial_age": 57.0,
+    "age_error": 0.0070010000000024775,
+    "eye": [
+      0.5,
+      66.619999886,
+      4000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -26.56505,
+    "fov": 70,
+    "quality": "MEDIUM",
+    "wave": "0.25",
+    "sha256": "fadb98d9932776948fcb201c443cc067b83df054a1969d0c46283455fc4c4fc6",
+    "size": [
+      2560,
+      1412
+    ]
+  },
+  {
+    "scene": "air6-player60-OFF",
+    "file": "mod/run/sandbox/fx/out/air6-player60-OFF/air6-player60-OFF_003.00s.png",
+    "requested_t": 3.0,
+    "nuclear_age": 60.008002,
+    "initial_age": 57.0,
+    "age_error": 0.008001999999997622,
+    "eye": [
+      0.5,
+      66.619999886,
+      4000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -26.56505,
+    "fov": 70,
+    "quality": "OFF",
+    "wave": "0.25",
+    "sha256": "b63ab2db100eeeabb1df4776a1c8315c90af3aed3bfeedf28a99dc36d0091cc5",
+    "size": [
+      2560,
+      1412
+    ]
+  },
+  {
+    "scene": "air6-real-15-air",
+    "file": "mod/run/sandbox/fx/out/air6-real-15-air/air6-real-15-air_000.10s.png",
+    "requested_t": 0.1,
+    "nuclear_age": 0.109001,
+    "initial_age": 0.0,
+    "age_error": 0.009000999999999995,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fov": 70,
+    "quality": "MEDIUM",
+    "wave": "1",
+    "sha256": "6b41823f2705dacc4d55afc65adcbe30616a214c0a1af2cd142f69ca07847ecf",
+    "size": [
+      2560,
+      1412
+    ]
+  },
+  {
+    "scene": "air6-real-15-air",
+    "file": "mod/run/sandbox/fx/out/air6-real-15-air/air6-real-15-air_000.50s.png",
+    "requested_t": 0.5,
+    "nuclear_age": 0.511001,
+    "initial_age": 0.0,
+    "age_error": 0.011001000000000039,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fov": 70,
+    "quality": "MEDIUM",
+    "wave": "1",
+    "sha256": "d6ab83dad7ea9a26df4704946ba4f2fdc739ff10671864f79b47a2c3512a97c9",
+    "size": [
+      2560,
+      1412
+    ]
+  },
+  {
+    "scene": "air6-real-15-air",
+    "file": "mod/run/sandbox/fx/out/air6-real-15-air/air6-real-15-air_001.00s.png",
+    "requested_t": 1.0,
+    "nuclear_age": 1.011001,
+    "initial_age": 0.0,
+    "age_error": 0.011001000000000039,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fov": 70,
+    "quality": "MEDIUM",
+    "wave": "1",
+    "sha256": "a58dd0d84383fbcb11e84e1785d5ddb32b48e33602fe755330bd9776c72a7f9c",
+    "size": [
+      2560,
+      1412
+    ]
+  },
+  {
+    "scene": "air6-real-15-air",
+    "file": "mod/run/sandbox/fx/out/air6-real-15-air/air6-real-15-air_003.00s.png",
+    "requested_t": 3.0,
+    "nuclear_age": 3.012001,
+    "initial_age": 0.0,
+    "age_error": 0.01200100000000015,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fov": 70,
+    "quality": "MEDIUM",
+    "wave": "1",
+    "sha256": "d950150ca9f63255128874a7cdefd43e3f6d7bb86e180acd0b7085b8991ddc46",
+    "size": [
+      2560,
+      1412
+    ]
+  },
+  {
+    "scene": "air6-real-15-air",
+    "file": "mod/run/sandbox/fx/out/air6-real-15-air/air6-real-15-air_005.00s.png",
+    "requested_t": 5.0,
+    "nuclear_age": 5.016001,
+    "initial_age": 0.0,
+    "age_error": 0.016001000000000154,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fov": 70,
+    "quality": "MEDIUM",
+    "wave": "1",
+    "sha256": "65a8d2bef6f387a4d7daf5f4cd41807d0a78a25222710a1f6a8500cc1ca49918",
+    "size": [
+      2560,
+      1412
+    ]
+  },
+  {
+    "scene": "air6-real-15-air",
+    "file": "mod/run/sandbox/fx/out/air6-real-15-air/air6-real-15-air_010.00s.png",
+    "requested_t": 10.0,
+    "nuclear_age": 10.004001,
+    "initial_age": 0.0,
+    "age_error": 0.004001000000000587,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fov": 70,
+    "quality": "MEDIUM",
+    "wave": "1",
+    "sha256": "20bd97c43c71ff946c5d5fd86cc30961744c339c8ee33735d65de8dddf825c6d",
+    "size": [
+      2560,
+      1412
+    ]
+  },
+  {
+    "scene": "air6-real-15-air",
+    "file": "mod/run/sandbox/fx/out/air6-real-15-air/air6-real-15-air_015.00s.png",
+    "requested_t": 15.0,
+    "nuclear_age": 15.006001,
+    "initial_age": 0.0,
+    "age_error": 0.006000999999999479,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fov": 70,
+    "quality": "MEDIUM",
+    "wave": "1",
+    "sha256": "a4ee349353c394155b20f4ae826a702b92511ae875ff3432261c3daa47d3ed4a",
+    "size": [
+      2560,
+      1412
+    ]
+  },
+  {
+    "scene": "air6-real-15-air",
+    "file": "mod/run/sandbox/fx/out/air6-real-15-air/air6-real-15-air_030.00s.png",
+    "requested_t": 30.0,
+    "nuclear_age": 30.003,
+    "initial_age": 0.0,
+    "age_error": 0.0030000000000001137,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fov": 70,
+    "quality": "MEDIUM",
+    "wave": "1",
+    "sha256": "2b548c2f0b162b75acd716086c665a3882427db05bca3e6c70006b2782efd191",
+    "size": [
+      2560,
+      1412
+    ]
+  },
+  {
+    "scene": "air6-real-15-air",
+    "file": "mod/run/sandbox/fx/out/air6-real-15-air/air6-real-15-air_060.00s.png",
+    "requested_t": 60.0,
+    "nuclear_age": 60.008002,
+    "initial_age": 0.0,
+    "age_error": 0.008001999999997622,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fov": 70,
+    "quality": "MEDIUM",
+    "wave": "1",
+    "sha256": "0d5a4f2ef27e613a7201daadf916ede1b3dafdd7b4afd1f9971a25f6efca302e",
+    "size": [
+      2560,
+      1412
+    ]
+  }
+]

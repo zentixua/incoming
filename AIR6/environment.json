@@ -1,0 +1,32 @@
+{
+  "source": "476355384f944d094856348c31ea0dd6cab31aa9",
+  "framebuffer": [
+    2560,
+    1412
+  ],
+  "gpu": "NVIDIA RTX4060 Laptop",
+  "driver": "615.78.08",
+  "initial_power_sample_utc": "2026-11-04T22:01:28Z",
+  "initial_power_profile": "low-power",
+  "final_power_sample_utc": "2026-11-04T22:06:26Z",
+  "final_power_profile": "performance",
+  "power_transition_time": "not sampled; no throughput comparison permitted",
+  "primary_camera": {
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180,
+    "pitch": -12.007899,
+    "fov": 70
+  },
+  "primary_wave": 0.25,
+  "real_control_wave": 1.0,
+  "effects_scale": 1,
+  "seed": 1234,
+  "detonation_wind": 0,
+  "visibility": 20000,
+  "fires": false,
+  "quality": "MEDIUM"
+}

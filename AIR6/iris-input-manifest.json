@@ -1,0 +1,30 @@
+{
+  "shaderpacks": {
+    "ComplementaryUnbound_r5.9.3.zip": "98ac741dee294d2a3c82d153349148c3bb7fb688c30eb3b49c3b9ac37e968c5a"
+  },
+  "mods": {
+    "sable-companion-common-1.21.1-1.6.0.jar": "873633e35046e3761b277ff8a1ecad0d55d9a3014fa81a0b084c9aecba1f3bed",
+    "iris-neoforge-1.8.14-beta.1+mc1.21.1.jar": "60d5f8bf52f25e9986440f4a4270a6bd986d9cff994510e1108ac1547063b314",
+    "sodium-neoforge-0.8.13+mc1.21.1.jar": "575d187b15328d7bddd8a9b1bee64333c22c14735f5780ec49eac0cd5503c08d"
+  },
+  "iris_properties": "#This file stores configuration options for Iris, such as the currently active shaderpack\n#Wed Nov 04 23:03:35 CET 2026\nallowUnknownShaders=false\ncolorSpace=SRGB\ndisableUpdateMessage=true\nenableDebugOptions=false\nenableShaders=true\nmaxShadowRenderDistance=32\nshaderPack=ComplementaryUnbound_r5.9.3.zip\n",
+  "actual_pipeline_log": [
+    "[04\u043d\u043e\u044f\u0431.2026 23:03:35.689] [Render thread/INFO] [Iris/]: Using shaderpack: ComplementaryUnbound_r5.9.3.zip",
+    "[04\u043d\u043e\u044f\u0431.2026 23:03:38.391] [Render thread/INFO] [Iris/]: Creating pipeline for dimension minecraft:overworld",
+    "[04\u043d\u043e\u044f\u0431.2026 23:03:48.761] [Render thread/INFO] [Iris/]: Creating pipeline for dimension minecraft:overworld"
+  ],
+  "warnings": [
+    "[04\u043d\u043e\u044f\u0431.2026 23:03:38.431] [Render thread/WARN] [Iris/]: Failed to resolve uniform inPaleGarden, reason: Unknown variable: BIOME_PALE_GARDEN ( = FunctionCall{smooth {[Number{55}, FunctionCall{if {[FunctionCall{in {[Id{biome}, Id{BIOME_PALE_GARDEN}]} }, Number{1}, Number{0}]} }, Number{15}, Number{15}]} })",
+    "[04\u043d\u043e\u044f\u0431.2026 23:03:38.432] [Render thread/WARN] [Iris/]: Failed to resolve uniform inSulfurCaves, reason: Unknown variable: BIOME_SULFUR_CAVES ( = FunctionCall{smooth {[Number{56}, FunctionCall{if {[FunctionCall{in {[Id{biome}, Id{BIOME_SULFUR_CAVES}]} }, Number{1}, Number{0}]} }, Number{15}, Number{15}]} })",
+    "[04\u043d\u043e\u044f\u0431.2026 23:03:38.432] [Render thread/WARN] [Iris/]: Failed to resolve uniform endFlashFactor0, reason: Unknown variable: endFlashIntensity ( = BinaryExpr{ {FunctionCall{min {[Id{endFlashIntensity}, Number{0.5}]} }} multiply{0} {Number{2.0}} })",
+    "[04\u043d\u043e\u044f\u0431.2026 23:03:38.434] [Render thread/WARN] [Iris/]: The following uniforms won't work, either because they are broken, or reference a broken uniform: ",
+    "[04\u043d\u043e\u044f\u0431.2026 23:03:48.766] [Render thread/WARN] [Iris/]: Failed to resolve uniform inPaleGarden, reason: Unknown variable: BIOME_PALE_GARDEN ( = FunctionCall{smooth {[Number{55}, FunctionCall{if {[FunctionCall{in {[Id{biome}, Id{BIOME_PALE_GARDEN}]} }, Number{1}, Number{0}]} }, Number{15}, Number{15}]} })",
+    "[04\u043d\u043e\u044f\u0431.2026 23:03:48.767] [Render thread/WARN] [Iris/]: Failed to resolve uniform inSulfurCaves, reason: Unknown variable: BIOME_SULFUR_CAVES ( = FunctionCall{smooth {[Number{56}, FunctionCall{if {[FunctionCall{in {[Id{biome}, Id{BIOME_SULFUR_CAVES}]} }, Number{1}, Number{0}]} }, Number{15}, Number{15}]} })",
+    "[04\u043d\u043e\u044f\u0431.2026 23:03:48.769] [Render thread/WARN] [Iris/]: Failed to resolve uniform endFlashFactor0, reason: Unknown variable: endFlashIntensity ( = BinaryExpr{ {FunctionCall{min {[Id{endFlashIntensity}, Number{0.5}]} }} multiply{0} {Number{2.0}} })",
+    "[04\u043d\u043e\u044f\u0431.2026 23:03:48.770] [Render thread/WARN] [Iris/]: The following uniforms won't work, either because they are broken, or reference a broken uniform: ",
+    "[04\u043d\u043e\u044f\u0431.2026 23:03:49.230] [Render thread/WARN] [Iris/]: Error while parsing the block ID map entry for \"block.10104\":"
+  ],
+  "incoming_shader_lines": [
+    "[04\u043d\u043e\u044f\u0431.2026 23:03:49.896] [Render thread/INFO] [ua.zentix.incoming.Incoming/]: Nuclear volume shaders prepared in 25 ms"
+  ]
+}

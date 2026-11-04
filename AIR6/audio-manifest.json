@@ -1,0 +1,58 @@
+[
+  {
+    "file": "raw/air6-game-15-air/air6-game-15-air.wav",
+    "sha256": "30798be1533ad04fc350679df64ee4c40ee3ebf0935cd67a8b9f5975edbc5e0e",
+    "frames": 2160000,
+    "sample_rate": 48000,
+    "channels": 2,
+    "sample_bytes": 2
+  },
+  {
+    "file": "raw/air6-game-15-ground/air6-game-15-ground.wav",
+    "sha256": "ce99cfe368991bb2101ec7035dce02a1b081027bdad218b9d47e26d0496bd06d",
+    "frames": 2160000,
+    "sample_rate": 48000,
+    "channels": 2,
+    "sample_bytes": 2
+  },
+  {
+    "file": "raw/air6-game-5-air/air6-game-5-air.wav",
+    "sha256": "882174d2e425df40b7316753823f93decfe993c6cd99adcb8be0eda2b7f8e787",
+    "frames": 2160000,
+    "sample_rate": 48000,
+    "channels": 2,
+    "sample_bytes": 2
+  },
+  {
+    "file": "raw/air6-game-5-ground/air6-game-5-ground.wav",
+    "sha256": "0b404dd6e37205281e2346d828bc7d6197578adbe9e78c658edd50337ab197e6",
+    "frames": 2160000,
+    "sample_rate": 48000,
+    "channels": 2,
+    "sample_bytes": 2
+  },
+  {
+    "file": "raw/air6-iris-15-air/air6-iris-15-air.wav",
+    "sha256": "41d4a9f0c789a016016661ddef47dcabc86dab1db8af0deb73654697fa4989a6",
+    "frames": 2160000,
+    "sample_rate": 48000,
+    "channels": 2,
+    "sample_bytes": 2
+  },
+  {
+    "file": "raw/air6-iris-15-ground/air6-iris-15-ground.wav",
+    "sha256": "12366b375d0643ca4acddd1d942537bc24b5de3e86f5dfc5c7633be1e8691a57",
+    "frames": 2160000,
+    "sample_rate": 48000,
+    "channels": 2,
+    "sample_bytes": 2
+  },
+  {
+    "file": "raw/air6-real-15-air/air6-real-15-air.wav",
+    "sha256": "73fe6a47865b3bb414e0870184243195f068e054a29afd236902b7b6d7d77476",
+    "frames": 2160000,
+    "sample_rate": 48000,
+    "channels": 2,
+    "sample_bytes": 2
+  }
+]
