@@ -192,6 +192,8 @@ public final class RuinPlanner {
         RuinContext ctx = new RuinContext(level, d);
         long until = System.nanoTime() + 60_000_000_000L;
         while (ctx.requestWindow(level, chunk.getPos()) > 0) {
+            // This diagnostic blocks the normal server tick that services asynchronous decode admission.
+            RuinWorkers.adapt(level.getServer());
             if (System.nanoTime() > until) throw new IllegalStateException("window neighbours not read from disk within a minute");
             java.util.concurrent.locks.LockSupport.parkNanos(1_000_000L);
         }
@@ -234,6 +236,7 @@ public final class RuinPlanner {
     private static RuinPlan await(ServerLevel level, RuinContext ctx, LevelChunk chunk) {
         long until = System.nanoTime() + 60_000_000_000L;
         while (!ctx.done(chunk.getPos().toLong())) {
+            RuinWorkers.adapt(level.getServer());
             if (System.nanoTime() > until) throw new IllegalStateException("background plan not ready within a minute");
             java.util.concurrent.locks.LockSupport.parkNanos(1_000_000L);
         }
