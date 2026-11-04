@@ -552,6 +552,12 @@ public final class NuclearPrep {
         return bytes + RuinWorkers.residentBufferBytes(height);
     }
 
+    /** Existing cache I/O can release counted ownership. Reserving future solvers here would
+     * block the snapshot spill needed to make room for those same solvers and material. */
+    private static long storageRoom(ServerLevel level) {
+        return Math.max(0, PLANS_CAP - residentMemory(level));
+    }
+
     static long memory(ServerLevel level, boolean reserveWorkers) {
         long bytes = RuinInputs.detachedBytes() + RuinResults.bytes();
         int height = level.getHeight();
@@ -607,7 +613,7 @@ public final class NuclearPrep {
                     if (releaseSome(level, p, RELEASE_PER_TICK) == 0) it.remove();
                     continue;
                 }
-                p.plans.pump(Math.max(0, PLANS_CAP - memory(level)));
+                p.plans.pump(storageRoom(level));
                 if (p.detonation >= 0) {
                     rememberArchive(level, p);
                     // handed to detonation: behind-wave zone loads squares, releases when ruins applied
@@ -738,9 +744,9 @@ public final class NuclearPrep {
                             level.getServer().getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT))
                             .resolve("data/incoming-preparation/" + p.archivePath);
             p.plans.spill(new RuinPages(info, root.resolve("plans-v" + RuinPlan.STORAGE_VERSION)),
-                    p.ruins, p.accounting, () -> Math.max(0, PLANS_CAP - memory(level)));
+                    p.ruins, p.accounting, () -> storageRoom(level));
             p.ruins.archive(new RuinSnapshots(new RuinPages(info, root.resolve("shots")), p.accounting,
-                    () -> Math.max(0, PLANS_CAP - memory(level))));
+                    () -> storageRoom(level)));
         }
         if (p.noRuins) return;
         if (p.layout != null) {
@@ -854,7 +860,7 @@ public final class NuclearPrep {
     /** Reopen the bounded cache after a detonation's preparation owner has disappeared on restart. */
     void restore(ServerLevel level, RuinContext ctx) {
         if (ctx.archiveChecked) {
-            if (ctx.restoredPlans != null) ctx.restoredPlans.pump(Math.max(0, PLANS_CAP - memory(level)));
+            if (ctx.restoredPlans != null) ctx.restoredPlans.pump(storageRoom(level));
             return;
         }
         String path = RuinProgress.get(level).archive(ctx.d.id());
@@ -871,10 +877,10 @@ public final class NuclearPrep {
                 level.getServer().getWorldData().getLevelName(), level.dimension(), "incoming_preparation");
         ctx.restoredPlans = new RetainedPlans();
         ctx.restoredPlans.spill(new RuinPages(info, root.resolve("plans-v" + RuinPlan.STORAGE_VERSION)), ctx, readBytes::addAndGet,
-                () -> Math.max(0, PLANS_CAP - memory(level)));
+                () -> storageRoom(level));
         ctx.restoredPlans.discover();
         ctx.archive(new RuinSnapshots(new RuinPages(info, root.resolve("shots")), readBytes::addAndGet,
-                () -> Math.max(0, PLANS_CAP - memory(level))));
+                () -> storageRoom(level)));
     }
 
     CompletableFuture<Void> closeStorage() {
