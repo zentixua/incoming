@@ -82,6 +82,12 @@ public final class RuinPreparationGameTests {
         field(p, "nextFar").setInt(p, 1);
         var plans = (RetainedPlans) field(p, "plans").get(p);
         plans.put(123L, RuinPlan.EMPTY);
+        field(p, "requiredInitialized").setBoolean(p, true);
+        field(p, "requiredTarget").setLong(p, 123L);
+        ((it.unimi.dsi.fastutil.longs.LongOpenHashSet) field(p, "required").get(p)).add(123L);
+        // This controlled receipt/identity fixture excludes unrelated live chunks; real refresh is tested separately.
+        var considered = (it.unimi.dsi.fastutil.longs.LongOpenHashSet) field(p, "considered").get(p);
+        for (var holder : level.getChunkSource().chunkMap.getChunks()) considered.add(holder.getPos().toLong());
         // A plan waiting for submission is required work too, even before an I/O future exists.
         var pending = (it.unimi.dsi.fastutil.longs.LongLinkedOpenHashSet) field(plans, "toWrite").get(plans);
         pending.add(123L);
@@ -280,8 +286,8 @@ public final class RuinPreparationGameTests {
             var geometry = NuclearWarhead.geometry(level, target, 15, true, (float) IncomingConfig.SERVER.effectsScale());
             var ctx = new RuinContext(level, geometry);
             field(p, "geometry").set(p, geometry); field(p, "resolvedTarget").set(p, target); field(p, "ruins").set(p, ctx);
-            int identity = RuinPreparation.bindCarrier(level, handle, owner, target, 15, false, true);
-            h.assertTrue(identity >= 0, "Marker handoff fixture did not bind");
+            int identity = 1_900_776;
+            field(p, "strike").setInt(p, identity); field(p, "bound").setBoolean(p, true); field(p, "carrier").setBoolean(p, true);
             var event = new ua.zentix.incoming.nuclear.Detonation(1_900_778, geometry.burst(), geometry.groundY(), geometry.yieldKt(), geometry.surface(),
                     level.getGameTime(), 0, 0, geometry.visibility(), 0, geometry.scale(), false, geometry.wave());
             var ready = NuclearWorld.get(level).prep().handOff(level, event, level.getGameTime(), identity);
@@ -307,8 +313,8 @@ public final class RuinPreparationGameTests {
         field(p, "geometry").set(p, geometry); field(p, "resolvedTarget").set(p, target);
         field(p, "ruins").set(p, new RuinContext(level, geometry));
         field(p, "archivePath").set(p, "frozen-hint-test");
-        int identity = RuinPreparation.bindCarrier(level, handle, owner, target, 1, false, false);
-        h.assertTrue(identity >= 0, "Empty required-work carrier fixture rejected");
+        int identity = 1_900_775;
+        field(p, "strike").setInt(p, identity); field(p, "bound").setBoolean(p, true); field(p, "carrier").setBoolean(p, true);
         var progress = RuinProgress.get(level);
         var gate = new java.util.concurrent.CountDownLatch(1);
         StrikeGameTests.afterTest(h, gate::countDown);

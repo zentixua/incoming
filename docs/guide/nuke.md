@@ -44,6 +44,8 @@ remains immediate diagnostic behavior. Carrier preparation includes its usual ra
 Plans cover the normal arrival for a fixed point or map-ground order. Entity/craft targeting, an earlier collision,
 terrain edit or server restart may require fresh destruction work at the actual impact site. It does not guarantee that every distant-terrain client already has the latest view.
 
+Preparation before launch covers the target and currently loaded surroundings. READY waits for those ruin plans and their plan writes; the rest of the heavy zone continues preparing during flight and after the explosion. Entering a new area can add preparation before launch. READY does not survive a server restart, and distant terrain and LOD updates may arrive later.
+
 ![Console with the nuclear warhead: yield and burst mode](img/remote-nuke.png)
 
 Existing worlds need no config edit: burst mode is not stored in `incoming-server.toml`. Older versions normally
