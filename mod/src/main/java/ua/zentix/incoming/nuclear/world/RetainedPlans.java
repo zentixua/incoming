@@ -16,6 +16,7 @@ final class RetainedPlans extends Long2ObjectOpenHashMap<RuinPlan> {
     private transient java.util.function.LongSupplier room = () -> Long.MAX_VALUE;
     private static final long READ_BYTES = 4L << 20;
     private static final int IO_LIMIT = 64, READ_LIMIT = 16;
+    private final long residentTarget;
     private final transient it.unimi.dsi.fastutil.longs.LongLinkedOpenHashSet toWrite = new it.unimi.dsi.fastutil.longs.LongLinkedOpenHashSet();
     private final transient it.unimi.dsi.fastutil.longs.LongLinkedOpenHashSet hot = new it.unimi.dsi.fastutil.longs.LongLinkedOpenHashSet();
     // Demand reads belong to the scar/front consumer, independently of the preparation cursor.
@@ -24,6 +25,14 @@ final class RetainedPlans extends Long2ObjectOpenHashMap<RuinPlan> {
     private boolean discover;
     private final transient it.unimi.dsi.fastutil.longs.LongLinkedOpenHashSet misses = new it.unimi.dsi.fastutil.longs.LongLinkedOpenHashSet();
     private java.util.concurrent.CompletableFuture<Void> closing = java.util.concurrent.CompletableFuture.completedFuture(null);
+
+    RetainedPlans() { this(16L << 20); }
+
+    /** Smaller targets let storage regressions exercise real write/evict/read ownership. */
+    RetainedPlans(long residentTarget) {
+        if (residentTarget < 0) throw new IllegalArgumentException("Negative resident target");
+        this.residentTarget = residentTarget;
+    }
 
     void discover() { discover = true; }
     java.util.concurrent.CompletableFuture<Void> closeStorage() {
@@ -63,7 +72,7 @@ final class RetainedPlans extends Long2ObjectOpenHashMap<RuinPlan> {
             if (super.get(entry.getLongKey()) == write.plan) hot.addAndMoveToLast(entry.getLongKey());
             it.remove();
         }
-        while (bytes > (16L << 20) && !hot.isEmpty()) {
+        while (bytes > residentTarget && !hot.isEmpty()) {
             long key = hot.removeFirstLong();
             RuinPlan plan = super.put(key, null);
             if (plan != null) bytes -= plan.bytes();
