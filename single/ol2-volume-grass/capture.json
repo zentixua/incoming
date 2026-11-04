@@ -1,0 +1,41 @@
+{
+  "name": "ol2-volume-grass",
+  "effect": "blast drone 1",
+  "site": [
+    0.5,
+    65.0,
+    0.5
+  ],
+  "camera": [
+    40.0,
+    3.0,
+    0.0,
+    2.0
+  ],
+  "audio": {
+    "file": "ol2-volume-grass.wav",
+    "start": 5087300,
+    "from": 0.0,
+    "seconds": 6.0
+  },
+  "frames": [
+    {
+      "t": 0.3,
+      "age": 0.302,
+      "file": "ol2-volume-grass_000.30s.png",
+      "fps": 60
+    },
+    {
+      "t": 2.0,
+      "age": 2.016,
+      "file": "ol2-volume-grass_002.00s.png",
+      "fps": 60
+    },
+    {
+      "t": 6.0,
+      "age": 6.002,
+      "file": "ol2-volume-grass_006.00s.png",
+      "fps": 60
+    }
+  ]
+}

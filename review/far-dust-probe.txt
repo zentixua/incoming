@@ -1,0 +1,2 @@
+fully hidden source: dust grid count=1
+T=1679.0529 K, shown=0.100000; tau=200 -> intended opacity=0.100000000, density-scaled opacity=0.999999998

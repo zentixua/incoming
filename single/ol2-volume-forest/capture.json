@@ -1,0 +1,41 @@
+{
+  "name": "ol2-volume-forest",
+  "effect": "blast drone 1",
+  "site": [
+    0.5,
+    65.0,
+    0.5
+  ],
+  "camera": [
+    40.0,
+    3.0,
+    0.0,
+    2.0
+  ],
+  "audio": {
+    "file": "ol2-volume-forest.wav",
+    "start": 9986116,
+    "from": 0.0,
+    "seconds": 6.0
+  },
+  "frames": [
+    {
+      "t": 0.3,
+      "age": 0.304,
+      "file": "ol2-volume-forest_000.30s.png",
+      "fps": 60
+    },
+    {
+      "t": 2.0,
+      "age": 2.004,
+      "file": "ol2-volume-forest_002.00s.png",
+      "fps": 60
+    },
+    {
+      "t": 6.0,
+      "age": 6.004,
+      "file": "ol2-volume-forest_006.00s.png",
+      "fps": 60
+    }
+  ]
+}

@@ -1,0 +1,22 @@
+[
+  {
+    "y": 64.1,
+    "single_axis_density": 7.6139835799562015,
+    "with_high_outlier_axis_density": 0.40492630576148486
+  },
+  {
+    "y": 64.6,
+    "single_axis_density": 0.0,
+    "with_high_outlier_axis_density": 0.5827855893864935
+  },
+  {
+    "y": 65.1,
+    "single_axis_density": 0.0,
+    "with_high_outlier_axis_density": 0.4321980616546302
+  },
+  {
+    "y": 66.1,
+    "single_axis_density": 0.0,
+    "with_high_outlier_axis_density": 0.07647949239156117
+  }
+]

@@ -1,0 +1,370 @@
+{
+  "A1": {
+    "done": {
+      "type": "done",
+      "t_ms": 164030.654,
+      "frames": 82609,
+      "repeated_stages": 0,
+      "steps_done": 20
+    },
+    "max_impact": 100,
+    "meta": {
+      "name": "ol2-quiet/A1",
+      "label": "1aca1654a@1aca1654",
+      "jar": {
+        "label": "1aca1654a@1aca1654",
+        "file": "incoming-3.10.4.jar",
+        "sha256": "8717214b0d8d401fbbb3acc43018860b0a37fd0d3d4c06442bf7624910ff8a8e",
+        "spec": "ci:1aca1654a"
+      },
+      "context": {
+        "stand": "93bda32d0c451bce411c92d25b38305be7260fb92b1e2711f567b3cc75d149f5",
+        "mods": {
+          "sodium": "4f537696af95411e9daf15795fb5fcbc49913d488a96fa912fa8f1d7db408710995e8a1461190f3cd0f8217bf9e35e9539176592428ed587ca2d7aa84450a390",
+          "iris": "33fddb430e16222902eac75b8b3d57c381b0f3cc729f3b56c4628df12ca108f23a0b11e2feb167923d6d14d1fc7e8ee1a977ec421b19d1951bdca74c4092b9c5"
+        },
+        "packs": {
+          "none": "none"
+        },
+        "scenes": [
+          "100"
+        ],
+        "gpu": "NVIDIA GeForce RTX 4060 Laptop GPU",
+        "driver": "615.78.08",
+        "size": "2560x1600",
+        "java": "21.0.7",
+        "kwin": "kwin 6.8.2",
+        "power": "performance"
+      },
+      "started": "2026-11-04T07:51:44+00:00",
+      "packs": {
+        "none": {
+          "exit": 0,
+          "gpu_minutes": 3.02,
+          "file": null
+        }
+      }
+    },
+    "windows": {
+      "100-hit": {
+        "n": 601,
+        "gpu50": 14.634,
+        "cpu95": 17.182,
+        "foreign_cpu_mean": 0.0,
+        "foreign_cpu_peak": 0.0,
+        "units_peak": {},
+        "gpu_clock_mean": 1762.5,
+        "gpu_temp_mean": 65.5,
+        "foreign_gpu_peak": 5,
+        "foreign_gpu_mean": 1.8,
+        "foreign_gpu_samples": 10,
+        "foreign_gpu_nonzero": 4,
+        "foreign_gpu_who": [
+          "kwin_wayland:4",
+          "plasmashell:5"
+        ]
+      },
+      "100/outside": {
+        "n": 4021,
+        "gpu50": 2.302,
+        "cpu95": 5.126,
+        "foreign_cpu_mean": 0.0,
+        "foreign_cpu_peak": 0.0,
+        "units_peak": {},
+        "gpu_clock_mean": 2396.25,
+        "gpu_temp_mean": 84.5,
+        "foreign_gpu_peak": 0,
+        "foreign_gpu_mean": 0,
+        "foreign_gpu_samples": 19,
+        "foreign_gpu_nonzero": 0,
+        "foreign_gpu_who": []
+      },
+      "100/edge": {
+        "n": 4098,
+        "gpu50": 4.0205,
+        "cpu95": 4.80615,
+        "foreign_cpu_mean": 0.0,
+        "foreign_cpu_peak": 0.0,
+        "units_peak": {},
+        "gpu_clock_mean": 1805.0,
+        "gpu_temp_mean": 85.0,
+        "foreign_gpu_peak": 0,
+        "foreign_gpu_mean": 0,
+        "foreign_gpu_samples": 20,
+        "foreign_gpu_nonzero": 0,
+        "foreign_gpu_who": []
+      },
+      "100/inside": {
+        "n": 4304,
+        "gpu50": 3.7344999999999997,
+        "cpu95": 4.3637,
+        "foreign_cpu_mean": 0.0,
+        "foreign_cpu_peak": 0.0,
+        "units_peak": {},
+        "gpu_clock_mean": 2081.25,
+        "gpu_temp_mean": 85.25,
+        "foreign_gpu_peak": 0,
+        "foreign_gpu_mean": 0,
+        "foreign_gpu_samples": 19,
+        "foreign_gpu_nonzero": 0,
+        "foreign_gpu_who": []
+      }
+    },
+    "pack_in_use": [
+      {
+        "type": "once",
+        "t_ms": 23727.245,
+        "name": "net.irisshaders.iris.Iris#isPackInUseQuick",
+        "value": "false"
+      }
+    ]
+  },
+  "B": {
+    "done": {
+      "type": "done",
+      "t_ms": 164841.221,
+      "frames": 93023,
+      "repeated_stages": 0,
+      "steps_done": 20
+    },
+    "max_impact": 100,
+    "meta": {
+      "name": "ol2-quiet/B",
+      "label": "3.10.4",
+      "jar": {
+        "label": "3.10.4",
+        "file": "incoming-3.10.4.jar",
+        "sha256": "cec5517a996d78dbf52417929edcef7db38dad5fb818e32204653554fec841cd",
+        "spec": "mod/build/libs/incoming-3.10.4.jar"
+      },
+      "context": {
+        "stand": "93bda32d0c451bce411c92d25b38305be7260fb92b1e2711f567b3cc75d149f5",
+        "mods": {
+          "sodium": "4f537696af95411e9daf15795fb5fcbc49913d488a96fa912fa8f1d7db408710995e8a1461190f3cd0f8217bf9e35e9539176592428ed587ca2d7aa84450a390",
+          "iris": "33fddb430e16222902eac75b8b3d57c381b0f3cc729f3b56c4628df12ca108f23a0b11e2feb167923d6d14d1fc7e8ee1a977ec421b19d1951bdca74c4092b9c5"
+        },
+        "packs": {
+          "none": "none"
+        },
+        "scenes": [
+          "100"
+        ],
+        "gpu": "NVIDIA GeForce RTX 4060 Laptop GPU",
+        "driver": "615.78.08",
+        "size": "2560x1600",
+        "java": "21.0.7",
+        "kwin": "kwin 6.8.2",
+        "power": "performance"
+      },
+      "started": "2026-11-04T07:54:45+00:00",
+      "packs": {
+        "none": {
+          "exit": 0,
+          "gpu_minutes": 2.88,
+          "file": null
+        }
+      }
+    },
+    "windows": {
+      "100-hit": {
+        "n": 487,
+        "gpu50": 18.055,
+        "cpu95": 21.650799999999997,
+        "foreign_cpu_mean": 0.125,
+        "foreign_cpu_peak": 0.14,
+        "units_peak": {},
+        "gpu_clock_mean": 1717.5,
+        "gpu_temp_mean": 69.5,
+        "foreign_gpu_peak": 0,
+        "foreign_gpu_mean": 0,
+        "foreign_gpu_samples": 10,
+        "foreign_gpu_nonzero": 0,
+        "foreign_gpu_who": []
+      },
+      "100/outside": {
+        "n": 3464,
+        "gpu50": 3.74,
+        "cpu95": 6.051699999999999,
+        "foreign_cpu_mean": 0.16,
+        "foreign_cpu_peak": 0.39,
+        "units_peak": {},
+        "gpu_clock_mean": 2317.5,
+        "gpu_temp_mean": 85.75,
+        "foreign_gpu_peak": 7,
+        "foreign_gpu_mean": 0.3684210526315789,
+        "foreign_gpu_samples": 19,
+        "foreign_gpu_nonzero": 1,
+        "foreign_gpu_who": [
+          "plasmashell:7"
+        ]
+      },
+      "100/edge": {
+        "n": 3384,
+        "gpu50": 5.3525,
+        "cpu95": 5.9497,
+        "foreign_cpu_mean": 0.0425,
+        "foreign_cpu_peak": 0.13,
+        "units_peak": {},
+        "gpu_clock_mean": 2100.0,
+        "gpu_temp_mean": 85.25,
+        "foreign_gpu_peak": 22,
+        "foreign_gpu_mean": 4.15,
+        "foreign_gpu_samples": 20,
+        "foreign_gpu_nonzero": 6,
+        "foreign_gpu_who": [
+          "kwin_wayland:10",
+          "kwin_wayland:11",
+          "kwin_wayland:13",
+          "kwin_wayland:14",
+          "kwin_wayland:22"
+        ]
+      },
+      "100/inside": {
+        "n": 3445,
+        "gpu50": 5.434,
+        "cpu95": 5.724799999999999,
+        "foreign_cpu_mean": 0.0875,
+        "foreign_cpu_peak": 0.19,
+        "units_peak": {
+          "arch-update.service": 0.18
+        },
+        "gpu_clock_mean": 2047.5,
+        "gpu_temp_mean": 86.25,
+        "foreign_gpu_peak": 0,
+        "foreign_gpu_mean": 0,
+        "foreign_gpu_samples": 19,
+        "foreign_gpu_nonzero": 0,
+        "foreign_gpu_who": []
+      }
+    },
+    "pack_in_use": [
+      {
+        "type": "once",
+        "t_ms": 22085.463,
+        "name": "net.irisshaders.iris.Iris#isPackInUseQuick",
+        "value": "false"
+      }
+    ]
+  },
+  "A2": {
+    "done": {
+      "type": "done",
+      "t_ms": 161728.825,
+      "frames": 85587,
+      "repeated_stages": 0,
+      "steps_done": 20
+    },
+    "max_impact": 100,
+    "meta": {
+      "name": "ol2-quiet/A2",
+      "label": "1aca1654a@1aca1654",
+      "jar": {
+        "label": "1aca1654a@1aca1654",
+        "file": "incoming-3.10.4.jar",
+        "sha256": "8717214b0d8d401fbbb3acc43018860b0a37fd0d3d4c06442bf7624910ff8a8e",
+        "spec": "ci:1aca1654a"
+      },
+      "context": {
+        "stand": "93bda32d0c451bce411c92d25b38305be7260fb92b1e2711f567b3cc75d149f5",
+        "mods": {
+          "sodium": "4f537696af95411e9daf15795fb5fcbc49913d488a96fa912fa8f1d7db408710995e8a1461190f3cd0f8217bf9e35e9539176592428ed587ca2d7aa84450a390",
+          "iris": "33fddb430e16222902eac75b8b3d57c381b0f3cc729f3b56c4628df12ca108f23a0b11e2feb167923d6d14d1fc7e8ee1a977ec421b19d1951bdca74c4092b9c5"
+        },
+        "packs": {
+          "none": "none"
+        },
+        "scenes": [
+          "100"
+        ],
+        "gpu": "NVIDIA GeForce RTX 4060 Laptop GPU",
+        "driver": "615.78.08",
+        "size": "2560x1600",
+        "java": "21.0.7",
+        "kwin": "kwin 6.8.2",
+        "power": "performance"
+      },
+      "started": "2026-11-04T07:57:38+00:00",
+      "packs": {
+        "none": {
+          "exit": 0,
+          "gpu_minutes": 2.83,
+          "file": null
+        }
+      }
+    },
+    "windows": {
+      "100-hit": {
+        "n": 497,
+        "gpu50": 17.112,
+        "cpu95": 21.1204,
+        "foreign_cpu_mean": 0.005,
+        "foreign_cpu_peak": 0.01,
+        "units_peak": {},
+        "gpu_clock_mean": 1440.0,
+        "gpu_temp_mean": 70.5,
+        "foreign_gpu_peak": 4,
+        "foreign_gpu_mean": 0.4444444444444444,
+        "foreign_gpu_samples": 9,
+        "foreign_gpu_nonzero": 1,
+        "foreign_gpu_who": [
+          "kwin_wayland:4"
+        ]
+      },
+      "100/outside": {
+        "n": 3766,
+        "gpu50": 2.433,
+        "cpu95": 5.42975,
+        "foreign_cpu_mean": 0.025,
+        "foreign_cpu_peak": 0.05,
+        "units_peak": {},
+        "gpu_clock_mean": 2257.5,
+        "gpu_temp_mean": 86.25,
+        "foreign_gpu_peak": 0,
+        "foreign_gpu_mean": 0,
+        "foreign_gpu_samples": 20,
+        "foreign_gpu_nonzero": 0,
+        "foreign_gpu_who": []
+      },
+      "100/edge": {
+        "n": 4009,
+        "gpu50": 3.554,
+        "cpu95": 5.174,
+        "foreign_cpu_mean": 0.0775,
+        "foreign_cpu_peak": 0.25,
+        "units_peak": {
+          "incoming-codex-OL2-REV.service": 0.2
+        },
+        "gpu_clock_mean": 2006.25,
+        "gpu_temp_mean": 87.75,
+        "foreign_gpu_peak": 0,
+        "foreign_gpu_mean": 0,
+        "foreign_gpu_samples": 20,
+        "foreign_gpu_nonzero": 0,
+        "foreign_gpu_who": []
+      },
+      "100/inside": {
+        "n": 4201,
+        "gpu50": 4.023,
+        "cpu95": 4.47,
+        "foreign_cpu_mean": 0.0325,
+        "foreign_cpu_peak": 0.06,
+        "units_peak": {},
+        "gpu_clock_mean": 2021.25,
+        "gpu_temp_mean": 86.25,
+        "foreign_gpu_peak": 0,
+        "foreign_gpu_mean": 0,
+        "foreign_gpu_samples": 19,
+        "foreign_gpu_nonzero": 0,
+        "foreign_gpu_who": []
+      }
+    },
+    "pack_in_use": [
+      {
+        "type": "once",
+        "t_ms": 21923.687,
+        "name": "net.irisshaders.iris.Iris#isPackInUseQuick",
+        "value": "false"
+      }
+    ]
+  }
+}

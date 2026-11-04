@@ -1,0 +1,2 @@
+count=1 cellY=0.01000000 yMin=-0.22000000 yMax=0.42000005 horizontal=0.80000001 vertices=732
+count=2 cellY=1.67666662 yMin=-3.55333328 yMax=103.75332642 horizontal=0.80000001 vertices=36

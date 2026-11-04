@@ -1,0 +1,294 @@
+{
+  "A1": {
+    "done": {
+      "type": "done",
+      "t_ms": 169120.598,
+      "frames": 70346,
+      "repeated_stages": 0,
+      "steps_done": 20
+    },
+    "max_impact": 100,
+    "meta": {
+      "name": "ol2-first/A1",
+      "label": "1aca1654a@1aca1654",
+      "jar": {
+        "label": "1aca1654a@1aca1654",
+        "file": "incoming-3.10.4.jar",
+        "sha256": "8717214b0d8d401fbbb3acc43018860b0a37fd0d3d4c06442bf7624910ff8a8e",
+        "spec": "ci:1aca1654a"
+      },
+      "context": {
+        "stand": "93bda32d0c451bce411c92d25b38305be7260fb92b1e2711f567b3cc75d149f5",
+        "mods": {
+          "sodium": "4f537696af95411e9daf15795fb5fcbc49913d488a96fa912fa8f1d7db408710995e8a1461190f3cd0f8217bf9e35e9539176592428ed587ca2d7aa84450a390",
+          "iris": "33fddb430e16222902eac75b8b3d57c381b0f3cc729f3b56c4628df12ca108f23a0b11e2feb167923d6d14d1fc7e8ee1a977ec421b19d1951bdca74c4092b9c5"
+        },
+        "packs": {
+          "none": "none"
+        },
+        "scenes": [
+          "100"
+        ],
+        "gpu": "NVIDIA GeForce RTX 4060 Laptop GPU",
+        "driver": "615.78.08",
+        "size": "2560x1600",
+        "java": "21.0.7",
+        "kwin": "kwin 6.8.2",
+        "power": "performance"
+      },
+      "started": "2026-11-04T07:34:56+00:00",
+      "packs": {
+        "none": {
+          "exit": 0,
+          "gpu_minutes": 3.16,
+          "file": null
+        }
+      }
+    },
+    "windows": {
+      "100-hit": {
+        "frames": 424,
+        "gpu_ms_p50": 19.048000000000002,
+        "cpu_thread_ms_p95": 25.9722,
+        "wall_ms_p95": 27.469349999999984,
+        "foreign_cpu_mean": 3.32,
+        "foreign_units_peak": {
+          "incoming-job-mt-l2-recovery-build-19137.service": 1.04,
+          "incoming-job-lead2-jfr-stages-19293.service": 1.19,
+          "incoming-job-mt-s2-opt-fix-20176.service": 1.52
+        },
+        "foreign_gpu_peak": 20
+      },
+      "100/outside": {
+        "frames": 3641,
+        "gpu_ms_p50": 2.327,
+        "cpu_thread_ms_p95": 5.762,
+        "wall_ms_p95": 5.802,
+        "foreign_cpu_mean": 1.6775000000000002,
+        "foreign_units_peak": {
+          "incoming-job-mt-l2-recovery-build-19137.service": 1.03,
+          "incoming-job-lead2-jfr-stages-19293.service": 1.24
+        },
+        "foreign_gpu_peak": 10
+      },
+      "100/edge": {
+        "frames": 2604,
+        "gpu_ms_p50": 2.9515000000000002,
+        "cpu_thread_ms_p95": 8.9834,
+        "wall_ms_p95": 9.25405,
+        "foreign_cpu_mean": 6.6775,
+        "foreign_units_peak": {
+          "incoming-job-mt-l2-recovery-build-19137.service": 1.04,
+          "incoming-job-mt-s2-demand-23423.service": 6.45
+        },
+        "foreign_gpu_peak": 4
+      },
+      "100/inside": {
+        "frames": 3293,
+        "gpu_ms_p50": 3.245,
+        "cpu_thread_ms_p95": 7.784999999999997,
+        "wall_ms_p95": 8.0842,
+        "foreign_cpu_mean": 3.5925000000000002,
+        "foreign_units_peak": {
+          "incoming-job-mt-l2-recovery-build-19137.service": 1.67,
+          "app-com.anthropic.Claude-3533.scope": 0.37
+        },
+        "foreign_gpu_peak": 0
+      }
+    }
+  },
+  "B": {
+    "done": {
+      "type": "done",
+      "t_ms": 168474.016,
+      "frames": 82706,
+      "repeated_stages": 0,
+      "steps_done": 20
+    },
+    "max_impact": 100,
+    "meta": {
+      "name": "ol2-first/B",
+      "label": "3.10.4",
+      "jar": {
+        "label": "3.10.4",
+        "file": "incoming-3.10.4.jar",
+        "sha256": "cec5517a996d78dbf52417929edcef7db38dad5fb818e32204653554fec841cd",
+        "spec": "mod/build/libs/incoming-3.10.4.jar"
+      },
+      "context": {
+        "stand": "93bda32d0c451bce411c92d25b38305be7260fb92b1e2711f567b3cc75d149f5",
+        "mods": {
+          "sodium": "4f537696af95411e9daf15795fb5fcbc49913d488a96fa912fa8f1d7db408710995e8a1461190f3cd0f8217bf9e35e9539176592428ed587ca2d7aa84450a390",
+          "iris": "33fddb430e16222902eac75b8b3d57c381b0f3cc729f3b56c4628df12ca108f23a0b11e2feb167923d6d14d1fc7e8ee1a977ec421b19d1951bdca74c4092b9c5"
+        },
+        "packs": {
+          "none": "none"
+        },
+        "scenes": [
+          "100"
+        ],
+        "gpu": "NVIDIA GeForce RTX 4060 Laptop GPU",
+        "driver": "615.78.08",
+        "size": "2560x1600",
+        "java": "21.0.7",
+        "kwin": "kwin 6.8.2",
+        "power": "performance"
+      },
+      "started": "2026-11-04T07:38:06+00:00",
+      "packs": {
+        "none": {
+          "exit": 0,
+          "gpu_minutes": 2.95,
+          "file": null
+        }
+      }
+    },
+    "windows": {
+      "100-hit": {
+        "frames": 457,
+        "gpu_ms_p50": 18.746,
+        "cpu_thread_ms_p95": 23.002000000000002,
+        "wall_ms_p95": 23.8722,
+        "foreign_cpu_mean": 1.175,
+        "foreign_units_peak": {
+          "incoming-job-mt-l2-recovery-build-19137.service": 1.11
+        },
+        "foreign_gpu_peak": 0
+      },
+      "100/outside": {
+        "frames": 2214,
+        "gpu_ms_p50": 4.06,
+        "cpu_thread_ms_p95": 10.68245,
+        "wall_ms_p95": 10.803099999999999,
+        "foreign_cpu_mean": 6.640000000000001,
+        "foreign_units_peak": {
+          "incoming-job-mt-l2-recovery-build-19137.service": 2.4,
+          "incoming-job-mt-l2-hints-build-27727.service": 6.15,
+          "incoming-codex-MT-L2.service": 0.17
+        },
+        "foreign_gpu_peak": 0
+      },
+      "100/edge": {
+        "frames": 1864,
+        "gpu_ms_p50": 5.6145,
+        "cpu_thread_ms_p95": 11.023399999999999,
+        "wall_ms_p95": 22.188399999999984,
+        "foreign_cpu_mean": 9.1225,
+        "foreign_units_peak": {
+          "incoming-job-mt-l2-recovery-build-19137.service": 13.28,
+          "incoming-job-mt-l2-hints-build-27727.service": 1.29,
+          "app-com.anthropic.Claude-3533.scope": 0.45
+        },
+        "foreign_gpu_peak": 6
+      },
+      "100/inside": {
+        "frames": 2609,
+        "gpu_ms_p50": 5.321,
+        "cpu_thread_ms_p95": 9.7358,
+        "wall_ms_p95": 9.942599999999999,
+        "foreign_cpu_mean": 4.9675,
+        "foreign_units_peak": {
+          "incoming-job-mt-l2-hints-build-27727.service": 1.02,
+          "app-com.anthropic.Claude-3533.scope": 0.24,
+          "incoming-job-mt-l2-gametest-29912.service": 6.68
+        },
+        "foreign_gpu_peak": 0
+      }
+    }
+  },
+  "A2": {
+    "done": {
+      "type": "done",
+      "t_ms": 163274.88,
+      "frames": 81929,
+      "repeated_stages": 0,
+      "steps_done": 20
+    },
+    "max_impact": 100,
+    "meta": {
+      "name": "ol2-first/A2",
+      "label": "1aca1654a@1aca1654",
+      "jar": {
+        "label": "1aca1654a@1aca1654",
+        "file": "incoming-3.10.4.jar",
+        "sha256": "8717214b0d8d401fbbb3acc43018860b0a37fd0d3d4c06442bf7624910ff8a8e",
+        "spec": "ci:1aca1654a"
+      },
+      "context": {
+        "stand": "93bda32d0c451bce411c92d25b38305be7260fb92b1e2711f567b3cc75d149f5",
+        "mods": {
+          "sodium": "4f537696af95411e9daf15795fb5fcbc49913d488a96fa912fa8f1d7db408710995e8a1461190f3cd0f8217bf9e35e9539176592428ed587ca2d7aa84450a390",
+          "iris": "33fddb430e16222902eac75b8b3d57c381b0f3cc729f3b56c4628df12ca108f23a0b11e2feb167923d6d14d1fc7e8ee1a977ec421b19d1951bdca74c4092b9c5"
+        },
+        "packs": {
+          "none": "none"
+        },
+        "scenes": [
+          "100"
+        ],
+        "gpu": "NVIDIA GeForce RTX 4060 Laptop GPU",
+        "driver": "615.78.08",
+        "size": "2560x1600",
+        "java": "21.0.7",
+        "kwin": "kwin 6.8.2",
+        "power": "performance"
+      },
+      "started": "2026-11-04T07:41:03+00:00",
+      "packs": {
+        "none": {
+          "exit": 0,
+          "gpu_minutes": 2.9,
+          "file": null
+        }
+      }
+    },
+    "windows": {
+      "100-hit": {
+        "frames": 460,
+        "gpu_ms_p50": 18.2725,
+        "cpu_thread_ms_p95": 23.282349999999997,
+        "wall_ms_p95": 23.91295,
+        "foreign_cpu_mean": 1.3250000000000002,
+        "foreign_units_peak": {
+          "incoming-codex-OL2.service": 0.48,
+          "incoming-job-mt-l2-hints-build-27727.service": 1.04
+        },
+        "foreign_gpu_peak": 0
+      },
+      "100/outside": {
+        "frames": 3317,
+        "gpu_ms_p50": 2.306,
+        "cpu_thread_ms_p95": 6.361,
+        "wall_ms_p95": 6.449799999999999,
+        "foreign_cpu_mean": 1.5375,
+        "foreign_units_peak": {
+          "incoming-job-mt-l2-hints-build-27727.service": 1.73
+        },
+        "foreign_gpu_peak": 0
+      },
+      "100/edge": {
+        "frames": 3655,
+        "gpu_ms_p50": 3.343,
+        "cpu_thread_ms_p95": 5.689199999999999,
+        "wall_ms_p95": 5.765,
+        "foreign_cpu_mean": 1.28,
+        "foreign_units_peak": {
+          "incoming-job-mt-l2-hints-build-27727.service": 1.61
+        },
+        "foreign_gpu_peak": 0
+      },
+      "100/inside": {
+        "frames": 3844,
+        "gpu_ms_p50": 2.712,
+        "cpu_thread_ms_p95": 5.08855,
+        "wall_ms_p95": 5.2264,
+        "foreign_cpu_mean": 1.2075,
+        "foreign_units_peak": {
+          "incoming-job-mt-l2-hints-build-27727.service": 1.15,
+          "incoming-codex-OL2-REV.service": 0.15
+        },
+        "foreign_gpu_peak": 0
+      }
+    }
+  }
+}

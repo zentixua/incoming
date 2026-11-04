@@ -1,0 +1,41 @@
+{
+  "name": "ol2-main-raised",
+  "effect": "blast missile 1",
+  "site": [
+    0.5,
+    65.0,
+    0.5
+  ],
+  "camera": [
+    70.0,
+    20.0,
+    0.0,
+    2.0
+  ],
+  "audio": {
+    "file": "ol2-main-raised.wav",
+    "start": 9392196,
+    "from": 0.0,
+    "seconds": 6.0
+  },
+  "frames": [
+    {
+      "t": 0.3,
+      "age": 0.312,
+      "file": "ol2-main-raised_000.30s.png",
+      "fps": 60
+    },
+    {
+      "t": 2.0,
+      "age": 2.012,
+      "file": "ol2-main-raised_002.00s.png",
+      "fps": 60
+    },
+    {
+      "t": 6.0,
+      "age": 6.013,
+      "file": "ol2-main-raised_006.00s.png",
+      "fps": 60
+    }
+  ]
+}
