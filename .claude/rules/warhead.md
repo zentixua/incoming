@@ -261,3 +261,9 @@ paths:
 - `DebrisSpawner`: the ground ejecta is separated from the hull parts. An intact connected surface gives fine crumbs; large boulders
   remain only on loose ground. `wreck()` and burning debris keep their earlier placement under `debris_stay`; fire follows the earlier
   fuel check. Do not turn the whole debris stream into `chip()`.
+
+- FragmentTrace keeps a section reference only within one ray, refreshes it on chunk/section crossings and still
+  checks every DDA cell and ready-chunk boundary. Empty sections can omit the repeated LevelChunk block getter;
+  nonempty sections retain the original collision/tag/fluid path. Debug worlds must use the getter: vanilla
+  supplies virtual barriers/display blocks even when stored sections are empty. Differential FragmentTraceTest
+  covers exact callbacks, boundary/tie order, unload/mutation between rays and that debug-world exception.

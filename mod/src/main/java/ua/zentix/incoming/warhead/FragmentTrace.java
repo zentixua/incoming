@@ -5,6 +5,7 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
+import net.minecraft.world.level.chunk.LevelChunkSection;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.registry.ModTags;
@@ -47,8 +48,11 @@ public final class FragmentTrace {
         double ty = sy == 0 ? Double.MAX_VALUE : ((sy > 0 ? y + 1 - from.y : from.y - y) * tdy);
         double tz = sz == 0 ? Double.MAX_VALUE : ((sz > 0 ? z + 1 - from.z : from.z - z) * tdz);
         int minY = level.getMinBuildHeight(), maxY = level.getMaxBuildHeight();
+        boolean debug = level.isDebug(); // the debug world supplies virtual blocks from its getter
         int cx = Integer.MIN_VALUE, cz = Integer.MIN_VALUE;
         LevelChunk chunk = null;
+        LevelChunkSection section = null;
+        int sectionY = Integer.MIN_VALUE;
         BlockPos.MutableBlockPos m = new BlockPos.MutableBlockPos();
         net.minecraft.core.Direction entry = net.minecraft.core.Direction.UP;
         double s = 0;
@@ -75,8 +79,18 @@ public final class FragmentTrace {
                 cx = x >> 4;
                 cz = z >> 4;
                 chunk = chunkNow(level, cx, cz);
+                sectionY = Integer.MIN_VALUE;
             }
             if (chunk == null) return -1;
+            if (!debug) {
+                if (y >> 4 != sectionY) {
+                    sectionY = y >> 4;
+                    section = chunk.getSection(chunk.getSectionIndex(y));
+                }
+                // Vanilla's getter returns air for an empty section. Keep the same cell walk/readiness checks,
+                // but avoid repeating that getter for every cell of the same empty section.
+                if (section.hasOnlyAir()) continue;
+            }
             m.set(x, y, z);
             BlockState st = chunk.getBlockState(m);
             if (st.isAir()) continue;
