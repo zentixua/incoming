@@ -22,7 +22,7 @@ import ua.zentix.incoming.nuclear.Detonation;
 public final class RuinNearReadyGameTests {
     private RuinNearReadyGameTests() {}
 
-    @GameTest(template = "range", batch = "nuke_near_ready", timeoutTicks = 1800, skyAccess = true)
+    @GameTest(template = "range", batch = "nuke_near_ready", timeoutTicks = 600, skyAccess = true)
     public static void nearPlansCanLaunchWhileFarWorkContinues(GameTestHelper h) throws ReflectiveOperationException {
         StrikeGameTests.gameSpeed(h);
         ServerLevel level = h.getLevel();
@@ -38,6 +38,8 @@ public final class RuinNearReadyGameTests {
         StrikeGameTests.afterTest(h, () -> RuinPreparation.cancel(level, handle));
         boolean[] stalled = {false}, loaded = {false};
         long[] added = {0};
+        String[] phase = {"waiting"};
+        boolean[] reported = {false}, realReceipt = {false};
         h.succeedWhen(() -> {
             try {
                 RuinPreparation.keepAlive(level, handle, owner);
@@ -76,6 +78,29 @@ public final class RuinNearReadyGameTests {
                     h.fail("Waiting for newly loaded surroundings");
                 }
                 h.assertTrue(plans.containsKey(added[0]), "New critical plan did not complete");
+                phase[0] = "real-write-receipt";
+                if (!realReceipt[0]) {
+                    var pages = (RuinPages) field(plans, "pages").get(plans);
+                    @SuppressWarnings("unchecked")
+                    var preceding = (java.util.concurrent.CompletableFuture<Void>) field(pages, "tail").get(pages);
+                    var gate = new java.util.concurrent.CompletableFuture<Void>();
+                    StrikeGameTests.afterTest(h, () -> gate.complete(null));
+                    field(pages, "tail").set(pages, preceding.thenCompose(unused -> gate));
+                    try {
+                        plans.put(centre.toLong(), near);
+                        plans.pump(32L << 20);
+                        h.assertTrue(((it.unimi.dsi.fastutil.longs.Long2ObjectMap<?>) field(plans, "writes").get(plans)).containsKey(centre.toLong()),
+                                "Actual plan write was not dispatched");
+                        h.assertTrue(RuinPreparation.status(level, handle).stage() == RuinPreparation.Stage.STORING,
+                                "Unfinished actual plan write receipt certified READY");
+                        h.assertTrue(RuinPreparation.bindCarrier(level, handle, owner, status.resolvedTarget(), .01, false, true) == -1,
+                                "Unfinished actual plan write receipt allowed binding");
+                    } finally { gate.complete(null); }
+                    realReceipt[0] = true;
+                    phase[0] = "waiting";
+                    h.fail("Waiting for actual page write completion");
+                }
+                phase[0] = "receipts";
                 // A critical pending receipt blocks READY; an unrelated pending receipt does not.
                 var queued = (it.unimi.dsi.fastutil.longs.LongLinkedOpenHashSet) field(plans, "toWrite").get(plans);
                 long remote = order[order.length - 1];
@@ -92,8 +117,11 @@ public final class RuinNearReadyGameTests {
                 field(p, "failure").set(p, RuinPreparation.Reason.IO);
                 h.assertTrue(RuinPreparation.status(level, handle).stage() == RuinPreparation.Stage.FAILED, "Distant source error was hidden by near readiness");
                 field(p, "failure").set(p, RuinPreparation.Reason.NONE);
+                phase[0] = "binding";
                 int identity = RuinPreparation.bindCarrier(level, handle, owner, status.resolvedTarget(), .01, false, true);
-                h.assertTrue(identity >= 0, "Actual near-ready carrier could not bind");
+                h.assertTrue(identity >= 0, "Actual near-ready carrier could not bind: " + RuinPreparation.status(level, handle)
+                        + "; already bound=" + field(p, "bound").getBoolean(p));
+                phase[0] = "handoff";
                 Detonation geometry = (Detonation) field(p, "geometry").get(p);
                 Detonation event = new Detonation(1_903_001, geometry.burst(), geometry.groundY(), geometry.yieldKt(), geometry.surface(),
                         level.getGameTime(), 0, 0, geometry.visibility(), 0, geometry.scale(), false, geometry.wave());
@@ -101,6 +129,7 @@ public final class RuinNearReadyGameTests {
                 h.assertTrue(ready != null && ready.plans() == plans && plans.get(centre.toLong()) == near,
                         "Partial handoff changed or discarded actual near output");
                 h.assertTrue(!field(p, "draining").getBoolean(p), "Partial handoff discarded unfinished far ownership");
+                phase[0] = "far-continuation";
                 field(p, "nextRead").setInt(p, 0);
                 var far = NuclearPrep.class.getDeclaredMethod("far", ServerLevel.class, p.getClass(), WorkClock.class);
                 far.setAccessible(true);
@@ -110,6 +139,13 @@ public final class RuinNearReadyGameTests {
                 h.assertTrue(field(p, "nextRead").getInt(p) > 0 || !((it.unimi.dsi.fastutil.longs.LongOpenHashSet) field(p, "reading").get(p)).isEmpty(),
                         "Existing far pipeline did not continue after partial handoff");
             } catch (ReflectiveOperationException error) { throw new IllegalStateException(error); }
+            catch (RuntimeException error) {
+                if (!phase[0].equals("waiting") && !reported[0]) {
+                    reported[0] = true;
+                    Incoming.LOG.error("NEAR_READY first final-phase failure {}", phase[0], error);
+                }
+                throw error;
+            }
         });
     }
 

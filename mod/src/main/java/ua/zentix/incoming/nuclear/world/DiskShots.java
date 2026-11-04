@@ -68,6 +68,11 @@ final class DiskShots {
         Read(ChunkPos pos, int minY, PalettedContainer<BlockState>[] states, int[] heights, int unprimed, @Nullable String skip, int flashLayer) {
             this(pos, minY, states, heights, unprimed, skip, flashLayer, 0);
         }
+        /** A failed required source is different from genuinely absent or unfinished terrain. */
+        boolean sourceFailure() {
+            return skip != null && !skip.equals("not on disk") && !skip.equals("not fully generated on disk");
+        }
+
         static Read skipped(ChunkPos pos, String why) {
             return new Read(pos, 0, empty(), new int[0], 0, why, 0);
         }

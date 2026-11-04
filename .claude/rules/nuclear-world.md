@@ -446,3 +446,8 @@ paths:
   Only these plans' own spill receipts block READY. Full physical disk planning, partial context handoff and durable
   settlement continue during flight/after detonation; distant planning errors still invalidate an unbound request.
   READY is a live launch condition, not persisted permission or a promise that distant ruins are already saved.
+  Critical membership uses `Terrain.ready`, not `Terrain.inMemory`: FULL chunks retained by generation/unload can
+  be unavailable to `getChunkNow`, so adding/removing them on every bind would oscillate READY forever. Unload
+  keeps explicit near collectors until actual completion; every failed/abandoned completion fails the request.
+  The window reader distinguishes source failure from legal absent/unfinished terrain. Drain owned read results
+  before fresh-snapshot admission. `nuke_near_*` covers those transitions, late loads and partial handoff.
