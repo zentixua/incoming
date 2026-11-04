@@ -117,3 +117,8 @@ paths:
   producer/reset monitor (`WitnessesTest` holds a read while both progress). Values carry their epoch; stale read
   confirmation cannot consume a new witness. `TimedLodBuffer.current` is an ownership snapshot, never a fence
   against foreign ingestion already crossing stop. Submission timings are elapsed nanoseconds, not CPU time.
+
+- Voxy recovery retains only 65,536 recent chunk coordinates and 4,096 pending hints, not every changed coordinate
+  in the session. Requests are deduplicated and drained at the existing server rate. Overflow evicts old hints, so
+  recovery remains best effort, not a durable freshness record. A later Incoming submission cannot cancel a
+  crossing foreign-delivery hint. Logout/reset clears the previous world and both collections immediately.
