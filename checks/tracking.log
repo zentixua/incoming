@@ -1,0 +1,494 @@
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.14.3/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :createMinecraftArtifacts UP-TO-DATE
+> Task :compileJava
+> Task :generateModMetadata UP-TO-DATE
+> Task :processResources UP-TO-DATE
+> Task :classes
+> Task :compileDevtestJava
+> Task :copyRuntimeMods_gametest UP-TO-DATE
+> Task :processDevtestResources UP-TO-DATE
+> Task :devtestClasses
+> Task :downloadAssets UP-TO-DATE
+> Task :writeGameTestServerLegacyClasspath UP-TO-DATE
+> Task :prepareGameTestServerRun
+
+> Task :runGameTestServer
+WARN StatusConsoleListener Advanced terminal features are not available in this environment
+[11:29:21] [main/INFO] [cp.mo.mo.Launcher/MODLAUNCHER]: ModLauncher running: args [--launchTarget, forgeserverdev, --gameDir, ., --fml.fmlVersion, 4.0.45, --fml.mcVersion, 1.21.1, --fml.neoForgeVersion, 21.1.264, --fml.neoFormVersion, 20240808.144430]
+[11:29:21] [main/INFO] [cp.mo.mo.Launcher/MODLAUNCHER]: JVM identified as Microsoft OpenJDK 64-Bit Server VM 21.0.7+6-LTS
+[11:29:21] [main/INFO] [cp.mo.mo.Launcher/MODLAUNCHER]: ModLauncher 11.0.5+main.901c6ea8 starting: java version 21.0.7 by Microsoft; OS Linux arch amd64 version 7.3.1-1-cachyos
+[11:29:21] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Configuration file /mnt/data/projects/incoming/mod/run/wt-LEAD2-CONTROL/mod/run/gametest/config/fml.toml is not correct. Correcting
+[11:29:21] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [disableConfigWatcher] was corrected from null to false
+[11:29:21] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowControl] was corrected from null to true
+[11:29:21] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [maxThreads] was corrected from null to -1
+[11:29:21] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [versionCheck] was corrected from null to true
+[11:29:21] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [defaultConfigPath] was corrected from null to defaultconfigs
+[11:29:21] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [disableOptimizedDFU] was corrected from null to true
+[11:29:21] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowProvider] was corrected from null to fmlearlywindow
+[11:29:21] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowWidth] was corrected from null to 854
+[11:29:21] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowHeight] was corrected from null to 480
+[11:29:21] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowFBScale] was corrected from null to 1
+[11:29:21] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowMaximized] was corrected from null to false
+[11:29:21] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowSkipGLVersions] was corrected from null to []
+[11:29:21] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowSquir] was corrected from null to false
+[11:29:21] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: ****************************** Found dependency overrides ******************************
+[11:29:21] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: Dependency overrides for mod 'aeronautics': adding explicit AFTER ordering against 'simulated', adding explicit AFTER ordering against 'offroad'
+[11:29:21] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: Dependency overrides for mod 'simulated': adding explicit AFTER ordering against 'create', adding explicit AFTER ordering against 'sable'
+[11:29:21] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: Dependency overrides for mod 'offroad': adding explicit AFTER ordering against 'simulated'
+[11:29:21] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: ****************************************************************************************
+[11:29:21] [main/INFO] [ne.ne.fm.lo.ImmediateWindowHandler/]: ImmediateWindowProvider not loading because launch target is forgeserverdev
+[11:29:21] [main/INFO] [mixin/]: SpongePowered MIXIN Subsystem Version=0.8.7 Source=union:/home/artem/.gradle/caches/modules-2/files-2.1/net.fabricmc/sponge-mixin/0.16.4+mixin.0.8.7/26d01f0567ab46e9ca0d2ed89d0ecc11aadbd433/sponge-mixin-0.16.4+mixin.0.8.7.jar%2394!/ Service=ModLauncher Env=SERVER
+[11:29:21] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: ****************************** Found dependency overrides ******************************
+[11:29:21] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: Dependency overrides for mod 'aeronautics': adding explicit AFTER ordering against 'simulated', adding explicit AFTER ordering against 'offroad'
+[11:29:21] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: Dependency overrides for mod 'simulated': adding explicit AFTER ordering against 'create', adding explicit AFTER ordering against 'sable'
+[11:29:21] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: Dependency overrides for mod 'offroad': adding explicit AFTER ordering against 'simulated'
+[11:29:21] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: ****************************************************************************************
+[11:29:21] [main/INFO] [ne.ne.fm.lo.mo.lo.JarInJarDependencyLocator/]: Found 13 dependencies adding them to mods collection
+[11:29:21] [main/INFO] [ne.ne.fm.lo.mo.ModDiscoverer/]: 
+     Mod List:
+		Name Version (Mod Id)
+
+		Create 6.0.10 (create)
+		Create Aeronautics 1.3.2 (aeronautics)
+		Create Aeronautics 1.3.2 (aeronautics_bundled)
+		Create Offroad 1.3.2 (offroad)
+		Create Simulated 1.3.2 (simulated)
+		Flywheel 1.0.6 (flywheel)
+		Incoming 3.10.4 (incoming)
+		Minecraft 1.21.1 (minecraft)
+		NeoForge 21.1.264 (neoforge)
+		Ponder 1.0.82+mc1.21.1 (ponder)
+		Sable 2.0.6 (sable)
+		Sable Companion 1.6.0 (sablecompanion)
+		Veil 4.3.2 (veil)
+[11:29:22] [main/INFO] [mixin/]: Compatibility level set to JAVA_21
+[11:29:22] [main/INFO] [cp.mo.mo.LaunchServiceHandler/MODLAUNCHER]: Launching target 'forgeserverdev' with arguments [--gameDir, .]
+[11:29:22] [main/WARN] [mixin/]: Reference map 'ponder.refmap.json' for ponder-common.mixins.json could not be read. If this is a development environment you can ignore this message
+[11:29:22] [main/INFO] [de.ry.sa.mi.AbstractSableMixinPlugin/]: Using Vanilla renderer mixins
+[11:29:22] [main/INFO] [de.ry.sa.mi.AbstractSableMixinPlugin/]: Using Vanilla renderer mixins
+[11:29:22] [main/WARN] [mixin/]: Reference map 'simulated.refmap.json' for simulated.mixins.json could not be read. If this is a development environment you can ignore this message
+[11:29:22] [main/WARN] [mixin/]: Reference map 'offroad.refmap.json' for offroad.mixins.json could not be read. If this is a development environment you can ignore this message
+[11:29:22] [main/WARN] [mixin/]: Reference map 'aeronautics.refmap.json' for aeronautics.mixins.json could not be read. If this is a development environment you can ignore this message
+[11:29:22] [main/WARN] [mixin/]: Error loading class: org/jetbrains/annotations/ApiStatus$ScheduledForRemoval (java.lang.ClassNotFoundException: org.jetbrains.annotations.ApiStatus$ScheduledForRemoval)
+[11:29:22] [main/INFO] [MixinExtras|Service/]: Initializing MixinExtras via com.llamalad7.mixinextras.service.MixinExtrasServiceImpl(version=0.5.5).
+[11:29:26] [main/WARN] [minecraft/Commands]: Ambiguity between arguments [teleport, location] and [teleport, destination] with inputs: [0.1 -0.5 .9, 0 0 0]
+[11:29:26] [main/WARN] [minecraft/Commands]: Ambiguity between arguments [teleport, location] and [teleport, targets] with inputs: [0.1 -0.5 .9, 0 0 0]
+[11:29:26] [main/WARN] [minecraft/Commands]: Ambiguity between arguments [teleport, destination] and [teleport, targets] with inputs: [Player, 0123, @e, dd12be42-52a9-4a91-a8a1-11c01849e498]
+[11:29:26] [main/WARN] [minecraft/Commands]: Ambiguity between arguments [teleport, targets] and [teleport, destination] with inputs: [Player, 0123, dd12be42-52a9-4a91-a8a1-11c01849e498]
+[11:29:26] [main/WARN] [minecraft/Commands]: Ambiguity between arguments [teleport, targets, location] and [teleport, targets, destination] with inputs: [0.1 -0.5 .9, 0 0 0]
+[11:29:26] [modloading-worker-0/INFO] [Veil/]: Veil is initializing.
+[11:29:26] [modloading-worker-0/INFO] [ne.ne.ne.co.NeoForgeMod/NEOFORGE-MOD]: NeoForge mod loading, version 21.1.264, for MC 1.21.1
+[11:29:26] [modloading-worker-0/INFO] [co.si.cr.Create/]: Create 6.0.10 initializing! Commit hash: ac0c444d9828da3453ae8cc65338e8de063286fb
+[11:29:27] [modloading-worker-0/INFO] [de.ry.sa.Sable/]: Sable loaded!
+[11:29:29] [main/INFO] [mojang/YggdrasilAuthenticationService]: Environment: Environment[sessionHost=https://sessionserver.mojang.com, servicesHost=https://api.minecraftservices.com, name=PROD]
+[11:29:29] [NeoForge Version Check/INFO] [ne.ne.fm.VersionChecker/]: [create] Starting version check at https://api.modrinth.com/updates/create/forge_updates.json?neoforge=only
+[11:29:29] [main/WARN] [minecraft/VanillaPackResourcesBuilder]: Assets URL 'union:/mnt/data/projects/incoming/mod/run/wt-LEAD2-CONTROL/mod/build/moddev/artifacts/neoforge-21.1.264.jar%23128!/assets/.mcassetsroot' uses unexpected schema
+[11:29:29] [main/WARN] [minecraft/VanillaPackResourcesBuilder]: Assets URL 'union:/mnt/data/projects/incoming/mod/run/wt-LEAD2-CONTROL/mod/build/moddev/artifacts/neoforge-21.1.264.jar%23128!/data/.mcassetsroot' uses unexpected schema
+[11:29:29] [main/INFO] [co.si.cr.Create/]: Created 157 recipes which will be injected into the game
+[11:29:29] [main/INFO] [co.si.cr.Create/]: Created 0 tags which will be injected into the game
+[11:29:29] [main/INFO] [ne.ne.ne.ga.GameTestHooks/]: Enabled Gametest Namespaces: [incoming]
+[11:29:29] [NeoForge Version Check/INFO] [ne.ne.fm.VersionChecker/]: [create] Found status: OUTDATED Current: 6.0.10 Target: 6.0.10+mc1.21.1
+[11:29:29] [main/INFO] [minecraft/RecipeManager]: Loaded 2954 recipes
+[11:29:30] [main/INFO] [minecraft/AdvancementTree]: Loaded 2645 advancements
+[11:29:30] [Server thread/INFO] [ua.ze.in.Incoming/]: GameTest: only batch “nuclear_review.*|nuclear_keys.*|nuke_command_.*|nuke_prepared_.*|munitions.*|salvo_nuke” - tests 37 from 765
+[11:29:30] [Server thread/INFO] [de.ry.sa.Sable/]: Creating physics pipeline for ResourceKey[minecraft:dimension / minecraft:overworld] using RapierPhysicsPipelineProvider
+[11:29:30] [Server thread/INFO] [de.ry.sa.Sable/]: Using game directory relative Sable Rapier native directory /mnt/data/projects/incoming/mod/run/wt-LEAD2-CONTROL/mod/run/gametest/.sable/natives
+[2026-11-04T09:29:30.918554147Z] [[32mINFO[0m] (sable_rapier) Rapier scene initialized
+[11:29:31] [Server thread/INFO] [de.ry.sa.Sable/]: Creating physics pipeline for ResourceKey[minecraft:dimension / minecraft:the_nether] using RapierPhysicsPipelineProvider
+[2026-11-04T09:29:31.177845556Z] [[32mINFO[0m] (sable_rapier) Rapier scene initialized
+[11:29:31] [Server thread/INFO] [de.ry.sa.Sable/]: Creating physics pipeline for ResourceKey[minecraft:dimension / minecraft:the_end] using RapierPhysicsPipelineProvider
+[2026-11-04T09:29:31.192682539Z] [[32mINFO[0m] (sable_rapier) Rapier scene initialized
+[11:29:31] [Server thread/INFO] [minecraft/MinecraftServer]: Preparing start region for dimension minecraft:overworld
+[11:29:31] [worldgen/INFO] [minecraft/LoggerChunkProgressListener]: Preparing spawn area: 2%
+[11:29:31] [Server thread/INFO] [minecraft/LoggerChunkProgressListener]: Time elapsed: 127 ms
+[11:29:31] [Server thread/INFO] [minecraft/GameTestServer]: Started game test server
+[11:29:31] [Server thread/INFO] [ne.ne.ne.se.pe.PermissionAPI/]: Successfully initialized permission handler neoforge:default_handler
+[11:29:31] [Server thread/INFO] [minecraft/GameTestServer]: 37 tests are now running at position 14730653, -59, 5934408!
+[11:29:31] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuclear_review_launch_permission:0' (1 tests)...
+[11:29:31] [Server thread/INFO] [minecraft/GameTestServer]: [                                     ]
+[11:29:32] [Server thread/INFO] [minecraft/GameTestServer]: [                                     ]
+[11:29:32] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuclear_keys:0' (1 tests)...
+[11:29:32] [Server thread/INFO] [minecraft/GameTestServer]: [+                                    ]
+[11:29:32] [Server thread/INFO] [minecraft/GameTestServer]: [+                                    ]
+[11:29:32] [Server thread/INFO] [ua.ze.in.Incoming/]: Nuclear launch waits 30 s for a second key: nuke at 14730738 -56 5934608 — keys_launcher
+[11:29:32] [Server thread/INFO] [ua.ze.in.Incoming/]: Second key: keys_near confirmed nuclear launch nuke — keys_launcher
+[11:29:32] [Server thread/INFO] [ua.ze.in.Incoming/]: Strike: nuke ×1 spread 0 at 14730738 -56 5934608 (point) — keys_launcher (second key — keys_near)
+[11:29:32] [Server thread/INFO] [ua.ze.in.Incoming/]: ICBM #1: 15 kt at 14730738 -56 5934608, detonation in 90 s
+[11:29:32] [Server thread/INFO] [ua.ze.in.Incoming/]: Nuclear launch detected: nuke from area 14730752 5934592 — keys_launcher
+[11:29:33] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuke_command_policy:0' (1 tests)...
+[11:29:33] [Server thread/INFO] [minecraft/GameTestServer]: [++                                   ]
+[11:29:33] [Server thread/INFO] [minecraft/GameTestServer]: [++                                   ]
+[11:29:33] [Server thread/INFO] [ua.ze.in.Incoming/]: Nuclear command a0c43368-7377-4986-b476-877c78105fe2 by command-policy-test: incoming.nuke.prepare.command []
+[11:29:33] [Server thread/INFO] [ua.ze.in.Incoming/]: Nuclear command a0c43368-7377-4986-b476-877c78105fe2 by command-policy-test: incoming.nuke.prepare.cancelled []
+[11:29:33] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuclear_review_lease:0' (1 tests)...
+[11:29:33] [Server thread/INFO] [minecraft/GameTestServer]: [+++                                  ]
+[11:29:33] [Server thread/INFO] [minecraft/GameTestServer]: [+++                                  ]
+[11:29:33] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruins for strike #-4 ready: plans for loaded chunks 0 (chunks loaded during flight 0), from disk 0 (heavy zone 0 chunks), not from disk 0 (unread 0; 461168601842738782 s to detonation), plans 0 MB, snapshots 0 MB, background threads 0 (working 0, lowered 0, raised 0, tasks abandoned 0) busy 0 %, heap 699 of 7944 MB
+[11:29:33] [Server thread/INFO] [minecraft/GameTestServer]: [+++_                                 ]
+[11:29:33] [Server thread/INFO] [minecraft/GameTestServer]: [+++_                                 ]
+[11:29:33] [Server thread/INFO] [minecraft/GameTestServer]: [+++_                                 ]
+[11:29:33] [Server thread/INFO] [minecraft/GameTestServer]: [+++_                                 ]
+[11:29:33] [Server thread/INFO] [minecraft/GameTestServer]: [+++_                                 ]
+[11:29:33] [Server thread/INFO] [minecraft/GameTestServer]: [+++_                                 ]
+[11:29:33] [Server thread/INFO] [minecraft/GameTestServer]: [+++_                                 ]
+[11:29:33] [Server thread/INFO] [minecraft/GameTestServer]: [+++_                                 ]
+[11:29:33] [Server thread/INFO] [minecraft/GameTestServer]: [+++_                                 ]
+[11:29:33] [Server thread/INFO] [minecraft/GameTestServer]: [+++_                                 ]
+[11:29:33] [Server thread/INFO] [minecraft/GameTestServer]: [+++_                                 ]
+[11:29:33] [Server thread/INFO] [minecraft/GameTestServer]: [+++_                                 ]
+[11:29:33] [Server thread/INFO] [minecraft/GameTestServer]: [+++_                                 ]
+[11:29:33] [Server thread/INFO] [minecraft/GameTestServer]: [+++_                                 ]
+[11:29:33] [Server thread/INFO] [minecraft/GameTestServer]: [+++_                                 ]
+[11:29:33] [Server thread/INFO] [minecraft/GameTestServer]: [+++_                                 ]
+[11:29:33] [Server thread/INFO] [minecraft/GameTestServer]: [+++_                                 ]
+[11:29:33] [Server thread/INFO] [minecraft/GameTestServer]: [+++_                                 ]
+[11:29:33] [Server thread/INFO] [minecraft/GameTestServer]: [+++_                                 ]
+[11:29:33] [Server thread/INFO] [minecraft/GameTestServer]: [+++_                                 ]
+[11:29:33] [Server thread/INFO] [minecraft/GameTestServer]: [+++_                                 ]
+[11:29:33] [Server thread/INFO] [minecraft/GameTestServer]: [+++_                                 ]
+[11:29:33] [Server thread/INFO] [minecraft/GameTestServer]: [+++_                                 ]
+[11:29:33] [Server thread/INFO] [minecraft/GameTestServer]: [+++_                                 ]
+[11:29:33] [Server thread/INFO] [minecraft/GameTestServer]: [+++_                                 ]
+[11:29:33] [Server thread/INFO] [minecraft/GameTestServer]: [+++_                                 ]
+[11:29:33] [Server thread/INFO] [minecraft/GameTestServer]: [+++_                                 ]
+[11:29:33] [Server thread/INFO] [minecraft/GameTestServer]: [+++_                                 ]
+[11:29:33] [Server thread/INFO] [minecraft/GameTestServer]: [+++_                                 ]
+[11:29:33] [Server thread/INFO] [minecraft/GameTestServer]: [+++_                                 ]
+[11:29:33] [Server thread/INFO] [minecraft/GameTestServer]: [+++_                                 ]
+[11:29:33] [Server thread/INFO] [minecraft/GameTestServer]: [+++_                                 ]
+[11:29:33] [Server thread/INFO] [minecraft/GameTestServer]: [+++_                                 ]
+[11:29:33] [Server thread/INFO] [minecraft/GameTestServer]: [+++_                                 ]
+[11:29:33] [Server thread/INFO] [minecraft/GameTestServer]: [+++_                                 ]
+[11:29:33] [Server thread/INFO] [minecraft/GameTestServer]: [+++_                                 ]
+[11:29:33] [Server thread/INFO] [minecraft/GameTestServer]: [+++_                                 ]
+[11:29:33] [Server thread/INFO] [minecraft/GameTestServer]: [+++_                                 ]
+[11:29:33] [Server thread/INFO] [minecraft/GameTestServer]: [+++_                                 ]
+[11:29:33] [Server thread/INFO] [minecraft/GameTestServer]: [+++_                                 ]
+[11:29:33] [Server thread/INFO] [minecraft/GameTestServer]: [+++_                                 ]
+[11:29:33] [Server thread/INFO] [minecraft/GameTestServer]: [+++_                                 ]
+[11:29:33] [Server thread/INFO] [minecraft/GameTestServer]: [+++_                                 ]
+[11:29:33] [Server thread/INFO] [minecraft/GameTestServer]: [+++_                                 ]
+[11:29:33] [Server thread/INFO] [minecraft/GameTestServer]: [+++_                                 ]
+[11:29:33] [Server thread/INFO] [minecraft/GameTestServer]: [+++_                                 ]
+[11:29:33] [Server thread/INFO] [minecraft/GameTestServer]: [+++_                                 ]
+[11:29:33] [Server thread/INFO] [minecraft/GameTestServer]: [+++_                                 ]
+[11:29:33] [Server thread/INFO] [minecraft/GameTestServer]: [+++_                                 ]
+[11:29:33] [Server thread/INFO] [minecraft/GameTestServer]: [+++_                                 ]
+[11:29:33] [Server thread/INFO] [minecraft/GameTestServer]: [+++_                                 ]
+[11:29:33] [Server thread/INFO] [minecraft/GameTestServer]: [+++_                                 ]
+[11:29:33] [Server thread/INFO] [minecraft/GameTestServer]: [+++_                                 ]
+[11:29:33] [Server thread/INFO] [minecraft/GameTestServer]: [+++_                                 ]
+[11:29:33] [Server thread/INFO] [minecraft/GameTestServer]: [+++_                                 ]
+[11:29:33] [Server thread/INFO] [minecraft/GameTestServer]: [+++_                                 ]
+[11:29:33] [Server thread/INFO] [minecraft/GameTestServer]: [+++_                                 ]
+[11:29:33] [Server thread/INFO] [minecraft/GameTestServer]: [+++_                                 ]
+[11:29:33] [Server thread/INFO] [minecraft/GameTestServer]: [+++_                                 ]
+[11:29:33] [Server thread/INFO] [minecraft/GameTestServer]: [+++_                                 ]
+[11:29:33] [Server thread/INFO] [minecraft/GameTestServer]: [+++_                                 ]
+[11:29:33] [Server thread/INFO] [minecraft/GameTestServer]: [+++_                                 ]
+[11:29:33] [Server thread/INFO] [minecraft/GameTestServer]: [+++_                                 ]
+[11:29:33] [Server thread/INFO] [minecraft/GameTestServer]: [+++_                                 ]
+[11:29:33] [Server thread/INFO] [minecraft/GameTestServer]: [+++_                                 ]
+[11:29:34] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuclear_review_preparation:0' (1 tests)...
+[11:29:34] [Server thread/INFO] [minecraft/GameTestServer]: [++++                                 ]
+[11:29:34] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruins for strike #-5 ready: plans for loaded chunks 0 (chunks loaded during flight 0), from disk 0 (heavy zone 0 chunks), not from disk 0 (unread 0; 461168601842738715 s to detonation), plans 0 MB, snapshots 0 MB, background threads 0 (working 0, lowered 0, raised 0, tasks abandoned 0) busy 0 %, heap 684 of 7944 MB
+[11:29:34] [Server thread/INFO] [minecraft/GameTestServer]: [++++_                                ]
+[11:29:34] [Server thread/INFO] [minecraft/GameTestServer]: [++++_                                ]
+[11:29:34] [Server thread/INFO] [minecraft/GameTestServer]: [++++_                                ]
+[11:29:34] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuclear_review_permissions:0' (1 tests)...
+[11:29:34] [Server thread/INFO] [minecraft/GameTestServer]: [+++++                                ]
+[11:29:34] [Server thread/INFO] [minecraft/GameTestServer]: [+++++                                ]
+[11:29:34] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuclear_keys_armed_dimension:0' (1 tests)...
+[11:29:34] [Server thread/INFO] [minecraft/GameTestServer]: [++++++                               ]
+[11:29:34] [Server thread/INFO] [minecraft/GameTestServer]: [++++++                               ]
+[11:29:34] [Server thread/INFO] [ua.ze.in.Incoming/]: Nuclear launch waits 30 s for a second key: missile at 14731051 -56 5934608 — keys_armed_dimension
+[11:29:34] [Server thread/INFO] [ua.ze.in.Incoming/]: Second key: keys_armed_dimension_near confirmed nuclear launch missile — keys_armed_dimension
+[11:29:34] [Server thread/INFO] [ua.ze.in.Incoming/]: Nuclear alarm at target 14731051 -56 5934608: missile — launch in 90 s — keys_armed_dimension
+[11:29:34] [Server thread/INFO] [ua.ze.in.Incoming/]: Strike: missile ×1 spread 0 at 14731051 -56 5934608 (point) — keys_armed_dimension (second key — keys_armed_dimension_near)
+[11:29:34] [Server thread/INFO] [ua.ze.in.Incoming/]: Nuclear launch detected: missile from area 0 0 — keys_armed_dimension
+[11:29:35] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuclear_review_abort:0' (1 tests)...
+[11:29:35] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++                              ]
+[11:29:35] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++                              ]
+[11:29:35] [Server thread/INFO] [ua.ze.in.Incoming/]: Clear with nukes — nuclear review abort regression: projectiles 1 (off-world 1), launchers 0, salvos 0
+[11:29:35] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++_                             ]
+[11:29:35] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++_                             ]
+[11:29:35] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++_                             ]
+[11:29:35] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuclear_keys_alone:0' (1 tests)...
+[11:29:35] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++                             ]
+[11:29:35] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++                             ]
+[11:29:35] [Server thread/INFO] [ua.ze.in.Incoming/]: Strike: nuke ×1 spread 0 at 14730669 -56 5934870 (point) — keys_alone
+[11:29:35] [Server thread/INFO] [ua.ze.in.Incoming/]: ICBM #3: 15 kt at 14730669 -56 5934870, detonation in 90 s
+[11:29:35] [Server thread/INFO] [ua.ze.in.Incoming/]: Nuclear launch detected: nuke from area 14730752 5934848 — keys_alone
+[11:29:35] [Server thread/INFO] [ua.ze.in.Incoming/]: Strike: nuke ×1 spread 0 at 14730669 -56 5934870 (point) — keys_op_command
+[11:29:35] [Server thread/INFO] [ua.ze.in.Incoming/]: ICBM #4: 15 kt at 14730669 -56 5934870, detonation in 10 s
+[11:29:36] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuclear_review_lost_ready:0' (1 tests)...
+[11:29:36] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++                            ]
+[11:29:36] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++_                           ]
+[11:29:36] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++_                           ]
+[11:29:36] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++_                           ]
+[11:29:36] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'munitions_salvo:0' (1 tests)...
+[11:29:36] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++                           ]
+[11:29:36] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++                           ]
+[11:29:36] [Server thread/INFO] [ua.ze.in.Incoming/]: Strike: drone ×4 spread 20 at 14730791 -48 5934702 (point) — munitions_salvo
+[11:29:36] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++_                          ]
+[11:29:36] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++_                          ]
+[11:29:36] [Server thread/INFO] [ua.ze.in.Incoming/]: Munitions refund (salvo cancelled): drone ×2 — munitions_salvo
+[11:29:36] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuclear_review:0' (1 tests)...
+[11:29:36] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++                          ]
+[11:29:36] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruins for strike #-11 ready: plans for loaded chunks 0 (chunks loaded during flight 0), from disk 0 (heavy zone 0 chunks), not from disk 0 (unread 0; 461168601842738692 s to detonation), plans 0 MB, snapshots 0 MB, background threads 0 (working 0, lowered 0, raised 0, tasks abandoned 0) busy 0 %, heap 1053 of 7944 MB
+[11:29:36] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++_                         ]
+[11:29:36] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++_                         ]
+[11:29:36] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++_                         ]
+[11:29:37] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuclear_review_revision:0' (1 tests)...
+[11:29:37] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++                         ]
+[11:29:37] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++                         ]
+[11:29:37] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuke_prepared_drop:0' (1 tests)...
+[11:29:37] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++                        ]
+[11:29:37] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++                        ]
+[11:29:37] [Server thread/INFO] [ua.ze.in.Incoming/]: B-2 0f7dfe0f-a805-4d71-abe9-1ddca2c4c378 dropped bomb 5c8ca032-ff05-4cad-b9d4-dd02dd2c432a at BlockPos{x=14730999, y=121, z=5924957}, 9745 blocks from the aim point, 180 above it (off-world true)
+[11:29:37] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuke_prepared_carrier:0' (1 tests)...
+[11:29:37] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++                       ]
+[11:29:37] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuclear_keys_expiry:0' (1 tests)...
+[11:29:37] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++                      ]
+[11:29:37] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++                      ]
+[11:29:38] [Server thread/INFO] [ua.ze.in.Incoming/]: Nuclear launch waits 5 s for a second key: nuke at 14731120 -56 5934870 — keys_expiry
+[11:29:38] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruins for strike #-14 ready: plans for loaded chunks 0 (chunks loaded during flight 0), from disk 0 (heavy zone 0 chunks), not from disk 0 (unread 0; 461168601842738683 s to detonation), plans 0 MB, snapshots 0 MB, background threads 0 (working 0, lowered 0, raised 0, tasks abandoned 0) busy 0 %, heap 862 of 7944 MB
+[11:29:38] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++_                     ]
+[11:29:38] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++_                     ]
+[11:29:38] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++_                     ]
+[11:29:38] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++_                     ]
+[11:29:38] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++_                     ]
+[11:29:38] [Server thread/INFO] [ua.ze.in.Incoming/]: Munitions refund (no second key): nuke ×1 — keys_expiry
+[11:29:38] [Server thread/INFO] [ua.ze.in.Incoming/]: No second key within 5 s: nuclear launch nuke cancelled — keys_expiry
+[11:29:38] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuke_command_player:0' (1 tests)...
+[11:29:38] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++                     ]
+[11:29:38] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++                     ]
+[11:29:38] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuke_command_abort:0' (1 tests)...
+[11:29:38] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++                    ]
+[11:29:38] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++                    ]
+[11:29:38] [Server thread/INFO] [ua.ze.in.Incoming/]: Nuclear command 54208b42-b426-47ac-8cda-a2fe6f8b2abb by command-abort-test: incoming.nuke.prepare.command []
+[11:29:38] [Server thread/INFO] [ua.ze.in.Incoming/]: Nuclear command 54208b42-b426-47ac-8cda-a2fe6f8b2abb by command-abort-test: incoming.nuke.prepare.cancelled []
+[11:29:38] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuke_command_ready:0' (1 tests)...
+[11:29:38] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++                   ]
+[11:29:38] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++                   ]
+[11:29:39] [Server thread/INFO] [ua.ze.in.Incoming/]: Nuclear command 1d276309-68f4-4cb0-b753-4c376ae4cef6 by command-ready-test: incoming.nuke.prepare.command []
+[11:29:39] [Server thread/INFO] [ua.ze.in.Incoming/]: Nuclear command 1d276309-68f4-4cb0-b753-4c376ae4cef6 by command-ready-test: incoming.nuke.prepare.progress [0, 0]
+[11:29:39] [Server thread/INFO] [ua.ze.in.Incoming/]: Strike: nuke ×1 spread 0 at 14730823 -56 5934964 (point) — command-ready-test
+[11:29:39] [Server thread/INFO] [ua.ze.in.Incoming/]: ICBM #7: 1 kt at 14730823 -56 5934964, detonation in 90 s
+[11:29:39] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'munitions_place:0' (1 tests)...
+[11:29:39] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++                  ]
+[11:29:39] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++                  ]
+[11:29:39] [Server thread/INFO] [ua.ze.in.Incoming/]: Strike: missile ×1 spread 0 at 14730892 -48 5934964 (point, launch from 14728844 5934964) — munitions_place
+[11:29:39] [Server thread/INFO] [ua.ze.in.Incoming/]: Munitions refund (salvo cancelled): missile ×1, nuclear warheads ×1 — munitions_place
+[11:29:39] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuclear_review_commit:0' (1 tests)...
+[11:29:39] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++                 ]
+[11:29:39] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++                 ]
+[11:29:39] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruins for strike #-21 ready: plans for loaded chunks 0 (chunks loaded during flight 0), from disk 0 (heavy zone 0 chunks), not from disk 0 (unread 0; 461168601842738667 s to detonation), plans 0 MB, snapshots 0 MB, background threads 0 (working 0, lowered 0, raised 0, tasks abandoned 0) busy 0 %, heap 1309 of 7944 MB
+[11:29:39] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++_                ]
+[11:29:39] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++_                ]
+[11:29:39] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++_                ]
+[11:29:39] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuclear_review_disclosure:0' (1 tests)...
+[11:29:39] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++                ]
+[11:29:39] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++                ]
+[11:29:39] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++                ]
+[11:29:40] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'munitions:0' (4 tests)...
+[11:29:40] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++++               ]
+[11:29:40] [Server thread/INFO] [ua.ze.in.Incoming/]: Strike: drone ×2 spread 10 at 14731099 -48 5934964 (point) — munitions_creative
+[11:29:40] [Server thread/INFO] [ua.ze.in.Incoming/]: Strike: drone ×2 spread 10 at 14731099 -48 5934964 (point) — munitions_op
+[11:29:40] [Server thread/INFO] [ua.ze.in.Incoming/]: Strike: drone ×3 spread 20 at 14730685 -48 5935034 (point) — munitions_dead
+[11:29:40] [Server thread/INFO] [ua.ze.in.Incoming/]: Munitions refund (salvo cancelled): drone ×3 — munitions_dead
+[11:29:41] [Server thread/INFO] [ua.ze.in.Incoming/]: Strike: drone ×3 spread 20 at 14730754 -48 5935034 (point) — munitions_buyer
+[11:29:41] [Server thread/INFO] [ua.ze.in.Incoming/]: Strike: rocket ×12 spread 15 at 14730754 -48 5935034 (point) — munitions_buyer
+[11:29:41] [Server thread/INFO] [ua.ze.in.Incoming/]: Munitions refund (salvo cancelled): drone ×3 — munitions_buyer
+[11:29:41] [Server thread/INFO] [ua.ze.in.Incoming/]: Munitions refund (salvo cancelled): rocket ×12 — munitions_buyer
+[11:29:41] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'munitions_failed:0' (1 tests)...
+[11:29:41] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++++++++           ]
+[11:29:41] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++++++++           ]
+[11:29:41] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++++++++           ]
+[11:29:41] [Server thread/INFO] [ua.ze.in.Incoming/]: Strike: drone ×1 spread 0 at 14730807 -56 5935202 (point) — munitions_failed
+[11:29:41] [Server thread/INFO] [ua.ze.in.Incoming/]: Munitions refund (launch failed): drone ×1 — munitions_failed
+[11:29:41] [Server thread/INFO] [ua.ze.in.Incoming/]: Strike: nuke ×1 spread 0 at 14730807 -56 5935202 (point) — munitions_failed
+[11:29:41] [Server thread/INFO] [ua.ze.in.Incoming/]: Munitions refund (nuclear launch failed): nuke ×1 — munitions_failed
+[11:29:41] [Server thread/INFO] [ua.ze.in.Incoming/]: Strike: drone ×1 spread 0 at 14730807 -56 5935202 (point) — munitions_failed
+[11:29:41] [Server thread/ERROR] [ne.ne.bu.EventBus/EVENTBUS]: Exception caught during firing event: check: launch crashes with an error
+	Index: 9
+	Listeners:
+		0: @SubscribeEvent: net.neoforged.neoforge.common.NeoForgeEventHandler@401d394d builtinMobSpawnBlocker(Lnet/neoforged/neoforge/event/entity/EntityJoinLevelEvent;)V
+		1: @SubscribeEvent: net.neoforged.neoforge.common.NeoForgeEventHandler@401d394d onEntityJoinWorld(Lnet/neoforged/neoforge/event/entity/EntityJoinLevelEvent;)V
+		2: @SubscribeEvent: class com.simibubi.create.foundation.events.CommonEvents onEntityAdded(Lnet/neoforged/neoforge/event/entity/EntityJoinLevelEvent;)V
+		3: @SubscribeEvent: class com.simibubi.create.foundation.events.CommonEvents attachData(Lnet/neoforged/neoforge/event/entity/EntityJoinLevelEvent;)V
+		4: ua.zentix.incoming.Incoming$$Lambda/0x000000080117a3b8@1c706f5e
+		5: ua.zentix.incoming.Incoming$$Lambda/0x000000080119b1a8@25f938c5
+		6: ua.zentix.incoming.Incoming$$Lambda/0x000000080119c7b8@13f19b8c
+		7: ua.zentix.incoming.Incoming$$Lambda/0x000000080119d9b0@24c0248f
+		8: ua.zentix.incoming.Incoming$$Lambda/0x000000080119f240@b4b91c1
+		9: ua.zentix.incoming.gametest.MunitionGameTests$$Lambda/0x00000008017cbc18@ecc4153
+java.lang.IllegalStateException: check: launch crashes with an error
+	at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.gametest.MunitionGameTests.lambda$failedLaunchRefunds$9(MunitionGameTests.java:244)
+	at MC-BOOTSTRAP/net.neoforged.bus/net.neoforged.bus.ConsumerEventHandler$WithPredicate.invoke(ConsumerEventHandler.java:48)
+	at MC-BOOTSTRAP/net.neoforged.bus/net.neoforged.bus.EventBus.post(EventBus.java:360)
+	at MC-BOOTSTRAP/net.neoforged.bus/net.neoforged.bus.EventBus.post(EventBus.java:328)
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.world.level.entity.PersistentEntitySectionManager.addEntity(PersistentEntitySectionManager.java:79)
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.world.level.entity.PersistentEntitySectionManager.addNewEntity(PersistentEntitySectionManager.java:71)
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.level.ServerLevel.addEntity(ServerLevel.java:944)
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.level.ServerLevel.addFreshEntity(ServerLevel.java:897)
+	at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.strike.StrikeService.launch(StrikeService.java:194)
+	at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.strike.StrikeService.launch(StrikeService.java:147)
+	at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.strike.StrikeService.launchBy(StrikeService.java:124)
+	at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.strike.ServerActions.launch(ServerActions.java:611)
+	at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.strike.ServerActions.strikePrepared(ServerActions.java:441)
+	at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.strike.ServerActions.strike(ServerActions.java:393)
+	at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.gametest.MunitionGameTests.failedLaunchRefunds(MunitionGameTests.java:280)
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestRegistry.lambda$turnMethodIntoConsumer$5(GameTestRegistry.java:169)
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.TestFunction.run(TestFunction.java:40)
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestInfo.startTest(GameTestInfo.java:162)
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestInfo.tickInternal(GameTestInfo.java:124)
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestInfo.tick(GameTestInfo.java:107)
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestTicker.lambda$tick$0(GameTestTicker.java:39)
+	at java.base/java.util.concurrent.CopyOnWriteArrayList.forEach(CopyOnWriteArrayList.java:891)
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestTicker.tick(GameTestTicker.java:39)
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.tickChildren(MinecraftServer.java:1070)
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.tickServer(MinecraftServer.java:932)
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestServer.tickServer(GameTestServer.java:171)
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.runServer(MinecraftServer.java:713)
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.lambda$spin$2(MinecraftServer.java:267)
+	at java.base/java.lang.Thread.run(Thread.java:1583)
+
+[11:29:41] [Server thread/ERROR] [ua.ze.in.Incoming/]: Launch drone failed with an exception — munitions_failed
+java.lang.IllegalStateException: check: launch crashes with an error
+	at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.gametest.MunitionGameTests.lambda$failedLaunchRefunds$9(MunitionGameTests.java:244) ~[%23133!/:?] {re:classloading}
+	at MC-BOOTSTRAP/net.neoforged.bus/net.neoforged.bus.ConsumerEventHandler$WithPredicate.invoke(ConsumerEventHandler.java:48) ~[bus-8.0.5.jar%23106!/:?] {}
+	at MC-BOOTSTRAP/net.neoforged.bus/net.neoforged.bus.EventBus.post(EventBus.java:360) ~[bus-8.0.5.jar%23106!/:?] {}
+	at MC-BOOTSTRAP/net.neoforged.bus/net.neoforged.bus.EventBus.post(EventBus.java:328) ~[bus-8.0.5.jar%23106!/:?] {}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.world.level.entity.PersistentEntitySectionManager.addEntity(PersistentEntitySectionManager.java:79) ~[neoforge-21.1.264.jar%23128!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:sable.mixins.json:entity.entity_unloading.PersistentEntitySectionManagerMixin from mod sable,pl:mixin:A}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.world.level.entity.PersistentEntitySectionManager.addNewEntity(PersistentEntitySectionManager.java:71) ~[neoforge-21.1.264.jar%23128!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:sable.mixins.json:entity.entity_unloading.PersistentEntitySectionManagerMixin from mod sable,pl:mixin:A}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.level.ServerLevel.addEntity(ServerLevel.java:944) ~[neoforge-21.1.264.jar%23128!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:veil.network.mixins.json:NetworkServerLevelMixin from mod veil,pl:mixin:APP:create.mixins.json:accessor.ServerLevelAccessor from mod create,pl:mixin:APP:sable.mixins.json:block_decal_render.ServerLevelMixin from mod sable,pl:mixin:APP:sable.mixins.json:entity.entity_aabb_lookup.ServerLevelMixin from mod sable,pl:mixin:APP:sable.mixins.json:entity.entity_kicking.ServerLevelMixin from mod sable,pl:mixin:APP:sable.mixins.json:entity.server_entities_tick.ServerLevelMixin from mod sable,pl:mixin:APP:sable.mixins.json:explosion.ServerLevelMixin from mod sable,pl:mixin:APP:sable.mixins.json:particle.ServerLevelMixin from mod sable,pl:mixin:APP:sable.mixins.json:physics.ServerLevelMixin from mod sable,pl:mixin:APP:sable.mixins.json:plot.ServerLevelMixin from mod sable,pl:mixin:APP:sable.mixins.json:plot.container.ServerLevelMixin from mod sable,pl:mixin:APP:sable.mixins.json:stop_lightning.ServerLevelMixin from mod sable,pl:mixin:APP:sable.mixins.json:water_occlusion.ServerLevelMixin from mod sable,pl:mixin:A}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.level.ServerLevel.addFreshEntity(ServerLevel.java:897) ~[neoforge-21.1.264.jar%23128!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:veil.network.mixins.json:NetworkServerLevelMixin from mod veil,pl:mixin:APP:create.mixins.json:accessor.ServerLevelAccessor from mod create,pl:mixin:APP:sable.mixins.json:block_decal_render.ServerLevelMixin from mod sable,pl:mixin:APP:sable.mixins.json:entity.entity_aabb_lookup.ServerLevelMixin from mod sable,pl:mixin:APP:sable.mixins.json:entity.entity_kicking.ServerLevelMixin from mod sable,pl:mixin:APP:sable.mixins.json:entity.server_entities_tick.ServerLevelMixin from mod sable,pl:mixin:APP:sable.mixins.json:explosion.ServerLevelMixin from mod sable,pl:mixin:APP:sable.mixins.json:particle.ServerLevelMixin from mod sable,pl:mixin:APP:sable.mixins.json:physics.ServerLevelMixin from mod sable,pl:mixin:APP:sable.mixins.json:plot.ServerLevelMixin from mod sable,pl:mixin:APP:sable.mixins.json:plot.container.ServerLevelMixin from mod sable,pl:mixin:APP:sable.mixins.json:stop_lightning.ServerLevelMixin from mod sable,pl:mixin:APP:sable.mixins.json:water_occlusion.ServerLevelMixin from mod sable,pl:mixin:A}
+	at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.strike.StrikeService.launch(StrikeService.java:194) ~[%23133!/:?] {re:classloading}
+	at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.strike.StrikeService.launch(StrikeService.java:147) ~[%23133!/:?] {re:classloading}
+	at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.strike.StrikeService.launchBy(StrikeService.java:124) ~[%23133!/:?] {re:classloading}
+	at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.strike.ServerActions.launch(ServerActions.java:611) ~[%23133!/:?] {re:classloading}
+	at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.strike.ServerActions.strikePrepared(ServerActions.java:441) ~[%23133!/:?] {re:classloading}
+	at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.strike.ServerActions.strike(ServerActions.java:393) ~[%23133!/:?] {re:classloading}
+	at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.gametest.MunitionGameTests.failedLaunchRefunds(MunitionGameTests.java:280) ~[%23133!/:?] {re:classloading}
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103) ~[?:?] {}
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580) ~[?:?] {}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestRegistry.lambda$turnMethodIntoConsumer$5(GameTestRegistry.java:169) ~[neoforge-21.1.264.jar%23128!/:?] {re:classloading}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.TestFunction.run(TestFunction.java:40) ~[neoforge-21.1.264.jar%23128!/:?] {re:classloading}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestInfo.startTest(GameTestInfo.java:162) ~[neoforge-21.1.264.jar%23128!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:sable.mixins.json:game_test.GameTestInfoMixin from mod sable,pl:mixin:A}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestInfo.tickInternal(GameTestInfo.java:124) ~[neoforge-21.1.264.jar%23128!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:sable.mixins.json:game_test.GameTestInfoMixin from mod sable,pl:mixin:A}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestInfo.tick(GameTestInfo.java:107) ~[neoforge-21.1.264.jar%23128!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:sable.mixins.json:game_test.GameTestInfoMixin from mod sable,pl:mixin:A}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestTicker.lambda$tick$0(GameTestTicker.java:39) ~[neoforge-21.1.264.jar%23128!/:?] {re:classloading}
+	at java.base/java.util.concurrent.CopyOnWriteArrayList.forEach(CopyOnWriteArrayList.java:891) ~[?:?] {}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestTicker.tick(GameTestTicker.java:39) ~[neoforge-21.1.264.jar%23128!/:?] {re:classloading}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.tickChildren(MinecraftServer.java:1070) ~[neoforge-21.1.264.jar%23128!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:veil.network.mixins.json:NetworkMinecraftServerMixin from mod veil,pl:mixin:APP:veil.scheduler.mixins.json:MinecraftServerMixin from mod veil,pl:mixin:APP:ponder-common.mixins.json:accessor.MinecraftServerAccessor from mod ponder,pl:mixin:APP:sable.mixins.json:udp.MinecraftServerMixin from mod sable,pl:mixin:A}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.tickServer(MinecraftServer.java:932) ~[neoforge-21.1.264.jar%23128!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:veil.network.mixins.json:NetworkMinecraftServerMixin from mod veil,pl:mixin:APP:veil.scheduler.mixins.json:MinecraftServerMixin from mod veil,pl:mixin:APP:ponder-common.mixins.json:accessor.MinecraftServerAccessor from mod ponder,pl:mixin:APP:sable.mixins.json:udp.MinecraftServerMixin from mod sable,pl:mixin:A}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestServer.tickServer(GameTestServer.java:171) ~[neoforge-21.1.264.jar%23128!/:?] {re:classloading}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.runServer(MinecraftServer.java:713) ~[neoforge-21.1.264.jar%23128!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:veil.network.mixins.json:NetworkMinecraftServerMixin from mod veil,pl:mixin:APP:veil.scheduler.mixins.json:MinecraftServerMixin from mod veil,pl:mixin:APP:ponder-common.mixins.json:accessor.MinecraftServerAccessor from mod ponder,pl:mixin:APP:sable.mixins.json:udp.MinecraftServerMixin from mod sable,pl:mixin:A}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.lambda$spin$2(MinecraftServer.java:267) ~[neoforge-21.1.264.jar%23128!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:veil.network.mixins.json:NetworkMinecraftServerMixin from mod veil,pl:mixin:APP:veil.scheduler.mixins.json:MinecraftServerMixin from mod veil,pl:mixin:APP:ponder-common.mixins.json:accessor.MinecraftServerAccessor from mod ponder,pl:mixin:APP:sable.mixins.json:udp.MinecraftServerMixin from mod sable,pl:mixin:A}
+	at java.base/java.lang.Thread.run(Thread.java:1583) [?:?] {}
+[11:29:41] [Server thread/INFO] [ua.ze.in.Incoming/]: Munitions refund (launch failed with an exception): drone ×1 — munitions_failed
+[11:29:41] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'salvo_nuke:0' (1 tests)...
+[11:29:41] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++          ]
+[11:29:41] [Server thread/INFO] [ua.ze.in.Incoming/]: Nuclear command 5426b96b-38a8-40b5-b4c0-a0164b63956e by GameTest: incoming.nuke.prepare.command []
+[11:29:41] [Server thread/INFO] [ua.ze.in.Incoming/]: Strike: missile ×1 spread 0 at 14730860 -49 5938034 (point) — GameTest
+[11:29:41] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuke_command_tracking:0' (1 tests)...
+[11:29:41] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++++++++++         ]
+[11:29:41] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++++++++++         ]
+[11:29:42] [Server thread/INFO] [ua.ze.in.Incoming/]: Nuclear command ec34df9f-df1b-4ad0-bf43-e1b215d056d6 by command-tracking-test: incoming.nuke.prepare.command []
+[11:29:42] [Server thread/INFO] [ua.ze.in.Incoming/]: Strike: missile ×1 spread 0 at 14730929 -55 5935034 (entity minecraft:pig) — command-tracking-test
+[11:29:42] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuclear_review_entity_disclosure:0' (1 tests)...
+[11:29:42] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++        ]
+[11:29:42] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++        ]
+[11:29:42] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuke_prepared_flight:0' (1 tests)...
+[11:29:42] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++++++++++++       ]
+[11:29:42] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++++++++++++       ]
+[11:29:42] [Server thread/INFO] [ua.ze.in.Incoming/]: ICBM #10: 1 kt at 14731067 -59 5935034, detonation in 90 s
+[11:29:42] [Server thread/INFO] [ua.ze.in.Incoming/]: Detonation #12: pre-built ruins — plans for loaded chunks 0 (chunks loaded during flight 0), still building 0; from disk 0 (zone chunks not loaded at detonation 0), still building 0, not from disk 0; background threads 0 (working 0, lowered 0, raised 0, tasks abandoned 0)
+[11:29:42] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #1 (minecraft:overworld): 14731068 5935035, radius 2421, power returns in 15 min
+[11:29:42] [Server thread/INFO] [ua.ze.in.Incoming/]: Nuclear detonation #12: 1 kt, ground burst, 14731067 -59 5935034, scale 1.0, 8 ms
+[11:29:42] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruins for detonation #12: from prepared plan 0, stale plan 0, on the spot 0, unplaced 0; lag behind the wave up to 0 ticks (near players up to 0, elsewhere up to 0); chunk swap avg 0 µs, longest 0.0 ms
+[11:29:42] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruins for detonation #12 (final): lag behind the wave near players up to 0 ticks (prepared plan 0, planned on the spot 0), elsewhere up to 0; stale plan 0, re-planned ahead of the wave near players 0; a player waited for chunk ruins up to 0 ticks (from the first chunk request after the wave)
+[11:29:42] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruins for detonation #12: 0 chunks loaded at detonation, 0 of them with loaded neighbours; from prepared plan 0 (— % of all, — % of chunks with neighbours); on a player's screen without neighbours 0
+[11:29:42] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruins for detonation #12: sent to players before ruins: 0 (distinct chunks)
+[11:29:42] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruins for detonation #12: disk windows — neighbours read 0, not whole on disk 0 (solid in the window, like the world edge)
+[11:29:42] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruins for detonation #12: 0 chunks loaded after detonation, planned on the spot — ruins avg 0 ticks after the wave, max 0; 0 from prepared plan — avg 0, max 0
+[11:29:42] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruins: chunk swap by phase (total since start, ms) — check 0, sections 0, heightmaps 0, light and packets 0, block entities 0
+[11:29:42] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuclear_review_last_seen:0' (1 tests)...
+[11:29:42] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++++      ]
+[11:29:42] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++++      ]
+[11:29:43] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuclear_keys_owner_lifecycle:0' (1 tests)...
+[11:29:43] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++++++++++++++     ]
+[11:29:43] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #1 (minecraft:overworld): outage cascade covered the whole area
+[11:29:43] [Server thread/INFO] [ua.ze.in.Incoming/]: Nuclear launch waits 30 s for a second key: nuke at 14730669 -56 5935464 — keys_lifecycle
+[11:29:43] [Server thread/INFO] [ua.ze.in.Incoming/]: Munitions refund (launching player died before the second key): nuke ×1 — keys_lifecycle
+[11:29:43] [Server thread/INFO] [ua.ze.in.Incoming/]: Nuclear launch nuke cancelled (launching player died before the second key) — keys_lifecycle
+[11:29:43] [Server thread/INFO] [ua.ze.in.Incoming/]: Nuclear launch waits 30 s for a second key: nuke at 14730669 -56 5935464 — keys_lifecycle
+[11:29:43] [Server thread/INFO] [ua.ze.in.Incoming/]: Munitions refund (launching player changed dimension before the second key): nuke ×1 — keys_lifecycle
+[11:29:43] [Server thread/INFO] [ua.ze.in.Incoming/]: Nuclear launch nuke cancelled (launching player changed dimension before the second key) — keys_lifecycle
+[11:29:43] [Server thread/INFO] [ua.ze.in.Incoming/]: Nuclear launch waits 30 s for a second key: nuke at 14730669 -56 5935464 — keys_lifecycle
+[11:29:43] [Server thread/INFO] [ua.ze.in.Incoming/]: Munitions refund (launching player left before the second key): nuke ×1 — keys_lifecycle
+[11:29:43] [Server thread/INFO] [ua.ze.in.Incoming/]: Nuclear launch nuke cancelled (launching player left before the second key) — keys_lifecycle
+[11:29:43] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuke_prepared_site:0' (1 tests)...
+[11:29:43] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++++++    ]
+[11:29:43] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++++++    ]
+[11:29:44] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuclear_review_launch:0' (1 tests)...
+[11:29:44] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++++++++++++++++   ]
+[11:29:44] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruins for strike #-31 ready: plans for loaded chunks 0 (chunks loaded during flight 0), from disk 0 (heavy zone 0 chunks), not from disk 0 (unread 0; 461168601842738644 s to detonation), plans 0 MB, snapshots 0 MB, background threads 0 (working 0, lowered 0, raised 0, tasks abandoned 0) busy 0 %, heap 1062 of 7944 MB
+[11:29:44] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++++++++++++++++_  ]
+[11:29:44] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++++++++++++++++_  ]
+[11:29:44] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++++++++++++++++_  ]
+[11:29:44] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++++++++++++++++_  ]
+[11:29:44] [Server thread/INFO] [ua.ze.in.Incoming/]: Strike: nuke ×1 spread 0 at 14730779 -56 5935284 (point) — review
+[11:29:44] [Server thread/INFO] [ua.ze.in.Incoming/]: ICBM #14: 15 kt at 14730779 -56 5935284, detonation in 90 s
+[11:29:44] [Server thread/INFO] [ua.ze.in.Incoming/]: Nuclear launch detected: nuke from area 14730752 5935360 — review
+[11:29:44] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuclear_review_death:0' (1 tests)...
+[11:29:44] [Server thread/INFO] [ua.ze.in.Incoming/]: Mod work over 30 s: server tick avg 8.3 ms (max 605.9), of which mod lanes avg — impacts 0.0, nuke 0.0, blackout 0.0 ms; the rest (vanilla, other mods) 8.3 ms; impact early window 100.0% of ticks, early avg 0.0 ms, late avg 0.0 ms; mandatory unload debt 2.7% of ticks
+[11:29:44] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++++++++  ]
+[11:29:44] [Server thread/INFO] [minecraft/MinecraftServer]: review_acfb4288 was killed
+[11:29:44] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++++++++_ ]
+[11:29:44] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++++++++_ ]
+[11:29:44] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++++++++_ ]
+[11:29:44] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuclear_keys_carrier:0' (1 tests)...
+[11:29:44] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++++++++++++++++++ ]
+[11:29:44] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++++++++++++++++++ ]
+[11:29:44] [Server thread/INFO] [ua.ze.in.Incoming/]: Nuclear launch waits 30 s for a second key: missile at 14730913 -56 5935464 — keys_carrier
+[11:29:44] [Server thread/INFO] [ua.ze.in.Incoming/]: Second key: keys_carrier_near confirmed nuclear launch missile — keys_carrier
+[11:29:44] [Server thread/INFO] [ua.ze.in.Incoming/]: Nuclear alarm at target 14730913 -56 5935464: missile — launch in 90 s — keys_carrier
+[11:29:44] [Server thread/INFO] [ua.ze.in.Incoming/]: Clear — check: non-operator hang up: projectiles 0 (off-world 0), launchers 0, salvos 0
+[11:29:44] [Server thread/INFO] [ua.ze.in.Incoming/]: Munitions refund (nuclear clear — check: nuclear shutdown): missile ×1, nuclear warheads ×1 — keys_carrier
+[11:29:44] [Server thread/INFO] [ua.ze.in.Incoming/]: Nuclear launch missile cancelled (nuclear clear — check: nuclear shutdown) — keys_carrier
+[11:29:44] [Server thread/INFO] [ua.ze.in.Incoming/]: Clear with nukes — check: nuclear shutdown: projectiles 0 (off-world 0), launchers 0, salvos 0
+[11:29:44] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++++++++++++]
+[11:29:44] [Server thread/INFO] [minecraft/GameTestServer]: ========= 37 GAME TESTS COMPLETE IN 13.31 s ======================
+[11:29:44] [Server thread/INFO] [minecraft/GameTestServer]: All 37 required tests passed :)
+[11:29:44] [Server thread/INFO] [minecraft/GameTestServer]: ====================================================
+[11:29:44] [Server thread/INFO] [minecraft/MinecraftServer]: Stopping server
+[11:29:44] [Server thread/INFO] [minecraft/MinecraftServer]: Saving players
+[11:29:44] [Server thread/INFO] [minecraft/MinecraftServer]: Saving worlds
+[11:29:45] [Server thread/INFO] [minecraft/MinecraftServer]: Saving chunks for level 'ServerLevel[Test Level]'/minecraft:overworld
+[11:29:45] [Server thread/INFO] [de.ry.sa.Sable/]: Saving sub-levels for level 'ServerLevel[Test Level]'/minecraft:overworld
+[11:29:49] [Server thread/INFO] [minecraft/MinecraftServer]: Saving chunks for level 'ServerLevel[Test Level]'/minecraft:the_nether
+[11:29:49] [Server thread/INFO] [de.ry.sa.Sable/]: Saving sub-levels for level 'ServerLevel[Test Level]'/minecraft:the_nether
+[11:29:49] [Server thread/INFO] [minecraft/MinecraftServer]: Saving chunks for level 'ServerLevel[Test Level]'/minecraft:the_end
+[11:29:49] [Server thread/INFO] [de.ry.sa.Sable/]: Saving sub-levels for level 'ServerLevel[Test Level]'/minecraft:the_end
+[11:29:49] [Server thread/INFO] [minecraft/MinecraftServer]: ThreadedAnvilChunkStorage (world): All chunks are saved
+[11:29:49] [Server thread/INFO] [minecraft/MinecraftServer]: ThreadedAnvilChunkStorage (DIM-1): All chunks are saved
+[11:29:49] [Server thread/INFO] [minecraft/MinecraftServer]: ThreadedAnvilChunkStorage (DIM1): All chunks are saved
+[11:29:49] [Server thread/INFO] [minecraft/MinecraftServer]: ThreadedAnvilChunkStorage: All dimensions are saved
+[11:29:49] [Server thread/INFO] [minecraft/GameTestServer]: Game test server shutting down
+
+[Incubating] Problems report is available at: file:///mnt/data/projects/incoming/mod/run/wt-LEAD2-CONTROL/mod/build/reports/problems/problems-report.html
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 9.0.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/8.14.3/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD SUCCESSFUL in 40s
+11 actionable tasks: 4 executed, 7 up-to-date
+laptop_job ctl2-tracking: exit 0
