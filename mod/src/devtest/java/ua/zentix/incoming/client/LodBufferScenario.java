@@ -36,7 +36,7 @@ import ua.zentix.incoming.nuclear.Detonation;
 import ua.zentix.incoming.nuclear.model.HobBlast;
 import ua.zentix.incoming.nuclear.model.Yield;
 import ua.zentix.incoming.scenario.lod.LodPanorama;
-import ua.zentix.incoming.client.lod.TimedLodBuffer;
+import ua.zentix.incoming.scenario.lod.TimedLodBuffer;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -51,9 +51,9 @@ import java.util.concurrent.atomic.AtomicInteger;
 public final class LodBufferScenario {
     private static final boolean SERVER_TRANSPORT = Boolean.getBoolean("incoming.lodProbe.serverTransport");
     private static final boolean PRODUCTION = !Boolean.getBoolean("incoming.lodProbe.control");
-    private static final int SECTIONS = 24, CHANGED = 4, WINDOW = 65536, PASS = 32;
+    private static final int SECTIONS = 24, CHANGED = 4, WINDOW = PRODUCTION ? 65536 : 1024, PASS = 32;
     private static final boolean CHANGED_ONLY = Boolean.getBoolean("incoming.lodProbe.changedOnly");
-    private static final long BYTES = 128L << 20;
+    private static final long BYTES = (PRODUCTION ? 128L : 48L) << 20;
     private static LodBufferScenario active;
     private final TimedLodBuffer<LodProbeWire.Column> buffer = new TimedLodBuffer<>(WINDOW, BYTES);
     private final AtomicInteger receipts = new AtomicInteger();
@@ -291,6 +291,7 @@ public final class LodBufferScenario {
                     for (int n = 0; n < PASS; n++) {
                         var r = buffer.take(now);
                         if (r == null) break;
+                        // An ownership check, not a fence: stop may race the following foreign call.
                         if (buffer.current(r.ticket())) {
                             long begin = System.nanoTime();
                             VoxyIngest.ingest(Minecraft.getInstance().level, r.value().column()); // direct-ingestion control

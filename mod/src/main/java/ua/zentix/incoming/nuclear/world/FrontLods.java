@@ -113,7 +113,7 @@ final class FrontLods {
         candidates.add(chunk);
     }
 
-    /** Read reservations belong to the preparation counter, even after this object is discarded. */
+    /** Read reservations remain in the preparation counter until completion, even after cancellation. */
     long retainedBytes() { return readyBytes + dhBytes; }
 
     /** Copy bytes: held, sent but still held by DH, in-flight reads. */

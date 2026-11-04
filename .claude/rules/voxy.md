@@ -112,3 +112,7 @@ paths:
   Incoming worker calls; it does not cancel/fence foreign Voxy work. No lock used by a tick may span a Voxy database
   read. The dev probe's `WitnessesTest` holds a read open while producer/reset progress. Durations from nanoTime
   are elapsed times, not CPU times. The development panorama is not a real-city preparation or end-to-end 512 MiB proof.
+- The `lod-buffer` development scenario is excluded from the release jar. Its database witnesses run outside the
+  producer/reset monitor (`WitnessesTest` holds a read while both progress). Values carry their epoch; stale read
+  confirmation cannot consume a new witness. `TimedLodBuffer.current` is an ownership snapshot, never a fence
+  against foreign ingestion already crossing stop. Submission timings are elapsed nanoseconds, not CPU time.
