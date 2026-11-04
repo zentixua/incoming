@@ -94,6 +94,7 @@ public final class IncomingClient {
     private static final int UNLIT_TINT = 0x7C7C84;
 
     public IncomingClient(IEventBus modBus, ModContainer container) {
+        MtB7Client.start();
         container.registerExtensionPoint(IConfigScreenFactory.class, ConfigurationScreen::new);
         modBus.addListener(IncomingClient::renderers);
         modBus.addListener(WeaponModels::register);

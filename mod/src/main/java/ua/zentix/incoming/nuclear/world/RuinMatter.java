@@ -446,6 +446,8 @@ public final class RuinMatter extends LedgerData {
     }
 
     private boolean step(ServerLevel level, Piece p) {
+        long mtB7Started = MtB7Stages.begin(3);
+        try {
         if (p.tick >= level.getGameTime()) return false;
         // A high velocity is sliced rather than tunnelling through a wall. Keep fractional elapsed
         // time, so multiple continuation units cannot simulate more time than has actually passed.
@@ -504,6 +506,9 @@ public final class RuinMatter extends LedgerData {
             p.tick += dt / DT;
         }
         return false;
+
+        } catch (RuntimeException | Error failure) { MtB7Stages.fail(3); throw failure; }
+        finally { MtB7Stages.end(3, mtB7Started); }
     }
 
     private static boolean free(BlockState state) {
