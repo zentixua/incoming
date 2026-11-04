@@ -1,0 +1,14 @@
+# Assembly and completion ownership audit
+
+Core pin: 476355384. Production caller inventory: assembly-callers.txt.
+
+- Near preparation: submit retries the same current todo until admission; unready metadata is inspected before worker admission, with a capacity-bounded skip pass. Refresh is the only reordering of the remaining todo list; it preserves the active claim before newly sorted work. Both normal refresh and bind use this method.
+- FAR preparation: immutable layout order and current nextFar frontier remain the consumer. Successful worker submission, no-plan/skip, collected results and retirement release its claim. A higher-priority visible/near request can preempt speculative assembly without invalidating the already-charged read inbox.
+- Scar queue: lookahead and due work reuse the same claim. Finite ready/byDue queues revisit their owner; full readiness loss, unload and consumer-removal errors release the matching claim. Admitted task windows remain protected by the Task map and RuinInputs lifetime, independently of this claim.
+- Diagnostic synchronous fracture preparation retains its existing context lifecycle; normal physical planning finishes through planned(). Diagnostic fresh owners close in finally.
+- Explicit handle failure/heap stop/cancel/handoff: release the claim separately from I/O/task ownership. A late callback retains its reservation until delivered or rejected by the invalidated inbox generation. Cancelled workers retain input/result ownership through actual exit.
+- Publication: known source + decode/output allowance is charged before allocation. Refusal retains the same completed head and credit. Installation into counted ownership precedes producer refund. Demand plan retrieval uses residents; speculative prefetch keeps its future-work reserve.
+- Preparation retirement: install retained plans in the surviving context before replacing the preparation map. Preserve tasks with scar consumers; explicitly cancel unclaimed FAR/submitted work. Later scar demand consults transferred/restored plans before starting another solver.
+- Scheduling: one bounded maintenance turn alternates with material, after pulse/front phases and under the same WorkClock. Collection and trimming rotate separately across contexts. This provides opportunities when earlier finite work leaves service; it is not a guarantee for infinite arrivals, failed storage or a working set that cannot fit its known simultaneous bounds.
+
+The 512 MiB figure is an admission estimate for known owners, not Minecraft's entire heap. Existing moving FIFO rotation and source publication need their own transition room; a fixture that fills that room with an immovable external owner is not a valid proof of starvation. The final tests preserve fixed external pressure, unchanged cap/deadline, all queued watched demand and actual block/material outcomes. Actual map throughput, complete world saves and client delivery remain integration work.

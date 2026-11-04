@@ -1,0 +1,130 @@
+diff --git a/.claude/rules/nuclear-world.md b/.claude/rules/nuclear-world.md
+index 5f72544fa..0fff7b764 100644
+--- a/.claude/rules/nuclear-world.md
++++ b/.claude/rules/nuclear-world.md
+@@ -516,3 +516,8 @@ paths:
+   assembly claims independently of read/task collectors. Inspect unready todos before checking worker
+   admission, with a bounded skip pass: decoder saturation cannot prevent retiring a dead assembly head.
+   `nuke_near_assembly_*` keeps late callbacks and completes another loaded required centre.
++
++- Reprioritizing remaining near todos must preserve the current active assembly ahead of unadmitted
++  work. A new closer FULL chunk cannot strand that owner behind a head waiting for its token.
++  `nuke_near_assembly_refresh` exercises real refresh, completes the held callback, and requires both
++  loaded centres to yield nonempty plans. Error paths that remove a consumer release its claim too.
+diff --git a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinNearLifecycleGameTests.java b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinNearLifecycleGameTests.java
+index e491d654f..c5a8339aa 100644
+--- a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinNearLifecycleGameTests.java
++++ b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinNearLifecycleGameTests.java
+@@ -143,6 +143,56 @@ public final class RuinNearLifecycleGameTests {
+         });
+     }
+ 
++    @GameTest(template = "range", batch = "nuke_near_assembly_refresh", timeoutTicks = 400, skyAccess = true)
++    @SuppressWarnings("unchecked")
++    public static void refreshedNearQueueKeepsItsLiveAssemblyReachable(GameTestHelper h) throws Exception {
++        var f = fixture(h, true);
++        var level = h.getLevel();
++        var active = new ChunkPos(f.centre.x + 1, f.centre.z);
++        var fresh = f.centre;
++        h.assertTrue(NuclearPrep.horizontal(fresh, f.ctx.d) < NuclearPrep.horizontal(active, f.ctx.d),
++                "Newly visible centre must sort ahead of the active one");
++        var activeChunk = level.getChunkSource().getChunkNow(active.x, active.z);
++        h.assertTrue(activeChunk != null, "Active centre is not loaded");
++        var reads = (RuinInbox<Object>) field(f.ctx, "reads").get(f.ctx);
++        var source = DiskShots.parse(level, active, net.minecraft.world.level.chunk.storage.ChunkSerializer.write(level, activeChunk));
++        var ctor = Class.forName(RuinContext.class.getName() + "$WindowRead").getDeclaredConstructors()[0];
++        ctor.setAccessible(true);
++        var reply = ctor.newInstance(active.toLong(), source, null);
++        var callback = reads.expect();
++        StrikeGameTests.afterTest(h, () -> callback.accept(reply));
++        f.ctx.requestWindow(level, active, RuinWorkers.Priority.NEAR);
++        var todo = (LongArrayList) field(f.owner, "todo").get(f.owner);
++        todo.add(active.toLong());
++        ((LongOpenHashSet) field(f.owner, "required").get(f.owner)).add(active.toLong());
++        var considered = (LongOpenHashSet) field(f.owner, "considered").get(f.owner);
++        for (var holder : level.getChunkSource().chunkMap.getChunks()) considered.add(holder.getPos().toLong());
++        considered.remove(fresh.toLong());
++        var refresh = NuclearPrep.class.getDeclaredMethod("refresh", ServerLevel.class, f.owner.getClass());
++        refresh.setAccessible(true);
++        refresh.invoke(null, level, f.owner);
++        h.assertTrue(todo.size() == 2 && todo.contains(active.toLong()) && todo.contains(fresh.toLong()),
++                "Real refresh did not merge the new nearer required centre");
++        h.assertTrue(!f.ctx.running(active.toLong()) && reads.pending() > 0,
++                "Fixture must refresh before solver admission with an outstanding source");
++        callback.accept(reply);
++        h.succeedWhen(() -> {
++            try {
++                h.assertTrue(level.getChunkSource().getChunkNow(active.x, active.z) != null
++                                && level.getChunkSource().getChunkNow(fresh.x, fresh.z) != null,
++                        "Both required centres must stay FULL");
++                invoke(f, level, "submit");
++                invoke(f, level, "harvest");
++                var plans = (RetainedPlans) field(f.owner, "plans").get(f.owner);
++                var a = plans.get(active.toLong());
++                var b = plans.get(fresh.toLong());
++                h.assertTrue(a != null && b != null && a.changedBlocks() > 0 && b.changedBlocks() > 0,
++                        "Refreshed head stranded the still-live assembly owner");
++                h.assertTrue(reads.pending() == 0 && f.ctx.tasks() == 0, "Finished refreshed queue retained work owners");
++            } catch (ReflectiveOperationException failure) { throw new IllegalStateException(failure); }
++        });
++    }
++
+     @GameTest(template = "range", batch = "nuke_near_failed_task", timeoutTicks = 400, skyAccess = true)
+     public static void completedExceptionalNearTaskFailsRequest(GameTestHelper h) throws Exception { failedTask(h, false); }
+ 
+diff --git a/mod/src/main/java/ua/zentix/incoming/nuclear/world/NuclearPrep.java b/mod/src/main/java/ua/zentix/incoming/nuclear/world/NuclearPrep.java
+index a61cdbe2e..ee7d91bc5 100644
+--- a/mod/src/main/java/ua/zentix/incoming/nuclear/world/NuclearPrep.java
++++ b/mod/src/main/java/ua/zentix/incoming/nuclear/world/NuclearPrep.java
+@@ -981,7 +981,13 @@ public final class NuclearPrep {
+         for (int i = 0; i < keyed.length; i++) keyed[i] = (long) (horizontal(new ChunkPos(rest.getLong(i)), d) * 16) << 24 | i;
+         java.util.Arrays.sort(keyed);
+         p.todo.clear();
+-        for (long k : keyed) p.todo.add(rest.getLong((int) (k & 0xFFFFFF)));
++        // Preserve the admitted assembly before reprioritizing unadmitted demand. Otherwise a
++        // newly loaded nearer head waits for the token whose owner it just moved behind itself.
++        for (long c : rest) if (p.ruins.assembling(c)) { p.todo.add(c); break; }
++        for (long k : keyed) {
++            long c = rest.getLong((int) (k & 0xFFFFFF));
++            if (!p.ruins.assembling(c)) p.todo.add(c);
++        }
+         p.nextTodo = 0;
+     }
+ 
+@@ -1381,6 +1387,7 @@ public final class NuclearPrep {
+                 else p.nextTodo--;
+             } catch (RuntimeException e) {
+                 if (p.handle != null) p.failure = RuinPreparation.Reason.IO;
++                p.ruins.unpinWindow(c);
+                 Incoming.LOG.error("Pre-built ruins: snapshots of chunk {} failed with an exception; its ruins will be built on the spot", new ChunkPos(c), e);
+             } finally {
+                 clock.record(shared.end(c0));
+diff --git a/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinContext.java b/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinContext.java
+index 29f4aa75d..9375d0286 100644
+--- a/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinContext.java
++++ b/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinContext.java
+@@ -363,6 +363,9 @@ final class RuinContext {
+         return true;
+     }
+ 
++    /** Pure queue-order query: an active assembly must stay reachable until admitted or abandoned. */
++    boolean assembling(long centre) { return pendingWindows.contains(centre); }
++
+     void unpinWindow(long centre) {
+         pendingWindows.remove(centre);
+         assembly.release(this, centre);
+diff --git a/mod/src/main/java/ua/zentix/incoming/nuclear/world/ScarQueue.java b/mod/src/main/java/ua/zentix/incoming/nuclear/world/ScarQueue.java
+index d12720b95..4c7f9ccad 100644
+--- a/mod/src/main/java/ua/zentix/incoming/nuclear/world/ScarQueue.java
++++ b/mod/src/main/java/ua/zentix/incoming/nuclear/world/ScarQueue.java
+@@ -826,6 +826,10 @@ public final class ScarQueue {
+                 result = work(level, job, now);
+             } catch (RuntimeException e) {
+                 Incoming.LOG.error("Damage to chunk {} failed with an exception; chunk removed from the queue", new ChunkPos(job.chunk), e);
++                if (job.event < job.events.size()) {
++                    var owner = NuclearWorld.get(level).ruinsIfKept(job.events.get(job.event).id());
++                    if (owner != null) owner.unpinWindow(job.chunk);
++                }
+                 jobs.remove(job.chunk);
+                 logs.remove(job.chunk);
+                 release(level, job);

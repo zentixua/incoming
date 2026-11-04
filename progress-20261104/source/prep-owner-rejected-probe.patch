@@ -1,0 +1,52 @@
+diff --git a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinMaintenanceGameTests.java b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinMaintenanceGameTests.java
+index 35f80345e..4a8d422aa 100644
+--- a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinMaintenanceGameTests.java
++++ b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinMaintenanceGameTests.java
+@@ -89,6 +89,47 @@ public final class RuinMaintenanceGameTests {
+         });
+     }
+ 
++    @GameTest(template = "range", batch = "nuke_prep_context_owner", timeoutTicks = 1200, skyAccess = true)
++    public static void handedOffPreparationKeepsItsContextThroughIdleSweep(GameTestHelper h) throws Exception {
++        var level = h.getLevel();
++        NuclearStrikes.clear(level);
++        RuinMatterGameTests.clearFixture(level);
++        var reference = RuinStorageGameTests.fixture(h, true);
++        var world = NuclearWorld.get(level);
++        var clock = WorkClock.counting(1_000_000);
++        clock.start(4_000_000);
++        world.tick(level, clock);
++        var ctx = world.ruins(level, reference.ctx().d, level.getGameTime());
++        var centre = reference.centre();
++        var chunk = level.getChunkSource().getChunkNow(centre.x, centre.z);
++        var source = DiskShots.parse(level, centre, ChunkSerializer.write(level, chunk));
++        var completed = completedSource(level, ctx, source);
++        h.assertTrue(world.scars().size() == 0 && world.prep().plannedChunks() > 0,
++                "Fixture needs a handed-off preparation without a scar consumer");
++        StrikeGameTests.afterTest(h, () -> {
++            NuclearStrikes.clear(level);
++            RuinMatterGameTests.clearFixture(level);
++            RuinWorkers.shutdown();
++        });
++        // Real ticks cross the normal 600-tick idle horizon and its 100-tick sweep; no epoch jump.
++        h.runAtTickTime(710, () -> {
++            h.assertTrue(world.prep().plannedChunks() > 0 && world.scars().size() == 0,
++                    "Preparation retired or gained another consumer before the sweep check");
++            h.assertTrue(world.ruinsIfKept(ctx.d.id()) == ctx && ctx.retainedBytes() > 0,
++                    "Idle sweep detached a context still owned by handed-off preparation");
++            h.assertTrue(completed.inbox().pending() == 0, "Completed source did not drain before the sweep");
++            StrikeGameTests.gameSpeed(h);
++            h.assertTrue(ctx.submit(level, chunk), "Preserved context could not admit a real worker");
++            h.succeedWhen(() -> {
++                h.assertTrue(ctx.done(centre.toLong()), "Preserved-context worker is still running");
++                var plan = ctx.collect(centre);
++                h.assertTrue(plan != null && plan.changedBlocks() > 0, "Preserved context did not produce actual ruins");
++                plan.discardResult();
++                Incoming.LOG.info("PREP_OWNER active preparation survived idle sweep with actual nonempty result");
++            });
++        });
++    }
++
+     record Completion(RuinInbox<Object> inbox, AtomicLong charged, long reserved) {}
+ 
+     @SuppressWarnings("unchecked")

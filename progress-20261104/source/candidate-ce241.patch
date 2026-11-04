@@ -1,0 +1,1589 @@
+diff --git a/.claude/rules/nuclear-world.md b/.claude/rules/nuclear-world.md
+index aac15763d..c26424ab2 100644
+--- a/.claude/rules/nuclear-world.md
++++ b/.claude/rules/nuclear-world.md
+@@ -488,3 +488,22 @@ paths:
+   tree-fall flags; close blocks late publications. Fresh diagnostic context owners close in `finally`; shared registered
+   contexts keep their world lifecycle. GC never refunds scalar cache ownership. These field-law estimates are not a
+   complete JVM-heap bound; raw chunk upgrading/codec allocations precede detached publication.
++
++- Completed preparation inputs/results and snapshot reclamation get a bounded service turn alternating with
++  material, under the same nuclear clock after pulse/front work. This service also visits surviving contexts
++  after preparation expires. Deferred window demands keep their queue keys; one assembling window is protected
++  server-wide, with visible work able to preempt lower priority assembly. Admitted tasks retain their windows
++  independently. Releasing/cancelling/preempting an assembly must release its token; pending I/O remains charged
++  until callbacks finish. This is finite-workload progress when the complete working set fits, not a guarantee
++  under arbitrary arrivals or an unfundable authoritative ledger (`nuke_sustained_progress`, `nuke_assembly`).
++- Demand retrieval of an existing plan uses resident headroom; speculative prefetch keeps the preparation reserve.
++  Retain the completed page's source/decode charge until the decoded plan is installed in its counted owner.
++  At preparation retirement, transfer retained plans to the shared context before dropping the preparation owner;
++  cancel unclaimed FAR/submitted tasks explicitly, retaining running input/result charges through actual exit.
++  Scar demand must consult the transferred/restored map before submitting another solver
++  (`nuke_demand_*`, `nuke_completion_retirement`).
++- Ruined snapshots need per-position property arrays only in sections touched by the old delta (or a global
++  palette). Other sections keep palette properties, with the same fire/flowing-water-to-air reconstruction.
++  Match the pre-allocation estimate to this representation; untouched empty sections must not reserve 4096
++  references apiece (`nuke_snapshot_lazy`, `nuke_snapshot_archive`). A funded live solver reuses its workspace;
++  only cold/taller pools need additional startup room. Cold source reads still reserve their publication slot.
+diff --git a/docs/guide/nuke.md b/docs/guide/nuke.md
+index fdfd2576a..c257daa4c 100644
+--- a/docs/guide/nuke.md
++++ b/docs/guide/nuke.md
+@@ -120,7 +120,9 @@ is saved with the world, so leaving and returning does not erase it. Leaves and
+ A surface-burst crater supplies its rim from the ground actually excavated; remaining ejecta and thermally transformed material stay accounted for.
+ 
+ If the shared nuclear working-memory reservation is full, further material removal waits while already moving
+-material can settle. Pending material and support checks survive a normal world save and reload. Completed movement and crater
++material can settle. Completed preparation and cached ruin plans continue to receive processing time alongside
++moving debris; later loaded chunks can reuse plans after the preparation window ends. Large strikes can
++still leave chunks waiting for memory and processing time. Pending material and support checks survive a normal world save and reload. Completed movement and crater
+ checkpoints are compacted into material totals; container contents are retained. Saving can pause material
+ movement until its file is written. An old active journal too large for the shared memory limit stays preserved
+ on disk and paused; it is never replaced with an empty aftermath.
+diff --git a/docs/guide/ru/nuke.md b/docs/guide/ru/nuke.md
+index 1d7770087..bc4881b1a 100644
+--- a/docs/guide/ru/nuke.md
++++ b/docs/guide/ru/nuke.md
+@@ -115,7 +115,9 @@ I степени открытой кожи при указанной погод
+ Ещё движущийся материал сохраняется вместе с миром и не исчезает при выходе. Листва и разбитое стекло учитываются как рассеянные мелкие обломки. При наземном взрыве вал воронки получает материал из действительно выкопанного грунта; оставшийся выброс и термически изменённый материал также учитываются.
+ 
+ Если общий рабочий резерв памяти ядерных ударов заполнен, новое удаление материала ждёт, пока уже движущиеся
+-обломки могут оседать. Очередь материала и проверок опор сохраняется при обычном сохранении и повторной загрузке мира. Завершённые траектории
++обломки могут оседать. Готовые результаты подготовки и сохранённые планы руин получают время обработки наряду
++с движением обломков; позднее загруженные чанки могут использовать планы и после завершения подготовки. После
++крупных ударов часть чанков всё ещё может ждать свободной памяти и времени обработки. Очередь материала и проверок опор сохраняется при обычном сохранении и повторной загрузке мира. Завершённые траектории
+ и контрольные точки воронки сворачиваются в итоги по материалам; содержимое контейнеров сохраняется. Сохранение
+ может приостановить движение обломков до окончания записи файла. Если активный журнал старого мира превышает
+ общий лимит памяти, он остаётся на диске и ждёт; последствия удара не заменяются пустыми данными.
+diff --git a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinAssemblyGameTests.java b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinAssemblyGameTests.java
+new file mode 100644
+index 000000000..2279c3a4d
+--- /dev/null
++++ b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinAssemblyGameTests.java
+@@ -0,0 +1,41 @@
++package ua.zentix.incoming.nuclear.world;
++
++import net.minecraft.core.BlockPos;
++import net.minecraft.gametest.framework.GameTest;
++import net.minecraft.gametest.framework.GameTestHelper;
++import net.minecraft.world.level.ChunkPos;
++import net.minecraft.world.level.Level;
++import net.neoforged.neoforge.gametest.GameTestHolder;
++import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
++import ua.zentix.incoming.Incoming;
++import ua.zentix.incoming.gametest.StrikeGameTests;
++
++/** An unadmitted demand cannot multiply protected input ownership through another dimension. */
++@GameTestHolder(Incoming.MOD_ID)
++@PrefixGameTestTemplate(false)
++public final class RuinAssemblyGameTests {
++    private RuinAssemblyGameTests() {}
++
++    @GameTest(template = "range", batch = "nuke_assembly", timeoutTicks = 240, skyAccess = true)
++    public static void deferredOtherDimensionStartsNoReadsUntilAssemblyTransfers(GameTestHelper h) {
++        StrikeGameTests.gameSpeed(h);
++        var level = h.getLevel();
++        var reference = RuinStorageGameTests.fixture(h, false);
++        var first = new RuinContext(level, reference.ctx().d);
++        var otherLevel = level.getServer().getLevel(Level.NETHER);
++        var second = new RuinContext(otherLevel, reference.ctx().d);
++        var pos = new ChunkPos(h.absolutePos(new BlockPos(32, 1, 32)));
++        var cold = new ChunkPos(pos.x + 1024, pos.z + 1024);
++        StrikeGameTests.afterTest(h, () -> { first.cancelTasks(); second.cancelTasks(); });
++        first.requestWindow(level, pos, RuinWorkers.Priority.SEEN);
++        second.requestWindow(otherLevel, cold, RuinWorkers.Priority.NEAR);
++        h.assertTrue(second.pendingWindowReads() == 0, "Another dimension admitted a deferred source window");
++        first.forget(pos.toLong());
++        second.requestWindow(otherLevel, cold, RuinWorkers.Priority.NEAR);
++        h.assertTrue(second.pendingWindowReads() > 0, "Retiring the first assembly did not admit real cold reads");
++        second.retireWindowReads();
++        h.succeedWhen(() -> {
++            h.assertTrue(second.pendingWindowReads() == 0, "Retired callbacks still own their source reservations");
++        });
++    }
++}
+diff --git a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinCompletionRetirementGameTests.java b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinCompletionRetirementGameTests.java
+new file mode 100644
+index 000000000..82f728a14
+--- /dev/null
++++ b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinCompletionRetirementGameTests.java
+@@ -0,0 +1,95 @@
++package ua.zentix.incoming.nuclear.world;
++
++import it.unimi.dsi.fastutil.longs.LongArrayList;
++import java.lang.reflect.Field;
++import java.util.List;
++import net.minecraft.core.BlockPos;
++import net.minecraft.gametest.framework.GameTest;
++import net.minecraft.gametest.framework.GameTestHelper;
++import net.minecraft.world.level.ChunkPos;
++import net.minecraft.world.level.block.Blocks;
++import net.minecraft.world.level.chunk.storage.ChunkSerializer;
++import net.neoforged.neoforge.gametest.GameTestHolder;
++import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
++import ua.zentix.incoming.Incoming;
++import ua.zentix.incoming.gametest.StrikeGameTests;
++import ua.zentix.incoming.nuclear.NuclearStrikes;
++
++/** Preparation expiry must hand existing consumers to the surviving context or retire their work explicitly. */
++@GameTestHolder(Incoming.MOD_ID)
++@PrefixGameTestTemplate(false)
++public final class RuinCompletionRetirementGameTests {
++    private RuinCompletionRetirementGameTests() {}
++
++    @GameTest(template = "range", batch = "nuke_completion_retirement", timeoutTicks = 240, skyAccess = true)
++    public static void expiredPreparationTransfersPlansAndRetiresUnclaimedFarResult(GameTestHelper h) throws Exception {
++        StrikeGameTests.gameSpeed(h);
++        var level = h.getLevel();
++        NuclearStrikes.clear(level);
++        RuinMatterGameTests.clearFixture(level);
++        var reference = RuinStorageGameTests.fixture(h, true);
++        var old = reference.ctx().d;
++        var d = new ua.zentix.incoming.nuclear.Detonation(old.id(), old.burst(), old.groundY(), old.yieldKt(),
++                old.surface(), level.getGameTime() - 20000, 0, 0, old.visibility(), old.seed(), old.scale(), false, old.wave());
++        var world = NuclearWorld.get(level);
++        var ctx = world.ruins(level, d, level.getGameTime());
++        var centre = reference.centre();
++        var far = new ChunkPos(centre.x + 1, centre.z);
++        var chunk = level.getChunkSource().getChunkNow(centre.x, centre.z);
++        BlockPos glass = new BlockPos(centre.getMinBlockX() + 2, (int) d.groundY() + 2, centre.getMinBlockZ() + 2);
++        var plan = RuinStorageGameTests.plan(ctx.grid(level, centre, false));
++        h.assertTrue(plan.changedBlocks() > 0 && chunk.getBlockState(glass).is(Blocks.GLASS), "Fixture has no glass plan");
++        h.assertTrue(ctx.submitDisk(level, far), "Initial far task was not admitted");
++        var source = DiskShots.parse(level, centre, ChunkSerializer.write(level, chunk));
++        int[] stage = {0};
++        RetainedPlans[] transferred = {null};
++        long[] heldResult = {0};
++        StrikeGameTests.afterTest(h, () -> {
++            ScarQueue.seenForTest(null);
++            NuclearStrikes.clear(level);
++            RuinMatterGameTests.clearFixture(level);
++            RuinWorkers.shutdown();
++        });
++        h.succeedWhen(() -> {
++            try {
++                world.ruins(level, d, level.getGameTime());
++                if (stage[0] == 0) {
++                    h.assertTrue(ctx.done(far.toLong()), "Actual solver has not exited");
++                    heldResult[0] = RuinResults.bytes();
++                    h.assertTrue(heldResult[0] > 0, "Completed result was already unowned");
++                    RuinMaintenanceGameTests.completedSource(level, ctx, source);
++                    Object p = ((List<?>) field(world.prep(), "preps").get(world.prep())).getFirst();
++                    transferred[0] = (RetainedPlans) field(p, "plans").get(p);
++                    transferred[0].put(centre.toLong(), plan);
++                    ((LongArrayList) field(p, "farRunning").get(p)).add(far.toLong());
++                    field(p, "handedOff").setLong(p, level.getGameTime() - 12001);
++                    stage[0] = 1;
++                    h.assertTrue(false, "Waiting for actual preparation expiry");
++                }
++                if (stage[0] == 1) {
++                    h.assertTrue(((List<?>) field(world.prep(), "preps").get(world.prep())).isEmpty(), "Expired owner still retiring");
++                    h.assertTrue(!ctx.running(far.toLong()) && RuinResults.bytes() < heldResult[0],
++                            "Expired preparation abandoned its completed FAR result/window");
++                    h.assertTrue(ctx.restoredPlans == transferred[0] && transferred[0].containsKey(centre.toLong()),
++                            "Expiry discarded the still-needed prepared plan owner");
++                    h.assertTrue(ctx.retainedBytes() >= transferred[0].bytes(), "Plan transfer refunded before consumer ownership");
++                    ScarQueue.seenForTest(key -> key == centre.toLong());
++                    world.scars().offer(chunk, d);
++                    stage[0] = 2;
++                }
++                h.assertTrue(!world.scars().queued(centre.toLong()), "Transferred plan did not drain through the real queue");
++                h.assertTrue(!chunk.getBlockState(glass).is(Blocks.GLASS) && RuinMatter.get(level).released() > 0,
++                        "Expiry handoff lost actual damage/material");
++                h.assertTrue(!transferred[0].containsKey(centre.toLong()), "Applied transferred plan retained a second owner");
++                Incoming.LOG.info("RETIREMENT completed FAR released; retained plan applied with material {}", RuinMatter.get(level).released());
++                h.succeed();
++            } catch (ReflectiveOperationException e) { throw new IllegalStateException(e); }
++        });
++    }
++
++    private static Field field(Object owner, String name) throws ReflectiveOperationException {
++        Field result = owner.getClass().getDeclaredField(name);
++        result.setAccessible(true);
++        return result;
++    }
++}
+diff --git a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinDemandProgressGameTests.java b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinDemandProgressGameTests.java
+new file mode 100644
+index 000000000..a82094696
+--- /dev/null
++++ b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinDemandProgressGameTests.java
+@@ -0,0 +1,199 @@
++package ua.zentix.incoming.nuclear.world;
++
++import java.lang.reflect.Field;
++import java.util.UUID;
++import net.minecraft.core.BlockPos;
++import net.minecraft.gametest.framework.GameTest;
++import net.minecraft.gametest.framework.GameTestHelper;
++import net.minecraft.world.level.Level;
++import net.minecraft.world.level.block.Blocks;
++import net.neoforged.neoforge.gametest.GameTestHolder;
++import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
++import ua.zentix.incoming.Incoming;
++import ua.zentix.incoming.gametest.StrikeGameTests;
++import ua.zentix.incoming.nuclear.Detonation;
++
++/** A watched consumer must be able to consume a cold plan without funding future solvers. */
++@GameTestHolder(Incoming.MOD_ID)
++@PrefixGameTestTemplate(false)
++public final class RuinDemandProgressGameTests {
++    private RuinDemandProgressGameTests() {}
++
++    @GameTest(template = "range", batch = "nuke_demand_progress", timeoutTicks = 240, skyAccess = true)
++    @SuppressWarnings("unchecked")
++    public static void watchedStoredPlanCompletesWithFixedResidentPressure(GameTestHelper h) throws Exception {
++        StrikeGameTests.gameSpeed(h);
++        var level = h.getLevel();
++        RuinMatterGameTests.clearFixture(level);
++        var grid = RuinStorageGameTests.fixture(h, true);
++        var old = grid.ctx().d;
++        var d = new Detonation(190002, old.burst(), old.groundY(), old.yieldKt(), old.surface(),
++                old.gameTime() - 20000, 0, 0, old.visibility(), 42, old.scale(), false, old.wave());
++        var world = NuclearWorld.get(level);
++        var other = NuclearWorld.get(level.getServer().getLevel(Level.NETHER));
++        long previousReservation = other.materialReservation;
++        var content = NuclearPrep.class.getDeclaredMethod("content", net.minecraft.server.level.ServerLevel.class);
++        content.setAccessible(true);
++        var pass = RuinProgress.get(level).pass(d.id());
++        String previousArchive = pass.archive;
++        var queue = world.scars();
++        long key = grid.centre().toLong();
++        BlockPos glass = new BlockPos(grid.centre().getMinBlockX() + 2, (int) d.groundY() + 2,
++                grid.centre().getMinBlockZ() + 2);
++        h.assertTrue(level.getBlockState(glass).is(Blocks.GLASS), "Fixture glass missing");
++        int[] stage = {0};
++        long[] fixed = {0}, offered = {0};
++        RuinContext[] owner = {null};
++        RuinMaintenanceGameTests.Completion[] completed = {null};
++        StrikeGameTests.afterTest(h, () -> {
++            other.materialReservation = previousReservation;
++            ScarQueue.seenForTest(null);
++            ua.zentix.incoming.nuclear.NuclearStrikes.clear(level);
++            queue.clear(level);
++            pass.archive = previousArchive;
++            world.forgetRuinsForTest(d.id());
++            RuinMatterGameTests.clearFixture(level);
++        });
++        h.succeedWhen(() -> {
++            try {
++                if (stage[0] == 0) {
++                    String policy = (String) content.invoke(world.prep(), level);
++                    h.assertTrue(policy != null && RuinProgress.get(level).writable(), "Storage identity pending");
++                    pass.archive = UUID.randomUUID() + "/" + UUID.randomUUID() + "/" + policy;
++                    owner[0] = world.ruins(level, d, level.getGameTime());
++                    var plans = owner[0].restoredPlans;
++                    field(plans, "residentTarget").setLong(plans, 0);
++                    var plan = RuinStorageGameTests.plan(owner[0].grid(level, grid.centre(), false));
++                    h.assertTrue(plan.changedBlocks() > 0, "Fixture needs a nonempty destructive plan");
++                    Incoming.LOG.info("DEMAND_FIXTURE plan bytes {}, removal count {}, known decode {}", plan.bytes(),
++                            plan.store().getLongArray("material").length, RuinPlan.restorePublicationBytes(plan.store()));
++                    plans.put(key, plan);
++                    stage[0] = 1;
++                }
++                var ctx = owner[0];
++                var plans = ctx.restoredPlans;
++                if (stage[0] == 1) {
++                    world.ruins(level, d, level.getGameTime());
++                    h.assertTrue(plans.pendingWrites() == 0, "Real plan spill still pending");
++                    // Pump has evicted the actual completed write; no hand-crafted empty page.
++                    h.assertTrue(plans.containsKey(key) && plans.bytes() == 48, "Plan must be stored and cold");
++                    var pieces = new java.util.ArrayList<RuinMatter.Piece>();
++                    for (int i = 0; i < 8192; i++) pieces.add(new RuinMatter.Piece(glass.above(80),
++                            Blocks.STONE.defaultBlockState(), null, net.minecraft.world.phys.Vec3.ZERO, level.getGameTime()));
++                    RuinMatter.get(level).release(pieces);
++                    ((java.util.Map<Integer, RetainedPlans>) field(queue, "prepared").get(queue)).put(d.id(), plans);
++                    var source = DiskShots.parse(level, grid.centre(), net.minecraft.world.level.chunk.storage.ChunkSerializer.write(
++                            level, level.getChunkSource().getChunkNow(grid.centre().x, grid.centre().z)));
++                    completed[0] = RuinMaintenanceGameTests.completedSource(level, ctx, source);
++                    other.materialReservation += NuclearPrep.PLANS_CAP - NuclearPrep.residentMemory(level) - (24L << 20);
++                    fixed[0] = other.materialReservation;
++                    h.assertTrue(NuclearPrep.memory(level) > NuclearPrep.PLANS_CAP, "Future-worker policy must refuse");
++                    ScarQueue.seenForTest(k -> k == key);
++                    ((java.util.Map<Integer, RetainedPlans>) field(queue, "prepared").get(queue)).put(d.id(), plans);
++                    queue.offer(level.getChunkSource().getChunkNow(grid.centre().x, grid.centre().z), d);
++                    h.assertTrue(queue.queued(key), "Visible chunk was not queued");
++                    offered[0] = level.getGameTime();
++                    Incoming.LOG.info("DEMAND_PROGRESS cold plan queued at {}, resident {}, future {}, fixed {}",
++                            offered[0], NuclearPrep.residentMemory(level), NuclearPrep.memory(level), fixed[0]);
++                    stage[0] = 2;
++                }
++                h.assertTrue(other.materialReservation == fixed[0], "Pressure changed during demand read");
++                h.assertTrue(NuclearPrep.residentMemory(level) <= NuclearPrep.PLANS_CAP, "Demand exceeded resident cap");
++                if (level.getGameTime() - offered[0] == 30) {
++                    var reads = (java.util.Map<Long, java.util.concurrent.CompletableFuture<java.util.Optional<net.minecraft.nbt.CompoundTag>>>) field(plans, "reads").get(plans);
++                    var read = reads.get(key);
++                    var entries = plans.long2ObjectEntrySet().iterator();
++                    var stored = entries.hasNext() ? entries.next().getValue() : null;
++                    Incoming.LOG.info("DEMAND_STATE read={} done={} residentPlan={} planBytes={} job={} ledgerWritable={}/{}, resident={}, known={}",
++                            read, read != null && read.isDone(), stored != null, plans.bytes(),
++                            queue.diagState(key, level.getGameTime()), RuinMatter.get(level).writable(), CraterMatter.get(level).writable(),
++                            NuclearPrep.residentMemory(level), read != null && read.isDone() && !read.isCompletedExceptionally()
++                                    && read.join().isPresent() ? RuinPlan.restorePublicationBytes(read.join().get()) : -1);
++                }
++                h.assertTrue(!queue.queued(key), "Watched cold plan remains queued, lag=" + (level.getGameTime() - offered[0])
++                        + ", reads=" + plans.pendingReads() + ", future=" + NuclearPrep.memory(level));
++                h.assertTrue(level.getChunkSource().getChunkNow(grid.centre().x, grid.centre().z)
++                        .getExistingData(ua.zentix.incoming.registry.ModAttachments.CHUNK_SCAR).orElse(0) == d.id(),
++                        "Completed queue did not record the applied detonation");
++                h.assertTrue(!level.getBlockState(glass).is(Blocks.GLASS), "Queue completed without actual glass damage");
++                h.assertTrue(!plans.containsKey(key), "Consumed prepared plan was not released");
++                h.assertTrue(queue.size() == 0, "Pending visible work remains after the only queued chunk completed");
++                h.assertTrue(RuinMatter.get(level).pending() > 0, "Material backlog ended before visible damage");
++                h.assertTrue(completed[0].inbox().pending() == 0, "Ready source remained behind material/visible consumers");
++                Incoming.LOG.info("DEMAND_PROGRESS actual watched damage completed after {} ticks under fixed pressure {}",
++                        level.getGameTime() - offered[0], fixed[0]);
++            } catch (ReflectiveOperationException e) { throw new IllegalStateException(e); }
++        });
++    }
++
++    @GameTest(template = "range", batch = "nuke_demand_publication", timeoutTicks = 240, skyAccess = true)
++    @SuppressWarnings("unchecked")
++    public static void completedLargePageKeepsCreditUntilDecodeFits(GameTestHelper h) {
++        StrikeGameTests.gameSpeed(h);
++        var grid = RuinStorageGameTests.fixture(h, true);
++        var expected = RuinStorageGameTests.plan(grid).store();
++        // Accepted storage dimensions can exceed the fixed read allowance. This is a decoder
++        // ownership boundary, not a claim that a physical chunk produces this many fire entries.
++        expected.putIntArray("fires", new int[1 << 20]);
++        var level = h.getLevel();
++        var root = level.getServer().getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT)
++                .resolve("data/ruin-demand-bound-" + UUID.randomUUID());
++        var pages = new RuinPages(new net.minecraft.world.level.chunk.storage.RegionStorageInfo(
++                "gametest", level.dimension(), "incoming_preparation"), root);
++        long key = grid.centre().toLong(), readBytes = 4L << 20;
++        var written = pages.write(key, () -> expected);
++        var charged = new java.util.concurrent.atomic.AtomicLong();
++        var reopened = written.thenCompose(unused -> pages.close()).thenApply(unused ->
++                new RuinPages(new net.minecraft.world.level.chunk.storage.RegionStorageInfo(
++                        "gametest", level.dimension(), "incoming_preparation"), root));
++        var plans = new RetainedPlans();
++        long[] cap = {readBytes + 47};
++
++        int[] stage = {0};
++        StrikeGameTests.afterTest(h, plans::clear);
++        h.succeedWhen(() -> {
++            try {
++                h.assertTrue(written.isDone(), "Real oversized page write pending");
++                written.join();
++                if (stage[0] == 0) {
++                    h.assertTrue(reopened.isDone(), "Storage close/reopen pending");
++                    plans.spill(reopened.join(), grid.ctx(), charged::addAndGet, () -> 0,
++                            () -> cap[0] - charged.get() - plans.bytes());
++                    plans.discover();
++                    h.assertTrue(Boolean.TRUE.equals(reopened.join().existing()), "Directory probe pending");
++                    plans.get(key);
++                    h.assertTrue(plans.pendingReads() == 0 && charged.get() == 0,
++                            "Read entry must fit along with its source allowance");
++                    cap[0]++;
++                    stage[0] = 1;
++                }
++                h.assertTrue(plans.get(key) == null, "Oversized page decoded without publication room");
++                var reads = (java.util.Map<Long, java.util.concurrent.CompletableFuture<?>>) field(plans, "reads").get(plans);
++                var source = reads.get(key);
++                h.assertTrue(source != null && source.isDone(), "Actual page read pending");
++                h.assertTrue(charged.get() == readBytes, "Completed refused source lost its credit");
++                long known = RuinPlan.restorePublicationBytes(expected) + 48;
++                h.assertTrue(known > readBytes, "Test page fits the read allowance");
++                cap[0] = known + 47; // Existing read entry: one byte short of publication.
++                h.assertTrue(plans.get(key) == null && reads.get(key) == source && charged.get() == readBytes,
++                        "Refused publication changed the source future or its owner");
++                cap[0]++;
++                var restored = plans.get(key);
++                h.assertTrue(restored != null, "Fully funded publication did not complete");
++                h.assertTrue(restored.bytes() <= RuinPlan.storedBytes(expected), "Decoded fields exceeded their bound");
++                h.assertTrue(java.util.Arrays.equals(expected.getIntArray("fires"), restored.store().getIntArray("fires")),
++                        "Publication changed retained fire data");
++                h.assertTrue(charged.get() == 0 && plans.pendingReads() == 0,
++                        "Published source retained or double-refunded its credit");
++                h.assertTrue(plans.bytes() <= cap[0], "Decoded owner exceeded funded capacity");
++                Incoming.LOG.info("DEMAND_PUBLICATION known {}, actual {}, exact boundary {}", known, plans.bytes(), cap[0]);
++            } catch (ReflectiveOperationException e) { throw new IllegalStateException(e); }
++        });
++    }
++
++    private static Field field(Object owner, String name) throws NoSuchFieldException {
++        Field result = owner.getClass().getDeclaredField(name);
++        result.setAccessible(true);
++        return result;
++    }
++}
+diff --git a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinMaintenanceGameTests.java b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinMaintenanceGameTests.java
+new file mode 100644
+index 000000000..35f80345e
+--- /dev/null
++++ b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinMaintenanceGameTests.java
+@@ -0,0 +1,130 @@
++package ua.zentix.incoming.nuclear.world;
++
++import java.lang.reflect.Field;
++import java.util.ArrayList;
++import java.util.List;
++import java.util.Map;
++import java.util.Optional;
++import java.util.concurrent.atomic.AtomicLong;
++import java.util.function.LongConsumer;
++import net.minecraft.core.BlockPos;
++import net.minecraft.gametest.framework.GameTest;
++import net.minecraft.gametest.framework.GameTestHelper;
++import net.minecraft.world.level.ChunkPos;
++import net.minecraft.world.level.block.Blocks;
++import net.minecraft.world.level.chunk.storage.ChunkSerializer;
++import net.minecraft.world.phys.Vec3;
++import net.neoforged.neoforge.gametest.GameTestHolder;
++import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
++import ua.zentix.incoming.Incoming;
++import ua.zentix.incoming.gametest.StrikeGameTests;
++import ua.zentix.incoming.nuclear.Detonation;
++import ua.zentix.incoming.nuclear.NuclearEvents;
++import ua.zentix.incoming.nuclear.NuclearStrikes;
++
++/** Completed source ownership must drain while authoritative material still needs the lane. */
++@GameTestHolder(Incoming.MOD_ID)
++@PrefixGameTestTemplate(false)
++public final class RuinMaintenanceGameTests {
++    private RuinMaintenanceGameTests() {}
++
++    @GameTest(template = "range", batch = "nuke_maintenance", timeoutTicks = 80, skyAccess = true)
++    @SuppressWarnings("unchecked")
++    public static void completedSourceDrainsBeforeMaterialBacklogEnds(GameTestHelper h) throws Exception {
++        var level = h.getLevel();
++        NuclearStrikes.clear(level);
++        RuinMatterGameTests.clearFixture(level);
++        var world = NuclearWorld.get(level);
++        var previousClock = NuclearWorld.clock(level.getServer());
++        var clock = WorkClock.counting(1_000_000);
++        NuclearWorld.useClock(level.getServer(), clock);
++        clock.start(4_000_000);
++        world.tick(level, clock);
++        StrikeGameTests.afterTest(h, () -> {
++            NuclearWorld.useClock(level.getServer(), previousClock);
++            NuclearStrikes.clear(level);
++            RuinMatterGameTests.clearFixture(level);
++            RuinWorkers.shutdown();
++        });
++        BlockPos at = h.absolutePos(new BlockPos(32, 80, 32));
++        level.setBlock(at, Blocks.GLASS.defaultBlockState(), 2);
++        var centre = new ChunkPos(at);
++        var chunk = level.getChunkSource().getChunkNow(centre.x, centre.z);
++        var events = NuclearEvents.get(level);
++        var d = new Detonation(events.nextId(), Vec3.atCenterOf(at), at.getY(), 15, true,
++                level.getGameTime(), 0, 0, 20000, 42, 1, false, .25f);
++        events.add(d);
++        var ctx = world.ruins(level, d, level.getGameTime());
++        var source = DiskShots.parse(level, centre, ChunkSerializer.write(level, chunk));
++        h.assertTrue(source.skip() == null, "Actual source was not readable");
++
++        // Install the already-handed-off boundary, without a synthetic empty source or I/O failure.
++        var completed = completedSource(level, ctx, source);
++        var inbox = completed.inbox();
++        var readBytes = completed.charged();
++        long reserved = completed.reserved();
++        h.assertTrue(ctx.publicationBytes(source, Optional.empty()) < reserved,
++                "Fixture must shrink an already-owned source, not require an external refund");
++
++        var pieces = new ArrayList<RuinMatter.Piece>();
++        for (int i = 0; i < 8192; i++) pieces.add(new RuinMatter.Piece(at.above(80),
++                Blocks.STONE.defaultBlockState(), null, Vec3.ZERO, level.getGameTime()));
++        var matter = RuinMatter.get(level);
++        matter.release(pieces);
++        long baseline = NuclearPrep.residentMemory(level);
++        h.runAtTickTime(8, () -> {
++            h.assertTrue(matter.pending() > 0, "Material backlog ended before the completion check");
++            h.assertTrue(inbox.pending() == 0,
++                    "Completed source starved behind material: ready=" + (inbox.peek() != null)
++                            + ", pending=" + inbox.pending() + ", material=" + matter.pending());
++            h.assertTrue(readBytes.get() < reserved, "Consumed source reservation was not released");
++            h.assertTrue(ctx.shotCount() > 0, "Completed source did not publish its actual snapshot");
++            h.assertTrue(ctx.shot(level, centre.x, centre.z).get(at.getX() & 15, at.getY(), at.getZ() & 15).is(Blocks.GLASS),
++                    "Completed source changed the actual glass snapshot");
++            h.assertTrue(NuclearPrep.residentMemory(level) <= NuclearPrep.PLANS_CAP,
++                    "Maintenance exceeded the unchanged shared ownership cap");
++            Incoming.LOG.info("MAINTENANCE completed source with material remaining {}, reserved {}, baseline {}, resident {}",
++                    matter.pending(), reserved, baseline, NuclearPrep.residentMemory(level));
++            h.succeed();
++        });
++    }
++
++    record Completion(RuinInbox<Object> inbox, AtomicLong charged, long reserved) {}
++
++    @SuppressWarnings("unchecked")
++    static Completion completedSource(net.minecraft.server.level.ServerLevel level, RuinContext ctx, DiskShots.Read source)
++            throws ReflectiveOperationException {
++        var world = NuclearWorld.get(level);
++        var d = ctx.d;
++        var centre = source.pos();
++        var prep = world.prep();
++        var type = Class.forName(NuclearPrep.class.getName() + "$Prep");
++        var constructor = type.getDeclaredConstructor(int.class, long.class, LongConsumer.class);
++        constructor.setAccessible(true);
++        AtomicLong readBytes = (AtomicLong) field(prep, "readBytes").get(prep);
++        Object request = constructor.newInstance(190001, level.getGameTime(), (LongConsumer) readBytes::addAndGet);
++        field(request, "geometry").set(request, d);
++        field(request, "detonation").setInt(request, d.id());
++        field(request, "handedOff").setLong(request, level.getGameTime());
++        field(request, "ruins").set(request, ctx);
++        field(request, "archiveWritten").setBoolean(request, true);
++        field(request, "nextZoneReport").setLong(request, Long.MAX_VALUE);
++        var plans = (RetainedPlans) field(request, "plans").get(request);
++        plans.put(centre.toLong(), RuinPlan.EMPTY); // Keeps the valid preparation owner alive.
++        ((Map<Integer, RetainedPlans>) field(world.scars(), "prepared").get(world.scars())).putIfAbsent(d.id(), plans);
++        ((List<Object>) field(prep, "preps").get(prep)).add(request);
++        var replyType = Class.forName(NuclearPrep.class.getName() + "$ArchivedShot");
++        var replyConstructor = replyType.getDeclaredConstructor(long.class, Optional.class, DiskShots.Read.class);
++        replyConstructor.setAccessible(true);
++        var inbox = (RuinInbox<Object>) field(request, "archived").get(request);
++        inbox.expect().accept(replyConstructor.newInstance(centre.toLong(), Optional.empty(), source));
++        long reserved = readBytes.get();
++        return new Completion(inbox, readBytes, reserved);
++    }
++
++    private static Field field(Object owner, String name) throws NoSuchFieldException {
++        Field field = owner.getClass().getDeclaredField(name);
++        field.setAccessible(true);
++        return field;
++    }
++}
+diff --git a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinSnapshotAdmissionGameTests.java b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinSnapshotAdmissionGameTests.java
+index b80d7b5e0..c47931db2 100644
+--- a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinSnapshotAdmissionGameTests.java
++++ b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinSnapshotAdmissionGameTests.java
+@@ -154,13 +154,24 @@ public final class RuinSnapshotAdmissionGameTests {
+         var ordinary = DiskShots.parse(level, reference.centre(), net.minecraft.world.level.chunk.storage.ChunkSerializer.write(level,
+                 level.getChunkSource().getChunkNow(reference.centre().x, reference.centre().z)));
+         ChunkShot ruined = ChunkShot.fromDisk(ordinary, new RuinContext.Applied(plan, new short[256]), null, false);
+-        h.assertTrue(ruined.bytes >= plan.bytes() + ruined.sections * 4096L * 8, "Ruined lazy/embedded-plan arrays were not prepaid");
++        h.assertTrue(ruined.bytes >= plan.bytes() + touchedSections(plan, ruined.sections) * 4096L * 8, "Ruined lazy/embedded-plan arrays were not prepaid");
+         charged = ruined.bytes;
+-        for (int i = 0; i < ruined.sections; i++) ruined.props(i, Blast.SERVER);
++        for (int i = 0; i < ruined.sections; i++) {
++            var props = ruined.props(i, Blast.SERVER);
++            for (int cell = 0; cell < 4096; cell++) h.assertTrue(
++                    props.get(cell) == Blast.props(ruined.get(cell & 15, ruined.minY + i * 16 + (cell >> 8), (cell >> 4) & 15)),
++                    "Section property cache changed reconstructed original block");
++        }
+         h.assertTrue(ruined.bytes == charged, "Lazy ruined properties escaped their prepaid charge");
+         h.succeed();
+     }
+ 
++    private static int touchedSections(RuinPlan plan, int count) {
++        int touched = 0;
++        for (int i = 0; i < count; i++) if (plan.touches(i)) touched++;
++        return touched;
++    }
++
+     @GameTest(template = "range", batch = "nuke_snapshot_archive", timeoutTicks = 400, skyAccess = true)
+     public static void archivedOldPlanRemainsChargedAndMemoryRefusalRetries(GameTestHelper h) throws Exception {
+         var reference = RuinStorageGameTests.fixture(h, true);
+@@ -175,7 +186,7 @@ public final class RuinSnapshotAdmissionGameTests {
+         var current = new DiskShots.Read(cold, parsed.minY(), parsed.states(), parsed.heights(), parsed.unprimed(), null, 0, ctx.d.id());
+         var old = ChunkShot.fromDisk(current.primed(Blast.SERVER), new RuinContext.Applied(plan, new short[256]), null, false);
+         var stored = old.saved().encode(); ChunkShot expected = ChunkShot.restore(stored, ctx);
+-        h.assertTrue(expected.bytes >= plan.detached().bytes() + expected.sections * 4096L * 8, "Restored old plan is unowned");
++        h.assertTrue(expected.bytes >= plan.detached().bytes() + touchedSections(plan, expected.sections) * 4096L * 8, "Restored old plan is unowned");
+         var other = NuclearWorld.get(level.getServer().getLevel(Level.NETHER)); long previous = other.materialReservation;
+         try {
+             pressure(level, other, 0);
+diff --git a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinSustainedProgressGameTests.java b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinSustainedProgressGameTests.java
+new file mode 100644
+index 000000000..f50eea3b6
+--- /dev/null
++++ b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinSustainedProgressGameTests.java
+@@ -0,0 +1,161 @@
++package ua.zentix.incoming.nuclear.world;
++
++import java.lang.reflect.Field;
++import java.util.ArrayList;
++import java.util.UUID;
++import java.util.concurrent.ThreadPoolExecutor;
++import net.minecraft.core.BlockPos;
++import net.minecraft.gametest.framework.GameTest;
++import net.minecraft.gametest.framework.GameTestHelper;
++import net.minecraft.server.level.ServerLevel;
++import net.minecraft.world.level.ChunkPos;
++import net.minecraft.world.level.Level;
++import net.minecraft.world.level.block.Blocks;
++import net.minecraft.world.level.chunk.storage.RegionStorageInfo;
++import net.minecraft.world.phys.Vec3;
++import net.neoforged.neoforge.gametest.GameTestHolder;
++import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
++import ua.zentix.incoming.Incoming;
++import ua.zentix.incoming.IncomingConfig;
++import ua.zentix.incoming.gametest.StrikeGameTests;
++import ua.zentix.incoming.nuclear.Detonation;
++import ua.zentix.incoming.nuclear.NuclearEvents;
++import ua.zentix.incoming.nuclear.NuclearStrikes;
++import ua.zentix.incoming.nuclear.model.HobBlast;
++import ua.zentix.incoming.nuclear.model.Yield;
++
++/** Real queue progress with finite watched demand, fixed pressure and an independently busy material owner. */
++@GameTestHolder(Incoming.MOD_ID)
++@PrefixGameTestTemplate(false)
++public final class RuinSustainedProgressGameTests {
++    private RuinSustainedProgressGameTests() {}
++
++    @GameTest(template = "range", batch = "nuke_sustained_progress", timeoutTicks = 240, skyAccess = true)
++    public static void everyWatchedWindowFinishesAtCapacityWithMaterialBacklog(GameTestHelper h) throws Exception {
++        StrikeGameTests.gameSpeed(h);
++        var level = h.getLevel();
++        NuclearStrikes.clear(level);
++        RuinMatterGameTests.clearFixture(level);
++        var world = NuclearWorld.get(level);
++        var other = NuclearWorld.get(level.getServer().getLevel(Level.NETHER));
++        long previous = other.materialReservation;
++        int threads = IncomingConfig.SERVER.nukeRuinThreads.get();
++        var originalClock = NuclearWorld.clock(level.getServer());
++        var clock = WorkClock.counting(1_000_000);
++        NuclearWorld.useClock(level.getServer(), clock);
++        StrikeGameTests.afterTest(h, () -> {
++            other.materialReservation = previous;
++            ScarQueue.seenForTest(null);
++            NuclearWorld.useClock(level.getServer(), originalClock);
++            NuclearStrikes.clear(level);
++            RuinMatterGameTests.clearFixture(level);
++            RuinWorkers.shutdown();
++            IncomingConfig.SERVER.nukeRuinThreads.set(threads);
++        });
++        clock.start(4_000_000);
++        world.tick(level, clock);
++        RuinWorkers.shutdown();
++        IncomingConfig.SERVER.nukeRuinThreads.set(1);
++        RuinWorkers.executor(RuinWorkers.Priority.SEEN);
++        var pool = (ThreadPoolExecutor) field(RuinWorkers.class, "pool").get(null);
++        h.assertTrue(pool.getPoolSize() == 0, "Fixture must restart a cold worker pool");
++        var centre = new ChunkPos(h.absolutePos(new BlockPos(32, 1, 32)));
++        var area = new ua.zentix.incoming.strike.AreaLoader.Area(
++                net.minecraft.server.level.TicketType.create("incoming_sustained_test", java.util.Comparator.<UUID>naturalOrder()),
++                new ChunkPos(centre.x + 1, centre.z + 1), 5, UUID.randomUUID(), false);
++        ua.zentix.incoming.strike.StrikeWorld.get(level).areas().hold(level, area);
++        StrikeGameTests.afterTest(h, () -> ua.zentix.incoming.strike.StrikeWorld.get(level).areas().release(level, area));
++        int y = h.absolutePos(new BlockPos(0, 38, 0)).getY();
++        var targets = new ArrayList<BlockPos>();
++        var keys = new it.unimi.dsi.fastutil.longs.LongOpenHashSet();
++        for (int z = -2; z < 6; z++) for (int x = -2; x < 6; x++) level.getChunk(centre.x + x, centre.z + z);
++        for (int z = 0; z < 4; z++) for (int x = 0; x < 4; x++) {
++            var at = new BlockPos((centre.x + x) * 16 + 8, y, (centre.z + z) * 16 + 8);
++            level.setBlock(at.below(), Blocks.OBSIDIAN.defaultBlockState(), 18);
++            level.setBlock(at, Blocks.GLASS.defaultBlockState(), 18);
++            targets.add(at);
++            keys.add(new ChunkPos(at).toLong());
++        }
++        double height = Yield.optimalBurstHeight(15), distance = HobBlast.rangeFor(1.2, height, 15);
++        var d = new Detonation(NuclearEvents.get(level).nextId(),
++                new Vec3(centre.getMiddleBlockX() - distance, y + height, centre.getMiddleBlockZ()),
++                y, 15, false, level.getGameTime() - 20000, 0, 0, 20000, 42, 1, false, .25f);
++        NuclearEvents.get(level).add(d);
++        var ctx = world.ruins(level, d, level.getGameTime());
++        long need = 0;
++        for (var at : targets) {
++            var grid = ctx.grid(level, new ChunkPos(at), true);
++            h.assertTrue(grid != null, "Unpressured fixture window refused");
++            need = Math.max(need, RuinPlan.maxResultBytes(grid) + RuinPlan.maxFragmentBytes(grid)
++                    + RuinResults.OWNER_BYTES + RuinWorkers.threadBufferBytes(level.getHeight()));
++        }
++        long cached = ctx.shotBytes();
++        h.assertTrue(cached > 250_000, "Fixture needs reclaimable original snapshots");
++        var root = level.getServer().getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT)
++                .resolve("data/sustained-progress-" + UUID.randomUUID());
++        ctx.archive(new RuinSnapshots(new RuinPages(new RegionStorageInfo("gametest", level.dimension(), "incoming_preparation"), root),
++                world.prep().readAccounting(), () -> Math.max(0, NuclearPrep.PLANS_CAP - NuclearPrep.residentMemory(level))));
++        var matter = RuinMatter.get(level);
++        var pieces = new ArrayList<RuinMatter.Piece>();
++        for (int i = 0; i < 8192; i++) pieces.add(new RuinMatter.Piece(targets.getFirst().above(80),
++                Blocks.STONE.defaultBlockState(), null, Vec3.ZERO, level.getGameTime()));
++        matter.release(pieces);
++        ScarQueue.seenForTest(keys::contains);
++        // All demands are offered before the first pressured tick; none has an admitted solver yet.
++        for (var at : targets) {
++            var pos = new ChunkPos(at);
++            ctx.requestWindow(level, pos, RuinWorkers.Priority.SEEN);
++            world.scars().offer(level.getChunkSource().getChunkNow(pos.x, pos.z), d);
++        }
++        // A complete path includes one source publication and the authoritative cohort's material,
++        // in addition to the solver/startup bound. The earlier smaller fixture did not fund that path.
++        long room = need + cached + (4L << 20) + matter.removalBytes(targets.size());
++        h.assertTrue(room > RuinWorkers.threadBufferBytes(level.getHeight()), "Fixture must fund source decoding");
++        other.materialReservation += NuclearPrep.PLANS_CAP - NuclearPrep.residentMemory(level) - room;
++        long fixed = other.materialReservation, began = level.getGameTime();
++        long[] peak = {NuclearPrep.residentMemory(level)};
++        Incoming.LOG.info("SUSTAINED start demand {}, cache {}, solver+restart {}, room {}, fixed {}",
++                targets.size(), cached, need, room, fixed);
++        h.succeedWhen(() -> {
++            h.assertTrue(other.materialReservation == fixed, "External pressure was refunded");
++            long resident = NuclearPrep.residentMemory(level);
++            peak[0] = Math.max(peak[0], resident);
++            h.assertTrue(resident <= NuclearPrep.PLANS_CAP, "Resident ownership exceeded unchanged cap: " + resident);
++            int pending = 0;
++            for (var at : targets) {
++                var pos = new ChunkPos(at);
++                var chunk = level.getChunkSource().getChunkNow(pos.x, pos.z);
++                h.assertTrue(chunk != null, "Watched cohort unloaded instead of completing");
++                if (world.scars().queued(pos.toLong())) pending++;
++                else {
++                    h.assertTrue(chunk.getExistingData(ua.zentix.incoming.registry.ModAttachments.CHUNK_SCAR).orElse(0) == d.id(),
++                            "Queue dropped an unapplied watched chunk");
++                    h.assertTrue(!chunk.getBlockState(at).is(Blocks.GLASS), "Queue completed without actual glass damage");
++                }
++            }
++            if ((level.getGameTime() - began) % 20 == 0) Incoming.LOG.info(
++                    "SUSTAINED age {} pending {}/{} tasks {} reads {} snapshots {} resident {} material {}",
++                    level.getGameTime() - began, pending, targets.size(), ctx.tasks(), ctx.pendingWindowReads(),
++                    ctx.shotCount(), resident, matter.pending());
++            if ((level.getGameTime() - began) % 20 == 0) Incoming.LOG.info(
++                    "SUSTAINED owners ctx {} shots {} results {} detached {} workspace {} ledger {} prep {} scar {} released {}",
++                    ctx.retainedBytes(), ctx.shotBytes(), RuinResults.bytes(), RuinInputs.detachedBytes(),
++                    RuinWorkers.residentBufferBytes(level.getHeight()), matter.retainedBytes(), world.prep().retainedBytes(),
++                    world.scars().retainedBytes(), matter.released());
++            h.assertTrue(pending == 0 && world.scars().size() == 0,
++                    "Watched demand remains: " + pending + "/" + targets.size() + ", tasks=" + ctx.tasks() + ", snapshots=" + ctx.shotCount());
++            h.assertTrue(matter.released() >= 8192 + targets.size(), "Applied glass lost its material ownership");
++            h.assertTrue(matter.pending() > 0, "Competing backlog drained before watched completion");
++            h.assertTrue(ctx.tasks() == 0 && ctx.pendingWindowReads() == 0, "Completed cohort orphaned source/solver work");
++            h.assertTrue(pool.getLargestPoolSize() > 0, "Actual worker never restarted");
++            Incoming.LOG.info("SUSTAINED all {} watched applied in {} ticks; peak {}, material released {}, remaining {}",
++                    targets.size(), level.getGameTime() - began, peak[0], matter.released(), matter.pending());
++        });
++    }
++
++    private static Field field(Object owner, String name) throws ReflectiveOperationException {
++        Field result = (owner instanceof Class<?> c ? c : owner.getClass()).getDeclaredField(name);
++        result.setAccessible(true);
++        return result;
++    }
++}
+diff --git a/mod/src/main/java/ua/zentix/incoming/nuclear/world/ChunkShot.java b/mod/src/main/java/ua/zentix/incoming/nuclear/world/ChunkShot.java
+index 62d969947..5cee8e70b 100644
+--- a/mod/src/main/java/ua/zentix/incoming/nuclear/world/ChunkShot.java
++++ b/mod/src/main/java/ua/zentix/incoming/nuclear/world/ChunkShot.java
+@@ -170,8 +170,9 @@ final class ChunkShot {
+         this.liveNormals = liveNormals;
+         this.liveKnown = liveKnown;
+         long size = 0;
+-        for (PalettedContainer<BlockState> c : states) {
+-            size += sectionBytes(c, ruined);
++        for (int i = 0; i < states.length; i++) {
++            PalettedContainer<BlockState> c = states[i];
++            size += sectionBytes(c, reconstructed(i));
+             if (c != null) register(c);
+         }
+         int surfaceType = type(Heightmap.Types.WORLD_SURFACE), solidType = type(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES);
+@@ -190,8 +191,8 @@ final class ChunkShot {
+     }
+ 
+     /** Known retained arrays, including Sec objects/references before their lazy publication. Not total object heap. */
+-    static long sectionBytes(@Nullable PalettedContainer<BlockState> states, boolean ruined) {
+-        long references = ruined || states != null && states.data.palette() instanceof GlobalPalette
++    static long sectionBytes(@Nullable PalettedContainer<BlockState> states, boolean reconstructed) {
++        long references = reconstructed || states != null && states.data.palette() instanceof GlobalPalette
+                 ? 4096 : states == null ? 1 : states.data.palette().getSize();
+         return (states == null ? 0 : states.getSerializedSize()) + 64 + 8 * references;
+     }
+@@ -434,10 +435,7 @@ final class ChunkShot {
+                 BlockState o = old.oldState(lx, y, lz, minY);
+                 if (o != null) return o;
+             }
+-            BlockState now = raw(lx, y, lz);
+-            // ruin aftermath: fire and spread water occupy former air
+-            if (now.getBlock() instanceof BaseFireBlock || !now.getFluidState().isEmpty() && !now.getFluidState().isSource()) return AIR;
+-            return now;
++            return withoutAftermath(raw(lx, y, lz));
+         }
+         return raw(lx, y, lz);
+     }
+@@ -449,12 +447,22 @@ final class ChunkShot {
+         return states[i] == null ? AIR : states[i].get(lx, y & 15, lz);
+     }
+ 
++    private boolean reconstructed(int section) {
++        return ruined && old != null && old.touches(section);
++    }
++
++    private static BlockState withoutAftermath(BlockState state) {
++        // Ruin aftermath: fire and spread water occupy former air.
++        return state.getBlock() instanceof BaseFireBlock
++                || !state.getFluidState().isEmpty() && !state.getFluidState().isSource() ? AIR : state;
++    }
++
+     /** Position properties of section {@code i} (index from world bottom). */
+     Sec props(int i, Blast.PropsView view) {
+         Sec p = props.get(i);
+         if (p != null) return p;
+         PalettedContainer<BlockState> c = states[i];
+-        if (ruined || c != null && c.data.palette() instanceof GlobalPalette) {
++        if (reconstructed(i) || c != null && c.data.palette() instanceof GlobalPalette) {
+             // by position: old plan blocks overlaid on section, or global palette (index in the whole registry)
+             Blast.Props[] full = new Blast.Props[4096];
+             int y0 = minY + (i << 4);
+@@ -469,7 +477,10 @@ final class ChunkShot {
+         } else {
+             Palette<BlockState> palette = c.data.palette();
+             Blast.Props[] local = new Blast.Props[palette.getSize()];
+-            for (int k = 0; k < local.length; k++) local[k] = view.get(palette.valueFor(k));
++            for (int k = 0; k < local.length; k++) {
++                BlockState state = palette.valueFor(k);
++                local[k] = view.get(ruined ? withoutAftermath(state) : state);
++            }
+             p = new Sec(c.data.storage(), local, null);
+         }
+         return props.compareAndSet(i, null, p) ? p : props.get(i);
+diff --git a/mod/src/main/java/ua/zentix/incoming/nuclear/world/NuclearPrep.java b/mod/src/main/java/ua/zentix/incoming/nuclear/world/NuclearPrep.java
+index 6a4b9fcb0..ea5a1ed96 100644
+--- a/mod/src/main/java/ua/zentix/incoming/nuclear/world/NuclearPrep.java
++++ b/mod/src/main/java/ua/zentix/incoming/nuclear/world/NuclearPrep.java
+@@ -225,7 +225,7 @@ public final class NuclearPrep {
+         /** Times ready square not released because neighbor-waiting chunks lack holds (whole detonation). */
+         long diagRefused;
+         long nextIoReport;
+-        final RetainedPlans plans = new RetainedPlans();
++        RetainedPlans plans = new RetainedPlans();
+         /** All-chunk ruins (neighbor fractures): transferred to detonation with plans. */
+         @Nullable
+         RuinContext ruins;
+@@ -302,6 +302,7 @@ public final class NuclearPrep {
+     /** Strikes whose preparation failed: do not restart (otherwise error logged every tick). */
+     private final java.util.Set<Integer> failed = new java.util.HashSet<>();
+     private final WorkClock clock = WorkClock.decaying(0.5);
++    private int reclaimNext;
+     /** Re-readable cache policy; tiny owned-test caches exercise eviction without a large synthetic heap. */
+     private long shotCacheLimit = 64L << 20;
+ 
+@@ -583,6 +584,50 @@ public final class NuclearPrep {
+ 
+     // ---------------------------------------------------------------- tick
+ 
++    /**
++     * One bounded opportunity to retire already-owned work, before its consumers spend the lane.
++     * Rotate sources, completed solvers and cache receipts: a memory-blocked head must not prevent
++     * the reclamation that funds it. This never opens fresh reads or admits another solver.
++     */
++    boolean reclaim(ServerLevel level, WorkClock shared) {
++        int slots = preps.size() * 3;
++        for (int checked = 0; checked < slots && shared.canStart(); checked++) {
++            int slot = Math.floorMod(reclaimNext++, slots);
++            Prep p = preps.get(slot / 3);
++            if (p.draining || p.detonation < 0 || p.ruins == null) continue;
++            switch (slot % 3) {
++                case 0 -> {
++                    ArchivedShot head = p.archived.peek();
++                    if (head == null) continue;
++                    long began = shared.begin();
++                    try { acceptArchived(level, p, head); }
++                    finally { shared.end(began); }
++                }
++                case 1 -> {
++                    DiskShots.Read head = p.reads.peek();
++                    if (head == null) continue;
++                    long began = shared.begin();
++                    try { acceptRead(level, p, head); }
++                    finally { shared.end(began); }
++                }
++                case 2 -> {
++                    int ready = -1;
++                    for (int i = 0; i < p.farRunning.size(); i++) {
++                        long key = p.farRunning.getLong(i);
++                        if (!p.ruins.running(key) || p.ruins.done(key)) { ready = i; break; }
++                    }
++                    if (ready < 0) continue;
++                    long began = shared.begin();
++                    try { collectFar(level, p, ready); }
++                    finally { shared.end(began); }
++                }
++                default -> throw new AssertionError("Unknown completion lane");
++            }
++            return true;
++        }
++        return false;
++    }
++
+     /**
+      * Budgeted preparation: own deadline (shared-budget fraction {@link WorkScheduler#PREP_SHARE}) and nuclear-lane deadline.
+      *
+@@ -606,6 +651,7 @@ public final class NuclearPrep {
+             Prep p = it.next();
+             try {
+                 if (p.draining) {
++                    transferRemaining(p, scars);
+                     discardPreparation(p);
+                     p.lods.clear(level);
+                     // before detonation preparation tasks not handed off: abandon
+@@ -744,7 +790,7 @@ public final class NuclearPrep {
+                             level.getServer().getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT))
+                             .resolve("data/incoming-preparation/" + p.archivePath);
+             p.plans.spill(new RuinPages(info, root.resolve("plans-v" + RuinPlan.STORAGE_VERSION)),
+-                    p.ruins, p.accounting, () -> Math.max(0, PLANS_CAP - memory(level)));
++                    p.ruins, p.accounting, () -> Math.max(0, PLANS_CAP - memory(level)), () -> storageRoom(level));
+             p.ruins.archive(new RuinSnapshots(new RuinPages(info, root.resolve("shots")), p.accounting,
+                     () -> storageRoom(level)));
+         }
+@@ -877,7 +923,7 @@ public final class NuclearPrep {
+                 level.getServer().getWorldData().getLevelName(), level.dimension(), "incoming_preparation");
+         ctx.restoredPlans = new RetainedPlans();
+         ctx.restoredPlans.spill(new RuinPages(info, root.resolve("plans-v" + RuinPlan.STORAGE_VERSION)), ctx, readBytes::addAndGet,
+-                () -> Math.max(0, PLANS_CAP - memory(level)));
++                () -> Math.max(0, PLANS_CAP - memory(level)), () -> storageRoom(level));
+         ctx.restoredPlans.discover();
+         ctx.archive(new RuinSnapshots(new RuinPages(info, root.resolve("shots")), readBytes::addAndGet,
+                 () -> storageRoom(level)));
+@@ -1009,6 +1055,56 @@ public final class NuclearPrep {
+         return true;
+     }
+ 
++    /** Completion only: refusal preserves the source and its reservation for a later opportunity. */
++    private static boolean acceptRead(ServerLevel level, Prep p, DiskShots.Read r) {
++        long c = r.pos().toLong();
++        try {
++            if (r.skip() != null) {
++                p.reads.poll();
++                if (p.handle != null && r.sourceFailure()) p.failure = RuinPreparation.Reason.IO;
++                p.unreadable.add(c);
++                p.unreadWhy.addTo(r.skip().split(":", 2)[0], 1);
++            } else {
++                try (var publication = p.reads.takeForPublication(r, p.ruins.publicationBytes(r, null),
++                        PLANS_CAP - residentMemory(level))) {
++                    if (publication == null) return false;
++                    long before = p.ruins.retainedBytes();
++                    try {
++                        p.ruins.publishReserved(r, null);
++                        p.diskShots++;
++                    } finally {
++                        publication.releaseToCountedOwner(Math.max(0, p.ruins.retainedBytes() - before));
++                    }
++                }
++            }
++        } catch (RuntimeException error) {
++            if (p.reads.peek() == r) p.reads.poll();
++            failedSource(p, c, error);
++        }
++        p.reading.remove(c);
++        return true;
++    }
++
++    /** The caller established actual completion (or another consumer already collected this key). */
++    private static void collectFar(ServerLevel level, Prep p, int index) {
++        long c = p.farRunning.removeLong(index);
++        if (!p.ruins.done(c)) {
++            if (p.handle != null && !p.bound) p.failure = RuinPreparation.Reason.IO;
++            return;
++        }
++        try {
++            RuinPlan plan = p.ruins.collect(new ChunkPos(c));
++            if (plan != null) {
++                keep(level, p, c, plan);
++                p.farPlans++;
++                p.lods.offer(c);
++            } else if (p.handle != null && !p.bound) p.failure = RuinPreparation.Reason.IO;
++        } catch (RuntimeException e) {
++            if (p.handle != null) p.failure = RuinPreparation.Reason.IO;
++            Incoming.LOG.error("Pre-built ruins: plan for chunk {} from disk failed with an exception; its ruins will be built on the spot", new ChunkPos(c), e);
++        }
++    }
++
+     private static void failedSource(Prep p, long key, RuntimeException error) {
+         p.unreadable.add(key);
+         if (p.handle != null) p.failure = RuinPreparation.Reason.IO;
+@@ -1048,34 +1144,9 @@ public final class NuclearPrep {
+         }
+         // Completed source ownership funds the known publication transition before its slot is released.
+         for (DiskShots.Read r; clock.canStart() && shared.canStart() && (r = p.reads.peek()) != null; ) {
+-            long c = r.pos().toLong();
+-            long c0 = shared.begin();
+-            try {
+-                if (r.skip() != null) {
+-                    p.reads.poll();
+-                    if (p.handle != null && r.sourceFailure()) p.failure = RuinPreparation.Reason.IO;
+-                    p.unreadable.add(c);
+-                    p.unreadWhy.addTo(r.skip().split(":", 2)[0], 1);
+-                } else {
+-                    try (var publication = p.reads.takeForPublication(r, p.ruins.publicationBytes(r, null),
+-                            PLANS_CAP - residentMemory(level))) {
+-                        if (publication == null) break;
+-                        long before = p.ruins.retainedBytes();
+-                        try {
+-                            p.ruins.publishReserved(r, null);
+-                            p.diskShots++;
+-                        } finally {
+-                            publication.releaseToCountedOwner(Math.max(0, p.ruins.retainedBytes() - before));
+-                        }
+-                    }
+-                }
+-            } catch (RuntimeException error) {
+-                if (p.reads.peek() == r) p.reads.poll();
+-                failedSource(p, c, error);
+-            } finally {
+-                clock.record(shared.end(c0));
+-            }
+-            p.reading.remove(c);
++            long began = shared.begin();
++            try { if (!acceptRead(level, p, r)) break; }
++            finally { clock.record(shared.end(began)); }
+         }
+         // ready plans
+         for (int i = 0; i < p.farRunning.size() && clock.canStart() && shared.canStart(); ) {
+@@ -1084,29 +1155,13 @@ public final class NuclearPrep {
+                 i++;
+                 continue;
+             }
+-            p.farRunning.removeLong(i);
+-            if (!p.ruins.done(c)) {
+-                if (p.handle != null && !p.bound) p.failure = RuinPreparation.Reason.IO;
+-                continue; // collected elsewhere (ruin queue) or task abandoned
+-            }
+-            long c0 = shared.begin();
+-            try {
+-                RuinPlan plan = p.ruins.collect(new ChunkPos(c));
+-                if (plan != null) {
+-                    keep(level, p, c, plan);
+-                    p.farPlans++;
+-                    p.lods.offer(c);
+-                } else if (p.handle != null && !p.bound) p.failure = RuinPreparation.Reason.IO;
+-            } catch (RuntimeException e) {
+-                if (p.handle != null) p.failure = RuinPreparation.Reason.IO;
+-                Incoming.LOG.error("Pre-built ruins: plan for chunk {} from disk failed with an exception; its ruins will be built on the spot", new ChunkPos(c), e);
+-            } finally {
+-                clock.record(shared.end(c0));
+-            }
++            long began = shared.begin();
++            try { collectFar(level, p, i); }
++            finally { clock.record(shared.end(began)); }
+         }
+         // Bounded read-ahead follows solver admission. Otherwise the reader can sweep the whole
+         // zone while LRU trimming evicts the still-unplanned first window and planning never resumes.
+-        if (p.nextFar < p.order.length) p.ruins.pinWindow(p.order[p.nextFar]);
++        if (p.nextFar < p.order.length && !p.ruins.pinWindow(p.order[p.nextFar])) return;
+         p.nextRead = Math.max(p.nextRead, p.nextFar); // Earlier centres already have a task/plan or were excluded.
+         int readEnd = (int) Math.min(p.order.length, (long) p.nextFar + RuinWorkers.capacity());
+         while (p.nextRead < readEnd && p.reading.size() < READS && memory(level) + READ_BYTES <= WINDOW_CAP) {
+@@ -1142,7 +1197,7 @@ public final class NuclearPrep {
+         p.plans.prefetch(p.order, p.nextFar);
+         while (p.nextFar < p.order.length && !p.capped && clock.canStart() && shared.canStart()) {
+             long c = p.order[p.nextFar];
+-            p.ruins.pinWindow(c);
++            if (!p.ruins.pinWindow(c)) break;
+             if (!p.plans.containsKey(c) && !p.ruins.running(c) && p.ruins.doneAt(c) < 0 && readyChunk(level, c) == null) {
+                 long restoreUnit = shared.begin();
+                 int restored;
+@@ -1965,6 +2020,22 @@ public final class NuclearPrep {
+         p.tiles.clear();
+     }
+ 
++    /** Retire the collector without abandoning shared results or the still-needed page owner. */
++    private static void transferRemaining(Prep p, ScarQueue scars) {
++        if (p.detonation < 0 || p.ruins == null) return;
++        if (p.ruins.restoredPlans == null || p.ruins.restoredPlans == p.plans) {
++            // Install the counted consumer before removing preparation's reference/charge.
++            p.ruins.restoredPlans = p.plans;
++            p.plans.discover();
++            p.plans = new RetainedPlans();
++        }
++        for (long key : p.farRunning) if (!scars.queued(key)) p.ruins.retireUnclaimed(key);
++        for (long key : p.submitted) if (!scars.queued(key)) p.ruins.retireUnclaimed(key);
++        p.farRunning.clear();
++        p.submitted.clear();
++        if (p.nextFar < p.order.length) p.ruins.unpinWindow(p.order[p.nextFar]);
++    }
++
+     /** Release unused asynchronous ownership; detached late reads cannot refill a cancelled preparation. */
+     private static void discardPreparation(Prep p) {
+         if (p.layout != null) {
+diff --git a/mod/src/main/java/ua/zentix/incoming/nuclear/world/NuclearWorld.java b/mod/src/main/java/ua/zentix/incoming/nuclear/world/NuclearWorld.java
+index f03e0eba9..360951987 100644
+--- a/mod/src/main/java/ua/zentix/incoming/nuclear/world/NuclearWorld.java
++++ b/mod/src/main/java/ua/zentix/incoming/nuclear/world/NuclearWorld.java
+@@ -50,6 +50,9 @@ public final class NuclearWorld {
+     private final MobFallout mobFallout = new MobFallout();
+     private final LateExposure late = new LateExposure();
+     private final BlastFront blast = new BlastFront();
++    private boolean reclaimTurn;
++    private int reclaimNext;
++    final RuinContext.Assembly assembly = new RuinContext.Assembly();
+     private long lastFrontNanos, lastPulseNanos, lastScorchNanos, lastCraterNanos, lastScarNanos, lastPrepNanos, lastFalloutNanos, lastSettleNanos;
+     /**
+      * Chunks loaded since with flash-layer fire from forgotten detonation (no ruins coming): schedule fire ticks on world tick
+@@ -433,6 +436,33 @@ public final class NuclearWorld {
+         }
+     }
+ 
++    /** Bounded completion/cache service survives preparation expiry and rotates across active owners. */
++    private void reclaim(ServerLevel level, WorkClock clock) {
++        int slots = ruins.size() + 1;
++        for (int checked = 0; checked < slots && clock.canStart(); checked++) {
++            int slot = Math.floorMod(reclaimNext++, slots);
++            if (slot == 0) {
++                if (prep.reclaim(level, clock)) return;
++                continue;
++            }
++            var contexts = ruins.values().iterator();
++            for (int i = 1; i < slot; i++) contexts.next();
++            RuinContext ctx = contexts.next();
++            if (ctx.readyWindowReads()) {
++                long began = clock.begin();
++                try { ctx.drainWindowReads(level); }
++                finally { clock.end(began); }
++                return;
++            }
++            if (ctx.shotBytes() > (64L << 20)
++                    || NuclearPrep.PLANS_CAP - NuclearPrep.residentMemory(level) < RuinMemory.TRANSITION_ROOM) {
++                if (ctx.shotCount() == 0) continue;
++                ctx.trimShots(8L << 20, clock, 16);
++                return;
++            }
++        }
++    }
++
+     /** @param clock server-tick budget, shared across dimensions (already started) */
+     public void tick(ServerLevel level, WorkClock clock) {
+         get(level);
+@@ -493,6 +523,10 @@ public final class NuclearWorld {
+         // At capacity, existing material must progress before new removals can consume the
+         // lane. One bounded batch avoids starving visible ruins while breaking that dependency.
+         matter = RuinMatter.get(level);
++        // Ready input/results and spill receipts can free the memory these consumers need.
++        // They cannot wait behind an arbitrarily long material queue. Alternate the first
++        // opportunity while both owners have work, without granting another clock allowance.
++        if (!matter.busy() || (reclaimTurn = !reclaimTurn)) reclaim(level, clock);
+         matter.work(level, clock, 1);
+         long craterStart = System.nanoTime();
+         digCraters(level, events, clock);
+diff --git a/mod/src/main/java/ua/zentix/incoming/nuclear/world/RetainedPlans.java b/mod/src/main/java/ua/zentix/incoming/nuclear/world/RetainedPlans.java
+index d4d3215ac..e571ec076 100644
+--- a/mod/src/main/java/ua/zentix/incoming/nuclear/world/RetainedPlans.java
++++ b/mod/src/main/java/ua/zentix/incoming/nuclear/world/RetainedPlans.java
+@@ -14,6 +14,7 @@ final class RetainedPlans extends Long2ObjectOpenHashMap<RuinPlan> {
+             new it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<>();
+     private transient java.util.function.LongConsumer accounting = n -> {};
+     private transient java.util.function.LongSupplier room = () -> Long.MAX_VALUE;
++    private transient java.util.function.LongSupplier demandRoom = () -> Long.MAX_VALUE;
+     private static final long READ_BYTES = 4L << 20;
+     private static final int IO_LIMIT = 64, READ_LIMIT = 16;
+     private final long residentTarget;
+@@ -42,10 +43,17 @@ final class RetainedPlans extends Long2ObjectOpenHashMap<RuinPlan> {
+     private record Write(RuinPlan plan, java.util.concurrent.CompletableFuture<Void> receipt) {}
+ 
+     void spill(RuinPages store, RuinContext ctx, java.util.function.LongConsumer charge, java.util.function.LongSupplier headroom) {
++        spill(store, ctx, charge, headroom, headroom);
++    }
++
++    /** Existing consumer work needs resident space, not the reserve for future speculative solvers. */
++    void spill(RuinPages store, RuinContext ctx, java.util.function.LongConsumer charge,
++               java.util.function.LongSupplier headroom, java.util.function.LongSupplier consumerRoom) {
+         pages = store;
+         context = ctx;
+         accounting = charge;
+         room = headroom;
++        demandRoom = consumerRoom;
+     }
+ 
+     int pendingWrites() { return writes.size() + toWrite.size(); }
+@@ -101,14 +109,16 @@ final class RetainedPlans extends Long2ObjectOpenHashMap<RuinPlan> {
+     }
+ 
+     /** Restart walk: 0 pending, 1 restored, -1 no compatible stored plan. One cursor, no whole-zone scan. */
+-    int probe(long key) {
++    int probe(long key) { return probe(key, false); }
++
++    private int probe(long key, boolean demand) {
+         if (pages == null || key == lastMiss || misses.contains(key)) return -1;
+         Boolean existed = pages.existing();
+         if (existed == null) return 0;
+         if (!existed) return -1;
+         if (super.containsKey(key)) return 1;
+-        if (!reads.containsKey(key) && (reads.size() >= READ_LIMIT || room.getAsLong() < READ_BYTES)) return 0;
+-        RuinPlan plan = load(key);
++        if (!reads.containsKey(key) && (reads.size() >= READ_LIMIT || available(demand) < READ_BYTES + 48)) return 0;
++        RuinPlan plan = load(key, demand);
+         if (plan != null) return 1;
+         if (reads.containsKey(key)) return 0;
+         lastMiss = key;
+@@ -130,9 +140,9 @@ final class RetainedPlans extends Long2ObjectOpenHashMap<RuinPlan> {
+         if (pages == null) return null;
+         if (!super.containsKey(key)) {
+             if (!discover) return null;
+-            return probe(key) > 0 ? super.get(key) : null;
++            return probe(key, true) > 0 ? super.get(key) : null;
+         }
+-        return load(key);
++        return load(key, true);
+     }
+ 
+     /** Bounded restart read-ahead; collecting the results still consumes the normal planning units. */
+@@ -149,27 +159,40 @@ final class RetainedPlans extends Long2ObjectOpenHashMap<RuinPlan> {
+         for (int i = from; i < Math.min(order.length, from + READ_LIMIT); i++) {
+             long key = order[i];
+             if (key == lastMiss || super.containsKey(key) || reads.containsKey(key)) continue;
+-            if (reads.size() >= READ_LIMIT || room.getAsLong() < READ_BYTES) break;
++            if (reads.size() >= READ_LIMIT || room.getAsLong() < READ_BYTES + 48) break;
+             accounting.accept(READ_BYTES);
+             reads.put(key, pages.read(key));
+         }
+     }
+ 
+-    private RuinPlan load(long key) {
++    private long available(boolean demand) { return (demand ? demandRoom : room).getAsLong(); }
++
++    private RuinPlan load(long key, boolean demand) {
+         var read = reads.get(key);
+         if (read == null) {
+-            if (reads.size() >= READ_LIMIT || room.getAsLong() < READ_BYTES) return null;
++            if (reads.size() >= READ_LIMIT || available(demand) < READ_BYTES + 48) return null;
+             accounting.accept(READ_BYTES);
+             read = pages.read(key);
+             reads.put(key, read);
+         }
+-        demanded.add(key);
++        if (demand) demanded.add(key);
+         if (!read.isDone()) return null;
++        // The owned source stays charged until decoding and counted installation finish. A
++        // completed page may be larger than its I/O allowance; refusal keeps the same future.
++        java.util.Optional<net.minecraft.nbt.CompoundTag> stored;
++        long reservation;
++        try {
++            stored = read.join(); // already complete; no server-thread I/O
++            reservation = Math.max(READ_BYTES, stored.isPresent() ? RuinPlan.restorePublicationBytes(stored.get()) + 48 : 0);
++        } catch (RuntimeException e) {
++            discardRead(key);
++            return missing(key, e);
++        }
++        if (reservation - READ_BYTES > available(demand)) return null;
++        accounting.accept(reservation - READ_BYTES);
+         reads.remove(key);
+         demanded.remove(key);
+-        accounting.accept(-READ_BYTES);
+         try {
+-            var stored = read.join(); // already complete; no server-thread I/O
+             if (stored.isPresent()) {
+                 RuinPlan plan = RuinPlan.restore(stored.get(), context);
+                 super.put(key, plan);
+@@ -178,8 +201,16 @@ final class RetainedPlans extends Long2ObjectOpenHashMap<RuinPlan> {
+                 return plan;
+             }
+         } catch (RuntimeException e) {
+-            ua.zentix.incoming.Incoming.LOG.error("Could not restore prepared ruin plan at {}", new net.minecraft.world.level.ChunkPos(key), e);
++            return missing(key, e);
++        } finally {
++            accounting.accept(-reservation);
+         }
++        return missing(key, null);
++    }
++
++    private RuinPlan missing(long key, RuntimeException error) {
++        if (error != null) ua.zentix.incoming.Incoming.LOG.error(
++                "Could not restore prepared ruin plan at {}", new net.minecraft.world.level.ChunkPos(key), error);
+         // Failed cache data is not authoritative; the normal solver will reconstruct it.
+         super.remove(key);
+         misses.addAndMoveToLast(key);
+diff --git a/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinContext.java b/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinContext.java
+index c778fde1d..76d5f6cb2 100644
+--- a/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinContext.java
++++ b/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinContext.java
+@@ -61,6 +61,7 @@ final class RuinContext {
+      */
+     RuinContext(net.minecraft.server.level.ServerLevel level, Detonation d) {
+         this.d = d;
++        this.assembly = NuclearWorld.get(level.getServer().overworld()).assembly;
+         this.eventId = d.id();
+         this.noise = new ua.zentix.incoming.nuclear.model.WorldNoise(level.getSeed(), d.scale());
+         this.ruinRadius = d.ruinRadius();
+@@ -223,7 +224,8 @@ final class RuinContext {
+             // unflash can restore a formerly empty section; only touched sections need the palette-growth bound.
+             boolean edit = flash != null ? flash.touches(i) : unfire && !sections[i].hasOnlyAir();
+             if (edit) bytes += editableSectionBytes();
+-            else bytes += ChunkShot.sectionBytes(sections[i].hasOnlyAir() ? null : sections[i].getStates(), ruined);
++            else bytes += ChunkShot.sectionBytes(sections[i].hasOnlyAir() ? null : sections[i].getStates(),
++                    ruined && a.plan() != null && a.plan().touches(i));
+         }
+         return bytes;
+     }
+@@ -264,7 +266,7 @@ final class RuinContext {
+         for (int i = 0; i < read.states().length; i++) {
+             var section = read.states()[i];
+             if (flash != null && flash.touches(i) || unfire && section != null) bytes += editableSectionBytes();
+-            else bytes += ChunkShot.sectionBytes(section, ruined);
++            else bytes += ChunkShot.sectionBytes(section, ruined && a.plan() != null && a.plan().touches(i));
+         }
+         // Priming/cloning and motion extraction can overlap publication; height tile bound follows the section domain.
+         return bytes + (heights.containsKey(read.pos().toLong()) ? 0 : heightTileBound(read.states().length * 16))
+@@ -296,6 +298,7 @@ final class RuinContext {
+     private final LongOpenHashSet reading = new LongOpenHashSet();
+     /** Windows assembling snapshots, awaiting worker admission, or rebuilding on the server thread. */
+     private final LongOpenHashSet pendingWindows = new LongOpenHashSet();
++    private final Assembly assembly;
+     private static final long WINDOW_READ_BYTES = 4L << 20;
+     private static final int WINDOW_READ_LIMIT = 32;
+     private record WindowRead(long key, @Nullable DiskShots.Read disk,
+@@ -327,8 +330,8 @@ final class RuinContext {
+ 
+     /** Same, parse read neighbors at ruin-pool {@code priority}. */
+     int requestWindow(ServerLevel level, ChunkPos pos, RuinWorkers.Priority priority) {
+-        pendingWindows.add(pos.toLong());
+         drainWindowReads(level);
++        if (!pinWindow(pos.toLong(), priority)) return 1;
+         int missing = 0;
+         for (int dz = -RuinPlanner.REACH; dz <= RuinPlanner.REACH; dz++) {
+             for (int dx = -RuinPlanner.REACH; dx <= RuinPlanner.REACH; dx++) {
+@@ -351,8 +354,47 @@ final class RuinContext {
+     }
+ 
+     /** Unadmitted far demand must survive re-readable snapshot cache trimming. */
+-    void pinWindow(long centre) { pendingWindows.add(centre); }
+-    void unpinWindow(long centre) { pendingWindows.remove(centre); }
++    boolean pinWindow(long centre) { return pinWindow(centre, RuinWorkers.Priority.FAR); }
++
++    /** One assembling window server-wide; deferred demands retain only their queue key. */
++    private boolean pinWindow(long centre, RuinWorkers.Priority priority) {
++        if (!assembly.claim(this, centre, priority)) return false;
++        pendingWindows.add(centre);
++        return true;
++    }
++
++    void unpinWindow(long centre) {
++        pendingWindows.remove(centre);
++        assembly.release(this, centre);
++    }
++
++    /** Server-thread state owned by the overworld attachment; no world reference or static lifetime. */
++    static final class Assembly {
++        private RuinContext owner;
++        private long centre;
++        private RuinWorkers.Priority priority;
++
++        boolean claim(RuinContext next, long key, RuinWorkers.Priority requested) {
++            if (owner != null) {
++                if (owner == next && centre == key) {
++                    if (requested.compareTo(priority) < 0) priority = requested;
++                    return true;
++                }
++                if (requested.compareTo(priority) >= 0) return false;
++                owner.pendingWindows.remove(centre);
++            }
++            owner = next;
++            centre = key;
++            priority = requested;
++            return true;
++        }
++
++        void release(RuinContext context, long key) {
++            if (owner == context && centre == key) owner = null;
++        }
++
++        void release(RuinContext context) { if (owner == context) owner = null; }
++    }
+ 
+     /** Pending source ownership survives a todo being overtaken by another planner. */
+     int pendingWindowReads() { return reads.pending(); }
+@@ -486,7 +528,7 @@ final class RuinContext {
+      * If later planned (post-wave ruin queue), snapshots retaken.
+      */
+     void noPlan(long chunk) {
+-        pendingWindows.remove(chunk);
++        unpinWindow(chunk);
+         if (planned.add(chunk)) {
+             ChunkPos pos = new ChunkPos(chunk);
+             forget(pos, 1, planned, this::retireBlast);
+@@ -556,8 +598,13 @@ final class RuinContext {
+ 
+     /** Re-readable cache only: keep old changed blocks and shadow heights, and snapshots held by worker grids. */
+     void trimShots(long bytesToFree, WorkClock clock) {
++        trimShots(bytesToFree, clock, Integer.MAX_VALUE);
++    }
++
++    /** Bounded maintenance walk; pinned city windows must not consume the entire consumer lane. */
++    void trimShots(long bytesToFree, WorkClock clock, int maxVisits) {
+         long limit = Math.max(0, shotBytes - bytesToFree);
+-        int visits = shots.size();
++        int visits = Math.min(shots.size(), maxVisits);
+         while (shotBytes > limit && visits-- > 0 && !shots.isEmpty() && clock.canStart()) {
+             long unit = clock.begin();
+             try {
+@@ -812,7 +859,7 @@ final class RuinContext {
+      * false one fracture computed.
+      */
+     boolean blastsReady(ServerLevel level, ChunkPos pos) {
+-        pendingWindows.add(pos.toLong());
++        if (!pinWindow(pos.toLong(), RuinWorkers.Priority.NEAR)) return false;
+         Grid g = grid(level, pos, false);
+         if (g == null) return false;
+         for (int k = 0; k < 9; k++) {
+@@ -875,6 +922,7 @@ final class RuinContext {
+         // running and ready-uncollected tasks bounded: ready plan retains memory. Player-visible tasks use only
+         // their priority capacity: tasks preparation handed to detonation do not block them
+         if (!RuinWorkers.admit(priority) || priority != RuinWorkers.Priority.SEEN && tasks.size() >= 2 * RuinWorkers.capacity()) return false;
++        if (!pinWindow(key, priority)) return false;
+         Grid g = grid(level, pos, true);
+         if (g == null) return false;
+         if (g.at(0, 0) == null) throw new IllegalStateException("no snapshot of chunk " + pos);
+@@ -887,7 +935,7 @@ final class RuinContext {
+         if (future == null) return false;
+         tasks.put(key, new Task(future, chunkId, level.getGameTime(), priority));
+         failed.remove(key);
+-        pendingWindows.remove(key);
++        unpinWindow(key);
+         return true;
+     }
+ 
+@@ -903,7 +951,7 @@ final class RuinContext {
+         int height = level.getHeight();
+         for (ServerLevel other : level.getServer().getAllLevels()) height = Math.max(height, other.getHeight());
+         // A queued output permit must still leave enough shared room to start a solver after idle expiry.
+-        long room = NuclearPrep.PLANS_CAP - NuclearPrep.residentMemory(level) - RuinWorkers.threadBufferBytes(height);
++        long room = NuclearPrep.PLANS_CAP - NuclearPrep.residentMemory(level) - RuinWorkers.startupBytes(height);
+         RuinResults.Lease owner = RuinResults.tryReserve(RuinPlan.maxResultBytes(grid), RuinPlan.maxFragmentBytes(grid), room);
+         if (owner == null) return null;
+         try {
+@@ -915,6 +963,7 @@ final class RuinContext {
+             }, priority, inputs, owner::actualExit);
+             owner.bindFuture(future);
+             resultOwners.put(future, owner);
++            unpinWindow(grid.centre().toLong());
+             return future;
+         } catch (RuntimeException | Error failure) {
+             owner.abortBeforeSubmit();
+@@ -999,7 +1048,7 @@ final class RuinContext {
+     void retry(long chunk) {
+         planned.remove(chunk);
+         doneAt.remove(chunk);
+-        pendingWindows.add(chunk);
++        unpinWindow(chunk);
+     }
+ 
+     /**
+@@ -1076,9 +1125,16 @@ final class RuinContext {
+         return plan;
+     }
+ 
++    /** Its preparation collector disappeared; a scar job, if present, remains the consumer. */
++    void retireUnclaimed(long key) {
++        Task task = tasks.remove(key);
++        if (task != null) cancelWorker(task.future, true);
++        unpinWindow(key);
++    }
++
+     /** Chunk unloaded: live-chunk background plan/snapshot invalid (disk-snapshot plan remains valid). */
+     void forget(long chunk) {
+-        pendingWindows.remove(chunk);
++        unpinWindow(chunk);
+         Task t = tasks.get(chunk);
+         if (t != null && t.chunkId != 0) {
+             tasks.remove(chunk);
+@@ -1089,6 +1145,7 @@ final class RuinContext {
+ 
+     /** A new owner will request current windows; old callbacks retain reservations until they finish. */
+     void retireWindowReads() {
++        assembly.release(this);
+         pendingWindows.clear();
+         reads.invalidate();
+         reading.clear();
+@@ -1111,7 +1168,7 @@ final class RuinContext {
+ 
+     /** Chunk plan built: release fractures needed only by surrounding plans. */
+     void planned(ChunkPos pos) {
+-        pendingWindows.remove(pos.toLong());
++        unpinWindow(pos.toLong());
+         planned.add(pos.toLong());
+         forget(pos, 1, planned, this::retireBlast);
+         forget(pos, RuinPlanner.REACH, planned, this::retireShot);
+@@ -1128,7 +1185,7 @@ final class RuinContext {
+ 
+     /** Empty plans also complete their neighbors' old-world retention window. */
+     void finished(ChunkPos pos) {
+-        pendingWindows.remove(pos.toLong());
++        unpinWindow(pos.toLong());
+         planned.add(pos.toLong());
+         stood.add(pos.toLong());
+         forget(pos, 1, stood, this::retireBlast);
+diff --git a/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinMemory.java b/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinMemory.java
+index 72d80b167..cd4a8738a 100644
+--- a/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinMemory.java
++++ b/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinMemory.java
+@@ -46,7 +46,7 @@ final class RuinMemory {
+     static long sourceReadRoom(ServerLevel level) {
+         int height = level.getHeight();
+         for (ServerLevel other : level.getServer().getAllLevels()) height = Math.max(height, other.getHeight());
+-        return NuclearPrep.PLANS_CAP - NuclearPrep.residentMemory(level) - RuinWorkers.threadBufferBytes(height);
++        return NuclearPrep.PLANS_CAP - NuclearPrep.residentMemory(level) - RuinWorkers.startupBytes(height);
+     }
+ 
+     static final class Reservation implements AutoCloseable {
+diff --git a/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinPlan.java b/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinPlan.java
+index 599df57e5..9653297c1 100644
+--- a/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinPlan.java
++++ b/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinPlan.java
+@@ -414,16 +414,41 @@ public final class RuinPlan {
+         return copy;
+     }
+ 
++    /** Known source, decoded arrays and palette scratch; registry codec scratch is not a whole-heap bound. */
++    static long restorePublicationBytes(net.minecraft.nbt.CompoundTag tag) {
++        return tag.sizeInBytes() + storedBytes(tag)
++                + 512L + 96L * tag.getList("palette", net.minecraft.nbt.Tag.TAG_COMPOUND).size();
++    }
++
++    /** The same field law as bytes(), evaluated before allocating decoded arrays. */
++    static long storedBytes(net.minecraft.nbt.CompoundTag tag) {
++        int sections = tag.getInt("sections");
++        if (sections < 0 || sections > 256) throw new IllegalArgumentException("Invalid ruin plan sections");
++        return sourceBytes(arrayLength(tag, "cells"), arrayLength(tag, "old"), arrayLength(tag, "states"),
++                arrayLength(tag, "fires"), arrayLength(tag, "heights"), arrayLength(tag, "light"), sections, 0, 0,
++                arrayLength(tag, "outside"), arrayLength(tag, "outside_states"), arrayLength(tag, "fluids"),
++                arrayLength(tag, "biomes"), arrayLength(tag, "flash"), arrayLength(tag, "blown"),
++                arrayLength(tag, "material"), Math.max(1, (sections + 63) / 64));
++    }
++
++    private static int arrayLength(net.minecraft.nbt.CompoundTag tag, String key) {
++        var value = tag.get(key);
++        if (value instanceof net.minecraft.nbt.IntArrayTag array) return array.size();
++        if (value instanceof net.minecraft.nbt.LongArrayTag array) return array.size();
++        return value instanceof net.minecraft.nbt.ByteArrayTag array ? array.size() : 0;
++    }
++
+     /** Server thread: rebuild process-local hashes. Section fast checks fall back to the normal column rescan. */
+     static RuinPlan restore(net.minecraft.nbt.CompoundTag tag, RuinContext ctx) {
+         if (tag.getInt("version") != STORAGE_VERSION || !tag.contains("material", net.minecraft.nbt.Tag.TAG_LONG_ARRAY))
+             throw new IllegalArgumentException("Incomplete or unknown ruin plan version");
++        int sections = tag.getInt("sections");
++        if (sections < 0 || sections > 256 || arrayLength(tag, "cells") != arrayLength(tag, "old")
++                || arrayLength(tag, "states") > MAX_STATES)
++            throw new IllegalArgumentException("Invalid ruin plan dimensions");
+         var palette = RuinPalette.load(tag.getList("palette", net.minecraft.nbt.Tag.TAG_COMPOUND));
+         int[] cells = tag.getIntArray("cells");
+         BlockState[] states = palette.states(tag.getIntArray("states")), olds = palette.states(tag.getIntArray("old"));
+-        int sections = tag.getInt("sections");
+-        if (sections < 0 || sections > 256 || cells.length != olds.length || states.length > MAX_STATES)
+-            throw new IllegalArgumentException("Invalid ruin plan dimensions");
+         long[] hashes = new long[sections];
+         int previous = -1;
+         for (int i = 0; i < cells.length; i++) {
+diff --git a/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinWorkers.java b/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinWorkers.java
+index 0e1a926f2..883831aac 100644
+--- a/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinWorkers.java
++++ b/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinWorkers.java
+@@ -295,6 +295,16 @@ public final class RuinWorkers {
+         if (server != null) service(server);
+     }
+ 
++    /** A live, funded worker can reuse its workspace; only a cold/taller pool needs a new grant. */
++    static long startupBytes(int height) {
++        if (pool instanceof OwnedPool owned && !owned.isShutdown()) {
++            for (Credit credit : owned.workspace.credits) synchronized (credit) {
++                if (!credit.closed && credit.height >= height) return 0;
++            }
++        }
++        return threadBufferBytes(height);
++    }
++
+     /** Tasks held in pool at once (running/queued). */
+     static int capacity() {
+         if (pool == null) pool();
+diff --git a/mod/src/main/java/ua/zentix/incoming/nuclear/world/ScarQueue.java b/mod/src/main/java/ua/zentix/incoming/nuclear/world/ScarQueue.java
+index 5629009af..cfd4f7a1b 100644
+--- a/mod/src/main/java/ua/zentix/incoming/nuclear/world/ScarQueue.java
++++ b/mod/src/main/java/ua/zentix/incoming/nuclear/world/ScarQueue.java
+@@ -1170,6 +1170,9 @@ public final class ScarQueue {
+         Detonation d = job.events.get(job.event);
+         RuinContext ctx = NuclearWorld.get(level).ruins(level, d, now);
+         boolean ready = hasPlan(d.id(), job.chunk);
++        if (!ready && ctx.restoredPlans != null) {
++            ready = ctx.restoredPlans.get(job.chunk) != null || RetainedPlans.waiting(ctx.restoredPlans, job.chunk);
++        }
+         if (chunk == null) {
+             // below full loading (view edge): ruin when full
+             waited(job, NukeDiag.Wait.BELOW_FULL);

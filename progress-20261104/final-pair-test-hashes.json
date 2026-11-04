@@ -1,0 +1,14 @@
+{
+  "RuinSustainedProgressGameTests.java": {
+    "candidate": "d832fc7e3306ef626b2d3af58ed806834ef616fddfc31e78149f5bc524ac55c6",
+    "baseline": "d832fc7e3306ef626b2d3af58ed806834ef616fddfc31e78149f5bc524ac55c6"
+  },
+  "RuinMaintenanceGameTests.java": {
+    "candidate": "237932dc0754d067b15ec153a272d2b9b610508e5b0e11903e3cfd4b50c7d391",
+    "baseline": "237932dc0754d067b15ec153a272d2b9b610508e5b0e11903e3cfd4b50c7d391"
+  },
+  "RuinCompletionRetirementGameTests.java": {
+    "candidate": "67784cfe5c5dd3f10b0961635c6f8d1f1731beaab9a35e0bdc98db217aad38ed",
+    "baseline": "67784cfe5c5dd3f10b0961635c6f8d1f1731beaab9a35e0bdc98db217aad38ed"
+  }
+}

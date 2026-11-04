@@ -1,0 +1,34 @@
+Picked up JAVA_TOOL_OPTIONS: -XX:ActiveProcessorCount=4 -Xmx2g -Dincoming.mtS5Diag=true
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.14.3/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :createMinecraftArtifacts UP-TO-DATE
+> Task :compileJava UP-TO-DATE
+> Task :generateModMetadata UP-TO-DATE
+> Task :processResources UP-TO-DATE
+> Task :classes UP-TO-DATE
+
+> Task :compileDevtestJava FAILED
+/mnt/data/projects/incoming/mod/run/wt-MT-OPT/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinSustainedProgressGameTests.java:54: error: package ua.zentix.incoming.util.AreaLoader does not exist
+        var area = new ua.zentix.incoming.util.AreaLoader.Area(
+                                                         ^
+1 error
+
+[Incubating] Problems report is available at: file:///mnt/data/projects/incoming/mod/run/wt-MT-OPT/mod/build/reports/problems/problems-report.html
+
+FAILURE: Build failed with an exception.
+
+* What went wrong:
+Execution failed for task ':compileDevtestJava'.
+> Compilation failed; see the compiler output below.
+  /mnt/data/projects/incoming/mod/run/wt-MT-OPT/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinSustainedProgressGameTests.java:54: error: package ua.zentix.incoming.util.AreaLoader does not exist
+          var area = new ua.zentix.incoming.util.AreaLoader.Area(
+                                                           ^
+  1 error
+
+* Try:
+> Check your code and dependencies to fix the compilation error(s)
+> Run with --scan to get full insights.
+
+BUILD FAILED in 3s
+5 actionable tasks: 1 executed, 4 up-to-date
+laptop_job mt-s5-held-inputs: exit 1

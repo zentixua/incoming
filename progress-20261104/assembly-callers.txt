@@ -1,0 +1,51 @@
+mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinContext.java:327:    int requestWindow(ServerLevel level, ChunkPos pos) {
+mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinContext.java:328:        return requestWindow(level, pos, RuinWorkers.Priority.NEAR);
+mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinContext.java:332:    int requestWindow(ServerLevel level, ChunkPos pos, RuinWorkers.Priority priority) {
+mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinContext.java:334:        if (!pinWindow(pos.toLong(), priority)) return 1;
+mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinContext.java:357:    boolean pinWindow(long centre) { return pinWindow(centre, RuinWorkers.Priority.FAR); }
+mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinContext.java:360:    private boolean pinWindow(long centre, RuinWorkers.Priority priority) {
+mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinContext.java:369:    void unpinWindow(long centre) {
+mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinContext.java:534:        unpinWindow(chunk);
+mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinContext.java:865:        if (!pinWindow(pos.toLong(), RuinWorkers.Priority.NEAR)) return false;
+mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinContext.java:928:        if (!pinWindow(key, priority)) return false;
+mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinContext.java:941:        unpinWindow(key);
+mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinContext.java:969:            unpinWindow(grid.centre().toLong());
+mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinContext.java:1054:        unpinWindow(chunk);
+mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinContext.java:1135:        unpinWindow(key);
+mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinContext.java:1140:        unpinWindow(chunk);
+mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinContext.java:1150:    void releaseAssembly() {
+mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinContext.java:1157:        releaseAssembly();
+mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinContext.java:1179:        unpinWindow(pos.toLong());
+mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinContext.java:1196:        unpinWindow(pos.toLong());
+mod/src/main/java/ua/zentix/incoming/nuclear/world/ScarQueue.java:831:                    if (owner != null) owner.unpinWindow(job.chunk);
+mod/src/main/java/ua/zentix/incoming/nuclear/world/ScarQueue.java:918:        if (ctx.requestWindow(level, pos, RuinWorkers.Priority.SEEN) > 0) return plan != null;
+mod/src/main/java/ua/zentix/incoming/nuclear/world/ScarQueue.java:1182:            ctx.unpinWindow(job.chunk);
+mod/src/main/java/ua/zentix/incoming/nuclear/world/ScarQueue.java:1200:        int reading = submit ? ctx.requestWindow(level, pos, priority) : 0;
+mod/src/main/java/ua/zentix/incoming/nuclear/world/NuclearPrep.java:523:            if (p.ruins != null) p.ruins.unpinWindow(chunk);
+mod/src/main/java/ua/zentix/incoming/nuclear/world/NuclearPrep.java:691:                    if (p.failure != RuinPreparation.Reason.NONE && p.ruins != null) p.ruins.releaseAssembly();
+mod/src/main/java/ua/zentix/incoming/nuclear/world/NuclearPrep.java:817:        if (!p.heapStop && p.nextTodo < p.todo.size() && heapTight()) stopForHeap(p);
+mod/src/main/java/ua/zentix/incoming/nuclear/world/NuclearPrep.java:832:        if (!p.announced && p.nextTodo >= p.todo.size() && p.submitted.isEmpty() && p.nextFar >= p.order.length && p.farRunning.isEmpty()
+mod/src/main/java/ua/zentix/incoming/nuclear/world/NuclearPrep.java:978:        LongArrayList rest = new LongArrayList(p.todo.subList(p.nextTodo, p.todo.size()));
+mod/src/main/java/ua/zentix/incoming/nuclear/world/NuclearPrep.java:983:        p.todo.clear();
+mod/src/main/java/ua/zentix/incoming/nuclear/world/NuclearPrep.java:986:        for (long c : rest) if (p.ruins.assembling(c)) { p.todo.add(c); break; }
+mod/src/main/java/ua/zentix/incoming/nuclear/world/NuclearPrep.java:989:            if (!p.ruins.assembling(c)) p.todo.add(c);
+mod/src/main/java/ua/zentix/incoming/nuclear/world/NuclearPrep.java:991:        p.nextTodo = 0;
+mod/src/main/java/ua/zentix/incoming/nuclear/world/NuclearPrep.java:1174:        if (p.nextFar < p.order.length && !p.ruins.pinWindow(p.order[p.nextFar])) return;
+mod/src/main/java/ua/zentix/incoming/nuclear/world/NuclearPrep.java:1210:            if (!p.ruins.pinWindow(c)) break;
+mod/src/main/java/ua/zentix/incoming/nuclear/world/NuclearPrep.java:1227:                p.ruins.unpinWindow(c);
+mod/src/main/java/ua/zentix/incoming/nuclear/world/NuclearPrep.java:1259:                p.ruins.unpinWindow(c); // The admitted Task/Grid now owns this window.
+mod/src/main/java/ua/zentix/incoming/nuclear/world/NuclearPrep.java:1262:                p.ruins.unpinWindow(c);
+mod/src/main/java/ua/zentix/incoming/nuclear/world/NuclearPrep.java:1271:        if (p.nextFar < p.order.length) p.ruins.pinWindow(p.order[p.nextFar]);
+mod/src/main/java/ua/zentix/incoming/nuclear/world/NuclearPrep.java:1351:        while (visits-- > 0 && p.nextTodo < p.todo.size() && clock.canStart() && shared.canStart()) {
+mod/src/main/java/ua/zentix/incoming/nuclear/world/NuclearPrep.java:1352:            long c = p.todo.getLong(p.nextTodo++);
+mod/src/main/java/ua/zentix/incoming/nuclear/world/NuclearPrep.java:1366:                p.ruins.unpinWindow(c);
+mod/src/main/java/ua/zentix/incoming/nuclear/world/NuclearPrep.java:1371:            if (!RuinWorkers.admit(RuinWorkers.Priority.NEAR)) { p.nextTodo--; return; }
+mod/src/main/java/ua/zentix/incoming/nuclear/world/NuclearPrep.java:1375:                    int missing = p.ruins.requestWindow(level, chunk.getPos());
+mod/src/main/java/ua/zentix/incoming/nuclear/world/NuclearPrep.java:1378:                        p.ruins.releaseAssembly();
+mod/src/main/java/ua/zentix/incoming/nuclear/world/NuclearPrep.java:1381:                    if (missing > 0) { p.nextTodo--; return; }
+mod/src/main/java/ua/zentix/incoming/nuclear/world/NuclearPrep.java:1385:                if (memory(level) + windowBytes > WINDOW_CAP) { p.nextTodo--; return; }
+mod/src/main/java/ua/zentix/incoming/nuclear/world/NuclearPrep.java:1387:                else p.nextTodo--;
+mod/src/main/java/ua/zentix/incoming/nuclear/world/NuclearPrep.java:1390:                p.ruins.unpinWindow(c);
+mod/src/main/java/ua/zentix/incoming/nuclear/world/NuclearPrep.java:1842:            if (p.detonation < 0) p.ruins.releaseAssembly();
+mod/src/main/java/ua/zentix/incoming/nuclear/world/NuclearPrep.java:1843:            else if (p.nextFar < p.order.length) p.ruins.unpinWindow(p.order[p.nextFar]);
+mod/src/main/java/ua/zentix/incoming/nuclear/world/NuclearPrep.java:2057:        if (p.nextFar < p.order.length) p.ruins.unpinWindow(p.order[p.nextFar]);
