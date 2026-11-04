@@ -10,3 +10,5 @@ Production base7cb9d1cb049b868374024102b66618fc1d019b7d; candidate75aaa3c11906cc
 - Independent review7cb..92122: no serious findings. Final75aaa fixes stale15kt comments; optional extra high-yield authority test not added, no behavior defect reported.
 
 No GPU/client/Crafty/world artifacts. Actual100/1000kt gates remain with LEAD2. Inherited producer defects/failures are assigned elsewhere, never repaired or instrumented in this diff.
+
+Read-only check of actual GameTest-generated config/incoming-server.toml: max_yield100/default_yield15. No live or test config was edited.
