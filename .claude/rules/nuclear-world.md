@@ -97,9 +97,11 @@ paths:
   once: `Read.cost`); unread reasons appear in “Ruins for strike #N ready”); snapshot to server thread, plan in background
   (`RuinContext.submitDisk`), continuing after detonation (half the pool for the ruin queue); line “far rings: X of Y
   ready for the wave”; memory — plans, snapshots, reads and thread buffers — capped at 512 MB. Existing cache
-  spill/reload uses resident ownership (`NuclearPrep.storageRoom`), not reservations for future solver threads:
+  writes use resident ownership (`NuclearPrep.storageRoom`), not reservations for future solver threads:
   otherwise unpinned originals cannot reach disk to free the memory that planning/material needs
   (`nuke_archive_progress` exercises the production archive supplier under fixed cross-dimension pressure).
+  Admit the complete incremental encoder/source/receipt ownership, including consecutive writes in one pump
+  (`nuke_plan_spill_admission`, `nuke_snapshot_spill_admission` hold real receipts at the exact budget boundary).
   Heavy-zone LOD copies
   for the front, `FrontLods` in `dh.md`, use the remainder after plans: taken once disk plans are ready, heap stop drops
   them; one area, one preparation; a prepared detonation takes preparation's location, ground and visibility

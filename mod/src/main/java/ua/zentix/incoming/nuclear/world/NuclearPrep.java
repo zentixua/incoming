@@ -552,7 +552,7 @@ public final class NuclearPrep {
         return bytes + RuinWorkers.residentBufferBytes(height);
     }
 
-    /** Existing cache I/O can release counted ownership. Reserving future solvers here would
+    /** Existing cache writes can release counted ownership. Reserving future solvers here would
      * block the snapshot spill needed to make room for those same solvers and material. */
     private static long storageRoom(ServerLevel level) {
         return Math.max(0, PLANS_CAP - residentMemory(level));
@@ -744,7 +744,7 @@ public final class NuclearPrep {
                             level.getServer().getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT))
                             .resolve("data/incoming-preparation/" + p.archivePath);
             p.plans.spill(new RuinPages(info, root.resolve("plans-v" + RuinPlan.STORAGE_VERSION)),
-                    p.ruins, p.accounting, () -> storageRoom(level));
+                    p.ruins, p.accounting, () -> Math.max(0, PLANS_CAP - memory(level)));
             p.ruins.archive(new RuinSnapshots(new RuinPages(info, root.resolve("shots")), p.accounting,
                     () -> storageRoom(level)));
         }
@@ -877,7 +877,7 @@ public final class NuclearPrep {
                 level.getServer().getWorldData().getLevelName(), level.dimension(), "incoming_preparation");
         ctx.restoredPlans = new RetainedPlans();
         ctx.restoredPlans.spill(new RuinPages(info, root.resolve("plans-v" + RuinPlan.STORAGE_VERSION)), ctx, readBytes::addAndGet,
-                () -> storageRoom(level));
+                () -> Math.max(0, PLANS_CAP - memory(level)));
         ctx.restoredPlans.discover();
         ctx.archive(new RuinSnapshots(new RuinPages(info, root.resolve("shots")), readBytes::addAndGet,
                 () -> storageRoom(level)));

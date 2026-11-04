@@ -86,8 +86,10 @@ final class RetainedPlans extends Long2ObjectOpenHashMap<RuinPlan> {
             if (plan == null) { toWrite.removeFirstLong(); continue; }
             if (writes.containsKey(key)) break;
             long reserve = Math.max(4096, plan.bytes() * 3);
-            if (reserve > room) break;
-            room -= reserve;
+            // The encoder allowance, retained source and receipt entry are separate counted owners.
+            long ownership = reserve + plan.bytes() + 48;
+            if (ownership > room) break;
+            room -= ownership;
             toWrite.removeFirstLong();
             accounting.accept(reserve);
             var charge = accounting;
