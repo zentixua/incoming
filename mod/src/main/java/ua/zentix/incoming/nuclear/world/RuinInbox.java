@@ -44,6 +44,9 @@ final class RuinInbox<T> {
     }
 
     @Nullable
+    synchronized T peek() { return ready.peekFirst(); }
+
+    @Nullable
     synchronized T poll() {
         T value = ready.pollFirst();
         if (value != null) release(1);

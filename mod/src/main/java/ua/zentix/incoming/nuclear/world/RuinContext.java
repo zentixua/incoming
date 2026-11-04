@@ -23,6 +23,8 @@ import ua.zentix.incoming.nuclear.Detonation;
 final class RuinContext {
     /** Ruin inputs (preparation location without ID; actual detonation afterward). */
     final Detonation d;
+    /** Marker identity is assigned at handoff; immutable geometry remains safe for running solvers. */
+    private int eventId;
     /** Chunk fractures: also computed by background tasks ({@link RuinWorkers}), hence shared map. */
     private final java.util.concurrent.ConcurrentHashMap<Long, Blast> blasts = new java.util.concurrent.ConcurrentHashMap<>();
     /** Chunk snapshots (server thread) retained while unfinished plan windows read them. Outside-memory chunks from disk ({@link DiskShots}). */
@@ -32,8 +34,10 @@ final class RuinContext {
      * ({@link #lit}) on any thread: in-memory from live chunk (pre-ruin for ruined chunk), others disk.
      * Server-thread writes only, immutable values; missing means no terrain (like unloaded chunk).
      */
-    private final java.util.concurrent.ConcurrentHashMap<Long, int[]> heights = new java.util.concurrent.ConcurrentHashMap<>();
+    private final java.util.concurrent.ConcurrentHashMap<Long, RuinHeights> heights = new java.util.concurrent.ConcurrentHashMap<>();
+    private long heightBytes;
     private long appliedBytes;
+    private final RuinInputs inputs = new RuinInputs();
     private final Long2ObjectOpenHashMap<Applied> applied = new Long2ObjectOpenHashMap<>();
     private final LongOpenHashSet planned = new LongOpenHashSet(), stood = new LongOpenHashSet();
     /** Last context use (game time), for queue to forget long-idle contexts. */
@@ -52,8 +56,16 @@ final class RuinContext {
      */
     RuinContext(net.minecraft.server.level.ServerLevel level, Detonation d) {
         this.d = d;
+        this.eventId = d.id();
         this.noise = new ua.zentix.incoming.nuclear.model.WorldNoise(level.getSeed(), d.scale());
         this.ruinRadius = d.ruinRadius();
+        this.reads = new RuinInbox<>(NuclearWorld.get(level).prep().readAccounting(), WINDOW_READ_BYTES);
+    }
+
+    /** Adopt the actual event marker without mutating geometry captured by background tasks. */
+    void bindEvent(int id) {
+        if (id <= 0 || eventId > 0 && eventId != id) throw new IllegalArgumentException("Ruin context belongs to another event");
+        eventId = id;
     }
 
     /** Ruin reach, blocks ({@link Detonation#ruinRadius}): light trace fades at edge ({@code RuinPlanner}). */
@@ -82,7 +94,7 @@ final class RuinContext {
         if (s == null || !s.current(c, a)) {
             RuinPlan flash = flashed.get(key);
             // flash layer present but plan forgotten (detonation ruins forgotten/restart): snapshot fire is air
-            putShot(key, s = ChunkShot.take(c, a, flash, flash == null && a == null && FlashScorch.marked(c, d.id())));
+            putShot(key, s = ChunkShot.take(c, a, flash, flash == null && a == null && FlashScorch.marked(c, eventId)));
         }
         return s;
     }
@@ -163,7 +175,7 @@ final class RuinContext {
             Applied a = applied.get(key);
             RuinPlan flash = flashed.get(key);
             // flash layer present, plan forgotten: snapshot fire is air like in-memory chunk ({@link #shot})
-            putShot(key, ChunkShot.fromDisk(primed, a, flash, flash == null && a == null && FlashScorch.marks(primed.flashLayer(), d.id())));
+            putShot(key, ChunkShot.fromDisk(primed, a, flash, flash == null && a == null && FlashScorch.marks(primed.flashLayer(), eventId)));
             putHeights(key, primed.motion());
         }
     }
@@ -184,7 +196,13 @@ final class RuinContext {
     private final LongOpenHashSet reading = new LongOpenHashSet();
     /** Windows assembling snapshots, awaiting worker admission, or rebuilding on the server thread. */
     private final LongOpenHashSet pendingWindows = new LongOpenHashSet();
-    private final java.util.concurrent.ConcurrentLinkedQueue<DiskShots.Read> reads = new java.util.concurrent.ConcurrentLinkedQueue<>();
+    private static final long WINDOW_READ_BYTES = 4L << 20;
+    private static final int WINDOW_READ_LIMIT = 32;
+    private record WindowRead(long key, @Nullable DiskShots.Read disk,
+                              @Nullable java.util.Optional<net.minecraft.nbt.CompoundTag> cached) {
+        int cost() { return cached != null ? Math.max(PUTS_PER_WINDOW / 4, disk.cost()) : disk.cost(); }
+    }
+    private final RuinInbox<WindowRead> reads;
     /** Window neighbors not whole on disk (unfinished generation): solid window mass like world edge. */
     private final LongOpenHashSet absent = new LongOpenHashSet();
     /** Detonation log: disk window neighbors read, those not whole on disk. */
@@ -208,35 +226,69 @@ final class RuinContext {
     /** Same, parse read neighbors at ruin-pool {@code priority}. */
     int requestWindow(ServerLevel level, ChunkPos pos, RuinWorkers.Priority priority) {
         pendingWindows.add(pos.toLong());
-        // read results limited to window per call: server thread builds disk snapshot; while paused, background
-        // reads continue, accumulating unlimited results, rest taken by subsequent windows. Only this thread takes them:
-        // peeked chunk same as later polled chunk
+        // Results and delayed callbacks remain charged after cancellation. Decode at most one
+        // window per call; archived snapshots enter the same bounded path after a clean restart.
         int put = 0;
-        for (DiskShots.Read r; (r = reads.peek()) != null && (put == 0 || put + r.cost() <= PUTS_PER_WINDOW); put += r.cost()) {
+        for (WindowRead r; (r = reads.peek()) != null && (put == 0 || put + r.cost() <= PUTS_PER_WINDOW); put += r.cost()) {
             reads.poll();
-            long key = r.pos().toLong();
+            long key = r.key();
             reading.remove(key);
             windowReads++;
-            if (r.skip() != null) {
+            if (r.disk().skip() != null) {
                 if (absent.add(key)) windowAbsent++;
-            } else {
-                putDisk(level, r);
+                continue;
             }
+            DiskShots.Read current = r.disk().primed(Blast.SERVER);
+            boolean restored = false;
+            if (r.cached() != null && r.cached().isPresent()) {
+                try {
+                    restored = restoreArchived(key, r.cached().get(), current);
+                } catch (RuntimeException error) {
+                    Incoming.LOG.warn("Prepared window snapshot rejected for {}", new ChunkPos(key), error);
+                }
+            }
+            if (!restored) putDisk(level, current);
         }
         int missing = 0;
-        DiskShots.Format format = null;
         for (int dz = -RuinPlanner.REACH; dz <= RuinPlanner.REACH; dz++) {
             for (int dx = -RuinPlanner.REACH; dx <= RuinPlanner.REACH; dx++) {
                 long key = ChunkPos.asLong(pos.x + dx, pos.z + dz);
                 if (absent.contains(key) || shotAvailable(level, key)) continue;
                 missing++;
-                if (reading.add(key)) {
-                    if (format == null) format = DiskShots.Format.of(level);
-                    DiskShots.read(format, new ChunkPos(key), priority).thenAccept(reads::add);
+                if (!reading.contains(key) && reads.pending() < WINDOW_READ_LIMIT
+                        && NuclearPrep.memory(level) + WINDOW_READ_BYTES <= NuclearPrep.PLANS_CAP) {
+                    reading.add(key);
+                    if (archive != null && archive.mayHave(key)) {
+                        var accept = reads.expect();
+                        var disk = DiskShots.read(DiskShots.Format.of(level), new ChunkPos(key), priority);
+                        archive.read(key).handle((tag, failure) -> failure == null ? tag : java.util.Optional.<net.minecraft.nbt.CompoundTag>empty())
+                                .thenCombine(disk, (tag, current) -> new WindowRead(key, current, tag)).thenAccept(accept);
+                    } else readWindowDisk(level, key, priority);
                 }
             }
         }
         return missing;
+    }
+
+    /** Server-thread source validation shared by restart reads and live window read-ahead. */
+    boolean restoreArchived(long key, net.minecraft.nbt.CompoundTag data, DiskShots.Read current) {
+        if (current.skip() != null) return false;
+        ChunkShot shot = ChunkShot.restore(data, this);
+        if (shot.pos().toLong() != key || current.pos().toLong() != key)
+            throw new IllegalArgumentException("Wrong archived snapshot coordinate");
+        // A scarred neighbour needs its original world. Unscarred later edits use fresh data.
+        var fresh = ChunkShot.fromDisk(current.primed(Blast.SERVER), applied.get(key), flashed.get(key),
+                FlashScorch.marks(current.flashLayer(), eventId));
+        if (!(current.scar() >= eventId && eventId > 0)
+                && !java.util.Arrays.equals(shot.normalPrints(Blast.SERVER), fresh.normalPrints(Blast.SERVER))) return false;
+        restoreShot(key, shot);
+        return true;
+    }
+
+    private void readWindowDisk(ServerLevel level, long key, RuinWorkers.Priority priority) {
+        var accept = reads.expect();
+        DiskShots.read(DiskShots.Format.of(level), new ChunkPos(key), priority)
+                .thenApply(disk -> new WindowRead(key, disk, null)).thenAccept(accept);
     }
 
     /**
@@ -247,7 +299,7 @@ final class RuinContext {
         if (planned.add(chunk)) {
             ChunkPos pos = new ChunkPos(chunk);
             forget(pos, 1, planned, k -> blasts.remove(k));
-            forget(pos, RuinPlanner.REACH, planned, this::dropShot);
+            forget(pos, RuinPlanner.REACH, planned, this::retireShot);
         }
     }
 
@@ -266,15 +318,49 @@ final class RuinContext {
     private long now;
 
     private long shotBytes;
+    @Nullable private RuinSnapshots archive;
+
+    boolean archiveChecked, archivePending;
+    @Nullable RetainedPlans restoredPlans;
+    private java.util.concurrent.CompletableFuture<Void> closing = java.util.concurrent.CompletableFuture.completedFuture(null);
+
+    void archive(RuinSnapshots snapshots) { archive = snapshots; archiveChecked = true; archivePending = false; }
+
+    java.util.concurrent.CompletableFuture<Void> closeStorage() {
+        closing = java.util.concurrent.CompletableFuture.allOf(closing,
+                archive == null ? java.util.concurrent.CompletableFuture.completedFuture(null) : archive.close(),
+                restoredPlans == null ? java.util.concurrent.CompletableFuture.completedFuture(null) : restoredPlans.closeStorage());
+        return closing;
+    }
+
+    private void retireShot(long key) {
+        ChunkShot shot = shots.get(key);
+        if (shot == null || archive == null || archive.evictable(key, shot)) dropShot(key);
+    }
+
+    RuinSnapshots archive() { return archive; }
+
+    void restoreShot(long key, ChunkShot shot) {
+        putShot(key, shot);
+        if (archive != null) archive.restored(key, shot);
+        int[] motion = new int[256];
+        System.arraycopy(shot.heights, ChunkShot.type(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING) * 256,
+                motion, 0, 256);
+        putHeights(key, motion);
+    }
 
     private void putShot(long key, ChunkShot shot) {
         ChunkShot was = shots.putAndMoveToLast(key, shot);
+        if (was != null && was != shot) inputs.retire(was.bytes);
         shotBytes += shot.bytes - (was == null ? 0 : was.bytes);
     }
 
     void dropShot(long key) {
         ChunkShot was = shots.remove(key);
-        if (was != null) shotBytes -= was.bytes;
+        if (was != null) {
+            inputs.retire(was.bytes);
+            shotBytes -= was.bytes;
+        }
     }
 
     /** Re-readable cache only: keep old changed blocks and shadow heights, and snapshots held by worker grids. */
@@ -293,8 +379,9 @@ final class RuinContext {
                                 || pendingWindows.contains(ChunkPos.asLong(x + dx, z + dz));
                 if (inUse) shots.getAndMoveToLast(key);
                 else {
-                    dropShot(key);
-                    blasts.remove(key);
+                    ChunkShot shot = shots.get(key);
+                    if (archive != null && !archive.evictable(key, shot)) shots.getAndMoveToLast(key);
+                    else { dropShot(key); blasts.remove(key); }
                 }
             } finally { clock.end(unit); }
         }
@@ -321,7 +408,10 @@ final class RuinContext {
 
     /** Disk chunk heightmap (server thread): first {@code MOTION_BLOCKING} air, if absent. */
     void putHeights(long chunk, int[] firstAir) {
-        heights.putIfAbsent(chunk, firstAir);
+        if (heights.containsKey(chunk)) return;
+        var tile = new RuinHeights(firstAir);
+        heights.put(chunk, tile);
+        heightBytes += tile.bytes() + 48;
     }
 
     /** In-memory heightmap (server thread), if absent: ruined chunk uses higher of pre-ruin/live values. */
@@ -336,7 +426,7 @@ final class RuinContext {
             int now = c.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING, col & 15, col >> 4) + 1;
             h[col] = a == null ? now : Math.max(now, a.motion[col]);
         }
-        heights.put(key, h);
+        putHeights(key, h);
     }
 
     /**
@@ -355,8 +445,8 @@ final class RuinContext {
 
     /** First pre-wave air over {@code MOTION_BLOCKING} (any thread); chunk absent from maps means world bottom. */
     private int height(int x, int z, int minY) {
-        int[] h = heights.get(ChunkPos.asLong(x >> 4, z >> 4));
-        return h == null ? minY : h[(z & 15) << 4 | (x & 15)];
+        RuinHeights h = heights.get(ChunkPos.asLong(x >> 4, z >> 4));
+        return h == null ? minY : h.get((z & 15) << 4 | (x & 15));
     }
 
     /** Light pulse at position as pre-wave world saw it (any thread). */
@@ -372,13 +462,17 @@ final class RuinContext {
 
     /** Conservative retained-plan accounting for long disk settlement passes, including old blocks and marks. */
     long retainedBytes() {
+        return inputs.retained(currentBytes());
+    }
+
+    private long currentBytes() {
         long bytes = shotBytes() + applied.size() * 640L + (planned.size() + stood.size()) * 32L;
-        return bytes + appliedBytes;
+        return bytes + appliedBytes + (restoredPlans == null ? 0 : restoredPlans.bytes());
     }
 
     /** Snapshots, heightmaps and flash-layer plans, toward {@link NuclearPrep#PLANS_CAP}. */
     long shotBytes() {
-        return shotBytes + heights.size() * 1100L + flashedBytes;
+        return shotBytes + heightBytes + flashedBytes + (archive == null ? 0 : archive.bytes());
     }
 
     /**
@@ -502,11 +596,11 @@ final class RuinContext {
      */
     private record Task(java.util.concurrent.Future<RuinPlan> future, int chunkId, long since, RuinWorkers.Priority priority) {}
 
-    /** Background-plan timeout, ticks: abandon task beyond, build on server thread. */
+    /** Background-plan timeout, ticks: interrupt an expired attempt, then retry in the pool. */
     static final int TASK_AGE_LIMIT = 600;
 
     private final Long2ObjectOpenHashMap<Task> tasks = new Long2ObjectOpenHashMap<>();
-    /** Chunks whose background plan failed, stalled or stale at replacement ({@link #planOnServer}): plan on server thread. */
+    /** Chunks whose last background attempt failed or expired; preparation reports failure until a new attempt is admitted. */
     private final LongOpenHashSet failed = new LongOpenHashSet();
     private int failures;
 
@@ -541,14 +635,20 @@ final class RuinContext {
         if (!RuinWorkers.admit(priority) || priority != RuinWorkers.Priority.SEEN && tasks.size() >= 2 * RuinWorkers.capacity()) return false;
         Grid g = grid(level, pos, true);
         if (g.at(0, 0) == null) throw new IllegalStateException("no snapshot of chunk " + pos);
-        tasks.put(key, new Task(RuinWorkers.submit(() -> {
+        tasks.put(key, new Task(submitWorker(() -> {
             RuinWorkers.checkStop();
             Collapse c = Collapse.solve(g);
             RuinWorkers.checkStop();
             return RuinPlanner.finish(g, c);
         }, priority), chunkId, level.getGameTime(), priority));
+        failed.remove(key);
         pendingWindows.remove(key);
         return true;
+    }
+
+    /** Ruin and flash-layer jobs share this context's actual input owner. */
+    <T> java.util.concurrent.Future<T> submitWorker(java.util.concurrent.Callable<T> task, RuinWorkers.Priority priority) {
+        return RuinWorkers.submit(task, priority, inputs);
     }
 
     /** Chunk has running or ready background plan. */
@@ -575,28 +675,25 @@ final class RuinContext {
     /** Background chunk plan ready (collect in one work unit). */
     boolean done(long chunk) {
         Task t = tasks.get(chunk);
-        return t != null && t.future.isDone();
+        return t != null && RuinWorkers.finished(t.future);
     }
 
-    /** Background plan failed/stalled: build on server thread. */
+    /** Last admitted background attempt failed or expired; never authorizes a synchronous solver. */
     boolean failed(long chunk) {
         return failed.contains(chunk);
     }
 
-    /**
-     * Background plan stale at replacement, plan-position blocks changed during build (server thread): fresh
-     * plan from current chunk on server thread. New snapshot plan could stale again (redstone clock,
-     * Create mechanism), leaving chunk awaiting ruins indefinitely.
-     */
-    void planOnServer(long chunk) {
-        failed.add(chunk);
+    /** Applied positions changed: discard completion markers and retry from validated current snapshots. */
+    void retry(long chunk) {
+        planned.remove(chunk);
+        doneAt.remove(chunk);
+        pendingWindows.add(chunk);
     }
 
     /**
-     * Background plans running over {@link #TASK_AGE_LIMIT} ticks (server thread, every tick): abandon task
-     * ({@code cancel(true)} interrupts solver thread if stuck), add chunk to {@link #failed}, plan on
-     * server thread. Deadline from work start: distant task awaiting higher-priority tasks in pool queue is
-     * not stuck.
+     * Interrupt background work after its running deadline. Keep the task/window owned until the
+     * worker actually exits: Future cancellation alone must not admit overlapping replacement work.
+     * A queued task's deadline starts when it begins running, not when it entered the pool.
      */
     void expire(long now) {
         this.now = now;
@@ -613,10 +710,9 @@ final class RuinContext {
             }
             if (now - t.since < TASK_AGE_LIMIT) continue;
             t.future.cancel(true);
-            it.remove();
             failed.add(e.getLongKey());
             RuinWorkers.expired();
-            Incoming.LOG.warn("Ruins for detonation #{}: background plan for chunk {} not ready in {} ticks — abandoned, building on the server thread",
+            Incoming.LOG.warn("Ruins for detonation #{}: background plan for chunk {} not ready in {} ticks — interrupted; awaiting worker exit before retry",
                     d.id(), new ChunkPos(e.getLongKey()), TASK_AGE_LIMIT);
         }
     }
@@ -629,7 +725,7 @@ final class RuinContext {
     @Nullable
     RuinPlan collect(ServerLevel level, LevelChunk chunk) {
         Task t = tasks.get(chunk.getPos().toLong());
-        if (t != null && t.chunkId != 0 && t.future.isDone() && System.identityHashCode(chunk) != t.chunkId) {
+        if (t != null && t.chunkId != 0 && RuinWorkers.finished(t.future) && System.identityHashCode(chunk) != t.chunkId) {
             // chunk unloaded/reloaded: snapshots from different chunk
             tasks.remove(chunk.getPos().toLong());
             submit(level, chunk, t.priority);
@@ -643,7 +739,7 @@ final class RuinContext {
     RuinPlan collect(ChunkPos pos) {
         long key = pos.toLong();
         Task t = tasks.get(key);
-        if (t == null || !t.future.isDone()) return null;
+        if (t == null || !RuinWorkers.finished(t.future)) return null;
         tasks.remove(key);
         RuinPlan plan;
         try {
@@ -651,7 +747,7 @@ final class RuinContext {
         } catch (java.util.concurrent.ExecutionException e) {
             failed.add(key);
             // solver error repeats across many chunks: log first occurrences
-            if (failures++ < 3) Incoming.LOG.error("Ruins for detonation #{}: background plan for chunk {} failed; building on the server thread", d.id(), pos, e.getCause());
+            if (failures++ < 3) Incoming.LOG.error("Ruins for detonation #{}: background plan for chunk {} failed; leaving the chunk pending for background retry", d.id(), pos, e.getCause());
             return null;
         } catch (InterruptedException | java.util.concurrent.CancellationException e) {
             return null;
@@ -674,9 +770,16 @@ final class RuinContext {
 
     /** Background plans no longer needed (cancel, world unload): abandon tasks. */
     void cancelTasks() {
+        // Transfer before cancel: queued callbacks may release immediately; running callbacks may not.
+        inputs.detach(currentBytes());
         for (Task t : tasks.values()) t.future.cancel(false);
         tasks.clear();
         pendingWindows.clear();
+        reads.invalidate();
+        reading.clear();
+        closeStorage();
+        if (restoredPlans != null) { restoredPlans.clear(); restoredPlans = null; }
+        archive = null;
     }
 
     /** Chunk plan built: release fractures needed only by surrounding plans. */
@@ -684,7 +787,7 @@ final class RuinContext {
         pendingWindows.remove(pos.toLong());
         planned.add(pos.toLong());
         forget(pos, 1, planned, k -> blasts.remove(k));
-        forget(pos, RuinPlanner.REACH, planned, this::dropShot);
+        forget(pos, RuinPlanner.REACH, planned, this::retireShot);
     }
 
     /** Chunk ruins applied from plan. */
@@ -701,12 +804,18 @@ final class RuinContext {
         planned.add(pos.toLong());
         stood.add(pos.toLong());
         forget(pos, 1, stood, k -> blasts.remove(k));
-        forget(pos, RuinPlanner.REACH, stood, this::dropShot);
+        forget(pos, RuinPlanner.REACH, stood, this::retireShot);
         forget(pos, 2, stood, k -> {
-            Applied a = applied.get(k);
-            if (a != null && a.plan != null) {
-                appliedBytes -= a.plan.bytes();
-                applied.put(k, new Applied(null, a.motion));
+            Applied a = applied.remove(k);
+            if (a != null) {
+                if (a.plan != null) appliedBytes -= a.plan.bytes();
+                // Every centre whose window could need these old cells is already settled.
+                // Keep one packed shadow tile, never a second short[256] per completed chunk.
+                if (!heights.containsKey(k)) {
+                    int[] original = new int[256];
+                    for (int i = 0; i < original.length; i++) original[i] = a.motion[i];
+                    putHeights(k, original);
+                }
             }
             // pre-flash world no longer needed: surrounding windows built
             RuinPlan f = flashed.remove(k);

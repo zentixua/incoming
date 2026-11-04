@@ -66,6 +66,8 @@ import java.util.List;
  * ruins (without {@code setBlock}: wall/tree fire does not wake neighbors), only fire tick scheduled.
  */
 public final class RuinPlan {
+    /** Disposable cache schema; older pages omitted structural ownership and must be rebuilt. */
+    static final int STORAGE_VERSION = 2;
     /** Server chunk heightmaps; index is map type in {@link #heights}. */
     public static final Heightmap.Types[] HEIGHTMAP_TYPES = {Heightmap.Types.MOTION_BLOCKING, Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
             Heightmap.Types.OCEAN_FLOOR, Heightmap.Types.WORLD_SURFACE};
@@ -374,6 +376,78 @@ public final class RuinPlan {
         return (h ^ System.identityHashCode(normal)) * 0x9E3779B97F4A7C15L + 1;
     }
 
+    /** Immutable plan payload; named states, rather than runtime registry/object identities, survive restart. */
+    net.minecraft.nbt.CompoundTag store() {
+        var tag = new net.minecraft.nbt.CompoundTag();
+        tag.putInt("version", STORAGE_VERSION);
+        var palette = new RuinPalette();
+        tag.putIntArray("states", palette.indices(states));
+        tag.putIntArray("old", palette.indices(olds));
+        tag.putIntArray("cells", cells);
+        tag.putInt("sections", oldHashes.length);
+        tag.putIntArray("fires", fires);
+        tag.putIntArray("heights", heights);
+        tag.putLongArray("light", lightAt);
+        tag.putLongArray("fluids", fluidTicks);
+        tag.putLongArray("material", material);
+        if (outside != null) {
+            tag.putLongArray("outside", outside.toLongArray());
+            tag.putIntArray("outside_states", palette.indices(outsideState.toArray(BlockState[]::new)));
+        }
+        if (biomes != null) {
+            tag.putByteArray("biomes", biomes.levels());
+            tag.putIntArray("biome_from", biomes.from());
+        }
+        if (flash != null) tag.putIntArray("flash", flash);
+        if (blown != null) tag.putIntArray("blown", blown);
+        tag.put("palette", palette.save());
+        return tag;
+    }
+
+    /** Disk callbacks must not keep a cancelled detonation context (and its entire snapshot cache) alive. */
+    RuinPlan detached() {
+        var copy = new RuinPlan(cells, oldHashes, states, olds, fires, heights, lightAt, prints, normals,
+                outside, outsideState, null, fluidTicks, biomes);
+        copy.flash = flash;
+        copy.blown = blown;
+        copy.material = material;
+        return copy;
+    }
+
+    /** Server thread: rebuild process-local hashes. Section fast checks fall back to the normal column rescan. */
+    static RuinPlan restore(net.minecraft.nbt.CompoundTag tag, RuinContext ctx) {
+        if (tag.getInt("version") != STORAGE_VERSION || !tag.contains("material", net.minecraft.nbt.Tag.TAG_LONG_ARRAY))
+            throw new IllegalArgumentException("Incomplete or unknown ruin plan version");
+        var palette = RuinPalette.load(tag.getList("palette", net.minecraft.nbt.Tag.TAG_COMPOUND));
+        int[] cells = tag.getIntArray("cells");
+        BlockState[] states = palette.states(tag.getIntArray("states")), olds = palette.states(tag.getIntArray("old"));
+        int sections = tag.getInt("sections");
+        if (sections < 0 || sections > 256 || cells.length != olds.length || states.length > MAX_STATES)
+            throw new IllegalArgumentException("Invalid ruin plan dimensions");
+        long[] hashes = new long[sections];
+        int previous = -1;
+        for (int i = 0; i < cells.length; i++) {
+            int c = cells[i], key = c & KEY_MASK;
+            if (key <= previous || section(c) >= sections || (c >>> STATE_SHIFT & STATE_MASK) >= states.length)
+                throw new IllegalArgumentException("Invalid ruin plan cell");
+            previous = key;
+            hashes[section(c)] = mix(hashes[section(c)], olds[i]);
+        }
+        var outside = tag.contains("outside") ? new LongArrayList(tag.getLongArray("outside")) : null;
+        var outsideStates = outside == null ? null : java.util.Arrays.asList(palette.states(tag.getIntArray("outside_states")));
+        if (outside != null && outside.size() != outsideStates.size()) throw new IllegalArgumentException("Invalid outside logs");
+        ScorchedBiomes.Cells biomes = tag.contains("biomes")
+                ? new ScorchedBiomes.Cells(tag.getByteArray("biomes"), tag.getIntArray("biome_from")) : null;
+        if (biomes != null && (biomes.levels().length != 16 || biomes.from().length != 16))
+            throw new IllegalArgumentException("Invalid biome cells");
+        var plan = new RuinPlan(cells, hashes, states, olds, tag.getIntArray("fires"), tag.getIntArray("heights"),
+                tag.getLongArray("light"), null, null, outside, outsideStates, ctx, tag.getLongArray("fluids"), biomes);
+        if (tag.contains("flash")) plan.flash = tag.getIntArray("flash");
+        if (tag.contains("blown")) plan.blown = tag.getIntArray("blown");
+        plan.material = tag.getLongArray("material");
+        return plan;
+    }
+
     /** For tests: differences from another plan (same positions, new/old states, fires); null if none. */
     @Nullable
     public String differs(RuinPlan o) {
@@ -406,7 +480,12 @@ public final class RuinPlan {
         if (heightsDiffer) out.append(" heightmaps differ (").append(heights.length).append(" | ").append(o.heights.length).append(')');
         boolean biomesDiffer = biomes == null ? o.biomes != null : !biomes.same(o.biomes);
         if (biomesDiffer) out.append(" biomes ").append(biomes).append(" | ").append(o.biomes);
-        return n == 0 && onlyA.isEmpty() && onlyB.isEmpty() && !heightsDiffer && !biomesDiffer ? null : n + " cells" + out;
+        // Candidate order comes from a solver map; ownership is a set of source positions.
+        var materialA = new it.unimi.dsi.fastutil.longs.LongOpenHashSet(material);
+        var materialB = new it.unimi.dsi.fastutil.longs.LongOpenHashSet(o.material);
+        boolean materialDiffer = !materialA.equals(materialB);
+        if (materialDiffer) out.append(" material differs (").append(material.length).append(" | ").append(o.material.length).append(')');
+        return n == 0 && onlyA.isEmpty() && onlyB.isEmpty() && !heightsDiffer && !biomesDiffer && !materialDiffer ? null : n + " cells" + out;
     }
 
     /**
@@ -746,7 +825,7 @@ public final class RuinPlan {
         if (!current(chunk, flash, marked)) return false;
         // Reserve the bounded capture/contact window before allocating it. Large container tags
         // extend that reservation before any source mutation; refusal keeps this exact plan pending.
-        try (var reservation = RuinMemory.reserve(level, material.length * (8192L + 512))) {
+        try (var reservation = RuinMemory.reserve(level, material.length * (8192L + 512) + RuinMatter.get(level).queueGrowthBytes(material.length))) {
             if (reservation == null) { memoryWaiting = true; return false; }
             java.util.List<RuinMatter.Piece> released = new java.util.ArrayList<>();
             RuinScorch scorch = new RuinScorch(chunk);

@@ -144,7 +144,7 @@ public final class RuinSettleGameTests {
 
     /** Unchanged neighbors are finished too: they must not pin old city plans for the whole zone. */
     @GameTest(template = "range", batch = "nuke_settle_empty", timeoutTicks = 100, skyAccess = true)
-    public static void emptyPlansReleaseSurroundingOldBlocks(GameTestHelper h) {
+    public static void emptyPlansReleaseSurroundingOldBlocks(GameTestHelper h) throws ReflectiveOperationException {
         ServerLevel level = h.getLevel();
         ChunkPos center = new ChunkPos(10000, 10000);
         Detonation d = new Detonation(NuclearEvents.get(level).nextId(),
@@ -158,12 +158,17 @@ public final class RuinSettleGameTests {
         h.assertTrue(plan.changedBlocks() > 0, "fixture needs a nonempty retained plan");
         ctx.applied(source, plan, new short[256]);
         h.assertTrue(ctx.applied(center.toLong()).plan() != null, "plan was not retained");
+        var heightsField = RuinContext.class.getDeclaredField("heights"); heightsField.setAccessible(true);
+        var shadows = (java.util.Map<?, ?>) heightsField.get(ctx);
+        Object originalShadow = shadows.get(center.toLong());
+        h.assertTrue(originalShadow != null, "fixture did not retain its original shadow tile");
         for (int x = -2; x <= 2; x++) for (int z = -2; z <= 2; z++) {
             if (x == 0 && z == 0) continue;
             RuinPlan.EMPTY.apply(level, new LevelChunk(level, new ChunkPos(center.x + x, center.z + z)), d, null);
         }
-        h.assertTrue(ctx.applied(center.toLong()).plan() == null,
-                "empty neighbors pin old plan despite the entire window being settled");
+        h.assertTrue(ctx.applied(center.toLong()) == null,
+                "completed window retained an area-sized history of old blocks/motion arrays");
+        h.assertTrue(shadows.get(center.toLong()) == originalShadow, "retirement changed pre-wave shadow heights");
         NuclearWorld.get(level).clear(level);
         h.succeed();
     }

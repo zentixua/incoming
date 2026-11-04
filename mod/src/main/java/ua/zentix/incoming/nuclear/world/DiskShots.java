@@ -64,7 +64,10 @@ final class DiskShots {
      * flash-layer mark in chunk data ({@code FLASH_LAYER}: detonation ID whose layer fire stands without ruins; 0 absent):
      * snapshot for that detonation reads fire as air, like in-memory chunk snapshot ({@link ChunkShot#fromDisk}).
      */
-    record Read(ChunkPos pos, int minY, PalettedContainer<BlockState>[] states, int[] heights, int unprimed, @Nullable String skip, int flashLayer) {
+    record Read(ChunkPos pos, int minY, PalettedContainer<BlockState>[] states, int[] heights, int unprimed, @Nullable String skip, int flashLayer, int scar) {
+        Read(ChunkPos pos, int minY, PalettedContainer<BlockState>[] states, int[] heights, int unprimed, @Nullable String skip, int flashLayer) {
+            this(pos, minY, states, heights, unprimed, skip, flashLayer, 0);
+        }
         static Read skipped(ChunkPos pos, String why) {
             return new Read(pos, 0, empty(), new int[0], 0, why, 0);
         }
@@ -103,7 +106,7 @@ final class DiskShots {
                     }
                 }
             }
-            return new Read(pos, minY, states, out, 0, null, flashLayer);
+            return new Read(pos, minY, states, out, 0, null, flashLayer, scar);
         }
 
         /**
@@ -129,12 +132,13 @@ final class DiskShots {
 
     /** World data needed for chunk parsing (captured on server thread; parsing itself reads no world). */
     record Format(ChunkMap storage, ResourceKey<Level> dimension, Optional<ResourceKey<MapCodec<? extends ChunkGenerator>>> generator,
-                  int minSection, int sections, int minY, int height, Registry<Biome> biomes, String flashLayerKey) {
+                  int minSection, int sections, int minY, int height, Registry<Biome> biomes, String flashLayerKey, String scarKey) {
         static Format of(ServerLevel level) {
             return new Format(level.getChunkSource().chunkMap, level.dimension(), level.getChunkSource().getGenerator().getTypeNameForDataFixer(),
                     level.getMinSection(), level.getSectionsCount(), level.getMinBuildHeight(), level.getHeight(),
                     level.registryAccess().registryOrThrow(Registries.BIOME),
-                    String.valueOf(NeoForgeRegistries.ATTACHMENT_TYPES.getKey(ModAttachments.FLASH_LAYER.get())));
+                    String.valueOf(NeoForgeRegistries.ATTACHMENT_TYPES.getKey(ModAttachments.FLASH_LAYER.get())),
+                    String.valueOf(NeoForgeRegistries.ATTACHMENT_TYPES.getKey(ModAttachments.CHUNK_SCAR.get())));
         }
     }
 
@@ -169,7 +173,8 @@ final class DiskShots {
             PalettedContainer<BlockState> c = parsed.get();
             if (c.maybeHas(st -> !st.isAir())) states[index] = c;
         }
-        return new Read(pos, f.minY, states, heights, unprimed, null, flashLayer(f, checked.tag));
+        return new Read(pos, f.minY, states, heights, unprimed, null, flashLayer(f, checked.tag),
+                checked.tag.getCompound(AttachmentHolder.ATTACHMENTS_NBT_KEY).getInt(f.scarKey));
     }
 
     /** Flash-layer mark in chunk data (attachment, as NeoForge writes {@code neoforge:attachments}); 0 absent. */
