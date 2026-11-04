@@ -302,6 +302,8 @@ public final class NuclearPrep {
     /** Strikes whose preparation failed: do not restart (otherwise error logged every tick). */
     private final java.util.Set<Integer> failed = new java.util.HashSet<>();
     private final WorkClock clock = WorkClock.decaying(0.5);
+    /** Re-readable cache policy; tiny owned-test caches exercise eviction without a large synthetic heap. */
+    private long shotCacheLimit = 64L << 20;
 
     // A server-wide handle limit bounds metadata as well as the shared byte admission budget.
     static final int REQUEST_LIMIT = 8;
@@ -1095,8 +1097,12 @@ public final class NuclearPrep {
                 clock.record(shared.end(c0));
             }
         }
-        // window read-ahead in wave order
-        while (p.nextRead < p.order.length && p.reading.size() < READS && memory(level) + READ_BYTES <= WINDOW_CAP) {
+        // Bounded read-ahead follows solver admission. Otherwise the reader can sweep the whole
+        // zone while LRU trimming evicts the still-unplanned first window and planning never resumes.
+        if (p.nextFar < p.order.length) p.ruins.pinWindow(p.order[p.nextFar]);
+        p.nextRead = Math.max(p.nextRead, p.nextFar); // Earlier centres already have a task/plan or were excluded.
+        int readEnd = (int) Math.min(p.order.length, (long) p.nextFar + RuinWorkers.capacity());
+        while (p.nextRead < readEnd && p.reading.size() < READS && memory(level) + READ_BYTES <= WINDOW_CAP) {
             long c = p.order[p.nextRead];
             boolean all = true;
             for (int dx = -RuinPlanner.REACH; all && dx <= RuinPlanner.REACH; dx++) {
@@ -1124,11 +1130,12 @@ public final class NuclearPrep {
             p.nextRead++;
         }
         // Retire cold snapshots as writes finish; a frontier must not retain the whole completed disk.
-        if (p.ruins.shotBytes() > (64L << 20)) p.ruins.trimShots(8L << 20, shared);
+        if (p.ruins.shotBytes() > shotCacheLimit) p.ruins.trimShots(8L << 20, shared);
         // plans in wave order: ready window goes to background threads; pending reads stop cursor
         p.plans.prefetch(p.order, p.nextFar);
         while (p.nextFar < p.order.length && !p.capped && clock.canStart() && shared.canStart()) {
             long c = p.order[p.nextFar];
+            p.ruins.pinWindow(c);
             if (!p.plans.containsKey(c) && !p.ruins.running(c) && p.ruins.doneAt(c) < 0 && readyChunk(level, c) == null) {
                 long restoreUnit = shared.begin();
                 int restored;
@@ -1145,6 +1152,7 @@ public final class NuclearPrep {
             if (p.handle != null && p.ruins.failed(c)) p.failure = RuinPreparation.Reason.IO;
             if (p.plans.containsKey(c) || p.ruins.running(c) || p.ruins.failed(c) || p.ruins.doneAt(c) >= 0 || p.handle == null && readyChunk(level, c) != null) {
                 // ready, building, or in-memory chunk with neighbors, preplanned by near preparation
+                p.ruins.unpinWindow(c);
                 p.nextFar++;
                 continue;
             }
@@ -1167,13 +1175,19 @@ public final class NuclearPrep {
                 continue;
             }
             // after detonation reserve half pool for ruin queue: player chunks before distant rings
-            if (missing > 0 || !RuinWorkers.admit(RuinWorkers.Priority.FAR) || p.detonation >= 0 && RuinWorkers.inFlight() >= RuinWorkers.capacity() / 2) break;
+            if (missing > 0) {
+                p.nextRead = Math.min(p.nextRead, p.nextFar); // Refill demand lost to eviction or a superseded read.
+                break;
+            }
+            if (!RuinWorkers.admit(RuinWorkers.Priority.FAR) || p.detonation >= 0 && RuinWorkers.inFlight() >= RuinWorkers.capacity() / 2) break;
             long c0 = shared.begin();
             try {
                 if (!p.ruins.submitDisk(level, new ChunkPos(c))) break;
                 p.farRunning.add(c);
+                p.ruins.unpinWindow(c); // The admitted Task/Grid now owns this window.
                 p.nextFar++;
             } catch (RuntimeException e) {
+                p.ruins.unpinWindow(c);
                 p.nextFar++;
                 if (p.handle != null) p.failure = RuinPreparation.Reason.IO;
                 Incoming.LOG.error("Pre-built ruins: snapshots of chunk {} from disk failed with an exception; its ruins will be built on the spot", new ChunkPos(c), e);
@@ -1181,6 +1195,8 @@ public final class NuclearPrep {
                 clock.record(shared.end(c0));
             }
         }
+        // Other budgeted owners may trim the cache before the next preparation tick.
+        if (p.nextFar < p.order.length) p.ruins.pinWindow(p.order[p.nextFar]);
     }
 
     /**

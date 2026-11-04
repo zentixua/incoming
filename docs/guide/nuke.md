@@ -140,6 +140,8 @@ Nearby terrain changes as the pressure wave passes. Distant Horizons can show di
 integration. Voxy receives remote terrain through LOD Server Support after the changed world chunks are saved;
 these updates can arrive later than the wave. Without a server terrain provider, Voxy only knows terrain the
 client has loaded. Saved world changes remain the source of ruins, including for players who join later.
+Flying quickly or teleporting into an area still being processed can cause loading waits or visible terrain changes
+after arrival.
 
 The detailed timings, visual behavior and model limits are in the [nuclear effects reference](../dev/nuclear-effects-reference.md).
 
