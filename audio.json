@@ -1,0 +1,34 @@
+[
+  {
+    "file": "depth-day.wav",
+    "seconds": 35.0,
+    "pre_flash_peak": 1,
+    "pre_flash_rms_dbfs": -96.32453479683687,
+    "first_above_dither_seconds": 30.826333333333334,
+    "peak": 32767
+  },
+  {
+    "file": "depth-night.wav",
+    "seconds": 35.0,
+    "pre_flash_peak": 1,
+    "pre_flash_rms_dbfs": -96.32214058347554,
+    "first_above_dither_seconds": 30.842333333333332,
+    "peak": 32767
+  },
+  {
+    "file": "main-day.wav",
+    "seconds": 35.0,
+    "pre_flash_peak": 1,
+    "pre_flash_rms_dbfs": -96.34099871233107,
+    "first_above_dither_seconds": 30.877020833333333,
+    "peak": 32767
+  },
+  {
+    "file": "main-night-clean.wav",
+    "seconds": 35.0,
+    "pre_flash_peak": 1,
+    "pre_flash_rms_dbfs": -96.33095599483197,
+    "first_above_dither_seconds": 30.875666666666667,
+    "peak": 32767
+  }
+]
