@@ -1,0 +1,45 @@
+{
+  "artifacts": [
+    {
+      "path": "incoming-3.11.0.jar",
+      "sha256": "03aaa3a9220fb292e7a7565852e233bdef477064ac63b1808dcf3a54dcfee854",
+      "entries": {
+        "ua/zentix/incoming/nuclear/model/MushroomModel.class": "a86fa85ee71bab7f7d9e545ce8aaa9ca5fbbb6fa9aa38912a06feba67bdbf484",
+        "ua/zentix/incoming/nuclear/model/MushroomModel$Shape.class": "0ec9750369e8a3cf85d433ae1c092bb617f421e623786034d1262bfb2d0fac6e",
+        "ua/zentix/incoming/nuclear/model/CloudModel.class": "bc2b89f7a018816eb3a906a45e1cd0888e6e6a8bd4de33082ac6c30de0a3f283",
+        "ua/zentix/incoming/nuclear/model/FireballModel.class": "60f993968915612fa4bfbece3f3bd91b6e4cf13d7767e6476fb916d2475b6c47",
+        "ua/zentix/incoming/nuclear/model/DustModel.class": "97a02d5164bccb030a7f925d41a593c3ffe5ce7cfed7b4e888cad871eefe60c9",
+        "ua/zentix/incoming/nuclear/model/DustModel$Column.class": "cadb4894bea3f082d0e80aeac57011a36108c05a3816e5c4cebaf5b96e37736b",
+        "ua/zentix/incoming/nuclear/model/StemDust.class": "9382646558b0d4ca4ed1f7d49b6eeec8e8062f62e92cc4ad5b9c1fd00a306078",
+        "ua/zentix/incoming/nuclear/model/Yield.class": "99bf854ef9ca53c0db4fd973b5d24e764bee63b28e6b648c533f5cf1396b823b",
+        "ua/zentix/incoming/nuclear/model/HobBlast.class": "5106d9bf803d37707a4fc78bbd93723fd82d10225068f1dc6f4a1316367548ab",
+        "ua/zentix/incoming/nuclear/model/ThermalModel.class": "213696d75e0bf5f9f8923188691f8f7e5d9339d287a700c8be37a98707b4ee53",
+        "assets/incoming/shaders/include/mushroom.glsl": "94e9191cde6c67a146bcd0f52be0e42180d23fbdb0439d686ee84147222fe358",
+        "assets/incoming/shaders/include/fx_pall.glsl": "fef87d0038aa77bce98c567b4c9828e607b5034a4842e63e1145c8382b284707",
+        "assets/incoming/shaders/include/pall.glsl": "0c52078f6fc67dacfc70fc3dcb70ca79aa2b061317d1859cd3ea6261a3da02b8",
+        "ua/zentix/incoming/client/nuclear/MushroomField.class": "18ec8afebd62f76036b7dfe50dd5dbe4d3fdb437a171f7c0128297c99b32e450"
+      }
+    },
+    {
+      "path": "incoming-3.11.0-41c718adc-TEST-ONLY.jar",
+      "sha256": "fd2a79c9b171c75f5cf6bb4247dbe58cae2cab4f3f6b17da5a675d2a45410d3f",
+      "entries": {
+        "ua/zentix/incoming/nuclear/model/MushroomModel.class": "a86fa85ee71bab7f7d9e545ce8aaa9ca5fbbb6fa9aa38912a06feba67bdbf484",
+        "ua/zentix/incoming/nuclear/model/MushroomModel$Shape.class": "0ec9750369e8a3cf85d433ae1c092bb617f421e623786034d1262bfb2d0fac6e",
+        "ua/zentix/incoming/nuclear/model/CloudModel.class": "bc2b89f7a018816eb3a906a45e1cd0888e6e6a8bd4de33082ac6c30de0a3f283",
+        "ua/zentix/incoming/nuclear/model/FireballModel.class": "60f993968915612fa4bfbece3f3bd91b6e4cf13d7767e6476fb916d2475b6c47",
+        "ua/zentix/incoming/nuclear/model/DustModel.class": "97a02d5164bccb030a7f925d41a593c3ffe5ce7cfed7b4e888cad871eefe60c9",
+        "ua/zentix/incoming/nuclear/model/DustModel$Column.class": "cadb4894bea3f082d0e80aeac57011a36108c05a3816e5c4cebaf5b96e37736b",
+        "ua/zentix/incoming/nuclear/model/StemDust.class": "9382646558b0d4ca4ed1f7d49b6eeec8e8062f62e92cc4ad5b9c1fd00a306078",
+        "ua/zentix/incoming/nuclear/model/Yield.class": "99bf854ef9ca53c0db4fd973b5d24e764bee63b28e6b648c533f5cf1396b823b",
+        "ua/zentix/incoming/nuclear/model/HobBlast.class": "5106d9bf803d37707a4fc78bbd93723fd82d10225068f1dc6f4a1316367548ab",
+        "ua/zentix/incoming/nuclear/model/ThermalModel.class": "213696d75e0bf5f9f8923188691f8f7e5d9339d287a700c8be37a98707b4ee53",
+        "assets/incoming/shaders/include/mushroom.glsl": "94e9191cde6c67a146bcd0f52be0e42180d23fbdb0439d686ee84147222fe358",
+        "assets/incoming/shaders/include/fx_pall.glsl": "fef87d0038aa77bce98c567b4c9828e607b5034a4842e63e1145c8382b284707",
+        "assets/incoming/shaders/include/pall.glsl": "0c52078f6fc67dacfc70fc3dcb70ca79aa2b061317d1859cd3ea6261a3da02b8",
+        "ua/zentix/incoming/client/nuclear/MushroomField.class": "18ec8afebd62f76036b7dfe50dd5dbe4d3fdb437a171f7c0128297c99b32e450"
+      }
+    }
+  ],
+  "all_selected_entries_identical": true
+}

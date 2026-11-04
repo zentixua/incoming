@@ -1,0 +1,14 @@
+{
+  "commit": "476355384f944d094856348c31ea0dd6cab31aa9",
+  "files": {
+    "mod/src/main/java/ua/zentix/incoming/nuclear/model/MushroomModel.java": "12b5b0922b5bbaf0af6f0e0bfa2bfd628a08c443d023c532245aa6788cf524fb",
+    "mod/src/main/java/ua/zentix/incoming/nuclear/model/StemDust.java": "1c87dac521c1d2d5792ca85e9d0be858d93c73bb4e2b9c38f52ef4b4fce33b41",
+    "mod/src/main/java/ua/zentix/incoming/nuclear/model/DustModel.java": "8836fd6374ee037ff2a5af9623ca56c1b883c58893da6e032d383c778f37afd5",
+    "mod/src/main/java/ua/zentix/incoming/nuclear/model/CloudModel.java": "41492f5d6eb83ffe9d6923898c33fa0e65940b30632f9d60cd406c456cd5c8f1",
+    "mod/src/main/java/ua/zentix/incoming/nuclear/model/FireballModel.java": "ade27c31062a1160415cfce2c848ee7d80fef69026ba63f103d7d2c738a078b5",
+    "mod/src/main/java/ua/zentix/incoming/nuclear/model/Yield.java": "3a354143e7a6e59482107f53993cbccd3fd909e8ab691540b263808617832f88",
+    "mod/src/main/java/ua/zentix/incoming/client/nuclear/MushroomField.java": "1c98c04506a8fb4b6a90ebbe6ec9c3090f0ba892b1d55210caa064011af61e49",
+    "mod/src/main/resources/assets/incoming/shaders/include/mushroom.glsl": "94e9191cde6c67a146bcd0f52be0e42180d23fbdb0439d686ee84147222fe358",
+    "mod/src/main/resources/assets/incoming/shaders/include/fx_pall.glsl": "fef87d0038aa77bce98c567b4c9828e607b5034a4842e63e1145c8382b284707"
+  }
+}
