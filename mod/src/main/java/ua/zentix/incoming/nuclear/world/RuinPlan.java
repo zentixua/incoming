@@ -66,6 +66,8 @@ import java.util.List;
  * ruins (without {@code setBlock}: wall/tree fire does not wake neighbors), only fire tick scheduled.
  */
 public final class RuinPlan {
+    /** Disposable cache schema; older pages omitted structural ownership and must be rebuilt. */
+    static final int STORAGE_VERSION = 2;
     /** Server chunk heightmaps; index is map type in {@link #heights}. */
     public static final Heightmap.Types[] HEIGHTMAP_TYPES = {Heightmap.Types.MOTION_BLOCKING, Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
             Heightmap.Types.OCEAN_FLOOR, Heightmap.Types.WORLD_SURFACE};
@@ -377,7 +379,7 @@ public final class RuinPlan {
     /** Immutable plan payload; named states, rather than runtime registry/object identities, survive restart. */
     net.minecraft.nbt.CompoundTag store() {
         var tag = new net.minecraft.nbt.CompoundTag();
-        tag.putInt("version", 1);
+        tag.putInt("version", STORAGE_VERSION);
         var palette = new RuinPalette();
         tag.putIntArray("states", palette.indices(states));
         tag.putIntArray("old", palette.indices(olds));
@@ -387,6 +389,7 @@ public final class RuinPlan {
         tag.putIntArray("heights", heights);
         tag.putLongArray("light", lightAt);
         tag.putLongArray("fluids", fluidTicks);
+        tag.putLongArray("material", material);
         if (outside != null) {
             tag.putLongArray("outside", outside.toLongArray());
             tag.putIntArray("outside_states", palette.indices(outsideState.toArray(BlockState[]::new)));
@@ -407,12 +410,14 @@ public final class RuinPlan {
                 outside, outsideState, null, fluidTicks, biomes);
         copy.flash = flash;
         copy.blown = blown;
+        copy.material = material;
         return copy;
     }
 
     /** Server thread: rebuild process-local hashes. Section fast checks fall back to the normal column rescan. */
     static RuinPlan restore(net.minecraft.nbt.CompoundTag tag, RuinContext ctx) {
-        if (tag.getInt("version") != 1) throw new IllegalArgumentException("Unknown ruin plan version");
+        if (tag.getInt("version") != STORAGE_VERSION || !tag.contains("material", net.minecraft.nbt.Tag.TAG_LONG_ARRAY))
+            throw new IllegalArgumentException("Incomplete or unknown ruin plan version");
         var palette = RuinPalette.load(tag.getList("palette", net.minecraft.nbt.Tag.TAG_COMPOUND));
         int[] cells = tag.getIntArray("cells");
         BlockState[] states = palette.states(tag.getIntArray("states")), olds = palette.states(tag.getIntArray("old"));
@@ -439,6 +444,7 @@ public final class RuinPlan {
                 tag.getLongArray("light"), null, null, outside, outsideStates, ctx, tag.getLongArray("fluids"), biomes);
         if (tag.contains("flash")) plan.flash = tag.getIntArray("flash");
         if (tag.contains("blown")) plan.blown = tag.getIntArray("blown");
+        plan.material = tag.getLongArray("material");
         return plan;
     }
 
@@ -474,7 +480,12 @@ public final class RuinPlan {
         if (heightsDiffer) out.append(" heightmaps differ (").append(heights.length).append(" | ").append(o.heights.length).append(')');
         boolean biomesDiffer = biomes == null ? o.biomes != null : !biomes.same(o.biomes);
         if (biomesDiffer) out.append(" biomes ").append(biomes).append(" | ").append(o.biomes);
-        return n == 0 && onlyA.isEmpty() && onlyB.isEmpty() && !heightsDiffer && !biomesDiffer ? null : n + " cells" + out;
+        // Candidate order comes from a solver map; ownership is a set of source positions.
+        var materialA = new it.unimi.dsi.fastutil.longs.LongOpenHashSet(material);
+        var materialB = new it.unimi.dsi.fastutil.longs.LongOpenHashSet(o.material);
+        boolean materialDiffer = !materialA.equals(materialB);
+        if (materialDiffer) out.append(" material differs (").append(material.length).append(" | ").append(o.material.length).append(')');
+        return n == 0 && onlyA.isEmpty() && onlyB.isEmpty() && !heightsDiffer && !biomesDiffer && !materialDiffer ? null : n + " cells" + out;
     }
 
     /**
