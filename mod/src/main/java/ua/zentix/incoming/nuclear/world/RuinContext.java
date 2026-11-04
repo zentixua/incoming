@@ -780,10 +780,16 @@ final class RuinContext {
         forget(pos, 1, stood, k -> blasts.remove(k));
         forget(pos, RuinPlanner.REACH, stood, this::retireShot);
         forget(pos, 2, stood, k -> {
-            Applied a = applied.get(k);
-            if (a != null && a.plan != null) {
-                appliedBytes -= a.plan.bytes();
-                applied.put(k, new Applied(null, a.motion));
+            Applied a = applied.remove(k);
+            if (a != null) {
+                if (a.plan != null) appliedBytes -= a.plan.bytes();
+                // Every centre whose window could need these old cells is already settled.
+                // Keep one packed shadow tile, never a second short[256] per completed chunk.
+                if (!heights.containsKey(k)) {
+                    int[] original = new int[256];
+                    for (int i = 0; i < original.length; i++) original[i] = a.motion[i];
+                    putHeights(k, original);
+                }
             }
             // pre-flash world no longer needed: surrounding windows built
             RuinPlan f = flashed.remove(k);

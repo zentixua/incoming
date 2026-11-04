@@ -103,9 +103,11 @@ public final class RuinLifecycleGameTests {
         long before = NuclearPrep.memory(level);
         Object a = preparation(first, -1001), b = preparation(second, -1002);
         try {
+            long metadata = NuclearPrep.memory(level) - before;
+            h.assertTrue(metadata > 0, "Empty preparation/request metadata is not charged");
             field(field(a, "plans").get(a), "bytes").setLong(field(a, "plans").get(a), 300L << 20);
             field(field(b, "plans").get(b), "bytes").setLong(field(b, "plans").get(b), 250L << 20);
-            h.assertTrue(NuclearPrep.memory(level) == before + (550L << 20), "per-strike/dimension estimates were omitted or buffers duplicated");
+            h.assertTrue(NuclearPrep.memory(level) == before + metadata + (550L << 20), "per-strike/dimension estimates were omitted or buffers duplicated");
             h.assertTrue(NuclearPrep.memory(level) > NuclearPrep.PLANS_CAP, "other dimension bypassed admission cap");
             h.assertTrue(!NuclearWorld.get(level).settleCanAdmit(level), "settlement ignored cross-dimension preparation");
             h.assertTrue(NuclearWorld.get(level).settleMemoryRoom(level) == 0, "settlement ignored shared retained memory");
@@ -126,19 +128,22 @@ public final class RuinLifecycleGameTests {
         Object old = preparation(prep, -1003);
         var reads = (RuinInbox<Object>) field(old, "reads").get(old);
         var copies = (RuinInbox<Object>) field(field(old, "lods").get(old), "built").get(field(old, "lods").get(old));
+        long metadata = NuclearPrep.memory(level) - before;
         var delayed = reads.expect();
         var delayedCopy = copies.expect();
-        long reserved = NuclearPrep.memory(level) - before;
+        long reserved = NuclearPrep.memory(level) - before - metadata;
         h.assertTrue(reserved > FrontLods.READ_BYTES, "both reads must be reserved");
         prep.clear(level, new ScarQueue());
         h.assertTrue(prep.idle(), "cancelled preparation still attached");
         h.assertTrue(NuclearPrep.memory(level) == before + reserved, "detached reads disappeared from admission");
         Object next = preparation(prep, -1004);
+        long nextMetadata = NuclearPrep.memory(level) - before - reserved;
+        h.assertTrue(nextMetadata > 0, "New preparation has no metadata charge");
         try {
             delayed.accept(new Object());
-            h.assertTrue(NuclearPrep.memory(level) == before + FrontLods.READ_BYTES, "disk completion did not release exactly its reservation");
+            h.assertTrue(NuclearPrep.memory(level) == before + nextMetadata + FrontLods.READ_BYTES, "disk completion did not release exactly its reservation");
             delayedCopy.accept(new Object());
-            h.assertTrue(NuclearPrep.memory(level) == before, "front-copy completion retained detached bytes");
+            h.assertTrue(NuclearPrep.memory(level) == before + nextMetadata, "front-copy completion retained detached bytes");
             h.assertTrue(reads.poll() == null && copies.poll() == null, "cancelled results became publishable");
         } finally {
             delayed.accept(new Object());
