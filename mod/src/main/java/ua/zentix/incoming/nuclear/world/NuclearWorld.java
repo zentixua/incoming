@@ -50,6 +50,7 @@ public final class NuclearWorld {
     private final MobFallout mobFallout = new MobFallout();
     private final LateExposure late = new LateExposure();
     private final BlastFront blast = new BlastFront();
+    private boolean reclaimTurn;
     private long lastFrontNanos, lastPulseNanos, lastScorchNanos, lastCraterNanos, lastScarNanos, lastPrepNanos, lastFalloutNanos, lastSettleNanos;
     /**
      * Chunks loaded since with flash-layer fire from forgotten detonation (no ruins coming): schedule fire ticks on world tick
@@ -493,6 +494,10 @@ public final class NuclearWorld {
         // At capacity, existing material must progress before new removals can consume the
         // lane. One bounded batch avoids starving visible ruins while breaking that dependency.
         matter = RuinMatter.get(level);
+        // Ready input/results and spill receipts can free the memory these consumers need.
+        // They cannot wait behind an arbitrarily long material queue. Alternate the first
+        // opportunity while both owners have work, without granting another clock allowance.
+        if (!matter.busy() || (reclaimTurn = !reclaimTurn)) prep.reclaim(level, clock);
         matter.work(level, clock, 1);
         long craterStart = System.nanoTime();
         digCraters(level, events, clock);

@@ -556,8 +556,13 @@ final class RuinContext {
 
     /** Re-readable cache only: keep old changed blocks and shadow heights, and snapshots held by worker grids. */
     void trimShots(long bytesToFree, WorkClock clock) {
+        trimShots(bytesToFree, clock, Integer.MAX_VALUE);
+    }
+
+    /** Bounded maintenance walk; pinned city windows must not consume the entire consumer lane. */
+    void trimShots(long bytesToFree, WorkClock clock, int maxVisits) {
         long limit = Math.max(0, shotBytes - bytesToFree);
-        int visits = shots.size();
+        int visits = Math.min(shots.size(), maxVisits);
         while (shotBytes > limit && visits-- > 0 && !shots.isEmpty() && clock.canStart()) {
             long unit = clock.begin();
             try {
