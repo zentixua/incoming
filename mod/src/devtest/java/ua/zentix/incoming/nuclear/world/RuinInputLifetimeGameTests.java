@@ -72,7 +72,7 @@ public final class RuinInputLifetimeGameTests {
                 "fixture must retain real snapshots and shadow heights");
         long known = ctx.retainedBytes();
         double light = grid.lit(BlockPos.containing(point));
-        grid.blast(0, 0);
+        Blast fracture = grid.blast(0, 0);
         var failure = new AtomicReference<Throwable>();
         var consumed = new AtomicBoolean();
         Future<?> blocker = route.equals("queued") ? RuinWorkers.submit(() -> {
@@ -92,8 +92,13 @@ public final class RuinInputLifetimeGameTests {
                     catch (InterruptedException expected) { continue; }
                     if (!open) throw new AssertionError("Grid gate not released");
                 }
-                if (grid.at(0, 0) == null || grid.lit(BlockPos.containing(point)) != light || !grid.hasBlast(0, 0))
-                    throw new AssertionError("cancel mutated running Grid inputs");
+                Blast after = grid.blast(0, 0);
+                if (grid.at(0, 0) == null || grid.lit(BlockPos.containing(point)) != light
+                        || !fracture.stamp().same(after.stamp()) || fracture.minY() != after.minY()
+                        || !java.util.Arrays.equals(fracture.removed(), after.removed())
+                        || !fracture.treeLogs().equals(after.treeLogs())
+                        || !java.util.Arrays.deepEquals(fracture.trees().toArray(), after.trees().toArray()))
+                    throw new AssertionError("cancel mutated running Grid inputs or fracture output");
                 var result = RuinPlanner.finish(grid, Collapse.solve(grid));
                 consumed.set(true);
                 return result;
