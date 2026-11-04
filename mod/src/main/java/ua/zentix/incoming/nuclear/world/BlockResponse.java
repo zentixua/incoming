@@ -52,6 +52,17 @@ public record BlockResponse(float thresholdPsi, Kind kind) {
         return CACHE.computeIfAbsent(s, BlockResponse::classify);
     }
 
+    /** Nuclear structures: an unknown hard material is not an indestructible anchor. */
+    static BlockResponse structural(BlockState state) {
+        BlockResponse response = of(state);
+        float hardness = state.getBlock().defaultDestroyTime();
+        // Strong-material game proxy (est.), not engineering strength. Preserve the conventional
+        // response table and the existing unbreakable/ultra-strong protection boundary.
+        if (response.kind == Kind.NONE && hardness > 9 && hardness < 50)
+            return new BlockResponse(25f, Kind.BREAK);
+        return response;
+    }
+
     /** Tags may change: /reload or different single-player world (own datapacks). */
     public static synchronized void clearCache() {
         CACHE.clear();
@@ -60,6 +71,11 @@ public record BlockResponse(float thresholdPsi, Kind kind) {
 
     public static void onTagsUpdated(TagsUpdatedEvent e) {
         if (e.getUpdateCause() == TagsUpdatedEvent.UpdateCause.SERVER_DATA_LOAD) clearCache();
+    }
+
+    public static void onDataMapsUpdated(net.neoforged.neoforge.registries.datamaps.DataMapsUpdatedEvent event) {
+        if (event.getCause() == net.neoforged.neoforge.registries.datamaps.DataMapsUpdatedEvent.UpdateCause.SERVER_RELOAD
+                && event.getRegistryKey() == net.minecraft.core.registries.Registries.BLOCK) clearCache();
     }
 
     public boolean breaksAt(double psi, int jitterSeed) {
