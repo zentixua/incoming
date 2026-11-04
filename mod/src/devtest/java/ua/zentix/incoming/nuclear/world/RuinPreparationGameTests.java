@@ -48,6 +48,11 @@ public final class RuinPreparationGameTests {
         var target = Vec3.atCenterOf(h.absolutePos(new BlockPos(32, 1, 32)));
         RuinPreparation.prepare(level, handle, owner, target, 1, true, false);
         Object p = request(level, handle);
+        Object oldCache = field(p, "cacheId").get(p);
+        RuinPreparation.cancel(level, handle);
+        RuinPreparation.prepare(level, handle, owner, target, 1, true, false);
+        p = request(level, handle);
+        h.assertTrue(!oldCache.equals(field(p, "cacheId").get(p)), "replacement lifetime reopens a still-draining archive writer");
         // Simulate elapsed lease using the request's tick deadline; never mutate the world's clock.
         field(p, "expires").setLong(p, level.getGameTime() + 1);
         h.assertTrue(RuinPreparation.keepAlive(level, handle, owner), "valid long preparation did not renew");
@@ -206,7 +211,7 @@ public final class RuinPreparationGameTests {
     @SuppressWarnings("unchecked")
     private static Object request(net.minecraft.server.level.ServerLevel level, UUID handle) throws ReflectiveOperationException {
         var prep = NuclearWorld.get(level).prep();
-        for (Object p : (List<Object>) field(prep, "preps").get(prep)) if (handle.equals(field(p, "handle").get(p))) return p;
+        for (Object p : (List<Object>) field(prep, "preps").get(prep)) if (handle.equals(field(p, "handle").get(p)) && !field(p, "draining").getBoolean(p)) return p;
         throw new AssertionError("request absent");
     }
 
