@@ -85,6 +85,57 @@ public final class RuinMemoryFlowGameTests {
         h.succeed();
     }
 
+    @GameTest(template = "range", batch = "nuke_memory_cache", timeoutTicks = 100, skyAccess = true)
+    @SuppressWarnings("unchecked")
+    public static void waitingPlanCannotBlockTheCacheTrimThatFreesItsCapacity(GameTestHelper h) throws ReflectiveOperationException {
+        var level = h.getLevel();
+        NuclearStrikes.clear(level);
+        RuinMatterGameTests.clearFixture(level);
+        var world = NuclearWorld.get(level);
+        var clock = WorkClock.counting(1_000_000);
+        clock.start(4_000_000); world.tick(level, clock); // restore before registering the controlled event
+        RuinWorkers.executor(RuinWorkers.Priority.NEAR); RuinWorkers.shutdown();
+        long time = level.getGameTime();
+        BlockPos at = h.absolutePos(new BlockPos(24, 30, 24));
+        level.setBlock(at.below(), Blocks.OBSIDIAN.defaultBlockState(), 2);
+        level.setBlock(at, Blocks.GLASS.defaultBlockState(), 2);
+        var d = event(h, at, 1);
+        var chunk = level.getChunkSource().getChunkNow(at.getX() >> 4, at.getZ() >> 4);
+        var plan = RuinPlanner.plan(level, d, chunk);
+        h.assertTrue(plan != RuinPlan.EMPTY && plan.changedBlocks() > 0, "Fixture has no destructive plan");
+        var plans = new Long2ObjectOpenHashMap<RuinPlan>(); plans.put(chunk.getPos().toLong(), plan);
+        var prepared = ScarQueue.class.getDeclaredField("prepared"); prepared.setAccessible(true);
+        ((Map<Integer, Long2ObjectOpenHashMap<RuinPlan>>) prepared.get(world.scars())).put(d.id(), plans);
+        world.scars().offer(chunk, d);
+        var ledger = RuinMatter.get(level);
+        var context = world.ruins(level, d, time);
+        context.grid(level, chunk.getPos(), false);
+        long cached = context.shotBytes();
+        h.assertTrue(cached > 100_000, "Fixture lacks re-readable snapshots");
+        var other = level.getServer().getLevel(Level.NETHER);
+        try (var occupied = RuinMemory.reserve(other, NuclearPrep.PLANS_CAP - NuclearPrep.memory(other, false) - 2048)) {
+            h.assertTrue(occupied != null, "Could not occupy the controlled budget");
+            h.assertFalse(plan.apply(level, chunk, d, new ColumnScar.Budget(false)), "Fixture plan did not initially wait");
+            h.assertTrue(plan.memoryWaiting(), "Fixture plan was stale rather than capacity-blocked");
+            for (int i = 0; i < 160 && !level.getBlockState(at).isAir(); i++) {
+                ((net.minecraft.world.level.storage.ServerLevelData) level.getLevelData()).setGameTime(time + i + 1);
+                clock.start(4_000_000); world.tick(level, clock);
+            }
+            h.assertTrue(context.shotBytes() < cached, "Admission blocked the cache trim needed to free capacity");
+            h.assertTrue(level.getBlockState(at).isAir() && ledger.released() == 1,
+                    "Trimmed capacity did not apply the retained plan exactly once");
+            for (int i = 0; i < 8; i++) {
+                ((net.minecraft.world.level.storage.ServerLevelData) level.getLevelData()).setGameTime(time + 161 + i);
+                clock.start(4_000_000); world.tick(level, clock);
+            }
+            h.assertTrue(ledger.released() == 1, "Retained plan applied more than once");
+        } finally {
+            ((net.minecraft.world.level.storage.ServerLevelData) level.getLevelData()).setGameTime(time);
+            NuclearStrikes.clear(level); RuinMatterGameTests.clearFixture(level);
+        }
+        h.succeed();
+    }
+
     @GameTest(template = "range", batch = "nuke_memory_retired_workers", timeoutTicks = 200, skyAccess = true)
     public static void retiredLargePoolCannotBlockMaterialCraterOrSettlement(GameTestHelper h) {
         var level = h.getLevel();

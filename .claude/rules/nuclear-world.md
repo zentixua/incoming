@@ -391,3 +391,5 @@ paths:
 - Crater traversal uses the bounded row-head iterator's inclusive 15-block edge to preserve old saved chunk order.
   Settlement uses the default 16-block edge and versioned cursors; legacy unfinished cursors restart through scar
   marks. Never substitute the crater ordering without a cursor migration test.
+
+- Settlement must trim re-readable snapshots before reserving traversal rows. Otherwise a full budget can block the cleanup that a retained scar needs to resume; cover this through `NuclearWorld.tick` with no moving pieces or external reservation release.

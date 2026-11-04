@@ -71,6 +71,11 @@ final class RuinSettle {
                 return;
             }
         }
+        NuclearWorld world = NuclearWorld.get(level);
+        // Free re-readable ownership before asking for room to construct the traversal itself.
+        // A capacity-blocked scar keeps its context alive; admission cannot also gate cleanup.
+        if (world.settleMemoryRoom(level) < NuclearPrep.PLANS_CAP / 8)
+            world.trimSettleCache(detonation.id(), clock);
         if (!order.prepared()) {
             if (clock.canStart()) {
                 long unit = clock.begin();
@@ -90,12 +95,7 @@ final class RuinSettle {
         }
         if (replayed < pass.cursor && !order.done()) return;
         long now = level.getGameTime();
-        NuclearWorld world = NuclearWorld.get(level);
         long room = world.settleMemoryRoom(level);
-        if (room < NuclearPrep.PLANS_CAP / 8) {
-            world.trimSettleCache(detonation.id(), clock);
-            room = world.settleMemoryRoom(level);
-        }
         boolean admit = world.settleCanAdmit(level) && !heap.tight() && room > 0;
         if (now >= adaptAt) {
             window.adapt(externalMillis(level), IncomingConfig.SERVER.workBudgetMs.get(), spare, admit);
