@@ -653,27 +653,36 @@ public final class NuclearPrep {
                         (float) IncomingConfig.SERVER.effectsScale());
             } else {
                 var noLeaves = net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING_NO_LEAVES;
-                if (p.resolvedTarget == null) {
-                    Terrain.Surface original = resolveSurface(level, p, shared, p.target, noLeaves);
-                    if (original == null) return;
-                    double y = original.source() == Terrain.Source.CEILING ? p.target.y : original.y();
-                    if (y <= level.getMinBuildHeight()) y = p.target.y;
-                    p.resolvedTarget = p.surface ? new Vec3(p.target.x, y, p.target.z) : p.target;
-                }
                 Vec3 at = p.target.add(p.miss);
-                if (p.terminalGround == null) {
-                    Terrain.Surface under = resolveSurface(level, p, shared, at, noLeaves);
+                double ground;
+                if (p.carrierWeapon == null) {
+                    Terrain.Surface under = resolveSurface(level, p, shared, p.target, noLeaves);
                     if (under == null) return;
-                    p.terminalGround = (double) under.y();
+                    ground = terminalGround(p, under.y(), under.y(), under.source() == Terrain.Source.CEILING,
+                            level.getMinBuildHeight());
+                    p.resolvedTarget = p.surface ? new Vec3(p.target.x, ground, p.target.z) : p.target;
+                } else {
+                    if (p.resolvedTarget == null) {
+                        Terrain.Surface original = resolveSurface(level, p, shared, p.target, noLeaves);
+                        if (original == null) return;
+                        double y = original.source() == Terrain.Source.CEILING ? p.target.y : original.y();
+                        if (y <= level.getMinBuildHeight()) y = p.target.y;
+                        p.resolvedTarget = p.surface ? new Vec3(p.target.x, y, p.target.z) : p.target;
+                    }
+                    if (p.terminalGround == null) {
+                        Terrain.Surface under = resolveSurface(level, p, shared, at, noLeaves);
+                        if (under == null) return;
+                        p.terminalGround = (double) under.y();
+                    }
+                    if (p.terminalCanopy == null) {
+                        Terrain.Surface canopy = resolveSurface(level, p, shared, at,
+                                net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING);
+                        if (canopy == null) return;
+                        p.terminalCanopy = (double) canopy.y();
+                    }
+                    ground = terminalGround(p, p.terminalGround, p.terminalCanopy,
+                            level.dimensionType().hasCeiling(), level.getMinBuildHeight());
                 }
-                if (p.terminalCanopy == null) {
-                    Terrain.Surface canopy = resolveSurface(level, p, shared, at,
-                            net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING);
-                    if (canopy == null) return;
-                    p.terminalCanopy = (double) canopy.y();
-                }
-                double ground = terminalGround(p, p.terminalGround, p.terminalCanopy,
-                        level.dimensionType().hasCeiling(), level.getMinBuildHeight());
                 float scale = (float) IncomingConfig.SERVER.effectsScale();
                 double hob = p.airBurst ? ua.zentix.incoming.nuclear.model.Yield.optimalBurstHeight(p.yieldKt) * scale : 0;
                 boolean surfaceBurst = hob / scale < ua.zentix.incoming.nuclear.model.FireballModel.maxRadius(p.yieldKt, true);

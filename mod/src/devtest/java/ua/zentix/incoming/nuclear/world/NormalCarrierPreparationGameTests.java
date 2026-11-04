@@ -76,7 +76,9 @@ public final class NormalCarrierPreparationGameTests {
         long beforePrepared = number(NuclearWorld.get(level).scars(), "appliedPrepared");
         StrikeGameTests.afterTest(h, () -> {
             VirtualFlights.get(level).clear(level, p -> owner.equals(p.ownerId()));
-            for (var e : level.getAllEntities()) if (e instanceof StrikeProjectile p && owner.equals(p.ownerId())) p.discard();
+            var owned = new java.util.ArrayList<StrikeProjectile>();
+            for (var e : level.getAllEntities()) if (e instanceof StrikeProjectile p && owner.equals(p.ownerId())) owned.add(p);
+            owned.forEach(StrikeProjectile::discard);
             RuinPreparation.cancel(level, handle);
             NuclearStrikes.clear(level);
             RuinMatterGameTests.clearFixture(level);

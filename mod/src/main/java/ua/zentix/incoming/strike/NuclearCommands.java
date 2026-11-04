@@ -86,7 +86,7 @@ public final class NuclearCommands {
                     e.aim.target() instanceof Target.Ground,
                     e.loadout.weapon().spec().warhead().chooseBurst() && e.loadout.nuke().airBurst(), e.loadout.weapon());
         else
-        RuinPreparation.prepare(level, e.id, e.owner, e.aim.point(), e.loadout.nuke().yieldKt(),
+            RuinPreparation.prepare(level, e.id, e.owner, e.aim.point(), e.loadout.nuke().yieldKt(),
                 e.aim.target() instanceof Target.Ground,
                 e.loadout.weapon().spec().warhead().chooseBurst() && e.loadout.nuke().airBurst());
         RuinPreparation.Status status = RuinPreparation.status(level, e.id);

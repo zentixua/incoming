@@ -211,7 +211,7 @@ public final class NuclearReview {
                     RuinPreparation.prepareCarrier(p.serverLevel(), e.id, p.getUUID(), e.aim.point(), l.nuke().yieldKt(),
                             e.aim.target() instanceof Target.Ground, l.weapon().spec().warhead().chooseBurst() && l.nuke().airBurst(), l.weapon());
                 else
-                RuinPreparation.prepare(p.serverLevel(), e.id, p.getUUID(), e.aim.point(), l.nuke().yieldKt(),
+                    RuinPreparation.prepare(p.serverLevel(), e.id, p.getUUID(), e.aim.point(), l.nuke().yieldKt(),
                         e.aim.target() instanceof Target.Ground, l.weapon().spec().warhead().chooseBurst() && l.nuke().airBurst());
             }
             if (e.preparing) {
