@@ -703,9 +703,9 @@ public final class RuinPlan {
     }
 
     /**
-     * Separate retained-cache estimate; NOT part of a lease that shrinks to plan.bytes(). The context owner
-     * must reserve before production and retain/transfer it for the cache's actual lifetime. A solver may
-     * publish all nine chunk fractures even when its centre plan is empty or its future is cancelled.
+     * Temporary fracture output, separate from the final plan. All nine fragments remain owned until
+     * the actual solver exits, even when its centre plan is empty or its future is cancelled.
+     * Diagnostic server-thread cache entries instead remain counted by their context.
      */
     static long maxFragmentBytes(RuinContext.Grid grid) {
         long bytes = 0;
@@ -1004,12 +1004,14 @@ public final class RuinPlan {
      * restart) know chunk fire belongs to layer.
      *
      * @return fires ignited (including wave-blown); −1 stale layer (positions changed since snapshot): nothing
-     *          changed
+     *          changed; −2 when shared memory cannot admit the pre-flash shadow tile
      */
     int applyFlash(ServerLevel level, LevelChunk chunk, Detonation d, ColumnScar.Budget budget) {
+        memoryWaiting = false;
         if (this == EMPTY || ctx == null) return 0;
         long t = System.nanoTime();
         if (!current(chunk, null, false)) return -1;
+        if (!ctx.flashHeightsReady(level, chunk)) { memoryWaiting = true; return -2; }
         boolean shotCurrent = ctx.beforeFlash(level, chunk);
         boolean recoloured = biomes != null && ScorchedBiomes.write(level, chunk, biomes);
         int lit = 0;

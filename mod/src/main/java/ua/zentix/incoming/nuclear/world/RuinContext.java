@@ -25,8 +25,10 @@ final class RuinContext {
     final Detonation d;
     /** Marker identity is assigned at handoff; immutable geometry remains safe for running solvers. */
     private int eventId;
-    /** Chunk fractures: also computed by background tasks ({@link RuinWorkers}), hence shared map. */
+    /** Diagnostic server-thread fracture cache; background tasks own their fragments until actual exit. */
     private final java.util.concurrent.ConcurrentHashMap<Long, Blast> blasts = new java.util.concurrent.ConcurrentHashMap<>();
+    /** Only diagnostic server-thread solvers keep this cache; background fragments stay task-owned. */
+    private long blastBytes;
     /** Chunk snapshots (server thread) retained while unfinished plan windows read them. Outside-memory chunks from disk ({@link DiskShots}). */
     private final it.unimi.dsi.fastutil.longs.Long2ObjectLinkedOpenHashMap<ChunkShot> shots = new it.unimi.dsi.fastutil.longs.Long2ObjectLinkedOpenHashMap<>();
     /**
@@ -156,6 +158,7 @@ final class RuinContext {
         long key = chunk.getPos().toLong();
         RuinPlan was = flashed.put(key, plan);
         flashedBytes += plan.bytes() - (was == null ? 0 : was.bytes());
+        plan.releaseResultToCountedOwner();
         ChunkShot s = shots.getAndMoveToLast(key);
         if (s == null) return;
         if (shotCurrent) s.relive(chunk, plan);
@@ -460,7 +463,7 @@ final class RuinContext {
         pendingWindows.remove(chunk);
         if (planned.add(chunk)) {
             ChunkPos pos = new ChunkPos(chunk);
-            forget(pos, 1, planned, k -> blasts.remove(k));
+            forget(pos, 1, planned, this::retireBlast);
             forget(pos, RuinPlanner.REACH, planned, this::retireShot);
         }
     }
@@ -543,9 +546,18 @@ final class RuinContext {
                 else {
                     ChunkShot shot = shots.get(key);
                     if (archive != null && !archive.evictable(key, shot)) shots.getAndMoveToLast(key);
-                    else { dropShot(key); blasts.remove(key); }
+                    else { dropShot(key); retireBlast(key); }
                 }
             } finally { clock.end(unit); }
+        }
+    }
+
+    private void retireBlast(long key) {
+        Blast old = blasts.remove(key);
+        if (old != null) {
+            long bytes = RuinPlan.fragmentBytes(old);
+            inputs.retire(bytes);
+            blastBytes -= bytes;
         }
     }
 
@@ -553,7 +565,7 @@ final class RuinContext {
     void dropShotsForTest() {
         shots.clear();
         shotBytes = 0;
-        blasts.clear();
+        for (long key : java.util.List.copyOf(blasts.keySet())) retireBlast(key);
     }
 
     /** Whether chunk snapshot exists (memory/disk). */
@@ -657,7 +669,7 @@ final class RuinContext {
 
     private long currentBytes() {
         long bytes = shotBytes() + applied.size() * 640L + (planned.size() + stood.size()) * 32L;
-        return bytes + appliedBytes + (restoredPlans == null ? 0 : restoredPlans.bytes());
+        return bytes + blastBytes + appliedBytes + (restoredPlans == null ? 0 : restoredPlans.bytes());
     }
 
     /** Snapshots, heightmaps and flash-layer plans, toward {@link NuclearPrep#PLANS_CAP}. */
@@ -694,10 +706,16 @@ final class RuinContext {
         Blast blast(int dx, int dz) {
             ChunkPos pos = new ChunkPos(centre.x + dx, centre.z + dz);
             ChunkShot[] w = window(dx, dz);
+            // A background task owns its nine fragments through actual exit. Sharing them in
+            // the context would give temporary solver output an unbounded cross-task lifetime.
+            if (view != Blast.SERVER)
+                return Blast.solve(new RuinWindow(pos, minY, maxY, w, view), ctx.d, blockDamage, treeFall);
             Blast b = ctx.blasts.get(pos.toLong());
             if (b != null && b.stamp().same(RuinWindow.Stamp.of(w))) return b;
             b = Blast.solve(new RuinWindow(pos, minY, maxY, w, view), ctx.d, blockDamage, treeFall);
+            ctx.retireBlast(pos.toLong());
             ctx.blasts.put(pos.toLong(), b);
+            ctx.blastBytes += RuinPlan.fragmentBytes(b);
             return b;
         }
 
@@ -761,10 +779,14 @@ final class RuinContext {
     boolean blastsReady(ServerLevel level, ChunkPos pos) {
         pendingWindows.add(pos.toLong());
         Grid g = grid(level, pos, false);
+        if (g == null) return false;
         for (int k = 0; k < 9; k++) {
             int dx = k % 3 - 1, dz = k / 3 - 1;
             if (g.at(dx, dz) == null || g.hasBlast(dx, dz)) continue;
-            g.blast(dx, dz);
+            try (var reservation = RuinMemory.reserveInputs(level, RuinPlan.maxFragmentBytes(g))) {
+                if (reservation == null) return false;
+                g.blast(dx, dz);
+            }
             return false;
         }
         return true;
@@ -783,6 +805,8 @@ final class RuinContext {
     static final int TASK_AGE_LIMIT = 600;
 
     private final Long2ObjectOpenHashMap<Task> tasks = new Long2ObjectOpenHashMap<>();
+    /** Result permits outlive Future cancellation until the actual callable exits. */
+    private final java.util.IdentityHashMap<java.util.concurrent.Future<RuinPlan>, RuinResults.Lease> resultOwners = new java.util.IdentityHashMap<>();
     /** Chunks whose last background attempt failed or expired; preparation reports failure until a new attempt is admitted. */
     private final LongOpenHashSet failed = new LongOpenHashSet();
     private int failures;
@@ -817,13 +841,16 @@ final class RuinContext {
         // their priority capacity: tasks preparation handed to detonation do not block them
         if (!RuinWorkers.admit(priority) || priority != RuinWorkers.Priority.SEEN && tasks.size() >= 2 * RuinWorkers.capacity()) return false;
         Grid g = grid(level, pos, true);
+        if (g == null) return false;
         if (g.at(0, 0) == null) throw new IllegalStateException("no snapshot of chunk " + pos);
-        tasks.put(key, new Task(submitWorker(() -> {
+        var future = submitPlanWorker(level, g, () -> {
             RuinWorkers.checkStop();
             Collapse c = Collapse.solve(g);
             RuinWorkers.checkStop();
             return RuinPlanner.finish(g, c);
-        }, priority), chunkId, level.getGameTime(), priority));
+        }, priority);
+        if (future == null) return false;
+        tasks.put(key, new Task(future, chunkId, level.getGameTime(), priority));
         failed.remove(key);
         pendingWindows.remove(key);
         return true;
@@ -832,6 +859,52 @@ final class RuinContext {
     /** Ruin and flash-layer jobs share this context's actual input owner. */
     <T> java.util.concurrent.Future<T> submitWorker(java.util.concurrent.Callable<T> task, RuinWorkers.Priority priority) {
         return RuinWorkers.submit(task, priority, inputs);
+    }
+
+    /** Reserve output before the solver can allocate it, including completed/uncollected results. */
+    @Nullable
+    java.util.concurrent.Future<RuinPlan> submitPlanWorker(ServerLevel level, Grid grid,
+            java.util.concurrent.Callable<RuinPlan> task, RuinWorkers.Priority priority) {
+        int height = level.getHeight();
+        for (ServerLevel other : level.getServer().getAllLevels()) height = Math.max(height, other.getHeight());
+        // A queued output permit must still leave enough shared room to start a solver after idle expiry.
+        long room = NuclearPrep.PLANS_CAP - NuclearPrep.residentMemory(level) - RuinWorkers.threadBufferBytes(height);
+        RuinResults.Lease owner = RuinResults.tryReserve(RuinPlan.maxResultBytes(grid), RuinPlan.maxFragmentBytes(grid), room);
+        if (owner == null) return null;
+        try {
+            var future = RuinWorkers.submit(() -> {
+                RuinPlan result = task.call();
+                owner.markResult(result);
+                return result;
+            }, priority, inputs, owner::actualExit);
+            owner.bindFuture(future);
+            resultOwners.put(future, owner);
+            return future;
+        } catch (RuntimeException | Error failure) {
+            owner.abortBeforeSubmit();
+            throw failure;
+        }
+    }
+
+    /** Finished callable only: transfer its result permit to the returned plan. */
+    RuinPlan takeWorker(java.util.concurrent.Future<RuinPlan> future)
+            throws java.util.concurrent.ExecutionException, InterruptedException {
+        RuinResults.Lease owner = resultOwners.remove(future);
+        try {
+            return future.get();
+        } catch (java.util.concurrent.ExecutionException | InterruptedException | java.util.concurrent.CancellationException failure) {
+            if (owner != null) owner.cancel();
+            throw failure;
+        } finally {
+            if (owner != null) owner.detachFuture();
+        }
+    }
+
+    /** Abandon output, but a running producer retains its permit through actual exit. */
+    void cancelWorker(java.util.concurrent.Future<RuinPlan> future, boolean interrupt) {
+        RuinResults.Lease owner = resultOwners.remove(future);
+        if (owner != null) owner.cancel();
+        future.cancel(interrupt);
     }
 
     /** Chunk has running or ready background plan. */
@@ -846,7 +919,13 @@ final class RuinContext {
     void promote(long chunk, RuinWorkers.Priority priority) {
         Task t = tasks.get(chunk);
         if (t == null || t.priority.compareTo(priority) <= 0) return;
+        RuinResults.Lease owner = resultOwners.get(t.future);
+        if (owner != null) owner.beginTransfer();
         java.util.concurrent.Future<RuinPlan> moved = RuinWorkers.promote(t.future, priority);
+        if (owner != null) {
+            owner.bindFuture(moved == null ? t.future : moved);
+            if (moved != null) { resultOwners.remove(t.future); resultOwners.put(moved, owner); }
+        }
         if (moved != null) tasks.put(chunk, new Task(moved, t.chunkId, t.since, priority));
     }
 
@@ -892,7 +971,7 @@ final class RuinContext {
                 continue;
             }
             if (now - t.since < TASK_AGE_LIMIT) continue;
-            t.future.cancel(true);
+            cancelWorker(t.future, true);
             failed.add(e.getLongKey());
             RuinWorkers.expired();
             Incoming.LOG.warn("Ruins for detonation #{}: background plan for chunk {} not ready in {} ticks — interrupted; awaiting worker exit before retry",
@@ -917,6 +996,7 @@ final class RuinContext {
             }
             // chunk unloaded/reloaded: successful snapshots from a different chunk
             tasks.remove(chunk.getPos().toLong());
+            cancelWorker(t.future, false);
             submit(level, chunk, t.priority);
             return null;
         }
@@ -932,7 +1012,7 @@ final class RuinContext {
         tasks.remove(key);
         RuinPlan plan;
         try {
-            plan = t.future.get();
+            plan = takeWorker(t.future);
         } catch (java.util.concurrent.ExecutionException e) {
             failed.add(key);
             // solver error repeats across many chunks: log first occurrences
@@ -952,7 +1032,7 @@ final class RuinContext {
         Task t = tasks.get(chunk);
         if (t != null && t.chunkId != 0) {
             tasks.remove(chunk);
-            t.future.cancel(false);
+            cancelWorker(t.future, false);
         }
         dropShot(chunk);
     }
@@ -968,8 +1048,9 @@ final class RuinContext {
     void cancelTasks() {
         // Transfer before cancel: queued callbacks may release immediately; running callbacks may not.
         inputs.detach(currentBytes());
-        for (Task t : tasks.values()) t.future.cancel(false);
+        for (Task t : tasks.values()) cancelWorker(t.future, false);
         tasks.clear();
+        for (var future : java.util.List.copyOf(resultOwners.keySet())) cancelWorker(future, false);
         retireWindowReads();
         closeStorage();
         if (restoredPlans != null) { restoredPlans.clear(); restoredPlans = null; }
@@ -980,7 +1061,7 @@ final class RuinContext {
     void planned(ChunkPos pos) {
         pendingWindows.remove(pos.toLong());
         planned.add(pos.toLong());
-        forget(pos, 1, planned, k -> blasts.remove(k));
+        forget(pos, 1, planned, this::retireBlast);
         forget(pos, RuinPlanner.REACH, planned, this::retireShot);
     }
 
@@ -989,6 +1070,7 @@ final class RuinContext {
         ChunkPos pos = chunk.getPos();
         Applied old = applied.put(pos.toLong(), new Applied(plan, motion));
         appliedBytes += plan.bytes() - (old == null || old.plan == null ? 0 : old.plan.bytes());
+        plan.releaseResultToCountedOwner();
         finished(pos);
     }
 
@@ -997,7 +1079,7 @@ final class RuinContext {
         pendingWindows.remove(pos.toLong());
         planned.add(pos.toLong());
         stood.add(pos.toLong());
-        forget(pos, 1, stood, k -> blasts.remove(k));
+        forget(pos, 1, stood, this::retireBlast);
         forget(pos, RuinPlanner.REACH, stood, this::retireShot);
         forget(pos, 2, stood, k -> {
             Applied a = applied.remove(k);

@@ -180,6 +180,7 @@ public final class ScarQueue {
         Parked old = parked.put(key, value);
         if (old != null) parkedBytes -= old.plan.bytes() + 64;
         parkedBytes += value.plan.bytes() + 64;
+        value.plan.releaseResultToCountedOwner();
     }
 
     private void unpark(long key) {
