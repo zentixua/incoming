@@ -41,6 +41,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.function.LongConsumer;
 
 /**
  * Blackout in a dimension's world: brings chunks into line with the power grid ({@link PowerGrid}) within the tick time
@@ -95,7 +96,7 @@ public final class BlackoutWorld {
     private static final double DISTRICT_SOUND_RANGE = 96;
 
     /** Cascade of one outage (or power restoration): area chunks ordered by arrival time. */
-    private static final class Sweep {
+    static final class Sweep {
         final Outage outage;
         final boolean restore;
         final int minX, maxX, maxZ;
@@ -654,24 +655,11 @@ public final class BlackoutWorld {
                 if (slow(level, took)) logSlowUnit(level, "cascade", took, "row of " + (s.maxX - s.minX + 1) + " chunks", counted, timed);
             }
             if (!s.built()) continue;
-            while (s.cursor <= now && s.cursor <= s.last) {
-                LongArrayList chunks = s.byDue.remove(s.cursor);
-                if (chunks != null) {
-                    // district outward from the player: lamps near the player go dark and relight first
-                    if (!players.isEmpty()) {
-                        long[] order = chunks.toLongArray();
-                        LongArrays.quickSort(order, (a, b) -> Integer.compare(playerDistance(a), playerDistance(b)));
-                        chunks = LongArrayList.wrap(order);
-                    }
-                    for (int i = 0; i < chunks.size(); i++) {
-                        long c = chunks.getLong(i);
-                        if (inMemory(level, c) != null) enqueue(c);
-                        // not in memory: converts on load, with distant Distant Horizons LODs using a disk copy
-                        else FarLods.request(level, c, false);
-                    }
-                }
-                s.cursor++;
-            }
+            issueDue(s, now, clock, c -> {
+                if (inMemory(level, c) != null) enqueue(c);
+                // not in memory: converts on load, with distant Distant Horizons LODs using a disk copy
+                else FarLods.request(level, c, false);
+            });
             // save progress: fully processed — not repeated after restart
             grid.swept(s.outage.id(), s.restore, s.done() ? Long.MAX_VALUE : Math.min(now, s.last));
             if (s.done()) {
@@ -679,6 +667,22 @@ public final class BlackoutWorld {
                 Incoming.LOG.info("Blackout #{} ({}): {} cascade covered the whole area", s.outage.id(), level.dimension().location(),
                         s.restore ? "restore" : "outage");
             }
+        }
+    }
+
+    /** Issue due chunks of a built sweep; separate from world access so the scheduling contract can be checked. */
+    void issueDue(Sweep s, long now, WorkClock clock, LongConsumer issue) {
+        while (s.cursor <= now && s.cursor <= s.last) {
+            LongArrayList chunks = s.byDue.remove(s.cursor);
+            if (chunks != null) {
+                if (!players.isEmpty()) {
+                    long[] order = chunks.toLongArray();
+                    LongArrays.quickSort(order, (a, b) -> Integer.compare(playerDistance(a), playerDistance(b)));
+                    chunks = LongArrayList.wrap(order);
+                }
+                for (int i = 0; i < chunks.size(); i++) issue.accept(chunks.getLong(i));
+            }
+            s.cursor++;
         }
     }
 
