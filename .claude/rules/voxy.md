@@ -1,9 +1,5 @@
 ---
 paths:
-  - "mod/src/main/java/ua/zentix/incoming/client/VoxyIngest.java"
-  - "mod/src/main/java/ua/zentix/incoming/client/LssVoxyWatch.java"
-  - "mod/src/main/java/ua/zentix/incoming/compat/LodSections.java"
-  - "mod/src/main/java/ua/zentix/incoming/compat/CopyLight.java"
   - "mod/src/main/java/ua/zentix/incoming/client/render/LodDepth.java"
   - "mod/src/main/java/ua/zentix/incoming/client/render/VoxyDepth.java"
   - "mod/src/main/java/ua/zentix/incoming/compat/Voxy*.java"
@@ -50,36 +46,14 @@ paths:
   a lock: an ID not yet present is treated as air, without caching. There are no change events for us
   (`setDirtyCallback` is single and used by rendering): the scan around the player rereads level 4 out to 8 km once
   a minute; changed summaries invalidate tiles above them. Voxy's database holds only what Voxy has seen (and what LSS
-  and our `S2C.VoxyChunk` sent); in single-player, the entire save is `/voxy import current`. Readout:
+  the provider delivered); in single-player, the entire save is `/voxy import current`. Readout:
   `TerrainTiles.stats()` (`Voxy (world …): section columns read …`).
-- Distant world changes (craters, ruins and nuclear traces, blackout lamps) use the same path as DH (`compat/DhUpdates`:
-  marks, `FarLods` copies, heavy-zone `FrontLods` copies), alongside DH: `compat/VoxyLods` sends chunks to Voxy players
-  (`C2S.LodMods` on entry) via `S2C.VoxyChunk`, except players viewing that chunk (their Voxy rebuilds it itself), no
-  farther than `FarLods.FAR_CHUNKS`; the client submits sections with static
-  `VoxelIngestService.rawIngest(WorldIdentifier, section, x, y, z, blockLight, skyLight)` via `MethodHandle`
-  (`client/VoxyIngest`; LOD Server Support does the same, `compat/VoxyCompat`) on the network thread. Voxy is client-only:
-  dedicated servers do not have it, hence a packet rather than a server call. Section light is supplied; Voxy does not
-  calculate it: null means dark (black LODs); loaded chunks use the world's light engine (missing sky layer above
-  terrain = 15), copies use `compat/CopyLight` from their blocks within the chunk (disk light would keep a dark district
-  lit). All sections, including empty ones: air from a demolished tower erases it. Delivery uses start/chunks/finish
-  batches and `C2S.LodBatchReceived`: one unacknowledged batch per connection, a single bootstrap chunk, then a
-  fractional chunks/tick quota from the client's vanilla `ChunkBatchSizeCalculator` (0.01–64, like PlayerChunkSender).
-  Each batch also holds at most 256 KiB before acknowledgement (one larger indivisible chunk may stand alone): a
-  chunk-count window alone can leave MiB behind a fast proxy with a slow downstream. This bounds in-flight data;
-  it is not a bytes/tick throttle. `fastProxyCannotAccumulateAMultiMiBBatchBeforeItsSlowClientAcknowledges` guards it.
-  The three client handlers run on the same network thread. Before ack, poll Voxy's public
-  `VoxyCommon.getInstance().getIngestService().getTaskCount()` on the event loop until its queue empties; never block
-  the network thread. Running tasks remain bounded by its worker pool. Missing counter disables Incoming delivery.
-  Timing includes transfer and background queue drain. Calculator
-  state belongs to the channel; batch IDs survive dimension changes and reject old/duplicate/early acknowledgements.
-  Netty still gates every chunk: active/writable, at least 16 KiB headroom, no more than 32 KiB pending even with a
-  raised watermark, and at most one outstanding chunk write including event-loop dispatch. A large indivisible
-  chunk can cross the watermark once. There is no fixed byte-rate throttle. The waiting queue holds at most 48 MiB;
-  a fresh copy replaces a waiting copy. `VoxyLods.room` gates `DhUpdates`, `FarLods` and `FrontLods`, even with DH:
-  excess updates for Voxy players would otherwise be lost. Copy engine light layers (`getData` fills the live layer
-  for a uniform one); a heavy-zone copy goes to DH `DhUpdates.LEAD` before the front, but Voxy ingests immediately —
-  give it a “not before front” deadline (`VoxyLods.send(…, notBefore)`). Regressions: `VoxyLodsTest`, `LodBatchFlowTest`
-  and GameTest batch `voxy_backpressure`.
+- Voxy distant changes follow its normal world ingestion and LOD Server Support's saved-chunk delivery. Incoming
+  does not publish into Voxy, advertise a custom terrain receiver, retain timed client columns, or repair another
+  producer by re-ingesting. Near-player world changes follow the pressure wave; far LODs may arrive later after
+  real source changes are saved and delivered. Measure eventual convergence separately from the near-world timing.
+  The old `S2C.VoxyChunk`, `LodBatchStart` and `LodBatchFinished` codecs remain registered as no-op client handlers
+  only so existing Flashback recordings decode; their shipped golden bytes must remain unchanged (`replay.md`).
 - LOD Server Support 0.19/0.20 (server) observes `ChunkSerializer.write` at RETURN, not block-change events:
   `ChunkSaveDataHook` → `ServerReceiverGlue.onChunkSaveData` → `DirtyContentFilter.observeSave`. It hashes serialized
   block states, biomes and light. A changed observation marks the column dirty and immediately deletes its old store
@@ -89,26 +63,8 @@ paths:
   deposited by LSS's delivery path, not by the save hook. Count changed columns, not all loaded/scar-marked chunks.
   Load-time hash seeding is a baseline, not a comparison against SQLite: loading a previously stale saved column
   does not itself prove the stored row has been repaired. Do not promise that every save/store hit contains ruins.
-  LSS exposes a public client API, but no public server column-invalidation API in these versions. Do not invoke its
-  networking/filter/store implementation from Incoming main code or synthesize saves just to trip its mixin.
+  LSS exposes a declared public client API. Java-public implementation invalidation helpers are not a supported
+  third-party publication contract: do not invoke its networking/filter/store implementation from Incoming main
+  code or synthesize saves just to trip its mixin.
   Integration checks (`-PwithLss`, batches `lss_.*`) use the real optional LSS runtime, save hook and SQLite store;
   test-only implementation calls arrange/inspect fixtures and are excluded from the release jar.
-- Speculative distant ruin copies can still be overwritten by LSS before the world chunk is settled. The client
-  detects this through `client/LssVoxyWatch` (subscribes only with Voxy: without it a subscriber would make LSS
-  download LODs) and reports chunks through `C2S.VoxyStale` (client 12/tick, server 256/second/player). The server
-  resends a copy only to that player, and only if it differs from disk (`FarLods.refresh`: ruin plan, trace outside
-  the heavy zone, district darkness). Never broadcast that repair to DH/other players: without the short-lived plan
-  it could restore intact terrain over their correct ruins. `RuinSettle` now writes saved-zone ruins into vanilla
-  chunks without a player visit; later clients depend on LSS's ordinary save/store invalidation. This must be tested
-  separately from Incoming's immediate copy delivery. Packets are not ingested during Flashback replay (Voxy shows
-  the live database there).
-
-- The `lod-buffer` development scenario is excluded from the release jar. Its database witnesses run outside the
-  producer/reset monitor (`WitnessesTest` holds a read while both progress). Values carry their epoch; stale read
-  confirmation cannot consume a new witness. `TimedLodBuffer.current` is an ownership snapshot, never a fence
-  against foreign ingestion already crossing stop. Submission timings are elapsed nanoseconds, not CPU time.
-
-- Voxy recovery retains only 65,536 recent chunk coordinates and 4,096 pending hints, not every changed coordinate
-  in the session. Requests are deduplicated and drained at the existing server rate. Overflow evicts old hints, so
-  recovery remains best effort, not a durable freshness record. A later Incoming submission cannot cancel a
-  crossing foreign-delivery hint. Logout/reset clears the previous world and both collections immediately.

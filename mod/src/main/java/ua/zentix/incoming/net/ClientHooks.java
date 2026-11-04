@@ -33,6 +33,7 @@ public interface ClientHooks {
 
     default void openRemote() {}
 
+    default void nuclearPreparation(S2C.NuclearPreparation p) {}
     default void nuclearReview(S2C.NuclearReview p) {}
 
     default void cleared(S2C.Cleared p) {}
@@ -63,13 +64,6 @@ public interface ClientHooks {
     default void intercept(S2C.Intercept p) {}
 
     default void radarScope(S2C.RadarScope p) {}
-
-    /** Chunk into Voxy LOD; network thread. */
-    default void voxyChunk(S2C.VoxyChunk p) {}
-
-    default void lodBatchStart(S2C.LodBatchStart p, net.neoforged.neoforge.network.handling.IPayloadContext context) {}
-
-    default void lodBatchFinished(S2C.LodBatchFinished p, net.neoforged.neoforge.network.handling.IPayloadContext context) {}
 
     ClientHooks NONE = new ClientHooks() {};
 

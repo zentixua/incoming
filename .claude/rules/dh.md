@@ -58,10 +58,10 @@ paths:
   `TerrainTiles.stats()` (`target-map` scenario logs it). API readiness and loaded DH worlds come from events
   (`DhApiAfterDhInitEvent`, `DhApiLevelLoadEvent`/`…Unload`); the mod targets API 7 (`DhApi.getApiMajorVersion() == 7`),
   other major versions disable the DH layer; `mods.toml` has optional dependency `distanthorizons` (`dh_version_range`).
-- The same path (`DhUpdates`) also sends changes to players' Voxy LODs — `voxy.md`. LSS's persistent server store is
-  a separate path: its save hook hashes live section/biome/light bytes and invalidates changed rows before dirty
-  broadcasts. Do not infer store freshness from an Incoming copy being delivered. See `voxy.md` and the optional
-  `lss_.*` GameTests (`-PwithLss`) for real-store checks.
+- `DhUpdates` serves only the optional public DH integration. Voxy uses ordinary LSS saved-chunk delivery
+  (`voxy.md`); Incoming no longer sends its own Voxy copies. LSS's save hook hashes section/biome/light bytes and
+  invalidates changed rows before dirty broadcasts. See `voxy.md` and the optional `lss_.*` GameTests (`-PwithLss`)
+  for real-store checks; a prepared copy alone is not evidence that the saved source changed.
 - Distant Horizons builds LODs for chunks outside the world itself (its generator reads region files with lit lamps)
   and updates on chunk load. Thus the mod supplies DH with extinguished or relit districts and nuclear ruins behind
   the wave for chunks outside the world within `FarLods.FAR_CHUNKS` of a player: a disk-chunk copy with grid-correct
@@ -125,14 +125,13 @@ paths:
   it builds little in the cloud). NaN, infinite or behind-eye distance means sky (`fx_depth`, `pallScene`): near the
   far plane and with a foreign projection, LODs end up behind the eye or infinitely far away.
 
-- A loaded-chunk mark in `DhUpdates` must survive network backpressure and unloading. Use `Terrain.inMemory` for
+- A loaded-chunk mark in `DhUpdates` must survive delayed delivery and unloading. Use `Terrain.inMemory` for
   lowered/pending-unload full chunks; otherwise keep the mark while at most four `FarLods.savedCopy` reads restore
   saved sections through `DiskShots`. Pending saves are visible to chunk storage reads. Missing/non-final saved data
-  can be discarded; I/O failure retries without blocking. GameTest `voxy_saved_update` keeps an old copy at 48 MiB,
-  delays the fresh mark, then verifies disk restoration replaces the waiting copy without loading world chunks.
-  A later `mark` invalidates an older saved read, including an already-completed result held by backpressure;
-  keep the old read counted until completion before retrying, so invalidation cannot bypass the four-read cap.
-  GameTest `voxy_saved_revision` saves gold, holds that read, saves diamond and marks again; only diamond may arrive.
+  can be discarded; I/O failure retries without blocking. GameTest `dh_saved_update` verifies that the saved state
+  reaches the DH sink without loading world chunks. A later `mark` invalidates an older saved read, including an
+  already-completed result; keep it counted until completion before retrying, preserving the four-read cap.
+  GameTest `dh_saved_revision` saves gold, holds that read, saves diamond and marks again; only diamond may arrive.
 
 - FrontLods copy completion owns a candidate index and a RuinInbox generation. Clear/cancel invalidates queued
   results; a late old read cannot replace a newly offered copy at the same coordinate. Outstanding invalidated

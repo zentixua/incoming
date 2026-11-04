@@ -120,10 +120,13 @@ public final class NuclearCarrierGameTests {
             h.assertTrue(p.aimPoint().distanceTo(target.position()) < 10, "Tracker retained old prepared target");
             Vec3 outside = at.add(1200, 0, 0);
             h.assertTrue(p.retarget(new Target.Point(outside), outside), "In-flight operator mechanism refused far point");
+            // A saved carrier can outlive the unsaved preparation owner after restart.
+            p.setNuclearPreparation(8_310_007);
             CompoundTag saved = new CompoundTag(); p.saveWithoutId(saved);
             var restored = new CruiseMissileEntity(ModEntities.CRUISE_MISSILE.get(), level);
             restored.load(saved);
             h.assertTrue(restored.isNuclear(), "Restart lost nuclear payload");
+            h.assertTrue(restored.nuclearPreparation() == 8_310_007, "Saved flight lost explicit identity");
             var expected = NuclearWarhead.geometry(level, NuclearStrikes.ground(level, restored.position()), 15, false, 1);
             h.assertTrue(restored.hurt(level.damageSources().generic(), Float.MAX_VALUE), "Reloaded carrier ignored lethal damage");
             event(h, expected.burst(), expected.groundY(), expected.surface(), level.getGameTime());

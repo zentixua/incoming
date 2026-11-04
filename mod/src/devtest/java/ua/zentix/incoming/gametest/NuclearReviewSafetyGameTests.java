@@ -83,6 +83,13 @@ public final class NuclearReviewSafetyGameTests {
                 Optional.empty(), Optional.empty(), Waypoints.NONE, Optional.empty()));
     }
 
+    private static void prepared(net.minecraft.server.level.ServerPlayer p, UUID id) {
+        if (!NuclearReview.act(p, id, C2S.NuclearAction.PREPARE)) throw new AssertionError("prepare refused");
+        var snapshot = p.getData(ModAttachments.NUCLEAR_REVIEW).snapshot().orElseThrow();
+        ua.zentix.incoming.nuclear.world.NuclearReadyFixture.ready(p.serverLevel(), id, snapshot.target(),
+                snapshot.order().loadout().nuke().yieldKt(), snapshot.order().loadout().nuke().airBurst());
+    }
+
     private static UUID id(ServerPlayer p) {
         return p.getData(ModAttachments.NUCLEAR_REVIEW).snapshot().orElseThrow().id();
     }
@@ -99,6 +106,7 @@ public final class NuclearReviewSafetyGameTests {
         give(p, ModItems.ICBM.get(), 1);
         NuclearReview.request(p, point(h));
         UUID id = id(p);
+        prepared(p, id);
         h.assertTrue(NuclearReview.act(p, id, C2S.NuclearAction.BEGIN), "hold refused");
         ServerActions.clearAll(p.server, true, "nuclear review abort regression");
         h.assertTrue(watcher.cleared.stream().anyMatch(S2C.Cleared::nuclear), "client did not receive nuclear abort");
@@ -124,6 +132,7 @@ public final class NuclearReviewSafetyGameTests {
         give(p, ModItems.ICBM.get(), 1);
         NuclearReview.request(p, point(h));
         UUID id = id(p);
+        prepared(p, id);
         h.assertTrue(NuclearReview.act(p, id, C2S.NuclearAction.BEGIN), "hold refused");
         p.hurt(level.damageSources().genericKill(), Float.MAX_VALUE);
         h.assertFalse(p.isAlive(), "actual death did not happen");
