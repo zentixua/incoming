@@ -22,7 +22,7 @@ public final class RuinWorkerAdmissionGameTests {
     private RuinWorkerAdmissionGameTests() {}
 
     @GameTest(template = "range", timeoutTicks = 300, batch = "nuke_worker_admission", skyAccess = true)
-    public static void pressureBoundsBirthGrowthAndCapturedCallbackRebirth(GameTestHelper h) throws ReflectiveOperationException {
+    public static void pressureBoundsBirthGrowthAndCapturedCallbackRebirth(GameTestHelper h) {
         StrikeGameTests.gameSpeed(h);
         // This fixture holds non-worker ownership constant. Previous batches can leave cached
         // snapshots and material that normal tick reclamation legitimately frees under pressure.
@@ -30,7 +30,26 @@ public final class RuinWorkerAdmissionGameTests {
             ua.zentix.incoming.nuclear.NuclearStrikes.clear(previous);
             RuinMatterGameTests.clearFixture(previous);
         }
-        RuinWorkers.shutdown();
+        h.assertTrue(RuinWorkers.shutdown(), "Previous fixture workers did not exit");
+        h.startSequence().thenWaitUntil(() -> {
+            // Clear invalidates collectors; outstanding I/O still owns its bytes until completion.
+            // Resolve existing cold-load receipts here, before calibrating the fixed reservation.
+            for (var previous : h.getLevel().getServer().getAllLevels()) {
+                var world = NuclearWorld.get(previous);
+                h.assertFalse(world.ledgers.pending(), "Previous fixture ledger load is still pending");
+                h.assertTrue(world.prep().retainedBytes() == 0 && world.materialReservation == 0,
+                        "Previous fixture asynchronous ownership is still pending");
+            }
+            h.assertTrue(RuinInputs.detachedBytes() == 0 && RuinResults.bytes() == 0
+                            && RuinWorkers.residentBufferBytes(384) == 0,
+                    "Previous fixture worker ownership is still pending");
+        }).thenExecute(() -> {
+            try { checkPressure(h); }
+            catch (ReflectiveOperationException failure) { throw new AssertionError(failure); }
+        });
+    }
+
+    private static void checkPressure(GameTestHelper h) throws ReflectiveOperationException {
         var level = h.getLevel();
         var other = level.getServer().getLevel(net.minecraft.world.level.Level.NETHER);
         h.assertTrue(other != null, "second dimension absent");
