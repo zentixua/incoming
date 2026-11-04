@@ -70,6 +70,8 @@ final class FrameClock {
     private boolean afterShot;
     /** Repeated stages in a frame (shadow pass etc.): timestamp only the first. */
     long repeatedStages;
+    /** Full query-ring waits perturb the measured workload; passive recordings report this count. */
+    long gpuRingWaits;
 
     FrameClock(Out out) {
         this.out = out;
@@ -112,7 +114,10 @@ final class FrameClock {
         if (timerAvailable()) {
             // Full ring (GPU more than RING frames behind; not normal for drivers, but retain all rows):
             // wait for the oldest
-            if (pending[s]) drain(true);
+            if (pending[s]) {
+                gpuRingWaits++;
+                drain(true);
+            }
             used[s] = 0;
             stamp(s, "start");
         }
