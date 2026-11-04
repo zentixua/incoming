@@ -24,6 +24,19 @@ public final class RuinWorkerAdmissionGameTests {
     @GameTest(template = "range", timeoutTicks = 300, batch = "nuke_worker_admission", skyAccess = true)
     public static void pressureBoundsBirthGrowthAndCapturedCallbackRebirth(GameTestHelper h) {
         StrikeGameTests.gameSpeed(h);
+        // Exercise the reset with actual retained rows, even when this batch runs in isolation.
+        // Replacing SavedData must also refresh NuclearWorld's cached material reference.
+        RuinMatterGameTests.clearFixture(h.getLevel());
+        var previousMaterial = RuinMatter.get(h.getLevel());
+        long emptyBytes = previousMaterial.retainedBytes();
+        var pieces = new ArrayList<RuinMatter.Piece>();
+        for (int i = 0; i < 2048; i++) pieces.add(new RuinMatter.Piece(
+                h.absolutePos(new net.minecraft.core.BlockPos(i % 32, 1, i / 32)),
+                net.minecraft.world.level.block.Blocks.STONE.defaultBlockState(), null,
+                net.minecraft.world.phys.Vec3.ZERO, h.getLevel().getGameTime()));
+        previousMaterial.release(pieces);
+        h.assertTrue(previousMaterial.retainedBytes() - emptyBytes > 1L << 18,
+                "Previous material fixture must exceed the ninth-worker margin");
         // This fixture holds non-worker ownership constant. Previous batches can leave cached
         // snapshots and material that normal tick reclamation legitimately frees under pressure.
         for (var previous : h.getLevel().getServer().getAllLevels()) {
@@ -75,6 +88,8 @@ public final class RuinWorkerAdmissionGameTests {
         Future<?> first = RuinWorkers.submitForTest(() -> { progress.incrementAndGet(); release.await(); return null; }, RuinWorkers.Priority.SEEN);
         h.assertTrue(pool.getPoolSize() == 1, "one-worker control did not start");
         h.assertTrue(NuclearPrep.memory(level) > NuclearPrep.PLANS_CAP, "future-worker policy must refuse far admission");
+        h.assertTrue(NuclearPrep.residentMemory(level) == base + RuinWorkers.threadBufferBytes(384),
+                "Refreshing ledger owners changed the calibrated non-worker charge");
         var futures = new ArrayList<Future<?>>();
         // Submit in one server step: later CPU adaptation can legitimately retain just one active
         // worker on a game-paced test server. The memory bound is independent of that CPU policy.
