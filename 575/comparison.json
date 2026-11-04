@@ -1,0 +1,332 @@
+{
+  "a1": {
+    "head": "36c9b5bdddbad22cc4e418c7b02bb7a141f56e4b",
+    "fragment_ms": 1495.378,
+    "impact_per_tick": {
+      "n": 1003,
+      "p50": 0.0006,
+      "p95": 30.1192,
+      "p99": 31.5835,
+      "max": 48.553,
+      "mean": 3.669653040877368,
+      "over33": 7,
+      "over50": 0,
+      "over100": 0,
+      "over250": 0
+    },
+    "frame": {
+      "n": 2242,
+      "p50": 18.169,
+      "p95": 54.197,
+      "p99": 88.391,
+      "max": 302.827,
+      "mean": 22.36741436217663,
+      "over33": 309,
+      "over50": 156,
+      "over100": 12,
+      "over250": 2
+    },
+    "tick": {
+      "n": 1003,
+      "p50": 5.7815,
+      "p95": 41.6355,
+      "p99": 49.478,
+      "max": 56.8419,
+      "mean": 10.648924127617148,
+      "over33": 115,
+      "over50": 4,
+      "over100": 0,
+      "over250": 0
+    },
+    "tick_cpu": {
+      "n": 1003,
+      "p50": 5.4524,
+      "p95": 39.112,
+      "p99": 46.3823,
+      "max": 51.1407,
+      "mean": 10.034568993020937,
+      "over33": 111,
+      "over50": 1,
+      "over100": 0,
+      "over250": 0
+    },
+    "quality": {
+      "foreign_cpu_cores": {
+        "n": 10,
+        "p50": 0.09,
+        "p95": 0.24,
+        "p99": 0.24,
+        "max": 0.24,
+        "mean": 0.129,
+        "over33": 0,
+        "over50": 0,
+        "over100": 0,
+        "over250": 0
+      },
+      "foreign_gpu_percent": {
+        "n": 10,
+        "p50": 0.0,
+        "p95": 1.8,
+        "p99": 1.8,
+        "max": 1.8,
+        "mean": 0.28,
+        "over33": 0,
+        "over50": 0,
+        "over100": 0,
+        "over250": 0
+      },
+      "gpu_clock_mhz": {
+        "n": 10,
+        "p50": 2445.0,
+        "p95": 2565.0,
+        "p99": 2565.0,
+        "max": 2565.0,
+        "mean": 2281.5,
+        "over33": 10,
+        "over50": 10,
+        "over100": 10,
+        "over250": 10
+      },
+      "power_profiles": [
+        "performance"
+      ],
+      "gc_pause_ms": {
+        "n": 28,
+        "p50": 6.69,
+        "p95": 9.177,
+        "p99": 9.196,
+        "max": 9.196,
+        "mean": 5.7180357142857146,
+        "over33": 0,
+        "over50": 0,
+        "over100": 0,
+        "over250": 0
+      }
+    },
+    "native": {
+      "incoming-drone": 100
+    },
+    "blasts": 100,
+    "series": "[09:10:14] [Server thread/INFO] [ua.ze.in.Incoming/]: Impact series summary (minecraft:overworld): strikes 100, units 770520, total 3350.5 ms, longest unit 20.0 ms, longest tick 48.6 ms, ticks over 50 ms 0, over 282 ticks"
+  },
+  "b": {
+    "head": "0006b0ccc2a8c041d4947ddc25d0da7810a437d4",
+    "fragment_ms": 1564.802,
+    "impact_per_tick": {
+      "n": 1002,
+      "p50": 0.0007,
+      "p95": 30.1235,
+      "p99": 31.9136,
+      "max": 47.1549,
+      "mean": 3.8087241516966066,
+      "over33": 7,
+      "over50": 0,
+      "over100": 0,
+      "over250": 0
+    },
+    "frame": {
+      "n": 2465,
+      "p50": 16.173,
+      "p95": 49.89,
+      "p99": 86.587,
+      "max": 275.385,
+      "mean": 20.327360649087222,
+      "over33": 292,
+      "over50": 122,
+      "over100": 14,
+      "over250": 2
+    },
+    "tick": {
+      "n": 1002,
+      "p50": 4.3096,
+      "p95": 40.0224,
+      "p99": 47.6466,
+      "max": 57.2863,
+      "mean": 9.857977844311376,
+      "over33": 120,
+      "over50": 7,
+      "over100": 0,
+      "over250": 0
+    },
+    "tick_cpu": {
+      "n": 1002,
+      "p50": 4.1918,
+      "p95": 38.4865,
+      "p99": 44.3035,
+      "max": 51.1843,
+      "mean": 9.350815768463073,
+      "over33": 114,
+      "over50": 1,
+      "over100": 0,
+      "over250": 0
+    },
+    "quality": {
+      "foreign_cpu_cores": {
+        "n": 10,
+        "p50": 0.0,
+        "p95": 0.08,
+        "p99": 0.08,
+        "max": 0.08,
+        "mean": 0.014,
+        "over33": 0,
+        "over50": 0,
+        "over100": 0,
+        "over250": 0
+      },
+      "foreign_gpu_percent": {
+        "n": 10,
+        "p50": 0.0,
+        "p95": 0.0,
+        "p99": 0.0,
+        "max": 0.0,
+        "mean": 0.0,
+        "over33": 0,
+        "over50": 0,
+        "over100": 0,
+        "over250": 0
+      },
+      "gpu_clock_mhz": {
+        "n": 10,
+        "p50": 2280.0,
+        "p95": 2565.0,
+        "p99": 2565.0,
+        "max": 2565.0,
+        "mean": 2290.5,
+        "over33": 10,
+        "over50": 10,
+        "over100": 10,
+        "over250": 10
+      },
+      "power_profiles": [
+        "performance"
+      ],
+      "gc_pause_ms": {
+        "n": 26,
+        "p50": 6.973,
+        "p95": 9.527,
+        "p99": 9.56,
+        "max": 9.56,
+        "mean": 5.799807692307692,
+        "over33": 0,
+        "over50": 0,
+        "over100": 0,
+        "over250": 0
+      }
+    },
+    "native": {
+      "incoming-drone": 100
+    },
+    "blasts": 100,
+    "series": "[09:13:23] [Server thread/INFO] [ua.ze.in.Incoming/]: Impact series summary (minecraft:overworld): strikes 100, units 778447, total 3504.0 ms, longest unit 21.4 ms, longest tick 47.2 ms, ticks over 50 ms 0, over 282 ticks"
+  },
+  "a2": {
+    "head": "36c9b5bdddbad22cc4e418c7b02bb7a141f56e4b",
+    "fragment_ms": 1453.471,
+    "impact_per_tick": {
+      "n": 1003,
+      "p50": 0.0006,
+      "p95": 30.1071,
+      "p99": 31.3813,
+      "max": 45.6102,
+      "mean": 3.64880259222333,
+      "over33": 4,
+      "over50": 0,
+      "over100": 0,
+      "over250": 0
+    },
+    "frame": {
+      "n": 2259,
+      "p50": 17.464,
+      "p95": 55.264,
+      "p99": 87.97,
+      "max": 243.157,
+      "mean": 22.19943337760071,
+      "over33": 300,
+      "over50": 169,
+      "over100": 14,
+      "over250": 0
+    },
+    "tick": {
+      "n": 1003,
+      "p50": 4.8674,
+      "p95": 40.8772,
+      "p99": 49.7304,
+      "max": 54.9138,
+      "mean": 10.219495114656032,
+      "over33": 118,
+      "over50": 3,
+      "over100": 0,
+      "over250": 0
+    },
+    "tick_cpu": {
+      "n": 1003,
+      "p50": 4.7159,
+      "p95": 39.0198,
+      "p99": 46.9414,
+      "max": 49.4443,
+      "mean": 9.629723529411764,
+      "over33": 111,
+      "over50": 0,
+      "over100": 0,
+      "over250": 0
+    },
+    "quality": {
+      "foreign_cpu_cores": {
+        "n": 10,
+        "p50": 0.09,
+        "p95": 0.18,
+        "p99": 0.18,
+        "max": 0.18,
+        "mean": 0.093,
+        "over33": 0,
+        "over50": 0,
+        "over100": 0,
+        "over250": 0
+      },
+      "foreign_gpu_percent": {
+        "n": 10,
+        "p50": 0.0,
+        "p95": 7.8,
+        "p99": 7.8,
+        "max": 7.8,
+        "mean": 1.48,
+        "over33": 0,
+        "over50": 0,
+        "over100": 0,
+        "over250": 0
+      },
+      "gpu_clock_mhz": {
+        "n": 10,
+        "p50": 2130.0,
+        "p95": 2565.0,
+        "p99": 2565.0,
+        "max": 2565.0,
+        "mean": 2194.5,
+        "over33": 10,
+        "over50": 10,
+        "over100": 10,
+        "over250": 10
+      },
+      "power_profiles": [
+        "performance"
+      ],
+      "gc_pause_ms": {
+        "n": 27,
+        "p50": 6.794,
+        "p95": 9.098,
+        "p99": 9.101,
+        "max": 9.101,
+        "mean": 5.808481481481482,
+        "over33": 0,
+        "over50": 0,
+        "over100": 0,
+        "over250": 0
+      }
+    },
+    "native": {
+      "incoming-drone": 100
+    },
+    "blasts": 100,
+    "series": "[09:16:33] [Server thread/INFO] [ua.ze.in.Incoming/]: Impact series summary (minecraft:overworld): strikes 100, units 755531, total 3357.2 ms, longest unit 21.1 ms, longest tick 45.6 ms, ticks over 50 ms 0, over 282 ticks"
+  }
+}

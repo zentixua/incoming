@@ -1,0 +1,80 @@
+{
+  "a1": {
+    "profile.jfr": {
+      "bytes": 23811263,
+      "sha256": "5b0fd296209e0f508315b1a975c0d0d527bc1b74a97919c3d291cd7a4b356c7a"
+    },
+    "async.jfr": {
+      "bytes": 23835596,
+      "sha256": "f8b3f7012086bd0a7dea551400f714057a299a94d4f77d35630e0855b6d8ae75"
+    },
+    "console.log": {
+      "bytes": 734788,
+      "sha256": "06055160b9b7fd60d8fe934207a210dcd8ec68fbb19a1bbc4506ef53638abdfd"
+    },
+    "stand-out/host.jsonl": {
+      "bytes": 29371,
+      "sha256": "758ca0ee29ef3785985bb4692379a710060fba652dd8803c9a739d85a4a69ff2"
+    },
+    "stand-out/events.jsonl": {
+      "bytes": 1136356,
+      "sha256": "fb1b23700c830db495f3ec4cfea616a79dd492c964f2b269c1faebf8835cc615"
+    },
+    "stand-out/frames.csv": {
+      "bytes": 3928244,
+      "sha256": "e8697f8377017952add1635051fe4656309b18c762e5462e1f021dd690d98d56"
+    }
+  },
+  "b": {
+    "profile.jfr": {
+      "bytes": 23574176,
+      "sha256": "254240f9be6eee44310e01ad5dd2eb3d1776c4e79e27943f5875170bfdace95a"
+    },
+    "async.jfr": {
+      "bytes": 24059219,
+      "sha256": "4ca41bfc7d889cd1ea21fab6a0361a88cd1678b528553bcecac7a0dafee9100e"
+    },
+    "console.log": {
+      "bytes": 734560,
+      "sha256": "d4e14ab0ddaa94cbde1a29bb454aabe65c41f08a486e52adc9d1524fffa74bd2"
+    },
+    "stand-out/host.jsonl": {
+      "bytes": 28371,
+      "sha256": "9acfb8e9982b29412f561a688c8bbe7c6ccb870a7ab3ba70c345d1a049fdfdd6"
+    },
+    "stand-out/events.jsonl": {
+      "bytes": 1134622,
+      "sha256": "ee57e5d262cc9acc9f656a1786f0991eeae799a06ce200d2ac0f5bccf94c0df3"
+    },
+    "stand-out/frames.csv": {
+      "bytes": 4028449,
+      "sha256": "564253f45a8f7fee706b1d0ff2f2f947bdb6f96f7cf0c10147592dda03262011"
+    }
+  },
+  "a2": {
+    "profile.jfr": {
+      "bytes": 23785077,
+      "sha256": "49fa4cfd46350182bd1947a3a5beae0ad7a9431f8a8027809b135806f64279db"
+    },
+    "async.jfr": {
+      "bytes": 25249073,
+      "sha256": "d9257daf51c19d0f8bc94fe218629c5af847b3288c49f76fc726bb11ef33c0b1"
+    },
+    "console.log": {
+      "bytes": 734526,
+      "sha256": "4686ec08969dc39babd0e80bf82b5b691b728cf73d57925033eb156932cf3cb0"
+    },
+    "stand-out/host.jsonl": {
+      "bytes": 29433,
+      "sha256": "22cce7090fdb1b807ce57e30d0fa1057856862942c982922a1d9fc3484e58f7c"
+    },
+    "stand-out/events.jsonl": {
+      "bytes": 1128716,
+      "sha256": "2772a48188c4226abd39a52026916f98d661311a1ce9358c2527eb88a76889b8"
+    },
+    "stand-out/frames.csv": {
+      "bytes": 3869556,
+      "sha256": "d0413c529c6280e028cc81723f2355bb92252bc1466cb3d6d8abde47b48894a4"
+    }
+  }
+}
