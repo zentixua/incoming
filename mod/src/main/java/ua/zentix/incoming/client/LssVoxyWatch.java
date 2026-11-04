@@ -12,7 +12,8 @@ import ua.zentix.incoming.Incoming;
  * Chunks LOD Server Support writes to Voxy: it would overwrite one sent by the mod with the server's disk chunk
  * (no distant ruins there), {@link VoxyIngest#overwritten}. Only the public LSS API
  * ({@code LSSApi.registerColumnConsumer}, MIT); class loads only with LSS installed and subscribes only when the
- * mod writes chunks to Voxy (a subscriber without Voxy would make LSS download LODs just for us).
+ * mod writes chunks to Voxy, or in the test-only standard-LSS hash observation with Voxy installed
+ * (a subscriber without Voxy would make LSS download LODs just for us).
  */
 final class LssVoxyWatch {
     private LssVoxyWatch() {}
