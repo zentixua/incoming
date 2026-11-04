@@ -13,7 +13,7 @@ import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.nuclear.Detonation;
 import ua.zentix.incoming.registry.ModAttachments;
 
-/** One terminal observation for the pipeline test; never runs on its ordinary successful path. */
+/** One deadline snapshot for the pipeline test, skipped when the test completes before tick 1200. */
 public final class RuinPipelineDiagnostic {
     private RuinPipelineDiagnostic() {}
 
@@ -30,13 +30,13 @@ public final class RuinPipelineDiagnostic {
             Future<?> future = task == null ? null : (Future<?>) field(task, "future");
             ThreadPoolExecutor pool = (ThreadPoolExecutor) field(RuinWorkers.class, "pool");
             Incoming.LOG.info("NUKE_PIPELINE_DEADLINE game={} age={} event={} queuedEvent={} target={} state={} scar={} "
-                            + "craters={} queue={} pendingPlan={} clockUsed={} maxUnits={} resident={} results={} detached={} "
+                            + "craters={} queue={} pendingPlan={} clockUsed={} maxUnits={} results={} detached={} "
                             + "poolSize={} active={} queued={} nearInFlight={} capacity={}",
                     now, now - detonation.gameTime(), detonation.id(), queuedEvent, target,
                     chunk == null ? "unready" : chunk.getBlockState(target),
                     chunk == null ? -1 : chunk.getExistingData(ModAttachments.CHUNK_SCAR).orElse(0),
                     world.craterJobs(), queue.diagState(key, now), queue.pendingPlan(detonation.id(), key),
-                    clock.usedThisTickNanos(), clock.maxUnitsPerTick(), NuclearPrep.residentMemory(level),
+                    clock.usedThisTickNanos(), clock.maxUnitsPerTick(),
                     RuinResults.bytes(), RuinInputs.detachedBytes(), pool == null ? 0 : pool.getPoolSize(),
                     pool == null ? 0 : pool.getActiveCount(), pool == null ? 0 : pool.getQueue().size(),
                     RuinWorkers.inFlight(RuinWorkers.Priority.NEAR), pool == null ? 0 : RuinWorkers.capacity());
