@@ -39,13 +39,16 @@ abstract class LedgerData extends SavedData {
 
     @Override public final void save(File file, HolderLookup.Provider registries) {
         if (!writable() || !isDirty() && !failed) return;
-        long mtB7Id = MtB7Metrics.saveId(), mtB7Frozen = mtB7Id == 0 ? 0 : System.nanoTime();
+        long mtB7Id = MtB7Metrics.saveId();
+        long mtB7Session = MtB7Metrics.session();
+        String mtB7File = mtB7Id == 0 ? "" : MtB7Metrics.fileKey(file);
+        long mtB7Frozen = mtB7Id == 0 ? 0 : System.nanoTime();
         writing = true; // Before enqueue: delayed I/O owns the ledger too.
         failed = false;
         setDirty(false);
         IOUtilities.withIOWorker(() -> {
             long mtB7Worker = mtB7Id == 0 ? 0 : System.nanoTime();
-            MtB7Metrics.save(mtB7Id, this, "worker_start_queue", mtB7Worker - mtB7Frozen, true);
+            MtB7Metrics.save(mtB7Id, mtB7Session, mtB7File, this, "worker_start_queue", mtB7Worker - mtB7Frozen, true);
             long mtB7Atomic = MtB7Stages.begin(5);
             boolean mtB7Success = false;
             try {
@@ -67,12 +70,13 @@ abstract class LedgerData extends SavedData {
                 failed = true; // Keep the old atomic file, retry on the next save even after shutdown.
                 Incoming.LOG.error("Could not save material ledger {}", file, error);
             } finally {
-                MtB7Stages.end(5, mtB7Atomic);
-                MtB7Metrics.save(mtB7Id, this, "atomic_write_complete", mtB7Id == 0 ? 0 : System.nanoTime() - mtB7Worker, mtB7Success);
+                long mtB7Done = mtB7Id == 0 ? 0 : System.nanoTime();
                 writing = false;
-                MtB7Metrics.save(mtB7Id, this, "freeze_complete", mtB7Id == 0 ? 0 : System.nanoTime() - mtB7Frozen, mtB7Success);
+                MtB7Stages.end(5, mtB7Atomic);
+                MtB7Metrics.save(mtB7Id, mtB7Session, mtB7File, this, "atomic_write_complete", mtB7Atomic == 0 ? 0 : mtB7Done - mtB7Atomic, mtB7Success);
+                MtB7Metrics.save(mtB7Id, mtB7Session, mtB7File, this, "freeze_complete", mtB7Id == 0 ? 0 : mtB7Done - mtB7Frozen, mtB7Success);
             }
         });
-        MtB7Metrics.save(mtB7Id, this, "enqueue_return", mtB7Id == 0 ? 0 : System.nanoTime() - mtB7Frozen, true);
+        MtB7Metrics.save(mtB7Id, mtB7Session, mtB7File, this, "enqueue_return", mtB7Id == 0 ? 0 : System.nanoTime() - mtB7Frozen, true);
     }
 }

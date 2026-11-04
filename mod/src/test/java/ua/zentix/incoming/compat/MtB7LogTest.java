@@ -19,8 +19,8 @@ class MtB7LogTest {
         long saved = rows.stream().filter(row -> row.startsWith("measurement,")).count();
         assertEquals(10000, saved + log.dropped.get());
         assertTrue(log.dropped.get() > 0);
-        assertTrue(Files.size(path) <= 256 + 32, "fixed final drop footer is the only allowance");
-        assertEquals("# dropped=" + log.dropped.get(), rows.getLast());
+        assertTrue(Files.size(path) <= 256 + 64, "fixed final drop footer is the only allowance");
+        assertEquals("# dropped=" + log.dropped.get() + " producer_shutdown=complete", rows.getLast());
     }
 
     @Test void oversizeAndClosedRowsAreDroppedAndExistingEvidenceCannotBeOverwritten() throws Exception {
@@ -34,5 +34,26 @@ class MtB7LogTest {
         assertTrue(Files.readString(path).contains("kept\n"));
         assertThrows(java.nio.file.FileAlreadyExistsException.class, () -> new MtB7Log(path, "replacement"));
         assertTrue(Files.readString(path).startsWith("header\n"));
+    }
+    @Test void blockedProducerIsExplicitlyIncompleteAndDrainedProducerKeepsItsFinalRow() throws Exception {
+        var pool = java.util.concurrent.Executors.newSingleThreadExecutor();
+        var gate = new java.util.concurrent.CountDownLatch(1);
+        var began = new java.util.concurrent.CountDownLatch(1);
+        var log = new MtB7Log(directory.resolve("incomplete.csv"), "header");
+        try {
+            pool.execute(() -> { began.countDown(); try { gate.await(); } catch (InterruptedException e) { Thread.currentThread().interrupt(); } log.add("late result"); });
+            assertTrue(began.await(1, java.util.concurrent.TimeUnit.SECONDS));
+            assertFalse(MtB7Log.drain(pool, 5));
+            log.close(false);
+            assertTrue(Files.readString(directory.resolve("incomplete.csv")).contains("producer_shutdown=incomplete"));
+        } finally { gate.countDown(); assertTrue(pool.awaitTermination(1, java.util.concurrent.TimeUnit.SECONDS)); log.close(false); }
+        assertEquals(1, log.dropped.get(), "late producer cannot rewrite a sealed incomplete footer");
+
+        var finished = java.util.concurrent.Executors.newSingleThreadExecutor();
+        var complete = new MtB7Log(directory.resolve("complete.csv"), "header");
+        finished.execute(() -> complete.add("final result"));
+        assertTrue(MtB7Log.drain(finished, 1000));
+        complete.close(true);
+        assertTrue(Files.readString(directory.resolve("complete.csv")).contains("final result\n# dropped=0 producer_shutdown=complete"));
     }
 }

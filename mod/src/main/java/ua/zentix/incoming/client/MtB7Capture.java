@@ -25,15 +25,13 @@ final class MtB7Capture {
         writer = new ThreadPoolExecutor(1,1,0,TimeUnit.SECONDS,new ArrayBlockingQueue<>(2), task -> {
             Thread thread = new Thread(task,"MT-B7 PNG"); thread.setDaemon(true); return thread;
         });
-        Runtime.getRuntime().addShutdownHook(new Thread(() -> {
-            writer.shutdown(); try { writer.awaitTermination(3,TimeUnit.SECONDS); }
-            catch (InterruptedException error) { Thread.currentThread().interrupt(); }
-            index.close();
-        }));
+        MtB7Log.producer(writer, () -> index.add("# capture_drops=" + DROPS.get()));
     }
     static long drops() { return DROPS.get() + (index == null ? 0 : index.dropped.get()); }
     static void frame(long frame,long wall,long nano,long tick,long scope) {
-        if (!ENABLED || writer == null || nano < next) return;
+        if (!ENABLED || writer == null) return;
+        synchronized (writer) {
+        if (MtB7Log.stopping() || nano < next) return;
         next = nano + 1_000_000_000L;
         if (total >= 1000 || writer.getQueue().remainingCapacity() == 0) { DROPS.incrementAndGet(); return; }
         var target = Minecraft.getInstance().getMainRenderTarget();
@@ -48,5 +46,6 @@ final class MtB7Capture {
             });
             total++;
         } catch (RejectedExecutionException error) { image.close(); DROPS.incrementAndGet(); index.add(row+"queue_drop"); }
+        }
     }
 }

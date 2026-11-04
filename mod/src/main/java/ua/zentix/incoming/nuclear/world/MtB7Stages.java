@@ -8,6 +8,10 @@ final class MtB7Stages {
     static final AtomicLongArray started=new AtomicLongArray(8),finished=new AtomicLongArray(8),failed=new AtomicLongArray(8),nanos=new AtomicLongArray(8);
     private static final AtomicLongArray work = new AtomicLongArray(2);
     static void count(int kind) { if (ENABLED) work.incrementAndGet(kind); }
+    static boolean idle() {
+        for (int i = 0; i <= 5; i++) if (started.get(i) != finished.get(i)) return false;
+        return true;
+    }
     private MtB7Stages() {}
     static long begin(int stage){if(!ENABLED)return 0;started.incrementAndGet(stage);return System.nanoTime();}
     static void end(int stage,long start){if(start==0)return;nanos.addAndGet(stage,System.nanoTime()-start);finished.incrementAndGet(stage);}

@@ -21,8 +21,18 @@ public final class MtB7Columns {
     private static final ExecutorService SERVER = new ThreadPoolExecutor(1, 1, 0, TimeUnit.SECONDS, new ArrayBlockingQueue<>(64), r -> {
         Thread t = new Thread(r, "MT-B7 passive columns"); t.setDaemon(true); return t;
     });
+    private static final AtomicLong connections = new AtomicLong(), offers = new AtomicLong();
+    public static long nextConnection() { return connections.incrementAndGet(); }
+    static String offerIdentity(long offer, UUID recipient, long connection, boolean accepted) {
+        return offer+","+recipient+","+connection+",queue_offer,"+accepted;
+    }
     private static Log serverLog;
     private static final java.util.concurrent.atomic.AtomicBoolean errorLogged = new java.util.concurrent.atomic.AtomicBoolean();
+    static {
+        if (ENABLED) MtB7Log.producer(SERVER, () -> {
+            if (serverLog != null) serverLog.add("# hash_drops=" + serverDrops.get() + " queued_bytes=" + serverBytes.get());
+        });
+    }
     private MtB7Columns() {}
 
     public static long hash(LevelChunkSection section) {
@@ -52,23 +62,27 @@ public final class MtB7Columns {
         }
         return out.toString();
     }
-    /** Called only after the production queue accepts a column; encoded immutable payloads are read off-thread. */
-    public static void offered(ServerLevel level, S2C.VoxyChunk packet) {
+    /** Observe each production queue offer, including refusals; never claim send/delivery. */
+    public static void offered(ServerLevel level, S2C.VoxyChunk packet, UUID recipient, long connection, boolean accepted) {
         if(!ENABLED || level == null)return;
+        synchronized (SERVER) {
+        if (MtB7Log.stopping()) return;
         long charge=packet.sections().length+256L;
         if(serverBytes.addAndGet(charge)>(8L<<20)){serverBytes.addAndGet(-charge);serverDrops.incrementAndGet();return;}
         long wall=System.currentTimeMillis(),nano=System.nanoTime(),tick=level.getGameTime();
+        String identity = offerIdentity(offers.incrementAndGet(), recipient, connection, accepted);
         var biomes=level.registryAccess().registryOrThrow(Registries.BIOME);
         try { SERVER.execute(() -> {
             long start=System.nanoTime();
             try {
-                if(serverLog==null)serverLog=new Log(MtB7Log.ROOT.resolve("server-columns.csv"),"wall_ms,mono_ns,tick,dimension,x,z,event,due,hashes,observe_ns,decode_delay_ns");
+                if(serverLog==null)serverLog=new Log(MtB7Log.ROOT.resolve("server-columns.csv"),"wall_ms,mono_ns,tick,offer_id,recipient_uuid,connection,phase,accepted,dimension,x,z,event,due,hashes,observe_ns,decode_delay_ns");
                 long[] hashes=empty();
                 for(var s:LodSections.read(packet.sections(),biomes))if(s.y()>=-8&&s.y()<56)hashes[s.y()+8]=hash(s.blocks());
-                serverLog.add(wall+","+nano+","+tick+","+packet.dimension()+","+packet.x()+","+packet.z()+","+packet.detonation()+","+packet.notBefore()+","+encode(hashes)+","+(System.nanoTime()-start)+","+(start-nano));
+                serverLog.add(wall+","+nano+","+tick+","+identity+","+packet.dimension()+","+packet.x()+","+packet.z()+","+packet.detonation()+","+packet.notBefore()+","+encode(hashes)+","+(System.nanoTime()-start)+","+(start-nano));
             }catch(Exception e){serverDrops.incrementAndGet();if (errorLogged.compareAndSet(false, true)) Incoming.LOG.error("MT-B7 passive server record failed (subsequent errors counted)",e);}
             finally{serverBytes.addAndGet(-charge);}
         }); } catch (RejectedExecutionException rejected) { serverBytes.addAndGet(-charge); serverDrops.incrementAndGet(); }
+        }
     }
     /** Compatibility with the prior MT-B7 instrumenter. */
     public static final class Log extends MtB7Log {

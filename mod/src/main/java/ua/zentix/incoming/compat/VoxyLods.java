@@ -93,16 +93,19 @@ public final class VoxyLods {
         final LodBatchFlow flow = new LodBatchFlow();
         private int batchBytes;
 
-        void offer(long chunk, S2C.VoxyChunk packet) {
+        final long mtB7Connection = MtB7Columns.ENABLED ? MtB7Columns.nextConnection() : 0;
+
+        boolean offer(long chunk, S2C.VoxyChunk packet) {
             Column key = new Column(chunk, packet.notBefore(), packet.detonation());
             S2C.VoxyChunk was = queue.remove(key);
             if (was != null) bytes -= was.sections().length;
             if (bytes + packet.sections().length > QUEUE_BYTES) {
                 dropped++;
-                return;
+                return false;
             }
             queue.put(key, packet);
             bytes += packet.sections().length;
+            return true;
         }
 
         void drain(ServerPlayer player) {
@@ -303,8 +306,8 @@ public final class VoxyLods {
         if (viewer.bytes + packet.sections().length > QUEUE_BYTES
                 || ua.zentix.incoming.nuclear.world.NuclearPrep.memory(player.serverLevel()) + packet.sections().length
                 > ua.zentix.incoming.nuclear.world.NuclearPrep.PLANS_CAP) return false;
-        viewer.offer(ChunkPos.asLong(packet.x(), packet.z()), packet);
-        MtB7Columns.offered(player.serverLevel(), packet);
+        boolean mtB7Accepted = viewer.offer(ChunkPos.asLong(packet.x(), packet.z()), packet);
+        MtB7Columns.offered(player.serverLevel(), packet, player.getUUID(), viewer.mtB7Connection, mtB7Accepted);
         return true;
     }
 
@@ -318,8 +321,8 @@ public final class VoxyLods {
         for (UUID id : b.to) {
             Viewer viewer = viewers.get(id);
             if (viewer == null || viewer.dimension != b.dimension) continue;
-            viewer.offer(b.chunk, packet);
-            MtB7Columns.offered(server.getLevel(b.dimension), packet);
+            boolean mtB7Accepted = viewer.offer(b.chunk, packet);
+            MtB7Columns.offered(server.getLevel(b.dimension), packet, id, viewer.mtB7Connection, mtB7Accepted);
         }
     }
 

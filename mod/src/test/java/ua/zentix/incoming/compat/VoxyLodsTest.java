@@ -303,4 +303,27 @@ class VoxyLodsTest {
         assertEquals(35, viewer.bytes, "only a revision of the same event deadline supersedes its waiting copy");
     }
 
+    @Test
+    void testOnlyOfferObservationDistinguishesRecipientRefusalAndReplacement() {
+        var recipientA = java.util.UUID.randomUUID();
+        var recipientB = java.util.UUID.randomUUID();
+        var first = new VoxyLods.Viewer();
+        var second = new VoxyLods.Viewer();
+        second.bytes = VoxyLods.QUEUE_BYTES;
+        var original = packet(7, new byte[10]);
+        assertTrue(first.offer(7, original));
+        assertFalse(second.offer(7, original));
+        long connectionA = MtB7Columns.nextConnection(), connectionB = MtB7Columns.nextConnection();
+        String accepted = MtB7Columns.offerIdentity(1, recipientA, connectionA, true);
+        String refused = MtB7Columns.offerIdentity(2, recipientB, connectionB, false);
+        assertTrue(accepted.contains(recipientA+","+connectionA+",queue_offer,true"));
+        assertTrue(refused.contains(recipientB+","+connectionB+",queue_offer,false"));
+        var replacement = packet(7, new byte[20]);
+        assertTrue(first.offer(7, replacement));
+        assertEquals(List.of(replacement), new ArrayList<>(first.queue.values()));
+        assertEquals(20, first.bytes);
+        assertEquals(0, second.queue.size());
+        assertEquals(1, second.dropped);
+    }
+
 }
