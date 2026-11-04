@@ -45,7 +45,8 @@ final class RuinPages {
         if (closed) return CompletableFuture.failedFuture(new IllegalStateException("Ruin pages closed"));
         var result = tail.handleAsync((unused, failure) -> key, Util.ioPool())
                 .thenCompose(k -> worker.loadAsync(new ChunkPos(k)));
-        tail = result;
+        // Ordering owns completion only; the reader's reservation owns the returned payload.
+        tail = result.handle((unused, failure) -> null);
         return result;
     }
 

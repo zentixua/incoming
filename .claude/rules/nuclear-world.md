@@ -437,3 +437,12 @@ paths:
   `nuke_stale_background` holds worker admission after changing planned glass and proves that the tick cannot
   borrow a synchronous solver or mark stale output complete. Continuously edited inputs may need more retries;
   the pressure clock and chunk-send deadline are unchanged.
+
+- Actual solver input ownership is separate from pool slots/workspace. `RuinContext` transfers its existing
+  retained estimate to numeric `RuinInputs` ownership before cancellation/detachment; actual Task exit (or removed
+  queued callable) releases it. Both ruin and flash-layer submissions carry that callback through promotion.
+  Removed/replaced snapshots stay conservatively charged while any actual context worker remains, including tasks
+  forgotten from the task map. Keep shadow heights/fractures available to running Grids. Admission and resident
+  counters include detached inputs once across dimensions; the scalar owner retains no context/world references.
+  `nuke_inputs_*` exercises populated Grids through registered cancel, clear, forget/world removal, expiry and
+  queued promotion/cancellation. This preserves known estimates, not a complete JVM heap bound.
