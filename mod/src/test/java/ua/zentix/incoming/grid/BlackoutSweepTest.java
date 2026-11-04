@@ -4,6 +4,8 @@ import it.unimi.dsi.fastutil.longs.LongArrayFIFOQueue;
 import it.unimi.dsi.fastutil.longs.LongArrayList;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import net.minecraft.world.level.ChunkPos;
+import net.minecraft.core.HolderLookup;
+import net.minecraft.nbt.CompoundTag;
 import org.junit.jupiter.api.Test;
 import ua.zentix.incoming.nuclear.world.WorkClock;
 
@@ -73,6 +75,33 @@ class BlackoutSweepTest {
     }
 
     @Test
+    void closestChunksOfEveryPlayerLeadEachDistanceRing() throws ReflectiveOperationException {
+        BlackoutWorld world = new BlackoutWorld();
+        LongArrayList players = field(world, "players");
+        players.add(ChunkPos.asLong(50, 30));
+        players.add(ChunkPos.asLong(-45, -30));
+        BlackoutWorld.Sweep sweep = built(instant());
+        WorkClock clock = WorkClock.counting(1_000_000);
+        LongArrayList issued = new LongArrayList();
+        int[] lastDistance = {-1};
+        while (!sweep.done()) {
+            clock.start(1_000_000);
+            world.issueDue(sweep, 100, clock, c -> {
+                int distance = Integer.MAX_VALUE;
+                for (long p : players) distance = Math.min(distance, Math.max(
+                        Math.abs(ChunkPos.getX(c) - ChunkPos.getX(p)), Math.abs(ChunkPos.getZ(c) - ChunkPos.getZ(p))));
+                if (distance <= BlackoutWorld.NEAR_CHUNKS) {
+                    assertTrue(distance >= lastDistance[0], "more distant near chunk overtook a closer player chunk");
+                    lastDistance[0] = distance;
+                }
+                issued.add(c);
+            });
+            assertEquals(players.getLong(0), issued.getLong(0), "first player centre must lead the first unit");
+            assertEquals(players.getLong(1), issued.getLong(1), "second player centre must not wait for the first square");
+        }
+    }
+
+    @Test
     void nearQueueGetsTheNextTickInsteadOfWaitingForWholeFarBucket() throws ReflectiveOperationException {
         BlackoutWorld world = new BlackoutWorld();
         LongArrayList players = field(world, "players");
@@ -89,6 +118,67 @@ class BlackoutSweepTest {
         world.issueDue(sweep, 100, clock, c -> { throw new AssertionError("near lamps must convert first"); });
         assertTrue(clock.canStart(), "the next tick's one-unit guarantee remains for conversion");
         assertEquals(1, clock.units());
+    }
+
+    @Test
+    void productionNearFifoStartsWithBothPlayersInLargeAndSmallBuckets() throws ReflectiveOperationException {
+        for (double radius : new double[]{1200, 80}) {
+            BlackoutWorld.Sweep sweep = built(new Outage(1, 0, 0, radius, 100,
+                    Double.POSITIVE_INFINITY, Outage.NEVER, 0, -1));
+            LongArrayList bucket = sweep.byDue.get(100);
+            assertTrue(bucket.size() > 2);
+            BlackoutWorld world = new BlackoutWorld();
+            LongArrayList players = field(world, "players");
+            players.add(radius > 100 ? ChunkPos.asLong(50, 30) : bucket.getLong(bucket.size() - 1));
+            players.add(radius > 100 ? ChunkPos.asLong(-45, -30) : bucket.getLong(0));
+            assertEquals(radius > 100, bucket.size() > BlackoutWorld.CHUNKS_PER_UNIT);
+            WorkClock clock = WorkClock.counting(1_000_000);
+            clock.start(4_000_000);
+            world.issueDue(sweep, 100, clock, world::enqueue);
+            LongArrayFIFOQueue near = field(world, "near");
+            assertTrue(near.size() > 2);
+            LongOpenHashSet first = new LongOpenHashSet();
+            first.add(near.dequeueLong());
+            first.add(near.dequeueLong());
+            assertEquals(new LongOpenHashSet(players), first, "either player's centre waited behind a farther chunk");
+            int previous = 0;
+            while (!near.isEmpty()) {
+                long c = near.dequeueLong();
+                int distance = Integer.MAX_VALUE;
+                for (long p : players) distance = Math.min(distance, Math.max(
+                        Math.abs(ChunkPos.getX(c) - ChunkPos.getX(p)), Math.abs(ChunkPos.getZ(c) - ChunkPos.getZ(p))));
+                assertTrue(distance >= previous, "production near FIFO changed nearest-player order");
+                previous = distance;
+            }
+        }
+    }
+
+    @Test
+    void partialBucketProgressSurvivesSavedDataRoundTrip() throws ReflectiveOperationException {
+        PowerGrid grid = new PowerGrid();
+        Outage outage = grid.addOutage(0, 0, 1200, 100, Double.MAX_VALUE, Outage.NEVER, 0, -1);
+        BlackoutWorld.Sweep sweep = built(outage);
+        LongOpenHashSet expected = contents(sweep);
+        WorkClock clock = WorkClock.counting(1_000_000);
+        clock.start(1_000_000);
+        BlackoutWorld world = new BlackoutWorld();
+        world.issueDue(sweep, 100, clock, c -> {});
+        grid.swept(outage.id(), false, sweep.issuedThrough());
+        var load = PowerGrid.class.getDeclaredMethod("load", CompoundTag.class, HolderLookup.Provider.class);
+        load.setAccessible(true);
+        PowerGrid reloaded = (PowerGrid) load.invoke(null, grid.save(new CompoundTag(), null), null);
+        assertEquals(99, reloaded.swept(outage.id(), false));
+        assertTrue(reloaded.swept(outage.id(), false) < reloaded.outages().getFirst().lastDark());
+        BlackoutWorld.Sweep restarted = built(reloaded.outages().getFirst());
+        LongOpenHashSet replay = new LongOpenHashSet();
+        while (!restarted.done()) {
+            clock.start(1_000_000);
+            world.issueDue(restarted, 100, clock, c -> assertTrue(replay.add(c)));
+        }
+        assertEquals(expected, replay);
+        reloaded.swept(outage.id(), false, restarted.issuedThrough());
+        PowerGrid finished = (PowerGrid) load.invoke(null, reloaded.save(new CompoundTag(), null), null);
+        assertEquals(Long.MAX_VALUE, finished.swept(outage.id(), false));
     }
 
     @Test

@@ -6,6 +6,7 @@ import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongArrayFIFOQueue;
 import it.unimi.dsi.fastutil.longs.LongArrayList;
+import it.unimi.dsi.fastutil.longs.LongArrays;
 import it.unimi.dsi.fastutil.longs.LongLinkedOpenHashSet;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import dev.ryanhcode.sable.companion.SubLevelAccess;
@@ -108,7 +109,7 @@ public final class BlackoutWorld {
         long cursor = Long.MIN_VALUE;
 
         /** Resume within the current due bucket; near probes never scan the whole far bucket. */
-        int at, nearPlayer, nearCell;
+        int at, nearRadius, nearPlayer, nearCell;
         long[] priorityPlayers;
         IntOpenHashSet issuedNear;
 
@@ -144,7 +145,6 @@ public final class BlackoutWorld {
 
         /** One bounded unit, including empty deadlines, near-player probes and already-issued entries. */
         void issueBatch(long now, LongArrayList players, LongConsumer issue) {
-            final int side = NEAR_CHUNKS * 2 + 1;
             for (int work = 0; work < CHUNKS_PER_UNIT && cursor <= now && cursor <= last; work++) {
                 LongArrayList chunks = byDue.get(cursor);
                 if (chunks == null) {
@@ -152,21 +152,34 @@ public final class BlackoutWorld {
                     continue;
                 }
                 if (priorityPlayers == null) {
-                    // Small buckets already fit in one unit; enqueue separates near from far chunks itself.
-                    priorityPlayers = chunks.size() > CHUNKS_PER_UNIT ? players.toLongArray() : new long[0];
+                    if (chunks.size() <= CHUNKS_PER_UNIT) {
+                        // Bounded sort: closest lamps first even when this whole bucket fits in one unit.
+                        if (!players.isEmpty()) LongArrays.quickSort(chunks.elements(), 0, chunks.size(),
+                                (a, b) -> Integer.compare(playerDistance(a, players), playerDistance(b, players)));
+                        priorityPlayers = new long[0];
+                    } else priorityPlayers = players.toLongArray();
                 }
-                if (nearPlayer < priorityPlayers.length) {
+                if (priorityPlayers.length > 0 && nearRadius <= NEAR_CHUNKS) {
+                    // Visit each distance ring across ALL players before any farther ring.
+                    int r = nearRadius, edge = r * 2, dx = 0, dz = 0;
+                    if (r > 0) {
+                        int segment = nearCell / edge, offset = nearCell % edge;
+                        dx = switch (segment) { case 0 -> -r + offset; case 1 -> r; case 2 -> r - offset; default -> -r; };
+                        dz = switch (segment) { case 0 -> -r; case 1 -> -r + offset; case 2 -> r; default -> r - offset; };
+                    }
                     long p = priorityPlayers[nearPlayer];
-                    long c = ChunkPos.asLong(ChunkPos.getX(p) + nearCell % side - NEAR_CHUNKS,
-                            ChunkPos.getZ(p) + nearCell / side - NEAR_CHUNKS);
+                    long c = ChunkPos.asLong(ChunkPos.getX(p) + dx, ChunkPos.getZ(p) + dz);
                     int index = find(chunks, c);
                     if (index >= 0) {
                         if (issuedNear == null) issuedNear = new IntOpenHashSet();
                         if (issuedNear.add(index)) issue.accept(c);
                     }
-                    if (++nearCell == side * side) {
+                    if (++nearCell == (r == 0 ? 1 : 8 * r)) {
                         nearCell = 0;
-                        nearPlayer++;
+                        if (++nearPlayer == priorityPlayers.length) {
+                            nearPlayer = 0;
+                            nearRadius++;
+                        }
                     }
                     continue;
                 }
@@ -174,7 +187,7 @@ public final class BlackoutWorld {
                 if (issuedNear == null || !issuedNear.remove(index)) issue.accept(chunks.getLong(index));
                 if (at == chunks.size()) {
                     byDue.remove(cursor++);
-                    at = nearPlayer = nearCell = 0;
+                    at = nearRadius = nearPlayer = nearCell = 0;
                     priorityPlayers = null;
                     issuedNear = null;
                 }
@@ -370,6 +383,10 @@ public final class BlackoutWorld {
 
     /** Nearest player distance in chunks (maximum axis distance); no players — {@code Integer.MAX_VALUE}. */
     private int playerDistance(long chunk) {
+        return playerDistance(chunk, players);
+    }
+
+    private static int playerDistance(long chunk, LongArrayList players) {
         int x = ChunkPos.getX(chunk), z = ChunkPos.getZ(chunk), best = Integer.MAX_VALUE;
         for (int i = 0; i < players.size(); i++) {
             long p = players.getLong(i);
