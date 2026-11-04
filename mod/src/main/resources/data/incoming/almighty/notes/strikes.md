@@ -10,6 +10,11 @@ Incoming (https://github.com/zentixua/incoming): strikes by Shahed and Lancet dr
   [kt [air|ground]]» detonates immediately (operator only). Without kt, use nuclear.default_yield (15 kt by default);
   without a burst mode, use ground (surface contact, crater and fallout). Explicit «15 air» selects the existing
   airburst at its yield-dependent height. Burst mode is not stored in incoming-server.toml.
+  Ordinary nuclear commands queue unpaid destruction preparation, report progress, and automatically launch the exact
+  accepted order when ready; configured flight time starts then. Do not repeat commands to poll progress: a player's
+  new command replaces their previous unlaunched nuclear command. Player logout, death, dimension change, changed
+  authority/settings, moved target or a global nuclear abort cancels pending preparation. Console/command-block
+  preparation requests are bounded; a refused command has not launched. The operator-only now form remains immediate.
 - Fixed launcher (block incoming:fixed_launcher): «incoming launcher x y z [mission <weapon> <count> <spread> x z
   [via …] | load N | fire | clear | owner <player>|none]»; the mission target is x z or x y z, as in salvo. A redstone
   signal at the block does the same as fire.

@@ -681,6 +681,16 @@ final class Sandbox {
                     var screen = new ua.zentix.incoming.client.screen.NuclearReviewScreen(new S2C.NuclearReview(
                             java.util.UUID.randomUUID(), order, target, 20000, 1));
                     mc.setScreen(screen);
+                    if (which.equals("preparing") || which.equals("ready") || which.equals("paused") || which.equals("keyboard")) {
+                        try {
+                            var id = screen.getClass().getDeclaredField("review"); id.setAccessible(true);
+                            var snapshot = (S2C.NuclearReview) id.get(screen);
+                            screen.update(new S2C.NuclearPreparation(snapshot.id(), which.equals("paused") ? S2C.NuclearPreparation.PAUSED
+                                    : which.equals("preparing") ? S2C.NuclearPreparation.PLANNING : S2C.NuclearPreparation.READY,
+                                    which.equals("preparing") || which.equals("paused") ? 245 : 1000, 1000,
+                                    which.equals("paused") ? 2 : 0, Optional.of(target)));
+                        } catch (ReflectiveOperationException e) { throw new IllegalStateException(e); }
+                    }
                     if (which.equals("keyboard")) {
                         screen.setFocused(screen.children().getFirst());
                         screen.tick(); // opening-key guard sees released native keys

@@ -19,9 +19,11 @@ By default only operators can.
 2. On the console: the Nuclear weapon, or the nuclear warhead option of the Missile and the Bomb; the yield
    numeric field in whole kt and suggested values, up to the world’s configured maximum (at most 15 kt); for the ICBM and the missile a ground burst
    (the default, with a crater and fallout trail) or an air burst (wider destruction). The bomb explodes underground.
-3. LMB in the binoculars or FIRE opens a review of the server-resolved target and yield. Hold the launch button
-   for three seconds, or focus it with Tab and hold Space or Enter. Releasing, moving the pointer off the button,
-   losing window focus or closing the review cancels the hold. On small screens, scroll or use Page Up/Down to read the details.
+3. LMB in the binoculars or FIRE opens the exact target, yield and effect estimates. Select **Prepare target**;
+   the server resolves the surface and prepares the hardest-hit area, showing actual progress. Cancel or close freely.
+4. When **Ready** appears, release the button, then hold the launch button for three seconds, or focus it with Tab
+   and hold Space or Enter. Releasing, moving off the button or losing focus cancels the hold. Holding during preparation
+   never launches automatically. On small screens, scroll or use Page Up/Down to read the details.
 
 The targeting map shows flat-ground reference contours for the fireball reference silhouette, 5 psi and 1 psi.
 The fireball reference is its radius at the second light maximum; it can expand farther later.
@@ -31,11 +33,14 @@ boundaries: terrain, shelter, clothing and materials matter. A dashed elevated f
 The review shows your distance and a north-up downwind arrow. Unknown ground height remains an estimate.
 Viewing a wider footprint does not increase targeting range or reveal hidden players.
 
-Reviewing a strike reserves no ammunition and starts no preparation or alarm. Payment and the existing second-key
-window begin only after confirmation. A changed target, weather, server limit or flight configuration requires a new
-review. An unpaid review expires after one minute and is discarded on disconnect, death or restart. The existing
-flight duration and operator immediate-detonation commands are unchanged; this review does not guarantee prepared
-terrain or LOD readiness for a cold observer arriving during flight.
+Inspection and preparation reserve no ammunition and start no alarm. Payment and the existing second-key window begin
+only after confirmation. A changed target, weather, limit or configuration requires a new review. Preparation stays
+alive while the review is open; closing, death, disconnect, dimension change, abort or one minute without contact cancels
+unlaunched preparation. A confirmed order waiting for a second key or carrier warning keeps its preparation itself.
+The configured flight duration (90 seconds by default) starts at launch, after preparation. Ordinary nuclear commands
+prepare unpaid and then launch once ready, because the command itself is the instruction to fire. Operator `nuke now`
+remains immediate diagnostic behavior. Preparation covers the intended target; an unexpected carrier impact or terrain
+edits may need more work. It does not guarantee that every distant-terrain client already has the latest view.
 
 ![Console with the nuclear warhead: yield and burst mode](img/remote-nuke.png)
 
@@ -127,8 +132,7 @@ Burns, radiation and falling debris can still hurt you after the flash, so stay 
 
 ![A dust wave approaches beneath the mushroom cloud at dusk](../media/blast-wave-dusk-hq.jpg)
 
-Distant Horizons and Voxy can show ruins without you visiting them. ICBM strikes prepare the hardest-hit area during
-flight; other nuclear carriers can take longer to update the distant view. Broken windows and fallen trees farther
+Distant Horizons and Voxy can show ruins without you visiting them. Ordinary nuclear orders prepare the hardest-hit area before launch. Broken windows and fallen trees farther
 out appear when you approach. In Voxy, players who missed the strike also need to approach to see its distant ruins.
 Prepared Voxy updates wait for the wave before appearing. Delivery can still fall behind it, and old terrain from
 LOD Server Support can reappear while Incoming requests fresh terrain from the server. Recovery requests are bounded

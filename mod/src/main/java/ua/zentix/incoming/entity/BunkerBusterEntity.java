@@ -183,8 +183,9 @@ public class BunkerBusterEntity extends StrikeProjectile {
         if (flightPhase() == FlightPhase.DRILL) return;
         if (nuclear != null) {
             // Nuclear penetrating warhead (like B61-11): enters ground a few meters, a surface detonation with a crater.
+            int identity = takeNuclearPreparation();
             discard();
-            NuclearWarhead.detonate(level, point, nuclear.yieldKt(), false, ownerId());
+            NuclearWarhead.detonatePrepared(level, point, nuclear.yieldKt(), false, ownerId(), identity);
             return;
         }
         // Impact uses entity velocity at fall end: along the nose plus wind drift.

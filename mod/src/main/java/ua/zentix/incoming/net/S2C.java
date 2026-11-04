@@ -40,6 +40,18 @@ public final class S2C {
         @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }
     }
 
+    /** Bounded server progress for the currently open exact-order review; updates never reopen a screen. */
+    public record NuclearPreparation(UUID id, int stage, long ready, long total, int reason, Optional<Vec3> target) implements CustomPacketPayload {
+        public static final int RESOLVING = 0, PLANNING = 1, STORING = 2, READY = 3, PAUSED = 4, FAILED = 5, ABSENT = 6;
+        public static final Type<NuclearPreparation> TYPE = new Type<>(Incoming.id("nuclear_preparation"));
+        public static final StreamCodec<ByteBuf, NuclearPreparation> CODEC = StreamCodec.composite(
+                UUIDUtil.STREAM_CODEC, NuclearPreparation::id, ByteBufCodecs.VAR_INT, NuclearPreparation::stage,
+                ByteBufCodecs.VAR_LONG, NuclearPreparation::ready, ByteBufCodecs.VAR_LONG, NuclearPreparation::total,
+                ByteBufCodecs.VAR_INT, NuclearPreparation::reason, ByteBufCodecs.optional(StreamCodecs.VEC3), NuclearPreparation::target,
+                NuclearPreparation::new);
+        @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }
+    }
+
     /**
      * Explosion: kind (0 — Shahed, 1 — missile, 2 — buried bomb, 3 — MLRS projectile — how explosion occurs), ground, surface
      * height above point (bomb: top above charge, {@code BunkerCover}; others: impact-point height — client sees

@@ -203,6 +203,8 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
     /** Nuclear warhead replacing conventional one (cruise missile, bomb). */
     @Nullable
     protected Loadout.Nuke nuclear;
+    /** Exact bound backend preparation, unsynchronized server identity; saved through virtual-flight copies. */
+    private int nuclearPreparation = -1;
 
     private int phaseStart;
     /** Client: phase whose change established {@link #phaseStart}. */
@@ -431,6 +433,25 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
         entityData.set(DATA_NUCLEAR, nuke != null);
     }
 
+    public final void setNuclearPreparation(int identity) {
+        nuclearPreparation = identity;
+    }
+
+    public final int nuclearPreparation() { return nuclearPreparation; }
+
+    /** Transfer ownership before removing the carrier or passing its payload to a dropped bomb. */
+    protected final int takeNuclearPreparation() {
+        int identity = nuclearPreparation;
+        nuclearPreparation = -1;
+        return identity;
+    }
+
+    protected final void cancelNuclearPreparation() {
+        int identity = takeNuclearPreparation();
+        if (identity >= 0 && level() instanceof ServerLevel level)
+            ua.zentix.incoming.nuclear.world.RuinPreparation.cancelCarrier(level, identity);
+    }
+
     /** Carries nuclear warhead: canceled only by nuclear recall. */
     public boolean isNuclear() {
         return entityData.get(DATA_NUCLEAR);
@@ -543,6 +564,7 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
         }
         copy.aimArea = aimArea;
         aimArea = new TargetAreaHold();
+        copy.nuclearPreparation = takeNuclearPreparation();
     }
 
     /** Impact ETA, ticks (server): remaining route at cruise speed plus launch. */
@@ -568,6 +590,7 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
      */
     public boolean retarget(Target target, Vec3 point) {
         if (tracker == null || !acceptsRetarget()) return false;
+        cancelNuclearPreparation();
         mission().retarget(tracker.retarget(target, point));
         if (route != null) route.skip();
         releaseTargetArea();
@@ -1350,6 +1373,7 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
     @Override
     public void remove(RemovalReason reason) {
         if (reason.shouldDestroy() && !isRemoved() && !level().isClientSide()) noteForeignRemoval(reason);
+        if (reason.shouldDestroy()) cancelNuclearPreparation();
         super.remove(reason);
         releaseTickets();
     }
@@ -1569,6 +1593,7 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
         grounded = Nbt.getVec(tag, "grounded");
         readyTicks = tag.getInt("ready_ticks");
         sirenLead = tag.contains("siren_lead") ? tag.getInt("siren_lead") : -1;
+        nuclearPreparation = tag.contains("nuclear_preparation") ? tag.getInt("nuclear_preparation") : -1;
         setNuclear(tag.contains("nuclear") ? Loadout.Nuke.CODEC.parse(NbtOps.INSTANCE, tag.get("nuclear")).result().orElse(null) : null);
         syncAim();
         syncSpeed();
@@ -1597,6 +1622,7 @@ public abstract class StrikeProjectile extends Entity implements IEntityWithComp
         if (grounded != null) Nbt.putVec(tag, "grounded", grounded);
         tag.putInt("ready_ticks", readyTicks);
         tag.putInt("siren_lead", sirenLead);
+        if (nuclearPreparation >= 0) tag.putInt("nuclear_preparation", nuclearPreparation);
         if (nuclear != null) Loadout.Nuke.CODEC.encodeStart(NbtOps.INSTANCE, nuclear).result().ifPresent(n -> tag.put("nuclear", n));
     }
 
