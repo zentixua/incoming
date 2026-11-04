@@ -10,3 +10,5 @@ Original first review SHA256: 1cc9fc7cb9f8d8207fd2c4524724af9baee9a07502637ddc17
 Personal review/session records stay outside version control.
 
 Second review SHA256: 86c99bbc30985785f5231d42f626b422e3fc0ca4823f0592601e17e423f67ff8
+
+The separate three-file fixture correction 0798 was independently reviewed by fresh Sol/high RCI-S6 and integrated as3efac357c. Source/evidence: https://github.com/zentixua/incoming/blob/0eb11dc41354eb00edc1803883e3e98aaf44488e/README.md . Parent did not repeat that accepted independent review.

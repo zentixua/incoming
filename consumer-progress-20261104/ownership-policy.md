@@ -1,6 +1,6 @@
 # Dense ruin consumer ownership
 
-Baseline: 452f1f78af23779200baf4aef804e8e92d6dca40. Reviewed production: b57c36061db305408c25e07d9e563fc37bd64dde; prepared/fresh provenance follow-up: e00fdfb71443905079eb09730737c6261b07f68c. Local 1840 units/82 touched GameTests, three strict matched pairs, two independent source reviews and e00 exact full CI are complete. Final integration-fixture closure and root-owned runtime acceptance remain separate.
+Baseline: 452f1f78af23779200baf4aef804e8e92d6dca40. Reviewed production: b57c36061db305408c25e07d9e563fc37bd64dde; prepared/fresh provenance follow-up: e00fdfb71443905079eb09730737c6261b07f68c. Local 1840 units/82 touched GameTests, three strict matched pairs, two independent source reviews and e00 exact full CI are complete. The three-file integration-fixture closure is integrated as3efac357c; its full tree equals successful CI41928780767. Root-owned runtime acceptance and the additional integration-branch runs remain separate.
 
 ## Recorded failure and interpretation
 

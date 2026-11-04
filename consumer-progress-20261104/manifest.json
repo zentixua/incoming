@@ -1,16 +1,15 @@
 {
   "base": "452f1f78af23779200baf4aef804e8e92d6dca40",
   "initial_candidate": "bbe615b79010e40f13a7703dcf047ff01d7fd0e1",
-  "candidate": "b57c36061db305408c25e07d9e563fc37bd64dde",
+  "candidate": "3efac357cc368045f6fe821ac02c561ab99af4c8",
   "actual_failed_runtime_source": "41c718adcc211076e28e4909343fad7e03cdeff6",
   "actual_failed_runtime_jar_sha256": "fd2a79c9b171c75f5cf6bb4247dbe58cae2cab4f3f6b17da5a675d2a45410d3f",
   "checks_pending": [
-    "two proven integration-fixture corrections and their review/checks",
-    "final combined CI",
+    "additional integration-branch CI runs owned by LEAD4 under explicit handoff",
     "root-owned actual runtime acceptance"
   ],
   "files": {
-    "ownership-policy.md": "1ae534821e71bfe79e8a9ce64de58fb77420ad3d2a6fffdb7d3868ce6ff2158f",
+    "ownership-policy.md": "b0310da1e4798455486e502db9407c6a69a66a8f5470f68248827389383f66ed",
     "actual-timeline.json": "d905297ed773d59b787d966d4bd1683204317d6c750d41046b6bac397617eff5",
     "strict-pairs.log": "cf2df4341b46fc1e3b8e6c196e7595627ee21a26d947d152ac9c24a31f65f235",
     "strict-pair-verdict.json": "c8cba48e0e47e002f5806bbe3365f978c84251b949c46cc39e35f488e06c5e1d",
@@ -33,15 +32,19 @@
     "strict-candidate-demand_progress.log": "b8e830470e98289ef2c1bec27dc3d6004b2f0a736671943df0b120b42a783a5b",
     "PairedOrigin.java": "1963e91d3d69e9f4c52e52ec761ce4f1f0dd9e9057f49b921887388a4b333a2a",
     "original-post-clean-probe.txt": "1d7f219ec9b4663a0d98f70e0446187607df4500909ce261f078c0bb24090c62",
-    "candidate.patch": "482a825df4ee6e76af2262c9fedc925168aa2cd14edb9eed6a5d68338f1c24c4",
-    "review-scope.md": "428bffa27528d6b3c0701616ba045787ef78ba7f7887db02ccaf4bbf58183299",
+    "candidate.patch": "f9588aaea20c9d5362beddeb51eefcc0e4bf691e55cf4b9f296a4dfa297be9b7",
+    "review-scope.md": "a6dbb6e0a49191d4180fab612223676f68fdd35d16b885ff9f04cf2004e1f618",
     "validation.log": "d7c2a645482879579b12e0a31c0ef12b36c6ec28f78da788029caa038a4f88f4",
     "provenance.log": "27d15635986752448877ac5272a64029543ab18dc45b9d5131bdc1e10f80ed97",
     "ci-b57-failed.log": "3d069135610edfbcdf81c4d75b1712a6bedae7cf06b67116034ce82c04e19249",
-    "README.md": "32ef48b42f7036f226afcb76b964b44e8b460cffe41ef01695d3d5ef1b52f969",
+    "README.md": "e3c12a7acd2391663a97a49d1b2a6539edf49a550b6888431887ce9befe6717a",
     "ci-e00-receipt.json": "7f5e8cde496441054f71b94b4b948ad4bc9b1f111fba02ea643abe6a74c04f06",
     "ci-e00-artifacts.json": "48c627e8f4c45dfa8a8d1db5563f735774686ccb146dd1dbc906c070c2174444",
-    "ci-e00.log": "932e5a674addbbf2530fbbef4a183490294b59bad47a87a932ab610be909fb8a"
+    "ci-e00.log": "932e5a674addbbf2530fbbef4a183490294b59bad47a87a932ab610be909fb8a",
+    "ci-component-receipt.json": "d137167ed29a2320d12259685777d44478be7564db8e0e59317dc8ffe7d003ae",
+    "ci-integrated.log": "332357588914591c2f5824ce941350d514b6b8f570066b113cf0a7ca8cbf3377",
+    "integration-provenance.json": "00eff43c1f95d8acb35284121a1db4543366718485e87767ee6844b0392d5571"
   },
-  "production": "e00fdfb71443905079eb09730737c6261b07f68c"
+  "production": "e00fdfb71443905079eb09730737c6261b07f68c",
+  "tree": "638d3b7c1b077e2aec3a395b22d204144703d839"
 }

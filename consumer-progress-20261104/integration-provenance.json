@@ -1,0 +1,17 @@
+{
+  "final_head": "3efac357cc368045f6fe821ac02c561ab99af4c8",
+  "final_tree": "638d3b7c1b077e2aec3a395b22d204144703d839",
+  "production_tree": "cd87df2bfb10e61477aa903f40343276a2dcb662",
+  "production_unchanged_from": "e00fdfb71443905079eb09730737c6261b07f68c",
+  "successful_combined_ci": 41928780767,
+  "successful_ci_checkout": "ec2c3de79123f96cb8a344c7932a7e4fa7738a31",
+  "successful_ci_tree": "638d3b7c1b077e2aec3a395b22d204144703d839",
+  "parent_pr": 598,
+  "parent_pr_state": "MERGED into codex/nuclear-3.11-readiness by base advancement",
+  "parent_ci_waiter_result": "0 because PR already merged; not a separate green receipt for its new-head run",
+  "still_running_runs_transferred_to_integration_owner": [
+    41930192912,
+    41930347079
+  ],
+  "transfer_instruction": "LEAD4 explicit handoff request, 2026-11-04T23:02:00.987618+00:00"
+}

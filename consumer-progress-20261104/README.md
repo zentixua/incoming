@@ -24,7 +24,11 @@ See `strict-pair-verdict.json`, `strict-pair-hashes.json`, `strict-pairs.log` an
 
 Local b57 full build: 1840 unit tests, 0 failures/errors/skips. 82/82 touched GameTests passed without the seed control. Source review used two fresh independent Astra/xhigh sessions with diff/surrounding code and raw evidence, not author conclusions. Minor prepared/fresh diagnostic correction subsequently passed 5 targeted tests.
 
-Exact b57 CI41925168739 failed in two older integration fixtures (`craftBlocksGoRightAfterDamage`, `ruinsOverFlashWithoutShots`). Their causes have since been reproduced and narrow fixture corrections are under independent validation. Current e00fdfb71 CI41927570788 is green, including the prepared/fresh provenance correction; the final combined fixture closure remains pending. Do not substitute local green tests for this requirement or for actual runtime acceptance.
+Exact b57 CI41925168739 failed two older integration fixtures. Their reproduced causes were an unretired synthetic context and a craft-order fixture whose actual charge was inside the platform while its shielding precondition used a higher source. The narrow corrections are integrated as 3efac357c. They have an independent Sol/high review, full 1,840-unit build, 8 targeted GameTests and original 31/50-test prefixes. [Separate fixture evidence](https://github.com/zentixua/incoming/blob/0eb11dc41354eb00edc1803883e3e98aaf44488e/README.md) preserves the instrumentation and historical-interleaving limits. No production law or deadline was weakened.
+
+Final source **3efac357cc368045f6fe821ac02c561ab99af4c8**, tree **638d3b7c1b077e2aec3a395b22d204144703d839**, exactly equals the successful combined tree from [CI41928780767](https://github.com/zentixua/incoming/actions/runs/41928780767), checkout ec2c3de79123f96cb8a344c7932a7e4fa7738a31. Production/build inputs are unchanged from e00fdfb71, whose [full CI41927570788](https://github.com/zentixua/incoming/actions/runs/41927570788) is also green. Source trees and receipts are recorded in `integration-provenance.json`.
+
+PR598 became merged into the readiness branch when its base advanced to the final head. Its `pr_ci.sh` waiter therefore returned 0 for merged state, not because its separate latest run completed. The integration owner explicitly requested final handback and owns those still-running checks (41930192912 /41930347079) and diagnostic integration checks. No main merge, runtime acceptance, installation or release is asserted here.
 
 ## Preserved failures and limits
 
