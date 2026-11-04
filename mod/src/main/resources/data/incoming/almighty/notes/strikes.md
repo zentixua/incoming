@@ -22,6 +22,7 @@ Incoming (https://github.com/zentixua/incoming): strikes by Shahed and Lancet dr
 - Routes at the default GAME scale: drone (shahed) flies 45 blocks above the launch site and the target, loiter (lancet) circles 45 blocks above
   the target, missile flies 12 blocks above the terrain; all three follow via. rocket (grad) is ballistic and bunker is
   a bomb from a B-2: they take no via, and a command with via fails.
+- An owner can cancel unpaid nuclear preparation with ordinary Abort/clear; accepted paid nuclear warnings retain their existing cancellation rules.
 - incoming clear removes all launchers and every projectile in flight at once: an emergency stop. To stop a campaign,
   remove its rule first.
 - A campaign (a salvo every N seconds) is a tick rule with a name, interval and run limit; pauses count toward the

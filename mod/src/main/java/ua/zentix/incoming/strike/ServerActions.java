@@ -937,6 +937,8 @@ public final class ServerActions {
 
     /** {@link #recall(MinecraftServer, UUID, String)} for {@code player}: report to them. */
     public static MutableComponent recall(ServerPlayer player) {
+        NuclearReview.cancel(player);
+        NuclearCommands.cancelPlayer(player);
         Recalled r = recall(player.server, player.getUUID(), player.getGameProfile().getName());
         return Component.translatable("incoming.recalled", r.projectiles(), r.salvos());
     }

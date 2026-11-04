@@ -136,6 +136,11 @@ public final class NuclearCommandGameTests {
         NuclearCommands.onDeath(new net.neoforged.neoforge.event.entity.living.LivingDeathEvent(player, level.damageSources().genericKill()));
         h.assertValueEqual(NuclearCommands.pending(level), 0, "death retained command");
         h.assertTrue(RuinPreparation.status(level, third).stage() == RuinPreparation.Stage.ABSENT, "death kept preparation");
+        h.assertTrue(NuclearCommands.request(player, loadout(), aim, Waypoints.NONE, null, true), "abort fixture command refused");
+        UUID fourth = handle(level);
+        ServerActions.recall(player);
+        h.assertValueEqual(NuclearCommands.pending(level), 0, "own abort retained an unpaid nuclear command");
+        h.assertTrue(RuinPreparation.status(level, fourth).stage() == RuinPreparation.Stage.ABSENT, "own abort kept preparation");
         h.assertValueEqual(player.getInventory().countItem(ammo), 1, "unaccepted commands spent ammunition");
         h.succeed();
     }
@@ -170,6 +175,30 @@ public final class NuclearCommandGameTests {
         Vec3 after = projectile.target().resolve(level).orElseThrow();
         h.assertTrue(after.distanceTo(before.add(2, 0, 0)) < 1e-6, "accepted carrier lost its existing target movement law");
         h.succeed();
+    }
+
+    @GameTest(template = "range", batch = "nuke_command_no_ruins", timeoutTicks = 200, skyAccess = true)
+    public static void blockDamageDisabledCommandActuallyBecomesReadyAndLaunches(GameTestHelper h) throws ReflectiveOperationException {
+        Vec3 target = setup(h);
+        var level = h.getLevel();
+        boolean damage = IncomingConfig.SERVER.nukeBlockDamage.get();
+        IncomingConfig.SERVER.nukeBlockDamage.set(false);
+        StrikeGameTests.afterTest(h, () -> {
+            ua.zentix.incoming.nuclear.NuclearStrikes.clear(level);
+            IncomingConfig.SERVER.nukeBlockDamage.set(damage);
+        });
+        h.assertTrue(NuclearCommands.request(level, "no-ruins-command", 0, loadout(),
+                new ServerActions.Aim(new Target.Point(target), target, null), Waypoints.NONE, null), "no-ruins command refused");
+        UUID handle = handle(level);
+        h.succeedWhen(() -> {
+            var scheduled = NuclearEvents.get(level).scheduled().stream()
+                    .filter(order -> order.owner().filter(handle::equals).isPresent()).findFirst().orElse(null);
+            h.assertTrue(scheduled != null, "no-ruins preparation has not launched");
+            var status = RuinPreparation.status(level, handle);
+            h.assertTrue(status.stage() == RuinPreparation.Stage.READY && status.total() == 0,
+                    "no-ruins order did not certify its actual empty required work");
+            h.assertTrue(scheduled.target().equals(target), "no-ruins command changed target");
+        });
     }
 
     private static NuclearCommands state(ServerLevel level) throws ReflectiveOperationException {
