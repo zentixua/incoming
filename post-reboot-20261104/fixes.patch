@@ -1,0 +1,253 @@
+diff --git a/.claude/rules/nuclear-world.md b/.claude/rules/nuclear-world.md
+index 1a4751f62..2566ba867 100644
+--- a/.claude/rules/nuclear-world.md
++++ b/.claude/rules/nuclear-world.md
+@@ -416,3 +416,9 @@ paths:
+   admission; release/transfer on success, staleness, unload and clear. Prepared plans keep their `RetainedPlans`
+   owner through admission and are not counted twice. `nuke_ledger_*` covers delayed real-wrapper I/O, packed/legacy
+   parity, several refused collected plans, cold cross-dimension admission and large completed legacy checkpoints.
++
++- Cold import must leave already-loaded transport/support able to free decoder workspace. Continuation growth
++  uses actual resident ownership, while unknown ledgers still close new strike removals. Resolve getters that
++  may admit another cold decoder before checking/charging headroom (`nuke_ledger_drain`, `nuke_ledger_admission`).
++  Streaming crater retirement adds to saved aggregate totals in either compound field order; never overwrite
++  totals from previously retired rows (`nuke_ledger_totals`).
+diff --git a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/LedgerStorageGameTests.java b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/LedgerStorageGameTests.java
+index 413d12a39..184915367 100644
+--- a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/LedgerStorageGameTests.java
++++ b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/LedgerStorageGameTests.java
+@@ -144,6 +144,150 @@ public final class LedgerStorageGameTests {
+                     .getCompound(0).getCompound("contents").equals(cargo), "Legacy import lost cargo");
+         });
+     }
++    @GameTest(template = "range", batch = "nuke_ledger_drain", timeoutTicks = 1200, skyAccess = true)
++    public static void loadedTransportFreesColdImportWorkspace(GameTestHelper h) throws Exception {
++        StrikeGameTests.gameSpeed(h);
++        var level = h.getLevel();
++        var world = NuclearWorld.get(level);
++        var storage = level.getDataStorage();
++        var oldFolder = storage.dataFolder;
++        var oldMatter = storage.cache.get("incoming_ruin_matter");
++        var oldProgress = storage.cache.get("incoming_ruin_settle");
++        var dir = Files.createTempDirectory(oldFolder.toPath(), "ledger-drain-");
++        var source = new RuinProgress();
++        var root = new CompoundTag(); root.put("data", source.save(new CompoundTag(), level.registryAccess()));
++        var file = dir.resolve("incoming_ruin_settle.dat");
++        NbtIo.writeCompressed(root, file);
++        long required = LedgerScan.measure(file, "incoming_ruin_settle", java.util.Set.of(), NuclearPrep.PLANS_CAP).owned();
++        var resident = new RuinMatter();
++        var pieces = new ArrayList<RuinMatter.Piece>();
++        for (int i = 0; i < 512; i++) {
++            var pos = h.absolutePos(new BlockPos(8 + i % 24, 3, 8 + i / 24));
++            pieces.add(new RuinMatter.Piece(pos, Blocks.STONE.defaultBlockState(), null, Vec3.ZERO, level.getGameTime() - 20));
++        }
++        resident.release(pieces);
++        folder(storage, dir.toFile());
++        storage.set("incoming_ruin_matter", resident);
++        storage.cache.remove("incoming_ruin_settle");
++        // Close admission before any poll can finish the small scan; retain a fixed reservation
++        // thereafter. Only real transport progress may supply the missing decoder workspace.
++        world.materialReservation += NuclearPrep.PLANS_CAP;
++        NuclearWorld.get(level);
++        long residentBytes = NuclearPrep.residentMemory(level) - NuclearPrep.PLANS_CAP;
++        long reserve = NuclearPrep.PLANS_CAP - residentBytes - required + (64L << 10);
++        world.materialReservation += reserve - NuclearPrep.PLANS_CAP;
++        h.assertTrue(reserve > 0, "Fixture has no admission headroom");
++        StrikeGameTests.afterTest(h, () -> {
++            world.materialReservation -= reserve;
++            folder(storage, oldFolder);
++            storage.set("incoming_ruin_matter", oldMatter);
++            storage.set("incoming_ruin_settle", oldProgress);
++            NuclearWorld.get(level);
++        });
++        var cold = RuinProgress.get(level);
++        h.assertFalse(cold.loaded(), "Cold fixture decoded on caller");
++        h.assertTrue(RuinMemory.reserve(level, 1) == null, "New removals admitted behind unknown ownership");
++        try (var progress = RuinMemory.reserveProgress(level, 32L << 10)) {
++            h.assertTrue(progress != null, "Resident support cannot reserve bounded progress behind cold ownership");
++        }
++        h.succeedWhen(() -> {
++            var clock = WorkClock.counting(1); clock.start(64);
++            world.tick(level, clock);
++            h.assertTrue(resident.deposited() > 0, "Loaded transport cannot drain behind a cold ledger");
++            h.assertTrue(RuinProgress.get(level).loaded(), "Transport did not free cold decoder workspace");
++            h.assertTrue(NuclearPrep.residentMemory(level) <= NuclearPrep.PLANS_CAP, "Cold import exceeded capacity");
++        });
++    }
++
++    @GameTest(template = "pad", batch = "nuke_ledger_admission", timeoutTicks = 1200, skyAccess = true)
++    public static void progressCannotSpendAColdDecodersHeadroomTwice(GameTestHelper h) throws Exception {
++        StrikeGameTests.gameSpeed(h);
++        var level = h.getLevel(); var owner = NuclearWorld.get(level);
++        var storage = level.getDataStorage();
++        var oldFolder = storage.dataFolder;
++        var oldMatter = storage.cache.get("incoming_ruin_matter");
++        var oldProgress = storage.cache.get("incoming_ruin_settle");
++        var dir = Files.createTempDirectory(oldFolder.toPath(), "ledger-admission-");
++        var root = new CompoundTag(); root.put("data", new RuinProgress().save(new CompoundTag(), level.registryAccess()));
++        var file = dir.resolve("incoming_ruin_settle.dat");
++        NbtIo.writeCompressed(root, file);
++        long required = LedgerScan.measure(file, "incoming_ruin_settle", java.util.Set.of(), NuclearPrep.PLANS_CAP).owned();
++        long[] reservation = {NuclearPrep.PLANS_CAP}; owner.materialReservation += reservation[0];
++        folder(storage, dir.toFile());
++        storage.set("incoming_ruin_matter", new RuinMatter()); storage.cache.remove("incoming_ruin_settle");
++        NuclearWorld.get(level); // Queue the scan, with admission closed.
++        var gate = new CountDownLatch(1);
++        var scanned = new AtomicBoolean();
++        IOUtilities.withIOWorker(() -> {
++            scanned.set(true);
++            try { gate.await(); } catch (InterruptedException error) { Thread.currentThread().interrupt(); }
++        });
++        StrikeGameTests.afterTest(h, () -> {
++            gate.countDown(); owner.materialReservation -= reservation[0];
++            folder(storage, oldFolder);
++            storage.set("incoming_ruin_matter", oldMatter); storage.set("incoming_ruin_settle", oldProgress);
++            NuclearWorld.get(level);
++        });
++        boolean[] checked = {false};
++        h.succeedWhen(() -> {
++            h.assertTrue(scanned.get(), "Sibling scan has not completed");
++            if (!checked[0]) {
++                // Exactly one decoder fits; no owner getter may run between this adjustment
++                // and the real progress helper. The gated decoder keeps its charge live.
++                long delta = NuclearPrep.PLANS_CAP - NuclearPrep.residentMemory(level) - required;
++                owner.materialReservation += delta; reservation[0] += delta;
++                try (var progress = RuinMemory.reserveProgress(level, 32L << 10)) {
++                    h.assertTrue(NuclearPrep.residentMemory(level) <= NuclearPrep.PLANS_CAP,
++                            "Progress and cold import spent the same headroom");
++                    h.assertTrue(progress == null, "Progress admitted beside a capacity-filling decoder");
++                }
++                checked[0] = true;
++                gate.countDown();
++            }
++            h.assertTrue(RuinProgress.get(level).loaded(), "Gated import has not published");
++        });
++    }
++
++    @GameTest(template = "pad", batch = "nuke_ledger_totals", timeoutTicks = 200, skyAccess = true)
++    public static void retiredCraterAddsToSavedTotalsInEitherFieldOrder(GameTestHelper h) throws Exception {
++        var lookup = h.getLevel().registryAccess();
++        var dir = Files.createTempDirectory(h.getLevel().getDataStorage().dataFolder.toPath(), "ledger-totals-");
++        for (boolean settledFirst : new boolean[]{false, true}) {
++            var file = dir.resolve("order-" + settledFirst + ".dat");
++            try (var out = new java.io.DataOutputStream(new java.util.zip.GZIPOutputStream(Files.newOutputStream(file)))) {
++                var writer = new LedgerWriter(out); writer.compound(""); writer.compound("data");
++                if (settledFirst) writeSettledFixture(writer);
++                writer.list("passes", 1);
++                var pass = new CompoundTag(); pass.putInt("event", 7);
++                writer.fields(pass); writer.list("materials", 1);
++                writer.row(craterTotalsFixture(10)); writer.end();
++                if (!settledFirst) writeSettledFixture(writer);
++                writer.end(); writer.end();
++            }
++            var measured = LedgerScan.measure(file, "incoming_crater_matter", java.util.Set.of(), NuclearPrep.PLANS_CAP);
++            var restored = (CraterMatter) LedgerReader.read(file, "incoming_crater_matter", lookup, measured.row(), java.util.Set.of());
++            var again = CraterMatter.load(restored.save(new CompoundTag(), lookup), lookup);
++            double[] expected = {17, 45900, 0, 0, 17, 45900, 0, 0};
++            h.assertTrue(java.util.Arrays.equals(restored.settled(Blocks.STONE.defaultBlockState()), expected),
++                    "Retired totals overwritten, settledFirst=" + settledFirst);
++            h.assertTrue(java.util.Arrays.equals(again.settled(Blocks.STONE.defaultBlockState()), expected),
++                    "Second save/read changed merged totals");
++        }
++        h.succeed();
++    }
++
++    private static CompoundTag craterTotalsFixture(int count) {
++        var row = new CompoundTag(); row.put("state", net.minecraft.nbt.NbtUtils.writeBlockState(Blocks.STONE.defaultBlockState()));
++        row.putDouble("v0", count); row.putDouble("v1", count * 2700);
++        row.putDouble("v4", count); row.putDouble("v5", count * 2700);
++        row.putLong("available", count);
++        return row;
++    }
++
++    private static void writeSettledFixture(LedgerWriter writer) throws java.io.IOException {
++        writer.list("settled", 1); writer.row(craterTotalsFixture(7));
++    }
++
+     @GameTest(template = "pad", batch = "nuke_ledger_legacy_crater", timeoutTicks = 1200, skyAccess = true)
+     public static void retiredLegacyCraterSkipsLargeArraysBeforeAllocation(GameTestHelper h) throws Exception {
+         StrikeGameTests.gameSpeed(h);
+diff --git a/mod/src/main/java/ua/zentix/incoming/nuclear/world/CraterMatter.java b/mod/src/main/java/ua/zentix/incoming/nuclear/world/CraterMatter.java
+index 994ff3ff0..3ddb21f72 100644
+--- a/mod/src/main/java/ua/zentix/incoming/nuclear/world/CraterMatter.java
++++ b/mod/src/main/java/ua/zentix/incoming/nuclear/world/CraterMatter.java
+@@ -146,7 +146,10 @@ public final class CraterMatter extends LedgerData {
+             double[] balance = new double[8];
+             for (int j = 0; j < balance.length; j++) balance[j] = row.getDouble("v" + j);
+             validate(state, balance);
+-            result.settled.put(state, balance);
++            // Streaming import can already contain retired passes of the same material.
++            // Saved aggregates add to those totals, regardless of compound field order.
++            double[] total = result.settled.computeIfAbsent(state, ignored -> new double[8]);
++            for (int j = 0; j < total.length; j++) total[j] += balance[j];
+         }
+         return result;
+     }
+diff --git a/mod/src/main/java/ua/zentix/incoming/nuclear/world/NuclearWorld.java b/mod/src/main/java/ua/zentix/incoming/nuclear/world/NuclearWorld.java
+index 0288350c1..631a94ca5 100644
+--- a/mod/src/main/java/ua/zentix/incoming/nuclear/world/NuclearWorld.java
++++ b/mod/src/main/java/ua/zentix/incoming/nuclear/world/NuclearWorld.java
+@@ -412,7 +412,12 @@ public final class NuclearWorld {
+     /** @param clock server-tick budget, shared across dimensions (already started) */
+     public void tick(ServerLevel level, WorkClock clock) {
+         get(level);
+-        if (!matter.loaded() || !craterMatter.loaded() || !ruinProgress.loaded()) return;
++        if (!matter.loaded() || !craterMatter.loaded() || !ruinProgress.loaded()) {
++            // Already-owned transport must be able to free room for another cold ledger's
++            // decoder. New strike removals/restoration still wait for every authoritative store.
++            if (matter.loaded()) matter.work(level, clock);
++            return;
++        }
+         if (!restored && !craterMatter.writable()) return;
+         long now = level.getGameTime();
+         NuclearEvents events = NuclearEvents.get(level);
+diff --git a/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinMatter.java b/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinMatter.java
+index bae744c26..d318389bd 100644
+--- a/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinMatter.java
++++ b/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinMatter.java
+@@ -383,7 +383,7 @@ public final class RuinMatter extends LedgerData {
+                 if (d != null) {
+                     // A graph step adds at most sixteen cells and their six neighbours. Refusal
+                     // keeps the saved seed/provenance intact; transport can still free capacity.
+-                    try (var reservation = RuinMemory.reserve(level, 32L << 10)) {
++                    try (var reservation = RuinMemory.reserveProgress(level, 32L << 10)) {
+                         if (reservation == null) waiting = true;
+                         else {
+                             if (search == null) search = new RuinSupport(seed);
+diff --git a/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinMemory.java b/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinMemory.java
+index b64b0181d..4871031b6 100644
+--- a/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinMemory.java
++++ b/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinMemory.java
+@@ -20,6 +20,19 @@ final class RuinMemory {
+         return new Reservation(owner, bytes);
+     }
+ 
++    /** Existing support continuations may free ownership needed by a cold import. Their
++     * bounded growth uses actual resident charges, while new strike removals stay closed. */
++    static Reservation reserveProgress(ServerLevel level, long bytes) {
++        if (bytes < 0) throw new IllegalArgumentException("Negative material reservation");
++        // Resolve admission-capable getters before checking/charging the remaining room.
++        NuclearWorld owner = NuclearWorld.get(level);
++        if (!RuinMatter.get(level).writable()) return null;
++        long retained = NuclearPrep.residentMemory(level);
++        if (bytes > NuclearPrep.PLANS_CAP - retained) return null;
++        owner.materialReservation += bytes;
++        return new Reservation(owner, bytes);
++    }
++
+     static final class Reservation implements AutoCloseable {
+         private NuclearWorld owner;
+         private long bytes;
+diff --git a/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinSupport.java b/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinSupport.java
+index 89afb08d4..7b121c3d7 100644
+--- a/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinSupport.java
++++ b/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinSupport.java
+@@ -79,7 +79,7 @@ final class RuinSupport {
+                 }
+                 RuinMatter.Piece piece = RuinMatter.capture(level, at, state, d, scorch);
+                 if (piece != null) {
+-                    try (var reservation = RuinMemory.reserve(level, RuinMatter.removalBytes(piece))) {
++                    try (var reservation = RuinMemory.reserveProgress(level, RuinMatter.removalBytes(piece))) {
+                         if (reservation == null) { waiting = true; return false; }
+                         ownRemoval = at;
+                         try { ColumnScar.replace(level, at, state, Blocks.AIR.defaultBlockState()); }

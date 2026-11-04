@@ -1,0 +1,3 @@
+active import=252017530, rowLimit=36001334, retired import=277476
+moving retained=299467776, cap=536870912, room=237403136, cold import refused=true
+combined final retained=472531968, final fits=true
