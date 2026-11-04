@@ -49,6 +49,9 @@ final class RetainedPlans extends Long2ObjectOpenHashMap<RuinPlan> {
     }
 
     int pendingWrites() { return writes.size() + toWrite.size(); }
+
+    /** A launch-critical receipt cannot be substituted by unrelated distant writes. */
+    boolean pendingWrite(long key) { return writes.containsKey(key) || toWrite.contains(key); }
     int pendingReads() { return reads.size(); }
 
     long bytes() { return bytes + writeBytes + 48L * (super.size() + reads.size() + writes.size()); }

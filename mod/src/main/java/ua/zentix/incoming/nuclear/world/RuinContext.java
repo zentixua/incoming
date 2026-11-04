@@ -207,6 +207,8 @@ final class RuinContext {
     private final LongOpenHashSet absent = new LongOpenHashSet();
     /** Detonation log: disk window neighbors read, those not whole on disk. */
     int windowReads, windowAbsent;
+    private boolean windowFailed;
+    boolean windowFailed() { return windowFailed; }
 
     /**
      * Background-plan window for in-memory chunk (server thread): radius-{@link RuinPlanner#REACH} square neighbors not fully
@@ -235,6 +237,7 @@ final class RuinContext {
             reading.remove(key);
             windowReads++;
             if (r.disk().skip() != null) {
+                windowFailed |= r.disk().sourceFailure();
                 if (absent.add(key)) windowAbsent++;
                 continue;
             }

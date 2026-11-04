@@ -49,6 +49,9 @@ public final class RuinSourceFailureGameTests {
         field(p, "geometry").set(p, geometry); field(p, "resolvedTarget").set(p, target);
         field(p, "ruins").set(p, new RuinContext(level, geometry));
         field(p, "order").set(p, new long[] {root.toLong()}); field(p, "nextRead").setInt(p, 1);
+        field(p, "requiredInitialized").setBoolean(p, true);
+        field(p, "requiredTarget").setLong(p, root.toLong());
+        ((it.unimi.dsi.fastutil.longs.LongOpenHashSet) field(p, "required").get(p)).add(root.toLong());
         return new Request(prep, p, handle, player, target, root.toLong(), source);
     }
 
