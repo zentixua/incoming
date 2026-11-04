@@ -26,6 +26,15 @@ public final class Stand {
 
     public Stand() {
         Path game = FMLPaths.GAMEDIR.get();
+        if (Boolean.getBoolean("stand.observe")) {
+            try {
+                Path root = Files.createDirectories(game.resolve("stand-observe"));
+                new Observer(new Out(Files.createTempDirectory(root, "run-")));
+            } catch (IOException | RuntimeException e) {
+                LOG.error("STAND: passive observation not started", e);
+            }
+            return;
+        }
         Path plan = game.resolve("stand-plan.json");
         if (!Files.isRegularFile(plan)) {
             LOG.info("STAND: no stand-plan.json in {} — idle", game);

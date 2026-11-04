@@ -15,6 +15,25 @@ dependency (its own MDG Gradle project, like `tools/replayscan`). Incoming-speci
 commands, projectile type, probe method names. The identical bench captures any Incoming 3.4.1+ jar;
 only that jar changes between columns.
 
+## Observe an existing client
+
+Install the same `stand` harness jar in a disposable client copy and start it with `-Dstand.observe=true`
+to record an ordinary session, including a remote server. This mode takes precedence over a scene plan:
+it does not create a world, issue commands, move the camera, take screenshots or exit the game.
+Each launch writes a new `stand-observe/run-*/` directory, preserving previous recordings.
+
+`frames.csv` uses the same render-thread CPU and GPU timestamp measurements as the scene bench.
+`events.jsonl` adds wall-clock anchors, camera position/direction, client world ticks and dimension once
+per second. Menu/loading frames are also recorded; select in-world windows using these events.
+No server tick or network-byte measurement is implied by this client-only mode.
+
+GPU timestamps include idle gaps when the CPU cannot feed the GPU. `gpu_ring_waits` counts forced waits
+when all eight timestamp slots remain busy; a nonzero increment marks a perturbed interval. Separately
+record screenshot/readback times and exclude those frames and their following intervals when another
+observer captures images. Flush occurs once per second and on normal shutdown; a crash can lose the
+last buffered second, and up to eight unresolved GPU rows can remain at shutdown. This raw recording
+does not run the paired scene acceptance gate or certify visible terrain publication.
+
 ## Structure
 - `scenes.json`: sites (`F`, `C`, `D`, `L1`–`L3`), cameras, salvos, measurement windows. `plan.py` expands them
   into harness steps (`stand-plan.json`: camera, command, salvo, wait for hits, shot, window). All geometry
