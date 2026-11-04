@@ -9,7 +9,7 @@
   "broad_gametest": {
     "tests": 16,
     "seconds": 22,
-    "source_note": "Last writer cacheId change was picked up before run compilation; exact final-head follow-up is last.log."
+    "source_note": "94ec0756c: compileJava UP-TO-DATE after its full build. Writer cacheId change is validated separately on exact final bcf53f23f in last.log."
   },
   "final_head_gametest": {
     "tests": 6,
