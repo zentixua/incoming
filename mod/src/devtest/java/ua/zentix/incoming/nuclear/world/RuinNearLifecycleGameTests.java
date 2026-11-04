@@ -36,7 +36,13 @@ public final class RuinNearLifecycleGameTests {
         var grid = dense ? RuinStorageGameTests.fixture(h, true, 1) : null;
         var origin = new ChunkPos(h.absolutePos(new BlockPos(32, 1, 32)));
         var centre = grid == null ? new ChunkPos(origin.x + 32, origin.z) : grid.centre();
-        if (grid == null) level.getChunk(centre.x, centre.z);
+        if (grid == null) {
+            var hold = net.minecraft.server.level.TicketType.create("incoming_near_window_test",
+                    java.util.Comparator.comparingLong(ChunkPos::toLong));
+            level.getChunkSource().addRegionTicket(hold, centre, 0, centre);
+            StrikeGameTests.afterTest(h, () -> level.getChunkSource().removeRegionTicket(hold, centre, 0, centre));
+            level.getChunk(centre.x, centre.z);
+        }
         var target = grid == null ? new Vec3(centre.getMiddleBlockX(), h.absolutePos(new BlockPos(32, 1, 32)).getY(), centre.getMiddleBlockZ())
                 : new Vec3(grid.ctx().d.burst().x, grid.ctx().d.groundY(), grid.ctx().d.burst().z);
         UUID handle = UUID.randomUUID(), player = UUID.randomUUID();
@@ -146,8 +152,10 @@ public final class RuinNearLifecycleGameTests {
         if (failed) { requireFailed(h, f); h.succeed(); }
         else h.succeedWhen(() -> {
             h.assertFalse(f.ctx.windowFailed(), "Legal absence was treated as source failure");
-            h.assertTrue(RuinPreparation.status(h.getLevel(), f.handle).stage() == RuinPreparation.Stage.READY,
-                    "Actual near plan failed to finish with legal absent neighbour");
+            var status = RuinPreparation.status(h.getLevel(), f.handle);
+            h.assertTrue(status.stage() == RuinPreparation.Stage.READY,
+                    "Actual near plan failed to finish with legal absent neighbour: " + status
+                            + "; pendingWindow=" + f.ctx.pendingWindowReads() + "; tasks=" + f.ctx.tasks());
         });
     }
 
