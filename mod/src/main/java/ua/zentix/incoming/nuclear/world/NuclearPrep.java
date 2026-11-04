@@ -1500,6 +1500,7 @@ public final class NuclearPrep {
                     continue;
                 }
             }
+            p.ruins.bindEvent(d.id());
             p.detonation = d.id();
             rememberArchive(level, p);
             p.handedOff = now;

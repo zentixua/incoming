@@ -23,6 +23,8 @@ import ua.zentix.incoming.nuclear.Detonation;
 final class RuinContext {
     /** Ruin inputs (preparation location without ID; actual detonation afterward). */
     final Detonation d;
+    /** Marker identity is assigned at handoff; immutable geometry remains safe for running solvers. */
+    private int eventId;
     /** Chunk fractures: also computed by background tasks ({@link RuinWorkers}), hence shared map. */
     private final java.util.concurrent.ConcurrentHashMap<Long, Blast> blasts = new java.util.concurrent.ConcurrentHashMap<>();
     /** Chunk snapshots (server thread) retained while unfinished plan windows read them. Outside-memory chunks from disk ({@link DiskShots}). */
@@ -53,9 +55,16 @@ final class RuinContext {
      */
     RuinContext(net.minecraft.server.level.ServerLevel level, Detonation d) {
         this.d = d;
+        this.eventId = d.id();
         this.noise = new ua.zentix.incoming.nuclear.model.WorldNoise(level.getSeed(), d.scale());
         this.ruinRadius = d.ruinRadius();
         this.reads = new RuinInbox<>(NuclearWorld.get(level).prep().readAccounting(), WINDOW_READ_BYTES);
+    }
+
+    /** Adopt the actual event marker without mutating geometry captured by background tasks. */
+    void bindEvent(int id) {
+        if (id <= 0 || eventId > 0 && eventId != id) throw new IllegalArgumentException("Ruin context belongs to another event");
+        eventId = id;
     }
 
     /** Ruin reach, blocks ({@link Detonation#ruinRadius}): light trace fades at edge ({@code RuinPlanner}). */
@@ -84,7 +93,7 @@ final class RuinContext {
         if (s == null || !s.current(c, a)) {
             RuinPlan flash = flashed.get(key);
             // flash layer present but plan forgotten (detonation ruins forgotten/restart): snapshot fire is air
-            putShot(key, s = ChunkShot.take(c, a, flash, flash == null && a == null && FlashScorch.marked(c, d.id())));
+            putShot(key, s = ChunkShot.take(c, a, flash, flash == null && a == null && FlashScorch.marked(c, eventId)));
         }
         return s;
     }
@@ -165,7 +174,7 @@ final class RuinContext {
             Applied a = applied.get(key);
             RuinPlan flash = flashed.get(key);
             // flash layer present, plan forgotten: snapshot fire is air like in-memory chunk ({@link #shot})
-            putShot(key, ChunkShot.fromDisk(primed, a, flash, flash == null && a == null && FlashScorch.marks(primed.flashLayer(), d.id())));
+            putShot(key, ChunkShot.fromDisk(primed, a, flash, flash == null && a == null && FlashScorch.marks(primed.flashLayer(), eventId)));
             putHeights(key, primed.motion());
         }
     }
@@ -268,8 +277,8 @@ final class RuinContext {
             throw new IllegalArgumentException("Wrong archived snapshot coordinate");
         // A scarred neighbour needs its original world. Unscarred later edits use fresh data.
         var fresh = ChunkShot.fromDisk(current.primed(Blast.SERVER), applied.get(key), flashed.get(key),
-                FlashScorch.marks(current.flashLayer(), d.id()));
-        if (!(current.scar() >= d.id() && d.id() > 0)
+                FlashScorch.marks(current.flashLayer(), eventId));
+        if (!(current.scar() >= eventId && eventId > 0)
                 && !java.util.Arrays.equals(shot.normalPrints(Blast.SERVER), fresh.normalPrints(Blast.SERVER))) return false;
         restoreShot(key, shot);
         return true;
