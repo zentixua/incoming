@@ -1,0 +1,47 @@
+{
+  "production_source": "10d2b145fde4f90752688cc037825f197081caa5",
+  "source_checks": [
+    {
+      "head": "4f1f18115",
+      "build_seconds": 213,
+      "units": [
+        1800,
+        0,
+        0,
+        0
+      ],
+      "gametest": [
+        66,
+        66
+      ],
+      "ci": "41828839286 success"
+    },
+    {
+      "head": "7c28de912",
+      "build_seconds": 237,
+      "units": [
+        1800,
+        0,
+        0,
+        0
+      ],
+      "gametest": [
+        73,
+        72
+      ],
+      "failed": "nuke_prep existing fixture release deadline; cleanup erased failure counters",
+      "ci": "41831266389 failed only legacy DH asynchronous section-gap fixture"
+    },
+    {
+      "head": "10d2b145f",
+      "gametest": [
+        19,
+        19
+      ],
+      "game_seconds": 11.9,
+      "gradle_seconds": 31,
+      "ci": "pending"
+    }
+  ],
+  "review": "two independent source rounds; five serious findings corrected by author with focused regressions; composition97c3 had no additional serious integration findings; no third round"
+}

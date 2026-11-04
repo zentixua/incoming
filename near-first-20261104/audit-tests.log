@@ -1,0 +1,13 @@
+test_bad_inputs (test_ledger_audit.Tests.test_bad_inputs) ... ok
+test_crater_progress (test_ledger_audit.Tests.test_crater_progress) ... ok
+test_fold_order (test_ledger_audit.Tests.test_fold_order) ... ok
+test_large_array_stream (test_ledger_audit.Tests.test_large_array_stream) ... ok
+test_legacy_empty_lists_and_semantic_motion (test_ledger_audit.Tests.test_legacy_empty_lists_and_semantic_motion) ... ok
+test_packed_and_legacy (test_ledger_audit.Tests.test_packed_and_legacy) ... ok
+test_separate_crater_cursor (test_ledger_audit.Tests.test_separate_crater_cursor) ... ok
+test_typed_cargo_and_nan_motion (test_ledger_audit.Tests.test_typed_cargo_and_nan_motion) ... ok
+
+----------------------------------------------------------------------
+Ran 8 tests in 2.670s
+
+OK
