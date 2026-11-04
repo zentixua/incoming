@@ -1388,6 +1388,49 @@ public final class RuinBackgroundGameTests {
         h.succeed();
     }
 
+    /** Disabling structural damage must not move ground-trace planning back onto the tick thread. */
+    @GameTest(template = "range", timeoutTicks = 40, batch = "nuke_background_damage_off", skyAccess = true)
+    public static void groundTraceWithoutBlockDamageUsesWorkers(GameTestHelper h) {
+        var config = ua.zentix.incoming.IncomingConfig.SERVER.nukeBlockDamage;
+        boolean damage = config.get();
+        config.set(false);
+        ServerLevel level = h.getLevel();
+        BlockPos glass = NuclearGameTests.CENTER.west(8);
+        h.setBlock(glass, Blocks.GLASS);
+        Detonation d = NuclearGameTests.detonation(h, NuclearGameTests.CENTER, 0, 15, 0.025f);
+        LevelChunk chunk = level.getChunkAt(h.absolutePos(glass));
+        ChunkPos pos = chunk.getPos();
+        for (int dx = -RuinPlanner.REACH; dx <= RuinPlanner.REACH; dx++)
+            for (int dz = -RuinPlanner.REACH; dz <= RuinPlanner.REACH; dz++) level.getChunk(pos.x + dx, pos.z + dz);
+        ScarQueue q = new ScarQueue();
+        var release = new java.util.concurrent.CountDownLatch(1);
+        try {
+            RuinWorkers.fillForTest(release, RuinWorkers.Priority.SEEN);
+            q.offer(chunk, d);
+            long wave = ScarQueue.due(d, pos);
+            WorkClock clock = WorkClock.counting(1_000_000);
+            clock.start(10_000_000_000L);
+            q.work(level, wave, clock);
+            h.assertTrue(chunk.getExistingData(ModAttachments.CHUNK_SCAR).orElse(0) != d.id(),
+                    "ground trace was solved synchronously while workers were unavailable");
+            release.countDown();
+            h.assertTrue(RuinWorkers.awaitForTest(RuinWorkers.Priority.NEAR, 60_000), "worker gate did not release");
+            clock.start(10_000_000_000L);
+            q.work(level, wave + 1, clock);
+            h.assertTrue(RuinWorkers.awaitForTest(RuinWorkers.Priority.NEAR, 60_000), "ground trace did not finish");
+            clock.start(10_000_000_000L);
+            q.work(level, wave + 2, clock);
+            h.assertTrue(chunk.getExistingData(ModAttachments.CHUNK_SCAR).orElse(0) == d.id(), "ground trace did not apply");
+            h.assertBlockPresent(Blocks.GLASS, glass);
+        } finally {
+            release.countDown();
+            RuinWorkers.awaitForTest(RuinWorkers.Priority.NEAR, 60_000);
+            q.clear(level);
+            config.set(damage);
+        }
+        h.succeed();
+    }
+
     /**
      * The pool task, which is waiting in line on the far stage (the plan given by the preparation of the ruins in advance), is transferred to the
      *  chunk stage at the wave and goes before all the distant ones that stand in front of it; started and already important - are not transferred.
