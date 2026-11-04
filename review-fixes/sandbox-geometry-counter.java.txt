@@ -1,0 +1,17 @@
+
+        if (effectTick >= 0 && tick - effectTick == 200) {
+            var server = Minecraft.getInstance().getSingleplayerServer();
+            Vec3 origin = site;
+            if (server != null) server.execute(() -> {
+                var level = server.overworld();
+                BlockPos o = BlockPos.containing(origin);
+                int island = 0, glazing = 0;
+                for (int x=-8;x<=8;x++) for (int z=-8;z<=8;z++) for (int y=15;y<=17;y++)
+                    if (level.getBlockState(o.offset(x,y,z)).is(net.minecraft.world.level.block.Blocks.END_STONE)) island++;
+                for (int x=-6;x<=6;x++) for (int z=-6;z<=6;z++)
+                    if (level.getBlockState(o.offset(x,18,z)).is(net.minecraft.world.level.block.Blocks.GLASS)) glazing++;
+                var ledger = ua.zentix.incoming.nuclear.world.RuinMatter.get(level);
+                Incoming.LOG.info("REVIEW_GEOMETRY origin={} island={} glass={} released={} deposited={} pending={}",
+                        o, island, glazing, ledger.released(), ledger.deposited(), ledger.pending());
+            });
+        }

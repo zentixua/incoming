@@ -1,3 +1,5 @@
+> Review correction (4 November): the original PipelineBench did not register its synthetic events. Its MTMAT rows exclude live support reconciliation. See [registered continuation measurements and B1–B4 fixes](review-fixes/README.md). Earlier frames/source identity below belong to reviewed head ad1f7c064, not the later fixes.
+
 # MT-B2 structural material and support
 
 Production PR: https://github.com/zentixua/incoming/pull/560. Baseline: `292f3153636952a8168da493e717952ec680c396`. The production source and capture hashes are recorded in `source-identity.json`. No merge or release is authorized by this evidence.

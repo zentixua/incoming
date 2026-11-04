@@ -1,3 +1,5 @@
+> Review correction (4 November): the original PipelineBench did not register its synthetic events. Its MTMAT rows exclude live support reconciliation. See [registered continuation measurements and B1–B4 fixes](review-fixes/README.md). Earlier frames/source identity below belong to reviewed head ad1f7c064, not the later fixes.
+
 # Per-chunk CPU probe
 
 All times are local elapsed milliseconds on the laptop, not CI thresholds. Each row is one live 16×16 chunk. Snapshot, blast, collapse, plan completion and commit are timed separately. Light is asynchronous barrier latency (not light-thread CPU). Encoding is a real full chunk-with-light packet into a buffer; network delivery/LOD ingestion is not included.

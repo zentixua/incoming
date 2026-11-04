@@ -1,0 +1,230 @@
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.14.3/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+
+> Task :createMinecraftArtifacts
+Loaded 131 artifacts from /mnt/data/projects/incoming/mod/run/wt-MT-B2/mod/run/mt-b2/review-probe/mod/build/tmp/createMinecraftArtifacts/nfrt_artifact_manifest.properties
+[1m*** Started working on [4mdownloadJson[23;0m[23;0m
+ [1m[92m✓[23;0m Completed [4mdownloadJson[23;0m in 0.01s
+[1m*** Started working on [4mdownloadClientMappings[23;0m[23;0m
+[1m*** Started working on [4mdownloadServer[23;0m[23;0m
+[1m*** Started working on [4mdownloadClient[23;0m[23;0m
+ [1m[92m✓[23;0m Completed [4mdownloadClient[23;0m in 0.02s
+ [1m[92m✓[23;0m Completed [4mdownloadClientMappings[23;0m in 0.02s
+ [1m[92m✓[23;0m Completed [4mdownloadServer[23;0m in 0.02s
+[1m*** Started working on [4mmergeMappings[23;0m[23;0m
+[1m*** Started working on [4mstripClient[23;0m[23;0m
+ [1m[92m♻[23;0m Used cache of [4mmergeMappings[23;0m in 0.00s
+ [1m[92m♻[23;0m Used cache of [4mstripClient[23;0m in 0.00s
+[1m*** Started working on [4mextractServer[23;0m[23;0m
+ [1m[92m♻[23;0m Used cache of [4mextractServer[23;0m in 0.00s
+[1m*** Started working on [4mstripServer[23;0m[23;0m
+ [1m[92m♻[23;0m Used cache of [4mstripServer[23;0m in 0.00s
+[1m*** Started working on [4mmerge[23;0m[23;0m
+ [1m[92m♻[23;0m Used cache of [4mmerge[23;0m in 0.00s
+[1m*** Started working on [4mrename[23;0m[23;0m
+ [1m[92m♻[23;0m Used cache of [4mrename[23;0m in 0.00s
+[1m*** Started working on [4mdecompile[23;0m[23;0m
+ [1m[92m♻[23;0m Used cache of [4mdecompile[23;0m in 0.00s
+[1m*** Started working on [4minject[23;0m[23;0m
+ [1m[92m♻[23;0m Used cache of [4minject[23;0m in 0.00s
+[1m*** Started working on [4mpatch[23;0m[23;0m
+ [1m[92m♻[23;0m Used cache of [4mpatch[23;0m in 0.00s
+[1m*** Started working on [4mapplyNeoforgePatches[23;0m[23;0m
+ [1m[92m♻[23;0m Used cache of [4mapplyNeoforgePatches[23;0m in 0.00s
+[1m*** Started working on [4mtransformSources[23;0m[23;0m
+ [1m[92m♻[23;0m Used cache of [4mtransformSources[23;0m in 0.00s
+[1m*** Started working on [4mrecompile[23;0m[23;0m
+ [1m[92m♻[23;0m Used cache of [4mrecompile[23;0m in 0.00s
+[1m*** Started working on [4msourcesWithNeoForge[23;0m[23;0m
+ [1m[92m♻[23;0m Used cache of [4msourcesWithNeoForge[23;0m in 0.00s
+[1m*** Started working on [4mcompiledWithNeoForge[23;0m[23;0m
+ [1m[92m♻[23;0m Used cache of [4mcompiledWithNeoForge[23;0m in 0.00s
+[1m*** Started working on [4msourcesAndCompiledWithNeoForge[23;0m[23;0m
+ [1m[92m♻[23;0m Used cache of [4msourcesAndCompiledWithNeoForge[23;0m in 0.00s
+Total runtime: 0.63s
+
+
+> Task :compileJava FROM-CACHE
+> Task :generateModMetadata
+> Task :processResources
+> Task :classes
+> Task :compileDevtestJava
+> Task :copyRuntimeMods_gametest
+> Task :processDevtestResources
+> Task :devtestClasses
+
+> Task :downloadAssets
+Loaded 131 artifacts from /mnt/data/projects/incoming/mod/run/wt-MT-B2/mod/run/mt-b2/review-probe/mod/build/tmp/downloadAssets/nfrt_artifact_manifest.properties
+Downloading asset index 17
+Using Minecraft asset root: /home/artem/.gradle/caches/neoformruntime/assets
+  ↓ https://piston-meta.mojang.com/v1/packages/de573f83da62843433ec9951c66feec7ed0a60a1/17.json
+
+> Task :writeGameTestServerLegacyClasspath
+> Task :prepareGameTestServerRun
+
+> Task :runGameTestServer
+WARN StatusConsoleListener Advanced terminal features are not available in this environment
+[03:25:21] [main/INFO] [cp.mo.mo.Launcher/MODLAUNCHER]: ModLauncher running: args [--launchTarget, forgeserverdev, --gameDir, ., --fml.fmlVersion, 4.0.45, --fml.mcVersion, 1.21.1, --fml.neoForgeVersion, 21.1.264, --fml.neoFormVersion, 20240808.144430]
+[03:25:21] [main/INFO] [cp.mo.mo.Launcher/MODLAUNCHER]: JVM identified as Microsoft OpenJDK 64-Bit Server VM 21.0.7+6-LTS
+[03:25:21] [main/INFO] [cp.mo.mo.Launcher/MODLAUNCHER]: ModLauncher 11.0.5+main.901c6ea8 starting: java version 21.0.7 by Microsoft; OS Linux arch amd64 version 7.3.1-1-cachyos
+[03:25:21] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Configuration file /mnt/data/projects/incoming/mod/run/wt-MT-B2/mod/run/mt-b2/review-probe/mod/run/gametest/config/fml.toml is not correct. Correcting
+[03:25:21] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [disableConfigWatcher] was corrected from null to false
+[03:25:21] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowControl] was corrected from null to true
+[03:25:21] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [maxThreads] was corrected from null to -1
+[03:25:21] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [versionCheck] was corrected from null to true
+[03:25:21] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [defaultConfigPath] was corrected from null to defaultconfigs
+[03:25:21] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [disableOptimizedDFU] was corrected from null to true
+[03:25:21] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowProvider] was corrected from null to fmlearlywindow
+[03:25:21] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowWidth] was corrected from null to 854
+[03:25:21] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowHeight] was corrected from null to 480
+[03:25:21] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowFBScale] was corrected from null to 1
+[03:25:21] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowMaximized] was corrected from null to false
+[03:25:21] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowSkipGLVersions] was corrected from null to []
+[03:25:21] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowSquir] was corrected from null to false
+[03:25:21] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: ****************************** Found dependency overrides ******************************
+[03:25:21] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: Dependency overrides for mod 'aeronautics': adding explicit AFTER ordering against 'simulated', adding explicit AFTER ordering against 'offroad'
+[03:25:21] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: Dependency overrides for mod 'simulated': adding explicit AFTER ordering against 'create', adding explicit AFTER ordering against 'sable'
+[03:25:21] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: Dependency overrides for mod 'offroad': adding explicit AFTER ordering against 'simulated'
+[03:25:21] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: ****************************************************************************************
+[03:25:21] [main/INFO] [ne.ne.fm.lo.ImmediateWindowHandler/]: ImmediateWindowProvider not loading because launch target is forgeserverdev
+[03:25:21] [main/INFO] [mixin/]: SpongePowered MIXIN Subsystem Version=0.8.7 Source=union:/home/artem/.gradle/caches/modules-2/files-2.1/net.fabricmc/sponge-mixin/0.16.4+mixin.0.8.7/26d01f0567ab46e9ca0d2ed89d0ecc11aadbd433/sponge-mixin-0.16.4+mixin.0.8.7.jar%2394!/ Service=ModLauncher Env=SERVER
+[03:25:21] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: ****************************** Found dependency overrides ******************************
+[03:25:21] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: Dependency overrides for mod 'aeronautics': adding explicit AFTER ordering against 'simulated', adding explicit AFTER ordering against 'offroad'
+[03:25:21] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: Dependency overrides for mod 'simulated': adding explicit AFTER ordering against 'create', adding explicit AFTER ordering against 'sable'
+[03:25:21] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: Dependency overrides for mod 'offroad': adding explicit AFTER ordering against 'simulated'
+[03:25:21] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: ****************************************************************************************
+[03:25:22] [main/INFO] [ne.ne.fm.lo.mo.lo.JarInJarDependencyLocator/]: Found 13 dependencies adding them to mods collection
+[03:25:22] [main/INFO] [ne.ne.fm.lo.mo.ModDiscoverer/]: 
+     Mod List:
+		Name Version (Mod Id)
+
+		Create 6.0.10 (create)
+		Create Aeronautics 1.3.2 (aeronautics)
+		Create Aeronautics 1.3.2 (aeronautics_bundled)
+		Create Offroad 1.3.2 (offroad)
+		Create Simulated 1.3.2 (simulated)
+		Flywheel 1.0.6 (flywheel)
+		Incoming 3.10.4 (incoming)
+		Minecraft 1.21.1 (minecraft)
+		NeoForge 21.1.264 (neoforge)
+		Ponder 1.0.82+mc1.21.1 (ponder)
+		Sable 2.0.6 (sable)
+		Sable Companion 1.6.0 (sablecompanion)
+		Veil 4.3.2 (veil)
+[03:25:22] [main/INFO] [mixin/]: Compatibility level set to JAVA_21
+[03:25:22] [main/INFO] [cp.mo.mo.LaunchServiceHandler/MODLAUNCHER]: Launching target 'forgeserverdev' with arguments [--gameDir, .]
+[03:25:22] [main/WARN] [mixin/]: Reference map 'ponder.refmap.json' for ponder-common.mixins.json could not be read. If this is a development environment you can ignore this message
+[03:25:22] [main/INFO] [de.ry.sa.mi.AbstractSableMixinPlugin/]: Using Vanilla renderer mixins
+[03:25:22] [main/INFO] [de.ry.sa.mi.AbstractSableMixinPlugin/]: Using Vanilla renderer mixins
+[03:25:22] [main/WARN] [mixin/]: Reference map 'simulated.refmap.json' for simulated.mixins.json could not be read. If this is a development environment you can ignore this message
+[03:25:22] [main/WARN] [mixin/]: Reference map 'offroad.refmap.json' for offroad.mixins.json could not be read. If this is a development environment you can ignore this message
+[03:25:22] [main/WARN] [mixin/]: Reference map 'aeronautics.refmap.json' for aeronautics.mixins.json could not be read. If this is a development environment you can ignore this message
+[03:25:23] [main/WARN] [mixin/]: Error loading class: org/jetbrains/annotations/ApiStatus$ScheduledForRemoval (java.lang.ClassNotFoundException: org.jetbrains.annotations.ApiStatus$ScheduledForRemoval)
+[03:25:23] [main/INFO] [MixinExtras|Service/]: Initializing MixinExtras via com.llamalad7.mixinextras.service.MixinExtrasServiceImpl(version=0.5.5).
+[03:25:26] [main/WARN] [minecraft/Commands]: Ambiguity between arguments [teleport, location] and [teleport, destination] with inputs: [0.1 -0.5 .9, 0 0 0]
+[03:25:26] [main/WARN] [minecraft/Commands]: Ambiguity between arguments [teleport, location] and [teleport, targets] with inputs: [0.1 -0.5 .9, 0 0 0]
+[03:25:26] [main/WARN] [minecraft/Commands]: Ambiguity between arguments [teleport, destination] and [teleport, targets] with inputs: [Player, 0123, @e, dd12be42-52a9-4a91-a8a1-11c01849e498]
+[03:25:26] [main/WARN] [minecraft/Commands]: Ambiguity between arguments [teleport, targets] and [teleport, destination] with inputs: [Player, 0123, dd12be42-52a9-4a91-a8a1-11c01849e498]
+[03:25:26] [main/WARN] [minecraft/Commands]: Ambiguity between arguments [teleport, targets, location] and [teleport, targets, destination] with inputs: [0.1 -0.5 .9, 0 0 0]
+[03:25:26] [modloading-worker-0/INFO] [Veil/]: Veil is initializing.
+[03:25:26] [modloading-worker-0/INFO] [ne.ne.ne.co.NeoForgeMod/NEOFORGE-MOD]: NeoForge mod loading, version 21.1.264, for MC 1.21.1
+[03:25:26] [modloading-worker-0/INFO] [co.si.cr.Create/]: Create 6.0.10 initializing! Commit hash: ac0c444d9828da3453ae8cc65338e8de063286fb
+[03:25:27] [modloading-worker-0/INFO] [de.ry.sa.Sable/]: Sable loaded!
+[03:25:29] [main/ERROR] [minecraft/Settings]: Failed to load properties from file: server.properties
+java.nio.file.NoSuchFileException: server.properties
+	at java.base/sun.nio.fs.UnixException.translateToIOException(UnixException.java:92) ~[?:?] {}
+	at java.base/sun.nio.fs.UnixException.rethrowAsIOException(UnixException.java:106) ~[?:?] {}
+	at java.base/sun.nio.fs.UnixException.rethrowAsIOException(UnixException.java:111) ~[?:?] {}
+	at java.base/sun.nio.fs.UnixFileSystemProvider.newByteChannel(UnixFileSystemProvider.java:261) ~[?:?] {}
+	at java.base/java.nio.file.Files.newByteChannel(Files.java:380) ~[?:?] {}
+	at java.base/java.nio.file.Files.newByteChannel(Files.java:432) ~[?:?] {}
+	at java.base/java.nio.file.spi.FileSystemProvider.newInputStream(FileSystemProvider.java:420) ~[?:?] {}
+	at java.base/java.nio.file.Files.newInputStream(Files.java:160) ~[?:?] {}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.dedicated.Settings.loadFromFile(Settings.java:38) ~[neoforge-21.1.264.jar%23128!/:?] {re:classloading}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.dedicated.DedicatedServerProperties.fromFile(DedicatedServerProperties.java:132) ~[neoforge-21.1.264.jar%23128!/:?] {re:classloading}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.dedicated.DedicatedServerSettings.<init>(DedicatedServerSettings.java:12) ~[neoforge-21.1.264.jar%23128!/:?] {re:classloading}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.Main.main(Main.java:125) ~[neoforge-21.1.264.jar%23128!/:?] {re:classloading}
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103) ~[?:?] {}
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580) ~[?:?] {}
+	at MC-BOOTSTRAP/fml_loader@4.0.45/net.neoforged.fml.loading.targets.CommonLaunchHandler.runTarget(CommonLaunchHandler.java:136) ~[loader-4.0.45.jar%23102!/:4.0] {}
+	at MC-BOOTSTRAP/fml_loader@4.0.45/net.neoforged.fml.loading.targets.CommonLaunchHandler.serverService(CommonLaunchHandler.java:128) ~[loader-4.0.45.jar%23102!/:4.0] {}
+	at MC-BOOTSTRAP/fml_loader@4.0.45/net.neoforged.fml.loading.targets.NeoForgeServerDevLaunchHandler.runService(NeoForgeServerDevLaunchHandler.java:23) ~[loader-4.0.45.jar%23102!/:4.0] {}
+	at MC-BOOTSTRAP/fml_loader@4.0.45/net.neoforged.fml.loading.targets.CommonLaunchHandler.lambda$launchService$4(CommonLaunchHandler.java:118) ~[loader-4.0.45.jar%23102!/:4.0] {}
+	at MC-BOOTSTRAP/cpw.mods.modlauncher@11.0.5/cpw.mods.modlauncher.LaunchServiceHandlerDecorator.launch(LaunchServiceHandlerDecorator.java:30) [modlauncher-11.0.5.jar%2382!/:?] {}
+	at MC-BOOTSTRAP/cpw.mods.modlauncher@11.0.5/cpw.mods.modlauncher.LaunchServiceHandler.launch(LaunchServiceHandler.java:53) [modlauncher-11.0.5.jar%2382!/:?] {}
+	at MC-BOOTSTRAP/cpw.mods.modlauncher@11.0.5/cpw.mods.modlauncher.LaunchServiceHandler.launch(LaunchServiceHandler.java:71) [modlauncher-11.0.5.jar%2382!/:?] {}
+	at MC-BOOTSTRAP/cpw.mods.modlauncher@11.0.5/cpw.mods.modlauncher.Launcher.run(Launcher.java:103) [modlauncher-11.0.5.jar%2382!/:?] {}
+	at MC-BOOTSTRAP/cpw.mods.modlauncher@11.0.5/cpw.mods.modlauncher.Launcher.main(Launcher.java:74) [modlauncher-11.0.5.jar%2382!/:?] {}
+	at MC-BOOTSTRAP/cpw.mods.modlauncher@11.0.5/cpw.mods.modlauncher.BootstrapLaunchConsumer.accept(BootstrapLaunchConsumer.java:26) [modlauncher-11.0.5.jar%2382!/:?] {}
+	at MC-BOOTSTRAP/cpw.mods.modlauncher@11.0.5/cpw.mods.modlauncher.BootstrapLaunchConsumer.accept(BootstrapLaunchConsumer.java:23) [modlauncher-11.0.5.jar%2382!/:?] {}
+	at cpw.mods.bootstraplauncher@2.0.2/cpw.mods.bootstraplauncher.BootstrapLauncher.run(BootstrapLauncher.java:210) [bootstraplauncher-2.0.2.jar:?] {}
+	at cpw.mods.bootstraplauncher@2.0.2/cpw.mods.bootstraplauncher.BootstrapLauncher.main(BootstrapLauncher.java:69) [bootstraplauncher-2.0.2.jar:?] {}
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103) ~[?:?] {}
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580) ~[?:?] {}
+	at net.neoforged.devlaunch.Main.main(Main.java:57) [DevLaunch-1.0.2.jar:?] {}
+[03:25:29] [main/INFO] [mojang/YggdrasilAuthenticationService]: Environment: Environment[sessionHost=https://sessionserver.mojang.com, servicesHost=https://api.minecraftservices.com, name=PROD]
+[03:25:29] [NeoForge Version Check/INFO] [ne.ne.fm.VersionChecker/]: [create] Starting version check at https://api.modrinth.com/updates/create/forge_updates.json?neoforge=only
+[03:25:29] [main/WARN] [minecraft/VanillaPackResourcesBuilder]: Assets URL 'union:/mnt/data/projects/incoming/mod/run/wt-MT-B2/mod/run/mt-b2/review-probe/mod/build/moddev/artifacts/neoforge-21.1.264.jar%23128!/assets/.mcassetsroot' uses unexpected schema
+[03:25:29] [main/WARN] [minecraft/VanillaPackResourcesBuilder]: Assets URL 'union:/mnt/data/projects/incoming/mod/run/wt-MT-B2/mod/run/mt-b2/review-probe/mod/build/moddev/artifacts/neoforge-21.1.264.jar%23128!/data/.mcassetsroot' uses unexpected schema
+[03:25:29] [main/INFO] [co.si.cr.Create/]: Created 157 recipes which will be injected into the game
+[03:25:29] [main/INFO] [co.si.cr.Create/]: Created 0 tags which will be injected into the game
+[03:25:29] [main/INFO] [ne.ne.ne.ga.GameTestHooks/]: Enabled Gametest Namespaces: [incoming]
+[03:25:29] [NeoForge Version Check/INFO] [ne.ne.fm.VersionChecker/]: [create] Found status: OUTDATED Current: 6.0.10 Target: 6.0.10+mc1.21.1
+[03:25:30] [main/INFO] [minecraft/RecipeManager]: Loaded 2954 recipes
+[03:25:30] [main/INFO] [minecraft/AdvancementTree]: Loaded 2645 advancements
+[03:25:31] [Server thread/INFO] [ua.ze.in.Incoming/]: GameTest: only batch “mt_review_support_bench” - tests 1 from 710
+[03:25:31] [Server thread/INFO] [de.ry.sa.Sable/]: Creating physics pipeline for ResourceKey[minecraft:dimension / minecraft:overworld] using RapierPhysicsPipelineProvider
+[03:25:31] [Server thread/INFO] [de.ry.sa.Sable/]: Using game directory relative Sable Rapier native directory /mnt/data/projects/incoming/mod/run/wt-MT-B2/mod/run/mt-b2/review-probe/mod/run/gametest/.sable/natives
+[2026-11-04T01:25:31.316227823Z] [[32mINFO[0m] (sable_rapier) Rapier scene initialized
+[03:25:31] [Server thread/INFO] [de.ry.sa.Sable/]: Creating physics pipeline for ResourceKey[minecraft:dimension / minecraft:the_nether] using RapierPhysicsPipelineProvider
+[2026-11-04T01:25:31.595541516Z] [[32mINFO[0m] (sable_rapier) Rapier scene initialized
+[03:25:31] [Server thread/INFO] [de.ry.sa.Sable/]: Creating physics pipeline for ResourceKey[minecraft:dimension / minecraft:the_end] using RapierPhysicsPipelineProvider
+[2026-11-04T01:25:31.612964115Z] [[32mINFO[0m] (sable_rapier) Rapier scene initialized
+[03:25:31] [Server thread/INFO] [minecraft/MinecraftServer]: Preparing start region for dimension minecraft:overworld
+[03:25:31] [worldgen/INFO] [minecraft/LoggerChunkProgressListener]: Preparing spawn area: 2%
+[03:25:31] [Server thread/INFO] [minecraft/LoggerChunkProgressListener]: Time elapsed: 135 ms
+[03:25:31] [Server thread/INFO] [minecraft/GameTestServer]: Started game test server
+[03:25:31] [Server thread/INFO] [ne.ne.ne.se.pe.PermissionAPI/]: Successfully initialized permission handler neoforge:default_handler
+[03:25:31] [Server thread/INFO] [minecraft/GameTestServer]: 1 tests are now running at position -7565966, -59, 6995777!
+[03:25:32] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'mt_review_support_bench:0' (1 tests)...
+[03:25:32] [Server thread/INFO] [minecraft/GameTestServer]: [ ]
+[03:25:32] [Server thread/INFO] [minecraft/GameTestServer]: [ ]
+[03:25:32] [Server thread/INFO] [ua.ze.in.Incoming/]: MTSUPPORT sample=0 side=16 chunks=4 released=257 units=64 totalMs=21.569874 perChunkMs=5.3924685 maxUnitMs=4.800297 peakGraphEntries=732 peakSupportSeeds=168 savedBytes=108920 saveMs=9.778692 loadMs=2.455359
+[03:25:32] [Server thread/INFO] [ua.ze.in.Incoming/]: MTSUPPORT sample=1 side=32 chunks=9 released=1025 units=254 totalMs=21.162626 perChunkMs=2.351402888888889 maxUnitMs=1.101825 peakGraphEntries=3004 peakSupportSeeds=825 savedBytes=433784 saveMs=5.910433 loadMs=2.948093
+[03:25:33] [Server thread/INFO] [ua.ze.in.Incoming/]: MTSUPPORT sample=2 side=48 chunks=16 released=2305 units=572 totalMs=25.169815 perChunkMs=1.5731134375 maxUnitMs=0.76819 peakGraphEntries=6812 peakSupportSeeds=1994 savedBytes=975224 saveMs=11.131039 loadMs=7.742454
+[03:25:33] [Server thread/INFO] [ua.ze.in.Incoming/]: MTSUPPORT sample=3 side=16 chunks=4 released=257 units=64 totalMs=3.345839 perChunkMs=0.83645975 maxUnitMs=0.480861 peakGraphEntries=732 peakSupportSeeds=168 savedBytes=108920 saveMs=0.818057 loadMs=0.73732
+[03:25:33] [Server thread/INFO] [ua.ze.in.Incoming/]: MTSUPPORT sample=4 side=32 chunks=9 released=1025 units=254 totalMs=12.228112 perChunkMs=1.358679111111111 maxUnitMs=0.630462 peakGraphEntries=3004 peakSupportSeeds=825 savedBytes=433784 saveMs=5.355959 loadMs=3.963244
+[03:25:33] [Server thread/INFO] [ua.ze.in.Incoming/]: MTSUPPORT sample=5 side=48 chunks=16 released=2305 units=572 totalMs=30.421275 perChunkMs=1.9013296875 maxUnitMs=1.118447 peakGraphEntries=6812 peakSupportSeeds=1994 savedBytes=975224 saveMs=9.467617 loadMs=6.912523
+[03:25:33] [Server thread/INFO] [ua.ze.in.Incoming/]: MTSUPPORT sample=6 side=16 chunks=4 released=257 units=64 totalMs=3.954933 perChunkMs=0.98873325 maxUnitMs=1.190873 peakGraphEntries=732 peakSupportSeeds=168 savedBytes=108920 saveMs=0.774127 loadMs=0.546163
+[03:25:33] [Server thread/INFO] [ua.ze.in.Incoming/]: MTSUPPORT sample=7 side=32 chunks=9 released=1025 units=254 totalMs=10.372343 perChunkMs=1.1524825555555556 maxUnitMs=0.293266 peakGraphEntries=3004 peakSupportSeeds=825 savedBytes=433784 saveMs=3.018144 loadMs=1.875952
+[03:25:33] [Server thread/INFO] [ua.ze.in.Incoming/]: MTSUPPORT sample=8 side=48 chunks=16 released=2305 units=572 totalMs=20.018066 perChunkMs=1.251129125 maxUnitMs=0.417934 peakGraphEntries=6812 peakSupportSeeds=1994 savedBytes=975224 saveMs=5.866503 loadMs=4.104533
+[03:25:33] [Server thread/INFO] [minecraft/GameTestServer]: [+]
+[03:25:33] [Server thread/INFO] [minecraft/GameTestServer]: ========= 1 GAME TESTS COMPLETE IN 1.300 s ======================
+[03:25:33] [Server thread/INFO] [minecraft/GameTestServer]: All 1 required tests passed :)
+[03:25:33] [Server thread/INFO] [minecraft/GameTestServer]: ====================================================
+[03:25:33] [Server thread/INFO] [minecraft/MinecraftServer]: Stopping server
+[03:25:33] [Server thread/INFO] [minecraft/MinecraftServer]: Saving players
+[03:25:33] [Server thread/INFO] [minecraft/MinecraftServer]: Saving worlds
+[03:25:33] [Server thread/INFO] [minecraft/MinecraftServer]: Saving chunks for level 'ServerLevel[Test Level]'/minecraft:overworld
+[03:25:33] [Server thread/INFO] [de.ry.sa.Sable/]: Saving sub-levels for level 'ServerLevel[Test Level]'/minecraft:overworld
+[03:25:36] [Server thread/INFO] [minecraft/MinecraftServer]: Saving chunks for level 'ServerLevel[Test Level]'/minecraft:the_nether
+[03:25:36] [Server thread/INFO] [de.ry.sa.Sable/]: Saving sub-levels for level 'ServerLevel[Test Level]'/minecraft:the_nether
+[03:25:36] [Server thread/INFO] [minecraft/MinecraftServer]: Saving chunks for level 'ServerLevel[Test Level]'/minecraft:the_end
+[03:25:36] [Server thread/INFO] [de.ry.sa.Sable/]: Saving sub-levels for level 'ServerLevel[Test Level]'/minecraft:the_end
+[03:25:36] [Server thread/INFO] [minecraft/MinecraftServer]: ThreadedAnvilChunkStorage (world): All chunks are saved
+[03:25:36] [Server thread/INFO] [minecraft/MinecraftServer]: ThreadedAnvilChunkStorage (DIM-1): All chunks are saved
+[03:25:36] [Server thread/INFO] [minecraft/MinecraftServer]: ThreadedAnvilChunkStorage (DIM1): All chunks are saved
+[03:25:36] [Server thread/INFO] [minecraft/MinecraftServer]: ThreadedAnvilChunkStorage: All dimensions are saved
+[03:25:36] [Server thread/INFO] [minecraft/GameTestServer]: Game test server shutting down
+
+[Incubating] Problems report is available at: file:///mnt/data/projects/incoming/mod/run/wt-MT-B2/mod/run/mt-b2/review-probe/mod/build/reports/problems/problems-report.html
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 9.0.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/8.14.3/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD SUCCESSFUL in 27s
+11 actionable tasks: 10 executed, 1 from cache
+laptop_job mt-b2-review-probe: exit 0

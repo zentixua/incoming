@@ -1,0 +1,12 @@
+    private static void buildHouses(MinecraftServer server, BlockPos o) {
+        int x=o.getX(), y=o.getY()+15, z=o.getZ();
+        // B1: floating end-stone island, with ordinary breakable glass resting on its upper face.
+        run(server, "fill %d %d %d %d %d %d minecraft:end_stone".formatted(x-8,y,z-8,x+8,y+2,z+8));
+        run(server, "fill %d %d %d %d %d %d minecraft:glass".formatted(x-6,y+3,z-6,x+6,y+3,z+6));
+        // B2: supported barrel-bearing roof. Rails survive beneath it inside a protected recess.
+        run(server, "fill %d %d %d %d %d %d minecraft:obsidian".formatted(x+14,o.getY()-1,z-5,x+24,o.getY()-1,z+5));
+        run(server, "fill %d %d %d %d %d %d minecraft:glass hollow".formatted(x+16,o.getY(),z-3,x+22,o.getY()+5,z+3));
+        run(server, "fill %d %d %d %d %d %d minecraft:white_concrete".formatted(x+16,o.getY()+5,z-3,x+22,o.getY()+5,z+3));
+        run(server, "fill %d %d %d %d %d %d minecraft:rail".formatted(x+17,o.getY(),z-2,x+21,o.getY(),z+2));
+    }
+

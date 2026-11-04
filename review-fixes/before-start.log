@@ -1,0 +1,2 @@
+JVM: /mnt/data/projects/incoming/mod/run/jbr/jbr-21.0.11-linux-x64-b1163.116/bin/java; hot swap: new fields, methods and lambdas too
+02:26:13 GPU held by MT-B3 (/mnt/data/projects/incoming/mod/run/wt-MT), since 02:23, last work 0 min ago (free — tools/gpu_lease.sh release in its tree or after 10 min without work) — waiting (queue position 1)
