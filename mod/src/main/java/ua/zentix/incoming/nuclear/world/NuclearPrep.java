@@ -1466,7 +1466,7 @@ public final class NuclearPrep {
     /** Preparation matches detonation: not handed off, same location, yield and scale. */
     private static boolean preparedFor(Prep p, Detonation d, int strikeId) {
         Detonation g = p.geometry;
-        return (p.handle == null || p.bound && p.strike == strikeId && compatible(p)) && p.detonation < 0 && !p.draining && g != null && g.yieldKt() == d.yieldKt() && g.surface() == d.surface() && g.scale() == d.scale()
+        return (strikeId < 0 ? p.handle == null : p.strike == strikeId && (p.handle == null || p.bound && compatible(p))) && p.detonation < 0 && !p.draining && g != null && g.yieldKt() == d.yieldKt() && g.surface() == d.surface() && g.scale() == d.scale()
                 && (p.handle == null ? g.burst().distanceTo(d.burst()) <= SAME_PLACE : g.burst().equals(d.burst()) && g.groundY() == d.groundY());
     }
 

@@ -106,6 +106,17 @@ public final class RuinPreparationGameTests {
             h.assertTrue(prep.planned(fresh) == fresh, "diagnostic stole bound preparation");
             h.assertTrue(prep.planned(fresh, 123) == fresh, "other strike stole bound preparation");
             h.assertTrue(prep.planned(fresh, 124) == geometry, "bound geometry unavailable by ID");
+            // An older legacy preparation at the same point must not steal an explicitly identified event.
+            var ctor = p.getClass().getDeclaredConstructor(int.class, long.class, java.util.function.LongConsumer.class);
+            ctor.setAccessible(true);
+            Object legacy = ctor.newInstance(125, Long.MAX_VALUE, (java.util.function.LongConsumer) ignored -> {});
+            field(legacy, "geometry").set(legacy, fresh);
+            @SuppressWarnings("unchecked")
+            var all = (List<Object>) field(prep, "preps").get(prep);
+            all.add(0, legacy);
+            try {
+                h.assertTrue(prep.planned(fresh, 124) == geometry, "coincident legacy strike stole exact-ID binding");
+            } finally { all.remove(legacy); }
             field(p, "generation").setInt(p, Blast.generation - 1);
             h.assertTrue(RuinPreparation.status(level, handle).reason() == RuinPreparation.Reason.INCOMPATIBLE, "resource reload retained readiness");
         } finally {
