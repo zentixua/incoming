@@ -1,0 +1,60 @@
+{
+  "production_head": "452f1f78af23779200baf4aef804e8e92d6dca40",
+  "files": [
+    {
+      "path": "mod/src/main/java/ua/zentix/incoming/nuclear/model/StemDust.java",
+      "sha256": "1c87dac521c1d2d5792ca85e9d0be858d93c73bb4e2b9c38f52ef4b4fce33b41",
+      "identical_to_476": true
+    },
+    {
+      "path": "mod/src/main/java/ua/zentix/incoming/nuclear/model/MushroomModel.java",
+      "sha256": "12b5b0922b5bbaf0af6f0e0bfa2bfd628a08c443d023c532245aa6788cf524fb",
+      "identical_to_476": true
+    },
+    {
+      "path": "mod/src/main/java/ua/zentix/incoming/nuclear/model/CloudModel.java",
+      "sha256": "41492f5d6eb83ffe9d6923898c33fa0e65940b30632f9d60cd406c456cd5c8f1",
+      "identical_to_476": true
+    },
+    {
+      "path": "mod/src/main/java/ua/zentix/incoming/nuclear/model/DustModel.java",
+      "sha256": "8836fd6374ee037ff2a5af9623ca56c1b883c58893da6e032d383c778f37afd5",
+      "identical_to_476": true
+    },
+    {
+      "path": "mod/src/main/java/ua/zentix/incoming/nuclear/model/FrontProfile.java",
+      "sha256": "107c38a49fada09cdb9a9ca7f434242f0b811afb734f33db820617e832ba8bf5",
+      "identical_to_476": true
+    },
+    {
+      "path": "mod/src/main/java/ua/zentix/incoming/nuclear/Detonation.java",
+      "sha256": "cd41a0ae0d92215ed574e781ad5d66ff83794dab9edc438f2a273e50fe0230f9",
+      "identical_to_476": true
+    },
+    {
+      "path": "mod/src/main/java/ua/zentix/incoming/client/nuclear/PallField.java",
+      "sha256": "2428bff42034fd5a608a993a8a74a8fbc191959b9a06ddb31cd98f050e2df0b3",
+      "identical_to_476": true
+    },
+    {
+      "path": "mod/src/main/java/ua/zentix/incoming/client/nuclear/PallGround.java",
+      "sha256": "7f07a78820363636bb95393a6e9435548e11cf5c80a8dd4665cf4667a95274d3",
+      "identical_to_476": true
+    },
+    {
+      "path": "mod/src/main/java/ua/zentix/incoming/client/nuclear/MushroomField.java",
+      "sha256": "1c98c04506a8fb4b6a90ebbe6ec9c3090f0ba892b1d55210caa064011af61e49",
+      "identical_to_476": true
+    },
+    {
+      "path": "mod/src/main/java/ua/zentix/incoming/client/nuclear/FireStorm.java",
+      "sha256": "25d5f55f17b714b822c555e59c64f711ac9c8816c79e128a09974b944c942a25",
+      "identical_to_476": true
+    },
+    {
+      "path": "mod/src/main/java/ua/zentix/incoming/client/nuclear/FireStorms.java",
+      "sha256": "d8d1ff2855fddd9f8da210f3b11d15e8044f698419c58604b1f6ea6186284d10",
+      "identical_to_476": true
+    }
+  ]
+}

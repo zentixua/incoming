@@ -1,0 +1,69 @@
+{
+  "checked_utc": "2026-11-04T22:47:35.028997+00:00",
+  "originals_republished": false,
+  "sources": [
+    {
+      "filename": "nas2025-figure2-3.jpg",
+      "url": "https://nap.nationalacademies.org/read/27515/assets/images/img-73.jpg",
+      "local_read": false,
+      "bytes": null,
+      "sha256": null
+    },
+    {
+      "filename": "doppler-dna6006f.pdf",
+      "url": "https://www.govinfo.gov/content/pkg/GOVPUB-D15-PURL-gpo222715/pdf/GOVPUB-D15-PURL-gpo222715.pdf",
+      "local_read": true,
+      "bytes": 1402897,
+      "sha256": "6d043eb6564463f34939e180eaf61c1dd5d7b84d19c3fdea8c5ef9739bdbeec3"
+    },
+    {
+      "filename": "hiroshima-kimura-0001.html",
+      "url": "https://visual-archives-hiroshima.jp/en/list/detail/?cate=artifact_en&data_id=1543&search_type=detail",
+      "local_read": true,
+      "bytes": 33066,
+      "sha256": "4d5668aa084537a9893a767f1fd980782bfbc364b346b70f14279d6896960487"
+    },
+    {
+      "filename": "hiroshima-matsushige-0001.html",
+      "url": "https://visual-archives-hiroshima.jp/en/list/detail/?cate=artifact_en&data_id=1539&search_type=detail",
+      "local_read": true,
+      "bytes": 32548,
+      "sha256": "7078e8c0a0e7d2e7c30851bb438fb545dc32b1ea30b5d91b24c0e94d925fa3e5"
+    },
+    {
+      "filename": "hiroshima-kimura-0001.jpg",
+      "url": "https://ibmuseum.mapps.ne.jp/files/4056/media_files/large/1560.jpg",
+      "local_read": true,
+      "bytes": 272299,
+      "sha256": "1269215ad3363a002b92c42d07bcf0e88164aa306be55582f99068bc7a925bd3"
+    },
+    {
+      "filename": "hiroshima-matsushige-0001.jpg",
+      "url": "https://ibmuseum.mapps.ne.jp/files/4056/media_files/large/1556.jpg",
+      "local_read": true,
+      "bytes": 205510,
+      "sha256": "22a45e46c4942ddc4846ffb19eb68c2289a6715aac6aaa5caaf27ba35fc37ba1"
+    },
+    {
+      "filename": "nas2025-p39.gif",
+      "url": "https://nap.nationalacademies.org/books/27515/gif/39.gif",
+      "local_read": true,
+      "bytes": 452114,
+      "sha256": "15ff10e1965e60c687e3e8cab73a452179d15aef840bf9f27a6c0d53bf528f8c"
+    },
+    {
+      "filename": "hiroshima-rerf-summary.pdf",
+      "url": "https://www.rerf.or.jp/uploads/2017/09/briefdescript_e.pdf",
+      "local_read": true,
+      "bytes": 5988594,
+      "sha256": "b0a74c5a1a99f00e5888772e8d8e2026c3c54840238f54d6ccd4fbe8391b6730"
+    },
+    {
+      "filename": "doppler-lanl-photo-catalog.pdf",
+      "url": "https://cdn.lanl.gov/bf395b59-3a70-4125-8640-59ebcafbe81c.pdf",
+      "local_read": true,
+      "bytes": 2108460,
+      "sha256": "36b1d62c876c9ba0ea4039814e73fbb09bb49e19576a2d5dcecf486482f394f9"
+    }
+  ]
+}
