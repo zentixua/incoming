@@ -33,3 +33,10 @@ A second fresh independent Astra/high review and final exact-head build/30target
 ## Final local validation and second review
 
 Exact5d431b337563be9f4fa7bae23e5af14ff535d80b clean source passed build,1840unit tests (zero failures/errors/skips) and30targeted GameTests. Wrapper exited0; elapsed4m21s. Final run again exercises both held-write boundaries and the archive progress case. Source/compiled-class/jar hashes and test totals are in final-validation-receipt.json; this receipt was collected after the unchanged-source run, not embedded retroactively into rawlogs. The fresh second Astra/high review found no serious issues and independently confirmed the first P2 resolved. No third review. Exact-head CI is still pending at this local checkpoint.
+
+
+## Exact required CI completed and component integration
+
+Required check126726077926 for exact5d431b337563be9f4fa7bae23e5af14ff535d80b, run41872103400, completed success at2026-11-04T17:04:12Z. The direct exact-job watcher completed0. The original pr_ci594 waiter had returned0 earlier because root's normal integration merge auto-closed the PR by ancestry; that shortcut was explicitly NOT treated as a green required check. Both waiter logs and the final exact-head check-run receipt are included. No rerun was requested.
+
+LEAD2 explicitly accepted component integration ownership. Its normal combined merges are READYb5610b3c91a2c1e2e2d09d28c0fd503464a43982 / NATURAL0f1a77ff88b4e6546212aec9ab34a834eda525d1, including separate material PR595. This is integration-branch delivery, not main or release readiness. Fresh combined runtime acceptance and any further diagnosis remain root-owned.
