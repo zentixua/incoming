@@ -427,8 +427,6 @@ public final class CloudModel {
         // explosion point, not coarse distant ground height (unknown surface heights mean exactly at the face)
         crushed = GroundDust.skirt(onWater ? 0 : source.chargeKg(), target.atFace() ? 0 : hob, cold, surface, air);
         life = Math.max(lifeSeconds(), Math.min(LIFE_MAX, Math.max(ground.life, crushed.life)));
-        // The wind integral is source data, like Thermal's table, not work for an invisible source in each frame.
-        shear(Math.min(1, life));
     }
 
     /**
@@ -557,8 +555,9 @@ public final class CloudModel {
 
     /** Shear table step, s. */
     private static final double SHEAR_DT = 0.5;
-    /** Downwind offset of layer σv above center relative to center, m, in {@link #SHEAR_DT} steps (computed on first call). */
+    /** Downwind offset of layer σv above center relative to center, m, in {@link #SHEAR_DT} steps, computed only up to the requested age. */
     private double[] shearTable;
+    private int shearThrough;
 
     /**
      * How far a layer σv above cloud center outruns it downwind by age t, m: ∫ ½·(u(z + σv) − u(z − σv)) dt,
@@ -571,15 +570,16 @@ public final class CloudModel {
         if (a == null) {
             int n = (int) Math.ceil(Math.min(life, LIFE_MAX) / SHEAR_DT) + 2;
             a = new double[n];
-            double w = Math.hypot(air.windX(), air.windZ());
-            for (int i = 1; i < n; i++) {
-                double tm = (i - 0.5) * SHEAR_DT, z = height(tm) + hob, v = sigmaV(tm);
-                a[i] = a[i - 1] + 0.5 * w * (air.wind(z + v) - air.wind(Math.max(z - v, 1))) * SHEAR_DT;
-            }
             shearTable = a;
         }
         double f = t / SHEAR_DT;
         int i = (int) Math.min(a.length - 2, Math.floor(f));
+        double w = Math.hypot(air.windX(), air.windZ());
+        for (int j = shearThrough + 1; j <= i + 1; j++) {
+            double tm = (j - 0.5) * SHEAR_DT, z = height(tm) + hob, v = sigmaV(tm);
+            a[j] = a[j - 1] + 0.5 * w * (air.wind(z + v) - air.wind(Math.max(z - v, 1))) * SHEAR_DT;
+        }
+        shearThrough = Math.max(shearThrough, i + 1);
         return a[i] + (a[i + 1] - a[i]) * Math.min(1, f - i);
     }
 

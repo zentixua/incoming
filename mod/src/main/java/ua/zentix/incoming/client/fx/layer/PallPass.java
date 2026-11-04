@@ -538,6 +538,7 @@ public final class PallPass {
      * {@code haze} — air haze and Minecraft fog ({@link FxFrame.Fog#haze}): world shadow fades through them.
      */
     static boolean draw(Frame f, int scene, Matrix4f view, Matrix4f projection, Vec3 eye, Vector4f haze) {
+        long preparing = cold() ? System.nanoTime() : 0;
         ShaderInstance m = march, r = resolve, c = composite, sh = shadow, fl = footLighting;
         if (m == null || r == null || c == null || f.quality == Quality.OFF || !upload()) return false;
         Minecraft mc = Minecraft.getInstance();
@@ -759,7 +760,20 @@ public final class PallPass {
         previousEye = eye;
         history = true;
         drawn++;
+        prepared = m;
+        preparedProgram = m.getId();
+        if (preparing != 0) Incoming.LOG.info("Nuclear volume shaders prepared in {} ms", (System.nanoTime() - preparing) / 1_000_000);
         return true;
+    }
+
+    /** Last program drawn with the actual pass resources; no world references. */
+    @Nullable
+    private static ShaderInstance prepared;
+    private static int preparedProgram = -1;
+
+    /** Resource reloads replace the shader; runtime recompilation can replace its GL program in place. */
+    static boolean cold() {
+        return !failed && march != null && (prepared != march || preparedProgram != march.getId());
     }
 
     /** Full-frame quad with custom shader; ray pass also binds 3D noise at its own texture unit. */

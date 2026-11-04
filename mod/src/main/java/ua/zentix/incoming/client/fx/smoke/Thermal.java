@@ -11,6 +11,15 @@ package ua.zentix.incoming.client.fx.smoke;
  * initial radius: ground cloud is a hemisphere).
  */
 public final class Thermal {
+    /** Rise is independent of wind, humidity and terrain. Reuse the exact immutable RK4 table. */
+    private record Key(double buoyancy, double g0, double rMin, double n) {}
+    private record Rise(double r0, double[] z, double[] r, double[] w, double[] gp,
+                        double maxRise, double topZ, double topR, double topSeconds, int stopped) {}
+    private static final java.util.Map<Key, Rise> RISES = new java.util.LinkedHashMap<>(32, 0.75f, true) {
+        @Override protected boolean removeEldestEntry(java.util.Map.Entry<Key, Rise> entry) {
+            return size() > 32;
+        }
+    };
     /** Rise integration step, s. */
     static final double DT = 0.05;
 
@@ -21,6 +30,8 @@ public final class Thermal {
     public final double r0;
     /** Rise at {@link #DT} steps: centre height, radius, speed, g'; drift x and z. */
     private final double[] z, r, w, gp, dx, dz;
+    private final int stopped;
+    private int driftThrough;
     /** Maximum rise speed, m/s. */
     public final double maxRise;
     /** Maximum centre height and time reached, s; radius there. */
@@ -38,49 +49,74 @@ public final class Thermal {
     public Thermal(double buoyancy, double g0, double rMin, CloudModel.Air air) {
         this.air = air;
         this.buoyancy = buoyancy;
+        Key key = new Key(buoyancy, g0, rMin, air.n());
+        Rise rise;
+        synchronized (RISES) { rise = RISES.get(key); }
+        if (rise == null) {
+            rise = integrate(buoyancy, g0, rMin, air.n());
+            // Very weak stratification can produce much larger tables in numerical checks. Do not
+            // retain those: 32 normal tables at most, each no more than 512 KiB of rise samples.
+            if (rise.z.length <= 16_384) synchronized (RISES) { RISES.put(key, rise); }
+        }
+        r0 = rise.r0; z = rise.z; r = rise.r; w = rise.w; gp = rise.gp;
+        maxRise = rise.maxRise; topZ = rise.topZ; topR = rise.topR; topSeconds = rise.topSeconds;
+        dx = new double[z.length]; dz = new double[z.length];
+        stopped = rise.stopped;
+    }
+
+    /** Integrate only the wind history already needed, with exactly the original node order. */
+    private void drift(double t) {
+        int through = (int) Math.min(z.length - 1, Math.floor(step(t)) + 1);
+        for (int i = driftThrough + 1; i <= through; i++) {
+            if (i <= stopped) {
+                double along = air.wind(z[i]) * DT;
+                dx[i] = dx[i - 1] + air.windX() * along;
+                dz[i] = dz[i - 1] + air.windZ() * along;
+            } else {
+                dx[i] = dx[i - 1] + air.windX() * air.wind(z[stopped]) * DT;
+                dz[i] = dz[i - 1] + air.windZ() * air.wind(z[stopped]) * DT;
+            }
+        }
+        driftThrough = Math.max(driftThrough, through);
+    }
+
+    private static Rise integrate(double buoyancy, double g0, double rMin, double frequency) {
         // no heat (dust raised without heating) — sphere does not rise: g' = 0
         double volume = buoyancy > 0 && g0 > 0 ? buoyancy / g0 : 0;
         if (buoyancy <= 0) g0 = 0;
-        r0 = Math.max(rMin, Math.cbrt(3 * volume / (4 * Math.PI)));
-        int n = (int) Math.ceil(Math.PI / air.n() / DT) + 1;
-        z = new double[n];
-        r = new double[n];
-        w = new double[n];
-        gp = new double[n];
-        dx = new double[n];
-        dz = new double[n];
+        double r0 = Math.max(rMin, Math.cbrt(3 * volume / (4 * Math.PI)));
+        int n = (int) Math.ceil(Math.PI / frequency / DT) + 1;
+        double[] z = new double[n];
+        double[] r = new double[n];
+        double[] w = new double[n];
+        double[] gp = new double[n];
         // MTT in variables u = R³, m = R³W, f = R³g'; centre starts half radius above ground (ground ball is hemisphere)
-        double u = r0 * r0 * r0, m = 0, f = u * g0, h = 0.5 * r0, x = 0, y = 0;
+        double u = r0 * r0 * r0, m = 0, f = u * g0, h = 0.5 * r0;
         double[] k1 = new double[4], k2 = new double[4], k3 = new double[4], k4 = new double[4];
+        int stopped = n - 1;
         for (int i = 0; i < n; i++) {
             double rr = Math.cbrt(u);
             z[i] = h;
             r[i] = rr;
             w[i] = m / u;
             gp[i] = f / u;
-            dx[i] = x;
-            dz[i] = y;
             // RK4 over (u, m, f, h)
-            rate(u, m, f, k1);
-            rate(u + 0.5 * DT * k1[0], m + 0.5 * DT * k1[1], f + 0.5 * DT * k1[2], k2);
-            rate(u + 0.5 * DT * k2[0], m + 0.5 * DT * k2[1], f + 0.5 * DT * k2[2], k3);
-            rate(u + DT * k3[0], m + DT * k3[1], f + DT * k3[2], k4);
+            rate(u, m, f, frequency, k1);
+            rate(u + 0.5 * DT * k1[0], m + 0.5 * DT * k1[1], f + 0.5 * DT * k1[2], frequency, k2);
+            rate(u + 0.5 * DT * k2[0], m + 0.5 * DT * k2[1], f + 0.5 * DT * k2[2], frequency, k3);
+            rate(u + DT * k3[0], m + DT * k3[1], f + DT * k3[2], frequency, k4);
             u += DT / 6 * (k1[0] + 2 * k2[0] + 2 * k3[0] + k4[0]);
             m += DT / 6 * (k1[1] + 2 * k2[1] + 2 * k3[1] + k4[1]);
             f += DT / 6 * (k1[2] + 2 * k2[2] + 2 * k3[2] + k4[2]);
             h += DT / 6 * (k1[3] + 2 * k2[3] + 2 * k3[3] + k4[3]);
-            double along = air.wind(h) * DT;
-            x += air.windX() * along;
-            y += air.windZ() * along;
             if (m <= 0 && i > 0) {
+                stopped = i;
                 // apex: cloud rises no farther
                 for (int j = i + 1; j < n; j++) {
                     z[j] = z[i];
                     r[j] = r[i];
                     w[j] = 0;
                     gp[j] = gp[i];
-                    dx[j] = dx[j - 1] + air.windX() * air.wind(z[i]) * DT;
-                    dz[j] = dz[j - 1] + air.windZ() * air.wind(z[i]) * DT;
                 }
                 break;
             }
@@ -89,19 +125,16 @@ public final class Thermal {
         for (int i = 1; i < n; i++) if (z[i] > z[top]) top = i;
         double fastest = 0;
         for (double v : w) fastest = Math.max(fastest, v);
-        maxRise = fastest;
-        topZ = z[top];
-        topR = r[top];
-        topSeconds = top * DT;
+        return new Rise(r0, z, r, w, gp, fastest, z[top], r[top], top * DT, stopped);
     }
 
     /** MTT thermal derivatives d/dt (u, m, f, h), m = R³W, f = R³g', into {@code out}. */
-    private void rate(double u, double m, double f, double[] out) {
+    private static void rate(double u, double m, double f, double frequency, double[] out) {
         double rr = Math.cbrt(u);
         double wv = m / u;
         out[0] = 3 * CloudModel.ALPHA * rr * rr * wv;
         out[1] = f;
-        out[2] = -air.n() * air.n() * m;
+        out[2] = -frequency * frequency * m;
         out[3] = wv;
     }
 
@@ -134,10 +167,12 @@ public final class Thermal {
 
     /** Centre wind drift over t, m (x and z). */
     public double driftX(double t) {
+        drift(t);
         return at(dx, step(t)) + air.windX() * air.wind(topZ) * beyond(t);
     }
 
     public double driftZ(double t) {
+        drift(t);
         return at(dz, step(t)) + air.windZ() * air.wind(topZ) * beyond(t);
     }
 

@@ -281,6 +281,9 @@ public final class FxLayer {
         PallPass.Frame pall = NukePall.frame(level, view.camera(), view.partial(), FRUSTUM);
         // ordinary blast smoke — in the same pass: with the nuke or without it
         pall = SmokeFrame.frame(level, view.camera(), view.partial(), pall);
+        // First draw can compile the ray program in the driver. Run the actual pass while entering
+        // the world (retry until background textures are ready), before the first nuclear flash.
+        if (pall == null && PallPass.cold()) pall = new PallPass.Frame();
         lastQuads = QUADS.size();
         if (QUADS.size() == 0 && pall == null && !WaterDecal.active() && !hot) {
             PallPass.reset();
