@@ -638,7 +638,7 @@ public final class NuclearPrep {
             var root = net.minecraft.world.level.dimension.DimensionType.getStorageFolder(level.dimension(),
                             level.getServer().getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT))
                             .resolve("data/incoming-preparation/" + p.archivePath);
-            p.plans.spill(new RuinPages(info, root.resolve("plans-v2")),
+            p.plans.spill(new RuinPages(info, root.resolve("plans-v" + RuinPlan.STORAGE_VERSION)),
                     p.ruins, p.accounting, () -> Math.max(0, PLANS_CAP - memory(level)));
             p.ruins.archive(new RuinSnapshots(new RuinPages(info, root.resolve("shots")), p.accounting,
                     () -> Math.max(0, PLANS_CAP - memory(level))));
@@ -744,7 +744,7 @@ public final class NuclearPrep {
         var info = new net.minecraft.world.level.chunk.storage.RegionStorageInfo(
                 level.getServer().getWorldData().getLevelName(), level.dimension(), "incoming_preparation");
         ctx.restoredPlans = new RetainedPlans();
-        ctx.restoredPlans.spill(new RuinPages(info, root.resolve("plans-v2")), ctx, readBytes::addAndGet,
+        ctx.restoredPlans.spill(new RuinPages(info, root.resolve("plans-v" + RuinPlan.STORAGE_VERSION)), ctx, readBytes::addAndGet,
                 () -> Math.max(0, PLANS_CAP - memory(level)));
         ctx.restoredPlans.discover();
         ctx.archive(new RuinSnapshots(new RuinPages(info, root.resolve("shots")), readBytes::addAndGet,
