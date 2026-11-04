@@ -41,8 +41,9 @@ public final class RuinPreparation {
     }
 
     /** Pin an accepted carrier order without creating a timed scheduled detonation; -1 rejects. */
-    public static int bindCarrier(ServerLevel level, UUID handle, UUID owner) {
-        return NuclearWorld.get(level).prep().bindCarrier(level, handle, owner);
+    public static int bindCarrier(ServerLevel level, UUID handle, UUID owner, Vec3 target, double yieldKt,
+                                  boolean surface, boolean airBurst) {
+        return NuclearWorld.get(level).prep().bindCarrier(level, handle, owner, target, yieldKt, surface, airBurst);
     }
 
     /** Release a lost/cancelled carrier's preparation identity; does not create or cancel an impact. */

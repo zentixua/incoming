@@ -421,10 +421,10 @@ public final class NuclearPrep {
         return true;
     }
 
-    int bindCarrier(ServerLevel level, UUID handle, UUID owner) {
+    int bindCarrier(ServerLevel level, UUID handle, UUID owner, Vec3 target, double yieldKt, boolean surface, boolean airBurst) {
         Prep p = request(handle);
-        if (p == null || !owner.equals(p.owner)) return -1;
-        if (p.bound) return p.carrier && compatible(p) && p.failure == RuinPreparation.Reason.NONE ? p.strike : -1;
+        if (p == null || p.bound || !owner.equals(p.owner) || !target.equals(p.resolvedTarget)
+                || yieldKt != p.yieldKt || surface != p.surface || airBurst != p.airBurst) return -1;
         if (status(level, handle).stage() != RuinPreparation.Stage.READY) return -1;
         p.strike = NuclearEvents.get(level).nextId();
         p.carrier = true;

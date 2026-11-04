@@ -33,7 +33,7 @@ public final class RuinPreparationGameTests {
         h.assertTrue(!RuinPreparation.keepAlive(level, handle, UUID.randomUUID()), "foreign owner renewed handle");
         h.assertTrue(RuinPreparation.keepAlive(level, handle, owner), "owner could not renew");
         h.assertTrue(!RuinPreparation.bind(level, handle, 123), "unready handle bound");
-        h.assertTrue(RuinPreparation.bindCarrier(level, handle, owner) == -1, "unready carrier handle bound");
+        h.assertTrue(RuinPreparation.bindCarrier(level, handle, owner, target, 1, true, false) == -1, "unready carrier handle bound");
         RuinPreparation.prepare(other, next, owner, target, 1, true, false);
         h.assertTrue(RuinPreparation.status(level, handle).stage() == RuinPreparation.Stage.ABSENT, "owner kept two unlaunched handles");
         h.assertTrue(!RuinPreparation.keepAlive(level, next, owner), "dimension mismatch renewed handle");
@@ -146,15 +146,20 @@ public final class RuinPreparationGameTests {
             h.assertTrue(status.resolvedTarget().equals(expected), "client Y became authoritative surface");
             h.assertTrue(status.stage() == RuinPreparation.Stage.READY, "tiny real preparation not yet stored: " + status);
             if (carrier[0] < 0) {
-                h.assertTrue(RuinPreparation.bindCarrier(level, handle, UUID.randomUUID()) == -1, "foreign carrier owner accepted");
-                carrier[0] = RuinPreparation.bindCarrier(level, handle, owner);
+                h.assertTrue(RuinPreparation.bindCarrier(level, handle, UUID.randomUUID(), expected, .000001, true, false) == -1, "foreign carrier owner accepted");
+                h.assertTrue(RuinPreparation.bindCarrier(level, handle, owner, expected.add(1, 0, 0), .000001, true, false) == -1,
+                        "carrier bound incompatible accepted target");
+                h.assertTrue(RuinPreparation.bindCarrier(level, handle, owner, expected, 1, true, false) == -1,
+                        "carrier bound incompatible accepted yield");
+                carrier[0] = RuinPreparation.bindCarrier(level, handle, owner, expected, .000001, true, false);
                 h.assertTrue(carrier[0] >= 0, "ready accepted carrier did not bind");
                 boundAt[0] = level.getGameTime();
                 h.assertTrue(NuclearEvents.get(level).scheduled().stream().noneMatch(scheduled -> scheduled.id() == carrier[0]),
                         "carrier binding invented a timed scheduled impact");
             }
             h.assertTrue(level.getGameTime() >= boundAt[0] + 3, "awaiting carrier binding through registered world ticks");
-            h.assertTrue(RuinPreparation.bindCarrier(level, handle, owner) == carrier[0], "carrier identity changed during tick/renew");
+            h.assertTrue(RuinPreparation.bindCarrier(level, handle, owner, expected, .000001, true, false) == -1,
+                    "bound handle accepted a second carrier launch");
             RuinPreparation.cancelCarrier(level, carrier[0]);
             h.assertTrue(RuinPreparation.status(level, handle).stage() == RuinPreparation.Stage.ABSENT, "lost carrier retained its preparation");
         });
