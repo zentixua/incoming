@@ -1,0 +1,593 @@
+diff --git a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinResultOwnershipGameTests.java b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinResultOwnershipGameTests.java
+new file mode 100644
+index 000000000..96b59c459
+--- /dev/null
++++ b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinResultOwnershipGameTests.java
+@@ -0,0 +1,70 @@
++package ua.zentix.incoming.nuclear.world;
++
++import java.util.concurrent.CompletableFuture;
++import net.minecraft.gametest.framework.GameTest;
++import net.minecraft.gametest.framework.GameTestHelper;
++import net.minecraft.world.level.ChunkPos;
++import net.minecraft.world.level.block.Blocks;
++import net.neoforged.neoforge.gametest.GameTestHolder;
++import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
++import ua.zentix.incoming.Incoming;
++
++/** Actual full solvers, with sparse centre and taller neighbouring fracture/fluid input. */
++@GameTestHolder(Incoming.MOD_ID)
++@PrefixGameTestTemplate(false)
++public final class RuinResultOwnershipGameTests {
++    private RuinResultOwnershipGameTests() {}
++
++    @GameTest(template = "pad", batch = "nuke_result_bound", timeoutTicks = 100, skyAccess = true)
++    public static void sourceBoundCoversActualCollapseFlashAndScorch(GameTestHelper h) throws Exception {
++        long baseline = RuinResults.bytes();
++        for (double pressure : new double[]{2, 20, 50}) {
++            StructuralRuinGameTests.Shape hall = StructuralRuinGameTests.hall(Blocks.STONE_BRICKS);
++            var ctx = StructuralRuinGameTests.fixture(h.getLevel(), (x, y, z) -> {
++                // Outside-centre tower and pool widen the true collapse/fracture height domain.
++                if (x >= 16 && x <= 18 && z >= 6 && z <= 9 && y <= 145)
++                    return (y == 145 ? Blocks.WATER : Blocks.GLASS).defaultBlockState();
++                if (x >= 4 && x <= 11 && z >= 4 && z <= 11 && y == 79)
++                    return Blocks.GRASS_BLOCK.defaultBlockState();
++                if (x == 5 && z == 5 && y == 80) return Blocks.TALL_GRASS.defaultBlockState();
++                return hall.at(x, y, z);
++            }, pressure);
++            var grid = ctx.cachedGridForTest(h.getLevel(), new ChunkPos(0, 0));
++            long bound = RuinPlan.maxResultBytes(grid);
++            long fullHeight = 256L * (grid.maxY() - grid.minY());
++            h.assertTrue(bound < fullHeight * 40, "Sparse source lost its tighter section-domain admission");
++            long fragmentBound = RuinPlan.maxFragmentBytes(grid);
++            RuinPlan[] plans = {RuinPlanner.finish(grid, Collapse.solve(grid)), RuinPlanner.flash(grid), RuinPlanner.scorch(grid)};
++            for (var plan : plans) {
++                h.assertTrue(plan != RuinPlan.EMPTY, "Fixture did not produce an owned plan");
++                h.assertTrue(plan.bytes() <= bound, "Actual full solver output exceeded bound");
++                var lease = RuinResults.tryReserve(bound, bound + RuinResults.OWNER_BYTES);
++                h.assertTrue(lease != null, "Result reservation unexpectedly refused");
++                try {
++                    lease.markResult(plan);
++                    lease.bindFuture(CompletableFuture.completedFuture(plan));
++                    lease.actualExit();
++                    h.assertTrue(RuinResults.bytes() == baseline + plan.bytes() + RuinResults.OWNER_BYTES,
++                            "Completed/uncollected output lost its charge");
++                    var field = RuinPlan.class.getDeclaredField("resultOwner"); field.setAccessible(true);
++                    var detached = plan.detached();
++                    var restored = RuinPlan.restore(plan.store(), ctx);
++                    h.assertTrue(field.get(detached) == null && field.get(restored) == null,
++                            "Detached or restored plan copied mutable producer ownership");
++                    h.assertTrue(plan.differs(detached) == null && plan.differs(restored) == null,
++                            "Result ownership changed actual full-store payload");
++                    plan.releaseResultToCountedOwner();
++                    h.assertTrue(RuinResults.bytes() == baseline, "Counted consumer did not release producer charge");
++                } finally { lease.cancel(); lease.actualExit(); }
++            }
++            long fragments = 0;
++            for (int dz = -1; dz <= 1; dz++) for (int dx = -1; dx <= 1; dx++)
++                if (grid.at(dx, dz) != null) fragments += RuinPlan.fragmentBytes(grid.blast(dx, dz));
++            h.assertTrue(fragments <= fragmentBound, "Actual retained fracture cache exceeded source bound");
++            Incoming.LOG.info("Separate fragment estimate pressure={} bound={} actual={}", pressure, fragmentBound, fragments);
++            Incoming.LOG.info("Result ownership fixture pressure={} bound={} ruin={} flash={} scorch={}", pressure,
++                    bound, plans[0].bytes(), plans[1].bytes(), plans[2].bytes());
++        }
++        h.succeed();
++    }
++}
+diff --git a/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinPlan.java b/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinPlan.java
+index 07a048b48..397217b93 100644
+--- a/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinPlan.java
++++ b/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinPlan.java
+@@ -627,12 +627,125 @@ public final class RuinPlan {
+         return new Debris(out, removed);
+     }
+ 
+-    /** Approximate plan memory, bytes (for log). */
++    /** Producer ownership is never copied by detached/store/restore, especially not onto EMPTY. */
++    @Nullable
++    private RuinResults.Lease resultOwner;
++
++    synchronized void attachResult(RuinResults.Lease owner) {
++        if (this == EMPTY || resultOwner != null) throw new IllegalStateException("Ruin plan already owned or shared empty");
++        resultOwner = owner;
++    }
++
++    /** Call only after the consumer has charged this plan, not merely after Future.get(). */
++    void releaseResultToCountedOwner() {
++        RuinResults.Lease owner;
++        synchronized (this) { owner = resultOwner; resultOwner = null; }
++        if (owner != null) owner.releaseToCountedOwner();
++    }
++
++    /** Stale/discarded output: keep its producer charge until the actual solver exits. */
++    void discardResult() {
++        RuinResults.Lease owner;
++        synchronized (this) { owner = resultOwner; resultOwner = null; }
++        if (owner != null) owner.cancel();
++    }
++
++    /** Payload estimate, including possible lazy lookup arrays; not a whole-heap measurement. */
+     public long bytes() {
+         if (this == EMPTY) return 0;
+-        return 64 + 12L * cells.length + 8L * fluidTicks.length + 8L * oldHashes.length + 8L * states.length + 4L * fires.length + 4L * heights.length
+-                + 8L * lightAt.length + (prints == null ? 0 : 16L * prints.length) + (outside == null ? 0 : 16L * outside.size()) + (biomes == null ? 0 : 96)
+-                + (flash == null ? 0 : 4L * flash.length) + (blown == null ? 0 : 4L * blown.length) + 8L * material.length;
++        return sourceBytes(cells.length, olds.length, states.length, fires.length, heights.length, lightAt.length,
++                oldHashes.length, prints == null ? 0 : prints.length, normals == null ? 0 : normals.length,
++                outside == null ? 0 : outside.size(), outsideState == null ? 0 : outsideState.size(),
++                fluidTicks.length, biomes == null ? 0 : 16, flash == null ? 0 : flash.length,
++                blown == null ? 0 : blown.length, material.length, sectionWords());
++    }
++
++    private int sectionWords() {
++        return Math.max(1, (oldHashes.length + 63) / 64);
++    }
++
++    /** The same field law is used for an actual plan and its pre-allocation domain bound. */
++    static long sourceBytes(long cells, long olds, long states, long fires, long heights, long light,
++                            long hashes, long prints, long normals, long outside, long outsideStates,
++                            long fluids, long biomes, long flash, long blown, long material, long sectionWords) {
++        // Eight-byte reference estimate; registry BlockStates/context are borrowed, not deep-copied here.
++        // Fire keys and section bits are charged before their lazy allocation so bytes never grows on lookup.
++        // oldTops is an optional int[512]; prepay it too so all lazy caches are stable.
++        return 64 + 4L * 512 + 4 * cells + 8 * olds + 8 * states + 8 * fires + 4 * heights + 8 * light
++                + 8 * (hashes + prints + normals + outside + outsideStates + fluids + material + sectionWords)
++                + 6 * biomes + 4 * (flash + blown);
++    }
++
++    /**
++     * Source-proven result bound, before any Blast/Collapse/finish allocation. Original non-air centre sections
++     * contain all changed/material positions (Collapse.collect, ground/plants/fireball/snowy); no deposition is
++     * performed by the solver. Ruined snapshots' mayHave also includes restored old blocks. Leaves contribute at
++     * most one fire each, land at most one per column, including fire ABOVE a populated section. The fluid pass
++     * visits exactly the 18x18 centre-plus-border domain, once per y; only original fluid cells can enter it.
++     * All nine input chunks matter, including fracture-driven collapse below/above centre surface. Counting their
++     * non-air section domains avoids assuming the centre's surface bounds neighbour fractures or fluid heights.
++     * Outside logs have no current producer in Sections; reserve one per possible centre source as well.
++     * Heights: 256 columns x (four maps + sky) x triple. Palette <= MAX_STATES; flash <= MAX_CHARS.
++     */
++    static long maxResultBytes(RuinContext.Grid grid) {
++        ChunkShot centre = grid.at(0, 0);
++        if (centre == null) throw new IllegalArgumentException("Missing result centre");
++        long cells = populatedCells(centre, 256), fluids = 0;
++        for (int dz = -1; dz <= 1; dz++) for (int dx = -1; dx <= 1; dx++) {
++            ChunkShot shot = grid.at(dx, dz);
++            if (shot != null) fluids += populatedCells(shot, (dx == 0 ? 16 : 1) * (dz == 0 ? 16 : 1));
++        }
++        long fires = cells + 256;
++        return sourceBytes(cells, cells, MAX_STATES, fires, 256L * (SKY + 1) * 3, cells,
++                centre.sections, centre.sections, centre.sections, cells, cells, fluids, 16,
++                Math.min(6 * cells, ua.zentix.incoming.nuclear.flash.FlashMarks.MAX_CHARS), fires, cells,
++                (centre.sections + 63L) / 64);
++    }
++
++    /**
++     * Separate retained-cache estimate; NOT part of a lease that shrinks to plan.bytes(). The context owner
++     * must reserve before production and retain/transfer it for the cache's actual lifetime. A solver may
++     * publish all nine chunk fractures even when its centre plan is empty or its future is cancelled.
++     */
++    static long maxFragmentBytes(RuinContext.Grid grid) {
++        long bytes = 0;
++        for (int dz = -1; dz <= 1; dz++) for (int dx = -1; dx <= 1; dx++) {
++            ChunkShot shot = grid.at(dx, dz);
++            if (shot == null) continue;
++            long cells = populatedCells(shot, 256);
++            // Blast.run emits each non-air centre position once. fellTrees records at most one root per
++            // centre column (break after recording); each record is long[]{position,height,direction}.
++            long trees = Math.min(cells, 256);
++            bytes += fragmentBytes(cells, 9, trees, trees, 3 * trees);
++        }
++        return bytes;
++    }
++
++    /** The same element/capacity law for an actually retained Blast, with its nine numeric snapshot IDs. */
++    static long fragmentBytes(Blast blast) {
++        long treeLongs = 0;
++        for (long[] tree : blast.trees()) treeLongs += tree.length;
++        return fragmentBytes(blast.removed().length, blast.stamp().serials().length,
++                blast.trees().size(), blast.treeLogs().size(), treeLongs);
++    }
++
++    static long fragmentBytes(long removed, long serials, long trees, long treeLogs, long treeLongs) {
++        // Estimated record shell 56, stamp shell 24, map/key allowance 64; array headers 16 each;
++        // two ArrayList shells 24 each. Eight-byte references keep this independent of compressed oops.
++        return 64 + 56 + 24 + 16 + 8 * serials + 16 + 4 * removed + 2 * (24 + 16)
++                + 8 * (listCapacity(trees) + listCapacity(treeLogs)) + 16 * trees + 8 * treeLongs;
++    }
++
++    private static long listCapacity(long size) {
++        // These producer lists only append: ArrayList starts at 10 then grows by 1.5, hence <=2n.
++        // This is a backing-capacity bound, not a guessed payload multiplier.
++        return size == 0 ? 0 : Math.max(10, 2 * size);
++    }
++
++    private static long populatedCells(ChunkShot shot, int columns) {
++        long result = 0;
++        for (int i = 0; i < shot.sections; i++) if (shot.mayHave(i, state -> !state.isAir())) result += 16L * columns;
++        return result;
+     }
+ 
+     private static int section(int cell) {
+diff --git a/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinResults.java b/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinResults.java
+new file mode 100644
+index 000000000..08e7aa470
+--- /dev/null
++++ b/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinResults.java
+@@ -0,0 +1,113 @@
++package ua.zentix.incoming.nuclear.world;
++
++import java.util.Objects;
++import java.util.concurrent.Future;
++import java.util.concurrent.atomic.AtomicLong;
++import org.jetbrains.annotations.Nullable;
++
++/** Numeric producer ownership between solver admission and an already-counted consumer. */
++final class RuinResults {
++    private static final AtomicLong BYTES = new AtomicLong();
++    /** Fixed estimate for the lease, its future binding and the owner's map entry; no payload multiplier. */
++    static final long OWNER_BYTES = 128;
++
++    private RuinResults() {}
++
++    static long bytes() { return BYTES.get(); }
++
++    /** Server thread supplies free shared room, with existing result ownership already subtracted. */
++    @Nullable
++    static Lease tryReserve(long maxBytes, long room) {
++        if (maxBytes < 0) throw new IllegalArgumentException("Negative result bound");
++        if (maxBytes > Long.MAX_VALUE - OWNER_BYTES || room < maxBytes + OWNER_BYTES) return null;
++        long amount = maxBytes + OWNER_BYTES;
++        // Admission is server-thread-only. Asynchronous changes to this counter only release bytes.
++        long current;
++        do {
++            current = BYTES.get();
++            if (current > Long.MAX_VALUE - amount) return null;
++        } while (!BYTES.compareAndSet(current, current + amount));
++        return new Lease(maxBytes, amount);
++    }
++
++    static final class Lease {
++        private final long maximum;
++        private long charged;
++        @Nullable private Future<?> future;
++        private boolean marked, empty, exited, cancelled, released;
++
++        private Lease(long maximum, long charged) {
++            this.maximum = maximum;
++            this.charged = charged;
++        }
++
++        /** Called inside the solver, before publishing its result into the Future. */
++        synchronized void markResult(RuinPlan plan) {
++            Objects.requireNonNull(plan);
++            if (marked || exited || released) throw new IllegalStateException("Result owner already completed");
++            long actual = plan.bytes();
++            if (actual > maximum) throw new IllegalStateException("Ruin result exceeds source bound: " + actual + " > " + maximum);
++            // Attach before shrinking, so an invalid second owner cannot silently lose its reservation.
++            if (plan != RuinPlan.EMPTY) plan.attachResult(this);
++            marked = true;
++            empty = plan == RuinPlan.EMPTY;
++            changeCharge(actual + OWNER_BYTES);
++        }
++
++        /** Pool callback: actual callable returned, or a queued callable was removed without execution. */
++        synchronized void actualExit() {
++            exited = true;
++            if (future != null && failedOrCancelled(future)) cancelled = true;
++            if (cancelled || !marked || empty) release();
++        }
++
++        /** Must precede Future.cancel: cancellation does not establish actual callable exit. */
++        synchronized void cancel() {
++            cancelled = true;
++            if (exited) release();
++        }
++
++        /** Admission failed before pool submission; there is no callable that can still allocate a result. */
++        synchronized void abortBeforeSubmit() {
++            if (marked || future != null) throw new IllegalStateException("Result owner already submitted");
++            cancelled = exited = true;
++            release();
++        }
++
++        /** Handles both ordinary binding and a solver/cancellation that finished before submit returned. */
++        synchronized void bindFuture(Future<?> bound) {
++            Objects.requireNonNull(bound);
++            if (future != null && future != bound) throw new IllegalStateException("Result future already bound");
++            if (!released) future = bound;
++            if (failedOrCancelled(bound)) {
++                cancelled = true;
++                if (exited) release();
++            }
++        }
++
++        /** Unbind while queued promotion terminates the old future and installs its replacement. */
++        synchronized void beginTransfer() { future = null; }
++
++        /** Consumer has already added plan.bytes() to its counted owner, including local handoff. */
++        synchronized void releaseToCountedOwner() { release(); }
++
++        /** Collection/discard breaks the future/result/lease cycle without changing ownership. */
++        synchronized void detachFuture() { future = null; }
++
++        private static boolean failedOrCancelled(Future<?> bound) {
++            return bound.isDone() && bound.state() != Future.State.SUCCESS;
++        }
++
++        private void release() {
++            if (released) return;
++            released = true;
++            future = null;
++            changeCharge(0);
++        }
++
++        private void changeCharge(long amount) {
++            BYTES.addAndGet(amount - charged);
++            charged = amount;
++        }
++    }
++}
+diff --git a/mod/src/test/java/ua/zentix/incoming/nuclear/world/RuinResultSizeTest.java b/mod/src/test/java/ua/zentix/incoming/nuclear/world/RuinResultSizeTest.java
+new file mode 100644
+index 000000000..1c8677666
+--- /dev/null
++++ b/mod/src/test/java/ua/zentix/incoming/nuclear/world/RuinResultSizeTest.java
+@@ -0,0 +1,69 @@
++package ua.zentix.incoming.nuclear.world;
++
++import it.unimi.dsi.fastutil.longs.LongArrayList;
++import java.lang.reflect.Modifier;
++import java.util.Arrays;
++import java.util.Set;
++import net.minecraft.world.level.block.state.BlockState;
++import org.junit.jupiter.api.Test;
++import static org.junit.jupiter.api.Assertions.*;
++
++class RuinResultSizeTest {
++    @Test
++    void everyOwnedFieldHasAnExplicitElementLawAndLazyCachesArePrepaid() {
++        var plan = new RuinPlan(new int[2], new long[3], new BlockState[4], new BlockState[5], new int[6],
++                new int[7], new long[8], new long[9], new long[10], new LongArrayList(new long[11]),
++                Arrays.asList(new BlockState[12]), null, new long[13], new ScorchedBiomes.Cells(new byte[16], new int[16]));
++        plan.flash(new int[14]); plan.blown(new int[15]); plan.material(new long[16]);
++        long expected = 64 + 2048 + 4L * 2 + 8L * 5 + 8L * 4 + 8L * 6 + 4L * 7 + 8L * 8
++                + 8L * (3 + 9 + 10 + 11 + 12 + 13 + 16 + 1) + 96 + 4L * (14 + 15);
++        assertEquals(expected, plan.bytes());
++        long before = plan.bytes(); plan.touches(0); plan.hasFire(0);
++        assertEquals(before, plan.bytes());
++        assertEquals(before, plan.detached().bytes());
++        assertEquals(0, RuinPlan.EMPTY.bytes());
++    }
++
++    @Test
++    void oldColumnCachePrepaysBothSurfaceAndSupportingTopBands() throws Exception {
++        var plan = new RuinPlan(new int[0], new long[0], new BlockState[0], new BlockState[0], new int[0],
++                new int[0], new long[0], null, null, null, null, null, new long[0], null);
++        long before = plan.bytes();
++        int[] tops = plan.oldTops(0);
++        assertEquals(2 * 256, tops.length);
++        assertTrue(before >= 4L * tops.length);
++        assertEquals(before, plan.bytes());
++    }
++
++    @Test
++    void exhaustiveFieldInventorySeparatesBorrowedAndProducerOwnershipFromPayload() {
++        var payload = Set.of("cells", "olds", "states", "fires", "heights", "lightAt", "oldHashes", "prints",
++                "normals", "outside", "outsideState", "fluidTicks", "biomes", "flash", "blown", "material");
++        var prepaid = Set.of("oldTops", "fireKeys", "sectionBits");
++        var borrowedOrScalar = Set.of("ctx", "memoryWaiting", "resultOwner");
++        for (var field : RuinPlan.class.getDeclaredFields()) if (!Modifier.isStatic(field.getModifiers()))
++            assertTrue(payload.contains(field.getName()) || prepaid.contains(field.getName()) || borrowedOrScalar.contains(field.getName()),
++                    "New field needs a byte/domain law: " + field.getName());
++        for (var field : RuinResults.class.getDeclaredFields()) if (Modifier.isStatic(field.getModifiers()))
++            assertTrue(field.getType().isPrimitive() || field.getType() == java.util.concurrent.atomic.AtomicLong.class,
++                    "Global result policy must be numeric only: " + field);
++    }
++
++    @Test
++    void fragmentFieldLawIncludesStampTreesBothListsAndRemovedPositions() {
++        long expected = 64 + 56 + 24 + 16 + 9 * 8 + 16 + 20 * 4 + 2 * (24 + 16)
++                + 8 * (10 + 10) + 2 * (16 + 3 * 8);
++        assertEquals(expected, RuinPlan.fragmentBytes(20, 9, 2, 2, 6));
++        var fields = Set.of("stamp", "minY", "removed", "trees", "treeLogs");
++        for (var field : Blast.class.getDeclaredFields()) if (!Modifier.isStatic(field.getModifiers()))
++            assertTrue(fields.contains(field.getName()), "New retained fragment field needs a law: " + field);
++    }
++
++    @Test
++    void maximumEncodedDimensionsCannotOverflowElementArithmetic() {
++        long cells = 256L * 4096, fires = cells + 256, fluids = 18L * 18 * 4096;
++        long bytes = RuinPlan.sourceBytes(cells, cells, 1024, fires, 3840, cells, 256, 256, 256,
++                cells, cells, fluids, 16, 65536, fires, cells, 4);
++        assertTrue(bytes > 0 && bytes < 256L << 20);
++    }
++}
+diff --git a/mod/src/test/java/ua/zentix/incoming/nuclear/world/RuinResultsTest.java b/mod/src/test/java/ua/zentix/incoming/nuclear/world/RuinResultsTest.java
+new file mode 100644
+index 000000000..9d3b70a6e
+--- /dev/null
++++ b/mod/src/test/java/ua/zentix/incoming/nuclear/world/RuinResultsTest.java
+@@ -0,0 +1,183 @@
++package ua.zentix.incoming.nuclear.world;
++
++import java.util.ArrayList;
++import java.util.concurrent.CompletableFuture;
++import java.util.concurrent.CountDownLatch;
++import java.util.concurrent.FutureTask;
++import java.util.concurrent.TimeUnit;
++import org.junit.jupiter.api.AfterEach;
++import org.junit.jupiter.api.Test;
++import net.minecraft.world.level.block.state.BlockState;
++import static org.junit.jupiter.api.Assertions.*;
++
++class RuinResultsTest {
++    private final long baseline = RuinResults.bytes();
++    private final ArrayList<RuinResults.Lease> leases = new ArrayList<>();
++
++    private RuinResults.Lease reserve(long maximum) {
++        var lease = RuinResults.tryReserve(maximum, maximum + RuinResults.OWNER_BYTES);
++        assertNotNull(lease);
++        leases.add(lease);
++        return lease;
++    }
++
++    @AfterEach
++    void clean() {
++        for (var lease : leases) { lease.cancel(); lease.actualExit(); }
++        assertEquals(baseline, RuinResults.bytes());
++    }
++
++    private static RuinPlan plan() {
++        return new RuinPlan(new int[2], new long[3], new BlockState[4], new BlockState[2], new int[5],
++                new int[6], new long[7], new long[8], new long[9], null, null, null, new long[10], null);
++    }
++
++    @Test
++    void roomIncludesMetadataAndOverflowNeverCreatesOwnership() {
++        assertNull(RuinResults.tryReserve(100, 100 + RuinResults.OWNER_BYTES - 1));
++        assertNull(RuinResults.tryReserve(Long.MAX_VALUE, Long.MAX_VALUE));
++        assertNull(RuinResults.tryReserve(0, -1));
++        assertThrows(IllegalArgumentException.class, () -> RuinResults.tryReserve(-1, 100));
++        assertEquals(baseline, RuinResults.bytes());
++        var zero = reserve(0); zero.abortBeforeSubmit(); zero.abortBeforeSubmit();
++    }
++
++    @Test
++    void aggregateNumericOwnershipCannotWrapAtLongLimit() {
++        var full = reserve(Long.MAX_VALUE - RuinResults.OWNER_BYTES - baseline);
++        assertEquals(Long.MAX_VALUE, RuinResults.bytes());
++        assertNull(RuinResults.tryReserve(0, Long.MAX_VALUE));
++        full.abortBeforeSubmit();
++        assertEquals(baseline, RuinResults.bytes());
++    }
++
++    @Test
++    void completedUncollectedAndLocalHandoffRemainCharged() {
++        var p = plan(); var lease = reserve(p.bytes() + 1000);
++        lease.markResult(p);
++        lease.bindFuture(CompletableFuture.completedFuture(p));
++        lease.actualExit();
++        lease.detachFuture();
++        assertEquals(baseline + p.bytes() + RuinResults.OWNER_BYTES, RuinResults.bytes());
++        p.releaseResultToCountedOwner(); p.releaseResultToCountedOwner();
++        assertEquals(baseline, RuinResults.bytes());
++    }
++
++    @Test
++    void cancelledExecutionKeepsFullReservationUntilActualExit() throws Exception {
++        var entered = new CountDownLatch(1); var proceed = new CountDownLatch(1);
++        var p = plan(); var lease = reserve(p.bytes() + 1000);
++        var task = new FutureTask<>(() -> {
++            entered.countDown(); assertTrue(proceed.await(5, TimeUnit.SECONDS));
++            lease.markResult(p); return p;
++        });
++        var thread = Thread.ofPlatform().unstarted(() -> { try { task.run(); } finally { lease.actualExit(); } });
++        lease.bindFuture(task);
++        try {
++            thread.start(); assertTrue(entered.await(5, TimeUnit.SECONDS));
++            lease.cancel(); task.cancel(false); lease.cancel();
++            assertEquals(baseline + p.bytes() + 1000 + RuinResults.OWNER_BYTES, RuinResults.bytes());
++        } finally { proceed.countDown(); thread.join(5000); }
++        assertFalse(thread.isAlive()); assertEquals(baseline, RuinResults.bytes());
++    }
++
++    @Test
++    void discardAfterMarkStillWaitsForExit() {
++        var p = plan(); var lease = reserve(p.bytes()); lease.markResult(p);
++        p.discardResult(); p.discardResult();
++        assertEquals(baseline + p.bytes() + RuinResults.OWNER_BYTES, RuinResults.bytes());
++        lease.actualExit(); assertEquals(baseline, RuinResults.bytes());
++    }
++
++    @Test
++    void queuedNeverStartedAndFailureReleaseAtCallback() {
++        var lease = reserve(1000);
++        var task = new FutureTask<>(() -> { throw new AssertionError("queued task ran"); });
++        lease.bindFuture(task); task.cancel(false); lease.actualExit();
++        lease.actualExit(); assertEquals(baseline, RuinResults.bytes());
++        var failed = reserve(1000); failed.actualExit();
++        failed.bindFuture(CompletableFuture.failedFuture(new IllegalStateException()));
++        assertEquals(baseline, RuinResults.bytes());
++    }
++
++    @Test
++    void failedAfterMarkIsNotMistakenForSuccessfulUncollectedResult() {
++        var p = plan(); var lease = reserve(p.bytes()); lease.markResult(p);
++        lease.bindFuture(CompletableFuture.failedFuture(new IllegalStateException()));
++        lease.actualExit(); assertEquals(baseline, RuinResults.bytes());
++    }
++
++    @Test
++    void completionBeforeBindingHandlesSuccessCancellationAndFailure() {
++        for (int outcome = 0; outcome < 3; outcome++) {
++            var p = plan(); var lease = reserve(p.bytes()); lease.markResult(p); lease.actualExit();
++            var future = new CompletableFuture<RuinPlan>();
++            if (outcome == 0) future.complete(p);
++            else if (outcome == 1) future.cancel(false);
++            else future.completeExceptionally(new IllegalStateException());
++            lease.bindFuture(future);
++            assertEquals(baseline + (outcome == 0 ? p.bytes() + RuinResults.OWNER_BYTES : 0), RuinResults.bytes());
++            p.releaseResultToCountedOwner();
++        }
++    }
++
++    @Test
++    void queuedPromotionDoesNotCancelReplacementOwner() {
++        var p = plan(); var lease = reserve(p.bytes());
++        var old = new CompletableFuture<RuinPlan>(); lease.bindFuture(old);
++        lease.beginTransfer(); old.cancel(false);
++        var next = new CompletableFuture<RuinPlan>(); lease.bindFuture(next);
++        lease.markResult(p); next.complete(p); lease.actualExit();
++        assertEquals(baseline + p.bytes() + RuinResults.OWNER_BYTES, RuinResults.bytes());
++        p.releaseResultToCountedOwner();
++    }
++
++    @Test
++    void promotionThatCannotMoveRebindsCancelledOldFuture() {
++        var lease = reserve(1000); var old = new CompletableFuture<RuinPlan>(); lease.bindFuture(old);
++        lease.beginTransfer(); old.cancel(false); lease.actualExit(); lease.bindFuture(old);
++        assertEquals(baseline, RuinResults.bytes());
++    }
++
++    @Test
++    void transferMayPrecedeExitOnlyAfterCountedConsumerTakesOwnership() {
++        var p = plan(); var lease = reserve(p.bytes()); lease.markResult(p);
++        p.releaseResultToCountedOwner(); lease.actualExit(); lease.cancel();
++        assertEquals(baseline, RuinResults.bytes());
++    }
++
++    @Test
++    void emptySingletonNeverSharesMutableLease() throws Exception {
++        var first = reserve(1000); var second = reserve(1000);
++        first.markResult(RuinPlan.EMPTY); second.markResult(RuinPlan.EMPTY);
++        var field = RuinPlan.class.getDeclaredField("resultOwner"); field.setAccessible(true);
++        assertNull(field.get(RuinPlan.EMPTY));
++        first.actualExit();
++        assertEquals(baseline + RuinResults.OWNER_BYTES, RuinResults.bytes());
++        second.actualExit();
++        assertEquals(baseline, RuinResults.bytes());
++        first.releaseToCountedOwner(); second.releaseToCountedOwner();
++    }
++
++    @Test
++    void oversizedOutputAndDuplicateOwnerCannotSilentlyShrinkCharge() {
++        var p = plan(); var small = reserve(p.bytes() - 1);
++        assertThrows(IllegalStateException.class, () -> small.markResult(p)); small.actualExit();
++        var first = reserve(p.bytes()); var second = reserve(p.bytes()); first.markResult(p);
++        assertThrows(IllegalStateException.class, () -> second.markResult(p)); second.actualExit();
++        p.releaseResultToCountedOwner();
++    }
++
++    @Test
++    void cancelMarkExitAndConsumerReleaseAreIdempotentUnderConcurrency() throws Exception {
++        for (int round = 0; round < 100; round++) {
++            var p = plan(); var lease = reserve(p.bytes());
++            var cancel = Thread.ofPlatform().start(lease::cancel);
++            lease.markResult(p);
++            var release = Thread.ofPlatform().start(p::releaseResultToCountedOwner);
++            lease.actualExit(); cancel.join(); release.join();
++            lease.cancel(); lease.actualExit(); lease.releaseToCountedOwner();
++            assertEquals(baseline, RuinResults.bytes());
++        }
++    }
++}

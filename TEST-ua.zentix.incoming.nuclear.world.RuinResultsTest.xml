@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.nuclear.world.RuinResultsTest" tests="14" skipped="0" failures="0" errors="0" timestamp="2026-11-04T14:23:09.466Z" hostname="zentixua-pc" time="0.021">
+  <properties/>
+  <testcase name="transferMayPrecedeExitOnlyAfterCountedConsumerTakesOwnership()" classname="ua.zentix.incoming.nuclear.world.RuinResultsTest" time="0.001"/>
+  <testcase name="promotionThatCannotMoveRebindsCancelledOldFuture()" classname="ua.zentix.incoming.nuclear.world.RuinResultsTest" time="0.0"/>
+  <testcase name="oversizedOutputAndDuplicateOwnerCannotSilentlyShrinkCharge()" classname="ua.zentix.incoming.nuclear.world.RuinResultsTest" time="0.002"/>
+  <testcase name="queuedNeverStartedAndFailureReleaseAtCallback()" classname="ua.zentix.incoming.nuclear.world.RuinResultsTest" time="0.0"/>
+  <testcase name="cancelledExecutionKeepsFullReservationUntilActualExit()" classname="ua.zentix.incoming.nuclear.world.RuinResultsTest" time="0.001"/>
+  <testcase name="roomIncludesMetadataAndOverflowNeverCreatesOwnership()" classname="ua.zentix.incoming.nuclear.world.RuinResultsTest" time="0.001"/>
+  <testcase name="cancelMarkExitAndConsumerReleaseAreIdempotentUnderConcurrency()" classname="ua.zentix.incoming.nuclear.world.RuinResultsTest" time="0.012"/>
+  <testcase name="completionBeforeBindingHandlesSuccessCancellationAndFailure()" classname="ua.zentix.incoming.nuclear.world.RuinResultsTest" time="0.0"/>
+  <testcase name="failedAfterMarkIsNotMistakenForSuccessfulUncollectedResult()" classname="ua.zentix.incoming.nuclear.world.RuinResultsTest" time="0.0"/>
+  <testcase name="discardAfterMarkStillWaitsForExit()" classname="ua.zentix.incoming.nuclear.world.RuinResultsTest" time="0.001"/>
+  <testcase name="queuedPromotionDoesNotCancelReplacementOwner()" classname="ua.zentix.incoming.nuclear.world.RuinResultsTest" time="0.0"/>
+  <testcase name="aggregateNumericOwnershipCannotWrapAtLongLimit()" classname="ua.zentix.incoming.nuclear.world.RuinResultsTest" time="0.0"/>
+  <testcase name="completedUncollectedAndLocalHandoffRemainCharged()" classname="ua.zentix.incoming.nuclear.world.RuinResultsTest" time="0.0"/>
+  <testcase name="emptySingletonNeverSharesMutableLease()" classname="ua.zentix.incoming.nuclear.world.RuinResultsTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>
