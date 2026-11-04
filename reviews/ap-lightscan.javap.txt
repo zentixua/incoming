@@ -1,0 +1,44 @@
+Compiled from "MixinMixinParticle_LightScan.java"
+public abstract class neoforge.fun.qu_an.minecraft.asyncparticles.client.mixin.compat.sable.MixinMixinParticle_LightScan {
+  public net.minecraft.client.multiplayer.ClientLevel level;
+
+  public neoforge.fun.qu_an.minecraft.asyncparticles.client.mixin.compat.sable.MixinMixinParticle_LightScan();
+    Code:
+       0: aload_0
+       1: invokespecial #18                 // Method java/lang/Object."<init>":()V
+       4: return
+
+  private void cacheMaxScanSteps(org.spongepowered.asm.mixin.injection.callback.CallbackInfo, com.llamalad7.mixinextras.sugar.ref.LocalIntRef);
+    Code:
+       0: aload_2
+       1: aload_0
+       2: getfield      #47                 // Field level:Lnet/minecraft/client/multiplayer/ClientLevel;
+       5: invokevirtual #53                 // Method net/minecraft/client/multiplayer/ClientLevel.getHeight:()I
+       8: invokeinterface #59,  2           // InterfaceMethod com/llamalad7/mixinextras/sugar/ref/LocalIntRef.set:(I)V
+      13: return
+
+  private boolean limitHeightScan(boolean, com.llamalad7.mixinextras.sugar.ref.LocalIntRef, com.llamalad7.mixinextras.sugar.ref.LocalIntRef);
+    Code:
+       0: iload_1
+       1: ifne          6
+       4: iconst_0
+       5: ireturn
+       6: aload_2
+       7: invokeinterface #70,  1           // InterfaceMethod com/llamalad7/mixinextras/sugar/ref/LocalIntRef.get:()I
+      12: istore        4
+      14: aload_2
+      15: iload         4
+      17: iconst_1
+      18: isub
+      19: invokeinterface #59,  2           // InterfaceMethod com/llamalad7/mixinextras/sugar/ref/LocalIntRef.set:(I)V
+      24: iload         4
+      26: iflt          44
+      29: iload         4
+      31: aload_3
+      32: invokeinterface #70,  1           // InterfaceMethod com/llamalad7/mixinextras/sugar/ref/LocalIntRef.get:()I
+      37: if_icmpge     44
+      40: iconst_1
+      41: goto          45
+      44: iconst_0
+      45: ireturn
+}

@@ -1,0 +1,1370 @@
+[
+  {
+    "run": "final-a1",
+    "source": "36c9b5bdddbad22cc4e418c7b02bb7a141f56e4b",
+    "windows": {
+      "incoming-city-night-100-spread/baseline": {
+        "frame": {
+          "n": 1191,
+          "p50": 8.202,
+          "p95": 11.273,
+          "p99": 13.139,
+          "max": 15.722,
+          "mean": 8.440366918555835,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        },
+        "render_cpu": {
+          "n": 1191,
+          "p50": 1.599,
+          "p95": 2.094,
+          "p99": 2.462,
+          "max": 2.766,
+          "mean": 1.6344886649874055,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        },
+        "full_cycle_cpu": {
+          "n": 1191,
+          "p50": 1.852,
+          "p95": 4.312,
+          "p99": 5.185,
+          "max": 7.986,
+          "mean": 2.2760906801007557,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        },
+        "gpu_timestamp_span": {
+          "n": 1191,
+          "p50": 8.01,
+          "p95": 9.798,
+          "p99": 10.42,
+          "max": 12.93,
+          "mean": 8.250823677581863,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        },
+        "late_ms_over50": 0,
+        "host": {
+          "samples": 3,
+          "covered": 1.0,
+          "gpu_covered": 1.0,
+          "cpu_foreign_max": 0.02,
+          "cpu_foreign": 0.01,
+          "gpu_foreign": 0,
+          "gpu_foreign_mean": 0.0,
+          "load1": 1.91,
+          "units": {},
+          "profiles": [
+            "performance"
+          ]
+        },
+        "worst": {
+          "frame": "3295",
+          "t_ms": "93368.778",
+          "interval": 15.722,
+          "cpu_ms": "1.527",
+          "cpu_thread_ms": "1.513",
+          "cycle_cpu": 7.607
+        }
+      },
+      "incoming-drone-city-night-100-spread/t0-3": {
+        "frame": {
+          "n": 43,
+          "p50": 53.781,
+          "p95": 219.788,
+          "p99": 261.829,
+          "max": 261.829,
+          "mean": 70.79127906976744,
+          "over33": 34,
+          "over50": 24,
+          "over100": 6,
+          "over250": 1
+        },
+        "render_cpu": {
+          "n": 43,
+          "p50": 35.125,
+          "p95": 62.036,
+          "p99": 76.592,
+          "max": 76.592,
+          "mean": 33.43523255813953,
+          "over33": 25,
+          "over50": 7,
+          "over100": 0,
+          "over250": 0
+        },
+        "full_cycle_cpu": {
+          "n": 43,
+          "p50": 50.926,
+          "p95": 187.049,
+          "p99": 192.584,
+          "max": 192.584,
+          "mean": 61.75658139534884,
+          "over33": 34,
+          "over50": 22,
+          "over100": 5,
+          "over250": 0
+        },
+        "gpu_timestamp_span": {
+          "n": 43,
+          "p50": 38.475,
+          "p95": 63.214,
+          "p99": 99.34,
+          "max": 99.34,
+          "mean": 37.20920930232558,
+          "over33": 27,
+          "over50": 6,
+          "over100": 0,
+          "over250": 0
+        },
+        "late_ms_over50": 2480.649,
+        "host": {
+          "samples": 1,
+          "covered": 1.0,
+          "gpu_covered": 1.0,
+          "cpu_foreign_max": 0.0,
+          "cpu_foreign": 0.0,
+          "gpu_foreign": 0,
+          "gpu_foreign_mean": 0.0,
+          "load1": 1.62,
+          "units": {},
+          "profiles": [
+            "performance"
+          ]
+        },
+        "worst": {
+          "frame": "3668",
+          "t_ms": "96823.641",
+          "interval": 261.829,
+          "cpu_ms": "118.314",
+          "cpu_thread_ms": "71.898",
+          "cycle_cpu": 190.946
+        }
+      },
+      "incoming-drone-city-night-100-spread/t3-15": {
+        "frame": {
+          "n": 189,
+          "p50": 59.639,
+          "p95": 91.758,
+          "p99": 109.441,
+          "max": 131.189,
+          "mean": 63.74910052910053,
+          "over33": 187,
+          "over50": 157,
+          "over100": 5,
+          "over250": 0
+        },
+        "render_cpu": {
+          "n": 189,
+          "p50": 40.55,
+          "p95": 56.534,
+          "p99": 62.077,
+          "max": 63.1,
+          "mean": 41.74132275132275,
+          "over33": 170,
+          "over50": 32,
+          "over100": 0,
+          "over250": 0
+        },
+        "full_cycle_cpu": {
+          "n": 189,
+          "p50": 56.618,
+          "p95": 87.069,
+          "p99": 107.953,
+          "max": 127.12,
+          "mean": 61.04473544973545,
+          "over33": 187,
+          "over50": 144,
+          "over100": 3,
+          "over250": 0
+        },
+        "gpu_timestamp_span": {
+          "n": 189,
+          "p50": 51.272,
+          "p95": 61.129,
+          "p99": 64.134,
+          "max": 70.746,
+          "mean": 50.685391534391535,
+          "over33": 186,
+          "over50": 105,
+          "over100": 0,
+          "over250": 0
+        },
+        "late_ms_over50": 10606.661,
+        "host": {
+          "samples": 4,
+          "covered": 1.0,
+          "gpu_covered": 1.0,
+          "cpu_foreign_max": 0.11,
+          "cpu_foreign": 0.05,
+          "gpu_foreign": 5,
+          "gpu_foreign_mean": 0.42,
+          "load1": 2.15,
+          "units": {},
+          "profiles": [
+            "performance"
+          ]
+        },
+        "worst": {
+          "frame": "3722",
+          "t_ms": "101074.158",
+          "interval": 131.189,
+          "cpu_ms": "56.773",
+          "cpu_thread_ms": "53.891",
+          "cycle_cpu": 127.12
+        }
+      },
+      "incoming-drone-city-night-100-spread/t15-35": {
+        "frame": {
+          "n": 992,
+          "p50": 18.901,
+          "p95": 36.901,
+          "p99": 52.282,
+          "max": 133.189,
+          "mean": 20.17495060483871,
+          "over33": 84,
+          "over50": 12,
+          "over100": 2,
+          "over250": 0
+        },
+        "render_cpu": {
+          "n": 992,
+          "p50": 16.627,
+          "p95": 29.062,
+          "p99": 35.951,
+          "max": 55.293,
+          "mean": 16.599079637096775,
+          "over33": 21,
+          "over50": 1,
+          "over100": 0,
+          "over250": 0
+        },
+        "full_cycle_cpu": {
+          "n": 992,
+          "p50": 18.36,
+          "p95": 36.213,
+          "p99": 48.717,
+          "max": 131.315,
+          "mean": 19.45313306451613,
+          "over33": 68,
+          "over50": 8,
+          "over100": 2,
+          "over250": 0
+        },
+        "gpu_timestamp_span": {
+          "n": 992,
+          "p50": 16.958,
+          "p95": 32.829,
+          "p99": 47.267,
+          "max": 59.752,
+          "mean": 19.302016129032257,
+          "over33": 45,
+          "over50": 2,
+          "over100": 0,
+          "over250": 0
+        },
+        "late_ms_over50": 815.492,
+        "host": {
+          "samples": 5,
+          "covered": 1.0,
+          "gpu_covered": 1.0,
+          "cpu_foreign_max": 0.15,
+          "cpu_foreign": 0.12,
+          "gpu_foreign": 0,
+          "gpu_foreign_mean": 0.0,
+          "load1": 4.15,
+          "units": {},
+          "profiles": [
+            "performance"
+          ]
+        },
+        "worst": {
+          "frame": "4237",
+          "t_ms": "119878.145",
+          "interval": 133.189,
+          "cpu_ms": "11.149",
+          "cpu_thread_ms": "9.650",
+          "cycle_cpu": 131.315
+        }
+      },
+      "incoming-drone-city-night-100-spread/t35-50": {
+        "frame": {
+          "n": 940,
+          "p50": 16.417,
+          "p95": 22.209,
+          "p99": 31.688,
+          "max": 52.269,
+          "mean": 16.00556489361702,
+          "over33": 9,
+          "over50": 3,
+          "over100": 0,
+          "over250": 0
+        },
+        "render_cpu": {
+          "n": 940,
+          "p50": 14.31,
+          "p95": 18.787,
+          "p99": 20.051,
+          "max": 21.681,
+          "mean": 13.04813085106383,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        },
+        "full_cycle_cpu": {
+          "n": 940,
+          "p50": 15.555,
+          "p95": 21.468,
+          "p99": 31.59,
+          "max": 51.377,
+          "mean": 15.00221914893617,
+          "over33": 9,
+          "over50": 2,
+          "over100": 0,
+          "over250": 0
+        },
+        "gpu_timestamp_span": {
+          "n": 940,
+          "p50": 14.665,
+          "p95": 20.848,
+          "p99": 24.901,
+          "max": 26.932,
+          "mean": 15.693944680851065,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        },
+        "late_ms_over50": 154.942,
+        "host": {
+          "samples": 4,
+          "covered": 1.0,
+          "gpu_covered": 1.0,
+          "cpu_foreign_max": 0.1,
+          "cpu_foreign": 0.08,
+          "gpu_foreign": 0,
+          "gpu_foreign_mean": 0.0,
+          "load1": 5.65,
+          "units": {},
+          "profiles": [
+            "performance"
+          ]
+        },
+        "worst": {
+          "frame": "5376",
+          "t_ms": "139572.067",
+          "interval": 52.269,
+          "cpu_ms": "7.659",
+          "cpu_thread_ms": "7.628",
+          "cycle_cpu": 46.324
+        }
+      },
+      "incoming-drone-city-night-100-spread/total": {
+        "frame": {
+          "n": 2164,
+          "p50": 18.016,
+          "p95": 61.083,
+          "p99": 88.634,
+          "max": 261.829,
+          "mean": 23.175317467652494,
+          "over33": 314,
+          "over50": 196,
+          "over100": 13,
+          "over250": 1
+        },
+        "render_cpu": {
+          "n": 2164,
+          "p50": 15.986,
+          "p95": 40.594,
+          "p99": 53.891,
+          "max": 76.592,
+          "mean": 17.58704020332717,
+          "over33": 216,
+          "over50": 40,
+          "over100": 0,
+          "over250": 0
+        },
+        "full_cycle_cpu": {
+          "n": 2164,
+          "p50": 17.289,
+          "p95": 58.297,
+          "p99": 85.064,
+          "max": 192.584,
+          "mean": 21.992875231053603,
+          "over33": 298,
+          "over50": 176,
+          "over100": 10,
+          "over250": 0
+        },
+        "gpu_timestamp_span": {
+          "n": 2164,
+          "p50": 16.484,
+          "p95": 50.517,
+          "p99": 59.572,
+          "max": 99.34,
+          "mean": 20.831535582255082,
+          "over33": 258,
+          "over50": 113,
+          "over100": 0,
+          "over250": 0
+        },
+        "late_ms_over50": 14057.744,
+        "host": {
+          "samples": 11,
+          "covered": 1.0,
+          "gpu_covered": 1.0,
+          "cpu_foreign_max": 0.15,
+          "cpu_foreign": 0.08,
+          "gpu_foreign": 5,
+          "gpu_foreign_mean": 0.1,
+          "load1": 5.65,
+          "units": {},
+          "profiles": [
+            "performance"
+          ]
+        },
+        "worst": {
+          "frame": "3668",
+          "t_ms": "96823.641",
+          "interval": 261.829,
+          "cpu_ms": "118.314",
+          "cpu_thread_ms": "71.898",
+          "cycle_cpu": 190.946
+        }
+      }
+    },
+    "workload": {
+      "native": {
+        "incoming-drone": 100
+      },
+      "blasts": 100
+    },
+    "contract_issues": [],
+    "issues": []
+  },
+  {
+    "run": "final-post-b",
+    "source": "f69381911602154c0ce994f57150881169a4cfe9",
+    "windows": {
+      "incoming-city-night-100-spread/baseline": {
+        "frame": {
+          "n": 1176,
+          "p50": 8.361,
+          "p95": 11.54,
+          "p99": 13.393,
+          "max": 15.751,
+          "mean": 8.547851190476191,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        },
+        "render_cpu": {
+          "n": 1176,
+          "p50": 1.599,
+          "p95": 2.256,
+          "p99": 2.612,
+          "max": 5.623,
+          "mean": 1.6614923469387755,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        },
+        "full_cycle_cpu": {
+          "n": 1176,
+          "p50": 1.859,
+          "p95": 4.318,
+          "p99": 4.995,
+          "max": 10.725,
+          "mean": 2.2894625850340136,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        },
+        "gpu_timestamp_span": {
+          "n": 1176,
+          "p50": 8.178,
+          "p95": 9.895,
+          "p99": 11.591,
+          "max": 13.119,
+          "mean": 8.357068027210884,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        },
+        "late_ms_over50": 0,
+        "host": {
+          "samples": 3,
+          "covered": 1.0,
+          "gpu_covered": 1.0,
+          "cpu_foreign_max": 0.03,
+          "cpu_foreign": 0.01,
+          "gpu_foreign": 0,
+          "gpu_foreign_mean": 0.0,
+          "load1": 5.54,
+          "units": {},
+          "profiles": [
+            "performance"
+          ]
+        },
+        "worst": {
+          "frame": "2940",
+          "t_ms": "91100.995",
+          "interval": 15.751,
+          "cpu_ms": "1.767",
+          "cpu_thread_ms": "1.757",
+          "cycle_cpu": 4.414
+        }
+      },
+      "incoming-drone-city-night-100-spread/t0-3": {
+        "frame": {
+          "n": 46,
+          "p50": 56.12,
+          "p95": 180.257,
+          "p99": 209.505,
+          "max": 209.505,
+          "mean": 66.25452173913044,
+          "over33": 36,
+          "over50": 29,
+          "over100": 7,
+          "over250": 0
+        },
+        "render_cpu": {
+          "n": 46,
+          "p50": 32.874,
+          "p95": 57.894,
+          "p99": 74.377,
+          "max": 74.377,
+          "mean": 32.286521739130436,
+          "over33": 23,
+          "over50": 6,
+          "over100": 0,
+          "over250": 0
+        },
+        "full_cycle_cpu": {
+          "n": 46,
+          "p50": 50.676,
+          "p95": 161.997,
+          "p99": 185.381,
+          "max": 185.381,
+          "mean": 59.31819565217391,
+          "over33": 35,
+          "over50": 24,
+          "over100": 6,
+          "over250": 0
+        },
+        "gpu_timestamp_span": {
+          "n": 46,
+          "p50": 33.026,
+          "p95": 59.143,
+          "p99": 83.129,
+          "max": 83.129,
+          "mean": 34.77632608695652,
+          "over33": 23,
+          "over50": 5,
+          "over100": 0,
+          "over250": 0
+        },
+        "late_ms_over50": 2604.095,
+        "host": {
+          "samples": 2,
+          "covered": 1.0,
+          "gpu_covered": 1.0,
+          "cpu_foreign_max": 0.12,
+          "cpu_foreign": 0.05,
+          "gpu_foreign": 0,
+          "gpu_foreign_mean": 0.0,
+          "load1": 5.54,
+          "units": {},
+          "profiles": [
+            "performance"
+          ]
+        },
+        "worst": {
+          "frame": "3612",
+          "t_ms": "97121.650",
+          "interval": 209.505,
+          "cpu_ms": "78.251",
+          "cpu_thread_ms": "74.377",
+          "cycle_cpu": 185.381
+        }
+      },
+      "incoming-drone-city-night-100-spread/t3-15": {
+        "frame": {
+          "n": 201,
+          "p50": 55.86,
+          "p95": 92.334,
+          "p99": 109.029,
+          "max": 124.762,
+          "mean": 59.869611940298505,
+          "over33": 196,
+          "over50": 146,
+          "over100": 5,
+          "over250": 0
+        },
+        "render_cpu": {
+          "n": 201,
+          "p50": 38.245,
+          "p95": 49.396,
+          "p99": 52.214,
+          "max": 57.625,
+          "mean": 38.51590049751244,
+          "over33": 155,
+          "over50": 9,
+          "over100": 0,
+          "over250": 0
+        },
+        "full_cycle_cpu": {
+          "n": 201,
+          "p50": 53.83,
+          "p95": 88.114,
+          "p99": 105.434,
+          "max": 119.4,
+          "mean": 57.33444776119403,
+          "over33": 195,
+          "over50": 136,
+          "over100": 4,
+          "over250": 0
+        },
+        "gpu_timestamp_span": {
+          "n": 201,
+          "p50": 47.622,
+          "p95": 57.06,
+          "p99": 63.686,
+          "max": 68.494,
+          "mean": 47.08623880597015,
+          "over33": 193,
+          "over50": 74,
+          "over100": 0,
+          "over250": 0
+        },
+        "late_ms_over50": 9675.295,
+        "host": {
+          "samples": 3,
+          "covered": 1.0,
+          "gpu_covered": 1.0,
+          "cpu_foreign_max": 0.51,
+          "cpu_foreign": 0.17,
+          "gpu_foreign": 5,
+          "gpu_foreign_mean": 0.66,
+          "load1": 6.43,
+          "units": {
+            "incoming-codex-GOLD2.service": 0.46
+          },
+          "profiles": [
+            "performance"
+          ]
+        },
+        "worst": {
+          "frame": "3755",
+          "t_ms": "105764.752",
+          "interval": 124.762,
+          "cpu_ms": "52.591",
+          "cpu_thread_ms": "48.002",
+          "cycle_cpu": 119.4
+        }
+      },
+      "incoming-drone-city-night-100-spread/t15-35": {
+        "frame": {
+          "n": 1071,
+          "p50": 17.584,
+          "p95": 35.58,
+          "p99": 52.761,
+          "max": 168.084,
+          "mean": 18.698444444444444,
+          "over33": 69,
+          "over50": 13,
+          "over100": 1,
+          "over250": 0
+        },
+        "render_cpu": {
+          "n": 1071,
+          "p50": 15.016,
+          "p95": 28.605,
+          "p99": 36.521,
+          "max": 57.048,
+          "mean": 15.37498132586368,
+          "over33": 20,
+          "over50": 1,
+          "over100": 0,
+          "over250": 0
+        },
+        "full_cycle_cpu": {
+          "n": 1071,
+          "p50": 16.74,
+          "p95": 34.596,
+          "p99": 48.503,
+          "max": 167.525,
+          "mean": 17.849147525676937,
+          "over33": 61,
+          "over50": 6,
+          "over100": 1,
+          "over250": 0
+        },
+        "gpu_timestamp_span": {
+          "n": 1071,
+          "p50": 15.959,
+          "p95": 30.349,
+          "p99": 48.941,
+          "max": 56.223,
+          "mean": 18.07479831932773,
+          "over33": 40,
+          "over50": 9,
+          "over100": 0,
+          "over250": 0
+        },
+        "late_ms_over50": 832.333,
+        "host": {
+          "samples": 5,
+          "covered": 1.0,
+          "gpu_covered": 1.0,
+          "cpu_foreign_max": 0.51,
+          "cpu_foreign": 0.08,
+          "gpu_foreign": 0,
+          "gpu_foreign_mean": 0.0,
+          "load1": 7.04,
+          "units": {
+            "incoming-codex-GOLD2.service": 0.46
+          },
+          "profiles": [
+            "performance"
+          ]
+        },
+        "worst": {
+          "frame": "4069",
+          "t_ms": "117308.279",
+          "interval": 168.084,
+          "cpu_ms": "16.599",
+          "cpu_thread_ms": "16.497",
+          "cycle_cpu": 167.525
+        }
+      },
+      "incoming-drone-city-night-100-spread/t35-50": {
+        "frame": {
+          "n": 985,
+          "p50": 16.144,
+          "p95": 22.345,
+          "p99": 24.274,
+          "max": 33.829,
+          "mean": 15.236884263959391,
+          "over33": 1,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        },
+        "render_cpu": {
+          "n": 985,
+          "p50": 12.857,
+          "p95": 18.166,
+          "p99": 19.524,
+          "max": 23.773,
+          "mean": 12.416259898477158,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        },
+        "full_cycle_cpu": {
+          "n": 985,
+          "p50": 15.115,
+          "p95": 21.107,
+          "p99": 23.58,
+          "max": 31.688,
+          "mean": 13.986331979695432,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        },
+        "gpu_timestamp_span": {
+          "n": 985,
+          "p50": 14.324,
+          "p95": 19.053,
+          "p99": 20.579,
+          "max": 25.424,
+          "mean": 15.029739086294416,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        },
+        "late_ms_over50": 0,
+        "host": {
+          "samples": 4,
+          "covered": 1.0,
+          "gpu_covered": 1.0,
+          "cpu_foreign_max": 0.06,
+          "cpu_foreign": 0.04,
+          "gpu_foreign": 0,
+          "gpu_foreign_mean": 0.0,
+          "load1": 7.44,
+          "units": {},
+          "profiles": [
+            "performance"
+          ]
+        },
+        "worst": {
+          "frame": "5245",
+          "t_ms": "136745.432",
+          "interval": 33.829,
+          "cpu_ms": "25.672",
+          "cpu_thread_ms": "23.773",
+          "cycle_cpu": 31.688
+        }
+      },
+      "incoming-drone-city-night-100-spread/total": {
+        "frame": {
+          "n": 2303,
+          "p50": 17.326,
+          "p95": 57.052,
+          "p99": 86.926,
+          "max": 209.505,
+          "mean": 21.76112244897959,
+          "over33": 302,
+          "over50": 188,
+          "over100": 13,
+          "over250": 0
+        },
+        "render_cpu": {
+          "n": 2303,
+          "p50": 14.969,
+          "p95": 38.535,
+          "p99": 48.002,
+          "max": 74.377,
+          "mean": 16.466998263135043,
+          "over33": 198,
+          "over50": 16,
+          "over100": 0,
+          "over250": 0
+        },
+        "full_cycle_cpu": {
+          "n": 2303,
+          "p50": 16.592,
+          "p95": 55.161,
+          "p99": 82.294,
+          "max": 185.381,
+          "mean": 20.47148719062093,
+          "over33": 291,
+          "over50": 166,
+          "over100": 11,
+          "over250": 0
+        },
+        "gpu_timestamp_span": {
+          "n": 2303,
+          "p50": 15.164,
+          "p95": 47.881,
+          "p99": 55.596,
+          "max": 83.129,
+          "mean": 19.638057750759877,
+          "over33": 256,
+          "over50": 88,
+          "over100": 0,
+          "over250": 0
+        },
+        "late_ms_over50": 13111.723,
+        "host": {
+          "samples": 11,
+          "covered": 1.0,
+          "gpu_covered": 1.0,
+          "cpu_foreign_max": 0.51,
+          "cpu_foreign": 0.08,
+          "gpu_foreign": 5,
+          "gpu_foreign_mean": 0.16,
+          "load1": 7.44,
+          "units": {
+            "incoming-codex-GOLD2.service": 0.46
+          },
+          "profiles": [
+            "performance"
+          ]
+        },
+        "worst": {
+          "frame": "3612",
+          "t_ms": "97121.650",
+          "interval": 209.505,
+          "cpu_ms": "78.251",
+          "cpu_thread_ms": "74.377",
+          "cycle_cpu": 185.381
+        }
+      }
+    },
+    "workload": {
+      "native": {
+        "incoming-drone": 100
+      },
+      "blasts": 100
+    },
+    "contract_issues": [],
+    "issues": []
+  },
+  {
+    "run": "final-a2",
+    "source": "36c9b5bdddbad22cc4e418c7b02bb7a141f56e4b",
+    "windows": {
+      "incoming-city-night-100-spread/baseline": {
+        "frame": {
+          "n": 1147,
+          "p50": 8.49,
+          "p95": 12.08,
+          "p99": 14.806,
+          "max": 21.443,
+          "mean": 8.754717523975588,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        },
+        "render_cpu": {
+          "n": 1147,
+          "p50": 1.572,
+          "p95": 2.246,
+          "p99": 2.723,
+          "max": 5.582,
+          "mean": 1.644541412380122,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        },
+        "full_cycle_cpu": {
+          "n": 1147,
+          "p50": 1.816,
+          "p95": 4.35,
+          "p99": 6.074,
+          "max": 10.367,
+          "mean": 2.3080854402789885,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        },
+        "gpu_timestamp_span": {
+          "n": 1147,
+          "p50": 8.286,
+          "p95": 10.44,
+          "p99": 11.817,
+          "max": 13.873,
+          "mean": 8.567054054054054,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        },
+        "late_ms_over50": 0,
+        "host": {
+          "samples": 3,
+          "covered": 1.0,
+          "gpu_covered": 1.0,
+          "cpu_foreign_max": 0.02,
+          "cpu_foreign": 0.01,
+          "gpu_foreign": 0,
+          "gpu_foreign_mean": 0.0,
+          "load1": 2.58,
+          "units": {},
+          "profiles": [
+            "performance"
+          ]
+        },
+        "worst": {
+          "frame": "3367",
+          "t_ms": "96518.460",
+          "interval": 21.443,
+          "cpu_ms": "1.434",
+          "cpu_thread_ms": "1.427",
+          "cycle_cpu": 10.367
+        }
+      },
+      "incoming-drone-city-night-100-spread/t0-3": {
+        "frame": {
+          "n": 44,
+          "p50": 55.663,
+          "p95": 173.246,
+          "p99": 235.796,
+          "max": 235.796,
+          "mean": 69.39095454545455,
+          "over33": 35,
+          "over50": 30,
+          "over100": 9,
+          "over250": 0
+        },
+        "render_cpu": {
+          "n": 44,
+          "p50": 35.364,
+          "p95": 51.615,
+          "p99": 75.683,
+          "max": 75.683,
+          "mean": 32.021454545454546,
+          "over33": 25,
+          "over50": 3,
+          "over100": 0,
+          "over250": 0
+        },
+        "full_cycle_cpu": {
+          "n": 44,
+          "p50": 54.173,
+          "p95": 152.214,
+          "p99": 205.729,
+          "max": 205.729,
+          "mean": 61.62084090909091,
+          "over33": 34,
+          "over50": 29,
+          "over100": 4,
+          "over250": 0
+        },
+        "gpu_timestamp_span": {
+          "n": 44,
+          "p50": 35.119,
+          "p95": 53.083,
+          "p99": 78.585,
+          "max": 78.585,
+          "mean": 35.20490909090909,
+          "over33": 29,
+          "over50": 6,
+          "over100": 0,
+          "over250": 0
+        },
+        "late_ms_over50": 2717.029,
+        "host": {
+          "samples": 2,
+          "covered": 1.0,
+          "gpu_covered": 1.0,
+          "cpu_foreign_max": 0.02,
+          "cpu_foreign": 0.0,
+          "gpu_foreign": 1,
+          "gpu_foreign_mean": 0.33,
+          "load1": 2.39,
+          "units": {},
+          "profiles": [
+            "performance"
+          ]
+        },
+        "worst": {
+          "frame": "3593",
+          "t_ms": "98857.425",
+          "interval": 235.796,
+          "cpu_ms": "82.975",
+          "cpu_thread_ms": "75.683",
+          "cycle_cpu": 205.729
+        }
+      },
+      "incoming-drone-city-night-100-spread/t3-15": {
+        "frame": {
+          "n": 211,
+          "p50": 53.451,
+          "p95": 88.597,
+          "p99": 108.434,
+          "max": 157.648,
+          "mean": 56.94626066350711,
+          "over33": 199,
+          "over50": 136,
+          "over100": 3,
+          "over250": 0
+        },
+        "render_cpu": {
+          "n": 211,
+          "p50": 36.526,
+          "p95": 49.902,
+          "p99": 53.55,
+          "max": 56.304,
+          "mean": 36.613734597156395,
+          "over33": 143,
+          "over50": 10,
+          "over100": 0,
+          "over250": 0
+        },
+        "full_cycle_cpu": {
+          "n": 211,
+          "p50": 51.376,
+          "p95": 84.829,
+          "p99": 107.162,
+          "max": 147.397,
+          "mean": 54.66549763033176,
+          "over33": 198,
+          "over50": 122,
+          "over100": 3,
+          "over250": 0
+        },
+        "gpu_timestamp_span": {
+          "n": 211,
+          "p50": 46.286,
+          "p95": 56.569,
+          "p99": 64.18,
+          "max": 66.909,
+          "mean": 45.646312796208534,
+          "over33": 194,
+          "over50": 61,
+          "over100": 0,
+          "over250": 0
+        },
+        "late_ms_over50": 8922.255,
+        "host": {
+          "samples": 3,
+          "covered": 1.0,
+          "gpu_covered": 1.0,
+          "cpu_foreign_max": 0.04,
+          "cpu_foreign": 0.01,
+          "gpu_foreign": 3,
+          "gpu_foreign_mean": 1.33,
+          "load1": 4.2,
+          "units": {},
+          "profiles": [
+            "performance"
+          ]
+        },
+        "worst": {
+          "frame": "3630",
+          "t_ms": "101478.806",
+          "interval": 157.648,
+          "cpu_ms": "44.400",
+          "cpu_thread_ms": "36.031",
+          "cycle_cpu": 147.397
+        }
+      },
+      "incoming-drone-city-night-100-spread/t15-35": {
+        "frame": {
+          "n": 1047,
+          "p50": 16.93,
+          "p95": 36.524,
+          "p99": 49.51,
+          "max": 133.755,
+          "mean": 19.132385864374402,
+          "over33": 82,
+          "over50": 9,
+          "over100": 2,
+          "over250": 0
+        },
+        "render_cpu": {
+          "n": 1047,
+          "p50": 15.576,
+          "p95": 28.317,
+          "p99": 33.99,
+          "max": 58.13,
+          "mean": 15.562753581661891,
+          "over33": 15,
+          "over50": 1,
+          "over100": 0,
+          "over250": 0
+        },
+        "full_cycle_cpu": {
+          "n": 1047,
+          "p50": 16.486,
+          "p95": 35.421,
+          "p99": 46.217,
+          "max": 131.258,
+          "mean": 18.302251193887297,
+          "over33": 73,
+          "over50": 6,
+          "over100": 2,
+          "over250": 0
+        },
+        "gpu_timestamp_span": {
+          "n": 1047,
+          "p50": 16.402,
+          "p95": 30.275,
+          "p99": 45.365,
+          "max": 51.226,
+          "mean": 18.37085959885387,
+          "over33": 42,
+          "over50": 1,
+          "over100": 0,
+          "over250": 0
+        },
+        "late_ms_over50": 617.7379999999999,
+        "host": {
+          "samples": 5,
+          "covered": 1.0,
+          "gpu_covered": 1.0,
+          "cpu_foreign_max": 0.35,
+          "cpu_foreign": 0.15,
+          "gpu_foreign": 7,
+          "gpu_foreign_mean": 0.7,
+          "load1": 6.05,
+          "units": {
+            "app-com.anthropic.Claude-3533.scope": 0.29
+          },
+          "profiles": [
+            "performance"
+          ]
+        },
+        "worst": {
+          "frame": "4170",
+          "t_ms": "121168.256",
+          "interval": 133.755,
+          "cpu_ms": "16.738",
+          "cpu_thread_ms": "15.763",
+          "cycle_cpu": 131.258
+        }
+      },
+      "incoming-drone-city-night-100-spread/t35-50": {
+        "frame": {
+          "n": 959,
+          "p50": 15.159,
+          "p95": 24.053,
+          "p99": 45.916,
+          "max": 60.909,
+          "mean": 15.695728884254432,
+          "over33": 17,
+          "over50": 3,
+          "over100": 0,
+          "over250": 0
+        },
+        "render_cpu": {
+          "n": 959,
+          "p50": 13.016,
+          "p95": 18.569,
+          "p99": 20.542,
+          "max": 23.384,
+          "mean": 12.578041710114702,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        },
+        "full_cycle_cpu": {
+          "n": 959,
+          "p50": 14.165,
+          "p95": 23.215,
+          "p99": 43.292,
+          "max": 58.854,
+          "mean": 14.613054223149113,
+          "over33": 15,
+          "over50": 3,
+          "over100": 0,
+          "over250": 0
+        },
+        "gpu_timestamp_span": {
+          "n": 959,
+          "p50": 14.34,
+          "p95": 20.57,
+          "p99": 24.68,
+          "max": 27.551,
+          "mean": 15.395186652763295,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        },
+        "late_ms_over50": 174.09699999999998,
+        "host": {
+          "samples": 4,
+          "covered": 1.0,
+          "gpu_covered": 1.0,
+          "cpu_foreign_max": 0.43,
+          "cpu_foreign": 0.19,
+          "gpu_foreign": 8,
+          "gpu_foreign_mean": 1.06,
+          "load1": 6.63,
+          "units": {
+            "app-com.anthropic.Claude-3533.scope": 0.17
+          },
+          "profiles": [
+            "performance"
+          ]
+        },
+        "worst": {
+          "frame": "5608",
+          "t_ms": "144966.655",
+          "interval": 60.909,
+          "cpu_ms": "16.849",
+          "cpu_thread_ms": "16.650",
+          "cycle_cpu": 58.854
+        }
+      },
+      "incoming-drone-city-night-100-spread/total": {
+        "frame": {
+          "n": 2261,
+          "p50": 16.93,
+          "p95": 55.793,
+          "p99": 89.21,
+          "max": 235.796,
+          "mean": 22.181634232640423,
+          "over33": 333,
+          "over50": 178,
+          "over100": 14,
+          "over250": 0
+        },
+        "render_cpu": {
+          "n": 2261,
+          "p50": 15.205,
+          "p95": 37.54,
+          "p99": 47.729,
+          "max": 75.683,
+          "mean": 16.581595311808933,
+          "over33": 183,
+          "over50": 14,
+          "over100": 0,
+          "over250": 0
+        },
+        "full_cycle_cpu": {
+          "n": 2261,
+          "p50": 16.32,
+          "p95": 53.748,
+          "p99": 84.449,
+          "max": 205.729,
+          "mean": 20.97395532950022,
+          "over33": 320,
+          "over50": 160,
+          "over100": 9,
+          "over250": 0
+        },
+        "gpu_timestamp_span": {
+          "n": 2261,
+          "p50": 15.601,
+          "p95": 46.991,
+          "p99": 55.118,
+          "max": 78.585,
+          "mean": 19.98171693940734,
+          "over33": 265,
+          "over50": 68,
+          "over100": 0,
+          "over250": 0
+        },
+        "late_ms_over50": 12431.119,
+        "host": {
+          "samples": 11,
+          "covered": 1.0,
+          "gpu_covered": 1.0,
+          "cpu_foreign_max": 0.43,
+          "cpu_foreign": 0.12,
+          "gpu_foreign": 8,
+          "gpu_foreign_mean": 0.94,
+          "load1": 6.63,
+          "units": {
+            "app-com.anthropic.Claude-3533.scope": 0.29
+          },
+          "profiles": [
+            "performance"
+          ]
+        },
+        "worst": {
+          "frame": "3593",
+          "t_ms": "98857.425",
+          "interval": 235.796,
+          "cpu_ms": "82.975",
+          "cpu_thread_ms": "75.683",
+          "cycle_cpu": 205.729
+        }
+      }
+    },
+    "workload": {
+      "native": {
+        "incoming-drone": 100
+      },
+      "blasts": 100
+    },
+    "contract_issues": [],
+    "issues": []
+  }
+]

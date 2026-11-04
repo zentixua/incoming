@@ -1,3 +1,7 @@
+# Final outcome
+
+Read [FINAL.md](FINAL.md) for the completed A/B/A, validation and rejected package decision. The checkpoint below preserves the earlier state; its pending items are superseded by FINAL.md.
+
 # PERF-C2 client performance evidence
 
 Checkpoint 2026-11-04. This orphan evidence branch is never merged into production. Original raw JFR recordings, copied worlds and dependency jars stay in ignored local test data; sampled method stacks and original frame/event/host streams are included here. Streams are gzip-compressed without changing rows. Exact jar/config hashes and actual plans accompany each completed recording.
