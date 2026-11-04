@@ -232,6 +232,16 @@ public final class WorkClock {
         return took;
     }
 
+    /**
+     * Include a whole queue window, whose units may already be charged. Readiness, dependency checks and release
+     * consume the same tick allowance, without changing step estimates or the one-unit progress guarantee.
+     * {@code usedBefore} is {@link #usedThisTickNanos()} at window entry. Counting clocks add no extra wall time.
+     */
+    public void accountWindow(long began, long usedBefore) {
+        usedThisTick = Math.max(usedThisTick, usedBefore + (time.getAsLong() - began));
+        maxTickNanos = Math.max(maxTickNanos, usedThisTick);
+    }
+
     /** Work unit took {@code nanos}. */
     public void record(long nanos) {
         lateStart = false;
