@@ -11,7 +11,7 @@ import ua.zentix.incoming.strike.ServerActions;
  * incompatible change, letting NeoForge report different mod versions instead of crashing.
  */
 public final class IncomingNetwork {
-    public static final String PROTOCOL = "53";
+    public static final String PROTOCOL = "54";
 
     private IncomingNetwork() {}
 
@@ -45,6 +45,7 @@ public final class IncomingNetwork {
         r.playToClient(S2C.Intercept.TYPE, S2C.Intercept.CODEC, (p, ctx) -> ClientHooks.get().intercept(p));
         r.playToClient(S2C.RadarScope.TYPE, S2C.RadarScope.CODEC, (p, ctx) -> ClientHooks.get().radarScope(p));
 
+        r.playToClient(S2C.NuclearPreparation.TYPE, S2C.NuclearPreparation.CODEC, (p, ctx) -> ClientHooks.get().nuclearPreparation(p));
         r.playToClient(S2C.NuclearReview.TYPE, S2C.NuclearReview.CODEC, (p, ctx) -> ClientHooks.get().nuclearReview(p));
         r.playToServer(C2S.ReviewNuclear.TYPE, C2S.ReviewNuclear.CODEC, ua.zentix.incoming.strike.NuclearReview::request);
         r.playToServer(C2S.NuclearAction.TYPE, C2S.NuclearAction.CODEC, ua.zentix.incoming.strike.NuclearReview::action);

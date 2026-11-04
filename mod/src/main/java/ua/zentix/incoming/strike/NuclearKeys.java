@@ -16,6 +16,7 @@ import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.IncomingConfig;
 import ua.zentix.incoming.net.C2S;
+import ua.zentix.incoming.nuclear.world.RuinPreparation;
 import ua.zentix.incoming.registry.ModAttachments;
 import ua.zentix.incoming.registry.ModSounds;
 
@@ -74,6 +75,7 @@ public final class NuclearKeys {
         final Waypoints via;
         @Nullable
         final Munitions.Bill paid;
+        @Nullable final UUID preparation;
         final long created;
         final long deadline;
         /** Players already invited to turn the key. */
@@ -87,7 +89,7 @@ public final class NuclearKeys {
         @Nullable
         String confirmer;
 
-        Order(ServerPlayer owner, Loadout loadout, ServerActions.Aim aim, Waypoints via, @Nullable Munitions.Bill paid, long deadline) {
+        Order(ServerPlayer owner, Loadout loadout, ServerActions.Aim aim, Waypoints via, @Nullable Munitions.Bill paid, long deadline, @Nullable UUID preparation) {
             this.level = owner.serverLevel();
             this.ownerId = owner.getUUID();
             this.name = owner.getGameProfile().getName();
@@ -95,6 +97,7 @@ public final class NuclearKeys {
             this.aim = aim;
             this.via = via;
             this.paid = paid;
+            this.preparation = preparation;
             this.created = level.getGameTime();
             this.deadline = deadline;
             this.owner = owner;
@@ -138,9 +141,14 @@ public final class NuclearKeys {
      */
     public static boolean order(ServerPlayer owner, Collection<? extends ServerPlayer> online, Loadout loadout, ServerActions.Aim aim, Waypoints via,
                                 @Nullable Munitions.Bill paid) {
+        return order(owner, online, loadout, aim, via, paid, null);
+    }
+
+    public static boolean order(ServerPlayer owner, Collection<? extends ServerPlayer> online, Loadout loadout, ServerActions.Aim aim, Waypoints via,
+                                @Nullable Munitions.Bill paid, @Nullable UUID preparation) {
         ServerLevel level = owner.serverLevel();
         NuclearKeys keys = get(level);
-        Order o = new Order(owner, loadout, aim, via, paid, level.getGameTime() + window());
+        Order o = new Order(owner, loadout, aim, via, paid, level.getGameTime() + window(), preparation);
         boolean alone = true;
         for (ServerPlayer p : online) {
             if (!p.getUUID().equals(owner.getUUID())) alone = false;
@@ -246,7 +254,14 @@ public final class NuclearKeys {
         StrikeService.Result r;
         String why = "nuclear launch failed";
         try {
-            if (o.icbm()) {
+            if (o.preparation != null) {
+                boolean allowed = IncomingConfig.SERVER.nukeEnabled.get() && l.nuke().yieldKt() <= IncomingConfig.SERVER.nukeMaxYield.get()
+                        && (!l.nuke().onCarrier() || IncomingConfig.SERVER.carrierNukes.get())
+                        && (owner == null || ServerActions.mayUseNuke(owner));
+                r = allowed ? StrikeService.launchPrepared(o.level, l.weapon(), aim.target(), aim.point(), o.lastYaw, o.ownerId, owner,
+                        true, l.nuke(), o.via, null, o.preparation, o.icbm() ? flightTicks() : IncomingConfig.SERVER.nukeFlightTime.get())
+                        : StrikeService.Result.FAILED;
+            } else if (o.icbm()) {
                 r = StrikeService.launchIcbm(o.level, aim.target(), aim.point(), l.nuke(), owner, flightTicks());
             } else if (owner != null) {
                 r = StrikeService.launchBy(o.level, l.weapon(), aim.target(), aim.point(), owner.getYRot(), owner, true, l.nuke(), o.via, null);
@@ -264,6 +279,7 @@ public final class NuclearKeys {
             else owner.displayClientMessage(Component.translatable("incoming.launch_failed").withStyle(ChatFormatting.RED), true);
         }
         if (!r.ok()) {
+            release(o);
             if (o.paid != null) Munitions.refund(owner != null ? List.of(owner) : online, o.ownerId, o.paid, why);
         } else {
             detected(o, online);
@@ -320,12 +336,21 @@ public final class NuclearKeys {
         if (orders.isEmpty()) return;
         long now = level.getGameTime();
         for (Order o : List.copyOf(orders)) {
+            if (o.preparation != null && !RuinPreparation.keepAlive(level, o.preparation, o.ownerId)) {
+                orders.remove(o);
+                release(o);
+                ServerPlayer owner = o.owner(online);
+                if (owner != null) owner.sendSystemMessage(Component.translatable("incoming.nuke.prepare.cancelled"));
+                if (o.paid != null) Munitions.refund(owner != null ? List.of(owner) : online, o.ownerId, o.paid, "preparation expired");
+                continue;
+            }
             if (o.launchAt >= 0) {
                 if (now < o.launchAt) continue;
                 orders.remove(o);
                 launch(o, online);
             } else if (now >= o.deadline) {
                 orders.remove(o);
+                release(o);
                 ServerPlayer owner = o.owner(online);
                 if (owner != null) {
                     owner.sendSystemMessage(Component.translatable("incoming.nuke.key.expired", window() / 20).withStyle(ChatFormatting.RED));
@@ -369,6 +394,7 @@ public final class NuclearKeys {
             NuclearKeys keys = get(level);
             for (Order o : List.copyOf(keys.orders)) {
                 keys.orders.remove(o);
+                release(o);
                 n++;
                 ServerPlayer owner = o.owner(online);
                 if (owner != null && notice != null) owner.sendSystemMessage(notice);
@@ -391,10 +417,15 @@ public final class NuclearKeys {
             for (Order o : List.copyOf(keys.orders)) {
                 if (o.launchAt >= 0 || !o.ownerId.equals(player.getUUID())) continue;
                 keys.orders.remove(o);
+                release(o);
                 if (o.paid != null) Munitions.refund(List.of(player), o.ownerId, o.paid, "launching player left before the second key");
                 Incoming.LOG.info("Nuclear launch {} cancelled: {} left before the second key", o.loadout.weapon().getSerializedName(), o.name);
             }
         }
+    }
+
+    private static void release(Order o) {
+        if (o.preparation != null) RuinPreparation.cancel(o.level, o.preparation);
     }
 
     /** Order weapon for messages: “ICBM, 15 kt”, “Cruise missile with nuclear warhead, 15 kt”. */

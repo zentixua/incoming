@@ -390,6 +390,12 @@ public final class ServerActions {
      */
     public static boolean strike(ServerPlayer player, WeaponType weapon, int count, int spread, Aim aim, Loadout.Nuke nuke, Waypoints via,
                                  @Nullable LaunchOrigin from, boolean rules) {
+        return strikePrepared(player, weapon, count, spread, aim, nuke, via, from, rules, null);
+    }
+
+    /** Exact prepared order; null handle denotes a new ordinary command, queued unpaid first. */
+    public static boolean strikePrepared(ServerPlayer player, WeaponType weapon, int count, int spread, Aim aim, Loadout.Nuke nuke, Waypoints via,
+                                         @Nullable LaunchOrigin from, boolean rules, @Nullable UUID preparation) {
         if (rules) {
             aim = ruled(player, aim);
             if (aim == null) return false;
@@ -413,6 +419,12 @@ public final class ServerActions {
                 return false;
             }
         }
+        if (l.nuclear()) {
+            if (preparation == null) return NuclearCommands.request(player, l, aim, via, from, rules);
+            if (!prepared(player.serverLevel(), preparation, aim, l)) return false;
+            MutableComponent route = routeProblem(player.serverLevel(), player, rules, weapon, from, via, aim.point());
+            if (route != null) { player.sendSystemMessage(route); return false; }
+        }
         // Whole order at once: do not shrink salvo to inventory contents.
         Munitions.Bill bill = rules && !player.hasInfiniteMaterials() ? Munitions.Bill.of(l) : null;
         if (bill != null && !Munitions.pay(player, bill)) return false;
@@ -420,9 +432,9 @@ public final class ServerActions {
         // Non-operator nuclear strike: second key and at least 90 s target warning (such order has no launch site:
         // only operator/host specify it by command or designator map, and they need no second key).
         if (l.nuclear() && rules && !NuclearKeys.trusted(player)) {
-            return NuclearKeys.order(player, player.server.getPlayerList().getPlayers(), l, aim, via, bill);
+            return NuclearKeys.order(player, player.server.getPlayerList().getPlayers(), l, aim, via, bill, preparation);
         }
-        return launch(player.serverLevel(), player.getGameProfile().getName(), player, player.getYRot(), l, aim, via, from, bill);
+        return launch(player.serverLevel(), player.getGameProfile().getName(), player, player.getUUID(), player.getYRot(), l, aim, via, from, bill, preparation);
     }
 
     /**
@@ -518,7 +530,24 @@ public final class ServerActions {
      */
     public static boolean dispatch(ServerLevel level, String who, float yaw, WeaponType weapon, int count, int spread, Aim aim, Loadout.Nuke nuke,
                                    Waypoints via, @Nullable LaunchOrigin from) {
-        return launch(level, who, null, null, yaw, order(weapon, count, spread, nuke), aim, via, from, null);
+        Loadout l = order(weapon, count, spread, nuke);
+        if (l.nuclear()) return NuclearCommands.request(level, who, yaw, l, aim, via, from);
+        return launch(level, who, null, null, yaw, l, aim, via, from, null);
+    }
+
+    /** Console command readiness commit; its generated UUID is also the server preparation owner. */
+    public static boolean dispatchPrepared(ServerLevel level, String who, float yaw, Loadout l, Aim aim, Waypoints via,
+                                           @Nullable LaunchOrigin from, UUID preparation) {
+        if (!prepared(level, preparation, aim, l)) return false;
+        return launch(level, who, null, preparation, yaw, l, aim, via, from, null, preparation);
+    }
+
+    private static boolean prepared(ServerLevel level, UUID preparation, Aim aim, Loadout l) {
+        var status = ua.zentix.incoming.nuclear.world.RuinPreparation.status(level, preparation);
+        return IncomingConfig.SERVER.nukeEnabled.get() && l.nuke().yieldKt() <= IncomingConfig.SERVER.nukeMaxYield.get()
+                && (!l.nuke().onCarrier() || l.weapon().spec().warhead().always() || IncomingConfig.SERVER.carrierNukes.get())
+                && status.stage() == ua.zentix.incoming.nuclear.world.RuinPreparation.Stage.READY
+                && aim.point().equals(status.resolvedTarget());
     }
 
     /**
@@ -552,18 +581,26 @@ public final class ServerActions {
     /** {@link #launch} for {@code ownerId}: {@code owner} is shooter when player ordered, not launcher/console. */
     private static boolean launch(ServerLevel level, String who, @Nullable ServerPlayer owner, @Nullable UUID ownerId, float yaw, Loadout l, Aim aim,
                                   Waypoints via, @Nullable LaunchOrigin from, @Nullable Munitions.Bill paid) {
+        return launch(level, who, owner, ownerId, yaw, l, aim, via, from, paid, null);
+    }
+
+    private static boolean launch(ServerLevel level, String who, @Nullable ServerPlayer owner, @Nullable UUID ownerId, float yaw, Loadout l, Aim aim,
+                                  Waypoints via, @Nullable LaunchOrigin from, @Nullable Munitions.Bill paid, @Nullable UUID preparation) {
         StrikeService.log(level, who, l.weapon(), l.count(), l.spread(), aim.target(), aim.point(), via, from);
         float course = from != null ? FlightController.anglesTo(from.at(), aim.point())[0] : yaw;
         // Unready launch site: even one projectile uses a salvo, which loads/waits for site (LaunchPlaces), rather than starting
         // outside the loaded world, already cruising, where launch is invisible.
         if (l.count() > 1 || l.spread() > 0 || LaunchPlaces.waits(level, l.weapon(), from)) {
-            SalvoData.start(level, l.weapon(), l.count(), l.spread(), aim.target(), aim.point(), course, ownerId, l.nuke(), via, from, paid != null);
+            if (preparation != null) SalvoData.startPrepared(level, l.weapon(), aim.target(), aim.point(), course, ownerId, l.nuke(), via, from, paid != null, preparation);
+            else SalvoData.start(level, l.weapon(), l.count(), l.spread(), aim.target(), aim.point(), course, ownerId, l.nuke(), via, from, paid != null);
             return true;
         }
         StrikeService.Result r;
         String why = "launch failed";
         try {
-            r = owner == null ? StrikeService.launch(level, l.weapon(), aim.target(), aim.point(), course, ownerId, true, l.nuke(), via, from)
+            r = preparation != null ? StrikeService.launchPrepared(level, l.weapon(), aim.target(), aim.point(), course, ownerId, owner, true,
+                    l.nuke(), via, from, preparation, IncomingConfig.SERVER.nukeFlightTime.get())
+                    : owner == null ? StrikeService.launch(level, l.weapon(), aim.target(), aim.point(), course, ownerId, true, l.nuke(), via, from)
                     : StrikeService.launchBy(level, l.weapon(), aim.target(), aim.point(), course, owner, true, l.nuke(), via, from);
         } catch (RuntimeException e) {
             // Like salvo (SalvoData.tick): exception during launch counts as failed, refund payment.
@@ -809,6 +846,7 @@ public final class ServerActions {
         }
         if (nuclear) {
             n += NuclearReview.cancelAll(server.getPlayerList().getPlayers());
+            n += NuclearCommands.cancelAll(server);
             n += NuclearKeys.cancelAll(server, server.getPlayerList().getPlayers(),
                     Component.translatable("incoming.nuke.key.cancelled").withStyle(ChatFormatting.GRAY), "nuclear clear — " + who);
         }
