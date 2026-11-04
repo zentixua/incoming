@@ -131,7 +131,10 @@ These are reduced block-scale rules: joint properties, drag and the pile's repos
 
 With the default ground burst, the dust column joins the mushroom cap. With an explicitly selected air burst
 at the standard burst height, the column starts rising later, with a billowing upper edge, and stays below the
-faster-rising cap. The gap is expected; in the first seconds, dust near the ground can hide the short column entirely.
+faster-rising cap. This separation comes from the current approximate transport model; its exact duration is not
+calibrated to a timed real-world reference. In the first seconds, dust near the ground can hide the short column entirely.
+The column and its base receive dust only after the same local wave arrival and inflow delay as the supplying ground
+layer. Slowing the wave in GAME also delays this supply; the dust column can appear later and remain shorter than in REAL.
 
 A ground burst leaves a crater and radioactive fallout downwind. Over water, spray takes the place of the dust wall.
 Burns, radiation and falling debris can still hurt you after the flash, so stay under cover and watch your dose.
