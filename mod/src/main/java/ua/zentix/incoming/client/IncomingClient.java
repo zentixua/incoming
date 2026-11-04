@@ -565,8 +565,8 @@ public final class IncomingClient {
         }
 
         @Override
-        public void voxyChunk(S2C.VoxyChunk p) {
-            VoxyIngest.accept(p);
+        public void voxyChunk(S2C.VoxyChunk p, net.neoforged.neoforge.network.handling.IPayloadContext context) {
+            VoxyIngest.accept(p, context);
         }
 
         @Override

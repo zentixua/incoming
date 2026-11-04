@@ -146,7 +146,7 @@ class VoxyLodsTest {
             for (int tick = 0; tick < 1200; tick++) viewer.drain(channel, client);
             assertTrue(channel.isWritable(), "event-loop dispatch has not encoded anything yet");
             assertEquals(2, client.chunks.size());
-            assertEquals(18, viewer.queue.size());
+            assertEquals(13, viewer.queue.size(), "six 40 KiB columns are owned by the bounded network batch");
             assertFalse(viewer.flow.acknowledge(viewer.flow.id(), 64), "unfinished batch cannot be acknowledged");
             client.pending.onSuccess();
             viewer.drain(channel, client);
@@ -181,7 +181,9 @@ class VoxyLodsTest {
             assertEquals(1, viewer.sent);
             assertEquals(250 * 1024L, viewer.bytes);
             channel.resume();
-            viewer.drain(channel, transport); // finish the first batch after its stalled write
+            channel.advanceTimeBy(2, java.util.concurrent.TimeUnit.MILLISECONDS);
+            channel.runScheduledPendingTasks();
+            viewer.drain(channel, transport); // observe completion after the event loop regained headroom
             client.ack(viewer, 1);
             viewer.drain(channel, transport);
             assertEquals(2, viewer.sent);
@@ -265,4 +267,40 @@ class VoxyLodsTest {
             channel.finishAndReleaseAll();
         }
     }
+    @Test
+    void completedWritesContinueWithoutWaitingForAnotherServerTick() {
+        EmbeddedChannel channel = new EmbeddedChannel();
+        try {
+            VoxyLods.Viewer viewer = new VoxyLods.Viewer();
+            Receiver client = new Receiver();
+            viewer.offer(0, packet(0, new byte[1024]));
+            viewer.drain(channel, client);
+            client.ack(viewer, 64);
+            for (int i = 1; i <= 64; i++) viewer.offer(i, packet(i, new byte[1024]));
+            client.completeWrites = false;
+            viewer.drain(channel, client);
+            assertEquals(2, client.chunks.size());
+            // Only network completions advance this batch. There is no intervening server tick/drain call.
+            for (int i = 0; i < 64; i++) client.pending.onSuccess();
+            assertEquals(65, client.chunks.size());
+            assertEquals(64, client.batches.getLast().chunks());
+            assertEquals(0, viewer.bytes);
+        } finally { channel.finishAndReleaseAll(); }
+    }
+
+    @Test
+    void overlappingFrontDeadlinesDoNotReplaceOneAnotherInTheServerQueue() {
+        VoxyLods.Viewer viewer = new VoxyLods.Viewer();
+        var dimension = ResourceLocation.withDefaultNamespace("overworld");
+        S2C.VoxyChunk early = new S2C.VoxyChunk(dimension, 7, 0, new byte[10], 100, 1);
+        S2C.VoxyChunk later = new S2C.VoxyChunk(dimension, 7, 0, new byte[20], 200, 2);
+        viewer.offer(7, early);
+        viewer.offer(7, later);
+        assertEquals(2, viewer.queue.size());
+        assertEquals(30, viewer.bytes);
+        viewer.offer(7, new S2C.VoxyChunk(dimension, 7, 0, new byte[15], 100, 1));
+        assertEquals(2, viewer.queue.size());
+        assertEquals(35, viewer.bytes, "only a revision of the same event deadline supersedes its waiting copy");
+    }
+
 }

@@ -85,21 +85,23 @@ public final class VoxyLods {
 
     /** Player with Voxy: their chunks in order (chunk → packet; a fresh copy replaces a waiting one in place). */
     static final class Viewer {
-        final LinkedHashMap<Long, S2C.VoxyChunk> queue = new LinkedHashMap<>();
+        private record Column(long chunk, long due, int detonation) {}
+        final LinkedHashMap<Column, S2C.VoxyChunk> queue = new LinkedHashMap<>();
         long bytes, sent, dropped;
         /** Includes dispatch waiting in the Netty event loop; cleared only by the write completion callback. */
-        private volatile boolean writing;
+        private volatile boolean writing, batchWritten;
         final LodBatchFlow flow = new LodBatchFlow();
         private int batchBytes;
 
         void offer(long chunk, S2C.VoxyChunk packet) {
-            S2C.VoxyChunk was = queue.remove(chunk);
+            Column key = new Column(chunk, packet.notBefore(), packet.detonation());
+            S2C.VoxyChunk was = queue.remove(key);
             if (was != null) bytes -= was.sections().length;
             if (bytes + packet.sections().length > QUEUE_BYTES) {
                 dropped++;
                 return;
             }
-            queue.put(chunk, packet);
+            queue.put(key, packet);
             bytes += packet.sections().length;
         }
 
@@ -108,47 +110,68 @@ public final class VoxyLods {
                     (packet, listener) -> player.connection.send(new ClientboundCustomPayloadPacket(packet), listener));
         }
 
-        /** Server-thread queue drain. Never wait for the network or scan a blocked queue. */
+        /** Select one bounded batch on the server; its serial writer then progresses independently on the event loop. */
         void drain(@Nullable Channel channel, BiConsumer<CustomPacketPayload, PacketSendListener> send) {
-            if (!writable(channel)) return;
-            if (!flow.active()) {
-                if (queue.isEmpty() || !flow.begin()) return;
-                batchBytes = 0;
-                send.accept(new S2C.LodBatchStart(flow.id()), null);
-            }
-            if (!flow.sending()) return; // Only the client's acknowledgement opens the next batch.
-            boolean byteWindowFull = batchBytes >= BATCH_BYTES;
-            for (Iterator<S2C.VoxyChunk> q = queue.values().iterator(); q.hasNext() && flow.hasRoom() && !byteWindowFull && writable(channel); ) {
-                // Connection.send schedules on the event loop: writability alone cannot see those pending tasks.
-                // A single chunk may exceed the watermark. Let it through once, then await its completed write;
-                // requiring the entire chunk to fit would permanently block large, globally paletted chunks.
-                S2C.VoxyChunk packet = q.next();
-                if (flow.sent() > 0 && batchBytes + packet.sections().length > BATCH_BYTES) {
-                    byteWindowFull = true;
-                    break;
-                }
-                writing = true;
-                try {
-                    send.accept(packet, PacketSendListener.thenRun(() -> writing = false));
-                } catch (RuntimeException | Error error) {
-                    writing = false;
-                    throw error;
-                }
-                q.remove();
+            finishWritten();
+            if (writing || !transportWritable(channel) || flow.active() || queue.isEmpty() || !flow.begin()) return;
+            List<S2C.VoxyChunk> batch = new ArrayList<>();
+            batchBytes = 0;
+            for (Iterator<S2C.VoxyChunk> it = queue.values().iterator(); it.hasNext() && flow.hasRoom(); ) {
+                S2C.VoxyChunk packet = it.next();
+                if (!batch.isEmpty() && batchBytes + packet.sections().length > BATCH_BYTES) break;
+                batch.add(packet);
+                it.remove();
                 bytes -= packet.sections().length;
-                flow.chunkSent();
                 batchBytes += packet.sections().length;
-                byteWindowFull = batchBytes >= BATCH_BYTES;
+                flow.chunkSent();
                 sent++;
+                if (batchBytes >= BATCH_BYTES) break;
             }
-            if ((byteWindowFull || !flow.hasRoom() || queue.isEmpty()) && transportWritable(channel)) {
-                flow.finish();
-                send.accept(new S2C.LodBatchFinished(flow.id(), flow.sent()), null);
-            }
+            writing = true;
+            batchWritten = false;
+            int id = flow.id();
+            Runnable pump = new Runnable() {
+                int next;
+                boolean started;
+                @Override public void run() {
+                    if (!channel.isActive()) { complete(); return; }
+                    if (!transportWritable(channel)) {
+                        channel.eventLoop().schedule(this, 2, java.util.concurrent.TimeUnit.MILLISECONDS);
+                        return;
+                    }
+                    try {
+                        if (!started) {
+                            started = true;
+                            send.accept(new S2C.LodBatchStart(id), null);
+                        }
+                        if (next == batch.size()) {
+                            send.accept(new S2C.LodBatchFinished(id, batch.size()), null);
+                            complete();
+                            return;
+                        }
+                        S2C.VoxyChunk packet = batch.get(next++);
+                        send.accept(packet, PacketSendListener.thenRun(() -> {
+                            if (channel.eventLoop().inEventLoop()) run();
+                            else channel.eventLoop().execute(this);
+                        }));
+                    } catch (RuntimeException | Error error) {
+                        complete();
+                        throw error;
+                    }
+                }
+                private void complete() {
+                    batchWritten = true;
+                    writing = false;
+                }
+            };
+            if (channel.eventLoop().inEventLoop()) pump.run();
+            else channel.eventLoop().execute(pump);
+            finishWritten(); // Inline transports used by deterministic tests may already have finished.
         }
 
-        private boolean writable(@Nullable Channel channel) {
-            return !writing && transportWritable(channel);
+        /** Server thread only; an acknowledgement may arrive before the next server tick. */
+        private void finishWritten() {
+            if (batchWritten && flow.sending()) flow.finish();
         }
 
         private static boolean transportWritable(@Nullable Channel channel) {
@@ -345,7 +368,10 @@ public final class VoxyLods {
     public static void batchReceived(C2S.LodBatchReceived packet, IPayloadContext context) {
         if (!(context.player() instanceof ServerPlayer p)) return;
         Viewer viewer = get(p.getServer()).viewers.get(p.getUUID());
-        if (viewer != null) viewer.flow.acknowledge(packet.id(), packet.desiredChunksPerTick());
+        if (viewer != null) {
+            viewer.finishWritten();
+            viewer.flow.acknowledge(packet.id(), packet.desiredChunksPerTick());
+        }
     }
 
     /** The client reported whether it renders Voxy, into which the mod ingests chunks. Server thread. */

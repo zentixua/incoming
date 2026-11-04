@@ -31,7 +31,7 @@ import java.util.concurrent.ConcurrentHashMap;
  * method LOD Server Support ({@code compat/VoxyCompat}, MIT) uses for server chunks and Voxy for its own; via
  * {@link MethodHandle}, without mixins. World is {@code WorldIdentifier.of(Level)}. If unavailable, log one line,
  * tell the server Voxy is absent, and receive no packets. Voxy 0.2.16 (via Roxy) accepts sections from any thread:
- * decoding and ingestion run on the network thread.
+ * decoding and ingestion run on Incoming's serial horizon worker.
  * <p>
  * Remember which chunks the client received from the mod in this world ({@link #ours}): if LOD Server Support later
  * writes the same chunk from the server's disk to Voxy (its first check; no distant ruins on disk), the client names
@@ -108,8 +108,13 @@ public final class VoxyIngest {
     }
 
     /** Network receipt holds the encoded sections until their authoritative front time. */
-    static void accept(S2C.VoxyChunk p) {
-        ClientLevel level = Minecraft.getInstance().level;
+    static void accept(S2C.VoxyChunk p, net.neoforged.neoforge.network.handling.IPayloadContext context) {
+        var minecraft = Minecraft.getInstance();
+        var connection = minecraft.getConnection();
+        // The dimension name alone is not a session identity: a late packet from a closed connection must
+        // never enter the new world's queue, even when both servers call the dimension "overworld".
+        if (connection == null || connection.getConnection() != context.connection()) return;
+        ClientLevel level = minecraft.level;
         if (!available() || level == null || Replay.active() || !level.dimension().location().equals(p.dimension())) return;
         if (!ClientHorizon.offer(level, p)) STALE.add(ChunkPos.asLong(p.x(), p.z()));
     }

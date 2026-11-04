@@ -57,7 +57,7 @@ paths:
   (`C2S.LodMods` on entry) via `S2C.VoxyChunk`, except players viewing that chunk (their Voxy rebuilds it itself), no
   farther than `FarLods.FAR_CHUNKS`; the client submits sections with static
   `VoxelIngestService.rawIngest(WorldIdentifier, section, x, y, z, blockLight, skyLight)` via `MethodHandle`
-  (`client/VoxyIngest`; LOD Server Support does the same, `compat/VoxyCompat`) on the network thread. Voxy is client-only:
+  (`client/VoxyIngest`; LOD Server Support does the same, `compat/VoxyCompat`) on the serial `ClientHorizon` worker. Voxy is client-only:
   dedicated servers do not have it, hence a packet rather than a server call. Section light is supplied; Voxy does not
   calculate it: null means dark (black LODs); loaded chunks use the world's light engine (missing sky layer above
   terrain = 15), copies use `compat/CopyLight` from their blocks within the chunk (disk light would keep a dark district
@@ -75,10 +75,9 @@ paths:
   Netty still gates every chunk: active/writable, at least 16 KiB headroom, no more than 32 KiB pending even with a
   raised watermark, and at most one outstanding chunk write including event-loop dispatch. A large indivisible
   chunk can cross the watermark once. There is no fixed byte-rate throttle. The waiting queue holds at most 48 MiB;
-  a fresh copy replaces a waiting copy. `VoxyLods.room` gates `DhUpdates`, `FarLods` and `FrontLods`, even with DH:
+  a fresh copy at the same coordinate/event/deadline replaces its waiting revision (different event deadlines stay separate). The server selects one immutable bounded batch; write callbacks advance it on the Netty event loop without waiting another server tick. `VoxyLods.room` gates `DhUpdates`, `FarLods` and `FrontLods`, even with DH:
   excess updates for Voxy players would otherwise be lost. Copy engine light layers (`getData` fills the live layer
-  for a uniform one); a heavy-zone copy goes to DH `DhUpdates.LEAD` before the front, but Voxy ingests immediately —
-  give it a “not before front” deadline (`VoxyLods.send(…, notBefore)`). Regressions: `VoxyLodsTest`, `LodBatchFlowTest`
+  for a uniform one); a heavy-zone copy goes to DH `DhUpdates.LEAD` before the front, and Voxy receives its “not before front” deadline and detonation identity (`VoxyLods.sendChanged`). `ClientHorizon` holds encoded sections until the same client event clock used by the wave reaches that deadline. Exact before/after section comparisons include light and newly empty sections; unchanged sections carry skip flags. Unknown baselines still send full columns. Regressions: `VoxyLodsTest`, `LodBatchFlowTest`
   and GameTest batch `voxy_backpressure`.
 - LOD Server Support 0.19/0.20 (server) observes `ChunkSerializer.write` at RETURN, not block-change events:
   `ChunkSaveDataHook` → `ServerReceiverGlue.onChunkSaveData` → `DirtyContentFilter.observeSave`. It hashes serialized
@@ -102,3 +101,14 @@ paths:
   chunks without a player visit; later clients depend on LSS's ordinary save/store invalidation. This must be tested
   separately from Incoming's immediate copy delivery. Packets are not ingested during Flashback replay (Voxy shows
   the live database there).
+
+- MT-B3 horizon buffer: 24 MiB queued encoded columns and 24 MiB retained repair sections, plus bounded worker/codec
+  scratch and bookkeeping (these are not total client heap/GPU limits). A local repair merges changed section spans,
+  not individual block intentions. Same-section plans still require authoritative chronological composition upstream.
+  Repair retention is session-local and evicts by bytes; it does not solve late join/reconnect or immutable stale
+  replay. LSS's public void consumer cannot veto another consumer. A zero Voxy task count is not an in-progress
+  worker/renderer fence. Never claim the city cannot transiently return from a successful later readback.
+  `ClientHorizon.reset()` invalidates queued work and returns an asynchronous barrier behind already submitted
+  Incoming worker calls; it does not cancel/fence foreign Voxy work. No lock used by a tick may span a Voxy database
+  read. The dev probe's `WitnessesTest` holds a read open while producer/reset progress. Durations from nanoTime
+  are elapsed times, not CPU times. The development panorama is not a real-city preparation or end-to-end 512 MiB proof.

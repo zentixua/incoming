@@ -51,7 +51,7 @@ import java.util.concurrent.atomic.AtomicInteger;
 public final class LodBufferScenario {
     private static final boolean SERVER_TRANSPORT = Boolean.getBoolean("incoming.lodProbe.serverTransport");
     private static final boolean PRODUCTION = !Boolean.getBoolean("incoming.lodProbe.control");
-    private static final int SECTIONS = 24, CHANGED = 4, WINDOW = 1024, PASS = 32;
+    private static final int SECTIONS = 24, CHANGED = 4, WINDOW = 16384, PASS = 32;
     private static final boolean CHANGED_ONLY = Boolean.getBoolean("incoming.lodProbe.changedOnly");
     private static final long BYTES = 48L << 20;
     private static LodBufferScenario active;
@@ -65,6 +65,7 @@ public final class LodBufferScenario {
     private volatile long burstTick, received;
     private volatile boolean done, failed, replayRequested;
     private volatile int replayFrame = -1;
+    private volatile int replayRound;
     private volatile Producer producer;
     private Thread worker;
     private boolean opened, started;
@@ -212,7 +213,7 @@ public final class LodBufferScenario {
         lastFrame = t;
         if (phase == 2 && replayFrame >= 0 && replayFrame < 90) {
             var mc = Minecraft.getInstance();
-            String name = String.format(Locale.ROOT, "replay_%03d_tick%d.png", replayFrame++, now);
+            String name = String.format(Locale.ROOT, "replay_%d_%03d_tick%d.png", replayRound, replayFrame++, now);
             Screenshot.grab(mc.gameDirectory, name, mc.getMainRenderTarget(), c -> {});
             log("REPLAY_FRAME file=%s now=%d", name, now);
         }
@@ -314,18 +315,19 @@ public final class LodBufferScenario {
     }
     private void witness() throws ReflectiveOperationException {
         if (readback == null) readback = new LodProbeReadback(Minecraft.getInstance().level);
-        List<LodProbeWire.Column> checking;
-        synchronized (witnesses) { checking = List.copyOf(witnesses); }
-        for (var p : checking) {
-            // acquireIfExists may block on disk. Never hold the monitor used by Producer.tick here.
-            boolean matches = readback.air(p.column().x() * 16 + 8, 120, p.column().z() * 16 + 8) == (p.phase() == 1);
-            synchronized (witnesses) {
-                if (matches && p.epoch() == epoch && witnesses.remove(p)) {
-                    log("DB_READY epoch=%d x=%d z=%d due=%d seen=%d lateTicks=%d", epoch, p.column().x(), p.column().z(), p.due(), now, Math.max(0, now - p.due()));
-                    sampled++;
-                }
+        ua.zentix.incoming.scenario.lod.Witnesses.check(witnesses, p -> {
+            try {
+                // acquireIfExists may block on disk. Producer.tick and phase reset must remain independent.
+                return readback.air(p.column().x() * 16 + 8, 120, p.column().z() * 16 + 8) == (p.phase() == 1);
+            } catch (ReflectiveOperationException e) {
+                throw new IllegalStateException("Voxy witness failed", e);
             }
-        }
+        }, p -> {
+            if (p.epoch() == epoch) {
+                log("DB_READY epoch=%d x=%d z=%d due=%d seen=%d lateTicks=%d", epoch, p.column().x(), p.column().z(), p.due(), now, Math.max(0, now - p.due()));
+                sampled++;
+            }
+        });
     }
 
     /** Public LSS dispatch is observational: consumers cannot veto another consumer. Repair only after ingest drains. */
@@ -351,15 +353,27 @@ public final class LodBufferScenario {
             // Prime the production repair cache for this coordinate even if the panorama evicted it.
             ClientHorizon.offer(mc.level, packet);
             waitTicks(20);
-            replayFrame = 0; // recording starts BEFORE the stale producer is dispatched
-            waitTicks(2);
             for (int round = 0; round < 2; round++) {
+                replayRound = round;
+                replayFrame = 0; // Each sequence starts BEFORE its stale producer is dispatched.
+                waitTicks(2);
                 long began = System.nanoTime();
                 dev.vox.lss.api.LSSApi.dispatchColumn(mc.level, mc.level.dimension(), x, z, new dev.vox.lss.api.VoxelColumnData(data, 1));
                 log("REPLAY_DISPATCH round=%d tick=%d production=true", round, now);
-                waitTicks(40);
+                long endTick = now + 40, firstStale = -1, lastStale = -1, samples = 0;
+                while (!done && now < endTick) {
+                    // Database reads are witnesses, not a renderer fence. Never hold a tick-facing monitor here.
+                    if (!readback.air(x * 16 + 8, 120, z * 16 + 8)) {
+                        long elapsed = System.nanoTime() - began;
+                        if (firstStale < 0) firstStale = elapsed;
+                        lastStale = elapsed;
+                        samples++;
+                    }
+                    Thread.sleep(2);
+                }
                 if (!readback.air(x * 16 + 8, 120, z * 16 + 8)) { fail("production replay repair did not converge"); return; }
-                log("REPLAY_REPAIRED round=%d tick=%d elapsedMs=%.4f production=true", round, now, (System.nanoTime() - began) / 1e6);
+                log("REPLAY_OBSERVATION round=%d tick=%d observationElapsedMs=%.4f staleSamples=%d firstStaleElapsedMs=%.4f lastStaleElapsedMs=%.4f converged=true production=true",
+                        round, now, (System.nanoTime() - began) / 1e6, samples, firstStale / 1e6, lastStale / 1e6);
             }
             waitTicks(80);
             log("COMPLETE production panorama and replay probe");
@@ -433,7 +447,7 @@ public final class LodBufferScenario {
         void reset() {
             envelope = new LodPanorama(radius(yields[which]));
             prepared = exhausted = false; pending = null; sent = acked = count = 0; completed = -1;
-            credits = Math.min(WINDOW, (int) (BYTES / Math.max(intact.length, ruined.length)));
+            credits = Math.min(WINDOW, (int) (BYTES / (stage == 0 ? intact.length : ruined.length)));
             event = detonation(yields[which], level.getGameTime() + 200);
         }
         void ack(LodProbeWire.Ack p) { if (p.epoch() == generation) { credits += p.count(); acked += p.count(); } }

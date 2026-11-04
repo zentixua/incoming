@@ -72,8 +72,10 @@ public final class ClientLodBatches {
             if (!VoxyIngest.available()) context.reply(new C2S.LodMods(false));
             context.reply(ack);
         } else {
-            // One poll per tick, on the event loop: never wait/block here or queue work on the game thread.
-            channel.eventLoop().schedule(() -> replyWhenReady(context, batch), 50, TimeUnit.MILLISECONDS);
+            // Poll service completion independently of the game tick. A 50 ms polling floor becomes part of
+            // vanilla's receive-rate sample and falsely throttles a batch that drained in a few milliseconds.
+            // There is still only one outstanding poll per connection; never block either thread.
+            channel.eventLoop().schedule(() -> replyWhenReady(context, batch), 2, TimeUnit.MILLISECONDS);
         }
     }
 

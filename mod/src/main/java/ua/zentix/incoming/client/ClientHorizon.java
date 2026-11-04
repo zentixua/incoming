@@ -14,12 +14,13 @@ import java.util.concurrent.Executors;
 /** Client-owned deadline queue. The only external calls run on a serial worker, outside every tick-facing lock. */
 final class ClientHorizon {
     static final long QUEUED_BYTES = 24L << 20, REPAIR_BYTES = 24L << 20;
+    private static final int QUEUED_COLUMNS = 16384;
     private static final ScheduledExecutorService WORKER = Executors.newSingleThreadScheduledExecutor(r -> {
         Thread thread = new Thread(r, "Incoming horizon");
         thread.setDaemon(true);
         return thread;
     });
-    private static final TimedLodBuffer<S2C.VoxyChunk> QUEUE = new TimedLodBuffer<>(8192, QUEUED_BYTES);
+    private static final TimedLodBuffer<S2C.VoxyChunk> QUEUE = new TimedLodBuffer<>(QUEUED_COLUMNS, QUEUED_BYTES);
     private static final LinkedHashMap<Long, S2C.VoxyChunk> REPAIR = new LinkedHashMap<>();
     private static ClientLevel world;
     private static long repairBytes;
@@ -52,7 +53,7 @@ final class ClientHorizon {
 
     static synchronized long bytes() { return QUEUE.bytes() + repairBytes; }
 
-    static synchronized boolean full() { return QUEUE.bytes() >= QUEUED_BYTES - (1 << 20) - 128 || QUEUE.size() >= 8192 - 64; }
+    static synchronized boolean full() { return QUEUE.bytes() >= QUEUED_BYTES - (1 << 20) - 128 || QUEUE.size() >= QUEUED_COLUMNS - 64; }
 
     static synchronized void tick(ClientLevel level, long now) {
         if (world != level) return;

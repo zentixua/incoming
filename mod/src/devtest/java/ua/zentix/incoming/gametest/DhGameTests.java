@@ -537,7 +537,8 @@ public final class DhGameTests {
      * {@code max(detonation, front arrival at DH section center − LEAD)}; one DH section (4×4 chunks) in one tick, once:
      * a {@code FarLods} request on wave arrival (and light from a quarter blacked out by detonation) does not repeat it.
      * Log output is delivery minus front arrival by chunk. The receiver immediately sends DH write confirmation (absent
-     * without DH). Flight and wave run at game pace: disk reads, plans and copies follow wall-clock time.
+     * without DH). Await actual asynchronous preparation first, then move the deadline near the current tick;
+     * the flight/front assertions advance only by game ticks, without pacing sleeps.
      */
     @GameTest(template = "range", timeoutTicks = 6000, batch = "dh_front", skyAccess = true)
     public static void heavyZoneLodsGoWithTheFront(GameTestHelper h) {
