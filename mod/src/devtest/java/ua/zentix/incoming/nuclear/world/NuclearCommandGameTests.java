@@ -140,6 +140,38 @@ public final class NuclearCommandGameTests {
         h.succeed();
     }
 
+    @GameTest(template = "range", batch = "nuke_command_tracking", skyAccess = true)
+    public static void preparedCommandPreservesUnrestrictedTargetTrackingAfterLaunch(GameTestHelper h) throws ReflectiveOperationException {
+        setup(h);
+        var level = h.getLevel();
+        boolean carriers = IncomingConfig.SERVER.carrierNukes.get();
+        IncomingConfig.SERVER.carrierNukes.set(true);
+        var quarry = h.spawn(net.minecraft.world.entity.EntityType.PIG, new BlockPos(32, 5, 32));
+        var target = new Target.OfEntity(quarry.getUUID(), Vec3.ZERO, Vec3.ZERO);
+        Vec3 point = target.resolve(level).orElseThrow();
+        var carrier = Loadout.DEFAULT.withWeapon(WeaponType.MISSILE).withNuke(new Loadout.Nuke(1, false, true));
+        h.assertTrue(NuclearCommands.request(level, "command-tracking-test", 0, carrier,
+                new ServerActions.Aim(target, point, null), Waypoints.NONE, null), "command refused");
+        UUID handle = handle(level);
+        StrikeGameTests.afterTest(h, () -> {
+            ua.zentix.incoming.strike.VirtualFlights.get(level).clear(level, p -> handle.equals(p.ownerId()));
+            RuinPreparation.cancel(level, handle);
+            IncomingConfig.SERVER.carrierNukes.set(carriers);
+            quarry.discard();
+        });
+        ready(level, handle, point);
+        tick(level);
+        var projectile = ua.zentix.incoming.strike.VirtualFlights.get(level).flights().stream()
+                .filter(p -> handle.equals(p.ownerId())).findFirst().orElseThrow();
+        h.assertTrue(projectile.target().subject() instanceof Target.OfEntity entity && entity.uuid().equals(quarry.getUUID()),
+                "prepared commit replaced an unrestricted entity order with a stationary point");
+        Vec3 before = projectile.target().resolve(level).orElseThrow();
+        quarry.setPos(quarry.position().add(2, 0, 0));
+        Vec3 after = projectile.target().resolve(level).orElseThrow();
+        h.assertTrue(after.distanceTo(before.add(2, 0, 0)) < 1e-6, "accepted carrier lost its existing target movement law");
+        h.succeed();
+    }
+
     private static NuclearCommands state(ServerLevel level) throws ReflectiveOperationException {
         return (NuclearCommands) field(StrikeWorld.get(level), "commands").get(StrikeWorld.get(level));
     }

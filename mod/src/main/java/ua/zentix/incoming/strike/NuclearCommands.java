@@ -112,9 +112,9 @@ public final class NuclearCommands {
             Vec3 resolved = status.resolvedTarget();
             if (resolved == null) { remove(level, e); continue; }
             entries.remove(e.id);
-            // Freeze the accepted geometry: no entity tracking or later Ground refinement can move prepared work.
+            // Commit the exact prepared point while preserving the target's existing in-flight tracking law.
             ServerActions.Aim aim = new ServerActions.Aim(e.aim.target() instanceof Target.Ground
-                    ? new Target.Ground(resolved) : new Target.Point(resolved), resolved, e.aim.label());
+                    ? new Target.Ground(resolved) : e.aim.target(), resolved, e.aim.label());
             boolean accepted = false;
             try {
                 accepted = e.player == null

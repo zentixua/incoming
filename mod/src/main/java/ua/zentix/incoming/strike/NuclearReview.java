@@ -229,7 +229,7 @@ public final class NuclearReview {
         state.entry = null; // consume before payment or dispatch: duplicates cannot launch twice
         var l = e.order.loadout();
         Vec3 resolved = RuinPreparation.status(p.serverLevel(), e.id).resolvedTarget();
-        ServerActions.Aim aim = new ServerActions.Aim(e.aim.target() instanceof Target.Ground ? new Target.Ground(resolved) : new Target.Point(resolved),
+        ServerActions.Aim aim = new ServerActions.Aim(e.aim.target() instanceof Target.Ground ? new Target.Ground(resolved) : e.aim.target(),
                 resolved, e.aim.label());
         LaunchOrigin from = e.order.from().map(at -> (LaunchOrigin) new LaunchOrigin.Place(at)).orElse(null);
         boolean accepted = ServerActions.strikePrepared(p, l.weapon(), 1, 0, aim, l.nuke(), e.order.via(), from, true, e.id);
