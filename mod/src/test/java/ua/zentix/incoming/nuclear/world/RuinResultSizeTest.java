@@ -50,6 +50,16 @@ class RuinResultSizeTest {
     }
 
     @Test
+    void fragmentFieldLawIncludesStampTreesBothListsAndRemovedPositions() {
+        long expected = 64 + 56 + 24 + 16 + 9 * 8 + 16 + 20 * 4 + 2 * (24 + 16)
+                + 8 * (10 + 10) + 2 * (16 + 3 * 8);
+        assertEquals(expected, RuinPlan.fragmentBytes(20, 9, 2, 2, 6));
+        var fields = Set.of("stamp", "minY", "removed", "trees", "treeLogs");
+        for (var field : Blast.class.getDeclaredFields()) if (!Modifier.isStatic(field.getModifiers()))
+            assertTrue(fields.contains(field.getName()), "New retained fragment field needs a law: " + field);
+    }
+
+    @Test
     void maximumEncodedDimensionsCannotOverflowElementArithmetic() {
         long cells = 256L * 4096, fires = cells + 256, fluids = 18L * 18 * 4096;
         long bytes = RuinPlan.sourceBytes(cells, cells, 1024, fires, 3840, cells, 256, 256, 256,
