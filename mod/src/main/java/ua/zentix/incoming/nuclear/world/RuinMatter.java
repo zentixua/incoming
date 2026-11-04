@@ -45,21 +45,34 @@ public final class RuinMatter extends LedgerData {
     private int strandedCount;
     private long movingBytes, strandedBytes, supportBacking;
 
+    /** Deferred source plus its eventual contact-map growth, already charged by retainedBytes. */
+    private static final long SUPPORT_SOURCE_BYTES = 4096;
+    private static final long SUPPORT_ENTRY_BYTES = 256;
+    /** Worst case: one new provenance entry, material balance, palette state and inventory slot per removal. */
+    private static final long REMOVAL_INDEX_BYTES = SUPPORT_ENTRY_BYTES + 512 + 96 + 64;
+
     /** Conservative owned representation, including cargo and collection growth slack; the frozen save shares this owner. */
     long retainedBytes() {
-        supportBacking = Math.max(supportBacking, 2048L + supportSources.size() * 4096L
-                + supports.size() * 256L + uncertain.size() * 256L + originals.size() * 256L);
+        supportBacking = Math.max(supportBacking, 2048L + supportSources.size() * SUPPORT_SOURCE_BYTES
+                + supports.size() * SUPPORT_ENTRY_BYTES + uncertain.size() * SUPPORT_ENTRY_BYTES + originals.size() * SUPPORT_ENTRY_BYTES);
         inventoryCapacity = Math.max(inventoryCapacity, inventories.size());
         return IO_BYTES + 1024L + movingBytes + moving.bytes() + strandedBytes + palette.bytes()
                 + inventoryCapacity * 64L + supportBacking
-                + Math.max(0, supportSources.bytes() - 4096L * supportSources.size())
+                + Math.max(0, supportSources.bytes() - SUPPORT_SOURCE_BYTES * supportSources.size())
                 + materials.size() * 512L + (search == null ? 2048 : search.retainedBytes());
     }
 
     long queueGrowthBytes(int pieces) { return moving.growthBytes(pieces) + supportSources.growthBytes(pieces); }
 
+    /** Capture objects coexist with the published compact rows and their indexes. Cargo grows
+     * the reservation separately before mutation. Reserve each ownership term once, rather
+     * than an unrelated per-cell envelope: dense ready chunks must fit when these owners fit. */
+    long removalBytes(int pieces) {
+        return pieces * (512L + SUPPORT_SOURCE_BYTES + REMOVAL_INDEX_BYTES) + queueGrowthBytes(pieces);
+    }
+
     static long removalBytes(ServerLevel level, Piece piece) {
-        return piece.retainedBytes() + 8192 + get(level).queueGrowthBytes(1);
+        return get(level).removalBytes(1) + piece.retainedBytes() - 512;
     }
 
 

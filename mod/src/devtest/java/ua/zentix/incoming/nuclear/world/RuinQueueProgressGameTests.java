@@ -71,6 +71,7 @@ public final class RuinQueueProgressGameTests {
         ServerLevel level = h.getLevel();
         var bean = (ThreadMXBean) ManagementFactory.getThreadMXBean();
         h.assertTrue(bean.isThreadAllocatedMemorySupported(), "Allocator measurement is unavailable");
+        boolean allocationWasEnabled = bean.isThreadAllocatedMemoryEnabled();
         bean.setThreadAllocatedMemoryEnabled(true);
         long thread = Thread.currentThread().threadId();
         try {
@@ -116,6 +117,7 @@ public final class RuinQueueProgressGameTests {
         } finally {
             NuclearStrikes.clear(level);
             RuinMatterGameTests.clearFixture(level);
+            bean.setThreadAllocatedMemoryEnabled(allocationWasEnabled);
         }
         h.succeed();
     }
