@@ -159,6 +159,11 @@ paths:
   must not silently cancel a paid pending warning. Ordinary owner Abort cancels unpaid reviews/commands while
   preserving accepted paid nuclear orders. Preserve the accepted Ground Y through continuation; resolving
   `Target.Ground` again changes its surface convention by half a block and invalidates exact readiness.
+- Normal carrier preparation selects its spec miss once per request lifetime on the server. Launch consumes that
+  sample without another draw. Keep the accepted unshifted `resolvedTarget` separate from nominal terminal geometry:
+  Ground missile uses canopy-inclusive top minus 0.5 with the no-leaves ground clamp, B-2 uses no-leaves top minus
+  0.5. Fixed point/ground nominal reuse does not cover unrestricted entity/craft target-resolution laws or earlier
+  contacts; exact burst and ground equality must remain. Carrier authority fixtures use `prepareCarrier` too.
 - ICBM binding uses its actual scheduled ID before warnings. Carriers use an explicit one-shot identity through
   save/virtual transitions/B-2 payload transfer; detonation forwards that identity to the backend. No geometry
   proximity lookup identifies a request. Physical off-target/penetrating impacts must not be snapped to cache

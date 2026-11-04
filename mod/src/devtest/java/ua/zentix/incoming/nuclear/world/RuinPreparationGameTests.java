@@ -269,6 +269,34 @@ public final class RuinPreparationGameTests {
         h.succeed();
     }
 
+    @GameTest(template = "range", batch = "nuke_prelaunch_event_marker", skyAccess = true)
+    public static void handedOffContextUsesActualScarIdentity(GameTestHelper h) throws ReflectiveOperationException {
+        var level = h.getLevel(); var grid = RuinStorageGameTests.fixture(h, true);
+        Vec3 target = new Vec3(grid.centre().getMiddleBlockX(), grid.ctx().d.groundY(), grid.centre().getMiddleBlockZ());
+        UUID handle = UUID.randomUUID(), owner = UUID.randomUUID();
+        RuinPreparation.prepare(level, handle, owner, target, 15, false, true);
+        try {
+            Object p = request(level, handle);
+            var geometry = NuclearWarhead.geometry(level, target, 15, true, (float) IncomingConfig.SERVER.effectsScale());
+            var ctx = new RuinContext(level, geometry);
+            field(p, "geometry").set(p, geometry); field(p, "resolvedTarget").set(p, target); field(p, "ruins").set(p, ctx);
+            int identity = RuinPreparation.bindCarrier(level, handle, owner, target, 15, false, true);
+            h.assertTrue(identity >= 0, "Marker handoff fixture did not bind");
+            var event = new ua.zentix.incoming.nuclear.Detonation(1_900_778, geometry.burst(), geometry.groundY(), geometry.yieldKt(), geometry.surface(),
+                    level.getGameTime(), 0, 0, geometry.visibility(), 0, geometry.scale(), false, geometry.wave());
+            var ready = NuclearWorld.get(level).prep().handOff(level, event, level.getGameTime(), identity);
+            h.assertTrue(ready != null && ready.ruins() == ctx, "Actual handoff did not transfer preparation context");
+            var original = grid.at(0, 0).saved(); var states = original.states().clone();
+            int y = (int) grid.ctx().d.groundY() + 5, section = (y - original.minY()) >> 4;
+            states[section] = RuinPlan.copyStates(states[section]);
+            states[section].set(7, y & 15, 7, net.minecraft.world.level.block.Blocks.BEDROCK.defaultBlockState());
+            var current = new DiskShots.Read(grid.centre(), original.minY(), states, original.heights(), 0, null, 0, event.id());
+            h.assertTrue(ctx.restoreArchived(grid.centre().toLong(), original.encode(), current),
+                    "Preparation geometry ID -1 rejected an original belonging to the actual scarred event");
+        } finally { RuinPreparation.cancel(level, handle); }
+        h.succeed();
+    }
+
     @GameTest(template = "range", batch = "nuke_prelaunch_frozen_hint", timeoutTicks = 600, skyAccess = true)
     public static void detonationDoesNotWaitForFrozenArchiveHint(GameTestHelper h) throws Exception {
         var level = h.getLevel(); UUID handle = UUID.randomUUID(), owner = UUID.randomUUID();
@@ -323,10 +351,14 @@ public final class RuinPreparationGameTests {
                         NuclearEvents.ScheduledStrike.class, p.getClass(), WorkClock.class);
                 work.setAccessible(true);
                 // Avoid an unrelated asynchronous policy calculation; geometry is the acceptance here.
-                field(prep, "policy").set(prep, java.util.concurrent.CompletableFuture.completedFuture("0".repeat(64)));
-                field(prep, "policyGeneration").setInt(prep, Blast.generation);
-                var clock = WorkClock.counting(1_000_000); clock.start(10_000_000);
-                work.invoke(prep, level, null, p, clock);
+                var policy = field(prep, "policy"); Object previousPolicy = policy.get(prep);
+                var generation = field(prep, "policyGeneration"); int previousGeneration = generation.getInt(prep);
+                try {
+                    policy.set(prep, java.util.concurrent.CompletableFuture.completedFuture("0".repeat(64)));
+                    generation.setInt(prep, Blast.generation);
+                    var clock = WorkClock.counting(1_000_000); clock.start(10_000_000);
+                    work.invoke(prep, level, null, p, clock);
+                } finally { policy.set(prep, previousPolicy); generation.setInt(prep, previousGeneration); }
                 var ordinaryTarget = NuclearWarhead.surfaceAt(level, target);
                 var ordinary = NuclearWarhead.geometry(level, ordinaryTarget, 1, false, (float) IncomingConfig.SERVER.effectsScale());
                 var geometry = (ua.zentix.incoming.nuclear.Detonation) field(p, "geometry").get(p);

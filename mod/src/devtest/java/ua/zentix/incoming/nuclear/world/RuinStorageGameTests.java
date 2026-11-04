@@ -152,9 +152,6 @@ public final class RuinStorageGameTests {
                 .resolve("data/ruin-source-test-" + java.util.UUID.randomUUID());
         var info = new RegionStorageInfo("gametest", level.dimension(), "incoming_preparation");
         var pages = new RuinPages(info, root);
-        var result = pages.write(key, payload::encode).thenCompose(unused -> pages.close())
-                .thenApply(unused -> new RuinPages(info, root))
-                .thenCompose(store -> store.read(key).thenCompose(tag -> store.close().thenApply(unused -> tag)));
         var unchanged = new DiskShots.Read(grid.centre(), payload.minY(), payload.states(), payload.heights(), 0, null, 0);
         var changed = payload.states().clone();
         int y = (int) grid.ctx().d.groundY() + 5, section = (y - payload.minY()) >> 4;
@@ -162,6 +159,10 @@ public final class RuinStorageGameTests {
         changed[section].set(7, y & 15, 7, Blocks.BEDROCK.defaultBlockState());
         var edited = new DiskShots.Read(grid.centre(), payload.minY(), changed, payload.heights(), 0, null, 0);
         var scarred = new DiskShots.Read(grid.centre(), payload.minY(), changed, payload.heights(), 0, null, 0, grid.ctx().d.id());
+        // Finish the fixture's independent copy before asynchronous encoding acquires the same palette.
+        var result = pages.write(key, payload::encode).thenCompose(unused -> pages.close())
+                .thenApply(unused -> new RuinPages(info, root))
+                .thenCompose(store -> store.read(key).thenCompose(tag -> store.close().thenApply(unused -> tag)));
         h.succeedWhen(() -> {
             h.assertTrue(result.isDone(), "Cache close/reopen still running");
             var data = result.join().orElseThrow();
@@ -226,6 +227,8 @@ public final class RuinStorageGameTests {
         h.assertTrue(java.util.Arrays.equals(old.gone, now.gone), sample + ": fallen positions");
         h.assertTrue(java.util.Arrays.equals(old.drained, now.drained), sample + ": drained positions");
         h.assertTrue(old.changes.equals(now.changes), sample + ": changed states");
+        h.assertTrue(java.util.Arrays.equals(old.changes.keySet().toLongArray(), now.changes.keySet().toLongArray()),
+                sample + ": structural candidate order feeding the material FIFO");
         h.assertTrue(java.util.Arrays.equals(old.removed, now.removed), sample + ": removed counts");
         h.assertTrue(java.util.Arrays.equals(old.wood, now.wood), sample + ": wood counts");
         h.assertTrue(java.util.Arrays.equals(old.ground, now.ground), sample + ": ground heights");
@@ -257,6 +260,8 @@ public final class RuinStorageGameTests {
             h.assertTrue(java.util.Arrays.equals(old.gone, now.gone), sample + ": fallen positions");
             h.assertTrue(java.util.Arrays.equals(old.drained, now.drained), sample + ": drained positions");
             h.assertTrue(old.changes.equals(now.changes), sample + ": changed states");
+        h.assertTrue(java.util.Arrays.equals(old.changes.keySet().toLongArray(), now.changes.keySet().toLongArray()),
+                sample + ": structural candidate order feeding the material FIFO");
             h.assertTrue(java.util.Arrays.equals(old.removed, now.removed), sample + ": removed counts");
             h.assertTrue(java.util.Arrays.equals(old.wood, now.wood), sample + ": wood counts");
             h.assertTrue(java.util.Arrays.equals(old.ground, now.ground), sample + ": ground heights");

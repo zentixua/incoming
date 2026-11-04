@@ -44,7 +44,7 @@ public final class SceneDepth {
     private static final int[] VIEWPORT = new int[4];
     /** Last frame's layer occlusion: 0 — none, 1 — world, 2 — world and LOD. */
     private static int last;
-    /** Run diagnostics ({@code -Dincoming.nukeDiag=true}): distance column once per second, see {@link #diag}. */
+    /** Explicit readback diagnostics ({@code -Dincoming.nukeDiag=true}): distance columns and LOD coverage. */
     private static final boolean DIAG = Boolean.getBoolean("incoming.nukeDiag");
     private static final float[] DIAG_ROWS = {0.1f, 0.3f, 0.45f, 0.55f, 0.65f, 0.75f, 0.9f};
     private static long nextDiag;
@@ -210,10 +210,10 @@ public final class SceneDepth {
         return -v.z / v.w;
     }
 
-    /** Last frame's layer occlusion — for the scenario line. */
+    /** Last frame's layer occlusion. Ordinary timing probes must not synchronize with the GPU. */
     static String describe() {
         return switch (last) {
-            case 2 -> "world and LOD (" + LOD.describe() + lodShare() + ")";
+            case 2 -> "world and LOD (" + LOD.describe() + (DIAG ? lodShare() : "") + ")";
             case 1 -> "world";
             default -> "none";
         };
@@ -221,7 +221,7 @@ public final class SceneDepth {
 
     /**
      * Frame fraction with LOD beyond Minecraft render distance behind the pixel, and their nearest distance — from the read-back
-     * distance texture (waits for GPU: only for the scenario line).
+     * distance texture (waits for GPU: only for explicit readback diagnostics).
      */
     private static String lodShare() {
         if (texture < 0 || width <= 0) return "";

@@ -72,6 +72,7 @@ class RuinWorkersTest {
             queued.cancel(false);
             org.junit.jupiter.api.Assertions.assertTrue(executor.getQueue().isEmpty());
             assertEquals(0, counts.get(2));
+            org.junit.jupiter.api.Assertions.assertTrue(RuinWorkers.finished(queued));
             // An executor/cancellation race may still call run; accounting must be exactly once.
             queued.run();
             assertEquals(0, counts.get(2));
@@ -100,10 +101,12 @@ class RuinWorkersTest {
             running.cancel(false);
             org.junit.jupiter.api.Assertions.assertTrue(running.isDone());
             assertEquals(1, counts.get(0), "Future completion is not worker completion");
+            org.junit.jupiter.api.Assertions.assertFalse(RuinWorkers.finished(running), "retry must not overlap cancelled work");
             release.countDown();
             executor.shutdown();
             org.junit.jupiter.api.Assertions.assertTrue(executor.awaitTermination(5, java.util.concurrent.TimeUnit.SECONDS));
             assertEquals(0, counts.get(0));
+            org.junit.jupiter.api.Assertions.assertTrue(RuinWorkers.finished(running));
         } finally {
             release.countDown();
             executor.shutdownNow();

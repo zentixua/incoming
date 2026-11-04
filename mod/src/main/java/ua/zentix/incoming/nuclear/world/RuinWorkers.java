@@ -231,6 +231,15 @@ public final class RuinWorkers {
         return t;
     }
 
+    /** Completion ownership follows the actual callable, including promotion and queued cancellation. */
+    static <T> Future<T> submit(Callable<T> task, Priority priority, RuinInputs inputs) {
+        ThreadPoolExecutor executor = pool();
+        inputs.acquire();
+        Task<T> t = new Task<>(task, priority, IN_FLIGHT, executor, inputs::release);
+        execute(executor, t);
+        return t;
+    }
+
     /**
      * Executor at {@code priority}: disk-chunk parsing (I/O thread submits into pool), distant LOD copies.
      * Current pool (server thread): task arriving after shutdown rejected, never starts new pool from external thread.
@@ -266,11 +275,20 @@ public final class RuinWorkers {
         if (p == null || !(future instanceof Task<T> t) || t.owner != p || t.isDone()
                 || t.priority <= priority.ordinal() || !p.remove(t)) return null;
         // The removed future is terminal and releases its captured callable; only the new task owns it.
-        Callable<T> callable = t.callable;
+        Callable<T> callable;
+        Runnable onExit;
+        synchronized (t) {
+            callable = t.callable;
+            onExit = t.onExit;
+            t.onExit = null;
+        }
         t.cancel(false);
         t.uncount();
-        if (callable == null) return null; // cancelled concurrently after removal
-        Task<T> moved = new Task<>(callable, priority, t.counts, p);
+        if (callable == null) {
+            if (onExit != null) onExit.run();
+            return null; // cancelled concurrently after removal
+        }
+        Task<T> moved = new Task<>(callable, priority, t.counts, p, onExit);
         try {
             execute(p, moved);
         } catch (java.util.concurrent.RejectedExecutionException e) {
@@ -286,6 +304,11 @@ public final class RuinWorkers {
         return !(future instanceof Task<?> t) || t.started;
     }
 
+    /** A cancelled future is collectable only after its worker has released captured inputs. */
+    static boolean finished(Future<?> future) {
+        return future.isDone() && (!(future instanceof Task<?> task) || !task.counted.get());
+    }
+
     /**
      * Pool task: queue by priority, within priority by submission; priority count from submission to
      * actual completion; cancelled queued tasks release their slot immediately. Running cancellation
@@ -299,18 +322,25 @@ public final class RuinWorkers {
         @Nullable private final ThreadPoolExecutor owner;
         private final AtomicBoolean counted = new AtomicBoolean(true);
         private volatile boolean started;
+        @Nullable private Runnable onExit;
 
         Task(Callable<T> task, Priority priority) {
             this(task, priority, IN_FLIGHT, null);
         }
 
         Task(Callable<T> task, Priority priority, AtomicIntegerArray counts, @Nullable ThreadPoolExecutor owner) {
+            this(task, priority, counts, owner, null);
+        }
+
+        Task(Callable<T> task, Priority priority, AtomicIntegerArray counts, @Nullable ThreadPoolExecutor owner,
+             @Nullable Runnable onExit) {
             super(task);
             this.callable = task;
             this.priority = priority.ordinal();
             this.sequence = SEQUENCE.getAndIncrement();
             this.counts = counts;
             this.owner = owner;
+            this.onExit = onExit;
             counts.incrementAndGet(this.priority);
         }
 
@@ -334,8 +364,14 @@ public final class RuinWorkers {
             if (owner != null && owner.remove(this)) uncount();
         }
 
-        private void uncount() {
-            if (counted.compareAndSet(true, false)) counts.decrementAndGet(priority);
+        private synchronized void uncount() {
+            if (!counted.get()) return;
+            if (onExit != null) {
+                onExit.run();
+                onExit = null;
+            }
+            counts.decrementAndGet(priority);
+            counted.set(false);
         }
 
         @Override

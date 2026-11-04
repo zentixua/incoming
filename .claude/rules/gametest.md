@@ -114,6 +114,8 @@ paths:
   enables entity ticking in rings as neighbors become ready and releases at explosion end: on slow CI machines,
   falling at the area edge would hang — `CraterFalls` places it immediately. Each platform has an air layer beneath:
   the bomb fracture zone collapses the neighboring platform's floor.
+- Exact server aim assertions use `TargetTracker.point()`. `StrikeProjectile.aimPoint()` reads the synchronized
+  HUD `Vector3f`, which rounds X/Z at distant test coordinates; it is not an exact geometry certificate.
 - `StrikeService` launch offsets aim by the spec's miss (`WeaponSpec.Route#miss`, Shahed axial standard deviation 3 m):
   compare hits with the projectile's aim point (`aimPoint`), not the target. Explosion work uses counting clocks
   (`WorkClock.counting`) if the check depends on how it is split across ticks.
@@ -133,3 +135,14 @@ paths:
   restore it with `StrikeGameTests.afterTest`; retain dose/burn/health assertions and report the last damage source.
 
 - Delayed nuclear review tests that mutate/restore global config need separate batches too. Sharing `nuclear_review` let one completion restore ops-only/cap while another flow was requesting its revised order, producing an empty review despite a valid fixture.
+
+- Front LOD deadlines use a separate per-preparation send clock in `dh_front`: a stationary clock verifies the exact
+  section deadline, while `dh_front_budget` charges a full send budget per copy and verifies one whole section per
+  tick. Never assert a fixed tick latency for a wall-time-bounded burst on shared CI hardware. The production clock
+  remains `System.nanoTime`; both fixtures wait for completed asynchronous copies before arming their front.
+- `nuke_send_hold` fills ruin-worker admission until the first post-wave send request exercises the gate, then
+  releases workers and checks both the scar and actual glass removal. Cleanup releases the latch on failure too;
+  observing an incidental worker delay after the next GameTest callback is not a deterministic gate prerequisite.
+- Cold-ledger fixtures must unload the currently imported `RuinMatter` before restoring the previous SavedData
+  cache entry in each dimension. The imported instance may already hold a material ticket after background import;
+  restoring the old cache alone leaves an ownerless load (`nuke_ledger_cleanup`, then `nuke_stop`).

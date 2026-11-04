@@ -16,6 +16,7 @@ import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.IncomingConfig;
 import ua.zentix.incoming.entity.IcbmEntity;
 import ua.zentix.incoming.entity.LauncherEntity;
+import ua.zentix.incoming.entity.StrikeProjectile;
 import ua.zentix.incoming.gametest.MunitionGameTests.Listener;
 import ua.zentix.incoming.nuclear.NuclearEvents;
 import ua.zentix.incoming.nuclear.NuclearStrikes;
@@ -245,6 +246,9 @@ public final class NuclearKeyGameTests {
         h.assertTrue(StrikeWorld.projectiles(level).stream().anyMatch(projectile -> owner.getUUID().equals(projectile.ownerId())
                 && projectile.nuclearPreparation() >= 0), "dimension change refused prepared carrier launch");
         h.assertValueEqual(held(owner, ModItems.CRUISE_MISSILE.get()), 0, "armed carrier refunded instead of launching");
+        clearNuclearFlights(level);
+        h.assertTrue(StrikeWorld.projectiles(level).stream().noneMatch(p -> p instanceof IcbmEntity || p.isNuclear()),
+                "key fixture left a carrier able to detonate in a later batch");
         h.succeed();
     }
 
@@ -262,14 +266,19 @@ public final class NuclearKeyGameTests {
             NuclearCommands.cancelAll(level.getServer());
             NuclearKeys.cancelAll(level.getServer(), List.of(), null, "check completed");
             NuclearStrikes.clear(level);
-            VirtualFlights.get(level).clear(level, p -> p instanceof IcbmEntity);
-            level.getEntities(EntityTypeTest.forClass(IcbmEntity.class), e -> true).forEach(Entity::discard);
+            clearNuclearFlights(level);
             level.getEntitiesOfClass(LauncherEntity.class, h.getBounds().inflate(64)).forEach(Entity::discard);
             IncomingConfig.SERVER.nukeOpsOnly.set(opsOnly);
             IncomingConfig.SERVER.nukeFlightTime.set(flight);
         });
         IncomingConfig.SERVER.nukeOpsOnly.set(false);
         IncomingConfig.SERVER.nukeFlightTime.set(SHORT_FLIGHT);
+    }
+
+    private static void clearNuclearFlights(ServerLevel level) {
+        VirtualFlights.get(level).clear(level, p -> p instanceof IcbmEntity || p.isNuclear());
+        level.getEntities(EntityTypeTest.forClass(StrikeProjectile.class), p -> p instanceof IcbmEntity || p.isNuclear())
+                .forEach(Entity::discard);
     }
 
     private static Listener at(GameTestHelper h, String name, BlockPos pos) {

@@ -161,7 +161,8 @@ public final class StrikeService {
         Vec3 preparedPoint = point;
         boolean preparedSurface = target instanceof Target.Ground;
         // This launch's miss (spec): aim at shifted target, relative offset for entity.
-        Vec3 miss = spec.route().miss(level.random);
+        Vec3 miss = preparation == null ? spec.route().miss(level.random) : RuinPreparation.carrierMiss(level, preparation, weapon);
+        if (miss == null) return Result.FAILED;
         if (!miss.equals(Vec3.ZERO)) {
             target = target.offset(miss);
             point = point.add(miss);

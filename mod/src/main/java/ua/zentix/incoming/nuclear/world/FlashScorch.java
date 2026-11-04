@@ -266,7 +266,7 @@ public final class FlashScorch {
             long t0 = clock.begin();
             try {
                 RuinContext.Grid g = ctx.flashGrid(level, chunk.getPos(), true);
-                building.put(k, new Build(RuinWorkers.submit(() -> {
+                building.put(k, new Build(ctx.submitWorker(() -> {
                     RuinWorkers.checkStop();
                     return RuinPlanner.flash(g);
                 }, priority)));

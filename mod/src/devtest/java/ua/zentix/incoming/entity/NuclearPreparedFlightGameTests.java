@@ -74,7 +74,7 @@ public final class NuclearPreparedFlightGameTests {
         Vec3 target = Vec3.atCenterOf(h.absolutePos(new BlockPos(32, 1, 32)));
         Loadout.Nuke nuke = new Loadout.Nuke(1, false, true);
         try {
-            RuinPreparation.prepare(level, handle, owner, target, 1, false, false);
+            RuinPreparation.prepareCarrier(level, handle, owner, target, 1, false, false, WeaponType.MISSILE);
             makeReady(level, handle, target);
             var accepted = StrikeService.launchPrepared(level, WeaponType.MISSILE, new Target.Point(target), target, 0, owner, null,
                     false, nuke, Waypoints.NONE, null, handle, 1800);
@@ -114,7 +114,7 @@ public final class NuclearPreparedFlightGameTests {
         Vec3 target = Vec3.atCenterOf(h.absolutePos(new BlockPos(32, 1, 32)));
         Loadout.Nuke nuke = new Loadout.Nuke(1, false, true);
         try {
-            RuinPreparation.prepare(level, handle, owner, target, 1, false, false);
+            RuinPreparation.prepareCarrier(level, handle, owner, target, 1, false, false, WeaponType.BUNKER);
             makeReady(level, handle, target);
             h.assertTrue(StrikeService.launchPrepared(level, WeaponType.BUNKER, new Target.Point(target), target, 0, owner, null,
                     false, nuke, Waypoints.NONE, null, handle, 1800).ok(), "ready bomber rejected");
@@ -152,7 +152,10 @@ public final class NuclearPreparedFlightGameTests {
                     try { return handle.equals(field(p, "handle").get(p)) && !field(p, "draining").getBoolean(p); }
                     catch (ReflectiveOperationException e) { throw new AssertionError(e); }
                 }).findFirst().orElseThrow();
-        var geometry = NuclearWarhead.geometry(level, target, 1, false, (float) IncomingConfig.SERVER.effectsScale());
+        var weapon = (WeaponType) field(request, "carrierWeapon").get(request);
+        Vec3 terminal = target.add((Vec3) field(request, "miss").get(request));
+        if (weapon == WeaponType.BUNKER) terminal = NuclearWarhead.surfaceAt(level, terminal).add(0, -.5, 0);
+        var geometry = NuclearWarhead.geometry(level, terminal, 1, false, (float) IncomingConfig.SERVER.effectsScale());
         field(request, "geometry").set(request, geometry);
         var contextType = Class.forName("ua.zentix.incoming.nuclear.world.RuinContext");
         var constructor = contextType.getDeclaredConstructor(ServerLevel.class, ua.zentix.incoming.nuclear.Detonation.class);
