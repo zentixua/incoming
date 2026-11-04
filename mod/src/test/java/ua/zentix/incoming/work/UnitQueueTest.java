@@ -238,4 +238,69 @@ class UnitQueueTest {
         assertEquals(1, blocks.ended);
         assertEquals(3, blocks.blockedCalls, "one more check in the new window");
     }
+
+    @Test
+    void windowIncludesReadinessAndReleaseWithoutInflatingUnitEstimate() {
+        long[] now = {0};
+        int[] completed = {0};
+        WorkClock clock = WorkClock.decaying(() -> now[0], 1);
+        clock.start(100 * MS);
+        for (int i = 0; i < 2; i++) {
+            UnitQueue queue = new UnitQueue();
+            queue.add(0, costed(now, 3 * MS, 2 * MS, 4 * MS, completed));
+            queue.work(null, 0, clock);
+            assertEquals((i + 1) * 9 * MS, clock.usedThisTickNanos());
+        }
+        assertEquals(2, completed[0]);
+        assertEquals(2, clock.units());
+        assertEquals(2 * MS, clock.estimateNanos(), "readiness and release are not the next step's estimate");
+    }
+
+    @Test
+    void earlyWindowOverheadIsNotRefundedToTheLateWindow() {
+        long[] now = {0};
+        int[] completed = {0};
+        UnitQueue queue = new UnitQueue();
+        for (int i = 0; i < 100; i++) queue.add(0, costed(now, MS, MS, 0, completed));
+        WorkClock clock = WorkClock.decaying(() -> now[0], 1);
+        clock.start(20 * MS);
+        queue.work(null, 0, clock);
+        // WorkScheduler shares this expenditure across its early and late windows.
+        clock.resume(30 * MS - clock.usedThisTickNanos(), () -> true, 0);
+        clock.allowLateStart();
+        queue.work(null, 0, clock);
+        assertTrue(now[0] <= 32 * MS, "30 ms cap plus one final 2 ms job, actual " + now[0]);
+        assertEquals(now[0], clock.usedThisTickNanos(), "both windows include all queue work exactly once");
+        clock.start(1000 * MS);
+        queue.work(null, 1, clock);
+        assertEquals(100, completed[0], "accounting changes pace, not eventual jobs or releases");
+        assertTrue(queue.isEmpty());
+    }
+
+    private static UnitQueue.Job costed(long[] now, long ready, long step, long release, int[] completed) {
+        return new UnitQueue.Job() {
+            @Override
+            public boolean ready(ServerLevel level) {
+                now[0] += ready;
+                return true;
+            }
+
+            @Override
+            public boolean step(ServerLevel level) {
+                now[0] += step;
+                return false;
+            }
+
+            @Override
+            public void end(ServerLevel level) {
+                now[0] += release;
+                completed[0]++;
+            }
+
+            @Override
+            public String describe() {
+                return "costed job";
+            }
+        };
+    }
 }
