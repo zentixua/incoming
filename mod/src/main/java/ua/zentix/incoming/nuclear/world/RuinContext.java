@@ -333,7 +333,7 @@ final class RuinContext {
                 if (absent.contains(key) || shotAvailable(level, key)) continue;
                 missing++;
                 if (!reading.contains(key) && reads.pending() < WINDOW_READ_LIMIT
-                        && NuclearPrep.residentMemory(level) + WINDOW_READ_BYTES <= NuclearPrep.PLANS_CAP) {
+                        && WINDOW_READ_BYTES <= RuinMemory.sourceReadRoom(level)) {
                     reading.add(key);
                     if (archive != null && archive.mayHave(key)) {
                         var accept = reads.expect();
@@ -372,9 +372,12 @@ final class RuinContext {
                 continue;
             }
             DiskShots.Read current = r.disk();
-            // Keep ready input ownership through priming, validation and actual publication.
-            try (var reservation = RuinMemory.reserveInputs(level, diskPublicationBytes(current) + archivePublicationBytes(r.cached()))) {
-                if (reservation == null) break;
+            // The completed slot already owns the detached source. Resize/transfer that owner,
+            // rather than demanding the same source/copies twice at a full shared budget.
+            long known = diskSourceBytes(current) + diskPublicationBytes(current) + archivePublicationBytes(r.cached());
+            try (var publication = reads.takeForPublication(r, known, NuclearPrep.PLANS_CAP - NuclearPrep.residentMemory(level))) {
+                if (publication == null) break;
+                long before = retainedBytes();
                 boolean restored = false;
                 if (r.cached() != null && r.cached().isPresent()) {
                     try {
@@ -384,11 +387,18 @@ final class RuinContext {
                     }
                 }
                 if (!restored) publishDisk(current);
+                publication.releaseToCountedOwner(Math.max(0, retainedBytes() - before));
                 reading.remove(key);
                 windowReads++;
-                reads.poll();
             }
         }
+    }
+
+    /** Detached Read arrays remain live while priming or a flash/archived copy is published. */
+    private static long diskSourceBytes(DiskShots.Read read) {
+        long bytes = 128 + 8L * read.states().length + 4L * read.heights().length;
+        for (var section : read.states()) if (section != null) bytes += section.getSerializedSize();
+        return bytes;
     }
 
     /** Archived codec scratch is not a full heap bound. Charge known section-domain publication before decoding. */

@@ -42,6 +42,13 @@ final class RuinMemory {
         return new Reservation(owner, bytes);
     }
 
+    /** New source I/O must leave one real decoder restart, not every configured future worker. */
+    static long sourceReadRoom(ServerLevel level) {
+        int height = level.getHeight();
+        for (ServerLevel other : level.getServer().getAllLevels()) height = Math.max(height, other.getHeight());
+        return NuclearPrep.PLANS_CAP - NuclearPrep.residentMemory(level) - RuinWorkers.threadBufferBytes(height);
+    }
+
     static final class Reservation implements AutoCloseable {
         private NuclearWorld owner;
         private long bytes;
