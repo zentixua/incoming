@@ -81,6 +81,11 @@ public final class NuclearCommands {
 
     private static boolean add(ServerLevel level, Entry e) {
         StrikeWorld.get(level).commands().entries.put(e.id, e);
+        if (Loadout.carriesNuke(e.loadout.weapon()))
+            RuinPreparation.prepareCarrier(level, e.id, e.owner, e.aim.point(), e.loadout.nuke().yieldKt(),
+                    e.aim.target() instanceof Target.Ground,
+                    e.loadout.weapon().spec().warhead().chooseBurst() && e.loadout.nuke().airBurst(), e.loadout.weapon());
+        else
         RuinPreparation.prepare(level, e.id, e.owner, e.aim.point(), e.loadout.nuke().yieldKt(),
                 e.aim.target() instanceof Target.Ground,
                 e.loadout.weapon().spec().warhead().chooseBurst() && e.loadout.nuke().airBurst());

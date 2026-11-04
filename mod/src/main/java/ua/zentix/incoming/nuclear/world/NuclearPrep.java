@@ -262,6 +262,9 @@ public final class NuclearPrep {
         UUID handle, owner;
         final UUID cacheId = UUID.randomUUID();
         Vec3 target, resolvedTarget;
+        ua.zentix.incoming.strike.WeaponType carrierWeapon;
+        Vec3 miss = Vec3.ZERO;
+        Double terminalGround, terminalCanopy;
         double yieldKt;
         boolean surface, airBurst, bound, carrier, noRuins, archiveWritten;
         long expires;
@@ -343,6 +346,31 @@ public final class NuclearPrep {
         preps.add(p);
     }
 
+    void prepareCarrier(ServerLevel level, UUID handle, UUID owner, Vec3 target, double yieldKt, boolean surface,
+                        boolean airBurst, ua.zentix.incoming.strike.WeaponType weapon) {
+        if (!ua.zentix.incoming.strike.Loadout.carriesNuke(weapon)) throw new IllegalArgumentException("Not a nuclear carrier");
+        Prep old = request(handle);
+        prepare(level, handle, owner, target, yieldKt, surface, airBurst);
+        Prep p = request(handle);
+        if (p == null || p == old) return; // Repeated PREPARE never redraws route error.
+        p.carrierWeapon = weapon;
+        p.miss = weapon.spec().route().miss(level.random);
+    }
+
+    @Nullable Vec3 carrierMiss(UUID handle, ua.zentix.incoming.strike.WeaponType weapon) {
+        Prep p = request(handle);
+        return p == null || p.bound || p.carrierWeapon != null && p.carrierWeapon != weapon ? null : p.miss;
+    }
+
+    /** Existing impact(aim) branch only; an earlier collision keeps its own fresh geometry. */
+    private static double terminalGround(Prep p, double ground, double canopy, boolean ceiling, int bottom) {
+        double aimY = ceiling ? p.target.y
+                : p.carrierWeapon == ua.zentix.incoming.strike.WeaponType.BUNKER ? ground - 0.5
+                : p.carrierWeapon != null && p.surface ? canopy - 0.5 : p.target.y;
+        double result = ceiling ? aimY : p.carrierWeapon == null && p.surface ? ground : Math.min(ground, aimY);
+        return result <= bottom ? aimY : result;
+    }
+
     private Prep request(UUID handle) {
         for (Prep p : preps) if (handle.equals(p.handle) && !p.draining) return p;
         return null;
@@ -383,11 +411,13 @@ public final class NuclearPrep {
         if (!p.bound && level.getGameTime() >= p.expires) reason = RuinPreparation.Reason.EXPIRED;
         if (!compatible(p)) reason = RuinPreparation.Reason.INCOMPATIBLE;
         if (p.geometry != null && p.detonation < 0) {
+            Vec3 at = p.target.add(p.miss);
             var under = Terrain.estimate(level, net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
-                    Mth.floor(p.target.x), Mth.floor(p.target.z), Terrain.Allowed.CHUNK);
+                    Mth.floor(at.x), Mth.floor(at.z), Terrain.Allowed.CHUNK);
             if (under.source() == Terrain.Source.CHUNK) {
-                double ground = p.surface ? under.y() : Math.min(under.y(), p.target.y);
-                if (ground <= level.getMinBuildHeight()) ground = p.target.y;
+                var canopy = Terrain.estimate(level, net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING,
+                        Mth.floor(at.x), Mth.floor(at.z), Terrain.Allowed.CHUNK);
+                double ground = terminalGround(p, under.y(), canopy.y(), false, level.getMinBuildHeight());
                 if (ground != p.geometry.groundY()) reason = RuinPreparation.Reason.INCOMPATIBLE;
             }
         }
@@ -421,7 +451,7 @@ public final class NuclearPrep {
 
     boolean bind(ServerLevel level, UUID handle, int strikeId) {
         Prep p = request(handle);
-        if (p == null) return false;
+        if (p == null || p.carrierWeapon != null) return false;
         if (p.bound) return p.strike == strikeId && compatible(p) && p.failure == RuinPreparation.Reason.NONE;
         if (status(level, handle).stage() != RuinPreparation.Stage.READY) return false;
         var s = NuclearEvents.get(level).scheduled().stream().filter(x -> x.id() == strikeId).findFirst().orElse(null);
@@ -622,18 +652,35 @@ public final class NuclearPrep {
                 p.geometry = NuclearWarhead.geometry(level, s.surface() ? NuclearWarhead.surfaceAt(level, s.target()) : s.target(), s.yieldKt(), s.airBurst(),
                         (float) IncomingConfig.SERVER.effectsScale());
             } else {
-                Terrain.Surface under = resolveSurface(level, p, shared);
-                if (under == null) return;
-                double ground = under.source() == Terrain.Source.CEILING ? p.target.y : p.surface ? under.y() : Math.min(under.y(), p.target.y);
-                if (ground <= level.getMinBuildHeight()) ground = p.target.y;
-                p.resolvedTarget = p.surface ? new Vec3(p.target.x, ground, p.target.z) : p.target;
+                var noLeaves = net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING_NO_LEAVES;
+                if (p.resolvedTarget == null) {
+                    Terrain.Surface original = resolveSurface(level, p, shared, p.target, noLeaves);
+                    if (original == null) return;
+                    double y = original.source() == Terrain.Source.CEILING ? p.target.y : original.y();
+                    if (y <= level.getMinBuildHeight()) y = p.target.y;
+                    p.resolvedTarget = p.surface ? new Vec3(p.target.x, y, p.target.z) : p.target;
+                }
+                Vec3 at = p.target.add(p.miss);
+                if (p.terminalGround == null) {
+                    Terrain.Surface under = resolveSurface(level, p, shared, at, noLeaves);
+                    if (under == null) return;
+                    p.terminalGround = (double) under.y();
+                }
+                if (p.terminalCanopy == null) {
+                    Terrain.Surface canopy = resolveSurface(level, p, shared, at,
+                            net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING);
+                    if (canopy == null) return;
+                    p.terminalCanopy = (double) canopy.y();
+                }
+                double ground = terminalGround(p, p.terminalGround, p.terminalCanopy,
+                        level.dimensionType().hasCeiling(), level.getMinBuildHeight());
                 float scale = (float) IncomingConfig.SERVER.effectsScale();
                 double hob = p.airBurst ? ua.zentix.incoming.nuclear.model.Yield.optimalBurstHeight(p.yieldKt) * scale : 0;
                 boolean surfaceBurst = hob / scale < ua.zentix.incoming.nuclear.model.FireballModel.maxRadius(p.yieldKt, true);
                 float visibility = (float) (level.isThundering() ? ua.zentix.incoming.nuclear.model.ThermalModel.VISIBILITY_THUNDER
                         : level.isRaining() ? ua.zentix.incoming.nuclear.model.ThermalModel.VISIBILITY_RAIN
                         : ua.zentix.incoming.nuclear.model.ThermalModel.VISIBILITY_CLEAR);
-                p.geometry = new Detonation(-1, new Vec3(p.target.x, ground + hob, p.target.z), ground, p.yieldKt,
+                p.geometry = new Detonation(-1, new Vec3(at.x, ground + hob, at.z), ground, p.yieldKt,
                         surfaceBurst, 0, 0, 0, visibility, 0, scale, false, (float) IncomingConfig.SERVER.waveSpeed());
             }
             p.noRuins = !IncomingConfig.SERVER.nukeBlockDamage.get();
@@ -693,18 +740,17 @@ public final class NuclearPrep {
     }
 
     /** One bounded async region read also handles editor chunks with missing heightmaps. */
-    private Terrain.@Nullable Surface resolveSurface(ServerLevel level, Prep p, WorkClock shared) {
+    private Terrain.@Nullable Surface resolveSurface(ServerLevel level, Prep p, WorkClock shared, Vec3 at, net.minecraft.world.level.levelgen.Heightmap.Types type) {
         // A ceiling heightmap describes the roof, never the ground beneath an in-cavern target.
         // Match NuclearWarhead.surfaceAt/geometry for both ready and cold ceiling chunks.
-        if (level.dimensionType().hasCeiling()) return new Terrain.Surface(Mth.floor(p.target.y), Terrain.Source.CEILING);
-        var type = net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING_NO_LEAVES;
-        var live = Terrain.estimate(level, type, Mth.floor(p.target.x), Mth.floor(p.target.z), Terrain.Allowed.CHUNK);
+        if (level.dimensionType().hasCeiling()) return new Terrain.Surface(Mth.floor(at.y), Terrain.Source.CEILING);
+        var live = Terrain.estimate(level, type, Mth.floor(at.x), Mth.floor(at.z), Terrain.Allowed.CHUNK);
         if (!p.resolvingRead && live.source() == Terrain.Source.CHUNK) return live;
         if (!p.resolvingRead) {
             if (memory(level) + READ_BYTES > WINDOW_CAP) return null;
             p.resolvingRead = true;
             p.format = DiskShots.Format.of(level);
-            DiskShots.read(p.format, new ChunkPos(BlockPos.containing(p.target)), RuinWorkers.Priority.FAR)
+            DiskShots.read(p.format, new ChunkPos(BlockPos.containing(at)), RuinWorkers.Priority.FAR)
                     .thenAccept(p.terrainReads.expect());
         }
         if (!clock.canStart() || !shared.canStart()) return null;
@@ -720,7 +766,7 @@ public final class NuclearPrep {
         long unit = shared.begin();
         try {
             read = read.primed(Blast.SERVER);
-            int column = (Mth.floor(p.target.z) & 15) * 16 + (Mth.floor(p.target.x) & 15);
+            int column = (Mth.floor(at.z) & 15) * 16 + (Mth.floor(at.x) & 15);
             return new Terrain.Surface(read.heights()[ChunkShot.type(type) * 256 + column], Terrain.Source.DISK);
         } finally { clock.record(shared.end(unit)); }
     }
