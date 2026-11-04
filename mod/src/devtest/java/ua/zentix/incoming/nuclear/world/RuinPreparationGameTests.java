@@ -170,6 +170,39 @@ public final class RuinPreparationGameTests {
         h.succeed();
     }
 
+    @GameTest(template = "range", batch = "nuke_prelaunch_disk_surface", skyAccess = true)
+    @SuppressWarnings("unchecked")
+    public static void diskSurfacePrimesMissingEditorHeightmaps(GameTestHelper h) throws ReflectiveOperationException {
+        var level = h.getLevel();
+        var local = h.absolutePos(new BlockPos(32, 1, 32));
+        var chunk = level.getChunkAt(local);
+        var tag = net.minecraft.world.level.chunk.storage.ChunkSerializer.write(level, chunk);
+        tag.remove("Heightmaps");
+        var target = new Vec3(12_000_000 + (local.getX() & 15), 500, 12_000_000 + (local.getZ() & 15));
+        UUID owner = UUID.randomUUID(), handle = UUID.randomUUID();
+        RuinPreparation.prepare(level, handle, owner, target, 1, true, false);
+        Object p = request(level, handle);
+        var pos = new net.minecraft.world.level.ChunkPos(BlockPos.containing(target));
+        var read = DiskShots.parse(level, pos, tag);
+        h.assertTrue(read.skip() == null && read.unprimed() != 0, "fixture must contain final blocks without heightmaps");
+        var inbox = (RuinInbox<DiskShots.Read>) field(p, "terrainReads").get(p);
+        field(p, "resolvingRead").setBoolean(p, true);
+        inbox.expect().accept(read);
+        var prep = NuclearWorld.get(level).prep();
+        var method = NuclearPrep.class.getDeclaredMethod("resolveSurface", net.minecraft.server.level.ServerLevel.class, p.getClass(), WorkClock.class);
+        method.setAccessible(true);
+        var clock = WorkClock.counting(1_000_000);
+        clock.start(10_000_000);
+        var result = (ua.zentix.incoming.util.Terrain.Surface) method.invoke(prep, level, p, clock);
+        h.assertTrue(result != null && result.source() == ua.zentix.incoming.util.Terrain.Source.DISK, "editor source replaced with generator/client Y");
+        int expected = ua.zentix.incoming.util.Terrain.height(level, net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
+                local.getX(), local.getZ());
+        h.assertTrue(result.y() == expected, "primed disk ground differs from actual block column");
+        h.assertTrue(!ua.zentix.incoming.util.Terrain.ready(level, BlockPos.containing(target)), "surface resolution loaded distant world chunk");
+        RuinPreparation.cancel(level, handle);
+        h.succeed();
+    }
+
     @SuppressWarnings("unchecked")
     private static Object request(net.minecraft.server.level.ServerLevel level, UUID handle) throws ReflectiveOperationException {
         var prep = NuclearWorld.get(level).prep();
