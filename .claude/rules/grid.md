@@ -38,6 +38,12 @@ paths:
   other chunks.
 
 ## Pitfalls
+- Due-bucket issuance is clocked too (`BlackoutWorld.Sweep.issueBatch`, `Work.ISSUE`): at most `CHUNKS_PER_UNIT`
+  deadline steps, near probes or chunk entries per unit. Rows append in z/x order; near-player square probes use binary
+  search in that order, never a full far-bucket copy/sort. The bucket cursor advances only after every entry is issued;
+  save only fully issued deadlines. A queued near chunk yields issuance to conversion, preserving the next tick's
+  progress guarantee. `BlackoutSweepTest` checks exhausted/shared clocks, bounded progress, overlapping near players,
+  deadlines, restoration and partial-bucket replay. This does not bound build-row cost or all blackout maintenance.
 - Lamp-twin models and states come from the vanilla jar via `tools/gen_grid_assets.py` (do not edit by hand);
   substation textures: `tools/gen_textures.py`. Vanilla assigns the cutout layer to lanterns and end rods in code
   (`ItemBlockRenderTypes`), not the model — twins need it in the model (`render_type`). `ofFullCopy` does not transfer
