@@ -1,0 +1,944 @@
+{
+  "final-source-crater": {
+    "capture": {
+      "name": "final-source-crater",
+      "effect": "nuke 15 ground near 100",
+      "site": [
+        98304.5,
+        65.0,
+        1536.5
+      ],
+      "camera": [
+        200.0,
+        100.0,
+        180.0,
+        -80.0
+      ],
+      "audio": {
+        "file": "/mnt/data/projects/incoming/mod/run/wt-MT-B2/mod/run/mt-b2/branch-material/mod/run/sandbox/audio.wav",
+        "start": 6832196,
+        "from": 0.05,
+        "seconds": 6.0
+      },
+      "frames": [
+        {
+          "t": -0.25,
+          "age": 0.116,
+          "file": "final-source-crater_-00.25s.png",
+          "fps": 60
+        },
+        {
+          "t": 0.1,
+          "age": 0.408,
+          "file": "final-source-crater_000.10s.png",
+          "fps": 45
+        },
+        {
+          "t": 0.5,
+          "age": 0.585,
+          "file": "final-source-crater_000.50s.png",
+          "fps": 45
+        },
+        {
+          "t": 1.0,
+          "age": 1.0,
+          "file": "final-source-crater_001.00s.png",
+          "fps": 45
+        },
+        {
+          "t": 3.0,
+          "age": 3.021,
+          "file": "final-source-crater_003.00s.png",
+          "fps": 55
+        },
+        {
+          "t": 10.0,
+          "age": 10.001,
+          "file": "final-source-crater_010.00s.png",
+          "fps": 60
+        },
+        {
+          "t": 30.0,
+          "age": 30.008,
+          "file": "final-source-crater_030.00s.png",
+          "fps": 60
+        }
+      ]
+    },
+    "frames": [
+      {
+        "t": -0.25,
+        "age": 0.116,
+        "file": "final-source-crater_-00.25s.png",
+        "fps": 60,
+        "width": 1280,
+        "height": 692,
+        "sha256": "4d996faf90700571d16f874b53f9195e61e1d473e5ffdc8b17a063d68876b23c"
+      },
+      {
+        "t": 0.1,
+        "age": 0.408,
+        "file": "final-source-crater_000.10s.png",
+        "fps": 45,
+        "width": 1280,
+        "height": 692,
+        "sha256": "7c10058d5312395d67cf5f8164130900153cae1b283a08e052a6363a549c44cf"
+      },
+      {
+        "t": 0.5,
+        "age": 0.585,
+        "file": "final-source-crater_000.50s.png",
+        "fps": 45,
+        "width": 1280,
+        "height": 692,
+        "sha256": "52da39a2970af4db3635dc8bc17b9dd54e4d3078d8f377903ca3ae427e9bab69"
+      },
+      {
+        "t": 1.0,
+        "age": 1.0,
+        "file": "final-source-crater_001.00s.png",
+        "fps": 45,
+        "width": 1280,
+        "height": 692,
+        "sha256": "4c6e5a0500cee60d90e38567547f3c3f62a91b2e3c0dcf64ff1e3d2e67b49dbc"
+      },
+      {
+        "t": 3.0,
+        "age": 3.021,
+        "file": "final-source-crater_003.00s.png",
+        "fps": 55,
+        "width": 1280,
+        "height": 692,
+        "sha256": "c2c856e4b4b4207a59607da70f4179c98b5a15d2c13a3407914a263e226703e1"
+      },
+      {
+        "t": 10.0,
+        "age": 10.001,
+        "file": "final-source-crater_010.00s.png",
+        "fps": 60,
+        "width": 1280,
+        "height": 692,
+        "sha256": "ff9b3a5dc934563536e3791900393c2fd428835a9e4981c1cabc859431182425"
+      },
+      {
+        "t": 30.0,
+        "age": 30.008,
+        "file": "final-source-crater_030.00s.png",
+        "fps": 60,
+        "width": 1280,
+        "height": 692,
+        "sha256": "9b14d6940aff16aef4345cf5a2602cd930ce25eaebf1ce056af7ff9375bed067"
+      }
+    ],
+    "audio": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "pcm_s16le",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "6.000000"
+      }
+    },
+    "wav_sha256": "7b3ae3e62fd9cb04f8ad82eb87c47d296d64432448bd1318b839df6edb260636"
+  },
+  "final-source-roof": {
+    "capture": {
+      "name": "final-source-roof",
+      "effect": "nuke 15 air near 2835",
+      "site": [
+        98304.5,
+        65.0,
+        1536.5
+      ],
+      "camera": [
+        85.0,
+        28.0,
+        25.0,
+        10.0
+      ],
+      "audio": {
+        "file": "/mnt/data/projects/incoming/mod/run/wt-MT-B2/mod/run/mt-b2/branch-material/mod/run/sandbox/audio.wav",
+        "start": 5296196,
+        "from": -0.25,
+        "seconds": 6.0
+      },
+      "frames": [
+        {
+          "t": -0.25,
+          "age": -0.239,
+          "file": "final-source-roof_-00.25s.png",
+          "fps": 58
+        },
+        {
+          "t": 0.1,
+          "age": 0.106,
+          "file": "final-source-roof_000.10s.png",
+          "fps": 57
+        },
+        {
+          "t": 0.5,
+          "age": 0.515,
+          "file": "final-source-roof_000.50s.png",
+          "fps": 57
+        },
+        {
+          "t": 1.0,
+          "age": 1.004,
+          "file": "final-source-roof_001.00s.png",
+          "fps": 55
+        },
+        {
+          "t": 2.0,
+          "age": 2.005,
+          "file": "final-source-roof_002.00s.png",
+          "fps": 60
+        },
+        {
+          "t": 3.0,
+          "age": 3.006,
+          "file": "final-source-roof_003.00s.png",
+          "fps": 60
+        },
+        {
+          "t": 6.0,
+          "age": 6.008,
+          "file": "final-source-roof_006.00s.png",
+          "fps": 60
+        },
+        {
+          "t": 10.0,
+          "age": 10.009,
+          "file": "final-source-roof_010.00s.png",
+          "fps": 60
+        }
+      ]
+    },
+    "frames": [
+      {
+        "t": -0.25,
+        "age": -0.239,
+        "file": "final-source-roof_-00.25s.png",
+        "fps": 58,
+        "width": 1280,
+        "height": 692,
+        "sha256": "515c8b0f3d6f2f845abbc423634df7df35300fc9e4d231d14e58321a6e6312e0"
+      },
+      {
+        "t": 0.1,
+        "age": 0.106,
+        "file": "final-source-roof_000.10s.png",
+        "fps": 57,
+        "width": 1280,
+        "height": 692,
+        "sha256": "02d6a7edf311c202bef5f345902b33c388ac7e532a700b02013e4dc8914b0eaa"
+      },
+      {
+        "t": 0.5,
+        "age": 0.515,
+        "file": "final-source-roof_000.50s.png",
+        "fps": 57,
+        "width": 1280,
+        "height": 692,
+        "sha256": "5544948d34253265396c47455d96b3faa527205d182ce5d66f37a5ff6185156a"
+      },
+      {
+        "t": 1.0,
+        "age": 1.004,
+        "file": "final-source-roof_001.00s.png",
+        "fps": 55,
+        "width": 1280,
+        "height": 692,
+        "sha256": "284c300a49c007a829ecc37c485a306ce962624ecf08d85ae39bac19da265aa6"
+      },
+      {
+        "t": 2.0,
+        "age": 2.005,
+        "file": "final-source-roof_002.00s.png",
+        "fps": 60,
+        "width": 1280,
+        "height": 692,
+        "sha256": "90e86ca71c5b19b842454bd1da319f3462d03bfc2f301ef68e3862e56ebe462a"
+      },
+      {
+        "t": 3.0,
+        "age": 3.006,
+        "file": "final-source-roof_003.00s.png",
+        "fps": 60,
+        "width": 1280,
+        "height": 692,
+        "sha256": "fe0b0a5a3d6761b133e91aa967a506718399a7d661ae289758a452ff34bf6d49"
+      },
+      {
+        "t": 6.0,
+        "age": 6.008,
+        "file": "final-source-roof_006.00s.png",
+        "fps": 60,
+        "width": 1280,
+        "height": 692,
+        "sha256": "f7a7bb07eafc9f7f4029ef8c9c8b73e13204b8fc73c112e380359a29d0c68380"
+      },
+      {
+        "t": 10.0,
+        "age": 10.009,
+        "file": "final-source-roof_010.00s.png",
+        "fps": 60,
+        "width": 1280,
+        "height": 692,
+        "sha256": "5f9407e1d5c39dc761115da9e00fedac7cc3249607119809675f1b3ed2604593"
+      }
+    ],
+    "audio": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "pcm_s16le",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "6.000000"
+      }
+    },
+    "wav_sha256": "cbae1bf12d414bcd81edd5bbdfff7cd223cc8a8199db895c479664c0e88ba162"
+  },
+  "final-source-tree": {
+    "capture": {
+      "name": "final-source-tree",
+      "effect": "nuke 15 air near 1000",
+      "site": [
+        163840.5,
+        65.0,
+        2560.5
+      ],
+      "camera": [
+        85.0,
+        28.0,
+        25.0,
+        10.0
+      ],
+      "audio": {
+        "file": "/mnt/data/projects/incoming/mod/run/wt-MT-B2/mod/run/mt-b2/branch-material/mod/run/sandbox/audio.wav",
+        "start": 10182724,
+        "from": -0.25,
+        "seconds": 6.0
+      },
+      "frames": [
+        {
+          "t": -0.25,
+          "age": -0.245,
+          "file": "final-source-tree_-00.25s.png",
+          "fps": 59
+        },
+        {
+          "t": 0.1,
+          "age": 0.12,
+          "file": "final-source-tree_000.10s.png",
+          "fps": 59
+        },
+        {
+          "t": 0.5,
+          "age": 0.501,
+          "file": "final-source-tree_000.50s.png",
+          "fps": 55
+        },
+        {
+          "t": 1.0,
+          "age": 1.002,
+          "file": "final-source-tree_001.00s.png",
+          "fps": 55
+        },
+        {
+          "t": 2.0,
+          "age": 2.003,
+          "file": "final-source-tree_002.00s.png",
+          "fps": 59
+        },
+        {
+          "t": 3.0,
+          "age": 3.005,
+          "file": "final-source-tree_003.00s.png",
+          "fps": 60
+        },
+        {
+          "t": 6.0,
+          "age": 6.007,
+          "file": "final-source-tree_006.00s.png",
+          "fps": 60
+        },
+        {
+          "t": 10.0,
+          "age": 10.009,
+          "file": "final-source-tree_010.00s.png",
+          "fps": 60
+        }
+      ]
+    },
+    "frames": [
+      {
+        "t": -0.25,
+        "age": -0.245,
+        "file": "final-source-tree_-00.25s.png",
+        "fps": 59,
+        "width": 1280,
+        "height": 692,
+        "sha256": "e8301e5a7fa921d24b731c67486c5f7d1b77ae3222c0341252cf649af15fcc63"
+      },
+      {
+        "t": 0.1,
+        "age": 0.12,
+        "file": "final-source-tree_000.10s.png",
+        "fps": 59,
+        "width": 1280,
+        "height": 692,
+        "sha256": "424d48696457599fc03f684072ef1072335ec526a66a08963c8cf87a9180e31b"
+      },
+      {
+        "t": 0.5,
+        "age": 0.501,
+        "file": "final-source-tree_000.50s.png",
+        "fps": 55,
+        "width": 1280,
+        "height": 692,
+        "sha256": "dcbdc5c4741a9994930a8a386a969155ef95e89fbf72c4226d26d4d39ebc4747"
+      },
+      {
+        "t": 1.0,
+        "age": 1.002,
+        "file": "final-source-tree_001.00s.png",
+        "fps": 55,
+        "width": 1280,
+        "height": 692,
+        "sha256": "04e8be92160b54977d1bc16be7c0cc44723c1fdd1881750c222d1a3b6da55521"
+      },
+      {
+        "t": 2.0,
+        "age": 2.003,
+        "file": "final-source-tree_002.00s.png",
+        "fps": 59,
+        "width": 1280,
+        "height": 692,
+        "sha256": "43b82b176fbbfa91b40fbd41b34f102f281d5fbcbf25945ff017571608dde1e7"
+      },
+      {
+        "t": 3.0,
+        "age": 3.005,
+        "file": "final-source-tree_003.00s.png",
+        "fps": 60,
+        "width": 1280,
+        "height": 692,
+        "sha256": "ed95f4bceb98f4abc470a92d665a7013013f918a11d248ae72cd184e6de76a65"
+      },
+      {
+        "t": 6.0,
+        "age": 6.007,
+        "file": "final-source-tree_006.00s.png",
+        "fps": 60,
+        "width": 1280,
+        "height": 692,
+        "sha256": "dc0741d4f68ec3eb68d4693a1a3787043aa1a3eca4c579c5526f42239887307e"
+      },
+      {
+        "t": 10.0,
+        "age": 10.009,
+        "file": "final-source-tree_010.00s.png",
+        "fps": 60,
+        "width": 1280,
+        "height": 692,
+        "sha256": "6889a2427e6c37cb178cb81d950f3bd5fe868e56335110d767ae79953c2ca9bf"
+      }
+    ],
+    "audio": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "pcm_s16le",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "6.000000"
+      }
+    },
+    "wav_sha256": "acc176d76230e81db184b93fecb36779c74be110729ee8bda693ab09c0bbb8a3"
+  },
+  "main-material-crater": {
+    "capture": {
+      "name": "main-material-crater",
+      "effect": "nuke 15 ground near 100",
+      "site": [
+        98304.5,
+        65.0,
+        1536.5
+      ],
+      "camera": [
+        200.0,
+        100.0,
+        180.0,
+        -80.0
+      ],
+      "audio": {
+        "file": "/mnt/data/projects/incoming/mod/run/wt-MT-B2/mod/run/mt-b2/main-material/mod/run/sandbox/audio.wav",
+        "start": 6795332,
+        "from": 0.05,
+        "seconds": 6.0
+      },
+      "frames": [
+        {
+          "t": -0.25,
+          "age": 0.159,
+          "file": "main-material-crater_-00.25s.png",
+          "fps": 61
+        },
+        {
+          "t": 0.1,
+          "age": 0.501,
+          "file": "main-material-crater_000.10s.png",
+          "fps": 61
+        },
+        {
+          "t": 0.5,
+          "age": 0.736,
+          "file": "main-material-crater_000.50s.png",
+          "fps": 24
+        },
+        {
+          "t": 1.0,
+          "age": 1.095,
+          "file": "main-material-crater_001.00s.png",
+          "fps": 24
+        },
+        {
+          "t": 3.0,
+          "age": 3.001,
+          "file": "main-material-crater_003.00s.png",
+          "fps": 41
+        },
+        {
+          "t": 10.0,
+          "age": 10.006,
+          "file": "main-material-crater_010.00s.png",
+          "fps": 60
+        },
+        {
+          "t": 30.0,
+          "age": 30.013,
+          "file": "main-material-crater_030.00s.png",
+          "fps": 60
+        }
+      ]
+    },
+    "frames": [
+      {
+        "t": -0.25,
+        "age": 0.159,
+        "file": "main-material-crater_-00.25s.png",
+        "fps": 61,
+        "width": 1280,
+        "height": 692,
+        "sha256": "4d996faf90700571d16f874b53f9195e61e1d473e5ffdc8b17a063d68876b23c"
+      },
+      {
+        "t": 0.1,
+        "age": 0.501,
+        "file": "main-material-crater_000.10s.png",
+        "fps": 61,
+        "width": 1280,
+        "height": 692,
+        "sha256": "6502a0b716c4aaf49e887d2e1e9344d296b908b6291853b7234b0399bdda702d"
+      },
+      {
+        "t": 0.5,
+        "age": 0.736,
+        "file": "main-material-crater_000.50s.png",
+        "fps": 24,
+        "width": 1280,
+        "height": 692,
+        "sha256": "3e34d04585b0cf91d0919ce733843ac9ecd4119e12e23ea6c83d8dc8ac669ca3"
+      },
+      {
+        "t": 1.0,
+        "age": 1.095,
+        "file": "main-material-crater_001.00s.png",
+        "fps": 24,
+        "width": 1280,
+        "height": 692,
+        "sha256": "c630df074623c215ab6d01368b050884bc9c66074224d824d5ad74e660c009a9"
+      },
+      {
+        "t": 3.0,
+        "age": 3.001,
+        "file": "main-material-crater_003.00s.png",
+        "fps": 41,
+        "width": 1280,
+        "height": 692,
+        "sha256": "927ef42b4a6537139beba498adb7b0368576800e4a8e05351edee6ecd4de92d8"
+      },
+      {
+        "t": 10.0,
+        "age": 10.006,
+        "file": "main-material-crater_010.00s.png",
+        "fps": 60,
+        "width": 1280,
+        "height": 692,
+        "sha256": "8cf71b39e956fb7c95b9e41519f35847bdb58440114027edf1669a2323984e1d"
+      },
+      {
+        "t": 30.0,
+        "age": 30.013,
+        "file": "main-material-crater_030.00s.png",
+        "fps": 60,
+        "width": 1280,
+        "height": 692,
+        "sha256": "7cc6fb10fe676b9b935effb0d014c196991c704b6b38e9f1824899737638b8f3"
+      }
+    ],
+    "audio": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "pcm_s16le",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "6.000000"
+      }
+    },
+    "wav_sha256": "d7d2c7f5df987d8bad9d0a25224f92f68b36130c8eb2da19931e53997b67f377"
+  },
+  "main-material-roof": {
+    "capture": {
+      "name": "main-material-roof",
+      "effect": "nuke 15 air near 2835",
+      "site": [
+        98304.5,
+        65.0,
+        1536.5
+      ],
+      "camera": [
+        85.0,
+        28.0,
+        25.0,
+        10.0
+      ],
+      "audio": {
+        "file": "/mnt/data/projects/incoming/mod/run/wt-MT-B2/mod/run/mt-b2/main-material/mod/run/sandbox/audio.wav",
+        "start": 12963908,
+        "from": -0.25,
+        "seconds": 6.0
+      },
+      "frames": [
+        {
+          "t": -0.25,
+          "age": -0.247,
+          "file": "main-material-roof_-00.25s.png",
+          "fps": 60
+        },
+        {
+          "t": 0.1,
+          "age": 0.117,
+          "file": "main-material-roof_000.10s.png",
+          "fps": 60
+        },
+        {
+          "t": 0.5,
+          "age": 0.502,
+          "file": "main-material-roof_000.50s.png",
+          "fps": 60
+        },
+        {
+          "t": 1.0,
+          "age": 1.017,
+          "file": "main-material-roof_001.00s.png",
+          "fps": 60
+        },
+        {
+          "t": 2.0,
+          "age": 2.016,
+          "file": "main-material-roof_002.00s.png",
+          "fps": 60
+        },
+        {
+          "t": 3.0,
+          "age": 3.002,
+          "file": "main-material-roof_003.00s.png",
+          "fps": 60
+        },
+        {
+          "t": 6.0,
+          "age": 6.006,
+          "file": "main-material-roof_006.00s.png",
+          "fps": 60
+        },
+        {
+          "t": 10.0,
+          "age": 10.009,
+          "file": "main-material-roof_010.00s.png",
+          "fps": 59
+        }
+      ]
+    },
+    "frames": [
+      {
+        "t": -0.25,
+        "age": -0.247,
+        "file": "main-material-roof_-00.25s.png",
+        "fps": 60,
+        "width": 1280,
+        "height": 692,
+        "sha256": "f7460e2929eae1d93b565334b169e4ae7a3227f7fa7fcff3173ec42dfcc7cf9f"
+      },
+      {
+        "t": 0.1,
+        "age": 0.117,
+        "file": "main-material-roof_000.10s.png",
+        "fps": 60,
+        "width": 1280,
+        "height": 692,
+        "sha256": "83d30e677aae6c9a62d99671229467c0ddefde32c7584a6e4dc77756363dccfa"
+      },
+      {
+        "t": 0.5,
+        "age": 0.502,
+        "file": "main-material-roof_000.50s.png",
+        "fps": 60,
+        "width": 1280,
+        "height": 692,
+        "sha256": "a1cbdf567c28ba20980b97ee7a6ee100b85155a38cacf6af5c5cbafaa52f22b1"
+      },
+      {
+        "t": 1.0,
+        "age": 1.017,
+        "file": "main-material-roof_001.00s.png",
+        "fps": 60,
+        "width": 1280,
+        "height": 692,
+        "sha256": "f2bf190a39a0713c5b0b985924e60bae5c59dc7f29ed38171d5a4e60ee207ed5"
+      },
+      {
+        "t": 2.0,
+        "age": 2.016,
+        "file": "main-material-roof_002.00s.png",
+        "fps": 60,
+        "width": 1280,
+        "height": 692,
+        "sha256": "eb3829f48bce334c555a7113dd4f18b096d464f04ff65a1db5742d77a6da959c"
+      },
+      {
+        "t": 3.0,
+        "age": 3.002,
+        "file": "main-material-roof_003.00s.png",
+        "fps": 60,
+        "width": 1280,
+        "height": 692,
+        "sha256": "bf763f5c31cea89a42825084a9e9dc7a2dea2e90e55b3d730b7098ce0a836887"
+      },
+      {
+        "t": 6.0,
+        "age": 6.006,
+        "file": "main-material-roof_006.00s.png",
+        "fps": 60,
+        "width": 1280,
+        "height": 692,
+        "sha256": "cfb7b4dc179479516d63371513b2257d7fac6e3aab8ded9c43a4bd4bffb98b23"
+      },
+      {
+        "t": 10.0,
+        "age": 10.009,
+        "file": "main-material-roof_010.00s.png",
+        "fps": 59,
+        "width": 1280,
+        "height": 692,
+        "sha256": "488d1bc583f1a8e27a5b00a0d40215a66fdf33cb35322a2ebaf3d4a1b1e851cb"
+      }
+    ],
+    "audio": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "pcm_s16le",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "6.000000"
+      }
+    },
+    "wav_sha256": "fa034a57eb46df44214f7b3cf23e688622c16e588ce636b3e5214703e59a8b02"
+  },
+  "main-material-tree": {
+    "capture": {
+      "name": "main-material-tree",
+      "effect": "nuke 15 air near 1000",
+      "site": [
+        163840.5,
+        65.0,
+        2560.5
+      ],
+      "camera": [
+        85.0,
+        28.0,
+        25.0,
+        10.0
+      ],
+      "audio": {
+        "file": "/mnt/data/projects/incoming/mod/run/wt-MT-B2/mod/run/mt-b2/main-material/mod/run/sandbox/audio.wav",
+        "start": 100343876,
+        "from": -0.25,
+        "seconds": 6.0
+      },
+      "frames": [
+        {
+          "t": -0.25,
+          "age": -0.244,
+          "file": "main-material-tree_-00.25s.png",
+          "fps": 23
+        },
+        {
+          "t": 0.1,
+          "age": 0.107,
+          "file": "main-material-tree_000.10s.png",
+          "fps": 51
+        },
+        {
+          "t": 0.5,
+          "age": 0.505,
+          "file": "main-material-tree_000.50s.png",
+          "fps": 51
+        },
+        {
+          "t": 1.0,
+          "age": 1.005,
+          "file": "main-material-tree_001.00s.png",
+          "fps": 62
+        },
+        {
+          "t": 2.0,
+          "age": 2.007,
+          "file": "main-material-tree_002.00s.png",
+          "fps": 60
+        },
+        {
+          "t": 3.0,
+          "age": 3.008,
+          "file": "main-material-tree_003.00s.png",
+          "fps": 60
+        },
+        {
+          "t": 6.0,
+          "age": 6.01,
+          "file": "main-material-tree_006.00s.png",
+          "fps": 60
+        },
+        {
+          "t": 10.0,
+          "age": 10.011,
+          "file": "main-material-tree_010.00s.png",
+          "fps": 60
+        }
+      ]
+    },
+    "frames": [
+      {
+        "t": -0.25,
+        "age": -0.244,
+        "file": "main-material-tree_-00.25s.png",
+        "fps": 23,
+        "width": 1280,
+        "height": 692,
+        "sha256": "987dbccaa751ee8d2dae373102293326e81ee6c40fa3500562c42c7fff16c417"
+      },
+      {
+        "t": 0.1,
+        "age": 0.107,
+        "file": "main-material-tree_000.10s.png",
+        "fps": 51,
+        "width": 1280,
+        "height": 692,
+        "sha256": "58fcb6fbf6c32f8882169480d1b7965965c852322f4925e66c9b6f224778cf81"
+      },
+      {
+        "t": 0.5,
+        "age": 0.505,
+        "file": "main-material-tree_000.50s.png",
+        "fps": 51,
+        "width": 1280,
+        "height": 692,
+        "sha256": "bb198e76fa6f4b24da7034f02bfb69efb8983529c721ee9b452cd1695be7085f"
+      },
+      {
+        "t": 1.0,
+        "age": 1.005,
+        "file": "main-material-tree_001.00s.png",
+        "fps": 62,
+        "width": 1280,
+        "height": 692,
+        "sha256": "cd15aa97920a0c1cfbbfb02fbeed6363da7e7ab7c9ca0d1ddca7806199ff9c02"
+      },
+      {
+        "t": 2.0,
+        "age": 2.007,
+        "file": "main-material-tree_002.00s.png",
+        "fps": 60,
+        "width": 1280,
+        "height": 692,
+        "sha256": "b1714e38d3d93dc3cbb50df62882c5c9d9b8d08810777ae20ae0d622a0cd2d09"
+      },
+      {
+        "t": 3.0,
+        "age": 3.008,
+        "file": "main-material-tree_003.00s.png",
+        "fps": 60,
+        "width": 1280,
+        "height": 692,
+        "sha256": "627ad3ee8480be89973b095d2600b197fb6adbc6556cf720fc32183a5b8db3e7"
+      },
+      {
+        "t": 6.0,
+        "age": 6.01,
+        "file": "main-material-tree_006.00s.png",
+        "fps": 60,
+        "width": 1280,
+        "height": 692,
+        "sha256": "d1a523a570ad13cba197f71447d089478b900fc555718bd8e9ac009d87bdebc1"
+      },
+      {
+        "t": 10.0,
+        "age": 10.011,
+        "file": "main-material-tree_010.00s.png",
+        "fps": 60,
+        "width": 1280,
+        "height": 692,
+        "sha256": "1321c17d52d83752cab64b5390a143c9935b8cb4c1228dcaf42105b1d077b813"
+      }
+    ],
+    "audio": {
+      "programs": [],
+      "stream_groups": [],
+      "streams": [
+        {
+          "codec_name": "pcm_s16le",
+          "sample_rate": "48000",
+          "channels": 2
+        }
+      ],
+      "format": {
+        "duration": "6.000000"
+      }
+    },
+    "wav_sha256": "4d72559cbb71bf910478a3ca8df0d243914e21b6ccbc5a187f7099682c263b54"
+  }
+}

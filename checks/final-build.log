@@ -1,0 +1,25 @@
+Starting a Gradle Daemon (subsequent builds will be faster)
+> Task :createMinecraftArtifacts UP-TO-DATE
+> Task :compileJava
+> Task :generateModMetadata UP-TO-DATE
+> Task :processResources UP-TO-DATE
+> Task :classes
+> Task :jarJar UP-TO-DATE
+> Task :jar
+> Task :assemble
+> Task :compileDevtestJava UP-TO-DATE
+> Task :compileSandboxAgentJava UP-TO-DATE
+> Task :processDevtestResources UP-TO-DATE
+> Task :devtestClasses UP-TO-DATE
+> Task :processSandboxAgentResources NO-SOURCE
+> Task :sandboxAgentClasses UP-TO-DATE
+> Task :compileTestJava
+> Task :processTestResources UP-TO-DATE
+> Task :testClasses
+> Task :test
+> Task :check
+> Task :build
+
+BUILD SUCCESSFUL in 5m 25s
+12 actionable tasks: 4 executed, 8 up-to-date
+laptop_job mt-b2-final-build: exit 0

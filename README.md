@@ -1,52 +1,40 @@
-# MT-B2 partial repair evidence
+# MT-B2 structural material and support
 
-This evidence does not close MT-report §33.2 B2. See [OPEN-GATES.md](OPEN-GATES.md) for the exact missing implementation and the B1 staging gate.
+Production PR: https://github.com/zentixua/incoming/pull/560. Baseline: `292f3153636952a8168da493e717952ec680c396`. The production source and capture hashes are recorded in `source-identity.json`. No merge or release is authorized by this evidence.
 
-## Paired sandbox
+## What already exists
 
-Baseline: `origin/main` at `341c2ea6fdda1a9ed6f941dc00c5065b1353bc7e`.
-Captured B2 production code: `eeb19e219`. Final PR head after rebasing onto B1 (`292f31536`): `8226e88eead475734dec6e22c6454bfc916e29c3`. `source-identity.json` verifies that all three changed production classes are byte-identical to the captured files. The visual worktree started at `58ad02bc5` and received the exact final `Blast.java` before the `final-*` captures; the other production files are identical.
+| Existing implementation | Reuse and boundary |
+|---|---|
+| [Orbital Laser](https://github.com/Stink-O/orbital-laser), Hurricane and Sinkhole, source `8ae6409af90335e461ba473c92a3e56798f30d38` | Adopt material continuity and the order source removal → movement → rest. No source was copied. Its Rust/Horizon runtime and scripted vortex/sinkhole motion are not Minecraft nuclear physics. |
+| [Block Physics](https://modrinth.com/mod/block-physics), BlockCollapse / Simple Block Physics | General block gravity, not ownership of material released by Incoming's pulse or its staged chunk commits. No new required mod. |
+| Incoming's penetration data map, collision shapes and snapshot workers | Reuse represented thickness and geometry, rather than introduce another hand-maintained map-specific material table. |
+| Incoming's block-textured fragments and nuclear dust | Keep the existing bounded cosmetic renderer. It has no additional authoritative material mass. No nuke shader or sound changes. |
 
-Both disposable worktrees use the same `instrument_sandbox.py`: two 25×25 roofs (stone and concrete) on five-block-high glass walls, a bare 16-block timber column, and a 30-block trunk with a leaf crown. The camera, load and timestamps are identical. Sandbox sites have matching block-threshold hashes and fixed detonation ID/time; see each `capture.json` for actual coordinates and image ages.
+## Implementation
 
-Commands (replace shot-name prefix `main` with `final` for the paired result):
+The plan records structural source positions, not a decorative finished pile. Successful replacement transfers the actual surviving block state, contents, solid volume and mass into saved ownership. A triangular dynamic-pressure pulse accelerates loose material relative to the air while gravity acts. Placement keeps the block type and occurs only after travel/collision; logs rotate horizontally, and loose piles spill to lower neighboring space. Leaves and shattered glazing enter a dispersed fine-material reservoir. Per-type and aggregate balances include deposited, dispersed and still-pending material. These are cumulative transfers across the ownership boundary, not a census of every block currently in the world. Charred face tiers are saved and rotate with log axes; settled marks merge once per chunk/tick. Below-world material is a saved dormant reservoir, not a repeated load request or silent deletion.
 
-```sh
-INCOMING_GPU_OWNER=MT-B2 tools/sandbox.sh start --wait
-INCOMING_GPU_OWNER=MT-B2 tools/sandbox.sh shot main-roof 'nuke 15 air near 2835' --cam '85 28 25 10' --at -0.25,0.1,1,3,10 --wav 4
-INCOMING_GPU_OWNER=MT-B2 tools/sandbox.sh shot main-tree 'nuke 15 air near 1000' --cam '85 28 25 10' --at -0.25,0.1,1,3,10 --wav 4
-INCOMING_GPU_OWNER=MT-B2 tools/sandbox.sh stop
-INCOMING_GPU_OWNER=MT-B2 tools/gpu_lease.sh release
-```
+Pressure response uses the elastic triangular-pulse SDOF solution, including motion after pressure ends. The existing long-pulse pressure proxies remain the capacities; represented thickness, collision volume and inferred span affect response. Connection strain and drag are explicitly estimated. Rooted connected timber with a crown includes branches and trunks above 24 blocks. Actual removed support contacts seed a budgeted continuation across chunk borders; a missing boundary is pending, never a foundation.
 
-Times are relative to arrival of the wave at the fixtures. This is the ordinary muted virtual sandbox, without Iris, at its explicit test wave speed of 1× sound. It is not a full-pack, real-time-scale or LOD proof.
+## Paired sandbox evidence
 
-**The +10 s images are diagnostic geometry views:** the disposable instrumentation clears client effect state after +8 s, exposing the authoritative blocks. The earlier images and four-second WAV use the ordinary effect. The final images must not be presented as ordinary dust visibility or a motion-quality acceptance. No server blocks are cleared by that diagnostic operation.
+[Paired frames and full sequences](paired-frames.md).
 
-## Snapshot diagnostic
+Both copies use `instrument_sandbox.py`: two 25×25 roofs (stone / white concrete) on five-block glass walls, a bare 16-block timber column and a 30-block tree. Camera `85 28 25 10`, 15 kt airburst, near distances 2835 m and 1000 m. The ordinary muted virtual sandbox uses its test wave speed of one sound speed; this is not a full-pack Iris or LOD test.
 
-`install_bench.py` adapts the retained Stage A `MtRuinBench` to 15 kt only. Each solver receives the same immutable synthetic geometry and load, and the probe decodes final chunk plans over the central 3×3 chunks. Three repetitions preserve the original diagnostic methodology. Exported voxel tables record before/after blocks. Outside-chunk tree transfers are counted separately and are not applied by this probe.
+Capture ages: −0.25, +0.1, +0.5, +1, +2, +3, +6 and +10 seconds from wave arrival; six-second WAV. **At +8 s the disposable fixture clears client effects only. The +10 s image is a diagnostic view of authoritative geometry, not a claim about normal dust visibility.** Earlier frames and WAV retain ordinary effects. No server blocks are cleared by this diagnostic operation. A separate 15 kt ground-burst view records the crater through +30 s; its camera and timing are listed with the pairs.
 
-The measurements exclude snapshot construction, world commit, lighting, encoding and LOD receipt. Other laptop jobs can overlap. They are local diagnostic timings, **not full-pipeline CPU/MSPT, bounded-memory or deadline acceptance**. Connectivity is a six-neighbor diagnostic, not a pressure/impulse element model. No results for a higher yield are claimed.
+The baseline leaves a floating stone patch and upright bare timber. With material transfer, the roof material and timber settle at the base rather than vanish. The weak-zone tree stays standing; the strong-zone tree falls. Existing cosmetic fragments show the removed block textures during the dust front; they are representative fragments, not a one-to-one rendering of every server-owned moving record.
 
-## Validation
+## CPU and validation
 
-Initial regression run failed on main for the floating roof, bare timber and tall-tree crown. The new tests also cover a translated chunk seam, a preexisting floating roof beside an actually collapsing pedestal, and protected/unknown hard materials. Thermal tests retain their scorch/save/packet/layer assertions without relying on timber immunity.
+[Per-chunk pipeline measurements](pipeline-results.md) include live snapshot extraction, blast, collapse, plan completion, commit, asynchronous lighting barrier and actual packet encoding. Raw logs and the disposable probe are retained. The table reports median, nearest-rank p95 and maximum for the measured implementation, with its exact source commit and post-commit material work separately reported. The two later path-specific corrections and the probe’s scorch-prepass limitation are disclosed in that report. These are local workload samples, not an arbitrary-world throughput guarantee. Post-commit material work is separately reported in `MTMAT` rows.
 
-Final build, GameTest and CI results are recorded in the PR and accompanying logs. The independent fresh-session review is deliberately still pending; this draft is not authorized to merge.
+Regression coverage includes floating roofs, bare timber, tall/branched trees, protected blocks, partial contact faces, support over more than three chunks, containers, ordered re-removal/retry, clean save/reload, material-specific balances, stable piles, dormant outside-height material, rotated scorch after save, crater source stock, protected bowls and idempotent crater resume. Response laws have pure unit tests. The complete local build passed 1748 unit tests. The structural/ruin set passed 57 GameTests, the material/scorch/crater set passed 19, and the later unchanged-glazing and signed-scorch fixes passed their targeted cases. Final-head CI, including all six GameTest shards and both LSS variants, is green. Logs and source identities are under `checks/` and linked in the PR.
 
-Snapshot output: [paired results](snapshot-results.md) and [raw counters](snapshot-results.json). All three repetitions agree on block counts. The stone roof changes from 49 newly floating blocks to zero; bare timber from 16 surviving logs to zero; the tall tree from zero recognized trunks to one. The missing rubble remains unresolved.
+## Model and evidence limits
 
-Local validation: 1740 unit tests passed with no skipped tests; 44 of 45 affected GameTests passed in `final-checks.log`, then the corrected exposed-pedestal preservation fixture passed in `anchor-check.log`. Its earlier failure and both thermal-fixture corrections are retained in the logs. CI must independently pass the final head.
+This is a reduced block-scale model, not a calibrated engineering simulation of reinforcement, individual joints or nonlinear fracture. The existing span rules remain the local capacity model. Coarse pile repose is a one-block estimate. A separate crater ledger partitions actual source material into rim deposits, exported ejecta and thermal transformation. The rim consumes source stock with the same block state; original ground/soil and completed columns persist across a clean restart. The existing crater shape and nuclear dust presentation remain. Carried scorch keeps face tiers; silhouette shadow masks remain attached to their original surfaces. Normal save/reload is covered; atomic recovery from power loss across region files and SavedData is not claimed. No 100/1000 kt, whole-zone memory/service-rate or staged LOD guarantee is inferred from these tests. The yield ceiling and default remain 15 kt.
 
-## Visual findings
-
-At 2835 m, main leaves a small floating stone roof patch and both upright trunks. The final branch removes the roof patch and the bare timber column, while the recognized tree remains standing below its whole-tree toppling load. At 1000 m, main keeps both upright trunks; the final branch leaves the recognized 30-block trunk horizontal downrange. The thin roofs still leave no material pile: these images do not close the missing-rubble case or demonstrate staged falling motion.
-
-The first intermediate capture exposed an error: recognized trees below their whole-tree threshold fell through the new timber-member path. `rejected-intermediate/` retains that rejected result. The final implementation recognizes trees before checking load or `nukeTreeFall` and excludes surviving trunks from every fracture round. Both new regressions first failed, then all eight structural fixtures passed in `tree-rule-check.log`. The final paired images are exclusively under `sandbox/main-*` and `sandbox/final-*`.
-
-No renderer/FX code was changed; this is not a GPU performance proof. Full causal motion, conserved rubble, and the complete B2 gate remain open. All four WAV files contain four seconds of stereo PCM at the rates recorded in `audio-metadata.json`; no filtering or host playback was used.
-
-The complete pre-rebase build passed all 1740 unit tests and all 47 affected GameTests (`checks/verified-head.log`). Rebase preserves the B1 lifecycle changes; the integration run and final-head CI are recorded separately. The starting-main capture remains at the explicitly named baseline rather than claiming a new capture of B1.
-
-After rebasing onto B1, all 47 affected GameTests passed again (`checks/rebased-check.log`). [PR #560](https://github.com/zentixua/incoming/pull/560) carries the CI result for the final head and the subsequent independent review.
+The earlier connectivity-only draft is archived under `history-partial/` and the preceding evidence commit. Its B1-dependent stop is superseded by Artem's instruction: the closed LOD gate does not block these B2 changes. An independent fresh-session review remains pending; this draft must not be merged by this session.

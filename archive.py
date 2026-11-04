@@ -19,6 +19,6 @@ tree = git('write-tree')
 ref = 'refs/heads/look-gate/mt-b2'
 old = subprocess.run(['git', '-C', str(repo), 'rev-parse', '--verify', ref], capture_output=True, text=True)
 parents = ['-p', old.stdout.strip()] if old.returncode == 0 else []
-commit = git('commit-tree', tree, *parents, data=b'MT-B2 partial structural repair evidence\n\nCo-Authored-By: Codex <noreply@openai.com>\n')
+commit = git('commit-tree', tree, *parents, data=b'MT-B2 structural material and support evidence\n\nCo-Authored-By: Codex <noreply@openai.com>\n')
 git('update-ref', ref, commit)
 print(commit)
