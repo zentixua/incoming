@@ -56,3 +56,8 @@ paths:
   release: the list is again 3.1.0 detonations, `wave` a trailing list. Replays of `main` builds from #296 (16.10) carrying
   detonations in `NukeSync` (world entry, dimension change, respawn during an active detonation) cannot be read:
   unreleased-build formats are unsupported; this rule covers shipped releases.
+
+- Retired Voxy terrain payloads (`S2C.VoxyChunk`, `LodBatchStart`, `LodBatchFinished`) retain their codecs, shipped
+  `.hex` vectors and no-op client registrations for old recordings. They must never publish terrain or start
+  a client queue; the current server sends none of them. Removing a feature does not permit deleting its shipped
+  replay format.
