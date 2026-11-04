@@ -191,6 +191,7 @@ final class RetainedPlans extends Long2ObjectOpenHashMap<RuinPlan> {
         misses.remove(key);
         RuinPlan old = super.put(key, value);
         bytes += value.bytes() - (old == null ? 0 : old.bytes());
+        value.releaseResultToCountedOwner();
         hot.remove(key);
         if (pages != null) toWrite.add(key);
         return old;

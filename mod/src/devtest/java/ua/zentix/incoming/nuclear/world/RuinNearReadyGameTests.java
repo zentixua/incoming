@@ -37,6 +37,9 @@ public final class RuinNearReadyGameTests {
         Object p = request(prep, handle);
         StrikeGameTests.afterTest(h, () -> RuinPreparation.cancel(level, handle));
         boolean[] stalled = {false}, loaded = {false};
+        var farGate = new java.util.concurrent.CompletableFuture<Void>();
+        var farReads = new java.util.ArrayList<java.util.concurrent.CompletableFuture<DiskShots.Read>>();
+        StrikeGameTests.afterTest(h, () -> farGate.complete(null));
         long[] added = {0};
         String[] phase = {"waiting"};
         boolean[] reported = {false}, realReceipt = {false};
@@ -48,9 +51,22 @@ public final class RuinNearReadyGameTests {
                 long[] order = (long[]) field(p, "order").get(p);
                 if (!stalled[0]) {
                     h.assertTrue(order.length > 1, "Fixture has no actual remaining far work");
-                    // Stop only the ordinary far read cursor at a cold last centre. Near window I/O is untouched.
+                    // Hold actual far source completions, independently of read-cursor recovery.
+                    // The near-window reader and its results continue through their own inbox.
                     field(p, "nextRead").setInt(p, order.length);
                     field(p, "nextFar").setInt(p, order.length - 1);
+                    var remote = new ChunkPos(order[order.length - 1]);
+                    var reading = (it.unimi.dsi.fastutil.longs.LongOpenHashSet) field(p, "reading").get(p);
+                    @SuppressWarnings("unchecked")
+                    var inbox = (RuinInbox<DiskShots.Read>) field(p, "reads").get(p);
+                    for (int dx = -2; dx <= 2; dx++) for (int dz = -2; dz <= 2; dz++) {
+                        var neighbour = new ChunkPos(remote.x + dx, remote.z + dz);
+                        if (!reading.add(neighbour.toLong())) continue;
+                        var complete = inbox.expect();
+                        var read = DiskShots.read(DiskShots.Format.of(level), neighbour, RuinWorkers.Priority.FAR);
+                        farReads.add(read);
+                        read.thenCombine(farGate, (source, unused) -> source).thenAccept(complete);
+                    }
                     stalled[0] = true;
                 }
                 h.assertTrue(status.stage() == RuinPreparation.Stage.READY, "Near plans not ready: " + status);
@@ -117,6 +133,7 @@ public final class RuinNearReadyGameTests {
                 field(p, "failure").set(p, RuinPreparation.Reason.IO);
                 h.assertTrue(RuinPreparation.status(level, handle).stage() == RuinPreparation.Stage.FAILED, "Distant source error was hidden by near readiness");
                 field(p, "failure").set(p, RuinPreparation.Reason.NONE);
+                h.assertTrue(farReads.stream().allMatch(java.util.concurrent.CompletableFuture::isDone), "Far source I/O is not ready behind its gate yet");
                 phase[0] = "binding";
                 int identity = RuinPreparation.bindCarrier(level, handle, owner, status.resolvedTarget(), .01, false, true);
                 h.assertTrue(identity >= 0, "Actual near-ready carrier could not bind: " + RuinPreparation.status(level, handle)
@@ -130,6 +147,7 @@ public final class RuinNearReadyGameTests {
                         "Partial handoff changed or discarded actual near output");
                 h.assertTrue(!field(p, "draining").getBoolean(p), "Partial handoff discarded unfinished far ownership");
                 phase[0] = "far-continuation";
+                farGate.complete(null);
                 field(p, "nextRead").setInt(p, 0);
                 var far = NuclearPrep.class.getDeclaredMethod("far", ServerLevel.class, p.getClass(), WorkClock.class);
                 far.setAccessible(true);

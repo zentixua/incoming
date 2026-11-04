@@ -246,6 +246,62 @@ class RuinWorkerAdmissionTest {
         assertEquals(0, resident());
     }
 
+    @Test
+    void failedExitCallbackStillTerminatesCountExactlyOnce() {
+        var counts = new AtomicIntegerArray(3);
+        var exits = new java.util.concurrent.atomic.AtomicInteger();
+        var task = new RuinWorkers.Task<>(() -> 42, RuinWorkers.Priority.SEEN, counts, null, () -> {
+            exits.incrementAndGet();
+            throw new IllegalStateException("controlled ownership callback failure");
+        });
+        assertDoesNotThrow(task::run);
+        assertTrue(RuinWorkers.finished(task));
+        assertEquals(0, counts.get(0));
+        task.run();
+        assertEquals(1, exits.get());
+        assertEquals(0, counts.get(0));
+    }
+
+    @Test
+    void failedQueuedExitObserverCannotRetainTheFutureTaskCallable() throws Exception {
+        var pool = new RuinWorkers.OwnedPool(1, HEIGHT);
+        var release = new CountDownLatch(1);
+        var started = new CountDownLatch(1);
+        var counts = new AtomicIntegerArray(3);
+        var exits = new java.util.concurrent.atomic.AtomicInteger();
+        try {
+            submit(pool, counts, () -> { started.countDown(); release.await(); return null; }, RuinWorkers.Priority.SEEN);
+            pump(pool, 0, 1);
+            assertTrue(started.await(5, TimeUnit.SECONDS));
+            Object payload = new Object();
+            java.util.concurrent.Callable<Object> body = () -> payload;
+            var queued = new RuinWorkers.Task<>(body, RuinWorkers.Priority.FAR, counts, pool, () -> {
+                exits.incrementAndGet();
+                throw new IllegalStateException("controlled queued ownership callback failure");
+            });
+            pool.execute(queued);
+            assertSame(body, futureTaskCallable(queued));
+            RuntimeException escaped = null;
+            try { queued.cancel(false); } catch (RuntimeException failure) { escaped = failure; }
+            assertNull(futureTaskCallable(queued), "the actual superclass callable must release the payload");
+            assertNull(escaped, "observer failure escaped FutureTask.done");
+            assertTrue(RuinWorkers.finished(queued));
+            assertEquals(1, exits.get());
+            assertEquals(0, counts.get(2));
+        } finally { release.countDown(); close(pool); }
+    }
+
+    /** Read-only test access without requiring module opens in every Gradle/CI JVM. */
+    private static Object futureTaskCallable(Future<?> future) throws ReflectiveOperationException {
+        Class<?> type = Class.forName("sun.misc.Unsafe");
+        var singleton = type.getDeclaredField("theUnsafe");
+        singleton.setAccessible(true);
+        Object unsafe = singleton.get(null);
+        var field = java.util.concurrent.FutureTask.class.getDeclaredField("callable");
+        long offset = (Long) type.getMethod("objectFieldOffset", java.lang.reflect.Field.class).invoke(unsafe, field);
+        return type.getMethod("getObject", Object.class, long.class).invoke(unsafe, future, offset);
+    }
+
     private static <T> Future<T> submit(RuinWorkers.OwnedPool pool, AtomicIntegerArray counts,
                                        java.util.concurrent.Callable<T> body, RuinWorkers.Priority priority) {
         var task = new RuinWorkers.Task<>(body, priority, counts, pool);
