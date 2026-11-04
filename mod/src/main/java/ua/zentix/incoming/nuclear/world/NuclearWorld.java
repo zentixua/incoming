@@ -442,7 +442,7 @@ public final class NuclearWorld {
         NuclearEvents events = NuclearEvents.get(level);
         if (!restored) restore(level, events);
         sweepRuins(now);
-        // background plans: stuck ones fall back to server thread; active threads follow server tick
+        // Expired background attempts are interrupted for retry; active threads follow server tick.
         for (RuinContext ctx : ruins.values()) ctx.expire(now);
         RuinWorkers.adapt(level.getServer());
         // light before wave: faster; wave-killed bodies already received pulse
