@@ -156,7 +156,8 @@ paths:
   and never survives a restart. Do not inspect hidden quarry movement when retaining an accepted sighted point.
 - Carry the UUID through payment, `NuclearKeys` warning/second-key waits and one-shot launch-site continuations;
   renew accepted pending work from server ticks, rather than requiring its screen to remain open. Another review
-  must not silently cancel a paid pending warning. Preserve the accepted Ground Y through continuation; resolving
+  must not silently cancel a paid pending warning. Ordinary owner Abort cancels unpaid reviews/commands while
+  preserving accepted paid nuclear orders. Preserve the accepted Ground Y through continuation; resolving
   `Target.Ground` again changes its surface convention by half a block and invalidates exact readiness.
 - ICBM binding uses its actual scheduled ID before warnings. Carriers use an explicit one-shot identity through
   save/virtual transitions/B-2 payload transfer; detonation forwards that identity to the backend. No geometry

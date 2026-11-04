@@ -177,6 +177,30 @@ public final class NuclearCommandGameTests {
         h.succeed();
     }
 
+    @GameTest(template = "range", batch = "nuke_command_no_ruins", timeoutTicks = 200, skyAccess = true)
+    public static void blockDamageDisabledCommandActuallyBecomesReadyAndLaunches(GameTestHelper h) throws ReflectiveOperationException {
+        Vec3 target = setup(h);
+        var level = h.getLevel();
+        boolean damage = IncomingConfig.SERVER.nukeBlockDamage.get();
+        IncomingConfig.SERVER.nukeBlockDamage.set(false);
+        StrikeGameTests.afterTest(h, () -> {
+            ua.zentix.incoming.nuclear.NuclearStrikes.clear(level);
+            IncomingConfig.SERVER.nukeBlockDamage.set(damage);
+        });
+        h.assertTrue(NuclearCommands.request(level, "no-ruins-command", 0, loadout(),
+                new ServerActions.Aim(new Target.Point(target), target, null), Waypoints.NONE, null), "no-ruins command refused");
+        UUID handle = handle(level);
+        h.succeedWhen(() -> {
+            var scheduled = NuclearEvents.get(level).scheduled().stream()
+                    .filter(order -> order.owner().filter(handle::equals).isPresent()).findFirst().orElse(null);
+            h.assertTrue(scheduled != null, "no-ruins preparation has not launched");
+            var status = RuinPreparation.status(level, handle);
+            h.assertTrue(status.stage() == RuinPreparation.Stage.READY && status.total() == 0,
+                    "no-ruins order did not certify its actual empty required work");
+            h.assertTrue(scheduled.target().equals(target), "no-ruins command changed target");
+        });
+    }
+
     private static NuclearCommands state(ServerLevel level) throws ReflectiveOperationException {
         return (NuclearCommands) field(StrikeWorld.get(level), "commands").get(StrikeWorld.get(level));
     }
