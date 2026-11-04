@@ -1,0 +1,202 @@
+diff --git a/.claude/rules/nuclear-world.md b/.claude/rules/nuclear-world.md
+index bc0480407..6b0b1fc98 100644
+--- a/.claude/rules/nuclear-world.md
++++ b/.claude/rules/nuclear-world.md
+@@ -383,6 +383,11 @@ paths:
+   requeueing as `AGAIN`; `NuclearWorld` gives existing material one bounded batch before admitting new removals.
+   Material/settlement admission charges resident workers (`memory(level, false)`), not an idle pool's configured
+   future size. `nuke_memory_flow` and `nuke_memory_retired_workers` cover the resulting progress dependencies.
++- Dense-plan capture reserves the same ownership terms as the material ledger: temporary pieces, deferred support
++  and provenance, balance/palette/inventory indexes, and compact row growth. Keep `RuinMatter.removalBytes`
++  aligned with those counters; an unrelated per-cell allowance can refuse an already funded ready plan.
++  `nuke_large_plan_admission` compares a 22,054-cell reference with the identical fixed-owner application,
++  including measured server-thread allocation, retained growth and conserved material/support.
+ - Completed crater chunks discard column checkpoints after advancing the saved chunk cursor. Completed passes
+   retain only material totals; terminal out-of-height material groups identical state/cargo without trajectory data.
+   Active moving pieces, support provenance/graph and crater passes are charged by `retainedRuinBytes`. The counter
+diff --git a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinQueueProgressGameTests.java b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinQueueProgressGameTests.java
+new file mode 100644
+index 000000000..693278616
+--- /dev/null
++++ b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinQueueProgressGameTests.java
+@@ -0,0 +1,124 @@
++package ua.zentix.incoming.nuclear.world;
++
++import com.sun.management.ThreadMXBean;
++import java.lang.management.ManagementFactory;
++import net.minecraft.core.BlockPos;
++import net.minecraft.gametest.framework.GameTest;
++import net.minecraft.gametest.framework.GameTestHelper;
++import net.minecraft.server.level.ServerLevel;
++import net.minecraft.world.level.ChunkPos;
++import net.minecraft.world.level.Level;
++import net.minecraft.world.level.block.Blocks;
++import net.minecraft.world.level.chunk.LevelChunk;
++import net.minecraft.world.phys.Vec3;
++import net.neoforged.neoforge.gametest.GameTestHolder;
++import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
++import ua.zentix.incoming.Incoming;
++import ua.zentix.incoming.nuclear.Detonation;
++import ua.zentix.incoming.nuclear.NuclearEvents;
++import ua.zentix.incoming.nuclear.NuclearStrikes;
++
++/** Consumption-boundary reproduction of the 22,054-cell parked plan in the 1 Mt run. */
++@GameTestHolder(Incoming.MOD_ID)
++@PrefixGameTestTemplate(false)
++public final class RuinQueueProgressGameTests {
++    private static final int CELLS = 22_054;
++    private static final long ROOM = 160L << 20;
++
++    private RuinQueueProgressGameTests() {}
++
++    private record Fixture(LevelChunk chunk, Detonation event, RuinPlan plan, long[] positions) {}
++
++    private static Fixture prepare(GameTestHelper h) {
++        ServerLevel level = h.getLevel();
++        NuclearStrikes.clear(level);
++        RuinMatterGameTests.clearFixture(level);
++        var clock = WorkClock.counting(1);
++        clock.start(32); NuclearWorld.get(level).tick(level, clock);
++        ChunkPos centre = new ChunkPos(h.absolutePos(new BlockPos(32, 1, 32)));
++        for (int dz = -2; dz <= 2; dz++) for (int dx = -2; dx <= 2; dx++)
++            level.getChunk(centre.x + dx, centre.z + dz); // Fixture setup, never the live tick path.
++        int bottom = h.absolutePos(new BlockPos(0, 4, 0)).getY();
++        long[] positions = new long[CELLS];
++        for (int i = 0; i < CELLS; i++) {
++            BlockPos at = new BlockPos(centre.getMinBlockX() + (i & 15), bottom + (i >> 8),
++                    centre.getMinBlockZ() + ((i >> 4) & 15));
++            positions[i] = at.asLong();
++            level.setBlock(at, Blocks.STONE_BRICKS.defaultBlockState(), 18);
++        }
++        var event = new Detonation(NuclearEvents.get(level).nextId(),
++                new Vec3(centre.getMiddleBlockX(), bottom + 100, centre.getMiddleBlockZ()), bottom,
++                15, false, level.getGameTime(), 0, 0, 20000, 42, 1, false, .25f, 6000, false);
++        NuclearEvents.get(level).add(event);
++        var context = NuclearWorld.get(level).ruins(level, event, level.getGameTime());
++        var grid = context.grid(level, centre, false);
++        h.assertTrue(grid != null, "Fixture could not capture its live source window");
++        // The measured consumer already had its plan. Rebuild the same payload cardinality
++        // through the real section encoder, without making a new fracture/geometry claim.
++        var sections = new RuinPlanner.Sections(grid.at(0, 0), grid.view());
++        for (long position : positions) {
++            BlockPos at = BlockPos.of(position);
++            sections.set(at.getX() & 15, at.getY(), at.getZ() & 15, Blocks.AIR.defaultBlockState());
++        }
++        var plan = sections.finish(context, new long[0], null);
++        plan.material(positions);
++        h.assertTrue(plan.changedBlocks() == CELLS, "Fixture lost destructive plan positions");
++        return new Fixture(level.getChunkSource().getChunkNow(centre.x, centre.z), event, plan, positions);
++    }
++
++    @GameTest(template = "range", batch = "nuke_large_plan_admission", timeoutTicks = 100, skyAccess = true)
++    public static void densePlanUsesItsFundedPublicationFootprint(GameTestHelper h) {
++        ServerLevel level = h.getLevel();
++        var bean = (ThreadMXBean) ManagementFactory.getThreadMXBean();
++        h.assertTrue(bean.isThreadAllocatedMemorySupported(), "Allocator measurement is unavailable");
++        boolean allocationWasEnabled = bean.isThreadAllocatedMemoryEnabled();
++        bean.setThreadAllocatedMemoryEnabled(true);
++        long thread = Thread.currentThread().threadId();
++        try {
++            Fixture reference = prepare(h);
++            long before = NuclearPrep.residentMemory(level), allocationStart = bean.getThreadAllocatedBytes(thread);
++            h.assertTrue(reference.plan.apply(level, reference.chunk, reference.event, new ColumnScar.Budget(false)),
++                    "Unpressured reference failed to apply");
++            long allocated = bean.getThreadAllocatedBytes(thread) - allocationStart;
++            long growth = NuclearPrep.residentMemory(level) - before;
++            var referenceLedger = RuinMatter.get(level);
++            h.assertTrue(referenceLedger.released() == CELLS && referenceLedger.pending() == CELLS
++                            && referenceLedger.pendingSupport() == CELLS,
++                    "Reference did not retain all material and support seeds");
++            double volume = referenceLedger.releasedVolume();
++            double[] balance = referenceLedger.balance(Blocks.STONE_BRICKS);
++            Incoming.LOG.info("Large-plan reference: cells={} serverAllocated={} retainedGrowth={} controlledRoom={}",
++                    CELLS, allocated, growth, ROOM);
++            h.assertTrue(allocated + growth < ROOM,
++                    "Fixture room does not fund measured capture allocation plus retained ownership");
++
++            Fixture pressured = prepare(h);
++            var other = level.getServer().getLevel(Level.NETHER);
++            try (var occupied = RuinMemory.reserve(other,
++                    NuclearPrep.PLANS_CAP - NuclearPrep.memory(other, false) - ROOM)) {
++                h.assertTrue(occupied != null, "Could not establish the fixed external owner");
++                long initial = NuclearPrep.memory(level, false);
++                boolean applied = pressured.plan.apply(level, pressured.chunk, pressured.event, new ColumnScar.Budget(false));
++                Incoming.LOG.info("Large-plan pressured: cells={} initialOwned={} room={} applied={} memoryWaiting={} retainedNow={}",
++                        CELLS, initial, NuclearPrep.PLANS_CAP - initial, applied, pressured.plan.memoryWaiting(),
++                        NuclearPrep.memory(level, false));
++                h.assertTrue(applied, "Funded dense plan refused application under the unchanged external owner");
++                var ledger = RuinMatter.get(level);
++                h.assertTrue(ledger.released() == CELLS && ledger.pending() == CELLS && ledger.pendingSupport() == CELLS,
++                        "Pressure discarded or duplicated material/support ownership");
++                h.assertTrue(ledger.releasedVolume() == volume
++                                && java.util.Arrays.equals(balance, ledger.balance(Blocks.STONE_BRICKS)),
++                        "Pressure changed conserved volume/mass");
++                for (long position : pressured.positions)
++                    h.assertTrue(level.getBlockState(BlockPos.of(position)).isAir(), "A planned source block survived");
++                h.assertTrue(NuclearPrep.memory(level, false) <= NuclearPrep.PLANS_CAP,
++                        "Application exceeded the unchanged server-wide ownership cap");
++            }
++        } finally {
++            NuclearStrikes.clear(level);
++            RuinMatterGameTests.clearFixture(level);
++            bean.setThreadAllocatedMemoryEnabled(allocationWasEnabled);
++        }
++        h.succeed();
++    }
++}
+diff --git a/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinMatter.java b/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinMatter.java
+index 60b80bfb7..a70c00e67 100644
+--- a/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinMatter.java
++++ b/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinMatter.java
+@@ -45,21 +45,34 @@ public final class RuinMatter extends LedgerData {
+     private int strandedCount;
+     private long movingBytes, strandedBytes, supportBacking;
+ 
++    /** Deferred source plus its eventual contact-map growth, already charged by retainedBytes. */
++    private static final long SUPPORT_SOURCE_BYTES = 4096;
++    private static final long SUPPORT_ENTRY_BYTES = 256;
++    /** Worst case: one new provenance entry, material balance, palette state and inventory slot per removal. */
++    private static final long REMOVAL_INDEX_BYTES = SUPPORT_ENTRY_BYTES + 512 + 96 + 64;
++
+     /** Conservative owned representation, including cargo and collection growth slack; the frozen save shares this owner. */
+     long retainedBytes() {
+-        supportBacking = Math.max(supportBacking, 2048L + supportSources.size() * 4096L
+-                + supports.size() * 256L + uncertain.size() * 256L + originals.size() * 256L);
++        supportBacking = Math.max(supportBacking, 2048L + supportSources.size() * SUPPORT_SOURCE_BYTES
++                + supports.size() * SUPPORT_ENTRY_BYTES + uncertain.size() * SUPPORT_ENTRY_BYTES + originals.size() * SUPPORT_ENTRY_BYTES);
+         inventoryCapacity = Math.max(inventoryCapacity, inventories.size());
+         return IO_BYTES + 1024L + movingBytes + moving.bytes() + strandedBytes + palette.bytes()
+                 + inventoryCapacity * 64L + supportBacking
+-                + Math.max(0, supportSources.bytes() - 4096L * supportSources.size())
++                + Math.max(0, supportSources.bytes() - SUPPORT_SOURCE_BYTES * supportSources.size())
+                 + materials.size() * 512L + (search == null ? 2048 : search.retainedBytes());
+     }
+ 
+     long queueGrowthBytes(int pieces) { return moving.growthBytes(pieces) + supportSources.growthBytes(pieces); }
+ 
++    /** Capture objects coexist with the published compact rows and their indexes. Cargo grows
++     * the reservation separately before mutation. Reserve each ownership term once, rather
++     * than an unrelated per-cell envelope: dense ready chunks must fit when these owners fit. */
++    long removalBytes(int pieces) {
++        return pieces * (512L + SUPPORT_SOURCE_BYTES + REMOVAL_INDEX_BYTES) + queueGrowthBytes(pieces);
++    }
++
+     static long removalBytes(ServerLevel level, Piece piece) {
+-        return piece.retainedBytes() + 8192 + get(level).queueGrowthBytes(1);
++        return get(level).removalBytes(1) + piece.retainedBytes() - 512;
+     }
+ 
+ 
+diff --git a/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinPlan.java b/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinPlan.java
+index ef1526cf0..599df57e5 100644
+--- a/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinPlan.java
++++ b/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinPlan.java
+@@ -938,7 +938,7 @@ public final class RuinPlan {
+         if (!current(chunk, flash, marked)) return false;
+         // Reserve the bounded capture/contact window before allocating it. Large container tags
+         // extend that reservation before any source mutation; refusal keeps this exact plan pending.
+-        try (var reservation = RuinMemory.reserve(level, material.length * (8192L + 512) + RuinMatter.get(level).queueGrowthBytes(material.length))) {
++        try (var reservation = RuinMemory.reserve(level, RuinMatter.get(level).removalBytes(material.length))) {
+             if (reservation == null) { memoryWaiting = true; return false; }
+             java.util.List<RuinMatter.Piece> released = new java.util.ArrayList<>();
+             RuinScorch scorch = new RuinScorch(chunk);

@@ -1,0 +1,58 @@
+{
+  "source": "2e2a7aea1c281c47be318b4b35f26858833bd452",
+  "tree": "035eed3a204be9ea9addea264e9e89171e8e8b12",
+  "files": {
+    "mod/build/libs/incoming-3.11.0.jar": {
+      "bytes": 23484220,
+      "sha256": "46e07835cdf8e1765fee80f765cebbb1710b719e31c19b61f33f97565878c9db"
+    },
+    "mod/build/classes/java/main/ua/zentix/incoming/nuclear/world/RuinMatter$ReservoirKey.class": {
+      "bytes": 1968,
+      "sha256": "db4744cc64fe37ff3cb0cbf03ce180751f2453b281a0f12ceef513e2fe38650d"
+    },
+    "mod/build/classes/java/main/ua/zentix/incoming/nuclear/world/RuinMatter$Reservoir.class": {
+      "bytes": 508,
+      "sha256": "f5dac85f07fec6a5e52868884957c9f7d562702812a88cb1d044b9ae210d4b35"
+    },
+    "mod/build/classes/java/main/ua/zentix/incoming/nuclear/world/RuinMatter$SupportSeed.class": {
+      "bytes": 2081,
+      "sha256": "7df1282395ee1dd0c4b5a8e6670174f9089153f0e1755c5270b21e898664e964"
+    },
+    "mod/build/classes/java/main/ua/zentix/incoming/nuclear/world/RuinMatter$Original.class": {
+      "bytes": 1842,
+      "sha256": "dce950e32ee8422b320c7f353d5f6e951c269f4e7e79580e4275f1cd1550f55d"
+    },
+    "mod/build/classes/java/main/ua/zentix/incoming/nuclear/world/RuinMatter$Piece.class": {
+      "bytes": 3633,
+      "sha256": "969a010c5ada711984557aecfbbdd0b99316c4d90d6ff598b36292311cd86d75"
+    },
+    "mod/build/classes/java/main/ua/zentix/incoming/nuclear/world/RuinMatter.class": {
+      "bytes": 51004,
+      "sha256": "f1806f84ca9c13f3d9b75e875a8bfa236751328becdb3485157629c711fb2820"
+    },
+    "mod/build/classes/java/main/ua/zentix/incoming/nuclear/world/RuinPlan$Debris.class": {
+      "bytes": 2306,
+      "sha256": "3bb8695741c303aa8371b958b81673a50afda72ce5cffb3d03351cf02a173fe8"
+    },
+    "mod/build/classes/java/main/ua/zentix/incoming/nuclear/world/RuinPlan.class": {
+      "bytes": 62665,
+      "sha256": "5b18f582c5b2110be690aa9ffaa5f95aef85f8809b99a46d5733e44c25474a27"
+    },
+    "mod/build/classes/java/main/ua/zentix/incoming/nuclear/world/RuinPlanner$Sections.class": {
+      "bytes": 15225,
+      "sha256": "a28cf7e3a0aab9cde29909e6783755670606e428cb9786bbb700f1e235d68c04"
+    },
+    "mod/build/classes/java/main/ua/zentix/incoming/nuclear/world/RuinPlanner.class": {
+      "bytes": 30859,
+      "sha256": "a3da75fddd56e5064c866d08c9a9e861f9b2c44dd9a162e6dbf116370a911508"
+    },
+    "mod/build/classes/java/devtest/ua/zentix/incoming/nuclear/world/RuinQueueProgressGameTests$Fixture.class": {
+      "bytes": 2456,
+      "sha256": "cfc323bcc71941d90a930efe429b9df0191593c1f89e0700456224ed23f6dcf3"
+    },
+    "mod/build/classes/java/devtest/ua/zentix/incoming/nuclear/world/RuinQueueProgressGameTests.class": {
+      "bytes": 12465,
+      "sha256": "66c743064e992d144bdc6fc588a39739f5580fdc9bedb26c4df838ac337ab36f"
+    }
+  }
+}

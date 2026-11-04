@@ -1,0 +1,329 @@
+Picked up JAVA_TOOL_OPTIONS: -XX:ActiveProcessorCount=4 -Xmx2g
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.14.3/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :createMinecraftArtifacts UP-TO-DATE
+> Task :compileJava UP-TO-DATE
+> Task :generateModMetadata UP-TO-DATE
+> Task :processResources UP-TO-DATE
+> Task :classes UP-TO-DATE
+> Task :jarJar UP-TO-DATE
+> Task :jar
+> Task :assemble
+> Task :compileDevtestJava
+> Task :compileSandboxAgentJava UP-TO-DATE
+> Task :processDevtestResources UP-TO-DATE
+> Task :devtestClasses
+> Task :processSandboxAgentResources NO-SOURCE
+> Task :sandboxAgentClasses UP-TO-DATE
+> Task :compileTestJava
+> Task :processTestResources UP-TO-DATE
+> Task :testClasses
+
+> Task :test
+Picked up JAVA_TOOL_OPTIONS: -XX:ActiveProcessorCount=4 -Xmx2g
+
+> Task :check
+> Task :build
+> Task :copyRuntimeMods_gametest UP-TO-DATE
+> Task :downloadAssets UP-TO-DATE
+> Task :writeGameTestServerLegacyClasspath UP-TO-DATE
+> Task :prepareGameTestServerRun
+
+> Task :runGameTestServer
+Picked up JAVA_TOOL_OPTIONS: -XX:ActiveProcessorCount=4 -Xmx2g
+WARN StatusConsoleListener Advanced terminal features are not available in this environment
+[18:53:40] [main/INFO] [cp.mo.mo.Launcher/MODLAUNCHER]: ModLauncher running: args [--launchTarget, forgeserverdev, --gameDir, ., --fml.fmlVersion, 4.0.45, --fml.mcVersion, 1.21.1, --fml.neoForgeVersion, 21.1.264, --fml.neoFormVersion, 20240808.144430]
+[18:53:40] [main/INFO] [cp.mo.mo.Launcher/MODLAUNCHER]: JVM identified as Microsoft OpenJDK 64-Bit Server VM 21.0.7+6-LTS
+[18:53:40] [main/INFO] [cp.mo.mo.Launcher/MODLAUNCHER]: ModLauncher 11.0.5+main.901c6ea8 starting: java version 21.0.7 by Microsoft; OS Linux arch amd64 version 7.3.1-1-cachyos
+[18:53:40] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Configuration file /mnt/data/projects/incoming/mod/run/wt-CI-ASTRA/mod/run/gametest/config/fml.toml is not correct. Correcting
+[18:53:40] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [disableConfigWatcher] was corrected from null to false
+[18:53:40] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowControl] was corrected from null to true
+[18:53:40] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [maxThreads] was corrected from null to -1
+[18:53:40] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [versionCheck] was corrected from null to true
+[18:53:40] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [defaultConfigPath] was corrected from null to defaultconfigs
+[18:53:40] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [disableOptimizedDFU] was corrected from null to true
+[18:53:40] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowProvider] was corrected from null to fmlearlywindow
+[18:53:40] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowWidth] was corrected from null to 854
+[18:53:40] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowHeight] was corrected from null to 480
+[18:53:40] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowFBScale] was corrected from null to 1
+[18:53:40] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowMaximized] was corrected from null to false
+[18:53:40] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowSkipGLVersions] was corrected from null to []
+[18:53:40] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowSquir] was corrected from null to false
+[18:53:40] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: ****************************** Found dependency overrides ******************************
+[18:53:40] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: Dependency overrides for mod 'aeronautics': adding explicit AFTER ordering against 'simulated', adding explicit AFTER ordering against 'offroad'
+[18:53:40] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: Dependency overrides for mod 'simulated': adding explicit AFTER ordering against 'create', adding explicit AFTER ordering against 'sable'
+[18:53:40] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: Dependency overrides for mod 'offroad': adding explicit AFTER ordering against 'simulated'
+[18:53:40] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: ****************************************************************************************
+[18:53:40] [main/INFO] [ne.ne.fm.lo.ImmediateWindowHandler/]: ImmediateWindowProvider not loading because launch target is forgeserverdev
+[18:53:40] [main/INFO] [mixin/]: SpongePowered MIXIN Subsystem Version=0.8.7 Source=union:/home/artem/.gradle/caches/modules-2/files-2.1/net.fabricmc/sponge-mixin/0.16.4+mixin.0.8.7/26d01f0567ab46e9ca0d2ed89d0ecc11aadbd433/sponge-mixin-0.16.4+mixin.0.8.7.jar%2394!/ Service=ModLauncher Env=SERVER
+[18:53:40] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: ****************************** Found dependency overrides ******************************
+[18:53:40] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: Dependency overrides for mod 'aeronautics': adding explicit AFTER ordering against 'simulated', adding explicit AFTER ordering against 'offroad'
+[18:53:40] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: Dependency overrides for mod 'simulated': adding explicit AFTER ordering against 'create', adding explicit AFTER ordering against 'sable'
+[18:53:40] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: Dependency overrides for mod 'offroad': adding explicit AFTER ordering against 'simulated'
+[18:53:40] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: ****************************************************************************************
+[18:53:41] [main/INFO] [ne.ne.fm.lo.mo.lo.JarInJarDependencyLocator/]: Found 13 dependencies adding them to mods collection
+[18:53:41] [main/INFO] [ne.ne.fm.lo.mo.ModDiscoverer/]: 
+     Mod List:
+		Name Version (Mod Id)
+
+		Create 6.0.10 (create)
+		Create Aeronautics 1.3.2 (aeronautics)
+		Create Aeronautics 1.3.2 (aeronautics_bundled)
+		Create Offroad 1.3.2 (offroad)
+		Create Simulated 1.3.2 (simulated)
+		Flywheel 1.0.6 (flywheel)
+		Incoming 3.11.0 (incoming)
+		Minecraft 1.21.1 (minecraft)
+		NeoForge 21.1.264 (neoforge)
+		Ponder 1.0.82+mc1.21.1 (ponder)
+		Sable 2.0.6 (sable)
+		Sable Companion 1.6.0 (sablecompanion)
+		Veil 4.3.2 (veil)
+[18:53:41] [main/INFO] [mixin/]: Compatibility level set to JAVA_21
+[18:53:41] [main/INFO] [cp.mo.mo.LaunchServiceHandler/MODLAUNCHER]: Launching target 'forgeserverdev' with arguments [--gameDir, .]
+[18:53:41] [main/WARN] [mixin/]: Reference map 'ponder.refmap.json' for ponder-common.mixins.json could not be read. If this is a development environment you can ignore this message
+[18:53:41] [main/INFO] [de.ry.sa.mi.AbstractSableMixinPlugin/]: Using Vanilla renderer mixins
+[18:53:41] [main/INFO] [de.ry.sa.mi.AbstractSableMixinPlugin/]: Using Vanilla renderer mixins
+[18:53:41] [main/WARN] [mixin/]: Reference map 'simulated.refmap.json' for simulated.mixins.json could not be read. If this is a development environment you can ignore this message
+[18:53:41] [main/WARN] [mixin/]: Reference map 'offroad.refmap.json' for offroad.mixins.json could not be read. If this is a development environment you can ignore this message
+[18:53:41] [main/WARN] [mixin/]: Reference map 'aeronautics.refmap.json' for aeronautics.mixins.json could not be read. If this is a development environment you can ignore this message
+[18:53:42] [main/WARN] [mixin/]: Error loading class: org/jetbrains/annotations/ApiStatus$ScheduledForRemoval (java.lang.ClassNotFoundException: org.jetbrains.annotations.ApiStatus$ScheduledForRemoval)
+[18:53:42] [main/INFO] [MixinExtras|Service/]: Initializing MixinExtras via com.llamalad7.mixinextras.service.MixinExtrasServiceImpl(version=0.5.5).
+[18:53:45] [main/WARN] [minecraft/Commands]: Ambiguity between arguments [teleport, location] and [teleport, destination] with inputs: [0.1 -0.5 .9, 0 0 0]
+[18:53:45] [main/WARN] [minecraft/Commands]: Ambiguity between arguments [teleport, location] and [teleport, targets] with inputs: [0.1 -0.5 .9, 0 0 0]
+[18:53:45] [main/WARN] [minecraft/Commands]: Ambiguity between arguments [teleport, destination] and [teleport, targets] with inputs: [Player, 0123, @e, dd12be42-52a9-4a91-a8a1-11c01849e498]
+[18:53:45] [main/WARN] [minecraft/Commands]: Ambiguity between arguments [teleport, targets] and [teleport, destination] with inputs: [Player, 0123, dd12be42-52a9-4a91-a8a1-11c01849e498]
+[18:53:45] [main/WARN] [minecraft/Commands]: Ambiguity between arguments [teleport, targets, location] and [teleport, targets, destination] with inputs: [0.1 -0.5 .9, 0 0 0]
+[18:53:45] [modloading-worker-0/INFO] [Veil/]: Veil is initializing.
+[18:53:45] [modloading-worker-0/INFO] [ne.ne.ne.co.NeoForgeMod/NEOFORGE-MOD]: NeoForge mod loading, version 21.1.264, for MC 1.21.1
+[18:53:45] [modloading-worker-0/INFO] [co.si.cr.Create/]: Create 6.0.10 initializing! Commit hash: ac0c444d9828da3453ae8cc65338e8de063286fb
+[18:53:46] [modloading-worker-0/INFO] [de.ry.sa.Sable/]: Sable loaded!
+[18:53:47] [main/INFO] [mojang/YggdrasilAuthenticationService]: Environment: Environment[sessionHost=https://sessionserver.mojang.com, servicesHost=https://api.minecraftservices.com, name=PROD]
+[18:53:47] [NeoForge Version Check/INFO] [ne.ne.fm.VersionChecker/]: [create] Starting version check at https://api.modrinth.com/updates/create/forge_updates.json?neoforge=only
+[18:53:47] [main/WARN] [minecraft/VanillaPackResourcesBuilder]: Assets URL 'union:/mnt/data/projects/incoming/mod/run/wt-CI-ASTRA/mod/build/moddev/artifacts/neoforge-21.1.264.jar%23128!/assets/.mcassetsroot' uses unexpected schema
+[18:53:47] [main/WARN] [minecraft/VanillaPackResourcesBuilder]: Assets URL 'union:/mnt/data/projects/incoming/mod/run/wt-CI-ASTRA/mod/build/moddev/artifacts/neoforge-21.1.264.jar%23128!/data/.mcassetsroot' uses unexpected schema
+[18:53:47] [main/INFO] [co.si.cr.Create/]: Created 157 recipes which will be injected into the game
+[18:53:47] [main/INFO] [co.si.cr.Create/]: Created 0 tags which will be injected into the game
+[18:53:47] [main/INFO] [ne.ne.ne.ga.GameTestHooks/]: Enabled Gametest Namespaces: [incoming]
+[18:53:48] [NeoForge Version Check/INFO] [ne.ne.fm.VersionChecker/]: [create] Found status: OUTDATED Current: 6.0.10 Target: 6.0.10+mc1.21.1
+[18:53:48] [main/INFO] [minecraft/RecipeManager]: Loaded 2954 recipes
+[18:53:48] [main/INFO] [minecraft/AdvancementTree]: Loaded 2645 advancements
+[18:53:49] [Server thread/INFO] [ua.ze.in.Incoming/]: GameTest: only batch “nuke_(material.*|memory_.*|ledger.*|plan_.*|large_plan_admission)” - tests 28 from 835
+[18:53:49] [Server thread/INFO] [de.ry.sa.Sable/]: Creating physics pipeline for ResourceKey[minecraft:dimension / minecraft:overworld] using RapierPhysicsPipelineProvider
+[18:53:49] [Server thread/INFO] [de.ry.sa.Sable/]: Using game directory relative Sable Rapier native directory /mnt/data/projects/incoming/mod/run/wt-CI-ASTRA/mod/run/gametest/.sable/natives
+[2026-11-04T16:53:49.336082896Z] [[32mINFO[0m] (sable_rapier) Rapier scene initialized
+[18:53:49] [Server thread/INFO] [de.ry.sa.Sable/]: Creating physics pipeline for ResourceKey[minecraft:dimension / minecraft:the_end] using RapierPhysicsPipelineProvider
+[2026-11-04T16:53:49.552920870Z] [[32mINFO[0m] (sable_rapier) Rapier scene initialized
+[18:53:49] [Server thread/INFO] [de.ry.sa.Sable/]: Creating physics pipeline for ResourceKey[minecraft:dimension / minecraft:the_nether] using RapierPhysicsPipelineProvider
+[2026-11-04T16:53:49.587877687Z] [[32mINFO[0m] (sable_rapier) Rapier scene initialized
+[18:53:49] [Server thread/INFO] [minecraft/MinecraftServer]: Preparing start region for dimension minecraft:overworld
+[18:53:49] [worldgen/INFO] [minecraft/LoggerChunkProgressListener]: Preparing spawn area: 2%
+[18:53:49] [Server thread/INFO] [minecraft/LoggerChunkProgressListener]: Time elapsed: 91 ms
+[18:53:49] [Server thread/INFO] [minecraft/GameTestServer]: Started game test server
+[18:53:49] [Server thread/INFO] [ne.ne.ne.se.pe.PermissionAPI/]: Successfully initialized permission handler neoforge:default_handler
+[18:53:49] [Server thread/INFO] [minecraft/GameTestServer]: 28 tests are now running at position -6649624, -59, -12949429!
+[18:53:49] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuke_material:0' (1 tests)...
+[18:53:49] [Server thread/INFO] [minecraft/GameTestServer]: [                            ]
+[18:53:49] [Server thread/INFO] [minecraft/GameTestServer]: [                            ]
+[18:53:49] [Server thread/INFO] [minecraft/GameTestServer]: [_                           ]
+[18:53:50] [Server thread/INFO] [minecraft/GameTestServer]: [_                           ]
+[18:53:50] [Server thread/INFO] [minecraft/GameTestServer]: [_                           ]
+[18:53:50] [Server thread/INFO] [minecraft/GameTestServer]: [_                           ]
+[18:53:50] [Server thread/INFO] [minecraft/GameTestServer]: [_                           ]
+[18:53:50] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuke_memory_cache:0' (1 tests)...
+[18:53:50] [Server thread/INFO] [minecraft/GameTestServer]: [+                           ]
+[18:53:50] [Server thread/INFO] [minecraft/GameTestServer]: [+                           ]
+[18:53:50] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruins: background threads 2 (desired 2; automatic; cores 4, left to the game 2)
+[18:53:50] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruins: background threads stopped (queued tasks dropped: 0)
+[18:53:50] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuke_material_overlap:0' (1 tests)...
+[18:53:50] [Server thread/INFO] [minecraft/GameTestServer]: [++                          ]
+[18:53:50] [Server thread/INFO] [minecraft/GameTestServer]: [++                          ]
+[18:53:50] [Server thread/INFO] [minecraft/GameTestServer]: [++                          ]
+[18:53:50] [Server thread/INFO] [minecraft/GameTestServer]: [++                          ]
+[18:53:50] [Server thread/INFO] [minecraft/GameTestServer]: [++                          ]
+[18:53:50] [Server thread/INFO] [minecraft/GameTestServer]: [++                          ]
+[18:53:50] [Server thread/INFO] [minecraft/GameTestServer]: [++                          ]
+[18:53:50] [Server thread/INFO] [minecraft/GameTestServer]: [++                          ]
+[18:53:50] [Server thread/INFO] [minecraft/GameTestServer]: [++                          ]
+[18:53:50] [Server thread/INFO] [minecraft/GameTestServer]: [++                          ]
+[18:53:50] [Server thread/INFO] [minecraft/GameTestServer]: [++                          ]
+[18:53:50] [Server thread/INFO] [minecraft/GameTestServer]: [++                          ]
+[18:53:50] [Server thread/INFO] [minecraft/GameTestServer]: [++                          ]
+[18:53:50] [Server thread/INFO] [minecraft/GameTestServer]: [++                          ]
+[18:53:50] [Server thread/INFO] [minecraft/GameTestServer]: [++                          ]
+[18:53:50] [Server thread/INFO] [minecraft/GameTestServer]: [++                          ]
+[18:53:50] [Server thread/INFO] [minecraft/GameTestServer]: [++                          ]
+[18:53:50] [Server thread/INFO] [minecraft/GameTestServer]: [++                          ]
+[18:53:50] [Server thread/INFO] [minecraft/GameTestServer]: [++                          ]
+[18:53:50] [Server thread/INFO] [minecraft/GameTestServer]: [++                          ]
+[18:53:50] [Server thread/INFO] [minecraft/GameTestServer]: [++                          ]
+[18:53:50] [Server thread/INFO] [minecraft/GameTestServer]: [++                          ]
+[18:53:50] [Server thread/INFO] [minecraft/GameTestServer]: [++                          ]
+[18:53:50] [Server thread/INFO] [minecraft/GameTestServer]: [++                          ]
+[18:53:50] [Server thread/INFO] [minecraft/GameTestServer]: [++                          ]
+[18:53:50] [Server thread/INFO] [minecraft/GameTestServer]: [++                          ]
+[18:53:50] [Server thread/INFO] [minecraft/GameTestServer]: [++                          ]
+[18:53:50] [Server thread/INFO] [minecraft/GameTestServer]: [++                          ]
+[18:53:50] [Server thread/INFO] [minecraft/GameTestServer]: [++                          ]
+[18:53:50] [Server thread/INFO] [minecraft/GameTestServer]: [++                          ]
+[18:53:50] [Server thread/INFO] [minecraft/GameTestServer]: [++                          ]
+[18:53:50] [Server thread/INFO] [minecraft/GameTestServer]: [++                          ]
+[18:53:50] [Server thread/INFO] [minecraft/GameTestServer]: [++                          ]
+[18:53:50] [Server thread/INFO] [minecraft/GameTestServer]: [++                          ]
+[18:53:50] [Server thread/INFO] [minecraft/GameTestServer]: [++                          ]
+[18:53:50] [Server thread/INFO] [minecraft/GameTestServer]: [++                          ]
+[18:53:51] [Server thread/INFO] [minecraft/GameTestServer]: [++                          ]
+[18:53:51] [Server thread/INFO] [minecraft/GameTestServer]: [++                          ]
+[18:53:51] [Server thread/INFO] [minecraft/GameTestServer]: [++                          ]
+[18:53:51] [Server thread/INFO] [minecraft/GameTestServer]: [++                          ]
+[18:53:51] [Server thread/INFO] [minecraft/GameTestServer]: [++                          ]
+[18:53:51] [Server thread/INFO] [minecraft/GameTestServer]: [++                          ]
+[18:53:51] [Server thread/INFO] [minecraft/GameTestServer]: [++                          ]
+[18:53:51] [Server thread/INFO] [minecraft/GameTestServer]: [++                          ]
+[18:53:51] [Server thread/INFO] [minecraft/GameTestServer]: [++                          ]
+[18:53:51] [Server thread/INFO] [minecraft/GameTestServer]: [++                          ]
+[18:53:51] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuke_ledger_legacy_crater:0' (1 tests)...
+[18:53:51] [Server thread/INFO] [minecraft/GameTestServer]: [+++                         ]
+[18:53:51] [Server thread/INFO] [minecraft/GameTestServer]: [+++                         ]
+[18:53:51] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuke_material_pile:0' (1 tests)...
+[18:53:51] [Server thread/INFO] [minecraft/GameTestServer]: [++++                        ]
+[18:53:51] [Server thread/INFO] [minecraft/GameTestServer]: [++++                        ]
+[18:53:51] [Server thread/INFO] [minecraft/GameTestServer]: [++++_                       ]
+[18:53:51] [Server thread/INFO] [minecraft/GameTestServer]: [++++_                       ]
+[18:53:51] [Server thread/INFO] [minecraft/GameTestServer]: [++++_                       ]
+[18:53:51] [Server thread/INFO] [minecraft/GameTestServer]: [++++_                       ]
+[18:53:51] [Server thread/INFO] [minecraft/GameTestServer]: [++++_                       ]
+[18:53:51] [Server thread/INFO] [minecraft/GameTestServer]: [++++_                       ]
+[18:53:52] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuke_plan_material:0' (1 tests)...
+[18:53:52] [Server thread/INFO] [minecraft/GameTestServer]: [+++++                       ]
+[18:53:52] [Server thread/INFO] [minecraft/GameTestServer]: [+++++                       ]
+[18:53:52] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruin plan storage route 0: released=64, volume=26.199999999999974, mass=58560.0, support=64, masonry mass=57960.0, barrel mass=600.0
+[18:53:52] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruin plan storage route 1: released=64, volume=26.199999999999974, mass=58560.0, support=64, masonry mass=57960.0, barrel mass=600.0
+[18:53:52] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruin plan storage route 2: released=64, volume=26.199999999999974, mass=58560.0, support=64, masonry mass=57960.0, barrel mass=600.0
+[18:53:52] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruin plan storage route 3: released=64, volume=26.199999999999974, mass=58560.0, support=64, masonry mass=57960.0, barrel mass=600.0
+[18:53:52] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuke_plan_fields:0' (1 tests)...
+[18:53:52] [Server thread/INFO] [minecraft/GameTestServer]: [++++++                      ]
+[18:53:52] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuke_material_compaction:0' (2 tests)...
+[18:53:52] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++                     ]
+[18:53:52] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++                     ]
+[18:53:52] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuke_ledger_totals:0' (1 tests)...
+[18:53:52] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++                   ]
+[18:53:52] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuke_material_geometry:0' (1 tests)...
+[18:53:52] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++                  ]
+[18:53:52] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++                  ]
+[18:53:52] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuke_ledger_parked:0' (1 tests)...
+[18:53:52] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++                 ]
+[18:53:52] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++                 ]
+[18:53:53] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuke_large_plan_admission:0' (1 tests)...
+[18:53:53] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++                ]
+[18:53:53] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++                ]
+[18:53:53] [Server thread/INFO] [ua.ze.in.Incoming/]: Large-plan reference: cells=22054 serverAllocated=42027128 retainedGrowth=99980392 controlledRoom=167772160
+[18:53:53] [Server thread/INFO] [ua.ze.in.Incoming/]: Large-plan pressured: cells=22054 initialOwned=369098752 room=167772160 applied=true memoryWaiting=false retainedNow=469079144
+[18:53:53] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuke_ledger_cold:0' (1 tests)...
+[18:53:53] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++               ]
+[18:53:53] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++               ]
+[18:53:53] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++               ]
+[18:53:53] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++_              ]
+[18:53:53] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++_              ]
+[18:53:53] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuke_material_seam:0' (1 tests)...
+[18:53:53] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++              ]
+[18:53:54] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++              ]
+[18:53:54] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++_             ]
+[18:53:54] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++_             ]
+[18:53:54] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++_             ]
+[18:53:54] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++_             ]
+[18:53:54] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++_             ]
+[18:53:54] [Server thread/INFO] [ua.ze.in.Incoming/]: Mod work over 30 s: server tick avg 3.4 ms (max 389.7), of which mod lanes avg — impacts 0.0, nuke 0.0, blackout 0.0 ms; the rest (vanilla, other mods) 3.4 ms; impact early window 100.0% of ticks, early avg 0.0 ms, late avg 0.0 ms; mandatory unload debt 2.2% of ticks
+[18:53:54] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++_             ]
+[18:53:54] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++_             ]
+[18:53:54] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuke_ledger_drain:0' (1 tests)...
+[18:53:54] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++             ]
+[18:53:54] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++             ]
+[18:53:54] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuke_ledger_admission:0' (1 tests)...
+[18:53:54] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++            ]
+[18:53:54] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++            ]
+[18:53:55] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuke_memory_flow:0' (1 tests)...
+[18:53:55] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++           ]
+[18:53:55] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++           ]
+[18:53:55] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruins: background threads 2 (desired 2; automatic; cores 4, left to the game 2)
+[18:53:55] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruins: background threads stopped (queued tasks dropped: 0)
+[18:53:55] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuke_material_void:0' (1 tests)...
+[18:53:55] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++          ]
+[18:53:55] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuke_ledger_save:0' (1 tests)...
+[18:53:55] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++         ]
+[18:53:55] [Server thread/INFO] [ua.ze.in.Incoming/]: Ledger wrapper: records=10001, caller allocated=224 bytes, owned=1878534 bytes
+[18:53:55] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++_        ]
+[18:53:55] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++_        ]
+[18:53:55] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++_        ]
+[18:53:55] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuke_material_wall:0' (1 tests)...
+[18:53:55] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++        ]
+[18:53:55] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++_       ]
+[18:53:55] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++_       ]
+[18:53:55] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++_       ]
+[18:53:55] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++_       ]
+[18:53:55] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++_       ]
+[18:53:55] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuke_material_memory:0' (1 tests)...
+[18:53:55] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++       ]
+[18:53:55] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++       ]
+[18:53:55] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuke_ledger_cleanup:0' (1 tests)...
+[18:53:55] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++++      ]
+[18:53:55] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuke_material_plan_memory:0' (1 tests)...
+[18:53:55] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++     ]
+[18:53:55] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++     ]
+[18:53:56] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuke_memory_retired_workers:0' (1 tests)...
+[18:53:56] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++++++    ]
+[18:53:56] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++++++    ]
+[18:53:56] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruins: background threads 17 (desired 96; from the ruin_threads setting; cores 4, left to the game 0)
+[18:53:56] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruins: background threads stopped (queued tasks dropped: 0)
+[18:53:56] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuke_material_codec:0' (1 tests)...
+[18:53:56] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++   ]
+[18:53:56] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++   ]
+[18:53:56] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++   ]
+[18:53:56] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++   ]
+[18:53:56] [Server thread/INFO] [ua.ze.in.Incoming/]: Mod work over 30 s: server tick avg 4.1 ms (max 431.1), of which mod lanes avg — impacts 0.0, nuke 0.0, blackout 0.0 ms; the rest (vanilla, other mods) 4.1 ms; impact early window 100.0% of ticks, early avg 0.0 ms, late avg 0.0 ms; mandatory unload debt 2.8% of ticks
+[18:53:56] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++   ]
+[18:53:56] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++   ]
+[18:53:56] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++   ]
+[18:53:56] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++   ]
+[18:53:56] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++   ]
+[18:53:56] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuke_material_scorch:0' (1 tests)...
+[18:53:56] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++++++++  ]
+[18:53:56] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++++++++  ]
+[18:53:56] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++++++++  ]
+[18:53:56] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++++++++_ ]
+[18:53:56] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++++++++_ ]
+[18:53:56] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++++++++_ ]
+[18:53:56] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++++++++_ ]
+[18:53:56] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuke_material_many:0' (1 tests)...
+[18:53:56] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++ ]
+[18:53:56] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++++++++++ ]
+[18:53:56] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++++++++++]
+[18:53:56] [Server thread/INFO] [minecraft/GameTestServer]: ========= 28 GAME TESTS COMPLETE IN 7.201 s ======================
+[18:53:56] [Server thread/INFO] [minecraft/GameTestServer]: All 28 required tests passed :)
+[18:53:56] [Server thread/INFO] [minecraft/GameTestServer]: ====================================================
+[18:53:56] [Server thread/INFO] [minecraft/MinecraftServer]: Stopping server
+[18:53:56] [Server thread/INFO] [minecraft/MinecraftServer]: Saving players
+[18:53:56] [Server thread/INFO] [minecraft/MinecraftServer]: Saving worlds
+[18:53:57] [Server thread/INFO] [minecraft/MinecraftServer]: Saving chunks for level 'ServerLevel[Test Level]'/minecraft:overworld
+[18:53:57] [Server thread/INFO] [de.ry.sa.Sable/]: Saving sub-levels for level 'ServerLevel[Test Level]'/minecraft:overworld
+[18:53:59] [Server thread/INFO] [minecraft/MinecraftServer]: Saving chunks for level 'ServerLevel[Test Level]'/minecraft:the_end
+[18:53:59] [Server thread/INFO] [de.ry.sa.Sable/]: Saving sub-levels for level 'ServerLevel[Test Level]'/minecraft:the_end
+[18:53:59] [Server thread/INFO] [minecraft/MinecraftServer]: Saving chunks for level 'ServerLevel[Test Level]'/minecraft:the_nether
+[18:53:59] [Server thread/INFO] [de.ry.sa.Sable/]: Saving sub-levels for level 'ServerLevel[Test Level]'/minecraft:the_nether
+[18:53:59] [Server thread/INFO] [minecraft/MinecraftServer]: ThreadedAnvilChunkStorage (world): All chunks are saved
+[18:53:59] [Server thread/INFO] [minecraft/MinecraftServer]: ThreadedAnvilChunkStorage (DIM1): All chunks are saved
+[18:53:59] [Server thread/INFO] [minecraft/MinecraftServer]: ThreadedAnvilChunkStorage (DIM-1): All chunks are saved
+[18:53:59] [Server thread/INFO] [minecraft/MinecraftServer]: ThreadedAnvilChunkStorage: All dimensions are saved
+[18:53:59] [Server thread/INFO] [minecraft/GameTestServer]: Game test server shutting down
+
+[Incubating] Problems report is available at: file:///mnt/data/projects/incoming/mod/run/wt-CI-ASTRA/mod/build/reports/problems/problems-report.html
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 9.0.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/8.14.3/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD SUCCESSFUL in 4m 16s
+17 actionable tasks: 6 executed, 11 up-to-date
+laptop_job ci-astra-material-final: exit 0

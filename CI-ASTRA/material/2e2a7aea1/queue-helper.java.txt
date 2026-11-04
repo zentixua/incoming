@@ -1,0 +1,62 @@
+    // Call once per existing dimension: queueHeads(out, name + ".queueHeads", level, world).
+    // Passive fields/maps only; no RetainedPlans.get, current/apply/reserve or admission getters.
+    private static void queueHeads(StringBuilder out, String label, Object level, Object world) throws Exception {
+        Object scars = read(world, "scars");
+        Map<?, ?> jobs = (Map<?, ?>) read(scars, "jobs");
+        Map<?, ?> prepared = (Map<?, ?>) read(scars, "prepared");
+        Map<?, ?> parked = (Map<?, ?>) read(scars, "parked");
+        Map<?, ?> contexts = (Map<?, ?>) read(world, "ruins");
+        Object chunks = call(level, "getChunkSource");
+        List<Object> selected = new ArrayList<>();
+        List<String> names = new ArrayList<>();
+        for (String source : List.of("readySeen", "readyUnseen")) {
+            int scanned = 0, stale = 0, selectedHere = 0, limit = source.equals("readySeen") ? 8 : 4;
+            for (Object job : (Collection<?>) read(scars, source)) {
+                if (scanned++ >= 512 || selectedHere >= limit) break;
+                long key = ((Number) read(job, "chunk")).longValue();
+                if (jobs.get(key) != job) { stale++; continue; }
+                selected.add(job); names.add(source + "[" + selectedHere++ + "]");
+            }
+            out.append(label).append(' ').append(source).append(" scanned=").append(scanned)
+                    .append(" stale=").append(stale).append(" selected=").append(selectedHere).append('\n');
+        }
+        Object due = ((Queue<?>) read(scars, "byDue")).peek();
+        if (due != null) { selected.add(due); names.add("byDue.head"); }
+        for (int i = 0; i < selected.size(); i++) {
+            Object job = selected.get(i); String name = label + '.' + names.get(i);
+            long key = ((Number) read(job, "chunk")).longValue(); int x = (int) key, z = (int) (key >>> 32);
+            List<?> events = (List<?>) read(job, "events"); int event = ((Number) read(job, "event")).intValue();
+            Object d = event >= 0 && event < events.size() ? events.get(event) : null;
+            Object id = d == null ? null : read(d, "id");
+            out.append(name).append(" key=").append(key).append(" x=").append(x).append(" z=").append(z)
+                    .append(" liveJob=").append(jobs.get(key) == job).append(" actualEvent=").append(id).append('\n');
+            dump(out, name + ".job", job);
+            int loaded = 0;
+            for (int dz = -2, bit = 0; dz <= 2; dz++) for (int dx = -2; dx <= 2; dx++, bit++)
+                if (call(chunks, "getChunkNow", x + dx, z + dz) != null) loaded |= 1 << bit;
+            out.append(name).append(" loadedMask=").append(Integer.toHexString(loaded))
+                    .append(" (bit=(dz+2)*5+dx+2; getChunkNow only)\n");
+            Object ctx = contexts.get(id);
+            Object task = ctx == null ? null : ((Map<?, ?>) read(ctx, "tasks")).get(key);
+            dump(out, name + ".task", task);
+            Object held = parked.get(key); dump(out, name + ".parked", held);
+            if (held != null) dump(out, name + ".parkedPlan", read(held, "plan"));
+            Map<?, ?> plans = (Map<?, ?>) prepared.get(id);
+            if (plans == null && ctx != null) plans = (Map<?, ?>) read(ctx, "restoredPlans");
+            if (plans != null) {
+                // entry.getValue reads the backing slot; it does not dispatch the demand-loading get override.
+                int scanned = 0; boolean found = false;
+                for (var entry : plans.entrySet()) {
+                    if (scanned++ >= 8192) break;
+                    if (((Number) entry.getKey()).longValue() != key) continue;
+                    found = true; dump(out, name + ".preparedPlan", entry.getValue()); break;
+                }
+                out.append(name).append(" preparedKeyFound=").append(found).append(" scanCount=").append(scanned)
+                        .append(" completeAbsenceCheck=").append(found || scanned <= 8192).append('\n');
+                Object reads = optional(plans, "reads");
+                if (reads instanceof Map<?, ?> map) dump(out, name + ".planRead", map.get(key));
+                Object demanded = optional(plans, "demanded");
+                out.append(name).append(" planDemanded=").append(demanded instanceof Set<?> set && set.contains(key)).append('\n');
+            } else out.append(name).append(" noPreparedOwner\n");
+        }
+    }

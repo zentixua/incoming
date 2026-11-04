@@ -1,0 +1,54 @@
+{
+  "RCI-MAT-review.md": {
+    "bytes": 7915,
+    "sha256": "b8faff7b80b132eb1d31811b015ba55b1142fc60bb3aa5da0162cf65027940cb"
+  },
+  "README.md": {
+    "bytes": 3101,
+    "sha256": "1ce95dad470629992b9885fc556d56a2a3f641aeff8c94351aeca1fb72976e27"
+  },
+  "actual-probe2.txt": {
+    "bytes": 41250,
+    "sha256": "31a2ba747df4abbef62307b58f6ca8fd9299747f3d80c067f00210c97b4f6b7b"
+  },
+  "candidate.patch": {
+    "bytes": 13369,
+    "sha256": "75d173da6b85a1564fdf99a67ba521cfd8e344d016e7cefebd018e5c041f2965"
+  },
+  "cause-correction.patch": {
+    "bytes": 3935,
+    "sha256": "5ec99bdea9cba9111115ae9d3a7acf15fddce22600fa2882d49c4e96791f2000"
+  },
+  "final-artifacts.json": {
+    "bytes": 2779,
+    "sha256": "d7913b6767de80a5593b9c93b7f1c08f47ad7f8c6ed50d142feca795059996eb"
+  },
+  "final-unit-results.json": {
+    "bytes": 68320,
+    "sha256": "d96a3e7f549be83ad1550f0f249dee3096293414b7913f9534add475e7a8b371"
+  },
+  "material-final-validation.log": {
+    "bytes": 32747,
+    "sha256": "a94401b4d64c90017883cf1e5fed2da3f2975a4f924e6355b5632f0d3a601f79"
+  },
+  "material-green160.log": {
+    "bytes": 14996,
+    "sha256": "9c060646cf8524827fce037cd3e84fdc4b2c5cc2998742b23ca94613ff4b75db"
+  },
+  "material-red.log": {
+    "bytes": 15650,
+    "sha256": "8df03fafcce8ba3fe43c155d84860d2bfa69689b48428e18fa49aa8ca4388f28"
+  },
+  "material-red160.log": {
+    "bytes": 15781,
+    "sha256": "9867b051462e280ae8ad5d2da4726fc49e56c76cba7bdf08684a59549caed284"
+  },
+  "queue-helper.java.txt": {
+    "bytes": 4431,
+    "sha256": "a9c1a1a231d6e3c1f4b37136177fca568521596de5fce9c0327b08c426b80a89"
+  },
+  "red-fixture.java": {
+    "bytes": 7370,
+    "sha256": "8cff676519efd9436d99ab6c9568d3d2854b5c9d9033b5b549ea47399cb90acc"
+  }
+}
