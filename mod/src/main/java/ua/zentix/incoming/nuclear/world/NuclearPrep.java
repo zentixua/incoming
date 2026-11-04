@@ -864,15 +864,25 @@ public final class NuclearPrep {
             p.unreadWhy.addTo(current.skip().split(":", 2)[0], 1);
             return;
         }
-        current = current.primed(Blast.SERVER);
-        boolean restored = false;
         try {
-            if (stored.data().isPresent()) restored = p.ruins.restoreArchived(stored.key(), stored.data().get(), current);
+            current = current.primed(Blast.SERVER);
+            boolean restored = false;
+            try {
+                if (stored.data().isPresent()) restored = p.ruins.restoreArchived(stored.key(), stored.data().get(), current);
+            } catch (RuntimeException error) {
+                Incoming.LOG.warn("Prepared snapshot cache rejected for {}", new ChunkPos(stored.key()), error);
+            }
+            if (!restored) p.ruins.putDisk(level, current);
+            p.diskShots++;
         } catch (RuntimeException error) {
-            Incoming.LOG.warn("Prepared snapshot cache rejected for {}", new ChunkPos(stored.key()), error);
+            failedSource(p, stored.key(), error);
         }
-        if (!restored) p.ruins.putDisk(level, current);
-        p.diskShots++;
+    }
+
+    private static void failedSource(Prep p, long key, RuntimeException error) {
+        p.unreadable.add(key);
+        if (p.handle != null) p.failure = RuinPreparation.Reason.IO;
+        Incoming.LOG.error("Pre-built ruins: snapshot of chunk {} from disk failed", new ChunkPos(key), error);
     }
 
     /** Add ready plan to the resident window; completed spill receipts free it for subsequent chunks. */
@@ -923,8 +933,7 @@ public final class NuclearPrep {
                     p.diskShots++;
                 }
             } catch (RuntimeException e) {
-                p.unreadable.add(c);
-                Incoming.LOG.error("Pre-built ruins: snapshot of chunk {} from disk failed", r.pos(), e);
+                failedSource(p, c, e);
             } finally {
                 clock.record(shared.end(c0));
             }
@@ -1021,7 +1030,8 @@ public final class NuclearPrep {
             }
             if (skip) {
                 // cannot read entire window: chunk ruins after wave
-                p.farSkipped++;
+                // Failed required work is never credited as absent/non-required terrain.
+                if (p.handle == null || p.failure == RuinPreparation.Reason.NONE) p.farSkipped++;
                 p.ruins.noPlan(c);
                 p.nextFar++;
                 continue;
