@@ -1342,7 +1342,13 @@ public final class RuinBackgroundGameTests {
         } finally {
             ScarQueue.seenForTest(null);
             q.clear(level);
+            // This standalone queue leaves an unseen consumer pending. It owns the synthetic
+            // detonation lifetime too; clearing only the queue cannot retire its assembling window.
+            NuclearWorld.get(level).forgetRuinsForTest(d.id());
         }
+        h.assertTrue(RuinWorkers.awaitForTest(RuinWorkers.Priority.NEAR, 60_000), "retired fixture workers did not exit");
+        h.assertTrue(RuinPlanner.planFresh(level, d, unseen, true).changedBlocks() > 0,
+                "retired fixture blocked an independent background consumer");
         h.succeed();
     }
 
