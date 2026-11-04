@@ -646,7 +646,7 @@ final class RuinContext {
         return true;
     }
 
-    /** Every actual Grid consumer shares this context's input owner, including flash-layer work. */
+    /** Ruin and flash-layer jobs share this context's actual input owner. */
     <T> java.util.concurrent.Future<T> submitWorker(java.util.concurrent.Callable<T> task, RuinWorkers.Priority priority) {
         return RuinWorkers.submit(task, priority, inputs);
     }

@@ -149,6 +149,7 @@ public final class RuinInputLifetimeGameTests {
                     h.assertTrue(RuinWorkers.finished(future) && started.getCount() == 1,
                             "queued Grid callable ran or retained its owner");
                     h.assertTrue(RuinInputs.detachedBytes() == initialDetached, "queued cancellation leaked inputs");
+                    Incoming.LOG.info("INPUT_LIFETIME {} known={} detached={} queuedCallableStarted={}", route, known, RuinInputs.detachedBytes(), started.getCount() == 0);
                     release.countDown();
                     phase[0] = 1;
                     return;
@@ -161,6 +162,8 @@ public final class RuinInputLifetimeGameTests {
                 h.assertTrue(total < NuclearPrep.PLANS_CAP / 2, "fixture lacks admission headroom before filling room");
                 otherWorld.materialReservation += Math.max(0, NuclearPrep.PLANS_CAP / 2 - total + known / 2);
                 h.assertTrue(otherWorld.settleMemoryRoom(other) == 0, "another dimension spent running Grid room");
+                Incoming.LOG.info("INPUT_LIFETIME {} held known={} detached={} futureDone={} actualFinished={} otherRoom={}",
+                        route, known, RuinInputs.detachedBytes(), future.isDone(), RuinWorkers.finished(future), otherWorld.settleMemoryRoom(other));
                 release.countDown();
                 phase[0] = 1;
             } else if (RuinWorkers.finished(future) && (blocker == null || RuinWorkers.finished(blocker))) {
@@ -170,6 +173,8 @@ public final class RuinInputLifetimeGameTests {
                 if (blocker == null) h.assertTrue(otherWorld.settleMemoryRoom(other) > 0, "actual exit did not reopen admission");
                 ctx.cancelTasks();
                 h.assertTrue(RuinInputs.detachedBytes() == initialDetached, "repeated clear refunded twice");
+                Incoming.LOG.info("INPUT_LIFETIME {} exited detached={} consumed={} otherRoom={}",
+                        route, RuinInputs.detachedBytes(), consumed.get(), otherWorld.settleMemoryRoom(other));
                 h.succeed();
             }
         });
