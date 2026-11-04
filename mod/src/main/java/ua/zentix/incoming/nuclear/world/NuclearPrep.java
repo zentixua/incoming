@@ -359,7 +359,7 @@ public final class NuclearPrep {
 
     @Nullable Vec3 carrierMiss(UUID handle, ua.zentix.incoming.strike.WeaponType weapon) {
         Prep p = request(handle);
-        return p == null || p.bound || p.carrierWeapon != null && p.carrierWeapon != weapon ? null : p.miss;
+        return p == null || p.bound || p.carrierWeapon != weapon ? null : p.miss;
     }
 
     /** Existing impact(aim) branch only; an earlier collision keeps its own fresh geometry. */

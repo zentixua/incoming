@@ -212,7 +212,7 @@ public final class NuclearReview {
                             e.aim.target() instanceof Target.Ground, l.weapon().spec().warhead().chooseBurst() && l.nuke().airBurst(), l.weapon());
                 else
                     RuinPreparation.prepare(p.serverLevel(), e.id, p.getUUID(), e.aim.point(), l.nuke().yieldKt(),
-                        e.aim.target() instanceof Target.Ground, l.weapon().spec().warhead().chooseBurst() && l.nuke().airBurst());
+                            e.aim.target() instanceof Target.Ground, l.weapon().spec().warhead().chooseBurst() && l.nuke().airBurst());
             }
             if (e.preparing) {
                 RuinPreparation.keepAlive(p.serverLevel(), e.id, p.getUUID());
