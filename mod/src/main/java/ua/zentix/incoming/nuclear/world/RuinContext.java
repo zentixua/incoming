@@ -250,6 +250,10 @@ final class RuinContext {
         return missing;
     }
 
+    /** Unadmitted far demand must survive re-readable snapshot cache trimming. */
+    void pinWindow(long centre) { pendingWindows.add(centre); }
+    void unpinWindow(long centre) { pendingWindows.remove(centre); }
+
     /** Pending source ownership survives a todo being overtaken by another planner. */
     int pendingWindowReads() { return reads.pending(); }
     long pendingWindowBytes() { return WINDOW_READ_BYTES * reads.pending(); }
@@ -309,6 +313,7 @@ final class RuinContext {
      * If later planned (post-wave ruin queue), snapshots retaken.
      */
     void noPlan(long chunk) {
+        pendingWindows.remove(chunk);
         if (planned.add(chunk)) {
             ChunkPos pos = new ChunkPos(chunk);
             forget(pos, 1, planned, k -> blasts.remove(k));
