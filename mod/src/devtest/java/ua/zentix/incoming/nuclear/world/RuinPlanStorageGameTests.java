@@ -153,7 +153,26 @@ public final class RuinPlanStorageGameTests {
                 && a.pendingSupport() == b.pendingSupport(), route + " changed aggregate/support ownership");
         for (var type : TYPES) h.assertTrue(Arrays.equals(a.balance(type), b.balance(type)), route + " changed mass/volume for " + type);
         var saved = b.save(new CompoundTag(), h.getLevel().registryAccess());
-        h.assertTrue(expected.equals(saved), route + " changed material trajectories, source contacts or cargo");
+        h.assertTrue(expected.getAllKeys().equals(saved.getAllKeys()), route + " changed ledger fields");
+        for (String key : expected.getAllKeys()) {
+            // These maps have no ordering contract; rehashing on load may change their row order.
+            String rowKey = switch (key) {
+                case "materials" -> "block";
+                case "support_originals", "cold_edges" -> "position";
+                default -> null;
+            };
+            Object before = rowKey == null ? expected.get(key) : rows(expected, key, rowKey);
+            Object after = rowKey == null ? saved.get(key) : rows(saved, key, rowKey);
+            h.assertTrue(Objects.equals(before, after), route + " changed ledger field " + key);
+        }
+    }
+
+    private static List<CompoundTag> rows(CompoundTag tag, String name, String key) {
+        var list = tag.getList(name, Tag.TAG_COMPOUND);
+        var sorted = new ArrayList<CompoundTag>();
+        for (int i = 0; i < list.size(); i++) sorted.add(list.getCompound(i));
+        sorted.sort(java.util.Comparator.comparing(row -> row.get(key).toString()));
+        return sorted;
     }
 
     private static void cargo(GameTestHelper h, CompoundTag saved, BlockPos barrel, CompoundTag contents) {
@@ -232,6 +251,9 @@ public final class RuinPlanStorageGameTests {
                     h.assertTrue(ledger.released() > 1 && ledger.pendingSupport() > 0 && ledger.balance(Blocks.STONE_BRICKS)[1] > 0
                             && ledger.balance(Blocks.BARREL)[1] > 0, "Route " + i + " discarded structural material/support");
                     cargo(h, saved, f.barrel(), contents);
+                    Incoming.LOG.info("Ruin plan storage route {}: released={}, volume={}, mass={}, support={}, masonry mass={}, barrel mass={}",
+                            i, ledger.released(), ledger.releasedVolume(), saved.getDouble("released_mass"), ledger.pendingSupport(),
+                            ledger.balance(Blocks.STONE_BRICKS)[1], ledger.balance(Blocks.BARREL)[1]);
                     if (i > 0) sameLedger(h, outcomes.getFirst().ledger, ledger, outcomes.getFirst().saved, "Route " + i);
                     var restored = RuinMatter.load(saved, lookup);
                     sameLedger(h, ledger, restored, saved, "In-memory ledger reload " + i);
@@ -243,6 +265,7 @@ public final class RuinPlanStorageGameTests {
                 // No pending transport may mutate a compared ledger while its file save finishes.
                 storage.set("incoming_ruin_matter", new RuinMatter());
                 plans.remove(key);
+                h.assertTrue(plans.bytes() == 0, "Consumed spilled plan retained historical memory");
                 closed.set(plans.closeStorage());
                 applied[0] = true;
             }
