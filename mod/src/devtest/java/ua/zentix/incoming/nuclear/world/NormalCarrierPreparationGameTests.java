@@ -177,6 +177,7 @@ public final class NormalCarrierPreparationGameTests {
 
     @GameTest(template = "range", batch = "nuke_normal_void_point", timeoutTicks = 200, skyAccess = true)
     public static void voidPointRetainsTheMissilesExistingPreWarheadClamp(GameTestHelper h) {
+        StrikeGameTests.gameSpeed(h);
         var level = h.getLevel();
         boolean damage = IncomingConfig.SERVER.nukeBlockDamage.get();
         IncomingConfig.SERVER.nukeBlockDamage.set(false);
