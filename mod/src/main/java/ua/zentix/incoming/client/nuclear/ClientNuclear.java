@@ -149,6 +149,10 @@ public final class ClientNuclear {
     /** Server game-time packet interval in ticks (same in replay, from recording). */
     static final int TIME_SYNC_TICKS = 20;
 
+    private static final IcbmApproaches APPROACHES = new IcbmApproaches();
+    public static IcbmApproaches approaches() { return APPROACHES; }
+    public static void approach(S2C.NukeApproach p) { APPROACHES.snapshot(p.time(), p.arrivals()); }
+
     private static final ClockLead CLOCK = new ClockLead();
     private static final Map<Integer, Active> DETONATIONS = new LinkedHashMap<>();
     private static final Map<Integer, S2C.NukeWarning> WARNINGS = new LinkedHashMap<>();
@@ -173,10 +177,15 @@ public final class ClientNuclear {
      */
     public static void detonation(S2C.NukeDetonation p, boolean live) {
         Detonation d = p.detonation();
+        if (p.strikeId() >= 0) {
+            WARNINGS.remove(p.strikeId());
+            APPROACHES.finish(p.strikeId());
+        }
+        // Old recordings have no scheduled-strike identity. Only those use the historical location match.
         // detonation can follow countdown: server waits for location loading (NuclearStrikes.GIVE_UP_TICKS). Detonation
         // has no strike ID; remove one warning, earliest countdown among matching place/deadline
         // (server detonates by deadline); another strike at the same point remains on screen
-        WARNINGS.values().stream()
+        if (p.strikeId() < 0) WARNINGS.values().stream()
                 .filter(w -> w.target().distanceToSqr(new Vec3(d.burst().x, w.target().y, d.burst().z)) < 4 && d.gameTime() >= w.detonateTime() - 40)
                 .min(Comparator.comparingLong(S2C.NukeWarning::detonateTime).thenComparingInt(S2C.NukeWarning::strikeId))
                 .ifPresent(w -> WARNINGS.remove(w.strikeId()));
@@ -196,6 +205,7 @@ public final class ClientNuclear {
     /** World entry/dimension change: all current state, without flash/hit (already passed). */
     public static void sync(S2C.NukeSync p) {
         stopAll();
+        APPROACHES.reset();
         Map<Integer, Active> old = new HashMap<>(DETONATIONS);
         DETONATIONS.clear();
         WARNINGS.clear();
@@ -228,6 +238,7 @@ public final class ClientNuclear {
         DETONATIONS.replaceAll((id, a) -> new Active(a, now));
         WARNINGS.values().removeIf(w -> w.launchTime() > now + TIME_SYNC_TICKS);
         CLOCK.reset();
+        APPROACHES.reset();
         NukeFlash.reset();
         Deafness.reset();
         NukeDust.reset();
@@ -277,6 +288,7 @@ public final class ClientNuclear {
         WARNINGS.clear();
         radiation = null;
         CLOCK.reset();
+        APPROACHES.reset();
         NukeFlash.reset();
         // retinal burns are server player state: seeking leaves them, exit forgets them (entry sends again)
         NukeFlash.scars(RetinaScars.NONE);
@@ -315,6 +327,7 @@ public final class ClientNuclear {
         if (level == null) return;
         long now = level.getGameTime();
         CLOCK.tick(now);
+        APPROACHES.tick();
         Vec3 eye = mc.gameRenderer.getMainCamera().getPosition();
         Sightline.Heights heights = ground(level);
         // column-top water for pall map (its matter); absent under ceiling (Nether), like terrain

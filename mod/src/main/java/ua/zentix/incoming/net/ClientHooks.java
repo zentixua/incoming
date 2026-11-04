@@ -33,8 +33,11 @@ public interface ClientHooks {
 
     default void openRemote() {}
 
+    default void nuclearReview(S2C.NuclearReview p) {}
+
     default void cleared(S2C.Cleared p) {}
 
+    default void nukeApproach(S2C.NukeApproach p) {}
     default void nukeWarning(S2C.NukeWarning p) {}
 
     default void nukeDetonation(S2C.NukeDetonation p) {}

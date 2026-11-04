@@ -73,12 +73,12 @@ record SandboxCommand(Verb verb, List<String> args) {
     /** {@code blast … water}: side and depth of the pond, blocks (the pond is wider than the Shahed's column and spray ring). */
     static final int POND = 64, POND_DEPTH = 4;
 
-    enum Verb { BLAST, REAL, NUKE, AIRBURST, LAUNCH, FLIGHT, FIRE, SPENT, CAM, STANCE, WEATHER, TIME, HUD, OVERLAY, ZOOM, TRACK, SHOTS, AGAIN, CLEAR, RELOAD, WAIT, RAID, SAM, HOUSE, SCENERY, SURFACE, TURN }
+    enum Verb { ARRIVAL, BLAST, REAL, NUKE, AIRBURST, LAUNCH, FLIGHT, FIRE, SPENT, CAM, STANCE, WEATHER, TIME, HUD, OVERLAY, ZOOM, TRACK, SHOTS, AGAIN, CLEAR, RELOAD, WAIT, RAID, SAM, HOUSE, SCENERY, SURFACE, TURN, UI }
 
     /** An effect (repeated by {@code again} and captured by {@code shots}). */
     boolean effect() {
         return switch (verb) {
-            case BLAST, REAL, NUKE, AIRBURST, LAUNCH, FLIGHT, FIRE, SPENT, RAID, SAM, SURFACE -> true;
+            case ARRIVAL, BLAST, REAL, NUKE, AIRBURST, LAUNCH, FLIGHT, FIRE, SPENT, RAID, SAM, SURFACE, UI -> true;
             default -> false;
         };
     }
@@ -108,6 +108,15 @@ record SandboxCommand(Verb verb, List<String> args) {
 
     private void check() {
         switch (verb) {
+            case ARRIVAL -> {
+                need(0, 2);
+                if (number(0, 1) < 1 || number(0, 1) > 128) throw new IllegalArgumentException("arrival [1–128] [flash]");
+                if (args.size() > 1 && !args.get(1).equals("flash")) throw new IllegalArgumentException("arrival [1–128] [flash]");
+            }
+            case UI -> {
+                need(1, 1);
+                if (!List.of("remote", "map", "review", "keyboard", "air", "mapair").contains(args.getFirst())) throw new IllegalArgumentException("ui remote|map|review|keyboard|air|mapair");
+            }
             case BLAST, REAL -> {
                 need(1, verb == Verb.BLAST && water() ? 4 : 3);
                 WeaponType w = weapon();

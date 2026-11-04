@@ -260,9 +260,14 @@ public final class GroundDust {
         ball = new boolean[SECTORS][RINGS];
         double hardSupply = DustModel.Surface.HARD.supply();
         for (int k = 0; k < SECTORS && outer > INNER; k++) {
+            Rings[] fields = new Rings[BANDS.length], covers = new Rings[BANDS.length];
             for (int i = 0; i < RINGS; i++) {
                 int b = band(r[i]);
-                Rings f = rings(tntKg, over[k][b], ballM, DustModel.Surface.FIELD, outer), c = rings(tntKg, over[k][b], ballM, DustModel.Surface.COVERED, outer);
+                if (fields[b] == null) {
+                    fields[b] = rings(tntKg, over[k][b], ballM, DustModel.Surface.FIELD, outer);
+                    covers[b] = rings(tntKg, over[k][b], ballM, DustModel.Surface.COVERED, outer);
+                }
+                Rings f = fields[b], c = covers[b];
                 // on hard surfaces only deposited dust is loose: same entrainment law, capped by inventory (threshold as soil);
                 // on turf too, only dust on grass: roots hold soil; soil fines come from crater (its
                 // skirt); torn grass crumbs are FrontDust (coarse, settle in seconds). ⚠ Est.: grass dust loading equals
@@ -333,10 +338,11 @@ public final class GroundDust {
         // stem: cumulative inflow (extinction in mixture kg); layer slumping follows still-airborne dust
         for (int s = 1; s < STEPS; s++) {
             double t = 0.5 * (time(s - 1) + time(s)), flux = 0, aloft = 0;
+            double inflow = under(t);
             for (int k = 0; k < SECTORS; k++) {
                 for (int i = 0; i < RINGS; i++) {
                     if (ball[k][i] || t <= arrival[k][i]) continue;
-                    if (t > stemFrom[k][i]) flux += stem[k][i] / DustModel.STEM_S * under(t) * ringNow(k, i, t);
+                    if (inflow > 0 && t > stemFrom[k][i]) flux += stem[k][i] / DustModel.STEM_S * inflow * ringNow(k, i, t);
                     aloft += massNow(k, i, t);
                 }
             }
@@ -351,19 +357,22 @@ public final class GroundDust {
         for (int k = 0; k < SECTORS; k++) for (int i = 0; i < RINGS; i++) if (!ball[k][i] && mass[k][i] > 0) {
             boundInitialV = Math.max(boundInitialV, first[k][i] / 2.5);
         }
-        support();
     }
+
+    private int supported = -1;
+    private final int[] windNode = new int[ANNULI];
+    private final double[] windPrevious = new double[ANNULI], forwardSum = new double[ANNULI], backwardSum = new double[ANNULI];
 
     /**
      * Interval bounds for the moments used by emit. Settling is common to a display annulus and cancels
      * from its normalized moments. Lift only increases and stem survival only decreases: their endpoint
      * products bound each ring's weight throughout an interval, including between table samples.
-     * This is built once, without terrain. Using the outermost ring as every puff's width made the old
+     * Nodes are built only up to the requested age, without terrain. Using the outermost ring as every puff's width made the old
      * envelope several kilometres wider than the cloud after a raid.
      */
-    private void support() {
+    private void support(int through) {
         double[] upper = new double[RINGS];
-        for (int s = 0; s < STEPS; s++) {
+        for (int s = supported + 1; s <= through; s++) {
             double t0 = time(s), t1 = s + 1 < STEPS ? time(s + 1) : Math.max(t0, CloudModel.LIFE_MAX);
             double stem0 = at(stemTime, t0), stem1 = at(stemTime, t1);
             boundWidth[s] = -1;
@@ -398,8 +407,9 @@ public final class GroundDust {
         // cannot rotate that increment: bound its scalar forward/backward travel on the very same PATH.
         // Include the next path node, because the displayed state interpolates towards that node.
         for (int a = 0; a < ANNULI; a++) {
-            int p = 1; double previous = 0, forward = 0, backward = 0;
-            for (int s = 0; s < STEPS; s++) {
+            int p = Math.max(1, windNode[a]);
+            double previous = windPrevious[a], forward = forwardSum[a], backward = backwardSum[a];
+            for (int s = supported + 1; s <= through; s++) {
                 double end = s + 1 < STEPS ? time(s + 1) : CloudModel.LIFE_MAX;
                 while (p < PATH.length && PATH[p - 1] <= end) {
                     double t = PATH[p++], value = air.wind(Math.max(2, 0.8 * at(sv[a], t))) * t, change = value - previous;
@@ -408,7 +418,9 @@ public final class GroundDust {
                 windForward[s] = Math.max(windForward[s], forward);
                 windBackward[s] = Math.max(windBackward[s], backward);
             }
+            windNode[a] = p; windPrevious[a] = previous; forwardSum[a] = forward; backwardSum[a] = backward;
         }
+        supported = Math.max(supported, through);
     }
 
     /** Calculation-ring i center, m (checks). */
@@ -728,9 +740,11 @@ public final class GroundDust {
     private record Rings(double[] mass, double[] arrival, double[] positive, double[] first, double[] stem, double[] stemFrom, boolean[] ball) {
     }
 
-    private static final java.util.Map<String, Rings> CACHE = new java.util.LinkedHashMap<>(64, 0.75f, true) {
+    private record RingKey(double charge, double hob, double ball, double threshold, double outer) {}
+
+    private static final java.util.Map<RingKey, Rings> CACHE = new java.util.LinkedHashMap<>(64, 0.75f, true) {
         @Override
-        protected boolean removeEldestEntry(java.util.Map.Entry<String, Rings> e) {
+        protected boolean removeEldestEntry(java.util.Map.Entry<RingKey, Rings> e) {
             return size() > 256;
         }
     };
@@ -740,7 +754,7 @@ public final class GroundDust {
      * radius {@code outer} (cached; otherwise computed now).
      */
     private static Rings rings(double tntKg, double hob, double ballM, DustModel.Surface surface, double outer) {
-        String key = tntKg + "/" + hob + "/" + ballM + "/" + surface.threshold() + "/" + outer;
+        RingKey key = new RingKey(tntKg, hob, ballM, surface.threshold(), outer);
         synchronized (CACHE) {
             Rings k = CACHE.get(key);
             if (k != null) return k;
@@ -810,7 +824,9 @@ public final class GroundDust {
     /** Lifted share of ring i, sector k, by age t (since explosion): local phase from front arrival. */
     private double liftedShare(int k, int i, double t) {
         double age = t - arrival[k][i];
-        return age <= 0 ? 0 : DustModel.lifted(age / Math.max(positive[k][i], 1e-6));
+        if (age <= 0) return 0;
+        double phase = Math.max(positive[k][i], 1e-6);
+        return age >= phase ? 1 : DustModel.lifted(age / phase);
     }
 
     /** Ring i, sector k, at age t: extinction in mixture kg after lifting, settling and inflow loss. */
@@ -818,7 +834,22 @@ public final class GroundDust {
         double m = mass[k][i] * liftedShare(k, i, t);
         if (m <= 0) return 0;
         double left = Math.exp(-stem[k][i] * at(stemTime, t) / DustModel.STEM_S);
-        return m * DustModel.extinctionAloft(at(settled[annulus[i]], t)) * left;
+        settling(t);
+        return m * extinction[annulus[i]] * left;
+    }
+
+    /** Settling depends on time and display annulus, not on sector or calculation ring. */
+    private double settlingTime = Double.NaN;
+    private final double[] extinction = new double[ANNULI], airborne = new double[ANNULI];
+
+    private void settling(double t) {
+        if (t == settlingTime) return;
+        for (int a = 0; a < ANNULI; a++) {
+            double integral = at(settled[a], t);
+            extinction[a] = DustModel.extinctionAloft(integral);
+            airborne[a] = DustModel.airborne(integral);
+        }
+        settlingTime = t;
     }
 
     /** Same by mass, kg: layer gravity follows airborne dust mass (settled coarse dust no longer pulls layer). */
@@ -826,7 +857,8 @@ public final class GroundDust {
         double m = mass[k][i] * liftedShare(k, i, t);
         if (m <= 0) return 0;
         double left = Math.exp(-stem[k][i] * at(stemTime, t) / DustModel.STEM_S);
-        return m * DustModel.airborne(at(settled[annulus[i]], t)) * left;
+        settling(t);
+        return m * airborne[annulus[i]] * left;
     }
 
     /** Layer top in ring i, sector k, at age t during wave phase: Kuhl by front travel (∝ age^⅚ toward {@code first}), m. */
@@ -940,6 +972,7 @@ public final class GroundDust {
     public void bounds(double t, double floor, double ceiling, SmokeBounds out) {
         if (total <= 0 || t <= 0) return;
         int s = (int) node(t);
+        if (s > supported) support(s);
         if (boundWidth[s] < 0) return;
         double v = boundInitialV, lowWind = Double.POSITIVE_INFINITY, highWind = 0;
         for (double[] row : sv) {
@@ -1019,6 +1052,10 @@ public final class GroundDust {
                 double[] e = edge(mean, Math.max(Math.hypot(own * stretch, spread), v), own, v, front(k, t));
                 mean = e[0];
                 double sh = e[1];
+                if (!levels) {
+                    out.blob(0, 0, 0, sh, v, mass * fade, 0, surface[k][a]);
+                    continue;
+                }
                 double ang = heading[k][a], path = source;
                 if (walled && mean > 0) {
                     double[] o = open(k, a, mean);
@@ -1029,7 +1066,7 @@ public final class GroundDust {
                 double ux = Math.cos(ang), uz = Math.sin(ang);
                 double[] d = drift(t, zc);
                 // clump path along street starts from same open position ({@link #place}) as clump itself
-                double[] at = levels ? level(k, a, t, walled ? path : source, ux, uz, own) : new double[]{surface[k][a], 0, 0};
+                double[] at = level(k, a, t, walled ? path : source, ux, uz, own);
                 double x = d[0] + mean * ux - at[1], z = d[1] + mean * uz - at[2];
                 if (walled) {
                     double[] p = out(x, z, at[0] + zc);

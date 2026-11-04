@@ -8,6 +8,13 @@ paths:
 
 # Blast cloud preparation
 
+- Cloud construction must not integrate future wind or walk future terrain. `Thermal` shares bounded, immutable
+  rise tables keyed by buoyancy, initial buoyancy acceleration, minimum radius and stratification; drift stays
+  per cloud and advances only to the requested age. `CloudModel.shear` and `GroundDust.support` likewise advance
+  their original integration grids on demand. Dust extinction/lifetime needs mass and widths, not street paths
+  or clump positions. Settling is common to an annulus at a given age: compute it once, not once per ring/sector.
+  `CloudBuildTest` checks terrain-free lifetime probes, independent wind histories and out-of-order age queries;
+  frozen eager-model samples cover sheltered shear, apex/table boundaries and street emission across a rewind.
 - Blast sources provide `Source.bounds` before `emit`: absolute age, growth and wind, without puffs or terrain reads.
   Include young ejecta, condensation and water. `SmokeVisibility` uses the actual layer matrix (bob and zoom), side
   planes (distant effects fold in front of the far plane), and haze at the nearest/highest bound edge.

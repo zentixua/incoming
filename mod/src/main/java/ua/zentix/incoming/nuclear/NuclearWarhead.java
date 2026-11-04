@@ -65,12 +65,18 @@ public final class NuclearWarhead {
 
     /** @param scale radius scale (1 is real life); usually from effects_scale setting, GameTest supplies its own */
     public static Detonation detonate(ServerLevel level, Vec3 target, double yieldKt, boolean airBurst, @Nullable UUID owner, float scale) {
+        return detonate(level, target, yieldKt, airBurst, owner, scale, null, -1);
+    }
+
+    /** A committed arrival consumes its exact endpoint; terrain edits cannot move a visible head's destination. */
+    static Detonation detonate(ServerLevel level, Vec3 target, double yieldKt, boolean airBurst, @Nullable UUID owner,
+                               float scale, @Nullable Detonation committed, int strikeId) {
         long started = System.nanoTime();
         // yield limit also applies to strikes from old saves and other mods' commands
         yieldKt = Math.min(yieldKt, ua.zentix.incoming.strike.Loadout.Nuke.MAX_YIELD);
         NuclearEvents events = NuclearEvents.get(level);
         // prepared for this detonation: location, ground and visibility match the prebuilt ruins
-        Detonation g = NuclearWorld.get(level).planned(geometry(level, target, yieldKt, airBurst, scale));
+        Detonation g = committed != null ? committed : NuclearWorld.get(level).planned(geometry(level, target, yieldKt, airBurst, scale));
         int id = events.nextId();
         RandomSource random = SCENARIO ? RandomSource.create(SCENARIO_SEED + id) : level.random;
         // wind is world wind (same as client smoke and trails)
@@ -81,7 +87,7 @@ public final class NuclearWarhead {
                 (float) IncomingConfig.SERVER.waveSpeed(), level.getDayTime(),
                 IncomingConfig.SERVER.nukeFires.get() && IncomingConfig.SERVER.nukeMaxFires.get() > 0);
         events.add(d);
-        PacketDistributor.sendToPlayersInDimension(level, new S2C.NukeDetonation(d, (float) Blackouts.nukeRadius(d)));
+        PacketDistributor.sendToPlayersInDimension(level, new S2C.NukeDetonation(d, (float) Blackouts.nukeRadius(d), strikeId));
 
         NuclearWorld.get(level).onDetonation(level, d, owner);
         Blackouts.nuke(level, d);

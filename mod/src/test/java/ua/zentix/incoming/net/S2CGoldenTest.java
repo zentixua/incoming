@@ -114,6 +114,9 @@ class S2CGoldenTest {
                 golden(S2C.Siren.TYPE, S2C.Siren.CODEC, new S2C.Siren(Q, S2C.Siren.MISSILE)),
                 golden(S2C.SalvoStatus.TYPE, S2C.SalvoStatus.CODEC, new S2C.SalvoStatus(6, 17, 40)),
                 golden(S2C.Cleared.TYPE, S2C.Cleared.CODEC, new S2C.Cleared(Optional.of(B), true, List.of(A, B))),
+                golden(S2C.NukeApproach.TYPE, S2C.NukeApproach.CODEC,
+                        new S2C.NukeApproach(2300, List.of(new ua.zentix.incoming.nuclear.IcbmArrival(9, 2260, 2500,
+                                D.withWave(Detonation.OLD_WAVE).withDayTime(Detonation.NO_DAY_TIME), Q)))),
                 golden(S2C.NukeWarning.TYPE, S2C.NukeWarning.CODEC, W),
                 // 1 - release 3.1.0; 2 - wave (wall speed); 3 - blackout (EMR); 4 — time of day of detonation; 5 - fires
                 golden(S2C.NukeDetonation.TYPE, S2C.NukeDetonation.CODEC,
@@ -121,7 +124,8 @@ class S2CGoldenTest {
                         new S2C.NukeDetonation(D.withDayTime(Detonation.NO_DAY_TIME), 0f),
                         new S2C.NukeDetonation(D.withDayTime(Detonation.NO_DAY_TIME), 242f),
                         new S2C.NukeDetonation(D, 242f),
-                        new S2C.NukeDetonation(D.withFires(false), 242f)),
+                        new S2C.NukeDetonation(D.withFires(false), 242f),
+                        new S2C.NukeDetonation(D.withFires(false), 242f, 9)),
                 golden(S2C.NukeDebris.TYPE, S2C.NukeDebris.CODEC, new S2C.NukeDebris(4, List.of(
                         new S2C.NukeDebris.Piece(new BlockPos(-100, 70, 2000), Blocks.STONE.defaultBlockState()),
                         new S2C.NukeDebris.Piece(new BlockPos(1, -60, -1), Blocks.OAK_PLANKS.defaultBlockState())), S2C.NukeDebris.OLD_REMOVED),
@@ -151,6 +155,10 @@ class S2CGoldenTest {
                 golden(S2C.MapPlayers.TYPE, S2C.MapPlayers.CODEC, new S2C.MapPlayers(List.of(
                         new S2C.MapPlayer(A, "Player01", -100.5, 2000.25, Sightings.Kind.PLAYER, true, 0),
                         new S2C.MapPlayer(B, "", 7, -8, Sightings.Kind.AIRCRAFT, false, 12)), true)),
+                golden(S2C.NuclearReview.TYPE, S2C.NuclearReview.CODEC, new S2C.NuclearReview(A,
+                        new C2S.Fire(ua.zentix.incoming.strike.Loadout.DEFAULT.withWeapon(ua.zentix.incoming.strike.WeaponType.NUKE),
+                                Optional.of(new C2S.AimHint(C2S.AimHint.POINT, P, 0, Vec3.ZERO)), Optional.empty(),
+                                ua.zentix.incoming.strike.Waypoints.NONE, Optional.empty()), P, 20000, 1)),
                 golden(S2C.OpenRemote.TYPE, S2C.OpenRemote.CODEC, new S2C.OpenRemote()),
                 golden(S2C.ReplayTick.TYPE, S2C.ReplayTick.CODEC, new S2C.ReplayTick(123_456, true)),
                 golden(S2C.Intercept.TYPE, S2C.Intercept.CODEC, new S2C.Intercept(P, true, Optional.of(B), 99)),

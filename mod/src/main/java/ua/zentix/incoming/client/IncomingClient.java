@@ -439,6 +439,14 @@ public final class IncomingClient {
         }
 
         @Override
+        public void nuclearReview(S2C.NuclearReview p) {
+            if (Replay.active()) return;
+            if (p.finished()) {
+                if (Minecraft.getInstance().screen instanceof ua.zentix.incoming.client.screen.NuclearReviewScreen screen) screen.complete(p.id());
+            } else Minecraft.getInstance().setScreen(new ua.zentix.incoming.client.screen.NuclearReviewScreen(p));
+        }
+
+        @Override
         public void openRemote() {
             // the recorded player opened the remote, not the replay viewer
             if (!Replay.active()) Minecraft.getInstance().setScreen(new RemoteScreen());
@@ -454,12 +462,19 @@ public final class IncomingClient {
                 FlightTracks.reset();
                 ProjectileCamera.reset();
                 NukeArming.cancel();
+                if (Minecraft.getInstance().screen instanceof ua.zentix.incoming.client.screen.NuclearReviewScreen screen) screen.abort();
             } else {
                 // ordinary cancel: nuclear projectiles keep flying; their sound, camera and two-step ICBM launch remain
                 ClientSounds.cancelled(p.projectiles());
                 FlightTracks.cancelled(p.projectiles());
                 ProjectileCamera.cancelled(p.projectiles());
             }
+        }
+
+        @Override
+        public void nukeApproach(S2C.NukeApproach p) {
+            // Keep snapshot order with burst events and apply it after the replay seek reset.
+            Replay.event("nuke_approach", live -> ClientNuclear.approach(p));
         }
 
         @Override

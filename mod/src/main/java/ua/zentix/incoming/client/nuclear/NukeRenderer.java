@@ -35,7 +35,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Nuclear strike visuals in the world (DESIGN-nuke §6): amber sky, warhead reentry trail and black rain use their own
+ * Nuclear strike visuals in the world (DESIGN-nuke §6): amber sky and black rain use their own
  * pass; the fireball, mushroom and water column ({@link MushroomField}), dust wall and Wilson cloud ({@link BlastWall}) are
  * volumes in the effects layer pall pass; light around the ball uses particle lighting and glare with veiling light there ({@link #fireballs}).
  * <p>
@@ -52,7 +52,7 @@ public final class NukeRenderer {
     /** Frame ball light ({@link BlackBody#light}), world-space cap center, glare parameters ({@link Sight#light}). */
     private static final double[] BALL = new double[4], CENTRE = new double[3], GLARE = new double[5];
 
-    /** Analytic circular glow ({@code nuke_flare}): warhead trail head, flash afterimage. */
+    /** Analytic circular glow ({@code nuke_flare}): flash afterimage. */
     @Nullable
     static ShaderInstance flare;
 
@@ -64,7 +64,7 @@ public final class NukeRenderer {
             e.registerShader(new ShaderInstance(e.getResourceProvider(), Incoming.id("nuke_flare"), DefaultVertexFormat.POSITION_TEX_COLOR), s -> flare = s);
         } catch (IOException ex) {
             flare = null;
-            Incoming.LOG.error("Nuclear glow shader failed to load: no re-entry streak head or afterimage", ex);
+            Incoming.LOG.error("Nuclear glow shader failed to load: no flash afterimage", ex);
         }
     }
 
@@ -82,7 +82,6 @@ public final class NukeRenderer {
         Minecraft mc = Minecraft.getInstance();
         ClientLevel level = mc.level;
         if (level == null) return;
-        Camera camera = e.getCamera();
         float partial = e.getPartialTick().getGameTimeDeltaPartialTick(false);
         float far = mc.gameRenderer.getDepthFar() * 0.97f;
 
@@ -90,7 +89,7 @@ public final class NukeRenderer {
         FarDraw.begin(e, eye);
         try {
             drawSkyGlow(eye, partial, far);
-            drawReentry(level, camera, eye, partial, far);
+            if (!ClientNuclear.approaches().supported()) drawReentry(level, e.getCamera(), eye, partial, far);
         } finally {
             FarDraw.end();
         }
@@ -180,16 +179,16 @@ public final class NukeRenderer {
 
     // ---------------------------------------------------------------- warhead reentry
 
-    /** Last 3 s before detonation: a glowing streak with a star-shaped head descending toward the target. */
+    /** Legacy recordings without authoritative approach packets: last 3 s before detonation, a glowing streak with a star-shaped head descending toward the target. */
     private static void drawReentry(ClientLevel level, Camera camera, Vec3 cam, float partial, float far) {
         double now = level.getGameTime() + partial;
         for (S2C.NukeWarning w : ClientNuclear.warnings()) {
             double left = w.detonateTime() - now;
-            if (left < 0 || left > NukeSounds.REENTRY_TICKS) continue;
+            if (left < 0 || left > 60) continue;
             Vec3 end = w.target().add(0, w.airBurst() ? w.burstHeight() : 0, 0);
             Vec3 dir = reentryDirection(w);
-            double f = left / NukeSounds.REENTRY_TICKS; // 1 → 0
-            // from 60 km to the detonation point, almost straight (≈ 7 km/s)
+            double f = left / 60; // 1 → 0
+            // Historical graphic: 60 km in 3 seconds (not physical). Kept only for old recordings.
             double path = 60_000 * w.scale();
             Vec3 head = end.add(dir.scale(-path * f));
             Vec3 tail = head.add(dir.scale(-Math.min(path * 0.25, path * (1 - f) + 2000 * w.scale())));
