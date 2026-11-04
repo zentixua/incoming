@@ -434,7 +434,7 @@
   "key.incoming.camera": "Камера снаряда",
   "incoming.remote.warhead.conventional": "БЧ: фугасная",
   "incoming.remote.warhead.nuclear": "БЧ: ☢ ядерная",
-  "incoming.remote.warhead.tooltip": "Ядерная боевая часть на ракете или бомбе B-2: один снаряд, мощность по выбору. Ракета рвётся над целью или у земли, бомба — под землёй после бурения.",
+  "incoming.remote.warhead.tooltip": "Ядерная боевая часть на ракете или бомбе B-2: один снаряд, мощность по выбору. Ракета рвётся над целью или у земли, ядерная бомба — при попадании.",
   "incoming.config.launch_near_player": "Пуск с пусковой рядом с игроком",
   "incoming.config.launch_near_player.tooltip": "Шахеды и ракеты стартуют с мобильной пусковой позади игрока. Выключено — заходят издалека.",
   "incoming.config.drone_flight_time": "Полёт шахеда, с",
@@ -607,5 +607,5 @@
   "incoming.nuke.preview.wind": "Ветер →",
   "incoming.nuke.preview.fit": "Вместить эффекты",
   "incoming.nuke.preview.extra": "Ожоги / стекло: вкл./выкл.",
-  "incoming.nuke.preview.buried": "Подземная бомба · контуры для поверхности"
+  "incoming.nuke.preview.buried": "Контактный подрыв · контуры для поверхности"
 }
