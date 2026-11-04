@@ -980,19 +980,24 @@ public final class NuclearPrep {
             p.reading.remove(stored.key());
             return true;
         }
-        long known = p.ruins.publicationBytes(current, stored.data());
-        try (var publication = p.archived.takeForPublication(stored, known,
-                PLANS_CAP - residentMemory(level))) {
-            if (publication == null) return false;
-            long before = p.ruins.retainedBytes();
-            try {
-                p.ruins.publishReserved(current, stored.data());
-                p.diskShots++;
-            } catch (RuntimeException error) {
-                failedSource(p, stored.key(), error);
-            } finally {
-                publication.releaseToCountedOwner(Math.max(0, p.ruins.retainedBytes() - before));
+        try {
+            long known = p.ruins.publicationBytes(current, stored.data());
+            try (var publication = p.archived.takeForPublication(stored, known,
+                    PLANS_CAP - residentMemory(level))) {
+                if (publication == null) return false;
+                long before = p.ruins.retainedBytes();
+                try {
+                    p.ruins.publishReserved(current, stored.data());
+                    p.diskShots++;
+                } catch (RuntimeException error) {
+                    failedSource(p, stored.key(), error);
+                } finally {
+                    publication.releaseToCountedOwner(Math.max(0, p.ruins.retainedBytes() - before));
+                }
             }
+        } catch (RuntimeException error) {
+            if (p.archived.peek() == stored) p.archived.poll();
+            failedSource(p, stored.key(), error);
         }
         p.reading.remove(stored.key());
         return true;
@@ -1059,6 +1064,7 @@ public final class NuclearPrep {
                     }
                 }
             } catch (RuntimeException error) {
+                if (p.reads.peek() == r) p.reads.poll();
                 failedSource(p, c, error);
             } finally {
                 clock.record(shared.end(c0));
