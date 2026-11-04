@@ -32,7 +32,7 @@ public final class RuinMemoryGameTests {
     }
 
     private static RuinMemory.Reservation fill(ServerLevel other, long spare) {
-        return RuinMemory.reserve(other, NuclearPrep.PLANS_CAP - NuclearPrep.memory(other) + RuinMemory.TRANSITION_ROOM - spare);
+        return RuinMemory.reserve(other, NuclearPrep.PLANS_CAP - NuclearPrep.memory(other, false) - spare);
     }
 
     private static void work(ServerLevel level, RuinMatter ledger, int units) {
@@ -74,7 +74,7 @@ public final class RuinMemoryGameTests {
                 for (int i = 0; i < 20; i++) work(level, ledger, 4);
                 h.assertTrue(ledger.released() == 1 && ledger.pendingSupport() > 0, "Capacity pause removed structure or lost its seeds");
                 for (int x = 0; x < 56; x++) h.assertTrue(level.getBlockState(start.east(x)).is(Blocks.WHITE_CONCRETE), "Block removed without material capacity");
-                h.assertTrue(NuclearPrep.memory(level) - RuinMemory.TRANSITION_ROOM <= NuclearPrep.PLANS_CAP,
+                h.assertTrue(NuclearPrep.memory(level, false) <= NuclearPrep.PLANS_CAP,
                         "Paused support exceeded the shared reservation cap");
             }
             for (int i = 0; i < 200; i++) work(level, ledger, 1);
@@ -117,4 +117,47 @@ public final class RuinMemoryGameTests {
         }
         h.succeed();
     }
+
+    @GameTest(template = "range", batch = "nuke_material_many", timeoutTicks = 100, skyAccess = true)
+    public static void oneTenAndHundredRegisteredStrikesKeepOneSavedMaterialBudget(GameTestHelper h) {
+        var level = h.getLevel();
+        BlockPos start = h.absolutePos(new BlockPos(16, 30, 16));
+        var events = NuclearEvents.get(level);
+        for (int count : new int[]{1, 10, 100}) {
+            RuinMatterGameTests.clearFixture(level);
+            var registered = new java.util.ArrayList<Detonation>();
+            try {
+                for (int i = 0; i < count; i++) registered.add(register(level, start));
+                var ledger = RuinMatter.get(level);
+                for (int i = 0; i < 100; i++) {
+                    BlockPos at = start.offset((i % 10) * 3, 0, (i / 10) * 3);
+                    level.setBlock(at.below(2), Blocks.OBSIDIAN.defaultBlockState(), 2);
+                    level.setBlock(at.below(), Blocks.GLASS.defaultBlockState(), 2);
+                    level.setBlock(at, Blocks.WHITE_CONCRETE.defaultBlockState(), 2);
+                    var d = registered.get(i % count);
+                    var piece = RuinMatter.capture(level, at.below(), level.getBlockState(at.below()), d);
+                    try (var reserve = RuinMemory.reserve(level, RuinMatter.removalBytes(piece))) {
+                        h.assertTrue(reserve != null, "Small registered fixture could not reserve material");
+                        ColumnScar.replace(level, at.below(), piece.state, Blocks.AIR.defaultBlockState());
+                        ledger.release(List.of(piece)); ledger.support(level, List.of(piece), d);
+                    }
+                }
+                var saved = ledger.save(new CompoundTag(), level.registryAccess());
+                ledger.unload(level);
+                ledger = RuinMatter.load(saved, level.registryAccess());
+                level.getDataStorage().set("incoming_ruin_matter", ledger);
+                for (int i = 0; i < 2000 && ledger.pendingSupport() > 0; i++) work(level, ledger, 4);
+                h.assertTrue(ledger.pendingSupport() == 0 && ledger.released() == 200,
+                        count + " overlapping event regions changed material ownership or starved a seed");
+                h.assertTrue(NuclearPrep.memory(level, false) < NuclearPrep.PLANS_CAP,
+                        "Overlapping events escaped the one global cap");
+                h.assertTrue(ledger.pending() == 100, "Overlapping events duplicated/lost coarse material");
+            } finally {
+                events.detonations().removeAll(registered);
+                RuinMatterGameTests.clearFixture(level);
+            }
+        }
+        h.succeed();
+    }
+
 }

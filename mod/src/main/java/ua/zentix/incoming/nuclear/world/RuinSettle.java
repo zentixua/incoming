@@ -165,7 +165,7 @@ final class RuinSettle {
                     loaded++;
                 }
                 if (e.read == null && !e.held && (!e.finalBlocks || e.applied) && now >= e.retryAt && reading < READS
-                        && NuclearPrep.memory(level) + READ_BYTES <= NuclearPrep.PLANS_CAP) {
+                        && NuclearPrep.memory(level, false) + READ_BYTES <= NuclearPrep.PLANS_CAP) {
                     e.read = read(level, e.pos);
                     reading++;
                 }

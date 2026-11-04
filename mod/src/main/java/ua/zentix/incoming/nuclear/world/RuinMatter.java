@@ -335,10 +335,13 @@ public final class RuinMatter extends SavedData {
     }
 
     /** No world reads without getChunkNow readiness, and no whole-pile work in one tick unit. */
-    void work(ServerLevel level, WorkClock clock) {
+    void work(ServerLevel level, WorkClock clock) { work(level, clock, Integer.MAX_VALUE); }
+
+    /** Existing ownership gets a bounded progress slice before new removals compete for memory. */
+    void work(ServerLevel level, WorkClock clock, int units) {
         int left = moving.size();
         boolean waiting = false;
-        while ((left > 0 || !supportSources.isEmpty() || !supports.isEmpty() && !waiting) && clock.canStart()) {
+        while ((left > 0 || !supportSources.isEmpty() || !supports.isEmpty() && !waiting) && units-- > 0 && clock.canStart()) {
             long began = clock.begin();
             for (int i = 0; i < 16 && !supportSources.isEmpty(); i++) expandSupport(level, supportSources.removeFirst());
             if (!supports.isEmpty() && !waiting) {

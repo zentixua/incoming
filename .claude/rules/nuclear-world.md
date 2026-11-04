@@ -377,3 +377,17 @@ paths:
   it cannot create material when the bowl is protected or empty. Original soil, column heights and completed
   columns survive clean restart, so a resumed chunk cannot deepen its already-dug columns. Conventional
   `CraterJob.digColumn` callers retain their existing path. Region-file/SavedData power-loss atomicity is not claimed.
+
+- Material ownership participates in the same cross-dimension reservation counter as preparation. Reserve before
+  source removal; retain the plan/seed on refusal. `ScarQueue` capacity waits yield the lane instead of immediately
+  requeueing as `AGAIN`; `NuclearWorld` gives existing material one bounded batch before admitting new removals.
+  Material/settlement admission charges resident workers (`memory(level, false)`), not an idle pool's configured
+  future size. `nuke_memory_flow` and `nuke_memory_retired_workers` cover the resulting progress dependencies.
+- Completed crater chunks discard column checkpoints after advancing the saved chunk cursor. Completed passes
+  retain only material totals; terminal out-of-height material groups identical state/cargo without trajectory data.
+  Active moving pieces, support provenance/graph and crater passes are charged by `retainedRuinBytes`. The counter
+  includes collection/serialization slack; it does not bound all Minecraft/mod heap or guarantee a finite completion
+  time for an arbitrarily large component at capacity.
+- Crater traversal uses the bounded row-head iterator's inclusive 15-block edge to preserve old saved chunk order.
+  Settlement uses the default 16-block edge and versioned cursors; legacy unfinished cursors restart through scar
+  marks. Never substitute the crater ordering without a cursor migration test.
