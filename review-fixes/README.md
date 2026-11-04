@@ -30,6 +30,6 @@ First-pass maximum unit: 2.737 ms. Serialized bytes are actual uncompressed NBT 
 
 Ordinary external changes use NeoForge neighbour notifications (including cancelled notifications); our replacements notify explicitly despite suppressing neighbour cascades. Release also checks local state and contacts. Code that silently edits raw chunk sections must participate in invalidation; this implementation does not add a vanilla/foreign mixin to observe arbitrary unsupported writes.
 
-## Follow-up visual method (queued for the GPU)
+## Follow-up capture status
 
-The queued follow-up sandbox will use the same disposable geometry fixture on reviewed head ad1f7c064 and the fixed head. A 15 kt weak-zone wave breaks glass on a floating 17×17×3 end-stone island. Source positions will be counted from the server at +10 s; the same camera will record both. As in the previous geometry evidence, client FX are deliberately cleared after +8 s. These late images show geometry, not natural flash/pall lifetime. Frames and server counters will be archived here after the GPU queue releases MT-B3.
+The final head reached green Итог while the optional follow-up sandbox was still queued behind MT-B3. Per Artem's explicit instruction to stop after green CI, only our unstarted request was cancelled. No MT-B2 GPU client was launched in this correction pass and no new frames are claimed. The earlier paired frames remain attached with their actual reviewed head (`ad1f7c064`) and diagnostic FX-clear disclosure. B1–B4 on the corrected head are established by the registered continuation GameTests above. The unused disposable fixture/counter source is retained here as preparation, not executed evidence.
