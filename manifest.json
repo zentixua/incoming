@@ -1,0 +1,26 @@
+{
+  "source_head": "bcf53f23f0a8a48f6c41baa67ffd623d2af758fa",
+  "full_build": {
+    "head": "94ec0756c",
+    "unit_tests": 1783,
+    "failures": 0,
+    "seconds": 229
+  },
+  "broad_gametest": {
+    "tests": 16,
+    "seconds": 22,
+    "source_note": "Last writer cacheId change was picked up before run compilation; exact final-head follow-up is last.log."
+  },
+  "final_head_gametest": {
+    "tests": 6,
+    "seconds": 22
+  },
+  "independent_review": "MT-S2 integrated review pending by explicit handoff scope; no session spawned",
+  "ci": "pending; final status will be appended",
+  "whole_zone_performance": "not measured; no 1 Mt/10\u201315-minute claim",
+  "files": {
+    "check.log": "68a6dd1e62311dd6d5f99d56a2709125de1155df9f862b8f3c59b47e6eccab89",
+    "final.log": "9ed2db843fea273d031154061fbf801878b568d6e637d453c5f0c9f54dba7cbc",
+    "last.log": "947a6c2f0f9bb09dbcd55699c8008269f3d3650cfe45f8a9a109475be0efdc10"
+  }
+}
