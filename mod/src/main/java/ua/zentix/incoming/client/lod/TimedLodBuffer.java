@@ -59,6 +59,11 @@ public final class TimedLodBuffer<T> {
     /** Taking a due column keeps ownership charged until finish, including while ingestion is executing. */
     public synchronized Ready<T> take(long now) { return take(unused -> now); }
 
+    /** Claim and session check are one operation: an old worker may not take a newly refilled epoch's work. */
+    public synchronized Ready<T> take(long expectedEpoch, java.util.function.IntToDoubleFunction clock) {
+        return epoch == expectedEpoch ? take(clock) : null;
+    }
+
     /** One head per event: a future event must not block another event whose own visible clock is due. */
     public synchronized Ready<T> take(java.util.function.IntToDoubleFunction clock) {
         Ready<T> first = null;

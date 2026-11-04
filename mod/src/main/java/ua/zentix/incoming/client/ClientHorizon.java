@@ -85,8 +85,8 @@ final class ClientHorizon {
             if (VoxyIngest.backlogged()) return;
             int changedSections = 0;
             java.util.function.IntToDoubleFunction clock = event -> clocks.getOrDefault(event, (double) now);
-            for (int i = 0; i < 256 && changedSections < 1024 && QUEUE.epoch() == epoch; i++) {
-                var ready = QUEUE.take(clock);
+            for (int i = 0; i < 256 && changedSections < 1024; i++) {
+                var ready = QUEUE.take(epoch, clock);
                 if (ready == null) break;
                 try {
                     // A concurrent reset may occur here. The explicit level belongs to this session; reset's

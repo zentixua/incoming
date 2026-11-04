@@ -7,6 +7,38 @@ import java.util.HashSet;
 import static org.junit.jupiter.api.Assertions.*;
 
 class TimedLodBufferTest {
+    @Test void anOldWorkerCannotClaimRefilledSessionWorkWithoutAwaitingItsBarrier() throws Exception {
+        var b = new TimedLodBuffer<String>(2, 20);
+        long oldEpoch = b.epoch();
+        var beforeClaim = new java.util.concurrent.CountDownLatch(1);
+        var continueClaim = new java.util.concurrent.CountDownLatch(1);
+        try (var worker = java.util.concurrent.Executors.newSingleThreadExecutor()) {
+            var old = worker.submit(() -> {
+                assertEquals(oldEpoch, b.epoch());
+                beforeClaim.countDown();
+                continueClaim.await();
+                return b.take(oldEpoch, event -> 1000);
+            });
+            try {
+                assertTrue(beforeClaim.await(5, java.util.concurrent.TimeUnit.SECONDS));
+                b.stop(); // dimension B retires A without waiting for A's worker
+                var fresh = b.reserve(1, Long.MIN_VALUE, 10, 1, 2);
+                assertTrue(b.complete(fresh, "B"));
+                continueClaim.countDown();
+                assertNull(old.get(5, java.util.concurrent.TimeUnit.SECONDS), "A must not consume B's packet");
+                assertEquals(10, b.bytes(), "B still owns its queued work");
+                var ready = b.take(b.epoch(), event -> 1000);
+                assertEquals(fresh, ready.ticket());
+                assertEquals("B", ready.value());
+                b.finish(ready);
+                assertNull(b.take(b.epoch(), event -> 1000));
+                assertEquals(0, b.bytes());
+            } finally {
+                continueClaim.countDown();
+            }
+        }
+    }
+
     @Test void independentEventClocksDoNotBlockEachOther() {
         var b = new TimedLodBuffer<String>(3, 30);
         var a = b.reserve(1, 1400, 10, 1, 1);
