@@ -52,6 +52,7 @@ public final class NuclearReadyFixture {
                 field(p, "resolvedTarget").set(p, resolvedTarget);
                 field(p, "order").set(p, new long[0]);
                 field(p, "nextFar").setInt(p, 0);
+                emptyWork(level, p);
                 if (RuinPreparation.status(level, handle).stage() != RuinPreparation.Stage.READY)
                     throw new AssertionError("Empty-zone receipt fixture not ready: " + RuinPreparation.status(level, handle));
                 return;
@@ -60,6 +61,13 @@ public final class NuclearReadyFixture {
         } catch (ReflectiveOperationException failure) {
             throw new AssertionError("Cannot install empty-zone receipt fixture", failure);
         }
+    }
+
+    /** Authority-only receipt: no physical inputs; real loaded-edge preparation has separate GameTests. */
+    public static void emptyWork(ServerLevel level, Object request) throws ReflectiveOperationException {
+        field(request, "requiredInitialized").setBoolean(request, true);
+        var considered = (it.unimi.dsi.fastutil.longs.LongOpenHashSet) field(request, "considered").get(request);
+        for (var holder : level.getChunkSource().chunkMap.getChunks()) considered.add(holder.getPos().toLong());
     }
 
     public static UUID commandHandle(ServerLevel level) {
