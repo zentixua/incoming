@@ -13,3 +13,5 @@ Five original MAT2 CI failures, exact source provenance and bounded local contro
 - RCI-ASTRA-review.md and RCI-TERM-review.md are independent Astra/high reviews, with their own stated scope and limits.
 
 SHA256.json hashes every evidence file except itself. Integration/required CI/main merge remain LEAD2-owned. No runtime production fix is claimed here.
+
+Final aa6e73 validation: build SUCCESS6m25s,1840 unit tests/0 failures/0 errors/0 skipped, original nuke_pipeline1/1 PASS1.370s. Wrapper exit0 awaited. Deadline observer did not execute on this successful case; source review checks its call paths. final-unit-results.json preserves per-suite counts/hashes.

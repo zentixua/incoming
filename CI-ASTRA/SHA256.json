@@ -24,8 +24,8 @@
     "sha256": "4b9c632f9cbabe4ad8f347e5b56651db424692fdc086ca6d89cd3558fdfe5b16"
   },
   "README.md": {
-    "bytes": 2476,
-    "sha256": "baf2405df140208b8688ea549bacdefca67dc90a21b15d324f1397565ff76227"
+    "bytes": 2784,
+    "sha256": "1c39a76e3e2550476b60f41e22c64c1fb22398fbfb962b892675b4713c396e39"
   },
   "RMAT2-ci-shard1.log": {
     "bytes": 610840,
@@ -62,6 +62,14 @@
   "failed-cases.json": {
     "bytes": 12500,
     "sha256": "9ec45e3bdde8595f9841588e71493e00f981d1026c9781cce0c751c50acf060c"
+  },
+  "final-unit-results.json": {
+    "bytes": 68320,
+    "sha256": "291dc96678192155566985a5d45d1b30b9d35e531a0f06b5dff9349d363c399d"
+  },
+  "final-validation.log": {
+    "bytes": 23156,
+    "sha256": "75d2210b550054b32d781fc8e6f5a011b7813e6f3d8bd8ca6197190af140d67e"
   },
   "green-probe.patch": {
     "bytes": 4832,
