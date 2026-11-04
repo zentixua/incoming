@@ -378,9 +378,19 @@ public final class RuinWorkers {
 
     /** Completion ownership follows the actual callable, including promotion and queued cancellation. */
     static <T> Future<T> submit(Callable<T> task, Priority priority, RuinInputs inputs) {
+        return submit(task, priority, inputs, null);
+    }
+
+    /** Additional numeric ownership ends with actual execution/removal, never Future cancellation alone. */
+    static <T> Future<T> submit(Callable<T> task, Priority priority, RuinInputs inputs,
+                               @Nullable Runnable onActualExit) {
         ThreadPoolExecutor executor = pool();
         inputs.acquire();
-        Task<T> t = new Task<>(task, priority, IN_FLIGHT, executor, inputs::release);
+        Runnable onExit = () -> {
+            try { inputs.release(); }
+            finally { if (onActualExit != null) onActualExit.run(); }
+        };
+        Task<T> t = new Task<>(task, priority, IN_FLIGHT, executor, onExit);
         execute(executor, t);
         serviceCurrent();
         return t;
@@ -515,12 +525,17 @@ public final class RuinWorkers {
 
         private synchronized void uncount() {
             if (!counted.get()) return;
-            if (onExit != null) {
-                onExit.run();
-                onExit = null;
+            Runnable exit = onExit;
+            onExit = null;
+            try { if (exit != null) exit.run(); }
+            catch (RuntimeException | Error failure) {
+                // FutureTask.done must return normally to clear its private callable, and shutdown
+                // must continue releasing the rest of its drained queue after one observer fails.
+                Incoming.LOG.error("Ruins: task exit ownership callback failed", failure);
+            } finally {
+                counts.decrementAndGet(priority);
+                counted.set(false);
             }
-            counts.decrementAndGet(priority);
-            counted.set(false);
         }
 
         @Override

@@ -542,7 +542,7 @@ public final class NuclearPrep {
 
     /** Already-owned bytes only: cold-load publication cannot recursively start another admission. */
     static long residentMemory(ServerLevel level) {
-        long bytes = RuinInputs.detachedBytes();
+        long bytes = RuinInputs.detachedBytes() + RuinResults.bytes();
         int height = level.getHeight();
         for (ServerLevel other : level.getServer().getAllLevels()) {
             height = Math.max(height, other.getHeight());
@@ -553,7 +553,7 @@ public final class NuclearPrep {
     }
 
     static long memory(ServerLevel level, boolean reserveWorkers) {
-        long bytes = RuinInputs.detachedBytes();
+        long bytes = RuinInputs.detachedBytes() + RuinResults.bytes();
         int height = level.getHeight();
         boolean cold = false;
         for (ServerLevel other : level.getServer().getAllLevels()) {
@@ -962,29 +962,33 @@ public final class NuclearPrep {
     }
 
     /** Shared far-read completion: preserve scarred originals, reject later unscarred edits. */
-    private static void acceptArchived(ServerLevel level, Prep p, ArchivedShot stored) {
-        p.reading.remove(stored.key());
+    private static boolean acceptArchived(ServerLevel level, Prep p, ArchivedShot stored) {
         DiskShots.Read current = stored.current();
         if (current.skip() != null) {
-            if (p.handle != null && current.sourceFailure())
-                p.failure = RuinPreparation.Reason.IO;
+            if (p.handle != null && current.sourceFailure()) p.failure = RuinPreparation.Reason.IO;
             p.unreadable.add(stored.key());
             p.unreadWhy.addTo(current.skip().split(":", 2)[0], 1);
-            return;
+            p.reading.remove(stored.key());
+            return true;
         }
         try {
-            current = current.primed(Blast.SERVER);
             boolean restored = false;
             try {
-                if (stored.data().isPresent()) restored = p.ruins.restoreArchived(stored.key(), stored.data().get(), current);
+                if (stored.data().isPresent()) {
+                    Boolean admitted = p.ruins.restoreArchived(level, stored.key(), stored.data().get(), current);
+                    if (admitted == null) return false;
+                    restored = admitted;
+                }
             } catch (RuntimeException error) {
                 Incoming.LOG.warn("Prepared snapshot cache rejected for {}", new ChunkPos(stored.key()), error);
             }
-            if (!restored) p.ruins.putDisk(level, current);
+            if (!restored && !p.ruins.putDisk(level, current)) return false;
             p.diskShots++;
         } catch (RuntimeException error) {
             failedSource(p, stored.key(), error);
         }
+        p.reading.remove(stored.key());
+        return true;
     }
 
     private static void failedSource(Prep p, long key, RuntimeException error) {
@@ -1018,17 +1022,16 @@ public final class NuclearPrep {
         int archivedCost = 0;
         for (ArchivedShot stored; clock.canStart() && shared.canStart()
                 && (stored = p.archived.peek()) != null && (archivedCost == 0 || archivedCost + stored.current().cost() <= 4); ) {
-            p.archived.poll();
             archivedCost += stored.current().cost();
             long unit = shared.begin();
             try {
-                acceptArchived(level, p, stored);
+                if (!acceptArchived(level, p, stored)) break;
+                p.archived.poll();
             } finally { clock.record(shared.end(unit)); }
         }
         // disk results: snapshots into ruins (states into property table), one work unit per chunk
-        for (DiskShots.Read r; clock.canStart() && shared.canStart() && (r = p.reads.poll()) != null; ) {
+        for (DiskShots.Read r; clock.canStart() && shared.canStart() && (r = p.reads.peek()) != null; ) {
             long c = r.pos().toLong();
-            p.reading.remove(c);
             long c0 = shared.begin();
             try {
                 if (r.skip() != null) {
@@ -1037,7 +1040,7 @@ public final class NuclearPrep {
                     p.unreadable.add(c);
                     p.unreadWhy.addTo(r.skip().split(":", 2)[0], 1);
                 } else {
-                    p.ruins.putDisk(level, r);
+                    if (!p.ruins.putDisk(level, r)) break;
                     p.diskShots++;
                 }
             } catch (RuntimeException e) {
@@ -1045,6 +1048,8 @@ public final class NuclearPrep {
             } finally {
                 clock.record(shared.end(c0));
             }
+            p.reads.poll();
+            p.reading.remove(c);
         }
         // ready plans
         for (int i = 0; i < p.farRunning.size() && clock.canStart() && shared.canStart(); ) {

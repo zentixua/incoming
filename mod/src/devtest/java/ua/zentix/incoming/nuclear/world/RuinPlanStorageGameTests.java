@@ -45,7 +45,7 @@ public final class RuinPlanStorageGameTests {
     private static final Set<String> PAYLOAD = Set.of("cells", "states", "olds", "fires", "heights", "lightAt",
             "fluidTicks", "outside", "outsideState", "biomes", "flash", "blown", "material");
     private static final Set<String> REBUILT = Set.of("oldHashes", "prints", "normals", "ctx", "fireKeys",
-            "sectionBits", "oldTops", "memoryWaiting");
+            "sectionBits", "oldTops", "memoryWaiting", "resultOwner");
 
     private static Object field(RuinPlan plan, String name) {
         try {

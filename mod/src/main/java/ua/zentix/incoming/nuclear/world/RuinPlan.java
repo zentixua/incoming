@@ -627,12 +627,125 @@ public final class RuinPlan {
         return new Debris(out, removed);
     }
 
-    /** Approximate plan memory, bytes (for log). */
+    /** Producer ownership is never copied by detached/store/restore, especially not onto EMPTY. */
+    @Nullable
+    private RuinResults.Lease resultOwner;
+
+    synchronized void attachResult(RuinResults.Lease owner) {
+        if (this == EMPTY || resultOwner != null) throw new IllegalStateException("Ruin plan already owned or shared empty");
+        resultOwner = owner;
+    }
+
+    /** Call only after the consumer has charged this plan, not merely after Future.get(). */
+    void releaseResultToCountedOwner() {
+        RuinResults.Lease owner;
+        synchronized (this) { owner = resultOwner; resultOwner = null; }
+        if (owner != null) owner.releaseToCountedOwner();
+    }
+
+    /** Stale/discarded output: keep its producer charge until the actual solver exits. */
+    void discardResult() {
+        RuinResults.Lease owner;
+        synchronized (this) { owner = resultOwner; resultOwner = null; }
+        if (owner != null) owner.cancel();
+    }
+
+    /** Payload estimate, including possible lazy lookup arrays; not a whole-heap measurement. */
     public long bytes() {
         if (this == EMPTY) return 0;
-        return 64 + 12L * cells.length + 8L * fluidTicks.length + 8L * oldHashes.length + 8L * states.length + 4L * fires.length + 4L * heights.length
-                + 8L * lightAt.length + (prints == null ? 0 : 16L * prints.length) + (outside == null ? 0 : 16L * outside.size()) + (biomes == null ? 0 : 96)
-                + (flash == null ? 0 : 4L * flash.length) + (blown == null ? 0 : 4L * blown.length) + 8L * material.length;
+        return sourceBytes(cells.length, olds.length, states.length, fires.length, heights.length, lightAt.length,
+                oldHashes.length, prints == null ? 0 : prints.length, normals == null ? 0 : normals.length,
+                outside == null ? 0 : outside.size(), outsideState == null ? 0 : outsideState.size(),
+                fluidTicks.length, biomes == null ? 0 : 16, flash == null ? 0 : flash.length,
+                blown == null ? 0 : blown.length, material.length, sectionWords());
+    }
+
+    private int sectionWords() {
+        return Math.max(1, (oldHashes.length + 63) / 64);
+    }
+
+    /** The same field law is used for an actual plan and its pre-allocation domain bound. */
+    static long sourceBytes(long cells, long olds, long states, long fires, long heights, long light,
+                            long hashes, long prints, long normals, long outside, long outsideStates,
+                            long fluids, long biomes, long flash, long blown, long material, long sectionWords) {
+        // Eight-byte reference estimate; registry BlockStates/context are borrowed, not deep-copied here.
+        // Fire keys and section bits are charged before their lazy allocation so bytes never grows on lookup.
+        // oldTops is an optional int[512]; prepay it too so all lazy caches are stable.
+        return 64 + 4L * 512 + 4 * cells + 8 * olds + 8 * states + 8 * fires + 4 * heights + 8 * light
+                + 8 * (hashes + prints + normals + outside + outsideStates + fluids + material + sectionWords)
+                + 6 * biomes + 4 * (flash + blown);
+    }
+
+    /**
+     * Source-proven result bound, before any Blast/Collapse/finish allocation. Original non-air centre sections
+     * contain all changed/material positions (Collapse.collect, ground/plants/fireball/snowy); no deposition is
+     * performed by the solver. Ruined snapshots' mayHave also includes restored old blocks. Leaves contribute at
+     * most one fire each, land at most one per column, including fire ABOVE a populated section. The fluid pass
+     * visits exactly the 18x18 centre-plus-border domain, once per y; only original fluid cells can enter it.
+     * All nine input chunks matter, including fracture-driven collapse below/above centre surface. Counting their
+     * non-air section domains avoids assuming the centre's surface bounds neighbour fractures or fluid heights.
+     * Outside logs have no current producer in Sections; reserve one per possible centre source as well.
+     * Heights: 256 columns x (four maps + sky) x triple. Palette <= MAX_STATES; flash <= MAX_CHARS.
+     */
+    static long maxResultBytes(RuinContext.Grid grid) {
+        ChunkShot centre = grid.at(0, 0);
+        if (centre == null) throw new IllegalArgumentException("Missing result centre");
+        long cells = populatedCells(centre, 256), fluids = 0;
+        for (int dz = -1; dz <= 1; dz++) for (int dx = -1; dx <= 1; dx++) {
+            ChunkShot shot = grid.at(dx, dz);
+            if (shot != null) fluids += populatedCells(shot, (dx == 0 ? 16 : 1) * (dz == 0 ? 16 : 1));
+        }
+        long fires = cells + 256;
+        return sourceBytes(cells, cells, MAX_STATES, fires, 256L * (SKY + 1) * 3, cells,
+                centre.sections, centre.sections, centre.sections, cells, cells, fluids, 16,
+                Math.min(6 * cells, ua.zentix.incoming.nuclear.flash.FlashMarks.MAX_CHARS), fires, cells,
+                (centre.sections + 63L) / 64);
+    }
+
+    /**
+     * Temporary fracture output, separate from the final plan. All nine fragments remain owned until
+     * the actual solver exits, even when its centre plan is empty or its future is cancelled.
+     * Diagnostic server-thread cache entries instead remain counted by their context.
+     */
+    static long maxFragmentBytes(RuinContext.Grid grid) {
+        long bytes = 0;
+        for (int dz = -1; dz <= 1; dz++) for (int dx = -1; dx <= 1; dx++) {
+            ChunkShot shot = grid.at(dx, dz);
+            if (shot == null) continue;
+            long cells = populatedCells(shot, 256);
+            // Blast.run emits each non-air centre position once. fellTrees records at most one root per
+            // centre column (break after recording); each record is long[]{position,height,direction}.
+            long trees = Math.min(cells, 256);
+            bytes += fragmentBytes(cells, 9, trees, trees, 3 * trees);
+        }
+        return bytes;
+    }
+
+    /** The same element/capacity law for an actually retained Blast, with its nine numeric snapshot IDs. */
+    static long fragmentBytes(Blast blast) {
+        long treeLongs = 0;
+        for (long[] tree : blast.trees()) treeLongs += tree.length;
+        return fragmentBytes(blast.removed().length, blast.stamp().serials().length,
+                blast.trees().size(), blast.treeLogs().size(), treeLongs);
+    }
+
+    static long fragmentBytes(long removed, long serials, long trees, long treeLogs, long treeLongs) {
+        // Estimated record shell 56, stamp shell 24, map/key allowance 64; array headers 16 each;
+        // two ArrayList shells 24 each. Eight-byte references keep this independent of compressed oops.
+        return 64 + 56 + 24 + 16 + 8 * serials + 16 + 4 * removed + 2 * (24 + 16)
+                + 8 * (listCapacity(trees) + listCapacity(treeLogs)) + 16 * trees + 8 * treeLongs;
+    }
+
+    private static long listCapacity(long size) {
+        // These producer lists only append: ArrayList starts at 10 then grows by 1.5, hence <=2n.
+        // This is a backing-capacity bound, not a guessed payload multiplier.
+        return size == 0 ? 0 : Math.max(10, 2 * size);
+    }
+
+    private static long populatedCells(ChunkShot shot, int columns) {
+        long result = 0;
+        for (int i = 0; i < shot.sections; i++) if (shot.mayHave(i, state -> !state.isAir())) result += 16L * columns;
+        return result;
     }
 
     private static int section(int cell) {
@@ -891,12 +1004,14 @@ public final class RuinPlan {
      * restart) know chunk fire belongs to layer.
      *
      * @return fires ignited (including wave-blown); −1 stale layer (positions changed since snapshot): nothing
-     *          changed
+     *          changed; −2 when shared memory cannot admit the pre-flash shadow tile
      */
     int applyFlash(ServerLevel level, LevelChunk chunk, Detonation d, ColumnScar.Budget budget) {
+        memoryWaiting = false;
         if (this == EMPTY || ctx == null) return 0;
         long t = System.nanoTime();
         if (!current(chunk, null, false)) return -1;
+        if (!ctx.flashHeightsReady(level, chunk)) { memoryWaiting = true; return -2; }
         boolean shotCurrent = ctx.beforeFlash(level, chunk);
         boolean recoloured = biomes != null && ScorchedBiomes.write(level, chunk, biomes);
         int lit = 0;

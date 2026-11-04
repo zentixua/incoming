@@ -74,10 +74,12 @@ public final class FlashScorch {
     /** Background layer: task and work start time (game time; −1 — still waiting in pool queue). */
     private static final class Build {
         final Future<RuinPlan> task;
+        final RuinContext owner;
         long since = -1;
 
-        Build(Future<RuinPlan> task) {
+        Build(Future<RuinPlan> task, RuinContext owner) {
             this.task = task;
+            this.owner = owner;
         }
     }
 
@@ -222,11 +224,14 @@ public final class FlashScorch {
             Map.Entry<Integer, Build> e = it.next();
             int k = e.getKey();
             Build b = e.getValue();
-            if (!b.task.isDone()) {
+            if (!RuinWorkers.finished(b.task)) {
                 if (abandoned(b, k, now)) it.remove();
                 continue;
             }
             if (due[k] > now) continue;
+            long key = order[k];
+            LevelChunk chunk = level.getChunkSource().getChunkNow(ChunkPos.getX(key), ChunkPos.getZ(key));
+            if (chunk != null && !ctx.flashHeightsReady(level, chunk)) continue;
             if (!(seen[k] ? clock.canStartVisible(ScarQueue.SEEN_BUSY_NANOS) : clock.canStart())) return false;
             it.remove();
             long t0 = clock.begin();
@@ -266,10 +271,13 @@ public final class FlashScorch {
             long t0 = clock.begin();
             try {
                 RuinContext.Grid g = ctx.flashGrid(level, chunk.getPos(), true);
-                building.put(k, new Build(ctx.submitWorker(() -> {
+                if (g == null) { next--; return false; }
+                var future = ctx.submitPlanWorker(level, g, () -> {
                     RuinWorkers.checkStop();
                     return RuinPlanner.flash(g);
-                }, priority)));
+                }, priority);
+                if (future == null) { next--; return false; }
+                building.put(k, new Build(future, ctx));
             } catch (RuntimeException ex) {
                 failed(k, ex);
             } finally {
@@ -287,7 +295,7 @@ public final class FlashScorch {
 
     /** Cancel, stop: background layers no longer needed. */
     void cancel() {
-        for (Build b : building.values()) b.task.cancel(false);
+        for (Build b : building.values()) b.owner.cancelWorker(b.task, false);
         building.clear();
     }
 
@@ -302,7 +310,7 @@ public final class FlashScorch {
         }
         if (b.since < 0) b.since = now;
         if (now - b.since < RuinContext.TASK_AGE_LIMIT) return false;
-        b.task.cancel(true);
+        b.owner.cancelWorker(b.task, true);
         RuinWorkers.expired();
         if (failures++ < 3) {
             Incoming.LOG.warn("Nuclear detonation #{}: flash scorch of chunk {} not ready in {} ticks — abandoned (the wave brings it with the ruins)",
@@ -326,38 +334,40 @@ public final class FlashScorch {
         long key = order[k];
         RuinPlan plan;
         try {
-            plan = task.get();
+            plan = ctx.takeWorker(task);
         } catch (java.util.concurrent.ExecutionException e) {
             failed(k, e.getCause());
             return;
         } catch (InterruptedException | java.util.concurrent.CancellationException e) {
             return;
         }
-        LevelChunk chunk = level.getChunkSource().getChunkNow(ChunkPos.getX(key), ChunkPos.getZ(key));
-        if (chunk == null) {
-            gone++;
-            return;
-        }
-        if (ruined(ctx, chunk)) {
-            late++;
-            return;
-        }
-        // writing needs neighbors (nearby Sable craft, edge block entity), but absent: ruins wait for them themselves
-        if (plan.waitsNeighbours(level, chunk) > 0) {
-            waiting++;
-            return;
-        }
-        int lit = plan.applyFlash(level, chunk, d, budget);
-        if (lit < 0) {
-            stale++;
-            return;
-        }
-        applied++;
-        blocks += plan.changedBlocks();
-        fires += lit;
-        lastApplied = now;
-        // chunk ruins no longer need snapshot (plan ready or building): only neighbors would hold it until wave — retake it
-        if (scars.hasPlan(ctx, d, key)) ctx.dropShot(key);
+        try {
+            LevelChunk chunk = level.getChunkSource().getChunkNow(ChunkPos.getX(key), ChunkPos.getZ(key));
+            if (chunk == null) {
+                gone++;
+                return;
+            }
+            if (ruined(ctx, chunk)) {
+                late++;
+                return;
+            }
+            // writing needs neighbors (nearby Sable craft, edge block entity), but absent: ruins wait for them themselves
+            if (plan.waitsNeighbours(level, chunk) > 0) {
+                waiting++;
+                return;
+            }
+            int lit = plan.applyFlash(level, chunk, d, budget);
+            if (lit < 0) {
+                stale++;
+                return;
+            }
+            applied++;
+            blocks += plan.changedBlocks();
+            fires += lit;
+            lastApplied = now;
+            // chunk ruins no longer need snapshot (plan ready or building): only neighbors would hold it until wave — retake it
+            if (scars.hasPlan(ctx, d, key)) ctx.dropShot(key);
+        } finally { plan.discardResult(); }
     }
 
     /**
