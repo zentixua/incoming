@@ -416,3 +416,9 @@ paths:
   admission; release/transfer on success, staleness, unload and clear. Prepared plans keep their `RetainedPlans`
   owner through admission and are not counted twice. `nuke_ledger_*` covers delayed real-wrapper I/O, packed/legacy
   parity, several refused collected plans, cold cross-dimension admission and large completed legacy checkpoints.
+
+- Cold import must leave already-loaded transport/support able to free decoder workspace. Continuation growth
+  uses actual resident ownership, while unknown ledgers still close new strike removals. Resolve getters that
+  may admit another cold decoder before checking/charging headroom (`nuke_ledger_drain`, `nuke_ledger_admission`).
+  Streaming crater retirement adds to saved aggregate totals in either compound field order; never overwrite
+  totals from previously retired rows (`nuke_ledger_totals`).

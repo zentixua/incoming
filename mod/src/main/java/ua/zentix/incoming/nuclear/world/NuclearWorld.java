@@ -414,7 +414,7 @@ public final class NuclearWorld {
         get(level);
         if (!matter.loaded() || !craterMatter.loaded() || !ruinProgress.loaded()) {
             // Already-owned transport must be able to free room for another cold ledger's
-            // decoder. New removals/restoration still wait for every authoritative store.
+            // decoder. New strike removals/restoration still wait for every authoritative store.
             if (matter.loaded()) matter.work(level, clock);
             return;
         }

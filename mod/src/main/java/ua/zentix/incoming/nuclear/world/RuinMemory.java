@@ -24,10 +24,11 @@ final class RuinMemory {
      * bounded growth uses actual resident charges, while new strike removals stay closed. */
     static Reservation reserveProgress(ServerLevel level, long bytes) {
         if (bytes < 0) throw new IllegalArgumentException("Negative material reservation");
+        // Resolve admission-capable getters before checking/charging the remaining room.
+        NuclearWorld owner = NuclearWorld.get(level);
         if (!RuinMatter.get(level).writable()) return null;
         long retained = NuclearPrep.residentMemory(level);
         if (bytes > NuclearPrep.PLANS_CAP - retained) return null;
-        NuclearWorld owner = NuclearWorld.get(level);
         owner.materialReservation += bytes;
         return new Reservation(owner, bytes);
     }

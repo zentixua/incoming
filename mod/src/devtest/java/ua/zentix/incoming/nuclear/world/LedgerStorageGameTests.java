@@ -199,6 +199,55 @@ public final class LedgerStorageGameTests {
         });
     }
 
+    @GameTest(template = "pad", batch = "nuke_ledger_admission", timeoutTicks = 1200, skyAccess = true)
+    public static void progressCannotSpendAColdDecodersHeadroomTwice(GameTestHelper h) throws Exception {
+        StrikeGameTests.gameSpeed(h);
+        var level = h.getLevel(); var owner = NuclearWorld.get(level);
+        var storage = level.getDataStorage();
+        var oldFolder = storage.dataFolder;
+        var oldMatter = storage.cache.get("incoming_ruin_matter");
+        var oldProgress = storage.cache.get("incoming_ruin_settle");
+        var dir = Files.createTempDirectory(oldFolder.toPath(), "ledger-admission-");
+        var root = new CompoundTag(); root.put("data", new RuinProgress().save(new CompoundTag(), level.registryAccess()));
+        var file = dir.resolve("incoming_ruin_settle.dat");
+        NbtIo.writeCompressed(root, file);
+        long required = LedgerScan.measure(file, "incoming_ruin_settle", java.util.Set.of(), NuclearPrep.PLANS_CAP).owned();
+        long[] reservation = {NuclearPrep.PLANS_CAP}; owner.materialReservation += reservation[0];
+        folder(storage, dir.toFile());
+        storage.set("incoming_ruin_matter", new RuinMatter()); storage.cache.remove("incoming_ruin_settle");
+        NuclearWorld.get(level); // Queue the scan, with admission closed.
+        var gate = new CountDownLatch(1);
+        var scanned = new AtomicBoolean();
+        IOUtilities.withIOWorker(() -> {
+            scanned.set(true);
+            try { gate.await(); } catch (InterruptedException error) { Thread.currentThread().interrupt(); }
+        });
+        StrikeGameTests.afterTest(h, () -> {
+            gate.countDown(); owner.materialReservation -= reservation[0];
+            folder(storage, oldFolder);
+            storage.set("incoming_ruin_matter", oldMatter); storage.set("incoming_ruin_settle", oldProgress);
+            NuclearWorld.get(level);
+        });
+        boolean[] checked = {false};
+        h.succeedWhen(() -> {
+            h.assertTrue(scanned.get(), "Sibling scan has not completed");
+            if (!checked[0]) {
+                // Exactly one decoder fits; no owner getter may run between this adjustment
+                // and the real progress helper. The gated decoder keeps its charge live.
+                long delta = NuclearPrep.PLANS_CAP - NuclearPrep.residentMemory(level) - required;
+                owner.materialReservation += delta; reservation[0] += delta;
+                try (var progress = RuinMemory.reserveProgress(level, 32L << 10)) {
+                    h.assertTrue(NuclearPrep.residentMemory(level) <= NuclearPrep.PLANS_CAP,
+                            "Progress and cold import spent the same headroom");
+                    h.assertTrue(progress == null, "Progress admitted beside a capacity-filling decoder");
+                }
+                checked[0] = true;
+                gate.countDown();
+            }
+            h.assertTrue(RuinProgress.get(level).loaded(), "Gated import has not published");
+        });
+    }
+
     @GameTest(template = "pad", batch = "nuke_ledger_totals", timeoutTicks = 200, skyAccess = true)
     public static void retiredCraterAddsToSavedTotalsInEitherFieldOrder(GameTestHelper h) throws Exception {
         var lookup = h.getLevel().registryAccess();
