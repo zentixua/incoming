@@ -1,0 +1,373 @@
+{
+  "first": [
+    {
+      "x": 1,
+      "z": -60,
+      "changed_sections": [
+        "4"
+      ],
+      "unsupported_after": {},
+      "arrivals": [
+        {
+          "wall_ms": 1793810611611,
+          "scope": "1",
+          "all_selected_match": true,
+          "all_changed_match": true,
+          "missing_changed": [],
+          "mismatched_changed": []
+        }
+      ],
+      "geometry_observed": true
+    },
+    {
+      "x": -15,
+      "z": -44,
+      "changed_sections": [
+        "4",
+        "5",
+        "6"
+      ],
+      "unsupported_after": {},
+      "arrivals": [
+        {
+          "wall_ms": 1793810611622,
+          "scope": "1",
+          "all_selected_match": false,
+          "all_changed_match": false,
+          "missing_changed": [],
+          "mismatched_changed": [
+            "5"
+          ]
+        },
+        {
+          "wall_ms": 1793810624934,
+          "scope": "1",
+          "all_selected_match": false,
+          "all_changed_match": false,
+          "missing_changed": [],
+          "mismatched_changed": [
+            "4",
+            "5",
+            "6"
+          ]
+        },
+        {
+          "wall_ms": 1793810642813,
+          "scope": "1",
+          "all_selected_match": false,
+          "all_changed_match": false,
+          "missing_changed": [],
+          "mismatched_changed": [
+            "4",
+            "5",
+            "6"
+          ]
+        }
+      ],
+      "geometry_observed": false
+    },
+    {
+      "x": -16,
+      "z": -45,
+      "changed_sections": [
+        "3",
+        "4",
+        "5",
+        "6"
+      ],
+      "unsupported_after": {},
+      "arrivals": [
+        {
+          "wall_ms": 1793810614622,
+          "scope": "1",
+          "all_selected_match": false,
+          "all_changed_match": false,
+          "missing_changed": [],
+          "mismatched_changed": [
+            "3"
+          ]
+        },
+        {
+          "wall_ms": 1793810625011,
+          "scope": "1",
+          "all_selected_match": false,
+          "all_changed_match": false,
+          "missing_changed": [],
+          "mismatched_changed": [
+            "3",
+            "4"
+          ]
+        }
+      ],
+      "geometry_observed": false
+    },
+    {
+      "x": -15,
+      "z": -60,
+      "changed_sections": [
+        "4",
+        "5"
+      ],
+      "unsupported_after": {},
+      "arrivals": [
+        {
+          "wall_ms": 1793810624921,
+          "scope": "1",
+          "all_selected_match": false,
+          "all_changed_match": false,
+          "missing_changed": [],
+          "mismatched_changed": [
+            "4",
+            "5"
+          ]
+        },
+        {
+          "wall_ms": 1793810642807,
+          "scope": "1",
+          "all_selected_match": false,
+          "all_changed_match": false,
+          "missing_changed": [],
+          "mismatched_changed": [
+            "4",
+            "5"
+          ]
+        },
+        {
+          "wall_ms": 1793810655156,
+          "scope": "1",
+          "all_selected_match": false,
+          "all_changed_match": false,
+          "missing_changed": [],
+          "mismatched_changed": [
+            "4",
+            "5"
+          ]
+        }
+      ],
+      "geometry_observed": false
+    },
+    {
+      "x": 1,
+      "z": -44,
+      "changed_sections": [
+        "4",
+        "5",
+        "6",
+        "7"
+      ],
+      "unsupported_after": {},
+      "arrivals": [
+        {
+          "wall_ms": 1793810624927,
+          "scope": "1",
+          "all_selected_match": false,
+          "all_changed_match": false,
+          "missing_changed": [],
+          "mismatched_changed": [
+            "4"
+          ]
+        },
+        {
+          "wall_ms": 1793810642810,
+          "scope": "1",
+          "all_selected_match": false,
+          "all_changed_match": false,
+          "missing_changed": [],
+          "mismatched_changed": [
+            "4"
+          ]
+        },
+        {
+          "wall_ms": 1793810660407,
+          "scope": "1",
+          "all_selected_match": false,
+          "all_changed_match": false,
+          "missing_changed": [],
+          "mismatched_changed": [
+            "4"
+          ]
+        }
+      ],
+      "geometry_observed": false
+    },
+    {
+      "x": -15,
+      "z": -61,
+      "changed_sections": [
+        "4",
+        "5",
+        "7"
+      ],
+      "unsupported_after": {},
+      "arrivals": [
+        {
+          "wall_ms": 1793810624993,
+          "scope": "1",
+          "all_selected_match": false,
+          "all_changed_match": false,
+          "missing_changed": [],
+          "mismatched_changed": [
+            "4"
+          ]
+        },
+        {
+          "wall_ms": 1793810642817,
+          "scope": "1",
+          "all_selected_match": false,
+          "all_changed_match": false,
+          "missing_changed": [],
+          "mismatched_changed": [
+            "4",
+            "5"
+          ]
+        }
+      ],
+      "geometry_observed": false
+    },
+    {
+      "x": -14,
+      "z": -61,
+      "changed_sections": [
+        "4",
+        "5",
+        "6",
+        "7"
+      ],
+      "unsupported_after": {},
+      "arrivals": [
+        {
+          "wall_ms": 1793810624995,
+          "scope": "1",
+          "all_selected_match": false,
+          "all_changed_match": false,
+          "missing_changed": [],
+          "mismatched_changed": [
+            "4"
+          ]
+        },
+        {
+          "wall_ms": 1793810642818,
+          "scope": "1",
+          "all_selected_match": false,
+          "all_changed_match": false,
+          "missing_changed": [],
+          "mismatched_changed": [
+            "4"
+          ]
+        }
+      ],
+      "geometry_observed": false
+    },
+    {
+      "x": 2,
+      "z": -58,
+      "changed_sections": [
+        "4",
+        "5"
+      ],
+      "unsupported_after": {},
+      "arrivals": [
+        {
+          "wall_ms": 1793810624997,
+          "scope": "1",
+          "all_selected_match": false,
+          "all_changed_match": false,
+          "missing_changed": [],
+          "mismatched_changed": [
+            "4"
+          ]
+        }
+      ],
+      "geometry_observed": false
+    },
+    {
+      "x": 0,
+      "z": -43,
+      "changed_sections": [
+        "4",
+        "5"
+      ],
+      "unsupported_after": {},
+      "arrivals": [
+        {
+          "wall_ms": 1793810624998,
+          "scope": "1",
+          "all_selected_match": true,
+          "all_changed_match": true,
+          "missing_changed": [],
+          "mismatched_changed": []
+        }
+      ],
+      "geometry_observed": true
+    },
+    {
+      "x": -1,
+      "z": -43,
+      "changed_sections": [
+        "4",
+        "5",
+        "6"
+      ],
+      "unsupported_after": {},
+      "arrivals": [
+        {
+          "wall_ms": 1793810625001,
+          "scope": "1",
+          "all_selected_match": false,
+          "all_changed_match": false,
+          "missing_changed": [],
+          "mismatched_changed": [
+            "4"
+          ]
+        }
+      ],
+      "geometry_observed": false
+    },
+    {
+      "x": -13,
+      "z": -43,
+      "changed_sections": [
+        "4",
+        "6"
+      ],
+      "unsupported_after": {},
+      "arrivals": [
+        {
+          "wall_ms": 1793810625003,
+          "scope": "1",
+          "all_selected_match": false,
+          "all_changed_match": false,
+          "missing_changed": [],
+          "mismatched_changed": [
+            "4"
+          ]
+        }
+      ],
+      "geometry_observed": false
+    },
+    {
+      "x": -15,
+      "z": -43,
+      "changed_sections": [
+        "4",
+        "6"
+      ],
+      "unsupported_after": {},
+      "arrivals": [
+        {
+          "wall_ms": 1793810625004,
+          "scope": "1",
+          "all_selected_match": false,
+          "all_changed_match": false,
+          "missing_changed": [],
+          "mismatched_changed": [
+            "4",
+            "6"
+          ]
+        }
+      ],
+      "geometry_observed": false
+    }
+  ],
+  "limits": "Geometry only. All timestamps are client callback wall times. No arrival means unobserved, never stale/fresh proof. Restrict input to the intended connection/scope and a settled source interval. Ordinary cached rejoin may correctly send no LSS callback; use native frames for persistent visibility. No wave/render fence."
+}

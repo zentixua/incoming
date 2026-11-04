@@ -1,0 +1,27 @@
+{
+  "case": "corrected1000kt-frontier-on",
+  "source": "fc07be9e624848a0c409fcebc3bbe91307e03f0e",
+  "jar_sha256": "59fd5691482867c6481cde30aaf77d53d7fc03e8de9102c37582d1af8f08fb51",
+  "protocol": 55,
+  "heap_gib": 8,
+  "active_processors": 12,
+  "yield_kt": 1000,
+  "post_flash_seconds": 480,
+  "target": [
+    3104.5,
+    63,
+    560.5
+  ],
+  "camera": [
+    -96.5,
+    150,
+    -816.5,
+    -66.72369,
+    1.4302
+  ],
+  "game_flight_ticks": 1800,
+  "hashes": false,
+  "screenshots": false,
+  "telemetry": true,
+  "native_camera_verified": true
+}

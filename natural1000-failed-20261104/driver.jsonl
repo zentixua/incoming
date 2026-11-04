@@ -1,0 +1,25 @@
+{"event": "driver_start", "wall_ms": 1793807330172, "mono_ns": 1046141870595480, "source": "fc07be9e624848a0c409fcebc3bbe91307e03f0e", "jar_sha256": "59fd5691482867c6481cde30aaf77d53d7fc03e8de9102c37582d1af8f08fb51", "post_flash_seconds": 480, "minimum_since_request_seconds": 0}
+{"event": "client_joined", "wall_ms": 1793807386188, "mono_ns": 1046197887435320}
+{"event": "command", "wall_ms": 1793807386189, "mono_ns": 1046197887551422, "command": "gamemode spectator Dev"}
+{"event": "command", "wall_ms": 1793807386510, "mono_ns": 1046198209175082, "command": "tp Dev -96.5 150 -816.5 -66.72369 1.4302"}
+{"event": "command", "wall_ms": 1793807386828, "mono_ns": 1046198527111495, "command": "gamerule doDaylightCycle false"}
+{"event": "command", "wall_ms": 1793807387147, "mono_ns": 1046198846190492, "command": "gamerule doWeatherCycle false"}
+{"event": "command", "wall_ms": 1793807387478, "mono_ns": 1046199176898919, "command": "time set noon"}
+{"event": "command", "wall_ms": 1793807387793, "mono_ns": 1046199491739137, "command": "weather clear"}
+{"event": "command", "wall_ms": 1793807388108, "mono_ns": 1046199807452248, "command": "tick query"}
+{"event": "camera_ready", "wall_ms": 1793807388424, "mono_ns": 1046200123080315}
+{"event": "awaiting_measurement_gate", "wall_ms": 1793807478424, "mono_ns": 1046290123453654}
+{"event": "baseline_start", "wall_ms": 1793808342699, "mono_ns": 1047154398264128}
+{"event": "prepare_requested", "wall_ms": 1793808402700, "mono_ns": 1047214398720693}
+{"event": "command", "wall_ms": 1793808402700, "mono_ns": 1047214398937661, "command": "incoming nuke at 3104.5 63 560.5 1000 ground"}
+{"event": "launch_observed", "wall_ms": 1793808424729, "mono_ns": 1047236427935550, "line": "[04Nov2026 17:07:04.183] [Server thread/INFO] [ua.zentix.incoming.Incoming/]: ICBM #1: 1000 kt at 3104 63 560, detonation in 90 s"}
+{"event": "detonation_observed", "wall_ms": 1793808514758, "mono_ns": 1047326456576938, "line": "[04Nov2026 17:08:34.197] [Server thread/INFO] [ua.zentix.incoming.Incoming/]: Nuclear detonation #2: 1000 kt, ground burst, 3104 63 560, scale 1.0, 34 ms"}
+{"event": "flash_window_end", "wall_ms": 1793808544758, "mono_ns": 1047356456941988}
+{"event": "wave_window_end", "wall_ms": 1793808634758, "mono_ns": 1047446457255271}
+{"event": "settle_window_end", "wall_ms": 1793808994759, "mono_ns": 1047806457583615, "post_flash_seconds": 480}
+{"event": "completion_window_extension", "wall_ms": 1793808994759, "mono_ns": 1047806457694848, "seconds": 0}
+{"event": "completion_window_end", "wall_ms": 1793808994759, "mono_ns": 1047806457713387, "elapsed_since_request_seconds": 592.0591578830499}
+{"event": "command", "wall_ms": 1793808994759, "mono_ns": 1047806457735272, "command": "tick query"}
+{"event": "command", "wall_ms": 1793808994774, "mono_ns": 1047806473296686, "command": "save-all flush"}
+{"event": "native_save_complete", "wall_ms": 1793808996790, "mono_ns": 1047808489487110, "line": "[04Nov2026 17:16:36.268] [Server thread/INFO] [net.minecraft.server.MinecraftServer/]: Saved the game"}
+{"event": "driver_complete", "wall_ms": 1793808996791, "mono_ns": 1047808489571222}

@@ -1,0 +1,77 @@
+{
+  "columns": [
+    {
+      "x": 180,
+      "z": 35,
+      "DataVersion": 3955,
+      "Status": "minecraft:full",
+      "chunk_nbt_sha256": "82beb0cb127b70cc3bbcd127159667e113eb44c830391299adf868d091c54a1c",
+      "hashes": {
+        "0": "14f66ce049bec9d4",
+        "1": "b27bae07f790309f",
+        "2": "91d1c2f494e75ae1",
+        "3": "3c7848da5d85e95",
+        "4": "d9d5cee5bd3ccc60",
+        "5": "0",
+        "6": "0",
+        "7": "0"
+      },
+      "unsupported": {}
+    },
+    {
+      "x": 194,
+      "z": 20,
+      "DataVersion": 3955,
+      "Status": "minecraft:full",
+      "chunk_nbt_sha256": "75b252e930c83ba491d4e790394e78938d84aa59d077533b3ea82686df4cd615",
+      "hashes": {
+        "0": "35c11a16f639ee1e",
+        "1": "7b85c0c70c44b82",
+        "2": "c098612b51117212",
+        "3": "473b31ae2f689183",
+        "4": "fa614c65476dee11",
+        "5": "6a69db6fd2b24b5",
+        "6": "0",
+        "7": "0"
+      },
+      "unsupported": {}
+    },
+    {
+      "x": -3,
+      "z": -57,
+      "DataVersion": 3955,
+      "Status": "minecraft:full",
+      "chunk_nbt_sha256": "bd754557ce30f48556c7d5a750b757041e255199f480794a8e6bac9801bdb2fa",
+      "hashes": {
+        "0": "6f30b9f07528caa1",
+        "1": "420419b2a98c6dbf",
+        "2": "85159a49d94fcfd4",
+        "3": "a0175a8f357038bb",
+        "4": "2e64d1356c068ba7",
+        "5": "452e4fea63f6fb13",
+        "6": "55d223503c7638a8",
+        "7": "eb0ef09ffa5e8482"
+      },
+      "unsupported": {}
+    },
+    {
+      "x": 0,
+      "z": -50,
+      "DataVersion": 3955,
+      "Status": "minecraft:full",
+      "chunk_nbt_sha256": "29fb7789ef2c1455896a4321faff1b068c46203953f241a6da050f74ee503a9b",
+      "hashes": {
+        "0": "95baac35024675bc",
+        "1": "2a4275c4628fa894",
+        "2": "3d27bc22c57793a",
+        "3": "521af5fbdc234c8d",
+        "4": "c935729a0f65a294",
+        "5": "0",
+        "6": "0",
+        "7": "0"
+      },
+      "unsupported": {}
+    }
+  ],
+  "limits": "geometry only; absent receipt section is unknown, not air; no biome/light/render/persistence claim"
+}

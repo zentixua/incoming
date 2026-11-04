@@ -1,0 +1,9 @@
+{
+  "pid": "53340",
+  "start_ticks": "104606428",
+  "wall_ms": 1793809289842,
+  "artifact_sha256": "6b89b90c5499b62615415471dcc9c721f608e3ba57a4a1ad00efb70317c76a6a",
+  "cwd": "/crafty/servers/4e58303d-11d5-43b2-b002-afd1f9c9a52f",
+  "attach_stdout": "Connected to remote JVM\nJVM response code = 0\nreturn code: 0\n\n",
+  "complete_wall_ms": 1793809290268
+}

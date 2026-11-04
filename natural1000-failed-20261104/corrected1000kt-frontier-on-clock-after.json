@@ -1,0 +1,134 @@
+{
+  "host": "vps",
+  "samples": [
+    {
+      "begin_wall_ns": 1793809032836499700,
+      "end_wall_ns": 1793809032922636421,
+      "begin_mono_ns": 32027308155963,
+      "end_mono_ns": 32027394281213,
+      "remote": {
+        "wall_ns": 1793809032893535996,
+        "mono_ns": 1047844592084179
+      },
+      "offset_low_ms": -29.100425,
+      "offset_high_ms": 57.036296,
+      "rtt_ms": 86.12525,
+      "local_wall_step_ms": 0.011471
+    },
+    {
+      "begin_wall_ns": 1793809032922645769,
+      "end_wall_ns": 1793809033045137754,
+      "begin_mono_ns": 32027394291823,
+      "end_mono_ns": 32027516782737,
+      "remote": {
+        "wall_ns": 1793809032997518881,
+        "mono_ns": 1047844696066735
+      },
+      "offset_low_ms": -47.618873,
+      "offset_high_ms": 74.873112,
+      "rtt_ms": 122.490914,
+      "local_wall_step_ms": 0.001071
+    },
+    {
+      "begin_wall_ns": 1793809033045148755,
+      "end_wall_ns": 1793809033101569626,
+      "begin_mono_ns": 32027516794579,
+      "end_mono_ns": 32027573214769,
+      "remote": {
+        "wall_ns": 1793809033072635972,
+        "mono_ns": 1047844771183676
+      },
+      "offset_low_ms": -28.933654,
+      "offset_high_ms": 27.487217,
+      "rtt_ms": 56.42019,
+      "local_wall_step_ms": 0.000681
+    },
+    {
+      "begin_wall_ns": 1793809033101575397,
+      "end_wall_ns": 1793809033161514202,
+      "begin_mono_ns": 32027573221291,
+      "end_mono_ns": 32027633159244,
+      "remote": {
+        "wall_ns": 1793809033131847532,
+        "mono_ns": 1047844830395155
+      },
+      "offset_low_ms": -29.66667,
+      "offset_high_ms": 30.272135,
+      "rtt_ms": 59.937953,
+      "local_wall_step_ms": 0.000852
+    },
+    {
+      "begin_wall_ns": 1793809033161519993,
+      "end_wall_ns": 1793809033222115102,
+      "begin_mono_ns": 32027633165887,
+      "end_mono_ns": 32027693760254,
+      "remote": {
+        "wall_ns": 1793809033196872391,
+        "mono_ns": 1047844895419864
+      },
+      "offset_low_ms": -25.242711,
+      "offset_high_ms": 35.352398,
+      "rtt_ms": 60.594367,
+      "local_wall_step_ms": 0.000742
+    },
+    {
+      "begin_wall_ns": 1793809033222120472,
+      "end_wall_ns": 1793809033281792726,
+      "begin_mono_ns": 32027693766386,
+      "end_mono_ns": 32027753437868,
+      "remote": {
+        "wall_ns": 1793809033257449653,
+        "mono_ns": 1047844956010548
+      },
+      "offset_low_ms": -24.343073,
+      "offset_high_ms": 35.329181,
+      "rtt_ms": 59.671482,
+      "local_wall_step_ms": 0.000772
+    },
+    {
+      "begin_wall_ns": 1793809033281798416,
+      "end_wall_ns": 1793809033342527848,
+      "begin_mono_ns": 32027753444321,
+      "end_mono_ns": 32027814173051,
+      "remote": {
+        "wall_ns": 1793809033317598817,
+        "mono_ns": 1047845016146780
+      },
+      "offset_low_ms": -24.929031,
+      "offset_high_ms": 35.800401,
+      "rtt_ms": 60.72873,
+      "local_wall_step_ms": 0.000702
+    },
+    {
+      "begin_wall_ns": 1793809033342532737,
+      "end_wall_ns": 1793809033403913153,
+      "begin_mono_ns": 32027814178541,
+      "end_mono_ns": 32027875558255,
+      "remote": {
+        "wall_ns": 1793809033377389250,
+        "mono_ns": 1047845075937094
+      },
+      "offset_low_ms": -26.523903,
+      "offset_high_ms": 34.856513,
+      "rtt_ms": 61.379714,
+      "local_wall_step_ms": 0.000702
+    },
+    {
+      "begin_wall_ns": 1793809033403918603,
+      "end_wall_ns": 1793809033464896632,
+      "begin_mono_ns": 32027875564427,
+      "end_mono_ns": 32027936541625,
+      "remote": {
+        "wall_ns": 1793809033442072646,
+        "mono_ns": 1047845140620820
+      },
+      "offset_low_ms": -22.823986,
+      "offset_high_ms": 38.154043,
+      "rtt_ms": 60.977198,
+      "local_wall_step_ms": 0.000831
+    }
+  ],
+  "server_minus_client_ms": -0.7232184999999998,
+  "clock_uncertainty_ms": 28.210435500000003,
+  "limits": "A measured clock bracket, valid at sampling time; repeat after the trial to detect drift/steps. No assumption of symmetric latency."
+}

@@ -1,0 +1,216 @@
+{
+  "audit_schema_version": 1,
+  "source_sha": "4d89b5b113a53b3cfe8822092e1813750516c9e9",
+  "files": [
+    {
+      "audit_schema_version": 1,
+      "source_sha": "4d89b5b113a53b3cfe8822092e1813750516c9e9",
+      "path": "/home/ubuntu/airstrike-work/lead2/corrected1000kt-frontier-on/clean-stop-B/world/data/incoming_ruin_matter.dat",
+      "status": "pass",
+      "file_sha256": "4b0b3e04acb4244ee45204fc938d77716c5a6f93f59209c840be41748f4350f9",
+      "file_bytes": 17617972,
+      "kind": "ruin",
+      "row_digests": {
+        "data/materials": {
+          "count": 317,
+          "sum_sha256_mod_2_256": "3c3780f9ce0c5eeada13db8cffe8b3cb30a74591c3615a686fd76e0700850c2d",
+          "ordered_sha256": "ff00b11ae5c0d2d9099b2b33343b84c934c5fee3dc07130da0cdeaf7d5d59084"
+        },
+        "data/support_originals": {
+          "count": 283719,
+          "sum_sha256_mod_2_256": "a3c0cac2723b59c2d81c70fe0271ae5bcdc019a0bc125db58ff1ba6dcbc3e900",
+          "ordered_sha256": "0e77849b7f538d5df774ea3c02b0c42eff0d6fb0b30a14722f76728073ce4186"
+        },
+        "data/cold_edges": {
+          "count": 95597,
+          "sum_sha256_mod_2_256": "8899d639243cebf84d04e2c0f4ae2947b8184f8429cd5abb465b19626d20f191",
+          "ordered_sha256": "76dafc8833198f691a443a5a96880890575557279dcfbc19b8ab7c8aa6f6b845"
+        },
+        "data/moving": {
+          "count": 168536,
+          "sum_sha256_mod_2_256": "deb71c2d9cc7d30cddb530ab5840d7f9c57a6f04f32dc3d9017d6cdffcf33cd3",
+          "ordered_sha256": "a82027cf9ef0d62a5ba638ab5ded27377ba303a850234319c15e37655561e1df"
+        }
+      },
+      "totals": {
+        "released": 813494,
+        "deposited": 476152,
+        "dispersed": 168806,
+        "released_volume": 542686.5733983079,
+        "deposited_volume": 293880.9861333317,
+        "dispersed_volume": 145040.015625,
+        "released_mass": 1116478197.4902344,
+        "deposited_mass": 676595138.1875,
+        "dispersed_mass": 207157339.0625
+      },
+      "pending_count_volume_mass": [
+        168536,
+        103765.57164052961,
+        232725720.24023438
+      ],
+      "cargo": {
+        "rows": 473,
+        "represented_pieces": 473,
+        "canonical_summary_bytes": 78745,
+        "note": "Cargo contents hashed structurally; no registry/item-stack guesses"
+      },
+      "moving_and_stranded_count_volume_mass": {
+        "moving": [
+          168536,
+          103765.57164052961,
+          232725720.24023438
+        ]
+      },
+      "semantic_moving_digest": {
+        "count": 168536,
+        "sum_sha256_mod_2_256": "3ce4e10eaa8613dab01afd929c2cfc7a7b459cfb34052fa977c4ee4a7824141e",
+        "ordered_sha256": "3df05f791d106e929e74e6472965a1f647b969943f7503e4e8d54ad2cbef4c9d"
+      },
+      "motion_formats": {
+        "packed145": 168536
+      },
+      "material_v0_to_v5": [
+        542686.5733984412,
+        1116478197.4902344,
+        293880.98613281525,
+        676595138.1875,
+        145040.015625,
+        207157339.0625
+      ],
+      "residuals": {
+        "count": 0,
+        "_volume": -5.534384399652481e-07,
+        "_mass": 0.0
+      },
+      "support_arrays": {
+        "supports": {
+          "nbt_array_type": 12,
+          "count": 148775,
+          "sum_sha256_mod_2_256": "817f7a54357a01c596c22d41e6cde5fe011b926ef3de891776989bcdc46d9e15",
+          "ordered_sha256": "d1d3515262afb4598bb43a23f7df611c5c90d3b83ebe1af1542b9e1704ed032a"
+        },
+        "support_events": {
+          "nbt_array_type": 11,
+          "count": 148775,
+          "sum_sha256_mod_2_256": "326d53ef6261a153efa55223dec2fe1c5c9408d138ab8e57c95f58ae9a8e5e13",
+          "ordered_sha256": "2f071ac3215a27923c790bb2b7339ad9f45d935c9a4cd1247b76908954dcf310"
+        }
+      },
+      "data_version": 3955,
+      "failures": []
+    },
+    {
+      "audit_schema_version": 1,
+      "source_sha": "4d89b5b113a53b3cfe8822092e1813750516c9e9",
+      "path": "/home/ubuntu/airstrike-work/lead2/corrected1000kt-frontier-on/clean-stop-B/world/data/incoming_crater_matter.dat",
+      "status": "pass",
+      "file_sha256": "676cb1bfd25624e82a4a9714e70ad10824b6760ca98fd04aefb25144f9b2fec5",
+      "file_bytes": 19719,
+      "kind": "crater",
+      "row_digests": {
+        "data/settled": {
+          "count": 902,
+          "sum_sha256_mod_2_256": "71608aea2c108ac705b5c06c5b8976034c816fe1e2aebd14f3b278f562532fdb",
+          "ordered_sha256": "6d825b0beefecfd7e5d2400e91403bea9d4245a61961822506a42064980f886e"
+        }
+      },
+      "pass_count": 0,
+      "pass_samples": [],
+      "samples_truncated": false,
+      "material_v0_to_v7": [
+        2546301.896248117,
+        5919978280.388672,
+        866677.0,
+        1993357100.0,
+        1089183.0,
+        2514507900.0,
+        590441.8962481164,
+        1412113280.3886719
+      ],
+      "available_count": 0,
+      "residuals": {
+        "0": 9.313225746154785e-10,
+        "1": 0.0
+      },
+      "data_version": 3955,
+      "failures": []
+    },
+    {
+      "audit_schema_version": 1,
+      "source_sha": "4d89b5b113a53b3cfe8822092e1813750516c9e9",
+      "path": "/home/ubuntu/airstrike-work/lead2/corrected1000kt-frontier-on/clean-stop-B/world/data/incoming_ruin_settle.dat",
+      "status": "pass",
+      "file_sha256": "0d902bd38c9fccf7724a02685b42926de1ea92e490be405135c0e54d89e0b722",
+      "file_bytes": 2652,
+      "kind": "progress",
+      "row_digests": {},
+      "pending_chunk_count": 965,
+      "complete_events": 0,
+      "archives_digest": {
+        "count": 1,
+        "sum_sha256_mod_2_256": "e410d3a16678ff70f1cc371366ae04d41451c61ae40805ea7dc51ca6d29f0d23",
+        "ordered_sha256": "e9b01eef22e98082042b0c2ab2df1beadf7bf94b2b20968f760bffe3249a22c7"
+      },
+      "events": 1,
+      "events_digest": {
+        "count": 1,
+        "sum_sha256_mod_2_256": "5eaa072cf2a88ca0537b0d48288ca8a728bd2e57d3d3f314eaf5206724d37218",
+        "ordered_sha256": "630a0c5692b1b4dc20f5104c3dde08525264a3356ff5ead52dc5bf63ef7fd2d8"
+      },
+      "event_samples": [
+        {
+          "event": "2",
+          "cursor": 1050,
+          "scan_version": 2,
+          "complete": 0,
+          "archive": "0ef764ea-583b-495e-bab8-bfd5dafc2444/0444de1c-da1e-397e-9c7d-8c1ce79fbf98/89a8dab49bdd429b9b2f1e444fe1da4757baa6a2f4543134b99320b0a0ad0044",
+          "pending": {
+            "nbt_array_type": 12,
+            "count": 965,
+            "sum_sha256_mod_2_256": "7bdda91f9671002860a9c9961246c679eb43f424f9c6c8bae29bf7abca473f9c",
+            "ordered_sha256": "73a6d028ce88571fd91a8efc52b7469457e845e59fad9305217924f555bd734c"
+          },
+          "effective_cursor": 1050
+        }
+      ],
+      "samples_truncated": false,
+      "data_version": 3955,
+      "failures": []
+    },
+    {
+      "audit_schema_version": 1,
+      "source_sha": "4d89b5b113a53b3cfe8822092e1813750516c9e9",
+      "path": "/home/ubuntu/airstrike-work/lead2/corrected1000kt-frontier-on/clean-stop-B/world/data/incoming_nuclear.dat",
+      "status": "pass",
+      "file_sha256": "d49724bbf3e47c9d2513e7e3ab65c8ee5c632eb8b518b947919305d2495db924",
+      "file_bytes": 286,
+      "kind": "nuclear",
+      "row_digests": {},
+      "crater_chunk_cursors": {},
+      "next_id": 3,
+      "late_from": 1,
+      "event_lists": {
+        "detonations": {
+          "nbt_list_type": 10,
+          "count": 1,
+          "sum_sha256_mod_2_256": "1d620e8bbb1ad495c3490a0959a36cad604b439b7d5b04f8ba8c45bf9fbbb3be",
+          "ordered_sha256": "5b733e7eb4d23e9e8fb9fd17013f8c8274adf70a80b29a171011dcb096d8758d"
+        },
+        "past": {
+          "nbt_list_type": 0,
+          "count": 0,
+          "sum_sha256_mod_2_256": "0000000000000000000000000000000000000000000000000000000000000000",
+          "ordered_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        },
+        "scheduled": {
+          "nbt_list_type": 0,
+          "count": 0,
+          "sum_sha256_mod_2_256": "0000000000000000000000000000000000000000000000000000000000000000",
+          "ordered_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+        }
+      },
+      "data_version": 3955,
+      "failures": []
+    }
+  ]
+}

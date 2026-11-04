@@ -1,0 +1,36 @@
+# Actual 1 Mt trial — unresolved near-ruin failure
+
+Test-only source `fc07be9e624848a0c409fcebc3bbe91307e03f0e`, jar SHA-256 `59fd5691482867c6481cde30aaf77d53d7fc03e8de9102c37582d1af8f08fb51`. Production behavior matches f848 and subsequent fixture-only composition f9d1ac8. Disposable complete Zearth domain1000 copy on authorized Crafty25571,8GiB heap/12 active processors, automatic nuclear workers, global nuclear ownership cap unchanged. Complementary Unbound5.9.3/Euphoria,2560×1600,render12/sim8; native camera(-96.5,150,-816.5), target(3104.5,63,560.5).
+
+**FAIL for full readiness:** native final log reports near-player ruin lag up to11106ticks (~555s),1381/1427 chunks loaded at flash still unruined at the ten-minute preparation cutoff, and4604 unplaced prepared plans. The text attributing every remaining chunk to neighbors is generic, not a measured cause. Sent-before-ruins0 does not prove on-time transformation. Far planning stopped at4213/268082 during the observed window. No release, whole-zone completion or universal latency claim follows.
+
+Timing: accepted16:06:42.792UTC → launch16:07:04.183 → FLASH16:08:34.197, on4November2026. Preparation21.391s, fixed flight90.014s, acceptance→FLASH111.405s. This passes the wait-time target for this case while the near-ruin feature fails.
+
+Clean measurement: sixty-second baseline, preparation, normal flight, then480s after flash. No profiler, hash callback or screenshot capture inside those phases. Native post-window frame and one-shot ownership observation happen later. The manual prelaunch CI gate extended warmup; it is excluded from the accepted-order timing and is disclosed rather than presented as cold-cache timing.
+
+| Phase | Server work p99/max ms | Frame interval p99/max ms | Frames >100ms |
+|---|---:|---:|---:|
+| baseline | 17.761/43.269 | 38.622/48.440 | 0 |
+| prepare | 59.948/89.592 | 37.654/40.657 | 0 |
+| flight | 27.225/71.812 | 39.458/188.520 | 1 |
+| flash | 69.275/87.022 | 84.980/180.262 | 3 |
+| wave | 65.521/80.989 | 47.177/112.045 | 1 |
+| settle | 57.583/189.783 | 50.904/166.033 | 6 |
+
+Server tick samples cover1202/428/1800/600/1800/7200 ticks respectively. Tick work excludes between-tick tasks/sleep. Maximum sampled heap-used during these phases is6,730,403,752bytes; this is neither live-set size nor the512MiB ownership estimate. The bounded measurement has zero recorded log drops, zero frame sequence gaps, zero GPU ring waits and zero TCP sampler errors. Final server footer reports producer_shutdown=complete and dropped=0. The client did not emit observe-stop on externally requested shutdown; its continuously flushed rows extend beyond every measured phase, so only those bounded windows are certified. A whole-lifetime completion/tail claim is not made. The first client stop sent duplicate SIGTERM through systemd and its wrapper; the separate rejoin used one guarded wrapper SIGTERM (expected exit143).
+
+The checked native preflight shows the dense city. The same view after480s shows brown nuclear haze and building silhouettes; it cannot certify exact damage geometry or LSS freshness. No screenshot-derived completion claim is made.
+
+A single read-only attach snapshot at16:21:30.059UTC, after the clean window and preparation expiry, took25.233ms on the server thread. It changed no bytecode and called no admission/drain/GC/solver. It shows2699 retained snapshots/387,520,554bytes and454 pending windows; the actual worker pool has one resident thread, zero active/queued tasks. This is post-expiry state, not proof of the earlier far collector head. The original pre-expiry far collector head remains unknown; the following post-expiry ownership causes are separately established.
+
+A second bounded read-only snapshot at16:31:43.751UTC took48.207ms, after all clean phases. It found1247 unpinned snapshots totaling113,013,570bytes with no exact saved/completed receipt and no pending write. Existing snapshot bytes435,036,688 + ten future worker workspaces132,710,400 + transition reserve67,108,864 alone exceed the536,870,912byte cap. The storage room supplier subtracts this future reservation, so it cannot archive those otherwise unpinned sources. This is an actual post-expiry storage-admission refusal, not a disk failure. A separate same-input controlled archive regression has since demonstrated RED/GREEN; its production fix requires a new artifact and new integrated acceptance.
+
+The same snapshot records the first visible parked plan at chunk(-3,-57),22,054 material/cell entries, memoryWaiting=true, and all25 required chunks ready. Existing8704bytes/candidate upfront reservation alone requests191,958,016bytes. This establishes memory admission at that actual head rather than missing neighbors. Its safe replacement bound and controlled nonempty plan application remain under independent engineering validation. Neither snapshot proves these were the only causes of the initial far plateau.
+
+Normal stop A: requested16:36:04.110, stopped16:36:11.298UTC. Same artifact and unchanged world/cache restart: requested16:42:10.760, ready16:42:38.791; normal stop B requested16:44:17.330, stopped16:44:25.516. All four material/progress/nuclear ledgers pass native-format audits on both immutable cuts. Exact material count residual is0; floating volume/mass residuals are recorded without rounding them into exact equality. All34 archive files,97,398,784bytes total, are byte-identical across A/B. This proves bounded persistence/conservation for this failed trial, not that settlement completed.
+
+The ordinary rejoin kept world identity, LSS receipt marks and Voxy caches. The initial same-view frame shows standing buildings in blue haze; it cannot certify full ruins. Natural LSS callbacks were received without custom publication or cache clearing. A bounded offline native-section hash comparison of12 actually observed columns finds two callbacks matching all selected changed A sections and four matching later B sections. Continued settlement changed some A geometry during this rejoin, so mismatches to A/B alone are not stale-data proof. These callbacks lie near the original camera; this is selected changed-geometry receipt evidence, not whole-horizon coverage, a renderer fence, or a far-view acceptance result. The four preselected target/near coordinates had no matching callback in this lifetime and remain unobserved. No callback absence claim relies on a missing client shutdown footer.
+
+Raw phase metrics, source/artifact pins, common wall/monotonic timestamps, one-shot ownership records, exact archive/audit receipts, selected section witnesses, callback rows and three native frames accompany this report. World/NBT payloads, JARs, private launchers and credentials are excluded. Full readiness remains blocked by the measured near-ruin delay and far-progress stall. No release is authorized or performed.
+
+Audit provenance: the offline schema reader is pinned to source4d89b5b and SHA256 8d5b535f23e2d95670087a000becfd8d0e60ce73df0bd632836fdbb895ee81dc. Its source_sha field identifies that schema baseline, not the runtime artifact. The compared current RuinMatter/RuinProgress/CraterMatter diff has no disk writer/reader format change; unsupported fields fail closed. The actual runtime artifact is fc07be9e/59fd5691 as pinned above.

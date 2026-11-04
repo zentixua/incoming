@@ -1,0 +1,78 @@
+{
+  "columns": [
+    {
+      "x": 180,
+      "z": 35,
+      "DataVersion": 3955,
+      "Status": "minecraft:full",
+      "chunk_nbt_sha256": "75da403814496804ef7b081f1b0adb1430d1a03f2808191abf11d96e938c84f0",
+      "hashes": {
+        "0": "14f66ce049bec9d4",
+        "1": "b27bae07f790309f",
+        "2": "91d1c2f494e75ae1",
+        "3": "6bb98241cbeb31dc",
+        "4": "99f3c811f303df5",
+        "5": "0",
+        "6": "0",
+        "7": "0"
+      },
+      "unsupported": {}
+    },
+    {
+      "x": 194,
+      "z": 20,
+      "DataVersion": 3955,
+      "Status": "minecraft:full",
+      "chunk_nbt_sha256": "3ce404fa15e61f1e1e6df1d14aa7b869bb6838aea1bc4fa6d05a0da876e2c674",
+      "hashes": {
+        "0": "35c11a16f639ee1e",
+        "1": "7b85c0c70c44b82",
+        "2": "c098612b51117212",
+        "3": "23e8d3e7fcbc47d9",
+        "4": "da0c0aeb527fd3b8",
+        "5": "8c8df2d2f166c98f",
+        "6": "0",
+        "7": "0"
+      },
+      "unsupported": {}
+    },
+    {
+      "x": -3,
+      "z": -57,
+      "DataVersion": 3955,
+      "Status": "minecraft:full",
+      "chunk_nbt_sha256": "3767cfe19287ef77fdf4fa292c424ffc4149926e5961ca18ceb8c102e76dfb86",
+      "hashes": {
+        "0": "6f30b9f07528caa1",
+        "1": "420419b2a98c6dbf",
+        "2": "85159a49d94fcfd4",
+        "3": "a0175a8f357038bb",
+        "4": "7df08a9ec1c979f1",
+        "5": "452e4fea63f6fb13",
+        "6": "55d223503c7638a8",
+        "7": "eb0ef09ffa5e8482"
+      },
+      "unsupported": {}
+    },
+    {
+      "x": 0,
+      "z": -50,
+      "DataVersion": 3955,
+      "Status": "minecraft:full",
+      "chunk_nbt_sha256": "0a96d1348f255f8abcaccf9cb1facdf2458e465407a158bff356920ea7adcd6c",
+      "hashes": {
+        "0": "95baac35024675bc",
+        "1": "2a4275c4628fa894",
+        "2": "3d27bc22c57793a",
+        "3": "521af5fbdc234c8d",
+        "5": "0",
+        "6": "0",
+        "7": "0"
+      },
+      "unsupported": {
+        "4": "non-vanilla registry needs native state/isAir validation"
+      }
+    }
+  ],
+  "limits": "geometry only; absent receipt section is unknown, not air; no biome/light/render/persistence claim"
+}

@@ -1,0 +1,17 @@
+{
+  "pid": "53340",
+  "start_ticks": "104606428",
+  "wall_ms": 1793809903646,
+  "artifact_sha256": "57777c6e38dd7aef4391f45e3283710407894dedeba151509879769924aff144",
+  "cwd": "/crafty/servers/4e58303d-11d5-43b2-b002-afd1f9c9a52f",
+  "args": [
+    "/crafty/servers/4e58303d-11d5-43b2-b002-afd1f9c9a52f/diagnostics/jattach",
+    "53340",
+    "load",
+    "instrument",
+    "false",
+    "/crafty/servers/4e58303d-11d5-43b2-b002-afd1f9c9a52f/diagnostics/lead2-ownership-agent2.jar=/crafty/servers/4e58303d-11d5-43b2-b002-afd1f9c9a52f/diagnostics/lead2-ownership2.txt"
+  ],
+  "attach_stdout": "Connected to remote JVM\nJVM response code = 0\nreturn code: 0\n\n",
+  "complete_wall_ms": 1793809903996
+}

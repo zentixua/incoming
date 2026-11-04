@@ -1,0 +1,46 @@
+{
+  "identity": {
+    "case": "corrected1000kt-frontier-on",
+    "source": "fc07be9e624848a0c409fcebc3bbe91307e03f0e",
+    "scope": "fixed clean phases, currently live log snapshot; shutdown completeness not yet available"
+  },
+  "ticks": "mod/run/lead2/corrected1000kt-frontier-on-live-snapshot/ticks.csv",
+  "stand": "mod/run/lead2/corrected1000kt-frontier-on/stand-observe/run-6993836942435521878",
+  "tcp": "mod/run/lead2/corrected1000kt-frontier-on-tcp.jsonl",
+  "server_minus_client_ms": 0.1831999999999958,
+  "clock_uncertainty_ms": 29.116854,
+  "phases": {
+    "baseline": [
+      1793808342698.817,
+      1793808402791.817
+    ],
+    "prepare": [
+      1793808402791.817,
+      1793808424182.817
+    ],
+    "flight": [
+      1793808424182.817,
+      1793808514196.817
+    ],
+    "flash": [
+      1793808514196.817,
+      1793808544196.817
+    ],
+    "wave": [
+      1793808544196.817,
+      1793808634196.817
+    ],
+    "settle": [
+      1793808634196.817,
+      1793808994196.817
+    ]
+  },
+  "timing": {
+    "accepted_server_ms": 1793808402792.0,
+    "launch_server_ms": 1793808424183.0,
+    "flash_server_ms": 1793808514197.0,
+    "prepare_seconds": 21.391,
+    "flight_seconds": 90.014,
+    "total_seconds": 111.405
+  }
+}
