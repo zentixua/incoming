@@ -23,7 +23,7 @@ final class LssVoxyWatch {
                 @Override
                 public void onVoxelColumnReceived(ClientLevel level, ResourceKey<Level> dimension, int chunkX, int chunkZ, VoxelColumnData columnData) {
                     MtB7Client.lss(level, chunkX, chunkZ, columnData);
-                    VoxyIngest.overwritten(level, chunkX, chunkZ);
+                    if (VoxyIngest.available()) VoxyIngest.overwritten(level, chunkX, chunkZ);
                 }
             });
         } catch (LinkageError e) {

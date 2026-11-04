@@ -114,7 +114,10 @@ public final class IncomingClient {
         // sent to Voxy: detect this and request them again
         modBus.addListener((net.neoforged.fml.event.lifecycle.FMLClientSetupEvent e) -> {
             VoxyIngest.init();
-            if (VoxyIngest.available() && net.neoforged.fml.ModList.get().isLoaded("lss")) LssVoxyWatch.subscribe();
+            boolean observeStandard = VoxyIngest.STANDARD_LSS && ua.zentix.incoming.compat.MtB7Columns.ENABLED
+                    && net.neoforged.fml.ModList.get().isLoaded("voxy");
+            if ((VoxyIngest.available() || observeStandard)
+                    && net.neoforged.fml.ModList.get().isLoaded("lss")) LssVoxyWatch.subscribe();
         });
 
         NeoForge.EVENT_BUS.addListener(net.neoforged.bus.api.EventPriority.HIGHEST, IncomingClient::preTick);

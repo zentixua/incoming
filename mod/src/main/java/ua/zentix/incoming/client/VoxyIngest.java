@@ -36,6 +36,8 @@ import java.lang.invoke.MethodType;
  * it to the server ({@link C2S.VoxyStale}, {@link #tick}), which sends the copy again.
  */
 public final class VoxyIngest {
+    /** TEST ONLY: measure ordinary LSS saved-chunk delivery without Incoming's direct bridge. */
+    static final boolean STANDARD_LSS = Boolean.getBoolean("incoming.mtB7.standardLss");
     @Nullable
     private static MethodHandle worldOf, rawIngest, instanceOf, ingestService, taskCount;
     // Recovery is best effort and coordinate-only. Replaying retained sections could erase subsequent edits,
@@ -47,6 +49,10 @@ public final class VoxyIngest {
 
     /** At client startup: whether Voxy is installed and its methods were found. */
     static void init() {
+        if (STANDARD_LSS) {
+            Incoming.LOG.info("MT-B7: standard LSS delivery only; Incoming direct Voxy ingestion is disabled");
+            return;
+        }
         if (!ModList.get().isLoaded("voxy")) return;
         try {
             MethodHandles.Lookup lookup = MethodHandles.lookup();
