@@ -27,9 +27,10 @@ public final class IcbmArrivalRenderer {
                 Vec3 p = path.at(now).subtract(view.camera());
                 double air = view.air(p.length(), p.y), light = LIGHT * path.light(now) * view.exposure() * air;
                 Sight.light(RADIUS, light, p.length(), view.pixel(), HEAD);
-                // Compact source-space halo: scene depth occludes it, with no screen-wide veil or bloom pass.
-                out.glow(p.x, p.y, p.z, HEAD[0], 0, 1, 0.94f, 0.82f, (float) Math.min(1, HEAD[2]));
-                out.glow(p.x, p.y, p.z, HEAD[3], 0, 1, 0.74f, 0.42f, (float) Math.min(0.3, light * 0.003));
+                // Source-sized softness selects shared scene-depth occlusion, including folded distant terrain.
+                // Compact source-space halo, with no screen-wide veil or bloom pass.
+                out.glow(p.x, p.y, p.z, HEAD[0], RADIUS, 1, 0.94f, 0.82f, (float) Math.min(1, HEAD[2]));
+                out.glow(p.x, p.y, p.z, HEAD[3], RADIUS, 1, 0.74f, 0.42f, (float) Math.min(0.3, light * 0.003));
             }
             for (int i = 0; i < SEGMENTS; i++) {
                 double t0 = Math.min(path.end(), now - IcbmArrival.WAKE * i / SEGMENTS);
@@ -41,12 +42,12 @@ public final class IcbmArrivalRenderer {
                 double a = glow(path, view, now, t0, p), b = glow(path, view, now, t1, q);
                 Vec3 side = q.subtract(p).cross(p).normalize().scale(RADIUS * 0.45);
                 if (side.lengthSqr() < 1e-8) {
-                    out.glow(p.x, p.y, p.z, RADIUS * 0.45, 0, 1, 0.5f, 0.2f, (float) a);
+                    out.glow(p.x, p.y, p.z, RADIUS * 0.45, RADIUS * 0.45, 1, 0.5f, 0.2f, (float) a);
                     continue;
                 }
                 set(A, p.add(side)); set(B, p.subtract(side)); set(C, q.subtract(side)); set(D, q.add(side));
                 out.glowStrip(A, B, C, D, (float) a, (float) (a * 0.5), (float) (a * 0.2),
-                        (float) b, (float) (b * 0.5), (float) (b * 0.2), 0, (float) ((p.length() + q.length()) * 0.5), 0, 0);
+                        (float) b, (float) (b * 0.5), (float) (b * 0.2), (float) (RADIUS * 0.45), (float) ((p.length() + q.length()) * 0.5), 0, 0);
             }
         }
     }

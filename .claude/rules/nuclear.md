@@ -483,3 +483,5 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   no countdown extrapolation. A stalled server pauses upstream like an entity, never at the burst endpoint.
   `NukeDetonation.strikeId` consumes exactly its own head; the 0.2-second emitted wake survives warning removal.
   Legacy detonation packets retain location matching. Clear/dimension/replay reset arrival state.
+  Arrival glows/ribbons use positive source-sized softness: zero skips the shared scene-depth sample in the
+  full-resolution pass and allowed a halo over nearby Iris masonry (`arrival 1`, house 50, camera 11/2/0/800).
