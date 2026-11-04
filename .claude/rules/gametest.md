@@ -146,3 +146,8 @@ paths:
 - Cold-ledger fixtures must unload the currently imported `RuinMatter` before restoring the previous SavedData
   cache entry in each dimension. The imported instance may already hold a material ticket after background import;
   restoring the old cache alone leaves an ownerless load (`nuke_ledger_cleanup`, then `nuke_stop`).
+
+- A world-owned ruin fixture must register through `NuclearWorld.ruins(level, d, now)`, as gameplay does.
+  Direct map insertion leaves `used=0`: a later shard batch crosses the 100-tick sweep after the 600-tick
+  idle horizon, detaches the context, then resubmits through stale input ownership. `nuke_source_progress`
+  starts after that horizon and crosses a real sweep while preserving fixed external memory pressure.
