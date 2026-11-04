@@ -109,23 +109,6 @@ public final class LodSections {
         return bytes(out);
     }
 
-    /** Retain the union of applied section revisions for replay repair. Newer sections replace older ones. */
-    public static byte[] merge(byte[] older, byte[] newer, Registry<Biome> biomes) {
-        java.util.TreeMap<Integer, Section> sections = new java.util.TreeMap<>();
-        for (Section section : read(older, biomes)) sections.put(section.y(), section);
-        for (Section section : read(newer, biomes)) sections.put(section.y(), section);
-        FriendlyByteBuf out = new FriendlyByteBuf(Unpooled.buffer());
-        int min = sections.isEmpty() ? 0 : sections.firstKey(), max = sections.isEmpty() ? -1 : sections.lastKey();
-        out.writeVarInt(min);
-        out.writeVarInt(max - min + 1);
-        for (int y = min; y <= max; y++) {
-            Section section = sections.get(y);
-            if (section == null) out.writeByte(UNCHANGED);
-            else write(out, section.blocks(), section.blockLight(), section.skyLight(), false);
-        }
-        return bytes(out);
-    }
-
     private static void write(FriendlyByteBuf out, @Nullable LevelChunkSection section, @Nullable DataLayer block, @Nullable DataLayer sky, boolean fullSky) {
         // a layer of all 15s needs no bytes; do not touch a live light engine layer (getData fills a uniform layer itself)
         if (sky != null && sky.isDefinitelyFilledWith(15)) fullSky = true;

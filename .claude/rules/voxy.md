@@ -102,16 +102,17 @@ paths:
   separately from Incoming's immediate copy delivery. Packets are not ingested during Flashback replay (Voxy shows
   the live database there).
 
-- MT-B3 horizon buffer: 96 MiB queued encoded columns and 24 MiB retained repair sections, plus bounded worker/codec
-  scratch and bookkeeping (these are not total client heap/GPU limits). A local repair merges changed section spans,
-  not individual block intentions. Same-section plans still require authoritative chronological composition upstream.
-  Repair retention is session-local and evicts by bytes; it does not solve late join/reconnect or immutable stale
-  replay. LSS's public void consumer cannot veto another consumer. A zero Voxy task count is not an in-progress
-  worker/renderer fence. Never claim the city cannot transiently return from a successful later readback.
-  `ClientHorizon.reset()` invalidates queued work and returns an asynchronous barrier behind already submitted
-  Incoming worker calls; it does not cancel/fence foreign Voxy work. No lock used by a tick may span a Voxy database
-  read. The dev probe's `WitnessesTest` holds a read open while producer/reset progress. Durations from nanoTime
-  are elapsed times, not CPU times. The development panorama is not a real-city preparation or end-to-end 512 MiB proof.
+- MT-B3 horizon buffer: 96 MiB queued encoded columns plus bounded worker/codec scratch and bookkeeping
+  (not total client heap/GPU limits). Recovery retains only 65,536 recent coordinates and 4,096 pending refresh
+  hints, never old section images: local replay can erase later player edits, material settlement or another strike.
+  Refresh requests use the existing server-authoritative path and rate limit; evicted hints are best effort, not
+  a persistent correctness record. Login, dimension change and reset clear the session identity and hints; late
+  callbacks cannot retarget the next session. A foreign delivery crossing submission keeps its refresh request.
+  This does not solve late join/reconnect or immutable stale replay. LSS's public void consumer cannot veto another
+  consumer. A zero Voxy task count is not an in-progress worker/renderer fence. Never claim the city cannot transiently
+  return from a successful later readback. `ClientHorizon.reset()` invalidates queued work and returns an asynchronous
+  barrier behind already submitted Incoming worker calls; it does not cancel/fence foreign Voxy work. No lock used by
+  a tick may span a Voxy database read. The development panorama is not real-city preparation or a total-memory proof.
 - The `lod-buffer` development scenario is excluded from the release jar. Its database witnesses run outside the
   producer/reset monitor (`WitnessesTest` holds a read while both progress). Values carry their epoch; stale read
   confirmation cannot consume a new witness. `TimedLodBuffer.current` is an ownership snapshot, never a fence

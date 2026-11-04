@@ -156,7 +156,7 @@ class LodSectionsTest {
         assertTrue(data.length < 20_000, data.length + " byte");
     }
     @Test
-    void sparseUpdatesEraseTowersPreserveUntouchedSectionsAndComposeRepairs() {
+    void sparseUpdatesEraseTowersAndPreserveUntouchedSections() {
         LevelChunkSection[] initial = sections((x, y, z) -> y >= 32 ? Blocks.STONE_BRICKS.defaultBlockState() : Blocks.AIR.defaultBlockState());
         LevelChunkSection[] first = sections((x, y, z) -> y >= 48 ? Blocks.STONE_BRICKS.defaultBlockState() : Blocks.AIR.defaultBlockState());
         LevelChunkSection[] second = sections((x, y, z) -> Blocks.AIR.defaultBlockState());
@@ -166,9 +166,10 @@ class LodSectionsTest {
         assertEquals(1, read.size(), "only the erased section travels");
         assertEquals(-2, read.getFirst().y());
         assertTrue(read.getFirst().blocks().hasOnlyAir());
-        var merged = LodSections.read(LodSections.merge(one, two, biomes), biomes);
-        assertEquals(2, merged.size(), "repair retains both strikes' changed sections");
-        assertTrue(merged.stream().allMatch(section -> section.blocks().hasOnlyAir()));
+        var next = LodSections.read(two, biomes);
+        assertEquals(1, next.size());
+        assertEquals(-1, next.getFirst().y());
+        assertTrue(next.getFirst().blocks().hasOnlyAir());
         assertTrue(LodSections.read(LodSections.difference(-4, a, a), biomes).isEmpty());
     }
 

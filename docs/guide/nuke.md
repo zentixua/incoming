@@ -125,8 +125,8 @@ Distant Horizons and Voxy can show ruins without you visiting them. ICBM strikes
 flight; other nuclear carriers can take longer to update the distant view. Broken windows and fallen trees farther
 out appear when you approach. In Voxy, players who missed the strike also need to approach to see its distant ruins.
 Prepared Voxy updates wait for the wave before appearing. Delivery can still fall behind it, and old terrain from
-LOD Server Support can briefly reappear before Incoming restores a retained ruin. Rejoining does not preserve that
-repair buffer; saved world changes remain the durable source of ruins.
+LOD Server Support can reappear while Incoming requests fresh terrain from the server. Recovery requests are bounded
+and best effort; saved world changes remain the durable source of ruins after rejoining.
 
 The detailed timings, visual behavior and model limits are in the [nuclear effects reference](../dev/nuclear-effects-reference.md).
 

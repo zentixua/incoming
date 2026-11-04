@@ -5,7 +5,6 @@ import net.minecraft.world.level.ChunkPos;
 import ua.zentix.incoming.client.lod.TimedLodBuffer;
 import ua.zentix.incoming.net.S2C;
 
-import java.util.LinkedHashMap;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -16,7 +15,7 @@ final class ClientHorizon {
     // The measured 1 Mt panorama needs ~3,638 columns/s at the front, above the transport's 1,280/s ceiling.
     // 24 MiB prefilling left it 282 ticks late. Hold the encoded work earlier, without moving its deadlines.
     // Shared by all strikes in this client; this is separate from the server's global 512 MiB working budget.
-    static final long QUEUED_BYTES = 96L << 20, REPAIR_BYTES = 24L << 20;
+    static final long QUEUED_BYTES = 96L << 20;
     private static final int QUEUED_COLUMNS = 65536;
     private static final ScheduledExecutorService WORKER = Executors.newSingleThreadScheduledExecutor(r -> {
         Thread thread = new Thread(r, "Incoming horizon");
@@ -24,9 +23,7 @@ final class ClientHorizon {
         return thread;
     });
     private static final TimedLodBuffer<S2C.VoxyChunk> QUEUE = new TimedLodBuffer<>(QUEUED_COLUMNS, QUEUED_BYTES);
-    private static final LinkedHashMap<Long, S2C.VoxyChunk> REPAIR = new LinkedHashMap<>();
     private static ClientLevel world;
-    private static long repairBytes;
     private static boolean draining;
     private static long latestTick;
     private static java.util.Map<Integer, Double> latestClocks = java.util.Map.of();
@@ -40,6 +37,7 @@ final class ClientHorizon {
         if (world != level) {
             reset();
             world = level;
+            VoxyIngest.beginHints(level);
         }
         var ticket = QUEUE.reserve(ChunkPos.asLong(packet.x(), packet.z()), packet.notBefore(),
                 packet.sections().length + 128L, 1);
@@ -48,13 +46,7 @@ final class ClientHorizon {
         return accepted;
     }
 
-    static synchronized boolean repair(ClientLevel level, long key) {
-        if (world != level) return false;
-        S2C.VoxyChunk packet = REPAIR.get(key);
-        return packet != null && offer(level, packet);
-    }
-
-    static synchronized long bytes() { return QUEUE.bytes() + repairBytes; }
+    static synchronized long bytes() { return QUEUE.bytes(); }
 
     static synchronized boolean full() { return QUEUE.bytes() >= QUEUED_BYTES - (1 << 20) - 128 || QUEUE.size() >= QUEUED_COLUMNS - 64; }
 
@@ -102,14 +94,11 @@ final class ClientHorizon {
                     int sections = VoxyIngest.ingest(level, packet);
                     if (sections >= 0) {
                         changedSections += sections;
-                        // Only the incoming changed sections enter Voxy. The union is retained solely for stale replay repair.
-                        S2C.VoxyChunk previous = previous(level, epoch, ready.ticket().key());
-                        if (previous != null) packet = new S2C.VoxyChunk(packet.dimension(), packet.x(), packet.z(),
-                                ua.zentix.incoming.compat.LodSections.merge(previous.sections(), packet.sections(),
-                                        level.registryAccess().registryOrThrow(net.minecraft.core.registries.Registries.BIOME)), packet.notBefore(), packet.detonation());
                         remember(level, epoch, packet);
                         var measured = observer;
                         if (measured != null) measured.accept(new Submission(ready.value(), now, System.nanoTime() - started, sections, bytes()));
+                    } else {
+                        requestFresh(level, epoch, packet);
                     }
                 } finally {
                     QUEUE.finish(ready);
@@ -127,23 +116,12 @@ final class ClientHorizon {
         }
     }
 
-    private static synchronized S2C.VoxyChunk previous(ClientLevel level, long epoch, long key) {
-        return world == level && QUEUE.epoch() == epoch ? REPAIR.get(key) : null;
+    private static synchronized void remember(ClientLevel level, long epoch, S2C.VoxyChunk packet) {
+        if (world == level && QUEUE.epoch() == epoch) VoxyIngest.remember(level, packet);
     }
 
-    private static synchronized void remember(ClientLevel level, long epoch, S2C.VoxyChunk packet) {
-        if (world != level || QUEUE.epoch() != epoch) return;
-        VoxyIngest.remember(level, packet);
-        long key = ChunkPos.asLong(packet.x(), packet.z());
-        S2C.VoxyChunk previous = REPAIR.remove(key);
-        if (previous != null) repairBytes -= previous.sections().length + 128L;
-        REPAIR.put(key, packet);
-        repairBytes += packet.sections().length + 128L;
-        var it = REPAIR.values().iterator();
-        while (repairBytes > REPAIR_BYTES && it.hasNext()) {
-            repairBytes -= it.next().sections().length + 128L;
-            it.remove();
-        }
+    private static synchronized void requestFresh(ClientLevel level, long epoch, S2C.VoxyChunk packet) {
+        if (world == level && QUEUE.epoch() == epoch) VoxyIngest.requestFresh(level, packet);
     }
 
     /** Nonblocking request. The returned future is the Incoming submission fence, not a Voxy renderer fence. */
@@ -152,8 +130,7 @@ final class ClientHorizon {
         world = null;
         latestTick = Long.MIN_VALUE;
         latestClocks = java.util.Map.of();
-        REPAIR.clear();
-        repairBytes = 0;
+        VoxyIngest.clearHints();
         draining = false;
         return CompletableFuture.runAsync(() -> {}, WORKER);
     }
