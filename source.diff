@@ -1,0 +1,354 @@
+diff --git a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinPreparationMemoryGameTests.java b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinPreparationMemoryGameTests.java
+new file mode 100644
+index 000000000..f9bdb6d8e
+--- /dev/null
++++ b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinPreparationMemoryGameTests.java
+@@ -0,0 +1,88 @@
++package ua.zentix.incoming.nuclear.world;
++
++import java.lang.reflect.Field;
++import java.util.UUID;
++import java.util.concurrent.ThreadPoolExecutor;
++import java.util.concurrent.TimeUnit;
++import net.minecraft.core.BlockPos;
++import net.minecraft.gametest.framework.GameTest;
++import net.minecraft.gametest.framework.GameTestHelper;
++import net.minecraft.world.phys.Vec3;
++import net.neoforged.neoforge.gametest.GameTestHolder;
++import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
++import ua.zentix.incoming.Incoming;
++import ua.zentix.incoming.IncomingConfig;
++import ua.zentix.incoming.gametest.StrikeGameTests;
++
++/** Exercise the public preparation path with a real initialized and expired high-count worker pool. */
++@GameTestHolder(Incoming.MOD_ID)
++@PrefixGameTestTemplate(false)
++public final class RuinPreparationMemoryGameTests {
++    private RuinPreparationMemoryGameTests() {}
++
++    @GameTest(template = "range", batch = "nuke_prelaunch_workers_46", timeoutTicks = 600, skyAccess = true)
++    public static void automatic48CoreEquivalentSurvivesPoolInitializationAndExpiry(GameTestHelper h) throws Exception {
++        admission(h, 48 - RuinWorkers.reserve(false));
++    }
++
++    @GameTest(template = "range", batch = "nuke_prelaunch_workers_256", timeoutTicks = 600, skyAccess = true)
++    public static void maximumConfiguredCountSurvivesPoolInitializationAndExpiry(GameTestHelper h) throws Exception {
++        admission(h, 256);
++    }
++
++    private static void admission(GameTestHelper h, int desired) throws Exception {
++        StrikeGameTests.gameSpeed(h);
++        var level = h.getLevel();
++        int previous = IncomingConfig.SERVER.nukeRuinThreads.get();
++        RuinWorkers.shutdown();
++        IncomingConfig.SERVER.nukeRuinThreads.set(desired);
++        UUID owner = UUID.randomUUID(), handle = UUID.randomUUID();
++        StrikeGameTests.afterTest(h, () -> {
++            RuinPreparation.cancel(level, handle);
++            RuinWorkers.shutdown();
++            IncomingConfig.SERVER.nukeRuinThreads.set(previous);
++        });
++        var target = Vec3.atCenterOf(h.absolutePos(new BlockPos(32, 1, 32))).add(0, 500, 0);
++        // No geometry/layout injection: this is the same facade and registered tick path used by an order.
++        RuinPreparation.prepare(level, handle, owner, target, .000001, true, false);
++        assertAdmission(h, handle, "before pool initialization");
++        h.assertTrue(RuinWorkers.stopped(), "admission unexpectedly initialized the pool");
++        RuinWorkers.submitForTest(() -> true, RuinWorkers.Priority.FAR).get(5, TimeUnit.SECONDS);
++        ThreadPoolExecutor pool = pool();
++        pool.prestartAllCoreThreads();
++        int admitted = RuinWorkers.memoryThreads(desired, level.getHeight());
++        h.assertTrue(pool.getMaximumPoolSize() == admitted && pool.getPoolSize() == admitted,
++                "actual executor parallelism did not follow workspace admission");
++        h.assertTrue(RuinWorkers.threads(false) == desired, "memory bound overwrote the configured upper bound");
++        assertAdmission(h, handle, "after pool initialization");
++        pool.setKeepAliveTime(1, TimeUnit.MILLISECONDS);
++        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
++        while (pool.getPoolSize() != 0 && System.nanoTime() < deadline) Thread.sleep(1);
++        h.assertTrue(pool.getPoolSize() == 0, "fixture workers failed to expire");
++        assertAdmission(h, handle, "after actual idle expiry");
++        pool.setKeepAliveTime(30, TimeUnit.SECONDS);
++        h.succeedWhen(() -> {
++            RuinPreparation.keepAlive(level, handle, owner);
++            var status = RuinPreparation.status(level, handle);
++            h.assertTrue(status.resolvedTarget() != null, "surface admission made no progress: " + status);
++            h.assertTrue(status.stage() == RuinPreparation.Stage.READY,
++                    "real preparation did not reach READY after high-count pool initialization/expiry: " + status);
++        });
++    }
++
++    private static void assertAdmission(GameTestHelper h, UUID handle, String phase) {
++        var status = RuinPreparation.status(h.getLevel(), handle);
++        h.assertTrue(status.reason() != RuinPreparation.Reason.MEMORY, phase + " permanently closed preparation: " + status);
++        long memory = NuclearPrep.memory(h.getLevel());
++        h.assertTrue(memory >= RuinMemory.TRANSITION_ROOM + RuinWorkers.bufferBytes(h.getLevel().getHeight()),
++                phase + " lost the future worker or transition reservation");
++        h.assertTrue(memory + (32L << 20) < NuclearPrep.PLANS_CAP - (32L << 20),
++                phase + " left no workspace for actual preparation inputs");
++    }
++
++    private static ThreadPoolExecutor pool() throws ReflectiveOperationException {
++        Field field = RuinWorkers.class.getDeclaredField("pool");
++        field.setAccessible(true);
++        return (ThreadPoolExecutor) field.get(null);
++    }
++}
+diff --git a/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinWorkers.java b/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinWorkers.java
+index 215a071b4..027780365 100644
+--- a/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinWorkers.java
++++ b/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinWorkers.java
+@@ -25,7 +25,7 @@ import java.util.concurrent.atomic.AtomicLong;
+  * <p>
+  * Thread count: {@code ruin_threads}, 0 automatic: all cores except game reserve, {@code cores − 1 (server thread)
+  * − 1 (own game: client render thread for integrated server) − 1 (vanilla: chunk I/O, generation, garbage
+- * collector)}, at least one. No cap: more cores build distant rings faster. Java thread priorities have no
++ * collector)}, at least one. This is an upper bound: solver-buffer memory also limits parallelism. Java thread priorities have no
+  * effect on Linux, so only count and tick adaptation leave room for game: once per second, external tick
+  * time over last second (tick minus mod lanes) above threshold ({@link #MARGIN_MS}) reduces active threads by
+  * a quarter (at least one), below adds one (at most pool thread count). Chosen count and every
+@@ -82,8 +82,12 @@ public final class RuinWorkers {
+     private static volatile AtomicIntegerArray IN_FLIGHT = new AtomicIntegerArray(Priority.values().length);
+     @Nullable
+     private static ThreadPoolExecutor pool;
+-    /** Configured (or core-derived) thread count and currently active count (tick adaptation). */
++    /** Memory-bounded thread count and currently active count (tick adaptation). */
+     private static int size, active;
++    /** Split the shared cap between solver workspace and retained inputs/results; transition room stays free. */
++    static final long BUFFER_CAP = (NuclearPrep.PLANS_CAP - RuinMemory.TRANSITION_ROOM) / 2;
++    /** Highest dimension seen this pool lifetime: ThreadLocal arrays do not shrink between tasks. */
++    private static int bufferHeight = 384;
+     /** Thread busy time since pool start, ns (thread utilization in summary). */
+     private static final AtomicLong BUSY = new AtomicLong();
+     private static long startedAt;
+@@ -112,7 +116,10 @@ public final class RuinWorkers {
+ 
+     private static ThreadPoolExecutor pool() {
+         boolean integrated = integrated();
+-        int n = threads(integrated);
++        MinecraftServer server = net.neoforged.neoforge.server.ServerLifecycleHooks.getCurrentServer();
++        if (server != null) for (var level : server.getAllLevels()) configureHeight(level.getHeight());
++        int desired = threads(integrated);
++        int n = memoryThreads(desired, bufferHeight);
+         if (pool != null && size == n) return pool;
+         if (pool != null) {
+             // Resize the same lifetime: queued work and its captured snapshots must not drain in a
+@@ -123,19 +130,25 @@ public final class RuinWorkers {
+         }
+         size = active = n;
+         lowered = raised = 0;
+-        pool = new ThreadPoolExecutor(n, n, 30, TimeUnit.SECONDS, new PriorityBlockingQueue<>(), r -> {
++        pool = newPool(n);
++        startedAt = System.nanoTime();
++        BUSY.set(0);
++        int manual = IncomingConfig.SERVER.nukeRuinThreads.get();
++        Incoming.LOG.info("Ruins: background threads {} (desired {}; {}; cores {}, left to the game {}{})", n, desired,
++                manual > 0 ? "from the ruin_threads setting" : "automatic", Runtime.getRuntime().availableProcessors(),
++                manual > 0 ? 0 : reserve(integrated), integrated ? ", integrated server" : "");
++        return pool;
++    }
++
++    static ThreadPoolExecutor newPool(int threads) {
++        var executor = new ThreadPoolExecutor(threads, threads, 30, TimeUnit.SECONDS, new PriorityBlockingQueue<>(), r -> {
+             Thread t = new Thread(r, "Incoming ruins #" + NUMBER.incrementAndGet());
+             t.setDaemon(true);
+             t.setPriority(Thread.MIN_PRIORITY);
+             return t;
+         });
+-        pool.allowCoreThreadTimeOut(true);
+-        startedAt = System.nanoTime();
+-        BUSY.set(0);
+-        int manual = IncomingConfig.SERVER.nukeRuinThreads.get();
+-        Incoming.LOG.info("Ruins: background threads {} ({}; cores {}, left to the game {}{})", n, manual > 0 ? "from the ruin_threads setting" : "automatic",
+-                Runtime.getRuntime().availableProcessors(), manual > 0 ? 0 : reserve(integrated), integrated ? ", integrated server" : "");
+-        return pool;
++        executor.allowCoreThreadTimeOut(true);
++        return executor;
+     }
+ 
+     /** Tasks held in pool at once (running/queued). */
+@@ -363,7 +376,7 @@ public final class RuinWorkers {
+         Incoming.LOG.info("Ruins: background threads working {} of {} (server tick without mod lanes {} ms)", active, size, String.format(java.util.Locale.ROOT, "%.1f", ms));
+     }
+ 
+-    private static void resize(ThreadPoolExecutor executor, int threads) {
++    static void resize(ThreadPoolExecutor executor, int threads) {
+         if (threads < executor.getCorePoolSize()) {
+             executor.setCorePoolSize(threads);
+             executor.setMaximumPoolSize(threads);
+@@ -383,9 +396,35 @@ public final class RuinWorkers {
+         return size + " (working " + active + ", lowered " + lowered + ", raised " + raised + ", tasks abandoned " + expired + ")";
+     }
+ 
+-    /** All pool-thread solver buffers, bytes ((est.) for 48×48 window through world height: 15 bytes per position, including an uncompressed property reference). */
++    /** Full-height solver workspace estimate, including an uncompressed property reference (15 bytes/cell). */
++    static long threadBufferBytes(int height) {
++        return (long) RuinWindow.SIDE * RuinWindow.SIDE * height * 15;
++    }
++
++    static int memoryThreads(int desired, int height) {
++        return (int) Math.max(1, Math.min(desired, BUFFER_CAP / threadBufferBytes(height)));
++    }
++
++    /** Observe all server dimension heights before admission, including before a pool exists. */
++    static void configureHeight(int height) {
++        bufferHeight = Math.max(bufferHeight, height);
++        if (pool == null) return;
++        int bounded = memoryThreads(threads(integrated()), bufferHeight);
++        if (bounded == size) return;
++        size = bounded;
++        active = Math.min(active, size);
++        resize(pool, active);
++    }
++
++    /** Future admitted workers plus still-live downsized threads; never reserve the raw configured count. */
+     static long bufferBytes(int height) {
+-        return (long) Math.max(size, pool == null ? 0 : pool.getPoolSize()) * RuinWindow.SIDE * RuinWindow.SIDE * height * 15;
++        configureHeight(height);
++        return bufferBytes(pool, threads(integrated()), bufferHeight);
++    }
++
++    static long bufferBytes(@Nullable ThreadPoolExecutor executor, int desired, int height) {
++        return (long) Math.max(memoryThreads(desired, height), executor == null ? 0 : executor.getPoolSize())
++                * threadBufferBytes(height);
+     }
+ 
+     /**
+@@ -393,11 +432,12 @@ public final class RuinWorkers {
+      * using configured size here would permanently stop settlement on large-core machines even after they exit.
+      */
+     static long residentBufferBytes(int height) {
+-        return residentBufferBytes(pool, height);
++        configureHeight(height);
++        return residentBufferBytes(pool, bufferHeight);
+     }
+ 
+     static long residentBufferBytes(@Nullable ThreadPoolExecutor executor, int height) {
+-        return executor == null ? 0 : (long) executor.getPoolSize() * RuinWindow.SIDE * RuinWindow.SIDE * height * 15;
++        return executor == null ? 0 : (long) executor.getPoolSize() * threadBufferBytes(height);
+     }
+ 
+     /** Fraction of thread time busy since pool start (for “ready” line). */
+@@ -421,6 +461,8 @@ public final class RuinWorkers {
+         ThreadPoolExecutor p = pool;
+         pool = null;
+         lastAdapt = -ADAPT_EVERY;
++        bufferHeight = 384;
++        size = active = 0;
+         if (p == null) return true;
+         java.util.List<Runnable> queued = p.shutdownNow();
+         // run will not be called: remove from priority counts
+diff --git a/mod/src/test/java/ua/zentix/incoming/nuclear/world/RuinWorkerMemoryTest.java b/mod/src/test/java/ua/zentix/incoming/nuclear/world/RuinWorkerMemoryTest.java
+new file mode 100644
+index 000000000..1590721a0
+--- /dev/null
++++ b/mod/src/test/java/ua/zentix/incoming/nuclear/world/RuinWorkerMemoryTest.java
+@@ -0,0 +1,110 @@
++package ua.zentix.incoming.nuclear.world;
++
++import org.junit.jupiter.api.Test;
++
++import java.util.concurrent.CountDownLatch;
++import java.util.concurrent.ThreadPoolExecutor;
++import java.util.concurrent.TimeUnit;
++
++import static org.junit.jupiter.api.Assertions.assertEquals;
++import static org.junit.jupiter.api.Assertions.assertTrue;
++
++class RuinWorkerMemoryTest {
++    private static final int HEIGHT = 384;
++    private static final long WINDOW_CAP = NuclearPrep.PLANS_CAP - (32L << 20);
++
++    @Test
++    void highConfiguredAndAutomaticUpperBoundsLeavePreparationRoomBeforePoolInitialization() {
++        // Automatic selection on a 48-logical-core dedicated server, and the maximum valid manual setting.
++        for (int desired : new int[]{48 - RuinWorkers.reserve(false), 256}) {
++            assertEquals(17, RuinWorkers.memoryThreads(desired, HEIGHT));
++            long bytes = RuinWorkers.bufferBytes(null, desired, HEIGHT);
++            assertEquals(17L * 48 * 48 * HEIGHT * 15, bytes);
++            assertTrue(bytes <= RuinWorkers.BUFFER_CAP);
++            assertTrue(bytes + RuinMemory.TRANSITION_ROOM + (32L << 20) < WINDOW_CAP,
++                    "The same reservation must leave input/result room before the first disk parser starts");
++        }
++        assertEquals(1, RuinWorkers.memoryThreads(1, HEIGHT));
++        assertEquals(4, RuinWorkers.memoryThreads(4, HEIGHT));
++    }
++
++    @Test
++    void actualHighCountPoolAndItsIdleExpiryKeepFutureAdmissionWithinWindow() throws Exception {
++        int desired = 256;
++        int admitted = RuinWorkers.memoryThreads(desired, HEIGHT);
++        ThreadPoolExecutor executor = RuinWorkers.newPool(admitted);
++        CountDownLatch started = new CountDownLatch(admitted);
++        CountDownLatch release = new CountDownLatch(1);
++        try {
++            for (int i = 0; i < admitted; i++) executor.execute(() -> {
++                started.countDown();
++                try { release.await(); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
++            });
++            assertTrue(started.await(5, TimeUnit.SECONDS));
++            assertEquals(admitted, executor.getPoolSize());
++            assertEquals(admitted, executor.getMaximumPoolSize());
++            long reserved = RuinWorkers.bufferBytes(executor, desired, HEIGHT);
++            assertEquals(reserved, RuinWorkers.residentBufferBytes(executor, HEIGHT));
++            assertTrue(reserved + RuinMemory.TRANSITION_ROOM < WINDOW_CAP);
++            // Use the production timeout policy with a shorter duration; no synthetic live-thread counter.
++            executor.setKeepAliveTime(1, TimeUnit.MILLISECONDS);
++            release.countDown();
++            awaitIdleExpiry(executor);
++            assertEquals(0, RuinWorkers.residentBufferBytes(executor, HEIGHT));
++            assertEquals(reserved, RuinWorkers.bufferBytes(executor, desired, HEIGHT));
++            assertTrue(reserved + RuinMemory.TRANSITION_ROOM < WINDOW_CAP);
++            // An expired pool can actually restart, still at its admitted parallelism.
++            executor.execute(() -> {});
++            assertTrue(executor.getPoolSize() <= admitted);
++        } finally {
++            release.countDown();
++            executor.shutdownNow();
++            assertTrue(executor.awaitTermination(5, TimeUnit.SECONDS));
++        }
++    }
++
++    @Test
++    void downsizeKeepsRunningThreadBuffersChargedUntilActualExit() throws Exception {
++        int admitted = RuinWorkers.memoryThreads(256, HEIGHT);
++        ThreadPoolExecutor executor = RuinWorkers.newPool(admitted);
++        CountDownLatch started = new CountDownLatch(admitted);
++        CountDownLatch release = new CountDownLatch(1);
++        try {
++            for (int i = 0; i < admitted; i++) executor.execute(() -> {
++                started.countDown();
++                try { release.await(); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
++            });
++            assertTrue(started.await(5, TimeUnit.SECONDS));
++            RuinWorkers.resize(executor, 2);
++            long oldBuffers = admitted * RuinWorkers.threadBufferBytes(HEIGHT);
++            assertEquals(oldBuffers, RuinWorkers.bufferBytes(executor, 2, HEIGHT));
++            assertEquals(oldBuffers, RuinWorkers.residentBufferBytes(executor, HEIGHT));
++            executor.setKeepAliveTime(1, TimeUnit.MILLISECONDS);
++            release.countDown();
++            awaitIdleExpiry(executor);
++            assertEquals(2 * RuinWorkers.threadBufferBytes(HEIGHT), RuinWorkers.bufferBytes(executor, 2, HEIGHT));
++        } finally {
++            release.countDown();
++            executor.shutdownNow();
++            assertTrue(executor.awaitTermination(5, TimeUnit.SECONDS));
++        }
++    }
++
++    @Test
++    void tallerWorldsReduceActualParallelismWithoutReducingThePerCellCharge() {
++        for (int height : new int[]{256, 384, 1024, 4064}) {
++            int count = RuinWorkers.memoryThreads(256, height);
++            long bytes = RuinWorkers.bufferBytes(null, 256, height);
++            assertEquals((long) count * 48 * 48 * height * 15, bytes);
++            assertTrue(bytes <= RuinWorkers.BUFFER_CAP);
++            assertTrue(bytes + RuinMemory.TRANSITION_ROOM < WINDOW_CAP);
++        }
++        assertEquals(6, RuinWorkers.memoryThreads(256, 1024));
++    }
++
++    private static void awaitIdleExpiry(ThreadPoolExecutor executor) throws InterruptedException {
++        long deadline = System.nanoTime() + TimeUnit.SECONDS.toNanos(5);
++        while (executor.getPoolSize() != 0 && System.nanoTime() < deadline) Thread.sleep(1);
++        assertEquals(0, executor.getPoolSize(), "Idle threads must release their ThreadLocal buffers");
++    }
++}

@@ -1,0 +1,13 @@
+commit e7d98a4b340d6e468c338bc331a0d61cf22d57cb
+Author:     Artem <artemzheglov10@gmail.com>
+AuthorDate: Wed Nov 4 10:23:09 2026 +0100
+Commit:     Artem <artemzheglov10@gmail.com>
+CommitDate: Wed Nov 4 10:23:09 2026 +0100
+
+    Bound ruin worker parallelism by solver workspace memory
+    
+    Preserve configured and automatic CPU counts as upper bounds while reserving a shared 224 MiB worker partition. Count admitted workers before pool initialization and retain live downsized thread charges through idle expiry. Cover high-count preparation through the public facade and real executor lifetime.
+    
+    Co-Authored-By: Codex <noreply@openai.com>
+
+## codex/nuke-worker-bounds...origin/codex/nuke-worker-bounds

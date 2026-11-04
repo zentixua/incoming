@@ -1,0 +1,42 @@
+MT-BUF — OPT review F2 worker-memory correction
+
+Production commit: e7d98a4b340d6e468c338bc331a0d61cf22d57cb.
+Base: d1ae6fe45, including daf620c74.
+Owner until explicit handoff: MT-BUF; final integration/review owner MT-S2.
+
+Change
+- ruin_threads and the automatic CPU-derived count remain desired upper bounds.
+- Actual executor parallelism is min(desired, floor(224 MiB / full-height worker workspace)).
+- 224 MiB = (shared 512 MiB preparation cap minus 64 MiB transition reserve) / 2.
+  The remaining partition is for retained inputs/results; the preparation window additionally leaves 32 MiB for writes.
+- The existing 15-byte/cell workspace estimate remains unchanged, including an uncompressed property reference.
+- Height 384: one worker 13,271,040 bytes / 12.65625 MiB; 17 workers 225,607,680 bytes / 215.15625 MiB.
+  With 64 MiB transition, the 480 MiB preparation window has 200.84375 MiB left.
+- Reserve bounded future parallelism even before the pool exists and after idle expiry.
+  Actual live threads remain charged through downward resize. Resident-only accounting still becomes zero when threads exit.
+- Record maximum dimension height through the pool lifetime because retained ThreadLocal arrays do not shrink.
+  Pool creation/resizing independently discovers current server dimension heights. Shutdown resets the height/counts.
+- Tick adaptation can only recover to the memory-bounded size, never to the raw desired CPU count.
+
+Root integration (NuclearPrep remains MT-S2-owned)
+Inside NuclearPrep.memory(level, reserveWorkers), after finding the maximum dimension height and before the cold-owner early return:
+    RuinWorkers.configureHeight(height);
+The bufferBytes(height)/residentBufferBytes(height) methods also observe height. The early call makes the lifetime explicit even while cold ownership closes new admission.
+No other NuclearPrep call edits are required by this patch.
+
+Verification already complete before the full build
+- compileDevtestJava + focused RuinWorker*Test: success, 25 seconds; 8 tests (4 existing + 4 new).
+- nuke_prelaunch_workers_46 and nuke_prelaunch_workers_256: both pass, 3.394 seconds test runtime / 30 seconds Gradle.
+  Real RuinPreparation.prepare/status path before initial pool creation, after actual prestarted 17-thread pool and after actual idle expiry.
+  Registered server ticks then reach READY; 9/10 disk plans in the tiny preparation fixtures. No injected geometry/order/layout.
+- New unit coverage: CPU bounds 46/256 and small counts; honest per-cell math at heights 256/384/1024/4064;
+  live 17-thread pool, actual core timeout, restart, downward resize retaining active thread charges until exit.
+
+Limits
+- Workspace figures are the existing allocation estimate, not a measurement of all solver temporaries or total JVM heap.
+- The tiny facade fixtures establish admission/progress, not 1 Mt preparation time, whole-world memory, physics look or server performance.
+- The fixture deliberately prestarts/expires workers; its startup timing is not production performance evidence.
+- No separate helper PR/review/CI: MT-S2 owns #568 integration and the final fresh independent serious-fix review.
+- No production merge/release/deployment/GPU/desktop/protected-server action.
+
+Final full build at the same production commit: PASS, 4m39s, 1792 unit tests, zero failures/errors/skips (290 suites). All owned laptop jobs ended with exit0; CPU slot released to MT-MAT at09:28UTC.
