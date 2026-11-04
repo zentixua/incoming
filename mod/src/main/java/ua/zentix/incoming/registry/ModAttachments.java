@@ -112,10 +112,6 @@ public final class ModAttachments {
     public static final Supplier<AttachmentType<DhUpdates>> DH_UPDATES = REGISTER.register("dh_updates",
             () -> AttachmentType.builder(DhUpdates::new).build());
 
-    /** Main world: mod world changes sent to players' Voxy LODs, their queues (unsaved). */
-    public static final Supplier<AttachmentType<ua.zentix.incoming.compat.VoxyLods>> VOXY_LODS = REGISTER.register("voxy_lods",
-            () -> AttachmentType.builder(ua.zentix.incoming.compat.VoxyLods::new).build());
-
     /** World: terrain survey without chunk loading — disk heightmaps and background generator terrain ({@link ua.zentix.incoming.util.TerrainSurvey}); not saved. */
     public static final Supplier<AttachmentType<ua.zentix.incoming.util.TerrainSurvey>> TERRAIN_SURVEY = REGISTER.register("terrain_survey",
             () -> AttachmentType.builder(ua.zentix.incoming.util.TerrainSurvey::new).build());

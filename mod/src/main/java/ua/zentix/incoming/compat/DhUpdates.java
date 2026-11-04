@@ -23,7 +23,7 @@ import java.util.ArrayDeque;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 /**
- * Mod world changes delivered to DH's terrain database and Voxy players through their shared queue.
+ * Mod world changes delivered through DH's supported terrain API.
  * Loaded marks coalesce and resend no sooner than {@link #RESEND}; built distant copies use {@link #offer}, and
  * front-held copies use {@link #sendHeld}. When a marked chunk unloads while delivery is paused, read its saved
  * sections asynchronously instead of dropping the fresh update. Never load a world chunk for LOD delivery.
@@ -84,8 +84,7 @@ public final class DhUpdates {
     /** For checks: the most marks scanned in a single tick. */
     private int scannedMax;
     /**
-     * Where chunks go: in the game — {@link DhChunks} and {@link VoxyLods}; checks substitute their own sink ({@link
-     * #testSink}).
+     * Where chunks go: {@link DhChunks}; checks substitute their own sink ({@link #testSink}).
      */
     private Sink sink = DhUpdates::deliver;
     private boolean test;
@@ -113,23 +112,16 @@ public final class DhUpdates {
     public DhUpdates() {}
 
     /**
-     * The world's queue, if there is somewhere to hand chunks (DH is installed, a player with Voxy is in the world, or
-     * a check substituted a sink), else null.
+     * The world's queue when DH is installed or a check substituted a sink; otherwise null.
      */
     private static DhUpdates active(ServerLevel level) {
         DhUpdates u = level.getData(ModAttachments.DH_UPDATES);
-        return u.test || DhChunks.available() || VoxyLods.wanted(level) ? u : null;
+        return u.test || DhChunks.available() ? u : null;
     }
 
-    /** Chunk — to DH (if installed) and to players with Voxy (if any). Server thread. */
+    /** Chunk to the optional DH integration. Server thread. */
     private static void deliver(ServerLevel level, ChunkAccess chunk) {
         DhChunks.overwrite(level, chunk);
-        VoxyLods.send(level, chunk);
-    }
-
-    /** The pace is held by the DH queue (write confirmations): DH is installed or a check substituted a sink. */
-    private boolean paced() {
-        return test || DhChunks.available();
     }
 
     /** Checks: chunks of world {@code level} go to {@code sink} (and not to DH); null — back to DH, queue empty. */
@@ -189,13 +181,12 @@ public final class DhUpdates {
     }
 
     /**
-     * Whether there is somewhere to hand chunks, and how many more collected chunks not in the world can be handed over
-     * ({@link #offer}) right now: no more than the room left in the queues of players with Voxy ({@link
-     * VoxyLods#room}).
+     * Room for collected chunks not in the world ({@link #offer}), bounded by {@link #OFFER_LIMIT}.
+     * Zero when the optional DH integration is inactive.
      */
     public static int room(ServerLevel level) {
         DhUpdates u = active(level);
-        return u == null ? 0 : Math.max(0, Math.min(OFFER_LIMIT - u.offered.size(), VoxyLods.room(level) - u.offered.size()));
+        return u == null ? 0 : Math.max(0, OFFER_LIMIT - u.offered.size());
     }
 
     /**
@@ -219,8 +210,7 @@ public final class DhUpdates {
     public static int heldRoom(ServerLevel level) {
         DhUpdates u = active(level);
         if (u == null) return 0;
-        int dh = u.paced() ? DhQueue.window(DhChunks.threads()) - u.held.waiting() : Integer.MAX_VALUE;
-        return Math.min(dh, VoxyLods.room(level));
+        return Math.max(0, DhQueue.window(DhChunks.threads()) - u.held.waiting());
     }
 
     /**
@@ -238,21 +228,12 @@ public final class DhUpdates {
         if (u == null) return true;
         long key = copy.getPos().toLong(), now = level.getGameTime();
         if (u.offeredCount.containsKey(key) || u.sent.containsKey(key) && now - u.sent.get(key) < RESEND) return false;
-        // write confirmations — only from DH: without it the pace holds room in the Voxy queues (heldRoom)
-        boolean paced = u.paced();
-        if (paced && u.held.waiting() == 0) {
+        if (u.held.waiting() == 0) {
             u.setListening(true);
             DhChunks.listen();
         }
-        if (u.test) {
-            u.sink.overwrite(level, copy);
-        } else {
-            DhChunks.overwrite(level, copy);
-            // DH sets the LOD LEAD ticks after the call, Voxy — at once: the copy for players with Voxy — right up to
-            // the front
-            VoxyLods.send(level, copy, now + LEAD);
-        }
-        if (paced) u.held.sent(key, System.nanoTime());
+        u.sink.overwrite(level, copy);
+        u.held.sent(key, System.nanoTime());
         u.sent.put(key, now);
         return true;
     }
@@ -297,8 +278,7 @@ public final class DhUpdates {
             if (held.waiting() == 0) setListening(false);
         }
         if (due.isEmpty() && offered.isEmpty()) return;
-        // players with Voxy (and with DH): the pace — and the room in their queues, or they would not get the extra
-        int budget = Math.min(PER_TICK, VoxyLods.room(level));
+        int budget = PER_TICK;
         // collected chunks first: marks of chunks in the world will wait a tick, while collected ones hold memory; a
         // chunk handed to DH
         // less than RESEND ticks ago (as a held copy or as a previous collected one) — to the end: DH would skip it

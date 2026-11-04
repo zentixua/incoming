@@ -822,9 +822,8 @@ public final class S2C {
     }
 
     /**
-     * Chunk absent from client, sent to Voxy LOD ({@code compat/VoxyLods}, Voxy players only): distant ruins, craters,
-     * detonation traces and district lamps. {@code sections}: sections with light ({@code compat/LodSections}); dimension:
-     * whose chunk it is — packets from old dimension rejected after dimension change.
+     * Legacy terrain payload retained for existing Flashback recordings. Current servers never send it and
+     * clients decode and ignore it; Incoming no longer writes into Voxy.
      */
     public record VoxyChunk(net.minecraft.resources.ResourceLocation dimension, int x, int z, byte[] sections) implements CustomPacketPayload {
         /** Maximum chunk size: 24 globally paletted sections and two light layers — ~250 KB. */
@@ -854,7 +853,7 @@ public final class S2C {
             return "VoxyChunk[" + dimension + " " + x + " " + z + ", " + sections.length + " bytes]";
         }
     }
-    /** Start/finish delimit a LOD batch on the same ordered network handler as its chunks. */
+    /** Legacy batch marker: decoded and ignored when reading old Flashback recordings. */
     public record LodBatchStart(int id) implements CustomPacketPayload {
         public static final Type<LodBatchStart> TYPE = new Type<>(Incoming.id("lod_batch_start"));
         public static final StreamCodec<ByteBuf, LodBatchStart> CODEC = ByteBufCodecs.VAR_INT.map(LodBatchStart::new, LodBatchStart::id);
@@ -862,6 +861,7 @@ public final class S2C {
         public Type<? extends CustomPacketPayload> type() { return TYPE; }
     }
 
+    /** Legacy batch marker; see {@link LodBatchStart}. */
     public record LodBatchFinished(int id, int chunks) implements CustomPacketPayload {
         public static final Type<LodBatchFinished> TYPE = new Type<>(Incoming.id("lod_batch_finished"));
         public static final StreamCodec<ByteBuf, LodBatchFinished> CODEC = StreamCodec.composite(

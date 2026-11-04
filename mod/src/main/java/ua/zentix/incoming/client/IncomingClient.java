@@ -109,13 +109,6 @@ public final class IncomingClient {
         modBus.addListener(IncomingClient::blockColors);
         TerrainTiles.init(modBus);
         LodDepth.init();
-        // Voxy (via Roxy) and its classes are available at client setup; LOD Server Support overwrites chunks the mod
-        // sent to Voxy: detect this and request them again
-        modBus.addListener((net.neoforged.fml.event.lifecycle.FMLClientSetupEvent e) -> {
-            VoxyIngest.init();
-            if (VoxyIngest.available() && net.neoforged.fml.ModList.get().isLoaded("lss")) LssVoxyWatch.subscribe();
-        });
-
         NeoForge.EVENT_BUS.addListener(net.neoforged.bus.api.EventPriority.HIGHEST, IncomingClient::preTick);
         NeoForge.EVENT_BUS.addListener(IncomingClient::tick);
         NeoForge.EVENT_BUS.addListener(IncomingClient::entityTick);
@@ -239,7 +232,6 @@ public final class IncomingClient {
         Replay.tick();
         // flash traces update while paused too: replay can seek while paused
         ua.zentix.incoming.client.nuclear.FlashMarksClient.tick();
-        VoxyIngest.tick();
         if (mc.isPaused()) return;
         Designator.tick();
         ClientFlights.tick();
@@ -310,7 +302,6 @@ public final class IncomingClient {
      */
     private static void login(ClientPlayerNetworkEvent.LoggingIn e) {
         PallPass.prepare();
-        VoxyIngest.login();
         if (!nukeWarmed) {
             nukeWarmed = true;
             net.minecraft.Util.backgroundExecutor().execute(ClientNuclear::warm);
@@ -326,7 +317,6 @@ public final class IncomingClient {
 
     /** Everything the client holds about the world: sounds, tracks, effects, the nuke, map; world exit (and devtest effects sandbox). */
     public static void resetSession() {
-        VoxyIngest.reset();
         ua.zentix.incoming.client.fx.BlastTime.reset();
         ClientSounds.reset();
         FlightTracks.logout();
@@ -562,21 +552,6 @@ public final class IncomingClient {
                 p.target().ifPresent(FlightTracks::impact);
                 BlastEffects.intercept(p);
             });
-        }
-
-        @Override
-        public void voxyChunk(S2C.VoxyChunk p) {
-            VoxyIngest.accept(p);
-        }
-
-        @Override
-        public void lodBatchStart(S2C.LodBatchStart p, net.neoforged.neoforge.network.handling.IPayloadContext context) {
-            ClientLodBatches.start(p, context);
-        }
-
-        @Override
-        public void lodBatchFinished(S2C.LodBatchFinished p, net.neoforged.neoforge.network.handling.IPayloadContext context) {
-            ClientLodBatches.finish(p, context);
         }
 
         @Override

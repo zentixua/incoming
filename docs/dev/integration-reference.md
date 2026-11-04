@@ -15,9 +15,10 @@ All of these are optional:
   updates. Supported distant damage updates appear without visiting the chunk, through queues and asynchronous LOD writes;
   [preparation and delays](../guide/nuke.md#what-happens) depend on the carrier and the terrain.
 - **[Voxy](https://modrinth.com/mod/voxy)** 0.2.16-beta (on NeoForge through **[Roxy](https://modrinth.com/mod/roxy)**): distant terrain hides projectiles, blasts and smoke beyond your
-  render distance, with and without shaders, and strike damage far away (craters, nuclear ruins and scorch, dark
-  districts in a blackout) shows up in it: the server sends those chunks to players with Voxy. Where LOD Server
-  Support is not serving (single-player, a server without it), the targeting map, sight lines and sound around hills
+  render distance, with and without shaders. Remote server changes reach it through LOD Server Support after the
+  real world chunks are changed and saved; they may appear later than the pressure wave. Incoming does not submit
+  speculative sections into Voxy or repair another producer by overwriting it. Where LOD Server Support is not
+  serving (single-player, a server without it), the targeting map, sight lines and sound around hills
   read distant terrain from Voxy's own LOD: everything Voxy has seen, or the whole save after `/voxy import current`.
 - **Sound Physics Remastered**: it handles the world's sounds. Incoming's own sounds keep Incoming's distance, hill
   and wall muffling, since Incoming knows where each blast and engine really is. To keep Sound Physics from adding its
