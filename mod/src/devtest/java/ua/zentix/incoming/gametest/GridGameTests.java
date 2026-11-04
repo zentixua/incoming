@@ -472,12 +472,20 @@ public final class GridGameTests {
     @GameTest(template = "range", timeoutTicks = 4800, batch = "grid_city", skyAccess = true)
     public static void cityQueueRunsManyChunksPerTick(GameTestHelper h) {
         ServerLevel level = h.getLevel();
+        Vec3 at = Vec3.atCenterOf(h.absolutePos(CENTER));
+        // Reproduce earlier batches leaving restoration sweeps pending. quiet schedules their work;
+        // it does not complete it. Four city-sized sweeps exceed this benchmark's spare unit margin.
+        for (int i = 0; i < 4; i++) Blackouts.blackout(level, at, CITY_RADIUS, 1000, -1);
         quiet(level);
         var chunks = level.getChunkSource();
         ChunkPos mid = new ChunkPos(h.absolutePos(CENTER));
         int y = h.absolutePos(CENTER).getY() + 1;
         List<ChunkPos> held = new ArrayList<>();
         List<BlockPos> lamps = new ArrayList<>();
+        StrikeGameTests.afterTest(h, () -> {
+            Blackouts.useClock(level.getServer(), Blackouts.newClock());
+            held.forEach(p -> chunks.removeRegionTicket(HOLD, p, 1, p));
+        });
         for (int dx = -16; dx < 16; dx++) {
             for (int dz = -16; dz < 16; dz++) {
                 ChunkPos p = new ChunkPos(mid.x + dx, mid.z + dz);
@@ -516,17 +524,23 @@ public final class GridGameTests {
                 String.format(Locale.ROOT, "%.1f", set / 1e3 / (128 * 8)), String.format(Locale.ROOT, "%.1f", apply / 1e3 / n),
                 String.format(Locale.ROOT, "%.1f", inPlace / 1e3 / m), n, m);
 
-        Vec3 at = Vec3.atCenterOf(h.absolutePos(CENTER));
+        WorkClock cleanup = WorkClock.counting(1_000_000L);
         WorkClock counting = WorkClock.counting(1_000_000L);
         WorkClock[] real = {null};
         int[] ticks = new int[4], units = new int[2];
         long[] maxTick = new long[2];
-        Blackouts.useClock(level.getServer(), counting);
-        // work counters for /incoming grid status (from loading the world: window in 100 tick server GameTest on CI
-        //  passes entirely during the clearing time, and the previous window is empty) - units, lamps, passed chunks
-        long[] before = BlackoutWorld.get(level).totals();
-        Blackouts.blackout(level, at, CITY_RADIUS, 1000, -1);
+        Blackouts.useClock(level.getServer(), cleanup);
+        long[] before = new long[BlackoutWorld.Work.values().length];
         h.startSequence()
+                .thenWaitUntil(() -> h.assertTrue(BlackoutWorld.get(level).idle(), "previous restoration is in progress"))
+                .thenExecute(() -> {
+                    h.assertTrue(cleanup.units() > 0, "pending restoration fixture did no work");
+                    Incoming.LOG.info("GRIDBENCH drained {} previous-work units before measurement", cleanup.units());
+                    // Measure only this city's cascade, after all previous sweeps and queued lamps finish.
+                    System.arraycopy(BlackoutWorld.get(level).totals(), 0, before, 0, before.length);
+                    Blackouts.useClock(level.getServer(), counting);
+                    Blackouts.blackout(level, at, CITY_RADIUS, 1000, -1);
+                })
                 .thenWaitUntil(() -> h.assertTrue(BlackoutWorld.get(level).idle(), "extinguishing is in progress"))
                 .thenExecute(() -> {
                     for (BlockPos p : lamps) h.assertTrue(GridLights.isUnlit(level.getBlockState(p)), "lamp " + p + " lit");
@@ -564,7 +578,6 @@ public final class GridGameTests {
                     ticks[3] = real[0].ticksWorked();
                     maxTick[1] = real[0].maxTickNanos();
                     Blackouts.useClock(level.getServer(), Blackouts.newClock());
-                    held.forEach(p -> chunks.removeRegionTicket(HOLD, p, 1, p));
                     assertAllLit(h, level, lamps, mid);
                     int budget = (int) Math.round(WorkScheduler.gridCapNanos() / 1e6);
                     // by one, and not by tick: the cascade goes through quarters with a shift, and in the tick part the queue empties ahead of schedule
