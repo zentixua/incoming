@@ -377,19 +377,11 @@ final class RuinContext {
             DiskShots.Read current = r.disk();
             // The completed slot already owns the detached source. Resize/transfer that owner,
             // rather than demanding the same source/copies twice at a full shared budget.
-            long known = diskSourceBytes(current) + diskPublicationBytes(current) + archivePublicationBytes(r.cached());
+            long known = publicationBytes(current, r.cached());
             try (var publication = reads.takeForPublication(r, known, NuclearPrep.PLANS_CAP - NuclearPrep.residentMemory(level))) {
                 if (publication == null) break;
                 long before = retainedBytes();
-                boolean restored = false;
-                if (r.cached() != null && r.cached().isPresent()) {
-                    try {
-                        restored = restoreArchived(key, r.cached().get(), current);
-                    } catch (RuntimeException error) {
-                        Incoming.LOG.warn("Prepared window snapshot rejected for {}", new ChunkPos(key), error);
-                    }
-                }
-                if (!restored) publishDisk(current);
+                publishReserved(current, r.cached());
                 publication.releaseToCountedOwner(Math.max(0, retainedBytes() - before));
                 reading.remove(key);
                 windowReads++;
@@ -398,10 +390,30 @@ final class RuinContext {
     }
 
     /** Detached Read arrays remain live while priming or a flash/archived copy is published. */
-    private static long diskSourceBytes(DiskShots.Read read) {
+    static long diskSourceBytes(DiskShots.Read read) {
         long bytes = 128 + 8L * read.states().length + 4L * read.heights().length;
         for (var section : read.states()) if (section != null) bytes += section.getSerializedSize();
         return bytes;
+    }
+
+    /** Combined known source/copy/output bound, reusable by other already-owned read collectors. */
+    long publicationBytes(DiskShots.Read current, @Nullable java.util.Optional<net.minecraft.nbt.CompoundTag> cached) {
+        return diskSourceBytes(current) + diskPublicationBytes(current) + archivePublicationBytes(cached);
+    }
+
+    /** Caller owns publicationBytes through a charged publication lease; this method never re-admits. */
+    void publishReserved(DiskShots.Read current, @Nullable java.util.Optional<net.minecraft.nbt.CompoundTag> cached) {
+        if (current.skip() != null) throw new IllegalArgumentException("Cannot publish a skipped source");
+        long key = current.pos().toLong();
+        boolean restored = false;
+        if (cached != null && cached.isPresent()) {
+            try {
+                restored = restoreArchived(key, cached.get(), current);
+            } catch (RuntimeException error) {
+                Incoming.LOG.warn("Prepared window snapshot rejected for {}", new ChunkPos(key), error);
+            }
+        }
+        if (!restored) publishDisk(current);
     }
 
     /** Archived codec scratch is not a full heap bound. Charge known section-domain publication before decoding. */
@@ -409,8 +421,9 @@ final class RuinContext {
         if (cached == null || cached.isEmpty()) return 0;
         var tag = cached.get();
         int sections = tag.getInt("sections");
-        // The decoder rejects this before allocating states. Keep normal fallback/error classification.
-        if (sections < 1 || sections > 256) return 0;
+        // Invalid dimensions allocate no decoded states, but the already-owned NBT stays live
+        // until validation/fallback finishes and must not disappear from the transition bound.
+        if (sections < 1 || sections > 256) return tag.sizeInBytes();
         long bytes = snapshotMetadata(sections, tag.contains("sky"));
         boolean ruined = tag.getBoolean("ruined");
         for (int i = 0; i < sections; i++)
