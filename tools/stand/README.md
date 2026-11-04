@@ -23,7 +23,7 @@ it does not create a world, issue commands, move the camera, take screenshots or
 Each launch writes a new `stand-observe/run-*/` directory, preserving previous recordings.
 
 `frames.csv` uses the same render-thread CPU and GPU timestamp measurements as the scene bench.
-`events.jsonl` adds wall-clock anchors, camera position/direction, client world ticks and dimension once
+`events.jsonl` adds wall-clock and JVM monotonic-clock anchors, camera position/direction, client world ticks and dimension once
 per second while client ticks advance. Local-world loading/unloading can render frames without client
 ticks, so anchors pause during those loops. Select in-world windows using these events.
 No server tick or network-byte measurement is implied by this client-only mode.

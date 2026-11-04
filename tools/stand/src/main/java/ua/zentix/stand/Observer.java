@@ -16,7 +16,8 @@ final class Observer {
         this.clock = new FrameClock(out);
         NeoForge.EVENT_BUS.addListener(this::tick);
         NeoForge.EVENT_BUS.addListener(this::stop);
-        out.event("observe-start", System.nanoTime(), "wall_ms", System.currentTimeMillis());
+        long now = System.nanoTime();
+        out.event("observe-start", now, "wall_ms", System.currentTimeMillis(), "mono_ns", now);
         out.flush();
         Stand.LOG.info("STAND: passive frame observation in {}", out.dir);
     }
@@ -29,7 +30,7 @@ final class Observer {
         var level = mc.level;
         var camera = mc.gameRenderer.getMainCamera();
         var pos = camera.getPosition();
-        out.event("observe", now, "wall_ms", System.currentTimeMillis(), "frame", clock.frame(),
+        out.event("observe", now, "wall_ms", System.currentTimeMillis(), "mono_ns", now, "frame", clock.frame(),
                 "world", level != null, "dimension", level == null ? null : level.dimension().location(),
                 "tick", level == null ? null : level.getGameTime(),
                 "x", pos.x, "y", pos.y, "z", pos.z, "yaw", camera.getYRot(), "pitch", camera.getXRot(),
@@ -38,7 +39,8 @@ final class Observer {
     }
 
     private void stop(GameShuttingDownEvent event) {
-        out.event("observe-stop", System.nanoTime(), "wall_ms", System.currentTimeMillis(),
+        long now = System.nanoTime();
+        out.event("observe-stop", now, "wall_ms", System.currentTimeMillis(), "mono_ns", now,
                 "gpu_ring_waits", clock.gpuRingWaits);
         out.close();
     }
