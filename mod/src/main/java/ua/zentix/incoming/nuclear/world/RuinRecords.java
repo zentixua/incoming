@@ -25,10 +25,24 @@ final class RuinRecords<T> implements Iterable<T> {
     private final BiConsumer<ByteBuffer, T> encode;
     private final Function<ByteBuffer, T> decode;
     private final ArrayDeque<Page> pages = new ArrayDeque<>();
-    private int size;
+    private int size, pageCapacity;
+    private long payloadBytes;
+
+    long bytes() { return 128L + payloadBytes + pages.size() * 64L + pageCapacity * 32L; }
 
     RuinRecords(int width, BiConsumer<ByteBuffer, T> encode, Function<ByteBuffer, T> decode) {
         this.width = width; this.encode = encode; this.decode = decode;
+    }
+
+    /** Capacity to reserve before publishing an append batch; includes a replacement tail's
+     * whole new array while the old partial input is still live. At most two boundary pages. */
+    long growthBytes(int count) {
+        if (count <= 0) return 0;
+        Page tail = pages.peekLast();
+        int free = tail == null ? 0 : ROWS - tail.used;
+        long grow = tail != null && free > 0 && tail.bytes.length < width * ROWS ? (long) width * ROWS : 0;
+        long newPages = (Math.max(0L, (long) count - free) + ROWS - 1) / ROWS;
+        return grow + newPages * ((long) width * ROWS + 96);
     }
 
     void addLast(T value) {
@@ -36,8 +50,11 @@ final class RuinRecords<T> implements Iterable<T> {
         if (page == null || page.used == ROWS) {
             page = new Page(new byte[width * ROWS], 0);
             pages.addLast(page);
+            payloadBytes += page.bytes.length;
+            pageCapacity = Math.max(pageCapacity, pages.size());
         } else if (page.bytes.length < width * ROWS) {
             // A restored partial tail belongs to the input snapshot; append only to an owned copy.
+            payloadBytes += (long) width * ROWS - page.bytes.length;
             page.bytes = Arrays.copyOf(page.bytes, width * ROWS);
         }
         ByteBuffer buffer = ByteBuffer.wrap(page.bytes, page.used * width, width);
@@ -50,13 +67,13 @@ final class RuinRecords<T> implements Iterable<T> {
         Page page = pages.getFirst();
         T value = decode.apply(ByteBuffer.wrap(page.bytes, page.from * width, width));
         page.from++; size--;
-        if (page.from == page.used) pages.removeFirst();
+        if (page.from == page.used) { pages.removeFirst(); payloadBytes -= page.bytes.length; }
         return value;
     }
 
     int size() { return size; }
     boolean isEmpty() { return size == 0; }
-    void clear() { pages.clear(); size = 0; }
+    void clear() { pages.clear(); size = 0; payloadBytes = 0; }
 
     List<byte[]> snapshot() {
         List<byte[]> result = new ArrayList<>(pages.size());
@@ -69,6 +86,8 @@ final class RuinRecords<T> implements Iterable<T> {
         if (bytes.length == 0 || bytes.length % width != 0 || bytes.length > width * ROWS)
             throw new IllegalArgumentException("Invalid ruin record page");
         pages.addLast(new Page(bytes, bytes.length / width));
+        payloadBytes += bytes.length;
+        pageCapacity = Math.max(pageCapacity, pages.size());
         size = Math.addExact(size, bytes.length / width);
     }
 

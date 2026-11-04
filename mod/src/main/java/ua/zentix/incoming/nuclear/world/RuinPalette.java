@@ -14,6 +14,8 @@ final class RuinPalette {
     private final ArrayList<BlockState> states = new ArrayList<>();
     private final IdentityHashMap<BlockState, Integer> ids = new IdentityHashMap<>();
 
+    long bytes() { return 512L + 96L * states.size(); }
+
     int index(BlockState state) {
         Integer found = ids.get(state);
         if (found != null) return found;

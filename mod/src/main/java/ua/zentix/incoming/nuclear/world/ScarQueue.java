@@ -138,7 +138,7 @@ public final class ScarQueue {
      */
     static final int THROWN_PER_CHUNK = 24;
     /** {@link #ruin} unit result: applied; another unit (neighbor fracture computed, stale plan); await neighbors ({@link #waitRadius}). */
-    private static final int RUINED = 0, AGAIN = 1, WAIT = 2;
+    private static final int RUINED = 0, AGAIN = 1, WAIT = 2, MEMORY = 3;
     /**
      * Ready-queue inspection result ({@link #work(ServerLevel, Job, long)}): waiting without work (neighbors,
      * window read, pool slot, background plan); awaiting neighbors after on-site plan; unit done (ruins, neighbor
@@ -147,7 +147,7 @@ public final class ScarQueue {
      * clock always admits first unit, so entire queue would drain in tick: inspect only until
      * deadline ({@link WorkClock#overdue}).
      */
-    private static final int LOOKED = 0, PLANNED_WAITS = 1, WORKED = 2;
+    private static final int LOOKED = 0, PLANNED_WAITS = 1, WORKED = 2, CAPACITY_WAIT = 3;
     /** Slow nuclear-tick log/tests: jobs inspected this tick, those waiting. */
     private int inspected, waitedThisTick;
     /**
@@ -172,6 +172,20 @@ public final class ScarQueue {
      * plan retained while neighbors load.
      */
     private final Long2ObjectOpenHashMap<Parked> parked = new Long2ObjectOpenHashMap<>();
+    private long parkedBytes;
+
+    long retainedBytes() { return parkedBytes; }
+
+    private void park(long key, Parked value) {
+        Parked old = parked.put(key, value);
+        if (old != null) parkedBytes -= old.plan.bytes() + 64;
+        parkedBytes += value.plan.bytes() + 64;
+    }
+
+    private void unpark(long key) {
+        Parked old = parked.remove(key);
+        if (old != null) parkedBytes -= old.plan.bytes() + 64;
+    }
 
     private record Parked(int detonation, RuinPlan plan) {}
 
@@ -575,7 +589,7 @@ public final class ScarQueue {
 
     /** Job removed/finished: release neighbor ticket/collected plan. */
     private void release(ServerLevel level, Job job) {
-        parked.remove(job.chunk);
+        unpark(job.chunk);
         unhold(level, job);
     }
 
@@ -643,6 +657,8 @@ public final class ScarQueue {
 
     public void clear(ServerLevel level) {
         jobs.values().forEach(j -> release(level, j));
+        parked.clear();
+        parkedBytes = 0;
         underHold.clear();
         tileHolds = 0;
         tileHoldsPeak = 0;
@@ -822,6 +838,7 @@ public final class ScarQueue {
                     Incoming.LOG.warn("Slow ruin chunk {}: {} ms", new ChunkPos(job.chunk), took / 1_000_000);
                 }
             }
+            if (result == CAPACITY_WAIT) return;
         }
     }
 
@@ -930,7 +947,6 @@ public final class ScarQueue {
         RuinPlan plan = plans != null ? plans.get(key) : null;
         if (plan == null && RetainedPlans.waiting(plans, key)) return WAIT;
         if (plan != null && (waitRadius = plan.waitsNeighbours(level, chunk)) > 0) return WAIT;
-        if (plan != null) plans.remove(key);
         long[] st = preparedStats.computeIfAbsent(d.id(), k -> new long[STATS]);
         if (seen) st[2] = Math.max(st[2], lag);
         else st[5] = Math.max(st[5], lag);
@@ -940,6 +956,7 @@ public final class ScarQueue {
             RuinPlan.Debris debris = debris(level, chunk, plan);
             long t0 = System.nanoTime();
             if (plan.apply(level, chunk, d, budget)) {
+                plans.remove(key);
                 long took = System.nanoTime() - t0;
                 buried(level, d, free);
                 thrown(level, d, chunk, debris);
@@ -963,6 +980,8 @@ public final class ScarQueue {
                 deferLogs(level, d, plan);
                 return RUINED;
             }
+            if (plan.memoryWaiting()) return MEMORY;
+            plans.remove(key);
             stalePlans++;
             st[1]++;
             // stale: on-site plan in subsequent units (background or window fractures)
@@ -976,14 +995,13 @@ public final class ScarQueue {
         if (kept != null && kept.detonation() == d.id()) {
             plan = kept.plan();
             if ((waitRadius = plan.waitsNeighbours(level, chunk)) > 0) return WAIT;
-            parked.remove(key);
         } else if (background(ctx, key)) {
             // background plan ready ({@link #work} takes only when ready): finish/apply
             diagSource = "background";
             plan = ctx.collect(level, chunk);
             if (plan == null) return AGAIN;
             if ((waitRadius = plan.waitsNeighbours(level, chunk)) > 0) {
-                parked.put(key, new Parked(d.id(), plan));
+                park(key, new Parked(d.id(), plan));
                 return WAIT;
             }
         } else {
@@ -992,10 +1010,13 @@ public final class ScarQueue {
             diagSource = "server thread";
             server = true;
         }
+        park(key, new Parked(d.id(), plan));
         List<LivingEntity> free = BlastBody.free(level, chunk);
         if (plan != RuinPlan.EMPTY) NuclearWorld.get(level).beforeRuins(level, d, chunk);
         RuinPlan.Debris debris = debris(level, chunk, plan);
         boolean applied = plan.apply(level, chunk, d, budget);
+        if (plan.memoryWaiting()) return MEMORY;
+        unpark(key);
         if (applied) buried(level, d, free);
         if (!applied && !server) {
             // background-build positions changed: rebuild on server thread from current chunk
@@ -1209,6 +1230,13 @@ public final class ScarQueue {
             return WORKED;
         }
         int r = ruin(level, d, chunk, budget, Math.max(0, now - job.wave), seen);
+        if (r == MEMORY) {
+            // Capacity is a dependency, not more planning work. Retry in another tick and
+            // yield the remaining lane to moving material/settlement that can release memory.
+            job.due = now + 1;
+            byDue.add(job);
+            return CAPACITY_WAIT;
+        }
         if (r == AGAIN) {
             // neighbor fracture computed or plan stale: next unit behind already waiting jobs in same queue.
             // At head would block all: on-site plan up to 9 one-unit window fractures plus collapse, each several ms,

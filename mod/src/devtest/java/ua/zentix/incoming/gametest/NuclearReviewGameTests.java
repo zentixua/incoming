@@ -68,7 +68,9 @@ public final class NuclearReviewGameTests {
         });
     }
 
-    @GameTest(template = "range", batch = "nuclear_review", timeoutTicks = 100, skyAccess = true)
+    // This delayed flow mutates/restores global policy. A concurrent review's cleanup can
+    // restore ops-only/cap between this request and its revision, rejecting an otherwise valid fixture.
+    @GameTest(template = "range", batch = "nuclear_review_revision", timeoutTicks = 100, skyAccess = true)
     public static void editedOrdersAndConfigChangesInvalidateTheOldHold(GameTestHelper h) {
         var p = setup(h);
         NuclearReview.request(p, order(h, 15));

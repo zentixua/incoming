@@ -673,6 +673,9 @@ float fireBend(float h, float hb) {
 }
 
 // half-width of the column at height h, blocks (FireStorm.width): at the ground — already cells, higher it grows
+// Coarse feed maps cover the full ignition zone; source columns retain their world-space spacing.
+float fireSourceCell(float cell) { return min(32.0, cell); }
+
 float fireWidth(float h, float cell) {
     return 0.3 * cell + 0.22 * max(h, 0.0);
 }

@@ -42,4 +42,22 @@ class RuinRecordsTest {
         assertNotSame(first.getLast(), second.getLast());
         assertThrows(IllegalArgumentException.class, () -> queue.restore(new byte[7]));
     }
+    @org.junit.jupiter.api.Test
+    void appendReservationCoversTailGrowthAndWholeBoundaryPages() {
+        var records = new RuinRecords<Long>(8, java.nio.ByteBuffer::putLong, java.nio.ByteBuffer::getLong);
+        for (long i = 0; i < 2L * RuinRecords.ROWS + 1; i++) {
+            long before = records.bytes(), reservation = records.growthBytes(1);
+            records.addLast(i);
+            org.junit.jupiter.api.Assertions.assertTrue(records.bytes() <= before + reservation,
+                    "A queue boundary allocated outside its admitted growth");
+        }
+        records.clear();
+        long backing = records.bytes();
+        records.restore(java.nio.ByteBuffer.allocate(8).putLong(7).array());
+        long before = records.bytes(), reservation = records.growthBytes(1);
+        records.addLast(8L);
+        org.junit.jupiter.api.Assertions.assertTrue(records.bytes() <= before + reservation,
+                "Restored partial tail copy exceeded its reservation");
+        org.junit.jupiter.api.Assertions.assertTrue(backing >= 128, "Retained deque backing was forgotten");
+    }
 }

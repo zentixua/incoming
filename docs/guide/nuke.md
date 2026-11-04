@@ -110,6 +110,12 @@ containers retain their contents. Charred faces travel with the block and rotate
 is saved with the world, so leaving and returning does not erase it. Leaves and shattered glazing enter the dispersed debris reservoir.
 A surface-burst crater supplies its rim from the ground actually excavated; remaining ejecta and thermally transformed material stay accounted for.
 
+If the shared nuclear working-memory reservation is full, further material removal waits while already moving
+material can settle. Pending material and support checks survive a restart. Completed movement and crater
+checkpoints are compacted into material totals; container contents are retained. Saving can pause material
+movement until its file is written. An old active journal too large for the shared memory limit stays preserved
+on disk and paused; it is never replaced with an empty aftermath.
+
 These are reduced block-scale rules: joint properties, drag and the pile's repose angle are estimates.
 
 With the default ground burst, the dust column joins the mushroom cap. With an explicitly selected air burst
@@ -124,6 +130,7 @@ Burns, radiation and falling debris can still hurt you after the flash, so stay 
 Distant Horizons and Voxy can show ruins without you visiting them. ICBM strikes prepare the hardest-hit area during
 flight; other nuclear carriers can take longer to update the distant view. Broken windows and fallen trees farther
 out appear when you approach. In Voxy, players who missed the strike also need to approach to see its distant ruins.
+Incoming keeps a bounded list of recent distant updates and asks the server to refresh terrain overwritten by LOD Server Support. This recovery is best effort; saved world changes remain the durable source of ruins.
 
 The detailed timings, visual behavior and model limits are in the [nuclear effects reference](../dev/nuclear-effects-reference.md).
 
