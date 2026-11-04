@@ -17,5 +17,18 @@
     "gametests": 12,
     "publicationGate": "FAIL; old negative evidence not superseded",
     "priorEvidence": "93ef1d4d71ee2c10128dc4234721ca30a264d5a6"
+  },
+  "564Final": {
+    "head": "195f38b8eebfbaf1c435906bd95b47c62a58449a",
+    "units": {
+      "tests": 1796,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "gametests": 12,
+    "ciRun": 41797177031,
+    "review": "two fresh independent sessions; second confirms R1-R3, R5 correction follows second review with deterministic latch regression; no third round",
+    "publicationGate": "INCOMPLETE: no supported all-source versioned publication contract; no real full-column fallback measurement yet"
   }
 }

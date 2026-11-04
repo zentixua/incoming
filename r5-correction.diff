@@ -1,0 +1,96 @@
+diff --git a/.claude/rules/voxy.md b/.claude/rules/voxy.md
+index e02364b61..2912fafb2 100644
+--- a/.claude/rules/voxy.md
++++ b/.claude/rules/voxy.md
+@@ -77,7 +77,7 @@ paths:
+   chunk can cross the watermark once. There is no fixed byte-rate throttle. The waiting queue holds at most 48 MiB;
+   a fresh copy at the same coordinate/event/deadline replaces its waiting revision (different event deadlines stay separate). The server selects one immutable bounded batch; write callbacks advance it on the Netty event loop without waiting another server tick. `VoxyLods.room` gates `DhUpdates`, `FarLods` and `FrontLods`, even with DH:
+   excess updates for Voxy players would otherwise be lost. Copy engine light layers (`getData` fills the live layer
+-  for a uniform one); a heavy-zone copy goes to DH `DhUpdates.LEAD` before the front, and Voxy receives its “not before front” deadline and detonation identity (`VoxyLods.sendChanged`). `ClientHorizon` holds encoded sections until the same client event clock used by the wave reaches that deadline. The server sends full columns, including light and empty sections: a server before/after snapshot does not prove any recipient holds its baseline. Sparse codec utilities belong to known-baseline development fixtures until a recipient baseline protocol exists. Regressions: `VoxyLodsTest`, `LodBatchFlowTest`
++  for a uniform one); a heavy-zone copy goes to DH `DhUpdates.LEAD` before the front, and Voxy receives its “not before front” deadline and detonation identity (`VoxyLods.send(..., detonation)`). `ClientHorizon` holds encoded sections until the same client event clock used by the wave reaches that deadline. The server sends full columns, including light and empty sections: a server before/after snapshot does not prove any recipient holds its baseline. Sparse codec utilities belong to known-baseline development fixtures until a recipient baseline protocol exists. Regressions: `VoxyLodsTest`, `LodBatchFlowTest`
+   and GameTest batch `voxy_backpressure`.
+ - LOD Server Support 0.19/0.20 (server) observes `ChunkSerializer.write` at RETURN, not block-change events:
+   `ChunkSaveDataHook` → `ServerReceiverGlue.onChunkSaveData` → `DirtyContentFilter.observeSave`. It hashes serialized
+@@ -127,3 +127,8 @@ paths:
+   old batch otherwise withholds its ACK and prevents the very packet that would reset it. Event queues have separate
+   heads and use each detonation's own visible clock; a future head cannot block a due different event. Clock sampling
+   follows ClientNuclear.tick, including a frozen sample while paused. Regressions: ClientHorizonTest, TimedLodBufferTest.
++
++- A horizon worker claims work with its expected buffer epoch under the same buffer lock as dequeue. A separate
++  epoch check followed by take can steal a newly refilled dimension's packet and submit it using the old world.
++  Already taken old work remains charged until finish; the reset barrier covers only Incoming calls. Regression:
++  TimedLodBufferTest.anOldWorkerCannotClaimRefilledSessionWorkWithoutAwaitingItsBarrier.
+diff --git a/mod/src/main/java/ua/zentix/incoming/client/ClientHorizon.java b/mod/src/main/java/ua/zentix/incoming/client/ClientHorizon.java
+index aa58aa321..e3c4cb58a 100644
+--- a/mod/src/main/java/ua/zentix/incoming/client/ClientHorizon.java
++++ b/mod/src/main/java/ua/zentix/incoming/client/ClientHorizon.java
+@@ -85,8 +85,8 @@ final class ClientHorizon {
+             if (VoxyIngest.backlogged()) return;
+             int changedSections = 0;
+             java.util.function.IntToDoubleFunction clock = event -> clocks.getOrDefault(event, (double) now);
+-            for (int i = 0; i < 256 && changedSections < 1024 && QUEUE.epoch() == epoch; i++) {
+-                var ready = QUEUE.take(clock);
++            for (int i = 0; i < 256 && changedSections < 1024; i++) {
++                var ready = QUEUE.take(epoch, clock);
+                 if (ready == null) break;
+                 try {
+                     // A concurrent reset may occur here. The explicit level belongs to this session; reset's
+diff --git a/mod/src/main/java/ua/zentix/incoming/client/lod/TimedLodBuffer.java b/mod/src/main/java/ua/zentix/incoming/client/lod/TimedLodBuffer.java
+index 8861f7ceb..e8aec5a68 100644
+--- a/mod/src/main/java/ua/zentix/incoming/client/lod/TimedLodBuffer.java
++++ b/mod/src/main/java/ua/zentix/incoming/client/lod/TimedLodBuffer.java
+@@ -59,6 +59,11 @@ public final class TimedLodBuffer<T> {
+     /** Taking a due column keeps ownership charged until finish, including while ingestion is executing. */
+     public synchronized Ready<T> take(long now) { return take(unused -> now); }
+ 
++    /** Claim and session check are one operation: an old worker may not take a newly refilled epoch's work. */
++    public synchronized Ready<T> take(long expectedEpoch, java.util.function.IntToDoubleFunction clock) {
++        return epoch == expectedEpoch ? take(clock) : null;
++    }
++
+     /** One head per event: a future event must not block another event whose own visible clock is due. */
+     public synchronized Ready<T> take(java.util.function.IntToDoubleFunction clock) {
+         Ready<T> first = null;
+diff --git a/mod/src/test/java/ua/zentix/incoming/client/lod/TimedLodBufferTest.java b/mod/src/test/java/ua/zentix/incoming/client/lod/TimedLodBufferTest.java
+index 878978f6f..dc53a0283 100644
+--- a/mod/src/test/java/ua/zentix/incoming/client/lod/TimedLodBufferTest.java
++++ b/mod/src/test/java/ua/zentix/incoming/client/lod/TimedLodBufferTest.java
+@@ -7,6 +7,38 @@ import java.util.HashSet;
+ import static org.junit.jupiter.api.Assertions.*;
+ 
+ class TimedLodBufferTest {
++    @Test void anOldWorkerCannotClaimRefilledSessionWorkWithoutAwaitingItsBarrier() throws Exception {
++        var b = new TimedLodBuffer<String>(2, 20);
++        long oldEpoch = b.epoch();
++        var beforeClaim = new java.util.concurrent.CountDownLatch(1);
++        var continueClaim = new java.util.concurrent.CountDownLatch(1);
++        try (var worker = java.util.concurrent.Executors.newSingleThreadExecutor()) {
++            var old = worker.submit(() -> {
++                assertEquals(oldEpoch, b.epoch());
++                beforeClaim.countDown();
++                continueClaim.await();
++                return b.take(oldEpoch, event -> 1000);
++            });
++            try {
++                assertTrue(beforeClaim.await(5, java.util.concurrent.TimeUnit.SECONDS));
++                b.stop(); // dimension B retires A without waiting for A's worker
++                var fresh = b.reserve(1, Long.MIN_VALUE, 10, 1, 2);
++                assertTrue(b.complete(fresh, "B"));
++                continueClaim.countDown();
++                assertNull(old.get(5, java.util.concurrent.TimeUnit.SECONDS), "A must not consume B's packet");
++                assertEquals(10, b.bytes(), "B still owns its queued work");
++                var ready = b.take(b.epoch(), event -> 1000);
++                assertEquals(fresh, ready.ticket());
++                assertEquals("B", ready.value());
++                b.finish(ready);
++                assertNull(b.take(b.epoch(), event -> 1000));
++                assertEquals(0, b.bytes());
++            } finally {
++                continueClaim.countDown();
++            }
++        }
++    }
++
+     @Test void independentEventClocksDoNotBlockEachOther() {
+         var b = new TimedLodBuffer<String>(3, 30);
+         var a = b.reserve(1, 1400, 10, 1, 1);

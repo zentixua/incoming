@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.client.lod.TimedLodBufferTest" tests="8" skipped="0" failures="0" errors="0" timestamp="2026-11-04T08:12:03.547Z" hostname="zentixua-pc" time="0.039">
+  <properties/>
+  <testcase name="independentEventClocksDoNotBlockEachOther()" classname="ua.zentix.incoming.client.lod.TimedLodBufferTest" time="0.002"/>
+  <testcase name="earlyDeliveryCannotMoveThePressureClock()" classname="ua.zentix.incoming.client.lod.TimedLodBufferTest" time="0.0"/>
+  <testcase name="anOldWorkerCannotClaimRefilledSessionWorkWithoutAwaitingItsBarrier()" classname="ua.zentix.incoming.client.lod.TimedLodBufferTest" time="0.001"/>
+  <testcase name="stopRefireRejectsOldReadsEvenAtTheSameCoordinate()" classname="ua.zentix.incoming.client.lod.TimedLodBufferTest" time="0.0"/>
+  <testcase name="neverCompletingReadsStayBoundedAcrossThousandsOfRefires()" classname="ua.zentix.incoming.client.lod.TimedLodBufferTest" time="0.002"/>
+  <testcase name="bunchedOutOfOrderReadsDrainByDueTimeAndRespectBothLimits()" classname="ua.zentix.incoming.client.lod.TimedLodBufferTest" time="0.0"/>
+  <testcase name="takenWorkStaysChargedAcrossStop()" classname="ua.zentix.incoming.client.lod.TimedLodBufferTest" time="0.0"/>
+  <testcase name="panoramaYieldsWithoutWholeZoneEnumeration()" classname="ua.zentix.incoming.client.lod.TimedLodBufferTest" time="0.033"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>
