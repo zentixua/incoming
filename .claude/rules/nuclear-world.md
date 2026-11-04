@@ -439,3 +439,10 @@ paths:
   counters include detached inputs once across dimensions; the scalar owner retains no context/world references.
   `nuke_inputs_*` exercises populated Grids through registered cancel, clear, forget/world removal, expiry and
   queued promotion/cancellation. This preserves known estimates, not a complete JVM heap bound.
+
+- Explicit unpaid preparation gates launch on exact geometry, its target chunk and loaded chunks within the ruin
+  radius, rather than every distant heavy-zone plan. `required` is charged metadata; refresh before binding admits
+  newly loaded surroundings. Loaded-edge plans use the existing asynchronous window reader and NEAR priority.
+  Only these plans' own spill receipts block READY. Full physical disk planning, partial context handoff and durable
+  settlement continue during flight/after detonation; distant planning errors still invalidate an unbound request.
+  READY is a live launch condition, not persisted permission or a promise that distant ruins are already saved.

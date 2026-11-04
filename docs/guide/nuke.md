@@ -37,6 +37,8 @@ review. An unpaid review expires after one minute and is discarded on disconnect
 flight duration and operator immediate-detonation commands are unchanged; this review does not guarantee prepared
 terrain or LOD readiness for a cold observer arriving during flight.
 
+Preparation before launch covers the target and currently loaded surroundings. READY waits for those ruin plans and their plan writes; the rest of the heavy zone continues preparing during flight and after the explosion. Entering a new area can add preparation before launch. READY does not survive a server restart, and distant terrain and LOD updates may arrive later.
+
 ![Console with the nuclear warhead: yield and burst mode](img/remote-nuke.png)
 
 Existing worlds need no config edit: burst mode is not stored in `incoming-server.toml`. Older versions normally
