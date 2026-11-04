@@ -240,6 +240,143 @@ public final class RuinPreparationGameTests {
         h.succeed();
     }
 
+    @GameTest(template = "range", batch = "nuke_prelaunch_no_ruins", timeoutTicks = 200, skyAccess = true)
+    public static void disabledBlockDamageHasTruthfulEmptyReadinessAndCarrierBinding(GameTestHelper h) {
+        var level = h.getLevel();
+        boolean before = IncomingConfig.SERVER.nukeBlockDamage.get();
+        UUID owner = UUID.randomUUID(), handle = UUID.randomUUID();
+        StrikeGameTests.afterTest(h, () -> {
+            RuinPreparation.cancel(level, handle);
+            IncomingConfig.SERVER.nukeBlockDamage.set(before);
+        });
+        IncomingConfig.SERVER.nukeBlockDamage.set(false);
+        Vec3 target = Vec3.atCenterOf(h.absolutePos(new BlockPos(32, 1, 32)));
+        RuinPreparation.prepare(level, handle, owner, target, 1, true, false);
+        var prep = NuclearWorld.get(level).prep();
+        var clock = WorkClock.counting(1_000_000); clock.start(10_000_000);
+        prep.tick(level, NuclearEvents.get(level), new ScarQueue(), clock);
+        var status = RuinPreparation.status(level, handle);
+        h.assertTrue(status.stage() == RuinPreparation.Stage.READY && status.reason() == RuinPreparation.Reason.NONE,
+                "Legal flash/radiation-only mode cannot launch");
+        h.assertTrue(status.total() == 0 && status.ready() == 0 && status.reading() == 0 && status.planning() == 0 && status.writing() == 0,
+                "Disabled destruction performed or claimed ruin preparation");
+        int identity = RuinPreparation.bindCarrier(level, handle, owner, status.resolvedTarget(), 1, true, false);
+        h.assertTrue(identity >= 0, "Empty required work rejected carrier binding");
+        var geometry = NuclearWarhead.geometry(level, status.resolvedTarget(), 1, false, (float) IncomingConfig.SERVER.effectsScale());
+        var event = new ua.zentix.incoming.nuclear.Detonation(777, geometry.burst(), geometry.groundY(), geometry.yieldKt(), geometry.surface(),
+                level.getGameTime(), 0, 0, geometry.visibility(), 0, geometry.scale(), false, geometry.wave());
+        h.assertTrue(prep.handOff(level, event, level.getGameTime(), identity) == null, "Empty readiness claimed a heavy-zone cache");
+        h.succeed();
+    }
+
+    @GameTest(template = "range", batch = "nuke_prelaunch_frozen_hint", timeoutTicks = 600, skyAccess = true)
+    public static void detonationDoesNotWaitForFrozenArchiveHint(GameTestHelper h) throws Exception {
+        var level = h.getLevel(); UUID handle = UUID.randomUUID(), owner = UUID.randomUUID();
+        Vec3 target = Vec3.atCenterOf(h.absolutePos(new BlockPos(32, 1, 32)));
+        RuinPreparation.prepare(level, handle, owner, target, 1, false, false);
+        Object p = request(level, handle); var prep = NuclearWorld.get(level).prep();
+        var geometry = NuclearWarhead.geometry(level, target, 1, false, (float) IncomingConfig.SERVER.effectsScale());
+        field(p, "geometry").set(p, geometry); field(p, "resolvedTarget").set(p, target);
+        field(p, "ruins").set(p, new RuinContext(level, geometry));
+        field(p, "archivePath").set(p, "frozen-hint-test");
+        int identity = RuinPreparation.bindCarrier(level, handle, owner, target, 1, false, false);
+        h.assertTrue(identity >= 0, "Empty required-work carrier fixture rejected");
+        var progress = RuinProgress.get(level);
+        var gate = new java.util.concurrent.CountDownLatch(1);
+        StrikeGameTests.afterTest(h, gate::countDown);
+        StrikeGameTests.afterTest(h, () -> RuinPreparation.cancelCarrier(level, identity));
+        net.neoforged.neoforge.common.IOUtilities.withIOWorker(() -> {
+            try { gate.await(); } catch (InterruptedException e) { Thread.currentThread().interrupt(); }
+        });
+        var dir = java.nio.file.Files.createTempDirectory(level.getDataStorage().dataFolder.toPath(), "frozen-prep-");
+        progress.setDirty(); progress.save(dir.resolve("progress.dat").toFile(), level.registryAccess());
+        h.assertTrue(!progress.writable(), "Save did not freeze actual ledger");
+        int eventId = 1_900_777;
+        var event = new ua.zentix.incoming.nuclear.Detonation(eventId, geometry.burst(), geometry.groundY(), geometry.yieldKt(), geometry.surface(),
+                level.getGameTime(), 0, 0, geometry.visibility(), 0, geometry.scale(), false, geometry.wave());
+        h.assertTrue(prep.handOff(level, event, level.getGameTime(), identity) != null, "Frozen optional hint postponed physical detonation");
+        h.assertTrue(progress.archive(eventId).isEmpty(), "Frozen ledger mutated during handoff");
+        gate.countDown();
+        h.succeedWhen(() -> {
+            h.assertTrue(progress.writable(), "Actual ledger save still running");
+            var clock = WorkClock.counting(1_000_000); clock.start(10_000_000);
+            prep.tick(level, new NuclearEvents(), new ScarQueue(), clock);
+            h.assertTrue(progress.archive(eventId).equals("frozen-hint-test"), "Writable continuation lost deferred archive hint");
+            var restored = RuinProgress.load(progress.save(new net.minecraft.nbt.CompoundTag(), level.registryAccess()), level.registryAccess());
+            h.assertTrue(restored.archive(eventId).equals("frozen-hint-test"), "Deferred hint did not survive ledger roundtrip");
+        });
+    }
+
+    @GameTest(template = "range", batch = "nuke_prelaunch_ceiling", skyAccess = true)
+    public static void ceilingTargetsMatchOrdinaryGeometryWithoutDiskReads(GameTestHelper h) throws ReflectiveOperationException {
+        var level = h.getLevel().getServer().getLevel(Level.NETHER);
+        h.assertTrue(level != null && level.dimensionType().hasCeiling(), "Missing ceiling dimension fixture");
+        // Fixture setup alone may load a chunk; the second target remains cold.
+        level.getChunk(0, 0);
+        for (Vec3 target : List.of(new Vec3(8.5, 64.25, 8.5), new Vec3(12_000_008.5, 64.25, 12_000_008.5))) {
+            UUID handle = UUID.randomUUID();
+            RuinPreparation.prepare(level, handle, UUID.randomUUID(), target, 1, true, false);
+            try {
+                Object p = request(level, handle);
+                var prep = NuclearWorld.get(level).prep();
+                var work = NuclearPrep.class.getDeclaredMethod("work", net.minecraft.server.level.ServerLevel.class,
+                        NuclearEvents.ScheduledStrike.class, p.getClass(), WorkClock.class);
+                work.setAccessible(true);
+                // Avoid an unrelated asynchronous policy calculation; geometry is the acceptance here.
+                field(prep, "policy").set(prep, java.util.concurrent.CompletableFuture.completedFuture("0".repeat(64)));
+                field(prep, "policyGeneration").setInt(prep, Blast.generation);
+                var clock = WorkClock.counting(1_000_000); clock.start(10_000_000);
+                work.invoke(prep, level, null, p, clock);
+                var ordinaryTarget = NuclearWarhead.surfaceAt(level, target);
+                var ordinary = NuclearWarhead.geometry(level, ordinaryTarget, 1, false, (float) IncomingConfig.SERVER.effectsScale());
+                var geometry = (ua.zentix.incoming.nuclear.Detonation) field(p, "geometry").get(p);
+                h.assertTrue(field(p, "resolvedTarget").get(p).equals(ordinaryTarget), "Ceiling roof replaced requested target");
+                h.assertTrue(geometry.burst().equals(ordinary.burst()) && geometry.groundY() == ordinary.groundY(), "Ceiling preparation differs from ordinary geometry");
+                h.assertFalse(field(p, "resolvingRead").getBoolean(p), "Ceiling fallback issued unnecessary disk read");
+            } finally { RuinPreparation.cancel(level, handle); }
+        }
+        h.succeed();
+    }
+
+    @GameTest(template = "range", batch = "nuke_prep_far_source", skyAccess = true)
+    @SuppressWarnings("unchecked")
+    public static void farArchivedCompletionValidatesEditedAndScarredSources(GameTestHelper h) throws ReflectiveOperationException {
+        var level = h.getLevel(); var grid = RuinStorageGameTests.fixture(h, true);
+        var original = grid.at(0, 0).saved(); long key = grid.centre().toLong();
+        var states = original.states().clone(); int y = (int) grid.ctx().d.groundY() + 5;
+        int section = (y - original.minY()) >> 4;
+        states[section] = RuinPlan.copyStates(states[section]);
+        states[section].set(7, y & 15, 7, net.minecraft.world.level.block.Blocks.BEDROCK.defaultBlockState());
+        var record = Class.forName(NuclearPrep.class.getName() + "$ArchivedShot");
+        var constructor = record.getDeclaredConstructor(long.class, Optional.class, DiskShots.Read.class); constructor.setAccessible(true);
+        for (int scar : new int[] {0, grid.ctx().d.id()}) {
+            UUID handle = UUID.randomUUID();
+            RuinPreparation.prepare(level, handle, UUID.randomUUID(), grid.ctx().d.burst(), 15, false, false);
+            try {
+                Object p = request(level, handle); var ctx = new RuinContext(level, grid.ctx().d);
+                field(p, "geometry").set(p, grid.ctx().d); field(p, "ruins").set(p, ctx);
+                var read = new DiskShots.Read(grid.centre(), original.minY(), states, original.heights(), 0, null, 0, scar);
+                var inbox = (RuinInbox<Object>) field(p, "archived").get(p);
+                inbox.expect().accept(constructor.newInstance(key, Optional.of(original.encode()), read));
+                var far = NuclearPrep.class.getDeclaredMethod("far", net.minecraft.server.level.ServerLevel.class, p.getClass(), WorkClock.class);
+                far.setAccessible(true); var clock = WorkClock.counting(1_000_000); clock.start(10_000_000);
+                ((WorkClock) field(NuclearWorld.get(level).prep(), "clock").get(NuclearWorld.get(level).prep())).start(1_000_000_000);
+                far.invoke(NuclearWorld.get(level).prep(), level, p, clock);
+                var expected = scar == 0 ? ChunkShot.fromDisk(read, null, null, false) : grid.at(0, 0);
+                var actual = ((it.unimi.dsi.fastutil.longs.Long2ObjectLinkedOpenHashMap<ChunkShot>) field(ctx, "shots").get(ctx)).get(key);
+                h.assertTrue(java.util.Arrays.equals(actual.normalPrints(Blast.SERVER), expected.normalPrints(Blast.SERVER)),
+                        scar == 0 ? "Far cached source overwrote later edit" : "Far cached source lost scarred original");
+                var shots = grid.shots().clone(); shots[(RuinContext.Grid.R) * RuinContext.Grid.SIDE + RuinContext.Grid.R] = expected;
+                var expectedGrid = new RuinContext.Grid(ctx, grid.centre(), grid.minY(), grid.maxY(), shots, grid.view(), grid.blockDamage(), grid.treeFall(), grid.fires());
+                shots = shots.clone(); shots[RuinContext.Grid.R * RuinContext.Grid.SIDE + RuinContext.Grid.R] = actual;
+                var actualGrid = new RuinContext.Grid(ctx, grid.centre(), grid.minY(), grid.maxY(), shots, grid.view(), grid.blockDamage(), grid.treeFall(), grid.fires());
+                h.assertTrue(RuinStorageGameTests.plan(expectedGrid).store().equals(RuinStorageGameTests.plan(actualGrid).store()), "Far source completion changed plan");
+                h.assertTrue(((java.util.concurrent.atomic.AtomicLong) field(p, "asyncBytes").get(p)).get() == 0, "Far completion kept read reservation");
+            } finally { RuinPreparation.cancel(level, handle); }
+        }
+        h.succeed();
+    }
+
     @SuppressWarnings("unchecked")
     private static Object request(net.minecraft.server.level.ServerLevel level, UUID handle) throws ReflectiveOperationException {
         var prep = NuclearWorld.get(level).prep();
