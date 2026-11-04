@@ -286,6 +286,11 @@ public final class RuinWorkers {
         return !(future instanceof Task<?> t) || t.started;
     }
 
+    /** A cancelled future is collectable only after its worker has released captured inputs. */
+    static boolean finished(Future<?> future) {
+        return future.isDone() && (!future.isCancelled() || !(future instanceof Task<?> task) || !task.counted.get());
+    }
+
     /**
      * Pool task: queue by priority, within priority by submission; priority count from submission to
      * actual completion; cancelled queued tasks release their slot immediately. Running cancellation
