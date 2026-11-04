@@ -1,0 +1,21 @@
+{
+  "572": {
+    "head": "325ed64ebc8624a78b96462d27594d79318954d0",
+    "units": {
+      "tests": 1779,
+      "failures": 0,
+      "errors": 0,
+      "skipped": 0
+    },
+    "gametests": 3,
+    "ciRun": 41793813284,
+    "review": "no serious findings"
+  },
+  "564": {
+    "head": "f4c5c276612834ed9c4feab556f210fe689e9111",
+    "unitTests": 1792,
+    "gametests": 12,
+    "publicationGate": "FAIL; old negative evidence not superseded",
+    "priorEvidence": "93ef1d4d71ee2c10128dc4234721ca30a264d5a6"
+  }
+}
