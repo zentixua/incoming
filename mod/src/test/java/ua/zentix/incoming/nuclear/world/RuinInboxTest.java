@@ -5,6 +5,24 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class RuinInboxTest {
     @Test
+    void discardedOwnersKeepTheirReadsChargedUntilCompletion() {
+        var bytes = new java.util.concurrent.atomic.AtomicLong();
+        RuinInbox<String> old = new RuinInbox<>(bytes::addAndGet, 1024);
+        var read = old.expect();
+        old.invalidate();
+        old = null;
+        RuinInbox<String> next = new RuinInbox<>(bytes::addAndGet, 1024);
+        var fresh = next.expect();
+        assertEquals(2048, bytes.get());
+        read.accept("cancelled owner's late copy");
+        assertEquals(1024, bytes.get());
+        fresh.accept("fresh");
+        assertEquals(1024, bytes.get());
+        assertEquals("fresh", next.poll());
+        assertEquals(0, bytes.get());
+    }
+
+    @Test
     void cancelledCopyCannotReplaceNewCopyAtTheSameCoordinate() {
         RuinInbox<String> inbox = new RuinInbox<>();
         var old = inbox.expect();

@@ -66,7 +66,7 @@ public final class ClientLodBatches {
     private void replyWhenReady(IPayloadContext context, int batch) {
         var channel = context.connection().channel();
         if (!channel.isActive() || !active || id != batch) return;
-        boolean busy = VoxyIngest.backlogged();
+        boolean busy = VoxyIngest.backlogged() || ClientHorizon.full();
         C2S.LodBatchReceived ack = acknowledge(busy);
         if (ack != null) {
             if (!VoxyIngest.available()) context.reply(new C2S.LodMods(false));

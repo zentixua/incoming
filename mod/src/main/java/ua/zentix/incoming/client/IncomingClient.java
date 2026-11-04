@@ -326,6 +326,7 @@ public final class IncomingClient {
 
     /** Everything the client holds about the world: sounds, tracks, effects, the nuke, map; world exit (and devtest effects sandbox). */
     public static void resetSession() {
+        ClientHorizon.reset();
         ua.zentix.incoming.client.fx.BlastTime.reset();
         ClientSounds.reset();
         FlightTracks.logout();

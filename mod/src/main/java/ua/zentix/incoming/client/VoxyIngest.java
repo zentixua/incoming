@@ -101,32 +101,32 @@ public final class VoxyIngest {
 
     /** World login: tell the server whether to send chunks. */
     static void login() {
+        ClientHorizon.reset();
         OURS.clear();
         STALE.clear();
         if (available()) PacketDistributor.sendToServer(new C2S.LodMods(true));
     }
 
-    /** Server chunk into Voxy; network thread. */
+    /** Network receipt holds the encoded sections until their authoritative front time. */
     static void accept(S2C.VoxyChunk p) {
-        MethodHandle of = worldOf, raw = rawIngest;
         ClientLevel level = Minecraft.getInstance().level;
-        // Flashback replay: Voxy shows its live database there; past chunks from the recording do not belong in it.
-        if (of == null || raw == null || broken || level == null || Replay.active() || !level.dimension().location().equals(p.dimension())) return;
-        if (ingested != level) {
-            ingested = level;
-            OURS.clear();
-            STALE.clear();
-        }
+        if (!available() || level == null || Replay.active() || !level.dimension().location().equals(p.dimension())) return;
+        if (!ClientHorizon.offer(level, p)) STALE.add(ChunkPos.asLong(p.x(), p.z()));
+    }
+
+    /** Worker only. The level is captured before submission; never retarget taken work to a new world. */
+    static int ingest(ClientLevel level, S2C.VoxyChunk p) {
+        MethodHandle of = worldOf, raw = rawIngest;
+        if (of == null || raw == null || broken) return -1;
         try {
             Object world = of.invoke((Level) level);
-            if (world == null) return;
-            for (LodSections.Section s : LodSections.read(p.sections(), level.registryAccess().registryOrThrow(Registries.BIOME))) {
+            if (world == null) return -1;
+            var sections = LodSections.read(p.sections(), level.registryAccess().registryOrThrow(Registries.BIOME));
+            for (LodSections.Section s : sections) {
                 boolean ok = (boolean) raw.invoke(world, s.blocks(), p.x(), s.y(), p.z(), s.blockLight(), s.skyLight());
-                if (!ok) return;
+                if (!ok) return -1;
             }
-            long chunk = ChunkPos.asLong(p.x(), p.z());
-            OURS.add(chunk);
-            STALE.remove(chunk);
+            return sections.size();
         } catch (LinkageError e) {
             broken = true;
             Incoming.LOG.warn("Voxy: rawIngest no longer matches ({}) — strike damage far away shows in Voxy only when you get there", e.toString());
@@ -135,6 +135,15 @@ public final class VoxyIngest {
         } catch (Throwable e) {
             throw HandleFailures.propagate(e);
         }
+        return -1;
+    }
+
+    /** Publish only after ClientHorizon checks the session, under its short ownership lock. */
+    static void remember(ClientLevel level, S2C.VoxyChunk p) {
+        ingested = level;
+        long chunk = ChunkPos.asLong(p.x(), p.z());
+        OURS.add(chunk);
+        STALE.remove(chunk);
     }
 
     /**
@@ -144,11 +153,13 @@ public final class VoxyIngest {
     static void overwritten(ClientLevel level, int x, int z) {
         if (level != ingested) return;
         long chunk = ChunkPos.asLong(x, z);
-        if (OURS.remove(chunk)) STALE.add(chunk);
+        if (OURS.contains(chunk) && !ClientHorizon.repair(level, chunk)) STALE.add(chunk);
     }
 
     /** Client tick: report LSS-overwritten chunks to the server, at most {@link C2S.VoxyStale#PER_TICK} per tick (server limit). */
     static void tick() {
+        ClientLevel level = Minecraft.getInstance().level;
+        if (level != null) ClientHorizon.tick(level, level.getGameTime());
         if (STALE.isEmpty() || Minecraft.getInstance().getConnection() == null) return;
         LongArrayList batch = new LongArrayList();
         for (Long c : STALE) {

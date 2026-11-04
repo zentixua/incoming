@@ -112,7 +112,7 @@ public final class FarLods {
     }
 
     /** Read trace chunk: snapshot on server thread ({@link #shoot}), plan/copy in background. */
-    private record Read(long chunk, Ring ring, DiskShots.Scorch scorch, boolean lights) {}
+    private record Read(long chunk, Ring ring, DiskShots.Scorch scorch, boolean lights, long generation) {}
 
     /**
      * Distant ground trace ({@link #scorch}): chunks out to {@link RuinPlanner#scorchReach} on wave arrival, nearest
@@ -124,19 +124,16 @@ public final class FarLods {
         final RuinContext ruins;
         /** Chunks (nearest horizontal point, {@link NuclearPrep#horizontal}) within {@code (skip, reach]}. */
         final double skip, reach;
-        /** Ring chunks by distance, computed in background; empty once traversed (memory). */
-        java.util.concurrent.CompletableFuture<long[]> order;
-        int next;
+        /** Incrementally prepared radial row heads, independent of zone area. */
+        final RadialChunks order;
+        long traversed;
 
         Ring(ServerLevel level, Detonation d, double skip) {
             this.d = d;
             this.ruins = new RuinContext(level, d);
             this.skip = skip;
             this.reach = RuinPlanner.scorchReach(d);
-            this.order = java.util.concurrent.CompletableFuture.supplyAsync(() -> layout(d, skip, reach), RuinWorkers.executor(RuinWorkers.Priority.FAR)).exceptionally(e -> {
-                Incoming.LOG.error("Far scorch of detonation #{}: ring layout failed", d.id(), e);
-                return new long[0];
-            });
+            this.order = new RadialChunks(d.burst().x, d.burst().z, skip, reach);
         }
 
         /** Ring trace on chunk: within radius and wave arrived (also heavy-zone chunk that timed out awaiting plan). */
@@ -146,27 +143,8 @@ public final class FarLods {
         }
 
         boolean done() {
-            long[] o = order.getNow(null);
-            return o != null && next >= o.length;
+            return order.done();
         }
-    }
-
-    /** Ring chunks ordered by epicenter distance (any thread): distance key, one numeric sort. */
-    private static long[] layout(Detonation d, double skip, double reach) {
-        int cx = net.minecraft.util.Mth.floor(d.burst().x) >> 4, cz = net.minecraft.util.Mth.floor(d.burst().z) >> 4;
-        int r = net.minecraft.util.Mth.ceil(reach / 16) + 1;
-        it.unimi.dsi.fastutil.longs.LongArrayList keyed = new it.unimi.dsi.fastutil.longs.LongArrayList();
-        for (int x = cx - r; x <= cx + r; x++) {
-            for (int z = cz - r; z <= cz + r; z++) {
-                double h = NuclearPrep.horizontal(new ChunkPos(x, z), d);
-                // key: distance (1/16 block) in high bits, chunk offset from epicenter in low bits
-                if (h > skip && h <= reach) keyed.add((long) (h * 16) << 32 | (long) (x - cx + 0x8000) << 16 | (z - cz + 0x8000));
-            }
-        }
-        long[] out = keyed.toLongArray();
-        java.util.Arrays.sort(out);
-        for (int i = 0; i < out.length; i++) out[i] = ChunkPos.asLong(cx + (int) (out[i] >> 16 & 0xFFFF) - 0x8000, cz + (int) (out[i] & 0xFFFF) - 0x8000);
-        return out;
     }
 
     /**
@@ -198,7 +176,9 @@ public final class FarLods {
      * sent only to them, not DH/everyone, since DH/others already correct.
      */
     private final it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<java.util.Set<java.util.UUID>> refreshFor = new it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<>();
-    private final ConcurrentLinkedQueue<Built> built = new ConcurrentLinkedQueue<>();
+    private record Completion(Built value, long generation) {}
+    private final ConcurrentLinkedQueue<Completion> built = new ConcurrentLinkedQueue<>();
+    private long generation;
     /** Wave-reached unplanned chunks: disk state ({@link #SCANNING}, {@link #WHOLE}, {@link #FINAL}, {@link #PARTIAL}); I/O-thread results. */
     private final Long2ByteOpenHashMap disk = new Long2ByteOpenHashMap();
     private final ConcurrentLinkedQueue<long[]> scanned = new ConcurrentLinkedQueue<>();
@@ -326,18 +306,26 @@ public final class FarLods {
 
     /** Trace rings feed wave-reached chunks while trace queue has room. */
     private void feedRings(ServerLevel level, long now) {
+        int visits = FEED_PER_TICK, rows = 64;
         for (Ring ring : rings) {
-            long[] order = ring.order.getNow(null);
-            if (order == null || ring.done()) continue;
-            for (int n = FEED_PER_TICK; n > 0 && ring.next < order.length && scorchQueue.size() < SCORCH_QUEUE; n--, ring.next++) {
-                if (ScarQueue.due(ring.d, new ChunkPos(order[ring.next])) > now) break;
-                request(level, order[ring.next], SCORCH);
+            if (!ring.order.prepared()) {
+                if (rows == 0) return;
+                boolean ready = ring.order.prepare(rows);
+                rows = 0;
+                if (!ready) continue;
             }
-            if (ring.next >= order.length) {
-                Incoming.LOG.info("Far scorch of detonation #{}: all {} chunks to {} m handed to the LOD queue", ring.d.id(), order.length, Math.round(ring.reach));
-                ring.order = java.util.concurrent.CompletableFuture.completedFuture(new long[0]);
-                ring.next = 0;
+            if (ring.done()) continue;
+            while (visits > 0 && !ring.done() && scorchQueue.size() < SCORCH_QUEUE) {
+                long chunk = ring.order.peek();
+                if (ScarQueue.due(ring.d, new ChunkPos(chunk)) > now) break;
+                visits--;
+                request(level, chunk, SCORCH);
+                ring.order.advance();
+                ring.traversed++;
             }
+            if (ring.done()) Incoming.LOG.info("Far scorch of detonation #{}: all {} chunks to {} m handed to the LOD queue",
+                    ring.d.id(), ring.traversed, Math.round(ring.reach));
+            if (visits == 0) return;
         }
     }
 
@@ -375,12 +363,12 @@ public final class FarLods {
         if (!refreshFor.isEmpty() && level.getGameTime() % 20 == 0) refreshFor.keySet().removeIf(c -> !queued.containsKey(c) && !reading.contains(c));
         if (queued.isEmpty() && reading.isEmpty() && scanning == 0 && !zone.busy() && !ringsFeeding()) return;
         long now = level.getGameTime();
-        for (Built b; (b = built.poll()) != null; ) harvest(level, b);
+        for (Completion b; (b = built.poll()) != null; ) harvest(level, b.value, b.generation);
         shoot(level);
         for (long[] s; (s = scanned.poll()) != null; ) {
             scanning--;
             // result for chunk no longer waiting (cancelled, loaded) unnecessary
-            if (queued.containsKey(s[0])) disk.put(s[0], (byte) s[1]);
+            if (s[2] == generation && queued.containsKey(s[0])) disk.put(s[0], (byte) s[1]);
             else disk.remove(s[0]);
         }
         if (!DhUpdates.enabled(level)) {
@@ -443,8 +431,8 @@ public final class FarLods {
     private String ringSummary() {
         StringBuilder b = new StringBuilder();
         for (Ring ring : rings) {
-            long[] o = ring.order.getNow(null);
-            if (o != null && ring.next < o.length) b.append(String.format(java.util.Locale.ROOT, "; scorch of detonation #%d: %d of %d chunks to %.0f m", ring.d.id(), ring.next, o.length, ring.reach));
+            if (!ring.done()) b.append(String.format(java.util.Locale.ROOT, "; scorch of detonation #%d: %d chunks traversed to %.0f m (%d row heads)",
+                    ring.d.id(), ring.traversed, ring.reach, ring.order.headers()));
         }
         return b.toString();
     }
@@ -462,12 +450,17 @@ public final class FarLods {
         long until = System.nanoTime() + SHOT_NANOS;
         // server thread only: peek/poll return same chunk
         for (Read r; (r = shots.peek()) != null; ) {
+            if (r.generation != generation) {
+                shots.poll();
+                built.add(new Completion(new Built(r.chunk, null, false, false, "cancelled"), r.generation));
+                continue;
+            }
             String skip = r.scorch.read().skip();
             if (skip == null && (cost >= SHOTS_PER_TICK || !taken.isEmpty() && System.nanoTime() >= until
                     || RuinWorkers.inFlight() + taken.size() >= RuinWorkers.capacity())) break;
             shots.poll();
             if (skip != null) {
-                built.add(new Built(r.chunk, null, false, r.lights, skip));
+                built.add(new Completion(new Built(r.chunk, null, false, r.lights, skip), r.generation));
                 continue;
             }
             DiskShots.Read read = r.scorch.read();
@@ -481,7 +474,7 @@ public final class FarLods {
                 if (!shotFailed) Incoming.LOG.warn("Far Distant Horizons LODs: snapshot of chunk {} failed, it stays without the scorch (further failures are counted as unread)",
                         new ChunkPos(r.chunk), e);
                 shotFailed = true;
-                built.add(new Built(r.chunk, null, false, r.lights, "snapshot error: " + e));
+                built.add(new Completion(new Built(r.chunk, null, false, r.lights, "snapshot error: " + e), r.generation));
             }
         }
         if (taken.isEmpty()) return;
@@ -493,7 +486,7 @@ public final class FarLods {
             Read r = taken.get(i);
             RuinContext.Grid g = r.ring.ruins.scorchGrid(level, made.get(i), view);
             java.util.concurrent.CompletableFuture.supplyAsync(() -> build(f, r.scorch.sections(), RuinPlanner.scorch(g), fires, r.lights, true), RuinWorkers.executor(RuinWorkers.Priority.FAR))
-                    .exceptionally(e -> new Built(r.chunk, null, false, r.lights, "error: " + e)).thenAccept(built::add);
+                    .exceptionally(e -> new Built(r.chunk, null, false, r.lights, "error: " + e)).thenAccept(b -> built.add(new Completion(b, r.generation)));
         }
     }
 
@@ -565,13 +558,14 @@ public final class FarLods {
         boolean fires = IncomingConfig.SERVER.nukeFires.get(), lights = (kind & LIGHTS) != 0 && !refreshFor.containsKey(r.chunk);
         // unplanned chunk may carry ground trace (district light included): snapshot, trace plan, copy
         Ring ring = plan == null ? ringOf(r.chunk, now) : null;
+        long revision = generation;
         if (ring != null) {
             scorchReading.add(r.chunk);
-            DiskShots.readScorch(f, pos).thenAccept(s -> shots.add(new Read(r.chunk, ring, s, lights)));
+            DiskShots.readScorch(f, pos).thenAccept(s -> shots.add(new Read(r.chunk, ring, s, lights, revision)));
             return true;
         }
         DiskShots.readSections(f, pos).thenApply(s -> build(f, s, plan, fires, lights, false)).exceptionally(e -> new Built(r.chunk, null, false, false, "error: " + e))
-                .thenAccept(built::add);
+                .thenAccept(b -> built.add(new Completion(b, revision)));
         return true;
     }
 
@@ -586,11 +580,12 @@ public final class FarLods {
         disk.put(chunk, SCANNING);
         scanning++;
         ConcurrentLinkedQueue<long[]> out = scanned;
+        long revision = generation;
         DiskStatus.scan(level, new ChunkPos(chunk)).thenAccept(state -> out.add(new long[]{chunk, switch (state) {
             case WHOLE -> WHOLE;
             case FINAL -> FINAL;
             case PARTIAL -> PARTIAL;
-        }}));
+        }, revision}));
     }
 
     /** Chunk copy with ruins/trace (background): disk sections, plan positions. */
@@ -606,11 +601,12 @@ public final class FarLods {
     }
 
     /** Server thread: lamps by current grid; send to DH if changed from disk (or district light changed). */
-    private void harvest(ServerLevel level, Built b) {
+    private void harvest(ServerLevel level, Built b, long revision) {
         reading.remove(b.chunk);
         scorchReading.remove(b.chunk);
         byte asked = again.remove(b.chunk);
         for (byte kind : new byte[]{RUINS, SCORCH, LIGHTS}) if ((asked & kind) != 0) queue(level, b.chunk, kind);
+        if (revision != generation) return;
         if (b.copy == null) {
             if ("stale plan".equals(b.skip)) stale++;
             else unread++;
@@ -684,6 +680,7 @@ public final class FarLods {
      * {@link FarZone} released before {@code util/StopDrain}, which finishes their started generation.
      */
     public void clear(ServerLevel level) {
+        generation++;
         ruinQueue.clear();
         lightQueue.clear();
         scorchQueue.clear();
@@ -704,6 +701,16 @@ public final class FarLods {
     /** Tests: {@link FarZone} square-generation deadline, ticks; negative restores {@link FarZone#LOAD_LIMIT}. */
     public static void testZoneLoadLimit(ServerLevel level, int ticks) {
         get(level).zone.loadLimit(ticks >= 0 ? ticks : FarZone.LOAD_LIMIT);
+    }
+
+    /** Admission estimate includes in-flight and completed-uncollected reads, ring heads and request metadata. */
+    static long retainedBytes(ServerLevel level) {
+        if (!level.hasData(ModAttachments.FAR_LODS)) return 0;
+        FarLods f = get(level);
+        long bytes = f.reading.size() * FrontLods.READ_BYTES + (f.queued.size() + f.again.size()) * 64L
+                + f.disk.size() * 24L + f.refreshFor.size() * 96L;
+        for (Ring ring : f.rings) bytes += ring.order.bytes() + ring.ruins.retainedBytes();
+        return bytes;
     }
 
     /** For tests: maximum queue visits per tick ({@link #VISITS}). */

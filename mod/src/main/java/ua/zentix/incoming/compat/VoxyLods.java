@@ -75,6 +75,8 @@ public final class VoxyLods {
     static final long QUEUE_BYTES = 48L << 20;
     /** Estimated chunk size (for {@link #room}): 24 sections with palettes and surface light — ~40 KB before compression. */
     static final int CHUNK_BYTES = 40 * 1024;
+    /** Encoded payload plus codec/light scratch, reserved before asynchronous encoding. */
+    static final long BUILD_BYTES = 2L << 20;
     /**
      * Maximum LSS-overwritten chunks a player can report per second: each costs a disk header read or a read and copy;
      * the client itself reports at most {@link C2S.VoxyStale#PER_TICK} per tick; excess reports are dropped.
@@ -163,14 +165,12 @@ public final class VoxyLods {
     }
 
     /** Built copy: recipient and earliest world tick for delivery ({@code notBefore}). */
-    private record Built(ResourceKey<Level> dimension, long chunk, @Nullable byte[] data, List<UUID> to, long notBefore) {}
+    private record Built(ResourceKey<Level> dimension, long chunk, @Nullable byte[] data, List<UUID> to, long notBefore, int detonation) {}
 
     private final Map<UUID, Viewer> viewers = new HashMap<>();
     /** Worlds with Voxy players (per tick): {@link #wanted} is called for every chunk mark. */
     private final Set<ResourceKey<Level>> levels = new HashSet<>();
     private final ConcurrentLinkedQueue<Built> built = new ConcurrentLinkedQueue<>();
-    /** Built copies whose time has not yet come (heavy-zone copies wait for the wave front). */
-    private final List<Built> held = new ArrayList<>();
     /** Copies being built (their queue space is already reserved for {@link #room}). */
     private int building;
     private long nextReport;
@@ -187,6 +187,15 @@ public final class VoxyLods {
         return get(level.getServer()).levels.contains(level.dimension());
     }
 
+    /** All dimensions/players share nuclear admission; includes unfinished encoding and unacknowledged batches. */
+    public static long retainedBytes(MinecraftServer server) {
+        if (!server.overworld().hasData(ModAttachments.VOXY_LODS)) return 0;
+        VoxyLods v = get(server);
+        long bytes = v.building * BUILD_BYTES;
+        for (Viewer viewer : v.viewers.values()) bytes += viewer.bytes + (viewer.flow.active() ? viewer.batchBytes : 0);
+        return bytes;
+    }
+
     /**
      * How many more chunks can be delivered now: space in the fullest queue of this world's Voxy players, estimated using
      * {@link #CHUNK_BYTES}; no players — {@link Integer#MAX_VALUE}.
@@ -198,7 +207,9 @@ public final class VoxyLods {
             if (e.getValue().dimension == level.dimension()) free = Math.min(free, QUEUE_BYTES - e.getValue().bytes);
         }
         if (free == Long.MAX_VALUE) return Integer.MAX_VALUE;
-        return (int) Math.max(0, Math.min(Integer.MAX_VALUE, free / CHUNK_BYTES - v.building - v.held.size()));
+        long global = Math.max(0, ua.zentix.incoming.nuclear.world.NuclearPrep.PLANS_CAP
+                - ua.zentix.incoming.nuclear.world.NuclearPrep.memory(level));
+        return (int) Math.max(0, Math.min(global / BUILD_BYTES, Math.min(Integer.MAX_VALUE, free / CHUNK_BYTES - v.building)));
     }
 
     /**
@@ -215,7 +226,7 @@ public final class VoxyLods {
      * LODs must not change before the front.
      */
     public static void send(ServerLevel level, ChunkAccess chunk, long notBefore) {
-        send(level, chunk, notBefore, null);
+        send(level, chunk, notBefore, null, null, -1);
     }
 
     /**
@@ -223,10 +234,14 @@ public final class VoxyLods {
      * {@code FarLods.refresh}): DH and other players already have correct LODs. Server thread.
      */
     public static void sendTo(ServerLevel level, ChunkAccess chunk, UUID player) {
-        send(level, chunk, Long.MIN_VALUE, player);
+        send(level, chunk, Long.MIN_VALUE, player, null, -1);
     }
 
-    private static void send(ServerLevel level, ChunkAccess chunk, long notBefore, @Nullable UUID only) {
+    public static void sendChanged(ServerLevel level, ChunkAccess chunk, long notBefore, byte[][] baseline, int detonation) {
+        send(level, chunk, notBefore, null, baseline, detonation);
+    }
+
+    private static void send(ServerLevel level, ChunkAccess chunk, long notBefore, @Nullable UUID only, @Nullable byte[][] baseline, int detonation) {
         VoxyLods v = get(level.getServer());
         if (!v.levels.contains(level.dimension())) return;
         ChunkPos pos = chunk.getPos();
@@ -241,15 +256,29 @@ public final class VoxyLods {
         if (to.isEmpty()) return;
         ResourceKey<Level> dim = level.dimension();
         if (loaded) {
-            v.enqueue(level.getServer(), new Built(dim, pos.toLong(), LodSections.ofLoaded(level, chunk), to, notBefore));
+            v.enqueue(level.getServer(), new Built(dim, pos.toLong(), LodSections.ofLoaded(level, chunk), to, notBefore, detonation));
             return;
         }
         boolean sky = level.dimensionType().hasSkyLight();
         v.building++;
-        CompletableFuture.supplyAsync(() -> LodSections.ofCopy(chunk, sky), Util.backgroundExecutor()).whenComplete((data, error) -> {
+        CompletableFuture.supplyAsync(() -> baseline == null ? LodSections.ofCopy(chunk, sky)
+                : LodSections.difference(chunk.getMinSection(), baseline, LodSections.snapshot(chunk.getSections(), sky)), Util.backgroundExecutor()).whenComplete((data, error) -> {
             if (error != null) Incoming.LOG.warn("Voxy LOD of changed chunk {} not built", pos, error);
-            v.built.add(new Built(dim, pos.toLong(), error == null ? data : null, to, notBefore));
+            v.built.add(new Built(dim, pos.toLong(), error == null ? data : null, to, notBefore, detonation));
         });
+    }
+
+    /** Admission for an already encoded, selected-viewer horizon column; false means retain and retry upstream. */
+    public static boolean offerPrepared(ServerPlayer player, S2C.VoxyChunk packet) {
+        VoxyLods state = get(player.getServer());
+        Viewer viewer = state.viewers.get(player.getUUID());
+        if (viewer == null || viewer.dimension != player.level().dimension()
+                || !packet.dimension().equals(player.level().dimension().location())) return false;
+        if (viewer.bytes + packet.sections().length > QUEUE_BYTES
+                || ua.zentix.incoming.nuclear.world.NuclearPrep.memory(player.serverLevel()) + packet.sections().length
+                > ua.zentix.incoming.nuclear.world.NuclearPrep.PLANS_CAP) return false;
+        viewer.offer(ChunkPos.asLong(packet.x(), packet.z()), packet);
+        return true;
     }
 
     private static boolean near(ServerPlayer p, ChunkPos pos) {
@@ -258,12 +287,7 @@ public final class VoxyLods {
     }
 
     private void enqueue(MinecraftServer server, Built b) {
-        ServerLevel level = server.getLevel(b.dimension);
-        if (level != null && level.getGameTime() < b.notBefore) {
-            held.add(b);
-            return;
-        }
-        S2C.VoxyChunk packet = new S2C.VoxyChunk(b.dimension.location(), ChunkPos.getX(b.chunk), ChunkPos.getZ(b.chunk), b.data);
+        S2C.VoxyChunk packet = new S2C.VoxyChunk(b.dimension.location(), ChunkPos.getX(b.chunk), ChunkPos.getZ(b.chunk), b.data, b.notBefore, b.detonation);
         for (UUID id : b.to) {
             Viewer viewer = viewers.get(id);
             if (viewer == null || viewer.dimension != b.dimension) continue;
@@ -278,11 +302,6 @@ public final class VoxyLods {
     }
 
     private void tick(MinecraftServer server) {
-        if (!held.isEmpty()) {
-            List<Built> due = new ArrayList<>(held);
-            held.clear();
-            for (Built b : due) enqueue(server, b);
-        }
         for (Built b; (b = built.poll()) != null; ) {
             building--;
             if (b.data != null) enqueue(server, b);

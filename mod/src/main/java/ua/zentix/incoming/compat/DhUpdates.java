@@ -234,6 +234,11 @@ public final class DhUpdates {
      * ({@link #offer}) — DH would skip the copy or overlap it with that one
      */
     public static boolean sendHeld(ServerLevel level, ChunkAccess copy) {
+        return sendHeld(level, copy, level.getGameTime() + LEAD, null, -1);
+    }
+
+    /** Exact chunk-front time for Voxy; DH retains its section-based lead schedule. */
+    public static boolean sendHeld(ServerLevel level, ChunkAccess copy, long due, @Nullable byte[][] baseline, int detonation) {
         DhUpdates u = active(level);
         if (u == null) return true;
         long key = copy.getPos().toLong(), now = level.getGameTime();
@@ -250,7 +255,8 @@ public final class DhUpdates {
             DhChunks.overwrite(level, copy);
             // DH sets the LOD LEAD ticks after the call, Voxy — at once: the copy for players with Voxy — right up to
             // the front
-            VoxyLods.send(level, copy, now + LEAD);
+            if (baseline == null) VoxyLods.send(level, copy, due);
+            else VoxyLods.sendChanged(level, copy, due, baseline, detonation);
         }
         if (paced) u.held.sent(key, System.nanoTime());
         u.sent.put(key, now);

@@ -36,6 +36,8 @@ public final class LodSections {
     static final int SKY_LIGHT = 4;
     /** Skylight 15 everywhere (section under open sky), no layer. */
     static final int FULL_SKY = 8;
+    /** Sparse update: leave this section untouched, including its light. */
+    static final int UNCHANGED = 16;
 
     private LodSections() {}
 
@@ -81,6 +83,49 @@ public final class LodSections {
         return bytes(out);
     }
 
+    /** Canonical section bytes, including computed light; worker only. */
+    public static byte[][] snapshot(LevelChunkSection[] sections, boolean hasSky) {
+        CopyLight light = CopyLight.of(sections, hasSky);
+        byte[][] result = new byte[sections.length][];
+        for (int i = 0; i < sections.length; i++) {
+            FriendlyByteBuf out = new FriendlyByteBuf(Unpooled.buffer());
+            boolean full = hasSky && light.fullSky(i);
+            write(out, sections[i], light.blockLayer(i), full ? null : light.skyLayer(i), full);
+            result[i] = bytes(out);
+        }
+        return result;
+    }
+
+    /** Send every changed section, including all-air erasures and light-only changes; skip identical sections. */
+    public static byte[] difference(int minSection, byte[][] before, byte[][] after) {
+        if (before.length != after.length) throw new IllegalArgumentException("section range changed");
+        FriendlyByteBuf out = new FriendlyByteBuf(Unpooled.buffer());
+        out.writeVarInt(minSection);
+        out.writeVarInt(after.length);
+        for (int i = 0; i < after.length; i++) {
+            if (java.util.Arrays.equals(before[i], after[i])) out.writeByte(UNCHANGED);
+            else out.writeBytes(after[i]);
+        }
+        return bytes(out);
+    }
+
+    /** Retain the union of applied section revisions for replay repair. Newer sections replace older ones. */
+    public static byte[] merge(byte[] older, byte[] newer, Registry<Biome> biomes) {
+        java.util.TreeMap<Integer, Section> sections = new java.util.TreeMap<>();
+        for (Section section : read(older, biomes)) sections.put(section.y(), section);
+        for (Section section : read(newer, biomes)) sections.put(section.y(), section);
+        FriendlyByteBuf out = new FriendlyByteBuf(Unpooled.buffer());
+        int min = sections.isEmpty() ? 0 : sections.firstKey(), max = sections.isEmpty() ? -1 : sections.lastKey();
+        out.writeVarInt(min);
+        out.writeVarInt(max - min + 1);
+        for (int y = min; y <= max; y++) {
+            Section section = sections.get(y);
+            if (section == null) out.writeByte(UNCHANGED);
+            else write(out, section.blocks(), section.blockLight(), section.skyLight(), false);
+        }
+        return bytes(out);
+    }
+
     private static void write(FriendlyByteBuf out, @Nullable LevelChunkSection section, @Nullable DataLayer block, @Nullable DataLayer sky, boolean fullSky) {
         // a layer of all 15s needs no bytes; do not touch a live light engine layer (getData fills a uniform layer itself)
         if (sky != null && sky.isDefinitelyFilledWith(15)) fullSky = true;
@@ -105,11 +150,14 @@ public final class LodSections {
     /** Sections from {@link #ofLoaded}/{@link #ofCopy} bytes; {@code biomes} is the client world's biome registry. */
     public static List<Section> read(byte[] data, Registry<Biome> biomes) {
         FriendlyByteBuf in = new FriendlyByteBuf(Unpooled.wrappedBuffer(data));
+        try {
         int min = in.readVarInt(), count = in.readVarInt();
         if (count < 0 || count > 4096) throw new IllegalArgumentException("sections: " + count);
         List<Section> out = new ArrayList<>(count);
         for (int i = 0; i < count; i++) {
             int flags = in.readUnsignedByte();
+            if (flags == UNCHANGED) continue;
+            if ((flags & ~15) != 0) throw new IllegalArgumentException("section flags: " + flags);
             LevelChunkSection section = new LevelChunkSection(biomes);
             if ((flags & BLOCKS) != 0) section.read(in);
             DataLayer block = (flags & BLOCK_LIGHT) != 0 ? layer(in) : null;
@@ -118,6 +166,9 @@ public final class LodSections {
         }
         if (in.isReadable()) throw new IllegalArgumentException(in.readableBytes() + " bytes left");
         return out;
+        } finally {
+            in.release();
+        }
     }
 
     private static DataLayer layer(FriendlyByteBuf in) {
