@@ -405,16 +405,18 @@ public final class RuinBackgroundGameTests {
                 }
                 return;
             }
+            Incoming.LOG.info("Nuclear stop fixture before shutdown: {}",
+                    ua.zentix.incoming.strike.StrikeWorld.get(level).areas().describe());
             boolean stopped = NuclearWorld.onServerStopping(level.getServer());
             ua.zentix.incoming.IncomingConfig.SERVER.nukeEffectsScale.set(scale);
-            int held = ruinTickets(level);
+            List<String> held = ruinTickets(level);
             long threads = ruinThreadsLeft();
             String left = "squares " + w.prepTiles() + ", in preparation " + w.plannedChunks() + ", in line " + w.queuedChunks()
                     + ", ticket ruins " + held + ", streams of ruins " + threads;
             NuclearStrikes.clear(level);
             h.assertTrue(stopped, "background threads did not stop within the time limit; " + left);
             h.assertTrue(ua.zentix.incoming.nuclear.world.RuinWorkers.stopped() && threads == 0, "streams of ruins remained; " + left);
-            h.assertTrue(w.prepTiles() == 0 && w.plannedChunks() == 0 && w.queuedChunks() == 0 && held == 0, "after stopping there is still work left: " + left);
+            h.assertTrue(w.prepTiles() == 0 && w.plannedChunks() == 0 && w.queuedChunks() == 0 && held.isEmpty(), "after stopping there is still work left: " + left);
             h.succeed();
         });
     }
@@ -440,7 +442,7 @@ public final class RuinBackgroundGameTests {
     }
 
     /** ticket the nuke on the world distance map: yours and downloads of areas whose area is nuclear (preparation, zone). */
-    private static int ruinTickets(ServerLevel level) {
+    private static List<String> ruinTickets(ServerLevel level) {
         try {
             java.lang.reflect.Field f = net.minecraft.server.level.DistanceManager.class.getDeclaredField("tickets");
             f.setAccessible(true);
@@ -449,16 +451,17 @@ public final class RuinBackgroundGameTests {
                     f.get(level.getChunkSource().chunkMap.getDistanceManager());
             java.lang.reflect.Field key = net.minecraft.server.level.Ticket.class.getDeclaredField("key");
             key.setAccessible(true);
-            int n = 0;
-            for (var set : map.values()) {
+            List<String> tickets = new ArrayList<>();
+            for (var entry : map.long2ObjectEntrySet()) {
+                var set = entry.getValue();
                 for (net.minecraft.server.level.Ticket<?> t : set) {
                     String type = t.getType().toString();
-                    if (type.startsWith("incoming_nuclear")) n++;
+                    if (type.startsWith("incoming_nuclear")) tickets.add(t + " at " + new ChunkPos(entry.getLongKey()) + " key " + key.get(t));
                     else if (type.equals("incoming_area_load") && key.get(t) instanceof ua.zentix.incoming.strike.AreaLoader.Area a
-                            && a.type().toString().startsWith("incoming_nuclear")) n++;
+                            && a.type().toString().startsWith("incoming_nuclear")) tickets.add(t + " at " + new ChunkPos(entry.getLongKey()) + " area " + a);
                 }
             }
-            return n;
+            return tickets;
         } catch (ReflectiveOperationException e) {
             throw new IllegalStateException(e);
         }
