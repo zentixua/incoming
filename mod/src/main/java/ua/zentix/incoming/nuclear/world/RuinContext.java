@@ -55,6 +55,7 @@ final class RuinContext {
         this.d = d;
         this.noise = new ua.zentix.incoming.nuclear.model.WorldNoise(level.getSeed(), d.scale());
         this.ruinRadius = d.ruinRadius();
+        this.reads = new RuinInbox<>(NuclearWorld.get(level).prep().readAccounting(), WINDOW_READ_BYTES);
     }
 
     /** Ruin reach, blocks ({@link Detonation#ruinRadius}): light trace fades at edge ({@code RuinPlanner}). */
@@ -185,7 +186,13 @@ final class RuinContext {
     private final LongOpenHashSet reading = new LongOpenHashSet();
     /** Windows assembling snapshots, awaiting worker admission, or rebuilding on the server thread. */
     private final LongOpenHashSet pendingWindows = new LongOpenHashSet();
-    private final java.util.concurrent.ConcurrentLinkedQueue<DiskShots.Read> reads = new java.util.concurrent.ConcurrentLinkedQueue<>();
+    private static final long WINDOW_READ_BYTES = 4L << 20;
+    private static final int WINDOW_READ_LIMIT = 32;
+    private record WindowRead(long key, @Nullable DiskShots.Read disk,
+                              @Nullable java.util.Optional<net.minecraft.nbt.CompoundTag> cached) {
+        int cost() { return cached != null ? Math.max(PUTS_PER_WINDOW / 4, disk.cost()) : disk.cost(); }
+    }
+    private final RuinInbox<WindowRead> reads;
     /** Window neighbors not whole on disk (unfinished generation): solid window mass like world edge. */
     private final LongOpenHashSet absent = new LongOpenHashSet();
     /** Detonation log: disk window neighbors read, those not whole on disk. */
@@ -209,35 +216,68 @@ final class RuinContext {
     /** Same, parse read neighbors at ruin-pool {@code priority}. */
     int requestWindow(ServerLevel level, ChunkPos pos, RuinWorkers.Priority priority) {
         pendingWindows.add(pos.toLong());
-        // read results limited to window per call: server thread builds disk snapshot; while paused, background
-        // reads continue, accumulating unlimited results, rest taken by subsequent windows. Only this thread takes them:
-        // peeked chunk same as later polled chunk
+        // Results and delayed callbacks remain charged after cancellation. Decode at most one
+        // window per call; archived snapshots enter the same bounded path after a clean restart.
         int put = 0;
-        for (DiskShots.Read r; (r = reads.peek()) != null && (put == 0 || put + r.cost() <= PUTS_PER_WINDOW); put += r.cost()) {
+        for (WindowRead r; (r = reads.peek()) != null && (put == 0 || put + r.cost() <= PUTS_PER_WINDOW); put += r.cost()) {
             reads.poll();
-            long key = r.pos().toLong();
+            long key = r.key();
             reading.remove(key);
             windowReads++;
-            if (r.skip() != null) {
+            if (r.disk().skip() != null) {
                 if (absent.add(key)) windowAbsent++;
-            } else {
-                putDisk(level, r);
+                continue;
             }
+            boolean restored = false;
+            if (r.cached() != null && r.cached().isPresent()) {
+                try {
+                    restored = restoreArchived(key, r.cached().get(), r.disk());
+                } catch (RuntimeException error) {
+                    Incoming.LOG.warn("Prepared window snapshot rejected for {}", new ChunkPos(key), error);
+                }
+            }
+            if (!restored) putDisk(level, r.disk());
         }
         int missing = 0;
-        DiskShots.Format format = null;
         for (int dz = -RuinPlanner.REACH; dz <= RuinPlanner.REACH; dz++) {
             for (int dx = -RuinPlanner.REACH; dx <= RuinPlanner.REACH; dx++) {
                 long key = ChunkPos.asLong(pos.x + dx, pos.z + dz);
                 if (absent.contains(key) || shotAvailable(level, key)) continue;
                 missing++;
-                if (reading.add(key)) {
-                    if (format == null) format = DiskShots.Format.of(level);
-                    DiskShots.read(format, new ChunkPos(key), priority).thenAccept(reads::add);
+                if (!reading.contains(key) && reads.pending() < WINDOW_READ_LIMIT
+                        && NuclearPrep.memory(level) + WINDOW_READ_BYTES <= NuclearPrep.PLANS_CAP) {
+                    reading.add(key);
+                    if (archive != null && archive.mayHave(key)) {
+                        var accept = reads.expect();
+                        var disk = DiskShots.read(DiskShots.Format.of(level), new ChunkPos(key), priority);
+                        archive.read(key).handle((tag, failure) -> failure == null ? tag : java.util.Optional.<net.minecraft.nbt.CompoundTag>empty())
+                                .thenCombine(disk, (tag, current) -> new WindowRead(key, current, tag)).thenAccept(accept);
+                    } else readWindowDisk(level, key, priority);
                 }
             }
         }
         return missing;
+    }
+
+    /** Server-thread source validation shared by restart reads and live window read-ahead. */
+    boolean restoreArchived(long key, net.minecraft.nbt.CompoundTag data, DiskShots.Read current) {
+        if (current.skip() != null) return false;
+        ChunkShot shot = ChunkShot.restore(data, this);
+        if (shot.pos().toLong() != key || current.pos().toLong() != key)
+            throw new IllegalArgumentException("Wrong archived snapshot coordinate");
+        // A scarred neighbour needs its original world. Unscarred later edits use fresh data.
+        var fresh = ChunkShot.fromDisk(current.primed(Blast.SERVER), applied.get(key), flashed.get(key),
+                FlashScorch.marks(current.flashLayer(), d.id()));
+        if (!(current.scar() >= d.id() && d.id() > 0)
+                && !java.util.Arrays.equals(shot.normalPrints(Blast.SERVER), fresh.normalPrints(Blast.SERVER))) return false;
+        restoreShot(key, shot);
+        return true;
+    }
+
+    private void readWindowDisk(ServerLevel level, long key, RuinWorkers.Priority priority) {
+        var accept = reads.expect();
+        DiskShots.read(DiskShots.Format.of(level), new ChunkPos(key), priority)
+                .thenApply(disk -> new WindowRead(key, disk, null)).thenAccept(accept);
     }
 
     /**
@@ -712,6 +752,8 @@ final class RuinContext {
         for (Task t : tasks.values()) t.future.cancel(false);
         tasks.clear();
         pendingWindows.clear();
+        reads.invalidate();
+        reading.clear();
         closeStorage();
         if (restoredPlans != null) { restoredPlans.clear(); restoredPlans = null; }
         archive = null;

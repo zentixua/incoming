@@ -263,6 +263,8 @@ public final class NuclearPrep {
 
     // The completion retains this counter, never the abandoned preparation/world.
     private final java.util.concurrent.atomic.AtomicLong readBytes = new java.util.concurrent.atomic.AtomicLong();
+    java.util.function.LongConsumer readAccounting() { return readBytes::addAndGet; }
+
     private CompletableFuture<String> policy;
     private int policyGeneration = -1;
     private final List<Prep> preps = new ArrayList<>();
@@ -456,7 +458,15 @@ public final class NuclearPrep {
                     .map(mod -> mod.getModId() + "=" + mod.getVersion()).sorted().collect(java.util.stream.Collectors.joining("\n"));
             policy = CompletableFuture.supplyAsync(() -> RuinPolicy.fingerprint(resources, mods), Util.ioPool());
         }
-        return policy.getNow(null);
+        try { return policy.getNow(null); }
+        catch (java.util.concurrent.CompletionException failure) {
+            Incoming.LOG.warn("Prepared page reuse disabled for this resource generation", failure);
+            // A unique process-local namespace permits fresh planning while rejecting every
+            // previous generation's pages; a failed optional cache identity cannot halt ruins.
+            String fresh = (java.util.UUID.randomUUID().toString() + java.util.UUID.randomUUID()).replace("-", "");
+            policy = CompletableFuture.completedFuture(fresh);
+            return fresh;
+        }
     }
 
     /** Reopen the bounded cache after a detonation's preparation owner has disappeared on restart. */

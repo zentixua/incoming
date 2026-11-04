@@ -143,6 +143,111 @@ public final class RuinStorageGameTests {
         });
     }
 
+    @GameTest(template = "range", timeoutTicks = 1200, batch = "nuke_store_source", skyAccess = true)
+    public static void reopenedPagesValidateLaterSourceEdits(GameTestHelper h) {
+        ua.zentix.incoming.gametest.StrikeGameTests.gameSpeed(h);
+        var level = h.getLevel(); var grid = fixture(h, true);
+        long key = grid.centre().toLong(); var shot = grid.at(0, 0); var payload = shot.saved();
+        var root = level.getServer().getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT)
+                .resolve("data/ruin-source-test-" + java.util.UUID.randomUUID());
+        var info = new RegionStorageInfo("gametest", level.dimension(), "incoming_preparation");
+        var pages = new RuinPages(info, root);
+        var result = pages.write(key, payload::encode).thenCompose(unused -> pages.close())
+                .thenApply(unused -> new RuinPages(info, root))
+                .thenCompose(store -> store.read(key).thenCompose(tag -> store.close().thenApply(unused -> tag)));
+        var unchanged = new DiskShots.Read(grid.centre(), payload.minY(), payload.states(), payload.heights(), 0, null, 0);
+        var changed = payload.states().clone();
+        int y = (int) grid.ctx().d.groundY() + 5, section = (y - payload.minY()) >> 4;
+        changed[section] = RuinPlan.copyStates(changed[section]);
+        changed[section].set(7, y & 15, 7, Blocks.BEDROCK.defaultBlockState());
+        var edited = new DiskShots.Read(grid.centre(), payload.minY(), changed, payload.heights(), 0, null, 0);
+        var scarred = new DiskShots.Read(grid.centre(), payload.minY(), changed, payload.heights(), 0, null, 0, grid.ctx().d.id());
+        h.succeedWhen(() -> {
+            h.assertTrue(result.isDone(), "Cache close/reopen still running");
+            var data = result.join().orElseThrow();
+            var first = new RuinContext(level, grid.ctx().d);
+            h.assertTrue(first.restoreArchived(key, data, unchanged), "Unchanged source rejected");
+            var second = new RuinContext(level, grid.ctx().d);
+            h.assertFalse(second.restoreArchived(key, data, edited), "Stored source overwrote a later unscarred edit");
+            h.assertTrue(second.restoreArchived(key, data, scarred), "Scarred neighbour lost its pre-wave world");
+            var plan = RuinPlan.restore(plan(grid).store(), grid.ctx());
+            var chunk = level.getChunkSource().getChunkNow(grid.centre().x, grid.centre().z);
+            h.assertTrue(plan.current(chunk, grid.ctx().d), "Unedited plan already stale");
+            int cell = plan.store().getIntArray("cells")[0];
+            var at = new BlockPos(grid.centre().getMinBlockX() + (cell & 15),
+                    level.getMinBuildHeight() + ((cell >>> RuinPlan.SECTION_SHIFT) << 4) + ((cell >> 8) & 15),
+                    grid.centre().getMinBlockZ() + ((cell >> 4) & 15));
+            level.setBlock(at, Blocks.BEDROCK.defaultBlockState(), 18);
+            h.assertFalse(plan.current(chunk, grid.ctx().d), "Restored plan accepted a changed source cell");
+            h.assertFalse(plan.apply(level, chunk, grid.ctx().d, new ColumnScar.Budget(false)), "Stale plan applied");
+            h.assertTrue(level.getBlockState(at).is(Blocks.BEDROCK), "Stale plan removed the later edit");
+        });
+    }
+
+    /** Shared raw-input corpus for correctness and same-grid paired timing; no map-specific solver paths. */
+    static RuinContext.Grid corpus(GameTestHelper h, String kind, double psi) {
+        var base = fixture(h, kind.equals("dense"), psi);
+        if (kind.equals("dense") || kind.equals("natural")) return base;
+        var level = h.getLevel();
+        int ground = (int) base.ctx().d.groundY();
+        var centre = base.centre();
+        var pos = new BlockPos.MutableBlockPos();
+        // Flat earth isolates partial contacts, an existing floating build and a boundary-crossing span.
+        for (int z = -16; z < 32; z++) for (int x = -16; x < 32; x++) for (int y = 1; y <= 40; y++)
+            level.setBlock(pos.set(centre.getMinBlockX() + x, ground + y, centre.getMinBlockZ() + z), Blocks.AIR.defaultBlockState(), 18);
+        for (int z = -16; z < 32; z++) for (int x = -16; x < 32; x++)
+            level.setBlock(pos.set(centre.getMinBlockX() + x, ground, centre.getMinBlockZ() + z), Blocks.STONE.defaultBlockState(), 18);
+        if (kind.equals("columns")) {
+            for (int y = 1; y <= 20; y++) for (int z = 5; z <= 10; z++) {
+                level.setBlock(pos.set(centre.getMinBlockX() + 5, ground + y, centre.getMinBlockZ() + z), Blocks.GLASS.defaultBlockState(), 18);
+                level.setBlock(pos.set(centre.getMinBlockX() + 6, ground + y, centre.getMinBlockZ() + z), Blocks.OBSIDIAN.defaultBlockState(), 18);
+            }
+        } else if (kind.equals("floating")) {
+            for (int x = 3; x < 11; x++) for (int z = 3; z < 11; z++)
+                level.setBlock(pos.set(centre.getMinBlockX() + x, ground + 22, centre.getMinBlockZ() + z), Blocks.CALCITE.defaultBlockState(), 18);
+        } else if (kind.equals("partial") || kind.equals("border")) {
+            int left = kind.equals("border") ? -6 : 3, right = kind.equals("border") ? 23 : 12;
+            for (int x : new int[]{left, right}) for (int y = 1; y <= 18; y++)
+                level.setBlock(pos.set(centre.getMinBlockX() + x, ground + y, centre.getMinBlockZ() + 8), Blocks.GLASS.defaultBlockState(), 18);
+            for (int x = left; x <= right; x++) {
+                BlockState state = x % 3 == 0 ? Blocks.STONE_BRICK_SLAB.defaultBlockState()
+                        .setValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.SLAB_TYPE,
+                                net.minecraft.world.level.block.state.properties.SlabType.TOP)
+                        : x % 3 == 1 ? Blocks.STONE_BRICK_STAIRS.defaultBlockState() : Blocks.CALCITE.defaultBlockState();
+                level.setBlock(pos.set(centre.getMinBlockX() + x, ground + 19, centre.getMinBlockZ() + 8), state, 18);
+            }
+            // A fence and a bottom slab do not share every vertical contact face.
+            level.setBlock(pos.set(centre.getMinBlockX() + left, ground + 18, centre.getMinBlockZ() + 8), Blocks.OAK_FENCE.defaultBlockState(), 18);
+        } else throw new IllegalArgumentException("Unknown collapse corpus " + kind);
+        return new RuinContext(level, base.ctx().d).grid(level, centre, false);
+    }
+
+    static void sameCollapse(GameTestHelper h, ReferenceCollapse old, Collapse now, String sample) {
+        h.assertTrue(java.util.Arrays.equals(old.gone, now.gone), sample + ": fallen positions");
+        h.assertTrue(java.util.Arrays.equals(old.drained, now.drained), sample + ": drained positions");
+        h.assertTrue(old.changes.equals(now.changes), sample + ": changed states");
+        h.assertTrue(java.util.Arrays.equals(old.removed, now.removed), sample + ": removed counts");
+        h.assertTrue(java.util.Arrays.equals(old.wood, now.wood), sample + ": wood counts");
+        h.assertTrue(java.util.Arrays.equals(old.ground, now.ground), sample + ": ground heights");
+        h.assertTrue(old.leaves.equals(now.leaves), sample + ": leaf order");
+        h.assertTrue(old.fluidTicks.equals(now.fluidTicks), sample + ": fluid order");
+    }
+
+    @GameTest(template = "range", timeoutTicks = 1200, batch = "nuke_opt_corpus", skyAccess = true)
+    public static void completeCollapseCorpusAndBothSupportPaths(GameTestHelper h) {
+        int fast = 0, full = 0;
+        for (String kind : new String[]{"columns", "partial", "floating", "border"})
+            for (double psi : new double[]{1, 6, 20, 50}) {
+                var grid = corpus(h, kind, psi);
+                var old = ReferenceCollapse.solve(grid); var now = Collapse.solve(grid);
+                sameCollapse(h, old, now, kind + " " + psi + " psi");
+                if (now.supportChecked) { if (now.directSupport) fast++; else full++; }
+            }
+        h.assertTrue(fast > 0, "Corpus never exercised the sufficient vertical-support exit");
+        h.assertTrue(full > 0, "Corpus never exercised full support after a gap/partial contact");
+        h.succeed();
+    }
+
     private static void compareCollapse(GameTestHelper h, boolean dense) {
         for (double psi : new double[]{1, 6, 20, 50}) {
             var grid = fixture(h, dense, psi);

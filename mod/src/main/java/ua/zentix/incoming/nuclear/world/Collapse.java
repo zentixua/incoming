@@ -56,8 +56,8 @@ final class Collapse {
     private byte[] before, after;
     private int[] ring;
     private Blast.Props[] properties;
-    private final boolean[] present = new boolean[SIDE * SIDE];
-    boolean directSupport;
+    private boolean[] present;
+    boolean directSupport, supportChecked;
 
     final RuinWindow w;
     final Blast[] blasts = new Blast[9];
@@ -114,7 +114,6 @@ final class Collapse {
         this.yb = Math.max(w.minY, low - 16);
         this.yt = Math.min(w.maxY - 1, Math.max(high, yb) + 1);
         this.h = yt - yb + 1;
-        for (int z = 0; z < SIDE; z++) for (int x = 0; x < SIDE; x++) present[z * SIDE + x] = w.has(x, z);
         this.gone = new long[(SIDE * SIDE * h + 63) >> 6];
         this.drained = new long[gone.length];
         for (int k = 0; k < 9; k++) {
@@ -203,6 +202,9 @@ final class Collapse {
         }
         if (!logs) for (int k = 0; k < 9 && !logs; k++) logs = blasts[k] != null && !blasts[k].trees().isEmpty();
         if (support) {
+            supportChecked = true;
+            present = new boolean[SIDE * SIDE];
+            for (int z = 0; z < SIDE; z++) for (int x = 0; x < SIDE; x++) present[z * SIDE + x] = w.has(x, z);
             // One palette decode per cell, shared by all traversals in this solve. The grid is immutable.
             properties = new Blast.Props[SIDE * SIDE * h];
             int i = 0;
