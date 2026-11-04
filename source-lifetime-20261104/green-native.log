@@ -1,0 +1,306 @@
+Picked up JAVA_TOOL_OPTIONS: -XX:ActiveProcessorCount=4 -Xmx2g
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.14.3/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :createMinecraftArtifacts UP-TO-DATE
+> Task :compileJava UP-TO-DATE
+> Task :generateModMetadata UP-TO-DATE
+> Task :processResources UP-TO-DATE
+> Task :classes UP-TO-DATE
+> Task :compileDevtestJava
+> Task :copyRuntimeMods_gametest UP-TO-DATE
+> Task :processDevtestResources UP-TO-DATE
+> Task :devtestClasses
+> Task :downloadAssets UP-TO-DATE
+> Task :writeGameTestServerLegacyClasspath UP-TO-DATE
+> Task :prepareGameTestServerRun UP-TO-DATE
+
+> Task :runGameTestServer
+Picked up JAVA_TOOL_OPTIONS: -XX:ActiveProcessorCount=4 -Xmx2g
+WARN StatusConsoleListener Advanced terminal features are not available in this environment
+[18:03:37] [main/INFO] [cp.mo.mo.Launcher/MODLAUNCHER]: ModLauncher running: args [--launchTarget, forgeserverdev, --gameDir, ., --fml.fmlVersion, 4.0.45, --fml.mcVersion, 1.21.1, --fml.neoForgeVersion, 21.1.264, --fml.neoFormVersion, 20240808.144430]
+[18:03:37] [main/INFO] [cp.mo.mo.Launcher/MODLAUNCHER]: JVM identified as Microsoft OpenJDK 64-Bit Server VM 21.0.7+6-LTS
+[18:03:37] [main/INFO] [cp.mo.mo.Launcher/MODLAUNCHER]: ModLauncher 11.0.5+main.901c6ea8 starting: java version 21.0.7 by Microsoft; OS Linux arch amd64 version 7.3.1-1-cachyos
+[18:03:37] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Configuration file /mnt/data/projects/incoming/mod/run/wt-MT-OPT/mod/run/gametest/config/fml.toml is not correct. Correcting
+[18:03:37] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [disableConfigWatcher] was corrected from null to false
+[18:03:37] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowControl] was corrected from null to true
+[18:03:37] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [maxThreads] was corrected from null to -1
+[18:03:37] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [versionCheck] was corrected from null to true
+[18:03:37] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [defaultConfigPath] was corrected from null to defaultconfigs
+[18:03:37] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [disableOptimizedDFU] was corrected from null to true
+[18:03:37] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowProvider] was corrected from null to fmlearlywindow
+[18:03:37] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowWidth] was corrected from null to 854
+[18:03:37] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowHeight] was corrected from null to 480
+[18:03:37] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowFBScale] was corrected from null to 1
+[18:03:37] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowMaximized] was corrected from null to false
+[18:03:37] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowSkipGLVersions] was corrected from null to []
+[18:03:37] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowSquir] was corrected from null to false
+[18:03:37] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: ****************************** Found dependency overrides ******************************
+[18:03:37] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: Dependency overrides for mod 'aeronautics': adding explicit AFTER ordering against 'simulated', adding explicit AFTER ordering against 'offroad'
+[18:03:37] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: Dependency overrides for mod 'simulated': adding explicit AFTER ordering against 'create', adding explicit AFTER ordering against 'sable'
+[18:03:37] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: Dependency overrides for mod 'offroad': adding explicit AFTER ordering against 'simulated'
+[18:03:37] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: ****************************************************************************************
+[18:03:37] [main/INFO] [ne.ne.fm.lo.ImmediateWindowHandler/]: ImmediateWindowProvider not loading because launch target is forgeserverdev
+[18:03:37] [main/INFO] [mixin/]: SpongePowered MIXIN Subsystem Version=0.8.7 Source=union:/home/artem/.gradle/caches/modules-2/files-2.1/net.fabricmc/sponge-mixin/0.16.4+mixin.0.8.7/26d01f0567ab46e9ca0d2ed89d0ecc11aadbd433/sponge-mixin-0.16.4+mixin.0.8.7.jar%2394!/ Service=ModLauncher Env=SERVER
+[18:03:37] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: ****************************** Found dependency overrides ******************************
+[18:03:37] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: Dependency overrides for mod 'aeronautics': adding explicit AFTER ordering against 'simulated', adding explicit AFTER ordering against 'offroad'
+[18:03:37] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: Dependency overrides for mod 'simulated': adding explicit AFTER ordering against 'create', adding explicit AFTER ordering against 'sable'
+[18:03:37] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: Dependency overrides for mod 'offroad': adding explicit AFTER ordering against 'simulated'
+[18:03:37] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: ****************************************************************************************
+[18:03:37] [main/INFO] [ne.ne.fm.lo.mo.lo.JarInJarDependencyLocator/]: Found 13 dependencies adding them to mods collection
+[18:03:37] [main/INFO] [ne.ne.fm.lo.mo.ModDiscoverer/]: 
+     Mod List:
+		Name Version (Mod Id)
+
+		Create 6.0.10 (create)
+		Create Aeronautics 1.3.2 (aeronautics)
+		Create Aeronautics 1.3.2 (aeronautics_bundled)
+		Create Offroad 1.3.2 (offroad)
+		Create Simulated 1.3.2 (simulated)
+		Flywheel 1.0.6 (flywheel)
+		Incoming 3.10.4 (incoming)
+		Minecraft 1.21.1 (minecraft)
+		NeoForge 21.1.264 (neoforge)
+		Ponder 1.0.82+mc1.21.1 (ponder)
+		Sable 2.0.6 (sable)
+		Sable Companion 1.6.0 (sablecompanion)
+		Veil 4.3.2 (veil)
+[18:03:38] [main/INFO] [mixin/]: Compatibility level set to JAVA_21
+[18:03:38] [main/INFO] [cp.mo.mo.LaunchServiceHandler/MODLAUNCHER]: Launching target 'forgeserverdev' with arguments [--gameDir, .]
+[18:03:38] [main/WARN] [mixin/]: Reference map 'ponder.refmap.json' for ponder-common.mixins.json could not be read. If this is a development environment you can ignore this message
+[18:03:38] [main/INFO] [de.ry.sa.mi.AbstractSableMixinPlugin/]: Using Vanilla renderer mixins
+[18:03:38] [main/INFO] [de.ry.sa.mi.AbstractSableMixinPlugin/]: Using Vanilla renderer mixins
+[18:03:38] [main/WARN] [mixin/]: Reference map 'simulated.refmap.json' for simulated.mixins.json could not be read. If this is a development environment you can ignore this message
+[18:03:38] [main/WARN] [mixin/]: Reference map 'offroad.refmap.json' for offroad.mixins.json could not be read. If this is a development environment you can ignore this message
+[18:03:38] [main/WARN] [mixin/]: Reference map 'aeronautics.refmap.json' for aeronautics.mixins.json could not be read. If this is a development environment you can ignore this message
+[18:03:38] [main/WARN] [mixin/]: Error loading class: org/jetbrains/annotations/ApiStatus$ScheduledForRemoval (java.lang.ClassNotFoundException: org.jetbrains.annotations.ApiStatus$ScheduledForRemoval)
+[18:03:38] [main/INFO] [MixinExtras|Service/]: Initializing MixinExtras via com.llamalad7.mixinextras.service.MixinExtrasServiceImpl(version=0.5.5).
+[18:03:44] [main/WARN] [minecraft/Commands]: Ambiguity between arguments [teleport, location] and [teleport, destination] with inputs: [0.1 -0.5 .9, 0 0 0]
+[18:03:44] [main/WARN] [minecraft/Commands]: Ambiguity between arguments [teleport, location] and [teleport, targets] with inputs: [0.1 -0.5 .9, 0 0 0]
+[18:03:44] [main/WARN] [minecraft/Commands]: Ambiguity between arguments [teleport, destination] and [teleport, targets] with inputs: [Player, 0123, @e, dd12be42-52a9-4a91-a8a1-11c01849e498]
+[18:03:44] [main/WARN] [minecraft/Commands]: Ambiguity between arguments [teleport, targets] and [teleport, destination] with inputs: [Player, 0123, dd12be42-52a9-4a91-a8a1-11c01849e498]
+[18:03:44] [main/WARN] [minecraft/Commands]: Ambiguity between arguments [teleport, targets, location] and [teleport, targets, destination] with inputs: [0.1 -0.5 .9, 0 0 0]
+[18:03:44] [modloading-worker-0/INFO] [Veil/]: Veil is initializing.
+[18:03:44] [modloading-worker-0/INFO] [ne.ne.ne.co.NeoForgeMod/NEOFORGE-MOD]: NeoForge mod loading, version 21.1.264, for MC 1.21.1
+[18:03:44] [modloading-worker-0/INFO] [co.si.cr.Create/]: Create 6.0.10 initializing! Commit hash: ac0c444d9828da3453ae8cc65338e8de063286fb
+[18:03:45] [modloading-worker-0/INFO] [de.ry.sa.Sable/]: Sable loaded!
+[18:03:47] [main/INFO] [mojang/YggdrasilAuthenticationService]: Environment: Environment[sessionHost=https://sessionserver.mojang.com, servicesHost=https://api.minecraftservices.com, name=PROD]
+[18:03:47] [NeoForge Version Check/INFO] [ne.ne.fm.VersionChecker/]: [create] Starting version check at https://api.modrinth.com/updates/create/forge_updates.json?neoforge=only
+[18:03:47] [main/WARN] [minecraft/VanillaPackResourcesBuilder]: Assets URL 'union:/mnt/data/projects/incoming/mod/run/wt-MT-OPT/mod/build/moddev/artifacts/neoforge-21.1.264.jar%23128!/assets/.mcassetsroot' uses unexpected schema
+[18:03:47] [main/WARN] [minecraft/VanillaPackResourcesBuilder]: Assets URL 'union:/mnt/data/projects/incoming/mod/run/wt-MT-OPT/mod/build/moddev/artifacts/neoforge-21.1.264.jar%23128!/data/.mcassetsroot' uses unexpected schema
+[18:03:47] [main/INFO] [co.si.cr.Create/]: Created 157 recipes which will be injected into the game
+[18:03:47] [main/INFO] [co.si.cr.Create/]: Created 0 tags which will be injected into the game
+[18:03:47] [main/INFO] [ne.ne.ne.ga.GameTestHooks/]: Enabled Gametest Namespaces: [incoming]
+[18:03:47] [NeoForge Version Check/INFO] [ne.ne.fm.VersionChecker/]: [create] Found status: OUTDATED Current: 6.0.10 Target: 6.0.10+mc1.21.1
+[18:03:48] [main/INFO] [minecraft/RecipeManager]: Loaded 2954 recipes
+[18:03:48] [main/INFO] [minecraft/AdvancementTree]: Loaded 2645 advancements
+[18:03:49] [Server thread/INFO] [ua.ze.in.Incoming/]: GameTest: only batch “nuke_source_progress” - tests 1 from 833
+[18:03:49] [Server thread/INFO] [de.ry.sa.Sable/]: Creating physics pipeline for ResourceKey[minecraft:dimension / minecraft:overworld] using RapierPhysicsPipelineProvider
+[18:03:49] [Server thread/INFO] [de.ry.sa.Sable/]: Using game directory relative Sable Rapier native directory /mnt/data/projects/incoming/mod/run/wt-MT-OPT/mod/run/gametest/.sable/natives
+[2026-11-04T16:03:49.539242583Z] [[32mINFO[0m] (sable_rapier) Rapier scene initialized
+[18:03:49] [Server thread/INFO] [de.ry.sa.Sable/]: Creating physics pipeline for ResourceKey[minecraft:dimension / minecraft:the_end] using RapierPhysicsPipelineProvider
+[2026-11-04T16:03:49.845690433Z] [[32mINFO[0m] (sable_rapier) Rapier scene initialized
+[18:03:49] [Server thread/INFO] [de.ry.sa.Sable/]: Creating physics pipeline for ResourceKey[minecraft:dimension / minecraft:the_nether] using RapierPhysicsPipelineProvider
+[2026-11-04T16:03:49.891737889Z] [[32mINFO[0m] (sable_rapier) Rapier scene initialized
+[18:03:49] [Server thread/INFO] [minecraft/MinecraftServer]: Preparing start region for dimension minecraft:overworld
+[18:03:49] [worldgen/INFO] [minecraft/LoggerChunkProgressListener]: Preparing spawn area: 2%
+[18:03:50] [Server thread/INFO] [minecraft/LoggerChunkProgressListener]: Time elapsed: 137 ms
+[18:03:50] [Server thread/INFO] [minecraft/GameTestServer]: Started game test server
+[18:03:50] [Server thread/INFO] [ne.ne.ne.se.pe.PermissionAPI/]: Successfully initialized permission handler neoforge:default_handler
+[18:03:50] [Server thread/INFO] [minecraft/GameTestServer]: 1 tests are now running at position -13395350, -59, -11145337!
+[18:03:50] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuke_source_progress:0' (1 tests)...
+[18:03:50] [Server thread/INFO] [minecraft/GameTestServer]: [ ]
+[18:03:50] [Server thread/INFO] [minecraft/GameTestServer]: [ ]
+[18:03:51] [Server thread/INFO] [minecraft/GameTestServer]: [ ]
+[18:03:51] [Server thread/INFO] [minecraft/GameTestServer]: [ ]
+[18:03:51] [Server thread/INFO] [minecraft/GameTestServer]: [ ]
+[18:03:51] [Server thread/INFO] [minecraft/GameTestServer]: [ ]
+[18:03:51] [Server thread/INFO] [minecraft/GameTestServer]: [ ]
+[18:03:51] [Server thread/INFO] [minecraft/GameTestServer]: [ ]
+[18:03:51] [Server thread/INFO] [minecraft/GameTestServer]: [ ]
+[18:03:51] [Server thread/INFO] [minecraft/GameTestServer]: [ ]
+[18:03:51] [Server thread/INFO] [minecraft/GameTestServer]: [ ]
+[18:03:51] [Server thread/INFO] [minecraft/GameTestServer]: [ ]
+[18:03:51] [Server thread/INFO] [minecraft/GameTestServer]: [ ]
+[18:03:51] [Server thread/INFO] [minecraft/GameTestServer]: [ ]
+[18:03:51] [Server thread/INFO] [minecraft/GameTestServer]: [ ]
+[18:03:51] [Server thread/INFO] [minecraft/GameTestServer]: [ ]
+[18:03:51] [Server thread/INFO] [minecraft/GameTestServer]: [ ]
+[18:03:51] [Server thread/INFO] [minecraft/GameTestServer]: [ ]
+[18:03:51] [Server thread/INFO] [minecraft/GameTestServer]: [ ]
+[18:03:51] [Server thread/INFO] [minecraft/GameTestServer]: [ ]
+[18:03:51] [Server thread/INFO] [minecraft/GameTestServer]: [ ]
+[18:03:51] [Server thread/INFO] [minecraft/GameTestServer]: [ ]
+[18:03:51] [Server thread/INFO] [minecraft/GameTestServer]: [ ]
+[18:03:51] [Server thread/INFO] [minecraft/GameTestServer]: [ ]
+[18:03:51] [Server thread/INFO] [minecraft/GameTestServer]: [ ]
+[18:03:51] [Server thread/INFO] [minecraft/GameTestServer]: [ ]
+[18:03:51] [Server thread/INFO] [minecraft/GameTestServer]: [ ]
+[18:03:51] [Server thread/INFO] [minecraft/GameTestServer]: [ ]
+[18:03:51] [Server thread/INFO] [minecraft/GameTestServer]: [ ]
+[18:03:51] [Server thread/INFO] [minecraft/GameTestServer]: [ ]
+[18:03:51] [Server thread/INFO] [minecraft/GameTestServer]: [ ]
+[18:03:51] [Server thread/INFO] [minecraft/GameTestServer]: [ ]
+[18:03:51] [Server thread/INFO] [minecraft/GameTestServer]: [ ]
+[18:03:51] [Server thread/INFO] [minecraft/GameTestServer]: [ ]
+[18:03:51] [Server thread/INFO] [minecraft/GameTestServer]: [ ]
+[18:03:51] [Server thread/INFO] [minecraft/GameTestServer]: [ ]
+[18:03:51] [Server thread/INFO] [minecraft/GameTestServer]: [ ]
+[18:03:53] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[18:03:54] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[18:03:54] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruins: background threads 2 (desired 2; automatic; cores 4, left to the game 2)
+[18:03:54] [Server thread/INFO] [ua.ze.in.Incoming/]: SOURCE_PROGRESS admitted 8 real reads; cold pool 0, room 16777216, fixed other owner 484156928
+[18:03:54] [Server thread/INFO] [ua.ze.in.Incoming/]: SOURCE_LIFETIME callback=1 now=790 id=150000 used=746 registered=true detached=false workers=0 pending=8 resultOwners={}
+[18:03:54] [Server thread/INFO] [ua.ze.in.Incoming/]: SOURCE_LIFETIME callback=1 now=790 id=150001 used=746 registered=true detached=false workers=0 pending=0 resultOwners={}
+[18:03:54] [Server thread/INFO] [ua.ze.in.Incoming/]: SOURCE_LIFETIME callback=1 now=790 id=150002 used=746 registered=true detached=false workers=0 pending=0 resultOwners={}
+[18:03:54] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruins: background threads working 1 of 2 (server tick without mod lanes 49.9 ms)
+[18:03:54] [Server thread/INFO] [ua.ze.in.Incoming/]: SOURCE_LIFETIME callback=2 now=791 id=150000 used=746 registered=true detached=false workers=0 pending=8 resultOwners={}
+[18:03:54] [Server thread/INFO] [ua.ze.in.Incoming/]: SOURCE_LIFETIME callback=2 now=791 id=150001 used=746 registered=true detached=false workers=0 pending=0 resultOwners={}
+[18:03:54] [Server thread/INFO] [ua.ze.in.Incoming/]: SOURCE_LIFETIME callback=2 now=791 id=150002 used=746 registered=true detached=false workers=0 pending=0 resultOwners={}
+[18:03:55] [Server thread/INFO] [ua.ze.in.Incoming/]: SOURCE_LIFETIME callback=3 now=792 id=150000 used=746 registered=true detached=false workers=0 pending=5 resultOwners={}
+[18:03:55] [Server thread/INFO] [ua.ze.in.Incoming/]: SOURCE_LIFETIME callback=3 now=792 id=150001 used=746 registered=true detached=false workers=0 pending=0 resultOwners={}
+[18:03:55] [Server thread/INFO] [ua.ze.in.Incoming/]: SOURCE_LIFETIME callback=3 now=792 id=150002 used=746 registered=true detached=false workers=0 pending=0 resultOwners={}
+[18:03:55] [Server thread/INFO] [ua.ze.in.Incoming/]: SOURCE_LIFETIME callback=4 now=793 id=150000 used=746 registered=true detached=false workers=0 pending=5 resultOwners={}
+[18:03:55] [Server thread/INFO] [ua.ze.in.Incoming/]: SOURCE_LIFETIME callback=4 now=793 id=150001 used=746 registered=true detached=false workers=0 pending=0 resultOwners={}
+[18:03:55] [Server thread/INFO] [ua.ze.in.Incoming/]: SOURCE_LIFETIME callback=4 now=793 id=150002 used=746 registered=true detached=false workers=0 pending=0 resultOwners={}
+[18:03:55] [Server thread/INFO] [ua.ze.in.Incoming/]: SOURCE_LIFETIME callback=5 now=794 id=150000 used=746 registered=true detached=false workers=0 pending=5 resultOwners={}
+[18:03:55] [Server thread/INFO] [ua.ze.in.Incoming/]: SOURCE_LIFETIME callback=5 now=794 id=150001 used=746 registered=true detached=false workers=0 pending=0 resultOwners={}
+[18:03:55] [Server thread/INFO] [ua.ze.in.Incoming/]: SOURCE_LIFETIME callback=5 now=794 id=150002 used=746 registered=true detached=false workers=0 pending=0 resultOwners={}
+[18:03:55] [Server thread/INFO] [ua.ze.in.Incoming/]: SOURCE_LIFETIME callback=6 now=795 id=150000 used=746 registered=true detached=false workers=0 pending=2 resultOwners={}
+[18:03:55] [Server thread/INFO] [ua.ze.in.Incoming/]: SOURCE_LIFETIME callback=6 now=795 id=150001 used=746 registered=true detached=false workers=0 pending=3 resultOwners={}
+[18:03:55] [Server thread/INFO] [ua.ze.in.Incoming/]: SOURCE_LIFETIME callback=6 now=795 id=150002 used=746 registered=true detached=false workers=0 pending=0 resultOwners={}
+[18:03:55] [Server thread/INFO] [ua.ze.in.Incoming/]: SOURCE_LIFETIME callback=7 now=796 id=150000 used=746 registered=true detached=false workers=1 pending=0 resultOwners={ua.zentix.incoming.nuclear.world.RuinWorkers$Task@12739727[Not completed, task = ua.zentix.incoming.nuclear.world.RuinContext$$Lambda/0x0000000101738cd0@76c7c862]=ua.zentix.incoming.nuclear.world.RuinResults$Lease@74364533}
+[18:03:55] [Server thread/INFO] [ua.ze.in.Incoming/]: SOURCE_LIFETIME callback=7 now=796 id=150001 used=746 registered=true detached=false workers=0 pending=5 resultOwners={}
+[18:03:55] [Server thread/INFO] [ua.ze.in.Incoming/]: SOURCE_LIFETIME callback=7 now=796 id=150002 used=746 registered=true detached=false workers=0 pending=0 resultOwners={}
+[18:03:55] [Server thread/INFO] [ua.ze.in.Incoming/]: SOURCE_LIFETIME callback=8 now=797 id=150000 used=746 registered=true detached=false workers=1 pending=0 resultOwners={ua.zentix.incoming.nuclear.world.RuinWorkers$Task@12739727[Not completed, task = ua.zentix.incoming.nuclear.world.RuinContext$$Lambda/0x0000000101738cd0@76c7c862]=ua.zentix.incoming.nuclear.world.RuinResults$Lease@74364533}
+[18:03:55] [Server thread/INFO] [ua.ze.in.Incoming/]: SOURCE_LIFETIME callback=8 now=797 id=150001 used=746 registered=true detached=false workers=0 pending=5 resultOwners={}
+[18:03:55] [Server thread/INFO] [ua.ze.in.Incoming/]: SOURCE_LIFETIME callback=8 now=797 id=150002 used=746 registered=true detached=false workers=0 pending=0 resultOwners={}
+[18:03:55] [Server thread/INFO] [ua.ze.in.Incoming/]: SOURCE_LIFETIME callback=9 now=798 id=150000 used=746 registered=true detached=false workers=0 pending=0 resultOwners={ua.zentix.incoming.nuclear.world.RuinWorkers$Task@12739727[Completed normally]=ua.zentix.incoming.nuclear.world.RuinResults$Lease@74364533}
+[18:03:55] [Server thread/INFO] [ua.ze.in.Incoming/]: SOURCE_LIFETIME callback=9 now=798 id=150001 used=746 registered=true detached=false workers=0 pending=5 resultOwners={}
+[18:03:55] [Server thread/INFO] [ua.ze.in.Incoming/]: SOURCE_LIFETIME callback=9 now=798 id=150002 used=746 registered=true detached=false workers=0 pending=0 resultOwners={}
+[18:03:55] [Server thread/INFO] [ua.ze.in.Incoming/]: SOURCE_LIFETIME callback=10 now=799 id=150000 used=746 registered=true detached=false workers=0 pending=0 resultOwners={ua.zentix.incoming.nuclear.world.RuinWorkers$Task@12739727[Completed normally]=ua.zentix.incoming.nuclear.world.RuinResults$Lease@74364533}
+[18:03:55] [Server thread/INFO] [ua.ze.in.Incoming/]: SOURCE_LIFETIME callback=10 now=799 id=150001 used=746 registered=true detached=false workers=0 pending=5 resultOwners={}
+[18:03:55] [Server thread/INFO] [ua.ze.in.Incoming/]: SOURCE_LIFETIME callback=10 now=799 id=150002 used=746 registered=true detached=false workers=0 pending=0 resultOwners={}
+[18:03:55] [Server thread/INFO] [ua.ze.in.Incoming/]: SOURCE_LIFETIME callback=11 now=800 id=150000 used=746 registered=true detached=false workers=0 pending=0 resultOwners={ua.zentix.incoming.nuclear.world.RuinWorkers$Task@12739727[Completed normally]=ua.zentix.incoming.nuclear.world.RuinResults$Lease@74364533}
+[18:03:55] [Server thread/INFO] [ua.ze.in.Incoming/]: SOURCE_LIFETIME callback=11 now=800 id=150001 used=746 registered=true detached=false workers=0 pending=5 resultOwners={}
+[18:03:55] [Server thread/INFO] [ua.ze.in.Incoming/]: SOURCE_LIFETIME callback=11 now=800 id=150002 used=746 registered=true detached=false workers=0 pending=0 resultOwners={}
+[18:03:55] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[18:03:55] [Server thread/INFO] [ua.ze.in.Incoming/]: SOURCE_LIFETIME callback=12 now=801 id=150000 used=746 registered=true detached=false workers=0 pending=0 resultOwners={ua.zentix.incoming.nuclear.world.RuinWorkers$Task@12739727[Completed normally]=ua.zentix.incoming.nuclear.world.RuinResults$Lease@74364533}
+[18:03:55] [Server thread/INFO] [ua.ze.in.Incoming/]: SOURCE_LIFETIME callback=12 now=801 id=150001 used=746 registered=true detached=false workers=0 pending=5 resultOwners={}
+[18:03:55] [Server thread/INFO] [ua.ze.in.Incoming/]: SOURCE_LIFETIME callback=12 now=801 id=150002 used=746 registered=true detached=false workers=0 pending=0 resultOwners={}
+[18:03:55] [Server thread/INFO] [ua.ze.in.Incoming/]: SOURCE_LIFETIME callback=13 now=802 id=150000 used=746 registered=true detached=false workers=0 pending=0 resultOwners={ua.zentix.incoming.nuclear.world.RuinWorkers$Task@12739727[Completed normally]=ua.zentix.incoming.nuclear.world.RuinResults$Lease@74364533}
+[18:03:55] [Server thread/INFO] [ua.ze.in.Incoming/]: SOURCE_LIFETIME callback=13 now=802 id=150001 used=746 registered=true detached=false workers=0 pending=2 resultOwners={}
+[18:03:55] [Server thread/INFO] [ua.ze.in.Incoming/]: SOURCE_LIFETIME callback=13 now=802 id=150002 used=746 registered=true detached=false workers=0 pending=3 resultOwners={}
+[18:03:55] [Server thread/INFO] [ua.ze.in.Incoming/]: SOURCE_LIFETIME callback=14 now=803 id=150000 used=746 registered=true detached=false workers=0 pending=0 resultOwners={ua.zentix.incoming.nuclear.world.RuinWorkers$Task@12739727[Completed normally]=ua.zentix.incoming.nuclear.world.RuinResults$Lease@74364533}
+[18:03:55] [Server thread/INFO] [ua.ze.in.Incoming/]: SOURCE_LIFETIME callback=14 now=803 id=150001 used=746 registered=true detached=false workers=1 pending=0 resultOwners={ua.zentix.incoming.nuclear.world.RuinWorkers$Task@25a91df3[Not completed, task = ua.zentix.incoming.nuclear.world.RuinContext$$Lambda/0x0000000101738cd0@6de555fc]=ua.zentix.incoming.nuclear.world.RuinResults$Lease@2b3c9aae}
+[18:03:55] [Server thread/INFO] [ua.ze.in.Incoming/]: SOURCE_LIFETIME callback=14 now=803 id=150002 used=746 registered=true detached=false workers=0 pending=5 resultOwners={}
+[18:03:55] [Server thread/INFO] [ua.ze.in.Incoming/]: SOURCE_LIFETIME callback=15 now=804 id=150000 used=746 registered=true detached=false workers=0 pending=0 resultOwners={ua.zentix.incoming.nuclear.world.RuinWorkers$Task@12739727[Completed normally]=ua.zentix.incoming.nuclear.world.RuinResults$Lease@74364533}
+[18:03:55] [Server thread/INFO] [ua.ze.in.Incoming/]: SOURCE_LIFETIME callback=15 now=804 id=150001 used=746 registered=true detached=false workers=1 pending=0 resultOwners={ua.zentix.incoming.nuclear.world.RuinWorkers$Task@25a91df3[Not completed, task = ua.zentix.incoming.nuclear.world.RuinContext$$Lambda/0x0000000101738cd0@6de555fc]=ua.zentix.incoming.nuclear.world.RuinResults$Lease@2b3c9aae}
+[18:03:55] [Server thread/INFO] [ua.ze.in.Incoming/]: SOURCE_LIFETIME callback=15 now=804 id=150002 used=746 registered=true detached=false workers=0 pending=5 resultOwners={}
+[18:03:55] [Server thread/INFO] [ua.ze.in.Incoming/]: SOURCE_LIFETIME callback=16 now=805 id=150000 used=746 registered=true detached=false workers=0 pending=0 resultOwners={ua.zentix.incoming.nuclear.world.RuinWorkers$Task@12739727[Completed normally]=ua.zentix.incoming.nuclear.world.RuinResults$Lease@74364533}
+[18:03:55] [Server thread/INFO] [ua.ze.in.Incoming/]: SOURCE_LIFETIME callback=16 now=805 id=150001 used=746 registered=true detached=false workers=0 pending=0 resultOwners={ua.zentix.incoming.nuclear.world.RuinWorkers$Task@25a91df3[Completed normally]=ua.zentix.incoming.nuclear.world.RuinResults$Lease@2b3c9aae}
+[18:03:55] [Server thread/INFO] [ua.ze.in.Incoming/]: SOURCE_LIFETIME callback=16 now=805 id=150002 used=746 registered=true detached=false workers=0 pending=5 resultOwners={}
+[18:03:55] [Server thread/INFO] [ua.ze.in.Incoming/]: SOURCE_LIFETIME callback=17 now=806 id=150000 used=746 registered=true detached=false workers=0 pending=0 resultOwners={ua.zentix.incoming.nuclear.world.RuinWorkers$Task@12739727[Completed normally]=ua.zentix.incoming.nuclear.world.RuinResults$Lease@74364533}
+[18:03:55] [Server thread/INFO] [ua.ze.in.Incoming/]: SOURCE_LIFETIME callback=17 now=806 id=150001 used=746 registered=true detached=false workers=0 pending=0 resultOwners={ua.zentix.incoming.nuclear.world.RuinWorkers$Task@25a91df3[Completed normally]=ua.zentix.incoming.nuclear.world.RuinResults$Lease@2b3c9aae}
+[18:03:55] [Server thread/INFO] [ua.ze.in.Incoming/]: SOURCE_LIFETIME callback=17 now=806 id=150002 used=746 registered=true detached=false workers=0 pending=5 resultOwners={}
+[18:03:55] [Server thread/INFO] [ua.ze.in.Incoming/]: SOURCE_LIFETIME callback=18 now=807 id=150000 used=746 registered=true detached=false workers=0 pending=0 resultOwners={ua.zentix.incoming.nuclear.world.RuinWorkers$Task@12739727[Completed normally]=ua.zentix.incoming.nuclear.world.RuinResults$Lease@74364533}
+[18:03:55] [Server thread/INFO] [ua.ze.in.Incoming/]: SOURCE_LIFETIME callback=18 now=807 id=150001 used=746 registered=true detached=false workers=0 pending=0 resultOwners={ua.zentix.incoming.nuclear.world.RuinWorkers$Task@25a91df3[Completed normally]=ua.zentix.incoming.nuclear.world.RuinResults$Lease@2b3c9aae}
+[18:03:55] [Server thread/INFO] [ua.ze.in.Incoming/]: SOURCE_LIFETIME callback=18 now=807 id=150002 used=746 registered=true detached=false workers=0 pending=5 resultOwners={}
+[18:03:55] [Server thread/INFO] [ua.ze.in.Incoming/]: SOURCE_LIFETIME callback=19 now=808 id=150000 used=746 registered=true detached=false workers=0 pending=0 resultOwners={ua.zentix.incoming.nuclear.world.RuinWorkers$Task@12739727[Completed normally]=ua.zentix.incoming.nuclear.world.RuinResults$Lease@74364533}
+[18:03:55] [Server thread/INFO] [ua.ze.in.Incoming/]: SOURCE_LIFETIME callback=19 now=808 id=150001 used=746 registered=true detached=false workers=0 pending=0 resultOwners={ua.zentix.incoming.nuclear.world.RuinWorkers$Task@25a91df3[Completed normally]=ua.zentix.incoming.nuclear.world.RuinResults$Lease@2b3c9aae}
+[18:03:55] [Server thread/INFO] [ua.ze.in.Incoming/]: SOURCE_LIFETIME callback=19 now=808 id=150002 used=746 registered=true detached=false workers=0 pending=5 resultOwners={}
+[18:03:55] [Server thread/INFO] [ua.ze.in.Incoming/]: SOURCE_LIFETIME callback=20 now=809 id=150000 used=746 registered=true detached=false workers=0 pending=0 resultOwners={ua.zentix.incoming.nuclear.world.RuinWorkers$Task@12739727[Completed normally]=ua.zentix.incoming.nuclear.world.RuinResults$Lease@74364533}
+[18:03:55] [Server thread/INFO] [ua.ze.in.Incoming/]: SOURCE_LIFETIME callback=20 now=809 id=150001 used=746 registered=true detached=false workers=0 pending=0 resultOwners={ua.zentix.incoming.nuclear.world.RuinWorkers$Task@25a91df3[Completed normally]=ua.zentix.incoming.nuclear.world.RuinResults$Lease@2b3c9aae}
+[18:03:55] [Server thread/INFO] [ua.ze.in.Incoming/]: SOURCE_LIFETIME callback=20 now=809 id=150002 used=746 registered=true detached=false workers=0 pending=2 resultOwners={}
+[18:03:55] [Server thread/INFO] [ua.ze.in.Incoming/]: SOURCE_PROGRESS tick 20 complete 2/3, pending 0, known 502621394, fixed 484156928
+[18:03:55] [Server thread/INFO] [ua.ze.in.Incoming/]: SOURCE_LIFETIME callback=21 now=810 id=150000 used=746 registered=true detached=false workers=0 pending=0 resultOwners={ua.zentix.incoming.nuclear.world.RuinWorkers$Task@12739727[Completed normally]=ua.zentix.incoming.nuclear.world.RuinResults$Lease@74364533}
+[18:03:55] [Server thread/INFO] [ua.ze.in.Incoming/]: SOURCE_LIFETIME callback=21 now=810 id=150001 used=746 registered=true detached=false workers=0 pending=0 resultOwners={ua.zentix.incoming.nuclear.world.RuinWorkers$Task@25a91df3[Completed normally]=ua.zentix.incoming.nuclear.world.RuinResults$Lease@2b3c9aae}
+[18:03:55] [Server thread/INFO] [ua.ze.in.Incoming/]: SOURCE_LIFETIME callback=21 now=810 id=150002 used=746 registered=true detached=false workers=1 pending=0 resultOwners={ua.zentix.incoming.nuclear.world.RuinWorkers$Task@6bf95702[Not completed, task = ua.zentix.incoming.nuclear.world.RuinContext$$Lambda/0x0000000101738cd0@415f7688]=ua.zentix.incoming.nuclear.world.RuinResults$Lease@ef96de7}
+[18:03:55] [Server thread/INFO] [ua.ze.in.Incoming/]: SOURCE_LIFETIME callback=22 now=811 id=150000 used=746 registered=true detached=false workers=0 pending=0 resultOwners={ua.zentix.incoming.nuclear.world.RuinWorkers$Task@12739727[Completed normally]=ua.zentix.incoming.nuclear.world.RuinResults$Lease@74364533}
+[18:03:55] [Server thread/INFO] [ua.ze.in.Incoming/]: SOURCE_LIFETIME callback=22 now=811 id=150001 used=746 registered=true detached=false workers=0 pending=0 resultOwners={ua.zentix.incoming.nuclear.world.RuinWorkers$Task@25a91df3[Completed normally]=ua.zentix.incoming.nuclear.world.RuinResults$Lease@2b3c9aae}
+[18:03:55] [Server thread/INFO] [ua.ze.in.Incoming/]: SOURCE_LIFETIME callback=22 now=811 id=150002 used=746 registered=true detached=false workers=1 pending=0 resultOwners={ua.zentix.incoming.nuclear.world.RuinWorkers$Task@6bf95702[Not completed, task = ua.zentix.incoming.nuclear.world.RuinContext$$Lambda/0x0000000101738cd0@415f7688]=ua.zentix.incoming.nuclear.world.RuinResults$Lease@ef96de7}
+[18:03:56] [Server thread/INFO] [ua.ze.in.Incoming/]: SOURCE_LIFETIME callback=23 now=812 id=150000 used=746 registered=true detached=false workers=0 pending=0 resultOwners={ua.zentix.incoming.nuclear.world.RuinWorkers$Task@12739727[Completed normally]=ua.zentix.incoming.nuclear.world.RuinResults$Lease@74364533}
+[18:03:56] [Server thread/INFO] [ua.ze.in.Incoming/]: SOURCE_LIFETIME callback=23 now=812 id=150001 used=746 registered=true detached=false workers=0 pending=0 resultOwners={ua.zentix.incoming.nuclear.world.RuinWorkers$Task@25a91df3[Completed normally]=ua.zentix.incoming.nuclear.world.RuinResults$Lease@2b3c9aae}
+[18:03:56] [Server thread/INFO] [ua.ze.in.Incoming/]: SOURCE_LIFETIME callback=23 now=812 id=150002 used=746 registered=true detached=false workers=0 pending=0 resultOwners={ua.zentix.incoming.nuclear.world.RuinWorkers$Task@6bf95702[Completed normally]=ua.zentix.incoming.nuclear.world.RuinResults$Lease@ef96de7}
+[18:03:56] [Server thread/INFO] [ua.ze.in.Incoming/]: SOURCE_PROGRESS PASS: 3 nonempty identical plans in 23 callbacks, peak known 533364736, external 484156928 held throughout
+[18:03:56] [Server thread/INFO] [ua.ze.in.Incoming/]: SOURCE_LIFETIME detach id=150000 used=746 bytes=405642
+java.lang.Exception: detach origin
+	at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.world.RuinContext.cancelTasks(RuinContext.java:1100) ~[%23133!/:?] {re:classloading}
+	at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.world.RuinSourceProgressGameTests.lambda$disjointColdWindowsFinishWithoutExternalRefund$0(RuinSourceProgressGameTests.java:47) ~[%23133!/:?] {re:classloading}
+	at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.gametest.StrikeGameTests$1.testPassed(StrikeGameTests.java:3721) ~[%23133!/:?] {re:classloading}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestInfo.lambda$tick$2(GameTestInfo.java:112) ~[neoforge-21.1.264.jar%23128!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:sable.mixins.json:game_test.GameTestInfoMixin from mod sable,pl:mixin:A}
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596) ~[?:?] {}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestInfo.tick(GameTestInfo.java:112) ~[neoforge-21.1.264.jar%23128!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:sable.mixins.json:game_test.GameTestInfoMixin from mod sable,pl:mixin:A}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestTicker.lambda$tick$0(GameTestTicker.java:39) ~[neoforge-21.1.264.jar%23128!/:?] {re:classloading}
+	at java.base/java.util.concurrent.CopyOnWriteArrayList.forEach(CopyOnWriteArrayList.java:891) ~[?:?] {}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestTicker.tick(GameTestTicker.java:39) ~[neoforge-21.1.264.jar%23128!/:?] {re:classloading}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.tickChildren(MinecraftServer.java:1070) ~[neoforge-21.1.264.jar%23128!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:veil.network.mixins.json:NetworkMinecraftServerMixin from mod veil,pl:mixin:APP:veil.scheduler.mixins.json:MinecraftServerMixin from mod veil,pl:mixin:APP:ponder-common.mixins.json:accessor.MinecraftServerAccessor from mod ponder,pl:mixin:APP:sable.mixins.json:udp.MinecraftServerMixin from mod sable,pl:mixin:A}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.tickServer(MinecraftServer.java:932) ~[neoforge-21.1.264.jar%23128!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:veil.network.mixins.json:NetworkMinecraftServerMixin from mod veil,pl:mixin:APP:veil.scheduler.mixins.json:MinecraftServerMixin from mod veil,pl:mixin:APP:ponder-common.mixins.json:accessor.MinecraftServerAccessor from mod ponder,pl:mixin:APP:sable.mixins.json:udp.MinecraftServerMixin from mod sable,pl:mixin:A}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestServer.tickServer(GameTestServer.java:171) ~[neoforge-21.1.264.jar%23128!/:?] {re:classloading}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.runServer(MinecraftServer.java:713) ~[neoforge-21.1.264.jar%23128!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:veil.network.mixins.json:NetworkMinecraftServerMixin from mod veil,pl:mixin:APP:veil.scheduler.mixins.json:MinecraftServerMixin from mod veil,pl:mixin:APP:ponder-common.mixins.json:accessor.MinecraftServerAccessor from mod ponder,pl:mixin:APP:sable.mixins.json:udp.MinecraftServerMixin from mod sable,pl:mixin:A}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.lambda$spin$2(MinecraftServer.java:267) ~[neoforge-21.1.264.jar%23128!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:veil.network.mixins.json:NetworkMinecraftServerMixin from mod veil,pl:mixin:APP:veil.scheduler.mixins.json:MinecraftServerMixin from mod veil,pl:mixin:APP:ponder-common.mixins.json:accessor.MinecraftServerAccessor from mod ponder,pl:mixin:APP:sable.mixins.json:udp.MinecraftServerMixin from mod sable,pl:mixin:A}
+	at java.base/java.lang.Thread.run(Thread.java:1583) [?:?] {}
+[18:03:56] [Server thread/INFO] [ua.ze.in.Incoming/]: SOURCE_LIFETIME detach id=150001 used=746 bytes=405642
+java.lang.Exception: detach origin
+	at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.world.RuinContext.cancelTasks(RuinContext.java:1100) ~[%23133!/:?] {re:classloading}
+	at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.world.RuinSourceProgressGameTests.lambda$disjointColdWindowsFinishWithoutExternalRefund$0(RuinSourceProgressGameTests.java:47) ~[%23133!/:?] {re:classloading}
+	at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.gametest.StrikeGameTests$1.testPassed(StrikeGameTests.java:3721) ~[%23133!/:?] {re:classloading}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestInfo.lambda$tick$2(GameTestInfo.java:112) ~[neoforge-21.1.264.jar%23128!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:sable.mixins.json:game_test.GameTestInfoMixin from mod sable,pl:mixin:A}
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596) ~[?:?] {}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestInfo.tick(GameTestInfo.java:112) ~[neoforge-21.1.264.jar%23128!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:sable.mixins.json:game_test.GameTestInfoMixin from mod sable,pl:mixin:A}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestTicker.lambda$tick$0(GameTestTicker.java:39) ~[neoforge-21.1.264.jar%23128!/:?] {re:classloading}
+	at java.base/java.util.concurrent.CopyOnWriteArrayList.forEach(CopyOnWriteArrayList.java:891) ~[?:?] {}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestTicker.tick(GameTestTicker.java:39) ~[neoforge-21.1.264.jar%23128!/:?] {re:classloading}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.tickChildren(MinecraftServer.java:1070) ~[neoforge-21.1.264.jar%23128!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:veil.network.mixins.json:NetworkMinecraftServerMixin from mod veil,pl:mixin:APP:veil.scheduler.mixins.json:MinecraftServerMixin from mod veil,pl:mixin:APP:ponder-common.mixins.json:accessor.MinecraftServerAccessor from mod ponder,pl:mixin:APP:sable.mixins.json:udp.MinecraftServerMixin from mod sable,pl:mixin:A}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.tickServer(MinecraftServer.java:932) ~[neoforge-21.1.264.jar%23128!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:veil.network.mixins.json:NetworkMinecraftServerMixin from mod veil,pl:mixin:APP:veil.scheduler.mixins.json:MinecraftServerMixin from mod veil,pl:mixin:APP:ponder-common.mixins.json:accessor.MinecraftServerAccessor from mod ponder,pl:mixin:APP:sable.mixins.json:udp.MinecraftServerMixin from mod sable,pl:mixin:A}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestServer.tickServer(GameTestServer.java:171) ~[neoforge-21.1.264.jar%23128!/:?] {re:classloading}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.runServer(MinecraftServer.java:713) ~[neoforge-21.1.264.jar%23128!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:veil.network.mixins.json:NetworkMinecraftServerMixin from mod veil,pl:mixin:APP:veil.scheduler.mixins.json:MinecraftServerMixin from mod veil,pl:mixin:APP:ponder-common.mixins.json:accessor.MinecraftServerAccessor from mod ponder,pl:mixin:APP:sable.mixins.json:udp.MinecraftServerMixin from mod sable,pl:mixin:A}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.lambda$spin$2(MinecraftServer.java:267) ~[neoforge-21.1.264.jar%23128!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:veil.network.mixins.json:NetworkMinecraftServerMixin from mod veil,pl:mixin:APP:veil.scheduler.mixins.json:MinecraftServerMixin from mod veil,pl:mixin:APP:ponder-common.mixins.json:accessor.MinecraftServerAccessor from mod ponder,pl:mixin:APP:sable.mixins.json:udp.MinecraftServerMixin from mod sable,pl:mixin:A}
+	at java.base/java.lang.Thread.run(Thread.java:1583) [?:?] {}
+[18:03:56] [Server thread/INFO] [ua.ze.in.Incoming/]: SOURCE_LIFETIME detach id=150002 used=746 bytes=405642
+java.lang.Exception: detach origin
+	at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.world.RuinContext.cancelTasks(RuinContext.java:1100) ~[%23133!/:?] {re:classloading}
+	at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.world.RuinSourceProgressGameTests.lambda$disjointColdWindowsFinishWithoutExternalRefund$0(RuinSourceProgressGameTests.java:47) ~[%23133!/:?] {re:classloading}
+	at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.gametest.StrikeGameTests$1.testPassed(StrikeGameTests.java:3721) ~[%23133!/:?] {re:classloading}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestInfo.lambda$tick$2(GameTestInfo.java:112) ~[neoforge-21.1.264.jar%23128!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:sable.mixins.json:game_test.GameTestInfoMixin from mod sable,pl:mixin:A}
+	at java.base/java.util.ArrayList.forEach(ArrayList.java:1596) ~[?:?] {}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestInfo.tick(GameTestInfo.java:112) ~[neoforge-21.1.264.jar%23128!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:sable.mixins.json:game_test.GameTestInfoMixin from mod sable,pl:mixin:A}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestTicker.lambda$tick$0(GameTestTicker.java:39) ~[neoforge-21.1.264.jar%23128!/:?] {re:classloading}
+	at java.base/java.util.concurrent.CopyOnWriteArrayList.forEach(CopyOnWriteArrayList.java:891) ~[?:?] {}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestTicker.tick(GameTestTicker.java:39) ~[neoforge-21.1.264.jar%23128!/:?] {re:classloading}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.tickChildren(MinecraftServer.java:1070) ~[neoforge-21.1.264.jar%23128!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:veil.network.mixins.json:NetworkMinecraftServerMixin from mod veil,pl:mixin:APP:veil.scheduler.mixins.json:MinecraftServerMixin from mod veil,pl:mixin:APP:ponder-common.mixins.json:accessor.MinecraftServerAccessor from mod ponder,pl:mixin:APP:sable.mixins.json:udp.MinecraftServerMixin from mod sable,pl:mixin:A}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.tickServer(MinecraftServer.java:932) ~[neoforge-21.1.264.jar%23128!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:veil.network.mixins.json:NetworkMinecraftServerMixin from mod veil,pl:mixin:APP:veil.scheduler.mixins.json:MinecraftServerMixin from mod veil,pl:mixin:APP:ponder-common.mixins.json:accessor.MinecraftServerAccessor from mod ponder,pl:mixin:APP:sable.mixins.json:udp.MinecraftServerMixin from mod sable,pl:mixin:A}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestServer.tickServer(GameTestServer.java:171) ~[neoforge-21.1.264.jar%23128!/:?] {re:classloading}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.runServer(MinecraftServer.java:713) ~[neoforge-21.1.264.jar%23128!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:veil.network.mixins.json:NetworkMinecraftServerMixin from mod veil,pl:mixin:APP:veil.scheduler.mixins.json:MinecraftServerMixin from mod veil,pl:mixin:APP:ponder-common.mixins.json:accessor.MinecraftServerAccessor from mod ponder,pl:mixin:APP:sable.mixins.json:udp.MinecraftServerMixin from mod sable,pl:mixin:A}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.lambda$spin$2(MinecraftServer.java:267) ~[neoforge-21.1.264.jar%23128!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:veil.network.mixins.json:NetworkMinecraftServerMixin from mod veil,pl:mixin:APP:veil.scheduler.mixins.json:MinecraftServerMixin from mod veil,pl:mixin:APP:ponder-common.mixins.json:accessor.MinecraftServerAccessor from mod ponder,pl:mixin:APP:sable.mixins.json:udp.MinecraftServerMixin from mod sable,pl:mixin:A}
+	at java.base/java.lang.Thread.run(Thread.java:1583) [?:?] {}
+[18:03:56] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruins: background threads stopped (queued tasks dropped: 0)
+[18:03:56] [Server thread/INFO] [minecraft/GameTestServer]: [+]
+[18:03:56] [Server thread/INFO] [minecraft/GameTestServer]: ========= 1 GAME TESTS COMPLETE IN 5.879 s ======================
+[18:03:56] [Server thread/INFO] [minecraft/GameTestServer]: All 1 required tests passed :)
+[18:03:56] [Server thread/INFO] [minecraft/GameTestServer]: ====================================================
+[18:03:56] [Server thread/INFO] [minecraft/MinecraftServer]: Stopping server
+[18:03:56] [Server thread/INFO] [minecraft/MinecraftServer]: Saving players
+[18:03:56] [Server thread/INFO] [minecraft/MinecraftServer]: Saving worlds
+[18:03:56] [Server thread/INFO] [minecraft/MinecraftServer]: Saving chunks for level 'ServerLevel[Test Level]'/minecraft:overworld
+[18:03:56] [Server thread/INFO] [de.ry.sa.Sable/]: Saving sub-levels for level 'ServerLevel[Test Level]'/minecraft:overworld
+[18:03:59] [Server thread/INFO] [minecraft/MinecraftServer]: Saving chunks for level 'ServerLevel[Test Level]'/minecraft:the_end
+[18:03:59] [Server thread/INFO] [de.ry.sa.Sable/]: Saving sub-levels for level 'ServerLevel[Test Level]'/minecraft:the_end
+[18:03:59] [Server thread/INFO] [minecraft/MinecraftServer]: Saving chunks for level 'ServerLevel[Test Level]'/minecraft:the_nether
+[18:03:59] [Server thread/INFO] [de.ry.sa.Sable/]: Saving sub-levels for level 'ServerLevel[Test Level]'/minecraft:the_nether
+[18:03:59] [Server thread/INFO] [minecraft/MinecraftServer]: ThreadedAnvilChunkStorage (world): All chunks are saved
+[18:03:59] [Server thread/INFO] [minecraft/MinecraftServer]: ThreadedAnvilChunkStorage (DIM1): All chunks are saved
+[18:03:59] [Server thread/INFO] [minecraft/MinecraftServer]: ThreadedAnvilChunkStorage (DIM-1): All chunks are saved
+[18:03:59] [Server thread/INFO] [minecraft/MinecraftServer]: ThreadedAnvilChunkStorage: All dimensions are saved
+[18:03:59] [Server thread/INFO] [minecraft/GameTestServer]: Game test server shutting down
+
+[Incubating] Problems report is available at: file:///mnt/data/projects/incoming/mod/run/wt-MT-OPT/mod/build/reports/problems/problems-report.html
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 9.0.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/8.14.3/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD SUCCESSFUL in 30s
+11 actionable tasks: 2 executed, 9 up-to-date
+laptop_job mt-s3-green-native: exit 0

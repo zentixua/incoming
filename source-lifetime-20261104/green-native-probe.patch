@@ -1,0 +1,57 @@
+diff --git a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinSourceProgressGameTests.java b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinSourceProgressGameTests.java
+index 435e37399..8d0e2d56c 100644
+--- a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinSourceProgressGameTests.java
++++ b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinSourceProgressGameTests.java
+@@ -25,7 +25,7 @@ import ua.zentix.incoming.nuclear.Detonation;
+ public final class RuinSourceProgressGameTests {
+     private RuinSourceProgressGameTests() {}
+ 
+-    @GameTest(template = "range", batch = "nuke_source_progress", timeoutTicks = 600, skyAccess = true)
++    @GameTest(template = "range", batch = "nuke_source_progress", timeoutTicks = 600, setupTicks = 700, skyAccess = true)
+     @SuppressWarnings("unchecked")
+     public static void disjointColdWindowsFinishWithoutExternalRefund(GameTestHelper h) throws Exception {
+         StrikeGameTests.gameSpeed(h);
+@@ -56,7 +56,7 @@ public final class RuinSourceProgressGameTests {
+                     (centre.z - blueprint.centre().z) * 16.0), old.groundY(), old.yieldKt(), old.surface(),
+                     old.gameTime(), 0, 0, old.visibility(), 0, old.scale(), false, old.wave());
+             var reference = new RuinContext(level, d);
+-            var ctx = new RuinContext(level, d); requests.add(ctx); results.add(null);
++            var ctx = world.ruins(level, d, level.getGameTime()); requests.add(ctx); results.add(null);
+             contexts.put(d.id(), ctx);
+             for (int dz = -2; dz <= 2; dz++) for (int dx = -2; dx <= 2; dx++) {
+                 var pos = new ChunkPos(centre.x + dx, centre.z + dz);
+@@ -79,6 +79,7 @@ public final class RuinSourceProgressGameTests {
+         h.succeedWhen(() -> {
+             try {
+                 if (stage[0] == 0) {
++                    h.assertTrue(level.getGameTime() % 100 >= 90, "Waiting for the next world sweep boundary");
+                     h.assertTrue(sources.stream().allMatch(CompletableFuture::isDone), "Source-region writes/reads still pending");
+                     for (var source : sources) source.join();
+                     RuinWorkers.shutdown();
+@@ -101,6 +102,13 @@ public final class RuinSourceProgressGameTests {
+                     stage[0] = 1;
+                 }
+                 ticks[0]++;
++                for (RuinContext probe : requests) {
++                    Object inputs = field(probe, "inputs").get(probe);
++                    Incoming.LOG.info("SOURCE_LIFETIME callback={} now={} id={} used={} registered={} detached={} workers={} pending={} resultOwners={}",
++                            ticks[0], level.getGameTime(), probe.d.id(), probe.used,
++                            contexts.get(probe.d.id()) == probe, field(inputs, "detached").get(inputs),
++                            field(inputs, "workers").get(inputs), probe.pendingWindowReads(), field(probe, "resultOwners").get(probe));
++                }
+                 h.assertTrue(startupRoom[0] >= RuinWorkers.threadBufferBytes(level.getHeight()),
+                         "Source reads spent the last decoder restart: initial room=" + startupRoom[0]);
+                 h.assertTrue(other.materialReservation == fixed[0], "External owner was refunded during source progress");
+diff --git a/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinContext.java b/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinContext.java
+index c778fde1d..989fc5902 100644
+--- a/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinContext.java
++++ b/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinContext.java
+@@ -1096,6 +1096,8 @@ final class RuinContext {
+ 
+     /** Background plans no longer needed (cancel, world unload): abandon tasks. */
+     void cancelTasks() {
++        if (d.id() >= 150000 && d.id() <= 150002) ua.zentix.incoming.Incoming.LOG.info(
++                "SOURCE_LIFETIME detach id={} used={} bytes={}", d.id(), used, currentBytes(), new Exception("detach origin"));
+         fragmentCacheClosed = true;
+         if (fragmentCache != null) fragmentCache.close();
+         // Transfer before cancel: queued callbacks may release immediately; running callbacks may not.

@@ -1,0 +1,41 @@
+diff --git a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinSourceProgressGameTests.java b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinSourceProgressGameTests.java
+index 435e37399..e3aeae89f 100644
+--- a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinSourceProgressGameTests.java
++++ b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinSourceProgressGameTests.java
+@@ -30,6 +30,9 @@ public final class RuinSourceProgressGameTests {
+     public static void disjointColdWindowsFinishWithoutExternalRefund(GameTestHelper h) throws Exception {
+         StrikeGameTests.gameSpeed(h);
+         var level = h.getLevel();
++        long originalEpoch = level.getGameTime();
++        ((net.minecraft.world.level.storage.ServerLevelData) level.getLevelData()).setGameTime(699);
++        StrikeGameTests.afterTest(h, () -> ((net.minecraft.world.level.storage.ServerLevelData) level.getLevelData()).setGameTime(originalEpoch));
+         var blueprint = RuinStorageGameTests.fixture(h, true);
+         var world = NuclearWorld.get(level);
+         var other = NuclearWorld.get(level.getServer().getLevel(Level.NETHER));
+@@ -101,6 +104,13 @@ public final class RuinSourceProgressGameTests {
+                     stage[0] = 1;
+                 }
+                 ticks[0]++;
++                for (RuinContext probe : requests) {
++                    Object inputs = field(probe, "inputs").get(probe);
++                    Incoming.LOG.info("SOURCE_LIFETIME callback={} now={} id={} used={} registered={} detached={} workers={} pending={} resultOwners={}",
++                            ticks[0], level.getGameTime(), probe.d.id(), probe.used,
++                            contexts.get(probe.d.id()) == probe, field(inputs, "detached").get(inputs),
++                            field(inputs, "workers").get(inputs), probe.pendingWindowReads(), field(probe, "resultOwners").get(probe));
++                }
+                 h.assertTrue(startupRoom[0] >= RuinWorkers.threadBufferBytes(level.getHeight()),
+                         "Source reads spent the last decoder restart: initial room=" + startupRoom[0]);
+                 h.assertTrue(other.materialReservation == fixed[0], "External owner was refunded during source progress");
+diff --git a/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinContext.java b/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinContext.java
+index c778fde1d..989fc5902 100644
+--- a/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinContext.java
++++ b/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinContext.java
+@@ -1096,6 +1096,8 @@ final class RuinContext {
+ 
+     /** Background plans no longer needed (cancel, world unload): abandon tasks. */
+     void cancelTasks() {
++        if (d.id() >= 150000 && d.id() <= 150002) ua.zentix.incoming.Incoming.LOG.info(
++                "SOURCE_LIFETIME detach id={} used={} bytes={}", d.id(), used, currentBytes(), new Exception("detach origin"));
+         fragmentCacheClosed = true;
+         if (fragmentCache != null) fragmentCache.close();
+         // Transfer before cancel: queued callbacks may release immediately; running callbacks may not.

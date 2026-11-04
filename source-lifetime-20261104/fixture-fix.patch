@@ -1,0 +1,100 @@
+diff --git a/.claude/rules/gametest.md b/.claude/rules/gametest.md
+index 4b570e077..4e17f1ff1 100644
+--- a/.claude/rules/gametest.md
++++ b/.claude/rules/gametest.md
+@@ -146,3 +146,8 @@ paths:
+ - Cold-ledger fixtures must unload the currently imported `RuinMatter` before restoring the previous SavedData
+   cache entry in each dimension. The imported instance may already hold a material ticket after background import;
+   restoring the old cache alone leaves an ownerless load (`nuke_ledger_cleanup`, then `nuke_stop`).
++
++- A world-owned ruin fixture must register through `NuclearWorld.ruins(level, d, now)`, as gameplay does.
++  Direct map insertion leaves `used=0`: a later shard batch crosses the 100-tick sweep after the 600-tick
++  idle horizon, detaches the context, then resubmits through stale input ownership. `nuke_source_progress`
++  starts after that horizon and crosses a real sweep while preserving fixed external memory pressure.
+diff --git a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinSourceProgressGameTests.java b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinSourceProgressGameTests.java
+index 435e37399..216c9caca 100644
+--- a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinSourceProgressGameTests.java
++++ b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinSourceProgressGameTests.java
+@@ -1,6 +1,5 @@
+ package ua.zentix.incoming.nuclear.world;
+ 
+-import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
+ import java.lang.reflect.Field;
+ import java.util.ArrayList;
+ import java.util.concurrent.CompletableFuture;
+@@ -25,15 +24,13 @@ import ua.zentix.incoming.nuclear.Detonation;
+ public final class RuinSourceProgressGameTests {
+     private RuinSourceProgressGameTests() {}
+ 
+-    @GameTest(template = "range", batch = "nuke_source_progress", timeoutTicks = 600, skyAccess = true)
+-    @SuppressWarnings("unchecked")
++    @GameTest(template = "range", batch = "nuke_source_progress", timeoutTicks = 600, setupTicks = 700, skyAccess = true)
+     public static void disjointColdWindowsFinishWithoutExternalRefund(GameTestHelper h) throws Exception {
+         StrikeGameTests.gameSpeed(h);
+         var level = h.getLevel();
+         var blueprint = RuinStorageGameTests.fixture(h, true);
+         var world = NuclearWorld.get(level);
+         var other = NuclearWorld.get(level.getServer().getLevel(Level.NETHER));
+-        var contexts = (Int2ObjectOpenHashMap<RuinContext>) field(world, "ruins").get(world);
+         long originalReservation = other.materialReservation;
+         var requests = new ArrayList<RuinContext>();
+         var centres = new ArrayList<ChunkPos>();
+@@ -42,9 +39,9 @@ public final class RuinSourceProgressGameTests {
+         var results = new ArrayList<Future<RuinPlan>>();
+         long[] fixed = {Long.MIN_VALUE};
+         int[] stage = {0}, ticks = {0}, completed = {0};
+-        long[] peak = {0}, startupRoom = {-1};
++        long[] peak = {0}, startupRoom = {-1}, admittedAt = {-1};
+         StrikeGameTests.afterTest(h, () -> {
+-            for (RuinContext ctx : requests) { ctx.cancelTasks(); contexts.remove(ctx.d.id()); }
++            for (RuinContext ctx : requests) world.forgetRuinsForTest(ctx.d.id());
+             RuinWorkers.shutdown();
+             other.materialReservation = originalReservation;
+         });
+@@ -56,8 +53,9 @@ public final class RuinSourceProgressGameTests {
+                     (centre.z - blueprint.centre().z) * 16.0), old.groundY(), old.yieldKt(), old.surface(),
+                     old.gameTime(), 0, 0, old.visibility(), 0, old.scale(), false, old.wave());
+             var reference = new RuinContext(level, d);
+-            var ctx = new RuinContext(level, d); requests.add(ctx); results.add(null);
+-            contexts.put(d.id(), ctx);
++            // Use the same timestamped owner as gameplay; raw map insertion makes a late-batch
++            // context immediately idle and lets the world sweep detach its still-used inputs.
++            var ctx = world.ruins(level, d, level.getGameTime()); requests.add(ctx); results.add(null);
+             for (int dz = -2; dz <= 2; dz++) for (int dx = -2; dx <= 2; dx++) {
+                 var pos = new ChunkPos(centre.x + dx, centre.z + dz);
+                 var live = level.getChunkSource().getChunkNow(blueprint.centre().x + dx, blueprint.centre().z + dz);
+@@ -79,6 +77,8 @@ public final class RuinSourceProgressGameTests {
+         h.succeedWhen(() -> {
+             try {
+                 if (stage[0] == 0) {
++                    // Start after the idle horizon and cross a real sweep with the cold reads held.
++                    h.assertTrue(level.getGameTime() % 100 >= 90, "Waiting for the next world sweep boundary");
+                     h.assertTrue(sources.stream().allMatch(CompletableFuture::isDone), "Source-region writes/reads still pending");
+                     for (var source : sources) source.join();
+                     RuinWorkers.shutdown();
+@@ -95,6 +95,7 @@ public final class RuinSourceProgressGameTests {
+                     h.assertTrue(pending > 0 && pending < 75, "Disjoint source demand did not exercise aggregate admission");
+                     long spare = NuclearPrep.PLANS_CAP - NuclearPrep.residentMemory(level);
+                     startupRoom[0] = spare;
++                    admittedAt[0] = level.getGameTime();
+                     stage[0] = 1;
+                     Incoming.LOG.info("SOURCE_PROGRESS admitted {} real reads; cold pool {}, room {}, fixed other owner {}",
+                             pending, pool.getPoolSize(), spare, fixed[0]);
+@@ -107,6 +108,8 @@ public final class RuinSourceProgressGameTests {
+                 RuinWorkers.adapt(level.getServer());
+                 for (int i = 0; i < requests.size(); i++) {
+                     var ctx = requests.get(i); var centre = centres.get(i);
++                    h.assertTrue(world.ruinsIfKept(ctx.d.id()) == ctx,
++                            "Active fixture context expired: now=" + level.getGameTime() + ", used=" + ctx.used);
+                     ctx.drainWindowReads(level);
+                     long observed = NuclearPrep.residentMemory(level); peak[0] = Math.max(peak[0], observed);
+                     h.assertTrue(observed <= NuclearPrep.PLANS_CAP, "Publication exceeded shared estimate: " + observed);
+@@ -130,6 +133,8 @@ public final class RuinSourceProgressGameTests {
+                 h.assertTrue(completed[0] == requests.size(), "Owned source work still progressing: " + completed[0] + "/3");
+                 h.assertTrue(requests.stream().mapToInt(RuinContext::pendingWindowReads).sum() == 0, "Completed windows orphaned read ownership");
+                 h.assertTrue(ticks[0] > 1 && other.materialReservation == fixed[0], "Progress did not preserve the fixed external owner");
++                h.assertTrue(level.getGameTime() > (admittedAt[0] / 100 + 1) * 100,
++                        "Source ownership must survive an actual world sweep before completion");
+                 Incoming.LOG.info("SOURCE_PROGRESS PASS: 3 nonempty identical plans in {} callbacks, peak known {}, external {} held throughout",
+                         ticks[0], peak[0], fixed[0]);
+             } catch (ReflectiveOperationException e) { throw new IllegalStateException(e); }
