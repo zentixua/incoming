@@ -6,3 +6,10 @@ Workdir mod/
 Service incoming-job-ci5-prefix-73523
 
 CI actually checked merge 2178866fcbd5168e035f6f6e2d1a2b97df70cbce. Its entire tree and f53 HEAD both equal d0b1cc1241f3e4f81df7ea49332be4589e8a023a (git diff empty). CI Temurin21.0.13+9, local Microsoft21.0.7+6-LTS; CI reported3996MB heap, assigned local2GiB. Both4CPUs. Random GameTest coordinates differ.
+
+Final component d51e559589df40ce6d8055b63cf45200453c34f6.
+Positive command (mod/): same JAVA_HOME/SESSION_TREES/INCOMING_GPU_OWNER and wrapper ci5-final -- env JAVA_TOOL_OPTIONS="-XX:ActiveProcessorCount=4 -Xmx2g" ./gradlew --no-daemon --max-workers=2 -Dorg.gradle.jvmargs=-Xmx768m -PtestForks=1 build runGameTestServer -PgametestOnly=nuke_fragment_optional --console=plain
+Service incoming-job-ci5-final-81167; exit0,4m10s.
+Intentional control: failure-control.patch applied after positive job; wrapper ci5-terminal-control, same JVM/Gradle args and runGameTestServer only; expectedexit1,16s. Source restored exactly from d51 after control; generated positive and control worlds preserved under ignored ci5/.
+Restored command: wrapper ci5-restored, same JVM/Gradle args and -PtestForks=1 build; exit0,3s,devtest compilation FROM-CACHE/test UP-TO-DATE.
+Review: fresh RCI5 via existing go-codex.sh with explicit SESSION_TREES=wt-CI5 INCOMING_GPU_OWNER=RCI5 CODEX_MODEL=gpt-6-astra CODEX_EFFORT=xhigh; observed pid85468. Canonical --wait collected exit0; service inactive19:12. No author conclusions supplied.

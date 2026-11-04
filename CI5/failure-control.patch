@@ -1,0 +1,12 @@
+diff --git a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinFragmentCacheGameTests.java b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinFragmentCacheGameTests.java
+index 82c4c2960..88e0dc733 100644
+--- a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinFragmentCacheGameTests.java
++++ b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinFragmentCacheGameTests.java
+@@ -186,6 +186,7 @@ public final class RuinFragmentCacheGameTests {
+         }, RuinWorkers.Priority.NEAR);
+         submitted.set(future);
+         h.assertTrue(future != null && ctx.fragmentCacheBytes() == 0, "Optional cache blocked the admitted uncached solver");
++        h.assertTrue(false, "Intentional terminal-log validation; not a reproduction");
+         h.succeedWhen(() -> {
+             h.assertTrue(RuinWorkers.finished(future), "Uncached solver has not progressed with pressure still held");
+             try {

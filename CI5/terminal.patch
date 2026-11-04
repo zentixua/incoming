@@ -1,0 +1,59 @@
+diff --git a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinFragmentCacheGameTests.java b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinFragmentCacheGameTests.java
+index e1e479bb4..82c4c2960 100644
+--- a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinFragmentCacheGameTests.java
++++ b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinFragmentCacheGameTests.java
+@@ -2,7 +2,9 @@ package ua.zentix.incoming.nuclear.world;
+ 
+ import java.util.Arrays;
+ import java.util.concurrent.CountDownLatch;
++import java.util.concurrent.Future;
+ import java.util.concurrent.TimeUnit;
++import java.util.concurrent.atomic.AtomicLong;
+ import java.util.concurrent.atomic.AtomicReference;
+ import net.minecraft.gametest.framework.GameTest;
+ import net.minecraft.gametest.framework.GameTestHelper;
+@@ -147,8 +149,42 @@ public final class RuinFragmentCacheGameTests {
+         h.assertTrue(fixed > RuinResults.OWNER_BYTES, "No room for the held-pressure fixture");
+         var held = RuinResults.tryReserveCache(fixed - RuinResults.OWNER_BYTES, room);
+         h.assertTrue(held != null, "Could not establish held producer pressure");
+-        StrikeGameTests.afterTest(h, () -> { ctx.cancelTasks(); held.close(); });
+-        var future = ctx.submitPlanWorker(level, grid, () -> RuinPlanner.finish(grid, Collapse.solve(grid)), RuinWorkers.Priority.NEAR);
++        long submittedAt = System.nanoTime();
++        var enteredAt = new AtomicLong();
++        var exitedAt = new AtomicLong();
++        var worker = new AtomicReference<Thread>();
++        var failure = new AtomicReference<Throwable>();
++        var submitted = new AtomicReference<Future<RuinPlan>>();
++        StrikeGameTests.afterTest(h, () -> {
++            try {
++                if (h.testInfo.hasFailed()) {
++                    Future<RuinPlan> task = submitted.get();
++                    Thread thread = worker.get();
++                    // Direct counters only: residentMemory services ownership and is not a passive probe.
++                    Incoming.LOG.error("Uncached solver terminal: tick={} elapsed_ns={} entered_ns={} exited_ns={} "
++                                    + "admitted={} started={} done={} cancelled={} finished={} worker_error={} "
++                                    + "held={} initial_room={} result_bound={} startup={} results={} detached={} cache={} "
++                                    + "inflight={} workers={}",
++                            level.getGameTime(), System.nanoTime() - submittedAt,
++                            enteredAt.get() == 0 ? -1 : enteredAt.get() - submittedAt,
++                            exitedAt.get() == 0 ? -1 : exitedAt.get() - submittedAt,
++                            task != null, task != null && RuinWorkers.started(task), task != null && task.isDone(),
++                            task != null && task.isCancelled(), task != null && RuinWorkers.finished(task),
++                            String.valueOf(failure.get()), held.bytes(), room, result, startup, RuinResults.bytes(),
++                            RuinInputs.detachedBytes(), ctx.fragmentCacheBytes(), RuinWorkers.inFlight(), RuinWorkers.summary());
++                    if (thread != null) Incoming.LOG.error("Uncached solver worker: name={} state={} stack={}",
++                            thread.getName(), thread.getState(), Arrays.toString(thread.getStackTrace()));
++                }
++            } finally { ctx.cancelTasks(); held.close(); }
++        });
++        var future = ctx.submitPlanWorker(level, grid, () -> {
++            worker.set(Thread.currentThread());
++            enteredAt.set(System.nanoTime());
++            try { return RuinPlanner.finish(grid, Collapse.solve(grid)); }
++            catch (Throwable error) { failure.set(error); throw error; }
++            finally { exitedAt.set(System.nanoTime()); }
++        }, RuinWorkers.Priority.NEAR);
++        submitted.set(future);
+         h.assertTrue(future != null && ctx.fragmentCacheBytes() == 0, "Optional cache blocked the admitted uncached solver");
+         h.succeedWhen(() -> {
+             h.assertTrue(RuinWorkers.finished(future), "Uncached solver has not progressed with pressure still held");
