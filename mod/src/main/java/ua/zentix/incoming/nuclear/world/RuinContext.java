@@ -138,6 +138,16 @@ final class RuinContext {
         return s != null && !s.fromDisk() && s.current(chunk, applied.get(pos.toLong()));
     }
 
+    /** Caller must wait on false before applying a stored flash plan that has no captured height tile yet. */
+    boolean flashHeightsReady(ServerLevel level, LevelChunk chunk) {
+        if (heights.containsKey(chunk.getPos().toLong())) return true;
+        try (var reservation = RuinMemory.reserveInputs(level, heightTileBound(chunk.getHeight()) + 1024)) {
+            if (reservation == null) return false;
+            captureHeights(level, chunk.getPos().x, chunk.getPos().z);
+            return true;
+        }
+    }
+
     /**
      * Flash layer applied (server thread). Previously valid cached snapshot remains pre-flash world, subsequently checked
      * against layered chunk ({@link ChunkShot#relive}): fractures/plans remain valid; otherwise retake snapshot.
@@ -200,24 +210,26 @@ final class RuinContext {
         RuinPlan flash = flashed.get(key);
         boolean unfire = flash == null && applied.get(key) == null && FlashScorch.marked(chunk, eventId);
         var sections = chunk.getSections();
-        long bytes = snapshotMetadata(sections.length, true);
+        Applied a = applied.get(key);
+        boolean ruined = a != null;
+        long bytes = snapshotMetadata(sections.length, true) + ChunkShot.oldBytes(a == null ? null : a.plan());
         for (int i = 0; i < sections.length; i++) {
             // unflash can restore a formerly empty section; only touched sections need the palette-growth bound.
             boolean edit = flash != null ? flash.touches(i) : unfire && !sections[i].hasOnlyAir();
             if (edit) bytes += editableSectionBytes();
-            else if (!sections[i].hasOnlyAir()) bytes += sections[i].getStates().getSerializedSize();
+            else bytes += ChunkShot.sectionBytes(sections[i].hasOnlyAir() ? null : sections[i].getStates(), ruined);
         }
         return bytes;
     }
 
     private static long snapshotMetadata(int sections, boolean sky) {
-        return 4L * (RuinPlan.HEIGHTMAP_TYPES.length * 256 + 512 + (sky ? 256 : 0)) + 64L * sections + 256;
+        return ChunkShot.metadataBytes(sections, RuinPlan.HEIGHTMAP_TYPES.length * 256, sky);
     }
 
     /** SECTION_STATES switches to the registry palette above 8 bits. Include the largest local palette too. */
     private static long editableSectionBytes() {
         int bits = Math.max(9, net.minecraft.util.Mth.ceillog2(net.minecraft.world.level.block.Block.BLOCK_STATE_REGISTRY.size()));
-        return 1L + 5 + 256L * 5 + 5 + 8L * ((4096 + 64 / bits - 1) / (64 / bits));
+        return 1L + 5 + 256L * 5 + 5 + 8L * ((4096 + 64 / bits - 1) / (64 / bits)) + 64 + 4096L * 8;
     }
 
     /**
@@ -238,13 +250,15 @@ final class RuinContext {
 
     /** Known detached payload boundary; NBT read/upgrade/codec allocation precedes this API. */
     private long diskPublicationBytes(DiskShots.Read read) {
-        long bytes = snapshotMetadata(read.states().length, false);
+        Applied a = applied.get(read.pos().toLong());
+        boolean ruined = a != null;
+        long bytes = snapshotMetadata(read.states().length, false) + ChunkShot.oldBytes(a == null ? null : a.plan());
         RuinPlan flash = flashed.get(read.pos().toLong());
         boolean unfire = flash == null && applied.get(read.pos().toLong()) == null && FlashScorch.marks(read.flashLayer(), eventId);
         for (int i = 0; i < read.states().length; i++) {
             var section = read.states()[i];
             if (flash != null && flash.touches(i) || unfire && section != null) bytes += editableSectionBytes();
-            else if (section != null) bytes += section.getSerializedSize();
+            else bytes += ChunkShot.sectionBytes(section, ruined);
         }
         // Priming/cloning and motion extraction can overlap publication; height tile bound follows the section domain.
         return bytes + (heights.containsKey(read.pos().toLong()) ? 0 : heightTileBound(read.states().length * 16))
@@ -379,15 +393,38 @@ final class RuinContext {
         if (cached == null || cached.isEmpty()) return 0;
         var tag = cached.get();
         int sections = tag.getInt("sections");
-        if (sections < 1 || sections > 256) throw new IllegalArgumentException("Invalid stored snapshot dimensions");
+        // The decoder rejects this before allocating states. Keep normal fallback/error classification.
+        if (sections < 1 || sections > 256) return 0;
         long bytes = snapshotMetadata(sections, tag.contains("sky"));
-        for (int i = 0; i < sections; i++) if (tag.contains("s" + i)) bytes += editableSectionBytes();
-        return bytes + heightTileBound(sections * 16) + tag.sizeInBytes();
+        boolean ruined = tag.getBoolean("ruined");
+        for (int i = 0; i < sections; i++)
+            bytes += tag.contains("s" + i) ? editableSectionBytes() : ChunkShot.sectionBytes(null, ruined);
+        long old = tag.contains("old", net.minecraft.nbt.Tag.TAG_COMPOUND) ? storedOldBytes(tag.getCompound("old")) + 4L * 512 : 0;
+        return bytes + old + heightTileBound(sections * 16) + tag.sizeInBytes();
+    }
+
+    /** Restored array field law, including prepaid lazy lookups (also conservative for older plans). */
+    private static long storedOldBytes(net.minecraft.nbt.CompoundTag tag) {
+        int sections = Math.max(0, Math.min(256, tag.getInt("sections")));
+        return 64 + 4L * 512 + 4L * arrayLength(tag, "cells")
+                + 8L * (arrayLength(tag, "old") + arrayLength(tag, "states") + arrayLength(tag, "fires"))
+                + 4L * arrayLength(tag, "heights") + 8L * arrayLength(tag, "light")
+                + 8L * (sections + arrayLength(tag, "outside") + arrayLength(tag, "outside_states")
+                + arrayLength(tag, "fluids") + arrayLength(tag, "material") + Math.max(1, (sections + 63) / 64))
+                + 6L * arrayLength(tag, "biomes") + 4L * (arrayLength(tag, "flash") + arrayLength(tag, "blown"));
+    }
+
+    private static int arrayLength(net.minecraft.nbt.CompoundTag tag, String key) {
+        var value = tag.get(key);
+        if (value instanceof net.minecraft.nbt.IntArrayTag array) return array.size();
+        if (value instanceof net.minecraft.nbt.LongArrayTag array) return array.size();
+        return value instanceof net.minecraft.nbt.ByteArrayTag array ? array.size() : 0;
     }
 
     /** null means retry with the same owned input; false means source validation rejected the archive. */
     @Nullable
     Boolean restoreArchived(ServerLevel level, long key, net.minecraft.nbt.CompoundTag data, DiskShots.Read current) {
+        if (current.skip() != null) return false;
         try (var reservation = RuinMemory.reserveInputs(level, diskPublicationBytes(current)
                 + archivePublicationBytes(java.util.Optional.of(data)))) {
             return reservation == null ? null : restoreArchived(key, data, current);
@@ -577,17 +614,21 @@ final class RuinContext {
     private long bandBytes(ServerLevel level, ChunkPos to) {
         int bx = net.minecraft.util.Mth.floor(d.burst().x) >> 4, bz = net.minecraft.util.Mth.floor(d.burst().z) >> 4;
         int steps = Math.max(Math.abs(to.x - bx), Math.abs(to.z - bz));
-        var seen = new LongOpenHashSet();
         long bytes = 0;
+        int previousX = bx, previousZ = bz;
         for (int i = 0; i <= steps; i++) {
             int cx = bx + (int) Math.round((to.x - bx) * (double) i / Math.max(1, steps));
             int cz = bz + (int) Math.round((to.z - bz) * (double) i / Math.max(1, steps));
             for (int dx = -1; dx <= 1; dx++) for (int dz = -1; dz <= 1; dz++) {
                 long key = ChunkPos.asLong(cx + dx, cz + dz);
-                if (!seen.add(key) || heights.containsKey(key)) continue;
+                // The line is monotone on both axes. Any already visited tile in this 3x3 square
+                // also lies in the previous square; avoid allocating a demand-sized deduplication set.
+                if (i > 0 && Math.abs(cx + dx - previousX) <= 1 && Math.abs(cz + dz - previousZ) <= 1
+                        || heights.containsKey(key)) continue;
                 LevelChunk c = level.getChunkSource().getChunkNow(cx + dx, cz + dz);
                 if (c != null) bytes += heightTileBound(c.getHeight()) + 1024;
             }
+            previousX = cx; previousZ = cz;
         }
         return bytes;
     }

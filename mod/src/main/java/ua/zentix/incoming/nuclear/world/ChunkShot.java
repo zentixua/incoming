@@ -117,7 +117,7 @@ final class ChunkShot {
     final int[] sky;
     /** Section position properties, populated as read. */
     private final AtomicReferenceArray<Sec> props;
-    /** Bytes occupied by palette copies and maps (detonation memory). */
+    /** Known palette/map arrays, prepaid lazy properties and embedded old plan (admission estimate). */
     final long bytes;
 
     /** Properties of one section's positions: by palette index or (ruins, global palette) by position. */
@@ -171,9 +171,8 @@ final class ChunkShot {
         this.liveKnown = liveKnown;
         long size = 0;
         for (PalettedContainer<BlockState> c : states) {
-            if (c == null) continue;
-            size += c.getSerializedSize();
-            register(c);
+            size += sectionBytes(c, ruined);
+            if (c != null) register(c);
         }
         int surfaceType = type(Heightmap.Types.WORLD_SURFACE), solidType = type(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES);
         for (int c = 0; c < 256; c++) {
@@ -187,7 +186,23 @@ final class ChunkShot {
             this.oldTops = null;
         }
         this.props = new AtomicReferenceArray<>(sections);
-        this.bytes = size + 4L * (heights.length + 512 + (sky == null ? 0 : 256)) + 64L * sections + 256;
+        this.bytes = size + metadataBytes(sections, heights.length, sky != null) + oldBytes(old);
+    }
+
+    /** Known retained arrays, including Sec objects/references before their lazy publication. Not total object heap. */
+    static long sectionBytes(@Nullable PalettedContainer<BlockState> states, boolean ruined) {
+        long references = ruined || states != null && states.data.palette() instanceof GlobalPalette
+                ? 4096 : states == null ? 1 : states.data.palette().getSize();
+        return (states == null ? 0 : states.getSerializedSize()) + 64 + 8 * references;
+    }
+
+    static long metadataBytes(int sections, int heightLength, boolean sky) {
+        return 4L * (heightLength + 512 + (sky ? 256 : 0)) + 64L * sections + 256;
+    }
+
+    static long oldBytes(@Nullable RuinPlan old) {
+        // Live applied plans may also own this data; the archived-only plan has no other counted owner.
+        return old == null ? 0 : old.bytes() + 4L * 512;
     }
 
     static int type(Heightmap.Types t) {
