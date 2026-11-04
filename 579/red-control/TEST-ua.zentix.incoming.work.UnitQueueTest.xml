@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.work.UnitQueueTest" tests="11" skipped="0" failures="2" errors="0" timestamp="2026-11-04T09:35:03.784Z" hostname="zentixua-pc" time="0.471">
+  <properties/>
+  <testcase name="finishDoesReadyWorkAndReleasesTheRest()" classname="ua.zentix.incoming.work.UnitQueueTest" time="0.016"/>
+  <testcase name="blockedWaitsForItsJob()" classname="ua.zentix.incoming.work.UnitQueueTest" time="0.001"/>
+  <testcase name="windowIncludesReadinessAndReleaseWithoutInflatingUnitEstimate()" classname="ua.zentix.incoming.work.UnitQueueTest" time="0.005">
+    <failure message="org.opentest4j.AssertionFailedError: expected: &lt;9000000&gt; but was: &lt;2000000&gt;" type="org.opentest4j.AssertionFailedError">org.opentest4j.AssertionFailedError: expected: &lt;9000000&gt; but was: &lt;2000000&gt;
+	at app//org.junit.jupiter.api.AssertionFailureBuilder.build(AssertionFailureBuilder.java:151)
+	at app//org.junit.jupiter.api.AssertionFailureBuilder.buildAndThrow(AssertionFailureBuilder.java:132)
+	at app//org.junit.jupiter.api.AssertEquals.failNotEqual(AssertEquals.java:197)
+	at app//org.junit.jupiter.api.AssertEquals.assertEquals(AssertEquals.java:166)
+	at app//org.junit.jupiter.api.AssertEquals.assertEquals(AssertEquals.java:161)
+	at app//org.junit.jupiter.api.Assertions.assertEquals(Assertions.java:632)
+	at app//ua.zentix.incoming.work.UnitQueueTest.windowIncludesReadinessAndReleaseWithoutInflatingUnitEstimate(UnitQueueTest.java:252)
+	at java.base@21.0.7/java.lang.reflect.Method.invoke(Method.java:580)
+	at java.base@21.0.7/java.util.ArrayList.forEach(ArrayList.java:1596)
+	at java.base@21.0.7/java.util.ArrayList.forEach(ArrayList.java:1596)
+</failure>
+  </testcase>
+  <testcase name="continuationReadinessIsCachedPerWindowIncludingSkippedJobs()" classname="ua.zentix.incoming.work.UnitQueueTest" time="0.001"/>
+  <testcase name="dependencyIntroducedByHeadIsCheckedBeforeContinuationAndRefreshedNextWindow()" classname="ua.zentix.incoming.work.UnitQueueTest" time="0.0"/>
+  <testcase name="earlyWindowOverheadIsNotRefundedToTheLateWindow()" classname="ua.zentix.incoming.work.UnitQueueTest" time="0.003">
+    <failure message="org.opentest4j.AssertionFailedError: 30 ms cap plus one final 2 ms job, actual 40000000 ==&gt; expected: &lt;true&gt; but was: &lt;false&gt;" type="org.opentest4j.AssertionFailedError">org.opentest4j.AssertionFailedError: 30 ms cap plus one final 2 ms job, actual 40000000 ==&gt; expected: &lt;true&gt; but was: &lt;false&gt;
+	at app//org.junit.jupiter.api.AssertionFailureBuilder.build(AssertionFailureBuilder.java:151)
+	at app//org.junit.jupiter.api.AssertionFailureBuilder.buildAndThrow(AssertionFailureBuilder.java:132)
+	at app//org.junit.jupiter.api.AssertTrue.failNotTrue(AssertTrue.java:63)
+	at app//org.junit.jupiter.api.AssertTrue.assertTrue(AssertTrue.java:36)
+	at app//org.junit.jupiter.api.Assertions.assertTrue(Assertions.java:214)
+	at app//ua.zentix.incoming.work.UnitQueueTest.earlyWindowOverheadIsNotRefundedToTheLateWindow(UnitQueueTest.java:272)
+	at java.base@21.0.7/java.lang.reflect.Method.invoke(Method.java:580)
+	at java.base@21.0.7/java.util.ArrayList.forEach(ArrayList.java:1596)
+	at java.base@21.0.7/java.util.ArrayList.forEach(ArrayList.java:1596)
+</failure>
+  </testcase>
+  <testcase name="jobAddedFromJobRunsInSameTick()" classname="ua.zentix.incoming.work.UnitQueueTest" time="0.001"/>
+  <testcase name="kindsHaveOwnEstimates()" classname="ua.zentix.incoming.work.UnitQueueTest" time="0.001"/>
+  <testcase name="unreadyJobGivesUpOnce()" classname="ua.zentix.incoming.work.UnitQueueTest" time="0.434"/>
+  <testcase name="headsBeforeTails()" classname="ua.zentix.incoming.work.UnitQueueTest" time="0.001"/>
+  <testcase name="oldSweepDoesNotHoldNewFrontUntilItsEnd()" classname="ua.zentix.incoming.work.UnitQueueTest" time="0.001"/>
+  <system-out><![CDATA[WARN StatusConsoleListener Advanced terminal features are not available in this environment
+[11:35:04] [Test worker/WARN] [ua.ze.in.Incoming/]: far cancelled: area did not load within 6000 ticks
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

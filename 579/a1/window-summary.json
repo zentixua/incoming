@@ -1,0 +1,649 @@
+{
+  "head": "eee272309e1c8306952f32b5f6b7ed4192be2e7c",
+  "scope": "Instrumented queue windows; does not prove a universal deadline, every admission, or clean gameplay latency.",
+  "common_budget_ns": 30000000,
+  "windows": {
+    "incoming-drone-city-night-100-spread/t0-3": {
+      "ticks": 61,
+      "active_queue_ticks": 40,
+      "observed_windows": 78,
+      "queue_wall_ms": {
+        "n": 61,
+        "p50": 24.239321,
+        "p99": 44.198586,
+        "max": 44.198586,
+        "mean": 18.1878632295082,
+        "sum": 1109.459657
+      },
+      "queue_charge_ms": {
+        "n": 61,
+        "p50": 23.695271,
+        "p99": 43.958531,
+        "max": 43.958531,
+        "mean": 17.480477,
+        "sum": 1066.309097
+      },
+      "active_queue_wall_ms": {
+        "n": 40,
+        "p50": 29.950059,
+        "p99": 44.198586,
+        "max": 44.198586,
+        "mean": 27.736491425000004,
+        "sum": 1109.459657
+      },
+      "active_queue_charge_ms": {
+        "n": 40,
+        "p50": 28.951889,
+        "p99": 43.958531,
+        "max": 43.958531,
+        "mean": 26.657727425,
+        "sum": 1066.309097
+      },
+      "record_ms": {
+        "n": 61,
+        "p50": 23.695271,
+        "p99": 43.958531,
+        "max": 43.958531,
+        "mean": 17.480477,
+        "sum": 1066.309097
+      },
+      "observer_wall_minus_charge_ms": {
+        "n": 40,
+        "p50": 0.3799550000000025,
+        "p99": 8.669594,
+        "max": 8.669594,
+        "mean": 1.078764,
+        "sum": 43.15056
+      },
+      "actual_account_added_ms": {
+        "n": 0
+      },
+      "queue_wall_above_common": 16,
+      "queue_charge_above_common": 3,
+      "last_record_ms": {
+        "n": 72,
+        "p50": 0.410896,
+        "p99": 24.194156,
+        "max": 24.194156,
+        "mean": 1.5910771944444444,
+        "sum": 114.557558
+      },
+      "first_record_flags": 40,
+      "late_record_flags": 29,
+      "phase": {
+        "early": {
+          "count": 40,
+          "wall_ms": {
+            "n": 40,
+            "p50": 16.747869,
+            "p99": 24.218361,
+            "max": 24.218361,
+            "mean": 16.308122925,
+            "sum": 652.324917
+          },
+          "charged_ms": {
+            "n": 40,
+            "p50": 16.393639,
+            "p99": 24.005971,
+            "max": 24.005971,
+            "mean": 15.87428315,
+            "sum": 634.971326
+          },
+          "observer_wall_minus_charge_ms": {
+            "n": 40,
+            "p50": 0.194758,
+            "p99": 3.421576,
+            "max": 3.421576,
+            "mean": 0.43383977500000004,
+            "sum": 17.353591
+          },
+          "record_ms": {
+            "n": 40,
+            "p50": 16.393639,
+            "p99": 24.005971,
+            "max": 24.005971,
+            "mean": 15.87428315,
+            "sum": 634.971326
+          }
+        },
+        "late": {
+          "count": 38,
+          "wall_ms": {
+            "n": 38,
+            "p50": 11.769043,
+            "p99": 29.981038,
+            "max": 29.981038,
+            "mean": 12.029861578947369,
+            "sum": 457.13474
+          },
+          "charged_ms": {
+            "n": 38,
+            "p50": 11.66153,
+            "p99": 25.449076,
+            "max": 25.449076,
+            "mean": 11.35099397368421,
+            "sum": 431.337771
+          },
+          "observer_wall_minus_charge_ms": {
+            "n": 38,
+            "p50": 0.145635,
+            "p99": 8.618487,
+            "max": 8.618487,
+            "mean": 0.6788676052631579,
+            "sum": 25.796969
+          },
+          "record_ms": {
+            "n": 38,
+            "p50": 11.66153,
+            "p99": 25.449076,
+            "max": 25.449076,
+            "mean": 11.35099397368421,
+            "sum": 431.337771
+          }
+        }
+      },
+      "top_wall_ticks": [
+        {
+          "n": 791,
+          "queue_wall_ms": 44.198586,
+          "queue_charged_ms": 43.958531,
+          "record_ms": 43.958531,
+          "outer_impact_ms": 44.2613,
+          "window_count": 2,
+          "record_count": 9
+        },
+        {
+          "n": 802,
+          "queue_wall_ms": 30.991035,
+          "queue_charged_ms": 29.511696,
+          "record_ms": 29.511696,
+          "outer_impact_ms": 31.0602,
+          "window_count": 2,
+          "record_count": 51
+        },
+        {
+          "n": 789,
+          "queue_wall_ms": 30.630865,
+          "queue_charged_ms": 30.297526,
+          "record_ms": 30.297526,
+          "outer_impact_ms": 30.6802,
+          "window_count": 2,
+          "record_count": 82
+        },
+        {
+          "n": 801,
+          "queue_wall_ms": 30.599476,
+          "queue_charged_ms": 29.840271,
+          "record_ms": 29.840271,
+          "outer_impact_ms": 30.7256,
+          "window_count": 2,
+          "record_count": 64
+        },
+        {
+          "n": 805,
+          "queue_wall_ms": 30.484269,
+          "queue_charged_ms": 30.230732,
+          "record_ms": 30.230732,
+          "outer_impact_ms": 30.5492,
+          "window_count": 2,
+          "record_count": 82
+        },
+        {
+          "n": 795,
+          "queue_wall_ms": 30.402364,
+          "queue_charged_ms": 28.951889,
+          "record_ms": 28.951889,
+          "outer_impact_ms": 30.4821,
+          "window_count": 2,
+          "record_count": 26
+        },
+        {
+          "n": 808,
+          "queue_wall_ms": 30.393146,
+          "queue_charged_ms": 27.840174,
+          "record_ms": 27.840174,
+          "outer_impact_ms": 30.4769,
+          "window_count": 2,
+          "record_count": 159
+        },
+        {
+          "n": 800,
+          "queue_wall_ms": 30.277758,
+          "queue_charged_ms": 29.937876,
+          "record_ms": 29.937876,
+          "outer_impact_ms": 30.3395,
+          "window_count": 2,
+          "record_count": 44
+        }
+      ]
+    },
+    "incoming-drone-city-night-100-spread/t3-15": {
+      "ticks": 240,
+      "active_queue_ticks": 94,
+      "observed_windows": 182,
+      "queue_wall_ms": {
+        "n": 240,
+        "p50": 0.0,
+        "p99": 32.271183,
+        "max": 34.178948,
+        "mean": 11.0350273625,
+        "sum": 2648.406567
+      },
+      "queue_charge_ms": {
+        "n": 240,
+        "p50": 0.0,
+        "p99": 29.999044,
+        "max": 33.929956,
+        "mean": 10.379686604166666,
+        "sum": 2491.124785
+      },
+      "active_queue_wall_ms": {
+        "n": 94,
+        "p50": 30.011966,
+        "p99": 34.178948,
+        "max": 34.178948,
+        "mean": 28.17453794680851,
+        "sum": 2648.406567
+      },
+      "active_queue_charge_ms": {
+        "n": 94,
+        "p50": 28.525561,
+        "p99": 33.929956,
+        "max": 33.929956,
+        "mean": 26.5013275,
+        "sum": 2491.124785
+      },
+      "record_ms": {
+        "n": 240,
+        "p50": 0.0,
+        "p99": 29.999044,
+        "max": 33.929956,
+        "mean": 10.379686604166666,
+        "sum": 2491.124785
+      },
+      "observer_wall_minus_charge_ms": {
+        "n": 94,
+        "p50": 0.5871619999999993,
+        "p99": 6.4811049999999994,
+        "max": 6.4811049999999994,
+        "mean": 1.673210446808511,
+        "sum": 157.28178200000002
+      },
+      "actual_account_added_ms": {
+        "n": 0
+      },
+      "queue_wall_above_common": 60,
+      "queue_charge_above_common": 2,
+      "last_record_ms": {
+        "n": 153,
+        "p50": 0.036438,
+        "p99": 2.100919,
+        "max": 8.217684,
+        "mean": 0.27108716993464055,
+        "sum": 41.476337
+      },
+      "first_record_flags": 94,
+      "late_record_flags": 87,
+      "phase": {
+        "early": {
+          "count": 94,
+          "wall_ms": {
+            "n": 94,
+            "p50": 19.602581,
+            "p99": 21.035278,
+            "max": 21.035278,
+            "mean": 13.102087372340426,
+            "sum": 1231.596213
+          },
+          "charged_ms": {
+            "n": 94,
+            "p50": 18.776503,
+            "p99": 20.94756,
+            "max": 20.94756,
+            "mean": 12.786954372340427,
+            "sum": 1201.973711
+          },
+          "observer_wall_minus_charge_ms": {
+            "n": 94,
+            "p50": 0.132389,
+            "p99": 3.969903,
+            "max": 3.969903,
+            "mean": 0.315133,
+            "sum": 29.622502
+          },
+          "record_ms": {
+            "n": 94,
+            "p50": 18.776503,
+            "p99": 20.94756,
+            "max": 20.94756,
+            "mean": 12.786954372340427,
+            "sum": 1201.973711
+          }
+        },
+        "late": {
+          "count": 88,
+          "wall_ms": {
+            "n": 88,
+            "p50": 10.518371,
+            "p99": 30.018157,
+            "max": 30.018157,
+            "mean": 16.10011765909091,
+            "sum": 1416.810354
+          },
+          "charged_ms": {
+            "n": 88,
+            "p50": 10.411748,
+            "p99": 27.544898,
+            "max": 27.544898,
+            "mean": 14.649444022727272,
+            "sum": 1289.1510739999999
+          },
+          "observer_wall_minus_charge_ms": {
+            "n": 88,
+            "p50": 0.218323,
+            "p99": 6.450447,
+            "max": 6.450447,
+            "mean": 1.4506736363636363,
+            "sum": 127.65928
+          },
+          "record_ms": {
+            "n": 88,
+            "p50": 10.411748,
+            "p99": 27.544898,
+            "max": 27.544898,
+            "mean": 14.649444022727272,
+            "sum": 1289.1510739999999
+          }
+        }
+      },
+      "top_wall_ticks": [
+        {
+          "n": 968,
+          "queue_wall_ms": 34.178948,
+          "queue_charged_ms": 33.929956,
+          "record_ms": 33.929956,
+          "outer_impact_ms": 35.3977,
+          "window_count": 2,
+          "record_count": 168
+        },
+        {
+          "n": 969,
+          "queue_wall_ms": 32.489958,
+          "queue_charged_ms": 28.525561,
+          "record_ms": 28.525561,
+          "outer_impact_ms": 32.6209,
+          "window_count": 2,
+          "record_count": 26109
+        },
+        {
+          "n": 939,
+          "queue_wall_ms": 32.271183,
+          "queue_charged_ms": 28.444941,
+          "record_ms": 28.444941,
+          "outer_impact_ms": 32.3705,
+          "window_count": 2,
+          "record_count": 23181
+        },
+        {
+          "n": 881,
+          "queue_wall_ms": 31.203217,
+          "queue_charged_ms": 28.56821,
+          "record_ms": 28.56821,
+          "outer_impact_ms": 31.2666,
+          "window_count": 2,
+          "record_count": 14740
+        },
+        {
+          "n": 880,
+          "queue_wall_ms": 31.120069,
+          "queue_charged_ms": 30.825206,
+          "record_ms": 30.825206,
+          "outer_impact_ms": 31.2595,
+          "window_count": 2,
+          "record_count": 66
+        },
+        {
+          "n": 1036,
+          "queue_wall_ms": 30.78723,
+          "queue_charged_ms": 29.999044,
+          "record_ms": 29.999044,
+          "outer_impact_ms": 30.9007,
+          "window_count": 2,
+          "record_count": 88
+        },
+        {
+          "n": 938,
+          "queue_wall_ms": 30.711116,
+          "queue_charged_ms": 29.611192,
+          "record_ms": 29.611192,
+          "outer_impact_ms": 33.7515,
+          "window_count": 2,
+          "record_count": 380
+        },
+        {
+          "n": 882,
+          "queue_wall_ms": 30.595209,
+          "queue_charged_ms": 26.384414,
+          "record_ms": 26.384414,
+          "outer_impact_ms": 30.7905,
+          "window_count": 2,
+          "record_count": 23734
+        }
+      ]
+    },
+    "incoming-drone-city-night-100-spread/total": {
+      "ticks": 1002,
+      "active_queue_ticks": 134,
+      "observed_windows": 260,
+      "queue_wall_ms": {
+        "n": 1002,
+        "p50": 0.0,
+        "p99": 30.599476,
+        "max": 44.198586,
+        "mean": 3.750365493013972,
+        "sum": 3757.866224
+      },
+      "queue_charge_ms": {
+        "n": 1002,
+        "p50": 0.0,
+        "p99": 29.918985,
+        "max": 43.958531,
+        "mean": 3.550333215568862,
+        "sum": 3557.433882
+      },
+      "active_queue_wall_ms": {
+        "n": 134,
+        "p50": 30.006796,
+        "p99": 34.178948,
+        "max": 44.198586,
+        "mean": 28.043777791044775,
+        "sum": 3757.866224
+      },
+      "active_queue_charge_ms": {
+        "n": 134,
+        "p50": 28.652268,
+        "p99": 33.929956,
+        "max": 43.958531,
+        "mean": 26.548014044776117,
+        "sum": 3557.433882
+      },
+      "record_ms": {
+        "n": 1002,
+        "p50": 0.0,
+        "p99": 29.918985,
+        "max": 43.958531,
+        "mean": 3.550333215568862,
+        "sum": 3557.433882
+      },
+      "observer_wall_minus_charge_ms": {
+        "n": 134,
+        "p50": 0.5001459999999973,
+        "p99": 7.726287000000003,
+        "max": 8.669594,
+        "mean": 1.495763746268657,
+        "sum": 200.43234200000003
+      },
+      "actual_account_added_ms": {
+        "n": 0
+      },
+      "queue_wall_above_common": 76,
+      "queue_charge_above_common": 5,
+      "last_record_ms": {
+        "n": 225,
+        "p50": 0.088377,
+        "p99": 8.503995,
+        "max": 24.194156,
+        "mean": 0.6934839777777778,
+        "sum": 156.033895
+      },
+      "first_record_flags": 134,
+      "late_record_flags": 116,
+      "phase": {
+        "early": {
+          "count": 134,
+          "wall_ms": {
+            "n": 134,
+            "p50": 18.30493,
+            "p99": 21.035278,
+            "max": 24.218361,
+            "mean": 14.05911291044776,
+            "sum": 1883.92113
+          },
+          "charged_ms": {
+            "n": 134,
+            "p50": 17.804784,
+            "p99": 20.94756,
+            "max": 24.005971,
+            "mean": 13.708545052238806,
+            "sum": 1836.945037
+          },
+          "observer_wall_minus_charge_ms": {
+            "n": 134,
+            "p50": 0.175111,
+            "p99": 3.421576,
+            "max": 3.969903,
+            "mean": 0.3505678582089552,
+            "sum": 46.976093
+          },
+          "record_ms": {
+            "n": 134,
+            "p50": 17.804784,
+            "p99": 20.94756,
+            "max": 24.005971,
+            "mean": 13.708545052238806,
+            "sum": 1836.945037
+          }
+        },
+        "late": {
+          "count": 126,
+          "wall_ms": {
+            "n": 126,
+            "p50": 10.74006,
+            "p99": 30.002329,
+            "max": 30.018157,
+            "mean": 14.87258011111111,
+            "sum": 1873.945094
+          },
+          "charged_ms": {
+            "n": 126,
+            "p50": 10.522255,
+            "p99": 26.513657,
+            "max": 27.544898,
+            "mean": 13.654673373015873,
+            "sum": 1720.488845
+          },
+          "observer_wall_minus_charge_ms": {
+            "n": 126,
+            "p50": 0.158228,
+            "p99": 7.680831,
+            "max": 8.618487,
+            "mean": 1.2179067380952382,
+            "sum": 153.456249
+          },
+          "record_ms": {
+            "n": 126,
+            "p50": 10.522255,
+            "p99": 26.513657,
+            "max": 27.544898,
+            "mean": 13.654673373015873,
+            "sum": 1720.488845
+          }
+        }
+      },
+      "top_wall_ticks": [
+        {
+          "n": 791,
+          "queue_wall_ms": 44.198586,
+          "queue_charged_ms": 43.958531,
+          "record_ms": 43.958531,
+          "outer_impact_ms": 44.2613,
+          "window_count": 2,
+          "record_count": 9
+        },
+        {
+          "n": 968,
+          "queue_wall_ms": 34.178948,
+          "queue_charged_ms": 33.929956,
+          "record_ms": 33.929956,
+          "outer_impact_ms": 35.3977,
+          "window_count": 2,
+          "record_count": 168
+        },
+        {
+          "n": 969,
+          "queue_wall_ms": 32.489958,
+          "queue_charged_ms": 28.525561,
+          "record_ms": 28.525561,
+          "outer_impact_ms": 32.6209,
+          "window_count": 2,
+          "record_count": 26109
+        },
+        {
+          "n": 939,
+          "queue_wall_ms": 32.271183,
+          "queue_charged_ms": 28.444941,
+          "record_ms": 28.444941,
+          "outer_impact_ms": 32.3705,
+          "window_count": 2,
+          "record_count": 23181
+        },
+        {
+          "n": 881,
+          "queue_wall_ms": 31.203217,
+          "queue_charged_ms": 28.56821,
+          "record_ms": 28.56821,
+          "outer_impact_ms": 31.2666,
+          "window_count": 2,
+          "record_count": 14740
+        },
+        {
+          "n": 880,
+          "queue_wall_ms": 31.120069,
+          "queue_charged_ms": 30.825206,
+          "record_ms": 30.825206,
+          "outer_impact_ms": 31.2595,
+          "window_count": 2,
+          "record_count": 66
+        },
+        {
+          "n": 802,
+          "queue_wall_ms": 30.991035,
+          "queue_charged_ms": 29.511696,
+          "record_ms": 29.511696,
+          "outer_impact_ms": 31.0602,
+          "window_count": 2,
+          "record_count": 51
+        },
+        {
+          "n": 1036,
+          "queue_wall_ms": 30.78723,
+          "queue_charged_ms": 29.999044,
+          "record_ms": 29.999044,
+          "outer_impact_ms": 30.9007,
+          "window_count": 2,
+          "record_count": 88
+        }
+      ]
+    }
+  }
+}

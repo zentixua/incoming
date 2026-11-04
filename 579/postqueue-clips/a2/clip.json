@@ -1,0 +1,82 @@
+{
+  "arm": "a2",
+  "tick": {
+    "type": "tick",
+    "t_ms": 133613.039,
+    "n": 1481,
+    "wall_ms": 69.8445,
+    "cpu_ms": 58.3839
+  },
+  "origin_epoch_ms": 1793789040400.275,
+  "from_epoch_ms_exact": 1793789173943.4695,
+  "to_epoch_ms_exact": 1793789174013.314,
+  "from_epoch_ms_rounded": 1793789173943,
+  "to_epoch_ms_rounded": 1793789174013,
+  "same_n": [
+    {
+      "type": "tick",
+      "t_ms": 133613.039,
+      "n": 1481,
+      "wall_ms": 69.8445,
+      "cpu_ms": 58.3839
+    },
+    {
+      "type": "packets",
+      "t_ms": 133613.039,
+      "n": 1481,
+      "c2s": 1,
+      "s2c": 26,
+      "incoming": 1
+    },
+    {
+      "type": "block-writes",
+      "t_ms": 133613.039,
+      "n": 1481,
+      "total": 74,
+      "air": 11,
+      "fire": 12
+    },
+    {
+      "type": "impact-cost",
+      "t_ms": 133613.039,
+      "n": 1481,
+      "total_ms": 0.001,
+      "parts_ms": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ],
+      "stages_ms": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0
+      ]
+    },
+    {
+      "type": "air-cost",
+      "t_ms": 133613.039,
+      "n": 1481,
+      "calls": 0,
+      "wall_ns": 0,
+      "max_call_ns": 0
+    }
+  ],
+  "input_hashes": {
+    "profile.jfr": "499907521d4dec58fbd62d0f44874d68f5d1c88b79c76ea2500323aecdf1ee85",
+    "async.jfr": "7428816bd838e1a043a51562689b42344cdcaf4643d23c9f00ee9b132bfcf179",
+    "stand-out/events.jsonl": "1ba1b48fe6798164d35642b6b030fbd6c6bd9785aa7f5f6b6a3b615368ae1f6b",
+    "quality.json": "c2c6d7fe25951221b0c0fa5148974131c107131c50bd90430bb5892dfc16cce7",
+    "manifest.json": "33ce32a5130ec4da721a88e810fce3ab243b47cc772034fdbc7716331581d211"
+  }
+}

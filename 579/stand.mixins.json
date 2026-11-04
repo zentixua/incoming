@@ -1,0 +1,23 @@
+{
+  "required": true,
+  "minVersion": "0.8",
+  "package": "ua.zentix.stand.mixin",
+  "compatibilityLevel": "JAVA_21",
+  "mixins": [
+    "ConnectionCountMixin",
+    "BlockCountMixin",
+    "ImpactCostMixin",
+    "AirCostMixin",
+    "WindowQueueMixin",
+    "WindowClockMixin",
+    "WindowSchedulerMixin",
+    "WindowTimingMixin"
+  ],
+  "client": [
+    "TerrainParticleProbeMixin",
+    "BlastSoundProbeMixin"
+  ],
+  "injectors": {
+    "defaultRequire": 1
+  }
+}

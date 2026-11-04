@@ -1,0 +1,1300 @@
+{
+  "seed": 20261025,
+  "day_time": 18000,
+  "settle_s": 5,
+  "limit_s": 600,
+  "projectiles": [
+    "incoming:drone"
+  ],
+  "warheads": [
+    "incoming:strike"
+  ],
+  "probes": [
+    "ua.zentix.incoming.client.far.FarRenderer#describeSmoke",
+    "ua.zentix.incoming.client.sound.BlastSounds#describe",
+    "ua.zentix.incoming.client.sound.ClientSounds#describe",
+    "ua.zentix.incoming.client.fx.FireSmoke#describe",
+    "ua.zentix.incoming.client.nuclear.NukeSounds#describe",
+    "ua.zentix.incoming.client.nuclear.NukePall#describe",
+    "ua.zentix.incoming.client.sound.OwnSources#describe",
+    "ua.zentix.stand.AuditProbes#particles",
+    "ua.zentix.stand.AuditProbes#particleClasses",
+    "ua.zentix.stand.AuditProbes#particles",
+    "ua.zentix.stand.AuditProbes#particleClasses",
+    "ua.zentix.stand.AuditProbes#oppencraft"
+  ],
+  "once": [
+    "net.irisshaders.iris.Iris#getCurrentPackName",
+    "net.irisshaders.iris.Iris#isPackInUseQuick"
+  ],
+  "steps": [
+    {
+      "do": "tp",
+      "eye": [
+        -180,
+        95,
+        0
+      ],
+      "look": [
+        0,
+        80,
+        0
+      ],
+      "settle_s": 4
+    },
+    {
+      "do": "cmd",
+      "cmd": "time set 18000"
+    },
+    {
+      "do": "cmd",
+      "cmd": "forceload add -160 -160 160 0"
+    },
+    {
+      "do": "cmd",
+      "cmd": "forceload add -160 16 160 160"
+    },
+    {
+      "do": "wait",
+      "s": 5
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -129 65 -129 -111 80 -111 stone_bricks hollow"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -128 80 -128 -112 80 -112 oak_planks"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -127 68 -129 -113 72 -129 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -127 68 -111 -113 72 -111 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "setblock -120 79 -120 sea_lantern"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -129 65 -89 -111 80 -71 stone_bricks hollow"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -128 80 -88 -112 80 -72 oak_planks"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -127 68 -89 -113 72 -89 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -127 68 -71 -113 72 -71 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "setblock -120 79 -80 sea_lantern"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -129 65 -49 -111 80 -31 stone_bricks hollow"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -128 80 -48 -112 80 -32 oak_planks"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -127 68 -49 -113 72 -49 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -127 68 -31 -113 72 -31 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "setblock -120 79 -40 sea_lantern"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -129 65 -9 -111 80 9 stone_bricks hollow"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -128 80 -8 -112 80 8 oak_planks"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -127 68 -9 -113 72 -9 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -127 68 9 -113 72 9 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "setblock -120 79 0 sea_lantern"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -129 65 31 -111 80 49 stone_bricks hollow"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -128 80 32 -112 80 48 oak_planks"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -127 68 31 -113 72 31 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -127 68 49 -113 72 49 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "setblock -120 79 40 sea_lantern"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -129 65 71 -111 80 89 stone_bricks hollow"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -128 80 72 -112 80 88 oak_planks"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -127 68 71 -113 72 71 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -127 68 89 -113 72 89 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "setblock -120 79 80 sea_lantern"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -129 65 111 -111 80 129 stone_bricks hollow"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -128 80 112 -112 80 128 oak_planks"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -127 68 111 -113 72 111 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -127 68 129 -113 72 129 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "setblock -120 79 120 sea_lantern"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -89 65 -129 -71 80 -111 stone_bricks hollow"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -88 80 -128 -72 80 -112 oak_planks"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -87 68 -129 -73 72 -129 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -87 68 -111 -73 72 -111 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "setblock -80 79 -120 sea_lantern"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -89 65 -89 -71 80 -71 stone_bricks hollow"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -88 80 -88 -72 80 -72 oak_planks"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -87 68 -89 -73 72 -89 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -87 68 -71 -73 72 -71 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "setblock -80 79 -80 sea_lantern"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -89 65 -49 -71 80 -31 stone_bricks hollow"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -88 80 -48 -72 80 -32 oak_planks"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -87 68 -49 -73 72 -49 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -87 68 -31 -73 72 -31 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "setblock -80 79 -40 sea_lantern"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -89 65 -9 -71 80 9 stone_bricks hollow"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -88 80 -8 -72 80 8 oak_planks"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -87 68 -9 -73 72 -9 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -87 68 9 -73 72 9 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "setblock -80 79 0 sea_lantern"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -89 65 31 -71 80 49 stone_bricks hollow"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -88 80 32 -72 80 48 oak_planks"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -87 68 31 -73 72 31 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -87 68 49 -73 72 49 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "setblock -80 79 40 sea_lantern"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -89 65 71 -71 80 89 stone_bricks hollow"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -88 80 72 -72 80 88 oak_planks"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -87 68 71 -73 72 71 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -87 68 89 -73 72 89 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "setblock -80 79 80 sea_lantern"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -89 65 111 -71 80 129 stone_bricks hollow"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -88 80 112 -72 80 128 oak_planks"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -87 68 111 -73 72 111 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -87 68 129 -73 72 129 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "setblock -80 79 120 sea_lantern"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -49 65 -129 -31 80 -111 stone_bricks hollow"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -48 80 -128 -32 80 -112 oak_planks"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -47 68 -129 -33 72 -129 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -47 68 -111 -33 72 -111 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "setblock -40 79 -120 sea_lantern"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -49 65 -89 -31 80 -71 stone_bricks hollow"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -48 80 -88 -32 80 -72 oak_planks"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -47 68 -89 -33 72 -89 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -47 68 -71 -33 72 -71 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "setblock -40 79 -80 sea_lantern"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -49 65 -49 -31 80 -31 stone_bricks hollow"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -48 80 -48 -32 80 -32 oak_planks"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -47 68 -49 -33 72 -49 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -47 68 -31 -33 72 -31 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "setblock -40 79 -40 sea_lantern"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -49 65 -9 -31 80 9 stone_bricks hollow"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -48 80 -8 -32 80 8 oak_planks"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -47 68 -9 -33 72 -9 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -47 68 9 -33 72 9 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "setblock -40 79 0 sea_lantern"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -49 65 31 -31 80 49 stone_bricks hollow"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -48 80 32 -32 80 48 oak_planks"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -47 68 31 -33 72 31 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -47 68 49 -33 72 49 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "setblock -40 79 40 sea_lantern"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -49 65 71 -31 80 89 stone_bricks hollow"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -48 80 72 -32 80 88 oak_planks"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -47 68 71 -33 72 71 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -47 68 89 -33 72 89 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "setblock -40 79 80 sea_lantern"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -49 65 111 -31 80 129 stone_bricks hollow"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -48 80 112 -32 80 128 oak_planks"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -47 68 111 -33 72 111 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -47 68 129 -33 72 129 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "setblock -40 79 120 sea_lantern"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -9 65 -129 9 80 -111 stone_bricks hollow"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -8 80 -128 8 80 -112 oak_planks"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -7 68 -129 7 72 -129 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -7 68 -111 7 72 -111 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "setblock 0 79 -120 sea_lantern"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -9 65 -89 9 80 -71 stone_bricks hollow"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -8 80 -88 8 80 -72 oak_planks"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -7 68 -89 7 72 -89 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -7 68 -71 7 72 -71 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "setblock 0 79 -80 sea_lantern"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -9 65 -49 9 80 -31 stone_bricks hollow"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -8 80 -48 8 80 -32 oak_planks"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -7 68 -49 7 72 -49 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -7 68 -31 7 72 -31 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "setblock 0 79 -40 sea_lantern"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -9 65 -9 9 80 9 stone_bricks hollow"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -8 80 -8 8 80 8 oak_planks"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -7 68 -9 7 72 -9 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -7 68 9 7 72 9 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "setblock 0 79 0 sea_lantern"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -9 65 31 9 80 49 stone_bricks hollow"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -8 80 32 8 80 48 oak_planks"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -7 68 31 7 72 31 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -7 68 49 7 72 49 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "setblock 0 79 40 sea_lantern"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -9 65 71 9 80 89 stone_bricks hollow"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -8 80 72 8 80 88 oak_planks"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -7 68 71 7 72 71 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -7 68 89 7 72 89 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "setblock 0 79 80 sea_lantern"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -9 65 111 9 80 129 stone_bricks hollow"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -8 80 112 8 80 128 oak_planks"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -7 68 111 7 72 111 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill -7 68 129 7 72 129 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "setblock 0 79 120 sea_lantern"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill 31 65 -129 49 80 -111 stone_bricks hollow"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill 32 80 -128 48 80 -112 oak_planks"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill 33 68 -129 47 72 -129 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill 33 68 -111 47 72 -111 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "setblock 40 79 -120 sea_lantern"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill 31 65 -89 49 80 -71 stone_bricks hollow"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill 32 80 -88 48 80 -72 oak_planks"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill 33 68 -89 47 72 -89 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill 33 68 -71 47 72 -71 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "setblock 40 79 -80 sea_lantern"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill 31 65 -49 49 80 -31 stone_bricks hollow"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill 32 80 -48 48 80 -32 oak_planks"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill 33 68 -49 47 72 -49 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill 33 68 -31 47 72 -31 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "setblock 40 79 -40 sea_lantern"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill 31 65 -9 49 80 9 stone_bricks hollow"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill 32 80 -8 48 80 8 oak_planks"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill 33 68 -9 47 72 -9 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill 33 68 9 47 72 9 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "setblock 40 79 0 sea_lantern"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill 31 65 31 49 80 49 stone_bricks hollow"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill 32 80 32 48 80 48 oak_planks"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill 33 68 31 47 72 31 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill 33 68 49 47 72 49 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "setblock 40 79 40 sea_lantern"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill 31 65 71 49 80 89 stone_bricks hollow"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill 32 80 72 48 80 88 oak_planks"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill 33 68 71 47 72 71 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill 33 68 89 47 72 89 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "setblock 40 79 80 sea_lantern"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill 31 65 111 49 80 129 stone_bricks hollow"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill 32 80 112 48 80 128 oak_planks"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill 33 68 111 47 72 111 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill 33 68 129 47 72 129 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "setblock 40 79 120 sea_lantern"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill 71 65 -129 89 80 -111 stone_bricks hollow"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill 72 80 -128 88 80 -112 oak_planks"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill 73 68 -129 87 72 -129 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill 73 68 -111 87 72 -111 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "setblock 80 79 -120 sea_lantern"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill 71 65 -89 89 80 -71 stone_bricks hollow"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill 72 80 -88 88 80 -72 oak_planks"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill 73 68 -89 87 72 -89 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill 73 68 -71 87 72 -71 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "setblock 80 79 -80 sea_lantern"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill 71 65 -49 89 80 -31 stone_bricks hollow"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill 72 80 -48 88 80 -32 oak_planks"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill 73 68 -49 87 72 -49 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill 73 68 -31 87 72 -31 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "setblock 80 79 -40 sea_lantern"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill 71 65 -9 89 80 9 stone_bricks hollow"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill 72 80 -8 88 80 8 oak_planks"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill 73 68 -9 87 72 -9 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill 73 68 9 87 72 9 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "setblock 80 79 0 sea_lantern"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill 71 65 31 89 80 49 stone_bricks hollow"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill 72 80 32 88 80 48 oak_planks"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill 73 68 31 87 72 31 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill 73 68 49 87 72 49 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "setblock 80 79 40 sea_lantern"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill 71 65 71 89 80 89 stone_bricks hollow"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill 72 80 72 88 80 88 oak_planks"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill 73 68 71 87 72 71 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill 73 68 89 87 72 89 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "setblock 80 79 80 sea_lantern"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill 71 65 111 89 80 129 stone_bricks hollow"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill 72 80 112 88 80 128 oak_planks"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill 73 68 111 87 72 111 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill 73 68 129 87 72 129 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "setblock 80 79 120 sea_lantern"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill 111 65 -129 129 80 -111 stone_bricks hollow"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill 112 80 -128 128 80 -112 oak_planks"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill 113 68 -129 127 72 -129 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill 113 68 -111 127 72 -111 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "setblock 120 79 -120 sea_lantern"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill 111 65 -89 129 80 -71 stone_bricks hollow"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill 112 80 -88 128 80 -72 oak_planks"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill 113 68 -89 127 72 -89 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill 113 68 -71 127 72 -71 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "setblock 120 79 -80 sea_lantern"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill 111 65 -49 129 80 -31 stone_bricks hollow"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill 112 80 -48 128 80 -32 oak_planks"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill 113 68 -49 127 72 -49 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill 113 68 -31 127 72 -31 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "setblock 120 79 -40 sea_lantern"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill 111 65 -9 129 80 9 stone_bricks hollow"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill 112 80 -8 128 80 8 oak_planks"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill 113 68 -9 127 72 -9 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill 113 68 9 127 72 9 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "setblock 120 79 0 sea_lantern"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill 111 65 31 129 80 49 stone_bricks hollow"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill 112 80 32 128 80 48 oak_planks"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill 113 68 31 127 72 31 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill 113 68 49 127 72 49 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "setblock 120 79 40 sea_lantern"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill 111 65 71 129 80 89 stone_bricks hollow"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill 112 80 72 128 80 88 oak_planks"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill 113 68 71 127 72 71 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill 113 68 89 127 72 89 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "setblock 120 79 80 sea_lantern"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill 111 65 111 129 80 129 stone_bricks hollow"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill 112 80 112 128 80 128 oak_planks"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill 113 68 111 127 72 111 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill 113 68 129 127 72 129 glass"
+    },
+    {
+      "do": "cmd",
+      "cmd": "setblock 120 79 120 sea_lantern"
+    },
+    {
+      "do": "wait",
+      "s": 10
+    },
+    {
+      "do": "window",
+      "name": "incoming-city-night-100-spread/baseline",
+      "s": 10
+    },
+    {
+      "do": "mark",
+      "name": "incoming-drone-city-night-100-spread/native-begin"
+    },
+    {
+      "do": "salvo",
+      "id": "incoming-drone-city-night-100-spread",
+      "x": 0,
+      "z": 0,
+      "radius": 145,
+      "expect": 100,
+      "cmds": [
+        "perfa impact incoming-drone 7.1 81 0.0",
+        "perfa impact incoming-drone -9.0 81 8.3",
+        "perfa impact incoming-drone 1.4 65 -15.8",
+        "perfa impact incoming-drone 11.4 65 14.8",
+        "perfa impact incoming-drone -20.9 65 -3.7",
+        "perfa impact incoming-drone 19.8 65 -12.6",
+        "perfa impact incoming-drone -6.6 65 24.6",
+        "perfa impact incoming-drone -12.6 65 -24.3",
+        "perfa impact incoming-drone 27.4 65 10.0",
+        "perfa impact incoming-drone -28.5 65 11.8",
+        "perfa impact incoming-drone 13.7 65 -29.3",
+        "perfa impact incoming-drone 10.1 65 32.4",
+        "perfa impact incoming-drone -30.6 65 -17.7",
+        "perfa impact incoming-drone 35.9 81 -7.9",
+        "perfa impact incoming-drone -21.9 65 31.2",
+        "perfa impact incoming-drone -5.1 81 -39.0",
+        "perfa impact incoming-drone 31.1 65 26.2",
+        "perfa impact incoming-drone -41.8 81 1.7",
+        "perfa impact incoming-drone 30.5 65 -30.3",
+        "perfa impact incoming-drone -2.0 81 44.1",
+        "perfa impact incoming-drone -29.0 65 -34.8",
+        "perfa impact incoming-drone 46.0 81 6.2",
+        "perfa impact incoming-drone -38.9 65 27.1",
+        "perfa impact incoming-drone 10.6 65 -47.3",
+        "perfa impact incoming-drone 24.6 65 42.9",
+        "perfa impact incoming-drone -48.1 65 -15.3",
+        "perfa impact incoming-drone 46.7 65 -21.6",
+        "perfa impact incoming-drone -20.2 65 48.4",
+        "perfa impact incoming-drone -18.1 65 -50.2",
+        "perfa impact incoming-drone 48.1 65 25.3",
+        "perfa impact incoming-drone -53.4 65 14.1",
+        "perfa impact incoming-drone 30.4 65 -47.2",
+        "perfa impact incoming-drone 9.7 65 56.2",
+        "perfa impact incoming-drone -45.8 81 -35.4",
+        "perfa impact incoming-drone 58.5 65 -4.8",
+        "perfa impact incoming-drone -40.5 81 43.7",
+        "perfa impact incoming-drone 0.3 65 -60.4",
+        "perfa impact incoming-drone 41.1 81 45.4",
+        "perfa impact incoming-drone -61.8 65 -5.7",
+        "perfa impact incoming-drone 50.1 65 -38.0",
+        "perfa impact incoming-drone -11.4 65 62.6",
+        "perfa impact incoming-drone -34.3 65 -54.5",
+        "perfa impact incoming-drone 62.9 65 17.2",
+        "perfa impact incoming-drone -58.7 65 30.1",
+        "perfa impact incoming-drone 23.2 65 -62.5",
+        "perfa impact incoming-drone 25.4 65 62.5",
+        "perfa impact incoming-drone -61.6 65 -29.2",
+        "perfa impact incoming-drone 65.9 65 -20.3",
+        "perfa impact incoming-drone -35.2 65 60.1",
+        "perfa impact incoming-drone -14.8 65 -68.8",
+        "perfa impact incoming-drone 57.9 65 41.2",
+        "perfa impact incoming-drone -71.2 81 8.9",
+        "perfa impact incoming-drone 47.0 65 -55.2",
+        "perfa impact incoming-drone 2.7 81 73.1",
+        "perfa impact incoming-drone -51.8 65 -52.6",
+        "perfa impact incoming-drone 74.4 81 3.8",
+        "perfa impact incoming-drone -57.9 65 47.9",
+        "perfa impact incoming-drone 10.5 65 -75.1",
+        "perfa impact incoming-drone 43.4 65 63.0",
+        "perfa impact incoming-drone -75.2 65 -17.3",
+        "perfa impact incoming-drone 67.7 65 -38.3",
+        "perfa impact incoming-drone -24.2 65 74.6",
+        "perfa impact incoming-drone -32.8 81 -71.9",
+        "perfa impact incoming-drone 73.4 81 31.1",
+        "perfa impact incoming-drone -75.7 65 26.8",
+        "perfa impact incoming-drone 38.0 81 -71.5",
+        "perfa impact incoming-drone 20.4 65 79.0",
+        "perfa impact incoming-drone -68.9 65 -44.8",
+        "perfa impact incoming-drone 81.6 65 -13.6",
+        "perfa impact incoming-drone -51.4 65 65.7",
+        "perfa impact incoming-drone -6.5 81 -83.7",
+        "perfa impact incoming-drone 61.8 65 57.7",
+        "perfa impact incoming-drone -85.1 81 -0.8",
+        "perfa impact incoming-drone 63.8 65 -57.3",
+        "perfa impact incoming-drone -8.4 81 85.9",
+        "perfa impact incoming-drone -52.2 65 -69.5",
+        "perfa impact incoming-drone 86.0 65 16.1",
+        "perfa impact incoming-drone -74.7 81 46.5",
+        "perfa impact incoming-drone 23.8 65 -85.3",
+        "perfa impact incoming-drone 40.3 81 79.5",
+        "perfa impact incoming-drone -84.0 81 -31.6",
+        "perfa impact incoming-drone 83.8 81 -33.6",
+        "perfa impact incoming-drone -39.3 81 81.9",
+        "perfa impact incoming-drone -26.5 65 -87.5",
+        "perfa impact incoming-drone 79.1 81 46.9",
+        "perfa impact incoming-drone -90.5 65 19.0",
+        "perfa impact incoming-drone 54.2 65 -75.6",
+        "perfa impact incoming-drone 11.1 65 92.9",
+        "perfa impact incoming-drone -71.3 65 -61.3",
+        "perfa impact incoming-drone 94.6 65 -3.0",
+        "perfa impact incoming-drone -68.1 65 66.4",
+        "perfa impact incoming-drone 5.4 65 -95.5",
+        "perfa impact incoming-drone 60.9 65 74.4",
+        "perfa impact incoming-drone -95.7 65 -13.8",
+        "perfa impact incoming-drone 80.3 65 -54.7",
+        "perfa impact incoming-drone -22.4 65 95.1",
+        "perfa impact incoming-drone -48.0 81 -85.7",
+        "perfa impact incoming-drone 93.8 65 30.9",
+        "perfa impact incoming-drone -90.5 65 40.7",
+        "perfa impact incoming-drone 39.4 65 -91.6"
+      ],
+      "delays": [
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        0.0,
+        1.5,
+        1.5,
+        1.5,
+        1.5,
+        1.5,
+        1.5,
+        1.5,
+        1.5,
+        1.5,
+        1.5,
+        3.0,
+        3.0,
+        3.0,
+        3.0,
+        3.0,
+        3.0,
+        3.0,
+        3.0,
+        3.0,
+        3.0,
+        4.5,
+        4.5,
+        4.5,
+        4.5,
+        4.5,
+        4.5,
+        4.5,
+        4.5,
+        4.5,
+        4.5,
+        6.0,
+        6.0,
+        6.0,
+        6.0,
+        6.0,
+        6.0,
+        6.0,
+        6.0,
+        6.0,
+        6.0,
+        7.5,
+        7.5,
+        7.5,
+        7.5,
+        7.5,
+        7.5,
+        7.5,
+        7.5,
+        7.5,
+        7.5,
+        9.0,
+        9.0,
+        9.0,
+        9.0,
+        9.0,
+        9.0,
+        9.0,
+        9.0,
+        9.0,
+        9.0,
+        10.5,
+        10.5,
+        10.5,
+        10.5,
+        10.5,
+        10.5,
+        10.5,
+        10.5,
+        10.5,
+        10.5,
+        12.0,
+        12.0,
+        12.0,
+        12.0,
+        12.0,
+        12.0,
+        12.0,
+        12.0,
+        12.0,
+        12.0,
+        13.5,
+        13.5,
+        13.5,
+        13.5,
+        13.5,
+        13.5,
+        13.5,
+        13.5,
+        13.5,
+        13.5
+      ]
+    },
+    {
+      "do": "window",
+      "name": "incoming-drone-city-night-100-spread/t0-3",
+      "s": 3
+    },
+    {
+      "do": "window",
+      "name": "incoming-drone-city-night-100-spread/t3-15",
+      "s": 12
+    },
+    {
+      "do": "window",
+      "name": "incoming-drone-city-night-100-spread/t15-35",
+      "s": 20
+    },
+    {
+      "do": "window",
+      "name": "incoming-drone-city-night-100-spread/t35-50",
+      "s": 15
+    },
+    {
+      "do": "cmd",
+      "cmd": "forceload remove all"
+    },
+    {
+      "do": "cmd",
+      "cmd": "forceload remove all"
+    },
+    {
+      "do": "wait",
+      "s": 3
+    }
+  ],
+  "perfa_no_shots": true
+}

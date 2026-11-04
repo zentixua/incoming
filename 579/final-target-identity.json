@@ -1,0 +1,25 @@
+{
+  "runtime_head": "f8d6b1408b9f44cd255cb16db7253d73c7bef9b5",
+  "final_head": "2cacd470261d1e49765e6beb8fb9a2d00b89943d",
+  "runtime_jar_sha256": "ba536ba317bbe8b956ab29b10dd5ebd2c105c9164dacc14b7ebde016bcc208b3",
+  "final_jar_sha256": "ac66ef56c61ee9cf82458394d1dc3091e1375a697ed77ab304c03c80145e7bd1",
+  "target_classes": {
+    "ua/zentix/incoming/nuclear/world/WorkClock.class": {
+      "sha256": "9d4911b447333397e55394c657a9ce3eef398aa084ca0e773203bb9e27aff091",
+      "same_final": true
+    },
+    "ua/zentix/incoming/work/UnitQueue.class": {
+      "sha256": "553b4f816f0aabc01ffe9d4e640087a56afc01d9816db41231325e5d24faba3e",
+      "same_final": true
+    }
+  },
+  "runtime_to_final_zip_payload_changes": [
+    "ua/zentix/incoming/client/fx/layer/SceneDepth.class"
+  ],
+  "validated_integration_head": "04931ca4dfe3778709d4f9309d0bf0354ebd4d1b",
+  "post_review_change": "Only internal work.md corrects inherited universal deadline-plus-one-unit wording; all production, unit-test and build input trees equal the validated integration head.",
+  "reviewed_diff_sha256_before_rule_clarification": "6664a6eaa65f8ee5df159861de83b9d2aff6ab309bc839d41986401c2b94e5af",
+  "final_diff_sha256": "98279abcdfbf8083f5c69702605f0e4edb9ab10983da8ad2016630a1db7e0ead",
+  "production_and_tests_diff_sha256": "f4c6313f9f88408ce8c11f082e6b762608182dcc7588fd6025ccdac38ad18c7e",
+  "final_mod_tree": "d4ca1feac71995f5d3e5674495978c8099d91a77"
+}

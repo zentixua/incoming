@@ -1,0 +1,18 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.nuclear.world.WorkClockTest" tests="12" skipped="0" failures="0" errors="0" timestamp="2026-11-04T11:07:35.545Z" hostname="zentixua-pc" time="0.025">
+  <properties/>
+  <testcase name="statusReportsLastTick()" classname="ua.zentix.incoming.nuclear.world.WorkClockTest" time="0.008"/>
+  <testcase name="tickDecayOutOfRangeIsRejected()" classname="ua.zentix.incoming.nuclear.world.WorkClockTest" time="0.003"/>
+  <testcase name="perUnitDecayAloneStaysSlow()" classname="ua.zentix.incoming.nuclear.world.WorkClockTest" time="0.002"/>
+  <testcase name="visibleWorkGetsMoreTimeOnlyWithoutSpareTime()" classname="ua.zentix.incoming.nuclear.world.WorkClockTest" time="0.001"/>
+  <testcase name="spikeReleasesWithinFewTicks()" classname="ua.zentix.incoming.nuclear.world.WorkClockTest" time="0.0"/>
+  <testcase name="spentWorkCountsTimeNotUnits()" classname="ua.zentix.incoming.nuclear.world.WorkClockTest" time="0.001"/>
+  <testcase name="cheapUnitsFillTheBudget()" classname="ua.zentix.incoming.nuclear.world.WorkClockTest" time="0.002"/>
+  <testcase name="samplerCountsWithoutMovingQueueTime()" classname="ua.zentix.incoming.nuclear.world.WorkClockTest" time="0.0"/>
+  <testcase name="countingClockSplitsQueueByBudget()" classname="ua.zentix.incoming.nuclear.world.WorkClockTest" time="0.001"/>
+  <testcase name="alwaysDoesOneUnitPerTick()" classname="ua.zentix.incoming.nuclear.world.WorkClockTest" time="0.0"/>
+  <testcase name="doesNotStartWorkThatWouldOverrun()" classname="ua.zentix.incoming.nuclear.world.WorkClockTest" time="0.001"/>
+  <testcase name="estimateDecays()" classname="ua.zentix.incoming.nuclear.world.WorkClockTest" time="0.0"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

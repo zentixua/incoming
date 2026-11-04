@@ -1,0 +1,32 @@
+{
+  "original_jar_sha256": "c3860bdbfbfd04be2b606708b5f04ca8063dfa0351e0e1450cef64aa31bae818",
+  "jar_sha256": "5c8f4f7963fbe1b3371e081bfc3b1dafe18f30857a8f5aea29eefae312fb7f37",
+  "overlay_entries": [
+    "stand.mixins.json",
+    "ua/zentix/stand/ServerWatch.class",
+    "ua/zentix/stand/Stand.class",
+    "ua/zentix/stand/WindowClockView.class",
+    "ua/zentix/stand/WindowTelemetry$Row.class",
+    "ua/zentix/stand/WindowTelemetry$Window.class",
+    "ua/zentix/stand/WindowTelemetry.class",
+    "ua/zentix/stand/WindowTimingView.class",
+    "ua/zentix/stand/mixin/WindowClockMixin.class",
+    "ua/zentix/stand/mixin/WindowQueueMixin.class",
+    "ua/zentix/stand/mixin/WindowSchedulerMixin.class",
+    "ua/zentix/stand/mixin/WindowTimingMixin.class"
+  ],
+  "sources": {
+    "observer-src/ua/zentix/stand/ServerWatch.java": "4bc7da5fe25930bd032348f17729810f7d1d15204c867434531f4111c88271f5",
+    "observer-src/ua/zentix/stand/Stand.java": "21d2045fbd8f339bdf36e4a088f8d004982e74bfcffeba4b3494c7bd701fbd6c",
+    "observer-src/ua/zentix/stand/WindowClockView.java": "4b5d80649434cd59dbc4f90d9709b120cc6a73e70895b25d6253cb6c2fff9153",
+    "observer-src/ua/zentix/stand/WindowTelemetry.java": "94b95423b7222d1b3ef8efeb6d4fb6d93d814ae89bd72a4bc48df91dee25c11b",
+    "observer-src/ua/zentix/stand/WindowTimingView.java": "24c0e8b26aa373842c1a9c0ca16c9e87afaffcf97db772ee2452c17af995a3b9",
+    "observer-src/ua/zentix/stand/mixin/WindowClockMixin.java": "9680b3cb77293b7b449984068881a197d4147ec2a4c5207f087af65757b2e975",
+    "observer-src/ua/zentix/stand/mixin/WindowQueueMixin.java": "15b3aee2fcdee1f853c5534057c8b5551953488b6621dca9ab9c77accfd019b9",
+    "observer-src/ua/zentix/stand/mixin/WindowSchedulerMixin.java": "796947cd3e680582a9787e1e7eeeed9322091b1200dd13b3615fa5d053e3a5b8",
+    "observer-src/ua/zentix/stand/mixin/WindowTimingMixin.java": "4f23425c2edf3e000a858cc8f49aafd1e925c2f81d75388cc3344584466121ed"
+  },
+  "classpath_sha256": "1260ac3d6ae1330f9e135cfe39d171174b9d2c78258661f11c8f4332b795d55c",
+  "mixin_config_sha256": "65ed7d033bc1fd1805400eb55f0ae7ef0ef92e8272d44052d65f0c656190b25b",
+  "validation": "javac only; no runtime Mixin/client validation"
+}

@@ -1,0 +1,1964 @@
+{
+  "a1": {
+    "head": "eee272309e1c8306952f32b5f6b7ed4192be2e7c",
+    "scope": "Instrumented queue windows; does not prove a universal deadline, every admission, or clean gameplay latency.",
+    "common_budget_ns": 30000000,
+    "windows": {
+      "incoming-drone-city-night-100-spread/t0-3": {
+        "ticks": 61,
+        "active_queue_ticks": 40,
+        "observed_windows": 78,
+        "queue_wall_ms": {
+          "n": 61,
+          "p50": 24.239321,
+          "p99": 44.198586,
+          "max": 44.198586,
+          "mean": 18.1878632295082,
+          "sum": 1109.459657
+        },
+        "queue_charge_ms": {
+          "n": 61,
+          "p50": 23.695271,
+          "p99": 43.958531,
+          "max": 43.958531,
+          "mean": 17.480477,
+          "sum": 1066.309097
+        },
+        "active_queue_wall_ms": {
+          "n": 40,
+          "p50": 29.950059,
+          "p99": 44.198586,
+          "max": 44.198586,
+          "mean": 27.736491425000004,
+          "sum": 1109.459657
+        },
+        "active_queue_charge_ms": {
+          "n": 40,
+          "p50": 28.951889,
+          "p99": 43.958531,
+          "max": 43.958531,
+          "mean": 26.657727425,
+          "sum": 1066.309097
+        },
+        "record_ms": {
+          "n": 61,
+          "p50": 23.695271,
+          "p99": 43.958531,
+          "max": 43.958531,
+          "mean": 17.480477,
+          "sum": 1066.309097
+        },
+        "observer_wall_minus_charge_ms": {
+          "n": 40,
+          "p50": 0.3799550000000025,
+          "p99": 8.669594,
+          "max": 8.669594,
+          "mean": 1.078764,
+          "sum": 43.15056
+        },
+        "actual_account_added_ms": {
+          "n": 0
+        },
+        "queue_wall_above_common": 16,
+        "queue_charge_above_common": 3,
+        "last_record_ms": {
+          "n": 72,
+          "p50": 0.410896,
+          "p99": 24.194156,
+          "max": 24.194156,
+          "mean": 1.5910771944444444,
+          "sum": 114.557558
+        },
+        "first_record_flags": 40,
+        "late_record_flags": 29,
+        "phase": {
+          "early": {
+            "count": 40,
+            "wall_ms": {
+              "n": 40,
+              "p50": 16.747869,
+              "p99": 24.218361,
+              "max": 24.218361,
+              "mean": 16.308122925,
+              "sum": 652.324917
+            },
+            "charged_ms": {
+              "n": 40,
+              "p50": 16.393639,
+              "p99": 24.005971,
+              "max": 24.005971,
+              "mean": 15.87428315,
+              "sum": 634.971326
+            },
+            "observer_wall_minus_charge_ms": {
+              "n": 40,
+              "p50": 0.194758,
+              "p99": 3.421576,
+              "max": 3.421576,
+              "mean": 0.43383977500000004,
+              "sum": 17.353591
+            },
+            "record_ms": {
+              "n": 40,
+              "p50": 16.393639,
+              "p99": 24.005971,
+              "max": 24.005971,
+              "mean": 15.87428315,
+              "sum": 634.971326
+            }
+          },
+          "late": {
+            "count": 38,
+            "wall_ms": {
+              "n": 38,
+              "p50": 11.769043,
+              "p99": 29.981038,
+              "max": 29.981038,
+              "mean": 12.029861578947369,
+              "sum": 457.13474
+            },
+            "charged_ms": {
+              "n": 38,
+              "p50": 11.66153,
+              "p99": 25.449076,
+              "max": 25.449076,
+              "mean": 11.35099397368421,
+              "sum": 431.337771
+            },
+            "observer_wall_minus_charge_ms": {
+              "n": 38,
+              "p50": 0.145635,
+              "p99": 8.618487,
+              "max": 8.618487,
+              "mean": 0.6788676052631579,
+              "sum": 25.796969
+            },
+            "record_ms": {
+              "n": 38,
+              "p50": 11.66153,
+              "p99": 25.449076,
+              "max": 25.449076,
+              "mean": 11.35099397368421,
+              "sum": 431.337771
+            }
+          }
+        },
+        "top_wall_ticks": [
+          {
+            "n": 791,
+            "queue_wall_ms": 44.198586,
+            "queue_charged_ms": 43.958531,
+            "record_ms": 43.958531,
+            "outer_impact_ms": 44.2613,
+            "window_count": 2,
+            "record_count": 9
+          },
+          {
+            "n": 802,
+            "queue_wall_ms": 30.991035,
+            "queue_charged_ms": 29.511696,
+            "record_ms": 29.511696,
+            "outer_impact_ms": 31.0602,
+            "window_count": 2,
+            "record_count": 51
+          },
+          {
+            "n": 789,
+            "queue_wall_ms": 30.630865,
+            "queue_charged_ms": 30.297526,
+            "record_ms": 30.297526,
+            "outer_impact_ms": 30.6802,
+            "window_count": 2,
+            "record_count": 82
+          },
+          {
+            "n": 801,
+            "queue_wall_ms": 30.599476,
+            "queue_charged_ms": 29.840271,
+            "record_ms": 29.840271,
+            "outer_impact_ms": 30.7256,
+            "window_count": 2,
+            "record_count": 64
+          },
+          {
+            "n": 805,
+            "queue_wall_ms": 30.484269,
+            "queue_charged_ms": 30.230732,
+            "record_ms": 30.230732,
+            "outer_impact_ms": 30.5492,
+            "window_count": 2,
+            "record_count": 82
+          },
+          {
+            "n": 795,
+            "queue_wall_ms": 30.402364,
+            "queue_charged_ms": 28.951889,
+            "record_ms": 28.951889,
+            "outer_impact_ms": 30.4821,
+            "window_count": 2,
+            "record_count": 26
+          },
+          {
+            "n": 808,
+            "queue_wall_ms": 30.393146,
+            "queue_charged_ms": 27.840174,
+            "record_ms": 27.840174,
+            "outer_impact_ms": 30.4769,
+            "window_count": 2,
+            "record_count": 159
+          },
+          {
+            "n": 800,
+            "queue_wall_ms": 30.277758,
+            "queue_charged_ms": 29.937876,
+            "record_ms": 29.937876,
+            "outer_impact_ms": 30.3395,
+            "window_count": 2,
+            "record_count": 44
+          }
+        ]
+      },
+      "incoming-drone-city-night-100-spread/t3-15": {
+        "ticks": 240,
+        "active_queue_ticks": 94,
+        "observed_windows": 182,
+        "queue_wall_ms": {
+          "n": 240,
+          "p50": 0.0,
+          "p99": 32.271183,
+          "max": 34.178948,
+          "mean": 11.0350273625,
+          "sum": 2648.406567
+        },
+        "queue_charge_ms": {
+          "n": 240,
+          "p50": 0.0,
+          "p99": 29.999044,
+          "max": 33.929956,
+          "mean": 10.379686604166666,
+          "sum": 2491.124785
+        },
+        "active_queue_wall_ms": {
+          "n": 94,
+          "p50": 30.011966,
+          "p99": 34.178948,
+          "max": 34.178948,
+          "mean": 28.17453794680851,
+          "sum": 2648.406567
+        },
+        "active_queue_charge_ms": {
+          "n": 94,
+          "p50": 28.525561,
+          "p99": 33.929956,
+          "max": 33.929956,
+          "mean": 26.5013275,
+          "sum": 2491.124785
+        },
+        "record_ms": {
+          "n": 240,
+          "p50": 0.0,
+          "p99": 29.999044,
+          "max": 33.929956,
+          "mean": 10.379686604166666,
+          "sum": 2491.124785
+        },
+        "observer_wall_minus_charge_ms": {
+          "n": 94,
+          "p50": 0.5871619999999993,
+          "p99": 6.4811049999999994,
+          "max": 6.4811049999999994,
+          "mean": 1.673210446808511,
+          "sum": 157.28178200000002
+        },
+        "actual_account_added_ms": {
+          "n": 0
+        },
+        "queue_wall_above_common": 60,
+        "queue_charge_above_common": 2,
+        "last_record_ms": {
+          "n": 153,
+          "p50": 0.036438,
+          "p99": 2.100919,
+          "max": 8.217684,
+          "mean": 0.27108716993464055,
+          "sum": 41.476337
+        },
+        "first_record_flags": 94,
+        "late_record_flags": 87,
+        "phase": {
+          "early": {
+            "count": 94,
+            "wall_ms": {
+              "n": 94,
+              "p50": 19.602581,
+              "p99": 21.035278,
+              "max": 21.035278,
+              "mean": 13.102087372340426,
+              "sum": 1231.596213
+            },
+            "charged_ms": {
+              "n": 94,
+              "p50": 18.776503,
+              "p99": 20.94756,
+              "max": 20.94756,
+              "mean": 12.786954372340427,
+              "sum": 1201.973711
+            },
+            "observer_wall_minus_charge_ms": {
+              "n": 94,
+              "p50": 0.132389,
+              "p99": 3.969903,
+              "max": 3.969903,
+              "mean": 0.315133,
+              "sum": 29.622502
+            },
+            "record_ms": {
+              "n": 94,
+              "p50": 18.776503,
+              "p99": 20.94756,
+              "max": 20.94756,
+              "mean": 12.786954372340427,
+              "sum": 1201.973711
+            }
+          },
+          "late": {
+            "count": 88,
+            "wall_ms": {
+              "n": 88,
+              "p50": 10.518371,
+              "p99": 30.018157,
+              "max": 30.018157,
+              "mean": 16.10011765909091,
+              "sum": 1416.810354
+            },
+            "charged_ms": {
+              "n": 88,
+              "p50": 10.411748,
+              "p99": 27.544898,
+              "max": 27.544898,
+              "mean": 14.649444022727272,
+              "sum": 1289.1510739999999
+            },
+            "observer_wall_minus_charge_ms": {
+              "n": 88,
+              "p50": 0.218323,
+              "p99": 6.450447,
+              "max": 6.450447,
+              "mean": 1.4506736363636363,
+              "sum": 127.65928
+            },
+            "record_ms": {
+              "n": 88,
+              "p50": 10.411748,
+              "p99": 27.544898,
+              "max": 27.544898,
+              "mean": 14.649444022727272,
+              "sum": 1289.1510739999999
+            }
+          }
+        },
+        "top_wall_ticks": [
+          {
+            "n": 968,
+            "queue_wall_ms": 34.178948,
+            "queue_charged_ms": 33.929956,
+            "record_ms": 33.929956,
+            "outer_impact_ms": 35.3977,
+            "window_count": 2,
+            "record_count": 168
+          },
+          {
+            "n": 969,
+            "queue_wall_ms": 32.489958,
+            "queue_charged_ms": 28.525561,
+            "record_ms": 28.525561,
+            "outer_impact_ms": 32.6209,
+            "window_count": 2,
+            "record_count": 26109
+          },
+          {
+            "n": 939,
+            "queue_wall_ms": 32.271183,
+            "queue_charged_ms": 28.444941,
+            "record_ms": 28.444941,
+            "outer_impact_ms": 32.3705,
+            "window_count": 2,
+            "record_count": 23181
+          },
+          {
+            "n": 881,
+            "queue_wall_ms": 31.203217,
+            "queue_charged_ms": 28.56821,
+            "record_ms": 28.56821,
+            "outer_impact_ms": 31.2666,
+            "window_count": 2,
+            "record_count": 14740
+          },
+          {
+            "n": 880,
+            "queue_wall_ms": 31.120069,
+            "queue_charged_ms": 30.825206,
+            "record_ms": 30.825206,
+            "outer_impact_ms": 31.2595,
+            "window_count": 2,
+            "record_count": 66
+          },
+          {
+            "n": 1036,
+            "queue_wall_ms": 30.78723,
+            "queue_charged_ms": 29.999044,
+            "record_ms": 29.999044,
+            "outer_impact_ms": 30.9007,
+            "window_count": 2,
+            "record_count": 88
+          },
+          {
+            "n": 938,
+            "queue_wall_ms": 30.711116,
+            "queue_charged_ms": 29.611192,
+            "record_ms": 29.611192,
+            "outer_impact_ms": 33.7515,
+            "window_count": 2,
+            "record_count": 380
+          },
+          {
+            "n": 882,
+            "queue_wall_ms": 30.595209,
+            "queue_charged_ms": 26.384414,
+            "record_ms": 26.384414,
+            "outer_impact_ms": 30.7905,
+            "window_count": 2,
+            "record_count": 23734
+          }
+        ]
+      },
+      "incoming-drone-city-night-100-spread/total": {
+        "ticks": 1002,
+        "active_queue_ticks": 134,
+        "observed_windows": 260,
+        "queue_wall_ms": {
+          "n": 1002,
+          "p50": 0.0,
+          "p99": 30.599476,
+          "max": 44.198586,
+          "mean": 3.750365493013972,
+          "sum": 3757.866224
+        },
+        "queue_charge_ms": {
+          "n": 1002,
+          "p50": 0.0,
+          "p99": 29.918985,
+          "max": 43.958531,
+          "mean": 3.550333215568862,
+          "sum": 3557.433882
+        },
+        "active_queue_wall_ms": {
+          "n": 134,
+          "p50": 30.006796,
+          "p99": 34.178948,
+          "max": 44.198586,
+          "mean": 28.043777791044775,
+          "sum": 3757.866224
+        },
+        "active_queue_charge_ms": {
+          "n": 134,
+          "p50": 28.652268,
+          "p99": 33.929956,
+          "max": 43.958531,
+          "mean": 26.548014044776117,
+          "sum": 3557.433882
+        },
+        "record_ms": {
+          "n": 1002,
+          "p50": 0.0,
+          "p99": 29.918985,
+          "max": 43.958531,
+          "mean": 3.550333215568862,
+          "sum": 3557.433882
+        },
+        "observer_wall_minus_charge_ms": {
+          "n": 134,
+          "p50": 0.5001459999999973,
+          "p99": 7.726287000000003,
+          "max": 8.669594,
+          "mean": 1.495763746268657,
+          "sum": 200.43234200000003
+        },
+        "actual_account_added_ms": {
+          "n": 0
+        },
+        "queue_wall_above_common": 76,
+        "queue_charge_above_common": 5,
+        "last_record_ms": {
+          "n": 225,
+          "p50": 0.088377,
+          "p99": 8.503995,
+          "max": 24.194156,
+          "mean": 0.6934839777777778,
+          "sum": 156.033895
+        },
+        "first_record_flags": 134,
+        "late_record_flags": 116,
+        "phase": {
+          "early": {
+            "count": 134,
+            "wall_ms": {
+              "n": 134,
+              "p50": 18.30493,
+              "p99": 21.035278,
+              "max": 24.218361,
+              "mean": 14.05911291044776,
+              "sum": 1883.92113
+            },
+            "charged_ms": {
+              "n": 134,
+              "p50": 17.804784,
+              "p99": 20.94756,
+              "max": 24.005971,
+              "mean": 13.708545052238806,
+              "sum": 1836.945037
+            },
+            "observer_wall_minus_charge_ms": {
+              "n": 134,
+              "p50": 0.175111,
+              "p99": 3.421576,
+              "max": 3.969903,
+              "mean": 0.3505678582089552,
+              "sum": 46.976093
+            },
+            "record_ms": {
+              "n": 134,
+              "p50": 17.804784,
+              "p99": 20.94756,
+              "max": 24.005971,
+              "mean": 13.708545052238806,
+              "sum": 1836.945037
+            }
+          },
+          "late": {
+            "count": 126,
+            "wall_ms": {
+              "n": 126,
+              "p50": 10.74006,
+              "p99": 30.002329,
+              "max": 30.018157,
+              "mean": 14.87258011111111,
+              "sum": 1873.945094
+            },
+            "charged_ms": {
+              "n": 126,
+              "p50": 10.522255,
+              "p99": 26.513657,
+              "max": 27.544898,
+              "mean": 13.654673373015873,
+              "sum": 1720.488845
+            },
+            "observer_wall_minus_charge_ms": {
+              "n": 126,
+              "p50": 0.158228,
+              "p99": 7.680831,
+              "max": 8.618487,
+              "mean": 1.2179067380952382,
+              "sum": 153.456249
+            },
+            "record_ms": {
+              "n": 126,
+              "p50": 10.522255,
+              "p99": 26.513657,
+              "max": 27.544898,
+              "mean": 13.654673373015873,
+              "sum": 1720.488845
+            }
+          }
+        },
+        "top_wall_ticks": [
+          {
+            "n": 791,
+            "queue_wall_ms": 44.198586,
+            "queue_charged_ms": 43.958531,
+            "record_ms": 43.958531,
+            "outer_impact_ms": 44.2613,
+            "window_count": 2,
+            "record_count": 9
+          },
+          {
+            "n": 968,
+            "queue_wall_ms": 34.178948,
+            "queue_charged_ms": 33.929956,
+            "record_ms": 33.929956,
+            "outer_impact_ms": 35.3977,
+            "window_count": 2,
+            "record_count": 168
+          },
+          {
+            "n": 969,
+            "queue_wall_ms": 32.489958,
+            "queue_charged_ms": 28.525561,
+            "record_ms": 28.525561,
+            "outer_impact_ms": 32.6209,
+            "window_count": 2,
+            "record_count": 26109
+          },
+          {
+            "n": 939,
+            "queue_wall_ms": 32.271183,
+            "queue_charged_ms": 28.444941,
+            "record_ms": 28.444941,
+            "outer_impact_ms": 32.3705,
+            "window_count": 2,
+            "record_count": 23181
+          },
+          {
+            "n": 881,
+            "queue_wall_ms": 31.203217,
+            "queue_charged_ms": 28.56821,
+            "record_ms": 28.56821,
+            "outer_impact_ms": 31.2666,
+            "window_count": 2,
+            "record_count": 14740
+          },
+          {
+            "n": 880,
+            "queue_wall_ms": 31.120069,
+            "queue_charged_ms": 30.825206,
+            "record_ms": 30.825206,
+            "outer_impact_ms": 31.2595,
+            "window_count": 2,
+            "record_count": 66
+          },
+          {
+            "n": 802,
+            "queue_wall_ms": 30.991035,
+            "queue_charged_ms": 29.511696,
+            "record_ms": 29.511696,
+            "outer_impact_ms": 31.0602,
+            "window_count": 2,
+            "record_count": 51
+          },
+          {
+            "n": 1036,
+            "queue_wall_ms": 30.78723,
+            "queue_charged_ms": 29.999044,
+            "record_ms": 29.999044,
+            "outer_impact_ms": 30.9007,
+            "window_count": 2,
+            "record_count": 88
+          }
+        ]
+      }
+    }
+  },
+  "b": {
+    "head": "f8d6b1408b9f44cd255cb16db7253d73c7bef9b5",
+    "scope": "Instrumented queue windows; does not prove a universal deadline, every admission, or clean gameplay latency.",
+    "common_budget_ns": 30000000,
+    "windows": {
+      "incoming-drone-city-night-100-spread/t0-3": {
+        "ticks": 61,
+        "active_queue_ticks": 42,
+        "observed_windows": 82,
+        "queue_wall_ms": {
+          "n": 61,
+          "p50": 29.286636,
+          "p99": 33.087296,
+          "max": 33.087296,
+          "mean": 19.134777950819675,
+          "sum": 1167.221455
+        },
+        "queue_charge_ms": {
+          "n": 61,
+          "p50": 29.279553,
+          "p99": 33.080102,
+          "max": 33.080102,
+          "mean": 19.12491870491803,
+          "sum": 1166.620041
+        },
+        "active_queue_wall_ms": {
+          "n": 42,
+          "p50": 29.774697,
+          "p99": 33.087296,
+          "max": 33.087296,
+          "mean": 27.790987023809528,
+          "sum": 1167.221455
+        },
+        "active_queue_charge_ms": {
+          "n": 42,
+          "p50": 29.765631,
+          "p99": 33.080102,
+          "max": 33.080102,
+          "mean": 27.77666764285714,
+          "sum": 1166.620041
+        },
+        "record_ms": {
+          "n": 61,
+          "p50": 27.897527,
+          "p99": 32.869935,
+          "max": 32.869935,
+          "mean": 18.479963147540982,
+          "sum": 1127.277752
+        },
+        "observer_wall_minus_charge_ms": {
+          "n": 42,
+          "p50": 0.008316000000000656,
+          "p99": 0.2225999999999999,
+          "max": 0.2225999999999999,
+          "mean": 0.014319380952381115,
+          "sum": 0.6014140000000068
+        },
+        "actual_account_added_ms": {
+          "n": 82,
+          "p50": 0.180429,
+          "p99": 6.811942,
+          "max": 6.811942,
+          "mean": 0.47978401219512196,
+          "sum": 39.342289
+        },
+        "queue_wall_above_common": 7,
+        "queue_charge_above_common": 7,
+        "last_record_ms": {
+          "n": 79,
+          "p50": 0.371041,
+          "p99": 18.492164,
+          "max": 18.492164,
+          "mean": 1.5363681772151898,
+          "sum": 121.373086
+        },
+        "first_record_flags": 42,
+        "late_record_flags": 32,
+        "phase": {
+          "early": {
+            "count": 42,
+            "wall_ms": {
+              "n": 42,
+              "p50": 18.001167,
+              "p99": 30.354403,
+              "max": 30.354403,
+              "mean": 16.56014119047619,
+              "sum": 695.52593
+            },
+            "charged_ms": {
+              "n": 42,
+              "p50": 17.997539,
+              "p99": 30.350085,
+              "max": 30.350085,
+              "mean": 16.550433,
+              "sum": 695.118186
+            },
+            "observer_wall_minus_charge_ms": {
+              "n": 42,
+              "p50": 0.004217,
+              "p99": 0.214916,
+              "max": 0.214916,
+              "mean": 0.009708190476190476,
+              "sum": 0.407744
+            },
+            "record_ms": {
+              "n": 42,
+              "p50": 15.083406,
+              "p99": 30.012768,
+              "max": 30.012768,
+              "mean": 15.988551904761906,
+              "sum": 671.51918
+            }
+          },
+          "late": {
+            "count": 40,
+            "wall_ms": {
+              "n": 40,
+              "p50": 10.30089,
+              "p99": 29.705317,
+              "max": 29.705317,
+              "mean": 11.792388124999999,
+              "sum": 471.695525
+            },
+            "charged_ms": {
+              "n": 40,
+              "p50": 10.296762,
+              "p99": 29.70173,
+              "max": 29.70173,
+              "mean": 11.787546375,
+              "sum": 471.501855
+            },
+            "observer_wall_minus_charge_ms": {
+              "n": 40,
+              "p50": 0.004177,
+              "p99": 0.019987,
+              "max": 0.019987,
+              "mean": 0.004841750000000001,
+              "sum": 0.19367
+            },
+            "record_ms": {
+              "n": 40,
+              "p50": 10.193856,
+              "p99": 23.586208,
+              "max": 23.586208,
+              "mean": 11.3939643,
+              "sum": 455.758572
+            }
+          }
+        },
+        "top_wall_ticks": [
+          {
+            "n": 862,
+            "queue_wall_ms": 33.087296,
+            "queue_charged_ms": 33.080102,
+            "record_ms": 32.869935,
+            "outer_impact_ms": 33.1456,
+            "window_count": 2,
+            "record_count": 6
+          },
+          {
+            "n": 882,
+            "queue_wall_ms": 30.750621,
+            "queue_charged_ms": 30.737857,
+            "record_ms": 30.320777,
+            "outer_impact_ms": 30.8914,
+            "window_count": 2,
+            "record_count": 150
+          },
+          {
+            "n": 874,
+            "queue_wall_ms": 30.557747,
+            "queue_charged_ms": 30.54823,
+            "record_ms": 29.462182,
+            "outer_impact_ms": 30.6268,
+            "window_count": 2,
+            "record_count": 28
+          },
+          {
+            "n": 860,
+            "queue_wall_ms": 30.418464,
+            "queue_charged_ms": 30.414255,
+            "record_ms": 30.03579,
+            "outer_impact_ms": 30.4574,
+            "window_count": 2,
+            "record_count": 87
+          },
+          {
+            "n": 863,
+            "queue_wall_ms": 30.397634,
+            "queue_charged_ms": 30.389139,
+            "record_ms": 30.012768,
+            "outer_impact_ms": 30.4589,
+            "window_count": 2,
+            "record_count": 3
+          },
+          {
+            "n": 876,
+            "queue_wall_ms": 30.093751,
+            "queue_charged_ms": 30.084964,
+            "record_ms": 29.771709,
+            "outer_impact_ms": 30.1792,
+            "window_count": 2,
+            "record_count": 33
+          },
+          {
+            "n": 883,
+            "queue_wall_ms": 30.030322,
+            "queue_charged_ms": 30.023407,
+            "record_ms": 27.347303,
+            "outer_impact_ms": 30.102,
+            "window_count": 2,
+            "record_count": 179
+          },
+          {
+            "n": 893,
+            "queue_wall_ms": 29.995575,
+            "queue_charged_ms": 29.988632,
+            "record_ms": 23.586208,
+            "outer_impact_ms": 30.058,
+            "window_count": 2,
+            "record_count": 15802
+          }
+        ]
+      },
+      "incoming-drone-city-night-100-spread/t3-15": {
+        "ticks": 241,
+        "active_queue_ticks": 92,
+        "observed_windows": 179,
+        "queue_wall_ms": {
+          "n": 241,
+          "p50": 0.0,
+          "p99": 30.083641,
+          "max": 30.134387,
+          "mean": 10.618782365145227,
+          "sum": 2559.12655
+        },
+        "queue_charge_ms": {
+          "n": 241,
+          "p50": 0.0,
+          "p99": 30.076778,
+          "max": 30.127264,
+          "mean": 10.614518406639004,
+          "sum": 2558.098936
+        },
+        "active_queue_wall_ms": {
+          "n": 92,
+          "p50": 29.961691,
+          "p99": 30.134387,
+          "max": 30.134387,
+          "mean": 27.81659293478261,
+          "sum": 2559.12655
+        },
+        "active_queue_charge_ms": {
+          "n": 92,
+          "p50": 29.954077,
+          "p99": 30.127264,
+          "max": 30.127264,
+          "mean": 27.805423217391304,
+          "sum": 2558.098936
+        },
+        "record_ms": {
+          "n": 241,
+          "p50": 0.0,
+          "p99": 29.813098,
+          "max": 29.972564,
+          "mean": 9.989603502074688,
+          "sum": 2407.494444
+        },
+        "observer_wall_minus_charge_ms": {
+          "n": 92,
+          "p50": 0.007903999999999911,
+          "p99": 0.04941400000000229,
+          "max": 0.04941400000000229,
+          "mean": 0.011169717391304347,
+          "sum": 1.027614
+        },
+        "actual_account_added_ms": {
+          "n": 179,
+          "p50": 0.136546,
+          "p99": 4.825612,
+          "max": 5.524658,
+          "mean": 0.841365877094972,
+          "sum": 150.604492
+        },
+        "queue_wall_above_common": 26,
+        "queue_charge_above_common": 12,
+        "last_record_ms": {
+          "n": 149,
+          "p50": 0.064682,
+          "p99": 2.367172,
+          "max": 8.693723,
+          "mean": 0.2553255167785235,
+          "sum": 38.043502000000004
+        },
+        "first_record_flags": 92,
+        "late_record_flags": 75,
+        "phase": {
+          "early": {
+            "count": 92,
+            "wall_ms": {
+              "n": 92,
+              "p50": 19.836053,
+              "p99": 24.246254,
+              "max": 24.246254,
+              "mean": 12.685482489130434,
+              "sum": 1167.064389
+            },
+            "charged_ms": {
+              "n": 92,
+              "p50": 19.815444,
+              "p99": 24.236686,
+              "max": 24.236686,
+              "mean": 12.678825652173915,
+              "sum": 1166.45196
+            },
+            "observer_wall_minus_charge_ms": {
+              "n": 92,
+              "p50": 0.003828,
+              "p99": 0.045696,
+              "max": 0.045696,
+              "mean": 0.006656836956521739,
+              "sum": 0.612429
+            },
+            "record_ms": {
+              "n": 92,
+              "p50": 19.302112,
+              "p99": 24.064691,
+              "max": 24.064691,
+              "mean": 12.412650771739129,
+              "sum": 1141.963871
+            }
+          },
+          "late": {
+            "count": 87,
+            "wall_ms": {
+              "n": 87,
+              "p50": 10.0577,
+              "p99": 30.120221,
+              "max": 30.120221,
+              "mean": 16.000714494252875,
+              "sum": 1392.062161
+            },
+            "charged_ms": {
+              "n": 87,
+              "p50": 10.052951,
+              "p99": 30.116273,
+              "max": 30.116273,
+              "mean": 15.995942252873563,
+              "sum": 1391.646976
+            },
+            "observer_wall_minus_charge_ms": {
+              "n": 87,
+              "p50": 0.003718,
+              "p99": 0.040837,
+              "max": 0.040837,
+              "mean": 0.004772241379310345,
+              "sum": 0.415185
+            },
+            "record_ms": {
+              "n": 87,
+              "p50": 9.923094,
+              "p99": 26.506869,
+              "max": 26.506869,
+              "mean": 14.546328425287356,
+              "sum": 1265.530573
+            }
+          }
+        },
+        "top_wall_ticks": [
+          {
+            "n": 1100,
+            "queue_wall_ms": 30.134387,
+            "queue_charged_ms": 30.127264,
+            "record_ms": 26.071796,
+            "outer_impact_ms": 30.1762,
+            "window_count": 2,
+            "record_count": 20065
+          },
+          {
+            "n": 1134,
+            "queue_wall_ms": 30.114801,
+            "queue_charged_ms": 30.097928,
+            "record_ms": 25.259723,
+            "outer_impact_ms": 30.2251,
+            "window_count": 2,
+            "record_count": 20528
+          },
+          {
+            "n": 1017,
+            "queue_wall_ms": 30.083641,
+            "queue_charged_ms": 30.076778,
+            "record_ms": 29.972564,
+            "outer_impact_ms": 30.129,
+            "window_count": 2,
+            "record_count": 68
+          },
+          {
+            "n": 927,
+            "queue_wall_ms": 30.075946,
+            "queue_charged_ms": 30.066369,
+            "record_ms": 29.861052,
+            "outer_impact_ms": 30.1501,
+            "window_count": 2,
+            "record_count": 117
+          },
+          {
+            "n": 1070,
+            "queue_wall_ms": 30.058724,
+            "queue_charged_ms": 30.041993,
+            "record_ms": 26.296499,
+            "outer_impact_ms": 30.1557,
+            "window_count": 2,
+            "record_count": 22043
+          },
+          {
+            "n": 950,
+            "queue_wall_ms": 30.047362,
+            "queue_charged_ms": 30.038596,
+            "record_ms": 26.378644,
+            "outer_impact_ms": 30.1123,
+            "window_count": 2,
+            "record_count": 19555
+          },
+          {
+            "n": 983,
+            "queue_wall_ms": 30.04041,
+            "queue_charged_ms": 29.990996,
+            "record_ms": 25.309288,
+            "outer_impact_ms": 30.3063,
+            "window_count": 2,
+            "record_count": 20826
+          },
+          {
+            "n": 1018,
+            "queue_wall_ms": 30.03514,
+            "queue_charged_ms": 30.017716,
+            "record_ms": 29.490128,
+            "outer_impact_ms": 30.1959,
+            "window_count": 2,
+            "record_count": 56
+          }
+        ]
+      },
+      "incoming-drone-city-night-100-spread/total": {
+        "ticks": 1003,
+        "active_queue_ticks": 134,
+        "observed_windows": 261,
+        "queue_wall_ms": {
+          "n": 1003,
+          "p50": 0.0,
+          "p99": 30.058724,
+          "max": 33.087296,
+          "mean": 3.7152023978065802,
+          "sum": 3726.348005
+        },
+        "queue_charge_ms": {
+          "n": 1003,
+          "p50": 0.0,
+          "p99": 30.041993,
+          "max": 33.080102,
+          "mean": 3.7135782422731807,
+          "sum": 3724.718977
+        },
+        "active_queue_wall_ms": {
+          "n": 134,
+          "p50": 29.930793,
+          "p99": 30.750621,
+          "max": 33.087296,
+          "mean": 27.808567201492536,
+          "sum": 3726.348005
+        },
+        "active_queue_charge_ms": {
+          "n": 134,
+          "p50": 29.921274,
+          "p99": 30.737857,
+          "max": 33.080102,
+          "mean": 27.796410276119403,
+          "sum": 3724.718977
+        },
+        "record_ms": {
+          "n": 1003,
+          "p50": 0.0,
+          "p99": 29.781471,
+          "max": 32.869935,
+          "mean": 3.5241995972083746,
+          "sum": 3534.772196
+        },
+        "observer_wall_minus_charge_ms": {
+          "n": 134,
+          "p50": 0.008165000000001754,
+          "p99": 0.04941400000000229,
+          "max": 0.2225999999999999,
+          "mean": 0.012156925373134378,
+          "sum": 1.6290280000000068
+        },
+        "actual_account_added_ms": {
+          "n": 261,
+          "p50": 0.175408,
+          "p99": 5.675134,
+          "max": 6.811942,
+          "mean": 0.7277654444444444,
+          "sum": 189.946781
+        },
+        "queue_wall_above_common": 33,
+        "queue_charge_above_common": 19,
+        "last_record_ms": {
+          "n": 228,
+          "p50": 0.113354,
+          "p99": 13.860804,
+          "max": 18.492164,
+          "mean": 0.6991955614035087,
+          "sum": 159.416588
+        },
+        "first_record_flags": 134,
+        "late_record_flags": 107,
+        "phase": {
+          "early": {
+            "count": 134,
+            "wall_ms": {
+              "n": 134,
+              "p50": 19.742656,
+              "p99": 24.246254,
+              "max": 30.354403,
+              "mean": 13.899927753731342,
+              "sum": 1862.590319
+            },
+            "charged_ms": {
+              "n": 134,
+              "p50": 19.735623,
+              "p99": 24.236686,
+              "max": 30.350085,
+              "mean": 13.89231452238806,
+              "sum": 1861.570146
+            },
+            "observer_wall_minus_charge_ms": {
+              "n": 134,
+              "p50": 0.004008,
+              "p99": 0.045696,
+              "max": 0.214916,
+              "mean": 0.007613231343283582,
+              "sum": 1.020173
+            },
+            "record_ms": {
+              "n": 134,
+              "p50": 18.931214,
+              "p99": 24.064691,
+              "max": 30.012768,
+              "mean": 13.533455604477611,
+              "sum": 1813.483051
+            }
+          },
+          "late": {
+            "count": 127,
+            "wall_ms": {
+              "n": 127,
+              "p50": 10.104629,
+              "p99": 30.099171,
+              "max": 30.120221,
+              "mean": 14.67525737007874,
+              "sum": 1863.757686
+            },
+            "charged_ms": {
+              "n": 127,
+              "p50": 10.098828,
+              "p99": 30.085335,
+              "max": 30.116273,
+              "mean": 14.670463236220472,
+              "sum": 1863.148831
+            },
+            "observer_wall_minus_charge_ms": {
+              "n": 127,
+              "p50": 0.003837,
+              "p99": 0.019987,
+              "max": 0.040837,
+              "mean": 0.004794133858267717,
+              "sum": 0.608855
+            },
+            "record_ms": {
+              "n": 127,
+              "p50": 9.966387,
+              "p99": 26.50302,
+              "max": 26.506869,
+              "mean": 13.55345783464567,
+              "sum": 1721.289145
+            }
+          }
+        },
+        "top_wall_ticks": [
+          {
+            "n": 862,
+            "queue_wall_ms": 33.087296,
+            "queue_charged_ms": 33.080102,
+            "record_ms": 32.869935,
+            "outer_impact_ms": 33.1456,
+            "window_count": 2,
+            "record_count": 6
+          },
+          {
+            "n": 882,
+            "queue_wall_ms": 30.750621,
+            "queue_charged_ms": 30.737857,
+            "record_ms": 30.320777,
+            "outer_impact_ms": 30.8914,
+            "window_count": 2,
+            "record_count": 150
+          },
+          {
+            "n": 874,
+            "queue_wall_ms": 30.557747,
+            "queue_charged_ms": 30.54823,
+            "record_ms": 29.462182,
+            "outer_impact_ms": 30.6268,
+            "window_count": 2,
+            "record_count": 28
+          },
+          {
+            "n": 860,
+            "queue_wall_ms": 30.418464,
+            "queue_charged_ms": 30.414255,
+            "record_ms": 30.03579,
+            "outer_impact_ms": 30.4574,
+            "window_count": 2,
+            "record_count": 87
+          },
+          {
+            "n": 863,
+            "queue_wall_ms": 30.397634,
+            "queue_charged_ms": 30.389139,
+            "record_ms": 30.012768,
+            "outer_impact_ms": 30.4589,
+            "window_count": 2,
+            "record_count": 3
+          },
+          {
+            "n": 1100,
+            "queue_wall_ms": 30.134387,
+            "queue_charged_ms": 30.127264,
+            "record_ms": 26.071796,
+            "outer_impact_ms": 30.1762,
+            "window_count": 2,
+            "record_count": 20065
+          },
+          {
+            "n": 1134,
+            "queue_wall_ms": 30.114801,
+            "queue_charged_ms": 30.097928,
+            "record_ms": 25.259723,
+            "outer_impact_ms": 30.2251,
+            "window_count": 2,
+            "record_count": 20528
+          },
+          {
+            "n": 876,
+            "queue_wall_ms": 30.093751,
+            "queue_charged_ms": 30.084964,
+            "record_ms": 29.771709,
+            "outer_impact_ms": 30.1792,
+            "window_count": 2,
+            "record_count": 33
+          }
+        ]
+      }
+    }
+  },
+  "a2": {
+    "head": "eee272309e1c8306952f32b5f6b7ed4192be2e7c",
+    "scope": "Instrumented queue windows; does not prove a universal deadline, every admission, or clean gameplay latency.",
+    "common_budget_ns": 30000000,
+    "windows": {
+      "incoming-drone-city-night-100-spread/t0-3": {
+        "ticks": 60,
+        "active_queue_ticks": 41,
+        "observed_windows": 82,
+        "queue_wall_ms": {
+          "n": 60,
+          "p50": 27.528835,
+          "p99": 40.070919,
+          "max": 40.070919,
+          "mean": 19.449932016666665,
+          "sum": 1166.995921
+        },
+        "queue_charge_ms": {
+          "n": 60,
+          "p50": 25.277665,
+          "p99": 39.811579,
+          "max": 39.811579,
+          "mean": 18.915689750000002,
+          "sum": 1134.941385
+        },
+        "active_queue_wall_ms": {
+          "n": 41,
+          "p50": 29.961492,
+          "p99": 40.070919,
+          "max": 40.070919,
+          "mean": 28.46331514634146,
+          "sum": 1166.995921
+        },
+        "active_queue_charge_ms": {
+          "n": 41,
+          "p50": 29.303145,
+          "p99": 39.811579,
+          "max": 39.811579,
+          "mean": 27.681497195121953,
+          "sum": 1134.941385
+        },
+        "record_ms": {
+          "n": 60,
+          "p50": 25.277665,
+          "p99": 39.811579,
+          "max": 39.811579,
+          "mean": 18.915689750000002,
+          "sum": 1134.941385
+        },
+        "observer_wall_minus_charge_ms": {
+          "n": 41,
+          "p50": 0.35835499999999954,
+          "p99": 8.185582,
+          "max": 8.185582,
+          "mean": 0.781817951219512,
+          "sum": 32.05453599999999
+        },
+        "actual_account_added_ms": {
+          "n": 0
+        },
+        "queue_wall_above_common": 16,
+        "queue_charge_above_common": 4,
+        "last_record_ms": {
+          "n": 79,
+          "p50": 0.419913,
+          "p99": 18.287097,
+          "max": 18.287097,
+          "mean": 1.4360463417721518,
+          "sum": 113.447661
+        },
+        "first_record_flags": 41,
+        "late_record_flags": 33,
+        "phase": {
+          "early": {
+            "count": 41,
+            "wall_ms": {
+              "n": 41,
+              "p50": 15.529948,
+              "p99": 25.533226,
+              "max": 25.533226,
+              "mean": 15.236015731707317,
+              "sum": 624.676645
+            },
+            "charged_ms": {
+              "n": 41,
+              "p50": 15.392381,
+              "p99": 25.395754,
+              "max": 25.395754,
+              "mean": 14.883053195121953,
+              "sum": 610.205181
+            },
+            "observer_wall_minus_charge_ms": {
+              "n": 41,
+              "p50": 0.194438,
+              "p99": 3.598559,
+              "max": 3.598559,
+              "mean": 0.35296253658536586,
+              "sum": 14.471464000000001
+            },
+            "record_ms": {
+              "n": 41,
+              "p50": 15.392381,
+              "p99": 25.395754,
+              "max": 25.395754,
+              "mean": 14.883053195121953,
+              "sum": 610.205181
+            }
+          },
+          "late": {
+            "count": 41,
+            "wall_ms": {
+              "n": 41,
+              "p50": 13.555077,
+              "p99": 29.983082,
+              "max": 29.983082,
+              "mean": 13.227299414634144,
+              "sum": 542.319276
+            },
+            "charged_ms": {
+              "n": 41,
+              "p50": 13.415361,
+              "p99": 24.676266,
+              "max": 24.676266,
+              "mean": 12.798444000000002,
+              "sum": 524.736204
+            },
+            "observer_wall_minus_charge_ms": {
+              "n": 41,
+              "p50": 0.157968,
+              "p99": 8.105491,
+              "max": 8.105491,
+              "mean": 0.4288554146341464,
+              "sum": 17.583072
+            },
+            "record_ms": {
+              "n": 41,
+              "p50": 13.415361,
+              "p99": 24.676266,
+              "max": 24.676266,
+              "mean": 12.798444000000002,
+              "sum": 524.736204
+            }
+          }
+        },
+        "top_wall_ticks": [
+          {
+            "n": 759,
+            "queue_wall_ms": 40.070919,
+            "queue_charged_ms": 39.811579,
+            "record_ms": 39.811579,
+            "outer_impact_ms": 40.131,
+            "window_count": 2,
+            "record_count": 9
+          },
+          {
+            "n": 774,
+            "queue_wall_ms": 32.586981,
+            "queue_charged_ms": 28.790968,
+            "record_ms": 28.790968,
+            "outer_impact_ms": 32.6655,
+            "window_count": 2,
+            "record_count": 119
+          },
+          {
+            "n": 788,
+            "queue_wall_ms": 31.539572,
+            "queue_charged_ms": 31.13033,
+            "record_ms": 31.13033,
+            "outer_impact_ms": 31.6005,
+            "window_count": 2,
+            "record_count": 44
+          },
+          {
+            "n": 758,
+            "queue_wall_ms": 31.163652,
+            "queue_charged_ms": 30.539721,
+            "record_ms": 30.539721,
+            "outer_impact_ms": 31.2226,
+            "window_count": 2,
+            "record_count": 31
+          },
+          {
+            "n": 757,
+            "queue_wall_ms": 30.630034,
+            "queue_charged_ms": 30.283408,
+            "record_ms": 30.283408,
+            "outer_impact_ms": 30.671,
+            "window_count": 2,
+            "record_count": 79
+          },
+          {
+            "n": 773,
+            "queue_wall_ms": 30.436607,
+            "queue_charged_ms": 29.927899,
+            "record_ms": 29.927899,
+            "outer_impact_ms": 30.5156,
+            "window_count": 2,
+            "record_count": 63
+          },
+          {
+            "n": 789,
+            "queue_wall_ms": 30.327783,
+            "queue_charged_ms": 28.094042,
+            "record_ms": 28.094042,
+            "outer_impact_ms": 30.4029,
+            "window_count": 2,
+            "record_count": 2520
+          },
+          {
+            "n": 776,
+            "queue_wall_ms": 30.253102,
+            "queue_charged_ms": 29.303145,
+            "record_ms": 29.303145,
+            "outer_impact_ms": 30.3164,
+            "window_count": 2,
+            "record_count": 183
+          }
+        ]
+      },
+      "incoming-drone-city-night-100-spread/t3-15": {
+        "ticks": 241,
+        "active_queue_ticks": 93,
+        "observed_windows": 181,
+        "queue_wall_ms": {
+          "n": 241,
+          "p50": 0.0,
+          "p99": 30.795106,
+          "max": 31.525385,
+          "mean": 10.929954883817427,
+          "sum": 2634.119127
+        },
+        "queue_charge_ms": {
+          "n": 241,
+          "p50": 0.0,
+          "p99": 29.949243,
+          "max": 30.617411,
+          "mean": 10.288897580912861,
+          "sum": 2479.624317
+        },
+        "active_queue_wall_ms": {
+          "n": 93,
+          "p50": 30.053905,
+          "p99": 31.525385,
+          "max": 31.525385,
+          "mean": 28.32386158064516,
+          "sum": 2634.119127
+        },
+        "active_queue_charge_ms": {
+          "n": 93,
+          "p50": 28.909425,
+          "p99": 30.617411,
+          "max": 30.617411,
+          "mean": 26.662627064516126,
+          "sum": 2479.624317
+        },
+        "record_ms": {
+          "n": 241,
+          "p50": 0.0,
+          "p99": 29.949243,
+          "max": 30.617411,
+          "mean": 10.288897580912861,
+          "sum": 2479.624317
+        },
+        "observer_wall_minus_charge_ms": {
+          "n": 93,
+          "p50": 0.6318110000000026,
+          "p99": 6.6112660000000005,
+          "max": 6.6112660000000005,
+          "mean": 1.6612345161290325,
+          "sum": 154.49481000000003
+        },
+        "actual_account_added_ms": {
+          "n": 0
+        },
+        "queue_wall_above_common": 64,
+        "queue_charge_above_common": 1,
+        "last_record_ms": {
+          "n": 151,
+          "p50": 0.030347,
+          "p99": 9.55468,
+          "max": 9.588553,
+          "mean": 0.28387647682119205,
+          "sum": 42.865348
+        },
+        "first_record_flags": 93,
+        "late_record_flags": 86,
+        "phase": {
+          "early": {
+            "count": 93,
+            "wall_ms": {
+              "n": 93,
+              "p50": 19.844889,
+              "p99": 20.998178,
+              "max": 20.998178,
+              "mean": 12.863477817204302,
+              "sum": 1196.303437
+            },
+            "charged_ms": {
+              "n": 93,
+              "p50": 19.340828,
+              "p99": 20.821836,
+              "max": 20.821836,
+              "mean": 12.601337494623657,
+              "sum": 1171.924387
+            },
+            "observer_wall_minus_charge_ms": {
+              "n": 93,
+              "p50": 0.130307,
+              "p99": 2.986908,
+              "max": 2.986908,
+              "mean": 0.2621403225806452,
+              "sum": 24.37905
+            },
+            "record_ms": {
+              "n": 93,
+              "p50": 19.340828,
+              "p99": 20.821836,
+              "max": 20.821836,
+              "mean": 12.601337494623657,
+              "sum": 1171.924387
+            }
+          },
+          "late": {
+            "count": 88,
+            "wall_ms": {
+              "n": 88,
+              "p50": 10.525774,
+              "p99": 30.010002,
+              "max": 30.010002,
+              "mean": 16.338814659090907,
+              "sum": 1437.81569
+            },
+            "charged_ms": {
+              "n": 88,
+              "p50": 10.388464,
+              "p99": 26.786709,
+              "max": 26.786709,
+              "mean": 14.860226477272727,
+              "sum": 1307.69993
+            },
+            "observer_wall_minus_charge_ms": {
+              "n": 88,
+              "p50": 0.214692,
+              "p99": 6.577452,
+              "max": 6.577452,
+              "mean": 1.4785881818181819,
+              "sum": 130.11576
+            },
+            "record_ms": {
+              "n": 88,
+              "p50": 10.388464,
+              "p99": 26.786709,
+              "max": 26.786709,
+              "mean": 14.860226477272727,
+              "sum": 1307.69993
+            }
+          }
+        },
+        "top_wall_ticks": [
+          {
+            "n": 848,
+            "queue_wall_ms": 31.525385,
+            "queue_charged_ms": 28.631841,
+            "record_ms": 28.631841,
+            "outer_impact_ms": 31.5925,
+            "window_count": 2,
+            "record_count": 14719
+          },
+          {
+            "n": 936,
+            "queue_wall_ms": 30.930841,
+            "queue_charged_ms": 29.311118,
+            "record_ms": 29.311118,
+            "outer_impact_ms": 34.9921,
+            "window_count": 2,
+            "record_count": 4418
+          },
+          {
+            "n": 818,
+            "queue_wall_ms": 30.795106,
+            "queue_charged_ms": 30.617411,
+            "record_ms": 30.617411,
+            "outer_impact_ms": 30.8514,
+            "window_count": 2,
+            "record_count": 42
+          },
+          {
+            "n": 996,
+            "queue_wall_ms": 30.714093,
+            "queue_charged_ms": 29.734248,
+            "record_ms": 29.734248,
+            "outer_impact_ms": 34.4629,
+            "window_count": 2,
+            "record_count": 1685
+          },
+          {
+            "n": 856,
+            "queue_wall_ms": 30.57518,
+            "queue_charged_ms": 29.73132,
+            "record_ms": 29.73132,
+            "outer_impact_ms": 30.6541,
+            "window_count": 2,
+            "record_count": 59
+          },
+          {
+            "n": 944,
+            "queue_wall_ms": 30.482806,
+            "queue_charged_ms": 29.821349,
+            "record_ms": 29.821349,
+            "outer_impact_ms": 30.6257,
+            "window_count": 2,
+            "record_count": 79
+          },
+          {
+            "n": 854,
+            "queue_wall_ms": 30.470442,
+            "queue_charged_ms": 29.889841,
+            "record_ms": 29.889841,
+            "outer_impact_ms": 30.6658,
+            "window_count": 2,
+            "record_count": 58
+          },
+          {
+            "n": 1005,
+            "queue_wall_ms": 30.469881,
+            "queue_charged_ms": 29.850875,
+            "record_ms": 29.850875,
+            "outer_impact_ms": 30.5083,
+            "window_count": 2,
+            "record_count": 77
+          }
+        ]
+      },
+      "incoming-drone-city-night-100-spread/total": {
+        "ticks": 1003,
+        "active_queue_ticks": 134,
+        "observed_windows": 263,
+        "queue_wall_ms": {
+          "n": 1003,
+          "p50": 0.0,
+          "p99": 30.482806,
+          "max": 40.070919,
+          "mean": 3.789745810568295,
+          "sum": 3801.115048
+        },
+        "queue_charge_ms": {
+          "n": 1003,
+          "p50": 0.0,
+          "p99": 29.912412,
+          "max": 39.811579,
+          "mean": 3.603754438683948,
+          "sum": 3614.565702
+        },
+        "active_queue_wall_ms": {
+          "n": 134,
+          "p50": 30.021273,
+          "p99": 32.586981,
+          "max": 40.070919,
+          "mean": 28.366530208955226,
+          "sum": 3801.115048
+        },
+        "active_queue_charge_ms": {
+          "n": 134,
+          "p50": 28.924022,
+          "p99": 31.13033,
+          "max": 39.811579,
+          "mean": 26.97437091044776,
+          "sum": 3614.565702
+        },
+        "record_ms": {
+          "n": 1003,
+          "p50": 0.0,
+          "p99": 29.912412,
+          "max": 39.811579,
+          "mean": 3.603754438683948,
+          "sum": 3614.565702
+        },
+        "observer_wall_minus_charge_ms": {
+          "n": 134,
+          "p50": 0.47942799999999863,
+          "p99": 6.6112660000000005,
+          "max": 8.185582,
+          "mean": 1.392159298507463,
+          "sum": 186.549346
+        },
+        "actual_account_added_ms": {
+          "n": 0
+        },
+        "queue_wall_above_common": 80,
+        "queue_charge_above_common": 5,
+        "last_record_ms": {
+          "n": 230,
+          "p50": 0.10044,
+          "p99": 10.759205,
+          "max": 18.287097,
+          "mean": 0.6796217782608696,
+          "sum": 156.313009
+        },
+        "first_record_flags": 134,
+        "late_record_flags": 119,
+        "phase": {
+          "early": {
+            "count": 134,
+            "wall_ms": {
+              "n": 134,
+              "p50": 17.294241,
+              "p99": 20.998178,
+              "max": 25.533226,
+              "mean": 13.589403597014925,
+              "sum": 1820.980082
+            },
+            "charged_ms": {
+              "n": 134,
+              "p50": 16.539233,
+              "p99": 20.821836,
+              "max": 25.395754,
+              "mean": 13.299474388059702,
+              "sum": 1782.129568
+            },
+            "observer_wall_minus_charge_ms": {
+              "n": 134,
+              "p50": 0.15329,
+              "p99": 2.986908,
+              "max": 3.598559,
+              "mean": 0.28992920895522384,
+              "sum": 38.850514
+            },
+            "record_ms": {
+              "n": 134,
+              "p50": 16.539233,
+              "p99": 20.821836,
+              "max": 25.395754,
+              "mean": 13.299474388059702,
+              "sum": 1782.129568
+            }
+          },
+          "late": {
+            "count": 129,
+            "wall_ms": {
+              "n": 129,
+              "p50": 11.042039,
+              "p99": 29.99305,
+              "max": 30.010002,
+              "mean": 15.349883457364342,
+              "sum": 1980.134966
+            },
+            "charged_ms": {
+              "n": 129,
+              "p50": 10.698071,
+              "p99": 26.523885,
+              "max": 26.786709,
+              "mean": 14.20493127131783,
+              "sum": 1832.436134
+            },
+            "observer_wall_minus_charge_ms": {
+              "n": 129,
+              "p50": 0.173418,
+              "p99": 6.577452,
+              "max": 8.105491,
+              "mean": 1.1449521860465117,
+              "sum": 147.698832
+            },
+            "record_ms": {
+              "n": 129,
+              "p50": 10.698071,
+              "p99": 26.523885,
+              "max": 26.786709,
+              "mean": 14.20493127131783,
+              "sum": 1832.436134
+            }
+          }
+        },
+        "top_wall_ticks": [
+          {
+            "n": 759,
+            "queue_wall_ms": 40.070919,
+            "queue_charged_ms": 39.811579,
+            "record_ms": 39.811579,
+            "outer_impact_ms": 40.131,
+            "window_count": 2,
+            "record_count": 9
+          },
+          {
+            "n": 774,
+            "queue_wall_ms": 32.586981,
+            "queue_charged_ms": 28.790968,
+            "record_ms": 28.790968,
+            "outer_impact_ms": 32.6655,
+            "window_count": 2,
+            "record_count": 119
+          },
+          {
+            "n": 788,
+            "queue_wall_ms": 31.539572,
+            "queue_charged_ms": 31.13033,
+            "record_ms": 31.13033,
+            "outer_impact_ms": 31.6005,
+            "window_count": 2,
+            "record_count": 44
+          },
+          {
+            "n": 848,
+            "queue_wall_ms": 31.525385,
+            "queue_charged_ms": 28.631841,
+            "record_ms": 28.631841,
+            "outer_impact_ms": 31.5925,
+            "window_count": 2,
+            "record_count": 14719
+          },
+          {
+            "n": 758,
+            "queue_wall_ms": 31.163652,
+            "queue_charged_ms": 30.539721,
+            "record_ms": 30.539721,
+            "outer_impact_ms": 31.2226,
+            "window_count": 2,
+            "record_count": 31
+          },
+          {
+            "n": 936,
+            "queue_wall_ms": 30.930841,
+            "queue_charged_ms": 29.311118,
+            "record_ms": 29.311118,
+            "outer_impact_ms": 34.9921,
+            "window_count": 2,
+            "record_count": 4418
+          },
+          {
+            "n": 818,
+            "queue_wall_ms": 30.795106,
+            "queue_charged_ms": 30.617411,
+            "record_ms": 30.617411,
+            "outer_impact_ms": 30.8514,
+            "window_count": 2,
+            "record_count": 42
+          },
+          {
+            "n": 996,
+            "queue_wall_ms": 30.714093,
+            "queue_charged_ms": 29.734248,
+            "record_ms": 29.734248,
+            "outer_impact_ms": 34.4629,
+            "window_count": 2,
+            "record_count": 1685
+          }
+        ]
+      }
+    }
+  }
+}

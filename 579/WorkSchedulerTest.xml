@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.work.WorkSchedulerTest" tests="12" skipped="0" failures="0" errors="0" timestamp="2026-11-04T11:07:35.879Z" hostname="zentixua-pc" time="0.017">
+  <properties/>
+  <testcase name="nuclearLeavesGridItsShareWhileGridWaits()" classname="ua.zentix.incoming.work.WorkSchedulerTest" time="0.002"/>
+  <testcase name="lowerLaneGetsWhatIsLeftUpToItsCap()" classname="ua.zentix.incoming.work.WorkSchedulerTest" time="0.0"/>
+  <testcase name="laneWithNoBudgetStillDoesOneUnit()" classname="ua.zentix.incoming.work.WorkSchedulerTest" time="0.0"/>
+  <testcase name="skippedEarlyWindowStillHonorsTheAbsoluteDeadlineWhenPostHasTime()" classname="ua.zentix.incoming.work.WorkSchedulerTest" time="0.002"/>
+  <testcase name="longImpactUnitDoesNotStarveGrid()" classname="ua.zentix.incoming.work.WorkSchedulerTest" time="0.0"/>
+  <testcase name="twoWindowsHaveOneBudgetAndOneProgressGuarantee()" classname="ua.zentix.incoming.work.WorkSchedulerTest" time="0.0"/>
+  <testcase name="countingClockIgnoresSpareTime()" classname="ua.zentix.incoming.work.WorkSchedulerTest" time="0.001"/>
+  <testcase name="impactTakesAllUnlessLowerLanesWait()" classname="ua.zentix.incoming.work.WorkSchedulerTest" time="0.0"/>
+  <testcase name="busyServerGetsShortDeadline()" classname="ua.zentix.incoming.work.WorkSchedulerTest" time="0.001"/>
+  <testcase name="readyImpactRunsBeforeBackgroundWithinMeasuredHeadroom()" classname="ua.zentix.incoming.work.WorkSchedulerTest" time="0.007"/>
+  <testcase name="tickStaysWithinTotalPlusOneUnitPerLane()" classname="ua.zentix.incoming.work.WorkSchedulerTest" time="0.001"/>
+  <testcase name="sharesKeepTheOldLimitsAtTheDefaultBudget()" classname="ua.zentix.incoming.work.WorkSchedulerTest" time="0.0"/>
+  <system-out><![CDATA[PL10 AFTER mandatory=40 post_busy=600/600 early_work=600/600 impact_ms=9.750 max_tick_ms=50.000
+PL10 AFTER mandatory=43 post_busy=600/600 early_work=600/600 impact_ms=6.750 max_tick_ms=50.000
+PL10 AFTER mandatory=47 post_busy=600/600 early_work=600/600 impact_ms=2.750 max_tick_ms=50.000
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

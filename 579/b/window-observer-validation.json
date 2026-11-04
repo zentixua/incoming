@@ -1,0 +1,10 @@
+{
+  "window_rows": 261,
+  "phases": [
+    "early",
+    "late"
+  ],
+  "linked_ticks": 134,
+  "helper_sha256": "5c8f4f7963fbe1b3371e081bfc3b1dafe18f30857a8f5aea29eefae312fb7f37",
+  "note": "Schema/invariant validation only; no budget/performance verdict. Read units/guarantee/deadline/window fields separately."
+}

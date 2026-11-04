@@ -1,0 +1,28 @@
+{
+  "base_head": "eee272309e1c8306952f32b5f6b7ed4192be2e7c",
+  "order": [
+    "a1",
+    "b",
+    "a2"
+  ],
+  "plan_sha256": "929c558e36cf590dfd3f24a1e8ffb60b50809c9dffef2fe30feca2c9b76495dc",
+  "helper_sha256": "5c8f4f7963fbe1b3371e081bfc3b1dafe18f30857a8f5aea29eefae312fb7f37",
+  "omitted_probe": "FxLayer#describeTiming (full texture readback); FarRenderer#describeSmoke retained",
+  "zip_payload_changes": [
+    "ua/zentix/incoming/nuclear/world/WorkClock.class",
+    "ua/zentix/incoming/work/UnitQueue.class"
+  ],
+  "baseline": {
+    "head": "eee272309e1c8306952f32b5f6b7ed4192be2e7c",
+    "mod_tree": "703c9a1175a1a6c7c7d7991347c9f8732b171abc",
+    "sha256": "de011b8a93a5b54ea7454c4aff8b329f987b8180f989d6f943fda4740ea69ab9"
+  },
+  "candidate": {
+    "head": "f8d6b1408b9f44cd255cb16db7253d73c7bef9b5",
+    "mod_tree": "4b3d941f4e7cb6aac5728684137282b85e2f1011",
+    "sha256": "ba536ba317bbe8b956ab29b10dd5ebd2c105c9164dacc14b7ebde016bcc208b3"
+  },
+  "observer_build_sha256": "a713b3fdc43ba93888ea82cfc5a218361bdd18bd3dbc414dc7803966dacea544",
+  "runner_sha256": "bfa909ab3628f4dafea949c7388303cb85f0708dff565ab3c122a4e54de8366f",
+  "controller_sha256": "a4951931d47fb3a2651e18f8096d72126786a8f27abe2ea177d99c4b2122bd32"
+}
