@@ -1,0 +1,287 @@
+Picked up JAVA_TOOL_OPTIONS: -XX:ActiveProcessorCount=4 -Xmx2G
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.14.3/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :createMinecraftArtifacts UP-TO-DATE
+> Task :compileJava UP-TO-DATE
+> Task :generateModMetadata UP-TO-DATE
+> Task :processResources UP-TO-DATE
+> Task :classes UP-TO-DATE
+> Task :compileDevtestJava
+> Task :copyRuntimeMods_gametest UP-TO-DATE
+> Task :processDevtestResources UP-TO-DATE
+> Task :devtestClasses
+> Task :downloadAssets UP-TO-DATE
+> Task :writeGameTestServerLegacyClasspath UP-TO-DATE
+> Task :prepareGameTestServerRun
+
+> Task :runGameTestServer
+Picked up JAVA_TOOL_OPTIONS: -XX:ActiveProcessorCount=4 -Xmx2G
+WARN StatusConsoleListener Advanced terminal features are not available in this environment
+[16:38:41] [main/INFO] [cp.mo.mo.Launcher/MODLAUNCHER]: ModLauncher running: args [--launchTarget, forgeserverdev, --gameDir, ., --fml.fmlVersion, 4.0.45, --fml.mcVersion, 1.21.1, --fml.neoForgeVersion, 21.1.264, --fml.neoFormVersion, 20240808.144430]
+[16:38:41] [main/INFO] [cp.mo.mo.Launcher/MODLAUNCHER]: JVM identified as Microsoft OpenJDK 64-Bit Server VM 21.0.7+6-LTS
+[16:38:41] [main/INFO] [cp.mo.mo.Launcher/MODLAUNCHER]: ModLauncher 11.0.5+main.901c6ea8 starting: java version 21.0.7 by Microsoft; OS Linux arch amd64 version 7.3.1-1-cachyos
+[16:38:41] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Configuration file /mnt/data/projects/incoming/mod/run/wt-MT-SNAPSHOT/mod/run/gametest/config/fml.toml is not correct. Correcting
+[16:38:41] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [disableConfigWatcher] was corrected from null to false
+[16:38:41] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowControl] was corrected from null to true
+[16:38:41] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [maxThreads] was corrected from null to -1
+[16:38:41] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [versionCheck] was corrected from null to true
+[16:38:41] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [defaultConfigPath] was corrected from null to defaultconfigs
+[16:38:41] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [disableOptimizedDFU] was corrected from null to true
+[16:38:41] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowProvider] was corrected from null to fmlearlywindow
+[16:38:41] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowWidth] was corrected from null to 854
+[16:38:41] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowHeight] was corrected from null to 480
+[16:38:41] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowFBScale] was corrected from null to 1
+[16:38:41] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowMaximized] was corrected from null to false
+[16:38:41] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowSkipGLVersions] was corrected from null to []
+[16:38:41] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowSquir] was corrected from null to false
+[16:38:41] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: ****************************** Found dependency overrides ******************************
+[16:38:41] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: Dependency overrides for mod 'aeronautics': adding explicit AFTER ordering against 'simulated', adding explicit AFTER ordering against 'offroad'
+[16:38:41] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: Dependency overrides for mod 'simulated': adding explicit AFTER ordering against 'create', adding explicit AFTER ordering against 'sable'
+[16:38:41] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: Dependency overrides for mod 'offroad': adding explicit AFTER ordering against 'simulated'
+[16:38:41] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: ****************************************************************************************
+[16:38:41] [main/INFO] [ne.ne.fm.lo.ImmediateWindowHandler/]: ImmediateWindowProvider not loading because launch target is forgeserverdev
+[16:38:41] [main/INFO] [mixin/]: SpongePowered MIXIN Subsystem Version=0.8.7 Source=union:/home/artem/.gradle/caches/modules-2/files-2.1/net.fabricmc/sponge-mixin/0.16.4+mixin.0.8.7/26d01f0567ab46e9ca0d2ed89d0ecc11aadbd433/sponge-mixin-0.16.4+mixin.0.8.7.jar%2394!/ Service=ModLauncher Env=SERVER
+[16:38:41] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: ****************************** Found dependency overrides ******************************
+[16:38:41] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: Dependency overrides for mod 'aeronautics': adding explicit AFTER ordering against 'simulated', adding explicit AFTER ordering against 'offroad'
+[16:38:41] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: Dependency overrides for mod 'simulated': adding explicit AFTER ordering against 'create', adding explicit AFTER ordering against 'sable'
+[16:38:41] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: Dependency overrides for mod 'offroad': adding explicit AFTER ordering against 'simulated'
+[16:38:41] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: ****************************************************************************************
+[16:38:42] [main/INFO] [ne.ne.fm.lo.mo.lo.JarInJarDependencyLocator/]: Found 13 dependencies adding them to mods collection
+[16:38:42] [main/INFO] [ne.ne.fm.lo.mo.ModDiscoverer/]: 
+     Mod List:
+		Name Version (Mod Id)
+
+		Create 6.0.10 (create)
+		Create Aeronautics 1.3.2 (aeronautics)
+		Create Aeronautics 1.3.2 (aeronautics_bundled)
+		Create Offroad 1.3.2 (offroad)
+		Create Simulated 1.3.2 (simulated)
+		Flywheel 1.0.6 (flywheel)
+		Incoming 3.10.4 (incoming)
+		Minecraft 1.21.1 (minecraft)
+		NeoForge 21.1.264 (neoforge)
+		Ponder 1.0.82+mc1.21.1 (ponder)
+		Sable 2.0.6 (sable)
+		Sable Companion 1.6.0 (sablecompanion)
+		Veil 4.3.2 (veil)
+[16:38:43] [main/INFO] [mixin/]: Compatibility level set to JAVA_21
+[16:38:43] [main/INFO] [cp.mo.mo.LaunchServiceHandler/MODLAUNCHER]: Launching target 'forgeserverdev' with arguments [--gameDir, .]
+[16:38:43] [main/WARN] [mixin/]: Reference map 'ponder.refmap.json' for ponder-common.mixins.json could not be read. If this is a development environment you can ignore this message
+[16:38:43] [main/INFO] [de.ry.sa.mi.AbstractSableMixinPlugin/]: Using Vanilla renderer mixins
+[16:38:43] [main/INFO] [de.ry.sa.mi.AbstractSableMixinPlugin/]: Using Vanilla renderer mixins
+[16:38:43] [main/WARN] [mixin/]: Reference map 'simulated.refmap.json' for simulated.mixins.json could not be read. If this is a development environment you can ignore this message
+[16:38:43] [main/WARN] [mixin/]: Reference map 'offroad.refmap.json' for offroad.mixins.json could not be read. If this is a development environment you can ignore this message
+[16:38:43] [main/WARN] [mixin/]: Reference map 'aeronautics.refmap.json' for aeronautics.mixins.json could not be read. If this is a development environment you can ignore this message
+[16:38:44] [main/WARN] [mixin/]: Error loading class: org/jetbrains/annotations/ApiStatus$ScheduledForRemoval (java.lang.ClassNotFoundException: org.jetbrains.annotations.ApiStatus$ScheduledForRemoval)
+[16:38:44] [main/INFO] [MixinExtras|Service/]: Initializing MixinExtras via com.llamalad7.mixinextras.service.MixinExtrasServiceImpl(version=0.5.5).
+[16:38:52] [main/WARN] [minecraft/Commands]: Ambiguity between arguments [teleport, location] and [teleport, destination] with inputs: [0.1 -0.5 .9, 0 0 0]
+[16:38:52] [main/WARN] [minecraft/Commands]: Ambiguity between arguments [teleport, location] and [teleport, targets] with inputs: [0.1 -0.5 .9, 0 0 0]
+[16:38:52] [main/WARN] [minecraft/Commands]: Ambiguity between arguments [teleport, destination] and [teleport, targets] with inputs: [Player, 0123, @e, dd12be42-52a9-4a91-a8a1-11c01849e498]
+[16:38:52] [main/WARN] [minecraft/Commands]: Ambiguity between arguments [teleport, targets] and [teleport, destination] with inputs: [Player, 0123, dd12be42-52a9-4a91-a8a1-11c01849e498]
+[16:38:52] [main/WARN] [minecraft/Commands]: Ambiguity between arguments [teleport, targets, location] and [teleport, targets, destination] with inputs: [0.1 -0.5 .9, 0 0 0]
+[16:38:52] [modloading-worker-0/INFO] [Veil/]: Veil is initializing.
+[16:38:52] [modloading-worker-0/INFO] [ne.ne.ne.co.NeoForgeMod/NEOFORGE-MOD]: NeoForge mod loading, version 21.1.264, for MC 1.21.1
+[16:38:52] [modloading-worker-0/INFO] [co.si.cr.Create/]: Create 6.0.10 initializing! Commit hash: ac0c444d9828da3453ae8cc65338e8de063286fb
+[16:38:54] [modloading-worker-0/INFO] [de.ry.sa.Sable/]: Sable loaded!
+[16:38:56] [main/INFO] [mojang/YggdrasilAuthenticationService]: Environment: Environment[sessionHost=https://sessionserver.mojang.com, servicesHost=https://api.minecraftservices.com, name=PROD]
+[16:38:56] [NeoForge Version Check/INFO] [ne.ne.fm.VersionChecker/]: [create] Starting version check at https://api.modrinth.com/updates/create/forge_updates.json?neoforge=only
+[16:38:56] [main/WARN] [minecraft/VanillaPackResourcesBuilder]: Assets URL 'union:/mnt/data/projects/incoming/mod/run/wt-MT-SNAPSHOT/mod/build/moddev/artifacts/neoforge-21.1.264.jar%23128!/assets/.mcassetsroot' uses unexpected schema
+[16:38:56] [main/WARN] [minecraft/VanillaPackResourcesBuilder]: Assets URL 'union:/mnt/data/projects/incoming/mod/run/wt-MT-SNAPSHOT/mod/build/moddev/artifacts/neoforge-21.1.264.jar%23128!/data/.mcassetsroot' uses unexpected schema
+[16:38:57] [main/INFO] [co.si.cr.Create/]: Created 157 recipes which will be injected into the game
+[16:38:57] [main/INFO] [co.si.cr.Create/]: Created 0 tags which will be injected into the game
+[16:38:57] [main/INFO] [ne.ne.ne.ga.GameTestHooks/]: Enabled Gametest Namespaces: [incoming]
+[16:38:57] [NeoForge Version Check/INFO] [ne.ne.fm.VersionChecker/]: [create] Found status: OUTDATED Current: 6.0.10 Target: 6.0.10+mc1.21.1
+[16:38:58] [main/INFO] [minecraft/RecipeManager]: Loaded 2954 recipes
+[16:38:58] [main/INFO] [minecraft/AdvancementTree]: Loaded 2645 advancements
+[16:39:00] [Server thread/INFO] [ua.ze.in.Incoming/]: GameTest: only batch “dh_front|grid_edge_signal_back|nuke_send_hold” - tests 3 from 788
+[16:39:00] [Server thread/INFO] [de.ry.sa.Sable/]: Creating physics pipeline for ResourceKey[minecraft:dimension / minecraft:overworld] using RapierPhysicsPipelineProvider
+[16:39:00] [Server thread/INFO] [de.ry.sa.Sable/]: Using game directory relative Sable Rapier native directory /mnt/data/projects/incoming/mod/run/wt-MT-SNAPSHOT/mod/run/gametest/.sable/natives
+[2026-11-04T14:39:00.451102775Z] [[32mINFO[0m] (sable_rapier) Rapier scene initialized
+[16:39:00] [Server thread/INFO] [de.ry.sa.Sable/]: Creating physics pipeline for ResourceKey[minecraft:dimension / minecraft:the_nether] using RapierPhysicsPipelineProvider
+[2026-11-04T14:39:00.957413602Z] [[32mINFO[0m] (sable_rapier) Rapier scene initialized
+[16:39:00] [Server thread/INFO] [de.ry.sa.Sable/]: Creating physics pipeline for ResourceKey[minecraft:dimension / minecraft:the_end] using RapierPhysicsPipelineProvider
+[2026-11-04T14:39:00.985012825Z] [[32mINFO[0m] (sable_rapier) Rapier scene initialized
+[16:39:01] [Server thread/INFO] [minecraft/MinecraftServer]: Preparing start region for dimension minecraft:overworld
+[16:39:01] [worldgen/INFO] [minecraft/LoggerChunkProgressListener]: Preparing spawn area: 2%
+[16:39:01] [Server thread/INFO] [minecraft/LoggerChunkProgressListener]: Time elapsed: 226 ms
+[16:39:01] [Server thread/INFO] [minecraft/GameTestServer]: Started game test server
+[16:39:01] [Server thread/INFO] [ne.ne.ne.se.pe.PermissionAPI/]: Successfully initialized permission handler neoforge:default_handler
+[16:39:01] [Server thread/INFO] [minecraft/GameTestServer]: 3 tests are now running at position 3203201, -59, -2862790!
+[16:39:02] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'dh_front:0' (1 tests)...
+[16:39:02] [Server thread/INFO] [minecraft/GameTestServer]: [   ]
+[16:39:02] [Server thread/INFO] [minecraft/GameTestServer]: [   ]
+[16:39:04] [Server thread/INFO] [minecraft/GameTestServer]: [_  ]
+[16:39:05] [incoming-stall-watch/WARN] [ua.ze.in.Incoming/]: Server thread stalled for 2.2 s in a tick, stack samples 1:
+  samples 1:
+    at java.base/jdk.internal.misc.Unsafe.park(Native Method)
+    at java.base/java.util.concurrent.locks.LockSupport.parkNanos(LockSupport.java:269)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.util.thread.BlockableEventLoop.waitForTasks(BlockableEventLoop.java:146)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.util.thread.BlockableEventLoop.managedBlock(BlockableEventLoop.java:136)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.level.ServerChunkCache$MainThreadExecutor.managedBlock(ServerChunkCache.java:539)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.level.ServerChunkCache.getChunk(ServerChunkCache.java:159)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.world.level.Level.getChunk(Level.java:208)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.world.level.LevelReader.getChunk(LevelReader.java:141)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.world.level.Level.getChunk(Level.java:202)
+    at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.gametest.DhGameTests.heavyZoneLods(DhGameTests.java:563)
+    at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.gametest.DhGameTests.heavyZoneLodsGoWithTheFront(DhGameTests.java:546)
+    at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103)
+    at java.base/java.lang.reflect.Method.invoke(Method.java:580)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestRegistry.lambda$turnMethodIntoConsumer$5(GameTestRegistry.java:169)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.TestFunction.run(TestFunction.java:40)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestInfo.startTest(GameTestInfo.java:162)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestInfo.tickInternal(GameTestInfo.java:124)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestInfo.tick(GameTestInfo.java:107)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestTicker.lambda$tick$0(GameTestTicker.java:39)
+    at java.base/java.util.concurrent.CopyOnWriteArrayList.forEach(CopyOnWriteArrayList.java:891)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestTicker.tick(GameTestTicker.java:39)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.tickChildren(MinecraftServer.java:1070)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.tickServer(MinecraftServer.java:932)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestServer.tickServer(GameTestServer.java:171)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.runServer(MinecraftServer.java:713)
+    at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.lambda$spin$2(MinecraftServer.java:267)
+    at java.base/java.lang.Thread.run(Thread.java:1583)
+[16:39:05] [Server thread/INFO] [minecraft/GameTestServer]: [_  ]
+[16:39:06] [Server thread/INFO] [minecraft/GameTestServer]: [_  ]
+[16:39:06] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruins: background threads 2 (desired 2; automatic; cores 4, left to the game 2)
+[16:39:06] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruins: background threads working 1 of 2 (server tick without mod lanes 30.5 ms)
+[16:39:06] [Server thread/INFO] [minecraft/GameTestServer]: [_  ]
+[16:39:06] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruins: background threads working 2 of 2 (server tick without mod lanes 2.2 ms)
+[16:39:06] [Server thread/INFO] [minecraft/GameTestServer]: [_  ]
+[16:39:06] [Server thread/INFO] [minecraft/GameTestServer]: [_  ]
+[16:39:06] [Server thread/INFO] [minecraft/GameTestServer]: [_  ]
+[16:39:06] [Server thread/INFO] [minecraft/GameTestServer]: [_  ]
+[16:39:06] [Server thread/INFO] [minecraft/GameTestServer]: [_  ]
+[16:39:06] [Server thread/INFO] [minecraft/GameTestServer]: [_  ]
+[16:39:06] [Server thread/INFO] [minecraft/GameTestServer]: [_  ]
+[16:39:06] [Server thread/INFO] [minecraft/GameTestServer]: [_  ]
+[16:39:06] [Server thread/INFO] [minecraft/GameTestServer]: [_  ]
+[16:39:06] [Server thread/INFO] [minecraft/GameTestServer]: [_  ]
+[16:39:07] [Server thread/INFO] [minecraft/GameTestServer]: [_  ]
+[16:39:07] [Server thread/INFO] [minecraft/GameTestServer]: [_  ]
+[16:39:07] [Server thread/INFO] [minecraft/GameTestServer]: [_  ]
+[16:39:07] [Server thread/INFO] [minecraft/GameTestServer]: [_  ]
+[16:39:07] [Server thread/INFO] [minecraft/GameTestServer]: [_  ]
+[16:39:07] [Server thread/INFO] [minecraft/GameTestServer]: [_  ]
+[16:39:07] [Server thread/INFO] [minecraft/GameTestServer]: [_  ]
+[16:39:07] [Server thread/INFO] [minecraft/GameTestServer]: [_  ]
+[16:39:07] [Server thread/INFO] [minecraft/GameTestServer]: [_  ]
+[16:39:07] [Server thread/INFO] [minecraft/GameTestServer]: [_  ]
+[16:39:07] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruins for strike #1 ready: plans for loaded chunks 7 (chunks loaded during flight 81), from disk 238 (heavy zone 245 chunks), not from disk 0 (unread 0; 4978 s to detonation), plans 0 MB, snapshots 3 MB, background threads 2 (working 2, lowered 1, raised 1, tasks abandoned 0) busy 85 %, heap 806 of 2048 MB
+[16:39:07] [Server thread/INFO] [minecraft/GameTestServer]: [_  ]
+[16:39:07] [Server thread/INFO] [minecraft/GameTestServer]: [_  ]
+[16:39:07] [Server thread/INFO] [minecraft/GameTestServer]: [_  ]
+[16:39:07] [Server thread/INFO] [ua.ze.in.Incoming/]: Mod work over 30 s: server tick avg 7.4 ms (max 2235.8), of which mod lanes avg — impacts 0.0, nuke 0.1, blackout 0.0 ms; the rest (vanilla, other mods) 7.3 ms; impact early window 90.3% of ticks, early avg 0.0 ms, late avg 0.0 ms; mandatory unload debt 1.8% of ticks
+[16:39:07] [Server thread/INFO] [minecraft/GameTestServer]: [_  ]
+[16:39:07] [Server thread/INFO] [minecraft/GameTestServer]: [_  ]
+[16:39:07] [Server thread/INFO] [ua.ze.in.Incoming/]: Detonation #2: pre-built ruins — plans for loaded chunks 7 (chunks loaded during flight 81), still building 0; from disk 238 (heavy zone 245 chunks), still building 0, not from disk 0; background threads 2 (working 2, lowered 1, raised 1, tasks abandoned 0)
+[16:39:07] [Server thread/INFO] [ua.ze.in.Incoming/]: Detonation #2: heavy zone LODs held for the wave front — 164 ready (0 MB), 0 reading, 0 more queued; sent 27 ticks before the front reaches their Distant Horizons section
+[16:39:07] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #1 (minecraft:overworld): 3194201 -2853719, radius 605, power returns in 15 min
+[16:39:07] [Server thread/INFO] [ua.ze.in.Incoming/]: Nuclear detonation #2: 1 kt, ground burst, 3194200 -60 -2853720, scale 0.25, 17 ms
+[16:39:07] [Server thread/INFO] [ua.ze.in.Incoming/]: Nuclear detonation #2: light and radiation — 0 of 0 entities in 1 ticks, 1 ms
+[16:39:07] [Server thread/INFO] [ua.ze.in.Incoming/]: Far Distant Horizons LODs (minecraft:overworld): sent 8 chunks (0 with ruins, 0 scorched), unchanged 0, stale plan 0, unread 0, no plan in time 0, incomplete on disk 0 (into the world: tiles waiting 0, held 0, taken 0, released 0 (timed out 0), dropped without players 0; generation avg 0 ticks, until release 0); queued 478 (ruins 0, scorch 42), reading 8; scorch of detonation #2: 48 of 1558 chunks to 374 m
+[16:39:07] [Server thread/INFO] [ua.ze.in.Incoming/]: DH front fixture: separate ordinary copy at [199646, -178360] on tick 628
+[16:39:07] [Server thread/INFO] [ua.ze.in.Incoming/]: Nuclear detonation #2: flash scorch — 17 of 65 chunks (0 seen by players) in 6 ticks (pulse 1.6 ticks), 24 ms on the server thread; 3283 blocks, 3804 fires lit; 0 stale, 48 after the wave, 0 unloaded, 0 at aircraft without neighbours, 0 over the memory limit
+[16:39:07] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #1 (minecraft:overworld): outage cascade covered the whole area
+[16:39:07] [Server thread/INFO] [minecraft/GameTestServer]: [_  ]
+[16:39:07] [Server thread/INFO] [minecraft/GameTestServer]: [_  ]
+[16:39:07] [Server thread/INFO] [minecraft/GameTestServer]: [_  ]
+[16:39:08] [Server thread/INFO] [minecraft/GameTestServer]: [_  ]
+[16:39:08] [Server thread/INFO] [minecraft/GameTestServer]: [_  ]
+[16:39:08] [Server thread/INFO] [minecraft/GameTestServer]: [_  ]
+[16:39:08] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruins for detonation #2 (ruins placed for all chunks loaded at detonation): lag behind the wave near players up to 0 ticks (prepared plan 0, planned on the spot 0), elsewhere up to 119; stale plan 1, re-planned ahead of the wave near players 0; a player waited for chunk ruins up to 0 ticks (from the first chunk request after the wave)
+[16:39:08] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruins for detonation #2: 81 chunks loaded at detonation, 3 of them with loaded neighbours; from prepared plan 80 (98.8 % of all, 66.7 % of chunks with neighbours); on a player's screen without neighbours 0
+[16:39:08] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruins for detonation #2: sent to players before ruins: 0 (distinct chunks)
+[16:39:08] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruins for detonation #2: disk windows — neighbours read 1, not whole on disk 0 (solid in the window, like the world edge)
+[16:39:08] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruins for detonation #2: 1 chunks loaded after detonation, planned on the spot — ruins avg 115 ticks after the wave, max 115; 79 from prepared plan — avg 79, max 118
+[16:39:08] [Server thread/INFO] [minecraft/GameTestServer]: [_  ]
+[16:39:08] [Server thread/INFO] [minecraft/GameTestServer]: [_  ]
+[16:39:08] [Server thread/INFO] [minecraft/GameTestServer]: [_  ]
+[16:39:08] [Server thread/INFO] [minecraft/GameTestServer]: [_  ]
+[16:39:08] [Server thread/INFO] [ua.ze.in.Incoming/]: DH front test: 164 copies of the heavy zone in 21 sections; send minus front arrival min -5 median -3 max -2 ticks (lead 27); built 164, sent 164, nothing to show 0, loaded 0, over memory 0, front came first 0, not built 0
+[16:39:08] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'grid_edge_signal_back:0' (1 tests)...
+[16:39:08] [Server thread/INFO] [ua.ze.in.Incoming/]: Detonation #2 (strike #1): heavy zone LODs at the wave front — built 164, sent 164 (164 less than 27 ticks before the front; send minus front arrival min -5 avg -3 max -2 ticks); not sent: loaded 0, over memory 0, front came first 0, unread or stale plan 0, nothing to show 0; Distant Horizons saved 164 of 164 held after avg 0 ms (max 0), unconfirmed 0, still waiting 0
+[16:39:08] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruins for detonation #2: from prepared plan 200, stale plan 1, on the spot 12, unplaced 0; lag behind the wave up to 196 ticks (near players up to 0, elsewhere up to 196); chunk swap avg 663 µs, longest 3.0 ms
+[16:39:08] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruins for detonation #2: plan and swap on the spot — avg 0.6 ms, longest 3.5 ms
+[16:39:08] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruins for detonation #2 (final): lag behind the wave near players up to 0 ticks (prepared plan 0, planned on the spot 0), elsewhere up to 196; stale plan 1, re-planned ahead of the wave near players 0; a player waited for chunk ruins up to 0 ticks (from the first chunk request after the wave)
+[16:39:08] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruins for detonation #2: 81 chunks loaded at detonation, 3 of them with loaded neighbours; from prepared plan 80 (98.8 % of all, 66.7 % of chunks with neighbours); on a player's screen without neighbours 0
+[16:39:08] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruins for detonation #2: sent to players before ruins: 0 (distinct chunks)
+[16:39:08] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruins for detonation #2: disk windows — neighbours read 12, not whole on disk 0 (solid in the window, like the world edge)
+[16:39:08] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruins for detonation #2: 11 chunks loaded after detonation, planned on the spot — ruins avg 162 ticks after the wave, max 192; 120 from prepared plan — avg 105, max 196
+[16:39:08] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruins: chunk swap by phase (total since start, ms) — check 71, sections 24, heightmaps 11, light and packets 24, block entities 2
+[16:39:08] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruins: slowest through the world — chunk [199640, -178364]: 0 cells, 0.1 ms (block entities, POI, Distant Horizons LOD); slowest block — — 0.0 ms, Distant Horizons LOD 0.1 ms
+[16:39:09] [Server thread/INFO] [minecraft/GameTestServer]: [+  ]
+[16:39:09] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #1 (minecraft:overworld): power restored by command
+[16:39:09] [Server thread/INFO] [minecraft/GameTestServer]: [+_ ]
+[16:39:09] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #2 (minecraft:overworld): 3202825 -2863239, radius 200, power returns in 15 min
+[16:39:09] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #1 (minecraft:overworld): restore cascade covered the whole area
+[16:39:09] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #2 (minecraft:overworld): outage cascade covered the whole area
+[16:39:09] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #2 (minecraft:overworld): power restored by command
+[16:39:09] [Server thread/INFO] [minecraft/GameTestServer]: [+_ ]
+[16:39:09] [Server thread/INFO] [minecraft/GameTestServer]: [+_ ]
+[16:39:09] [Server thread/INFO] [minecraft/GameTestServer]: [+_ ]
+[16:39:09] [Server thread/INFO] [minecraft/GameTestServer]: [+_ ]
+[16:39:09] [Server thread/INFO] [minecraft/GameTestServer]: [+_ ]
+[16:39:09] [Server thread/INFO] [minecraft/GameTestServer]: [+_ ]
+[16:39:09] [Server thread/INFO] [minecraft/GameTestServer]: [+_ ]
+[16:39:09] [Server thread/INFO] [minecraft/GameTestServer]: [+_ ]
+[16:39:10] [Server thread/INFO] [minecraft/GameTestServer]: [+_ ]
+[16:39:10] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #2 (minecraft:overworld): restore cascade covered the whole area
+[16:39:10] [Server thread/INFO] [minecraft/GameTestServer]: [+_ ]
+[16:39:10] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuke_send_hold:0' (1 tests)...
+[16:39:10] [Server thread/INFO] [minecraft/GameTestServer]: [++ ]
+[16:39:11] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #3 (minecraft:overworld): 3203372 -2862757, radius 242, power returns in 15 min
+[16:39:11] [Server thread/INFO] [ua.ze.in.Incoming/]: Nuclear detonation #3: 1 kt, ground burst, 3203371 -48 -2862758, scale 0.1, 0 ms
+[16:39:11] [Server thread/INFO] [ua.ze.in.Incoming/]: SEND_HOLD_PROBE pin834382f68 stage=after-detonation calls=0 elapsed=0 event=3 chunk=[200209, -178923] held=false latch=1 scar=0 glass=Block{minecraft:glass} ready=25/25 state=null job=event=null events=null due=null wave=null asked=null held=null ready=null waitsNeighbours=null needs=null mayHold=null  pool=size:2,active:2,queued:6,completed:1936,shutdown:false counts=[8, 0, 0] worker=size=2 active=2  queues=jobs=size:0 readySeen=size:0 readyUnseen=size:0 background=size:0 parked=size:0 scans=size:1 byDue=size:0 inspected=0 waitedThisTick=0  ctx=tasks=null failed=null reading=null pendingWindows=null absent=null windowFailed=null windowReads=null windowAbsent=null shotBytes=null heightBytes=null  task=since=null priority=null chunkId=null  future=null readsPending=null lane=ua.zentix.incoming.nuclear.world.WorkClock budget=unitCost=0 usedThisTick=0 unitsThisTick=0 worked=false deadline=26145338705760 busyDeadline=26145310705760 estimate=771229.2552040207  used=0 nanos=[500, 592, 70, 40, 351, 301, 320, 100]
+[16:39:11] [Server thread/INFO] [ua.ze.in.Incoming/]: SEND_HOLD_PROBE pin834382f68 stage=poll calls=1 elapsed=0 event=3 chunk=[200209, -178923] held=false latch=1 scar=0 glass=Block{minecraft:glass} ready=25/25 state=null job=event=null events=null due=null wave=null asked=null held=null ready=null waitsNeighbours=null needs=null mayHold=null  pool=size:2,active:2,queued:6,completed:1936,shutdown:false counts=[8, 0, 0] worker=size=2 active=2  queues=jobs=size:0 readySeen=size:0 readyUnseen=size:0 background=size:0 parked=size:0 scans=size:1 byDue=size:0 inspected=0 waitedThisTick=0  ctx=tasks=null failed=null reading=null pendingWindows=null absent=null windowFailed=null windowReads=null windowAbsent=null shotBytes=null heightBytes=null  task=since=null priority=null chunkId=null  future=null readsPending=null lane=ua.zentix.incoming.nuclear.world.WorkClock budget=unitCost=0 usedThisTick=0 unitsThisTick=0 worked=false deadline=26145338705760 busyDeadline=26145310705760 estimate=771229.2552040207  used=0 nanos=[500, 592, 70, 40, 351, 301, 320, 100]
+[16:39:11] [Server thread/INFO] [ua.ze.in.Incoming/]: Nuclear detonation #3: light and radiation — 0 of 0 entities in 1 ticks, 0 ms
+[16:39:11] [Server thread/INFO] [ua.ze.in.Incoming/]: SEND_HOLD_PROBE pin834382f68 stage=release calls=2 elapsed=1 event=3 chunk=[200209, -178923] held=true latch=1 scar=0 glass=Block{minecraft:glass} ready=25/25 state=due now job=event=0 events=size:1 due=1095 wave=1094 asked=1095 held=0 ready=false waitsNeighbours=false needs=0 mayHold=true  pool=size:2,active:2,queued:33,completed:1936,shutdown:false counts=[8, 27, 0] worker=size=2 active=2  queues=jobs=size:153 readySeen=size:0 readyUnseen=size:0 background=size:0 parked=size:0 scans=size:0 byDue=size:153 inspected=36 waitedThisTick=36  ctx=tasks=size:0 failed=size:0 reading=size:27 pendingWindows=size:36 absent=size:0 windowFailed=false windowReads=0 windowAbsent=0 shotBytes=0 heightBytes=0  task=since=null priority=null chunkId=null  future=null readsPending=27 lane=ua.zentix.incoming.nuclear.world.WorkClock budget=unitCost=0 usedThisTick=15055725 unitsThisTick=791 worked=true deadline=26145564413533 busyDeadline=26145540413533 estimate=1416593.7824999997  used=15055725 nanos=[156033, 2833750, 1621711, 7433753, 4416417, 4167, 65984, 57489]
+[16:39:11] [Server thread/INFO] [ua.ze.in.Incoming/]: SEND_HOLD_PROBE thread=Incoming ruins #2 state=WAITING stack=[java.base@21.0.7/jdk.internal.misc.Unsafe.park(Native Method), java.base@21.0.7/java.util.concurrent.locks.LockSupport.park(LockSupport.java:221), java.base@21.0.7/java.util.concurrent.locks.AbstractQueuedSynchronizer.acquire(AbstractQueuedSynchronizer.java:754), java.base@21.0.7/java.util.concurrent.locks.AbstractQueuedSynchronizer.acquireSharedInterruptibly(AbstractQueuedSynchronizer.java:1099), java.base@21.0.7/java.util.concurrent.CountDownLatch.await(CountDownLatch.java:230), TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.world.RuinWorkers.lambda$fillForTest$1(RuinWorkers.java:188), TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.world.RuinWorkers$$Lambda/0x00000001017ba290.call(Unknown Source), java.base@21.0.7/java.util.concurrent.FutureTask.run(FutureTask.java:317), TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.world.RuinWorkers$Task.run(RuinWorkers.java:352), java.base@21.0.7/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144), java.base@21.0.7/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642), java.base@21.0.7/java.lang.Thread.runWith(Thread.java:1596), java.base@21.0.7/java.lang.Thread.run(Thread.java:1583)]
+[16:39:11] [Server thread/INFO] [ua.ze.in.Incoming/]: SEND_HOLD_PROBE thread=Incoming ruins #3 state=WAITING stack=[java.base@21.0.7/jdk.internal.misc.Unsafe.park(Native Method), java.base@21.0.7/java.util.concurrent.locks.LockSupport.park(LockSupport.java:221), java.base@21.0.7/java.util.concurrent.locks.AbstractQueuedSynchronizer.acquire(AbstractQueuedSynchronizer.java:754), java.base@21.0.7/java.util.concurrent.locks.AbstractQueuedSynchronizer.acquireSharedInterruptibly(AbstractQueuedSynchronizer.java:1099), java.base@21.0.7/java.util.concurrent.CountDownLatch.await(CountDownLatch.java:230), TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.world.RuinWorkers.lambda$fillForTest$1(RuinWorkers.java:188), TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.world.RuinWorkers$$Lambda/0x00000001017ba290.call(Unknown Source), java.base@21.0.7/java.util.concurrent.FutureTask.run(FutureTask.java:317), TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.world.RuinWorkers$Task.run(RuinWorkers.java:352), java.base@21.0.7/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144), java.base@21.0.7/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642), java.base@21.0.7/java.lang.Thread.runWith(Thread.java:1596), java.base@21.0.7/java.lang.Thread.run(Thread.java:1583)]
+[16:39:11] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #3 (minecraft:overworld): outage cascade covered the whole area
+[16:39:11] [Server thread/INFO] [minecraft/GameTestServer]: [++_]
+[16:39:11] [Server thread/INFO] [minecraft/GameTestServer]: [++_]
+[16:39:11] [Server thread/INFO] [minecraft/GameTestServer]: [++_]
+[16:39:11] [Server thread/INFO] [minecraft/GameTestServer]: [++_]
+[16:39:11] [Server thread/INFO] [minecraft/GameTestServer]: [++_]
+[16:39:11] [Server thread/INFO] [ua.ze.in.Incoming/]: Mod work over 30 s: server tick avg 4.9 ms (max 500.7), of which mod lanes avg — impacts 0.0, nuke 0.7, blackout 0.1 ms; the rest (vanilla, other mods) 4.2 ms; impact early window 100.0% of ticks, early avg 0.0 ms, late avg 0.0 ms; mandatory unload debt 1.5% of ticks
+[16:39:11] [Server thread/INFO] [minecraft/GameTestServer]: [++_]
+[16:39:11] [Server thread/INFO] [minecraft/GameTestServer]: [++_]
+[16:39:11] [Server thread/INFO] [minecraft/GameTestServer]: [++_]
+[16:39:11] [Server thread/INFO] [minecraft/GameTestServer]: [++_]
+[16:39:11] [Server thread/INFO] [minecraft/GameTestServer]: [++_]
+[16:39:11] [Server thread/INFO] [ua.ze.in.Incoming/]: SEND_HOLD_PROBE pin834382f68 stage=poll calls=200 elapsed=199 event=3 chunk=[200209, -178923] held=true latch=0 scar=0 glass=Block{minecraft:glass} ready=25/25 state=plan in the background job=event=0 events=size:1 due=1199 wave=1094 asked=1095 held=0 ready=false waitsNeighbours=false needs=0 mayHold=true  pool=size:2,active:2,queued:33,completed:2013,shutdown:false counts=[0, 35, 0] worker=size=2 active=2  queues=jobs=size:143 readySeen=size:0 readyUnseen=size:0 background=size:6 parked=size:0 scans=size:0 byDue=size:137 inspected=74 waitedThisTick=74  ctx=tasks=size:6 failed=size:0 reading=size:29 pendingWindows=size:65 absent=size:43 windowFailed=false windowReads=59 windowAbsent=43 shotBytes=1048989 heightBytes=13152  task=since=1208 priority=NEAR chunkId=1312194950  future=done:false,cancelled:false,started:true readsPending=29 lane=ua.zentix.incoming.nuclear.world.WorkClock budget=unitCost=0 usedThisTick=362972 unitsThisTick=153 worked=true deadline=26146046100789 busyDeadline=26146018100789 estimate=665.9499999999999  used=362972 nanos=[10340, 1152, 3707, 50, 353505, 511, 1673, 172554]
+[16:39:11] [Server thread/INFO] [ua.ze.in.Incoming/]: SEND_HOLD_PROBE pin834382f68 stage=success calls=204 elapsed=203 event=3 chunk=[200209, -178923] held=true latch=0 scar=3 glass=Block{minecraft:fire}[age=0,east=false,north=false,south=false,up=false,west=false] ready=25/25 state=null job=event=null events=null due=null wave=null asked=null held=null ready=null waitsNeighbours=null needs=null mayHold=null  pool=size:2,active:2,queued:30,completed:2016,shutdown:false counts=[0, 32, 0] worker=size=2 active=2  queues=jobs=size:141 readySeen=size:0 readyUnseen=size:0 background=size:4 parked=size:0 scans=size:0 byDue=size:137 inspected=76 waitedThisTick=75  ctx=tasks=size:4 failed=size:0 reading=size:29 pendingWindows=size:65 absent=size:43 windowFailed=false windowReads=59 windowAbsent=43 shotBytes=1048989 heightBytes=13152  task=since=null priority=null chunkId=null  future=null readsPending=29 lane=ua.zentix.incoming.nuclear.world.WorkClock budget=unitCost=0 usedThisTick=1286910 unitsThisTick=155 worked=true deadline=26146054697159 busyDeadline=26146026697159 estimate=1572.7988796007971  used=1286910 nanos=[14207, 3306, 5421, 170, 1152017, 1452, 3497, 374544]
+[16:39:11] [Server thread/INFO] [ua.ze.in.Incoming/]: SEND_HOLD_PROBE pin834382f68 stage=before-cleanup calls=204 elapsed=203 event=3 chunk=[200209, -178923] held=true latch=0 scar=3 glass=Block{minecraft:fire}[age=0,east=false,north=false,south=false,up=false,west=false] ready=25/25 state=null job=event=null events=null due=null wave=null asked=null held=null ready=null waitsNeighbours=null needs=null mayHold=null  pool=size:2,active:2,queued:30,completed:2016,shutdown:false counts=[0, 32, 0] worker=size=2 active=2  queues=jobs=size:141 readySeen=size:0 readyUnseen=size:0 background=size:4 parked=size:0 scans=size:0 byDue=size:137 inspected=76 waitedThisTick=75  ctx=tasks=size:4 failed=size:0 reading=size:29 pendingWindows=size:65 absent=size:43 windowFailed=false windowReads=59 windowAbsent=43 shotBytes=1048989 heightBytes=13152  task=since=null priority=null chunkId=null  future=null readsPending=29 lane=ua.zentix.incoming.nuclear.world.WorkClock budget=unitCost=0 usedThisTick=1286910 unitsThisTick=155 worked=true deadline=26146054697159 busyDeadline=26146026697159 estimate=1572.7988796007971  used=1286910 nanos=[14207, 3306, 5421, 170, 1152017, 1452, 3497, 374544]
+[16:39:11] [Server thread/INFO] [ua.ze.in.Incoming/]: SEND_HOLD_PROBE thread=Incoming ruins #2 state=RUNNABLE stack=[TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.world.Blast$Solver.decide(Blast.java:551), TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.world.Blast$Solver.run(Blast.java:467), TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.world.Blast.solve(Blast.java:275), TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.world.RuinContext$Grid.blast(RuinContext.java:527), TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.world.Collapse.<init>(Collapse.java:89), TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.world.Collapse.solve(Collapse.java:132), TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.world.RuinContext.lambda$submit$6(RuinContext.java:658), TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.world.RuinContext$$Lambda/0x0000000101762a00.call(Unknown Source), java.base@21.0.7/java.util.concurrent.FutureTask.run(FutureTask.java:317), TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.world.RuinWorkers$Task.run(RuinWorkers.java:352), java.base@21.0.7/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144), java.base@21.0.7/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642), java.base@21.0.7/java.lang.Thread.runWith(Thread.java:1596), java.base@21.0.7/java.lang.Thread.run(Thread.java:1583)]
+[16:39:11] [Server thread/INFO] [ua.ze.in.Incoming/]: SEND_HOLD_PROBE thread=Incoming ruins #3 state=RUNNABLE stack=[TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.world.Blast$Solver.run(Blast.java:467), TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.world.Blast.solve(Blast.java:275), TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.world.RuinContext$Grid.blast(RuinContext.java:527), TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.world.Collapse.<init>(Collapse.java:89), TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.world.Collapse.solve(Collapse.java:132), TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.world.RuinContext.lambda$submit$6(RuinContext.java:658), TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.world.RuinContext$$Lambda/0x0000000101762a00.call(Unknown Source), java.base@21.0.7/java.util.concurrent.FutureTask.run(FutureTask.java:317), TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.world.RuinWorkers$Task.run(RuinWorkers.java:352), java.base@21.0.7/java.util.concurrent.ThreadPoolExecutor.runWorker(ThreadPoolExecutor.java:1144), java.base@21.0.7/java.util.concurrent.ThreadPoolExecutor$Worker.run(ThreadPoolExecutor.java:642), java.base@21.0.7/java.lang.Thread.runWith(Thread.java:1596), java.base@21.0.7/java.lang.Thread.run(Thread.java:1583)]
+[16:39:11] [Server thread/INFO] [minecraft/GameTestServer]: [+++]
+[16:39:11] [Server thread/INFO] [minecraft/GameTestServer]: ========= 3 GAME TESTS COMPLETE IN 10.15 s ======================
+[16:39:11] [Server thread/INFO] [minecraft/GameTestServer]: All 3 required tests passed :)
+[16:39:11] [Server thread/INFO] [minecraft/GameTestServer]: ====================================================
+[16:39:11] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruins: background threads stopped (queued tasks dropped: 29)
+[16:39:11] [Server thread/INFO] [minecraft/MinecraftServer]: Stopping server
+[16:39:11] [Server thread/INFO] [minecraft/MinecraftServer]: Saving players
+[16:39:11] [Server thread/INFO] [minecraft/MinecraftServer]: Saving worlds
+[16:39:12] [Server thread/INFO] [minecraft/MinecraftServer]: Saving chunks for level 'ServerLevel[Test Level]'/minecraft:overworld
+[16:39:12] [Server thread/INFO] [de.ry.sa.Sable/]: Saving sub-levels for level 'ServerLevel[Test Level]'/minecraft:overworld
+[16:39:18] [Server thread/INFO] [minecraft/MinecraftServer]: Saving chunks for level 'ServerLevel[Test Level]'/minecraft:the_nether
+[16:39:18] [Server thread/INFO] [de.ry.sa.Sable/]: Saving sub-levels for level 'ServerLevel[Test Level]'/minecraft:the_nether
+[16:39:18] [Server thread/INFO] [minecraft/MinecraftServer]: Saving chunks for level 'ServerLevel[Test Level]'/minecraft:the_end
+[16:39:18] [Server thread/INFO] [de.ry.sa.Sable/]: Saving sub-levels for level 'ServerLevel[Test Level]'/minecraft:the_end
+[16:39:18] [Server thread/INFO] [minecraft/MinecraftServer]: ThreadedAnvilChunkStorage (world): All chunks are saved
+[16:39:18] [Server thread/INFO] [minecraft/MinecraftServer]: ThreadedAnvilChunkStorage (DIM-1): All chunks are saved
+[16:39:18] [Server thread/INFO] [minecraft/MinecraftServer]: ThreadedAnvilChunkStorage (DIM1): All chunks are saved
+[16:39:18] [Server thread/INFO] [minecraft/MinecraftServer]: ThreadedAnvilChunkStorage: All dimensions are saved
+[16:39:18] [Server thread/INFO] [minecraft/GameTestServer]: Game test server shutting down
+
+[Incubating] Problems report is available at: file:///mnt/data/projects/incoming/mod/run/wt-MT-SNAPSHOT/mod/build/reports/problems/problems-report.html
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 9.0.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/8.14.3/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD SUCCESSFUL in 53s
+11 actionable tasks: 3 executed, 8 up-to-date
+laptop_job mt-snapshot-send-hold-prefix: exit 0

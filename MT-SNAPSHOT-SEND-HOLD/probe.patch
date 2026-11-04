@@ -1,0 +1,109 @@
+diff --git a/mod/src/devtest/java/ua/zentix/incoming/gametest/RuinBackgroundGameTests.java b/mod/src/devtest/java/ua/zentix/incoming/gametest/RuinBackgroundGameTests.java
+index caccafd0e..8216142f3 100644
+--- a/mod/src/devtest/java/ua/zentix/incoming/gametest/RuinBackgroundGameTests.java
++++ b/mod/src/devtest/java/ua/zentix/incoming/gametest/RuinBackgroundGameTests.java
+@@ -1208,14 +1208,85 @@ public final class RuinBackgroundGameTests {
+         long chunk = new ChunkPos(h.absolutePos(glass)).toLong();
+         NuclearWorld w = NuclearWorld.get(level);
+         var release = new java.util.concurrent.CountDownLatch(1);
++        boolean[] held = {false};
++        var detonation = new java.util.concurrent.atomic.AtomicReference<Detonation>();
++        long began = level.getGameTime();
++        int[] calls = {0};
++        class Probe {
++            Object field(Object owner, String name) {
++                if (owner == null) return null;
++                try {
++                    Class<?> type = owner instanceof Class<?> c ? c : owner.getClass();
++                    var f = type.getDeclaredField(name); f.setAccessible(true);
++                    return f.get(owner instanceof Class<?> ? null : owner);
++                } catch (ReflectiveOperationException e) { return "unavailable:" + name; }
++            }
++            Object at(Object owner, long key) {
++                return owner instanceof it.unimi.dsi.fastutil.longs.Long2ObjectMap<?> map ? map.get(key) : null;
++            }
++            Object invoke(Object owner, String name) {
++                if (owner == null) return null;
++                try { var m = owner.getClass().getDeclaredMethod(name); m.setAccessible(true); return m.invoke(owner); }
++                catch (ReflectiveOperationException e) { return "unavailable:" + name; }
++            }
++            String fields(Object owner, String... names) {
++                var out = new StringBuilder();
++                for (String name : names) {
++                    Object value = field(owner, name);
++                    if (value instanceof java.util.Map<?, ?> map) value = "size:" + map.size();
++                    if (value instanceof java.util.Collection<?> collection) value = "size:" + collection.size();
++                    if (value instanceof long[] array) value = "longs:" + array.length;
++                    out.append(name).append('=').append(value).append(' ');
++                }
++                return out.toString();
++            }
++            void dump(String stage) {
++                Detonation event = detonation.get();
++                var q = w.scars();
++                Object job = at(field(q, "jobs"), chunk);
++                Object contexts = field(w, "ruins");
++                Object ctx = contexts instanceof it.unimi.dsi.fastutil.ints.Int2ObjectMap<?> map && event != null ? map.get(event.id()) : null;
++                Object task = at(field(ctx, "tasks"), chunk);
++                Object f = field(task, "future");
++                String future = f instanceof java.util.concurrent.Future<?> futureTask ? "done:" + futureTask.isDone() + ",cancelled:" + futureTask.isCancelled() + ",started:" + field(f, "started") : String.valueOf(f);
++                Object p = field(RuinWorkers.class, "pool");
++                String pool = p instanceof java.util.concurrent.ThreadPoolExecutor executor
++                        ? "size:" + executor.getPoolSize() + ",active:" + executor.getActiveCount() + ",queued:" + executor.getQueue().size()
++                        + ",completed:" + executor.getCompletedTaskCount() + ",shutdown:" + executor.isShutdown() : String.valueOf(p);
++                LevelChunk target = level.getChunkSource().getChunkNow(ChunkPos.getX(chunk), ChunkPos.getZ(chunk));
++                int ready = 0;
++                for (int dx = -2; dx <= 2; dx++) for (int dz = -2; dz <= 2; dz++)
++                    if (level.getChunkSource().getChunkNow(ChunkPos.getX(chunk) + dx, ChunkPos.getZ(chunk) + dz) != null) ready++;
++                var clock = NuclearWorld.clock(level.getServer());
++                Incoming.LOG.info("SEND_HOLD_PROBE pin834382f68 stage={} calls={} elapsed={} event={} chunk={} held={} latch={} scar={} glass={} ready={}/25 state={} job={} pool={} counts={} worker={} queues={} ctx={} task={} future={} readsPending={} lane={} budget={} used={} nanos={}",
++                        stage, calls[0], level.getGameTime() - began, event == null ? null : event.id(), new ChunkPos(chunk), held[0], release.getCount(),
++                        target == null ? null : target.getExistingData(ModAttachments.CHUNK_SCAR).orElse(0),
++                        target == null ? null : target.getBlockState(h.absolutePos(glass)), ready, q.diagState(chunk, level.getGameTime()),
++                        fields(job, "event", "events", "due", "wave", "asked", "held", "ready", "waitsNeighbours", "needs", "mayHold"), pool,
++                        field(RuinWorkers.class, "IN_FLIGHT"), fields(RuinWorkers.class, "size", "active"),
++                        fields(q, "jobs", "readySeen", "readyUnseen", "background", "parked", "scans", "byDue", "inspected", "waitedThisTick"),
++                        fields(ctx, "tasks", "failed", "reading", "pendingWindows", "absent", "windowFailed", "windowReads", "windowAbsent", "shotBytes", "heightBytes"),
++                        fields(task, "since", "priority", "chunkId"), future, invoke(field(ctx, "reads"), "pending"), clock.getClass().getName(),
++                        fields(clock, "unitCost", "usedThisTick", "unitsThisTick", "worked", "deadline", "busyDeadline", "estimate"), clock.usedThisTickNanos(), java.util.Arrays.toString(w.lastNanos()));
++                if (stage.equals("before-cleanup") || stage.equals("release")) {
++                    for (var entry : Thread.getAllStackTraces().entrySet()) if (entry.getKey().getName().startsWith("Incoming ruins #"))
++                        Incoming.LOG.info("SEND_HOLD_PROBE thread={} state={} stack={}", entry.getKey().getName(), entry.getKey().getState(), java.util.Arrays.toString(entry.getValue()));
++                }
++            }
++        }
++        Probe probe = new Probe();
+         StrikeGameTests.afterTest(h, () -> {
++            probe.dump("before-cleanup");
+             release.countDown();
+             NuclearStrikes.clear(level);
+         });
+         RuinWorkers.fillForTest(release, RuinWorkers.Priority.SEEN);
+         Detonation d = NuclearWarhead.detonate(level, Vec3.atBottomCenterOf(h.absolutePos(NuclearGameTests.CENTER)), 1, false, null, 0.1f);
+-        boolean[] held = {false};
++        detonation.set(d);
++        probe.dump("after-detonation");
+         h.succeedWhen(() -> {
++            calls[0]++;
++            if (calls[0] == 1 || calls[0] % 200 == 0) probe.dump("poll");
+             LevelChunk c = level.getChunkSource().getChunkNow(ChunkPos.getX(chunk), ChunkPos.getZ(chunk));
+             boolean scarred = c != null && c.getExistingData(ModAttachments.CHUNK_SCAR).orElse(0) >= d.id();
+             LongOpenHashSet pending = new LongOpenHashSet(new long[]{chunk});
+@@ -1223,7 +1294,9 @@ public final class RuinBackgroundGameTests {
+             if (!scarred) {
+                 if (w.withholds(level, chunk)) {
+                     h.assertTrue(out != null && out.contains(chunk) && pending.isEmpty(), "chunk without ruins remained in the sending queue");
++                    boolean firstHold = !held[0];
+                     held[0] = true;
++                    if (firstHold) probe.dump("release");
+                     release.countDown();
+                 }
+                 h.fail("the ruins have not yet risen");
+@@ -1231,6 +1304,7 @@ public final class RuinBackgroundGameTests {
+             h.assertTrue(out == null && pending.contains(chunk), "chunk with ruins is not given to the player");
+             h.assertTrue(held[0], "chunk never waited for ruins: not verified");
+             h.assertBlockNotPresent(Blocks.GLASS, glass);
++            probe.dump("success");
+         });
+     }
+ 
