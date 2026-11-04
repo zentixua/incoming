@@ -1,0 +1,96 @@
+diff --git a/mod/src/devtest/java/ua/zentix/incoming/gametest/NuclearGameTests.java b/mod/src/devtest/java/ua/zentix/incoming/gametest/NuclearGameTests.java
+index 48567f9c8..cc6d07ce0 100644
+--- a/mod/src/devtest/java/ua/zentix/incoming/gametest/NuclearGameTests.java
++++ b/mod/src/devtest/java/ua/zentix/incoming/gametest/NuclearGameTests.java
+@@ -1202,7 +1202,83 @@ public final class NuclearGameTests {
+         events.schedule(new NuclearEvents.ScheduledStrike(events.nextId(), target, 15, true, now, now + 300, target, java.util.Optional.empty(), false));
+         int[] plannedBefore = {-1};
+         long[] glassGone = {-1}, tickAt = {0};
++        java.util.function.BiFunction<Object, String, Object> field = (object, name) -> {
++            try {
++                Class<?> type = object instanceof Class<?> cls ? cls : object.getClass();
++                var f = type.getDeclaredField(name);
++                f.setAccessible(true);
++                return f.get(object instanceof Class<?> ? null : object);
++            } catch (ReflectiveOperationException error) { throw new AssertionError("tile probe " + name, error); }
++        };
++        java.util.function.Consumer<String> probe = reason -> {
++            Object prep = field.apply(w, "prep");
++            var preps = (java.util.List<?>) field.apply(prep, "preps");
++            var jobs = (java.util.Map<?, ?>) field.apply(w.scars(), "jobs");
++            Incoming.LOG.info("TILEPROBE {} elapsed={} plans={} tiles={} jobs={} holds={} clockUsed={} deadline={} fakeNow={} units={} inspected={} workers={}",
++                    reason, level.getGameTime() - now, w.plannedChunks(), w.prepTiles(), jobs.size(), w.scars().tileHoldsDiag(),
++                    clock.usedThisTickNanos(), field.apply(clock, "deadline"), field.apply(clock, "fakeNow"),
++                    field.apply(clock, "unitsThisTick"), w.scarInspectedLastTick(), field.apply(ua.zentix.incoming.nuclear.world.RuinWorkers.class, "active"));
++            int inspectedPreps = 0;
++            for (Object request : preps) {
++                if (++inspectedPreps > 4) break;
++                Object context = field.apply(request, "ruins");
++                Object plans = field.apply(request, "plans");
++                var tiles = (java.util.List<?>) field.apply(request, "tiles");
++                Incoming.LOG.info("TILEPROBE prep strike={} event={} draining={} heapStop={} tileCount={} nextFar={} order={} nextRead={} farRunning={} submitted={} planReads={} planWrites={} nextScan={} scanning={} ctxTasks={} ctxReading={} ctxWindows={}",
++                        field.apply(request, "strike"), field.apply(request, "detonation"), field.apply(request, "draining"),
++                        field.apply(request, "heapStop"), tiles.size(), field.apply(request, "nextFar"), ((long[]) field.apply(request, "order")).length,
++                        field.apply(request, "nextRead"), field.apply(request, "farRunning"), field.apply(request, "submitted"),
++                        field.apply(plans, "reads"), field.apply(plans, "writes"), field.apply(request, "nextScan"), field.apply(request, "scanning"),
++                        context == null ? null : ((java.util.Map<?, ?>) field.apply(context, "tasks")).size(),
++                        context == null ? null : field.apply(context, "reading"), context == null ? null : field.apply(context, "pendingWindows"));
++                int inspectedTiles = 0, heldTiles = 0;
++                for (Object tile : tiles) {
++                    if (++inspectedTiles > 64 || heldTiles >= 8) break;
++                    int held = (Integer) field.apply(tile, "held");
++                    String state = field.apply(tile, "state").toString();
++                    if (held == 0 && !state.equals("LOADING") && !state.equals("READY")) continue;
++                    heldTiles++;
++                    ChunkPos centre = (ChunkPos) field.apply(tile, "centre");
++                    Incoming.LOG.info("TILEPROBE tile={} state={} held={} partial={} unknown={} resident={} heldAt={} readyAt={}",
++                            centre, state, Integer.toHexString(held), Integer.toHexString((Integer) field.apply(tile, "partial")),
++                            field.apply(tile, "unknown"), field.apply(tile, "resident"), field.apply(tile, "heldAt"), field.apply(tile, "readyAt"));
++                    for (int dx = -2; dx <= 2; dx++) for (int dz = -2; dz <= 2; dz++) {
++                        if ((held & (1 << ((dx + 2) * 5 + dz + 2))) == 0) continue;
++                        ChunkPos pos = new ChunkPos(centre.x + dx, centre.z + dz);
++                        long key = pos.toLong();
++                        var chunk = level.getChunkSource().getChunkNow(pos.x, pos.z);
++                        var holder = level.getChunkSource().chunkMap.getVisibleChunkIfPresent(key);
++                        Object job = jobs.get(key);
++                        Object task = context == null ? null : ((java.util.Map<?, ?>) field.apply(context, "tasks")).get(key);
++                        Object future = task == null ? null : field.apply(task, "future");
++                        Incoming.LOG.info("TILEPROBE chunk={} ready={} holderLevel={} holderStatus={} generationRefs={} pendingUnload={} scar={} pendingPlan={} queued={} job={} needs={} ownRadius={} mayHold={} eventIndex={} task={} taskSince={} planRead={}",
++                                pos, chunk != null, holder == null ? null : holder.getTicketLevel(), holder == null ? null : holder.getLatestStatus(),
++                                holder == null ? null : holder.getGenerationRefCount(), level.getChunkSource().chunkMap.pendingUnloads.containsKey(key),
++                                chunk == null ? -1 : chunk.getExistingData(ModAttachments.CHUNK_SCAR).orElse(0),
++                                w.scars().pendingPlan((Integer) field.apply(request, "detonation"), key), w.scars().queued(key),
++                                w.scars().diagState(key, level.getGameTime()), job == null ? null : field.apply(job, "needs"),
++                                job == null ? null : field.apply(job, "held"), job == null ? null : field.apply(job, "mayHold"),
++                                job == null ? null : field.apply(job, "event"), future,
++                                task == null ? null : field.apply(task, "since"), ((java.util.Map<?, ?>) field.apply(plans, "reads")).get(key));
++                        if (chunk == null || job != null) {
++                            StringBuilder missing = new StringBuilder();
++                            for (int nx = -2; nx <= 2; nx++) for (int nz = -2; nz <= 2; nz++) {
++                                if (level.getChunkSource().getChunkNow(pos.x + nx, pos.z + nz) == null)
++                                    missing.append(' ').append(nx).append(',').append(nz);
++                            }
++                            Incoming.LOG.info("TILEPROBE neighbours {} missingRadius2:{}", pos, missing);
++                        }
++                    }
++                }
++            }
++        };
++        int[] probeBucket = {-1};
+         h.onEachTick(() -> {
++            long elapsed = level.getGameTime() - now;
++            if (elapsed >= 500 && elapsed / 100 != probeBucket[0]) {
++                probeBucket[0] = (int) (elapsed / 100);
++                probe.accept("checkpoint");
++            }
+             String failure = null;
+             if (!events.scheduled().isEmpty()) {
+                 plannedBefore[0] = w.plannedChunks();
+@@ -1244,6 +1320,7 @@ public final class NuclearGameTests {
+                 }
+             }
+             if (failure != null || level.getGameTime() > now + 850) {
++                probe.accept("failure");
+                 throw new net.minecraft.gametest.framework.GameTestAssertException(failure != null ? failure
+                         : "the detonation did not go through to the end: ready " + plannedBefore[0] + ", according to plan " + w.ruinStats()[0] + ", left " + w.plannedChunks()
+                         + ", squares " + w.prepTiles() + ", detonation " + (d != null) + ", glass " + glassGone[0]);

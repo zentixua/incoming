@@ -1,0 +1,24 @@
+{
+  "held_chunk_rows": 65,
+  "not_ready": [],
+  "queued": [],
+  "pending_plan": [],
+  "generation_nonzero": [],
+  "scar_values": [
+    9
+  ],
+  "tile_masks": [
+    {
+      "hex": "1ffffff",
+      "held_chunks": 25
+    },
+    {
+      "hex": "739ce7",
+      "held_chunks": 15
+    },
+    {
+      "hex": "1ffffff",
+      "held_chunks": 25
+    }
+  ]
+}

@@ -1,0 +1,427 @@
+Picked up JAVA_TOOL_OPTIONS: -XX:ActiveProcessorCount=4 -Xmx2g
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.14.3/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :createMinecraftArtifacts UP-TO-DATE
+> Task :compileJava UP-TO-DATE
+> Task :generateModMetadata UP-TO-DATE
+> Task :processResources UP-TO-DATE
+> Task :classes UP-TO-DATE
+> Task :compileDevtestJava
+> Task :copyRuntimeMods_gametest UP-TO-DATE
+> Task :processDevtestResources UP-TO-DATE
+> Task :devtestClasses
+> Task :downloadAssets UP-TO-DATE
+> Task :writeGameTestServerLegacyClasspath UP-TO-DATE
+> Task :prepareGameTestServerRun
+
+> Task :runGameTestServer
+Picked up JAVA_TOOL_OPTIONS: -XX:ActiveProcessorCount=4 -Xmx2g
+WARN StatusConsoleListener Advanced terminal features are not available in this environment
+[15:54:41] [main/INFO] [cp.mo.mo.Launcher/MODLAUNCHER]: ModLauncher running: args [--launchTarget, forgeserverdev, --gameDir, ., --fml.fmlVersion, 4.0.45, --fml.mcVersion, 1.21.1, --fml.neoForgeVersion, 21.1.264, --fml.neoFormVersion, 20240808.144430]
+[15:54:41] [main/INFO] [cp.mo.mo.Launcher/MODLAUNCHER]: JVM identified as Microsoft OpenJDK 64-Bit Server VM 21.0.7+6-LTS
+[15:54:41] [main/INFO] [cp.mo.mo.Launcher/MODLAUNCHER]: ModLauncher 11.0.5+main.901c6ea8 starting: java version 21.0.7 by Microsoft; OS Linux arch amd64 version 7.3.1-1-cachyos
+[15:54:42] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Configuration file /mnt/data/projects/incoming/mod/run/wt-MT-CHECK/mod/run/gametest/config/fml.toml is not correct. Correcting
+[15:54:42] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [disableConfigWatcher] was corrected from null to false
+[15:54:42] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowControl] was corrected from null to true
+[15:54:42] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [maxThreads] was corrected from null to -1
+[15:54:42] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [versionCheck] was corrected from null to true
+[15:54:42] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [defaultConfigPath] was corrected from null to defaultconfigs
+[15:54:42] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [disableOptimizedDFU] was corrected from null to true
+[15:54:42] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowProvider] was corrected from null to fmlearlywindow
+[15:54:42] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowWidth] was corrected from null to 854
+[15:54:42] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowHeight] was corrected from null to 480
+[15:54:42] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowFBScale] was corrected from null to 1
+[15:54:42] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowMaximized] was corrected from null to false
+[15:54:42] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowSkipGLVersions] was corrected from null to []
+[15:54:42] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowSquir] was corrected from null to false
+[15:54:42] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: ****************************** Found dependency overrides ******************************
+[15:54:42] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: Dependency overrides for mod 'aeronautics': adding explicit AFTER ordering against 'simulated', adding explicit AFTER ordering against 'offroad'
+[15:54:42] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: Dependency overrides for mod 'simulated': adding explicit AFTER ordering against 'create', adding explicit AFTER ordering against 'sable'
+[15:54:42] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: Dependency overrides for mod 'offroad': adding explicit AFTER ordering against 'simulated'
+[15:54:42] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: ****************************************************************************************
+[15:54:42] [main/INFO] [ne.ne.fm.lo.ImmediateWindowHandler/]: ImmediateWindowProvider not loading because launch target is forgeserverdev
+[15:54:42] [main/INFO] [mixin/]: SpongePowered MIXIN Subsystem Version=0.8.7 Source=union:/home/artem/.gradle/caches/modules-2/files-2.1/net.fabricmc/sponge-mixin/0.16.4+mixin.0.8.7/26d01f0567ab46e9ca0d2ed89d0ecc11aadbd433/sponge-mixin-0.16.4+mixin.0.8.7.jar%2394!/ Service=ModLauncher Env=SERVER
+[15:54:42] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: ****************************** Found dependency overrides ******************************
+[15:54:42] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: Dependency overrides for mod 'aeronautics': adding explicit AFTER ordering against 'simulated', adding explicit AFTER ordering against 'offroad'
+[15:54:42] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: Dependency overrides for mod 'simulated': adding explicit AFTER ordering against 'create', adding explicit AFTER ordering against 'sable'
+[15:54:42] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: Dependency overrides for mod 'offroad': adding explicit AFTER ordering against 'simulated'
+[15:54:42] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: ****************************************************************************************
+[15:54:42] [main/INFO] [ne.ne.fm.lo.mo.lo.JarInJarDependencyLocator/]: Found 13 dependencies adding them to mods collection
+[15:54:42] [main/INFO] [ne.ne.fm.lo.mo.ModDiscoverer/]: 
+     Mod List:
+		Name Version (Mod Id)
+
+		Create 6.0.10 (create)
+		Create Aeronautics 1.3.2 (aeronautics)
+		Create Aeronautics 1.3.2 (aeronautics_bundled)
+		Create Offroad 1.3.2 (offroad)
+		Create Simulated 1.3.2 (simulated)
+		Flywheel 1.0.6 (flywheel)
+		Incoming 3.10.4 (incoming)
+		Minecraft 1.21.1 (minecraft)
+		NeoForge 21.1.264 (neoforge)
+		Ponder 1.0.82+mc1.21.1 (ponder)
+		Sable 2.0.6 (sable)
+		Sable Companion 1.6.0 (sablecompanion)
+		Veil 4.3.2 (veil)
+[15:54:42] [main/INFO] [mixin/]: Compatibility level set to JAVA_21
+[15:54:42] [main/INFO] [cp.mo.mo.LaunchServiceHandler/MODLAUNCHER]: Launching target 'forgeserverdev' with arguments [--gameDir, .]
+[15:54:42] [main/WARN] [mixin/]: Reference map 'ponder.refmap.json' for ponder-common.mixins.json could not be read. If this is a development environment you can ignore this message
+[15:54:42] [main/INFO] [de.ry.sa.mi.AbstractSableMixinPlugin/]: Using Vanilla renderer mixins
+[15:54:42] [main/INFO] [de.ry.sa.mi.AbstractSableMixinPlugin/]: Using Vanilla renderer mixins
+[15:54:42] [main/WARN] [mixin/]: Reference map 'simulated.refmap.json' for simulated.mixins.json could not be read. If this is a development environment you can ignore this message
+[15:54:42] [main/WARN] [mixin/]: Reference map 'offroad.refmap.json' for offroad.mixins.json could not be read. If this is a development environment you can ignore this message
+[15:54:42] [main/WARN] [mixin/]: Reference map 'aeronautics.refmap.json' for aeronautics.mixins.json could not be read. If this is a development environment you can ignore this message
+[15:54:43] [main/WARN] [mixin/]: Error loading class: org/jetbrains/annotations/ApiStatus$ScheduledForRemoval (java.lang.ClassNotFoundException: org.jetbrains.annotations.ApiStatus$ScheduledForRemoval)
+[15:54:43] [main/INFO] [MixinExtras|Service/]: Initializing MixinExtras via com.llamalad7.mixinextras.service.MixinExtrasServiceImpl(version=0.5.5).
+[15:54:46] [main/WARN] [minecraft/Commands]: Ambiguity between arguments [teleport, location] and [teleport, destination] with inputs: [0.1 -0.5 .9, 0 0 0]
+[15:54:46] [main/WARN] [minecraft/Commands]: Ambiguity between arguments [teleport, location] and [teleport, targets] with inputs: [0.1 -0.5 .9, 0 0 0]
+[15:54:46] [main/WARN] [minecraft/Commands]: Ambiguity between arguments [teleport, destination] and [teleport, targets] with inputs: [Player, 0123, @e, dd12be42-52a9-4a91-a8a1-11c01849e498]
+[15:54:46] [main/WARN] [minecraft/Commands]: Ambiguity between arguments [teleport, targets] and [teleport, destination] with inputs: [Player, 0123, dd12be42-52a9-4a91-a8a1-11c01849e498]
+[15:54:46] [main/WARN] [minecraft/Commands]: Ambiguity between arguments [teleport, targets, location] and [teleport, targets, destination] with inputs: [0.1 -0.5 .9, 0 0 0]
+[15:54:46] [modloading-worker-0/INFO] [Veil/]: Veil is initializing.
+[15:54:46] [modloading-worker-0/INFO] [ne.ne.ne.co.NeoForgeMod/NEOFORGE-MOD]: NeoForge mod loading, version 21.1.264, for MC 1.21.1
+[15:54:46] [modloading-worker-0/INFO] [co.si.cr.Create/]: Create 6.0.10 initializing! Commit hash: ac0c444d9828da3453ae8cc65338e8de063286fb
+[15:54:47] [modloading-worker-0/INFO] [de.ry.sa.Sable/]: Sable loaded!
+[15:54:48] [main/INFO] [mojang/YggdrasilAuthenticationService]: Environment: Environment[sessionHost=https://sessionserver.mojang.com, servicesHost=https://api.minecraftservices.com, name=PROD]
+[15:54:48] [NeoForge Version Check/INFO] [ne.ne.fm.VersionChecker/]: [create] Starting version check at https://api.modrinth.com/updates/create/forge_updates.json?neoforge=only
+[15:54:48] [main/WARN] [minecraft/VanillaPackResourcesBuilder]: Assets URL 'union:/mnt/data/projects/incoming/mod/run/wt-MT-CHECK/mod/build/moddev/artifacts/neoforge-21.1.264.jar%23128!/assets/.mcassetsroot' uses unexpected schema
+[15:54:48] [main/WARN] [minecraft/VanillaPackResourcesBuilder]: Assets URL 'union:/mnt/data/projects/incoming/mod/run/wt-MT-CHECK/mod/build/moddev/artifacts/neoforge-21.1.264.jar%23128!/data/.mcassetsroot' uses unexpected schema
+[15:54:49] [main/INFO] [co.si.cr.Create/]: Created 157 recipes which will be injected into the game
+[15:54:49] [main/INFO] [co.si.cr.Create/]: Created 0 tags which will be injected into the game
+[15:54:49] [main/INFO] [ne.ne.ne.ga.GameTestHooks/]: Enabled Gametest Namespaces: [incoming]
+[15:54:49] [NeoForge Version Check/INFO] [ne.ne.fm.VersionChecker/]: [create] Found status: OUTDATED Current: 6.0.10 Target: 6.0.10+mc1.21.1
+[15:54:49] [main/INFO] [minecraft/RecipeManager]: Loaded 2954 recipes
+[15:54:49] [main/INFO] [minecraft/AdvancementTree]: Loaded 2645 advancements
+[15:54:50] [Server thread/INFO] [ua.ze.in.Incoming/]: GameTest: only batch “nuke_material|nuke_source_failure|nuke_ledger_legacy_crater|nuke_source_cached_failure|nuke_ledger_totals|nuke_lifecycle_pool|nuke_layout_backing|nuke_prelaunch_surface|nuke_near_unload|nuke_ledger_parked|nuke_store_restart|nuke_store_natural|nuke_settle_load|nuke_ledger_admission|nuke_near_handoff_reads|nuke_settle_many|nuke_flash_prep|nuke_memory_flow|nuke_lifecycle_detached|nuke_prep” - tests 20 from 788
+[15:54:50] [Server thread/INFO] [de.ry.sa.Sable/]: Creating physics pipeline for ResourceKey[minecraft:dimension / minecraft:overworld] using RapierPhysicsPipelineProvider
+[15:54:50] [Server thread/INFO] [de.ry.sa.Sable/]: Using game directory relative Sable Rapier native directory /mnt/data/projects/incoming/mod/run/wt-MT-CHECK/mod/run/gametest/.sable/natives
+[2026-11-04T13:54:50.544370593Z] [[32mINFO[0m] (sable_rapier) Rapier scene initialized
+[15:54:50] [Server thread/INFO] [de.ry.sa.Sable/]: Creating physics pipeline for ResourceKey[minecraft:dimension / minecraft:the_nether] using RapierPhysicsPipelineProvider
+[2026-11-04T13:54:50.759590920Z] [[32mINFO[0m] (sable_rapier) Rapier scene initialized
+[15:54:50] [Server thread/INFO] [de.ry.sa.Sable/]: Creating physics pipeline for ResourceKey[minecraft:dimension / minecraft:the_end] using RapierPhysicsPipelineProvider
+[2026-11-04T13:54:50.786380028Z] [[32mINFO[0m] (sable_rapier) Rapier scene initialized
+[15:54:50] [Server thread/INFO] [minecraft/MinecraftServer]: Preparing start region for dimension minecraft:overworld
+[15:54:50] [worldgen/INFO] [minecraft/LoggerChunkProgressListener]: Preparing spawn area: 2%
+[15:54:50] [Server thread/INFO] [minecraft/LoggerChunkProgressListener]: Time elapsed: 92 ms
+[15:54:50] [Server thread/INFO] [minecraft/GameTestServer]: Started game test server
+[15:54:50] [Server thread/INFO] [ne.ne.ne.se.pe.PermissionAPI/]: Successfully initialized permission handler neoforge:default_handler
+[15:54:50] [Server thread/INFO] [minecraft/GameTestServer]: 20 tests are now running at position 13984036, -59, -113836!
+[15:54:51] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuke_material:0' (1 tests)...
+[15:54:51] [Server thread/INFO] [minecraft/GameTestServer]: [                    ]
+[15:54:51] [Server thread/INFO] [minecraft/GameTestServer]: [                    ]
+[15:54:51] [Server thread/INFO] [minecraft/GameTestServer]: [_                   ]
+[15:54:51] [Server thread/INFO] [minecraft/GameTestServer]: [_                   ]
+[15:54:51] [Server thread/INFO] [minecraft/GameTestServer]: [_                   ]
+[15:54:51] [Server thread/INFO] [minecraft/GameTestServer]: [_                   ]
+[15:54:51] [Server thread/INFO] [minecraft/GameTestServer]: [_                   ]
+[15:54:51] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuke_source_failure:0' (1 tests)...
+[15:54:51] [Server thread/INFO] [minecraft/GameTestServer]: [+                   ]
+[15:54:51] [Server thread/INFO] [minecraft/GameTestServer]: [+                   ]
+[15:54:51] [Server thread/ERROR] [ua.ze.in.Incoming/]: Pre-built ruins: snapshot of chunk [874069, -7113] from disk failed
+java.lang.IllegalStateException: Injected source snapshot publication failure
+	at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.world.RuinSourceFailureGameTests$1.getSerializedSize(RuinSourceFailureGameTests.java:66) ~[%23133!/:?] {re:classloading}
+	at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.world.ChunkShot.<init>(ChunkShot.java:175) ~[%23133!/:?] {re:classloading}
+	at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.world.ChunkShot.fromDisk(ChunkShot.java:286) ~[%23133!/:?] {re:classloading}
+	at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.world.RuinContext.putDisk(RuinContext.java:178) ~[%23133!/:?] {re:classloading}
+	at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.world.NuclearPrep.far(NuclearPrep.java:977) ~[%23133!/:?] {re:classloading}
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103) ~[?:?] {}
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580) ~[?:?] {}
+	at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.world.RuinSourceFailureGameTests.far(RuinSourceFailureGameTests.java:79) ~[%23133!/:?] {re:classloading}
+	at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.world.RuinSourceFailureGameTests.ordinarySourcePublicationFailureCannotBecomeReady(RuinSourceFailureGameTests.java:98) ~[%23133!/:?] {re:classloading}
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103) ~[?:?] {}
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580) ~[?:?] {}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestRegistry.lambda$turnMethodIntoConsumer$5(GameTestRegistry.java:169) ~[neoforge-21.1.264.jar%23128!/:?] {re:classloading}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.TestFunction.run(TestFunction.java:40) ~[neoforge-21.1.264.jar%23128!/:?] {re:classloading}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestInfo.startTest(GameTestInfo.java:162) ~[neoforge-21.1.264.jar%23128!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:sable.mixins.json:game_test.GameTestInfoMixin from mod sable,pl:mixin:A}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestInfo.tickInternal(GameTestInfo.java:124) ~[neoforge-21.1.264.jar%23128!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:sable.mixins.json:game_test.GameTestInfoMixin from mod sable,pl:mixin:A}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestInfo.tick(GameTestInfo.java:107) ~[neoforge-21.1.264.jar%23128!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:sable.mixins.json:game_test.GameTestInfoMixin from mod sable,pl:mixin:A}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestTicker.lambda$tick$0(GameTestTicker.java:39) ~[neoforge-21.1.264.jar%23128!/:?] {re:classloading}
+	at java.base/java.util.concurrent.CopyOnWriteArrayList.forEach(CopyOnWriteArrayList.java:891) ~[?:?] {}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestTicker.tick(GameTestTicker.java:39) ~[neoforge-21.1.264.jar%23128!/:?] {re:classloading}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.tickChildren(MinecraftServer.java:1070) ~[neoforge-21.1.264.jar%23128!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:veil.network.mixins.json:NetworkMinecraftServerMixin from mod veil,pl:mixin:APP:veil.scheduler.mixins.json:MinecraftServerMixin from mod veil,pl:mixin:APP:ponder-common.mixins.json:accessor.MinecraftServerAccessor from mod ponder,pl:mixin:APP:sable.mixins.json:udp.MinecraftServerMixin from mod sable,pl:mixin:A}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.tickServer(MinecraftServer.java:932) ~[neoforge-21.1.264.jar%23128!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:veil.network.mixins.json:NetworkMinecraftServerMixin from mod veil,pl:mixin:APP:veil.scheduler.mixins.json:MinecraftServerMixin from mod veil,pl:mixin:APP:ponder-common.mixins.json:accessor.MinecraftServerAccessor from mod ponder,pl:mixin:APP:sable.mixins.json:udp.MinecraftServerMixin from mod sable,pl:mixin:A}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestServer.tickServer(GameTestServer.java:171) ~[neoforge-21.1.264.jar%23128!/:?] {re:classloading}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.runServer(MinecraftServer.java:713) ~[neoforge-21.1.264.jar%23128!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:veil.network.mixins.json:NetworkMinecraftServerMixin from mod veil,pl:mixin:APP:veil.scheduler.mixins.json:MinecraftServerMixin from mod veil,pl:mixin:APP:ponder-common.mixins.json:accessor.MinecraftServerAccessor from mod ponder,pl:mixin:APP:sable.mixins.json:udp.MinecraftServerMixin from mod sable,pl:mixin:A}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.lambda$spin$2(MinecraftServer.java:267) ~[neoforge-21.1.264.jar%23128!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:veil.network.mixins.json:NetworkMinecraftServerMixin from mod veil,pl:mixin:APP:veil.scheduler.mixins.json:MinecraftServerMixin from mod veil,pl:mixin:APP:ponder-common.mixins.json:accessor.MinecraftServerAccessor from mod ponder,pl:mixin:APP:sable.mixins.json:udp.MinecraftServerMixin from mod sable,pl:mixin:A}
+	at java.base/java.lang.Thread.run(Thread.java:1583) [?:?] {}
+[15:54:51] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruins: background threads 2 (desired 2; automatic; cores 4, left to the game 2)
+[15:54:51] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuke_ledger_legacy_crater:0' (1 tests)...
+[15:54:51] [Server thread/INFO] [minecraft/GameTestServer]: [++                  ]
+[15:54:52] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuke_source_cached_failure:0' (1 tests)...
+[15:54:52] [Server thread/INFO] [minecraft/GameTestServer]: [+++                 ]
+[15:54:53] [Server thread/INFO] [minecraft/GameTestServer]: [+++                 ]
+[15:54:53] [Server thread/ERROR] [ua.ze.in.Incoming/]: Pre-built ruins: snapshot of chunk [874074, -7113] from disk failed
+java.lang.IllegalStateException: Injected source snapshot publication failure
+	at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.world.RuinSourceFailureGameTests$1.getSerializedSize(RuinSourceFailureGameTests.java:66) ~[%23133!/:?] {re:classloading}
+	at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.world.ChunkShot.<init>(ChunkShot.java:175) ~[%23133!/:?] {re:classloading}
+	at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.world.ChunkShot.fromDisk(ChunkShot.java:286) ~[%23133!/:?] {re:classloading}
+	at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.world.RuinContext.putDisk(RuinContext.java:178) ~[%23133!/:?] {re:classloading}
+	at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.world.NuclearPrep.acceptArchived(NuclearPrep.java:920) ~[%23133!/:?] {re:classloading}
+	at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.world.NuclearPrep.far(NuclearPrep.java:962) ~[%23133!/:?] {re:classloading}
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103) ~[?:?] {}
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580) ~[?:?] {}
+	at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.world.RuinSourceFailureGameTests.far(RuinSourceFailureGameTests.java:79) ~[%23133!/:?] {re:classloading}
+	at TRANSFORMER/incoming@3.10.4/ua.zentix.incoming.nuclear.world.RuinSourceFailureGameTests.cachedFallbackPublicationFailureCannotBecomeReady(RuinSourceFailureGameTests.java:112) ~[%23133!/:?] {re:classloading}
+	at java.base/jdk.internal.reflect.DirectMethodHandleAccessor.invoke(DirectMethodHandleAccessor.java:103) ~[?:?] {}
+	at java.base/java.lang.reflect.Method.invoke(Method.java:580) ~[?:?] {}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestRegistry.lambda$turnMethodIntoConsumer$5(GameTestRegistry.java:169) ~[neoforge-21.1.264.jar%23128!/:?] {re:classloading}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.TestFunction.run(TestFunction.java:40) ~[neoforge-21.1.264.jar%23128!/:?] {re:classloading}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestInfo.startTest(GameTestInfo.java:162) ~[neoforge-21.1.264.jar%23128!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:sable.mixins.json:game_test.GameTestInfoMixin from mod sable,pl:mixin:A}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestInfo.tickInternal(GameTestInfo.java:124) ~[neoforge-21.1.264.jar%23128!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:sable.mixins.json:game_test.GameTestInfoMixin from mod sable,pl:mixin:A}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestInfo.tick(GameTestInfo.java:107) ~[neoforge-21.1.264.jar%23128!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:sable.mixins.json:game_test.GameTestInfoMixin from mod sable,pl:mixin:A}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestTicker.lambda$tick$0(GameTestTicker.java:39) ~[neoforge-21.1.264.jar%23128!/:?] {re:classloading}
+	at java.base/java.util.concurrent.CopyOnWriteArrayList.forEach(CopyOnWriteArrayList.java:891) ~[?:?] {}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestTicker.tick(GameTestTicker.java:39) ~[neoforge-21.1.264.jar%23128!/:?] {re:classloading}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.tickChildren(MinecraftServer.java:1070) ~[neoforge-21.1.264.jar%23128!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:veil.network.mixins.json:NetworkMinecraftServerMixin from mod veil,pl:mixin:APP:veil.scheduler.mixins.json:MinecraftServerMixin from mod veil,pl:mixin:APP:ponder-common.mixins.json:accessor.MinecraftServerAccessor from mod ponder,pl:mixin:APP:sable.mixins.json:udp.MinecraftServerMixin from mod sable,pl:mixin:A}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.tickServer(MinecraftServer.java:932) ~[neoforge-21.1.264.jar%23128!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:veil.network.mixins.json:NetworkMinecraftServerMixin from mod veil,pl:mixin:APP:veil.scheduler.mixins.json:MinecraftServerMixin from mod veil,pl:mixin:APP:ponder-common.mixins.json:accessor.MinecraftServerAccessor from mod ponder,pl:mixin:APP:sable.mixins.json:udp.MinecraftServerMixin from mod sable,pl:mixin:A}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.gametest.framework.GameTestServer.tickServer(GameTestServer.java:171) ~[neoforge-21.1.264.jar%23128!/:?] {re:classloading}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.runServer(MinecraftServer.java:713) ~[neoforge-21.1.264.jar%23128!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:veil.network.mixins.json:NetworkMinecraftServerMixin from mod veil,pl:mixin:APP:veil.scheduler.mixins.json:MinecraftServerMixin from mod veil,pl:mixin:APP:ponder-common.mixins.json:accessor.MinecraftServerAccessor from mod ponder,pl:mixin:APP:sable.mixins.json:udp.MinecraftServerMixin from mod sable,pl:mixin:A}
+	at TRANSFORMER/minecraft@1.21.1/net.minecraft.server.MinecraftServer.lambda$spin$2(MinecraftServer.java:267) ~[neoforge-21.1.264.jar%23128!/:?] {re:mixin,pl:accesstransformer:B,re:classloading,pl:accesstransformer:B,pl:mixin:APP:veil.network.mixins.json:NetworkMinecraftServerMixin from mod veil,pl:mixin:APP:veil.scheduler.mixins.json:MinecraftServerMixin from mod veil,pl:mixin:APP:ponder-common.mixins.json:accessor.MinecraftServerAccessor from mod ponder,pl:mixin:APP:sable.mixins.json:udp.MinecraftServerMixin from mod sable,pl:mixin:A}
+	at java.base/java.lang.Thread.run(Thread.java:1583) [?:?] {}
+[15:54:53] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuke_ledger_totals:0' (1 tests)...
+[15:54:53] [Server thread/INFO] [minecraft/GameTestServer]: [++++                ]
+[15:54:53] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuke_lifecycle_pool:0' (1 tests)...
+[15:54:53] [Server thread/INFO] [minecraft/GameTestServer]: [+++++               ]
+[15:54:53] [Server thread/INFO] [minecraft/GameTestServer]: [+++++               ]
+[15:54:53] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruins: background threads stopped (queued tasks dropped: 0)
+[15:54:53] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruins: background threads 1 (desired 1; from the ruin_threads setting; cores 4, left to the game 0)
+[15:54:53] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruins: background threads working 2 of 2 (server tick without mod lanes 0.7 ms)
+[15:54:53] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruins: background threads stopped (queued tasks dropped: 1)
+[15:54:53] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuke_layout_backing:0' (1 tests)...
+[15:54:53] [Server thread/INFO] [minecraft/GameTestServer]: [++++++              ]
+[15:54:54] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuke_prelaunch_surface:0' (1 tests)...
+[15:54:54] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++             ]
+[15:54:54] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++             ]
+[15:54:54] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruins: background threads 2 (desired 2; automatic; cores 4, left to the game 2)
+[15:54:54] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruins for strike #-5 ready: plans for loaded chunks 23 (chunks loaded during flight 23), from disk 0 (heavy zone 14 chunks), not from disk 0 (unread 0; 461168601842738771 s to detonation), plans 0 MB, snapshots 0 MB, background threads 2 (working 2, lowered 0, raised 0, tasks abandoned 0) busy 57 %, heap 617 of 2048 MB
+[15:54:55] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuke_near_unload:0' (1 tests)...
+[15:54:55] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++            ]
+[15:54:55] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++            ]
+[15:54:55] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++            ]
+[15:54:55] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuke_ledger_parked:0' (1 tests)...
+[15:54:55] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++           ]
+[15:54:55] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++           ]
+[15:54:56] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuke_store_restart:0' (1 tests)...
+[15:54:56] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++          ]
+[15:54:56] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++_         ]
+[15:54:56] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuke_store_natural:0' (1 tests)...
+[15:54:56] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++         ]
+[15:54:56] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++         ]
+[15:54:57] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuke_settle_load:0' (1 tests)...
+[15:54:57] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++        ]
+[15:54:57] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++_       ]
+[15:54:58] [Server thread/INFO] [ua.ze.in.Incoming/]: Mod work over 30 s: server tick avg 11.7 ms (max 354.0), of which mod lanes avg — impacts 0.0, nuke 0.0, blackout 0.0 ms; the rest (vanilla, other mods) 11.6 ms; impact early window 99.5% of ticks, early avg 0.0 ms, late avg 0.0 ms; mandatory unload debt 3.5% of ticks
+[15:54:58] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++_       ]
+[15:54:59] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++_       ]
+[15:54:59] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuke_ledger_admission:0' (1 tests)...
+[15:54:59] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++       ]
+[15:54:59] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuke_near_handoff_reads:0' (1 tests)...
+[15:54:59] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++      ]
+[15:54:59] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++      ]
+[15:55:00] [Server thread/INFO] [ua.ze.in.Incoming/]: Detonation #100: pre-built ruins — plans for loaded chunks 0 (chunks loaded during flight 0), still building 0; from disk 0 (heavy zone 0 chunks), still building 0, not from disk 0; background threads 2 (working 2, lowered 0, raised 0, tasks abandoned 0)
+[15:55:00] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuke_settle_many:0' (1 tests)...
+[15:55:00] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++     ]
+[15:55:00] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++     ]
+[15:55:01] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++_    ]
+[15:55:02] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++_    ]
+[15:55:03] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++_    ]
+[15:55:04] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++_    ]
+[15:55:05] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++_    ]
+[15:55:06] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++_    ]
+[15:55:07] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++_    ]
+[15:55:08] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++_    ]
+[15:55:08] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruin settlement #4: 5501 positions scanned, 100 saved chunks confirmed, 100 loads, 0 pending (0 held, admission 1, 0 reads), 152 ticks; complete
+[15:55:08] [Server thread/INFO] [ua.ze.in.Incoming/]: SETTLEBENCH chunks=100 wallMs=7769 ticks=157 nuclearTotalMs=317.951914 nuclearMeanMs=2.025171426751592 nuclearMaxMs=24.135016
+[15:55:08] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuke_flash_prep:0' (1 tests)...
+[15:55:08] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++    ]
+[15:55:08] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++    ]
+[15:55:09] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruins for strike #5 ready: plans for loaded chunks 20 (chunks loaded during flight 72), from disk 0 (heavy zone 22 chunks), not from disk 2 (unread 6: not fully generated on disk 6; 14 s to detonation), plans 0 MB, snapshots 0 MB, background threads 2 (working 2, lowered 0, raised 0, tasks abandoned 0) busy 5 %, heap 700 of 2048 MB
+[15:55:09] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++_   ]
+[15:55:09] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++_   ]
+[15:55:09] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++_   ]
+[15:55:09] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++_   ]
+[15:55:09] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++_   ]
+[15:55:09] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++_   ]
+[15:55:09] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++_   ]
+[15:55:09] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++_   ]
+[15:55:09] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++_   ]
+[15:55:09] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++_   ]
+[15:55:09] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++_   ]
+[15:55:09] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++_   ]
+[15:55:09] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++_   ]
+[15:55:09] [Server thread/INFO] [ua.ze.in.Incoming/]: Mod work over 30 s: server tick avg 17.7 ms (max 452.4), of which mod lanes avg — impacts 0.0, nuke 0.6, blackout 0.0 ms; the rest (vanilla, other mods) 17.1 ms; impact early window 100.0% of ticks, early avg 0.0 ms, late avg 0.0 ms; mandatory unload debt 4.7% of ticks
+[15:55:09] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++_   ]
+[15:55:09] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++_   ]
+[15:55:09] [Server thread/INFO] [ua.ze.in.Incoming/]: Detonation #6: pre-built ruins — plans for loaded chunks 25 (chunks loaded during flight 81), still building 0; from disk 0 (heavy zone 22 chunks), still building 0, not from disk 2; background threads 2 (working 2, lowered 0, raised 0, tasks abandoned 0)
+[15:55:09] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #1 (minecraft:overworld): 13984069 -113663, radius 76, power returns in 15 min
+[15:55:09] [Server thread/INFO] [ua.ze.in.Incoming/]: Nuclear detonation #6: 15 kt, air burst, 13984068 -42 -113664, scale 0.010626279, 4 ms
+[15:55:09] [Server thread/INFO] [ua.ze.in.Incoming/]: Nuclear detonation #6: light and radiation — 1 of 1 entities in 1 ticks, 2 ms
+[15:55:09] [Server thread/INFO] [ua.ze.in.Incoming/]: Nuclear detonation #6: flash shadows — 6 faces behind 1 bodies, 1 ms
+[15:55:09] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #1 (minecraft:overworld): outage cascade covered the whole area
+[15:55:09] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuke_memory_flow:0' (1 tests)...
+[15:55:09] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruins for detonation #6: from prepared plan 25, stale plan 0, on the spot 0, unplaced 0; lag behind the wave up to 0 ticks (near players up to 0, elsewhere up to 0); chunk swap avg 170 µs, longest 1.0 ms
+[15:55:09] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruins for detonation #6 (final): lag behind the wave near players up to 0 ticks (prepared plan 0, planned on the spot 0), elsewhere up to 0; stale plan 0, re-planned ahead of the wave near players 0; a player waited for chunk ruins up to 0 ticks (from the first chunk request after the wave)
+[15:55:09] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruins for detonation #6: 81 chunks loaded at detonation, 25 of them with loaded neighbours; from prepared plan 25 (30.9 % of all, 100.0 % of chunks with neighbours); on a player's screen without neighbours 0
+[15:55:09] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruins for detonation #6: sent to players before ruins: 0 (distinct chunks)
+[15:55:09] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruins for detonation #6: disk windows — neighbours read 0, not whole on disk 0 (solid in the window, like the world edge)
+[15:55:09] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruins for detonation #6: 0 chunks loaded after detonation, planned on the spot — ruins avg 0 ticks after the wave, max 0; 0 from prepared plan — avg 0, max 0
+[15:55:09] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruins for detonation #6: 56 chunks loaded at detonation still have no ruins (waiting for neighbours at the edge of the loaded world)
+[15:55:09] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruins: chunk swap by phase (total since start, ms) — check 46, sections 3, heightmaps 1, light and packets 2, block entities 0
+[15:55:09] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruins: slowest through the world — chunk [874426, -6708]: 0 cells, 0.0 ms (block entities, POI, Distant Horizons LOD); slowest block — — 0.0 ms, Distant Horizons LOD 0.0 ms
+[15:55:09] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++   ]
+[15:55:09] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++   ]
+[15:55:09] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruins: background threads stopped (queued tasks dropped: 0)
+[15:55:09] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuke_lifecycle_detached:0' (1 tests)...
+[15:55:09] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++  ]
+[15:55:10] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'nuke_prep:0' (1 tests)...
+[15:55:10] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++ ]
+[15:55:10] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruins: background threads 2 (desired 2; automatic; cores 4, left to the game 2)
+[15:55:10] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++_]
+[15:55:10] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++_]
+[15:55:10] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++_]
+[15:55:10] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++_]
+[15:55:10] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++_]
+[15:55:10] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruins for strike #8 ready: plans for loaded chunks 20 (chunks loaded during flight 179), from disk 9 (heavy zone 37 chunks), not from disk 8 (unread 13: not fully generated on disk 13; 10 s to detonation), plans 0 MB, snapshots 1 MB, background threads 2 (working 2, lowered 0, raised 0, tasks abandoned 0) busy 63 %, heap 803 of 2048 MB
+[15:55:10] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++_]
+[15:55:10] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++_]
+[15:55:10] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++_]
+[15:55:10] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++_]
+[15:55:10] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++_]
+[15:55:10] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++_]
+[15:55:10] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++_]
+[15:55:10] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++_]
+[15:55:10] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++_]
+[15:55:10] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++_]
+[15:55:10] [Server thread/INFO] [ua.ze.in.Incoming/]: Detonation #9: pre-built ruins — plans for loaded chunks 20 (chunks loaded during flight 179), still building 0; from disk 9 (heavy zone 37 chunks), still building 0, not from disk 8; background threads 2 (working 2, lowered 0, raised 0, tasks abandoned 0)
+[15:55:10] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #2 (minecraft:overworld): 13984276 -113663, radius 144, power returns in 15 min
+[15:55:10] [Server thread/INFO] [ua.ze.in.Incoming/]: Nuclear detonation #9: 15 kt, air burst, 13984275 -37 -113664, scale 0.02, 0 ms
+[15:55:10] [Server thread/INFO] [ua.ze.in.Incoming/]: Nuclear detonation #9: light and radiation — 0 of 0 entities in 1 ticks, 1 ms
+[15:55:10] [Server thread/INFO] [ua.ze.in.Incoming/]: Blackout #2 (minecraft:overworld): outage cascade covered the whole area
+[15:55:10] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++_]
+[15:55:11] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++_]
+[15:55:12] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++_]
+[15:55:13] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++_]
+[15:55:14] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++_]
+[15:55:15] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++_]
+[15:55:16] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++_]
+[15:55:17] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++_]
+[15:55:18] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++_]
+[15:55:19] [Server thread/INFO] [ua.ze.in.Incoming/]: Mod work over 30 s: server tick avg 16.9 ms (max 308.2), of which mod lanes avg — impacts 0.0, nuke 9.2, blackout 0.0 ms; the rest (vanilla, other mods) 7.7 ms; impact early window 100.0% of ticks, early avg 0.0 ms, late avg 0.0 ms; mandatory unload debt 4.7% of ticks
+[15:55:19] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++_]
+[15:55:20] [Server thread/INFO] [ua.ze.in.Incoming/]: TILEPROBE checkpoint elapsed=500 plans=0 tiles=3 jobs=79 holds=now 0, peak 0 of 64 clockUsed=29000000 deadline=5772000000 fakeNow=5771000000 units=29 inspected=0 workers=2
+[15:55:20] [Server thread/INFO] [ua.ze.in.Incoming/]: TILEPROBE prep strike=8 event=9 draining=false heapStop=false tileCount=5 nextFar=37 order=37 nextRead=37 farRunning=[] submitted=[] planReads={} planWrites={} nextScan=241 scanning=0 ctxTasks=0 ctxReading=[] ctxWindows=[]
+[15:55:20] [Server thread/INFO] [ua.ze.in.Incoming/]: TILEPROBE tile=[874017, -7108] state=READY held=1ffffff partial=0 unknown=0 resident=false heldAt=-1 readyAt=1614
+[15:55:20] [Server thread/INFO] [ua.ze.in.Incoming/]: TILEPROBE chunk=[874015, -7110] ready=true holderLevel=33 holderStatus=minecraft:full generationRefs=0 pendingUnload=false scar=9 pendingPlan=false queued=false job=null needs=null ownRadius=null mayHold=null eventIndex=null task=null taskSince=null planRead=null
+[15:55:20] [Server thread/INFO] [ua.ze.in.Incoming/]: TILEPROBE chunk=[874015, -7109] ready=true holderLevel=33 holderStatus=minecraft:full generationRefs=0 pendingUnload=false scar=9 pendingPlan=false queued=false job=null needs=null ownRadius=null mayHold=null eventIndex=null task=null taskSince=null planRead=null
+[15:55:20] [Server thread/INFO] [ua.ze.in.Incoming/]: TILEPROBE chunk=[874015, -7108] ready=true holderLevel=33 holderStatus=minecraft:full generationRefs=0 pendingUnload=false scar=9 pendingPlan=false queued=false job=null needs=null ownRadius=null mayHold=null eventIndex=null task=null taskSince=null planRead=null
+[15:55:20] [Server thread/INFO] [ua.ze.in.Incoming/]: TILEPROBE chunk=[874015, -7107] ready=true holderLevel=32 holderStatus=minecraft:full generationRefs=0 pendingUnload=false scar=9 pendingPlan=false queued=false job=null needs=null ownRadius=null mayHold=null eventIndex=null task=null taskSince=null planRead=null
+[15:55:20] [Server thread/INFO] [ua.ze.in.Incoming/]: TILEPROBE chunk=[874015, -7106] ready=true holderLevel=31 holderStatus=minecraft:full generationRefs=0 pendingUnload=false scar=9 pendingPlan=false queued=false job=null needs=null ownRadius=null mayHold=null eventIndex=null task=null taskSince=null planRead=null
+[15:55:20] [Server thread/INFO] [ua.ze.in.Incoming/]: TILEPROBE chunk=[874016, -7110] ready=true holderLevel=33 holderStatus=minecraft:full generationRefs=0 pendingUnload=false scar=9 pendingPlan=false queued=false job=null needs=null ownRadius=null mayHold=null eventIndex=null task=null taskSince=null planRead=null
+[15:55:20] [Server thread/INFO] [ua.ze.in.Incoming/]: TILEPROBE chunk=[874016, -7109] ready=true holderLevel=33 holderStatus=minecraft:full generationRefs=0 pendingUnload=false scar=9 pendingPlan=false queued=false job=null needs=null ownRadius=null mayHold=null eventIndex=null task=null taskSince=null planRead=null
+[15:55:20] [Server thread/INFO] [ua.ze.in.Incoming/]: TILEPROBE chunk=[874016, -7108] ready=true holderLevel=33 holderStatus=minecraft:full generationRefs=0 pendingUnload=false scar=9 pendingPlan=false queued=false job=null needs=null ownRadius=null mayHold=null eventIndex=null task=null taskSince=null planRead=null
+[15:55:20] [Server thread/INFO] [ua.ze.in.Incoming/]: TILEPROBE chunk=[874016, -7107] ready=true holderLevel=32 holderStatus=minecraft:full generationRefs=0 pendingUnload=false scar=9 pendingPlan=false queued=false job=null needs=null ownRadius=null mayHold=null eventIndex=null task=null taskSince=null planRead=null
+[15:55:20] [Server thread/INFO] [ua.ze.in.Incoming/]: TILEPROBE chunk=[874016, -7106] ready=true holderLevel=31 holderStatus=minecraft:full generationRefs=0 pendingUnload=false scar=9 pendingPlan=false queued=false job=null needs=null ownRadius=null mayHold=null eventIndex=null task=null taskSince=null planRead=null
+[15:55:20] [Server thread/INFO] [ua.ze.in.Incoming/]: TILEPROBE chunk=[874017, -7110] ready=true holderLevel=33 holderStatus=minecraft:full generationRefs=0 pendingUnload=false scar=9 pendingPlan=false queued=false job=null needs=null ownRadius=null mayHold=null eventIndex=null task=null taskSince=null planRead=null
+[15:55:20] [Server thread/INFO] [ua.ze.in.Incoming/]: TILEPROBE chunk=[874017, -7109] ready=true holderLevel=33 holderStatus=minecraft:full generationRefs=0 pendingUnload=false scar=9 pendingPlan=false queued=false job=null needs=null ownRadius=null mayHold=null eventIndex=null task=null taskSince=null planRead=null
+[15:55:20] [Server thread/INFO] [ua.ze.in.Incoming/]: TILEPROBE chunk=[874017, -7108] ready=true holderLevel=33 holderStatus=minecraft:full generationRefs=0 pendingUnload=false scar=9 pendingPlan=false queued=false job=null needs=null ownRadius=null mayHold=null eventIndex=null task=null taskSince=null planRead=null
+[15:55:20] [Server thread/INFO] [ua.ze.in.Incoming/]: TILEPROBE chunk=[874017, -7107] ready=true holderLevel=32 holderStatus=minecraft:full generationRefs=0 pendingUnload=false scar=9 pendingPlan=false queued=false job=null needs=null ownRadius=null mayHold=null eventIndex=null task=null taskSince=null planRead=null
+[15:55:20] [Server thread/INFO] [ua.ze.in.Incoming/]: TILEPROBE chunk=[874017, -7106] ready=true holderLevel=31 holderStatus=minecraft:full generationRefs=0 pendingUnload=false scar=9 pendingPlan=false queued=false job=null needs=null ownRadius=null mayHold=null eventIndex=null task=null taskSince=null planRead=null
+[15:55:20] [Server thread/INFO] [ua.ze.in.Incoming/]: TILEPROBE chunk=[874018, -7110] ready=true holderLevel=33 holderStatus=minecraft:full generationRefs=0 pendingUnload=false scar=9 pendingPlan=false queued=false job=null needs=null ownRadius=null mayHold=null eventIndex=null task=null taskSince=null planRead=null
+[15:55:20] [Server thread/INFO] [ua.ze.in.Incoming/]: TILEPROBE chunk=[874018, -7109] ready=true holderLevel=33 holderStatus=minecraft:full generationRefs=0 pendingUnload=false scar=9 pendingPlan=false queued=false job=null needs=null ownRadius=null mayHold=null eventIndex=null task=null taskSince=null planRead=null
+[15:55:20] [Server thread/INFO] [ua.ze.in.Incoming/]: TILEPROBE chunk=[874018, -7108] ready=true holderLevel=33 holderStatus=minecraft:full generationRefs=0 pendingUnload=false scar=9 pendingPlan=false queued=false job=null needs=null ownRadius=null mayHold=null eventIndex=null task=null taskSince=null planRead=null
+[15:55:20] [Server thread/INFO] [ua.ze.in.Incoming/]: TILEPROBE chunk=[874018, -7107] ready=true holderLevel=32 holderStatus=minecraft:full generationRefs=0 pendingUnload=false scar=9 pendingPlan=false queued=false job=null needs=null ownRadius=null mayHold=null eventIndex=null task=null taskSince=null planRead=null
+[15:55:20] [Server thread/INFO] [ua.ze.in.Incoming/]: TILEPROBE chunk=[874018, -7106] ready=true holderLevel=31 holderStatus=minecraft:full generationRefs=0 pendingUnload=false scar=9 pendingPlan=false queued=false job=null needs=null ownRadius=null mayHold=null eventIndex=null task=null taskSince=null planRead=null
+[15:55:20] [Server thread/INFO] [ua.ze.in.Incoming/]: TILEPROBE chunk=[874019, -7110] ready=true holderLevel=33 holderStatus=minecraft:full generationRefs=0 pendingUnload=false scar=9 pendingPlan=false queued=false job=null needs=null ownRadius=null mayHold=null eventIndex=null task=null taskSince=null planRead=null
+[15:55:20] [Server thread/INFO] [ua.ze.in.Incoming/]: TILEPROBE chunk=[874019, -7109] ready=true holderLevel=33 holderStatus=minecraft:full generationRefs=0 pendingUnload=false scar=9 pendingPlan=false queued=false job=null needs=null ownRadius=null mayHold=null eventIndex=null task=null taskSince=null planRead=null
+[15:55:20] [Server thread/INFO] [ua.ze.in.Incoming/]: TILEPROBE chunk=[874019, -7108] ready=true holderLevel=33 holderStatus=minecraft:full generationRefs=0 pendingUnload=false scar=9 pendingPlan=false queued=false job=null needs=null ownRadius=null mayHold=null eventIndex=null task=null taskSince=null planRead=null
+[15:55:20] [Server thread/INFO] [ua.ze.in.Incoming/]: TILEPROBE chunk=[874019, -7107] ready=true holderLevel=32 holderStatus=minecraft:full generationRefs=0 pendingUnload=false scar=9 pendingPlan=false queued=false job=null needs=null ownRadius=null mayHold=null eventIndex=null task=null taskSince=null planRead=null
+[15:55:20] [Server thread/INFO] [ua.ze.in.Incoming/]: TILEPROBE chunk=[874019, -7106] ready=true holderLevel=31 holderStatus=minecraft:full generationRefs=0 pendingUnload=false scar=9 pendingPlan=false queued=false job=null needs=null ownRadius=null mayHold=null eventIndex=null task=null taskSince=null planRead=null
+[15:55:20] [Server thread/INFO] [ua.ze.in.Incoming/]: TILEPROBE tile=[874012, -7103] state=READY held=739ce7 partial=18c6318 unknown=0 resident=false heldAt=-1 readyAt=1615
+[15:55:20] [Server thread/INFO] [ua.ze.in.Incoming/]: TILEPROBE chunk=[874010, -7105] ready=true holderLevel=33 holderStatus=minecraft:full generationRefs=0 pendingUnload=false scar=9 pendingPlan=false queued=false job=null needs=null ownRadius=null mayHold=null eventIndex=null task=null taskSince=null planRead=null
+[15:55:20] [Server thread/INFO] [ua.ze.in.Incoming/]: TILEPROBE chunk=[874010, -7104] ready=true holderLevel=33 holderStatus=minecraft:full generationRefs=0 pendingUnload=false scar=9 pendingPlan=false queued=false job=null needs=null ownRadius=null mayHold=null eventIndex=null task=null taskSince=null planRead=null
+[15:55:20] [Server thread/INFO] [ua.ze.in.Incoming/]: TILEPROBE chunk=[874010, -7103] ready=true holderLevel=33 holderStatus=minecraft:full generationRefs=0 pendingUnload=false scar=9 pendingPlan=false queued=false job=null needs=null ownRadius=null mayHold=null eventIndex=null task=null taskSince=null planRead=null
+[15:55:20] [Server thread/INFO] [ua.ze.in.Incoming/]: TILEPROBE chunk=[874011, -7105] ready=true holderLevel=33 holderStatus=minecraft:full generationRefs=0 pendingUnload=false scar=9 pendingPlan=false queued=false job=null needs=null ownRadius=null mayHold=null eventIndex=null task=null taskSince=null planRead=null
+[15:55:20] [Server thread/INFO] [ua.ze.in.Incoming/]: TILEPROBE chunk=[874011, -7104] ready=true holderLevel=33 holderStatus=minecraft:full generationRefs=0 pendingUnload=false scar=9 pendingPlan=false queued=false job=null needs=null ownRadius=null mayHold=null eventIndex=null task=null taskSince=null planRead=null
+[15:55:20] [Server thread/INFO] [ua.ze.in.Incoming/]: TILEPROBE chunk=[874011, -7103] ready=true holderLevel=33 holderStatus=minecraft:full generationRefs=0 pendingUnload=false scar=9 pendingPlan=false queued=false job=null needs=null ownRadius=null mayHold=null eventIndex=null task=null taskSince=null planRead=null
+[15:55:20] [Server thread/INFO] [ua.ze.in.Incoming/]: TILEPROBE chunk=[874012, -7105] ready=true holderLevel=33 holderStatus=minecraft:full generationRefs=0 pendingUnload=false scar=9 pendingPlan=false queued=false job=null needs=null ownRadius=null mayHold=null eventIndex=null task=null taskSince=null planRead=null
+[15:55:20] [Server thread/INFO] [ua.ze.in.Incoming/]: TILEPROBE chunk=[874012, -7104] ready=true holderLevel=33 holderStatus=minecraft:full generationRefs=0 pendingUnload=false scar=9 pendingPlan=false queued=false job=null needs=null ownRadius=null mayHold=null eventIndex=null task=null taskSince=null planRead=null
+[15:55:20] [Server thread/INFO] [ua.ze.in.Incoming/]: TILEPROBE chunk=[874012, -7103] ready=true holderLevel=33 holderStatus=minecraft:full generationRefs=0 pendingUnload=false scar=9 pendingPlan=false queued=false job=null needs=null ownRadius=null mayHold=null eventIndex=null task=null taskSince=null planRead=null
+[15:55:20] [Server thread/INFO] [ua.ze.in.Incoming/]: TILEPROBE chunk=[874013, -7105] ready=true holderLevel=33 holderStatus=minecraft:full generationRefs=0 pendingUnload=false scar=9 pendingPlan=false queued=false job=null needs=null ownRadius=null mayHold=null eventIndex=null task=null taskSince=null planRead=null
+[15:55:20] [Server thread/INFO] [ua.ze.in.Incoming/]: TILEPROBE chunk=[874013, -7104] ready=true holderLevel=33 holderStatus=minecraft:full generationRefs=0 pendingUnload=false scar=9 pendingPlan=false queued=false job=null needs=null ownRadius=null mayHold=null eventIndex=null task=null taskSince=null planRead=null
+[15:55:20] [Server thread/INFO] [ua.ze.in.Incoming/]: TILEPROBE chunk=[874013, -7103] ready=true holderLevel=33 holderStatus=minecraft:full generationRefs=0 pendingUnload=false scar=9 pendingPlan=false queued=false job=null needs=null ownRadius=null mayHold=null eventIndex=null task=null taskSince=null planRead=null
+[15:55:20] [Server thread/INFO] [ua.ze.in.Incoming/]: TILEPROBE chunk=[874014, -7105] ready=true holderLevel=32 holderStatus=minecraft:full generationRefs=0 pendingUnload=false scar=9 pendingPlan=false queued=false job=null needs=null ownRadius=null mayHold=null eventIndex=null task=null taskSince=null planRead=null
+[15:55:20] [Server thread/INFO] [ua.ze.in.Incoming/]: TILEPROBE chunk=[874014, -7104] ready=true holderLevel=32 holderStatus=minecraft:full generationRefs=0 pendingUnload=false scar=9 pendingPlan=false queued=false job=null needs=null ownRadius=null mayHold=null eventIndex=null task=null taskSince=null planRead=null
+[15:55:20] [Server thread/INFO] [ua.ze.in.Incoming/]: TILEPROBE chunk=[874014, -7103] ready=true holderLevel=32 holderStatus=minecraft:full generationRefs=0 pendingUnload=false scar=9 pendingPlan=false queued=false job=null needs=null ownRadius=null mayHold=null eventIndex=null task=null taskSince=null planRead=null
+[15:55:20] [Server thread/INFO] [ua.ze.in.Incoming/]: TILEPROBE tile=[874012, -7108] state=READY held=1ffffff partial=0 unknown=0 resident=false heldAt=-1 readyAt=1645
+[15:55:20] [Server thread/INFO] [ua.ze.in.Incoming/]: TILEPROBE chunk=[874010, -7110] ready=true holderLevel=33 holderStatus=minecraft:full generationRefs=0 pendingUnload=false scar=9 pendingPlan=false queued=false job=null needs=null ownRadius=null mayHold=null eventIndex=null task=null taskSince=null planRead=null
+[15:55:20] [Server thread/INFO] [ua.ze.in.Incoming/]: TILEPROBE chunk=[874010, -7109] ready=true holderLevel=33 holderStatus=minecraft:full generationRefs=0 pendingUnload=false scar=9 pendingPlan=false queued=false job=null needs=null ownRadius=null mayHold=null eventIndex=null task=null taskSince=null planRead=null
+[15:55:20] [Server thread/INFO] [ua.ze.in.Incoming/]: TILEPROBE chunk=[874010, -7108] ready=true holderLevel=33 holderStatus=minecraft:full generationRefs=0 pendingUnload=false scar=9 pendingPlan=false queued=false job=null needs=null ownRadius=null mayHold=null eventIndex=null task=null taskSince=null planRead=null
+[15:55:20] [Server thread/INFO] [ua.ze.in.Incoming/]: TILEPROBE chunk=[874010, -7107] ready=true holderLevel=33 holderStatus=minecraft:full generationRefs=0 pendingUnload=false scar=9 pendingPlan=false queued=false job=null needs=null ownRadius=null mayHold=null eventIndex=null task=null taskSince=null planRead=null
+[15:55:20] [Server thread/INFO] [ua.ze.in.Incoming/]: TILEPROBE chunk=[874010, -7106] ready=true holderLevel=33 holderStatus=minecraft:full generationRefs=0 pendingUnload=false scar=9 pendingPlan=false queued=false job=null needs=null ownRadius=null mayHold=null eventIndex=null task=null taskSince=null planRead=null
+[15:55:20] [Server thread/INFO] [ua.ze.in.Incoming/]: TILEPROBE chunk=[874011, -7110] ready=true holderLevel=33 holderStatus=minecraft:full generationRefs=0 pendingUnload=false scar=9 pendingPlan=false queued=false job=null needs=null ownRadius=null mayHold=null eventIndex=null task=null taskSince=null planRead=null
+[15:55:20] [Server thread/INFO] [ua.ze.in.Incoming/]: TILEPROBE chunk=[874011, -7109] ready=true holderLevel=33 holderStatus=minecraft:full generationRefs=0 pendingUnload=false scar=9 pendingPlan=false queued=false job=null needs=null ownRadius=null mayHold=null eventIndex=null task=null taskSince=null planRead=null
+[15:55:20] [Server thread/INFO] [ua.ze.in.Incoming/]: TILEPROBE chunk=[874011, -7108] ready=true holderLevel=33 holderStatus=minecraft:full generationRefs=0 pendingUnload=false scar=9 pendingPlan=false queued=false job=null needs=null ownRadius=null mayHold=null eventIndex=null task=null taskSince=null planRead=null
+[15:55:20] [Server thread/INFO] [ua.ze.in.Incoming/]: TILEPROBE chunk=[874011, -7107] ready=true holderLevel=33 holderStatus=minecraft:full generationRefs=0 pendingUnload=false scar=9 pendingPlan=false queued=false job=null needs=null ownRadius=null mayHold=null eventIndex=null task=null taskSince=null planRead=null
+[15:55:20] [Server thread/INFO] [ua.ze.in.Incoming/]: TILEPROBE chunk=[874011, -7106] ready=true holderLevel=33 holderStatus=minecraft:full generationRefs=0 pendingUnload=false scar=9 pendingPlan=false queued=false job=null needs=null ownRadius=null mayHold=null eventIndex=null task=null taskSince=null planRead=null
+[15:55:20] [Server thread/INFO] [ua.ze.in.Incoming/]: TILEPROBE chunk=[874012, -7110] ready=true holderLevel=33 holderStatus=minecraft:full generationRefs=0 pendingUnload=false scar=9 pendingPlan=false queued=false job=null needs=null ownRadius=null mayHold=null eventIndex=null task=null taskSince=null planRead=null
+[15:55:20] [Server thread/INFO] [ua.ze.in.Incoming/]: TILEPROBE chunk=[874012, -7109] ready=true holderLevel=33 holderStatus=minecraft:full generationRefs=0 pendingUnload=false scar=9 pendingPlan=false queued=false job=null needs=null ownRadius=null mayHold=null eventIndex=null task=null taskSince=null planRead=null
+[15:55:20] [Server thread/INFO] [ua.ze.in.Incoming/]: TILEPROBE chunk=[874012, -7108] ready=true holderLevel=33 holderStatus=minecraft:full generationRefs=0 pendingUnload=false scar=9 pendingPlan=false queued=false job=null needs=null ownRadius=null mayHold=null eventIndex=null task=null taskSince=null planRead=null
+[15:55:20] [Server thread/INFO] [ua.ze.in.Incoming/]: TILEPROBE chunk=[874012, -7107] ready=true holderLevel=33 holderStatus=minecraft:full generationRefs=0 pendingUnload=false scar=9 pendingPlan=false queued=false job=null needs=null ownRadius=null mayHold=null eventIndex=null task=null taskSince=null planRead=null
+[15:55:20] [Server thread/INFO] [ua.ze.in.Incoming/]: TILEPROBE chunk=[874012, -7106] ready=true holderLevel=33 holderStatus=minecraft:full generationRefs=0 pendingUnload=false scar=9 pendingPlan=false queued=false job=null needs=null ownRadius=null mayHold=null eventIndex=null task=null taskSince=null planRead=null
+[15:55:20] [Server thread/INFO] [ua.ze.in.Incoming/]: TILEPROBE chunk=[874013, -7110] ready=true holderLevel=32 holderStatus=minecraft:full generationRefs=0 pendingUnload=false scar=9 pendingPlan=false queued=false job=null needs=null ownRadius=null mayHold=null eventIndex=null task=null taskSince=null planRead=null
+[15:55:20] [Server thread/INFO] [ua.ze.in.Incoming/]: TILEPROBE chunk=[874013, -7109] ready=true holderLevel=33 holderStatus=minecraft:full generationRefs=0 pendingUnload=false scar=9 pendingPlan=false queued=false job=null needs=null ownRadius=null mayHold=null eventIndex=null task=null taskSince=null planRead=null
+[15:55:20] [Server thread/INFO] [ua.ze.in.Incoming/]: TILEPROBE chunk=[874013, -7108] ready=true holderLevel=33 holderStatus=minecraft:full generationRefs=0 pendingUnload=false scar=9 pendingPlan=false queued=false job=null needs=null ownRadius=null mayHold=null eventIndex=null task=null taskSince=null planRead=null
+[15:55:20] [Server thread/INFO] [ua.ze.in.Incoming/]: TILEPROBE chunk=[874013, -7107] ready=true holderLevel=33 holderStatus=minecraft:full generationRefs=0 pendingUnload=false scar=9 pendingPlan=false queued=false job=null needs=null ownRadius=null mayHold=null eventIndex=null task=null taskSince=null planRead=null
+[15:55:20] [Server thread/INFO] [ua.ze.in.Incoming/]: TILEPROBE chunk=[874013, -7106] ready=true holderLevel=33 holderStatus=minecraft:full generationRefs=0 pendingUnload=false scar=9 pendingPlan=false queued=false job=null needs=null ownRadius=null mayHold=null eventIndex=null task=null taskSince=null planRead=null
+[15:55:20] [Server thread/INFO] [ua.ze.in.Incoming/]: TILEPROBE chunk=[874014, -7110] ready=true holderLevel=33 holderStatus=minecraft:full generationRefs=0 pendingUnload=false scar=9 pendingPlan=false queued=false job=null needs=null ownRadius=null mayHold=null eventIndex=null task=null taskSince=null planRead=null
+[15:55:20] [Server thread/INFO] [ua.ze.in.Incoming/]: TILEPROBE chunk=[874014, -7109] ready=true holderLevel=33 holderStatus=minecraft:full generationRefs=0 pendingUnload=false scar=9 pendingPlan=false queued=false job=null needs=null ownRadius=null mayHold=null eventIndex=null task=null taskSince=null planRead=null
+[15:55:20] [Server thread/INFO] [ua.ze.in.Incoming/]: TILEPROBE chunk=[874014, -7108] ready=true holderLevel=33 holderStatus=minecraft:full generationRefs=0 pendingUnload=false scar=9 pendingPlan=false queued=false job=null needs=null ownRadius=null mayHold=null eventIndex=null task=null taskSince=null planRead=null
+[15:55:20] [Server thread/INFO] [ua.ze.in.Incoming/]: TILEPROBE chunk=[874014, -7107] ready=true holderLevel=32 holderStatus=minecraft:full generationRefs=0 pendingUnload=false scar=9 pendingPlan=false queued=false job=null needs=null ownRadius=null mayHold=null eventIndex=null task=null taskSince=null planRead=null
+[15:55:20] [Server thread/INFO] [ua.ze.in.Incoming/]: TILEPROBE chunk=[874014, -7106] ready=true holderLevel=32 holderStatus=minecraft:full generationRefs=0 pendingUnload=false scar=9 pendingPlan=false queued=false job=null needs=null ownRadius=null mayHold=null eventIndex=null task=null taskSince=null planRead=null
+[15:55:20] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++_]
+[15:55:21] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++_]
+[15:55:22] [Server thread/INFO] [minecraft/GameTestServer]: [+++++++++++++++++++_]
+[15:55:23] [Server thread/INFO] [ua.ze.in.Incoming/]: Nuclear detonation #9: flash scorch — 5 of 72 chunks (0 seen by players) in 2 ticks (pulse 0.5 ticks), 13 ms on the server thread; 0 blocks, 0 fires lit; 0 stale, 67 after the wave, 0 unloaded, 0 at aircraft without neighbours, 0 over the memory limit
+[15:55:23] [Server thread/INFO] [ua.ze.in.Incoming/]: Detonation #9: heavy-zone preparation — 20 loaded and 9 disk plans built, 37 chunks in zone, 0 plan pages resident, 0 reading, 0 building, 13 unreadable; 5 zone tiles
+[15:55:23] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruins for detonation #9: from prepared plan 29, stale plan 0, on the spot 86, unplaced 0; lag behind the wave up to 77 ticks (near players up to 0, elsewhere up to 77); chunk swap avg 159 µs, longest 0.7 ms
+[15:55:23] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruins for detonation #9: plan and swap on the spot — avg 0.4 ms, longest 5.3 ms
+[15:55:23] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruins for detonation #9 (final): lag behind the wave near players up to 0 ticks (prepared plan 0, planned on the spot 0), elsewhere up to 77; stale plan 0, re-planned ahead of the wave near players 0; a player waited for chunk ruins up to 0 ticks (from the first chunk request after the wave)
+[15:55:23] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruins for detonation #9: 179 chunks loaded at detonation, 20 of them with loaded neighbours; from prepared plan 29 (16.2 % of all, 100.0 % of chunks with neighbours); on a player's screen without neighbours 0
+[15:55:23] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruins for detonation #9: sent to players before ruins: 0 (distinct chunks)
+[15:55:23] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruins for detonation #9: disk windows — neighbours read 126, not whole on disk 34 (solid in the window, like the world edge)
+[15:55:23] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruins for detonation #9: 15 chunks loaded after detonation, planned on the spot — ruins avg 38 ticks after the wave, max 77; 0 from prepared plan — avg 0, max 0
+[15:55:23] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruins for detonation #9: 79 chunks loaded at detonation still have no ruins (waiting for neighbours at the edge of the loaded world)
+[15:55:23] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruins: chunk swap by phase (total since start, ms) — check 74, sections 3, heightmaps 1, light and packets 4, block entities 0
+[15:55:23] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruins: slowest through the world — chunk [874017, -7104]: 0 cells, 0.0 ms (block entities, POI, Distant Horizons LOD); slowest block — — 0.0 ms, Distant Horizons LOD 0.0 ms
+[15:55:23] [Server thread/INFO] [minecraft/GameTestServer]: [++++++++++++++++++++]
+[15:55:23] [Server thread/INFO] [minecraft/GameTestServer]: ========= 20 GAME TESTS COMPLETE IN 32.63 s ======================
+[15:55:23] [Server thread/INFO] [minecraft/GameTestServer]: All 20 required tests passed :)
+[15:55:23] [Server thread/INFO] [minecraft/GameTestServer]: ====================================================
+[15:55:23] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruins: background threads stopped (queued tasks dropped: 0)
+[15:55:23] [Server thread/INFO] [minecraft/MinecraftServer]: Stopping server
+[15:55:23] [Server thread/INFO] [minecraft/MinecraftServer]: Saving players
+[15:55:23] [Server thread/INFO] [minecraft/MinecraftServer]: Saving worlds
+[15:55:23] [Server thread/INFO] [minecraft/MinecraftServer]: Saving chunks for level 'ServerLevel[Test Level]'/minecraft:overworld
+[15:55:23] [Server thread/INFO] [de.ry.sa.Sable/]: Saving sub-levels for level 'ServerLevel[Test Level]'/minecraft:overworld
+[15:55:25] [Server thread/INFO] [minecraft/MinecraftServer]: Saving chunks for level 'ServerLevel[Test Level]'/minecraft:the_nether
+[15:55:25] [Server thread/INFO] [de.ry.sa.Sable/]: Saving sub-levels for level 'ServerLevel[Test Level]'/minecraft:the_nether
+[15:55:25] [Server thread/INFO] [minecraft/MinecraftServer]: Saving chunks for level 'ServerLevel[Test Level]'/minecraft:the_end
+[15:55:25] [Server thread/INFO] [de.ry.sa.Sable/]: Saving sub-levels for level 'ServerLevel[Test Level]'/minecraft:the_end
+[15:55:25] [Server thread/INFO] [minecraft/MinecraftServer]: ThreadedAnvilChunkStorage (world): All chunks are saved
+[15:55:25] [Server thread/INFO] [minecraft/MinecraftServer]: ThreadedAnvilChunkStorage (DIM-1): All chunks are saved
+[15:55:25] [Server thread/INFO] [minecraft/MinecraftServer]: ThreadedAnvilChunkStorage (DIM1): All chunks are saved
+[15:55:25] [Server thread/INFO] [minecraft/MinecraftServer]: ThreadedAnvilChunkStorage: All dimensions are saved
+[15:55:25] [Server thread/INFO] [minecraft/GameTestServer]: Game test server shutting down
+
+[Incubating] Problems report is available at: file:///mnt/data/projects/incoming/mod/run/wt-MT-CHECK/mod/build/reports/problems/problems-report.html
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 9.0.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/8.14.3/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD SUCCESSFUL in 49s
+11 actionable tasks: 3 executed, 8 up-to-date
+laptop_job mt-check-tile-prefix: exit 0
