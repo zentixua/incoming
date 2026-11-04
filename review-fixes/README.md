@@ -1,3 +1,5 @@
+> Final-head follow-up completed (4 November): [new registered apply-plus-support cost, B5 memory deferral, and fresh f92dabaaa/main paired frames](../final-head-pairs/README.md). The earlier capture status below is historical.
+
 # MT-B2 review fixes: registered support continuation
 
 Production head: `f92dabaaac30bb04b3e9b07296be44a2602114c8`. Main merged with merge commit `3c6f54e87`; no rebase.

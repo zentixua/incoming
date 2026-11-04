@@ -1,0 +1,552 @@
+{
+  "final-main-roof": {
+    "name": "final-main-roof",
+    "effect": "nuke 15 air near 2835",
+    "site": [
+      98304.5,
+      65.0,
+      1536.5
+    ],
+    "camera": [
+      85.0,
+      28.0,
+      25.0,
+      10.0
+    ],
+    "audio": {
+      "file": "/mnt/data/projects/incoming/mod/run/wt-MT-B2/mod/run/mt-b2/followup-main/mod/run/sandbox/audio.wav",
+      "start": 7540804,
+      "from": -0.25,
+      "seconds": 6.0
+    },
+    "frames": [
+      {
+        "t": -0.25,
+        "age": -0.248,
+        "file": "final-main-roof_-00.25s.png",
+        "fps": 60,
+        "size": [
+          1280,
+          692
+        ],
+        "sha256": "21878090d7f95914430c2b3c7b07b59c985c69a792ddaae2df10fe32182d4f85"
+      },
+      {
+        "t": 0.5,
+        "age": 0.503,
+        "file": "final-main-roof_000.50s.png",
+        "fps": 60,
+        "size": [
+          1280,
+          692
+        ],
+        "sha256": "c94b783e832b8413e49c17ac1fbc828a03b1aafcedf624ffe1b5ee6fcc0d8e4a"
+      },
+      {
+        "t": 1.0,
+        "age": 1.002,
+        "file": "final-main-roof_001.00s.png",
+        "fps": 60,
+        "size": [
+          1280,
+          692
+        ],
+        "sha256": "4def814825ae7208edb426ce794cabd76686fe46e9522b17d589186390602ea1"
+      },
+      {
+        "t": 3.0,
+        "age": 3.001,
+        "file": "final-main-roof_003.00s.png",
+        "fps": 60,
+        "size": [
+          1280,
+          692
+        ],
+        "sha256": "08052ecd94cf46cfa1d0b861b80c533ac26a91a6786d24814738e0a05e416b84"
+      },
+      {
+        "t": 10.0,
+        "age": 10.01,
+        "file": "final-main-roof_010.00s.png",
+        "fps": 60,
+        "size": [
+          1280,
+          692
+        ],
+        "sha256": "54e69648011ae42b658d029fc29681c2a57372bbb0005f3542fd980b67eaf26d"
+      }
+    ],
+    "wav": {
+      "channels": 2,
+      "rate": 48000,
+      "sample_width": 2,
+      "frames": 288000,
+      "seconds": 6.0,
+      "rms_dbfs": -14.449238898644662,
+      "peak": 0.999969482421875,
+      "full_scale_samples": 2
+    }
+  },
+  "final-main-tree": {
+    "name": "final-main-tree",
+    "effect": "nuke 15 air near 1000",
+    "site": [
+      163840.5,
+      65.0,
+      2560.5
+    ],
+    "camera": [
+      85.0,
+      28.0,
+      25.0,
+      10.0
+    ],
+    "audio": {
+      "file": "/mnt/data/projects/incoming/mod/run/wt-MT-B2/mod/run/mt-b2/followup-main/mod/run/sandbox/audio.wav",
+      "start": 15212612,
+      "from": -0.25,
+      "seconds": 6.0
+    },
+    "frames": [
+      {
+        "t": -0.25,
+        "age": -0.248,
+        "file": "final-main-tree_-00.25s.png",
+        "fps": 60,
+        "size": [
+          1280,
+          692
+        ],
+        "sha256": "77f31e83f3b601f4d7688af47c8199663239b64194ebd97ffac8f28c12808b56"
+      },
+      {
+        "t": 0.5,
+        "age": 0.502,
+        "file": "final-main-tree_000.50s.png",
+        "fps": 60,
+        "size": [
+          1280,
+          692
+        ],
+        "sha256": "6f0ea04dac289fd9d7dee67b8bebfbbc945c8249e59e6d62ec7006ad743b5fa0"
+      },
+      {
+        "t": 1.0,
+        "age": 1.001,
+        "file": "final-main-tree_001.00s.png",
+        "fps": 60,
+        "size": [
+          1280,
+          692
+        ],
+        "sha256": "640a94fd99ae66207addfd2a7fd1f370f6ca7ab7412b2b1474fd6369744bbe5a"
+      },
+      {
+        "t": 3.0,
+        "age": 3.001,
+        "file": "final-main-tree_003.00s.png",
+        "fps": 60,
+        "size": [
+          1280,
+          692
+        ],
+        "sha256": "739b73c30eecb03f9c777677d894942327510d10bc8057c32b53a49b66499ac5"
+      },
+      {
+        "t": 10.0,
+        "age": 10.003,
+        "file": "final-main-tree_010.00s.png",
+        "fps": 60,
+        "size": [
+          1280,
+          692
+        ],
+        "sha256": "7caec4e4b5c2b9f71a038af937eff5074507688d65cc73074bee112610dc763e"
+      }
+    ],
+    "wav": {
+      "channels": 2,
+      "rate": 48000,
+      "sample_width": 2,
+      "frames": 288000,
+      "seconds": 6.0,
+      "rms_dbfs": -14.441507671717542,
+      "peak": 0.999969482421875,
+      "full_scale_samples": 3
+    }
+  },
+  "final-main-crater": {
+    "name": "final-main-crater",
+    "effect": "nuke 15 ground near 100",
+    "site": [
+      229376.5,
+      65.0,
+      3584.5
+    ],
+    "camera": [
+      200.0,
+      100.0,
+      180.0,
+      -80.0
+    ],
+    "audio": {
+      "file": "/mnt/data/projects/incoming/mod/run/wt-MT-B2/mod/run/mt-b2/followup-main/mod/run/sandbox/audio.wav",
+      "start": 21569604,
+      "from": 0.05,
+      "seconds": 6.0
+    },
+    "frames": [
+      {
+        "t": 0.1,
+        "age": 0.178,
+        "file": "final-main-crater_000.10s.png",
+        "fps": 61,
+        "size": [
+          1280,
+          692
+        ],
+        "sha256": "4d996faf90700571d16f874b53f9195e61e1d473e5ffdc8b17a063d68876b23c"
+      },
+      {
+        "t": 0.5,
+        "age": 0.502,
+        "file": "final-main-crater_000.50s.png",
+        "fps": 61,
+        "size": [
+          1280,
+          692
+        ],
+        "sha256": "cf0c2f325d24c65280301279c73c3ab60ec975aaff03560402898064ff4cf021"
+      },
+      {
+        "t": 1.0,
+        "age": 1.009,
+        "file": "final-main-crater_001.00s.png",
+        "fps": 43,
+        "size": [
+          1280,
+          692
+        ],
+        "sha256": "3a296f403d1391886d3da9e10344cd3522f63dfb0e216c499602c447f94840fa"
+      },
+      {
+        "t": 3.0,
+        "age": 3.001,
+        "file": "final-main-crater_003.00s.png",
+        "fps": 60,
+        "size": [
+          1280,
+          692
+        ],
+        "sha256": "da418919c79dee749947b16408c710767e8107e4708b04cd84d15845d191d116"
+      },
+      {
+        "t": 10.0,
+        "age": 10.001,
+        "file": "final-main-crater_010.00s.png",
+        "fps": 60,
+        "size": [
+          1280,
+          692
+        ],
+        "sha256": "56c539334f18870e4ca8ded1105588197c0d3fa6ac79c222c7073df3ad445bd1"
+      },
+      {
+        "t": 30.0,
+        "age": 30.014,
+        "file": "final-main-crater_030.00s.png",
+        "fps": 60,
+        "size": [
+          1280,
+          692
+        ],
+        "sha256": "bca048a682ce7550777fc61e4abb23f2e8480daa28a8a4d4db11387f700de4d0"
+      }
+    ],
+    "wav": {
+      "channels": 2,
+      "rate": 48000,
+      "sample_width": 2,
+      "frames": 288000,
+      "seconds": 6.0,
+      "rms_dbfs": -13.88170810635537,
+      "peak": 0.999969482421875,
+      "full_scale_samples": 2
+    }
+  },
+  "final-head-roof": {
+    "name": "final-head-roof",
+    "effect": "nuke 15 air near 2835",
+    "site": [
+      98304.5,
+      65.0,
+      1536.5
+    ],
+    "camera": [
+      85.0,
+      28.0,
+      25.0,
+      10.0
+    ],
+    "audio": {
+      "file": "/mnt/data/projects/incoming/mod/run/wt-MT-B2/mod/run/sandbox/audio.wav",
+      "start": 6656068,
+      "from": -0.25,
+      "seconds": 6.0
+    },
+    "frames": [
+      {
+        "t": -0.25,
+        "age": -0.245,
+        "file": "final-head-roof_-00.25s.png",
+        "fps": 60,
+        "size": [
+          1280,
+          692
+        ],
+        "sha256": "4bb15c1276288a8d52229ed42ebbeadd92ac295a6306b2580ad76fffafc8393d"
+      },
+      {
+        "t": 0.5,
+        "age": 0.503,
+        "file": "final-head-roof_000.50s.png",
+        "fps": 60,
+        "size": [
+          1280,
+          692
+        ],
+        "sha256": "20087f12775193e8dca3c12e591d300233d427403edf007c241fc6d9dacc89ce"
+      },
+      {
+        "t": 1.0,
+        "age": 1.001,
+        "file": "final-head-roof_001.00s.png",
+        "fps": 60,
+        "size": [
+          1280,
+          692
+        ],
+        "sha256": "4b61913b75309d13de84c4701a13b3cb005193211cb1747b4fc6f8ec5e5d70a4"
+      },
+      {
+        "t": 3.0,
+        "age": 3.003,
+        "file": "final-head-roof_003.00s.png",
+        "fps": 60,
+        "size": [
+          1280,
+          692
+        ],
+        "sha256": "47883882578509c3b09922708e9122ae947cc9800b2580a0e1317df26fe81879"
+      },
+      {
+        "t": 10.0,
+        "age": 10.006,
+        "file": "final-head-roof_010.00s.png",
+        "fps": 60,
+        "size": [
+          1280,
+          692
+        ],
+        "sha256": "40b53d65b6da90b560161a90a9f26f8f3245a187ebfc9b49e361840e801e8892"
+      }
+    ],
+    "wav": {
+      "channels": 2,
+      "rate": 48000,
+      "sample_width": 2,
+      "frames": 288000,
+      "seconds": 6.0,
+      "rms_dbfs": -14.382285654785438,
+      "peak": 0.999969482421875,
+      "full_scale_samples": 4
+    }
+  },
+  "final-head-tree": {
+    "name": "final-head-tree",
+    "effect": "nuke 15 air near 1000",
+    "site": [
+      163840.5,
+      65.0,
+      2560.5
+    ],
+    "camera": [
+      85.0,
+      28.0,
+      25.0,
+      10.0
+    ],
+    "audio": {
+      "file": "/mnt/data/projects/incoming/mod/run/wt-MT-B2/mod/run/sandbox/audio.wav",
+      "start": 12636228,
+      "from": -0.25,
+      "seconds": 6.0
+    },
+    "frames": [
+      {
+        "t": -0.25,
+        "age": -0.249,
+        "file": "final-head-tree_-00.25s.png",
+        "fps": 42,
+        "size": [
+          1280,
+          692
+        ],
+        "sha256": "3f03c5900d479bfaca8c62880320b9213eac37bef2a2c9ed6d32c94ddb0272c1"
+      },
+      {
+        "t": 0.5,
+        "age": 0.502,
+        "file": "final-head-tree_000.50s.png",
+        "fps": 60,
+        "size": [
+          1280,
+          692
+        ],
+        "sha256": "1084494e789c55e838864ad55662ee2f4809cb7475dfa5f9dfaeb7385e1fc471"
+      },
+      {
+        "t": 1.0,
+        "age": 1.003,
+        "file": "final-head-tree_001.00s.png",
+        "fps": 60,
+        "size": [
+          1280,
+          692
+        ],
+        "sha256": "95f281c52d8cdffc9747a7d93e87178fa97e18c7e81212821d7e01791175d442"
+      },
+      {
+        "t": 3.0,
+        "age": 3.003,
+        "file": "final-head-tree_003.00s.png",
+        "fps": 60,
+        "size": [
+          1280,
+          692
+        ],
+        "sha256": "7f120160e47958c63275b29c487631c19887ecf2db8779b726c520b04feb0987"
+      },
+      {
+        "t": 10.0,
+        "age": 10.006,
+        "file": "final-head-tree_010.00s.png",
+        "fps": 60,
+        "size": [
+          1280,
+          692
+        ],
+        "sha256": "c79c85a7e12c30cb1fdafbe0f72d6b92247f4ee9ae138fd4f8347898fbbefb0b"
+      }
+    ],
+    "wav": {
+      "channels": 2,
+      "rate": 48000,
+      "sample_width": 2,
+      "frames": 288000,
+      "seconds": 6.0,
+      "rms_dbfs": -14.429235129464557,
+      "peak": 0.999969482421875,
+      "full_scale_samples": 3
+    }
+  },
+  "final-head-crater": {
+    "name": "final-head-crater",
+    "effect": "nuke 15 ground near 100",
+    "site": [
+      229376.5,
+      65.0,
+      3584.5
+    ],
+    "camera": [
+      200.0,
+      100.0,
+      180.0,
+      -80.0
+    ],
+    "audio": {
+      "file": "/mnt/data/projects/incoming/mod/run/wt-MT-B2/mod/run/sandbox/audio.wav",
+      "start": 18559044,
+      "from": 0.05,
+      "seconds": 6.0
+    },
+    "frames": [
+      {
+        "t": 0.1,
+        "age": 0.183,
+        "file": "final-head-crater_000.10s.png",
+        "fps": 60,
+        "size": [
+          1280,
+          692
+        ],
+        "sha256": "4d996faf90700571d16f874b53f9195e61e1d473e5ffdc8b17a063d68876b23c"
+      },
+      {
+        "t": 0.5,
+        "age": 0.506,
+        "file": "final-head-crater_000.50s.png",
+        "fps": 43,
+        "size": [
+          1280,
+          692
+        ],
+        "sha256": "7a12800681635fbbfbcad358513827c47a9b00f0a583e568ce13856a87e12795"
+      },
+      {
+        "t": 1.0,
+        "age": 1.012,
+        "file": "final-head-crater_001.00s.png",
+        "fps": 43,
+        "size": [
+          1280,
+          692
+        ],
+        "sha256": "b2796b770c936b58c7c7cb8c3ae4c15d349b0b66b2b4532c6144f47fd8e51732"
+      },
+      {
+        "t": 3.0,
+        "age": 3.011,
+        "file": "final-head-crater_003.00s.png",
+        "fps": 62,
+        "size": [
+          1280,
+          692
+        ],
+        "sha256": "1f065f5a7fee3f6fe8f6cea39f67f0ba1ed1702e993003341260587de225fb96"
+      },
+      {
+        "t": 10.0,
+        "age": 10.01,
+        "file": "final-head-crater_010.00s.png",
+        "fps": 60,
+        "size": [
+          1280,
+          692
+        ],
+        "sha256": "4fd0f10fa0a3c77d39bcd4028d75020d40fcde2cdef022b18b462e4818abbd66"
+      },
+      {
+        "t": 30.0,
+        "age": 30.006,
+        "file": "final-head-crater_030.00s.png",
+        "fps": 60,
+        "size": [
+          1280,
+          692
+        ],
+        "sha256": "0fc452bfa43aadca4abc641b4a49a4b9bd1508f4be18217d88bddd52815fa10e"
+      }
+    ],
+    "wav": {
+      "channels": 2,
+      "rate": 48000,
+      "sample_width": 2,
+      "frames": 288000,
+      "seconds": 6.0,
+      "rms_dbfs": -13.881600199881305,
+      "peak": 0.99993896484375,
+      "full_scale_samples": 0
+    }
+  }
+}

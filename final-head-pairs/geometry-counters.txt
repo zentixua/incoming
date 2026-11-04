@@ -1,0 +1,9 @@
+main [04Nov2026 02:56:15.365] [Server thread/INFO] [ua.zentix.incoming.Incoming/]: MTB2_FINAL_GEOMETRY origin=BlockPos{x=98304, y=65, z=1536} stoneRoof=49 concreteRoof=0 bareLogs=16 tallLogs=30
+main [04Nov2026 02:56:35.368] [Server thread/INFO] [ua.zentix.incoming.Incoming/]: MTB2_CRATER_GEOMETRY center=BlockPos{x=98304, y=65, z=1436} surfaceY=64
+main [04Nov2026 02:56:55.306] [Server thread/INFO] [ua.zentix.incoming.Incoming/]: MTB2_FINAL_GEOMETRY origin=BlockPos{x=163840, y=65, z=2560} stoneRoof=47 concreteRoof=0 bareLogs=14 tallLogs=29
+main [04Nov2026 02:57:28.104] [Server thread/INFO] [ua.zentix.incoming.Incoming/]: MTB2_FINAL_GEOMETRY origin=BlockPos{x=229376, y=65, z=3584} stoneRoof=0 concreteRoof=0 bareLogs=0 tallLogs=0
+main [04Nov2026 02:57:48.117] [Server thread/INFO] [ua.zentix.incoming.Incoming/]: MTB2_CRATER_GEOMETRY center=BlockPos{x=229376, y=65, z=3484} surfaceY=46
+head [04Nov2026 02:51:41.150] [Server thread/INFO] [ua.zentix.incoming.Incoming/]: MTB2_FINAL_GEOMETRY origin=BlockPos{x=98304, y=65, z=1536} stoneRoof=0 concreteRoof=0 bareLogs=1 tallLogs=30
+head [04Nov2026 02:52:12.300] [Server thread/INFO] [ua.zentix.incoming.Incoming/]: MTB2_FINAL_GEOMETRY origin=BlockPos{x=163840, y=65, z=2560} stoneRoof=0 concreteRoof=0 bareLogs=0 tallLogs=0
+head [04Nov2026 02:52:42.810] [Server thread/INFO] [ua.zentix.incoming.Incoming/]: MTB2_FINAL_GEOMETRY origin=BlockPos{x=229376, y=65, z=3584} stoneRoof=0 concreteRoof=0 bareLogs=0 tallLogs=0
+head [04Nov2026 02:53:02.800] [Server thread/INFO] [ua.zentix.incoming.Incoming/]: MTB2_CRATER_GEOMETRY center=BlockPos{x=229376, y=65, z=3484} surfaceY=46

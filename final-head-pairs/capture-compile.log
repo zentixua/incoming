@@ -1,0 +1,11 @@
+Starting a Gradle Daemon (subsequent builds will be faster)
+> Task :createMinecraftArtifacts UP-TO-DATE
+> Task :compileJava UP-TO-DATE
+> Task :generateModMetadata UP-TO-DATE
+> Task :processResources UP-TO-DATE
+> Task :classes UP-TO-DATE
+> Task :compileDevtestJava
+
+BUILD SUCCESSFUL in 5s
+5 actionable tasks: 1 executed, 4 up-to-date
+laptop_job mt-b2-capture-compile: exit 0

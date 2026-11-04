@@ -1,0 +1,422 @@
+To honour the JVM settings for this build a single-use Daemon process will be forked. For more on this, please refer to https://docs.gradle.org/8.14.3/userguide/gradle_daemon.html#sec:disabling_the_daemon in the Gradle documentation.
+Daemon will be stopped at the end of the build 
+> Task :createMinecraftArtifacts UP-TO-DATE
+> Task :compileJava
+> Task :generateModMetadata UP-TO-DATE
+> Task :processResources UP-TO-DATE
+> Task :classes
+> Task :compileDevtestJava
+> Task :copyRuntimeMods_gametest UP-TO-DATE
+> Task :processDevtestResources UP-TO-DATE
+> Task :devtestClasses
+> Task :downloadAssets UP-TO-DATE
+> Task :writeGameTestServerLegacyClasspath UP-TO-DATE
+> Task :prepareGameTestServerRun
+
+> Task :runGameTestServer
+WARN StatusConsoleListener Advanced terminal features are not available in this environment
+[03:44:39] [main/INFO] [cp.mo.mo.Launcher/MODLAUNCHER]: ModLauncher running: args [--launchTarget, forgeserverdev, --gameDir, ., --fml.fmlVersion, 4.0.45, --fml.mcVersion, 1.21.1, --fml.neoForgeVersion, 21.1.264, --fml.neoFormVersion, 20240808.144430]
+[03:44:39] [main/INFO] [cp.mo.mo.Launcher/MODLAUNCHER]: JVM identified as Microsoft OpenJDK 64-Bit Server VM 21.0.7+6-LTS
+[03:44:39] [main/INFO] [cp.mo.mo.Launcher/MODLAUNCHER]: ModLauncher 11.0.5+main.901c6ea8 starting: java version 21.0.7 by Microsoft; OS Linux arch amd64 version 7.3.1-1-cachyos
+[03:44:39] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Configuration file /mnt/data/projects/incoming/mod/run/wt-MT-B2/mod/run/mt-b2/review-probe/mod/run/gametest/config/fml.toml is not correct. Correcting
+[03:44:39] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [disableConfigWatcher] was corrected from null to false
+[03:44:39] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowControl] was corrected from null to true
+[03:44:39] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [maxThreads] was corrected from null to -1
+[03:44:39] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [versionCheck] was corrected from null to true
+[03:44:39] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [defaultConfigPath] was corrected from null to defaultconfigs
+[03:44:39] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [disableOptimizedDFU] was corrected from null to true
+[03:44:39] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowProvider] was corrected from null to fmlearlywindow
+[03:44:39] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowWidth] was corrected from null to 854
+[03:44:39] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowHeight] was corrected from null to 480
+[03:44:39] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowFBScale] was corrected from null to 1
+[03:44:39] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowMaximized] was corrected from null to false
+[03:44:39] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowSkipGLVersions] was corrected from null to []
+[03:44:39] [main/WARN] [ne.ne.fm.lo.FMLConfig/CORE]: Incorrect key [earlyWindowSquir] was corrected from null to false
+[03:44:39] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: ****************************** Found dependency overrides ******************************
+[03:44:39] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: Dependency overrides for mod 'aeronautics': adding explicit AFTER ordering against 'simulated', adding explicit AFTER ordering against 'offroad'
+[03:44:39] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: Dependency overrides for mod 'simulated': adding explicit AFTER ordering against 'create', adding explicit AFTER ordering against 'sable'
+[03:44:39] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: Dependency overrides for mod 'offroad': adding explicit AFTER ordering against 'simulated'
+[03:44:39] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: ****************************************************************************************
+[03:44:39] [main/INFO] [ne.ne.fm.lo.ImmediateWindowHandler/]: ImmediateWindowProvider not loading because launch target is forgeserverdev
+[03:44:39] [main/INFO] [mixin/]: SpongePowered MIXIN Subsystem Version=0.8.7 Source=union:/home/artem/.gradle/caches/modules-2/files-2.1/net.fabricmc/sponge-mixin/0.16.4+mixin.0.8.7/26d01f0567ab46e9ca0d2ed89d0ecc11aadbd433/sponge-mixin-0.16.4+mixin.0.8.7.jar%2394!/ Service=ModLauncher Env=SERVER
+[03:44:39] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: ****************************** Found dependency overrides ******************************
+[03:44:39] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: Dependency overrides for mod 'aeronautics': adding explicit AFTER ordering against 'simulated', adding explicit AFTER ordering against 'offroad'
+[03:44:39] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: Dependency overrides for mod 'simulated': adding explicit AFTER ordering against 'create', adding explicit AFTER ordering against 'sable'
+[03:44:39] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: Dependency overrides for mod 'offroad': adding explicit AFTER ordering against 'simulated'
+[03:44:39] [main/WARN] [ne.ne.fm.lo.FMLConfig/]: ****************************************************************************************
+[03:44:39] [main/INFO] [ne.ne.fm.lo.mo.lo.JarInJarDependencyLocator/]: Found 13 dependencies adding them to mods collection
+[03:44:39] [main/INFO] [ne.ne.fm.lo.mo.ModDiscoverer/]: 
+     Mod List:
+		Name Version (Mod Id)
+
+		Create 6.0.10 (create)
+		Create Aeronautics 1.3.2 (aeronautics)
+		Create Aeronautics 1.3.2 (aeronautics_bundled)
+		Create Offroad 1.3.2 (offroad)
+		Create Simulated 1.3.2 (simulated)
+		Flywheel 1.0.6 (flywheel)
+		Incoming 3.10.4 (incoming)
+		Minecraft 1.21.1 (minecraft)
+		NeoForge 21.1.264 (neoforge)
+		Ponder 1.0.82+mc1.21.1 (ponder)
+		Sable 2.0.6 (sable)
+		Sable Companion 1.6.0 (sablecompanion)
+		Veil 4.3.2 (veil)
+[03:44:40] [main/INFO] [mixin/]: Compatibility level set to JAVA_21
+[03:44:40] [main/INFO] [cp.mo.mo.LaunchServiceHandler/MODLAUNCHER]: Launching target 'forgeserverdev' with arguments [--gameDir, .]
+[03:44:40] [main/WARN] [mixin/]: Reference map 'ponder.refmap.json' for ponder-common.mixins.json could not be read. If this is a development environment you can ignore this message
+[03:44:40] [main/INFO] [de.ry.sa.mi.AbstractSableMixinPlugin/]: Using Vanilla renderer mixins
+[03:44:40] [main/INFO] [de.ry.sa.mi.AbstractSableMixinPlugin/]: Using Vanilla renderer mixins
+[03:44:40] [main/WARN] [mixin/]: Reference map 'simulated.refmap.json' for simulated.mixins.json could not be read. If this is a development environment you can ignore this message
+[03:44:40] [main/WARN] [mixin/]: Reference map 'offroad.refmap.json' for offroad.mixins.json could not be read. If this is a development environment you can ignore this message
+[03:44:40] [main/WARN] [mixin/]: Reference map 'aeronautics.refmap.json' for aeronautics.mixins.json could not be read. If this is a development environment you can ignore this message
+[03:44:40] [main/WARN] [mixin/]: Error loading class: org/jetbrains/annotations/ApiStatus$ScheduledForRemoval (java.lang.ClassNotFoundException: org.jetbrains.annotations.ApiStatus$ScheduledForRemoval)
+[03:44:40] [main/INFO] [MixinExtras|Service/]: Initializing MixinExtras via com.llamalad7.mixinextras.service.MixinExtrasServiceImpl(version=0.5.5).
+[03:44:44] [main/WARN] [minecraft/Commands]: Ambiguity between arguments [teleport, location] and [teleport, destination] with inputs: [0.1 -0.5 .9, 0 0 0]
+[03:44:44] [main/WARN] [minecraft/Commands]: Ambiguity between arguments [teleport, location] and [teleport, targets] with inputs: [0.1 -0.5 .9, 0 0 0]
+[03:44:44] [main/WARN] [minecraft/Commands]: Ambiguity between arguments [teleport, destination] and [teleport, targets] with inputs: [Player, 0123, @e, dd12be42-52a9-4a91-a8a1-11c01849e498]
+[03:44:44] [main/WARN] [minecraft/Commands]: Ambiguity between arguments [teleport, targets] and [teleport, destination] with inputs: [Player, 0123, dd12be42-52a9-4a91-a8a1-11c01849e498]
+[03:44:44] [main/WARN] [minecraft/Commands]: Ambiguity between arguments [teleport, targets, location] and [teleport, targets, destination] with inputs: [0.1 -0.5 .9, 0 0 0]
+[03:44:44] [modloading-worker-0/INFO] [Veil/]: Veil is initializing.
+[03:44:44] [modloading-worker-0/INFO] [ne.ne.ne.co.NeoForgeMod/NEOFORGE-MOD]: NeoForge mod loading, version 21.1.264, for MC 1.21.1
+[03:44:44] [modloading-worker-0/INFO] [co.si.cr.Create/]: Create 6.0.10 initializing! Commit hash: ac0c444d9828da3453ae8cc65338e8de063286fb
+[03:44:44] [modloading-worker-0/INFO] [de.ry.sa.Sable/]: Sable loaded!
+[03:44:46] [main/INFO] [mojang/YggdrasilAuthenticationService]: Environment: Environment[sessionHost=https://sessionserver.mojang.com, servicesHost=https://api.minecraftservices.com, name=PROD]
+[03:44:46] [NeoForge Version Check/INFO] [ne.ne.fm.VersionChecker/]: [create] Starting version check at https://api.modrinth.com/updates/create/forge_updates.json?neoforge=only
+[03:44:46] [main/WARN] [minecraft/VanillaPackResourcesBuilder]: Assets URL 'union:/mnt/data/projects/incoming/mod/run/wt-MT-B2/mod/run/mt-b2/review-probe/mod/build/moddev/artifacts/neoforge-21.1.264.jar%23128!/assets/.mcassetsroot' uses unexpected schema
+[03:44:46] [main/WARN] [minecraft/VanillaPackResourcesBuilder]: Assets URL 'union:/mnt/data/projects/incoming/mod/run/wt-MT-B2/mod/run/mt-b2/review-probe/mod/build/moddev/artifacts/neoforge-21.1.264.jar%23128!/data/.mcassetsroot' uses unexpected schema
+[03:44:46] [main/INFO] [co.si.cr.Create/]: Created 157 recipes which will be injected into the game
+[03:44:46] [main/INFO] [co.si.cr.Create/]: Created 0 tags which will be injected into the game
+[03:44:46] [main/INFO] [ne.ne.ne.ga.GameTestHooks/]: Enabled Gametest Namespaces: [incoming]
+[03:44:46] [NeoForge Version Check/INFO] [ne.ne.fm.VersionChecker/]: [create] Found status: OUTDATED Current: 6.0.10 Target: 6.0.10+mc1.21.1
+[03:44:47] [main/INFO] [minecraft/RecipeManager]: Loaded 2954 recipes
+[03:44:47] [main/INFO] [minecraft/AdvancementTree]: Loaded 2645 advancements
+[03:44:48] [Server thread/INFO] [ua.ze.in.Incoming/]: GameTest: only batch “mt_pipeline” - tests 1 from 711
+[03:44:48] [Server thread/INFO] [de.ry.sa.Sable/]: Creating physics pipeline for ResourceKey[minecraft:dimension / minecraft:overworld] using RapierPhysicsPipelineProvider
+[03:44:48] [Server thread/INFO] [de.ry.sa.Sable/]: Using game directory relative Sable Rapier native directory /mnt/data/projects/incoming/mod/run/wt-MT-B2/mod/run/mt-b2/review-probe/mod/run/gametest/.sable/natives
+[2026-11-04T01:44:48.186561656Z] [[32mINFO[0m] (sable_rapier) Rapier scene initialized
+[03:44:48] [Server thread/INFO] [de.ry.sa.Sable/]: Creating physics pipeline for ResourceKey[minecraft:dimension / minecraft:the_nether] using RapierPhysicsPipelineProvider
+[2026-11-04T01:44:48.402286418Z] [[32mINFO[0m] (sable_rapier) Rapier scene initialized
+[03:44:48] [Server thread/INFO] [de.ry.sa.Sable/]: Creating physics pipeline for ResourceKey[minecraft:dimension / minecraft:the_end] using RapierPhysicsPipelineProvider
+[2026-11-04T01:44:48.420282479Z] [[32mINFO[0m] (sable_rapier) Rapier scene initialized
+[03:44:48] [Server thread/INFO] [minecraft/MinecraftServer]: Preparing start region for dimension minecraft:overworld
+[03:44:48] [worldgen/INFO] [minecraft/LoggerChunkProgressListener]: Preparing spawn area: 2%
+[03:44:48] [Server thread/INFO] [minecraft/LoggerChunkProgressListener]: Time elapsed: 102 ms
+[03:44:48] [Server thread/INFO] [minecraft/GameTestServer]: Started game test server
+[03:44:48] [Server thread/INFO] [ne.ne.ne.se.pe.PermissionAPI/]: Successfully initialized permission handler neoforge:default_handler
+[03:44:48] [Server thread/INFO] [minecraft/GameTestServer]: 1 tests are now running at position -266635, -59, -12453522!
+[03:44:49] [Server thread/INFO] [minecraft/GameTestRunner]: Running test batch 'mt_pipeline:0' (1 tests)...
+[03:44:49] [Server thread/INFO] [minecraft/GameTestServer]: [ ]
+[03:44:49] [Server thread/INFO] [minecraft/GameTestServer]: [ ]
+[03:44:49] [Server thread/INFO] [ua.ze.in.Incoming/]: MTPIPE sample=0 kind=0 changed=0 planBytes=776 snapshotMs=14.9281 blastMs=47.8605 collapseMs=4.8454 finishMs=5.5661 applyMs=5.2313 lightBarrierMs=7.5845 encodeMs=3.2046 packetBytes=7481
+[03:44:49] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:49] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:49] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:49] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:49] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:49] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:49] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:50] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:50] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:50] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:50] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:50] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:50] [Server thread/INFO] [ua.ze.in.Incoming/]: MTMAT pending=0 released=0 deposited=0
+[03:44:50] [Server thread/INFO] [ua.ze.in.Incoming/]: MTMAT sample=0 totalMs=1.3001 calls=843 maxCallMs=0.0131
+[03:44:50] [Server thread/INFO] [ua.ze.in.Incoming/]: MTINCLUDED sample=0 applyMs=5.2313 supportMs=0.0000 applyPlusSupportMs=5.2313 allMaterialMs=1.3001 supportCalls=0 maxSupportUnitMs=0.0000
+[03:44:50] [Server thread/INFO] [ua.ze.in.Incoming/]: MTPIPE sample=1 kind=1 changed=4072 planBytes=95676 snapshotMs=1.9080 blastMs=90.0955 collapseMs=58.5059 finishMs=15.5538 applyMs=10.0078 lightBarrierMs=8.3314 encodeMs=0.5497 packetBytes=17751
+[03:44:50] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:50] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:50] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:50] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:50] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:50] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:50] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:51] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:51] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:51] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:51] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:51] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:51] [Server thread/INFO] [ua.ze.in.Incoming/]: MTMAT pending=0 released=4040 deposited=2120
+[03:44:51] [Server thread/INFO] [ua.ze.in.Incoming/]: MTMAT sample=1 totalMs=79.0475 calls=720 maxCallMs=5.5851
+[03:44:51] [Server thread/INFO] [ua.ze.in.Incoming/]: MTINCLUDED sample=1 applyMs=10.0078 supportMs=0.0000 applyPlusSupportMs=10.0078 allMaterialMs=79.0475 supportCalls=0 maxSupportUnitMs=0.0000
+[03:44:51] [Server thread/INFO] [ua.ze.in.Incoming/]: MTPIPE sample=2 kind=2 changed=4290 planBytes=101792 snapshotMs=1.6302 blastMs=42.0735 collapseMs=72.6622 finishMs=9.4771 applyMs=9.7407 lightBarrierMs=19.2997 encodeMs=0.4322 packetBytes=17314
+[03:44:51] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:51] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:51] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:51] [Server thread/INFO] [ua.ze.in.Incoming/]: Mod work over 30 s: server tick avg 4.0 ms (max 314.8), of which mod lanes avg — impacts 0.0, nuke 0.2, blackout 0.0 ms; the rest (vanilla, other mods) 3.8 ms; impact early window 98.3% of ticks, early avg 0.0 ms, late avg 0.0 ms; mandatory unload debt 0.0% of ticks
+[03:44:51] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:51] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:51] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:51] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:51] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:51] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:52] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:52] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:52] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:52] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:52] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:52] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:52] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:52] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:52] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:52] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:52] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:52] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:52] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:52] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:52] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:52] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:52] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:53] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:53] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:53] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:53] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:53] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:53] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:53] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:53] [Server thread/INFO] [ua.ze.in.Incoming/]: Mod work over 30 s: server tick avg 2.6 ms (max 13.5), of which mod lanes avg — impacts 0.0, nuke 0.0, blackout 0.0 ms; the rest (vanilla, other mods) 2.6 ms; impact early window 100.0% of ticks, early avg 0.0 ms, late avg 0.0 ms; mandatory unload debt 0.0% of ticks
+[03:44:53] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:53] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:53] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:53] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:53] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:53] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:53] [Server thread/INFO] [ua.ze.in.Incoming/]: MTMAT pending=0 released=4287 deposited=2438
+[03:44:53] [Server thread/INFO] [ua.ze.in.Incoming/]: MTMAT sample=2 totalMs=147.4437 calls=2364 maxCallMs=17.1163
+[03:44:53] [Server thread/INFO] [ua.ze.in.Incoming/]: MTINCLUDED sample=2 applyMs=9.7407 supportMs=10.2655 applyPlusSupportMs=20.0062 allMaterialMs=147.4437 supportCalls=619 maxSupportUnitMs=0.1247
+[03:44:53] [Server thread/INFO] [ua.ze.in.Incoming/]: MTPIPE sample=3 kind=0 changed=0 planBytes=756 snapshotMs=0.9772 blastMs=15.1798 collapseMs=0.8691 finishMs=1.6468 applyMs=0.3218 lightBarrierMs=1.8463 encodeMs=0.3883 packetBytes=17318
+[03:44:53] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:53] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:53] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:53] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:53] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:54] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:54] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:54] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:54] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:54] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:54] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:54] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:54] [Server thread/INFO] [ua.ze.in.Incoming/]: MTMAT pending=0 released=0 deposited=0
+[03:44:54] [Server thread/INFO] [ua.ze.in.Incoming/]: MTMAT sample=3 totalMs=0.9012 calls=720 maxCallMs=0.0107
+[03:44:54] [Server thread/INFO] [ua.ze.in.Incoming/]: MTINCLUDED sample=3 applyMs=0.3218 supportMs=0.0000 applyPlusSupportMs=0.3218 allMaterialMs=0.9012 supportCalls=0 maxSupportUnitMs=0.0000
+[03:44:54] [Server thread/INFO] [ua.ze.in.Incoming/]: MTPIPE sample=4 kind=1 changed=3859 planBytes=91756 snapshotMs=1.0721 blastMs=29.1995 collapseMs=23.0552 finishMs=6.9470 applyMs=6.5753 lightBarrierMs=7.1144 encodeMs=0.4915 packetBytes=17318
+[03:44:54] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:54] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:54] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:54] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:54] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:54] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:54] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:54] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:55] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:55] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:55] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:55] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:55] [Server thread/INFO] [ua.ze.in.Incoming/]: Mod work over 30 s: server tick avg 2.8 ms (max 76.2), of which mod lanes avg — impacts 0.0, nuke 0.1, blackout 0.0 ms; the rest (vanilla, other mods) 2.7 ms; impact early window 100.0% of ticks, early avg 0.0 ms, late avg 0.0 ms; mandatory unload debt 0.0% of ticks
+[03:44:55] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:55] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:55] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:55] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:55] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:55] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:55] [Server thread/INFO] [ua.ze.in.Incoming/]: MTMAT pending=0 released=3859 deposited=2019
+[03:44:55] [Server thread/INFO] [ua.ze.in.Incoming/]: MTMAT sample=4 totalMs=92.5948 calls=1098 maxCallMs=5.0104
+[03:44:55] [Server thread/INFO] [ua.ze.in.Incoming/]: MTINCLUDED sample=4 applyMs=6.5753 supportMs=2.6287 applyPlusSupportMs=9.2040 allMaterialMs=92.5948 supportCalls=257 maxSupportUnitMs=0.0416
+[03:44:55] [Server thread/INFO] [ua.ze.in.Incoming/]: MTPIPE sample=5 kind=2 changed=4194 planBytes=100080 snapshotMs=0.3265 blastMs=27.8151 collapseMs=21.5770 finishMs=4.6448 applyMs=6.4447 lightBarrierMs=15.2498 encodeMs=0.2363 packetBytes=17318
+[03:44:55] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:55] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:55] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:55] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:55] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:56] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:56] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:56] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:56] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:56] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:56] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:56] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:56] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:56] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:56] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruins: background threads 14 (automatic; cores 16, left to the game 2)
+[03:44:56] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:57] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:57] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:57] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:58] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:58] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:58] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:58] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:59] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:59] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:44:59] [Server thread/INFO] [ua.ze.in.Incoming/]: Mod work over 30 s: server tick avg 2.9 ms (max 70.1), of which mod lanes avg — impacts 0.0, nuke 1.5, blackout 0.0 ms; the rest (vanilla, other mods) 1.4 ms; impact early window 100.0% of ticks, early avg 0.0 ms, late avg 0.0 ms; mandatory unload debt 0.0% of ticks
+[03:44:59] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:00] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:00] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:00] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:00] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:01] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:01] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:01] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:02] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:02] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:02] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:02] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:03] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:03] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:03] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:03] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:04] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:04] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:04] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:05] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:05] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:05] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:05] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:06] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:06] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:06] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:06] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:07] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:07] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:07] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:08] [Server thread/INFO] [ua.ze.in.Incoming/]: Mod work over 30 s: server tick avg 2.8 ms (max 3.3), of which mod lanes avg — impacts 0.0, nuke 2.8, blackout 0.0 ms; the rest (vanilla, other mods) 0.0 ms; impact early window 100.0% of ticks, early avg 0.0 ms, late avg 0.0 ms; mandatory unload debt 0.0% of ticks
+[03:45:08] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:08] [Server thread/INFO] [ua.ze.in.Incoming/]: MTMAT pending=0 released=8261 deposited=6489
+[03:45:08] [Server thread/INFO] [ua.ze.in.Incoming/]: MTMAT sample=5 totalMs=359.9093 calls=3294 maxCallMs=14.2264
+[03:45:08] [Server thread/INFO] [ua.ze.in.Incoming/]: MTINCLUDED sample=5 applyMs=6.4447 supportMs=33.3753 applyPlusSupportMs=39.8200 allMaterialMs=359.9093 supportCalls=2879 maxSupportUnitMs=0.3693
+[03:45:08] [Server thread/INFO] [ua.ze.in.Incoming/]: MTPIPE sample=6 kind=0 changed=4 planBytes=892 snapshotMs=0.3289 blastMs=12.7136 collapseMs=8.7029 finishMs=0.6518 applyMs=0.3799 lightBarrierMs=12.2731 encodeMs=0.2576 packetBytes=21428
+[03:45:08] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:08] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:08] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:09] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:09] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:09] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:09] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:10] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:10] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:10] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:10] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:11] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:11] [Server thread/INFO] [ua.ze.in.Incoming/]: MTMAT pending=0 released=2 deposited=2
+[03:45:11] [Server thread/INFO] [ua.ze.in.Incoming/]: MTMAT sample=6 totalMs=1.2585 calls=720 maxCallMs=0.2826
+[03:45:11] [Server thread/INFO] [ua.ze.in.Incoming/]: MTINCLUDED sample=6 applyMs=0.3799 supportMs=0.1686 applyPlusSupportMs=0.5485 allMaterialMs=1.2585 supportCalls=18 maxSupportUnitMs=0.0368
+[03:45:11] [Server thread/INFO] [ua.ze.in.Incoming/]: MTPIPE sample=7 kind=1 changed=3907 planBytes=94200 snapshotMs=0.2683 blastMs=27.3412 collapseMs=13.1660 finishMs=2.4767 applyMs=5.4972 lightBarrierMs=17.6659 encodeMs=0.1876 packetBytes=21428
+[03:45:11] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:11] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:12] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:12] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:12] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:12] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruin settlement #8205: 149679 of 1103397 positions scanned, 0 saved chunks confirmed, 81 loads, 2048 pending (0 held, admission 164, 128 reads), 1200 ticks
+[03:45:13] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:13] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:13] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:13] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:14] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:14] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:14] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:14] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:15] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:15] [Server thread/INFO] [ua.ze.in.Incoming/]: MTMAT pending=0 released=3907 deposited=2085
+[03:45:15] [Server thread/INFO] [ua.ze.in.Incoming/]: MTMAT sample=7 totalMs=78.8985 calls=834 maxCallMs=5.1410
+[03:45:15] [Server thread/INFO] [ua.ze.in.Incoming/]: MTINCLUDED sample=7 applyMs=5.4972 supportMs=2.4304 applyPlusSupportMs=7.9276 allMaterialMs=78.8985 supportCalls=337 maxSupportUnitMs=0.0261
+[03:45:15] [Server thread/INFO] [ua.ze.in.Incoming/]: MTPIPE sample=8 kind=2 changed=4153 planBytes=99324 snapshotMs=0.2481 blastMs=30.3130 collapseMs=13.9662 finishMs=2.5919 applyMs=4.9890 lightBarrierMs=24.3824 encodeMs=0.2007 packetBytes=21428
+[03:45:15] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:15] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:16] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:16] [Server thread/INFO] [ua.ze.in.Incoming/]: Mod work over 30 s: server tick avg 3.0 ms (max 61.6), of which mod lanes avg — impacts 0.0, nuke 2.9, blackout 0.0 ms; the rest (vanilla, other mods) 0.1 ms; impact early window 100.0% of ticks, early avg 0.0 ms, late avg 0.0 ms; mandatory unload debt 0.0% of ticks
+[03:45:16] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:16] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:16] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:17] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:17] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:17] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:18] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:18] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:18] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:18] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:19] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:19] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:19] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:19] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:20] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:20] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:20] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:21] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:21] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:21] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:21] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:22] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:22] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:22] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:22] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:23] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:23] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:23] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:24] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:24] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:24] [Server thread/INFO] [ua.ze.in.Incoming/]: Mod work over 30 s: server tick avg 2.8 ms (max 4.3), of which mod lanes avg — impacts 0.0, nuke 2.8, blackout 0.0 ms; the rest (vanilla, other mods) 0.0 ms; impact early window 100.0% of ticks, early avg 0.0 ms, late avg 0.0 ms; mandatory unload debt 0.0% of ticks
+[03:45:24] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:24] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:25] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:25] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:25] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:25] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:26] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:26] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:26] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:26] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:27] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:27] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:27] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:28] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:28] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:28] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:28] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:29] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:29] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruin settlement #8205: 303173 of 1103397 positions scanned, 0 saved chunks confirmed, 81 loads, 2048 pending (0 held, admission 247, 128 reads), 2400 ticks
+[03:45:29] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:29] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:29] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:30] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:30] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:30] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:31] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:31] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:31] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:31] [Server thread/INFO] [minecraft/GameTestServer]: [_]
+[03:45:32] [Server thread/INFO] [ua.ze.in.Incoming/]: MTMAT pending=0 released=4153 deposited=2405
+[03:45:32] [Server thread/INFO] [ua.ze.in.Incoming/]: MTMAT sample=8 totalMs=192.5815 calls=3681 maxCallMs=11.8065
+[03:45:32] [Server thread/INFO] [ua.ze.in.Incoming/]: MTINCLUDED sample=8 applyMs=4.9890 supportMs=5.9994 applyPlusSupportMs=10.9885 allMaterialMs=192.5815 supportCalls=831 maxSupportUnitMs=0.0178
+[03:45:32] [Server thread/INFO] [minecraft/GameTestServer]: [+]
+[03:45:32] [Server thread/INFO] [minecraft/GameTestServer]: ========= 1 GAME TESTS COMPLETE IN 43.45 s ======================
+[03:45:32] [Server thread/INFO] [minecraft/GameTestServer]: All 1 required tests passed :)
+[03:45:32] [Server thread/INFO] [minecraft/GameTestServer]: ====================================================
+[03:45:32] [Server thread/INFO] [ua.ze.in.Incoming/]: Ruins: background threads stopped (queued tasks dropped: 0)
+[03:45:32] [Server thread/INFO] [minecraft/MinecraftServer]: Stopping server
+[03:45:32] [Server thread/INFO] [minecraft/MinecraftServer]: Saving players
+[03:45:32] [Server thread/INFO] [minecraft/MinecraftServer]: Saving worlds
+[03:45:32] [Server thread/INFO] [minecraft/MinecraftServer]: Saving chunks for level 'ServerLevel[Test Level]'/minecraft:overworld
+[03:45:32] [Server thread/INFO] [de.ry.sa.Sable/]: Saving sub-levels for level 'ServerLevel[Test Level]'/minecraft:overworld
+[03:45:34] [Server thread/INFO] [minecraft/MinecraftServer]: Saving chunks for level 'ServerLevel[Test Level]'/minecraft:the_nether
+[03:45:34] [Server thread/INFO] [de.ry.sa.Sable/]: Saving sub-levels for level 'ServerLevel[Test Level]'/minecraft:the_nether
+[03:45:34] [Server thread/INFO] [minecraft/MinecraftServer]: Saving chunks for level 'ServerLevel[Test Level]'/minecraft:the_end
+[03:45:34] [Server thread/INFO] [de.ry.sa.Sable/]: Saving sub-levels for level 'ServerLevel[Test Level]'/minecraft:the_end
+[03:45:34] [Server thread/INFO] [minecraft/MinecraftServer]: ThreadedAnvilChunkStorage (world): All chunks are saved
+[03:45:34] [Server thread/INFO] [minecraft/MinecraftServer]: ThreadedAnvilChunkStorage (DIM-1): All chunks are saved
+[03:45:34] [Server thread/INFO] [minecraft/MinecraftServer]: ThreadedAnvilChunkStorage (DIM1): All chunks are saved
+[03:45:34] [Server thread/INFO] [minecraft/MinecraftServer]: ThreadedAnvilChunkStorage: All dimensions are saved
+[03:45:34] [Server thread/INFO] [minecraft/GameTestServer]: Game test server shutting down
+
+[Incubating] Problems report is available at: file:///mnt/data/projects/incoming/mod/run/wt-MT-B2/mod/run/mt-b2/review-probe/mod/build/reports/problems/problems-report.html
+
+Deprecated Gradle features were used in this build, making it incompatible with Gradle 9.0.
+
+You can use '--warning-mode all' to show the individual deprecation warnings and determine if they come from your own scripts or plugins.
+
+For more on this, please refer to https://docs.gradle.org/8.14.3/userguide/command_line_interface.html#sec:command_line_warnings in the Gradle documentation.
+
+BUILD SUCCESSFUL in 1m 2s
+11 actionable tasks: 4 executed, 7 up-to-date
+laptop_job mt-b2-included-bench: exit 0

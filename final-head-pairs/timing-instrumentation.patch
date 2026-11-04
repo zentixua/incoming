@@ -1,0 +1,36 @@
+diff --git a/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinMatter.java b/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinMatter.java
+index ae12e1a69..cae1e194b 100644
+--- a/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinMatter.java
++++ b/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinMatter.java
+@@ -268,7 +268,13 @@ public final class RuinMatter extends SavedData {
+     }
+ 
+     /** No world reads without getChunkNow readiness, and no whole-pile work in one tick unit. */
++    public static long benchNanos, benchCalls, benchMax;
+     void work(ServerLevel level, WorkClock clock) {
++        long began = System.nanoTime();
++        try { workMeasured(level, clock); }
++        finally { long elapsed = System.nanoTime() - began; benchNanos += elapsed; benchCalls++; benchMax = Math.max(benchMax, elapsed); }
++    }
++    private void workMeasured(ServerLevel level, WorkClock clock) {
+         int left = moving.size();
+         boolean waiting = false;
+         while ((left > 0 || !supportSources.isEmpty() || !supports.isEmpty() && !waiting) && clock.canStart()) {
+diff --git a/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinSupport.java b/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinSupport.java
+index 26e15a969..f7fd152bb 100644
+--- a/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinSupport.java
++++ b/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinSupport.java
+@@ -37,7 +37,13 @@ final class RuinSupport {
+     }
+ 
+     /** True when settled as supported, absent, or fully released. */
++    public static long benchNanos, benchCalls, benchMax;
+     boolean step(ServerLevel level, RuinMatter ledger, Detonation d) {
++        long began = System.nanoTime();
++        try { return measuredStep(level, ledger, d); }
++        finally { long elapsed = System.nanoTime() - began; benchNanos += elapsed; benchCalls++; benchMax = Math.max(benchMax, elapsed); }
++    }
++    private boolean measuredStep(ServerLevel level, RuinMatter ledger, Detonation d) {
+         waiting = false;
+         if (invalidated) restart();
+         RuinScorch scorch = null;
