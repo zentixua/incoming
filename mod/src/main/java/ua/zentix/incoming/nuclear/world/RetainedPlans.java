@@ -65,7 +65,7 @@ final class RetainedPlans extends Long2ObjectOpenHashMap<RuinPlan> {
     /** Funded reads keep a collector even when their scar is behind capacity-blocked visible
      * work or has unloaded. Rotate refused publications too; one large page cannot hide a
      * smaller completed page. A successful decode enters the normal spillable cache. */
-    boolean collectReady() {
+    boolean collectReady(java.util.function.BiConsumer<Long, RuinPlan> consumer) {
         int remaining = demanded.size(); // at most READ_LIMIT
         while (remaining-- > 0) {
             long key = demanded.removeFirstLong();
@@ -73,7 +73,8 @@ final class RetainedPlans extends Long2ObjectOpenHashMap<RuinPlan> {
             if (read == null) continue;
             demanded.addAndMoveToLast(key);
             if (!read.isDone()) continue;
-            load(key, true);
+            RuinPlan plan = load(key, true);
+            if (plan != null) consumer.accept(key, plan);
             return true;
         }
         return false;

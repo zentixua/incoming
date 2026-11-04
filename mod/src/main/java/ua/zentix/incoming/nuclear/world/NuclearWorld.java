@@ -465,7 +465,8 @@ public final class NuclearWorld {
             if ((slot - 2) % 3 == 1) {
                 if (ctx.restoredPlans == null || ctx.restoredPlans.pendingReads() == 0) continue;
                 long began = clock.begin();
-                try { ctx.restoredPlans.collectReady(); }
+                try { ctx.restoredPlans.collectReady((key, plan) ->
+                        scars.collectPrepared(level, ctx, ctx.restoredPlans, key, plan)); }
                 finally { clock.end(began); }
                 return;
             }

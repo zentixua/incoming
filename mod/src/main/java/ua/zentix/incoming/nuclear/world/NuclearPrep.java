@@ -627,7 +627,8 @@ public final class NuclearPrep {
                 case 3 -> {
                     if (p.plans.pendingReads() == 0) continue;
                     long began = shared.begin();
-                    try { p.plans.collectReady(); }
+                    try { p.plans.collectReady((key, plan) ->
+                            NuclearWorld.get(level).scars().collectPrepared(level, p.ruins, p.plans, key, plan)); }
                     finally { shared.end(began); }
                 }
                 default -> throw new AssertionError("Unknown completion lane");

@@ -125,11 +125,22 @@ public final class RuinConsumerCompletionGameTests {
                     Incoming.LOG.info("CONSUMER_COMPLETION start resident {} fixed {} readOwners {} tasks {} denseDebit {}",
                             NuclearPrep.residentMemory(level), fixed[0], world.prep().readAccounting(), ctx.tasks(),
                             RuinMatter.get(level).removalBytes(positions.length));
-                    gate.complete(null);
                 }
                 h.assertTrue(other.materialReservation == fixed[0], "External ownership was released");
                 h.assertTrue(NuclearPrep.residentMemory(level) <= NuclearPrep.PLANS_CAP, "Consumer publication exceeded capacity");
-                h.assertTrue(world.scars().size() == 0 && ctx.tasks() == 0 && plans.pendingReads() == 0,
+                if (stage[0] == 1) {
+                    h.assertTrue(plans.pendingReads() == reads.length && !gate.isDone(), "Read ownership changed before its I/O fence");
+                    h.assertTrue(world.scars().queued(centre.toLong()) && level.getBlockState(BlockPos.of(positions[0])).is(Blocks.STONE_BRICKS),
+                            "Dense visible work must remain blocked during independent task collection");
+                    var parked = (Map<?, ?>) field(world.scars(), "parked").get(world.scars());
+                    h.assertTrue(!ctx.running(unseen.toLong()) && parked.containsKey(unseen.toLong()),
+                            "Completed unseen task was not transferred to its counted parked owner before visible admission");
+                    Incoming.LOG.info("CONSUMER_COMPLETION unseen result collected with all {} read owners still fenced", reads.length);
+                    stage[0] = 2;
+                    gate.complete(null);
+                }
+                h.assertTrue(!world.scars().queued(centre.toLong()) && !world.scars().queued(unseen.toLong())
+                                && !ctx.running(unseen.toLong()) && plans.pendingReads() == 0,
                         "Funded consumers remain: scars=" + world.scars().size() + ", tasks=" + ctx.tasks() + ", reads=" + plans.pendingReads());
                 for (long position : positions) h.assertFalse(level.getBlockState(BlockPos.of(position)).is(Blocks.STONE_BRICKS),
                         "Dense watched source survived completion");

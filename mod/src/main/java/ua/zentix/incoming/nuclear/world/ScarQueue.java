@@ -212,6 +212,21 @@ public final class ScarQueue {
     private final LinkedHashSet<Job> readySeen = new LinkedHashSet<>(), readyUnseen = new LinkedHashSet<>();
     private boolean completionSeen;
 
+    /** Hand a completed demanded page directly to its live scar before cache trimming can evict
+     * it again. Unloaded/no-longer-needed demand remains ordinary spillable cache data. */
+    void collectPrepared(ServerLevel level, RuinContext ctx, RetainedPlans source, long key, RuinPlan plan) {
+        Job job = jobs.get(key);
+        if (job == null || job.event >= job.events.size() || parked.containsKey(key)) return;
+        int event = job.events.get(job.event).id();
+        if (NuclearWorld.get(level).ruinsIfKept(event) != ctx) return;
+        var preferred = prepared.get(event);
+        if (preferred != null && preferred != source && preferred.containsKey(key)) return;
+        // Install the new counted owner before releasing the page-map owner. Applying it still
+        // goes through the normal chunk identity, current-state, neighbour and capacity checks.
+        park(key, new Parked(event, plan));
+        source.remove(key);
+    }
+
     /** Collect already-finished, owned work independently of destructive admission. Otherwise a
      * dense visible refusal can retain an unseen result and all its input pins indefinitely.
      * Only readiness/ownership is serviced here; normal priority still decides world changes. */

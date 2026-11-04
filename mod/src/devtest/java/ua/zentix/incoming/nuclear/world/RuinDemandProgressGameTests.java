@@ -26,6 +26,11 @@ public final class RuinDemandProgressGameTests {
         var level = h.getLevel();
         RuinMatterGameTests.clearFixture(level);
         var grid = RuinStorageGameTests.fixture(h, true);
+        var held = new ua.zentix.incoming.strike.AreaLoader.Area(
+                net.minecraft.server.level.TicketType.create("incoming_demand_test", java.util.Comparator.<UUID>naturalOrder()),
+                grid.centre(), 2, UUID.randomUUID(), false);
+        ua.zentix.incoming.strike.StrikeWorld.get(level).areas().hold(level, held);
+        StrikeGameTests.afterTest(h, () -> ua.zentix.incoming.strike.StrikeWorld.get(level).areas().release(level, held));
         var old = grid.ctx().d;
         var d = new Detonation(190002, old.burst(), old.groundY(), old.yieldKt(), old.surface(),
                 old.gameTime() - 20000, 0, 0, old.visibility(), 42, old.scale(), false, old.wave());
@@ -56,6 +61,8 @@ public final class RuinDemandProgressGameTests {
         });
         h.succeedWhen(() -> {
             try {
+                h.assertTrue(level.getChunkSource().getChunkNow(grid.centre().x, grid.centre().z) != null,
+                        "Watched fixture lost FULL readiness");
                 if (stage[0] == 0) {
                     String policy = (String) content.invoke(world.prep(), level);
                     h.assertTrue(policy != null && RuinProgress.get(level).writable(), "Storage identity pending");
