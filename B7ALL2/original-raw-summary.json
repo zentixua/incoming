@@ -1,0 +1,22 @@
+{
+  "scope": "Entire original file, all phases; not a clean-phase summary or new-observer cost measurement",
+  "source": "41c718adcc211076e28e4909343fad7e03cdeff6",
+  "jar_sha256": "fd2a79c9b171c75f5cf6bb4247dbe58cae2cab4f3f6b17da5a675d2a45410d3f",
+  "path": "/mnt/data/projects/incoming/mod/run/wt-LEAD2/mod/run/lead2/lead4-actual1000-evidence/cut-A/clean-stop-A/logs/mt-b7/run-1793823067501-34a5f10d-d510-4b43-a982-e6e65a52a966/progress.log",
+  "sha256": "3c112715b149cb1de458303d9da3fd5e4cf01f15ea39ed7d6cfc4c6bdfeffc3c",
+  "pending_rows": 3793,
+  "event_observed_rows": 967,
+  "cutoffs": {
+    "time": 967
+  },
+  "holder_visits_min_max": [
+    864,
+    3552
+  ],
+  "watched_loaded_max": 453,
+  "pending_max": 453,
+  "observer_ns_min_max": [
+    1000093,
+    3913268
+  ]
+}

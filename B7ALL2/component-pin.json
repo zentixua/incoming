@@ -1,0 +1,7 @@
+{
+  "base": "fc19f16d193905b39a27d1a899fde0a359a72b0a",
+  "head": "cb65e39e0f602e7a7c994b26690295cb69a02953",
+  "branch": "codex/mt-natural-trial",
+  "task": "B7ALL2",
+  "scope": "Diagnostic observer only; no main merge or shipment"
+}

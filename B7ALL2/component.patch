@@ -1,0 +1,381 @@
+diff --git a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/MtB7PendingGameTests.java b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/MtB7PendingGameTests.java
+index f768f6982..92ad08eb1 100644
+--- a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/MtB7PendingGameTests.java
++++ b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/MtB7PendingGameTests.java
+@@ -2,6 +2,11 @@ package ua.zentix.incoming.nuclear.world;
+ 
+ import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
+ import java.util.Map;
++import java.util.UUID;
++import com.mojang.authlib.GameProfile;
++import net.minecraft.server.level.ChunkTrackingView;
++import net.minecraft.world.level.ChunkPos;
++import net.neoforged.neoforge.common.util.FakePlayer;
+ import net.minecraft.core.BlockPos;
+ import net.minecraft.gametest.framework.GameTest;
+ import net.minecraft.gametest.framework.GameTestHelper;
+@@ -58,6 +63,7 @@ public final class MtB7PendingGameTests {
+                 var later = observer.census(level, queue, d, now + 20, () -> 0);
+                 h.assertTrue(first.complete() && first.pending() == 1 && first.overdue() == 1 && first.withoutJob() == 0,
+                         "Blocked watched loaded chunk must remain pending");
++                h.assertTrue(first.traversal().equals("holders"), "Additive override must retain exhaustive holder fallback");
+                 h.assertTrue(first.maxLag() == now - ScarQueue.due(d, chunk.getPos()) && later.maxLag() == first.maxLag() + 20,
+                         "Observer must use wave game time, independently of retry due or wall time");
+                 h.assertTrue(NuclearPrep.memory(level, false) == memory && queue.size() == 1
+@@ -97,6 +103,86 @@ public final class MtB7PendingGameTests {
+         h.succeed();
+     }
+ 
++    @GameTest(template = "range", batch = "mt_b7_views", timeoutTicks = 100, skyAccess = true)
++    public static void nativeViewUnionIsCompletePassiveAndBounded(GameTestHelper h) {
++        var level = h.getLevel();
++        var at = h.absolutePos(new BlockPos(24, 30, 24));
++        var centre = new ChunkPos(at);
++        var d = new Detonation(123, Vec3.atCenterOf(at), at.getY(), 1000, false,
++                level.getGameTime() - 10000, 0, 0, 20000, 42, 1, false, .25f);
++        var observer = new MtB7Pending(d.id());
++        var queue = new ScarQueue(observer);
++        var player = new FakePlayer(level, new GameProfile(UUID.randomUUID(), "b7-census"));
++        var peer = new FakePlayer(level, new GameProfile(UUID.randomUUID(), "b7-census-peer"));
++        player.setChunkTrackingView(ChunkTrackingView.of(centre, 2));
++        peer.setChunkTrackingView(ChunkTrackingView.of(new ChunkPos(centre.x + 1, centre.z), 2));
++        level.players().add(player); level.players().add(peer);
++        try {
++            int expected = 0, scars = 0;
++            for (var holder : level.getChunkSource().chunkMap.getChunks()) {
++                var p = holder.getPos();
++                if (!ScarQueue.watched(level, p)) continue;
++                var chunk = level.getChunkSource().getChunkNow(p.x, p.z);
++                if (chunk == null) continue;
++                expected++;
++                if (chunk.getExistingData(ModAttachments.CHUNK_SCAR).orElse(0) >= d.id()) scars++;
++            }
++            long memory = NuclearPrep.memory(level, false);
++            var census = observer.census(level, queue, d, level.getGameTime(), () -> 0);
++            h.assertTrue(expected > 0 && census.complete() && census.traversal().equals("views"), "Native cohort missing");
++            h.assertTrue(census.watchedLoaded() == expected && census.scarred() == scars
++                    && census.pending() == expected - scars && census.withoutJob() == census.pending(),
++                    "Native union must equal independent current-holder census, including absent jobs");
++            h.assertTrue(NuclearPrep.memory(level, false) == memory && queue.size() == 0, "Native census must remain passive");
++            long[] timed = {0};
++            var partial = observer.census(level, queue, d, level.getGameTime(),
++                    () -> timed[0]++ < 2 ? 0 : MtB7Pending.BUDGET_NS);
++            h.assertTrue(!partial.complete() && partial.cutoff().equals("time") && partial.candidates() == 32,
++                    "Native per-cell clock cutoff must preserve incomplete lower-bound evidence");
++            var immediate = observer.census(level, queue, d, level.getGameTime(),
++                    new java.util.function.LongSupplier() {
++                        int calls;
++                        @Override public long getAsLong() { return calls++ == 0 ? 0 : MtB7Pending.BUDGET_NS; }
++                    });
++            h.assertTrue(!immediate.complete() && immediate.cutoff().equals("time") && immediate.candidates() == 0,
++                    "First native candidate must honor the observer clock");
++            player.setChunkTrackingView(ChunkTrackingView.EMPTY);
++            peer.setChunkTrackingView(ChunkTrackingView.EMPTY);
++            ScarQueue.seenForTest(key -> key == centre.toLong());
++            try {
++                var extra = observer.census(level, queue, d, level.getGameTime(), () -> 0);
++                h.assertTrue(extra.complete() && extra.traversal().equals("holders") && extra.watchedLoaded() == 1,
++                        "Additive test visibility outside real players' native views must remain in the cohort");
++            } finally { ScarQueue.seenForTest(null); }
++            player.setChunkTrackingView(new ChunkTrackingView() {
++                @Override public boolean contains(int x, int z, boolean outer) { return x == centre.x && z == centre.z; }
++                @Override public void forEach(java.util.function.Consumer<ChunkPos> action) {
++                    throw new AssertionError("Custom forEach must never run");
++                }
++            });
++            peer.setChunkTrackingView(ChunkTrackingView.EMPTY);
++            var fallback = observer.census(level, queue, d, level.getGameTime(), () -> 0);
++            h.assertTrue(fallback.complete() && fallback.traversal().equals("holders") && fallback.watchedLoaded() == 1,
++                    "Custom tracking view must preserve the bounded holder fallback");
++            player.setChunkTrackingView(ChunkTrackingView.of(centre, 1000));
++            peer.setChunkTrackingView(ChunkTrackingView.EMPTY);
++            var bounded = observer.census(level, queue, d, level.getGameTime(), () -> 0);
++            h.assertTrue(!bounded.complete() && bounded.cutoff().equals("candidates")
++                    && bounded.candidates() == MtB7Pending.CANDIDATE_LIMIT, "Candidate cap must also cover rejected square corners");
++            for (int i = 0; i < MtB7Pending.PLAYER_LIMIT; i++) level.players().add(player);
++            try {
++                var capped = observer.census(level, queue, d, level.getGameTime(), () -> 0);
++                h.assertTrue(!capped.complete() && capped.cutoff().equals("players") && capped.candidates() == 0,
++                        "Excess players cannot certify empty completion");
++            } finally {
++                for (int i = 0; i < MtB7Pending.PLAYER_LIMIT; i++) level.players().remove(player);
++            }
++        } finally {
++            level.players().remove(player); level.players().remove(peer);
++        }
++        h.succeed();
++    }
++
+     @GameTest(template = "range", batch = "mt_b7_cutoff", timeoutTicks = 100, skyAccess = true)
+     public static void missingEventAndTimeCutoffsAreNeverComplete(GameTestHelper h) {
+         var level = h.getLevel();
+diff --git a/mod/src/main/java/ua/zentix/incoming/nuclear/world/MtB7Pending.java b/mod/src/main/java/ua/zentix/incoming/nuclear/world/MtB7Pending.java
+index 109a066e0..a0d0519b7 100644
+--- a/mod/src/main/java/ua/zentix/incoming/nuclear/world/MtB7Pending.java
++++ b/mod/src/main/java/ua/zentix/incoming/nuclear/world/MtB7Pending.java
+@@ -1,13 +1,16 @@
+ package ua.zentix.incoming.nuclear.world;
+ 
+ import java.util.function.LongSupplier;
++import net.minecraft.server.level.ChunkTrackingView;
+ import net.minecraft.server.level.ServerLevel;
++import net.minecraft.world.level.ChunkPos;
+ import ua.zentix.incoming.nuclear.Detonation;
+ import ua.zentix.incoming.registry.ModAttachments;
+ 
+ /** TEST ONLY. One explicitly selected scene/event; retains numbers only, never a world, chunk or job. */
+ final class MtB7Pending {
+     static final int HOLDER_LIMIT = 20_000, PLAYER_LIMIT = 16, EVENT_LIMIT = 1024;
++    static final int CANDIDATE_LIMIT = 20_000;
+     static final long BUDGET_NS = 1_000_000;
+     final int event;
+     private long prepared, fresh, seenApplied, appliedMaxLag, preparedDrops, unloaded, failed, clears;
+@@ -37,47 +40,124 @@ final class MtB7Pending {
+ 
+     /** Numeric result only. Counts are lower bounds unless complete=true; lag is now minus centre wave due. */
+     record Census(boolean complete, String cutoff, int holders, int watchedLoaded, int affected,
+-                  int scarred, int pending, int overdue, int withoutJob, long maxLag, long observerNs) {}
++                  int scarred, int pending, int overdue, int withoutJob, long maxLag, long observerNs,
++                  String traversal, int candidates) {}
+ 
+     Census census(ServerLevel level, ScarQueue queue, Detonation d, long now, LongSupplier nanoTime) {
+         long start = nanoTime.getAsLong();
+-        int holders = 0, loaded = 0, affected = 0, scarred = 0, pending = 0, overdue = 0, missing = 0;
+-        long maxLag = 0;
+-        String cutoff = "none";
+-        if (d == null || d.id() != event) cutoff = "event_missing";
+-        else if (level.players().size() > PLAYER_LIMIT) cutoff = "players";
++        var scan = new Scan(level, queue, d, now, start, nanoTime);
++        if (d == null || d.id() != event) scan.cutoff = "event_missing";
++        else if (level.players().size() > PLAYER_LIMIT) scan.cutoff = "players";
+         else {
+-            double radius = d.ruinRadius();
+-            for (var holder : level.getChunkSource().chunkMap.getChunks()) {
+-                if (holders >= HOLDER_LIMIT) { cutoff = "holders"; break; }
+-                // Cooperative bound: no reflective graph walks, block reads or terrain/source collection.
+-                if ((holders & 31) == 0 && nanoTime.getAsLong() - start >= BUDGET_NS) { cutoff = "time"; break; }
+-                holders++;
+-                var pos = holder.getPos();
+-                if (!ScarQueue.watched(level, pos)) continue;
+-                var chunk = level.getChunkSource().getChunkNow(pos.x, pos.z);
+-                if (chunk == null) continue;
+-                loaded++;
+-                if (NuclearPrep.horizontal(pos, d) > radius) continue;
+-                affected++;
+-                // getExistingData does not create the scar attachment on an untouched chunk.
+-                if (chunk.getExistingData(ModAttachments.CHUNK_SCAR).orElse(0) >= event) { scarred++; continue; }
+-                pending++;
+-                long lag = now - ScarQueue.due(d, pos);
+-                if (lag > 0) { overdue++; maxLag = Math.max(maxLag, lag); }
+-                int queued = queue.mtB7Queued(event, pos.toLong());
+-                if (queued < 0) { cutoff = "job_events"; break; }
+-                if (queued == 0) missing++;
++            var views = new ChunkTrackingView[level.players().size()];
++            for (int i = 0; i < views.length; i++) views[i] = level.players().get(i).getChunkTrackingView();
++            if (nativeViews(views) && !ScarQueue.mtB7HasSeenOverride()) {
++                scan.traversal = "views";
++                visitViews(views, scan::candidate);
++            } else {
++                // Custom views and the additive test predicate have no trustworthy finite native bounds.
++                scan.traversal = "holders";
++                for (var holder : level.getChunkSource().chunkMap.getChunks()) {
++                    if (!scan.holder(holder.getPos())) break;
++                }
+             }
+         }
+         long elapsed = nanoTime.getAsLong() - start;
+         // A last small batch or first-use linkage can overrun too: never label it a complete cheap census.
+-        if (elapsed >= BUDGET_NS && cutoff.equals("none")) cutoff = "time";
+-        boolean complete = cutoff.equals("none");
++        if (elapsed >= BUDGET_NS && scan.cutoff.equals("none")) scan.cutoff = "time";
++        boolean complete = scan.cutoff.equals("none");
+         samples++;
+         if (!complete) partialSamples++;
+-        sampledMaxLag = Math.max(sampledMaxLag, maxLag);
+-        return new Census(complete, cutoff, holders, loaded, affected, scarred, pending, overdue, missing, maxLag, elapsed);
++        sampledMaxLag = Math.max(sampledMaxLag, scan.maxLag);
++        return new Census(complete, scan.cutoff, scan.holders, scan.loaded, scan.affected, scan.scarred,
++                scan.pending, scan.overdue, scan.missing, scan.maxLag, elapsed, scan.traversal, scan.candidates);
++    }
++
++    static boolean nativeViews(ChunkTrackingView[] views) {
++        for (var view : views) if (view != ChunkTrackingView.EMPTY && !(view instanceof ChunkTrackingView.Positioned)) return false;
++        return true;
++    }
++
++    @FunctionalInterface
++    interface Candidate { boolean visit(int x, int z, boolean watched); }
++
++    /** Native forEach bounds and contains(..., true); caller sees every square cell for cooperative bounds. */
++    static void visitViews(ChunkTrackingView[] views, Candidate visit) {
++        for (int i = 0; i < views.length; i++) {
++            if (!(views[i] instanceof ChunkTrackingView.Positioned view)) continue;
++            // Match Positioned.forEach bounds; widen loop counters so cooperative stops also cover extreme inputs.
++            int minX = view.center().x - view.viewDistance() - 1;
++            int maxX = view.center().x + view.viewDistance() + 1;
++            int minZ = view.center().z - view.viewDistance() - 1;
++            int maxZ = view.center().z + view.viewDistance() + 1;
++            for (long x = minX; x <= maxX; x++) {
++                for (long z = minZ; z <= maxZ; z++) {
++                    boolean watched = view.contains((int) x, (int) z);
++                    // Numeric/current-view union only: no visited set, world cache or retained player references.
++                    for (int previous = 0; watched && previous < i; previous++)
++                        if (views[previous].contains((int) x, (int) z)) watched = false;
++                    if (!visit.visit((int) x, (int) z, watched)) return;
++                }
++            }
++        }
++    }
++
++    /** Sample-local only; no game objects escape census. */
++    private final class Scan {
++        final ServerLevel level;
++        final ScarQueue queue;
++        final Detonation d;
++        final long now, start;
++        final LongSupplier clock;
++        final double radius;
++        int holders, candidates, loaded, affected, scarred, pending, overdue, missing;
++        long maxLag;
++        String cutoff = "none", traversal = "none";
++
++        Scan(ServerLevel level, ScarQueue queue, Detonation d, long now, long start, LongSupplier clock) {
++            this.level = level; this.queue = queue; this.d = d; this.now = now; this.start = start; this.clock = clock;
++            radius = d == null || d.id() != event || level.players().size() > PLAYER_LIMIT ? 0 : d.ruinRadius();
++        }
++
++        boolean next() {
++            boolean fallback = traversal.equals("holders");
++            if (candidates >= (fallback ? HOLDER_LIMIT : CANDIDATE_LIMIT)) {
++                cutoff = fallback ? "holders" : "candidates"; return false;
++            }
++            if ((candidates & 31) == 0 && clock.getAsLong() - start >= BUDGET_NS) { cutoff = "time"; return false; }
++            candidates++;
++            return true;
++        }
++
++        boolean candidate(int x, int z, boolean watched) {
++            if (!next()) return false;
++            if (!watched || level.getChunkSource().chunkMap.getVisibleChunkIfPresent(ChunkPos.asLong(x, z)) == null) return true;
++            holders++;
++            return inspectLoaded(new ChunkPos(x, z));
++        }
++
++        boolean holder(ChunkPos pos) {
++            if (!next()) return false;
++            holders++;
++            if (!ScarQueue.watched(level, pos)) return true;
++            return inspectLoaded(pos);
++        }
++
++        boolean inspectLoaded(ChunkPos pos) {
++            var chunk = level.getChunkSource().getChunkNow(pos.x, pos.z);
++            if (chunk == null) return true;
++            loaded++;
++            if (NuclearPrep.horizontal(pos, d) > radius) return true;
++            affected++;
++            if (chunk.getExistingData(ModAttachments.CHUNK_SCAR).orElse(0) >= event) { scarred++; return true; }
++            pending++;
++            long lag = now - ScarQueue.due(d, pos);
++            if (lag > 0) { overdue++; maxLag = Math.max(maxLag, lag); }
++            int queued = queue.mtB7Queued(event, pos.toLong());
++            if (queued < 0) { cutoff = "job_events"; return false; }
++            if (queued == 0) missing++;
++            return true;
++        }
+     }
+ 
+     String row(Census c) {
+@@ -85,6 +165,7 @@ final class MtB7Pending {
+                 +" holders="+c.holders()+" watched_loaded="+c.watchedLoaded()+" affected="+c.affected()
+                 +" scarred="+c.scarred()+" pending="+c.pending()+" overdue="+c.overdue()
+                 +" pending_without_job="+c.withoutJob()+" pending_max_lag_ticks="+c.maxLag()
++                +" traversal="+c.traversal()+" candidates="+c.candidates()
+                 +" observer_ns="+c.observerNs()+" prepared_success="+prepared+" fresh_success="+fresh
+                 +" seen_success="+seenApplied+" seen_success_max_lag_ticks="+appliedMaxLag
+                 +" prepared_drops="+preparedDrops+" unloaded_pending="+unloaded+" failed_pending="+failed
+diff --git a/mod/src/main/java/ua/zentix/incoming/nuclear/world/ScarQueue.java b/mod/src/main/java/ua/zentix/incoming/nuclear/world/ScarQueue.java
+index ee6107e09..8aa974436 100644
+--- a/mod/src/main/java/ua/zentix/incoming/nuclear/world/ScarQueue.java
++++ b/mod/src/main/java/ua/zentix/incoming/nuclear/world/ScarQueue.java
+@@ -576,6 +576,9 @@ public final class ScarQueue {
+         seenForTest = chunks;
+     }
+ 
++    /** TEST ONLY: the passive census must include additive visibility outside native player views. */
++    static boolean mtB7HasSeenOverride() { return seenForTest != null; }
++
+     /** Chunk visible under test override ({@link #seenForTest}). */
+     static boolean seenInTest(long chunk) {
+         java.util.function.LongPredicate test = seenForTest;
+diff --git a/mod/src/test/java/ua/zentix/incoming/nuclear/world/MtB7PendingTest.java b/mod/src/test/java/ua/zentix/incoming/nuclear/world/MtB7PendingTest.java
+new file mode 100644
+index 000000000..7a64c5f2b
+--- /dev/null
++++ b/mod/src/test/java/ua/zentix/incoming/nuclear/world/MtB7PendingTest.java
+@@ -0,0 +1,65 @@
++package ua.zentix.incoming.nuclear.world;
++
++import java.util.HashSet;
++import java.util.Set;
++import java.util.function.Consumer;
++import net.minecraft.server.level.ChunkTrackingView;
++import net.minecraft.world.level.ChunkPos;
++import org.junit.jupiter.api.Test;
++
++import static org.junit.jupiter.api.Assertions.*;
++
++class MtB7PendingTest {
++    @Test
++    void nativeBoundaryAndOverlappingUnionMatchMinecraftEnumerationExactly() {
++        for (int distance : new int[]{2, 8, 16, 32}) {
++            var a = ChunkTrackingView.of(new ChunkPos(-19, 23), distance);
++            var b = ChunkTrackingView.of(new ChunkPos(-17, 22), distance);
++            var views = new ChunkTrackingView[]{a, ChunkTrackingView.EMPTY, b, a};
++            Set<Long> expected = new HashSet<>();
++            for (var view : views) view.forEach(p -> expected.add(p.toLong()));
++            Set<Long> actual = new HashSet<>();
++            int[] cells = {0};
++            assertTrue(MtB7Pending.nativeViews(views));
++            MtB7Pending.visitViews(views, (x, z, watched) -> {
++                cells[0]++;
++                if (watched) assertTrue(actual.add(ChunkPos.asLong(x, z)), "Duplicate union member");
++                return true;
++            });
++            assertEquals(expected, actual);
++            assertEquals(3 * (2 * distance + 3) * (2 * distance + 3), cells[0]);
++            assertTrue(actual.stream().anyMatch(key -> !a.isInViewDistance(ChunkPos.getX(key), ChunkPos.getZ(key))),
++                    "Fixture must include the native outer border");
++        }
++    }
++
++    @Test
++    void movedViewHasNoRetainedMembershipAndTraversalHonorsEveryCellStop() {
++        Set<Long> before = union(ChunkTrackingView.of(new ChunkPos(0, 0), 2));
++        Set<Long> after = union(ChunkTrackingView.of(new ChunkPos(100, -100), 2));
++        assertTrue(before.stream().noneMatch(after::contains));
++        int[] visits = {0};
++        MtB7Pending.visitViews(new ChunkTrackingView[]{ChunkTrackingView.of(new ChunkPos(0, 0), 1000)},
++                (x, z, watched) -> ++visits[0] < 33);
++        assertEquals(33, visits[0], "Even rejected square corners must honor cooperative stops");
++    }
++
++    @Test
++    void unknownViewsRequireHolderFallbackWithoutCallingUnboundedForEach() {
++        ChunkTrackingView custom = new ChunkTrackingView() {
++            @Override public boolean contains(int x, int z, boolean outer) { return true; }
++            @Override public void forEach(Consumer<ChunkPos> action) { fail("Unbounded custom enumeration"); }
++        };
++        assertFalse(MtB7Pending.nativeViews(new ChunkTrackingView[]{custom}));
++        assertTrue(MtB7Pending.nativeViews(new ChunkTrackingView[]{ChunkTrackingView.EMPTY}));
++    }
++
++    private static Set<Long> union(ChunkTrackingView view) {
++        Set<Long> result = new HashSet<>();
++        MtB7Pending.visitViews(new ChunkTrackingView[]{view}, (x, z, watched) -> {
++            if (watched) result.add(ChunkPos.asLong(x, z));
++            return true;
++        });
++        return result;
++    }
++}

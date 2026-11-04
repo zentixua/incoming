@@ -1,0 +1,9 @@
+{
+  "cache_jar": "/home/artem/.gradle/caches/neoformruntime/intermediate_results/sourcesAndCompiledWithNeoForge_db3b02017dab00ea5971868812997b371000dda1_output.jar",
+  "scope": "Cached source evidence only; not proof of loaded runtime artifact",
+  "sources": {
+    "ChunkTrackingView.java": "aad25b6d008123cbb1213f7a6a8fa3a3d720c7002ff99b6e7b404ef626c240a5",
+    "ChunkMap.java": "949719842a3d9413124535de9182522a14daf5032dbf9711e5f338b7e987ef98",
+    "ServerChunkCache.java": "8917fb9f79199e27b135042847c697b2847f9dcb0a26c0d5dfe6c1e7f8822c36"
+  }
+}
