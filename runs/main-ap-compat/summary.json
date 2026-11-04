@@ -1,0 +1,2237 @@
+{
+  "run": "main-ap-compat",
+  "windows": {
+    "compat/rain": {
+      "start_ms": 92064.169,
+      "end_ms": 104108.23,
+      "frame": {
+        "n": 1395,
+        "p50": 8.421,
+        "p95": 11.097,
+        "p99": 13.417,
+        "max": 21.407,
+        "mean": 8.633534050179211,
+        "over33": 0,
+        "over50": 0,
+        "over100": 0,
+        "over250": 0
+      },
+      "cpu": {
+        "n": 1395,
+        "p50": 1.919,
+        "p95": 2.952,
+        "p99": 3.852,
+        "max": 5.393,
+        "mean": 2.067035842293907,
+        "over33": 0,
+        "over50": 0,
+        "over100": 0,
+        "over250": 0
+      },
+      "gpu_elapsed": {
+        "n": 1395,
+        "p50": 8.259,
+        "p95": 9.942,
+        "p99": 10.646,
+        "max": 12.273,
+        "mean": 8.445015053763441,
+        "over33": 0,
+        "over50": 0,
+        "over100": 0,
+        "over250": 0
+      },
+      "tick": {
+        "n": 241,
+        "p50": 1.1817,
+        "p95": 1.6572,
+        "p99": 2.0836,
+        "max": 2.2848,
+        "mean": 1.2351352697095437,
+        "over33": 0,
+        "over50": 0,
+        "over100": 0,
+        "over250": 0
+      },
+      "tick_cpu": {
+        "n": 241,
+        "p50": 1.1269,
+        "p95": 1.5347,
+        "p99": 2.018,
+        "max": 2.2262,
+        "mean": 1.1785253112033196,
+        "over33": 0,
+        "over50": 0,
+        "over100": 0,
+        "over250": 0
+      },
+      "fx_gpu_elapsed": {
+        "n": 1395,
+        "p50": 0.001,
+        "p95": 0.001,
+        "p99": 0.005,
+        "max": 0.005,
+        "mean": 0.0006401433691756273,
+        "over33": 0,
+        "over50": 0,
+        "over100": 0,
+        "over250": 0
+      },
+      "probes": [
+        {
+          "type": "probe",
+          "t_ms": 92210.059,
+          "name": "ua.zentix.incoming.client.fx.layer.FxLayer#describeTiming",
+          "value": "quads 0, 0.000 ms (longest in the second 0.000; without GC 0.000, CPU 0.000; frames with GC 0), GPU 0.000 ms (longest 0.000, 0 frames; heat pass 0.000, longest 0.000, 0 frames \u2014 heat lights 0 hot 0 front 0 jets 0, area 0 rects (0 lit) 0.0%; bloom FAST 0.000 ms (longest 0.000, 0 frames; glow pass 0.000, pyramid 0.000, out 0.000; 0x0, glow level -1, levels 0-0)), depth: world and LOD (Voxy: forward Z, NDC -1..1, empty 1.0, nearest LOD 16.0 blocks, Minecraft pixels marked 0.0, no LOD beyond the render distance); GPU by pass: no frames yet (the probe runs while this line or F3 is read); half-resolution smoke 0 quads, full 1 (a quad over both kinds of tiles counts in each), lays 0"
+        },
+        {
+          "type": "probe",
+          "t_ms": 92210.059,
+          "name": "ua.zentix.incoming.client.far.FarRenderer#describeSmoke",
+          "value": "fill 0.00 screens (budget 16, one club per gaussian 0.00, before merging 0.00), cluster share 1.00, merge level 0, veil gaussians 0, clusters 0, plan 0.00 ms off-thread"
+        },
+        {
+          "type": "probe",
+          "t_ms": 92210.059,
+          "name": "ua.zentix.incoming.client.sound.BlastSounds#describe",
+          "value": ""
+        },
+        {
+          "type": "probe",
+          "t_ms": 92210.059,
+          "name": "ua.zentix.incoming.client.sound.ClientSounds#describe",
+          "value": " live=0"
+        },
+        {
+          "type": "probe",
+          "t_ms": 92210.059,
+          "name": "ua.zentix.incoming.client.fx.FireSmoke#describe",
+          "value": "fires 0"
+        },
+        {
+          "type": "probe",
+          "t_ms": 92210.059,
+          "name": "ua.zentix.incoming.client.nuclear.NukeSounds#describe",
+          "value": ""
+        },
+        {
+          "type": "probe",
+          "t_ms": 92210.059,
+          "name": "ua.zentix.incoming.client.nuclear.NukePall#describe",
+          "value": "sigma at camera 0.0000 /block (visibility Infinity blocks; mist 0.0000), depth up 0.00 down 0.00, muffle 0.00, ash 0, quality MEDIUM, light: sky 0.000, fires 0.00 \u00d7 0.00, ball r 0 blocks, black body 0.00 0.00 0.00, under the pall: -, surge r 0 top 0 sigma 0.0000, frames: off; mushrooms 0 (exposure 1); firestorm: none"
+        },
+        {
+          "type": "probe",
+          "t_ms": 92210.059,
+          "name": "ua.zentix.incoming.client.sound.OwnSources#describe",
+          "value": "own 0/0 started 0 efx - blocked 1.00/1.00"
+        },
+        {
+          "type": "probe",
+          "t_ms": 92210.059,
+          "name": "ua.zentix.stand.AuditProbes#particles",
+          "value": "vanilla=19. VE: 0. VP: 0 incoming=0 CLOUD=0/5120 refused=0 GROUND=0/3584 refused=0 TRAIL=0/5120 refused=0 DEBRIS=0/2560 refused=0 SPRAY=0/2048 refused=0 FLASH=0/512 refused=0 SPARK=0/15360 refused=0 ASH=0/3072 refused=0"
+        },
+        {
+          "type": "probe",
+          "t_ms": 92210.059,
+          "name": "ua.zentix.stand.AuditProbes#particleClasses",
+          "value": "{pigcart.particlerain.particle.CustomParticle=4}"
+        },
+        {
+          "type": "probe",
+          "t_ms": 92210.059,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryGpuOnlyAsyncParticleTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 92210.059,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryDisableAsyncParticleTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 92210.059,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryDisableAnimationTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 92210.059,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryDisableAsyncRainTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 93210.778,
+          "name": "ua.zentix.incoming.client.fx.layer.FxLayer#describeTiming",
+          "value": "quads 0, 0.000 ms (longest in the second 0.000; without GC 0.000, CPU 0.000; frames with GC 0), GPU 0.000 ms (longest 0.000, 0 frames; heat pass 0.000, longest 0.000, 0 frames \u2014 heat lights 0 hot 0 front 0 jets 0, area 0 rects (0 lit) 0.0%; bloom FAST 0.000 ms (longest 0.000, 0 frames; glow pass 0.000, pyramid 0.000, out 0.000; 0x0, glow level -1, levels 0-0)), depth: world and LOD (Voxy: forward Z, NDC -1..1, empty 1.0, nearest LOD 16.0 blocks, Minecraft pixels marked 0.0, no LOD beyond the render distance); GPU by pass: no frames yet (the probe runs while this line or F3 is read); half-resolution smoke 0 quads, full 1 (a quad over both kinds of tiles counts in each), lays 0"
+        },
+        {
+          "type": "probe",
+          "t_ms": 93210.778,
+          "name": "ua.zentix.incoming.client.far.FarRenderer#describeSmoke",
+          "value": "fill 0.00 screens (budget 16, one club per gaussian 0.00, before merging 0.00), cluster share 1.00, merge level 0, veil gaussians 0, clusters 0, plan 0.00 ms off-thread"
+        },
+        {
+          "type": "probe",
+          "t_ms": 93210.778,
+          "name": "ua.zentix.incoming.client.sound.BlastSounds#describe",
+          "value": ""
+        },
+        {
+          "type": "probe",
+          "t_ms": 93210.778,
+          "name": "ua.zentix.incoming.client.sound.ClientSounds#describe",
+          "value": " live=0"
+        },
+        {
+          "type": "probe",
+          "t_ms": 93210.778,
+          "name": "ua.zentix.incoming.client.fx.FireSmoke#describe",
+          "value": "fires 0"
+        },
+        {
+          "type": "probe",
+          "t_ms": 93210.778,
+          "name": "ua.zentix.incoming.client.nuclear.NukeSounds#describe",
+          "value": ""
+        },
+        {
+          "type": "probe",
+          "t_ms": 93210.778,
+          "name": "ua.zentix.incoming.client.nuclear.NukePall#describe",
+          "value": "sigma at camera 0.0000 /block (visibility Infinity blocks; mist 0.0000), depth up 0.00 down 0.00, muffle 0.00, ash 0, quality MEDIUM, light: sky 0.000, fires 0.00 \u00d7 0.00, ball r 0 blocks, black body 0.00 0.00 0.00, under the pall: -, surge r 0 top 0 sigma 0.0000, frames: off; mushrooms 0 (exposure 1); firestorm: none"
+        },
+        {
+          "type": "probe",
+          "t_ms": 93210.778,
+          "name": "ua.zentix.incoming.client.sound.OwnSources#describe",
+          "value": "own 0/0 started 0 efx - blocked 1.00/1.00"
+        },
+        {
+          "type": "probe",
+          "t_ms": 93210.778,
+          "name": "ua.zentix.stand.AuditProbes#particles",
+          "value": "vanilla=1070. VE: 0. VP: 0 incoming=0 CLOUD=0/5120 refused=0 GROUND=0/3584 refused=0 TRAIL=0/5120 refused=0 DEBRIS=0/2560 refused=0 SPRAY=0/2048 refused=0 FLASH=0/512 refused=0 SPARK=0/15360 refused=0 ASH=0/3072 refused=0"
+        },
+        {
+          "type": "probe",
+          "t_ms": 93210.778,
+          "name": "ua.zentix.stand.AuditProbes#particleClasses",
+          "value": "{pigcart.particlerain.particle.CustomParticle=922}"
+        },
+        {
+          "type": "probe",
+          "t_ms": 93210.778,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryGpuOnlyAsyncParticleTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 93210.778,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryDisableAsyncParticleTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 93210.778,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryDisableAnimationTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 93210.778,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryDisableAsyncRainTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 94212.108,
+          "name": "ua.zentix.incoming.client.fx.layer.FxLayer#describeTiming",
+          "value": "quads 0, 0.000 ms (longest in the second 0.000; without GC 0.000, CPU 0.000; frames with GC 0), GPU 0.000 ms (longest 0.000, 0 frames; heat pass 0.000, longest 0.000, 0 frames \u2014 heat lights 0 hot 0 front 0 jets 0, area 0 rects (0 lit) 0.0%; bloom FAST 0.000 ms (longest 0.000, 0 frames; glow pass 0.000, pyramid 0.000, out 0.000; 0x0, glow level -1, levels 0-0)), depth: world and LOD (Voxy: forward Z, NDC -1..1, empty 1.0, nearest LOD 16.0 blocks, Minecraft pixels marked 0.0, no LOD beyond the render distance); GPU by pass: no frames yet (the probe runs while this line or F3 is read); half-resolution smoke 0 quads, full 1 (a quad over both kinds of tiles counts in each), lays 0"
+        },
+        {
+          "type": "probe",
+          "t_ms": 94212.108,
+          "name": "ua.zentix.incoming.client.far.FarRenderer#describeSmoke",
+          "value": "fill 0.00 screens (budget 16, one club per gaussian 0.00, before merging 0.00), cluster share 1.00, merge level 0, veil gaussians 0, clusters 0, plan 0.00 ms off-thread"
+        },
+        {
+          "type": "probe",
+          "t_ms": 94212.108,
+          "name": "ua.zentix.incoming.client.sound.BlastSounds#describe",
+          "value": ""
+        },
+        {
+          "type": "probe",
+          "t_ms": 94212.108,
+          "name": "ua.zentix.incoming.client.sound.ClientSounds#describe",
+          "value": " live=0"
+        },
+        {
+          "type": "probe",
+          "t_ms": 94212.108,
+          "name": "ua.zentix.incoming.client.fx.FireSmoke#describe",
+          "value": "fires 0"
+        },
+        {
+          "type": "probe",
+          "t_ms": 94212.108,
+          "name": "ua.zentix.incoming.client.nuclear.NukeSounds#describe",
+          "value": ""
+        },
+        {
+          "type": "probe",
+          "t_ms": 94212.108,
+          "name": "ua.zentix.incoming.client.nuclear.NukePall#describe",
+          "value": "sigma at camera 0.0000 /block (visibility Infinity blocks; mist 0.0000), depth up 0.00 down 0.00, muffle 0.00, ash 0, quality MEDIUM, light: sky 0.000, fires 0.00 \u00d7 0.00, ball r 0 blocks, black body 0.00 0.00 0.00, under the pall: -, surge r 0 top 0 sigma 0.0000, frames: off; mushrooms 0 (exposure 1); firestorm: none"
+        },
+        {
+          "type": "probe",
+          "t_ms": 94212.108,
+          "name": "ua.zentix.incoming.client.sound.OwnSources#describe",
+          "value": "own 0/0 started 0 efx - blocked 1.00/1.00"
+        },
+        {
+          "type": "probe",
+          "t_ms": 94212.108,
+          "name": "ua.zentix.stand.AuditProbes#particles",
+          "value": "vanilla=1157. VE: 0. VP: 0 incoming=0 CLOUD=0/5120 refused=0 GROUND=0/3584 refused=0 TRAIL=0/5120 refused=0 DEBRIS=0/2560 refused=0 SPRAY=0/2048 refused=0 FLASH=0/512 refused=0 SPARK=0/15360 refused=0 ASH=0/3072 refused=0"
+        },
+        {
+          "type": "probe",
+          "t_ms": 94212.108,
+          "name": "ua.zentix.stand.AuditProbes#particleClasses",
+          "value": "{pigcart.particlerain.particle.CustomParticle=1010}"
+        },
+        {
+          "type": "probe",
+          "t_ms": 94212.108,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryGpuOnlyAsyncParticleTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 94212.108,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryDisableAsyncParticleTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 94212.108,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryDisableAnimationTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 94212.108,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryDisableAsyncRainTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 95265.007,
+          "name": "ua.zentix.incoming.client.fx.layer.FxLayer#describeTiming",
+          "value": "quads 0, 0.000 ms (longest in the second 0.000; without GC 0.000, CPU 0.000; frames with GC 0), GPU 0.000 ms (longest 0.000, 0 frames; heat pass 0.000, longest 0.000, 0 frames \u2014 heat lights 0 hot 0 front 0 jets 0, area 0 rects (0 lit) 0.0%; bloom FAST 0.000 ms (longest 0.000, 0 frames; glow pass 0.000, pyramid 0.000, out 0.000; 0x0, glow level -1, levels 0-0)), depth: world and LOD (Voxy: forward Z, NDC -1..1, empty 1.0, nearest LOD 16.0 blocks, Minecraft pixels marked 0.0, no LOD beyond the render distance); GPU by pass: no frames yet (the probe runs while this line or F3 is read); half-resolution smoke 0 quads, full 1 (a quad over both kinds of tiles counts in each), lays 0"
+        },
+        {
+          "type": "probe",
+          "t_ms": 95265.007,
+          "name": "ua.zentix.incoming.client.far.FarRenderer#describeSmoke",
+          "value": "fill 0.00 screens (budget 16, one club per gaussian 0.00, before merging 0.00), cluster share 1.00, merge level 0, veil gaussians 0, clusters 0, plan 0.00 ms off-thread"
+        },
+        {
+          "type": "probe",
+          "t_ms": 95265.007,
+          "name": "ua.zentix.incoming.client.sound.BlastSounds#describe",
+          "value": ""
+        },
+        {
+          "type": "probe",
+          "t_ms": 95265.007,
+          "name": "ua.zentix.incoming.client.sound.ClientSounds#describe",
+          "value": " live=0"
+        },
+        {
+          "type": "probe",
+          "t_ms": 95265.007,
+          "name": "ua.zentix.incoming.client.fx.FireSmoke#describe",
+          "value": "fires 0"
+        },
+        {
+          "type": "probe",
+          "t_ms": 95265.007,
+          "name": "ua.zentix.incoming.client.nuclear.NukeSounds#describe",
+          "value": ""
+        },
+        {
+          "type": "probe",
+          "t_ms": 95265.007,
+          "name": "ua.zentix.incoming.client.nuclear.NukePall#describe",
+          "value": "sigma at camera 0.0000 /block (visibility Infinity blocks; mist 0.0000), depth up 0.00 down 0.00, muffle 0.00, ash 0, quality MEDIUM, light: sky 0.000, fires 0.00 \u00d7 0.00, ball r 0 blocks, black body 0.00 0.00 0.00, under the pall: -, surge r 0 top 0 sigma 0.0000, frames: off; mushrooms 0 (exposure 1); firestorm: none"
+        },
+        {
+          "type": "probe",
+          "t_ms": 95265.007,
+          "name": "ua.zentix.incoming.client.sound.OwnSources#describe",
+          "value": "own 0/0 started 0 efx - blocked 1.00/1.00"
+        },
+        {
+          "type": "probe",
+          "t_ms": 95265.007,
+          "name": "ua.zentix.stand.AuditProbes#particles",
+          "value": "vanilla=1163. VE: 0. VP: 0 incoming=0 CLOUD=0/5120 refused=0 GROUND=0/3584 refused=0 TRAIL=0/5120 refused=0 DEBRIS=0/2560 refused=0 SPRAY=0/2048 refused=0 FLASH=0/512 refused=0 SPARK=0/15360 refused=0 ASH=0/3072 refused=0"
+        },
+        {
+          "type": "probe",
+          "t_ms": 95265.007,
+          "name": "ua.zentix.stand.AuditProbes#particleClasses",
+          "value": "{pigcart.particlerain.particle.CustomParticle=1007}"
+        },
+        {
+          "type": "probe",
+          "t_ms": 95265.007,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryGpuOnlyAsyncParticleTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 95265.007,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryDisableAsyncParticleTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 95265.007,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryDisableAnimationTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 95265.007,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryDisableAsyncRainTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 96307.099,
+          "name": "ua.zentix.incoming.client.fx.layer.FxLayer#describeTiming",
+          "value": "quads 0, 0.000 ms (longest in the second 0.000; without GC 0.000, CPU 0.000; frames with GC 0), GPU 0.000 ms (longest 0.000, 0 frames; heat pass 0.000, longest 0.000, 0 frames \u2014 heat lights 0 hot 0 front 0 jets 0, area 0 rects (0 lit) 0.0%; bloom FAST 0.000 ms (longest 0.000, 0 frames; glow pass 0.000, pyramid 0.000, out 0.000; 0x0, glow level -1, levels 0-0)), depth: world and LOD (Voxy: forward Z, NDC -1..1, empty 1.0, nearest LOD 16.0 blocks, Minecraft pixels marked 0.0, no LOD beyond the render distance); GPU by pass: no frames yet (the probe runs while this line or F3 is read); half-resolution smoke 0 quads, full 1 (a quad over both kinds of tiles counts in each), lays 0"
+        },
+        {
+          "type": "probe",
+          "t_ms": 96307.099,
+          "name": "ua.zentix.incoming.client.far.FarRenderer#describeSmoke",
+          "value": "fill 0.00 screens (budget 16, one club per gaussian 0.00, before merging 0.00), cluster share 1.00, merge level 0, veil gaussians 0, clusters 0, plan 0.00 ms off-thread"
+        },
+        {
+          "type": "probe",
+          "t_ms": 96307.099,
+          "name": "ua.zentix.incoming.client.sound.BlastSounds#describe",
+          "value": ""
+        },
+        {
+          "type": "probe",
+          "t_ms": 96307.099,
+          "name": "ua.zentix.incoming.client.sound.ClientSounds#describe",
+          "value": " live=0"
+        },
+        {
+          "type": "probe",
+          "t_ms": 96307.099,
+          "name": "ua.zentix.incoming.client.fx.FireSmoke#describe",
+          "value": "fires 0"
+        },
+        {
+          "type": "probe",
+          "t_ms": 96307.099,
+          "name": "ua.zentix.incoming.client.nuclear.NukeSounds#describe",
+          "value": ""
+        },
+        {
+          "type": "probe",
+          "t_ms": 96307.099,
+          "name": "ua.zentix.incoming.client.nuclear.NukePall#describe",
+          "value": "sigma at camera 0.0000 /block (visibility Infinity blocks; mist 0.0000), depth up 0.00 down 0.00, muffle 0.00, ash 0, quality MEDIUM, light: sky 0.000, fires 0.00 \u00d7 0.00, ball r 0 blocks, black body 0.00 0.00 0.00, under the pall: -, surge r 0 top 0 sigma 0.0000, frames: off; mushrooms 0 (exposure 1); firestorm: none"
+        },
+        {
+          "type": "probe",
+          "t_ms": 96307.099,
+          "name": "ua.zentix.incoming.client.sound.OwnSources#describe",
+          "value": "own 0/0 started 0 efx - blocked 1.00/1.00"
+        },
+        {
+          "type": "probe",
+          "t_ms": 96307.099,
+          "name": "ua.zentix.stand.AuditProbes#particles",
+          "value": "vanilla=1205. VE: 0. VP: 0 incoming=0 CLOUD=0/5120 refused=0 GROUND=0/3584 refused=0 TRAIL=0/5120 refused=0 DEBRIS=0/2560 refused=0 SPRAY=0/2048 refused=0 FLASH=0/512 refused=0 SPARK=0/15360 refused=0 ASH=0/3072 refused=0"
+        },
+        {
+          "type": "probe",
+          "t_ms": 96307.099,
+          "name": "ua.zentix.stand.AuditProbes#particleClasses",
+          "value": "{pigcart.particlerain.particle.CustomParticle=1024}"
+        },
+        {
+          "type": "probe",
+          "t_ms": 96307.099,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryGpuOnlyAsyncParticleTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 96307.099,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryDisableAsyncParticleTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 96307.099,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryDisableAnimationTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 96307.099,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryDisableAsyncRainTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 97307.307,
+          "name": "ua.zentix.incoming.client.fx.layer.FxLayer#describeTiming",
+          "value": "quads 0, 0.000 ms (longest in the second 0.000; without GC 0.000, CPU 0.000; frames with GC 0), GPU 0.000 ms (longest 0.000, 0 frames; heat pass 0.000, longest 0.000, 0 frames \u2014 heat lights 0 hot 0 front 0 jets 0, area 0 rects (0 lit) 0.0%; bloom FAST 0.000 ms (longest 0.000, 0 frames; glow pass 0.000, pyramid 0.000, out 0.000; 0x0, glow level -1, levels 0-0)), depth: world and LOD (Voxy: forward Z, NDC -1..1, empty 1.0, nearest LOD 16.0 blocks, Minecraft pixels marked 0.0, no LOD beyond the render distance); GPU by pass: no frames yet (the probe runs while this line or F3 is read); half-resolution smoke 0 quads, full 1 (a quad over both kinds of tiles counts in each), lays 0"
+        },
+        {
+          "type": "probe",
+          "t_ms": 97307.307,
+          "name": "ua.zentix.incoming.client.far.FarRenderer#describeSmoke",
+          "value": "fill 0.00 screens (budget 16, one club per gaussian 0.00, before merging 0.00), cluster share 1.00, merge level 0, veil gaussians 0, clusters 0, plan 0.00 ms off-thread"
+        },
+        {
+          "type": "probe",
+          "t_ms": 97307.307,
+          "name": "ua.zentix.incoming.client.sound.BlastSounds#describe",
+          "value": ""
+        },
+        {
+          "type": "probe",
+          "t_ms": 97307.307,
+          "name": "ua.zentix.incoming.client.sound.ClientSounds#describe",
+          "value": " live=0"
+        },
+        {
+          "type": "probe",
+          "t_ms": 97307.307,
+          "name": "ua.zentix.incoming.client.fx.FireSmoke#describe",
+          "value": "fires 0"
+        },
+        {
+          "type": "probe",
+          "t_ms": 97307.307,
+          "name": "ua.zentix.incoming.client.nuclear.NukeSounds#describe",
+          "value": ""
+        },
+        {
+          "type": "probe",
+          "t_ms": 97307.307,
+          "name": "ua.zentix.incoming.client.nuclear.NukePall#describe",
+          "value": "sigma at camera 0.0000 /block (visibility Infinity blocks; mist 0.0000), depth up 0.00 down 0.00, muffle 0.00, ash 0, quality MEDIUM, light: sky 0.000, fires 0.00 \u00d7 0.00, ball r 0 blocks, black body 0.00 0.00 0.00, under the pall: -, surge r 0 top 0 sigma 0.0000, frames: off; mushrooms 0 (exposure 1); firestorm: none"
+        },
+        {
+          "type": "probe",
+          "t_ms": 97307.307,
+          "name": "ua.zentix.incoming.client.sound.OwnSources#describe",
+          "value": "own 0/0 started 0 efx - blocked 1.00/1.00"
+        },
+        {
+          "type": "probe",
+          "t_ms": 97307.307,
+          "name": "ua.zentix.stand.AuditProbes#particles",
+          "value": "vanilla=1171. VE: 0. VP: 0 incoming=0 CLOUD=0/5120 refused=0 GROUND=0/3584 refused=0 TRAIL=0/5120 refused=0 DEBRIS=0/2560 refused=0 SPRAY=0/2048 refused=0 FLASH=0/512 refused=0 SPARK=0/15360 refused=0 ASH=0/3072 refused=0"
+        },
+        {
+          "type": "probe",
+          "t_ms": 97307.307,
+          "name": "ua.zentix.stand.AuditProbes#particleClasses",
+          "value": "{pigcart.particlerain.particle.CustomParticle=1019}"
+        },
+        {
+          "type": "probe",
+          "t_ms": 97307.307,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryGpuOnlyAsyncParticleTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 97307.307,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryDisableAsyncParticleTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 97307.307,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryDisableAnimationTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 97307.307,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryDisableAsyncRainTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 98311.539,
+          "name": "ua.zentix.incoming.client.fx.layer.FxLayer#describeTiming",
+          "value": "quads 0, 0.000 ms (longest in the second 0.000; without GC 0.000, CPU 0.000; frames with GC 0), GPU 0.000 ms (longest 0.000, 0 frames; heat pass 0.000, longest 0.000, 0 frames \u2014 heat lights 0 hot 0 front 0 jets 0, area 0 rects (0 lit) 0.0%; bloom FAST 0.000 ms (longest 0.000, 0 frames; glow pass 0.000, pyramid 0.000, out 0.000; 0x0, glow level -1, levels 0-0)), depth: world and LOD (Voxy: forward Z, NDC -1..1, empty 1.0, nearest LOD 16.0 blocks, Minecraft pixels marked 0.0, no LOD beyond the render distance); GPU by pass: no frames yet (the probe runs while this line or F3 is read); half-resolution smoke 0 quads, full 1 (a quad over both kinds of tiles counts in each), lays 0"
+        },
+        {
+          "type": "probe",
+          "t_ms": 98311.539,
+          "name": "ua.zentix.incoming.client.far.FarRenderer#describeSmoke",
+          "value": "fill 0.00 screens (budget 16, one club per gaussian 0.00, before merging 0.00), cluster share 1.00, merge level 0, veil gaussians 0, clusters 0, plan 0.00 ms off-thread"
+        },
+        {
+          "type": "probe",
+          "t_ms": 98311.539,
+          "name": "ua.zentix.incoming.client.sound.BlastSounds#describe",
+          "value": ""
+        },
+        {
+          "type": "probe",
+          "t_ms": 98311.539,
+          "name": "ua.zentix.incoming.client.sound.ClientSounds#describe",
+          "value": " live=0"
+        },
+        {
+          "type": "probe",
+          "t_ms": 98311.539,
+          "name": "ua.zentix.incoming.client.fx.FireSmoke#describe",
+          "value": "fires 0"
+        },
+        {
+          "type": "probe",
+          "t_ms": 98311.539,
+          "name": "ua.zentix.incoming.client.nuclear.NukeSounds#describe",
+          "value": ""
+        },
+        {
+          "type": "probe",
+          "t_ms": 98311.539,
+          "name": "ua.zentix.incoming.client.nuclear.NukePall#describe",
+          "value": "sigma at camera 0.0000 /block (visibility Infinity blocks; mist 0.0000), depth up 0.00 down 0.00, muffle 0.00, ash 0, quality MEDIUM, light: sky 0.000, fires 0.00 \u00d7 0.00, ball r 0 blocks, black body 0.00 0.00 0.00, under the pall: -, surge r 0 top 0 sigma 0.0000, frames: off; mushrooms 0 (exposure 1); firestorm: none"
+        },
+        {
+          "type": "probe",
+          "t_ms": 98311.539,
+          "name": "ua.zentix.incoming.client.sound.OwnSources#describe",
+          "value": "own 0/0 started 0 efx - blocked 1.00/1.00"
+        },
+        {
+          "type": "probe",
+          "t_ms": 98311.539,
+          "name": "ua.zentix.stand.AuditProbes#particles",
+          "value": "vanilla=1195. VE: 0. VP: 0 incoming=0 CLOUD=0/5120 refused=0 GROUND=0/3584 refused=0 TRAIL=0/5120 refused=0 DEBRIS=0/2560 refused=0 SPRAY=0/2048 refused=0 FLASH=0/512 refused=0 SPARK=0/15360 refused=0 ASH=0/3072 refused=0"
+        },
+        {
+          "type": "probe",
+          "t_ms": 98311.539,
+          "name": "ua.zentix.stand.AuditProbes#particleClasses",
+          "value": "{pigcart.particlerain.particle.CustomParticle=1013}"
+        },
+        {
+          "type": "probe",
+          "t_ms": 98311.539,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryGpuOnlyAsyncParticleTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 98311.539,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryDisableAsyncParticleTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 98311.539,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryDisableAnimationTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 98311.539,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryDisableAsyncRainTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 99357.738,
+          "name": "ua.zentix.incoming.client.fx.layer.FxLayer#describeTiming",
+          "value": "quads 0, 0.000 ms (longest in the second 0.000; without GC 0.000, CPU 0.000; frames with GC 0), GPU 0.000 ms (longest 0.000, 0 frames; heat pass 0.000, longest 0.000, 0 frames \u2014 heat lights 0 hot 0 front 0 jets 0, area 0 rects (0 lit) 0.0%; bloom FAST 0.000 ms (longest 0.000, 0 frames; glow pass 0.000, pyramid 0.000, out 0.000; 0x0, glow level -1, levels 0-0)), depth: world and LOD (Voxy: forward Z, NDC -1..1, empty 1.0, nearest LOD 16.0 blocks, Minecraft pixels marked 0.0, no LOD beyond the render distance); GPU by pass: no frames yet (the probe runs while this line or F3 is read); half-resolution smoke 0 quads, full 1 (a quad over both kinds of tiles counts in each), lays 0"
+        },
+        {
+          "type": "probe",
+          "t_ms": 99357.738,
+          "name": "ua.zentix.incoming.client.far.FarRenderer#describeSmoke",
+          "value": "fill 0.00 screens (budget 16, one club per gaussian 0.00, before merging 0.00), cluster share 1.00, merge level 0, veil gaussians 0, clusters 0, plan 0.00 ms off-thread"
+        },
+        {
+          "type": "probe",
+          "t_ms": 99357.738,
+          "name": "ua.zentix.incoming.client.sound.BlastSounds#describe",
+          "value": ""
+        },
+        {
+          "type": "probe",
+          "t_ms": 99357.738,
+          "name": "ua.zentix.incoming.client.sound.ClientSounds#describe",
+          "value": " live=0"
+        },
+        {
+          "type": "probe",
+          "t_ms": 99357.738,
+          "name": "ua.zentix.incoming.client.fx.FireSmoke#describe",
+          "value": "fires 0"
+        },
+        {
+          "type": "probe",
+          "t_ms": 99357.738,
+          "name": "ua.zentix.incoming.client.nuclear.NukeSounds#describe",
+          "value": ""
+        },
+        {
+          "type": "probe",
+          "t_ms": 99357.738,
+          "name": "ua.zentix.incoming.client.nuclear.NukePall#describe",
+          "value": "sigma at camera 0.0000 /block (visibility Infinity blocks; mist 0.0000), depth up 0.00 down 0.00, muffle 0.00, ash 0, quality MEDIUM, light: sky 0.000, fires 0.00 \u00d7 0.00, ball r 0 blocks, black body 0.00 0.00 0.00, under the pall: -, surge r 0 top 0 sigma 0.0000, frames: off; mushrooms 0 (exposure 1); firestorm: none"
+        },
+        {
+          "type": "probe",
+          "t_ms": 99357.738,
+          "name": "ua.zentix.incoming.client.sound.OwnSources#describe",
+          "value": "own 0/0 started 0 efx - blocked 1.00/1.00"
+        },
+        {
+          "type": "probe",
+          "t_ms": 99357.738,
+          "name": "ua.zentix.stand.AuditProbes#particles",
+          "value": "vanilla=1151. VE: 0. VP: 0 incoming=0 CLOUD=0/5120 refused=0 GROUND=0/3584 refused=0 TRAIL=0/5120 refused=0 DEBRIS=0/2560 refused=0 SPRAY=0/2048 refused=0 FLASH=0/512 refused=0 SPARK=0/15360 refused=0 ASH=0/3072 refused=0"
+        },
+        {
+          "type": "probe",
+          "t_ms": 99357.738,
+          "name": "ua.zentix.stand.AuditProbes#particleClasses",
+          "value": "{pigcart.particlerain.particle.CustomParticle=989}"
+        },
+        {
+          "type": "probe",
+          "t_ms": 99357.738,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryGpuOnlyAsyncParticleTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 99357.738,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryDisableAsyncParticleTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 99357.738,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryDisableAnimationTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 99357.738,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryDisableAsyncRainTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 100358.656,
+          "name": "ua.zentix.incoming.client.fx.layer.FxLayer#describeTiming",
+          "value": "quads 0, 0.000 ms (longest in the second 0.000; without GC 0.000, CPU 0.000; frames with GC 0), GPU 0.000 ms (longest 0.000, 0 frames; heat pass 0.000, longest 0.000, 0 frames \u2014 heat lights 0 hot 0 front 0 jets 0, area 0 rects (0 lit) 0.0%; bloom FAST 0.000 ms (longest 0.000, 0 frames; glow pass 0.000, pyramid 0.000, out 0.000; 0x0, glow level -1, levels 0-0)), depth: world and LOD (Voxy: forward Z, NDC -1..1, empty 1.0, nearest LOD 16.0 blocks, Minecraft pixels marked 0.0, no LOD beyond the render distance); GPU by pass: no frames yet (the probe runs while this line or F3 is read); half-resolution smoke 0 quads, full 1 (a quad over both kinds of tiles counts in each), lays 0"
+        },
+        {
+          "type": "probe",
+          "t_ms": 100358.656,
+          "name": "ua.zentix.incoming.client.far.FarRenderer#describeSmoke",
+          "value": "fill 0.00 screens (budget 16, one club per gaussian 0.00, before merging 0.00), cluster share 1.00, merge level 0, veil gaussians 0, clusters 0, plan 0.00 ms off-thread"
+        },
+        {
+          "type": "probe",
+          "t_ms": 100358.656,
+          "name": "ua.zentix.incoming.client.sound.BlastSounds#describe",
+          "value": ""
+        },
+        {
+          "type": "probe",
+          "t_ms": 100358.656,
+          "name": "ua.zentix.incoming.client.sound.ClientSounds#describe",
+          "value": " live=0"
+        },
+        {
+          "type": "probe",
+          "t_ms": 100358.656,
+          "name": "ua.zentix.incoming.client.fx.FireSmoke#describe",
+          "value": "fires 0"
+        },
+        {
+          "type": "probe",
+          "t_ms": 100358.656,
+          "name": "ua.zentix.incoming.client.nuclear.NukeSounds#describe",
+          "value": ""
+        },
+        {
+          "type": "probe",
+          "t_ms": 100358.656,
+          "name": "ua.zentix.incoming.client.nuclear.NukePall#describe",
+          "value": "sigma at camera 0.0000 /block (visibility Infinity blocks; mist 0.0000), depth up 0.00 down 0.00, muffle 0.00, ash 0, quality MEDIUM, light: sky 0.000, fires 0.00 \u00d7 0.00, ball r 0 blocks, black body 0.00 0.00 0.00, under the pall: -, surge r 0 top 0 sigma 0.0000, frames: off; mushrooms 0 (exposure 1); firestorm: none"
+        },
+        {
+          "type": "probe",
+          "t_ms": 100358.656,
+          "name": "ua.zentix.incoming.client.sound.OwnSources#describe",
+          "value": "own 0/0 started 0 efx - blocked 1.00/1.00"
+        },
+        {
+          "type": "probe",
+          "t_ms": 100358.656,
+          "name": "ua.zentix.stand.AuditProbes#particles",
+          "value": "vanilla=1206. VE: 0. VP: 0 incoming=0 CLOUD=0/5120 refused=0 GROUND=0/3584 refused=0 TRAIL=0/5120 refused=0 DEBRIS=0/2560 refused=0 SPRAY=0/2048 refused=0 FLASH=0/512 refused=0 SPARK=0/15360 refused=0 ASH=0/3072 refused=0"
+        },
+        {
+          "type": "probe",
+          "t_ms": 100358.656,
+          "name": "ua.zentix.stand.AuditProbes#particleClasses",
+          "value": "{pigcart.particlerain.particle.CustomParticle=1029}"
+        },
+        {
+          "type": "probe",
+          "t_ms": 100358.656,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryGpuOnlyAsyncParticleTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 100358.656,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryDisableAsyncParticleTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 100358.656,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryDisableAnimationTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 100358.656,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryDisableAsyncRainTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 101410.033,
+          "name": "ua.zentix.incoming.client.fx.layer.FxLayer#describeTiming",
+          "value": "quads 0, 0.000 ms (longest in the second 0.000; without GC 0.000, CPU 0.000; frames with GC 0), GPU 0.000 ms (longest 0.000, 0 frames; heat pass 0.000, longest 0.000, 0 frames \u2014 heat lights 0 hot 0 front 0 jets 0, area 0 rects (0 lit) 0.0%; bloom FAST 0.000 ms (longest 0.000, 0 frames; glow pass 0.000, pyramid 0.000, out 0.000; 0x0, glow level -1, levels 0-0)), depth: world and LOD (Voxy: forward Z, NDC -1..1, empty 1.0, nearest LOD 16.0 blocks, Minecraft pixels marked 0.0, no LOD beyond the render distance); GPU by pass: no frames yet (the probe runs while this line or F3 is read); half-resolution smoke 0 quads, full 1 (a quad over both kinds of tiles counts in each), lays 0"
+        },
+        {
+          "type": "probe",
+          "t_ms": 101410.033,
+          "name": "ua.zentix.incoming.client.far.FarRenderer#describeSmoke",
+          "value": "fill 0.00 screens (budget 16, one club per gaussian 0.00, before merging 0.00), cluster share 1.00, merge level 0, veil gaussians 0, clusters 0, plan 0.00 ms off-thread"
+        },
+        {
+          "type": "probe",
+          "t_ms": 101410.033,
+          "name": "ua.zentix.incoming.client.sound.BlastSounds#describe",
+          "value": ""
+        },
+        {
+          "type": "probe",
+          "t_ms": 101410.033,
+          "name": "ua.zentix.incoming.client.sound.ClientSounds#describe",
+          "value": " live=0"
+        },
+        {
+          "type": "probe",
+          "t_ms": 101410.033,
+          "name": "ua.zentix.incoming.client.fx.FireSmoke#describe",
+          "value": "fires 0"
+        },
+        {
+          "type": "probe",
+          "t_ms": 101410.033,
+          "name": "ua.zentix.incoming.client.nuclear.NukeSounds#describe",
+          "value": ""
+        },
+        {
+          "type": "probe",
+          "t_ms": 101410.033,
+          "name": "ua.zentix.incoming.client.nuclear.NukePall#describe",
+          "value": "sigma at camera 0.0000 /block (visibility Infinity blocks; mist 0.0000), depth up 0.00 down 0.00, muffle 0.00, ash 0, quality MEDIUM, light: sky 0.000, fires 0.00 \u00d7 0.00, ball r 0 blocks, black body 0.00 0.00 0.00, under the pall: -, surge r 0 top 0 sigma 0.0000, frames: off; mushrooms 0 (exposure 1); firestorm: none"
+        },
+        {
+          "type": "probe",
+          "t_ms": 101410.033,
+          "name": "ua.zentix.incoming.client.sound.OwnSources#describe",
+          "value": "own 0/0 started 0 efx - blocked 1.00/1.00"
+        },
+        {
+          "type": "probe",
+          "t_ms": 101410.033,
+          "name": "ua.zentix.stand.AuditProbes#particles",
+          "value": "vanilla=1145. VE: 0. VP: 0 incoming=0 CLOUD=0/5120 refused=0 GROUND=0/3584 refused=0 TRAIL=0/5120 refused=0 DEBRIS=0/2560 refused=0 SPRAY=0/2048 refused=0 FLASH=0/512 refused=0 SPARK=0/15360 refused=0 ASH=0/3072 refused=0"
+        },
+        {
+          "type": "probe",
+          "t_ms": 101410.033,
+          "name": "ua.zentix.stand.AuditProbes#particleClasses",
+          "value": "{pigcart.particlerain.particle.CustomParticle=990}"
+        },
+        {
+          "type": "probe",
+          "t_ms": 101410.033,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryGpuOnlyAsyncParticleTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 101410.033,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryDisableAsyncParticleTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 101410.033,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryDisableAnimationTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 101410.033,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryDisableAsyncRainTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 102414.63,
+          "name": "ua.zentix.incoming.client.fx.layer.FxLayer#describeTiming",
+          "value": "quads 0, 0.000 ms (longest in the second 0.000; without GC 0.000, CPU 0.000; frames with GC 0), GPU 0.000 ms (longest 0.000, 0 frames; heat pass 0.000, longest 0.000, 0 frames \u2014 heat lights 0 hot 0 front 0 jets 0, area 0 rects (0 lit) 0.0%; bloom FAST 0.000 ms (longest 0.000, 0 frames; glow pass 0.000, pyramid 0.000, out 0.000; 0x0, glow level -1, levels 0-0)), depth: world and LOD (Voxy: forward Z, NDC -1..1, empty 1.0, nearest LOD 16.0 blocks, Minecraft pixels marked 0.0, no LOD beyond the render distance); GPU by pass: no frames yet (the probe runs while this line or F3 is read); half-resolution smoke 0 quads, full 1 (a quad over both kinds of tiles counts in each), lays 0"
+        },
+        {
+          "type": "probe",
+          "t_ms": 102414.63,
+          "name": "ua.zentix.incoming.client.far.FarRenderer#describeSmoke",
+          "value": "fill 0.00 screens (budget 16, one club per gaussian 0.00, before merging 0.00), cluster share 1.00, merge level 0, veil gaussians 0, clusters 0, plan 0.00 ms off-thread"
+        },
+        {
+          "type": "probe",
+          "t_ms": 102414.63,
+          "name": "ua.zentix.incoming.client.sound.BlastSounds#describe",
+          "value": ""
+        },
+        {
+          "type": "probe",
+          "t_ms": 102414.63,
+          "name": "ua.zentix.incoming.client.sound.ClientSounds#describe",
+          "value": " live=0"
+        },
+        {
+          "type": "probe",
+          "t_ms": 102414.63,
+          "name": "ua.zentix.incoming.client.fx.FireSmoke#describe",
+          "value": "fires 0"
+        },
+        {
+          "type": "probe",
+          "t_ms": 102414.63,
+          "name": "ua.zentix.incoming.client.nuclear.NukeSounds#describe",
+          "value": ""
+        },
+        {
+          "type": "probe",
+          "t_ms": 102414.63,
+          "name": "ua.zentix.incoming.client.nuclear.NukePall#describe",
+          "value": "sigma at camera 0.0000 /block (visibility Infinity blocks; mist 0.0000), depth up 0.00 down 0.00, muffle 0.00, ash 0, quality MEDIUM, light: sky 0.000, fires 0.00 \u00d7 0.00, ball r 0 blocks, black body 0.00 0.00 0.00, under the pall: -, surge r 0 top 0 sigma 0.0000, frames: off; mushrooms 0 (exposure 1); firestorm: none"
+        },
+        {
+          "type": "probe",
+          "t_ms": 102414.63,
+          "name": "ua.zentix.incoming.client.sound.OwnSources#describe",
+          "value": "own 0/0 started 0 efx - blocked 1.00/1.00"
+        },
+        {
+          "type": "probe",
+          "t_ms": 102414.63,
+          "name": "ua.zentix.stand.AuditProbes#particles",
+          "value": "vanilla=1151. VE: 0. VP: 0 incoming=0 CLOUD=0/5120 refused=0 GROUND=0/3584 refused=0 TRAIL=0/5120 refused=0 DEBRIS=0/2560 refused=0 SPRAY=0/2048 refused=0 FLASH=0/512 refused=0 SPARK=0/15360 refused=0 ASH=0/3072 refused=0"
+        },
+        {
+          "type": "probe",
+          "t_ms": 102414.63,
+          "name": "ua.zentix.stand.AuditProbes#particleClasses",
+          "value": "{pigcart.particlerain.particle.CustomParticle=1001}"
+        },
+        {
+          "type": "probe",
+          "t_ms": 102414.63,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryGpuOnlyAsyncParticleTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 102414.63,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryDisableAsyncParticleTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 102414.63,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryDisableAnimationTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 102414.63,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryDisableAsyncRainTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 103462.364,
+          "name": "ua.zentix.incoming.client.fx.layer.FxLayer#describeTiming",
+          "value": "quads 0, 0.000 ms (longest in the second 0.000; without GC 0.000, CPU 0.000; frames with GC 0), GPU 0.000 ms (longest 0.000, 0 frames; heat pass 0.000, longest 0.000, 0 frames \u2014 heat lights 0 hot 0 front 0 jets 0, area 0 rects (0 lit) 0.0%; bloom FAST 0.000 ms (longest 0.000, 0 frames; glow pass 0.000, pyramid 0.000, out 0.000; 0x0, glow level -1, levels 0-0)), depth: world and LOD (Voxy: forward Z, NDC -1..1, empty 1.0, nearest LOD 16.0 blocks, Minecraft pixels marked 0.0, no LOD beyond the render distance); GPU by pass: no frames yet (the probe runs while this line or F3 is read); half-resolution smoke 0 quads, full 1 (a quad over both kinds of tiles counts in each), lays 0"
+        },
+        {
+          "type": "probe",
+          "t_ms": 103462.364,
+          "name": "ua.zentix.incoming.client.far.FarRenderer#describeSmoke",
+          "value": "fill 0.00 screens (budget 16, one club per gaussian 0.00, before merging 0.00), cluster share 1.00, merge level 0, veil gaussians 0, clusters 0, plan 0.00 ms off-thread"
+        },
+        {
+          "type": "probe",
+          "t_ms": 103462.364,
+          "name": "ua.zentix.incoming.client.sound.BlastSounds#describe",
+          "value": ""
+        },
+        {
+          "type": "probe",
+          "t_ms": 103462.364,
+          "name": "ua.zentix.incoming.client.sound.ClientSounds#describe",
+          "value": " live=0"
+        },
+        {
+          "type": "probe",
+          "t_ms": 103462.364,
+          "name": "ua.zentix.incoming.client.fx.FireSmoke#describe",
+          "value": "fires 0"
+        },
+        {
+          "type": "probe",
+          "t_ms": 103462.364,
+          "name": "ua.zentix.incoming.client.nuclear.NukeSounds#describe",
+          "value": ""
+        },
+        {
+          "type": "probe",
+          "t_ms": 103462.364,
+          "name": "ua.zentix.incoming.client.nuclear.NukePall#describe",
+          "value": "sigma at camera 0.0000 /block (visibility Infinity blocks; mist 0.0000), depth up 0.00 down 0.00, muffle 0.00, ash 0, quality MEDIUM, light: sky 0.000, fires 0.00 \u00d7 0.00, ball r 0 blocks, black body 0.00 0.00 0.00, under the pall: -, surge r 0 top 0 sigma 0.0000, frames: off; mushrooms 0 (exposure 1); firestorm: none"
+        },
+        {
+          "type": "probe",
+          "t_ms": 103462.364,
+          "name": "ua.zentix.incoming.client.sound.OwnSources#describe",
+          "value": "own 0/0 started 0 efx - blocked 1.00/1.00"
+        },
+        {
+          "type": "probe",
+          "t_ms": 103462.364,
+          "name": "ua.zentix.stand.AuditProbes#particles",
+          "value": "vanilla=1199. VE: 0. VP: 0 incoming=0 CLOUD=0/5120 refused=0 GROUND=0/3584 refused=0 TRAIL=0/5120 refused=0 DEBRIS=0/2560 refused=0 SPRAY=0/2048 refused=0 FLASH=0/512 refused=0 SPARK=0/15360 refused=0 ASH=0/3072 refused=0"
+        },
+        {
+          "type": "probe",
+          "t_ms": 103462.364,
+          "name": "ua.zentix.stand.AuditProbes#particleClasses",
+          "value": "{pigcart.particlerain.particle.CustomParticle=1026}"
+        },
+        {
+          "type": "probe",
+          "t_ms": 103462.364,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryGpuOnlyAsyncParticleTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 103462.364,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryDisableAsyncParticleTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 103462.364,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryDisableAnimationTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 103462.364,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryDisableAsyncRainTick",
+          "value": "false"
+        }
+      ],
+      "cycle_cpu": {
+        "n": 1395,
+        "p50": 2.321,
+        "p95": 4.201,
+        "p99": 6.434,
+        "max": 9.311,
+        "mean": 2.6101340501792114,
+        "over33": 0,
+        "over50": 0,
+        "over100": 0,
+        "over250": 0
+      }
+    },
+    "compat/aftermath": {
+      "start_ms": 107319.495,
+      "end_ms": 119367.413,
+      "frame": {
+        "n": 1216,
+        "p50": 8.905,
+        "p95": 14.957,
+        "p99": 29.166,
+        "max": 58.56,
+        "mean": 9.900282072368421,
+        "over33": 7,
+        "over50": 3,
+        "over100": 0,
+        "over250": 0
+      },
+      "cpu": {
+        "n": 1216,
+        "p50": 2.19,
+        "p95": 4.377,
+        "p99": 5.499,
+        "max": 7.705,
+        "mean": 2.4755871710526316,
+        "over33": 0,
+        "over50": 0,
+        "over100": 0,
+        "over250": 0
+      },
+      "gpu_elapsed": {
+        "n": 1216,
+        "p50": 8.631,
+        "p95": 13.902,
+        "p99": 15.521,
+        "max": 19.34,
+        "mean": 9.615708881578948,
+        "over33": 0,
+        "over50": 0,
+        "over100": 0,
+        "over250": 0
+      },
+      "tick": {
+        "n": 241,
+        "p50": 1.2595,
+        "p95": 1.8637,
+        "p99": 2.3478,
+        "max": 3.1048,
+        "mean": 1.3388265560165975,
+        "over33": 0,
+        "over50": 0,
+        "over100": 0,
+        "over250": 0
+      },
+      "tick_cpu": {
+        "n": 241,
+        "p50": 1.2057,
+        "p95": 1.7917,
+        "p99": 2.2949,
+        "max": 2.9936,
+        "mean": 1.2818846473029046,
+        "over33": 0,
+        "over50": 0,
+        "over100": 0,
+        "over250": 0
+      },
+      "fx_gpu_elapsed": {
+        "n": 1216,
+        "p50": 0.318,
+        "p95": 4.349,
+        "p99": 5.468,
+        "max": 7.448,
+        "mean": 1.2264662828947368,
+        "over33": 0,
+        "over50": 0,
+        "over100": 0,
+        "over250": 0
+      },
+      "probes": [
+        {
+          "type": "probe",
+          "t_ms": 107569.542,
+          "name": "ua.zentix.incoming.client.fx.layer.FxLayer#describeTiming",
+          "value": "quads 2532, 2.013 ms (longest in the second 3.133; without GC 3.133, CPU 2.901; frames with GC 0), GPU 6.242 ms (longest 8.703, 65 frames; heat pass 2.634, longest 5.016, 65 frames \u2014 heat lights 2 hot 1 front 1 jets 0, area 1 rects (1 lit) 100.0% {R 1180 L 2.8 dn 6.26e-07..6.26e-07 most 1.4 px} [r 13.9 h 28 dT 66 px 1.22]; bloom FAST 0.256 ms (longest 0.401, 65 frames; glow pass 0.069, pyramid 0.106, out 0.065; 2560x1600, glow level 3, levels 3-9)), depth: world and LOD (Voxy: forward Z, NDC -1..1, empty 1.0, nearest LOD 16.0 blocks, Minecraft pixels marked 0.0, LOD beyond the render distance in 0.1% of the frame, nearest 192 blocks); GPU by pass (ms, mean of 65 frames; a pass's tail may spill into the next): models 0.00 depth 0.14 water 0.01 pall 0.00 heat 2.64 probes 0.01 quads 3.32 bloom 0.28 (sum 6.39); drained frame: none (F3 or -Dincoming.fx.drain=true); half-resolution smoke 401 quads, full 2474 (a quad over both kinds of tiles counts in each), lays 1"
+        },
+        {
+          "type": "probe",
+          "t_ms": 107569.542,
+          "name": "ua.zentix.incoming.client.far.FarRenderer#describeSmoke",
+          "value": "fill 5.30 screens (budget 16, one club per gaussian 2.26, before merging 2.26), cluster share 1.00, merge level 0, veil gaussians 0, clusters 472, plan 0.92 ms off-thread"
+        },
+        {
+          "type": "probe",
+          "t_ms": 107569.542,
+          "name": "ua.zentix.incoming.client.sound.BlastSounds#describe",
+          "value": "DRONE 50 kg d 32 p 15848 Pa (178.0 dB) phase 13.6 ms loud -13.5 LUFS pitch 1.00 near 0.90 mid 0.00 far 0.10 sub 0.90 pulse 0.10 played echo on; echo rays 72/72 (slowest tick 5.40 ms) taps 95 ear -15,78,28 burst 7,67,7 sum -19.0dB tracks 7 queued 7 t60 1.5 vol 1.19 start +0.03s by sound of blast_near_2 [az 0 start 0.07s len 2.6s x1.00] [az 45 start 0.07s len 2.5s x1.00] [az 90 start 0.10s len 2.5s x1.00] [az 180 start 0.10s len 2.5s x1.00] [az 225 start 0.07s len 2.5s x1.00] [az 270 start 0.07s len 2.6s x1.00] [az 315 start 0.07s len 2.6s x1.00] {d 0.11s az 315 -32.0dB r 50 at 19,65,-6} {d 0.11s az 320 -32.2dB r 50 at 22,65,-3} {d 0.11s az 310 -32.2dB r 50 at 16,65,-9} {d 0.11s az 305 -32.8dB r 50 at 13,65,-11} {d 0.11s az 325 -32.8dB r 50 at 24,65,0} {d 0.11s az 300 -33.8dB r 50 at 9,65,-14}; voices 1/1 cap 96 requested 3 started 3 refused 0 rumble 0 yielded 0 loops 0.00 0.00 0.00 0.00; body d 32 p 15848 Pa phase 13.6 ms LAE 139.2 dB shift 29.4 dB open 0.00 lean 0.00 deg neck 0.00 deg tremor 0.78 dose 0.763"
+        },
+        {
+          "type": "probe",
+          "t_ms": 107569.542,
+          "name": "ua.zentix.incoming.client.sound.ClientSounds#describe",
+          "value": " live=0"
+        },
+        {
+          "type": "probe",
+          "t_ms": 107569.542,
+          "name": "ua.zentix.incoming.client.fx.FireSmoke#describe",
+          "value": "fires 0"
+        },
+        {
+          "type": "probe",
+          "t_ms": 107569.542,
+          "name": "ua.zentix.incoming.client.nuclear.NukeSounds#describe",
+          "value": ""
+        },
+        {
+          "type": "probe",
+          "t_ms": 107569.542,
+          "name": "ua.zentix.incoming.client.nuclear.NukePall#describe",
+          "value": "sigma at camera 0.0000 /block (visibility Infinity blocks; mist 0.0000), depth up 0.00 down 0.00, muffle 0.00, ash 0, quality MEDIUM, light: sky 0.000, fires 0.00 \u00d7 0.00, ball r 0 blocks, black body 0.00 0.00 0.00, under the pall: -, surge r 0 top 0 sigma 0.0000, frames: off; mushrooms 0 (exposure 1); firestorm: none"
+        },
+        {
+          "type": "probe",
+          "t_ms": 107569.542,
+          "name": "ua.zentix.incoming.client.sound.OwnSources#describe",
+          "value": "own 0/0 started 8 efx yes blocked 1.00/1.00"
+        },
+        {
+          "type": "probe",
+          "t_ms": 107569.542,
+          "name": "ua.zentix.stand.AuditProbes#particles",
+          "value": "vanilla=1275. VE: 0. VP: 0 incoming=1460 CLOUD=32/5120 refused=0 GROUND=0/3584 refused=0 TRAIL=0/5120 refused=0 DEBRIS=1428/2560 refused=0 SPRAY=0/2048 refused=0 FLASH=0/512 refused=0 SPARK=0/15360 refused=0 ASH=0/3072 refused=0"
+        },
+        {
+          "type": "probe",
+          "t_ms": 107569.542,
+          "name": "ua.zentix.stand.AuditProbes#particleClasses",
+          "value": "{pigcart.particlerain.particle.CustomParticle=1008}"
+        },
+        {
+          "type": "probe",
+          "t_ms": 107569.542,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryGpuOnlyAsyncParticleTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 107569.542,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryDisableAsyncParticleTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 107569.542,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryDisableAnimationTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 107569.542,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryDisableAsyncRainTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 108571.209,
+          "name": "ua.zentix.incoming.client.fx.layer.FxLayer#describeTiming",
+          "value": "quads 2373, 1.744 ms (longest in the second 2.288; without GC 2.288, CPU 2.284; frames with GC 0), GPU 5.043 ms (longest 7.305, 68 frames; heat pass 1.515, longest 2.680, 68 frames \u2014 heat lights 0 hot 1 front 1 jets 0, area 1 rects (1 lit) 100.0% {R 1525 L 2.8 dn 4.85e-07..4.85e-07 most 1.1 px} [r 15.6 h 31 dT 44 px 0.91]; bloom FAST 0.249 ms (longest 0.396, 39 frames; glow pass 0.065, pyramid 0.104, out 0.064; 2560x1600, glow level 3, levels 3-9)), depth: world and LOD (Voxy: forward Z, NDC -1..1, empty 1.0, nearest LOD 16.0 blocks, Minecraft pixels marked 0.0, LOD beyond the render distance in 0.1% of the frame, nearest 192 blocks); GPU by pass (ms, mean of 68 frames; a pass's tail may spill into the next): models 0.00 depth 0.14 water 0.01 pall 0.00 heat 1.52 probes 0.00 quads 3.36 bloom 0.16 (sum 5.19); drained frame: none (F3 or -Dincoming.fx.drain=true); half-resolution smoke 393 quads, full 2218 (a quad over both kinds of tiles counts in each), lays 1"
+        },
+        {
+          "type": "probe",
+          "t_ms": 108571.209,
+          "name": "ua.zentix.incoming.client.far.FarRenderer#describeSmoke",
+          "value": "fill 5.47 screens (budget 16, one club per gaussian 2.29, before merging 2.29), cluster share 1.00, merge level 0, veil gaussians 0, clusters 457, plan 0.72 ms off-thread"
+        },
+        {
+          "type": "probe",
+          "t_ms": 108571.209,
+          "name": "ua.zentix.incoming.client.sound.BlastSounds#describe",
+          "value": "DRONE 50 kg d 32 p 15848 Pa (178.0 dB) phase 13.6 ms loud -13.5 LUFS pitch 1.00 near 0.90 mid 0.00 far 0.10 sub 0.90 pulse 0.10 played echo on; echo rays 72/72 (slowest tick 5.40 ms) taps 95 ear -15,78,28 burst 7,67,7 sum -19.0dB tracks 7 queued 7 t60 1.5 vol 1.19 start +0.03s by sound of blast_near_2 [az 0 start 0.07s len 2.6s x1.00] [az 45 start 0.07s len 2.5s x1.00] [az 90 start 0.10s len 2.5s x1.00] [az 180 start 0.10s len 2.5s x1.00] [az 225 start 0.07s len 2.5s x1.00] [az 270 start 0.07s len 2.6s x1.00] [az 315 start 0.07s len 2.6s x1.00] {d 0.11s az 315 -32.0dB r 50 at 19,65,-6} {d 0.11s az 320 -32.2dB r 50 at 22,65,-3} {d 0.11s az 310 -32.2dB r 50 at 16,65,-9} {d 0.11s az 305 -32.8dB r 50 at 13,65,-11} {d 0.11s az 325 -32.8dB r 50 at 24,65,0} {d 0.11s az 300 -33.8dB r 50 at 9,65,-14}; voices 1/1 cap 96 requested 3 started 3 refused 0 rumble 0 yielded 0 loops 0.00 0.00 0.00 0.00; body d 32 p 15848 Pa phase 13.6 ms LAE 139.2 dB shift 29.4 dB open 0.00 lean 0.00 deg neck 0.00 deg tremor 0.78 dose 0.763"
+        },
+        {
+          "type": "probe",
+          "t_ms": 108571.209,
+          "name": "ua.zentix.incoming.client.sound.ClientSounds#describe",
+          "value": " live=0"
+        },
+        {
+          "type": "probe",
+          "t_ms": 108571.209,
+          "name": "ua.zentix.incoming.client.fx.FireSmoke#describe",
+          "value": "fires 0"
+        },
+        {
+          "type": "probe",
+          "t_ms": 108571.209,
+          "name": "ua.zentix.incoming.client.nuclear.NukeSounds#describe",
+          "value": ""
+        },
+        {
+          "type": "probe",
+          "t_ms": 108571.209,
+          "name": "ua.zentix.incoming.client.nuclear.NukePall#describe",
+          "value": "sigma at camera 0.0000 /block (visibility Infinity blocks; mist 0.0000), depth up 0.00 down 0.00, muffle 0.00, ash 0, quality MEDIUM, light: sky 0.000, fires 0.00 \u00d7 0.00, ball r 0 blocks, black body 0.00 0.00 0.00, under the pall: -, surge r 0 top 0 sigma 0.0000, frames: off; mushrooms 0 (exposure 1); firestorm: none"
+        },
+        {
+          "type": "probe",
+          "t_ms": 108571.209,
+          "name": "ua.zentix.incoming.client.sound.OwnSources#describe",
+          "value": "own 0/0 started 8 efx yes blocked 1.00/1.00"
+        },
+        {
+          "type": "probe",
+          "t_ms": 108571.209,
+          "name": "ua.zentix.stand.AuditProbes#particles",
+          "value": "vanilla=1243. VE: 0. VP: 0 incoming=1252 CLOUD=0/5120 refused=0 GROUND=0/3584 refused=0 TRAIL=0/5120 refused=0 DEBRIS=1252/2560 refused=0 SPRAY=0/2048 refused=0 FLASH=0/512 refused=0 SPARK=0/15360 refused=0 ASH=0/3072 refused=0"
+        },
+        {
+          "type": "probe",
+          "t_ms": 108571.209,
+          "name": "ua.zentix.stand.AuditProbes#particleClasses",
+          "value": "{pigcart.particlerain.particle.CustomParticle=1021, pigcart.particlerain.particle.StreakParticle=1}"
+        },
+        {
+          "type": "probe",
+          "t_ms": 108571.209,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryGpuOnlyAsyncParticleTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 108571.209,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryDisableAsyncParticleTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 108571.209,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryDisableAnimationTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 108571.209,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryDisableAsyncRainTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 109614.344,
+          "name": "ua.zentix.incoming.client.fx.layer.FxLayer#describeTiming",
+          "value": "quads 2075, 1.226 ms (longest in the second 1.985; without GC 1.985, CPU 1.757; frames with GC 0), GPU 3.785 ms (longest 7.249, 73 frames; heat pass 0.606, longest 1.949, 73 frames \u2014 heat lights 0 hot 1 front 1 jets 0, area 1 rects (1 lit) 100.0% {R 1884 L 2.8 dn 3.94e-07..3.94e-07 most 0.9 px} [r 17.3 h 35 dT 31 px 0.70]; bloom FAST 0.000 ms (longest 0.000, 0 frames; glow pass 0.000, pyramid 0.000, out 0.000; 2560x1600, glow level 3, levels 3-9)), depth: world and LOD (Voxy: forward Z, NDC -1..1, empty 1.0, nearest LOD 16.0 blocks, Minecraft pixels marked 0.0, LOD beyond the render distance in 0.1% of the frame, nearest 192 blocks); GPU by pass (ms, mean of 73 frames; a pass's tail may spill into the next): models 0.00 depth 0.15 water 0.01 pall 0.00 heat 0.61 probes 0.00 quads 3.17 bloom 0.00 (sum 3.94); drained frame: none (F3 or -Dincoming.fx.drain=true); half-resolution smoke 355 quads, full 1921 (a quad over both kinds of tiles counts in each), lays 1"
+        },
+        {
+          "type": "probe",
+          "t_ms": 109614.344,
+          "name": "ua.zentix.incoming.client.far.FarRenderer#describeSmoke",
+          "value": "fill 5.22 screens (budget 16, one club per gaussian 2.12, before merging 2.12), cluster share 1.00, merge level 0, veil gaussians 0, clusters 355, plan 0.89 ms off-thread"
+        },
+        {
+          "type": "probe",
+          "t_ms": 109614.344,
+          "name": "ua.zentix.incoming.client.sound.BlastSounds#describe",
+          "value": "DRONE 50 kg d 32 p 15848 Pa (178.0 dB) phase 13.6 ms loud -13.5 LUFS pitch 1.00 near 0.90 mid 0.00 far 0.10 sub 0.90 pulse 0.10 played echo on; echo rays 72/72 (slowest tick 5.40 ms) taps 95 ear -15,78,28 burst 7,67,7 sum -19.0dB tracks 7 queued 7 t60 1.5 vol 1.19 start +0.03s by sound of blast_near_2 [az 0 start 0.07s len 2.6s x1.00] [az 45 start 0.07s len 2.5s x1.00] [az 90 start 0.10s len 2.5s x1.00] [az 180 start 0.10s len 2.5s x1.00] [az 225 start 0.07s len 2.5s x1.00] [az 270 start 0.07s len 2.6s x1.00] [az 315 start 0.07s len 2.6s x1.00] {d 0.11s az 315 -32.0dB r 50 at 19,65,-6} {d 0.11s az 320 -32.2dB r 50 at 22,65,-3} {d 0.11s az 310 -32.2dB r 50 at 16,65,-9} {d 0.11s az 305 -32.8dB r 50 at 13,65,-11} {d 0.11s az 325 -32.8dB r 50 at 24,65,0} {d 0.11s az 300 -33.8dB r 50 at 9,65,-14}; voices 1/1 cap 96 requested 3 started 3 refused 0 rumble 0 yielded 0 loops 0.00 0.00 0.00 0.00; body d 32 p 15848 Pa phase 13.6 ms LAE 139.2 dB shift 29.4 dB open 0.00 lean 0.00 deg neck 0.00 deg tremor 0.78 dose 0.763"
+        },
+        {
+          "type": "probe",
+          "t_ms": 109614.344,
+          "name": "ua.zentix.incoming.client.sound.ClientSounds#describe",
+          "value": " live=0"
+        },
+        {
+          "type": "probe",
+          "t_ms": 109614.344,
+          "name": "ua.zentix.incoming.client.fx.FireSmoke#describe",
+          "value": "fires 0"
+        },
+        {
+          "type": "probe",
+          "t_ms": 109614.344,
+          "name": "ua.zentix.incoming.client.nuclear.NukeSounds#describe",
+          "value": ""
+        },
+        {
+          "type": "probe",
+          "t_ms": 109614.344,
+          "name": "ua.zentix.incoming.client.nuclear.NukePall#describe",
+          "value": "sigma at camera 0.0000 /block (visibility Infinity blocks; mist 0.0000), depth up 0.00 down 0.00, muffle 0.00, ash 0, quality MEDIUM, light: sky 0.000, fires 0.00 \u00d7 0.00, ball r 0 blocks, black body 0.00 0.00 0.00, under the pall: -, surge r 0 top 0 sigma 0.0000, frames: off; mushrooms 0 (exposure 1); firestorm: none"
+        },
+        {
+          "type": "probe",
+          "t_ms": 109614.344,
+          "name": "ua.zentix.incoming.client.sound.OwnSources#describe",
+          "value": "own 0/0 started 8 efx yes blocked 1.00/1.00"
+        },
+        {
+          "type": "probe",
+          "t_ms": 109614.344,
+          "name": "ua.zentix.stand.AuditProbes#particles",
+          "value": "vanilla=642. VE: 0. VP: 0 incoming=1139 CLOUD=0/5120 refused=0 GROUND=0/3584 refused=0 TRAIL=0/5120 refused=0 DEBRIS=1139/2560 refused=0 SPRAY=0/2048 refused=0 FLASH=0/512 refused=0 SPARK=0/15360 refused=0 ASH=0/3072 refused=0"
+        },
+        {
+          "type": "probe",
+          "t_ms": 109614.344,
+          "name": "ua.zentix.stand.AuditProbes#particleClasses",
+          "value": "{pigcart.particlerain.particle.CustomParticle=585}"
+        },
+        {
+          "type": "probe",
+          "t_ms": 109614.344,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryGpuOnlyAsyncParticleTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 109614.344,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryDisableAsyncParticleTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 109614.344,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryDisableAnimationTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 109614.344,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryDisableAsyncRainTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 110616.33,
+          "name": "ua.zentix.incoming.client.fx.layer.FxLayer#describeTiming",
+          "value": "quads 1842, 1.003 ms (longest in the second 1.746; without GC 1.746, CPU 1.740; frames with GC 0), GPU 3.448 ms (longest 5.270, 78 frames; heat pass 0.577, longest 0.856, 78 frames \u2014 heat lights 0 hot 1 front 0 jets 0, area 1 rects (0 lit) 48.4% [r 18.7 h 37 dT 24 px 0.55]; bloom FAST 0.000 ms (longest 0.000, 0 frames; glow pass 0.000, pyramid 0.000, out 0.000; 2560x1600, glow level 3, levels 3-9)), depth: world and LOD (Voxy: forward Z, NDC -1..1, empty 1.0, nearest LOD 16.0 blocks, Minecraft pixels marked 0.0, LOD beyond the render distance in 0.1% of the frame, nearest 192 blocks); GPU by pass (ms, mean of 78 frames; a pass's tail may spill into the next): models 0.00 depth 0.14 water 0.01 pall 0.00 heat 0.58 probes 0.00 quads 2.86 bloom 0.00 (sum 3.60); drained frame: none (F3 or -Dincoming.fx.drain=true); half-resolution smoke 231 quads, full 1751 (a quad over both kinds of tiles counts in each), lays 1"
+        },
+        {
+          "type": "probe",
+          "t_ms": 110616.33,
+          "name": "ua.zentix.incoming.client.far.FarRenderer#describeSmoke",
+          "value": "fill 3.70 screens (budget 16, one club per gaussian 1.54, before merging 1.54), cluster share 1.00, merge level 0, veil gaussians 0, clusters 278, plan 0.61 ms off-thread"
+        },
+        {
+          "type": "probe",
+          "t_ms": 110616.33,
+          "name": "ua.zentix.incoming.client.sound.BlastSounds#describe",
+          "value": "DRONE 50 kg d 32 p 15848 Pa (178.0 dB) phase 13.6 ms loud -13.5 LUFS pitch 1.00 near 0.90 mid 0.00 far 0.10 sub 0.90 pulse 0.10 played echo on; echo rays 72/72 (slowest tick 5.40 ms) taps 95 ear -15,78,28 burst 7,67,7 sum -19.0dB tracks 7 queued 7 t60 1.5 vol 1.19 start +0.03s by sound of blast_near_2 [az 0 start 0.07s len 2.6s x1.00] [az 45 start 0.07s len 2.5s x1.00] [az 90 start 0.10s len 2.5s x1.00] [az 180 start 0.10s len 2.5s x1.00] [az 225 start 0.07s len 2.5s x1.00] [az 270 start 0.07s len 2.6s x1.00] [az 315 start 0.07s len 2.6s x1.00] {d 0.11s az 315 -32.0dB r 50 at 19,65,-6} {d 0.11s az 320 -32.2dB r 50 at 22,65,-3} {d 0.11s az 310 -32.2dB r 50 at 16,65,-9} {d 0.11s az 305 -32.8dB r 50 at 13,65,-11} {d 0.11s az 325 -32.8dB r 50 at 24,65,0} {d 0.11s az 300 -33.8dB r 50 at 9,65,-14}; voices 0/0 cap 96 requested 3 started 3 refused 0 rumble 0 yielded 0 loops 0.00 0.00 0.00 0.00; body d 32 p 15848 Pa phase 13.6 ms LAE 139.2 dB shift 29.4 dB open 0.00 lean 0.00 deg neck 0.00 deg tremor 0.78 dose 0.763"
+        },
+        {
+          "type": "probe",
+          "t_ms": 110616.33,
+          "name": "ua.zentix.incoming.client.sound.ClientSounds#describe",
+          "value": " live=0"
+        },
+        {
+          "type": "probe",
+          "t_ms": 110616.33,
+          "name": "ua.zentix.incoming.client.fx.FireSmoke#describe",
+          "value": "fires 0"
+        },
+        {
+          "type": "probe",
+          "t_ms": 110616.33,
+          "name": "ua.zentix.incoming.client.nuclear.NukeSounds#describe",
+          "value": ""
+        },
+        {
+          "type": "probe",
+          "t_ms": 110616.33,
+          "name": "ua.zentix.incoming.client.nuclear.NukePall#describe",
+          "value": "sigma at camera 0.0000 /block (visibility Infinity blocks; mist 0.0000), depth up 0.00 down 0.00, muffle 0.00, ash 0, quality MEDIUM, light: sky 0.000, fires 0.00 \u00d7 0.00, ball r 0 blocks, black body 0.00 0.00 0.00, under the pall: -, surge r 0 top 0 sigma 0.0000, frames: off; mushrooms 0 (exposure 1); firestorm: none"
+        },
+        {
+          "type": "probe",
+          "t_ms": 110616.33,
+          "name": "ua.zentix.incoming.client.sound.OwnSources#describe",
+          "value": "own 0/0 started 8 efx yes blocked 1.00/1.00"
+        },
+        {
+          "type": "probe",
+          "t_ms": 110616.33,
+          "name": "ua.zentix.stand.AuditProbes#particles",
+          "value": "vanilla=44. VE: 0. VP: 0 incoming=1136 CLOUD=0/5120 refused=0 GROUND=0/3584 refused=0 TRAIL=0/5120 refused=0 DEBRIS=1136/2560 refused=0 SPRAY=0/2048 refused=0 FLASH=0/512 refused=0 SPARK=0/15360 refused=0 ASH=0/3072 refused=0"
+        },
+        {
+          "type": "probe",
+          "t_ms": 110616.33,
+          "name": "ua.zentix.stand.AuditProbes#particleClasses",
+          "value": "{}"
+        },
+        {
+          "type": "probe",
+          "t_ms": 110616.33,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryGpuOnlyAsyncParticleTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 110616.33,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryDisableAsyncParticleTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 110616.33,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryDisableAnimationTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 110616.33,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryDisableAsyncRainTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 111663.307,
+          "name": "ua.zentix.incoming.client.fx.layer.FxLayer#describeTiming",
+          "value": "quads 1194, 1.058 ms (longest in the second 5.289; without GC 1.793, CPU 1.785; frames with GC 1), GPU 2.584 ms (longest 4.905, 84 frames; heat pass 0.318, longest 0.835, 84 frames \u2014 heat lights 0 hot 0 front 0 jets 0, area 1 rects (0 lit) 47.0%; bloom FAST 0.000 ms (longest 0.000, 0 frames; glow pass 0.000, pyramid 0.000, out 0.000; 2560x1600, glow level 3, levels 3-9)), depth: world and LOD (Voxy: forward Z, NDC -1..1, empty 1.0, nearest LOD 16.0 blocks, Minecraft pixels marked 0.0, LOD beyond the render distance in 0.1% of the frame, nearest 192 blocks); GPU by pass (ms, mean of 84 frames; a pass's tail may spill into the next): models 0.00 depth 0.14 water 0.01 pall 0.00 heat 0.32 probes 0.00 quads 2.26 bloom 0.00 (sum 2.73); drained frame: none (F3 or -Dincoming.fx.drain=true); half-resolution smoke 159 quads, full 1141 (a quad over both kinds of tiles counts in each), lays 1"
+        },
+        {
+          "type": "probe",
+          "t_ms": 111663.307,
+          "name": "ua.zentix.incoming.client.far.FarRenderer#describeSmoke",
+          "value": "fill 2.21 screens (budget 16, one club per gaussian 0.90, before merging 0.90), cluster share 1.00, merge level 0, veil gaussians 0, clusters 203, plan 0.37 ms off-thread"
+        },
+        {
+          "type": "probe",
+          "t_ms": 111663.307,
+          "name": "ua.zentix.incoming.client.sound.BlastSounds#describe",
+          "value": "DRONE 50 kg d 32 p 15848 Pa (178.0 dB) phase 13.6 ms loud -13.5 LUFS pitch 1.00 near 0.90 mid 0.00 far 0.10 sub 0.90 pulse 0.10 played echo on; echo rays 72/72 (slowest tick 5.40 ms) taps 95 ear -15,78,28 burst 7,67,7 sum -19.0dB tracks 7 queued 7 t60 1.5 vol 1.19 start +0.03s by sound of blast_near_2 [az 0 start 0.07s len 2.6s x1.00] [az 45 start 0.07s len 2.5s x1.00] [az 90 start 0.10s len 2.5s x1.00] [az 180 start 0.10s len 2.5s x1.00] [az 225 start 0.07s len 2.5s x1.00] [az 270 start 0.07s len 2.6s x1.00] [az 315 start 0.07s len 2.6s x1.00] {d 0.11s az 315 -32.0dB r 50 at 19,65,-6} {d 0.11s az 320 -32.2dB r 50 at 22,65,-3} {d 0.11s az 310 -32.2dB r 50 at 16,65,-9} {d 0.11s az 305 -32.8dB r 50 at 13,65,-11} {d 0.11s az 325 -32.8dB r 50 at 24,65,0} {d 0.11s az 300 -33.8dB r 50 at 9,65,-14}; voices 0/0 cap 96 requested 3 started 3 refused 0 rumble 0 yielded 0 loops 0.00 0.00 0.00 0.00; body d 32 p 15848 Pa phase 13.6 ms LAE 139.2 dB shift 29.4 dB open 0.00 lean 0.00 deg neck 0.00 deg tremor 0.78 dose 0.763"
+        },
+        {
+          "type": "probe",
+          "t_ms": 111663.307,
+          "name": "ua.zentix.incoming.client.sound.ClientSounds#describe",
+          "value": " live=0"
+        },
+        {
+          "type": "probe",
+          "t_ms": 111663.307,
+          "name": "ua.zentix.incoming.client.fx.FireSmoke#describe",
+          "value": "fires 0"
+        },
+        {
+          "type": "probe",
+          "t_ms": 111663.307,
+          "name": "ua.zentix.incoming.client.nuclear.NukeSounds#describe",
+          "value": ""
+        },
+        {
+          "type": "probe",
+          "t_ms": 111663.307,
+          "name": "ua.zentix.incoming.client.nuclear.NukePall#describe",
+          "value": "sigma at camera 0.0000 /block (visibility Infinity blocks; mist 0.0000), depth up 0.00 down 0.00, muffle 0.00, ash 0, quality MEDIUM, light: sky 0.000, fires 0.00 \u00d7 0.00, ball r 0 blocks, black body 0.00 0.00 0.00, under the pall: -, surge r 0 top 0 sigma 0.0000, frames: off; mushrooms 0 (exposure 1); firestorm: none"
+        },
+        {
+          "type": "probe",
+          "t_ms": 111663.307,
+          "name": "ua.zentix.incoming.client.sound.OwnSources#describe",
+          "value": "own 0/0 started 8 efx yes blocked 1.00/1.00"
+        },
+        {
+          "type": "probe",
+          "t_ms": 111663.307,
+          "name": "ua.zentix.stand.AuditProbes#particles",
+          "value": "vanilla=33. VE: 0. VP: 0 incoming=806 CLOUD=0/5120 refused=0 GROUND=0/3584 refused=0 TRAIL=0/5120 refused=0 DEBRIS=806/2560 refused=0 SPRAY=0/2048 refused=0 FLASH=0/512 refused=0 SPARK=0/15360 refused=0 ASH=0/3072 refused=0"
+        },
+        {
+          "type": "probe",
+          "t_ms": 111663.307,
+          "name": "ua.zentix.stand.AuditProbes#particleClasses",
+          "value": "{}"
+        },
+        {
+          "type": "probe",
+          "t_ms": 111663.307,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryGpuOnlyAsyncParticleTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 111663.307,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryDisableAsyncParticleTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 111663.307,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryDisableAnimationTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 111663.307,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryDisableAsyncRainTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 112707.925,
+          "name": "ua.zentix.incoming.client.fx.layer.FxLayer#describeTiming",
+          "value": "quads 281, 0.721 ms (longest in the second 1.089; without GC 1.089, CPU 1.086; frames with GC 0), GPU 1.443 ms (longest 3.188, 99 frames; heat pass 0.264, longest 0.414, 31 frames \u2014 heat lights 0 hot 0 front 0 jets 0, area 1 rects (0 lit) 47.0%; bloom FAST 0.000 ms (longest 0.000, 0 frames; glow pass 0.000, pyramid 0.000, out 0.000; 2560x1600, glow level 3, levels 3-9)), depth: world and LOD (Voxy: forward Z, NDC -1..1, empty 1.0, nearest LOD 16.0 blocks, Minecraft pixels marked 0.0, LOD beyond the render distance in 0.1% of the frame, nearest 192 blocks); GPU by pass (ms, mean of 99 frames; a pass's tail may spill into the next): models 0.00 depth 0.13 water 0.01 pall 0.00 heat 0.09 probes 0.00 quads 1.34 bloom 0.00 (sum 1.58); drained frame: none (F3 or -Dincoming.fx.drain=true); half-resolution smoke 98 quads, full 232 (a quad over both kinds of tiles counts in each), lays 1"
+        },
+        {
+          "type": "probe",
+          "t_ms": 112707.925,
+          "name": "ua.zentix.incoming.client.far.FarRenderer#describeSmoke",
+          "value": "fill 1.21 screens (budget 16, one club per gaussian 0.50, before merging 0.50), cluster share 1.00, merge level 0, veil gaussians 0, clusters 95, plan 0.19 ms off-thread"
+        },
+        {
+          "type": "probe",
+          "t_ms": 112707.925,
+          "name": "ua.zentix.incoming.client.sound.BlastSounds#describe",
+          "value": "DRONE 50 kg d 32 p 15848 Pa (178.0 dB) phase 13.6 ms loud -13.5 LUFS pitch 1.00 near 0.90 mid 0.00 far 0.10 sub 0.90 pulse 0.10 played echo on; echo rays 72/72 (slowest tick 5.40 ms) taps 95 ear -15,78,28 burst 7,67,7 sum -19.0dB tracks 7 queued 7 t60 1.5 vol 1.19 start +0.03s by sound of blast_near_2 [az 0 start 0.07s len 2.6s x1.00] [az 45 start 0.07s len 2.5s x1.00] [az 90 start 0.10s len 2.5s x1.00] [az 180 start 0.10s len 2.5s x1.00] [az 225 start 0.07s len 2.5s x1.00] [az 270 start 0.07s len 2.6s x1.00] [az 315 start 0.07s len 2.6s x1.00] {d 0.11s az 315 -32.0dB r 50 at 19,65,-6} {d 0.11s az 320 -32.2dB r 50 at 22,65,-3} {d 0.11s az 310 -32.2dB r 50 at 16,65,-9} {d 0.11s az 305 -32.8dB r 50 at 13,65,-11} {d 0.11s az 325 -32.8dB r 50 at 24,65,0} {d 0.11s az 300 -33.8dB r 50 at 9,65,-14}; voices 0/0 cap 96 requested 3 started 3 refused 0 rumble 0 yielded 0 loops 0.00 0.00 0.00 0.00; body d 32 p 15848 Pa phase 13.6 ms LAE 139.2 dB shift 29.4 dB open 0.00 lean 0.00 deg neck 0.00 deg tremor 0.78 dose 0.763"
+        },
+        {
+          "type": "probe",
+          "t_ms": 112707.925,
+          "name": "ua.zentix.incoming.client.sound.ClientSounds#describe",
+          "value": " live=0"
+        },
+        {
+          "type": "probe",
+          "t_ms": 112707.925,
+          "name": "ua.zentix.incoming.client.fx.FireSmoke#describe",
+          "value": "fires 0"
+        },
+        {
+          "type": "probe",
+          "t_ms": 112707.925,
+          "name": "ua.zentix.incoming.client.nuclear.NukeSounds#describe",
+          "value": ""
+        },
+        {
+          "type": "probe",
+          "t_ms": 112707.925,
+          "name": "ua.zentix.incoming.client.nuclear.NukePall#describe",
+          "value": "sigma at camera 0.0000 /block (visibility Infinity blocks; mist 0.0000), depth up 0.00 down 0.00, muffle 0.00, ash 0, quality MEDIUM, light: sky 0.000, fires 0.00 \u00d7 0.00, ball r 0 blocks, black body 0.00 0.00 0.00, under the pall: -, surge r 0 top 0 sigma 0.0000, frames: off; mushrooms 0 (exposure 1); firestorm: none"
+        },
+        {
+          "type": "probe",
+          "t_ms": 112707.925,
+          "name": "ua.zentix.incoming.client.sound.OwnSources#describe",
+          "value": "own 0/0 started 8 efx yes blocked 1.00/1.00"
+        },
+        {
+          "type": "probe",
+          "t_ms": 112707.925,
+          "name": "ua.zentix.stand.AuditProbes#particles",
+          "value": "vanilla=31. VE: 0. VP: 0 incoming=163 CLOUD=0/5120 refused=0 GROUND=0/3584 refused=0 TRAIL=0/5120 refused=0 DEBRIS=163/2560 refused=0 SPRAY=0/2048 refused=0 FLASH=0/512 refused=0 SPARK=0/15360 refused=0 ASH=0/3072 refused=0"
+        },
+        {
+          "type": "probe",
+          "t_ms": 112707.925,
+          "name": "ua.zentix.stand.AuditProbes#particleClasses",
+          "value": "{}"
+        },
+        {
+          "type": "probe",
+          "t_ms": 112707.925,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryGpuOnlyAsyncParticleTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 112707.925,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryDisableAsyncParticleTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 112707.925,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryDisableAnimationTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 112707.925,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryDisableAsyncRainTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 113709.92,
+          "name": "ua.zentix.incoming.client.fx.layer.FxLayer#describeTiming",
+          "value": "quads 66, 0.498 ms (longest in the second 0.808; without GC 0.808, CPU 0.801; frames with GC 0), GPU 0.418 ms (longest 0.752, 116 frames; heat pass 0.000, longest 0.000, 0 frames \u2014 heat lights 0 hot 0 front 0 jets 0, area 1 rects (0 lit) 47.0%; bloom FAST 0.000 ms (longest 0.000, 0 frames; glow pass 0.000, pyramid 0.000, out 0.000; 2560x1600, glow level 3, levels 3-9)), depth: world and LOD (Voxy: forward Z, NDC -1..1, empty 1.0, nearest LOD 16.0 blocks, Minecraft pixels marked 0.0, LOD beyond the render distance in 0.1% of the frame, nearest 192 blocks); GPU by pass (ms, mean of 116 frames; a pass's tail may spill into the next): models 0.00 depth 0.13 water 0.01 pall 0.00 heat 0.00 probes 0.00 quads 0.41 bloom 0.00 (sum 0.56); drained frame: none (F3 or -Dincoming.fx.drain=true); half-resolution smoke 66 quads, full 0 (a quad over both kinds of tiles counts in each), lays 1"
+        },
+        {
+          "type": "probe",
+          "t_ms": 113709.92,
+          "name": "ua.zentix.incoming.client.far.FarRenderer#describeSmoke",
+          "value": "fill 0.88 screens (budget 16, one club per gaussian 0.33, before merging 0.33), cluster share 1.00, merge level 0, veil gaussians 0, clusters 19, plan 0.05 ms off-thread"
+        },
+        {
+          "type": "probe",
+          "t_ms": 113709.92,
+          "name": "ua.zentix.incoming.client.sound.BlastSounds#describe",
+          "value": "DRONE 50 kg d 32 p 15848 Pa (178.0 dB) phase 13.6 ms loud -13.5 LUFS pitch 1.00 near 0.90 mid 0.00 far 0.10 sub 0.90 pulse 0.10 played echo on; echo rays 72/72 (slowest tick 5.40 ms) taps 95 ear -15,78,28 burst 7,67,7 sum -19.0dB tracks 7 queued 7 t60 1.5 vol 1.19 start +0.03s by sound of blast_near_2 [az 0 start 0.07s len 2.6s x1.00] [az 45 start 0.07s len 2.5s x1.00] [az 90 start 0.10s len 2.5s x1.00] [az 180 start 0.10s len 2.5s x1.00] [az 225 start 0.07s len 2.5s x1.00] [az 270 start 0.07s len 2.6s x1.00] [az 315 start 0.07s len 2.6s x1.00] {d 0.11s az 315 -32.0dB r 50 at 19,65,-6} {d 0.11s az 320 -32.2dB r 50 at 22,65,-3} {d 0.11s az 310 -32.2dB r 50 at 16,65,-9} {d 0.11s az 305 -32.8dB r 50 at 13,65,-11} {d 0.11s az 325 -32.8dB r 50 at 24,65,0} {d 0.11s az 300 -33.8dB r 50 at 9,65,-14}; voices 0/0 cap 96 requested 3 started 3 refused 0 rumble 0 yielded 0 loops 0.00 0.00 0.00 0.00; body d 32 p 15848 Pa phase 13.6 ms LAE 139.2 dB shift 29.4 dB open 0.00 lean 0.00 deg neck 0.00 deg tremor 0.78 dose 0.763"
+        },
+        {
+          "type": "probe",
+          "t_ms": 113709.92,
+          "name": "ua.zentix.incoming.client.sound.ClientSounds#describe",
+          "value": " live=0"
+        },
+        {
+          "type": "probe",
+          "t_ms": 113709.92,
+          "name": "ua.zentix.incoming.client.fx.FireSmoke#describe",
+          "value": "fires 0"
+        },
+        {
+          "type": "probe",
+          "t_ms": 113709.92,
+          "name": "ua.zentix.incoming.client.nuclear.NukeSounds#describe",
+          "value": ""
+        },
+        {
+          "type": "probe",
+          "t_ms": 113709.92,
+          "name": "ua.zentix.incoming.client.nuclear.NukePall#describe",
+          "value": "sigma at camera 0.0000 /block (visibility Infinity blocks; mist 0.0000), depth up 0.00 down 0.00, muffle 0.00, ash 0, quality MEDIUM, light: sky 0.000, fires 0.00 \u00d7 0.00, ball r 0 blocks, black body 0.00 0.00 0.00, under the pall: -, surge r 0 top 0 sigma 0.0000, frames: off; mushrooms 0 (exposure 1); firestorm: none"
+        },
+        {
+          "type": "probe",
+          "t_ms": 113709.92,
+          "name": "ua.zentix.incoming.client.sound.OwnSources#describe",
+          "value": "own 0/0 started 8 efx yes blocked 1.00/1.00"
+        },
+        {
+          "type": "probe",
+          "t_ms": 113709.92,
+          "name": "ua.zentix.stand.AuditProbes#particles",
+          "value": "vanilla=26. VE: 0. VP: 0 incoming=0 CLOUD=0/5120 refused=0 GROUND=0/3584 refused=0 TRAIL=0/5120 refused=0 DEBRIS=0/2560 refused=0 SPRAY=0/2048 refused=0 FLASH=0/512 refused=0 SPARK=0/15360 refused=0 ASH=0/3072 refused=0"
+        },
+        {
+          "type": "probe",
+          "t_ms": 113709.92,
+          "name": "ua.zentix.stand.AuditProbes#particleClasses",
+          "value": "{}"
+        },
+        {
+          "type": "probe",
+          "t_ms": 113709.92,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryGpuOnlyAsyncParticleTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 113709.92,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryDisableAsyncParticleTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 113709.92,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryDisableAnimationTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 113709.92,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryDisableAsyncRainTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 114758.232,
+          "name": "ua.zentix.incoming.client.fx.layer.FxLayer#describeTiming",
+          "value": "quads 66, 0.329 ms (longest in the second 0.563; without GC 0.563, CPU 0.560; frames with GC 0), GPU 0.188 ms (longest 0.501, 111 frames; heat pass 0.000, longest 0.000, 0 frames \u2014 heat lights 0 hot 0 front 0 jets 0, area 1 rects (0 lit) 47.0%; bloom FAST 0.000 ms (longest 0.000, 0 frames; glow pass 0.000, pyramid 0.000, out 0.000; 2560x1600, glow level 3, levels 3-9)), depth: world and LOD (Voxy: forward Z, NDC -1..1, empty 1.0, nearest LOD 16.0 blocks, Minecraft pixels marked 0.0, LOD beyond the render distance in 0.1% of the frame, nearest 192 blocks); GPU by pass (ms, mean of 111 frames; a pass's tail may spill into the next): models 0.00 depth 0.13 water 0.01 pall 0.00 heat 0.00 probes 0.00 quads 0.18 bloom 0.00 (sum 0.33); drained frame: none (F3 or -Dincoming.fx.drain=true); half-resolution smoke 66 quads, full 0 (a quad over both kinds of tiles counts in each), lays 1"
+        },
+        {
+          "type": "probe",
+          "t_ms": 114758.232,
+          "name": "ua.zentix.incoming.client.far.FarRenderer#describeSmoke",
+          "value": "fill 0.83 screens (budget 16, one club per gaussian 0.31, before merging 0.31), cluster share 1.00, merge level 0, veil gaussians 0, clusters 19, plan 0.03 ms off-thread"
+        },
+        {
+          "type": "probe",
+          "t_ms": 114758.232,
+          "name": "ua.zentix.incoming.client.sound.BlastSounds#describe",
+          "value": "DRONE 50 kg d 32 p 15848 Pa (178.0 dB) phase 13.6 ms loud -13.5 LUFS pitch 1.00 near 0.90 mid 0.00 far 0.10 sub 0.90 pulse 0.10 played echo on; echo rays 72/72 (slowest tick 5.40 ms) taps 95 ear -15,78,28 burst 7,67,7 sum -19.0dB tracks 7 queued 7 t60 1.5 vol 1.19 start +0.03s by sound of blast_near_2 [az 0 start 0.07s len 2.6s x1.00] [az 45 start 0.07s len 2.5s x1.00] [az 90 start 0.10s len 2.5s x1.00] [az 180 start 0.10s len 2.5s x1.00] [az 225 start 0.07s len 2.5s x1.00] [az 270 start 0.07s len 2.6s x1.00] [az 315 start 0.07s len 2.6s x1.00] {d 0.11s az 315 -32.0dB r 50 at 19,65,-6} {d 0.11s az 320 -32.2dB r 50 at 22,65,-3} {d 0.11s az 310 -32.2dB r 50 at 16,65,-9} {d 0.11s az 305 -32.8dB r 50 at 13,65,-11} {d 0.11s az 325 -32.8dB r 50 at 24,65,0} {d 0.11s az 300 -33.8dB r 50 at 9,65,-14}; voices 0/0 cap 96 requested 3 started 3 refused 0 rumble 0 yielded 0 loops 0.00 0.00 0.00 0.00; body d 32 p 15848 Pa phase 13.6 ms LAE 139.2 dB shift 29.4 dB open 0.00 lean 0.00 deg neck 0.00 deg tremor 0.78 dose 0.763"
+        },
+        {
+          "type": "probe",
+          "t_ms": 114758.232,
+          "name": "ua.zentix.incoming.client.sound.ClientSounds#describe",
+          "value": " live=0"
+        },
+        {
+          "type": "probe",
+          "t_ms": 114758.232,
+          "name": "ua.zentix.incoming.client.fx.FireSmoke#describe",
+          "value": "fires 0"
+        },
+        {
+          "type": "probe",
+          "t_ms": 114758.232,
+          "name": "ua.zentix.incoming.client.nuclear.NukeSounds#describe",
+          "value": ""
+        },
+        {
+          "type": "probe",
+          "t_ms": 114758.232,
+          "name": "ua.zentix.incoming.client.nuclear.NukePall#describe",
+          "value": "sigma at camera 0.0000 /block (visibility Infinity blocks; mist 0.0000), depth up 0.00 down 0.00, muffle 0.00, ash 0, quality MEDIUM, light: sky 0.000, fires 0.00 \u00d7 0.00, ball r 0 blocks, black body 0.00 0.00 0.00, under the pall: -, surge r 0 top 0 sigma 0.0000, frames: off; mushrooms 0 (exposure 1); firestorm: none"
+        },
+        {
+          "type": "probe",
+          "t_ms": 114758.232,
+          "name": "ua.zentix.incoming.client.sound.OwnSources#describe",
+          "value": "own 0/0 started 8 efx yes blocked 1.00/1.00"
+        },
+        {
+          "type": "probe",
+          "t_ms": 114758.232,
+          "name": "ua.zentix.stand.AuditProbes#particles",
+          "value": "vanilla=27. VE: 0. VP: 0 incoming=0 CLOUD=0/5120 refused=0 GROUND=0/3584 refused=0 TRAIL=0/5120 refused=0 DEBRIS=0/2560 refused=0 SPRAY=0/2048 refused=0 FLASH=0/512 refused=0 SPARK=0/15360 refused=0 ASH=0/3072 refused=0"
+        },
+        {
+          "type": "probe",
+          "t_ms": 114758.232,
+          "name": "ua.zentix.stand.AuditProbes#particleClasses",
+          "value": "{}"
+        },
+        {
+          "type": "probe",
+          "t_ms": 114758.232,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryGpuOnlyAsyncParticleTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 114758.232,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryDisableAsyncParticleTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 114758.232,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryDisableAnimationTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 114758.232,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryDisableAsyncRainTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 115758.409,
+          "name": "ua.zentix.incoming.client.fx.layer.FxLayer#describeTiming",
+          "value": "quads 65, 0.222 ms (longest in the second 0.377; without GC 0.377, CPU 0.375; frames with GC 0), GPU 0.162 ms (longest 0.446, 120 frames; heat pass 0.000, longest 0.000, 0 frames \u2014 heat lights 0 hot 0 front 0 jets 0, area 1 rects (0 lit) 47.0%; bloom FAST 0.000 ms (longest 0.000, 0 frames; glow pass 0.000, pyramid 0.000, out 0.000; 2560x1600, glow level 3, levels 3-9)), depth: world and LOD (Voxy: forward Z, NDC -1..1, empty 1.0, nearest LOD 16.0 blocks, Minecraft pixels marked 0.0, LOD beyond the render distance in 0.1% of the frame, nearest 192 blocks); GPU by pass (ms, mean of 120 frames; a pass's tail may spill into the next): models 0.00 depth 0.13 water 0.01 pall 0.00 heat 0.00 probes 0.00 quads 0.16 bloom 0.00 (sum 0.30); drained frame: none (F3 or -Dincoming.fx.drain=true); half-resolution smoke 65 quads, full 0 (a quad over both kinds of tiles counts in each), lays 1"
+        },
+        {
+          "type": "probe",
+          "t_ms": 115758.409,
+          "name": "ua.zentix.incoming.client.far.FarRenderer#describeSmoke",
+          "value": "fill 0.78 screens (budget 16, one club per gaussian 0.30, before merging 0.30), cluster share 1.00, merge level 0, veil gaussians 0, clusters 19, plan 0.04 ms off-thread"
+        },
+        {
+          "type": "probe",
+          "t_ms": 115758.409,
+          "name": "ua.zentix.incoming.client.sound.BlastSounds#describe",
+          "value": "DRONE 50 kg d 32 p 15848 Pa (178.0 dB) phase 13.6 ms loud -13.5 LUFS pitch 1.00 near 0.90 mid 0.00 far 0.10 sub 0.90 pulse 0.10 played echo on; echo rays 72/72 (slowest tick 5.40 ms) taps 95 ear -15,78,28 burst 7,67,7 sum -19.0dB tracks 7 queued 7 t60 1.5 vol 1.19 start +0.03s by sound of blast_near_2 [az 0 start 0.07s len 2.6s x1.00] [az 45 start 0.07s len 2.5s x1.00] [az 90 start 0.10s len 2.5s x1.00] [az 180 start 0.10s len 2.5s x1.00] [az 225 start 0.07s len 2.5s x1.00] [az 270 start 0.07s len 2.6s x1.00] [az 315 start 0.07s len 2.6s x1.00] {d 0.11s az 315 -32.0dB r 50 at 19,65,-6} {d 0.11s az 320 -32.2dB r 50 at 22,65,-3} {d 0.11s az 310 -32.2dB r 50 at 16,65,-9} {d 0.11s az 305 -32.8dB r 50 at 13,65,-11} {d 0.11s az 325 -32.8dB r 50 at 24,65,0} {d 0.11s az 300 -33.8dB r 50 at 9,65,-14}; voices 0/0 cap 96 requested 3 started 3 refused 0 rumble 0 yielded 0 loops 0.00 0.00 0.00 0.00; body d 32 p 15848 Pa phase 13.6 ms LAE 139.2 dB shift 29.4 dB open 0.00 lean 0.00 deg neck 0.00 deg tremor 0.78 dose 0.763"
+        },
+        {
+          "type": "probe",
+          "t_ms": 115758.409,
+          "name": "ua.zentix.incoming.client.sound.ClientSounds#describe",
+          "value": " live=0"
+        },
+        {
+          "type": "probe",
+          "t_ms": 115758.409,
+          "name": "ua.zentix.incoming.client.fx.FireSmoke#describe",
+          "value": "fires 0"
+        },
+        {
+          "type": "probe",
+          "t_ms": 115758.409,
+          "name": "ua.zentix.incoming.client.nuclear.NukeSounds#describe",
+          "value": ""
+        },
+        {
+          "type": "probe",
+          "t_ms": 115758.409,
+          "name": "ua.zentix.incoming.client.nuclear.NukePall#describe",
+          "value": "sigma at camera 0.0000 /block (visibility Infinity blocks; mist 0.0000), depth up 0.00 down 0.00, muffle 0.00, ash 0, quality MEDIUM, light: sky 0.000, fires 0.00 \u00d7 0.00, ball r 0 blocks, black body 0.00 0.00 0.00, under the pall: -, surge r 0 top 0 sigma 0.0000, frames: off; mushrooms 0 (exposure 1); firestorm: none"
+        },
+        {
+          "type": "probe",
+          "t_ms": 115758.409,
+          "name": "ua.zentix.incoming.client.sound.OwnSources#describe",
+          "value": "own 0/0 started 8 efx yes blocked 1.00/1.00"
+        },
+        {
+          "type": "probe",
+          "t_ms": 115758.409,
+          "name": "ua.zentix.stand.AuditProbes#particles",
+          "value": "vanilla=45. VE: 0. VP: 0 incoming=0 CLOUD=0/5120 refused=0 GROUND=0/3584 refused=0 TRAIL=0/5120 refused=0 DEBRIS=0/2560 refused=0 SPRAY=0/2048 refused=0 FLASH=0/512 refused=0 SPARK=0/15360 refused=0 ASH=0/3072 refused=0"
+        },
+        {
+          "type": "probe",
+          "t_ms": 115758.409,
+          "name": "ua.zentix.stand.AuditProbes#particleClasses",
+          "value": "{}"
+        },
+        {
+          "type": "probe",
+          "t_ms": 115758.409,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryGpuOnlyAsyncParticleTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 115758.409,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryDisableAsyncParticleTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 115758.409,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryDisableAnimationTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 115758.409,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryDisableAsyncRainTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 116762.839,
+          "name": "ua.zentix.incoming.client.fx.layer.FxLayer#describeTiming",
+          "value": "quads 64, 0.218 ms (longest in the second 0.349; without GC 0.349, CPU 0.347; frames with GC 0), GPU 0.174 ms (longest 0.411, 114 frames; heat pass 0.000, longest 0.000, 0 frames \u2014 heat lights 0 hot 0 front 0 jets 0, area 1 rects (0 lit) 47.0%; bloom FAST 0.000 ms (longest 0.000, 0 frames; glow pass 0.000, pyramid 0.000, out 0.000; 2560x1600, glow level 3, levels 3-9)), depth: world and LOD (Voxy: forward Z, NDC -1..1, empty 1.0, nearest LOD 16.0 blocks, Minecraft pixels marked 0.0, LOD beyond the render distance in 0.1% of the frame, nearest 192 blocks); GPU by pass (ms, mean of 114 frames; a pass's tail may spill into the next): models 0.00 depth 0.14 water 0.01 pall 0.00 heat 0.00 probes 0.00 quads 0.17 bloom 0.00 (sum 0.32); drained frame: none (F3 or -Dincoming.fx.drain=true); half-resolution smoke 64 quads, full 0 (a quad over both kinds of tiles counts in each), lays 1"
+        },
+        {
+          "type": "probe",
+          "t_ms": 116762.839,
+          "name": "ua.zentix.incoming.client.far.FarRenderer#describeSmoke",
+          "value": "fill 0.76 screens (budget 16, one club per gaussian 0.29, before merging 0.29), cluster share 1.00, merge level 0, veil gaussians 0, clusters 19, plan 0.03 ms off-thread"
+        },
+        {
+          "type": "probe",
+          "t_ms": 116762.839,
+          "name": "ua.zentix.incoming.client.sound.BlastSounds#describe",
+          "value": "DRONE 50 kg d 32 p 15848 Pa (178.0 dB) phase 13.6 ms loud -13.5 LUFS pitch 1.00 near 0.90 mid 0.00 far 0.10 sub 0.90 pulse 0.10 played echo on; echo rays 72/72 (slowest tick 5.40 ms) taps 95 ear -15,78,28 burst 7,67,7 sum -19.0dB tracks 7 queued 7 t60 1.5 vol 1.19 start +0.03s by sound of blast_near_2 [az 0 start 0.07s len 2.6s x1.00] [az 45 start 0.07s len 2.5s x1.00] [az 90 start 0.10s len 2.5s x1.00] [az 180 start 0.10s len 2.5s x1.00] [az 225 start 0.07s len 2.5s x1.00] [az 270 start 0.07s len 2.6s x1.00] [az 315 start 0.07s len 2.6s x1.00] {d 0.11s az 315 -32.0dB r 50 at 19,65,-6} {d 0.11s az 320 -32.2dB r 50 at 22,65,-3} {d 0.11s az 310 -32.2dB r 50 at 16,65,-9} {d 0.11s az 305 -32.8dB r 50 at 13,65,-11} {d 0.11s az 325 -32.8dB r 50 at 24,65,0} {d 0.11s az 300 -33.8dB r 50 at 9,65,-14}; voices 0/0 cap 96 requested 3 started 3 refused 0 rumble 0 yielded 0 loops 0.00 0.00 0.00 0.00; body d 32 p 15848 Pa phase 13.6 ms LAE 139.2 dB shift 29.4 dB open 0.00 lean 0.00 deg neck 0.00 deg tremor 0.78 dose 0.763"
+        },
+        {
+          "type": "probe",
+          "t_ms": 116762.839,
+          "name": "ua.zentix.incoming.client.sound.ClientSounds#describe",
+          "value": " live=0"
+        },
+        {
+          "type": "probe",
+          "t_ms": 116762.839,
+          "name": "ua.zentix.incoming.client.fx.FireSmoke#describe",
+          "value": "fires 0"
+        },
+        {
+          "type": "probe",
+          "t_ms": 116762.839,
+          "name": "ua.zentix.incoming.client.nuclear.NukeSounds#describe",
+          "value": ""
+        },
+        {
+          "type": "probe",
+          "t_ms": 116762.839,
+          "name": "ua.zentix.incoming.client.nuclear.NukePall#describe",
+          "value": "sigma at camera 0.0000 /block (visibility Infinity blocks; mist 0.0000), depth up 0.00 down 0.00, muffle 0.00, ash 0, quality MEDIUM, light: sky 0.000, fires 0.00 \u00d7 0.00, ball r 0 blocks, black body 0.00 0.00 0.00, under the pall: -, surge r 0 top 0 sigma 0.0000, frames: off; mushrooms 0 (exposure 1); firestorm: none"
+        },
+        {
+          "type": "probe",
+          "t_ms": 116762.839,
+          "name": "ua.zentix.incoming.client.sound.OwnSources#describe",
+          "value": "own 0/0 started 8 efx yes blocked 1.00/1.00"
+        },
+        {
+          "type": "probe",
+          "t_ms": 116762.839,
+          "name": "ua.zentix.stand.AuditProbes#particles",
+          "value": "vanilla=50. VE: 0. VP: 0 incoming=0 CLOUD=0/5120 refused=0 GROUND=0/3584 refused=0 TRAIL=0/5120 refused=0 DEBRIS=0/2560 refused=0 SPRAY=0/2048 refused=0 FLASH=0/512 refused=0 SPARK=0/15360 refused=0 ASH=0/3072 refused=0"
+        },
+        {
+          "type": "probe",
+          "t_ms": 116762.839,
+          "name": "ua.zentix.stand.AuditProbes#particleClasses",
+          "value": "{}"
+        },
+        {
+          "type": "probe",
+          "t_ms": 116762.839,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryGpuOnlyAsyncParticleTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 116762.839,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryDisableAsyncParticleTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 116762.839,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryDisableAnimationTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 116762.839,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryDisableAsyncRainTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 117763.293,
+          "name": "ua.zentix.incoming.client.fx.layer.FxLayer#describeTiming",
+          "value": "quads 61, 0.220 ms (longest in the second 0.417; without GC 0.417, CPU 0.419; frames with GC 0), GPU 0.167 ms (longest 0.453, 109 frames; heat pass 0.000, longest 0.000, 0 frames \u2014 heat lights 0 hot 0 front 0 jets 0, area 1 rects (0 lit) 47.0%; bloom FAST 0.000 ms (longest 0.000, 0 frames; glow pass 0.000, pyramid 0.000, out 0.000; 2560x1600, glow level 3, levels 3-9)), depth: world and LOD (Voxy: forward Z, NDC -1..1, empty 1.0, nearest LOD 16.0 blocks, Minecraft pixels marked 0.0, LOD beyond the render distance in 0.1% of the frame, nearest 192 blocks); GPU by pass (ms, mean of 109 frames; a pass's tail may spill into the next): models 0.00 depth 0.14 water 0.01 pall 0.00 heat 0.00 probes 0.00 quads 0.16 bloom 0.00 (sum 0.32); drained frame: none (F3 or -Dincoming.fx.drain=true); half-resolution smoke 61 quads, full 0 (a quad over both kinds of tiles counts in each), lays 1"
+        },
+        {
+          "type": "probe",
+          "t_ms": 117763.293,
+          "name": "ua.zentix.incoming.client.far.FarRenderer#describeSmoke",
+          "value": "fill 0.70 screens (budget 16, one club per gaussian 0.28, before merging 0.28), cluster share 1.00, merge level 0, veil gaussians 0, clusters 19, plan 0.04 ms off-thread"
+        },
+        {
+          "type": "probe",
+          "t_ms": 117763.293,
+          "name": "ua.zentix.incoming.client.sound.BlastSounds#describe",
+          "value": "DRONE 50 kg d 32 p 15848 Pa (178.0 dB) phase 13.6 ms loud -13.5 LUFS pitch 1.00 near 0.90 mid 0.00 far 0.10 sub 0.90 pulse 0.10 played echo on; echo rays 72/72 (slowest tick 5.40 ms) taps 95 ear -15,78,28 burst 7,67,7 sum -19.0dB tracks 7 queued 7 t60 1.5 vol 1.19 start +0.03s by sound of blast_near_2 [az 0 start 0.07s len 2.6s x1.00] [az 45 start 0.07s len 2.5s x1.00] [az 90 start 0.10s len 2.5s x1.00] [az 180 start 0.10s len 2.5s x1.00] [az 225 start 0.07s len 2.5s x1.00] [az 270 start 0.07s len 2.6s x1.00] [az 315 start 0.07s len 2.6s x1.00] {d 0.11s az 315 -32.0dB r 50 at 19,65,-6} {d 0.11s az 320 -32.2dB r 50 at 22,65,-3} {d 0.11s az 310 -32.2dB r 50 at 16,65,-9} {d 0.11s az 305 -32.8dB r 50 at 13,65,-11} {d 0.11s az 325 -32.8dB r 50 at 24,65,0} {d 0.11s az 300 -33.8dB r 50 at 9,65,-14}; voices 0/0 cap 96 requested 3 started 3 refused 0 rumble 0 yielded 0 loops 0.00 0.00 0.00 0.00; body d 32 p 15848 Pa phase 13.6 ms LAE 139.2 dB shift 29.4 dB open 0.00 lean 0.00 deg neck 0.00 deg tremor 0.78 dose 0.763"
+        },
+        {
+          "type": "probe",
+          "t_ms": 117763.293,
+          "name": "ua.zentix.incoming.client.sound.ClientSounds#describe",
+          "value": " live=0"
+        },
+        {
+          "type": "probe",
+          "t_ms": 117763.293,
+          "name": "ua.zentix.incoming.client.fx.FireSmoke#describe",
+          "value": "fires 0"
+        },
+        {
+          "type": "probe",
+          "t_ms": 117763.293,
+          "name": "ua.zentix.incoming.client.nuclear.NukeSounds#describe",
+          "value": ""
+        },
+        {
+          "type": "probe",
+          "t_ms": 117763.293,
+          "name": "ua.zentix.incoming.client.nuclear.NukePall#describe",
+          "value": "sigma at camera 0.0000 /block (visibility Infinity blocks; mist 0.0000), depth up 0.00 down 0.00, muffle 0.00, ash 0, quality MEDIUM, light: sky 0.000, fires 0.00 \u00d7 0.00, ball r 0 blocks, black body 0.00 0.00 0.00, under the pall: -, surge r 0 top 0 sigma 0.0000, frames: off; mushrooms 0 (exposure 1); firestorm: none"
+        },
+        {
+          "type": "probe",
+          "t_ms": 117763.293,
+          "name": "ua.zentix.incoming.client.sound.OwnSources#describe",
+          "value": "own 0/0 started 8 efx yes blocked 1.00/1.00"
+        },
+        {
+          "type": "probe",
+          "t_ms": 117763.293,
+          "name": "ua.zentix.stand.AuditProbes#particles",
+          "value": "vanilla=49. VE: 0. VP: 0 incoming=0 CLOUD=0/5120 refused=0 GROUND=0/3584 refused=0 TRAIL=0/5120 refused=0 DEBRIS=0/2560 refused=0 SPRAY=0/2048 refused=0 FLASH=0/512 refused=0 SPARK=0/15360 refused=0 ASH=0/3072 refused=0"
+        },
+        {
+          "type": "probe",
+          "t_ms": 117763.293,
+          "name": "ua.zentix.stand.AuditProbes#particleClasses",
+          "value": "{}"
+        },
+        {
+          "type": "probe",
+          "t_ms": 117763.293,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryGpuOnlyAsyncParticleTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 117763.293,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryDisableAsyncParticleTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 117763.293,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryDisableAnimationTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 117763.293,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryDisableAsyncRainTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 118812.908,
+          "name": "ua.zentix.incoming.client.fx.layer.FxLayer#describeTiming",
+          "value": "quads 45, 0.211 ms (longest in the second 0.364; without GC 0.364, CPU 0.364; frames with GC 0), GPU 0.155 ms (longest 0.433, 115 frames; heat pass 0.000, longest 0.000, 0 frames \u2014 heat lights 0 hot 0 front 0 jets 0, area 1 rects (0 lit) 47.0%; bloom FAST 0.000 ms (longest 0.000, 0 frames; glow pass 0.000, pyramid 0.000, out 0.000; 2560x1600, glow level 3, levels 3-9)), depth: world and LOD (Voxy: forward Z, NDC -1..1, empty 1.0, nearest LOD 16.0 blocks, Minecraft pixels marked 0.0, LOD beyond the render distance in 0.1% of the frame, nearest 192 blocks); GPU by pass (ms, mean of 115 frames; a pass's tail may spill into the next): models 0.00 depth 0.14 water 0.01 pall 0.00 heat 0.00 probes 0.00 quads 0.15 bloom 0.00 (sum 0.30); drained frame: none (F3 or -Dincoming.fx.drain=true); half-resolution smoke 45 quads, full 0 (a quad over both kinds of tiles counts in each), lays 1"
+        },
+        {
+          "type": "probe",
+          "t_ms": 118812.908,
+          "name": "ua.zentix.incoming.client.far.FarRenderer#describeSmoke",
+          "value": "fill 0.65 screens (budget 16, one club per gaussian 0.24, before merging 0.24), cluster share 1.00, merge level 0, veil gaussians 0, clusters 11, plan 0.02 ms off-thread"
+        },
+        {
+          "type": "probe",
+          "t_ms": 118812.908,
+          "name": "ua.zentix.incoming.client.sound.BlastSounds#describe",
+          "value": "DRONE 50 kg d 32 p 15848 Pa (178.0 dB) phase 13.6 ms loud -13.5 LUFS pitch 1.00 near 0.90 mid 0.00 far 0.10 sub 0.90 pulse 0.10 played echo on; echo rays 72/72 (slowest tick 5.40 ms) taps 95 ear -15,78,28 burst 7,67,7 sum -19.0dB tracks 7 queued 7 t60 1.5 vol 1.19 start +0.03s by sound of blast_near_2 [az 0 start 0.07s len 2.6s x1.00] [az 45 start 0.07s len 2.5s x1.00] [az 90 start 0.10s len 2.5s x1.00] [az 180 start 0.10s len 2.5s x1.00] [az 225 start 0.07s len 2.5s x1.00] [az 270 start 0.07s len 2.6s x1.00] [az 315 start 0.07s len 2.6s x1.00] {d 0.11s az 315 -32.0dB r 50 at 19,65,-6} {d 0.11s az 320 -32.2dB r 50 at 22,65,-3} {d 0.11s az 310 -32.2dB r 50 at 16,65,-9} {d 0.11s az 305 -32.8dB r 50 at 13,65,-11} {d 0.11s az 325 -32.8dB r 50 at 24,65,0} {d 0.11s az 300 -33.8dB r 50 at 9,65,-14}; voices 0/0 cap 96 requested 3 started 3 refused 0 rumble 0 yielded 0 loops 0.00 0.00 0.00 0.00; body d 32 p 15848 Pa phase 13.6 ms LAE 139.2 dB shift 29.4 dB open 0.00 lean 0.00 deg neck 0.00 deg tremor 0.78 dose 0.763"
+        },
+        {
+          "type": "probe",
+          "t_ms": 118812.908,
+          "name": "ua.zentix.incoming.client.sound.ClientSounds#describe",
+          "value": " live=0"
+        },
+        {
+          "type": "probe",
+          "t_ms": 118812.908,
+          "name": "ua.zentix.incoming.client.fx.FireSmoke#describe",
+          "value": "fires 0"
+        },
+        {
+          "type": "probe",
+          "t_ms": 118812.908,
+          "name": "ua.zentix.incoming.client.nuclear.NukeSounds#describe",
+          "value": ""
+        },
+        {
+          "type": "probe",
+          "t_ms": 118812.908,
+          "name": "ua.zentix.incoming.client.nuclear.NukePall#describe",
+          "value": "sigma at camera 0.0000 /block (visibility Infinity blocks; mist 0.0000), depth up 0.00 down 0.00, muffle 0.00, ash 0, quality MEDIUM, light: sky 0.000, fires 0.00 \u00d7 0.00, ball r 0 blocks, black body 0.00 0.00 0.00, under the pall: -, surge r 0 top 0 sigma 0.0000, frames: off; mushrooms 0 (exposure 1); firestorm: none"
+        },
+        {
+          "type": "probe",
+          "t_ms": 118812.908,
+          "name": "ua.zentix.incoming.client.sound.OwnSources#describe",
+          "value": "own 0/0 started 8 efx yes blocked 1.00/1.00"
+        },
+        {
+          "type": "probe",
+          "t_ms": 118812.908,
+          "name": "ua.zentix.stand.AuditProbes#particles",
+          "value": "vanilla=45. VE: 0. VP: 0 incoming=0 CLOUD=0/5120 refused=0 GROUND=0/3584 refused=0 TRAIL=0/5120 refused=0 DEBRIS=0/2560 refused=0 SPRAY=0/2048 refused=0 FLASH=0/512 refused=0 SPARK=0/15360 refused=0 ASH=0/3072 refused=0"
+        },
+        {
+          "type": "probe",
+          "t_ms": 118812.908,
+          "name": "ua.zentix.stand.AuditProbes#particleClasses",
+          "value": "{}"
+        },
+        {
+          "type": "probe",
+          "t_ms": 118812.908,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryGpuOnlyAsyncParticleTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 118812.908,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryDisableAsyncParticleTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 118812.908,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryDisableAnimationTick",
+          "value": "false"
+        },
+        {
+          "type": "probe",
+          "t_ms": 118812.908,
+          "name": "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryDisableAsyncRainTick",
+          "value": "false"
+        }
+      ],
+      "cycle_cpu": {
+        "n": 1216,
+        "p50": 2.618,
+        "p95": 5.538,
+        "p99": 11.544,
+        "max": 48.512,
+        "mean": 3.238077302631579,
+        "over33": 4,
+        "over50": 0,
+        "over100": 0,
+        "over250": 0
+      }
+    }
+  },
+  "issues": [],
+  "impacts": {},
+  "gl": [
+    {
+      "type": "gl",
+      "t_ms": 70662.563,
+      "renderer": "NVIDIA GeForce RTX 4060 Laptop GPU/PCIe/SSE2",
+      "version": "4.6.0 NVIDIA 615.78.08",
+      "vendor": "NVIDIA Corporation",
+      "width": 2560,
+      "height": 1600
+    },
+    {
+      "type": "gl",
+      "t_ms": 122407.414,
+      "renderer": "NVIDIA GeForce RTX 4060 Laptop GPU/PCIe/SSE2",
+      "version": "4.6.0 NVIDIA 615.78.08",
+      "vendor": "NVIDIA Corporation",
+      "width": 2560,
+      "height": 1600
+    }
+  ],
+  "once": [
+    {
+      "type": "once",
+      "t_ms": 70662.563,
+      "name": "net.irisshaders.iris.Iris#getCurrentPackName",
+      "value": "ComplementaryUnbound_r5.9.3.zip"
+    },
+    {
+      "type": "once",
+      "t_ms": 70662.563,
+      "name": "net.irisshaders.iris.Iris#isPackInUseQuick",
+      "value": "true"
+    }
+  ]
+}

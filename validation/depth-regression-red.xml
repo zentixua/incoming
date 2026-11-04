@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.client.fx.layer.SceneDepthTelemetryTest" tests="1" skipped="0" failures="1" errors="0" timestamp="2026-11-04T08:53:31.247Z" hostname="zentixua-pc" time="0.285">
+  <properties/>
+  <testcase name="ordinaryLodDescriptionNeedsNoGraphicsContext()" classname="ua.zentix.incoming.client.fx.layer.SceneDepthTelemetryTest" time="0.285">
+    <failure message="org.opentest4j.AssertionFailedError: Unexpected exception thrown: java.lang.IllegalStateException: Rendersystem called from wrong thread" type="org.opentest4j.AssertionFailedError">org.opentest4j.AssertionFailedError: Unexpected exception thrown: java.lang.IllegalStateException: Rendersystem called from wrong thread
+	at app//org.junit.jupiter.api.AssertionFailureBuilder.build(AssertionFailureBuilder.java:152)
+	at app//org.junit.jupiter.api.AssertDoesNotThrow.createAssertionFailedError(AssertDoesNotThrow.java:84)
+	at app//org.junit.jupiter.api.AssertDoesNotThrow.assertDoesNotThrow(AssertDoesNotThrow.java:75)
+	at app//org.junit.jupiter.api.AssertDoesNotThrow.assertDoesNotThrow(AssertDoesNotThrow.java:58)
+	at app//org.junit.jupiter.api.Assertions.assertDoesNotThrow(Assertions.java:3228)
+	at app//ua.zentix.incoming.client.fx.layer.SceneDepthTelemetryTest.ordinaryLodDescriptionNeedsNoGraphicsContext(SceneDepthTelemetryTest.java:28)
+	at java.base@21.0.7/java.lang.reflect.Method.invoke(Method.java:580)
+	at java.base@21.0.7/java.util.ArrayList.forEach(ArrayList.java:1596)
+	at java.base@21.0.7/java.util.ArrayList.forEach(ArrayList.java:1596)
+Caused by: java.lang.IllegalStateException: Rendersystem called from wrong thread
+	at com.mojang.blaze3d.systems.RenderSystem.constructThreadException(RenderSystem.java:124)
+	at com.mojang.blaze3d.systems.RenderSystem.assertOnRenderThreadOrInit(RenderSystem.java:113)
+	at com.mojang.blaze3d.platform.GlStateManager._bindTexture(GlStateManager.java:549)
+	at ua.zentix.incoming.client.fx.layer.SceneDepth.lodShare(SceneDepth.java:231)
+	at ua.zentix.incoming.client.fx.layer.SceneDepth.describe(SceneDepth.java:216)
+	at org.junit.jupiter.api.AssertDoesNotThrow.assertDoesNotThrow(AssertDoesNotThrow.java:71)
+	... 6 more
+</failure>
+  </testcase>
+  <system-out><![CDATA[WARN StatusConsoleListener Advanced terminal features are not available in this environment
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

@@ -1,0 +1,531 @@
+{
+  "source": "async.jfr.cpu.collapsed",
+  "scope": "profile-window.json; running CPU samples; inclusive terms overlap and must not be added",
+  "threads": {
+    "[Render thread tid=120690]": {
+      "total": 22184,
+      "GroundDust": 1982,
+      "ParticleEngine": 410,
+      "CloudModel": 3127,
+      "LocalWind": 550,
+      "SmokePuffs": 5880,
+      "BlastSounds": 264,
+      "Air.of": 7,
+      "BlastPulse": 15
+    },
+    "[Incoming Smoke tid=122837]": {
+      "total": 7521,
+      "SmokePuffs": 7516
+    },
+    "[C2 CompilerThre tid=120704]": {
+      "total": 7321
+    },
+    "[Chunk Render Task Executor #9 tid=122814]": {
+      "total": 5929
+    },
+    "[Chunk Render Task Executor #8 tid=122812]": {
+      "total": 5929
+    },
+    "[Chunk Render Task Executor #5 tid=122808]": {
+      "total": 5897
+    },
+    "[Chunk Render Task Executor #3 tid=122803]": {
+      "total": 5879
+    },
+    "[Chunk Render Task Executor #4 tid=122806]": {
+      "total": 5878
+    },
+    "[Chunk Render Task Executor #7 tid=122811]": {
+      "total": 5875
+    },
+    "[Chunk Render Task Executor #2 tid=122802]": {
+      "total": 5873
+    },
+    "[Chunk Render Task Executor #6 tid=122810]": {
+      "total": 5861
+    },
+    "[Chunk Render Task Executor #0 tid=122800]": {
+      "total": 5860
+    },
+    "[Chunk Render Task Executor #1 tid=122801]": {
+      "total": 5785
+    },
+    "[Server thread tid=122361]": {
+      "total": 5426,
+      "WorkScheduler": 2075,
+      "RadiationTicker": 1,
+      "BlastFront": 1
+    },
+    "[tid=123646]": {
+      "total": 4359
+    },
+    "[tid=123644]": {
+      "total": 4053
+    },
+    "[tid=123648]": {
+      "total": 2647
+    },
+    "[tid=123647]": {
+      "total": 2474
+    },
+    "[tid=123652]": {
+      "total": 2460
+    },
+    "[tid=123654]": {
+      "total": 1930
+    },
+    "[tid=123653]": {
+      "total": 1866
+    },
+    "[AsyncParticleTickWorker-4 tid=123658]": {
+      "total": 1394,
+      "ParticleEngine": 930
+    },
+    "[G1 Conc#2 tid=120746]": {
+      "total": 1308
+    },
+    "[G1 Conc#0 tid=120694]": {
+      "total": 1306
+    },
+    "[G1 Conc#1 tid=120744]": {
+      "total": 1301
+    },
+    "[tid=123860]": {
+      "total": 1014
+    },
+    "[AsyncParticleTickWorker-2 tid=123656]": {
+      "total": 743,
+      "ParticleEngine": 541
+    },
+    "[AsyncParticleTickWorker-1 tid=123151]": {
+      "total": 729,
+      "ParticleEngine": 538
+    },
+    "[C1 CompilerThre tid=120705]": {
+      "total": 594
+    },
+    "[AsyncParticleTickWorker-3 tid=123657]": {
+      "total": 564,
+      "ParticleEngine": 521
+    },
+    "[Dedicated Voxy Worker #4 tid=122449]": {
+      "total": 447
+    },
+    "[Sound engine tid=122450]": {
+      "total": 439
+    },
+    "[tid=123655]": {
+      "total": 429
+    },
+    "[JFR Thread Samp tid=120728]": {
+      "total": 416
+    },
+    "[CullThread tid=122438]": {
+      "total": 414
+    },
+    "[tid=123645]": {
+      "total": 385
+    },
+    "[tid=124003]": {
+      "total": 383
+    },
+    "[tid=123649]": {
+      "total": 355
+    },
+    "[AsyncParticleTickWorker-6 tid=123661]": {
+      "total": 338,
+      "ParticleEngine": 300
+    },
+    "[tid=124002]": {
+      "total": 292
+    },
+    "[AsyncParticleTickWorker-5 tid=123660]": {
+      "total": 257,
+      "ParticleEngine": 188
+    },
+    "[Netty Local Client IO #0 tid=122427]": {
+      "total": 224
+    },
+    "[tid=123935]": {
+      "total": 223
+    },
+    "[JFR Periodic Tasks tid=120716]": {
+      "total": 222
+    },
+    "[tid=124394]": {
+      "total": 214
+    },
+    "[tid=123936]": {
+      "total": 180
+    },
+    "[tid=123937]": {
+      "total": 179
+    },
+    "[Async Node Manager tid=123087]": {
+      "total": 167
+    },
+    "[tid=123938]": {
+      "total": 162
+    },
+    "[Netty Server IO #2 tid=122428]": {
+      "total": 162
+    },
+    "[tid=124230]": {
+      "total": 155
+    },
+    "[tid=124393]": {
+      "total": 130
+    },
+    "[Worker-Main-12 tid=122379]": {
+      "total": 101
+    },
+    "[tid=124231]": {
+      "total": 99
+    },
+    "[tid=124004]": {
+      "total": 92
+    },
+    "[tid=124039]": {
+      "total": 92
+    },
+    "[tid=123939]": {
+      "total": 80
+    },
+    "[Download-6 tid=121463]": {
+      "total": 65
+    },
+    "[Download-19 tid=121476]": {
+      "total": 65
+    },
+    "[Worker-Main-13 tid=122380]": {
+      "total": 62
+    },
+    "[IO-Worker-6 tid=122892]": {
+      "total": 62
+    },
+    "[tid=123940]": {
+      "total": 62
+    },
+    "[pointblank:state_ticker_thread tid=121380]": {
+      "total": 58
+    },
+    "[Worker-Main-1 tid=121307]": {
+      "total": 57
+    },
+    "[Worker-Main-10 tid=122377]": {
+      "total": 56
+    },
+    "[GC Thread#4 tid=120720]": {
+      "total": 55
+    },
+    "[GC Thread#5 tid=120721]": {
+      "total": 54
+    },
+    "[GC Thread#3 tid=120719]": {
+      "total": 53
+    },
+    "[GC Thread#2 tid=120718]": {
+      "total": 53
+    },
+    "[Model factory processor tid=123086]": {
+      "total": 51
+    },
+    "[GC Thread#7 tid=120723]": {
+      "total": 51
+    },
+    "[GC Thread#10 tid=120726]": {
+      "total": 51
+    },
+    "[GC Thread#0 tid=120692]": {
+      "total": 50
+    },
+    "[GC Thread#8 tid=120724]": {
+      "total": 50
+    },
+    "[Incoming Voxy terrain tid=123139]": {
+      "total": 49
+    },
+    "[GC Thread#12 tid=120776]": {
+      "total": 49
+    },
+    "[GC Thread#1 tid=120717]": {
+      "total": 49
+    },
+    "[GC Thread#6 tid=120722]": {
+      "total": 48
+    },
+    "[GC Thread#11 tid=120727]": {
+      "total": 47
+    },
+    "[GC Thread#9 tid=120725]": {
+      "total": 46
+    },
+    "[Worker-Main-2 tid=121449]": {
+      "total": 45
+    },
+    "[Worker-Main-3 tid=121450]": {
+      "total": 44
+    },
+    "[Thread-18 tid=121378]": {
+      "total": 44
+    },
+    "[Download-20 tid=121477]": {
+      "total": 41
+    },
+    "[spark-monitoring-thread tid=121381]": {
+      "total": 41
+    },
+    "[tid=124286]": {
+      "total": 40
+    },
+    "[Flywheel Task Executor #4 tid=122678]": {
+      "total": 40
+    },
+    "[Flywheel Task Executor #7 tid=122681]": {
+      "total": 40
+    },
+    "[Flywheel Task Executor #0 tid=122674]": {
+      "total": 39
+    },
+    "[Flywheel Task Executor #2 tid=122676]": {
+      "total": 39
+    },
+    "[Flywheel Task Executor #3 tid=122677]": {
+      "total": 39
+    },
+    "[Flywheel Task Executor #8 tid=122682]": {
+      "total": 38
+    },
+    "[Worker-Main-9 tid=121456]": {
+      "total": 38
+    },
+    "[Worker-Main-11 tid=122378]": {
+      "total": 37
+    },
+    "[Flywheel Task Executor #1 tid=122675]": {
+      "total": 37
+    },
+    "[Flywheel Task Executor #6 tid=122680]": {
+      "total": 36
+    },
+    "[Flywheel Task Executor #5 tid=122679]": {
+      "total": 35
+    },
+    "[JFR Recorder Thread tid=120712]": {
+      "total": 34
+    },
+    "[Flywheel Task Executor #9 tid=122683]": {
+      "total": 34
+    },
+    "[IO-Worker-3 tid=122382]": {
+      "total": 32
+    },
+    "[Worker-Main-6 tid=121453]": {
+      "total": 31
+    },
+    "[Worker-Main-4 tid=121451]": {
+      "total": 26
+    },
+    "[Worker-Main-7 tid=121454]": {
+      "total": 26
+    },
+    "[IO-Worker-5 tid=122385]": {
+      "total": 25
+    },
+    "[tid=124398]": {
+      "total": 25
+    },
+    "[tid=124311]": {
+      "total": 25
+    },
+    "[Worker-Main-8 tid=121455]": {
+      "total": 24
+    },
+    "[Worker-Main-5 tid=121452]": {
+      "total": 21
+    },
+    "[IO-Worker-4 tid=122383]": {
+      "total": 18
+    },
+    "[tid=124312]": {
+      "total": 16
+    },
+    "[tid=124042]": {
+      "total": 16
+    },
+    "[VM Thread tid=120698]": {
+      "total": 16
+    },
+    "[tid=123948]": {
+      "total": 11
+    },
+    "[Thread-93 tid=124113]": {
+      "total": 9
+    },
+    "[tid=123941]": {
+      "total": 9
+    },
+    "[Thread-100 tid=124366]": {
+      "total": 9
+    },
+    "[Thread-85 tid=123897]": {
+      "total": 8
+    },
+    "[tid=123949]": {
+      "total": 8
+    },
+    "[tid=120693]": {
+      "total": 8
+    },
+    "[Thread-101 tid=124374]": {
+      "total": 8
+    },
+    "[config-file-watcher-0-0 tid=121331]": {
+      "total": 7
+    },
+    "[Thread-87 tid=123947]": {
+      "total": 7
+    },
+    "[Thread-88 tid=123970]": {
+      "total": 7
+    },
+    "[ForkJoinPool-9-worker-1 tid=121592]": {
+      "total": 7
+    },
+    "[Thread-91 tid=124054]": {
+      "total": 7
+    },
+    "[Thread-94 tid=124223]": {
+      "total": 7
+    },
+    "[Thread-89 tid=124006]": {
+      "total": 7
+    },
+    "[tid=120695]": {
+      "total": 7
+    },
+    "[tid=120697]": {
+      "total": 7
+    },
+    "[Thread-82 tid=123762]": {
+      "total": 7
+    },
+    "[Thread-99 tid=124338]": {
+      "total": 7
+    },
+    "[Thread-98 tid=124316]": {
+      "total": 7
+    },
+    "[Thread-86 tid=123933]": {
+      "total": 7
+    },
+    "[Thread-97 tid=124307]": {
+      "total": 7
+    },
+    "[Thread-90 tid=124043]": {
+      "total": 6
+    },
+    "[Thread-78 tid=123666]": {
+      "total": 6
+    },
+    "[Netty Server IO #3 tid=122430]": {
+      "total": 6
+    },
+    "[Thread-95 tid=124261]": {
+      "total": 6
+    },
+    "[Thread-80 tid=123730]": {
+      "total": 6
+    },
+    "[Thread-84 tid=123863]": {
+      "total": 6
+    },
+    "[Thread-83 tid=123840]": {
+      "total": 6
+    },
+    "[Thread-102 tid=124401]": {
+      "total": 5
+    },
+    "[tid=123950]": {
+      "total": 5
+    },
+    "[tid=124234]": {
+      "total": 5
+    },
+    "[Thread-96 tid=124269]": {
+      "total": 5
+    },
+    "[Thread-79 tid=123700]": {
+      "total": 5
+    },
+    "[Thread-81 tid=123754]": {
+      "total": 5
+    },
+    "[Thread-92 tid=124078]": {
+      "total": 5
+    },
+    "[tid=124082]": {
+      "total": 5
+    },
+    "[VirtualThread-unparker tid=121593]": {
+      "total": 4
+    },
+    "[tid=124181]": {
+      "total": 4
+    },
+    "[Async-profiler Timer tid=120708]": {
+      "total": 3
+    },
+    "[tid=124287]": {
+      "total": 3
+    },
+    "[tid=124041]": {
+      "total": 3
+    },
+    "[tid=123953]": {
+      "total": 3
+    },
+    "[tid=124396]": {
+      "total": 2
+    },
+    "[tid=124040]": {
+      "total": 2
+    },
+    "[Reference Handler tid=120699]": {
+      "total": 2
+    },
+    "[incoming-stall-watch tid=122391]": {
+      "total": 2
+    },
+    "[Essential Discord IPC Polling tid=121370]": {
+      "total": 2
+    },
+    "[tid=120696]": {
+      "total": 2
+    },
+    "[tid=124397]": {
+      "total": 2
+    },
+    "[tid=124235]": {
+      "total": 2
+    },
+    "[Service Thread tid=120702]": {
+      "total": 1
+    },
+    "[Roxy Voxy Request Watchdog tid=123088]": {
+      "total": 1
+    },
+    "[tid=124236]": {
+      "total": 1
+    },
+    "[Active world cleaner tid=122444]": {
+      "total": 1
+    },
+    "[MezzConfig File Watcher client tid=121289]": {
+      "total": 1
+    },
+    "[MezzConfig File Watcher server tid=121291]": {
+      "total": 1
+    }
+  }
+}

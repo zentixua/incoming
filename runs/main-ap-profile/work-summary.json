@@ -1,0 +1,2346 @@
+{
+  "parts_order": [
+    "rays",
+    "blocks",
+    "glass",
+    "debris",
+    "fire_ground",
+    "hits",
+    "fragments"
+  ],
+  "stages_order": [
+    "start",
+    "vanilla",
+    "game_event",
+    "rays",
+    "entity_search",
+    "detonate",
+    "damage",
+    "split",
+    "craft_blocks",
+    "snapshot"
+  ],
+  "scope_notes": {
+    "blocks": "SPLIT/FRONT/BLOCKS work kinds: FRONT handles blocks and bodies in propagation order.",
+    "damage_stage": "ExplosionStage.DAMAGE includes the entire front() loop (blocks and bodies) as well as damage(); it is not an entity-damage-only timer.",
+    "mobs": "irradiated means accumulated dose>0. RadiationDose rate/contamination are player-only fields in Incoming3.10.4 and stay zero on mobs; not a fallout-work detector.",
+    "timers": "Wall stopwatches on the server thread; stages are nested details of parts, not additional cost."
+  },
+  "windows": {
+    "incoming-city-night-100-spread/baseline": {
+      "tick_count": 200,
+      "impact_counter_samples": 0,
+      "mobs_samples": 10,
+      "packets_samples": 200,
+      "air": {
+        "calls": 0,
+        "wall_ms": 0.0,
+        "per_tick_ms": {
+          "n": 200,
+          "p50": 0.0,
+          "p95": 0.0,
+          "p99": 0.0,
+          "max": 0.0,
+          "mean": 0.0,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        },
+        "max_call_ms": 0.0,
+        "note": "Wall stopwatch includes its own end guard/timer overhead; server Air.of numeric overload only, not client LocalWind."
+      },
+      "mobs": {
+        "live": {
+          "n": 10,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0,
+          "mean": 0,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        },
+        "panicking": {
+          "n": 10,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0,
+          "mean": 0,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        },
+        "fleeing": {
+          "n": 10,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0,
+          "mean": 0,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        },
+        "searches_live_total": {
+          "n": 10,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0,
+          "mean": 0,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        },
+        "irradiated": {
+          "n": 10,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0,
+          "mean": 0,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        },
+        "contaminated": {
+          "n": 10,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0,
+          "mean": 0,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        },
+        "positive_dose_rate": {
+          "n": 10,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0,
+          "mean": 0,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        }
+      },
+      "packet_objects": {
+        "c2s": {
+          "sum": 10,
+          "per_second": 0.9977759573909762,
+          "per_tick": {
+            "n": 200,
+            "p50": 0,
+            "p95": 0,
+            "p99": 1,
+            "max": 1,
+            "mean": 0.05,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        },
+        "s2c": {
+          "sum": 57,
+          "per_second": 5.687322957128565,
+          "per_tick": {
+            "n": 200,
+            "p50": 0,
+            "p95": 2,
+            "p99": 4,
+            "max": 4,
+            "mean": 0.285,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        },
+        "incoming": {
+          "sum": 0,
+          "per_second": 0.0,
+          "per_tick": {
+            "n": 200,
+            "p50": 0,
+            "p95": 0,
+            "p99": 0,
+            "max": 0,
+            "mean": 0,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        }
+      }
+    },
+    "incoming-drone-city-night-100-spread/t0-3": {
+      "tick_count": 61,
+      "impact_counter_samples": 60,
+      "mobs_samples": 3,
+      "packets_samples": 61,
+      "air": {
+        "calls": 20,
+        "wall_ms": 0.119714,
+        "per_tick_ms": {
+          "n": 61,
+          "p50": 0.0,
+          "p95": 0.010942,
+          "p99": 0.031199,
+          "max": 0.031199,
+          "mean": 0.0019625245901639344,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        },
+        "max_call_ms": 0.031199,
+        "note": "Wall stopwatch includes its own end guard/timer overhead; server Air.of numeric overload only, not client LocalWind."
+      },
+      "impact_total_ms_per_tick": {
+        "n": 61,
+        "p50": 29.4297,
+        "p95": 34.3334,
+        "p99": 50.5665,
+        "max": 50.5665,
+        "mean": 22.793388524590164,
+        "over33": 4,
+        "over50": 1,
+        "over100": 0,
+        "over250": 0
+      },
+      "parts": {
+        "rays": {
+          "total_ms": 157.74699999999999,
+          "active_tick_ms": {
+            "n": 60,
+            "p50": 0.0,
+            "p95": 24.999,
+            "p99": 29.158,
+            "max": 29.158,
+            "mean": 2.6291166666666665,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        },
+        "blocks": {
+          "total_ms": 67.578,
+          "active_tick_ms": {
+            "n": 60,
+            "p50": 0.0,
+            "p95": 6.951,
+            "p99": 24.126,
+            "max": 24.126,
+            "mean": 1.1263,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        },
+        "glass": {
+          "total_ms": 159.275,
+          "active_tick_ms": {
+            "n": 60,
+            "p50": 1.71,
+            "p95": 10.655,
+            "p99": 13.352,
+            "max": 13.352,
+            "mean": 2.6545833333333335,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        },
+        "debris": {
+          "total_ms": 57.989,
+          "active_tick_ms": {
+            "n": 60,
+            "p50": 0.0,
+            "p95": 5.223,
+            "p99": 10.315,
+            "max": 10.315,
+            "mean": 0.9664833333333334,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        },
+        "fire_ground": {
+          "total_ms": 222.935,
+          "active_tick_ms": {
+            "n": 60,
+            "p50": 0.0,
+            "p95": 15.429,
+            "p99": 31.944,
+            "max": 31.944,
+            "mean": 3.7155833333333335,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        },
+        "hits": {
+          "total_ms": 7.975,
+          "active_tick_ms": {
+            "n": 60,
+            "p50": 0.0,
+            "p95": 0.953,
+            "p99": 3.449,
+            "max": 3.449,
+            "mean": 0.13291666666666666,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        },
+        "fragments": {
+          "total_ms": 615.357,
+          "active_tick_ms": {
+            "n": 60,
+            "p50": 6.538,
+            "p95": 25.003,
+            "p99": 28.13,
+            "max": 28.13,
+            "mean": 10.25595,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        }
+      },
+      "stages": {
+        "start": {
+          "total_ms": 0.478,
+          "active_tick_ms": {
+            "n": 60,
+            "p50": 0.0,
+            "p95": 0.0,
+            "p99": 0.418,
+            "max": 0.418,
+            "mean": 0.007966666666666667,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        },
+        "vanilla": {
+          "total_ms": 0.0,
+          "active_tick_ms": {
+            "n": 60,
+            "p50": 0.0,
+            "p95": 0.0,
+            "p99": 0.0,
+            "max": 0.0,
+            "mean": 0.0,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        },
+        "game_event": {
+          "total_ms": 0.917,
+          "active_tick_ms": {
+            "n": 60,
+            "p50": 0.0,
+            "p95": 0.0,
+            "p99": 0.765,
+            "max": 0.765,
+            "mean": 0.015283333333333333,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        },
+        "rays": {
+          "total_ms": 156.026,
+          "active_tick_ms": {
+            "n": 60,
+            "p50": 0.0,
+            "p95": 24.959,
+            "p99": 29.112,
+            "max": 29.112,
+            "mean": 2.600433333333333,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        },
+        "entity_search": {
+          "total_ms": 2.6079999999999997,
+          "active_tick_ms": {
+            "n": 60,
+            "p50": 0.0,
+            "p95": 0.016,
+            "p99": 2.211,
+            "max": 2.211,
+            "mean": 0.04346666666666667,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        },
+        "detonate": {
+          "total_ms": 3.699,
+          "active_tick_ms": {
+            "n": 60,
+            "p50": 0.0,
+            "p95": 0.528,
+            "p99": 1.018,
+            "max": 1.018,
+            "mean": 0.061649999999999996,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        },
+        "damage": {
+          "total_ms": 60.033,
+          "active_tick_ms": {
+            "n": 60,
+            "p50": 0.0,
+            "p95": 5.063,
+            "p99": 21.184,
+            "max": 21.184,
+            "mean": 1.00055,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        },
+        "split": {
+          "total_ms": 1.93,
+          "active_tick_ms": {
+            "n": 60,
+            "p50": 0.0,
+            "p95": 0.008,
+            "p99": 1.443,
+            "max": 1.443,
+            "mean": 0.03216666666666667,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        },
+        "craft_blocks": {
+          "total_ms": 0.0,
+          "active_tick_ms": {
+            "n": 60,
+            "p50": 0.0,
+            "p95": 0.0,
+            "p99": 0.0,
+            "max": 0.0,
+            "mean": 0.0,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        },
+        "snapshot": {
+          "total_ms": 0.5660000000000001,
+          "active_tick_ms": {
+            "n": 60,
+            "p50": 0.0,
+            "p95": 0.003,
+            "p99": 0.403,
+            "max": 0.403,
+            "mean": 0.009433333333333334,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        }
+      },
+      "mobs": {
+        "live": {
+          "n": 3,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0,
+          "mean": 0,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        },
+        "panicking": {
+          "n": 3,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0,
+          "mean": 0,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        },
+        "fleeing": {
+          "n": 3,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0,
+          "mean": 0,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        },
+        "searches_live_total": {
+          "n": 3,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0,
+          "mean": 0,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        },
+        "irradiated": {
+          "n": 3,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0,
+          "mean": 0,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        },
+        "contaminated": {
+          "n": 3,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0,
+          "mean": 0,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        },
+        "positive_dose_rate": {
+          "n": 3,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0,
+          "mean": 0,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        }
+      },
+      "packet_objects": {
+        "c2s": {
+          "sum": 10,
+          "per_second": 3.2547612274615862,
+          "per_tick": {
+            "n": 61,
+            "p50": 0,
+            "p95": 1,
+            "p99": 1,
+            "max": 1,
+            "mean": 0.16393442622950818,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        },
+        "s2c": {
+          "sum": 6926,
+          "per_second": 2254.2476261398947,
+          "per_tick": {
+            "n": 61,
+            "p50": 127,
+            "p95": 210,
+            "p99": 260,
+            "max": 260,
+            "mean": 113.54098360655738,
+            "over33": 46,
+            "over50": 42,
+            "over100": 39,
+            "over250": 1
+          }
+        },
+        "incoming": {
+          "sum": 72,
+          "per_second": 23.43428083772342,
+          "per_tick": {
+            "n": 61,
+            "p50": 0,
+            "p95": 5,
+            "p99": 10,
+            "max": 10,
+            "mean": 1.180327868852459,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        }
+      }
+    },
+    "incoming-drone-city-night-100-spread/t3-15": {
+      "tick_count": 241,
+      "impact_counter_samples": 241,
+      "mobs_samples": 12,
+      "packets_samples": 241,
+      "air": {
+        "calls": 80,
+        "wall_ms": 0.1088,
+        "per_tick_ms": {
+          "n": 241,
+          "p50": 0.0,
+          "p95": 0.002013,
+          "p99": 0.01627,
+          "max": 0.023222,
+          "mean": 0.0004514522821576764,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        },
+        "max_call_ms": 0.006252,
+        "note": "Wall stopwatch includes its own end guard/timer overhead; server Air.of numeric overload only, not client LocalWind."
+      },
+      "impact_total_ms_per_tick": {
+        "n": 241,
+        "p50": 0.0042,
+        "p95": 31.2484,
+        "p99": 32.3679,
+        "max": 33.4731,
+        "mean": 12.719379668049793,
+        "over33": 1,
+        "over50": 0,
+        "over100": 0,
+        "over250": 0
+      },
+      "parts": {
+        "rays": {
+          "total_ms": 219.113,
+          "active_tick_ms": {
+            "n": 241,
+            "p50": 0.0,
+            "p95": 0.0,
+            "p99": 28.127,
+            "max": 29.9,
+            "mean": 0.9091825726141078,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        },
+        "blocks": {
+          "total_ms": 792.216,
+          "active_tick_ms": {
+            "n": 241,
+            "p50": 0.0,
+            "p95": 24.545,
+            "p99": 24.908,
+            "max": 26.668,
+            "mean": 3.287203319502075,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        },
+        "glass": {
+          "total_ms": 119.433,
+          "active_tick_ms": {
+            "n": 241,
+            "p50": 0.0,
+            "p95": 2.87,
+            "p99": 5.407,
+            "max": 8.38,
+            "mean": 0.49557261410788384,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        },
+        "debris": {
+          "total_ms": 35.339,
+          "active_tick_ms": {
+            "n": 241,
+            "p50": 0.0,
+            "p95": 0.866,
+            "p99": 4.697,
+            "max": 5.828,
+            "mean": 0.14663485477178423,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        },
+        "fire_ground": {
+          "total_ms": 283.768,
+          "active_tick_ms": {
+            "n": 241,
+            "p50": 0.0,
+            "p95": 7.594,
+            "p99": 13.85,
+            "max": 22.589,
+            "mean": 1.177460580912863,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        },
+        "hits": {
+          "total_ms": 9.91,
+          "active_tick_ms": {
+            "n": 241,
+            "p50": 0.0,
+            "p95": 0.0,
+            "p99": 1.06,
+            "max": 2.318,
+            "mean": 0.04112033195020747,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        },
+        "fragments": {
+          "total_ms": 1366.982,
+          "active_tick_ms": {
+            "n": 241,
+            "p50": 0.0,
+            "p95": 25.371,
+            "p99": 28.518,
+            "max": 29.417,
+            "mean": 5.672124481327801,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        }
+      },
+      "stages": {
+        "start": {
+          "total_ms": 0.372,
+          "active_tick_ms": {
+            "n": 241,
+            "p50": 0.0,
+            "p95": 0.0,
+            "p99": 0.049,
+            "max": 0.075,
+            "mean": 0.0015435684647302904,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        },
+        "vanilla": {
+          "total_ms": 0.0,
+          "active_tick_ms": {
+            "n": 241,
+            "p50": 0.0,
+            "p95": 0.0,
+            "p99": 0.0,
+            "max": 0.0,
+            "mean": 0.0,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        },
+        "game_event": {
+          "total_ms": 0.16799999999999998,
+          "active_tick_ms": {
+            "n": 241,
+            "p50": 0.0,
+            "p95": 0.0,
+            "p99": 0.022,
+            "max": 0.039,
+            "mean": 0.0006970954356846473,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        },
+        "rays": {
+          "total_ms": 218.248,
+          "active_tick_ms": {
+            "n": 241,
+            "p50": 0.0,
+            "p95": 0.0,
+            "p99": 28.032,
+            "max": 29.761,
+            "mean": 0.9055933609958506,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        },
+        "entity_search": {
+          "total_ms": 2.118,
+          "active_tick_ms": {
+            "n": 241,
+            "p50": 0.0,
+            "p95": 0.0,
+            "p99": 0.192,
+            "max": 0.723,
+            "mean": 0.008788381742738589,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        },
+        "detonate": {
+          "total_ms": 5.021,
+          "active_tick_ms": {
+            "n": 241,
+            "p50": 0.0,
+            "p95": 0.0,
+            "p99": 0.582,
+            "max": 1.06,
+            "mean": 0.02083402489626556,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        },
+        "damage": {
+          "total_ms": 750.546,
+          "active_tick_ms": {
+            "n": 241,
+            "p50": 0.0,
+            "p95": 23.436,
+            "p99": 23.8,
+            "max": 25.587,
+            "mean": 3.114298755186722,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        },
+        "split": {
+          "total_ms": 0.894,
+          "active_tick_ms": {
+            "n": 241,
+            "p50": 0.0,
+            "p95": 0.0,
+            "p99": 0.131,
+            "max": 0.155,
+            "mean": 0.00370954356846473,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        },
+        "craft_blocks": {
+          "total_ms": 0.0,
+          "active_tick_ms": {
+            "n": 241,
+            "p50": 0.0,
+            "p95": 0.0,
+            "p99": 0.0,
+            "max": 0.0,
+            "mean": 0.0,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        },
+        "snapshot": {
+          "total_ms": 0.328,
+          "active_tick_ms": {
+            "n": 241,
+            "p50": 0.0,
+            "p95": 0.0,
+            "p99": 0.051,
+            "max": 0.066,
+            "mean": 0.0013609958506224065,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        }
+      },
+      "mobs": {
+        "live": {
+          "n": 12,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0,
+          "mean": 0,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        },
+        "panicking": {
+          "n": 12,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0,
+          "mean": 0,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        },
+        "fleeing": {
+          "n": 12,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0,
+          "mean": 0,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        },
+        "searches_live_total": {
+          "n": 12,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0,
+          "mean": 0,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        },
+        "irradiated": {
+          "n": 12,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0,
+          "mean": 0,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        },
+        "contaminated": {
+          "n": 12,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0,
+          "mean": 0,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        },
+        "positive_dose_rate": {
+          "n": 12,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0,
+          "mean": 0,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        }
+      },
+      "packet_objects": {
+        "c2s": {
+          "sum": 49,
+          "per_second": 4.073272012024298,
+          "per_tick": {
+            "n": 241,
+            "p50": 0,
+            "p95": 1,
+            "p99": 1,
+            "max": 2,
+            "mean": 0.2033195020746888,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        },
+        "s2c": {
+          "sum": 55410,
+          "per_second": 4606.122493597272,
+          "per_tick": {
+            "n": 241,
+            "p50": 225,
+            "p95": 376,
+            "p99": 503,
+            "max": 554,
+            "mean": 229.91701244813277,
+            "over33": 241,
+            "over50": 241,
+            "over100": 237,
+            "over250": 79
+          }
+        },
+        "incoming": {
+          "sum": 324,
+          "per_second": 26.933472079507602,
+          "per_tick": {
+            "n": 241,
+            "p50": 0,
+            "p95": 7,
+            "p99": 13,
+            "max": 14,
+            "mean": 1.3443983402489628,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        }
+      }
+    },
+    "incoming-drone-city-night-100-spread/t15-35": {
+      "tick_count": 401,
+      "impact_counter_samples": 401,
+      "mobs_samples": 20,
+      "packets_samples": 401,
+      "air": {
+        "calls": 0,
+        "wall_ms": 0.0,
+        "per_tick_ms": {
+          "n": 401,
+          "p50": 0.0,
+          "p95": 0.0,
+          "p99": 0.0,
+          "max": 0.0,
+          "mean": 0.0,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        },
+        "max_call_ms": 0.0,
+        "note": "Wall stopwatch includes its own end guard/timer overhead; server Air.of numeric overload only, not client LocalWind."
+      },
+      "impact_total_ms_per_tick": {
+        "n": 401,
+        "p50": 0.0006,
+        "p95": 0.0009,
+        "p99": 0.0016,
+        "max": 0.0046,
+        "mean": 0.0006673316708229426,
+        "over33": 0,
+        "over50": 0,
+        "over100": 0,
+        "over250": 0
+      },
+      "parts": {
+        "rays": {
+          "total_ms": 0.0,
+          "active_tick_ms": {
+            "n": 401,
+            "p50": 0.0,
+            "p95": 0.0,
+            "p99": 0.0,
+            "max": 0.0,
+            "mean": 0.0,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        },
+        "blocks": {
+          "total_ms": 0.0,
+          "active_tick_ms": {
+            "n": 401,
+            "p50": 0.0,
+            "p95": 0.0,
+            "p99": 0.0,
+            "max": 0.0,
+            "mean": 0.0,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        },
+        "glass": {
+          "total_ms": 0.0,
+          "active_tick_ms": {
+            "n": 401,
+            "p50": 0.0,
+            "p95": 0.0,
+            "p99": 0.0,
+            "max": 0.0,
+            "mean": 0.0,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        },
+        "debris": {
+          "total_ms": 0.0,
+          "active_tick_ms": {
+            "n": 401,
+            "p50": 0.0,
+            "p95": 0.0,
+            "p99": 0.0,
+            "max": 0.0,
+            "mean": 0.0,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        },
+        "fire_ground": {
+          "total_ms": 0.0,
+          "active_tick_ms": {
+            "n": 401,
+            "p50": 0.0,
+            "p95": 0.0,
+            "p99": 0.0,
+            "max": 0.0,
+            "mean": 0.0,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        },
+        "hits": {
+          "total_ms": 0.0,
+          "active_tick_ms": {
+            "n": 401,
+            "p50": 0.0,
+            "p95": 0.0,
+            "p99": 0.0,
+            "max": 0.0,
+            "mean": 0.0,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        },
+        "fragments": {
+          "total_ms": 0.0,
+          "active_tick_ms": {
+            "n": 401,
+            "p50": 0.0,
+            "p95": 0.0,
+            "p99": 0.0,
+            "max": 0.0,
+            "mean": 0.0,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        }
+      },
+      "stages": {
+        "start": {
+          "total_ms": 0.0,
+          "active_tick_ms": {
+            "n": 401,
+            "p50": 0.0,
+            "p95": 0.0,
+            "p99": 0.0,
+            "max": 0.0,
+            "mean": 0.0,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        },
+        "vanilla": {
+          "total_ms": 0.0,
+          "active_tick_ms": {
+            "n": 401,
+            "p50": 0.0,
+            "p95": 0.0,
+            "p99": 0.0,
+            "max": 0.0,
+            "mean": 0.0,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        },
+        "game_event": {
+          "total_ms": 0.0,
+          "active_tick_ms": {
+            "n": 401,
+            "p50": 0.0,
+            "p95": 0.0,
+            "p99": 0.0,
+            "max": 0.0,
+            "mean": 0.0,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        },
+        "rays": {
+          "total_ms": 0.0,
+          "active_tick_ms": {
+            "n": 401,
+            "p50": 0.0,
+            "p95": 0.0,
+            "p99": 0.0,
+            "max": 0.0,
+            "mean": 0.0,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        },
+        "entity_search": {
+          "total_ms": 0.0,
+          "active_tick_ms": {
+            "n": 401,
+            "p50": 0.0,
+            "p95": 0.0,
+            "p99": 0.0,
+            "max": 0.0,
+            "mean": 0.0,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        },
+        "detonate": {
+          "total_ms": 0.0,
+          "active_tick_ms": {
+            "n": 401,
+            "p50": 0.0,
+            "p95": 0.0,
+            "p99": 0.0,
+            "max": 0.0,
+            "mean": 0.0,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        },
+        "damage": {
+          "total_ms": 0.0,
+          "active_tick_ms": {
+            "n": 401,
+            "p50": 0.0,
+            "p95": 0.0,
+            "p99": 0.0,
+            "max": 0.0,
+            "mean": 0.0,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        },
+        "split": {
+          "total_ms": 0.0,
+          "active_tick_ms": {
+            "n": 401,
+            "p50": 0.0,
+            "p95": 0.0,
+            "p99": 0.0,
+            "max": 0.0,
+            "mean": 0.0,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        },
+        "craft_blocks": {
+          "total_ms": 0.0,
+          "active_tick_ms": {
+            "n": 401,
+            "p50": 0.0,
+            "p95": 0.0,
+            "p99": 0.0,
+            "max": 0.0,
+            "mean": 0.0,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        },
+        "snapshot": {
+          "total_ms": 0.0,
+          "active_tick_ms": {
+            "n": 401,
+            "p50": 0.0,
+            "p95": 0.0,
+            "p99": 0.0,
+            "max": 0.0,
+            "mean": 0.0,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        }
+      },
+      "mobs": {
+        "live": {
+          "n": 20,
+          "p50": 0,
+          "p95": 5,
+          "p99": 18,
+          "max": 18,
+          "mean": 1.25,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        },
+        "panicking": {
+          "n": 20,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0,
+          "mean": 0,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        },
+        "fleeing": {
+          "n": 20,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0,
+          "mean": 0,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        },
+        "searches_live_total": {
+          "n": 20,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0,
+          "mean": 0,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        },
+        "irradiated": {
+          "n": 20,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0,
+          "mean": 0,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        },
+        "contaminated": {
+          "n": 20,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0,
+          "mean": 0,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        },
+        "positive_dose_rate": {
+          "n": 20,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0,
+          "mean": 0,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        }
+      },
+      "packet_objects": {
+        "c2s": {
+          "sum": 91,
+          "per_second": 4.5410640940756775,
+          "per_tick": {
+            "n": 401,
+            "p50": 0,
+            "p95": 1,
+            "p99": 1,
+            "max": 2,
+            "mean": 0.22693266832917705,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        },
+        "s2c": {
+          "sum": 9219,
+          "per_second": 460.04472399212824,
+          "per_tick": {
+            "n": 401,
+            "p50": 12,
+            "p95": 92,
+            "p99": 193,
+            "max": 250,
+            "mean": 22.99002493765586,
+            "over33": 49,
+            "over50": 35,
+            "over100": 18,
+            "over250": 0
+          }
+        },
+        "incoming": {
+          "sum": 289,
+          "per_second": 14.421621133932646,
+          "per_tick": {
+            "n": 401,
+            "p50": 0,
+            "p95": 3,
+            "p99": 3,
+            "max": 4,
+            "mean": 0.7206982543640897,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        }
+      }
+    },
+    "incoming-drone-city-night-100-spread/t35-50": {
+      "tick_count": 301,
+      "impact_counter_samples": 301,
+      "mobs_samples": 15,
+      "packets_samples": 301,
+      "air": {
+        "calls": 0,
+        "wall_ms": 0.0,
+        "per_tick_ms": {
+          "n": 301,
+          "p50": 0.0,
+          "p95": 0.0,
+          "p99": 0.0,
+          "max": 0.0,
+          "mean": 0.0,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        },
+        "max_call_ms": 0.0,
+        "note": "Wall stopwatch includes its own end guard/timer overhead; server Air.of numeric overload only, not client LocalWind."
+      },
+      "impact_total_ms_per_tick": {
+        "n": 301,
+        "p50": 0.0006,
+        "p95": 0.0008,
+        "p99": 0.0011,
+        "max": 0.0017,
+        "mean": 0.0006441860465116279,
+        "over33": 0,
+        "over50": 0,
+        "over100": 0,
+        "over250": 0
+      },
+      "parts": {
+        "rays": {
+          "total_ms": 0.0,
+          "active_tick_ms": {
+            "n": 301,
+            "p50": 0.0,
+            "p95": 0.0,
+            "p99": 0.0,
+            "max": 0.0,
+            "mean": 0.0,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        },
+        "blocks": {
+          "total_ms": 0.0,
+          "active_tick_ms": {
+            "n": 301,
+            "p50": 0.0,
+            "p95": 0.0,
+            "p99": 0.0,
+            "max": 0.0,
+            "mean": 0.0,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        },
+        "glass": {
+          "total_ms": 0.0,
+          "active_tick_ms": {
+            "n": 301,
+            "p50": 0.0,
+            "p95": 0.0,
+            "p99": 0.0,
+            "max": 0.0,
+            "mean": 0.0,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        },
+        "debris": {
+          "total_ms": 0.0,
+          "active_tick_ms": {
+            "n": 301,
+            "p50": 0.0,
+            "p95": 0.0,
+            "p99": 0.0,
+            "max": 0.0,
+            "mean": 0.0,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        },
+        "fire_ground": {
+          "total_ms": 0.0,
+          "active_tick_ms": {
+            "n": 301,
+            "p50": 0.0,
+            "p95": 0.0,
+            "p99": 0.0,
+            "max": 0.0,
+            "mean": 0.0,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        },
+        "hits": {
+          "total_ms": 0.0,
+          "active_tick_ms": {
+            "n": 301,
+            "p50": 0.0,
+            "p95": 0.0,
+            "p99": 0.0,
+            "max": 0.0,
+            "mean": 0.0,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        },
+        "fragments": {
+          "total_ms": 0.0,
+          "active_tick_ms": {
+            "n": 301,
+            "p50": 0.0,
+            "p95": 0.0,
+            "p99": 0.0,
+            "max": 0.0,
+            "mean": 0.0,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        }
+      },
+      "stages": {
+        "start": {
+          "total_ms": 0.0,
+          "active_tick_ms": {
+            "n": 301,
+            "p50": 0.0,
+            "p95": 0.0,
+            "p99": 0.0,
+            "max": 0.0,
+            "mean": 0.0,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        },
+        "vanilla": {
+          "total_ms": 0.0,
+          "active_tick_ms": {
+            "n": 301,
+            "p50": 0.0,
+            "p95": 0.0,
+            "p99": 0.0,
+            "max": 0.0,
+            "mean": 0.0,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        },
+        "game_event": {
+          "total_ms": 0.0,
+          "active_tick_ms": {
+            "n": 301,
+            "p50": 0.0,
+            "p95": 0.0,
+            "p99": 0.0,
+            "max": 0.0,
+            "mean": 0.0,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        },
+        "rays": {
+          "total_ms": 0.0,
+          "active_tick_ms": {
+            "n": 301,
+            "p50": 0.0,
+            "p95": 0.0,
+            "p99": 0.0,
+            "max": 0.0,
+            "mean": 0.0,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        },
+        "entity_search": {
+          "total_ms": 0.0,
+          "active_tick_ms": {
+            "n": 301,
+            "p50": 0.0,
+            "p95": 0.0,
+            "p99": 0.0,
+            "max": 0.0,
+            "mean": 0.0,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        },
+        "detonate": {
+          "total_ms": 0.0,
+          "active_tick_ms": {
+            "n": 301,
+            "p50": 0.0,
+            "p95": 0.0,
+            "p99": 0.0,
+            "max": 0.0,
+            "mean": 0.0,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        },
+        "damage": {
+          "total_ms": 0.0,
+          "active_tick_ms": {
+            "n": 301,
+            "p50": 0.0,
+            "p95": 0.0,
+            "p99": 0.0,
+            "max": 0.0,
+            "mean": 0.0,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        },
+        "split": {
+          "total_ms": 0.0,
+          "active_tick_ms": {
+            "n": 301,
+            "p50": 0.0,
+            "p95": 0.0,
+            "p99": 0.0,
+            "max": 0.0,
+            "mean": 0.0,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        },
+        "craft_blocks": {
+          "total_ms": 0.0,
+          "active_tick_ms": {
+            "n": 301,
+            "p50": 0.0,
+            "p95": 0.0,
+            "p99": 0.0,
+            "max": 0.0,
+            "mean": 0.0,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        },
+        "snapshot": {
+          "total_ms": 0.0,
+          "active_tick_ms": {
+            "n": 301,
+            "p50": 0.0,
+            "p95": 0.0,
+            "p99": 0.0,
+            "max": 0.0,
+            "mean": 0.0,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        }
+      },
+      "mobs": {
+        "live": {
+          "n": 15,
+          "p50": 0,
+          "p95": 23,
+          "p99": 23,
+          "max": 23,
+          "mean": 1.5333333333333334,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        },
+        "panicking": {
+          "n": 15,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0,
+          "mean": 0,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        },
+        "fleeing": {
+          "n": 15,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0,
+          "mean": 0,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        },
+        "searches_live_total": {
+          "n": 15,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0,
+          "mean": 0,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        },
+        "irradiated": {
+          "n": 15,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0,
+          "mean": 0,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        },
+        "contaminated": {
+          "n": 15,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0,
+          "mean": 0,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        },
+        "positive_dose_rate": {
+          "n": 15,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0,
+          "mean": 0,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        }
+      },
+      "packet_objects": {
+        "c2s": {
+          "sum": 87,
+          "per_second": 5.780851123348942,
+          "per_tick": {
+            "n": 301,
+            "p50": 0,
+            "p95": 1,
+            "p99": 2,
+            "max": 2,
+            "mean": 0.28903654485049834,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        },
+        "s2c": {
+          "sum": 4526,
+          "per_second": 300.7371515434174,
+          "per_tick": {
+            "n": 301,
+            "p50": 12,
+            "p95": 31,
+            "p99": 45,
+            "max": 58,
+            "mean": 15.03654485049834,
+            "over33": 9,
+            "over50": 2,
+            "over100": 0,
+            "over250": 0
+          }
+        },
+        "incoming": {
+          "sum": 288,
+          "per_second": 19.136610615224082,
+          "per_tick": {
+            "n": 301,
+            "p50": 0,
+            "p95": 3,
+            "p99": 3,
+            "max": 3,
+            "mean": 0.9568106312292359,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        }
+      }
+    },
+    "incoming-drone-city-night-100-spread/total": {
+      "tick_count": 1004,
+      "impact_counter_samples": 1003,
+      "mobs_samples": 50,
+      "packets_samples": 1004,
+      "air": {
+        "calls": 100,
+        "wall_ms": 0.228514,
+        "per_tick_ms": {
+          "n": 1004,
+          "p50": 0.0,
+          "p95": 0.0,
+          "p99": 0.007606,
+          "max": 0.031199,
+          "mean": 0.00022760358565737052,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        },
+        "max_call_ms": 0.031199,
+        "note": "Wall stopwatch includes its own end guard/timer overhead; server Air.of numeric overload only, not client LocalWind."
+      },
+      "impact_total_ms_per_tick": {
+        "n": 1004,
+        "p50": 0.0007,
+        "p95": 30.1217,
+        "p99": 32.2045,
+        "max": 50.5665,
+        "mean": 4.438474800796813,
+        "over33": 5,
+        "over50": 1,
+        "over100": 0,
+        "over250": 0
+      },
+      "parts": {
+        "rays": {
+          "total_ms": 376.86,
+          "active_tick_ms": {
+            "n": 1003,
+            "p50": 0.0,
+            "p95": 0.0,
+            "p99": 21.125,
+            "max": 29.9,
+            "mean": 0.3757328015952144,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        },
+        "blocks": {
+          "total_ms": 859.794,
+          "active_tick_ms": {
+            "n": 1003,
+            "p50": 0.0,
+            "p95": 0.035,
+            "p99": 24.646,
+            "max": 26.668,
+            "mean": 0.857222333000997,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        },
+        "glass": {
+          "total_ms": 278.70799999999997,
+          "active_tick_ms": {
+            "n": 1003,
+            "p50": 0.0,
+            "p95": 1.932,
+            "p99": 5.375,
+            "max": 13.352,
+            "mean": 0.2778743768693918,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        },
+        "debris": {
+          "total_ms": 93.328,
+          "active_tick_ms": {
+            "n": 1003,
+            "p50": 0.0,
+            "p95": 0.0,
+            "p99": 4.955,
+            "max": 10.315,
+            "mean": 0.09304885343968096,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        },
+        "fire_ground": {
+          "total_ms": 506.703,
+          "active_tick_ms": {
+            "n": 1003,
+            "p50": 0.0,
+            "p95": 3.97,
+            "p99": 12.272,
+            "max": 31.944,
+            "mean": 0.5051874376869392,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        },
+        "hits": {
+          "total_ms": 17.885,
+          "active_tick_ms": {
+            "n": 1003,
+            "p50": 0.0,
+            "p95": 0.0,
+            "p99": 0.923,
+            "max": 3.449,
+            "mean": 0.01783150548354935,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        },
+        "fragments": {
+          "total_ms": 1982.339,
+          "active_tick_ms": {
+            "n": 1003,
+            "p50": 0.0,
+            "p95": 22.057,
+            "p99": 26.036,
+            "max": 29.417,
+            "mean": 1.9764097706879362,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        }
+      },
+      "stages": {
+        "start": {
+          "total_ms": 0.85,
+          "active_tick_ms": {
+            "n": 1003,
+            "p50": 0.0,
+            "p95": 0.0,
+            "p99": 0.0,
+            "max": 0.418,
+            "mean": 0.000847457627118644,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        },
+        "vanilla": {
+          "total_ms": 0.0,
+          "active_tick_ms": {
+            "n": 1003,
+            "p50": 0.0,
+            "p95": 0.0,
+            "p99": 0.0,
+            "max": 0.0,
+            "mean": 0.0,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        },
+        "game_event": {
+          "total_ms": 1.085,
+          "active_tick_ms": {
+            "n": 1003,
+            "p50": 0.0,
+            "p95": 0.0,
+            "p99": 0.0,
+            "max": 0.765,
+            "mean": 0.0010817547357926222,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        },
+        "rays": {
+          "total_ms": 374.274,
+          "active_tick_ms": {
+            "n": 1003,
+            "p50": 0.0,
+            "p95": 0.0,
+            "p99": 21.044,
+            "max": 29.761,
+            "mean": 0.3731545363908275,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        },
+        "entity_search": {
+          "total_ms": 4.726,
+          "active_tick_ms": {
+            "n": 1003,
+            "p50": 0.0,
+            "p95": 0.0,
+            "p99": 0.124,
+            "max": 2.211,
+            "mean": 0.004711864406779661,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        },
+        "detonate": {
+          "total_ms": 8.72,
+          "active_tick_ms": {
+            "n": 1003,
+            "p50": 0.0,
+            "p95": 0.0,
+            "p99": 0.499,
+            "max": 1.06,
+            "mean": 0.008693918245264207,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        },
+        "damage": {
+          "total_ms": 810.579,
+          "active_tick_ms": {
+            "n": 1003,
+            "p50": 0.0,
+            "p95": 0.033,
+            "p99": 23.53,
+            "max": 25.587,
+            "mean": 0.8081545363908275,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        },
+        "split": {
+          "total_ms": 2.824,
+          "active_tick_ms": {
+            "n": 1003,
+            "p50": 0.0,
+            "p95": 0.0,
+            "p99": 0.06,
+            "max": 1.443,
+            "mean": 0.00281555333998006,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        },
+        "craft_blocks": {
+          "total_ms": 0.0,
+          "active_tick_ms": {
+            "n": 1003,
+            "p50": 0.0,
+            "p95": 0.0,
+            "p99": 0.0,
+            "max": 0.0,
+            "mean": 0.0,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        },
+        "snapshot": {
+          "total_ms": 0.894,
+          "active_tick_ms": {
+            "n": 1003,
+            "p50": 0.0,
+            "p95": 0.0,
+            "p99": 0.012,
+            "max": 0.403,
+            "mean": 0.0008913260219341974,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        }
+      },
+      "mobs": {
+        "live": {
+          "n": 50,
+          "p50": 0,
+          "p95": 5,
+          "p99": 23,
+          "max": 23,
+          "mean": 0.96,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        },
+        "panicking": {
+          "n": 50,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0,
+          "mean": 0,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        },
+        "fleeing": {
+          "n": 50,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0,
+          "mean": 0,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        },
+        "searches_live_total": {
+          "n": 50,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0,
+          "mean": 0,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        },
+        "irradiated": {
+          "n": 50,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0,
+          "mean": 0,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        },
+        "contaminated": {
+          "n": 50,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0,
+          "mean": 0,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        },
+        "positive_dose_rate": {
+          "n": 50,
+          "p50": 0,
+          "p95": 0,
+          "p99": 0,
+          "max": 0,
+          "mean": 0,
+          "over33": 0,
+          "over50": 0,
+          "over100": 0,
+          "over250": 0
+        }
+      },
+      "packet_objects": {
+        "c2s": {
+          "sum": 237,
+          "per_second": 4.721952132316031,
+          "per_tick": {
+            "n": 1004,
+            "p50": 0,
+            "p95": 1,
+            "p99": 1,
+            "max": 2,
+            "mean": 0.2360557768924303,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        },
+        "s2c": {
+          "sum": 76081,
+          "per_second": 1515.8263298680843,
+          "per_tick": {
+            "n": 1004,
+            "p50": 16,
+            "p95": 286,
+            "p99": 385,
+            "max": 554,
+            "mean": 75.77788844621514,
+            "over33": 345,
+            "over50": 320,
+            "over100": 294,
+            "over250": 80
+          }
+        },
+        "incoming": {
+          "sum": 973,
+          "per_second": 19.38590474575316,
+          "per_tick": {
+            "n": 1004,
+            "p50": 0,
+            "p95": 3,
+            "p99": 10,
+            "max": 14,
+            "mean": 0.9691235059760956,
+            "over33": 0,
+            "over50": 0,
+            "over100": 0,
+            "over250": 0
+          }
+        }
+      }
+    }
+  }
+}

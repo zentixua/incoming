@@ -1,0 +1,45 @@
+{
+  "game_versions": [
+    "1.21.1"
+  ],
+  "loaders": [
+    "fabric",
+    "neoforge"
+  ],
+  "environment": "client_only",
+  "id": "VOO9rtUe",
+  "project_id": "c3onkd5k",
+  "author_id": "hFqrr48O",
+  "featured": false,
+  "name": "AsyncParticles 21.1.4.0",
+  "version_number": "21.1.4.0",
+  "changelog": "- Auto disable RUOK's async particle tick.\n- Particle Rain v4-beta.11 compat.\n  - No longer support v4-beta.10 with Create mod.\n- A Good Place compatibility fix.",
+  "changelog_url": null,
+  "date_published": "2026-08-25T14:39:21.476600Z",
+  "downloads": 1199,
+  "version_type": "beta",
+  "status": "listed",
+  "requested_status": null,
+  "files": [
+    {
+      "id": "rCg8MHa5",
+      "hashes": {
+        "sha1": "bb4a1013a2d720285225952927167f22a64d9cc9",
+        "sha512": "fbbd3e59ba8b5cbcb73fef4d84d3543dcb98ca72ee732b989b45ff44e029bcdf4fe39d9df443b8589631a5e70491b80fdb064f868d11ca04e34a638777496569"
+      },
+      "url": "https://cdn.modrinth.com/data/c3onkd5k/versions/VOO9rtUe/AsyncParticles-21.1.4.0%2B1.21.1.jar",
+      "filename": "AsyncParticles-21.1.4.0+1.21.1.jar",
+      "primary": true,
+      "size": 1269710,
+      "file_type": null
+    }
+  ],
+  "dependencies": [
+    {
+      "version_id": null,
+      "project_id": "9s6osm5g",
+      "file_name": null,
+      "dependency_type": "optional"
+    }
+  ]
+}

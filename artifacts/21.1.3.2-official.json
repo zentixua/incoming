@@ -1,0 +1,45 @@
+{
+  "game_versions": [
+    "1.21.1"
+  ],
+  "loaders": [
+    "fabric",
+    "neoforge"
+  ],
+  "environment": "client_only",
+  "id": "lcE6m2Tf",
+  "project_id": "c3onkd5k",
+  "author_id": "hFqrr48O",
+  "featured": false,
+  "name": "AsyncParticles 21.1.3.2",
+  "version_number": "21.1.3.2",
+  "changelog": "- Fixed GPU particle color (SquidInkParticle).\n- Fixed Wakes compatibility.",
+  "changelog_url": null,
+  "date_published": "2026-08-05T02:22:31.494285Z",
+  "downloads": 2892,
+  "version_type": "beta",
+  "status": "listed",
+  "requested_status": null,
+  "files": [
+    {
+      "id": "Zv4DRbLd",
+      "hashes": {
+        "sha512": "bd3ecc5f15afffeea776f4d49083810b8106bde2bd591b49f7c143a1c55e0ee79da98e4b1e8dcdaedf6282d705b8fb3f903eacea317419b0ee343a0797561c60",
+        "sha1": "2dfa7a762fa4871b9e0a307f76f02f9facec6b61"
+      },
+      "url": "https://cdn.modrinth.com/data/c3onkd5k/versions/lcE6m2Tf/AsyncParticles-21.1.3.2%2B1.21.1.jar",
+      "filename": "AsyncParticles-21.1.3.2+1.21.1.jar",
+      "primary": true,
+      "size": 1196213,
+      "file_type": null
+    }
+  ],
+  "dependencies": [
+    {
+      "version_id": null,
+      "project_id": "9s6osm5g",
+      "file_name": null,
+      "dependency_type": "optional"
+    }
+  ]
+}

@@ -1,0 +1,787 @@
+{
+  "origin_epoch_ms": 1793781655542.875,
+  "gc": [
+    {
+      "end_ms": -28019.875,
+      "duration_ms": 2.408
+    },
+    {
+      "end_ms": -27851.875,
+      "duration_ms": 2.22
+    },
+    {
+      "end_ms": -27673.875,
+      "duration_ms": 2.157
+    },
+    {
+      "end_ms": -27517.875,
+      "duration_ms": 2.848
+    },
+    {
+      "end_ms": -27327.875,
+      "duration_ms": 2.031
+    },
+    {
+      "end_ms": -27322.875,
+      "duration_ms": 1.371
+    },
+    {
+      "end_ms": -27321.875,
+      "duration_ms": 0.021
+    },
+    {
+      "end_ms": -26284.875,
+      "duration_ms": 13.358
+    },
+    {
+      "end_ms": -26191.875,
+      "duration_ms": 9.076
+    },
+    {
+      "end_ms": -26137.875,
+      "duration_ms": 5.503
+    },
+    {
+      "end_ms": -25976.875,
+      "duration_ms": 10.185
+    },
+    {
+      "end_ms": -25953.875,
+      "duration_ms": 1.315
+    },
+    {
+      "end_ms": -25943.875,
+      "duration_ms": 5.259
+    },
+    {
+      "end_ms": -25936.875,
+      "duration_ms": 0.039
+    },
+    {
+      "end_ms": -25900.875,
+      "duration_ms": 3.174
+    },
+    {
+      "end_ms": -25101.875,
+      "duration_ms": 3.92
+    },
+    {
+      "end_ms": -24828.875,
+      "duration_ms": 11.05
+    },
+    {
+      "end_ms": -24743.875,
+      "duration_ms": 5.306
+    },
+    {
+      "end_ms": -24729.875,
+      "duration_ms": 1.608
+    },
+    {
+      "end_ms": -24723.875,
+      "duration_ms": 0.05
+    },
+    {
+      "end_ms": -23935.875,
+      "duration_ms": 7.052
+    },
+    {
+      "end_ms": -23769.875,
+      "duration_ms": 3.931
+    },
+    {
+      "end_ms": -23701.875,
+      "duration_ms": 2.611
+    },
+    {
+      "end_ms": -23698.875,
+      "duration_ms": 0.569
+    },
+    {
+      "end_ms": -23683.875,
+      "duration_ms": 1.254
+    },
+    {
+      "end_ms": -23677.875,
+      "duration_ms": 0.044
+    },
+    {
+      "end_ms": -23109.875,
+      "duration_ms": 9.359
+    },
+    {
+      "end_ms": -22593.875,
+      "duration_ms": 30.412
+    },
+    {
+      "end_ms": -22580.875,
+      "duration_ms": 11.924
+    },
+    {
+      "end_ms": -22497.875,
+      "duration_ms": 1.586
+    },
+    {
+      "end_ms": -22441.875,
+      "duration_ms": 0.062
+    },
+    {
+      "end_ms": -22113.875,
+      "duration_ms": 4.387
+    },
+    {
+      "end_ms": -21515.875,
+      "duration_ms": 9.071
+    },
+    {
+      "end_ms": -21507.875,
+      "duration_ms": 4.364
+    },
+    {
+      "end_ms": -21452.875,
+      "duration_ms": 1.596
+    },
+    {
+      "end_ms": -21423.875,
+      "duration_ms": 0.061
+    },
+    {
+      "end_ms": -20917.875,
+      "duration_ms": 5.984
+    },
+    {
+      "end_ms": -20512.875,
+      "duration_ms": 17.811
+    },
+    {
+      "end_ms": -20363.875,
+      "duration_ms": 9.735
+    },
+    {
+      "end_ms": -20268.875,
+      "duration_ms": 6.594
+    },
+    {
+      "end_ms": -20200.875,
+      "duration_ms": 1.978
+    },
+    {
+      "end_ms": -20142.875,
+      "duration_ms": 0.097
+    },
+    {
+      "end_ms": -20064.875,
+      "duration_ms": 10.545
+    },
+    {
+      "end_ms": -19911.875,
+      "duration_ms": 10.841
+    },
+    {
+      "end_ms": -19753.875,
+      "duration_ms": 7.911
+    },
+    {
+      "end_ms": -19551.875,
+      "duration_ms": 2.092
+    },
+    {
+      "end_ms": -19516.875,
+      "duration_ms": 9.558
+    },
+    {
+      "end_ms": -19437.875,
+      "duration_ms": 0.081
+    },
+    {
+      "end_ms": -19349.875,
+      "duration_ms": 14.162
+    },
+    {
+      "end_ms": -19083.875,
+      "duration_ms": 11.475
+    },
+    {
+      "end_ms": -18542.875,
+      "duration_ms": 13.614
+    },
+    {
+      "end_ms": -18444.875,
+      "duration_ms": 3.162
+    },
+    {
+      "end_ms": -18404.875,
+      "duration_ms": 0.087
+    },
+    {
+      "end_ms": -17768.875,
+      "duration_ms": 1.538
+    },
+    {
+      "end_ms": -10569.875,
+      "duration_ms": 4.292
+    },
+    {
+      "end_ms": -10250.875,
+      "duration_ms": 4.852
+    },
+    {
+      "end_ms": -10197.875,
+      "duration_ms": 2.528
+    },
+    {
+      "end_ms": -10174.875,
+      "duration_ms": 0.083
+    },
+    {
+      "end_ms": -9945.875,
+      "duration_ms": 8.385
+    },
+    {
+      "end_ms": -9673.875,
+      "duration_ms": 9.399
+    },
+    {
+      "end_ms": -9413.875,
+      "duration_ms": 11.363
+    },
+    {
+      "end_ms": -9351.875,
+      "duration_ms": 5.28
+    },
+    {
+      "end_ms": -9323.875,
+      "duration_ms": 0.07
+    },
+    {
+      "end_ms": -9177.875,
+      "duration_ms": 12.06
+    },
+    {
+      "end_ms": -8589.875,
+      "duration_ms": 13.101
+    },
+    {
+      "end_ms": -7436.875,
+      "duration_ms": 12.594
+    },
+    {
+      "end_ms": -7354.875,
+      "duration_ms": 3.328
+    },
+    {
+      "end_ms": -7316.875,
+      "duration_ms": 0.074
+    },
+    {
+      "end_ms": -6501.875,
+      "duration_ms": 14.782
+    },
+    {
+      "end_ms": -5198.875,
+      "duration_ms": 17.234
+    },
+    {
+      "end_ms": -4448.875,
+      "duration_ms": 17.46
+    },
+    {
+      "end_ms": -4348.875,
+      "duration_ms": 4.89
+    },
+    {
+      "end_ms": -4294.875,
+      "duration_ms": 0.092
+    },
+    {
+      "end_ms": -2835.875,
+      "duration_ms": 24.061
+    },
+    {
+      "end_ms": -954.875,
+      "duration_ms": 42.206
+    },
+    {
+      "end_ms": 933.125,
+      "duration_ms": 48.622
+    },
+    {
+      "end_ms": 1141.125,
+      "duration_ms": 13.88
+    },
+    {
+      "end_ms": 1217.125,
+      "duration_ms": 1.736
+    },
+    {
+      "end_ms": 3964.125,
+      "duration_ms": 36.649
+    },
+    {
+      "end_ms": 5659.125,
+      "duration_ms": 34.649
+    },
+    {
+      "end_ms": 6784.125,
+      "duration_ms": 47.574
+    },
+    {
+      "end_ms": 7219.125,
+      "duration_ms": 14.156
+    },
+    {
+      "end_ms": 7334.125,
+      "duration_ms": 50.528
+    },
+    {
+      "end_ms": 7501.125,
+      "duration_ms": 0.145
+    },
+    {
+      "end_ms": 7614.125,
+      "duration_ms": 41.478
+    },
+    {
+      "end_ms": 8369.125,
+      "duration_ms": 32.203
+    },
+    {
+      "end_ms": 9644.125,
+      "duration_ms": 27.697
+    },
+    {
+      "end_ms": 10048.125,
+      "duration_ms": 13.706
+    },
+    {
+      "end_ms": 10198.125,
+      "duration_ms": 0.111
+    },
+    {
+      "end_ms": 12559.125,
+      "duration_ms": 27.395
+    },
+    {
+      "end_ms": 27562.125,
+      "duration_ms": 25.478
+    },
+    {
+      "end_ms": 28272.125,
+      "duration_ms": 8.753
+    },
+    {
+      "end_ms": 28480.125,
+      "duration_ms": 5.37
+    },
+    {
+      "end_ms": 28622.125,
+      "duration_ms": 0.111
+    },
+    {
+      "end_ms": 39602.125,
+      "duration_ms": 11.156
+    },
+    {
+      "end_ms": 42611.125,
+      "duration_ms": 18.906
+    },
+    {
+      "end_ms": 42793.125,
+      "duration_ms": 13.217
+    },
+    {
+      "end_ms": 43023.125,
+      "duration_ms": 6.423
+    },
+    {
+      "end_ms": 43156.125,
+      "duration_ms": 0.085
+    },
+    {
+      "end_ms": 45287.125,
+      "duration_ms": 11.697
+    },
+    {
+      "end_ms": 65867.125,
+      "duration_ms": 17.441
+    },
+    {
+      "end_ms": 66582.125,
+      "duration_ms": 15.293
+    },
+    {
+      "end_ms": 66829.125,
+      "duration_ms": 7.923
+    },
+    {
+      "end_ms": 66964.125,
+      "duration_ms": 0.099
+    },
+    {
+      "end_ms": 67679.125,
+      "duration_ms": 212.453
+    },
+    {
+      "end_ms": 67707.125,
+      "duration_ms": 1.609
+    },
+    {
+      "end_ms": 67965.125,
+      "duration_ms": 5.24
+    },
+    {
+      "end_ms": 68046.125,
+      "duration_ms": 0.075
+    },
+    {
+      "end_ms": 70253.125,
+      "duration_ms": 175.504
+    },
+    {
+      "end_ms": 70257.125,
+      "duration_ms": 1.849
+    },
+    {
+      "end_ms": 70545.125,
+      "duration_ms": 13.789
+    },
+    {
+      "end_ms": 70625.125,
+      "duration_ms": 0.087
+    },
+    {
+      "end_ms": 75564.125,
+      "duration_ms": 13.329
+    },
+    {
+      "end_ms": 75831.125,
+      "duration_ms": 5.039
+    },
+    {
+      "end_ms": 75913.125,
+      "duration_ms": 0.08
+    },
+    {
+      "end_ms": 87508.125,
+      "duration_ms": 10.722
+    },
+    {
+      "end_ms": 91846.125,
+      "duration_ms": 2.28
+    },
+    {
+      "end_ms": 92115.125,
+      "duration_ms": 10.537
+    },
+    {
+      "end_ms": 92203.125,
+      "duration_ms": 0.1
+    },
+    {
+      "end_ms": 103370.125,
+      "duration_ms": 2.388
+    },
+    {
+      "end_ms": 114710.125,
+      "duration_ms": 3.126
+    },
+    {
+      "end_ms": 120124.125,
+      "duration_ms": 2.97
+    },
+    {
+      "end_ms": 120400.125,
+      "duration_ms": 8.2
+    },
+    {
+      "end_ms": 120489.125,
+      "duration_ms": 0.087
+    }
+  ],
+  "windows": {
+    "compat/rain": {
+      "power_profiles": [
+        "performance"
+      ],
+      "foreign_cpu_cores": {
+        "n": 3,
+        "p50": 0.01,
+        "p95": 0.01,
+        "p99": 0.01,
+        "max": 0.01,
+        "mean": 0.006666666666666667,
+        "over33": 0,
+        "over50": 0,
+        "over100": 0,
+        "over250": 0
+      },
+      "gpu_clock_mhz": {
+        "n": 3,
+        "p50": 2205.0,
+        "p95": 2550.0,
+        "p99": 2550.0,
+        "max": 2550.0,
+        "mean": 2315.0,
+        "over33": 3,
+        "over50": 3,
+        "over100": 3,
+        "over250": 3
+      },
+      "gpu_temperature_c": {
+        "n": 3,
+        "p50": 83.0,
+        "p95": 85.0,
+        "p99": 85.0,
+        "max": 85.0,
+        "mean": 83.66666666666667,
+        "over33": 3,
+        "over50": 3,
+        "over100": 0,
+        "over250": 0
+      },
+      "foreign_gpu_percent": {
+        "n": 3,
+        "p50": 4.4,
+        "p95": 4.4,
+        "p99": 4.4,
+        "max": 4.4,
+        "mean": 2.9333333333333336,
+        "over33": 0,
+        "over50": 0,
+        "over100": 0,
+        "over250": 0
+      },
+      "gc_pause_ms": {
+        "n": 4,
+        "p50": 2.28,
+        "p95": 10.537,
+        "p99": 10.537,
+        "max": 10.537,
+        "mean": 3.82625,
+        "over33": 0,
+        "over50": 0,
+        "over100": 0,
+        "over250": 0
+      },
+      "packets_per_tick": {
+        "c2s": null,
+        "s2c": null,
+        "incoming": null
+      },
+      "block_writes_per_tick": {
+        "total": null,
+        "air": null,
+        "fire": null
+      },
+      "block_writes_total": null,
+      "packet_counter_available": false,
+      "block_counter_available": false,
+      "native_entry_wall_ms": null,
+      "native_entry_wall_sum_ms": null
+    },
+    "compat/aftermath": {
+      "power_profiles": [
+        "performance"
+      ],
+      "foreign_cpu_cores": {
+        "n": 3,
+        "p50": 0.02,
+        "p95": 0.03,
+        "p99": 0.03,
+        "max": 0.03,
+        "mean": 0.016666666666666666,
+        "over33": 0,
+        "over50": 0,
+        "over100": 0,
+        "over250": 0
+      },
+      "gpu_clock_mhz": {
+        "n": 3,
+        "p50": 2175.0,
+        "p95": 2355.0,
+        "p99": 2355.0,
+        "max": 2355.0,
+        "mean": 2235.0,
+        "over33": 3,
+        "over50": 3,
+        "over100": 3,
+        "over250": 3
+      },
+      "gpu_temperature_c": {
+        "n": 3,
+        "p50": 83.0,
+        "p95": 84.0,
+        "p99": 84.0,
+        "max": 84.0,
+        "mean": 83.33333333333333,
+        "over33": 3,
+        "over50": 3,
+        "over100": 0,
+        "over250": 0
+      },
+      "foreign_gpu_percent": {
+        "n": 3,
+        "p50": 3.6,
+        "p95": 9.6,
+        "p99": 9.6,
+        "max": 9.6,
+        "mean": 4.4,
+        "over33": 0,
+        "over50": 0,
+        "over100": 0,
+        "over250": 0
+      },
+      "gc_pause_ms": {
+        "n": 1,
+        "p50": 3.126,
+        "p95": 3.126,
+        "p99": 3.126,
+        "max": 3.126,
+        "mean": 3.126,
+        "over33": 0,
+        "over50": 0,
+        "over100": 0,
+        "over250": 0
+      },
+      "packets_per_tick": {
+        "c2s": null,
+        "s2c": null,
+        "incoming": null
+      },
+      "block_writes_per_tick": {
+        "total": null,
+        "air": null,
+        "fire": null
+      },
+      "block_writes_total": null,
+      "packet_counter_available": false,
+      "block_counter_available": false,
+      "native_entry_wall_ms": null,
+      "native_entry_wall_sum_ms": null
+    }
+  },
+  "native_entries": [
+    {
+      "kind": "incoming-drone",
+      "at": [
+        6.5,
+        67.0,
+        6.5
+      ],
+      "entry_ms": 25.642478,
+      "start_ms": 103739.885669
+    }
+  ],
+  "screenlocker_mentions": [],
+  "commands": [
+    {
+      "cmd": "gamemode spectator Dev",
+      "t_ms": 67419.98,
+      "execution_wall_ms": 15.706200000000536,
+      "queue_wait_ms": 15.422299999991083
+    },
+    {
+      "cmd": "time set 18000",
+      "t_ms": 67420.884,
+      "execution_wall_ms": 0.7758000000030734,
+      "queue_wait_ms": 29.966599999999744
+    },
+    {
+      "cmd": "weather clear 1000000",
+      "t_ms": 67421.107,
+      "execution_wall_ms": 0.18280000000959262,
+      "queue_wait_ms": 30.778200000000652
+    },
+    {
+      "cmd": "gamerule doFireTick true",
+      "t_ms": 67421.97,
+      "execution_wall_ms": 0.8408999999955995,
+      "queue_wait_ms": 30.981100000004517
+    },
+    {
+      "cmd": "tp Dev -15.00 76.38 28.00 facing 5.00 71.00 5.00",
+      "t_ms": 72406.984,
+      "execution_wall_ms": 3.501799999998184,
+      "queue_wait_ms": 0.030899999997927807
+    },
+    {
+      "cmd": "time set 18000",
+      "t_ms": 78294.227,
+      "execution_wall_ms": 0.335399999996298,
+      "queue_wait_ms": 0.43640000000596046
+    },
+    {
+      "cmd": "forceload add -48 -48 48 48",
+      "t_ms": 78297.196,
+      "execution_wall_ms": 2.9548999999969965,
+      "queue_wait_ms": 0.7798000000038883
+    },
+    {
+      "cmd": "fill 0 72 0 12 72 12 stone_bricks",
+      "t_ms": 83366.375,
+      "execution_wall_ms": 22.57249999999476,
+      "queue_wait_ms": 0.010999999998603016
+    },
+    {
+      "cmd": "fill 0 73 0 12 77 12 glass hollow",
+      "t_ms": 83374.593,
+      "execution_wall_ms": 8.18509999998787,
+      "queue_wait_ms": 22.61040000000503
+    },
+    {
+      "cmd": "setblock 6 76 6 sea_lantern",
+      "t_ms": 83375.391,
+      "execution_wall_ms": 0.7731999999959953,
+      "queue_wait_ms": 30.819200000012643
+    },
+    {
+      "cmd": "sable assemble area 0 72 0 12 77 12",
+      "t_ms": 86388.747,
+      "execution_wall_ms": 43.49590000000899,
+      "queue_wait_ms": 0.010199999989708886
+    },
+    {
+      "cmd": "particle minecraft:block{block_state:{Name:\"minecraft:stone\"}} 6 79 6 5 0.1 5 0.05 800 force",
+      "t_ms": 87393.763,
+      "execution_wall_ms": 1.3254000000015367,
+      "queue_wait_ms": 0.015400000003864989
+    },
+    {
+      "cmd": "particle minecraft:flame 6 78 6 5 0.1 5 0.03 100 force",
+      "t_ms": 87393.902,
+      "execution_wall_ms": 0.11109999999462161,
+      "queue_wait_ms": 1.3611000000091735
+    },
+    {
+      "cmd": "weather rain",
+      "t_ms": 91646.481,
+      "execution_wall_ms": 0.3959999999933643,
+      "queue_wait_ms": 0.013000000006286427
+    },
+    {
+      "cmd": "weather clear",
+      "t_ms": 103695.508,
+      "execution_wall_ms": 0.2756000000081258,
+      "queue_wait_ms": 0.014699999999720603
+    },
+    {
+      "cmd": "perfa impact incoming-drone 6 67 6",
+      "t_ms": 103696.113,
+      "execution_wall_ms": 0.5865999999950873,
+      "queue_wait_ms": 0.30070000000705477
+    },
+    {
+      "cmd": "forceload remove all",
+      "t_ms": 119101.621,
+      "execution_wall_ms": 0.7972000000008848,
+      "queue_wait_ms": 0.015599999998812564
+    }
+  ],
+  "native_counts": {
+    "incoming-drone": 1
+  },
+  "native_expected": {
+    "incoming-drone": 1
+  },
+  "contract_issues": []
+}

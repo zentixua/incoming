@@ -1,0 +1,45 @@
+{
+  "game_versions": [
+    "1.21.1"
+  ],
+  "loaders": [
+    "fabric",
+    "neoforge"
+  ],
+  "environment": "client_only",
+  "id": "Nt25cwqo",
+  "project_id": "c3onkd5k",
+  "author_id": "hFqrr48O",
+  "featured": false,
+  "name": "AsyncParticles 21.1.4.6",
+  "version_number": "21.1.4.6",
+  "changelog": "- Fixed compatibility issues when used alongside Particle Rain v4.0.1 and Create.",
+  "changelog_url": null,
+  "date_published": "2026-10-08T15:06:27.328168Z",
+  "downloads": 15446,
+  "version_type": "beta",
+  "status": "listed",
+  "requested_status": null,
+  "files": [
+    {
+      "id": "SjxBT1Qs",
+      "hashes": {
+        "sha1": "077dccc160012bcc3720a94ac7b7bae84c5e76e1",
+        "sha512": "582ff7dfe573bcc2513ca6fb2740992cb1a7c78beb0951f76b934e3e6ad95aa86cafb7398506eb06aa2eea3be77e1d9ab5eb8f15d4b2484e89d4fa7030b66243"
+      },
+      "url": "https://cdn.modrinth.com/data/c3onkd5k/versions/Nt25cwqo/AsyncParticles-21.1.4.6%2B1.21.1.jar",
+      "filename": "AsyncParticles-21.1.4.6+1.21.1.jar",
+      "primary": true,
+      "size": 1256527,
+      "file_type": null
+    }
+  ],
+  "dependencies": [
+    {
+      "version_id": null,
+      "project_id": "9s6osm5g",
+      "file_name": null,
+      "dependency_type": "optional"
+    }
+  ]
+}

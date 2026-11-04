@@ -1,0 +1,443 @@
+{
+  "seed": 20261025,
+  "day_time": 18000,
+  "settle_s": 5,
+  "limit_s": 600,
+  "projectiles": [
+    "incoming:drone"
+  ],
+  "warheads": [
+    "incoming:strike"
+  ],
+  "probes": [
+    "ua.zentix.incoming.client.fx.layer.FxLayer#describeTiming",
+    "ua.zentix.incoming.client.far.FarRenderer#describeSmoke",
+    "ua.zentix.incoming.client.sound.BlastSounds#describe",
+    "ua.zentix.incoming.client.sound.ClientSounds#describe",
+    "ua.zentix.incoming.client.fx.FireSmoke#describe",
+    "ua.zentix.incoming.client.nuclear.NukeSounds#describe",
+    "ua.zentix.incoming.client.nuclear.NukePall#describe",
+    "ua.zentix.incoming.client.sound.OwnSources#describe",
+    "ua.zentix.stand.AuditProbes#particles",
+    "ua.zentix.stand.AuditProbes#particleClasses",
+    "ua.zentix.stand.LightProbe#read",
+    "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryGpuOnlyAsyncParticleTick",
+    "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryDisableAsyncParticleTick",
+    "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryDisableAnimationTick",
+    "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryDisableAsyncRainTick"
+  ],
+  "once": [
+    "net.irisshaders.iris.Iris#getCurrentPackName",
+    "net.irisshaders.iris.Iris#isPackInUseQuick"
+  ],
+  "steps": [
+    {
+      "do": "tp",
+      "eye": [
+        -18,
+        77,
+        28
+      ],
+      "look": [
+        6,
+        72,
+        6
+      ],
+      "settle_s": 5
+    },
+    {
+      "do": "cmd",
+      "cmd": "time set 6000"
+    },
+    {
+      "do": "cmd",
+      "cmd": "weather clear"
+    },
+    {
+      "do": "cmd",
+      "cmd": "forceload add -48 -48 48 48"
+    },
+    {
+      "do": "wait",
+      "s": 5
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill 0 72 0 12 100 12 stone_bricks hollow"
+    },
+    {
+      "do": "wait",
+      "s": 3
+    },
+    {
+      "do": "cmd",
+      "cmd": "sable assemble area 0 72 0 12 100 12"
+    },
+    {
+      "do": "wait",
+      "s": 5
+    },
+    {
+      "do": "shot",
+      "name": "dark-assembled"
+    },
+    {
+      "do": "tp",
+      "eye": [
+        6.5,
+        80.5,
+        6.5
+      ],
+      "look": [
+        6.5,
+        79,
+        1
+      ],
+      "settle_s": 3
+    },
+    {
+      "do": "cmd",
+      "cmd": "particle minecraft:block{block_state:{Name:\"minecraft:stone\"}} 6.5 80.5 6.5 0.2 0.1 0.2 0 24 force"
+    },
+    {
+      "do": "cmd",
+      "cmd": "particle minecraft:block{block_state:{Name:\"minecraft:stone\"}} 20.5 80.5 6.5 0.2 0.1 0.2 0 24 force"
+    },
+    {
+      "do": "wait",
+      "s": 0.2
+    },
+    {
+      "do": "cmd",
+      "cmd": "particle minecraft:block{block_state:{Name:\"minecraft:stone\"}} 6.5 80.5 6.5 0.2 0.1 0.2 0 24 force"
+    },
+    {
+      "do": "cmd",
+      "cmd": "particle minecraft:block{block_state:{Name:\"minecraft:stone\"}} 20.5 80.5 6.5 0.2 0.1 0.2 0 24 force"
+    },
+    {
+      "do": "wait",
+      "s": 0.2
+    },
+    {
+      "do": "cmd",
+      "cmd": "particle minecraft:block{block_state:{Name:\"minecraft:stone\"}} 6.5 80.5 6.5 0.2 0.1 0.2 0 24 force"
+    },
+    {
+      "do": "cmd",
+      "cmd": "particle minecraft:block{block_state:{Name:\"minecraft:stone\"}} 20.5 80.5 6.5 0.2 0.1 0.2 0 24 force"
+    },
+    {
+      "do": "wait",
+      "s": 0.2
+    },
+    {
+      "do": "shot",
+      "name": "dark-interior-2"
+    },
+    {
+      "do": "cmd",
+      "cmd": "particle minecraft:block{block_state:{Name:\"minecraft:stone\"}} 6.5 80.5 6.5 0.2 0.1 0.2 0 24 force"
+    },
+    {
+      "do": "cmd",
+      "cmd": "particle minecraft:block{block_state:{Name:\"minecraft:stone\"}} 20.5 80.5 6.5 0.2 0.1 0.2 0 24 force"
+    },
+    {
+      "do": "wait",
+      "s": 0.2
+    },
+    {
+      "do": "cmd",
+      "cmd": "particle minecraft:block{block_state:{Name:\"minecraft:stone\"}} 6.5 80.5 6.5 0.2 0.1 0.2 0 24 force"
+    },
+    {
+      "do": "cmd",
+      "cmd": "particle minecraft:block{block_state:{Name:\"minecraft:stone\"}} 20.5 80.5 6.5 0.2 0.1 0.2 0 24 force"
+    },
+    {
+      "do": "wait",
+      "s": 0.2
+    },
+    {
+      "do": "cmd",
+      "cmd": "particle minecraft:block{block_state:{Name:\"minecraft:stone\"}} 6.5 80.5 6.5 0.2 0.1 0.2 0 24 force"
+    },
+    {
+      "do": "cmd",
+      "cmd": "particle minecraft:block{block_state:{Name:\"minecraft:stone\"}} 20.5 80.5 6.5 0.2 0.1 0.2 0 24 force"
+    },
+    {
+      "do": "wait",
+      "s": 0.2
+    },
+    {
+      "do": "cmd",
+      "cmd": "particle minecraft:block{block_state:{Name:\"minecraft:stone\"}} 6.5 80.5 6.5 0.2 0.1 0.2 0 24 force"
+    },
+    {
+      "do": "cmd",
+      "cmd": "particle minecraft:block{block_state:{Name:\"minecraft:stone\"}} 20.5 80.5 6.5 0.2 0.1 0.2 0 24 force"
+    },
+    {
+      "do": "wait",
+      "s": 0.2
+    },
+    {
+      "do": "cmd",
+      "cmd": "particle minecraft:block{block_state:{Name:\"minecraft:stone\"}} 6.5 80.5 6.5 0.2 0.1 0.2 0 24 force"
+    },
+    {
+      "do": "cmd",
+      "cmd": "particle minecraft:block{block_state:{Name:\"minecraft:stone\"}} 20.5 80.5 6.5 0.2 0.1 0.2 0 24 force"
+    },
+    {
+      "do": "wait",
+      "s": 0.2
+    },
+    {
+      "do": "shot",
+      "name": "dark-interior-7"
+    },
+    {
+      "do": "cmd",
+      "cmd": "particle minecraft:block{block_state:{Name:\"minecraft:stone\"}} 6.5 80.5 6.5 0.2 0.1 0.2 0 24 force"
+    },
+    {
+      "do": "cmd",
+      "cmd": "particle minecraft:block{block_state:{Name:\"minecraft:stone\"}} 20.5 80.5 6.5 0.2 0.1 0.2 0 24 force"
+    },
+    {
+      "do": "wait",
+      "s": 0.2
+    },
+    {
+      "do": "cmd",
+      "cmd": "particle minecraft:block{block_state:{Name:\"minecraft:stone\"}} 6.5 80.5 6.5 0.2 0.1 0.2 0 24 force"
+    },
+    {
+      "do": "cmd",
+      "cmd": "particle minecraft:block{block_state:{Name:\"minecraft:stone\"}} 20.5 80.5 6.5 0.2 0.1 0.2 0 24 force"
+    },
+    {
+      "do": "wait",
+      "s": 0.2
+    },
+    {
+      "do": "cmd",
+      "cmd": "particle minecraft:block{block_state:{Name:\"minecraft:stone\"}} 6.5 80.5 6.5 0.2 0.1 0.2 0 24 force"
+    },
+    {
+      "do": "cmd",
+      "cmd": "particle minecraft:block{block_state:{Name:\"minecraft:stone\"}} 20.5 80.5 6.5 0.2 0.1 0.2 0 24 force"
+    },
+    {
+      "do": "wait",
+      "s": 0.2
+    },
+    {
+      "do": "cmd",
+      "cmd": "particle minecraft:block{block_state:{Name:\"minecraft:stone\"}} 6.5 80.5 6.5 0.2 0.1 0.2 0 24 force"
+    },
+    {
+      "do": "cmd",
+      "cmd": "particle minecraft:block{block_state:{Name:\"minecraft:stone\"}} 20.5 80.5 6.5 0.2 0.1 0.2 0 24 force"
+    },
+    {
+      "do": "wait",
+      "s": 0.2
+    },
+    {
+      "do": "cmd",
+      "cmd": "particle minecraft:block{block_state:{Name:\"minecraft:stone\"}} 6.5 80.5 6.5 0.2 0.1 0.2 0 24 force"
+    },
+    {
+      "do": "cmd",
+      "cmd": "particle minecraft:block{block_state:{Name:\"minecraft:stone\"}} 20.5 80.5 6.5 0.2 0.1 0.2 0 24 force"
+    },
+    {
+      "do": "wait",
+      "s": 0.2
+    },
+    {
+      "do": "cmd",
+      "cmd": "particle minecraft:block{block_state:{Name:\"minecraft:stone\"}} 6.5 80.5 6.5 0.2 0.1 0.2 0 24 force"
+    },
+    {
+      "do": "cmd",
+      "cmd": "particle minecraft:block{block_state:{Name:\"minecraft:stone\"}} 20.5 80.5 6.5 0.2 0.1 0.2 0 24 force"
+    },
+    {
+      "do": "wait",
+      "s": 0.2
+    },
+    {
+      "do": "cmd",
+      "cmd": "particle minecraft:block{block_state:{Name:\"minecraft:stone\"}} 6.5 80.5 6.5 0.2 0.1 0.2 0 24 force"
+    },
+    {
+      "do": "cmd",
+      "cmd": "particle minecraft:block{block_state:{Name:\"minecraft:stone\"}} 20.5 80.5 6.5 0.2 0.1 0.2 0 24 force"
+    },
+    {
+      "do": "wait",
+      "s": 0.2
+    },
+    {
+      "do": "shot",
+      "name": "dark-interior-14"
+    },
+    {
+      "do": "cmd",
+      "cmd": "particle minecraft:block{block_state:{Name:\"minecraft:stone\"}} 6.5 80.5 6.5 0.2 0.1 0.2 0 24 force"
+    },
+    {
+      "do": "cmd",
+      "cmd": "particle minecraft:block{block_state:{Name:\"minecraft:stone\"}} 20.5 80.5 6.5 0.2 0.1 0.2 0 24 force"
+    },
+    {
+      "do": "wait",
+      "s": 0.2
+    },
+    {
+      "do": "cmd",
+      "cmd": "particle minecraft:block{block_state:{Name:\"minecraft:stone\"}} 6.5 80.5 6.5 0.2 0.1 0.2 0 24 force"
+    },
+    {
+      "do": "cmd",
+      "cmd": "particle minecraft:block{block_state:{Name:\"minecraft:stone\"}} 20.5 80.5 6.5 0.2 0.1 0.2 0 24 force"
+    },
+    {
+      "do": "wait",
+      "s": 0.2
+    },
+    {
+      "do": "cmd",
+      "cmd": "particle minecraft:block{block_state:{Name:\"minecraft:stone\"}} 6.5 80.5 6.5 0.2 0.1 0.2 0 24 force"
+    },
+    {
+      "do": "cmd",
+      "cmd": "particle minecraft:block{block_state:{Name:\"minecraft:stone\"}} 20.5 80.5 6.5 0.2 0.1 0.2 0 24 force"
+    },
+    {
+      "do": "wait",
+      "s": 0.2
+    },
+    {
+      "do": "cmd",
+      "cmd": "particle minecraft:block{block_state:{Name:\"minecraft:stone\"}} 6.5 80.5 6.5 0.2 0.1 0.2 0 24 force"
+    },
+    {
+      "do": "cmd",
+      "cmd": "particle minecraft:block{block_state:{Name:\"minecraft:stone\"}} 20.5 80.5 6.5 0.2 0.1 0.2 0 24 force"
+    },
+    {
+      "do": "wait",
+      "s": 0.2
+    },
+    {
+      "do": "cmd",
+      "cmd": "particle minecraft:block{block_state:{Name:\"minecraft:stone\"}} 6.5 80.5 6.5 0.2 0.1 0.2 0 24 force"
+    },
+    {
+      "do": "cmd",
+      "cmd": "particle minecraft:block{block_state:{Name:\"minecraft:stone\"}} 20.5 80.5 6.5 0.2 0.1 0.2 0 24 force"
+    },
+    {
+      "do": "wait",
+      "s": 0.2
+    },
+    {
+      "do": "cmd",
+      "cmd": "particle minecraft:block{block_state:{Name:\"minecraft:stone\"}} 6.5 80.5 6.5 0.2 0.1 0.2 0 24 force"
+    },
+    {
+      "do": "cmd",
+      "cmd": "particle minecraft:block{block_state:{Name:\"minecraft:stone\"}} 20.5 80.5 6.5 0.2 0.1 0.2 0 24 force"
+    },
+    {
+      "do": "wait",
+      "s": 0.2
+    },
+    {
+      "do": "cmd",
+      "cmd": "particle minecraft:block{block_state:{Name:\"minecraft:stone\"}} 6.5 80.5 6.5 0.2 0.1 0.2 0 24 force"
+    },
+    {
+      "do": "cmd",
+      "cmd": "particle minecraft:block{block_state:{Name:\"minecraft:stone\"}} 20.5 80.5 6.5 0.2 0.1 0.2 0 24 force"
+    },
+    {
+      "do": "wait",
+      "s": 0.2
+    },
+    {
+      "do": "cmd",
+      "cmd": "particle minecraft:block{block_state:{Name:\"minecraft:stone\"}} 6.5 80.5 6.5 0.2 0.1 0.2 0 24 force"
+    },
+    {
+      "do": "cmd",
+      "cmd": "particle minecraft:block{block_state:{Name:\"minecraft:stone\"}} 20.5 80.5 6.5 0.2 0.1 0.2 0 24 force"
+    },
+    {
+      "do": "wait",
+      "s": 0.2
+    },
+    {
+      "do": "cmd",
+      "cmd": "particle minecraft:block{block_state:{Name:\"minecraft:stone\"}} 6.5 80.5 6.5 0.2 0.1 0.2 0 24 force"
+    },
+    {
+      "do": "cmd",
+      "cmd": "particle minecraft:block{block_state:{Name:\"minecraft:stone\"}} 20.5 80.5 6.5 0.2 0.1 0.2 0 24 force"
+    },
+    {
+      "do": "wait",
+      "s": 0.2
+    },
+    {
+      "do": "shot",
+      "name": "dark-interior-23"
+    },
+    {
+      "do": "tp",
+      "eye": [
+        -18,
+        77,
+        28
+      ],
+      "look": [
+        6,
+        72,
+        6
+      ],
+      "settle_s": 3
+    },
+    {
+      "do": "cmd",
+      "cmd": "weather rain"
+    },
+    {
+      "do": "window",
+      "name": "dark-compat/rain",
+      "s": 12
+    },
+    {
+      "do": "shot",
+      "name": "dark-rain"
+    },
+    {
+      "do": "cmd",
+      "cmd": "weather clear"
+    },
+    {
+      "do": "cmd",
+      "cmd": "forceload remove all"
+    },
+    {
+      "do": "wait",
+      "s": 3
+    }
+  ],
+  "perfa_no_shots": false
+}

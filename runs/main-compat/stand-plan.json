@@ -1,0 +1,175 @@
+{
+  "seed": 20261025,
+  "day_time": 18000,
+  "settle_s": 5,
+  "limit_s": 600,
+  "projectiles": [
+    "incoming:drone"
+  ],
+  "warheads": [
+    "incoming:strike"
+  ],
+  "probes": [
+    "ua.zentix.incoming.client.fx.layer.FxLayer#describeTiming",
+    "ua.zentix.incoming.client.far.FarRenderer#describeSmoke",
+    "ua.zentix.incoming.client.sound.BlastSounds#describe",
+    "ua.zentix.incoming.client.sound.ClientSounds#describe",
+    "ua.zentix.incoming.client.fx.FireSmoke#describe",
+    "ua.zentix.incoming.client.nuclear.NukeSounds#describe",
+    "ua.zentix.incoming.client.nuclear.NukePall#describe",
+    "ua.zentix.incoming.client.sound.OwnSources#describe",
+    "ua.zentix.stand.AuditProbes#particles",
+    "ua.zentix.stand.AuditProbes#particleClasses",
+    "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryGpuOnlyAsyncParticleTick",
+    "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryDisableAsyncParticleTick",
+    "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryDisableAnimationTick",
+    "neoforge.fun.qu_an.minecraft.asyncparticles.client.core.Diagnostic#isTemporaryDisableAsyncRainTick"
+  ],
+  "once": [
+    "net.irisshaders.iris.Iris#getCurrentPackName",
+    "net.irisshaders.iris.Iris#isPackInUseQuick"
+  ],
+  "steps": [
+    {
+      "do": "tp",
+      "eye": [
+        -15,
+        78,
+        28
+      ],
+      "look": [
+        5,
+        71,
+        5
+      ],
+      "settle_s": 5
+    },
+    {
+      "do": "cmd",
+      "cmd": "time set 18000"
+    },
+    {
+      "do": "cmd",
+      "cmd": "forceload add -48 -48 48 48"
+    },
+    {
+      "do": "wait",
+      "s": 5
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill 0 72 0 12 72 12 stone_bricks"
+    },
+    {
+      "do": "cmd",
+      "cmd": "fill 0 73 0 12 77 12 glass hollow"
+    },
+    {
+      "do": "cmd",
+      "cmd": "setblock 6 76 6 sea_lantern"
+    },
+    {
+      "do": "wait",
+      "s": 3
+    },
+    {
+      "do": "cmd",
+      "cmd": "sable assemble area 0 72 0 12 77 12"
+    },
+    {
+      "do": "wait",
+      "s": 1
+    },
+    {
+      "do": "shot",
+      "name": "sable-assembled"
+    },
+    {
+      "do": "cmd",
+      "cmd": "particle minecraft:block{block_state:{Name:\"minecraft:stone\"}} 6 79 6 5 0.1 5 0.05 800 force"
+    },
+    {
+      "do": "cmd",
+      "cmd": "particle minecraft:flame 6 78 6 5 0.1 5 0.03 100 force"
+    },
+    {
+      "do": "wait",
+      "s": 0.25
+    },
+    {
+      "do": "shot",
+      "name": "sable-particles-quarter"
+    },
+    {
+      "do": "wait",
+      "s": 0.75
+    },
+    {
+      "do": "shot",
+      "name": "sable-particles-one"
+    },
+    {
+      "do": "wait",
+      "s": 3
+    },
+    {
+      "do": "shot",
+      "name": "sable-particles-four"
+    },
+    {
+      "do": "cmd",
+      "cmd": "weather rain"
+    },
+    {
+      "do": "window",
+      "name": "compat/rain",
+      "s": 12
+    },
+    {
+      "do": "shot",
+      "name": "sable-rain"
+    },
+    {
+      "do": "cmd",
+      "cmd": "weather clear"
+    },
+    {
+      "do": "cmd",
+      "cmd": "perfa impact incoming-drone 6 67 6"
+    },
+    {
+      "do": "wait",
+      "s": 0.3
+    },
+    {
+      "do": "shot",
+      "name": "sable-impact-start"
+    },
+    {
+      "do": "wait",
+      "s": 2.7
+    },
+    {
+      "do": "shot",
+      "name": "sable-impact-three"
+    },
+    {
+      "do": "window",
+      "name": "compat/aftermath",
+      "s": 12
+    },
+    {
+      "do": "shot",
+      "name": "sable-impact-fifteen"
+    },
+    {
+      "do": "cmd",
+      "cmd": "forceload remove all"
+    },
+    {
+      "do": "wait",
+      "s": 3
+    }
+  ],
+  "perfa_no_shots": false
+}

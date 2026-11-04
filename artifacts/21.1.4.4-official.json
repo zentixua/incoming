@@ -1,0 +1,45 @@
+{
+  "game_versions": [
+    "1.21.1"
+  ],
+  "loaders": [
+    "fabric",
+    "neoforge"
+  ],
+  "environment": "client_only",
+  "id": "KE9oULCD",
+  "project_id": "c3onkd5k",
+  "author_id": "hFqrr48O",
+  "featured": false,
+  "name": "AsyncParticles 21.1.4.4",
+  "version_number": "21.1.4.4",
+  "changelog": "- Fixed crash with Physics Mod Pro.",
+  "changelog_url": null,
+  "date_published": "2026-09-15T16:19:20.373188Z",
+  "downloads": 19239,
+  "version_type": "beta",
+  "status": "listed",
+  "requested_status": null,
+  "files": [
+    {
+      "id": "aWarNHXt",
+      "hashes": {
+        "sha1": "725a3bcecf32079b7159ec284231c4cfaedf3302",
+        "sha512": "e7a6d9a82282980f56788ba749589a5aa63d04843effb7c497af7546f0131a6c43b26f9fe6b2625453f3375bc1a4725a6124d1a3d722bc4e5b80e16dd9162fdb"
+      },
+      "url": "https://cdn.modrinth.com/data/c3onkd5k/versions/KE9oULCD/AsyncParticles-21.1.4.4%2B1.21.1.jar",
+      "filename": "AsyncParticles-21.1.4.4+1.21.1.jar",
+      "primary": true,
+      "size": 1253538,
+      "file_type": null
+    }
+  ],
+  "dependencies": [
+    {
+      "version_id": null,
+      "project_id": "9s6osm5g",
+      "file_name": null,
+      "dependency_type": "optional"
+    }
+  ]
+}

@@ -1,0 +1,45 @@
+{
+  "game_versions": [
+    "1.21.1"
+  ],
+  "loaders": [
+    "fabric",
+    "neoforge"
+  ],
+  "environment": "client_only",
+  "id": "8S3JSSbl",
+  "project_id": "c3onkd5k",
+  "author_id": "hFqrr48O",
+  "featured": false,
+  "name": "AsyncParticles 21.1.4.5",
+  "version_number": "21.1.4.5",
+  "changelog": "- Mitigated a bug in Sable that could cause an excessively long loop when getting particle light color.\n- Fixed compatibility with newer versions of Physics Mod.",
+  "changelog_url": null,
+  "date_published": "2026-09-26T05:51:59.267186Z",
+  "downloads": 41932,
+  "version_type": "beta",
+  "status": "listed",
+  "requested_status": null,
+  "files": [
+    {
+      "id": "XYQOtDIS",
+      "hashes": {
+        "sha512": "9eab01df3b5a26d432d659d0872f9fd7e377ffd4dfe3ddfb2566b298ed3cbe37db41c97621d459d8a2213436f150f03c13d4af27ed431955ebffc5acce2256d6",
+        "sha1": "6788dc6a5bb95ef5f9db7e87322a60f29bf7facb"
+      },
+      "url": "https://cdn.modrinth.com/data/c3onkd5k/versions/8S3JSSbl/AsyncParticles-21.1.4.5%2B1.21.1.jar",
+      "filename": "AsyncParticles-21.1.4.5+1.21.1.jar",
+      "primary": true,
+      "size": 1256671,
+      "file_type": null
+    }
+  ],
+  "dependencies": [
+    {
+      "version_id": null,
+      "project_id": "9s6osm5g",
+      "file_name": null,
+      "dependency_type": "optional"
+    }
+  ]
+}

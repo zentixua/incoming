@@ -1,0 +1,45 @@
+{
+  "game_versions": [
+    "1.21.1"
+  ],
+  "loaders": [
+    "fabric",
+    "neoforge"
+  ],
+  "environment": "client_only",
+  "id": "qLpoOaqY",
+  "project_id": "c3onkd5k",
+  "author_id": "hFqrr48O",
+  "featured": false,
+  "name": "AsyncParticles 21.1.4.10",
+  "version_number": "21.1.4.10",
+  "changelog": "- Fixed potential mod compatibility issues when `Compute Execution Stage` is set to `Level Rendering`.\n- Fixed the tracked particle count for sync particles was decremented twice.",
+  "changelog_url": null,
+  "date_published": "2026-10-19T15:14:36.397035Z",
+  "downloads": 31278,
+  "version_type": "beta",
+  "status": "listed",
+  "requested_status": null,
+  "files": [
+    {
+      "id": "bLA6tZLh",
+      "hashes": {
+        "sha512": "0b07cdbf6cf88c75e8c5fdedcf5d754579ec37e59294f22a45437cfa02b47e5af621827b3e001135b1f45765c80fb40582944788d63a9a06d2097baf23c9fafe",
+        "sha1": "ebc10f9aafc284df334e7cc2e986013c027d9450"
+      },
+      "url": "https://cdn.modrinth.com/data/c3onkd5k/versions/qLpoOaqY/AsyncParticles-21.1.4.10%2B1.21.1.jar",
+      "filename": "AsyncParticles-21.1.4.10+1.21.1.jar",
+      "primary": true,
+      "size": 1303563,
+      "file_type": null
+    }
+  ],
+  "dependencies": [
+    {
+      "version_id": null,
+      "project_id": "9s6osm5g",
+      "file_name": null,
+      "dependency_type": "optional"
+    }
+  ]
+}

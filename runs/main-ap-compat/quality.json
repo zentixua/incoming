@@ -1,0 +1,771 @@
+{
+  "origin_epoch_ms": 1793781484929.574,
+  "gc": [
+    {
+      "end_ms": -27878.573974609375,
+      "duration_ms": 2.964
+    },
+    {
+      "end_ms": -27706.573974609375,
+      "duration_ms": 2.55
+    },
+    {
+      "end_ms": -27524.573974609375,
+      "duration_ms": 2.197
+    },
+    {
+      "end_ms": -27354.573974609375,
+      "duration_ms": 2.887
+    },
+    {
+      "end_ms": -27174.573974609375,
+      "duration_ms": 2.238
+    },
+    {
+      "end_ms": -27169.573974609375,
+      "duration_ms": 1.275
+    },
+    {
+      "end_ms": -27168.573974609375,
+      "duration_ms": 0.028
+    },
+    {
+      "end_ms": -26117.573974609375,
+      "duration_ms": 13.868
+    },
+    {
+      "end_ms": -26043.573974609375,
+      "duration_ms": 8.678
+    },
+    {
+      "end_ms": -25973.573974609375,
+      "duration_ms": 5.623
+    },
+    {
+      "end_ms": -25816.573974609375,
+      "duration_ms": 8.46
+    },
+    {
+      "end_ms": -25788.573974609375,
+      "duration_ms": 1.338
+    },
+    {
+      "end_ms": -25772.573974609375,
+      "duration_ms": 0.037
+    },
+    {
+      "end_ms": -25579.573974609375,
+      "duration_ms": 4.966
+    },
+    {
+      "end_ms": -24913.573974609375,
+      "duration_ms": 3.987
+    },
+    {
+      "end_ms": -24766.573974609375,
+      "duration_ms": 5.449
+    },
+    {
+      "end_ms": -24746.573974609375,
+      "duration_ms": 1.776
+    },
+    {
+      "end_ms": -24736.573974609375,
+      "duration_ms": 0.039
+    },
+    {
+      "end_ms": -24630.573974609375,
+      "duration_ms": 3.381
+    },
+    {
+      "end_ms": -24505.573974609375,
+      "duration_ms": 7.504
+    },
+    {
+      "end_ms": -24501.573974609375,
+      "duration_ms": 2.499
+    },
+    {
+      "end_ms": -24487.573974609375,
+      "duration_ms": 1.465
+    },
+    {
+      "end_ms": -24481.573974609375,
+      "duration_ms": 0.044
+    },
+    {
+      "end_ms": -23729.573974609375,
+      "duration_ms": 2.725
+    },
+    {
+      "end_ms": -23636.573974609375,
+      "duration_ms": 2.811
+    },
+    {
+      "end_ms": -23600.573974609375,
+      "duration_ms": 1.152
+    },
+    {
+      "end_ms": -23586.573974609375,
+      "duration_ms": 1.151
+    },
+    {
+      "end_ms": -23580.573974609375,
+      "duration_ms": 0.052
+    },
+    {
+      "end_ms": -23337.573974609375,
+      "duration_ms": 1.531
+    },
+    {
+      "end_ms": -22885.573974609375,
+      "duration_ms": 10.678
+    },
+    {
+      "end_ms": -22808.573974609375,
+      "duration_ms": 7.24
+    },
+    {
+      "end_ms": -22785.573974609375,
+      "duration_ms": 1.579
+    },
+    {
+      "end_ms": -22773.573974609375,
+      "duration_ms": 0.074
+    },
+    {
+      "end_ms": -22509.573974609375,
+      "duration_ms": 19.572
+    },
+    {
+      "end_ms": -22314.573974609375,
+      "duration_ms": 16.033
+    },
+    {
+      "end_ms": -22301.573974609375,
+      "duration_ms": 3.76
+    },
+    {
+      "end_ms": -22183.573974609375,
+      "duration_ms": 2.867
+    },
+    {
+      "end_ms": -22139.573974609375,
+      "duration_ms": 0.082
+    },
+    {
+      "end_ms": -21888.573974609375,
+      "duration_ms": 3.923
+    },
+    {
+      "end_ms": -21431.573974609375,
+      "duration_ms": 8.878
+    },
+    {
+      "end_ms": -21409.573974609375,
+      "duration_ms": 3.711
+    },
+    {
+      "end_ms": -21352.573974609375,
+      "duration_ms": 1.69
+    },
+    {
+      "end_ms": -21323.573974609375,
+      "duration_ms": 0.071
+    },
+    {
+      "end_ms": -20862.573974609375,
+      "duration_ms": 3.536
+    },
+    {
+      "end_ms": -20419.573974609375,
+      "duration_ms": 5.716
+    },
+    {
+      "end_ms": -20236.573974609375,
+      "duration_ms": 9.802
+    },
+    {
+      "end_ms": -20105.573974609375,
+      "duration_ms": 1.829
+    },
+    {
+      "end_ms": -20074.573974609375,
+      "duration_ms": 9.387
+    },
+    {
+      "end_ms": -20035.573974609375,
+      "duration_ms": 0.083
+    },
+    {
+      "end_ms": -19980.573974609375,
+      "duration_ms": 6.454
+    },
+    {
+      "end_ms": -19816.573974609375,
+      "duration_ms": 9.113
+    },
+    {
+      "end_ms": -19691.573974609375,
+      "duration_ms": 8.52
+    },
+    {
+      "end_ms": -19529.573974609375,
+      "duration_ms": 2.496
+    },
+    {
+      "end_ms": -19491.573974609375,
+      "duration_ms": 7.578
+    },
+    {
+      "end_ms": -19425.573974609375,
+      "duration_ms": 0.067
+    },
+    {
+      "end_ms": -19333.573974609375,
+      "duration_ms": 7.724
+    },
+    {
+      "end_ms": -19181.573974609375,
+      "duration_ms": 12.184
+    },
+    {
+      "end_ms": -19012.573974609375,
+      "duration_ms": 13.793
+    },
+    {
+      "end_ms": -18885.573974609375,
+      "duration_ms": 3.019
+    },
+    {
+      "end_ms": -18841.573974609375,
+      "duration_ms": 0.097
+    },
+    {
+      "end_ms": -18165.573974609375,
+      "duration_ms": 15.554
+    },
+    {
+      "end_ms": -9919.573974609375,
+      "duration_ms": 11.875
+    },
+    {
+      "end_ms": -9442.573974609375,
+      "duration_ms": 5.454
+    },
+    {
+      "end_ms": -9387.573974609375,
+      "duration_ms": 2.901
+    },
+    {
+      "end_ms": -9354.573974609375,
+      "duration_ms": 0.083
+    },
+    {
+      "end_ms": -8992.573974609375,
+      "duration_ms": 10.41
+    },
+    {
+      "end_ms": -8618.573974609375,
+      "duration_ms": 14.793
+    },
+    {
+      "end_ms": -8230.573974609375,
+      "duration_ms": 21.154
+    },
+    {
+      "end_ms": -8156.573974609375,
+      "duration_ms": 2.64
+    },
+    {
+      "end_ms": -8122.573974609375,
+      "duration_ms": 0.134
+    },
+    {
+      "end_ms": -7545.573974609375,
+      "duration_ms": 16.958
+    },
+    {
+      "end_ms": -5554.573974609375,
+      "duration_ms": 14.649
+    },
+    {
+      "end_ms": -4620.573974609375,
+      "duration_ms": 16.653
+    },
+    {
+      "end_ms": -4538.573974609375,
+      "duration_ms": 7.284
+    },
+    {
+      "end_ms": -4501.573974609375,
+      "duration_ms": 0.072
+    },
+    {
+      "end_ms": -3417.573974609375,
+      "duration_ms": 16.768
+    },
+    {
+      "end_ms": -1891.573974609375,
+      "duration_ms": 22.42
+    },
+    {
+      "end_ms": -713.573974609375,
+      "duration_ms": 25.436
+    },
+    {
+      "end_ms": -617.573974609375,
+      "duration_ms": 5.182
+    },
+    {
+      "end_ms": -573.573974609375,
+      "duration_ms": 0.079
+    },
+    {
+      "end_ms": 1358.426025390625,
+      "duration_ms": 25.088
+    },
+    {
+      "end_ms": 2872.426025390625,
+      "duration_ms": 30.515
+    },
+    {
+      "end_ms": 3636.426025390625,
+      "duration_ms": 34.084
+    },
+    {
+      "end_ms": 3978.426025390625,
+      "duration_ms": 8.209
+    },
+    {
+      "end_ms": 4079.426025390625,
+      "duration_ms": 30.023
+    },
+    {
+      "end_ms": 4177.426025390625,
+      "duration_ms": 0.136
+    },
+    {
+      "end_ms": 4590.426025390625,
+      "duration_ms": 25.011
+    },
+    {
+      "end_ms": 5449.426025390625,
+      "duration_ms": 20.064
+    },
+    {
+      "end_ms": 24355.426025390625,
+      "duration_ms": 43.483
+    },
+    {
+      "end_ms": 24690.426025390625,
+      "duration_ms": 17.587
+    },
+    {
+      "end_ms": 24786.426025390625,
+      "duration_ms": 0.088
+    },
+    {
+      "end_ms": 26139.426025390625,
+      "duration_ms": 28.285
+    },
+    {
+      "end_ms": 38684.426025390625,
+      "duration_ms": 21.946
+    },
+    {
+      "end_ms": 42956.426025390625,
+      "duration_ms": 21.124
+    },
+    {
+      "end_ms": 43240.426025390625,
+      "duration_ms": 22.954
+    },
+    {
+      "end_ms": 43379.426025390625,
+      "duration_ms": 0.122
+    },
+    {
+      "end_ms": 43994.426025390625,
+      "duration_ms": 16.557
+    },
+    {
+      "end_ms": 59491.426025390625,
+      "duration_ms": 21.585
+    },
+    {
+      "end_ms": 60114.426025390625,
+      "duration_ms": 21.593
+    },
+    {
+      "end_ms": 60374.426025390625,
+      "duration_ms": 7.105
+    },
+    {
+      "end_ms": 60500.426025390625,
+      "duration_ms": 0.115
+    },
+    {
+      "end_ms": 61240.426025390625,
+      "duration_ms": 224.1
+    },
+    {
+      "end_ms": 61268.426025390625,
+      "duration_ms": 1.939
+    },
+    {
+      "end_ms": 61541.426025390625,
+      "duration_ms": 5.73
+    },
+    {
+      "end_ms": 61627.426025390625,
+      "duration_ms": 0.092
+    },
+    {
+      "end_ms": 70899.42602539062,
+      "duration_ms": 190.846
+    },
+    {
+      "end_ms": 70906.42602539062,
+      "duration_ms": 2.241
+    },
+    {
+      "end_ms": 71187.42602539062,
+      "duration_ms": 13.244
+    },
+    {
+      "end_ms": 71263.42602539062,
+      "duration_ms": 0.091
+    },
+    {
+      "end_ms": 77839.42602539062,
+      "duration_ms": 13.069
+    },
+    {
+      "end_ms": 77913.42602539062,
+      "duration_ms": 10.134
+    },
+    {
+      "end_ms": 78167.42602539062,
+      "duration_ms": 6.377
+    },
+    {
+      "end_ms": 78243.42602539062,
+      "duration_ms": 0.077
+    },
+    {
+      "end_ms": 91374.42602539062,
+      "duration_ms": 2.631
+    },
+    {
+      "end_ms": 91631.42602539062,
+      "duration_ms": 9.857
+    },
+    {
+      "end_ms": 91710.42602539062,
+      "duration_ms": 0.084
+    },
+    {
+      "end_ms": 103363.42602539062,
+      "duration_ms": 2.513
+    },
+    {
+      "end_ms": 110088.42602539062,
+      "duration_ms": 3.261
+    },
+    {
+      "end_ms": 110348.42602539062,
+      "duration_ms": 7.822
+    },
+    {
+      "end_ms": 110430.42602539062,
+      "duration_ms": 0.083
+    }
+  ],
+  "windows": {
+    "compat/rain": {
+      "power_profiles": [
+        "performance"
+      ],
+      "foreign_cpu_cores": {
+        "n": 3,
+        "p50": 0.09,
+        "p95": 0.59,
+        "p99": 0.59,
+        "max": 0.59,
+        "mean": 0.24333333333333332,
+        "over33": 0,
+        "over50": 0,
+        "over100": 0,
+        "over250": 0
+      },
+      "gpu_clock_mhz": {
+        "n": 3,
+        "p50": 2220.0,
+        "p95": 2550.0,
+        "p99": 2550.0,
+        "max": 2550.0,
+        "mean": 2305.0,
+        "over33": 3,
+        "over50": 3,
+        "over100": 3,
+        "over250": 3
+      },
+      "gpu_temperature_c": {
+        "n": 3,
+        "p50": 85.0,
+        "p95": 85.0,
+        "p99": 85.0,
+        "max": 85.0,
+        "mean": 83.66666666666667,
+        "over33": 3,
+        "over50": 3,
+        "over100": 0,
+        "over250": 0
+      },
+      "foreign_gpu_percent": {
+        "n": 3,
+        "p50": 0.0,
+        "p95": 2.8,
+        "p99": 2.8,
+        "max": 2.8,
+        "mean": 0.9333333333333332,
+        "over33": 0,
+        "over50": 0,
+        "over100": 0,
+        "over250": 0
+      },
+      "gc_pause_ms": {
+        "n": 1,
+        "p50": 2.513,
+        "p95": 2.513,
+        "p99": 2.513,
+        "max": 2.513,
+        "mean": 2.513,
+        "over33": 0,
+        "over50": 0,
+        "over100": 0,
+        "over250": 0
+      },
+      "packets_per_tick": {
+        "c2s": null,
+        "s2c": null,
+        "incoming": null
+      },
+      "block_writes_per_tick": {
+        "total": null,
+        "air": null,
+        "fire": null
+      },
+      "block_writes_total": null,
+      "packet_counter_available": false,
+      "block_counter_available": false,
+      "native_entry_wall_ms": null,
+      "native_entry_wall_sum_ms": null
+    },
+    "compat/aftermath": {
+      "power_profiles": [
+        "performance"
+      ],
+      "foreign_cpu_cores": {
+        "n": 3,
+        "p50": 0.0,
+        "p95": 0.02,
+        "p99": 0.02,
+        "max": 0.02,
+        "mean": 0.006666666666666667,
+        "over33": 0,
+        "over50": 0,
+        "over100": 0,
+        "over250": 0
+      },
+      "gpu_clock_mhz": {
+        "n": 3,
+        "p50": 2295.0,
+        "p95": 2355.0,
+        "p99": 2355.0,
+        "max": 2355.0,
+        "mean": 2295.0,
+        "over33": 3,
+        "over50": 3,
+        "over100": 3,
+        "over250": 3
+      },
+      "gpu_temperature_c": {
+        "n": 3,
+        "p50": 84.0,
+        "p95": 85.0,
+        "p99": 85.0,
+        "max": 85.0,
+        "mean": 84.0,
+        "over33": 3,
+        "over50": 3,
+        "over100": 0,
+        "over250": 0
+      },
+      "foreign_gpu_percent": {
+        "n": 3,
+        "p50": 0.0,
+        "p95": 0.0,
+        "p99": 0.0,
+        "max": 0.0,
+        "mean": 0.0,
+        "over33": 0,
+        "over50": 0,
+        "over100": 0,
+        "over250": 0
+      },
+      "gc_pause_ms": {
+        "n": 3,
+        "p50": 3.261,
+        "p95": 7.822,
+        "p99": 7.822,
+        "max": 7.822,
+        "mean": 3.722,
+        "over33": 0,
+        "over50": 0,
+        "over100": 0,
+        "over250": 0
+      },
+      "packets_per_tick": {
+        "c2s": null,
+        "s2c": null,
+        "incoming": null
+      },
+      "block_writes_per_tick": {
+        "total": null,
+        "air": null,
+        "fire": null
+      },
+      "block_writes_total": null,
+      "packet_counter_available": false,
+      "block_counter_available": false,
+      "native_entry_wall_ms": null,
+      "native_entry_wall_sum_ms": null
+    }
+  },
+  "native_entries": [
+    {
+      "kind": "incoming-drone",
+      "at": [
+        6.5,
+        67.0,
+        6.5
+      ],
+      "entry_ms": 18.921518,
+      "start_ms": 104173.096759
+    }
+  ],
+  "screenlocker_mentions": [],
+  "commands": [
+    {
+      "cmd": "gamemode spectator Dev",
+      "t_ms": 60958.293,
+      "execution_wall_ms": 9.84139999999752,
+      "queue_wait_ms": 1.4116999999969266
+    },
+    {
+      "cmd": "time set 18000",
+      "t_ms": 60959.277,
+      "execution_wall_ms": 0.864000000001397,
+      "queue_wait_ms": 10.132400000002235
+    },
+    {
+      "cmd": "weather clear 1000000",
+      "t_ms": 60959.635,
+      "execution_wall_ms": 0.31290000000444707,
+      "queue_wait_ms": 11.037700000000768
+    },
+    {
+      "cmd": "gamerule doFireTick true",
+      "t_ms": 60960.448,
+      "execution_wall_ms": 0.7732999999934691,
+      "queue_wait_ms": 11.38810000000376
+    },
+    {
+      "cmd": "tp Dev -15.00 76.38 28.00 facing 5.00 71.00 5.00",
+      "t_ms": 70668.282,
+      "execution_wall_ms": 3.6635999999998603,
+      "queue_wait_ms": 0.027500000011059456
+    },
+    {
+      "cmd": "time set 18000",
+      "t_ms": 78759.0,
+      "execution_wall_ms": 0.33109999999578577,
+      "queue_wait_ms": 0.015400000003864989
+    },
+    {
+      "cmd": "forceload add -48 -48 48 48",
+      "t_ms": 78761.404,
+      "execution_wall_ms": 2.3847999999998137,
+      "queue_wait_ms": 0.3585000000020955
+    },
+    {
+      "cmd": "fill 0 72 0 12 72 12 stone_bricks",
+      "t_ms": 83780.032,
+      "execution_wall_ms": 17.256100000013248,
+      "queue_wait_ms": 0.014100000000325963
+    },
+    {
+      "cmd": "fill 0 73 0 12 77 12 glass hollow",
+      "t_ms": 83792.013,
+      "execution_wall_ms": 10.30480000001262,
+      "queue_wait_ms": 18.94079999999667
+    },
+    {
+      "cmd": "setblock 6 76 6 sea_lantern",
+      "t_ms": 83792.739,
+      "execution_wall_ms": 0.6956999999965774,
+      "queue_wait_ms": 29.27490000000398
+    },
+    {
+      "cmd": "sable assemble area 0 72 0 12 77 12",
+      "t_ms": 86848.161,
+      "execution_wall_ms": 37.158499999990454,
+      "queue_wait_ms": 0.011299999998300336
+    },
+    {
+      "cmd": "particle minecraft:block{block_state:{Name:\"minecraft:stone\"}} 6 79 6 5 0.1 5 0.05 800 force",
+      "t_ms": 87912.21,
+      "execution_wall_ms": 1.1278000000020256,
+      "queue_wait_ms": 0.014100000000325963
+    },
+    {
+      "cmd": "particle minecraft:flame 6 78 6 5 0.1 5 0.03 100 force",
+      "t_ms": 87912.346,
+      "execution_wall_ms": 0.09820000000763685,
+      "queue_wait_ms": 1.1735000000044238
+    },
+    {
+      "cmd": "weather rain",
+      "t_ms": 92064.892,
+      "execution_wall_ms": 0.6960000000108266,
+      "queue_wait_ms": 0.01600000000325963
+    },
+    {
+      "cmd": "weather clear",
+      "t_ms": 104163.703,
+      "execution_wall_ms": 0.22779999999329448,
+      "queue_wait_ms": 0.019700000004377216
+    },
+    {
+      "cmd": "perfa impact incoming-drone 6 67 6",
+      "t_ms": 104164.105,
+      "execution_wall_ms": 0.37589999999909196,
+      "queue_wait_ms": 0.2651999999943655
+    },
+    {
+      "cmd": "forceload remove all",
+      "t_ms": 119407.95,
+      "execution_wall_ms": 0.9530999999988126,
+      "queue_wait_ms": 0.015100000004167669
+    }
+  ],
+  "native_counts": {
+    "incoming-drone": 1
+  },
+  "native_expected": {
+    "incoming-drone": 1
+  },
+  "contract_issues": []
+}
