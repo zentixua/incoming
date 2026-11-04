@@ -29,6 +29,9 @@ final class RuinContext {
     private final java.util.concurrent.ConcurrentHashMap<Long, Blast> blasts = new java.util.concurrent.ConcurrentHashMap<>();
     /** Only diagnostic server-thread solvers keep this cache; background fragments stay task-owned. */
     private long blastBytes;
+    private long fragmentCacheLimit = 16L << 20;
+    @Nullable private volatile RuinFragmentCache fragmentCache;
+    private boolean fragmentCacheClosed;
     /** Chunk snapshots (server thread) retained while unfinished plan windows read them. Outside-memory chunks from disk ({@link DiskShots}). */
     private final it.unimi.dsi.fastutil.longs.Long2ObjectLinkedOpenHashMap<ChunkShot> shots = new it.unimi.dsi.fastutil.longs.Long2ObjectLinkedOpenHashMap<>();
     /**
@@ -706,10 +709,19 @@ final class RuinContext {
         Blast blast(int dx, int dz) {
             ChunkPos pos = new ChunkPos(centre.x + dx, centre.z + dz);
             ChunkShot[] w = window(dx, dz);
-            // A background task owns its nine fragments through actual exit. Sharing them in
-            // the context would give temporary solver output an unbounded cross-task lifetime.
-            if (view != Blast.SERVER)
-                return Blast.solve(new RuinWindow(pos, minY, maxY, w, view), ctx.d, blockDamage, treeFall);
+            // A background task owns its nine fragments through actual exit. Optional shared reuse
+            // has a separately prepaid fixed capacity, including entries borrowed by other tasks.
+            if (view != Blast.SERVER) {
+                // Only permit-owning workers may borrow entries: eviction/close does not end their input lifetime.
+                RuinFragmentCache cache = RuinResults.currentProducer() == null ? null : ctx.fragmentCache;
+                if (cache != null) {
+                    Blast hit = cache.get(pos.toLong(), RuinWindow.Stamp.of(w));
+                    if (hit != null) return hit;
+                }
+                Blast fresh = Blast.solve(new RuinWindow(pos, minY, maxY, w, view), ctx.d, blockDamage, treeFall);
+                if (cache != null) cache.put(pos.toLong(), fresh);
+                return fresh;
+            }
             Blast b = ctx.blasts.get(pos.toLong());
             if (b != null && b.stamp().same(RuinWindow.Stamp.of(w))) return b;
             b = Blast.solve(new RuinWindow(pos, minY, maxY, w, view), ctx.d, blockDamage, treeFall);
@@ -872,8 +884,9 @@ final class RuinContext {
         RuinResults.Lease owner = RuinResults.tryReserve(RuinPlan.maxResultBytes(grid), RuinPlan.maxFragmentBytes(grid), room);
         if (owner == null) return null;
         try {
+            ensureFragmentCache(level, height);
             var future = RuinWorkers.submit(() -> {
-                RuinPlan result = task.call();
+                RuinPlan result = RuinResults.producing(owner, task);
                 owner.markResult(result);
                 return result;
             }, priority, inputs, owner::actualExit);
@@ -884,6 +897,20 @@ final class RuinContext {
             owner.abortBeforeSubmit();
             throw failure;
         }
+    }
+
+    private void ensureFragmentCache(ServerLevel level, int height) {
+        if (fragmentCache != null || fragmentCacheClosed || fragmentCacheLimit == 0) return;
+        // Optional reuse cannot borrow the decoder/publication transition or the first solver's workspace.
+        long room = NuclearPrep.PLANS_CAP - NuclearPrep.residentMemory(level)
+                - RuinWorkers.threadBufferBytes(height) - RuinMemory.TRANSITION_ROOM;
+        var budget = RuinResults.tryReserveCache(fragmentCacheLimit, room);
+        if (budget != null) fragmentCache = new RuinFragmentCache(fragmentCacheLimit, budget);
+    }
+
+    long fragmentCacheBytes() {
+        RuinFragmentCache cache = fragmentCache;
+        return cache == null ? 0 : cache.reservedBytes();
     }
 
     /** Finished callable only: transfer its result permit to the returned plan. */
@@ -1046,6 +1073,8 @@ final class RuinContext {
 
     /** Background plans no longer needed (cancel, world unload): abandon tasks. */
     void cancelTasks() {
+        fragmentCacheClosed = true;
+        if (fragmentCache != null) fragmentCache.close();
         // Transfer before cancel: queued callbacks may release immediately; running callbacks may not.
         inputs.detach(currentBytes());
         for (Task t : tasks.values()) cancelWorker(t.future, false);
