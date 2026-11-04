@@ -87,8 +87,10 @@ Tall and branched trees can topple too. When the strike cuts a structure's last 
 continues across chunk borders. Untouched floating builds stay as they were.
 
 Broken structural blocks fall and drift before settling on actual support. Coarse rubble keeps its block type;
-containers retain their contents. Loose piles spread into lower neighbouring spaces. Material still travelling
+containers retain their contents. Charred faces travel with the block and rotate with fallen logs. Loose piles spread into lower neighbouring spaces. Material still travelling
 is saved with the world, so leaving and returning does not erase it. Leaves and shattered glazing enter the dispersed debris reservoir.
+A surface-burst crater supplies its rim from the ground actually excavated; remaining ejecta and thermally transformed material stay accounted for.
+
 These are reduced block-scale rules: joint properties, drag and the pile's repose angle are estimates.
 
 With the default ground burst, the dust column joins the mushroom cap. With an explicitly selected air burst

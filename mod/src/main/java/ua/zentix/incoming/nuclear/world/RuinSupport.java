@@ -38,6 +38,8 @@ final class RuinSupport {
     /** True when settled as supported, absent, or fully released. */
     boolean step(ServerLevel level, RuinMatter ledger, Detonation d) {
         waiting = false;
+        RuinScorch scorch = null;
+        long scorchChunk = Long.MIN_VALUE;
         for (int work = 0; work < 16; work++) {
             if (releasing) {
                 if (cursor == cells.length) return true;
@@ -48,7 +50,12 @@ final class RuinSupport {
                     restart();
                     return false;
                 }
-                RuinMatter.Piece piece = RuinMatter.capture(level, at, state, d);
+                long chunkKey = net.minecraft.world.level.ChunkPos.asLong(at.getX() >> 4, at.getZ() >> 4);
+                if (scorch == null || scorchChunk != chunkKey) {
+                    scorch = new RuinScorch(level.getChunkSource().getChunkNow(at.getX() >> 4, at.getZ() >> 4));
+                    scorchChunk = chunkKey;
+                }
+                RuinMatter.Piece piece = RuinMatter.capture(level, at, state, d, scorch);
                 if (piece != null) {
                     ColumnScar.replace(level, at, state, Blocks.AIR.defaultBlockState());
                     if (level.getBlockState(at).isAir()) {

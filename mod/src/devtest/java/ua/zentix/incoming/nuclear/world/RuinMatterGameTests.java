@@ -219,6 +219,44 @@ public final class RuinMatterGameTests {
         });
     }
 
+    @GameTest(template = "pad", timeoutTicks = 100, batch = "nuke_material_scorch", skyAccess = true)
+    public static void fallenLogKeepsRotatedScorchAcrossSave(GameTestHelper h) {
+        var level = h.getLevel();
+        BlockPos base = h.absolutePos(new BlockPos(5, 3, 5)), source = base.above(6);
+        for (int x = -3; x <= 3; x++) for (int z = -3; z <= 3; z++) {
+            level.setBlock(base.offset(x, -1, z), Blocks.BEDROCK.defaultBlockState(), 2);
+            for (int y = 0; y < 10; y++) level.setBlock(base.offset(x, y, z), Blocks.AIR.defaultBlockState(), 2);
+        }
+        var state = Blocks.OAK_LOG.defaultBlockState();
+        level.setBlock(source, state, 2);
+        var d = new ua.zentix.incoming.nuclear.Detonation(8101, Vec3.atCenterOf(source.west(100)), source.getY(),
+                15, false, 0, 0, 3, 20000, 42, 1, false, .25f, 0, false);
+        var chunk = level.getChunkSource().getChunkNow(source.getX() >> 4, source.getZ() >> 4);
+        int mark = ua.zentix.incoming.nuclear.flash.FlashChar.mark(ua.zentix.incoming.nuclear.flash.FlashChar.key(
+                source.getX() & 15, source.getY(), source.getZ() & 15, net.minecraft.core.Direction.UP), 6,
+                ua.zentix.incoming.nuclear.flash.FlashChar.hash(Blocks.OAK_LOG));
+        ua.zentix.incoming.nuclear.flash.FlashSync.chars(level, chunk, d, new int[]{mark});
+        var piece = RuinMatter.capture(level, source, state, d);
+        h.assertTrue(piece != null && piece.scorch != 0, "Source scorch was not captured");
+        piece.drag = 0; // Isolate rigid face rotation and gravity from the separately tested pulse.
+        ColumnScar.replace(level, source, state, Blocks.AIR.defaultBlockState());
+        RuinMatter original = new RuinMatter(); original.release(java.util.List.of(piece));
+        RuinMatter ledger = RuinMatter.load(original.save(new CompoundTag(), level.registryAccess()), level.registryAccess());
+        WorkClock clock = WorkClock.counting(1);
+        h.onEachTick(() -> { clock.start(1000); ledger.work(level, clock); });
+        h.runAtTickTime(70, () -> {
+            h.assertTrue(ledger.deposited() == 1 && level.getBlockState(base).is(Blocks.OAK_LOG), "Scorched log failed to settle");
+            var marks = ua.zentix.incoming.nuclear.flash.FlashSync.of(level.getChunkSource().getChunkNow(base.getX() >> 4, base.getZ() >> 4));
+            boolean found = false;
+            for (var layer : marks.layers()) for (int value : layer.chars())
+                if (ua.zentix.incoming.nuclear.flash.FlashChar.pos(value, base.getX() >> 4, base.getZ() >> 4).equals(base)
+                        && ua.zentix.incoming.nuclear.flash.FlashChar.face(value) == net.minecraft.core.Direction.EAST
+                        && ua.zentix.incoming.nuclear.flash.FlashChar.level(value) == 6) found = true;
+            h.assertTrue(found, "The formerly upper charred face did not rotate east with the fallen log");
+            ledger.unload(level); h.succeed();
+        });
+    }
+
     @GameTest(template = "pad", timeoutTicks = 150, batch = "nuke_material_pile", skyAccess = true)
     public static void aColumnSpreadsIntoASupportedPile(GameTestHelper h) {
         var level = h.getLevel();

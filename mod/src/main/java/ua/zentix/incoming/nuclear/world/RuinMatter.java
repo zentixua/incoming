@@ -102,6 +102,8 @@ public final class RuinMatter extends SavedData {
         final CompoundTag contents;
         final BlockPos source;
         long id;
+        int scorch, scorchEvent;
+        long scorchTime;
         final boolean fine;
         boolean outside;
         double volume, mass;
@@ -133,6 +135,11 @@ public final class RuinMatter extends SavedData {
 
     /** Capture before the plan clears block entities; publish only after successful source replacement. */
     static Piece capture(ServerLevel level, BlockPos at, BlockState state, Detonation d) {
+        return capture(level, at, state, d, new RuinScorch(level.getChunkSource().getChunkNow(at.getX() >> 4, at.getZ() >> 4)));
+    }
+
+    static Piece capture(ServerLevel level, BlockPos at, BlockState state, Detonation d, RuinScorch scorch) {
+        BlockState sourceState = state;
         var props = Blast.props(state);
         if (props.air() || props.fluid() || props.fixed() || !props.bearing() && !props.leaves()) return null;
         CompoundTag contents = null;
@@ -152,6 +159,8 @@ public final class RuinMatter extends SavedData {
             state = state.setValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.AXIS,
                     Math.abs(away.x) > Math.abs(away.z) ? net.minecraft.core.Direction.Axis.X : net.minecraft.core.Direction.Axis.Z);
         Piece piece = new Piece(at, state, contents, Vec3.ZERO, level.getGameTime());
+        piece.scorch = scorch.capture(at, sourceState, state);
+        piece.scorchEvent = d.id(); piece.scorchTime = d.gameTime();
         // Integrate drag while airborne: giving the entire pulse as an instantaneous kick would
         // move a short fall too far and ignore the reduction in relative air speed.
         piece.windX = away.x * d.blastWind(p);
@@ -370,6 +379,7 @@ public final class RuinMatter extends SavedData {
                 entity.setChanged();
             }
         }
+        if (p.scorch != 0) ua.zentix.incoming.nuclear.flash.FlashSync.movedChars(level, at, p.scorchEvent, p.scorchTime, p.scorch, placed);
         DhUpdates.mark(level, new net.minecraft.world.level.ChunkPos(at), level.getGameTime());
         return true;
     }
@@ -429,6 +439,7 @@ public final class RuinMatter extends SavedData {
             p.windX = n.getDouble("wind_x"); p.windZ = n.getDouble("wind_z");
             p.drag = n.getDouble("drag"); p.pulse = n.getDouble("pulse");
             p.id = n.getLong("id");
+            p.scorch = n.getInt("scorch"); p.scorchEvent = n.getInt("scorch_event"); p.scorchTime = n.getLong("scorch_time");
             p.volume = n.getDouble("volume");
             p.mass = n.getDouble("mass");
             p.outside = n.getBoolean("outside");
@@ -500,6 +511,7 @@ public final class RuinMatter extends SavedData {
             n.putBoolean("outside", p.outside);
             n.putLong("source", p.source.asLong());
             n.putLong("id", p.id);
+            n.putInt("scorch", p.scorch); n.putInt("scorch_event", p.scorchEvent); n.putLong("scorch_time", p.scorchTime);
             n.putDouble("volume", p.volume);
             n.putDouble("mass", p.mass);
             n.put("state", NbtUtils.writeBlockState(p.state));

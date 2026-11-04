@@ -735,12 +735,13 @@ public final class RuinPlan {
         boolean marked = flash == null && FlashScorch.marked(chunk, d.id());
         if (!current(chunk, flash, marked)) return false;
         java.util.List<RuinMatter.Piece> released = new java.util.ArrayList<>();
+        RuinScorch scorch = new RuinScorch(chunk);
         for (long position : material) {
             BlockPos at = BlockPos.of(position);
             BlockState state = chunk.getBlockState(at);
             // Thermal-before-blast ordering: capture what actually survived the light pulse,
             // never resurrect a block from the original pre-flash snapshot.
-            RuinMatter.Piece piece = RuinMatter.capture(level, at, state, d);
+            RuinMatter.Piece piece = RuinMatter.capture(level, at, state, d, scorch);
             if (piece != null) released.add(piece);
         }
         short[] motion = new short[256];

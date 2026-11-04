@@ -355,3 +355,12 @@ paths:
   RuinInbox invalidates cancelled asynchronous results while keeping outstanding work charged until completion;
   it retains no world/preparation owner. Regressions: RuinWorkersTest, RuinInboxTest and nuke_lifecycle_* GameTests
   (cancel/resize/shutdown, nonblocking layout handoff, cross-strike/dimension admission).
+
+- Structural material retains source face scorch through `RuinScorch` (one chunk index per removal batch).
+  `RuinMatter` saves the six tiers with each pending piece; log-axis rotation rotates the faces, without
+  recomputing illumination at the destination. `FlashSync.movedChars` merges landed faces once per chunk/tick.
+- Nuclear crater ownership is `CraterMatter`: source solid volume/mass by block state is partitioned into
+  actual rim deposits, exported ejecta and thermal transformation. The rim consumes excavated ground stock;
+  it cannot create material when the bowl is protected or empty. Original soil, column heights and completed
+  columns survive clean restart, so a resumed chunk cannot deepen its already-dug columns. Conventional
+  `CraterJob.digColumn` callers retain their existing path. Region-file/SavedData power-loss atomicity is not claimed.
