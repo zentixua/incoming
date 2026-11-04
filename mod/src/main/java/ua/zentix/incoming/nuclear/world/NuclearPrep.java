@@ -261,7 +261,7 @@ public final class NuclearPrep {
         final UUID cacheId = UUID.randomUUID();
         Vec3 target, resolvedTarget;
         double yieldKt;
-        boolean surface, airBurst, bound;
+        boolean surface, airBurst, bound, carrier;
         long expires;
         int generation;
         String configuration;
@@ -421,6 +421,21 @@ public final class NuclearPrep {
         return true;
     }
 
+    int bindCarrier(ServerLevel level, UUID handle, UUID owner) {
+        Prep p = request(handle);
+        if (p == null || !owner.equals(p.owner)) return -1;
+        if (p.bound) return p.carrier && compatible(p) && p.failure == RuinPreparation.Reason.NONE ? p.strike : -1;
+        if (status(level, handle).stage() != RuinPreparation.Stage.READY) return -1;
+        p.strike = NuclearEvents.get(level).nextId();
+        p.carrier = true;
+        p.bound = true;
+        return p.strike;
+    }
+
+    void cancelCarrier(int identity) {
+        for (Prep p : preps) if (p.carrier && p.detonation < 0 && p.strike == identity) p.draining = true;
+    }
+
     /** Total prebuilt ruins across strikes (tests, status). */
     public int plannedChunks() {
         return preps.stream().mapToInt(p -> p.plans.size()).sum();
@@ -529,6 +544,10 @@ public final class NuclearPrep {
                     if (now >= p.expires) { p.draining = true; continue; }
                     if (!compatible(p)) p.failure = RuinPreparation.Reason.INCOMPATIBLE;
                     if (p.failure == RuinPreparation.Reason.NONE && (p.geometry != null || memory(level) < WINDOW_CAP)) work(level, null, p, shared);
+                    continue;
+                }
+                if (p.carrier) {
+                    work(level, null, p, shared);
                     continue;
                 }
                 NuclearEvents.ScheduledStrike s = events.scheduled().stream().filter(x -> x.id() == p.strike).findFirst().orElse(null);
@@ -1411,7 +1430,11 @@ public final class NuclearPrep {
 
     Handoff handOff(ServerLevel level, Detonation d, long now, int strikeId) {
         for (Prep p : preps) {
-            if (!preparedFor(p, d, strikeId)) continue;
+            if (!preparedFor(p, d, strikeId)) {
+                // A moving carrier can hit elsewhere: retire its exact identity, never claim another target's pages.
+                if (p.carrier && p.strike == strikeId) p.draining = true;
+                continue;
+            }
             // A late layout must not block the detonation tick. No plans exist until layout installation;
             // normal scar delivery and durable settlement cover this unprepared strike.
             if (p.layout != null) {
