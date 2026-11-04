@@ -24,14 +24,15 @@ Each launch writes a new `stand-observe/run-*/` directory, preserving previous r
 
 `frames.csv` uses the same render-thread CPU and GPU timestamp measurements as the scene bench.
 `events.jsonl` adds wall-clock anchors, camera position/direction, client world ticks and dimension once
-per second. Menu/loading frames are also recorded; select in-world windows using these events.
+per second while client ticks advance. Local-world loading/unloading can render frames without client
+ticks, so anchors pause during those loops. Select in-world windows using these events.
 No server tick or network-byte measurement is implied by this client-only mode.
 
 GPU timestamps include idle gaps when the CPU cannot feed the GPU. `gpu_ring_waits` counts forced waits
 when all eight timestamp slots remain busy; a nonzero increment marks a perturbed interval. Separately
 record screenshot/readback times and exclude those frames and their following intervals when another
-observer captures images. Flush occurs once per second and on normal shutdown; a crash can lose the
-last buffered second, and up to eight unresolved GPU rows can remain at shutdown. This raw recording
+observer captures images. Flush occurs with those periodic anchors and on normal shutdown; a crash can
+lose buffered data since the last actual flush, and up to eight unresolved GPU rows can remain at shutdown. This raw recording
 does not run the paired scene acceptance gate or certify visible terrain publication.
 
 ## Structure
