@@ -200,10 +200,10 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   touches ground. Top behind fresh front starts at zero: first 0.1 s for 1 kt–1 Mt surface/low airbursts, no higher than
   ~7 m (previously up to 48 km for surface 1 Mt; `BlastWallTest.headTopIsTheBoundaryLayer`: 0.1 ms grid and high airbursts,
   1 kt at 240 m, 15 kt at 592 m; top is Kuhl law over front-normal path behind wedge end during local dust age,
-  no spikes, and while sphere is off ground, top never sags by more than 2 % and 5 cm). Known out-of-game limit: low
+  no spikes, and while sphere is off ground, top never sags by more than 2 % and 5 cm). Known low-airburst limit:
   airbursts above 15 kt (1 Mt at 700 m) touch ground behind the front, shrinking the wedge by 1.5 on that tick, top
   10–25 % lower, and pall handoff band (`PALL_WALL_HANDOFF_FROM/TO` shader constants) jumps away from sphere: slot has
-  no sphere radius (all 20 numbers used); game bursts (up to 15 kt, airbursts above 2.9 sphere radii) never do this.
+  no sphere radius (all 20 numbers used); airbursts above 2.9 sphere radii do not do this.
   Over wedge fraction u behind edge, lofted amount follows dynamic-pressure impulse (`DustModel.lifted`), top Kuhl
   dusty-layer law u^(5/6) (`top`), ground density their ratio (`shape`: 0 at edge, at u ≈ 0.1 2.6 times denser than wedge
   back); column depth grows rearward. Back top and edge/back density use the same `DustModel.Column` (`first`,
@@ -473,7 +473,19 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
 - Mushroom stem dust is `nuclear/model/StemDust`: dust drawn from wave layer (`DustModel.Column.stem`, starting at
   `stemFrom`: immediately for grounded sphere, after `STEM_FROM_S`·∛(Y/15) s for airburst) rises with stem air
   (`MushroomModel.stemRise`); airburst dusty stem may never catch cap (NRC 1985, p. 22), surface burst leaves sphere
-  trail up to cap. Per-detonation table builds in background (`StemDust.ready`: first frames without dust).
+  trail up to cap. `PallField.stemSource` retains an immutable `StemDust.Source`: the actual `FrontProfile` supplies
+  each annulus and the moving foot, converting horizontal model meters to slant blocks and ticks back to model
+  seconds. Never substitute `HobBlast` arrival here: GAME would feed the stem before the supplying layer.
+  Source equality includes all 24 arrivals plus geometry/visibility. One eight-entry cache includes pending and
+  failed work; pending entries are not evicted. A caller-owned `StemDust.Request` retains its admitted future/result:
+  the frame scans every Active before selecting four rows, so earlier candidates must not repeatedly evict a late
+  visible consumer's completed table. The shared reuse cache stays at eight; live consumers retain their own table
+  (at most about 25 KiB of array payload each, shared for equal admitted sources) until cloud expiry. PallField releases
+  the request then; replay can reacquire it. Per-detonation table builds in background (first
+  frames without dust). Every positive source onset is an interpolation knot; the original one-second quadrature
+  amounts remain at integer nodes. This is causal numerical reconstruction, not a new measured transport law.
+  `StemClockTest`, `StemSourceTest` and `nuke_stem_clock` cover the clock and scale contract. All-water terrestrial
+  stem supply remains a known limitation: filled `PallGround` values do not establish complete footprint coverage.
 
 - ICBM terminal arrival (`IcbmArrival`, `IcbmApproaches`, `IcbmArrivalRenderer`) uses the existing NUKE airframe's
   FlightScale speed (game value is not physical). Once ready ground is known during the final window, its exact

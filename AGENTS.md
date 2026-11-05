@@ -134,7 +134,7 @@ The mod must be the most physically accurate in its niche and spectacular like g
 - **Fix causes, not outcomes.** Correct the producing model, not its output; one law per class; weapon-specific
   numbers in spec, not constants or weapon `switch`.
 - **Configure causes, not consequences.** Player sets conditions, world computes consequences. Four setting kinds:
-  world rules (phenomena, permissions, salvos, flight time, real-product choices: nuclear yield 1–15 kt, burst height);
+  world rules (phenomena, permissions, salvos, flight time, real-product choices: nuclear yield 1–1000 kt, burst height);
   map time/distance scale (`GAME` default, `REAL`, `CUSTOM`); performance (one work budget/tick, quality); convenience.
   Laws compute crater size, destruction, kill probability, penetration, audibility, smoke amount/lifetime. Excess
   setting signals: named after a consequence (“blast power ×”, “kill probability”, “radar range”) or a multiplier

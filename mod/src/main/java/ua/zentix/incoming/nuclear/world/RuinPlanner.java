@@ -141,9 +141,14 @@ public final class RuinPlanner {
      */
     public static RuinPlan planFresh(ServerLevel level, Detonation d, LevelChunk chunk, boolean background) {
         RuinContext ctx = new RuinContext(level, d);
-        if (!background) return plan(level, ctx, chunk);
-        if (!ctx.submit(level, chunk)) throw new IllegalStateException("ruin background threads busy");
-        return await(level, ctx, chunk);
+        try {
+            if (!background) return plan(level, ctx, chunk);
+            if (!ctx.submit(level, chunk)) throw new IllegalStateException("ruin background threads busy");
+            return await(level, ctx, chunk);
+        } finally {
+            // This helper owns the unregistered context, including its optional fragment cache.
+            ctx.cancelTasks();
+        }
     }
 
     /**
@@ -166,7 +171,7 @@ public final class RuinPlanner {
                 DiskShots.Read read = DiskShots.parse(level, new ChunkPos(c.x + dx, c.z + dz),
                         onDisk.apply(net.minecraft.world.level.chunk.storage.ChunkSerializer.write(level, n)));
                 if (read.skip() != null) throw new IllegalStateException("chunk from disk not parsed: " + read.skip());
-                ctx.putDisk(level, read);
+                if (!ctx.putDisk(level, read)) throw new IllegalStateException("Diagnostic snapshot memory is full");
             }
         }
         return fromCachedDisk(level, ctx, c);
@@ -190,15 +195,21 @@ public final class RuinPlanner {
      */
     public static RuinPlan planWithWindow(ServerLevel level, Detonation d, LevelChunk chunk, int[] window) {
         RuinContext ctx = new RuinContext(level, d);
-        long until = System.nanoTime() + 60_000_000_000L;
-        while (ctx.requestWindow(level, chunk.getPos()) > 0) {
-            if (System.nanoTime() > until) throw new IllegalStateException("window neighbours not read from disk within a minute");
-            java.util.concurrent.locks.LockSupport.parkNanos(1_000_000L);
+        try {
+            long until = System.nanoTime() + 60_000_000_000L;
+            while (ctx.requestWindow(level, chunk.getPos()) > 0) {
+                // This diagnostic blocks the normal server tick that services asynchronous decode admission.
+                RuinWorkers.adapt(level.getServer());
+                if (System.nanoTime() > until) throw new IllegalStateException("window neighbours not read from disk within a minute");
+                java.util.concurrent.locks.LockSupport.parkNanos(1_000_000L);
+            }
+            window[0] = ctx.windowReads;
+            window[1] = ctx.windowAbsent;
+            if (!ctx.submit(level, chunk)) throw new IllegalStateException("ruin background threads busy");
+            return await(level, ctx, chunk);
+        } finally {
+            ctx.cancelTasks();
         }
-        window[0] = ctx.windowReads;
-        window[1] = ctx.windowAbsent;
-        if (!ctx.submit(level, chunk)) throw new IllegalStateException("ruin background threads busy");
-        return await(level, ctx, chunk);
     }
 
     /**
@@ -223,7 +234,7 @@ public final class RuinPlanner {
                 if (n == null) throw new IllegalStateException("neighbour " + (c.x + dx) + ", " + (c.z + dz) + " not loaded");
                 DiskShots.Read read = DiskShots.parse(level, n.getPos(), net.minecraft.world.level.chunk.storage.ChunkSerializer.write(level, n));
                 if (read.skip() != null) throw new IllegalStateException("chunk from disk not parsed: " + read.skip());
-                ctx.putDisk(level, read);
+                if (!ctx.putDisk(level, read)) throw new IllegalStateException("Diagnostic snapshot memory is full");
             }
         }
         RuinPlan plan = fromCachedDisk(level, ctx, c);
@@ -234,11 +245,14 @@ public final class RuinPlanner {
     private static RuinPlan await(ServerLevel level, RuinContext ctx, LevelChunk chunk) {
         long until = System.nanoTime() + 60_000_000_000L;
         while (!ctx.done(chunk.getPos().toLong())) {
+            RuinWorkers.adapt(level.getServer());
             if (System.nanoTime() > until) throw new IllegalStateException("background plan not ready within a minute");
             java.util.concurrent.locks.LockSupport.parkNanos(1_000_000L);
         }
         RuinPlan plan = ctx.collect(level, chunk);
         if (plan == null) throw new IllegalStateException("background plan failed");
+        // This synchronous diagnostic returns outside the live preparation/queue ownership graph.
+        plan.discardResult();
         return plan;
     }
 
@@ -249,6 +263,7 @@ public final class RuinPlanner {
     public static long[] timedParts(ServerLevel level, Detonation d, LevelChunk chunk) {
         RuinContext ctx = NuclearWorld.get(level).ruins(level, d, level.getGameTime());
         RuinContext.Grid g = ctx.grid(level, chunk.getPos(), false);
+        if (g == null) throw new IllegalStateException("Diagnostic snapshot memory is full");
         long t0 = System.nanoTime();
         Collapse c = Collapse.solve(g);
         long t1 = System.nanoTime();
@@ -263,6 +278,7 @@ public final class RuinPlanner {
     public static RuinPlan testScorch(ServerLevel level, Detonation d, LevelChunk chunk) {
         RuinContext ctx = NuclearWorld.get(level).ruins(level, d, level.getGameTime());
         RuinContext.Grid g = ctx.grid(level, chunk.getPos(), false);
+        if (g == null) throw new IllegalStateException("Diagnostic snapshot memory is full");
         return scorch(ctx.scorchGrid(level, g.at(0, 0), Blast.SERVER));
     }
 
@@ -294,6 +310,7 @@ public final class RuinPlanner {
 
     static RuinPlan plan(ServerLevel level, RuinContext ctx, LevelChunk chunk) {
         RuinContext.Grid g = ctx.grid(level, chunk.getPos(), false);
+        if (g == null) throw new IllegalStateException("Diagnostic snapshot memory is full");
         RuinPlan plan = finish(g, Collapse.solve(g));
         ctx.planned(chunk.getPos());
         return plan;

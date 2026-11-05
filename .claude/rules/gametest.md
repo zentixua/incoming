@@ -9,10 +9,13 @@ paths:
 # GameTest and flight scenarios
 
 ## Pitfalls
-- Synchronous nuclear snapshot fixtures finish at structural failure, before saved material has fallen. Register
+- Nuclear fixtures can finish their assertions before saved material has fallen, including real-strike chunk
+  lifecycle checks. Register
   `RuinMatterGameTests.clearFixture` in their completion cleanup (the `NuclearGameTests.rawAt` helper does this):
   otherwise later unrelated batches inherit their moving material and loading tickets. Real save/reload and
   settlement integration tests must retain the ledger until their own assertions complete.
+  `NuclearStrikes.clear` only releases the material's current ticket; the preserved ledger can acquire another
+  on the next tick. Register test-owned chunk tickets and nuclear cleanup with `afterTest` so failure also retires them.
 - Whole strikes against data: `SurfaceGameTests` (batches `surface_<weapon>`, `surface_<weapon>_nearby`, `surface_bomb`):
   the mod's strike path (`Warheads.detonate` with a weapon entity, axis from the spec's impact angle; bomb is a real
   entity dropped by B-2) over seven surfaces; expectations are sourced laws and data spread; report:
@@ -114,6 +117,8 @@ paths:
   enables entity ticking in rings as neighbors become ready and releases at explosion end: on slow CI machines,
   falling at the area edge would hang — `CraterFalls` places it immediately. Each platform has an air layer beneath:
   the bomb fracture zone collapses the neighboring platform's floor.
+- Exact server aim assertions use `TargetTracker.point()`. `StrikeProjectile.aimPoint()` reads the synchronized
+  HUD `Vector3f`, which rounds X/Z at distant test coordinates; it is not an exact geometry certificate.
 - `StrikeService` launch offsets aim by the spec's miss (`WeaponSpec.Route#miss`, Shahed axial standard deviation 3 m):
   compare hits with the projectile's aim point (`aimPoint`), not the target. Explosion work uses counting clocks
   (`WorkClock.counting`) if the check depends on how it is split across ticks.
@@ -144,3 +149,22 @@ paths:
 - Cold-ledger fixtures must unload the currently imported `RuinMatter` before restoring the previous SavedData
   cache entry in each dimension. The imported instance may already hold a material ticket after background import;
   restoring the old cache alone leaves an ownerless load (`nuke_ledger_cleanup`, then `nuke_stop`).
+
+- A world-owned ruin fixture must register through `NuclearWorld.ruins(level, d, now)`, as gameplay does.
+  Direct map insertion leaves `used=0`: a later shard batch crosses the 100-tick sweep after the 600-tick
+  idle horizon, detaches the context, then resubmits through stale input ownership. `nuke_source_progress`
+  starts after that horizon and crosses a real sweep while preserving fixed external memory pressure.
+
+- A standalone `ScarQueue` fixture that ends with a pending consumer must also retire its synthetic
+  world context with `forgetRuinsForTest`. Queue clear releases jobs/tickets, not that context's assembling
+  window. `nuke_look_ahead` verifies that an independent background consumer can start after cleanup.
+- Craft hull-order checks place the charge above the platform and test initial shielding from that same
+  source. A charge inside the platform can remain shielded after the entire selected hull disappears.
+- A direct preparation-handoff fixture owns the returned plans/context when it does not pass them to
+  `NuclearWorld`. Close both in its cleanup; cancelling the former preparation deliberately preserves
+  handed-off work. `nuke_near_ready` followed by `nuke_worker_admission` catches an unclaimed fragment-cache
+  permit even after the worker pool has stopped.
+
+- Place watched test cohorts relative to the template interior and check their exposure. Chunk-centre
+  arithmetic can place a target on the enclosing barrier even with `skyAccess = true`; that barrier may
+  legitimately shield a glass block while the ruin queue commits its unchanged chunk.

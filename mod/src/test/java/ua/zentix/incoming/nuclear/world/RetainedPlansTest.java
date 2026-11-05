@@ -18,12 +18,12 @@ class RetainedPlansTest {
         RuinPlan a = plan(100), b = plan(200);
         plans.put(1L, a);
         plans.put(1L, b);
-        assertEquals(b.bytes(), plans.bytes());
+        assertEquals(b.bytes() + 48, plans.bytes());
         plans.put(2L, a);
         assertSame(b, plans.remove(1L));
-        assertEquals(a.bytes(), plans.bytes(), "applied plan transfers ownership to its context");
+        assertEquals(a.bytes() + 48, plans.bytes(), "applied plan transfers ownership to its context");
         plans.remove(1L);
-        assertEquals(a.bytes(), plans.bytes());
+        assertEquals(a.bytes() + 48, plans.bytes());
         plans.clear();
         assertEquals(0, plans.bytes());
     }

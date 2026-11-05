@@ -10,6 +10,28 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class LoadoutTest {
     @Test
+    void supportedNuclearCarriersClampAndRoundTripTheFullYieldRange() {
+        for (WeaponType weapon : new WeaponType[]{WeaponType.NUKE, WeaponType.MISSILE, WeaponType.BUNKER}) {
+            for (int input : new int[]{-1, 1, 15, 100, 500, 1000, 1001}) {
+                int expected = Math.clamp(input, 1, 1000);
+                Loadout loadout = Loadout.DEFAULT.withWeapon(weapon)
+                        .withNuke(new Loadout.Nuke(input, false, true));
+                assertTrue(loadout.nuclear());
+                assertEquals(expected, loadout.nuke().yieldKt());
+                var encoded = Loadout.CODEC.encodeStart(NbtOps.INSTANCE, loadout).getOrThrow();
+                assertEquals(loadout, Loadout.CODEC.parse(NbtOps.INSTANCE, encoded).getOrThrow());
+                var buffer = io.netty.buffer.Unpooled.buffer();
+                try {
+                    Loadout.STREAM_CODEC.encode(buffer, loadout);
+                    assertEquals(loadout, Loadout.STREAM_CODEC.decode(buffer));
+                } finally {
+                    buffer.release();
+                }
+            }
+        }
+    }
+
+    @Test
     void newAndMissingDesignatorSettingsUseGroundBursts() {
         assertFalse(Loadout.Nuke.DEFAULT.airBurst());
         assertFalse(Loadout.DEFAULT.withWeapon(WeaponType.NUKE).nuke().airBurst());

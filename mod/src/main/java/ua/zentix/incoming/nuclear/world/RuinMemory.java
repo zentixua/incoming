@@ -33,6 +33,22 @@ final class RuinMemory {
         return new Reservation(owner, bytes);
     }
 
+    /** Pure producer admission: never opens a ledger or changes worker configuration. Server thread only. */
+    static Reservation reserveInputs(ServerLevel level, long bytes) {
+        if (bytes < 0) throw new IllegalArgumentException("Negative input reservation");
+        NuclearWorld owner = NuclearWorld.get(level);
+        if (bytes > NuclearPrep.PLANS_CAP - NuclearPrep.residentMemory(level)) return null;
+        owner.materialReservation += bytes;
+        return new Reservation(owner, bytes);
+    }
+
+    /** New source I/O must leave one real decoder restart, not every configured future worker. */
+    static long sourceReadRoom(ServerLevel level) {
+        int height = level.getHeight();
+        for (ServerLevel other : level.getServer().getAllLevels()) height = Math.max(height, other.getHeight());
+        return NuclearPrep.PLANS_CAP - NuclearPrep.residentMemory(level) - RuinWorkers.startupBytes(height);
+    }
+
     static final class Reservation implements AutoCloseable {
         private NuclearWorld owner;
         private long bytes;
@@ -43,6 +59,12 @@ final class RuinMemory {
             owner.materialReservation += extra;
             bytes += extra;
             return true;
+        }
+        /** Published payload has a counted owner now; keep only the still-private capture credit. */
+        void transfer(long published) {
+            if (published < 0 || published > bytes) throw new IllegalArgumentException("Unfunded material publication");
+            owner.materialReservation -= published;
+            bytes -= published;
         }
         @Override public void close() {
             if (owner == null) return;

@@ -13,7 +13,7 @@ On a server, install the same Incoming version for everyone.
 | Create Aeronautics with Sable 2.0.6+ | Flying craft as targets; explosions break and push them | Server and clients |
 | Distant Horizons 3.3.3 | Distant terrain on the map and visible changes after strikes | Clients; also the host or dedicated server for damage updates |
 | Voxy through Roxy | Distant terrain on the map and in the world | Clients only |
-| LOD Server Support | Server terrain on the targeting map, even without Voxy | Server and clients; for a local world, open it to LAN |
+| LOD Server Support | Server terrain on the targeting map; distant updates for Voxy | Server and clients; for a local world, open it to LAN |
 | Iris | Nuclear effects with shaders | Clients only |
 | Flashback | Recording and replaying strikes | Clients only |
 
@@ -25,12 +25,11 @@ That version number is intentional: Roxy makes it run on 1.21.1. Its other requi
 [Forgified Fabric API 0.116.14+2.3.0 for 1.21.1](https://modrinth.com/mod/forgified-fabric-api/version/dAxle9F7).
 None of these are required if you do not use Voxy.
 
-For LOD Server Support, Incoming targets [NeoForge 0.19.0](https://modrinth.com/mod/lod-server-support/version/ydDRzPcM).
+For distant server terrain in Voxy, install LOD Server Support on both the server and clients. Changed chunks
+must be saved before its normal delivery updates the distant view; this can happen later than the pressure wave.
+Without a server terrain provider, Voxy shows the terrain the client has loaded.
 If the map is blank, see [map troubleshooting](map.md#if-the-map-is-empty).
-Distant damage can take time to appear; see [nuclear strikes](nuke.md#what-happens).
-Incoming sends its Voxy terrain updates in batches, waiting for your client to confirm receipt before sending the next.
-The batch size adapts to your client’s measured receive rate; delivery pauses while the connection is busy.
-On a slow connection, distant changes arrive gradually.
+See [nuclear strikes](nuke.md#what-happens) for nearby damage and distant updates.
 These versions do not guarantee that every shader and mod combination works together.
 
 ## Other sound and explosion mods

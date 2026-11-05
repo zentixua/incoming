@@ -48,7 +48,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
  * 1.17 chunk with below-zero retrogen ({@link DiskStatus.State#FINAL}) that timed out awaiting plan also enters world square:
  * zone behind wave never loads it (requires generation), otherwise LOD remains intact city.
  * <p>
- * Only with DH or Voxy players ({@link DhUpdates#room}, {@code compat/VoxyLods}), only chunks within
+ * Only with the optional DH integration ({@link DhUpdates#room}), only chunks within
  * {@link #FAR_CHUNKS} of player: farther DH by default
  * sends no updates, and disk reads share I/O thread with player world loading; at most
  * {@link #READS} concurrent and {@link #PER_TICK} new reads per tick; inspect at most {@link #VISITS} requests per tick
@@ -57,7 +57,7 @@ import java.util.concurrent.ConcurrentLinkedQueue;
 public final class FarLods {
     /**
      * Player range (chunks, larger axis): default DH player-update range ({@code
-     * realTimeUpdates.playerDistance}); same for Voxy player LODs ({@code compat/VoxyLods}).
+     * realTimeUpdates.playerDistance}).
      */
     public static final int FAR_CHUNKS = 256;
     /** Concurrent disk reads and new reads per tick. */
@@ -193,11 +193,6 @@ public final class FarLods {
     private final LongOpenHashSet scorchReading = new LongOpenHashSet();
     /** Chunks requested again during read, plus reasons: enqueue again afterward. */
     private final Long2ByteOpenHashMap again = new Long2ByteOpenHashMap();
-    /**
-     * Chunks queued only for Voxy players whose copy LOD Server Support overwrote ({@link #refresh}): copy
-     * sent only to them, not DH/everyone, since DH/others already correct.
-     */
-    private final it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<java.util.Set<java.util.UUID>> refreshFor = new it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<>();
     private record Completion(Built value, long generation) {}
     private final ConcurrentLinkedQueue<Completion> built = new ConcurrentLinkedQueue<>();
     private long generation;
@@ -239,47 +234,8 @@ public final class FarLods {
         get(level).request(level, chunk, ruins ? RUINS : LIGHTS);
     }
 
-    /**
-     * Chunk whose Voxy player copy LOD Server Support overwrote with intact disk chunk ({@code compat/VoxyLods.stale}):
-     * rebuild copy only for that player (DH/others already correct), only if different from disk:
-     * ready-plan ruins, ground trace outside heavy zone (without plan, copy there is intact city with trace), district darkness.
-     * Otherwise copy equals disk chunk. Loaded chunk sent as current world state, also only to that player.
-     */
-    public static void refresh(ServerLevel level, long chunk, java.util.UUID player) {
-        if (!DhUpdates.enabled(level)) return;
-        if (inWorld(level, chunk)) {
-            LevelChunk loaded = level.getChunkSource().getChunkNow(ChunkPos.getX(chunk), ChunkPos.getZ(chunk));
-            if (loaded != null) ua.zentix.incoming.compat.VoxyLods.sendTo(level, loaded, player);
-            return;
-        }
-        FarLods f = get(level);
-        long now = level.getGameTime();
-        java.util.Set<java.util.UUID> waiting = f.refreshFor.get(chunk);
-        if (waiting != null) {
-            waiting.add(player);
-            return;
-        }
-        // already queued for own reason: copy will go to everyone including this player
-        if (f.queued.containsKey(chunk) || f.reading.contains(chunk)) return;
-        byte kind;
-        if (NuclearWorld.get(level).prep().arrivedPlan(level, NuclearEvents.get(level), chunk, now) != null) kind = RUINS;
-        else if (f.ringOf(chunk, now) != null && !f.inHeavyZone(chunk, now)) kind = SCORCH;
-        else if (PowerGrid.get(level).dark(ChunkPos.getX(chunk), ChunkPos.getZ(chunk), now)) kind = LIGHTS;
-        // no plan, trace outside heavy zone or darkness: copy equals disk chunk already sent by LSS
-        else return;
-        f.refreshFor.computeIfAbsent(chunk, c -> new java.util.HashSet<>()).add(player);
-        f.queue(level, chunk, kind);
-    }
-
-    /** Chunk inside heavy zone with trace: without plan copy is intact city with trace, not ruins. */
-    private boolean inHeavyZone(long chunk, long now) {
-        Ring ring = ringOf(chunk, now);
-        return ring != null && NuclearPrep.horizontal(new ChunkPos(chunk), ring.d) <= Math.max(ring.skip, NuclearPrep.heavyRadius(ring.d) + 16);
-    }
-
     private void request(ServerLevel level, long chunk, byte kind) {
         if (!DhUpdates.enabled(level) || !nearPlayer(level, chunk)) return;
-        refreshFor.remove(chunk);
         // prebuilt heavy-zone copy sends itself with front, including chunk ruins and district light
         if (kind != SCORCH && front(level, chunk, kind == LIGHTS)) return;
         queue(level, chunk, kind);
@@ -373,8 +329,6 @@ public final class FarLods {
             lightQueue.clear();
             scorchQueue.clear();
         }
-        // Voxy-only requests removed without read (loaded, plan timeout) discarded
-        if (!refreshFor.isEmpty() && level.getGameTime() % 20 == 0) refreshFor.keySet().removeIf(c -> !queued.containsKey(c) && !reading.contains(c));
         if (queued.isEmpty() && reading.isEmpty() && scanning == 0 && !zone.busy() && !ringsFeeding()) return;
         long now = level.getGameTime();
         for (Completion b; (b = built.poll()) != null; ) harvest(level, b.value, b.generation);
@@ -568,8 +522,7 @@ public final class FarLods {
         if (format == null) format = DiskShots.Format.of(level);
         reading.add(r.chunk);
         DiskShots.Format f = format;
-        // Voxy-only request: send copy only if different from disk
-        boolean fires = IncomingConfig.SERVER.nukeFires.get(), lights = (kind & LIGHTS) != 0 && !refreshFor.containsKey(r.chunk);
+        boolean fires = IncomingConfig.SERVER.nukeFires.get(), lights = (kind & LIGHTS) != 0;
         // unplanned chunk may carry ground trace (district light included): snapshot, trace plan, copy
         Ring ring = plan == null ? ringOf(r.chunk, now) : null;
         long revision = generation;
@@ -633,14 +586,8 @@ public final class FarLods {
         // no twins on disk: darken if district dark
         boolean dark = PowerGrid.get(level).dark(ChunkPos.getX(b.chunk), ChunkPos.getZ(b.chunk), level.getGameTime());
         int lamps = dark ? ChunkLights.applyToCopy(b.copy.getSections(), true) : 0;
-        java.util.Set<java.util.UUID> only = refreshFor.remove(b.chunk);
         if (!b.ruined && lamps == 0 && !b.lights) {
             unchanged++;
-            return;
-        }
-        if (only != null) {
-            // LSS-overwritten for these players: DH/others already correct
-            for (java.util.UUID p : only) ua.zentix.incoming.compat.VoxyLods.sendTo(level, b.copy, p);
             return;
         }
         DhUpdates.offer(level, b.copy);
@@ -702,7 +649,6 @@ public final class FarLods {
         rings.clear();
         queued.clear();
         again.clear();
-        refreshFor.clear();
         disk.long2ByteEntrySet().removeIf(e -> e.getByteValue() != SCANNING);
         zone.clear(level);
     }

@@ -19,6 +19,10 @@ import java.util.Locale;
 public final class NuclearReviewScreen extends Screen {
     private final S2C.NuclearReview review;
     private final ImpactPreview preview;
+    private S2C.NuclearPreparation preparation;
+    private net.minecraft.world.phys.Vec3 target;
+    private int ticks;
+    private boolean requested;
     private Button hold;
     private int held;
     private int scroll;
@@ -28,6 +32,7 @@ public final class NuclearReviewScreen extends Screen {
     public NuclearReviewScreen(S2C.NuclearReview review) {
         super(Component.translatable("incoming.nuke.review.title"));
         this.review = review;
+        target = review.target();
         var l = review.order().loadout();
         preview = ImpactPreview.of(l.nuke().yieldKt(), l.weapon().spec().warhead().chooseBurst() && l.nuke().airBurst(), review.visibility(), review.scale());
     }
@@ -37,7 +42,7 @@ public final class NuclearReviewScreen extends Screen {
         held = 0;
         inputReady = false;
         int w = Math.min(300, width - 24);
-        hold = addRenderableWidget(Button.builder(Component.translatable("incoming.nuke.review.hold"), b -> {})
+        hold = addRenderableWidget(Button.builder(Component.translatable("incoming.nuke.review.hold"), b -> prepare())
                 .bounds((width - w) / 2, height - 54, w, 20).build());
         addRenderableWidget(Button.builder(Component.translatable("gui.cancel"), b -> onClose())
                 .bounds((width - w) / 2, height - 28, w, 20).build());
@@ -48,8 +53,29 @@ public final class NuclearReviewScreen extends Screen {
         PacketDistributor.sendToServer(new C2S.NuclearAction(review.id(), action));
     }
 
+    private void prepare() {
+        if (requested || sent) return;
+        requested = true;
+        inputReady = false;
+        action(C2S.NuclearAction.PREPARE);
+    }
+
+    public void update(S2C.NuclearPreparation p) {
+        if (!review.id().equals(p.id())) return;
+        boolean wasReady = ready();
+        requested = true;
+        preparation = p;
+        p.target().ifPresent(at -> target = at);
+        if (wasReady != ready()) {
+            release();
+            inputReady = false; // readiness never turns a held preparation button into a launch
+        }
+    }
+
+    private boolean ready() { return preparation != null && preparation.stage() == S2C.NuclearPreparation.READY; }
+
     private void begin(int key) {
-        if (!inputReady || holding || sent) return;
+        if (!ready() || !inputReady || holding || sent) return;
         holding = true;
         input = key;
         held = 0;
@@ -63,6 +89,7 @@ public final class NuclearReviewScreen extends Screen {
     }
 
     @Override public void tick() {
+        if (++ticks % 20 == 0) action(C2S.NuclearAction.POLL);
         long window = minecraft.getWindow().getWindow();
         boolean mouse = GLFW.glfwGetMouseButton(window, GLFW.GLFW_MOUSE_BUTTON_LEFT) == GLFW.GLFW_PRESS;
         boolean enter = GLFW.glfwGetKey(window, GLFW.GLFW_KEY_ENTER) == GLFW.GLFW_PRESS;
@@ -93,7 +120,7 @@ public final class NuclearReviewScreen extends Screen {
     }
 
     @Override public boolean mouseClicked(double x, double y, int button) {
-        if (button == 0 && hold.isMouseOver(x, y)) { setFocused(hold); begin(0); return true; }
+        if (button == 0 && hold.isMouseOver(x, y)) { setFocused(hold); if (!requested) prepare(); else begin(0); return true; }
         return super.mouseClicked(x, y, button);
     }
 
@@ -113,7 +140,7 @@ public final class NuclearReviewScreen extends Screen {
             release();
             return true;
         }
-        if ((key == GLFW.GLFW_KEY_ENTER || key == GLFW.GLFW_KEY_SPACE) && hold.isFocused()) { begin(key); return true; }
+        if ((key == GLFW.GLFW_KEY_ENTER || key == GLFW.GLFW_KEY_SPACE) && hold.isFocused()) { if (!requested) prepare(); else begin(key); return true; }
         return super.keyPressed(key, scan, modifiers);
     }
 
@@ -130,7 +157,7 @@ public final class NuclearReviewScreen extends Screen {
     @Override public Component getNarrationMessage() {
         var l = review.order().loadout();
         Component text = title.copy().append(". ").append(l.weapon().displayName()).append(". " + ImpactPreview.yieldText(l.nuke().yieldKt()))
-                .append(Component.translatable("incoming.nuke.review.target", review.target().toString()));
+                .append(Component.translatable("incoming.nuke.review.target", target.toString()));
         for (var c : preview.contours()) text = text.copy().append(". ").append(Component.translatable("incoming.nuke.preview." + c.key(), ImpactPreview.distance(c.radius())));
         return text;
     }
@@ -141,7 +168,7 @@ public final class NuclearReviewScreen extends Screen {
         super.render(g, mouseX, mouseY, partial);
         int x = Math.max(12, (width - 380) / 2), y = 18;
         g.drawString(font, title, x, y, 0xFFFF8070);
-        g.enableScissor(0, 36, width, height - 62);
+        g.enableScissor(0, 36, width, height - 94);
         y = 40 - scroll;
         var l = review.order().loadout();
         g.drawString(font, l.weapon().displayName().copy().append(" · " + ImpactPreview.yieldText(l.nuke().yieldKt())), x, y, 0xFFFFFFFF);
@@ -150,9 +177,9 @@ public final class NuclearReviewScreen extends Screen {
                 ImpactPreview.distance(preview.height())), x, y, 0xFFFFFFFF);
         y += 14;
         g.drawString(font, Component.translatable("incoming.nuke.review.target", String.format(Locale.ROOT, "%.0f / %.0f / %.0f",
-                review.target().x, review.target().y, review.target().z)), x, y, 0xFFFFFFFF);
+                target.x, target.y, target.z)), x, y, 0xFFFFFFFF);
         y += 14;
-        double distance = minecraft.player == null ? 0 : minecraft.player.position().distanceTo(review.target());
+        double distance = minecraft.player == null ? 0 : minecraft.player.position().distanceTo(target);
         g.drawString(font, Component.translatable("incoming.nuke.review.distance", ImpactPreview.distance(distance)), x, y, 0xFFFFFF80);
         y += 16;
         for (var c : preview.contours()) {
@@ -175,7 +202,35 @@ public final class NuclearReviewScreen extends Screen {
             g.drawString(font, Component.translatable("incoming.nuke.preview.wind"), ax - 24, ay + 25, 0xFF80E0FF);
         }
         g.disableScissor();
-        hold.setMessage(Component.translatable("incoming.nuke.review.hold"));
+        Component status = Component.translatable("incoming.nuke.prepare.inspect");
+        if (preparation != null) {
+            String key = switch (preparation.stage()) {
+                case S2C.NuclearPreparation.RESOLVING -> "resolving";
+                case S2C.NuclearPreparation.PLANNING, S2C.NuclearPreparation.STORING -> "progress";
+                case S2C.NuclearPreparation.READY -> "ready";
+                case S2C.NuclearPreparation.PAUSED -> "paused";
+                default -> "failed";
+            };
+            status = Component.translatable("incoming.nuke.prepare." + key, preparation.ready(), preparation.total());
+            if (preparation.stage() == S2C.NuclearPreparation.FAILED || preparation.stage() == S2C.NuclearPreparation.ABSENT) {
+                String reason = switch (preparation.reason()) {
+                    case 3 -> "io";
+                    case 4 -> "incompatible";
+                    case 5 -> "expired";
+                    case 6 -> "limit";
+                    default -> null;
+                };
+                if (reason != null) status = Component.translatable("incoming.nuke.prepare.reason." + reason);
+            }
+        } else if (requested) status = Component.translatable("incoming.nuke.prepare.resolving");
+        g.drawCenteredString(font, status, width / 2, height - 86, ready() ? 0xFF90E090 : 0xFFFFFFA0);
+        if (preparation != null && preparation.total() > 0) {
+            int w = Math.min(300, width - 24), left = (width - w) / 2;
+            g.fill(left, height - 72, left + w, height - 69, 0xFF404040);
+            g.fill(left, height - 72, left + (int) (w * Math.min(1, (double) preparation.ready() / preparation.total())), height - 69, 0xFF90B0D0);
+        }
+        hold.active = !requested || ready();
+        hold.setMessage(Component.translatable(ready() ? "incoming.nuke.review.hold" : "incoming.nuke.prepare.button"));
         if (holding) g.fill(hold.getX(), hold.getY() + 18, hold.getX() + hold.getWidth() * Math.min(held, 60) / 60, hold.getY() + 20, 0xFFFF6050);
     }
 }

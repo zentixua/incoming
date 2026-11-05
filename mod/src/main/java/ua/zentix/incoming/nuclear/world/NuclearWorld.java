@@ -50,6 +50,9 @@ public final class NuclearWorld {
     private final MobFallout mobFallout = new MobFallout();
     private final LateExposure late = new LateExposure();
     private final BlastFront blast = new BlastFront();
+    private boolean reclaimTurn;
+    private int reclaimNext;
+    final RuinContext.Assembly assembly = new RuinContext.Assembly();
     private long lastFrontNanos, lastPulseNanos, lastScorchNanos, lastCraterNanos, lastScarNanos, lastPrepNanos, lastFalloutNanos, lastSettleNanos;
     /**
      * Chunks loaded since with flash-layer fire from forgotten detonation (no ruins coming): schedule fire ticks on world tick
@@ -82,6 +85,11 @@ public final class NuclearWorld {
     /** Ruin detonation geometry: preparation location if prepared ({@link NuclearPrep#planned}), otherwise {@code fresh}. */
     public Detonation planned(Detonation fresh) {
         return prep.planned(fresh);
+    }
+
+    /** Explicit scheduled-strike identity for bound prelaunch handles. */
+    public Detonation planned(Detonation fresh, int strikeId) {
+        return prep.planned(fresh, strikeId);
     }
 
     /**
@@ -118,6 +126,7 @@ public final class NuclearWorld {
     RuinContext ruins(ServerLevel level, Detonation d, long now) {
         RuinContext ctx = ruins.get(d.id());
         if (ctx == null) ruins.put(d.id(), ctx = new RuinContext(level, d));
+        prep.restore(level, ctx);
         ctx.used = now;
         return ctx;
     }
@@ -286,6 +295,11 @@ public final class NuclearWorld {
      * @param owner launcher (credited for damage)
      */
     public void onDetonation(ServerLevel level, Detonation d, @Nullable UUID owner) {
+        onDetonation(level, d, owner, -1);
+    }
+
+    /** Transfer the exact accepted strike's prepared pages to the actual event ID. */
+    public void onDetonation(ServerLevel level, Detonation d, @Nullable UUID owner, int strikeId) {
         pulses.add(new PulseJob(level, d, owner));
         // snapshot bodies before walls now: pulse (PulseJob) and wave later burn, kill or move them
         FlashShadows flash = FlashShadows.of(level, d);
@@ -293,7 +307,7 @@ public final class NuclearWorld {
         // ground light during pulse, before wave: burned ground, scorch, fires (chunks collected by first work unit)
         scorches.add(new FlashScorch(d));
         blast.onDetonation(d, owner);
-        NuclearPrep.Handoff ready = prep.handOff(level, d, level.getGameTime());
+        NuclearPrep.Handoff ready = prep.handOff(level, d, level.getGameTime(), strikeId);
         if (ready != null) {
             // prebuilt and on-site ruins identical: preparation fractures/applied ruins pass to detonation
             ready.ruins().used = level.getGameTime();
@@ -363,15 +377,23 @@ public final class NuclearWorld {
      * @return background threads stopped within deadline
      */
     public static boolean onServerStopping(net.minecraft.server.MinecraftServer server) {
+        var storage = new java.util.ArrayList<java.util.concurrent.CompletableFuture<Void>>();
         for (ServerLevel level : server.getAllLevels()) {
             if (!level.hasData(ModAttachments.NUCLEAR_WORLD)) continue;
             try {
-                get(level).clear(level);
+                NuclearWorld world = get(level);
+                storage.add(world.prep.closeStorage());
+                for (RuinContext ctx : world.ruins.values()) storage.add(ctx.closeStorage());
+                world.clear(level);
             } catch (RuntimeException e) {
                 Incoming.LOG.error("Ruins: shutdown in {} failed with an exception", level.dimension().location(), e);
             }
         }
-        return RuinWorkers.shutdown();
+        boolean stopped = RuinWorkers.shutdown();
+        // Shutdown only, never an autosave/tick wait. Pages already admitted are bounded and detached.
+        try { java.util.concurrent.CompletableFuture.allOf(storage.toArray(java.util.concurrent.CompletableFuture[]::new)).join(); }
+        catch (RuntimeException e) { Incoming.LOG.error("Could not finish prepared ruin pages on shutdown", e); }
+        return stopped;
     }
 
     /** Cancel: queues stopped (destruction not restored). */
@@ -414,6 +436,49 @@ public final class NuclearWorld {
         }
     }
 
+    /** Bounded completion/cache service survives preparation expiry and rotates across active owners. */
+    private void reclaim(ServerLevel level, WorkClock clock) {
+        int slots = 3 * ruins.size() + 2;
+        for (int checked = 0; checked < slots && clock.canStart(); checked++) {
+            int slot = Math.floorMod(reclaimNext++, slots);
+            if (slot == 0) {
+                if (prep.reclaim(level, clock)) return;
+                continue;
+            }
+            if (slot == 1) {
+                if (scars.collectReady(level, clock)) return;
+                continue;
+            }
+            var contexts = ruins.values().iterator();
+            int context = (slot - 2) / 3;
+            for (int i = 0; i < context; i++) contexts.next();
+            RuinContext ctx = contexts.next();
+            // A ready payload may refuse publication. Collection and reclamation need separate
+            // turns so that refusal cannot suppress the operation that makes room for it.
+            if ((slot - 2) % 3 == 0) {
+                if (!ctx.readyWindowReads()) continue;
+                long began = clock.begin();
+                try { ctx.drainWindowReads(level); }
+                finally { clock.end(began); }
+                return;
+            }
+            if ((slot - 2) % 3 == 1) {
+                if (ctx.restoredPlans == null || ctx.restoredPlans.pendingReads() == 0) continue;
+                long began = clock.begin();
+                try { ctx.restoredPlans.collectReady((key, plan) ->
+                        scars.collectPrepared(level, ctx, ctx.restoredPlans, key, plan)); }
+                finally { clock.end(began); }
+                return;
+            }
+            if (ctx.shotBytes() > (64L << 20)
+                    || NuclearPrep.PLANS_CAP - NuclearPrep.residentMemory(level) < RuinMemory.TRANSITION_ROOM) {
+                if (ctx.shotCount() == 0) continue;
+                ctx.trimShots(8L << 20, clock, 16);
+                return;
+            }
+        }
+    }
+
     /** @param clock server-tick budget, shared across dimensions (already started) */
     public void tick(ServerLevel level, WorkClock clock) {
         get(level);
@@ -428,7 +493,7 @@ public final class NuclearWorld {
         NuclearEvents events = NuclearEvents.get(level);
         if (!restored) restore(level, events);
         sweepRuins(now);
-        // background plans: stuck ones fall back to server thread; active threads follow server tick
+        // Expired background attempts are interrupted for retry; active threads follow server tick.
         for (RuinContext ctx : ruins.values()) ctx.expire(now);
         RuinWorkers.adapt(level.getServer());
         // light before wave: faster; wave-killed bodies already received pulse
@@ -474,14 +539,16 @@ public final class NuclearWorld {
         // At capacity, existing material must progress before new removals can consume the
         // lane. One bounded batch avoids starving visible ruins while breaking that dependency.
         matter = RuinMatter.get(level);
+        // Ready input/results and spill receipts can free the memory these consumers need.
+        // They cannot wait behind an arbitrarily long material queue. Alternate the first
+        // opportunity while both owners have work, without granting another clock allowance.
+        if (!matter.busy() || (reclaimTurn = !reclaimTurn)) reclaim(level, clock);
         matter.work(level, clock, 1);
         long craterStart = System.nanoTime();
         digCraters(level, events, clock);
         long scarStart = System.nanoTime();
         lastCraterNanos = scarStart - craterStart;
         scars.work(level, now, clock);
-        matter = RuinMatter.get(level);
-        matter.work(level, clock);
         long scorchStart = System.nanoTime();
         lastScarNanos = scorchStart - scarStart;
         // ground light after wave-reached ruins using their remaining budget: when front crosses
@@ -510,8 +577,16 @@ public final class NuclearWorld {
             Incoming.LOG.error("Ruin preparation failed with an exception; dropped", e);
             prep.clear(level, scars);
         }
+        long materialStart = System.nanoTime();
+        lastPrepNanos = materialStart - prepStart;
+        // The first material batch above guarantees progress even when visible work fills the
+        // lane. Its remaining backlog must not consume every preparation/flash opportunity:
+        // a dense city can keep material moving long after the next front needs its plan.
+        // Preparation retains its existing share; all consumers still use this same clock.
+        matter = RuinMatter.get(level);
+        matter.work(level, clock);
         long falloutStart = System.nanoTime();
-        lastPrepNanos = falloutStart - prepStart;
+        lastScarNanos += falloutStart - materialStart;
         try {
             mobFallout.work(level, events.detonations(), clock);
         } catch (RuntimeException e) {

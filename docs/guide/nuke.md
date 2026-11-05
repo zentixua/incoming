@@ -2,7 +2,7 @@
 
 English · [Русский](ru/nuke.md)
 
-A nuclear warhead of 1 to 15 kt on an ICBM, a cruise missile or a B-2 bomb: flash, mushroom cloud, blast wave, fires, and
+A nuclear warhead of 1 to 1000 kt on an ICBM, a cruise missile or a B-2 bomb: flash, mushroom cloud, blast wave, fires, and
 with a ground burst a crater and a fallout trail. By default, one block represents one meter and the distant wave is slowed so you can see it coming.
 Distances below assume full radii.
 See [Not physical](not-physical.md) and [world settings](settings.md#world-settings).
@@ -17,11 +17,13 @@ By default only operators can.
 
 1. You need an ICBM item, or a missile or bomb plus a Nuclear Warhead ([recipes](munitions.md#recipes)).
 2. On the console: the Nuclear weapon, or the nuclear warhead option of the Missile and the Bomb; the yield
-   numeric field in whole kt and suggested values, up to the world’s configured maximum (at most 15 kt); for the ICBM and the missile a ground burst
-   (the default, with a crater and fallout trail) or an air burst (wider destruction). The bomb explodes underground.
-3. LMB in the binoculars or FIRE opens a review of the server-resolved target and yield. Hold the launch button
-   for three seconds, or focus it with Tab and hold Space or Enter. Releasing, moving the pointer off the button,
-   losing window focus or closing the review cancels the hold. On small screens, scroll or use Page Up/Down to read the details.
+   numeric field in whole kt and suggested values, up to the world’s configured maximum (100 kt in new worlds, configurable up to 1000 kt); for the ICBM and the missile a ground burst
+   (the default, with a crater and fallout trail) or an air burst (wider destruction). The nuclear bomb detonates on impact; the conventional bunker-buster penetrates before exploding.
+3. LMB in the binoculars or FIRE opens the exact target, yield and effect estimates. Select **Prepare target**;
+   the server resolves the surface and prepares destruction for this order, showing actual progress. Cancel or close freely.
+4. When **Ready** appears, release the button, then hold the launch button for three seconds, or focus it with Tab
+   and hold Space or Enter. Releasing, moving off the button or losing focus cancels the hold. Holding during preparation
+   never launches automatically. On small screens, scroll or use Page Up/Down to read the details.
 
 The targeting map shows flat-ground reference contours for the fireball reference silhouette, 5 psi and 1 psi.
 The fireball reference is its radius at the second light maximum; it can expand farther later.
@@ -31,11 +33,18 @@ boundaries: terrain, shelter, clothing and materials matter. A dashed elevated f
 The review shows your distance and a north-up downwind arrow. Unknown ground height remains an estimate.
 Viewing a wider footprint does not increase targeting range or reveal hidden players.
 
-Reviewing a strike reserves no ammunition and starts no preparation or alarm. Payment and the existing second-key
-window begin only after confirmation. A changed target, weather, server limit or flight configuration requires a new
-review. An unpaid review expires after one minute and is discarded on disconnect, death or restart. The existing
-flight duration and operator immediate-detonation commands are unchanged; this review does not guarantee prepared
-terrain or LOD readiness for a cold observer arriving during flight.
+Inspection and preparation reserve no ammunition and start no alarm. Payment and the existing second-key window begin
+only after confirmation. A changed target, weather, limit or configuration requires a new review. Preparation stays
+alive while the review is open; closing, death, disconnect, dimension change, abort or one minute without contact cancels
+unlaunched preparation. A confirmed order waiting for a second key or carrier warning keeps its preparation itself.
+The configured ICBM flight duration (90 seconds by default) starts at launch, after preparation. A required second key
+or carrier warning can add waiting before launch. Ordinary nuclear commands
+prepare unpaid and then launch once ready, because the command itself is the instruction to fire. Operator `nuke now`
+remains immediate diagnostic behavior. Carrier preparation includes its usual randomly selected aim offset; launch keeps that same offset.
+Plans cover the normal arrival for a fixed point or map-ground order. Entity/craft targeting, an earlier collision,
+terrain edit or server restart may require fresh destruction work at the actual impact site. It does not guarantee that every distant-terrain client already has the latest view.
+
+Preparation before launch covers the target and currently loaded surroundings. READY waits for those ruin plans and their plan writes; the rest of the heavy zone continues preparing during flight and after the explosion. Entering a new area can add preparation before launch. READY does not survive a server restart, and distant terrain and LOD updates may arrive later.
 
 ![Console with the nuclear warhead: yield and burst mode](img/remote-nuke.png)
 
@@ -111,7 +120,12 @@ is saved with the world, so leaving and returning does not erase it. Leaves and 
 A surface-burst crater supplies its rim from the ground actually excavated; remaining ejecta and thermally transformed material stay accounted for.
 
 If the shared nuclear working-memory reservation is full, further material removal waits while already moving
-material can settle. Pending material and support checks survive a restart. Completed movement and crater
+material can settle. Already started plan reads and completed calculations receive processing time even
+while a dense visible chunk waits for space; later loaded chunks can reuse plans after the preparation window ends.
+Completed terrain checks free room for subsequent ruins. Distant preparation can resume with fewer background
+threads when the configured maximum does not fit alongside the debris.
+The debris queue does not need to empty before nearby or distant preparation, or flash damage, can continue. Large strikes can
+still leave chunks waiting for memory and processing time. Pending material and support checks survive a normal world save and reload. Completed movement and crater
 checkpoints are compacted into material totals; container contents are retained. Saving can pause material
 movement until its file is written. An old active journal too large for the shared memory limit stays preserved
 on disk and paused; it is never replaced with an empty aftermath.
@@ -120,17 +134,22 @@ These are reduced block-scale rules: joint properties, drag and the pile's repos
 
 With the default ground burst, the dust column joins the mushroom cap. With an explicitly selected air burst
 at the standard burst height, the column starts rising later, with a billowing upper edge, and stays below the
-faster-rising cap. The gap is expected; in the first seconds, dust near the ground can hide the short column entirely.
+faster-rising cap. This separation comes from the current approximate transport model; its exact duration is not
+calibrated to a timed real-world reference. In the first seconds, dust near the ground can hide the short column entirely.
+The column and its base receive dust only after the same local wave arrival and inflow delay as the supplying ground
+layer. Slowing the wave in GAME also delays this supply; the dust column can appear later and remain shorter than in REAL.
 
 A ground burst leaves a crater and radioactive fallout downwind. Over water, spray takes the place of the dust wall.
 Burns, radiation and falling debris can still hurt you after the flash, so stay under cover and watch your dose.
 
 ![A dust wave approaches beneath the mushroom cloud at dusk](../media/blast-wave-dusk-hq.jpg)
 
-Distant Horizons and Voxy can show ruins without you visiting them. ICBM strikes prepare the hardest-hit area during
-flight; other nuclear carriers can take longer to update the distant view. Broken windows and fallen trees farther
-out appear when you approach. In Voxy, players who missed the strike also need to approach to see its distant ruins.
-Incoming keeps a bounded list of recent distant updates and asks the server to refresh terrain overwritten by LOD Server Support. This recovery is best effort; saved world changes remain the durable source of ruins.
+Nearby terrain changes as the pressure wave passes. Distant Horizons can show distant damage through its supported
+integration. Voxy receives remote terrain through LOD Server Support after the changed world chunks are saved;
+these updates can arrive later than the wave. Without a server terrain provider, Voxy only knows terrain the
+client has loaded. Saved world changes remain the source of ruins, including for players who join later.
+Flying quickly or teleporting into an area still being processed can cause loading waits or visible terrain changes
+after arrival.
 
 The detailed timings, visual behavior and model limits are in the [nuclear effects reference](../dev/nuclear-effects-reference.md).
 

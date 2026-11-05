@@ -214,6 +214,7 @@ public class BomberEntity extends StrikeProjectile {
     @Override
     public boolean recall(ServerLevel level) {
         if (released) return false;
+        cancelNuclearPreparation();
         released = true;
         setPhase(FlightPhase.EGRESS);
         Incoming.LOG.info("B-2 {} recalled at {}: leaving without a drop (off-world {})", getUUID(), blockPosition(), isVirtual());
@@ -228,12 +229,20 @@ public class BomberEntity extends StrikeProjectile {
         if (bomb == null) return;
         bomb.drop(position().add(0, -BombDrop.DROP_BELOW, 0), flight.forward().scale(speed), drop, goal, ownerId());
         bomb.setNuclear(nuclear);
+        bomb.setNuclearPreparation(takeNuclearPreparation());
         shareAir(bomb);
         // The bomb UUID from projectile warnings identifies its B-2.
         Incoming.LOG.info("B-2 {} dropped bomb {} at {}, {} blocks from the aim point, {} above it (off-world {})", getUUID(), bomb.getUUID(),
                 blockPosition(), Math.round(position().subtract(drop).horizontalDistance()), Math.round(getY() - drop.y), isVirtual());
-        if (isVirtual()) VirtualFlights.launch(level, bomb);
-        else level.addFreshEntity(bomb);
+        boolean added = false;
+        try {
+            if (isVirtual()) {
+                VirtualFlights.launch(level, bomb);
+                added = true;
+            } else added = level.addFreshEntity(bomb);
+        } finally {
+            if (!added) bomb.discard();
+        }
     }
 
     /**

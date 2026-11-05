@@ -66,6 +66,8 @@ import java.util.List;
  * ruins (without {@code setBlock}: wall/tree fire does not wake neighbors), only fire tick scheduled.
  */
 public final class RuinPlan {
+    /** Disposable cache schema; older pages omitted structural ownership and must be rebuilt. */
+    static final int STORAGE_VERSION = 2;
     /** Server chunk heightmaps; index is map type in {@link #heights}. */
     public static final Heightmap.Types[] HEIGHTMAP_TYPES = {Heightmap.Types.MOTION_BLOCKING, Heightmap.Types.MOTION_BLOCKING_NO_LEAVES,
             Heightmap.Types.OCEAN_FLOOR, Heightmap.Types.WORLD_SURFACE};
@@ -374,6 +376,103 @@ public final class RuinPlan {
         return (h ^ System.identityHashCode(normal)) * 0x9E3779B97F4A7C15L + 1;
     }
 
+    /** Immutable plan payload; named states, rather than runtime registry/object identities, survive restart. */
+    net.minecraft.nbt.CompoundTag store() {
+        var tag = new net.minecraft.nbt.CompoundTag();
+        tag.putInt("version", STORAGE_VERSION);
+        var palette = new RuinPalette();
+        tag.putIntArray("states", palette.indices(states));
+        tag.putIntArray("old", palette.indices(olds));
+        tag.putIntArray("cells", cells);
+        tag.putInt("sections", oldHashes.length);
+        tag.putIntArray("fires", fires);
+        tag.putIntArray("heights", heights);
+        tag.putLongArray("light", lightAt);
+        tag.putLongArray("fluids", fluidTicks);
+        tag.putLongArray("material", material);
+        if (outside != null) {
+            tag.putLongArray("outside", outside.toLongArray());
+            tag.putIntArray("outside_states", palette.indices(outsideState.toArray(BlockState[]::new)));
+        }
+        if (biomes != null) {
+            tag.putByteArray("biomes", biomes.levels());
+            tag.putIntArray("biome_from", biomes.from());
+        }
+        if (flash != null) tag.putIntArray("flash", flash);
+        if (blown != null) tag.putIntArray("blown", blown);
+        tag.put("palette", palette.save());
+        return tag;
+    }
+
+    /** Disk callbacks must not keep a cancelled detonation context (and its entire snapshot cache) alive. */
+    RuinPlan detached() {
+        var copy = new RuinPlan(cells, oldHashes, states, olds, fires, heights, lightAt, prints, normals,
+                outside, outsideState, null, fluidTicks, biomes);
+        copy.flash = flash;
+        copy.blown = blown;
+        copy.material = material;
+        return copy;
+    }
+
+    /** Known source, decoded arrays and palette scratch; registry codec scratch is not a whole-heap bound. */
+    static long restorePublicationBytes(net.minecraft.nbt.CompoundTag tag) {
+        return tag.sizeInBytes() + storedBytes(tag)
+                + 512L + 96L * tag.getList("palette", net.minecraft.nbt.Tag.TAG_COMPOUND).size();
+    }
+
+    /** The same field law as bytes(), evaluated before allocating decoded arrays. */
+    static long storedBytes(net.minecraft.nbt.CompoundTag tag) {
+        int sections = tag.getInt("sections");
+        if (sections < 0 || sections > 256) throw new IllegalArgumentException("Invalid ruin plan sections");
+        return sourceBytes(arrayLength(tag, "cells"), arrayLength(tag, "old"), arrayLength(tag, "states"),
+                arrayLength(tag, "fires"), arrayLength(tag, "heights"), arrayLength(tag, "light"), sections, 0, 0,
+                arrayLength(tag, "outside"), arrayLength(tag, "outside_states"), arrayLength(tag, "fluids"),
+                arrayLength(tag, "biomes"), arrayLength(tag, "flash"), arrayLength(tag, "blown"),
+                arrayLength(tag, "material"), Math.max(1, (sections + 63) / 64));
+    }
+
+    private static int arrayLength(net.minecraft.nbt.CompoundTag tag, String key) {
+        var value = tag.get(key);
+        if (value instanceof net.minecraft.nbt.IntArrayTag array) return array.size();
+        if (value instanceof net.minecraft.nbt.LongArrayTag array) return array.size();
+        return value instanceof net.minecraft.nbt.ByteArrayTag array ? array.size() : 0;
+    }
+
+    /** Server thread: rebuild process-local hashes. Section fast checks fall back to the normal column rescan. */
+    static RuinPlan restore(net.minecraft.nbt.CompoundTag tag, RuinContext ctx) {
+        if (tag.getInt("version") != STORAGE_VERSION || !tag.contains("material", net.minecraft.nbt.Tag.TAG_LONG_ARRAY))
+            throw new IllegalArgumentException("Incomplete or unknown ruin plan version");
+        int sections = tag.getInt("sections");
+        if (sections < 0 || sections > 256 || arrayLength(tag, "cells") != arrayLength(tag, "old")
+                || arrayLength(tag, "states") > MAX_STATES)
+            throw new IllegalArgumentException("Invalid ruin plan dimensions");
+        var palette = RuinPalette.load(tag.getList("palette", net.minecraft.nbt.Tag.TAG_COMPOUND));
+        int[] cells = tag.getIntArray("cells");
+        BlockState[] states = palette.states(tag.getIntArray("states")), olds = palette.states(tag.getIntArray("old"));
+        long[] hashes = new long[sections];
+        int previous = -1;
+        for (int i = 0; i < cells.length; i++) {
+            int c = cells[i], key = c & KEY_MASK;
+            if (key <= previous || section(c) >= sections || (c >>> STATE_SHIFT & STATE_MASK) >= states.length)
+                throw new IllegalArgumentException("Invalid ruin plan cell");
+            previous = key;
+            hashes[section(c)] = mix(hashes[section(c)], olds[i]);
+        }
+        var outside = tag.contains("outside") ? new LongArrayList(tag.getLongArray("outside")) : null;
+        var outsideStates = outside == null ? null : java.util.Arrays.asList(palette.states(tag.getIntArray("outside_states")));
+        if (outside != null && outside.size() != outsideStates.size()) throw new IllegalArgumentException("Invalid outside logs");
+        ScorchedBiomes.Cells biomes = tag.contains("biomes")
+                ? new ScorchedBiomes.Cells(tag.getByteArray("biomes"), tag.getIntArray("biome_from")) : null;
+        if (biomes != null && (biomes.levels().length != 16 || biomes.from().length != 16))
+            throw new IllegalArgumentException("Invalid biome cells");
+        var plan = new RuinPlan(cells, hashes, states, olds, tag.getIntArray("fires"), tag.getIntArray("heights"),
+                tag.getLongArray("light"), null, null, outside, outsideStates, ctx, tag.getLongArray("fluids"), biomes);
+        if (tag.contains("flash")) plan.flash = tag.getIntArray("flash");
+        if (tag.contains("blown")) plan.blown = tag.getIntArray("blown");
+        plan.material = tag.getLongArray("material");
+        return plan;
+    }
+
     /** For tests: differences from another plan (same positions, new/old states, fires); null if none. */
     @Nullable
     public String differs(RuinPlan o) {
@@ -406,7 +505,12 @@ public final class RuinPlan {
         if (heightsDiffer) out.append(" heightmaps differ (").append(heights.length).append(" | ").append(o.heights.length).append(')');
         boolean biomesDiffer = biomes == null ? o.biomes != null : !biomes.same(o.biomes);
         if (biomesDiffer) out.append(" biomes ").append(biomes).append(" | ").append(o.biomes);
-        return n == 0 && onlyA.isEmpty() && onlyB.isEmpty() && !heightsDiffer && !biomesDiffer ? null : n + " cells" + out;
+        // Candidate order comes from a solver map; ownership is a set of source positions.
+        var materialA = new it.unimi.dsi.fastutil.longs.LongOpenHashSet(material);
+        var materialB = new it.unimi.dsi.fastutil.longs.LongOpenHashSet(o.material);
+        boolean materialDiffer = !materialA.equals(materialB);
+        if (materialDiffer) out.append(" material differs (").append(material.length).append(" | ").append(o.material.length).append(')');
+        return n == 0 && onlyA.isEmpty() && onlyB.isEmpty() && !heightsDiffer && !biomesDiffer && !materialDiffer ? null : n + " cells" + out;
     }
 
     /**
@@ -548,12 +652,125 @@ public final class RuinPlan {
         return new Debris(out, removed);
     }
 
-    /** Approximate plan memory, bytes (for log). */
+    /** Producer ownership is never copied by detached/store/restore, especially not onto EMPTY. */
+    @Nullable
+    private RuinResults.Lease resultOwner;
+
+    synchronized void attachResult(RuinResults.Lease owner) {
+        if (this == EMPTY || resultOwner != null) throw new IllegalStateException("Ruin plan already owned or shared empty");
+        resultOwner = owner;
+    }
+
+    /** Call only after the consumer has charged this plan, not merely after Future.get(). */
+    void releaseResultToCountedOwner() {
+        RuinResults.Lease owner;
+        synchronized (this) { owner = resultOwner; resultOwner = null; }
+        if (owner != null) owner.releaseToCountedOwner();
+    }
+
+    /** Stale/discarded output: keep its producer charge until the actual solver exits. */
+    void discardResult() {
+        RuinResults.Lease owner;
+        synchronized (this) { owner = resultOwner; resultOwner = null; }
+        if (owner != null) owner.cancel();
+    }
+
+    /** Payload estimate, including possible lazy lookup arrays; not a whole-heap measurement. */
     public long bytes() {
         if (this == EMPTY) return 0;
-        return 64 + 12L * cells.length + 8L * fluidTicks.length + 8L * oldHashes.length + 8L * states.length + 4L * fires.length + 4L * heights.length
-                + 8L * lightAt.length + (prints == null ? 0 : 16L * prints.length) + (outside == null ? 0 : 16L * outside.size()) + (biomes == null ? 0 : 96)
-                + (flash == null ? 0 : 4L * flash.length) + (blown == null ? 0 : 4L * blown.length) + 8L * material.length;
+        return sourceBytes(cells.length, olds.length, states.length, fires.length, heights.length, lightAt.length,
+                oldHashes.length, prints == null ? 0 : prints.length, normals == null ? 0 : normals.length,
+                outside == null ? 0 : outside.size(), outsideState == null ? 0 : outsideState.size(),
+                fluidTicks.length, biomes == null ? 0 : 16, flash == null ? 0 : flash.length,
+                blown == null ? 0 : blown.length, material.length, sectionWords());
+    }
+
+    private int sectionWords() {
+        return Math.max(1, (oldHashes.length + 63) / 64);
+    }
+
+    /** The same field law is used for an actual plan and its pre-allocation domain bound. */
+    static long sourceBytes(long cells, long olds, long states, long fires, long heights, long light,
+                            long hashes, long prints, long normals, long outside, long outsideStates,
+                            long fluids, long biomes, long flash, long blown, long material, long sectionWords) {
+        // Eight-byte reference estimate; registry BlockStates/context are borrowed, not deep-copied here.
+        // Fire keys and section bits are charged before their lazy allocation so bytes never grows on lookup.
+        // oldTops is an optional int[512]; prepay it too so all lazy caches are stable.
+        return 64 + 4L * 512 + 4 * cells + 8 * olds + 8 * states + 8 * fires + 4 * heights + 8 * light
+                + 8 * (hashes + prints + normals + outside + outsideStates + fluids + material + sectionWords)
+                + 6 * biomes + 4 * (flash + blown);
+    }
+
+    /**
+     * Source-proven result bound, before any Blast/Collapse/finish allocation. Original non-air centre sections
+     * contain all changed/material positions (Collapse.collect, ground/plants/fireball/snowy); no deposition is
+     * performed by the solver. Ruined snapshots' mayHave also includes restored old blocks. Leaves contribute at
+     * most one fire each, land at most one per column, including fire ABOVE a populated section. The fluid pass
+     * visits exactly the 18x18 centre-plus-border domain, once per y; only original fluid cells can enter it.
+     * All nine input chunks matter, including fracture-driven collapse below/above centre surface. Counting their
+     * non-air section domains avoids assuming the centre's surface bounds neighbour fractures or fluid heights.
+     * Outside logs have no current producer in Sections; reserve one per possible centre source as well.
+     * Heights: 256 columns x (four maps + sky) x triple. Palette <= MAX_STATES; flash <= MAX_CHARS.
+     */
+    static long maxResultBytes(RuinContext.Grid grid) {
+        ChunkShot centre = grid.at(0, 0);
+        if (centre == null) throw new IllegalArgumentException("Missing result centre");
+        long cells = populatedCells(centre, 256), fluids = 0;
+        for (int dz = -1; dz <= 1; dz++) for (int dx = -1; dx <= 1; dx++) {
+            ChunkShot shot = grid.at(dx, dz);
+            if (shot != null) fluids += populatedCells(shot, (dx == 0 ? 16 : 1) * (dz == 0 ? 16 : 1));
+        }
+        long fires = cells + 256;
+        return sourceBytes(cells, cells, MAX_STATES, fires, 256L * (SKY + 1) * 3, cells,
+                centre.sections, centre.sections, centre.sections, cells, cells, fluids, 16,
+                Math.min(6 * cells, ua.zentix.incoming.nuclear.flash.FlashMarks.MAX_CHARS), fires, cells,
+                (centre.sections + 63L) / 64);
+    }
+
+    /**
+     * Temporary fracture output, separate from the final plan. All nine fragments remain owned until
+     * the actual solver exits, even when its centre plan is empty or its future is cancelled.
+     * Diagnostic server-thread cache entries instead remain counted by their context.
+     */
+    static long maxFragmentBytes(RuinContext.Grid grid) {
+        long bytes = 0;
+        for (int dz = -1; dz <= 1; dz++) for (int dx = -1; dx <= 1; dx++) {
+            ChunkShot shot = grid.at(dx, dz);
+            if (shot == null) continue;
+            long cells = populatedCells(shot, 256);
+            // Blast.run emits each non-air centre position once. fellTrees records at most one root per
+            // centre column (break after recording); each record is long[]{position,height,direction}.
+            long trees = Math.min(cells, 256);
+            bytes += fragmentBytes(cells, 9, trees, trees, 3 * trees);
+        }
+        return bytes;
+    }
+
+    /** The same element/capacity law for an actually retained Blast, with its nine numeric snapshot IDs. */
+    static long fragmentBytes(Blast blast) {
+        long treeLongs = 0;
+        for (long[] tree : blast.trees()) treeLongs += tree.length;
+        return fragmentBytes(blast.removed().length, blast.stamp().serials().length,
+                blast.trees().size(), blast.treeLogs().size(), treeLongs);
+    }
+
+    static long fragmentBytes(long removed, long serials, long trees, long treeLogs, long treeLongs) {
+        // Estimated record shell 56, stamp shell 24, map/key allowance 64; array headers 16 each;
+        // two ArrayList shells 24 each. Eight-byte references keep this independent of compressed oops.
+        return 64 + 56 + 24 + 16 + 8 * serials + 16 + 4 * removed + 2 * (24 + 16)
+                + 8 * (listCapacity(trees) + listCapacity(treeLogs)) + 16 * trees + 8 * treeLongs;
+    }
+
+    private static long listCapacity(long size) {
+        // These producer lists only append: ArrayList starts at 10 then grows by 1.5, hence <=2n.
+        // This is a backing-capacity bound, not a guessed payload multiplier.
+        return size == 0 ? 0 : Math.max(10, 2 * size);
+    }
+
+    private static long populatedCells(ChunkShot shot, int columns) {
+        long result = 0;
+        for (int i = 0; i < shot.sections; i++) if (shot.mayHave(i, state -> !state.isAir())) result += 16L * columns;
+        return result;
     }
 
     private static int section(int cell) {
@@ -746,7 +963,7 @@ public final class RuinPlan {
         if (!current(chunk, flash, marked)) return false;
         // Reserve the bounded capture/contact window before allocating it. Large container tags
         // extend that reservation before any source mutation; refusal keeps this exact plan pending.
-        try (var reservation = RuinMemory.reserve(level, material.length * (8192L + 512))) {
+        try (var reservation = RuinMemory.reserve(level, RuinMatter.get(level).removalBytes(material))) {
             if (reservation == null) { memoryWaiting = true; return false; }
             java.util.List<RuinMatter.Piece> released = new java.util.ArrayList<>();
             RuinScorch scorch = new RuinScorch(chunk);
@@ -781,8 +998,14 @@ public final class RuinPlan {
                     Blast.Props props = Blast.props(now);
                     return now.getBlock() == piece.state.getBlock() || props.bearing() || props.leaves();
                 });
-                RuinMatter.get(level).release(released);
-                RuinMatter.get(level).support(level, released, d);
+                RuinMatter ledger = RuinMatter.get(level);
+                long owned = ledger.retainedBytes();
+                try {
+                    ledger.release(released);
+                    ledger.support(level, released, d);
+                } finally {
+                    reservation.transfer(Math.max(0, ledger.retainedBytes() - owned));
+                }
             }
             if (ctx != null) ctx.applied(chunk, this, motion);
             FlashScorch.unmark(chunk, d.id());
@@ -812,12 +1035,14 @@ public final class RuinPlan {
      * restart) know chunk fire belongs to layer.
      *
      * @return fires ignited (including wave-blown); −1 stale layer (positions changed since snapshot): nothing
-     *          changed
+     *          changed; −2 when shared memory cannot admit the pre-flash shadow tile
      */
     int applyFlash(ServerLevel level, LevelChunk chunk, Detonation d, ColumnScar.Budget budget) {
+        memoryWaiting = false;
         if (this == EMPTY || ctx == null) return 0;
         long t = System.nanoTime();
         if (!current(chunk, null, false)) return -1;
+        if (!ctx.flashHeightsReady(level, chunk)) { memoryWaiting = true; return -2; }
         boolean shotCurrent = ctx.beforeFlash(level, chunk);
         boolean recoloured = biomes != null && ScorchedBiomes.write(level, chunk, biomes);
         int lit = 0;

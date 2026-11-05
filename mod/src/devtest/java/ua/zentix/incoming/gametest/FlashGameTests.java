@@ -253,9 +253,13 @@ public final class FlashGameTests {
         IncomingConfig.SERVER.nukeEffectsScale.set(hi);
         NuclearWorld w = NuclearWorld.get(level);
         NuclearWorld.useClock(level.getServer(), WorkClock.counting(1_000_000L));
+        NuclearEvents events = NuclearEvents.get(level);
+        int strike = events.nextId();
+        boolean[] prepared = {false};
         java.util.List<String> handOffs = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
         Runnable unwatch = NuclearGameTests.watchLog(line -> {
             if (line.contains("pre-built ruins")) handOffs.add(line);
+            if (line.startsWith("Ruins for strike #" + strike + " ready:")) prepared[0] = true;
         });
         Runnable restore = () -> {
             unwatch.run();
@@ -264,9 +268,9 @@ public final class FlashGameTests {
             NuclearStrikes.clear(level);
             stand.discard();
         };
-        NuclearEvents events = NuclearEvents.get(level);
+        StrikeGameTests.afterTest(h, restore);
         long now = level.getGameTime();
-        events.schedule(new NuclearEvents.ScheduledStrike(events.nextId(), target, 15, true, now, now + 300, target, java.util.Optional.empty(), false));
+        events.schedule(new NuclearEvents.ScheduledStrike(strike, target, 15, true, now, now + 300, target, java.util.Optional.empty(), false));
         BlockPos wallPos = h.absolutePos(CENTER.east(WALL_DX));
         boolean[] checked = {false};
         long[] tickAt = {System.nanoTime()};
@@ -274,6 +278,9 @@ public final class FlashGameTests {
             Detonation d = events.detonations().stream().filter(e -> e.burst().distanceTo(target) < 400).findFirst().orElse(null);
             String failure = null;
             if (d == null) {
+                // Layout, policy fingerprint and plans complete off-thread. Give them game time until
+                // this strike's real ready boundary, rather than consuming its flight in a few milliseconds.
+                if (!prepared[0]) RuinBackgroundGameTests.gamePace(tickAt);
                 if (level.getGameTime() > now + 1150) failure = "there was no explosion";
             } else if (!checked[0]) {
                 RuinBackgroundGameTests.gamePace(tickAt);
@@ -292,7 +299,8 @@ public final class FlashGameTests {
                                 .append(l.shadows().length).append(" silhouettes;");
                     }
                     FlashMarks.Layer layer = m.layers().stream().filter(l -> l.detonation() == d.id()).findFirst().orElseThrow();
-                    if (handOffs.stream().noneMatch(line -> line.startsWith("Detonation #" + d.id() + ":"))) failure = "the ruins were not prepared in advance: the explosion did not take preparation";
+                    if (!prepared[0]) failure = "the scheduled strike reached detonation before its real preparation completed";
+                    else if (handOffs.stream().noneMatch(line -> line.startsWith("Detonation #" + d.id() + ":"))) failure = "the ruins were not prepared in advance: the explosion did not take preparation";
                     else if (m.layers().stream().anyMatch(l -> l.detonation() < 0) || layer.time() != d.gameTime() || layer.chars().length == 0) {
                         failure = "scorch and wall silhouettes belong to different detonation layers #" + d.id() + " (time " + d.gameTime() + "):" + layers;
                     }
@@ -303,12 +311,10 @@ public final class FlashGameTests {
                 if (level.getGameTime() < d.gameTime() + 2400) return;
                 failure = "preparation did not release the squares: left " + w.plannedChunks() + ", squares " + w.prepTiles();
             } else {
-                restore.run();
                 h.succeed();
                 return;
             }
             if (failure != null) {
-                restore.run();
                 throw new net.minecraft.gametest.framework.GameTestAssertException(failure);
             }
         });

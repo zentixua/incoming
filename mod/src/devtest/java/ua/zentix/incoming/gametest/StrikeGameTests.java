@@ -4209,6 +4209,13 @@ public final class StrikeGameTests {
         h.assertTrue(ServerActions.dispatch(level, "GameTest", 0, WeaponType.MISSILE, 5, 20, aim, nuke, Waypoints.NONE, null), "launch from console did not pass");
         h.assertTrue(SalvoData.get(level).size() == 0, "nuclear order became a salvo");
         boolean carriers = ua.zentix.incoming.IncomingConfig.SERVER.carrierNukes.get();
+        if (carriers) {
+            h.assertTrue(VirtualFlights.get(level).flights().stream().noneMatch(ours), "unprepared console order launched");
+            var handle = ua.zentix.incoming.nuclear.world.NuclearReadyFixture.commandHandle(level);
+            ua.zentix.incoming.nuclear.world.NuclearReadyFixture.ready(level, handle, far, 15, true);
+            ua.zentix.incoming.nuclear.world.NuclearReadyFixture.tickCommands(level);
+            h.assertValueEqual(ua.zentix.incoming.strike.NuclearCommands.pending(level), 0, "ready console authority retained");
+        }
         List<StrikeProjectile> single = VirtualFlights.get(level).flights().stream().filter(ours).toList();
         h.assertTrue(single.size() == 1 && single.getFirst().isNuclear() == carriers,
                 "not a single missile with a nuclear warhead: " + single.stream().map(StrikeProjectile::isNuclear).toList());

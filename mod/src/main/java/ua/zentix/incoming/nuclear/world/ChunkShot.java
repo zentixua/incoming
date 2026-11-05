@@ -4,6 +4,7 @@ import net.minecraft.util.BitStorage;
 import net.minecraft.util.ZeroBitStorage;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.BaseFireBlock;
+import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.block.state.properties.BlockStateProperties;
@@ -39,6 +40,48 @@ import java.util.concurrent.atomic.AtomicReferenceArray;
  */
 final class ChunkShot {
     private static final BlockState AIR = Blocks.AIR.defaultBlockState();
+    private static final com.mojang.serialization.Codec<PalettedContainer<BlockState>> STORE_CODEC =
+            PalettedContainer.codecRW(Block.BLOCK_STATE_REGISTRY, BlockState.CODEC,
+                    PalettedContainer.Strategy.SECTION_STATES, AIR);
+
+    /** Immutable detached payload; encoding neither retains a context nor calls live world code. */
+    record Saved(int x, int z, int minY, PalettedContainer<BlockState>[] states, int[] heights, int[] sky,
+                 boolean ruined, @Nullable RuinPlan old) {
+        net.minecraft.nbt.CompoundTag encode() {
+            var tag = new net.minecraft.nbt.CompoundTag();
+            tag.putInt("version", 1);
+            tag.putInt("x", x); tag.putInt("z", z); tag.putInt("min_y", minY);
+            tag.putInt("sections", states.length);
+            tag.putIntArray("heights", heights);
+            if (sky != null) tag.putIntArray("sky", sky);
+            tag.putBoolean("ruined", ruined);
+            if (old != null) tag.put("old", old.store());
+            for (int i = 0; i < states.length; i++) if (states[i] != null)
+                tag.put("s" + i, STORE_CODEC.encodeStart(net.minecraft.nbt.NbtOps.INSTANCE, states[i]).getOrThrow());
+            return tag;
+        }
+    }
+
+    Saved saved() {
+        return new Saved(x, z, minY, states, heights, sky, ruined, old == null ? null : old.detached());
+    }
+
+    /** Server thread publishes properties and recomputes process-local fingerprints. */
+    @SuppressWarnings("unchecked")
+    static ChunkShot restore(net.minecraft.nbt.CompoundTag tag, RuinContext ctx) {
+        int sections = tag.getInt("sections");
+        if (tag.getInt("version") != 1 || sections < 1 || sections > 256)
+            throw new IllegalArgumentException("Invalid stored snapshot dimensions");
+        var states = (PalettedContainer<BlockState>[]) new PalettedContainer<?>[sections];
+        for (int i = 0; i < sections; i++) if (tag.contains("s" + i))
+            states[i] = STORE_CODEC.parse(net.minecraft.nbt.NbtOps.INSTANCE, tag.get("s" + i)).getOrThrow();
+        int[] heights = tag.getIntArray("heights"), sky = tag.contains("sky") ? tag.getIntArray("sky") : null;
+        if (heights.length != RuinPlan.HEIGHTMAP_TYPES.length * 256 || sky != null && sky.length != 256)
+            throw new IllegalArgumentException("Invalid stored snapshot heightmaps");
+        RuinPlan old = tag.contains("old") ? RuinPlan.restore(tag.getCompound("old"), ctx) : null;
+        return new ChunkShot(tag.getInt("x"), tag.getInt("z"), 0, old, tag.getBoolean("ruined"),
+                tag.getInt("min_y"), states, heights, sky, null, null, null);
+    }
 
     private static final java.util.concurrent.atomic.AtomicLong SERIALS = new java.util.concurrent.atomic.AtomicLong();
     /** Fingerprint of an all-air section (absent from the snapshot). */
@@ -74,7 +117,7 @@ final class ChunkShot {
     final int[] sky;
     /** Section position properties, populated as read. */
     private final AtomicReferenceArray<Sec> props;
-    /** Bytes occupied by palette copies and maps (detonation memory). */
+    /** Known palette/map arrays, prepaid lazy properties and embedded old plan (admission estimate). */
     final long bytes;
 
     /** Properties of one section's positions: by palette index or (ruins, global palette) by position. */
@@ -127,10 +170,10 @@ final class ChunkShot {
         this.liveNormals = liveNormals;
         this.liveKnown = liveKnown;
         long size = 0;
-        for (PalettedContainer<BlockState> c : states) {
-            if (c == null) continue;
-            size += c.getSerializedSize();
-            register(c);
+        for (int i = 0; i < states.length; i++) {
+            PalettedContainer<BlockState> c = states[i];
+            size += sectionBytes(c, reconstructed(i));
+            if (c != null) register(c);
         }
         int surfaceType = type(Heightmap.Types.WORLD_SURFACE), solidType = type(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES);
         for (int c = 0; c < 256; c++) {
@@ -144,7 +187,23 @@ final class ChunkShot {
             this.oldTops = null;
         }
         this.props = new AtomicReferenceArray<>(sections);
-        this.bytes = size + 4L * (heights.length + 512 + (sky == null ? 0 : 256)) + 64L * sections + 256;
+        this.bytes = size + metadataBytes(sections, heights.length, sky != null) + oldBytes(old);
+    }
+
+    /** Known retained arrays, including Sec objects/references before their lazy publication. Not total object heap. */
+    static long sectionBytes(@Nullable PalettedContainer<BlockState> states, boolean reconstructed) {
+        long references = reconstructed || states != null && states.data.palette() instanceof GlobalPalette
+                ? 4096 : states == null ? 1 : states.data.palette().getSize();
+        return (states == null ? 0 : states.getSerializedSize()) + 64 + 8 * references;
+    }
+
+    static long metadataBytes(int sections, int heightLength, boolean sky) {
+        return 4L * (heightLength + 512 + (sky ? 256 : 0)) + 64L * sections + 256;
+    }
+
+    static long oldBytes(@Nullable RuinPlan old) {
+        // Live applied plans may also own this data; the archived-only plan has no other counted owner.
+        return old == null ? 0 : old.bytes() + 4L * 512;
     }
 
     static int type(Heightmap.Types t) {
@@ -376,10 +435,7 @@ final class ChunkShot {
                 BlockState o = old.oldState(lx, y, lz, minY);
                 if (o != null) return o;
             }
-            BlockState now = raw(lx, y, lz);
-            // ruin aftermath: fire and spread water occupy former air
-            if (now.getBlock() instanceof BaseFireBlock || !now.getFluidState().isEmpty() && !now.getFluidState().isSource()) return AIR;
-            return now;
+            return withoutAftermath(raw(lx, y, lz));
         }
         return raw(lx, y, lz);
     }
@@ -391,12 +447,22 @@ final class ChunkShot {
         return states[i] == null ? AIR : states[i].get(lx, y & 15, lz);
     }
 
+    private boolean reconstructed(int section) {
+        return ruined && old != null && old.touches(section);
+    }
+
+    private static BlockState withoutAftermath(BlockState state) {
+        // Ruin aftermath: fire and spread water occupy former air.
+        return state.getBlock() instanceof BaseFireBlock
+                || !state.getFluidState().isEmpty() && !state.getFluidState().isSource() ? AIR : state;
+    }
+
     /** Position properties of section {@code i} (index from world bottom). */
     Sec props(int i, Blast.PropsView view) {
         Sec p = props.get(i);
         if (p != null) return p;
         PalettedContainer<BlockState> c = states[i];
-        if (ruined || c != null && c.data.palette() instanceof GlobalPalette) {
+        if (reconstructed(i) || c != null && c.data.palette() instanceof GlobalPalette) {
             // by position: old plan blocks overlaid on section, or global palette (index in the whole registry)
             Blast.Props[] full = new Blast.Props[4096];
             int y0 = minY + (i << 4);
@@ -411,7 +477,10 @@ final class ChunkShot {
         } else {
             Palette<BlockState> palette = c.data.palette();
             Blast.Props[] local = new Blast.Props[palette.getSize()];
-            for (int k = 0; k < local.length; k++) local[k] = view.get(palette.valueFor(k));
+            for (int k = 0; k < local.length; k++) {
+                BlockState state = palette.valueFor(k);
+                local[k] = view.get(ruined ? withoutAftermath(state) : state);
+            }
             p = new Sec(c.data.storage(), local, null);
         }
         return props.compareAndSet(i, null, p) ? p : props.get(i);

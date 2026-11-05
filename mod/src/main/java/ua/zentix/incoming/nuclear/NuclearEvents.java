@@ -49,7 +49,7 @@ public final class NuclearEvents extends SavedData {
         public static final Codec<ScheduledStrike> CODEC = RecordCodecBuilder.create(i -> i.group(
                 Codec.INT.fieldOf("id").forGetter(ScheduledStrike::id),
                 Vec3.CODEC.fieldOf("target").forGetter(ScheduledStrike::target),
-                // a strike launched before the 15 kt limit (old-version save) detonates with the limit applied
+                // Saved scheduled strikes respect the supported yield ceiling when decoded.
                 Codec.DOUBLE.fieldOf("yield").xmap(y -> Math.min(y, ua.zentix.incoming.strike.Loadout.Nuke.MAX_YIELD), y -> y)
                         .forGetter(ScheduledStrike::yieldKt),
                 Codec.BOOL.fieldOf("air_burst").forGetter(ScheduledStrike::airBurst),

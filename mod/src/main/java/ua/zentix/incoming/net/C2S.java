@@ -79,7 +79,7 @@ public final class C2S {
 
     /** Exact reviewed order: begin hold, cancel/release hold, commit, or discard review. */
     public record NuclearAction(UUID id, int action) implements CustomPacketPayload {
-        public static final int BEGIN = 0, RELEASE = 1, COMMIT = 2, DISCARD = 3;
+        public static final int BEGIN = 0, RELEASE = 1, COMMIT = 2, DISCARD = 3, PREPARE = 4, POLL = 5;
         public static final Type<NuclearAction> TYPE = new Type<>(Incoming.id("nuclear_action"));
         public static final StreamCodec<ByteBuf, NuclearAction> CODEC = StreamCodec.composite(
                 UUIDUtil.STREAM_CODEC, NuclearAction::id, ByteBufCodecs.VAR_INT, NuclearAction::action, NuclearAction::new);
@@ -177,68 +177,5 @@ public final class C2S {
         }
     }
 
-    /**
-     * Client's distant-terrain renderer, on world entry. {@code voxy}: client has Voxy and mod ingests chunks into it
-     * ({@code client/VoxyIngest}); server sends chunks absent from client ({@code compat/VoxyLods}).
-     */
-    public record LodMods(boolean voxy) implements CustomPacketPayload {
-        public static final Type<LodMods> TYPE = new Type<>(Incoming.id("lod_mods"));
-        public static final StreamCodec<ByteBuf, LodMods> CODEC = ByteBufCodecs.BOOL.map(LodMods::new, LodMods::voxy);
-
-        @Override
-        public Type<? extends CustomPacketPayload> type() {
-            return TYPE;
-        }
-    }
-
-    /**
-     * LOD Server Support overwrote mod-sent chunks in client Voxy (initial reconciliation sends server-disk chunks,
-     * but distant ruins are absent on disk): server resends if they still differ from disk
-     * ({@code compat/VoxyLods.stale}). Chunks use {@code ChunkPos.toLong}, at most {@link #MAX} per packet.
-     */
-    public record VoxyStale(long[] chunks) implements CustomPacketPayload {
-        public static final int MAX = 1024;
-        /**
-         * Chunk reports per client tick: 12 × 20 = 240 per second — below server per-player acceptance
-         * ({@code VoxyLods.STALE_PER_SECOND}, 256); chunks beyond its limit are dropped.
-         */
-        public static final int PER_TICK = 12;
-        public static final Type<VoxyStale> TYPE = new Type<>(Incoming.id("voxy_stale"));
-        public static final StreamCodec<ByteBuf, VoxyStale> CODEC = StreamCodec.of(
-                (buf, v) -> {
-                    ByteBufCodecs.VAR_INT.encode(buf, v.chunks.length);
-                    for (long c : v.chunks) buf.writeLong(c);
-                },
-                buf -> {
-                    int n = ByteBufCodecs.VAR_INT.decode(buf);
-                    if (n < 0 || n > MAX) throw new io.netty.handler.codec.DecoderException("voxy_stale: " + n + " chunks");
-                    long[] c = new long[n];
-                    for (int i = 0; i < n; i++) c[i] = buf.readLong();
-                    return new VoxyStale(c);
-                });
-
-        @Override
-        public Type<? extends CustomPacketPayload> type() {
-            return TYPE;
-        }
-
-        @Override
-        public boolean equals(Object o) {
-            return o instanceof VoxyStale v && java.util.Arrays.equals(v.chunks, chunks);
-        }
-
-        @Override
-        public int hashCode() {
-            return java.util.Arrays.hashCode(chunks);
-        }
-    }
-    /** Client-measured LOD receive/ingest rate, using vanilla ChunkBatchSizeCalculator. */
-    public record LodBatchReceived(int id, float desiredChunksPerTick) implements CustomPacketPayload {
-        public static final Type<LodBatchReceived> TYPE = new Type<>(Incoming.id("lod_batch_received"));
-        public static final StreamCodec<ByteBuf, LodBatchReceived> CODEC = StreamCodec.composite(
-                ByteBufCodecs.VAR_INT, LodBatchReceived::id, ByteBufCodecs.FLOAT, LodBatchReceived::desiredChunksPerTick, LodBatchReceived::new);
-        @Override
-        public Type<? extends CustomPacketPayload> type() { return TYPE; }
-    }
 
 }

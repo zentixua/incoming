@@ -5,6 +5,8 @@ import ua.zentix.incoming.nuclear.Detonation;
 import ua.zentix.incoming.nuclear.model.BlastModel;
 import ua.zentix.incoming.nuclear.model.DustModel;
 import ua.zentix.incoming.nuclear.model.FireballModel;
+import ua.zentix.incoming.nuclear.model.StemDust;
+import ua.zentix.incoming.nuclear.model.MushroomModel;
 import ua.zentix.incoming.nuclear.model.ThermalModel;
 import ua.zentix.incoming.nuclear.model.WaterModel;
 
@@ -42,6 +44,9 @@ import ua.zentix.incoming.nuclear.model.WaterModel;
  * ({@link #row}) is what the shader receives: all expensive work (dust model, front arrival) is done here.
  */
 public final class PallField {
+    /** One immutable source clock for both transported stem dust and its inflow at the foot; reused after replay seek. */
+    final StemDust.Source stemSource;
+    private final StemDust.Request stemRequest;
     /**
      * Dust-layer top unevenness: top above a point is (1 ± this) of table top (shader: {@code PALL_BUMPS}, tile noise).
      * Thermals make the mixed-layer top over heated ground bumpy — a convective entrainment zone 0.2–0.4
@@ -175,6 +180,8 @@ public final class PallField {
      */
     public PallField(Detonation d, long dayTime) {
         this.d = d;
+        this.stemSource = new StemDust.Source(d.yieldKt(), d.hobMetres(), d.surface(), d.visibility(), d.front(), d.scale());
+        this.stemRequest = StemDust.request(stemSource);
         this.hazeEnd = hazeEndTicks(dayTime);
         this.end = hazeEnd;
         this.burstGame = d.gameTime();
@@ -202,6 +209,16 @@ public final class PallField {
             last = Math.max(last, arrival[i] + 20 * d.scale() * settledBy(columns[i]));
         }
         this.dustEnd = last;
+    }
+
+    /** Consumer-owned table in model seconds. Long-lived pall does not retain an expired mushroom's table. */
+    @org.jetbrains.annotations.Nullable
+    StemDust stemDust(double seconds) {
+        if (seconds >= MushroomModel.lifeSeconds(d.yieldKt())) {
+            stemRequest.release();
+            return null;
+        }
+        return stemRequest.ready();
     }
 
     /** Minimum pall height in blocks (small strike scale): otherwise invisible. */

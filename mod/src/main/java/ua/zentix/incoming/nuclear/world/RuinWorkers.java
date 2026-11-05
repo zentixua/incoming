@@ -7,6 +7,7 @@ import ua.zentix.incoming.IncomingConfig;
 import ua.zentix.incoming.work.WorkScheduler;
 
 import java.util.concurrent.Callable;
+import java.util.concurrent.ConcurrentLinkedQueue;
 import java.util.concurrent.Executor;
 import java.util.concurrent.Future;
 import java.util.concurrent.FutureTask;
@@ -25,7 +26,7 @@ import java.util.concurrent.atomic.AtomicLong;
  * <p>
  * Thread count: {@code ruin_threads}, 0 automatic: all cores except game reserve, {@code cores − 1 (server thread)
  * − 1 (own game: client render thread for integrated server) − 1 (vanilla: chunk I/O, generation, garbage
- * collector)}, at least one. No cap: more cores build distant rings faster. Java thread priorities have no
+ * collector)}, at least one. This is an upper bound: solver-buffer memory also limits parallelism. Java thread priorities have no
  * effect on Linux, so only count and tick adaptation leave room for game: once per second, external tick
  * time over last second (tick minus mod lanes) above threshold ({@link #MARGIN_MS}) reduces active threads by
  * a quarter (at least one), below adds one (at most pool thread count). Chosen count and every
@@ -82,8 +83,16 @@ public final class RuinWorkers {
     private static volatile AtomicIntegerArray IN_FLIGHT = new AtomicIntegerArray(Priority.values().length);
     @Nullable
     private static ThreadPoolExecutor pool;
-    /** Configured (or core-derived) thread count and currently active count (tick adaptation). */
+    /** Memory-bounded thread count and currently active count (tick adaptation). */
     private static int size, active;
+    /** Split the shared cap between solver workspace and retained inputs/results; transition room stays free. */
+    static final long BUFFER_CAP = (NuclearPrep.PLANS_CAP - RuinMemory.TRANSITION_ROOM) / 2;
+    /** Highest dimension seen this pool lifetime: ThreadLocal arrays do not shrink between tasks. */
+    private static int bufferHeight = 384;
+    /** Numeric only: includes starting threads and survivors of an earlier shutdown. */
+    private static final AtomicLong WORKSPACE_BYTES = new AtomicLong();
+    /** A grant exists only while the server thread starts workers from a fresh resident estimate. */
+    private static final ThreadLocal<BirthRoom> BIRTH_ROOM = new ThreadLocal<>();
     /** Thread busy time since pool start, ns (thread utilization in summary). */
     private static final AtomicLong BUSY = new AtomicLong();
     private static long startedAt;
@@ -112,7 +121,10 @@ public final class RuinWorkers {
 
     private static ThreadPoolExecutor pool() {
         boolean integrated = integrated();
-        int n = threads(integrated);
+        MinecraftServer server = net.neoforged.neoforge.server.ServerLifecycleHooks.getCurrentServer();
+        if (server != null) for (var level : server.getAllLevels()) configureHeight(level.getHeight());
+        int desired = threads(integrated);
+        int n = memoryThreads(desired, bufferHeight);
         if (pool != null && size == n) return pool;
         if (pool != null) {
             // Resize the same lifetime: queued work and its captured snapshots must not drain in a
@@ -123,19 +135,174 @@ public final class RuinWorkers {
         }
         size = active = n;
         lowered = raised = 0;
-        pool = new ThreadPoolExecutor(n, n, 30, TimeUnit.SECONDS, new PriorityBlockingQueue<>(), r -> {
+        pool = new OwnedPool(n, bufferHeight);
+        startedAt = System.nanoTime();
+        BUSY.set(0);
+        int manual = IncomingConfig.SERVER.nukeRuinThreads.get();
+        Incoming.LOG.info("Ruins: background threads {} (desired {}; {}; cores {}, left to the game {}{})", n, desired,
+                manual > 0 ? "from the ruin_threads setting" : "automatic", Runtime.getRuntime().availableProcessors(),
+                manual > 0 ? 0 : reserve(integrated), integrated ? ", integrated server" : "");
+        return pool;
+    }
+
+    static ThreadPoolExecutor newPool(int threads) {
+        var executor = new ThreadPoolExecutor(threads, threads, 30, TimeUnit.SECONDS, new PriorityBlockingQueue<>(), r -> {
             Thread t = new Thread(r, "Incoming ruins #" + NUMBER.incrementAndGet());
             t.setDaemon(true);
             t.setPriority(Thread.MIN_PRIORITY);
             return t;
         });
-        pool.allowCoreThreadTimeOut(true);
-        startedAt = System.nanoTime();
-        BUSY.set(0);
-        int manual = IncomingConfig.SERVER.nukeRuinThreads.get();
-        Incoming.LOG.info("Ruins: background threads {} ({}; cores {}, left to the game {}{})", n, manual > 0 ? "from the ruin_threads setting" : "automatic",
-                Runtime.getRuntime().availableProcessors(), manual > 0 ? 0 : reserve(integrated), integrated ? ", integrated server" : "");
-        return pool;
+        executor.allowCoreThreadTimeOut(true);
+        return executor;
+    }
+
+    /** No world or server references escape into the executor or an I/O callback. */
+    private static final class Workspace {
+        final ConcurrentLinkedQueue<Credit> credits = new ConcurrentLinkedQueue<>();
+        final ThreadLocal<Credit> current = new ThreadLocal<>();
+        final AtomicLong bytes = new AtomicLong();
+        volatile int height;
+
+        Workspace(int height) { this.height = height; }
+
+        Thread thread(Runnable run) {
+            BirthRoom room = BIRTH_ROOM.get();
+            long bytes = threadBufferBytes(height);
+            if (room == null || !room.take(bytes)) return null;
+            this.bytes.addAndGet(bytes);
+            Credit credit = new Credit(height);
+            credits.add(credit);
+            try {
+                Thread thread = new Thread(() -> {
+                    current.set(credit);
+                    try { run.run(); }
+                    finally {
+                        current.remove();
+                        release(credit);
+                    }
+                }, "Incoming ruins #" + NUMBER.incrementAndGet());
+                thread.setDaemon(true);
+                thread.setPriority(Thread.MIN_PRIORITY);
+                // addWorker can discard a factory result if shutdown wins before Thread.start().
+                // The server's prestart call has resolved that race by the end of this grant scope.
+                room.unstarted.add(() -> {
+                    if (thread.getState() == Thread.State.NEW) release(credit);
+                });
+                return thread;
+            } catch (RuntimeException | Error failure) {
+                release(credit);
+                throw failure;
+            }
+        }
+
+        void release(Credit credit) {
+            synchronized (credit) {
+                if (credit.closed) return;
+                credit.closed = true;
+                WORKSPACE_BYTES.addAndGet(-threadBufferBytes(credit.height));
+                bytes.addAndGet(-threadBufferBytes(credit.height));
+                credits.remove(credit);
+            }
+        }
+    }
+
+    private static final class Credit {
+        int height;
+        boolean closed, waiting;
+        Credit(int height) { this.height = height; }
+    }
+
+    private static final class BirthRoom {
+        long remaining;
+        final java.util.List<Runnable> unstarted = new java.util.ArrayList<>();
+        BirthRoom(long remaining) { this.remaining = Math.max(0, remaining); }
+        boolean take(long bytes) {
+            if (bytes > remaining) return false;
+            remaining -= bytes;
+            WORKSPACE_BYTES.addAndGet(bytes);
+            return true;
+        }
+    }
+
+    static final class OwnedPool extends ThreadPoolExecutor {
+        final Workspace workspace;
+        OwnedPool(int threads, int height) { this(threads, new Workspace(height)); }
+        private OwnedPool(int threads, Workspace workspace) {
+            super(threads, threads, 30, TimeUnit.SECONDS, new PriorityBlockingQueue<>(), workspace::thread);
+            this.workspace = workspace;
+            allowCoreThreadTimeOut(true);
+        }
+
+        void observeHeight(int height) { workspace.height = Math.max(workspace.height, height); }
+
+        @Override protected void beforeExecute(Thread thread, Runnable run) {
+            Credit credit = workspace.current.get();
+            // A taller dimension may need larger ThreadLocals. Keep the old buffers charged, and
+            // wait for the server to fund the delta before entering any callable that can grow them.
+            boolean interrupted = false;
+            synchronized (credit) {
+                while (credit.height < workspace.height && !isShutdown()
+                        && (!(run instanceof Future<?> future) || !future.isCancelled())) {
+                    try { credit.waiting = true; credit.wait(); }
+                    catch (InterruptedException stop) { interrupted = true; break; }
+                }
+                credit.waiting = false;
+            }
+            // done() wakes other height waiters; never call it while holding one waiter's monitor.
+            if (interrupted || isShutdown()) {
+                if (run instanceof Future<?> future) future.cancel(false);
+                if (interrupted) thread.interrupt();
+            }
+        }
+    }
+
+    /** Called on every server tick, not just on the slower CPU adaptation interval. */
+    private static void service(MinecraftServer server) {
+        if (!(pool instanceof OwnedPool owned) || !server.isSameThread()) return;
+        for (var level : server.getAllLevels()) configureHeight(level.getHeight());
+        service(owned, NuclearPrep.PLANS_CAP - NuclearPrep.residentMemory(server.overworld()), active);
+    }
+
+    /** Numeric admission is also exercised without a Minecraft server by the worker regressions. */
+    static void service(OwnedPool owned, long room, int target) {
+        BirthRoom budget = new BirthRoom(room);
+        for (Credit credit : owned.workspace.credits) synchronized (credit) {
+            if (credit.closed || !credit.waiting) continue;
+            int height = owned.workspace.height;
+            long extra = threadBufferBytes(height) - threadBufferBytes(credit.height);
+            if (extra > 0 && budget.take(extra)) {
+                owned.workspace.bytes.addAndGet(extra);
+                credit.height = height;
+                credit.notifyAll();
+            }
+        }
+        // ThreadPoolExecutor may ask its factory from execute(), resize(), or processWorkerExit().
+        // Only this scope has a grant. A captured off-thread executor can enqueue but cannot lend
+        // memory already taken by material while the pool was idle.
+        BIRTH_ROOM.set(budget);
+        try {
+            int waiting = owned.getQueue().size();
+            for (int i = 0; i < waiting && owned.getPoolSize() < target; i++)
+                if (!owned.prestartCoreThread()) break;
+        } finally {
+            BIRTH_ROOM.remove();
+            for (Runnable unstarted : budget.unstarted) unstarted.run();
+        }
+    }
+
+    private static void serviceCurrent() {
+        MinecraftServer server = net.neoforged.neoforge.server.ServerLifecycleHooks.getCurrentServer();
+        if (server != null) service(server);
+    }
+
+    /** A live, funded worker can reuse its workspace; only a cold/taller pool needs a new grant. */
+    static long startupBytes(int height) {
+        if (pool instanceof OwnedPool owned && !owned.isShutdown()) {
+            for (Credit credit : owned.workspace.credits) synchronized (credit) {
+                if (!credit.closed && credit.height >= height) return 0;
+            }
+        }
+        return threadBufferBytes(height);
     }
 
     /** Tasks held in pool at once (running/queued). */
@@ -215,6 +382,27 @@ public final class RuinWorkers {
         ThreadPoolExecutor executor = pool();
         Task<T> t = new Task<>(task, priority, IN_FLIGHT, executor);
         execute(executor, t);
+        serviceCurrent();
+        return t;
+    }
+
+    /** Completion ownership follows the actual callable, including promotion and queued cancellation. */
+    static <T> Future<T> submit(Callable<T> task, Priority priority, RuinInputs inputs) {
+        return submit(task, priority, inputs, null);
+    }
+
+    /** Additional numeric ownership ends with actual execution/removal, never Future cancellation alone. */
+    static <T> Future<T> submit(Callable<T> task, Priority priority, RuinInputs inputs,
+                               @Nullable Runnable onActualExit) {
+        ThreadPoolExecutor executor = pool();
+        inputs.acquire();
+        Runnable onExit = () -> {
+            try { inputs.release(); }
+            finally { if (onActualExit != null) onActualExit.run(); }
+        };
+        Task<T> t = new Task<>(task, priority, IN_FLIGHT, executor, onExit);
+        execute(executor, t);
+        serviceCurrent();
         return t;
     }
 
@@ -253,13 +441,23 @@ public final class RuinWorkers {
         if (p == null || !(future instanceof Task<T> t) || t.owner != p || t.isDone()
                 || t.priority <= priority.ordinal() || !p.remove(t)) return null;
         // The removed future is terminal and releases its captured callable; only the new task owns it.
-        Callable<T> callable = t.callable;
+        Callable<T> callable;
+        Runnable onExit;
+        synchronized (t) {
+            callable = t.callable;
+            onExit = t.onExit;
+            t.onExit = null;
+        }
         t.cancel(false);
         t.uncount();
-        if (callable == null) return null; // cancelled concurrently after removal
-        Task<T> moved = new Task<>(callable, priority, t.counts, p);
+        if (callable == null) {
+            if (onExit != null) onExit.run();
+            return null; // cancelled concurrently after removal
+        }
+        Task<T> moved = new Task<>(callable, priority, t.counts, p, onExit);
         try {
             execute(p, moved);
+            serviceCurrent();
         } catch (java.util.concurrent.RejectedExecutionException e) {
             // shutdown: abandoned like queued tasks
             t.cancel(false);
@@ -271,6 +469,11 @@ public final class RuinWorkers {
     /** Pool task already started (or not a pool task): background-plan deadline measured from work start. */
     static boolean started(Future<?> future) {
         return !(future instanceof Task<?> t) || t.started;
+    }
+
+    /** A cancelled future is collectable only after its worker has released captured inputs. */
+    static boolean finished(Future<?> future) {
+        return future.isDone() && (!(future instanceof Task<?> task) || !task.counted.get());
     }
 
     /**
@@ -286,18 +489,25 @@ public final class RuinWorkers {
         @Nullable private final ThreadPoolExecutor owner;
         private final AtomicBoolean counted = new AtomicBoolean(true);
         private volatile boolean started;
+        @Nullable private Runnable onExit;
 
         Task(Callable<T> task, Priority priority) {
             this(task, priority, IN_FLIGHT, null);
         }
 
         Task(Callable<T> task, Priority priority, AtomicIntegerArray counts, @Nullable ThreadPoolExecutor owner) {
+            this(task, priority, counts, owner, null);
+        }
+
+        Task(Callable<T> task, Priority priority, AtomicIntegerArray counts, @Nullable ThreadPoolExecutor owner,
+             @Nullable Runnable onExit) {
             super(task);
             this.callable = task;
             this.priority = priority.ordinal();
             this.sequence = SEQUENCE.getAndIncrement();
             this.counts = counts;
             this.owner = owner;
+            this.onExit = onExit;
             counts.incrementAndGet(this.priority);
         }
 
@@ -319,10 +529,23 @@ public final class RuinWorkers {
             // Running cancellation is not completion: retain its slot until run() actually exits.
             // A queued cancellation, however, must immediately free queue ownership and snapshots.
             if (owner != null && owner.remove(this)) uncount();
+            if (owner instanceof OwnedPool owned) for (Credit credit : owned.workspace.credits)
+                synchronized (credit) { credit.notifyAll(); }
         }
 
-        private void uncount() {
-            if (counted.compareAndSet(true, false)) counts.decrementAndGet(priority);
+        private synchronized void uncount() {
+            if (!counted.get()) return;
+            Runnable exit = onExit;
+            onExit = null;
+            try { if (exit != null) exit.run(); }
+            catch (RuntimeException | Error failure) {
+                // FutureTask.done must return normally to clear its private callable, and shutdown
+                // must continue releasing the rest of its drained queue after one observer fails.
+                Incoming.LOG.error("Ruins: task exit ownership callback failed", failure);
+            } finally {
+                counts.decrementAndGet(priority);
+                counted.set(false);
+            }
         }
 
         @Override
@@ -340,6 +563,7 @@ public final class RuinWorkers {
     public static void adapt(MinecraftServer server) {
         ThreadPoolExecutor p = pool;
         if (p == null) return;
+        service(server);
         int tick = server.getTickCount();
         if (tick >= lastAdapt && tick - lastAdapt < ADAPT_EVERY) return;
         lastAdapt = tick;
@@ -363,7 +587,7 @@ public final class RuinWorkers {
         Incoming.LOG.info("Ruins: background threads working {} of {} (server tick without mod lanes {} ms)", active, size, String.format(java.util.Locale.ROOT, "%.1f", ms));
     }
 
-    private static void resize(ThreadPoolExecutor executor, int threads) {
+    static void resize(ThreadPoolExecutor executor, int threads) {
         if (threads < executor.getCorePoolSize()) {
             executor.setCorePoolSize(threads);
             executor.setMaximumPoolSize(threads);
@@ -383,9 +607,39 @@ public final class RuinWorkers {
         return size + " (working " + active + ", lowered " + lowered + ", raised " + raised + ", tasks abandoned " + expired + ")";
     }
 
-    /** All pool-thread solver buffers, bytes ((est.) for 48×48 window through world height: 7 bytes per position). */
+    /** Full-height solver workspace estimate, including an uncompressed property reference (15 bytes/cell). */
+    static long threadBufferBytes(int height) {
+        return (long) RuinWindow.SIDE * RuinWindow.SIDE * height * 15;
+    }
+
+    static int memoryThreads(int desired, int height) {
+        return (int) Math.max(1, Math.min(desired, BUFFER_CAP / threadBufferBytes(height)));
+    }
+
+    /** Observe all server dimension heights before admission, including before a pool exists. */
+    static void configureHeight(int height) {
+        bufferHeight = Math.max(bufferHeight, height);
+        if (pool instanceof OwnedPool owned) owned.observeHeight(bufferHeight);
+        if (pool == null) return;
+        int bounded = memoryThreads(threads(integrated()), bufferHeight);
+        if (bounded == size) return;
+        size = bounded;
+        active = Math.min(active, size);
+        resize(pool, active);
+    }
+
+    /** Future admitted workers plus still-live downsized threads; never reserve the raw configured count. */
     static long bufferBytes(int height) {
-        return (long) Math.max(size, pool == null ? 0 : pool.getPoolSize()) * RuinWindow.SIDE * RuinWindow.SIDE * height * 7;
+        configureHeight(height);
+        long current = residentBufferBytes(pool, bufferHeight);
+        long total = WORKSPACE_BYTES.get();
+        return Math.max(total, Math.max(0, total - current)
+                + (long) memoryThreads(threads(integrated()), bufferHeight) * threadBufferBytes(bufferHeight));
+    }
+
+    static long bufferBytes(@Nullable ThreadPoolExecutor executor, int desired, int height) {
+        return (long) Math.max(memoryThreads(desired, height), executor == null ? 0 : executor.getPoolSize())
+                * threadBufferBytes(height);
     }
 
     /**
@@ -393,11 +647,13 @@ public final class RuinWorkers {
      * using configured size here would permanently stop settlement on large-core machines even after they exit.
      */
     static long residentBufferBytes(int height) {
-        return residentBufferBytes(pool, height);
+        configureHeight(height);
+        return WORKSPACE_BYTES.get();
     }
 
     static long residentBufferBytes(@Nullable ThreadPoolExecutor executor, int height) {
-        return executor == null ? 0 : (long) executor.getPoolSize() * RuinWindow.SIDE * RuinWindow.SIDE * height * 7;
+        if (executor instanceof OwnedPool owned) return owned.workspace.bytes.get();
+        return executor == null ? 0 : (long) executor.getPoolSize() * threadBufferBytes(height);
     }
 
     /** Fraction of thread time busy since pool start (for “ready” line). */
@@ -421,6 +677,8 @@ public final class RuinWorkers {
         ThreadPoolExecutor p = pool;
         pool = null;
         lastAdapt = -ADAPT_EVERY;
+        bufferHeight = 384;
+        size = active = 0;
         if (p == null) return true;
         java.util.List<Runnable> queued = p.shutdownNow();
         // run will not be called: remove from priority counts

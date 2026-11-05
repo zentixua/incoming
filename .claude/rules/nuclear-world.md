@@ -21,8 +21,8 @@ paths:
   hold up dozens of ready visible chunks (0.2 ms replacement), 38 ticks on netcup 16.10; visible chunks are prechecked
   `ScarQueue.LOOKAHEAD` (20) ticks before the wave: plans that became stale during flight (grass grew, player placed a
   block) and chunks without plans receive a background plan now, ready by the wave (GameTest
-  `staleSeenPlanReplannedBeforeWave`); a background plan stale at replacement is not applied — rebuild on the server
-  thread from the chunk as it is (`staleBackgroundPlanRebuiltOnServer`); trunks falling into a neighboring chunk wait
+  `staleSeenPlanReplannedBeforeWave`); a background plan stale at replacement is not applied — resnapshot and retry
+  in the worker pool (`staleBackgroundPlanRequeuedInBackground`); trunks falling into a neighboring chunk wait
   for its ruins; loads no neighbors: finished plans need none (except `RuinPlan.neighbourRadius`: world-path positions
   within 2 blocks of the edge or a nearby Sable craft need a radius-1 ticket; non-vanilla block entities through the
   world (Create belts remove chains up to 20 blocks) need radius 2); background plans use a 5×5 window of memory/disk
@@ -47,7 +47,7 @@ paths:
   thread fills from snapshot palettes (`Blast.publish`); light shadow uses detonation heightmaps (`RuinContext.lit`).
   GameTest `backgroundSolversCallNoWorld` walks bytecode along the call graph from background-task roots;
   `backgroundPlanMatchesServerPlan` and `diskPlanMatchesMemoryPlan` check equal plans; a background plan running over
-  600 ticks, measured from start rather than enqueue, is abandoned and planned on the server thread): `Blast` —
+  600 ticks, measured from start rather than enqueue, is interrupted and retried after its worker exits): `Blast` —
   pressure differences break thin elements: pressure reaches only faces beside sky-connected air (above terrain tops
   and 4 blocks into openings, then beyond breaches through all connected air in chunk columns ± 9; bunkers, sealed
   caves and basements stay untouched); blast-facing surfaces get reflected `max(p, Pr·cos θ)` (walls horizontally,
@@ -96,9 +96,15 @@ paths:
   primed from blocks like vanilla loading, `DiskShots.Read.primed` (the ruin-queue window takes at most 4 such chunks at
   once: `Read.cost`); unread reasons appear in “Ruins for strike #N ready”); snapshot to server thread, plan in background
   (`RuinContext.submitDisk`), continuing after detonation (half the pool for the ruin queue); line “far rings: X of Y
-  ready for the wave”; memory — plans, snapshots, reads and thread buffers — capped at 512 MB (heavy-zone LOD copies
+  ready for the wave”; memory — plans, snapshots, reads and thread buffers — capped at 512 MB. Existing cache
+  writes use resident ownership (`NuclearPrep.storageRoom`), not reservations for future solver threads:
+  otherwise unpinned originals cannot reach disk to free the memory that planning/material needs
+  (`nuke_archive_progress` exercises the production archive supplier under fixed cross-dimension pressure).
+  Admit the complete incremental encoder/source/receipt ownership, including consecutive writes in one pump
+  (`nuke_plan_spill_admission`, `nuke_snapshot_spill_admission` hold real receipts at the exact budget boundary).
+  Heavy-zone LOD copies
   for the front, `FrontLods` in `dh.md`, use the remainder after plans: taken once disk plans are ready, heap stop drops
-  them); one area, one preparation; a prepared detonation takes preparation's location, ground and visibility
+  them; one area, one preparation; a prepared detonation takes preparation's location, ground and visibility
   (`NuclearPrep.planned`: weather changes during flight would leave a trace seam in later-loaded chunks); live heap is
   old generation after full/major GC, a GC that freed it (mixed G1), or any GC leaving it over the limit (`HeapWatch`
   via collector notifications: ZGC's young pool “after GC” includes allocations during the cycle; pool sum shows
@@ -383,6 +389,29 @@ paths:
   requeueing as `AGAIN`; `NuclearWorld` gives existing material one bounded batch before admitting new removals.
   Material/settlement admission charges resident workers (`memory(level, false)`), not an idle pool's configured
   future size. `nuke_memory_flow` and `nuke_memory_retired_workers` cover the resulting progress dependencies.
+- Dense-plan capture reserves the same ownership terms as the material ledger: temporary pieces, deferred support
+  and provenance, balance/palette/inventory indexes, and compact row growth. Keep `RuinMatter.removalBytes`
+  aligned with those counters; an unrelated per-cell allowance can refuse an already funded ready plan.
+  `nuke_large_plan_admission` compares a 22,054-cell reference with the identical fixed-owner application,
+  including measured server-thread allocation, retained growth and conserved material/support.
+- Support ownership separates actual fastutil table capacity, live original/cold-face payload and future
+  expansion (at most five contacts per deferred source). The projected tables include rehash scratch;
+  consuming sources transfers/releases their future credit even while other support work remains pending.
+  Never keep spent source credits in a historical payload maximum or refund still-allocated arrays by live size.
+  Capture credit transfers to the counted material owner before further admission. `nuke_support_capacity`
+  uses dense removals, partial support reconciliation, fixed competing ownership and full real ledger reload.
+- The original-contact journal uses primitive `RuinOriginals` section pages, preserving the first removed
+  state/event across every unfinished support search. Reserve growth for the actual removal positions,
+  including old/new arrays during page and outer-index rehash. Do not restore a global per-block object map:
+  a dense visible chunk can cross a whole-city table boundary while its own result is small.
+  Normal ledger saves stream at most 64 originals per named-palette row; process-local registry IDs never
+  reach disk. The first row declares and funds its section capacity; reject incomplete/oversized sections.
+  Legacy named rows count sections with bounded scan scratch and a conservative fallback for uncached
+  sections, then use the same first-event rule. `nuke_original_*` covers dense growth, overlap and real reload.
+- Material gets its existing first bounded batch before visible work, then its remaining turn after flash
+  layers and preparation. Keep the same shared clock and preparation share: draining the whole material
+  backlog before these consumers can starve already-funded disk work for the lifetime of a large debris
+  queue (`nuke_frontier_material`: real source/archive reads, moving records and identical physical output).
 - Completed crater chunks discard column checkpoints after advancing the saved chunk cursor. Completed passes
   retain only material totals; terminal out-of-height material groups identical state/cargo without trajectory data.
   Active moving pieces, support provenance/graph and crater passes are charged by `retainedRuinBytes`. The counter
@@ -422,3 +451,120 @@ paths:
   may admit another cold decoder before checking/charging headroom (`nuke_ledger_drain`, `nuke_ledger_admission`).
   Streaming crater retirement adds to saved aggregate totals in either compound field order; never overwrite
   totals from previously retired rows (`nuke_ledger_totals`).
+
+- `ScarQueue` never uses the synchronous `RuinPlanner.plan`/`blastsReady` path when a background plan is stale,
+  failed or expired. It retries from validated current snapshots through the bounded worker pool, including
+  ground traces with block damage disabled. No scar mark is written until a plan actually applies. A cancelled
+  future is not collectable until its worker exits (`RuinWorkers.finished`); keep its window owned meanwhile.
+  `nuke_stale_background` holds worker admission after changing planned glass and proves that the tick cannot
+  borrow a synchronous solver or mark stale output complete. Continuously edited inputs may need more retries;
+  the pressure clock and chunk-send deadline are unchanged.
+
+- Actual solver input ownership is separate from pool slots/workspace. `RuinContext` transfers its existing
+  retained estimate to numeric `RuinInputs` ownership before cancellation/detachment; actual Task exit (or removed
+  queued callable) releases it. Both ruin and flash-layer submissions carry that callback through promotion.
+  Removed/replaced snapshots stay conservatively charged while any actual context worker remains, including tasks
+  forgotten from the task map. Keep shadow heights/fractures available to running Grids. Admission and resident
+  counters include detached inputs once across dimensions; the scalar owner retains no context/world references.
+  `nuke_inputs_*` exercises populated Grids through registered cancel, clear, forget/world removal, expiry and
+  queued promotion/cancellation. This preserves known estimates, not a complete JVM heap bound.
+
+- Explicit unpaid preparation gates launch on exact geometry, its target chunk and loaded chunks within the ruin
+  radius, rather than every distant heavy-zone plan. `required` is charged metadata; refresh before binding admits
+  newly loaded surroundings. Loaded-edge plans use the existing asynchronous window reader and NEAR priority.
+  Only these plans' own spill receipts block READY. Full physical disk planning, partial context handoff and durable
+  settlement continue during flight/after detonation; distant planning errors still invalidate an unbound request.
+  READY is a live launch condition, not persisted permission or a promise that distant ruins are already saved.
+  Critical membership uses `Terrain.ready`, not `Terrain.inMemory`: FULL chunks retained by generation/unload can
+  be unavailable to `getChunkNow`, so adding/removing them on every bind would oscillate READY forever. Unload
+  keeps explicit near collectors until actual completion; every failed/abandoned completion fails the request.
+  The window reader distinguishes source failure from legal absent/unfinished terrain. Drain owned read results
+  before fresh-snapshot admission. `nuke_near_*` covers those transitions, late loads and partial handoff.
+  Owned window completions drain independently of near todo/worker admission; pending window sources block READY
+  even if another planner overtook their centre. On reload, observe a completed old task's outcome before
+  resubmitting successful stale input; failed/cancelled terminal outcomes remain visible to the handle collector.
+  `nuke_near_late_*` and `nuke_near_reload_*` cover these distinct ownership transitions.
+  Partial handoff supersedes pending flight-window reads/cursors, without cancelling solver tasks or plan/page
+  owners. Invalidate their inbox generation so late callbacks release reservations instead of requiring an absent
+  todo collector; the scar owner can request fresh windows. `nuke_near_handoff_reads` proves actual nonempty plan
+  transfer, a still-charged outstanding read, and release/rejection of its late payload.
+
+- Far snapshot read-ahead follows the admitted planning frontier (at most worker queue capacity centres ahead).
+  Pin the current unadmitted window across cache trimming, transfer its protection to the admitted Task/Grid, and
+  rewind the read cursor to refill missing demand. Bounding only outstanding reads permits a zone-wide sweep to
+  evict the first needed window and leave every solver idle. `nuke_disk_frontier` uses real world/source-region and
+  snapshot-page reads with a tiny cache policy and shared admission pressure; complete material output must match.
+  Try solver admission before the FAR cache trim, retaining the next consumer's pin first. Even pinned visits
+  spend the shared clock, so a whole protected window can otherwise consume every tick before its task starts.
+  `nuke_frontier_material` combines real source/archive reads and moving material at a 26 ms counting budget,
+  requiring the identical complete plan within the unchanged 120-tick progress bound.
+
+- Producer ownership: reserve known snapshot/height growth before copying and plan plus nine private fracture bounds
+  before solver allocation. `RuinResults` is one numeric server-wide counter, outside the dimension sum. Cancellation
+  keeps input/result ownership until actual callable exit; a completed plan stays charged until its consumer counts it.
+  New window reads leave one max-height worker startup allowance. `RuinInbox.Publication` transfers a completed slot
+  through known source/priming/publication bytes; do not require a duplicate full input reservation or release a running
+  callback's owner. Plain, archived and surface-resolution preparation reads use the same transition.
+- `RuinFragmentCache` is optional, prepaid fixed capacity; every borrowing worker still owns its nine-fragment bound
+  through actual exit. Cache refusal falls back to private solving. Validate snapshot IDs and captured block-damage/
+  tree-fall flags; close blocks late publications. Fresh diagnostic context owners close in `finally`; shared registered
+  contexts keep their world lifecycle. GC never refunds scalar cache ownership. These field-law estimates are not a
+  complete JVM-heap bound; raw chunk upgrading/codec allocations precede detached publication.
+
+- Completed preparation inputs/results and snapshot reclamation get a bounded service turn alternating with
+  material, under the same nuclear clock after pulse/front work. This service also visits surviving contexts
+  after preparation expires. Deferred window demands keep their queue keys; one assembling window is protected
+  server-wide, with visible work able to preempt lower priority assembly. Admitted tasks retain their windows
+  independently. Releasing/cancelling/preempting an assembly must release its token; pending I/O remains charged
+  until callbacks finish. This is finite-workload progress when the complete working set fits, not a guarantee
+  under arbitrary arrivals or an unfundable authoritative ledger (`nuke_sustained_progress`, `nuke_assembly`).
+- Demand retrieval of an existing plan uses resident headroom; speculative prefetch keeps the preparation reserve.
+  Retain the completed page's source/decode charge until the decoded plan is installed in its counted owner.
+  At preparation retirement, transfer retained plans to the shared context before dropping the preparation owner;
+  cancel unclaimed FAR/submitted tasks explicitly, retaining running input/result charges through actual exit.
+  Scar demand must consult the transferred/restored map before submitting another solver
+  (`nuke_demand_*`, `nuke_completion_retirement`).
+- Ruined snapshots need per-position property arrays only in sections touched by the old delta (or a global
+  palette). Other sections keep palette properties, with the same fire/flowing-water-to-air reconstruction.
+  Match the pre-allocation estimate to this representation; untouched empty sections must not reserve 4096
+  references apiece (`nuke_snapshot_lazy`, `nuke_snapshot_archive`). A funded live solver reuses its workspace;
+  only cold/taller pools need additional startup room. Cold source reads still reserve their publication slot.
+
+- Collection and trimming have independent maintenance turns. A ready read can still refuse publication;
+  it must not suppress reclamation in its own or another context (`nuke_reclaim_publication`,
+  `nuke_reclaim_other_owner`). Queue rotation itself needs its existing page-growth allowance in a
+  fixed-pressure fixture; do not mislabel an unfunded moving FIFO as collector starvation.
+- Maintenance also rotates requested plan-page completions and collects completed scar Tasks independently
+  of destructive admission. Refused large publications yield to other owned reads; unloaded demand does not
+  orphan a completed page. Task collection parks its result without applying it out of wave/visibility order.
+  `nuke_consumer_completion` combines real reads, a completed unseen solver and dense visible capacity pressure.
+- Explicit preparation unload, loss of FULL readiness, terminal failure and heap stop release abandoned
+  assembly claims independently of read/task collectors. Inspect unready todos before checking worker
+  admission, with a bounded skip pass: decoder saturation cannot prevent retiring a dead assembly head.
+  `nuke_near_assembly_*` keeps late callbacks and completes another loaded required centre.
+
+- Reprioritizing remaining near todos must preserve the current active assembly ahead of unadmitted
+  work. A new closer FULL chunk cannot strand that owner behind a head waiting for its token.
+  `nuke_near_assembly_refresh` exercises real refresh, completes the held callback, and requires both
+  loaded centres to yield nonempty plans. Error paths that remove a consumer release its claim too.
+
+- Header replies transfer availability into the zone tiles, then release their reverse-list payload.
+  Retain the reverse table's actual backing while replies are pending; clearing values avoids an
+  unreserved shrinking rehash. Once every header has returned, discard the exhausted reverse index
+  and scan-list backing, retaining the tile masks and completed-header count. `nuke_header_lifetime`
+  uses the complete 1-Mt layout, a withheld final reply and an independent availability-mask oracle.
+- FAR source admission reserves resident ownership, one actual decoder restart and the existing
+  material/encoding margins. It does not reserve every configured idle solver. Worker birth,
+  height growth, result and publication guards still fund their real owners. `nuke_frontier_workspace`
+  combines one funded worker, ten configured workers, real source/archive reads, active material
+  and actual application of the complete equal plan under fixed competing ownership.
+- Compact moving imports fund FIFO page slack, a palette bounded by row count and registered states,
+  cargo indexes only when present, and the existing cargo/row workspace. Legacy rows keep their
+  conservative allowance. Packed outside rows restore reservoirs, not FIFO/index rows; scan the same
+  exact 145-byte motion payload as the decoder. `nuke_ledger_packed_import` and
+  `nuke_ledger_outside_import` cover compact footprint, cargo/trajectory parity, reservoir ownership
+  and rejection of malformed motion arrays.
+- Material cargo is an optional compound in legacy/packed moving rows and reservoirs. Reject other
+  tag types in both preflight and decoding; `getCompound` must not silently replace a scalar with
+  a differently charged empty compound. `nuke_ledger_cargo_types` covers both paths and unchanged
+  source bytes after rejection.
