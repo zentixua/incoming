@@ -170,6 +170,25 @@ public final class RuinMatterFailureGameTests {
                     var scan = LedgerScan.measure(file, "incoming_ruin_matter", java.util.Set.of(), NuclearPrep.PLANS_CAP);
                     restored[0] = (RuinMatter) LedgerReader.read(file, "incoming_ruin_matter", level.registryAccess(), scan.row(), java.util.Set.of());
                     h.assertTrue(scan.owned() >= restored[0].retainedBytes(), "Paused import exceeded preflight ownership");
+                    var nativeTag = net.minecraft.nbt.NbtIo.readCompressed(file, net.minecraft.nbt.NbtAccounter.create(1L << 20));
+                    var packed = nativeTag.getCompound("data").getList("moving", 10).getCompound(0);
+                    h.assertTrue(packed.getByteArray("motion").length == 145, "Transfer changed the packed motion schema");
+                    // Packed rows take precedence over legacy fields in the reader and preflight.
+                    packed.putBoolean("outside", true);
+                    var mixed = file.resolveSibling("mixed-fields.dat");
+                    net.minecraft.nbt.NbtIo.writeCompressed(nativeTag, mixed);
+                    var mixedScan = LedgerScan.measure(mixed, "incoming_ruin_matter", java.util.Set.of(), NuclearPrep.PLANS_CAP);
+                    var mixedOwner = (RuinMatter) LedgerReader.read(mixed, "incoming_ruin_matter", level.registryAccess(), mixedScan.row(), java.util.Set.of());
+                    h.assertTrue(mixedScan.owned() >= mixedOwner.retainedBytes()
+                            && mixedOwner.save(new CompoundTag(), level.registryAccess()).equals(saved), "Packed/legacy precedence differs in preflight and decode");
+                    mixedOwner.unload(level);
+                    packed.putLong("transfer", cargo ? 2 : 1);
+                    var invalid = file.resolveSibling("invalid-transfer.dat");
+                    net.minecraft.nbt.NbtIo.writeCompressed(nativeTag, invalid);
+                    try { LedgerScan.measure(invalid, "incoming_ruin_matter", java.util.Set.of(), NuclearPrep.PLANS_CAP); h.fail("Preflight coerced transfer phase type"); }
+                    catch (java.io.IOException expected) { /* Reject before allocating a live owner. */ }
+                    try { RuinMatter.load(nativeTag.getCompound("data"), level.registryAccess()); h.fail("Decoder coerced transfer phase type"); }
+                    catch (IllegalStateException expected) { /* Exact scalar typing, as in preflight. */ }
                 } catch (java.io.IOException error) { throw new RuntimeException(error); }
             }
             for (int i = 0; i < 32; i++) work(restored[0], level);

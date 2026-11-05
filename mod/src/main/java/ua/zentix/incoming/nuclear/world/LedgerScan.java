@@ -209,7 +209,9 @@ final class LedgerScan {
                         add(12); transfer = input.readInt();
                         if (transfer < 1 || transfer > 2) throw new IOException("Invalid material transfer phase");
                     } else if (key.equals("outside") && depth == 0 && movingRow && child == 1) {
-                        add(9); outside = input.readByte() != 0;
+                        add(9);
+                        boolean legacyOutside = input.readByte() != 0;
+                        if (!packedMoving) outside = legacyOutside; // Packed motion takes precedence in the decoder.
                     } else if (key.equals("event") && depth == 0 && child == 3) {
                         add(12); event = input.readInt();
                     } else if (key.equals("original_entries") && depth == 0 && child == 3) {
