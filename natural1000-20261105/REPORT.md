@@ -57,3 +57,5 @@ A private bounded corpus retains the original/stopped 30 chunks around the two r
 [Native preflight](preflight.png) shows the city; [post-clean native image](post-clean.png) is heavily dust-obscured and does not certify all rendered geometry. All screenshots are exact owned nested-window captures.
 
 Raw evidence: [progress](raw/progress.log.gz), [tick times](raw/ticks.csv.gz), [ledger save phases](raw/ledger.csv.gz), [one ownership snapshot](raw/ownership-post-clean.txt.gz), [driver](raw/driver.jsonl.gz), [VPS monitor](raw/vps-host.jsonl.gz), [frame slice](raw/frames.csv.gz), [TCP counters](raw/tcp.jsonl.gz), [client host sampler](raw/client-host.jsonl.gz), [checksums](raw-manifest.json). The frame slice includes its preceding/following pair rows; complete originals remain privately preserved. [Phase metrics](phase-summary.json) retain methodological limitations.
+
+Independent follow-up: [source/raw assessment](independent-assessment.md), [independently derived counter rows](independent-derived.json). This does not approve the later implementation or runtime readiness.
