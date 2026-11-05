@@ -132,7 +132,7 @@ public final class RuinSupportCapacityGameTests {
                 "Fixture must consume sources while support and provenance remain pending");
         var originals = (RuinOriginals) field(ledger, "originals").get(ledger);
         h.assertTrue(originals.size() >= DENSITY[0], "Pending provenance was discarded");
-        Incoming.LOG.info("SUPPORT_CAPACITY expanded {} units, ledger {} -> {}, original {}, support {}, arrays {}",
+        Incoming.LOG.info("SUPPORT_CAPACITY expanded {} units, ledger {} -> {}, original {}, support {}, index estimate {}",
                 expanded, chargedBefore, ledger.retainedBytes(), originals.size(), ledger.pendingSupport(), backing(ledger));
         for (int i = 1; i < dense.size(); i++) world.scars().offer(dense.get(i).chunk, d);
         int ticks = 0;

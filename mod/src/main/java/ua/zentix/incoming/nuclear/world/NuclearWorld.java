@@ -549,8 +549,6 @@ public final class NuclearWorld {
         long scarStart = System.nanoTime();
         lastCraterNanos = scarStart - craterStart;
         scars.work(level, now, clock);
-        matter = RuinMatter.get(level);
-        matter.work(level, clock);
         long scorchStart = System.nanoTime();
         lastScarNanos = scorchStart - scarStart;
         // ground light after wave-reached ruins using their remaining budget: when front crosses
@@ -579,8 +577,16 @@ public final class NuclearWorld {
             Incoming.LOG.error("Ruin preparation failed with an exception; dropped", e);
             prep.clear(level, scars);
         }
+        long materialStart = System.nanoTime();
+        lastPrepNanos = materialStart - prepStart;
+        // The first material batch above guarantees progress even when visible work fills the
+        // lane. Its remaining backlog must not consume every preparation/flash opportunity:
+        // a dense city can keep material moving long after the next front needs its plan.
+        // Preparation retains its existing share; all consumers still use this same clock.
+        matter = RuinMatter.get(level);
+        matter.work(level, clock);
         long falloutStart = System.nanoTime();
-        lastPrepNanos = falloutStart - prepStart;
+        lastScarNanos += falloutStart - materialStart;
         try {
             mobFallout.work(level, events.detonations(), clock);
         } catch (RuntimeException e) {

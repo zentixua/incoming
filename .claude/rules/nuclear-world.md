@@ -400,6 +400,18 @@ paths:
   Never keep spent source credits in a historical payload maximum or refund still-allocated arrays by live size.
   Capture credit transfers to the counted material owner before further admission. `nuke_support_capacity`
   uses dense removals, partial support reconciliation, fixed competing ownership and full real ledger reload.
+- The original-contact journal uses primitive `RuinOriginals` section pages, preserving the first removed
+  state/event across every unfinished support search. Reserve growth for the actual removal positions,
+  including old/new arrays during page and outer-index rehash. Do not restore a global per-block object map:
+  a dense visible chunk can cross a whole-city table boundary while its own result is small.
+  Normal ledger saves stream at most 64 originals per named-palette row; process-local registry IDs never
+  reach disk. The first row declares and funds its section capacity; reject incomplete/oversized sections.
+  Legacy named rows count sections with bounded scan scratch and a conservative fallback for uncached
+  sections, then use the same first-event rule. `nuke_original_*` covers dense growth, overlap and real reload.
+- Material gets its existing first bounded batch before visible work, then its remaining turn after flash
+  layers and preparation. Keep the same shared clock and preparation share: draining the whole material
+  backlog before these consumers can starve already-funded disk work for the lifetime of a large debris
+  queue (`nuke_frontier_material`: real source/archive reads, moving records and identical physical output).
 - Completed crater chunks discard column checkpoints after advancing the saved chunk cursor. Completed passes
   retain only material totals; terminal out-of-height material groups identical state/cargo without trajectory data.
   Active moving pieces, support provenance/graph and crater passes are charged by `retainedRuinBytes`. The counter

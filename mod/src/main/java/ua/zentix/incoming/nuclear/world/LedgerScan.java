@@ -112,9 +112,10 @@ final class LedgerScan {
         long section = net.minecraft.core.SectionPos.asLong(net.minecraft.core.BlockPos.getX(originalPosition) >> 4,
                 net.minecraft.core.BlockPos.getY(originalPosition) >> 4, net.minecraft.core.BlockPos.getZ(originalPosition) >> 4);
         int count = originalSections.get(section);
-        // Bounded scan scratch even for deliberately scattered old saves. A section outside the
-        // cache pays its maximum page for each row; no authoritative data is discarded on refusal.
-        if (count == 0 && originalSections.size() == SECTION_COUNTS) return RuinOriginals.importBytes(4096);
+        // Bounded scan scratch even for deliberately scattered old saves. Outside the cache,
+        // each row pays a separate one-cell page and index share. Larger shared pages cost less
+        // per entry, including their rehash overlap. Refusal preserves the authoritative file.
+        if (count == 0 && originalSections.size() == SECTION_COUNTS) return 768;
         int next = Math.min(4096, count + 1);
         originalSections.put(section, next);
         return RuinOriginals.importBytes(next) - (count == 0 ? 0 : RuinOriginals.importBytes(count));

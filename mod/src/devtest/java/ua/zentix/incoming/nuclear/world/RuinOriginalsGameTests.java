@@ -58,7 +58,8 @@ public final class RuinOriginalsGameTests {
         CompoundTag part = new CompoundTag(), row = new CompoundTag();
         ListTag rows = new ListTag(); rows.add(row); part.put("support_originals", rows);
         for (int i = 0; i < 8195; i++) {
-            row.putLong("position", source(i)); row.putInt("event", 9);
+            // Exceed the legacy scanner's bounded section-count cache with real distinct sections.
+            row.putLong("position", BlockPos.asLong(i * 16, -16, -4096)); row.putInt("event", 9);
             row.put("state", NbtUtils.writeBlockState(Blocks.BRICKS.defaultBlockState()));
             RuinMatter.read(part, level.registryAccess(), ledger, false);
             row.putInt("event", 3); row.put("state", NbtUtils.writeBlockState(Blocks.STONE_BRICKS.defaultBlockState()));
@@ -85,6 +86,16 @@ public final class RuinOriginalsGameTests {
                     RuinMatter read = (RuinMatter) LedgerReader.read(file, "incoming_ruin_matter", level.registryAccess(),
                             measure.row(), java.util.Set.of());
                     if (read.retainedBytes() > measure.owned()) throw new IllegalStateException("Section import exceeded admission");
+                    Path legacy = file.resolveSibling(file.getFileName() + ".legacy");
+                    CompoundTag root = new CompoundTag(); root.put("data", expected);
+                    net.minecraft.nbt.NbtIo.writeCompressed(root, legacy);
+                    var oldMeasure = LedgerScan.measure(legacy, "incoming_ruin_matter", java.util.Set.of(), 8L << 20);
+                    if (oldMeasure.owned() >= 8L << 20) throw new IllegalStateException("Bounded legacy fallback does not fund sparse sections");
+                    RuinMatter oldRead = (RuinMatter) LedgerReader.read(legacy, "incoming_ruin_matter", level.registryAccess(),
+                            oldMeasure.row(), java.util.Set.of());
+                    if (oldRead.retainedBytes() > oldMeasure.owned()
+                            || !normalized(oldRead.save(new CompoundTag(), level.registryAccess())).equals(normalized(expected.copy())))
+                        throw new IllegalStateException("Legacy section accounting changed or underfunded originals");
                     return read;
                 } catch (java.io.IOException error) { throw new java.io.UncheckedIOException(error); }
             }, net.minecraft.Util.ioPool()));
@@ -93,6 +104,29 @@ public final class RuinOriginalsGameTests {
             h.assertTrue(normalized(read.save(new CompoundTag(), level.registryAccess())).equals(normalized(expected)),
                     "Streaming sections changed state, event, support or material ownership");
         });
+    }
+
+    @GameTest(template = "pad", batch = "nuke_original_bounds", timeoutTicks = 100)
+    public static void sectionHeadersCannotUnderstateImportedOwnership(GameTestHelper h) {
+        CompoundTag row = new CompoundTag();
+        row.putLong("section", net.minecraft.core.SectionPos.asLong(-1, -1, -1));
+        row.putInt("original_entries", 1);
+        ListTag palette = new ListTag(); palette.add(NbtUtils.writeBlockState(Blocks.BRICKS.defaultBlockState()));
+        row.put("palette", palette); row.putLongArray("cells", new long[]{3L << 24, (3L << 24) | 1});
+        h.assertTrue(rejected(() -> new RuinOriginals().read(row)), "Underdeclared section was accepted");
+        row.putInt("original_entries", 4097);
+        h.assertTrue(rejected(() -> new RuinOriginals().read(row)), "Oversized section was allocated");
+        row.remove("original_entries");
+        h.assertTrue(rejected(() -> new RuinOriginals().read(row)), "Headerless section was accepted");
+        row.putInt("original_entries", 3);
+        var incomplete = new RuinOriginals(); incomplete.read(row);
+        h.assertTrue(rejected(incomplete::loaded), "Incomplete section was published");
+        h.succeed();
+    }
+
+    private static boolean rejected(Runnable action) {
+        try { action.run(); return false; }
+        catch (IllegalArgumentException expected) { return true; }
     }
 
     private static CompoundTag normalized(CompoundTag tag) {

@@ -182,6 +182,8 @@ final class RuinOriginals {
 
     void read(CompoundTag row) {
         long key = row.getLong("section");
+        if (SectionPos.y(key) < -128 || SectionPos.y(key) > 127)
+            throw new IllegalArgumentException("Original section exceeds block-position height");
         if (row.contains("original_entries")) {
             int count = row.getInt("original_entries");
             importBytes(count); // Validate before allocation.
