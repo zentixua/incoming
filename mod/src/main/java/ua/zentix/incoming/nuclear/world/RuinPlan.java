@@ -4,12 +4,7 @@ import it.unimi.dsi.fastutil.HashCommon;
 import it.unimi.dsi.fastutil.longs.LongArrayList;
 import io.netty.buffer.Unpooled;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.Direction;
-import net.minecraft.core.SectionPos;
-import net.minecraft.server.level.ChunkHolder;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.server.level.ThreadedLevelLightEngine;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Block;
@@ -20,11 +15,8 @@ import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.LevelChunkSection;
 import net.minecraft.world.level.chunk.PalettedContainer;
 import net.minecraft.world.level.levelgen.Heightmap;
-import net.minecraft.world.level.lighting.BlockLightEngine;
 import net.minecraft.world.level.lighting.ChunkSkyLightSources;
-import net.minecraft.world.level.lighting.LightEngine;
 import net.minecraft.world.level.lighting.LevelLightEngine;
-import net.minecraft.world.level.lighting.SkyLightEngine;
 import net.minecraft.world.phys.shapes.Shapes;
 import org.jetbrains.annotations.Nullable;
 
@@ -422,8 +414,8 @@ public final class RuinPlan {
 
     /** The same field law as bytes(), evaluated before allocating decoded arrays. */
     static long storedBytes(net.minecraft.nbt.CompoundTag tag) {
+        validateStored(tag);
         int sections = tag.getInt("sections");
-        if (sections < 0 || sections > 256) throw new IllegalArgumentException("Invalid ruin plan sections");
         return sourceBytes(arrayLength(tag, "cells"), arrayLength(tag, "old"), arrayLength(tag, "states"),
                 arrayLength(tag, "fires"), arrayLength(tag, "heights"), arrayLength(tag, "light"), sections, 0, 0,
                 arrayLength(tag, "outside"), arrayLength(tag, "outside_states"), arrayLength(tag, "fluids"),
@@ -440,12 +432,8 @@ public final class RuinPlan {
 
     /** Server thread: rebuild process-local hashes. Section fast checks fall back to the normal column rescan. */
     static RuinPlan restore(net.minecraft.nbt.CompoundTag tag, RuinContext ctx) {
-        if (tag.getInt("version") != STORAGE_VERSION || !tag.contains("material", net.minecraft.nbt.Tag.TAG_LONG_ARRAY))
-            throw new IllegalArgumentException("Incomplete or unknown ruin plan version");
+        validateStored(tag);
         int sections = tag.getInt("sections");
-        if (sections < 0 || sections > 256 || arrayLength(tag, "cells") != arrayLength(tag, "old")
-                || arrayLength(tag, "states") > MAX_STATES)
-            throw new IllegalArgumentException("Invalid ruin plan dimensions");
         var palette = RuinPalette.load(tag.getList("palette", net.minecraft.nbt.Tag.TAG_COMPOUND));
         int[] cells = tag.getIntArray("cells");
         BlockState[] states = palette.states(tag.getIntArray("states")), olds = palette.states(tag.getIntArray("old"));
@@ -471,6 +459,83 @@ public final class RuinPlan {
         if (tag.contains("blown")) plan.blown = tag.getIntArray("blown");
         plan.material = tag.getLongArray("material");
         return plan;
+    }
+
+    /** Shared serialized-payload bounds, before decode/allocation; source-specific identity is checked separately. */
+    static void validateStored(net.minecraft.nbt.CompoundTag tag) {
+        storedType(tag, "version", net.minecraft.nbt.Tag.TAG_INT);
+        storedType(tag, "sections", net.minecraft.nbt.Tag.TAG_INT);
+        for (String key : new String[]{"cells", "old", "states", "fires", "heights"}) storedType(tag, key, net.minecraft.nbt.Tag.TAG_INT_ARRAY);
+        for (String key : new String[]{"light", "fluids", "material"}) storedType(tag, key, net.minecraft.nbt.Tag.TAG_LONG_ARRAY);
+        storedType(tag, "palette", net.minecraft.nbt.Tag.TAG_LIST);
+        for (String key : new String[]{"outside_states", "biome_from", "flash", "blown"})
+            if (tag.contains(key)) storedType(tag, key, net.minecraft.nbt.Tag.TAG_INT_ARRAY);
+        if (tag.contains("outside")) storedType(tag, "outside", net.minecraft.nbt.Tag.TAG_LONG_ARRAY);
+        if (tag.contains("biomes")) storedType(tag, "biomes", net.minecraft.nbt.Tag.TAG_BYTE_ARRAY);
+        int sections = tag.getInt("sections"), count = arrayLength(tag, "cells"), capacity = sections * 4096;
+        var palette = (net.minecraft.nbt.ListTag) tag.get("palette");
+        int states = arrayLength(tag, "states");
+        if (tag.getInt("version") != STORAGE_VERSION || sections < 0 || sections > 256
+                || count > capacity || arrayLength(tag, "old") != count || states > MAX_STATES
+                || arrayLength(tag, "fires") > capacity || arrayLength(tag, "heights") > 256 * 5 * 3
+                || arrayLength(tag, "heights") % 3 != 0 || arrayLength(tag, "light") > capacity
+                || arrayLength(tag, "material") > capacity || arrayLength(tag, "fluids") > 18 * 18 * sections * 16
+                || arrayLength(tag, "outside") > capacity || arrayLength(tag, "outside_states") != arrayLength(tag, "outside")
+                || tag.contains("outside") != tag.contains("outside_states") || tag.contains("biomes") != tag.contains("biome_from")
+                || tag.contains("biomes") && (arrayLength(tag, "biomes") != 16 || arrayLength(tag, "biome_from") != 16)
+                || arrayLength(tag, "flash") > ua.zentix.incoming.nuclear.flash.FlashMarks.MAX_CHARS
+                || arrayLength(tag, "blown") > capacity || !palette.isEmpty() && palette.getElementType() != net.minecraft.nbt.Tag.TAG_COMPOUND
+                || palette.size() > count + states + arrayLength(tag, "outside_states"))
+            throw new IllegalArgumentException("Invalid stored ruin plan dimensions");
+        for (String key : new String[]{"states", "old", "outside_states"}) for (int index : tag.getIntArray(key))
+            if (index < 0 || index >= palette.size()) throw new IllegalArgumentException("Invalid stored ruin palette index");
+        int previous = -1;
+        for (int cell : tag.getIntArray("cells")) {
+            int key = cell & KEY_MASK;
+            if (key <= previous || key >= capacity || (cell >>> STATE_SHIFT & STATE_MASK) >= states)
+                throw new IllegalArgumentException("Invalid stored ruin cell");
+            previous = key;
+        }
+        for (int cell : tag.getIntArray("fires"))
+            if ((cell & KEY_MASK) >= capacity || (cell >>> STATE_SHIFT & STATE_MASK) >= states)
+                throw new IllegalArgumentException("Invalid stored ruin fire");
+        for (int cell : tag.getIntArray("blown"))
+            if (cell < 0 || cell >= capacity) throw new IllegalArgumentException("Invalid stored flash quench cell");
+    }
+
+    /** Validate immutable source provenance directly, without serializing an entire plan just to inspect it. */
+    void validateSource(ChunkPos source, int minSection, int height, int[] references) {
+        // The new source consumer applies only its chunk delta. Legacy toppled logs must first
+        // become destination-owned material rows; accepting them here would silently omit them.
+        if (outside != null && !outside.isEmpty() || outsideState != null && !outsideState.isEmpty())
+            throw new IllegalArgumentException("Prepared source still contains unsupported outside logs");
+        if (height < 1 || height > 256 || oldHashes.length != height && oldHashes.length != 0
+                || oldHashes.length == 0 && (cells.length != 0 || states.length != 0 || fires.length != 0 || heights.length != 0
+                || lightAt.length != 0 || fluidTicks.length != 0 || material.length != 0 || outside != null && !outside.isEmpty()
+                || blown != null && blown.length != 0))
+            throw new IllegalArgumentException("Source descriptor height does not match ruin plan");
+        // FlashChar stores absolute Y biased by 2048, independently of RuinPlan's section indices.
+        if (flash != null) for (int mark : flash) {
+            int section = ua.zentix.incoming.nuclear.flash.FlashChar.y(mark) >> 4;
+            if (section < minSection || section >= minSection + height)
+                throw new IllegalArgumentException("Flash face outside source descriptor height");
+        }
+        var structural = new java.util.BitSet(height * 4096);
+        for (long position : material) {
+            BlockPos at = BlockPos.of(position);
+            int section = (at.getY() >> 4) - minSection;
+            if (at.getX() >> 4 != source.x || at.getZ() >> 4 != source.z || section < 0 || section >= height)
+                throw new IllegalArgumentException("Foreign prepared material source");
+            int key = section << SECTION_SHIFT | PreparedSourceProgress.local(at);
+            if (find(key) < 0 || structural.get(key)) throw new IllegalArgumentException("Invalid prepared material provenance");
+            structural.set(key);
+        }
+        for (int key : references) if (key < 0 || !structural.get(key))
+            throw new IllegalArgumentException("Reference lacks structural source provenance");
+    }
+
+    private static void storedType(net.minecraft.nbt.CompoundTag tag, String key, int type) {
+        if (!tag.contains(key, type)) throw new IllegalArgumentException("Invalid stored ruin field " + key);
     }
 
     /** For tests: differences from another plan (same positions, new/old states, fires); null if none. */
@@ -1016,6 +1081,276 @@ public final class RuinPlan {
         }
     }
 
+    /** Static source candidates persisted by the source descriptor; section keys are signed world section Y. */
+    java.util.Map<Integer, java.util.BitSet> sourceFootprint(int minSection) {
+        var result = new java.util.TreeMap<Integer, java.util.BitSet>();
+        for (int cell : cells) result.computeIfAbsent(minSection + section(cell), ignored -> new java.util.BitSet(4096)).set(cell & 4095);
+        for (int cell : fires) result.computeIfAbsent(minSection + section(cell), ignored -> new java.util.BitSet(4096)).set(cell & 4095);
+        return result;
+    }
+
+    /** Augment the static footprint once, before installing source progress, with actual flash quench candidates. */
+    java.util.Map<Integer, java.util.BitSet> waveFootprint(LevelChunk chunk, Detonation d) {
+        var result = sourceFootprint(chunk.getMinSection());
+        RuinPlan layer = flashOf(chunk);
+        // The caller binds the event before installation. A retained layer supplies exact candidates;
+        // after restart the persisted flash marker permits the same live-fire fallback as bindSection.
+        int[] candidates = layer != null ? layer.fires : FlashScorch.marked(chunk, d.id()) ? fireCells(chunk.getSections()) : NONE;
+        for (int cell : candidates)
+            result.computeIfAbsent(chunk.getMinSection() + section(cell), ignored -> new java.util.BitSet(4096)).set(cell & 4095);
+        return result;
+    }
+
+    /**
+     * Bind one section only after its original neighbor inputs have a durable owner. A binding is
+     * an immediate server-thread write attempt, not permission to overwrite a later world edit.
+     * The caller keeps completed local cells out of later attempts and repairs stale cells before
+     * declaring the chunk complete. No material ledger or old applied-plan owner is created here.
+     */
+    WaveSection bindSection(LevelChunk chunk, Detonation d, ColumnScar.Budget budget, int section) {
+        return bindSection(chunk, d, budget, section, local -> true);
+    }
+
+    WaveSection bindSection(LevelChunk chunk, Detonation d, ColumnScar.Budget budget, int section,
+                            java.util.function.IntPredicate pending) {
+        return bindSection(chunk, d, budget, section, pending, new java.util.BitSet());
+    }
+
+    /** Extra candidates come only from the persisted, initially augmented source footprint. */
+    WaveSection bindSection(LevelChunk chunk, Detonation d, ColumnScar.Budget budget, int section,
+                            java.util.function.IntPredicate pending, java.util.BitSet flashCandidates) {
+        if (!(chunk.getLevel() instanceof ServerLevel level) || !level.getServer().isSameThread())
+            throw new IllegalStateException("Wave binding requires the server thread");
+        if (section < 0 || section >= chunk.getSections().length) throw new IllegalArgumentException("Invalid wave section");
+        RuinPlan layer = flashOf(chunk);
+        boolean marked = layer == null && FlashScorch.marked(chunk, d.id());
+        boolean over = layer != null || marked;
+        boolean ignites = budget.ignites && IncomingConfig.SERVER.nukeFires.get();
+        int availableCount = budget.fires;
+        int layerRemaining = marked ? budget.layer.get(chunk.getPos().toLong()) : 0;
+        int maximum = IncomingConfig.SERVER.nukeMaxFires.get();
+        var work = new it.unimi.dsi.fastutil.ints.Int2ObjectLinkedOpenHashMap<WaveCell>();
+        var stale = new java.util.BitSet(4096);
+        var noOps = new java.util.BitSet(4096);
+        var structural = new java.util.BitSet(4096);
+        for (long source : material) {
+            if (BlockPos.getX(source) >> 4 != chunk.getPos().x || BlockPos.getZ(source) >> 4 != chunk.getPos().z
+                    || chunk.getSectionIndex(BlockPos.getY(source)) != section) continue;
+            structural.set((BlockPos.getY(source) & 15) << 8 | (BlockPos.getZ(source) & 15) << 4 | BlockPos.getX(source) & 15);
+        }
+        var pos = new BlockPos.MutableBlockPos();
+        int x0 = chunk.getPos().getMinBlockX(), z0 = chunk.getPos().getMinBlockZ(), minY = chunk.getMinBuildHeight();
+        var liveSection = chunk.getSection(section);
+        for (int k = 0; k < cells.length; k++) {
+            int cell = cells[k], key = cell & KEY_MASK, local = key & 4095;
+            if (section(cell) != section || !pending.test(local)) continue;
+            BlockState live = liveSection.getBlockState(local & 15, local >> 8, (local >> 4) & 15);
+            BlockState original = layer != null ? layer.beforeFlash(key, live)
+                    : marked && fire(live) ? Blocks.AIR.defaultBlockState() : live;
+            if (normal(original) != normal(olds[k])) { stale.set(local); continue; }
+            BlockPos at = at(pos, cell, x0, z0, minY).immutable();
+            BlockState after = states[(cell >>> STATE_SHIFT) & STATE_MASK];
+            var value = new WaveCell(at, live, after, structural.get(local), (cell & SLOW) != 0);
+            work.put(local, value);
+            if (value.slow) continue; // The old writer runs these callbacks after fire decisions.
+            if (over && fire(live)) {
+                value.counted = layer != null && layer.counted(key);
+                if (marked && layerRemaining > 0) { value.layerClaim = 1; layerRemaining--; value.counted = true; }
+                if (after.isAir() && ignites && hasFire(key)) value.after = live;
+                else if (value.counted) {
+                    availableCount = Math.max(0, availableCount - 1);
+                    value.fireDelta--;
+                }
+            }
+        }
+        for (int cell : fires) {
+            int key = cell & KEY_MASK, local = key & 4095;
+            if (section(cell) != section || !pending.test(local) || stale.get(local)) continue;
+            if (!ignites) { noOps.set(local); continue; }
+            WaveCell value = work.get(local);
+            BlockState actual = liveSection.getBlockState(local & 15, local >> 8, (local >> 4) & 15);
+            BlockState live = value == null || value.slow ? actual : value.after;
+            if (value == null) {
+                value = new WaveCell(at(pos, cell, x0, z0, minY).immutable(), actual, live, false, false);
+                value.counted = layer != null && layer.counted(key);
+                if (marked && fire(actual) && layerRemaining > 0) {
+                    value.layerClaim = 1; value.counted = true;
+                }
+            }
+            Ignition decision = ignition(live, over, value.counted, availableCount, maximum);
+            if (!decision.burn) { noOps.set(local); continue; }
+            if (!work.containsKey(local)) {
+                work.put(local, value);
+                layerRemaining -= value.layerClaim;
+            }
+            // A slow source still occupies this cell until its world callback: the old fire loop
+            // cannot ignite it. Keep that ordering even for an unusual slow air-like mod state.
+            if (value.slow) continue;
+            value.after = states[(cell >>> STATE_SHIFT) & STATE_MASK];
+            value.tickFire = true;
+            if (decision.addCount) { availableCount++; value.fireDelta++; }
+        }
+        var quenches = (java.util.BitSet) flashCandidates.clone();
+        if (quenches.length() > 4096) throw new IllegalArgumentException("Flash candidates exceed section bound");
+        if (over) for (int cell : layer != null ? layer.fires : fireCells(new LevelChunkSection[]{liveSection})) {
+            if (layer == null || section(cell) == section) quenches.set(cell & 4095);
+        }
+        for (int local = quenches.nextSetBit(0); local >= 0; local = quenches.nextSetBit(local + 1)) {
+            int key = section << SECTION_SHIFT | local;
+            if (!pending.test(local) || stale.get(local)
+                    || find(key) >= 0 || ignites && hasFire(key)) continue;
+            BlockState live = liveSection.getBlockState(local & 15, local >> 8, (local >> 4) & 15);
+            if (!over) { stale.set(local); continue; } // No flash provenance authorizes removing an unrelated fire.
+            if (!fire(live)) { noOps.set(local); continue; }
+            var value = new WaveCell(at(pos, key, x0, z0, minY).immutable(), live, Blocks.AIR.defaultBlockState(), false, false);
+            value.counted = layer != null && layer.counted(key);
+            if (marked && layerRemaining > 0) { value.layerClaim = 1; layerRemaining--; value.counted = true; }
+            if (value.counted) value.fireDelta--;
+            work.put(local, value);
+        }
+        var changes = new java.util.ArrayList<PreparedSectionWriter.CellChange>(work.size());
+        var sources = new java.util.BitSet(work.size());
+        var worldCells = new java.util.BitSet(work.size());
+        int[] counts = new int[work.size()], claims = new int[work.size()];
+        var ticks = new java.util.BitSet(work.size());
+        int n = 0;
+        for (WaveCell value : work.values()) {
+            noOps.clear(PreparedSourceProgress.local(value.pos));
+            changes.add(new PreparedSectionWriter.CellChange(value.pos, value.before, value.after));
+            if (value.structural) sources.set(n);
+            if (value.slow) worldCells.set(n);
+            if (value.tickFire) ticks.set(n);
+            claims[n] = value.layerClaim;
+            counts[n++] = value.fireDelta;
+        }
+        var stalePositions = new LongArrayList(stale.cardinality());
+        for (int local = stale.nextSetBit(0); local >= 0; local = stale.nextSetBit(local + 1))
+            stalePositions.add(at(pos, section << SECTION_SHIFT | local, x0, z0, minY).asLong());
+        noOps.andNot(stale);
+        return new WaveSection(chunk.getPos(), section, budget, marked, changes, sources, worldCells, stalePositions.toLongArray(), noOps, counts, claims, ticks);
+    }
+
+    private static final class WaveCell {
+        final BlockPos pos;
+        final BlockState before;
+        final boolean structural, slow;
+        BlockState after;
+        int fireDelta, layerClaim;
+        boolean tickFire, counted;
+
+        WaveCell(BlockPos pos, BlockState before, BlockState after, boolean structural, boolean slow) {
+            this.pos = pos; this.before = before; this.after = after; this.structural = structural; this.slow = slow;
+        }
+    }
+
+    /** One bounded attempt. Caller-created receipts remain available after callback failure. */
+    static final class WaveSection {
+        private final ChunkPos chunk;
+        private final int section;
+        private final ColumnScar.Budget budget;
+        private final boolean marked;
+        private final List<PreparedSectionWriter.CellChange> changes;
+        private final java.util.BitSet structural, worldCells, ticks, noOps;
+        private final long[] stale;
+        private final int[] counts, claims;
+        private boolean used;
+
+        private WaveSection(ChunkPos chunk, int section, ColumnScar.Budget budget, boolean marked,
+                            List<PreparedSectionWriter.CellChange> changes, java.util.BitSet structural, java.util.BitSet worldCells,
+                            long[] stale, java.util.BitSet noOps, int[] counts, int[] claims, java.util.BitSet ticks) {
+            this.chunk = chunk; this.section = section; this.budget = budget; this.marked = marked;
+            this.changes = List.copyOf(changes); this.structural = structural; this.worldCells = worldCells; this.stale = stale;
+            this.counts = counts; this.claims = claims; this.ticks = ticks; this.noOps = noOps;
+        }
+
+        List<PreparedSectionWriter.CellChange> changes() { return changes; }
+        boolean structural(int index) { return structural.get(index); }
+        long[] stalePositions() { return stale.clone(); }
+        java.util.BitSet resolvedNoOps() { return (java.util.BitSet) noOps.clone(); }
+
+        void apply(ServerLevel level, LevelChunk live, PreparedSectionWriter.Receipt receipt,
+                   java.util.function.BooleanSupplier worldPermit, java.util.function.IntPredicate beforeMutation) {
+            if (used || !live.getPos().equals(chunk) || section >= live.getSections().length)
+                throw new IllegalStateException("Wave binding already consumed or used in another chunk");
+            used = true;
+            int[] scanned = {-1}, confirmed = {budget.fires};
+            try {
+                PreparedSectionWriter.applyRuin(level, live, changes, receipt, worldPermit, index -> {
+                    // The preview may have returned a slot for a quench whose admission was
+                    // subsequently refused. Only confirmed earlier writes can fund a fresh fire.
+                    // All fire decisions use the ordinary first pass, in increasing list order.
+                    for (int prior = scanned[0] + 1; prior < index; prior++)
+                        if (receipt.applied(prior)) confirmed[0] = Math.max(0, confirmed[0] + counts[prior]);
+                    scanned[0] = Math.max(scanned[0], index - 1);
+                    var change = changes.get(index);
+                    if (ticks.get(index) && !fire(change.expected())
+                            && confirmed[0] >= IncomingConfig.SERVER.nukeMaxFires.get()) return false;
+                    return beforeMutation.test(index);
+                }, worldCells);
+            } finally {
+                if (!marked && !receipt.applied().isEmpty()) budget.layer.remove(chunk.toLong());
+                for (int i = 0; i < changes.size(); i++) if (receipt.applied(i)) {
+                    // A forgotten layer has only an aggregate count. Consume that existing
+                    // charge cell by cell; other sections' still-burning fires keep their slots.
+                    if (claims[i] > 0) {
+                        int remaining = budget.layer.get(chunk.toLong()) - claims[i];
+                        if (remaining > 0) budget.layer.put(chunk.toLong(), remaining);
+                        else budget.layer.remove(chunk.toLong());
+                    }
+                    budget.fires = Math.max(0, budget.fires + counts[i]);
+                    if (ticks.get(i)) {
+                        var change = changes.get(i);
+                        BlockPos at = change.pos();
+                        level.scheduleTick(at, change.state().getBlock(),
+                                30 + (int) (RuinPlanner.hash(at.getX(), at.getY(), at.getZ(), 31) * 10));
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Caller must already own the original neighbor inputs durably, before this first mutation.
+     * The returned original motion map belongs to that caller; this does not retain an Applied plan.
+     */
+    short[] beginWave(ServerLevel level, LevelChunk chunk) {
+        short[] motion = new short[256];
+        for (int col = 0; col < 256; col++) motion[col] = (short) (chunk.getHeight(Heightmap.Types.MOTION_BLOCKING, col & 15, col >> 4) + 1);
+        if (biomes != null && ScorchedBiomes.write(level, chunk, biomes)) DhUpdates.mark(level, chunk.getPos(), level.getGameTime());
+        return motion;
+    }
+
+    /** All source cells must be resolved first. Original-input lifetime and chunk completion are caller-owned. */
+    void finishWave(ServerLevel level, LevelChunk chunk, Detonation d, ColumnScar.Budget budget) {
+        // Every section has now been inspected. Count slots whose fire disappeared independently
+        // can finally be returned without releasing another section's live fire charge early.
+        int unused = budget.layer.remove(chunk.getPos().toLong());
+        if (flashOf(chunk) == null && FlashScorch.marked(chunk, d.id())) budget.fires = Math.max(0, budget.fires - unused);
+        scheduleFluids(level);
+        FlashScorch.unmark(chunk, d.id());
+        ua.zentix.incoming.nuclear.flash.FlashSync.chars(level, chunk, d, flash());
+    }
+
+    private void scheduleFluids(ServerLevel level) {
+        var pos = new BlockPos.MutableBlockPos();
+        for (int k = 0; k < fluidTicks.length; k++) {
+            pos.set(fluidTicks[k]);
+            if (!Terrain.ready(level, pos)) continue;
+            BlockState state = level.getBlockState(pos);
+            if (!state.getFluidState().isEmpty()) level.scheduleTick(pos.immutable(), state.getFluidState().getType(),
+                    fluidDelay(k, pos.getX(), pos.getY(), pos.getZ()));
+        }
+    }
+
+    /** Shared ignition decision for the old flash writer and the section-bound wave path. */
+    private record Ignition(boolean burn, boolean addCount) {}
+    private static final Ignition NO_IGNITION = new Ignition(false, false);
+
+    private static Ignition ignition(BlockState live, boolean over, boolean counted, int fires, int maximum) {
+        if (!live.isAir()) return over && fire(live) ? new Ignition(true, !counted) : NO_IGNITION;
+        return fires < maximum ? new Ignition(true, true) : NO_IGNITION;
+    }
+
     /** Structural candidates only; thermal/terrain transformations never manufacture coarse debris. */
     private long[] material = new long[0];
 
@@ -1105,8 +1440,7 @@ public final class RuinPlan {
                 quenched.add(at(m, c, x0, z0, minY).asLong());
                 if (flash != null && flash.counted(c & KEY_MASK)) budget.fires = Math.max(0, budget.fires - 1);
             }
-            touch(touched, wasEmpty, now, i);
-            s.setBlockState(c & 15, (c >> 8) & 15, (c >> 4) & 15, state, false);
+            ChunkDeltaWrites.set(now, touched, wasEmpty, i, c & 15, (c >> 8) & 15, (c >> 4) & 15, state);
             if (was != null) was[k] = live;
         }
         // fires where plan says air, until detonation fire counter exhausted; layer fire on ruin-fire position
@@ -1120,19 +1454,17 @@ public final class RuinPlan {
             LevelChunkSection s = now[i];
             BlockState fire = states[(c >>> STATE_SHIFT) & STATE_MASK];
             BlockState live = s.getBlockState(c & 15, (c >> 8) & 15, (c >> 4) & 15);
+            Ignition decision = ignition(live, over, flash != null && flash.counted(c & KEY_MASK), budget.fires, maxFires);
+            if (!decision.burn) continue;
             if (!live.isAir()) {
-                if (!over || !fire(live)) continue;
                 // layer fire excluded from detonation count (layer predicts wave-blown, or no plan) but retained by ruins
                 // now enters count
-                if (flash == null || !flash.counted(c & KEY_MASK)) budget.fires++;
+                if (decision.addCount) budget.fires++;
                 if (live != fire) {
-                    touch(touched, wasEmpty, now, i);
-                    s.setBlockState(c & 15, (c >> 8) & 15, (c >> 4) & 15, fire, false);
+                    ChunkDeltaWrites.set(now, touched, wasEmpty, i, c & 15, (c >> 8) & 15, (c >> 4) & 15, fire);
                 }
             } else {
-                if (budget.fires >= maxFires) continue;
-                touch(touched, wasEmpty, now, i);
-                s.setBlockState(c & 15, (c >> 8) & 15, (c >> 4) & 15, fire, false);
+                ChunkDeltaWrites.set(now, touched, wasEmpty, i, c & 15, (c >> 8) & 15, (c >> 4) & 15, fire);
                 lit++;
                 if (!layer || !isBlown(c & KEY_MASK)) {
                     budget.fires++;
@@ -1154,8 +1486,7 @@ public final class RuinPlan {
                 LevelChunkSection s = now[i];
                 BlockState live = s.getBlockState(f & 15, (f >> 8) & 15, (f >> 4) & 15);
                 if (!fire(live) || find(key) >= 0 || ignites && hasFire(key)) continue;
-                touch(touched, wasEmpty, now, i);
-                s.setBlockState(f & 15, (f >> 8) & 15, (f >> 4) & 15, air, false);
+                ChunkDeltaWrites.set(now, touched, wasEmpty, i, f & 15, (f >> 8) & 15, (f >> 4) & 15, air);
                 at(m, f, x0, z0, minY);
                 // fire blocks neither motion nor sky: only world-surface heightmap changes
                 surface.update(f & 15, m.getY(), (f >> 4) & 15, air);
@@ -1188,11 +1519,7 @@ public final class RuinPlan {
             }
         }
         LevelLightEngine light = level.getChunkSource().getLightEngine();
-        for (int i = 0; i < now.length; i++) {
-            if (!bit(touched, i)) continue;
-            boolean empty = now[i].hasOnlyAir();
-            if (bit(wasEmpty, i) != empty) light.updateSectionStatus(SectionPos.of(pos, chunk.getSectionYFromSectionIndex(i)), empty);
-        }
+        ChunkDeltaWrites.sectionStatus(level, chunk, touched, wasEmpty);
         PHASES[1] += System.nanoTime() - t;
         t = System.nanoTime();
         // heightmaps/sky sources from plan; chunk edited since plan outside plan positions (block inside house), or
@@ -1210,13 +1537,11 @@ public final class RuinPlan {
         PHASES[2] += System.nanoTime() - t;
         t = System.nanoTime();
         // chunk viewers get changes same tick via section packets (like setBlock), not chunk queue
-        ChunkHolder holder = level.getChunkSource().chunkMap.getVisibleChunkIfPresent(pos.toLong());
-        List<ServerPlayer> players = holder == null ? List.of() : level.getChunkSource().chunkMap.getPlayers(pos, false);
-        boolean watched = !players.isEmpty();
-        boolean sections = watched && holder.getTickingChunk() != null;
+        var delivery = ChunkDeltaWrites.delivery(level, chunk);
+        boolean sections = delivery.sections();
         if (sections) {
-            for (int c : cells) if ((c & SLOW) == 0) holder.blockChanged(at(m, c, x0, z0, minY));
-            for (int k = 0; out != null && k < out.size(); k++) holder.blockChanged(m.set(out.getLong(k)));
+            for (int c : cells) if ((c & SLOW) == 0) delivery.changed(at(m, c, x0, z0, minY));
+            for (int k = 0; out != null && k < out.size(); k++) delivery.changed(m.set(out.getLong(k)));
         }
         int extra = quenched == null ? 0 : quenched.size();
         long[] checks = java.util.Arrays.copyOf(lightAt, lightAt.length + lit + extra);
@@ -1227,22 +1552,14 @@ public final class RuinPlan {
             BlockState fire = states[(c >>> STATE_SHIFT) & STATE_MASK];
             at(m, c, x0, z0, minY);
             if (fireWas[k].isAir()) checks[checked++] = m.asLong();
-            if (sections && fireWas[k] != fire) holder.blockChanged(m);
+            if (sections && fireWas[k] != fire) delivery.changed(m);
             // fire tick like newly placed fire (FireBlock.onPlace): 30–39 ticks, flash-layer fire starts with ruins
             if (!layer) level.scheduleTick(m.immutable(), fire.getBlock(), 30 + (int) (RuinPlanner.hash(m.getX(), m.getY(), m.getZ(), 31) * 10));
         }
-        checkLight(light, pos, checked == checks.length ? checks : java.util.Arrays.copyOf(checks, checked));
+        ChunkDeltaWrites.checkLight(light, pos, checked == checks.length ? checks : java.util.Arrays.copyOf(checks, checked));
         // fluid beside breach (neighbors too) gets tick like neighbor setBlock, staggered by position hash, at most
         // FLUID_TICKS per second: replacement wakes no neighbors, unticked water would stand as wall
-        for (int k = 0; k < fluidTicks.length; k++) {
-            m.set(fluidTicks[k]);
-            // neighbor unloaded (ready plan needs no neighbors): no tick; chunk load does not schedule one, so water
-            // stands until nearby block update
-            if (!Terrain.ready(level, m)) continue;
-            BlockState st = level.getBlockState(m);
-            if (st.getFluidState().isEmpty()) continue;
-            level.scheduleTick(m.immutable(), st.getFluidState().getType(), fluidDelay(k, m.getX(), m.getY(), m.getZ()));
-        }
+        scheduleFluids(level);
         PHASES[3] += System.nanoTime() - t;
         t = System.nanoTime();
         chunk.setUnsaved(true);
@@ -1263,9 +1580,7 @@ public final class RuinPlan {
             }
         }
         // viewed but non-ticking chunk (view edge): send full chunk via vanilla
-        if (watched && !sections) {
-            for (ServerPlayer p : players) p.connection.chunkSender.markChunkPendingToSend(chunk);
-        }
+        delivery.finish();
         // Distant Horizons LOD: ruins with wave, not next chunk save
         long dh = System.nanoTime();
         DhUpdates.mark(level, pos, level.getGameTime());
@@ -1285,12 +1600,6 @@ public final class RuinPlan {
         return lit;
     }
 
-    /** Section {@code i} changes: mark it and pre-write emptiness. */
-    private static void touch(long[] touched, long[] wasEmpty, LevelChunkSection[] now, int i) {
-        if (bit(touched, i)) return;
-        set(touched, i);
-        if (now[i].hasOnlyAir()) set(wasEmpty, i);
-    }
 
     /** Layer fire at {@code key} counted toward detonation fires: layer ignited it, wave does not extinguish it. */
     private boolean counted(int key) {
@@ -1306,32 +1615,6 @@ public final class RuinPlan {
             for (int k = 0; k < 4096; k++) if (fire(s.getBlockState(k & 15, k >> 8, (k >> 4) & 15))) out.add(i << SECTION_SHIFT | k);
         }
         return out.toIntArray();
-    }
-
-    /**
-     * Chunk light checks in one light-engine task (like {@code LevelLightEngine.checkBlock} on its thread), not
-     * one mailbox task per position: hundreds per chunk, thousands of chunks within seconds. Non-vanilla light engine
-     * (another mod) uses individual {@code checkBlock} calls.
-     */
-    private static void checkLight(LevelLightEngine light, ChunkPos pos, long[] at) {
-        if (at.length == 0) return;
-        // block engine always present; absent means another mod computes light (Starlight, ScalableLux): task would be empty
-        if (light instanceof ThreadedLevelLightEngine threaded && light.blockEngine != null && vanilla(light.blockEngine, BlockLightEngine.class)
-                && vanilla(light.skyEngine, SkyLightEngine.class)) {
-            var block = light.blockEngine;
-            var sky = light.skyEngine;
-            threaded.addTask(pos.x, pos.z, ThreadedLevelLightEngine.TaskType.PRE_UPDATE, () -> {
-                BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos();
-                for (long a : at) {
-                    p.set(a);
-                    block.checkBlock(p);
-                    if (sky != null) sky.checkBlock(p);
-                }
-            });
-            return;
-        }
-        BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos();
-        for (long a : at) light.checkBlock(p.set(a));
     }
 
     /**
@@ -1370,46 +1653,10 @@ public final class RuinPlan {
             int y = minY + (section(c) << 4) + ((c >> 8) & 15);
             if (y > top[c & 0xFF]) top[c & 0xFF] = y;
         }
-        ChunkSkyLightSources sky = chunk.getSkyLightSources();
-        Heightmap[] maps = new Heightmap[HEIGHTMAP_TYPES.length];
-        for (int i = 0; i < maps.length; i++) maps[i] = chunk.getOrCreateHeightmapUnprimed(HEIGHTMAP_TYPES[i]);
-        int x0 = chunk.getPos().getMinBlockX(), z0 = chunk.getPos().getMinBlockZ();
-        BlockPos.MutableBlockPos upper = new BlockPos.MutableBlockPos(), lower = new BlockPos.MutableBlockPos();
-        for (int column = 0; column < 256; column++) {
-            int t = top[column];
-            if (t == Integer.MIN_VALUE) continue;
-            int lx = column & 15, lz = column >> 4, x = x0 + lx, z = z0 + lz;
-            // search values at/below highest plan position (above belongs to unchanged block over plan)
-            int open = 0;
-            for (int i = 0; i < maps.length; i++) if (maps[i].getFirstAvailable(lx, lz) <= t + 1) open |= 1 << i;
-            boolean skyOpen = sky.get(column) <= t + 1;
-            BlockState above = chunk.getBlockState(upper.set(x, t + 1, z));
-            for (int y = t; y >= minY - 1 && (open != 0 || skyOpen); y--) {
-                BlockState below = chunk.getBlockState(lower.set(x, y, z));
-                for (int i = 0; open != 0 && i < maps.length; i++) {
-                    if ((open & 1 << i) != 0 && y >= minY && HEIGHTMAP_TYPES[i].isOpaque().test(below)) {
-                        maps[i].setHeight(lx, lz, y + 1);
-                        open &= ~(1 << i);
-                    }
-                }
-                if (skyOpen) {
-                    upper.set(x, y + 1, z);
-                    if (below.getLightBlock(chunk, lower) != 0 || Shapes.faceShapeOccludes(LightEngine.getOcclusionShape(chunk, upper, above, Direction.DOWN),
-                            LightEngine.getOcclusionShape(chunk, lower, below, Direction.UP))) {
-                        sky.set(column, y + 1);
-                        skyOpen = false;
-                    }
-                }
-                above = below;
-            }
-            for (int i = 0; i < maps.length; i++) if ((open & 1 << i) != 0) maps[i].setHeight(lx, lz, minY);
-            if (skyOpen) sky.set(column, minY - 1);
-        }
+        ChunkDeltaWrites.rescanColumns(chunk, top);
     }
 
-    private static boolean vanilla(@Nullable Object engine, Class<?> type) {
-        return engine == null || engine.getClass() == type;
-    }
+
 
     /** Trunks toppled into neighboring chunks: count. */
     public int outsideCount() {

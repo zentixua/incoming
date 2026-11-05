@@ -9,6 +9,7 @@ import net.minecraft.world.level.chunk.storage.RegionStorageInfo;
 import java.nio.file.Path;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.function.Supplier;
 
 /** Detached, ordered pages using vanilla's region-file writer, never live world chunks. */
@@ -20,6 +21,8 @@ final class RuinPages {
     private final Worker worker;
     private final CompletableFuture<Boolean> existing;
     private CompletableFuture<?> tail = CompletableFuture.completedFuture(null);
+    // Ordering deliberately recovers after failed operations. Durability must not forget their failure.
+    private volatile Throwable storageFailure;
     private boolean closed;
 
     RuinPages(RegionStorageInfo info, Path path) {
@@ -36,7 +39,8 @@ final class RuinPages {
         if (closed) return CompletableFuture.failedFuture(new IllegalStateException("Ruin pages closed"));
         // Serialize encoding as well as I/O: a slow older encoder must never overwrite a newer page.
         var result = tail.handleAsync((unused, failure) -> encode.get(), Util.ioPool())
-                .thenCompose(tag -> worker.store(new ChunkPos(key), tag));
+                .thenCompose(tag -> worker.store(new ChunkPos(key), tag))
+                .whenComplete((unused, failure) -> rememberFailure(failure));
         tail = result;
         return result;
     }
@@ -50,13 +54,40 @@ final class RuinPages {
         return result;
     }
 
-    /** Flush and close off tick; also drains writes when the preparation owner was cancelled. */
+    /**
+     * Ordered force-to-storage fence. Every admitted write before this call is included, even if a
+     * later read recovered the ordering tail. A write/flush failure remains visible for this handle's
+     * lifetime; the owner must retain its failed page and recover explicitly, not infer success from close.
+     */
+    synchronized CompletableFuture<Void> flush() {
+        if (closed) return CompletableFuture.failedFuture(new IllegalStateException("Ruin pages closed"));
+        var result = tail.handle((unused, failure) -> (Void) null)
+                .thenCompose(unused -> worker.synchronize(true))
+                .handle((unused, failure) -> {
+                    rememberFailure(failure);
+                    if (storageFailure != null) throw new CompletionException(storageFailure);
+                    return (Void) null;
+                });
+        tail = result;
+        return result;
+    }
+
+    private void rememberFailure(Throwable failure) {
+        if (failure != null && storageFailure == null) storageFailure = failure;
+    }
+
+    /** Always close the worker, including after a failed flush, and retain that failure on repeated close. */
     synchronized CompletableFuture<Void> close() {
-        if (closed) return tail.handle((unused, failure) -> null);
+        if (closed) return tail.thenApply(unused -> null);
+        var flushed = flush();
         closed = true;
-        var result = tail.handleAsync((unused, failure) -> {
+        var result = flushed.handleAsync((unused, failure) -> {
             try { worker.close(); }
-            catch (java.io.IOException e) { throw new java.io.UncheckedIOException(e); }
+            catch (java.io.IOException | RuntimeException error) {
+                if (failure != null) error.addSuppressed(failure);
+                throw new CompletionException(error);
+            }
+            if (failure != null) throw new CompletionException(failure);
             return (Void) null;
         }, Util.ioPool());
         tail = result;

@@ -4,6 +4,9 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.chunk.LevelChunk;
+import net.minecraft.world.level.chunk.storage.RegionStorageInfo;
+import net.neoforged.neoforge.common.IOUtilities;
+import net.neoforged.neoforge.event.level.LevelEvent;
 import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.IncomingConfig;
@@ -29,6 +32,13 @@ import java.util.UUID;
 public final class NuclearWorld {
     /** Minimum interval between slow nuclear-tick logs, ticks. */
     private static final int SLOW_LOG_PERIOD = 100;
+
+    // Provisional integration bounds, to be measured with the prepared producer. These are not a
+    // throughput policy or total JVM heap limit: four full pages plus bounded snapshots/codecs/handles.
+    private static final PreparedMaterialStore.Limits PREPARED_MATERIAL_LIMITS =
+            new PreparedMaterialStore.Limits(4, 1, 1, 2, 4L << 20);
+    @Nullable private PreparedMaterialStore preparedMaterials;
+    private boolean preparedMaterialsStopping;
 
     private final ScarQueue scars = new ScarQueue();
     /** Detonation ruins by ID ({@link RuinContext}) while detonation has queued work. */
@@ -120,6 +130,42 @@ public final class NuclearWorld {
         world.craterMatter = CraterMatter.get(level);
         world.ruinProgress = RuinProgress.get(level);
         return world;
+    }
+
+    /** New prepared execution only. Ordinary nuclear work and save events do not allocate this owner. */
+    PreparedMaterialStore getPreparedMaterials(ServerLevel level) {
+        if (preparedMaterialsStopping) throw new IllegalStateException("Prepared material owner is stopping");
+        if (preparedMaterials == null) {
+            var info = new RegionStorageInfo(level.getServer().getWorldData().getLevelName(), level.dimension(),
+                    "incoming_prepared_material");
+            // RegionStorageInfo.dimension is metadata, not a directory separator.
+            var root = level.getDataStorage().dataFolder.toPath().resolve("incoming-prepared-material-v5");
+            preparedMaterials = new PreparedMaterialStore(info, root, PREPARED_MATERIAL_LIMITS);
+        }
+        return preparedMaterials;
+    }
+
+    /** Vanilla posts this after saving chunks, then joins IOUtilities for a flushing save. */
+    public static void onLevelSave(LevelEvent.Save event) {
+        if (!(event.getLevel() instanceof ServerLevel level) || !level.hasData(ModAttachments.NUCLEAR_WORLD)) return;
+        NuclearWorld world = level.getData(ModAttachments.NUCLEAR_WORLD);
+        if (world.preparedMaterials == null || world.preparedMaterialsStopping) return;
+        // Capture live revisions on the server thread. The queued fence only awaits detached I/O.
+        var saved = world.preparedMaterials.flush();
+        IOUtilities.withIOWorker(() -> {
+            try { saved.join(); }
+            catch (RuntimeException error) {
+                // Store remains FAILED with its owner retained. Do not poison NeoForge's shared
+                // future chain and silently suppress unrelated dimensions' later SavedData writes.
+                Incoming.LOG.error("Could not save prepared material pages in {}", level.dimension().location(), error);
+            }
+        });
+    }
+
+    /** Quiesce new page calls, capture the final revision and close even after a failed write. */
+    java.util.concurrent.CompletableFuture<Void> closePreparedMaterials() {
+        preparedMaterialsStopping = true;
+        return preparedMaterials == null ? java.util.concurrent.CompletableFuture.completedFuture(null) : preparedMaterials.close();
     }
 
     /** Detonation ruins across chunks, shared by preparation (after detonation), queue and tests. */
@@ -369,19 +415,21 @@ public final class NuclearWorld {
     /**
      * Server stop (leaving single-player): abandon all ruin work, preparation (disk reads, squares behind
      * wave), queues, background plans; stop/await background threads ({@link RuinWorkers#shutdown}):
-     * after exit no ruin computation or retained memory. None of this saved anyway.
+     * after exit no ruin computation or retained memory. Prepared material pages retain their saved ownership.
      * Release zone/preparation tickets here before vanilla unload loop (also removes all tickets except
      * {@code UNKNOWN}, but only within its loops, and does not stop disk reads/ruin tasks). Generation
      * already started by tickets then completed by {@link ua.zentix.incoming.util.StopDrain}.
      *
-     * @return background threads stopped within deadline
+     * @return background threads stopped within deadline and admitted storage completed successfully
      */
     public static boolean onServerStopping(net.minecraft.server.MinecraftServer server) {
         var storage = new java.util.ArrayList<java.util.concurrent.CompletableFuture<Void>>();
         for (ServerLevel level : server.getAllLevels()) {
             if (!level.hasData(ModAttachments.NUCLEAR_WORLD)) continue;
             try {
-                NuclearWorld world = get(level);
+                NuclearWorld world = level.getData(ModAttachments.NUCLEAR_WORLD);
+                // Before clearing live work: no late producer may reopen the owner during shutdown.
+                storage.add(world.closePreparedMaterials());
                 storage.add(world.prep.closeStorage());
                 for (RuinContext ctx : world.ruins.values()) storage.add(ctx.closeStorage());
                 world.clear(level);
@@ -392,7 +440,10 @@ public final class NuclearWorld {
         boolean stopped = RuinWorkers.shutdown();
         // Shutdown only, never an autosave/tick wait. Pages already admitted are bounded and detached.
         try { java.util.concurrent.CompletableFuture.allOf(storage.toArray(java.util.concurrent.CompletableFuture[]::new)).join(); }
-        catch (RuntimeException e) { Incoming.LOG.error("Could not finish prepared ruin pages on shutdown", e); }
+        catch (RuntimeException e) {
+            Incoming.LOG.error("Could not finish prepared ruin pages on shutdown", e);
+            return false;
+        }
         return stopped;
     }
 

@@ -77,6 +77,16 @@ public final class ColumnScar {
 
     /** The same with {@code flags} ({@code setBlock}): neighbor updates make loose material above the position fall. */
     public static void replace(ServerLevel level, BlockPos pos, BlockState old, BlockState with, int flags) {
+        replaceState(level, pos, old, with, flags);
+        RuinMatter.changed(level, pos);
+    }
+
+    /** World callbacks and deferred block-entity cleanup, without choosing a material/support owner. */
+    static void replaceState(ServerLevel level, BlockPos pos, BlockState old, BlockState with) {
+        replaceState(level, pos, old, with, FLAGS);
+    }
+
+    private static void replaceState(ServerLevel level, BlockPos pos, BlockState old, BlockState with, int flags) {
         if (old.hasBlockEntity()) {
             BlockEntity be = level.getBlockEntity(pos);
             if (be instanceof RandomizableContainer loot) loot.setLootTable(null);
@@ -85,7 +95,6 @@ public final class ColumnScar {
         }
         if (!old.is(with.getBlock())) PoiRecords.recordIfMissing(level, pos, old);
         level.setBlock(pos, with, flags);
-        RuinMatter.changed(level, pos);
     }
 
     /** Thermal fluence at a point with terrain and building shadows, cal/cm². */

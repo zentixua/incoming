@@ -52,6 +52,11 @@ public final class ModAttachments {
     public static final Supplier<AttachmentType<Integer>> CHUNK_SCAR = REGISTER.register("chunk_scar",
             () -> AttachmentType.builder(() -> 0).serialize(Codec.INT).build());
 
+    /** Chunk: exact partial prepared source writes; retired only after its completed scar watermark. */
+    public static final Supplier<AttachmentType<ua.zentix.incoming.nuclear.world.PreparedSourceProgress>> PREPARED_SOURCE_PROGRESS =
+            REGISTER.register("prepared_source_progress", () -> AttachmentType.builder(() -> ua.zentix.incoming.nuclear.world.PreparedSourceProgress.EMPTY)
+                    .serialize(ua.zentix.incoming.nuclear.world.PreparedSourceProgress.CODEC, p -> !p.isEmpty()).build());
+
     /** Cohesive surface damage smaller than a full block; vanilla crack packets display it. */
     public static final Supplier<AttachmentType<java.util.List<ua.zentix.incoming.warhead.SurfaceDamage.Mark>>> SURFACE_DAMAGE =
             REGISTER.register("surface_damage", () -> AttachmentType.builder(() -> java.util.List.<ua.zentix.incoming.warhead.SurfaceDamage.Mark>of())
