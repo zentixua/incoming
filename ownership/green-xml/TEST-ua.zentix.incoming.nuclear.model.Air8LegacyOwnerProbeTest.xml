@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.nuclear.model.Air8LegacyOwnerProbeTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-11-05T00:38:51.325Z" hostname="zentixua-pc" time="0.324">
+  <properties/>
+  <testcase name="originalCacheReadinessWithCompletionsBetweenFrames()" classname="ua.zentix.incoming.nuclear.model.Air8LegacyOwnerProbeTest" time="0.324"/>
+  <system-out><![CDATA[STEM_ORIGINAL_24 010101010101
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

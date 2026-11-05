@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.nuclear.model.StemClockTest" tests="8" skipped="0" failures="0" errors="0" timestamp="2026-11-05T00:38:50.203Z" hostname="zentixua-pc" time="0.563">
+  <properties/>
+  <testcase name="scaleUsesSlantBlocksAndModelSecondsAtEverySource()" classname="ua.zentix.incoming.nuclear.model.StemClockTest" time="0.159"/>
+  <testcase name="lateVisibleConsumerKeepsItsAdmittedResult()" classname="ua.zentix.incoming.nuclear.model.StemClockTest" time="0.068"/>
+  <testcase name="completeValueIdentityIsSharedBySynchronousAndBackgroundCache()" classname="ua.zentix.incoming.nuclear.model.StemClockTest" time="0.059"/>
+  <testcase name="actualGameAndRealClocksAtIdenticalGeometry()" classname="ua.zentix.incoming.nuclear.model.StemClockTest" time="0.22"/>
+  <testcase name="consumerOwnsItsTableUntilReleaseEvenAfterSharedEviction()" classname="ua.zentix.incoming.nuclear.model.StemClockTest" time="0.035"/>
+  <testcase name="interpolationDoesNotBorrowPositiveDustBeforeArrivalAndInflow()" classname="ua.zentix.incoming.nuclear.model.StemClockTest" time="0.014"/>
+  <testcase name="allPendingSlotsRemainBoundedWithoutEvictionOrResubmission()" classname="ua.zentix.incoming.nuclear.model.StemClockTest" time="0.004"/>
+  <testcase name="backgroundFailureBetweenStatusAndResultStaysOutOfTheFrame()" classname="ua.zentix.incoming.nuclear.model.StemClockTest" time="0.001"/>
+  <system-out><![CDATA[STEM_CONSUMER_24 000111111111
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

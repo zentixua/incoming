@@ -1,0 +1,16 @@
+01:04:20 air8-c156-100 warm-up: pack none, 20 steps
+01:07:17 air8-c156-100 warm-up: pack none — exit 0, 3.0 min
+01:07:17 air8-c156-100 A1: pack none, 20 steps
+01:10:16 air8-c156-100 A1: pack none — exit 0, 3.0 min
+01:10:16 air8-c156-100 B: pack none, 20 steps
+01:13:06 air8-c156-100 B: pack none — exit 0, 2.8 min
+01:13:06 air8-c156-100 A2: pack none, 20 steps
+01:15:56 air8-c156-100 A2: pack none — exit 0, 2.8 min
+01:15:59 air8-c156-100: pack none, pair 1 — pass
+01:16:00 A1 none: valid
+01:16:01 A2 none: valid
+01:16:02 B none: valid
+01:16:05 air8-c156-100: pass; results in /mnt/data/projects/incoming/mod/run/stand/out/air8-c156-100
+laptop_job stand-air8-c156-100: exit 0
+stand air8-c156-100: exit 0
+laptop_job air8-stand-driver: exit 0

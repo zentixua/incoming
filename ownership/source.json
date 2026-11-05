@@ -1,0 +1,22 @@
+{
+  "source": "df40a1e369306d21cad94677aadd99e77e235eba",
+  "previous": "c156f260588aaa967327ed6577f775e015bc0ec7",
+  "native_original_452_trace": "010101010101",
+  "native_c156_trace": "000000000000",
+  "native_owned_trace": "000111111111",
+  "workload": "24 distinct sources, stable scan then last selected consumer, native queued builders complete between frames;12frames",
+  "shared_cache_limit": 8,
+  "owned_table_lifetime": "caller cloud lifetime; release at expiry; reacquire for replay",
+  "single_source_values": "immutable table model unchanged; exact lambda/top match after eviction/reacquisition",
+  "full_local_build": {
+    "tests": 1850,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0,
+    "source": "df40a1e369306d21cad94677aadd99e77e235eba"
+  },
+  "native_GT": "1/1 nuke_stem_clock",
+  "local_jar_sha256": "04569f9d9ee0cdaed570d144d80cc0cbd0f0bbb7a7022c04e15b8f4eb76c71c1",
+  "CI": "41943641063 success; merge tree equals df40",
+  "CI_jar_sha256": "3cb9666c52723f93d702b19ff96a8763954a4bb73091fa4c3a3d9203f5221685"
+}

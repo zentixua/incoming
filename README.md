@@ -1,6 +1,6 @@
 # AIR8 source-clock correction
 
-Component PR [#600](https://github.com/zentixua/incoming/pull/600), candidate c156f260588aaa967327ed6577f775e015bc0ec7, readiness base3efac357c. No release or overall runtime-readiness claim.
+Component PR [#600](https://github.com/zentixua/incoming/pull/600), current candidate df40a1e369306d21cad94677aadd99e77e235eba, readiness base3efac357c. See [final ownership correction](ownership/README.md). Native frames below retain their original c156 after-pin. No release or overall runtime-readiness claim.
 
 ## Source and checks
 

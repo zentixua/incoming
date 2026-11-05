@@ -1,0 +1,1 @@
+allprojects { p -> p.plugins.withId('java') { p.extensions.getByName('sourceSets').getByName('test').java.srcDir(p.file('run/air8/hot-probe/java')) } }

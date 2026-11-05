@@ -1,0 +1,4 @@
+tag,phase,calls,thread_cpu_ns,allocated_bytes,cpu_ns_per_call,bytes_per_call
+AIR8_HOT,A1-physical-clock,500000,84693586,200000152,169.387172000,400.000304000
+AIR8_HOT,B-actual-clock,500000,19763806,0,39.527612000,0.000000000
+AIR8_HOT,A2-physical-clock,500000,77668081,200000000,155.336162000,400.000000000

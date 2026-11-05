@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.nuclear.model.StemClockTest" tests="1" skipped="0" failures="1" errors="0" timestamp="2026-11-05T00:34:45.185Z" hostname="zentixua-pc" time="0.263">
+  <properties/>
+  <testcase name="lateVisibleConsumerKeepsItsAdmittedResult()" classname="ua.zentix.incoming.nuclear.model.StemClockTest" time="0.263">
+    <failure message="org.opentest4j.AssertionFailedError: late visible owner must receive and retain its result: 000000000000 ==&gt; expected: &lt;true&gt; but was: &lt;false&gt;" type="org.opentest4j.AssertionFailedError">org.opentest4j.AssertionFailedError: late visible owner must receive and retain its result: 000000000000 ==&gt; expected: &lt;true&gt; but was: &lt;false&gt;
+	at app//org.junit.jupiter.api.AssertionFailureBuilder.build(AssertionFailureBuilder.java:151)
+	at app//org.junit.jupiter.api.AssertionFailureBuilder.buildAndThrow(AssertionFailureBuilder.java:132)
+	at app//org.junit.jupiter.api.AssertTrue.failNotTrue(AssertTrue.java:63)
+	at app//org.junit.jupiter.api.AssertTrue.assertTrue(AssertTrue.java:36)
+	at app//org.junit.jupiter.api.Assertions.assertTrue(Assertions.java:214)
+	at app//ua.zentix.incoming.nuclear.model.StemClockTest.lateVisibleConsumerKeepsItsAdmittedResult(StemClockTest.java:214)
+	at java.base@21.0.7/java.lang.reflect.Method.invoke(Method.java:580)
+	at java.base@21.0.7/java.util.ArrayList.forEach(ArrayList.java:1596)
+	at java.base@21.0.7/java.util.ArrayList.forEach(ArrayList.java:1596)
+</failure>
+  </testcase>
+  <system-out><![CDATA[STEM_CONSUMER_24 000000000000
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

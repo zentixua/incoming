@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.client.nuclear.StemSourceTest" tests="2" skipped="0" failures="0" errors="0" timestamp="2026-11-05T00:38:50.767Z" hostname="zentixua-pc" time="0.284">
+  <properties/>
+  <testcase name="footUsesTheSupplyingLayersClockForBothBurstModesAndScales()" classname="ua.zentix.incoming.client.nuclear.StemSourceTest" time="0.281"/>
+  <testcase name="expiredCloudReleasesItsRequestAndReplayCanReadItAgain()" classname="ua.zentix.incoming.client.nuclear.StemSourceTest" time="0.003"/>
+  <system-out><![CDATA[WARN StatusConsoleListener Advanced terminal features are not available in this environment
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.nuclear.model.Air8HotPathProbeTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-11-05T00:38:51.053Z" hostname="zentixua-pc" time="0.271">
+  <properties/>
+  <testcase name="changedLookupsHaveNoSteadyFrameAllocation()" classname="ua.zentix.incoming.nuclear.model.Air8HotPathProbeTest" time="0.271"/>
+  <system-out><![CDATA[AIR8_HOT,A1-physical-clock,500000,77364751,200000152,154.729502000,400.000304000
+AIR8_HOT,B-actual-clock,500000,16820105,0,33.640210000,0.000000000
+AIR8_HOT,A2-physical-clock,500000,77417369,200000000,154.834738000,400.000000000
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

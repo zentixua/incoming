@@ -1,0 +1,16 @@
+{
+  "candidate": "c156f260588aaa967327ed6577f775e015bc0ec7",
+  "legacy_source": "452f1f78a:mod/src/main/java/ua/zentix/incoming/nuclear/model/StemDust.java",
+  "transformation": "Only class-name StemDust -> Air8LegacyDust, to run both hot paths in one JVM; shared unchanged models. Four visibility inputs prevent a constant input-only case.",
+  "scope": "ready lookup, tau, top, foot arrival; excludes shape packing, shaders, asynchronous construction and full frame. Thread CPU and allocation, not wall-clock FPS.",
+  "argv": [
+    "./gradlew",
+    "--no-daemon",
+    "test",
+    "--max-workers=2",
+    "-I",
+    "run/air8/hot-probe/init.gradle",
+    "--tests",
+    "ua.zentix.incoming.nuclear.model.Air8HotPathProbeTest"
+  ]
+}

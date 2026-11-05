@@ -1,0 +1,9 @@
+{
+  "init.gradle": "45068391997d947039f101f8473dfa3dd68b0e1fddd2383087e11bb5303f375c",
+  "run.log": "aba54b12acb6acd695ddce0a366da6f4cd1bef2bbe543dc8aea7fef6a84d624b",
+  "result.xml": "92aa336e37b9846d8651a81ec1e4546eb4154b9614bff80e9af217b497f2573a",
+  "measurements.csv": "ebd12f9da396b2b669a3167a3a65b46d463fd93ebfd9b5e7142779659894bfef",
+  "provenance.json": "25b9b46a1c6fe8a171fa2d3e1472251e9d80cc7d31837e67aadfd1acffe23983",
+  "java/ua/zentix/incoming/nuclear/model/Air8LegacyDust.java": "92edcd8489245dfa0bcfa04ccb5bb5f7ce0b0d65a1e2eca044aed39dca4e4a6e",
+  "java/ua/zentix/incoming/nuclear/model/Air8HotPathProbeTest.java": "87fb53cd000b7261ee3dbdff1580aa03afd0bc09c98967287eea4dce2b078c24"
+}
