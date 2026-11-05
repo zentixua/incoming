@@ -121,7 +121,8 @@ A surface-burst crater supplies its rim from the ground actually excavated; rema
 
 If the shared nuclear working-memory reservation is full, further material removal waits while already moving
 material can settle. Already started plan reads and completed calculations receive processing time even
-while a dense visible chunk waits for space; later loaded chunks can reuse plans after the preparation window ends. Large strikes can
+while a dense visible chunk waits for space; later loaded chunks can reuse plans after the preparation window ends.
+The debris queue does not need to empty before preparation or flash damage can continue. Large strikes can
 still leave chunks waiting for memory and processing time. Pending material and support checks survive a normal world save and reload. Completed movement and crater
 checkpoints are compacted into material totals; container contents are retained. Saving can pause material
 movement until its file is written. An old active journal too large for the shared memory limit stays preserved
@@ -131,7 +132,10 @@ These are reduced block-scale rules: joint properties, drag and the pile's repos
 
 With the default ground burst, the dust column joins the mushroom cap. With an explicitly selected air burst
 at the standard burst height, the column starts rising later, with a billowing upper edge, and stays below the
-faster-rising cap. The gap is expected; in the first seconds, dust near the ground can hide the short column entirely.
+faster-rising cap. This separation comes from the current approximate transport model; its exact duration is not
+calibrated to a timed real-world reference. In the first seconds, dust near the ground can hide the short column entirely.
+The column and its base receive dust only after the same local wave arrival and inflow delay as the supplying ground
+layer. Slowing the wave in GAME also delays this supply; the dust column can appear later and remain shorter than in REAL.
 
 A ground burst leaves a crater and radioactive fallout downwind. Over water, spray takes the place of the dust wall.
 Burns, radiation and falling debris can still hurt you after the flash, so stay under cover and watch your dose.

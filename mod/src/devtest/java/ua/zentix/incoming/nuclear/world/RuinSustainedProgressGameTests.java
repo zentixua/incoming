@@ -109,7 +109,7 @@ public final class RuinSustainedProgressGameTests {
         }
         // A complete path includes one source publication and the authoritative cohort's material,
         // in addition to the solver/startup bound. The earlier smaller fixture did not fund that path.
-        long room = need + cached + (4L << 20) + matter.removalBytes(targets.size());
+        long room = need + cached + (4L << 20) + matter.removalBytes(targets.stream().mapToLong(BlockPos::asLong).toArray());
         h.assertTrue(room > RuinWorkers.threadBufferBytes(level.getHeight()), "Fixture must fund source decoding");
         other.materialReservation += NuclearPrep.PLANS_CAP - NuclearPrep.residentMemory(level) - room;
         long fixed = other.materialReservation, began = level.getGameTime();

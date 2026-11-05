@@ -124,7 +124,7 @@ public final class RuinConsumerCompletionGameTests {
                     started[0] = level.getGameTime(); stage[0] = 1;
                     Incoming.LOG.info("CONSUMER_COMPLETION start resident {} fixed {} readOwners {} tasks {} denseDebit {}",
                             NuclearPrep.residentMemory(level), fixed[0], world.prep().readAccounting(), ctx.tasks(),
-                            RuinMatter.get(level).removalBytes(positions.length));
+                            RuinMatter.get(level).removalBytes(positions));
                 }
                 h.assertTrue(other.materialReservation == fixed[0], "External ownership was released");
                 h.assertTrue(NuclearPrep.residentMemory(level) <= NuclearPrep.PLANS_CAP, "Consumer publication exceeded capacity");

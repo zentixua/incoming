@@ -12,6 +12,13 @@ import java.util.zip.GZIPInputStream;
 final class LedgerScan {
     private long bytes, cargo, checkpoints;
     private int event;
+    private int originalEntries;
+    private long originalPosition;
+    private boolean hasOriginalPosition;
+    // At most 98,316 bytes of primitive arrays; leave I/O workspace for buffers and row scanning.
+    // Dense legacy cities need a section count, not a pessimistic per-block object estimate.
+    private it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap originalSections;
+    private static final int SECTION_COUNTS = 4096;
     private final long limit;
     private LedgerScan(long limit) { this.limit = limit; }
 
@@ -40,7 +47,9 @@ final class LedgerScan {
 
     /** Live representation plus one transient row, rather than eight copies of the old save tree. */
     static Measure measure(Path file, String name, java.util.Set<Integer> activeCraters, long limit) throws IOException {
-        long owned = LedgerData.IO_BYTES + 8192, largest = 0, cargoTotal = 0;
+        // Empty queues/indexes and the original journal's fixed section-query workspace remain
+        // owned even when a file has no rows. The small-ledger regression checks this floor.
+        long owned = LedgerData.IO_BYTES + (12L << 10), largest = 0, cargoTotal = 0;
         var scan = new LedgerScan(Long.MAX_VALUE / 16);
         try (var input = open(file)) {
             if (input.readUnsignedByte() != 10) throw new IOException("Invalid ledger root");
@@ -60,6 +69,7 @@ final class LedgerScan {
                         if (count > 0 && key.equals("support_sources")) owned += RuinRecords.ROWS * 16L + 1024;
                         for (int i = 0; i < count; i++) {
                             scan.bytes = 0; scan.cargo = 0; scan.checkpoints = 0; scan.event = -1;
+                            scan.originalEntries = -1; scan.hasOriginalPosition = false;
                             scan.payload(input, element, 0);
                             long rowBytes = key.equals("passes") && !activeCraters.contains(scan.event)
                                     ? scan.bytes - scan.checkpoints : scan.bytes;
@@ -68,7 +78,9 @@ final class LedgerScan {
                                 case "moving" -> RuinMatter.PIECE_BYTES + 192L + 3 * scan.cargo;
                                 case "stranded" -> 256 + 3 * scan.cargo;
                                 case "support_sources" -> 4096;
-                                case "support_originals", "cold_edges" -> 256;
+                                case "support_originals" -> scan.originalGrowth();
+                                case "original_sections" -> scan.originalEntries < 0 ? 0 : RuinOriginals.importBytes(scan.originalEntries);
+                                case "cold_edges" -> 256;
                                 case "materials", "settled" -> 768;
                                 // Old crater checkpoints can be large. Twelve times encoded tag
                                 // storage covers both maps/sets and their temporary primitive arrays.
@@ -94,6 +106,22 @@ final class LedgerScan {
         // IO_BYTES also pays the ordinary row; large non-cargo rows need explicit extra room.
         owned += Math.max(0, 2 * largest - 2 * cargoTotal - LedgerData.IO_BYTES);
         return new Measure(owned, Math.max(LedgerData.IO_BYTES, 2 * largest));
+    }
+
+    private long originalGrowth() throws IOException {
+        if (!hasOriginalPosition) throw new IOException("Original row has no position");
+        if (originalSections == null) originalSections = new it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap(SECTION_COUNTS);
+        long section = net.minecraft.core.SectionPos.asLong(net.minecraft.core.BlockPos.getX(originalPosition) >> 4,
+                net.minecraft.core.BlockPos.getY(originalPosition) >> 4, net.minecraft.core.BlockPos.getZ(originalPosition) >> 4);
+        int count = originalSections.get(section);
+        // Bounded scan scratch even for deliberately scattered old saves. Outside the cache,
+        // each row pays the old 256-byte legacy allowance. Singleton sections allocate no table;
+        // all denser pages and their outer-index share fit this same per-entry bound. This must
+        // not reject an old sparse journal that fitted before section compaction.
+        if (count == 0 && originalSections.size() == SECTION_COUNTS) return 256;
+        int next = Math.min(4096, count + 1);
+        originalSections.put(section, next);
+        return RuinOriginals.importBytes(next) - (count == 0 ? 0 : RuinOriginals.importBytes(count));
     }
 
     static int event(DataInputStream input) throws IOException {
@@ -149,6 +177,11 @@ final class LedgerScan {
                     long before = bytes;
                     if (key.equals("event") && depth == 0 && child == 3) {
                         add(12); event = input.readInt();
+                    } else if (key.equals("original_entries") && depth == 0 && child == 3) {
+                        add(12); originalEntries = input.readInt();
+                        if (originalEntries < 1 || originalEntries > 4096) throw new IOException("Invalid original section size");
+                    } else if (key.equals("position") && depth == 0 && child == 4) {
+                        add(16); originalPosition = input.readLong(); hasOriginalPosition = true;
                     } else payload(input, child, depth + 1);
                     if (depth == 0) {
                         if (key.equals("contents")) cargo += bytes - before;

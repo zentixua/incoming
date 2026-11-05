@@ -157,3 +157,7 @@ paths:
   window. `nuke_look_ahead` verifies that an independent background consumer can start after cleanup.
 - Craft hull-order checks place the charge above the platform and test initial shielding from that same
   source. A charge inside the platform can remain shielded after the entire selected hull disappears.
+- A direct preparation-handoff fixture owns the returned plans/context when it does not pass them to
+  `NuclearWorld`. Close both in its cleanup; cancelling the former preparation deliberately preserves
+  handed-off work. `nuke_near_ready` followed by `nuke_worker_admission` catches an unclaimed fragment-cache
+  permit even after the worker pool has stopped.
