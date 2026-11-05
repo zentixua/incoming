@@ -564,3 +564,7 @@ paths:
   exact 145-byte motion payload as the decoder. `nuke_ledger_packed_import` and
   `nuke_ledger_outside_import` cover compact footprint, cargo/trajectory parity, reservoir ownership
   and rejection of malformed motion arrays.
+- Material cargo is an optional compound in legacy/packed moving rows and reservoirs. Reject other
+  tag types in both preflight and decoding; `getCompound` must not silently replace a scalar with
+  a differently charged empty compound. `nuke_ledger_cargo_types` covers both paths and unchanged
+  source bytes after rejection.

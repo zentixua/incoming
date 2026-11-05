@@ -10,6 +10,7 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.Tag;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.gametest.GameTestHolder;
@@ -22,6 +23,45 @@ import ua.zentix.incoming.gametest.StrikeGameTests;
 @PrefixGameTestTemplate(false)
 public final class LedgerPackedImportGameTests {
     private LedgerPackedImportGameTests() {}
+
+    @GameTest(template = "pad", batch = "nuke_ledger_cargo_types", timeoutTicks = 100)
+    public static void malformedCargoCannotChangeRepresentationAfterAdmission(GameTestHelper h) throws Exception {
+        var level = h.getLevel();
+        var ledger = new RuinMatter();
+        var piece = new RuinMatter.Piece(h.absolutePos(new BlockPos(4, 8, 4)), Blocks.BARREL.defaultBlockState(),
+                new CompoundTag(), Vec3.ZERO, level.getGameTime());
+        ledger.release(List.of(piece));
+        CompoundTag legacy = ledger.save(new CompoundTag(), level.registryAccess());
+        var encode = RuinMatter.class.getDeclaredMethod("packed", RuinMatter.Piece.class); encode.setAccessible(true);
+        CompoundTag packed = (CompoundTag) encode.invoke(null, piece);
+        CompoundTag compact = legacy.copy();
+        var moving = new net.minecraft.nbt.ListTag(); moving.add(packed); compact.put("moving", moving);
+        var outside = compact.copy(); outside.getList("moving", Tag.TAG_COMPOUND).getCompound(0).getByteArray("motion")[144] = 1;
+        var stranded = RuinMatter.load(outside, level.registryAccess());
+        CompoundTag reservoir = stranded.save(new CompoundTag(), level.registryAccess()); stranded.unload(level);
+        for (CompoundTag valid : List.of(legacy, compact, reservoir)) {
+            String list = valid.getList("moving", Tag.TAG_COMPOUND).isEmpty() ? "stranded" : "moving";
+            for (Tag invalid : List.of(net.minecraft.nbt.ByteTag.valueOf((byte) 1), net.minecraft.nbt.IntTag.valueOf(1),
+                    net.minecraft.nbt.StringTag.valueOf("invalid"), new net.minecraft.nbt.ListTag(), new net.minecraft.nbt.ByteArrayTag(new byte[1]))) {
+                CompoundTag data = valid.copy(); data.getList(list, Tag.TAG_COMPOUND).getCompound(0).put("contents", invalid);
+                CompoundTag root = new CompoundTag(); root.put("data", data);
+                Path file = level.getDataStorage().dataFolder.toPath().resolve("cargo-types-" + UUID.randomUUID() + ".dat");
+                net.minecraft.nbt.NbtIo.writeCompressed(root, file);
+                byte[] before = java.nio.file.Files.readAllBytes(file);
+                boolean scanRejected = false, decodeRejected = false;
+                try { LedgerScan.measure(file, "incoming_ruin_matter", Set.of(), NuclearPrep.PLANS_CAP); }
+                catch (java.io.IOException expected) { scanRejected = true; }
+                try {
+                    var decoded = (RuinMatter) LedgerReader.read(file, "incoming_ruin_matter", level.registryAccess(), LedgerData.IO_BYTES, Set.of());
+                    decoded.unload(level);
+                } catch (java.io.IOException | IllegalStateException expected) { decodeRejected = true; }
+                Incoming.LOG.info("CARGO_TYPES list {} type {} scanRejected {} decodeRejected {}", list, invalid.getId(), scanRejected, decodeRejected);
+                h.assertTrue(scanRejected && decodeRejected, "Cargo tag changed representation between scan and decode");
+                h.assertTrue(java.util.Arrays.equals(before, java.nio.file.Files.readAllBytes(file)), "Rejected cargo changed the original file");
+            }
+        }
+        h.succeed();
+    }
 
     @GameTest(template = "pad", batch = "nuke_ledger_outside_import", timeoutTicks = 100)
     public static void packedOutsideRowsFundReservoirsAndLegacyKeepsItsAllowance(GameTestHelper h) throws Exception {

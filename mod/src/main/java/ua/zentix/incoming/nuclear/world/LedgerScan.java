@@ -16,6 +16,7 @@ final class LedgerScan {
     private long originalPosition;
     private boolean hasOriginalPosition;
     private boolean packedMoving, outside;
+    private boolean materialRow;
     // At most 98,316 bytes of primitive arrays; leave I/O workspace for buffers and row scanning.
     // Dense legacy cities need a section count, not a pessimistic per-block object estimate.
     private it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap originalSections;
@@ -60,7 +61,7 @@ final class LedgerScan {
             for (int root; (root = input.readUnsignedByte()) != 0;) {
                 String rootName = input.readUTF();
                 if (root != 10 || !rootName.equals("data")) {
-                    scan.bytes = 0; scan.payload(input, root, 0); continue;
+                    scan.bytes = 0; scan.materialRow = false; scan.payload(input, root, 0); continue;
                 }
                 for (int type; (type = input.readUnsignedByte()) != 0;) {
                     String key = input.readUTF();
@@ -76,6 +77,7 @@ final class LedgerScan {
                             scan.bytes = 0; scan.cargo = 0; scan.checkpoints = 0; scan.event = -1;
                             scan.originalEntries = -1; scan.hasOriginalPosition = false;
                             scan.packedMoving = false; scan.outside = false;
+                            scan.materialRow = key.equals("moving") || key.equals("stranded");
                             scan.payload(input, element, 0);
                             long rowBytes = key.equals("passes") && !activeCraters.contains(scan.event)
                                     ? scan.bytes - scan.checkpoints : scan.bytes;
@@ -111,7 +113,7 @@ final class LedgerScan {
                             if (owned > limit) return new Measure(limit + 1, largest);
                         }
                     } else {
-                        scan.bytes = 0; scan.payload(input, type, 0);
+                        scan.bytes = 0; scan.materialRow = false; scan.payload(input, type, 0);
                         largest = Math.max(largest, scan.bytes);
                         // Support arrays load together; maps, old backing arrays and the input
                         // arrays fit inside the existing 256-byte-per-seed ownership estimate.
@@ -194,6 +196,8 @@ final class LedgerScan {
                 add(48);
                 for (int child; (child = input.readUnsignedByte()) != 0;) {
                     String key = input.readUTF(); add(64L + 2L * key.length());
+                    if (depth == 0 && materialRow && key.equals("contents") && child != 10)
+                        throw new IOException("Material contents is not a compound");
                     long before = bytes;
                     if (key.equals("event") && depth == 0 && child == 3) {
                         add(12); event = input.readInt();

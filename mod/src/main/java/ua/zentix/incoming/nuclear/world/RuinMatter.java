@@ -711,7 +711,7 @@ public final class RuinMatter extends LedgerData {
         for (int i = 0; i < reservoirs.size(); i++) {
             CompoundTag row = reservoirs.getCompound(i);
             ReservoirKey key = new ReservoirKey(NbtUtils.readBlockState(lookup.lookupOrThrow(Registries.BLOCK), row.getCompound("state")),
-                    row.contains("contents") ? row.getCompound("contents") : null);
+                    readContents(row));
             Reservoir value = result.stranded.computeIfAbsent(key, ignored -> {
                 result.strandedBytes += 256L + (key.contents == null ? 0 : 3L * key.contents.sizeInBytes());
                 return new Reservoir();
@@ -751,14 +751,24 @@ public final class RuinMatter extends LedgerData {
         return result;
     }
 
+    @org.jetbrains.annotations.Nullable
+    private static CompoundTag readContents(CompoundTag row) {
+        if (!row.contains("contents")) return null;
+        // getCompound silently converts other tag types to a new empty compound. That would
+        // change both cargo meaning and the representation admitted by the streaming scan.
+        if (!row.contains("contents", Tag.TAG_COMPOUND)) throw new IllegalStateException("Material contents is not a compound");
+        return row.getCompound("contents");
+    }
+
     private static Piece readPiece(CompoundTag n, HolderLookup.Provider lookup) {
+        CompoundTag contents = readContents(n);
         if (n.contains("motion", Tag.TAG_BYTE_ARRAY)) {
             byte[] bytes = n.getByteArray("motion");
             if (bytes.length != 145) throw new IllegalStateException("Invalid material motion record");
             var data = java.nio.ByteBuffer.wrap(bytes);
             BlockPos source = BlockPos.of(data.getLong());
             var state = NbtUtils.readBlockState(lookup.lookupOrThrow(Registries.BLOCK), n.getCompound("state"));
-            Piece p = new Piece(source, state, n.contains("contents") ? n.getCompound("contents") : null, Vec3.ZERO, 0, true);
+            Piece p = new Piece(source, state, contents, Vec3.ZERO, 0, true);
             p.id = data.getLong(); p.scorch = data.getInt(); p.scorchEvent = data.getInt(); p.scorchTime = data.getLong();
             p.volume = data.getDouble(); p.mass = data.getDouble();
             p.x = data.getDouble(); p.y = data.getDouble(); p.z = data.getDouble();
@@ -770,7 +780,7 @@ public final class RuinMatter extends LedgerData {
         }
         BlockState state = NbtUtils.readBlockState(lookup.lookupOrThrow(Registries.BLOCK), n.getCompound("state"));
         Piece p = new Piece(BlockPos.of(n.getLong("source")), state,
-                n.contains("contents") ? n.getCompound("contents") : null,
+                contents,
                 new Vec3(n.getDouble("vx"), n.getDouble("vy"), n.getDouble("vz")), n.getLong("tick"), true);
         p.x = n.getDouble("x"); p.y = n.getDouble("y"); p.z = n.getDouble("z");
         p.tick = n.getDouble("tick");
