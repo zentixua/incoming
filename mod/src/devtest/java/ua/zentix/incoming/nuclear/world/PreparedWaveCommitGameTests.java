@@ -48,10 +48,11 @@ public final class PreparedWaveCommitGameTests {
         level.getChunk(toA.getX() >> 4, toA.getZ() >> 4);
         level.getChunk(toB.getX() >> 4, toB.getZ() >> 4);
         var event = StructuralRuinGameTests.event(2);
-        var a = new PreparedMaterialBatch(event.id(), new ChunkPos(toA), List.of(
+        var preparation = UUID.randomUUID();
+        var a = new PreparedMaterialBatch(preparation, new ChunkPos(toA), List.of(
                 move(chest, toA, barrel, 100), move(burning, toA.offset(2, 0, 0), stone, 100),
                 move(edited, toA.offset(6, 0, 0), stone, 100)));
-        var b = new PreparedMaterialBatch(event.id(), new ChunkPos(toB), List.of(move(delayed, toB, barrel, 120)));
+        var b = new PreparedMaterialBatch(preparation, new ChunkPos(toB), List.of(move(delayed, toB, barrel, 120)));
         var beforeBinding = a.snapshot();
         var plan = plan(chunk, changes, burning, new long[]{chest.asLong(), burning.asLong(), delayed.asLong(), edited.asLong()});
         var budget = new ColumnScar.Budget(true);

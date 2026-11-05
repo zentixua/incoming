@@ -57,7 +57,7 @@ public final class PreparedMaterialSaveGameTests {
         };
         NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, listener);
         StrikeGameTests.afterTest(h, () -> NeoForge.EVENT_BUS.unregister(listener));
-        var batch = batch(eventId(), true);
+        var batch = batch(UUID.randomUUID(), true);
         var key = PreparedMaterialStore.Key.of(batch);
         var reopened = new CompletableFuture<?>[1];
         int[] stage = {0};
@@ -86,7 +86,7 @@ public final class PreparedMaterialSaveGameTests {
                 h.assertTrue(boundary.get(), "Clean save failed to capture the latest revision while the old writer was held");
                 h.assertTrue(store.evict(key), "Native flushing save returned before the latest page receipt");
                 world.closePreparedMaterials().join();
-                var reader = new RuinPages(info, path.resolve("event-" + key.event()).resolve("section-" + batch.sectionY()));
+                var reader = new RuinPages(info, path.resolve("plan-" + key.plan()).resolve("section-" + batch.sectionY()));
                 reopened[0] = reader.read(key.chunk()).thenCompose(tag -> reader.close().thenApply(unused -> {
                     var restored = PreparedMaterialBatch.decode(tag.orElseThrow());
                     if (restored.revision() != batch.revision() || restored.phase(0) != PreparedMaterialBatch.Phase.PLACED
@@ -118,8 +118,8 @@ public final class PreparedMaterialSaveGameTests {
                 "Save-only dimensions allocated a prepared owner");
         var stores = new PreparedMaterialStore[] {
                 worlds[0].getPreparedMaterials(level), worlds[1].getPreparedMaterials(nether)};
-        int event = eventId();
-        var batches = new PreparedMaterialBatch[] {batch(event, false), batch(event, false)};
+        var plan = UUID.randomUUID();
+        var batches = new PreparedMaterialBatch[] {batch(plan, false), batch(plan, false)};
         var key = PreparedMaterialStore.Key.of(batches[0]);
         int[] stage = {0};
         h.succeedWhen(() -> {
@@ -160,7 +160,7 @@ public final class PreparedMaterialSaveGameTests {
                     && stores[1].get(key).phase(0) == PreparedMaterialBatch.Phase.REMOVED
                     && stores[1].get(key).cargo(0).getInt("count") == 47,
                     "Dimension paths collided or stop lost the final phase/cargo");
-            var relative = "incoming-prepared-material-v4/event-" + event + "/section-4/r.0.0.mca";
+            var relative = "incoming-prepared-material-v5/plan-" + plan + "/section-4/r.0.0.mca";
             var first = level.getDataStorage().dataFolder.toPath().resolve(relative);
             var second = nether.getDataStorage().dataFolder.toPath().resolve(relative);
             try {
@@ -184,16 +184,15 @@ public final class PreparedMaterialSaveGameTests {
         return owner;
     }
 
-    private static PreparedMaterialBatch batch(int event, boolean two) {
+    private static PreparedMaterialBatch batch(UUID plan, boolean two) {
         var at = new BlockPos(17, 64, 17);
         var first = new PreparedMaterialBatch.Move(at.east(64), at, Blocks.BARREL.defaultBlockState(),
                 Blocks.BARREL.defaultBlockState(), 100, 140, 1, 600);
         var second = new PreparedMaterialBatch.Move(at.east(64).above(), at.above(), Blocks.BARREL.defaultBlockState(),
                 Blocks.BARREL.defaultBlockState(), 101, 141, 1, 600);
-        return new PreparedMaterialBatch(event, new ChunkPos(at), two ? List.of(first, second) : List.of(first));
+        return new PreparedMaterialBatch(plan, new ChunkPos(at), two ? List.of(first, second) : List.of(first));
     }
 
-    private static int eventId() { return UUID.randomUUID().hashCode() & Integer.MAX_VALUE; }
     private static CompoundTag cargo(int count) { var tag = new CompoundTag(); tag.putInt("count", count); return tag; }
 
     private PreparedMaterialSaveGameTests() {}

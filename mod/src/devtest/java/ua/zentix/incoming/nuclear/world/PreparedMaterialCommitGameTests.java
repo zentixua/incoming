@@ -36,11 +36,14 @@ public final class PreparedMaterialCommitGameTests {
         var entity = level.getBlockEntity(source);
         ((Container) entity).setItem(0, new ItemStack(Items.DIAMOND, 3));
         var batch = batch(source, destination, state);
+        // Preparation predates the actual origin; no page/row rewrite is needed when it becomes known.
+        long actualOrigin = level.getGameTime() + 4_000_000;
+        var planned = batch.move(0);
         // Contents edited after planning must be captured at departure, not resurrect the old three.
         ((Container) entity).setItem(0, new ItemStack(Items.DIAMOND, 7));
-        h.assertTrue(PreparedMaterialCommit.depart(level, batch, FIRST, 99) == 0
+        h.assertTrue(PreparedMaterialCommit.depart(level, batch, FIRST, actualOrigin + 99 - actualOrigin) == 0
                 && ((Container) entity).getItem(0).getCount() == 7, "Material departed before its causal tick");
-        h.assertTrue(PreparedMaterialCommit.depart(level, batch, FIRST, 100) == 1
+        h.assertTrue(PreparedMaterialCommit.depart(level, batch, FIRST, actualOrigin + 100 - actualOrigin) == 1
                 && level.getBlockState(source).isAir() && batch.ownsMaterial(0), "Source removal did not transfer ownership");
         var saved = batch.snapshot();
         var root = level.getServer().getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT)
@@ -55,7 +58,9 @@ public final class PreparedMaterialCommitGameTests {
         h.startSequence().thenWaitUntil(() -> h.assertTrue(read.isDone(), "Waiting for pending material page reopen"))
                 .thenExecute(() -> {
                     var restored = PreparedMaterialBatch.decode(read.join().orElseThrow());
-                    h.assertTrue(PreparedMaterialCommit.land(level, restored, FIRST, 139, true) == 0,
+                    h.assertTrue(restored.plan().equals(batch.plan()) && restored.move(0).equals(planned),
+                            "Binding or reload rewrote preparation identity or relative times");
+                    h.assertTrue(PreparedMaterialCommit.land(level, restored, FIRST, actualOrigin + 139 - actualOrigin, true) == 0,
                             "Material landed before its computed time");
                     h.assertTrue(PreparedMaterialCommit.land(level, restored, FIRST, 1000, false) == 0
                             && level.getBlockState(destination).isAir(), "Material bypassed destination scar phase");
@@ -129,7 +134,7 @@ public final class PreparedMaterialCommitGameTests {
                 && level.getBlockState(destination).is(Blocks.DIAMOND_BLOCK), "Destination edit consumed saved material or was overwritten");
         BlockPos glass = source.above();
         level.setBlock(glass, Blocks.GLASS.defaultBlockState(), 2);
-        var fine = new PreparedMaterialBatch(7, new ChunkPos(glass), List.of(new PreparedMaterialBatch.Move(glass, glass,
+        var fine = new PreparedMaterialBatch(UUID.randomUUID(), new ChunkPos(glass), List.of(new PreparedMaterialBatch.Move(glass, glass,
                 Blocks.GLASS.defaultBlockState(), Blocks.GLASS.defaultBlockState(), Blocks.AIR.defaultBlockState(),
                 100, 100, 1, 2500, true)));
         h.assertTrue(PreparedMaterialCommit.depart(level, fine, FIRST, 100) == 1
@@ -143,7 +148,7 @@ public final class PreparedMaterialCommitGameTests {
         var wetState = Blocks.OAK_STAIRS.defaultBlockState().setValue(BlockStateProperties.WATERLOGGED, true);
         var dryState = wetState.setValue(BlockStateProperties.WATERLOGGED, false);
         level.setBlock(wetSource, wetState, 2);
-        var wet = new PreparedMaterialBatch(7, new ChunkPos(dryDestination), List.of(new PreparedMaterialBatch.Move(
+        var wet = new PreparedMaterialBatch(UUID.randomUUID(), new ChunkPos(dryDestination), List.of(new PreparedMaterialBatch.Move(
                 wetSource, dryDestination, wetState, dryState, 100, 140, .75, 450)));
         h.assertTrue(PreparedMaterialCommit.depart(level, wet, FIRST, 100) == 1
                 && level.getBlockState(wetSource).is(Blocks.WATER), "Source removal lost its waterlogged fluid");
@@ -153,7 +158,7 @@ public final class PreparedMaterialCommitGameTests {
     }
 
     private static PreparedMaterialBatch batch(BlockPos source, BlockPos target, BlockState state) {
-        return new PreparedMaterialBatch(7, new ChunkPos(target), List.of(new PreparedMaterialBatch.Move(source, target,
+        return new PreparedMaterialBatch(UUID.randomUUID(), new ChunkPos(target), List.of(new PreparedMaterialBatch.Move(source, target,
                 state, state, 100, 140, 1, 600)));
     }
 

@@ -8,6 +8,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionException;
 import java.util.function.BiFunction;
@@ -19,13 +20,17 @@ import java.util.function.BiFunction;
  * on disk. NuclearWorld creates this owner lazily and fences it at world save/stop boundaries.
  */
 final class PreparedMaterialStore {
-    record Key(int event, long section) {
-        Key { if (event < 0) throw new IllegalArgumentException("Invalid material event"); }
+    record Key(UUID plan, long section) {
+        Key {
+            // Rows pack BlockPos with 12 signed Y bits; a section must fit that same identity domain.
+            if (plan == null || SectionPos.y(section) < -128 || SectionPos.y(section) > 127)
+                throw new IllegalArgumentException("Invalid material plan or packed block section");
+        }
         static Key of(PreparedMaterialBatch batch) {
-            return new Key(batch.event(), SectionPos.asLong(batch.owner().x, batch.sectionY(), batch.owner().z));
+            return new Key(batch.plan(), SectionPos.asLong(batch.owner().x, batch.sectionY(), batch.owner().z));
         }
         long chunk() { return ChunkPos.asLong(SectionPos.x(section), SectionPos.z(section)); }
-        Directory directory() { return new Directory(event, SectionPos.y(section)); }
+        Directory directory() { return new Directory(plan, SectionPos.y(section)); }
     }
 
     record Limits(int residents, int reads, int writes, int handles, long pageBytes) {
@@ -38,7 +43,7 @@ final class PreparedMaterialStore {
     /** The batch is borrowed until the next store operation; retain it across operations only with a Lease. */
     record Lookup(State state, PreparedMaterialBatch batch, Throwable failure) {}
     record Counters(int residents, int reads, int writes, int pending, int handles, long writesStarted, long reservedBytes) {}
-    private record Directory(int event, int y) {}
+    private record Directory(UUID plan, int y) {}
     private static final class Handle {
         final RuinPages pages;
         int pins;
@@ -268,7 +273,7 @@ final class PreparedMaterialStore {
         Handle existing = handles.get(directory);
         if (existing != null) return existing.closing == null ? existing : null;
         if (handles.size() < limits.handles) {
-            Handle handle = new Handle(factory.apply(info, root.resolve("event-" + directory.event).resolve("section-" + directory.y)));
+            Handle handle = new Handle(factory.apply(info, root.resolve("plan-" + directory.plan).resolve("section-" + directory.y)));
             handles.put(directory, handle);
             return handle;
         }

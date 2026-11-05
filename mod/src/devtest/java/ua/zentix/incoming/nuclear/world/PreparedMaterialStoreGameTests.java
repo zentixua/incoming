@@ -32,7 +32,7 @@ public final class PreparedMaterialStoreGameTests {
         var pages = new RuinPages[1];
         var store = new PreparedMaterialStore(info, path, new PreparedMaterialStore.Limits(1, 1, 1, 1, 1L << 20),
                 (storage, folder) -> pages[0] = new RuinPages(storage, folder));
-        var batch = batch(4, 64, true);
+        var batch = batch(UUID.randomUUID(), 64, true);
         var key = PreparedMaterialStore.Key.of(batch);
         var gate = new CountDownLatch(1);
         StrikeGameTests.afterTest(h, () -> { gate.countDown(); store.close(); });
@@ -85,14 +85,17 @@ public final class PreparedMaterialStoreGameTests {
     }
 
     @GameTest(template = "pad", batch = "nuke_prepared_store_bounds", timeoutTicks = 200, skyAccess = true)
-    public static void eventAndVerticalSectionPagesReopenWithinOneHotSlotAndHandle(GameTestHelper h) {
+    public static void planAndVerticalSectionPagesReopenWithinOneHotSlotAndHandle(GameTestHelper h) {
         StrikeGameTests.gameSpeed(h);
         var level = h.getLevel();
         var info = new RegionStorageInfo("gametest", level.dimension(), "incoming_material_bounds");
         var path = level.getServer().getWorldPath(LevelResource.ROOT).resolve("data/material-bounds-" + UUID.randomUUID());
         var store = new PreparedMaterialStore(info, path, new PreparedMaterialStore.Limits(1, 1, 1, 1, 65536));
         StrikeGameTests.afterTest(h, store::close);
-        var batches = List.of(batch(5, 64, false), batch(5, 80, false), batch(6, 64, false));
+        var planA = new UUID(1, 0);
+        var planB = new UUID(0, 1);
+        h.assertTrue(!planA.equals(planB) && planA.hashCode() == planB.hashCode(), "Fixture UUIDs must collide only in hash");
+        var batches = List.of(batch(planA, 64, false), batch(planA, 80, false), batch(planB, 64, false));
         h.assertTrue(!store.admit(batches.getFirst()), "Unknown cold page was assumed absent");
         int[] cursor = {0}, stage = {0};
         var fence = new CompletableFuture<?>[1];
@@ -112,16 +115,16 @@ public final class PreparedMaterialStoreGameTests {
                 h.assertTrue(fence[0].isDone(), "Waiting for bounded page write"); fence[0].join();
                 h.assertTrue(store.evict(key), "Saved bounded page retained its hot slot");
                 cursor[0]++;
-                if (cursor[0] < batches.size()) { stage[0] = 0; h.assertTrue(false, "Continue next event/section"); }
+                if (cursor[0] < batches.size()) { stage[0] = 0; h.assertTrue(false, "Continue next plan/section"); }
                 cursor[0] = batches.size() - 1; stage[0] = 2;
             }
             if (stage[0] == 2) {
                 var key = PreparedMaterialStore.Key.of(batches.get(cursor[0]));
-                h.assertTrue(store.request(key).state() == PreparedMaterialStore.State.READY, "Waiting for cold event/section reload");
-                h.assertTrue(store.get(key).cargo(0).getInt("count") == cursor[0] + 1, "Event or vertical-section key collided");
+                h.assertTrue(store.request(key).state() == PreparedMaterialStore.State.READY, "Waiting for cold plan/section reload");
+                h.assertTrue(store.get(key).cargo(0).getInt("count") == cursor[0] + 1, "Plan UUID or vertical-section key collided");
                 h.assertTrue(store.evict(key), "Reloaded clean page could not retire");
                 cursor[0]--;
-                if (cursor[0] >= 0) h.assertTrue(false, "Continue previous event/section");
+                if (cursor[0] >= 0) h.assertTrue(false, "Continue previous plan/section");
                 fence[0] = store.close(); stage[0] = 3;
             }
             h.assertTrue(fence[0].isDone(), "Waiting for bounded owner close"); fence[0].join();
@@ -138,7 +141,7 @@ public final class PreparedMaterialStoreGameTests {
         var store = new PreparedMaterialStore(info, path, new PreparedMaterialStore.Limits(1, 1, 1, 1, 65536),
                 (storage, folder) -> pages[0] = new RuinPages(storage, folder));
         StrikeGameTests.afterTest(h, store::close);
-        var batch = batch(8, 64, false);
+        var batch = batch(UUID.randomUUID(), 64, false);
         var key = PreparedMaterialStore.Key.of(batch);
         int[] stage = {0};
         var closed = new CompletableFuture<?>[1];
@@ -167,7 +170,7 @@ public final class PreparedMaterialStoreGameTests {
         var path = level.getServer().getWorldPath(LevelResource.ROOT).resolve("data/material-nbt-bound-" + UUID.randomUUID());
         var store = new PreparedMaterialStore(info, path, new PreparedMaterialStore.Limits(1, 1, 1, 1, 512));
         StrikeGameTests.afterTest(h, store::close);
-        var batch = batch(9, 64, false);
+        var batch = batch(UUID.randomUUID(), 64, false);
         var key = PreparedMaterialStore.Key.of(batch);
         int[] stage = {0};
         var fence = new CompletableFuture<?>[1];
@@ -207,8 +210,9 @@ public final class PreparedMaterialStoreGameTests {
             if (lease[0] != null) lease[0].close();
             store.close();
         });
-        var first = batch(10, 64, true);
-        var second = batch(10, 80, false);
+        var plan = UUID.randomUUID();
+        var first = batch(plan, 64, true);
+        var second = batch(plan, 80, false);
         var a = PreparedMaterialStore.Key.of(first);
         var b = PreparedMaterialStore.Key.of(second);
         var fence = new CompletableFuture<?>[1];
@@ -265,13 +269,13 @@ public final class PreparedMaterialStoreGameTests {
         });
     }
 
-    private static PreparedMaterialBatch batch(int event, int y, boolean two) {
+    private static PreparedMaterialBatch batch(UUID plan, int y, boolean two) {
         var target = new BlockPos(112, y, -64);
         var first = new PreparedMaterialBatch.Move(target.east(64), target, Blocks.BARREL.defaultBlockState(),
                 Blocks.BARREL.defaultBlockState(), 100, 140, 1, 600);
         var second = new PreparedMaterialBatch.Move(target.east(64).above(), target.above(), Blocks.BARREL.defaultBlockState(),
                 Blocks.BARREL.defaultBlockState(), 101, 141, 1, 600);
-        return new PreparedMaterialBatch(event, new ChunkPos(target), two ? List.of(first, second) : List.of(first));
+        return new PreparedMaterialBatch(plan, new ChunkPos(target), two ? List.of(first, second) : List.of(first));
     }
 
     private static CompoundTag cargo(int count) {

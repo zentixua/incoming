@@ -139,7 +139,7 @@ public final class NuclearWorld {
             var info = new RegionStorageInfo(level.getServer().getWorldData().getLevelName(), level.dimension(),
                     "incoming_prepared_material");
             // RegionStorageInfo.dimension is metadata, not a directory separator.
-            var root = level.getDataStorage().dataFolder.toPath().resolve("incoming-prepared-material-v4");
+            var root = level.getDataStorage().dataFolder.toPath().resolve("incoming-prepared-material-v5");
             preparedMaterials = new PreparedMaterialStore(info, root, PREPARED_MATERIAL_LIMITS);
         }
         return preparedMaterials;

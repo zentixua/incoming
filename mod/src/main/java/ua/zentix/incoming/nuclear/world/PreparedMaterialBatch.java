@@ -12,12 +12,14 @@ import net.minecraft.world.level.block.state.properties.BlockStateProperties;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.UUID;
 
 /**
  * Destination-owned, finite material operations. This new execution path is not connected to
  * strikes yet. A batch has no tick loop, world reference, ticket, trajectory or support graph.
  * Its detached snapshot can be encoded by the existing region writer while the next revision
  * continues to change. Cross-chunk save ordering belongs to the caller, not this codec.
+ * The preparation UUID survives detonation unchanged; chronological event IDs do not own pages.
  */
 final class PreparedMaterialBatch {
     // At most 4096 final coarse cells plus 4096 source-local dispersed receipts in one section.
@@ -25,7 +27,7 @@ final class PreparedMaterialBatch {
     enum Phase { PLANNED, REMOVED, PLACED, SOURCE_CHANGED, DESTINATION_CHANGED, DISPERSED }
     private static final Phase[] PHASES = Phase.values();
 
-    /** Absolute game ticks; before and placed differ for rotated logs and drained waterlogging. */
+    /** Tick offsets from actual detonation origin; consumers supply event age, never world game time. */
     record Move(BlockPos source, BlockPos destination, BlockState before, BlockState placed, BlockState destinationBefore,
                 long departureTick, long landingTick, double volume, double mass, boolean dispersed, BlockState sourceAfter) {
         Move(BlockPos source, BlockPos destination, BlockState before, BlockState placed, BlockState destinationBefore,
@@ -50,13 +52,14 @@ final class PreparedMaterialBatch {
             destination = destination.immutable();
             if (before == null || placed == null || destinationBefore == null || sourceAfter == null
                     || before == sourceAfter || before.isAir() || placed.isAir()
+                    || !BlockPos.of(source.asLong()).equals(source) || !BlockPos.of(destination.asLong()).equals(destination)
                     || departureTick < 0 || landingTick < departureTick || dispersed && before.hasBlockEntity()
                     || !(volume > 0) || !(mass > 0) || !Double.isFinite(volume + mass))
                 throw new IllegalArgumentException("Invalid prepared material move");
         }
     }
 
-    private final int event;
+    private final UUID plan;
     private final ChunkPos owner;
     private final int sectionY;
     private final List<Move> moves;
@@ -68,10 +71,10 @@ final class PreparedMaterialBatch {
     private long capacity = Long.MAX_VALUE;
     private long cargoBytes;
 
-    PreparedMaterialBatch(int event, ChunkPos owner, List<Move> moves) {
-        if (event < 0 || moves.isEmpty() || moves.size() > MAX_MOVES)
+    PreparedMaterialBatch(UUID plan, ChunkPos owner, List<Move> moves) {
+        if (plan == null || owner == null || moves.isEmpty() || moves.size() > MAX_MOVES)
             throw new IllegalArgumentException("Invalid prepared material batch");
-        this.event = event;
+        this.plan = plan;
         this.owner = owner;
         this.moves = new ArrayList<>(moves);
         sectionY = moves.getFirst().destination.getY() >> 4;
@@ -87,7 +90,7 @@ final class PreparedMaterialBatch {
         }
     }
 
-    int event() { return event; }
+    UUID plan() { return plan; }
     ChunkPos owner() { return owner; }
     int sectionY() { return sectionY; }
     int size() { return moves.size(); }
@@ -107,7 +110,7 @@ final class PreparedMaterialBatch {
     }
 
     /** Conservative admission estimate, not a measured heap claim. Registry states are shared. */
-    long retainedBytes() { return 256L + 224L * size() + cargoBytes; }
+    long retainedBytes() { return 288L + 224L * size() + cargoBytes; }
     /** Also charges shared immutable data: safe initial bound for a queued save generation. */
     long snapshotBytes() { return retainedBytes(); }
     void setCapacity(long bytes) {
@@ -121,7 +124,7 @@ final class PreparedMaterialBatch {
         require(index, Phase.PLANNED);
         if (moves.get(index).dispersed && contents != null) throw new IllegalArgumentException("Dispersed material cannot own cargo");
         long next = cargoBytes - cargoBytes(cargo[index]) + cargoBytes(contents);
-        if (256L + 224L * size() + next > capacity) return false;
+        if (288L + 224L * size() + next > capacity) return false;
         CompoundTag copy = contents == null ? null : contents.copy();
         cargo[index] = copy;
         cargoBytes = next;
@@ -181,26 +184,26 @@ final class PreparedMaterialBatch {
         if (phase(index) != expected) throw new IllegalStateException("Unexpected material phase " + phase(index));
     }
 
-    Snapshot snapshot() { return new Snapshot(event, owner, List.copyOf(moves), phases.clone(), cargo.clone(), revision); }
+    Snapshot snapshot() { return new Snapshot(plan, owner, List.copyOf(moves), phases.clone(), cargo.clone(), revision); }
 
     /** No reference to the mutable batch survives in the encoder. */
     static final class Snapshot {
-        private final int event;
+        private final UUID plan;
         private final ChunkPos owner;
         private final List<Move> moves;
         private final byte[] phases;
         private final CompoundTag[] cargo;
         private final long revision;
 
-        private Snapshot(int event, ChunkPos owner, List<Move> moves, byte[] phases, CompoundTag[] cargo, long revision) {
-            this.event = event; this.owner = owner; this.moves = moves;
+        private Snapshot(UUID plan, ChunkPos owner, List<Move> moves, byte[] phases, CompoundTag[] cargo, long revision) {
+            this.plan = plan; this.owner = owner; this.moves = moves;
             this.phases = phases; this.cargo = cargo; this.revision = revision;
         }
 
         CompoundTag encode() {
             var tag = new CompoundTag();
-            tag.putInt("version", 4);
-            tag.putInt("event", event);
+            tag.putInt("version", 5);
+            tag.putUUID("plan", plan);
             tag.putLong("chunk", owner.toLong());
             tag.putLong("revision", revision);
             var palette = new RuinPalette();
@@ -239,7 +242,7 @@ final class PreparedMaterialBatch {
 
     static PreparedMaterialBatch decode(CompoundTag tag) {
         requireType(tag, "version", Tag.TAG_INT);
-        requireType(tag, "event", Tag.TAG_INT);
+        requireType(tag, "plan", Tag.TAG_INT_ARRAY);
         requireType(tag, "chunk", Tag.TAG_LONG);
         requireType(tag, "revision", Tag.TAG_LONG);
         requireType(tag, "rows", Tag.TAG_LONG_ARRAY);
@@ -255,7 +258,8 @@ final class PreparedMaterialBatch {
         byte[] dispersed = tag.getByteArray("dispersed");
         var paletteTag = (ListTag) tag.get("palette");
         var cargoTag = (ListTag) tag.get("cargo");
-        if (tag.getInt("version") != 4 || rows.length % 6 != 0 || count < 1 || count > MAX_MOVES
+        if (tag.getInt("version") != 5 || tag.getIntArray("plan").length != 4 || tag.contains("event")
+                || rows.length % 6 != 0 || count < 1 || count > MAX_MOVES
                 || states.length != count * 4 || phases.length != count || tag.getLong("revision") < 0
                 || dispersed.length != count
                 || paletteTag == null || paletteTag.getElementType() != Tag.TAG_COMPOUND
@@ -277,7 +281,7 @@ final class PreparedMaterialBatch {
                     Double.longBitsToDouble(rows[p + 4]), Double.longBitsToDouble(rows[p + 5]), dispersed[i] == 1,
                     palette.state(states[i * 4 + 3])));
         }
-        var batch = new PreparedMaterialBatch(tag.getInt("event"), new ChunkPos(tag.getLong("chunk")), moves);
+        var batch = new PreparedMaterialBatch(tag.getUUID("plan"), new ChunkPos(tag.getLong("chunk")), moves);
         System.arraycopy(phases, 0, batch.phases, 0, count);
         batch.revision = tag.getLong("revision");
         for (Tag value : cargoTag) {

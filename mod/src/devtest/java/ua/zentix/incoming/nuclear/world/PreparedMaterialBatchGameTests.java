@@ -1,6 +1,7 @@
 package ua.zentix.incoming.nuclear.world;
 
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.SectionPos;
 import net.minecraft.gametest.framework.GameTest;
 import net.minecraft.gametest.framework.GameTestHelper;
 import net.minecraft.nbt.CompoundTag;
@@ -28,7 +29,7 @@ public final class PreparedMaterialBatchGameTests {
         var source = h.absolutePos(new BlockPos(8, 24, 8));
         var target = source.offset(16, -8, 0);
         var owner = new ChunkPos(target);
-        var batch = new PreparedMaterialBatch(3, owner, List.of(new PreparedMaterialBatch.Move(source, target,
+        var batch = new PreparedMaterialBatch(UUID.randomUUID(), owner, List.of(new PreparedMaterialBatch.Move(source, target,
                 Blocks.BARREL.defaultBlockState(), Blocks.BARREL.defaultBlockState(), 100, 140, 1, 600)));
         var cargo = new CompoundTag();
         cargo.putString("proof", "exact private contents");
@@ -83,7 +84,7 @@ public final class PreparedMaterialBatchGameTests {
         var moves = List.of(new PreparedMaterialBatch.Move(source, target, before, placed, 100, 140, .75, 450),
                 new PreparedMaterialBatch.Move(source.above(), target.above(), Blocks.BARREL.defaultBlockState(),
                         Blocks.BARREL.defaultBlockState(), 101, 141, 1, 600));
-        var batch = new PreparedMaterialBatch(3, new ChunkPos(target), moves);
+        var batch = new PreparedMaterialBatch(UUID.randomUUID(), new ChunkPos(target), moves);
         var cargo = new CompoundTag();
         cargo.putString("inventory", "preserved");
         batch.capture(0, cargo);
@@ -102,12 +103,50 @@ public final class PreparedMaterialBatchGameTests {
         restored.cargo(1).putString("inventory", "external edit");
         h.assertTrue("preserved".equals(restored.cargo(1).getString("inventory")), "Cargo accessor leaked a mutable save owner");
         var corrupt = encoded.copy();
-        corrupt.putLong("event", 3); // Numeric coercion must not accept an incompatible header.
+        corrupt.putLong("plan", 3); // Numeric coercion must not accept an incompatible header.
         boolean rejected = false;
         try { PreparedMaterialBatch.decode(corrupt); }
         catch (IllegalArgumentException expected) { rejected = true; }
         h.assertTrue(rejected, "Invalid page header was accepted with implicit NBT coercion");
         h.succeed();
+    }
+
+    @GameTest(template = "pad", batch = "nuke_prepared_batch_identity", skyAccess = true)
+    public static void preparationIdentityAndOffsetsRejectLegacyOrAliasedInputs(GameTestHelper h) {
+        var plan = UUID.randomUUID();
+        var source = new BlockPos(-25, 72, 40);
+        var target = source.east(64);
+        var move = new PreparedMaterialBatch.Move(source, target, Blocks.STONE.defaultBlockState(),
+                Blocks.STONE.defaultBlockState(), 100, 140, 1, 2500);
+        var batch = new PreparedMaterialBatch(plan, new ChunkPos(target), List.of(move));
+        var encoded = batch.snapshot().encode();
+        var restored = PreparedMaterialBatch.decode(encoded);
+        h.assertTrue(restored.plan().equals(plan) && restored.move(0).equals(move)
+                        && !encoded.contains("event") && encoded.getInt("version") == 5,
+                "Page rewrote preparation identity or relative times");
+        var corrupt = encoded.copy();
+        corrupt.putIntArray("plan", new int[]{1, 2, 3});
+        rejected(h, () -> PreparedMaterialBatch.decode(corrupt), "Truncated UUID was accepted");
+        var wrongVersion = encoded.copy(); wrongVersion.putInt("version", 4);
+        rejected(h, () -> PreparedMaterialBatch.decode(wrongVersion), "Absolute-time schema version was accepted as v5");
+        var old = encoded.copy();
+        old.putInt("version", 4); old.remove("plan"); old.putInt("event", 7);
+        rejected(h, () -> PreparedMaterialBatch.decode(old), "Unshipped absolute-time v4 page was accepted as v5");
+        var ambiguous = encoded.copy(); ambiguous.putInt("event", 7);
+        rejected(h, () -> PreparedMaterialBatch.decode(ambiguous), "Two material identity domains were accepted");
+        rejected(h, () -> new PreparedMaterialBatch(null, new ChunkPos(target), List.of(move)), "Missing plan was accepted");
+        rejected(h, () -> new PreparedMaterialStore.Key(null, SectionPos.asLong(target)), "Missing key plan was accepted");
+        rejected(h, () -> new PreparedMaterialStore.Key(plan, SectionPos.asLong(0, 128, 0)),
+                "Section outside packed block identities was accepted");
+        rejected(h, () -> new PreparedMaterialBatch.Move(source.offset(1 << 26, 0, 0), target,
+                move.before(), move.placed(), 100, 140, 1, 2500), "Truncated source identity was accepted");
+        h.succeed();
+    }
+
+    private static void rejected(GameTestHelper h, Runnable action, String message) {
+        boolean failed = false;
+        try { action.run(); } catch (IllegalArgumentException expected) { failed = true; }
+        h.assertTrue(failed, message);
     }
 
     private PreparedMaterialBatchGameTests() {}
