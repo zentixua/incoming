@@ -51,7 +51,9 @@ public final class PreparedLandingGameTests {
     private static void compareCurrent(GameTestHelper h, boolean wall) {
         h.assertTrue(PreparedLandingModel.GRAVITY == StructuralResponse.GRAVITY, "Prototype gravity drifted from production");
         var level = h.getLevel();
-        BlockPos base = h.absolutePos(new BlockPos(8, 4, 8));
+        // The range template's origin is below the native flat-world stone surface. Keep the
+        // complete comparison volume above it rather than pretending that hidden stone is air.
+        BlockPos base = h.absolutePos(new BlockPos(8, 24, 8));
         BlockPos source = base.offset(16, 16, 16);
         byte[] cells = new byte[48 * 48 * 32];
         for (int x = 0; x < 48; x++) for (int z = 0; z < 48; z++) {
@@ -85,6 +87,13 @@ public final class PreparedLandingGameTests {
             var clock = WorkClock.counting(1);
             for (int i = 0; i < 1000 && ledger.pending() > 0; i++) { clock.start(16); ledger.work(level, clock); }
             h.assertTrue(ledger.deposited() == 1 && ledger.pending() == 0, "Current native material did not finish");
+            if (level.getBlockState(new BlockPos(expected.x(), expected.y(), expected.z())) != state) {
+                var found = new ArrayList<BlockPos>();
+                for (int y = 1; y < 32; y++) for (int z = 0; z < 48; z++) for (int x = 0; x < 48; x++)
+                    if (level.getBlockState(base.offset(x, y, z)) == state) found.add(base.offset(x, y, z));
+                Incoming.LOG.error("LANDING_CONTROL_MISMATCH wall={} source={} expected={} actual={} expected_state={}",
+                        wall, source, expected, found, level.getBlockState(new BlockPos(expected.x(), expected.y(), expected.z())));
+            }
             h.assertTrue(level.getBlockState(new BlockPos(expected.x(), expected.y(), expected.z())) == state,
                     "Detached endpoint differs from current native material");
             h.assertTrue(ledger.depositedVolume() == input.volume(), "Native control changed material volume");
@@ -162,6 +171,16 @@ public final class PreparedLandingGameTests {
                 ChunkPos pos = new ChunkPos(row.get("x").getAsInt(), row.get("z").getAsInt());
                 var raw = NbtIo.readCompressed(file, NbtAccounter.create(16L << 20));
                 var read = DiskShots.parse(format, pos, raw);
+                if (read.skip() != null) {
+                    var codec = PalettedContainer.codecRW(Block.BLOCK_STATE_REGISTRY, BlockState.CODEC,
+                            PalettedContainer.Strategy.SECTION_STATES, Blocks.AIR.defaultBlockState());
+                    var sections = raw.getList("sections", net.minecraft.nbt.Tag.TAG_COMPOUND);
+                    for (int section = 0; section < sections.size(); section++) {
+                        var tag = sections.getCompound(section);
+                        if (tag.contains("block_states")) codec.parse(net.minecraft.nbt.NbtOps.INSTANCE, tag.getCompound("block_states"))
+                                .error().ifPresent(error -> Incoming.LOG.error("LANDING_CITY_CODEC chunk={} section={} error={}", pos, tag.getByte("Y"), error.message()));
+                    }
+                }
                 h.assertTrue(read.skip() == null, "City chunk was not parsed: " + read.skip());
                 // Register states before priming and publish the immutable table before any worker.
                 for (var section : read.states()) if (section != null) section.getAll(Blast::ensure);
