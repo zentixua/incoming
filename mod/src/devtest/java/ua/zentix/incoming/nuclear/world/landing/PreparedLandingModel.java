@@ -70,7 +70,7 @@ public final class PreparedLandingModel {
         public long dueTick() { return (long) Math.ceil(time * 20); }
     }
 
-    public record Result(List<Outcome> outcomes, long segments, long collisionReads, int peakQueue,
+    public record Result(List<Outcome> outcomes, long segments, long collisionReads, long queueOperations, int peakQueue,
                          long inputBytes, long motionBytesEstimate, long outputBytesEstimate) {
         public Result { outcomes = List.copyOf(outcomes); }
         public long count(Status status) { return outcomes.stream().filter(o -> o.status == status).count(); }
@@ -100,7 +100,7 @@ public final class PreparedLandingModel {
     private final Limits limits;
     private final PriorityQueue<Motion> events = new PriorityQueue<>(ORDER);
     private final List<Outcome> outcomes = new ArrayList<>();
-    private long segments, reads;
+    private long segments, reads, queueOperations;
     private int peak;
 
     private PreparedLandingModel(Snapshot snapshot, Limits limits) {
@@ -119,16 +119,18 @@ public final class PreparedLandingModel {
             int position = snapshot.index(source.x, source.y, source.z);
             if (position < 0 || !positions.add(position)) throw new IllegalArgumentException("Invalid/duplicate source position");
             model.events.add(new Motion(source));
+            model.queueOperations++;
         }
         model.peak = model.events.size();
         while (!model.events.isEmpty()) {
             Motion motion = model.events.remove();
+            model.queueOperations++;
             if (model.segments >= limits.segments) { model.finish(motion, Status.WORK_LIMIT); continue; }
             if (!motion.departed) model.depart(motion);
             else model.advance(motion);
         }
         model.outcomes.sort(Comparator.comparing(Outcome::source, SOURCES));
-        return new Result(model.outcomes, model.segments, model.reads, model.peak,
+        return new Result(model.outcomes, model.segments, model.reads, model.queueOperations, model.peak,
                 snapshot.cells.length, 256L * sources.size() + snapshot.cells.length,
                 96L * sources.size()); // Explicit estimates, not measured heap or a persistent codec size.
     }
@@ -171,6 +173,7 @@ public final class PreparedLandingModel {
         m.nz = m.z + m.vz * dt + m.az * dt * dt / 2;
         m.due = m.time + dt;
         events.add(m);
+        queueOperations++;
     }
 
     private void advance(Motion m) {
