@@ -103,7 +103,7 @@ public final class PreparedLandingGameTests {
     }
 
     @GameTest(template = "pad", batch = "nuke_prepared_landing_snapshot", timeoutTicks = 200, skyAccess = true)
-    public static void absentSnapshotIsUnknownAndCargoIsNotOrdinary(GameTestHelper h) {
+    public static void absentSnapshotIsUnknownAndCargoGeometryIsDetached(GameTestHelper h) {
         ChunkShot[] shots = syntheticShots(48, false);
         shots[0] = null;
         var palette = palette(h, shots);
@@ -113,8 +113,8 @@ public final class PreparedLandingGameTests {
         var removals = List.of(new PreparedLandingSnapshot.Removal(at, 0, true),
                 new PreparedLandingSnapshot.Removal(new BlockPos(8, 32, -12), 0, true));
         var input = PreparedLandingSnapshot.from(window, removals, syntheticDetonation(), palette);
-        h.assertTrue(input.sources().size() == 2 && input.sources().get(1).kind() == PreparedLandingModel.Kind.UNSUPPORTED_SOURCE,
-                "A container entered the ordinary no-cargo fast path");
+        h.assertTrue(input.sources().size() == 2 && input.sources().get(1).kind() == PreparedLandingModel.Kind.ORDINARY,
+                "Static cargo geometry was excluded; contents belong to the departure commit");
         var original = input.sources().getFirst();
         var driven = new PreparedLandingModel.Source(original.id(), original.event(), original.x(), original.y(), original.z(),
                 original.state(), original.volume(), original.mass(), 0, -50, 0, 100, 5, PreparedLandingModel.Kind.ORDINARY);
@@ -262,18 +262,26 @@ public final class PreparedLandingGameTests {
                 label, input.removalCells(), input.nonMaterialCells(), input.sources().size(), eligible, input.states().size(),
                 fracture, adapter, elapsed, cpu, allocated, result.segments(), result.queueOperations(), result.collisionReads(), result.peakQueue(),
                 result.inputBytes(), result.motionBytesEstimate(), result.outputBytesEstimate(), counts);
+        double[] ages = result.outcomes().stream().mapToDouble(o -> o.time() - o.source().departure()).sorted().toArray();
+        Incoming.LOG.info("LANDING_ARRIVAL label={} age_p50_s={} age_p95_s={} age_p99_s={} age_max_s={} event_end_s={}",
+                label, quantile(ages, .5), quantile(ages, .95), quantile(ages, .99), quantile(ages, 1),
+                result.outcomes().stream().mapToDouble(PreparedLandingModel.Outcome::time).max().orElse(0));
         collisionDiagnostics(label, window, result);
         return new Measurement(input, result);
+    }
+
+    private static double quantile(double[] sorted, double fraction) {
+        return sorted.length == 0 ? 0 : sorted[(int) Math.ceil((sorted.length - 1) * fraction)];
     }
 
     private static void collisionDiagnostics(String label, RuinWindow window, PreparedLandingModel.Result result) {
         Map<String, Integer> states = new HashMap<>(), types = new HashMap<>();
         Map<String, String> samples = new HashMap<>();
-        long collisions = 0, climbs = 0, spills = 0, same = 0, cycles = 0;
+        long collisions = 0, climbs = 0, spills = 0, same = 0, cycles = 0, transfers = 0;
         for (var output : result.outcomes()) {
             var trace = output.trace();
             collisions += trace.collisions(); climbs += trace.climbs(); spills += trace.spills();
-            same += trace.sameCellSteps(); cycles += trace.reposeABA();
+            same += trace.sameCellSteps(); cycles += trace.reposeABA(); transfers += trace.contactTransfers();
             if (output.status() != PreparedLandingModel.Status.UNSUPPORTED_COLLISION) continue;
             var cell = output.blocked();
             var state = window.get(cell.x() - window.x0, cell.y(), cell.z() - window.z0);
@@ -281,8 +289,8 @@ public final class PreparedLandingGameTests {
             states.merge(name, 1, Integer::sum); types.merge(type, 1, Integer::sum);
             samples.putIfAbsent(name, "blocked=" + cell + " source=" + output.source().x() + "," + output.source().y() + "," + output.source().z());
         }
-        Incoming.LOG.info("LANDING_TRACE label={} collisions={} climbs={} spills={} same_cell_steps={} repose_ABA={} unsupported_types={}",
-                label, collisions, climbs, spills, same, cycles, new java.util.TreeMap<>(types));
+        Incoming.LOG.info("LANDING_TRACE label={} collisions={} climbs={} spills={} same_cell_steps={} repose_ABA={} contact_transfers={} unsupported_types={}",
+                label, collisions, climbs, spills, same, cycles, transfers, new java.util.TreeMap<>(types));
         states.entrySet().stream().sorted(Map.Entry.<String, Integer>comparingByValue().reversed().thenComparing(Map.Entry.comparingByKey()))
                 .limit(10).forEach(entry -> Incoming.LOG.info("LANDING_BLOCKED label={} count={} state={} {}",
                         label, entry.getValue(), entry.getKey(), samples.get(entry.getKey())));

@@ -39,7 +39,10 @@ class PreparedLandingModelTest {
     @Test void futureDeletionDoesNotEraseAStillPresentRoof() {
         var late = scheduledRoof(10);
         var early = scheduledRoof(0);
-        assertEquals(9, late.outcomes().getFirst().y());
+        assertEquals(9, late.outcomes().getFirst().trace().firstContact().y());
+        assertTrue(late.outcomes().getFirst().trace().firstContactTime() < 10);
+        assertEquals(1, late.outcomes().getFirst().y(), "Removing a later support must wake its owned material");
+        assertTrue(late.outcomes().getFirst().time() > 10);
         assertEquals(1, early.outcomes().getFirst().y());
         assertEquals(Status.LANDED, late.outcomes().getFirst().status());
         assertEquals(9, late.count(Status.UNSUPPORTED_SOURCE));
@@ -130,6 +133,48 @@ class PreparedLandingModelTest {
         assertEquals(0, result.segments());
     }
 
+    @Test void finiteContactUsesHeightPotentialButFreeFlightStillHasItsAgeGuard() {
+        byte[] cells = floor(0);
+        var inputs = new ArrayList<Source>();
+        for (int y = 1; y < H; y++) {
+            Source s = source(y, 24, y, 24, 0);
+            inputs.add(s); cells[index(24, y, 24)] = SOLID;
+        }
+        var result = PreparedLandingModel.solve(new Snapshot(0, 0, 0, W, H, W, cells), inputs, new Limits(32, 100_000, .1));
+        assertEquals(inputs.size(), result.count(Status.LANDED));
+        assertTrue(result.outcomes().stream().mapToDouble(Outcome::time).max().orElseThrow() > .1);
+        var single = source(100, 10, 20, 10, 0);
+        cells = floor(0); cells[index(10, 20, 10)] = SOLID;
+        result = PreparedLandingModel.solve(new Snapshot(0, 0, 0, W, H, W, cells), List.of(single), new Limits(1, 100_000, .1));
+        assertEquals(1, result.count(Status.WORK_LIMIT));
+    }
+
+    @Test void fineMaterialDispersesAtItsDepartureWithExactStateVolumeAndMass() {
+        var fine = new Source(1, 1, 24, 20, 24, 25, .125, 300, 7, 10, 0, 5, 3, Kind.FINE);
+        var result = solve(floor(0), List.of(fine));
+        var output = result.outcomes().getFirst();
+        assertEquals(Status.DISPERSED, output.status());
+        assertEquals(fine, output.source());
+        assertEquals(7, output.time());
+        assertEquals(0, result.segments());
+    }
+
+    @Test void fullHeightDenseStackNeverCreatesUpwardEnergyOrOutsideHeight() {
+        var inputs = new ArrayList<Source>();
+        for (int x = 20; x < 25; x++) for (int z = 20; z < 25; z++) for (int y = 1; y < H; y++)
+            inputs.add(source(inputs.size() + 1, x, y, z, 20));
+        var result = solve(floor(0), inputs);
+        assertEquals(inputs.size(), result.count(Status.LANDED));
+        var occupied = new java.util.HashSet<Cell>();
+        for (var output : result.outcomes()) {
+            assertTrue(occupied.add(new Cell(output.x(), output.y(), output.z())));
+            assertEquals(0, output.trace().climbs());
+            assertEquals(0, output.trace().postContactRises());
+            assertTrue(output.trace().firstContact().y() <= output.source().y());
+            assertTrue(output.y() <= output.trace().firstContact().y());
+        }
+    }
+
     @Test void shuffledDenseSourcesHaveIdenticalFiniteResults() {
         var inputs = new ArrayList<Source>();
         for (int x = 18; x < 22; x++) for (int z = 18; z < 22; z++) for (int y = 5; y < 15; y++)
@@ -138,5 +183,12 @@ class PreparedLandingModelTest {
         Collections.shuffle(inputs, new java.util.Random(42));
         assertEquals(first, solve(floor(0), inputs));
         assertEquals(inputs.size(), first.count(Status.LANDED));
+        assertTrue(first.segments() < 100_000, "Dense contact must not return to ghost-overlap integration");
+        assertTrue(first.outcomes().stream().mapToLong(o -> o.trace().contactTransfers()).sum() > 0);
+        for (var output : first.outcomes()) {
+            assertEquals(0, output.trace().postContactRises());
+            assertTrue(output.y() <= output.trace().firstContact().y());
+            assertTrue(output.time() >= output.trace().firstContactTime());
+        }
     }
 }

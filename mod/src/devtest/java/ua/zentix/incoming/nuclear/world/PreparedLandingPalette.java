@@ -15,7 +15,8 @@ import java.util.IdentityHashMap;
 /** Devtest-only state facts. Capture on the server; the frozen table performs no block or world calls. */
 final class PreparedLandingPalette {
     record Material(BlockState state, double volume, double mass, byte collision) {}
-    record Facts(byte collision, boolean material, boolean ordinary, double dragMass, Material alongX, Material alongZ) {
+    /** Ordinary describes geometry only; cargo remains the live departure owner's responsibility. */
+    record Facts(byte collision, boolean material, boolean ordinary, boolean fine, double dragMass, Material alongX, Material alongZ) {
         Material oriented(boolean x) { return x ? alongX : alongZ; }
     }
 
@@ -53,17 +54,20 @@ final class PreparedLandingPalette {
             double mass = props.volume() * props.density();
             boolean material = !props.air() && !props.fluid() && !props.fixed()
                     && (props.bearing() || props.leaves()) && mass > 0;
-            boolean fine = props.leaves() || state.is(net.neoforged.neoforge.common.Tags.Blocks.GLASS_BLOCKS)
-                    || state.is(net.neoforged.neoforge.common.Tags.Blocks.GLASS_PANES);
+            // A mod tag cannot terminally disperse a live cargo owner. Its geometry may be ordinary,
+            // but its contents must still pass through the departure/placement ownership protocol.
+            boolean fine = !state.hasBlockEntity() && (props.leaves()
+                    || state.is(net.neoforged.neoforge.common.Tags.Blocks.GLASS_BLOCKS)
+                    || state.is(net.neoforged.neoforge.common.Tags.Blocks.GLASS_PANES));
             BlockState dry = state.hasProperty(BlockStateProperties.WATERLOGGED)
                     ? state.setValue(BlockStateProperties.WATERLOGGED, false) : state;
             boolean log = props.log() && dry.hasProperty(BlockStateProperties.AXIS);
             Material x = material(log ? dry.setValue(BlockStateProperties.AXIS, Direction.Axis.X) : dry);
             Material z = log ? material(dry.setValue(BlockStateProperties.AXIS, Direction.Axis.Z)) : x;
-            boolean ordinary = material && !state.hasBlockEntity() && !fine
+            boolean ordinary = material && !fine
                     && collision != PreparedLandingModel.UNSUPPORTED
                     && x.collision != PreparedLandingModel.UNSUPPORTED && z.collision != PreparedLandingModel.UNSUPPORTED;
-            states.put(state, new Facts(collision, material, ordinary, mass, x, z));
+            states.put(state, new Facts(collision, material, ordinary, fine, mass, x, z));
         }
 
         PreparedLandingPalette freeze() {

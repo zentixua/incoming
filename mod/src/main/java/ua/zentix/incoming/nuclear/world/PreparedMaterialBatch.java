@@ -5,6 +5,7 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.world.level.ChunkPos;
+import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 
 import java.util.ArrayList;
@@ -22,12 +23,17 @@ final class PreparedMaterialBatch {
     enum Phase { PLANNED, REMOVED, PLACED, SOURCE_CHANGED, DESTINATION_CHANGED }
 
     /** Absolute game ticks; before and placed differ for rotated logs and drained waterlogging. */
-    record Move(BlockPos source, BlockPos destination, BlockState before, BlockState placed,
+    record Move(BlockPos source, BlockPos destination, BlockState before, BlockState placed, BlockState destinationBefore,
                 long departureTick, long landingTick, double volume, double mass) {
+        Move(BlockPos source, BlockPos destination, BlockState before, BlockState placed,
+             long departureTick, long landingTick, double volume, double mass) {
+            this(source, destination, before, placed, Blocks.AIR.defaultBlockState(), departureTick, landingTick, volume, mass);
+        }
+
         Move {
             source = source.immutable();
             destination = destination.immutable();
-            if (before == null || placed == null || before.isAir() || placed.isAir()
+            if (before == null || placed == null || destinationBefore == null || before.isAir() || placed.isAir()
                     || departureTick < 0 || landingTick < departureTick
                     || !(volume > 0) || !(mass > 0) || !Double.isFinite(volume + mass))
                 throw new IllegalArgumentException("Invalid prepared material move");
@@ -136,13 +142,13 @@ final class PreparedMaterialBatch {
 
         CompoundTag encode() {
             var tag = new CompoundTag();
-            tag.putInt("version", 1);
+            tag.putInt("version", 2);
             tag.putInt("event", event);
             tag.putLong("chunk", owner.toLong());
             tag.putLong("revision", revision);
             var palette = new RuinPalette();
             long[] rows = new long[moves.size() * 6];
-            int[] states = new int[moves.size() * 2];
+            int[] states = new int[moves.size() * 3];
             var contents = new ListTag();
             for (int i = 0; i < moves.size(); i++) {
                 Move move = moves.get(i);
@@ -151,8 +157,9 @@ final class PreparedMaterialBatch {
                 rows[p + 2] = move.departureTick; rows[p + 3] = move.landingTick;
                 rows[p + 4] = Double.doubleToLongBits(move.volume);
                 rows[p + 5] = Double.doubleToLongBits(move.mass);
-                states[i * 2] = palette.index(move.before);
-                states[i * 2 + 1] = palette.index(move.placed);
+                states[i * 3] = palette.index(move.before);
+                states[i * 3 + 1] = palette.index(move.placed);
+                states[i * 3 + 2] = palette.index(move.destinationBefore);
                 if (cargo[i] != null) {
                     var entry = new CompoundTag();
                     entry.putInt("index", i);
@@ -185,10 +192,10 @@ final class PreparedMaterialBatch {
         byte[] phases = tag.getByteArray("phases");
         var paletteTag = (ListTag) tag.get("palette");
         var cargoTag = (ListTag) tag.get("cargo");
-        if (tag.getInt("version") != 1 || rows.length % 6 != 0 || count < 1 || count > MAX_MOVES
-                || states.length != count * 2 || phases.length != count || tag.getLong("revision") < 0
+        if (tag.getInt("version") != 2 || rows.length % 6 != 0 || count < 1 || count > MAX_MOVES
+                || states.length != count * 3 || phases.length != count || tag.getLong("revision") < 0
                 || paletteTag == null || paletteTag.getElementType() != Tag.TAG_COMPOUND
-                || paletteTag.isEmpty() || paletteTag.size() > count * 2
+                || paletteTag.isEmpty() || paletteTag.size() > count * 3
                 || cargoTag == null || !cargoTag.isEmpty() && cargoTag.getElementType() != Tag.TAG_COMPOUND
                 || cargoTag.size() > count)
             throw new IllegalArgumentException("Invalid prepared material page dimensions");
@@ -198,8 +205,8 @@ final class PreparedMaterialBatch {
             int p = i * 6;
             if (phases[i] < 0 || phases[i] >= Phase.values().length)
                 throw new IllegalArgumentException("Invalid prepared material phase");
-            moves.add(new Move(BlockPos.of(rows[p]), BlockPos.of(rows[p + 1]), palette.state(states[i * 2]),
-                    palette.state(states[i * 2 + 1]), rows[p + 2], rows[p + 3],
+            moves.add(new Move(BlockPos.of(rows[p]), BlockPos.of(rows[p + 1]), palette.state(states[i * 3]),
+                    palette.state(states[i * 3 + 1]), palette.state(states[i * 3 + 2]), rows[p + 2], rows[p + 3],
                     Double.longBitsToDouble(rows[p + 4]), Double.longBitsToDouble(rows[p + 5])));
         }
         var batch = new PreparedMaterialBatch(tag.getInt("event"), new ChunkPos(tag.getLong("chunk")), moves);

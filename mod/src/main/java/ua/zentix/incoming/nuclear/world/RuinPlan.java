@@ -4,12 +4,7 @@ import it.unimi.dsi.fastutil.HashCommon;
 import it.unimi.dsi.fastutil.longs.LongArrayList;
 import io.netty.buffer.Unpooled;
 import net.minecraft.core.BlockPos;
-import net.minecraft.core.Direction;
-import net.minecraft.core.SectionPos;
-import net.minecraft.server.level.ChunkHolder;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.server.level.ServerPlayer;
-import net.minecraft.server.level.ThreadedLevelLightEngine;
 import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.Block;
@@ -20,11 +15,8 @@ import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.LevelChunkSection;
 import net.minecraft.world.level.chunk.PalettedContainer;
 import net.minecraft.world.level.levelgen.Heightmap;
-import net.minecraft.world.level.lighting.BlockLightEngine;
 import net.minecraft.world.level.lighting.ChunkSkyLightSources;
-import net.minecraft.world.level.lighting.LightEngine;
 import net.minecraft.world.level.lighting.LevelLightEngine;
-import net.minecraft.world.level.lighting.SkyLightEngine;
 import net.minecraft.world.phys.shapes.Shapes;
 import org.jetbrains.annotations.Nullable;
 
@@ -1105,8 +1097,7 @@ public final class RuinPlan {
                 quenched.add(at(m, c, x0, z0, minY).asLong());
                 if (flash != null && flash.counted(c & KEY_MASK)) budget.fires = Math.max(0, budget.fires - 1);
             }
-            touch(touched, wasEmpty, now, i);
-            s.setBlockState(c & 15, (c >> 8) & 15, (c >> 4) & 15, state, false);
+            ChunkDeltaWrites.set(now, touched, wasEmpty, i, c & 15, (c >> 8) & 15, (c >> 4) & 15, state);
             if (was != null) was[k] = live;
         }
         // fires where plan says air, until detonation fire counter exhausted; layer fire on ruin-fire position
@@ -1126,13 +1117,11 @@ public final class RuinPlan {
                 // now enters count
                 if (flash == null || !flash.counted(c & KEY_MASK)) budget.fires++;
                 if (live != fire) {
-                    touch(touched, wasEmpty, now, i);
-                    s.setBlockState(c & 15, (c >> 8) & 15, (c >> 4) & 15, fire, false);
+                    ChunkDeltaWrites.set(now, touched, wasEmpty, i, c & 15, (c >> 8) & 15, (c >> 4) & 15, fire);
                 }
             } else {
                 if (budget.fires >= maxFires) continue;
-                touch(touched, wasEmpty, now, i);
-                s.setBlockState(c & 15, (c >> 8) & 15, (c >> 4) & 15, fire, false);
+                ChunkDeltaWrites.set(now, touched, wasEmpty, i, c & 15, (c >> 8) & 15, (c >> 4) & 15, fire);
                 lit++;
                 if (!layer || !isBlown(c & KEY_MASK)) {
                     budget.fires++;
@@ -1154,8 +1143,7 @@ public final class RuinPlan {
                 LevelChunkSection s = now[i];
                 BlockState live = s.getBlockState(f & 15, (f >> 8) & 15, (f >> 4) & 15);
                 if (!fire(live) || find(key) >= 0 || ignites && hasFire(key)) continue;
-                touch(touched, wasEmpty, now, i);
-                s.setBlockState(f & 15, (f >> 8) & 15, (f >> 4) & 15, air, false);
+                ChunkDeltaWrites.set(now, touched, wasEmpty, i, f & 15, (f >> 8) & 15, (f >> 4) & 15, air);
                 at(m, f, x0, z0, minY);
                 // fire blocks neither motion nor sky: only world-surface heightmap changes
                 surface.update(f & 15, m.getY(), (f >> 4) & 15, air);
@@ -1188,11 +1176,7 @@ public final class RuinPlan {
             }
         }
         LevelLightEngine light = level.getChunkSource().getLightEngine();
-        for (int i = 0; i < now.length; i++) {
-            if (!bit(touched, i)) continue;
-            boolean empty = now[i].hasOnlyAir();
-            if (bit(wasEmpty, i) != empty) light.updateSectionStatus(SectionPos.of(pos, chunk.getSectionYFromSectionIndex(i)), empty);
-        }
+        ChunkDeltaWrites.sectionStatus(level, chunk, touched, wasEmpty);
         PHASES[1] += System.nanoTime() - t;
         t = System.nanoTime();
         // heightmaps/sky sources from plan; chunk edited since plan outside plan positions (block inside house), or
@@ -1210,13 +1194,11 @@ public final class RuinPlan {
         PHASES[2] += System.nanoTime() - t;
         t = System.nanoTime();
         // chunk viewers get changes same tick via section packets (like setBlock), not chunk queue
-        ChunkHolder holder = level.getChunkSource().chunkMap.getVisibleChunkIfPresent(pos.toLong());
-        List<ServerPlayer> players = holder == null ? List.of() : level.getChunkSource().chunkMap.getPlayers(pos, false);
-        boolean watched = !players.isEmpty();
-        boolean sections = watched && holder.getTickingChunk() != null;
+        var delivery = ChunkDeltaWrites.delivery(level, chunk);
+        boolean sections = delivery.sections();
         if (sections) {
-            for (int c : cells) if ((c & SLOW) == 0) holder.blockChanged(at(m, c, x0, z0, minY));
-            for (int k = 0; out != null && k < out.size(); k++) holder.blockChanged(m.set(out.getLong(k)));
+            for (int c : cells) if ((c & SLOW) == 0) delivery.changed(at(m, c, x0, z0, minY));
+            for (int k = 0; out != null && k < out.size(); k++) delivery.changed(m.set(out.getLong(k)));
         }
         int extra = quenched == null ? 0 : quenched.size();
         long[] checks = java.util.Arrays.copyOf(lightAt, lightAt.length + lit + extra);
@@ -1227,11 +1209,11 @@ public final class RuinPlan {
             BlockState fire = states[(c >>> STATE_SHIFT) & STATE_MASK];
             at(m, c, x0, z0, minY);
             if (fireWas[k].isAir()) checks[checked++] = m.asLong();
-            if (sections && fireWas[k] != fire) holder.blockChanged(m);
+            if (sections && fireWas[k] != fire) delivery.changed(m);
             // fire tick like newly placed fire (FireBlock.onPlace): 30–39 ticks, flash-layer fire starts with ruins
             if (!layer) level.scheduleTick(m.immutable(), fire.getBlock(), 30 + (int) (RuinPlanner.hash(m.getX(), m.getY(), m.getZ(), 31) * 10));
         }
-        checkLight(light, pos, checked == checks.length ? checks : java.util.Arrays.copyOf(checks, checked));
+        ChunkDeltaWrites.checkLight(light, pos, checked == checks.length ? checks : java.util.Arrays.copyOf(checks, checked));
         // fluid beside breach (neighbors too) gets tick like neighbor setBlock, staggered by position hash, at most
         // FLUID_TICKS per second: replacement wakes no neighbors, unticked water would stand as wall
         for (int k = 0; k < fluidTicks.length; k++) {
@@ -1263,9 +1245,7 @@ public final class RuinPlan {
             }
         }
         // viewed but non-ticking chunk (view edge): send full chunk via vanilla
-        if (watched && !sections) {
-            for (ServerPlayer p : players) p.connection.chunkSender.markChunkPendingToSend(chunk);
-        }
+        delivery.finish();
         // Distant Horizons LOD: ruins with wave, not next chunk save
         long dh = System.nanoTime();
         DhUpdates.mark(level, pos, level.getGameTime());
@@ -1285,12 +1265,6 @@ public final class RuinPlan {
         return lit;
     }
 
-    /** Section {@code i} changes: mark it and pre-write emptiness. */
-    private static void touch(long[] touched, long[] wasEmpty, LevelChunkSection[] now, int i) {
-        if (bit(touched, i)) return;
-        set(touched, i);
-        if (now[i].hasOnlyAir()) set(wasEmpty, i);
-    }
 
     /** Layer fire at {@code key} counted toward detonation fires: layer ignited it, wave does not extinguish it. */
     private boolean counted(int key) {
@@ -1306,32 +1280,6 @@ public final class RuinPlan {
             for (int k = 0; k < 4096; k++) if (fire(s.getBlockState(k & 15, k >> 8, (k >> 4) & 15))) out.add(i << SECTION_SHIFT | k);
         }
         return out.toIntArray();
-    }
-
-    /**
-     * Chunk light checks in one light-engine task (like {@code LevelLightEngine.checkBlock} on its thread), not
-     * one mailbox task per position: hundreds per chunk, thousands of chunks within seconds. Non-vanilla light engine
-     * (another mod) uses individual {@code checkBlock} calls.
-     */
-    private static void checkLight(LevelLightEngine light, ChunkPos pos, long[] at) {
-        if (at.length == 0) return;
-        // block engine always present; absent means another mod computes light (Starlight, ScalableLux): task would be empty
-        if (light instanceof ThreadedLevelLightEngine threaded && light.blockEngine != null && vanilla(light.blockEngine, BlockLightEngine.class)
-                && vanilla(light.skyEngine, SkyLightEngine.class)) {
-            var block = light.blockEngine;
-            var sky = light.skyEngine;
-            threaded.addTask(pos.x, pos.z, ThreadedLevelLightEngine.TaskType.PRE_UPDATE, () -> {
-                BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos();
-                for (long a : at) {
-                    p.set(a);
-                    block.checkBlock(p);
-                    if (sky != null) sky.checkBlock(p);
-                }
-            });
-            return;
-        }
-        BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos();
-        for (long a : at) light.checkBlock(p.set(a));
     }
 
     /**
@@ -1370,46 +1318,10 @@ public final class RuinPlan {
             int y = minY + (section(c) << 4) + ((c >> 8) & 15);
             if (y > top[c & 0xFF]) top[c & 0xFF] = y;
         }
-        ChunkSkyLightSources sky = chunk.getSkyLightSources();
-        Heightmap[] maps = new Heightmap[HEIGHTMAP_TYPES.length];
-        for (int i = 0; i < maps.length; i++) maps[i] = chunk.getOrCreateHeightmapUnprimed(HEIGHTMAP_TYPES[i]);
-        int x0 = chunk.getPos().getMinBlockX(), z0 = chunk.getPos().getMinBlockZ();
-        BlockPos.MutableBlockPos upper = new BlockPos.MutableBlockPos(), lower = new BlockPos.MutableBlockPos();
-        for (int column = 0; column < 256; column++) {
-            int t = top[column];
-            if (t == Integer.MIN_VALUE) continue;
-            int lx = column & 15, lz = column >> 4, x = x0 + lx, z = z0 + lz;
-            // search values at/below highest plan position (above belongs to unchanged block over plan)
-            int open = 0;
-            for (int i = 0; i < maps.length; i++) if (maps[i].getFirstAvailable(lx, lz) <= t + 1) open |= 1 << i;
-            boolean skyOpen = sky.get(column) <= t + 1;
-            BlockState above = chunk.getBlockState(upper.set(x, t + 1, z));
-            for (int y = t; y >= minY - 1 && (open != 0 || skyOpen); y--) {
-                BlockState below = chunk.getBlockState(lower.set(x, y, z));
-                for (int i = 0; open != 0 && i < maps.length; i++) {
-                    if ((open & 1 << i) != 0 && y >= minY && HEIGHTMAP_TYPES[i].isOpaque().test(below)) {
-                        maps[i].setHeight(lx, lz, y + 1);
-                        open &= ~(1 << i);
-                    }
-                }
-                if (skyOpen) {
-                    upper.set(x, y + 1, z);
-                    if (below.getLightBlock(chunk, lower) != 0 || Shapes.faceShapeOccludes(LightEngine.getOcclusionShape(chunk, upper, above, Direction.DOWN),
-                            LightEngine.getOcclusionShape(chunk, lower, below, Direction.UP))) {
-                        sky.set(column, y + 1);
-                        skyOpen = false;
-                    }
-                }
-                above = below;
-            }
-            for (int i = 0; i < maps.length; i++) if ((open & 1 << i) != 0) maps[i].setHeight(lx, lz, minY);
-            if (skyOpen) sky.set(column, minY - 1);
-        }
+        ChunkDeltaWrites.rescanColumns(chunk, top);
     }
 
-    private static boolean vanilla(@Nullable Object engine, Class<?> type) {
-        return engine == null || engine.getClass() == type;
-    }
+
 
     /** Trunks toppled into neighboring chunks: count. */
     public int outsideCount() {

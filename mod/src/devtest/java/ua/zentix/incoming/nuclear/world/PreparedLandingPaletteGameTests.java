@@ -53,8 +53,8 @@ public final class PreparedLandingPaletteGameTests {
         h.assertTrue(frozen.get(Blocks.END_PORTAL.defaultBlockState()).collision() == PreparedLandingModel.BLOCKED_EMPTY,
                 "Protected empty shape lost its independent collision operand");
         h.assertTrue(frozen.get(Blocks.CHEST.defaultBlockState()).collision() == PreparedLandingModel.SOLID
-                        && !frozen.get(Blocks.CHEST.defaultBlockState()).ordinary(),
-                "Static cargo obstacle was rejected or cargo source became ordinary");
+                        && frozen.get(Blocks.CHEST.defaultBlockState()).ordinary(),
+                "Static cargo geometry was rejected before live departure ownership");
         h.assertTrue(frozen.get(Blocks.MOVING_PISTON.defaultBlockState()).collision() == PreparedLandingModel.UNSUPPORTED,
                 "Dynamic collision was silently treated as a static shape");
         int count = frozen.size();
@@ -70,7 +70,7 @@ public final class PreparedLandingPaletteGameTests {
         var states = List.of(Blocks.OAK_FENCE.defaultBlockState(), Blocks.OAK_TRAPDOOR.defaultBlockState(),
                 Blocks.SMOOTH_STONE_SLAB.defaultBlockState(),
                 Blocks.SMOOTH_STONE_SLAB.defaultBlockState().setValue(BlockStateProperties.WATERLOGGED, true),
-                Blocks.OAK_STAIRS.defaultBlockState(), Blocks.OAK_LOG.defaultBlockState(),
+                Blocks.OAK_STAIRS.defaultBlockState(), Blocks.OAK_LOG.defaultBlockState(), Blocks.BARREL.defaultBlockState(),
                 Blocks.SNOW.defaultBlockState().setValue(BlockStateProperties.LAYERS, 2));
         ChunkPos center = new ChunkPos(h.absolutePos(new BlockPos(8, 8, 8)));
         int minY = Math.floorDiv(h.absolutePos(new BlockPos(0, 8, 0)).getY(), 16) * 16;

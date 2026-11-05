@@ -48,6 +48,7 @@ final class PreparedLandingSnapshot {
             var material = source.oriented(Math.abs(away.x) > Math.abs(away.z));
             int stateId = palette.computeIfAbsent(material.state(), unused -> palette.size());
             var kind = !removal.structuralDecisionKnown ? PreparedLandingModel.Kind.UNRESOLVED_STRUCTURE
+                    : source.fine() ? PreparedLandingModel.Kind.FINE
                     : source.ordinary() ? PreparedLandingModel.Kind.ORDINARY : PreparedLandingModel.Kind.UNSUPPORTED_SOURCE;
             sources.add(new PreparedLandingModel.Source(at.asLong(), detonation.id(), at.getX(), at.getY(), at.getZ(), stateId,
                     material.volume(), material.mass(), removal.departure, away.x * detonation.blastWind(position), away.z * detonation.blastWind(position),
