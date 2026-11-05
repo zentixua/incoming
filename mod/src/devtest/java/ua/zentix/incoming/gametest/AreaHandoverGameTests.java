@@ -57,6 +57,8 @@ public final class AreaHandoverGameTests {
 
     private static void handovers(GameTestHelper h, boolean ready, boolean ticks) {
         ServerLevel level = h.getLevel();
+        Incoming.LOG.info("NORMAL_AREA fixture begins ready={} origin={} {}", ready, h.absolutePos(BlockPos.ZERO),
+                StrikeWorld.get(level).areas().describe());
         Vec3 start = Vec3.atCenterOf(h.absolutePos(new BlockPos(32, 80, 32)));
         Vec3 aim = start.add(640, 0, 0);
         ChunkPos centre = new ChunkPos(BlockPos.containing(aim));
@@ -238,7 +240,8 @@ public final class AreaHandoverGameTests {
 
     private static void drained(GameTestHelper h) {
         h.succeedWhen(() -> {
-            h.assertTrue(StrikeWorld.get(h.getLevel()).areas().size() == 0, "areas still held");
+            h.assertTrue(StrikeWorld.get(h.getLevel()).areas().size() == 0,
+                    "areas still held: " + StrikeWorld.get(h.getLevel()).areas().describe());
             h.assertTrue(StrikeWorld.get(h.getLevel()).areas().releasing() == 0, "release queue still draining");
             for (String type : List.of("incoming_flight", "incoming_area_load", "incoming_area_release", "incoming_projectile")) {
                 h.assertValueEqual(TicketProbe.count(h.getLevel(), type), 0, "remaining " + type);
