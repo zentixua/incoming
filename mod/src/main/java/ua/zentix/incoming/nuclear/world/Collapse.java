@@ -125,9 +125,14 @@ final class Collapse {
 
     /** Ruins of central snapshot chunk (any thread): window fractures cached per detonation or computed anew. */
     static Collapse solve(RuinContext.Grid g) {
+        long mtB7Started=MtB7Stages.begin(1);
+        try {
         Collapse c = new Collapse(g);
         c.run();
         return c;
+
+        } catch (RuntimeException | Error failure) { MtB7Stages.fail(1); throw failure; }
+        finally { MtB7Stages.end(1,mtB7Started); }
     }
 
     /** Snapshot IDs used to build chunk window. */

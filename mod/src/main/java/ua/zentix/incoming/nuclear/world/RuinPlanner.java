@@ -305,6 +305,8 @@ public final class RuinPlanner {
      * light shadow from detonation heightmaps ({@link RuinContext.Grid#lit}).
      */
     static RuinPlan finish(RuinContext.Grid g, Collapse c) {
+        long mtB7Started=MtB7Stages.begin(0);
+        try {
         Detonation d = g.ctx().d;
         ChunkShot shot = g.at(0, 0);
         Sections s = new Sections(shot, g.view());
@@ -329,6 +331,9 @@ public final class RuinPlanner {
         // flash scorch on surviving faces: pre-wave world, applied with ruins
         if (plan != RuinPlan.EMPTY) plan.flash(FlashFaces.chars(g, s));
         return plan;
+
+        } catch (RuntimeException | Error failure) { MtB7Stages.fail(0); throw failure; }
+        finally { MtB7Stages.end(0,mtB7Started); }
     }
 
     /**

@@ -75,6 +75,8 @@ public final class VoxyLods {
     static final long QUEUE_BYTES = 48L << 20;
     /** Estimated chunk size (for {@link #room}): 24 sections with palettes and surface light — ~40 KB before compression. */
     static final int CHUNK_BYTES = 40 * 1024;
+    /** Encoded payload plus codec/light scratch, reserved before asynchronous encoding. */
+    static final long BUILD_BYTES = 2L << 20;
     /**
      * Maximum LSS-overwritten chunks a player can report per second: each costs a disk header read or a read and copy;
      * the client itself reports at most {@link C2S.VoxyStale#PER_TICK} per tick; excess reports are dropped.
@@ -83,21 +85,23 @@ public final class VoxyLods {
 
     /** Player with Voxy: their chunks in order (chunk → packet; a fresh copy replaces a waiting one in place). */
     static final class Viewer {
-        final LinkedHashMap<Long, S2C.VoxyChunk> queue = new LinkedHashMap<>();
+        private record Column(long chunk, long due, int detonation) {}
+        final LinkedHashMap<Column, S2C.VoxyChunk> queue = new LinkedHashMap<>();
         long bytes, sent, dropped;
         /** Includes dispatch waiting in the Netty event loop; cleared only by the write completion callback. */
-        private volatile boolean writing;
+        private volatile boolean writing, batchWritten;
         final LodBatchFlow flow = new LodBatchFlow();
         private int batchBytes;
 
         void offer(long chunk, S2C.VoxyChunk packet) {
-            S2C.VoxyChunk was = queue.remove(chunk);
+            Column key = new Column(chunk, packet.notBefore(), packet.detonation());
+            S2C.VoxyChunk was = queue.remove(key);
             if (was != null) bytes -= was.sections().length;
             if (bytes + packet.sections().length > QUEUE_BYTES) {
                 dropped++;
                 return;
             }
-            queue.put(chunk, packet);
+            queue.put(key, packet);
             bytes += packet.sections().length;
         }
 
@@ -106,47 +110,68 @@ public final class VoxyLods {
                     (packet, listener) -> player.connection.send(new ClientboundCustomPayloadPacket(packet), listener));
         }
 
-        /** Server-thread queue drain. Never wait for the network or scan a blocked queue. */
+        /** Select one bounded batch on the server; its serial writer then progresses independently on the event loop. */
         void drain(@Nullable Channel channel, BiConsumer<CustomPacketPayload, PacketSendListener> send) {
-            if (!writable(channel)) return;
-            if (!flow.active()) {
-                if (queue.isEmpty() || !flow.begin()) return;
-                batchBytes = 0;
-                send.accept(new S2C.LodBatchStart(flow.id()), null);
-            }
-            if (!flow.sending()) return; // Only the client's acknowledgement opens the next batch.
-            boolean byteWindowFull = batchBytes >= BATCH_BYTES;
-            for (Iterator<S2C.VoxyChunk> q = queue.values().iterator(); q.hasNext() && flow.hasRoom() && !byteWindowFull && writable(channel); ) {
-                // Connection.send schedules on the event loop: writability alone cannot see those pending tasks.
-                // A single chunk may exceed the watermark. Let it through once, then await its completed write;
-                // requiring the entire chunk to fit would permanently block large, globally paletted chunks.
-                S2C.VoxyChunk packet = q.next();
-                if (flow.sent() > 0 && batchBytes + packet.sections().length > BATCH_BYTES) {
-                    byteWindowFull = true;
-                    break;
-                }
-                writing = true;
-                try {
-                    send.accept(packet, PacketSendListener.thenRun(() -> writing = false));
-                } catch (RuntimeException | Error error) {
-                    writing = false;
-                    throw error;
-                }
-                q.remove();
+            finishWritten();
+            if (writing || !transportWritable(channel) || flow.active() || queue.isEmpty() || !flow.begin()) return;
+            List<S2C.VoxyChunk> batch = new ArrayList<>();
+            batchBytes = 0;
+            for (Iterator<S2C.VoxyChunk> it = queue.values().iterator(); it.hasNext() && flow.hasRoom(); ) {
+                S2C.VoxyChunk packet = it.next();
+                if (!batch.isEmpty() && batchBytes + packet.sections().length > BATCH_BYTES) break;
+                batch.add(packet);
+                it.remove();
                 bytes -= packet.sections().length;
-                flow.chunkSent();
                 batchBytes += packet.sections().length;
-                byteWindowFull = batchBytes >= BATCH_BYTES;
+                flow.chunkSent();
                 sent++;
+                if (batchBytes >= BATCH_BYTES) break;
             }
-            if ((byteWindowFull || !flow.hasRoom() || queue.isEmpty()) && transportWritable(channel)) {
-                flow.finish();
-                send.accept(new S2C.LodBatchFinished(flow.id(), flow.sent()), null);
-            }
+            writing = true;
+            batchWritten = false;
+            int id = flow.id();
+            Runnable pump = new Runnable() {
+                int next;
+                boolean started;
+                @Override public void run() {
+                    if (!channel.isActive()) { complete(); return; }
+                    if (!transportWritable(channel)) {
+                        channel.eventLoop().schedule(this, 2, java.util.concurrent.TimeUnit.MILLISECONDS);
+                        return;
+                    }
+                    try {
+                        if (!started) {
+                            started = true;
+                            send.accept(new S2C.LodBatchStart(id), null);
+                        }
+                        if (next == batch.size()) {
+                            send.accept(new S2C.LodBatchFinished(id, batch.size()), null);
+                            complete();
+                            return;
+                        }
+                        S2C.VoxyChunk packet = batch.get(next++);
+                        send.accept(packet, PacketSendListener.thenRun(() -> {
+                            if (channel.eventLoop().inEventLoop()) run();
+                            else channel.eventLoop().execute(this);
+                        }));
+                    } catch (RuntimeException | Error error) {
+                        complete();
+                        throw error;
+                    }
+                }
+                private void complete() {
+                    batchWritten = true;
+                    writing = false;
+                }
+            };
+            if (channel.eventLoop().inEventLoop()) pump.run();
+            else channel.eventLoop().execute(pump);
+            finishWritten(); // Inline transports used by deterministic tests may already have finished.
         }
 
-        private boolean writable(@Nullable Channel channel) {
-            return !writing && transportWritable(channel);
+        /** Server thread only; an acknowledgement may arrive before the next server tick. */
+        private void finishWritten() {
+            if (batchWritten && flow.sending()) flow.finish();
         }
 
         private static boolean transportWritable(@Nullable Channel channel) {
@@ -163,14 +188,12 @@ public final class VoxyLods {
     }
 
     /** Built copy: recipient and earliest world tick for delivery ({@code notBefore}). */
-    private record Built(ResourceKey<Level> dimension, long chunk, @Nullable byte[] data, List<UUID> to, long notBefore) {}
+    private record Built(ResourceKey<Level> dimension, long chunk, @Nullable byte[] data, List<UUID> to, long notBefore, int detonation) {}
 
     private final Map<UUID, Viewer> viewers = new HashMap<>();
     /** Worlds with Voxy players (per tick): {@link #wanted} is called for every chunk mark. */
     private final Set<ResourceKey<Level>> levels = new HashSet<>();
     private final ConcurrentLinkedQueue<Built> built = new ConcurrentLinkedQueue<>();
-    /** Built copies whose time has not yet come (heavy-zone copies wait for the wave front). */
-    private final List<Built> held = new ArrayList<>();
     /** Copies being built (their queue space is already reserved for {@link #room}). */
     private int building;
     private long nextReport;
@@ -187,6 +210,15 @@ public final class VoxyLods {
         return get(level.getServer()).levels.contains(level.dimension());
     }
 
+    /** All dimensions/players share nuclear admission; includes unfinished encoding and unacknowledged batches. */
+    public static long retainedBytes(MinecraftServer server) {
+        if (!server.overworld().hasData(ModAttachments.VOXY_LODS)) return 0;
+        VoxyLods v = get(server);
+        long bytes = v.building * BUILD_BYTES;
+        for (Viewer viewer : v.viewers.values()) bytes += viewer.bytes + (viewer.flow.active() ? viewer.batchBytes : 0);
+        return bytes;
+    }
+
     /**
      * How many more chunks can be delivered now: space in the fullest queue of this world's Voxy players, estimated using
      * {@link #CHUNK_BYTES}; no players — {@link Integer#MAX_VALUE}.
@@ -198,7 +230,9 @@ public final class VoxyLods {
             if (e.getValue().dimension == level.dimension()) free = Math.min(free, QUEUE_BYTES - e.getValue().bytes);
         }
         if (free == Long.MAX_VALUE) return Integer.MAX_VALUE;
-        return (int) Math.max(0, Math.min(Integer.MAX_VALUE, free / CHUNK_BYTES - v.building - v.held.size()));
+        long global = Math.max(0, ua.zentix.incoming.nuclear.world.NuclearPrep.PLANS_CAP
+                - ua.zentix.incoming.nuclear.world.NuclearPrep.memory(level));
+        return (int) Math.max(0, Math.min(global / BUILD_BYTES, Math.min(Integer.MAX_VALUE, free / CHUNK_BYTES - v.building)));
     }
 
     /**
@@ -215,7 +249,7 @@ public final class VoxyLods {
      * LODs must not change before the front.
      */
     public static void send(ServerLevel level, ChunkAccess chunk, long notBefore) {
-        send(level, chunk, notBefore, null);
+        send(level, chunk, notBefore, null, null, -1);
     }
 
     /**
@@ -223,10 +257,14 @@ public final class VoxyLods {
      * {@code FarLods.refresh}): DH and other players already have correct LODs. Server thread.
      */
     public static void sendTo(ServerLevel level, ChunkAccess chunk, UUID player) {
-        send(level, chunk, Long.MIN_VALUE, player);
+        send(level, chunk, Long.MIN_VALUE, player, null, -1);
     }
 
-    private static void send(ServerLevel level, ChunkAccess chunk, long notBefore, @Nullable UUID only) {
+    public static void sendChanged(ServerLevel level, ChunkAccess chunk, long notBefore, byte[][] baseline, int detonation) {
+        send(level, chunk, notBefore, null, baseline, detonation);
+    }
+
+    private static void send(ServerLevel level, ChunkAccess chunk, long notBefore, @Nullable UUID only, @Nullable byte[][] baseline, int detonation) {
         VoxyLods v = get(level.getServer());
         if (!v.levels.contains(level.dimension())) return;
         ChunkPos pos = chunk.getPos();
@@ -241,15 +279,30 @@ public final class VoxyLods {
         if (to.isEmpty()) return;
         ResourceKey<Level> dim = level.dimension();
         if (loaded) {
-            v.enqueue(level.getServer(), new Built(dim, pos.toLong(), LodSections.ofLoaded(level, chunk), to, notBefore));
+            v.enqueue(level.getServer(), new Built(dim, pos.toLong(), LodSections.ofLoaded(level, chunk), to, notBefore, detonation));
             return;
         }
         boolean sky = level.dimensionType().hasSkyLight();
         v.building++;
-        CompletableFuture.supplyAsync(() -> LodSections.ofCopy(chunk, sky), Util.backgroundExecutor()).whenComplete((data, error) -> {
+        CompletableFuture.supplyAsync(() -> baseline == null ? LodSections.ofCopy(chunk, sky)
+                : LodSections.difference(chunk.getMinSection(), baseline, LodSections.snapshot(chunk.getSections(), sky)), Util.backgroundExecutor()).whenComplete((data, error) -> {
             if (error != null) Incoming.LOG.warn("Voxy LOD of changed chunk {} not built", pos, error);
-            v.built.add(new Built(dim, pos.toLong(), error == null ? data : null, to, notBefore));
+            v.built.add(new Built(dim, pos.toLong(), error == null ? data : null, to, notBefore, detonation));
         });
+    }
+
+    /** Admission for an already encoded, selected-viewer horizon column; false means retain and retry upstream. */
+    public static boolean offerPrepared(ServerPlayer player, S2C.VoxyChunk packet) {
+        VoxyLods state = get(player.getServer());
+        Viewer viewer = state.viewers.get(player.getUUID());
+        if (viewer == null || viewer.dimension != player.level().dimension()
+                || !packet.dimension().equals(player.level().dimension().location())) return false;
+        if (viewer.bytes + packet.sections().length > QUEUE_BYTES
+                || ua.zentix.incoming.nuclear.world.NuclearPrep.memory(player.serverLevel()) + packet.sections().length
+                > ua.zentix.incoming.nuclear.world.NuclearPrep.PLANS_CAP) return false;
+        viewer.offer(ChunkPos.asLong(packet.x(), packet.z()), packet);
+        MtB7Columns.offered(player.serverLevel(), packet);
+        return true;
     }
 
     private static boolean near(ServerPlayer p, ChunkPos pos) {
@@ -258,16 +311,12 @@ public final class VoxyLods {
     }
 
     private void enqueue(MinecraftServer server, Built b) {
-        ServerLevel level = server.getLevel(b.dimension);
-        if (level != null && level.getGameTime() < b.notBefore) {
-            held.add(b);
-            return;
-        }
-        S2C.VoxyChunk packet = new S2C.VoxyChunk(b.dimension.location(), ChunkPos.getX(b.chunk), ChunkPos.getZ(b.chunk), b.data);
+        S2C.VoxyChunk packet = new S2C.VoxyChunk(b.dimension.location(), ChunkPos.getX(b.chunk), ChunkPos.getZ(b.chunk), b.data, b.notBefore, b.detonation);
         for (UUID id : b.to) {
             Viewer viewer = viewers.get(id);
             if (viewer == null || viewer.dimension != b.dimension) continue;
             viewer.offer(b.chunk, packet);
+            MtB7Columns.offered(server.getLevel(b.dimension), packet);
         }
     }
 
@@ -278,11 +327,6 @@ public final class VoxyLods {
     }
 
     private void tick(MinecraftServer server) {
-        if (!held.isEmpty()) {
-            List<Built> due = new ArrayList<>(held);
-            held.clear();
-            for (Built b : due) enqueue(server, b);
-        }
         for (Built b; (b = built.poll()) != null; ) {
             building--;
             if (b.data != null) enqueue(server, b);
@@ -326,7 +370,10 @@ public final class VoxyLods {
     public static void batchReceived(C2S.LodBatchReceived packet, IPayloadContext context) {
         if (!(context.player() instanceof ServerPlayer p)) return;
         Viewer viewer = get(p.getServer()).viewers.get(p.getUUID());
-        if (viewer != null) viewer.flow.acknowledge(packet.id(), packet.desiredChunksPerTick());
+        if (viewer != null) {
+            viewer.finishWritten();
+            viewer.flow.acknowledge(packet.id(), packet.desiredChunksPerTick());
+        }
     }
 
     /** The client reported whether it renders Voxy, into which the mod ingests chunks. Server thread. */

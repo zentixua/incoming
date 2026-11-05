@@ -377,6 +377,12 @@ public final class ClientNuclear {
     // ---------------------------------------------------------------- rendering and sound
 
     /** Client detonation {@code id} clock: ticks since detonation ({@link Active#ticks}); NaN if absent. */
+    /** LOD publication follows the very same interpolated event clock as the visible pressure front. */
+    public static double horizonTime(int id, long fallback) {
+        Active a = DETONATIONS.get(id);
+        return a == null ? fallback : a.d.gameTime() + a.ticks(0);
+    }
+
     static double ticksOf(int id) {
         Active a = DETONATIONS.get(id);
         return a == null ? Double.NaN : a.ticks(0);

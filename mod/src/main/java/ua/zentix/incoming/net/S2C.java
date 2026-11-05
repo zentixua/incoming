@@ -826,13 +826,23 @@ public final class S2C {
      * detonation traces and district lamps. {@code sections}: sections with light ({@code compat/LodSections}); dimension:
      * whose chunk it is — packets from old dimension rejected after dimension change.
      */
-    public record VoxyChunk(net.minecraft.resources.ResourceLocation dimension, int x, int z, byte[] sections) implements CustomPacketPayload {
+    public record VoxyChunk(net.minecraft.resources.ResourceLocation dimension, int x, int z, byte[] sections, long notBefore, int detonation) implements CustomPacketPayload {
+        public VoxyChunk(net.minecraft.resources.ResourceLocation dimension, int x, int z, byte[] sections) {
+            this(dimension, x, z, sections, Long.MIN_VALUE, -1);
+        }
+
+        public VoxyChunk(net.minecraft.resources.ResourceLocation dimension, int x, int z, byte[] sections, long notBefore) {
+            this(dimension, x, z, sections, notBefore, -1);
+        }
+
         /** Maximum chunk size: 24 globally paletted sections and two light layers — ~250 KB. */
         static final int MAX_BYTES = 1 << 20;
         public static final Type<VoxyChunk> TYPE = new Type<>(Incoming.id("voxy_chunk"));
         public static final StreamCodec<ByteBuf, VoxyChunk> CODEC = StreamCodec.composite(
                 net.minecraft.resources.ResourceLocation.STREAM_CODEC, VoxyChunk::dimension, ByteBufCodecs.VAR_INT, VoxyChunk::x,
-                ByteBufCodecs.VAR_INT, VoxyChunk::z, ByteBufCodecs.byteArray(MAX_BYTES), VoxyChunk::sections, VoxyChunk::new);
+                ByteBufCodecs.VAR_INT, VoxyChunk::z, ByteBufCodecs.byteArray(MAX_BYTES), VoxyChunk::sections,
+                StreamCodecs.trailing(ByteBufCodecs.VAR_LONG, Long.MIN_VALUE), VoxyChunk::notBefore,
+                StreamCodecs.trailing(ByteBufCodecs.VAR_INT, -1), VoxyChunk::detonation, VoxyChunk::new);
 
         @Override
         public Type<? extends CustomPacketPayload> type() {
@@ -841,7 +851,7 @@ public final class S2C {
 
         @Override
         public boolean equals(Object o) {
-            return o instanceof VoxyChunk v && v.x == x && v.z == z && v.dimension.equals(dimension) && java.util.Arrays.equals(v.sections, sections);
+            return o instanceof VoxyChunk v && v.x == x && v.z == z && v.notBefore == notBefore && v.detonation == detonation && v.dimension.equals(dimension) && java.util.Arrays.equals(v.sections, sections);
         }
 
         @Override

@@ -94,6 +94,7 @@ public final class IncomingClient {
     private static final int UNLIT_TINT = 0x7C7C84;
 
     public IncomingClient(IEventBus modBus, ModContainer container) {
+        MtB7Client.start();
         container.registerExtensionPoint(IConfigScreenFactory.class, ConfigurationScreen::new);
         modBus.addListener(IncomingClient::renderers);
         modBus.addListener(WeaponModels::register);
@@ -326,6 +327,7 @@ public final class IncomingClient {
 
     /** Everything the client holds about the world: sounds, tracks, effects, the nuke, map; world exit (and devtest effects sandbox). */
     public static void resetSession() {
+        ClientHorizon.reset();
         ua.zentix.incoming.client.fx.BlastTime.reset();
         ClientSounds.reset();
         FlightTracks.logout();
@@ -564,8 +566,8 @@ public final class IncomingClient {
         }
 
         @Override
-        public void voxyChunk(S2C.VoxyChunk p) {
-            VoxyIngest.accept(p);
+        public void voxyChunk(S2C.VoxyChunk p, net.neoforged.neoforge.network.handling.IPayloadContext context) {
+            VoxyIngest.accept(p, context);
         }
 
         @Override

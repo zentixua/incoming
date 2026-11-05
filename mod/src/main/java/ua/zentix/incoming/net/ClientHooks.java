@@ -65,7 +65,7 @@ public interface ClientHooks {
     default void radarScope(S2C.RadarScope p) {}
 
     /** Chunk into Voxy LOD; network thread. */
-    default void voxyChunk(S2C.VoxyChunk p) {}
+    default void voxyChunk(S2C.VoxyChunk p, net.neoforged.neoforge.network.handling.IPayloadContext context) {}
 
     default void lodBatchStart(S2C.LodBatchStart p, net.neoforged.neoforge.network.handling.IPayloadContext context) {}
 

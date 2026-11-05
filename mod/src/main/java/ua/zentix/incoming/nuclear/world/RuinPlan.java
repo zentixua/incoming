@@ -728,6 +728,8 @@ public final class RuinPlan {
     boolean memoryWaiting() { return memoryWaiting; }
 
     public boolean apply(ServerLevel level, LevelChunk chunk, Detonation d, ColumnScar.Budget budget) {
+        long mtB7Started=MtB7Stages.begin(2);
+        try {
         memoryWaiting = false;
         if (this == EMPTY) {
             RuinContext kept = NuclearWorld.get(level).ruinsIfKept(d.id());
@@ -791,6 +793,9 @@ public final class RuinPlan {
             if (ctx != null) ua.zentix.incoming.nuclear.flash.FlashSync.chars(level, chunk, d, flash());
             return true;
         }
+
+        } catch (RuntimeException | Error failure) { MtB7Stages.fail(2); throw failure; }
+        finally { MtB7Stages.end(2,mtB7Started); }
     }
 
     /** Structural candidates only; thermal/terrain transformations never manufacture coarse debris. */

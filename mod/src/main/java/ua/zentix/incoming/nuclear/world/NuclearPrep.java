@@ -93,7 +93,7 @@ public final class NuclearPrep {
      * Prebuilt-ruin memory cap, bytes: ready plans, chunk snapshots (memory/disk), in-flight reads, background
      * thread buffers. Beyond cap new reads await plans releasing snapshots; no further plans built above cap.
      */
-    static final long PLANS_CAP = 512L << 20;
+    public static final long PLANS_CAP = 512L << 20;
     /** Concurrent disk reads and estimated memory per read (parsed city chunk tens of KB). */
     private static final int READS = 64;
     private static final long READ_BYTES = 96L << 10;
@@ -261,6 +261,19 @@ public final class NuclearPrep {
     private final java.util.Set<Integer> failed = new java.util.HashSet<>();
     private final WorkClock clock = WorkClock.decaying(0.5);
 
+    /** TEST ONLY: passive snapshot of existing preparation ownership/cursors. */
+    String mtB7Progress() {
+        var out = new java.util.ArrayList<String>();
+        for (var p : preps) out.add("{strike="+p.strike+",detonation="+p.detonation+",due="+p.detonateTime
+            +",layoutPending="+(p.layout!=null)+",near="+p.nearPlans+",nearCursor="+p.nextTodo+"/"+p.todo.size()
+            +",disk="+p.farPlans+",farCursor="+p.nextFar+"/"+p.order.length+",readCursor="+p.nextRead
+            +",reading="+p.reading.size()+",running="+p.farRunning.size()+",skipped="+p.farSkipped
+            +",capped="+p.capped+",heapStop="+p.heapStop+",announced="+p.announced+",draining="+p.draining
+            +",planBytes="+p.plans.bytes()+",shotBytes="+(p.ruins==null?0:p.ruins.shotBytes())
+            +",lods="+java.util.Arrays.toString(p.lods.stats())+"}");
+        return out.toString();
+    }
+
     /** Total prebuilt ruins across strikes (tests, status). */
     public int plannedChunks() {
         return preps.stream().mapToInt(p -> p.plans.size()).sum();
@@ -293,16 +306,16 @@ public final class NuclearPrep {
     }
 
     /** One server-wide preparation admission estimate; multiple strikes/dimensions share the cap. */
-    static long memory(ServerLevel level) {
+    public static long memory(ServerLevel level) {
         return memory(level, true);
     }
 
     static long memory(ServerLevel level, boolean reserveWorkers) {
-        long bytes = 0;
+        long bytes = ua.zentix.incoming.compat.VoxyLods.retainedBytes(level.getServer());
         int height = level.getHeight();
         for (ServerLevel other : level.getServer().getAllLevels()) {
             height = Math.max(height, other.getHeight());
-            bytes += NuclearWorld.get(other).retainedRuinBytes();
+            bytes += NuclearWorld.get(other).retainedRuinBytes() + FarLods.retainedBytes(other);
         }
         return bytes + (reserveWorkers ? RuinWorkers.bufferBytes(height) + RuinMemory.TRANSITION_ROOM
                 : RuinWorkers.residentBufferBytes(height));

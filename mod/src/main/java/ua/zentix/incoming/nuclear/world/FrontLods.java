@@ -60,6 +60,8 @@ final class FrontLods {
         byte state = BUILDING;
         @Nullable
         ProtoChunk chunk;
+        @Nullable
+        byte[][] baseline;
         int[] lamps = NO_LAMPS;
         /**
          * Copy has ruins; district light changed ({@link FarLods}: LOD sent even unchanged from disk); ruin request
@@ -76,7 +78,7 @@ final class FrontLods {
     }
 
     /** Ready background copy: copy null if build failed (absent on disk, stale plan). */
-    private record Built(long chunk, int index, @Nullable ProtoChunk copy, boolean ruined, int[] lamps, long bytes) {}
+    private record Built(long chunk, int index, @Nullable ProtoChunk copy, boolean ruined, int[] lamps, long bytes, @Nullable byte[][] baseline) {}
 
     private final int strike;
     /** Zone chunks with ready disk plans, in plan (wave) order; cursor tracks read submissions. */
@@ -162,6 +164,7 @@ final class FrontLods {
             }
             c.state = READY;
             c.chunk = b.copy;
+            c.baseline = b.baseline;
             c.lamps = b.lamps;
             c.ruined = b.ruined;
             c.bytes = b.bytes;
@@ -185,6 +188,7 @@ final class FrontLods {
     /** Read new copies in queue order while capacity, reads and background pool available. */
     private void start(ServerLevel level, Long2ObjectOpenHashMap<RuinPlan> plans, long room, long now) {
         boolean fires = IncomingConfig.SERVER.nukeFires.get();
+        boolean voxy = ua.zentix.incoming.compat.VoxyLods.wanted(level), sky = level.dimensionType().hasSkyLight();
         for (int started = 0; next < candidates.size() && started < PER_TICK && built.pending() < READS && bytes() + READ_BYTES <= room; ) {
             // after detonation use at most half pool: player-chunk ruins more important
             if (!RuinWorkers.admit(RuinWorkers.Priority.FAR) || d != null && RuinWorkers.inFlight() >= RuinWorkers.capacity() / 2) return;
@@ -200,18 +204,19 @@ final class FrontLods {
             started++;
             if (format == null) format = DiskShots.Format.of(level);
             DiskShots.Format f = format;
-            DiskShots.readSections(f, new ChunkPos(chunk)).thenApply(s -> build(f, s, plan, fires, index))
-                    .exceptionally(e -> new Built(chunk, index, null, false, NO_LAMPS, 0)).thenAccept(built.expect());
+            DiskShots.readSections(f, new ChunkPos(chunk)).thenApply(s -> build(f, s, plan, fires, index, voxy, sky))
+                    .exceptionally(e -> new Built(chunk, index, null, false, NO_LAMPS, 0, null)).thenAccept(built.expect());
         }
     }
 
     /** Chunk copy with plan ruins and lit-lamp positions (background thread). */
-    private static Built build(DiskShots.Format f, DiskShots.Sections s, RuinPlan plan, boolean fires, int index) {
+    private static Built build(DiskShots.Format f, DiskShots.Sections s, RuinPlan plan, boolean fires, int index, boolean voxy, boolean sky) {
+        byte[][] before = voxy && s.skip() == null ? ua.zentix.incoming.compat.LodSections.snapshot(s.sections(), sky) : null;
         FarLods.Built b = FarLods.build(f, s, plan, fires, false, false);
-        if (b.copy() == null) return new Built(b.chunk(), index, null, false, NO_LAMPS, 0);
+        if (b.copy() == null) return new Built(b.chunk(), index, null, false, NO_LAMPS, 0, null);
         LevelChunkSection[] sections = b.copy().getSections();
         int[] lamps = ChunkLights.litLamps(sections);
-        return new Built(b.chunk(), index, b.copy(), b.ruined(), lamps, bytes(sections) + 4L * lamps.length);
+        return new Built(b.chunk(), index, b.copy(), b.ruined(), lamps, bytes(sections) + 4L * lamps.length + (before == null ? 0 : java.util.Arrays.stream(before).mapToLong(b0 -> b0.length + 24L).sum()), before);
     }
 
     /** Copy memory, bytes: section palettes (estimated like {@code ChunkShot}) and chunk-copy object. */
@@ -283,6 +288,7 @@ final class FrontLods {
             // LOD already same; lit lamps require later district-light check, like sent copy (claim)
             readyBytes -= c.bytes;
             c.chunk = null;
+        c.baseline = null;
             c.lit = c.lamps.length > 0;
             c.lamps = NO_LAMPS;
             c.dark = dark;
@@ -296,7 +302,7 @@ final class FrontLods {
             counting = true;
         }
         // same chunk just sent via another DH path: DH would skip copy, retry next tick
-        if (!DhUpdates.sendHeld(level, c.chunk)) {
+        if (!DhUpdates.sendHeld(level, c.chunk, c.due, c.baseline, d.id())) {
             schedule.add(chunk, now + 1);
             return;
         }
@@ -305,6 +311,7 @@ final class FrontLods {
         dhBytes += c.bytes;
         inDh.add(new long[] {System.nanoTime(), c.bytes});
         c.chunk = null;
+        c.baseline = null;
         c.lit = c.lamps.length > 0;
         c.lamps = NO_LAMPS;
         c.state = SENT;

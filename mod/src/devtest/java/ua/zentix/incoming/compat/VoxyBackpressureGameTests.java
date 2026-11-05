@@ -96,6 +96,10 @@ public final class VoxyBackpressureGameTests {
             viewer.offer(1, fresh);
             channel.draining = true;
             channel.flush();
+            // Netty completion, rather than another server tick, owns the remaining bounded batch.
+            // Advance the embedded event-loop clock deterministically past its headroom retry.
+            channel.advanceTimeBy(2, java.util.concurrent.TimeUnit.MILLISECONDS);
+            channel.runScheduledPendingTasks();
             viewer.drain(player); // complete the stalled bootstrap batch
             h.assertTrue(batches.size() == 1, "missing bootstrap finish marker");
             for (int tick = 0; tick < 1200; tick++) viewer.drain(player);
@@ -147,7 +151,8 @@ public final class VoxyBackpressureGameTests {
             h.assertTrue(delivered.get() != null, "unloaded mark was discarded instead of read from its save");
             h.assertTrue(delivered.get().getBlockState(new BlockPos(unloaded.getMinBlockX() + (changed.getX() & 15),
                     changed.getY(), unloaded.getMinBlockZ() + (changed.getZ() & 15))).is(Blocks.GOLD_BLOCK), "saved update is stale");
-            h.assertTrue(viewer.queue.size() == 768 && viewer.queue.get(key).sections() != old, "fresh copy did not replace waiting copy at cap");
+            var queued = viewer.queue.values().stream().filter(p -> p.x() == unloaded.x && p.z() == unloaded.z).findFirst().orElse(null);
+            h.assertTrue(viewer.queue.size() == 768 && queued != null && queued.sections() != old, "fresh copy did not replace waiting copy at cap");
             h.assertTrue(viewer.bytes <= VoxyLods.QUEUE_BYTES && viewer.dropped == 0, "replacement exceeded cap or was dropped");
             h.assertTrue(level.getChunkSource().getChunkNow(unloaded.x, unloaded.z) == null, "LOD refresh loaded world chunks");
         });

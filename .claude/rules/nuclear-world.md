@@ -369,6 +369,13 @@ paths:
   it retains no world/preparation owner. Regressions: RuinWorkersTest, RuinInboxTest and nuke_lifecycle_* GameTests
   (cancel/resize/shutdown, nonblocking layout handoff, cross-strike/dimension admission).
 
+- Preparation ownership after cancellation: `RuinInbox` read reservations remain in the owning `NuclearPrep` counter
+  until actual completion even after the preparation is detached; never subtract them merely because its map entry
+  was removed. `RetainedPlans` follows put/remove/clear ownership so `ScarQueue` consumption releases retained bytes
+  instead of preserving historical totals. `FarLods` tags reads, snapshots and completions with a generation; clear
+  invalidates publication but keeps running reads charged until harvest. New requests for their coordinates wait
+  for that completion. Far scorch rings use `RadialChunks` row heads, prepared incrementally (global per-tick slice),
+  not an area-sized array/sort. This does not replace `NuclearPrep`'s heavy-zone layout or certify all 1 Mt memory paths.
 - Structural material retains source face scorch through `RuinScorch` (one chunk index per removal batch).
   `RuinMatter` saves the six tiers with each pending piece; log-axis rotation rotates the faces, without
   recomputing illumination at the destination. `FlashSync.movedChars` merges landed faces once per chunk/tick.
