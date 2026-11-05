@@ -1008,6 +1008,241 @@ public final class RuinPlan {
         }
     }
 
+    /**
+     * Bind one section only after its original neighbor inputs have a durable owner. A binding is
+     * an immediate server-thread write attempt, not permission to overwrite a later world edit.
+     * The caller keeps completed local cells out of later attempts and repairs stale cells before
+     * declaring the chunk complete. No material ledger or old applied-plan owner is created here.
+     */
+    WaveSection bindSection(LevelChunk chunk, Detonation d, ColumnScar.Budget budget, int section) {
+        return bindSection(chunk, d, budget, section, local -> true);
+    }
+
+    WaveSection bindSection(LevelChunk chunk, Detonation d, ColumnScar.Budget budget, int section,
+                            java.util.function.IntPredicate pending) {
+        if (!(chunk.getLevel() instanceof ServerLevel level) || !level.getServer().isSameThread())
+            throw new IllegalStateException("Wave binding requires the server thread");
+        if (section < 0 || section >= chunk.getSections().length) throw new IllegalArgumentException("Invalid wave section");
+        RuinPlan layer = flashOf(chunk);
+        boolean marked = layer == null && FlashScorch.marked(chunk, d.id());
+        boolean over = layer != null || marked;
+        boolean ignites = budget.ignites && IncomingConfig.SERVER.nukeFires.get();
+        int availableCount = budget.fires;
+        int layerRemaining = marked ? budget.layer.get(chunk.getPos().toLong()) : 0;
+        int maximum = IncomingConfig.SERVER.nukeMaxFires.get();
+        var work = new it.unimi.dsi.fastutil.ints.Int2ObjectLinkedOpenHashMap<WaveCell>();
+        var stale = new java.util.BitSet(4096);
+        var structural = new java.util.BitSet(4096);
+        for (long source : material) {
+            if (BlockPos.getX(source) >> 4 != chunk.getPos().x || BlockPos.getZ(source) >> 4 != chunk.getPos().z
+                    || chunk.getSectionIndex(BlockPos.getY(source)) != section) continue;
+            structural.set((BlockPos.getY(source) & 15) << 8 | (BlockPos.getZ(source) & 15) << 4 | BlockPos.getX(source) & 15);
+        }
+        var pos = new BlockPos.MutableBlockPos();
+        int x0 = chunk.getPos().getMinBlockX(), z0 = chunk.getPos().getMinBlockZ(), minY = chunk.getMinBuildHeight();
+        var liveSection = chunk.getSection(section);
+        for (int k = 0; k < cells.length; k++) {
+            int cell = cells[k], key = cell & KEY_MASK, local = key & 4095;
+            if (section(cell) != section || !pending.test(local)) continue;
+            BlockState live = liveSection.getBlockState(local & 15, local >> 8, (local >> 4) & 15);
+            BlockState original = layer != null ? layer.beforeFlash(key, live)
+                    : marked && fire(live) ? Blocks.AIR.defaultBlockState() : live;
+            if (normal(original) != normal(olds[k])) { stale.set(local); continue; }
+            BlockPos at = at(pos, cell, x0, z0, minY).immutable();
+            BlockState after = states[(cell >>> STATE_SHIFT) & STATE_MASK];
+            var value = new WaveCell(at, live, after, structural.get(local), (cell & SLOW) != 0);
+            work.put(local, value);
+            if (value.slow) continue; // The old writer runs these callbacks after fire decisions.
+            if (over && fire(live)) {
+                value.counted = layer != null && layer.counted(key);
+                if (marked && layerRemaining > 0) { value.layerClaim = 1; layerRemaining--; value.counted = true; }
+                if (after.isAir() && ignites && hasFire(key)) value.after = live;
+                else if (value.counted) {
+                    availableCount = Math.max(0, availableCount - 1);
+                    value.fireDelta--;
+                }
+            }
+        }
+        if (ignites) for (int cell : fires) {
+            int key = cell & KEY_MASK, local = key & 4095;
+            if (section(cell) != section || !pending.test(local) || stale.get(local)) continue;
+            WaveCell value = work.get(local);
+            BlockState actual = liveSection.getBlockState(local & 15, local >> 8, (local >> 4) & 15);
+            BlockState live = value == null || value.slow ? actual : value.after;
+            if (value == null) {
+                value = new WaveCell(at(pos, cell, x0, z0, minY).immutable(), actual, live, false, false);
+                value.counted = layer != null && layer.counted(key);
+                if (marked && fire(actual) && layerRemaining > 0) {
+                    value.layerClaim = 1; value.counted = true;
+                }
+            }
+            Ignition decision = ignition(live, over, value.counted, availableCount, maximum);
+            if (!decision.burn) continue;
+            if (!work.containsKey(local)) {
+                work.put(local, value);
+                layerRemaining -= value.layerClaim;
+            }
+            // A slow source still occupies this cell until its world callback: the old fire loop
+            // cannot ignite it. Keep that ordering even for an unusual slow air-like mod state.
+            if (value.slow) continue;
+            value.after = states[(cell >>> STATE_SHIFT) & STATE_MASK];
+            value.tickFire = true;
+            if (decision.addCount) { availableCount++; value.fireDelta++; }
+        }
+        if (over) for (int cell : layer != null ? layer.fires : fireCells(new LevelChunkSection[]{liveSection})) {
+            // fireCells above uses an array-local section zero; the retained layer uses world-section indices.
+            int key = layer != null ? cell & KEY_MASK : (section << SECTION_SHIFT) | (cell & 4095);
+            int local = key & 4095;
+            if (section(key) != section || !pending.test(local) || stale.get(local)
+                    || find(key) >= 0 || ignites && hasFire(key)) continue;
+            BlockState live = liveSection.getBlockState(local & 15, local >> 8, (local >> 4) & 15);
+            if (!fire(live)) continue;
+            var value = new WaveCell(at(pos, key, x0, z0, minY).immutable(), live, Blocks.AIR.defaultBlockState(), false, false);
+            value.counted = layer != null && layer.counted(key);
+            if (marked && layerRemaining > 0) { value.layerClaim = 1; layerRemaining--; value.counted = true; }
+            if (value.counted) value.fireDelta--;
+            work.put(local, value);
+        }
+        var changes = new java.util.ArrayList<PreparedSectionWriter.CellChange>(work.size());
+        var sources = new java.util.BitSet(work.size());
+        var worldCells = new java.util.BitSet(work.size());
+        int[] counts = new int[work.size()], claims = new int[work.size()];
+        var ticks = new java.util.BitSet(work.size());
+        int n = 0;
+        for (WaveCell value : work.values()) {
+            changes.add(new PreparedSectionWriter.CellChange(value.pos, value.before, value.after));
+            if (value.structural) sources.set(n);
+            if (value.slow) worldCells.set(n);
+            if (value.tickFire) ticks.set(n);
+            claims[n] = value.layerClaim;
+            counts[n++] = value.fireDelta;
+        }
+        var stalePositions = new LongArrayList(stale.cardinality());
+        for (int local = stale.nextSetBit(0); local >= 0; local = stale.nextSetBit(local + 1))
+            stalePositions.add(at(pos, section << SECTION_SHIFT | local, x0, z0, minY).asLong());
+        return new WaveSection(chunk.getPos(), section, budget, marked, changes, sources, worldCells, stalePositions.toLongArray(), counts, claims, ticks);
+    }
+
+    private static final class WaveCell {
+        final BlockPos pos;
+        final BlockState before;
+        final boolean structural, slow;
+        BlockState after;
+        int fireDelta, layerClaim;
+        boolean tickFire, counted;
+
+        WaveCell(BlockPos pos, BlockState before, BlockState after, boolean structural, boolean slow) {
+            this.pos = pos; this.before = before; this.after = after; this.structural = structural; this.slow = slow;
+        }
+    }
+
+    /** One bounded attempt. Caller-created receipts remain available after callback failure. */
+    static final class WaveSection {
+        private final ChunkPos chunk;
+        private final int section;
+        private final ColumnScar.Budget budget;
+        private final boolean marked;
+        private final List<PreparedSectionWriter.CellChange> changes;
+        private final java.util.BitSet structural, worldCells, ticks;
+        private final long[] stale;
+        private final int[] counts, claims;
+        private boolean used;
+
+        private WaveSection(ChunkPos chunk, int section, ColumnScar.Budget budget, boolean marked,
+                            List<PreparedSectionWriter.CellChange> changes, java.util.BitSet structural, java.util.BitSet worldCells,
+                            long[] stale, int[] counts, int[] claims, java.util.BitSet ticks) {
+            this.chunk = chunk; this.section = section; this.budget = budget; this.marked = marked;
+            this.changes = List.copyOf(changes); this.structural = structural; this.worldCells = worldCells; this.stale = stale;
+            this.counts = counts; this.claims = claims; this.ticks = ticks;
+        }
+
+        List<PreparedSectionWriter.CellChange> changes() { return changes; }
+        boolean structural(int index) { return structural.get(index); }
+        long[] stalePositions() { return stale.clone(); }
+
+        void apply(ServerLevel level, LevelChunk live, PreparedSectionWriter.Receipt receipt,
+                   java.util.function.BooleanSupplier worldPermit, java.util.function.IntPredicate beforeMutation) {
+            if (used || !live.getPos().equals(chunk) || section >= live.getSections().length)
+                throw new IllegalStateException("Wave binding already consumed or used in another chunk");
+            used = true;
+            int[] scanned = {-1}, confirmed = {budget.fires};
+            try {
+                PreparedSectionWriter.applyRuin(level, live, changes, receipt, worldPermit, index -> {
+                    // The preview may have returned a slot for a quench whose admission was
+                    // subsequently refused. Only confirmed earlier writes can fund a fresh fire.
+                    // All fire decisions use the ordinary first pass, in increasing list order.
+                    for (int prior = scanned[0] + 1; prior < index; prior++)
+                        if (receipt.applied(prior)) confirmed[0] = Math.max(0, confirmed[0] + counts[prior]);
+                    scanned[0] = Math.max(scanned[0], index - 1);
+                    var change = changes.get(index);
+                    if (ticks.get(index) && !fire(change.expected())
+                            && confirmed[0] >= IncomingConfig.SERVER.nukeMaxFires.get()) return false;
+                    return beforeMutation.test(index);
+                }, worldCells);
+            } finally {
+                if (!marked && !receipt.applied().isEmpty()) budget.layer.remove(chunk.toLong());
+                for (int i = 0; i < changes.size(); i++) if (receipt.applied(i)) {
+                    // A forgotten layer has only an aggregate count. Consume that existing
+                    // charge cell by cell; other sections' still-burning fires keep their slots.
+                    if (claims[i] > 0) {
+                        int remaining = budget.layer.get(chunk.toLong()) - claims[i];
+                        if (remaining > 0) budget.layer.put(chunk.toLong(), remaining);
+                        else budget.layer.remove(chunk.toLong());
+                    }
+                    budget.fires = Math.max(0, budget.fires + counts[i]);
+                    if (ticks.get(i)) {
+                        var change = changes.get(i);
+                        BlockPos at = change.pos();
+                        level.scheduleTick(at, change.state().getBlock(),
+                                30 + (int) (RuinPlanner.hash(at.getX(), at.getY(), at.getZ(), 31) * 10));
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Caller must already own the original neighbor inputs durably, before this first mutation.
+     * The returned original motion map belongs to that caller; this does not retain an Applied plan.
+     */
+    short[] beginWave(ServerLevel level, LevelChunk chunk) {
+        short[] motion = new short[256];
+        for (int col = 0; col < 256; col++) motion[col] = (short) (chunk.getHeight(Heightmap.Types.MOTION_BLOCKING, col & 15, col >> 4) + 1);
+        if (biomes != null && ScorchedBiomes.write(level, chunk, biomes)) DhUpdates.mark(level, chunk.getPos(), level.getGameTime());
+        return motion;
+    }
+
+    /** All source cells must be resolved first. Original-input lifetime and chunk completion are caller-owned. */
+    void finishWave(ServerLevel level, LevelChunk chunk, Detonation d, ColumnScar.Budget budget) {
+        // Every section has now been inspected. Count slots whose fire disappeared independently
+        // can finally be returned without releasing another section's live fire charge early.
+        int unused = budget.layer.remove(chunk.getPos().toLong());
+        if (flashOf(chunk) == null && FlashScorch.marked(chunk, d.id())) budget.fires = Math.max(0, budget.fires - unused);
+        scheduleFluids(level);
+        FlashScorch.unmark(chunk, d.id());
+        ua.zentix.incoming.nuclear.flash.FlashSync.chars(level, chunk, d, flash());
+    }
+
+    private void scheduleFluids(ServerLevel level) {
+        var pos = new BlockPos.MutableBlockPos();
+        for (int k = 0; k < fluidTicks.length; k++) {
+            pos.set(fluidTicks[k]);
+            if (!Terrain.ready(level, pos)) continue;
+            BlockState state = level.getBlockState(pos);
+            if (!state.getFluidState().isEmpty()) level.scheduleTick(pos.immutable(), state.getFluidState().getType(),
+                    fluidDelay(k, pos.getX(), pos.getY(), pos.getZ()));
+        }
+    }
+
+    /** Shared ignition decision for the old flash writer and the section-bound wave path. */
+    private record Ignition(boolean burn, boolean addCount) {}
+    private static final Ignition NO_IGNITION = new Ignition(false, false);
+
+    private static Ignition ignition(BlockState live, boolean over, boolean counted, int fires, int maximum) {
+        if (!live.isAir()) return over && fire(live) ? new Ignition(true, !counted) : NO_IGNITION;
+        return fires < maximum ? new Ignition(true, true) : NO_IGNITION;
+    }
+
     /** Structural candidates only; thermal/terrain transformations never manufacture coarse debris. */
     private long[] material = new long[0];
 
@@ -1111,16 +1346,16 @@ public final class RuinPlan {
             LevelChunkSection s = now[i];
             BlockState fire = states[(c >>> STATE_SHIFT) & STATE_MASK];
             BlockState live = s.getBlockState(c & 15, (c >> 8) & 15, (c >> 4) & 15);
+            Ignition decision = ignition(live, over, flash != null && flash.counted(c & KEY_MASK), budget.fires, maxFires);
+            if (!decision.burn) continue;
             if (!live.isAir()) {
-                if (!over || !fire(live)) continue;
                 // layer fire excluded from detonation count (layer predicts wave-blown, or no plan) but retained by ruins
                 // now enters count
-                if (flash == null || !flash.counted(c & KEY_MASK)) budget.fires++;
+                if (decision.addCount) budget.fires++;
                 if (live != fire) {
                     ChunkDeltaWrites.set(now, touched, wasEmpty, i, c & 15, (c >> 8) & 15, (c >> 4) & 15, fire);
                 }
             } else {
-                if (budget.fires >= maxFires) continue;
                 ChunkDeltaWrites.set(now, touched, wasEmpty, i, c & 15, (c >> 8) & 15, (c >> 4) & 15, fire);
                 lit++;
                 if (!layer || !isBlown(c & KEY_MASK)) {
@@ -1216,15 +1451,7 @@ public final class RuinPlan {
         ChunkDeltaWrites.checkLight(light, pos, checked == checks.length ? checks : java.util.Arrays.copyOf(checks, checked));
         // fluid beside breach (neighbors too) gets tick like neighbor setBlock, staggered by position hash, at most
         // FLUID_TICKS per second: replacement wakes no neighbors, unticked water would stand as wall
-        for (int k = 0; k < fluidTicks.length; k++) {
-            m.set(fluidTicks[k]);
-            // neighbor unloaded (ready plan needs no neighbors): no tick; chunk load does not schedule one, so water
-            // stands until nearby block update
-            if (!Terrain.ready(level, m)) continue;
-            BlockState st = level.getBlockState(m);
-            if (st.getFluidState().isEmpty()) continue;
-            level.scheduleTick(m.immutable(), st.getFluidState().getType(), fluidDelay(k, m.getX(), m.getY(), m.getZ()));
-        }
+        scheduleFluids(level);
         PHASES[3] += System.nanoTime() - t;
         t = System.nanoTime();
         chunk.setUnsaved(true);

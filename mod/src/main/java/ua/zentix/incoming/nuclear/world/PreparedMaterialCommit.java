@@ -6,12 +6,86 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.BitSet;
 import java.util.List;
 import java.util.function.BooleanSupplier;
 
 /** Server-side commit of one already admitted section group; no scheduling, loading or old material ledger. */
 final class PreparedMaterialCommit {
+    /**
+     * Apply source scars and capture material in the same write. The caller pins just one
+     * destination page for this synchronous attempt, so a section spanning many destinations
+     * never requires all their pages in RAM together. Other material sources stay pending;
+     * independent non-material deltas can proceed. The receipt belongs to the caller even on error.
+     */
+    static void waveDepart(ServerLevel level, LevelChunk chunk, RuinPlan.WaveSection binding,
+                           PreparedMaterialStore.Lease owner, int[] indices, long tick,
+                           PreparedSectionWriter.Receipt receipt, BooleanSupplier permit) {
+        PreparedMaterialBatch batch = owner == null ? null : owner.batch();
+        if (batch == null && indices.length != 0) throw new IllegalArgumentException("Source rows require a pinned owner");
+        var selected = batch == null ? List.<Integer>of() : select(batch, indices, tick, true);
+        if (!selected.isEmpty() && ready(level, batch, selected, true) != chunk)
+            throw new IllegalArgumentException("Wave source group does not belong to this ready chunk");
+        int[] sourceRows = new int[4096];
+        Arrays.fill(sourceRows, -1);
+        for (int index : selected) sourceRows[local(batch.move(index).source())] = index;
+        for (long stale : binding.stalePositions()) {
+            int index = sourceRows[local(BlockPos.of(stale))];
+            if (index >= 0 && batch.move(index).source().asLong() == stale) batch.sourceChanged(index);
+        }
+        var changes = binding.changes();
+        int[] rows = new int[changes.size()];
+        Arrays.fill(rows, -1);
+        for (int n = 0; n < changes.size(); n++) {
+            var change = changes.get(n);
+            int index = sourceRows[local(change.pos())];
+            if (index < 0 || !batch.move(index).source().equals(change.pos())
+                    || batch.phase(index) != PreparedMaterialBatch.Phase.PLANNED) continue;
+            if (!binding.structural(n)) throw new IllegalArgumentException("Material source lacks structural provenance");
+            var move = batch.move(index);
+            // A flash transformation or player edit changes the physical source. Repair this row;
+            // never transport its obsolete palette state or remove it without a valid owner.
+            if (move.before() != change.expected() || change.expected() == change.state()) {
+                batch.sourceChanged(index);
+                continue;
+            }
+            batch.bindSourceAfter(index, change.state());
+            rows[n] = index;
+        }
+        Throwable failure = null;
+        try {
+            binding.apply(level, chunk, receipt, permit, n -> {
+                var change = changes.get(n);
+                if (!binding.structural(n) || !requiresOwner(change.expected())) return true;
+                int index = rows[n];
+                if (index < 0) return false;
+                return capture(level, batch, index);
+            });
+        } catch (RuntimeException | Error error) {
+            failure = error;
+        }
+        for (int n = 0; n < rows.length; n++) if (rows[n] >= 0) {
+            try {
+                reconcileDeparture(level, chunk, batch, rows[n], receipt.stale(n), receipt.attempted(n));
+            } catch (RuntimeException | Error error) {
+                failure = combine(failure, error);
+            }
+        }
+        rethrow(failure);
+    }
+
+    private static int local(BlockPos at) {
+        return (at.getY() & 15) << 8 | (at.getZ() & 15) << 4 | at.getX() & 15;
+    }
+
+    /** Shared material eligibility; no building classifier and no legacy ledger access. */
+    static boolean requiresOwner(BlockState state) {
+        var props = Blast.props(state);
+        return !props.air() && !props.fluid() && !props.fixed() && (props.bearing() || props.leaves())
+                && props.density() * props.volume() > 0;
+    }
+
     static int depart(ServerLevel level, PreparedMaterialBatch batch, int[] indices, long tick) {
         return depart(level, batch, indices, tick, ColumnScar::replaceState, () -> true);
     }
@@ -40,12 +114,9 @@ final class PreparedMaterialCommit {
         try {
             PreparedSectionWriter.apply(level, chunk, changes, receipt, write, permit, n -> {
                 int index = selected.get(n);
-                var move = batch.move(index);
                 // Capture only after callback admission and exact source validation. Even NBT
                 // capture is part of the admitted work; a whole section of containers is not free.
-                var entity = move.before().hasBlockEntity() ? level.getBlockEntity(move.source()) : null;
-                if (move.before().hasBlockEntity() && entity == null) return false;
-                return batch.tryCapture(index, entity == null ? null : entity.saveWithoutMetadata(level.registryAccess()));
+                return capture(level, batch, index);
             });
         } catch (RuntimeException | Error error) {
             failure = error;
@@ -53,28 +124,40 @@ final class PreparedMaterialCommit {
         for (int n = 0; n < selected.size(); n++) {
             int index = selected.get(n);
             try {
-                if (receipt.stale(n)) batch.sourceChanged(index);
-                else if (receipt.attempted(n)) {
-                    var move = batch.move(index);
-                    if (chunk.getBlockState(move.source()) != move.before()) batch.removed(index);
-                    else {
-                        // Container cleanup precedes setBlock. An exception may leave the source
-                        // state unchanged but its inventory empty; restore the captured owner.
-                        var cargo = batch.cargo(index);
-                        if (cargo != null) {
-                            var entity = level.getBlockEntity(move.source());
-                            if (entity == null) throw new IllegalStateException("Unchanged source lost its block entity");
-                            entity.loadWithComponents(cargo, level.registryAccess());
-                            entity.setChanged();
-                        }
-                    }
-                }
+                reconcileDeparture(level, chunk, batch, index, receipt.stale(n), receipt.attempted(n));
             } catch (RuntimeException | Error error) {
                 failure = combine(failure, error); // Reconcile the other confirmed writes too.
             }
         }
         rethrow(failure);
         return receipt.applied().cardinality();
+    }
+
+    private static boolean capture(ServerLevel level, PreparedMaterialBatch batch, int index) {
+        var move = batch.move(index);
+        var entity = move.before().hasBlockEntity() ? level.getBlockEntity(move.source()) : null;
+        if (move.before().hasBlockEntity() && entity == null) return false;
+        return batch.tryCapture(index, entity == null ? null : entity.saveWithoutMetadata(level.registryAccess()));
+    }
+
+    private static void reconcileDeparture(ServerLevel level, LevelChunk chunk, PreparedMaterialBatch batch,
+                                           int index, boolean stale, boolean attempted) {
+        if (stale) batch.sourceChanged(index);
+        else if (attempted) {
+            var move = batch.move(index);
+            if (chunk.getBlockState(move.source()) != move.before()) batch.removed(index);
+            else {
+                // Cleanup can empty a container before setBlock throws. Restore it if the source
+                // still owns the material; a confirmed removal instead keeps cargo in the page.
+                var cargo = batch.cargo(index);
+                if (cargo != null) {
+                    var entity = level.getBlockEntity(move.source());
+                    if (entity == null) throw new IllegalStateException("Unchanged source lost its block entity");
+                    entity.loadWithComponents(cargo, level.registryAccess());
+                    entity.setChanged();
+                }
+            }
+        }
     }
 
     static int land(ServerLevel level, PreparedMaterialBatch batch, int[] indices, long tick, boolean destinationScarApplied) {

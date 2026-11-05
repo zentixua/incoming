@@ -195,6 +195,76 @@ public final class PreparedMaterialStoreGameTests {
         });
     }
 
+    @GameTest(template = "pad", batch = "nuke_prepared_store_lease", timeoutTicks = 200, skyAccess = true)
+    public static void consumerLeaseRetainsDirtyOwnershipUntilReleaseAndCloseRefusesLiveConsumers(GameTestHelper h) {
+        StrikeGameTests.gameSpeed(h);
+        var level = h.getLevel();
+        var info = new RegionStorageInfo("gametest", level.dimension(), "incoming_material_lease");
+        var path = level.getDataStorage().dataFolder.toPath().resolve("material-lease-" + UUID.randomUUID());
+        var store = new PreparedMaterialStore(info, path, new PreparedMaterialStore.Limits(1, 1, 1, 1, 65536));
+        var lease = new PreparedMaterialStore.Lease[1];
+        StrikeGameTests.afterTest(h, () -> {
+            if (lease[0] != null) lease[0].close();
+            store.close();
+        });
+        var first = batch(10, 64, true);
+        var second = batch(10, 80, false);
+        var a = PreparedMaterialStore.Key.of(first);
+        var b = PreparedMaterialStore.Key.of(second);
+        var fence = new CompletableFuture<?>[1];
+        int[] stage = {0};
+        h.succeedWhen(() -> {
+            if (stage[0] == 0) {
+                h.assertTrue(store.request(a).state() == PreparedMaterialStore.State.ABSENT, "Waiting for first page absence");
+                h.assertTrue(store.admit(first), "Could not admit first page");
+                first.capture(0, cargo(5)); first.removed(0);
+                fence[0] = store.flush(); stage[0] = 1;
+            }
+            if (stage[0] == 1) {
+                h.assertTrue(fence[0].isDone(), "Waiting for initial clean page"); fence[0].join();
+                lease[0] = store.pin(a);
+                h.assertTrue(lease[0] != null, "Ready page could not be leased");
+                h.assertTrue(store.request(b).state() == PreparedMaterialStore.State.WAITING
+                        && store.get(a) == lease[0].batch() && store.counters().residents() == 1,
+                        "Another request evicted the leased consumer's owner");
+                lease[0].batch().placed(0);
+                lease[0].batch().capture(1, cargo(61)); lease[0].batch().removed(1);
+                fence[0] = store.flush(); stage[0] = 2;
+            }
+            if (stage[0] == 2) {
+                h.assertTrue(fence[0].isDone(), "Waiting for leased page's new revision"); fence[0].join();
+                h.assertTrue(!store.evict(a) && store.request(b).state() == PreparedMaterialStore.State.WAITING,
+                        "A successful write retired a page still owned by its consumer");
+                lease[0].close(); lease[0].close();
+                boolean refused = false;
+                try { lease[0].batch(); } catch (IllegalStateException expected) { refused = true; }
+                h.assertTrue(refused, "Closed lease still exposed its mutable owner");
+                stage[0] = 3;
+            }
+            if (stage[0] == 3) {
+                h.assertTrue(store.request(b).state() == PreparedMaterialStore.State.ABSENT,
+                        "Released page/handle did not permit the second request to progress");
+                h.assertTrue(store.admit(second), "Could not admit second page after consumer release");
+                fence[0] = store.flush(); stage[0] = 4;
+            }
+            if (stage[0] == 4) {
+                h.assertTrue(fence[0].isDone(), "Waiting for second page receipt"); fence[0].join();
+                h.assertTrue(store.request(a).state() == PreparedMaterialStore.State.READY, "Waiting for evicted first page reload");
+                lease[0] = store.pin(a);
+                var restored = lease[0].batch();
+                h.assertTrue(restored.revision() == first.revision() && restored.phase(0) == PreparedMaterialBatch.Phase.PLACED
+                        && restored.cargo(0) == null && restored.phase(1) == PreparedMaterialBatch.Phase.REMOVED
+                        && restored.cargo(1).getInt("count") == 61, "Consumer mutation escaped durable ownership");
+                var refusedClose = store.close();
+                h.assertTrue(refusedClose.isCompletedExceptionally() && store.counters().residents() == 1
+                        && lease[0].batch() == restored, "Close waited silently or discarded its leased owner");
+                lease[0].close();
+                fence[0] = store.close(); stage[0] = 5;
+            }
+            h.assertTrue(fence[0].isDone(), "Waiting for close retry after consumer release"); fence[0].join();
+        });
+    }
+
     private static PreparedMaterialBatch batch(int event, int y, boolean two) {
         var target = new BlockPos(112, y, -64);
         var first = new PreparedMaterialBatch.Move(target.east(64), target, Blocks.BARREL.defaultBlockState(),

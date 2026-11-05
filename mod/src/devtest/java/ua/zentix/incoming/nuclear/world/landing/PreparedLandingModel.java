@@ -90,6 +90,9 @@ public final class PreparedLandingModel {
 
     private static final Comparator<Motion> ORDER = Comparator.comparingDouble((Motion m) -> m.due)
             .thenComparingInt(m -> m.departed ? 1 : 0)
+            // At equal physical time, release a lower moving cell before its following cell.
+            // Contenders for one destination have the same y and retain event/source tie order.
+            .thenComparingInt(m -> !m.departed ? Integer.MIN_VALUE : m.contact ? m.ty : floor(m.ny))
             .thenComparingInt(m -> m.source.event).thenComparingLong(m -> m.source.id);
     private static final Comparator<Source> SOURCES = Comparator.comparingInt(Source::event).thenComparingLong(Source::id);
     // Direction.Plane.HORIZONTAL order in the current material rule: north, east, south, west.

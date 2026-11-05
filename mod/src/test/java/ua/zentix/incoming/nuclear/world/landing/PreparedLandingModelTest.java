@@ -144,6 +144,42 @@ class PreparedLandingModelTest {
         assertEquals(0, landing.trace().wakes(), "A sideways change should not energize a supported resting block");
     }
 
+    @Test void equalArrivalIntoOneVacancyUsesEventThenSourceIdentity() {
+        for (boolean olderRightEvent : new boolean[]{false, true}) {
+            byte[] cells = floor(0);
+            for (int x = 0; x < W; x++) for (int z = 0; z < W; z++) cells[index(x, 1, z)] = SOLID;
+            cells[index(24, 1, 24)] = AIR;
+            var left = new Source(1, 2, 23, 2, 24, 1, 1, 2300, 0, 0, 0, 0, 0, Kind.ORDINARY);
+            var right = new Source(2, olderRightEvent ? 1 : 2, 25, 2, 24, 2, 1, 2300, 0, 0, 0, 0, 0, Kind.ORDINARY);
+            var result = solve(cells, List.of(right, left));
+            long expected = olderRightEvent ? right.id() : left.id();
+            var winner = result.outcomes().stream().filter(o -> o.x() == 24 && o.y() == 1 && o.z() == 24).findFirst().orElseThrow();
+            assertEquals(expected, winner.source().id(), "Equal-time contenders changed event/source priority");
+            assertEquals(2, result.count(Status.LANDED));
+        }
+    }
+
+    @Test void touchingAndGappedColumnsFollowGravityRegardlessOfSourceIdentityOrder() {
+        for (int gap : new int[]{1, 2}) for (boolean reverse : new boolean[]{false, true}) {
+            byte[] cells = new byte[W * W * 96];
+            for (int y = 0; y < 96; y++) for (int z = 0; z < W; z++) for (int x = 0; x < W; x++)
+                if (y == 0 || Math.abs(x - 24) + Math.abs(z - 24) == 1) cells[index(x, y, z)] = SOLID;
+            var inputs = new ArrayList<Source>();
+            for (int i = 0; i < 16; i++) {
+                int y = 32 + i * gap;
+                inputs.add(source(reverse ? 16 - i : i + 1, 24, y, 24, 0));
+                cells[index(24, y, 24)] = SOLID;
+            }
+            var result = PreparedLandingModel.solve(new Snapshot(0, 0, 0, W, 96, W, cells), inputs, Limits.experiment());
+            assertEquals(16, result.count(Status.LANDED));
+            for (var output : result.outcomes()) {
+                assertEquals((output.source().y() - 32) / gap + 1, output.y());
+                double expected = Math.sqrt(2 * (output.source().y() - output.y()) / GRAVITY);
+                assertEquals(expected, output.time(), DT, "Cell ownership serialized a freely falling column");
+            }
+        }
+    }
+
     @Test void laterSideHoleCannotMoveMaterialWithItsVerticalSupportIntact() {
         byte[] cells = floor(0);
         for (int x = 0; x < W; x++) for (int z = 0; z < W; z++) cells[index(x, 4, z)] = SOLID;

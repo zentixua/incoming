@@ -99,6 +99,7 @@ public final class Incoming {
         NeoForge.EVENT_BUS.addListener(ua.zentix.incoming.util.TerrainSurvey::onChunkUnload);
         NeoForge.EVENT_BUS.addListener(ua.zentix.incoming.util.TerrainSurvey::onChunkLoad);
         NeoForge.EVENT_BUS.addListener(StrikeWorld::onServerStopping);
+        NeoForge.EVENT_BUS.addListener(ua.zentix.incoming.nuclear.world.NuclearWorld::onLevelSave);
         NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.event.server.ServerStoppingEvent e) -> ua.zentix.incoming.nuclear.world.NuclearWorld.onServerStopping(e.getServer()));
         // After the mod releases its tickets and work: finish generation started before exit (otherwise the unload loop hangs).
         NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, ua.zentix.incoming.util.StopDrain::onServerStopping);

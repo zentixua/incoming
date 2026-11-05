@@ -16,7 +16,7 @@ import java.util.function.BiFunction;
  * Bounded hot material pages, backed by ordinary region files. Public operations belong to the server
  * thread; completion callbacks only publish detached data and receipts under this owner's monitor.
  * No chunk loading, tickets, cold-page index or per-material tick loop. Cold terminal receipts remain
- * on disk. This owner is not yet wired to world save/stop events.
+ * on disk. NuclearWorld creates this owner lazily and fences it at world save/stop boundaries.
  */
 final class PreparedMaterialStore {
     record Key(int event, long section) {
@@ -35,6 +35,7 @@ final class PreparedMaterialStore {
         }
     }
     enum State { READY, PENDING, ABSENT, WAITING, FAILED }
+    /** The batch is borrowed until the next store operation; retain it across operations only with a Lease. */
     record Lookup(State state, PreparedMaterialBatch batch, Throwable failure) {}
     record Counters(int residents, int reads, int writes, int pending, int handles, long writesStarted, long reservedBytes) {}
     private record Directory(int event, int y) {}
@@ -61,7 +62,29 @@ final class PreparedMaterialStore {
         CompletableFuture<?> read;
         long writtenRevision = -1;
         Generation active, pending;
+        int consumerPins;
         Entry(Key key, Handle handle) { this.key = key; this.handle = handle; }
+    }
+
+    /** Synchronous consumer scope. Never carry a live batch into another tick or an asynchronous worker. */
+    final class Lease implements AutoCloseable {
+        private Entry entry;
+        private Lease(Entry entry) { this.entry = entry; }
+
+        PreparedMaterialBatch batch() {
+            synchronized (PreparedMaterialStore.this) {
+                if (entry == null) throw new IllegalStateException("Material page lease is closed");
+                return entry.batch;
+            }
+        }
+
+        @Override public void close() {
+            synchronized (PreparedMaterialStore.this) {
+                if (entry == null) return;
+                entry.consumerPins--;
+                entry = null;
+            }
+        }
     }
 
     private final RegionStorageInfo info;
@@ -110,11 +133,21 @@ final class PreparedMaterialStore {
         return lookup(entry);
     }
 
+    /** Borrowed until the next store operation. Use pin for a consumer that calls back into this store. */
     synchronized PreparedMaterialBatch get(Key key) {
         requireOpen();
         if (failure != null) return null;
         Entry entry = hot.get(key);
         return entry == null || entry.reading || entry.failure != null ? null : entry.batch;
+    }
+
+    /** Pin an already READY owner against both resident eviction and its region handle's retirement. */
+    synchronized Lease pin(Key key) {
+        requireOpen();
+        Entry entry = hot.get(key);
+        if (failure != null || entry == null || entry.reading || entry.failure != null || entry.batch == null) return null;
+        entry.consumerPins++;
+        return new Lease(entry);
     }
 
     /** Caller must first obtain ABSENT. A new plan cannot overwrite a cold completed receipt. */
@@ -227,7 +260,7 @@ final class PreparedMaterialStore {
     }
 
     private static boolean evictable(Entry entry) {
-        return !entry.reading && entry.failure == null && entry.active == null && entry.pending == null
+        return entry.consumerPins == 0 && !entry.reading && entry.failure == null && entry.active == null && entry.pending == null
                 && (entry.batch == null || entry.writtenRevision >= entry.batch.revision());
     }
 
@@ -265,6 +298,11 @@ final class PreparedMaterialStore {
     synchronized CompletableFuture<Void> close() {
         if (closeReceipt != null) return closeReceipt;
         closing = true;
+        // Producers must leave their synchronous lease scopes before shutdown. Refuse immediately,
+        // preserving ownership and allowing close to be retried after release; never wait invisibly.
+        for (Entry entry : hot.values()) if (entry.consumerPins != 0)
+            return CompletableFuture.failedFuture(new IllegalStateException("Prepared material page still leased at close: "
+                    + entry.key + ", consumers=" + entry.consumerPins));
         var readsDone = hot.values().stream().filter(entry -> entry.reading).map(entry -> entry.read).toArray(CompletableFuture[]::new);
         var flushed = flushHot();
         closeReceipt = CompletableFuture.allOf(flushed, CompletableFuture.allOf(readsDone)).handle((unused, error) -> error)

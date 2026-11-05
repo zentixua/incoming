@@ -73,7 +73,7 @@ final class PreparedMaterialBatch {
             throw new IllegalArgumentException("Invalid prepared material batch");
         this.event = event;
         this.owner = owner;
-        this.moves = List.copyOf(moves);
+        this.moves = new ArrayList<>(moves);
         sectionY = moves.getFirst().destination.getY() >> 4;
         phases = new byte[moves.size()];
         cargo = new CompoundTag[moves.size()];
@@ -95,6 +95,16 @@ final class PreparedMaterialBatch {
     Phase phase(int index) { return PHASES[phases[index]]; }
     long revision() { return revision; }
     CompoundTag cargo(int index) { return cargo[index] == null ? null : cargo[index].copy(); }
+
+    /** The wave's current fire/water decision is bound before removal, never after ownership moved. */
+    void bindSourceAfter(int index, BlockState after) {
+        require(index, Phase.PLANNED);
+        Move move = moves.get(index);
+        if (move.sourceAfter == after) return;
+        moves.set(index, new Move(move.source, move.destination, move.before, move.placed, move.destinationBefore,
+                move.departureTick, move.landingTick, move.volume, move.mass, move.dispersed, after));
+        revision++;
+    }
 
     /** Conservative admission estimate, not a measured heap claim. Registry states are shared. */
     long retainedBytes() { return 256L + 224L * size() + cargoBytes; }
@@ -171,7 +181,7 @@ final class PreparedMaterialBatch {
         if (phase(index) != expected) throw new IllegalStateException("Unexpected material phase " + phase(index));
     }
 
-    Snapshot snapshot() { return new Snapshot(event, owner, moves, phases.clone(), cargo.clone(), revision); }
+    Snapshot snapshot() { return new Snapshot(event, owner, List.copyOf(moves), phases.clone(), cargo.clone(), revision); }
 
     /** No reference to the mutable batch survives in the encoder. */
     static final class Snapshot {

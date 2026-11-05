@@ -78,6 +78,17 @@ final class PreparedSectionWriter {
     /** Final admission/cargo capture runs only for a ready, current cell with its callback permit. */
     static void apply(ServerLevel level, LevelChunk chunk, List<CellChange> changes, Receipt receipt,
                       WorldWrite worldWrite, BooleanSupplier worldPermit, IntPredicate beforeMutation) {
+        apply(level, chunk, changes, receipt, worldWrite, worldPermit, beforeMutation, null);
+    }
+
+    /** Validated ruin deltas keep the planner's original world-path flags, including bulk fire/water writes. */
+    static void applyRuin(ServerLevel level, LevelChunk chunk, List<CellChange> changes, Receipt receipt,
+                          BooleanSupplier worldPermit, IntPredicate beforeMutation, BitSet worldCells) {
+        apply(level, chunk, changes, receipt, ColumnScar::replaceState, worldPermit, beforeMutation, worldCells);
+    }
+
+    private static void apply(ServerLevel level, LevelChunk chunk, List<CellChange> changes, Receipt receipt,
+                              WorldWrite worldWrite, BooleanSupplier worldPermit, IntPredicate beforeMutation, BitSet worldCells) {
         if (!level.getServer().isSameThread()) throw new IllegalStateException("Section writes require the server thread");
         if (receipt.started || receipt.size != changes.size()) throw new IllegalArgumentException("Receipt does not own this attempt");
         int section = validate(chunk, changes);
@@ -112,7 +123,7 @@ final class PreparedSectionWriter {
                     // Exact expected state. Blackout equivalence remains confined to the old ruin-plan contract.
                     if (before != change.expected) { receipt.stale.set(i); continue; }
                     if (before == change.state) { receipt.applied.set(i); continue; }
-                    boolean fast = ordinary(before, change.state);
+                    boolean fast = worldCells == null ? ordinary(before, change.state) : !worldCells.get(i);
                     if (fast != (pass == 0)) continue;
                     if (!fast) {
                         int radius = Math.max(RuinPlan.callbackRadius(before), RuinPlan.callbackRadius(change.state));
