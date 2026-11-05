@@ -1,0 +1,103 @@
+{
+  "source_base": "f506c1eae6e868f7a6a6256caac581d6f6534a38",
+  "source_head": "2e9717de77fa0a2d19a1481ff544ec06628eddaf",
+  "pull_request": 605,
+  "ci_base_head": "d2f3854df0221d1a69cbd24c869f881ea9b1dafc",
+  "original_ci_run": 41966271699,
+  "final_ci_run": 41973940019,
+  "final_ci_result": "success",
+  "tested_tree": "bad2d7a97842d58ab7ad1cb1c47ee6eea10fc8cb",
+  "prefix": [
+    "nuke_maintenance",
+    "nuke_structure_tree_rule",
+    "nuke_flash_scorch",
+    "nuke_demand_publication",
+    "work_rays",
+    "nuke_structure_protection",
+    "nuke_near_assembly_skip",
+    "nuke_near_unload",
+    "virtual_return_refused",
+    "nuclear_review_preparation",
+    "nuke_tile_full",
+    "panic_place",
+    "nuke_stripes",
+    "dh_far_zone_proto",
+    "salvo_busy_tickets"
+  ],
+  "grid_origin": [
+    13777285,
+    -59,
+    -1659328
+  ],
+  "stripes_detonation": [
+    13777593,
+    11,
+    -1659226
+  ],
+  "salvo_failure_origin": [
+    13777699,
+    -60,
+    -1659258
+  ],
+  "old_ticket_chunk": [
+    861100,
+    -103705
+  ],
+  "unit_tests": {
+    "tests": 1850,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "normal_gametests": {
+    "required": 2,
+    "passed": 2
+  },
+  "private_prefix": {
+    "old_passed": 14,
+    "old_failed": 1,
+    "new_passed": 15,
+    "new_failed": 0
+  },
+  "harness_sha256": {
+    "prefix.txt": "c9216fc1d708c02c549ac8cc125a3c7c8c9fa0fe788a672da13f56900f201f3e",
+    "replay.init.gradle": "0ce8395bd8d04b5c13cd81eccae5ee985dc686b108336c84c1559cceb71c7777",
+    "run-prefix.sh": "e83fada9536fa2bce0905e7af1ccce333ca199c5fc1c8e3d3f198b2d553835aa",
+    "private-src/ua/zentix/incoming/nuclear/world/CiS8Replay.java": "296c5d9ecb1c47cd1705f746bde83dd4b3249c41e56fc6c0ed19ba0da673754a"
+  },
+  "artifacts": {
+    "raw/ci-original.log": {
+      "sha256": "f38da51549ca1c667a31e0338191ebe2158e876bc0ed9d0cd4b0576fd4552bb2",
+      "bytes": 652020
+    },
+    "raw/old-prefix.log": {
+      "sha256": "353a8b5fee57f0f32aa187f50c810812cd08d5c99ff1c97e80a82e93bae0455a",
+      "bytes": 57431
+    },
+    "raw/new-prefix.log": {
+      "sha256": "560d0aebfb439bed14e06d91e2184195cccce962113ce4e5c71a502e870744c3",
+      "bytes": 46824
+    },
+    "raw/final-validation.log": {
+      "sha256": "787e7f0984c834d40d1f0c0b2041020229f9407b63687b8d24b87c9e1f7c7595",
+      "bytes": 22934
+    },
+    "raw/pr-ci.log": {
+      "sha256": "afc4f4018c20c00e40247e9f4f8aaa801c610d22fee21633eb2ad28f28bb6120",
+      "bytes": 60
+    },
+    "independent-review.md": {
+      "sha256": "66f74da694ee95dbbd7b973179c3f749154b612b4173cf39995f68ebc63d2ce6",
+      "bytes": 9119
+    }
+  },
+  "limits": [
+    "Grid and batch order are pinned; later RNG, worker scheduling and complete CI-shard history are not.",
+    "Native logs do not embed a compiled source SHA; pins come from the clean checkout, explicit commands and source diff.",
+    "Batch observers run before the later afterTest listener; the immediately following observer is not an after-cleanup fence.",
+    "This test-only component does not establish actual 1 Mt/100 kt, save/rejoin or LOD acceptance.",
+    "The separate original nuke_send_hold failure in CI41972699466 remains with RT8 despite this later successful CI."
+  ],
+  "old_fixture_source_sha256": "22b972d00dbd9e6f1366912c985cb51b2a649473a549973a3919f139d58fbce0",
+  "new_fixture_source_sha256": "0c084919d14763298f71a1a24933ea3d28859835e0cd5228b41d8f0eba9cf451"
+}
