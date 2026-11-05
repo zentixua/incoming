@@ -1,0 +1,982 @@
+diff --git a/.claude/rules/gametest.md b/.claude/rules/gametest.md
+index 7f593ea27..40e29aa4d 100644
+--- a/.claude/rules/gametest.md
++++ b/.claude/rules/gametest.md
+@@ -157,3 +157,7 @@ paths:
+   window. `nuke_look_ahead` verifies that an independent background consumer can start after cleanup.
+ - Craft hull-order checks place the charge above the platform and test initial shielding from that same
+   source. A charge inside the platform can remain shielded after the entire selected hull disappears.
++- A direct preparation-handoff fixture owns the returned plans/context when it does not pass them to
++  `NuclearWorld`. Close both in its cleanup; cancelling the former preparation deliberately preserves
++  handed-off work. `nuke_near_ready` followed by `nuke_worker_admission` catches an unclaimed fragment-cache
++  permit even after the worker pool has stopped.
+diff --git a/.claude/rules/nuclear-world.md b/.claude/rules/nuclear-world.md
+index 6f37a24a2..0884c58bb 100644
+--- a/.claude/rules/nuclear-world.md
++++ b/.claude/rules/nuclear-world.md
+@@ -400,6 +400,18 @@ paths:
+   Never keep spent source credits in a historical payload maximum or refund still-allocated arrays by live size.
+   Capture credit transfers to the counted material owner before further admission. `nuke_support_capacity`
+   uses dense removals, partial support reconciliation, fixed competing ownership and full real ledger reload.
++- The original-contact journal uses primitive `RuinOriginals` section pages, preserving the first removed
++  state/event across every unfinished support search. Reserve growth for the actual removal positions,
++  including old/new arrays during page and outer-index rehash. Do not restore a global per-block object map:
++  a dense visible chunk can cross a whole-city table boundary while its own result is small.
++  Normal ledger saves stream at most 64 originals per named-palette row; process-local registry IDs never
++  reach disk. The first row declares and funds its section capacity; reject incomplete/oversized sections.
++  Legacy named rows count sections with bounded scan scratch and a conservative fallback for uncached
++  sections, then use the same first-event rule. `nuke_original_*` covers dense growth, overlap and real reload.
++- Material gets its existing first bounded batch before visible work, then its remaining turn after flash
++  layers and preparation. Keep the same shared clock and preparation share: draining the whole material
++  backlog before these consumers can starve already-funded disk work for the lifetime of a large debris
++  queue (`nuke_frontier_material`: real source/archive reads, moving records and identical physical output).
+ - Completed crater chunks discard column checkpoints after advancing the saved chunk cursor. Completed passes
+   retain only material totals; terminal out-of-height material groups identical state/cargo without trajectory data.
+   Active moving pieces, support provenance/graph and crater passes are charged by `retainedRuinBytes`. The counter
+diff --git a/docs/guide/nuke.md b/docs/guide/nuke.md
+index fd5a73529..a47401d7e 100644
+--- a/docs/guide/nuke.md
++++ b/docs/guide/nuke.md
+@@ -121,7 +121,8 @@ A surface-burst crater supplies its rim from the ground actually excavated; rema
+ 
+ If the shared nuclear working-memory reservation is full, further material removal waits while already moving
+ material can settle. Already started plan reads and completed calculations receive processing time even
+-while a dense visible chunk waits for space; later loaded chunks can reuse plans after the preparation window ends. Large strikes can
++while a dense visible chunk waits for space; later loaded chunks can reuse plans after the preparation window ends.
++The debris queue does not need to empty before preparation or flash damage can continue. Large strikes can
+ still leave chunks waiting for memory and processing time. Pending material and support checks survive a normal world save and reload. Completed movement and crater
+ checkpoints are compacted into material totals; container contents are retained. Saving can pause material
+ movement until its file is written. An old active journal too large for the shared memory limit stays preserved
+diff --git a/docs/guide/ru/nuke.md b/docs/guide/ru/nuke.md
+index 739e15866..eca8db7cc 100644
+--- a/docs/guide/ru/nuke.md
++++ b/docs/guide/ru/nuke.md
+@@ -116,7 +116,8 @@ I степени открытой кожи при указанной погод
+ 
+ Если общий рабочий резерв памяти ядерных ударов заполнен, новое удаление материала ждёт, пока уже движущиеся
+ обломки могут оседать. Уже начатое чтение планов и готовые расчёты получают время обработки, даже когда
+-плотно застроенный видимый чанк ждёт свободного места; позднее загруженные чанки могут использовать планы и после завершения подготовки. После
++плотно застроенный видимый чанк ждёт свободного места; позднее загруженные чанки могут использовать планы и после завершения подготовки.
++Подготовка и повреждения от вспышки могут продолжаться, пока в очереди ещё есть движущиеся обломки. После
+ крупных ударов часть чанков всё ещё может ждать свободной памяти и времени обработки. Очередь материала и проверок опор сохраняется при обычном сохранении и повторной загрузке мира. Завершённые траектории
+ и контрольные точки воронки сворачиваются в итоги по материалам; содержимое контейнеров сохраняется. Сохранение
+ может приостановить движение обломков до окончания записи файла. Если активный журнал старого мира превышает
+diff --git a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinConsumerCompletionGameTests.java b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinConsumerCompletionGameTests.java
+index 6120aa14b..eecc4b21c 100644
+--- a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinConsumerCompletionGameTests.java
++++ b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinConsumerCompletionGameTests.java
+@@ -124,7 +124,7 @@ public final class RuinConsumerCompletionGameTests {
+                     started[0] = level.getGameTime(); stage[0] = 1;
+                     Incoming.LOG.info("CONSUMER_COMPLETION start resident {} fixed {} readOwners {} tasks {} denseDebit {}",
+                             NuclearPrep.residentMemory(level), fixed[0], world.prep().readAccounting(), ctx.tasks(),
+-                            RuinMatter.get(level).removalBytes(positions.length));
++                            RuinMatter.get(level).removalBytes(positions));
+                 }
+                 h.assertTrue(other.materialReservation == fixed[0], "External ownership was released");
+                 h.assertTrue(NuclearPrep.residentMemory(level) <= NuclearPrep.PLANS_CAP, "Consumer publication exceeded capacity");
+diff --git a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinFrontierGameTests.java b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinFrontierGameTests.java
+index 4315bf552..eafcedb87 100644
+--- a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinFrontierGameTests.java
++++ b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinFrontierGameTests.java
+@@ -29,11 +29,23 @@ public final class RuinFrontierGameTests {
+     private RuinFrontierGameTests() {}
+ 
+     @GameTest(template = "range", batch = "nuke_disk_frontier", timeoutTicks = 1200, skyAccess = true)
+-    @SuppressWarnings("unchecked")
+     public static void evictedDemandRefillsBeforeReaderSweepsTheZone(GameTestHelper h) throws Exception {
++        frontier(h, false);
++    }
++
++    @GameTest(template = "range", batch = "nuke_frontier_material", timeoutTicks = 240, skyAccess = true)
++    public static void fundedDiskFrontierProgressesWhileMaterialIsStillMoving(GameTestHelper h) throws Exception {
++        frontier(h, true);
++    }
++
++    @SuppressWarnings("unchecked")
++    private static void frontier(GameTestHelper h, boolean withMaterial) throws Exception {
+         StrikeGameTests.gameSpeed(h);
+         ServerLevel level = h.getLevel();
+         var original = RuinStorageGameTests.fixture(h, true);
++        var originalClock = NuclearWorld.clock(level.getServer());
++        if (withMaterial) NuclearWorld.useClock(level.getServer(), WorkClock.counting(1_000_000));
++        StrikeGameTests.afterTest(h, () -> NuclearWorld.useClock(level.getServer(), originalClock));
+         var centre = new ChunkPos(original.centre().x + 128, original.centre().z + 128);
+         h.assertFalse(ua.zentix.incoming.util.Terrain.ready(level, centre.x, centre.z), "Disk frontier must be cold");
+         double dx = (centre.x - original.centre().x) * 16.0, dz = (centre.z - original.centre().z) * 16.0;
+@@ -86,6 +98,8 @@ public final class RuinFrontierGameTests {
+         CompoundTag expected = RuinPlanner.finish(referenceGrid, Collapse.solve(referenceGrid)).store();
+         h.assertTrue(expected.getLongArray("material").length > 0, "Physical reference has no removed material");
+         boolean[] opened = {false};
++        long[] openedAt = {0};
++        RuinMatter[] material = {null};
+         h.succeedWhen(() -> {
+             try {
+                 if (!opened[0]) {
+@@ -95,10 +109,21 @@ public final class RuinFrontierGameTests {
+                     invokeFar(prep, owner, level);
+                     h.assertTrue(field(owner, "nextRead").getInt(owner) == 0,
+                             "Missing current demand did not rewind stale read cursor: " + field(owner, "nextRead").getInt(owner));
++                    if (withMaterial) {
++                        material[0] = RuinMatter.get(level);
++                        BlockPos source = h.absolutePos(new BlockPos(32, 100, 32));
++                        var pieces = new ArrayList<RuinMatter.Piece>();
++                        for (int i = 0; i < 65_536; i++) pieces.add(new RuinMatter.Piece(source,
++                                net.minecraft.world.level.block.Blocks.STONE.defaultBlockState(), null, Vec3.ZERO, level.getGameTime()));
++                        material[0].release(pieces);
++                    }
+                     other.materialReservation += Math.max(0, NuclearPrep.PLANS_CAP - (32L << 20) - NuclearPrep.memory(level) - (16L << 20));
+                     field(owner, "layout").set(owner, null);
++                    openedAt[0] = level.getGameTime();
+                     opened[0] = true;
+                 }
++                if (withMaterial) h.assertTrue(level.getGameTime() - openedAt[0] < 120,
++                        "Already funded far work was starved by the material continuation");
+                 int cursor = field(owner, "nextFar").getInt(owner), readCursor = field(owner, "nextRead").getInt(owner);
+                 h.assertTrue(readCursor <= Math.min(order.length, cursor + RuinWorkers.capacity()), "Reader outran bounded solver frontier");
+                 h.assertTrue(NuclearPrep.memory(level) <= NuclearPrep.PLANS_CAP, "Controlled pipeline exceeded its admission budget");
+@@ -108,6 +133,15 @@ public final class RuinFrontierGameTests {
+                         + ", far=" + cursor + ", reading=" + ((it.unimi.dsi.fastutil.longs.LongOpenHashSet) field(owner, "reading").get(owner)).size());
+                 h.assertTrue(plan.store().equals(expected), "Frontier/cache changes altered complete physical/material output");
+                 h.assertFalse(ua.zentix.incoming.util.Terrain.ready(level, centre.x, centre.z), "Preparation loaded/generated the disk-only source");
++                if (withMaterial) {
++                    h.assertTrue(material[0].pending() > 0, "Material drained before the far frontier got service");
++                    var moving = (RuinRecords<RuinMatter.Piece>) field(material[0], "moving").get(material[0]);
++                    boolean advanced = false;
++                    for (var piece : moving) if (piece.tick > piece.releasedTick) { advanced = true; break; }
++                    h.assertTrue(advanced || material[0].deposited() > 0, "Material had calls but no actual progress");
++                    Incoming.LOG.info("FRONTIER_MATERIAL far plan completed in {} ticks with {} moving records, resident {}",
++                            level.getGameTime() - openedAt[0], material[0].pending(), NuclearPrep.residentMemory(level));
++                }
+             } catch (ReflectiveOperationException e) { throw new IllegalStateException(e); }
+         });
+     }
+diff --git a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinNearReadyGameTests.java b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinNearReadyGameTests.java
+index 84dc6a41d..20cd12b13 100644
+--- a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinNearReadyGameTests.java
++++ b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinNearReadyGameTests.java
+@@ -36,6 +36,15 @@ public final class RuinNearReadyGameTests {
+         var prep = NuclearWorld.get(level).prep();
+         Object p = request(prep, handle);
+         StrikeGameTests.afterTest(h, () -> RuinPreparation.cancel(level, handle));
++        NuclearPrep.Handoff[] handedOff = {null};
++        StrikeGameTests.afterTest(h, () -> {
++            // Gameplay adopts this returned owner in NuclearWorld. This direct handoff fixture
++            // keeps it itself, so cancelling the former preparation cannot retire its cache.
++            if (handedOff[0] != null) {
++                handedOff[0].plans().clear();
++                handedOff[0].ruins().cancelTasks();
++            }
++        });
+         boolean[] stalled = {false}, loaded = {false};
+         var farGate = new java.util.concurrent.CompletableFuture<Void>();
+         var farReads = new java.util.ArrayList<java.util.concurrent.CompletableFuture<DiskShots.Read>>();
+@@ -143,6 +152,7 @@ public final class RuinNearReadyGameTests {
+                 Detonation event = new Detonation(1_903_001, geometry.burst(), geometry.groundY(), geometry.yieldKt(), geometry.surface(),
+                         level.getGameTime(), 0, 0, geometry.visibility(), 0, geometry.scale(), false, geometry.wave());
+                 var ready = prep.handOff(level, event, level.getGameTime(), identity);
++                handedOff[0] = ready;
+                 h.assertTrue(ready != null && ready.plans() == plans && plans.get(centre.toLong()) == near,
+                         "Partial handoff changed or discarded actual near output");
+                 h.assertTrue(!field(p, "draining").getBoolean(p), "Partial handoff discarded unfinished far ownership");
+diff --git a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinOriginalsGameTests.java b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinOriginalsGameTests.java
+new file mode 100644
+index 000000000..212f2243e
+--- /dev/null
++++ b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinOriginalsGameTests.java
+@@ -0,0 +1,208 @@
++package ua.zentix.incoming.nuclear.world;
++
++import java.nio.file.Path;
++import java.util.ArrayList;
++import java.util.List;
++import java.util.UUID;
++import net.minecraft.core.BlockPos;
++import net.minecraft.gametest.framework.GameTest;
++import net.minecraft.gametest.framework.GameTestHelper;
++import net.minecraft.nbt.CompoundTag;
++import net.minecraft.nbt.ListTag;
++import net.minecraft.nbt.NbtUtils;
++import net.minecraft.nbt.Tag;
++import net.minecraft.world.level.block.Blocks;
++import net.neoforged.neoforge.gametest.GameTestHolder;
++import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
++import ua.zentix.incoming.Incoming;
++import ua.zentix.incoming.gametest.StrikeGameTests;
++
++/** Dense original-state lifetime, with the global table boundary from the actual 1 Mt failure. */
++@GameTestHolder(Incoming.MOD_ID)
++@PrefixGameTestTemplate(false)
++public final class RuinOriginalsGameTests {
++    private RuinOriginalsGameTests() {}
++
++    private static long source(int i) {
++        return BlockPos.asLong(-4096 + (i & 255), -32 + (i >>> 16), -4096 + ((i >>> 8) & 255));
++    }
++
++    @GameTest(template = "pad", batch = "nuke_original_sections", timeoutTicks = 100)
++    public static void denseJournalHasNoWorldSizedRehash(GameTestHelper h) {
++        RuinOriginals journal = new RuinOriginals();
++        int count = 1_570_626;
++        for (int i = 0; i < count; i++) journal.put(source(i), Blocks.STONE_BRICKS.defaultBlockState(), 2, false);
++        long before = journal.bytes();
++        h.assertTrue(journal.size() == count, "Original provenance was lost");
++        h.assertTrue(before < 64L << 20, "Dense original journal retained per-block object ownership");
++        long[] next = new long[22_144];
++        for (int i = 0; i < next.length; i++) next[i] = BlockPos.asLong(-208 + (i & 15), 64 + (i >>> 8), -864 + ((i >>> 4) & 15));
++        long growth = journal.growthBytes(next);
++        h.assertTrue(growth < 4L << 20, "One dense chunk requests a global journal expansion");
++        for (long at : next) journal.put(at, Blocks.BRICKS.defaultBlockState(), 3, false);
++        h.assertTrue(journal.bytes() <= before + growth, "Journal publication exceeded its complete growth allowance");
++        for (int i = 0; i < count; i++) h.assertTrue(journal.state(source(i)) == Blocks.STONE_BRICKS.defaultBlockState(),
++                "Growth changed an existing original");
++        Incoming.LOG.info("ORIGINAL_SECTIONS old count {} retained {}, next {} growth {}, final {}",
++                count, before, next.length, growth, journal.bytes());
++        journal.clear();
++        h.assertTrue(journal.bytes() < 8192 && journal.isEmpty(), "Completed journal retains its backing pages");
++        h.succeed();
++    }
++
++    @GameTest(template = "pad", batch = "nuke_original_stream", timeoutTicks = 200)
++    public static void firstRemovedStatesSurviveBothLegacyAndNormalStream(GameTestHelper h) throws Exception {
++        StrikeGameTests.gameSpeed(h);
++        var level = h.getLevel();
++        RuinMatter ledger = new RuinMatter();
++        CompoundTag part = new CompoundTag(), row = new CompoundTag();
++        ListTag rows = new ListTag(); rows.add(row); part.put("support_originals", rows);
++        for (int i = 0; i < 8195; i++) {
++            // Exceed the legacy scanner's bounded section-count cache with real distinct sections.
++            row.putLong("position", BlockPos.asLong(i * 16, -16, -4096)); row.putInt("event", 9);
++            row.put("state", NbtUtils.writeBlockState(Blocks.BRICKS.defaultBlockState()));
++            RuinMatter.read(part, level.registryAccess(), ledger, false);
++            row.putInt("event", 3); row.put("state", NbtUtils.writeBlockState(Blocks.STONE_BRICKS.defaultBlockState()));
++            RuinMatter.read(part, level.registryAccess(), ledger, false);
++            row.putInt("event", 6); row.put("state", NbtUtils.writeBlockState(Blocks.GLASS.defaultBlockState()));
++            RuinMatter.read(part, level.registryAccess(), ledger, false);
++        }
++        RuinMatter.read(new CompoundTag(), level.registryAccess(), ledger, true);
++        CompoundTag expected = ledger.save(new CompoundTag(), level.registryAccess());
++        for (Tag value : expected.getList("support_originals", Tag.TAG_COMPOUND)) {
++            CompoundTag original = (CompoundTag) value;
++            h.assertTrue(original.getInt("event") == 3, "Overlapping legacy events replaced the first removal");
++        }
++        Path file = level.getServer().getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT)
++                .resolve("data/original-sections-" + UUID.randomUUID() + ".dat");
++        ledger.setDirty(); ledger.save(file.toFile(), level.registryAccess());
++        var restored = new java.util.concurrent.atomic.AtomicReference<java.util.concurrent.CompletableFuture<RuinMatter>>();
++        h.succeedWhen(() -> {
++            h.assertTrue(ledger.writable(), "Normal frozen ledger save is pending");
++            if (restored.get() == null) restored.set(java.util.concurrent.CompletableFuture.supplyAsync(() -> {
++                try {
++                    var measure = LedgerScan.measure(file, "incoming_ruin_matter", java.util.Set.of(), 8L << 20);
++                    if (measure.owned() >= 8L << 20) throw new IllegalStateException("Section import requires per-block object credit");
++                    RuinMatter read = (RuinMatter) LedgerReader.read(file, "incoming_ruin_matter", level.registryAccess(),
++                            measure.row(), java.util.Set.of());
++                    if (read.retainedBytes() > measure.owned()) throw new IllegalStateException("Section import exceeded admission");
++                    Path legacy = file.resolveSibling(file.getFileName() + ".legacy");
++                    CompoundTag root = new CompoundTag(); root.put("data", expected);
++                    net.minecraft.nbt.NbtIo.writeCompressed(root, legacy);
++                    var oldMeasure = LedgerScan.measure(legacy, "incoming_ruin_matter", java.util.Set.of(), 8L << 20);
++                    if (oldMeasure.owned() >= 8L << 20) throw new IllegalStateException("Bounded legacy fallback does not fund sparse sections");
++                    RuinMatter oldRead = (RuinMatter) LedgerReader.read(legacy, "incoming_ruin_matter", level.registryAccess(),
++                            oldMeasure.row(), java.util.Set.of());
++                    if (oldRead.retainedBytes() > oldMeasure.owned()
++                            || !normalized(oldRead.save(new CompoundTag(), level.registryAccess())).equals(normalized(expected.copy())))
++                        throw new IllegalStateException("Legacy section accounting changed or underfunded originals");
++                    return read;
++                } catch (java.io.IOException error) { throw new java.io.UncheckedIOException(error); }
++            }, net.minecraft.Util.ioPool()));
++            h.assertTrue(restored.get().isDone(), "Normal streaming import is pending");
++            RuinMatter read = restored.get().join();
++            h.assertTrue(normalized(read.save(new CompoundTag(), level.registryAccess())).equals(normalized(expected)),
++                    "Streaming sections changed state, event, support or material ownership");
++        });
++    }
++
++    @GameTest(template = "pad", batch = "nuke_original_bounds", timeoutTicks = 100)
++    public static void sectionHeadersCannotUnderstateImportedOwnership(GameTestHelper h) {
++        for (int entries = 1; entries <= 4096; entries++) h.assertTrue(RuinOriginals.importBytes(entries) <= entries * 256L,
++                "Section density regressed the legacy per-original admission bound");
++        CompoundTag row = new CompoundTag();
++        row.putLong("section", net.minecraft.core.SectionPos.asLong(-1, -1, -1));
++        row.putInt("original_entries", 1);
++        ListTag palette = new ListTag(); palette.add(NbtUtils.writeBlockState(Blocks.BRICKS.defaultBlockState()));
++        row.put("palette", palette); row.putLongArray("cells", new long[]{3L << 24, (3L << 24) | 1});
++        h.assertTrue(rejected(() -> new RuinOriginals().read(row)), "Underdeclared section was accepted");
++        row.putInt("original_entries", 4097);
++        h.assertTrue(rejected(() -> new RuinOriginals().read(row)), "Oversized section was allocated");
++        row.remove("original_entries");
++        h.assertTrue(rejected(() -> new RuinOriginals().read(row)), "Headerless section was accepted");
++        var uncharged = new RuinOriginals(); long fixed = uncharged.bytes();
++        row.putLong("original_entries", 2);
++        h.assertTrue(rejected(() -> uncharged.read(row)) && uncharged.bytes() == fixed && uncharged.isEmpty(),
++                "Long header allocated an uncharged section");
++        row.putShort("original_entries", (short) 2);
++        h.assertTrue(rejected(() -> uncharged.read(row)) && uncharged.bytes() == fixed && uncharged.isEmpty(),
++                "Short header allocated an uncharged section");
++        row.putInt("original_entries", 3);
++        var incomplete = new RuinOriginals(); incomplete.read(row);
++        h.assertTrue(rejected(incomplete::loaded), "Incomplete section was published");
++        h.succeed();
++    }
++
++    @GameTest(template = "pad", batch = "nuke_original_growth", timeoutTicks = 100)
++    public static void existingPageFundsTheLastIntermediateRehash(GameTestHelper h) throws Exception {
++        var journal = new RuinOriginals();
++        for (int i = 0; i < 2; i++) journal.put(cell(i), Blocks.BRICKS.defaultBlockState(), 1, false);
++        long before = journal.bytes();
++        long[] positions = new long[4094];
++        for (int i = 0; i < positions.length; i++) positions[i] = cell(i + 2);
++        long grant = journal.growthBytes(positions);
++        for (int i = 2; i < 3072; i++) journal.put(cell(i), Blocks.BRICKS.defaultBlockState(), 1, false);
++        var pages = (java.util.Map<?, ?>) field(journal, "pages");
++        Object table = field(pages.values().iterator().next(), "table");
++        // Keep the actual last old arrays alive across their replacement, as they coexist
++        // with the new arrays during rehash. This observes the peak missed by final size alone.
++        int[] oldKeys = (int[]) field(table, "key");
++        long[] oldValues = (long[]) field(table, "value");
++        for (int i = 3072; i < 4096; i++) journal.put(cell(i), Blocks.BRICKS.defaultBlockState(), 1, false);
++        long overlapping = 64L + oldKeys.length * 4L + oldValues.length * 8L;
++        long peakGrowth = journal.bytes() - before + overlapping;
++        Incoming.LOG.info("ORIGINAL_GROWTH grant {} finalGrowth {} overlapping {} peakGrowth {}",
++                grant, journal.bytes() - before, overlapping, peakGrowth);
++        java.lang.ref.Reference.reachabilityFence(oldKeys);
++        java.lang.ref.Reference.reachabilityFence(oldValues);
++        h.assertTrue(peakGrowth <= grant, "Existing section did not fund its intermediate old/new arrays");
++        h.succeed();
++    }
++
++    private static long cell(int i) { return BlockPos.asLong(i & 15, i >>> 8, (i >>> 4) & 15); }
++
++    private static Object field(Object owner, String name) throws ReflectiveOperationException {
++        for (Class<?> type = owner.getClass(); type != null; type = type.getSuperclass()) {
++            try { var f = type.getDeclaredField(name); f.setAccessible(true); return f.get(owner); }
++            catch (NoSuchFieldException ignored) { }
++        }
++        throw new NoSuchFieldException(name);
++    }
++
++    private static boolean rejected(Runnable action) {
++        try { action.run(); return false; }
++        catch (IllegalArgumentException expected) { return true; }
++    }
++
++    @GameTest(template = "pad", batch = "nuke_original_min", timeoutTicks = 100)
++    public static void emptyAndSingletonImportsFundTheirFixedOwners(GameTestHelper h) throws Exception {
++        for (int count = 0; count < 2; count++) {
++            var ledger = new RuinMatter();
++            if (count > 0) {
++                var row = new CompoundTag(); row.putLong("position", 0); row.putInt("event", 1);
++                row.put("state", NbtUtils.writeBlockState(Blocks.BRICKS.defaultBlockState()));
++                var rows = new ListTag(); rows.add(row);
++                var part = new CompoundTag(); part.put("support_originals", rows);
++                RuinMatter.read(part, h.getLevel().registryAccess(), ledger, true);
++            }
++            Path file = h.getLevel().getServer().getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT)
++                    .resolve("data/original-min-" + UUID.randomUUID() + ".dat");
++            try (var output = new java.io.DataOutputStream(new java.util.zip.GZIPOutputStream(java.nio.file.Files.newOutputStream(file)))) {
++                var writer = new LedgerWriter(output);
++                writer.compound(""); writer.compound("data"); ledger.write(writer, h.getLevel().registryAccess());
++                writer.end(); writer.end();
++            }
++            var measure = LedgerScan.measure(file, "incoming_ruin_matter", java.util.Set.of(), NuclearPrep.PLANS_CAP);
++            Incoming.LOG.info("ORIGINAL_MIN count {} import {} resident {}", count, measure.owned(), ledger.retainedBytes());
++            h.assertTrue(measure.owned() >= ledger.retainedBytes(), "Small ledger import omitted fixed journal ownership");
++        }
++        h.succeed();
++    }
++
++    private static CompoundTag normalized(CompoundTag tag) {
++        List<Tag> rows = new ArrayList<>(tag.getList("support_originals", Tag.TAG_COMPOUND));
++        rows.sort(java.util.Comparator.comparingLong(row -> ((CompoundTag) row).getLong("position")));
++        ListTag sorted = new ListTag(); sorted.addAll(rows); tag.put("support_originals", sorted);
++        return tag;
++    }
++}
+diff --git a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinSupportCapacityGameTests.java b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinSupportCapacityGameTests.java
+index b3cbed466..98d729311 100644
+--- a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinSupportCapacityGameTests.java
++++ b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinSupportCapacityGameTests.java
+@@ -116,7 +116,7 @@ public final class RuinSupportCapacityGameTests {
+         ledger.release(List.of(piece)); ledger.support(level, List.of(piece), d);
+         other.materialReservation = previous + COMPETING;
+         long fixed = other.materialReservation;
+-        h.assertTrue(NuclearPrep.residentMemory(level) + ledger.removalBytes(DENSITY[0]) + (1L << 20) < NuclearPrep.PLANS_CAP,
++        h.assertTrue(NuclearPrep.residentMemory(level) + ledger.removalBytes(dense.getFirst().positions) + (1L << 20) < NuclearPrep.PLANS_CAP,
+                 "Fixture does not fund the initial real dense publication");
+         world.scars().offer(dense.getFirst().chunk, d);
+         clock.start(1_000_000); world.scars().work(level, time, clock);
+@@ -130,9 +130,9 @@ public final class RuinSupportCapacityGameTests {
+         }
+         h.assertTrue(sources.isEmpty() && ledger.pendingSupport() > 0,
+                 "Fixture must consume sources while support and provenance remain pending");
+-        var originals = (Map<?, ?>) field(ledger, "originals").get(ledger);
++        var originals = (RuinOriginals) field(ledger, "originals").get(ledger);
+         h.assertTrue(originals.size() >= DENSITY[0], "Pending provenance was discarded");
+-        Incoming.LOG.info("SUPPORT_CAPACITY expanded {} units, ledger {} -> {}, original {}, support {}, arrays {}",
++        Incoming.LOG.info("SUPPORT_CAPACITY expanded {} units, ledger {} -> {}, original {}, support {}, index estimate {}",
+                 expanded, chargedBefore, ledger.retainedBytes(), originals.size(), ledger.pendingSupport(), backing(ledger));
+         for (int i = 1; i < dense.size(); i++) world.scars().offer(dense.get(i).chunk, d);
+         int ticks = 0;
+@@ -209,7 +209,8 @@ public final class RuinSupportCapacityGameTests {
+ 
+     private static long backing(RuinMatter ledger) throws ReflectiveOperationException {
+         long bytes = 0;
+-        for (String name : List.of("supports", "uncertain", "originals")) {
++        bytes += ((RuinOriginals) field(ledger, "originals").get(ledger)).bytes();
++        for (String name : List.of("supports", "uncertain")) {
+             Object map = field(ledger, name).get(ledger);
+             for (String array : List.of("key", "value", "link")) {
+                 Field f;
+diff --git a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinSustainedProgressGameTests.java b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinSustainedProgressGameTests.java
+index f50eea3b6..b9b29fd68 100644
+--- a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinSustainedProgressGameTests.java
++++ b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinSustainedProgressGameTests.java
+@@ -109,7 +109,7 @@ public final class RuinSustainedProgressGameTests {
+         }
+         // A complete path includes one source publication and the authoritative cohort's material,
+         // in addition to the solver/startup bound. The earlier smaller fixture did not fund that path.
+-        long room = need + cached + (4L << 20) + matter.removalBytes(targets.size());
++        long room = need + cached + (4L << 20) + matter.removalBytes(targets.stream().mapToLong(BlockPos::asLong).toArray());
+         h.assertTrue(room > RuinWorkers.threadBufferBytes(level.getHeight()), "Fixture must fund source decoding");
+         other.materialReservation += NuclearPrep.PLANS_CAP - NuclearPrep.residentMemory(level) - room;
+         long fixed = other.materialReservation, began = level.getGameTime();
+diff --git a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinWorkerAdmissionGameTests.java b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinWorkerAdmissionGameTests.java
+index 0ae650c7c..687d1884c 100644
+--- a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinWorkerAdmissionGameTests.java
++++ b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinWorkerAdmissionGameTests.java
+@@ -65,9 +65,9 @@ public final class RuinWorkerAdmissionGameTests {
+                 h.assertTrue(world.prep().retainedBytes() == 0 && world.materialReservation == 0,
+                         "Previous fixture asynchronous ownership is still pending");
+             }
+-            h.assertTrue(RuinInputs.detachedBytes() == 0 && RuinResults.bytes() == 0
+-                            && RuinWorkers.residentBufferBytes(384) == 0,
+-                    "Previous fixture worker ownership is still pending");
++            long inputs = RuinInputs.detachedBytes(), results = RuinResults.bytes(), workspace = RuinWorkers.residentBufferBytes(384);
++            h.assertTrue(inputs == 0 && results == 0 && workspace == 0,
++                    "Previous fixture worker ownership is still pending: inputs=" + inputs + ", results=" + results + ", workspace=" + workspace);
+         }).thenExecute(() -> {
+             try { checkPressure(h); }
+             catch (ReflectiveOperationException failure) { throw new AssertionError(failure); }
+diff --git a/mod/src/main/java/ua/zentix/incoming/nuclear/world/LedgerScan.java b/mod/src/main/java/ua/zentix/incoming/nuclear/world/LedgerScan.java
+index ba7e83091..846442655 100644
+--- a/mod/src/main/java/ua/zentix/incoming/nuclear/world/LedgerScan.java
++++ b/mod/src/main/java/ua/zentix/incoming/nuclear/world/LedgerScan.java
+@@ -12,6 +12,13 @@ import java.util.zip.GZIPInputStream;
+ final class LedgerScan {
+     private long bytes, cargo, checkpoints;
+     private int event;
++    private int originalEntries;
++    private long originalPosition;
++    private boolean hasOriginalPosition;
++    // At most 98,316 bytes of primitive arrays; leave I/O workspace for buffers and row scanning.
++    // Dense legacy cities need a section count, not a pessimistic per-block object estimate.
++    private it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap originalSections;
++    private static final int SECTION_COUNTS = 4096;
+     private final long limit;
+     private LedgerScan(long limit) { this.limit = limit; }
+ 
+@@ -40,7 +47,9 @@ final class LedgerScan {
+ 
+     /** Live representation plus one transient row, rather than eight copies of the old save tree. */
+     static Measure measure(Path file, String name, java.util.Set<Integer> activeCraters, long limit) throws IOException {
+-        long owned = LedgerData.IO_BYTES + 8192, largest = 0, cargoTotal = 0;
++        // Empty queues/indexes and the original journal's fixed section-query workspace remain
++        // owned even when a file has no rows. The small-ledger regression checks this floor.
++        long owned = LedgerData.IO_BYTES + (12L << 10), largest = 0, cargoTotal = 0;
+         var scan = new LedgerScan(Long.MAX_VALUE / 16);
+         try (var input = open(file)) {
+             if (input.readUnsignedByte() != 10) throw new IOException("Invalid ledger root");
+@@ -60,6 +69,7 @@ final class LedgerScan {
+                         if (count > 0 && key.equals("support_sources")) owned += RuinRecords.ROWS * 16L + 1024;
+                         for (int i = 0; i < count; i++) {
+                             scan.bytes = 0; scan.cargo = 0; scan.checkpoints = 0; scan.event = -1;
++                            scan.originalEntries = -1; scan.hasOriginalPosition = false;
+                             scan.payload(input, element, 0);
+                             long rowBytes = key.equals("passes") && !activeCraters.contains(scan.event)
+                                     ? scan.bytes - scan.checkpoints : scan.bytes;
+@@ -68,7 +78,9 @@ final class LedgerScan {
+                                 case "moving" -> RuinMatter.PIECE_BYTES + 192L + 3 * scan.cargo;
+                                 case "stranded" -> 256 + 3 * scan.cargo;
+                                 case "support_sources" -> 4096;
+-                                case "support_originals", "cold_edges" -> 256;
++                                case "support_originals" -> scan.originalGrowth();
++                                case "original_sections" -> scan.originalEntries < 0 ? 0 : RuinOriginals.importBytes(scan.originalEntries);
++                                case "cold_edges" -> 256;
+                                 case "materials", "settled" -> 768;
+                                 // Old crater checkpoints can be large. Twelve times encoded tag
+                                 // storage covers both maps/sets and their temporary primitive arrays.
+@@ -96,6 +108,22 @@ final class LedgerScan {
+         return new Measure(owned, Math.max(LedgerData.IO_BYTES, 2 * largest));
+     }
+ 
++    private long originalGrowth() throws IOException {
++        if (!hasOriginalPosition) throw new IOException("Original row has no position");
++        if (originalSections == null) originalSections = new it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap(SECTION_COUNTS);
++        long section = net.minecraft.core.SectionPos.asLong(net.minecraft.core.BlockPos.getX(originalPosition) >> 4,
++                net.minecraft.core.BlockPos.getY(originalPosition) >> 4, net.minecraft.core.BlockPos.getZ(originalPosition) >> 4);
++        int count = originalSections.get(section);
++        // Bounded scan scratch even for deliberately scattered old saves. Outside the cache,
++        // each row pays the old 256-byte legacy allowance. Singleton sections allocate no table;
++        // all denser pages and their outer-index share fit this same per-entry bound. This must
++        // not reject an old sparse journal that fitted before section compaction.
++        if (count == 0 && originalSections.size() == SECTION_COUNTS) return 256;
++        int next = Math.min(4096, count + 1);
++        originalSections.put(section, next);
++        return RuinOriginals.importBytes(next) - (count == 0 ? 0 : RuinOriginals.importBytes(count));
++    }
++
+     static int event(DataInputStream input) throws IOException {
+         var scan = new LedgerScan(Long.MAX_VALUE / 16);
+         scan.payload(input, 10, 0);
+@@ -149,6 +177,11 @@ final class LedgerScan {
+                     long before = bytes;
+                     if (key.equals("event") && depth == 0 && child == 3) {
+                         add(12); event = input.readInt();
++                    } else if (key.equals("original_entries") && depth == 0 && child == 3) {
++                        add(12); originalEntries = input.readInt();
++                        if (originalEntries < 1 || originalEntries > 4096) throw new IOException("Invalid original section size");
++                    } else if (key.equals("position") && depth == 0 && child == 4) {
++                        add(16); originalPosition = input.readLong(); hasOriginalPosition = true;
+                     } else payload(input, child, depth + 1);
+                     if (depth == 0) {
+                         if (key.equals("contents")) cargo += bytes - before;
+diff --git a/mod/src/main/java/ua/zentix/incoming/nuclear/world/NuclearWorld.java b/mod/src/main/java/ua/zentix/incoming/nuclear/world/NuclearWorld.java
+index 83e8f8213..733dc79e4 100644
+--- a/mod/src/main/java/ua/zentix/incoming/nuclear/world/NuclearWorld.java
++++ b/mod/src/main/java/ua/zentix/incoming/nuclear/world/NuclearWorld.java
+@@ -549,8 +549,6 @@ public final class NuclearWorld {
+         long scarStart = System.nanoTime();
+         lastCraterNanos = scarStart - craterStart;
+         scars.work(level, now, clock);
+-        matter = RuinMatter.get(level);
+-        matter.work(level, clock);
+         long scorchStart = System.nanoTime();
+         lastScarNanos = scorchStart - scarStart;
+         // ground light after wave-reached ruins using their remaining budget: when front crosses
+@@ -579,8 +577,16 @@ public final class NuclearWorld {
+             Incoming.LOG.error("Ruin preparation failed with an exception; dropped", e);
+             prep.clear(level, scars);
+         }
++        long materialStart = System.nanoTime();
++        lastPrepNanos = materialStart - prepStart;
++        // The first material batch above guarantees progress even when visible work fills the
++        // lane. Its remaining backlog must not consume every preparation/flash opportunity:
++        // a dense city can keep material moving long after the next front needs its plan.
++        // Preparation retains its existing share; all consumers still use this same clock.
++        matter = RuinMatter.get(level);
++        matter.work(level, clock);
+         long falloutStart = System.nanoTime();
+-        lastPrepNanos = falloutStart - prepStart;
++        lastScarNanos += falloutStart - materialStart;
+         try {
+             mobFallout.work(level, events.detonations(), clock);
+         } catch (RuntimeException e) {
+diff --git a/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinMatter.java b/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinMatter.java
+index bce776a9b..4f54140da 100644
+--- a/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinMatter.java
++++ b/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinMatter.java
+@@ -52,7 +52,7 @@ public final class RuinMatter extends LedgerData {
+     long retainedBytes() {
+         inventoryCapacity = Math.max(inventoryCapacity, inventories.size());
+         return IO_BYTES + 1024L + movingBytes + moving.bytes() + strandedBytes + palette.bytes()
+-                + inventoryCapacity * 64L + supportBytes(0) + supportSources.bytes()
++                + inventoryCapacity * 64L + supportBytes(0) + supportSources.bytes() + originals.bytes()
+                 + materials.size() * 512L + (search == null ? 2048 : search.retainedBytes());
+     }
+ 
+@@ -61,9 +61,13 @@ public final class RuinMatter extends LedgerData {
+     /** Capture objects coexist with the published compact rows and their indexes. Cargo grows
+      * the reservation separately before mutation. Reserve each ownership term once, rather
+      * than an unrelated per-cell envelope: dense ready chunks must fit when these owners fit. */
+-    long removalBytes(int pieces) {
++    long removalBytes(long[] positions) {
++        return removalBytes(positions.length, originals.growthBytes(positions));
++    }
++
++    private long removalBytes(int pieces, long originalGrowth) {
+         return pieces * (512L + REMOVAL_INDEX_BYTES) + queueGrowthBytes(pieces)
+-                + supportBytes(pieces) - supportBytes(0);
++                + supportBytes(pieces) - supportBytes(0) + originalGrowth;
+     }
+ 
+     /** A deferred source can add at most five contacts (never its lower neighbour). Fund their
+@@ -74,8 +78,7 @@ public final class RuinMatter extends LedgerData {
+     private long supportBytes(int removals) {
+         long contacts = 5L * (supportSources.size() + (long) removals);
+         return supports.bytes(contacts) + uncertain.bytes(contacts)
+-                + 96L * (uncertain.size() + contacts)
+-                + originals.bytes(removals) + 64L * (originals.size() + (long) removals);
++                + 96L * (uncertain.size() + contacts);
+     }
+ 
+     private static long tableSize(long entries, float loadFactor) {
+@@ -100,7 +103,8 @@ public final class RuinMatter extends LedgerData {
+     }
+ 
+     static long removalBytes(ServerLevel level, Piece piece) {
+-        return get(level).removalBytes(1) + piece.retainedBytes() - 512;
++        RuinMatter ledger = get(level);
++        return ledger.removalBytes(1, ledger.originals.growthBytes(piece.source.asLong())) + piece.retainedBytes() - 512;
+     }
+ 
+ 
+@@ -138,10 +142,9 @@ public final class RuinMatter extends LedgerData {
+     private final SupportMap supports = new SupportMap();
+     /** Only cold edges need to remember the removed face until their neighbour can be inspected. */
+     private final ContactMap<BlockState[]> uncertain = new ContactMap<>();
+-    private record Original(BlockState state, int event) {}
+     /** One pre-failure graph for all still-pending removals, including overlapping strikes.
+      * First removal at a position wins until reconciliation drains; event IDs only attribute it. */
+-    private final ContactMap<Original> originals = new ContactMap<>();
++    private final RuinOriginals originals = new RuinOriginals();
+     private RuinSupport search;
+     private int heldRadius;
+     /** One held-window observation per work invocation; destination readiness always stays live. */
+@@ -190,8 +193,8 @@ public final class RuinMatter extends LedgerData {
+     }
+ 
+     BlockState original(ServerLevel level, BlockPos at) {
+-        Original removed = originals.get(at.asLong());
+-        return removed == null ? level.getBlockState(at) : removed.state;
++        BlockState removed = originals.state(at.asLong());
++        return removed == null ? level.getBlockState(at) : removed;
+     }
+ 
+     private net.minecraft.world.level.ChunkPos held;
+@@ -199,7 +202,7 @@ public final class RuinMatter extends LedgerData {
+     void support(ServerLevel level, List<Piece> pieces, Detonation d) {
+         requireWritable();
+         for (Piece piece : pieces) if (Blast.props(piece.state).bearing()) {
+-            originals.putIfAbsent(piece.source.asLong(), new Original(piece.state, d.id()));
++            originals.put(piece.source.asLong(), piece.state, d.id(), false);
+             supportSources.addLast(new SupportSeed(piece.source, piece.state, d.id()));
+         }
+         if (!pieces.isEmpty()) setDirty();
+@@ -499,7 +502,7 @@ public final class RuinMatter extends LedgerData {
+         if (supports.isEmpty() && supportSources.isEmpty() && !originals.isEmpty()) {
+             // All affected components have been reconciled, including cold edges. A later failure
+             // starts from that settled world; completed contact journals are not permanent history.
+-            originals.clear(); originals.trim();
++            originals.clear();
+             supports.trim(); uncertain.trim();
+             setDirty();
+         }
+@@ -664,11 +667,13 @@ public final class RuinMatter extends LedgerData {
+         ListTag originalTags = tag.getList("support_originals", Tag.TAG_COMPOUND);
+         for (int i = 0; i < originalTags.size(); i++) {
+             CompoundTag row = originalTags.getCompound(i);
+-            Original removed = new Original(NbtUtils.readBlockState(lookup.lookupOrThrow(Registries.BLOCK), row.getCompound("state")), row.getInt("event"));
+             // Older per-event saves may repeat a position in unspecified map order. Event IDs
+             // increase with registration; retain the earliest strike's contact when importing them.
+-            result.originals.merge(row.getLong("position"), removed, (a, b) -> a.event <= b.event ? a : b);
++            result.originals.put(row.getLong("position"), NbtUtils.readBlockState(lookup.lookupOrThrow(Registries.BLOCK),
++                    row.getCompound("state")), row.getInt("event"), true);
+         }
++        for (Tag row : tag.getList("original_sections", Tag.TAG_COMPOUND)) result.originals.read((CompoundTag) row);
++        if (finish) result.originals.loaded();
+         ListTag sourceTags = tag.getList("support_sources", Tag.TAG_COMPOUND);
+         for (int i = 0; i < sourceTags.size(); i++) {
+             CompoundTag n = sourceTags.getCompound(i);
+@@ -846,11 +851,11 @@ public final class RuinMatter extends LedgerData {
+         tag.putDouble("dispersed_volume", dispersedVolume);
+         tag.putDouble("dispersed_mass", dispersedMass);
+         ListTag originalTags = new ListTag();
+-        for (var entry : originals.long2ObjectEntrySet()) {
++        originals.forEach((position, state, event) -> {
+             CompoundTag row = new CompoundTag();
+-            row.putInt("event", entry.getValue().event); row.putLong("position", entry.getLongKey());
+-            row.put("state", NbtUtils.writeBlockState(entry.getValue().state)); originalTags.add(row);
+-        }
++            row.putInt("event", event); row.putLong("position", position);
++            row.put("state", NbtUtils.writeBlockState(state)); originalTags.add(row);
++        });
+         tag.put("support_originals", originalTags);
+         ListTag sourceTags = new ListTag();
+         for (SupportSeed source : supportSources) {
+@@ -924,12 +929,7 @@ public final class RuinMatter extends LedgerData {
+         tag.putDouble("dispersed_volume", dispersedVolume);
+         tag.putDouble("dispersed_mass", dispersedMass);
+         writer.fields(tag);
+-        writer.list("support_originals", originals.size());
+-        for (var entry : originals.long2ObjectEntrySet()) {
+-            CompoundTag row = new CompoundTag();
+-            row.putInt("event", entry.getValue().event); row.putLong("position", entry.getLongKey());
+-            row.put("state", NbtUtils.writeBlockState(entry.getValue().state)); writer.row(row);
+-        }
++        originals.write(writer);
+ 
+         writer.list("support_sources", supportSources.size());
+         for (SupportSeed source : supportSources) {
+diff --git a/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinOriginals.java b/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinOriginals.java
+new file mode 100644
+index 000000000..f515a7418
+--- /dev/null
++++ b/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinOriginals.java
+@@ -0,0 +1,254 @@
++package ua.zentix.incoming.nuclear.world;
++
++import it.unimi.dsi.fastutil.HashCommon;
++import it.unimi.dsi.fastutil.ints.Int2LongOpenHashMap;
++import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
++import net.minecraft.core.BlockPos;
++import net.minecraft.core.SectionPos;
++import net.minecraft.nbt.CompoundTag;
++import net.minecraft.nbt.Tag;
++import net.minecraft.world.level.block.Block;
++import net.minecraft.world.level.block.state.BlockState;
++
++import java.io.IOException;
++import java.util.Arrays;
++
++/** First removed state/event, shared by all unfinished support searches. A section has at most
++ * 4096 entries: adding a city block never doubles a world-sized table of per-block objects.
++ * Registry IDs are process-local only; the normal ledger stream writes named state palettes. */
++final class RuinOriginals {
++    private static final float LOAD = 0.75f;
++    private static final int ROW = 64;
++    private static final class Table extends Int2LongOpenHashMap {
++        private static final long serialVersionUID = 1L;
++        Table(int expected) { super(expected, LOAD); }
++        long bytes() { return tableBytes(n); }
++        long growth(int additions) {
++            int next = Math.max(n, capacity(Math.min(4096, size() + additions)));
++            // The previous arrays stay live while rehash installs the new arrays.
++            return rehashBytes(n, next, 12);
++        }
++    }
++    private static final class Page {
++        private int first;
++        private long value;
++        private Table table;
++        int imported = -1;
++        Page(int expected) { if (expected > 1) table = new Table(expected); }
++        int size() { return table != null ? table.size() : value == 0 ? 0 : 1; }
++        long get(int key) { return table != null ? table.get(key) : first == key ? value : 0; }
++        boolean containsKey(int key) { return get(key) != 0; }
++        long bytes() { return 96L + (table == null ? 0 : table.bytes()); }
++        long growth(int additions) {
++            if (table != null) return table.growth(additions);
++            int count = Math.min(4096, size() + additions);
++            if (count <= 1) return 0;
++            return (additions > 1 ? 2 : 1) * tableBytes(capacity(count));
++        }
++        void put(int key, long next) {
++            if (table == null && (value == 0 || first == key)) { first = key; value = next; return; }
++            if (table == null) {
++                table = new Table(2); table.put(first, value); value = 0;
++            }
++            table.put(key, next);
++        }
++        it.unimi.dsi.fastutil.ints.IntIterator keys() {
++            return table != null ? table.keySet().iterator() : value == 0
++                    ? it.unimi.dsi.fastutil.ints.IntIterators.EMPTY_ITERATOR
++                    : it.unimi.dsi.fastutil.ints.IntIterators.singleton(first);
++        }
++    }
++    private static final class Pages extends Long2ObjectOpenHashMap<Page> {
++        private static final long serialVersionUID = 1L;
++        long bytes() { return 192L + 16L * (n + 1); }
++        long growth(int additions) {
++            int next = Math.max(n, capacity(size() + additions));
++            return rehashBytes(n, next, 16);
++        }
++    }
++
++    private final Pages pages = new Pages();
++    // A RuinPlan's positions are in one chunk, with at most 256 representable vertical sections.
++    // Keep this admission scratch owned, instead of allocating a map before obtaining a permit.
++    private final int[] additions = new int[256];
++    private final long[] sections = new long[256];
++    private long pageBytes;
++    private int size;
++
++    private static int capacity(int entries) { return HashCommon.arraySize(Math.max(2, entries), LOAD); }
++    private static long rehashBytes(int current, int next, int width) {
++        if (next <= current) return 0;
++        // A batch can cross several capacities. At the last rehash the old array is next/2,
++        // not necessarily the smaller array counted when the batch obtained its permit.
++        return 192L + width * (next + 1L) + width * (long) Math.max(0, next / 2 - current);
++    }
++    private static long tableBytes(int capacity) { return 192L + 12L * (capacity + 1); }
++    private static long pageBytes(int entries) { return 96L + (entries <= 1 ? 0 : tableBytes(capacity(entries))); }
++    static long importBytes(int entries) {
++        if (entries < 1 || entries > 4096) throw new IllegalArgumentException("Invalid original section size");
++        // Page arrays plus its share of the outer index, including index rehash overlap.
++        return pageBytes(entries) + 128;
++    }
++
++    long bytes() { return 128L + 64 + 12L * additions.length + pages.bytes() + pageBytes; }
++    int size() { return size; }
++    boolean isEmpty() { return size == 0; }
++    boolean containsKey(long position) { return get(position) != 0; }
++
++    private static long section(long position) {
++        return SectionPos.asLong(BlockPos.getX(position) >> 4, BlockPos.getY(position) >> 4, BlockPos.getZ(position) >> 4);
++    }
++    private static int local(long position) {
++        return (BlockPos.getY(position) & 15) << 8 | (BlockPos.getZ(position) & 15) << 4 | BlockPos.getX(position) & 15;
++    }
++    private static long position(long section, int local) {
++        return BlockPos.asLong((SectionPos.x(section) << 4) + (local & 15),
++                (SectionPos.y(section) << 4) + (local >>> 8), (SectionPos.z(section) << 4) + ((local >>> 4) & 15));
++    }
++    private long get(long position) {
++        Page page = pages.get(section(position));
++        return page == null ? 0 : page.get(local(position));
++    }
++    BlockState state(long position) {
++        long value = get(position);
++        return value == 0 ? null : stateOf(value);
++    }
++    private static BlockState stateOf(long value) { return Block.stateById((int) value - 1); }
++    private static int eventOf(long value) { return (int) (value >>> 32); }
++    private static long value(BlockState state, int event) {
++        return (long) event << 32 | Integer.toUnsignedLong(Block.getId(state) + 1);
++    }
++
++    /** Existing first-removal provenance wins; legacy duplicates use the earliest event ID. */
++    void put(long position, BlockState state, int event, boolean earliest) {
++        long key = section(position);
++        Page page = pages.get(key);
++        if (page == null) { page = new Page(1); pages.put(key, page); pageBytes += page.bytes(); }
++        int at = local(position);
++        long old = page.get(at);
++        if (old != 0 && (!earliest || eventOf(old) <= event)) return;
++        long before = page.bytes();
++        page.put(at, value(state, event));
++        pageBytes += page.bytes() - before;
++        if (old == 0) size++;
++    }
++
++    /** Complete incremental ownership for the known source positions, including rehash scratch. */
++    long growthBytes(long[] positions) {
++        if (positions.length == 0) return 0;
++        Arrays.fill(additions, 0);
++        int count = 0;
++        for (long position : positions) {
++            if (containsKey(position)) continue;
++            long key = section(position);
++            int at = 0;
++            while (at < count && sections[at] != key) at++;
++            if (at == count) {
++                if (count == sections.length) throw new IllegalArgumentException("Material plan exceeds its section bound");
++                sections[count++] = key;
++            }
++            additions[at]++;
++        }
++        int newPages = 0;
++        long growth = 0;
++        for (int i = 0; i < count; i++) {
++            Page page = pages.get(sections[i]);
++            if (page == null) {
++                newPages++;
++                // A fresh page may grow through several tables before the batch ends.
++                growth += 2 * pageBytes(Math.min(4096, additions[i]));
++            } else growth += page.growth(additions[i]);
++        }
++        return growth + pages.growth(newPages);
++    }
++
++    long growthBytes(long position) {
++        if (containsKey(position)) return 0;
++        Page page = pages.get(section(position));
++        return page == null ? pageBytes(1) + pages.growth(1) : page.growth(1);
++    }
++
++    void clear() { pages.clear(); pages.trim(); size = 0; pageBytes = 0; }
++
++    void loaded() {
++        for (Page page : pages.values()) if (page.imported >= 0) {
++            if (page.size() != page.imported) throw new IllegalArgumentException("Incomplete original section");
++            page.imported = -1;
++        }
++    }
++
++    @FunctionalInterface interface Visitor { void accept(long position, BlockState state, int event); }
++    void forEach(Visitor visitor) {
++        for (var entry : pages.long2ObjectEntrySet()) {
++            Page page = entry.getValue();
++            for (var cells = page.keys(); cells.hasNext();) {
++                int local = cells.nextInt(); long value = page.get(local);
++                visitor.accept(position(entry.getLongKey(), local), stateOf(value), eventOf(value));
++            }
++        }
++    }
++
++    /** Small independent rows keep the existing bounded streaming loader and frozen-save owner.
++     * The first row pays and preallocates its whole section; later rows add no backing arrays. */
++    void write(LedgerWriter writer) throws IOException {
++        int rows = 0;
++        for (Page page : pages.values()) rows += (page.size() + ROW - 1) / ROW;
++        writer.list("original_sections", rows);
++        for (var entry : pages.long2ObjectEntrySet()) {
++            Page page = entry.getValue();
++            var cells = page.keys();
++            boolean first = true;
++            while (cells.hasNext()) {
++                var palette = new RuinPalette();
++                long[] packed = new long[Math.min(ROW, first ? page.size() : ROW)];
++                int count = 0;
++                while (count < packed.length && cells.hasNext()) {
++                    int local = cells.nextInt(); long value = page.get(local);
++                    int state = palette.index(stateOf(value));
++                    packed[count++] = (long) eventOf(value) << 24 | (long) state << 12 | local;
++                }
++                CompoundTag row = new CompoundTag();
++                row.putLong("section", entry.getLongKey());
++                if (first) row.putInt("original_entries", page.size());
++                row.put("palette", palette.save());
++                row.putLongArray("cells", count == packed.length ? packed : Arrays.copyOf(packed, count));
++                writer.row(row);
++                first = false;
++            }
++        }
++    }
++
++    void read(CompoundTag row) {
++        if (!row.contains("section", Tag.TAG_LONG)) throw new IllegalArgumentException("Invalid original section key");
++        long key = row.getLong("section");
++        if (SectionPos.y(key) < -128 || SectionPos.y(key) > 127)
++            throw new IllegalArgumentException("Original section exceeds block-position height");
++        if (row.contains("original_entries")) {
++            // getInt accepts every numeric NBT type, but the preflight scanner charges IntTag.
++            // Match that schema before any page allocation, including rejected partial files.
++            if (!row.contains("original_entries", Tag.TAG_INT))
++                throw new IllegalArgumentException("Invalid original section header type");
++            int count = row.getInt("original_entries");
++            importBytes(count); // Validate before allocation.
++            if (pages.containsKey(key)) throw new IllegalArgumentException("Duplicate original section header");
++            Page page = new Page(count);
++            page.imported = count;
++            pages.put(key, page); pageBytes += page.bytes();
++        }
++        Page page = pages.get(key);
++        if (page == null) throw new IllegalArgumentException("Original section has no header");
++        var palette = RuinPalette.load(row.getList("palette", Tag.TAG_COMPOUND));
++        long[] cells = row.getLongArray("cells");
++        if (cells.length == 0 || cells.length > ROW) throw new IllegalArgumentException("Invalid original section row");
++        for (long cell : cells) {
++            int at = (int) cell & 4095, id = (int) (cell >>> 12) & 4095, event = (int) (cell >>> 24);
++            if (page.containsKey(at)) throw new IllegalArgumentException("Duplicate original section cell");
++            if (page.imported < 0 || page.size() >= page.imported)
++                throw new IllegalArgumentException("Original section exceeds its declared size");
++            long before = page.bytes();
++            page.put(at, value(palette.state(id), event));
++            pageBytes += page.bytes() - before;
++            size++;
++        }
++    }
++}
+diff --git a/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinPlan.java b/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinPlan.java
+index 0e543560a..7b710eca7 100644
+--- a/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinPlan.java
++++ b/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinPlan.java
+@@ -963,7 +963,7 @@ public final class RuinPlan {
+         if (!current(chunk, flash, marked)) return false;
+         // Reserve the bounded capture/contact window before allocating it. Large container tags
+         // extend that reservation before any source mutation; refusal keeps this exact plan pending.
+-        try (var reservation = RuinMemory.reserve(level, RuinMatter.get(level).removalBytes(material.length))) {
++        try (var reservation = RuinMemory.reserve(level, RuinMatter.get(level).removalBytes(material))) {
+             if (reservation == null) { memoryWaiting = true; return false; }
+             java.util.List<RuinMatter.Piece> released = new java.util.ArrayList<>();
+             RuinScorch scorch = new RuinScorch(chunk);

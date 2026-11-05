@@ -1,0 +1,94 @@
+diff --git a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinFrontierGameTests.java b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinFrontierGameTests.java
+index 4315bf552..eafcedb87 100644
+--- a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinFrontierGameTests.java
++++ b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinFrontierGameTests.java
+@@ -29,11 +29,23 @@ public final class RuinFrontierGameTests {
+     private RuinFrontierGameTests() {}
+ 
+     @GameTest(template = "range", batch = "nuke_disk_frontier", timeoutTicks = 1200, skyAccess = true)
+-    @SuppressWarnings("unchecked")
+     public static void evictedDemandRefillsBeforeReaderSweepsTheZone(GameTestHelper h) throws Exception {
++        frontier(h, false);
++    }
++
++    @GameTest(template = "range", batch = "nuke_frontier_material", timeoutTicks = 240, skyAccess = true)
++    public static void fundedDiskFrontierProgressesWhileMaterialIsStillMoving(GameTestHelper h) throws Exception {
++        frontier(h, true);
++    }
++
++    @SuppressWarnings("unchecked")
++    private static void frontier(GameTestHelper h, boolean withMaterial) throws Exception {
+         StrikeGameTests.gameSpeed(h);
+         ServerLevel level = h.getLevel();
+         var original = RuinStorageGameTests.fixture(h, true);
++        var originalClock = NuclearWorld.clock(level.getServer());
++        if (withMaterial) NuclearWorld.useClock(level.getServer(), WorkClock.counting(1_000_000));
++        StrikeGameTests.afterTest(h, () -> NuclearWorld.useClock(level.getServer(), originalClock));
+         var centre = new ChunkPos(original.centre().x + 128, original.centre().z + 128);
+         h.assertFalse(ua.zentix.incoming.util.Terrain.ready(level, centre.x, centre.z), "Disk frontier must be cold");
+         double dx = (centre.x - original.centre().x) * 16.0, dz = (centre.z - original.centre().z) * 16.0;
+@@ -86,6 +98,8 @@ public final class RuinFrontierGameTests {
+         CompoundTag expected = RuinPlanner.finish(referenceGrid, Collapse.solve(referenceGrid)).store();
+         h.assertTrue(expected.getLongArray("material").length > 0, "Physical reference has no removed material");
+         boolean[] opened = {false};
++        long[] openedAt = {0};
++        RuinMatter[] material = {null};
+         h.succeedWhen(() -> {
+             try {
+                 if (!opened[0]) {
+@@ -95,10 +109,21 @@ public final class RuinFrontierGameTests {
+                     invokeFar(prep, owner, level);
+                     h.assertTrue(field(owner, "nextRead").getInt(owner) == 0,
+                             "Missing current demand did not rewind stale read cursor: " + field(owner, "nextRead").getInt(owner));
++                    if (withMaterial) {
++                        material[0] = RuinMatter.get(level);
++                        BlockPos source = h.absolutePos(new BlockPos(32, 100, 32));
++                        var pieces = new ArrayList<RuinMatter.Piece>();
++                        for (int i = 0; i < 65_536; i++) pieces.add(new RuinMatter.Piece(source,
++                                net.minecraft.world.level.block.Blocks.STONE.defaultBlockState(), null, Vec3.ZERO, level.getGameTime()));
++                        material[0].release(pieces);
++                    }
+                     other.materialReservation += Math.max(0, NuclearPrep.PLANS_CAP - (32L << 20) - NuclearPrep.memory(level) - (16L << 20));
+                     field(owner, "layout").set(owner, null);
++                    openedAt[0] = level.getGameTime();
+                     opened[0] = true;
+                 }
++                if (withMaterial) h.assertTrue(level.getGameTime() - openedAt[0] < 120,
++                        "Already funded far work was starved by the material continuation");
+                 int cursor = field(owner, "nextFar").getInt(owner), readCursor = field(owner, "nextRead").getInt(owner);
+                 h.assertTrue(readCursor <= Math.min(order.length, cursor + RuinWorkers.capacity()), "Reader outran bounded solver frontier");
+                 h.assertTrue(NuclearPrep.memory(level) <= NuclearPrep.PLANS_CAP, "Controlled pipeline exceeded its admission budget");
+@@ -108,6 +133,15 @@ public final class RuinFrontierGameTests {
+                         + ", far=" + cursor + ", reading=" + ((it.unimi.dsi.fastutil.longs.LongOpenHashSet) field(owner, "reading").get(owner)).size());
+                 h.assertTrue(plan.store().equals(expected), "Frontier/cache changes altered complete physical/material output");
+                 h.assertFalse(ua.zentix.incoming.util.Terrain.ready(level, centre.x, centre.z), "Preparation loaded/generated the disk-only source");
++                if (withMaterial) {
++                    h.assertTrue(material[0].pending() > 0, "Material drained before the far frontier got service");
++                    var moving = (RuinRecords<RuinMatter.Piece>) field(material[0], "moving").get(material[0]);
++                    boolean advanced = false;
++                    for (var piece : moving) if (piece.tick > piece.releasedTick) { advanced = true; break; }
++                    h.assertTrue(advanced || material[0].deposited() > 0, "Material had calls but no actual progress");
++                    Incoming.LOG.info("FRONTIER_MATERIAL far plan completed in {} ticks with {} moving records, resident {}",
++                            level.getGameTime() - openedAt[0], material[0].pending(), NuclearPrep.residentMemory(level));
++                }
+             } catch (ReflectiveOperationException e) { throw new IllegalStateException(e); }
+         });
+     }
+diff --git a/mod/src/main/java/ua/zentix/incoming/nuclear/world/LedgerScan.java b/mod/src/main/java/ua/zentix/incoming/nuclear/world/LedgerScan.java
+index df55c5554..c8b087532 100644
+--- a/mod/src/main/java/ua/zentix/incoming/nuclear/world/LedgerScan.java
++++ b/mod/src/main/java/ua/zentix/incoming/nuclear/world/LedgerScan.java
+@@ -112,9 +112,10 @@ final class LedgerScan {
+         long section = net.minecraft.core.SectionPos.asLong(net.minecraft.core.BlockPos.getX(originalPosition) >> 4,
+                 net.minecraft.core.BlockPos.getY(originalPosition) >> 4, net.minecraft.core.BlockPos.getZ(originalPosition) >> 4);
+         int count = originalSections.get(section);
+-        // Bounded scan scratch even for deliberately scattered old saves. A section outside the
+-        // cache pays its maximum page for each row; no authoritative data is discarded on refusal.
+-        if (count == 0 && originalSections.size() == SECTION_COUNTS) return RuinOriginals.importBytes(4096);
++        // Bounded scan scratch even for deliberately scattered old saves. Outside the cache,
++        // each row pays a separate one-cell page and index share. Larger shared pages cost less
++        // per entry, including their rehash overlap. Refusal preserves the authoritative file.
++        if (count == 0 && originalSections.size() == SECTION_COUNTS) return 768;
+         int next = Math.min(4096, count + 1);
+         originalSections.put(section, next);
+         return RuinOriginals.importBytes(next) - (count == 0 ? 0 : RuinOriginals.importBytes(count));

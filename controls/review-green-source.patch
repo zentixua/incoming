@@ -1,0 +1,208 @@
+diff --git a/.claude/rules/gametest.md b/.claude/rules/gametest.md
+index 7f593ea27..40e29aa4d 100644
+--- a/.claude/rules/gametest.md
++++ b/.claude/rules/gametest.md
+@@ -157,3 +157,7 @@ paths:
+   window. `nuke_look_ahead` verifies that an independent background consumer can start after cleanup.
+ - Craft hull-order checks place the charge above the platform and test initial shielding from that same
+   source. A charge inside the platform can remain shielded after the entire selected hull disappears.
++- A direct preparation-handoff fixture owns the returned plans/context when it does not pass them to
++  `NuclearWorld`. Close both in its cleanup; cancelling the former preparation deliberately preserves
++  handed-off work. `nuke_near_ready` followed by `nuke_worker_admission` catches an unclaimed fragment-cache
++  permit even after the worker pool has stopped.
+diff --git a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinNearReadyGameTests.java b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinNearReadyGameTests.java
+index 84dc6a41d..20cd12b13 100644
+--- a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinNearReadyGameTests.java
++++ b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinNearReadyGameTests.java
+@@ -36,6 +36,15 @@ public final class RuinNearReadyGameTests {
+         var prep = NuclearWorld.get(level).prep();
+         Object p = request(prep, handle);
+         StrikeGameTests.afterTest(h, () -> RuinPreparation.cancel(level, handle));
++        NuclearPrep.Handoff[] handedOff = {null};
++        StrikeGameTests.afterTest(h, () -> {
++            // Gameplay adopts this returned owner in NuclearWorld. This direct handoff fixture
++            // keeps it itself, so cancelling the former preparation cannot retire its cache.
++            if (handedOff[0] != null) {
++                handedOff[0].plans().clear();
++                handedOff[0].ruins().cancelTasks();
++            }
++        });
+         boolean[] stalled = {false}, loaded = {false};
+         var farGate = new java.util.concurrent.CompletableFuture<Void>();
+         var farReads = new java.util.ArrayList<java.util.concurrent.CompletableFuture<DiskShots.Read>>();
+@@ -143,6 +152,7 @@ public final class RuinNearReadyGameTests {
+                 Detonation event = new Detonation(1_903_001, geometry.burst(), geometry.groundY(), geometry.yieldKt(), geometry.surface(),
+                         level.getGameTime(), 0, 0, geometry.visibility(), 0, geometry.scale(), false, geometry.wave());
+                 var ready = prep.handOff(level, event, level.getGameTime(), identity);
++                handedOff[0] = ready;
+                 h.assertTrue(ready != null && ready.plans() == plans && plans.get(centre.toLong()) == near,
+                         "Partial handoff changed or discarded actual near output");
+                 h.assertTrue(!field(p, "draining").getBoolean(p), "Partial handoff discarded unfinished far ownership");
+diff --git a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinOriginalsGameTests.java b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinOriginalsGameTests.java
+index ae84fad4f..02e0ab065 100644
+--- a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinOriginalsGameTests.java
++++ b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinOriginalsGameTests.java
+@@ -120,17 +120,80 @@ public final class RuinOriginalsGameTests {
+         h.assertTrue(rejected(() -> new RuinOriginals().read(row)), "Oversized section was allocated");
+         row.remove("original_entries");
+         h.assertTrue(rejected(() -> new RuinOriginals().read(row)), "Headerless section was accepted");
++        row.putLong("original_entries", 2);
++        h.assertTrue(rejected(() -> new RuinOriginals().read(row)), "Long header bypassed the scanner's integer ownership charge");
++        row.putShort("original_entries", (short) 2);
++        h.assertTrue(rejected(() -> new RuinOriginals().read(row)), "Short header bypassed the scanner's integer ownership charge");
+         row.putInt("original_entries", 3);
+         var incomplete = new RuinOriginals(); incomplete.read(row);
+         h.assertTrue(rejected(incomplete::loaded), "Incomplete section was published");
+         h.succeed();
+     }
+ 
++    @GameTest(template = "pad", batch = "nuke_original_growth", timeoutTicks = 100)
++    public static void existingPageFundsTheLastIntermediateRehash(GameTestHelper h) throws Exception {
++        var journal = new RuinOriginals();
++        for (int i = 0; i < 2; i++) journal.put(cell(i), Blocks.BRICKS.defaultBlockState(), 1, false);
++        long before = journal.bytes();
++        long[] positions = new long[4094];
++        for (int i = 0; i < positions.length; i++) positions[i] = cell(i + 2);
++        long grant = journal.growthBytes(positions);
++        for (int i = 2; i < 3072; i++) journal.put(cell(i), Blocks.BRICKS.defaultBlockState(), 1, false);
++        var pages = (java.util.Map<?, ?>) field(journal, "pages");
++        Object table = field(pages.values().iterator().next(), "table");
++        // Keep the actual last old arrays alive across their replacement, as they coexist
++        // with the new arrays during rehash. This observes the peak missed by final size alone.
++        int[] oldKeys = (int[]) field(table, "key");
++        long[] oldValues = (long[]) field(table, "value");
++        for (int i = 3072; i < 4096; i++) journal.put(cell(i), Blocks.BRICKS.defaultBlockState(), 1, false);
++        long overlapping = 64L + oldKeys.length * 4L + oldValues.length * 8L;
++        long peakGrowth = journal.bytes() - before + overlapping;
++        Incoming.LOG.info("ORIGINAL_GROWTH grant {} finalGrowth {} overlapping {} peakGrowth {}",
++                grant, journal.bytes() - before, overlapping, peakGrowth);
++        h.assertTrue(peakGrowth <= grant, "Existing section did not fund its intermediate old/new arrays");
++        h.succeed();
++    }
++
++    private static long cell(int i) { return BlockPos.asLong(i & 15, i >>> 8, (i >>> 4) & 15); }
++
++    private static Object field(Object owner, String name) throws ReflectiveOperationException {
++        for (Class<?> type = owner.getClass(); type != null; type = type.getSuperclass()) {
++            try { var f = type.getDeclaredField(name); f.setAccessible(true); return f.get(owner); }
++            catch (NoSuchFieldException ignored) { }
++        }
++        throw new NoSuchFieldException(name);
++    }
++
+     private static boolean rejected(Runnable action) {
+         try { action.run(); return false; }
+         catch (IllegalArgumentException expected) { return true; }
+     }
+ 
++    @GameTest(template = "pad", batch = "nuke_original_min", timeoutTicks = 100)
++    public static void emptyAndSingletonImportsFundTheirFixedOwners(GameTestHelper h) throws Exception {
++        for (int count = 0; count < 2; count++) {
++            var ledger = new RuinMatter();
++            if (count > 0) {
++                var row = new CompoundTag(); row.putLong("position", 0); row.putInt("event", 1);
++                row.put("state", NbtUtils.writeBlockState(Blocks.BRICKS.defaultBlockState()));
++                var rows = new ListTag(); rows.add(row);
++                var part = new CompoundTag(); part.put("support_originals", rows);
++                RuinMatter.read(part, h.getLevel().registryAccess(), ledger, true);
++            }
++            Path file = h.getLevel().getServer().getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT)
++                    .resolve("data/original-min-" + UUID.randomUUID() + ".dat");
++            try (var output = new java.io.DataOutputStream(new java.util.zip.GZIPOutputStream(java.nio.file.Files.newOutputStream(file)))) {
++                var writer = new LedgerWriter(output);
++                writer.compound(""); writer.compound("data"); ledger.write(writer, h.getLevel().registryAccess());
++                writer.end(); writer.end();
++            }
++            var measure = LedgerScan.measure(file, "incoming_ruin_matter", java.util.Set.of(), NuclearPrep.PLANS_CAP);
++            Incoming.LOG.info("ORIGINAL_MIN count {} import {} resident {}", count, measure.owned(), ledger.retainedBytes());
++            h.assertTrue(measure.owned() >= ledger.retainedBytes(), "Small ledger import omitted fixed journal ownership");
++        }
++        h.succeed();
++    }
++
+     private static CompoundTag normalized(CompoundTag tag) {
+         List<Tag> rows = new ArrayList<>(tag.getList("support_originals", Tag.TAG_COMPOUND));
+         rows.sort(java.util.Comparator.comparingLong(row -> ((CompoundTag) row).getLong("position")));
+diff --git a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinWorkerAdmissionGameTests.java b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinWorkerAdmissionGameTests.java
+index 0ae650c7c..687d1884c 100644
+--- a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinWorkerAdmissionGameTests.java
++++ b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinWorkerAdmissionGameTests.java
+@@ -65,9 +65,9 @@ public final class RuinWorkerAdmissionGameTests {
+                 h.assertTrue(world.prep().retainedBytes() == 0 && world.materialReservation == 0,
+                         "Previous fixture asynchronous ownership is still pending");
+             }
+-            h.assertTrue(RuinInputs.detachedBytes() == 0 && RuinResults.bytes() == 0
+-                            && RuinWorkers.residentBufferBytes(384) == 0,
+-                    "Previous fixture worker ownership is still pending");
++            long inputs = RuinInputs.detachedBytes(), results = RuinResults.bytes(), workspace = RuinWorkers.residentBufferBytes(384);
++            h.assertTrue(inputs == 0 && results == 0 && workspace == 0,
++                    "Previous fixture worker ownership is still pending: inputs=" + inputs + ", results=" + results + ", workspace=" + workspace);
+         }).thenExecute(() -> {
+             try { checkPressure(h); }
+             catch (ReflectiveOperationException failure) { throw new AssertionError(failure); }
+diff --git a/mod/src/main/java/ua/zentix/incoming/nuclear/world/LedgerScan.java b/mod/src/main/java/ua/zentix/incoming/nuclear/world/LedgerScan.java
+index 2f2166824..846442655 100644
+--- a/mod/src/main/java/ua/zentix/incoming/nuclear/world/LedgerScan.java
++++ b/mod/src/main/java/ua/zentix/incoming/nuclear/world/LedgerScan.java
+@@ -47,7 +47,9 @@ final class LedgerScan {
+ 
+     /** Live representation plus one transient row, rather than eight copies of the old save tree. */
+     static Measure measure(Path file, String name, java.util.Set<Integer> activeCraters, long limit) throws IOException {
+-        long owned = LedgerData.IO_BYTES + 8192, largest = 0, cargoTotal = 0;
++        // Empty queues/indexes and the original journal's fixed section-query workspace remain
++        // owned even when a file has no rows. The small-ledger regression checks this floor.
++        long owned = LedgerData.IO_BYTES + (12L << 10), largest = 0, cargoTotal = 0;
+         var scan = new LedgerScan(Long.MAX_VALUE / 16);
+         try (var input = open(file)) {
+             if (input.readUnsignedByte() != 10) throw new IOException("Invalid ledger root");
+diff --git a/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinOriginals.java b/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinOriginals.java
+index c75b734ce..f515a7418 100644
+--- a/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinOriginals.java
++++ b/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinOriginals.java
+@@ -26,7 +26,7 @@ final class RuinOriginals {
+         long growth(int additions) {
+             int next = Math.max(n, capacity(Math.min(4096, size() + additions)));
+             // The previous arrays stay live while rehash installs the new arrays.
+-            return next > n ? tableBytes(next) : 0;
++            return rehashBytes(n, next, 12);
+         }
+     }
+     private static final class Page {
+@@ -63,7 +63,7 @@ final class RuinOriginals {
+         long bytes() { return 192L + 16L * (n + 1); }
+         long growth(int additions) {
+             int next = Math.max(n, capacity(size() + additions));
+-            return next > n ? 192L + 16L * (next + 1) : 0;
++            return rehashBytes(n, next, 16);
+         }
+     }
+ 
+@@ -76,6 +76,12 @@ final class RuinOriginals {
+     private int size;
+ 
+     private static int capacity(int entries) { return HashCommon.arraySize(Math.max(2, entries), LOAD); }
++    private static long rehashBytes(int current, int next, int width) {
++        if (next <= current) return 0;
++        // A batch can cross several capacities. At the last rehash the old array is next/2,
++        // not necessarily the smaller array counted when the batch obtained its permit.
++        return 192L + width * (next + 1L) + width * (long) Math.max(0, next / 2 - current);
++    }
+     private static long tableBytes(int capacity) { return 192L + 12L * (capacity + 1); }
+     private static long pageBytes(int entries) { return 96L + (entries <= 1 ? 0 : tableBytes(capacity(entries))); }
+     static long importBytes(int entries) {
+@@ -213,10 +219,15 @@ final class RuinOriginals {
+     }
+ 
+     void read(CompoundTag row) {
++        if (!row.contains("section", Tag.TAG_LONG)) throw new IllegalArgumentException("Invalid original section key");
+         long key = row.getLong("section");
+         if (SectionPos.y(key) < -128 || SectionPos.y(key) > 127)
+             throw new IllegalArgumentException("Original section exceeds block-position height");
+         if (row.contains("original_entries")) {
++            // getInt accepts every numeric NBT type, but the preflight scanner charges IntTag.
++            // Match that schema before any page allocation, including rejected partial files.
++            if (!row.contains("original_entries", Tag.TAG_INT))
++                throw new IllegalArgumentException("Invalid original section header type");
+             int count = row.getInt("original_entries");
+             importBytes(count); // Validate before allocation.
+             if (pages.containsKey(key)) throw new IllegalArgumentException("Duplicate original section header");

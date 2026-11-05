@@ -1,0 +1,36 @@
+diff --git a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinOriginalsGameTests.java b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinOriginalsGameTests.java
+index ae84fad4f..56ae3b2e6 100644
+--- a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinOriginalsGameTests.java
++++ b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinOriginalsGameTests.java
+@@ -131,6 +131,31 @@ public final class RuinOriginalsGameTests {
+         catch (IllegalArgumentException expected) { return true; }
+     }
+ 
++    @GameTest(template = "pad", batch = "nuke_original_min", timeoutTicks = 100)
++    public static void emptyAndSingletonImportsFundTheirFixedOwners(GameTestHelper h) throws Exception {
++        for (int count = 0; count < 2; count++) {
++            var ledger = new RuinMatter();
++            if (count > 0) {
++                var row = new CompoundTag(); row.putLong("position", 0); row.putInt("event", 1);
++                row.put("state", NbtUtils.writeBlockState(Blocks.BRICKS.defaultBlockState()));
++                var rows = new ListTag(); rows.add(row);
++                var part = new CompoundTag(); part.put("support_originals", rows);
++                RuinMatter.read(part, h.getLevel().registryAccess(), ledger, true);
++            }
++            Path file = h.getLevel().getServer().getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT)
++                    .resolve("data/original-min-" + UUID.randomUUID() + ".dat");
++            try (var output = new java.io.DataOutputStream(new java.util.zip.GZIPOutputStream(java.nio.file.Files.newOutputStream(file)))) {
++                var writer = new LedgerWriter(output);
++                writer.compound(""); writer.compound("data"); ledger.write(writer, h.getLevel().registryAccess());
++                writer.end(); writer.end();
++            }
++            var measure = LedgerScan.measure(file, "incoming_ruin_matter", java.util.Set.of(), NuclearPrep.PLANS_CAP);
++            Incoming.LOG.info("ORIGINAL_MIN count {} import {} resident {}", count, measure.owned(), ledger.retainedBytes());
++            h.assertTrue(measure.owned() >= ledger.retainedBytes(), "Small ledger import omitted fixed journal ownership");
++        }
++        h.succeed();
++    }
++
+     private static CompoundTag normalized(CompoundTag tag) {
+         List<Tag> rows = new ArrayList<>(tag.getList("support_originals", Tag.TAG_COMPOUND));
+         rows.sort(java.util.Comparator.comparingLong(row -> ((CompoundTag) row).getLong("position")));

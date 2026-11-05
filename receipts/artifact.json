@@ -1,0 +1,18 @@
+{
+  "source": "96648b0d730a93977ffe97b047d67f03885676ee",
+  "tree": "99920198c2a5a5429b7c8608280fe503faa23be7",
+  "main_tree": "5004180da7fb5a6062080a9025208412466e83c3",
+  "ci_run": 41949145779,
+  "artifact_id": 13379488095,
+  "zip_bytes": 23087422,
+  "zip_sha256": "67788936e30011947e428fbb6e5fd09e4ee5abb28483458e0ba8f448d74c5965",
+  "jar": "incoming-3.11.0.jar",
+  "jar_bytes": 23486800,
+  "jar_sha256": "0f4b5e969d79c15e6207ae15fa2700f4c324b0cf25b3486c0fced8fc006601e3",
+  "members": [
+    "incoming-3.11.0.jar"
+  ],
+  "ci_checkout": "b662cf552589fedd712639894a8a6bd1568749fe",
+  "tested_tree_artifact": 13380206749,
+  "devtest_and_diagnostic_classes_absent": true
+}

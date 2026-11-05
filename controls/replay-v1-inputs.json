@@ -1,0 +1,296 @@
+{
+  "created": "2026-11-05T00:20:25.835392+00:00",
+  "source_head": "bfe909a091f45c91c5bb85bac5730b23b13bb3b7",
+  "patch_sha256": "1a65d418958daa5d5edeffc996d03c792e838637375c28199c0d1b6593cc4ba6",
+  "harness_sha256": "111f86e9ede1fbbff7261f239c8cd6c83643015a4d59b57c57c5afc0da721bbd",
+  "source_chunks": [
+    {
+      "chunk": [
+        -15,
+        -56
+      ],
+      "bytes": 146154,
+      "sha256": "32eb722c031151b420c97e9cda860e89279ffa8b4734ae3c9a34b5f3b1480185"
+    },
+    {
+      "chunk": [
+        -15,
+        -55
+      ],
+      "bytes": 100175,
+      "sha256": "2abb094ef98849efc3192add6c8e926bdb940a6823d6436e1c76cb73b7e50f84"
+    },
+    {
+      "chunk": [
+        -15,
+        -54
+      ],
+      "bytes": 118191,
+      "sha256": "3e6007304c2fbc3680ce909f8a9545669fbff4e419c91962a9d638f52a54742e"
+    },
+    {
+      "chunk": [
+        -15,
+        -53
+      ],
+      "bytes": 114180,
+      "sha256": "491d6947c5b4d1859998ee39f4812877faa59ac09a76b3bb3fabef3c75f8aa2f"
+    },
+    {
+      "chunk": [
+        -15,
+        -52
+      ],
+      "bytes": 87393,
+      "sha256": "0122b7a191f183b0e1e284b2d034e8aa00f6f1d053d32602d70ea72b5f0f7914"
+    },
+    {
+      "chunk": [
+        -15,
+        -51
+      ],
+      "bytes": 87967,
+      "sha256": "da33d8cf70bbaf32347b952515ef391f489a6f7670cd8e8b29a9f2103d1fd0ed"
+    },
+    {
+      "chunk": [
+        -14,
+        -56
+      ],
+      "bytes": 142678,
+      "sha256": "fcaf2a68fc3a2470aae9f86fa8b3dc9f71233b1e084c74000a9eb6e05572e271"
+    },
+    {
+      "chunk": [
+        -14,
+        -55
+      ],
+      "bytes": 143821,
+      "sha256": "5785454901249ebce4254a2be3d881555b01f73da3e4bd57e4bf3ba03c62aee3"
+    },
+    {
+      "chunk": [
+        -14,
+        -54
+      ],
+      "bytes": 185130,
+      "sha256": "77db68bc3007a890b8a35dcc14f75bc84b3add3612012725caca1bf0eb6716b8"
+    },
+    {
+      "chunk": [
+        -14,
+        -53
+      ],
+      "bytes": 175130,
+      "sha256": "3bc25fdfe8382d88143fb4284767e5b5f3521873bd3e5e0925e08757509e0809"
+    },
+    {
+      "chunk": [
+        -14,
+        -52
+      ],
+      "bytes": 162151,
+      "sha256": "92154c3d4786c37b6c7dd1d2bb36edcbabc61d259c2de801d59e7fd41cfdb545"
+    },
+    {
+      "chunk": [
+        -14,
+        -51
+      ],
+      "bytes": 96631,
+      "sha256": "e753be6401d0af1c16512bb17418b6702487312b47472c1a755d35b9da20247b"
+    },
+    {
+      "chunk": [
+        -13,
+        -56
+      ],
+      "bytes": 143816,
+      "sha256": "ef95c732caddf1fecbb82ad9b7a702717e29ce33c301cae460b1bc34e0ce0447"
+    },
+    {
+      "chunk": [
+        -13,
+        -55
+      ],
+      "bytes": 158548,
+      "sha256": "5a1d7c62d661eb83726f033e548d4f429d28e2ee7641b23230b375bbe2f810a0"
+    },
+    {
+      "chunk": [
+        -13,
+        -54
+      ],
+      "bytes": 193453,
+      "sha256": "f33f07a8717b3cbbe93a76a908ec91667eb2493ffe37bcb3318ee5525a55529f"
+    },
+    {
+      "chunk": [
+        -13,
+        -53
+      ],
+      "bytes": 197736,
+      "sha256": "d37cd965565a618fb2f831ae329cd55cf2015e469afeef9dbfc3a206a8194fb8"
+    },
+    {
+      "chunk": [
+        -13,
+        -52
+      ],
+      "bytes": 159810,
+      "sha256": "dd59d370add797a9872935604fa5254a065b34017828db00fab941e3f64f2749"
+    },
+    {
+      "chunk": [
+        -13,
+        -51
+      ],
+      "bytes": 100571,
+      "sha256": "ca6109cfd1aa9916e28e454946c8d3b6b98552bebfda71f9feb7fbbbb3a3eafd"
+    },
+    {
+      "chunk": [
+        -12,
+        -56
+      ],
+      "bytes": 102312,
+      "sha256": "5d98e7ea8134529519533ff48eb1e1dfcc7fdadda636554afc4104e2abc92d04"
+    },
+    {
+      "chunk": [
+        -12,
+        -55
+      ],
+      "bytes": 120427,
+      "sha256": "91b1a166c85835b8ed3afdb09933597a48f963ffa6629c26ef061ddd1a72829e"
+    },
+    {
+      "chunk": [
+        -12,
+        -54
+      ],
+      "bytes": 137349,
+      "sha256": "44dfbeb30a593fbdbdb769b472eaac26f64494a373109e52f22af979a5b35cf6"
+    },
+    {
+      "chunk": [
+        -12,
+        -53
+      ],
+      "bytes": 128196,
+      "sha256": "aae27af5ec0c8607f440fa51b89ecdeafa8df23f42fcc798380d503fea52a868"
+    },
+    {
+      "chunk": [
+        -12,
+        -52
+      ],
+      "bytes": 92909,
+      "sha256": "f6ea518fec901c1080262825b152e3d76382155f5929942bd7374df38567dd63"
+    },
+    {
+      "chunk": [
+        -12,
+        -51
+      ],
+      "bytes": 76214,
+      "sha256": "32965f86e13bebadbdc0a44e1b5ee60b286a5f988d80532eaff2badcf714c7c4"
+    },
+    {
+      "chunk": [
+        -11,
+        -56
+      ],
+      "bytes": 217538,
+      "sha256": "d19940db607b70a48c1e704f91cdf340f35c0162708fad1fcc513c1deb28f031"
+    },
+    {
+      "chunk": [
+        -11,
+        -55
+      ],
+      "bytes": 156604,
+      "sha256": "0a91693a79d6d3b85d6ab86bc8b64d8fb46b35b66bfdc9b2374f53f550d04850"
+    },
+    {
+      "chunk": [
+        -11,
+        -54
+      ],
+      "bytes": 244782,
+      "sha256": "6f96657df0c8b66214fe9835683b9e3f5a284f5b776af39addbba48a484bc1c2"
+    },
+    {
+      "chunk": [
+        -11,
+        -53
+      ],
+      "bytes": 207623,
+      "sha256": "51644e8f713db84070b8d40a1b91eddd9b119f51ed0668e8aeb4508d37f31cf6"
+    },
+    {
+      "chunk": [
+        -11,
+        -52
+      ],
+      "bytes": 124296,
+      "sha256": "64ee9a46c076deb06f918f0b17237aa746db06d11c3fb3c068f595de130308d8"
+    },
+    {
+      "chunk": [
+        -11,
+        -51
+      ],
+      "bytes": 82338,
+      "sha256": "a1affca20b17da9d534ce7f85087d908791490bbd25da2e855402bc523327de7"
+    },
+    {
+      "chunk": [
+        -10,
+        -56
+      ],
+      "bytes": 140841,
+      "sha256": "b29e16ac8ea9b9a312a60fcb3ddff625cbe3e0afc2f4fa8d7ffb2ca81b220156"
+    },
+    {
+      "chunk": [
+        -10,
+        -55
+      ],
+      "bytes": 142633,
+      "sha256": "92abf0962d38aa41d856d65a4f2609beca27036ec6b3cc87db156dbf86a92929"
+    },
+    {
+      "chunk": [
+        -10,
+        -54
+      ],
+      "bytes": 265021,
+      "sha256": "95b9c8128156d898d5b3944288465b6dd645f5be21316bcf8fb85f10be449d70"
+    },
+    {
+      "chunk": [
+        -10,
+        -53
+      ],
+      "bytes": 243280,
+      "sha256": "2023697c05696816b9c9969c1c08e7797cda1c04fdfb28b3aab875bd29738c41"
+    },
+    {
+      "chunk": [
+        -10,
+        -52
+      ],
+      "bytes": 124922,
+      "sha256": "b5ad82b8cf32ba383346bf11e99cadbf9ed6712fb83276cc1fb30203be0e9513"
+    }
+  ],
+  "native_ledger_sha256": "de1369f99d1f8d9debec70deb87cb8c224b4d4e9cdc13325210915024700007f",
+  "translation_chunks": [
+    100000,
+    100000
+  ],
+  "game_time": 2040660000,
+  "competing_bytes": 152043520,
+  "scope": "Exact persisted failed-case ledger plus a fresh translated real-city cohort. Not a reconstruction of the stopped world. Pinned immediately after launch, with no intervening source edits."
+}

@@ -1,0 +1,139 @@
+{
+  "head": "96648b0d730a93977ffe97b047d67f03885676ee",
+  "checkout": "b662cf552589fedd712639894a8a6bd1568749fe",
+  "tree": "99920198c2a5a5429b7c8608280fe503faa23be7",
+  "run": 41949145779,
+  "conclusion": "success",
+  "required_check_job": 126991428112,
+  "artifact": 13379488095,
+  "tested_tree_artifact": 13380206749,
+  "jobs": [
+    {
+      "id": 126988652010,
+      "name": "Что изменилось",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 126988708298,
+      "name": "Страницы магазинов",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 126988708309,
+      "name": "Юнит-тесты (slow)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 126988708328,
+      "name": "GameTest 2/6",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 126988708345,
+      "name": "LSS GameTest ydDRzPcM",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 126988708386,
+      "name": "GameTest 6/6",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 126988708396,
+      "name": "Юнит-тесты (rest)",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 126988708493,
+      "name": "LSS GameTest jxJ4956L",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 126988708511,
+      "name": "GameTest 1/6",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 126988708522,
+      "name": "GameTest 5/6",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 126988708527,
+      "name": "GameTest 4/6",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 126988708566,
+      "name": "GameTest 3/6",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 126988709079,
+      "name": "Сборка",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 126988709856,
+      "name": "Шлагбаум",
+      "status": "completed",
+      "conclusion": "skipped"
+    },
+    {
+      "id": 126988709943,
+      "name": "Разбор повторов",
+      "status": "completed",
+      "conclusion": "skipped"
+    },
+    {
+      "id": 126988709996,
+      "name": "Остановка проверок",
+      "status": "completed",
+      "conclusion": "skipped"
+    },
+    {
+      "id": 126988710404,
+      "name": "Сборка из проверенного прогона",
+      "status": "completed",
+      "conclusion": "skipped"
+    },
+    {
+      "id": 126988710725,
+      "name": "Стенд: сборка и шлагбаум",
+      "status": "completed",
+      "conclusion": "skipped"
+    },
+    {
+      "id": 126989114667,
+      "name": "Clean NeoForge installation",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 126991428112,
+      "name": "Итог",
+      "status": "completed",
+      "conclusion": "success"
+    },
+    {
+      "id": 126991461442,
+      "name": "Релиз",
+      "status": "completed",
+      "conclusion": "skipped"
+    }
+  ],
+  "scope": "The CI checkout tree equals the source head tree. This receipt is source/CI evidence, not actual runtime acceptance."
+}

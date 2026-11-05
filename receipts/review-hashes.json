@@ -1,0 +1,10 @@
+{
+  "RMT-S7-review.md": {
+    "original_sha256": "76047b37aee79aeb86d03502a544b2b6968830aae1d10e534bbb6431c39b1621",
+    "scope": "Technical excerpt only; personal task/resource/session records remain outside version control."
+  },
+  "RMT-S7B-review.md": {
+    "original_sha256": "172ec6f7effe50edc850dfdfb566ddb2afdb874bc01b28618be8a585694f35d4",
+    "scope": "Technical excerpt only; personal task/resource/session records remain outside version control."
+  }
+}

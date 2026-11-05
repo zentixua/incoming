@@ -1,0 +1,10 @@
+{
+  "source": "96648b0d730a93977ffe97b047d67f03885676ee",
+  "tree": "99920198c2a5a5429b7c8608280fe503faa23be7",
+  "main_tree": "5004180da7fb5a6062080a9025208412466e83c3",
+  "local_full_build_and_95_gt": "1fe9d36057492cc1ef8b243d0ac150b928456846",
+  "corrective_native": "Production and Handoff cleanup match96648; final test-only assertions/fences are covered by finalCI. See review-green-source.patch and corrective review.",
+  "native_replay_final": "1fe9d, same v2 input/control; counting-clock memory pressure, not actual whole-world/performance acceptance.",
+  "source_jars": "Exact final CI jar retained locally and identified in artifact.json; no unreleased jar or private world/cargo input is published on this evidence branch.",
+  "excluded": "Private .dat/.nbt/world data; personal launchers, task briefs, inboxes, handoffs and session transcripts."
+}
