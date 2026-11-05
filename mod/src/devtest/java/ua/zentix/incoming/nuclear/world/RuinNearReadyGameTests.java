@@ -36,6 +36,15 @@ public final class RuinNearReadyGameTests {
         var prep = NuclearWorld.get(level).prep();
         Object p = request(prep, handle);
         StrikeGameTests.afterTest(h, () -> RuinPreparation.cancel(level, handle));
+        NuclearPrep.Handoff[] handedOff = {null};
+        StrikeGameTests.afterTest(h, () -> {
+            // Gameplay adopts this returned owner in NuclearWorld. This direct handoff fixture
+            // keeps it itself, so cancelling the former preparation cannot retire its cache.
+            if (handedOff[0] != null) {
+                handedOff[0].plans().clear();
+                handedOff[0].ruins().cancelTasks();
+            }
+        });
         boolean[] stalled = {false}, loaded = {false};
         var farGate = new java.util.concurrent.CompletableFuture<Void>();
         var farReads = new java.util.ArrayList<java.util.concurrent.CompletableFuture<DiskShots.Read>>();
@@ -143,6 +152,7 @@ public final class RuinNearReadyGameTests {
                 Detonation event = new Detonation(1_903_001, geometry.burst(), geometry.groundY(), geometry.yieldKt(), geometry.surface(),
                         level.getGameTime(), 0, 0, geometry.visibility(), 0, geometry.scale(), false, geometry.wave());
                 var ready = prep.handOff(level, event, level.getGameTime(), identity);
+                handedOff[0] = ready;
                 h.assertTrue(ready != null && ready.plans() == plans && plans.get(centre.toLong()) == near,
                         "Partial handoff changed or discarded actual near output");
                 h.assertTrue(!field(p, "draining").getBoolean(p), "Partial handoff discarded unfinished far ownership");

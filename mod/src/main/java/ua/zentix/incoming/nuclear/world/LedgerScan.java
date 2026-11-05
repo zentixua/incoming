@@ -47,7 +47,9 @@ final class LedgerScan {
 
     /** Live representation plus one transient row, rather than eight copies of the old save tree. */
     static Measure measure(Path file, String name, java.util.Set<Integer> activeCraters, long limit) throws IOException {
-        long owned = LedgerData.IO_BYTES + 8192, largest = 0, cargoTotal = 0;
+        // Empty queues/indexes and the original journal's fixed section-query workspace remain
+        // owned even when a file has no rows. The small-ledger regression checks this floor.
+        long owned = LedgerData.IO_BYTES + (12L << 10), largest = 0, cargoTotal = 0;
         var scan = new LedgerScan(Long.MAX_VALUE / 16);
         try (var input = open(file)) {
             if (input.readUnsignedByte() != 10) throw new IOException("Invalid ledger root");

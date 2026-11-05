@@ -65,9 +65,9 @@ public final class RuinWorkerAdmissionGameTests {
                 h.assertTrue(world.prep().retainedBytes() == 0 && world.materialReservation == 0,
                         "Previous fixture asynchronous ownership is still pending");
             }
-            h.assertTrue(RuinInputs.detachedBytes() == 0 && RuinResults.bytes() == 0
-                            && RuinWorkers.residentBufferBytes(384) == 0,
-                    "Previous fixture worker ownership is still pending");
+            long inputs = RuinInputs.detachedBytes(), results = RuinResults.bytes(), workspace = RuinWorkers.residentBufferBytes(384);
+            h.assertTrue(inputs == 0 && results == 0 && workspace == 0,
+                    "Previous fixture worker ownership is still pending: inputs=" + inputs + ", results=" + results + ", workspace=" + workspace);
         }).thenExecute(() -> {
             try { checkPressure(h); }
             catch (ReflectiveOperationException failure) { throw new AssertionError(failure); }

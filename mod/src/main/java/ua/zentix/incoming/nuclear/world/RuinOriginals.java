@@ -26,7 +26,7 @@ final class RuinOriginals {
         long growth(int additions) {
             int next = Math.max(n, capacity(Math.min(4096, size() + additions)));
             // The previous arrays stay live while rehash installs the new arrays.
-            return next > n ? tableBytes(next) : 0;
+            return rehashBytes(n, next, 12);
         }
     }
     private static final class Page {
@@ -63,7 +63,7 @@ final class RuinOriginals {
         long bytes() { return 192L + 16L * (n + 1); }
         long growth(int additions) {
             int next = Math.max(n, capacity(size() + additions));
-            return next > n ? 192L + 16L * (next + 1) : 0;
+            return rehashBytes(n, next, 16);
         }
     }
 
@@ -76,6 +76,12 @@ final class RuinOriginals {
     private int size;
 
     private static int capacity(int entries) { return HashCommon.arraySize(Math.max(2, entries), LOAD); }
+    private static long rehashBytes(int current, int next, int width) {
+        if (next <= current) return 0;
+        // A batch can cross several capacities. At the last rehash the old array is next/2,
+        // not necessarily the smaller array counted when the batch obtained its permit.
+        return 192L + width * (next + 1L) + width * (long) Math.max(0, next / 2 - current);
+    }
     private static long tableBytes(int capacity) { return 192L + 12L * (capacity + 1); }
     private static long pageBytes(int entries) { return 96L + (entries <= 1 ? 0 : tableBytes(capacity(entries))); }
     static long importBytes(int entries) {
@@ -213,10 +219,15 @@ final class RuinOriginals {
     }
 
     void read(CompoundTag row) {
+        if (!row.contains("section", Tag.TAG_LONG)) throw new IllegalArgumentException("Invalid original section key");
         long key = row.getLong("section");
         if (SectionPos.y(key) < -128 || SectionPos.y(key) > 127)
             throw new IllegalArgumentException("Original section exceeds block-position height");
         if (row.contains("original_entries")) {
+            // getInt accepts every numeric NBT type, but the preflight scanner charges IntTag.
+            // Match that schema before any page allocation, including rejected partial files.
+            if (!row.contains("original_entries", Tag.TAG_INT))
+                throw new IllegalArgumentException("Invalid original section header type");
             int count = row.getInt("original_entries");
             importBytes(count); // Validate before allocation.
             if (pages.containsKey(key)) throw new IllegalArgumentException("Duplicate original section header");
