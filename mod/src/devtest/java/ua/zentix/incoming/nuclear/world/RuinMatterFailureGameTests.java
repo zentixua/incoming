@@ -123,7 +123,17 @@ public final class RuinMatterFailureGameTests {
 
     private static void partialTransfer(GameTestHelper h, boolean cargo) throws Exception {
         var level = h.getLevel();
-        var at = h.absolutePos(new BlockPos(32, 3, 32));
+        var at = h.absolutePos(new BlockPos(cargo ? 16384 : 8192, 3, -8192));
+        var ledger = new RuinMatter();
+        var chunk = new net.minecraft.world.level.ChunkPos(at);
+        var ticket = new java.util.UUID(0, chunk.toLong());
+        StrikeGameTests.afterTest(h, () -> { placementFailure = null; cargoFailure = null; ledger.unload(level); });
+        h.assertFalse(ua.zentix.incoming.util.Terrain.ready(level, chunk.x, chunk.z), "Fixture destination must start cold");
+        h.assertFalse(ledger.readyToReplace(level, at, Blocks.AIR.defaultBlockState(), container.defaultBlockState()),
+                "Cold material destination did not wait for its callback neighbourhood");
+        h.assertTrue(ua.zentix.incoming.gametest.TicketProbe.count(level, t -> true, ticket) == 1,
+                "Cold material destination did not acquire its own load ticket");
+        // Finish fixture loading synchronously, without a timing assumption about background generation.
         for (int x = -2; x <= 2; x++) for (int z = -2; z <= 2; z++)
             level.getChunk((at.getX() >> 4) + x, (at.getZ() >> 4) + z);
         for (int x = -2; x <= 2; x++) for (int z = -2; z <= 2; z++) {
@@ -139,9 +149,8 @@ public final class RuinMatterFailureGameTests {
                 new Vec3(0, -1, 0), level.getGameTime() - 1);
         piece.y = at.getY();
         ColumnScar.replace(level, source, piece.state, Blocks.AIR.defaultBlockState());
-        var ledger = new RuinMatter(); ledger.release(java.util.List.of(piece));
+        ledger.release(java.util.List.of(piece));
         if (cargo) cargoFailure = at; else placementFailure = at;
-        StrikeGameTests.afterTest(h, () -> { placementFailure = null; cargoFailure = null; ledger.unload(level); });
         try { work(ledger, level); h.fail("Placement/cargo callback did not throw"); }
         catch (CallbackFailure expected) { /* Assert actual mutation and retained ownership below. */ }
         placementFailure = null; cargoFailure = null;
@@ -153,6 +162,10 @@ public final class RuinMatterFailureGameTests {
         h.assertTrue(ledger.pending() == 1 && ledger.deposited() == 0 && row.getInt("transfer") == (cargo ? 2 : 1),
                 "Ambiguous world mutation lost explicit pending ownership");
         h.assertTrue(row.getCompound("contents").equals(contents), "Callback mutated authoritative cargo");
+        h.assertFalse(ledger.busy(), "Paused ownership remained executable work");
+        h.assertTrue(ua.zentix.incoming.gametest.TicketProbe.count(level, t -> true, ticket) == 0,
+                "Paused ownership retained its material load ticket");
+        assertDormant(h, ledger);
         var legacy = RuinMatter.load(saved, level.registryAccess());
         h.assertTrue(legacy.save(new CompoundTag(), level.registryAccess()).equals(saved), "Named-row restore changed paused ownership");
         legacy.unload(level);
@@ -161,12 +174,27 @@ public final class RuinMatterFailureGameTests {
         var file = java.nio.file.Files.createTempDirectory(level.getDataStorage().dataFolder.toPath(), "material-partial-")
                 .resolve("material.dat");
         ledger.save(file.toFile(), level.registryAccess());
+        var mixedLedger = RuinMatter.load(saved, level.registryAccess());
+        mixedLedger.release(java.util.List.of(new RuinMatter.Piece(at.east(), Blocks.STONE.defaultBlockState(), null,
+                new Vec3(0, -1, 0), level.getGameTime() - 1)));
+        var mixedFile = file.resolveSibling("active-and-paused.dat");
+        mixedLedger.save(mixedFile.toFile(), level.registryAccess());
+        StrikeGameTests.afterTest(h, () -> mixedLedger.unload(level));
         RuinMatter[] restored = {null};
         StrikeGameTests.afterTest(h, () -> { if (restored[0] != null) restored[0].unload(level); });
         h.succeedWhen(() -> {
             h.assertFalse(ledger.writing(), "Native save has not completed");
+            h.assertFalse(mixedLedger.writing(), "Mixed native save has not completed");
             if (restored[0] == null) {
                 try {
+                    var bothScan = LedgerScan.measure(mixedFile, "incoming_ruin_matter", java.util.Set.of(), NuclearPrep.PLANS_CAP);
+                    var both = (RuinMatter) LedgerReader.read(mixedFile, "incoming_ruin_matter", level.registryAccess(), bothScan.row(), java.util.Set.of());
+                    h.assertTrue(bothScan.owned() >= both.retainedBytes(), "Mixed active/paused import exceeded preflight ownership");
+                    h.assertTrue(both.busy() && both.pending() == 2, "Paused ownership suppressed healthy material work");
+                    work(both, level);
+                    h.assertTrue(both.deposited() == 1 && both.pending() == 1, "Healthy material did not drain beside paused ownership");
+                    assertDormant(h, both);
+                    both.unload(level);
                     var scan = LedgerScan.measure(file, "incoming_ruin_matter", java.util.Set.of(), NuclearPrep.PLANS_CAP);
                     restored[0] = (RuinMatter) LedgerReader.read(file, "incoming_ruin_matter", level.registryAccess(), scan.row(), java.util.Set.of());
                     h.assertTrue(scan.owned() >= restored[0].retainedBytes(), "Paused import exceeded preflight ownership");
@@ -192,10 +220,25 @@ public final class RuinMatterFailureGameTests {
                 } catch (java.io.IOException error) { throw new RuntimeException(error); }
             }
             for (int i = 0; i < 32; i++) work(restored[0], level);
+            assertDormant(h, restored[0]);
             h.assertTrue(restored[0].pending() == 1 && restored[0].deposited() == 0, "Partial transfer was replayed or retired");
             h.assertTrue(restored[0].save(new CompoundTag(), level.registryAccess()).equals(saved), "Native reload changed IDs, destination or cargo");
             h.assertTrue(level.getBlockState(at).is(Blocks.GOLD_BLOCK), "Pending transfer overwrote a subsequent player edit");
         });
+    }
+
+    private static void assertDormant(GameTestHelper h, RuinMatter ledger) {
+        h.assertFalse(ledger.busy(), "Restored paused ownership became executable work");
+        var clock = WorkClock.counting(1);
+        clock.start(1); ledger.work(h.getLevel(), clock); // Retire any empty active queue backing once.
+        var allocation = (com.sun.management.ThreadMXBean) java.lang.management.ManagementFactory.getThreadMXBean();
+        long before = allocation.getThreadAllocatedBytes(Thread.currentThread().threadId());
+        for (int i = 0; i < 32; i++) {
+            clock.start(1); ledger.work(h.getLevel(), clock);
+            h.assertTrue(clock.usedThisTickNanos() == 0, "Paused ownership consumed work units");
+        }
+        long allocated = allocation.getThreadAllocatedBytes(Thread.currentThread().threadId()) - before;
+        h.assertTrue(allocated < 4096, "Paused ownership churned FIFO pages: allocated=" + allocated);
     }
 
     @GameTest(template = "pad", timeoutTicks = 1200, batch = "nuke_material_failure_after_transfer", skyAccess = true)

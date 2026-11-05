@@ -31,11 +31,14 @@ public final class RuinMatter extends LedgerData {
     private static final int SEGMENTS = 8;
     private static final int PLACING = 1, LOADING_CARGO = 2, TRANSFERRED = 3;
     static final int PIECE_BYTES = 157;
+    /** Rare callback failures retain their already-decoded piece, including list growth slack. */
+    static final int PAUSED_BYTES = 640;
     private RuinPalette palette = new RuinPalette();
     private final it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<CompoundTag> inventories = new it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<>();
     private long nextInventory;
     private int inventoryCapacity;
     private RuinRecords<Piece> moving = new RuinRecords<>(PIECE_BYTES, this::encodePiece, this::decodePiece);
+    private final java.util.ArrayList<Piece> paused = new java.util.ArrayList<>();
     /** Outside build height: retained material, but no repeated world reads/ticket churn. */
     private record ReservoirKey(BlockState state, CompoundTag contents) {}
     private static final class Reservoir {
@@ -44,7 +47,7 @@ public final class RuinMatter extends LedgerData {
     }
     private final java.util.Map<ReservoirKey, Reservoir> stranded = new java.util.HashMap<>();
     private int strandedCount;
-    private long movingBytes, strandedBytes;
+    private long cargoBytes, strandedBytes;
 
     /** One material balance, palette state and inventory slot per removal, before deduplication. */
     private static final long REMOVAL_INDEX_BYTES = 512 + 96 + 64;
@@ -52,7 +55,7 @@ public final class RuinMatter extends LedgerData {
     /** Conservative owned representation, including cargo and collection growth slack; the frozen save shares this owner. */
     long retainedBytes() {
         inventoryCapacity = Math.max(inventoryCapacity, inventories.size());
-        return IO_BYTES + 1024L + movingBytes + moving.bytes() + strandedBytes + palette.bytes()
+        return IO_BYTES + 1024L + cargoBytes + moving.bytes() + paused.size() * (long) PAUSED_BYTES + strandedBytes + palette.bytes()
                 + inventoryCapacity * 64L + supportBytes(0) + supportSources.bytes() + originals.bytes()
                 + materials.size() * 512L + (search == null ? 2048 : search.retainedBytes());
     }
@@ -383,7 +386,7 @@ public final class RuinMatter extends LedgerData {
                 dispersedMass += piece.mass;
             } else {
                 moving.addLast(piece);
-                movingBytes += piece.retainedBytes() - 512;
+                cargoBytes += piece.retainedBytes() - 512;
             }
         }
         setDirty();
@@ -405,11 +408,11 @@ public final class RuinMatter extends LedgerData {
 
     public long released() { return released; }
     public long deposited() { return deposited; }
-    public int pending() { return moving.size() + strandedCount; }
+    public int pending() { return moving.size() + paused.size() + strandedCount; }
     public double releasedVolume() { return releasedVolume; }
     public double depositedVolume() { return depositedVolume; }
 
-    /** Active material still travelling from a source volume, for diagnostics and phase-order checks. */
+    /** Retained coarse records from a source volume, for diagnostics and phase-order checks. */
     public int pendingFrom(BlockPos minimum, BlockPos maximum) {
         int count = 0;
         for (Piece p : allPending()) if (p.source.getX() >= minimum.getX() && p.source.getX() <= maximum.getX()
@@ -427,7 +430,12 @@ public final class RuinMatter extends LedgerData {
         heldChecked = false;
         inWork = true;
         try { workBatch(level, clock, units); }
-        finally { inWork = false; heldChecked = false; }
+        finally {
+            inWork = false; heldChecked = false;
+            // A callback can exit workBatch before its normal cleanup. Saved paused records own
+            // no runnable work and must not keep a cold destination loaded after that exception.
+            if (!busy()) unload(level);
+        }
     }
 
     private void workBatch(ServerLevel level, WorkClock clock, int units) {
@@ -501,17 +509,18 @@ public final class RuinMatter extends LedgerData {
                     // The popped record remains ours across every callback. After cargo transfer,
                     // later notification/drop failures must not recreate that cargo elsewhere.
                     if (settled || piece.transfer == TRANSFERRED) {
-                        movingBytes -= piece.retainedBytes() - 512;
+                        cargoBytes -= piece.retainedBytes() - 512;
                         inventories.remove(piece.cargoKey);
                         account(piece, 2);
                         deposited++;
                         depositedVolume += piece.volume;
                         depositedMass += piece.mass;
                     } else if (piece.outside) {
-                        movingBytes -= piece.retainedBytes() - 512;
+                        cargoBytes -= piece.retainedBytes() - 512;
                         inventories.remove(piece.cargoKey);
                         strand(piece);
-                    } else moving.addLast(piece);
+                    } else if (piece.transfer != 0) paused.add(piece);
+                    else moving.addLast(piece);
                     setDirty();
                 }
             }
@@ -528,10 +537,9 @@ public final class RuinMatter extends LedgerData {
         if (moving.isEmpty() && moving.bytes() > 128) moving = new RuinRecords<>(PIECE_BYTES, this::encodePiece, this::decodePiece);
         if (supports.isEmpty() && supportSources.isEmpty() && originals.isEmpty() && supportSources.bytes() > 128)
             supportSources = new RuinRecords<>(16, this::encodeSource, this::decodeSource);
-        if (moving.isEmpty() && supportSources.isEmpty() && (palette.bytes() > 512 || inventoryCapacity > 0)) {
+        if (moving.isEmpty() && paused.isEmpty() && supportSources.isEmpty() && (palette.bytes() > 512 || inventoryCapacity > 0)) {
             palette = new RuinPalette(); inventories.clear(); inventories.trim(); inventoryCapacity = 0;
         }
-        if (moving.isEmpty() && supports.isEmpty() && supportSources.isEmpty()) unload(level);
     }
 
     private boolean step(ServerLevel level, Piece p) {
@@ -669,7 +677,7 @@ public final class RuinMatter extends LedgerData {
     }
 
     private Iterable<Piece> allPending() {
-        return moving;
+        return com.google.common.collect.Iterables.concat(moving, paused);
     }
 
     static RuinMatter load(CompoundTag tag, HolderLookup.Provider lookup) {
@@ -734,8 +742,9 @@ public final class RuinMatter extends LedgerData {
                     p.id, p.source, BlockPos.containing(p.x, p.y, p.z), p.transfer);
             if (p.outside) result.strand(p);
             else {
-                result.moving.addLast(p);
-                result.movingBytes += p.retainedBytes() - 512;
+                if (p.transfer != 0) result.paused.add(p);
+                else result.moving.addLast(p);
+                result.cargoBytes += p.retainedBytes() - 512;
             }
         }
         ListTag reservoirs = tag.getList("stranded", Tag.TAG_COMPOUND);
@@ -1010,7 +1019,7 @@ public final class RuinMatter extends LedgerData {
             writer.row(edge);
         }
 
-        writer.list("moving", moving.size());
+        writer.list("moving", moving.size() + paused.size());
         for (Piece p : allPending()) writer.row(packed(p));
 
         writer.list("stranded", stranded.size());

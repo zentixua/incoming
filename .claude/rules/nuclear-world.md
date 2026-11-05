@@ -271,6 +271,9 @@ paths:
   a saved paused transfer (ERROR with position/phase/cause, and another diagnostic on reload). It must not replay
   over player edits or duplicate partial contents. After block and cargo transfer completes, retire ownership
   even if a later decoration-drop/scorch/LOD callback fails. No generic third-party rollback is attempted.
+  Paused transfers live outside the executable FIFO: they preserve cargo/accounting, but consume no work units
+  or load tickets after healthy/support work drains. The disk `moving` list includes both kinds; import routes
+  them by the transfer phase and charges paused objects separately from packed FIFO rows.
 - Coarse transport integrates gravity and triangular dynamic-pressure drag relative to the air, with adaptive
   half-metre substeps. It never advances beyond elapsed game time. Settlement uses the same block type and saved
   contents; logs rotate horizontally, waterlogging follows destination water. A one-block coarse repose step is

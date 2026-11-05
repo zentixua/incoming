@@ -88,7 +88,10 @@ final class LedgerScan {
                                     ? scan.bytes - scan.checkpoints : scan.bytes;
                             largest = Math.max(largest, rowBytes);
                             long moving = RuinMatter.PIECE_BYTES + 192L; // Legacy row allowance also covers stranded conversion.
-                            if (key.equals("moving") && scan.packedMoving) {
+                            if (key.equals("moving") && scan.transfer != 0) {
+                                // Paused callbacks retain one decoded object, never a runnable FIFO page.
+                                moving = RuinMatter.PAUSED_BYTES;
+                            } else if (key.equals("moving") && scan.packedMoving) {
                                 if (scan.outside) moving = 256; // The decoder creates a reservoir, not a FIFO/cargo-index row.
                                 else {
                                     // One byte per row bounds 96 bytes per 1024-row page; the full
