@@ -1,0 +1,50 @@
+#Camera shake strength (0: off). Aim is never disturbed: only the camera shakes.
+# Default: 1.0
+# Range: 0.0 ~ 2.0
+camera_shake = 1.0
+#Brightness of the on-screen explosion flash (0: off).
+# Default: 1.0
+# Range: 0.0 ~ 1.0
+flash = 1.0
+#Strength of the blast concussion on screen (0: off): after a blast wave strong enough to stun, the picture blurs,
+#loses colour and darkens at the edges for one to three seconds. Also scaled by the vanilla Distortion Effects option.
+# Default: 1.0
+# Range: 0.0 ~ 1.0
+screen_effects = 1.0
+#Show your projectiles in flight and their time to impact.
+hud = true
+#The projectile camera turns on by itself at every launch: launch from the side, flight from on board, impact (Shift exits).
+auto_camera = false
+#Designator binocular zoom.
+# Default: 4.0
+# Range: 1.5 ~ 10.0
+zoom = 4.0
+#Fireball, mushroom cloud (with the water column of a burst on water), the dust wall of a nuclear blast wave and
+#the dust and smoke pall after it (over water, spray and the base surge), as a volume: OFF / LOW / MEDIUM / HIGH.
+#LOW is lighter on a weak graphics card; MEDIUM and HIGH lower their own detail (not below LOW) while the volume takes more
+#than about 2 ms of graphics card time a frame, but not while Flashback exports a video.
+#OFF leaves only the dust close around you and falling ash: no dust wall, no pall or base surge, and it does not muffle
+#sounds. The fireball, the mushroom cloud and the water column stay, at LOW.
+#Allowed Values: OFF, LOW, MEDIUM, HIGH
+nuke_dust_quality = "MEDIUM"
+#Glow around fire, fireballs, flashes and rocket flames: light scattered by the air around them; smoke in front
+#of the fire dims it. OFF / FAST / FULL. FAST works out the glow from a coarser image and is cheaper (about 0.25-0.4 ms a
+#frame against 0.3-0.7 ms for FULL at 2560x1600 on an RTX 4060); FULL is finer close to small and fine-detailed flames.
+#It does not change the light of the fire on the world and smoke.
+#Allowed Values: OFF, FAST, FULL
+bloom = "FAST"
+#Hearing damage from a blast wave strong enough to hurt the ears (from about 0.75 psi): muffled hearing and
+#ringing ears that recover over game hours; from 5 psi torn eardrums, muffled for game weeks or until you die.
+nuke_tinnitus = true
+#Strike sounds lose high tones with distance and are muffled behind hills and walls, with or without Sound Physics Remastered;
+#inside the nuclear dust pall, distant sounds are muffled too.
+sound_muffling = true
+#Terrain of the targeting map around the player is prepared in advance (from Distant Horizons) while a designator
+#is in the inventory or the map was opened in this world, so the map opens instantly.
+map_prefetch = true
+#Incoming shows and plays its own strike blasts: flash, fireball, smoke, dust, debris, the blast wave, its sound and echo,
+#the jolt and hearing loss, and the bunker bomb's impact, ground tremor, gas vent and collapse. Turning this off hides these
+#effects but does not make another mod replace them. Only
+#this player's picture and sound change: destruction and damage are the server's. Air defence hits and nuclear
+#blasts stay Incoming's.
+blast_effects = true

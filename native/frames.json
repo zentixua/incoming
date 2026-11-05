@@ -1,0 +1,1162 @@
+[
+  {
+    "version": "before",
+    "scene": "15-air",
+    "t": 1.0,
+    "age": 1.0,
+    "nuclearAge": 1.0,
+    "file": "air8-before-15-air_001.00s.png",
+    "fps": 60,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fovSetting": 70,
+    "width": 2560,
+    "height": 1412,
+    "sha256": "da98ad15b155848a9b43838507f802684d6d0803427e6747f2d73a2d351ebc3c"
+  },
+  {
+    "version": "before",
+    "scene": "15-air",
+    "t": 5.0,
+    "age": 5.0,
+    "nuclearAge": 5.0,
+    "file": "air8-before-15-air_005.00s.png",
+    "fps": 60,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fovSetting": 70,
+    "width": 2560,
+    "height": 1412,
+    "sha256": "c3928bedf706ff1aeb6ac26ad7e26062a7b52c0f4fa59cfb124a95dcdad75d28"
+  },
+  {
+    "version": "before",
+    "scene": "15-air",
+    "t": 10.0,
+    "age": 10.016,
+    "nuclearAge": 10.016,
+    "file": "air8-before-15-air_010.00s.png",
+    "fps": 60,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fovSetting": 70,
+    "width": 2560,
+    "height": 1412,
+    "sha256": "4b85eb9b0fa6b3bbf4de6edff82c1917976d8ee4d3837a4dbcc477057cc1b0f5"
+  },
+  {
+    "version": "before",
+    "scene": "15-air",
+    "t": 15.0,
+    "age": 15.016,
+    "nuclearAge": 15.016,
+    "file": "air8-before-15-air_015.00s.png",
+    "fps": 60,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fovSetting": 70,
+    "width": 2560,
+    "height": 1412,
+    "sha256": "15928b8e193935f5aa6ed14fc3325d4ade9ed710b50f4398371d2c9ed14a0d4b"
+  },
+  {
+    "version": "before",
+    "scene": "15-air",
+    "t": 30.0,
+    "age": 30.016,
+    "nuclearAge": 30.016,
+    "file": "air8-before-15-air_030.00s.png",
+    "fps": 60,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fovSetting": 70,
+    "width": 2560,
+    "height": 1412,
+    "sha256": "0001e6e328ee38cd691e2910876fe6c376f3f9d3a5e1fbdb504d8bb52c6f2b6e"
+  },
+  {
+    "version": "before",
+    "scene": "15-air",
+    "t": 60.0,
+    "age": 60.016,
+    "nuclearAge": 60.015997,
+    "file": "air8-before-15-air_060.00s.png",
+    "fps": 60,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fovSetting": 70,
+    "width": 2560,
+    "height": 1412,
+    "sha256": "1ad478902f64c333cfca984b70dbddd8eb8faa968324f064b074b025dc12401c"
+  },
+  {
+    "version": "before",
+    "scene": "15-ground",
+    "t": 1.0,
+    "age": 1.016,
+    "nuclearAge": 1.016,
+    "file": "air8-before-15-ground_001.00s.png",
+    "fps": 60,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fovSetting": 70,
+    "width": 2560,
+    "height": 1412,
+    "sha256": "58ce678632591367dbe246375a4a3e5f32fc855c2720e6250765581d088ba147"
+  },
+  {
+    "version": "before",
+    "scene": "15-ground",
+    "t": 5.0,
+    "age": 5.0,
+    "nuclearAge": 5.0,
+    "file": "air8-before-15-ground_005.00s.png",
+    "fps": 60,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fovSetting": 70,
+    "width": 2560,
+    "height": 1412,
+    "sha256": "c0630154c6a72c3fad75ecd001cfde1623288313589580b9a14f182d16482b7a"
+  },
+  {
+    "version": "before",
+    "scene": "15-ground",
+    "t": 10.0,
+    "age": 10.016,
+    "nuclearAge": 10.016,
+    "file": "air8-before-15-ground_010.00s.png",
+    "fps": 60,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fovSetting": 70,
+    "width": 2560,
+    "height": 1412,
+    "sha256": "324e170c07421436e6b8a39164140d9274b2f47ce77bd98eeced02655c25598e"
+  },
+  {
+    "version": "before",
+    "scene": "15-ground",
+    "t": 15.0,
+    "age": 15.0,
+    "nuclearAge": 15.0,
+    "file": "air8-before-15-ground_015.00s.png",
+    "fps": 60,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fovSetting": 70,
+    "width": 2560,
+    "height": 1412,
+    "sha256": "6345369b42512180b11569d0923ad8e7fbb7ff73900ec5e4cf01aa7a1433f78d"
+  },
+  {
+    "version": "before",
+    "scene": "15-ground",
+    "t": 30.0,
+    "age": 30.016,
+    "nuclearAge": 30.016,
+    "file": "air8-before-15-ground_030.00s.png",
+    "fps": 60,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fovSetting": 70,
+    "width": 2560,
+    "height": 1412,
+    "sha256": "72ab841ace885359d2992eff41522808c2188317930938412c82397df5b064d5"
+  },
+  {
+    "version": "before",
+    "scene": "15-ground",
+    "t": 60.0,
+    "age": 60.0,
+    "nuclearAge": 60.0,
+    "file": "air8-before-15-ground_060.00s.png",
+    "fps": 60,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fovSetting": 70,
+    "width": 2560,
+    "height": 1412,
+    "sha256": "66b41ed08c39d2a664466a80c85c63cc1ac54dc1a9b12eab42bdd265823056b8"
+  },
+  {
+    "version": "before",
+    "scene": "5-air",
+    "t": 1.0,
+    "age": 1.003,
+    "nuclearAge": 1.003,
+    "file": "air8-before-5-air_001.00s.png",
+    "fps": 53,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fovSetting": 70,
+    "width": 2560,
+    "height": 1412,
+    "sha256": "071996780328748f059390060c10ab6aa62f0803ff73aa10dbbf3b1bd46dae98"
+  },
+  {
+    "version": "before",
+    "scene": "5-air",
+    "t": 5.0,
+    "age": 5.003,
+    "nuclearAge": 5.003,
+    "file": "air8-before-5-air_005.00s.png",
+    "fps": 60,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fovSetting": 70,
+    "width": 2560,
+    "height": 1412,
+    "sha256": "710fba45547eac055c553a867fe7089448b885c4a739e0ee4eefd5dce804001e"
+  },
+  {
+    "version": "before",
+    "scene": "5-air",
+    "t": 10.0,
+    "age": 10.009,
+    "nuclearAge": 10.009,
+    "file": "air8-before-5-air_010.00s.png",
+    "fps": 60,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fovSetting": 70,
+    "width": 2560,
+    "height": 1412,
+    "sha256": "e7ce23b49b612e775fc3df931c2d6dbeb3cb5c2d9538e54cae6178ee58dbc4a8"
+  },
+  {
+    "version": "before",
+    "scene": "5-air",
+    "t": 15.0,
+    "age": 15.013,
+    "nuclearAge": 15.013,
+    "file": "air8-before-5-air_015.00s.png",
+    "fps": 60,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fovSetting": 70,
+    "width": 2560,
+    "height": 1412,
+    "sha256": "6b970f6174bd857238c8257e45afcadab42380f9b4b50754935b90545832b48b"
+  },
+  {
+    "version": "before",
+    "scene": "5-air",
+    "t": 30.0,
+    "age": 30.016,
+    "nuclearAge": 30.016,
+    "file": "air8-before-5-air_030.00s.png",
+    "fps": 60,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fovSetting": 70,
+    "width": 2560,
+    "height": 1412,
+    "sha256": "5e684d1e696a5d6944640c6f18198ea65012667bee92bf35fd1321c2dd67e08c"
+  },
+  {
+    "version": "before",
+    "scene": "5-air",
+    "t": 60.0,
+    "age": 60.0,
+    "nuclearAge": 60.0,
+    "file": "air8-before-5-air_060.00s.png",
+    "fps": 60,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fovSetting": 70,
+    "width": 2560,
+    "height": 1412,
+    "sha256": "9bbd79cb6e688121a9ebe4326e7fb2154ca31cebd5915c964a171302f36d8fcd"
+  },
+  {
+    "version": "before",
+    "scene": "5-ground",
+    "t": 1.0,
+    "age": 1.0,
+    "nuclearAge": 1.0,
+    "file": "air8-before-5-ground_001.00s.png",
+    "fps": 60,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fovSetting": 70,
+    "width": 2560,
+    "height": 1412,
+    "sha256": "ad9e9e62651c9c9eab349e3e4b600f7fa38d681ec30b7d66e06c59a0a8612da1"
+  },
+  {
+    "version": "before",
+    "scene": "5-ground",
+    "t": 5.0,
+    "age": 5.0,
+    "nuclearAge": 5.0,
+    "file": "air8-before-5-ground_005.00s.png",
+    "fps": 60,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fovSetting": 70,
+    "width": 2560,
+    "height": 1412,
+    "sha256": "5f2d5395bf3be2088cfaf36d6d380d98777c1159479f2739ec0c191dcedce0ed"
+  },
+  {
+    "version": "before",
+    "scene": "5-ground",
+    "t": 10.0,
+    "age": 10.016,
+    "nuclearAge": 10.016,
+    "file": "air8-before-5-ground_010.00s.png",
+    "fps": 60,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fovSetting": 70,
+    "width": 2560,
+    "height": 1412,
+    "sha256": "f2a617488034d6b25d2f6219c61574db718a22843582387675d9cf1115307a44"
+  },
+  {
+    "version": "before",
+    "scene": "5-ground",
+    "t": 15.0,
+    "age": 15.016,
+    "nuclearAge": 15.016,
+    "file": "air8-before-5-ground_015.00s.png",
+    "fps": 60,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fovSetting": 70,
+    "width": 2560,
+    "height": 1412,
+    "sha256": "4e9d7eb0de4c2507ee1a4e0aca152b7d2246a74b9fcea6641183bdadab4018b9"
+  },
+  {
+    "version": "before",
+    "scene": "5-ground",
+    "t": 30.0,
+    "age": 30.0,
+    "nuclearAge": 30.0,
+    "file": "air8-before-5-ground_030.00s.png",
+    "fps": 60,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fovSetting": 70,
+    "width": 2560,
+    "height": 1412,
+    "sha256": "8763d9997803d536803fa9e9668a519f49ea557584562e22cd7a22751f985bef"
+  },
+  {
+    "version": "before",
+    "scene": "5-ground",
+    "t": 60.0,
+    "age": 60.0,
+    "nuclearAge": 60.0,
+    "file": "air8-before-5-ground_060.00s.png",
+    "fps": 60,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fovSetting": 70,
+    "width": 2560,
+    "height": 1412,
+    "sha256": "ab94e85754342489b5d85e4e397448c7323cfce8e01e1bad768632f5e0eb4d69"
+  },
+  {
+    "version": "before",
+    "scene": "high",
+    "t": 44.0,
+    "age": 44.016,
+    "nuclearAge": 44.016,
+    "file": "air8-before-high_044.00s.png",
+    "fps": 60,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -30.442883,
+    "fovSetting": 70,
+    "width": 2560,
+    "height": 1412,
+    "sha256": "8f1a63bf0b28a5e6ec0c2abdeab7e865bcb190bef00b0342a7b2a3852a0310a8"
+  },
+  {
+    "version": "before",
+    "scene": "high",
+    "t": 50.0,
+    "age": 50.0,
+    "nuclearAge": 50.0,
+    "file": "air8-before-high_050.00s.png",
+    "fps": 60,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -30.442883,
+    "fovSetting": 70,
+    "width": 2560,
+    "height": 1412,
+    "sha256": "340c663c8c00257a80186c7c498dab837376ed409cabca54d415da8ff03f89c6"
+  },
+  {
+    "version": "before",
+    "scene": "high",
+    "t": 60.0,
+    "age": 60.0,
+    "nuclearAge": 60.0,
+    "file": "air8-before-high_060.00s.png",
+    "fps": 60,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -30.442883,
+    "fovSetting": 70,
+    "width": 2560,
+    "height": 1412,
+    "sha256": "1008f861d4c8dbd02e22baefbd532d7b33656766a19afdbc34b29a65f8c7ea24"
+  },
+  {
+    "version": "before",
+    "scene": "high",
+    "t": 75.0,
+    "age": 75.0,
+    "nuclearAge": 75.0,
+    "file": "air8-before-high_075.00s.png",
+    "fps": 60,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -30.442883,
+    "fovSetting": 70,
+    "width": 2560,
+    "height": 1412,
+    "sha256": "6c0fa655f6f657f369f30dfbcd4d2d9125cec79b2d6fc2e0cce7204f63894487"
+  },
+  {
+    "version": "before",
+    "scene": "high",
+    "t": 90.0,
+    "age": 90.0,
+    "nuclearAge": 90.0,
+    "file": "air8-before-high_090.00s.png",
+    "fps": 60,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -30.442883,
+    "fovSetting": 70,
+    "width": 2560,
+    "height": 1412,
+    "sha256": "ed6207034efa4094c5053fa87df49e1d40a6512c3e3810624db8140e030218a9"
+  },
+  {
+    "version": "after",
+    "scene": "15-air",
+    "t": 1.0,
+    "age": 1.015,
+    "nuclearAge": 1.015,
+    "file": "air8-after-15-air_001.00s.png",
+    "fps": 60,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fovSetting": 70,
+    "width": 2560,
+    "height": 1412,
+    "sha256": "3b09f6c9dc5a67321f53e287a23109254b34364035b90bb27ed34cc25a28966f"
+  },
+  {
+    "version": "after",
+    "scene": "15-air",
+    "t": 5.0,
+    "age": 5.015,
+    "nuclearAge": 5.015,
+    "file": "air8-after-15-air_005.00s.png",
+    "fps": 60,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fovSetting": 70,
+    "width": 2560,
+    "height": 1412,
+    "sha256": "17b4be283d21a22c9dee0f22c70a91cca44df789d380f2b29da86aef053f4f9b"
+  },
+  {
+    "version": "after",
+    "scene": "15-air",
+    "t": 10.0,
+    "age": 10.015,
+    "nuclearAge": 10.015,
+    "file": "air8-after-15-air_010.00s.png",
+    "fps": 60,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fovSetting": 70,
+    "width": 2560,
+    "height": 1412,
+    "sha256": "26fb1ed59ccff075def98c5e6c916386228390eb1f000746942e904f7714bb18"
+  },
+  {
+    "version": "after",
+    "scene": "15-air",
+    "t": 15.0,
+    "age": 15.015,
+    "nuclearAge": 15.015001,
+    "file": "air8-after-15-air_015.00s.png",
+    "fps": 60,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fovSetting": 70,
+    "width": 2560,
+    "height": 1412,
+    "sha256": "ca046aff2c0641d5ee5d2634b342fdea20b0f47ac9e346358993a6d21a63ce43"
+  },
+  {
+    "version": "after",
+    "scene": "15-air",
+    "t": 30.0,
+    "age": 30.015,
+    "nuclearAge": 30.014999,
+    "file": "air8-after-15-air_030.00s.png",
+    "fps": 60,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fovSetting": 70,
+    "width": 2560,
+    "height": 1412,
+    "sha256": "f7ad4488eee6760e091b8dee4d2076f40ee78c6818a75017df86b37b7f359995"
+  },
+  {
+    "version": "after",
+    "scene": "15-air",
+    "t": 60.0,
+    "age": 60.015,
+    "nuclearAge": 60.015002,
+    "file": "air8-after-15-air_060.00s.png",
+    "fps": 60,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fovSetting": 70,
+    "width": 2560,
+    "height": 1412,
+    "sha256": "b27a1b51657588ac7ba1e82ae9886f9292bbba2a52302b02a94c72053935c699"
+  },
+  {
+    "version": "after",
+    "scene": "15-ground",
+    "t": 1.0,
+    "age": 1.015,
+    "nuclearAge": 1.015,
+    "file": "air8-after-15-ground_001.00s.png",
+    "fps": 60,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fovSetting": 70,
+    "width": 2560,
+    "height": 1412,
+    "sha256": "8824f38c3b5c7d866c6b63396348916a5d16093fa5aeab9d0398a6ef42542792"
+  },
+  {
+    "version": "after",
+    "scene": "15-ground",
+    "t": 5.0,
+    "age": 5.015,
+    "nuclearAge": 5.015,
+    "file": "air8-after-15-ground_005.00s.png",
+    "fps": 60,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fovSetting": 70,
+    "width": 2560,
+    "height": 1412,
+    "sha256": "a4b4cb12660a6f8c5aabab69f31842a27d53e73c30a498825527d3a725159fe0"
+  },
+  {
+    "version": "after",
+    "scene": "15-ground",
+    "t": 10.0,
+    "age": 10.015,
+    "nuclearAge": 10.015,
+    "file": "air8-after-15-ground_010.00s.png",
+    "fps": 60,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fovSetting": 70,
+    "width": 2560,
+    "height": 1412,
+    "sha256": "f0f93572eb6aab5da8a8235fe1942f89d5b20a133d4d1a10d5662db4d399580c"
+  },
+  {
+    "version": "after",
+    "scene": "15-ground",
+    "t": 15.0,
+    "age": 15.015,
+    "nuclearAge": 15.015001,
+    "file": "air8-after-15-ground_015.00s.png",
+    "fps": 60,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fovSetting": 70,
+    "width": 2560,
+    "height": 1412,
+    "sha256": "a252903448773243fa05c9ce50bc2aa5d121b91ec71c6a649bb4919a582d7de3"
+  },
+  {
+    "version": "after",
+    "scene": "15-ground",
+    "t": 30.0,
+    "age": 30.015,
+    "nuclearAge": 30.014999,
+    "file": "air8-after-15-ground_030.00s.png",
+    "fps": 60,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fovSetting": 70,
+    "width": 2560,
+    "height": 1412,
+    "sha256": "1722fda05d7ef877832ee83a84f2208e56fb227d1415ee04916809e84101c857"
+  },
+  {
+    "version": "after",
+    "scene": "15-ground",
+    "t": 60.0,
+    "age": 60.015,
+    "nuclearAge": 60.015002,
+    "file": "air8-after-15-ground_060.00s.png",
+    "fps": 60,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fovSetting": 70,
+    "width": 2560,
+    "height": 1412,
+    "sha256": "05a2809afbc785f8b583cdab7374fd141f7918efa707533de8f3b38a32a4f908"
+  },
+  {
+    "version": "after",
+    "scene": "5-air",
+    "t": 1.0,
+    "age": 1.002,
+    "nuclearAge": 1.002,
+    "file": "air8-after-5-air_001.00s.png",
+    "fps": 54,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fovSetting": 70,
+    "width": 2560,
+    "height": 1412,
+    "sha256": "8012bbaaf82599b1a245dbddb932329ade6528ddfdb119670e5dea3a62b9f854"
+  },
+  {
+    "version": "after",
+    "scene": "5-air",
+    "t": 5.0,
+    "age": 5.005,
+    "nuclearAge": 5.005,
+    "file": "air8-after-5-air_005.00s.png",
+    "fps": 59,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fovSetting": 70,
+    "width": 2560,
+    "height": 1412,
+    "sha256": "3fc0be32b5e2adb908f93a564e8077c624a1f771ae0e206c7dd6a3efc667f51b"
+  },
+  {
+    "version": "after",
+    "scene": "5-air",
+    "t": 10.0,
+    "age": 10.011,
+    "nuclearAge": 10.011,
+    "file": "air8-after-5-air_010.00s.png",
+    "fps": 60,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fovSetting": 70,
+    "width": 2560,
+    "height": 1412,
+    "sha256": "bc15a7ca6971c9ace9e01ff449b6bd98453981a6d278dd40d91ed422d94ec009"
+  },
+  {
+    "version": "after",
+    "scene": "5-air",
+    "t": 15.0,
+    "age": 15.013,
+    "nuclearAge": 15.013,
+    "file": "air8-after-5-air_015.00s.png",
+    "fps": 60,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fovSetting": 70,
+    "width": 2560,
+    "height": 1412,
+    "sha256": "d7555774470deee31efc3396a0a04cdc7c896ead64f5ab6d2a4e25075eb8660e"
+  },
+  {
+    "version": "after",
+    "scene": "5-air",
+    "t": 30.0,
+    "age": 30.015,
+    "nuclearAge": 30.014999,
+    "file": "air8-after-5-air_030.00s.png",
+    "fps": 60,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fovSetting": 70,
+    "width": 2560,
+    "height": 1412,
+    "sha256": "53744072d2e5ea0a3f2f6bd300231b45424c70e1ebaf988d3a24ddd6b1489350"
+  },
+  {
+    "version": "after",
+    "scene": "5-air",
+    "t": 60.0,
+    "age": 60.015,
+    "nuclearAge": 60.015002,
+    "file": "air8-after-5-air_060.00s.png",
+    "fps": 60,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fovSetting": 70,
+    "width": 2560,
+    "height": 1412,
+    "sha256": "0c822aef7010f65bb6e0457197a968d4516ba001ab26add6339e9914c078a7ee"
+  },
+  {
+    "version": "after",
+    "scene": "5-ground",
+    "t": 1.0,
+    "age": 1.015,
+    "nuclearAge": 1.015,
+    "file": "air8-after-5-ground_001.00s.png",
+    "fps": 60,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fovSetting": 70,
+    "width": 2560,
+    "height": 1412,
+    "sha256": "7a7c86d80a8b2fc378e43434da55ce21d3eef4ef7c56dfac7f72f217ec0c06d2"
+  },
+  {
+    "version": "after",
+    "scene": "5-ground",
+    "t": 5.0,
+    "age": 5.015,
+    "nuclearAge": 5.015,
+    "file": "air8-after-5-ground_005.00s.png",
+    "fps": 60,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fovSetting": 70,
+    "width": 2560,
+    "height": 1412,
+    "sha256": "427b001d011c9265334a180d758bc4402266c5beee5d9b1902b3de0c2bb54b28"
+  },
+  {
+    "version": "after",
+    "scene": "5-ground",
+    "t": 10.0,
+    "age": 10.015,
+    "nuclearAge": 10.015,
+    "file": "air8-after-5-ground_010.00s.png",
+    "fps": 60,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fovSetting": 70,
+    "width": 2560,
+    "height": 1412,
+    "sha256": "620d8a9d5bf917396d0bbed8ea811aa5f9f1f79f8cee0f3d55a00b57010a19f3"
+  },
+  {
+    "version": "after",
+    "scene": "5-ground",
+    "t": 15.0,
+    "age": 15.015,
+    "nuclearAge": 15.014999,
+    "file": "air8-after-5-ground_015.00s.png",
+    "fps": 60,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fovSetting": 70,
+    "width": 2560,
+    "height": 1412,
+    "sha256": "562d0da5dd5fb88e2f83f76cf41e3a6bd1a380185f53c3e63d31698c67c1b7f8"
+  },
+  {
+    "version": "after",
+    "scene": "5-ground",
+    "t": 30.0,
+    "age": 30.015,
+    "nuclearAge": 30.014999,
+    "file": "air8-after-5-ground_030.00s.png",
+    "fps": 60,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fovSetting": 70,
+    "width": 2560,
+    "height": 1412,
+    "sha256": "27de07c0960aa421ba87c0cfb87d0fa4184c0f696d484bd6ad5f157413eb7ce7"
+  },
+  {
+    "version": "after",
+    "scene": "5-ground",
+    "t": 60.0,
+    "age": 60.015,
+    "nuclearAge": 60.015002,
+    "file": "air8-after-5-ground_060.00s.png",
+    "fps": 60,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -12.007899,
+    "fovSetting": 70,
+    "width": 2560,
+    "height": 1412,
+    "sha256": "fc04345efc64fb374807c6f01a1e09fb7d650c079b3f0a6767bfead9ef852817"
+  },
+  {
+    "version": "after",
+    "scene": "high",
+    "t": 44.0,
+    "age": 44.015,
+    "nuclearAge": 44.014999,
+    "file": "air8-after-high_044.00s.png",
+    "fps": 60,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -30.442883,
+    "fovSetting": 70,
+    "width": 2560,
+    "height": 1412,
+    "sha256": "ec992d76d8a50642c9d89e52f9c2b32e58e5a50a04ac7aa82f6f56e170baf9cf"
+  },
+  {
+    "version": "after",
+    "scene": "high",
+    "t": 50.0,
+    "age": 50.015,
+    "nuclearAge": 50.014999,
+    "file": "air8-after-high_050.00s.png",
+    "fps": 60,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -30.442883,
+    "fovSetting": 70,
+    "width": 2560,
+    "height": 1412,
+    "sha256": "b52f02a9325a4ddfc60c4c1c10ad61a3a03f3035fdd60c1119e510a78ee1fd12"
+  },
+  {
+    "version": "after",
+    "scene": "high",
+    "t": 60.0,
+    "age": 60.015,
+    "nuclearAge": 60.015002,
+    "file": "air8-after-high_060.00s.png",
+    "fps": 60,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -30.442883,
+    "fovSetting": 70,
+    "width": 2560,
+    "height": 1412,
+    "sha256": "26813a3d1f9a9f2817f6a97f6d3264a5c254e93ecc076784b0f71afc62e64ab5"
+  },
+  {
+    "version": "after",
+    "scene": "high",
+    "t": 75.0,
+    "age": 75.015,
+    "nuclearAge": 75.015002,
+    "file": "air8-after-high_075.00s.png",
+    "fps": 60,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -30.442883,
+    "fovSetting": 70,
+    "width": 2560,
+    "height": 1412,
+    "sha256": "bb66e42d93674b651864feda54cee4078db0b1df2f51716807889b758d318660"
+  },
+  {
+    "version": "after",
+    "scene": "high",
+    "t": 90.0,
+    "age": 90.016,
+    "nuclearAge": 90.016003,
+    "file": "air8-after-high_090.00s.png",
+    "fps": 60,
+    "eye": [
+      0.5,
+      364.999999886,
+      8000.5
+    ],
+    "yaw": -180.0,
+    "pitch": -30.442883,
+    "fovSetting": 70,
+    "width": 2560,
+    "height": 1412,
+    "sha256": "0e876aa40289d40074e98e42b7540cb374a9c117c014c9348a105d57165e6750"
+  }
+]

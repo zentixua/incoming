@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.nuclear.model.StemClockTest" tests="1" skipped="0" failures="1" errors="0" timestamp="2026-11-04T23:15:49.916Z" hostname="zentixua-pc" time="0.052">
+  <properties/>
+  <testcase name="backgroundFailureBetweenStatusAndResultStaysOutOfTheFrame()" classname="ua.zentix.incoming.nuclear.model.StemClockTest" time="0.052">
+    <failure message="org.opentest4j.AssertionFailedError: Unexpected exception thrown: java.util.concurrent.CompletionException: java.lang.IllegalStateException: controlled completion between status observation and result read" type="org.opentest4j.AssertionFailedError">org.opentest4j.AssertionFailedError: Unexpected exception thrown: java.util.concurrent.CompletionException: java.lang.IllegalStateException: controlled completion between status observation and result read
+	at app//org.junit.jupiter.api.AssertionFailureBuilder.build(AssertionFailureBuilder.java:152)
+	at app//org.junit.jupiter.api.AssertDoesNotThrow.createAssertionFailedError(AssertDoesNotThrow.java:84)
+	at app//org.junit.jupiter.api.AssertDoesNotThrow.assertDoesNotThrow(AssertDoesNotThrow.java:75)
+	at app//org.junit.jupiter.api.AssertDoesNotThrow.assertDoesNotThrow(AssertDoesNotThrow.java:58)
+	at app//org.junit.jupiter.api.Assertions.assertDoesNotThrow(Assertions.java:3228)
+	at app//ua.zentix.incoming.nuclear.model.StemClockTest.backgroundFailureBetweenStatusAndResultStaysOutOfTheFrame(StemClockTest.java:148)
+	at java.base@21.0.7/java.lang.reflect.Method.invoke(Method.java:580)
+	at java.base@21.0.7/java.util.ArrayList.forEach(ArrayList.java:1596)
+	at java.base@21.0.7/java.util.ArrayList.forEach(ArrayList.java:1596)
+Caused by: java.util.concurrent.CompletionException: java.lang.IllegalStateException: controlled completion between status observation and result read
+	at java.base/java.util.concurrent.CompletableFuture.reportJoin(CompletableFuture.java:413)
+	at java.base/java.util.concurrent.CompletableFuture.getNow(CompletableFuture.java:2134)
+	at ua.zentix.incoming.nuclear.model.StemDust.ready(StemDust.java:215)
+	at ua.zentix.incoming.nuclear.model.StemClockTest.lambda$backgroundFailureBetweenStatusAndResultStaysOutOfTheFrame$0(StemClockTest.java:148)
+	at org.junit.jupiter.api.AssertDoesNotThrow.assertDoesNotThrow(AssertDoesNotThrow.java:71)
+	... 6 more
+Caused by: java.lang.IllegalStateException: controlled completion between status observation and result read
+	at ua.zentix.incoming.nuclear.model.StemClockTest.backgroundFailureBetweenStatusAndResultStaysOutOfTheFrame(StemClockTest.java:126)
+	... 3 more
+</failure>
+  </testcase>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

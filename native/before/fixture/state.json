@@ -1,0 +1,17 @@
+{
+  "ArrivalScene.java": {
+    "path": "mod/src/devtest/java/ua/zentix/incoming/scenario/ArrivalScene.java",
+    "existed": true,
+    "used_sha256": "f988207cd431f339145cb6197b67063790ccb19a56e86cc9aea5d6efdb5f6259"
+  },
+  "Sandbox.java": {
+    "path": "mod/src/devtest/java/ua/zentix/incoming/scenario/Sandbox.java",
+    "existed": true,
+    "used_sha256": "920bcba2b3647c4a78099c1f3a4e50c5bef5ed6319eb3e1cfc873e79e139585f"
+  },
+  "Air8Capture.java": {
+    "path": "mod/src/devtest/java/ua/zentix/incoming/client/nuclear/Air8Capture.java",
+    "existed": false,
+    "used_sha256": "7596a185f303b5e553d3fe500796164571a903b61b24e6f1bcc3ef6c7af2b98d"
+  }
+}

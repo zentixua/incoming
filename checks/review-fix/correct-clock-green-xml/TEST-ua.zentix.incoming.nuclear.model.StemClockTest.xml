@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.nuclear.model.StemClockTest" tests="6" skipped="0" failures="0" errors="0" timestamp="2026-11-04T23:16:01.589Z" hostname="zentixua-pc" time="0.395">
+  <properties/>
+  <testcase name="scaleUsesSlantBlocksAndModelSecondsAtEverySource()" classname="ua.zentix.incoming.nuclear.model.StemClockTest" time="0.094"/>
+  <testcase name="completeValueIdentityIsSharedBySynchronousAndBackgroundCache()" classname="ua.zentix.incoming.nuclear.model.StemClockTest" time="0.062"/>
+  <testcase name="actualGameAndRealClocksAtIdenticalGeometry()" classname="ua.zentix.incoming.nuclear.model.StemClockTest" time="0.219"/>
+  <testcase name="interpolationDoesNotBorrowPositiveDustBeforeArrivalAndInflow()" classname="ua.zentix.incoming.nuclear.model.StemClockTest" time="0.013"/>
+  <testcase name="allPendingSlotsRemainBoundedWithoutEvictionOrResubmission()" classname="ua.zentix.incoming.nuclear.model.StemClockTest" time="0.005"/>
+  <testcase name="backgroundFailureBetweenStatusAndResultStaysOutOfTheFrame()" classname="ua.zentix.incoming.nuclear.model.StemClockTest" time="0.001"/>
+  <system-out><![CDATA[]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

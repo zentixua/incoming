@@ -1,0 +1,92 @@
+[
+  {
+    "version": "before",
+    "scene": "15-air",
+    "seconds": 45.0,
+    "rate": 48000,
+    "channels": 2,
+    "sample_bytes": 2,
+    "sha256": "225f57621c99a977463cdff98307960064bbe4a20bd872ce7ebc508e5b1759ba"
+  },
+  {
+    "version": "before",
+    "scene": "15-ground",
+    "seconds": 45.0,
+    "rate": 48000,
+    "channels": 2,
+    "sample_bytes": 2,
+    "sha256": "3ed6fb693ed763c94cfe2071d0c76b57b16d103c88a6eb9b48c86364f1a11e24"
+  },
+  {
+    "version": "before",
+    "scene": "5-air",
+    "seconds": 45.0,
+    "rate": 48000,
+    "channels": 2,
+    "sample_bytes": 2,
+    "sha256": "01454aadb1902e2466dd6d4afb922dd5ff12732e10f640bc9c89b3cc38944791"
+  },
+  {
+    "version": "before",
+    "scene": "5-ground",
+    "seconds": 45.0,
+    "rate": 48000,
+    "channels": 2,
+    "sample_bytes": 2,
+    "sha256": "9d727dd976552b42be277d829284024aeccaa0898a52e3a96818994f84ebe1a0"
+  },
+  {
+    "version": "before",
+    "scene": "high",
+    "seconds": 45.0,
+    "rate": 48000,
+    "channels": 2,
+    "sample_bytes": 2,
+    "sha256": "83f69c5a5c9b1a3c074f5f18d43ff52362bf3966d293516dc0765a1e6abc20f9"
+  },
+  {
+    "version": "after",
+    "scene": "15-air",
+    "seconds": 45.0,
+    "rate": 48000,
+    "channels": 2,
+    "sample_bytes": 2,
+    "sha256": "12902afaa924663bb5f7b1f0e2c72db5dff6517c28b09abb0a25430402bbc127"
+  },
+  {
+    "version": "after",
+    "scene": "15-ground",
+    "seconds": 45.0,
+    "rate": 48000,
+    "channels": 2,
+    "sample_bytes": 2,
+    "sha256": "d9ef9550f49f88dd77f857a612051a206fd66e7be730dbeac697eee8a96bfc25"
+  },
+  {
+    "version": "after",
+    "scene": "5-air",
+    "seconds": 45.0,
+    "rate": 48000,
+    "channels": 2,
+    "sample_bytes": 2,
+    "sha256": "905ae8a361196f0cf91d74e85dc0e7e86eaf5c06a1d5a9b80ff8ea697f621235"
+  },
+  {
+    "version": "after",
+    "scene": "5-ground",
+    "seconds": 45.0,
+    "rate": 48000,
+    "channels": 2,
+    "sample_bytes": 2,
+    "sha256": "e01a2c0cdb92f955807769153663f3c4487df06178780f41e865b40b422bc205"
+  },
+  {
+    "version": "after",
+    "scene": "high",
+    "seconds": 45.0,
+    "rate": 48000,
+    "channels": 2,
+    "sample_bytes": 2,
+    "sha256": "df4db45452862b987e20e3daad73ec16b1edd62c0c39135923d67d9bf6ee1806"
+  }
+]

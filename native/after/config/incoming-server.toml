@@ -1,0 +1,219 @@
+[scale]
+	#GAME (default): game flight speeds and heights, full nuclear radii, distant nuclear wave at 0.25 of sound speed.
+	#REAL: reference flight speeds and heights, full nuclear radii and physical wave timing. Flight and air defense use a game model.
+	#CUSTOM uses flight_speed, nuclear.wave_speed and nuclear.effects_scale as set; effects_scale below 1 shrinks nuclear effects.
+	#Allowed Values: GAME, REAL, CUSTOM
+	scale_preset = "GAME"
+	#Works with scale_preset = CUSTOM. Flight speeds and altitudes: 0 is the game values (not true to life: slower
+	#and lower, so that the approach is seen within a few hundred blocks), 1 is true to life, in between each weapon
+	#goes the same share of the way on a log scale. Changes cruise and dive speed, route altitude, B-2 release
+	#altitude, SAM missile speed and the Grad launch speed (a Grad launched from afar starts further away); turns and climb rates stay game values, the flight time
+	#settings stay, so a faster weapon starts further away.
+	# Default: 0.0
+	# Range: 0.0 ~ 1.0
+	flight_speed = 0.0
+
+[world]
+	#Blasts destroy blocks. Off: they still hurt players and mobs. Nuclear strikes use nuclear.block_damage.
+	block_damage = true
+	#The blast wave breaks glass beyond the crater wherever outside air reaches it.
+	shatter_glass = true
+	#Conventional blasts and burning debris start fires.
+	fire = true
+	#Ground clods stay as blocks on loose ground; large airframe parts and burning debris can also remain. Small chips disperse. Off: all debris disappears on landing. Fire still needs fuel.
+	debris_stay = true
+	#An underground blast brings down the roof of the cavity above it.
+	collapse = true
+	#Air raid siren and on-screen warning for players within 350 blocks of the target.
+	siren = true
+
+[launch]
+	#Largest number of rounds in one salvo.
+	# Default: 30
+	# Range: 1 ~ 100
+	max_salvo = 30
+	#Largest salvo spread, blocks.
+	# Default: 150
+	# Range: 0 ~ 500
+	max_spread = 150
+	#How many rounds one player may have in progress (in flight and not yet fired in salvos) for a new order
+	#to be accepted; operators are not limited. 0: no limit.
+	# Default: 0
+	# Range: 0 ~ 100000
+	max_active_per_player = 0
+	#Designator binoculars range, blocks.
+	# Default: 400
+	# Range: 32 ~ 1024
+	aim_range = 400
+	#Range of strikes at a place picked on the targeting map, blocks (horizontal distance from the player).
+	#The server loads the target area and generates it where nobody has been: the larger the range, the more new terrain.
+	# Default: 10000
+	# Range: 256 ~ 1000000
+	map_range = 10000
+	#The designator works for every player, not only operators.
+	designator_for_everyone = true
+	#The targeting map shows players in the same dimension (within map_range, except invisible players and spectators):
+	#teammates (/team) always, others where they were last seen (with sight_rules) or all of them (without).
+	#Off: the map does not draw them; the player target list on the console stays.
+	map_players = true
+	#Spotting: the designator strikes another player or aircraft only if the shooter or their /team sees it now or saw it
+	#within sight_memory, directly or through their projectile camera; one seen earlier is struck at its last known place.
+	#The map shows others the same way. /incoming from operators and the console ignores these rules.
+	sight_rules = true
+	#How many seconds a player and their team remember a spotted player or aircraft.
+	# Default: 30
+	# Range: 0 ~ 600
+	sight_memory = 30
+	#Shaheds and missiles take off from a mobile launcher near the player who launched them (off: they come in from afar).
+	launch_near_player = true
+	#Shahed flight from launch to target, seconds: a detour and an attack run from behind (never shorter than the direct path).
+	# Default: 50
+	# Range: 5 ~ 600
+	drone_flight_time = 50
+	#Cruise missile flight from launch to target, seconds (never shorter than the direct path).
+	# Default: 30
+	# Range: 5 ~ 600
+	missile_flight_time = 30
+	#B-2 approach until bomb release, seconds.
+	# Default: 40
+	# Range: 5 ~ 600
+	bomber_flight_time = 40
+	#How long a Lancet circles over the target before diving, seconds (±20% for each one in a salvo).
+	# Default: 25
+	# Range: 0 ~ 600
+	loiter_time = 25
+
+[nuclear]
+	#Nuclear weapons are available: the ICBM, nuclear warheads and /incoming nuke.
+	enabled = true
+	#Only operators can launch nuclear strikes. Off: other players need a second key from a player nearby.
+	ops_only = true
+	#Yield of /incoming nuke without a number, kt (15 is Hiroshima). On the console the yield is entered in whole kt.
+	# Default: 15
+	# Range: 1 ~ 1000
+	default_yield = 15
+	#Largest allowed yield, kt (1–1000). New worlds default to 100; existing valid values are retained.
+	# Default: 100
+	# Range: 1 ~ 1000
+	max_yield = 100
+	#Works with scale.scale_preset = CUSTOM. Scale of all radii: 1.0 is true to life (1 block = 1 m); lower for small worlds.
+	# Default: 1.0
+	# Range: 0.005 ~ 1.0
+	effects_scale = 1.0
+	#Works with scale.scale_preset = CUSTOM. Speed of the blast wave and its dust wall away from the fireball,
+	#as a share of the speed of sound (1.0 is true to life, 0.25 is the GAME preset). Lower is not true to life: it
+	#gives the server more time to build ruins ahead of the wave and lets players watch the wall roll in. Near the
+	#fireball the wave is always true to life; beyond the dust wall only the sound travels on, at the speed of sound.
+	# Default: 0.25
+	# Range: 0.15 ~ 1.0
+	wave_speed = 0.25
+	#The blast wave destroys buildings and trees. Off: no ruins and no crater.
+	block_damage = true
+	#The thermal pulse starts fires.
+	fires = true
+	#Tree trunks fall whole, away from ground zero.
+	tree_fall = true
+	#A ground burst digs a crater.
+	crater = true
+	#Radioactive fallout: the trail downwind of a ground burst and what black rain washes down after any burst.
+	fallout = true
+	#Radiation dose and radiation sickness for players.
+	radiation = true
+	#Radiation dose and sickness for mobs (except the undead): a dose at the burst and in the fallout trail,
+	#sickness in the same stages as players. Off: prompt radiation kills mobs at once (from 1000 rem) or takes
+	#half their health (from 400 rem), and fallout does not affect them.
+	mob_radiation = true
+	#Black rain from the fires contaminates skin and clothes until washed off with water.
+	black_rain = true
+	#ICBM flight from launch to detonation, ticks (about 30 minutes in reality). A non-operator strike takes at least 1800 (90 s of alarm).
+	# Default: 1800
+	# Range: 200 ~ 72000
+	flight_time = 1800
+	#When players use Distant Horizons: the heavy-damage zone that is not fully generated on disk (the edge of the explored
+	#world) is generated in the background behind the wave (at most two 5×5 squares at a time), so the ruins are
+	#visible from afar at once. Off: ruins appear there only when a player gets there.
+	#Existing final-block chunks throughout the ruin zone are always settled in the background, independently of this setting.
+	far_zone = true
+	#How many background threads build ruin plans (breaks, collapse and fill from chunk snapshots, parsing chunks
+	#from disk). 0: automatic, all cores but three (server thread, rendering, world I/O and generation;
+	#on a dedicated server all but two), at least one. The mod adjusts how many of them work
+	#to the server tick. The server thread only snapshots chunks and places finished ruins.
+	# Default: 0
+	# Range: 0 ~ 256
+	ruin_threads = 0
+	#Largest number of fires from one detonation that burn on after the blast wave (the flash also lights the ones the wave blows out).
+	# Default: 20000
+	# Range: 0 ~ 100000
+	fires_per_detonation = 20000
+	#Players within this many blocks of the target hear the nuclear alarm.
+	# Default: 20000
+	# Range: 100 ~ 1000000
+	warning_radius = 20000
+	#A nuclear strike by a non-operator (ops_only = false) needs a second key: another player within this many blocks
+	#of the launching player presses their Second key. Alone online: no key needed.
+	# Default: 16
+	# Range: 2 ~ 128
+	second_key_distance = 16
+	#How many seconds to wait for the second key; without it there is no launch and the munitions are returned.
+	# Default: 30
+	# Range: 5 ~ 300
+	second_key_window = 30
+	#A nuclear warhead on the cruise missile and the B-2 bomb as well as the ICBM.
+	carrier_nukes = true
+
+[grid]
+	#Blackout: a strike on a substation cuts power to its area, and electric lights go out district by district.
+	#Torches, candles, campfires and furnaces keep burning: they are not on the grid.
+	enabled = true
+	#Radius of the area a substation powers, blocks.
+	# Default: 512
+	# Range: 16 ~ 4096
+	node_radius = 512
+	#Largest radius of one outage, blocks (a nuclear strike goes no further).
+	# Default: 4096
+	# Range: 64 ~ 16384
+	max_radius = 4096
+	#How fast the outage spreads from the substation across districts, blocks per second.
+	# Default: 60.0
+	# Range: 1.0 ~ 10000.0
+	cascade_speed = 60.0
+	#Minutes until power starts coming back (0: only with /incoming grid restore).
+	# Default: 15
+	# Range: 0 ~ 10080
+	restore_minutes = 15
+	#Seconds over which power returns to all districts, in random order.
+	# Default: 90
+	# Range: 0 ~ 3600
+	restore_spread_seconds = 90
+	#Nuclear blackout requires grid.enabled and works without a substation; radius is the smaller of the damage radius and grid.max_radius.
+	nuke_blackout = true
+
+[performance]
+	#At most how many milliseconds of each tick the server spends on the mod's heavy work in total (5–45):
+	#strike destruction first, then the nuke (building ruins ahead while an ICBM flies takes at most 4/15 of the
+	#budget), then blackout lights (at most 2/15; the nuke leaves them that while they have work). The full budget
+	#comes only from time left free in the tick: a server behind schedule gets 2 ms for each of the three, and
+	#6 ms more for nuclear ruins in a player's view. More: salvo damage and nuclear ruins appear sooner; less: a
+	#steadier tick, craters and ruins take longer to finish.
+	# Default: 30
+	# Range: 5 ~ 45
+	work_ms_per_tick = 30
+
+[visibility]
+	#How far players see and hear projectiles in flight (horizontally, at any altitude) and conventional blasts, blocks. Beyond render distance they show
+	#as a model (a dot when smaller than a couple of pixels), flame, trail, fireball and smoke column; sound arrives with
+	#the speed-of-sound delay. Haze hides them anyway further out; a lower value sends fewer packets to players.
+	#A blast is also sent as far as its sound carries on a quiet night, which depends on its charge, up to 32000 blocks.
+	# Default: 8000
+	# Range: 640 ~ 32000
+	far_range = 8000
+
+[air_defense]
+	#How many missiles stand on the SAM rails ready to fire.
+	# Default: 4
+	# Range: 1 ~ 16
+	rails = 4
+	#Seconds to put the next missile from the SAM stock on a free rail.
+	# Default: 8
+	# Range: 0 ~ 600
+	reload_seconds = 8

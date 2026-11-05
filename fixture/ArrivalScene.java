@@ -39,6 +39,12 @@ final class ArrivalScene {
   long now = mc.level.getGameTime();
   Detonation d = new Detonation(9000, at.add(0, hob, 0), at.y, yield, !air,
     now - Math.round(initial * 20), 0, 0, 20_000, 1234, 1, false, wave, mc.level.getDayTime(), fires);
+  double firstRadius = ua.zentix.incoming.nuclear.model.DustModel.STEM_M * Math.cbrt(yield / 15.0) / 48;
+  double sourceDelay = ua.zentix.incoming.nuclear.model.DustModel.stemFrom(hob, yield,
+      ua.zentix.incoming.nuclear.model.FireballModel.maxRadius(yield, !air));
+  Incoming.LOG.info("AIR8 first source radius={} front={} physicalFront={} inflowDelay={}", firstRadius,
+      d.arrivalTicks(d.slantOf(d.blocks(firstRadius))) / (20 * d.scale()),
+      ua.zentix.incoming.nuclear.model.HobBlast.arrivalSeconds(firstRadius, hob, yield), sourceDelay);
   S2C.NukeDetonation packet = new S2C.NukeDetonation(d, 0, 9000);
   if (initial == 0) ClientHooks.get().nukeDetonation(packet);
   else ClientNuclear.detonation(packet, false); // explicit replay-age diagnostic, never used for main time sequences

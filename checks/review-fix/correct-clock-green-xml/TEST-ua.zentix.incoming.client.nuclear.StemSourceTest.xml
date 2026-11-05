@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<testsuite name="ua.zentix.incoming.client.nuclear.StemSourceTest" tests="1" skipped="0" failures="0" errors="0" timestamp="2026-11-04T23:16:01.225Z" hostname="zentixua-pc" time="0.363">
+  <properties/>
+  <testcase name="footUsesTheSupplyingLayersClockForBothBurstModesAndScales()" classname="ua.zentix.incoming.client.nuclear.StemSourceTest" time="0.363"/>
+  <system-out><![CDATA[WARN StatusConsoleListener Advanced terminal features are not available in this environment
+]]></system-out>
+  <system-err><![CDATA[]]></system-err>
+</testsuite>

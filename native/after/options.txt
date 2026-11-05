@@ -1,0 +1,10 @@
+onboardAccessibility:false
+pauseOnLostFocus:false
+renderDistance:12
+simulationDistance:8
+guiScale:2
+soundCategory_master:1.0
+soundCategory_ambient:1.0
+soundCategory_music:0.0
+tutorialStep:none
+joinedFirstServer:true

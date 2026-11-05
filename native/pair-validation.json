@@ -1,0 +1,8 @@
+{
+  "frames": 58,
+  "pairs": 29,
+  "wav": 10,
+  "camera_exact": true,
+  "max_requested_age_error_s": 0.01600299999999777,
+  "max_pair_age_difference_s": 0.01600299999999777
+}

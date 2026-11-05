@@ -1,0 +1,4 @@
+00:11:38 no checks for 68a48e2f after 5 min (mergeable=MERGEABLE) — still waiting
+00:12:09 new head 2a3b4614 — waiting for its checks
+00:17:27 new head c156f260 — waiting for its checks
+PR 600 (c156f260): Итог is green after 21 min of waiting
