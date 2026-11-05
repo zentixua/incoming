@@ -2,39 +2,57 @@ package ua.zentix.incoming.nuclear.world;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
-import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
 
 import java.util.ArrayList;
 import java.util.BitSet;
 import java.util.List;
+import java.util.function.BooleanSupplier;
 
 /** Server-side commit of one already admitted section group; no scheduling, loading or old material ledger. */
 final class PreparedMaterialCommit {
     static int depart(ServerLevel level, PreparedMaterialBatch batch, int[] indices, long tick) {
-        return depart(level, batch, indices, tick, ColumnScar::replaceState);
+        return depart(level, batch, indices, tick, ColumnScar::replaceState, () -> true);
+    }
+
+    static int depart(ServerLevel level, PreparedMaterialBatch batch, int[] indices, long tick, BooleanSupplier permit) {
+        return depart(level, batch, indices, tick, ColumnScar::replaceState, permit);
     }
 
     static int depart(ServerLevel level, PreparedMaterialBatch batch, int[] indices, long tick,
                       PreparedSectionWriter.WorldWrite write) {
+        return depart(level, batch, indices, tick, write, () -> true);
+    }
+
+    static int depart(ServerLevel level, PreparedMaterialBatch batch, int[] indices, long tick,
+                      PreparedSectionWriter.WorldWrite write, BooleanSupplier permit) {
         var selected = select(batch, indices, tick, true);
         LevelChunk chunk = ready(level, batch, selected, true);
         if (chunk == null) return 0;
         var changes = new ArrayList<PreparedSectionWriter.CellChange>(selected.size());
         for (int index : selected) {
             var move = batch.move(index);
-            // Capture the inventory at departure, not at the earlier terrain-snapshot time.
-            var entity = chunk.getBlockState(move.source()) == move.before() && move.before().hasBlockEntity()
-                    ? level.getBlockEntity(move.source()) : null;
-            batch.capture(index, entity == null ? null : entity.saveWithoutMetadata(level.registryAccess()));
-            changes.add(new PreparedSectionWriter.CellChange(move.source(), move.before(), Blocks.AIR.defaultBlockState()));
+            changes.add(new PreparedSectionWriter.CellChange(move.source(), move.before(), move.sourceAfter()));
         }
         var receipt = new PreparedSectionWriter.Receipt(changes.size());
+        Throwable failure = null;
         try {
-            PreparedSectionWriter.apply(level, chunk, changes, receipt, write);
-        } finally {
-            for (int n = 0; n < selected.size(); n++) {
+            PreparedSectionWriter.apply(level, chunk, changes, receipt, write, permit, n -> {
                 int index = selected.get(n);
+                var move = batch.move(index);
+                // Capture only after callback admission and exact source validation. Even NBT
+                // capture is part of the admitted work; a whole section of containers is not free.
+                var entity = move.before().hasBlockEntity() ? level.getBlockEntity(move.source()) : null;
+                if (move.before().hasBlockEntity() && entity == null) return false;
+                return batch.tryCapture(index, entity == null ? null : entity.saveWithoutMetadata(level.registryAccess()));
+            });
+        } catch (RuntimeException | Error error) {
+            failure = error;
+        }
+        for (int n = 0; n < selected.size(); n++) {
+            int index = selected.get(n);
+            try {
                 if (receipt.stale(n)) batch.sourceChanged(index);
                 else if (receipt.attempted(n)) {
                     var move = batch.move(index);
@@ -51,27 +69,44 @@ final class PreparedMaterialCommit {
                         }
                     }
                 }
+            } catch (RuntimeException | Error error) {
+                failure = combine(failure, error); // Reconcile the other confirmed writes too.
             }
         }
+        rethrow(failure);
         return receipt.applied().cardinality();
     }
 
     static int land(ServerLevel level, PreparedMaterialBatch batch, int[] indices, long tick, boolean destinationScarApplied) {
+        return land(level, batch, indices, tick, destinationScarApplied, () -> true);
+    }
+
+    static int land(ServerLevel level, PreparedMaterialBatch batch, int[] indices, long tick,
+                    boolean destinationScarApplied, BooleanSupplier permit) {
         if (!destinationScarApplied) return 0;
         var selected = select(batch, indices, tick, false);
         LevelChunk chunk = ready(level, batch, selected, false);
         if (chunk == null) return 0;
         var changes = new ArrayList<PreparedSectionWriter.CellChange>(selected.size());
+        selected.removeIf(index -> {
+            if (replaceable(batch.move(index).destinationBefore())) return false;
+            batch.destinationChanged(index);
+            return true;
+        });
         for (int index : selected) {
             var move = batch.move(index);
             changes.add(new PreparedSectionWriter.CellChange(move.destination(), move.destinationBefore(), move.placed()));
         }
         var receipt = new PreparedSectionWriter.Receipt(changes.size());
+        Throwable failure = null;
         try {
-            PreparedSectionWriter.apply(level, chunk, changes, receipt);
-        } finally {
-            for (int n = 0; n < selected.size(); n++) {
-                int index = selected.get(n);
+            PreparedSectionWriter.apply(level, chunk, changes, receipt, permit);
+        } catch (RuntimeException | Error error) {
+            failure = error;
+        }
+        for (int n = 0; n < selected.size(); n++) {
+            int index = selected.get(n);
+            try {
                 if (receipt.stale(n)) batch.destinationChanged(index);
                 else if (receipt.applied(n)) {
                     var cargo = batch.cargo(index);
@@ -83,9 +118,21 @@ final class PreparedMaterialCommit {
                     }
                     batch.placed(index);
                 } else if (receipt.changed(n)) batch.destinationChanged(index);
+            } catch (RuntimeException | Error error) {
+                // Retain escrow and stop automatic placement after a partial cargo callback.
+                if (batch.phase(index) == PreparedMaterialBatch.Phase.REMOVED) batch.destinationChanged(index);
+                failure = combine(failure, error);
             }
         }
+        rethrow(failure);
         return receipt.applied().cardinality();
+    }
+
+    private static boolean replaceable(BlockState state) {
+        if (state.hasBlockEntity()) return false;
+        var props = Blast.props(state);
+        return state.isAir() || props.fluid() || props.is(Blast.Props.REPLACEABLE)
+                || !props.bearing() && !props.leaves() && !props.fixed();
     }
 
     private static List<Integer> select(PreparedMaterialBatch batch, int[] indices, long tick, boolean departure) {
@@ -114,6 +161,17 @@ final class PreparedMaterialCommit {
                 throw new IllegalArgumentException("Material commit must contain exactly one section");
         }
         return level.getChunkSource().getChunkNow(first.getX() >> 4, first.getZ() >> 4);
+    }
+
+    private static Throwable combine(Throwable first, Throwable next) {
+        if (first == null) return next;
+        if (first != next) first.addSuppressed(next);
+        return first;
+    }
+
+    private static void rethrow(Throwable error) {
+        if (error instanceof RuntimeException runtime) throw runtime;
+        if (error instanceof Error fatal) throw fatal;
     }
 
     private PreparedMaterialCommit() {}

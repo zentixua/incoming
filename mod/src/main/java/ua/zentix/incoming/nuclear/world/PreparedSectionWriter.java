@@ -14,6 +14,7 @@ import java.util.BitSet;
 import java.util.List;
 import java.util.Objects;
 import java.util.function.BooleanSupplier;
+import java.util.function.IntPredicate;
 
 /** Bounded section deltas. The caller owns due times, persistence and cargo before entering this writer. */
 final class PreparedSectionWriter {
@@ -71,6 +72,12 @@ final class PreparedSectionWriter {
 
     static void apply(ServerLevel level, LevelChunk chunk, List<CellChange> changes, Receipt receipt,
                       WorldWrite worldWrite, BooleanSupplier worldPermit) {
+        apply(level, chunk, changes, receipt, worldWrite, worldPermit, index -> true);
+    }
+
+    /** Final admission/cargo capture runs only for a ready, current cell with its callback permit. */
+    static void apply(ServerLevel level, LevelChunk chunk, List<CellChange> changes, Receipt receipt,
+                      WorldWrite worldWrite, BooleanSupplier worldPermit, IntPredicate beforeMutation) {
         if (!level.getServer().isSameThread()) throw new IllegalStateException("Section writes require the server thread");
         if (receipt.started || receipt.size != changes.size()) throw new IllegalArgumentException("Receipt does not own this attempt");
         int section = validate(chunk, changes);
@@ -86,42 +93,60 @@ final class PreparedSectionWriter {
         var written = new LongArrayList(changes.size());
         Throwable failure = null;
         try {
-            for (int i = 0; i < changes.size(); i++) {
-                CellChange change = changes.get(i);
-                BlockPos at = change.pos;
-                BlockState before = chunk.getBlockState(at);
-                // Exact expected state. Blackout equivalence remains confined to the old ruin-plan contract.
-                if (before != change.expected) { receipt.stale.set(i); continue; }
-                if (before == change.state) { receipt.applied.set(i); continue; }
-                boolean fast = ordinary(before, change.state);
-                if (!fast) {
-                    int radius = Math.max(RuinPlan.callbackRadius(before), RuinPlan.callbackRadius(change.state));
-                    if (radius > 0 && !NuclearTickets.neighbourhoodLoaded(level, chunk.getPos(), radius)) continue;
-                    int x = at.getX() & 15, z = at.getZ() & 15;
-                    if (!radiusOne && (x < RuinPlan.EDGE || x > 15 - RuinPlan.EDGE || z < RuinPlan.EDGE || z > 15 - RuinPlan.EDGE)) continue;
-                    if (!worldPermit.getAsBoolean()) continue;
+            // Match the existing ruin writer: publish ordinary section metadata before a world
+            // callback can observe heights or sky sources in the already changed chunk.
+            for (int pass = 0; pass < 2; pass++) {
+                if (pass == 1 && !written.isEmpty()) {
+                    chunk.setUnsaved(true);
+                    ChunkDeltaWrites.sectionStatus(level, chunk, touched, wasEmpty);
+                    ChunkDeltaWrites.rescanColumns(chunk, top);
+                    Arrays.fill(touched, 0);
+                    Arrays.fill(wasEmpty, 0);
+                    Arrays.fill(top, Integer.MIN_VALUE);
                 }
-                // A container may be emptied before setBlock throws while its state remains unchanged.
-                // The escrow owner must reconcile every attempted world write, not only changed states.
-                receipt.attempted.set(i);
-                ChunkDeltaWrites.touch(sections, touched, wasEmpty, section);
-                try {
-                    if (fast) {
-                        ChunkDeltaWrites.set(sections, touched, wasEmpty, section, at.getX() & 15, at.getY() & 15, at.getZ() & 15, change.state);
-                        receipt.fastWrites++;
-                    } else {
-                        receipt.worldWrites++;
-                        worldWrite.replace(level, at, before, change.state);
+                for (int i = 0; i < changes.size(); i++) {
+                    if (receipt.applied(i) || receipt.stale(i)) continue;
+                    CellChange change = changes.get(i);
+                    BlockPos at = change.pos;
+                    BlockState before = chunk.getBlockState(at);
+                    // Exact expected state. Blackout equivalence remains confined to the old ruin-plan contract.
+                    if (before != change.expected) { receipt.stale.set(i); continue; }
+                    if (before == change.state) { receipt.applied.set(i); continue; }
+                    boolean fast = ordinary(before, change.state);
+                    if (fast != (pass == 0)) continue;
+                    if (!fast) {
+                        int radius = Math.max(RuinPlan.callbackRadius(before), RuinPlan.callbackRadius(change.state));
+                        if (radius > 0 && !NuclearTickets.neighbourhoodLoaded(level, chunk.getPos(), radius)) continue;
+                        int x = at.getX() & 15, z = at.getZ() & 15;
+                        if (!radiusOne && (x < RuinPlan.EDGE || x > 15 - RuinPlan.EDGE || z < RuinPlan.EDGE || z > 15 - RuinPlan.EDGE)) continue;
+                        if (!worldPermit.getAsBoolean()) continue;
                     }
-                } finally {
-                    BlockState actual = chunk.getBlockState(at);
-                    if (actual == change.state) receipt.applied.set(i);
-                    if (actual != before) {
-                        receipt.changed.set(i);
-                        written.add(at.asLong());
-                        int column = (at.getZ() & 15) << 4 | at.getX() & 15;
-                        top[column] = Math.max(top[column], at.getY());
-                        if (fast && sable) SableTerrain.changed(level, chunk, at.getX(), at.getY(), at.getZ(), before, actual);
+                    if (!beforeMutation.test(i)) continue;
+                    // Capturing a deferred block entity can run a mod's load hook. It must not turn
+                    // a previously current cell into permission to overwrite a newly changed state.
+                    if (chunk.getBlockState(at) != before) { receipt.stale.set(i); continue; }
+                    // A container may be emptied before setBlock throws while its state remains unchanged.
+                    // The escrow owner must reconcile every attempted world write, not only changed states.
+                    receipt.attempted.set(i);
+                    ChunkDeltaWrites.touch(sections, touched, wasEmpty, section);
+                    try {
+                        if (fast) {
+                            ChunkDeltaWrites.set(sections, touched, wasEmpty, section, at.getX() & 15, at.getY() & 15, at.getZ() & 15, change.state);
+                            receipt.fastWrites++;
+                        } else {
+                            receipt.worldWrites++;
+                            worldWrite.replace(level, at, before, change.state);
+                        }
+                    } finally {
+                        BlockState actual = chunk.getBlockState(at);
+                        if (actual == change.state) receipt.applied.set(i);
+                        if (actual != before) {
+                            receipt.changed.set(i);
+                            written.add(at.asLong());
+                            int column = (at.getZ() & 15) << 4 | at.getX() & 15;
+                            top[column] = Math.max(top[column], at.getY());
+                            if (fast && sable) SableTerrain.changed(level, chunk, at.getX(), at.getY(), at.getZ(), before, actual);
+                        }
                     }
                 }
             }

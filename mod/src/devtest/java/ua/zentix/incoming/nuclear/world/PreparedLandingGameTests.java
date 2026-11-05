@@ -191,24 +191,21 @@ public final class PreparedLandingGameTests {
             }
             Blast.PropsView view = Blast.publish();
             var palette = paletteBuilder.freeze();
-            Incoming.LOG.info("LANDING_CITY_INPUT chunks={} parse_publish_ns={} level_sha256={} scope=pristine-central-cohort-not-live-453-chunks",
+            Incoming.LOG.info("LANDING_CITY_INPUT chunks={} parse_publish_ns={} level_sha256={} scope=pristine-bounded-cohorts-not-live-453-chunks",
                     shots.size(), System.nanoTime() - began, manifest.get("level_sha256").getAsString());
             var grids = new ArrayList<RuinContext.Grid>();
+            var neighbours = new ArrayList<RuinContext.Grid>();
             var labels = new ArrayList<String>();
-            for (String variant : List.of("512", "1536")) {
+            boolean cohort = Boolean.getBoolean("incoming.preparedLanding.cohort");
+            for (String variant : cohort ? List.of("512") : List.of("512", "1536")) {
                 Detonation d = detonation(events.getAsJsonArray(variant).get(0).getAsJsonObject());
                 var context = new RuinContext(h.getLevel(), d);
                 StrikeGameTests.afterTest(h, context::cancelTasks);
                 for (var center : manifest.getAsJsonArray("centres")) {
                     var xy = center.getAsJsonArray();
                     var pos = new ChunkPos(xy.get(0).getAsInt(), xy.get(1).getAsInt());
-                    ChunkShot[] grid = new ChunkShot[25];
-                    for (int dz = -2; dz <= 2; dz++) for (int dx = -2; dx <= 2; dx++) {
-                        grid[(dz + 2) * 5 + dx + 2] = shots.get(ChunkPos.asLong(pos.x + dx, pos.z + dz));
-                        h.assertTrue(grid[(dz + 2) * 5 + dx + 2] != null, "Missing 5x5 city fracture source");
-                    }
-                    ChunkShot own = grid[12];
-                    grids.add(new RuinContext.Grid(context, pos, own.minY, own.minY + own.sections * 16, grid, view, true, true, true));
+                    grids.add(cityGrid(h, context, pos, shots, view));
+                    if (cohort) neighbours.add(cityGrid(h, context, new ChunkPos(pos.x + 1, pos.z), shots, view));
                     labels.add("city-" + variant + "-" + pos.x + "-" + pos.z);
                 }
             }
@@ -216,20 +213,39 @@ public final class PreparedLandingGameTests {
                 var results = new ArrayList<Measurement>();
                 for (int i = 0; i < grids.size(); i++) {
                     var grid = grids.get(i);
+                    var fracture = fracture(grid);
+                    var removals = fracture.removals();
                     long start = System.nanoTime();
-                    Collapse collapse = Collapse.solve(grid);
-                    long fracture = System.nanoTime() - start;
-                    var removals = new ArrayList<PreparedLandingSnapshot.Removal>();
-                    for (long position : collapse.changes.keySet()) {
-                        BlockPos source = BlockPos.of(position);
-                        double departure = grid.ctx().d.arrivalTicks(Vec3.atCenterOf(source).distanceTo(grid.ctx().d.burst())) / 20;
-                        removals.add(new PreparedLandingSnapshot.Removal(source, departure, true));
-                    }
-                    start = System.nanoTime();
                     var window = grid.windowOf(0, 0);
                     var input = PreparedLandingSnapshot.from(window, removals, grid.ctx().d, palette);
                     long adapter = System.nanoTime() - start;
-                    results.add(measure(labels.get(i), input, window, fracture, adapter));
+                    results.add(measure(labels.get(i), input, window, fracture.nanos(), adapter));
+                    if (cohort) {
+                        java.util.function.Function<PreparedLandingModel.Cell, BlockState> stateAt = cell ->
+                                shots.get(ChunkPos.asLong(cell.x() >> 4, cell.z() >> 4)).get(cell.x() & 15, cell.y(), cell.z() & 15);
+                        start = System.nanoTime();
+                        var large = PreparedLandingSnapshot.from(grid.shots(), grid.centre(), grid.minY(), grid.maxY(), view,
+                                removals, grid.ctx().d, palette);
+                        results.add(measure(labels.get(i) + "-halo5", large, stateAt, fracture.nanos(), System.nanoTime() - start));
+                        var second = fracture(neighbours.get(i));
+                        var merged = new ArrayList<>(removals); merged.addAll(second.removals());
+                        start = System.nanoTime();
+                        var shared = PreparedLandingSnapshot.from(grid.shots(), grid.centre(), grid.minY(), grid.maxY(), view,
+                                merged, grid.ctx().d, palette);
+                        var measured = measure(labels.get(i) + "-two-chunks", shared, stateAt,
+                                fracture.nanos() + second.nanos(), System.nanoTime() - start);
+                        results.add(measured);
+                        // A partition is a collection boundary only. One solver owns both chunks.
+                        merged.clear(); merged.addAll(second.removals()); merged.addAll(removals);
+                        var reversed = PreparedLandingSnapshot.from(grid.shots(), grid.centre(), grid.minY(), grid.maxY(), view,
+                                merged, grid.ctx().d, palette);
+                        if (!shared.states().equals(reversed.states()) || !shared.sources().equals(reversed.sources()))
+                            throw new IllegalStateException("Chunk partition order changed exact source palette");
+                        var repeat = PreparedLandingModel.solve(reversed.collision(), reversed.sources(), LIMITS);
+                        if (!measured.result().equals(repeat)) throw new IllegalStateException("Chunk partition order changed shared landing outcomes");
+                        Incoming.LOG.info("LANDING_COHORT partition_order=identical centres={},{} source_count={} collision_cells={}",
+                                grid.centre(), neighbours.get(i).centre(), shared.sources().size(), shared.collision().cellCount());
+                    }
                 }
                 return results;
             });
@@ -242,9 +258,38 @@ public final class PreparedLandingGameTests {
         }
     }
 
+    private static RuinContext.Grid cityGrid(GameTestHelper h, RuinContext context, ChunkPos pos,
+                                             Map<Long, ChunkShot> shots, Blast.PropsView view) {
+        ChunkShot[] grid = new ChunkShot[25];
+        for (int dz = -2; dz <= 2; dz++) for (int dx = -2; dx <= 2; dx++) {
+            grid[(dz + 2) * 5 + dx + 2] = shots.get(ChunkPos.asLong(pos.x + dx, pos.z + dz));
+            h.assertTrue(grid[(dz + 2) * 5 + dx + 2] != null, "Missing full 5x5 source fracture stencil at " + pos);
+        }
+        ChunkShot own = grid[12];
+        return new RuinContext.Grid(context, pos, own.minY, own.minY + own.sections * 16, grid, view, true, true, true);
+    }
+
+    private record Fracture(List<PreparedLandingSnapshot.Removal> removals, long nanos) {}
+    private static Fracture fracture(RuinContext.Grid grid) {
+        long began = System.nanoTime();
+        Collapse collapse = Collapse.solve(grid);
+        var removals = new ArrayList<PreparedLandingSnapshot.Removal>();
+        for (long position : collapse.changes.keySet()) {
+            BlockPos source = BlockPos.of(position);
+            double departure = grid.ctx().d.arrivalTicks(Vec3.atCenterOf(source).distanceTo(grid.ctx().d.burst())) / 20;
+            removals.add(new PreparedLandingSnapshot.Removal(source, departure, true));
+        }
+        return new Fracture(removals, System.nanoTime() - began);
+    }
+
     private record Measurement(PreparedLandingSnapshot.Input input, PreparedLandingModel.Result result) {}
 
     private static Measurement measure(String label, PreparedLandingSnapshot.Input input, RuinWindow window, long fracture, long adapter) {
+        return measure(label, input, cell -> window.get(cell.x() - window.x0, cell.y(), cell.z() - window.z0), fracture, adapter);
+    }
+
+    private static Measurement measure(String label, PreparedLandingSnapshot.Input input,
+                                       java.util.function.Function<PreparedLandingModel.Cell, BlockState> stateAt, long fracture, long adapter) {
         var bean = ManagementFactory.getThreadMXBean();
         long cpu = bean.isCurrentThreadCpuTimeSupported() ? bean.getCurrentThreadCpuTime() : -1;
         var allocation = bean instanceof com.sun.management.ThreadMXBean extended ? extended : null;
@@ -266,7 +311,7 @@ public final class PreparedLandingGameTests {
         Incoming.LOG.info("LANDING_ARRIVAL label={} age_p50_s={} age_p95_s={} age_p99_s={} age_max_s={} event_end_s={}",
                 label, quantile(ages, .5), quantile(ages, .95), quantile(ages, .99), quantile(ages, 1),
                 result.outcomes().stream().mapToDouble(PreparedLandingModel.Outcome::time).max().orElse(0));
-        collisionDiagnostics(label, window, result);
+        collisionDiagnostics(label, stateAt, result);
         return new Measurement(input, result);
     }
 
@@ -274,7 +319,7 @@ public final class PreparedLandingGameTests {
         return sorted.length == 0 ? 0 : sorted[(int) Math.ceil((sorted.length - 1) * fraction)];
     }
 
-    private static void collisionDiagnostics(String label, RuinWindow window, PreparedLandingModel.Result result) {
+    private static void collisionDiagnostics(String label, java.util.function.Function<PreparedLandingModel.Cell, BlockState> stateAt, PreparedLandingModel.Result result) {
         Map<String, Integer> states = new HashMap<>(), types = new HashMap<>();
         Map<String, String> samples = new HashMap<>();
         long collisions = 0, climbs = 0, spills = 0, same = 0, cycles = 0, transfers = 0;
@@ -284,7 +329,7 @@ public final class PreparedLandingGameTests {
             same += trace.sameCellSteps(); cycles += trace.reposeABA(); transfers += trace.contactTransfers();
             if (output.status() != PreparedLandingModel.Status.UNSUPPORTED_COLLISION) continue;
             var cell = output.blocked();
-            var state = window.get(cell.x() - window.x0, cell.y(), cell.z() - window.z0);
+            var state = stateAt.apply(cell);
             String name = state.toString(), type = state.getBlock().getClass().getSimpleName();
             states.merge(name, 1, Integer::sum); types.merge(type, 1, Integer::sum);
             samples.putIfAbsent(name, "blocked=" + cell + " source=" + output.source().x() + "," + output.source().y() + "," + output.source().z());
@@ -294,6 +339,11 @@ public final class PreparedLandingGameTests {
         states.entrySet().stream().sorted(Map.Entry.<String, Integer>comparingByValue().reversed().thenComparing(Map.Entry.comparingByKey()))
                 .limit(10).forEach(entry -> Incoming.LOG.info("LANDING_BLOCKED label={} count={} state={} {}",
                         label, entry.getValue(), entry.getKey(), samples.get(entry.getKey())));
+        result.outcomes().stream().filter(o -> o.status() == PreparedLandingModel.Status.LANDED)
+                .sorted(java.util.Comparator.comparingDouble((PreparedLandingModel.Outcome o) -> o.time() - o.source().departure()).reversed())
+                .limit(3).forEach(output -> Incoming.LOG.info("LANDING_LATE label={} source={},{},{} at={},{},{} age_s={} longest_idle_blocker={} trace={}",
+                        label, output.source().x(), output.source().y(), output.source().z(), output.x(), output.y(), output.z(),
+                        output.time() - output.source().departure(), BlockPos.of(output.trace().longestIdleBlocker()), output.trace()));
         result.outcomes().stream().filter(o -> o.status() == PreparedLandingModel.Status.WORK_LIMIT)
                 .sorted(java.util.Comparator.comparingLong(PreparedLandingModel.Outcome::segments).reversed()).limit(5)
                 .forEach(output -> Incoming.LOG.info("LANDING_UNFINISHED label={} source={},{},{} at={},{},{} age_s={} segments={} wind={},{} drag={} pulse={} trace={}",

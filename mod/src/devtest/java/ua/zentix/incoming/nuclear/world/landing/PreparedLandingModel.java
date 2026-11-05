@@ -45,7 +45,7 @@ public final class PreparedLandingModel {
         private final byte[] cells;
 
         public Snapshot(int x0, int minY, int z0, int width, int height, int depth, byte[] cells) {
-            if (width < 1 || height < 1 || depth < 1 || width > 48 || depth > 48 || height > 4096
+            if (width < 1 || height < 1 || depth < 1 || width > 80 || depth > 80 || height > 4096
                     || cells.length != Math.multiplyExact(Math.multiplyExact(width, height), depth))
                 throw new IllegalArgumentException("Invalid bounded collision window");
             this.x0 = x0; this.minY = minY; this.z0 = z0;
@@ -74,7 +74,9 @@ public final class PreparedLandingModel {
 
     public record Cell(int x, int y, int z) {}
     public record Trace(long collisions, long climbs, long spills, long sameCellSteps, long maxSameCellRun, long reposeABA,
-                        Cell firstContact, double firstContactTime, long contactTransfers, long postContactRises) {}
+                        Cell firstContact, double firstContactTime, long contactTransfers, long postContactRises,
+                        long wakes, long failedTransfers, double transferSeconds, double idleSeconds,
+                        double longestIdleSeconds, long longestIdleBlocker, Cell longestIdleCell) {}
     public record Outcome(Source source, Status status, int x, int y, int z, double time, long segments, Cell blocked, Trace trace) {
         /** Never publish a landing before its computed arrival. */
         public long dueTick() { return (long) Math.ceil(time * 20); }
@@ -95,7 +97,7 @@ public final class PreparedLandingModel {
 
     private static final class Motion {
         final Source source;
-        double x, y, z, vx, vy, vz, time, due, dt, nx, ny, nz, ax, az;
+        double x, y, z, vx, vy, vz, time, due, dt, nx, ny, nz, ax, az, arrivalTime;
         boolean departed, queued, contact;
         int ownerCell = -1, tx, ty, tz;
         double fallingSpeed;
@@ -105,7 +107,10 @@ public final class PreparedLandingModel {
         long previousCell = Long.MIN_VALUE, previousSpill = Long.MIN_VALUE, precedingSpill = Long.MIN_VALUE;
         Cell blocked, firstContact;
         double firstContactTime = -1;
-        long contactTransfers, postContactRises;
+        long contactTransfers, postContactRises, wakes, failedTransfers;
+        double transferSeconds, idleSeconds, longestIdleSeconds;
+        long longestIdleBlocker;
+        Cell longestIdleCell;
         Motion(Source source) {
             this.source = source;
             x = source.x + .5; y = source.y; z = source.z + .5;
@@ -158,12 +163,12 @@ public final class PreparedLandingModel {
         for (Motion motion : model.motions) {
             if (motion.status == null) throw new IllegalStateException("Material has no final owner status");
             model.outcomes.add(new Outcome(motion.source, motion.status, floor(motion.x), floor(motion.y), floor(motion.z),
-                    motion.time, motion.segments, motion.blocked, trace(motion)));
+                    motion.status == Status.LANDED ? motion.arrivalTime : motion.time, motion.segments, motion.blocked, trace(motion)));
         }
         model.outcomes.sort(Comparator.comparing(Outcome::source, SOURCES));
         return new Result(model.outcomes, model.segments, model.reads, model.queueOperations, model.peak,
-                snapshot.cells.length, 448L * sources.size() + 5L * snapshot.cells.length,
-                176L * sources.size()); // Includes diagnostic counters; not measured heap or a persistent codec size.
+                snapshot.cells.length, 512L * sources.size() + 5L * snapshot.cells.length,
+                320L * sources.size()); // Includes diagnostic counters; not measured heap or a persistent codec size.
     }
 
     private void depart(Motion m) {
@@ -176,7 +181,7 @@ public final class PreparedLandingModel {
         // artificial support in the geometry after its known departure.
         occupancy[position] = AIR;
         if (m.source.kind != Kind.ORDINARY) {
-            wake(m.source.x, m.source.y, m.source.z, m.time);
+            wake(m.source.x, m.source.y, m.source.z, m.time, m);
             finish(m, m.source.kind == Kind.FINE ? Status.DISPERSED : Status.UNSUPPORTED_SOURCE);
             return;
         }
@@ -250,7 +255,7 @@ public final class PreparedLandingModel {
         m.x = x + .5; m.y = y; m.z = z + .5;
         m.vx = m.vy = m.vz = 0;
         m.contact = true;
-        m.firstContact = new Cell(x, y, z); m.firstContactTime = m.time;
+        m.firstContact = new Cell(x, y, z); m.firstContactTime = m.time; m.arrivalTime = m.time;
         repose(m);
     }
 
@@ -262,7 +267,7 @@ public final class PreparedLandingModel {
         owners[m.ownerCell] = null;
         claim(m, x, y, z);
         m.x = oldX; m.y = oldY; m.z = oldZ;
-        wake(ox, oy, oz, m.time);
+        wake(ox, oy, oz, m.time, m);
     }
 
     private Motion owner(int x, int y, int z) {
@@ -274,6 +279,7 @@ public final class PreparedLandingModel {
         int index = snapshot.index(x, y, z);
         if (owners[index] != null) throw new IllegalStateException("Two materials claim one cell");
         owners[index] = m;
+        m.arrivalTime = m.time;
         m.ownerCell = index;
         m.x = x + .5; m.y = y; m.z = z + .5;
     }
@@ -314,6 +320,7 @@ public final class PreparedLandingModel {
 
     private void transfer(Motion m) {
         segments++; m.segments++; m.time = m.due;
+        m.transferSeconds += m.dt;
         int cell = cell(m.tx, m.ty, m.tz);
         if (fallback(m, cell, m.tx, m.ty, m.tz)) return;
         int side = cell(m.tx, floor(m.y), m.tz);
@@ -322,6 +329,7 @@ public final class PreparedLandingModel {
         // The target is not reserved before arrival. A preceding event may occupy it. In that case
         // retain the current owned material and reconsider the now-current support, never climb.
         if (horizontalBlocked || !free(cell) || !empty(cell) || owner(m.tx, m.ty, m.tz) != null) {
+            m.failedTransfers++;
             m.fallingSpeed = 0; repose(m); return;
         }
         int x = floor(m.x), y = floor(m.y), z = floor(m.z);
@@ -329,20 +337,25 @@ public final class PreparedLandingModel {
         if (m.ty >= y) { m.postContactRises++; throw new IllegalStateException("Non-descending contact transfer"); }
         owners[m.ownerCell] = null;
         claim(m, m.tx, m.ty, m.tz);
-        wake(x, y, z, m.time);
+        wake(x, y, z, m.time, m);
         repose(m);
     }
 
-    private void wake(int x, int y, int z, double time) {
-        wakeOwner(owner(x, y + 1, z), time);
-        for (int d = 0; d < 4; d++) {
-            wakeOwner(owner(x + DX[d], y + 1, z + DZ[d]), time);
-            wakeOwner(owner(x + DX[d], y, z + DZ[d]), time);
-        }
+    private void wake(int x, int y, int z, double time, Motion cause) {
+        // Only loss of the actual vertical support adds gravity to a resting block. A neighboring
+        // hole supplies no lateral impulse: impact/repose is not a permanent sandpile update rule.
+        wakeOwner(owner(x, y + 1, z), time, cause, x, y, z);
     }
 
-    private void wakeOwner(Motion m, double time) {
+    private void wakeOwner(Motion m, double time, Motion cause, int x, int y, int z) {
         if (m == null || m.queued || m.status != Status.LANDED) return;
+        m.wakes++;
+        double idle = Math.max(0, time - m.time);
+        m.idleSeconds += idle;
+        if (idle > m.longestIdleSeconds) {
+            m.longestIdleSeconds = idle; m.longestIdleBlocker = cause.source.id;
+            m.longestIdleCell = new Cell(x, y, z);
+        }
         m.time = Math.max(m.time, time);
         m.status = null;
         repose(m);
@@ -382,7 +395,8 @@ public final class PreparedLandingModel {
     }
 
     private static Trace trace(Motion m) {
-        return new Trace(m.collisions, m.climbs, m.spills, m.sameCellSteps, m.maxSameCellRun, m.reposeABA, m.firstContact, m.firstContactTime, m.contactTransfers, m.postContactRises);
+        return new Trace(m.collisions, m.climbs, m.spills, m.sameCellSteps, m.maxSameCellRun, m.reposeABA, m.firstContact, m.firstContactTime, m.contactTransfers, m.postContactRises,
+                m.wakes, m.failedTransfers, m.transferSeconds, m.idleSeconds, m.longestIdleSeconds, m.longestIdleBlocker, m.longestIdleCell);
     }
 
     private static long position(int x, int y, int z) {

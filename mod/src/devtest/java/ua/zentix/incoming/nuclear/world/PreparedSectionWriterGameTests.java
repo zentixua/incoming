@@ -96,6 +96,8 @@ public final class PreparedSectionWriterGameTests {
         var receipt = new PreparedSectionWriter.Receipt(2);
         try {
             PreparedSectionWriter.apply(level, chunk, changes, receipt, (world, at, before, after) -> {
+                h.assertTrue(chunk.getHeight(Heightmap.Types.MOTION_BLOCKING, plain.getX() & 15, plain.getZ() & 15) < plain.getY(),
+                        "World callback observed a stale height above an earlier direct removal");
                 ColumnScar.replaceState(world, at, before, after);
                 throw new IllegalStateException("Controlled failure after native world write");
             });
@@ -168,6 +170,20 @@ public final class PreparedSectionWriterGameTests {
                         && limited.worldWrites() == 1 && limited.fastWrites() == 1
                         && level.getBlockState(deferred).is(Blocks.BARREL),
                 "Callback permit either mutated a denied owner or blocked later ordinary cells");
+
+        BlockPos allowed = base.offset(3, 5, 3);
+        var admitted = new java.util.BitSet();
+        var admission = new PreparedSectionWriter.Receipt(4);
+        PreparedSectionWriter.apply(level, chunk, List.of(
+                new PreparedSectionWriter.CellChange(destination, Blocks.BARREL.defaultBlockState(), Blocks.AIR.defaultBlockState()),
+                new PreparedSectionWriter.CellChange(deferred, Blocks.BARREL.defaultBlockState(), Blocks.AIR.defaultBlockState()),
+                new PreparedSectionWriter.CellChange(source, Blocks.STONE.defaultBlockState(), Blocks.AIR.defaultBlockState()),
+                new PreparedSectionWriter.CellChange(allowed, Blocks.AIR.defaultBlockState(), Blocks.STONE.defaultBlockState())),
+                admission, ColumnScar::replaceState, () -> false, index -> { admitted.set(index); return index == 3; });
+        h.assertTrue(admitted.cardinality() == 2 && admitted.get(2) && admitted.get(3)
+                        && admission.stale(0) && !admission.attempted(1) && !admission.attempted(2) && admission.applied(3)
+                        && level.getBlockState(source).is(Blocks.STONE),
+                "Capture admission ran before current/permit checks or mutated a refused cell");
         h.succeed();
     }
 

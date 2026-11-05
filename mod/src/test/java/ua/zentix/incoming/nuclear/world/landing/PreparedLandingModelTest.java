@@ -133,6 +133,64 @@ class PreparedLandingModelTest {
         assertEquals(0, result.segments());
     }
 
+    @Test void neighborWakeWithoutMovementDoesNotDelayTheActualLanding() {
+        Source material = source(1, 24, 1, 24, 0);
+        Source laterNeighbor = new Source(2, 1, 25, 1, 24, 5, 1, 2300, 1000, 0, 0, 0, 0, Kind.FINE);
+        var result = solve(floor(0), List.of(material, laterNeighbor));
+        var landing = result.outcomes().getFirst();
+        assertEquals(Status.LANDED, landing.status());
+        assertEquals(1, landing.y());
+        assertTrue(landing.time() < 1, "A no-op support wake became a false late arrival");
+        assertEquals(0, landing.trace().wakes(), "A sideways change should not energize a supported resting block");
+    }
+
+    @Test void laterSideHoleCannotMoveMaterialWithItsVerticalSupportIntact() {
+        byte[] cells = floor(0);
+        for (int x = 0; x < W; x++) for (int z = 0; z < W; z++) cells[index(x, 4, z)] = SOLID;
+        Source material = source(1, 24, 5, 24, 0);
+        Source adjacentFloor = new Source(2, 1, 25, 4, 24, 5, 1, 2300, 1000, 0, 0, 0, 0, Kind.FINE);
+        var result = solve(cells, List.of(material, adjacentFloor));
+        var resting = result.outcomes().getFirst();
+        assertEquals(Status.LANDED, resting.status());
+        assertEquals(new Cell(24, 5, 24), new Cell(resting.x(), resting.y(), resting.z()),
+                "Opening a side hole caused motion without an impulse or loss of vertical support");
+        assertTrue(resting.time() < 1);
+        assertEquals(0, resting.trace().contactTransfers());
+    }
+
+    @Test void adjacentChunkPartitionsShareOneCausalCohortAndLaterSupportDeletion() {
+        int width = 64;
+        byte[] cells = new byte[width * H * W];
+        for (int x = 0; x < width; x++) for (int z = 0; z < W; z++) {
+            cells[z * width + x] = SOLID;
+            cells[(8 * W + z) * width + x] = SOLID;
+        }
+        var left = new ArrayList<Source>(); var right = new ArrayList<Source>();
+        left.add(source(1, 31, 18, 24, 1));
+        right.add(source(2, 33, 18, 24, -1));
+        long id = 10;
+        for (int x = 30; x <= 34; x++) for (int z = 23; z <= 25; z++) {
+            var removal = new Source(id++, 1, x, 8, z, 5, 1, 2300, 5, 0, 0, 0, 0, Kind.FINE);
+            (x < 32 ? left : right).add(removal);
+        }
+        var merged = new ArrayList<>(left); merged.addAll(right);
+        for (Source s : merged) cells[(s.y() * W + s.z()) * width + s.x()] = SOLID;
+        var snapshot = new Snapshot(0, 0, 0, width, H, W, cells);
+        var forward = PreparedLandingModel.solve(snapshot, merged, Limits.experiment());
+        merged.clear(); merged.addAll(right); merged.addAll(left);
+        var reverse = PreparedLandingModel.solve(snapshot, merged, Limits.experiment());
+        assertEquals(forward, reverse, "Chunk partition order changed shared occupancy");
+        assertEquals(2, forward.count(Status.LANDED));
+        assertEquals(15, forward.count(Status.DISPERSED));
+        var occupied = new java.util.HashSet<Cell>();
+        for (var output : forward.outcomes()) if (output.status() == Status.LANDED) {
+            assertTrue(occupied.add(new Cell(output.x(), output.y(), output.z())));
+            assertTrue(output.trace().firstContact().y() >= 9);
+            assertEquals(1, output.y(), "A later neighboring departure left an obsolete endpoint on its former roof");
+            assertTrue(output.time() > 5);
+        }
+    }
+
     @Test void finiteContactUsesHeightPotentialButFreeFlightStillHasItsAgeGuard() {
         byte[] cells = floor(0);
         var inputs = new ArrayList<Source>();
