@@ -1,0 +1,34 @@
+{
+  "source": "56f735f2b6ba7c5c30fec8d148359c75c0373372",
+  "raw_sha256": "f639e849a50cfceab91f9719228472eb966f23de80b499a790dd751d3688d95f",
+  "wall_ms": 1793850560312,
+  "material_terms": {
+    "material_io_fixed": 263168,
+    "moving_cargo_extra": 11680176,
+    "moving_fifo": 241296160,
+    "palette": 158528,
+    "inventory_index": 998656,
+    "support_table": 20971816,
+    "cold_table": 4194528,
+    "cold_faces": 6472704,
+    "source_fifo": 3584,
+    "original_journal": 55251864,
+    "balances": 208896,
+    "support_search": 41088
+  },
+  "material_estimate": 341541168,
+  "other_partial_terms": {
+    "context": 59035241,
+    "prep_minimum": 70263196,
+    "parked": 16385784,
+    "results": 32807008,
+    "workspace": 13271040,
+    "crater_ledger": 707072,
+    "settlement_ledger_minimum": 262528,
+    "other_dimensions_minimum": 1577472
+  },
+  "partial_resident_lower_bound": 535850509,
+  "cap": 536870912,
+  "limits": "Production accounting-law reconstruction, not JVM heap. Prep toScan logical cardinality is only a backing lower bound. Metadata capacities, pass archive/pending, tiny empty ledger tables and settle owner omitted. post-clean snapshot, not clean service timing.",
+  "maximum_remaining_from_partial_bound": 1020403
+}

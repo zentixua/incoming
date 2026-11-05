@@ -1,0 +1,672 @@
+diff --git a/.claude/rules/nuclear-world.md b/.claude/rules/nuclear-world.md
+index f4c3b5f00..55e52afa0 100644
+--- a/.claude/rules/nuclear-world.md
++++ b/.claude/rules/nuclear-world.md
+@@ -547,3 +547,24 @@ paths:
+   work. A new closer FULL chunk cannot strand that owner behind a head waiting for its token.
+   `nuke_near_assembly_refresh` exercises real refresh, completes the held callback, and requires both
+   loaded centres to yield nonempty plans. Error paths that remove a consumer release its claim too.
++
++- Header replies transfer availability into the zone tiles, then release their reverse-list payload.
++  Retain the reverse table's actual backing while replies are pending; clearing values avoids an
++  unreserved shrinking rehash. Once every header has returned, discard the exhausted reverse index
++  and scan-list backing, retaining the tile masks and completed-header count. `nuke_header_lifetime`
++  uses the complete 1-Mt layout, a withheld final reply and an independent availability-mask oracle.
++- FAR source admission reserves resident ownership, one actual decoder restart and the existing
++  material/encoding margins. It does not reserve every configured idle solver. Worker birth,
++  height growth, result and publication guards still fund their real owners. `nuke_frontier_workspace`
++  combines one funded worker, ten configured workers, real source/archive reads, active material
++  and actual application of the complete equal plan under fixed competing ownership.
++- Compact moving imports fund FIFO page slack, a palette bounded by row count and registered states,
++  cargo indexes only when present, and the existing cargo/row workspace. Legacy rows keep their
++  conservative allowance. Packed outside rows restore reservoirs, not FIFO/index rows; scan the same
++  exact 145-byte motion payload as the decoder. `nuke_ledger_packed_import` and
++  `nuke_ledger_outside_import` cover compact footprint, cargo/trajectory parity, reservoir ownership
++  and rejection of malformed motion arrays.
++- Material cargo is an optional compound in legacy/packed moving rows and reservoirs. Reject other
++  tag types in both preflight and decoding; `getCompound` must not silently replace a scalar with
++  a differently charged empty compound. `nuke_ledger_cargo_types` covers both paths and unchanged
++  source bytes after rejection.
+diff --git a/docs/guide/nuke.md b/docs/guide/nuke.md
+index fa8ccda4e..23f87b2aa 100644
+--- a/docs/guide/nuke.md
++++ b/docs/guide/nuke.md
+@@ -122,6 +122,8 @@ A surface-burst crater supplies its rim from the ground actually excavated; rema
+ If the shared nuclear working-memory reservation is full, further material removal waits while already moving
+ material can settle. Already started plan reads and completed calculations receive processing time even
+ while a dense visible chunk waits for space; later loaded chunks can reuse plans after the preparation window ends.
++Completed terrain checks free room for subsequent ruins. Distant preparation can resume with fewer background
++threads when the configured maximum does not fit alongside the debris.
+ The debris queue does not need to empty before nearby or distant preparation, or flash damage, can continue. Large strikes can
+ still leave chunks waiting for memory and processing time. Pending material and support checks survive a normal world save and reload. Completed movement and crater
+ checkpoints are compacted into material totals; container contents are retained. Saving can pause material
+diff --git a/docs/guide/ru/nuke.md b/docs/guide/ru/nuke.md
+index 95aaa4e12..70fd0ed64 100644
+--- a/docs/guide/ru/nuke.md
++++ b/docs/guide/ru/nuke.md
+@@ -117,6 +117,8 @@ I степени открытой кожи при указанной погод
+ Если общий рабочий резерв памяти ядерных ударов заполнен, новое удаление материала ждёт, пока уже движущиеся
+ обломки могут оседать. Уже начатое чтение планов и готовые расчёты получают время обработки, даже когда
+ плотно застроенный видимый чанк ждёт свободного места; позднее загруженные чанки могут использовать планы и после завершения подготовки.
++Завершённые проверки местности освобождают память для следующих разрушений. Дальняя подготовка может продолжаться с меньшим
++числом фоновых потоков, если настроенный максимум не помещается рядом с обломками.
+ Подготовка ближних и дальних чанков и повреждения от вспышки могут продолжаться, пока в очереди ещё есть движущиеся обломки. После
+ крупных ударов часть чанков всё ещё может ждать свободной памяти и времени обработки. Очередь материала и проверок опор сохраняется при обычном сохранении и повторной загрузке мира. Завершённые траектории
+ и контрольные точки воронки сворачиваются в итоги по материалам; содержимое контейнеров сохраняется. Сохранение
+diff --git a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/LedgerPackedImportGameTests.java b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/LedgerPackedImportGameTests.java
+new file mode 100644
+index 000000000..79ca83866
+--- /dev/null
++++ b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/LedgerPackedImportGameTests.java
+@@ -0,0 +1,175 @@
++package ua.zentix.incoming.nuclear.world;
++
++import java.nio.file.Path;
++import java.util.List;
++import java.util.Set;
++import java.util.UUID;
++import java.util.concurrent.CompletableFuture;
++import java.util.concurrent.atomic.AtomicReference;
++import net.minecraft.core.BlockPos;
++import net.minecraft.gametest.framework.GameTest;
++import net.minecraft.gametest.framework.GameTestHelper;
++import net.minecraft.nbt.CompoundTag;
++import net.minecraft.nbt.Tag;
++import net.minecraft.world.level.block.Blocks;
++import net.minecraft.world.phys.Vec3;
++import net.neoforged.neoforge.gametest.GameTestHolder;
++import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
++import ua.zentix.incoming.Incoming;
++import ua.zentix.incoming.gametest.StrikeGameTests;
++
++/** The compact FIFO does not retain a palette/inventory object for every cargo-free record. */
++@GameTestHolder(Incoming.MOD_ID)
++@PrefixGameTestTemplate(false)
++public final class LedgerPackedImportGameTests {
++    private LedgerPackedImportGameTests() {}
++
++    @GameTest(template = "pad", batch = "nuke_ledger_cargo_types", timeoutTicks = 100)
++    public static void malformedCargoCannotChangeRepresentationAfterAdmission(GameTestHelper h) throws Exception {
++        var level = h.getLevel();
++        var ledger = new RuinMatter();
++        var piece = new RuinMatter.Piece(h.absolutePos(new BlockPos(4, 8, 4)), Blocks.BARREL.defaultBlockState(),
++                new CompoundTag(), Vec3.ZERO, level.getGameTime());
++        ledger.release(List.of(piece));
++        CompoundTag legacy = ledger.save(new CompoundTag(), level.registryAccess());
++        var encode = RuinMatter.class.getDeclaredMethod("packed", RuinMatter.Piece.class); encode.setAccessible(true);
++        CompoundTag packed = (CompoundTag) encode.invoke(null, piece);
++        CompoundTag compact = legacy.copy();
++        var moving = new net.minecraft.nbt.ListTag(); moving.add(packed); compact.put("moving", moving);
++        var outside = compact.copy(); outside.getList("moving", Tag.TAG_COMPOUND).getCompound(0).getByteArray("motion")[144] = 1;
++        var stranded = RuinMatter.load(outside, level.registryAccess());
++        CompoundTag reservoir = stranded.save(new CompoundTag(), level.registryAccess()); stranded.unload(level);
++        for (CompoundTag valid : List.of(legacy, compact, reservoir)) {
++            String list = valid.getList("moving", Tag.TAG_COMPOUND).isEmpty() ? "stranded" : "moving";
++            for (Tag invalid : List.of(net.minecraft.nbt.ByteTag.valueOf((byte) 1), net.minecraft.nbt.IntTag.valueOf(1),
++                    net.minecraft.nbt.StringTag.valueOf("invalid"), new net.minecraft.nbt.ListTag(), new net.minecraft.nbt.ByteArrayTag(new byte[1]))) {
++                CompoundTag data = valid.copy(); data.getList(list, Tag.TAG_COMPOUND).getCompound(0).put("contents", invalid);
++                CompoundTag root = new CompoundTag(); root.put("data", data);
++                Path file = level.getDataStorage().dataFolder.toPath().resolve("cargo-types-" + UUID.randomUUID() + ".dat");
++                net.minecraft.nbt.NbtIo.writeCompressed(root, file);
++                byte[] before = java.nio.file.Files.readAllBytes(file);
++                boolean scanRejected = false, decodeRejected = false;
++                try { LedgerScan.measure(file, "incoming_ruin_matter", Set.of(), NuclearPrep.PLANS_CAP); }
++                catch (java.io.IOException expected) { scanRejected = true; }
++                try {
++                    var decoded = (RuinMatter) LedgerReader.read(file, "incoming_ruin_matter", level.registryAccess(), LedgerData.IO_BYTES, Set.of());
++                    decoded.unload(level);
++                } catch (java.io.IOException | IllegalStateException expected) { decodeRejected = true; }
++                Incoming.LOG.info("CARGO_TYPES list {} type {} scanRejected {} decodeRejected {}", list, invalid.getId(), scanRejected, decodeRejected);
++                h.assertTrue(scanRejected && decodeRejected, "Cargo tag changed representation between scan and decode");
++                h.assertTrue(java.util.Arrays.equals(before, java.nio.file.Files.readAllBytes(file)), "Rejected cargo changed the original file");
++            }
++        }
++        h.succeed();
++    }
++
++    @GameTest(template = "pad", batch = "nuke_ledger_outside_import", timeoutTicks = 100)
++    public static void packedOutsideRowsFundReservoirsAndLegacyKeepsItsAllowance(GameTestHelper h) throws Exception {
++        var level = h.getLevel();
++        var ledger = new RuinMatter();
++        var cargo = new CompoundTag(); cargo.putInt("cargo", 7);
++        var piece = new RuinMatter.Piece(h.absolutePos(new BlockPos(4, 8, 4)), Blocks.BARREL.defaultBlockState(), cargo, Vec3.ZERO, level.getGameTime());
++        ledger.release(List.of(piece));
++        CompoundTag legacy = ledger.save(new CompoundTag(), level.registryAccess());
++        var encode = RuinMatter.class.getDeclaredMethod("packed", RuinMatter.Piece.class); encode.setAccessible(true);
++        CompoundTag packed = (CompoundTag) encode.invoke(null, piece);
++        long[] owned = new long[3];
++        for (int kind = 0; kind < 3; kind++) {
++            CompoundTag data = legacy.copy();
++            if (kind != 0) {
++                var row = packed.copy();
++                if (kind == 2) row.getByteArray("motion")[144] = 1;
++                var rows = new net.minecraft.nbt.ListTag(); rows.add(row); data.put("moving", rows);
++            }
++            CompoundTag root = new CompoundTag(); root.put("data", data);
++            Path file = level.getDataStorage().dataFolder.toPath().resolve("outside-import-" + UUID.randomUUID() + ".dat");
++            net.minecraft.nbt.NbtIo.writeCompressed(root, file);
++            var measured = LedgerScan.measure(file, "incoming_ruin_matter", Set.of(), NuclearPrep.PLANS_CAP);
++            owned[kind] = measured.owned();
++            RuinMatter read = (RuinMatter) LedgerReader.read(file, "incoming_ruin_matter", level.registryAccess(), measured.row(), Set.of());
++            h.assertTrue(read.released() == 1 && read.pending() == 1 && read.retainedBytes() <= measured.owned(), "Import lost or underfunded its record");
++            if (kind == 2) {
++                var field = RuinMatter.class.getDeclaredField("strandedCount"); field.setAccessible(true);
++                h.assertTrue(field.getInt(read) == 1, "Packed outside row did not become a reservoir");
++            }
++            read.unload(level);
++        }
++        h.assertTrue(owned[0] >= owned[1] && owned[1] - owned[2] == 62,
++                "Import did not distinguish legacy, packed FIFO/cargo index and packed reservoir ownership");
++        Incoming.LOG.info("PACKED_IMPORT representations legacy {} packed {} reservoir {}", owned[0], owned[1], owned[2]);
++        var malformed = legacy.copy();
++        var row = packed.copy(); row.putByteArray("motion", new byte[144]);
++        var rows = new net.minecraft.nbt.ListTag(); rows.add(row); malformed.put("moving", rows);
++        CompoundTag root = new CompoundTag(); root.put("data", malformed);
++        Path bad = level.getDataStorage().dataFolder.toPath().resolve("invalid-motion-" + UUID.randomUUID() + ".dat");
++        net.minecraft.nbt.NbtIo.writeCompressed(root, bad);
++        boolean rejected = false;
++        try { LedgerScan.measure(bad, "incoming_ruin_matter", Set.of(), NuclearPrep.PLANS_CAP); }
++        catch (java.io.IOException expected) { rejected = true; }
++        h.assertTrue(rejected, "Admission accepted a motion array the decoder rejects");
++        h.succeed();
++    }
++
++    @GameTest(template = "pad", batch = "nuke_ledger_packed_import", timeoutTicks = 600)
++    public static void compactMovingImportFundsPaletteAndActualCargoIndexes(GameTestHelper h) {
++        StrikeGameTests.gameSpeed(h);
++        var level = h.getLevel();
++        var ledger = new RuinMatter();
++        var origin = h.absolutePos(new BlockPos(0, 4, 0));
++        final int count = 100000;
++        final long room = 32L << 20;
++        for (int i = 0; i < count; i++) {
++            CompoundTag cargo = null;
++            if (i % 1000 == 0) { cargo = new CompoundTag(); cargo.putInt("cargo", i); }
++            var piece = new RuinMatter.Piece(origin.offset(i % 64, i / 64 % 64, i / 4096),
++                    cargo == null ? Blocks.STONE.defaultBlockState() : Blocks.BARREL.defaultBlockState(),
++                    cargo, new Vec3(1, -2, 3), level.getGameTime());
++            piece.windX = 4; piece.windZ = -5; piece.drag = 6; piece.pulse = 7;
++            ledger.release(List.of(piece));
++        }
++        h.assertTrue(ledger.retainedBytes() < room, "Compact live control itself does not fit its import room");
++        Path file = level.getDataStorage().dataFolder.toPath().resolve("packed-import-" + UUID.randomUUID() + ".dat");
++        ledger.save(file.toFile(), level.registryAccess());
++        var reloading = new AtomicReference<CompletableFuture<RuinMatter>>();
++        h.succeedWhen(() -> {
++            h.assertTrue(ledger.writable(), "Normal compact save is pending");
++            if (reloading.get() == null) reloading.set(CompletableFuture.supplyAsync(() -> {
++                try {
++                    var measured = LedgerScan.measure(file, "incoming_ruin_matter", Set.of(), room);
++                    Incoming.LOG.info("PACKED_IMPORT rows {} live {} admitted {} room {}", count, ledger.retainedBytes(), measured.owned(), room);
++                    if (measured.owned() > room) throw new IllegalStateException("Compact import still reserves a per-record object index");
++                    RuinMatter read = (RuinMatter) LedgerReader.read(file, "incoming_ruin_matter", level.registryAccess(), measured.row(), Set.of());
++                    if (read.retainedBytes() > measured.owned()) throw new IllegalStateException("Compact import underfunded its live owner");
++                    return read;
++                } catch (java.io.IOException e) { throw new java.io.UncheckedIOException(e); }
++            }, net.minecraft.Util.ioPool()));
++            var result = reloading.get();
++            h.assertTrue(result.isDone(), "Normal compact import is pending");
++            h.assertFalse(result.isCompletedExceptionally(), "Compact import failed: "
++                    + (result.isCompletedExceptionally() ? result.exceptionNow() : ""));
++            RuinMatter read = result.join();
++            h.assertTrue(read.released() == count && read.pending() == count && read.deposited() == 0,
++                    "Compact import lost material records");
++            h.assertTrue(read.releasedVolume() == ledger.releasedVolume()
++                            && java.util.Arrays.equals(read.balance(Blocks.STONE), ledger.balance(Blocks.STONE))
++                            && java.util.Arrays.equals(read.balance(Blocks.BARREL), ledger.balance(Blocks.BARREL)),
++                    "Compact import changed volume/mass balances");
++            try {
++                var field = RuinMatter.class.getDeclaredField("moving"); field.setAccessible(true);
++                int rows = 0, cargos = 0;
++                for (Object value : (Iterable<?>) field.get(read)) {
++                    var piece = (RuinMatter.Piece) value;
++                    h.assertTrue(piece.vx == 1 && piece.vy == -2 && piece.vz == 3 && piece.windX == 4
++                                    && piece.windZ == -5 && piece.drag == 6 && piece.pulse == 7,
++                            "Compact import changed trajectory fields");
++                    if (piece.contents != null) {
++                        h.assertTrue(piece.contents.getInt("cargo") == rows && rows % 1000 == 0, "Compact import changed cargo ownership");
++                        cargos++;
++                    }
++                    rows++;
++                }
++                h.assertTrue(rows == count && cargos == count / 1000, "Compact import lost records or cargo indexes");
++            } catch (ReflectiveOperationException e) { throw new AssertionError(e); }
++        });
++    }
++}
+diff --git a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinFrontierGameTests.java b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinFrontierGameTests.java
+index fbe7a5de3..9bb071882 100644
+--- a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinFrontierGameTests.java
++++ b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinFrontierGameTests.java
+@@ -39,11 +39,32 @@ public final class RuinFrontierGameTests {
+         frontier(h, true);
+     }
+ 
+-    @SuppressWarnings("unchecked")
++    @GameTest(template = "range", batch = "nuke_frontier_workspace", timeoutTicks = 240, skyAccess = true)
++    public static void actualWorkspaceFundsFarReadAndMaterialApplication(GameTestHelper h) throws Exception {
++        frontier(h, true, true);
++    }
++
+     private static void frontier(GameTestHelper h, boolean withMaterial) throws Exception {
++        frontier(h, withMaterial, false);
++    }
++
++    @SuppressWarnings("unchecked")
++    private static void frontier(GameTestHelper h, boolean withMaterial, boolean workspacePressure) throws Exception {
+         StrikeGameTests.gameSpeed(h);
+         ServerLevel level = h.getLevel();
+         var original = RuinStorageGameTests.fixture(h, true);
++        int originalThreads = IncomingConfig.SERVER.nukeRuinThreads.get();
++        java.util.concurrent.Future<?> warm;
++        if (workspacePressure) {
++            RuinWorkers.shutdown();
++            IncomingConfig.SERVER.nukeRuinThreads.set(10);
++            warm = RuinWorkers.submitForTest(() -> null, RuinWorkers.Priority.SEEN);
++            StrikeGameTests.afterTest(h, () -> {
++                ua.zentix.incoming.nuclear.NuclearStrikes.clear(level);
++                RuinWorkers.shutdown();
++                IncomingConfig.SERVER.nukeRuinThreads.set(originalThreads);
++            });
++        } else warm = null;
+         var originalClock = NuclearWorld.clock(level.getServer());
+         int originalBudget = IncomingConfig.SERVER.workBudgetMs.get();
+         if (withMaterial) {
+@@ -113,6 +134,7 @@ public final class RuinFrontierGameTests {
+         h.succeedWhen(() -> {
+             try {
+                 if (!opened[0]) {
++                    if (warm != null) h.assertTrue(warm.isDone(), "One funded decoder has not warmed up");
+                     for (ChunkShot shot : shots) h.assertTrue(archive.evictable(shot.pos().toLong(), shot), "Actual snapshot write not acknowledged yet");
+                     h.assertTrue(NuclearPrep.memory(level) < NuclearPrep.PLANS_CAP - (48L << 20), "Cold ledgers/setup still own admission");
+                     context.dropShotsForTest();
+@@ -127,7 +149,8 @@ public final class RuinFrontierGameTests {
+                                 net.minecraft.world.level.block.Blocks.STONE.defaultBlockState(), null, Vec3.ZERO, level.getGameTime()));
+                         material[0].release(pieces);
+                     }
+-                    other.materialReservation += Math.max(0, NuclearPrep.PLANS_CAP - (32L << 20) - NuclearPrep.memory(level) - (16L << 20));
++                    other.materialReservation += workspacePressure ? 280L << 20
++                            : Math.max(0, NuclearPrep.PLANS_CAP - (32L << 20) - NuclearPrep.memory(level) - (16L << 20));
+                     field(owner, "layout").set(owner, null);
+                     openedAt[0] = level.getGameTime();
+                     opened[0] = true;
+@@ -136,7 +159,8 @@ public final class RuinFrontierGameTests {
+                         "Already funded far work was starved by the material continuation");
+                 int cursor = field(owner, "nextFar").getInt(owner), readCursor = field(owner, "nextRead").getInt(owner);
+                 h.assertTrue(readCursor <= Math.min(order.length, cursor + RuinWorkers.capacity()), "Reader outran bounded solver frontier");
+-                h.assertTrue(NuclearPrep.memory(level) <= NuclearPrep.PLANS_CAP, "Controlled pipeline exceeded its admission budget");
++                h.assertTrue((workspacePressure ? NuclearPrep.residentMemory(level) : NuclearPrep.memory(level)) <= NuclearPrep.PLANS_CAP,
++                        "Controlled pipeline exceeded its admission budget");
+                 var plans = (RetainedPlans) field(owner, "plans").get(owner);
+                 var plan = plans.get(centre.toLong());
+                 h.assertTrue(plan != null, "Current physical plan did not complete through actual disk/archive reads; read=" + readCursor
+@@ -151,6 +175,20 @@ public final class RuinFrontierGameTests {
+                     h.assertTrue(advanced || material[0].deposited() > 0, "Material had calls but no actual progress");
+                     Incoming.LOG.info("FRONTIER_MATERIAL far plan completed in {} ticks with {} moving records, resident {}",
+                             level.getGameTime() - openedAt[0], material[0].pending(), NuclearPrep.residentMemory(level));
++                    if (workspacePressure) {
++                        long released = material[0].released();
++                        for (int z = -2; z <= 2; z++) for (int x = -2; x <= 2; x++) level.getChunk(centre.x + x, centre.z + z);
++                        var events = ua.zentix.incoming.nuclear.NuclearEvents.get(level);
++                        var actual = new Detonation(events.nextId(), geometry.burst(), geometry.groundY(), geometry.yieldKt(), geometry.surface(),
++                                level.getGameTime() - 20000, 0, 0, geometry.visibility(), 0, geometry.scale(), false, geometry.wave());
++                        events.add(actual);
++                        h.assertTrue(plan.apply(level, level.getChunkSource().getChunkNow(centre.x, centre.z), actual, new ColumnScar.Budget(false)),
++                                "Funded FAR result refused actual application; capacity=" + plan.memoryWaiting());
++                        h.assertTrue(material[0].released() > released, "FAR produced a plan without an actual material transaction");
++                        h.assertTrue(NuclearPrep.residentMemory(level) <= NuclearPrep.PLANS_CAP, "FAR application exceeded its shared cap");
++                        Incoming.LOG.info("FRONTIER_WORKSPACE applied {} actual material records, pending {}, resident {}",
++                                material[0].released() - released, material[0].pending(), NuclearPrep.residentMemory(level));
++                    }
+                 }
+             } catch (ReflectiveOperationException e) { throw new IllegalStateException(e); }
+         });
+diff --git a/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinHeaderLifetimeGameTests.java b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinHeaderLifetimeGameTests.java
+new file mode 100644
+index 000000000..3a4423d91
+--- /dev/null
++++ b/mod/src/devtest/java/ua/zentix/incoming/nuclear/world/RuinHeaderLifetimeGameTests.java
+@@ -0,0 +1,98 @@
++package ua.zentix.incoming.nuclear.world;
++
++import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
++import it.unimi.dsi.fastutil.longs.LongArrayList;
++import java.lang.reflect.Field;
++import java.lang.reflect.Method;
++import java.util.List;
++import java.util.concurrent.ConcurrentLinkedQueue;
++import java.util.function.LongConsumer;
++import net.minecraft.gametest.framework.GameTest;
++import net.minecraft.gametest.framework.GameTestHelper;
++import net.minecraft.world.level.ChunkPos;
++import net.minecraft.world.phys.Vec3;
++import net.neoforged.neoforge.gametest.GameTestHolder;
++import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
++import ua.zentix.incoming.Incoming;
++import ua.zentix.incoming.nuclear.Detonation;
++
++/** Real 1-Mt header layout: consumed reverse edges must not retain the transition's memory. */
++@GameTestHolder(Incoming.MOD_ID)
++@PrefixGameTestTemplate(false)
++public final class RuinHeaderLifetimeGameTests {
++    private RuinHeaderLifetimeGameTests() {}
++
++    @GameTest(template = "pad", batch = "nuke_header_lifetime", timeoutTicks = 100)
++    @SuppressWarnings("unchecked")
++    public static void headerRepliesReleaseTheirIndexWithoutChangingTileMasks(GameTestHelper h) throws Exception {
++        var geometry = new Detonation(-1, new Vec3(3104.5, 63, 560.5), 63, 1000,
++                true, 0, 0, 0, 20000, 0, 1, false, .25f);
++        NuclearPrep prep = new NuclearPrep();
++        Class<?> type = Class.forName(NuclearPrep.class.getName() + "$Prep");
++        var constructor = type.getDeclaredConstructor(int.class, long.class, LongConsumer.class);
++        constructor.setAccessible(true);
++        Object request = constructor.newInstance(1, 0L, (LongConsumer) ignored -> {});
++        ((List<Object>) get(prep, "preps")).add(request);
++        method("install", type, NuclearPrep.Layout.class).invoke(null, request, NuclearPrep.layout(geometry));
++        var input = (LongArrayList) get(request, "toScan");
++        int count = input.size();
++        h.assertTrue(count == 277736, "The native 1-Mt header cohort changed");
++        long first = prep.retainedBytes(), last = input.getLong(count - 1);
++        Method answer = method("answer", type, long.class, boolean.class);
++        for (int i = 0; i < count - 1; i++) {
++            long key = input.getLong(i);
++            answer.invoke(null, request, key, whole(ChunkPos.getX(key), ChunkPos.getZ(key)));
++        }
++        long partial = prep.retainedBytes();
++        Incoming.LOG.info("HEADER_LIFETIME headers {} charged {} -> {} with one reply pending", count, first, partial);
++        h.assertTrue(first - partial > 20L << 20, "Consumed header reply lists still own the transition room");
++        h.assertTrue(get(request, "toScan") == input, "An outstanding reply lost its scan owner");
++        field(request, "nextScan").setInt(request, count);
++        field(request, "scanning").setInt(request, 1);
++        ((ConcurrentLinkedQueue<long[]>) get(request, "scanned")).add(new long[]{last,
++                whole(ChunkPos.getX(last), ChunkPos.getZ(last)) ? 1 : 0});
++        Method scan = method("scan", net.minecraft.server.level.ServerLevel.class, type);
++        scan.invoke(null, h.getLevel(), request);
++        long complete = prep.retainedBytes();
++        h.assertTrue(((Long2ObjectOpenHashMap<?>) get(request, "askedBy")).isEmpty(), "Completed scan retains its reverse index");
++        h.assertTrue(((LongArrayList) get(request, "toScan")).isEmpty(), "Completed scan retains its input backing");
++        h.assertTrue(first - complete > 40L << 20, "Completed 1-Mt headers retain their obsolete workspace");
++        h.assertTrue((int) get(request, "nextScan") == count && (int) get(request, "scanning") == 0,
++                "Retirement changed completed header provenance");
++        for (Object tile : (List<?>) get(request, "tiles")) {
++            ChunkPos centre = (ChunkPos) get(tile, "centre");
++            int expected = 0;
++            for (int x = -2; x <= 2; x++) for (int z = -2; z <= 2; z++) {
++                boolean loadable = true;
++                for (int dx = -2; dx <= 2 && loadable; dx++) for (int dz = -2; dz <= 2; dz++)
++                    if (!whole(centre.x + x + dx, centre.z + z + dz)) { loadable = false; break; }
++                if (!loadable) expected |= 1 << ((x + 2) * 5 + z + 2);
++            }
++            h.assertTrue((int) get(tile, "unknown") == 0 && (int) get(tile, "partial") == expected,
++                    "Header reclamation changed the complete world-availability mask at " + centre);
++            h.assertTrue(get(tile, "state").toString().equals(expected == (1 << 25) - 1 ? "SKIP" : "WAIT"),
++                    "Header reclamation changed tile admission at " + centre);
++        }
++        scan.invoke(null, h.getLevel(), request);
++        h.assertTrue(prep.retainedBytes() == complete, "Completed scan re-admitted storage or refunded backing twice");
++        Incoming.LOG.info("HEADER_LIFETIME complete {} tiles; charged {} -> {} -> {}; reclaimed {} bytes",
++                ((List<?>) get(request, "tiles")).size(), first, partial, complete, first - complete);
++        h.succeed();
++    }
++
++    private static boolean whole(int x, int z) { return Math.floorMod(x * 31 + z * 17, 97) != 0; }
++
++    private static Method method(String name, Class<?>... arguments) throws Exception {
++        Method method = NuclearPrep.class.getDeclaredMethod(name, arguments);
++        method.setAccessible(true);
++        return method;
++    }
++
++    private static Object get(Object owner, String name) throws Exception { return field(owner, name).get(owner); }
++
++    private static Field field(Object owner, String name) throws Exception {
++        Field field = owner.getClass().getDeclaredField(name);
++        field.setAccessible(true);
++        return field;
++    }
++}
+diff --git a/mod/src/main/java/ua/zentix/incoming/nuclear/world/LedgerScan.java b/mod/src/main/java/ua/zentix/incoming/nuclear/world/LedgerScan.java
+index 846442655..ddcb34848 100644
+--- a/mod/src/main/java/ua/zentix/incoming/nuclear/world/LedgerScan.java
++++ b/mod/src/main/java/ua/zentix/incoming/nuclear/world/LedgerScan.java
+@@ -15,6 +15,8 @@ final class LedgerScan {
+     private int originalEntries;
+     private long originalPosition;
+     private boolean hasOriginalPosition;
++    private boolean packedMoving, outside;
++    private boolean materialRow;
+     // At most 98,316 bytes of primitive arrays; leave I/O workspace for buffers and row scanning.
+     // Dense legacy cities need a section count, not a pessimistic per-block object estimate.
+     private it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap originalSections;
+@@ -50,6 +52,8 @@ final class LedgerScan {
+         // Empty queues/indexes and the original journal's fixed section-query workspace remain
+         // owned even when a file has no rows. The small-ledger regression checks this floor.
+         long owned = LedgerData.IO_BYTES + (12L << 10), largest = 0, cargoTotal = 0;
++        long packedStates = 0;
++        int registryStates = -1;
+         var scan = new LedgerScan(Long.MAX_VALUE / 16);
+         try (var input = open(file)) {
+             if (input.readUnsignedByte() != 10) throw new IOException("Invalid ledger root");
+@@ -57,7 +61,7 @@ final class LedgerScan {
+             for (int root; (root = input.readUnsignedByte()) != 0;) {
+                 String rootName = input.readUTF();
+                 if (root != 10 || !rootName.equals("data")) {
+-                    scan.bytes = 0; scan.payload(input, root, 0); continue;
++                    scan.bytes = 0; scan.materialRow = false; scan.payload(input, root, 0); continue;
+                 }
+                 for (int type; (type = input.readUnsignedByte()) != 0;) {
+                     String key = input.readUTF();
+@@ -65,17 +69,35 @@ final class LedgerScan {
+                         int element = input.readUnsignedByte(), count = scan.count(input);
+                         if (element != 10 && count != 0) throw new IOException("Invalid ledger row list");
+                         // Partial FIFO tails own a full primitive page even for one legacy row.
+-                        if (count > 0 && key.equals("moving")) owned += (long) RuinRecords.ROWS * RuinMatter.PIECE_BYTES + 1024;
++                        if (count > 0 && key.equals("moving")) {
++                            owned += (long) RuinRecords.ROWS * RuinMatter.PIECE_BYTES + 1024;
++                        }
+                         if (count > 0 && key.equals("support_sources")) owned += RuinRecords.ROWS * 16L + 1024;
+                         for (int i = 0; i < count; i++) {
+                             scan.bytes = 0; scan.cargo = 0; scan.checkpoints = 0; scan.event = -1;
+                             scan.originalEntries = -1; scan.hasOriginalPosition = false;
++                            scan.packedMoving = false; scan.outside = false;
++                            scan.materialRow = key.equals("moving") || key.equals("stranded");
+                             scan.payload(input, element, 0);
+                             long rowBytes = key.equals("passes") && !activeCraters.contains(scan.event)
+                                     ? scan.bytes - scan.checkpoints : scan.bytes;
+                             largest = Math.max(largest, rowBytes);
++                            long moving = RuinMatter.PIECE_BYTES + 192L; // Legacy row allowance also covers stranded conversion.
++                            if (key.equals("moving") && scan.packedMoving) {
++                                if (scan.outside) moving = 256; // The decoder creates a reservoir, not a FIFO/cargo-index row.
++                                else {
++                                    // One byte per row bounds 96 bytes per 1024-row page; the full
++                                    // partial tail and small-queue overhead were funded above.
++                                    moving = RuinMatter.PIECE_BYTES + 1L + (scan.cargo > 0 ? 64L : 0);
++                                    if (registryStates < 0) registryStates = net.minecraft.world.level.block.Block.BLOCK_STATE_REGISTRY.size();
++                                    if (registryStates == 0) throw new IOException("Block-state registry is not ready for material import");
++                                    // One shared palette, bounded by both imported rows and the
++                                    // frozen registry. Legacy/source rows retain their own allowance.
++                                    if (packedStates < registryStates) { moving += 96; packedStates++; }
++                                }
++                            }
+                             long charge = switch (key) {
+-                                case "moving" -> RuinMatter.PIECE_BYTES + 192L + 3 * scan.cargo;
++                                case "moving" -> moving + 3 * scan.cargo;
+                                 case "stranded" -> 256 + 3 * scan.cargo;
+                                 case "support_sources" -> 4096;
+                                 case "support_originals" -> scan.originalGrowth();
+@@ -91,7 +113,7 @@ final class LedgerScan {
+                             if (owned > limit) return new Measure(limit + 1, largest);
+                         }
+                     } else {
+-                        scan.bytes = 0; scan.payload(input, type, 0);
++                        scan.bytes = 0; scan.materialRow = false; scan.payload(input, type, 0);
+                         largest = Math.max(largest, scan.bytes);
+                         // Support arrays load together; maps, old backing arrays and the input
+                         // arrays fit inside the existing 256-byte-per-seed ownership estimate.
+@@ -174,6 +196,8 @@ final class LedgerScan {
+                 add(48);
+                 for (int child; (child = input.readUnsignedByte()) != 0;) {
+                     String key = input.readUTF(); add(64L + 2L * key.length());
++                    if (depth == 0 && materialRow && key.equals("contents") && child != 10)
++                        throw new IOException("Material contents is not a compound");
+                     long before = bytes;
+                     if (key.equals("event") && depth == 0 && child == 3) {
+                         add(12); event = input.readInt();
+@@ -182,6 +206,13 @@ final class LedgerScan {
+                         if (originalEntries < 1 || originalEntries > 4096) throw new IOException("Invalid original section size");
+                     } else if (key.equals("position") && depth == 0 && child == 4) {
+                         add(16); originalPosition = input.readLong(); hasOriginalPosition = true;
++                    } else if (key.equals("motion") && depth == 0 && child == 7) {
++                        int length = count(input);
++                        if (length != 145) throw new IOException("Invalid material motion record");
++                        add(24L + length);
++                        input.skipNBytes(length - 1L);
++                        outside = input.readByte() != 0;
++                        packedMoving = true;
+                     } else payload(input, child, depth + 1);
+                     if (depth == 0) {
+                         if (key.equals("contents")) cargo += bytes - before;
+diff --git a/mod/src/main/java/ua/zentix/incoming/nuclear/world/NuclearPrep.java b/mod/src/main/java/ua/zentix/incoming/nuclear/world/NuclearPrep.java
+index e6f0ba25f..b3fdb504d 100644
+--- a/mod/src/main/java/ua/zentix/incoming/nuclear/world/NuclearPrep.java
++++ b/mod/src/main/java/ua/zentix/incoming/nuclear/world/NuclearPrep.java
+@@ -183,7 +183,7 @@ public final class NuclearPrep {
+         CompletableFuture<Layout> layout;
+         /** Geometry exists, but layout admission/installation is still required. */
+         boolean layoutRequired;
+-        /** Immutable reverse-index and tile backing ownership, calculated once by its builder. */
++        /** Reverse-index and tile backing ownership; answered header lists retire on the server thread. */
+         long layoutMetadata;
+         /** Heavy-zone chunks nearest first (zone behind wave). */
+         long[] order = new long[0];
+@@ -209,7 +209,7 @@ public final class NuclearPrep {
+         long[] edge = new long[0];
+         List<Tile> tiles = new ArrayList<>();
+         /** Squares needing chunk result (own chunk or neighbor ring). */
+-        Long2ObjectOpenHashMap<List<Tile>> askedBy = new Long2ObjectOpenHashMap<>();
++        Long2ObjectOpenHashMap<List<Tile>> askedBy = new LayoutMap();
+         /** Memory tight: stop prebuilding, behind-wave squares load only chunks with ready plans. */
+         boolean heapStop;
+         /** Disk-read queue and results (from I/O thread). */
+@@ -580,6 +580,15 @@ public final class NuclearPrep {
+                 : RuinWorkers.residentBufferBytes(height));
+     }
+ 
++    /** Source I/O needs one real decoder restart, not every configured future solver's workspace.
++     * Existing workers stay charged; later births and solver results have their own admission.
++     * Keep the material transition reserve and the caller's write-encoding margin. */
++    private static long sourceMemory(ServerLevel level) {
++        int height = level.getHeight();
++        for (ServerLevel other : level.getServer().getAllLevels()) height = Math.max(height, other.getHeight());
++        return memory(level, false) + RuinWorkers.startupBytes(height) + RuinMemory.TRANSITION_ROOM;
++    }
++
+     /** Squares held by tickets (tests). */
+     public int heldTiles() {
+         return (int) preps.stream().flatMap(p -> p.tiles.stream()).filter(t -> t.state == TileState.LOADING || t.state == TileState.READY).count();
+@@ -1181,20 +1190,20 @@ public final class NuclearPrep {
+         if (p.nextFar < p.order.length && !p.ruins.pinWindow(p.order[p.nextFar])) return;
+         p.nextRead = Math.max(p.nextRead, p.nextFar); // Earlier centres already have a task/plan or were excluded.
+         int readEnd = (int) Math.min(p.order.length, (long) p.nextFar + RuinWorkers.capacity());
+-        while (p.nextRead < readEnd && p.reading.size() < READS && memory(level) + READ_BYTES <= WINDOW_CAP) {
++        while (p.nextRead < readEnd && p.reading.size() < READS && sourceMemory(level) + READ_BYTES <= WINDOW_CAP) {
+             long c = p.order[p.nextRead];
+             boolean all = true;
+             for (int dx = -RuinPlanner.REACH; all && dx <= RuinPlanner.REACH; dx++) {
+                 for (int dz = -RuinPlanner.REACH; all && dz <= RuinPlanner.REACH; dz++) {
+                     long k = ChunkPos.asLong(ChunkPos.getX(c) + dx, ChunkPos.getZ(c) + dz);
+                     if (p.reading.contains(k) || p.unreadable.contains(k) || p.ruins.shotAvailable(level, k)) continue;
+-                    if (p.reading.size() >= READS || memory(level) + READ_BYTES > WINDOW_CAP) {
++                    if (p.reading.size() >= READS || sourceMemory(level) + READ_BYTES > WINDOW_CAP) {
+                         all = false;
+                         continue;
+                     }
+                     var archive = p.ruins.archive();
+                     boolean stored = archive != null && archive.mayHave(k);
+-                    if (stored && memory(level) + SPILL_READ_BYTES > WINDOW_CAP) { all = false; continue; }
++                    if (stored && sourceMemory(level) + SPILL_READ_BYTES > WINDOW_CAP) { all = false; continue; }
+                     p.reading.add(k);
+                     if (stored) {
+                         var accept = p.archived.expect();
+@@ -1612,12 +1621,24 @@ public final class NuclearPrep {
+             ConcurrentLinkedQueue<long[]> out = p.scanned;
+             DiskStatus.scan(level, new ChunkPos(c)).thenAccept(state -> out.add(new long[]{c, state == DiskStatus.State.WHOLE ? 1 : 0}));
+         }
++        if (!p.toScan.isEmpty() && p.nextScan == p.toScan.size() && p.scanning == 0) {
++            // Every reply has transferred its answer to Tile. Keep the tiles/zone, but not
++            // the exhausted header cursor and reverse index (over 40 MiB for a 1-Mt layout).
++            p.layoutMetadata -= ((LayoutMap) p.askedBy).bytes();
++            p.askedBy = new LayoutMap();
++            p.layoutMetadata += ((LayoutMap) p.askedBy).bytes();
++            p.toScan = new LongArrayList();
++        }
+     }
+ 
+     /** Chunk result: not whole means neighboring square chunks (ruin-window radius) not loaded. */
+     private static void answer(Prep p, long chunk, boolean whole) {
+         List<Tile> asked = p.askedBy.get(chunk);
+         if (asked == null) return;
++        // Clearing the value releases only the consumed list. Keep the backing table charged
++        // and avoid remove()'s automatic shrinking/rehash during a still-active scan.
++        p.askedBy.put(chunk, null);
++        p.layoutMetadata -= 96L + 8L * ((ObjectArrayList<?>) asked).elements().length;
+         int x = ChunkPos.getX(chunk), z = ChunkPos.getZ(chunk);
+         for (Tile t : asked) {
+             if (!whole) {
+@@ -1768,7 +1789,7 @@ public final class NuclearPrep {
+         Incoming.LOG.info("DIAG zone #{}: tiles SCAN {}, SKIP {}, WAIT {}, LOADING {}, READY {}; headers read {} of {} (in flight {}); "
+                         + "intake stalled, ticks — slots {}, disk reply {}, wave {}, nothing to take {}, detonation forgotten {}; released {}: ticket→full avg {} (max {}), "
+                         + "full→released {} ({}), wave→ticket {} ({}); holds for tiles {}, tile releases refused (too few holds) {}",
+-                p.detonation, states[0], states[1], states[2], states[3], states[4], p.nextScan - p.scanning, p.toScan.size(), p.scanning,
++                p.detonation, states[0], states[1], states[2], states[3], states[4], p.nextScan - p.scanning, Math.max(p.nextScan, p.toScan.size()), p.scanning,
+                 s[0], s[1], s[2], s[3], s[4], dn[0], dn[1] / n, dn[2], dn[3] / n, dn[4], dn[5] / Math.max(1, dn[7]), dn[6], scars.tileHoldsDiag(), p.diagRefused);
+         java.util.Arrays.fill(s, 0);
+         for (Tile t : p.tiles) {
+diff --git a/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinMatter.java b/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinMatter.java
+index 4f54140da..f819d08d4 100644
+--- a/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinMatter.java
++++ b/mod/src/main/java/ua/zentix/incoming/nuclear/world/RuinMatter.java
+@@ -706,7 +706,7 @@ public final class RuinMatter extends LedgerData {
+         for (int i = 0; i < reservoirs.size(); i++) {
+             CompoundTag row = reservoirs.getCompound(i);
+             ReservoirKey key = new ReservoirKey(NbtUtils.readBlockState(lookup.lookupOrThrow(Registries.BLOCK), row.getCompound("state")),
+-                    row.contains("contents") ? row.getCompound("contents") : null);
++                    readContents(row));
+             Reservoir value = result.stranded.computeIfAbsent(key, ignored -> {
+                 result.strandedBytes += 256L + (key.contents == null ? 0 : 3L * key.contents.sizeInBytes());
+                 return new Reservoir();
+@@ -746,14 +746,24 @@ public final class RuinMatter extends LedgerData {
+         return result;
+     }
+ 
++    @org.jetbrains.annotations.Nullable
++    private static CompoundTag readContents(CompoundTag row) {
++        if (!row.contains("contents")) return null;
++        // getCompound silently converts other tag types to a new empty compound. That would
++        // change both cargo meaning and the representation admitted by the streaming scan.
++        if (!row.contains("contents", Tag.TAG_COMPOUND)) throw new IllegalStateException("Material contents is not a compound");
++        return row.getCompound("contents");
++    }
++
+     private static Piece readPiece(CompoundTag n, HolderLookup.Provider lookup) {
++        CompoundTag contents = readContents(n);
+         if (n.contains("motion", Tag.TAG_BYTE_ARRAY)) {
+             byte[] bytes = n.getByteArray("motion");
+             if (bytes.length != 145) throw new IllegalStateException("Invalid material motion record");
+             var data = java.nio.ByteBuffer.wrap(bytes);
+             BlockPos source = BlockPos.of(data.getLong());
+             var state = NbtUtils.readBlockState(lookup.lookupOrThrow(Registries.BLOCK), n.getCompound("state"));
+-            Piece p = new Piece(source, state, n.contains("contents") ? n.getCompound("contents") : null, Vec3.ZERO, 0, true);
++            Piece p = new Piece(source, state, contents, Vec3.ZERO, 0, true);
+             p.id = data.getLong(); p.scorch = data.getInt(); p.scorchEvent = data.getInt(); p.scorchTime = data.getLong();
+             p.volume = data.getDouble(); p.mass = data.getDouble();
+             p.x = data.getDouble(); p.y = data.getDouble(); p.z = data.getDouble();
+@@ -765,7 +775,7 @@ public final class RuinMatter extends LedgerData {
+         }
+         BlockState state = NbtUtils.readBlockState(lookup.lookupOrThrow(Registries.BLOCK), n.getCompound("state"));
+         Piece p = new Piece(BlockPos.of(n.getLong("source")), state,
+-                n.contains("contents") ? n.getCompound("contents") : null,
++                contents,
+                 new Vec3(n.getDouble("vx"), n.getDouble("vy"), n.getDouble("vz")), n.getLong("tick"), true);
+         p.x = n.getDouble("x"); p.y = n.getDouble("y"); p.z = n.getDouble("z");
+         p.tick = n.getDouble("tick");

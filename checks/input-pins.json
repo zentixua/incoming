@@ -1,0 +1,16 @@
+{
+  "productionBase": "56f735f2b6ba7c5c30fec8d148359c75c0373372",
+  "source": "d2f3854df0221d1a69cbd24c869f881ea9b1dafc",
+  "nativeRuntimeDiagnosticSource": "a0babee626ad07cacc1d7d41dbe71cccfeadcc7b",
+  "nativeRuntimeJarSHA256": "ef18d01008fe610758309f35a381de775d18595790aaee995a643e65e17dc2e5",
+  "nativeSavedLedger": {
+    "bytes": 135695543,
+    "sha256": "37f82d21e8bc2d5516ca78877e138a87416693a180e98d683891639c3e4fbd83"
+  },
+  "nativeSourceSeed": -1905315873147090944,
+  "stoppedEpoch": 2040656885,
+  "processors": 4,
+  "nativeHeapGiB": 4,
+  "sharedOwnershipCap": 536870912,
+  "limitations": "Private full native NBT/cargo is excluded. The stopped input is later than the ownership snapshot; controlled epochs do not reconstruct the whole live world. Ownership estimates are not JVM heap measurements."
+}
