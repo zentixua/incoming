@@ -150,6 +150,16 @@ public final class PreparedLandingGameTests {
     /** Explicit external fixture: raw NBT remains ignored and is never copied into this repository. */
     @GameTest(template = "pad", batch = "nuke_prepared_landing_city", timeoutTicks = 1200, skyAccess = true)
     public static void externalCityWindowsReportEligibilityAndWorkerCost(GameTestHelper h) {
+        externalCityWindows(h, false);
+    }
+
+    /** A bounded pressure/reach diagnostic on original city blocks, not 15 kt gameplay acceptance. */
+    @GameTest(template = "pad", batch = "nuke_prepared_landing_near_city", timeoutTicks = 1200, skyAccess = true)
+    public static void nearGroundBurstReportsFiniteWindowContinuations(GameTestHelper h) {
+        externalCityWindows(h, true);
+    }
+
+    private static void externalCityWindows(GameTestHelper h, boolean near) {
         String directory = System.getProperty("incoming.preparedLanding.fixture", "");
         if (directory.isBlank()) {
             Incoming.LOG.info("LANDING_CITY skipped: no incoming.preparedLanding.fixture; synthetic checks are not city evidence");
@@ -196,17 +206,18 @@ public final class PreparedLandingGameTests {
             var grids = new ArrayList<RuinContext.Grid>();
             var neighbours = new ArrayList<RuinContext.Grid>();
             var labels = new ArrayList<String>();
-            boolean cohort = Boolean.getBoolean("incoming.preparedLanding.cohort");
+            boolean cohort = near || Boolean.getBoolean("incoming.preparedLanding.cohort");
             for (String variant : cohort ? List.of("512") : List.of("512", "1536")) {
-                Detonation d = detonation(events.getAsJsonArray(variant).get(0).getAsJsonObject());
-                var context = new RuinContext(h.getLevel(), d);
-                StrikeGameTests.afterTest(h, context::cancelTasks);
+                Detonation template = detonation(events.getAsJsonArray(variant).get(0).getAsJsonObject());
                 for (var center : manifest.getAsJsonArray("centres")) {
                     var xy = center.getAsJsonArray();
                     var pos = new ChunkPos(xy.get(0).getAsInt(), xy.get(1).getAsInt());
+                    Detonation d = near ? nearDetonation(template, pos, shots) : template;
+                    var context = new RuinContext(h.getLevel(), d);
+                    StrikeGameTests.afterTest(h, context::cancelTasks);
                     grids.add(cityGrid(h, context, pos, shots, view));
                     if (cohort) neighbours.add(cityGrid(h, context, new ChunkPos(pos.x + 1, pos.z), shots, view));
-                    labels.add("city-" + variant + "-" + pos.x + "-" + pos.z);
+                    labels.add((near ? "near15kt-" : "city-" + variant + "-") + pos.x + "-" + pos.z);
                 }
             }
             var future = worker(h, () -> {
@@ -215,18 +226,22 @@ public final class PreparedLandingGameTests {
                     var grid = grids.get(i);
                     var fracture = fracture(grid);
                     var removals = fracture.removals();
-                    long start = System.nanoTime();
-                    var window = grid.windowOf(0, 0);
-                    var input = PreparedLandingSnapshot.from(window, removals, grid.ctx().d, palette);
-                    long adapter = System.nanoTime() - start;
-                    results.add(measure(labels.get(i), input, window, fracture.nanos(), adapter));
+                    long start;
+                    if (!near) {
+                        start = System.nanoTime();
+                        var window = grid.windowOf(0, 0);
+                        var input = PreparedLandingSnapshot.from(window, removals, grid.ctx().d, palette);
+                        results.add(measure(labels.get(i), input, window, fracture.nanos(), System.nanoTime() - start));
+                    }
                     if (cohort) {
                         java.util.function.Function<PreparedLandingModel.Cell, BlockState> stateAt = cell ->
                                 shots.get(ChunkPos.asLong(cell.x() >> 4, cell.z() >> 4)).get(cell.x() & 15, cell.y(), cell.z() & 15);
-                        start = System.nanoTime();
-                        var large = PreparedLandingSnapshot.from(grid.shots(), grid.centre(), grid.minY(), grid.maxY(), view,
-                                removals, grid.ctx().d, palette);
-                        results.add(measure(labels.get(i) + "-halo5", large, stateAt, fracture.nanos(), System.nanoTime() - start));
+                        if (!near) {
+                            start = System.nanoTime();
+                            var large = PreparedLandingSnapshot.from(grid.shots(), grid.centre(), grid.minY(), grid.maxY(), view,
+                                    removals, grid.ctx().d, palette);
+                            results.add(measure(labels.get(i) + "-halo5", large, stateAt, fracture.nanos(), System.nanoTime() - start));
+                        }
                         var second = fracture(neighbours.get(i));
                         var merged = new ArrayList<>(removals); merged.addAll(second.removals());
                         start = System.nanoTime();
@@ -235,6 +250,7 @@ public final class PreparedLandingGameTests {
                         var measured = measure(labels.get(i) + "-two-chunks", shared, stateAt,
                                 fracture.nanos() + second.nanos(), System.nanoTime() - start);
                         results.add(measured);
+                        if (near) reachDiagnostics(labels.get(i), grid, measured);
                         // A partition is a collection boundary only. One solver owns both chunks.
                         merged.clear(); merged.addAll(second.removals()); merged.addAll(removals);
                         var reversed = PreparedLandingSnapshot.from(grid.shots(), grid.centre(), grid.minY(), grid.maxY(), view,
@@ -256,6 +272,59 @@ public final class PreparedLandingGameTests {
         } catch (IOException | NoSuchAlgorithmException error) {
             throw new IllegalStateException("Cannot read external city fixture", error);
         }
+    }
+
+    private static Detonation nearDetonation(Detonation template, ChunkPos centre, Map<Long, ChunkShot> shots) {
+        int coreX = centre.getMinBlockX() + 8, coreZ = centre.getMinBlockZ() + 8;
+        BlockPos ground = null;
+        int nearest = Integer.MAX_VALUE;
+        // This is a read-only fixture location, selected from the already primed snapshot map.
+        // Prefer its lowest open surface within 32 m, then its closest column to the source core.
+        for (int dz = -32; dz <= 32; dz++) for (int dx = -32; dx <= 32; dx++) {
+            int distance = dx * dx + dz * dz;
+            if (distance > 32 * 32) continue;
+            int x = coreX + dx, z = coreZ + dz;
+            ChunkShot shot = shots.get(ChunkPos.asLong(x >> 4, z >> 4));
+            if (shot == null) continue;
+            int y = shot.solid[((z & 15) << 4) | (x & 15)];
+            if (y < shot.minY) continue;
+            BlockState top = shot.get(x & 15, y, z & 15);
+            if (top.isAir() || !top.getFluidState().isEmpty()) continue;
+            if (ground == null || y < ground.getY() || y == ground.getY() && distance < nearest) {
+                ground = new BlockPos(x, y, z); nearest = distance;
+            }
+        }
+        if (ground == null) throw new IllegalStateException("No known dry surface near fixture core " + centre);
+        double groundY = ground.getY() + 1;
+        Vec3 burst = new Vec3(ground.getX() + .5, groundY, ground.getZ() + .5);
+        Detonation d = new Detonation(template.id(), burst, groundY, 15, true, template.gameTime(),
+                template.windDir(), template.windSpeed(), template.visibility(), template.seed(), 1, template.fallout(),
+                .25f, template.dayTime(), template.fires());
+        BlockState state = shots.get(ChunkPos.asLong(ground.getX() >> 4, ground.getZ() >> 4))
+                .get(ground.getX() & 15, ground.getY(), ground.getZ() & 15);
+        Incoming.LOG.info("LANDING_NEAR_INPUT centre={} burst={} ground_y={} ground_state={} horizontal_core_distance={} yield_kt=15 wave=.25 scale=1 scope=bounded-pressure-reach-not-gameplay",
+                centre, burst, groundY, state, Math.sqrt(nearest));
+        return d;
+    }
+
+    private static void reachDiagnostics(String label, RuinContext.Grid grid, Measurement measurement) {
+        var input = measurement.input(); var result = measurement.result();
+        double[] distances = result.outcomes().stream().mapToDouble(o -> Math.hypot(o.x() - o.source().x(), o.z() - o.source().z())).sorted().toArray();
+        double maxBoundary = result.outcomes().stream().filter(o -> o.blocked() != null)
+                .mapToDouble(o -> Math.hypot(o.blocked().x() - o.source().x(), o.blocked().z() - o.source().z())).max().orElse(0);
+        double minPsi = input.sources().stream().mapToDouble(s -> grid.ctx().d.psi(new Vec3(s.x() + .5, s.y() + .5, s.z() + .5))).min().orElse(0);
+        double maxPsi = input.sources().stream().mapToDouble(s -> grid.ctx().d.psi(new Vec3(s.x() + .5, s.y() + .5, s.z() + .5))).max().orElse(0);
+        var pending = new java.util.EnumMap<PreparedLandingModel.Status, Long>(PreparedLandingModel.Status.class);
+        for (var status : PreparedLandingModel.Status.values())
+            if (status != PreparedLandingModel.Status.LANDED && status != PreparedLandingModel.Status.DISPERSED && result.count(status) > 0)
+                pending.put(status, result.count(status));
+        Incoming.LOG.info("LANDING_REACH label={} sources={} psi_min={} psi_max={} endpoint_horizontal_p95_m={} endpoint_horizontal_max_m={} boundary_horizontal_max_m={} pending_reasons={} bounds_sources={} bounds_segments={} bounds_flight_seconds={} reach_scope=observed-endpoints-and-boundaries-censored-for-continuations",
+                label, input.sources().size(), minPsi, maxPsi, quantile(distances, .95), quantile(distances, 1), maxBoundary, pending,
+                LIMITS.sources(), LIMITS.segments(), LIMITS.secondsPerSource());
+        result.outcomes().stream().filter(o -> o.status() != PreparedLandingModel.Status.LANDED && o.status() != PreparedLandingModel.Status.DISPERSED)
+                .sorted(java.util.Comparator.comparingDouble((PreparedLandingModel.Outcome o) -> Math.hypot(o.x() - o.source().x(), o.z() - o.source().z())).reversed())
+                .limit(5).forEach(o -> Incoming.LOG.info("LANDING_CONTINUATION label={} status={} source={} at={},{},{} blocked={} age_s={} trace={}",
+                        label, o.status(), o.source(), o.x(), o.y(), o.z(), o.blocked(), o.time() - o.source().departure(), o.trace()));
     }
 
     private static RuinContext.Grid cityGrid(GameTestHelper h, RuinContext context, ChunkPos pos,
