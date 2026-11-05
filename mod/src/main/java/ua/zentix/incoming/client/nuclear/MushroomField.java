@@ -308,7 +308,7 @@ public final class MushroomField {
         double front = d.metres(d.frontRadius(a.ticks(partial)));
         double hob = Math.max(0, d.hobMetres());
         return MushroomModel.shape(t, d.yieldKt(), hob, d.surface(), Math.sqrt(Math.max(0, front * front - hob * hob)),
-                ua.zentix.incoming.nuclear.model.StemDust.ready(a.pall.stemSource));
+                a.pall.stemDust(t));
     }
 
     /**

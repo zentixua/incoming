@@ -477,7 +477,11 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   each annulus and the moving foot, converting horizontal model meters to slant blocks and ticks back to model
   seconds. Never substitute `HobBlast` arrival here: GAME would feed the stem before the supplying layer.
   Source equality includes all 24 arrivals plus geometry/visibility. One eight-entry cache includes pending and
-  failed work; pending entries are not evicted. Per-detonation table builds in background (`StemDust.ready`: first
+  failed work; pending entries are not evicted. A caller-owned `StemDust.Request` retains its admitted future/result:
+  the frame scans every Active before selecting four rows, so earlier candidates must not repeatedly evict a late
+  visible consumer's completed table. The shared reuse cache stays at eight; live consumers retain their own table
+  (at most about 25 KiB of array payload each, shared for equal admitted sources) until cloud expiry. PallField releases
+  the request then; replay can reacquire it. Per-detonation table builds in background (first
   frames without dust). Every positive source onset is an interpolation knot; the original one-second quadrature
   amounts remain at integer nodes. This is causal numerical reconstruction, not a new measured transport law.
   `StemClockTest`, `StemSourceTest` and `nuke_stem_clock` cover the clock and scale contract. All-water terrestrial

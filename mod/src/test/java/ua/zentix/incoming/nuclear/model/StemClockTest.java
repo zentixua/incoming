@@ -7,6 +7,10 @@ import ua.zentix.incoming.nuclear.Detonation;
 import java.util.Map;
 import java.util.LinkedHashMap;
 import java.util.concurrent.CompletableFuture;
+import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.concurrent.Executor;
+import java.util.function.Supplier;
 
 import static org.junit.jupiter.api.Assertions.*;
 
@@ -172,6 +176,82 @@ class StemClockTest {
                 cache.clear();
                 cache.putAll(previous);
             }
+        }
+    }
+
+    @Test
+    void lateVisibleConsumerKeepsItsAdmittedResult() throws ReflectiveOperationException {
+        Map<StemDust.Source, CompletableFuture<StemDust>> cache = cache();
+        var previous = new LinkedHashMap<>(cache);
+        var work = new ArrayDeque<Runnable>();
+        Executor worker = work::add;
+        var readers = new ArrayList<Supplier<StemDust>>();
+        StringBuilder frames = new StringBuilder();
+        try {
+            cache.clear();
+            for (int i = 0; i < 24; i++) {
+                StemDust.Source s = source(burst(15, 592 + i, false, 1, 0.25f, 20_000));
+                StemDust.Request request = StemDust.request(s, worker);
+                readers.add(request::ready);
+            }
+            StemDust first = null;
+            boolean stable = true;
+            for (int frame = 0; frame < 12; frame++) {
+                // Frame scans every Active before writing its four selected rows; the visible owner is last here.
+                for (var reader : readers) reader.get();
+                StemDust selected = readers.getLast().get();
+                frames.append(selected == null ? '0' : '1');
+                if (frame >= 3) {
+                    stable &= selected != null && selected.lambda(60) > 0;
+                    if (first == null) first = selected;
+                    else stable &= selected == first;
+                }
+                assertTrue(cache.size() <= StemDust.CACHE_LIMIT);
+                assertTrue(work.size() <= StemDust.CACHE_LIMIT);
+                // A legal, deterministic completion schedule: all admitted native builders finish between frames.
+                while (!work.isEmpty()) work.remove().run();
+            }
+            System.out.println("STEM_CONSUMER_24 " + frames);
+            assertTrue(stable, "late visible owner must receive and retain its result: " + frames);
+        } finally {
+            while (!work.isEmpty()) work.remove().run();
+            cache.clear();
+            cache.putAll(previous);
+        }
+    }
+
+    @Test
+    void consumerOwnsItsTableUntilReleaseEvenAfterSharedEviction() throws ReflectiveOperationException {
+        Map<StemDust.Source, CompletableFuture<StemDust>> cache = cache();
+        var previous = new LinkedHashMap<>(cache);
+        var work = new ArrayDeque<Runnable>();
+        try {
+            cache.clear();
+            StemDust.Source s = source(burst(15, 592, false, 1, 0.25f, 20_000));
+            StemDust.Request a = StemDust.request(s, work::add), b = StemDust.request(s, work::add);
+            assertNull(a.ready());
+            assertNull(b.ready());
+            assertEquals(1, work.size(), "equal source requests share the admitted builder");
+            work.remove().run();
+            StemDust table = a.ready();
+            assertNotNull(table);
+            assertSame(table, b.ready());
+            for (int i = 0; i < 9; i++) StemDust.of(1, 500 + i, false, 20_000);
+            assertFalse(cache.containsKey(s), "actually evict the shared reuse entry");
+            assertSame(table, a.ready());
+            assertSame(table, b.ready());
+            a.release();
+            assertSame(table, b.ready(), "releasing one owner does not cancel another owner's result");
+            assertNull(a.ready(), "released owner must reacquire after eviction, as after a replay seek");
+            assertEquals(1, work.size());
+            work.remove().run();
+            assertNotSame(table, a.ready());
+            assertEquals(table.lambda(60), a.ready().lambda(60), 0, "ownership changes no model values");
+            assertEquals(table.top(60), a.ready().top(60), 0);
+        } finally {
+            while (!work.isEmpty()) work.remove().run();
+            cache.clear();
+            cache.putAll(previous);
         }
     }
 

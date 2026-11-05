@@ -13,6 +13,17 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class StemSourceTest {
     @Test
+    void expiredCloudReleasesItsRequestAndReplayCanReadItAgain() {
+        Detonation d = new Detonation(1, new Vec3(0, 656, 0), 64, 15, false,
+                0, 0, 0, 20_000, 7, 1, false, 0.25f);
+        PallField pall = new PallField(d, 6000);
+        StemDust table = StemDust.of(pall.stemSource);
+        assertSame(table, pall.stemDust(60));
+        assertNull(pall.stemDust(MushroomModel.lifeSeconds(15)));
+        assertSame(table, pall.stemDust(60), "rewinding can reacquire the same immutable source data");
+    }
+
+    @Test
     void footUsesTheSupplyingLayersClockForBothBurstModesAndScales() {
         for (boolean ground : new boolean[]{false, true}) {
             for (float scale : new float[]{1, 0.25f, 2.5f}) {

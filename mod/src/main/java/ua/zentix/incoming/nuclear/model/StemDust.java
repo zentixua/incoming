@@ -5,6 +5,8 @@ import java.util.Map;
 import java.util.Arrays;
 import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.Executor;
+import java.util.concurrent.ForkJoinPool;
 
 /**
  * Mushroom stem dust is drawn near the epicenter from the blast dust layer ({@link DustModel}: share
@@ -83,6 +85,42 @@ public final class StemDust {
         public int hashCode() {
             return hash;
         }
+    }
+
+    /**
+     * Caller-owned request. The shared cache bounds reuse and pending builders, not a live consumer's result:
+     * another detonation must not evict this future before its owner can use it. Read/release on the caller thread.
+     * One table is retained through the consumer's cloud lifetime, even when it leaves the eight-entry shared cache.
+     */
+    public static final class Request {
+        private final Source source;
+        private final Executor worker;
+        private CompletableFuture<StemDust> entry;
+
+        private Request(Source source, Executor worker) {
+            this.source = source;
+            this.worker = worker;
+        }
+
+        @org.jetbrains.annotations.Nullable
+        public StemDust ready() {
+            if (entry == null) entry = start(source, worker);
+            return value(entry);
+        }
+
+        /** Detach this consumer without cancelling a computation shared with other consumers. */
+        public void release() {
+            entry = null;
+        }
+    }
+
+    /** Allocate once for a consumer; its immutable Source may be shared with the moving foot. */
+    public static Request request(Source source) {
+        return request(source, ForkJoinPool.commonPool());
+    }
+
+    static Request request(Source source, Executor worker) {
+        return new Request(source, worker);
     }
 
     private final double yieldKt, hob;
@@ -207,19 +245,33 @@ public final class StemDust {
      */
     @org.jetbrains.annotations.Nullable
     public static StemDust ready(Source source) {
+        return value(start(source, ForkJoinPool.commonPool()));
+    }
+
+    private static CompletableFuture<StemDust> start(Source source, Executor worker) {
         CompletableFuture<StemDust> entry;
         synchronized (CACHE) {
             entry = CACHE.get(source);
-            // A terminal result cannot change. Checking failure on a pending future before getNow races
-            // exceptional completion; return early while pending, then inspect only a terminal result.
-            if (entry != null) return !entry.isDone() || entry.isCompletedExceptionally() ? null : entry.getNow(null);
+            if (entry != null) return entry;
             if (!room()) return null;
             entry = new CompletableFuture<>();
             CACHE.put(source, entry);
         }
         CompletableFuture<StemDust> pending = entry;
-        CompletableFuture.runAsync(() -> compute(source, pending));
-        return null;
+        try {
+            worker.execute(() -> compute(source, pending));
+        } catch (RuntimeException | Error e) {
+            pending.completeExceptionally(e);
+            org.slf4j.LoggerFactory.getLogger(StemDust.class).error("Stem dust worker submission failed", e);
+        }
+        return entry;
+    }
+
+    @org.jetbrains.annotations.Nullable
+    private static StemDust value(@org.jetbrains.annotations.Nullable CompletableFuture<StemDust> entry) {
+        // A terminal result cannot change. Checking failure on a pending future before getNow races
+        // exceptional completion; return early while pending, then inspect only a terminal result.
+        return entry == null || !entry.isDone() || entry.isCompletedExceptionally() ? null : entry.getNow(null);
     }
 
     private static void compute(Source source, CompletableFuture<StemDust> entry) {
