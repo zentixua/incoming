@@ -1,5 +1,10 @@
 [
   {
+    "path": "README.md",
+    "bytes": 3396,
+    "sha256": "e7e69efada1dc3bb7052158eab78b8bc0bc791166707a2b2e012a5356dd39247"
+  },
+  {
     "path": "controls/GameTestShards-control.java",
     "bytes": 10141,
     "sha256": "cc078a4157f80a65fbdbbeac1ae6415717186bb47e0483a0990ce68075cb6d4f"
@@ -35,6 +40,11 @@
     "sha256": "a907b71d18bde0a60ea6201da688bb7c4c53b9fdf3531d4349c66fa8455fa377"
   },
   {
+    "path": "independent-review.md",
+    "bytes": 5582,
+    "sha256": "712bb842fe8af4617677f9884373b22a3154c691ef741686ab010c522bae67d0"
+  },
+  {
     "path": "provenance.json",
     "bytes": 1038,
     "sha256": "452719ebc383d2663c433b48386606df60ef9a76b2a10b082fb0ab9a20871e89"
@@ -48,6 +58,11 @@
     "path": "raw/original-ci-job.log",
     "bytes": 381771,
     "sha256": "c85f81b0257f4885b05aebb757c93edbf6c44d8982ed44d2ef8cffef4a89c746"
+  },
+  {
+    "path": "raw/pr-ci.log",
+    "bytes": 60,
+    "sha256": "fdefdbcda3df975a44ad7f4764fc808e220cb23fdf46fca4259a23f3d12750f8"
   },
   {
     "path": "raw/prefix-fixed.log",
