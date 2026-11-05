@@ -227,6 +227,59 @@ class PreparedLandingModelTest {
         }
     }
 
+    @Test void confirmedWallReactionRemovesRejectedForceBeforeAdaptiveFlightSteps() {
+        var result = wallReaction(false, 0, 120);
+        var material = result.outcomes().getFirst();
+        assertEquals(Status.LANDED, material.status());
+        assertEquals(new Cell(24, 1, 24), new Cell(material.x(), material.y(), material.z()));
+        assertEquals(Math.sqrt(2 * 31 / GRAVITY), material.time(), DT);
+        assertTrue(material.segments() < 500, "A rejected wall-normal force still causes microscopic flight steps");
+    }
+
+    @Test void movingWallVacancyReleasesTheProjectedForceAfterItsDeparture() {
+        var before = wallReaction(true, 0, .4).outcomes().getFirst();
+        assertEquals(Status.WORK_LIMIT, before.status());
+        assertTrue(before.time() < .5);
+        assertEquals(24, before.x(), "Material crossed the wall before its departure");
+        var after = wallReaction(true, 0, .6).outcomes().getFirst();
+        assertTrue(after.time() > .5);
+        assertTrue(after.x() > 25, "A vacated face kept suppressing the driving force");
+        var result = wallReaction(true, 0, 120);
+        assertEquals(2, result.count(Status.LANDED));
+        assertEquals(64, result.outcomes().getFirst().x());
+        assertEquals(Math.sqrt(2 * 31 / GRAVITY), result.outcomes().getFirst().time(), DT);
+        assertTrue(result.outcomes().get(1).time() >= .5, "Moving wall arrived before departure");
+    }
+
+    @Test void wallReactionPreservesTheUnblockedTangentialForce() {
+        var material = wallReaction(false, 3, 120).outcomes().getFirst();
+        assertEquals(Status.LANDED, material.status());
+        assertEquals(24, material.x());
+        assertEquals(31, material.z(), "Wall reaction erased tangential motion");
+        assertEquals(Math.sqrt(2 * 31 / GRAVITY), material.time(), DT);
+        // No operation target here: tangential stiff-drag integration is intentionally unchanged.
+    }
+
+    private static Result wallReaction(boolean movingWall, double windZ, double seconds) {
+        int width = 80, height = 64;
+        byte[] cells = new byte[width * width * height];
+        for (int x = 0; x < width; x++) for (int z = 0; z < width; z++) cells[z * width + x] = SOLID;
+        for (int y = movingWall ? 31 : 1; y < height; y++) for (int z = 0; z < width; z++)
+            cells[(y * width + z) * width + 25] = SOLID;
+        // Finite numerical stress input, not a claimed real plate/pressure calibration.
+        var material = new Source(1, 1, 24, 32, 24, 1, .001, 1, 0, 20, windZ, 100000, 1, Kind.ORDINARY);
+        var inputs = new ArrayList<Source>(); inputs.add(material);
+        cells[(32 * width + 24) * width + 24] = SOLID;
+        if (movingWall) {
+            inputs.add(new Source(2, 1, 25, 30, 24, 2, 1, 2300, .5, 0, 0, 0, 0, Kind.ORDINARY));
+            cells[(30 * width + 24) * width + 25] = SOLID;
+        }
+        var result = PreparedLandingModel.solveAudited(new Snapshot(0, 0, 0, width, height, width, cells), inputs,
+                new Limits(2, 100000, seconds));
+        assertEquals(inputs, result.outcomes().stream().map(Outcome::source).toList(), "Source state/volume/mass changed");
+        return result;
+    }
+
     @Test void laterSideHoleCannotMoveMaterialWithItsVerticalSupportIntact() {
         byte[] cells = floor(0);
         for (int x = 0; x < W; x++) for (int z = 0; z < W; z++) cells[index(x, 4, z)] = SOLID;

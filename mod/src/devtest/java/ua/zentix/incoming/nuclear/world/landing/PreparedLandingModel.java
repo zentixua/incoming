@@ -105,7 +105,7 @@ public final class PreparedLandingModel {
         final Source source;
         double x, y, z, vx, vy, vz, time, due, dt, nx, ny, nz, ax, az, arrivalTime;
         boolean departed, queued, contact, horizontalBlocked;
-        int ownerCell = -1, plannedCell = -1, tx, ty, tz;
+        int ownerCell = -1, plannedCell = -1, tx, ty, tz, wallX, wallZ;
         double fallingSpeed;
         Status status;
         long segments;
@@ -221,9 +221,10 @@ public final class PreparedLandingModel {
         double drag = m.source.pulse > 0 && wind > 0 ? m.source.drag * Math.max(0, 1 - age / m.source.pulse)
                 * Math.hypot(rx, rz) / (wind * wind) : 0;
         m.ax = drag * rx; m.az = drag * rz;
+        projectConfirmedFaces(m);
         double acceleration = Math.sqrt(m.ax * m.ax + m.az * m.az + GRAVITY * GRAVITY);
         dt = Math.min(dt, 1 / (speed + Math.sqrt(speed * speed + acceleration)));
-        if (drag > 0) dt = Math.min(dt, .25 / drag);
+        if (drag > 0 && (m.ax != 0 || m.az != 0)) dt = Math.min(dt, .25 / drag);
         m.dt = dt;
         m.nx = m.x + m.vx * dt + m.ax * dt * dt / 2;
         m.ny = m.y + m.vy * dt - GRAVITY * dt * dt / 2;
@@ -257,6 +258,9 @@ public final class PreparedLandingModel {
             m.collisions++;
             int hx = floor(m.x), hy = floor(m.y), hz = floor(m.z);
             if (owners[m.ownerCell] != m) throw new IllegalStateException("Airborne material lost its exclusive logical reservation");
+            // Cache only a geometric face this movement hit, not a swept-edge conflict.
+            if (x != hx && knownBlocked(cell(m, x, y, hz))) m.wallX = Integer.signum(x - hx);
+            if (z != hz && knownBlocked(cell(m, hx, y, z))) m.wallZ = Integer.signum(z - hz);
             m.vx = m.vz = 0;
             int vertical = cell(m, hx, y, hz);
             if (fallback(m, vertical, hx, y, hz)) return;
@@ -271,6 +275,20 @@ public final class PreparedLandingModel {
             m.vx += m.ax * m.dt; m.vy -= GRAVITY * m.dt; m.vz += m.az * m.dt;
         }
         schedule(m);
+    }
+
+    /** A confirmed wall supplies its normal reaction before choosing the integration step. */
+    private void projectConfirmedFaces(Motion m) {
+        int x = floor(m.x), y = floor(m.y), z = floor(m.z);
+        // Recheck every segment: changed vertical/tangential cells and vacated owners release the face.
+        if (m.wallX != 0 && !knownBlocked(cell(m, x + m.wallX, y, z))) m.wallX = 0;
+        if (m.wallZ != 0 && !knownBlocked(cell(m, x, y, z + m.wallZ))) m.wallZ = 0;
+        if (m.wallX * m.ax > 0) m.ax = 0;
+        if (m.wallZ * m.az > 0) m.az = 0;
+    }
+
+    private static boolean knownBlocked(int cell) {
+        return cell == SOLID || cell == FREE_COLLIDING || cell == BLOCKED_EMPTY;
     }
 
     /** Inelastic contact retains the already-owned voxel; it never projects material upward. */
