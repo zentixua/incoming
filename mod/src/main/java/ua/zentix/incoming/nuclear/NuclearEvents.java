@@ -6,6 +6,7 @@ import net.minecraft.core.HolderLookup;
 import net.minecraft.core.UUIDUtil;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.NbtOps;
+import net.minecraft.nbt.Tag;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.saveddata.SavedData;
 import net.minecraft.world.phys.Vec3;
@@ -17,6 +18,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
+import java.util.Objects;
 
 /**
  * Dimension nuclear events (saved in the world): detonations that have occurred — server and clients derive destruction,
@@ -76,6 +78,44 @@ public final class NuclearEvents extends SavedData {
     private final List<ScheduledStrike> scheduled = new ArrayList<>();
     /** Unfinished craters: detonation number → number of chunks already dug. */
     private final Map<Integer, Integer> craters = new LinkedHashMap<>();
+    /** One small binding per actual event, never one entry per block or chunk. */
+    private final Map<Integer, PreparedBinding> prepared = new LinkedHashMap<>();
+    private Tag invalidPrepared;
+    private String preparedFailure;
+
+    /** Material times remain offsets; preparation order must not allocate chronological event IDs. */
+    public record PreparedBinding(UUID preparation, long origin) {
+        public PreparedBinding { Objects.requireNonNull(preparation); }
+        public long age(long worldTick) { return Math.subtractExact(worldTick, origin); }
+    }
+
+    /** Bind only an already registered detonation, after its complete prepared output is durable. */
+    public PreparedBinding bindPrepared(Detonation event, UUID preparation) {
+        requirePrepared();
+        if (event.id() <= 0 || !detonations.contains(event) && !past.contains(event))
+            throw new IllegalArgumentException("Prepared output needs a registered actual detonation");
+        var binding = new PreparedBinding(preparation, event.gameTime());
+        PreparedBinding previous = prepared.get(event.id());
+        if (previous != null) {
+            if (!previous.equals(binding)) throw new IllegalStateException("Prepared event binding cannot change");
+            return previous;
+        }
+        if (prepared.values().stream().anyMatch(p -> p.preparation.equals(preparation)))
+            throw new IllegalStateException("Prepared output already belongs to another detonation");
+        prepared.put(event.id(), binding);
+        setDirty();
+        return binding;
+    }
+
+    /** Empty means a legacy event; unreadable authoritative bindings must never fall back to legacy destruction. */
+    public Optional<PreparedBinding> prepared(int event) {
+        requirePrepared();
+        return Optional.ofNullable(prepared.get(event));
+    }
+
+    private void requirePrepared() {
+        if (preparedFailure != null) throw new IllegalStateException(preparedFailure);
+    }
     private static final Codec<Map<Integer, Integer>> CRATERS_CODEC = Codec.unboundedMap(Codec.STRING.xmap(Integer::parseInt, String::valueOf), Codec.INT);
     private int nextId = 1;
     /**
@@ -158,6 +198,8 @@ public final class NuclearEvents extends SavedData {
         detonations.clear();
         past.clear();
         craters.clear();
+        // Already removed material still owns its cargo after cancellation. Keep its page/origin
+        // bindings even though no new destruction or exposure is issued for the cancelled events.
         setDirty();
         return n;
     }
@@ -173,7 +215,7 @@ public final class NuclearEvents extends SavedData {
         if (craters.keySet().removeIf(id -> detonations.stream().noneMatch(d -> d.id() == id))) setDirty();
     }
 
-    private static NuclearEvents load(CompoundTag tag, HolderLookup.Provider registries) {
+    static NuclearEvents load(CompoundTag tag, HolderLookup.Provider registries) {
         NuclearEvents e = new NuclearEvents();
         e.nextId = Math.max(1, tag.getInt("next_id"));
         e.lateFrom = tag.contains("late_from") ? tag.getInt("late_from") : e.nextId;
@@ -181,6 +223,33 @@ public final class NuclearEvents extends SavedData {
         if (tag.contains("past")) Detonation.CODEC.listOf().parse(NbtOps.INSTANCE, tag.get("past")).resultOrPartial(Incoming.LOG::error).ifPresent(e.past::addAll);
         ScheduledStrike.CODEC.listOf().parse(NbtOps.INSTANCE, tag.get("scheduled")).resultOrPartial(Incoming.LOG::error).ifPresent(e.scheduled::addAll);
         if (tag.contains("craters")) CRATERS_CODEC.parse(NbtOps.INSTANCE, tag.get("craters")).resultOrPartial(Incoming.LOG::error).ifPresent(e.craters::putAll);
+        if (tag.contains("prepared")) {
+            try {
+                if (!tag.contains("prepared", Tag.TAG_COMPOUND)) throw new IllegalArgumentException("Prepared bindings are not a compound");
+                CompoundTag bindings = tag.getCompound("prepared");
+                var identities = new java.util.HashSet<UUID>();
+                for (String key : bindings.getAllKeys()) {
+                    int id = Integer.parseInt(key);
+                    if (id <= 0 || !Integer.toString(id).equals(key) || !bindings.contains(key, Tag.TAG_COMPOUND))
+                        throw new IllegalArgumentException("Invalid prepared event key");
+                    CompoundTag row = bindings.getCompound(key);
+                    if (row.size() != 2 || !row.hasUUID("plan") || !row.contains("origin", Tag.TAG_LONG))
+                        throw new IllegalArgumentException("Invalid prepared event binding");
+                    UUID plan = row.getUUID("plan");
+                    if (!identities.add(plan)) throw new IllegalArgumentException("Prepared output bound to multiple events");
+                    long origin = row.getLong("origin");
+                    if (java.util.stream.Stream.concat(e.detonations.stream(), e.past.stream())
+                            .anyMatch(d -> d.id() == id && d.gameTime() != origin))
+                        throw new IllegalArgumentException("Prepared origin differs from actual detonation");
+                    e.prepared.put(id, new PreparedBinding(plan, origin));
+                }
+            } catch (RuntimeException error) {
+                e.prepared.clear();
+                e.invalidPrepared = tag.get("prepared").copy();
+                e.preparedFailure = "Could not read prepared nuclear event bindings; original data retained";
+                Incoming.LOG.error(e.preparedFailure, error);
+            }
+        }
         return e;
     }
 
@@ -192,6 +261,17 @@ public final class NuclearEvents extends SavedData {
         Detonation.CODEC.listOf().encodeStart(NbtOps.INSTANCE, past).resultOrPartial(Incoming.LOG::error).ifPresent(t -> tag.put("past", t));
         ScheduledStrike.CODEC.listOf().encodeStart(NbtOps.INSTANCE, scheduled).resultOrPartial(Incoming.LOG::error).ifPresent(t -> tag.put("scheduled", t));
         CRATERS_CODEC.encodeStart(NbtOps.INSTANCE, craters).resultOrPartial(Incoming.LOG::error).ifPresent(t -> tag.put("craters", t));
+        if (invalidPrepared != null) tag.put("prepared", invalidPrepared.copy());
+        else if (!prepared.isEmpty()) {
+            CompoundTag bindings = new CompoundTag();
+            prepared.forEach((event, binding) -> {
+                CompoundTag row = new CompoundTag();
+                row.putUUID("plan", binding.preparation);
+                row.putLong("origin", binding.origin);
+                bindings.put(Integer.toString(event), row);
+            });
+            tag.put("prepared", bindings);
+        } else tag.remove("prepared");
         return tag;
     }
 }
