@@ -547,3 +547,9 @@ paths:
   work. A new closer FULL chunk cannot strand that owner behind a head waiting for its token.
   `nuke_near_assembly_refresh` exercises real refresh, completes the held callback, and requires both
   loaded centres to yield nonempty plans. Error paths that remove a consumer release its claim too.
+
+- Header replies transfer availability into the zone tiles, then release their reverse-list payload.
+  Retain the reverse table's actual backing while replies are pending; clearing values avoids an
+  unreserved shrinking rehash. Once every header has returned, discard the exhausted reverse index
+  and scan-list backing, retaining the tile masks and completed-header count. `nuke_header_lifetime`
+  uses the complete 1-Mt layout, a withheld final reply and an independent availability-mask oracle.
