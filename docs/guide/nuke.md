@@ -138,6 +138,9 @@ faster-rising cap. This separation comes from the current approximate transport 
 calibrated to a timed real-world reference. In the first seconds, dust near the ground can hide the short column entirely.
 The column and its base receive dust only after the same local wave arrival and inflow delay as the supplying ground
 layer. Slowing the wave in GAME also delays this supply; the dust column can appear later and remain shorter than in REAL.
+Known water in the source area reduces the column's terrestrial dust; a fully water-sampled area supplies none.
+This is a sparse surface estimate: unknown areas still use the reference dry-ground supply until terrain is known,
+and small islands or water patches between samples can be missed. The cloud and water spray remain separate effects.
 
 A ground burst leaves a crater and radioactive fallout downwind. Over water, spray takes the place of the dust wall.
 Burns, radiation and falling debris can still hurt you after the flash, so stay under cover and watch your dose.

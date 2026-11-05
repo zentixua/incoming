@@ -13,6 +13,25 @@ import static org.junit.jupiter.api.Assertions.*;
 
 class StemSourceTest {
     @Test
+    void pallConsumerUsesSurveyedSourceAndRetainsItAcrossExpiryAndReplay() {
+        Detonation d = new Detonation(1, new Vec3(0, 656, 0), 64, 15, false,
+                0, 0, 0, 20_000, 7, 1, false, 0.25f);
+        PallField pall = new PallField(d, 6000);
+        StemDust.Source wet = pall.stemSource.withLand(new double[pall.stemSource.rings()]);
+        StemDust expected = StemDust.of(wet);
+        for (int tick = 0; tick < pall.stemSource.rings(); tick++) pall.surveyStem((x, z) -> 1);
+        assertSame(expected, pall.stemDust(60), "the actual field consumer must use the surveyed table");
+        MushroomModel.Shape shape = MushroomModel.shape(60, 15, 592, false, 0, pall.stemDust(60));
+        assertEquals(0, shape.stemTau(), 0);
+        double[] foot = new double[5];
+        MushroomField.foot(d, pall, PallField.Water.DRY, shape, 1200, foot);
+        assertEquals(0, foot[1], 0, "no terrestrial inflow connector survives an empty stem source");
+        assertNull(pall.stemDust(MushroomModel.lifeSeconds(15)));
+        pall.surveyStem((x, z) -> 0);
+        assertSame(expected, pall.stemDust(60), "rewind preserves already known source columns");
+    }
+
+    @Test
     void expiredCloudReleasesItsRequestAndReplayCanReadItAgain() {
         Detonation d = new Detonation(1, new Vec3(0, 656, 0), 64, 15, false,
                 0, 0, 0, 20_000, 7, 1, false, 0.25f);

@@ -476,16 +476,24 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   trail up to cap. `PallField.stemSource` retains an immutable `StemDust.Source`: the actual `FrontProfile` supplies
   each annulus and the moving foot, converting horizontal model meters to slant blocks and ticks back to model
   seconds. Never substitute `HobBlast` arrival here: GAME would feed the stem before the supplying layer.
-  Source equality includes all 24 arrivals plus geometry/visibility. One eight-entry cache includes pending and
+  Source equality includes all 24 arrivals, terrestrial fractions and geometry/visibility. `StemSurface` samples
+  eight equally weighted angles in each source annulus, at most eight raw `FarTerrain.water` queries per client tick;
+  every sweep publishes one immutable revision. Known water removes only its sampled area share; unknown columns
+  retain the reference dry source (est.) and retry. Never use filled `PallGround` or epicenter water for this: neither
+  establishes source coverage. This sparse quadrature can miss small features between samples; all 192 water samples
+  mean zero estimated terrestrial supply, not proof the whole footprint is water. Keep first known columns with the
+  detonation, including replay seek. One eight-entry cache includes pending and
   failed work; pending entries are not evicted. A caller-owned `StemDust.Request` retains its admitted future/result:
   the frame scans every Active before selecting four rows, so earlier candidates must not repeatedly evict a late
-  visible consumer's completed table. The shared reuse cache stays at eight; live consumers retain their own table
-  (at most about 25 KiB of array payload each, shared for equal admitted sources) until cloud expiry. PallField releases
+  visible consumer's completed table. Surface revisions keep the last ready table while one replacement builds and
+  coalesce newer revisions without abandoning pending work. The shared reuse cache stays at eight; live consumers
+  retain at most two tables (about 25 KiB of array payload each, shared for equal admitted sources) until cloud expiry. PallField releases
   the request then; replay can reacquire it. Per-detonation table builds in background (first
   frames without dust). Every positive source onset is an interpolation knot; the original one-second quadrature
   amounts remain at integer nodes. This is causal numerical reconstruction, not a new measured transport law.
-  `StemClockTest`, `StemSourceTest` and `nuke_stem_clock` cover the clock and scale contract. All-water terrestrial
-  stem supply remains a known limitation: filled `PallGround` values do not establish complete footprint coverage.
+  `StemClockTest`, `StemSourceTest`, `StemSurfaceTest` and `nuke_stem_clock` cover source identity, coverage, clock and
+  scale contracts. They do not calibrate dust ascent or establish rendered acceptance; late terrain knowledge can
+  change opacity when its replacement table becomes ready.
 
 - ICBM terminal arrival (`IcbmArrival`, `IcbmApproaches`, `IcbmArrivalRenderer`) uses the existing NUKE airframe's
   FlightScale speed (game value is not physical). Once ready ground is known during the final window, its exact

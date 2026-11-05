@@ -11,11 +11,81 @@ import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.concurrent.Executor;
 import java.util.function.Supplier;
+import java.util.Arrays;
 
 import static org.junit.jupiter.api.Assertions.*;
 
 /** Causal source timing, distinct from the uncalibrated cloud transport estimates. */
 class StemClockTest {
+    @Test
+    void surfaceFractionsAreImmutableAndPartOfTheCacheIdentity() {
+        StemDust.Source dry = source(burst(15, 592, false, 1, 0.25f, 20_000));
+        double[] fractions = new double[dry.rings()];
+        Arrays.fill(fractions, 1);
+        assertSame(dry, dry.withLand(fractions), "fully dry surface is exactly the reference source");
+        fractions[0] = 0;
+        StemDust.Source innerWater = dry.withLand(fractions);
+        StemDust innerTable = StemDust.of(innerWater);
+        fractions[0] = 1;
+        fractions[23] = 0;
+        StemDust.Source outerWater = dry.withLand(fractions);
+        assertEquals(0, innerWater.landShare(0), 0, "the caller cannot mutate an admitted source");
+        assertEquals(1, innerWater.landShare(23), 0);
+        assertNotEquals(innerWater, outerWater, "equal mean wetness at different source radii is not the same source");
+        assertNotSame(innerTable, StemDust.of(outerWater));
+        assertNotEquals(innerTable.lambda(120), StemDust.of(outerWater).lambda(120));
+        fractions[0] = 0;
+        fractions[23] = 1;
+        StemDust.Source same = dry.withLand(fractions);
+        assertEquals(innerWater, same);
+        assertEquals(innerWater.hashCode(), same.hashCode());
+        assertSame(innerTable, StemDust.of(same));
+        fractions[0] = Double.NaN;
+        assertThrows(IllegalArgumentException.class, () -> dry.withLand(fractions));
+        assertThrows(IllegalArgumentException.class, () -> dry.withLand(new double[1]));
+    }
+
+    @Test
+    void surfaceRevisionsCoalesceWithoutOrphaningTheOldResult() throws ReflectiveOperationException {
+        Map<StemDust.Source, CompletableFuture<StemDust>> cache = cache();
+        var saved = new LinkedHashMap<>(cache);
+        var work = new ArrayDeque<Runnable>();
+        try {
+            cache.clear();
+            StemDust.Source dry = source(burst(15, 592, false, 1, 0.25f, 20_000));
+            double[] land = new double[dry.rings()];
+            StemDust.Source wet = dry.withLand(land);
+            Arrays.fill(land, 0.5);
+            StemDust.Source coast = dry.withLand(land);
+            StemDust.Request request = StemDust.request(dry, work::add);
+            assertNull(request.ready());
+            assertEquals(1, work.size());
+            for (int i = 0; i < 20; i++) {
+                request.update(i % 2 == 0 ? coast : wet);
+                assertNull(request.ready());
+                assertEquals(1, work.size(), "a revision never abandons and duplicates the pending builder");
+            }
+            work.remove().run();
+            StemDust previous = request.ready();
+            assertNotNull(previous);
+            assertTrue(previous.lambda(120) > 0, "old ready source remains visible while the replacement builds");
+            assertEquals(1, work.size());
+            assertFalse(cache.containsKey(coast), "intermediate revisions never entered the build queue");
+            for (int i = 0; i < 20; i++) assertSame(previous, request.ready());
+            work.remove().run();
+            StemDust current = request.ready();
+            assertNotNull(current);
+            assertEquals(0, current.lambda(120), 0);
+            assertTrue(work.isEmpty());
+            assertSame(previous, StemDust.of(dry), "another dry consumer keeps its own source identity");
+            request.release();
+            assertSame(current, request.ready(), "replay reacquires the current surface revision");
+        } finally {
+            cache.clear();
+            cache.putAll(saved);
+        }
+    }
+
     private static Detonation burst(double y, double hob, boolean surface, float scale, float wave, float visibility) {
         return new Detonation(1, new Vec3(0, 64 + hob * scale, 0), 64, y, surface, 0,
                 0, 0, visibility, 7, scale, false, wave);
