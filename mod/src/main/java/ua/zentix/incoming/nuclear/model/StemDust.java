@@ -42,31 +42,63 @@ public final class StemDust {
     private static final Map<Source, CompletableFuture<StemDust>> CACHE = new LinkedHashMap<>(16, 0.75f, true);
 
     /**
-     * Immutable per-detonation source clock. Front distances are slant blocks and times are ticks;
+     * Immutable per-detonation source clock and terrestrial area fractions. Front distances are slant blocks and times are ticks;
      * dust uses horizontal model meters and model seconds. The profile itself is immutable.
-     * Equality includes every sampled arrival used by the dust table, not the profile's object identity.
+     * Equality includes every sampled arrival and terrestrial fraction used by the dust table, not the profile's object identity.
      */
     public static final class Source {
         private final double yieldKt, hob, visibility, scale;
         private final boolean surface;
         private final FrontProfile front;
         private final double[] arrival = new double[RINGS];
+        private final double[] land;
         private final int hash;
 
         public Source(double yieldKt, double hobM, boolean surface, double visibilityM, FrontProfile front, double scale) {
+            this(yieldKt, hobM, surface, visibilityM, front, scale, null);
+        }
+
+        private Source(double yieldKt, double hobM, boolean surface, double visibilityM, FrontProfile front, double scale,
+                       double[] land) {
             this.yieldKt = yieldKt;
             this.hob = Math.max(0, hobM);
             this.surface = surface;
             this.visibility = visibilityM;
             this.front = front;
             this.scale = scale;
+            this.land = new double[RINGS];
+            if (land == null) Arrays.fill(this.land, 1);
+            else {
+                if (land.length != RINGS) throw new IllegalArgumentException("Expected one land share per stem source annulus");
+                for (int i = 0; i < RINGS; i++) {
+                    if (!Double.isFinite(land[i]) || land[i] < 0 || land[i] > 1)
+                        throw new IllegalArgumentException("Stem source land share must be between zero and one");
+                    this.land[i] = land[i];
+                }
+            }
             for (int i = 0; i < RINGS; i++) arrival[i] = arrivalSeconds(radius(i));
-            hash = 31 * Objects.hash(yieldKt, hob, surface, visibility) + Arrays.hashCode(arrival);
+            hash = 31 * (31 * Objects.hash(yieldKt, hob, surface, visibility) + Arrays.hashCode(arrival)) + Arrays.hashCode(this.land);
+        }
+
+        /** Number of radial source annuli. Surface sampling uses the same quadrature as dust supply. */
+        public int rings() {
+            return RINGS;
         }
 
         /** Ground range of the middle of source annulus i, model meters. */
-        double radius(int i) {
+        public double radius(int i) {
             return DustModel.STEM_M * Math.cbrt(yieldKt / 15) * (i + 0.5) / RINGS;
+        }
+
+        /** Terrestrial source area fraction in annulus i; unknown surface keeps the reference-land estimate. */
+        public double landShare(int i) {
+            return land[i];
+        }
+
+        /** Immutable surface revision. Its clock and all dry-source laws stay unchanged. */
+        public Source withLand(double[] shares) {
+            Objects.requireNonNull(shares);
+            return Arrays.equals(land, shares) ? this : new Source(yieldKt, hob, surface, visibility, front, scale, shares);
         }
 
         /** Local front arrival in model seconds, also used at the moving stem foot. */
@@ -78,7 +110,8 @@ public final class StemDust {
         @Override
         public boolean equals(Object other) {
             return this == other || other instanceof Source s && Double.compare(yieldKt, s.yieldKt) == 0 && Double.compare(hob, s.hob) == 0
-                    && surface == s.surface && Double.compare(visibility, s.visibility) == 0 && Arrays.equals(arrival, s.arrival);
+                    && surface == s.surface && Double.compare(visibility, s.visibility) == 0
+                    && Arrays.equals(arrival, s.arrival) && Arrays.equals(land, s.land);
         }
 
         @Override
@@ -90,12 +123,14 @@ public final class StemDust {
     /**
      * Caller-owned request. The shared cache bounds reuse and pending builders, not a live consumer's result:
      * another detonation must not evict this future before its owner can use it. Read/release on the caller thread.
-     * One table is retained through the consumer's cloud lifetime, even when it leaves the eight-entry shared cache.
+     * A surface revision keeps the last ready table while one replacement builds. Further revisions coalesce;
+     * at most one ready table and one pending/completed replacement belong to this consumer.
      */
     public static final class Request {
-        private final Source source;
+        private Source source, building;
         private final Executor worker;
         private CompletableFuture<StemDust> entry;
+        private StemDust previous;
 
         private Request(Source source, Executor worker) {
             this.source = source;
@@ -104,13 +139,36 @@ public final class StemDust {
 
         @org.jetbrains.annotations.Nullable
         public StemDust ready() {
-            if (entry == null) entry = start(source, worker);
-            return value(entry);
+            if (entry != null && entry.isDone()) {
+                if (source.equals(building)) {
+                    previous = null;
+                    return value(entry);
+                }
+                StemDust completed = value(entry);
+                if (completed != null) previous = completed;
+                entry = null;
+            }
+            if (entry == null) {
+                entry = start(source, worker);
+                if (entry != null) building = source;
+            }
+            if (entry != null && entry.isDone()) {
+                previous = null;
+                return value(entry);
+            }
+            return previous;
+        }
+
+        /** Coalesce new surface knowledge without abandoning a running builder or accumulating old table owners. */
+        public void update(Source source) {
+            this.source = Objects.requireNonNull(source);
         }
 
         /** Detach this consumer without cancelling a computation shared with other consumers. */
         public void release() {
             entry = null;
+            building = null;
+            previous = null;
         }
     }
 
@@ -138,7 +196,7 @@ public final class StemDust {
         for (int i = 0; i < RINGS; i++) {
             double r0 = reach * i / RINGS, r1 = reach * (i + 1) / RINGS, r = 0.5 * (r0 + r1);
             col[i] = DustModel.column(r, hob, yieldKt, surface, source.visibility, DustModel.Surface.REFERENCE);
-            area[i] = Math.PI * (r1 * r1 - r0 * r0);
+            area[i] = Math.PI * (r1 * r1 - r0 * r0) * source.land[i];
             onset[i] = source.arrival[i] + col[i].stemFrom();
         }
         int n = (int) Math.ceil(SPAN * CloudModel.stabilizationSeconds(yieldKt) / STEP) + 1;
@@ -165,7 +223,7 @@ public final class StemDust {
         int count = n;
         for (int k = 0; k < n; k++) knots[k] = k * STEP;
         for (int i = 0; i < RINGS; i++) {
-            if (col[i].mass() > 0 && col[i].stem() > 0 && onset[i] > 0 && onset[i] < (n - 1) * STEP)
+            if (area[i] > 0 && col[i].mass() > 0 && col[i].stem() > 0 && onset[i] > 0 && onset[i] < (n - 1) * STEP)
                 knots[count++] = onset[i];
         }
         Arrays.sort(knots, 0, count);

@@ -9,6 +9,9 @@ paths:
 Particles and the effects layer: `client-fx.md`; models: `client-models.md`; sound: `client-sound.md`; map and DH: `dh.md`; replay: `replay.md`; the nuke: `nuclear.md`.
 
 ## Structure
+- `FarTerrain.water`: `ChunkAccess.getHeight(MOTION_BLOCKING, ...)` already returns the top occupied block Y
+  (`Heightmap.getFirstAvailable - 1`). Do not subtract again: shallow water then reads its dry bottom, and solid
+  cover over water reads the water below it. `FarTerrainWaterTest` exercises both opposite columns.
 - `client/` (`@Mod(dist = CLIENT)`) includes `render/` (`WeaponModels`: projectile OBJ models and animations from
   `ProjectilePose` (one code path for entities and distant tracks) and flight phase: propeller, wings, intake, doors,
   booster, MLRS rocket spin; MLRS rack is also OBJ, trailer and other racks (Shahed frame, missile containers,

@@ -1,5 +1,7 @@
 package ua.zentix.incoming.client.nuclear;
 
+import org.jetbrains.annotations.Nullable;
+import ua.zentix.incoming.client.far.FarTerrain;
 import ua.zentix.incoming.client.far.Sight;
 import ua.zentix.incoming.nuclear.Detonation;
 import ua.zentix.incoming.nuclear.model.BlastModel;
@@ -46,6 +48,7 @@ import ua.zentix.incoming.nuclear.model.WaterModel;
 public final class PallField {
     /** One immutable source clock for both transported stem dust and its inflow at the foot; reused after replay seek. */
     final StemDust.Source stemSource;
+    private final StemSurface stemSurface;
     private final StemDust.Request stemRequest;
     /**
      * Dust-layer top unevenness: top above a point is (1 ± this) of table top (shader: {@code PALL_BUMPS}, tile noise).
@@ -182,6 +185,7 @@ public final class PallField {
         this.d = d;
         this.stemSource = new StemDust.Source(d.yieldKt(), d.hobMetres(), d.surface(), d.visibility(), d.front(), d.scale());
         this.stemRequest = StemDust.request(stemSource);
+        this.stemSurface = new StemSurface(d, stemSource);
         this.hazeEnd = hazeEndTicks(dayTime);
         this.end = hazeEnd;
         this.burstGame = d.gameTime();
@@ -219,6 +223,11 @@ public final class PallField {
             return null;
         }
         return stemRequest.ready();
+    }
+
+    /** Raw surface knowledge supplies the stem independently of the pall's filled rendering map. */
+    void surveyStem(@Nullable FarTerrain.Water water) {
+        stemRequest.update(stemSurface.survey(water));
     }
 
     /** Minimum pall height in blocks (small strike scale): otherwise invisible. */

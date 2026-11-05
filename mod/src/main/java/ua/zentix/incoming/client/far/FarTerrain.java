@@ -76,8 +76,8 @@ public final class FarTerrain {
         return (x, z) -> {
             LevelChunk chunk = level.getChunkSource().getChunk(x >> 4, z >> 4, false);
             if (chunk != null) {
-                // heightmap — the first air above the top block
-                int top = chunk.getHeight(Heightmap.Types.MOTION_BLOCKING, x & 15, z & 15) - 1;
+                // ChunkAccess.getHeight already subtracts one from Heightmap.getFirstAvailable.
+                int top = chunk.getHeight(Heightmap.Types.MOTION_BLOCKING, x & 15, z & 15);
                 if (top < chunk.getMinBuildHeight()) return Double.NaN;
                 return chunk.getFluidState(pos.set(x, top, z)).is(FluidTags.WATER) ? 1 : 0;
             }
