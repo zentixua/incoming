@@ -29,12 +29,16 @@ public final class RuinMatter extends LedgerData {
     private static final double DT = 1.0 / 20;
     /** A work unit advances at most this many half-metre trajectory segments. */
     private static final int SEGMENTS = 8;
+    private static final int PLACING = 1, LOADING_CARGO = 2, TRANSFERRED = 3;
     static final int PIECE_BYTES = 157;
+    /** Rare callback failures retain their already-decoded piece, including list growth slack. */
+    static final int PAUSED_BYTES = 640;
     private RuinPalette palette = new RuinPalette();
     private final it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<CompoundTag> inventories = new it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<>();
     private long nextInventory;
     private int inventoryCapacity;
     private RuinRecords<Piece> moving = new RuinRecords<>(PIECE_BYTES, this::encodePiece, this::decodePiece);
+    private final java.util.ArrayList<Piece> paused = new java.util.ArrayList<>();
     /** Outside build height: retained material, but no repeated world reads/ticket churn. */
     private record ReservoirKey(BlockState state, CompoundTag contents) {}
     private static final class Reservoir {
@@ -43,7 +47,7 @@ public final class RuinMatter extends LedgerData {
     }
     private final java.util.Map<ReservoirKey, Reservoir> stranded = new java.util.HashMap<>();
     private int strandedCount;
-    private long movingBytes, strandedBytes;
+    private long cargoBytes, strandedBytes;
 
     /** One material balance, palette state and inventory slot per removal, before deduplication. */
     private static final long REMOVAL_INDEX_BYTES = 512 + 96 + 64;
@@ -51,7 +55,7 @@ public final class RuinMatter extends LedgerData {
     /** Conservative owned representation, including cargo and collection growth slack; the frozen save shares this owner. */
     long retainedBytes() {
         inventoryCapacity = Math.max(inventoryCapacity, inventories.size());
-        return IO_BYTES + 1024L + movingBytes + moving.bytes() + strandedBytes + palette.bytes()
+        return IO_BYTES + 1024L + cargoBytes + moving.bytes() + paused.size() * (long) PAUSED_BYTES + strandedBytes + palette.bytes()
                 + inventoryCapacity * 64L + supportBytes(0) + supportSources.bytes() + originals.bytes()
                 + materials.size() * 512L + (search == null ? 2048 : search.retainedBytes());
     }
@@ -267,7 +271,7 @@ public final class RuinMatter extends LedgerData {
     }
 
     static final class Piece {
-        final BlockState state;
+        BlockState state;
         final CompoundTag contents;
         final BlockPos source;
         long id;
@@ -275,6 +279,8 @@ public final class RuinMatter extends LedgerData {
         long scorchTime;
         final boolean fine;
         boolean outside;
+        /** Nonzero means a world callback may have mutated the destination. Never replay it blindly. */
+        int transfer;
         double volume, mass;
         double x, y, z, vx, vy, vz;
         double tick, releasedTick, windX, windZ, drag, pulse;
@@ -380,7 +386,7 @@ public final class RuinMatter extends LedgerData {
                 dispersedMass += piece.mass;
             } else {
                 moving.addLast(piece);
-                movingBytes += piece.retainedBytes() - 512;
+                cargoBytes += piece.retainedBytes() - 512;
             }
         }
         setDirty();
@@ -402,11 +408,11 @@ public final class RuinMatter extends LedgerData {
 
     public long released() { return released; }
     public long deposited() { return deposited; }
-    public int pending() { return moving.size() + strandedCount; }
+    public int pending() { return moving.size() + paused.size() + strandedCount; }
     public double releasedVolume() { return releasedVolume; }
     public double depositedVolume() { return depositedVolume; }
 
-    /** Active material still travelling from a source volume, for diagnostics and phase-order checks. */
+    /** Retained coarse records from a source volume, for diagnostics and phase-order checks. */
     public int pendingFrom(BlockPos minimum, BlockPos maximum) {
         int count = 0;
         for (Piece p : allPending()) if (p.source.getX() >= minimum.getX() && p.source.getX() <= maximum.getX()
@@ -424,7 +430,12 @@ public final class RuinMatter extends LedgerData {
         heldChecked = false;
         inWork = true;
         try { workBatch(level, clock, units); }
-        finally { inWork = false; heldChecked = false; }
+        finally {
+            inWork = false; heldChecked = false;
+            // A callback can exit workBatch before its normal cleanup. Saved paused records own
+            // no runnable work and must not keep a cold destination loaded after that exception.
+            if (!busy()) unload(level);
+        }
     }
 
     private void workBatch(ServerLevel level, WorkClock clock, int units) {
@@ -482,19 +493,36 @@ public final class RuinMatter extends LedgerData {
             // block on counting clocks. Support and moving material both make progress in it.
             for (int i = 0; i < 16 && left > 0 && !moving.isEmpty(); i++, left--) {
                 Piece piece = moving.removeFirst();
-                if (step(level, piece)) {
-                    movingBytes -= piece.retainedBytes() - 512;
-                    inventories.remove(piece.cargoKey);
-                    account(piece, 2);
-                    deposited++;
-                    depositedVolume += piece.volume;
-                    depositedMass += piece.mass;
-                } else if (piece.outside) {
-                    movingBytes -= piece.retainedBytes() - 512;
-                    inventories.remove(piece.cargoKey);
-                    strand(piece);
+                boolean settled = false;
+                try {
+                    settled = step(level, piece);
+                } catch (RuntimeException | Error error) {
+                    ua.zentix.incoming.Incoming.LOG.error(
+                            "Material #{} from {} failed at {} in {} (transfer phase {}); {}",
+                            piece.id, piece.source, BlockPos.containing(piece.x, piece.y, piece.z),
+                            level.dimension().location(), piece.transfer,
+                            piece.transfer == TRANSFERRED ? "block and cargo already transferred"
+                                    : piece.transfer == 0 ? "moving ownership retained" : "ownership saved; automatic transfer paused",
+                            error);
+                    throw error;
+                } finally {
+                    // The popped record remains ours across every callback. After cargo transfer,
+                    // later notification/drop failures must not recreate that cargo elsewhere.
+                    if (settled || piece.transfer == TRANSFERRED) {
+                        cargoBytes -= piece.retainedBytes() - 512;
+                        inventories.remove(piece.cargoKey);
+                        account(piece, 2);
+                        deposited++;
+                        depositedVolume += piece.volume;
+                        depositedMass += piece.mass;
+                    } else if (piece.outside) {
+                        cargoBytes -= piece.retainedBytes() - 512;
+                        inventories.remove(piece.cargoKey);
+                        strand(piece);
+                    } else if (piece.transfer != 0) paused.add(piece);
+                    else moving.addLast(piece);
+                    setDirty();
                 }
-                else moving.addLast(piece);
             }
             clock.end(began);
             setDirty();
@@ -509,13 +537,15 @@ public final class RuinMatter extends LedgerData {
         if (moving.isEmpty() && moving.bytes() > 128) moving = new RuinRecords<>(PIECE_BYTES, this::encodePiece, this::decodePiece);
         if (supports.isEmpty() && supportSources.isEmpty() && originals.isEmpty() && supportSources.bytes() > 128)
             supportSources = new RuinRecords<>(16, this::encodeSource, this::decodeSource);
-        if (moving.isEmpty() && supportSources.isEmpty() && (palette.bytes() > 512 || inventoryCapacity > 0)) {
+        if (moving.isEmpty() && paused.isEmpty() && supportSources.isEmpty() && (palette.bytes() > 512 || inventoryCapacity > 0)) {
             palette = new RuinPalette(); inventories.clear(); inventories.trim(); inventoryCapacity = 0;
         }
-        if (moving.isEmpty() && supports.isEmpty() && supportSources.isEmpty()) unload(level);
     }
 
     private boolean step(ServerLevel level, Piece p) {
+        // A failed world mutation has an explicit saved destination/cargo, not a trajectory to
+        // retry over subsequent player edits. Its original exception logs the required diagnosis.
+        if (p.transfer != 0) return false;
         if (p.tick >= level.getGameTime()) return false;
         // A high velocity is sliced rather than tunnelling through a wall. Keep fractional elapsed
         // time, so multiple continuation units cannot simulate more time than has actually passed.
@@ -620,23 +650,34 @@ public final class RuinMatter extends LedgerData {
         // Non-colliding decorations yield the destination, with their ordinary drops exactly once.
         // A block entity or protected block is never consumed by this displacement rule.
         boolean decoration = !old.isAir() && !Blast.props(old).fluid() && !old.canBeReplaced();
-        ColumnScar.replace(level, at, old, placed);
-        if (level.getBlockState(at) != placed) return false;
-        if (decoration) net.minecraft.world.level.block.Block.dropResources(old, level, at);
-        if (p.contents != null) {
-            var entity = level.getBlockEntity(at);
-            if (entity != null) {
-                entity.loadWithComponents(p.contents, level.registryAccess());
+        // Block-entity loaders may mutate their input or fail after partial application. Keep the
+        // authoritative cargo separate, and fund its temporary copy before any world mutation.
+        try (var reservation = p.contents == null ? null : RuinMemory.reserveProgress(level, 3L * p.contents.sizeInBytes())) {
+            if (p.contents != null && reservation == null) return false;
+            CompoundTag cargo = p.contents == null ? null : p.contents.copy();
+            p.state = placed;
+            p.x = at.getX(); p.y = at.getY(); p.z = at.getZ();
+            p.transfer = PLACING;
+            ColumnScar.replace(level, at, old, placed);
+            if (level.getBlockState(at) != placed)
+                throw new IllegalStateException("Material destination differs after placement");
+            if (cargo != null) {
+                p.transfer = LOADING_CARGO;
+                var entity = level.getBlockEntity(at);
+                if (entity == null) throw new IllegalStateException("Material cargo has no destination block entity");
+                entity.loadWithComponents(cargo, level.registryAccess());
                 entity.setChanged();
             }
+            p.transfer = TRANSFERRED;
         }
+        if (decoration) net.minecraft.world.level.block.Block.dropResources(old, level, at);
         if (p.scorch != 0) ua.zentix.incoming.nuclear.flash.FlashSync.movedChars(level, at, p.scorchEvent, p.scorchTime, p.scorch, placed);
         DhUpdates.mark(level, new net.minecraft.world.level.ChunkPos(at), level.getGameTime());
         return true;
     }
 
     private Iterable<Piece> allPending() {
-        return moving;
+        return com.google.common.collect.Iterables.concat(moving, paused);
     }
 
     static RuinMatter load(CompoundTag tag, HolderLookup.Provider lookup) {
@@ -696,10 +737,14 @@ public final class RuinMatter extends LedgerData {
         for (int i = 0; i < list.size(); i++) {
             CompoundTag n = list.getCompound(i);
             Piece p = readPiece(n, lookup);
+            if (p.transfer != 0) ua.zentix.incoming.Incoming.LOG.error(
+                    "Restored paused material #{} from {} at {} (transfer phase {}); inspect destination and retained cargo before recovery",
+                    p.id, p.source, BlockPos.containing(p.x, p.y, p.z), p.transfer);
             if (p.outside) result.strand(p);
             else {
-                result.moving.addLast(p);
-                result.movingBytes += p.retainedBytes() - 512;
+                if (p.transfer != 0) result.paused.add(p);
+                else result.moving.addLast(p);
+                result.cargoBytes += p.retainedBytes() - 512;
             }
         }
         ListTag reservoirs = tag.getList("stranded", Tag.TAG_COMPOUND);
@@ -757,6 +802,11 @@ public final class RuinMatter extends LedgerData {
 
     private static Piece readPiece(CompoundTag n, HolderLookup.Provider lookup) {
         CompoundTag contents = readContents(n);
+        int transfer = 0;
+        if (n.contains("transfer")) {
+            if (!n.contains("transfer", Tag.TAG_INT) || (transfer = n.getInt("transfer")) < 1 || transfer > LOADING_CARGO)
+                throw new IllegalStateException("Invalid material transfer phase");
+        }
         if (n.contains("motion", Tag.TAG_BYTE_ARRAY)) {
             byte[] bytes = n.getByteArray("motion");
             if (bytes.length != 145) throw new IllegalStateException("Invalid material motion record");
@@ -771,6 +821,8 @@ public final class RuinMatter extends LedgerData {
             p.tick = data.getDouble(); p.releasedTick = data.getDouble();
             p.windX = data.getDouble(); p.windZ = data.getDouble(); p.drag = data.getDouble(); p.pulse = data.getDouble();
             p.outside = data.get() != 0;
+            if (p.outside && transfer != 0) throw new IllegalStateException("Outside material has a transfer destination");
+            p.transfer = transfer;
             return p;
         }
         BlockState state = NbtUtils.readBlockState(lookup.lookupOrThrow(Registries.BLOCK), n.getCompound("state"));
@@ -787,6 +839,8 @@ public final class RuinMatter extends LedgerData {
         p.volume = n.getDouble("volume");
         p.mass = n.getDouble("mass");
         p.outside = n.getBoolean("outside");
+        if (p.outside && transfer != 0) throw new IllegalStateException("Outside material has a transfer destination");
+        p.transfer = transfer;
         return p;
     }
 
@@ -800,12 +854,14 @@ public final class RuinMatter extends LedgerData {
 
     /** Internal queue pages only. The B5 streaming disk schema and frozen-owner interval stay unchanged.
      * Bit 1 marks captured classification, bit 2 stores fine; legacy 0/1 rows classify once on decode.
-     * Tag reloads affect new captures and disk restores as before, never reclassify a FIFO rotation. */
+     * Bits 3-4 retain transfer ownership; disk rows use an optional typed scalar instead of changing
+     * the 145-byte motion/outside schema. Tag reloads never reclassify a FIFO rotation. */
     private void encodePiece(java.nio.ByteBuffer b, Piece p) {
         if (p.contents != null && p.cargoKey == 0) p.cargoKey = ++nextInventory;
         if (p.contents != null) inventories.put(p.cargoKey, p.contents);
         b.putLong(p.source.asLong()).putLong(p.id).putLong(p.scorchTime).putLong(p.cargoKey);
-        b.putInt(p.scorch).putInt(p.scorchEvent).putInt(palette.index(p.state)).put((byte) ((p.outside ? 1 : 0) | 2 | (p.fine ? 4 : 0)));
+        b.putInt(p.scorch).putInt(p.scorchEvent).putInt(palette.index(p.state))
+                .put((byte) ((p.outside ? 1 : 0) | 2 | (p.fine ? 4 : 0) | (p.transfer << 3)));
         b.putDouble(p.volume).putDouble(p.mass).putDouble(p.x).putDouble(p.y).putDouble(p.z);
         b.putDouble(p.vx).putDouble(p.vy).putDouble(p.vz).putDouble(p.tick).putDouble(p.releasedTick);
         b.putDouble(p.windX).putDouble(p.windZ).putDouble(p.drag).putDouble(p.pulse);
@@ -821,6 +877,7 @@ public final class RuinMatter extends LedgerData {
                 (flags & 2) != 0 ? (flags & 4) != 0 : Piece.fine(state));
         p.id = id; p.scorchTime = scorchTime; p.scorch = scorch; p.scorchEvent = event; p.cargoKey = cargoKey;
         p.outside = (flags & 1) != 0;
+        p.transfer = (flags >>> 3) & 3;
         p.volume = b.getDouble(); p.mass = b.getDouble(); p.x = b.getDouble(); p.y = b.getDouble(); p.z = b.getDouble();
         p.vx = b.getDouble(); p.vy = b.getDouble(); p.vz = b.getDouble(); p.tick = b.getDouble(); p.releasedTick = b.getDouble();
         p.windX = b.getDouble(); p.windZ = b.getDouble(); p.drag = b.getDouble(); p.pulse = b.getDouble();
@@ -838,6 +895,7 @@ public final class RuinMatter extends LedgerData {
         CompoundTag row = new CompoundTag();
         row.putByteArray("motion", data.array());
         row.put("state", NbtUtils.writeBlockState(p.state));
+        if (p.transfer != 0) row.putInt("transfer", p.transfer);
         if (p.contents != null) row.put("contents", p.contents);
         return row;
     }
@@ -890,6 +948,7 @@ public final class RuinMatter extends LedgerData {
         for (Piece p : allPending()) {
             CompoundTag n = new CompoundTag();
             n.putBoolean("outside", p.outside);
+            if (p.transfer != 0) n.putInt("transfer", p.transfer);
             n.putLong("source", p.source.asLong());
             n.putLong("id", p.id);
             n.putInt("scorch", p.scorch); n.putInt("scorch_event", p.scorchEvent); n.putLong("scorch_time", p.scorchTime);
@@ -960,7 +1019,7 @@ public final class RuinMatter extends LedgerData {
             writer.row(edge);
         }
 
-        writer.list("moving", moving.size());
+        writer.list("moving", moving.size() + paused.size());
         for (Piece p : allPending()) writer.row(packed(p));
 
         writer.list("stranded", stranded.size());

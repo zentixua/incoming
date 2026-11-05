@@ -16,7 +16,8 @@ final class LedgerScan {
     private long originalPosition;
     private boolean hasOriginalPosition;
     private boolean packedMoving, outside;
-    private boolean materialRow;
+    private boolean materialRow, movingRow;
+    private int transfer;
     // At most 98,316 bytes of primitive arrays; leave I/O workspace for buffers and row scanning.
     // Dense legacy cities need a section count, not a pessimistic per-block object estimate.
     private it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap originalSections;
@@ -61,7 +62,7 @@ final class LedgerScan {
             for (int root; (root = input.readUnsignedByte()) != 0;) {
                 String rootName = input.readUTF();
                 if (root != 10 || !rootName.equals("data")) {
-                    scan.bytes = 0; scan.materialRow = false; scan.payload(input, root, 0); continue;
+                    scan.bytes = 0; scan.materialRow = false; scan.movingRow = false; scan.payload(input, root, 0); continue;
                 }
                 for (int type; (type = input.readUnsignedByte()) != 0;) {
                     String key = input.readUTF();
@@ -77,13 +78,20 @@ final class LedgerScan {
                             scan.bytes = 0; scan.cargo = 0; scan.checkpoints = 0; scan.event = -1;
                             scan.originalEntries = -1; scan.hasOriginalPosition = false;
                             scan.packedMoving = false; scan.outside = false;
+                            scan.transfer = 0;
                             scan.materialRow = key.equals("moving") || key.equals("stranded");
+                            scan.movingRow = key.equals("moving");
                             scan.payload(input, element, 0);
+                            if (scan.transfer != 0 && scan.outside)
+                                throw new IOException("Material transfer has no moving destination");
                             long rowBytes = key.equals("passes") && !activeCraters.contains(scan.event)
                                     ? scan.bytes - scan.checkpoints : scan.bytes;
                             largest = Math.max(largest, rowBytes);
                             long moving = RuinMatter.PIECE_BYTES + 192L; // Legacy row allowance also covers stranded conversion.
-                            if (key.equals("moving") && scan.packedMoving) {
+                            if (key.equals("moving") && scan.transfer != 0) {
+                                // Paused callbacks retain one decoded object, never a runnable FIFO page.
+                                moving = RuinMatter.PAUSED_BYTES;
+                            } else if (key.equals("moving") && scan.packedMoving) {
                                 if (scan.outside) moving = 256; // The decoder creates a reservoir, not a FIFO/cargo-index row.
                                 else {
                                     // One byte per row bounds 96 bytes per 1024-row page; the full
@@ -113,7 +121,7 @@ final class LedgerScan {
                             if (owned > limit) return new Measure(limit + 1, largest);
                         }
                     } else {
-                        scan.bytes = 0; scan.materialRow = false; scan.payload(input, type, 0);
+                        scan.bytes = 0; scan.materialRow = false; scan.movingRow = false; scan.payload(input, type, 0);
                         largest = Math.max(largest, scan.bytes);
                         // Support arrays load together; maps, old backing arrays and the input
                         // arrays fit inside the existing 256-byte-per-seed ownership estimate.
@@ -199,7 +207,15 @@ final class LedgerScan {
                     if (depth == 0 && materialRow && key.equals("contents") && child != 10)
                         throw new IOException("Material contents is not a compound");
                     long before = bytes;
-                    if (key.equals("event") && depth == 0 && child == 3) {
+                    if (key.equals("transfer") && depth == 0 && movingRow) {
+                        if (child != 3) throw new IOException("Invalid material transfer phase type");
+                        add(12); transfer = input.readInt();
+                        if (transfer < 1 || transfer > 2) throw new IOException("Invalid material transfer phase");
+                    } else if (key.equals("outside") && depth == 0 && movingRow && child == 1) {
+                        add(9);
+                        boolean legacyOutside = input.readByte() != 0;
+                        if (!packedMoving) outside = legacyOutside; // Packed motion takes precedence in the decoder.
+                    } else if (key.equals("event") && depth == 0 && child == 3) {
                         add(12); event = input.readInt();
                     } else if (key.equals("original_entries") && depth == 0 && child == 3) {
                         add(12); originalEntries = input.readInt();
