@@ -55,6 +55,9 @@ final class LedgerScan {
                     if (type == 9) {
                         int element = input.readUnsignedByte(), count = scan.count(input);
                         if (element != 10 && count != 0) throw new IOException("Invalid ledger row list");
+                        // Partial FIFO tails own a full primitive page even for one legacy row.
+                        if (count > 0 && key.equals("moving")) owned += (long) RuinRecords.ROWS * RuinMatter.PIECE_BYTES + 1024;
+                        if (count > 0 && key.equals("support_sources")) owned += RuinRecords.ROWS * 16L + 1024;
                         for (int i = 0; i < count; i++) {
                             scan.bytes = 0; scan.cargo = 0; scan.checkpoints = 0; scan.event = -1;
                             scan.payload(input, element, 0);
@@ -62,7 +65,7 @@ final class LedgerScan {
                                     ? scan.bytes - scan.checkpoints : scan.bytes;
                             largest = Math.max(largest, rowBytes);
                             long charge = switch (key) {
-                                case "moving" -> 544 + 3 * scan.cargo;
+                                case "moving" -> RuinMatter.PIECE_BYTES + 192L + 3 * scan.cargo;
                                 case "stranded" -> 256 + 3 * scan.cargo;
                                 case "support_sources" -> 4096;
                                 case "support_originals", "cold_edges" -> 256;
