@@ -1045,17 +1045,20 @@ final class Sandbox {
      * — {@code place feature}: random shape).
      */
     private static void buildHouses(MinecraftServer server, BlockPos o) {
-        int x = o.getX(), y = o.getY(), z = o.getZ();
-        List<String> build = new ArrayList<>(List.of(
-                "fill %d %d %d %d %d %d minecraft:stone_bricks hollow".formatted(x - 12, y, z - 4, x - 4, y + 6, z + 4),
-                "fill %d %d %d %d %d %d minecraft:glass_pane".formatted(x - 10, y + 2, z + 4, x - 6, y + 3, z + 4),
-                "fill %d %d %d %d %d %d minecraft:glass_pane".formatted(x - 10, y + 2, z - 4, x - 6, y + 3, z - 4),
-                "fill %d %d %d %d %d %d minecraft:oak_planks".formatted(x - 12, y + 7, z - 4, x - 4, y + 7, z + 4),
-                "fill %d %d %d %d %d %d minecraft:oak_planks hollow".formatted(x + 4, y, z - 3, x + 12, y + 5, z + 3),
-                "fill %d %d %d %d %d %d minecraft:glass".formatted(x + 6, y + 2, z + 3, x + 10, y + 3, z + 3),
-                "fill %d %d %d %d %d %d minecraft:glass".formatted(x + 6, y + 2, z - 3, x + 10, y + 3, z - 3)));
-        for (int[] t : new int[][]{{x - 8, z + 12}, {x + 8, z + 12}, {x, z - 14}}) build.addAll(oak(t[0], y, t[1]));
-        for (String c : build) run(server, c);
+        int y = o.getY(), z = o.getZ();
+        for (int side : new int[]{-1, 1}) {
+            int x = o.getX() + side * 18;
+            run(server, "fill %d %d %d %d %d %d minecraft:glass hollow".formatted(x - 12, y, z - 12, x + 12, y + 5, z + 12));
+            run(server, "fill %d %d %d %d %d %d minecraft:air".formatted(x - 11, y, z - 11, x + 11, y + 4, z + 11));
+            run(server, "fill %d %d %d %d %d %d minecraft:%s".formatted(x - 12, y + 5, z - 12, x + 12, y + 5, z + 12,
+                    side < 0 ? "stone" : "white_concrete"));
+        }
+        for (int side : new int[]{-1, 1}) {
+            int x = o.getX() + side * 8, tz = z + 24, height = side < 0 ? 16 : 30;
+            run(server, "fill %d %d %d %d %d %d minecraft:oak_log".formatted(x, y, tz, x, y + height - 1, tz));
+            if (side > 0) run(server, "fill %d %d %d %d %d %d minecraft:oak_leaves[persistent=true]".formatted(
+                    x - 2, y + height, tz - 2, x + 2, y + height + 1, tz + 2));
+        }
     }
 
     /**
@@ -1200,8 +1203,48 @@ final class Sandbox {
     /**
      * {@code track on}: before a frame the eye looks at the effect's projectile where it is on its path in this frame.
      */
+    private int evidenceSample = -1;
+    private boolean evidenceLate;
+
     private void onFrameStart(RenderFrameEvent.Pre e) {
+        // Diagnostic geometry view only; ordinary earlier frames retain the real presentation.
+        if (effectTick >= 0 && tick - effectTick >= 160) IncomingClient.resetSession();
+        if (effectTick >= 0 && tick - effectTick >= 200 && evidenceSample != effectTick) {
+            evidenceSample = effectTick;
+            evidenceLate = false;
+            var server = Minecraft.getInstance().getSingleplayerServer();
+            Vec3 origin = site;
+            if (server != null) server.execute(() -> {
+                var level = server.overworld();
+                BlockPos o = BlockPos.containing(origin);
+                int stoneRoof=0, concreteRoof=0, bareLogs=0, tallLogs=0;
+                for (int x=-12;x<=12;x++) for (int z=-12;z<=12;z++) {
+                    if (level.getBlockState(o.offset(-18+x,5,z)).is(net.minecraft.world.level.block.Blocks.STONE)) stoneRoof++;
+                    if (level.getBlockState(o.offset(18+x,5,z)).is(net.minecraft.world.level.block.Blocks.WHITE_CONCRETE)) concreteRoof++;
+                }
+                for (int y=0;y<16;y++) if (level.getBlockState(o.offset(-8,y,24)).is(net.minecraft.world.level.block.Blocks.OAK_LOG)) bareLogs++;
+                for (int y=0;y<30;y++) if (level.getBlockState(o.offset(8,y,24)).is(net.minecraft.world.level.block.Blocks.OAK_LOG)) tallLogs++;
+                Incoming.LOG.info("MTB2_FINAL_GEOMETRY origin={} stoneRoof={} concreteRoof={} bareLogs={} tallLogs={}",
+                        o,stoneRoof,concreteRoof,bareLogs,tallLogs);
+            });
+        }
+
         Minecraft mc = Minecraft.getInstance();
+        if (effectTick >= 0 && tick - effectTick >= 600 && !evidenceLate) {
+            evidenceLate = true;
+            var server = mc.getSingleplayerServer();
+            Vec3 origin = site;
+            if (server != null) server.execute(() -> {
+                var level = server.overworld();
+                BlockPos center = BlockPos.containing(origin).north(100);
+                var chunk = level.getChunkSource().getChunkNow(center.getX() >> 4, center.getZ() >> 4);
+                if (chunk == null) { Incoming.LOG.info("MTB2_CRATER_GEOMETRY center={} unready", center); return; }
+                int surface = level.getMinBuildHeight();
+                for (int y = level.getMaxBuildHeight()-1; y >= level.getMinBuildHeight(); y--)
+                    if (!chunk.getBlockState(center.atY(y)).isAir()) { surface = y; break; }
+                Incoming.LOG.info("MTB2_CRATER_GEOMETRY center={} surfaceY={}", center, surface);
+            });
+        }
         if (turn != 0 && effectTick >= 0 && mc.player != null) {
             if (Float.isNaN(turnYaw)) turnYaw = mc.player.getYRot();
             double t = (tick - effectTick + e.getPartialTick().getGameTimeDeltaPartialTick(true)) / 20.0;
