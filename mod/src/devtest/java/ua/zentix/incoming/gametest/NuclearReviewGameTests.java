@@ -31,6 +31,8 @@ public final class NuclearReviewGameTests {
         c.nukeOpsOnly.set(false);
         c.nukeMaxYield.set(15);
         var p = player(h, "review");
+        // Assertion failure must not leave an unpaid preparation blocking later settlement.
+        StrikeGameTests.afterTest(h, () -> NuclearReview.cancel(p));
         give(p, ModItems.ICBM.get(), 1);
         return p;
     }
@@ -217,7 +219,8 @@ public final class NuclearReviewGameTests {
             h.assertFalse(NuclearReview.act(p, id, C2S.NuclearAction.POLL), "unbounded polling accepted");
         });
         h.runAfterDelay(1300, () -> {
-            h.assertTrue(NuclearReview.act(p, id, C2S.NuclearAction.BEGIN), "watched prep expired after original minute");
+            h.assertTrue(NuclearReview.act(p, id, C2S.NuclearAction.BEGIN), "watched prep unavailable after original minute: "
+                    + ua.zentix.incoming.nuclear.world.RuinPreparation.status(p.serverLevel(), id));
             NuclearReview.act(p, id, C2S.NuclearAction.DISCARD);
             h.assertValueEqual(held(p, ModItems.ICBM.get()), 1, "lease renewal spent ammo");
             h.succeed();

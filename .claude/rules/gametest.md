@@ -9,6 +9,12 @@ paths:
 # GameTest and flight scenarios
 
 ## Pitfalls
+- Authority/payment fixtures explicitly exclude physical preparation through `NuclearReadyFixture`'s
+  no-ruins fixture state. The historical `considered` cursor cannot exclude current loaded membership:
+  bind/refresh still discover it. A receipt test that needs STORING must instead install counted resident
+  empty results for its controlled cohort, preserving the real pending-write gate. Unpaid review fixtures
+  cancel their own review with `afterTest`, including assertion failure; leaked preparation suppresses
+  unrelated far settlement through `settleCanAdmit`.
 - Nuclear fixtures can finish their assertions before saved material has fallen, including real-strike chunk
   lifecycle checks. Register
   `RuinMatterGameTests.clearFixture` in their completion cleanup (the `NuclearGameTests.rawAt` helper does this):

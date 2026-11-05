@@ -162,7 +162,9 @@ public final class NuclearPreparedFlightGameTests {
         constructor.setAccessible(true);
         field(request, "ruins").set(request, constructor.newInstance(level, geometry));
         field(request, "resolvedTarget").set(request, target);
-        ua.zentix.incoming.nuclear.world.NuclearReadyFixture.emptyWork(level, request);
+        // These tests exercise the actual plan/context handoff, not the no-ruins shortcut.
+        ua.zentix.incoming.nuclear.world.NuclearReadyFixture.residentEmptyWork(level, request,
+                new net.minecraft.world.level.ChunkPos(BlockPos.containing(geometry.burst())).toLong());
         return request;
     }
 

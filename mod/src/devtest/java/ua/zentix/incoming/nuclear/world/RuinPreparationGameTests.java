@@ -81,13 +81,9 @@ public final class RuinPreparationGameTests {
         field(p, "order").set(p, new long[] {123L});
         field(p, "nextFar").setInt(p, 1);
         var plans = (RetainedPlans) field(p, "plans").get(p);
-        plans.put(123L, RuinPlan.EMPTY);
-        field(p, "requiredInitialized").setBoolean(p, true);
-        field(p, "requiredTarget").setLong(p, 123L);
-        ((it.unimi.dsi.fastutil.longs.LongOpenHashSet) field(p, "required").get(p)).add(123L);
-        // This controlled receipt/identity fixture excludes unrelated live chunks; real refresh is tested separately.
-        var considered = (it.unimi.dsi.fastutil.longs.LongOpenHashSet) field(p, "considered").get(p);
-        for (var holder : level.getChunkSource().chunkMap.getChunks()) considered.add(holder.getPos().toLong());
+        // This fixture controls receipts, not terrain. Give every possible refresh member an
+        // explicit resident empty result; marking traversal complete alone cannot certify READY.
+        NuclearReadyFixture.residentEmptyWork(level, p, 123L);
         // A plan waiting for submission is required work too, even before an I/O future exists.
         var pending = (it.unimi.dsi.fastutil.longs.LongLinkedOpenHashSet) field(plans, "toWrite").get(plans);
         pending.add(123L);
