@@ -9,10 +9,13 @@ paths:
 # GameTest and flight scenarios
 
 ## Pitfalls
-- Synchronous nuclear snapshot fixtures finish at structural failure, before saved material has fallen. Register
+- Nuclear fixtures can finish their assertions before saved material has fallen, including real-strike chunk
+  lifecycle checks. Register
   `RuinMatterGameTests.clearFixture` in their completion cleanup (the `NuclearGameTests.rawAt` helper does this):
   otherwise later unrelated batches inherit their moving material and loading tickets. Real save/reload and
   settlement integration tests must retain the ledger until their own assertions complete.
+  `NuclearStrikes.clear` only releases the material's current ticket; the preserved ledger can acquire another
+  on the next tick. Register test-owned chunk tickets and nuclear cleanup with `afterTest` so failure also retires them.
 - Whole strikes against data: `SurfaceGameTests` (batches `surface_<weapon>`, `surface_<weapon>_nearby`, `surface_bomb`):
   the mod's strike path (`Warheads.detonate` with a weapon entity, axis from the spec's impact angle; bomb is a real
   entity dropped by B-2) over seven surfaces; expectations are sourced laws and data spread; report:
