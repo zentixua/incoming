@@ -26,7 +26,8 @@ public record Loadout(WeaponType weapon, int count, int spread, TargetMode mode,
          * chunks; higher yields exceed memory and destruction budget, leaving ruins behind the blast front. Older
          * designators/saves with higher yield are clamped to this.
          */
-        public static final int MAX_YIELD = 15;
+        // TEST ONLY: MT-B7 disposable-server measurement; never ship this ceiling.
+        public static final int MAX_YIELD = 1000;
         public static final Nuke DEFAULT = new Nuke(15, false, false);
         public static final Codec<Nuke> CODEC = RecordCodecBuilder.create(i -> i.group(
                 Codec.INT.optionalFieldOf("yield", DEFAULT.yieldKt).forGetter(Nuke::yieldKt),

@@ -22,6 +22,7 @@ final class LssVoxyWatch {
             LSSApi.registerColumnConsumer(new VoxelColumnConsumer() {
                 @Override
                 public void onVoxelColumnReceived(ClientLevel level, ResourceKey<Level> dimension, int chunkX, int chunkZ, VoxelColumnData columnData) {
+                    MtB7Client.lss(level, chunkX, chunkZ, columnData);
                     VoxyIngest.overwritten(level, chunkX, chunkZ);
                 }
             });

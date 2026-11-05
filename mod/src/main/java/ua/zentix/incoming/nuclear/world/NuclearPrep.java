@@ -261,6 +261,19 @@ public final class NuclearPrep {
     private final java.util.Set<Integer> failed = new java.util.HashSet<>();
     private final WorkClock clock = WorkClock.decaying(0.5);
 
+    /** TEST ONLY: passive snapshot of existing preparation ownership/cursors. */
+    String mtB7Progress() {
+        var out = new java.util.ArrayList<String>();
+        for (var p : preps) out.add("{strike="+p.strike+",detonation="+p.detonation+",due="+p.detonateTime
+            +",layoutPending="+(p.layout!=null)+",near="+p.nearPlans+",nearCursor="+p.nextTodo+"/"+p.todo.size()
+            +",disk="+p.farPlans+",farCursor="+p.nextFar+"/"+p.order.length+",readCursor="+p.nextRead
+            +",reading="+p.reading.size()+",running="+p.farRunning.size()+",skipped="+p.farSkipped
+            +",capped="+p.capped+",heapStop="+p.heapStop+",announced="+p.announced+",draining="+p.draining
+            +",planBytes="+p.plans.bytes()+",shotBytes="+(p.ruins==null?0:p.ruins.shotBytes())
+            +",lods="+java.util.Arrays.toString(p.lods.stats())+"}");
+        return out.toString();
+    }
+
     /** Total prebuilt ruins across strikes (tests, status). */
     public int plannedChunks() {
         return preps.stream().mapToInt(p -> p.plans.size()).sum();
