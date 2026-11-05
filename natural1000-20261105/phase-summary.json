@@ -1,0 +1,320 @@
+{
+  "identity": {
+    "case": "corrected1000kt-journal-on",
+    "source_world": "immutable native domain1000 source",
+    "source": "a0babee626ad07cacc1d7d41dbe71cccfeadcc7b",
+    "jar_sha256": "ef18d01008fe610758309f35a381de775d18595790aaee995a643e65e17dc2e5",
+    "protocol": 55,
+    "heap_gib": 8,
+    "active_processors": 12,
+    "yield_kt": 1000,
+    "post_flash_seconds": 480,
+    "minimum_since_request_seconds": 0,
+    "target": [
+      3104.5,
+      63,
+      560.5
+    ],
+    "camera": [
+      -96.5,
+      150,
+      -816.5,
+      -66.72369,
+      1.4302
+    ],
+    "native_camera_verified": true,
+    "game_flight_ticks": 1800,
+    "hashes": false,
+    "screenshots": false,
+    "telemetry": true,
+    "pending_expected_event": 2,
+    "pending_scene": "natural-fixed-v1",
+    "started": true,
+    "fresh_world_level_sha256": "f8563e2c4470bc17f10adf4f68d4eeb45ec486747b162f9d22cb0d54bfb57073",
+    "prelogin_protection": {
+      "gamemode": "spectator",
+      "force-gamemode": true,
+      "scope": "owned disposable 25571 only"
+    },
+    "start_requested_wall_ms": 1793849680025,
+    "native_preflight": "rt8-1000-preflight.png",
+    "native_state": "rt8-1000-preflight-state-native.json",
+    "native_preflight_checked_wall_ms": 1793849895170,
+    "native_pipeline": "IrisVoxyRenderPipeline",
+    "capture_method": "ExactownednestedJavawindowX11 beforeclean"
+  },
+  "clock": {
+    "server_minus_client_ms": 0.14991500000000002,
+    "uncertainty_ms": 29.862174000000003,
+    "stand_epoch_drift_range_ms": [
+      -0.73193359375,
+      0.26708984375
+    ]
+  },
+  "coverage": {
+    "tick_footer": "# dropped=0 producer_shutdown=complete",
+    "max_tick_log_drops": 0,
+    "stand_stop_seen": false,
+    "gpu_ring_waits": 0,
+    "nonconsecutive_frame_pairs": 0,
+    "tcp_end": {
+      "kind": "end",
+      "client_returncode": 143,
+      "signals": [
+        15
+      ],
+      "wall_ms": 1793850672922,
+      "mono_ns": 37421322223562
+    },
+    "tcp_sample_errors": 0
+  },
+  "phases": {
+    "baseline": {
+      "start_ms": 1793849895943.85,
+      "end_ms": 1793849955943.85,
+      "server_ms": {
+        "n": 1200,
+        "p50": 10.709477,
+        "p99": 17.916332,
+        "max": 22.813963
+      },
+      "frame_interval_ms": {
+        "n": 2587,
+        "p50": 22.573,
+        "p99": 35.654,
+        "max": 65.679
+      },
+      "render_cpu_ms": {
+        "n": 2587,
+        "p50": 3.442,
+        "p99": 25.379,
+        "max": 59.009
+      },
+      "gpu_elapsed_ms": {
+        "n": 2587,
+        "p50": 22.317,
+        "p99": 30.551,
+        "max": 33.169
+      },
+      "frames_over50ms": 2,
+      "frames_over100ms": 0,
+      "heap_used_max_bytes": 2629452288,
+      "tcp": {
+        "observed_start_ms": 1793849896025,
+        "observed_end_ms": 1793849955897,
+        "received_delta": 6894944,
+        "acked_delta": 23453,
+        "joined_socket_intervals": 274,
+        "counter_resets": 0,
+        "max_sampling_gap_ms": 222
+      }
+    },
+    "prepare": {
+      "start_ms": 1793849955943.85,
+      "end_ms": 1793849972262.85,
+      "server_ms": {
+        "n": 325,
+        "p50": 19.173607,
+        "p99": 59.466388,
+        "max": 89.738709
+      },
+      "frame_interval_ms": {
+        "n": 709,
+        "p50": 22.582,
+        "p99": 31.74,
+        "max": 39.951
+      },
+      "render_cpu_ms": {
+        "n": 709,
+        "p50": 3.216,
+        "p99": 5.796,
+        "max": 8.492
+      },
+      "gpu_elapsed_ms": {
+        "n": 709,
+        "p50": 22.524,
+        "p99": 26.026,
+        "max": 28.001
+      },
+      "frames_over50ms": 0,
+      "frames_over100ms": 0,
+      "heap_used_max_bytes": 5754939688,
+      "tcp": {
+        "observed_start_ms": 1793849956116,
+        "observed_end_ms": 1793849972065,
+        "received_delta": 1557257,
+        "acked_delta": 6820,
+        "joined_socket_intervals": 73,
+        "counter_resets": 0,
+        "max_sampling_gap_ms": 221
+      }
+    },
+    "flight": {
+      "start_ms": 1793849972262.85,
+      "end_ms": 1793850062223.85,
+      "server_ms": {
+        "n": 1800,
+        "p50": 15.391434499999999,
+        "p99": 46.95083,
+        "max": 139.495983
+      },
+      "frame_interval_ms": {
+        "n": 3844,
+        "p50": 23.092,
+        "p99": 32.712,
+        "max": 42.43
+      },
+      "render_cpu_ms": {
+        "n": 3844,
+        "p50": 3.364,
+        "p99": 7.908,
+        "max": 12.284
+      },
+      "gpu_elapsed_ms": {
+        "n": 3844,
+        "p50": 23.0205,
+        "p99": 26.592,
+        "max": 34.484
+      },
+      "frames_over50ms": 0,
+      "frames_over100ms": 0,
+      "heap_used_max_bytes": 5927669320,
+      "tcp": {
+        "observed_start_ms": 1793849972284,
+        "observed_end_ms": 1793850062141,
+        "received_delta": 8669945,
+        "acked_delta": 30953,
+        "joined_socket_intervals": 411,
+        "counter_resets": 0,
+        "max_sampling_gap_ms": 223
+      }
+    },
+    "flash": {
+      "start_ms": 1793850062223.85,
+      "end_ms": 1793850092223.85,
+      "server_ms": {
+        "n": 600,
+        "p50": 45.228074500000005,
+        "p99": 70.853594,
+        "max": 101.192179
+      },
+      "frame_interval_ms": {
+        "n": 857,
+        "p50": 36.079,
+        "p99": 56.027,
+        "max": 129.839
+      },
+      "render_cpu_ms": {
+        "n": 857,
+        "p50": 5.256,
+        "p99": 38.403,
+        "max": 86.626
+      },
+      "gpu_elapsed_ms": {
+        "n": 857,
+        "p50": 34.046,
+        "p99": 46.53,
+        "max": 49.696
+      },
+      "frames_over50ms": 16,
+      "frames_over100ms": 1,
+      "heap_used_max_bytes": 5983703040,
+      "tcp": {
+        "observed_start_ms": 1793850062361,
+        "observed_end_ms": 1793850092028,
+        "received_delta": 6976093,
+        "acked_delta": 13042,
+        "joined_socket_intervals": 135,
+        "counter_resets": 0,
+        "max_sampling_gap_ms": 231
+      }
+    },
+    "wave": {
+      "start_ms": 1793850092223.85,
+      "end_ms": 1793850182223.85,
+      "server_ms": {
+        "n": 1800,
+        "p50": 47.960738,
+        "p99": 82.882179,
+        "max": 558.937169
+      },
+      "frame_interval_ms": {
+        "n": 2902,
+        "p50": 29.2395,
+        "p99": 95.849,
+        "max": 163.911
+      },
+      "render_cpu_ms": {
+        "n": 2902,
+        "p50": 14.935500000000001,
+        "p99": 53.232,
+        "max": 67.051
+      },
+      "gpu_elapsed_ms": {
+        "n": 2902,
+        "p50": 28.447000000000003,
+        "p99": 39.642,
+        "max": 47.224
+      },
+      "frames_over50ms": 243,
+      "frames_over100ms": 24,
+      "heap_used_max_bytes": 6452614240,
+      "tcp": {
+        "observed_start_ms": 1793850092248,
+        "observed_end_ms": 1793850182186,
+        "received_delta": 43091457,
+        "acked_delta": 42051,
+        "joined_socket_intervals": 398,
+        "counter_resets": 0,
+        "max_sampling_gap_ms": 248
+      }
+    },
+    "settle": {
+      "start_ms": 1793850182223.85,
+      "end_ms": 1793850542223.85,
+      "server_ms": {
+        "n": 7200,
+        "p50": 49.1717685,
+        "p99": 70.386734,
+        "max": 156.049355
+      },
+      "frame_interval_ms": {
+        "n": 10743,
+        "p50": 34.439,
+        "p99": 81.466,
+        "max": 180.588
+      },
+      "render_cpu_ms": {
+        "n": 10743,
+        "p50": 7.282,
+        "p99": 71.64,
+        "max": 96.968
+      },
+      "gpu_elapsed_ms": {
+        "n": 10743,
+        "p50": 31.813,
+        "p99": 44.587,
+        "max": 54.823
+      },
+      "frames_over50ms": 575,
+      "frames_over100ms": 17,
+      "heap_used_max_bytes": 6875910752,
+      "tcp": {
+        "observed_start_ms": 1793850182411,
+        "observed_end_ms": 1793850542052,
+        "received_delta": 123203973,
+        "acked_delta": 208703,
+        "joined_socket_intervals": 1636,
+        "counter_resets": 0,
+        "max_sampling_gap_ms": 240
+      }
+    }
+  },
+  "limits": [
+    "Tick and frame membership uses start time; a last sample can cross a phase boundary.",
+    "Tick work excludes between-tick tasks/sleep. Heap used is not live-set size.",
+    "Render CPU excludes client tick/task time; GPU elapsed includes CPU submission gaps.",
+    "TCP is all Minecraft payload on attributed sockets, not Incoming-only bytes; unobserved starts/tails are omitted.",
+    "Missing/incomplete footer, drops, clock drift, or diagnostic readbacks limit acceptance."
+  ]
+}

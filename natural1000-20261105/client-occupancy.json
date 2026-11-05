@@ -1,0 +1,13 @@
+{
+  "cpu_rows": 129,
+  "mean_foreign_cpu_percent": 0.031007751937984496,
+  "max_foreign_cpu_percent": 0.45,
+  "power_profiles": [
+    "performance"
+  ],
+  "gpu_rows": 632,
+  "max_foreign_gpu_sm": 19,
+  "foreign_gpu_nonzero_samples": 26,
+  "mean_foreign_gpu_sm": 0.569620253164557,
+  "max_gpu_sample_gap_seconds": 2.0
+}

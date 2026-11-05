@@ -1,0 +1,133 @@
+{
+  "samples": [
+    {
+      "begin_wall_ns": 1793849839790813774,
+      "end_wall_ns": 1793849839865407382,
+      "begin_mono_ns": 36588190805414,
+      "end_mono_ns": 36588265391748,
+      "remote": {
+        "wall_ns": 1793849839837236835,
+        "mono_ns": 1088651535785140
+      },
+      "offset_low_ms": -28.170547,
+      "offset_high_ms": 46.423061,
+      "rtt_ms": 74.586334,
+      "local_wall_step_ms": 0.007274
+    },
+    {
+      "begin_wall_ns": 1793849839865416789,
+      "end_wall_ns": 1793849839931937365,
+      "begin_mono_ns": 36588265402198,
+      "end_mono_ns": 36588331921732,
+      "remote": {
+        "wall_ns": 1793849839893947961,
+        "mono_ns": 1088651592500351
+      },
+      "offset_low_ms": -37.989404,
+      "offset_high_ms": 28.531172,
+      "rtt_ms": 66.519534,
+      "local_wall_step_ms": 0.001042
+    },
+    {
+      "begin_wall_ns": 1793849839931950049,
+      "end_wall_ns": 1793849839984758437,
+      "begin_mono_ns": 36588331935317,
+      "end_mono_ns": 36588384742894,
+      "remote": {
+        "wall_ns": 1793849839958504158,
+        "mono_ns": 1088651657051691
+      },
+      "offset_low_ms": -26.254279,
+      "offset_high_ms": 26.554109,
+      "rtt_ms": 52.807577,
+      "local_wall_step_ms": 0.000811
+    },
+    {
+      "begin_wall_ns": 1793849839984764038,
+      "end_wall_ns": 1793849840053591814,
+      "begin_mono_ns": 36588384749216,
+      "end_mono_ns": 36588453576181,
+      "remote": {
+        "wall_ns": 1793849840013470988,
+        "mono_ns": 1088651712018441
+      },
+      "offset_low_ms": -40.120826,
+      "offset_high_ms": 28.70695,
+      "rtt_ms": 68.826965,
+      "local_wall_step_ms": 0.000811
+    },
+    {
+      "begin_wall_ns": 1793849840053597775,
+      "end_wall_ns": 1793849840113807386,
+      "begin_mono_ns": 36588453583034,
+      "end_mono_ns": 36588513791913,
+      "remote": {
+        "wall_ns": 1793849840088313982,
+        "mono_ns": 1088651786862207
+      },
+      "offset_low_ms": -25.493404,
+      "offset_high_ms": 34.716207,
+      "rtt_ms": 60.208879,
+      "local_wall_step_ms": 0.000732
+    },
+    {
+      "begin_wall_ns": 1793849840113814239,
+      "end_wall_ns": 1793849840177601094,
+      "begin_mono_ns": 36588513799437,
+      "end_mono_ns": 36588577585591,
+      "remote": {
+        "wall_ns": 1793849840152177198,
+        "mono_ns": 1088651850725201
+      },
+      "offset_low_ms": -25.423896,
+      "offset_high_ms": 38.362959,
+      "rtt_ms": 63.786154,
+      "local_wall_step_ms": 0.000701
+    },
+    {
+      "begin_wall_ns": 1793849840177607065,
+      "end_wall_ns": 1793849840244882878,
+      "begin_mono_ns": 36588577592353,
+      "end_mono_ns": 36588644867495,
+      "remote": {
+        "wall_ns": 1793849840218821276,
+        "mono_ns": 1088651917369421
+      },
+      "offset_low_ms": -26.061602,
+      "offset_high_ms": 41.214211,
+      "rtt_ms": 67.275142,
+      "local_wall_step_ms": 0.000671
+    },
+    {
+      "begin_wall_ns": 1793849840244887036,
+      "end_wall_ns": 1793849840305322651,
+      "begin_mono_ns": 36588644872204,
+      "end_mono_ns": 36588705307017,
+      "remote": {
+        "wall_ns": 1793849840273834309,
+        "mono_ns": 1088651972382002
+      },
+      "offset_low_ms": -31.488342,
+      "offset_high_ms": 28.947273,
+      "rtt_ms": 60.434813,
+      "local_wall_step_ms": 0.000802
+    },
+    {
+      "begin_wall_ns": 1793849840305329133,
+      "end_wall_ns": 1793849840364799867,
+      "begin_mono_ns": 36588705314301,
+      "end_mono_ns": 36588764784324,
+      "remote": {
+        "wall_ns": 1793849840333648339,
+        "mono_ns": 1088652032196233
+      },
+      "offset_low_ms": -31.151528,
+      "offset_high_ms": 28.319206,
+      "rtt_ms": 59.470023,
+      "local_wall_step_ms": 0.000711
+    }
+  ],
+  "server_minus_client_ms": 0.14991500000000002,
+  "clock_uncertainty_ms": 26.404194,
+  "limits": "A measured clock bracket, valid at sampling time; repeat after the trial to detect drift/steps. No assumption of symmetric latency."
+}

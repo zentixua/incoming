@@ -1,0 +1,25 @@
+{
+  "ok": true,
+  "result": {
+    "ok": true,
+    "value": {
+      "name": "Dev",
+      "alive": true,
+      "health": 20.0,
+      "spectator": true,
+      "listenerSame": true,
+      "body": [
+        -96.5,
+        150.0,
+        -816.5
+      ],
+      "eye": "(-96.5, 151.62000000476837, -816.5)",
+      "cameraSame": true,
+      "yaw": -66.72369,
+      "pitch": 1.4302,
+      "view": "Positioned[center=[-7, -52], viewDistance=10]",
+      "gameTime": 2040641089
+    },
+    "ms": 111.17
+  }
+}

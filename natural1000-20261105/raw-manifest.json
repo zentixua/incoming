@@ -1,0 +1,56 @@
+[
+  {
+    "file": "raw/progress.log.gz",
+    "original_bytes": 1902259,
+    "original_sha256": "7b3b9f7cb4835a766407834cc09fbcea63f6703201063c2f66fe6a3eafa8ef9b",
+    "gzip_sha256": "4e097fe26cf9dcbc16534e9f0daf350241d2ffa63cc0b74efc1056798b86c341"
+  },
+  {
+    "file": "raw/ticks.csv.gz",
+    "original_bytes": 2028519,
+    "original_sha256": "20764df06ba7343485d31cdd6b9982f855abe6553438c71616ce1e7ce6aef405",
+    "gzip_sha256": "1b7847ff958915f5fb99eddd9a61c149f06ba1908fa4bbdabf4c37eb6e24b791"
+  },
+  {
+    "file": "raw/ledger.csv.gz",
+    "original_bytes": 4571,
+    "original_sha256": "d67c919910f14f21cb165a03edb71d99550c7ca13069eddcada19fc581dda4e4",
+    "gzip_sha256": "6a13741bf70f8870191d1bd800467fbdc87ac562cee7c73935f59ce320f8e3da"
+  },
+  {
+    "file": "raw/ownership-post-clean.txt.gz",
+    "original_bytes": 42614,
+    "original_sha256": "f639e849a50cfceab91f9719228472eb966f23de80b499a790dd751d3688d95f",
+    "gzip_sha256": "a1b6ac9514b3116a719d20e306a3544c307bbc2c8bb18dd8ec66543a1de8a256"
+  },
+  {
+    "file": "raw/driver.jsonl.gz",
+    "original_bytes": 3443,
+    "original_sha256": "6391aee2bab724992b9bd4ff1e75a5f8c0eb7bf364f2a07e51a127ffd91e3c58",
+    "gzip_sha256": "d123b8018bbb7ad1c801c8a7da90106b9f34e154ea55cfd061c93f7bfa17c1fb"
+  },
+  {
+    "file": "raw/vps-host.jsonl.gz",
+    "original_bytes": 276021,
+    "original_sha256": "22ec4f9acb5cf04921bc85c67fefec872ae1f0bbaf81f948663dc2bbe5e00f83",
+    "gzip_sha256": "bfd75595032ded0b4368b12490f060b5c33c06dd55ff17d60d64dd28f6a40288"
+  },
+  {
+    "file": "raw/frames.csv.gz",
+    "original_bytes": 13800824,
+    "original_sha256": "5957fd078c938aa879bf877fe73389c063c55034eeadbe5564c9ba987e298a27",
+    "gzip_sha256": "713a06c9b35c8a2c89977aa84850064fcdb04c2e22bbebabc36e05ee3a420581"
+  },
+  {
+    "file": "raw/tcp.jsonl.gz",
+    "original_bytes": 1828867,
+    "original_sha256": "c0a50dd41717514aae845a54ace0255c2a11522581410fc762b67fd5798332c4",
+    "gzip_sha256": "1a8a02ed2c7ae2772224aa5f7c79dc57b012f6cca62e73c49b08794bd788a991"
+  },
+  {
+    "file": "raw/client-host.jsonl.gz",
+    "original_bytes": 143810,
+    "original_sha256": "9b2de5bb002a9dd0bfb99125b5bbcb2bb9565a03f53f15014a8dfa5dfa41edec",
+    "gzip_sha256": "1e793b91f7c7e282f90a4f0eba1ab9c564a6591e0771834e4c0932a38bb8544e"
+  }
+]

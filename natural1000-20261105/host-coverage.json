@@ -1,0 +1,13 @@
+{
+  "total_samples": 1911,
+  "clean_samples": 1279,
+  "clean_span_ms": [
+    1793849895979,
+    1793850542153
+  ],
+  "min_available_clean_bytes": 18821775360,
+  "min_available_full_bytes": 18751614976,
+  "max_clean_gap_ms": 564,
+  "reserve_stops": [],
+  "api_errors": []
+}
