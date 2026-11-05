@@ -108,6 +108,8 @@ public final class RuinOriginalsGameTests {
 
     @GameTest(template = "pad", batch = "nuke_original_bounds", timeoutTicks = 100)
     public static void sectionHeadersCannotUnderstateImportedOwnership(GameTestHelper h) {
+        for (int entries = 1; entries <= 4096; entries++) h.assertTrue(RuinOriginals.importBytes(entries) <= entries * 256L,
+                "Section density regressed the legacy per-original admission bound");
         CompoundTag row = new CompoundTag();
         row.putLong("section", net.minecraft.core.SectionPos.asLong(-1, -1, -1));
         row.putInt("original_entries", 1);

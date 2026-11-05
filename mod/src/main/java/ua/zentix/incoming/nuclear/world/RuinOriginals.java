@@ -19,15 +19,43 @@ import java.util.Arrays;
 final class RuinOriginals {
     private static final float LOAD = 0.75f;
     private static final int ROW = 64;
-    private static final class Page extends Int2LongOpenHashMap {
+    private static final class Table extends Int2LongOpenHashMap {
         private static final long serialVersionUID = 1L;
-        int imported = -1;
-        Page(int expected) { super(expected, LOAD); }
-        long bytes() { return pageBytes(n); }
+        Table(int expected) { super(expected, LOAD); }
+        long bytes() { return tableBytes(n); }
         long growth(int additions) {
             int next = Math.max(n, capacity(Math.min(4096, size() + additions)));
             // The previous arrays stay live while rehash installs the new arrays.
-            return next > n ? pageBytes(next) : 0;
+            return next > n ? tableBytes(next) : 0;
+        }
+    }
+    private static final class Page {
+        private int first;
+        private long value;
+        private Table table;
+        int imported = -1;
+        Page(int expected) { if (expected > 1) table = new Table(expected); }
+        int size() { return table != null ? table.size() : value == 0 ? 0 : 1; }
+        long get(int key) { return table != null ? table.get(key) : first == key ? value : 0; }
+        boolean containsKey(int key) { return get(key) != 0; }
+        long bytes() { return 96L + (table == null ? 0 : table.bytes()); }
+        long growth(int additions) {
+            if (table != null) return table.growth(additions);
+            int count = Math.min(4096, size() + additions);
+            if (count <= 1) return 0;
+            return (additions > 1 ? 2 : 1) * tableBytes(capacity(count));
+        }
+        void put(int key, long next) {
+            if (table == null && (value == 0 || first == key)) { first = key; value = next; return; }
+            if (table == null) {
+                table = new Table(2); table.put(first, value); value = 0;
+            }
+            table.put(key, next);
+        }
+        it.unimi.dsi.fastutil.ints.IntIterator keys() {
+            return table != null ? table.keySet().iterator() : value == 0
+                    ? it.unimi.dsi.fastutil.ints.IntIterators.EMPTY_ITERATOR
+                    : it.unimi.dsi.fastutil.ints.IntIterators.singleton(first);
         }
     }
     private static final class Pages extends Long2ObjectOpenHashMap<Page> {
@@ -48,11 +76,12 @@ final class RuinOriginals {
     private int size;
 
     private static int capacity(int entries) { return HashCommon.arraySize(Math.max(2, entries), LOAD); }
-    private static long pageBytes(int capacity) { return 192L + 12L * (capacity + 1); }
+    private static long tableBytes(int capacity) { return 192L + 12L * (capacity + 1); }
+    private static long pageBytes(int entries) { return 96L + (entries <= 1 ? 0 : tableBytes(capacity(entries))); }
     static long importBytes(int entries) {
         if (entries < 1 || entries > 4096) throw new IllegalArgumentException("Invalid original section size");
         // Page arrays plus its share of the outer index, including index rehash overlap.
-        return pageBytes(capacity(entries)) + 512;
+        return pageBytes(entries) + 128;
     }
 
     long bytes() { return 128L + 64 + 12L * additions.length + pages.bytes() + pageBytes; }
@@ -88,7 +117,7 @@ final class RuinOriginals {
     void put(long position, BlockState state, int event, boolean earliest) {
         long key = section(position);
         Page page = pages.get(key);
-        if (page == null) { page = new Page(2); pages.put(key, page); pageBytes += page.bytes(); }
+        if (page == null) { page = new Page(1); pages.put(key, page); pageBytes += page.bytes(); }
         int at = local(position);
         long old = page.get(at);
         if (old != 0 && (!earliest || eventOf(old) <= event)) return;
@@ -121,7 +150,7 @@ final class RuinOriginals {
             if (page == null) {
                 newPages++;
                 // A fresh page may grow through several tables before the batch ends.
-                growth += 2 * pageBytes(capacity(Math.min(4096, additions[i])));
+                growth += 2 * pageBytes(Math.min(4096, additions[i]));
             } else growth += page.growth(additions[i]);
         }
         return growth + pages.growth(newPages);
@@ -130,7 +159,7 @@ final class RuinOriginals {
     long growthBytes(long position) {
         if (containsKey(position)) return 0;
         Page page = pages.get(section(position));
-        return page == null ? pageBytes(capacity(2)) + pages.growth(1) : page.growth(1);
+        return page == null ? pageBytes(1) + pages.growth(1) : page.growth(1);
     }
 
     void clear() { pages.clear(); pages.trim(); size = 0; pageBytes = 0; }
@@ -145,8 +174,11 @@ final class RuinOriginals {
     @FunctionalInterface interface Visitor { void accept(long position, BlockState state, int event); }
     void forEach(Visitor visitor) {
         for (var entry : pages.long2ObjectEntrySet()) {
-            for (var cell : entry.getValue().int2LongEntrySet())
-                visitor.accept(position(entry.getLongKey(), cell.getIntKey()), stateOf(cell.getLongValue()), eventOf(cell.getLongValue()));
+            Page page = entry.getValue();
+            for (var cells = page.keys(); cells.hasNext();) {
+                int local = cells.nextInt(); long value = page.get(local);
+                visitor.accept(position(entry.getLongKey(), local), stateOf(value), eventOf(value));
+            }
         }
     }
 
@@ -158,16 +190,16 @@ final class RuinOriginals {
         writer.list("original_sections", rows);
         for (var entry : pages.long2ObjectEntrySet()) {
             Page page = entry.getValue();
-            var cells = page.int2LongEntrySet().fastIterator();
+            var cells = page.keys();
             boolean first = true;
             while (cells.hasNext()) {
                 var palette = new RuinPalette();
                 long[] packed = new long[Math.min(ROW, first ? page.size() : ROW)];
                 int count = 0;
                 while (count < packed.length && cells.hasNext()) {
-                    var cell = cells.next();
-                    int state = palette.index(stateOf(cell.getLongValue()));
-                    packed[count++] = (long) eventOf(cell.getLongValue()) << 24 | (long) state << 12 | cell.getIntKey();
+                    int local = cells.nextInt(); long value = page.get(local);
+                    int state = palette.index(stateOf(value));
+                    packed[count++] = (long) eventOf(value) << 24 | (long) state << 12 | local;
                 }
                 CompoundTag row = new CompoundTag();
                 row.putLong("section", entry.getLongKey());

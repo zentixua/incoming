@@ -15,10 +15,10 @@ final class LedgerScan {
     private int originalEntries;
     private long originalPosition;
     private boolean hasOriginalPosition;
-    // At most 196,620 bytes of primitive arrays, within the ledger's existing I/O workspace.
+    // At most 98,316 bytes of primitive arrays; leave I/O workspace for buffers and row scanning.
     // Dense legacy cities need a section count, not a pessimistic per-block object estimate.
     private it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap originalSections;
-    private static final int SECTION_COUNTS = 8192;
+    private static final int SECTION_COUNTS = 4096;
     private final long limit;
     private LedgerScan(long limit) { this.limit = limit; }
 
@@ -113,9 +113,10 @@ final class LedgerScan {
                 net.minecraft.core.BlockPos.getY(originalPosition) >> 4, net.minecraft.core.BlockPos.getZ(originalPosition) >> 4);
         int count = originalSections.get(section);
         // Bounded scan scratch even for deliberately scattered old saves. Outside the cache,
-        // each row pays a separate one-cell page and index share. Larger shared pages cost less
-        // per entry, including their rehash overlap. Refusal preserves the authoritative file.
-        if (count == 0 && originalSections.size() == SECTION_COUNTS) return 768;
+        // each row pays the old 256-byte legacy allowance. Singleton sections allocate no table;
+        // all denser pages and their outer-index share fit this same per-entry bound. This must
+        // not reject an old sparse journal that fitted before section compaction.
+        if (count == 0 && originalSections.size() == SECTION_COUNTS) return 256;
         int next = Math.min(4096, count + 1);
         originalSections.put(section, next);
         return RuinOriginals.importBytes(next) - (count == 0 ? 0 : RuinOriginals.importBytes(count));
