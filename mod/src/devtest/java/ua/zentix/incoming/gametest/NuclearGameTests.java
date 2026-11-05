@@ -1652,6 +1652,16 @@ public final class NuclearGameTests {
         ChunkPos cAnchor = new ChunkPos(c.x + 2, c.z), dAnchor = new ChunkPos(dPos.x - 2, dPos.z);
         BlockPos[] glass = new BlockPos[3];
         Detonation[] det = new Detonation[1];
+        StrikeGameTests.afterTest(h, () -> {
+            for (ChunkPos p : new ChunkPos[]{cAnchor, dAnchor}) chunks.removeRegionTicket(HOLD, p, 0, p);
+            for (ChunkPos p : new ChunkPos[]{c, dPos}) {
+                chunks.removeRegionTicket(HOLD, p, 0, p);
+                chunks.removeRegionTicket(HOLD, p, 1, p);
+            }
+            chunks.removeRegionTicket(HOLD, e, 0, e);
+            NuclearStrikes.clear(level);
+            ua.zentix.incoming.nuclear.world.RuinMatterGameTests.clearFixture(level);
+        });
         chunks.addRegionTicket(HOLD, cAnchor, 0, cAnchor);
         chunks.addRegionTicket(HOLD, dAnchor, 0, dAnchor);
         chunks.addRegionTicket(HOLD, c, 0, c);
@@ -1693,12 +1703,6 @@ public final class NuclearGameTests {
                         int scar = chunk.getExistingData(ModAttachments.CHUNK_SCAR).orElse(0);
                         h.assertTrue(scar >= det[0].id(), name + " not marked with detonation: " + scar);
                     }
-                })
-                .thenExecute(() -> {
-                    for (ChunkPos p : new ChunkPos[]{cAnchor, dAnchor}) chunks.removeRegionTicket(HOLD, p, 0, p);
-                    for (ChunkPos p : new ChunkPos[]{c, dPos}) chunks.removeRegionTicket(HOLD, p, 1, p);
-                    chunks.removeRegionTicket(HOLD, e, 0, e);
-                    NuclearStrikes.clear(level);
                 })
                 .thenSucceed();
     }
