@@ -59,7 +59,7 @@ public final class RuinSustainedProgressGameTests {
         RuinWorkers.executor(RuinWorkers.Priority.SEEN);
         var pool = (ThreadPoolExecutor) field(RuinWorkers.class, "pool").get(null);
         h.assertTrue(pool.getPoolSize() == 0, "Fixture must restart a cold worker pool");
-        var centre = new ChunkPos(h.absolutePos(new BlockPos(32, 1, 32)));
+        var centre = new ChunkPos(h.absolutePos(new BlockPos(8, 1, 8)));
         var area = new ua.zentix.incoming.strike.AreaLoader.Area(
                 net.minecraft.server.level.TicketType.create("incoming_sustained_test", java.util.Comparator.<UUID>naturalOrder()),
                 new ChunkPos(centre.x + 1, centre.z + 1), 5, UUID.randomUUID(), false);
@@ -70,9 +70,14 @@ public final class RuinSustainedProgressGameTests {
         var keys = new it.unimi.dsi.fastutil.longs.LongOpenHashSet();
         for (int z = -2; z < 6; z++) for (int x = -2; x < 6; x++) level.getChunk(centre.x + x, centre.z + z);
         for (int z = 0; z < 4; z++) for (int x = 0; x < 4; x++) {
-            var at = new BlockPos((centre.x + x) * 16 + 8, y, (centre.z + z) * 16 + 8);
+            // Chunk-centred world positions can leave the template and enter its enclosing barrier.
+            var at = h.absolutePos(new BlockPos(8 + x * 16, 38, 8 + z * 16));
+            h.assertTrue(h.getBounds().contains(Vec3.atCenterOf(at)), "Watched glass must stay inside the fixture");
             level.setBlock(at.below(), Blocks.OBSIDIAN.defaultBlockState(), 18);
             level.setBlock(at, Blocks.GLASS.defaultBlockState(), 18);
+            for (var direction : net.minecraft.core.Direction.Plane.HORIZONTAL)
+                h.assertTrue(level.getBlockState(at.relative(direction)).isAir(),
+                        "Watched glass needs unshielded horizontal faces: " + at + " " + direction);
             targets.add(at);
             keys.add(new ChunkPos(at).toLong());
         }
