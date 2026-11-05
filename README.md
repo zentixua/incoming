@@ -50,7 +50,9 @@ not erase either original failure. Final required-CI closure is pending in this 
 
 All byte values above are the mod's known-owner accounting model, not total JVM heap or a measured
 allocation peak. Counting ticks are service controls, not server-frame deadlines. The native fixture
-uses 30 original/stopped chunks, the exact complete material file and its actual registry providers.
+uses 30 original/stopped block-state and block-entity chunks, the exact complete material file and
+all registry providers needed by those inputs (115,814 registered states in this controlled runtime).
+GameTest still supplies its biome and tick environment; this is not a complete pack/world restart.
 It does not reconstruct the entire stopped world, unsaved live overlays or all cold terrain. Its two
 consumers and old cold backlog do not establish sustainable whole-world transport; the successful
 native transaction has zero old-material deposits during its short controlled window. The separate
