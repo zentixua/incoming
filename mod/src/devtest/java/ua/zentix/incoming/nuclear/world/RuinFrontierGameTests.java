@@ -50,6 +50,7 @@ public final class RuinFrontierGameTests {
             NuclearWorld.useClock(level.getServer(), WorkClock.counting(1_000_000));
             // Material plus a full pinned 25-snapshot scan would exhaust this counting budget.
             IncomingConfig.SERVER.workBudgetMs.set(26);
+            StrikeGameTests.afterTest(h, () -> RuinMatterGameTests.clearFixture(level));
         }
         StrikeGameTests.afterTest(h, () -> {
             NuclearWorld.useClock(level.getServer(), originalClock);
