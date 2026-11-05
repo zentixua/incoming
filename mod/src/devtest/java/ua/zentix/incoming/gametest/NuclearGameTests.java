@@ -18,7 +18,6 @@ import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.LeavesBlock;
-import net.minecraft.world.level.block.RotatedPillarBlock;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.fml.ModList;
@@ -236,12 +235,9 @@ public final class NuclearGameTests {
         h.assertBlockNotPresent(Blocks.OAK_PLANKS, planks);
         for (BlockPos p : BlockPos.betweenClosed(bricks.offset(-1, 0, -1), bricks.offset(1, 1, 0))) h.assertBlockPresent(Blocks.STONE_BRICKS, p.immutable());
         h.assertTrue(!h.getBlockState(tree.above()).is(BlockTags.LOGS), "tree trunk stands" + at);
-        int lying = 0;
-        for (int i = 0; i < 6; i++) {
-            var s = h.getBlockState(tree.east(i));
-            if (s.is(BlockTags.LOGS) && s.getValue(RotatedPillarBlock.AXIS) == Direction.Axis.X) lying++;
-        }
-        h.assertTrue(lying >= 3, "the tree did not lie down from the epicenter: logs along x " + lying + at);
+        int falling = ua.zentix.incoming.nuclear.world.RuinMatter.get(h.getLevel())
+                .pendingFrom(h.absolutePos(tree), h.absolutePos(tree.above(3)));
+        h.assertTrue(falling == 4, "Failure must retain all four logs in flight before deposition: " + falling + at);
         for (BlockPos p : BlockPos.betweenClosed(tree.offset(-2, 3, -2), tree.offset(2, 5, 2))) {
             h.assertTrue(!h.getBlockState(p).is(BlockTags.LEAVES), "foliage hangs without a trunk in " + p.toShortString() + at);
         }
@@ -250,26 +246,27 @@ public final class NuclearGameTests {
     }
 
     /**
-     * Ruins: stone brick tower 3×3×4 in 480 m from 15 kt near the ground (1 block = 40 m, ~30 psi) is collapsing, in its place is
-     *  a blockage high; chunk height maps - for ruins (replacement of entire sections, without {@code setBlock} for each block).
-     *  Debris for players ({@link RuinPlan#thrown}) - demolished places of the tower with its block; the smaller limit is the beginning of the same list.
+     * A 3×3×4 stone-brick tower fails at the front, transferring all 36 blocks into motion. Heightmaps
+     * describe that failure stage; deposition is separately exercised by RuinMatterGameTests. The
+     * client debris sample retains the original material and a smaller limit is the same list prefix.
      */
     @GameTest(template = "range", timeoutTicks = 40, batch = "nuke_ruins", skyAccess = true)
-    public static void collapsedBuildingLeavesRubble(GameTestHelper h) {
+    public static void collapsedBuildingTransfersAllMaterial(GameTestHelper h) {
         ServerLevel level = h.getLevel();
         BlockPos tower = CENTER.east(12);
         for (BlockPos p : BlockPos.betweenClosed(tower.offset(-1, 0, -1), tower.offset(1, 3, 1))) h.setBlock(p, Blocks.STONE_BRICKS);
         List<RuinPlan> plans = scarAll(h, detonation(h, CENTER, 0, 15, 0.025f), new ColumnScar.Budget(false));
         thrownTower(h, plans, tower);
+        h.assertTrue(ua.zentix.incoming.nuclear.world.RuinMatter.get(level).pendingFrom(
+                h.absolutePos(tower.offset(-1, 0, -1)), h.absolutePos(tower.offset(1, 3, 1))) == 36,
+                "The entire demolished tower must enter material transport before it can settle");
         for (BlockPos p : BlockPos.betweenClosed(tower.offset(-1, 0, -1), tower.offset(1, 0, 1))) {
             BlockPos q = p.immutable();
-            var rubble = h.getBlockState(q);
-            h.assertTrue(rubble.is(Blocks.GRAVEL) || rubble.is(Blocks.COBBLESTONE) || rubble.is(Blocks.ANDESITE) || rubble.is(Blocks.TUFF),
-                    "no blockage in " + q.toShortString() + ": " + rubble);
+            h.assertTrue(h.getBlockState(q).isAir(), "A finished pile appeared before falling: " + q.toShortString());
             for (int y = 1; y <= 3; y++) h.assertTrue(h.getBlockState(q.above(y)).isAir(), "the tower stands: " + q.above(y).toShortString());
             BlockPos abs = h.absolutePos(q);
-            h.assertTrue(level.getHeight(Heightmap.Types.WORLD_SURFACE, abs.getX(), abs.getZ()) == abs.getY() + 1,
-                    "height map not for ruins: " + level.getHeight(Heightmap.Types.WORLD_SURFACE, abs.getX(), abs.getZ()) + " instead of " + (abs.getY() + 1));
+            h.assertTrue(level.getHeight(Heightmap.Types.WORLD_SURFACE, abs.getX(), abs.getZ()) == abs.getY(),
+                    "Height map must describe failure, not a future pile");
         }
         h.succeed();
     }
@@ -391,14 +388,12 @@ public final class NuclearGameTests {
         return out.toString();
     }
 
-    /** From the tower there is a blockage and no more than 5% of blocks above it, nothing hangs above the void; how many blocks are above the rubble? */
+    /** Failure leaves at most 5% of the upper structure, no floating survivors, and all removed material in transport. */
     private static int towerFell(GameTestHelper h, Detonation d, BlockPos c, int built, String path) {
-        int standing = 0, rubble = 0;
+        int standing = 0, survivors = 0;
         for (int dx = -TOWER_HALF; dx <= TOWER_HALF; dx++) {
             for (int dz = -TOWER_HALF; dz <= TOWER_HALF; dz++) {
                 BlockPos col = c.offset(dx, 0, dz);
-                BlockState first = h.getBlockState(col);
-                if (first.is(Blocks.GRAVEL) || first.is(Blocks.COBBLESTONE) || first.is(Blocks.ANDESITE) || first.is(Blocks.TUFF)) rubble++;
                 int air = 0;
                 for (int y = 0; y < TOWER_HEIGHT; y++) {
                     BlockState st = h.getBlockState(col.above(y));
@@ -407,6 +402,7 @@ public final class NuclearGameTests {
                         continue;
                     }
                     if (y >= 4) standing++;
+                    survivors++;
                     if (air >= 3) h.fail(path + ": hanging in the air " + st + " in " + col.above(y).toShortString() + " over the void in " + air + " blocks; " + profile(h, c));
                     air = 0;
                 }
@@ -414,7 +410,10 @@ public final class NuclearGameTests {
         }
         h.assertTrue(standing * 20 <= built, path + ": the tower stands higher than the rubble " + standing + " blocks of " + built
                 + " (pressure at the tower " + String.format(Locale.ROOT, "%.0f", d.psi(Vec3.atCenterOf(h.absolutePos(c)))) + " psi)");
-        h.assertTrue(rubble * 2 >= (2 * TOWER_HALF + 1) * (2 * TOWER_HALF + 1), path + ": there is not enough blockage - " + rubble + " columns");
+        int pending = ua.zentix.incoming.nuclear.world.RuinMatter.get(h.getLevel()).pendingFrom(
+                h.absolutePos(c.offset(-TOWER_HALF, 0, -TOWER_HALF)), h.absolutePos(c.offset(TOWER_HALF, TOWER_HEIGHT - 1, TOWER_HALF)));
+        h.assertTrue(pending >= built - survivors, path + ": removed material did not enter transport: " + pending
+                + " pending for " + (built - survivors) + " removed blocks");
         return standing;
     }
 

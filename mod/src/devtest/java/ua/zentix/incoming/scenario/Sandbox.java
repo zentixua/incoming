@@ -997,17 +997,20 @@ final class Sandbox {
      * — {@code place feature}: random shape).
      */
     private static void buildHouses(MinecraftServer server, BlockPos o) {
-        int x = o.getX(), y = o.getY(), z = o.getZ();
-        List<String> build = new ArrayList<>(List.of(
-                "fill %d %d %d %d %d %d minecraft:stone_bricks hollow".formatted(x - 12, y, z - 4, x - 4, y + 6, z + 4),
-                "fill %d %d %d %d %d %d minecraft:glass_pane".formatted(x - 10, y + 2, z + 4, x - 6, y + 3, z + 4),
-                "fill %d %d %d %d %d %d minecraft:glass_pane".formatted(x - 10, y + 2, z - 4, x - 6, y + 3, z - 4),
-                "fill %d %d %d %d %d %d minecraft:oak_planks".formatted(x - 12, y + 7, z - 4, x - 4, y + 7, z + 4),
-                "fill %d %d %d %d %d %d minecraft:oak_planks hollow".formatted(x + 4, y, z - 3, x + 12, y + 5, z + 3),
-                "fill %d %d %d %d %d %d minecraft:glass".formatted(x + 6, y + 2, z + 3, x + 10, y + 3, z + 3),
-                "fill %d %d %d %d %d %d minecraft:glass".formatted(x + 6, y + 2, z - 3, x + 10, y + 3, z - 3)));
-        for (int[] t : new int[][]{{x - 8, z + 12}, {x + 8, z + 12}, {x, z - 14}}) build.addAll(oak(t[0], y, t[1]));
-        for (String c : build) run(server, c);
+        int y = o.getY(), z = o.getZ();
+        for (int side : new int[]{-1, 1}) {
+            int x = o.getX() + side * 18;
+            run(server, "fill %d %d %d %d %d %d minecraft:glass hollow".formatted(x - 12, y, z - 12, x + 12, y + 5, z + 12));
+            run(server, "fill %d %d %d %d %d %d minecraft:air".formatted(x - 11, y, z - 11, x + 11, y + 4, z + 11));
+            run(server, "fill %d %d %d %d %d %d minecraft:%s".formatted(x - 12, y + 5, z - 12, x + 12, y + 5, z + 12,
+                    side < 0 ? "stone" : "white_concrete"));
+        }
+        for (int side : new int[]{-1, 1}) {
+            int x = o.getX() + side * 8, tz = z + 24, height = side < 0 ? 16 : 30;
+            run(server, "fill %d %d %d %d %d %d minecraft:oak_log".formatted(x, y, tz, x, y + height - 1, tz));
+            if (side > 0) run(server, "fill %d %d %d %d %d %d minecraft:oak_leaves[persistent=true]".formatted(
+                    x - 2, y + height, tz - 2, x + 2, y + height + 1, tz + 2));
+        }
     }
 
     /**
@@ -1180,6 +1183,7 @@ final class Sandbox {
         if (overlay) drawOverlay(mc, partial);
         Capture cap = capture;
         if (cap == null || effectTick < 0 || cap.next >= cap.times.length) return;
+        if (tick - effectTick >= 160) IncomingClient.resetSession();
         double t = cap.times[cap.next];
         if (tick < effectTick + Math.round(t * 20)) return;
         double age = (tick - effectTick + partial) / 20.0;

@@ -238,7 +238,8 @@ final class Collapse {
                 int x = wx + dir.getStepX(), yy = y + dir.getStepY(), z = wz + dir.getStepZ();
                 if (!inside(x, yy, z) || !w.has(x, z)) continue;
                 int next = idx(x, yy, z);
-                if (before[next] != 0 || !props(x, yy, z).bearing()) continue;
+                if (before[next] != 0 || !props(x, yy, z).bearing()
+                        || !props(wx, y, wz).touches(dir, props(x, yy, z))) continue;
                 before[next] = 1;
                 ring[tail++] = next;
             }
@@ -262,7 +263,8 @@ final class Collapse {
                         continue;
                     }
                     int next = idx(x, yy, z);
-                    if (after[next] != 0 || bit(gone, next) || !props(x, yy, z).bearing()) continue;
+                    if (after[next] != 0 || bit(gone, next) || !props(x, yy, z).bearing()
+                            || !props(wx, y, wz).touches(dir, props(x, yy, z))) continue;
                     after[next] = 1;
                     ring[tail++] = next;
                 }

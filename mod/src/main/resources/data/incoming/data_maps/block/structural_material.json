@@ -1,0 +1,14 @@
+{
+  "_comment": "Representative density estimates; connection displacement/span is an explicitly estimated brittle (0.005) or timber-joint (0.02) failure displacement, not a measured property of every Minecraft build. Pressure capacity retains the existing nuke material tags. Geometry uses collision shape and the existing penetration data map's represented thickness exactly once. Unlisted blocks use the same material-family fallback, and mods may supply this map for their own blocks.",
+  "_sources": {
+    "response": "Single-degree-of-freedom response to a pressure-time history: UFC 3-340-02, chapter 3, https://www.wbdg.org/ffc/army-coe/ufc/ufc-3-340-02 . Joint displacement estimates remain uncalibrated construction assumptions.",
+    "densities": "Representative family estimates consistent with the existing Shielding material model: wood 600, stone/concrete 2300, steel 7800 kg/m3; glass is solid glass at 2500 kg/m3, never silently reduced to a millimetre pane. Represented construction thickness is documented in penetration.json."
+  },
+  "values": {
+    "#minecraft:logs": { "density_kg_m3": 600, "joint_displacement_per_span": 0.02 },
+    "#minecraft:planks": { "density_kg_m3": 600, "joint_displacement_per_span": 0.02 },
+    "#incoming:nuke_masonry": { "density_kg_m3": 2300, "joint_displacement_per_span": 0.005 },
+    "minecraft:iron_block": { "density_kg_m3": 7800, "joint_displacement_per_span": 0.02 },
+    "minecraft:iron_bars": { "density_kg_m3": 7800, "joint_displacement_per_span": 0.02 }
+  }
+}

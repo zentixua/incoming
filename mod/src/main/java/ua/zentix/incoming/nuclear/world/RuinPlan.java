@@ -547,7 +547,7 @@ public final class RuinPlan {
         if (this == EMPTY) return 0;
         return 64 + 12L * cells.length + 8L * fluidTicks.length + 8L * oldHashes.length + 8L * states.length + 4L * fires.length + 4L * heights.length
                 + 8L * lightAt.length + (prints == null ? 0 : 16L * prints.length) + (outside == null ? 0 : 16L * outside.size()) + (biomes == null ? 0 : 96)
-                + (flash == null ? 0 : 4L * flash.length) + (blown == null ? 0 : 4L * blown.length);
+                + (flash == null ? 0 : 4L * flash.length) + (blown == null ? 0 : 4L * blown.length) + 8L * material.length;
     }
 
     private static int section(int cell) {
@@ -734,16 +734,38 @@ public final class RuinPlan {
         RuinPlan flash = flashOf(chunk);
         boolean marked = flash == null && FlashScorch.marked(chunk, d.id());
         if (!current(chunk, flash, marked)) return false;
+        java.util.List<RuinMatter.Piece> released = new java.util.ArrayList<>();
+        RuinScorch scorch = new RuinScorch(chunk);
+        for (long position : material) {
+            BlockPos at = BlockPos.of(position);
+            BlockState state = chunk.getBlockState(at);
+            // Thermal-before-blast ordering: capture what actually survived the light pulse,
+            // never resurrect a block from the original pre-flash snapshot.
+            RuinMatter.Piece piece = RuinMatter.capture(level, at, state, d, scorch);
+            if (piece != null) released.add(piece);
+        }
         short[] motion = new short[256];
         for (int column = 0; column < 256; column++) motion[column] = (short) (chunk.getHeight(Heightmap.Types.MOTION_BLOCKING, column & 15, column >> 4) + 1);
         // biome before blocks: Distant Horizons LOD reads chunk with biome after position writes
         boolean recoloured = biomes != null && ScorchedBiomes.write(level, chunk, biomes);
-        if (cells.length > 0 || fires.length > 0 || outside != null || fluidTicks.length > 0 || flash != null || marked) {
-            // blocks outside plan positions checked before writes: afterward chunk different. Flash layer makes chunk differ
-            // from pre-flash plan snapshot, so rescan plan columns from chunk
-            write(level, chunk, budget, t, flash == null && !marked && cells.length > 0 && sameBlocks(chunk), flash, marked, false);
-        } else if (recoloured) {
-            DhUpdates.mark(level, chunk.getPos(), level.getGameTime());
+        try {
+            if (cells.length > 0 || fires.length > 0 || outside != null || fluidTicks.length > 0 || flash != null || marked) {
+                // blocks outside plan positions checked before writes: afterward chunk different. Flash layer makes chunk differ
+                // from pre-flash plan snapshot, so rescan plan columns from chunk
+                write(level, chunk, budget, t, flash == null && !marked && cells.length > 0 && sameBlocks(chunk), flash, marked, false);
+            } else if (recoloured) {
+                DhUpdates.mark(level, chunk.getPos(), level.getGameTime());
+            }
+        } finally {
+            // A block callback can fail after preceding cells were removed. Retain ownership of
+            // those removals even on that exceptional path; unmodified cells remain in the world.
+            released.removeIf(piece -> {
+                BlockState now = chunk.getBlockState(piece.source);
+                Blast.Props props = Blast.props(now);
+                return now.getBlock() == piece.state.getBlock() || props.bearing() || props.leaves();
+            });
+            RuinMatter.get(level).release(released);
+            RuinMatter.get(level).support(level, released, d);
         }
         if (ctx != null) ctx.applied(chunk, this, motion);
         FlashScorch.unmark(chunk, d.id());
@@ -751,6 +773,13 @@ public final class RuinPlan {
         // on changed blocks removed
         if (ctx != null) ua.zentix.incoming.nuclear.flash.FlashSync.chars(level, chunk, d, flash());
         return true;
+    }
+
+    /** Structural candidates only; thermal/terrain transformations never manufacture coarse debris. */
+    private long[] material = new long[0];
+
+    void material(long[] positions) {
+        material = positions;
     }
 
     /**
