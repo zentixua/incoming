@@ -39,11 +39,32 @@ public final class RuinFrontierGameTests {
         frontier(h, true);
     }
 
-    @SuppressWarnings("unchecked")
+    @GameTest(template = "range", batch = "nuke_frontier_workspace", timeoutTicks = 240, skyAccess = true)
+    public static void actualWorkspaceFundsFarReadAndMaterialApplication(GameTestHelper h) throws Exception {
+        frontier(h, true, true);
+    }
+
     private static void frontier(GameTestHelper h, boolean withMaterial) throws Exception {
+        frontier(h, withMaterial, false);
+    }
+
+    @SuppressWarnings("unchecked")
+    private static void frontier(GameTestHelper h, boolean withMaterial, boolean workspacePressure) throws Exception {
         StrikeGameTests.gameSpeed(h);
         ServerLevel level = h.getLevel();
         var original = RuinStorageGameTests.fixture(h, true);
+        int originalThreads = IncomingConfig.SERVER.nukeRuinThreads.get();
+        java.util.concurrent.Future<?> warm;
+        if (workspacePressure) {
+            RuinWorkers.shutdown();
+            IncomingConfig.SERVER.nukeRuinThreads.set(10);
+            warm = RuinWorkers.submitForTest(() -> null, RuinWorkers.Priority.SEEN);
+            StrikeGameTests.afterTest(h, () -> {
+                ua.zentix.incoming.nuclear.NuclearStrikes.clear(level);
+                RuinWorkers.shutdown();
+                IncomingConfig.SERVER.nukeRuinThreads.set(originalThreads);
+            });
+        } else warm = null;
         var originalClock = NuclearWorld.clock(level.getServer());
         int originalBudget = IncomingConfig.SERVER.workBudgetMs.get();
         if (withMaterial) {
@@ -113,6 +134,7 @@ public final class RuinFrontierGameTests {
         h.succeedWhen(() -> {
             try {
                 if (!opened[0]) {
+                    if (warm != null) h.assertTrue(warm.isDone(), "One funded decoder has not warmed up");
                     for (ChunkShot shot : shots) h.assertTrue(archive.evictable(shot.pos().toLong(), shot), "Actual snapshot write not acknowledged yet");
                     h.assertTrue(NuclearPrep.memory(level) < NuclearPrep.PLANS_CAP - (48L << 20), "Cold ledgers/setup still own admission");
                     context.dropShotsForTest();
@@ -127,7 +149,8 @@ public final class RuinFrontierGameTests {
                                 net.minecraft.world.level.block.Blocks.STONE.defaultBlockState(), null, Vec3.ZERO, level.getGameTime()));
                         material[0].release(pieces);
                     }
-                    other.materialReservation += Math.max(0, NuclearPrep.PLANS_CAP - (32L << 20) - NuclearPrep.memory(level) - (16L << 20));
+                    other.materialReservation += workspacePressure ? 280L << 20
+                            : Math.max(0, NuclearPrep.PLANS_CAP - (32L << 20) - NuclearPrep.memory(level) - (16L << 20));
                     field(owner, "layout").set(owner, null);
                     openedAt[0] = level.getGameTime();
                     opened[0] = true;
@@ -136,7 +159,8 @@ public final class RuinFrontierGameTests {
                         "Already funded far work was starved by the material continuation");
                 int cursor = field(owner, "nextFar").getInt(owner), readCursor = field(owner, "nextRead").getInt(owner);
                 h.assertTrue(readCursor <= Math.min(order.length, cursor + RuinWorkers.capacity()), "Reader outran bounded solver frontier");
-                h.assertTrue(NuclearPrep.memory(level) <= NuclearPrep.PLANS_CAP, "Controlled pipeline exceeded its admission budget");
+                h.assertTrue((workspacePressure ? NuclearPrep.residentMemory(level) : NuclearPrep.memory(level)) <= NuclearPrep.PLANS_CAP,
+                        "Controlled pipeline exceeded its admission budget");
                 var plans = (RetainedPlans) field(owner, "plans").get(owner);
                 var plan = plans.get(centre.toLong());
                 h.assertTrue(plan != null, "Current physical plan did not complete through actual disk/archive reads; read=" + readCursor
@@ -151,6 +175,20 @@ public final class RuinFrontierGameTests {
                     h.assertTrue(advanced || material[0].deposited() > 0, "Material had calls but no actual progress");
                     Incoming.LOG.info("FRONTIER_MATERIAL far plan completed in {} ticks with {} moving records, resident {}",
                             level.getGameTime() - openedAt[0], material[0].pending(), NuclearPrep.residentMemory(level));
+                    if (workspacePressure) {
+                        long released = material[0].released();
+                        for (int z = -2; z <= 2; z++) for (int x = -2; x <= 2; x++) level.getChunk(centre.x + x, centre.z + z);
+                        var events = ua.zentix.incoming.nuclear.NuclearEvents.get(level);
+                        var actual = new Detonation(events.nextId(), geometry.burst(), geometry.groundY(), geometry.yieldKt(), geometry.surface(),
+                                level.getGameTime() - 20000, 0, 0, geometry.visibility(), 0, geometry.scale(), false, geometry.wave());
+                        events.add(actual);
+                        h.assertTrue(plan.apply(level, level.getChunkSource().getChunkNow(centre.x, centre.z), actual, new ColumnScar.Budget(false)),
+                                "Funded FAR result refused actual application; capacity=" + plan.memoryWaiting());
+                        h.assertTrue(material[0].released() > released, "FAR produced a plan without an actual material transaction");
+                        h.assertTrue(NuclearPrep.residentMemory(level) <= NuclearPrep.PLANS_CAP, "FAR application exceeded its shared cap");
+                        Incoming.LOG.info("FRONTIER_WORKSPACE applied {} actual material records, pending {}, resident {}",
+                                material[0].released() - released, material[0].pending(), NuclearPrep.residentMemory(level));
+                    }
                 }
             } catch (ReflectiveOperationException e) { throw new IllegalStateException(e); }
         });

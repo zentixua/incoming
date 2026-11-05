@@ -580,6 +580,15 @@ public final class NuclearPrep {
                 : RuinWorkers.residentBufferBytes(height));
     }
 
+    /** Source I/O needs one real decoder restart, not every configured future solver's workspace.
+     * Existing workers stay charged; later births and solver results have their own admission.
+     * Keep the material transition reserve and the caller's write-encoding margin. */
+    private static long sourceMemory(ServerLevel level) {
+        int height = level.getHeight();
+        for (ServerLevel other : level.getServer().getAllLevels()) height = Math.max(height, other.getHeight());
+        return memory(level, false) + RuinWorkers.startupBytes(height) + RuinMemory.TRANSITION_ROOM;
+    }
+
     /** Squares held by tickets (tests). */
     public int heldTiles() {
         return (int) preps.stream().flatMap(p -> p.tiles.stream()).filter(t -> t.state == TileState.LOADING || t.state == TileState.READY).count();
@@ -1181,20 +1190,20 @@ public final class NuclearPrep {
         if (p.nextFar < p.order.length && !p.ruins.pinWindow(p.order[p.nextFar])) return;
         p.nextRead = Math.max(p.nextRead, p.nextFar); // Earlier centres already have a task/plan or were excluded.
         int readEnd = (int) Math.min(p.order.length, (long) p.nextFar + RuinWorkers.capacity());
-        while (p.nextRead < readEnd && p.reading.size() < READS && memory(level) + READ_BYTES <= WINDOW_CAP) {
+        while (p.nextRead < readEnd && p.reading.size() < READS && sourceMemory(level) + READ_BYTES <= WINDOW_CAP) {
             long c = p.order[p.nextRead];
             boolean all = true;
             for (int dx = -RuinPlanner.REACH; all && dx <= RuinPlanner.REACH; dx++) {
                 for (int dz = -RuinPlanner.REACH; all && dz <= RuinPlanner.REACH; dz++) {
                     long k = ChunkPos.asLong(ChunkPos.getX(c) + dx, ChunkPos.getZ(c) + dz);
                     if (p.reading.contains(k) || p.unreadable.contains(k) || p.ruins.shotAvailable(level, k)) continue;
-                    if (p.reading.size() >= READS || memory(level) + READ_BYTES > WINDOW_CAP) {
+                    if (p.reading.size() >= READS || sourceMemory(level) + READ_BYTES > WINDOW_CAP) {
                         all = false;
                         continue;
                     }
                     var archive = p.ruins.archive();
                     boolean stored = archive != null && archive.mayHave(k);
-                    if (stored && memory(level) + SPILL_READ_BYTES > WINDOW_CAP) { all = false; continue; }
+                    if (stored && sourceMemory(level) + SPILL_READ_BYTES > WINDOW_CAP) { all = false; continue; }
                     p.reading.add(k);
                     if (stored) {
                         var accept = p.archived.expect();
