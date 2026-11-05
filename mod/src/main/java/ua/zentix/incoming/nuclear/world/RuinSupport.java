@@ -47,7 +47,13 @@ final class RuinSupport {
     }
 
     /** True when settled as supported, absent, or fully released. */
+    public static long benchNanos, benchCalls, benchMax, benchPeak;
     boolean step(ServerLevel level, RuinMatter ledger, Detonation d) {
+        long began = System.nanoTime();
+        try { return stepMeasured(level, ledger, d); }
+        finally { long elapsed = System.nanoTime()-began; benchNanos+=elapsed; benchCalls++; benchMax=Math.max(benchMax,elapsed); benchPeak=Math.max(benchPeak,retainedBytes()); }
+    }
+    boolean stepMeasured(ServerLevel level, RuinMatter ledger, Detonation d) {
         waiting = false;
         if (invalidated) restart();
         RuinScorch scorch = null;

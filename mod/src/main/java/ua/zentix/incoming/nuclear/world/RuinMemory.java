@@ -13,7 +13,7 @@ final class RuinMemory {
     static Reservation reserve(ServerLevel level, long bytes) {
         if (bytes < 0) throw new IllegalArgumentException("Negative material reservation");
         NuclearWorld owner = NuclearWorld.get(level);
-        long retained = NuclearPrep.memory(level) - TRANSITION_ROOM;
+        long retained = NuclearPrep.memory(level, false);
         if (bytes > NuclearPrep.PLANS_CAP - retained) return null;
         owner.materialReservation += bytes;
         return new Reservation(owner, bytes);
@@ -25,7 +25,7 @@ final class RuinMemory {
         private Reservation(NuclearWorld owner, long bytes) { this.owner = owner; this.bytes = bytes; }
         boolean grow(ServerLevel level, long extra) {
             if (extra < 0) throw new IllegalArgumentException("Negative material reservation");
-            if (extra > NuclearPrep.PLANS_CAP - (NuclearPrep.memory(level) - TRANSITION_ROOM)) return false;
+            if (extra > NuclearPrep.PLANS_CAP - (NuclearPrep.memory(level, false))) return false;
             owner.materialReservation += extra;
             bytes += extra;
             return true;

@@ -138,7 +138,7 @@ public final class ScarQueue {
      */
     static final int THROWN_PER_CHUNK = 24;
     /** {@link #ruin} unit result: applied; another unit (neighbor fracture computed, stale plan); await neighbors ({@link #waitRadius}). */
-    private static final int RUINED = 0, AGAIN = 1, WAIT = 2;
+    private static final int RUINED = 0, AGAIN = 1, WAIT = 2, MEMORY = 3;
     /**
      * Ready-queue inspection result ({@link #work(ServerLevel, Job, long)}): waiting without work (neighbors,
      * window read, pool slot, background plan); awaiting neighbors after on-site plan; unit done (ruins, neighbor
@@ -147,7 +147,7 @@ public final class ScarQueue {
      * clock always admits first unit, so entire queue would drain in tick: inspect only until
      * deadline ({@link WorkClock#overdue}).
      */
-    private static final int LOOKED = 0, PLANNED_WAITS = 1, WORKED = 2;
+    private static final int LOOKED = 0, PLANNED_WAITS = 1, WORKED = 2, CAPACITY_WAIT = 3;
     /** Slow nuclear-tick log/tests: jobs inspected this tick, those waiting. */
     private int inspected, waitedThisTick;
     /**
@@ -822,6 +822,7 @@ public final class ScarQueue {
                     Incoming.LOG.warn("Slow ruin chunk {}: {} ms", new ChunkPos(job.chunk), took / 1_000_000);
                 }
             }
+            if (result == CAPACITY_WAIT) return;
         }
     }
 
@@ -957,7 +958,7 @@ public final class ScarQueue {
             }
             if (plan.memoryWaiting()) {
                 plans.put(key, plan);
-                return AGAIN;
+                return MEMORY;
             }
             stalePlans++;
             st[1]++;
@@ -994,7 +995,7 @@ public final class ScarQueue {
         boolean applied = plan.apply(level, chunk, d, budget);
         if (plan.memoryWaiting()) {
             parked.put(key, new Parked(d.id(), plan));
-            return AGAIN;
+            return MEMORY;
         }
         if (applied) buried(level, d, free);
         if (!applied && !server) {
@@ -1209,6 +1210,13 @@ public final class ScarQueue {
             return WORKED;
         }
         int r = ruin(level, d, chunk, budget, Math.max(0, now - job.wave), seen);
+        if (r == MEMORY) {
+            // Capacity is a dependency, not more planning work. Retry in another tick and
+            // yield the remaining lane to moving material/settlement that can release memory.
+            job.due = now + 1;
+            byDue.add(job);
+            return CAPACITY_WAIT;
+        }
         if (r == AGAIN) {
             // neighbor fracture computed or plan stale: next unit behind already waiting jobs in same queue.
             // At head would block all: on-site plan up to 9 one-unit window fractures plus collapse, each several ms,

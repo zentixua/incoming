@@ -451,6 +451,10 @@ public final class NuclearWorld {
         }
         lastFrontNanos = System.nanoTime() - frontStart;
         if (now % 1200 == 0) scars.retainBudgets(events.detonations().stream().map(Detonation::id).collect(java.util.stream.Collectors.toSet()));
+        // At capacity, existing material must progress before new removals can consume the
+        // lane. One bounded batch avoids starving visible ruins while breaking that dependency.
+        matter = RuinMatter.get(level);
+        matter.work(level, clock, 1);
         long craterStart = System.nanoTime();
         digCraters(level, events, clock);
         long scarStart = System.nanoTime();
