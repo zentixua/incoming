@@ -61,10 +61,19 @@ public final class RuinMemoryFlowGameTests {
         var prepared = ScarQueue.class.getDeclaredField("prepared"); prepared.setAccessible(true);
         ((Map<Integer, Long2ObjectOpenHashMap<RuinPlan>>) prepared.get(world.scars())).put(d.id(), plans);
         world.scars().offer(chunk, d);
-        CompoundTag cargo = new CompoundTag(); cargo.putString("fixture_payload", "x".repeat(12000));
-        var falling = new RuinMatter.Piece(landing, Blocks.STONE.defaultBlockState(), cargo, Vec3.ZERO, time - 1);
+        level.setBlock(landing, Blocks.BARREL.defaultBlockState(), 2);
+        var sourceContainer = (net.minecraft.world.level.block.entity.BarrelBlockEntity) level.getBlockEntity(landing);
+        sourceContainer.setItem(0, new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.DIAMOND, 7));
+        sourceContainer.getPersistentData().putString("fixture_payload", "x".repeat(12000));
+        CompoundTag cargo = sourceContainer.saveWithoutMetadata(level.registryAccess());
+        ColumnScar.replace(level, landing, Blocks.BARREL.defaultBlockState(), Blocks.AIR.defaultBlockState());
+        var falling = new RuinMatter.Piece(landing, Blocks.BARREL.defaultBlockState(), cargo, Vec3.ZERO, time - 1);
         falling.y += 1;
         var ledger = RuinMatter.get(level); ledger.release(List.of(falling));
+        // Keep the active FIFO page owned while the container settles. A singleton pop would
+        // accidentally provide another full page of headroom before the cargo copy.
+        ledger.release(List.of(new RuinMatter.Piece(landing.east(), Blocks.STONE.defaultBlockState(), null,
+                Vec3.ZERO, time + 10_000)));
         world.ruins(level, d, time); // include context ownership before occupying the remaining room
         var other = level.getServer().getLevel(Level.NETHER);
         try (var occupied = RuinMemory.reserve(other, NuclearPrep.PLANS_CAP - NuclearPrep.memory(other, false) - 4096)) {
@@ -77,8 +86,13 @@ public final class RuinMemoryFlowGameTests {
             }
             h.assertTrue(ledger.deposited() == 1, "Waiting scar starved the existing moving piece: elapsed=" + (level.getGameTime() - time)
                     + ", deposited=" + ledger.deposited() + ", glass=" + level.getBlockState(at));
-            h.assertTrue(level.getBlockState(at).isAir() && ledger.released() == 2,
+            h.assertTrue(level.getBlockState(at).isAir() && ledger.released() == 3,
                     "Freed capacity did not apply the same pending plan exactly once");
+            var deposited = (net.minecraft.world.level.block.entity.BarrelBlockEntity) level.getBlockEntity(landing);
+            h.assertTrue(deposited != null && deposited.getItem(0).is(net.minecraft.world.item.Items.DIAMOND)
+                    && deposited.getItem(0).getCount() == 7
+                    && deposited.getPersistentData().getString("fixture_payload").equals("x".repeat(12000)),
+                    "Capacity progress lost real container inventory or persistent data");
         } finally {
             ((net.minecraft.world.level.storage.ServerLevelData) level.getLevelData()).setGameTime(time);
             NuclearStrikes.clear(level); RuinMatterGameTests.clearFixture(level);
