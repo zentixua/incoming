@@ -23,20 +23,12 @@ final class ArrivalScene {
 
     static void start(Vec3 at, int count, boolean burst) {
         reset();
-        ground = at;
-        flash = burst;
-        start = Minecraft.getInstance().level.getGameTime();
-        age = 0;
-        long end = start + 240;
-        for (int i = 0; i < count; i++) {
-            Vec3 target = at.add((i % 10) * 30, 0, (i / 10) * 30);
-            Vec3 launch = target.add(-6000, 0, 0);
-            ClientHooks.get().nukeWarning(new S2C.NukeWarning(9000 + i, target, launch, end - 1800, end, 15, true, false, false, 1));
-            Detonation g = geometry(9000 + i, target, end);
-            PATHS.add(new IcbmArrival(9000 + i, start, end, g,
-                    IcbmArrival.velocity(launch, target, WeaponSpec.NUKE.airframe().diveSpeed())));
-        }
-        ClientHooks.get().nukeApproach(new S2C.NukeApproach(start, List.copyOf(PATHS)));
+        var mc = Minecraft.getInstance();
+        double kt = count == 1 ? 15 : count == 2 ? 100 : 1000;
+        long when = mc.level.getGameTime() - 6000;
+        var d = new Detonation(9900, at, at.y, kt, true, when, 0, 3, 20000,
+                1234, 1, false, .25f, mc.level.getDayTime() - 6000, true);
+        ua.zentix.incoming.client.nuclear.ClientNuclear.detonation(new S2C.NukeDetonation(d, 0), false);
     }
 
     private static Detonation geometry(int id, Vec3 target, long end) {
