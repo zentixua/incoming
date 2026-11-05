@@ -101,6 +101,26 @@ public final class StemDust {
             return Arrays.equals(land, shares) ? this : new Source(yieldKt, hob, surface, visibility, front, scale, shares);
         }
 
+        /**
+         * The front creates each annulus's finite airborne inventory. Later ground knowledge cannot change that
+         * inventory, including its subsequent afterwind transfer into the stem. Unborn annuli may still change.
+         */
+        private Source preserveBorn(Source admitted, double seconds) {
+            if (Double.compare(yieldKt, admitted.yieldKt) != 0 || Double.compare(hob, admitted.hob) != 0
+                    || surface != admitted.surface || Double.compare(visibility, admitted.visibility) != 0
+                    || !Arrays.equals(arrival, admitted.arrival))
+                throw new IllegalArgumentException("A stem consumer cannot replace its detonation geometry or source clock");
+            double[] shares = null;
+            for (int i = 0; i < RINGS; i++) {
+                if (arrival[i] <= seconds && land[i] != admitted.land[i]) {
+                    if (shares == null) shares = land.clone();
+                    shares[i] = admitted.land[i];
+                }
+            }
+            if (shares == null) return this;
+            return Arrays.equals(shares, admitted.land) ? admitted : withLand(shares);
+        }
+
         /** Local front arrival in model seconds, also used at the moving stem foot. */
         public double arrivalSeconds(double groundMetres) {
             return front == null ? HobBlast.arrivalSeconds(groundMetres, hob, yieldKt)
@@ -127,41 +147,68 @@ public final class StemDust {
      * at most one ready table and one pending/completed replacement belong to this consumer.
      */
     public static final class Request {
-        private Source source, building;
+        private Source source, building, admitted;
         private final Executor worker;
         private CompletableFuture<StemDust> entry;
         private StemDust previous;
+        /** History survives replay seeks and releasing an expired table. Model seconds, never a wall clock. */
+        private double bornThrough = Double.NEGATIVE_INFINITY;
 
         private Request(Source source, Executor worker) {
             this.source = source;
+            this.admitted = source;
             this.worker = worker;
         }
 
         @org.jetbrains.annotations.Nullable
         public StemDust ready() {
-            if (entry != null && entry.isDone()) {
-                if (source.equals(building)) {
-                    previous = null;
-                    return value(entry);
-                }
-                StemDust completed = value(entry);
-                if (completed != null) previous = completed;
-                entry = null;
-            }
+            complete();
+            if (previous != null && source.equals(admitted)) return previous;
             if (entry == null) {
                 entry = start(source, worker);
                 if (entry != null) building = source;
             }
-            if (entry != null && entry.isDone()) {
-                previous = null;
-                return value(entry);
-            }
+            complete();
             return previous;
+        }
+
+        /** Admit results at the actual consumer clock, including completion after a source-birth boundary. */
+        @org.jetbrains.annotations.Nullable
+        public StemDust ready(double seconds) {
+            advance(seconds);
+            return ready();
+        }
+
+        private void complete() {
+            if (entry == null || !entry.isDone()) return;
+            StemDust completed = value(entry);
+            if (completed != null && building.equals(building.preserveBorn(admitted, bornThrough))) {
+                previous = completed;
+                admitted = building;
+            }
+            // A stale completion is still reusable by other consumers; this owner never applies its rewritten history.
+            entry = null;
+            building = null;
+            source = source.preserveBorn(admitted, bornThrough);
+        }
+
+        private void advance(double seconds) {
+            if (!Double.isFinite(seconds)) throw new IllegalArgumentException("Expected finite stem model time");
+            bornThrough = Math.max(bornThrough, seconds);
+            source = source.preserveBorn(admitted, bornThrough);
         }
 
         /** Coalesce new surface knowledge without abandoning a running builder or accumulating old table owners. */
         public void update(Source source) {
-            this.source = Objects.requireNonNull(source);
+            this.source = Objects.requireNonNull(source).preserveBorn(admitted, bornThrough);
+            // Before any displayed result, choosing the initial source cannot erase displayed matter. Keep this
+            // choice even if its first worker completes late; a superseded cold result must not overwrite it then.
+            if (previous == null) admitted = this.source;
+        }
+
+        public void update(Source source, double seconds) {
+            advance(seconds);
+            update(source);
         }
 
         /** Detach this consumer without cancelling a computation shared with other consumers. */

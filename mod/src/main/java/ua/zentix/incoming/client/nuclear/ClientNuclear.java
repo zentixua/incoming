@@ -342,7 +342,7 @@ public final class ClientNuclear {
             // under epicenter)
             // water under epicenter before pall map: map fills unknowns from it
             NukeWater.resolve(a, level);
-            if (a.seconds(0) < MushroomModel.lifeSeconds(a.d.yieldKt())) a.pall.surveyStem(water);
+            if (a.seconds(0) < MushroomModel.lifeSeconds(a.d.yieldKt())) a.pall.surveyStem(water, a.seconds(0));
             double wall = a.wall.reach(a.seconds(0));
             double seen = Math.hypot(eye.x - a.d.burst().x, eye.z - a.d.burst().z);
             if (a.pall.visible(a.ticks(0)) || wall > 0) a.ground.survey(a.ticks(0), wall, seen, heights, water);

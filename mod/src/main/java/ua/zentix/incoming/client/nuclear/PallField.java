@@ -222,12 +222,12 @@ public final class PallField {
             stemRequest.release();
             return null;
         }
-        return stemRequest.ready();
+        return stemRequest.ready(seconds);
     }
 
     /** Raw surface knowledge supplies the stem independently of the pall's filled rendering map. */
-    void surveyStem(@Nullable FarTerrain.Water water) {
-        stemRequest.update(stemSurface.survey(water));
+    void surveyStem(@Nullable FarTerrain.Water water, double seconds) {
+        stemRequest.update(stemSurface.survey(water), seconds);
     }
 
     /** Minimum pall height in blocks (small strike scale): otherwise invisible. */

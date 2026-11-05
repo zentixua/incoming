@@ -19,7 +19,7 @@ class StemSourceTest {
         PallField pall = new PallField(d, 6000);
         StemDust.Source wet = pall.stemSource.withLand(new double[pall.stemSource.rings()]);
         StemDust expected = StemDust.of(wet);
-        for (int tick = 0; tick < pall.stemSource.rings(); tick++) pall.surveyStem((x, z) -> 1);
+        for (int tick = 0; tick < pall.stemSource.rings(); tick++) pall.surveyStem((x, z) -> 1, tick / 20.0);
         assertSame(expected, pall.stemDust(60), "the actual field consumer must use the surveyed table");
         MushroomModel.Shape shape = MushroomModel.shape(60, 15, 592, false, 0, pall.stemDust(60));
         assertEquals(0, shape.stemTau(), 0);
@@ -27,7 +27,7 @@ class StemSourceTest {
         MushroomField.foot(d, pall, PallField.Water.DRY, shape, 1200, foot);
         assertEquals(0, foot[1], 0, "no terrestrial inflow connector survives an empty stem source");
         assertNull(pall.stemDust(MushroomModel.lifeSeconds(15)));
-        pall.surveyStem((x, z) -> 0);
+        pall.surveyStem((x, z) -> 0, 60);
         assertSame(expected, pall.stemDust(60), "rewind preserves already known source columns");
     }
 
