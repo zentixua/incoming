@@ -33,6 +33,8 @@ import ua.zentix.incoming.gametest.StrikeGameTests;
 @EventBusSubscriber(modid = Incoming.MOD_ID)
 public final class RuinMatterFailureGameTests {
     private RuinMatterFailureGameTests() {}
+    /** Fixtures are not production blocks and never had airstrike namespace aliases. */
+    private static final String TEST_NAMESPACE = "incoming_devtest";
 
     private static BlockPos collisionFailure;
     private static int collisionCalls;
@@ -56,20 +58,20 @@ public final class RuinMatterFailureGameTests {
     public static void register(RegisterEvent event) {
         event.register(Registries.BLOCK, helper -> {
             collider = collider();
-            helper.register(ResourceLocation.fromNamespaceAndPath(Incoming.MOD_ID, "test_material_collision"), collider);
+            helper.register(ResourceLocation.fromNamespaceAndPath(TEST_NAMESPACE, "test_material_collision"), collider);
             container = new CargoBlock();
-            helper.register(ResourceLocation.fromNamespaceAndPath(Incoming.MOD_ID, "test_material_container"), container);
+            helper.register(ResourceLocation.fromNamespaceAndPath(TEST_NAMESPACE, "test_material_container"), container);
             decoration = new Block(BlockBehaviour.Properties.of().noCollission()) {
                 @Override protected java.util.List<ItemStack> getDrops(BlockState state, net.minecraft.world.level.storage.loot.LootParams.Builder params) {
                     if (dropFailure) throw new CallbackFailure();
                     return java.util.List.of();
                 }
             };
-            helper.register(ResourceLocation.fromNamespaceAndPath(Incoming.MOD_ID, "test_material_decoration"), decoration);
+            helper.register(ResourceLocation.fromNamespaceAndPath(TEST_NAMESPACE, "test_material_decoration"), decoration);
         });
         event.register(Registries.BLOCK_ENTITY_TYPE, helper -> {
             cargoType = net.minecraft.world.level.block.entity.BlockEntityType.Builder.of(CargoEntity::new, container).build(null);
-            helper.register(ResourceLocation.fromNamespaceAndPath(Incoming.MOD_ID, "test_material_cargo"), cargoType);
+            helper.register(ResourceLocation.fromNamespaceAndPath(TEST_NAMESPACE, "test_material_cargo"), cargoType);
         });
     }
 
