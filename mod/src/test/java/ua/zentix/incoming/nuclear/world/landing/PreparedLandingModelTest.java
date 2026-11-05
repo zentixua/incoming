@@ -180,6 +180,53 @@ class PreparedLandingModelTest {
         }
     }
 
+    @Test void fractionalDeparturesAndDifferentHorizontalDragDoNotSerializeAFreeFallingShaft() {
+        for (double releaseStep : new double[]{.001, -.001}) for (boolean reverse : new boolean[]{false, true})
+            for (boolean variedDrag : new boolean[]{false, true}) {
+                byte[] cells = new byte[W * W * 96];
+                for (int y = 0; y < 96; y++) for (int z = 0; z < W; z++) for (int x = 0; x < W; x++)
+                    if (y == 0 || Math.abs(x - 24) + Math.abs(z - 24) == 1) cells[index(x, y, z)] = SOLID;
+                var inputs = new ArrayList<Source>();
+                for (int i = 0; i < 16; i++) {
+                    double departure = releaseStep > 0 ? i * releaseStep : (15 - i) * -releaseStep;
+                    inputs.add(new Source(reverse ? 16 - i : i + 1, 1, 24, 32 + i, 24, i, 1, 2300,
+                            departure, variedDrag ? 1 : 0, 0, variedDrag ? (i % 3 + 1) * 20 : 0, 3, Kind.ORDINARY));
+                    cells[index(24, 32 + i, 24)] = SOLID;
+                }
+                var result = PreparedLandingModel.solveAudited(new Snapshot(0, 0, 0, W, 96, W, cells), inputs, Limits.experiment());
+                assertEquals(16, result.count(Status.LANDED));
+                double freeFall = Math.sqrt(2 * 31 / GRAVITY);
+                for (var output : result.outcomes()) {
+                    assertEquals(output.source().y() - 31, output.y());
+                    assertTrue(output.time() >= output.source().departure() + freeFall - DT, "Early physical arrival");
+                    assertTrue(output.time() <= .015 + freeFall + DT, "A following cell paid a false one-cell waiting interval");
+                }
+            }
+    }
+
+    @Test void sweptReservationsRejectDiagonalCrossingAndHeadOnSwapWithoutPublishingEarly() {
+        int[][] positions = {{20, 20, 21, 20}, {20, 24, 28, 24}, {20, 24, 24, 20}, {20, 24, 21, 24}};
+        double[][] winds = {{10, 10, -10, 10}, {10, 0, -10, 0}, {10, 0, 0, 10}, {10, 0, 10, 0}};
+        for (int i = 0; i < positions.length; i++) {
+            int[] p = positions[i]; double[] wind = winds[i];
+            byte[] cells = floor(0);
+            var left = new Source(1, 1, p[0], 24, p[1], 1, 1, 2300, 0, wind[0], wind[1], 50, 3, Kind.ORDINARY);
+            var right = new Source(2, 1, p[2], 24, p[3], 2, 1, 2300, i == 3 ? .001 : 0, wind[2], wind[3], 50, 3, Kind.ORDINARY);
+            cells[index(left.x(), left.y(), left.z())] = SOLID;
+            cells[index(right.x(), right.y(), right.z())] = SOLID;
+            var snapshot = new Snapshot(0, 0, 0, W, H, W, cells);
+            var result = PreparedLandingModel.solveAudited(snapshot, List.of(left, right), Limits.experiment());
+            assertEquals(result, PreparedLandingModel.solveAudited(snapshot, List.of(right, left), Limits.experiment()));
+            assertEquals(2, result.count(Status.LANDED));
+            var occupied = new java.util.HashSet<Cell>();
+            for (var output : result.outcomes()) {
+                assertTrue(occupied.add(new Cell(output.x(), output.y(), output.z())));
+                assertTrue(output.time() >= output.source().departure());
+                assertTrue(output.time() >= output.trace().firstContactTime());
+            }
+        }
+    }
+
     @Test void laterSideHoleCannotMoveMaterialWithItsVerticalSupportIntact() {
         byte[] cells = floor(0);
         for (int x = 0; x < W; x++) for (int z = 0; z < W; z++) cells[index(x, 4, z)] = SOLID;
@@ -230,13 +277,18 @@ class PreparedLandingModelTest {
     @Test void finiteContactUsesHeightPotentialButFreeFlightStillHasItsAgeGuard() {
         byte[] cells = floor(0);
         var inputs = new ArrayList<Source>();
-        for (int y = 1; y < H; y++) {
-            Source s = source(y, 24, y, 24, 0);
-            inputs.add(s); cells[index(24, y, 24)] = SOLID;
-        }
+        inputs.add(source(1, 24, 2, 24, 0));
+        long id = 10;
+        for (int x = 23; x <= 25; x++) for (int z = 23; z <= 25; z++)
+            inputs.add(new Source(id++, 1, x, 1, z, 5, 1, 2300, 1, 0, 0, 0, 0, Kind.FINE));
+        for (Source input : inputs) cells[index(input.x(), input.y(), input.z())] = SOLID;
         var result = PreparedLandingModel.solve(new Snapshot(0, 0, 0, W, H, W, cells), inputs, new Limits(32, 100_000, .1));
-        assertEquals(inputs.size(), result.count(Status.LANDED));
-        assertTrue(result.outcomes().stream().mapToDouble(Outcome::time).max().orElseThrow() > .1);
+        assertEquals(1, result.count(Status.LANDED));
+        assertEquals(9, result.count(Status.DISPERSED));
+        var falling = result.outcomes().getFirst();
+        assertTrue(falling.trace().firstContactTime() < .1, "Fixture must reach contact before the flight-only guard");
+        assertTrue(falling.time() > 1, "Later support loss must preserve the finite contact transfer");
+        assertEquals(1, falling.y());
         var single = source(100, 10, 20, 10, 0);
         cells = floor(0); cells[index(10, 20, 10)] = SOLID;
         result = PreparedLandingModel.solve(new Snapshot(0, 0, 0, W, H, W, cells), List.of(single), new Limits(1, 100_000, .1));
@@ -258,14 +310,20 @@ class PreparedLandingModelTest {
         for (int x = 20; x < 25; x++) for (int z = 20; z < 25; z++) for (int y = 1; y < H; y++)
             inputs.add(source(inputs.size() + 1, x, y, z, 20));
         var result = solve(floor(0), inputs);
-        assertEquals(inputs.size(), result.count(Status.LANDED));
+        assertEquals(inputs.size(), result.count(Status.LANDED) + result.count(Status.OUT_OF_WINDOW));
+        assertEquals(inputs.size(), result.outcomes().size());
         var occupied = new java.util.HashSet<Cell>();
         for (var output : result.outcomes()) {
-            assertTrue(occupied.add(new Cell(output.x(), output.y(), output.z())));
+            assertEquals(inputs.get((int) output.source().id() - 1), output.source());
+            if (output.status() == Status.LANDED)
+                assertTrue(occupied.add(new Cell(output.x(), output.y(), output.z())));
+            else assertNotNull(output.blocked(), "Finite-window exit must retain its continuation boundary");
             assertEquals(0, output.trace().climbs());
             assertEquals(0, output.trace().postContactRises());
-            assertTrue(output.trace().firstContact().y() <= output.source().y());
-            assertTrue(output.y() <= output.trace().firstContact().y());
+            if (output.trace().firstContact() != null) {
+                assertTrue(output.trace().firstContact().y() <= output.source().y());
+                assertTrue(output.y() <= output.trace().firstContact().y());
+            }
         }
     }
 

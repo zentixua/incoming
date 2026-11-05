@@ -1,5 +1,6 @@
 package ua.zentix.incoming.nuclear.world.landing;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.HashSet;
@@ -7,13 +8,15 @@ import java.util.List;
 import java.util.PriorityQueue;
 
 /**
- * Devtest-only, world-free experiment: run the current coarse material law once against detached
- * collision cells. Free flight retains the existing numerical law with exclusive occupied voxels
- * from departure, including airborne material (a coarse voxel-transport approximation). Inelastic
- * contact changes to timed, strictly downhill cell transfers with unique material owners;
- * horizontal displacement remains the existing estimated one-block repose rule. The transient motion queue is bounded by one input window; only finite landing
- * operations survive the solve. Unknown geometry and exhausted work return explicit continuations,
- * never artificial ground. No production code calls this class.
+ * Devtest-only, world-free experiment against detached collision cells. Free flight uses the
+ * current gravity/drag law. Material interactions are a coarse voxel-transport approximation,
+ * not continuous rigid-body dynamics: BEGIN reserves the destination and releases logical source
+ * occupancy; END updates the physical position and arrival. A reservation never publishes a world
+ * block. Following material can share a fall without a one-cell waiting interval; contact retains
+ * at most the downward speed of its moving support. Crossing one-cell swept edges are exclusive.
+ * Inelastic contact has strictly downhill transfers with the existing estimated one-block repose.
+ * The transient queue is bounded by one input window; only finite outcomes survive. Unknown geometry
+ * and exhausted work remain explicit continuations, never artificial ground. No production caller.
  */
 public final class PreparedLandingModel {
     public static final byte AIR = 0, SOLID = 1, UNKNOWN = 2, UNSUPPORTED = 3, FREE_COLLIDING = 4, BLOCKED_EMPTY = 5;
@@ -101,8 +104,8 @@ public final class PreparedLandingModel {
     private static final class Motion {
         final Source source;
         double x, y, z, vx, vy, vz, time, due, dt, nx, ny, nz, ax, az, arrivalTime;
-        boolean departed, queued, contact;
-        int ownerCell = -1, tx, ty, tz;
+        boolean departed, queued, contact, horizontalBlocked;
+        int ownerCell = -1, plannedCell = -1, tx, ty, tz;
         double fallingSpeed;
         Status status;
         long segments;
@@ -128,6 +131,9 @@ public final class PreparedLandingModel {
     private final Limits limits;
     private final PriorityQueue<Motion> events = new PriorityQueue<>(ORDER);
     private final List<Outcome> outcomes = new ArrayList<>();
+    private record Wake(Motion owner, double time, Motion cause, int x, int y, int z) {}
+    private final ArrayDeque<Wake> wakes = new ArrayDeque<>();
+    private boolean waking;
     private long segments, reads, queueOperations;
     private int peak;
 
@@ -137,6 +143,15 @@ public final class PreparedLandingModel {
     }
 
     public static Result solve(Snapshot snapshot, List<Source> sources, Limits limits) {
+        return solve(snapshot, sources, limits, false);
+    }
+
+    /** Unit-only invariant audit after every event; excluded from measured/native solves. */
+    static Result solveAudited(Snapshot snapshot, List<Source> sources, Limits limits) {
+        return solve(snapshot, sources, limits, true);
+    }
+
+    private static Result solve(Snapshot snapshot, List<Source> sources, Limits limits, boolean audit) {
         if (sources.size() > limits.sources) throw new IllegalArgumentException("Input exceeds bounded source window");
         var ordered = new ArrayList<>(sources);
         ordered.sort(SOURCES);
@@ -162,6 +177,7 @@ public final class PreparedLandingModel {
             if (!motion.departed) model.depart(motion);
             else if (motion.contact) model.transfer(motion);
             else model.advance(motion);
+            if (audit) model.auditLogical();
         }
         for (Motion motion : model.motions) {
             if (motion.status == null) throw new IllegalStateException("Material has no final owner status");
@@ -216,6 +232,14 @@ public final class PreparedLandingModel {
         m.queued = true;
         events.add(m);
         queueOperations++;
+        int x = floor(m.nx), y = floor(m.ny), z = floor(m.nz);
+        int target = snapshot.index(x, y, z);
+        m.horizontalBlocked = target >= 0 && !edgeClear(m, target);
+        if (target >= 0 && (m.horizontalBlocked || !free(cell(m, x, y, z)) || !empty(cell(m, x, y, z)))) {
+            x = floor(m.x); z = floor(m.z); target = snapshot.index(x, y, z);
+        }
+        m.plannedCell = target;
+        reserve(m, target, m.time);
     }
 
     private void advance(Motion m) {
@@ -229,10 +253,10 @@ public final class PreparedLandingModel {
         int x = floor(m.nx), y = floor(m.ny), z = floor(m.nz);
         int cell = cell(m, x, y, z);
         if (fallback(m, cell, x, y, z)) return;
-        if (!free(cell) || !empty(cell)) {
+        if (m.horizontalBlocked || !free(cell) || !empty(cell)) {
             m.collisions++;
             int hx = floor(m.x), hy = floor(m.y), hz = floor(m.z);
-            if (owner(hx, hy, hz) != m) throw new IllegalStateException("Airborne material lost its exclusive cell");
+            if (owners[m.ownerCell] != m) throw new IllegalStateException("Airborne material lost its exclusive logical reservation");
             m.vx = m.vz = 0;
             int vertical = cell(m, hx, y, hz);
             if (fallback(m, vertical, hx, y, hz)) return;
@@ -256,6 +280,8 @@ public final class PreparedLandingModel {
         if (fallback(m, below, x, y - 1, z)) return;
         if (free(below) && empty(below)) { schedule(m); return; }
         m.x = x + .5; m.y = y; m.z = z + .5;
+        Motion support = owner(x, y - 1, z);
+        m.fallingSpeed = support != null && support.queued ? Math.min(Math.max(0, -m.vy), downwardSpeed(support, m.time)) : 0;
         m.vx = m.vy = m.vz = 0;
         m.contact = true;
         m.firstContact = new Cell(x, y, z); m.firstContactTime = m.time; m.arrivalTime = m.time;
@@ -295,6 +321,11 @@ public final class PreparedLandingModel {
         if (free(below) && empty(below)) {
             queueTransfer(m, x, y - 1, z, m.fallingSpeed); return;
         }
+        Motion support = owner(x, y - 1, z);
+        if (support != null && support.queued) {
+            m.fallingSpeed = Math.min(m.fallingSpeed, downwardSpeed(support, m.time));
+            queueTransfer(m, x, y - 1, z, m.fallingSpeed); return;
+        }
         m.fallingSpeed = 0;
         int offset = Math.floorMod(Long.hashCode(m.source.id), 4);
         for (int k = 0; k < 4; k++) {
@@ -319,38 +350,50 @@ public final class PreparedLandingModel {
         m.due = m.time + m.dt;
         m.fallingSpeed = speed + GRAVITY * m.dt;
         m.queued = true; events.add(m); queueOperations++;
+        m.plannedCell = snapshot.index(x, y, z);
+        reserve(m, m.plannedCell, m.time);
     }
 
     private void transfer(Motion m) {
         segments++; m.segments++; m.time = m.due;
         m.transferSeconds += m.dt;
-        int cell = cell(m.tx, m.ty, m.tz);
-        if (fallback(m, cell, m.tx, m.ty, m.tz)) return;
-        int side = cell(m.tx, floor(m.y), m.tz);
-        if (fallback(m, side, m.tx, floor(m.y), m.tz)) return;
-        boolean horizontalBlocked = (m.tx != floor(m.x) || m.tz != floor(m.z)) && (!free(side) || !empty(side));
-        // The target is not reserved before arrival. A preceding event may occupy it. In that case
-        // retain the current owned material and reconsider the now-current support, never climb.
-        if (horizontalBlocked || !free(cell) || !empty(cell) || owner(m.tx, m.ty, m.tz) != null) {
+        int y = floor(m.y);
+        if (owner(m.tx, m.ty, m.tz) != m) {
             m.failedTransfers++;
-            m.fallingSpeed = 0; repose(m); return;
+            m.fallingSpeed = Math.max(0, m.fallingSpeed - GRAVITY * m.dt);
+            repose(m); return;
         }
-        int x = floor(m.x), y = floor(m.y), z = floor(m.z);
         m.contactTransfers++;
-        if (m.ty >= y) { m.postContactRises++; throw new IllegalStateException("Non-descending contact transfer"); }
-        owners[m.ownerCell] = null;
-        claim(m, m.tx, m.ty, m.tz);
-        wake(x, y, z, m.time, m);
+        if (m.ty >= y) throw new IllegalStateException("Non-descending reserved transfer");
+        m.x = m.tx + .5; m.y = m.ty; m.z = m.tz + .5;
+        m.arrivalTime = m.time;
         repose(m);
     }
 
     private void wake(int x, int y, int z, double time, Motion cause) {
-        // Only loss of the actual vertical support adds gravity to a resting block. A neighboring
-        // hole supplies no lateral impulse: impact/repose is not a permanent sandpile update rule.
-        wakeOwner(owner(x, y + 1, z), time, cause, x, y, z);
+        // Only loss of vertical support adds gravity. A sideways hole supplies no impulse.
+        Motion above = owner(x, y + 1, z);
+        if (above == null || (!above.queued && above.status != Status.LANDED)) return;
+        if (above.queued && above.plannedCell != snapshot.index(x, y, z)) return;
+        wakes.addLast(new Wake(above, time, cause, x, y, z));
+        if (waking) return;
+        // A tall following column must not consume one Java stack frame per material cell.
+        waking = true;
+        try {
+            while (!wakes.isEmpty()) {
+                Wake next = wakes.removeFirst();
+                wakeOwner(next.owner, next.time, next.cause, next.x, next.y, next.z);
+            }
+        } finally { waking = false; }
     }
 
     private void wakeOwner(Motion m, double time, Motion cause, int x, int y, int z) {
+        if (m != null && m.queued && m.plannedCell == snapshot.index(x, y, z)
+                && m.plannedCell != m.ownerCell && owners[m.plannedCell] == null
+                && free(occupancy[m.plannedCell]) && empty(occupancy[m.plannedCell])) {
+            reserve(m, m.plannedCell, time);
+            return;
+        }
         if (m == null || m.queued || m.status != Status.LANDED) return;
         m.wakes++;
         double idle = Math.max(0, time - m.time);
@@ -362,6 +405,68 @@ public final class PreparedLandingModel {
         m.time = Math.max(m.time, time);
         m.status = null;
         repose(m);
+    }
+
+    private static double downwardSpeed(Motion m, double time) {
+        return m.contact ? Math.max(0, m.fallingSpeed - GRAVITY * Math.max(0, m.due - time))
+                : Math.max(0, -m.vy + GRAVITY * Math.max(0, time - m.time));
+    }
+
+    /** Logical swept occupancy, not an early physical arrival or world placement. */
+    private boolean reserve(Motion m, int target, double time) {
+        if (target < 0) return false;
+        if (target == m.ownerCell) return true;
+        if (owners[target] != null || !free(occupancy[target]) || !empty(occupancy[target]) || !edgeClear(m, target)) return false;
+        int old = m.ownerCell;
+        owners[target] = m; owners[old] = null; m.ownerCell = target;
+        wake(cellX(old), cellY(old), cellZ(old), time, m);
+        return true;
+    }
+
+    /** One-cell edges can cross only at a common midpoint; inspect their at most eight corners. */
+    private boolean edgeClear(Motion m, int target) {
+        if (target < 0 || target == m.ownerCell) return true;
+        int x = floor(m.x), y = floor(m.y), z = floor(m.z);
+        int tx = cellX(target), ty = cellY(target), tz = cellZ(target);
+        if (Math.abs(tx - x) > 1 || Math.abs(ty - y) > 1 || Math.abs(tz - z) > 1)
+            throw new IllegalStateException("More than one swept cell");
+        for (int cx = Math.min(x, tx); cx <= Math.max(x, tx); cx++)
+            for (int cy = Math.min(y, ty); cy <= Math.max(y, ty); cy++)
+                for (int cz = Math.min(z, tz); cz <= Math.max(z, tz); cz++) {
+                    Motion n = owner(cx, cy, cz);
+                    if (n == null || n == m || !n.queued || !n.departed) continue;
+                    int nx = floor(n.x), ny = floor(n.y), nz = floor(n.z);
+                    if (nx == cx && ny == cy && nz == cz) continue;
+                    if (x + tx == nx + cx && y + ty == ny + cy && z + tz == nz + cz) return false;
+                }
+        return true;
+    }
+
+    private int cellX(int index) { return snapshot.x0 + index % snapshot.width; }
+    private int cellY(int index) { return snapshot.minY + index / (snapshot.width * snapshot.depth); }
+    private int cellZ(int index) { return snapshot.z0 + index / snapshot.width % snapshot.depth; }
+
+    private void auditLogical() {
+        var seen = new HashSet<Integer>();
+        for (Motion m : motions) {
+            if (m.ownerCell < 0) continue;
+            if (!m.departed || m.time < m.source.departure || owners[m.ownerCell] != m || !seen.add(m.ownerCell))
+                throw new IllegalStateException("Invalid logical owner " + m.source.id);
+            if (occupancy[m.ownerCell] != AIR) throw new IllegalStateException("Reservation replaced static cell");
+        }
+        // Pairwise audit is deliberately confined to small crossing/shaft controls.
+        if (motions.size() > 32) return;
+        for (int a = 0; a < motions.size(); a++) for (int b = a + 1; b < motions.size(); b++) {
+            Motion m = motions.get(a), n = motions.get(b);
+            if (!m.departed || !n.departed || !m.queued || !n.queued || m.ownerCell < 0 || n.ownerCell < 0) continue;
+            int mx = floor(m.x), my = floor(m.y), mz = floor(m.z);
+            int nx = floor(n.x), ny = floor(n.y), nz = floor(n.z);
+            int mtx = cellX(m.ownerCell), mty = cellY(m.ownerCell), mtz = cellZ(m.ownerCell);
+            int ntx = cellX(n.ownerCell), nty = cellY(n.ownerCell), ntz = cellZ(n.ownerCell);
+            if ((mx == mtx && my == mty && mz == mtz) || (nx == ntx && ny == nty && nz == ntz)) continue;
+            if (mx + mtx == nx + ntx && my + mty == ny + nty && mz + mtz == nz + ntz)
+                throw new IllegalStateException("Crossing swept reservations " + m.source.id + " and " + n.source.id);
+        }
     }
 
     private static boolean free(int cell) { return cell == AIR || cell == FREE_COLLIDING; }
