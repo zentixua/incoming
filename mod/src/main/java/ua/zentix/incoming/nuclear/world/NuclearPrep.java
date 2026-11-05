@@ -1232,8 +1232,6 @@ public final class NuclearPrep {
             if (!all) break;
             p.nextRead++;
         }
-        // Retire cold snapshots as writes finish; a frontier must not retain the whole completed disk.
-        if (p.ruins.shotBytes() > shotCacheLimit) p.ruins.trimShots(8L << 20, shared);
         // plans in wave order: ready window goes to background threads; pending reads stop cursor
         p.plans.prefetch(p.order, p.nextFar);
         while (p.nextFar < p.order.length && !p.capped && clock.canStart() && shared.canStart()) {
@@ -1300,6 +1298,9 @@ public final class NuclearPrep {
         }
         // Other budgeted owners may trim the cache before the next preparation tick.
         if (p.nextFar < p.order.length) p.ruins.pinWindow(p.order[p.nextFar]);
+        // Admit the funded window before cache maintenance: visiting pinned snapshots spends the
+        // shared clock but cannot retire them until this consumer reaches its planning task.
+        if (p.ruins.shotBytes() > shotCacheLimit) p.ruins.trimShots(8L << 20, shared);
     }
 
     /**

@@ -161,3 +161,7 @@ paths:
   `NuclearWorld`. Close both in its cleanup; cancelling the former preparation deliberately preserves
   handed-off work. `nuke_near_ready` followed by `nuke_worker_admission` catches an unclaimed fragment-cache
   permit even after the worker pool has stopped.
+
+- Place watched test cohorts relative to the template interior and check their exposure. Chunk-centre
+  arithmetic can place a target on the enclosing barrier even with `skyAccess = true`; that barrier may
+  legitimately shield a glass block while the ruin queue commits its unchanged chunk.

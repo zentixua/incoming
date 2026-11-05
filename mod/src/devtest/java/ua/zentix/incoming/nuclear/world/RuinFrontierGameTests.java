@@ -19,6 +19,7 @@ import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
 import ua.zentix.incoming.Incoming;
+import ua.zentix.incoming.IncomingConfig;
 import ua.zentix.incoming.gametest.StrikeGameTests;
 import ua.zentix.incoming.nuclear.Detonation;
 
@@ -44,8 +45,16 @@ public final class RuinFrontierGameTests {
         ServerLevel level = h.getLevel();
         var original = RuinStorageGameTests.fixture(h, true);
         var originalClock = NuclearWorld.clock(level.getServer());
-        if (withMaterial) NuclearWorld.useClock(level.getServer(), WorkClock.counting(1_000_000));
-        StrikeGameTests.afterTest(h, () -> NuclearWorld.useClock(level.getServer(), originalClock));
+        int originalBudget = IncomingConfig.SERVER.workBudgetMs.get();
+        if (withMaterial) {
+            NuclearWorld.useClock(level.getServer(), WorkClock.counting(1_000_000));
+            // Material plus a full pinned 25-snapshot scan would exhaust this counting budget.
+            IncomingConfig.SERVER.workBudgetMs.set(26);
+        }
+        StrikeGameTests.afterTest(h, () -> {
+            NuclearWorld.useClock(level.getServer(), originalClock);
+            if (withMaterial) IncomingConfig.SERVER.workBudgetMs.set(originalBudget);
+        });
         var centre = new ChunkPos(original.centre().x + 128, original.centre().z + 128);
         h.assertFalse(ua.zentix.incoming.util.Terrain.ready(level, centre.x, centre.z), "Disk frontier must be cold");
         double dx = (centre.x - original.centre().x) * 16.0, dz = (centre.z - original.centre().z) * 16.0;
