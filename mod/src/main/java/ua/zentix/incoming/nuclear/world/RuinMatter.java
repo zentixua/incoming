@@ -218,7 +218,13 @@ public final class RuinMatter extends SavedData {
     }
 
     /** No world reads without getChunkNow readiness, and no whole-pile work in one tick unit. */
+    public static long benchNanos, benchCalls, benchMax;
     void work(ServerLevel level, WorkClock clock) {
+        long began = System.nanoTime();
+        try { workMeasured(level, clock); }
+        finally { long elapsed = System.nanoTime() - began; benchNanos += elapsed; benchCalls++; benchMax = Math.max(benchMax, elapsed); }
+    }
+    private void workMeasured(ServerLevel level, WorkClock clock) {
         int left = moving.size();
         boolean waiting = false;
         while ((left > 0 || !supportSources.isEmpty() || !supports.isEmpty() && !waiting) && clock.canStart()) {
