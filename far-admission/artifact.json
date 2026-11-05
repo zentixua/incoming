@@ -1,0 +1,18 @@
+{
+  "run": 41959237084,
+  "artifact_id": 13383474743,
+  "source": "55a64d2e0a7fce31d24c80b7495fb14ca9b1a158",
+  "tested_tree": "79dd19cac0a7d643cc33284abf3aec7428bc3b8c",
+  "tested_tree_artifact": 13383784305,
+  "zip": {
+    "bytes": 23091068,
+    "sha256": "237984e19ff51a239037644fd1f6d1e6a8b71fba571c9d61c7cc369fdd276414"
+  },
+  "jar": {
+    "name": "incoming-3.11.0.jar",
+    "bytes": 23490088,
+    "sha256": "9b34fba0a451d7ea3148ec7f700ac3cefc88309fa445decd87e7cdcb0fbe13ce"
+  },
+  "required_ci_status_at_download": "pending",
+  "private_test_classes_present": []
+}

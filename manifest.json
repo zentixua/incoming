@@ -2,8 +2,8 @@
   "files": [
     {
       "path": "README.md",
-      "bytes": 11239,
-      "sha256": "0bb3c8129d4ffb6a3bbf48053a702627486fe7ab3d8f3ac242e0fea1553fa144"
+      "bytes": 11689,
+      "sha256": "acb956b794f3d8e62eebb82413a81d6019583dfcca292e578e315c8aabbe832a"
     },
     {
       "path": "controls/DenseCityReplay-v1.java",
@@ -74,6 +74,106 @@
       "path": "controls/review-red-source.patch",
       "bytes": 7116,
       "sha256": "2d36eda72e53dc0d9e994548a90ce68aadf2d46df9ad85a6a34813b532573868"
+    },
+    {
+      "path": "far-admission/PairedOrigin.java",
+      "bytes": 1021,
+      "sha256": "3456ebc65bd24eed64b0ec2b8210929a949fb03ee7787624422a8c84d57ea515"
+    },
+    {
+      "path": "far-admission/README.md",
+      "bytes": 5133,
+      "sha256": "190ca05afe886aadbd49c16c07f0757a22fb978b17271291229316926a69b4e4"
+    },
+    {
+      "path": "far-admission/after.log.gz",
+      "bytes": 4038,
+      "sha256": "3912f06af82f962e5ce64262ec4a0138b4c48e2f5f289d022a9cc015dd6039bb"
+    },
+    {
+      "path": "far-admission/artifact.json",
+      "bytes": 571,
+      "sha256": "8a9c62f98c3f811c5fcfec25f44de9b44c2ee158add13baf783ba7409d58aa3d"
+    },
+    {
+      "path": "far-admission/before.log.gz",
+      "bytes": 4319,
+      "sha256": "e2a79bcda93314c44a7e58036d05fe5bb1abd3552d605dc93c2bb8f33acf8299"
+    },
+    {
+      "path": "far-admission/cleanup-validation.log.gz",
+      "bytes": 5341,
+      "sha256": "2ecf7c5a1b72a51b4207262e5320da1a4e86ee5dd260a755e3eb4c800d377bff"
+    },
+    {
+      "path": "far-admission/final-artifact.json",
+      "bytes": 758,
+      "sha256": "3d36cd45530e31baef85b420687d39328c9a923653309af23a90e55abb8e94a4"
+    },
+    {
+      "path": "far-admission/final-ci.json",
+      "bytes": 3232,
+      "sha256": "d9acabeb237b56e7de75fd6e0d33270dc832081edef739b7e9058a61f22e9bad"
+    },
+    {
+      "path": "far-admission/final-local-validation.json",
+      "bytes": 160,
+      "sha256": "d9d857b1257bb8ef18317491e44e1a5b668e476c65912c14fec1a28d8dd4515c"
+    },
+    {
+      "path": "far-admission/isolated26-observed.log.gz",
+      "bytes": 4977,
+      "sha256": "a31bf4119ac2c3e685e617a17e91281ddefe54d9abd0ba8d09799d4f6a1ee450"
+    },
+    {
+      "path": "far-admission/local-validation.json",
+      "bytes": 211,
+      "sha256": "7fe5889f3b98f1e61f8e206c31302fc097a1aea93a42e2ed97cf56ae8184b4e6"
+    },
+    {
+      "path": "far-admission/observed-fixture-v1.java.txt",
+      "bytes": 14233,
+      "sha256": "0b50b947623a1dda6d6e04cdba404e36017e25b0a7d0f9930552892c302154e6"
+    },
+    {
+      "path": "far-admission/observed-fixture.java.txt",
+      "bytes": 15328,
+      "sha256": "a9e985e27ba0edc2a18d37976fed3862a3c01257e8713c1f144605a7ec3f529a"
+    },
+    {
+      "path": "far-admission/original-ci3.log.gz",
+      "bytes": 47064,
+      "sha256": "7ad16bdebf2095bc48df3e670e93c7fe42f21d67afa3c5187daf93ece444d73a"
+    },
+    {
+      "path": "far-admission/pr-ci.log.gz",
+      "bytes": 182,
+      "sha256": "a0712673bf8f0160f9ca3f6d063a8465bc278fe439024bb8c9795a02b37aeedf"
+    },
+    {
+      "path": "far-admission/provenance.json",
+      "bytes": 3016,
+      "sha256": "4775ccf71f986bc44d42bce64fb95622fe1dcca9f16469fc9655d00dc24a2a50"
+    },
+    {
+      "path": "far-admission/review.md",
+      "bytes": 4646,
+      "sha256": "3894a697acffd6fefe761896ae1a8f39370f14131c0b1a46ae5d2e2dfc4da3b5"
+    },
+    {
+      "path": "far-admission/run-watch.log.gz",
+      "bytes": 114,
+      "sha256": "df8546121103183c165bb14aefdeb8c1bf3bc89ff31b45b0a794eaf3327b84bb"
+    },
+    {
+      "path": "far-admission/same-grid-ci3.log.gz",
+      "bytes": 25761,
+      "sha256": "b0acc5b6fbd6cb45e41706bfc4314953c77ba84e819e639f12bac5bfdfab5b23"
+    },
+    {
+      "path": "far-admission/validation.log.gz",
+      "bytes": 5367,
+      "sha256": "0b3a265f9777a5cd60eb53f30e8d6af8f86192ebb160eabeb35bb119aa6cdd7b"
     },
     {
       "path": "logs/ci-bfe.log.gz",

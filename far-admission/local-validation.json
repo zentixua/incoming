@@ -1,0 +1,11 @@
+{
+  "tests": 1850,
+  "failures": 0,
+  "errors": 0,
+  "skipped": 0,
+  "suites": 298,
+  "local_jar": {
+    "bytes": 23505668,
+    "sha256": "a4856c271d1f97b711ec8bfc51d113a414fa86746497ba964e8fc3a080da6992"
+  }
+}

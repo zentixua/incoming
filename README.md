@@ -72,3 +72,7 @@ Authoritative work is retained at capacity. Ordinary successful save/reload is c
 - Final CI artifact `13379488095`: ZIP 23,087,422 B, SHA256 `67788936e30011947e428fbb6e5fd09e4ee5abb28483458e0ba8f448d74c5965`. Its verified member `incoming-3.11.0.jar` is 23,486,800 B, SHA256 **`0f4b5e969d79c15e6207ae15fa2700f4c324b0cf25b3486c0fced8fc006601e3`**. These are different hashes. The jar contains production classes and excludes private replay, seed/epoch, GameTest and diagnostic classes. [Artifact receipt](receipts/artifact.json).
 
 Source component checks are complete. The unreleased jar remains a local/CI integration input; this evidence branch contains no jar or private world/cargo data. Runtime acceptance and delivery remain separate.
+
+## Combined-CI follow-up
+
+After this component was combined with client work, the real shared-clock frontier regression exposed a second ordering dependency: pinned-cache maintenance ran before funded FAR admission. The separate [PR 603 evidence](far-admission/README.md) records exact old/new controls, source review and final follow-up validation. The original component receipts above remain unchanged; they were not combined runtime acceptance.
