@@ -149,4 +149,44 @@ public final class RuinMatterArrivalGameTests {
         h.assertTrue(matter.deposited() == 1 && matter.pending() == 0, "Out-of-range pending scan held material");
         h.succeed();
     }
+
+    @GameTest(template = "pad", timeoutTicks = 40, batch = "nuke_material_arrival_scan", skyAccess = true)
+    public static void unofferedSourceScanAlreadyOwnsItsDestination(GameTestHelper h) {
+        var level = h.getLevel(); var at = floor(h);
+        var source = event(level, at, level.getGameTime() + 400);
+        var scars = NuclearWorld.get(level).scars();
+        scars.scanLoaded(source);
+        h.assertFalse(scars.queued(new ChunkPos(at).toLong()), "Fixture already offered a destination job");
+        var matter = barrel(h, at, source.id());
+        work(matter, level);
+        h.assertTrue(matter.pending() == 1 && matter.deposited() == 0 && level.getBlockState(at).isAir(),
+                "Material overtook an in-range source scan before its job was offered");
+        h.succeed();
+    }
+
+    @GameTest(template = "pad", timeoutTicks = 40, batch = "nuke_material_arrival_unmarked", skyAccess = true)
+    public static void unrelatedEventDoesNotHoldOutOfRangeSourceWithoutScar(GameTestHelper h) {
+        var level = h.getLevel(); var at = floor(h);
+        var source = event(level, at.west(8192), level.getGameTime() - 400);
+        var later = event(level, at, level.getGameTime() + 400);
+        var chunk = level.getChunkAt(at);
+        chunk.setData(ModAttachments.CHUNK_SCAR, 0);
+        NuclearWorld.get(level).scars().offer(chunk, later);
+        var matter = barrel(h, at, source.id());
+        work(matter, level);
+        h.assertTrue(matter.deposited() == 1 && matter.pending() == 0, "Unrelated job held an unaffected source destination");
+        h.succeed();
+    }
+
+    @GameTest(template = "pad", timeoutTicks = 40, batch = "nuke_material_arrival_cleared", skyAccess = true)
+    public static void clearedSourceEventDoesNotStrandItsMaterial(GameTestHelper h) {
+        var level = h.getLevel(); var at = floor(h);
+        var source = event(level, at, level.getGameTime() + 400);
+        NuclearWorld.get(level).scars().offer(level.getChunkAt(at), source);
+        var matter = barrel(h, at, source.id());
+        NuclearStrikes.clear(level);
+        work(matter, level);
+        h.assertTrue(matter.deposited() == 1 && matter.pending() == 0, "Cleared source event stranded preserved material");
+        h.succeed();
+    }
 }

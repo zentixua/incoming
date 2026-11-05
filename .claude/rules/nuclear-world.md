@@ -282,6 +282,10 @@ paths:
   protected blocks and block entities retain ownership. Collision and placement share the occupancy rule.
   No decorative 12%/four-block cap remains. Outside-height material stays in a saved dormant reservoir without
   acquiring chunks or consuming repeated work. Unloaded destinations remain pending, not discarded.
+  Settlement waits for the destination's pending ruins from the piece's source event, including before-wave
+  prepared plans and loaded-range scans not yet offered as jobs. Otherwise our deposit invalidates that event's
+  snapshot and can be struck again. The saved chunk scar permits already-completed source events; unrelated later
+  events, out-of-range scans and cleared events do not hold material. This does not reorder overlapping strikes.
   These are normal-save invariants, not an atomic transaction across region files and SavedData under power loss.
   Regression batches: `nuke_structure_*`, `nuke_material*`; numeric response: `StructuralResponseTest`.
 - `RuinSettle` settles the entire saved ruin zone after its wave, including `NuclearEvents.past` from old saves,
