@@ -1,0 +1,258 @@
+{
+  "source_file": "raw/progress.log.gz (full server lifetime)",
+  "event": 2,
+  "dimension": "minecraft:overworld",
+  "requested_server_wall_ms": [
+    1793834740705,
+    1793835220705
+  ],
+  "coverage": {
+    "newline_terminated": true,
+    "world_rows": 480,
+    "world_span_ms": [
+      1793834741261,
+      1793835220260
+    ],
+    "pending_schema_present": true,
+    "event_observed": true,
+    "first_event_observations_in_source": {
+      "1": {
+        "line": 1944,
+        "wall_ms": 1793834741261,
+        "event_game_time": 2040646748
+      }
+    },
+    "expected_pre_event_rows": 0,
+    "event_rows": 480,
+    "event_span_ms": [
+      1793834741261,
+      1793835220260
+    ],
+    "complete_event_rows": 434,
+    "traversal": {
+      "views": {
+        "rows": 480,
+        "complete": 434,
+        "cutoffs": {
+          "time": 46,
+          "none": 434
+        },
+        "max_candidates": 529,
+        "max_holders": 453
+      }
+    },
+    "cutoffs": {
+      "time": 46,
+      "none": 434
+    },
+    "max_sample_tick_gap": 20,
+    "server_sessions": [
+      "1"
+    ],
+    "malformed_rows": [],
+    "max_progress_drops": 0
+  },
+  "pending": {
+    "max_observed_count": 453,
+    "max_observed_overdue": 382,
+    "max_observed_lag_ticks": 8933,
+    "max_observed_without_job": 453,
+    "last_complete": {
+      "wall_ms": "1793835220260",
+      "mono_ns": "1074031959156201",
+      "server_session": "1",
+      "tick": "17360",
+      "dimension": "minecraft:overworld",
+      "game_time": "2040656339",
+      "event_game_time": "2040646748",
+      "event": "2",
+      "complete": "true",
+      "cutoff": "none",
+      "holders": "453",
+      "watched_loaded": "453",
+      "affected": "453",
+      "scarred": "430",
+      "pending": "23",
+      "overdue": "23",
+      "pending_without_job": "0",
+      "pending_max_lag_ticks": "8933",
+      "traversal": "views",
+      "candidates": "529",
+      "observer_ns": "532181",
+      "prepared_success": "334",
+      "fresh_success": "218",
+      "seen_success": "430",
+      "seen_success_max_lag_ticks": "6354",
+      "prepared_drops": "0",
+      "unloaded_pending": "6315",
+      "failed_pending": "0",
+      "clears": "0",
+      "samples": "868",
+      "partial_samples": "434",
+      "sampled_pending_max_lag_ticks": "8933",
+      "observer_pre_enqueue_ns": "562550",
+      "event_scan": "1",
+      "progress_drops": "0",
+      "source_line": 4339
+    },
+    "last_observed": {
+      "wall_ms": "1793835220260",
+      "mono_ns": "1074031959156201",
+      "server_session": "1",
+      "tick": "17360",
+      "dimension": "minecraft:overworld",
+      "game_time": "2040656339",
+      "event_game_time": "2040646748",
+      "event": "2",
+      "complete": "true",
+      "cutoff": "none",
+      "holders": "453",
+      "watched_loaded": "453",
+      "affected": "453",
+      "scarred": "430",
+      "pending": "23",
+      "overdue": "23",
+      "pending_without_job": "0",
+      "pending_max_lag_ticks": "8933",
+      "traversal": "views",
+      "candidates": "529",
+      "observer_ns": "532181",
+      "prepared_success": "334",
+      "fresh_success": "218",
+      "seen_success": "430",
+      "seen_success_max_lag_ticks": "6354",
+      "prepared_drops": "0",
+      "unloaded_pending": "6315",
+      "failed_pending": "0",
+      "clears": "0",
+      "samples": "868",
+      "partial_samples": "434",
+      "sampled_pending_max_lag_ticks": "8933",
+      "observer_pre_enqueue_ns": "562550",
+      "event_scan": "1",
+      "progress_drops": "0",
+      "source_line": 4339
+    },
+    "success_and_exit_endpoints": {
+      "prepared_success": [
+        0,
+        334
+      ],
+      "fresh_success": [
+        0,
+        218
+      ],
+      "seen_success": [
+        0,
+        430
+      ],
+      "prepared_drops": [
+        0,
+        0
+      ],
+      "unloaded_pending": [
+        0,
+        6315
+      ],
+      "failed_pending": [
+        0,
+        0
+      ],
+      "clears": [
+        0,
+        0
+      ]
+    },
+    "success_delta_within_observed_lifetime": {
+      "prepared_success": 334,
+      "fresh_success": 218,
+      "seen_success": 430,
+      "all_scar_commits": 552,
+      "unseen_at_commit": 122,
+      "observed_span_ms": [
+        1793834741261,
+        1793835220260
+      ]
+    },
+    "max_success_lag_ticks": 6354,
+    "max_census_ns": 3145993,
+    "max_pre_enqueue_observer_ns": 3194878
+  },
+  "far": {
+    "rows": 480,
+    "span_ms": [
+      1793834741261,
+      1793835220260
+    ],
+    "first": {
+      "strike": "1",
+      "detonation": "2",
+      "due": "2040646748",
+      "layout_pending": "false",
+      "near": "674",
+      "near_cursor": "72/72",
+      "far": "3290",
+      "far_cursor": "3290/268082",
+      "read_cursor": "3310",
+      "reading": "39",
+      "running": "0",
+      "skipped": "0",
+      "capped": "false",
+      "heap_stop": "false",
+      "draining": "false",
+      "plan_bytes": "16966120",
+      "plan_reads": "0",
+      "plan_writes": "0",
+      "async_bytes": "150634496",
+      "lod_bytes": "0",
+      "wall_ms": "1793834741261",
+      "server_session": "1",
+      "tick": "7780",
+      "game_time": "2040646759"
+    },
+    "last": {
+      "strike": "1",
+      "detonation": "2",
+      "due": "2040646748",
+      "layout_pending": "false",
+      "near": "674",
+      "near_cursor": "72/72",
+      "far": "3290",
+      "far_cursor": "3290/268082",
+      "read_cursor": "3330",
+      "reading": "0",
+      "running": "0",
+      "skipped": "0",
+      "capped": "false",
+      "heap_stop": "false",
+      "draining": "false",
+      "plan_bytes": "11459196",
+      "plan_reads": "0",
+      "plan_writes": "0",
+      "async_bytes": "0",
+      "lod_bytes": "0",
+      "wall_ms": "1793835220260",
+      "server_session": "1",
+      "tick": "17360",
+      "game_time": "2040656339"
+    },
+    "counter_decreases": 0,
+    "longest_observed_unchanged_run": {
+      "far": 3290,
+      "session": "1",
+      "start_ms": 1793834741261,
+      "last_ms": 1793835220260,
+      "samples": 480,
+      "observed_span_ms": 478999
+    }
+  },
+  "limits": [
+    "No automatic readiness verdict; missing observations remain unknown.",
+    "Incomplete census counts are lower bounds, including positive failure witnesses.",
+    "Traversal work counters are method-specific; repeated partial prefixes need not cover later views.",
+    "Current tracking-view samples do not prove continuous membership or rendered geometry.",
+    "Success and exit counters are lifetime endpoints; inspect session/clear boundaries before deltas.",
+    "Far plateau is an observed unchanged span, not permanent deadlock or proof between samples.",
+    "Observer cost excludes final formatting/enqueue and is not a total zero-overhead claim."
+  ]
+}

@@ -1,0 +1,24 @@
+{
+  "samples": 1993,
+  "min_MemAvailable_bytes": 19548545024,
+  "max_gap_ms": 550,
+  "first": {
+    "running": false,
+    "cpu": 0.0,
+    "mem": 0.0,
+    "online": 0,
+    "wall_ms": 1793834323524,
+    "MemAvailable": 29398560768,
+    "SwapFree": 4653363200
+  },
+  "last": {
+    "running": false,
+    "cpu": 0.0,
+    "mem": 0.0,
+    "online": 0,
+    "wall_ms": 1793835329536,
+    "MemAvailable": 29339320320,
+    "SwapFree": 4629590016
+  },
+  "reserve_stop": []
+}
