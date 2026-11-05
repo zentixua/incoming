@@ -1215,6 +1215,7 @@ public final class RuinBackgroundGameTests {
         RuinWorkers.fillForTest(release, RuinWorkers.Priority.SEEN);
         Detonation d = NuclearWarhead.detonate(level, Vec3.atBottomCenterOf(h.absolutePos(NuclearGameTests.CENTER)), 1, false, null, 0.1f);
         boolean[] held = {false};
+        ua.zentix.incoming.nuclear.world.CiSendProbe.install(h, chunk, d, () -> held[0], release);
         h.succeedWhen(() -> {
             LevelChunk c = level.getChunkSource().getChunkNow(ChunkPos.getX(chunk), ChunkPos.getZ(chunk));
             boolean scarred = c != null && c.getExistingData(ModAttachments.CHUNK_SCAR).orElse(0) >= d.id();
