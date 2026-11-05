@@ -49,6 +49,23 @@ import java.util.PriorityQueue;
  * ({@link #scanLoaded}); nothing on detonation tick.
  */
 public final class ScarQueue {
+    // TEST ONLY: diagnostic branch, explicit scene/event opt-in. No gameplay decisions use these numbers.
+    final MtB7Pending mtB7Pending;
+    public ScarQueue() { this(MtB7Pending.configured()); }
+    ScarQueue(MtB7Pending observer) { mtB7Pending = observer; }
+
+    /** Read-only membership, including later queued events. Bound malformed/huge event lists explicitly. */
+    int mtB7Queued(int event, long key) {
+        Job job = jobs.get(key);
+        if (job == null) return 0;
+        if (job.events.size() - job.event > 32) return -1;
+        for (int i = job.event; i < job.events.size(); i++) if (job.events.get(i).id() == event) return 1;
+        return 0;
+    }
+
+    private void mtB7Removed(Job job, boolean failure) {
+        if (mtB7Pending != null && mtB7Queued(mtB7Pending.event, job.chunk) == 1) mtB7Pending.removed(failure);
+    }
     /** Work for one chunk: detonations by ascending ID. */
     private static final class Job {
         final long chunk;
@@ -335,6 +352,7 @@ public final class ScarQueue {
      *              before wave: ruins applied on load
      */
     public void dropPrepared(int detonation, java.util.function.LongPredicate zone) {
+        if (mtB7Pending != null) mtB7Pending.preparedDropped(detonation);
         Long2ObjectOpenHashMap<RuinPlan> left = prepared.remove(detonation);
         long[] st = preparedStats.remove(detonation);
         if (st == null) st = new long[STATS];
@@ -583,7 +601,7 @@ public final class ScarQueue {
      * keeps chunk queued until ruined, otherwise post-teleport awaited chunks' ruins would follow
      * unseen ones until {@link #WITHHOLD_LIMIT} sends them intact.
      */
-    private static boolean watched(ServerLevel level, ChunkPos pos) {
+    static boolean watched(ServerLevel level, ChunkPos pos) {
         java.util.function.LongPredicate test = seenForTest;
         if (test != null && test.test(pos.toLong())) return true;
         for (ServerPlayer player : level.players()) {
@@ -600,6 +618,9 @@ public final class ScarQueue {
     public static void seenForTest(@Nullable java.util.function.LongPredicate chunks) {
         seenForTest = chunks;
     }
+
+    /** TEST ONLY: the passive census must include additive visibility outside native player views. */
+    static boolean mtB7HasSeenOverride() { return seenForTest != null; }
 
     /** Chunk visible under test override ({@link #seenForTest}). */
     static boolean seenInTest(long chunk) {
@@ -671,6 +692,8 @@ public final class ScarQueue {
 
     /** Unloaded: remove job (ticket-held chunk cannot unload: ticket removed earlier in {@link #clear}). */
     public void drop(ServerLevel level, ChunkPos pos) {
+        Job previous = jobs.get(pos.toLong());
+        if (previous != null) mtB7Removed(previous, false);
         for (int id : new ArrayList<>(awaitingMemory.keySet())) placedFromMemory(id, pos.toLong());
         Job job = jobs.remove(pos.toLong());
         if (job != null) release(level, job);
@@ -700,6 +723,7 @@ public final class ScarQueue {
     }
 
     public void clear(ServerLevel level) {
+        if (mtB7Pending != null) mtB7Pending.cleared();
         jobs.values().forEach(j -> release(level, j));
         parked.clear();
         parkedBytes = 0;
@@ -873,6 +897,7 @@ public final class ScarQueue {
                     var owner = NuclearWorld.get(level).ruinsIfKept(job.events.get(job.event).id());
                     if (owner != null) owner.unpinWindow(job.chunk);
                 }
+                mtB7Removed(job, true);
                 jobs.remove(job.chunk);
                 logs.remove(job.chunk);
                 release(level, job);
@@ -1212,6 +1237,7 @@ public final class ScarQueue {
     private int work(ServerLevel level, Job job, long now) {
         if (NuclearTickets.inMemory(level, job.chunk) == null) {
             // unloaded (onChunkUnload would already remove job): queued by onChunkLoad on return
+            mtB7Removed(job, false);
             jobs.remove(job.chunk);
             release(level, job);
             logs.remove(job.chunk);
@@ -1293,6 +1319,7 @@ public final class ScarQueue {
         if (NukeDiag.ON) diagRuined(level, job, pos, Math.max(0, now - job.wave), seen);
         chunk.setData(ModAttachments.CHUNK_SCAR, d.id());
         chunk.setUnsaved(true);
+        if (mtB7Pending != null) mtB7Pending.applied(d.id(), now - job.wave, seen, diagSource.equals("prepared"));
         if (job.asked != Long.MIN_VALUE) {
             long[] waited = preparedStats.computeIfAbsent(d.id(), k -> new long[STATS]);
             waited[23] = Math.max(waited[23], now - job.asked);

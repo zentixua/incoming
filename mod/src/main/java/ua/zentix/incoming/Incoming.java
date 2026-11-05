@@ -67,6 +67,7 @@ public final class Incoming {
     public static final Logger LOG = LogUtils.getLogger();
 
     public Incoming(IEventBus modBus, ModContainer container) {
+        ua.zentix.incoming.nuclear.world.MtB7Metrics.start();
         for (DeferredRegister<?> register : List.of(ModBlocks.REGISTER, ModBlockEntities.REGISTER, ModEntities.REGISTER,
                 ModItems.REGISTER, ModSounds.REGISTER, ModParticles.REGISTER, ModDataComponents.REGISTER,
                 ModCreativeTabs.REGISTER, ModEffects.REGISTER, ModAttachments.REGISTER)) {

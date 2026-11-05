@@ -503,6 +503,26 @@ public final class NuclearPrep {
         for (Prep p : preps) if (p.carrier && p.detonation < 0 && p.strike == identity) p.draining = true;
     }
 
+    /** TEST ONLY: bounded direct counters; never walk zone entries, plans or ledgers. */
+    String mtB7Progress() {
+        var out = new StringBuilder("async_bytes=" + readBytes.get());
+        int n = 0;
+        for (Prep p : preps) {
+            if (++n > 8) { out.append(" prep_limit"); break; }
+            out.append(" {strike=").append(p.strike).append(",detonation=").append(p.detonation)
+                .append(",due=").append(p.detonateTime).append(",layout_pending=").append(p.layout != null)
+                .append(",near=").append(p.nearPlans).append(",near_cursor=").append(p.nextTodo).append('/').append(p.todo.size())
+                .append(",far=").append(p.farPlans).append(",far_cursor=").append(p.nextFar).append('/').append(p.order.length)
+                .append(",read_cursor=").append(p.nextRead).append(",reading=").append(p.reading.size())
+                .append(",running=").append(p.farRunning.size()).append(",skipped=").append(p.farSkipped)
+                .append(",capped=").append(p.capped).append(",heap_stop=").append(p.heapStop)
+                .append(",draining=").append(p.draining).append(",plan_bytes=").append(p.plans.bytes())
+                .append(",plan_reads=").append(p.plans.pendingReads()).append(",plan_writes=").append(p.plans.pendingWrites())
+                .append(",async_bytes=").append(p.asyncBytes.get()).append(",lod_bytes=").append(p.lods.retainedBytes()).append('}');
+        }
+        return out.toString();
+    }
+
     /** Total prebuilt ruins across strikes (tests, status). */
     public int plannedChunks() {
         return preps.stream().mapToInt(p -> p.plans.size()).sum();
@@ -553,7 +573,7 @@ public final class NuclearPrep {
             if (other.hasData(ModAttachments.NUCLEAR_WORLD))
                 bytes += other.getData(ModAttachments.NUCLEAR_WORLD).retainedRuinBytes();
         }
-        return bytes + RuinWorkers.residentBufferBytes(height);
+        return MtB7Stages.memory(0, bytes + RuinWorkers.residentBufferBytes(height));
     }
 
     /** Existing cache writes can release counted ownership. Reserving future solvers here would
@@ -575,9 +595,13 @@ public final class NuclearPrep {
         RuinWorkers.configureHeight(height);
         // Unknown old ownership has priority over new preparation/removals. Import uses only the
         // already-resident counter above and takes its reservation before decoding anything.
-        if (cold) return Math.max(bytes, PLANS_CAP);
-        return bytes + (reserveWorkers ? RuinWorkers.bufferBytes(height) + RuinMemory.TRANSITION_ROOM
-                : RuinWorkers.residentBufferBytes(height));
+        if (cold) {
+            MtB7Stages.memory(3, bytes);
+            return Math.max(bytes, PLANS_CAP);
+        }
+        return MtB7Stages.memory(reserveWorkers ? 1 : 2,
+                bytes + (reserveWorkers ? RuinWorkers.bufferBytes(height) + RuinMemory.TRANSITION_ROOM
+                : RuinWorkers.residentBufferBytes(height)));
     }
 
     /** Squares held by tickets (tests). */

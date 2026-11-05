@@ -60,6 +60,8 @@ final class RuinSettle {
 
     /** Called after player ruins, preparation and fallout; no independent time allowance. */
     void work(ServerLevel level, NuclearEvents events, WorkClock clock) {
+        long mtB7Started = MtB7Stages.begin(4);
+        try {
         if (detonation == null && (level.getGameTime() < checkAt || events.past().isEmpty() && events.detonations().isEmpty())) return;
         RuinProgress progress = RuinProgress.get(level);
         if (!progress.writable()) return;
@@ -152,7 +154,7 @@ final class RuinSettle {
                         entries.remove(e.pos.toLong());
                         pass.pending.remove(e.pos.toLong());
                         progress.setDirty();
-                        if (h.scar >= detonation.id()) settled++;
+                        if (h.scar >= detonation.id()) { settled++; MtB7Stages.count(0); }
                         continue;
                     }
                     e.finalBlocks = true;
@@ -163,7 +165,7 @@ final class RuinSettle {
                     e.held = true;
                     e.heldAt = now;
                     holding++;
-                    loaded++;
+                    loaded++; MtB7Stages.count(1);
                 }
                 if (e.read == null && !e.held && (!e.finalBlocks || e.applied) && now >= e.retryAt && reading < READS
                         && NuclearPrep.memory(level, false) + READ_BYTES <= NuclearPrep.PLANS_CAP) {
@@ -199,6 +201,9 @@ final class RuinSettle {
             report(now, false);
             nextReport = now + 1200;
         }
+
+        } catch (RuntimeException | Error failure) { MtB7Stages.fail(4); throw failure; }
+        finally { MtB7Stages.end(4, mtB7Started); }
     }
 
     private void select(ServerLevel level, NuclearEvents events, RuinProgress progress) {
