@@ -197,11 +197,11 @@ public final class ScarQueue {
     private final it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap underHold = new it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap();
     private long lastSlowChunk = Long.MIN_VALUE / 2;
     private final PriorityQueue<Job> byDue = new PriorityQueue<>(Comparator.comparingLong(j -> j.due));
-    /** Jobs by wave arrival: precheck ({@link #lookAhead}) {@link #LOOKAHEAD} ticks before. */
-    private final PriorityQueue<Ahead> ahead = new PriorityQueue<>(Comparator.comparingLong(Ahead::wave));
+    /** Start loaded demand immediately; retain the final pre-wave freshness check. */
+    private final PriorityQueue<Ahead> ahead = new PriorityQueue<>(Comparator.comparingLong(Ahead::at));
 
-    /** Job, detonation ID ({@link Detonation#id}: location in {@code events} changes if earlier detonation arrives), wave arrival. */
-    private record Ahead(Job job, int detonation, long wave) {}
+    /** Job, stable detonation ID, next demand/freshness opportunity, and final pre-wave check. */
+    private record Ahead(Job job, int detonation, long at, boolean finalCheck) {}
     /**
      * Due chunks: player-visible first ({@link #watched}: ruins with front, same-tick changes to
      * player), then others (unseen lag of a few ticks invisible; still processed
@@ -501,6 +501,26 @@ public final class ScarQueue {
         return plans != null && plans.containsKey(chunk);
     }
 
+    /**
+     * Same-event ruin work still owns this destination. Material callers already check the
+     * destination's scar marker; a remaining loaded-range scan conservatively precedes delivery
+     * even before it has offered this chunk. This query neither loads chunks nor advances work.
+     */
+    public boolean pending(int detonation, long chunk) {
+        Job job = jobs.get(chunk);
+        if (job != null) {
+            for (int i = job.event; i < job.events.size(); i++) {
+                if (job.events.get(i).id() == detonation) return true;
+            }
+        }
+        if (hasPlan(detonation, chunk)) return true;
+        ChunkPos pos = new ChunkPos(chunk);
+        for (Scan scan : scans) {
+            if (scan.d.id() == detonation && inRange(pos, scan.d)) return true;
+        }
+        return false;
+    }
+
     /** Ready-plan, fresh-plan, stale-plan counts (tests, status). */
     public int[] ruinStats() {
         return new int[]{appliedPrepared, appliedFresh, stalePlans};
@@ -552,12 +572,12 @@ public final class ScarQueue {
         lookAheadLater(job);
     }
 
-    /** Precheck chunk ({@link #lookAhead}) before current detonation's wave, once per detonation. */
+    /** Establish loaded demand, then perform the final pre-wave freshness check for this event. */
     private void lookAheadLater(Job job) {
         int id = job.events.get(job.event).id();
         if (job.aheadEvent == id) return;
         job.aheadEvent = id;
-        ahead.add(new Ahead(job, id, job.wave));
+        ahead.add(new Ahead(job, id, Long.MIN_VALUE, false));
     }
 
     /**
@@ -674,6 +694,13 @@ public final class ScarQueue {
         for (int id : new ArrayList<>(awaitingMemory.keySet())) placedFromMemory(id, pos.toLong());
         Job job = jobs.remove(pos.toLong());
         if (job != null) release(level, job);
+        for (var plans : prepared.values()) {
+            if (plans instanceof RetainedPlans retained) retained.unprotect(pos.toLong());
+        }
+        if (job != null) for (Detonation d : job.events) {
+            var ctx = NuclearWorld.get(level).ruinsIfKept(d.id());
+            if (ctx != null && ctx.restoredPlans != null) ctx.restoredPlans.unprotect(pos.toLong());
+        }
         // ready queue removes lazily: process job only if still in jobs
         if (job != null && !job.ready) byDue.remove(job);
         logs.remove(pos.toLong());
@@ -891,25 +918,36 @@ public final class ScarQueue {
     }
 
     /**
-     * Next player-visible chunk whose wave arrives in {@link #LOOKAHEAD} ticks gets precheck
-     * ({@link #lookAhead}). Skip unseen/removed without clock (checking iterates players).
+     * Start missing loaded demand as soon as discovered, then precheck player-visible freshness
+     * {@link #LOOKAHEAD} ticks before the wave. Retired queue entries have a bounded sweep.
      *
      * @return chunk inspected (counts toward tick time); false nothing to precheck
      */
     private boolean lookAheadNext(ServerLevel level, long now, WorkClock clock) {
-        for (Ahead a; (a = ahead.peek()) != null && a.wave() - LOOKAHEAD <= now; ) {
+        int visited = 0;
+        for (Ahead a; (a = ahead.peek()) != null && a.at() <= now; ) {
+            if (visited++ == OFFERS_PER_UNIT) return true;
             ahead.poll();
             Job job = a.job();
             // removed, different detonation, already due
             if (jobs.get(job.chunk) != job || job.event >= job.events.size() || job.events.get(job.event).id() != a.detonation()
                     || job.ready || job.wave <= now + EARLY) continue;
             ChunkPos pos = new ChunkPos(job.chunk);
-            if (!watched(level, pos)) continue;
+            boolean seen = watched(level, pos);
+            if (a.finalCheck() && !seen) continue;
             long c0 = clock.begin();
             boolean worked = false;
             try {
-                worked = lookAhead(level, job, pos, now);
+                worked = lookAhead(level, job, pos, now, seen, a.finalCheck());
                 diagAhead++;
+                if (!a.finalCheck()) {
+                    // Native read/worker receipts may need several opportunities. Retry only
+                    // this finite live job, then check freshness once more close to its wave.
+                    long finalAt = job.wave - LOOKAHEAD;
+                    long retry = Math.min(finalAt, now + NEIGHBOUR_RETRY);
+                    ahead.add(new Ahead(job, a.detonation(), worked ? finalAt : retry,
+                            worked || retry == finalAt));
+                }
             } catch (RuntimeException e) {
                 // chunk follows normal path when due
                 Incoming.LOG.error("Ruins: checking chunk {} ahead of the wave failed with an exception", pos, e);
@@ -933,7 +971,7 @@ public final class ScarQueue {
      *
      * @return work unit completed (plan validation, window snapshots)
      */
-    private boolean lookAhead(ServerLevel level, Job job, ChunkPos pos, long now) {
+    private boolean lookAhead(ServerLevel level, Job job, ChunkPos pos, long now, boolean seen, boolean validate) {
         LevelChunk chunk = level.getChunkSource().getChunkNow(pos.x, pos.z);
         if (chunk == null) return false;
         Detonation d = job.events.get(job.event);
@@ -941,25 +979,30 @@ public final class ScarQueue {
         RuinContext restored = NuclearWorld.get(level).ruins(level, d, now);
         if (plans == null) plans = restored.restoredPlans;
         if (restored.archivePending) return false;
+        if (plans instanceof RetainedPlans retained) retained.protect(job.chunk);
         RuinPlan plan = plans != null ? plans.get(job.chunk) : null;
         if (plan == null && RetainedPlans.waiting(plans, job.chunk)) return false;
         Parked kept = parked.get(job.chunk);
         if (plan == null && kept != null && kept.detonation() == d.id()) return false;
         long[] st = preparedStats.computeIfAbsent(d.id(), k -> new long[STATS]);
         if (plan != null) {
+            // Initial discovery establishes resident ownership. Freshness still belongs to the
+            // final pre-wave check and apply: an early check cannot promise a future world state.
+            if (!validate) return true;
             if (plan.current(chunk, d)) return true;
             plans.remove(job.chunk);
             stalePlans++;
             st[1]++;
         }
         RuinContext ctx = NuclearWorld.get(level).ruins(level, d, now);
+        var priority = seen ? RuinWorkers.Priority.SEEN : RuinWorkers.Priority.NEAR;
         if (ctx.running(job.chunk)) {
             // plan running (preparation submitted at far priority): promote if still queued
-            ctx.promote(job.chunk, RuinWorkers.Priority.SEEN);
+            ctx.promote(job.chunk, priority);
             return plan != null;
         }
-        if (ctx.requestWindow(level, pos, RuinWorkers.Priority.SEEN) > 0) return plan != null;
-        if (!ctx.submit(level, chunk, RuinWorkers.Priority.SEEN)) return plan != null;
+        if (ctx.requestWindow(level, pos, priority) > 0) return plan != null;
+        if (!ctx.submit(level, chunk, priority)) return plan != null;
         st[26]++;
         return true;
     }

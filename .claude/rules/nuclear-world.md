@@ -472,7 +472,14 @@ paths:
 - Explicit unpaid preparation gates launch on exact geometry, its target chunk and loaded chunks within the ruin
   radius, rather than every distant heavy-zone plan. `required` is charged metadata; refresh before binding admits
   newly loaded surroundings. Loaded-edge plans use the existing asynchronous window reader and NEAR priority.
-  Only these plans' own spill receipts block READY. Full physical disk planning, partial context handoff and durable
+  READY requires these plans to be resident and their own spill receipts complete. `RetainedPlans` protects current
+  critical keys from its ordinary 16 MiB cache eviction, while charging their actual payload and pin metadata.
+  Unload/not-ready refresh retires surroundings from current membership; the launch target remains required.
+  Historical `everInMemory` and stored page keys never define the current cohort. Partial handoff transfers the
+  same protected owner; consume, unload and cancellation release its protection. Loaded scar demand starts missing
+  plan work immediately, with the usual visible freshness precheck still 20 ticks before the wave. These guarantees
+  do not reserve the complete material transition or bound the growing material ledger (`nuke_protected_pages`,
+  `nuke_loaded_demand_early`, `nuke_near_ready`). Full physical disk planning, partial context handoff and durable
   settlement continue during flight/after detonation; distant planning errors still invalidate an unbound request.
   READY is a live launch condition, not persisted permission or a promise that distant ruins are already saved.
   Critical membership uses `Terrain.ready`, not `Terrain.inMemory`: FULL chunks retained by generation/unload can

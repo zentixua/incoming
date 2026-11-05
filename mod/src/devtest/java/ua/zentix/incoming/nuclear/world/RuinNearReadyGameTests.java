@@ -45,7 +45,7 @@ public final class RuinNearReadyGameTests {
                 handedOff[0].ruins().cancelTasks();
             }
         });
-        boolean[] stalled = {false}, loaded = {false};
+        boolean[] stalled = {false}, loaded = {false}, residentGateChecked = {false};
         var farGate = new java.util.concurrent.CompletableFuture<Void>();
         var farReads = new java.util.ArrayList<java.util.concurrent.CompletableFuture<DiskShots.Read>>();
         StrikeGameTests.afterTest(h, () -> farGate.complete(null));
@@ -83,6 +83,24 @@ public final class RuinNearReadyGameTests {
                 var plans = (RetainedPlans) field(p, "plans").get(p);
                 var near = plans.get(centre.toLong());
                 h.assertTrue(near != null && near.changedBlocks() > 0, "Actual target plan is absent or vacuous");
+                field(plans, "residentTarget").setLong(plans, 0);
+                plans.pump(32L << 20);
+                for (long key : (it.unimi.dsi.fastutil.longs.LongOpenHashSet) field(p, "required").get(p)) {
+                    h.assertTrue(plans.protectedPlan(key) && plans.resident(key),
+                            "READY critical plan was spilled by ordinary cache pressure: " + new ChunkPos(key));
+                }
+                if (!residentGateChecked[0]) {
+                    plans.unprotect(centre.toLong());
+                    plans.pump(32L << 20);
+                    h.assertTrue(plans.containsKey(centre.toLong()) && !plans.resident(centre.toLong()),
+                            "READY control did not create a real stored-only target");
+                    h.assertTrue(RuinPreparation.status(level, handle).stage() != RuinPreparation.Stage.READY,
+                            "Stored-only target incorrectly certified resident READY");
+                    plans.protect(centre.toLong());
+                    plans.put(centre.toLong(), near);
+                    residentGateChecked[0] = true;
+                    h.fail("Waiting for restored protected target write");
+                }
                 h.assertTrue(field(p, "nextFar").getInt(p) < order.length, "READY waited for the full far walk");
                 if (!loaded[0]) {
                     var geometry = (Detonation) field(p, "geometry").get(p);
@@ -92,6 +110,11 @@ public final class RuinNearReadyGameTests {
                         if (level.getChunkSource().getChunkNow(candidate.x, candidate.z) == null) { fresh = candidate; break; }
                     }
                     h.assertTrue(fresh != null, "Fixture has no cold near-player chunk");
+                    var held = fresh;
+                    var ticket = net.minecraft.server.level.TicketType.create("incoming_ready_cohort_test",
+                            java.util.Comparator.comparingLong(ChunkPos::toLong));
+                    level.getChunkSource().addRegionTicket(ticket, held, 0, held);
+                    StrikeGameTests.afterTest(h, () -> level.getChunkSource().removeRegionTicket(ticket, held, 0, held));
                     level.getChunk(fresh.x, fresh.z); // Fixture setup, never preparation's world path.
                     added[0] = fresh.toLong();
                     h.assertTrue(!plans.containsKey(added[0]), "New live source already had a plan");
@@ -103,6 +126,15 @@ public final class RuinNearReadyGameTests {
                     h.fail("Waiting for newly loaded surroundings");
                 }
                 h.assertTrue(plans.containsKey(added[0]), "New critical plan did not complete");
+                // Registered unload retires only current membership, not historical pages or target.
+                var unloaded = level.getChunkSource().getChunkNow(ChunkPos.getX(added[0]), ChunkPos.getZ(added[0]));
+                NuclearWorld.get(level).onChunkUnload(level, unloaded);
+                var required = (it.unimi.dsi.fastutil.longs.LongOpenHashSet) field(p, "required").get(p);
+                h.assertTrue(!required.contains(added[0]) && !plans.protectedPlan(added[0]),
+                        "Unloaded surroundings remained in the current critical cohort");
+                h.assertTrue(required.contains(centre.toLong()) && plans.protectedPlan(centre.toLong()),
+                        "Unloading surroundings lost the launch target");
+                NuclearWorld.get(level).onChunkLoad(level, unloaded);
                 phase[0] = "real-write-receipt";
                 if (!realReceipt[0]) {
                     var pages = (RuinPages) field(plans, "pages").get(plans);

@@ -1203,6 +1203,8 @@ public final class RuinBackgroundGameTests {
     @GameTest(template = "range", timeoutTicks = 1200, batch = "nuke_send_hold", skyAccess = true)
     public static void chunkWithheldUntilRuins(GameTestHelper h) {
         ServerLevel level = h.getLevel();
+        // Window reads and ruin workers complete asynchronously; their tick deadlines assume game speed.
+        StrikeGameTests.gameSpeed(h);
         BlockPos glass = NuclearGameTests.CENTER.west(16);
         h.setBlock(glass, Blocks.GLASS);
         long chunk = new ChunkPos(h.absolutePos(glass)).toLong();
@@ -1217,7 +1219,8 @@ public final class RuinBackgroundGameTests {
         boolean[] held = {false};
         h.succeedWhen(() -> {
             LevelChunk c = level.getChunkSource().getChunkNow(ChunkPos.getX(chunk), ChunkPos.getZ(chunk));
-            boolean scarred = c != null && c.getExistingData(ModAttachments.CHUNK_SCAR).orElse(0) >= d.id();
+            int marker = c == null ? -1 : c.getExistingData(ModAttachments.CHUNK_SCAR).orElse(0);
+            boolean scarred = marker >= d.id();
             LongOpenHashSet pending = new LongOpenHashSet(new long[]{chunk});
             var out = ChunkSendGate.withhold(level, pending);
             if (!scarred) {
@@ -1226,7 +1229,9 @@ public final class RuinBackgroundGameTests {
                     held[0] = true;
                     release.countDown();
                 }
-                h.fail("the ruins have not yet risen");
+                h.fail("Ruins not applied: loaded=" + (c != null) + ", scar=" + marker + ", expected=" + d.id()
+                        + ", held=" + held[0] + ", latch=" + release.getCount() + ", queued=" + w.scars().queued(chunk)
+                        + ", prepared/fresh/stale=" + java.util.Arrays.toString(w.ruinStats()));
             }
             h.assertTrue(out == null && pending.contains(chunk), "chunk with ruins is not given to the player");
             h.assertTrue(held[0], "chunk never waited for ruins: not verified");

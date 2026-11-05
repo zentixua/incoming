@@ -9,6 +9,12 @@ paths:
 # GameTest and flight scenarios
 
 ## Pitfalls
+- Authority/payment fixtures explicitly exclude physical preparation through `NuclearReadyFixture`'s
+  no-ruins fixture state. The historical `considered` cursor cannot exclude current loaded membership:
+  bind/refresh still discover it. A receipt test that needs STORING must instead install counted resident
+  empty results for its controlled cohort, preserving the real pending-write gate. Unpaid review fixtures
+  cancel their own review with `afterTest`, including assertion failure; leaked preparation suppresses
+  unrelated far settlement through `settleCanAdmit`.
 - Nuclear fixtures can finish their assertions before saved material has fallen, including real-strike chunk
   lifecycle checks. Register
   `RuinMatterGameTests.clearFixture` in their completion cleanup (the `NuclearGameTests.rawAt` helper does this):
@@ -146,6 +152,8 @@ paths:
 - `nuke_send_hold` fills ruin-worker admission until the first post-wave send request exercises the gate, then
   releases workers and checks both the scar and actual glass removal. Cleanup releases the latch on failure too;
   observing an incidental worker delay after the next GameTest callback is not a deterministic gate prerequisite.
+  Run it at game speed: native window I/O and ruin-worker receipts must share the pacing assumed by tick deadlines;
+  an unpaced server can exhaust the fixture timeout while those background operations are still running.
 - Cold-ledger fixtures must unload the currently imported `RuinMatter` before restoring the previous SavedData
   cache entry in each dimension. The imported instance may already hold a material ticket after background import;
   restoring the old cache alone leaves an ownerless load (`nuke_ledger_cleanup`, then `nuke_stop`).

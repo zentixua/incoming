@@ -1137,6 +1137,7 @@ final class RuinContext {
 
     /** Chunk unloaded: live-chunk background plan/snapshot invalid (disk-snapshot plan remains valid). */
     void forget(long chunk) {
+        if (restoredPlans != null) restoredPlans.unprotect(chunk);
         unpinWindow(chunk);
         Task t = tasks.get(chunk);
         if (t != null && t.chunkId != 0) {

@@ -347,6 +347,18 @@ public final class RuinSettleGameTests {
         RuinSettle settle = new RuinSettle();
         WorkClock clock = WorkClock.counting(1_000_000);
         boolean[] inside = {false}, admitted = {false};
+        h.runAfterDelay(390, () -> {
+            if (admitted[0] && !p.pending.contains(partial.toLong())) return;
+            StringBuilder owners = new StringBuilder();
+            for (var dimension : level.getServer().getAllLevels()) {
+                if (!dimension.hasData(ModAttachments.NUCLEAR_WORLD)) continue;
+                owners.append(dimension.dimension().location()).append(":prepIdle=")
+                        .append(NuclearWorld.get(dimension).prep().idle()).append(' ');
+            }
+            Incoming.LOG.info("SETTLE_LOAD_PENDING admitted={} held={} reads={} partialPending={} room={} canAdmit={} owners={}",
+                    admitted[0], settle.held(), settle.reads(), p.pending.contains(partial.toLong()),
+                    NuclearWorld.get(level).settleMemoryRoom(level), NuclearWorld.get(level).settleCanAdmit(level), owners);
+        });
         int[] syncLoads = {0};
         java.util.function.Consumer<net.neoforged.neoforge.event.level.ChunkEvent.Load> listener = e -> {
             if (inside[0] && e.getLevel() == level) syncLoads[0]++;

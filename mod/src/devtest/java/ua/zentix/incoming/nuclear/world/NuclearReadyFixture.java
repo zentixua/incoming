@@ -65,9 +65,29 @@ public final class NuclearReadyFixture {
 
     /** Authority-only receipt: no physical inputs; real loaded-edge preparation has separate GameTests. */
     public static void emptyWork(ServerLevel level, Object request) throws ReflectiveOperationException {
+        // Exclude physical work explicitly. The historical traversal cursor is not a cohort
+        // boundary: binding and later refresh must still discover current loaded chunks normally.
+        field(request, "noRuins").setBoolean(request, true);
+        field(request, "requiredInitialized").setBoolean(request, false);
+        ((it.unimi.dsi.fastutil.longs.LongOpenHashSet) field(request, "required").get(request)).clear();
+    }
+
+    /** Receipt/handoff fixture: retain real counted owners, but use controlled empty deltas. */
+    public static void residentEmptyWork(ServerLevel level, Object request, long target) throws ReflectiveOperationException {
+        field(request, "noRuins").setBoolean(request, false);
         field(request, "requiredInitialized").setBoolean(request, true);
+        field(request, "requiredTarget").setLong(request, target);
+        ((it.unimi.dsi.fastutil.longs.LongOpenHashSet) field(request, "required").get(request)).add(target);
+        var plans = (RetainedPlans) field(request, "plans").get(request);
+        plans.protect(target);
+        plans.put(target, RuinPlan.EMPTY);
         var considered = (it.unimi.dsi.fastutil.longs.LongOpenHashSet) field(request, "considered").get(request);
-        for (var holder : level.getChunkSource().chunkMap.getChunks()) considered.add(holder.getPos().toLong());
+        for (var holder : level.getChunkSource().chunkMap.getChunks()) {
+            long key = holder.getPos().toLong();
+            considered.add(key);
+            plans.protect(key);
+            plans.put(key, RuinPlan.EMPTY);
+        }
     }
 
     public static UUID commandHandle(ServerLevel level) {

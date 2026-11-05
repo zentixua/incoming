@@ -55,6 +55,10 @@ final class RuinMemory {
         private Reservation(NuclearWorld owner, long bytes) { this.owner = owner; this.bytes = bytes; }
         boolean grow(ServerLevel level, long extra) {
             if (extra < 0) throw new IllegalArgumentException("Negative material reservation");
+            if (owner == null) throw new IllegalStateException("Closed material reservation");
+            // Ordinary non-cargo pieces already own their complete capture credit. This must
+            // neither repeat global admission nor fail because another owner grew meanwhile.
+            if (extra == 0) return true;
             if (extra > NuclearPrep.PLANS_CAP - (NuclearPrep.memory(level, false))) return false;
             owner.materialReservation += extra;
             bytes += extra;
