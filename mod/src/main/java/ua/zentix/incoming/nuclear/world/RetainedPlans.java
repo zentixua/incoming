@@ -18,6 +18,12 @@ final class RetainedPlans extends Long2ObjectOpenHashMap<RuinPlan> {
     private static final long READ_BYTES = 4L << 20;
     private static final int IO_LIMIT = 64, READ_LIMIT = 16;
     private final long residentTarget;
+    /** Current loaded/launch cohort only; historical page keys never acquire this ownership. */
+    private transient Pins protectedKeys;
+    private static final class Pins extends it.unimi.dsi.fastutil.longs.LongOpenHashSet {
+        private static final long serialVersionUID = 1L;
+        long bytes() { return 64L + 8L * (n + 1); }
+    }
     private final transient it.unimi.dsi.fastutil.longs.LongLinkedOpenHashSet toWrite = new it.unimi.dsi.fastutil.longs.LongLinkedOpenHashSet();
     private final transient it.unimi.dsi.fastutil.longs.LongLinkedOpenHashSet hot = new it.unimi.dsi.fastutil.longs.LongLinkedOpenHashSet();
     // Demand reads belong to the scar/front consumer, independently of the preparation cursor.
@@ -62,6 +68,20 @@ final class RetainedPlans extends Long2ObjectOpenHashMap<RuinPlan> {
     boolean pendingWrite(long key) { return writes.containsKey(key) || toWrite.contains(key); }
     int pendingReads() { return reads.size(); }
 
+    void protect(long key) {
+        if (protectedKeys == null) protectedKeys = new Pins();
+        protectedKeys.add(key);
+    }
+
+    void unprotect(long key) {
+        if (protectedKeys == null) return;
+        protectedKeys.remove(key);
+        if (protectedKeys.isEmpty()) protectedKeys = null;
+    }
+
+    boolean protectedPlan(long key) { return protectedKeys != null && protectedKeys.contains(key); }
+    boolean resident(long key) { return super.get(key) != null; }
+
     /** Funded reads keep a collector even when their scar is behind capacity-blocked visible
      * work or has unloaded. Rotate refused publications too; one large page cannot hide a
      * smaller completed page. A successful decode enters the normal spillable cache. */
@@ -80,7 +100,8 @@ final class RetainedPlans extends Long2ObjectOpenHashMap<RuinPlan> {
         return false;
     }
 
-    long bytes() { return bytes + writeBytes + 48L * (super.size() + reads.size() + writes.size()); }
+    long bytes() { return bytes + writeBytes + 48L * (super.size() + reads.size() + writes.size())
+            + (protectedKeys == null ? 0 : protectedKeys.bytes()); }
 
     /** Bound both write ownership and read results; no blocking future wait on the tick thread. */
     void pump(long room) {
@@ -101,8 +122,10 @@ final class RetainedPlans extends Long2ObjectOpenHashMap<RuinPlan> {
             if (super.get(entry.getLongKey()) == write.plan) hot.addAndMoveToLast(entry.getLongKey());
             it.remove();
         }
-        while (bytes > residentTarget && !hot.isEmpty()) {
+        int candidates = hot.size();
+        while (bytes > residentTarget && candidates-- > 0 && !hot.isEmpty()) {
             long key = hot.removeFirstLong();
+            if (protectedPlan(key)) { hot.addAndMoveToLast(key); continue; }
             RuinPlan plan = super.put(key, null);
             if (plan != null) bytes -= plan.bytes();
         }
@@ -250,6 +273,7 @@ final class RetainedPlans extends Long2ObjectOpenHashMap<RuinPlan> {
 
     @Override
     public RuinPlan remove(long key) {
+        unprotect(key);
         misses.addAndMoveToLast(key);
         if (misses.size() > 1024) misses.removeFirstLong();
         RuinPlan old = super.remove(key);
@@ -283,6 +307,7 @@ final class RetainedPlans extends Long2ObjectOpenHashMap<RuinPlan> {
         writeBytes = 0;
         toWrite.clear();
         hot.clear();
+        protectedKeys = null;
         closeStorage();
         pages = null;
         misses.clear();

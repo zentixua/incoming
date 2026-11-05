@@ -195,7 +195,7 @@ public final class NuclearPrep {
         final MetadataSet everInMemory = new MetadataSet();
         /** Plans for in-memory chunks (near preparation). */
         int nearPlans;
-        /** Launch-critical target and loaded surroundings; far physical work continues independently. */
+        /** Current launch-critical target and loaded surroundings, never historical travel. */
         final MetadataSet required = new MetadataSet();
         boolean requiredInitialized;
         long requiredTarget;
@@ -442,7 +442,7 @@ public final class NuclearPrep {
             writing = 0;
             total = p.required.size();
             for (long key : p.required) {
-                if (p.plans.containsKey(key) || key == p.requiredTarget && p.unreadable.contains(key)
+                if (p.plans.resident(key) || key == p.requiredTarget && p.unreadable.contains(key)
                         && level.getChunkSource().getChunkNow(ChunkPos.getX(key), ChunkPos.getZ(key)) == null) complete++;
                 if (p.plans.pendingWrite(key)) writing++;
             }
@@ -524,6 +524,10 @@ public final class NuclearPrep {
             // before detonation preparation ruins outside NuclearWorld: preparation removes task itself
             if (p.handle == null && p.ruins != null && p.detonation < 0) p.ruins.forget(chunk);
             p.considered.remove(chunk);
+            if (chunk != p.requiredTarget) p.required.remove(chunk);
+            // The target is still required at launch, but an unloaded ordinary cohort member
+            // must not retain a resident page throughout arbitrary player travel.
+            if (chunk != p.requiredTarget || p.detonation >= 0) p.plans.unprotect(chunk);
         }
     }
 
@@ -821,10 +825,11 @@ public final class NuclearPrep {
             install(p, l);
         }
         long now = level.getGameTime();
-        if (p.handle != null && !p.requiredInitialized) {
+        if (!p.requiredInitialized) {
             p.requiredInitialized = true;
             p.requiredTarget = ChunkPos.asLong(Mth.floor(p.geometry.burst().x) >> 4, Mth.floor(p.geometry.burst().z) >> 4);
             p.required.add(p.requiredTarget);
+            p.plans.protect(p.requiredTarget);
         }
         if (now >= p.nextRefresh) {
             p.nextRefresh = now + REFRESH;
@@ -977,16 +982,26 @@ public final class NuclearPrep {
     private static void refresh(ServerLevel level, Prep p) {
         Detonation d = p.geometry;
         double radius = d.ruinRadius();
+        var required = p.required.iterator();
+        while (required.hasNext()) {
+            long key = required.nextLong();
+            if (key == p.requiredTarget || Terrain.ready(level, ChunkPos.getX(key), ChunkPos.getZ(key))) continue;
+            required.remove();
+            p.considered.remove(key);
+            p.plans.unprotect(key);
+        }
         LongArrayList fresh = new LongArrayList();
         for (ChunkHolder holder : level.getChunkSource().chunkMap.getChunks()) {
             ChunkPos c = holder.getPos();
-            if (p.considered.contains(c.toLong()) || horizontal(c, d) > radius) continue;
+            if (horizontal(c, d) > radius) continue;
             // FULL data retained by generation/unload is not a ready player chunk. Do not add a key
             // that submit() must immediately remove and bind() would re-add forever.
             if (p.handle == null ? NuclearTickets.inMemory(level, c.toLong()) == null : !Terrain.ready(level, c.x, c.z)) continue;
+            p.required.add(c.toLong());
+            p.plans.protect(c.toLong());
+            if (p.considered.contains(c.toLong())) continue;
             p.considered.add(c.toLong());
             p.everInMemory.add(c.toLong());
-            if (p.handle != null) p.required.add(c.toLong());
             fresh.add(c.toLong());
         }
         if (fresh.isEmpty()) return;
@@ -1139,6 +1154,7 @@ public final class NuclearPrep {
 
     /** Add ready plan to the resident window; completed spill receipts free it for subsequent chunks. */
     private static void keep(ServerLevel level, Prep p, long c, RuinPlan plan) {
+        if (Terrain.ready(level, ChunkPos.getX(c), ChunkPos.getZ(c)) || p.required.contains(c)) p.plans.protect(c);
         p.plans.put(c, plan);
         p.planned.add(c);
     }
@@ -1327,7 +1343,13 @@ public final class NuclearPrep {
 
     /** Chunk loaded: front LOD copy unnecessary, world supplies ruins/LODs. */
     void loaded(long chunk) {
-        for (Prep p : preps) p.lods.loaded(chunk);
+        for (Prep p : preps) {
+            p.lods.loaded(chunk);
+            if (p.draining || p.geometry == null || horizontal(new ChunkPos(chunk), p.geometry) > p.geometry.ruinRadius()) continue;
+            p.plans.protect(chunk);
+            p.required.add(chunk);
+            p.nextRefresh = 0;
+        }
     }
 
     /** For tests: strike {@code strike} preparation front LOD copies ({@link FrontLods#stats}); null without preparation. */
@@ -1367,7 +1389,14 @@ public final class NuclearPrep {
         int visits = RuinWorkers.capacity();
         while (visits-- > 0 && p.nextTodo < p.todo.size() && clock.canStart() && shared.canStart()) {
             long c = p.todo.getLong(p.nextTodo++);
-            if (p.plans.containsKey(c)) continue;
+            if (p.plans.containsKey(c)) {
+                // A restored historical key is not READY until its protected resident owner exists.
+                long began = shared.begin();
+                try {
+                    if (p.plans.get(c) == null) { p.nextTodo--; return; }
+                } finally { clock.record(shared.end(began)); }
+                continue;
+            }
             if (p.ruins.running(c)) {
                 if (p.handle != null) {
                     p.ruins.promote(c, RuinWorkers.Priority.NEAR);
@@ -1382,7 +1411,8 @@ public final class NuclearPrep {
                 // Neighbours/centre may lose FULL readiness without an unload event.
                 p.ruins.unpinWindow(c);
                 p.considered.remove(c);
-                if (p.handle != null && c != p.requiredTarget) p.required.remove(c);
+                if (c != p.requiredTarget) p.required.remove(c);
+                if (c != p.requiredTarget) p.plans.unprotect(c);
                 continue;
             }
             if (!RuinWorkers.admit(RuinWorkers.Priority.NEAR)) { p.nextTodo--; return; }
