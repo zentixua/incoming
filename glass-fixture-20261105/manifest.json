@@ -1,0 +1,87 @@
+[
+  {
+    "path": "controls/GameTestShards-control.java",
+    "bytes": 10141,
+    "sha256": "cc078a4157f80a65fbdbbeac1ae6415717186bb47e0483a0990ce68075cb6d4f"
+  },
+  {
+    "path": "controls/RuinSustainedProgress.barrier-intervention.java",
+    "bytes": 12476,
+    "sha256": "9e1dac6fb8d62dd03925f5cbcdca3c44b8316b7e4dc8f6d2eaf5022666ffb845"
+  },
+  {
+    "path": "controls/RuinSustainedProgress.barrier-red.java",
+    "bytes": 12080,
+    "sha256": "d61455ca0259ea3d55b98bd4626b670c97a1a1ca02007aadf3ddeb875581e617"
+  },
+  {
+    "path": "controls/RuinSustainedProgress.fixed.java",
+    "bytes": 10802,
+    "sha256": "9d39936475bbab44bc0fe0215094a62a4ef2510da7a25379e2df04d6fb8825fd"
+  },
+  {
+    "path": "controls/RuinSustainedProgress.guard-mutant.java",
+    "bytes": 10814,
+    "sha256": "710f3d0d523330a6f4b89c0e4aa776c5b4aa8dc3f4fcf110fd1ff016e4e93a64"
+  },
+  {
+    "path": "controls/RuinSustainedProgress.original.java",
+    "bytes": 10333,
+    "sha256": "6c2af835cd5bc458eb40c21ccdad758f6034e4e4314a4681a367d7db3a728a58"
+  },
+  {
+    "path": "controls/RuinSustainedProgress.probe.java",
+    "bytes": 10711,
+    "sha256": "a907b71d18bde0a60ea6201da688bb7c4c53b9fdf3531d4349c66fa8455fa377"
+  },
+  {
+    "path": "provenance.json",
+    "bytes": 1038,
+    "sha256": "452719ebc383d2663c433b48386606df60ef9a76b2a10b082fb0ab9a20871e89"
+  },
+  {
+    "path": "raw/final-validation.log",
+    "bytes": 22738,
+    "sha256": "7ae7f930e0c345121fc54b87a44326bca3f8bea3a41633626ae8ff92329f857a"
+  },
+  {
+    "path": "raw/original-ci-job.log",
+    "bytes": 381771,
+    "sha256": "c85f81b0257f4885b05aebb757c93edbf6c44d8982ed44d2ef8cffef4a89c746"
+  },
+  {
+    "path": "raw/prefix-fixed.log",
+    "bytes": 32917,
+    "sha256": "3c44c34233919adcc1b018ae7254c3572750981a8855dd25fc5195518b52fbe9"
+  },
+  {
+    "path": "raw/prefix-guard-mutant.log",
+    "bytes": 33186,
+    "sha256": "27dc55141fd46c0a25da8882c56493f226ad95e60260824e5149a06995b71bd9"
+  },
+  {
+    "path": "raw/prefix-marks.log",
+    "bytes": 40656,
+    "sha256": "b6ca45b02be14de80d3131dd53c5ab7341f932f45b396bc88dac0a14906cf2ae"
+  },
+  {
+    "path": "raw/prefix-neighbours.log",
+    "bytes": 45074,
+    "sha256": "9b70557651b070b61507211acd822a193aee5946b2a72f4d0e72bcec00a6da8b"
+  },
+  {
+    "path": "raw/prefix-open-faces.log",
+    "bytes": 43095,
+    "sha256": "bb499f9fd70ae90be621a3620c960c7f18eabb39ff43cb041cc5356e975229eb"
+  },
+  {
+    "path": "raw/prefix-red-probe.log",
+    "bytes": 38715,
+    "sha256": "bb0f02b83bc9abb649dfe4e9f72cfbefa27b4e81e35eb8374c81b078ca074e8c"
+  },
+  {
+    "path": "raw/prefix-reference.log",
+    "bytes": 42980,
+    "sha256": "14a86833f89258bf7c91631ac46a386a78a73c56b180d34387d12d7fbb2a842a"
+  }
+]

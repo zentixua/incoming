@@ -1,0 +1,41 @@
+{
+  "base": "fa2b09d3ea9aea3b5c4d5168a5b809285d2b5fdd",
+  "source": "2f9466177908f1e97b689928659058c300458593",
+  "original_ci": {
+    "run": 41951385109,
+    "job": 126995941624
+  },
+  "native_starting_grid": [
+    9925128,
+    -59,
+    -11516958
+  ],
+  "failed_structure_origin": [
+    9925271,
+    -60,
+    -11516696
+  ],
+  "native_order": [
+    "launch_from_map",
+    "nuke_ledger_legacy_crater",
+    "arrival_teleport_bare",
+    "sam_skip",
+    "nuclear_review_abort",
+    "nuke_flash_shadow",
+    "nuke_scorch_far",
+    "missile_mast",
+    "crater_falls_salvo",
+    "bunker_air",
+    "nuke_panic",
+    "nuke_sustained_progress"
+  ],
+  "local_build": {
+    "tests": 1850,
+    "failures": 0,
+    "errors": 0,
+    "skipped": 0
+  },
+  "focused_gametest_passed": 1,
+  "prefix_tests": 12,
+  "limits": "The private selector pins two native grid draws after grouping and starts from seed42; UUIDs, thread timing and every historical random draw are not reconstructed. Instrumented source is not final production or performance evidence."
+}
