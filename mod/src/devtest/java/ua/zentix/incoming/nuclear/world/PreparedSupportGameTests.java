@@ -17,6 +17,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Set;
 import java.util.function.Predicate;
+import java.util.function.ToDoubleFunction;
 
 /** Detached-snapshot experiments for finite prepared structural decisions. */
 @GameTestHolder(Incoming.MOD_ID)
@@ -112,6 +113,87 @@ public final class PreparedSupportGameTests {
         h.assertTrue(retry.metrics().detachedCells() == 168 && direct(retry).size() == 1,
                 "Refusal changed the immutable source or lost a planned removal");
         h.succeed();
+    }
+
+    @GameTest(template = "pad", timeoutTicks = 100, batch = "nuke_prepared_support_timed", skyAccess = true)
+    public static void bridgeWaitsForItsLastSupportAcrossSeams(GameTestHelper h) {
+        Predicate<BlockPos> cuts = pos -> pos.getY() == 39 && pos.getZ() == 1 && (pos.getX() == 0 || pos.getX() == 55);
+        var input = sections(roof(true, false), cuts, 0, 0, 0);
+        var times = timedSections(input, at -> at.getX() == 0 ? 10 : 30);
+        var result = PreparedSupportPrototype.timed(times, 200, 2000);
+        assertTimedRoof(h, result, 30);
+        long early = result.plans().stream().flatMap(plan -> plan.detached.stream()).filter(release -> release.at() <= 10).count();
+        h.assertTrue(early == 0, "First broken support released the bridge before the last support failed");
+        var directTimes = result.plans().stream().flatMap(plan -> plan.direct.stream()).map(PreparedSupportPrototype.Release::at).sorted().toList();
+        h.assertTrue(directTimes.equals(List.of(10.0, 30.0)), "Direct source times or ownership changed");
+        Collections.reverse(times);
+        assertTimedRoof(h, PreparedSupportPrototype.timed(times, 200, 2000), 30);
+        var shifted = sections(roof(true, false), cuts, 15, 11, -17);
+        assertTimedRoof(h, PreparedSupportPrototype.timed(timedSections(shifted, at -> at.getX() == 15 ? 10 : 30), 200, 2000), 30);
+        Incoming.LOG.info("PREPARED_SUPPORT_TIMED sections={} visits={} cellPops={} boundaryBytes={} release=30 count=168",
+                times.size(), result.sectionVisits(), result.cellPops(), result.boundaryBytes());
+        h.succeed();
+    }
+
+    @GameTest(template = "pad", timeoutTicks = 100, batch = "nuke_prepared_support_timed_controls", skyAccess = true)
+    public static void survivingAnchorAndFloatingBuildDoNotGainTimedRemovals(GameTestHelper h) {
+        Predicate<BlockPos> cut = pos -> pos.equals(new BlockPos(0, 39, 1));
+        for (var shape : List.of(roof(true, false), roof(false, true))) {
+            var result = PreparedSupportPrototype.timed(timedSections(sections(shape, cut, 0, 0, 0), at -> 10), 200, 2000);
+            h.assertTrue(result.plans().stream().allMatch(plan -> plan.detached.isEmpty() && plan.unresolved().isEmpty()),
+                    "A surviving distant support or closed preexisting floating build acquired gravity");
+            h.assertTrue(result.plans().stream().mapToInt(plan -> plan.direct.size()).sum() == 1, "Direct removal lost ownership");
+        }
+        h.succeed();
+    }
+
+    @GameTest(template = "pad", timeoutTicks = 100, batch = "nuke_prepared_support_timed_unknown", skyAccess = true)
+    public static void unknownSupportTimeNeverBecomesAnEarlyRelease(GameTestHelper h) {
+        var all = sections(roof(true, false), pos -> pos.equals(new BlockPos(0, 39, 1)), 0, 0, 0);
+        var partial = new ArrayList<>(all);
+        partial.removeIf(section -> section.key.x() == 3 && section.key.y() == 2 && section.key.z() == 0);
+        var result = PreparedSupportPrototype.timed(timedSections(partial, at -> 10), 200, 2000);
+        h.assertTrue(result.plans().stream().allMatch(plan -> plan.detached.isEmpty()), "Unknown last support became a removal at t10");
+        h.assertTrue(result.plans().stream().mapToInt(plan -> plan.unresolved().cardinality()).sum() > 0,
+                "Unknown-boundary lower and upper bounds were silently equated");
+        var ready = PreparedSupportPrototype.timed(timedSections(all, at -> 10), 200, 2000);
+        h.assertTrue(ready.plans().stream().allMatch(plan -> plan.detached.isEmpty() && plan.unresolved().isEmpty()),
+                "Real distant support failed to resolve the unknown time");
+        h.succeed();
+    }
+
+    @GameTest(template = "pad", timeoutTicks = 100, batch = "nuke_prepared_support_timed_budget", skyAccess = true)
+    public static void timedWorkRefusalCannotPublishEarlyOrPartialMaterial(GameTestHelper h) {
+        var sections = timedSections(sections(roof(false, false), pos -> pos.equals(new BlockPos(0, 39, 1)), 0, 0, 0), at -> 17);
+        boolean refused = false;
+        try { PreparedSupportPrototype.timed(sections, 200, 1); }
+        catch (IllegalArgumentException expected) { refused = expected.getMessage().contains("work budget"); }
+        h.assertTrue(refused, "Timed preparation exceeded its explicit work limit");
+        assertTimedRoof(h, PreparedSupportPrototype.timed(sections, 200, 2000), 17);
+        h.succeed();
+    }
+
+    private static void assertTimedRoof(GameTestHelper h, PreparedSupportPrototype.TimedResult result, double time) {
+        h.assertTrue(result.plans().stream().mapToInt(plan -> plan.detached.size()).sum() == 168, "Timed roof source count changed");
+        h.assertTrue(result.plans().stream().allMatch(plan -> plan.unresolved().isEmpty()
+                && plan.detached.stream().allMatch(release -> release.at() == time)), "Wrong or unresolved last-support time");
+    }
+
+    private static List<PreparedSupportPrototype.TimedSection> timedSections(List<PreparedSupportPrototype.Section> sections,
+                                                                           ToDoubleFunction<BlockPos> time) {
+        // Static direct masks come from the same immutable input; no live-world lookup supplies timestamps.
+        var staticPlan = PreparedSupportPrototype.solve(sections, new PreparedSupportPrototype.Budget(200, 10000));
+        var result = new ArrayList<PreparedSupportPrototype.TimedSection>();
+        for (int index = 0; index < sections.size(); index++) {
+            var section = sections.get(index);
+            BitSet direct = staticPlan.plans().get(index).direct();
+            double[] times = new double[direct.cardinality()];
+            for (int cell = direct.nextSetBit(0), ordinal = 0; cell >= 0; cell = direct.nextSetBit(cell + 1))
+                times[ordinal++] = time.applyAsDouble(new BlockPos(section.key.x() * 16 + (cell & 15),
+                        section.key.y() * 16 + (cell >> 8), section.key.z() * 16 + (cell >> 4 & 15)));
+            result.add(new PreparedSupportPrototype.TimedSection(section, times));
+        }
+        return result;
     }
 
     private static StructuralRuinGameTests.Shape roof(boolean secondFoundation, boolean floating) {

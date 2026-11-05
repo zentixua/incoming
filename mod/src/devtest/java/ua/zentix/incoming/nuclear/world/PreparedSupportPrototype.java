@@ -4,6 +4,7 @@ import net.minecraft.core.Direction;
 import net.minecraft.world.level.block.state.BlockState;
 
 import java.util.ArrayList;
+import java.util.ArrayDeque;
 import java.util.Arrays;
 import java.util.BitSet;
 import java.util.LinkedHashMap;
@@ -81,6 +82,192 @@ final class PreparedSupportPrototype {
 
     private record Components(short[] ports, byte[] flags) {}
     private record Summary(Section section, Components before, Components after, short[] original, int beforeBase, int afterBase) {}
+
+    /** Times are in the caller's common event clock, ordered by the section's direct-removal bits. */
+    static final class TimedSection {
+        final Section section;
+        private final double[] times;
+
+        TimedSection(Section section, double[] times) {
+            if (times.length != section.removed.cardinality()) throw new IllegalArgumentException("Missing removal times");
+            for (double time : times) if (!Double.isFinite(time) || time < 0) throw new IllegalArgumentException("Invalid removal time");
+            this.section = section;
+            this.times = times.clone();
+        }
+    }
+
+    record Release(int cell, double at) {}
+    static final class TimedPlan {
+        final Key key;
+        final List<Release> direct, detached;
+        private final BitSet unresolved;
+
+        TimedPlan(Key key, List<Release> direct, List<Release> detached, BitSet unresolved) {
+            this.key = key; this.direct = List.copyOf(direct); this.detached = List.copyOf(detached);
+            this.unresolved = (BitSet) unresolved.clone();
+        }
+
+        BitSet unresolved() { return (BitSet) unresolved.clone(); }
+    }
+
+    record TimedResult(List<TimedPlan> plans, int sectionVisits, long cellPops, long boundaryBytes) {
+        TimedResult { plans = List.copyOf(plans); }
+    }
+
+    private static final double UNREACHED = -1;
+    private static final class TimedState {
+        final TimedSection input;
+        final double[] lower = new double[PORTS], upper = new double[PORTS];
+        boolean queued;
+
+        TimedState(TimedSection input) {
+            this.input = input;
+            Arrays.fill(lower, UNREACHED); Arrays.fill(upper, UNREACHED);
+        }
+    }
+
+    /**
+     * Last-support time = max over original anchor paths of min removal time along each path.
+     * Section-local widest paths exchange only face values. Unknown faces seed an upper bound;
+     * actual anchors seed both bounds. A finite release requires matching bounds. This does not
+     * model elastic signal travel or change the upstream finite-span failure law.
+     */
+    static TimedResult timed(List<TimedSection> sections, int sectionLimit, int visitLimit) {
+        if (sections.size() > sectionLimit || sectionLimit < 1 || visitLimit < 1)
+            throw new IllegalArgumentException("Timed support section budget exceeded");
+        var states = new LinkedHashMap<Key, TimedState>();
+        var queue = new ArrayDeque<TimedState>();
+        for (TimedSection section : sections) {
+            var state = new TimedState(section);
+            if (states.put(section.section.key, state) != null) throw new IllegalArgumentException("Duplicate support section");
+            state.queued = true; queue.addLast(state);
+        }
+        var work = new TimedWork(visitLimit);
+        var heap = new LocalHeap();
+        double[] capacity = new double[CELLS], lower = new double[CELLS];
+        while (!queue.isEmpty()) {
+            TimedState state = queue.removeFirst(); state.queued = false;
+            for (boolean upper : new boolean[]{false, true}) {
+                localTimes(state, states, upper, heap, capacity, work);
+                double[] ports = upper ? state.upper : state.lower;
+                for (Direction direction : DIRECTIONS) {
+                    boolean changed = false;
+                    for (int face = 0; face < 256; face++) {
+                        int port = direction.ordinal() * 256 + face;
+                        double value = heap.values[faceCell(direction, face)];
+                        if (value > ports[port]) { ports[port] = value; changed = true; }
+                    }
+                    TimedState neighbour = states.get(state.input.section.key.next(direction));
+                    if (changed && neighbour != null && !neighbour.queued) {
+                        neighbour.queued = true; queue.addLast(neighbour);
+                    }
+                }
+            }
+        }
+        var plans = new ArrayList<TimedPlan>();
+        for (TimedState state : states.values()) {
+            localTimes(state, states, false, heap, capacity, work);
+            System.arraycopy(heap.values, 0, lower, 0, CELLS);
+            localTimes(state, states, true, heap, capacity, work);
+            var direct = new ArrayList<Release>();
+            var detached = new ArrayList<Release>();
+            var unresolved = new BitSet(CELLS);
+            Section section = state.input.section;
+            for (int cell = 0, ordinal = 0; cell < CELLS; cell++) {
+                if (section.removed.get(cell)) { direct.add(new Release(cell, state.input.times[ordinal++])); continue; }
+                if (!section.at(cell).bearing()) continue;
+                double lo = lower[cell], hi = heap.values[cell];
+                if (lo == Double.POSITIVE_INFINITY || lo == UNREACHED && hi == UNREACHED) continue;
+                if (lo >= 0 && lo == hi) detached.add(new Release(cell, lo));
+                else unresolved.set(cell);
+            }
+            plans.add(new TimedPlan(section.key, direct, detached, unresolved));
+        }
+        return new TimedResult(plans, work.visits, work.pops, states.size() * (128L + 2L * PORTS * Double.BYTES));
+    }
+
+    private static void localTimes(TimedState state, LinkedHashMap<Key, TimedState> states, boolean upper,
+                                   LocalHeap heap, double[] capacity, TimedWork work) {
+        if (++work.visits > work.limit) throw new IllegalArgumentException("Timed support work budget exceeded");
+        Section section = state.input.section;
+        Arrays.fill(capacity, Double.POSITIVE_INFINITY);
+        for (int cell = section.removed.nextSetBit(0), ordinal = 0; cell >= 0; cell = section.removed.nextSetBit(cell + 1))
+            capacity[cell] = state.input.times[ordinal++];
+        heap.clear();
+        for (int cell = 0; cell < CELLS; cell++) if (section.at(cell).bearing() && section.anchor(cell)) heap.raise(cell, capacity[cell]);
+        for (Direction direction : DIRECTIONS) {
+            TimedState neighbour = states.get(section.key.next(direction));
+            for (int face = 0; face < 256; face++) {
+                int cell = faceCell(direction, face);
+                var props = section.at(cell);
+                if (!props.bearing() || props.contacts()[direction.ordinal()].isEmpty()) continue;
+                if (neighbour == null) {
+                    if (upper) heap.raise(cell, capacity[cell]);
+                    continue;
+                }
+                int other = faceCell(direction.getOpposite(), face);
+                var otherProps = neighbour.input.section.at(other);
+                if (!otherProps.bearing() || !props.touches(direction, otherProps)) continue;
+                double value = (upper ? neighbour.upper : neighbour.lower)[direction.getOpposite().ordinal() * 256 + face];
+                heap.raise(cell, Math.min(capacity[cell], value));
+            }
+        }
+        while (!heap.empty()) {
+            int cell = heap.pop(); work.pops++;
+            for (Direction direction : DIRECTIONS) {
+                int next = adjacent(cell, direction);
+                if (next < 0 || !section.at(next).bearing() || !section.at(cell).touches(direction, section.at(next))) continue;
+                heap.raise(next, Math.min(heap.values[cell], capacity[next]));
+            }
+        }
+    }
+
+    private static final class TimedWork {
+        final int limit;
+        int visits;
+        long pops;
+        TimedWork(int limit) { this.limit = limit; }
+    }
+
+    /** Indexed max heap: one slot per local cell; no per-block objects or stale queue entries. */
+    private static final class LocalHeap {
+        final double[] values = new double[CELLS];
+        final int[] heap = new int[CELLS], positions = new int[CELLS];
+        int size;
+
+        void clear() { size = 0; Arrays.fill(values, UNREACHED); Arrays.fill(positions, -1); }
+        boolean empty() { return size == 0; }
+        void raise(int cell, double value) {
+            if (value <= values[cell]) return;
+            values[cell] = value;
+            int at = positions[cell];
+            if (at < 0) { at = size++; heap[at] = cell; positions[cell] = at; }
+            while (at > 0) {
+                int parent = (at - 1) / 2;
+                if (values[heap[parent]] >= value) break;
+                swap(at, parent); at = parent;
+            }
+        }
+
+        int pop() {
+            int result = heap[0]; positions[result] = -1;
+            if (--size == 0) return result;
+            heap[0] = heap[size]; positions[heap[0]] = 0;
+            int at = 0;
+            while (at * 2 + 1 < size) {
+                int child = at * 2 + 1;
+                if (child + 1 < size && values[heap[child + 1]] > values[heap[child]]) child++;
+                if (values[heap[at]] >= values[heap[child]]) break;
+                swap(at, child); at = child;
+            }
+            return result;
+        }
+
+        private void swap(int a, int b) {
+            int temporary = heap[a]; heap[a] = heap[b]; heap[b] = temporary;
+            positions[heap[a]] = a; positions[heap[b]] = b;
+        }
+    }
 
     static Result solve(List<Section> sections, Budget budget) {
         if (sections.size() > budget.sections) throw new IllegalArgumentException("Support section budget exceeded");
