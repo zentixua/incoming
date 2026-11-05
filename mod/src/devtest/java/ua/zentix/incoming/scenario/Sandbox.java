@@ -997,17 +997,15 @@ final class Sandbox {
      * — {@code place feature}: random shape).
      */
     private static void buildHouses(MinecraftServer server, BlockPos o) {
-        int x = o.getX(), y = o.getY(), z = o.getZ();
-        List<String> build = new ArrayList<>(List.of(
-                "fill %d %d %d %d %d %d minecraft:stone_bricks hollow".formatted(x - 12, y, z - 4, x - 4, y + 6, z + 4),
-                "fill %d %d %d %d %d %d minecraft:glass_pane".formatted(x - 10, y + 2, z + 4, x - 6, y + 3, z + 4),
-                "fill %d %d %d %d %d %d minecraft:glass_pane".formatted(x - 10, y + 2, z - 4, x - 6, y + 3, z - 4),
-                "fill %d %d %d %d %d %d minecraft:oak_planks".formatted(x - 12, y + 7, z - 4, x - 4, y + 7, z + 4),
-                "fill %d %d %d %d %d %d minecraft:oak_planks hollow".formatted(x + 4, y, z - 3, x + 12, y + 5, z + 3),
-                "fill %d %d %d %d %d %d minecraft:glass".formatted(x + 6, y + 2, z + 3, x + 10, y + 3, z + 3),
-                "fill %d %d %d %d %d %d minecraft:glass".formatted(x + 6, y + 2, z - 3, x + 10, y + 3, z - 3)));
-        for (int[] t : new int[][]{{x - 8, z + 12}, {x + 8, z + 12}, {x, z - 14}}) build.addAll(oak(t[0], y, t[1]));
-        for (String c : build) run(server, c);
+        int x=o.getX(), y=o.getY()+15, z=o.getZ();
+        // B1: floating end-stone island, with ordinary breakable glass resting on its upper face.
+        run(server, "fill %d %d %d %d %d %d minecraft:end_stone".formatted(x-8,y,z-8,x+8,y+2,z+8));
+        run(server, "fill %d %d %d %d %d %d minecraft:glass".formatted(x-6,y+3,z-6,x+6,y+3,z+6));
+        // B2: supported barrel-bearing roof. Rails survive beneath it inside a protected recess.
+        run(server, "fill %d %d %d %d %d %d minecraft:obsidian".formatted(x+14,o.getY()-1,z-5,x+24,o.getY()-1,z+5));
+        run(server, "fill %d %d %d %d %d %d minecraft:glass hollow".formatted(x+16,o.getY(),z-3,x+22,o.getY()+5,z+3));
+        run(server, "fill %d %d %d %d %d %d minecraft:white_concrete".formatted(x+16,o.getY()+5,z-3,x+22,o.getY()+5,z+3));
+        run(server, "fill %d %d %d %d %d %d minecraft:rail".formatted(x+17,o.getY(),z-2,x+21,o.getY(),z+2));
     }
 
     /**
@@ -1153,6 +1151,24 @@ final class Sandbox {
      * {@code track on}: before a frame the eye looks at the effect's projectile where it is on its path in this frame.
      */
     private void onFrameStart(RenderFrameEvent.Pre e) {
+        if (effectTick >= 0 && tick - effectTick == 200) {
+            var server = Minecraft.getInstance().getSingleplayerServer();
+            Vec3 origin = site;
+            if (server != null) server.execute(() -> {
+                var level = server.overworld();
+                BlockPos o = BlockPos.containing(origin);
+                int island = 0, glazing = 0;
+                for (int x=-8;x<=8;x++) for (int z=-8;z<=8;z++) for (int y=15;y<=17;y++)
+                    if (level.getBlockState(o.offset(x,y,z)).is(net.minecraft.world.level.block.Blocks.END_STONE)) island++;
+                for (int x=-6;x<=6;x++) for (int z=-6;z<=6;z++)
+                    if (level.getBlockState(o.offset(x,18,z)).is(net.minecraft.world.level.block.Blocks.GLASS)) glazing++;
+                var ledger = ua.zentix.incoming.nuclear.world.RuinMatter.get(level);
+                Incoming.LOG.info("REVIEW_GEOMETRY origin={} island={} glass={} released={} deposited={} pending={}",
+                        o, island, glazing, ledger.released(), ledger.deposited(), ledger.pending());
+            });
+        }
+
+        if (effectTick >= 0 && tick - effectTick >= 160) IncomingClient.resetSession();
         Minecraft mc = Minecraft.getInstance();
         if (turn != 0 && effectTick >= 0 && mc.player != null) {
             if (Float.isNaN(turnYaw)) turnYaw = mc.player.getYRot();
