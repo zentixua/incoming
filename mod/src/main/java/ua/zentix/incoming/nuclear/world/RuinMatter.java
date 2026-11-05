@@ -614,6 +614,15 @@ public final class RuinMatter extends LedgerData {
 
     private boolean settle(ServerLevel level, Piece p, BlockPos at) {
         if (!ready(level, at, true) || at.getY() >= level.getMaxBuildHeight()) return false;
+        if (p.scorchEvent > 0) {
+            var chunk = level.getChunkSource().getChunkNow(at.getX() >> 4, at.getZ() >> 4);
+            if (chunk == null) return false;
+            // The source wave's destination plan must consume its original snapshot before this
+            // debris arrives. Otherwise our deposit stales that plan and can be struck a second
+            // time. Later unrelated events still act on the normally settled world.
+            if (chunk.getExistingData(ua.zentix.incoming.registry.ModAttachments.CHUNK_SCAR).orElse(0) < p.scorchEvent
+                    && NuclearWorld.get(level).scars().pending(p.scorchEvent, chunk.getPos().toLong())) return false;
+        }
         BlockState old = level.getBlockState(at), below = level.getBlockState(at.below());
         if (!free(old)) {
             // Another owner occupied this cell during flight. Climb out of that occupied cell;

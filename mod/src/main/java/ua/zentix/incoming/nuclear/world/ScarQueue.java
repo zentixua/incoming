@@ -501,6 +501,26 @@ public final class ScarQueue {
         return plans != null && plans.containsKey(chunk);
     }
 
+    /**
+     * Same-event ruin work still owns this destination. Material callers already check the
+     * destination's scar marker; a remaining loaded-range scan conservatively precedes delivery
+     * even before it has offered this chunk. This query neither loads chunks nor advances work.
+     */
+    public boolean pending(int detonation, long chunk) {
+        Job job = jobs.get(chunk);
+        if (job != null) {
+            for (int i = job.event; i < job.events.size(); i++) {
+                if (job.events.get(i).id() == detonation) return true;
+            }
+        }
+        if (hasPlan(detonation, chunk)) return true;
+        ChunkPos pos = new ChunkPos(chunk);
+        for (Scan scan : scans) {
+            if (scan.d.id() == detonation && inRange(pos, scan.d)) return true;
+        }
+        return false;
+    }
+
     /** Ready-plan, fresh-plan, stale-plan counts (tests, status). */
     public int[] ruinStats() {
         return new int[]{appliedPrepared, appliedFresh, stalePlans};
