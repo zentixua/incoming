@@ -15,6 +15,7 @@ final class LedgerScan {
     private int originalEntries;
     private long originalPosition;
     private boolean hasOriginalPosition;
+    private boolean packedMoving, outside;
     // At most 98,316 bytes of primitive arrays; leave I/O workspace for buffers and row scanning.
     // Dense legacy cities need a section count, not a pessimistic per-block object estimate.
     private it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap originalSections;
@@ -50,6 +51,8 @@ final class LedgerScan {
         // Empty queues/indexes and the original journal's fixed section-query workspace remain
         // owned even when a file has no rows. The small-ledger regression checks this floor.
         long owned = LedgerData.IO_BYTES + (12L << 10), largest = 0, cargoTotal = 0;
+        long packedStates = 0;
+        int registryStates = -1;
         var scan = new LedgerScan(Long.MAX_VALUE / 16);
         try (var input = open(file)) {
             if (input.readUnsignedByte() != 10) throw new IOException("Invalid ledger root");
@@ -65,17 +68,34 @@ final class LedgerScan {
                         int element = input.readUnsignedByte(), count = scan.count(input);
                         if (element != 10 && count != 0) throw new IOException("Invalid ledger row list");
                         // Partial FIFO tails own a full primitive page even for one legacy row.
-                        if (count > 0 && key.equals("moving")) owned += (long) RuinRecords.ROWS * RuinMatter.PIECE_BYTES + 1024;
+                        if (count > 0 && key.equals("moving")) {
+                            owned += (long) RuinRecords.ROWS * RuinMatter.PIECE_BYTES + 1024;
+                        }
                         if (count > 0 && key.equals("support_sources")) owned += RuinRecords.ROWS * 16L + 1024;
                         for (int i = 0; i < count; i++) {
                             scan.bytes = 0; scan.cargo = 0; scan.checkpoints = 0; scan.event = -1;
                             scan.originalEntries = -1; scan.hasOriginalPosition = false;
+                            scan.packedMoving = false; scan.outside = false;
                             scan.payload(input, element, 0);
                             long rowBytes = key.equals("passes") && !activeCraters.contains(scan.event)
                                     ? scan.bytes - scan.checkpoints : scan.bytes;
                             largest = Math.max(largest, rowBytes);
+                            long moving = RuinMatter.PIECE_BYTES + 192L; // Legacy row allowance also covers stranded conversion.
+                            if (key.equals("moving") && scan.packedMoving) {
+                                if (scan.outside) moving = 256; // The decoder creates a reservoir, not a FIFO/cargo-index row.
+                                else {
+                                    // One byte per row bounds 96 bytes per 1024-row page; the full
+                                    // partial tail and small-queue overhead were funded above.
+                                    moving = RuinMatter.PIECE_BYTES + 1L + (scan.cargo > 0 ? 64L : 0);
+                                    if (registryStates < 0) registryStates = net.minecraft.world.level.block.Block.BLOCK_STATE_REGISTRY.size();
+                                    if (registryStates == 0) throw new IOException("Block-state registry is not ready for material import");
+                                    // One shared palette, bounded by both imported rows and the
+                                    // frozen registry. Legacy/source rows retain their own allowance.
+                                    if (packedStates < registryStates) { moving += 96; packedStates++; }
+                                }
+                            }
                             long charge = switch (key) {
-                                case "moving" -> RuinMatter.PIECE_BYTES + 192L + 3 * scan.cargo;
+                                case "moving" -> moving + 3 * scan.cargo;
                                 case "stranded" -> 256 + 3 * scan.cargo;
                                 case "support_sources" -> 4096;
                                 case "support_originals" -> scan.originalGrowth();
@@ -182,6 +202,13 @@ final class LedgerScan {
                         if (originalEntries < 1 || originalEntries > 4096) throw new IOException("Invalid original section size");
                     } else if (key.equals("position") && depth == 0 && child == 4) {
                         add(16); originalPosition = input.readLong(); hasOriginalPosition = true;
+                    } else if (key.equals("motion") && depth == 0 && child == 7) {
+                        int length = count(input);
+                        if (length != 145) throw new IOException("Invalid material motion record");
+                        add(24L + length);
+                        input.skipNBytes(length - 1L);
+                        outside = input.readByte() != 0;
+                        packedMoving = true;
                     } else payload(input, child, depth + 1);
                     if (depth == 0) {
                         if (key.equals("contents")) cargo += bytes - before;

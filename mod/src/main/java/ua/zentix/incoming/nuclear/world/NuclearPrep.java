@@ -183,7 +183,7 @@ public final class NuclearPrep {
         CompletableFuture<Layout> layout;
         /** Geometry exists, but layout admission/installation is still required. */
         boolean layoutRequired;
-        /** Immutable reverse-index and tile backing ownership, calculated once by its builder. */
+        /** Reverse-index and tile backing ownership; answered header lists retire on the server thread. */
         long layoutMetadata;
         /** Heavy-zone chunks nearest first (zone behind wave). */
         long[] order = new long[0];
@@ -209,7 +209,7 @@ public final class NuclearPrep {
         long[] edge = new long[0];
         List<Tile> tiles = new ArrayList<>();
         /** Squares needing chunk result (own chunk or neighbor ring). */
-        Long2ObjectOpenHashMap<List<Tile>> askedBy = new Long2ObjectOpenHashMap<>();
+        Long2ObjectOpenHashMap<List<Tile>> askedBy = new LayoutMap();
         /** Memory tight: stop prebuilding, behind-wave squares load only chunks with ready plans. */
         boolean heapStop;
         /** Disk-read queue and results (from I/O thread). */
@@ -602,6 +602,15 @@ public final class NuclearPrep {
         return MtB7Stages.memory(reserveWorkers ? 1 : 2,
                 bytes + (reserveWorkers ? RuinWorkers.bufferBytes(height) + RuinMemory.TRANSITION_ROOM
                 : RuinWorkers.residentBufferBytes(height)));
+    }
+
+    /** Source I/O needs one real decoder restart, not every configured future solver's workspace.
+     * Existing workers stay charged; later births and solver results have their own admission.
+     * Keep the material transition reserve and the caller's write-encoding margin. */
+    private static long sourceMemory(ServerLevel level) {
+        int height = level.getHeight();
+        for (ServerLevel other : level.getServer().getAllLevels()) height = Math.max(height, other.getHeight());
+        return memory(level, false) + RuinWorkers.startupBytes(height) + RuinMemory.TRANSITION_ROOM;
     }
 
     /** Squares held by tickets (tests). */
@@ -1205,20 +1214,20 @@ public final class NuclearPrep {
         if (p.nextFar < p.order.length && !p.ruins.pinWindow(p.order[p.nextFar])) return;
         p.nextRead = Math.max(p.nextRead, p.nextFar); // Earlier centres already have a task/plan or were excluded.
         int readEnd = (int) Math.min(p.order.length, (long) p.nextFar + RuinWorkers.capacity());
-        while (p.nextRead < readEnd && p.reading.size() < READS && memory(level) + READ_BYTES <= WINDOW_CAP) {
+        while (p.nextRead < readEnd && p.reading.size() < READS && sourceMemory(level) + READ_BYTES <= WINDOW_CAP) {
             long c = p.order[p.nextRead];
             boolean all = true;
             for (int dx = -RuinPlanner.REACH; all && dx <= RuinPlanner.REACH; dx++) {
                 for (int dz = -RuinPlanner.REACH; all && dz <= RuinPlanner.REACH; dz++) {
                     long k = ChunkPos.asLong(ChunkPos.getX(c) + dx, ChunkPos.getZ(c) + dz);
                     if (p.reading.contains(k) || p.unreadable.contains(k) || p.ruins.shotAvailable(level, k)) continue;
-                    if (p.reading.size() >= READS || memory(level) + READ_BYTES > WINDOW_CAP) {
+                    if (p.reading.size() >= READS || sourceMemory(level) + READ_BYTES > WINDOW_CAP) {
                         all = false;
                         continue;
                     }
                     var archive = p.ruins.archive();
                     boolean stored = archive != null && archive.mayHave(k);
-                    if (stored && memory(level) + SPILL_READ_BYTES > WINDOW_CAP) { all = false; continue; }
+                    if (stored && sourceMemory(level) + SPILL_READ_BYTES > WINDOW_CAP) { all = false; continue; }
                     p.reading.add(k);
                     if (stored) {
                         var accept = p.archived.expect();
@@ -1636,12 +1645,24 @@ public final class NuclearPrep {
             ConcurrentLinkedQueue<long[]> out = p.scanned;
             DiskStatus.scan(level, new ChunkPos(c)).thenAccept(state -> out.add(new long[]{c, state == DiskStatus.State.WHOLE ? 1 : 0}));
         }
+        if (!p.toScan.isEmpty() && p.nextScan == p.toScan.size() && p.scanning == 0) {
+            // Every reply has transferred its answer to Tile. Keep the tiles/zone, but not
+            // the exhausted header cursor and reverse index (over 40 MiB for a 1-Mt layout).
+            p.layoutMetadata -= ((LayoutMap) p.askedBy).bytes();
+            p.askedBy = new LayoutMap();
+            p.layoutMetadata += ((LayoutMap) p.askedBy).bytes();
+            p.toScan = new LongArrayList();
+        }
     }
 
     /** Chunk result: not whole means neighboring square chunks (ruin-window radius) not loaded. */
     private static void answer(Prep p, long chunk, boolean whole) {
         List<Tile> asked = p.askedBy.get(chunk);
         if (asked == null) return;
+        // Clearing the value releases only the consumed list. Keep the backing table charged
+        // and avoid remove()'s automatic shrinking/rehash during a still-active scan.
+        p.askedBy.put(chunk, null);
+        p.layoutMetadata -= 96L + 8L * ((ObjectArrayList<?>) asked).elements().length;
         int x = ChunkPos.getX(chunk), z = ChunkPos.getZ(chunk);
         for (Tile t : asked) {
             if (!whole) {
@@ -1792,7 +1813,7 @@ public final class NuclearPrep {
         Incoming.LOG.info("DIAG zone #{}: tiles SCAN {}, SKIP {}, WAIT {}, LOADING {}, READY {}; headers read {} of {} (in flight {}); "
                         + "intake stalled, ticks — slots {}, disk reply {}, wave {}, nothing to take {}, detonation forgotten {}; released {}: ticket→full avg {} (max {}), "
                         + "full→released {} ({}), wave→ticket {} ({}); holds for tiles {}, tile releases refused (too few holds) {}",
-                p.detonation, states[0], states[1], states[2], states[3], states[4], p.nextScan - p.scanning, p.toScan.size(), p.scanning,
+                p.detonation, states[0], states[1], states[2], states[3], states[4], p.nextScan - p.scanning, Math.max(p.nextScan, p.toScan.size()), p.scanning,
                 s[0], s[1], s[2], s[3], s[4], dn[0], dn[1] / n, dn[2], dn[3] / n, dn[4], dn[5] / Math.max(1, dn[7]), dn[6], scars.tileHoldsDiag(), p.diagRefused);
         java.util.Arrays.fill(s, 0);
         for (Tile t : p.tiles) {

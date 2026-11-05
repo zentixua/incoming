@@ -547,3 +547,20 @@ paths:
   work. A new closer FULL chunk cannot strand that owner behind a head waiting for its token.
   `nuke_near_assembly_refresh` exercises real refresh, completes the held callback, and requires both
   loaded centres to yield nonempty plans. Error paths that remove a consumer release its claim too.
+
+- Header replies transfer availability into the zone tiles, then release their reverse-list payload.
+  Retain the reverse table's actual backing while replies are pending; clearing values avoids an
+  unreserved shrinking rehash. Once every header has returned, discard the exhausted reverse index
+  and scan-list backing, retaining the tile masks and completed-header count. `nuke_header_lifetime`
+  uses the complete 1-Mt layout, a withheld final reply and an independent availability-mask oracle.
+- FAR source admission reserves resident ownership, one actual decoder restart and the existing
+  material/encoding margins. It does not reserve every configured idle solver. Worker birth,
+  height growth, result and publication guards still fund their real owners. `nuke_frontier_workspace`
+  combines one funded worker, ten configured workers, real source/archive reads, active material
+  and actual application of the complete equal plan under fixed competing ownership.
+- Compact moving imports fund FIFO page slack, a palette bounded by row count and registered states,
+  cargo indexes only when present, and the existing cargo/row workspace. Legacy rows keep their
+  conservative allowance. Packed outside rows restore reservoirs, not FIFO/index rows; scan the same
+  exact 145-byte motion payload as the decoder. `nuke_ledger_packed_import` and
+  `nuke_ledger_outside_import` cover compact footprint, cargo/trajectory parity, reservoir ownership
+  and rejection of malformed motion arrays.
