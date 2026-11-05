@@ -494,6 +494,10 @@ paths:
   rewind the read cursor to refill missing demand. Bounding only outstanding reads permits a zone-wide sweep to
   evict the first needed window and leave every solver idle. `nuke_disk_frontier` uses real world/source-region and
   snapshot-page reads with a tiny cache policy and shared admission pressure; complete material output must match.
+  Try solver admission before the FAR cache trim, retaining the next consumer's pin first. Even pinned visits
+  spend the shared clock, so a whole protected window can otherwise consume every tick before its task starts.
+  `nuke_frontier_material` combines real source/archive reads and moving material at a 26 ms counting budget,
+  requiring the identical complete plan within the unchanged 120-tick progress bound.
 
 - Producer ownership: reserve known snapshot/height growth before copying and plan plus nine private fracture bounds
   before solver allocation. `RuinResults` is one numeric server-wide counter, outside the dimension sum. Cancellation
