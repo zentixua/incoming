@@ -106,12 +106,13 @@ public final class PreparedLandingGameTests {
     public static void absentSnapshotIsUnknownAndCargoIsNotOrdinary(GameTestHelper h) {
         ChunkShot[] shots = syntheticShots(48, false);
         shots[0] = null;
+        var palette = palette(h, shots);
         var window = new RuinWindow(new ChunkPos(0, 0), 0, 48, shots, Blast.publish());
         // x=4,z=-12 is in the known northern central chunk; westward motion enters missing NW.
         var at = new BlockPos(4, 32, -12);
         var removals = List.of(new PreparedLandingSnapshot.Removal(at, 0, true),
                 new PreparedLandingSnapshot.Removal(new BlockPos(8, 32, -12), 0, true));
-        var input = PreparedLandingSnapshot.from(window, removals, syntheticDetonation());
+        var input = PreparedLandingSnapshot.from(window, removals, syntheticDetonation(), palette);
         h.assertTrue(input.sources().size() == 2 && input.sources().get(1).kind() == PreparedLandingModel.Kind.UNSUPPORTED_SOURCE,
                 "A container entered the ordinary no-cargo fast path");
         var original = input.sources().getFirst();
@@ -129,15 +130,16 @@ public final class PreparedLandingGameTests {
     @GameTest(template = "pad", batch = "nuke_prepared_landing_measure", timeoutTicks = 600, skyAccess = true)
     public static void denseSyntheticSnapshotReportsFiniteWorkerCost(GameTestHelper h) {
         var shots = syntheticShots(96, true);
+        var palette = palette(h, shots);
         var window = new RuinWindow(new ChunkPos(0, 0), 0, 96, shots, Blast.publish());
         var removals = new ArrayList<PreparedLandingSnapshot.Removal>();
         for (int y = 1; y < 96; y++) for (int z = 0; z < 16; z++) for (int x = 0; x < 16; x++)
             if (!window.get(x + 16, y, z + 16).isAir()) removals.add(new PreparedLandingSnapshot.Removal(new BlockPos(x, y, z), 0, true));
         var future = worker(h, () -> {
             long before = System.nanoTime();
-            var input = PreparedLandingSnapshot.from(window, removals, syntheticDetonation());
+            var input = PreparedLandingSnapshot.from(window, removals, syntheticDetonation(), palette);
             long adapter = System.nanoTime() - before;
-            return measure("synthetic-dense-central", input, 0, adapter);
+            return measure("synthetic-dense-central", input, window, 0, adapter);
         });
         h.succeedWhen(() -> {
             h.assertTrue(future.isDone(), "Waiting for dense snapshot worker");
@@ -160,6 +162,7 @@ public final class PreparedLandingGameTests {
             JsonObject manifest = JsonParser.parseString(Files.readString(fixture.resolve("manifest.json"))).getAsJsonObject();
             JsonObject events = JsonParser.parseString(Files.readString(Path.of(eventsPath))).getAsJsonObject();
             var shots = new HashMap<Long, ChunkShot>();
+            var paletteBuilder = new PreparedLandingPalette.Builder(h.getLevel());
             long began = System.nanoTime();
             var format = DiskShots.Format.of(h.getLevel());
             for (var element : manifest.getAsJsonArray("chunks")) {
@@ -183,10 +186,11 @@ public final class PreparedLandingGameTests {
                 }
                 h.assertTrue(read.skip() == null, "City chunk was not parsed: " + read.skip());
                 // Register states before priming and publish the immutable table before any worker.
-                for (var section : read.states()) if (section != null) section.getAll(Blast::ensure);
+                for (var section : read.states()) if (section != null) section.getAll(state -> { Blast.ensure(state); paletteBuilder.add(state); });
                 shots.put(pos.toLong(), ChunkShot.fromDisk(read.primed(Blast.SERVER), null, null, false));
             }
             Blast.PropsView view = Blast.publish();
+            var palette = paletteBuilder.freeze();
             Incoming.LOG.info("LANDING_CITY_INPUT chunks={} parse_publish_ns={} level_sha256={} scope=pristine-central-cohort-not-live-453-chunks",
                     shots.size(), System.nanoTime() - began, manifest.get("level_sha256").getAsString());
             var grids = new ArrayList<RuinContext.Grid>();
@@ -222,9 +226,10 @@ public final class PreparedLandingGameTests {
                         removals.add(new PreparedLandingSnapshot.Removal(source, departure, true));
                     }
                     start = System.nanoTime();
-                    var input = PreparedLandingSnapshot.from(grid.windowOf(0, 0), removals, grid.ctx().d);
+                    var window = grid.windowOf(0, 0);
+                    var input = PreparedLandingSnapshot.from(window, removals, grid.ctx().d, palette);
                     long adapter = System.nanoTime() - start;
-                    results.add(measure(labels.get(i), input, fracture, adapter));
+                    results.add(measure(labels.get(i), input, window, fracture, adapter));
                 }
                 return results;
             });
@@ -239,7 +244,7 @@ public final class PreparedLandingGameTests {
 
     private record Measurement(PreparedLandingSnapshot.Input input, PreparedLandingModel.Result result) {}
 
-    private static Measurement measure(String label, PreparedLandingSnapshot.Input input, long fracture, long adapter) {
+    private static Measurement measure(String label, PreparedLandingSnapshot.Input input, RuinWindow window, long fracture, long adapter) {
         var bean = ManagementFactory.getThreadMXBean();
         long cpu = bean.isCurrentThreadCpuTimeSupported() ? bean.getCurrentThreadCpuTime() : -1;
         var allocation = bean instanceof com.sun.management.ThreadMXBean extended ? extended : null;
@@ -257,7 +262,36 @@ public final class PreparedLandingGameTests {
                 label, input.removalCells(), input.nonMaterialCells(), input.sources().size(), eligible, input.states().size(),
                 fracture, adapter, elapsed, cpu, allocated, result.segments(), result.queueOperations(), result.collisionReads(), result.peakQueue(),
                 result.inputBytes(), result.motionBytesEstimate(), result.outputBytesEstimate(), counts);
+        collisionDiagnostics(label, window, result);
         return new Measurement(input, result);
+    }
+
+    private static void collisionDiagnostics(String label, RuinWindow window, PreparedLandingModel.Result result) {
+        Map<String, Integer> states = new HashMap<>(), types = new HashMap<>();
+        Map<String, String> samples = new HashMap<>();
+        long collisions = 0, climbs = 0, spills = 0, same = 0, cycles = 0;
+        for (var output : result.outcomes()) {
+            var trace = output.trace();
+            collisions += trace.collisions(); climbs += trace.climbs(); spills += trace.spills();
+            same += trace.sameCellSteps(); cycles += trace.reposeABA();
+            if (output.status() != PreparedLandingModel.Status.UNSUPPORTED_COLLISION) continue;
+            var cell = output.blocked();
+            var state = window.get(cell.x() - window.x0, cell.y(), cell.z() - window.z0);
+            String name = state.toString(), type = state.getBlock().getClass().getSimpleName();
+            states.merge(name, 1, Integer::sum); types.merge(type, 1, Integer::sum);
+            samples.putIfAbsent(name, "blocked=" + cell + " source=" + output.source().x() + "," + output.source().y() + "," + output.source().z());
+        }
+        Incoming.LOG.info("LANDING_TRACE label={} collisions={} climbs={} spills={} same_cell_steps={} repose_ABA={} unsupported_types={}",
+                label, collisions, climbs, spills, same, cycles, new java.util.TreeMap<>(types));
+        states.entrySet().stream().sorted(Map.Entry.<String, Integer>comparingByValue().reversed().thenComparing(Map.Entry.comparingByKey()))
+                .limit(10).forEach(entry -> Incoming.LOG.info("LANDING_BLOCKED label={} count={} state={} {}",
+                        label, entry.getValue(), entry.getKey(), samples.get(entry.getKey())));
+        result.outcomes().stream().filter(o -> o.status() == PreparedLandingModel.Status.WORK_LIMIT)
+                .sorted(java.util.Comparator.comparingLong(PreparedLandingModel.Outcome::segments).reversed()).limit(5)
+                .forEach(output -> Incoming.LOG.info("LANDING_UNFINISHED label={} source={},{},{} at={},{},{} age_s={} segments={} wind={},{} drag={} pulse={} trace={}",
+                        label, output.source().x(), output.source().y(), output.source().z(), output.x(), output.y(), output.z(),
+                        output.time() - output.source().departure(), output.segments(), output.source().windX(), output.source().windZ(),
+                        output.source().drag(), output.source().pulse(), output.trace()));
     }
 
     private static void verify(GameTestHelper h, Measurement measurement) {
@@ -284,6 +318,13 @@ public final class PreparedLandingGameTests {
         var executor = Executors.newSingleThreadExecutor(r -> new Thread(r, "prepared-landing-experiment"));
         StrikeGameTests.afterTest(h, executor::shutdownNow);
         return CompletableFuture.supplyAsync(task, executor);
+    }
+
+    private static PreparedLandingPalette palette(GameTestHelper h, ChunkShot[] shots) {
+        var builder = new PreparedLandingPalette.Builder(h.getLevel());
+        for (var shot : shots) if (shot != null)
+            for (var section : shot.saved().states()) if (section != null) section.getAll(builder::add);
+        return builder.freeze();
     }
 
     @SuppressWarnings("unchecked")

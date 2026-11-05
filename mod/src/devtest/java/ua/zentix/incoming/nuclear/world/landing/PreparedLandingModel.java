@@ -13,7 +13,7 @@ import java.util.PriorityQueue;
  * never artificial ground. No production code calls this class.
  */
 public final class PreparedLandingModel {
-    public static final byte AIR = 0, SOLID = 1, UNKNOWN = 2, UNSUPPORTED = 3;
+    public static final byte AIR = 0, SOLID = 1, UNKNOWN = 2, UNSUPPORTED = 3, FREE_COLLIDING = 4, BLOCKED_EMPTY = 5;
     public static final double GRAVITY = 9.80665, DT = 1.0 / 20;
 
     public enum Kind { ORDINARY, UNSUPPORTED_SOURCE, UNRESOLVED_STRUCTURE }
@@ -24,9 +24,13 @@ public final class PreparedLandingModel {
 
     /** State is an opaque exact palette identity, never a material-family substitution. Times are seconds. */
     public record Source(long id, int event, int x, int y, int z, int state, double volume, double mass,
-                         double departure, double windX, double windZ, double drag, double pulse, Kind kind) {
+                         double departure, double windX, double windZ, double drag, double pulse, Kind kind, byte landingCell) {
+        public Source(long id, int event, int x, int y, int z, int state, double volume, double mass,
+                      double departure, double windX, double windZ, double drag, double pulse, Kind kind) {
+            this(id, event, x, y, z, state, volume, mass, departure, windX, windZ, drag, pulse, kind, SOLID);
+        }
         public Source {
-            if (kind == null || state < 0 || !(volume > 0) || !(mass > 0) || departure < 0 || drag < 0 || pulse < 0
+            if (kind == null || landingCell < AIR || landingCell > BLOCKED_EMPTY || state < 0 || !(volume > 0) || !(mass > 0) || departure < 0 || drag < 0 || pulse < 0
                     || !Double.isFinite(volume + mass + departure + windX + windZ + drag + pulse))
                 throw new IllegalArgumentException("Invalid material source");
         }
@@ -44,7 +48,7 @@ public final class PreparedLandingModel {
             this.x0 = x0; this.minY = minY; this.z0 = z0;
             this.width = width; this.height = height; this.depth = depth;
             this.cells = cells.clone();
-            for (byte cell : cells) if (cell < AIR || cell > UNSUPPORTED) throw new IllegalArgumentException("Invalid collision cell");
+            for (byte cell : cells) if (cell < AIR || cell > BLOCKED_EMPTY) throw new IllegalArgumentException("Invalid collision cell");
         }
 
         private int index(int x, int y, int z) {
@@ -65,7 +69,9 @@ public final class PreparedLandingModel {
         public static Limits experiment() { return new Limits(131072, 8_000_000, 120); }
     }
 
-    public record Outcome(Source source, Status status, int x, int y, int z, double time, long segments) {
+    public record Cell(int x, int y, int z) {}
+    public record Trace(long collisions, long climbs, long spills, long sameCellSteps, long maxSameCellRun, long reposeABA) {}
+    public record Outcome(Source source, Status status, int x, int y, int z, double time, long segments, Cell blocked, Trace trace) {
         /** Never publish a landing before its computed arrival. */
         public long dueTick() { return (long) Math.ceil(time * 20); }
     }
@@ -88,6 +94,9 @@ public final class PreparedLandingModel {
         double x, y, z, vx, vy, vz, time, due, dt, nx, ny, nz, ax, az;
         boolean departed;
         long segments;
+        long collisions, climbs, spills, sameCellSteps, sameCellRun, maxSameCellRun, reposeABA;
+        long previousCell = Long.MIN_VALUE, previousSpill = Long.MIN_VALUE, precedingSpill = Long.MIN_VALUE;
+        Cell blocked;
         Motion(Source source) {
             this.source = source;
             x = source.x + .5; y = source.y; z = source.z + .5;
@@ -131,8 +140,8 @@ public final class PreparedLandingModel {
         }
         model.outcomes.sort(Comparator.comparing(Outcome::source, SOURCES));
         return new Result(model.outcomes, model.segments, model.reads, model.queueOperations, model.peak,
-                snapshot.cells.length, 256L * sources.size() + snapshot.cells.length,
-                96L * sources.size()); // Explicit estimates, not measured heap or a persistent codec size.
+                snapshot.cells.length, 384L * sources.size() + snapshot.cells.length,
+                176L * sources.size()); // Includes diagnostic counters; not measured heap or a persistent codec size.
     }
 
     private void depart(Motion m) {
@@ -148,7 +157,7 @@ public final class PreparedLandingModel {
             finish(m, m.source.kind == Kind.UNRESOLVED_STRUCTURE ? Status.UNRESOLVED_STRUCTURE : Status.UNSUPPORTED_SOURCE);
             return;
         }
-        if (old != SOLID) { finish(m, Status.UNSUPPORTED_SOURCE); return; }
+        if (old == UNSUPPORTED) { finish(m, Status.UNSUPPORTED_SOURCE); return; }
         m.departed = true;
         schedule(m);
     }
@@ -179,22 +188,29 @@ public final class PreparedLandingModel {
     private void advance(Motion m) {
         segments++; m.segments++;
         m.time = m.due;
+        long position = position(floor(m.x), floor(m.y), floor(m.z));
+        if (position == m.previousCell) { m.sameCellSteps++; m.sameCellRun++; }
+        else m.sameCellRun = 0;
+        m.previousCell = position;
+        m.maxSameCellRun = Math.max(m.maxSameCellRun, m.sameCellRun);
         int x = floor(m.nx), y = floor(m.ny), z = floor(m.nz);
         int cell = cell(x, y, z);
-        if (fallback(m, cell)) return;
-        if (cell == SOLID) {
+        if (fallback(m, cell, x, y, z)) return;
+        if (!free(cell) || !empty(cell)) {
+            m.collisions++;
             int hx = floor(m.x), hy = floor(m.y), hz = floor(m.z);
             int here = cell(hx, hy, hz);
-            if (fallback(m, here)) return;
-            if (here == SOLID) {
+            if (fallback(m, here, hx, hy, hz)) return;
+            if (!empty(here)) {
+                m.climbs++;
                 m.y = hy + 1; m.vx = m.vy = m.vz = 0;
                 settle(m, hx, hy + 1, hz);
                 return;
             }
             m.vx = m.vz = 0;
             int vertical = cell(hx, y, hz);
-            if (fallback(m, vertical)) return;
-            if (vertical == AIR) { m.y = m.ny; m.vy -= GRAVITY * m.dt; }
+            if (fallback(m, vertical, hx, y, hz)) return;
+            if (free(vertical) && empty(vertical)) { m.y = m.ny; m.vy -= GRAVITY * m.dt; }
             else if (m.ny < m.y) { settle(m, hx, hy, hz); return; }
             else m.vy = Math.min(0, m.vy);
         } else {
@@ -206,25 +222,33 @@ public final class PreparedLandingModel {
 
     private void settle(Motion m, int x, int y, int z) {
         int own = cell(x, y, z), below = cell(x, y - 1, z);
-        if (fallback(m, own) || fallback(m, below)) return;
-        if (own == SOLID) {
+        if (fallback(m, own, x, y, z) || fallback(m, below, x, y - 1, z)) return;
+        if (!free(own)) {
+            m.climbs++;
             m.y = y + 1; m.vx = m.vy = m.vz = 0;
             schedule(m); return;
         }
-        if (below == AIR) { schedule(m); return; }
+        if (free(below) && empty(below)) { schedule(m); return; }
         int offset = Math.floorMod(Long.hashCode(m.source.id), 4);
         for (int k = 0; k < 4; k++) {
             int d = (k + offset) % 4, sx = x + DX[d], sz = z + DZ[d];
             int side = cell(sx, y, sz), under = cell(sx, y - 1, sz);
-            if (fallback(m, side) || fallback(m, under)) return;
-            if (side == AIR && under == AIR) {
+            if (fallback(m, side, sx, y, sz) || fallback(m, under, sx, y - 1, sz)) return;
+            if (free(side) && free(under)) {
+                m.spills++;
+                long position = position(x, y, z);
+                if (position == m.precedingSpill) m.reposeABA++;
+                m.precedingSpill = m.previousSpill; m.previousSpill = position;
                 m.x = sx + .5; m.y = y; m.z = sz + .5; m.vx = m.vy = m.vz = 0;
                 schedule(m); return;
             }
         }
-        occupancy[snapshot.index(x, y, z)] = SOLID;
-        outcomes.add(new Outcome(m.source, Status.LANDED, x, y, z, m.time, m.segments));
+        occupancy[snapshot.index(x, y, z)] = m.source.landingCell;
+        outcomes.add(new Outcome(m.source, Status.LANDED, x, y, z, m.time, m.segments, null, trace(m)));
     }
+
+    private static boolean free(int cell) { return cell == AIR || cell == FREE_COLLIDING; }
+    private static boolean empty(int cell) { return cell == AIR || cell == BLOCKED_EMPTY; }
 
     private int cell(int x, int y, int z) {
         reads++;
@@ -232,7 +256,7 @@ public final class PreparedLandingModel {
         return index < 0 ? index : occupancy[index];
     }
 
-    private boolean fallback(Motion m, int cell) {
+    private boolean fallback(Motion m, int cell, int x, int y, int z) {
         Status status = switch (cell) {
             case -1 -> Status.OUT_OF_WINDOW;
             case -2 -> Status.OUTSIDE_HEIGHT;
@@ -241,12 +265,21 @@ public final class PreparedLandingModel {
             default -> null;
         };
         if (status == null) return false;
+        m.blocked = new Cell(x, y, z);
         finish(m, status);
         return true;
     }
 
     private void finish(Motion m, Status status) {
-        outcomes.add(new Outcome(m.source, status, floor(m.x), floor(m.y), floor(m.z), m.time, m.segments));
+        outcomes.add(new Outcome(m.source, status, floor(m.x), floor(m.y), floor(m.z), m.time, m.segments, m.blocked, trace(m)));
+    }
+
+    private static Trace trace(Motion m) {
+        return new Trace(m.collisions, m.climbs, m.spills, m.sameCellSteps, m.maxSameCellRun, m.reposeABA);
+    }
+
+    private static long position(int x, int y, int z) {
+        return ((long) x & 0x3ffffff) << 38 | ((long) z & 0x3ffffff) << 12 | (y & 0xfff);
     }
 
     private static int floor(double value) { return (int) Math.floor(value); }
