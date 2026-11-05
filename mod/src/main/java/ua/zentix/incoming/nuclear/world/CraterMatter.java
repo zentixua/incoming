@@ -43,6 +43,22 @@ public final class CraterMatter extends LedgerData {
 
     double[] settled(BlockState state) { return settled.getOrDefault(state, new double[8]).clone(); }
 
+    @Override CraterMatter snapshot() {
+        requireWritable();
+        CraterMatter copy = new CraterMatter();
+        settled.forEach((state, values) -> copy.settled.put(state, values.clone()));
+        passes.forEach((id, pass) -> {
+            Pass frozen = copy.new Pass();
+            frozen.soil = pass.soil;
+            pass.materials.forEach((state, values) -> frozen.materials.put(state, values.clone()));
+            frozen.available.putAll(pass.available);
+            frozen.ground.putAll(pass.ground);
+            frozen.done.addAll(pass.done);
+            copy.passes.put(id, frozen);
+        });
+        return copy;
+    }
+
     static CraterMatter get(ServerLevel level) {
         NuclearWorld world = level.getData(ua.zentix.incoming.registry.ModAttachments.NUCLEAR_WORLD);
         return world.ledgers.get(level, world, NAME, CraterMatter::new);

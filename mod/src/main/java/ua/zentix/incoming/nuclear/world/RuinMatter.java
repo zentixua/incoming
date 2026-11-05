@@ -62,6 +62,37 @@ public final class RuinMatter extends LedgerData {
 
     long queueGrowthBytes(int pieces) { return moving.growthBytes(pieces) + supportSources.growthBytes(pieces); }
 
+    @Override RuinMatter snapshot() {
+        requireWritable();
+        RuinMatter copy = new RuinMatter();
+        copy.palette = palette.snapshot();
+        // Captured cargo is immutable: placement gives block-entity loaders a separate copy.
+        // Freeze the index itself because live deposits remove entries and may reset its palette.
+        copy.inventories.putAll(inventories);
+        copy.nextInventory = nextInventory;
+        copy.inventoryCapacity = inventoryCapacity;
+        moving.snapshot().forEach(copy.moving::restore);
+        supportSources.snapshot().forEach(copy.supportSources::restore);
+        for (Piece piece : paused) copy.paused.add(piece.snapshot());
+        copy.cargoBytes = cargoBytes;
+        copy.strandedBytes = strandedBytes;
+        copy.strandedCount = strandedCount;
+        stranded.forEach((key, value) -> {
+            Reservoir frozen = new Reservoir();
+            frozen.count = value.count; frozen.volume = value.volume; frozen.mass = value.mass;
+            copy.stranded.put(key, frozen);
+        });
+        materials.forEach((key, value) -> copy.materials.put(key, value.clone()));
+        copy.supports.putAll(supports);
+        uncertain.forEach((key, value) -> copy.uncertain.put(key.longValue(), value.clone()));
+        originals.snapshotTo(copy.originals);
+        copy.released = released; copy.deposited = deposited; copy.dispersed = dispersed;
+        copy.releasedVolume = releasedVolume; copy.releasedMass = releasedMass;
+        copy.depositedVolume = depositedVolume; copy.depositedMass = depositedMass;
+        copy.dispersedVolume = dispersedVolume; copy.dispersedMass = dispersedMass;
+        return copy;
+    }
+
     /** Capture objects coexist with the published compact rows and their indexes. Cargo grows
      * the reservation separately before mutation. Reserve each ownership term once, rather
      * than an unrelated per-cell envelope: dense ready chunks must fit when these owners fit. */
@@ -287,6 +318,18 @@ public final class RuinMatter extends LedgerData {
         private long cargoKey;
         private final long retained;
         long retainedBytes() { return retained; }
+
+        private Piece snapshot() {
+            Piece copy = new Piece(source, state, contents, Vec3.ZERO, 0, true, fine);
+            copy.id = id; copy.scorch = scorch; copy.scorchEvent = scorchEvent; copy.scorchTime = scorchTime;
+            copy.cargoKey = cargoKey; copy.outside = outside; copy.transfer = transfer;
+            copy.volume = volume; copy.mass = mass;
+            copy.x = x; copy.y = y; copy.z = z;
+            copy.vx = vx; copy.vy = vy; copy.vz = vz;
+            copy.tick = tick; copy.releasedTick = releasedTick;
+            copy.windX = windX; copy.windZ = windZ; copy.drag = drag; copy.pulse = pulse;
+            return copy;
+        }
 
         Piece(BlockPos source, BlockState state, CompoundTag contents, Vec3 velocity, long tick) {
             this(source, state, contents, velocity, tick, false);

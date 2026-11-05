@@ -30,6 +30,19 @@ final class RuinProgress extends LedgerData {
 
     private final Map<Integer, Pass> passes = new HashMap<>();
 
+    @Override RuinProgress snapshot() {
+        requireWritable();
+        RuinProgress copy = new RuinProgress();
+        passes.forEach((id, pass) -> {
+            Pass frozen = new Pass();
+            frozen.cursor = pass.cursor; frozen.complete = pass.complete; frozen.archive = pass.archive;
+            frozen.pending.addAll(pass.pending);
+            frozen.capacity = pass.capacity;
+            copy.passes.put(id, frozen);
+        });
+        return copy;
+    }
+
     static RuinProgress get(ServerLevel level) {
         NuclearWorld world = level.getData(ua.zentix.incoming.registry.ModAttachments.NUCLEAR_WORLD);
         return world.ledgers.get(level, world, "incoming_ruin_settle", RuinProgress::new);

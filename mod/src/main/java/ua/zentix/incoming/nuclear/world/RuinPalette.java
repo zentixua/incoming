@@ -16,6 +16,13 @@ final class RuinPalette {
 
     long bytes() { return 512L + 96L * states.size(); }
 
+    RuinPalette snapshot() {
+        RuinPalette copy = new RuinPalette();
+        copy.states.addAll(states);
+        copy.ids.putAll(ids);
+        return copy;
+    }
+
     int index(BlockState state) {
         Integer found = ids.get(state);
         if (found != null) return found;

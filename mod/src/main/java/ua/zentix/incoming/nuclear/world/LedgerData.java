@@ -37,6 +37,9 @@ abstract class LedgerData extends SavedData {
 
     abstract void write(LedgerWriter writer, HolderLookup.Provider registries) throws IOException;
 
+    /** Server-thread capture. The returned owner is detached from every mutable persisted field. */
+    abstract LedgerData snapshot();
+
     @Override public final void save(File file, HolderLookup.Provider registries) {
         if (!writable() || !isDirty() && !failed) return;
         writing = true; // Before enqueue: delayed I/O owns the ledger too.

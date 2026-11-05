@@ -95,6 +95,22 @@ final class RuinOriginals {
     boolean isEmpty() { return size == 0; }
     boolean containsKey(long position) { return get(position) != 0; }
 
+    /** Freeze primitive provenance tables; a later live removal cannot alter the saved graph. */
+    void snapshotTo(RuinOriginals copy) {
+        if (!copy.isEmpty()) throw new IllegalArgumentException("Snapshot destination is not empty");
+        for (var entry : pages.long2ObjectEntrySet()) {
+            Page source = entry.getValue();
+            Page page = new Page(1);
+            page.first = source.first;
+            page.value = source.value;
+            page.imported = source.imported;
+            page.table = source.table == null ? null : (Table) source.table.clone();
+            copy.pages.put(entry.getLongKey(), page);
+            copy.pageBytes += page.bytes();
+        }
+        copy.size = size;
+    }
+
     private static long section(long position) {
         return SectionPos.asLong(BlockPos.getX(position) >> 4, BlockPos.getY(position) >> 4, BlockPos.getZ(position) >> 4);
     }
