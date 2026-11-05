@@ -283,6 +283,7 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
         /** Third round ({@link Blast#remnants}): every window chunk's breaches count as breaches. */
         int[] remnants(Blast[] blasts, int margin) {
             skyAir();
+            fellTrees(false);
             IntArrayList breaks = new IntArrayList();
             for (int k = 0; k < 9; k++) {
                 if (blasts[k] == null) continue;
@@ -314,6 +315,9 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
         /** Sky-connected air depth (1…{@link #SKY_DEPTH}); above column top, sky without stored entry. */
         final byte[] sky;
         final long[] gone;
+        /** Recognized trunks left standing by load or world rule; they never use timber-member pressure response. */
+        @org.jetbrains.annotations.Nullable
+        long[] standingTrees;
         /** Thread buffers {@link #sky} and {@link #gone} ({@link #BUFFERS}). */
         final Buffers pooled;
         final List<long[]> trees = new ArrayList<>();
@@ -413,7 +417,7 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
         Blast run(boolean blockDamage, boolean treeFall) {
             if (blockDamage) {
                 skyAir();
-                if (treeFall) fellTrees();
+                fellTrees(treeFall);
                 IntArrayList round = new IntArrayList();
                 for (int wz = LO - ROUND_ONE; wz < HI + ROUND_ONE; wz++) {
                     for (int wx = LO - ROUND_ONE; wx < HI + ROUND_ONE; wx++) {
@@ -492,6 +496,7 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
 
         /** Whether block breaks (thickness, reflection) or element topples; broken positions into {@code out}. */
         void decide(int wx, int y, int wz, Props p, double pmax, IntArrayList out, boolean first) {
+            if (standingTree(wx, y, wz)) return;
             int x = w.x0 + wx, z = w.z0 + wz;
             double cx = x + 0.5, cy = y + 0.5, cz = z + 0.5;
             double ux = burst.x - cx, uy = burst.y - cy, uz = burst.z - cz, len = Math.sqrt(ux * ux + uy * uy + uz * uz);
@@ -559,7 +564,7 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
         void take(int wx, int y, int wz, IntArrayList out) {
             if (!inside(wx, y, wz)) return;
             Props p = w.props(wx, y, wz);
-            if (p.breakable() && p.full()) out.add(idx(wx, y, wz));
+            if (p.breakable() && p.full() && !standingTree(wx, y, wz)) out.add(idx(wx, y, wz));
         }
 
         /**
@@ -691,8 +696,12 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
             }
         }
 
-        /** Supported trunks topple whole away from epicenter (before per-block wave; unsupported leaves follow, {@link Collapse}). */
-        void fellTrees() {
+        private boolean standingTree(int wx, int y, int wz) {
+            return standingTrees != null && inside(wx, y, wz) && bit(standingTrees, idx(wx, y, wz));
+        }
+
+        /** Recognize trunks before applying load/rules; eligible trees topple whole before per-block wave. */
+        void fellTrees(boolean fall) {
             for (int wz = LO - ROUND_ONE; wz < HI + ROUND_ONE; wz++) {
                 for (int wx = LO - ROUND_ONE; wx < HI + ROUND_ONE; wx++) {
                     int t = w.top(wx, wz);
@@ -703,11 +712,15 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
                         Props pb = w.props(wx, y - 1, wz);
                         if (pb.log() || pb.leaves() || !pb.bearing()) continue;
                         int x = w.x0 + wx, z = w.z0 + wz;
-                        if (d.psi(new Vec3(x + 0.5, y + 0.5, z + 0.5)) < p.threshold()) continue;
                         // trunk only if tree: leaves above (otherwise log wall or pillar)
                         int height = 0;
                         while (y + height <= yt && w.props(wx, y + height, wz).log()) height++;
                         if (!w.props(wx, y + height, wz).leaves() && !nearLeaves(wx, y + height - 1, wz)) continue;
+                        if (!fall || d.psi(new Vec3(x + 0.5, y + 0.5, z + 0.5)) < p.threshold()) {
+                            if (standingTrees == null) standingTrees = new long[(SIDE * SIDE * h + 63) >> 6];
+                            for (int i = 0; i < height; i++) set(standingTrees, idx(wx, y + i, wz));
+                            continue;
+                        }
                         BlockState st = w.get(wx, y, wz);
                         for (int i = 0; i < height; i++) set(gone, idx(wx, y + i, wz));
                         if (wx >= LO && wx < HI && wz >= LO && wz < HI) {
