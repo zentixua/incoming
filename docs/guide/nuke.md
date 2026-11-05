@@ -122,6 +122,8 @@ A surface-burst crater supplies its rim from the ground actually excavated; rema
 If the shared nuclear working-memory reservation is full, further material removal waits while already moving
 material can settle. Already started plan reads and completed calculations receive processing time even
 while a dense visible chunk waits for space; later loaded chunks can reuse plans after the preparation window ends.
+Completed terrain checks free room for subsequent ruins. Distant preparation can resume with fewer background
+threads when the configured maximum does not fit alongside the debris.
 The debris queue does not need to empty before nearby or distant preparation, or flash damage, can continue. Large strikes can
 still leave chunks waiting for memory and processing time. Pending material and support checks survive a normal world save and reload. Completed movement and crater
 checkpoints are compacted into material totals; container contents are retained. Saving can pause material
