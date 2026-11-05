@@ -100,3 +100,35 @@ The actual CI receipt is newer than source.json's stale pending-CI field: run419
 The previous standard100-scene A1/B/A2 records in bench/ are none-pack conventional-scene measurements for c156, with main7bdb as baseline. They are not df40 cost evidence and are not a high-yield nuclear or 24-source consumption benchmark. The request-path CPU/allocation probe above is also a different scope. A **fresh final-df40 100-scene cost comparison remains required and unaccepted**. Supply its raw results/context/artifact pin as the last phase of this same independent review; no further routine source round is requested.
 
 RAIR8B returns this source/frame continuation now and ends to free the S7 correction-review slot. No source, JVM, GPU, heavy job, server, nested reviewer, PR or user-desktop action was performed. AIR8 retains source ownership; LEAD4 retains integration/runtime/GPU ownership. All records preserved; reviewer-owned resources0.
+
+
+# Final cost receipt — 5 November 2026
+
+Same second independent review, final evidence phase. Source is still exact `df40a1e369306d21cad94677aadd99e77e235eba`, detached clean wt-RAIR8B, with no source delta since the preceding source/frame continuation.
+
+**PASS for the required sampled standard100 conventional-strike / none-pack frame-cost comparison. No blocking finding remains within this component review's established source, controlled-frame and sampled-cost scope.** This closes the previously pending final-df40 cost gate; integration/runtime/delivery remain LEAD4-owned.
+
+Inspected raw `bench-final/` pair/context metadata, A1/B/A2 frames.csv, events.jsonl, host.jsonl, plans, client logs and completed driver stages. Did not read the supplied verdict.json or author PR/report conclusions. Reparsed all three raw runs with the existing stand implementation using `stand.analyze(write=False)` and independently invoked the inspected gate comparison; no receipt/result file was rewritten. Recomputed metrics exactly match the recorded results, and the recomputed gate returns pass with no failures.
+
+- Actual candidate JAR SHA-256 independently checked: `3cb9666c52723f93d702b19ff96a8763954a4bb73091fa4c3a3d9203f5221685`, the supplied df40 CI JAR. Both baseline metadata records use main `7bdb5b2c12c9c387aa346046250a9fd62fdf3990`, SHA-256 `1767702dc97870b3f31e139fca970648376008764b42a237b68b8bf54022554d`.
+- Recomputed current harness hash matches pair context: `d410cda45bc305b2d1ef5ea6e3d4f019739387723e3e045211bc295ed1a7f8be`. All three contexts match; saved scene plans are byte-identical. All15 checked metadata/raw/plan files match their original `stand/out/air8-df40-100` copies by SHA-256.
+- Same RTX4060 Laptop GPU / NVIDIA615.78.08 /2560×1600 / Java21.0.7 / performance profile; recorded Iris pipeline is off throughout, as required for pack none. Driver records warmup, A1, B, A2 completed consecutively, followed by both wrapper exits0. Warmup is excluded from the decision.
+- All runs finish20 steps and100/100 impacts (`why=all`), with no validity errors, failed camera/deadline checks or missing windows. Each gated window has3780–4307 usable frames. Screenshot and following frames are excluded by the existing parser; frame intervals are taken from the next row. Gate CPU is render-thread CPU time, not wall-clock frame duration; GPU values are GL timestamp spans.
+
+| Gated window | GPU p50 A1 / B / A2, ms | CPU thread p95 A1 / B / A2, ms |
+|---|---:|---:|
+|100/outside|2.407 /2.392 /2.447|5.150 /5.363 /5.385|
+|100/edge|3.720 /3.492 /3.554|4.765 /4.890 /5.063|
+|100/inside|3.336 /3.024 /3.946|4.803 /4.478 /4.552|
+
+The existing gate compares each candidate metric with the worse A1/A2 value, allowing25%. All six candidate gated metrics are below that baseline. This supports absence of a gate-detectable regression in this pair; it is not a causal performance-improvement estimate. The100-hit window is report-only; first-strike and accumulation gates were not captured in this subset.
+
+Host records cover every gated window at100% for both CPU and sampled GPU observations; performance profile is stable. No load notes are produced. Candidate foreign CPU peaks at0.03 core in those windows; foreign GPU peaks at16% SM, with highest window mean4.59%, within existing25% peak/5% mean reporting thresholds. These sampled records do not prove absence of interference at every instant. The same-session A1/B/A2 comparison is the prescribed control for heating/background variability.
+
+## Final bounded disposition and retained limits
+
+The source/ownership and captured-path reuse findings in the preceding continuation remain unchanged. Native PNGs remain labeled452→c156 and are reused only for the explicitly justified unchanged single-source table/steady appearance path; they are not relabeled df40 captures. The final benchmark is df40, rather than the historical c156 pair.
+
+This receipt establishes standard100 conventional-strike cost under none, on one A1/B/A2 pair. It does not establish nuclear multi-source rendering cost, all-shaderpack/full-pack performance, arbitrary source-count total heap bounds, fixed async completion latency, calibrated real-world stem/gap duration, water-footprint completeness, actual server100/1000kt terrain publication, save/restart/multiplayer/traversal readiness or private/public delivery. The retained caller-owned data and shared eight-entry cache continue to have different ownership/memory scopes.
+
+The prior exact-tree CI/local unit/native receipts remain as previously inspected; no new source review round, JVM/GPU/heavy job, nested session, PR mutation or desktop/game operation was performed in this final phase. RAIR8B owns no pending jobs/resources. Final component handback goes to AIR8 for evidence/PR/handoff bookkeeping and LEAD4 for integration/runtime/delivery. END.

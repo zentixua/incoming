@@ -6,6 +6,6 @@ Queued native constructors complete between12 deterministic frame scans over24di
 
 Full localbuild1850 tests passes, native nuke_stem_clock1/1 passes, exactCI41943641063 passes; merge treeb87277f5c72357e753fb95892fedfc7e6dc6fc7c equalsdf40. CI ZIPa7fa92ec0dd23c8eca174475a4f57d74835c11219916cbda9305c5a1879da476; JAR3cb9666c52723f93d702b19ff96a8763954a4bb73091fa4c3a3d9203f5221685. All134 model/client-nuclear compiled class entries match CI.
 
-Private changed-path probe:500000 iterations perphase, original source with only renaming and controlled executor, current production Request.ready/tau/top/foot lookup. Candidate0B/call,33.64021threadCPU ns; original~400B/call,154.7295/154.8347ns. Excludes fullframe/shader/background construction and is not an FPS claim. Rawgreen XML and source underfixture/. The c156bench elsewhere is historical; finaldf40 cost is pending.
+Private changed-path probe:500000 iterations perphase, original source with only renaming and controlled executor, current production Request.ready/tau/top/foot lookup. Candidate0B/call,33.64021threadCPU ns; original~400B/call,154.7295/154.8347ns. Excludes fullframe/shader/background construction and is not an FPS claim. Rawgreen XML and source underfixture/. The c156bench elsewhere is historical; final df40 sampled cost passed; see ../bench-final/README.md.
 
 Same independent second reviewer RAIR8B explicitly accepted single-source452→c156 frame reuse fordf40, with originalpins retained. See reviews/RAIR8B-source-and-frames-review.md. No overall server/readiness/real-world-calibration claim.

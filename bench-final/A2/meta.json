@@ -1,0 +1,37 @@
+{
+ "name": "air8-df40-100/A2",
+ "label": "main 7bdb5b2c",
+ "jar": {
+  "label": "main 7bdb5b2c",
+  "file": "incoming-3.10.4.jar",
+  "sha256": "1767702dc97870b3f31e139fca970648376008764b42a237b68b8bf54022554d",
+  "spec": "ci:7bdb5b2c12c9c387aa346046250a9fd62fdf3990"
+ },
+ "context": {
+  "stand": "d410cda45bc305b2d1ef5ea6e3d4f019739387723e3e045211bc295ed1a7f8be",
+  "mods": {
+   "sodium": "4f537696af95411e9daf15795fb5fcbc49913d488a96fa912fa8f1d7db408710995e8a1461190f3cd0f8217bf9e35e9539176592428ed587ca2d7aa84450a390",
+   "iris": "33fddb430e16222902eac75b8b3d57c381b0f3cc729f3b56c4628df12ca108f23a0b11e2feb167923d6d14d1fc7e8ee1a977ec421b19d1951bdca74c4092b9c5"
+  },
+  "packs": {
+   "none": "none"
+  },
+  "scenes": [
+   "100"
+  ],
+  "gpu": "NVIDIA GeForce RTX 4060 Laptop GPU",
+  "driver": "615.78.08",
+  "size": "2560x1600",
+  "java": "21.0.7",
+  "kwin": "kwin 6.8.2",
+  "power": "performance"
+ },
+ "started": "2026-11-05T01:43:30+00:00",
+ "packs": {
+  "none": {
+   "exit": 0,
+   "gpu_minutes": 2.83,
+   "file": null
+  }
+ }
+}

@@ -1,0 +1,27 @@
+{
+  "source": "df40a1e369306d21cad94677aadd99e77e235eba",
+  "base": "3efac357cc368045f6fe821ac02c561ab99af4c8",
+  "PR": 600,
+  "CI": 41943641063,
+  "CI_tree": "b87277f5c72357e753fb95892fedfc7e6dc6fc7c",
+  "CI_JAR_sha256": "3cb9666c52723f93d702b19ff96a8763954a4bb73091fa4c3a3d9203f5221685",
+  "local_unit_tests": 1850,
+  "native_GT": "1/1 nuke_stem_clock",
+  "native_capture_pins": [
+    "452f1f78af23779200baf4aef804e8e92d6dca40",
+    "c156f260588aaa967327ed6577f775e015bc0ec7"
+  ],
+  "native_frames": 58,
+  "WAV": 10,
+  "reuse_for_df40": "explicitly accepted by same independent RAIR8B review; preserve original pins",
+  "final_cost": "air8-df40-100:one none-pack A1/B/A2 PASS, all3valid/100impacts",
+  "review": "RAIR8 then fresh RAIR8B, same second review continued for ownership/frames/finalcost; complete, no scoped blockers",
+  "resources": "all owned jobs/JVM/client/GPU/server/CI/review ended; handback toLEAD4",
+  "limits": [
+    "F1all-water soil needs full-footprint coverage",
+    "upper-cloud/gap/rise estimates not newly calibrated",
+    "sampled conventional100 cost is not nuclear multisource/allpacks acceptance",
+    "shared cache8 is not total heap bound",
+    "overall server/runtime/integration/private delivery remain owner gates"
+  ]
+}
