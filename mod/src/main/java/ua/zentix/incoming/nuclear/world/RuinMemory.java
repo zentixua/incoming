@@ -13,11 +13,29 @@ final class RuinMemory {
     static Reservation reserve(ServerLevel level, long bytes) {
         if (bytes < 0) throw new IllegalArgumentException("Negative material reservation");
         NuclearWorld owner = NuclearWorld.get(level);
-        if (!RuinMatter.get(level).writable() || !CraterMatter.get(level).writable()) return null;
+        RuinMatter matter = RuinMatter.get(level);
+        if (!matter.writable()) { mtB7Blocked(level, matter, bytes); return null; }
+        CraterMatter crater = CraterMatter.get(level);
+        if (!crater.writable()) { mtB7Blocked(level, crater, bytes); return null; }
         long retained = NuclearPrep.memory(level, false);
-        if (bytes > NuclearPrep.PLANS_CAP - retained) return null;
+        if (bytes > NuclearPrep.PLANS_CAP - retained) {
+            mtB7Memory(level, bytes, retained, "reserve"); return null;
+        }
         owner.materialReservation += bytes;
         return new Reservation(owner, bytes);
+    }
+
+    private static void mtB7Blocked(ServerLevel level, LedgerData ledger, long requested) {
+        var trace = MtB7Refusals.active(level);
+        if (trace != null) trace.refuse(ledger.loaded() ? MtB7Refusals.Reason.WRITING : MtB7Refusals.Reason.LOADING,
+                requested, -1, "op=reserve ledger=" + ledger.getClass().getSimpleName()
+                        + " writing=" + ledger.writing() + " loaded=" + ledger.loaded());
+    }
+
+    private static void mtB7Memory(ServerLevel level, long requested, long retained, String operation) {
+        var trace = MtB7Refusals.active(level);
+        if (trace != null) trace.refuse(trace.coldMemory ? MtB7Refusals.Reason.LOADING : MtB7Refusals.Reason.MEMORY,
+                requested, retained, "op=" + operation + " cold_ledgers=" + trace.coldMemory);
     }
 
     /** Existing support continuations may free ownership needed by a cold import. Their
@@ -55,7 +73,10 @@ final class RuinMemory {
         private Reservation(NuclearWorld owner, long bytes) { this.owner = owner; this.bytes = bytes; }
         boolean grow(ServerLevel level, long extra) {
             if (extra < 0) throw new IllegalArgumentException("Negative material reservation");
-            if (extra > NuclearPrep.PLANS_CAP - (NuclearPrep.memory(level, false))) return false;
+            long retained = NuclearPrep.memory(level, false);
+            if (extra > NuclearPrep.PLANS_CAP - retained) {
+                mtB7Memory(level, extra, retained, "grow"); return false;
+            }
             owner.materialReservation += extra;
             bytes += extra;
             return true;

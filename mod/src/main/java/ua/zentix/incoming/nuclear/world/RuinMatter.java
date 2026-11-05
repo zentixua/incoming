@@ -44,6 +44,14 @@ public final class RuinMatter extends LedgerData {
     private final java.util.Map<ReservoirKey, Reservoir> stranded = new java.util.HashMap<>();
     private int strandedCount;
     private long movingBytes, strandedBytes;
+    // TEST ONLY: samples from records already decoded by the normal work loop, never a queue scan.
+    private long mtB7MoveObservations, mtB7MoveMaxLag, mtB7MoveLatestLag, mtB7MoveSampleTick;
+
+    void mtB7Counts(MtB7Refusals trace) {
+        trace.material(released, deposited, dispersed, moving.size(), strandedCount, supportSources.size(),
+                supports.size(), uncertain.size(), originals.size(), mtB7MoveObservations,
+                mtB7MoveMaxLag, mtB7MoveLatestLag, mtB7MoveSampleTick);
+    }
 
     /** One material balance, palette state and inventory slot per removal, before deduplication. */
     private static final long REMOVAL_INDEX_BYTES = 512 + 96 + 64;
@@ -429,6 +437,7 @@ public final class RuinMatter extends LedgerData {
 
     private void workBatch(ServerLevel level, WorkClock clock, int units) {
         int left = moving.size();
+        long mtB7Now = MtB7Refusals.ENABLED ? level.getGameTime() : 0;
         boolean waiting = false;
         while ((left > 0 || !supportSources.isEmpty() || !supports.isEmpty() && !waiting) && units-- > 0 && clock.canStart()) {
             long began = clock.begin();
@@ -482,6 +491,12 @@ public final class RuinMatter extends LedgerData {
             // block on counting clocks. Support and moving material both make progress in it.
             for (int i = 0; i < 16 && left > 0 && !moving.isEmpty(); i++, left--) {
                 Piece piece = moving.removeFirst();
+                if (MtB7Refusals.ENABLED) {
+                    mtB7MoveObservations++;
+                    mtB7MoveLatestLag = Math.max(0, (long) Math.ceil(mtB7Now - piece.tick));
+                    mtB7MoveMaxLag = Math.max(mtB7MoveMaxLag, mtB7MoveLatestLag);
+                    mtB7MoveSampleTick = mtB7Now;
+                }
                 if (step(level, piece)) {
                     movingBytes -= piece.retainedBytes() - 512;
                     inventories.remove(piece.cargoKey);

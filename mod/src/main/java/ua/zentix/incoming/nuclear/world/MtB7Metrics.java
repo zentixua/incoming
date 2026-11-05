@@ -36,12 +36,16 @@ public final class MtB7Metrics {
             saves.add(saveRow(0, 0, fileKey(new java.io.File("startup")), "schema", "startup", 0, true));
             NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.event.server.ServerAboutToStartEvent event) -> {
                 serverSession++;
+                progress.add("refusal_schema owners=[prep,reservation,parked,matter,crater_matter,progress,craters,settle,contexts] material=[released,deposited,dispersed,moving,stranded,support_sources,supports,uncertain,originals,move_observations,move_max_lag,move_latest_lag,move_sample_tick] cap=" + NuclearPrep.PLANS_CAP + " enabled=" + MtB7Refusals.ENABLED);
                 progress.add("server_session_start=" + serverSession + " mono_ns=" + System.nanoTime() + " scope=process_global " + MtB7Stages.snapshot());
             });
             NeoForge.EVENT_BUS.addListener(EventPriority.HIGHEST, MtB7Metrics::before);
             NeoForge.EVENT_BUS.addListener(MtB7Stages::chunkSave);
             NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, MtB7Metrics::after);
         } catch (IOException error) { Incoming.LOG.error("MT-B7 metrics initialization failed", error); }
+    }
+    static void refusal(String row) {
+        if (progress != null && !MtB7Log.stopping()) progress.add("refusal " + row);
     }
     static long saveId() {
         synchronized (SAVE_IDS) {
@@ -112,7 +116,7 @@ public final class MtB7Metrics {
                     +" hash_queued_bytes="+ua.zentix.incoming.compat.MtB7Columns.serverBytes.get()
                     +" hash_drops="+ua.zentix.incoming.compat.MtB7Columns.serverDrops.get()
                     +" material_reservation="+world.materialReservation+" prep="+world.prep().mtB7Progress()
-                    +" server_session="+serverSession);
+                    +" server_session="+serverSession + world.mtB7RefusalSnapshot());
         }
     }
 }

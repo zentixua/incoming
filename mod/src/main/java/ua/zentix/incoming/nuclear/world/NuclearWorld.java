@@ -182,14 +182,30 @@ public final class NuclearWorld {
 
     /** Retained preparation and active-context estimates, without the shared worker buffers. */
     long retainedRuinBytes() {
-        long bytes = prep.retainedBytes() + materialReservation + scars.retainedBytes();
-        if (matter != null) bytes += matter.retainedBytes();
-        if (craterMatter != null) bytes += craterMatter.retainedBytes();
-        if (ruinProgress != null) bytes += ruinProgress.retainedBytes();
-        for (CraterJob crater : craters) bytes += crater.retainedBytes();
-        bytes += settle.retainedBytes();
-        for (RuinContext ctx : ruins.values()) bytes += ctx.retainedBytes();
-        return bytes;
+        long preparation = prep.retainedBytes(), reserved = materialReservation, parked = scars.retainedBytes();
+        long material = matter == null ? 0 : matter.retainedBytes();
+        long craterMaterial = craterMatter == null ? 0 : craterMatter.retainedBytes();
+        long progress = ruinProgress == null ? 0 : ruinProgress.retainedBytes();
+        long craterBytes = 0;
+        for (CraterJob crater : craters) craterBytes += crater.retainedBytes();
+        long settling = settle.retainedBytes(), contexts = 0;
+        for (RuinContext ctx : ruins.values()) contexts += ctx.retainedBytes();
+        var pending = scars.mtB7Pending;
+        if (pending != null && pending.refusals != null) {
+            pending.refusals.ownership(preparation, reserved, parked, material, craterMaterial,
+                    progress, craterBytes, settling, contexts);
+            if (matter != null) matter.mtB7Counts(pending.refusals);
+        }
+        return preparation + reserved + parked + material + craterMaterial + progress
+                + craterBytes + settling + contexts;
+    }
+
+    /** TEST ONLY: cached owners and O(1) counters, without admission or ledger lookup. */
+    String mtB7RefusalSnapshot() {
+        var pending = scars.mtB7Pending;
+        if (pending == null || pending.refusals == null) return "";
+        if (matter != null) matter.mtB7Counts(pending.refusals);
+        return pending.refusals.snapshot();
     }
 
     /** Leave room for loaded-player work and its background windows before admitting settlement chunks. */

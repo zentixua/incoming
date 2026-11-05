@@ -13,10 +13,14 @@ final class MtB7Pending {
     static final int CANDIDATE_LIMIT = 20_000;
     static final long BUDGET_NS = 1_000_000;
     final int event;
+    final MtB7Refusals refusals;
     private long prepared, fresh, seenApplied, appliedMaxLag, preparedDrops, unloaded, failed, clears;
     private long samples, partialSamples, sampledMaxLag;
 
-    MtB7Pending(int event) { this.event = event; }
+    MtB7Pending(int event) {
+        this.event = event;
+        refusals = MtB7Refusals.ENABLED ? new MtB7Refusals(event) : null;
+    }
 
     static boolean enabled() {
         return Boolean.getBoolean("incoming.mtB7")

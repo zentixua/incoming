@@ -785,7 +785,7 @@ public final class RuinPlan {
      */
     boolean current(LevelChunk chunk, Detonation d) {
         RuinPlan flash = flashOf(chunk);
-        return current(chunk, flash, flash == null && FlashScorch.marked(chunk, d.id()));
+        return current(chunk, flash, flash == null && FlashScorch.marked(chunk, d.id()), null);
     }
 
     /** Chunk flash layer for checking this ruin plan (null for layer itself). */
@@ -795,22 +795,35 @@ public final class RuinPlan {
         return f == this ? null : f;
     }
 
-    private boolean current(LevelChunk chunk, @Nullable RuinPlan flash, boolean marked) {
+    private boolean current(LevelChunk chunk, @Nullable RuinPlan flash, boolean marked, @Nullable MtB7Refusals trace) {
         LevelChunkSection[] now = chunk.getSections();
         int k = 0;
         while (k < cells.length) {
             int i = section(cells[k]);
-            if (i >= now.length) return false;
+            if (i >= now.length) {
+                if (trace != null) trace.refuse(MtB7Refusals.Reason.STALE, -1, -1, "op=apply_current missing_section=" + i);
+                return false;
+            }
             LevelChunkSection s = now[i];
             long h = 0;
+            int mismatch = -1;
+            BlockState mismatchActual = null;
             for (; k < cells.length && section(cells[k]) == i; k++) {
                 int c = cells[k];
                 BlockState live = s.getBlockState(c & 15, (c >> 8) & 15, (c >> 4) & 15);
                 if (flash != null) live = flash.beforeFlash(c & KEY_MASK, live);
                 else if (marked && fire(live)) live = Blocks.AIR.defaultBlockState();
-                h = mix(h, live);
+                BlockState normalized = normal(live);
+                h = mixNormal(h, normalized);
+                if (trace != null && mismatch < 0 && olds[k] != normalized && normal(olds[k]) != normalized) {
+                    mismatch = k; mismatchActual = normalized;
+                }
             }
-            if (h != oldHashes[i]) return false;
+            if (h != oldHashes[i]) {
+                if (trace != null) trace.stale(mismatch < 0 ? cells[k - 1] : cells[mismatch], chunk.getMinBuildHeight(),
+                        mismatch < 0 ? null : normal(olds[mismatch]), mismatchActual, oldHashes[i], h);
+                return false;
+            }
         }
         return true;
     }
@@ -962,7 +975,9 @@ public final class RuinPlan {
         long t = System.nanoTime();
         RuinPlan flash = flashOf(chunk);
         boolean marked = flash == null && FlashScorch.marked(chunk, d.id());
-        if (!current(chunk, flash, marked)) return false;
+        var mtB7Trace = MtB7Refusals.active(level);
+        if (mtB7Trace != null) mtB7Trace.plan(cells.length, material.length);
+        if (!current(chunk, flash, marked, mtB7Trace)) return false;
         // Reserve the bounded capture/contact window before allocating it. Large container tags
         // extend that reservation before any source mutation; refusal keeps this exact plan pending.
         try (var reservation = RuinMemory.reserve(level, RuinMatter.get(level).removalBytes(material))) {
@@ -1046,7 +1061,7 @@ public final class RuinPlan {
         memoryWaiting = false;
         if (this == EMPTY || ctx == null) return 0;
         long t = System.nanoTime();
-        if (!current(chunk, null, false)) return -1;
+        if (!current(chunk, null, false, null)) return -1;
         if (!ctx.flashHeightsReady(level, chunk)) { memoryWaiting = true; return -2; }
         boolean shotCurrent = ctx.beforeFlash(level, chunk);
         boolean recoloured = biomes != null && ScorchedBiomes.write(level, chunk, biomes);

@@ -94,7 +94,8 @@ public final class NuclearPrep {
      * Prebuilt-ruin memory cap, bytes: ready plans, chunk snapshots (memory/disk), in-flight reads, background
      * thread buffers. Beyond cap new reads await plans releasing snapshots; no further plans built above cap.
      */
-    static final long PLANS_CAP = 512L << 20;
+    // TEST ONLY: diagnostic branch override is gated by incoming.mtB7; default remains 512 MiB.
+    static final long PLANS_CAP = MtB7Refusals.cap();
     /** Keep write-encoding room free: a full read window must still be able to spill. */
     private static final long WINDOW_CAP = PLANS_CAP - (32L << 20);
     /** Concurrent disk reads and estimated memory per read (parsed city chunk tens of KB). */
@@ -595,6 +596,8 @@ public final class NuclearPrep {
         RuinWorkers.configureHeight(height);
         // Unknown old ownership has priority over new preparation/removals. Import uses only the
         // already-resident counter above and takes its reservation before decoding anything.
+        var mtB7Trace = MtB7Refusals.active(level);
+        if (mtB7Trace != null) mtB7Trace.coldMemory = cold;
         if (cold) {
             MtB7Stages.memory(3, bytes);
             return Math.max(bytes, PLANS_CAP);

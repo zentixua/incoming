@@ -1261,6 +1261,9 @@ public final class ScarQueue {
         }
         job.waitsNeighbours = false;
         boolean seen = watched(level, pos);
+        MtB7Refusals trace = mtB7Pending == null ? null : mtB7Pending.refusals;
+        if (trace != null) trace.begin(level, d.id(), job.chunk, now, job.wave, seen);
+        try {
         // visible chunk first in ruin pool: distant tasks (LODs, disk ruins) keep pool full
         RuinWorkers.Priority priority = seen ? RuinWorkers.Priority.SEEN : RuinWorkers.Priority.NEAR;
         boolean submit = !ready && !ctx.running(job.chunk);
@@ -1268,6 +1271,7 @@ public final class ScarQueue {
             // plan building; far-priority preparation task not started promoted to wave-chunk priority
             ctx.promote(job.chunk, priority);
             waited(job, NukeDiag.Wait.BACKGROUND);
+            if (trace != null) trace.refuse(MtB7Refusals.Reason.WORKER, -1, -1, "op=background");
             this.background.add(job);
             return LOOKED;
         }
@@ -1280,6 +1284,8 @@ public final class ScarQueue {
         if (submit && (reading > 0 || !RuinWorkers.admit(priority))) {
             // neighbor snapshots reading or detonation has too many tasks: retry next tick
             waited(job, reading > 0 ? NukeDiag.Wait.WINDOW : NukeDiag.Wait.ADMIT);
+            if (trace != null) trace.refuse(reading > 0 ? MtB7Refusals.Reason.READ : MtB7Refusals.Reason.ADMIT,
+                    -1, -1, "op=window reading=" + reading);
             job.due = now + 1;
             byDue.add(job);
             return LOOKED;
@@ -1290,6 +1296,7 @@ public final class ScarQueue {
             if (ctx.submit(level, chunk, priority)) this.background.add(job);
             else {
                 waited(job, NukeDiag.Wait.SUBMIT);
+                if (trace != null) trace.refuse(MtB7Refusals.Reason.SUBMIT, -1, -1, "op=submit");
                 job.due = now + 1;
                 byDue.add(job);
             }
@@ -1304,6 +1311,7 @@ public final class ScarQueue {
             return CAPACITY_WAIT;
         }
         if (r == AGAIN) {
+            if (trace != null) trace.refuse(MtB7Refusals.Reason.REPLAN, -1, -1, "op=collect_or_stale");
             // Stale/failed plan: retry behind already waiting jobs. The next inspection submits
             // fresh background work; unrelated ready plans keep progressing.
             waited(job, NukeDiag.Wait.AGAIN);
@@ -1312,6 +1320,7 @@ public final class ScarQueue {
             return WORKED;
         }
         if (r == WAIT) {
+            if (trace != null) trace.refuse(MtB7Refusals.Reason.PLAN_WAIT, -1, -1, "op=plan_wait radius=" + waitRadius);
             waited(job, waitRadius > 1 ? NukeDiag.Wait.PLAN_R2 : NukeDiag.Wait.PLAN_R1);
             waitNeighbours(level, job, now, waitRadius);
             return PLANNED_WAITS;
@@ -1339,5 +1348,6 @@ public final class ScarQueue {
             lookAheadLater(job);
         }
         return WORKED;
+        } finally { if (trace != null) trace.end(); }
     }
 }
