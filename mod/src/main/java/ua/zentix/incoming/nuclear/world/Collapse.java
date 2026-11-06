@@ -54,6 +54,9 @@ final class Collapse {
     private static final ThreadLocal<Buffers> BUFFERS = ThreadLocal.withInitial(Buffers::new);
     private byte[] before, after;
     private int[] ring;
+    /** Load-bearing original cells ({@link #bearingCells}), during the support traversals. */
+    @org.jetbrains.annotations.Nullable
+    private long[] bear;
 
     final RuinWindow w;
     final Blast[] blasts = new Blast[9];
@@ -221,6 +224,7 @@ final class Collapse {
     private void support() {
         int n = SIDE * SIDE * h;
         buffers(n);
+        bear = bearingCells(n);
         long[] fixed = fixedCells();
         distances(before, false, n, fixed);
         distances(after, true, n, fixed);
@@ -469,7 +473,23 @@ final class Collapse {
 
     private boolean bearing(int i, int wx, int y, int wz, boolean afterBlast) {
         if (afterBlast && bit(gone, i)) return false;
-        return props(wx, y, wz).bearing();
+        return bear != null ? bit(bear, i) : props(wx, y, wz).bearing();
+    }
+
+    /**
+     * Load-bearing original blocks of the window as bits: the support traversals test each cell's neighbours twice
+     * (before and after the strike), and a bit costs far less than the property lookup through section snapshots.
+     */
+    private long[] bearingCells(int n) {
+        long[] out = new long[(n + 63) >> 6];
+        for (int y = yb; y <= yt; y++) {
+            for (int wz = 0; wz < SIDE; wz++) {
+                for (int wx = 0; wx < SIDE; wx++) {
+                    if (props(wx, y, wz).bearing()) set(out, idx(wx, y, wz));
+                }
+            }
+        }
+        return out;
     }
 
     /** Indestructible load-bearing blocks in window (only sections whose palettes know them), support like ground. */
@@ -502,6 +522,8 @@ final class Collapse {
     private void distances(byte[] dist, boolean afterBlast, int n, long[] fixed) {
         java.util.Arrays.fill(dist, 0, n, (byte) INF);
         int cap = n + 1, head = 0, tail = 0;
+        // ground supports below the top ground layer only reach other ground supports: marked, not traversed
+        int top = Math.max(yb, surface);
         for (int y = yb; y <= yt; y++) {
             boolean ground = y == yb || y <= surface;
             for (int wz = 0; wz < SIDE; wz++) {
@@ -509,6 +531,7 @@ final class Collapse {
                     int i = idx(wx, y, wz);
                     if (!(ground || bit(fixed, i)) || !bearing(i, wx, y, wz, afterBlast)) continue;
                     dist[i] = 0;
+                    if (ground && y < top && !bit(fixed, i)) continue;
                     ring[tail] = i;
                     tail = (tail + 1) % cap;
                 }

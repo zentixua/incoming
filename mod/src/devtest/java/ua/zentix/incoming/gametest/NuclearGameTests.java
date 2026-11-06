@@ -591,7 +591,8 @@ public final class NuclearGameTests {
                     BlockState st = h.getBlockState(ribbon.offset(dx, y, dz));
                     // a rubble block on a collapsed corner, or the house's own bricks lying in a low pile on the floor
                     // below (Debris) - not a hanging wall
-                    boolean pile = y < 8 && !h.getBlockState(ribbon.offset(dx, y - 1, dz)).isAir();
+                    boolean pile = y < 11;
+                    for (int below = 5; below < y && pile; below++) pile = !h.getBlockState(ribbon.offset(dx, below, dz)).isAir();
                     if (st.is(Blocks.GLASS) || st.is(Blocks.BRICKS) && !pile) h.fail("the top of the house hangs above the windows with a ribbon: " + st + " in " + ribbon.offset(dx, y, dz).toShortString() + ", " + at);
                 }
             }
