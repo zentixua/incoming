@@ -340,6 +340,7 @@ public final class RuinSettleGameTests {
         p.pending.add(full.toLong());
         p.pending.add(partial.toLong());
         RuinSettle settle = new RuinSettle();
+        settle.regions = (rx, rz) -> true;
         WorkClock clock = WorkClock.counting(1_000_000);
         boolean[] inside = {false}, admitted = {false};
         int[] syncLoads = {0};
@@ -373,6 +374,7 @@ public final class RuinSettleGameTests {
         StrikeGameTests.gameSpeed(h);
         ServerLevel level = h.getLevel();
         RuinSettle settle = new RuinSettle();
+        settle.regions = (rx, rz) -> true;
         NuclearEvents events = new NuclearEvents();
         int id = NuclearEvents.get(level).nextId();
         events.add(new Detonation(id, new Vec3(80000, 64, 80000), 64, 7, true, -10000, 0, 0, 20000, 3, 0.03f, false, 1));

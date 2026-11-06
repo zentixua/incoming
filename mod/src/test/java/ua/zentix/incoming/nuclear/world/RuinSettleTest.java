@@ -39,6 +39,24 @@ class RuinSettleTest {
     }
 
     @Test
+    void scanSkipsRegionsAbsentOnDisk() {
+        Detonation d = new Detonation(1, new Vec3(-123.25, 65, 285.75), 65, 7, true,
+                -10000, 0, 0, 20000, 42, 0.03f, false, 1);
+        long[] all = RuinSettle.layout(d), east = RuinSettle.layout(d, (rx, rz) -> rx >= 0 && rz != 1);
+        var kept = new HashSet<Long>();
+        for (long key : east) {
+            ChunkPos pos = new ChunkPos(key);
+            assertTrue(pos.getRegionX() >= 0 && pos.getRegionZ() != 1, "chunk of an absent region: " + pos);
+            kept.add(key);
+        }
+        for (long key : all) {
+            ChunkPos pos = new ChunkPos(key);
+            assertEquals(pos.getRegionX() >= 0 && pos.getRegionZ() != 1, kept.contains(key), "chunk " + pos);
+        }
+        assertTrue(east.length > 0 && east.length < all.length);
+    }
+
+    @Test
     void legacyRowCursorRestartsRatherThanSkippingRadialChunks() {
         CompoundTag old = new CompoundTag(), pass = new CompoundTag();
         pass.putLong("cursor", 12345);

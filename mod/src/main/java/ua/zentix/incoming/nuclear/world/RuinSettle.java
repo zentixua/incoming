@@ -188,7 +188,13 @@ final class RuinSettle {
             if (level.getGameTime() < d.gameTime() + d.arrivalTicks(Math.hypot(d.ruinRadius() + 32, d.burst().y - d.groundY()))) continue;
             detonation = d;
             pass = p;
-            layout = CompletableFuture.supplyAsync(() -> layout(d), net.minecraft.Util.backgroundExecutor());
+            java.nio.file.Path folder = net.minecraft.world.level.dimension.DimensionType.getStorageFolder(level.dimension(),
+                    level.getServer().getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT)).resolve("region");
+            Regions on = regions != null ? regions : (rx, rz) -> java.nio.file.Files.isRegularFile(folder.resolve("r." + rx + "." + rz + ".mca"));
+            // chunks still queued for writing count: their region file exists once the queue drains
+            CompletableFuture<Void> written = level.getChunkSource().chunkMap.chunkScanner() instanceof net.minecraft.world.level.chunk.storage.IOWorker io
+                    ? io.synchronize(false) : CompletableFuture.completedFuture(null);
+            layout = written.thenApplyAsync(v -> layout(d, on), net.minecraft.Util.backgroundExecutor());
             for (long key : p.pending) entries.put(key, new Entry(key));
             began = level.getGameTime();
             nextReport = began + 1200;
@@ -197,12 +203,36 @@ final class RuinSettle {
         }
     }
 
-    /** Same compact distance sort as distant LOD rings, built off-thread. Quantization: 1/16 block. */
+    /** Region files to scan; null: those on disk. Tests set it to scan a world they did not save. */
+    @org.jetbrains.annotations.Nullable
+    Regions regions;
+
+    /** Region file present on disk, by region coordinates. */
+    interface Regions {
+        boolean present(int rx, int rz);
+    }
+
     static long[] layout(Detonation d) {
+        return layout(d, (rx, rz) -> true);
+    }
+
+    /**
+     * Same compact distance sort as distant LOD rings, built off-thread. Quantization: 1/16 block. Only chunks of region
+     * files on disk: the rest of the circle was never generated (open maps fill a fraction of a megaton's 0.5 psi circle;
+     * 15 kt: 1.1 million positions), and a chunk generated later gets its ruins when it loads. A region file created
+     * after the layout only adds positions, so a restored cursor can repeat chunks, never skip them.
+     */
+    static long[] layout(Detonation d, Regions regions) {
         int cx = (int) Math.floor(d.burst().x / 16), cz = (int) Math.floor(d.burst().z / 16);
         int radius = (int) Math.ceil(d.ruinRadius() / 16) + 1;
         var keyed = new it.unimi.dsi.fastutil.longs.LongArrayList();
+        it.unimi.dsi.fastutil.longs.Long2BooleanOpenHashMap present = new it.unimi.dsi.fastutil.longs.Long2BooleanOpenHashMap();
         for (int x = cx - radius; x <= cx + radius; x++) for (int z = cz - radius; z <= cz + radius; z++) {
+            int rx = x >> 5, rz = z >> 5;
+            if (!present.computeIfAbsent(ChunkPos.asLong(rx, rz), k -> regions.present(rx, rz))) {
+                z |= 31;
+                continue;
+            }
             ChunkPos pos = new ChunkPos(x, z);
             if (ScarQueue.inRange(pos, d)) {
                 long distance = (long) (NuclearPrep.horizontal(pos, d) * 16);
