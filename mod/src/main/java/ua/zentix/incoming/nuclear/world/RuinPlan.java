@@ -724,11 +724,7 @@ public final class RuinPlan {
      *           detonation silhouettes and flash time
      * @return false if stale, nothing changed
      */
-    private boolean memoryWaiting;
-    boolean memoryWaiting() { return memoryWaiting; }
-
     public boolean apply(ServerLevel level, LevelChunk chunk, Detonation d, ColumnScar.Budget budget) {
-        memoryWaiting = false;
         if (this == EMPTY) {
             RuinContext kept = NuclearWorld.get(level).ruinsIfKept(d.id());
             // ruins change no blocks, layer ignited fire: wave extinguishes all (otherwise remains unticked)
@@ -744,53 +740,45 @@ public final class RuinPlan {
         RuinPlan flash = flashOf(chunk);
         boolean marked = flash == null && FlashScorch.marked(chunk, d.id());
         if (!current(chunk, flash, marked)) return false;
-        // Reserve the bounded capture/contact window before allocating it. Large container tags
-        // extend that reservation before any source mutation; refusal keeps this exact plan pending.
-        try (var reservation = RuinMemory.reserve(level, material.length * (8192L + 512))) {
-            if (reservation == null) { memoryWaiting = true; return false; }
-            java.util.List<RuinMatter.Piece> released = new java.util.ArrayList<>();
-            RuinScorch scorch = new RuinScorch(chunk);
-            for (long position : material) {
-                BlockPos at = BlockPos.of(position);
-                BlockState state = chunk.getBlockState(at);
-                // Thermal-before-blast ordering: capture what actually survived the light pulse,
-                // never resurrect a block from the original pre-flash snapshot.
-                RuinMatter.Piece piece = RuinMatter.capture(level, at, state, d, scorch);
-                if (piece != null) {
-                    if (!reservation.grow(level, piece.retainedBytes() - 512)) { memoryWaiting = true; return false; }
-                    released.add(piece);
-                }
-            }
-            short[] motion = new short[256];
-            for (int column = 0; column < 256; column++) motion[column] = (short) (chunk.getHeight(Heightmap.Types.MOTION_BLOCKING, column & 15, column >> 4) + 1);
-            // biome before blocks: Distant Horizons LOD reads chunk with biome after position writes
-            boolean recoloured = biomes != null && ScorchedBiomes.write(level, chunk, biomes);
-            try {
-                if (cells.length > 0 || fires.length > 0 || outside != null || fluidTicks.length > 0 || flash != null || marked) {
-                    // blocks outside plan positions checked before writes: afterward chunk different. Flash layer makes chunk differ
-                    // from pre-flash plan snapshot, so rescan plan columns from chunk
-                    write(level, chunk, budget, t, flash == null && !marked && cells.length > 0 && sameBlocks(chunk), flash, marked, false);
-                } else if (recoloured) {
-                    DhUpdates.mark(level, chunk.getPos(), level.getGameTime());
-                }
-            } finally {
-                // A block callback can fail after preceding cells were removed. Retain ownership of
-                // those removals even on that exceptional path; unmodified cells remain in the world.
-                released.removeIf(piece -> {
-                    BlockState now = chunk.getBlockState(piece.source);
-                    Blast.Props props = Blast.props(now);
-                    return now.getBlock() == piece.state.getBlock() || props.bearing() || props.leaves();
-                });
-                RuinMatter.get(level).release(released);
-                RuinMatter.get(level).support(level, released, d);
-            }
-            if (ctx != null) ctx.applied(chunk, this, motion);
-            FlashScorch.unmark(chunk, d.id());
-            // flash scorch with ruins (layer already applied: replace with surviving scorch); old flash traces
-            // on changed blocks removed
-            if (ctx != null) ua.zentix.incoming.nuclear.flash.FlashSync.chars(level, chunk, d, flash());
-            return true;
+        java.util.List<RuinMatter.Piece> released = new java.util.ArrayList<>();
+        RuinScorch scorch = new RuinScorch(chunk);
+        for (long position : material) {
+            BlockPos at = BlockPos.of(position);
+            BlockState state = chunk.getBlockState(at);
+            // Thermal-before-blast ordering: capture what actually survived the light pulse,
+            // never resurrect a block from the original pre-flash snapshot.
+            RuinMatter.Piece piece = RuinMatter.capture(level, at, state, d, scorch);
+            if (piece != null) released.add(piece);
         }
+        short[] motion = new short[256];
+        for (int column = 0; column < 256; column++) motion[column] = (short) (chunk.getHeight(Heightmap.Types.MOTION_BLOCKING, column & 15, column >> 4) + 1);
+        // biome before blocks: Distant Horizons LOD reads chunk with biome after position writes
+        boolean recoloured = biomes != null && ScorchedBiomes.write(level, chunk, biomes);
+        try {
+            if (cells.length > 0 || fires.length > 0 || outside != null || fluidTicks.length > 0 || flash != null || marked) {
+                // blocks outside plan positions checked before writes: afterward chunk different. Flash layer makes chunk differ
+                // from pre-flash plan snapshot, so rescan plan columns from chunk
+                write(level, chunk, budget, t, flash == null && !marked && cells.length > 0 && sameBlocks(chunk), flash, marked, false);
+            } else if (recoloured) {
+                DhUpdates.mark(level, chunk.getPos(), level.getGameTime());
+            }
+        } finally {
+            // A block callback can fail after preceding cells were removed. Retain ownership of
+            // those removals even on that exceptional path; unmodified cells remain in the world.
+            released.removeIf(piece -> {
+                BlockState now = chunk.getBlockState(piece.source);
+                Blast.Props props = Blast.props(now);
+                return now.getBlock() == piece.state.getBlock() || props.bearing() || props.leaves();
+            });
+            RuinMatter.get(level).release(released);
+            RuinMatter.get(level).support(level, released, d);
+        }
+        if (ctx != null) ctx.applied(chunk, this, motion);
+        FlashScorch.unmark(chunk, d.id());
+        // flash scorch with ruins (layer already applied: replace with surviving scorch); old flash traces
+        // on changed blocks removed
+        if (ctx != null) ua.zentix.incoming.nuclear.flash.FlashSync.chars(level, chunk, d, flash());
+        return true;
     }
 
     /** Structural candidates only; thermal/terrain transformations never manufacture coarse debris. */

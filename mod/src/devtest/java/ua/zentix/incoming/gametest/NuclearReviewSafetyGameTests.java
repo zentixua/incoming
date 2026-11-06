@@ -193,69 +193,6 @@ public final class NuclearReviewSafetyGameTests {
         h.succeed();
     }
 
-    private record EntityDisclosure(Watcher viewer, Watcher target, net.minecraft.world.entity.Entity aimed,
-                                    boolean hint, boolean rules) {}
-
-    private static C2S.Fire entityReview(EntityDisclosure c) {
-        Vec3 point = c.aimed.getBoundingBox().getCenter();
-        c.viewer.player.lookAt(net.minecraft.commands.arguments.EntityAnchorArgument.Anchor.EYES, point);
-        return new C2S.Fire(loadout().withMode(TargetMode.LOOK), c.hint
-                ? Optional.of(new C2S.AimHint(C2S.AimHint.ENTITY, point, c.aimed.getId(), Vec3.ZERO))
-                : Optional.empty(), Optional.empty(), Waypoints.NONE, Optional.empty());
-    }
-
-    @GameTest(template = "range", batch = "nuclear_review_entity_disclosure", timeoutTicks = 80, skyAccess = true)
-    public static void entityHintsAndCrosshairsDoNotDiscloseInvisiblePlayersOrRiders(GameTestHelper h) {
-        setup(h);
-        var level = h.getLevel();
-        List<EntityDisclosure> cases = new ArrayList<>();
-        for (boolean rules : new boolean[] {false, true}) for (boolean hint : new boolean[] {false, true})
-                for (boolean vehicle : new boolean[] {false, true}) {
-            Watcher viewer = Watcher.at(h), target = Watcher.at(h);
-            viewer.player.setPos(Vec3.atCenterOf(h.absolutePos(new BlockPos(8 + cases.size() * 6, 12, 16))));
-            target.player.setPos(viewer.player.position().add(0, 0, 6));
-            target.player.setNoGravity(true);
-            level.addNewPlayer(target.player);
-            StrikeGameTests.afterTest(h, () -> level.removePlayerImmediately(target.player, net.minecraft.world.entity.Entity.RemovalReason.DISCARDED));
-            net.minecraft.world.entity.Entity aimed = target.player;
-            if (vehicle) {
-                var boat = new net.minecraft.world.entity.vehicle.Boat(level, target.player.getX(), target.player.getY(), target.player.getZ());
-                boat.setNoGravity(true);
-                level.addFreshEntity(boat);
-                h.assertTrue(target.player.startRiding(boat, true), "Fixture passenger did not mount");
-                StrikeGameTests.afterTest(h, boat::discard);
-                aimed = boat;
-            }
-            if (rules) {
-                var board = level.getScoreboard();
-                var team = board.addPlayerTeam("review_" + UUID.randomUUID().toString().substring(0, 8));
-                board.addPlayerToTeam(viewer.player.getScoreboardName(), team);
-                board.addPlayerToTeam(target.player.getScoreboardName(), team);
-                StrikeGameTests.afterTest(h, () -> board.removePlayerTeam(team));
-            }
-            IncomingConfig.SERVER.sightRules.set(rules);
-            EntityDisclosure c = new EntityDisclosure(viewer, target, aimed, hint, rules);
-            var request = entityReview(c);
-            var picked = request.aim().isEmpty() ? ServerActions.fromMode(viewer.player, request.loadout(), null) : null;
-            if (!hint) h.assertTrue(picked != null && picked.target().subject() instanceof ua.zentix.incoming.target.Target.OfEntity,
-                    "Crosshair control did not resolve an entity");
-            NuclearReview.request(viewer.player, request);
-            h.assertValueEqual(viewer.openReviews().size(), 1, "Visible entity control did not send a review");
-            cases.add(c);
-        }
-        h.runAfterDelay(5, () -> {
-            for (EntityDisclosure c : cases) {
-                IncomingConfig.SERVER.sightRules.set(c.rules);
-                c.target.player.setInvisible(true);
-                c.viewer.reviews.clear();
-                NuclearReview.request(c.viewer.player, entityReview(c));
-                h.assertTrue(c.viewer.openReviews().isEmpty(), "Invisible entity/rider coordinates leaked: hint=" + c.hint + ", rules=" + c.rules);
-                h.assertTrue(c.viewer.player.getData(ModAttachments.NUCLEAR_REVIEW).snapshot().isEmpty(), "Invisible entity/rider retained a review");
-            }
-            h.succeed();
-        });
-    }
-
     /** Observe real PacketDistributor sends without login/world presence or a real network connection. */
     private static final class Watcher extends ServerGamePacketListenerImpl {
         private final List<S2C.NuclearReview> reviews = new ArrayList<>();

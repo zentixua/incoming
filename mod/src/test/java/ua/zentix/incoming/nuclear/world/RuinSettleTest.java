@@ -11,26 +11,19 @@ import java.util.HashSet;
 import static org.junit.jupiter.api.Assertions.*;
 
 class RuinSettleTest {
-    private static long[] scan(Detonation d) {
-        var scan = new RadialChunks(d.burst().x, d.burst().z, -1, d.ruinRadius() + 32);
-        while (!scan.prepare(32)) { /* bounded row preparation */ }
-        var result = new it.unimi.dsi.fastutil.longs.LongArrayList();
-        while (!scan.done()) { result.add(scan.peek()); scan.advance(); }
-        return result.toLongArray();
-    }
-
     @Test
     void scanExpandsInCircularRingsAndRestoresTheSameNextPosition() {
         Detonation d = new Detonation(1, new Vec3(-123.25, 65, 285.75), 65, 7, true,
                 -10000, 0, 0, 20000, 42, 0.03f, false, 1);
-        long[] order = scan(d);
+        long[] order = RuinSettle.layout(d);
         var seen = new HashSet<Long>();
         double previous = -1;
         for (long key : order) {
             ChunkPos pos = new ChunkPos(key);
             double distance = NuclearPrep.horizontal(pos, d);
             assertTrue(distance + 1.0 / 16 >= previous, "scan moved back toward the burst");
-            if (ScarQueue.inRange(pos, d)) assertTrue(seen.add(key), "duplicate chunk");
+            assertTrue(ScarQueue.inRange(pos, d));
+            assertTrue(seen.add(key), "duplicate chunk");
             previous = distance;
         }
         int cx = (int) Math.floor(d.burst().x / 16), cz = (int) Math.floor(d.burst().z / 16);
@@ -41,7 +34,7 @@ class RuinSettleTest {
         progress.pass(1).cursor = order.length / 2;
         progress.pass(1).pending.add(order[7]);
         RuinProgress restored = RuinProgress.load(progress.save(new CompoundTag(), null), null);
-        assertEquals(order[(int) progress.pass(1).cursor], scan(d)[(int) restored.pass(1).cursor]);
+        assertEquals(order[(int) progress.pass(1).cursor], RuinSettle.layout(d)[(int) restored.pass(1).cursor]);
         assertTrue(restored.pass(1).pending.contains(order[7]));
     }
 

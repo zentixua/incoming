@@ -654,9 +654,9 @@ vec2 fireSpot(ivec2 c) {
 // for broad smoke (columns have their own finer noise).
 vec3 storm(sampler2D map, mat4 S, mat4 F, vec3 p, float cone, float clumps) {
     if (F[0].x <= 0.0) return vec3(0.0);
-    float h = p.y - S[0].z, mapCell = F[0].y, cell = fireSourceCell(mapCell), top = F[0].z, t = F[2].z;
+    float h = p.y - S[0].z, cell = F[0].y, top = F[0].z, t = F[2].z;
     vec2 rel = p.xz - S[0].xy;
-    float flame = textureLod(map, fireUv(S, F, p.xz), max(fireGlowLod(h, mapCell), fireLod(cone, mapCell))).r;
+    float flame = textureLod(map, fireUv(S, F, p.xz), max(fireGlowLod(h, cell), fireLod(cone, cell))).r;
     float glow = 0.0;
     if (flame > 1e-4) {
         float flicker = 0.55 + 0.9 * texture(PallNoise, vec3(rel / 700.0, t * 0.021)).r;
@@ -672,7 +672,7 @@ vec3 storm(sampler2D map, mat4 S, mat4 F, vec3 p, float cone, float clumps) {
     float w = fireWidth(h, cell), wide = max(w, cone);
     // wide column and “no fire nearby” in one sample: mip cell at least 64 blocks covers the four nearest column cells
     // (mean of nonnegative values: zero means no smoke in any); above unburned ground, no column/noise samples
-    vec3 m = textureLod(map, uv, max(fireLod(wide, mapCell), 1.0)).rgb;
+    vec3 m = textureLod(map, uv, max(fireLod(wide, cell), 1.0)).rgb;
     if (m.g + m.b <= 1e-6) return vec3(0.0, glow, 0.0);
     // column builds with smoke rise: full feed G at ground, risen share B above
     float rise = smoothstep(0.0, 0.3 * top, h);
@@ -689,17 +689,14 @@ vec3 storm(sampler2D map, mat4 S, mat4 F, vec3 p, float cone, float clumps) {
     float core = 0.6 * spread;
     if (spread < 1.0) {
         ivec2 size = textureSize(map, 0);
-        vec2 sourceSize = vec2(size) * (mapCell / cell);
-        vec2 g = fireUv(S, F, p.xz - shift + (n - 0.5) * (1.2 * w)) * sourceSize;
+        vec2 g = fireUv(S, F, p.xz - shift + (n - 0.5) * (1.2 * w)) * vec2(size);
         ivec2 base = ivec2(floor(g - 0.5));
         float area = cell * cell / (3.14159 * w * w), pillars = 0.0, shade = 0.0, peak = 0.0;
         for (int j = 0; j <= 1; j++) {
             for (int i = 0; i <= 1; i++) {
                 ivec2 c = base + ivec2(i, j);
-                if (any(lessThan(c, ivec2(0))) || any(greaterThanEqual(vec2(c), sourceSize))) continue;
-                vec3 mc;
-                if (mapCell <= cell) mc = texelFetch(map, c, 0).rgb;
-                else mc = textureLod(map, (vec2(c) + 0.5) / sourceSize, 0.0).rgb;
+                if (any(lessThan(c, ivec2(0))) || any(greaterThanEqual(c, size))) continue;
+                vec3 mc = texelFetch(map, c, 0).rgb;
                 vec2 d = (g - vec2(c) - 0.5 - fireSpot(c)) * cell / w;
                 float axis = mix(mc.g, mc.b, rise) * area, r2 = dot(d, d), e = exp(-r2);
                 pillars += axis * e;

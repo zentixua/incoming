@@ -37,17 +37,9 @@ public final class IcbmApproaches {
         entries.values().removeIf(e -> e.head() && e.seen != revision);
     }
 
-    public void finish(int id) { finish(id, 0); }
-
-    /** A seek delivers old arrival and burst packets together: retain only the wake's remaining
-     * lifetime at the recording clock, never start a fresh wake at packet receipt. */
-    public void finish(int id, double eventAge) {
-        if (eventAge >= IcbmArrival.WAKE) { entries.remove(id); return; }
+    public void finish(int id) {
         Entry e = entries.get(id);
-        if (e != null) {
-            double end = local - Math.max(0, eventAge);
-            e.ended = e.head() ? end : Math.min(e.ended, end);
-        }
+        if (e != null && e.head()) e.ended = local;
     }
 
     public void tick() {

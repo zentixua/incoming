@@ -297,33 +297,15 @@ public final class NuclearPrep {
         return memory(level, true);
     }
 
-    /** Already-owned bytes only: cold-load publication cannot recursively start another admission. */
-    static long residentMemory(ServerLevel level) {
-        long bytes = 0;
-        int height = level.getHeight();
-        for (ServerLevel other : level.getServer().getAllLevels()) {
-            height = Math.max(height, other.getHeight());
-            if (other.hasData(ModAttachments.NUCLEAR_WORLD))
-                bytes += other.getData(ModAttachments.NUCLEAR_WORLD).retainedRuinBytes();
-        }
-        return bytes + RuinWorkers.residentBufferBytes(height);
-    }
-
     static long memory(ServerLevel level, boolean reserveWorkers) {
         long bytes = 0;
         int height = level.getHeight();
-        boolean cold = false;
         for (ServerLevel other : level.getServer().getAllLevels()) {
+            if (!other.hasData(ModAttachments.NUCLEAR_WORLD)) continue;
             height = Math.max(height, other.getHeight());
-            NuclearWorld world = NuclearWorld.get(other);
-            bytes += world.retainedRuinBytes();
-            cold |= world.ledgers.pending();
+            bytes += NuclearWorld.get(other).retainedRuinBytes();
         }
-        // Unknown old ownership has priority over new preparation/removals. Import uses only the
-        // already-resident counter above and takes its reservation before decoding anything.
-        if (cold) return Math.max(bytes, PLANS_CAP);
-        return bytes + (reserveWorkers ? RuinWorkers.bufferBytes(height) + RuinMemory.TRANSITION_ROOM
-                : RuinWorkers.residentBufferBytes(height));
+        return bytes + (reserveWorkers ? RuinWorkers.bufferBytes(height) : RuinWorkers.residentBufferBytes(height));
     }
 
     /** Squares held by tickets (tests). */

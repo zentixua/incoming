@@ -110,12 +110,6 @@ containers retain their contents. Charred faces travel with the block and rotate
 is saved with the world, so leaving and returning does not erase it. Leaves and shattered glazing enter the dispersed debris reservoir.
 A surface-burst crater supplies its rim from the ground actually excavated; remaining ejecta and thermally transformed material stay accounted for.
 
-If the shared nuclear working-memory reservation is full, further material removal waits while already moving
-material can settle. Pending material and support checks survive a restart. Completed movement and crater
-checkpoints are compacted into material totals; container contents are retained. Saving can pause material
-movement until its file is written. An old active journal too large for the shared memory limit stays preserved
-on disk and paused; it is never replaced with an empty aftermath.
-
 These are reduced block-scale rules: joint properties, drag and the pile's repose angle are estimates.
 
 With the default ground burst, the dust column joins the mushroom cap. With an explicitly selected air burst

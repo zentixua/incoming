@@ -36,30 +36,6 @@ class FireStormTest {
     }
 
     @Test
-    void fullYieldEnvelopeIsCoveredWithoutGrowingSourceColumnsOrMapStorage() {
-        for (double yield : new double[]{15, 100, 1000}) for (boolean surface : new boolean[]{false, true}) {
-            double height = surface ? 0 : ua.zentix.incoming.nuclear.model.Yield.optimalBurstHeight(yield);
-            Detonation d = new Detonation(91, new Vec3(300000, 64 + height, -400000), 64, yield, surface,
-                    0, 0.5f, 6, 20000, 42, 1, false, .25f);
-            double reach = new PallField(d, NIGHT).fireReach();
-            FireStorm.Grid g = grid(d);
-            assertTrue(g.side() <= FireStorm.MAX_SIDE && g.side() * g.cell() / 2 >= reach * 1.05,
-                    "clipped ignition coverage at " + yield + " kt");
-            assertEquals(32, FireStorm.sourceCell(g.cell()), 1e-9, "larger map cells inflated visible columns");
-            assertEquals(FireStorm.width(20, 32), FireStorm.width(20, FireStorm.sourceCell(g.cell())), 1e-9);
-            if (yield == 1000) {
-                boolean[] quadrants = new boolean[4];
-                for (int c : g.index()) {
-                    double[] p = centre(g, c);
-                    if (Math.max(Math.abs(p[0]), Math.abs(p[1])) > 4096)
-                        quadrants[(p[0] < 0 ? 1 : 0) + (p[1] < 0 ? 2 : 0)] = true;
-                }
-                for (boolean present : quadrants) assertTrue(present, "former clipped quadrant has no sources");
-            }
-        }
-    }
-
-    @Test
     void sourcesFollowTheIgnitionLawInsideTheZone() {
         for (Detonation d : List.of(AIR, GROUND)) {
             double reach = new PallField(d, NIGHT).fireReach();

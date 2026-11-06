@@ -141,6 +141,3 @@ paths:
 - `nuke_send_hold` fills ruin-worker admission until the first post-wave send request exercises the gate, then
   releases workers and checks both the scar and actual glass removal. Cleanup releases the latch on failure too;
   observing an incidental worker delay after the next GameTest callback is not a deterministic gate prerequisite.
-- Cold-ledger fixtures must unload the currently imported `RuinMatter` before restoring the previous SavedData
-  cache entry in each dimension. The imported instance may already hold a material ticket after background import;
-  restoring the old cache alone leaves an ownerless load (`nuke_ledger_cleanup`, then `nuke_stop`).

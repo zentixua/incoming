@@ -21,7 +21,8 @@ import ua.zentix.incoming.warhead.MaterialPath;
 import ua.zentix.incoming.warhead.SurfaceBlocks;
 import ua.zentix.incoming.warhead.SurfaceDamage;
 
-import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 
 /**
@@ -44,9 +45,8 @@ public final class CraterJob {
     private final Detonation d;
     private final BlockPos gz;
     private final int outer;
-    private final RadialChunks chunks;
-    private final ArrayDeque<ChunkPos> ahead = new ArrayDeque<>();
-    private int next, skip;
+    private final List<ChunkPos> chunks = new ArrayList<>();
+    private int next;
     private int column;
     @Nullable
     private CraterModel.Soil soil;
@@ -58,8 +58,16 @@ public final class CraterJob {
         this.gz = BlockPos.containing(d.burst().x, d.groundY(), d.burst().z);
         // largest soil multiplier is wet (×1.3): rim reaches two radii
         this.outer = Mth.ceil(d.blocks(CraterModel.radius(d.yieldKt(), CraterModel.Soil.WET)) * 2) + 1;
-        chunks = new RadialChunks(gz.getX(), gz.getZ(), -1, outer, 15);
-        next = skip = Math.max(0, startChunk);
+        ChunkPos c = new ChunkPos(gz);
+        int rc = (outer >> 4) + 1;
+        for (int cx = c.x - rc; cx <= c.x + rc; cx++) {
+            for (int cz = c.z - rc; cz <= c.z + rc; cz++) {
+                ChunkPos p = new ChunkPos(cx, cz);
+                if (nearest(p) <= outer) chunks.add(p);
+            }
+        }
+        chunks.sort(Comparator.comparingDouble(this::nearest));
+        this.next = Mth.clamp(startChunk, 0, chunks.size());
     }
 
     public Detonation detonation() {
@@ -77,50 +85,29 @@ public final class CraterJob {
         return soil;
     }
 
-    long retainedBytes() { return 256L + chunks.bytes() + ahead.size() * 128L; }
+    private double nearest(ChunkPos p) {
+        double x = Mth.clamp(gz.getX(), p.getMinBlockX(), p.getMaxBlockX()) - gz.getX();
+        double z = Mth.clamp(gz.getZ(), p.getMinBlockZ(), p.getMaxBlockZ()) - gz.getZ();
+        return Math.sqrt(x * x + z * z);
+    }
 
     public enum Step { PROGRESS, WAIT, DONE }
 
     /** One column. WAIT — required chunk still loading, resume next tick. */
     public Step step(ServerLevel level, RandomSource random) {
-        if (!CraterMatter.get(level).writable()) return Step.WAIT;
-        // Both row preparation and replaying a legacy chunk cursor are bounded tick units.
-        if (!chunks.prepared()) {
-            try (var reservation = RuinMemory.reserve(level, 4096)) {
-                if (reservation == null) return Step.WAIT;
-                chunks.prepare(32);
-            }
-            return Step.PROGRESS;
-        }
-        if (skip > 0) {
-            for (int i = 0; i < 64 && skip > 0 && !chunks.done(); i++, skip--) chunks.advance();
-            if (chunks.done()) skip = 0;
-            return Step.PROGRESS;
-        }
-        while (ahead.size() < LOOKAHEAD && !chunks.done()) {
-            ahead.addLast(new ChunkPos(chunks.peek())); chunks.advance();
-        }
-        if (ahead.isEmpty()) {
-            CraterMatter.get(level).complete(d.id());
+        if (next >= chunks.size()) {
             release(level);
             return Step.DONE;
         }
         if (soil == null && !sampleSoil(level)) return Step.WAIT;
-        for (ChunkPos pos : ahead) NuclearTickets.hold(level, pos, true);
-        ChunkPos cp = ahead.getFirst();
+        for (int i = next; i < Math.min(chunks.size(), next + LOOKAHEAD); i++) NuclearTickets.hold(level, chunks.get(i), true);
+        ChunkPos cp = chunks.get(next);
         if (!NuclearTickets.neighbourhoodLoaded(level, cp)) return Step.WAIT;
-        // At most one new material row per world-height layer, plus checkpoint/save slack.
-        // Refusal leaves the saved chunk cursor and every block unchanged.
-        try (var reservation = RuinMemory.reserve(level, 4096L + level.getHeight() * 1536L)) {
-            if (reservation == null) return Step.WAIT;
-            dig(level, cp.getMinBlockX() + (column & 15), cp.getMinBlockZ() + (column >> 4), random);
-        }
+        dig(level, cp.getMinBlockX() + (column & 15), cp.getMinBlockZ() + (column >> 4), random);
         if (++column >= 256) {
             column = 0;
             NuclearTickets.hold(level, cp, false);
-            ahead.removeFirst();
             next++;
-            CraterMatter.get(level).pass(d.id()).chunkFinished();
         }
         return Step.PROGRESS;
     }
@@ -323,6 +310,6 @@ public final class CraterJob {
 
     public void release(ServerLevel level) {
         if (soil == null) NuclearTickets.hold(level, new ChunkPos(gz), false);
-        for (ChunkPos pos : ahead) NuclearTickets.hold(level, pos, false);
+        for (int i = next; i < Math.min(chunks.size(), next + LOOKAHEAD); i++) NuclearTickets.hold(level, chunks.get(i), false);
     }
 }
