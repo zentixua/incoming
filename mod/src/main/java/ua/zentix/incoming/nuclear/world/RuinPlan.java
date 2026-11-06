@@ -542,6 +542,11 @@ public final class RuinPlan {
         return new Debris(out, removed);
     }
 
+    /** Changed positions in the plan ({@link RuinCost}). */
+    int cells() {
+        return cells.length;
+    }
+
     /** Approximate plan memory, bytes (for log). */
     public long bytes() {
         if (this == EMPTY) return 0;
@@ -734,6 +739,15 @@ public final class RuinPlan {
         RuinPlan flash = flashOf(chunk);
         boolean marked = flash == null && FlashScorch.marked(chunk, d.id());
         if (!current(chunk, flash, marked)) return false;
+        try {
+            return applyCurrent(level, chunk, d, budget, t, flash, marked);
+        } finally {
+            RuinCost.swap(RuinCost.band(d, chunk.getPos()), System.nanoTime() - t);
+        }
+    }
+
+    private boolean applyCurrent(ServerLevel level, LevelChunk chunk, Detonation d, ColumnScar.Budget budget, long t, @Nullable RuinPlan flash,
+                                 boolean marked) {
         short[] motion = new short[256];
         for (int column = 0; column < 256; column++) motion[column] = (short) (chunk.getHeight(Heightmap.Types.MOTION_BLOCKING, column & 15, column >> 4) + 1);
         // biome before blocks: Distant Horizons LOD reads chunk with biome after position writes

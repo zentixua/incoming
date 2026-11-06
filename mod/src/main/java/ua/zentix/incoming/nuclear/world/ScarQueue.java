@@ -288,6 +288,7 @@ public final class ScarQueue {
             Incoming.LOG.info("Ruins for detonation #{}: plan and swap on the spot — avg {} ms, longest {} ms", detonation, ms(st[7] / st[6]), ms(st[8]));
         }
         criteria(detonation, st, "final");
+        RuinCost.log(detonation);
         // “ruins placed for all chunks loaded at detonation” not logged after summary: counters removed with summary
         var unplaced = awaitingMemory.remove(detonation);
         if (unplaced != null && !unplaced.isEmpty()) {

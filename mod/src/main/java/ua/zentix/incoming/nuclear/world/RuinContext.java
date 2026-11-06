@@ -539,13 +539,20 @@ final class RuinContext {
         // running and ready-uncollected tasks bounded: ready plan retains memory. Player-visible tasks use only
         // their priority capacity: tasks preparation handed to detonation do not block them
         if (!RuinWorkers.admit(priority) || priority != RuinWorkers.Priority.SEEN && tasks.size() >= 2 * RuinWorkers.capacity()) return false;
+        int band = RuinCost.band(d, pos);
+        long t0 = System.nanoTime();
         Grid g = grid(level, pos, true);
+        RuinCost.shot(band, System.nanoTime() - t0);
         if (g.at(0, 0) == null) throw new IllegalStateException("no snapshot of chunk " + pos);
         tasks.put(key, new Task(RuinWorkers.submit(() -> {
             RuinWorkers.checkStop();
+            long t1 = System.nanoTime();
             Collapse c = Collapse.solve(g);
+            long t2 = System.nanoTime();
             RuinWorkers.checkStop();
-            return RuinPlanner.finish(g, c);
+            RuinPlan plan = RuinPlanner.finish(g, c);
+            RuinCost.plan(band, System.nanoTime() - t1, t2 - t1, plan);
+            return plan;
         }, priority), chunkId, level.getGameTime(), priority));
         pendingWindows.remove(key);
         return true;
