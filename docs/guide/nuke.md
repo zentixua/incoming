@@ -101,17 +101,6 @@ The siren warns players near the target. The flash comes first; the fireball ris
 Then the wave reaches the ground around it, breaking buildings and throwing up dust. The sound reaches you with the wave.
 Fires and thick dust can make the area hard to see through long after the strike.
 
-Walls, floors, columns and timber respond to their shape, material, pressure and the duration of the blast.
-Tall and branched trees can topple too. When the strike cuts a structure's last support, the support check
-continues across chunk borders. Untouched floating builds stay as they were.
-
-Broken structural blocks fall and drift before settling on actual support. Coarse rubble keeps its block type;
-containers retain their contents. Charred faces travel with the block and rotate with fallen logs. Loose piles spread into lower neighbouring spaces. Material still travelling
-is saved with the world, so leaving and returning does not erase it. Leaves and shattered glazing enter the dispersed debris reservoir.
-A surface-burst crater supplies its rim from the ground actually excavated; remaining ejecta and thermally transformed material stay accounted for.
-
-These are reduced block-scale rules: joint properties, drag and the pile's repose angle are estimates.
-
 With the default ground burst, the dust column joins the mushroom cap. With an explicitly selected air burst
 at the standard burst height, the column starts rising later, with a billowing upper edge, and stays below the
 faster-rising cap. The gap is expected; in the first seconds, dust near the ground can hide the short column entirely.

@@ -51,27 +51,6 @@ public final class FlashSync {
         return m == null ? FlashMarks.EMPTY : m;
     }
 
-    /** Scorch carried by landed material; merge once per chunk at tick end, not per piece. */
-    public static void movedChars(ServerLevel level, BlockPos at, int event, long time, int tiers,
-                                  net.minecraft.world.level.block.state.BlockState state) {
-        Pending pending = level.getData(ModAttachments.FLASH_PENDING);
-        long chunk = ChunkPos.asLong(at.getX() >> 4, at.getZ() >> 4);
-        var layer = pending.moved.computeIfAbsent(chunk, ignored -> new java.util.HashMap<>())
-                .computeIfAbsent(event, ignored -> new Moved(time));
-        for (var face : net.minecraft.core.Direction.values()) {
-            int tier = tiers >>> (face.get3DDataValue() * 3) & 7;
-            if (tier != 0) layer.faces.put(FlashChar.key(at.getX() & 15, at.getY(), at.getZ() & 15, face),
-                    FlashChar.mark(FlashChar.key(at.getX() & 15, at.getY(), at.getZ() & 15, face), tier, FlashChar.hash(state.getBlock())));
-        }
-        pending.chunks.add(chunk);
-    }
-
-    private static final class Moved {
-        final long time;
-        final it.unimi.dsi.fastutil.ints.Int2IntOpenHashMap faces = new it.unimi.dsi.fastutil.ints.Int2IntOpenHashMap();
-        Moved(long time) { this.time = time; }
-    }
-
     private static void put(ServerLevel level, LevelChunk chunk, @Nullable FlashMarks old, FlashMarks now) {
         if (now == old || now.isEmpty() && old == null) return;
         store(chunk, now);
@@ -115,37 +94,18 @@ public final class FlashSync {
     public static void onLevelTick(LevelTickEvent.Post e) {
         if (!(e.getLevel() instanceof ServerLevel level) || !level.hasData(ModAttachments.FLASH_PENDING)) return;
         LongOpenHashSet chunks = level.getData(ModAttachments.FLASH_PENDING).chunks;
-        var moved = level.getData(ModAttachments.FLASH_PENDING).moved;
-        chunks.addAll(moved.keySet()); // An immediate chars()/shadows() send may have cleared the pending key.
         if (chunks.isEmpty()) return;
         for (LongIterator it = chunks.iterator(); it.hasNext(); ) {
             long key = it.nextLong();
             LevelChunk chunk = level.getChunkSource().getChunkNow(ChunkPos.getX(key), ChunkPos.getZ(key));
-            if (chunk != null) {
-                FlashMarks marks = of(chunk);
-                var additions = moved.get(key);
-                if (additions != null) {
-                    for (var entry : additions.entrySet()) {
-                        var faces = new it.unimi.dsi.fastutil.ints.Int2IntOpenHashMap();
-                        for (var layer : marks.layers()) if (layer.detonation() == entry.getKey())
-                            for (int mark : layer.chars()) faces.put(mark & FlashChar.KEY_MASK, mark);
-                        faces.putAll(entry.getValue().faces);
-                        marks = marks.withChars(entry.getKey(), entry.getValue().time, faces.values().toIntArray());
-                    }
-                    marks = marks.pruned(chunk);
-                    store(chunk, marks);
-                }
-                send(level, chunk, marks);
-            }
+            if (chunk != null) send(level, chunk, of(chunk));
         }
         chunks.clear();
-        moved.clear();
     }
 
     /** World chunks whose traces changed this tick but have not reached players (non-persistent world attachment). */
     public static final class Pending {
         final LongOpenHashSet chunks = new LongOpenHashSet();
-        final it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<java.util.Map<Integer, Moved>> moved = new it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<>();
     }
 
     /** Chunk sent to player: traces follow. */

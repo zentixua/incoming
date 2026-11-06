@@ -80,7 +80,7 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
      */
     record Props(BlockResponse response, boolean air, boolean full, boolean bearing, int span, boolean fluid, boolean waterlogged, boolean leaves,
                  boolean log, boolean fixed, boolean rubble, boolean wood, int flags, int lightBlock, int emission, VoxelShape occludeUp,
-                 VoxelShape occludeDown, BlockState normal, int flash, double volume, double density, double jointStrain, VoxelShape[] contacts) {
+                 VoxelShape occludeDown, BlockState normal, int flash) {
         /** Opaque to heightmap {@code RuinPlan.HEIGHTMAP_TYPES[i]}: bit {@code 1 << i}. */
         static final int OPAQUE = 1;
         static final int STURDY_UP = 1 << 4, FLAMMABLE = 1 << 5, REPLACEABLE = 1 << 6, SLOW = 1 << 7, SOURCE = 1 << 8,
@@ -110,19 +110,9 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
             return response.thresholdPsi();
         }
 
-        /** Joint opening at failure (est.): brittle masonry/glass versus ductile timber connections. */
-        double jointDisplacement(double span) {
-            return jointStrain * Math.max(1, span);
-        }
-
-        boolean touches(Direction direction, Props neighbour) {
-            return net.minecraft.world.phys.shapes.Shapes.joinIsNotEmpty(contacts[direction.ordinal()],
-                    neighbour.contacts[direction.getOpposite().ordinal()], net.minecraft.world.phys.shapes.BooleanOp.AND);
-        }
-
-        /** Timber is a material, not a tree: only recognized trunks take the whole-tree path. */
+        /** Wave-breakable (log only as tree trunk, not per block). */
         boolean breakable() {
-            return response.kind() != BlockResponse.Kind.NONE;
+            return response.kind() != BlockResponse.Kind.NONE && !log;
         }
     }
 
@@ -185,34 +175,11 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
     private static final BlockState AIR = net.minecraft.world.level.block.Blocks.AIR.defaultBlockState(),
             WATER = net.minecraft.world.level.block.Blocks.WATER.defaultBlockState();
 
-    @SuppressWarnings("deprecation") // Immutable material fallback: no live level is available to snapshot workers.
     private static Props computeProps(BlockState st) {
-        BlockResponse r = BlockResponse.structural(st);
+        BlockResponse r = BlockResponse.of(st);
         boolean liquid = st.getBlock() instanceof LiquidBlock;
         var shape = st.getCollisionShape(EmptyBlockGetter.INSTANCE, BlockPos.ZERO);
         boolean full = !liquid && Block.isShapeFullBlock(shape);
-        double volume = 0;
-        for (var box : shape.toAabbs()) volume += box.getXsize() * box.getYsize() * box.getZsize();
-        // Reuse the existing explicit block-to-material representation. It already distinguishes
-        // a concrete construction element, timber boarding and a solid metre of natural rock/log.
-        volume = Math.min(1, volume) * ua.zentix.incoming.registry.ModDataMaps.Penetrability.of(st).thickness();
-        VoxelShape[] contacts = new VoxelShape[Direction.values().length];
-        for (Direction direction : Direction.values()) contacts[direction.ordinal()] = shape.getFaceShape(direction);
-        // Bulk densities (kg/m³, representative estimates). Sound families are a generic modded
-        // material fallback, not a list of map blocks; actual collision volume remains unchanged.
-        var sound = st.getSoundType();
-        double density = sound == net.minecraft.world.level.block.SoundType.METAL
-                || sound == net.minecraft.world.level.block.SoundType.COPPER
-                || sound == net.minecraft.world.level.block.SoundType.ANVIL ? 7800
-                : st.is(BlockTags.MINEABLE_WITH_AXE) ? 600
-                : sound == net.minecraft.world.level.block.SoundType.GLASS ? 2500 : 2300;
-        if (st.is(BlockTags.LEAVES)) density = 50; // Crown bulk density proxy, as in Shielding (est.).
-        var profile = st.getBlockHolder().getData(ua.zentix.incoming.registry.ModDataMaps.STRUCTURAL_MATERIAL);
-        double jointStrain = st.is(BlockTags.MINEABLE_WITH_AXE) ? 0.02 : 0.005;
-        if (profile != null) {
-            density = profile.density();
-            jointStrain = profile.jointStrain();
-        }
         boolean leaves = st.is(BlockTags.LEAVES), log = st.is(BlockTags.LOGS);
         // support: anything with collision (glass, chains, fences too); leaves attach to trunk rather than rest on support ({@link Collapse})
         boolean bearing = !liquid && !leaves && !shape.isEmpty();
@@ -251,7 +218,7 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
         return new Props(r, st.isAir(), full, bearing, span, liquid, waterlogged, leaves, log, fixed, destroy >= 1, st.is(BlockTags.MINEABLE_WITH_AXE),
                 flags, st.getLightBlock(at, BlockPos.ZERO), st.getLightEmission(at, BlockPos.ZERO),
                 LightEngine.getOcclusionShape(at, BlockPos.ZERO, st, Direction.UP), LightEngine.getOcclusionShape(at, BlockPos.ZERO, st, Direction.DOWN),
-                RuinPlan.normal(st), FlashChar.material(st) | FlashChar.hash(st.getBlock()) << 2, volume, density, jointStrain, contacts);
+                RuinPlan.normal(st), FlashChar.material(st) | FlashChar.hash(st.getBlock()) << 2);
     }
 
     /** Normally reflected pressure (air, γ = 1.4), psi. */
@@ -316,7 +283,6 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
         /** Third round ({@link Blast#remnants}): every window chunk's breaches count as breaches. */
         int[] remnants(Blast[] blasts, int margin) {
             skyAir();
-            fellTrees(false);
             IntArrayList breaks = new IntArrayList();
             for (int k = 0; k < 9; k++) {
                 if (blasts[k] == null) continue;
@@ -348,9 +314,6 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
         /** Sky-connected air depth (1…{@link #SKY_DEPTH}); above column top, sky without stored entry. */
         final byte[] sky;
         final long[] gone;
-        /** Recognized trunks left standing by load or world rule; they never use timber-member pressure response. */
-        @org.jetbrains.annotations.Nullable
-        long[] standingTrees, treeSeen;
         /** Thread buffers {@link #sky} and {@link #gone} ({@link #BUFFERS}). */
         final Buffers pooled;
         final List<long[]> trees = new ArrayList<>();
@@ -450,7 +413,7 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
         Blast run(boolean blockDamage, boolean treeFall) {
             if (blockDamage) {
                 skyAir();
-                fellTrees(treeFall);
+                if (treeFall) fellTrees();
                 IntArrayList round = new IntArrayList();
                 for (int wz = LO - ROUND_ONE; wz < HI + ROUND_ONE; wz++) {
                     for (int wx = LO - ROUND_ONE; wx < HI + ROUND_ONE; wx++) {
@@ -529,7 +492,6 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
 
         /** Whether block breaks (thickness, reflection) or element topples; broken positions into {@code out}. */
         void decide(int wx, int y, int wz, Props p, double pmax, IntArrayList out, boolean first) {
-            if (standingTree(wx, y, wz)) return;
             int x = w.x0 + wx, z = w.z0 + wz;
             double cx = x + 0.5, cy = y + 0.5, cz = z + 0.5;
             double ux = burst.x - cx, uy = burst.y - cy, uz = burst.z - cz, len = Math.sqrt(ux * ux + uy * uy + uz * uz);
@@ -554,7 +516,7 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
             int height = 0;
             if (t > 3) {
                 if (p.leaves() || hl < 1e-6) return;
-                while (y + height + 1 <= w.maxY - 1 && !w.air(wx, y + height + 1, wz)) height++;
+                while (height < 64 && y + height + 1 <= w.maxY - 1 && !w.air(wx, y + height + 1, wz)) height++;
                 if (height < SLENDER) return;
             }
             double psi = d.psi(new Vec3(cx, cy, cz)), pr = reflected(psi);
@@ -565,10 +527,7 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
             boolean thin = t <= 3 && (p.response().kind() != BlockResponse.Kind.GROUND || ends(wx, y, wz, th));
             if (thin) {
                 double pressure = facing > 0 ? Math.max(psi, pr * facing) : psi;
-                int normalAxis = (int) (th >> 3 & 3);
-                int span = elementSpan(wx, y, wz, normalAxis);
-                double response = elementPressure(p, pressure, d.positivePhaseSeconds(new Vec3(cx, cy, cz)), t, span);
-                if (p.response().breaksAt(response / K[t], seed)) {
+                if (p.response().breaksAt(pressure / K[t], seed)) {
                     int axis = (int) (th >> 3 & 3);
                     if (facing > 0 && faceAxis.ordinal() == axis && t > 1) {
                         // face breached: element fails through full thickness
@@ -583,7 +542,7 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
             }
             if (t <= 3) {
                 if (p.leaves() || hl < 1e-6) return;
-                while (y + height + 1 <= w.maxY - 1 && !w.air(wx, y + height + 1, wz)) height++;
+                while (height < 64 && y + height + 1 <= w.maxY - 1 && !w.air(wx, y + height + 1, wz)) height++;
                 if (height < SLENDER) return;
             }
             topple(wx, y, wz, p, pr, ex, ez, height, seed, out, first);
@@ -600,7 +559,7 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
         void take(int wx, int y, int wz, IntArrayList out) {
             if (!inside(wx, y, wz)) return;
             Props p = w.props(wx, y, wz);
-            if (p.breakable() && p.full() && !standingTree(wx, y, wz)) out.add(idx(wx, y, wz));
+            if (p.breakable() && p.full()) out.add(idx(wx, y, wz));
         }
 
         /**
@@ -631,41 +590,11 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
                 while (b < most && full(alongX ? wx : wx - b - 1, y, alongX ? wz - b - 1 : wz)) b++;
                 if (a + b + 1 > most) return;
             }
-            Vec3 centre = new Vec3(w.x0 + wx + 0.5, y + 0.5, w.z0 + wz + 0.5);
-            double pressure = elementPressure(p, pr * cos, d.positivePhaseSeconds(centre), run, height);
-            if (!p.response().breaksAt(pressure * height / run / K[3], seed)) return;
+            if (!p.response().breaksAt(pr * cos * height / run / K[3], seed)) return;
             for (int i = 0; i < run; i++) {
                 int ax = alongX ? wx + step * i : wx, az = alongX ? wz : wz + step * i;
                 if (w.has(ax, az)) take(ax, y, az, out);
             }
-        }
-
-        /** First bending mode, with real element thickness/mass and estimated connection capacity. */
-        private static double elementPressure(Props p, double psi, double seconds, int thickness, int span) {
-            if (p.volume() <= 0 || p.leaves()) return psi;
-            double pa = ua.zentix.incoming.nuclear.model.BlastModel.kpa(psi) * 1000;
-            double threshold = ua.zentix.incoming.nuclear.model.BlastModel.kpa(p.threshold()) * 1000;
-            return psi * ua.zentix.incoming.nuclear.model.StructuralResponse.equivalentPressure(pa, seconds,
-                    p.density() * p.volume() * thickness, threshold, p.jointDisplacement(span)) / Math.max(1e-12, pa);
-        }
-
-        /** Shorter in-plane extent of a wall/slab; columns use their free height in toppling. */
-        private int elementSpan(int wx, int y, int wz, int normal) {
-            int result = Integer.MAX_VALUE;
-            for (int axis = 0; axis < 3; axis++) {
-                if (axis == normal) continue;
-                int dx = axis == 0 ? 1 : 0, dy = axis == 1 ? 1 : 0, dz = axis == 2 ? 1 : 0;
-                int extent = 1;
-                for (int sign = -1; sign <= 1; sign += 2) {
-                    int x = wx + sign * dx, yy = y + sign * dy, z = wz + sign * dz;
-                    while (inside(x, yy, z) && !isGone(x, yy, z) && w.props(x, yy, z).bearing()) {
-                        extent++;
-                        x += sign * dx; yy += sign * dy; z += sign * dz;
-                    }
-                }
-                result = Math.min(result, extent);
-            }
-            return result;
         }
 
         /**
@@ -762,12 +691,8 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
             }
         }
 
-        private boolean standingTree(int wx, int y, int wz) {
-            return standingTrees != null && inside(wx, y, wz) && bit(standingTrees, idx(wx, y, wz));
-        }
-
-        /** Recognize trunks before applying load/rules; eligible trees topple whole before per-block wave. */
-        void fellTrees(boolean fall) {
+        /** Supported trunks topple whole away from epicenter (before per-block wave; unsupported leaves follow, {@link Collapse}). */
+        void fellTrees() {
             for (int wz = LO - ROUND_ONE; wz < HI + ROUND_ONE; wz++) {
                 for (int wx = LO - ROUND_ONE; wx < HI + ROUND_ONE; wx++) {
                     int t = w.top(wx, wz);
@@ -778,39 +703,13 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
                         Props pb = w.props(wx, y - 1, wz);
                         if (pb.log() || pb.leaves() || !pb.bearing()) continue;
                         int x = w.x0 + wx, z = w.z0 + wz;
-                        // Follow connected timber to its crown, including horizontal branches. A
-                        // bare construction remains ordinary timber; no species/height whitelist.
-                        if (treeSeen == null) treeSeen = new long[(SIDE * SIDE * h + 63) >> 6];
-                        int root = idx(wx, y, wz);
-                        if (bit(treeSeen, root)) continue;
-                        IntArrayList timber = new IntArrayList();
-                        timber.add(root);
-                        set(treeSeen, root);
-                        int highest = y;
-                        boolean crown = false;
-                        for (int q = 0; q < timber.size(); q++) {
-                            int node = timber.getInt(q), tx = node % SIDE, tz = node / SIDE % SIDE,
-                                    ty = node / (SIDE * SIDE) + yb;
-                            highest = Math.max(highest, ty);
-                            crown |= nearLeaves(tx, ty, tz);
-                            for (Direction direction : Direction.values()) {
-                                int nx = tx + direction.getStepX(), ny = ty + direction.getStepY(), nz = tz + direction.getStepZ();
-                                if (!inside(nx, ny, nz) || !w.props(nx, ny, nz).log() || isGone(nx, ny, nz)) continue;
-                                int next = idx(nx, ny, nz);
-                                if (!bit(treeSeen, next)) { set(treeSeen, next); timber.add(next); }
-                            }
-                        }
-                        if (!crown) continue;
-                        int height = highest - y + 1;
-                        Vec3 base = new Vec3(x + 0.5, y + 0.5, z + 0.5);
-                        double treePressure = elementPressure(p, d.psi(base), d.positivePhaseSeconds(base), 1, height);
-                        if (!fall || treePressure < p.threshold()) {
-                            if (standingTrees == null) standingTrees = new long[(SIDE * SIDE * h + 63) >> 6];
-                            for (int i : timber) set(standingTrees, i);
-                            continue;
-                        }
+                        if (d.psi(new Vec3(x + 0.5, y + 0.5, z + 0.5)) < p.threshold()) continue;
+                        // trunk only if tree: leaves above (otherwise log wall or pillar)
+                        int height = 0;
+                        while (height < 24 && y + height <= yt && w.props(wx, y + height, wz).log()) height++;
+                        if (!w.props(wx, y + height, wz).leaves() && !nearLeaves(wx, y + height - 1, wz)) continue;
                         BlockState st = w.get(wx, y, wz);
-                        for (int i : timber) set(gone, i);
+                        for (int i = 0; i < height; i++) set(gone, idx(wx, y + i, wz));
                         if (wx >= LO && wx < HI && wz >= LO && wz < HI) {
                             double dx = x - burst.x, dz = z - burst.z;
                             Direction dir = Math.abs(dx) > Math.abs(dz) ? (dx > 0 ? Direction.EAST : Direction.WEST) : (dz > 0 ? Direction.SOUTH : Direction.NORTH);

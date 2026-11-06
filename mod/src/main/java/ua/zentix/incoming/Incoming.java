@@ -142,7 +142,6 @@ public final class Incoming {
         NeoForge.EVENT_BUS.addListener(NuclearStrikes::onRespawn);
         NeoForge.EVENT_BUS.addListener(RadiationTicker::onHeal);
         NeoForge.EVENT_BUS.addListener(BlockResponse::onTagsUpdated);
-        NeoForge.EVENT_BUS.addListener(BlockResponse::onDataMapsUpdated);
 
         NeoForge.EVENT_BUS.addListener(EventPriority.HIGHEST, WorkScheduler::onServerTickPre);
         NeoForge.EVENT_BUS.addListener(EventPriority.HIGHEST, WorkScheduler::onLevelTickPre);

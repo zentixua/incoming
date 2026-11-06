@@ -192,17 +192,13 @@ final class Collapse {
             int i = breaks.getInt(q), wx = i % SIDE, wz = (i / SIDE) % SIDE, y = i / (SIDE * SIDE) + yb;
             Blast.Props p = props(wx, y, wz);
             if (p.log()) logs = true;
-            if (support || !p.bearing()) continue;
+            if (support || !p.bearing() || p.log()) continue;
             // survivors above/beside broken blocks may have lost support
             if (standing(wx, y + 1, wz) || standing(wx + 1, y, wz) || standing(wx - 1, y, wz) || standing(wx, y, wz + 1) || standing(wx, y, wz - 1)) support = true;
         }
         if (!logs) for (int k = 0; k < 9 && !logs; k++) logs = blasts[k] != null && !blasts[k].trees().isEmpty();
-        if (support) {
-            support();
-            detached();
-        }
-        // Support reconciliation can release timber even when the pressure broke only its pedestal.
-        if (logs || support) leaves();
+        if (support) support();
+        if (logs) leaves();
         if (!breaks.isEmpty()) drain();
         attachments();
         collect();
@@ -210,67 +206,6 @@ final class Collapse {
 
     private boolean standing(int wx, int y, int wz) {
         return inside(wx, y, wz) && !isGone(wx, y, wz) && props(wx, y, wz).bearing();
-    }
-
-    /**
-     * Reconcile closed components independently of the short span-distance approximation. A saturated
-     * distance is not proof of support. Only components whose original connection to a real anchor is
-     * known may be released; an untouched floating build must not acquire global gravity. Open window
-     * components remain unresolved here: this pass makes no claim about their external support.
-     */
-    private void detached() {
-        int n = SIDE * SIDE * h;
-        // The span solve is finished: reuse its two byte maps and traversal ring.
-        java.util.Arrays.fill(before, 0, n, (byte) 0);
-        java.util.Arrays.fill(after, 0, n, (byte) 0);
-        int tail = 0;
-        for (int y = yb; y <= yt; y++) for (int wz = 0; wz < SIDE; wz++) for (int wx = 0; wx < SIDE; wx++) {
-            if (!w.has(wx, wz)) continue;
-            Blast.Props p = props(wx, y, wz);
-            if (!p.bearing() || !(y <= surface || y == yb || p.fixed())) continue;
-            int i = idx(wx, y, wz);
-            before[i] = 1;
-            ring[tail++] = i;
-        }
-        for (int q = 0; q < tail; q++) {
-            int i = ring[q], wx = i % SIDE, wz = i / SIDE % SIDE, y = i / (SIDE * SIDE) + yb;
-            for (Direction dir : Direction.values()) {
-                int x = wx + dir.getStepX(), yy = y + dir.getStepY(), z = wz + dir.getStepZ();
-                if (!inside(x, yy, z) || !w.has(x, z)) continue;
-                int next = idx(x, yy, z);
-                if (before[next] != 0 || !props(x, yy, z).bearing()
-                        || !props(wx, y, wz).touches(dir, props(x, yy, z))) continue;
-                before[next] = 1;
-                ring[tail++] = next;
-            }
-        }
-        for (int start = 0; start < n; start++) {
-            if (after[start] != 0 || bit(gone, start) || before[start] == 0) continue;
-            int sx = start % SIDE, sz = start / SIDE % SIDE, sy = start / (SIDE * SIDE) + yb;
-            if (!w.has(sx, sz) || !props(sx, sy, sz).bearing()) continue;
-            tail = 1;
-            ring[0] = start;
-            after[start] = 1;
-            boolean anchored = false, open = false;
-            for (int q = 0; q < tail; q++) {
-                int i = ring[q], wx = i % SIDE, wz = i / SIDE % SIDE, y = i / (SIDE * SIDE) + yb;
-                anchored |= y <= surface || y == yb || props(wx, y, wz).fixed();
-                for (Direction dir : Direction.values()) {
-                    int x = wx + dir.getStepX(), yy = y + dir.getStepY(), z = wz + dir.getStepZ();
-                    if (yy > yt || yy < yb) continue;
-                    if (!inside(x, yy, z) || !w.has(x, z)) {
-                        open = true;
-                        continue;
-                    }
-                    int next = idx(x, yy, z);
-                    if (after[next] != 0 || bit(gone, next) || !props(x, yy, z).bearing()
-                            || !props(wx, y, wz).touches(dir, props(x, yy, z))) continue;
-                    after[next] = 1;
-                    ring[tail++] = next;
-                }
-            }
-            if (!anchored && !open) for (int q = 0; q < tail; q++) set(gone, ring[q]);
-        }
     }
 
     // ---------------------------------------------------------------- support

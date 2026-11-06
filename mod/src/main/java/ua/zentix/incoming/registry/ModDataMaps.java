@@ -28,19 +28,6 @@ public final class ModDataMaps {
     public static final DataMapType<Block, Penetrability> PENETRATION = DataMapType.builder(Incoming.id("penetration"), Registries.BLOCK,
             Penetrability.CODEC).build();
 
-    /** Nuclear structural families: density and estimated connection displacement/span, not mining hardness. */
-    public static final DataMapType<Block, StructuralMaterial> STRUCTURAL_MATERIAL = DataMapType.builder(
-            Incoming.id("structural_material"), Registries.BLOCK, StructuralMaterial.CODEC).build();
-
-    public record StructuralMaterial(double density, double jointStrain) {
-        private static final Codec<Double> POSITIVE = Codec.DOUBLE.validate(value -> Double.isFinite(value) && value > 0
-                ? DataResult.success(value) : DataResult.error(() -> "Structural material values must be finite and positive"));
-        public static final Codec<StructuralMaterial> CODEC = RecordCodecBuilder.create(instance -> instance.group(
-                POSITIVE.fieldOf("density_kg_m3").forGetter(StructuralMaterial::density),
-                POSITIVE.fieldOf("joint_displacement_per_span").forGetter(StructuralMaterial::jointStrain)
-        ).apply(instance, StructuralMaterial::new));
-    }
-
     /** Ordered debris slots per block: repeated slots preserve piece counts and random-number order. */
     public static final DataMapType<Block, List<Integer>> DEBRIS_DRONE = debris("debris_drone");
     public static final DataMapType<Block, List<Integer>> DEBRIS_MISSILE = debris("debris_missile");
@@ -55,7 +42,6 @@ public final class ModDataMaps {
 
     public static void register(RegisterDataMapTypesEvent event) {
         event.register(PENETRATION);
-        event.register(STRUCTURAL_MATERIAL);
         event.register(DEBRIS_DRONE);
         event.register(DEBRIS_MISSILE);
         event.register(DEBRIS_EMBERS);
