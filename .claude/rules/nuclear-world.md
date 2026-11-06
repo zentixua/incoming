@@ -22,7 +22,10 @@ paths:
   `ScarQueue.LOOKAHEAD` (20) ticks before the wave: plans that became stale during flight (grass grew, player placed a
   block) and chunks without plans receive a background plan now, ready by the wave (GameTest
   `staleSeenPlanReplannedBeforeWave`); a background plan stale at replacement is not applied — rebuild on the server
-  thread from the chunk as it is (`staleBackgroundPlanRebuiltOnServer`); trunks falling into a neighboring chunk wait
+  thread from the chunk as it is (`staleBackgroundPlanRebuiltOnServer`). Changes the world makes by itself between plan
+  and wave must not stale plans, or a whole visible city re-plans at once (1 Mt: ruins 2–7 s late): `RuinPlan.normal`
+  ignores daylight detector power, `RuinPlan.unburnt` accepts flash fire and burned flammable cells (`PlanCurrentTest`);
+  `-Dincoming.nukeDiag=true` logs the changed blocks of each stale plan (“DIAG stale”); trunks falling into a neighboring chunk wait
   for its ruins; loads no neighbors: finished plans need none (except `RuinPlan.neighbourRadius`: world-path positions
   within 2 blocks of the edge or a nearby Sable craft need a radius-1 ticket; non-vanilla block entities through the
   world (Create belts remove chains up to 20 blocks) need radius 2); background plans use a 5×5 window of memory/disk
