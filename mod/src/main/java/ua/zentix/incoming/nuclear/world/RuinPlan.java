@@ -598,11 +598,27 @@ public final class RuinPlan {
                 BlockState live = s.getBlockState(c & 15, (c >> 8) & 15, (c >> 4) & 15);
                 if (flash != null) live = flash.beforeFlash(c & KEY_MASK, live);
                 else if (marked && fire(live)) live = Blocks.AIR.defaultBlockState();
-                h = mix(h, live);
+                h = mix(h, unburnt(live, olds[k]));
             }
             if (h != oldHashes[i]) return false;
         }
         return true;
+    }
+
+    /**
+     * Fire between the flash and the wave still matches the plan: a flammable block now fire or air burned, an air cell now
+     * fire caught. Minecraft fire eats a plank block in seconds, while a real building does not burn through in the
+     * seconds to a minute before the blast wave; the wave overwrites these cells anyway. Without this, the fires the flash
+     * lights near a player kept turning ready plans stale and their ruins came up to 2 s after the wave (1 Mt).
+     */
+    static BlockState unburnt(BlockState live, BlockState old) {
+        if (live == old) return live;
+        if (fire(live) ? old.isAir() || flammable(old) : live.isAir() && flammable(old)) return old;
+        return live;
+    }
+
+    private static boolean flammable(BlockState s) {
+        return s.isFlammable(net.minecraft.world.level.EmptyBlockGetter.INSTANCE, BlockPos.ZERO, net.minecraft.core.Direction.UP);
     }
 
     private static boolean fire(BlockState s) {

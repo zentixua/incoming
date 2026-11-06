@@ -291,8 +291,8 @@ final class RuinSettle {
     int reads() { return (int) entries.values().stream().filter(e -> e.read != null).count(); }
 
     private void report(long now, boolean done) {
-        Incoming.LOG.info("Ruin settlement #{}: {} of {} positions scanned, {} saved chunks confirmed, {} loads, {} pending ({} held, admission {}, {} reads), {} ticks{}",
+        Incoming.LOG.info("Ruin settlement #{}: {} of {} positions scanned, {} saved chunks confirmed, {} loads, {} pending ({} held, admission {}, {} reads), {}, {} ticks{}",
                 detonation.id(), pass.cursor, total(), settled, loaded, entries.size(), held(), loadingLimit, reads(),
-                now - began, done ? "; complete" : "");
+                window.report(), now - began, done ? "; complete" : "");
     }
 }
