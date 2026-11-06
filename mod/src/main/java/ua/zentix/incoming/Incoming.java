@@ -162,6 +162,7 @@ public final class Incoming {
         NeoForge.EVENT_BUS.addListener(Blackouts::onBlockPlaced);
         // First: other save listeners see the tag with twins already removed.
         NeoForge.EVENT_BUS.addListener(EventPriority.HIGHEST, ChunkSaves::onSave);
+        NeoForge.EVENT_BUS.addListener(ua.zentix.incoming.util.RegionFiles::onSave);
         NeoForge.EVENT_BUS.addListener(ChunkSaves::onLoad);
     }
 

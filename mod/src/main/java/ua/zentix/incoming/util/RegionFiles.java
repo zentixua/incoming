@@ -17,8 +17,8 @@ import java.util.concurrent.ConcurrentHashMap;
  * Whether a chunk's region file holds data, before asking the chunk I/O worker. Vanilla opens (and so creates) the region
  * file for every read: a 1 Mt zone reads headers of half a million chunks, most of them never generated, and left 516
  * empty {@code .mca} files in a 56-region world; settlement then took the empty files for saved regions and scanned their
- * positions. A chunk of a region without data reads as absent. Unsaved chunks of a brand-new region (generated, still
- * queued for writing) read as absent too; they are in memory, and ruins reach them on their normal path.
+ * positions. A chunk of a region without data reads as absent. A region a chunk save went to this session counts as
+ * having data at once ({@link #onSave}): its write may still be queued in the I/O worker, which then answers the read.
  */
 public final class RegionFiles {
     /** Region files seen with data: they never lose it, so only absent answers are checked again. */
@@ -38,6 +38,14 @@ public final class RegionFiles {
         if (!hasData(file)) return false;
         WITH_DATA.add(file);
         return true;
+    }
+
+    /** A chunk saved into a region (queued for writing or written): reads of that region go to the I/O worker. */
+    public static void onSave(net.neoforged.neoforge.event.level.ChunkDataEvent.Save e) {
+        if (e.getLevel() instanceof ServerLevel level) {
+            ChunkPos pos = e.getChunk().getPos();
+            WITH_DATA.add(folder(level).resolve("r." + (pos.x >> 5) + "." + (pos.z >> 5) + ".mca"));
+        }
     }
 
     /** Region file exists and is not empty (an empty one is what a read of a never-saved region leaves). */
