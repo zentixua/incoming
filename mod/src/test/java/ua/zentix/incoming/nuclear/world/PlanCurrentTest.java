@@ -13,8 +13,11 @@ import java.util.Map;
 
 import static org.junit.jupiter.api.Assertions.assertSame;
 
-/** Fire between the flash and the wave keeps a ready plan current ({@link RuinPlan#unburnt}). */
-class UnburntTest {
+/**
+ * Changes between plan and wave that keep a ready plan current: fire after the flash ({@link RuinPlan#unburnt}), daylight
+ * detector power following the sky ({@link RuinPlan#normal}).
+ */
+class PlanCurrentTest {
     @BeforeAll
     static void bootstrap() {
         SharedConstants.tryDetectVersion();
@@ -43,5 +46,13 @@ class UnburntTest {
         assertSame(Blocks.FIRE.defaultBlockState(), RuinPlan.unburnt(Blocks.FIRE.defaultBlockState(), stone));
         assertSame(stone, RuinPlan.unburnt(stone, air));
         assertSame(Blocks.OAK_PLANKS.defaultBlockState(), RuinPlan.unburnt(Blocks.OAK_PLANKS.defaultBlockState(), air));
+    }
+
+    @Test
+    void daylightDetectorAtAnyPowerIsTheSameDetector() {
+        BlockState dark = Blocks.DAYLIGHT_DETECTOR.defaultBlockState(), sunny = dark.setValue(net.minecraft.world.level.block.DaylightDetectorBlock.POWER, 13);
+        assertSame(RuinPlan.normal(dark), RuinPlan.normal(sunny));
+        BlockState inverted = sunny.setValue(net.minecraft.world.level.block.DaylightDetectorBlock.INVERTED, true);
+        org.junit.jupiter.api.Assertions.assertNotSame(RuinPlan.normal(dark), RuinPlan.normal(inverted));
     }
 }

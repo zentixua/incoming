@@ -366,8 +366,14 @@ public final class RuinPlan {
         return sections[i].get(lx, y & 15, lz);
     }
 
-    /** State normalized for old-state comparison: blackout-darkened lamp is same lamp. */
+    /**
+     * State normalized for old-state comparison: blackout-darkened lamp is same lamp; a daylight detector at any power is
+     * the same detector (its power follows the sky every second, so plans built during the flight went stale across a city
+     * lit by detectors, and ruins near players came seconds after the wave at 1 Mt; the detector recomputes its power on
+     * its next update).
+     */
     static BlockState normal(BlockState s) {
+        if (s.getBlock() instanceof net.minecraft.world.level.block.DaylightDetectorBlock) return s.setValue(net.minecraft.world.level.block.DaylightDetectorBlock.POWER, 0);
         BlockState lit = GridLights.lit(s);
         return lit != null ? lit : s;
     }
@@ -603,6 +609,25 @@ public final class RuinPlan {
             if (h != oldHashes[i]) return false;
         }
         return true;
+    }
+
+    /** For {@link NukeDiag}: changed plan positions since the snapshot, “old→live” counts (null when current). */
+    @Nullable
+    String staleCells(LevelChunk chunk, Detonation d) {
+        RuinPlan flash = flashOf(chunk);
+        boolean marked = flash == null && FlashScorch.marked(chunk, d.id());
+        LevelChunkSection[] now = chunk.getSections();
+        java.util.Map<String, Integer> diff = new java.util.TreeMap<>();
+        for (int k = 0; k < cells.length; k++) {
+            int c = cells[k], i = section(c);
+            if (i >= now.length) return "section out of range";
+            BlockState live = now[i].getBlockState(c & 15, (c >> 8) & 15, (c >> 4) & 15);
+            if (flash != null) live = flash.beforeFlash(c & KEY_MASK, live);
+            else if (marked && fire(live)) live = Blocks.AIR.defaultBlockState();
+            live = unburnt(live, olds[k]);
+            if (normal(live) != normal(olds[k])) diff.merge(olds[k].getBlock().getDescriptionId() + "→" + live.getBlock().getDescriptionId(), 1, Integer::sum);
+        }
+        return diff.isEmpty() ? null : diff.toString();
     }
 
     /**

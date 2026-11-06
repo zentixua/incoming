@@ -880,6 +880,7 @@ public final class ScarQueue {
         long[] st = preparedStats.computeIfAbsent(d.id(), k -> new long[STATS]);
         if (plan != null) {
             if (plan.current(chunk, d)) return true;
+            if (NukeDiag.ON) Incoming.LOG.info("DIAG stale plan {} ahead of the wave: {}", pos, plan.staleCells(chunk, d));
             plans.remove(job.chunk);
             stalePlans++;
             st[1]++;
@@ -956,6 +957,7 @@ public final class ScarQueue {
                 deferLogs(level, d, plan);
                 return RUINED;
             }
+            if (NukeDiag.ON) Incoming.LOG.info("DIAG stale prepared plan {}: {}", chunk.getPos(), plan.staleCells(chunk, d));
             stalePlans++;
             st[1]++;
             // stale: on-site plan in subsequent units (background or window fractures)
@@ -990,6 +992,7 @@ public final class ScarQueue {
         RuinPlan.Debris debris = debris(level, chunk, plan);
         boolean applied = plan.apply(level, chunk, d, budget);
         if (applied) buried(level, d, free);
+        if (!applied && !server && NukeDiag.ON) Incoming.LOG.info("DIAG stale {} plan {}: {}", diagSource, chunk.getPos(), plan.staleCells(chunk, d));
         if (!applied && !server) {
             // background-build positions changed: rebuild on server thread from current chunk
             // (otherwise intact chunk gets ruin mark). Server-thread plan built this tick, valid
