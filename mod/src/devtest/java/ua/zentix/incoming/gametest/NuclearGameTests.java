@@ -327,7 +327,8 @@ public final class NuclearGameTests {
             h.assertFalse(p.state().isAir(), "a piece of air in " + p.pos().toShortString());
         }
         for (BlockPos q : BlockPos.betweenClosed(at.offset(-1, 1, -1), at.offset(1, 3, 1))) {
-            if (new ChunkPos(q).equals(chunk.getPos())) {
+            // a cell under the tower's own rubble pile is not thrown: the pile lands where the hash of the position says
+            if (new ChunkPos(q).equals(chunk.getPos()) && h.getLevel().getBlockState(q).isAir()) {
                 BlockPos b = q.immutable();
                 h.assertTrue(all.stream().anyMatch(p -> p.pos().equals(b) && p.state().is(Blocks.STONE_BRICKS)), "no tower fragment in " + b.toShortString());
             }
