@@ -128,7 +128,7 @@ public final class VoxyBackpressureGameTests {
         data.putInt("xPos", unloaded.x);
         data.putInt("zPos", unloaded.z);
         data.putString("Status", ChunkStatus.FULL.getName());
-        level.getChunkSource().chunkMap.write(unloaded, data);
+        ua.zentix.incoming.util.RegionFiles.write(level, unloaded, data);
         VoxyLods.Viewer viewer = new VoxyLods.Viewer();
         byte[] old = new byte[64 * 1024];
         long key = unloaded.toLong();
@@ -166,7 +166,7 @@ public final class VoxyBackpressureGameTests {
         first.putInt("xPos", target.x);
         first.putInt("zPos", target.z);
         first.putString("Status", ChunkStatus.FULL.getName());
-        level.getChunkSource().chunkMap.write(target, first);
+        ua.zentix.incoming.util.RegionFiles.write(level, target, first);
         var oldRead = FarLods.savedCopy(level, target.toLong());
         AtomicReference<ChunkAccess> delivered = new AtomicReference<>();
         DhUpdates.testSink(level, (world, copy) -> {
@@ -187,7 +187,7 @@ public final class VoxyBackpressureGameTests {
             latest.putInt("xPos", target.x);
             latest.putInt("zPos", target.z);
             latest.putString("Status", ChunkStatus.FULL.getName());
-            level.getChunkSource().chunkMap.write(target, latest);
+            ua.zentix.incoming.util.RegionFiles.write(level, target, latest);
             DhUpdates.mark(level, target, due);
             prepared[0] = true;
         });

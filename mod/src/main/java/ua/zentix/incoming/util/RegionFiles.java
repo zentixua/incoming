@@ -42,10 +42,18 @@ public final class RegionFiles {
 
     /** A chunk saved into a region (queued for writing or written): reads of that region go to the I/O worker. */
     public static void onSave(net.neoforged.neoforge.event.level.ChunkDataEvent.Save e) {
-        if (e.getLevel() instanceof ServerLevel level) {
-            ChunkPos pos = e.getChunk().getPos();
-            WITH_DATA.add(folder(level).resolve("r." + (pos.x >> 5) + "." + (pos.z >> 5) + ".mca"));
-        }
+        if (e.getLevel() instanceof ServerLevel level) written(level, e.getChunk().getPos());
+    }
+
+    /** Chunk data queued for writing into its region: reads of that region go to the I/O worker from now on. */
+    public static void written(ServerLevel level, ChunkPos pos) {
+        WITH_DATA.add(folder(level).resolve("r." + (pos.x >> 5) + "." + (pos.z >> 5) + ".mca"));
+    }
+
+    /** Direct chunk write past {@code ChunkMap.save} (which fires the save event), e.g. a test fixture written to disk. */
+    public static CompletableFuture<Void> write(ServerLevel level, ChunkPos pos, CompoundTag data) {
+        written(level, pos);
+        return level.getChunkSource().chunkMap.write(pos, data);
     }
 
     /** Region file exists and is not empty (an empty one is what a read of a never-saved region leaves). */
