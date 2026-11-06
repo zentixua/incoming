@@ -87,7 +87,9 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
                 SHAPE_LIGHT = 1 << 9, GRASS = 1 << 10, MOSS = 1 << 11, SAND = 1 << 12, DIRT = 1 << 13, SNOW = 1 << 14,
                 SOUL_BASE = 1 << 15, FIRE = 1 << 16, NO_FLUID = 1 << 17, PLANT = 1 << 18, SNOW_LAYER = 1 << 19,
                 /** Snow for turf beneath ({@code SnowyDirtBlock}: {@code minecraft:snow} tag, layer, block, powder snow). */
-                SNOWY_TOP = 1 << 20;
+                SNOWY_TOP = 1 << 20,
+                /** Block entity holds items ({@link net.minecraft.world.Container}): lands in the rubble with its contents. */
+                CONTAINER = 1 << 21;
 
         boolean is(int flag) {
             return (flags & flag) != 0;
@@ -215,10 +217,21 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
         if (!liquid && st.getFluidState().isEmpty() && !st.is(Blocks.DEAD_BUSH) && st.is(ModTags.NUKE_PLANTS)) flags |= Props.PLANT;
         if (st.is(BlockTags.SOUL_FIRE_BASE_BLOCKS)) flags |= Props.SOUL_BASE;
         if (st.is(Blocks.FIRE)) flags |= Props.FIRE;
+        if (container(st)) flags |= Props.CONTAINER;
         return new Props(r, st.isAir(), full, bearing, span, liquid, waterlogged, leaves, log, fixed, destroy >= 1, st.is(BlockTags.MINEABLE_WITH_AXE),
                 flags, st.getLightBlock(at, BlockPos.ZERO), st.getLightEmission(at, BlockPos.ZERO),
                 LightEngine.getOcclusionShape(at, BlockPos.ZERO, st, Direction.UP), LightEngine.getOcclusionShape(at, BlockPos.ZERO, st, Direction.DOWN),
                 RuinPlan.normal(st), FlashChar.material(st) | FlashChar.hash(st.getBlock()) << 2);
+    }
+
+    /** Block whose block entity holds items: probe a detached instance once per state (constructors take no world). */
+    private static boolean container(BlockState st) {
+        if (!(st.getBlock() instanceof net.minecraft.world.level.block.EntityBlock eb)) return false;
+        try {
+            return eb.newBlockEntity(BlockPos.ZERO, st) instanceof net.minecraft.world.Container;
+        } catch (RuntimeException e) {
+            return false;
+        }
     }
 
     /** Normally reflected pressure (air, γ = 1.4), psi. */

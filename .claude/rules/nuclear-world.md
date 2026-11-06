@@ -72,7 +72,11 @@ paths:
   traversal); structures already without visible support before the strike (beyond 8) cascade from broken blocks,
   natural ground arches and overhangs stand; leaves without trunks fall; small water bodies (up to 4096 positions and
   16 wide) with breached bottoms drain; attached blocks (doors, torches, signs) follow their support, liquids beside a
-  breach tick; where 3 or more blocks collapsed (outside the fireball), rubble forms; light ignites/burns; all
+  breach tick; fallen blocks land as rubble of their own material (`Debris`: 0.12 of them, drifted downwind by the
+  decaying blast wind on 0.2 m fragments and spread by fall height, resolved exactly within the 8-block ring; farther
+  drift is exported and the chunk imports `Debris.importFraction` of its own exports at their landing columns, so no
+  cross-chunk record); containers fall straight into the pile with their contents (`RuinPlan.moves` carries the block
+  entity NBT within the chunk; a `SLOW` new state goes through the world); light ignites/burns; all
   randomness comes from coordinate hashes; chunk ruins wait for ready chunks within `RuinPlanner.REACH` = 2),
   `RuinPlan` (delta only: 4 bytes per position, fires; heightmaps, lower sky sources of changed columns and light-check
   positions are calculated in the plan; on replacement, write plan positions and fire directly into sections, install

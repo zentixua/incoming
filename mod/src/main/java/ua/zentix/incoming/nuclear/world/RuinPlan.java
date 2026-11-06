@@ -193,6 +193,14 @@ public final class RuinPlan {
         return flash == null ? NONE : flash;
     }
 
+    /** Containers landed in the rubble: pairs of source and landing position; contents move with them ({@link #write}). */
+    private long[] moves = NO_LONGS;
+
+    /** Containers landed in the rubble (plan-building thread). */
+    void moves(long[] pairs) {
+        this.moves = pairs;
+    }
+
     /** Wave-blown flash-layer fires (plan-building thread). */
     void blown(int[] cells) {
         java.util.Arrays.sort(cells);
@@ -992,6 +1000,13 @@ public final class RuinPlan {
         // belt removes whole chain)
         BlockState slowBlock = null;
         long slowBlockNanos = 0;
+        // landed containers: contents (or unopened loot table) read before the source is cleared, written into the
+        // landed block entity after it is placed
+        net.minecraft.nbt.CompoundTag[] carried = moves.length == 0 ? null : new net.minecraft.nbt.CompoundTag[moves.length / 2];
+        for (int k = 0; carried != null && k < carried.length; k++) {
+            net.minecraft.world.level.block.entity.BlockEntity be = level.getBlockEntity(m.set(moves[2 * k]));
+            if (be instanceof net.minecraft.world.Container) carried[k] = be.saveWithoutMetadata(level.registryAccess());
+        }
         for (int c : cells) {
             if ((c & SLOW) == 0) continue;
             at(m, c, x0, z0, minY);
@@ -1002,6 +1017,14 @@ public final class RuinPlan {
             if (b > slowBlockNanos) {
                 slowBlockNanos = b;
                 slowBlock = old;
+            }
+        }
+        for (int k = 0; carried != null && k < carried.length; k++) {
+            if (carried[k] == null) continue;
+            net.minecraft.world.level.block.entity.BlockEntity be = level.getBlockEntity(m.set(moves[2 * k + 1]));
+            if (be instanceof net.minecraft.world.Container) {
+                be.loadWithComponents(carried[k], level.registryAccess());
+                be.setChanged();
             }
         }
         // viewed but non-ticking chunk (view edge): send full chunk via vanilla
