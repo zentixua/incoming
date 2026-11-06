@@ -188,9 +188,9 @@ final class RuinSettle {
             if (level.getGameTime() < d.gameTime() + d.arrivalTicks(Math.hypot(d.ruinRadius() + 32, d.burst().y - d.groundY()))) continue;
             detonation = d;
             pass = p;
-            java.nio.file.Path folder = net.minecraft.world.level.dimension.DimensionType.getStorageFolder(level.dimension(),
-                    level.getServer().getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT)).resolve("region");
-            Regions on = regions != null ? regions : (rx, rz) -> java.nio.file.Files.isRegularFile(folder.resolve("r." + rx + "." + rz + ".mca"));
+            java.nio.file.Path folder = ua.zentix.incoming.util.RegionFiles.folder(level);
+            // a region file with data (an empty one is what a read of a never-saved region leaves)
+            Regions on = regions != null ? regions : (rx, rz) -> ua.zentix.incoming.util.RegionFiles.present(folder, rx << 5, rz << 5);
             // chunks still queued for writing count: their region file exists once the queue drains
             CompletableFuture<Void> written = level.getChunkSource().chunkMap.chunkScanner() instanceof net.minecraft.world.level.chunk.storage.IOWorker io
                     ? io.synchronize(false) : CompletableFuture.completedFuture(null);
@@ -260,7 +260,7 @@ final class RuinSettle {
 
     private static CompletableFuture<Header> read(ServerLevel level, ChunkPos pos) {
         // ChunkStorage reads on its I/O thread and observes pending vanilla saves. No join until complete.
-        return level.getChunkSource().chunkMap.read(pos).thenApply(tag -> {
+        return ua.zentix.incoming.util.RegionFiles.read(level, pos).thenApply(tag -> {
             CompoundTag data = tag.orElseGet(CompoundTag::new);
             return new Header(DiskStatus.of(data).blocksFinal(), data.getCompound(AttachmentHolder.ATTACHMENTS_NBT_KEY).getInt("incoming:chunk_scar"));
         });

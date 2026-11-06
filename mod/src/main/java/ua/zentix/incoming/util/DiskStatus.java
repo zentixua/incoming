@@ -97,6 +97,7 @@ public final class DiskStatus {
      * chunk). Completion arrives on the I/O thread; read error — {@link State#PARTIAL}.
      */
     public static CompletableFuture<State> scan(ServerLevel level, ChunkPos pos) {
+        if (!RegionFiles.present(RegionFiles.folder(level), pos.x, pos.z)) return CompletableFuture.completedFuture(State.PARTIAL);
         CollectFields fields = fields();
         return level.getChunkSource().chunkMap.chunkScanner().scanChunk(pos, fields)
                 .handle((v, e) -> e == null ? of(fields.getResult() instanceof CompoundTag tag ? tag : null) : State.PARTIAL);
