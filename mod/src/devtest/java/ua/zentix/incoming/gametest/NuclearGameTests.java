@@ -206,7 +206,8 @@ public final class NuclearGameTests {
     }
 
     /**
-     * 15 kt near the ground, 1 block = 50 m: the tree where at the crown 5.1–5.7 psi, falls with its trunk from the epicenter (log - 5 psi),
+     * 15 kt near the ground, 1 block = 50 m: an oak with 6.2–7 psi at its base (every deciduous tree is down from ~6.1 psi at
+     *  15 kt, ForestBlowdown) falls with its trunk from the epicenter,
      *  and its foliage (layer in the 3 block: the wave breaks it only from ~7 psi) falls without a trunk - not a leaf in the air; glass
      *  in 1.45 km (~3 psi) and boards in 900 m (~7 psi) are knocked out, the wall is made of stone bricks in two blocks with a thickness of 1.25 km
      * (~4 psi) is standing, the soil is intact. (A single brick of thickness 1 breaks under reflected pressure - this is a thin element.)
@@ -216,10 +217,10 @@ public final class NuclearGameTests {
         Detonation d = detonation(h, CENTER, 0, 15, 0.02f);
         BlockPos tree = null;
         for (int dx = 4; dx <= 25 && tree == null; dx++) {
-            double psi = d.psi(Vec3.atCenterOf(h.absolutePos(CENTER.east(dx).above(4))));
-            if (psi >= 5.1 && psi <= 5.7) tree = CENTER.east(dx);
+            double psi = d.psi(Vec3.atCenterOf(h.absolutePos(CENTER.east(dx))));
+            if (psi >= 6.2 && psi <= 7) tree = CENTER.east(dx);
         }
-        h.assertTrue(tree != null, "no space with 5.1–5.7 psi at the crown on the site");
+        h.assertTrue(tree != null, "no space with 6.2–7 psi at a trunk base on the site");
         for (int i = 0; i < 4; i++) h.setBlock(tree.above(i), Blocks.OAK_LOG);
         for (BlockPos p : BlockPos.betweenClosed(tree.offset(-2, 3, -2), tree.offset(2, 5, 2))) {
             if (h.getBlockState(p).isAir()) h.setBlock(p, Blocks.OAK_LEAVES);
@@ -231,7 +232,7 @@ public final class NuclearGameTests {
 
         scarAll(h, d);
 
-        String at = String.format(Locale.ROOT, " (at the crown %.1f psi)", d.psi(Vec3.atCenterOf(h.absolutePos(tree.above(4)))));
+        String at = String.format(Locale.ROOT, " (at the base %.1f psi)", d.psi(Vec3.atCenterOf(h.absolutePos(tree))));
         h.assertBlockNotPresent(Blocks.GLASS, glass);
         h.assertBlockNotPresent(Blocks.OAK_PLANKS, planks);
         for (BlockPos p : BlockPos.betweenClosed(bricks.offset(-1, 0, -1), bricks.offset(1, 1, 0))) h.assertBlockPresent(Blocks.STONE_BRICKS, p.immutable());
@@ -1346,23 +1347,29 @@ public final class NuclearGameTests {
     }
 
     /**
-     * Trunks fall only whole. A tree at ~3.5 psi (reflected pressure on its trunk above the 5 psi log threshold, incident
-     * below it) keeps its whole trunk: no log is cut out of it. A 26-block trunk (over the old 24-block limit) with a crown (mega jungle or spruce) at
-     * ~7 psi falls whole like a small tree: no log stands above the stump height.
+     * Trunks fall only whole. A spruce at 2.9–3.4 psi (reflected pressure on its trunk above the 5 psi timber threshold;
+     * at 15 kt no conifer is blown down below ~3.4 psi, ForestBlowdown) keeps its whole trunk: no log is cut out of it. A
+     * 26-block trunk (over the old 24-block limit) with a crown (mega jungle or spruce) at 6.5–9 psi (every deciduous
+     * tree is down from ~6.1 psi) falls whole like a small tree: no log stands above the stump height.
      */
     @GameTest(template = "range", timeoutTicks = 60, batch = "nuke_trunks", skyAccess = true)
     public static void trunksFallOnlyWhole(GameTestHelper h) {
         Detonation d = detonation(h, CENTER, 0, 15, 0.015f);
-        BlockPos small = eastAt(h, d, 3, 4.2, 2), tall = eastAt(h, d, 6, 9, 10).south(8);
-        for (int i = 0; i < 4; i++) h.setBlock(small.above(i), Blocks.OAK_LOG);
-        for (BlockPos p : BlockPos.betweenClosed(small.offset(-1, 4, -1), small.offset(1, 5, 1))) h.setBlock(p, Blocks.OAK_LEAVES);
+        BlockPos small = eastAt(h, d, 2.9, 3.4, 0), tall = null;
+        for (int dx = 4; dx <= 28 && tall == null; dx++) {
+            double psi = d.psi(Vec3.atCenterOf(h.absolutePos(CENTER.east(dx).south(8))));
+            if (psi >= 6.5 && psi <= 9) tall = CENTER.east(dx).south(8);
+        }
+        h.assertTrue(tall != null, "no place with 6.5–9 psi for the tall trunk");
+        for (int i = 0; i < 4; i++) h.setBlock(small.above(i), Blocks.SPRUCE_LOG);
+        for (BlockPos p : BlockPos.betweenClosed(small.offset(-1, 4, -1), small.offset(1, 5, 1))) h.setBlock(p, Blocks.SPRUCE_LEAVES);
         for (int i = 0; i < 26; i++) h.setBlock(tall.above(i), Blocks.JUNGLE_LOG);
         for (BlockPos p : BlockPos.betweenClosed(tall.offset(-2, 26, -2), tall.offset(2, 27, 2))) h.setBlock(p, Blocks.JUNGLE_LEAVES);
         scarAll(h, d, new ColumnScar.Budget(false));
-        for (int i = 0; i < 4; i++) h.assertBlockPresent(Blocks.OAK_LOG, small.above(i));
+        for (int i = 0; i < 4; i++) h.assertBlockPresent(Blocks.SPRUCE_LOG, small.above(i));
         for (int i = 2; i < 26; i++) {
             h.assertTrue(!h.getBlockState(tall.above(i)).is(BlockTags.LOGS), "the tall trunk stands at " + i + " blocks up: "
-                    + String.format(Locale.ROOT, "%.1f psi", d.psi(Vec3.atCenterOf(h.absolutePos(tall.above(10))))));
+                    + String.format(Locale.ROOT, "%.1f psi", d.psi(Vec3.atCenterOf(h.absolutePos(tall)))));
         }
         h.succeed();
     }

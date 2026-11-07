@@ -63,7 +63,10 @@ paths:
   behind a wall pier ends the lever arm at that story) topple; rounds: second behind first-round breaches (only
   columns at most 6 wide topple there, ground 4: core, corner), third through all neighbors' breaches (`Blast.remnants`);
   trees (log column with leaves at its top, up to `Blast.MAX_TRUNK` = 40: mega trees) fall only as whole trunks, standing
-  trunks are never cut block by block; other logs (stilts, pillars, log walls, beams) are timber like planks (5 psi):
+  trunks are never cut block by block; whether a trunk falls is the forest blowdown curve of its yield and kind
+  (`ForestBlowdown`, Glasstone fig. 5.146: drag damage reaches farther than ∛W, conifers are stronger), with the tree's
+  own randomness from its base position; a fixed 5 psi left Zearth's oak and birch standing at 3–4 km from 250 kt,
+  where Glasstone has 30–90 % down (`ForestBlowdownTest`); other logs (stilts, pillars, log walls, beams) are timber like planks (5 psi):
   before 07.11.2026 they never broke and log stilts held houses, tall bare trunks stood (Zearth 250 kt; GameTests
   `houseOnLogStiltsFalls`, `trunksFallOnlyWhole`); any broken log except a felled trunk's (`Collapse.markFelled`) starts
   the support pass and lands as rubble: a cut stilt or branch carrying only logs left the logs above it hanging
