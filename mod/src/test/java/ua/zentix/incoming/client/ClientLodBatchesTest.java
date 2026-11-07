@@ -24,4 +24,13 @@ class ClientLodBatchesTest {
         assertTrue(receiver.end(new S2C.LodBatchFinished(8, 2)));
         assertEquals(8, receiver.acknowledge(false).id());
     }
+
+    @Test
+    void voxyQueueBelowTheLssHaltMarkDoesNotHoldTheAcknowledgement() {
+        // LSS keeps Voxy's queue in the thousands while it streams: that alone must not stall Incoming's batches
+        assertFalse(VoxyIngest.backlogged(0));
+        assertFalse(VoxyIngest.backlogged(3072), "LSS rearm level");
+        assertFalse(VoxyIngest.backlogged(VoxyIngest.INGEST_HALT_SECTIONS));
+        assertTrue(VoxyIngest.backlogged(VoxyIngest.INGEST_HALT_SECTIONS + 1), "behind even by LSS's measure");
+    }
 }
