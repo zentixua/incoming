@@ -31,6 +31,7 @@ import java.util.Locale;
  *   <li>{@code nuke <kt> [air|ground] [near [meters]]} — a nuclear detonation without flight ({@code /incoming nuke now}) at a new
  *       place; with {@code near} — the view from the camera: the houses and oaks of the {@code debris} scene at the point, the detonation that many meters to the north
  *       (by default {@link #NEAR_RANGE}), effect time — from the arrival of the front at the houses (frames also before it, from −10 s));</li>
+ *   <li>{@code icbm} — an ICBM launch from a pad at the point, target 40 km north: the whole first-stage burn; time — from ignition;</li>
  *   <li>{@code airburst [seed]} — the burst of an anti-aircraft missile in the air above the point;</li>
  *   <li>{@code sam} — a SAM at the point (loaded) and a Shahed flying through it from the north; time — from the launch of the anti-aircraft missile
  *       (trail, launch cloud, engine sound — like the {@code sam-side} scene of the probe);</li>
@@ -73,12 +74,12 @@ record SandboxCommand(Verb verb, List<String> args) {
     /** {@code blast … water}: side and depth of the pond, blocks (the pond is wider than the Shahed's column and spray ring). */
     static final int POND = 64, POND_DEPTH = 4;
 
-    enum Verb { ARRIVAL, BLAST, REAL, NUKE, AIRBURST, LAUNCH, FLIGHT, FIRE, SPENT, CAM, STANCE, WEATHER, TIME, HUD, OVERLAY, ZOOM, TRACK, SHOTS, AGAIN, CLEAR, RELOAD, WAIT, RAID, SAM, HOUSE, SCENERY, SURFACE, TURN, UI }
+    enum Verb { ICBM, ARRIVAL, BLAST, REAL, NUKE, AIRBURST, LAUNCH, FLIGHT, FIRE, SPENT, CAM, STANCE, WEATHER, TIME, HUD, OVERLAY, ZOOM, TRACK, SHOTS, AGAIN, CLEAR, RELOAD, WAIT, RAID, SAM, HOUSE, SCENERY, SURFACE, TURN, UI }
 
     /** An effect (repeated by {@code again} and captured by {@code shots}). */
     boolean effect() {
         return switch (verb) {
-            case ARRIVAL, BLAST, REAL, NUKE, AIRBURST, LAUNCH, FLIGHT, FIRE, SPENT, RAID, SAM, SURFACE, UI -> true;
+            case ICBM, ARRIVAL, BLAST, REAL, NUKE, AIRBURST, LAUNCH, FLIGHT, FIRE, SPENT, RAID, SAM, SURFACE, UI -> true;
             default -> false;
         };
     }
@@ -108,6 +109,7 @@ record SandboxCommand(Verb verb, List<String> args) {
 
     private void check() {
         switch (verb) {
+            case ICBM -> need(0, 0);
             case ARRIVAL -> {
                 need(0, 2);
                 if (number(0, 1) < 1 || number(0, 1) > 128) throw new IllegalArgumentException("arrival [1–128] [flash]");

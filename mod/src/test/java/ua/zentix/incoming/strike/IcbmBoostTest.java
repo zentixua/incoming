@@ -56,4 +56,32 @@ class IcbmBoostTest {
         assertEquals(8.2, speed, 8.2 * 0.05, "speed after 10 s, blocks/tick");
         assertTrue(speed < cruise, "spec limit reached in 10 s");
     }
+
+    @Test
+    void gravityTurnBendsThePathToAboutSixtyFiveDegreesAtBurnout() {
+        float[] angles = A.pathAngles();
+        assertEquals(A.burnTicks(), angles.length - 1);
+        assertEquals(1220, A.burnTicks());
+        for (int tick = 0; tick <= A.pitchOverTick(); tick++) assertEquals(90, angles[tick]);
+        assertTrue(angles[A.pitchOverTick() + 1] <= A.climbPitch() && angles[A.pitchOverTick() + 1] > A.climbPitch() - 0.5);
+        for (int tick = A.pitchOverTick() + 2; tick < angles.length; tick++) assertTrue(angles[tick] < angles[tick - 1], "path rose at " + tick);
+        float end = angles[angles.length - 1];
+        assertTrue(end > 60 && end < 70, "burnout path angle " + end);
+    }
+
+    /** Game climb: speed capped at the game limit, path angle real; the burn ends tens of kilometers up, a few downrange. */
+    @Test
+    void wholeBurnClimbsAboutTwentyKilometers() {
+        float[] angles = A.pathAngles();
+        double cap = WeaponSpec.NUKE.airframe().gameCruise(), speed = 0, y = 0, x = 0;
+        for (int tick = 1; tick <= A.burnTicks(); tick++) {
+            speed = Math.min(cap, A.step(speed, tick));
+            double g = Math.toRadians(angles[tick]);
+            y += speed * Math.sin(g);
+            x += speed * Math.cos(g);
+        }
+        assertTrue(y > 18_000 && y < 26_000, "height at burnout " + y);
+        assertTrue(x > 5_000 && x < 11_000, "downrange at burnout " + x);
+        assertTrue(WeaponSpec.NUKE.airframe().range() >= A.burnTicks() * cap, "range must cover the whole burn at the speed cap");
+    }
 }

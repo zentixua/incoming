@@ -725,7 +725,9 @@ final class ScenarioRun {
         double cruise = cruiseSpeed();
         double chase = Math.min(TargetTracker.CHASE_BUDGET, targetTravel + retargetShift);
         double loiter = s.launch().weapon == WeaponType.LOITER ? IncomingConfig.SERVER.loiterTime.get() * 20 * 1.2 + 25 : 0;
-        double bound = 1.5 * (eta0 + chase / cruise + loiter) + DURATION_SLACK;
+        // the ICBM does not fly to the target: it boosts for its whole first-stage burn, then is gone
+        double boost = s.launch() == Scenario.Launch.ICBM ? WeaponSpec.NUKE.ascent().burnTicks() : 0;
+        double bound = 1.5 * (eta0 + chase / cruise + loiter) + boost + DURATION_SLACK;
         h.assertTrue(outcome.tick <= bound, String.format(Locale.ROOT, "flight ended (%s) on tick %d, time limit %.0f (plan %d, pursuit of %.0f blocks)",
                 outcome.end, outcome.tick, bound, eta0, chase));
     }

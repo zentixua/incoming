@@ -847,6 +847,8 @@ public final class StrikeGameTests {
         IcbmEntity icbm = ModEntities.ICBM.get().create(level);
         icbm.prepare(pad, pad.add(2000, 0, 0), null);
         level.addFreshEntity(icbm);
+        UUID id = icbm.getUUID();
+        afterTest(h, () -> removeIcbm(level, id));
         double[] top = {pad.y};
         h.onEachTick(() -> {
             if (!icbm.isRemoved()) top[0] = Math.max(top[0], icbm.getY());
@@ -885,7 +887,8 @@ public final class StrikeGameTests {
         IcbmEntity icbm = ModEntities.ICBM.get().create(level);
         icbm.prepare(pad, pad.add(2000, 0, 0), null);
         level.addFreshEntity(icbm);
-        afterTest(h, icbm::discard);
+        UUID id = icbm.getUUID();
+        afterTest(h, () -> removeIcbm(level, id));
         double half = WeaponSpec.NUKE.airframe().noseLength();
         double[] top = {pad.y}, off = {0};
         int[] out = {-1};
@@ -907,13 +910,13 @@ public final class StrikeGameTests {
     }
 
     /**
-     * An ICBM from a table at normal ground height (y 64) is visible for about nine seconds: from launch until it
-     * leaves through the world ceiling — 8–11 s (160–220 ticks), and it leaves exactly there, not earlier, at the edge
-     * of the ticking chunks. The table is in the air above the pad: there are no collisions on the run-up, and the
-     * GameTest pad height is not that of the world surface.
+     * An ICBM from a table at normal ground height (y 64) boosts for the whole first-stage burn (61 s, {@code
+     * WeaponSpec.Ascent#burnTicks}), not leaving at the world ceiling: it rises tens of kilometers, leaves the ticking
+     * chunks downrange and flies on outside the world, then ends at burnout. The table is in the air above the pad:
+     * there are no collisions on the run-up, and the GameTest pad height is not that of the world surface.
      */
-    @GameTest(template = "range", timeoutTicks = 300, batch = "icbm_sky", skyAccess = true)
-    public static void icbmStaysInTheSkyNineSeconds(GameTestHelper h) {
+    @GameTest(template = "range", timeoutTicks = 1400, batch = "icbm_sky", skyAccess = true)
+    public static void icbmBurnsForTheWholeFirstStage(GameTestHelper h) {
         ServerLevel level = h.getLevel();
         BlockPos c = h.absolutePos(RANGE_CENTER);
         BlockPos table = new BlockPos(c.getX(), Math.max(c.getY(), 64), c.getZ());
@@ -925,26 +928,35 @@ public final class StrikeGameTests {
         IcbmEntity icbm = ModEntities.ICBM.get().create(level);
         icbm.prepare(pad, pad.add(2000, 0, 0), null);
         level.addFreshEntity(icbm);
+        UUID id = icbm.getUUID();
+        afterTest(h, () -> removeIcbm(level, id));
+        int burn = WeaponSpec.NUKE.ascent().burnTicks();
         double[] last = {pad.y};
         int[] age = {0};
-        StringBuilder bySecond = new StringBuilder();
+        boolean[] outside = {false};
+        StringBuilder byTen = new StringBuilder();
         h.onEachTick(() -> {
-            if (icbm.isRemoved()) return;
-            last[0] = icbm.getY();
-            age[0] = icbm.age();
-            if (age[0] % 20 == 0) bySecond.append(String.format(Locale.ROOT, " %d s: +%.0f (%.2f blocks/tick);", age[0] / 20, icbm.getY() - 9 - pad.y, icbm.speed()));
+            StrikeProjectile p = level.getEntity(id) instanceof IcbmEntity e ? e
+                    : VirtualFlights.get(level).flights().stream().filter(f -> f.getUUID().equals(id)).findFirst().orElse(null);
+            if (p == null || p.isRemoved()) return;
+            outside[0] |= p.isVirtual();
+            last[0] = p.getY();
+            age[0] = p.age();
+            if (age[0] % 200 == 0) byTen.append(String.format(Locale.ROOT, " %d s: +%.0f, %.0f downrange (%.2f blocks/tick);", age[0] / 20,
+                    p.getY() - 9 - pad.y, Math.hypot(p.getX() - pad.x, p.getZ() - pad.z), p.speed()));
         });
         boolean[] told = {false};
         h.succeedWhen(() -> {
-            h.assertTrue(icbm.isRemoved(), "ICBM still in the sky");
+            h.assertTrue(level.getEntity(id) == null && VirtualFlights.get(level).flights().stream().noneMatch(f -> f.getUUID().equals(id)),
+                    "ICBM still boosting");
             if (!told[0]) {
                 told[0] = true;
-                Incoming.LOG.info("ICBM in the sky: {} ticks, last altitude {} (ceiling {});{}", age[0], String.format(Locale.ROOT, "%.0f", last[0]),
-                        level.getMaxBuildHeight(), bySecond);
+                Incoming.LOG.info("ICBM boost: {} ticks, last altitude {}, outside the world {};{}", age[0], String.format(Locale.ROOT, "%.0f", last[0]),
+                        outside[0], byTen);
             }
-            double ceiling = level.getMaxBuildHeight() + WeaponSpec.NUKE.ascent().ceiling();
-            h.assertTrue(last[0] > ceiling - 10, "ICBM removed before the ceiling " + ceiling + ": at " + last[0]);
-            h.assertTrue(age[0] >= 160 && age[0] <= 220, "ICBM in the sky " + age[0] + " ticks");
+            h.assertTrue(age[0] >= burn - 2 && age[0] <= burn, "ICBM boosted " + age[0] + " ticks of " + burn);
+            h.assertTrue(last[0] - pad.y > 15_000, "ICBM ended the burn only " + (last[0] - pad.y) + " blocks up");
+            h.assertTrue(outside[0], "ICBM never flew on outside the world");
         });
     }
 
@@ -3704,6 +3716,15 @@ public final class StrikeGameTests {
             for (BlockPos b : laid) if (level.getBlockState(b).is(Blocks.STONE)) level.setBlock(b, Blocks.AIR.defaultBlockState(), Block.UPDATE_CLIENTS);
             held.forEach(c -> level.getChunkSource().removeRegionTicket(READY_ONLY, c, 0, c));
         });
+    }
+
+    /**
+     * Removes the ICBM {@code id} in the world or flying outside it: it boosts for a minute ({@code IcbmEntity}), past the
+     * end of most tests, and would fly on into the next batch.
+     */
+    public static void removeIcbm(ServerLevel level, UUID id) {
+        if (level.getEntity(id) instanceof IcbmEntity e) e.discard();
+        VirtualFlights.get(level).clear(level, p -> p.getUUID().equals(id));
     }
 
     /**

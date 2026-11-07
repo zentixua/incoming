@@ -44,7 +44,9 @@ omitted AIR from saved designator settings because it was the default, so those 
 updating, even if you selected AIR with the button. A saved `air_burst=true` field still keeps AIR. You can select
 air burst again on the console before launching. ICBMs already scheduled keep their burst mode.
 
-The ICBM lifts off behind you. By default, the strike follows 90 seconds later.
+The ICBM lifts off behind you. Its first stage burns for a minute: the flame and white trail climb into the sky,
+leaning toward the target, until the stage burns out about 20 km up. By default, the strike follows 90 seconds after
+launch; with a flight time under a minute, the burst comes before the warhead can be seen falling.
 Only the warhead comes back down. For the last 30 seconds it falls steeply out of the sky in the direction of the
 launch, as bright as a large meteor: the air in front of it turns to glowing plasma. At night it lights the ground
 and leaves a long orange-white trail; by day it is a bright point with a short tail. Clouds, haze and terrain can

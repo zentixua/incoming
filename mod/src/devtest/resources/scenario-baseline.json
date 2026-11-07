@@ -322,11 +322,11 @@
     },
     "icbm.point.none.0": {
       "end": "gone",
-      "tick": 186,
-      "x": 223.56,
-      "y": 697.14,
-      "z": 119.35,
-      "hash": "e4e57f69ade1bdc8"
+      "tick": 1218,
+      "x": -6555.25,
+      "y": 22030.95,
+      "z": -3498.99,
+      "hash": "1e7feffd1a26a40f"
     },
     "loiter_far.mob.hill.0": {
       "end": "blast",

@@ -37,7 +37,7 @@ public final class IcbmArrivalGameTests {
         long now = level.getGameTime(), end = now + 30;
         var events = NuclearEvents.get(level);
         int id = events.nextId();
-        events.schedule(new NuclearEvents.ScheduledStrike(id, target, 1, true, now - 170, end,
+        events.schedule(new NuclearEvents.ScheduledStrike(id, target, 1, true, now + 10 - IcbmArrival.BOOST, end,
                 target.add(-100, 0, 0), Optional.empty(), true));
         final IcbmArrival[] committed = {null};
         h.onEachTick(() -> {

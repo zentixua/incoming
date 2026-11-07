@@ -30,12 +30,12 @@ class IcbmArrivalTest {
             assertTrue(start >= 12345);
             assertTrue(start <= end);
             assertTrue(end - start <= IcbmArrival.WINDOW);
-            if (duration >= 200) assertTrue(start >= 12345 + IcbmArrival.BOOST);
+            assertTrue(start >= Math.min(end, 12345 + IcbmArrival.BOOST)); // never while the first stage burns
         }
     }
 
     @Test void visibleEntryLastsHalfAMinuteAtGameSpeedAndStartsNoHigherThanTheLuminousOnset() {
-        long launch = 0, end = 1800;
+        long launch = 0, end = IcbmArrival.BOOST + IcbmArrival.WINDOW;
         Vec3 target = new Vec3(0, 64, 0), from = new Vec3(-6000, 64, 0);
         Vec3 game = IcbmArrival.velocity(from, target, WeaponSpec.NUKE.airframe().diveSpeed(0));
         assertEquals(IcbmArrival.WINDOW, end - IcbmArrival.start(launch, end, game));

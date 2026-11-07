@@ -24,10 +24,11 @@ paths:
   from rack tube), `BomberEntity` + `BunkerBusterEntity` (Young penetration: on entry, block-path `plan` with medium from
   `incoming:penetration` data map (`registry/ModDataMaps`, law `warhead/Penetration`); entity follows in time, channel
   one axial block, void sensor after 4 m solid once bomb fully entered; unready chunk ahead means in-place detonation;
-  path not saved, replans after load at same speed), `IcbmEntity` (boost only: Minuteman III first-stage thrust/mass,
-  spec `WeaponSpec.Ascent`, sources in `WeaponSpec.NUKE` javadoc; simplified pitch strictly axial 3 s, then 85° above
-  horizon (drift ~30 blocks, farther sideways would enter chunks not yet ticking entities); exceeds world ceiling
-  + 320 after ~8.5 s from y 64; ahead chunk by ground heading, not nose), `LauncherEntity` (launcher rack/slots/queue),
+  path not saved, replans after load at same speed), `IcbmEntity` (first-stage boost only: Minuteman III thrust/mass,
+  spec `WeaponSpec.Ascent`, sources in `WeaponSpec.NUKE` javadoc; strictly axial 3 s, kick to 85° above horizon, then
+  real gravity turn `Ascent.pathAngles` to ~65° at burnout; whole 61 s burn at game speed, ~22 km up and ~8 km downrange,
+  flying virtually once off the ticking chunks (seen via `FarFlights`); holds no target area; ahead chunk by ground
+  heading, not nose; GameTests launching one remove it after the test, `StrikeGameTests.removeIcbm`), `LauncherEntity` (launcher rack/slots/queue),
   `SpentBoosterEntity` spent booster, `DebrisEntity` ballistic debris, `InterceptorEntity` SAM missile visual only,
   flight via `defense/Interceptor`, downed projectile `StrikeProjectile.intercepted`, `defense.md`.
   `guidance/FlightController` turns with speed/acceleration limits (inertia; model bank by turn rate with game g 0.08);
