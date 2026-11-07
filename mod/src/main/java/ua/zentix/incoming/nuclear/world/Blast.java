@@ -19,6 +19,8 @@ import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.phys.shapes.VoxelShape;
 import ua.zentix.incoming.nuclear.Detonation;
 import ua.zentix.incoming.nuclear.flash.FlashChar;
+import ua.zentix.incoming.nuclear.model.ForestBlowdown;
+import ua.zentix.incoming.nuclear.model.Fragility;
 import ua.zentix.incoming.registry.ModTags;
 
 import java.util.ArrayList;
@@ -38,7 +40,7 @@ import java.util.List;
  * {@code P ≥ T·k(t)·jitter}, {@code k = 1, 2, 3.5}; face-breached element fails through full thickness. Ground only
  * with sky on both sides (ridge, wall, overhang).</li>
  * <li>Logs are timber like planks (pillars, stilts, log walls); a tree trunk (log column with leaves at its top, up to
- * {@link #MAX_TRUNK}) falls only whole.</li>
+ * {@link #MAX_TRUNK}) falls only whole, by the forest blowdown curve of its yield and kind ({@link ForestBlowdown}).</li>
  * <li>Toppling: tall narrow elements (slenderness {@code H/t ≥ 4}, {@code t} ≤ {@link #MAX_TOPPLE} away from
  * blast, sky behind) fail through full cross-section at {@code Pr·cos θ·H/t ≥ T·k(3)·jitter}. {@code H} is height above position
  * while air remains behind: floor behind wall pier ends lever arm at that story. Two-brick walls and tower cores fall,
@@ -95,7 +97,9 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
                 /** Snow for turf beneath ({@code SnowyDirtBlock}: {@code minecraft:snow} tag, layer, block, powder snow). */
                 SNOWY_TOP = 1 << 20,
                 /** Block entity holds items ({@link net.minecraft.world.Container}): lands in the rubble with its contents. */
-                CONTAINER = 1 << 21;
+                CONTAINER = 1 << 21,
+                /** Coniferous trunk ({@link ModTags#NUKE_CONIFERS}): its own blowdown curve ({@link ForestBlowdown}). */
+                CONIFER = 1 << 22;
 
         boolean is(int flag) {
             return (flags & flag) != 0;
@@ -224,6 +228,7 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
         if (st.is(BlockTags.SOUL_FIRE_BASE_BLOCKS)) flags |= Props.SOUL_BASE;
         if (st.is(Blocks.FIRE)) flags |= Props.FIRE;
         if (container(st)) flags |= Props.CONTAINER;
+        if (st.is(ModTags.NUKE_CONIFERS)) flags |= Props.CONIFER;
         return new Props(r, st.isAir(), full, bearing, span, liquid, waterlogged, leaves, log, fixed, destroy >= 1, st.is(BlockTags.MINEABLE_WITH_AXE),
                 flags, st.getLightBlock(at, BlockPos.ZERO), st.getLightEmission(at, BlockPos.ZERO),
                 LightEngine.getOcclusionShape(at, BlockPos.ZERO, st, Direction.UP), LightEngine.getOcclusionShape(at, BlockPos.ZERO, st, Direction.DOWN),
@@ -342,10 +347,14 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
         final Buffers pooled;
         final List<long[]> trees = new ArrayList<>();
         final List<BlockState> treeLogs = new ArrayList<>();
+        /** Blowdown of coniferous and other trunks at this yield. */
+        final ForestBlowdown.Curve conifers, broadleaves;
 
         Solver(RuinWindow w, Detonation d) {
             this.w = w;
             this.d = d;
+            this.conifers = ForestBlowdown.curve(d.yieldKt(), true);
+            this.broadleaves = ForestBlowdown.curve(d.yieldKt(), false);
             this.burst = d.burst();
             int minTop = Integer.MAX_VALUE, maxTop = w.minY;
             for (int wz = 0; wz < SIDE; wz++) {
@@ -729,8 +738,8 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
         }
 
         /**
-         * Tree trunks: a log column standing on a support with leaves at its top. With {@code fell}, trunks where the
-         * incident pressure reaches the log threshold topple whole away from the epicenter (before per-block wave;
+         * Tree trunks: a log column standing on a support with leaves at its top. With {@code fell}, trunks topple whole
+         * away from the epicenter by the blowdown curve ({@link #fells}; before per-block wave;
          * unsupported leaves follow, {@link Collapse}); every other trunk is marked standing, so the wave does not cut it
          * block by block. Logs without leaves at the top are pillars, stilts or walls: timber ({@link #breakable}).
          */
@@ -749,11 +758,11 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
                         while (height < MAX_TRUNK && y + height <= yt && w.props(wx, y + height, wz).log()) height++;
                         if (!w.props(wx, y + height, wz).leaves() && !nearLeaves(wx, y + height - 1, wz)) continue;
                         int x = w.x0 + wx, z = w.z0 + wz;
-                        if (!fell || d.psi(new Vec3(x + 0.5, y + 0.5, z + 0.5)) < p.threshold()) {
+                        BlockState st = w.get(wx, y, wz);
+                        if (!fell || !fells(p, x, y, z)) {
                             for (int i = 0; i < height; i++) if (inside(wx, y + i, wz)) set(trunk, idx(wx, y + i, wz));
                             break;
                         }
-                        BlockState st = w.get(wx, y, wz);
                         for (int i = 0; i < height; i++) set(gone, idx(wx, y + i, wz));
                         if (wx >= LO && wx < HI && wz >= LO && wz < HI) {
                             double dx = x - burst.x, dz = z - burst.z;
@@ -765,6 +774,18 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
                     }
                 }
             }
+        }
+
+        /**
+         * Whether the trunk based at {@code x y z} is blown down: incident pressure at its base on the blowdown curve of
+         * its kind, with the tree's own randomness from its position (the same tree falls whoever plans the chunk).
+         */
+        boolean fells(Props log, int x, int y, int z) {
+            ForestBlowdown.Curve c = log.is(Props.CONIFER) ? conifers : broadleaves;
+            double psi = d.psi(new Vec3(x + 0.5, y + 0.5, z + 0.5));
+            if (!Fragility.possible(psi, c.median(), c.beta())) return false;
+            long h = it.unimi.dsi.fastutil.HashCommon.mix(BlockPos.asLong(x, y, z) ^ 0x5DEECE66DL);
+            return c.falls(psi, Fragility.inverse(((h >>> 40) + 0.5) / (1 << 24)));
         }
 
         boolean nearLeaves(int wx, int y, int wz) {

@@ -347,7 +347,7 @@ Pressure thresholds psi (`data/incoming/tags/block/nuke_*.json`, datapack-overri
 | grass, flowers, saplings, crops, fern, vines, moss carpet (`nuke_plants`) | ~8 | air with pressure-stripped turf; light burns them nearer edge (below) |
 | leaves (`#leaves`) | 2 | air; at `Q` ≥ 10 fire in place |
 | doors, fences, trapdoors, wool, carpets, planks, furniture (`nuke_light`) | 3–5 | air / debris |
-| trees (log on natural ground + leaves) | 5 | toppled, horizontal logs on ground **away from epicenter** (radial blowdown like Tunguska/Hiroshima) |
+| trees (log column + leaves at its top) | blowdown curve (`ForestBlowdown`): 30 % down at Glasstone's moderate-damage range, 90 % at severe (table 5.149, fig. 5.146), coniferous (`nuke_conifers`) or deciduous stand, range ∝ W^0.37–0.40; 15 kt: deciduous 3.4/4.8 psi, conifers 5.6/8.8; 250 kt: 2.9/3.8 and 4.3/6.4 | toppled whole, horizontal logs on ground **away from epicenter** (radial blowdown like Tunguska/Hiroshima) |
 | brick, cobblestone, stone brick, concrete, terracotta (`nuke_masonry`) | 10–15 | air / debris / gravel |
 | strength 6–9 (iron etc.) | 25 | air / debris |
 | strength ≥ 1200 (obsidian, netherite, bedrock) | never | fireball/crater only |

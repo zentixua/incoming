@@ -19,6 +19,11 @@ public final class ModTags {
     public static final TagKey<Block> NUKE_FRAGILE = block("nuke_fragile");
     /** Nuclear strike: plants torn away by the dynamic pressure that also strips turf (~8 psi); a weak wave only bends them. */
     public static final TagKey<Block> NUKE_PLANTS = block("nuke_plants");
+    /**
+     * Nuclear strike: trunks of coniferous trees, blown down by the wave like Glasstone's unimproved coniferous stand
+     * (stronger than deciduous; {@code nuclear/model/ForestBlowdown}). Other tree trunks count as a deciduous stand.
+     */
+    public static final TagKey<Block> NUKE_CONIFERS = block("nuke_conifers");
     /** Nuclear strike: light structures, 3–5 psi. */
     public static final TagKey<Block> NUKE_LIGHT = block("nuke_light");
     /** Nuclear strike: masonry, 10–15 psi. */
