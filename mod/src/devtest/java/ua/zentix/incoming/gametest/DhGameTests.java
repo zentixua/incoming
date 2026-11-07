@@ -716,7 +716,7 @@ public final class DhGameTests {
         // batch GameTest are placed in one place: the quarter could extinguish the nuclear test earlier (blackout at 15 min), and then the
         //  lamps in the copy were already extinguished by the copy itself
         boolean dark = PowerGrid.get(level).dark(chunk.getPos().x, chunk.getPos().z, level.getGameTime());
-        int n = ChunkLights.applyToCopy(copy.getSections(), true);
+        int n = ChunkLights.applyToCopy(level, copy, true);
         h.assertTrue(dark ? n == 0 : n >= 2, "lamps turned off " + n + (dark ? " (the block is already dark)" : ""));
         h.assertTrue(copy.getBlockState(lamp) == GridLights.unlit(Blocks.GLOWSTONE.defaultBlockState()), "glowstone: " + copy.getBlockState(lamp));
         h.assertTrue(copy.getBlockState(sea) == GridLights.unlit(Blocks.SEA_LANTERN.defaultBlockState()), "sea lantern: " + copy.getBlockState(sea));

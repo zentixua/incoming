@@ -278,15 +278,15 @@ public final class IncomingConfig {
                     .translation("incoming.config.grid_enabled").define("enabled", true);
             gridNodeRadius = b.comment("Radius of the area a substation powers, blocks.")
                     .translation("incoming.config.grid_node_radius").defineInRange("node_radius", 512, 16, 4096);
-            gridMaxRadius = b.comment("Largest radius of one outage, blocks (a nuclear strike goes no further).")
+            gridMaxRadius = b.comment("Largest radius of one substation or command outage, blocks. A nuclear strike darkens its whole damage reach (at most 16384 blocks).")
                     .translation("incoming.config.grid_max_radius").defineInRange("max_radius", 4096, 64, 16_384);
             gridCascadeSpeed = b.comment("How fast the outage spreads from the substation across districts, blocks per second.")
                     .translation("incoming.config.grid_cascade_speed").defineInRange("cascade_speed", 60.0, 1.0, 10_000.0);
-            gridRestoreMinutes = b.comment("Minutes until power starts coming back (0: only with /incoming grid restore).")
+            gridRestoreMinutes = b.comment("Minutes until power starts coming back after a substation is knocked out (0: only with /incoming grid restore); after a nuclear strike power returns by the damage.")
                     .translation("incoming.config.grid_restore_minutes").defineInRange("restore_minutes", 15, 0, 10_080);
             gridRestoreSpread = b.comment("Seconds over which power returns to all districts, in random order.")
                     .translation("incoming.config.grid_restore_spread").defineInRange("restore_spread_seconds", 90, 0, 3600);
-            gridNuke = b.comment("Nuclear blackout requires grid.enabled and works without a substation; radius is the smaller of the damage radius and grid.max_radius.")
+            gridNuke = b.comment("Nuclear blackout requires grid.enabled and works without a substation, over the strike's whole damage reach (glass or burns, at most 16384 blocks).")
                     .translation("incoming.config.grid_nuke").define("nuke_blackout", true);
             b.pop();
 

@@ -113,4 +113,13 @@ class DistrictsTest {
         }
         assertEquals(0.5, sum / n, 0.02);
     }
+
+    /** The row shortcut of an outage cascade gives exactly the districts of {@link Districts#of}, negative coordinates too. */
+    @Test
+    void rowMatchesOf() {
+        for (int z = -137; z <= 137; z += 7) {
+            long[] row = Districts.row(z, -301, 299);
+            for (int x = -301; x <= 299; x++) assertEquals(Districts.of(x, z), row[x + 301], "chunk " + x + " " + z);
+        }
+    }
 }

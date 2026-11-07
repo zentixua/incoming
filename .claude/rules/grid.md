@@ -37,6 +37,26 @@ paths:
   lit there are checked against the signal when a neighbor loads (`BlackoutWorld.neighbourLoaded`), immediately in
   other chunks.
 
+- Nuclear outages repair by damage (`Outage.damageLightAt`, `dead`/`damaged` = ground ranges of `Blackouts.DEAD_PSI` 5 and
+  `DAMAGED_PSI` 1): never inside `dead`, days in the belt, hours outside it, on the 1000-ticks-per-hour game clock; the
+  restoration cascade starts at `Outage.restoreFrom` and lives as long as repairs (a restarted one skips districts issued
+  before the restart, `Sweep.issued`). Substations the strike hit repair as their district does; a destroyed one reroutes
+  its area at `Outage.rerouteAt` but stays unpowered while its zone is destroyed (`PowerGrid.destroyed`).
+- Nuclear outage radius is the whole damage reach (`Detonation.radiusMax`), capped by `Blackouts.NUKE_MAX_RADIUS` 16384
+  (measured cost in its javadoc), not `grid.max_radius` (substations, commands). Cascade build: `Sweep.buildRow` is
+  one unit of at most `Sweep.SEGMENT` chunks of a row's circle chord, districts per row via `Districts.row` (same result as
+  `Districts.of`, `DistrictsTest`), chunks stored as int offsets; chunks loaded around players when the outage begins are
+  issued at once (`Sweep.early`). Due chunks are issued under the budget too (`Sweep.issuing`, `ISSUE_UNIT` a unit; a
+  nuclear cascade reaches ~20 000 chunks a tick, and once built every chunk already due arrives at once); saved progress
+  is the last fully issued due time (`Sweep.issuedThrough`). A built cascade waiting for its next due time is not pending
+  work (`Sweep.due`, `SweepsDueTest`): a weeks-long repair cascade would otherwise keep the grid share from impacts and ruins.
+  A command restore that shrinks a running spread reissues the whole uniform restoration (new times may fall before the
+  old progress).
+- Lamps placed in a dark district (`Blackouts.onBlockPlaced`) run on their own supply: `PowerGrid` keeps
+  position → time placed (`placeOwn`, saved with the grid, not the chunk, so disk loads and LOD copies see it), and every
+  darkening path skips them via `PowerGrid.keepsLit` (lamps placed after the district's latest darkening). Forgotten
+  once no outage covers the chunk (`prune`).
+
 ## Pitfalls
 - Lamp-twin models and states come from the vanilla jar via `tools/gen_grid_assets.py` (do not edit by hand);
   substation textures: `tools/gen_textures.py`. Vanilla assigns the cutout layer to lanterns and end rods in code

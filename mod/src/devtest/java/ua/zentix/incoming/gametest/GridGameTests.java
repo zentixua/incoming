@@ -63,12 +63,15 @@ import ua.zentix.incoming.grid.BlackoutWorld;
 import ua.zentix.incoming.grid.Blackouts;
 import ua.zentix.incoming.grid.ChunkLights;
 import ua.zentix.incoming.grid.ChunkSaves;
+import ua.zentix.incoming.grid.Districts;
 import ua.zentix.incoming.grid.GridLights;
 import ua.zentix.incoming.grid.Node;
+import ua.zentix.incoming.grid.Outage;
 import ua.zentix.incoming.grid.PowerGrid;
 import ua.zentix.incoming.grid.SubstationBlock;
 import ua.zentix.incoming.grid.block.Unlit;
 import ua.zentix.incoming.nuclear.Detonation;
+import ua.zentix.incoming.nuclear.model.BlastModel;
 import ua.zentix.incoming.nuclear.world.NuclearTickets;
 import ua.zentix.incoming.nuclear.world.WorkClock;
 import ua.zentix.incoming.registry.ModAttachments;
@@ -151,7 +154,7 @@ public final class GridGameTests {
         int dark = first.changed();
         h.assertTrue(dark == 5 && !first.done(), "per unit redeemed " + dark + " instead of 5 (chunk passed: " + first.done() + ")");
         // exactly as many lamps as are left from the stopping place - the chunk is passed through the same passage
-        ChunkLights.Pass rest = ChunkLights.apply(level, chunk, true, placed.size() - 5, first.next());
+        ChunkLights.Pass rest = ChunkLights.apply(level, chunk, true, placed.size() - 5, first.next(), null);
         dark += rest.changed();
         h.assertTrue(rest.done(), "the chunk exactly with the lamp limit has not been completed to the end");
         h.assertTrue(ChunkLights.apply(level, chunk, true, 1).changed() == 0, "after going all the way there are lamps left");
@@ -384,7 +387,6 @@ public final class GridGameTests {
         ServerLevel level = h.getLevel();
         quiet(level);
         WorkClock clock = WorkClock.counting(1_000_000L);
-        Blackouts.useClock(level.getServer(), clock);
         h.setBlock(CENTER, ModBlocks.SUBSTATION.get());
         Node node = PowerGrid.get(level).nodeAt(h.absolutePos(CENTER));
         h.assertTrue(node != null && node.block(), "the substation did not become a network node");
@@ -393,6 +395,9 @@ public final class GridGameTests {
         for (BlockPos p : lamps) h.setBlock(p, Blocks.LANTERN);
         int budgetMs = (int) Math.round(WorkScheduler.gridCapNanos() / 1e6);
         h.startSequence()
+                // light returns from previous checks (quiet: nuclear areas of kilometres) pass on the real clock first
+                .thenWaitUntil(() -> h.assertTrue(BlackoutWorld.get(level).idle(), "there is a queue from previous checks"))
+                .thenExecute(() -> Blackouts.useClock(level.getServer(), clock))
                 .thenIdle(1)
                 .thenExecute(() -> {
                     Vec3 c = Vec3.atCenterOf(h.absolutePos(CENTER.east(3)));
@@ -516,7 +521,7 @@ public final class GridGameTests {
         t0 = System.nanoTime();
         int m = 0;
         for (int i = 256; i < 384; i++) {
-            m += ChunkLights.applyInPlace(level, level.getChunk(held.get(i).x, held.get(i).z), true, Integer.MAX_VALUE, 0, true, new LongArrayList()).changed();
+            m += ChunkLights.applyInPlace(level, level.getChunk(held.get(i).x, held.get(i).z), true, Integer.MAX_VALUE, 0, true, new LongArrayList(), null).changed();
         }
         long inPlace = System.nanoTime() - t0;
         for (int i = 256; i < 384; i++) ChunkLights.apply(level, level.getChunk(held.get(i).x, held.get(i).z), false);
@@ -625,7 +630,11 @@ public final class GridGameTests {
         long[] lampsAtStart = {0};
         hold(level, far);
         h.startSequence()
-                .thenWaitUntil(() -> h.assertTrue(chunks.getChunkNow(far.x, far.z) != null, "chunk is loading"))
+                .thenWaitUntil(() -> {
+                    h.assertTrue(chunks.getChunkNow(far.x, far.z) != null, "chunk is loading");
+                    // light returns from previous checks (quiet) pass on the real clock before the counting one
+                    h.assertTrue(BlackoutWorld.get(level).idle(), "there is a queue from previous checks");
+                })
                 .thenExecute(() -> {
                     placed.putAll(fill(level, far, 128, light, lantern));
                     Blackouts.useClock(level.getServer(), fast);
@@ -694,7 +703,11 @@ public final class GridGameTests {
         long[] before = new long[BlackoutWorld.Work.values().length];
         held.forEach(p -> hold(level, p));
         h.startSequence()
-                .thenWaitUntil(() -> held.forEach(p -> h.assertTrue(chunks.getChunkNow(p.x, p.z) != null, "chunk " + p + " loading")))
+                .thenWaitUntil(() -> {
+                    held.forEach(p -> h.assertTrue(chunks.getChunkNow(p.x, p.z) != null, "chunk " + p + " loading"));
+                    // light returns from previous checks (quiet) pass on the real clock: the count is this cube's units only
+                    h.assertTrue(BlackoutWorld.get(level).idle(), "there is a queue from previous checks");
+                })
                 .thenExecute(() -> {
                     // one height for all four chunks - a solid cube, its middle is far from the edge
                     int y = held.stream().mapToInt(p -> caseOrigin(level, p).getY()).max().orElseThrow();
@@ -873,11 +886,12 @@ public final class GridGameTests {
     }
 
     /**
-     * A lamp placed in a dark quarter, when the cascade has already passed, goes out - due to the event of the setting (by itself
-     *  it would not go out: the cascade for its chunk will no longer come).
+     * A lamp placed in a dark district runs on its placer's own supply: it stays lit, also through a pass over its chunk
+     * (load, cascade), while a lamp that stood there before the outage goes dark. The next outage reaching the district
+     * after it was placed takes it as the grid's lamp again.
      */
     @GameTest(template = "range", timeoutTicks = 600, batch = "grid_placed", skyAccess = true)
-    public static void lampPlacedInDarkDistrictGoesOut(GameTestHelper h) {
+    public static void lampPlacedInDarkDistrictStaysLit(GameTestHelper h) {
         ServerLevel level = h.getLevel();
         quiet(level);
         // both are in a chunk in the middle of the platform (he’s all on it): this chunk has already passed the cascade
@@ -889,16 +903,71 @@ public final class GridGameTests {
         h.startSequence()
                 .thenWaitUntil(() -> {
                     h.assertTrue(GridLights.isUnlit(level.getBlockState(first)), "lantern " + first + " lit");
-                    // the whole cascade has passed: the lamp could only be extinguished by staging
                     h.assertTrue(BlackoutWorld.get(level).idle(), "the cascade is going on");
                 })
-                .thenExecute(() -> level.setBlock(placed, Blocks.LANTERN.defaultBlockState(), Block.UPDATE_ALL))
-                .thenIdle(10)
                 .thenExecute(() -> {
-                    h.assertTrue(level.getBlockState(placed).is(Blocks.LANTERN), "the lamp went out without an event: " + level.getBlockState(placed));
+                    level.setBlock(placed, Blocks.LANTERN.defaultBlockState(), Block.UPDATE_ALL);
                     Blackouts.onBlockPlaced(new BlockEvent.EntityPlaceEvent(BlockSnapshot.create(level.dimension(), level, placed), Blocks.STONE.defaultBlockState(), null));
                 })
-                .thenWaitUntil(() -> h.assertTrue(GridLights.isUnlit(level.getBlockState(placed)), "the supplied lantern is on"))
+                .thenIdle(10)
+                .thenExecute(() -> {
+                    h.assertTrue(level.getBlockState(placed).is(Blocks.LANTERN), "the placed lantern went out: " + level.getBlockState(placed));
+                    // a lamp of the grid back lit (as a chunk from an old save), then a full pass over the chunk
+                    level.setBlock(first, Blocks.LANTERN.defaultBlockState(), Block.UPDATE_ALL);
+                    ChunkLights.applyInPlace(level, level.getChunk(mid.x, mid.z), true, Integer.MAX_VALUE, 0, true, new LongArrayList(),
+                            PowerGrid.get(level).keepsLit(mid.x, mid.z, level.getGameTime()));
+                    h.assertTrue(GridLights.isUnlit(level.getBlockState(first)), "the grid's lantern stayed lit");
+                    h.assertTrue(level.getBlockState(placed).is(Blocks.LANTERN), "the pass put out the placed lantern");
+                    Blackouts.blackout(level, Vec3.atCenterOf(h.absolutePos(CENTER)), 200, 1000, -1);
+                })
+                .thenWaitUntil(() -> h.assertTrue(GridLights.isUnlit(level.getBlockState(placed)), "the placed lantern survived the next outage"))
+                .thenSucceed();
+    }
+
+    /**
+     * A surface burst destroys the grid around it: power there never comes back by itself (lamps dark, a substation there
+     * stays dead even once supply around it is rerouted), until a command restores it.
+     */
+    @GameTest(template = "range", timeoutTicks = 1200, batch = "grid_nuke_destroyed", skyAccess = true)
+    public static void nukeDestroyedZoneStaysDark(GameTestHelper h) {
+        ServerLevel level = h.getLevel();
+        quiet(level);
+        h.setBlock(CENTER, ModBlocks.SUBSTATION.get());
+        Node node = PowerGrid.get(level).nodeAt(h.absolutePos(CENTER));
+        h.assertTrue(node != null, "the substation did not become a network node");
+        BlockPos lamp = new BlockPos(18, 12, 18);
+        h.setBlock(lamp, Blocks.LANTERN);
+        BlockPos g = h.absolutePos(CENTER.east(8));
+        Detonation d = new Detonation(NuclearGameTests.IDS.incrementAndGet(), new Vec3(g.getX() + 0.5, g.getY() + 1, g.getZ() + 0.5), g.getY(),
+                15, true, level.getGameTime(), 0, 0, 20_000, 7, 0.1f, false, Detonation.OLD_WAVE);
+        double dead = d.groundRange(BlastModel.kpa(Blackouts.DEAD_PSI));
+        h.assertTrue(dead > 64, "destroyed zone " + dead + " does not cover the platform");
+        Blackouts.nuke(level, d);
+        PowerGrid grid = PowerGrid.get(level);
+        // this strike's outage: the newest (other nuclear checks leave restored outages until they are pruned)
+        Outage o = grid.outages().stream().filter(Outage::byDamage).max(java.util.Comparator.comparingInt(Outage::id)).orElseThrow();
+        ChunkPos c = new ChunkPos(h.absolutePos(CENTER));
+        h.assertTrue(o.lightAt(Districts.of(c.x, c.z)) == Outage.NEVER, "the destroyed district has a repair time");
+        Outage down = grid.downOutage(node.id(), level.getGameTime()).orElseThrow();
+        h.assertTrue(down.restoreAt() == o.rerouteAt(), "destroyed substation's area not rerouted: " + down.restoreAt());
+        h.startSequence()
+                .thenWaitUntil(() -> {
+                    h.assertTrue(GridLights.isUnlit(h.getBlockState(lamp)), "lantern lit");
+                    h.assertFalse(h.getBlockState(CENTER).getValue(SubstationBlock.POWERED), "the substation is “under current”");
+                })
+                // supply around it rerouted: its own outage is over, the zone it stands in still has no grid
+                .thenExecute(() -> grid.replace(grid.downOutage(node.id(), level.getGameTime()).orElseThrow().restoring(level.getGameTime(), 0)))
+                .thenIdle(45)
+                .thenExecute(() -> {
+                    h.assertTrue(grid.destroyed(c.x, c.z, level.getGameTime()), "the destroyed zone has power");
+                    h.assertFalse(h.getBlockState(CENTER).getValue(SubstationBlock.POWERED), "a destroyed substation hums");
+                    h.assertTrue(GridLights.isUnlit(h.getBlockState(lamp)), "lantern relit by itself");
+                    h.assertTrue(Blackouts.restore(level, null, 0) >= 1, "nothing to return");
+                })
+                .thenWaitUntil(() -> {
+                    h.assertBlockState(lamp, s -> s == Blocks.LANTERN.defaultBlockState(), () -> "lantern didn't light up the same");
+                    h.assertTrue(h.getBlockState(CENTER).getValue(SubstationBlock.POWERED), "the substation did not work");
+                })
                 .thenSucceed();
     }
 
@@ -1113,7 +1182,7 @@ public final class GridGameTests {
         ChunkPos far = new ChunkPos(h.absolutePos(CENTER.north(480)));
         Map<BlockPos, BlockState> placed = new LinkedHashMap<>();
         Map<BlockPos, Holder<Biome>> biomes = new LinkedHashMap<>();
-        BlockPos[] glow = new BlockPos[1], chest = new BlockPos[1];
+        BlockPos[] glow = new BlockPos[1], chest = new BlockPos[1], own = new BlockPos[1];
         ItemStack loot = new ItemStack(Items.DIAMOND, 7);
         hold(level, far);
         h.startSequence()
@@ -1124,6 +1193,7 @@ public final class GridGameTests {
                     sealLampCases(level, origin);
                     glow[0] = find(placed, Blocks.GLOWSTONE);
                     chest[0] = origin.offset(0, 0, 9);
+                    own[0] = origin.offset(5, 0, 12);
                     level.setBlock(chest[0], Blocks.CHEST.defaultBlockState(), Block.UPDATE_ALL);
                     ((ChestBlockEntity) level.getBlockEntity(chest[0])).setItem(4, loot.copy());
                     for (int y = level.getMinBuildHeight(); y < level.getMaxBuildHeight(); y += 16) {
@@ -1136,7 +1206,16 @@ public final class GridGameTests {
                     assertLamps(h, level, placed, true);
                     assertBlockLight(h, level, glow[0].above(), 0);
                 })
-                .thenExecute(() -> chunks.removeRegionTicket(HOLD, far, 2, far))
+                .thenExecute(() -> {
+                    // a lamp placed in the dark district: its own supply, outside the sealed lamp cases
+                    level.setBlock(own[0].below(), Blocks.STONE.defaultBlockState(), Block.UPDATE_ALL);
+                    level.setBlock(own[0], Blocks.LANTERN.defaultBlockState(), Block.UPDATE_ALL);
+                    Blackouts.onBlockPlaced(new BlockEvent.EntityPlaceEvent(BlockSnapshot.create(level.dimension(), level, own[0]), Blocks.AIR.defaultBlockState(), null));
+                    // a distant LOD copy from the save keeps it lit too
+                    ProtoChunk copy = ua.zentix.incoming.nuclear.world.FarLods.testCopy(level, level.getChunkAt(own[0]), null, false);
+                    h.assertTrue(copy != null && copy.getBlockState(own[0]).is(Blocks.LANTERN), "own lantern dark in the LOD copy");
+                    chunks.removeRegionTicket(HOLD, far, 2, far);
+                })
                 .thenWaitUntil(() -> unloaded(h, level, far))
                 .thenExecute(() -> {
                     CompoundTag saved = assertNoTwinsOnDisk(h, level, far);
@@ -1151,6 +1230,7 @@ public final class GridGameTests {
                     assertBlockLight(h, level, glow[0].above(), 0);
                 })
                 .thenExecute(() -> {
+                    h.assertTrue(level.getBlockState(own[0]).is(Blocks.LANTERN), "own lantern went out on load: " + level.getBlockState(own[0]));
                     h.assertTrue(level.getChunkAt(glow[0]).hasData(ModAttachments.GRID_DARK), "the chunk loaded with dark is not marked");
                     h.assertTrue(level.getBlockEntity(chest[0]) instanceof ChestBlockEntity c && ItemStack.matches(c.getItem(4), loot),
                             "chest after disc: " + level.getBlockEntity(chest[0]));

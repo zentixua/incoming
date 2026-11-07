@@ -53,7 +53,7 @@ to apply the settings. The most useful ones are below; the rest are in the same 
 | `nuclear.wave_speed` | 0.25 | with CUSTOM: speed of the blast wave away from the fireball, as a share of the speed of sound (1.0 is true to life) |
 | `air_defense.rails`, `air_defense.reload_seconds` | 4, 8 | ready SAM rails and seconds to load one missile from stock, including the first |
 | `grid.enabled` | on | [blackout](blackout.md) |
-| `grid.nuke_blackout`, `grid.max_radius` | on, 4096 | nuclear blackout without a substation; maximum radius of any single outage in blocks |
+| `grid.nuke_blackout`, `grid.max_radius` | on, 4096 | nuclear blackout without a substation; maximum radius of a substation or command outage in blocks (a nuke darkens its whole damage reach, at most 16384) |
 | `performance.work_ms_per_tick` | 30 | server budget for the mod's heavy work, 5–45 ms; lower makes craters and ruins finish later and leaves more tick time for other work; it does not set client graphics quality; the server also reserves time for world simulation |
 
 During dense salvos, ready impact destruction gets time before optional chunk saving. Work on older fires and

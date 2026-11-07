@@ -632,7 +632,7 @@ public final class FarLods {
         if (!b.ruined && front(level, b.chunk, true)) return;
         // no twins on disk: darken if district dark
         boolean dark = PowerGrid.get(level).dark(ChunkPos.getX(b.chunk), ChunkPos.getZ(b.chunk), level.getGameTime());
-        int lamps = dark ? ChunkLights.applyToCopy(b.copy.getSections(), true) : 0;
+        int lamps = dark ? ChunkLights.applyToCopy(level, b.copy, true) : 0;
         java.util.Set<java.util.UUID> only = refreshFor.remove(b.chunk);
         if (!b.ruined && lamps == 0 && !b.lights) {
             unchanged++;
@@ -675,7 +675,7 @@ public final class FarLods {
         CompoundTag tag = ChunkSerializer.write(level, chunk);
         Built b = build(f, DiskShots.parseSections(f, chunk.getPos(), tag), plan, fires, false, false);
         if (b.copy == null) return null;
-        if (PowerGrid.get(level).dark(chunk.getPos().x, chunk.getPos().z, level.getGameTime())) ChunkLights.applyToCopy(b.copy.getSections(), true);
+        if (PowerGrid.get(level).dark(chunk.getPos().x, chunk.getPos().z, level.getGameTime())) ChunkLights.applyToCopy(level, b.copy, true);
         return b.copy;
     }
 
