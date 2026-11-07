@@ -805,6 +805,8 @@ public final class ScarQueue {
             job.ready = false;
             if (jobs.get(job.chunk) != job) continue; // unloaded or removed
             long c0 = clock.begin();
+            long gc0 = ua.zentix.incoming.util.GcPauses.millis();
+            long[] phases0 = RuinPlan.PHASES.clone();
             int result = WORKED;
             try {
                 result = work(level, job, now);
@@ -820,7 +822,12 @@ public final class ScarQueue {
                 // single chunk over 50 ms means external delay (chunk load, GC): log at most every 5 s
                 if (took > 50_000_000L && now - lastSlowChunk >= 100) {
                     lastSlowChunk = now;
-                    Incoming.LOG.warn("Slow ruin chunk {}: {} ms", new ChunkPos(job.chunk), took / 1_000_000);
+                    long[] ph = RuinPlan.PHASES;
+                    // swap phases all zero: the unit took snapshots for a background plan or planned on the spot
+                    Incoming.LOG.warn("Slow ruin chunk {}: {} ms (swap: check {}, sections {}, heightmaps {}, light and packets {}, block entities {} ms; "
+                                    + "GC pauses inside {} ms)", new ChunkPos(job.chunk), took / 1_000_000,
+                            (ph[0] - phases0[0]) / 1_000_000, (ph[1] - phases0[1]) / 1_000_000, (ph[2] - phases0[2]) / 1_000_000,
+                            (ph[3] - phases0[3]) / 1_000_000, (ph[4] - phases0[4]) / 1_000_000, ua.zentix.incoming.util.GcPauses.millis() - gc0);
                 }
             }
         }
