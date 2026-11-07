@@ -128,6 +128,13 @@ public final class FxLayer {
             PallPass.footLighting = null;
             Incoming.LOG.error("Stem foot lighting shader failed to load: using stem lighting at the foot", ex);
         }
+        // PROFILING ONLY: march variants without the mushroom or without the pall steps (-Dincoming.pallVariant)
+        try {
+            e.registerShader(new ShaderInstance(e.getResourceProvider(), Incoming.id("fx_pall_nomush"), DefaultVertexFormat.POSITION), s -> PallPass.marchNoMush = s);
+            e.registerShader(new ShaderInstance(e.getResourceProvider(), Incoming.id("fx_pall_nopall"), DefaultVertexFormat.POSITION), s -> PallPass.marchNoPall = s);
+        } catch (IOException ex) {
+            Incoming.LOG.error("Pall profiling variants failed to load", ex);
+        }
         try {
             e.registerShader(new ShaderInstance(e.getResourceProvider(), Incoming.id("fx_mush_shadow"), DefaultVertexFormat.POSITION), s -> PallPass.shadow = s);
         } catch (IOException ex) {

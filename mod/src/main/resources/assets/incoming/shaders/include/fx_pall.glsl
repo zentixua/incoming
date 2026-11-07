@@ -560,7 +560,9 @@ void slot(mat4 S, mat4 V, sampler2D ground, vec4 R, vec4 W, vec4 G, vec4 H, vec3
     float tile = S[3].y, fine = 1.0 - smoothstep(0.5, 1.0, cone * 32.0 / tile);
     if (cut(16) || cut(1024)) fine = 0.0;
     // young layer patches disperse as it mixes (pallMixed): old pall is an even blanket from above
-    float raw = cut(1024) ? 1.0 : carpetCoarse(S, uvA, uvB, phaseBlend, fill), detail = fine > 0.0 ? carpetFine(uvA, uvB, phaseBlend) : 1.0;
+    float raw = 1.0;
+    if (!cut(1024)) raw = carpetCoarse(S, uvA, uvB, phaseBlend, fill);
+    float detail = fine > 0.0 ? carpetFine(uvA, uvB, phaseBlend) : 1.0;
     float coarse = pallMixed(raw, f.mixed), shape = pallMixed(raw * mix(1.0, detail, fine), f.mixed);
     s.clumps = shape;
     float d = f.sigma.x * shape, h = f.sigma.y * mix(1.0, shape, 0.5), m = f.sigma.z * shape;
@@ -571,7 +573,8 @@ void slot(mat4 S, mat4 V, sampler2D ground, vec4 R, vec4 W, vec4 G, vec4 H, vec3
     // distinguish local billow edge from depth, producing blotches instead of lit/shaded sides. Shadow noise samples:
     // two coarse (two channels each), one fine only while resolved
     float sigmaShade = f.sigma.x + f.sigma.z;
-    float clump = cut(8) || cut(1024) ? 0.0 : clumpShade(coarse, pallMixed(carpetCoarse(S, uvA + lightUv * 0.06, uvB + lightUv * 0.06, phaseBlend, fill), f.mixed),
+    float clump = 0.0;
+    if (!cut(8) && !cut(1024)) clump = clumpShade(coarse, pallMixed(carpetCoarse(S, uvA + lightUv * 0.06, uvB + lightUv * 0.06, phaseBlend, fill), f.mixed),
             pallMixed(carpetCoarse(S, uvA + lightUv * 0.22, uvB + lightUv * 0.22, phaseBlend, fill), f.mixed)) * sigmaShade * tile;
     if (fine > 0.0 && !cut(8)) {
         clump += fine * clumpShade(pallMixed(detail, f.mixed), pallMixed(carpetFine(uvA + lightUv * 0.015, uvB + lightUv * 0.015, phaseBlend), f.mixed),
@@ -1556,6 +1559,7 @@ void main() {
     gFootSpan0 = gFootSpan1 = vec2(1.0, 0.0);
     gWhirlLight = mat4(0.0);
     gWhirlIn = vec4(1e9);
+#ifndef PALL_NO_PALL
     for (int i = 0; i < 4 && !cut(4096); i++) {
         vec2 sp = whirlSpan(i, dir);
         sp.y = min(sp.y, scene);
@@ -1573,6 +1577,7 @@ void main() {
         gWhirlLight[i] = whirl(i, dir, sp.x, sp.y, jitter, lit, burnt(m, PALL_SOOT_G * gMv) + glow, whirlFlame);
         gWhirlIn[i] = sp.x;
     }
+#endif
     // Wilson cloud: up to two shell crossings per slot, likewise when step reaches crossing (before world behind pixel)
     vec4 w0 = pallWilson(PallSlot0, PallWilson0, dir, scene), w1 = pallWilson(PallSlot1, PallWilson1, dir, scene);
     gWilsonLight = mat4(wilsonLight(PallSlot0, PallGlow0, PallHot0, PallWilson0, dir, sunDir, w0.x, w0.y),
@@ -1727,11 +1732,16 @@ void main() {
                 lastBase = nextBase;
                 nextBase = along((float(base) + 1.0 + jitter) / n, t0, fa, fb, t1, a, b);
             }
+#ifndef PALL_NO_PALL
             if (next > ta) pallStep(ta, next - ta, grid, light, transmit, lost);
+#endif
             i += 1;
             ta = next;
             if (i >= pallSteps || ta >= t1) ta = 1e9;
         } else {
+#ifdef PALL_NO_MUSH
+            tm = 1e9;
+#else
             float cone = max(tm * gPixel, 0.35 * dsMin);
             float gap;
             gTauEye = tauEye;
@@ -1758,8 +1768,11 @@ void main() {
             }
             tm += ds;
             mk += 1;
+#endif
         }
-        if (transmit + lost < (cut(131072) ? 0.05 : 0.005)) {
+        float exitAt = 0.005;
+        if (cut(131072)) exitAt = 0.05;
+        if (transmit + lost < exitAt) {
             transmit = 0.0;
             lost = 0.0;
             break;

@@ -391,6 +391,8 @@ public final class PallPass {
 
     @Nullable
     static ShaderInstance march, resolve, composite, shadow, footLighting;
+    // PROFILING ONLY
+    static ShaderInstance marchNoMush, marchNoPall;
     static final int FOOT_LIGHT_AZ = 64, FOOT_LIGHT_R = 16, FOOT_LIGHT_H = 32;
     private static final Frame EMPTY = new Frame();
     private static final Detail DETAIL = new Detail();
@@ -633,6 +635,9 @@ public final class PallPass {
         for (int pass = 0; pass < 2; pass++) {
             if (pass == 0 && !litFoot) continue;
             m = pass == 0 ? fl : march;
+            String variant = System.getProperty("incoming.pallVariant", "");
+            if (pass == 1 && variant.equals("nomush") && marchNoMush != null) m = marchNoMush;
+            if (pass == 1 && variant.equals("nopall") && marchNoPall != null) m = marchNoPall;
             if (pass == 0) {
                 GlStateManager._glBindFramebuffer(GlConst.GL_FRAMEBUFFER, footFbo);
                 RenderSystem.viewport(0, 0, FOOT_LIGHT_AZ + 1, FOOT_LIGHT_H * FOOT_LIGHT_R * f.mushroomCount);
@@ -769,8 +774,8 @@ public final class PallPass {
         previousEye = eye;
         history = true;
         drawn++;
-        prepared = m;
-        preparedProgram = m.getId();
+        prepared = march;
+        preparedProgram = march.getId();
         if (preparing != 0) Incoming.LOG.info("Nuclear volume shaders prepared in {} ms", (System.nanoTime() - preparing) / 1_000_000);
         return true;
     }

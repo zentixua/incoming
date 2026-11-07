@@ -334,7 +334,8 @@ public final class ClientNuclear {
         FarTerrain.Water water = heights == null ? null : FarTerrain.water(level);
         for (Iterator<Active> it = DETONATIONS.values().iterator(); it.hasNext(); ) {
             Active a = it.next();
-            a.age++;
+            // PROFILING ONLY: -Dincoming.nukeFreeze holds the scene for measurements
+            if (!Boolean.getBoolean("incoming.nukeFreeze")) a.age++;
             a.sounds.tick();
             a.pall.daylight(a.ticks(0), level.getGameTime(), level.getDayTime());
             // terrain/water under pall: for rays without world behind and for matter (ceiling dimensions use ground
