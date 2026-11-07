@@ -72,6 +72,8 @@ uniform vec4 PallHot1;
 uniform float PallGlowOnSmoke;
 // x frame index (step jitter), y steps, z frame downscale factor, w eye dust extinction (1/block)
 uniform vec4 PallFrame;
+// interleaved rays (fx_pall_resolve): x n, yz this frame's ray pixel within each n × n block of the ray frame
+uniform vec4 PallInterleave;
 // vertical dust depth at eye: x above, y below to ground (NukePall.tick); with PallFrame.w determines ray reach (pallClip)
 uniform vec2 PallEyeTau;
 // firestorm (client/nuclear/FireStorm, pall.glsl): slot fire maps (R flame, G column smoke, B G × rise;
@@ -1512,7 +1514,8 @@ vec4 smokeStep(float t, float cone, out float gap, out float cell) {
 #ifndef PALL_FOOT_CACHE
 void main() {
     if (cut(65536)) { fragColor = vec4(0.0, 0.0, 0.0, 1.0); return; }
-    vec2 low = gl_FragCoord.xy;
+    // ray-frame pixel of this target pixel: one per n × n block, the block's pixel taken this frame
+    vec2 low = floor(gl_FragCoord.xy) * PallInterleave.x + PallInterleave.yz + 0.5;
     ivec2 full = ivec2((floor(low) + 0.5) * PallFrame.z);
     ivec2 size = textureSize(Sampler0, 0);
     float depth = texelFetch(Sampler0, clamp(full, ivec2(0), size - 1), 0).r;

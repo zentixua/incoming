@@ -9,6 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /** Pall details by time on the GPU: steps, budget, descent immediately, ascent with a reserve and not higher than the settings. */
 class PallDetailTest {
     private static final long MS = 1_000_000L;
+    /** Lowest rung (below the LOW setting: fewer rays per frame). */
     private static final int LOW = PallPass.LADDER.length - 1;
 
     /** Frames of 16 ms with one time on the GPU, {@code frames} pieces; watch - in {@code clock[0]}. */
@@ -19,18 +20,22 @@ class PallDetailTest {
         }
     }
 
-    /** Stages - from HIGH to LOW, each one is no more than half the price of the previous one; MEDIUM is among them. */
+    /**
+     * Rungs from HIGH down, each at most half the price of the previous one; MEDIUM and LOW are among them, rungs below LOW
+     * for a GPU it does not fit; LOW costs what the former LOW (quarter frame × 20 steps) did.
+     */
     @Test
     void ladderRunsFromHighToLow() {
         assertEquals(0, PallPass.Quality.HIGH.step());
-        assertEquals(LOW, PallPass.Quality.LOW.step());
-        int medium = PallPass.Quality.MEDIUM.step();
-        assertTrue(medium > 0 && medium < LOW);
+        int medium = PallPass.Quality.MEDIUM.step(), low = PallPass.Quality.LOW.step();
+        assertTrue(medium > 0 && medium < low && low < LOW);
+        double old = 20 / 16.0, cost = PallPass.LADDER[low].cost();
+        assertTrue(cost >= 0.9 * old && cost <= 1.15 * old, "LOW: " + cost);
         assertEquals(-1, PallPass.Quality.OFF.step());
         for (int i = 1; i < PallPass.LADDER.length; i++) {
             double ratio = PallPass.LADDER[i].cost() / PallPass.LADDER[i - 1].cost();
             assertTrue(ratio >= 0.5 && ratio < 0.9, "step " + i + ": " + ratio);
-            assertTrue(PallPass.LADDER[i].factor() <= 4 && PallPass.LADDER[i].steps() >= 20, "below LOW");
+            assertTrue(PallPass.LADDER[i].factor() <= 4 && PallPass.LADDER[i].steps() >= 20 && PallPass.LADDER[i].interleave() <= 4, "below the floor");
         }
     }
 
