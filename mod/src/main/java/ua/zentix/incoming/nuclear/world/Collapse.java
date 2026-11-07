@@ -64,6 +64,9 @@ final class Collapse {
     /** Lowest original window surface (column support top): all load-bearing blocks at or below it are ground/support. */
     final int surface;
     final long[] gone;
+    /** Logs of trunks felled whole ({@link #markFelled()}), null none. */
+    @org.jetbrains.annotations.Nullable
+    private long[] felled;
     /** Drained water. */
     final long[] drained;
 
@@ -198,16 +201,16 @@ final class Collapse {
                 breaks.add(idx(wx, y, wz));
             }
         }
+        markFelled();
         boolean logs = false, support = false;
         for (int q = 0; q < breaks.size(); q++) {
             int i = breaks.getInt(q), wx = i % SIDE, wz = (i / SIDE) % SIDE, y = i / (SIDE * SIDE) + yb;
             Blast.Props p = props(wx, y, wz);
             if (p.log()) logs = true;
-            if (support || !p.bearing()) continue;
-            // survivors above/beside broken blocks may have lost support; a broken log (stilt, pillar) only when it carried
-            // something other than logs and leaves: a felled trunk among branches needs no support pass
-            if (p.log() ? carried(wx, y + 1, wz) || carried(wx + 1, y, wz) || carried(wx - 1, y, wz) || carried(wx, y, wz + 1) || carried(wx, y, wz - 1)
-                    : standing(wx, y + 1, wz) || standing(wx + 1, y, wz) || standing(wx - 1, y, wz) || standing(wx, y, wz + 1) || standing(wx, y, wz - 1)) support = true;
+            // survivors above/beside broken blocks may have lost support (a cut stilt, pillar or branch too: what it
+            // carried, logs included, falls); a felled trunk falls whole (Blast#trunks, RuinPlanner#lay) and needs no pass
+            if (support || !p.bearing() || p.log() && felled(i)) continue;
+            if (standing(wx, y + 1, wz) || standing(wx + 1, y, wz) || standing(wx - 1, y, wz) || standing(wx, y, wz + 1) || standing(wx, y, wz - 1)) support = true;
         }
         if (!logs) for (int k = 0; k < 9 && !logs; k++) logs = blasts[k] != null && !blasts[k].trees().isEmpty();
         if (support) support();
@@ -221,9 +224,20 @@ final class Collapse {
         return inside(wx, y, wz) && !isGone(wx, y, wz) && props(wx, y, wz).bearing();
     }
 
-    /** Standing load-bearing block other than a log. */
-    private boolean carried(int wx, int y, int wz) {
-        return standing(wx, y, wz) && !props(wx, y, wz).log();
+    private boolean felled(int i) {
+        return felled != null && bit(felled, i);
+    }
+
+    /** Marks the logs of trunks felled whole this round ({@link Blast#trees}): they leave as a lying trunk, not as rubble. */
+    private void markFelled() {
+        for (Blast b : blasts) {
+            if (b == null) continue;
+            for (long[] t : b.trees()) {
+                if (felled == null) felled = new long[gone.length];
+                int wx = BlockPos.getX(t[0]) - w.x0, y = BlockPos.getY(t[0]), wz = BlockPos.getZ(t[0]) - w.z0;
+                for (int k = 0; k < t[1]; k++) if (inside(wx, y + k, wz)) set(felled, idx(wx, y + k, wz));
+            }
+        }
     }
 
     // ---------------------------------------------------------------- support
@@ -884,7 +898,7 @@ final class Collapse {
                         if (p.bearing() && !p.log()) below = y;
                         continue;
                     }
-                    if (p.air() || p.fluid() || p.leaves() || p.log() || !p.rubble()) continue;
+                    if (p.air() || p.fluid() || p.leaves() || p.log() && felled(i) || !p.rubble()) continue;
                     if (p.is(Blast.Props.CONTAINER)) {
                         // chest, barrel, furnace: heavy and whole, falls into the pile at its own column with its
                         // contents (RuinPlan moves the block entity) and rolls off it like the rest (Debris#repose), so it

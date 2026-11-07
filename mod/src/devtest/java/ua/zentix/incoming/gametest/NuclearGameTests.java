@@ -1239,6 +1239,54 @@ public final class NuclearGameTests {
     }
 
     /**
+     * Timber does not hang in the air. A row of log cabins (acacia-log stilts and floor) where the wave's pressure is near
+     * the log threshold, so some logs break and others survive: every log left standing still rests on the ground
+     * through logs. A cut stilt or beam carried only logs, which once started no support pass, and the floor above it
+     * floated (the support pass starts from any broken log that is not a felled trunk, Collapse#run).
+     */
+    @GameTest(template = "range", timeoutTicks = 60, batch = "nuke_ruins_stilt_row", skyAccess = true)
+    public static void timberDoesNotHang(GameTestHelper h) {
+        Detonation d = detonation(h, CENTER, 0, 15, 0.025f);
+        java.util.List<BlockPos> huts = new java.util.ArrayList<>();
+        for (int dx = 4; dx <= 28; dx += 4) {
+            double psi = d.psi(Vec3.atCenterOf(h.absolutePos(CENTER.east(dx).above(3))));
+            if (psi < 3.8 || psi > 6.5) continue;
+            for (int dz = -24; dz <= 24; dz += 4) huts.add(CENTER.offset(dx, 0, dz));
+        }
+        h.assertTrue(huts.size() >= 8, "too few places near the log threshold: " + huts.size());
+        java.util.Set<BlockPos> built = new java.util.HashSet<>();
+        for (BlockPos base : huts) {
+            for (int sx : new int[]{-1, 1}) for (int sz : new int[]{-1, 1}) for (int y = 0; y < 5; y++) built.add(base.offset(sx, y, sz));
+            for (BlockPos p : BlockPos.betweenClosed(base.offset(-1, 5, -1), base.offset(1, 5, 1))) built.add(p.immutable());
+        }
+        for (BlockPos p : built) h.setBlock(p, Blocks.ACACIA_LOG);
+        scarAll(h, d, new ColumnScar.Budget(false));
+        int broken = 0;
+        for (BlockPos p : built) if (!h.getBlockState(p).is(Blocks.ACACIA_LOG)) broken++;
+        h.assertTrue(broken > 0, "no log broke: nothing checked");
+        // logs reachable through logs from the ground (stilt bases and landed rubble at ground level)
+        java.util.Set<BlockPos> held = new java.util.HashSet<>();
+        java.util.ArrayDeque<BlockPos> queue = new java.util.ArrayDeque<>();
+        for (BlockPos base : huts) {
+            for (BlockPos p : BlockPos.betweenClosed(base.offset(-3, 0, -2), base.offset(3, 0, 2))) {
+                if (h.getBlockState(p).is(Blocks.ACACIA_LOG) && held.add(p.immutable())) queue.add(p.immutable());
+            }
+        }
+        while (!queue.isEmpty()) {
+            BlockPos p = queue.poll();
+            for (net.minecraft.core.Direction dir : net.minecraft.core.Direction.values()) {
+                BlockPos n = p.relative(dir);
+                if (n.getY() >= 0 && h.getBlockState(n).is(Blocks.ACACIA_LOG) && held.add(n)) queue.add(n);
+            }
+        }
+        for (BlockPos p : built) {
+            h.assertTrue(!h.getBlockState(p).is(Blocks.ACACIA_LOG) || held.contains(p), "a log hangs in the air at " + p.toShortString()
+                    + String.format(Locale.ROOT, " (%.1f psi; %d of %d logs broke)", d.psi(Vec3.atCenterOf(h.absolutePos(p))), broken, built.size()));
+        }
+        h.succeed();
+    }
+
+    /**
      * Trunks fall only whole. A tree at ~3.5 psi (reflected pressure on its trunk above the 5 psi log threshold, incident
      * below it) keeps its whole trunk: no log is cut out of it. A 26-block trunk (over the old 24-block limit) with a crown (mega jungle or spruce) at
      * ~7 psi falls whole like a small tree: no log stands above the stump height.

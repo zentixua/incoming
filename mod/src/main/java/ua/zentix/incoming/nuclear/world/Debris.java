@@ -82,34 +82,31 @@ final class Debris {
 
     /**
      * Where landed material comes to rest. Rubble is loose: a block cannot stand more than one block above a neighboring
-     * column (angle of repose about 45°, broken masonry 35–45°), so a block that would make a steeper step rolls to the
-     * lowest lower neighbor (4-neighbors in this chunk; chunk edges hold, no cross-chunk record) until it rests. Without
-     * this, everything landing on one column (a block of flats with a chest on every floor at the same spot) stood as a
-     * one-block tower. Entries are taken in {@link Collapse#landed} order (lower sources first), so the result is the
-     * same whoever plans the chunk.
+     * column (angle of repose about 45°, broken masonry 35–45°), so a block landing on rubble that would make a steeper
+     * step rolls to the lowest lower neighbor (4-neighbors in this chunk; chunk edges hold, no cross-chunk record) until
+     * it rests on bare ground or in a hollow. Only the pile rolls: a block landing on bare ground stays there, so terrain
+     * slopes do not carry material down to the chunk edge. Without this, everything landing on one column (a block of
+     * flats with a chest on every floor at the same spot) stood as a one-block tower. A column whose ground is covered
+     * ({@code open} false: a standing trunk, a surviving block on the ground, the fireball) takes no rolling material;
+     * material landing on it rolls to its lowest open neighbor. Entries are taken in {@link Collapse#landed} order (lower
+     * sources first), so the result is the same whoever plans the chunk.
      *
      * @param ground post-ruin ground per column ({@link Integer#MIN_VALUE} none: material landing there is dropped)
+     * @param open   columns whose pile can take material, null all with ground
      * @param from   filled: first index into the returned order for each resting column, {@code from[256]} the end
      * @return landed entry indices grouped by resting column
      */
-    static int[] repose(int[] ground, it.unimi.dsi.fastutil.longs.LongArrayList landed, int[] from) {
+    static int[] repose(int[] ground, @org.jetbrains.annotations.Nullable boolean[] open, it.unimi.dsi.fastutil.longs.LongArrayList landed, int[] from) {
         int n = landed.size();
         int[] top = ground.clone(), rest = new int[n], count = new int[257];
         for (int k = 0; k < n; k++) {
             int c = (int) (landed.getLong(k) >>> 40);
-            if (top[c] != Integer.MIN_VALUE) {
-                while (true) {
-                    int lx = c & 15, lz = c >> 4, best = -1;
-                    for (int dir = 0; dir < 4; dir++) {
-                        int nx = lx + (dir == 0 ? 1 : dir == 1 ? -1 : 0), nz = lz + (dir == 2 ? 1 : dir == 3 ? -1 : 0);
-                        if (nx < 0 || nx > 15 || nz < 0 || nz > 15) continue;
-                        int nc = nz << 4 | nx;
-                        if (top[nc] == Integer.MIN_VALUE || top[nc] >= top[c]) continue;
-                        if (best < 0 || top[nc] < top[best]) best = nc;
-                    }
-                    if (best < 0) break;
-                    c = best;
-                }
+            if (open != null && !open[c] && ground[c] != Integer.MIN_VALUE) {
+                int best = lowest(top, open, c, Integer.MAX_VALUE);
+                if (best >= 0) c = best;
+            }
+            if (top[c] != Integer.MIN_VALUE && (open == null || open[c])) {
+                for (int best; top[c] > ground[c] && (best = lowest(top, open, c, top[c])) >= 0; ) c = best;
                 top[c]++;
             }
             rest[k] = c;
@@ -120,5 +117,18 @@ final class Debris {
         int[] order = new int[n];
         for (int k = 0; k < n; k++) order[count[rest[k]]++] = k;
         return order;
+    }
+
+    /** Lowest open 4-neighbor of column {@code c} in the chunk with pile top below {@code below}, or -1. */
+    private static int lowest(int[] top, @org.jetbrains.annotations.Nullable boolean[] open, int c, int below) {
+        int lx = c & 15, lz = c >> 4, best = -1;
+        for (int dir = 0; dir < 4; dir++) {
+            int nx = lx + (dir == 0 ? 1 : dir == 1 ? -1 : 0), nz = lz + (dir == 2 ? 1 : dir == 3 ? -1 : 0);
+            if (nx < 0 || nx > 15 || nz < 0 || nz > 15) continue;
+            int nc = nz << 4 | nx;
+            if (top[nc] == Integer.MIN_VALUE || open != null && !open[nc] || top[nc] >= below) continue;
+            if (best < 0 || top[nc] < top[best]) best = nc;
+        }
+        return best;
     }
 }

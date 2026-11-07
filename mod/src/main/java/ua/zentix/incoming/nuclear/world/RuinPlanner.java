@@ -409,16 +409,24 @@ public final class RuinPlanner {
         boolean blockDamage = g.blockDamage() && !flash, fires = g.fires();
         int x0 = s.chunkX << 4, z0 = s.chunkZ << 4;
         double[] heat = new double[256];
-        // landed entries by the column where they come to rest (repose), in landing order
-        int[] from = new int[257], order = debris == null ? new int[0] : Debris.repose(groundOf, debris.landed, from);
+        // landed entries by the column where they come to rest (repose), in landing order; a pile stands only on open
+        // ground (pile stops at the first standing block, the fireball takes nothing): a chest never rolls where it is lost
+        int[] from = new int[257], order = new int[0];
+        if (blockDamage && debris != null) {
+            boolean[] open = new boolean[256];
+            for (int column = 0; column < 256; column++) {
+                int ground = groundOf[column], lx = column & 15, lz = column >> 4;
+                open[column] = ground != Integer.MIN_VALUE && ground + 1 < s.maxY && buries(s, lx, ground + 1, lz)
+                        && !inFireball(d, x0 + lx, ground, z0 + lz);
+            }
+            order = Debris.repose(groundOf, open, debris.landed, from);
+        }
         for (int column = 0; column < 256; column++) {
             int ground = groundOf[column];
             if (ground == Integer.MIN_VALUE) continue;
             int lx = column & 15, lz = column >> 4, x = x0 + lx, z = z0 + lz;
             double groundPsi = d.psi(new Vec3(x + 0.5, ground + 1, z + 0.5));
-            Vec3 at = new Vec3(x + 0.5, ground + 0.5, z + 0.5);
-            boolean inFireball = d.surface() && Math.hypot(at.x - d.burst().x, at.z - d.burst().z) < d.fireballRadius() * 0.8
-                    && at.y > d.groundY() - d.fireballRadius();
+            boolean inFireball = inFireball(d, x, ground, z);
             double lit = g.lit(new BlockPos(x, ground, z));
             double q = lit > 0 ? lit * incidence(groundOf, lx, lz, ground, x, z, d.burst()) * edge(x, z, d.burst(), g.ctx().ruinRadius) : 0;
             heat[column] = inFireball ? lit : q;
@@ -540,7 +548,7 @@ public final class RuinPlanner {
         int y = ground + 1;
         int x = (s.chunkX << 4) + lx, z = (s.chunkZ << 4) + lz;
         for (int k = start; k < end && y < s.maxY; k++, y++) {
-            if (!s.get(lx, y, lz).isAir()) break;
+            if (!buries(s, lx, y, lz)) break;
             long e = debris.landed.getLong(order[k]);
             BlockState st = debris.landedStates.get((int) (e & 0xFFFF));
             s.set(lx, y, lz, st);
@@ -552,6 +560,21 @@ public final class RuinPlanner {
                 s.moves.add(BlockPos.asLong(x, y, z));
             }
         }
+        // a buried double plant or cane leaves no top hanging over the pile
+        if (y > ground + 1) for (; y < s.maxY && s.props(lx, y, lz).is(Blast.Props.PLANT); y++) s.set(lx, y, lz, AIR);
+    }
+
+    /** Falling rubble takes this place: air, or a plant or thin snow it buries (not water: rubble there sinks away). */
+    private static boolean buries(Sections s, int lx, int y, int lz) {
+        if (s.get(lx, y, lz).isAir()) return true;
+        Blast.Props p = s.props(lx, y, lz);
+        return p.is(Blast.Props.REPLACEABLE) && !p.fluid() && !p.waterlogged();
+    }
+
+    /** Column ground inside the surface fireball: nothing lands there, sand melts, water boils. */
+    private static boolean inFireball(Detonation d, int x, int ground, int z) {
+        return d.surface() && Math.hypot(x + 0.5 - d.burst().x, z + 0.5 - d.burst().z) < d.fireballRadius() * 0.8
+                && ground + 0.5 > d.groundY() - d.fireballRadius();
     }
 
     /** Dynamic pressure stripped turf/grass: bare soil. */

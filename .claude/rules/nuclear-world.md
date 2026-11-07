@@ -65,8 +65,9 @@ paths:
   trees (log column with leaves at its top, up to `Blast.MAX_TRUNK` = 40: mega trees) fall only as whole trunks, standing
   trunks are never cut block by block; other logs (stilts, pillars, log walls, beams) are timber like planks (5 psi):
   before 07.11.2026 they never broke and log stilts held houses, tall bare trunks stood (Zearth 250 kt; GameTests
-  `houseOnLogStiltsFalls`, `trunksFallOnlyWhole`); a broken log triggers the support pass only when it carried a non-log
-  block. `Collapse` drops what lost support: 0-1 traversal from supports (all load-bearing blocks at
+  `houseOnLogStiltsFalls`, `trunksFallOnlyWhole`); any broken log except a felled trunk's (`Collapse.markFelled`) starts
+  the support pass and lands as rubble: a cut stilt or branch carrying only logs left the logs above it hanging
+  (GameTest `timberDoesNotHang`). `Collapse` drops what lost support: 0-1 traversal from supports (all load-bearing blocks at
   window bottom and no higher than the window's lowest original surface, plus indestructible blocks, strength < 0 or
   ≥ 50, `Props.fixed`: they neither break nor fall; upward 0, sideways/down +1, up to 8); a block holds within its span
   (`Blast.Props.span`; ground in structures — unreinforced masonry — only if support did not lengthen; hanging masonry,
@@ -87,7 +88,10 @@ paths:
   cross-chunk record); containers fall straight into the pile with their contents (`RuinPlan.moves` carries the block
   entity NBT within the chunk; a `SLOW` new state goes through the world); landed material rests at the angle of
   repose (`Debris.repose`: no step over one block to a 4-neighbor in the chunk, it rolls to the lowest lower neighbor),
-  otherwise a chest on every floor at one spot stood as a one-block chest tower (GameTest `stackedChestsLandAsAHeap`); light ignites/burns; all
+  otherwise a chest on every floor at one spot stood as a one-block chest tower (GameTest `stackedChestsLandAsAHeap`);
+  only a pile rolls (material on bare ground stays: terrain slopes would carry it to the chunk edge) and only onto open
+  ground (air, or a plant or thin snow the pile buries; not a standing block, water or the fireball): a pile stops at
+  the first standing block and a container rolled there lost its items (`DebrisTest`); light ignites/burns; all
   randomness comes from coordinate hashes; chunk ruins wait for ready chunks within `RuinPlanner.REACH` = 2),
   `RuinPlan` (delta only: 4 bytes per position, fires; heightmaps, lower sky sources of changed columns and light-check
   positions are calculated in the plan; on replacement, write plan positions and fire directly into sections, install
@@ -271,8 +275,9 @@ paths:
   completed reads do not wait behind a large queue of idle ones. Admission and polling use the common nuclear clock,
   after player ruins, preparation and fallout. Preparation must be idle; heap pressure and retained ruin data plus
   live-worker buffers at half `PLANS_CAP` limit admission (the remainder is for player windows); durable per-chunk
-  marks (`RuinContext.durableBytes`: shadow heightmaps, applied marks, ~1.8 KB a chunk) are left to the heap guard,
-  otherwise a pass over a whole map stops for good (250 kt over Zearth at 30 %, GameTest `durableMarksLeaveSettlementRoom`). An idle context is evicted
+  marks (`RuinContext.durableBytes`: shadow heightmaps, applied marks, ~1.8 KB a chunk) are left to the heap guard and
+  excluded from every `PLANS_CAP` check (`NuclearWorld.workingRuinBytes`), otherwise a pass over a whole map stops for
+  good and a later strike's preparation starves (250 kt over Zearth at 30 %, GameTest `durableMarksLeaveSettlementRoom`). An idle context is evicted
   normally, allowing a long pass to resume. Count live pool threads, not configured cores: idle threads expire
   after 30 seconds; a fixed 46-thread estimate alone exceeds 256 MiB and would stop a 48-core server forever. `RuinContext.retainedBytes` counts old applied plans as well as snapshots. Empty plans must call
   `RuinContext.finished` too: otherwise unchanged streets/water leave holes in `stood`, pinning all neighboring
