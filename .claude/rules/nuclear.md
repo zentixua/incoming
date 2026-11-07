@@ -482,7 +482,8 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   FlightScale speed (game value is not physical). Once ready ground is known during the final window, its exact
   geometry is persisted in `ScheduledStrike.arrival` and used by detonation. The window is at most 30 seconds
   (`IcbmArrival.WINDOW`; at real speed no higher than the luminous onset `ONSET`, 80 km), never while the first stage burns
-  (`IcbmArrival.BOOST` = `Ascent.burnTicks`, 61 s; default 90 s flight leaves 29 s); no new flight setting. An unready target has no speculative head.
+  (`IcbmArrival.BOOST` = `Ascent.burnTicks`, 61 s); shorter flights split their time between climb and fall in the
+  same proportion (`IcbmArrival.boost`, passed to `IcbmEntity.prepare`; default 90 s: 60.3 s climb, 29.7 s fall); no new flight setting. An unready target has no speculative head.
   `NukeApproach` snapshots carry only active terminal paths and the server epoch; one tick of interpolation,
   no countdown extrapolation. A stalled server pauses upstream like an entity, never at the burst endpoint.
   `NukeDetonation.strikeId` consumes exactly its own head; the emitted wake (at most `IcbmArrival.WAKE`) survives

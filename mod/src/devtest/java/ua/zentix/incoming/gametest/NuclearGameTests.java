@@ -2379,6 +2379,9 @@ public final class NuclearGameTests {
         IcbmEntity icbm = icbms.getFirst();
         java.util.UUID icbmId = icbm.getUUID();
         StrikeGameTests.afterTest(h, () -> StrikeGameTests.removeIcbm(level, icbmId));
+        int flight = IncomingConfig.SERVER.nukeFlightTime.get();
+        h.assertTrue(icbm.burnout() == ua.zentix.incoming.nuclear.IcbmArrival.boost(flight), "climb " + icbm.burnout() + " does not leave the fall its share of a "
+                + flight + "-tick flight");
         h.assertTrue(icbm.getX() > launcher.x + 25, "the rocket did not start behind: " + icbm.position());
         double startY = icbm.getY();
         h.succeedWhen(() -> h.assertTrue(icbm.isRemoved() || icbm.getY() > startY + 40, "the rocket does not gain altitude: " + icbm.getY()));
