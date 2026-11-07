@@ -27,6 +27,7 @@ import ua.zentix.incoming.IncomingConfig;
 import ua.zentix.incoming.net.S2C;
 import ua.zentix.incoming.nuclear.Detonation;
 import ua.zentix.incoming.nuclear.NuclearEvents;
+import ua.zentix.incoming.nuclear.model.FalloutModel;
 import ua.zentix.incoming.nuclear.model.SicknessModel;
 import ua.zentix.incoming.registry.ModAttachments;
 import ua.zentix.incoming.registry.ModDamageTypes;
@@ -112,14 +113,17 @@ public final class RadiationTicker {
         long now = level.getGameTime();
         double field = 0;
         boolean blackRain = false;
+        long newest = Long.MAX_VALUE;
         for (Detonation d : events.detonations()) {
             field += d.falloutRate(p.getX(), p.getZ(), now - d.gameTime());
             if (d.blackRain(p.getX(), p.getZ(), now - d.gameTime())) blackRain = true;
+            if (d.hasFallout()) newest = Math.min(newest, now - d.gameTime());
         }
         RadiationDose r = dose(p);
-        double contamination = r.contamination();
+        // the dust on the body is the same fission products as the ground under it: it decays by the same law
+        double contamination = newest == Long.MAX_VALUE ? r.contamination() : decay(r.contamination(), newest / 1000.0, HOURS_PER_SECOND);
         if (blackRain && IncomingConfig.SERVER.nukeBlackRain.get() && Detonation.underOpenSky(level, p.getEyePosition())) {
-            // rain contaminates instead of washing off: contamination rises toward twice the field rate, never decreases
+            // rain contaminates instead of washing off: contamination rises toward twice the field rate; rain never lowers it
             contamination = Math.max(contamination, Math.min(contamination + field * 0.05, field * 2));
         }
         if (p.isInWater()) contamination *= 0.8;
@@ -131,6 +135,16 @@ public final class RadiationTicker {
         RadiationDose next = new RadiationDose((float) gy, (float) contamination, exposed, (float) rate);
         set(p, next);
         sickness(level, p, next);
+    }
+
+    /**
+     * Contamination dose rate after one more step of {@code stepHours}, R/h: Way–Wigner t^−1.2 decay like the fallout it came
+     * from ({@link FalloutModel#doseRate}), {@code ageHours} after the newest detonation with fallout (est.: dust from an older
+     * one decays a little slower).
+     */
+    static double decay(double contamination, double ageHours, double stepHours) {
+        double before = Math.max(ageHours - stepHours, FalloutModel.MIN_DECAY_HOURS), after = Math.max(ageHours, FalloutModel.MIN_DECAY_HOURS);
+        return contamination * Math.pow(before / after, FalloutModel.DECAY_EXP);
     }
 
     /** Body center: fallout shielding is evaluated there. */

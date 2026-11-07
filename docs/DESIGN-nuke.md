@@ -489,8 +489,9 @@ Like Hiroshima photos: wood charred toward sphere, stone soot-darkened, light hu
   - `RadiationDose` saved player data attachment (cumulative Gy, death resets); custom sync when change > 0.01 Gy.
   - Every 20 ticks, dose rate = sum of local fallout events (trace/black-rain washout) × wall/roof protection
     (`Shielding.fallout`, §1.5) + own contamination (below).
-  - **Contamination:** black rain/fallout zone adds dust (`contamination`) irradiating until washed; water, not rain,
-    removes over 5 s, real decontamination.
+  - **Contamination:** black rain/fallout zone adds dust (`contamination`) irradiating until washed and decaying
+    t^(−1.2) like its fallout (age from the newest detonation with fallout); water, not rain, removes over 5 s, real
+    decontamination.
   - **Radiation sickness** `incoming:radiation_sickness`, no medicine (`fillEffectCures` override, milk no cure),
     course by Gy/game hours, `SicknessModel`, G&D table 12.108: prodrome (vomiting after 3 h at 1 Gy … immediately at
     50), latent period (weeks at 1–6 Gy, days gastrointestinal, none cerebral), manifest illness, recovery 5–10 weeks

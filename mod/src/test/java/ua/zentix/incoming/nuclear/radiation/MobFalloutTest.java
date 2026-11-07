@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 import ua.zentix.incoming.nuclear.model.FalloutModel;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class MobFalloutTest {
     /** Exact ∫ t^-k dt over [a, b]. */
@@ -41,5 +42,35 @@ class MobFalloutTest {
     void emptySpan() {
         assertEquals(0, MobFallout.integral(t -> 1, 500, 500));
         assertEquals(0, MobFallout.integral(t -> 1, 500, 100));
+    }
+
+    /**
+     * A mob loaded hours after the detonation gets sick from the hour its dose really passed 1 Gy (the promise in
+     * {@code MobFallout}): bisection finds that tick of a decaying t^-1.2 dose to one tick, and the end when it never passes.
+     */
+    @Test
+    void crossingFindsTheTickTheDosePassed() {
+        double k = FalloutModel.DECAY_EXP;
+        java.util.function.LongToDoubleFunction dose = t -> t <= 500 ? 0 : 50 * powerLaw(k, 500, t);
+        long at = MobFallout.crossing(dose, 0, 60_000, 1);
+        assertTrue(dose.applyAsDouble(at) >= 1 && dose.applyAsDouble(at - 1) < 1, "tick " + at);
+        assertEquals(60_000, MobFallout.crossing(t -> 0.5, 0, 60_000, 1));
+    }
+
+    /**
+     * Contamination on the body fades by Way–Wigner like the ground (the promise in {@code RadiationTicker}): second steps add
+     * up to the t^-1.2 law, nothing fades in the first half hour, and 7× the age leaves about a tenth (7–10 rule).
+     */
+    @Test
+    void contaminationDecaysLikeFallout() {
+        double c = 100, age = 1;
+        for (int i = 0; i < 300; i++) c = RadiationTicker.decay(c, age += 0.02, 0.02);
+        assertEquals(100 * Math.pow(1 / age, k()), c, 1e-6);
+        assertEquals(100, RadiationTicker.decay(100, 0.3, 0.02), 1e-12);
+        assertEquals(10, RadiationTicker.decay(100, 7, 6), 0.5);
+    }
+
+    private static double k() {
+        return FalloutModel.DECAY_EXP;
     }
 }
