@@ -95,9 +95,6 @@ uniform sampler2D Sampler6;
 uniform vec4 PallGround0;
 uniform vec4 PallGround1;
 uniform float PallFloorFrom;
-// PROFILING ONLY (not for main): bit mask of terms left out, from -Dincoming.pallCut (PallPass)
-uniform float PallCut;
-bool cut(int bit) { return (int(PallCut + 0.5) & bit) != 0; }
 // slot water (pall.glsl): base surge and whether water exists beneath pall
 uniform vec4 PallWater0;
 uniform vec4 PallWater1;
@@ -557,7 +554,7 @@ void slot(mat4 S, mat4 V, sampler2D ground, vec4 R, vec4 W, vec4 G, vec4 H, vec3
     vec3 keyDir = mix(sunDir, keyLight, key);
     keyDir /= max(length(keyDir), 1e-3);
     bool pall = f.sigma.x + f.sigma.y + f.sigma.z > 1e-7;
-    if (head.P.w > 0.0 && !cut(4)) wall(V, head, keyDir, sunDir, lightDir, G.w, r, cone, pall, S[3].x, s);
+    if (head.P.w > 0.0) wall(V, head, keyDir, sunDir, lightDir, G.w, r, cone, pall, S[3].x, s);
     if (!pall) return;
     float fill = clamp(f.dense * 3.0, 0.0, 1.0) * (1.0 - smoothstep(0.4, 1.0, f.height.x));
     vec3 warp = warpAt(S, p);
@@ -569,11 +566,8 @@ void slot(mat4 S, mat4 V, sampler2D ground, vec4 R, vec4 W, vec4 G, vec4 H, vec3
     // fine billows about 1/32 tile: fully visible while ray resolves twice finer (fine is share; 0 when below pixel/step —
     // mean 1, no sample)
     float tile = S[3].y, fine = 1.0 - smoothstep(0.5, 1.0, cone * 32.0 / tile);
-    if (cut(16) || cut(1024)) fine = 0.0;
     // young layer patches disperse as it mixes (pallMixed): old pall is an even blanket from above
-    float raw = 1.0;
-    if (!cut(1024)) raw = carpetCoarse(S, uvA, uvB, phaseBlend, fill);
-    float detail = fine > 0.0 ? carpetFine(uvA, uvB, phaseBlend) : 1.0;
+    float raw = carpetCoarse(S, uvA, uvB, phaseBlend, fill), detail = fine > 0.0 ? carpetFine(uvA, uvB, phaseBlend) : 1.0;
     float coarse = pallMixed(raw, f.mixed), shape = pallMixed(raw * mix(1.0, detail, fine), f.mixed);
     s.clumps = shape;
     float d = f.sigma.x * shape, h = f.sigma.y * mix(1.0, shape, 0.5), m = f.sigma.z * shape;
@@ -584,10 +578,9 @@ void slot(mat4 S, mat4 V, sampler2D ground, vec4 R, vec4 W, vec4 G, vec4 H, vec3
     // distinguish local billow edge from depth, producing blotches instead of lit/shaded sides. Shadow noise samples:
     // two coarse (two channels each), one fine only while resolved
     float sigmaShade = f.sigma.x + f.sigma.z;
-    float clump = 0.0;
-    if (!cut(8) && !cut(1024)) clump = clumpShade(coarse, pallMixed(carpetCoarse(S, uvA + lightUv * 0.06, uvB + lightUv * 0.06, phaseBlend, fill), f.mixed),
+    float clump = clumpShade(coarse, pallMixed(carpetCoarse(S, uvA + lightUv * 0.06, uvB + lightUv * 0.06, phaseBlend, fill), f.mixed),
             pallMixed(carpetCoarse(S, uvA + lightUv * 0.22, uvB + lightUv * 0.22, phaseBlend, fill), f.mixed)) * sigmaShade * tile;
-    if (fine > 0.0 && !cut(8)) {
+    if (fine > 0.0) {
         clump += fine * clumpShade(pallMixed(detail, f.mixed), pallMixed(carpetFine(uvA + lightUv * 0.015, uvB + lightUv * 0.015, phaseBlend), f.mixed),
                 pallMixed(carpetFine(uvA + lightUv * 0.055, uvB + lightUv * 0.055, phaseBlend), f.mixed)) * sigmaShade * coarse * (0.25 * tile);
     }
@@ -943,14 +936,13 @@ void passesBefore(float t, inout vec3 light, inout float transmit, inout float l
 
 // outdoor-air share at p (pall.glsl: pallOpen); terrain beyond window uses first available slot map
 float pallOpenHere(vec3 p) {
-    if (cut(256)) return 1.0;
     if (PallSlot0[1].w > 0.5) return pallOpen(PallOpen, PallOpenAt, PallOpenWrap, Sampler5, PallSlot0, PallGround0, p);
     return pallOpen(PallOpen, PallOpenAt, PallOpenWrap, Sampler6, PallSlot1, PallGround1, p);
 }
 // Sun above eye-relative pall point p through mushrooms on its ray: shadow map as world (fx_pall_composite: shade),
 // from matter above map midpoint (mushShadowFrom); no map at night
 vec3 pallSunAt(vec3 p) {
-    if (PallSun.w <= 0.0 || cut(64)) return PallSunLight;
+    if (PallSun.w <= 0.0) return PallSunLight;
     return PallSunLight * mushShadowFrom(Sampler7, Sampler8, mushShadowSun(PallSun.xyz), p, 0.5);
 }
 
@@ -981,7 +973,7 @@ vec4 pallSource(vec3 p, float cone, vec4 inflow, out vec3 dustLight) {
     slot(PallSlot1, PallWall1, Sampler6, PallGround1, PallWater1, PallGlow1, PallHot1, p, sunDir, dir, cone, inflow, s);
     vec3 f0 = vec3(0.0), f1 = vec3(0.0);
     vec2 around0 = vec2(0.0), around1 = vec2(0.0);
-    if (!cut(32) && all(greaterThanEqual(p, PallFireMin)) && all(lessThanEqual(p, PallFireMax))) {
+    if (all(greaterThanEqual(p, PallFireMin)) && all(lessThanEqual(p, PallFireMax))) {
         f0 = storm(Sampler3, PallSlot0, PallFire0, p, cone, s.clumps);
         f1 = storm(Sampler4, PallSlot1, PallFire1, p, cone, s.clumps);
         around0 = fireAround(Sampler3, PallSlot0, PallFire0, p, dir, s.sigma);
@@ -1004,10 +996,6 @@ vec4 pallSource(vec3 p, float cone, vec4 inflow, out vec3 dustLight) {
         vec4 mat = slabMatter(s);
         w = mat.rgb;
         g = mat.a;
-    }
-    if (cut(128)) {
-        dustLight = w * PallSunLight * 0.3;
-        return vec4(s.albedo * PallSunLight * 0.3, st);
     }
     // Diffuse slab light and beams: sun/ball by Beer–Lambert through column above point and billow shadows,
     // Henyey–Greenstein phase (sphere mean 1, beam strength on white wall — hence ¼). Sun above pall first passes mushrooms
@@ -1075,7 +1063,6 @@ float mushTauOf(Mush m, vec3 p, vec3 v, float len, vec4 parts) {
     // disc in the haze below a viewer minutes after the burst, gone once the nearest sample stays above the ground; Zearth 07.11)
     if (v.y < 0.0) len = min(len, max((p.y - m.base.y + 0.02 * m.capBot) / -v.y, 1.0));
     float tau = 0.0;
-    if (cut(524288)) return 0.0;
     for (int i = 0; i < 4; i++) {
         tau += dot(mushMean(m, mushLocal(m, p + v * (len * MUSH_AT[i]))), parts) * MUSH_PART[i];
     }
@@ -1217,7 +1204,7 @@ vec4 mushDense(Mush m, vec3 q, float cone, float k, out float lobes, out float d
     float uc = mushCapUnit(m);
     if (m.capSigma > 0.0 && d.x < MUSH_CAP_REACH * uc) {
         // below deepest billow hollow cap is entirely dense: no billows needed (every sunward-ray step from shadow)
-        if (d.x + (MUSH_LOBES_DEEP * MUSH_CAP_LOBES * m.billows + MUSH_CAP_EDGE) * uc > 0.0 && !cut(8388608)) lobes = mushCapLobes(m, q, cone, k);
+        if (d.x + (MUSH_LOBES_DEEP * MUSH_CAP_LOBES * m.billows + MUSH_CAP_EDGE) * uc > 0.0) lobes = mushCapLobes(m, q, cone, k);
         float shifted = d.x - MUSH_CAP_LOBES * m.billows * uc * lobes;
         sigma.x = m.capSigma * mushEdge(shifted, MUSH_CAP_EDGE * uc);
         near = shifted - MUSH_CAP_EDGE * uc;
@@ -1285,8 +1272,8 @@ float mushSunTau(int mk, Mush m, vec3 p, float k, float far) {
     // the billow layer is resolved to its first segment: a ray step nearer than that to the last point it was traced from
     // (same mushroom) has the same sunward billows, so a ray traces them once per segment length, not once per step
     float along = dot(p, gDir);
-    if (mk == gSunK && abs(along - gSunAt) < len && !cut(536870912)) return gSunNear + far;
-    for (int i = 0; i < 5 && !cut(262144); i++) {
+    if (mk == gSunK && abs(along - gSunAt) < len) return gSunNear + far;
+    for (int i = 0; i < 5; i++) {
         float lobes, depth, near, carried;
         tau += dot(mushDense(m, mushLocal(m, p + gSun * (t + gJitter * len)), len, k, lobes, depth, near, carried), vec4(1.0)) * len;
         t += len;
@@ -1343,7 +1330,6 @@ vec4 mushAt(int k, Mush m, vec3 p, vec3 q, float cone, out float near, out vec3 
     vec3 carpetLight = vec3(0.0);
     if (fromCarpet > 0.0) carpetLight = mushFootLight(k, m, q);
     if (fromCarpet >= 1.0) return vec4(st * carpetLight, st);
-    if (cut(2097152)) return vec4(st * 0.3 * PallSunLight, st);
     vec3 w = (sig.x * m.capMat.rgb + sig.y * m.stemMat.rgb + sig.z * m.skirtMat.rgb + sig.w * m.colMat.rgb) / st;
     float g = (sig.x * m.capMat.a + sig.y * m.stemMat.a + sig.z * m.skirtMat.a + sig.w * m.colMat.a) / st;
     vec3 kd = vec3(pallK(w.r, g), pallK(w.g, g), pallK(w.b, g));
@@ -1373,7 +1359,7 @@ vec4 mushAt(int k, Mush m, vec3 p, vec3 q, float cone, out float near, out vec3 
     // radiance at visible exterior temperature (core excess × edge share), L·R²/d², beam from cap center like sun, with
     // stem/skirt/column depth on path (to ball, beyond it emitting surface). Cap itself does not receive it: its light is
     // its own emission (below)
-    if (lowShare > 0.0 && m.capSigma > 0.0 && !cut(1048576)) {
+    if (lowShare > 0.0 && m.capSigma > 0.0) {
         // toward cap center in world axes: height-dependent wind drift (mushLocal) means mushroom body axes are not world axes
         vec3 c = vec3(0.0, m.capY, 0.0) - q;
         c.xz += m.drift * (mushShare(m.capY, m.endTop) - mushShare(q.y, m.endTop));
@@ -1587,7 +1573,6 @@ vec4 smokeStep(float t, float cone, out float gap, out float cell) {
 #ifndef PALL_MUSH_TAUS
 #ifndef PALL_FOOT_CACHE
 void main() {
-    if (cut(65536)) { fragColor = vec4(0.0, 0.0, 0.0, 1.0); return; }
     // ray-frame pixel of this target pixel: one per n × n block, the block's pixel taken this frame
     vec2 low = floor(gl_FragCoord.xy) * PallInterleave.x + PallInterleave.yz + 0.5;
     ivec2 full = ivec2((floor(low) + 0.5) * PallFrame.z);
@@ -1611,7 +1596,7 @@ void main() {
     clip = max(clip, 0.5 * max(max(PallSlot0[3].y, 0.0) * step(0.5, PallSlot0[1].w), max(PallSlot1[3].y, 0.0) * step(0.5, PallSlot1[1].w)));
     if (scene < 1e8) {
         scene /= axis;
-    } else if (!cut(512)) {
+    } else {
         // no world behind pixel (beyond render range, beyond/between Distant Horizons LODs): ray ends on pall terrain (PallGround),
         // not epicenter ground plane — from a lower valley it would go beneath that plane at the eye, leaving no pall below horizon.
         // Searched to the map edge, not only within the pall: the mushroom ray ends there too; cut at the pall's reach, a ray
@@ -1638,8 +1623,7 @@ void main() {
     gFootSpan0 = gFootSpan1 = vec2(1.0, 0.0);
     gWhirlLight = mat4(0.0);
     gWhirlIn = vec4(1e9);
-#ifndef PALL_NO_PALL
-    for (int i = 0; i < 4 && !cut(4096); i++) {
+    for (int i = 0; i < 4; i++) {
         vec2 sp = whirlSpan(i, dir);
         sp.y = min(sp.y, scene);
         if (sp.y <= sp.x) continue;
@@ -1656,7 +1640,6 @@ void main() {
         gWhirlLight[i] = whirl(i, dir, sp.x, sp.y, jitter, lit, burnt(m, PALL_SOOT_G * gMv) + glow, whirlFlame);
         gWhirlIn[i] = sp.x;
     }
-#endif
     // Wilson cloud: up to two shell crossings per slot, likewise when step reaches crossing (before world behind pixel)
     vec4 w0 = pallWilson(PallSlot0, PallWilson0, dir, scene), w1 = pallWilson(PallSlot1, PallWilson1, dir, scene);
     gWilsonLight = mat4(wilsonLight(PallSlot0, PallGlow0, PallHot0, PallWilson0, dir, sunDir, w0.x, w0.y),
@@ -1672,7 +1655,7 @@ void main() {
     // mushrooms: individual ray intervals (before world behind pixel) and combined interval
     float m0 = 1e9, m1 = -1.0;
     gMushes = 0;
-    for (int k = 0; k < MUSHROOMS && !cut(1); k++) {
+    for (int k = 0; k < MUSHROOMS; k++) {
         if (!mushOn(Sampler7, k)) break;
         Mush body = mushLoad(Sampler7, k);
         vec2 sp = mushSpan(body, dir);
@@ -1718,7 +1701,6 @@ void main() {
         // entry-based grid with frame jitter; ordinary steps inside are skipped
         vec4 hs0 = pallWallSpans(PallSlot0, PallWall0, PallGround0, dir, t0, t1);
         vec4 hs1 = pallWallSpans(PallSlot1, PallWall1, PallGround1, dir, t0, t1);
-        if (cut(4)) hs0 = hs1 = vec4(1e9);
         enter = vec4(hs0.x, hs0.z, hs1.x, hs1.z);
         leave = vec4(hs0.y, hs0.w, hs1.y, hs1.w);
         fineStep = vec4(0.12 * PallWall0[0].z, 0.12 * PallWall0[0].z, 0.12 * PallWall1[0].z, 0.12 * PallWall1[0].z);
@@ -1737,7 +1719,7 @@ void main() {
     // pall: i steps taken (with wall-head steps, up to 2·steps + 16), base ordinary boundaries behind, nextBase next boundary
     int i = 0, base = 0, pallSteps = 2 * steps + 16;
     float ta = 1e9, nextBase = 1e9, lastBase = 1e9;
-    if (t1 > t0 && !cut(2048)) {
+    if (t1 > t0) {
         ta = along(jitter / n, t0, fa, fb, t1, a, b);
         lastBase = ta;
         nextBase = along((1.0 + jitter) / n, t0, fa, fb, t1, a, b);
@@ -1758,7 +1740,7 @@ void main() {
     // space between salvo clouds would consume steps, leaving smoke beyond undrawn
     int sk = 0, sSteps = steps + 16, se = 0, sEmpty = 3 * SMOKE_N;
     float s0 = 1e9, s1 = -1.0, ts = 1e9;
-    if (smokeOn() && !cut(2)) {
+    if (smokeOn()) {
         vec2 ss = pallBox(dir, SmokeMin, SmokeMax);
         s0 = max(ss.x, 0.0);
         s1 = min(ss.y, scene);
@@ -1812,16 +1794,11 @@ void main() {
                 lastBase = nextBase;
                 nextBase = along((float(base) + 1.0 + jitter) / n, t0, fa, fb, t1, a, b);
             }
-#ifndef PALL_NO_PALL
             if (next > ta) pallStep(ta, next - ta, grid, light, transmit, lost);
-#endif
             i += 1;
             ta = next;
             if (i >= pallSteps || ta >= t1) ta = 1e9;
         } else {
-#ifdef PALL_NO_MUSH
-            tm = 1e9;
-#else
             float cone = max(tm * gPixel, 0.35 * dsMin);
             float gap;
             gTauEye = tauEye;
@@ -1832,9 +1809,7 @@ void main() {
             // at identical positions, defeating accumulation smoothing
             float ds = clamp(gap + jitter * dsMin, dsMin, dsMax);
             if (r.w > 1e-7) {
-                float perStep = 0.5;
-                if (cut(16777216)) perStep = 1.0;
-                ds = clamp(perStep / r.w, dsMin, dsMax);
+                ds = clamp(0.5 / r.w, dsMin, dsMax);
                 ds = min(ds, m1 - tm);
                 passesBefore(tm, light, transmit, lost);
                 // air haze to step (pallAir): distant mushroom light/opacity fade into sky behind
@@ -1850,16 +1825,11 @@ void main() {
             }
             tm += ds;
             mk += 1;
-#endif
         }
-        float exitAt = RAY_EXIT;
-        if (cut(131072)) exitAt = 0.05;
-        if (cut(1073741824)) exitAt = 0.005;
-        if (transmit + lost < exitAt) {
+        if (transmit + lost < RAY_EXIT) {
             // what is left of the pixel looks like the matter so far: deeper matter takes the place of the background behind
             // it (dropping the rest instead would darken the pixel by up to its share, a few percent at this exit)
             float keep = 1.0 / (1.0 - transmit - lost);
-            if (cut(1073741824)) keep = 1.0;
             light *= keep;
             heat *= keep;
             emitted *= keep;

@@ -19,8 +19,8 @@
 // Interleaved rays (PallPass.Step.interleave n): each frame traces one pixel of every n × n block (Sampler0 holds only those,
 // block by block), the rest keep their reprojected history, clamped to the traced neighbours at the same place — the
 // way volumetric clouds are drawn in games (a sixteenth of the pixels per frame). A still image is the same; changes reach
-// every pixel within n² frames. A traced pixel takes its new ray with the history weight of n² ordinary frames, but no lower than
-// PallPass.TRACED_HISTORY: otherwise a pixel would show a single jittered ray (grain).
+// every pixel within n² frames. A traced pixel takes its new ray with the ordinary history weight (PallPass.HISTORY): every
+// pixel averages as many of its own rays as without interleaving, over n² times as many frames.
 // Comments below say “ray pixel” for a traced pixel of this frame.
 
 // current frame rays (fx_pall): one per n × n block
@@ -47,9 +47,6 @@ uniform vec4 PallInterleave;
 // light or dark tile of the block's size. Pulled part of the way, history follows the bounds averaged over frames; a real
 // change outside them still wins within a few frames
 uniform float PallClamp;
-// PROFILING ONLY: term switches (bits 2^25 neighbourhood, 2^26 mushroom/smoke reprojection distance, 2^27 slope, 2^28 history)
-uniform float PallCut;
-bool cut(int bit) { return (int(PallCut + 0.5) & bit) != 0; }
 
 out vec4 fragColor;
 
@@ -70,15 +67,12 @@ void main() {
     // pallAhead; a ray pixel always includes itself); no valid neighbor there means all valid neighbors (as without an
     // edge: current ray invalid, history exists). The neighbor at the same place nearest in world distance fills a pixel
     // without history
-    vec2 slope = vec2(0.0);
-    if (!cut(134217728)) slope = pallSlope(Sampler2, full, fullSize, depth);
-    int reach = 1;
-    if (cut(33554432)) reach = 0;
+    vec2 slope = pallSlope(Sampler2, full, fullSize, depth);
     vec4 lo = vec4(1e9), hi = vec4(-1e9), loAll = vec4(1e9), hiAll = vec4(-1e9);
     vec4 fill = vec4(0.0, 0.0, 0.0, 1.0);
     float fillAlike = -1.0;
-    for (int y = -reach; y <= reach; y++) {
-        for (int x = -reach; x <= reach; x++) {
+    for (int y = -1; y <= 1; y++) {
+        for (int x = -1; x <= 1; x++) {
             ivec2 c = clamp(own + ivec2(x, y), ivec2(0), cells - 1);
             vec4 v = texelFetch(Sampler0, c, 0);
             if (!pallValid(v)) continue;
@@ -112,14 +106,14 @@ void main() {
     vec3 dir = normalize(farPoint.xyz / farPoint.w);
     float scene = depth / max(dot(dir, PallForward), 1e-3);
     float t = min(scene, PallFrame.w), near = 1e9;
-    for (int k = 0; k < MUSHROOMS && !cut(67108864); k++) {
+    for (int k = 0; k < MUSHROOMS; k++) {
         if (!mushOn(Sampler3, k)) break;
         vec2 sp = mushSpan(mushLoad(Sampler3, k), dir);
         sp.y = min(sp.y, scene);
         if (sp.y > sp.x) near = min(near, 0.5 * (sp.x + sp.y));
     }
     // explosion smoke on ray: likewise its bounds midpoint (cloud hundreds of blocks away against sky)
-    if (smokeOn() && !cut(67108864)) {
+    if (smokeOn()) {
         vec2 ss = pallBox(dir, SmokeMin, SmokeMax);
         ss.y = min(ss.y, scene);
         if (ss.y > ss.x) near = min(near, 0.5 * (ss.x + ss.y));
@@ -133,8 +127,7 @@ void main() {
     // history uses same ray lattice (pallLattice), otherwise even a still view samples between pixels and
     // blurs history with neighbors each frame
     vec2 lattice = vec2(pallLattice(uv.x * float(fullSize.x), PallFrame.z), pallLattice(uv.y * float(fullSize.y), PallFrame.z));
-    vec4 past = vec4(0.0);
-    if (seen && !cut(268435456)) past = texture(Sampler1, (lattice + 0.5) / vec2(textureSize(Sampler1, 0)));
+    vec4 past = seen ? texture(Sampler1, (lattice + 0.5) / vec2(textureSize(Sampler1, 0))) : vec4(0.0);
     bool pastOk = seen && pallValid(past) && all(lessThanEqual(lo, hi));
     vec4 held = mix(past, clamp(past, lo, hi), PallClamp);
     if (!curOk) {

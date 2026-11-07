@@ -305,7 +305,6 @@ public final class ClientScenario {
         for (Step s : List.copyOf(steps)) {
             if (s.at == tick) s.action.run();
         }
-        if (holdFrom >= 0) holdEvents();
         if (nuke) nukeEvents();
         if (water) waterEvents();
         if (pall) pallEvents();
@@ -902,7 +901,6 @@ public final class ClientScenario {
             // wave long past (minutes after the burst, as on Zearth), then look down from each height (INCOMING_BELOW_UP),
             // at each pitch (INCOMING_BELOW_PITCH); each frame also without the pall and, under Iris, without the shader pack
             int t = tick + 1200 * Integer.parseInt(System.getenv().getOrDefault("INCOMING_BELOW_MIN", "10"));
-            final int first = t;
             // render distance of a host server whose view distance is below the client's (Zearth: 10 against 12)
             String rd = System.getenv("INCOMING_BELOW_RD");
             if (rd != null) at(t - 200, () -> Minecraft.getInstance().options.renderDistance().set(Integer.parseInt(rd)));
@@ -915,13 +913,6 @@ public final class ClientScenario {
                     at(t, () -> cmd(String.format(java.util.Locale.ROOT, "tp @s 0.5 %.1f 0.5 %d %d", filmEye.y + up, mushroomYaw, pitch)));
                     pallShot(t + 60, "below_up" + up + "_p" + pitch);
                     offShot(t + 70, "below_up" + up + "_p" + pitch + "_off", 40);
-                    for (String dbg : System.getenv().getOrDefault("INCOMING_BELOW_DBG", "").split(",")) {
-                        if (dbg.isBlank()) continue;
-                        at(t + 120, () -> System.setProperty("incoming.pallDebug", dbg));
-                        pallShot(t + 160, "below_up" + up + "_p" + pitch + "_dbg" + dbg);
-                        at(t + 165, () -> System.setProperty("incoming.pallDebug", "0"));
-                        t += 60;
-                    }
                     if (System.getenv("INCOMING_SHADERS") != null) {
                         // the same frame without the shader pack: what the pack itself does with the world under the pall
                         at(t + 130, () -> irisShaders(false));
@@ -931,24 +922,6 @@ public final class ClientScenario {
                     }
                     t += 140;
                 }
-            }
-            if (System.getenv("INCOMING_BELOW_FAST") != null) {
-                // DEBUG: age the cloud fast: no pall, short render distance until shortly before the shots
-                at(tick + 420, () -> {
-                    ua.zentix.incoming.IncomingConfig.CLIENT.nukeDustQuality.set(ua.zentix.incoming.IncomingConfig.Client.DustQuality.OFF);
-                    Minecraft.getInstance().options.renderDistance().set(2);
-                });
-                int back = first - 600;
-                at(back, () -> {
-                    ua.zentix.incoming.IncomingConfig.CLIENT.nukeDustQuality.set(ua.zentix.incoming.IncomingConfig.Client.DustQuality.valueOf(
-                            System.getenv().getOrDefault("INCOMING_PALL", "MEDIUM")));
-                    Minecraft.getInstance().options.renderDistance().set(Integer.parseInt(rd == null ? "10" : rd));
-                });
-            }
-            if (System.getenv("INCOMING_BELOW_HOLD") != null) {
-                int ready = t + 20;
-                at(ready, () -> { holdFrom = ready; Incoming.LOG.info("SCENARIO hold"); });
-                return;
             }
             at(t + 20, () -> {
                 Incoming.LOG.info("SCENARIO done");
@@ -3840,64 +3813,6 @@ public final class ClientScenario {
 
     /** Longest wait for an explosion ({@code wait:blast}): Shahed's flight at 5 km, tick. */
     private static final int BLAST_WAIT = 3600;
-
-    // DEBUG hold: commands from run/scenario/hold/*.cmd, one at a time, result *.done
-    private int holdFrom = -1, holdBusy = -1;
-    private java.util.concurrent.CompletableFuture<Void> holdReload;
-    private java.nio.file.Path holdCmd;
-
-    private void holdEvents() {
-        Minecraft mc = Minecraft.getInstance();
-        if (holdReload != null && !holdReload.isDone()) return;
-        if (holdBusy >= 0 && tick < holdBusy) return;
-        try {
-            if (holdCmd != null) {
-                java.nio.file.Files.move(holdCmd, holdCmd.resolveSibling(holdCmd.getFileName() + ".done"));
-                holdCmd = null;
-                holdReload = null;
-                holdBusy = -1;
-            }
-            java.nio.file.Path dir = mc.gameDirectory.toPath().resolve("hold");
-            java.nio.file.Files.createDirectories(dir);
-            java.nio.file.Path next;
-            try (var list = java.nio.file.Files.list(dir)) {
-                next = list.filter(f -> f.toString().endsWith(".cmd")).sorted().findFirst().orElse(null);
-            }
-            if (next == null) return;
-            String[] a = java.nio.file.Files.readString(next).trim().split("\\s+");
-            holdCmd = next;
-            Incoming.LOG.info("SCENARIO hold cmd {}", String.join(" ", a));
-            switch (a[0]) {
-                case "tp" -> { cmd(String.format(java.util.Locale.ROOT, "tp @s 0.5 %.1f 0.5 %d %s", filmEye.y + Double.parseDouble(a[1]), mushroomYaw, a[2])); holdBusy = tick + 40; }
-                case "prop" -> System.setProperty(a[1], a[2]);
-                case "reload" -> { holdReload = mc.reloadResourcePacks(); holdBusy = tick + 40; }
-                case "shot" -> { pallShot(tick + 30, a[1]); holdBusy = tick + 35; }
-                case "wait" -> holdBusy = tick + Integer.parseInt(a[1]);
-                case "pan" -> {
-                    // turn the view by a[1] degrees per tick for a[2] ticks, a frame halfway: the pall in motion
-                    float d = Float.parseFloat(a[1]);
-                    int ticks = Integer.parseInt(a[2]);
-                    for (int i = 1; i <= ticks; i++) {
-                        at(tick + i, () -> {
-                            if (Minecraft.getInstance().player != null) Minecraft.getInstance().player.setYRot(Minecraft.getInstance().player.getYRot() + d);
-                        });
-                    }
-                    pallShot(tick + ticks / 2, a[3]);
-                    holdBusy = tick + ticks + 5;
-                }
-                case "cmd" -> { cmd(String.join(" ", java.util.Arrays.copyOfRange(a, 1, a.length))); holdBusy = tick + 10; }
-                case "quality" -> { ua.zentix.incoming.IncomingConfig.CLIENT.nukeDustQuality.set(
-                        ua.zentix.incoming.IncomingConfig.Client.DustQuality.valueOf(a[1])); holdBusy = tick + 40; }
-                case "log" -> Incoming.LOG.info("SCENARIO pall {} cut {} at {}: {}; layer {}", a[1], Integer.getInteger("incoming.pallCut", 0),
-                        xyz(mc.gameRenderer.getMainCamera().getPosition()), ua.zentix.incoming.client.nuclear.NukePall.describe(),
-                        ua.zentix.incoming.client.fx.layer.FxLayer.describeTiming());
-                case "quit" -> mc.stop();
-                default -> Incoming.LOG.info("SCENARIO hold unknown {}", a[0]);
-            }
-        } catch (java.io.IOException ex) {
-            Incoming.LOG.warn("SCENARIO hold", ex);
-        }
-    }
 
     private void at(int t, Runnable r) {
         steps.add(new Step(t, r));

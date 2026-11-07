@@ -447,8 +447,18 @@ paths:
   stability to shift in both settings. The nuclear ball (the pall's volume) does not glow here. Time — the layer's line
   (`bloom`).
 - Nuclear dust pall (`fx/layer/PallPass`) — a volume in the same stage of the layer, before the squares: rays per frame
-  are a factor of 2–4 coarser per axis (`fx_pall`); accumulation over frames with transfer by world depth
-  (`fx_pall_resolve`); per-frame compositing with blend `ONE, SRC_ALPHA` and a weight by the similarity of distance to
+  are a factor of 2–4 coarser per axis (`fx_pall`), and on lower rungs interleaved: one ray pixel of every n × n block
+  per frame (n up to 4, `Step.interleave`, order `ORDER`), the others keep their reprojected history; accumulation over
+  frames with transfer by world depth (`fx_pall_resolve`): a pixel taking a ray keeps history weight 0.9 for any n (with
+  0.9^n² it showed nearly one jittered ray: grain on thin lobes against the sky), and history moves 1/n of the way to the
+  bounds of the neighbour rays per frame (snapped, a whole block took one frame's chance bound: square tiles). The
+  march's viewport is the ray cells; the accumulation sets the whole reduced frame itself. Mushroom mean optical depths
+  (up, down, away from the eye, sunward past the billow layer, away from the sun, toward and away from the ball) are
+  smooth fields of position, baked once per frame into a 48³ grid per mushroom (`fx_mush_taus`, `Sampler10`,
+  `mushTauGrid`; cells farther than a cell diagonal from matter by `mushGap` stay zero), not five four-sample paths at
+  every step (laptop 07.11: −25–40 % of ray time, frames unchanged); without the grid (`PallTauReady` 0) steps compute
+  them (`mushTausAt`). Sunward billows are traced once per first-segment length along a ray (`gSunK`); a ray ends at
+  `RAY_EXIT` 2 % left, the rest filled like the matter so far; per-frame compositing with blend `ONE, SRC_ALPHA` and a weight by the similarity of distance to
   the world (`fx_pall_composite`). The layer's squares then take their share of the pall in front of them (`fx.vsh`, six
   steps over the field without noise, `pall.glsl` — shared by all): otherwise a mushroom and smoke behind thick dust
   would be drawn over it. The pall's light in front of a square is the share of the pall's light in the frame by its
@@ -674,7 +684,10 @@ paths:
   Detail also keeps the budget — 2 ms on the GPU (`PallPass.Detail`): if the average over half a second is longer, it
   drops at once to a step of `PallPass.LADDER` that fits the cost; the headroom to go up a step is granted if, with it,
   the time would be no more than 0.7 of the budget for two windows in a row and 3 s after the last change. It is never
-  above the setting and never below LOW (steps between them are a factor of 2–4, 48–20 steps).
+  above the setting and goes below LOW down to the last rung (factor 2–4, 64–20 steps, interleave 1–4). Laptop 07.11
+  (RTX 4060 Laptop, 2560×1600, 250 kt at 195 s, ~2100 MHz): MEDIUM 22–48 ms before this ladder; rung 13 (1/2 × 22, rays
+  1/16) 2.4–5 ms, last rung 1.6–2.6 ms. The `SCENARIO pall` line splits GPU time into preparation, rays, accumulation and
+  composite (five timestamps per measured frame).
   Time — `glQueryCounter(GL_TIMESTAMP)` marks before and after the passes, in a ring of 4 pairs, read when ready (without
   waiting). Not `GL_TIME_ELAPSED`: that query is single in OpenGL for everyone, and Minecraft holds it for the whole frame
   while F3's GPU load is on screen (`TimerQuery`) — a nested one would not start. Pairs taken before the pall had gone

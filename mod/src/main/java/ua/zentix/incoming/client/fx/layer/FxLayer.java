@@ -134,13 +134,6 @@ public final class FxLayer {
             PallPass.mushTaus = null;
             Incoming.LOG.error("Mushroom depth grid shader failed to load: mushroom ray steps compute their depths themselves", ex);
         }
-        // PROFILING ONLY: march variants without the mushroom or without the pall steps (-Dincoming.pallVariant)
-        try {
-            e.registerShader(new ShaderInstance(e.getResourceProvider(), Incoming.id("fx_pall_nomush"), DefaultVertexFormat.POSITION), s -> PallPass.marchNoMush = s);
-            e.registerShader(new ShaderInstance(e.getResourceProvider(), Incoming.id("fx_pall_nopall"), DefaultVertexFormat.POSITION), s -> PallPass.marchNoPall = s);
-        } catch (IOException ex) {
-            Incoming.LOG.error("Pall profiling variants failed to load", ex);
-        }
         try {
             e.registerShader(new ShaderInstance(e.getResourceProvider(), Incoming.id("fx_mush_shadow"), DefaultVertexFormat.POSITION), s -> PallPass.shadow = s);
         } catch (IOException ex) {

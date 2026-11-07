@@ -75,7 +75,8 @@ import java.util.concurrent.CompletionException;
  * <p>
  * Detail holds its own budget ({@link Detail}): GPU pass times measured by OpenGL timestamps, read after
  * a few frames (no waiting); while above {@link Detail#BUDGET_MS} ms, ray frame resolution and step count decrease
- * and rays per frame decrease ({@link #LADDER}, down to its last rung, below the LOW setting); with headroom, detail returns toward the setting. In client scenarios
+ * and rays per frame decrease ({@link #LADDER}, down to its last rung, below the LOW setting); with headroom, detail returns
+ * toward the setting. In client scenarios
  * and Flashback video export, frames are not real-time: a slow frame costs nothing there, so detail always
  * follows the setting ({@link Detail#pin}). {@code SCENARIO pall} line — {@link #describe}.
  */
@@ -93,16 +94,14 @@ public final class PallPass {
     private static final float REPROJECT_MAX = 600;
     /** Eye displacement beyond this in one frame invalidates history (teleport, projectile camera). */
     private static final double JUMP = 30;
-    /** History weight per frame at each pixel (temporal accumulation, {@code fx_pall_resolve}). */
-    private static final double HISTORY = 0.9;
     /**
-     * Least history weight at a ray pixel when rays are interleaved: one jittered ray per block refreshes a pixel only every n²
-     * frames, so with the weight of n² ordinary frames (0.9^16 = 0.19 at n = 4) a pixel shows nearly a single ray — grain on
-     * thin cloud edges against the sky (laptop frames 07.11: noise p95 10 against 3–4). At 0.8 a pixel keeps about five rays:
-     * grain as without interleaving, a change takes 5·n² frames (80 at n = 4, about a second) where the neighbour clamp does
-     * not catch it.
+     * History weight at a pixel taking a new ray (temporal accumulation, {@code fx_pall_resolve}), interleaved or not: a pixel
+     * averages about ten of its own jittered rays. With interleave n a pixel takes a ray only every n² frames; giving that ray
+     * the weight of n² ordinary frames instead (0.9^16 = 0.19 at n = 4) left a pixel showing nearly a single ray — grain on thin
+     * cloud edges against the sky (laptop frames 07.11: noise p95 10 against 3–4 without interleave; 0.9: 3–4). A change the
+     * neighbour bounds do not catch takes 10·n² frames.
      */
-    static final double TRACED_HISTORY = 0.8;
+    private static final double HISTORY = 0.9;
 
     /**
      * Pall quality setting — finest {@link #LADDER} rung: frame downscale factor, steps per ray and ray interleave. LOW
@@ -427,8 +426,6 @@ public final class PallPass {
 
     @Nullable
     static ShaderInstance march, resolve, composite, shadow, footLighting, mushTaus;
-    // PROFILING ONLY
-    static ShaderInstance marchNoMush, marchNoPall;
     static final int FOOT_LIGHT_AZ = 64, FOOT_LIGHT_R = 16, FOOT_LIGHT_H = 32;
     /** Mushroom mean depth grid ({@code fx_mush_taus}): cells across x and z and height layers per mushroom, two blocks each. */
     static final int MUSH_TAU_N = 48;
@@ -601,9 +598,6 @@ public final class PallPass {
         }
         if (timer()) poll(System.nanoTime());
         Step step = LADDER[DETAIL.level];
-        // PROFILING ONLY: -Dincoming.pallRung forces a rung
-        int forced = Integer.getInteger("incoming.pallRung", -1);
-        if (forced >= 0 && forced < LADDER.length) step = LADDER[forced];
         if (!ensure(w, h, step.factor, step.interleave)) return false;
         boolean open = mc.level != null && OpenAir.update(mc.level, eye);
         tableBuffer.clear();
@@ -678,13 +672,10 @@ public final class PallPass {
         // base light in a separate small table; main pass only samples it
         // shared source textures and parameters: same pallSource, without a second inlined ray call
         // mushroom mean depths: one grid per frame, read by every mushroom ray step (fx_mush_taus)
-        boolean grid = mt != null && tauMap >= 0 && f.mushroomCount > 0 && !Boolean.getBoolean("incoming.pallLiveTaus");
+        boolean grid = mt != null && tauMap >= 0 && f.mushroomCount > 0;
         for (int pass = 0; pass < 3; pass++) {
             if (pass == 0 && !litFoot || pass == 1 && !grid) continue;
             m = pass == 0 ? fl : pass == 1 ? mt : march;
-            String variant = System.getProperty("incoming.pallVariant", "");
-            if (pass == 2 && variant.equals("nomush") && marchNoMush != null) m = marchNoMush;
-            if (pass == 2 && variant.equals("nopall") && marchNoPall != null) m = marchNoPall;
             if (pass == 0) {
                 GlStateManager._glBindFramebuffer(GlConst.GL_FRAMEBUFFER, footFbo);
                 RenderSystem.viewport(0, 0, FOOT_LIGHT_AZ + 1, FOOT_LIGHT_H * FOOT_LIGHT_R * f.mushroomCount);
@@ -746,7 +737,6 @@ public final class PallPass {
             m.safeGetUniform("PallWilson0").set(f.wilson0.x, f.wilson0.y, f.wilson0.z, f.wilson0.w);
             m.safeGetUniform("PallWilson1").set(f.wilson1.x, f.wilson1.y, f.wilson1.z, f.wilson1.w);
             m.safeGetUniform("PallFloorFrom").set(f.floorFrom);
-            m.safeGetUniform("PallCut").set((float) Integer.getInteger("incoming.pallCut", 0));
             m.safeGetUniform("PallExposure").set(f.exposure);
             m.safeGetUniform("SmokeNoise").set(f.smokeNoise.x, f.smokeNoise.y, f.smokeNoise.z, f.smokeNoise.w);
             m.safeGetUniform("SmokeWind").set(f.smokeWind.x, f.smokeWind.y, f.smokeWind.z, f.smokeWind.w);
@@ -773,12 +763,9 @@ public final class PallPass {
         r.safeGetUniform("PallForward").set(FORWARD.x, FORWARD.y, FORWARD.z);
         r.safeGetUniform("PallReproject").set(dx, dy, dz, history ? 1f : 0f);
         r.safeGetUniform("PallFrame").set(0f, 0f, factor, REPROJECT_MAX);
-        // a ray pixel takes its new ray with the history weight of n² ordinary frames, but no lower than TRACED_HISTORY
-        double traced = Double.parseDouble(System.getProperty("incoming.pallTracedHistory", String.valueOf(TRACED_HISTORY)));
-        r.safeGetUniform("PallInterleave").set(n, ox, oy, (float) Math.max(Math.pow(HISTORY, n * n), traced));
+        r.safeGetUniform("PallInterleave").set(n, ox, oy, (float) HISTORY);
         // history moves 1/n of the way to the neighbour-ray bounds each frame: outright without interleaving
-        r.safeGetUniform("PallClamp").set(Float.parseFloat(System.getProperty("incoming.pallClamp", String.valueOf(1f / n))));
-        r.safeGetUniform("PallCut").set((float) Integer.getInteger("incoming.pallCut", 0));
+        r.safeGetUniform("PallClamp").set(1f / n);
         SmokePass.bind(r, f.smoke);
         quad(r, false);
         latest = next - 1;
@@ -819,7 +806,6 @@ public final class PallPass {
         c.safeGetUniform("PallWall0").set(f.wall0);
         c.safeGetUniform("PallWall1").set(f.wall1);
         c.safeGetUniform("PallFloorFrom").set(f.floorFrom);
-        c.safeGetUniform("PallCut").set((float) Integer.getInteger("incoming.pallCut", 0));
         c.safeGetUniform("Haze").set(haze.x, haze.y, haze.z, haze.w);
         c.safeGetUniform("PallBalls").set(balls ? f.balls : NO_FIRE);
         c.safeGetUniform("PallBallLight").set(f.ballLight);
@@ -1286,8 +1272,6 @@ public final class PallPass {
     public static String describe() {
         if (lastDrawn == 0) return failed ? "failed" : "off";
         Step step = LADDER[Math.max(0, DETAIL.level)];
-        int forced = Integer.getInteger("incoming.pallRung", -1);
-        if (forced >= 0 && forced < LADDER.length) step = LADDER[forced];
         Step top = LADDER[Math.max(0, DETAIL.ceiling)];
         String gpu = timer < 0 ? "gpu n/a" : String.format(Locale.ROOT, "gpu %.2f ms (longest %.2f, budget %.1f; preparation %.2f, rays %.2f, accumulation %.2f, composite %.2f)",
                 lastGpuMean, lastGpuMax, Detail.BUDGET_MS, LAST_PART[0], LAST_PART[1], LAST_PART[2], LAST_PART[3]);
