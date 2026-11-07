@@ -469,13 +469,17 @@ public final class NuclearWorld {
         }
         lastFrontNanos = System.nanoTime() - frontStart;
         if (now % 1200 == 0) scars.retainBudgets(events.detonations().stream().map(Detonation::id).collect(java.util.stream.Collectors.toSet()));
+        // ruins a player sees before the crater: its columns would take the whole lane for seconds after a large
+        // ground burst, and the wave would pass intact chunks in view (ScarQueue.workSeen); unseen ruins after it
+        long seenStart = System.nanoTime();
+        scars.workSeen(level, now, clock);
         long craterStart = System.nanoTime();
         digCraters(level, events, clock);
         long scarStart = System.nanoTime();
         lastCraterNanos = scarStart - craterStart;
         scars.work(level, now, clock);
         long scorchStart = System.nanoTime();
-        lastScarNanos = scorchStart - scarStart;
+        lastScarNanos = scorchStart - scarStart + (craterStart - seenStart);
         // ground light after wave-reached ruins using their remaining budget: when front crosses
         // many chunks per tick, distant flash layers prioritized ahead delayed front ruins for ticks (25 tick units
         // to layers, none to ruins). Wave-reached layer unnecessary: ruins apply everything

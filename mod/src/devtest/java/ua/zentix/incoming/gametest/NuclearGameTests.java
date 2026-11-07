@@ -51,6 +51,7 @@ import ua.zentix.incoming.nuclear.world.RuinPlanner;
 import ua.zentix.incoming.nuclear.world.CraterJob;
 import ua.zentix.incoming.nuclear.world.NuclearWorld;
 import ua.zentix.incoming.nuclear.world.NukeSeen;
+import ua.zentix.incoming.nuclear.world.ScarQueue;
 import ua.zentix.incoming.nuclear.world.WorkClock;
 import ua.zentix.incoming.nuclear.world.RuinWorkers;
 import ua.zentix.incoming.nuclear.world.ThermalShadow;
@@ -1571,6 +1572,68 @@ public final class NuclearGameTests {
                 throw new net.minecraft.gametest.framework.GameTestAssertException(failure != null ? failure
                         : "the detonation did not go through to the end: ready " + plannedBefore[0] + ", according to plan " + w.ruinStats()[0] + ", left " + w.plannedChunks()
                         + ", squares " + w.prepTiles() + ", detonation " + (d != null) + ", glass " + glassGone[0]);
+            }
+        });
+    }
+
+    /**
+     * A ground burst digs a crater one column per work unit; ruins a player sees still fall with the front, no later than
+     * 2 ticks after it reaches their chunk, while the crater digs ({@code ScarQueue.workSeen} runs before it). Before,
+     * the crater took the whole lane first and chunks loaded at detonation were not even enqueued: 250 kt over Zearth
+     * (07.11, r4), every chunk in view of a bot 460 m out got its ruins 105–116 ticks after the wave. Counting clock:
+     * each unit 1 ms, so the crater (256 columns or more) holds the lane for dozens of ticks on any machine.
+     */
+    @GameTest(template = "range", timeoutTicks = 900, batch = "nuke_prep_crater", skyAccess = true)
+    public static void seenRuinsKeepUpWithCrater(GameTestHelper h) {
+        ServerLevel level = h.getLevel();
+        BlockPos glass = CENTER.west(16);
+        h.setBlock(glass, Blocks.GLASS);
+        long glassChunk = new ChunkPos(h.absolutePos(glass)).toLong();
+        double scale = IncomingConfig.SERVER.nukeEffectsScale.get();
+        IncomingConfig.SERVER.nukeEffectsScale.set(0.02);
+        NuclearWorld w = NuclearWorld.get(level);
+        WorkClock clock = WorkClock.counting(1_000_000L);
+        NuclearWorld.useClock(level.getServer(), clock);
+        ScarQueue.seenForTest(c -> c == glassChunk);
+        NuclearEvents events = NuclearEvents.get(level);
+        long now = level.getGameTime();
+        Vec3 target = Vec3.atBottomCenterOf(h.absolutePos(CENTER));
+        events.schedule(new NuclearEvents.ScheduledStrike(events.nextId(), target, 15, false, now, now + 300, target, java.util.Optional.empty(), false));
+        long[] glassGone = {-1}, tickAt = {0};
+        int[] cratersAtWave = {-1};
+        Runnable cleanup = () -> {
+            ScarQueue.seenForTest(null);
+            IncomingConfig.SERVER.nukeEffectsScale.set(scale);
+            NuclearWorld.useClock(level.getServer(), new WorkClock());
+            NuclearStrikes.clear(level);
+        };
+        h.onEachTick(() -> {
+            String failure = null;
+            // after the explosion at game pace, as ruinsPreparedDuringFlightFallWithFront: background plans and disk reads
+            if (events.scheduled().isEmpty()) {
+                if (tickAt[0] == 0) tickAt[0] = System.nanoTime();
+                else RuinBackgroundGameTests.gamePace(tickAt);
+            }
+            if (glassGone[0] < 0 && !h.getBlockState(glass).is(Blocks.GLASS)) glassGone[0] = level.getGameTime();
+            Detonation d = events.detonations().stream().filter(x -> x.burst().distanceTo(target) < 20).findFirst().orElse(null);
+            long due = d == null ? Long.MAX_VALUE : ScarQueue.due(d, new ChunkPos(glassChunk));
+            // crater still digging when the wave reaches the glass chunk: it competes with the ruins for the lane
+            if (cratersAtWave[0] < 0 && level.getGameTime() >= due) cratersAtWave[0] = w.craterJobs();
+            if (d != null && glassGone[0] < 0 && level.getGameTime() > due + 2) failure = "visible ruins lagged behind the front while the crater dug: glass "
+                    + "still whole " + (level.getGameTime() - due) + " ticks after the wave (craters at the wave " + cratersAtWave[0] + ")";
+            else if (d != null && glassGone[0] >= 0) {
+                if (!d.surface()) failure = "not a ground burst: no crater";
+                else if (cratersAtWave[0] <= 0) failure = "the crater was finished before the wave reached the glass: nothing competed with the ruins";
+                else {
+                    cleanup.run();
+                    h.succeed();
+                    return;
+                }
+            }
+            if (failure != null || level.getGameTime() > now + 850) {
+                cleanup.run();
+                throw new net.minecraft.gametest.framework.GameTestAssertException(failure != null ? failure
+                        : "the glass was not broken: detonation " + (d != null) + ", craters " + w.craterJobs());
             }
         });
     }
