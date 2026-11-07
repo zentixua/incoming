@@ -131,6 +131,35 @@ public final class LateExposureOrderGameTests {
         }
     }
 
+    /**
+     * An object the front blew gets that wave once: blown faster than the slowed front and caught by it again on a later
+     * tick, it is not blown again.
+     */
+    @GameTest(template = "range", batch = "nuke_late_order_object", skyAccess = true)
+    public static void objectIsBlownOncePerWave(GameTestHelper h) {
+        ServerLevel level = h.getLevel();
+        Vec3 burst = Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(16, 12, 32)));
+        Detonation d = det(level, NuclearEvents.get(level).nextId(), burst, 1);
+        var item = new net.minecraft.world.entity.item.ItemEntity(level, burst.x + 0.5 * (d.frontRadius(0) + d.frontRadius(1)), burst.y + 0.5, burst.z,
+                new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.COBBLESTONE, 16));
+        item.setNoGravity(true);
+        item.setDeltaMovement(Vec3.ZERO);
+        level.addFreshEntity(item);
+        try {
+            BlastFront front = new BlastFront();
+            front.advance(level, List.of(d), level.getGameTime());
+            h.assertTrue(item.getDeltaMovement().x > 0.05, "the front did not blow the object: " + item.getDeltaMovement());
+            // the object outran the front: the next tick's front crosses it again
+            item.setDeltaMovement(Vec3.ZERO);
+            item.setPos(burst.x + 0.5 * (d.frontRadius(1) + d.frontRadius(2)), burst.y + 0.5, burst.z);
+            front.advance(level, List.of(d), level.getGameTime() + 1);
+            h.assertTrue(item.getDeltaMovement().lengthSqr() == 0, "the object was blown again: " + item.getDeltaMovement());
+            h.succeed();
+        } finally {
+            item.discard();
+        }
+    }
+
     /** A body born after a detonation, out of its reach, then brought into the ruins and reloaded, gets nothing from it. */
     @GameTest(template = "range", batch = "nuke_late_order_born", skyAccess = true)
     public static void bornAfterGetsNothingOnReload(GameTestHelper h) {

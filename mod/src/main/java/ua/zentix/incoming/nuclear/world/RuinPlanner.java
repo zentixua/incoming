@@ -548,7 +548,8 @@ public final class RuinPlanner {
             BlockState st = debris.landedStates.get((int) (e & 0xFFFF));
             s.set(lx, y, lz, st);
             int from = debris.sourceY(e);
-            if (from != Integer.MIN_VALUE && from != y && s.view.get(st).is(Blast.Props.CONTAINER)) {
+            // also at its own height: a double chest half lands as a lone chest, a state change that clears it
+            if (from != Integer.MIN_VALUE && s.view.get(st).is(Blast.Props.CONTAINER)) {
                 int x = (s.chunkX << 4) + lx, z = (s.chunkZ << 4) + lz;
                 s.moves.add(BlockPos.asLong(x, from, z));
                 s.moves.add(BlockPos.asLong(x, y, z));

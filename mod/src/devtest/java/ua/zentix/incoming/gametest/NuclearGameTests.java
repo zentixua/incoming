@@ -860,7 +860,9 @@ public final class NuclearGameTests {
             for (BlockPos q : bed) if (h.getBlockState(q).isAir()) h.fail("the shore or bottom is knocked out: " + q.toShortString());
             for (int dx = 0; dx < 5; dx++) {
                 for (int dz = 0; dz < 5; dz++) {
-                    for (int y = 5; y < 60; y++) {
+                    // a column's own rubble lands at its foot: 0.12 of 60 blocks is about 7, so the levels a pile can reach
+                    // are not checked (piles vary with the test position: landing hashes take world coordinates)
+                    for (int y = 12; y < 60; y++) {
                         BlockState st = h.getBlockState(t.offset(dx, y, dz));
                         if (!st.isAir() && st.getFluidState().isEmpty()) h.fail("the tower on the shore stands: " + st + " in " + t.offset(dx, y, dz).toShortString());
                     }
@@ -1110,9 +1112,26 @@ public final class NuclearGameTests {
             c.setItem(0, new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.DIAMOND, 64));
         }
         h.setBlock(bed, Blocks.RED_BED);
+        // a double chest on the ground: each half lands where it stood as a lone chest (a state change) with its items
+        BlockPos left = CENTER.east(8).south(3), right = left.east();
+        BlockState half = Blocks.CHEST.defaultBlockState().setValue(net.minecraft.world.level.block.ChestBlock.FACING, net.minecraft.core.Direction.NORTH);
+        h.setBlock(left, half.setValue(net.minecraft.world.level.block.ChestBlock.TYPE, net.minecraft.world.level.block.state.properties.ChestType.LEFT));
+        h.setBlock(right, half.setValue(net.minecraft.world.level.block.ChestBlock.TYPE, net.minecraft.world.level.block.state.properties.ChestType.RIGHT));
+        for (BlockPos p : List.of(left, right)) {
+            if (h.getBlockEntity(p) instanceof net.minecraft.world.level.block.entity.ChestBlockEntity c) c.setItem(1, new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.EMERALD, 32));
+        }
         scarAll(h, detonation(h, CENTER, 0, 15, 0.025f), new ColumnScar.Budget(false));
         h.assertTrue(h.getBlockEntity(chest) instanceof net.minecraft.world.level.block.entity.ChestBlockEntity c && c.getItem(0).getCount() == 64,
                 "the chest lost its contents: " + h.getBlockState(chest));
+        for (BlockPos p : List.of(left, right)) {
+            BlockPos abs = h.absolutePos(p);
+            int found = 0;
+            for (int y = level.getMinBuildHeight(); y < abs.getY() + 2; y++) {
+                if (level.getBlockEntity(new BlockPos(abs.getX(), y, abs.getZ())) instanceof net.minecraft.world.level.block.entity.ChestBlockEntity c
+                        && c.getItem(1).is(net.minecraft.world.item.Items.EMERALD) && c.getItem(1).getCount() == 32) found++;
+            }
+            h.assertTrue(found == 1, "double chest half lost its contents: " + h.getBlockState(p) + " at " + p.toShortString());
+        }
         h.assertBlockNotPresent(Blocks.RED_BED, bed);
         h.assertTrue(level.getBlockEntity(h.absolutePos(bed)) == null || h.getBlockState(bed).hasBlockEntity(),
                 "the block entity of the bed remained with " + h.getBlockState(bed));
@@ -1202,6 +1221,29 @@ public final class NuclearGameTests {
         h.assertBlockPresent(Blocks.WHITE_STAINED_GLASS, glass);
         h.assertTrue(RuinPlanner.plan(level, d, chunk).apply(level, chunk, d, budget), "no new plan has been set");
         h.assertBlockNotPresent(Blocks.WHITE_STAINED_GLASS, glass);
+        h.succeed();
+    }
+
+    /**
+     * A plank a player removed after the plan makes it stale before the flash reached the chunk; after it, a burned-out
+     * flammable block still matches the plan (flash fires, {@code RuinPlan.unburnt}).
+     */
+    @GameTest(template = "range", timeoutTicks = 40, batch = "nuke_stale_plan", skyAccess = true)
+    public static void minedPlankMakesPlanStaleBeforeTheFlash(GameTestHelper h) {
+        ServerLevel level = h.getLevel();
+        BlockPos plank = CENTER.west(8);
+        h.setBlock(plank, Blocks.OAK_PLANKS);
+        Detonation d = detonation(h, CENTER, 0, 15, 0.025f);
+        LevelChunk chunk = level.getChunkAt(h.absolutePos(plank));
+        RuinPlan plan = RuinPlanner.plan(level, d, chunk);
+        h.setBlock(plank, Blocks.AIR);
+        ColumnScar.Budget budget = new ColumnScar.Budget(false);
+        h.assertFalse(plan.apply(level, chunk, d, budget), "a plan made over a mined plank was set before the flash");
+        h.setBlock(plank, Blocks.OAK_PLANKS);
+        RuinPlan again = RuinPlanner.plan(level, d, chunk);
+        h.setBlock(plank, Blocks.AIR);
+        chunk.setData(ua.zentix.incoming.registry.ModAttachments.FLASH_LAYER, d.id());
+        h.assertTrue(again.apply(level, chunk, d, budget), "a plank burned out after the flash made the plan stale");
         h.succeed();
     }
 

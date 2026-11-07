@@ -36,7 +36,9 @@ final class RuinProgress extends SavedData {
             Pass p = progress.pass(Integer.parseInt(key));
             // Early development builds used a north-to-south cursor. Restart that scan safely;
             // storage scar marks make revisiting completed positions harmless.
-            p.cursor = saved.getBoolean("radial") ? Math.max(0, saved.getLong("cursor")) : 0;
+            // 3.10.4 and earlier counted every position of the circle; the layout now holds only region files on disk, so
+            // that cursor would skip unscanned chunks: restart the pass (repeats are harmless, see above)
+            p.cursor = saved.getBoolean("radial") && saved.getBoolean("on_disk") ? Math.max(0, saved.getLong("cursor")) : 0;
             p.complete = saved.getBoolean("radial") && saved.getBoolean("complete");
             p.pending.addAll(new LongOpenHashSet(saved.getLongArray("pending")));
         }
@@ -49,6 +51,7 @@ final class RuinProgress extends SavedData {
             CompoundTag saved = new CompoundTag();
             saved.putLong("cursor", p.cursor);
             saved.putBoolean("radial", true);
+            saved.putBoolean("on_disk", true);
             saved.putBoolean("complete", p.complete);
             saved.putLongArray("pending", p.pending.toLongArray());
             tag.put(Integer.toString(id), saved);

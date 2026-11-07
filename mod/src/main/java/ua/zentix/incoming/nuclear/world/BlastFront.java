@@ -155,7 +155,10 @@ final class BlastFront {
         // objects (items, boats, minecarts, mod vehicles): wind only, no injury, so no queue
         for (Entity e : level.getEntities((Entity) null, AABB.ofSize(d.burst(), reach * 2, reach * 2, reach * 2), BlastBody::object)) {
             double dist = e.position().distanceTo(d.burst());
-            if (dist >= done[0] && dist < r) BlastBody.blow(level, d, e);
+            // once per object and detonation: blown faster than the slowed front, it would be caught and blown again
+            if (dist >= done[0] && dist < r) {
+                if (hitBy.add(e.getId())) BlastBody.blow(level, d, e);
+            }
             else if (dist >= done[1] && dist < back && BlastBody.windAt(level, e.position())) pull(d, e);
         }
         ring.sort(Comparator.comparingDouble(e -> e.distanceToSqr(d.burst())));

@@ -593,6 +593,8 @@ public final class RuinPlan {
 
     private boolean current(LevelChunk chunk, @Nullable RuinPlan flash, boolean marked) {
         LevelChunkSection[] now = chunk.getSections();
+        // fire only where this detonation's flash reached the chunk: before it, a block a player removed changes the plan
+        boolean lit = flash != null || marked;
         int k = 0;
         while (k < cells.length) {
             int i = section(cells[k]);
@@ -604,7 +606,7 @@ public final class RuinPlan {
                 BlockState live = s.getBlockState(c & 15, (c >> 8) & 15, (c >> 4) & 15);
                 if (flash != null) live = flash.beforeFlash(c & KEY_MASK, live);
                 else if (marked && fire(live)) live = Blocks.AIR.defaultBlockState();
-                h = mix(h, unburnt(live, olds[k]));
+                h = mix(h, lit ? unburnt(live, olds[k]) : live);
             }
             if (h != oldHashes[i]) return false;
         }
@@ -624,14 +626,14 @@ public final class RuinPlan {
             BlockState live = now[i].getBlockState(c & 15, (c >> 8) & 15, (c >> 4) & 15);
             if (flash != null) live = flash.beforeFlash(c & KEY_MASK, live);
             else if (marked && fire(live)) live = Blocks.AIR.defaultBlockState();
-            live = unburnt(live, olds[k]);
+            if (flash != null || marked) live = unburnt(live, olds[k]);
             if (normal(live) != normal(olds[k])) diff.merge(olds[k].getBlock().getDescriptionId() + "→" + live.getBlock().getDescriptionId(), 1, Integer::sum);
         }
         return diff.isEmpty() ? null : diff.toString();
     }
 
     /**
-     * Fire between the flash and the wave still matches the plan: a flammable block now fire or air burned, an air cell now
+     * Fire between the flash and the wave (chunks the flash layer reached) still matches the plan: a flammable block now fire or air burned, an air cell now
      * fire caught. Minecraft fire eats a plank block in seconds, while a real building does not burn through in the
      * seconds to a minute before the blast wave; the wave overwrites these cells anyway. Without this, the fires the flash
      * lights near a player kept turning ready plans stale and their ruins came up to 2 s after the wave (1 Mt).
