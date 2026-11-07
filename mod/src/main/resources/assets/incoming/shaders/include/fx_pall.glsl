@@ -1588,6 +1588,7 @@ void main() {
             foot.boundTop = foot.footMerge;
             vec2 fs = mushSpan(foot, dir);
             fs.y = min(fs.y, scene);
+            if (scene >= 1e8 && dir.y < 0.0) fs.y = min(fs.y, foot.base.y / dir.y);
             if (fs.y > fs.x) {
                 if (length(foot.base.xz - PallSlot0[0].xy) < 1.0) { gFoot0 = k; gFootSpan0 = fs; }
                 if (length(foot.base.xz - PallSlot1[0].xy) < 1.0) { gFoot1 = k; gFootSpan1 = fs; }
