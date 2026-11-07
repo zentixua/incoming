@@ -35,8 +35,8 @@ The blast wave reaches further than the damage. When it passes you, the view sha
 you, your head rocks on your neck and you come back upright over two or three seconds. A Shahed within about 20 blocks
 knocks you off balance, at 100 blocks the view swings by a few degrees, a few hundred blocks away you barely feel it.
 The shake is stronger the higher the pressure and lasts longer the bigger the charge (0.3–1.7 s). A wave strong enough to hurt the
-ears muffles your hearing and makes your ears ring for game hours, like after a nuclear blast: a Shahed within about 75
-blocks, a Lancet within about 35, a cruise missile within about 150. A wall, a house or a hill between you and the blast
+ears muffles your hearing for game hours, like after a nuclear blast: a Shahed within about 75 blocks, a Lancet within
+about 35, a cruise missile within about 150. Your ears ring faintly with it; you hear the ringing only when it is quiet. A wall, a house or a hill between you and the blast
 softens both. Hearing damage can be turned off in the [settings](settings.md).
 
 - **Get underground.** Earth and thick walls stop a blast; underground and under water even glass stays intact.

@@ -182,7 +182,10 @@ public final class RadiationTicker {
         return stage(e, r) != SicknessModel.Stage.NONE;
     }
 
-    /** Radiation sickness stages: nausea and vomiting, latent period, manifest illness (weakness, hunger, reduced health), death. */
+    /**
+     * Radiation sickness stages: nausea and vomiting, latent period, manifest illness (weakness, hunger, reduced health), death;
+     * at a cerebral dose, ataxia throughout.
+     */
     private static void sickness(ServerLevel level, LivingEntity p, RadiationDose r) {
         SicknessModel.Stage stage = stage(p, r);
         AttributeInstance health = p.getAttribute(Attributes.MAX_HEALTH);
@@ -191,6 +194,9 @@ public final class RadiationTicker {
             health.removeModifier(HEALTH_PENALTY);
             if (penalty > 0) health.addTransientModifier(new AttributeModifier(HEALTH_PENALTY, -penalty, AttributeModifier.Operation.ADD_VALUE));
         }
+        // cerebral form: ataxia for everyone from prodrome onset to death
+        int ataxia = SicknessModel.ataxiaSlowness(r.doseGy());
+        if (ataxia >= 0 && stage != SicknessModel.Stage.NONE) p.addEffect(new MobEffectInstance(MobEffects.MOVEMENT_SLOWDOWN, 60, ataxia, true, false, false));
         if (!(p instanceof ServerPlayer player)) {
             // mob sickness effect drives its own course (removed when tickMob returns false); nausea means nothing to a mob
             if (stage == SicknessModel.Stage.MANIFEST || stage == SicknessModel.Stage.FATAL) manifest(level, p, r, stage);

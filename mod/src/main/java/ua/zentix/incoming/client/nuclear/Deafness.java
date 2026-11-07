@@ -23,7 +23,8 @@ import java.util.WeakHashMap;
  * shift from audible energy at the ear, recovery by game time (one hour — 1000 ticks), eardrum rupture. All game sounds are muffled by an OpenAL EFX
  * low-pass filter ({@link ua.zentix.incoming.client.sound.SoundFilters}; own sources —
  * {@link ua.zentix.incoming.client.sound.OwnSources}): lows lose volume through cochlear and conductive loss, highs lose
- * the high–low difference on top of that. Ears ring while the shift remains. The player's category volumes are unchanged.
+ * the high–low difference on top of that. Ears ring faintly while the shift remains ({@link HearingModel#ringing}).
+ * The player's category volumes are unchanged.
  * <p>
  * Hearing time follows unpaused client ticks and forward time-of-day jumps (sleep, {@code /time add}): a night of sleep restores
  * hearing as a full night would. A jump counts only when game time advanced normally (sleep and {@code /time} do not
@@ -36,9 +37,8 @@ public final class Deafness {
     private static final double HOUR_TICKS = 1000;
     /** A larger time-of-day jump means elapsed time (sleep); a smaller one is a server clock correction. */
     private static final long DAY_JUMP = 20;
-    /** Ringing volume at a shift of {@link #RINGING_SHIFT} dB or more (ringing volume is an approximation, not from the model). */
+    /** Ringing loop volume for a tone as loud as world sound ({@link HearingModel#ringing} 1), the cap (est.). */
     private static final float RINGING = 0.75f;
-    private static final double RINGING_SHIFT = 50;
     /** Below this, ringing is inaudible. */
     private static final float RINGING_QUIET = 0.01f;
 
@@ -116,9 +116,9 @@ public final class Deafness {
         highs = (float) Math.pow(10, -Math.max(0, lossHigh - lossLow) / 20);
     }
 
-    /** Ringing in the ears: loop in the head, volume based on threshold shift. */
+    /** Ringing in the ears: loop in the head, a faint tone above the shifted threshold ({@link HearingModel#ringing}). */
     private static void ring(Minecraft mc) {
-        float v = (float) Math.min(RINGING, RINGING * shiftNow / RINGING_SHIFT);
+        float v = (float) Math.min(RINGING, RINGING * HearingModel.ringing(shiftNow));
         if (ringing != null && !ringing.playing()) ringing = null;
         if (v < RINGING_QUIET) {
             if (ringing != null) ringing.end();

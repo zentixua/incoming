@@ -101,4 +101,14 @@ class SicknessModelTest {
         assertEquals(Stage.PRODROMAL, SicknessModel.stage(1000, 0.1, true));
         assertEquals(Stage.FATAL, SicknessModel.stage(1000, 0.5, true));
     }
+
+    @Test
+    void cerebralDoseStaggersFromOnset() {
+        assertEquals(-1, SicknessModel.ataxiaSlowness(49));
+        assertEquals(4, SicknessModel.ataxiaSlowness(50));
+        // 15 kt ground burst at 500 m in the open: 200 Gy, ataxia within seconds, death within a few game hours
+        assertEquals(4, SicknessModel.ataxiaSlowness(200));
+        assertTrue(SicknessModel.onsetHours(200) <= 0.1);
+        assertTrue(SicknessModel.course(200).death() < 5);
+    }
 }

@@ -20,6 +20,8 @@ package ua.zentix.incoming.nuclear.model;
  *       cerebral — “1–48 hours”: 36 h at 50 Gy (Kelley case, 1958: about 40 Gy, death after 35 h), faster with dose as
  *       D^−1.5 (est.). Anchors: 6 weeks at 2 Gy, 30 days at 6, 12 at 10, 36 h at 50; form transitions between them
  *       (18 days at 8 Gy, 5 at 20, 2 at 40);</li>
+ *   <li>cerebral form (from 50 Gy): convulsions, tremor, ataxia (table 12.108) from prodrome onset to death — the body
+ *       barely walks ({@link #ataxiaSlowness});</li>
  *   <li>survivor recovery: manifest illness ends after 5 weeks at 1 Gy, 8 at 2, 10 at 6 Gy and above
  *       (followed by months of weakness, omitted here).</li>
  * </ul>
@@ -117,6 +119,17 @@ public final class SicknessModel {
     /** No natural regeneration during manifest illness (≥ 2 Gy). */
     public static boolean noRegeneration(double doseGy) {
         return doseGy >= 2;
+    }
+
+    /** Cerebral form from this dose, Gy (G&D table 12.108: central nervous system, over 5 000 rem). */
+    public static final double CEREBRAL_GY = 50;
+
+    /**
+     * Slowness amplifier for ataxia from prodrome onset at a cerebral dose: −1 — none, 4 — Slowness V, a quarter of normal
+     * walking speed (est.: table 12.108 names ataxia without a measure; a quarter keeps the body staggering, not frozen).
+     */
+    public static int ataxiaSlowness(double doseGy) {
+        return doseGy >= CEREBRAL_GY ? 4 : -1;
     }
 
     /** Weakness level during manifest illness (effect amplifier): −1 — none, 0 — I, 1 — II. */

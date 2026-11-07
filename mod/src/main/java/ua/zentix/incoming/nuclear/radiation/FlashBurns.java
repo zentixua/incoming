@@ -42,8 +42,9 @@ import ua.zentix.incoming.registry.ModEffects;
  *
  * <p>Second- and third-degree burns remove the health share they represent of shock threshold (§12.62), keeping it from
  * returning while healing ({@link BurnsEffect}); at threshold, shock follows after 0.5–12 game hours, fatal untreated.
- * A clothed person's flash burns affect only face and arms — far below shock; ignited clothing burns like any fire
- * until extinguished (§12.60: flame burns beneath clothing).
+ * Clothing shields only until it ignites: below that a clothed person's flash burns affect only face and arms — far below
+ * shock; ignited clothing burns the skin beneath it as the flash burns bare skin (§12.60: flame burns beneath clothing),
+ * so the whole facing side, and keeps burning like any fire until extinguished.
  *
  * <p>A second burst burns the same body side: health share removed is the larger of the two, not their sum; wound is
  * only the increase. Each burn heals on its own schedule (cap set by the worst unhealed burn); ongoing shock keeps its
@@ -86,7 +87,11 @@ public final class FlashBurns {
                 area -= FOREARMS;
             }
             if (cover == Cover.SKIN) skin += area;
-            else if (BurnInjury.ignites(cover, q, d.yieldKt())) fire = Math.max(fire, cover == Cover.THIN ? THIN_FIRE_S : HEAVY_FIRE_S);
+            else if (BurnInjury.ignites(cover, q, d.yieldKt())) {
+                fire = Math.max(fire, cover == Cover.THIN ? THIN_FIRE_S : HEAVY_FIRE_S);
+                // burning fabric no longer shields: its flame burns the skin beneath (§12.60)
+                skin += area;
+            }
         }
         if (fire > 0 && ignite) e.igniteForSeconds(fire);
         int degree = BurnInjury.degree(q, d.yieldKt(), z);
