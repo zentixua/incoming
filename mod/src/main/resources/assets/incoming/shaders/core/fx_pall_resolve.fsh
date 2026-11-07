@@ -65,12 +65,15 @@ void main() {
     float depth = pallScene(texelFetch(Sampler2, full, 0).r);
     // history bounds use valid ray-pixel neighbors at same place as this pixel (its surface by world distance,
     // pallAhead; a ray pixel always includes itself); no valid neighbor there means all valid neighbors (as without an
-    // edge: current ray invalid, history exists). The neighbor at the same place nearest in world distance fills a pixel
-    // without history
+    // edge: current ray invalid, history exists). A pixel without history takes the rays at the same place weighted by
+    // screen distance (the nearest alone would leave n × n blocks for the seconds history takes to refill them); without
+    // such a ray, the neighbor nearest in world distance
     vec2 slope = pallSlope(Sampler2, full, fullSize, depth);
     vec4 lo = vec4(1e9), hi = vec4(-1e9), loAll = vec4(1e9), hiAll = vec4(-1e9);
-    vec4 fill = vec4(0.0, 0.0, 0.0, 1.0);
-    float fillAlike = -1.0;
+    vec4 fill = vec4(0.0, 0.0, 0.0, 1.0), fillSum = vec4(0.0);
+    float fillAlike = -1.0, fillWeight = 0.0;
+    // a neighbor ray at another place (an object edge in the block's neighborhood)
+    bool edge = false;
     for (int y = -1; y <= 1; y++) {
         for (int x = -1; x <= 1; x++) {
             ivec2 c = clamp(own + ivec2(x, y), ivec2(0), cells - 1);
@@ -88,11 +91,19 @@ void main() {
                 fillAlike = a;
                 fill = v;
             }
-            if (a < 0.5) continue;
+            if (a < 0.5) {
+                edge = true;
+                continue;
+            }
+            vec2 off = vec2(q - px) / float(n);
+            float w = 1.0 / (1.0 + dot(off, off));
+            fillSum += w * v;
+            fillWeight += w;
             lo = min(lo, v);
             hi = max(hi, v);
         }
     }
+    if (fillWeight > 0.0) fill = fillSum / fillWeight;
     if (any(greaterThan(lo, hi))) {
         lo = loAll;
         hi = hiAll;
@@ -129,7 +140,11 @@ void main() {
     vec2 lattice = vec2(pallLattice(uv.x * float(fullSize.x), PallFrame.z), pallLattice(uv.y * float(fullSize.y), PallFrame.z));
     vec4 past = seen ? texture(Sampler1, (lattice + 0.5) / vec2(textureSize(Sampler1, 0))) : vec4(0.0);
     bool pastOk = seen && pallValid(past) && all(lessThanEqual(lo, hi));
-    vec4 held = mix(past, clamp(past, lo, hi), PallClamp);
+    // at an object edge history may come from the other side of it (parallax, a mob crossing the dust): clamped outright
+    // there, as without interleaving, or it would trail the silhouette for frames
+    float pull = PallClamp;
+    if (edge) pull = 1.0;
+    vec4 held = mix(past, clamp(past, lo, hi), pull);
     if (!curOk) {
         // between rays (or an invalid ray): history held to the rays around it; none — the nearest such ray
         if (pastOk) fragColor = traced ? past : held;

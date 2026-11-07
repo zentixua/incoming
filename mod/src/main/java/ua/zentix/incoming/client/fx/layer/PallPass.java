@@ -159,7 +159,7 @@ public final class PallPass {
      * Ray pixel of each n × n block per frame, in turn (n = 1–4): far apart in consecutive frames (ordered dither), so a
      * moving edge refreshes evenly.
      */
-    private static final int[][] ORDER = {{0}, {0, 3, 1, 2}, {0, 7, 5, 1, 8, 3, 6, 2, 4},
+    static final int[][] ORDER = {{0}, {0, 3, 1, 2}, {0, 7, 5, 1, 8, 3, 6, 2, 4},
             {0, 10, 2, 8, 5, 15, 7, 13, 1, 11, 3, 9, 4, 14, 6, 12}};
 
     /**
@@ -672,16 +672,17 @@ public final class PallPass {
         // base light in a separate small table; main pass only samples it
         // shared source textures and parameters: same pallSource, without a second inlined ray call
         // mushroom mean depths: one grid per frame, read by every mushroom ray step (fx_mush_taus)
-        boolean grid = mt != null && tauMap >= 0 && f.mushroomCount > 0;
+        // also while the march is cold (the empty warm-up frame, FxLayer): the program compiles before the flash, not on it
+        boolean bake = mt != null && tauMap >= 0 && (f.mushroomCount > 0 || cold()), grid = bake && f.mushroomCount > 0;
         for (int pass = 0; pass < 3; pass++) {
-            if (pass == 0 && !litFoot || pass == 1 && !grid) continue;
+            if (pass == 0 && !litFoot || pass == 1 && !bake) continue;
             m = pass == 0 ? fl : pass == 1 ? mt : march;
             if (pass == 0) {
                 GlStateManager._glBindFramebuffer(GlConst.GL_FRAMEBUFFER, footFbo);
                 RenderSystem.viewport(0, 0, FOOT_LIGHT_AZ + 1, FOOT_LIGHT_H * FOOT_LIGHT_R * f.mushroomCount);
             } else if (pass == 1) {
                 GlStateManager._glBindFramebuffer(GlConst.GL_FRAMEBUFFER, tauFbo);
-                RenderSystem.viewport(0, 0, MUSH_TAU_N * MUSH_TAU_N, 2 * MUSH_TAU_N * f.mushroomCount);
+                RenderSystem.viewport(0, 0, MUSH_TAU_N * MUSH_TAU_N, 2 * MUSH_TAU_N * Math.max(1, f.mushroomCount));
             } else {
                 GlStateManager._glBindFramebuffer(GlConst.GL_FRAMEBUFFER, FBOS[0]);
                 RenderSystem.viewport(0, 0, cellsW, cellsH);

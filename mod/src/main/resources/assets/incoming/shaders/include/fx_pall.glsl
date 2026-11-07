@@ -1342,6 +1342,9 @@ vec4 mushAt(int k, Mush m, vec3 p, vec3 q, float cone, out float near, out vec3 
     // toward eye, depth traveled by ray (with billows: a hollow point is eye-exposed; mean field would block it with
     // nonexistent foreground billows); away from eye, mean field
     float toEye = gTauEye, beyond = taus.z;
+    // within two cells of the eye the cells' own view directions fan out (up, sideways, behind): this ray's own direction there
+    float diag = length(vec3(2.0 * m.boundR, 1.05 * m.boundTop, 2.0 * m.boundR)) / float(MUSH_TAU_N - 1);
+    if (PallTauReady != 0 && dot(p, p) < 4.0 * diag * diag) beyond = mushTau(m, p, gDir, 2.0 * m.boundR);
     vec3 light = vec3(0.0);
     // emission escape depth: shortest optical depth
     float escape = min(min(up, down), toEye);
@@ -1915,6 +1918,7 @@ void main() {
     vec3 p = m.base + q;
     p.xz += m.drift * mushShare(q.y, m.endTop);
     pallLighting(p / max(length(p), 1e-3));
-    fragColor = mushTausAt(m, p, q, block);
+    // half-float target: depths beyond 6·10⁴ pass no light anyway
+    fragColor = min(mushTausAt(m, p, q, block), vec4(6.0e4));
 }
 #endif

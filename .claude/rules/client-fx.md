@@ -451,11 +451,14 @@ paths:
   per frame (n up to 4, `Step.interleave`, order `ORDER`), the others keep their reprojected history; accumulation over
   frames with transfer by world depth (`fx_pall_resolve`): a pixel taking a ray keeps history weight 0.9 for any n (with
   0.9^n² it showed nearly one jittered ray: grain on thin lobes against the sky), and history moves 1/n of the way to the
-  bounds of the neighbour rays per frame (snapped, a whole block took one frame's chance bound: square tiles). The
+  bounds of the neighbour rays per frame (snapped, a whole block took one frame's chance bound: square tiles), but
+  outright at an object edge (a neighbour ray at another place: no trail behind a silhouette); a pixel without history
+  takes the same-place rays weighted by screen distance (the nearest alone left n × n blocks for seconds). The
   march's viewport is the ray cells; the accumulation sets the whole reduced frame itself. Mushroom mean optical depths
   (up, down, away from the eye, sunward past the billow layer, away from the sun, toward and away from the ball) are
   smooth fields of position, baked once per frame into a 48³ grid per mushroom (`fx_mush_taus`, `Sampler10`,
-  `mushTauGrid`; cells farther than a cell diagonal from matter by `mushGap` stay zero), not five four-sample paths at
+  `mushTauGrid`; cells farther than 1.5 cell diagonals from matter by `mushGap` stay zero; within two cells of the
+  eye “away from the eye” is traced along the ray itself), not five four-sample paths at
   every step (laptop 07.11: −25–40 % of ray time, frames unchanged); without the grid (`PallTauReady` 0) steps compute
   them (`mushTausAt`). Sunward billows are traced once per first-segment length along a ray (`gSunK`); a ray ends at
   `RAY_EXIT` 2 % left, the rest filled like the matter so far; per-frame compositing with blend `ONE, SRC_ALPHA` and a weight by the similarity of distance to

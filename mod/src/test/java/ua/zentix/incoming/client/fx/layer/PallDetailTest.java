@@ -39,6 +39,41 @@ class PallDetailTest {
         }
     }
 
+    /** Each interleave order visits every pixel of its n × n block once per n² frames. */
+    @Test
+    void interleaveOrderVisitsEveryBlockPixelOnce() {
+        for (int n = 1; n <= 4; n++) {
+            int[] order = PallPass.ORDER[n - 1];
+            assertEquals(n * n, order.length);
+            assertEquals(n * n, java.util.Arrays.stream(order).distinct().filter(p -> p >= 0 && p < order.length).count(), "n = " + n);
+        }
+    }
+
+    /**
+     * The march traces pixel cell·n + o of each block ({@code fx_pall}: {@code low}); the accumulation finds the block of every
+     * pixel as round((px − o)/n), clamped to the cells, and takes the ray only where it lands on that pixel
+     * ({@code fx_pall_resolve}: {@code own}, {@code traced}): over n² frames every pixel of a frame of any size takes exactly
+     * one ray, also when the size is not a multiple of n.
+     */
+    @Test
+    void interleavedRaysCoverEveryPixelOncePerCycle() {
+        for (int n = 1; n <= 4; n++) {
+            for (int size : new int[]{1, 7, 13, 64, 641}) {
+                int cells = (size + n - 1) / n;
+                int[] taken = new int[size];
+                for (int frame = 0; frame < n * n; frame++) {
+                    int phase = PallPass.ORDER[n - 1][frame], o = phase % n;
+                    for (int px = 0; px < size; px++) {
+                        int own = Math.max(0, Math.min(cells - 1, (int) Math.floor((px - o) / (double) n + 0.5)));
+                        if (own * n + o == px) taken[px]++;
+                    }
+                }
+                // one axis: offsets o repeat n times per cycle (the other axis takes the rest), so each pixel n times
+                for (int px = 0; px < size; px++) assertEquals(n, taken[px], "n = " + n + ", size " + size + ", pixel " + px);
+            }
+        }
+    }
+
     /** Longer than the budget - immediately down a notch, whatever fits; very long (software OpenGL) - up to LOW, but not lower. */
     @Test
     void overBudgetStepsDownButNotBelowLow() {
