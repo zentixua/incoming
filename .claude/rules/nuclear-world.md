@@ -342,3 +342,7 @@ paths:
   follows put/remove/clear so consumed preplans no longer contribute historical bytes. These are admission estimates,
   not a complete nuclear heap bound. FarLods tags copies, snapshots and headers by cancellation generation; late
   results release their slots but cannot publish. Regressions: `nuke_lifecycle_detached`, `nuke_lifecycle_far`.
+- Never key a zone-sized `java.util` hash map by a raw chunk key (`ChunkPos.asLong`): `Long.hashCode` is `x ^ z`, so a zone's
+  square of chunks shares a few hundred hashes and the bins treeify (250 kt on Zearth 07.11.2026: `RuinSettle` rotation
+  = 54 % of allocation, `ConcurrentHashMap$TreeNode.findTreeNode` the top server-thread frame). Use fastutil `Long2*`
+  (mixing hash), or `RuinContext.key` for maps that must be concurrent (`RuinContextKeyTest`).

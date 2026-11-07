@@ -25,6 +25,15 @@ final class RuinContext {
     final Detonation d;
     /** Chunk fractures: also computed by background tasks ({@link RuinWorkers}), hence shared map. */
     private final java.util.concurrent.ConcurrentHashMap<Long, Blast> blasts = new java.util.concurrent.ConcurrentHashMap<>();
+
+    /**
+     * Key of the shared maps ({@link #blasts}, {@link #heights}): the chunk key mixed one to one. {@code Long.hashCode}
+     * of a raw chunk key is {@code x ^ z}, so a square of chunks lands in a few treeified bins; their lookups were the
+     * top server-thread frame after a 250 kt detonation (Zearth 07.11.2026).
+     */
+    static Long key(long chunk) {
+        return it.unimi.dsi.fastutil.HashCommon.mix(chunk);
+    }
     /** Chunk snapshots (server thread) retained while unfinished plan windows read them. Outside-memory chunks from disk ({@link DiskShots}). */
     private final it.unimi.dsi.fastutil.longs.Long2ObjectLinkedOpenHashMap<ChunkShot> shots = new it.unimi.dsi.fastutil.longs.Long2ObjectLinkedOpenHashMap<>();
     /**
@@ -246,7 +255,7 @@ final class RuinContext {
     void noPlan(long chunk) {
         if (planned.add(chunk)) {
             ChunkPos pos = new ChunkPos(chunk);
-            forget(pos, 1, planned, k -> blasts.remove(k));
+            forget(pos, 1, planned, k -> blasts.remove(key(k)));
             forget(pos, RuinPlanner.REACH, planned, this::dropShot);
         }
     }
@@ -294,7 +303,7 @@ final class RuinContext {
                 if (inUse) shots.getAndMoveToLast(key);
                 else {
                     dropShot(key);
-                    blasts.remove(key);
+                    blasts.remove(key(key));
                 }
             } finally { clock.end(unit); }
         }
@@ -321,13 +330,13 @@ final class RuinContext {
 
     /** Disk chunk heightmap (server thread): first {@code MOTION_BLOCKING} air, if absent. */
     void putHeights(long chunk, int[] firstAir) {
-        heights.putIfAbsent(chunk, firstAir);
+        heights.putIfAbsent(key(chunk), firstAir);
     }
 
     /** In-memory heightmap (server thread), if absent: ruined chunk uses higher of pre-ruin/live values. */
     private void captureHeights(ServerLevel level, int cx, int cz) {
         long key = ChunkPos.asLong(cx, cz);
-        if (heights.containsKey(key)) return;
+        if (heights.containsKey(key(key))) return;
         LevelChunk c = level.getChunkSource().getChunkNow(cx, cz);
         if (c == null) return;
         Applied a = applied.get(key);
@@ -336,7 +345,7 @@ final class RuinContext {
             int now = c.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING, col & 15, col >> 4) + 1;
             h[col] = a == null ? now : Math.max(now, a.motion[col]);
         }
-        heights.put(key, h);
+        heights.put(key(key), h);
     }
 
     /**
@@ -355,7 +364,7 @@ final class RuinContext {
 
     /** First pre-wave air over {@code MOTION_BLOCKING} (any thread); chunk absent from maps means world bottom. */
     private int height(int x, int z, int minY) {
-        int[] h = heights.get(ChunkPos.asLong(x >> 4, z >> 4));
+        int[] h = heights.get(key(ChunkPos.asLong(x >> 4, z >> 4)));
         return h == null ? minY : h[(z & 15) << 4 | (x & 15)];
     }
 
@@ -410,10 +419,10 @@ final class RuinContext {
         Blast blast(int dx, int dz) {
             ChunkPos pos = new ChunkPos(centre.x + dx, centre.z + dz);
             ChunkShot[] w = window(dx, dz);
-            Blast b = ctx.blasts.get(pos.toLong());
+            Blast b = ctx.blasts.get(key(pos.toLong()));
             if (b != null && b.stamp().same(RuinWindow.Stamp.of(w))) return b;
             b = Blast.solve(new RuinWindow(pos, minY, maxY, w, view), ctx.d, blockDamage, treeFall);
-            ctx.blasts.put(pos.toLong(), b);
+            ctx.blasts.put(key(pos.toLong()), b);
             return b;
         }
 
@@ -429,7 +438,7 @@ final class RuinContext {
 
         /** Offset chunk fracture already cached from same snapshots. */
         boolean hasBlast(int dx, int dz) {
-            Blast b = ctx.blasts.get(ChunkPos.asLong(centre.x + dx, centre.z + dz));
+            Blast b = ctx.blasts.get(key(ChunkPos.asLong(centre.x + dx, centre.z + dz)));
             return b != null && b.stamp().same(RuinWindow.Stamp.of(window(dx, dz)));
         }
     }
@@ -690,7 +699,7 @@ final class RuinContext {
     void planned(ChunkPos pos) {
         pendingWindows.remove(pos.toLong());
         planned.add(pos.toLong());
-        forget(pos, 1, planned, k -> blasts.remove(k));
+        forget(pos, 1, planned, k -> blasts.remove(key(k)));
         forget(pos, RuinPlanner.REACH, planned, this::dropShot);
     }
 
@@ -707,7 +716,7 @@ final class RuinContext {
         pendingWindows.remove(pos.toLong());
         planned.add(pos.toLong());
         stood.add(pos.toLong());
-        forget(pos, 1, stood, k -> blasts.remove(k));
+        forget(pos, 1, stood, k -> blasts.remove(key(k)));
         forget(pos, RuinPlanner.REACH, stood, this::dropShot);
         forget(pos, 2, stood, k -> {
             Applied a = applied.get(k);

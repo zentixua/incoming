@@ -68,8 +68,11 @@ paths:
   chunk-count window alone can leave MiB behind a fast proxy with a slow downstream. This bounds in-flight data;
   it is not a bytes/tick throttle. `fastProxyCannotAccumulateAMultiMiBBatchBeforeItsSlowClientAcknowledges` guards it.
   The three client handlers run on the same network thread. Before ack, poll Voxy's public
-  `VoxyCommon.getInstance().getIngestService().getTaskCount()` on the event loop until its queue empties; never block
-  the network thread. Running tasks remain bounded by its worker pool. Missing counter disables Incoming delivery.
+  `VoxyCommon.getInstance().getIngestService().getTaskCount()` (sections queued, not started) on the event loop until
+  it is at most LSS's own halt mark, 6144 (`VoxyIngest.INGEST_HALT_SECTIONS`); never block the network thread. Not
+  "until empty": LSS keeps that queue in the thousands while it fills its radius, and an empty-queue wait cut ruin
+  LODs to ~100 chunks a minute with half dropped (Zearth 07.11.2026). Running tasks remain bounded by its worker pool.
+  Missing counter disables Incoming delivery.
   Timing includes transfer and background queue drain. Calculator
   state belongs to the channel; batch IDs survive dimension changes and reject old/duplicate/early acknowledgements.
   Netty still gates every chunk: active/writable, at least 16 KiB headroom, no more than 32 KiB pending even with a
