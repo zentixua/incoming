@@ -155,6 +155,8 @@ public final class ClientScenario {
     private volatile Vec3 filmEye;
     /** Scenario {@code mushroom}: dust from the ground and pall from different heights ({@code INCOMING_MUSHROOM=blanket}). */
     private boolean blanketView;
+    /** Scenario {@code mushroom} with {@code below}: pall below a viewer high in it, looking down ({@code INCOMING_MUSHROOM=below}). */
+    private boolean belowView;
     /** Once every tick sound is recorded in the log. */
     private int soundEvery = 10;
     /** Nuclear explosion near the water ({@code nuke-water}, {@code nuke-lake}): footage from the explosion ({@link #waterEvents}). */
@@ -689,6 +691,35 @@ public final class ClientScenario {
             at(400, () -> cmd("incoming nuke now at 3000.5 320 0.5 15 ground"));
             return;
         }
+        if ("below".equals(System.getenv("INCOMING_MUSHROOM"))) {
+            // pall below a viewer high in it, minutes after a large burst (Zearth 07.11: a light disc under the camera that
+            // shrinks and vanishes as the viewer climbs): viewer 2 km from ground zero at several heights, looking down
+            belowView = true;
+            at(20, () -> mushroomYaw = landYaw(BELOW_M));
+            at(40, () -> {
+                String q = System.getenv().getOrDefault("INCOMING_PALL", "MEDIUM");
+                ua.zentix.incoming.IncomingConfig.CLIENT.nukeDustQuality.set(ua.zentix.incoming.IncomingConfig.Client.DustQuality.valueOf(q));
+                ua.zentix.incoming.IncomingConfig.SERVER.scalePreset.set(ua.zentix.incoming.IncomingConfig.ScalePreset.CUSTOM);
+                ua.zentix.incoming.IncomingConfig.SERVER.nukeWaveSpeed.set(0.5);
+                ua.zentix.incoming.IncomingConfig.SERVER.nukeMaxYield.set(1000);
+                var level = Minecraft.getInstance().getSingleplayerServer().overworld();
+                int ground = level.getChunkSource().getGenerator().getBaseHeight(0, 0, Heightmap.Types.WORLD_SURFACE_WG, level,
+                        level.getChunkSource().randomState());
+                filmEye = new Vec3(0.5, ground, 0.5);
+                cmd("time set " + System.getenv().getOrDefault("INCOMING_BELOW_TIME", "6000"));
+                cmd("weather clear");
+                cmd("gamerule doDaylightCycle false");
+                cmd("gamemode spectator");
+                cmd(String.format(java.util.Locale.ROOT, "tp @s 0.5 %d 0.5 %d 60", ground + 135, mushroomYaw));
+                hover = true;
+            });
+            at(400, () -> {
+                double x = 0.5 - BELOW_M * Math.sin(Math.toRadians(mushroomYaw)), z = 0.5 + BELOW_M * Math.cos(Math.toRadians(mushroomYaw));
+                cmd(String.format(java.util.Locale.ROOT, "incoming nuke now at %.1f %.1f %.1f %s ground", x, filmEye.y + 1, z,
+                        System.getenv().getOrDefault("INCOMING_KT", "250")));
+            });
+            return;
+        }
         if ("blanket".equals(System.getenv("INCOMING_MUSHROOM"))) {
             blanketView = true;
             at(20, () -> mushroomYaw = landYaw(BLANKET_M));
@@ -786,6 +817,8 @@ public final class ClientScenario {
     /** Scenario {@code mushroom} with {@code film}: from the viewer to the epicenter along the ground, blocks (host video camera above Newisle). */
     private static final double FILM_M = 1383;
 
+    /** Scenario {@code mushroom} with {@code below}: from the viewer to the epicenter along the ground, blocks. */
+    private static final double BELOW_M = 2000;
     /** Scenario {@code mushroom} with {@code blanket}: from the viewer to the epicenter along the ground, blocks. */
     private static final double BLANKET_M = 3000;
     /** Scenario {@code mushroom} with {@code blanket}: the height of the viewer above the ground, blocks (near the ground, just above the pall - up to the plane). */
@@ -859,6 +892,38 @@ public final class ClientScenario {
         if (glowView) {
             for (int s : new int[]{1, 2, 3, 5, 7, 9, 11, 14}) pallShot(tick + 20 * s, "glow_" + s + "s");
             at(tick + 20 * 14 + 20, () -> {
+                Incoming.LOG.info("SCENARIO done");
+                Minecraft.getInstance().stop();
+            });
+            return;
+        }
+        if (belowView) {
+            // wave long past (minutes after the burst, as on Zearth), then look down from each height (INCOMING_BELOW_UP),
+            // at each pitch (INCOMING_BELOW_PITCH); each frame also without the pall and, under Iris, without the shader pack
+            int t = tick + 1200 * Integer.parseInt(System.getenv().getOrDefault("INCOMING_BELOW_MIN", "10"));
+            // render distance of a host server whose view distance is below the client's (Zearth: 10 against 12)
+            String rd = System.getenv("INCOMING_BELOW_RD");
+            if (rd != null) at(t - 200, () -> Minecraft.getInstance().options.renderDistance().set(Integer.parseInt(rd)));
+            int[] ups = java.util.Arrays.stream(System.getenv().getOrDefault("INCOMING_BELOW_UP", "40,80,135,200,345").split(","))
+                    .mapToInt(Integer::parseInt).toArray();
+            int[] pitches = java.util.Arrays.stream(System.getenv().getOrDefault("INCOMING_BELOW_PITCH", "10,35,60,89").split(","))
+                    .mapToInt(Integer::parseInt).toArray();
+            for (int up : ups) {
+                for (int pitch : pitches) {
+                    at(t, () -> cmd(String.format(java.util.Locale.ROOT, "tp @s 0.5 %.1f 0.5 %d %d", filmEye.y + up, mushroomYaw, pitch)));
+                    pallShot(t + 60, "below_up" + up + "_p" + pitch);
+                    offShot(t + 70, "below_up" + up + "_p" + pitch + "_off", 40);
+                    if (System.getenv("INCOMING_SHADERS") != null) {
+                        // the same frame without the shader pack: what the pack itself does with the world under the pall
+                        at(t + 130, () -> irisShaders(false));
+                        pallShot(t + 190, "below_up" + up + "_p" + pitch + "_vanilla");
+                        at(t + 200, () -> irisShaders(true));
+                        t += 120;
+                    }
+                    t += 140;
+                }
+            }
+            at(t + 20, () -> {
                 Incoming.LOG.info("SCENARIO done");
                 Minecraft.getInstance().stop();
             });
@@ -1597,6 +1662,17 @@ public final class ClientScenario {
         cmd(String.format(java.util.Locale.ROOT, "fill %d %d %d %d %d %d minecraft:oak_fence", x + 3, g + 1, z - 6, x + 3, g + 3, z - 1));
         cmd(String.format(java.util.Locale.ROOT, "fill %d %d %d %d %d %d minecraft:iron_bars", x + 5, g + 1, z - 6, x + 5, g + 6, z + 6));
         cmd(String.format(java.util.Locale.ROOT, "fill %d %d %d %d %d %d minecraft:stone_bricks", x + 4, g + 1, z + 2, x + 4, g + 9, z + 2));
+    }
+
+    /** Iris shader pack on or off (Iris API by reflection: the scenario compiles without Iris). */
+    private static void irisShaders(boolean on) {
+        try {
+            Object api = Class.forName("net.irisshaders.iris.api.v0.IrisApi").getMethod("getInstance").invoke(null);
+            Object config = api.getClass().getMethod("getConfig").invoke(api);
+            config.getClass().getMethod("setShadersEnabledAndApply", boolean.class).invoke(config, on);
+        } catch (ReflectiveOperationException e) {
+            Incoming.LOG.warn("SCENARIO Iris shaders {}: {}", on, e.toString());
+        }
     }
 
     /**

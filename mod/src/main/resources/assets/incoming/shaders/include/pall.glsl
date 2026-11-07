@@ -240,16 +240,20 @@ float pallRelief(sampler2D ground, mat4 S, vec4 G, vec2 xz) {
 }
 
 // Where the ray dir from the eye (unit) goes under the slot's relief, up to end; 1e9 — it does not. There is no world behind
-// the pixel: the ray has passed everything drawn (further than from along the ground from the eye — the draw distance) and
-// hit nothing, so we search only farther. Steps grow with distance (far away a map cell is smaller on screen), the start is
-// shifted by a jitter of the step, the last is at end; between a step above the relief and a step below it — by a secant.
+// the pixel: the ray has passed everything drawn (further than from along the ground or up/down from the eye — the draw
+// distance) and hit nothing, so we search only farther. Steps grow with distance (far away a map cell is smaller on screen),
+// the start is shifted by a jitter of the step, the last is at end; between a step above the relief and a step below it — by
+// a secant.
 // The map is coarser than the world: if at the start it is above the ray (the ray passed over the real relief), there it
 // drops under the ray and, four cells farther, again as is.
 float pallFloor(sampler2D ground, mat4 S, vec4 G, vec3 dir, float from, float end, int steps, float jitter) {
     if (G.x <= 0.0 || S[1].w < 0.5) return 1e9;
     // frame of the map: along the ground — the map, above — the top of the relief, below — without edge (a ray downward ends under the relief)
     vec2 span = pallBox(dir, vec3(S[0].x - G.x, -1e6, S[0].y - G.x), vec3(S[0].x + G.x, S[0].z + G.z, S[0].y + G.x));
-    float fade = 4.0 * G.w, near = from / max(length(dir.xz), 1e-3);
+    // drawn chunks fill a cylinder around the eye: within the render distance across and the same distance up and down
+    // (Sodium culls sections vertically too), so a ray has passed them once it is that far out on either axis — straight
+    // down from high above the drawn ground it is under the relief at once
+    float fade = 4.0 * G.w, near = from / max(max(length(dir.xz), abs(dir.y)), 1e-3);
     float ta = max(max(span.x, near), 1.0);
     float tb = min(span.y, end);
     // below the lowest place of the map the ray is surely under the relief (and where the map is lowered at the start — no longer)

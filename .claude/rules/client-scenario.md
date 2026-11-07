@@ -189,7 +189,11 @@ with Iris.
   `film`: host video view above Newisle, daytime airburst 15 kt 1383 blocks away over land, spectator 40 above ground
   (wave cannot move it), `pall_film_front_<tenths>ds` from 1 to 3.5 s (approaching front, refraction ring at edge),
   `pall_film_<seconds>s` from 4 to 40 s (wall crosses viewer ~7 s), `pall_film_up_*` looking 55° up through 90 s,
-  mushroom/stem visible while viewer in dust. `blanket`: ground-view dust/overhead pall (complaints 18.10), airburst
+  mushroom/stem visible while viewer in dust. `below`: haze under the camera long after a ground burst (`INCOMING_KT`, default 250, 2 km away), after
+  `INCOMING_BELOW_MIN` minutes at heights `INCOMING_BELOW_UP` and pitches `INCOMING_BELOW_PITCH`
+  (`pall_below_up<h>_p<deg>`, `_off` without pall, `_vanilla` without shaders when `INCOMING_SHADERS` is set),
+  render distance `INCOMING_BELOW_RD`: past the drawn chunks the dust and mushroom rays end on the terrain map.
+  `blanket`: ground-view dust/overhead pall (complaints 18.10), airburst
   15 kt at 3 km, `nuclear.wave_speed` 0.2 like host servers (`INCOMING_WAVE_SPEED`), spectator 20 blocks above highest
   terrain in first 800 blocks toward epicenter (eye-local hill hid wall); `pall_blanket_ground_<seconds>s` every 6 s
   through 54 s, then 1/5 minutes at heights 60/150/400/1000/2500 blocks (`pall_blanket_<minutes>m_up<height>`), plus

@@ -31,6 +31,10 @@
 #     from the east at different heights, the edge of the shadow - according to the viewer, and from the west (frames pall_shadow_<time>; 8000 - without shadow);
 #     INCOMING_MUSHROOM=glow - light of the ball on the ground at night: explosion at 3 km to the east, the viewer looks at the ground in front of it
 #     (frames pall_glow_<seconds>s from 1 to 14 s);
+#     INCOMING_MUSHROOM=below - haze under the camera long after a ground nuke (INCOMING_KT, default 250 kt, 2 km away): after
+#     INCOMING_BELOW_MIN minutes (default 10) at heights INCOMING_BELOW_UP and pitches INCOMING_BELOW_PITCH (frames
+#     pall_below_up<h>_p<deg>, _off without the pall, _vanilla without shaders when INCOMING_SHADERS is set); INCOMING_BELOW_RD
+#     sets the render distance, INCOMING_BELOW_TIME the time of day (default 6000);
 #     INCOMING_MUSHROOM=blanket - air 15 kt in 3 km at wave_speed 0,2 (INCOMING_WAVE_SPEED): wall of dust from the ground
 #     (pall_blanket_ground_*) and pall through 1 and 5 minutes from the heights of 60–2500 blocks (pall_blanket_<minutes>m_up*, _over1000);
 #   firestorm - firestorm after air 15 kt: after ~1, 5 and 15 minutes (minutes are skipped by rewinding) from 2 km,
