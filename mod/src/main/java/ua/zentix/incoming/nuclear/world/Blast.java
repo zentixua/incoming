@@ -95,7 +95,9 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
                 /** Snow for turf beneath ({@code SnowyDirtBlock}: {@code minecraft:snow} tag, layer, block, powder snow). */
                 SNOWY_TOP = 1 << 20,
                 /** Block entity holds items ({@link net.minecraft.world.Container}): lands in the rubble with its contents. */
-                CONTAINER = 1 << 21;
+                CONTAINER = 1 << 21,
+                /** Coniferous trunk ({@link ModTags#NUKE_CONIFERS}): its own blowdown curve ({@link ForestBlowdown}). */
+                CONIFER = 1 << 22;
 
         boolean is(int flag) {
             return (flags & flag) != 0;
@@ -224,6 +226,7 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
         if (st.is(BlockTags.SOUL_FIRE_BASE_BLOCKS)) flags |= Props.SOUL_BASE;
         if (st.is(Blocks.FIRE)) flags |= Props.FIRE;
         if (container(st)) flags |= Props.CONTAINER;
+        if (st.is(ModTags.NUKE_CONIFERS)) flags |= Props.CONIFER;
         return new Props(r, st.isAir(), full, bearing, span, liquid, waterlogged, leaves, log, fixed, destroy >= 1, st.is(BlockTags.MINEABLE_WITH_AXE),
                 flags, st.getLightBlock(at, BlockPos.ZERO), st.getLightEmission(at, BlockPos.ZERO),
                 LightEngine.getOcclusionShape(at, BlockPos.ZERO, st, Direction.UP), LightEngine.getOcclusionShape(at, BlockPos.ZERO, st, Direction.DOWN),
@@ -754,7 +757,7 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
                         if (!w.props(wx, y + height, wz).leaves() && !nearLeaves(wx, y + height - 1, wz)) continue;
                         int x = w.x0 + wx, z = w.z0 + wz;
                         BlockState st = w.get(wx, y, wz);
-                        if (!fell || !fells(st, x, y, z)) {
+                        if (!fell || !fells(p, x, y, z)) {
                             for (int i = 0; i < height; i++) if (inside(wx, y + i, wz)) set(trunk, idx(wx, y + i, wz));
                             break;
                         }
@@ -775,8 +778,8 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
          * Whether the trunk based at {@code x y z} is blown down: incident pressure at its base on the blowdown curve of
          * its kind, with the tree's own randomness from its position (the same tree falls whoever plans the chunk).
          */
-        boolean fells(BlockState log, int x, int y, int z) {
-            ForestBlowdown.Curve c = log.is(ModTags.NUKE_CONIFERS) ? conifers : broadleaves;
+        boolean fells(Props log, int x, int y, int z) {
+            ForestBlowdown.Curve c = log.is(Props.CONIFER) ? conifers : broadleaves;
             double psi = d.psi(new Vec3(x + 0.5, y + 0.5, z + 0.5));
             if (!Fragility.possible(psi, c.median(), c.beta())) return false;
             long h = it.unimi.dsi.fastutil.HashCommon.mix(BlockPos.asLong(x, y, z) ^ 0x5DEECE66DL);
