@@ -158,11 +158,8 @@ class ShaderSourceTest {
     }
 
     /**
-     * A pixel without world behind it ends on the ground, for the pall and the mushroom alike. Drawn chunks fill a cylinder
-     * around the eye, the render distance across and up and down; past it the ray ends on the terrain map searched to its
-     * edge, and with no map at the mushroom's base. Zearth 07.11, 25 minutes after 250 kt: rays past the drawn chunks found
-     * no ground within the pall's reach and ran through the mushroom's foot under the terrain, a dark ring around a light
-     * disc of drawn ground below the viewer, and straight down from above the drawn height, rings of its shells.
+     * Past the drawn chunks a ray has no world depth: its floor search starts where it leaves the drawn cylinder on either axis
+     * (Sodium culls sections up and down too) and runs to the map edge, so the mushroom ends on the terrain, not under it.
      */
     @Test
     void rayWithoutWorldEndsOnTheGround() throws IOException, URISyntaxException {
@@ -172,6 +169,21 @@ class ShaderSourceTest {
         String march = blankComments(body(Files.readString(include.resolve("fx_pall.glsl")), "void main("));
         assertTrue(march.contains("PallFloorFrom, 1e6, FLOOR_STEPS"), "fx_pall: floor searched only within the pall's reach");
         assertTrue(march.contains("sp.y = min(sp.y, body.base.y / dir.y)"), "fx_pall: mushroom under the ground without a terrain map");
+    }
+
+    /**
+     * The mean mushroom depth behind a point (view ray beyond it, away from a high sun) samples four points over kilometers; on a
+     * downward path the samples under the ground count nothing and drop under it one by one as the ray tilts, so the light of the
+     * haze below a viewer stepped in rings around the nadir. The path ends where the matter does, just under the ground plane.
+     */
+    @Test
+    void mushroomDepthPathEndsAtTheGround() throws IOException, URISyntaxException {
+        Path include = Path.of(ShaderSourceTest.class.getResource("/assets/incoming/shaders/include").toURI());
+        String tau = blankComments(body(Files.readString(include.resolve("fx_pall.glsl")), "float mushTauOf("));
+        assertTrue(tau.contains("if (v.y < 0.0) len = min(len, max((p.y - m.base.y + 0.02 * m.capBot) / -v.y, 1.0));"),
+                "mushTauOf: a downward path must end at the ground plane");
+        String stem = blankComments(body(Files.readString(include.resolve("mushroom.glsl")), "float mushStemSigma("));
+        assertTrue(stem.contains("if (h < -0.02 * capBot) return 0.0;"), "mushTauOf clamp must match the stem's underground cutoff");
     }
 
     /** Identical dust at a joint requires one shared light source, not two independent lighting solvers. */

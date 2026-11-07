@@ -1042,6 +1042,11 @@ void pallStep(float ta, float ds, float grid, inout vec3 light, inout float tran
 // Mean mushroom m depth from eye-relative p along v over len, four samples (MUSH_AT); parts selects cap, stem, skirt,
 // water column
 float mushTauOf(Mush m, vec3 p, vec3 v, float len, vec4 parts) {
+    // matter ends just under the epicenter ground plane (mushStemSigma): a downward path is only as long as its way there.
+    // Over the whole len (the view ray's beyond, away from a high sun: kilometers) the samples under the ground count nothing,
+    // and as the ray tilts they drop under it one by one: the light of a point stepped in rings around the nadir (a lighter
+    // disc in the haze below a viewer minutes after the burst, gone once the nearest sample stays above the ground; Zearth 07.11)
+    if (v.y < 0.0) len = min(len, max((p.y - m.base.y + 0.02 * m.capBot) / -v.y, 1.0));
     float tau = 0.0;
     for (int i = 0; i < 4; i++) {
         tau += dot(mushMean(m, mushLocal(m, p + v * (len * MUSH_AT[i]))), parts) * MUSH_PART[i];
@@ -1516,9 +1521,8 @@ void main() {
     } else {
         // no world behind pixel (beyond render range, beyond/between Distant Horizons LODs): ray ends on pall terrain (PallGround),
         // not epicenter ground plane — from a lower valley it would go beneath that plane at the eye, leaving no pall below horizon.
-        // Searched to the map edge, not only within the pall: the mushroom ray ends there too. Cut at the pall's reach, a ray
-        // past the edge of the drawn chunks found no ground and ran through the mushroom's foot under the terrain: a dark ring
-        // around a lighter disc of drawn ground below a viewer minutes after the burst (Zearth 07.11)
+        // Searched to the map edge, not only within the pall: the mushroom ray ends there too; cut at the pall's reach, a ray
+        // past the edge of the drawn chunks found no ground and marched the mushroom's foot under the terrain
         scene = min(pallFloor(Sampler5, PallSlot0, PallGround0, dir, PallFloorFrom, 1e6, FLOOR_STEPS, jitter),
                 pallFloor(Sampler6, PallSlot1, PallGround1, dir, PallFloorFrom, 1e6, FLOOR_STEPS, jitter));
     }
