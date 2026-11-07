@@ -103,9 +103,12 @@ public final class MobFallout {
         if (span > SHORT && before < SicknessModel.MIN_DOSE && before + gy >= SicknessModel.MIN_DOSE) {
             // a long account (the mob was unloaded for hours): the sickness clock starts when the dose really passed 1 Gy,
             // not on load, so a mob that would have died in those hours dies now
+            // only detonations that gave this mob fallout in the account: each bisection step integrates them again
+            int[] live = java.util.stream.IntStream.range(0, froms.length)
+                    .filter(i -> froms[i] < now && detonations.get(i).hasFallout()).toArray();
             at = crossing(t -> {
                 double r = 0;
-                for (int i = 0; i < froms.length; i++) {
+                for (int i : live) {
                     Detonation d = detonations.get(i);
                     if (froms[i] < t) r += exposure(d, mob.getX(), mob.getZ(), froms[i] - d.gameTime(), t - d.gameTime());
                 }

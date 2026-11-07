@@ -4,6 +4,7 @@ import org.junit.jupiter.api.Test;
 import ua.zentix.incoming.nuclear.model.FalloutModel;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class MobFalloutTest {
     /** Exact ∫ t^-k dt over [a, b]. */
@@ -52,7 +53,7 @@ class MobFalloutTest {
         double k = FalloutModel.DECAY_EXP;
         java.util.function.LongToDoubleFunction dose = t -> t <= 500 ? 0 : 50 * powerLaw(k, 500, t);
         long at = MobFallout.crossing(dose, 0, 60_000, 1);
-        assertEquals(true, dose.applyAsDouble(at) >= 1 && dose.applyAsDouble(at - 1) < 1, "tick " + at);
+        assertTrue(dose.applyAsDouble(at) >= 1 && dose.applyAsDouble(at - 1) < 1, "tick " + at);
         assertEquals(60_000, MobFallout.crossing(t -> 0.5, 0, 60_000, 1));
     }
 
