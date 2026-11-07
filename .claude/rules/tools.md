@@ -28,6 +28,9 @@ The short layout is in the root CLAUDE.md; here, what each script does.
     deploy.sh                            ← build → mods/ of an instance and dist/ (--test, --dry; --jar F: a ready jar from CI/release);
                                            does not touch an instance with pack auto-update: packwiz-installer would bring back the pack's jar
     logscan.py                           ← digest of logs/latest.log
+    nuke_survey.py <untouched> <blasted> <gz x> <gz z> ← nuclear ruins against the untouched world, block by block (region
+                                           files only, safe on a live server's world): share of built blocks still in place by
+                                           kind and distance ring, one-block spikes left standing, block columns at --spot=x,z
     client_scenario.sh <scenario> [shaders] [dh] [voxy] [lss] ← client without a window (KWin virtual + Xwayland), frames and sound in WAV;
                                            scenarios and what each captures: in the script header
     sandbox.sh start|fx|swap|shot|restart|stop|jbr ← effects sandbox: a client with only the mod (+ Iris with a shaderpack, DH) in a
