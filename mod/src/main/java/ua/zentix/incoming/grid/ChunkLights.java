@@ -8,16 +8,20 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.CopperBulbBlock;
 import net.minecraft.world.level.block.RedstoneLampBlock;
+import net.minecraft.world.level.ChunkPos;
 import net.minecraft.world.level.block.state.BlockState;
+import net.minecraft.world.level.chunk.ChunkAccess;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.LevelChunkSection;
 import net.minecraft.world.level.chunk.PalettedContainer;
 
+import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.util.Palettes;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.function.LongPredicate;
 
 /**
  * Align chunk lamps to grid state: extinguish (lamps → twins) or relight (twins → lamps). Skip sections without
@@ -65,12 +69,13 @@ public final class ChunkLights {
         return false;
     }
 
-    static void scan(LevelChunkSection section, boolean dark, Change change) {
+    /** Every block of {@code section} to convert; {@code keep} (absolute block positions, section origin {@code x0 y0 z0}) stays as is. */
+    static void scan(LevelChunkSection section, boolean dark, int x0, int y0, int z0, @Nullable LongPredicate keep, Change change) {
         for (int y = 0; y < 16; y++) {
             for (int z = 0; z < 16; z++) {
                 for (int x = 0; x < 16; x++) {
                     BlockState to = GridLights.toward(section.getBlockState(x, y, z), dark);
-                    if (to != null) change.accept(x, y, z, to);
+                    if (to != null && (keep == null || !keep.test(BlockPos.asLong(x0 + x, y0 + y, z0 + z)))) change.accept(x, y, z, to);
                 }
             }
         }
@@ -89,11 +94,14 @@ public final class ChunkLights {
 
     /** Same, at most {@code limit} lamps (one budgeted work unit): the rest on the next call. */
     public static Pass apply(ServerLevel level, LevelChunk chunk, boolean dark, int limit) {
-        return apply(level, chunk, dark, limit, 0);
+        return apply(level, chunk, dark, limit, 0, null);
     }
 
-    /** Same, starting at {@code from} ({@link Pass#next} from the previous pass). */
-    public static Pass apply(ServerLevel level, LevelChunk chunk, boolean dark, int limit, int from) {
+    /**
+     * Same, starting at {@code from} ({@link Pass#next} from the previous pass); when darkening, lamps whose block position
+     * {@code keep} accepts stay lit (their own supply, {@link PowerGrid#keepsLit}).
+     */
+    public static Pass apply(ServerLevel level, LevelChunk chunk, boolean dark, int limit, int from, @Nullable LongPredicate keep) {
         LevelChunkSection[] sections = chunk.getSections();
         int x0 = chunk.getPos().getMinBlockX(), z0 = chunk.getPos().getMinBlockZ();
         BlockPos.MutableBlockPos p = new BlockPos.MutableBlockPos();
@@ -108,7 +116,7 @@ public final class ChunkLights {
             for (int b = i == from >> 12 ? from & 4095 : 0; b < 4096; b++) {
                 int x = b & 15, z = b >> 4 & 15, y = b >> 8;
                 BlockState to = GridLights.toward(section.getBlockState(x, y, z), dark);
-                if (to == null) continue;
+                if (to == null || keep != null && keep.test(BlockPos.asLong(x0 + x, y0 + y, z0 + z))) continue;
                 if (changed >= limit) {
                     done = false;
                     next = i << 12 | b;
@@ -143,10 +151,10 @@ public final class ChunkLights {
      * Signal lamps relit here reconcile separately ({@link #resignal}): their positions go to
      * {@code signalled}. Starts at {@code from} ({@link Pass#next} from previous pass). A pair that cannot change in the palette
      * (none among grid lamps — GameTest) converts through the world if neighbors are loaded ({@code neighbours});
-     * otherwise skips until neighbors load.
+     * otherwise skips until neighbors load. When darkening, lamps whose block position {@code keep} accepts stay lit.
      */
     public static Pass applyInPlace(ServerLevel level, LevelChunk chunk, boolean dark, int limit, int from,
-                                    boolean neighbours, LongArrayList signalled) {
+                                    boolean neighbours, LongArrayList signalled, @Nullable LongPredicate keep) {
         LevelChunkSection[] sections = chunk.getSections();
         int x0 = chunk.getPos().getMinBlockX(), z0 = chunk.getPos().getMinBlockZ();
         var light = level.getChunkSource().getLightEngine();
@@ -160,7 +168,7 @@ public final class ChunkLights {
             for (int b = i == from >> 12 ? from & 4095 : 0; b < 4096; b++) {
                 int x = b & 15, z = b >> 4 & 15, y = b >> 8;
                 BlockState to = GridLights.toward(section.getBlockState(x, y, z), dark);
-                if (to == null) continue;
+                if (to == null || keep != null && keep.test(BlockPos.asLong(x0 + x, y0 + y, z0 + z))) continue;
                 if (changed >= limit) {
                     done = false;
                     next = i << 12 | b;
@@ -185,18 +193,24 @@ public final class ChunkLights {
 
     /**
      * Align lamps of an outside-world chunk copy (distant Distant Horizons LOD) to grid state: {@code dark} — extinguish,
-     * otherwise relight. Directly in copy sections, without light or neighbors. Server thread.
+     * otherwise relight. Directly in copy sections, without light or neighbors. Server thread. Lamps on their own supply
+     * ({@link PowerGrid#keepsLit}) stay lit.
      *
      * @return number of lamps converted
      */
-    public static int applyToCopy(LevelChunkSection[] sections, boolean dark) {
+    public static int applyToCopy(ServerLevel level, ChunkAccess copy, boolean dark) {
+        LevelChunkSection[] sections = copy.getSections();
+        ChunkPos pos = copy.getPos();
+        LongPredicate keep = dark ? PowerGrid.get(level).keepsLit(pos.x, pos.z, level.getGameTime()) : null;
         int changed = 0;
-        for (LevelChunkSection section : sections) {
+        for (int i = 0; i < sections.length; i++) {
+            LevelChunkSection section = sections[i];
             if (section == null || !needs(section, dark)) continue;
+            int y0 = SectionPos.sectionToBlockCoord(copy.getSectionYFromSectionIndex(i));
             for (int b = 0; b < 4096; b++) {
                 int x = b & 15, z = b >> 4 & 15, y = b >> 8;
                 BlockState to = GridLights.toward(section.getBlockState(x, y, z), dark);
-                if (to == null) continue;
+                if (to == null || keep != null && keep.test(BlockPos.asLong(pos.getMinBlockX() + x, y0 + y, pos.getMinBlockZ() + z))) continue;
                 section.setBlockState(x, y, z, to, false);
                 changed++;
             }

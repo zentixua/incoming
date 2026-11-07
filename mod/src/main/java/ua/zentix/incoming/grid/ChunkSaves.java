@@ -24,6 +24,7 @@ import ua.zentix.incoming.registry.ModAttachments;
 
 import java.util.concurrent.atomic.AtomicIntegerArray;
 import java.util.concurrent.atomic.AtomicLongArray;
+import java.util.function.LongPredicate;
 
 /**
  * No counterparts on disk: an unlit lamp is only an in-memory chunk state. The chunk is saved with real lamps (and
@@ -117,13 +118,15 @@ public final class ChunkSaves {
         if (grid.outages().isEmpty() && !ChunkLights.anyUnlit(sections)) return;
         ChunkPos pos = chunk.getPos();
         boolean dark = grid.dark(pos.x, pos.z, level.getGameTime());
+        // lamps placed after the district went dark run on their own supply: they stay lit
+        LongPredicate keep = dark ? grid.keepsLit(pos.x, pos.z, level.getGameTime()) : null;
         LongArrayList stale = new LongArrayList();
         int[] lit = {0};
         for (int i = 0; i < sections.length; i++) {
             LevelChunkSection section = sections[i];
             if (section == null || !ChunkLights.needs(section, dark)) continue;
             int x0 = pos.getMinBlockX(), y0 = SectionPos.sectionToBlockCoord(chunk.getSectionYFromSectionIndex(i)), z0 = pos.getMinBlockZ();
-            ChunkLights.scan(section, dark, (x, y, z, to) -> {
+            ChunkLights.scan(section, dark, x0, y0, z0, keep, (x, y, z, to) -> {
                 section.setBlockState(x, y, z, to, false);
                 if (dark) stale.add(BlockPos.asLong(x0 + x, y0 + y, z0 + z));
                 else lit[0]++;

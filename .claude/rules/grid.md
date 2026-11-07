@@ -37,6 +37,16 @@ paths:
   lit there are checked against the signal when a neighbor loads (`BlackoutWorld.neighbourLoaded`), immediately in
   other chunks.
 
+- Nuclear outages repair by damage (`Outage.damageLightAt`, `dead`/`damaged` = ground ranges of `Blackouts.DEAD_PSI` 5 and
+  `DAMAGED_PSI` 1): never inside `dead`, days in the belt, hours outside it, on the 1000-ticks-per-hour game clock; the
+  restoration cascade starts at `Outage.restoreFrom` and lives as long as repairs (a restarted one skips districts issued
+  before the restart, `Sweep.issued`). Substations the strike hit repair as their district does; a destroyed one reroutes
+  its area at `Outage.rerouteAt` but stays unpowered while its zone is destroyed (`PowerGrid.destroyed`).
+- Lamps placed in a dark district (`Blackouts.onBlockPlaced`) run on their own supply: `PowerGrid` keeps
+  position → time placed (`placeOwn`, saved with the grid, not the chunk, so disk loads and LOD copies see it), and every
+  darkening path skips them via `PowerGrid.keepsLit` (lamps placed after the district's latest darkening). Forgotten
+  once no outage covers the chunk (`prune`).
+
 ## Pitfalls
 - Lamp-twin models and states come from the vanilla jar via `tools/gen_grid_assets.py` (do not edit by hand);
   substation textures: `tools/gen_textures.py`. Vanilla assigns the cutout layer to lanterns and end rods in code

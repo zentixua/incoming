@@ -41,6 +41,7 @@ import java.util.Iterator;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.function.LongPredicate;
 
 /**
  * Blackout in a dimension's world: brings chunks into line with the power grid ({@link PowerGrid}) within the tick time
@@ -105,10 +106,21 @@ public final class BlackoutWorld {
         long first = Long.MAX_VALUE, last = Long.MIN_VALUE;
         /** Next time whose chunks have not yet been issued. */
         long cursor = Long.MIN_VALUE;
+        /**
+         * Restoration resumed after a restart: districts due up to this time were already issued before it (their chunks
+         * on disk hold real lamps, distant LODs were already updated), so they are not issued again — a nuclear repair
+         * lasts weeks of game time, and every restart would otherwise reread the whole relit area for LODs.
+         */
+        final long issued;
 
         Sweep(Outage outage, boolean restore) {
+            this(outage, restore, Long.MIN_VALUE);
+        }
+
+        Sweep(Outage outage, boolean restore, long issued) {
             this.outage = outage;
             this.restore = restore;
+            this.issued = issued;
             // a district within the radius may include chunks beyond it: margin of one and a half cells
             double r = outage.radius() + Districts.CELL * 16 * 1.5;
             minX = (int) Math.floor((outage.x() - r) / 16);
@@ -128,7 +140,7 @@ public final class BlackoutWorld {
                 long district = Districts.of(x, z);
                 if (!outage.covers(district)) continue;
                 long due = restore ? outage.lightAt(district) : outage.darkAt(district);
-                if (due == Outage.NEVER) continue;
+                if (due == Outage.NEVER || due <= issued) continue;
                 byDue.computeIfAbsent(due, k -> new LongArrayList()).add(ChunkPos.asLong(x, z));
                 first = Math.min(first, due);
                 last = Math.max(last, due);
@@ -285,15 +297,6 @@ public final class BlackoutWorld {
         if (!queued.add(chunk)) return;
         resume.remove(chunk);
         (nearPlayer(chunk) ? near : ready).enqueue(chunk);
-    }
-
-    /** A lamp was placed: queue the chunk, and return a pass already beyond the lamp's position to it. */
-    void lampPlaced(ServerLevel level, BlockPos pos) {
-        long c = ChunkPos.asLong(pos);
-        int r = resume.get(c);
-        int at = level.getSectionIndex(pos.getY()) << 12 | (pos.getY() & 15) << 8 | (pos.getZ() & 15) << 4 | (pos.getX() & 15);
-        if (r >= 0 && at < r >> 1) resume.put(c, at << 1 | r & 1);
-        enqueue(c);
     }
 
     /** Chunk within {@link #NEAR_CHUNKS} of a player (using player chunks at tick start). */
@@ -620,15 +623,16 @@ public final class BlackoutWorld {
             boolean hasDark = sweeps.stream().anyMatch(sw -> !sw.restore && sw.outage.id() == o.id());
             boolean hasLight = sweeps.stream().anyMatch(sw -> sw.restore && sw.outage.id() == o.id());
             if (!hasDark && dark < o.lastDark()) sweeps.add(new Sweep(o, false));
-            if (!hasLight && o.restoreAt() != Outage.NEVER && now >= o.restoreAt()) sweeps.add(new Sweep(o, true));
+            if (!hasLight && o.restoreFrom() != Outage.NEVER && now >= o.restoreFrom()) sweeps.add(new Sweep(o, true, grid.swept(o.id(), true)));
         }
     }
 
     /** Outages due for power restoration: restoration cascade (one per outage). */
     private void scheduleRestoreSweeps(PowerGrid grid, long now) {
         for (Outage o : grid.outages()) {
-            if (o.restoreAt() == Outage.NEVER || now < o.restoreAt()) continue;
-            if (sweeps.stream().noneMatch(s -> s.restore && s.outage.id() == o.id()) && grid.swept(o.id(), true) < o.restoreAt()) {
+            long from = o.restoreFrom();
+            if (from == Outage.NEVER || now < from) continue;
+            if (sweeps.stream().noneMatch(s -> s.restore && s.outage.id() == o.id()) && grid.swept(o.id(), true) < from) {
                 sweeps.add(new Sweep(o, true));
             }
         }
@@ -748,11 +752,13 @@ public final class BlackoutWorld {
         int from = r >= 0 && (r & 1) == (dark ? 1 : 0) ? r >> 1 : 0;
         ChunkLights.Pass pass = ChunkLights.Pass.NONE;
         int cost = world ? WORLD_LAMP : 1, resignalled = 0;
+        // lamps placed after the district went dark run on their own supply: they stay lit
+        LongPredicate keep = dark && needed ? grid.keepsLit(pos.x, pos.z, now) : null;
         if (world) {
-            pass = ChunkLights.apply(level, chunk, dark, Math.max(1, limit / cost), from);
+            pass = ChunkLights.apply(level, chunk, dark, Math.max(1, limit / cost), from, keep);
         } else if (needed) {
             LongArrayList lamps = new LongArrayList();
-            pass = ChunkLights.applyInPlace(level, chunk, dark, limit, from, !edge, lamps);
+            pass = ChunkLights.applyInPlace(level, chunk, dark, limit, from, !edge, lamps, keep);
             if (edge) {
                 // signal is read from neighbors — check when they load
                 if (!lamps.isEmpty()) resignal.computeIfAbsent(c, k -> new LongArrayList()).addAll(lamps);

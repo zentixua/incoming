@@ -125,7 +125,9 @@ final class GridCommand {
             String dimension = level.dimension().location().toString();
             for (Outage outage : PowerGrid.get(level).outages()) {
                 long restore = outage.restoreAt();
-                Component when = restore == Outage.NEVER ? Component.translatable("incoming.grid.restore.never")
+                Component when = restore == Outage.NEVER && outage.byDamage()
+                        ? Component.translatable("incoming.grid.restore.damage", Math.round(outage.damaged()), Math.round(outage.dead()))
+                        : restore == Outage.NEVER ? Component.translatable("incoming.grid.restore.never")
                         : restore <= now ? Component.translatable("incoming.grid.restore.now")
                         : Component.translatable("incoming.grid.restore.in", (restore - now + 1199) / 1200);
                 ctx.getSource().sendSuccess(() -> Component.translatable("incoming.grid.outage", outage.id(), dimension,

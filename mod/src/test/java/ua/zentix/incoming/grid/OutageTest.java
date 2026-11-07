@@ -73,4 +73,92 @@ class OutageTest {
         json.getAsJsonObject().remove("node");
         assertEquals(-1, Outage.CODEC.parse(JsonOps.INSTANCE, json).getOrThrow().node());
     }
+
+    /** Nuclear outage by damage: destroyed within 2500 blocks, damaged belt to 6000, area 8000 blocks. */
+    private static final Outage NUKE = new Outage(4, 0, 0, 8000, 0, 50, Outage.NEVER, 1800, -1, 2500, 6000);
+    private static final double HOUR = Outage.TICKS_PER_HOUR;
+
+    /**
+     * Repair follows the damage: never where the grid was destroyed, days in the damaged belt (2–14, ±25 %), hours outside it
+     * (2–24, ±25 %); the whole tripped ring relights before any district of the damaged belt, the far edge before its inner
+     * side, and no district lights before the restoration cascade starts.
+     */
+    @Test
+    void nuclearRepairFollowsDamage() {
+        long trippedLast = Long.MIN_VALUE, damagedFirst = Long.MAX_VALUE, first = Long.MAX_VALUE;
+        long innerTripped = 0, outerTripped = 0;
+        int dead = 0, damaged = 0, tripped = 0;
+        for (int x = -480; x <= 480; x += 3) {
+            for (int z = -480; z <= 480; z += 37) {
+                long d = Districts.of(x, z);
+                if (!NUKE.covers(d)) continue;
+                double r = Math.hypot(Districts.seedX(d), Districts.seedZ(d));
+                long light = NUKE.lightAt(d);
+                assertTrue(NUKE.darkAt(d) < light, "lit before it went dark at " + r);
+                if (r <= 2500) {
+                    assertEquals(Outage.NEVER, light, "destroyed grid relit at " + r);
+                    assertTrue(NUKE.dark(d, 100_000_000L));
+                    dead++;
+                    continue;
+                }
+                first = Math.min(first, light);
+                double hours = light / HOUR;
+                if (r <= 6000) {
+                    assertTrue(hours >= 48 * 0.75 - 0.01 && hours <= 336 * 1.25 + 0.01, "damaged belt at " + r + ": " + hours + " h");
+                    damagedFirst = Math.min(damagedFirst, light);
+                    damaged++;
+                } else {
+                    assertTrue(hours >= 2 * 0.75 - 0.01 && hours <= 24 * 1.25 + 0.01, "tripped ring at " + r + ": " + hours + " h");
+                    trippedLast = Math.max(trippedLast, light);
+                    if (r < 6300) innerTripped = Math.max(innerTripped, light);
+                    if (r > 7700) outerTripped = Math.max(outerTripped, light);
+                    tripped++;
+                }
+            }
+        }
+        assertTrue(dead > 0 && damaged > 0 && tripped > 0, dead + " " + damaged + " " + tripped);
+        assertTrue(trippedLast < damagedFirst, "outskirts after the damaged belt");
+        assertTrue(outerTripped < innerTripped, "far edge after the inner side of the ring");
+        assertTrue(NUKE.restoreFrom() <= first && NUKE.restoreFrom() > 0);
+        assertTrue(NUKE.byDamage());
+        assertFalse(NUKE.over(Long.MAX_VALUE - 1), "a destroyed zone ended by itself");
+    }
+
+    /** A command restores light everywhere, the destroyed zone included, and ends the outage. */
+    @Test
+    void commandOverridesDamage() {
+        Outage o = NUKE.restoring(5000, 200);
+        long centre = Districts.of(0, 0);
+        assertTrue(o.lightAt(centre) <= 5200);
+        assertFalse(o.dark(centre, 5200));
+        assertTrue(o.over(5200));
+        // a district whose repair was due before the command keeps that sooner time
+        for (int x = 400; x <= 480; x++) {
+            long d = Districts.of(x, 0);
+            if (o.covers(d)) assertEquals(Math.min(NUKE.lightAt(d), 5000 + Math.round(200 * Districts.unit(d, 4))), o.lightAt(d));
+        }
+    }
+
+    /** Without a destroyed zone (high burst) the outage ends once the longest repair is done. */
+    @Test
+    void damageWithoutDestroyedZoneEnds() {
+        Outage o = new Outage(5, 0, 0, 4000, 0, 50, Outage.NEVER, 0, -1, 0, 3000);
+        assertFalse(o.over(o.rerouteAt()));
+        assertTrue(o.over(o.rerouteAt() + 1));
+        for (int x = -250; x <= 250; x += 5) {
+            long d = Districts.of(x, 0);
+            if (o.covers(d)) assertTrue(o.lightAt(d) <= o.rerouteAt(), "district at " + x + " beyond the longest repair");
+        }
+    }
+
+    @Test
+    void damageCodecRoundTrip() {
+        var json = Outage.CODEC.encodeStart(JsonOps.INSTANCE, NUKE).getOrThrow();
+        assertEquals(NUKE, Outage.CODEC.parse(JsonOps.INSTANCE, json).getOrThrow());
+        // outages saved before the damage law load as uniform ones
+        json.getAsJsonObject().remove("dead");
+        json.getAsJsonObject().remove("damaged");
+        assertFalse(Outage.CODEC.parse(JsonOps.INSTANCE, json).getOrThrow().byDamage());
+        assertFalse(O.byDamage());
+    }
 }

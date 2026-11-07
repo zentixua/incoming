@@ -20,6 +20,7 @@ import dev.ryanhcode.sable.companion.SubLevelAccess;
 import ua.zentix.incoming.compat.SubLevels;
 import ua.zentix.incoming.net.S2C;
 import ua.zentix.incoming.nuclear.Detonation;
+import ua.zentix.incoming.nuclear.model.BlastModel;
 import ua.zentix.incoming.nuclear.world.WorkClock;
 import ua.zentix.incoming.registry.ModAttachments;
 import ua.zentix.incoming.work.WorkScheduler;
@@ -30,7 +31,9 @@ import java.util.Locale;
 
 /**
  * Blackout: a grid-node (substation) hit, nuclear strike or command cuts power to an area — districts go dark in a cascade
- * from the center, then light returns in random order after {@code grid.restore_minutes}. Entry points and event hooks here;
+ * from the center, then light returns in random order after {@code grid.restore_minutes}, or after a nuclear strike by what
+ * its blast did to each district ({@link #nuke}). Lamps placed in a dark district run on their own supply
+ * ({@link #onBlockPlaced}). Entry points and event hooks here;
  * chunk work in {@link BlackoutWorld}, state in {@link PowerGrid}.
  */
 public final class Blackouts {
@@ -40,6 +43,18 @@ public final class Blackouts {
     static final double EQUIPMENT_PSI = 4;
     /** Distance at which substation failure is audible and visible (blocks). */
     private static final double FAILURE_RANGE = 320;
+    /**
+     * Nuclear strike: overpressure that destroys the grid — wood-frame buildings flattened, utility poles snapped, overhead
+     * lines and substation yards wrecked (Glasstone and Dolan 1977, ch. V: 5 psi, moderate-to-severe damage to most
+     * structures; (est.) for the grid as a whole). Power there never comes back by itself ({@link Outage#damageLightAt}).
+     */
+    public static final double DEAD_PSI = 5;
+    /**
+     * Nuclear strike: overpressure that starts damaging the distribution grid — windows out, scattered lines down under
+     * debris and broken branches (Glasstone and Dolan 1977, ch. V: 1 psi, light damage; (est.) for overhead lines). Below it
+     * the grid only trips.
+     */
+    public static final double DAMAGED_PSI = 1;
     /** Nuclear cascade: EMP and wave darken the area almost simultaneously (blocks per tick). */
     private static final double NUKE_SPEED = 50;
     /** Commanded light restoration takes 10 s. */
@@ -75,35 +90,47 @@ public final class Blackouts {
      * later (repairs restart).
      */
     public static void knockOut(ServerLevel level, Node node) {
+        knockOut(level, node, restoreAt(level.getGameTime()));
+    }
+
+    /** Same, repairs done at {@code restoreAt} ({@link Outage#NEVER} — only by command). */
+    private static void knockOut(ServerLevel level, Node node, long restoreAt) {
         PowerGrid grid = PowerGrid.get(level);
         long now = level.getGameTime();
         grid.downOutage(node.id(), now).ifPresentOrElse(o -> {
-            if (o.restoreAt() != Outage.NEVER) {
-                Outage later = o.restoring(restoreAt(now), restoreSpread());
+            if (o.restoreAt() != Outage.NEVER && restoreAt > o.restoreAt()) {
+                Outage later = o.restoring(restoreAt, restoreSpread());
                 grid.replace(later);
                 BlackoutWorld.get(level).onRestore(later);
             }
         }, () -> {
             Vec3 c = Vec3.atCenterOf(node.pos());
-            blackout(level, c, node.radius(), speed(), node.id());
+            blackout(level, c, node.radius(), speed(), node.id(), restoreAt, -1, -1);
             PacketDistributor.sendToPlayersNear(level, null, c.x, c.y, c.z, FAILURE_RANGE, new S2C.GridFailure(c, level.random.nextLong()));
         });
         Substations.sync(level, grid, now);
     }
 
     /**
-     * Nuclear strike cuts power everywhere it reaches (glass or burns), immediately at the flash; substations in this radius
-     * are disabled — each also darkens its own area.
+     * Nuclear strike cuts power everywhere it reaches (glass or burns), immediately at the flash. Light comes back by what
+     * the blast did to each district ({@link Outage#damageLightAt}): hours where the grid only tripped, days in the
+     * damaged belt ({@link #DAMAGED_PSI}), never where it was destroyed ({@link #DEAD_PSI}). Substations in the radius are
+     * disabled — each also darkens its own area until repaired as its own district is (a destroyed one: until supply is
+     * rerouted around it, {@link Outage#rerouteAt}).
      */
     public static void nuke(ServerLevel level, Detonation d) {
         double radius = nukeRadius(d);
         if (radius <= 0) return;
-        Outage o = blackout(level, d.burst(), radius, NUKE_SPEED, -1);
+        double dead = d.groundRange(BlastModel.kpa(DEAD_PSI)), damaged = Math.max(dead, d.groundRange(BlastModel.kpa(DAMAGED_PSI)));
+        Outage o = blackout(level, d.burst(), radius, NUKE_SPEED, -1, Outage.NEVER, dead, damaged);
         List<Node> hit = new ArrayList<>();
         for (Node n : PowerGrid.get(level).nodes()) {
             if (Math.hypot(n.pos().getX() + 0.5 - o.x(), n.pos().getZ() + 0.5 - o.z()) <= o.radius()) hit.add(n);
         }
-        hit.forEach(n -> knockOut(level, n));
+        for (Node n : hit) {
+            long repaired = o.lightAt(Districts.of(n.pos().getX() >> 4, n.pos().getZ() >> 4));
+            knockOut(level, n, repaired == Outage.NEVER ? o.rerouteAt() : repaired);
+        }
     }
 
     /**
@@ -122,13 +149,20 @@ public final class Blackouts {
      * @param node failed node causing this outage; -1 — not a node
      */
     public static Outage blackout(ServerLevel level, Vec3 at, double radius, double speed, int node) {
+        return blackout(level, at, radius, speed, node, restoreAt(level.getGameTime()), -1, -1);
+    }
+
+    /** Same, light restored uniformly from {@code restoreAt}, or by damage ({@code dead}, {@code damaged}: {@link Outage}). */
+    private static Outage blackout(ServerLevel level, Vec3 at, double radius, double speed, int node, long restoreAt, double dead, double damaged) {
         radius = Math.min(radius, IncomingConfig.SERVER.gridMaxRadius.get());
         long now = level.getGameTime();
-        Outage o = PowerGrid.get(level).addOutage(at.x, at.z, radius, now, speed, restoreAt(now), restoreSpread(), node);
+        Outage o = PowerGrid.get(level).addOutage(new Outage(0, at.x, at.z, radius, now, speed, restoreAt, restoreSpread(), node, dead, damaged));
         BlackoutWorld.get(level).onOutage(o);
-        Incoming.LOG.info("Blackout #{} ({}): {} {}, radius {}, {}", o.id(), level.dimension().location(), Math.round(at.x), Math.round(at.z), Math.round(radius),
-                o.restoreAt() == Outage.NEVER ? "power will not come back by itself" : String.format(Locale.ROOT, "power returns in %d min",
-                        (o.restoreAt() - now) / 1200));
+        String restore = o.byDamage() ? String.format(Locale.ROOT, "power returns by damage: in hours beyond %d blocks, in days beyond %d, never within %d",
+                Math.round(damaged), Math.round(dead), Math.round(dead))
+                : o.restoreAt() == Outage.NEVER ? "power will not come back by itself"
+                : String.format(Locale.ROOT, "power returns in %d min", (o.restoreAt() - now) / 1200);
+        Incoming.LOG.info("Blackout #{} ({}): {} {}, radius {}, {}", o.id(), level.dimension().location(), Math.round(at.x), Math.round(at.z), Math.round(radius), restore);
         return o;
     }
 
@@ -259,13 +293,17 @@ public final class Blackouts {
         }
     }
 
-    /** A lamp placed in a dark district goes out. */
+    /**
+     * A lamp placed in a dark district stays lit: Minecraft lamps have no wire to the grid, so a lamp set up after the outage
+     * runs on its placer's own supply (their redstone, their generator). The grid remembers it ({@link PowerGrid#placeOwn})
+     * and darkens only lamps that stood before the district went dark — also after the chunk is saved and loaded again.
+     * The lamp is the grid's again for the next outage that reaches its district after it was placed.
+     */
     public static void onBlockPlaced(BlockEvent.EntityPlaceEvent e) {
         if (e.getLevel() instanceof ServerLevel level && GridLights.isLit(e.getPlacedBlock())) {
             BlockPos pos = e.getPos();
-            if (PowerGrid.get(level).dark(pos.getX() >> 4, pos.getZ() >> 4, level.getGameTime())) {
-                BlackoutWorld.get(level).lampPlaced(level, pos);
-            }
+            PowerGrid grid = PowerGrid.get(level);
+            if (grid.dark(pos.getX() >> 4, pos.getZ() >> 4, level.getGameTime())) grid.placeOwn(pos, level.getGameTime());
         }
     }
 }
