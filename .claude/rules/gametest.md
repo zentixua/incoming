@@ -141,5 +141,7 @@ paths:
   body's random UUID and the wave id): a hit body may lose nothing. To check that a wave reached a body, record its
   throw (`push`) too, not damage alone (`craftBlocksGoRightAfterDamage`). Ruin rubble lands by world-coordinate hashes
   (`Collapse`): a destroyed block's spot may hold rubble, so check that the block is gone, not that the spot is air.
+  A broken full block on the ground lands back on its own cell as itself for 12 % of positions
+  (`RuinPlanner.leavesRubble`): a lone test block must sit where it leaves none (`blastBreaksLightKeepsMasonryFellsTrees`).
 - Background ruin workers run in wall time (0.5–1.3 s for a 1 kt chunk locally, 50–510 unthrottled ticks): a test that
   waits for them runs at game speed (`chunkWithheldUntilRuins`), or CI's unthrottled ticks spend its timeout first.

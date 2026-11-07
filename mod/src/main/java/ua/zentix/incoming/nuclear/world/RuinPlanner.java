@@ -115,6 +115,14 @@ public final class RuinPlanner {
 
     private RuinPlanner() {}
 
+    /**
+     * For tests: whether a block broken at {@code pos} lands as rubble ({@link Debris#SOLID_SHARE} of broken blocks,
+     * by position). A broken block on the ground falls nowhere, so its rubble lands back on its own cell.
+     */
+    public static boolean leavesRubble(BlockPos pos) {
+        return hash(pos.getX(), pos.getY(), pos.getZ(), 71) < Debris.SOLID_SHARE;
+    }
+
     /** Position/salt hash as number in [0, 1). */
     static double hash(int x, int y, int z, int salt) {
         int h = Mth.murmurHash3Mixer(Long.hashCode(BlockPos.asLong(x, y, z)) * 31 + salt);

@@ -368,6 +368,56 @@ public final class RuinSettleGameTests {
         });
     }
 
+    /**
+     * Chunks waiting for a load slot cost no visits: a 250 kt pass keeps 2048 of them, and visiting all every tick spent
+     * the lane, so the load window was cut for budget while the server thread idled (Zearth 07.11.2026).
+     */
+    @GameTest(template = "range", batch = "nuke_settle_visits", timeoutTicks = 600, skyAccess = true)
+    public static void waitingChunksAreNotVisited(GameTestHelper h) {
+        StrikeGameTests.gameSpeed(h);
+        ServerLevel level = h.getLevel();
+        ChunkPos pad = new ChunkPos(h.absolutePos(new BlockPos(32, 1, 32)));
+        ChunkPos center = new ChunkPos(pad.x + 700, pad.z + 700);
+        NuclearEvents events = new NuclearEvents();
+        int id = NuclearEvents.get(level).nextId();
+        events.add(new Detonation(id, new Vec3(center.getMiddleBlockX(), 65, center.getMiddleBlockZ()),
+                65, 7, true, -10000, 0, 0, 20000, 42, 0.1f, false, 1));
+        RuinProgress.Pass p = RuinProgress.get(level).pass(id);
+        p.cursor = Long.MAX_VALUE; // restored scan: only these unconfirmed positions remain
+        CompoundTag data = ChunkSerializer.write(level, fixture(level, center, 64));
+        for (int x = -15; x < 15; x++) for (int z = -15; z < 15; z++) {
+            ChunkPos pos = new ChunkPos(center.x + x, center.z + z);
+            CompoundTag tag = data.copy();
+            tag.putInt("xPos", pos.x);
+            tag.putInt("zPos", pos.z);
+            ua.zentix.incoming.util.RegionFiles.write(level, pos, tag);
+            p.pending.add(pos.toLong());
+        }
+        RuinSettle settle = new RuinSettle();
+        settle.regions = (rx, rz) -> true;
+        WorkClock clock = WorkClock.counting(1_000);
+        StrikeGameTests.afterTest(h, () -> {
+            settle.clear(level);
+            NuclearWorld.get(level).clear(level);
+        });
+        int[] checked = {0};
+        h.onEachTick(() -> {
+            clock.start(30_000_000);
+            settle.work(level, events, clock);
+            // from the first tick with 600 waiting, while any wait: a fast drain must not time the test out
+            if (checked[0] == 0 && settle.waiting() < 600 || settle.waiting() == 0) {
+                if (checked[0] > 0) h.succeed();
+                return;
+            }
+            // reads in flight and those started after them, holds kept or released, new holds: visits that can move a chunk
+            int bound = 2 * RuinSettle.READS + settle.held() + 2 * settle.loadingLimit();
+            h.assertTrue(settle.visited() <= bound, "visited " + settle.visited() + " entries with " + settle.waiting()
+                    + " waiting for a slot; at most " + bound + " can move");
+            if (++checked[0] < 40) return;
+            h.succeed();
+        });
+    }
+
     /** Admission and polling share the counting deadline; even an exhausted lane performs no unbounded scan. */
     @GameTest(template = "range", batch = "nuke_settle_budget", timeoutTicks = 100, skyAccess = true)
     public static void admissionUsesSharedBudgetAndStopsCleanly(GameTestHelper h) {

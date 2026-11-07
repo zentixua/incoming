@@ -225,7 +225,13 @@ public final class NuclearGameTests {
         for (BlockPos p : BlockPos.betweenClosed(tree.offset(-2, 3, -2), tree.offset(2, 5, 2))) {
             if (h.getBlockState(p).isAir()) h.setBlock(p, Blocks.OAK_LEAVES);
         }
-        BlockPos glass = CENTER.west(29), bricks = CENTER.north(25), planks = CENTER.south(18);
+        BlockPos glass = CENTER.west(29), bricks = CENTER.north(25), planks = null;
+        // a plank whose position sends its rubble nowhere: on the ground, own rubble lands back on its cell
+        for (int dx = 0; dx < 7 && planks == null; dx++) {
+            BlockPos p = CENTER.south(18).east(dx % 2 == 0 ? dx / 2 : -(dx + 1) / 2);
+            if (!RuinPlanner.leavesRubble(h.absolutePos(p))) planks = p;
+        }
+        h.assertTrue(planks != null, "every plank position on the row leaves its own rubble");
         h.setBlock(glass, Blocks.GLASS);
         for (BlockPos p : BlockPos.betweenClosed(bricks.offset(-1, 0, -1), bricks.offset(1, 1, 0))) h.setBlock(p, Blocks.STONE_BRICKS);
         h.setBlock(planks, Blocks.OAK_PLANKS);
