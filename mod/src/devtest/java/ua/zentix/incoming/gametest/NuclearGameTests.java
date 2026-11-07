@@ -1287,6 +1287,65 @@ public final class NuclearGameTests {
     }
 
     /**
+     * Nothing hangs in the air after the wave. A glass roof over the whole site (wider than a planning window, so it is
+     * the lowest column top there) above small terracotta tables on plank legs, at ~12 psi from a ground burst 60
+     * blocks west: the roof breaks, the wave reaches the legs through the gaps, and every block left above the ground
+     * rests on it through other blocks. Zearth 250 kt (07.11.2026): skyscraper terracotta, concrete and sandstone
+     * floated in one-block bands up to 180 blocks above the rubble, because a window under one roof took the roof for
+     * the ground (Collapse#surface).
+     */
+    @GameTest(template = "range", timeoutTicks = 100, batch = "nuke_ruins_floating", skyAccess = true)
+    public static void nothingHangsAfterTheWave(GameTestHelper h) {
+        int floor = CENTER.getY(), top = floor + 19;
+        Detonation d = atPsi(h, new BlockPos(-60, floor, 32), false, new BlockPos(32, floor + 3, 32), 12);
+        for (int x = 0; x < 64; x++) {
+            for (int z = 0; z < 64; z++) {
+                if (x % 4 == 1 && z % 4 == 1) for (int y = 0; y < 5; y++) h.setBlock(new BlockPos(x, floor + y, z), Blocks.SPRUCE_PLANKS);
+                if (x % 4 != 3 && z % 4 != 3) h.setBlock(new BlockPos(x, floor + 5, z), Blocks.LIGHT_GRAY_TERRACOTTA);
+                h.setBlock(new BlockPos(x, floor + 10, z), Blocks.GLASS);
+            }
+        }
+        scarAll(h, d, new ColumnScar.Budget(false));
+        java.util.function.Predicate<BlockPos> solid = p -> {
+            var st = h.getBlockState(p);
+            return !st.isAir() && st.getFluidState().isEmpty();
+        };
+        java.util.Set<BlockPos> held = new java.util.HashSet<>();
+        java.util.ArrayDeque<BlockPos> queue = new java.util.ArrayDeque<>();
+        for (int x = 0; x < 64; x++) for (int z = 0; z < 64; z++) {
+            BlockPos p = new BlockPos(x, floor - 1, z);
+            if (solid.test(p)) {
+                held.add(p);
+                queue.add(p);
+            }
+        }
+        while (!queue.isEmpty()) {
+            BlockPos p = queue.poll();
+            for (net.minecraft.core.Direction dir : net.minecraft.core.Direction.values()) {
+                BlockPos n = p.relative(dir);
+                if (n.getX() < 0 || n.getX() > 63 || n.getZ() < 0 || n.getZ() > 63 || n.getY() < floor - 1 || n.getY() > top) continue;
+                if (!held.contains(n) && solid.test(n)) {
+                    held.add(n);
+                    queue.add(n);
+                }
+            }
+        }
+        int floating = 0;
+        BlockPos first = null;
+        for (int x = 3; x < 64; x++) for (int z = 3; z < 64; z++) for (int y = floor; y <= top; y++) {
+            // from 3: the site's barrier fence (indestructible, holds like ground) carries the tables along its west and north sides
+            BlockPos p = new BlockPos(x, y, z);
+            if (solid.test(p) && !held.contains(p)) {
+                floating++;
+                if (first == null || p.getY() > first.getY()) first = p;
+            }
+        }
+        if (floating > 0) h.fail(floating + " blocks hang in the air, highest " + h.getBlockState(first) + " at " + first.toShortString()
+                + String.format(Locale.ROOT, " (%.1f psi there)", d.psi(Vec3.atCenterOf(h.absolutePos(first)))));
+        h.succeed();
+    }
+
+    /**
      * Trunks fall only whole. A tree at ~3.5 psi (reflected pressure on its trunk above the 5 psi log threshold, incident
      * below it) keeps its whole trunk: no log is cut out of it. A 26-block trunk (over the old 24-block limit) with a crown (mega jungle or spruce) at
      * ~7 psi falls whole like a small tree: no log stands above the stump height.

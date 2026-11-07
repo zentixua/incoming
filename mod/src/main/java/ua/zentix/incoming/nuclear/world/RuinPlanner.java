@@ -564,11 +564,11 @@ public final class RuinPlanner {
         if (y > ground + 1) for (; y < s.maxY && s.props(lx, y, lz).is(Blast.Props.PLANT); y++) s.set(lx, y, lz, AIR);
     }
 
-    /** Falling rubble takes this place: air, or a plant or thin snow it buries (not water: rubble there sinks away). */
+    /** Falling rubble takes this place: air, or a plant or thin snow it buries (nothing holding water: rubble there sinks away). */
     private static boolean buries(Sections s, int lx, int y, int lz) {
         if (s.get(lx, y, lz).isAir()) return true;
         Blast.Props p = s.props(lx, y, lz);
-        return p.is(Blast.Props.REPLACEABLE) && !p.fluid() && !p.waterlogged();
+        return p.is(Blast.Props.REPLACEABLE) && p.is(Blast.Props.NO_FLUID); // seagrass and bubble columns hold water
     }
 
     /** Column ground inside the surface fireball: nothing lands there, sand melts, water boils. */
