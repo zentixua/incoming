@@ -1200,6 +1200,8 @@ public final class RuinBackgroundGameTests {
      * Sable reads a changed block's neighbourhood shapes at {@code BlockPos.ZERO} ({@code NuclearTickets.ORIGIN}): a shulker box
      * placed anywhere loads chunk (0, 0) inside the block change. Nuclear work holds that chunk from launch to the end of
      * its queues. The first half pins Sable's behaviour: once it fails, Sable no longer reads the origin, and the hold goes.
+     * The second half checks the hold and its release; that the hold removes the stall is not testable here (Sable
+     * memoizes per block state for the whole JVM, so a state reads the origin once).
      */
     @GameTest(template = "range", timeoutTicks = 1200, batch = "sable_origin", skyAccess = true)
     public static void sableShapeLoadsOrigin(GameTestHelper h) {
@@ -1211,8 +1213,10 @@ public final class RuinBackgroundGameTests {
         var map = level.getChunkSource().chunkMap;
         var rule = level.getGameRules().getRule(net.minecraft.world.level.GameRules.RULE_SPAWN_CHUNK_RADIUS);
         int was = rule.get();
-        // the GameTest world spawns at the origin: its spawn chunks would keep it loaded
+        // the GameTest world spawns at the origin: its spawn chunks would keep it loaded; nuclear work an earlier batch
+        // left would hold it too
         rule.set(0, level.getServer());
+        NuclearStrikes.clear(level);
         StrikeGameTests.afterTest(h, () -> {
             rule.set(was, level.getServer());
             NuclearStrikes.clear(level);

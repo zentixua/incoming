@@ -238,7 +238,9 @@ public final class AreaHandoverGameTests {
 
     private static void drained(GameTestHelper h) {
         h.succeedWhen(() -> {
-            h.assertTrue(StrikeWorld.get(h.getLevel()).areas().size() == 0, "areas still held");
+            // chunk (0, 0) may stay held for nuclear work an earlier batch left (NuclearTickets.holdOrigin)
+            int origin = ua.zentix.incoming.nuclear.world.NuclearTickets.holdsOrigin(h.getLevel()) ? 1 : 0;
+            h.assertTrue(StrikeWorld.get(h.getLevel()).areas().size() == origin, "areas still held");
             h.assertTrue(StrikeWorld.get(h.getLevel()).areas().releasing() == 0, "release queue still draining");
             for (String type : List.of("incoming_flight", "incoming_area_load", "incoming_area_release", "incoming_projectile")) {
                 h.assertValueEqual(TicketProbe.count(h.getLevel(), type), 0, "remaining " + type);
