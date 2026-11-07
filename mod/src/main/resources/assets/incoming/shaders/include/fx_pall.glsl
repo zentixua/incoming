@@ -1042,7 +1042,8 @@ void pallStep(float ta, float ds, float grid, inout vec3 light, inout float tran
 // Mean mushroom m depth from eye-relative p along v over len, four samples (MUSH_AT); parts selects cap, stem, skirt,
 // water column
 float mushTauOf(Mush m, vec3 p, vec3 v, float len, vec4 parts) {
-    // matter ends just under the epicenter ground plane (mushStemSigma): a downward path is only as long as its way there.
+    // stem matter ends just under the epicenter ground plane (mushStemSigma; the dust skirt's analytic lower half reaches deeper
+    // and is not counted beyond it): a downward path is only as long as its way there.
     // Over the whole len (the view ray's beyond, away from a high sun: kilometers) the samples under the ground count nothing,
     // and as the ray tilts they drop under it one by one: the light of a point stepped in rings around the nadir (a lighter
     // disc in the haze below a viewer minutes after the burst, gone once the nearest sample stays above the ground; Zearth 07.11)
