@@ -404,7 +404,11 @@ public final class RuinSettleGameTests {
         h.onEachTick(() -> {
             clock.start(30_000_000);
             settle.work(level, events, clock);
-            if (settle.waiting() < 600) return;
+            // from the first tick with 600 waiting, while any wait: a fast drain must not time the test out
+            if (checked[0] == 0 && settle.waiting() < 600 || settle.waiting() == 0) {
+                if (checked[0] > 0) h.succeed();
+                return;
+            }
             // reads in flight and those started after them, holds kept or released, new holds: visits that can move a chunk
             int bound = 2 * RuinSettle.READS + settle.held() + 2 * settle.loadingLimit();
             h.assertTrue(settle.visited() <= bound, "visited " + settle.visited() + " entries with " + settle.waiting()

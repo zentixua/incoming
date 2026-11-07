@@ -40,7 +40,9 @@ final class RuinSettle {
      */
     private final it.unimi.dsi.fastutil.longs.Long2ObjectLinkedOpenHashMap<Entry> entries = new it.unimi.dsi.fastutil.longs.Long2ObjectLinkedOpenHashMap<>();
     /** Entries holding a ticket and entries with a read in flight, kept with each change instead of a scan per tick. */
-    private int holding, reading, visited;
+    private int holding, reading;
+    /** Entries visited by the last call (tests). */
+    private int visited;
     /**
      * Keys of {@link #entries} by what each waits for, each entry in exactly one: holding a ticket or reading a header,
      * read as final blocks and waiting for a load slot, or waiting for a header read (first, after its ruins, or retry).
@@ -103,8 +105,11 @@ final class RuinSettle {
             Entry e = entries.get(key);
             long unit = clock.begin();
             try {
-                if (advance(level, key, e, now, progress)) place(key, e);
-            } finally { clock.end(unit); }
+                advance(level, key, e, now, progress);
+            } finally {
+                refile(key, e);
+                clock.end(unit);
+            }
         }
         while (admit && holding < loadingLimit && !ready.isEmpty() && clock.canStart()) {
             long key = ready.removeFirstLong();
@@ -117,8 +122,10 @@ final class RuinSettle {
                 e.heldAt = now;
                 holding++;
                 loaded++;
-                place(key, e);
-            } finally { clock.end(unit); }
+            } finally {
+                refile(key, e);
+                clock.end(unit);
+            }
         }
         for (int n = unread.size(); n > 0 && reading < READS && clock.canStart(); n--) {
             long key = unread.removeFirstLong();
@@ -132,8 +139,10 @@ final class RuinSettle {
             try {
                 e.read = read(level, e.pos);
                 reading++;
-                place(key, e);
-            } finally { clock.end(unit); }
+            } finally {
+                refile(key, e);
+                clock.end(unit);
+            }
         }
         while (admit && entries.size() < PENDING && pass.cursor < total() && clock.canStart()) {
             long unit = clock.begin();
@@ -216,6 +225,11 @@ final class RuinSettle {
         ready.remove(key);
         unread.remove(key);
         place(key, e);
+    }
+
+    /** Files a visited entry again unless it was settled; also after a throw, so the entry is retried, not lost. */
+    private void refile(long key, Entry e) {
+        if (entries.get(key) == e) place(key, e);
     }
 
     /** Files an entry under what it waits for: its ticket or read, a load slot, or a header read. */
