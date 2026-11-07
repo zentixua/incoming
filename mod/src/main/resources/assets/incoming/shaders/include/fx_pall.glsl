@@ -1234,7 +1234,7 @@ vec3 mushFootLight(int k, Mush m, vec3 q) {
 
 // Mushroom k at eye-relative p and local q: extinction (w, 1/block), eye-scattered light per path unit
 // (rgb, Σ extinction × source function); own emission separate (end of main): hot unchanged (previous path), glow
-// ball-exposed (film curve), film its luminance × curve share (mushFilmShare). cone smallest resolved size
+// ball-exposed (film curve), film its luminance × curve share (mushFilmShareLit). cone smallest resolved size
 vec4 mushAt(int k, Mush m, vec3 p, vec3 q, float cone, out float near, out vec3 hot, out vec3 glow, out float film) {
     hot = vec3(0.0);
     glow = vec3(0.0);
@@ -1350,10 +1350,10 @@ vec4 mushAt(int k, Mush m, vec3 p, vec3 q, float cone, out float near, out vec3 
     // of whites clipped to a flat disk; this preserves surface temperature pattern
     float key = dot(mushBlackBody(Sampler7, m.tAmb + m.dT * m.edge), LUMA) * PallExposure * pallAir(PallAir, length(p), gDir.y);
     glow = hot * mushBallGain(key, PallExposure);
-    // Film curve while ball remains a ball (ring share, mushFilmShare); rolled cap uses previous path with pall:
-    // per-channel curve whitened orange interior at night and changed it through haze (review 441)
+    // Film curve while ball remains a ball (ring share) or its surface is still bright (mushFilmShareLit); rolled dim cap
+    // uses previous path with pall: per-channel curve whitened orange interior at night and changed it through haze (review 441)
     float roll = clamp(m.ringR / max(MUSH_RING * m.capR, 1.0), 0.0, 1.0);
-    film = dot(hot, LUMA) * mushFilmShare(roll);
+    film = dot(hot, LUMA) * mushFilmShareLit(roll, key / max(PallExposure, 1e-9));
     return vec4(st * source, st);
 }
 
@@ -1750,7 +1750,7 @@ void main() {
     vec3 shown = pallShown(light + heat, cover);
     // Fireball as conventional ball (presentation: NukeExposure): ball-exposed emission (emitted) through per-channel film
     // curve (mushFilm3) over pall, summed in linear. Previous path turned everything above white into single-color pixel
-    // coverage — flat disk without folds/pattern. Curve share follows ring share (mushFilmShare): rolled cap uses old path;
+    // coverage — flat disk without folds/pattern. Curve share follows ring share and surface brightness (mushFilmShareLit): rolled dim cap uses old path;
     // between them, blend completed images (blending emission would jump: even a small old-path share overexposes the pixel)
     float film = clamp(filmed / max(dot(heat, LUMA), 1e-30), 0.0, 1.0);
     if (film > 0.0) {

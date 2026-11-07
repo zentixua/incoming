@@ -142,9 +142,9 @@ public final class NukeRenderer {
             double top = Math.max(BALL[0], Math.max(BALL[1], BALL[2]));
             float cr = (float) Math.pow(BALL[0] / top, 1 / 2.2), cg = (float) Math.pow(BALL[1] / top, 1 / 2.2), cb = (float) Math.pow(BALL[2] / top, 1 / 2.2);
             double air = MushroomField.air(d, cam, view.range()).transmittance(d.metres(dist), d.metres(dy)), seen = surface * air;
-            // ball fire on screen (fraction of white), with fire exposure while the ball is a ball (rolled cap as before,
-            // NukeExposure.filmShare): glare and veiling light do not exceed it
-            double film = NukeExposure.filmShare(MushroomModel.rollUp(s.t(), d.yieldKt(), d.surface()));
+            // ball fire on screen (fraction of white), with fire exposure while the ball is a ball or still bright (rolled dim
+            // cap as before, NukeExposure.filmShare): glare and veiling light do not exceed it
+            double film = NukeExposure.filmShare(MushroomModel.rollUp(s.t(), d.yieldKt(), d.surface()), BALL[3] * air);
             double shown = film * NukeExposure.capShown(BALL[0] * adapt * air, BALL[1] * adapt * air, BALL[2] * adapt * air, adapt)
                     + (1 - film) * Math.min(1, Math.pow(seen, 1 / 2.2));
             lights.add(dx, dy, dz, r, surface, Math.min(1, Math.pow(surface, 1 / 2.2)), lr, lg, lb);

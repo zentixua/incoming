@@ -63,6 +63,12 @@ class MushroomGlslTest {
         for (double roll = -0.1; roll < 1.1; roll += 0.005) {
             assertEquals(NukeExposure.filmShare(roll), share.call(Map.of("roll", roll)), 1e-12, "share of the ring " + roll);
         }
+        GlslFunction lit = GlslFunction.parse(GLSL, "mushFilmShareLit");
+        for (double roll = -0.1; roll < 1.1; roll += 0.05) {
+            for (double l = 1e-4; l < 1e4; l *= 1.25) {
+                assertEquals(NukeExposure.filmShare(roll, l), lit.call(Map.of("roll", roll, "lit", l)), 1e-9, "ring " + roll + ", lit " + l);
+            }
+        }
         for (double x = -0.5; x < 30; x += 0.01) {
             assertEquals(NukeExposure.film(x), film.call(Map.of("x", x)), 1e-12, "x " + x);
             assertEquals(NukeExposure.white(x), white.call(Map.of("top", x)), 1e-12, "x " + x);
