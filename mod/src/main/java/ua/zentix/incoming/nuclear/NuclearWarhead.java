@@ -89,8 +89,12 @@ public final class NuclearWarhead {
         events.add(d);
         PacketDistributor.sendToPlayersInDimension(level, new S2C.NukeDetonation(d, (float) Blackouts.nukeRadius(d), strikeId));
 
+        long w0 = System.nanoTime();
         NuclearWorld.get(level).onDetonation(level, d, owner);
+        long w1 = System.nanoTime();
         Blackouts.nuke(level, d);
+        if (ua.zentix.incoming.nuclear.world.NukeDiag.ON) Incoming.LOG.info("DIAG detonation #{}: before world {} ms, world {} ms, blackout {} ms", d.id(),
+                (w0 - started) / 100_000 / 10.0, (w1 - w0) / 100_000 / 10.0, (System.nanoTime() - w1) / 100_000 / 10.0);
         Incoming.LOG.info("Nuclear detonation #{}: {} kt, {}, {} {} {}, scale {}, {} ms", d.id(), Math.round(yieldKt), d.surface() ? "ground burst" : "air burst",
                 Mth.floor(d.burst().x), Mth.floor(d.burst().y), Mth.floor(d.burst().z), scale, (System.nanoTime() - started) / 1_000_000);
         return d;
