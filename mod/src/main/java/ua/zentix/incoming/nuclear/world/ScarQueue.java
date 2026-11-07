@@ -811,7 +811,10 @@ public final class ScarQueue {
             job.ready = true;
             (watched(level, new ChunkPos(job.chunk)) ? readySeen : readyUnseen).addFirst(job);
         }
-        while (!byDue.isEmpty() && byDue.peek().due <= now + EARLY) {
+        // second pass of a tick (work after workSeen): one tick early only for jobs not retried this tick, which
+        // carry due = now + 1 and would be inspected again before their retry tick
+        long horizon = queueTick == now ? now : now + EARLY;
+        while (!byDue.isEmpty() && byDue.peek().due <= horizon) {
             Job job = byDue.poll();
             job.ready = true;
             (watched(level, new ChunkPos(job.chunk)) ? readySeen : readyUnseen).add(job);

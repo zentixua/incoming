@@ -19,7 +19,8 @@ paths:
   2 ms lane left visible ruins up to 64 ticks behind the front, netcup 16.10); the visible part (`ScarQueue.workSeen`:
   enqueuing chunks loaded at detonation, visible ruins, prechecks) runs before craters, unseen ruins after them: the
   crater's one-column units took the lane for 4.5 s after a 250 kt ground burst, so chunks in view were not even
-  enqueued and fell 105–116 ticks after the wave (Zearth r4 07.11, GameTest `seenRuinsKeepUpWithCrater`); a chunk needing another unit (neighbor
+  enqueued and fell 105–116 ticks after the wave (Zearth r4 07.11, GameTest `seenRuinsKeepUpWithCrater`); a chunk
+  needing another unit (neighbor
   fracture for an on-site plan, stale plan) returns to its queue's tail, not head: several-ms window fractures would
   hold up dozens of ready visible chunks (0.2 ms replacement), 38 ticks on netcup 16.10; visible chunks are prechecked
   `ScarQueue.LOOKAHEAD` (20) ticks before the wave: plans that became stale during flight (grass grew, player placed a

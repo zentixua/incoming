@@ -49,6 +49,7 @@ import ua.zentix.incoming.nuclear.world.RuinPlanner;
 import ua.zentix.incoming.nuclear.world.CraterJob;
 import ua.zentix.incoming.nuclear.world.NuclearWorld;
 import ua.zentix.incoming.nuclear.world.NukeSeen;
+import ua.zentix.incoming.nuclear.world.ScarQueue;
 import ua.zentix.incoming.nuclear.world.WorkClock;
 import ua.zentix.incoming.nuclear.world.RuinWorkers;
 import ua.zentix.incoming.nuclear.world.ThermalShadow;
@@ -1591,7 +1592,7 @@ public final class NuclearGameTests {
         NuclearWorld w = NuclearWorld.get(level);
         WorkClock clock = WorkClock.counting(1_000_000L);
         NuclearWorld.useClock(level.getServer(), clock);
-        ua.zentix.incoming.nuclear.world.ScarQueue.seenForTest(c -> c == glassChunk);
+        ScarQueue.seenForTest(c -> c == glassChunk);
         NuclearEvents events = NuclearEvents.get(level);
         long now = level.getGameTime();
         Vec3 target = Vec3.atBottomCenterOf(h.absolutePos(CENTER));
@@ -1599,7 +1600,7 @@ public final class NuclearGameTests {
         long[] glassGone = {-1}, tickAt = {0};
         int[] cratersAtWave = {-1};
         Runnable cleanup = () -> {
-            ua.zentix.incoming.nuclear.world.ScarQueue.seenForTest(null);
+            ScarQueue.seenForTest(null);
             IncomingConfig.SERVER.nukeEffectsScale.set(scale);
             NuclearWorld.useClock(level.getServer(), new WorkClock());
             NuclearStrikes.clear(level);
@@ -1613,7 +1614,7 @@ public final class NuclearGameTests {
             }
             if (glassGone[0] < 0 && !h.getBlockState(glass).is(Blocks.GLASS)) glassGone[0] = level.getGameTime();
             Detonation d = events.detonations().stream().filter(x -> x.burst().distanceTo(target) < 20).findFirst().orElse(null);
-            long due = d == null ? Long.MAX_VALUE : ua.zentix.incoming.nuclear.world.ScarQueue.due(d, new ChunkPos(glassChunk));
+            long due = d == null ? Long.MAX_VALUE : ScarQueue.due(d, new ChunkPos(glassChunk));
             // crater still digging when the wave reaches the glass chunk: it competes with the ruins for the lane
             if (cratersAtWave[0] < 0 && level.getGameTime() >= due) cratersAtWave[0] = w.craterJobs();
             if (d != null && glassGone[0] < 0 && level.getGameTime() > due + 2) failure = "visible ruins lagged behind the front while the crater dug: glass "
