@@ -11,8 +11,9 @@ import java.util.concurrent.TimeUnit;
 
 /**
  * Vanilla's receive-rate measurement, on the same network thread as LOD ingestion. Start and finish surround both
- * transfer and Voxy's background queue drain, including a slow downstream behind a proxy. The queue must empty
- * before acknowledgement; jobs already running remain bounded by Voxy's worker pool. State belongs to the connection.
+ * transfer and Voxy's background queue drain, including a slow downstream behind a proxy. The queue must be no deeper
+ * than LSS's own halt mark ({@link VoxyIngest#INGEST_HALT_SECTIONS}) before acknowledgement; jobs already running
+ * remain bounded by Voxy's worker pool. State belongs to the connection.
  */
 public final class ClientLodBatches {
     private static final AttributeKey<ClientLodBatches> STATE = AttributeKey.valueOf("incoming:lod_batches");

@@ -87,13 +87,15 @@ with a nuclear warhead takes off 90 seconds after the alarm starts.
   still see the white flash and its afterimage, but your sight is not dimmed and the spots are hidden.
 - **Leave the fallout trail, or wait it out indoors.** Fallout lies on everything open to the sky and shines through
   roofs and walls: a block of stone or earth stops nearly all of it, a block of wood about 95%, glass almost nothing,
-  and an open doorway lets it in. Water washes the dust off you (rain does not).
+  and an open doorway lets it in. Water washes the dust off you (rain does not); otherwise it fades only as slowly
+  as the fallout itself.
 - **Radiation sickness** starts hours later and keeps game time: nausea and vomiting, then days or weeks of feeling
   well, then weeks of weakness, from 2 Gy without natural healing. Whether it kills depends on the dose: below 2 Gy
   almost nobody dies, at 4.5 Gy half, from 10 Gy everyone, and the higher the dose, the sooner (from 50 Gy within a
-  game day or two). Milk does not cure it.
+  game day or two). Milk does not cure it. Animals and villagers get the same dose and sickness; the undead do not.
 
-A Geiger Counter in hand clicks and shows your dose. Operators give it out.
+A Geiger Counter in hand clicks and shows the dose rate and your dose. Operators give it out. In creative mode the
+dose does not build up.
 
 ## What happens
 

@@ -18,8 +18,6 @@ import ua.zentix.incoming.util.DiskStatus;
 
 import java.util.ArrayList;
 import java.util.Comparator;
-import java.util.LinkedHashMap;
-import java.util.Map;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 
@@ -35,7 +33,14 @@ final class RuinSettle {
     private boolean spare = true;
     private static final int RETRY = 20;
     private final HeapWatch.Tracker heap = new HeapWatch.Tracker();
-    private final Map<Long, Entry> entries = new LinkedHashMap<>();
+    /**
+     * Pending chunks in rotation order. fastutil's mixing hash: {@code Long.hashCode} of a chunk key is {@code x ^ z},
+     * so a square of chunks collides into treeified bins, and every rotation boxed the key and allocated a node
+     * (54 % of the server's allocation while a 250 kt pass waited, Zearth 07.11.2026).
+     */
+    private final it.unimi.dsi.fastutil.longs.Long2ObjectLinkedOpenHashMap<Entry> entries = new it.unimi.dsi.fastutil.longs.Long2ObjectLinkedOpenHashMap<>();
+    /** Entries holding a ticket and entries with a read in flight, kept with each change instead of a scan per tick. */
+    private int holding, reading;
     private Detonation detonation;
     private RuinProgress.Pass pass;
     private long nextReport, settled, loaded, began, checkAt;
@@ -81,17 +86,14 @@ final class RuinSettle {
             adaptAt = now + 20;
         }
         loadingLimit = admit ? window.limit(room, level.getHeight()) : 0;
-        int holding = (int) entries.values().stream().filter(e -> e.held).count();
-        int reading = (int) entries.values().stream().filter(e -> e.read != null).count();
-        int visits = 0;
         // A bounded rotating window: a player-held chunk awaiting autosave cannot block all other work.
-        for (Entry e : new ArrayList<>(entries.values())) {
-            if (visits++ >= PENDING || !clock.canStart()) break;
+        for (int visits = Math.min(PENDING, entries.size()); visits > 0 && !entries.isEmpty() && clock.canStart(); visits--) {
+            long key = entries.firstLongKey();
+            Entry e = entries.get(key);
             long unit = clock.begin();
             try {
                 if (e.held && now - e.heldAt > FarZone.HOLD_LIMIT) {
                     release(level, e);
-                    holding--;
                     e.finalBlocks = false;
                     e.retryAt = now + RETRY;
                     Incoming.LOG.warn("Ruin settlement: chunk {} did not finish; releasing and retrying", e.pos);
@@ -104,7 +106,6 @@ final class RuinSettle {
                         if (chunk.getExistingData(ModAttachments.CHUNK_SCAR).orElse(0) >= detonation.id()) {
                             e.applied = true;
                             release(level, e);
-                            holding--;
                         } else if (scars.waitsNeighbours(e.pos.toLong()) && scars.tileHoldsLeft() > 0) {
                             // A job loaded under another scar's neighbor ticket cannot acquire its own by default.
                             // Give it the normal bounded handoff, otherwise every settlement slot can wait forever.
@@ -125,9 +126,8 @@ final class RuinSettle {
                     e.read = null;
                     reading--;
                     if (!h.finalBlocks || h.scar >= detonation.id()) {
-                        if (e.held) holding--;
                         release(level, e);
-                        entries.remove(e.pos.toLong());
+                        entries.remove(key);
                         pass.pending.remove(e.pos.toLong());
                         progress.setDirty();
                         if (h.scar >= detonation.id()) settled++;
@@ -147,10 +147,11 @@ final class RuinSettle {
                     e.read = read(level, e.pos);
                     reading++;
                 }
+            } finally {
                 // Rotate even waiting entries, so a short work window does not starve the tail.
-                entries.remove(e.pos.toLong());
-                entries.put(e.pos.toLong(), e);
-            } finally { clock.end(unit); }
+                if (entries.containsKey(key)) entries.getAndMoveToLast(key);
+                clock.end(unit);
+            }
         }
         while (admit && entries.size() < PENDING && pass.cursor < total() && clock.canStart()) {
             long unit = clock.begin();
@@ -271,13 +272,16 @@ final class RuinSettle {
     }
 
     private void release(ServerLevel level, Entry e) {
-        if (e.held) StrikeWorld.get(level).areas().release(level, area(e));
+        if (!e.held) return;
+        StrikeWorld.get(level).areas().release(level, area(e));
         e.held = false;
+        holding--;
     }
 
     void clear(ServerLevel level) {
         for (Entry e : entries.values()) release(level, e);
         entries.clear();
+        holding = reading = 0;
         detonation = null;
         pass = null;
         order = null;
@@ -287,8 +291,8 @@ final class RuinSettle {
         checkAt = 0;
     }
 
-    int held() { return (int) entries.values().stream().filter(e -> e.held).count(); }
-    int reads() { return (int) entries.values().stream().filter(e -> e.read != null).count(); }
+    int held() { return holding; }
+    int reads() { return reading; }
 
     private void report(long now, boolean done) {
         Incoming.LOG.info("Ruin settlement #{}: {} of {} positions scanned, {} saved chunks confirmed, {} loads, {} pending ({} held, admission {}, {} reads), {}, {} ticks{}",
