@@ -263,14 +263,31 @@ public final class NuclearWorld {
      * @param owner launcher (credited for damage)
      */
     public void onDetonation(ServerLevel level, Detonation d, @Nullable UUID owner) {
+        long[] t = new long[8];
+        t[0] = System.nanoTime();
         pulses.add(new PulseJob(level, d, owner));
+        t[1] = System.nanoTime();
         // snapshot bodies before walls now: pulse (PulseJob) and wave later burn, kill or move them
         FlashShadows flash = FlashShadows.of(level, d);
         if (flash != null) shadows.add(flash);
+        t[2] = System.nanoTime();
         // ground light during pulse, before wave: burned ground, scorch, fires (chunks collected by first work unit)
         scorches.add(new FlashScorch(d));
         blast.onDetonation(d, owner);
+        t[3] = System.nanoTime();
         NuclearPrep.Handoff ready = prep.handOff(level, d, level.getGameTime());
+        t[4] = System.nanoTime();
+        try {
+            onDetonation(level, d, ready);
+        } finally {
+            t[5] = System.nanoTime();
+            if (NukeDiag.ON) Incoming.LOG.info("DIAG detonation #{} tick: pulse {} ms, shadows {} ms, scorch and front {} ms, hand-off {} ms, rest {} ms",
+                    d.id(), (t[1] - t[0]) / 100_000 / 10.0, (t[2] - t[1]) / 100_000 / 10.0, (t[3] - t[2]) / 100_000 / 10.0, (t[4] - t[3]) / 100_000 / 10.0, (t[5] - t[4]) / 100_000 / 10.0);
+        }
+    }
+
+    private void onDetonation(ServerLevel level, Detonation d, NuclearPrep.@Nullable Handoff ready) {
+        long t0 = System.nanoTime();
         if (ready != null) {
             // prebuilt and on-site ruins identical: preparation fractures/applied ruins pass to detonation
             ready.ruins().used = level.getGameTime();
@@ -278,6 +295,7 @@ public final class NuclearWorld {
             scars.scanLoaded(d, ready.plans(), ready.order());
         }
         else scars.scanLoaded(d);
+        if (NukeDiag.ON) Incoming.LOG.info("DIAG detonation #{}: scan loaded {} ms", d.id(), (System.nanoTime() - t0) / 100_000 / 10.0);
         // distant ground trace into DH LODs: beyond heavy zone (its LODs use ready-plan ruins), or all if unprepared
         FarLods.scorch(level, d, ready != null);
         if (d.surface() && IncomingConfig.SERVER.nukeCrater.get() && IncomingConfig.SERVER.nukeBlockDamage.get()

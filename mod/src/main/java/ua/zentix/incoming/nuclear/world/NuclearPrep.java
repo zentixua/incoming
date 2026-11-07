@@ -243,9 +243,14 @@ public final class NuclearPrep {
         int farPlans, diskShots, farSkipped;
         /** {@link #order} cursor: wave-reached chunks submitted to distant LODs ({@link FarLods}). */
         int nextLod;
-        /** Heavy-zone chunks outside memory at detonation, for “far rings” line. */
+        /**
+         * Heavy-zone chunks in memory at detonation; the rest of {@link #order} is the “far rings” line. Collected from the
+         * loaded chunk holders (a few thousand), not by asking for each of the zone's chunks (1 Mt: 524k, 32 ms).
+         */
         @Nullable
-        long[] farAtDetonation;
+        LongOpenHashSet loadedAtDetonation;
+        /** Heavy-zone chunks outside memory at detonation. */
+        int farAtDetonation;
         /** Zone LOD copies from ready disk plans, into DH with front. */
         final FrontLods lods;
 
@@ -351,14 +356,21 @@ public final class NuclearPrep {
                     // handed to detonation: behind-wave zone loads squares, releases when ruins applied
                     if (!p.heapStop && heapTight()) stopForHeap(p);
                     Detonation d = events.detonations().stream().filter(x -> x.id() == p.detonation).findFirst().orElse(null);
+                    long q0 = System.nanoTime();
                     behindWave(level, p, scars, d, now, shared);
+                    long q1 = System.nanoTime();
                     if (d != null && p.ruins != null) far(level, p, shared);
+                    long q2 = System.nanoTime();
                     if (d != null) farLods(level, p, d, now);
+                    long q3 = System.nanoTime();
                     frontLods(level, p, now);
+                    long q4 = System.nanoTime();
+                    if (NukeDiag.ON && q4 - q0 > 20_000_000L) Incoming.LOG.info("DIAG prep #{} tick {}: behind the wave {} ms, far {} ms, far LODs {} ms, front LODs {} ms",
+                            p.detonation, now - p.handedOff, (q1 - q0) / 100_000 / 10.0, (q2 - q1) / 100_000 / 10.0, (q3 - q2) / 100_000 / 10.0, (q4 - q3) / 100_000 / 10.0);
                     boolean zoneDone = p.tiles.stream().noneMatch(t -> t.state != TileState.SKIP);
                     if (zoneDone && !scars.hasPrepared(p.detonation) || now - p.handedOff > ZONE_HOLD) {
                         // last finished count (a fresh full pass would cost one long tick)
-                        if (p.lastTally != null) report(p, p.lastTally, d != null && p.farAtDetonation != null && p.ruins != null);
+                        if (p.lastTally != null) report(p, p.lastTally, d != null && p.loadedAtDetonation != null && p.ruins != null);
                         scars.dropPrepared(p.detonation, zone(p));
                         p.draining = true;
                     }
@@ -1025,10 +1037,11 @@ public final class NuclearPrep {
         if (t == null) return;
         int budget = TALLY_SLICE;
         for (; t.cursor < p.order.length && budget > 0; t.cursor++, budget--) if (scars.ruined(p.detonation, p.order[t.cursor])) t.done++;
-        boolean far = d != null && p.farAtDetonation != null && p.ruins != null;
+        boolean far = d != null && p.loadedAtDetonation != null && p.ruins != null;
         if (far) {
-            for (; t.farCursor < p.farAtDetonation.length && budget > 0; t.farCursor++, budget--) {
-                long c = p.farAtDetonation[t.farCursor];
+            for (; t.farCursor < p.order.length && budget > 0; t.farCursor++, budget--) {
+                long c = p.order[t.farCursor];
+                if (p.loadedAtDetonation.contains(c)) continue;
                 long wave = d.gameTime() + (long) Math.ceil(d.arrivalTicks(nearest(new ChunkPos(c), d)));
                 if (wave > now) continue;
                 t.passed++;
@@ -1046,7 +1059,7 @@ public final class NuclearPrep {
                 }
             }
         }
-        if (t.cursor < p.order.length || far && t.farCursor < p.farAtDetonation.length) return;
+        if (t.cursor < p.order.length || far && t.farCursor < p.order.length) return;
         p.tally = null;
         p.lastTally = t;
         report(p, t, far);
@@ -1059,7 +1072,7 @@ public final class NuclearPrep {
         // distant rings: outside-memory chunks at detonation already wave-reached, whether plan ready at arrival
         Incoming.LOG.info("Detonation #{}: far rings: ready for the wave {} of {} (after the wave {}: avg {} ticks late, max {}; "
                         + "no plan yet {}, not from disk {}; wave still ahead for {})", p.detonation, t.ready, t.passed, t.late, t.late == 0 ? 0 : t.lateSum / t.late, t.lateMax,
-                t.none, t.unreadable, p.farAtDetonation.length - t.passed);
+                t.none, t.unreadable, p.farAtDetonation - t.passed);
     }
 
     private static boolean ready(ServerLevel level, Tile t) {
@@ -1138,16 +1151,31 @@ public final class NuclearPrep {
                     continue;
                 }
             }
+            long t0 = System.nanoTime();
             p.detonation = d.id();
             p.handedOff = now;
-            p.farAtDetonation = java.util.Arrays.stream(p.order).filter(c -> level.getChunkSource().getChunkNow(ChunkPos.getX(c), ChunkPos.getZ(c)) == null).toArray();
+            // the zone's chunks in memory, by the rule that built its order (layout)
+            Detonation g = p.geometry != null ? p.geometry : d;
+            double radius = heavyRadius(g) + 16;
+            LongOpenHashSet loaded = new LongOpenHashSet();
+            for (ChunkHolder holder : level.getChunkSource().chunkMap.getChunks()) {
+                ChunkPos c = holder.getPos();
+                if (horizontal(c, g) <= radius && level.getChunkSource().getChunkNow(c.x, c.z) != null) loaded.add(c.toLong());
+            }
+            p.loadedAtDetonation = loaded;
+            p.farAtDetonation = p.order.length - loaded.size();
+            long t1 = System.nanoTime();
             Incoming.LOG.info("Detonation #{}: pre-built ruins — plans for loaded chunks {} (chunks loaded during flight {}), still building {}; from disk {} "
                             + "(zone chunks not loaded at detonation {}), still building {}, not from disk {}; background threads {}", d.id(), p.nearPlans, p.everInMemory.size(),
                     p.submitted.size(), p.farPlans,
-                    p.farAtDetonation.length, p.farRunning.size(), p.farSkipped, RuinWorkers.summary());
+                    p.farAtDetonation, p.farRunning.size(), p.farSkipped, RuinWorkers.summary());
             p.nextZoneReport = now + ZONE_REPORT;
+            long t2 = System.nanoTime();
             p.lods.handOff(d);
-            return new Handoff(p.plans, p.planned.toLongArray(), p.ruins);
+            long[] planned = p.planned.toLongArray();
+            if (NukeDiag.ON) Incoming.LOG.info("DIAG hand-off #{}: far at detonation {} ms ({} chunks), log {} ms, LODs and order {} ms", d.id(),
+                    (t1 - t0) / 100_000 / 10.0, p.order.length, (t2 - t1) / 100_000 / 10.0, (System.nanoTime() - t2) / 100_000 / 10.0);
+            return new Handoff(p.plans, planned, p.ruins);
         }
         return null;
     }
