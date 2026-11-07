@@ -95,6 +95,14 @@ public final class PallPass {
     private static final double JUMP = 30;
     /** History weight per frame at each pixel (temporal accumulation, {@code fx_pall_resolve}). */
     private static final double HISTORY = 0.9;
+    /**
+     * Least history weight at a ray pixel when rays are interleaved: one jittered ray per block refreshes a pixel only every n²
+     * frames, so with the weight of n² ordinary frames (0.9^16 = 0.19 at n = 4) a pixel shows nearly a single ray — grain on
+     * thin cloud edges against the sky (laptop frames 07.11: noise p95 10 against 3–4). At 0.8 a pixel keeps about five rays:
+     * grain as without interleaving, a change takes 5·n² frames (80 at n = 4, about a second) where the neighbour clamp does
+     * not catch it.
+     */
+    static final double TRACED_HISTORY = 0.8;
 
     /**
      * Pall quality setting — finest {@link #LADDER} rung: frame downscale factor, steps per ray and ray interleave. LOW
@@ -765,8 +773,9 @@ public final class PallPass {
         r.safeGetUniform("PallForward").set(FORWARD.x, FORWARD.y, FORWARD.z);
         r.safeGetUniform("PallReproject").set(dx, dy, dz, history ? 1f : 0f);
         r.safeGetUniform("PallFrame").set(0f, 0f, factor, REPROJECT_MAX);
-        // a ray pixel takes its new ray with the history weight of n² ordinary frames (0.9 each): the same response time
-        r.safeGetUniform("PallInterleave").set(n, ox, oy, (float) Math.pow(HISTORY, n * n));
+        // a ray pixel takes its new ray with the history weight of n² ordinary frames, but no lower than TRACED_HISTORY
+        double traced = Double.parseDouble(System.getProperty("incoming.pallTracedHistory", String.valueOf(TRACED_HISTORY)));
+        r.safeGetUniform("PallInterleave").set(n, ox, oy, (float) Math.max(Math.pow(HISTORY, n * n), traced));
         r.safeGetUniform("PallCut").set((float) Integer.getInteger("incoming.pallCut", 0));
         SmokePass.bind(r, f.smoke);
         quad(r, false);

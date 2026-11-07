@@ -19,7 +19,8 @@
 // Interleaved rays (PallPass.Step.interleave n): each frame traces one pixel of every n × n block (Sampler0 holds only those,
 // block by block), the rest keep their reprojected history, clamped to the traced neighbours at the same place — the
 // way volumetric clouds are drawn in games (a sixteenth of the pixels per frame). A still image is the same; changes reach
-// every pixel within n² frames, and a traced pixel takes its new ray with the weight of n² ordinary frames.
+// every pixel within n² frames. A traced pixel takes its new ray with the history weight of n² ordinary frames, but no lower than
+// PallPass.TRACED_HISTORY: otherwise a pixel would show a single jittered ray (grain).
 // Comments below say “ray pixel” for a traced pixel of this frame.
 
 // current frame rays (fx_pall): one per n × n block
