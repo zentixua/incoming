@@ -1055,6 +1055,8 @@ public final class RuinPlan {
         // belt removes whole chain)
         BlockState slowBlock = null;
         long slowBlockNanos = 0;
+        BlockPos slowAt = null;
+        int readyBefore = readyMask(level, pos), radiusBefore = slowBlockLines < SLOW_BLOCK_LINES ? neighbourRadius(level, chunk) : 0;
         // landed containers: contents (or unopened loot table) read before the source is cleared, written into the
         // landed block entity after it is placed
         net.minecraft.nbt.CompoundTag[] carried = moves.length == 0 ? null : new net.minecraft.nbt.CompoundTag[moves.length / 2];
@@ -1072,8 +1074,10 @@ public final class RuinPlan {
             if (b > slowBlockNanos) {
                 slowBlockNanos = b;
                 slowBlock = old;
+                slowAt = m.immutable();
             }
         }
+        if (slowBlockNanos > SLOW_BLOCK_NANOS) logSlowBlock(level, chunk, slowAt, slowBlock, slowBlockNanos, readyBefore, radiusBefore);
         for (int k = 0; carried != null && k < carried.length; k++) {
             if (carried[k] == null) continue;
             net.minecraft.world.level.block.entity.BlockEntity be = level.getBlockEntity(m.set(moves[2 * k + 1]));
@@ -1103,6 +1107,45 @@ public final class RuinPlan {
             slowestWorldDhNanos = dh;
         }
         return lit;
+    }
+
+    /** A world-path block replacement this long (a tick share) logs where and which neighbour chunks it loaded. */
+    private static final long SLOW_BLOCK_NANOS = 20_000_000L;
+    /** Slow-block lines logged per server run (first ones: the pattern, not every chunk). */
+    private static final int SLOW_BLOCK_LINES = 20;
+    private static int slowBlockLines;
+
+    /** Bit {@code (dx + 1) * 3 + (dz + 1)} set for each ready chunk of the 3×3 square around {@code pos}. */
+    private static int readyMask(ServerLevel level, ChunkPos pos) {
+        int mask = 0;
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dz = -1; dz <= 1; dz++) if (Terrain.ready(level, pos.x + dx, pos.z + dz)) mask |= 1 << ((dx + 1) * 3 + dz + 1);
+        }
+        return mask;
+    }
+
+    /**
+     * Slow world-path replacement: position in the chunk, plan neighbour radius, and chunks of the 3×3 square that became
+     * ready during it. Neighbours the queue awaited ({@link #neighbourRadius}) are ready before; a chunk turning ready
+     * here was loaded synchronously inside the call (rerun 07.11.2026: Sable reading a shulker box in a neighbour chunk
+     * cost up to 170 ms per block).
+     */
+    private void logSlowBlock(ServerLevel level, LevelChunk chunk, @Nullable BlockPos at, @Nullable BlockState state, long nanos, int before, int radius) {
+        if (slowBlockLines >= SLOW_BLOCK_LINES || at == null) return;
+        slowBlockLines++;
+        ChunkPos pos = chunk.getPos();
+        int loaded = readyMask(level, pos) & ~before;
+        StringBuilder chunks = new StringBuilder();
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dz = -1; dz <= 1; dz++) {
+                if ((loaded & 1 << ((dx + 1) * 3 + dz + 1)) == 0) continue;
+                chunks.append(chunks.isEmpty() ? "" : ", ").append('[').append(pos.x + dx).append(", ").append(pos.z + dz).append(']');
+            }
+        }
+        Incoming.LOG.warn("Slow ruin block {} at {} {} {} (in chunk {} {}) in chunk {}: {} ms; plan neighbour radius {}, own chunk ready {}; "
+                        + "chunks loaded during the swap: {}", state, at.getX(), at.getY(), at.getZ(), at.getX() & 15, at.getZ() & 15, pos,
+                String.format(java.util.Locale.ROOT, "%.1f", nanos / 1e6), radius,
+                level.getChunkSource().getChunkNow(pos.x, pos.z) == chunk, chunks.isEmpty() ? "none" : chunks);
     }
 
     /** Section {@code i} changes: mark it and pre-write emptiness. */
