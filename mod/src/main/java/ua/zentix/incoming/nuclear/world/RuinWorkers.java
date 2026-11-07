@@ -26,10 +26,10 @@ import java.util.concurrent.atomic.AtomicLong;
  * Thread count: {@code ruin_threads}, 0 automatic: all cores except game reserve, {@code cores − 1 (server thread)
  * − 1 (own game: client render thread for integrated server) − 1 (vanilla: chunk I/O, generation, garbage
  * collector)}, at least one. No cap: more cores build distant rings faster. Java thread priorities have no
- * effect on Linux, so only count and tick adaptation leave room for game: once per second, external tick
- * time over last second (tick minus mod lanes) above threshold ({@link #MARGIN_MS}) reduces active threads by
- * a quarter (at least one), below adds one (at most pool thread count). Chosen count and every
- * reduction/recovery logged.
+ * effect on Linux, so only count and tick adaptation leave room for game: once per second ({@link #decide}), external
+ * tick time over last second (tick minus mod lanes) above threshold ({@link #MARGIN_MS}) reduces active threads by
+ * a quarter (at least one) unless the machine still has the game reserve idle; a fast tick, or idle cores beyond the
+ * reserve, add one (at most pool thread count). Chosen count and every reduction/recovery logged.
  * <p>
  * At most {@link #capacity} tasks in pool (running and queued): queue keeps threads busy between ticks
  * (task 10–50 ms, tick 50 ms). Server thread submits tasks and collects results; background reads no world.
@@ -332,10 +332,9 @@ public final class RuinWorkers {
     }
 
     /**
-     * Tick adaptation (server thread, each tick; active once per {@link #ADAPT_EVERY}): average external tick time
-     * over last second (server tick minus mod lanes) above {@code 50 − work_ms_per_tick +} {@link #MARGIN_MS}
-     * reduces active threads by quarter; below {@code 50 − work_ms_per_tick −} {@link #MARGIN_MS} adds one.
-     * No action while pool unused.
+     * Tick adaptation (server thread, each tick; active once per {@link #ADAPT_EVERY}): {@link #decide} from average
+     * external tick time over last second (server tick minus mod lanes) and the machine's idle cores over the same
+     * second. No action while pool unused.
      */
     public static void adapt(MinecraftServer server) {
         ThreadPoolExecutor p = pool;
@@ -350,17 +349,39 @@ public final class RuinWorkers {
         for (int i = 1; i <= n; i++) sum += Math.max(0, times[Math.floorMod(tick - i, times.length)] - WorkScheduler.ownNanos(tick - i));
         double ms = sum / (double) n / 1e6;
         double room = TICK_MS - IncomingConfig.SERVER.workBudgetMs.get();
+        double idle = idleCores();
         int now = active;
-        if (ms > room + MARGIN_MS && active > 1) {
-            active = Math.max(1, active - Math.max(1, active / 4));
-            lowered++;
-        } else if (ms < room - MARGIN_MS && active < size) {
-            active++;
-            raised++;
-        }
+        active = decide(now, size, ms, room, idle, reserve(integrated()));
+        if (active < now) lowered++;
+        else if (active > now) raised++;
         if (active == now) return;
         resize(p, active);
-        Incoming.LOG.info("Ruins: background threads working {} of {} (server tick without mod lanes {} ms)", active, size, String.format(java.util.Locale.ROOT, "%.1f", ms));
+        Incoming.LOG.info("Ruins: background threads working {} of {} (server tick without mod lanes {} ms, idle cores {})", active, size,
+                String.format(java.util.Locale.ROOT, "%.1f", ms), idle < 0 ? "unknown" : String.format(java.util.Locale.ROOT, "%.1f", idle));
+    }
+
+    /**
+     * Active thread count after one adaptation step. Workers slow the server thread only by taking its CPU, so a slow
+     * external tick lowers them by a quarter only while the machine has fewer than {@code reserve} cores idle; with the
+     * reserve idle the server thread is slow by its own work (rerun on Zearth 07.11.2026, 12 cores: vanilla chunk
+     * unloads kept the tick at 25–43 ms and the old rule held the pool at 1–3 threads while 56–77 % of the machine
+     * was idle). A fast tick, or more than the reserve idle, adds one thread. {@code idleCores} below 0 (load
+     * unknown) leaves the tick-only rule.
+     */
+    static int decide(int active, int size, double externalMs, double room, double idleCores, int reserve) {
+        boolean known = idleCores >= 0;
+        if (externalMs > room + MARGIN_MS && active > 1 && !(known && idleCores >= reserve))
+            return Math.max(1, active - Math.max(1, active / 4));
+        if (active < size && (externalMs < room - MARGIN_MS || known && idleCores >= reserve + 1)) return active + 1;
+        return active;
+    }
+
+    /** Idle cores of the machine (or container) since the previous call, about the last second; −1 if unknown. */
+    private static double idleCores() {
+        if (!(java.lang.management.ManagementFactory.getOperatingSystemMXBean() instanceof com.sun.management.OperatingSystemMXBean os)) return -1;
+        double load = os.getCpuLoad();
+        if (!(load >= 0 && load <= 1)) return -1;
+        return (1 - load) * Runtime.getRuntime().availableProcessors();
     }
 
     private static void resize(ThreadPoolExecutor executor, int threads) {

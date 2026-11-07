@@ -109,4 +109,26 @@ class RuinWorkersTest {
             executor.shutdownNow();
         }
     }
+
+    /** Slow tick with the reserve idle (server thread slow by its own work) keeps the threads; without it lowers. */
+    @Test
+    void slowTickLowersThreadsOnlyWithoutIdleReserve() {
+        double room = 50 - 15;
+        // Zearth 07.11: 12 cores, 10 threads, tick up to 43 ms without mod lanes, 7 cores idle.
+        assertEquals(8, RuinWorkers.decide(10, 10, 45, room, 0.5, 2));
+        assertEquals(10, RuinWorkers.decide(10, 10, 45, room, 7, 2));
+        assertEquals(3, RuinWorkers.decide(2, 10, 45, room, 7, 2));
+        assertEquals(2, RuinWorkers.decide(2, 10, 45, room, 2.5, 2));
+        assertEquals(1, RuinWorkers.decide(1, 10, 45, room, 0, 2));
+    }
+
+    @Test
+    void fastTickRaisesAndUnknownLoadKeepsTheTickRule() {
+        double room = 50 - 15;
+        assertEquals(5, RuinWorkers.decide(4, 10, 10, room, 0, 2));
+        assertEquals(10, RuinWorkers.decide(10, 10, 10, room, 9, 2));
+        assertEquals(3, RuinWorkers.decide(4, 10, 45, room, -1, 2));
+        assertEquals(5, RuinWorkers.decide(4, 10, 10, room, -1, 2));
+        assertEquals(4, RuinWorkers.decide(4, 10, 33, room, -1, 2));
+    }
 }
