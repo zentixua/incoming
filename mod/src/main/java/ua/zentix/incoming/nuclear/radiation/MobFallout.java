@@ -7,6 +7,7 @@ import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.IncomingConfig;
 import ua.zentix.incoming.nuclear.Detonation;
 import ua.zentix.incoming.nuclear.NuclearEvents;
+import ua.zentix.incoming.nuclear.model.SicknessModel;
 import ua.zentix.incoming.nuclear.world.NukeSeen;
 import ua.zentix.incoming.nuclear.world.WorkClock;
 import ua.zentix.incoming.registry.ModAttachments;
@@ -14,13 +15,15 @@ import ua.zentix.incoming.util.Terrain;
 
 import java.util.List;
 import java.util.function.DoubleUnaryOperator;
+import java.util.function.LongToDoubleFunction;
 
 /**
  * Mob fallout (DESIGN-nuke §4). Players receive dose once a second; the loaded world has thousands of mobs, so every
  * {@link #PERIOD} ticks snapshot the level's mobs, then give each the dose since its own last account ({@link NukeSeen#falloutAt},
  * saved with the mob): local fallout rate over that time with wall and roof shielding ({@link Shielding#fallout}). A mob that was
  * not in memory for hours (its chunk unloaded, or first loaded after the detonation) receives the fallout of those hours when it
- * loads, as the decaying rate's integral, not the current rate times the gap. Estimate: shielding is the one it has now. The
+ * loads, as the decaying rate's integral, not the current rate times the gap, and its sickness runs from the hour that dose
+ * passed 1 Gy ({@link #crossing}). Estimate: shielding is the one it has now. The
  * snapshot and each mob are work units under the shared nuclear work budget ({@link WorkClock}), as light and destruction are.
  * Clothing contamination and black rain are player-only.
  */
@@ -81,9 +84,12 @@ public final class MobFallout {
         int lateFrom = NuclearEvents.get(level).lateFrom();
         double roentgens = 0;
         long span = 0;
-        for (Detonation d : detonations) {
+        long[] froms = new long[detonations.size()];
+        for (int i = 0; i < froms.length; i++) {
+            Detonation d = detonations.get(i);
             // own account; none — since the detonation (it was there, unloaded or not), or this pass for an old world's mob
             long from = seen.falloutAt() >= 0 ? Math.max(seen.falloutAt(), d.gameTime()) : d.id() >= lateFrom ? d.gameTime() : passStart;
+            froms[i] = from;
             if (from >= now) continue;
             roentgens += exposure(d, mob.getX(), mob.getZ(), from - d.gameTime(), now - d.gameTime());
             span = Math.max(span, now - from);
@@ -91,8 +97,37 @@ public final class MobFallout {
         mob.setData(ModAttachments.NUKE_SEEN, seen.withFallout(now));
         // background rate over the span adds nothing (same as players): skip shielding rays
         if (roentgens < BACKGROUND * span / 1000.0) return;
-        double gy = roentgens * Shielding.fallout(level, RadiationTicker.middle(mob)) * RadiationTicker.GY_PER_R;
-        RadiationTicker.addDose(mob, (float) gy);
+        double gyPerR = Shielding.fallout(level, RadiationTicker.middle(mob)) * RadiationTicker.GY_PER_R;
+        double gy = roentgens * gyPerR, before = RadiationTicker.dose(mob).doseGy();
+        long at = now;
+        if (span > SHORT && before < SicknessModel.MIN_DOSE && before + gy >= SicknessModel.MIN_DOSE) {
+            // a long account (the mob was unloaded for hours): the sickness clock starts when the dose really passed 1 Gy,
+            // not on load, so a mob that would have died in those hours dies now
+            at = crossing(t -> {
+                double r = 0;
+                for (int i = 0; i < froms.length; i++) {
+                    Detonation d = detonations.get(i);
+                    if (froms[i] < t) r += exposure(d, mob.getX(), mob.getZ(), froms[i] - d.gameTime(), t - d.gameTime());
+                }
+                return before + r * gyPerR;
+            }, now - span, now, SicknessModel.MIN_DOSE);
+        }
+        RadiationTicker.addDose(mob, (float) gy, at);
+    }
+
+    /**
+     * First tick in [{@code from}, {@code to}] at which the growing dose {@code doseAt} reaches {@code gy}: bisection, to a tick.
+     * {@code to} if it never does.
+     */
+    static long crossing(LongToDoubleFunction doseAt, long from, long to, double gy) {
+        if (doseAt.applyAsDouble(to) < gy) return to;
+        long lo = from, hi = to;
+        while (hi - lo > 1) {
+            long mid = lo + (hi - lo) / 2;
+            if (doseAt.applyAsDouble(mid) >= gy) hi = mid;
+            else lo = mid;
+        }
+        return hi;
     }
 
     /** Unshielded fallout exposure at (x, z) from {@code t0} to {@code t1} ticks after detonation {@code d}, R. */
