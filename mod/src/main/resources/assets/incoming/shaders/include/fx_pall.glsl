@@ -160,6 +160,8 @@ const vec4 MUSH_AT = vec4(0.025, 0.1, 0.275, 0.7);
 const vec4 MUSH_PART = vec4(0.05, 0.1, 0.25, 0.6);
 // mean depth grid per mushroom (PallPass.MUSH_TAU_N): cells across its bounds cylinder and height layers
 const int MUSH_TAU_N = 48;
+// a ray ends once the background shows through less than this share of the pixel
+const float RAY_EXIT = 0.02;
 
 // frame mushrooms and ray interval in each
 vec2 gMushSpan[MUSHROOMS];
@@ -909,6 +911,9 @@ mat4 gWilsonLight;
 vec4 gWilsonIn;
 // eye-to-step mushroom depth: actual billowing depth — skylight from eye side lost before point
 float gTauEye;
+// near sunward billow depth of mushroom gSunK last traced at ray distance gSunAt (mushSunTau); −1: none yet on this ray
+int gSunK;
+float gSunAt, gSunNear;
 
 // Add matter of opacity 1 − tr and light l (already × opacity) at eye distance t to ray. Eye sees pall, whirls and
 // Wilson cloud even where mushroom fades in air haze (lost): their light weighted by transmit + lost. Air haze to t
@@ -1275,14 +1280,21 @@ vec4 mushDense(Mush m, vec3 q, float cone, float k, out float lobes, out float d
 // as long, frame-jittered sample within each (sunlit billow side and neighbor shadow give “cauliflower” cap); farther,
 // mean field: billows average to it beyond the billow layer. Mean field from point would cover even sunlit billows with
 // soft-edge depth along the surface (tens of optical depths sideways to sun)
-float mushSunTau(Mush m, vec3 p, float k, float far) {
+float mushSunTau(int mk, Mush m, vec3 p, float k, float far) {
     float reach = 0.75 * m.capTile, len = reach / 31.0, t = 0.0, tau = 0.0;
+    // the billow layer is resolved to its first segment: a ray step nearer than that to the last point it was traced from
+    // (same mushroom) has the same sunward billows, so a ray traces them once per segment length, not once per step
+    float along = dot(p, gDir);
+    if (mk == gSunK && abs(along - gSunAt) < len && !cut(536870912)) return gSunNear + far;
     for (int i = 0; i < 5 && !cut(262144); i++) {
         float lobes, depth, near, carried;
         tau += dot(mushDense(m, mushLocal(m, p + gSun * (t + gJitter * len)), len, k, lobes, depth, near, carried), vec4(1.0)) * len;
         t += len;
         len *= 2.0;
     }
+    gSunK = mk;
+    gSunAt = along;
+    gSunNear = tau;
     // beyond the billow layer: mean field from the reach on (mushTausAt)
     return tau + far;
 }
@@ -1348,7 +1360,7 @@ vec4 mushAt(int k, Mush m, vec3 p, vec3 q, float cone, out float near, out vec3 
     // emission escape depth: shortest optical depth
     float escape = min(min(up, down), toEye);
     if (PallSun.w > 0.0) {
-        float toSun = mushSunTau(m, p, kk, taus.w), away = more.x;
+        float toSun = mushSunTau(k, m, p, kk, taus.w), away = more.x;
         escape = min(escape, min(toSun, away));
         // sun beam along slab through point on sun axis (cosine 1): its diffuse light and direct beam
         float cs = g * dot(-gDir, gSun);
@@ -1656,6 +1668,7 @@ void main() {
     if (w0.w <= 0.0) gWilsonIn.y = 1e9;
     if (w1.y <= 0.0) gWilsonIn.z = 1e9;
     if (w1.w <= 0.0) gWilsonIn.w = 1e9;
+    gSunK = -1;
     // mushrooms: individual ray intervals (before world behind pixel) and combined interval
     float m0 = 1e9, m1 = -1.0;
     gMushes = 0;
@@ -1839,9 +1852,18 @@ void main() {
             mk += 1;
 #endif
         }
-        float exitAt = 0.005;
+        float exitAt = RAY_EXIT;
         if (cut(131072)) exitAt = 0.05;
+        if (cut(1073741824)) exitAt = 0.005;
         if (transmit + lost < exitAt) {
+            // what is left of the pixel looks like the matter so far: deeper matter takes the place of the background behind
+            // it (dropping the rest instead would darken the pixel by up to its share, a few percent at this exit)
+            float keep = 1.0 / (1.0 - transmit - lost);
+            if (cut(1073741824)) keep = 1.0;
+            light *= keep;
+            heat *= keep;
+            emitted *= keep;
+            filmed *= keep;
             transmit = 0.0;
             lost = 0.0;
             break;
