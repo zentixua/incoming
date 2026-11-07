@@ -87,6 +87,29 @@ public final class NuclearTickets {
         return true;
     }
 
+    /**
+     * Sable classifies a changed block's neighbourhood with collision shapes taken at {@code BlockPos.ZERO}, memoized per
+     * block state ({@code VoxelNeighborhoodState}). A shape that reads its block entity (shulker box) then reads chunk
+     * (0, 0): an unloaded origin loads synchronously inside the block change. GameTest {@code sableShapeLoadsOrigin}: 39 ms
+     * on an idle server; Zearth rerun 07.11.2026 (spawn far from the origin): ruin blocks 50–140 ms, the server thread
+     * running the queued chunk loads ahead of it. Held while nuclear work changes blocks; drop once Sable stops reading
+     * shapes at a fixed position.
+     */
+    private static final TicketType<UUID> ORIGIN = TicketType.create("incoming_sable_origin", Comparator.<UUID>naturalOrder());
+
+    /** Keep chunk (0, 0) fully loaded, without ticking ({@link #ORIGIN}). */
+    public static void holdOrigin(ServerLevel level, boolean hold) {
+        AreaLoader.Area area = new AreaLoader.Area(ORIGIN, ChunkPos.ZERO, 0, new UUID(0L, 0L), false);
+        AreaLoader areas = StrikeWorld.get(level).areas();
+        if (areas.holds(area) == hold) return;
+        if (hold) areas.hold(level, area);
+        else areas.release(level, area);
+    }
+
+    public static boolean holdsOrigin(ServerLevel level) {
+        return StrikeWorld.get(level).areas().holds(new AreaLoader.Area(ORIGIN, ChunkPos.ZERO, 0, new UUID(0L, 0L), false));
+    }
+
     public static void hold(ServerLevel level, ChunkPos pos, boolean hold) {
         hold(level, TYPE, pos, hold);
     }

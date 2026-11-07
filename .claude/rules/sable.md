@@ -22,3 +22,7 @@ paths:
   flash layer at a craft is not placed without loaded neighbors (`FlashScorch`: before background work and again
   before writing — neighbors may have left while it was built; GameTests `flashLayerWaitsNeighboursAtCraft`,
   `flashLayerRechecksNeighboursBeforeWrite`); ruins, which wait for neighbors, bring it later.
+- Sable's neighbourhood classification also reads collision shapes at `BlockPos.ZERO`, memoized per block state
+  (`VoxelNeighborhoodState`): a block-entity shape (shulker box) reads chunk (0, 0), which loads synchronously if the
+  spawn is elsewhere (Zearth: 50–140 ms per ruin block). `NuclearTickets.ORIGIN` holds that chunk while nuclear work
+  runs; GameTest `sableShapeLoadsOrigin` fails once Sable stops, and then the hold goes.

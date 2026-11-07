@@ -1197,6 +1197,58 @@ public final class RuinBackgroundGameTests {
     }
 
     /**
+     * Sable reads a changed block's neighbourhood shapes at {@code BlockPos.ZERO} ({@code NuclearTickets.ORIGIN}): a shulker box
+     * placed anywhere loads chunk (0, 0) inside the block change. Nuclear work holds that chunk from launch to the end of
+     * its queues. The first half pins Sable's behaviour: once it fails, Sable no longer reads the origin, and the hold goes.
+     */
+    @GameTest(template = "range", timeoutTicks = 1200, batch = "sable_origin", skyAccess = true)
+    public static void sableShapeLoadsOrigin(GameTestHelper h) {
+        if (!net.neoforged.fml.ModList.get().isLoaded("sable")) {
+            h.succeed();
+            return;
+        }
+        ServerLevel level = h.getLevel();
+        var map = level.getChunkSource().chunkMap;
+        var rule = level.getGameRules().getRule(net.minecraft.world.level.GameRules.RULE_SPAWN_CHUNK_RADIUS);
+        int was = rule.get();
+        // the GameTest world spawns at the origin: its spawn chunks would keep it loaded
+        rule.set(0, level.getServer());
+        StrikeGameTests.afterTest(h, () -> {
+            rule.set(was, level.getServer());
+            NuclearStrikes.clear(level);
+            ua.zentix.incoming.nuclear.world.NuclearTickets.holdOrigin(level, false);
+        });
+        int[] stage = {0};
+        h.onEachTick(() -> {
+            if (stage[0] != 0 || map.getVisibleChunkIfPresent(0L) != null || map.pendingUnloads.containsKey(0L)) return;
+            stage[0] = 1;
+            // Sable memoizes per block state: of all shulker boxes, those no earlier test placed read the origin
+            int i = 0;
+            for (net.minecraft.world.item.DyeColor color : net.minecraft.world.item.DyeColor.values()) {
+                for (net.minecraft.core.Direction f : net.minecraft.core.Direction.values()) {
+                    h.setBlock(new BlockPos(10 + i % 40, 3, 10 + i / 40), net.minecraft.world.level.block.ShulkerBoxBlock.getBlockByColor(color)
+                            .defaultBlockState().setValue(net.minecraft.world.level.block.ShulkerBoxBlock.FACING, f));
+                    i++;
+                }
+            }
+            h.assertTrue(map.getVisibleChunkIfPresent(0L) != null, "Sable no longer loads chunk (0, 0) for block-entity shapes: drop NuclearTickets.ORIGIN");
+            NuclearWarhead.detonate(level, Vec3.atBottomCenterOf(h.absolutePos(NuclearGameTests.CENTER)), 1, false, null, 0.1f);
+            stage[0] = 2;
+        });
+        h.succeedWhen(() -> {
+            h.assertTrue(stage[0] >= 2, "chunk (0, 0) did not unload");
+            boolean held = ua.zentix.incoming.nuclear.world.NuclearTickets.holdsOrigin(level);
+            if (stage[0] == 2) {
+                h.assertTrue(held, "nuclear work does not hold chunk (0, 0)");
+                // the work ends: the next tick lets the chunk go
+                NuclearStrikes.clear(level);
+                stage[0] = 3;
+            }
+            h.assertFalse(held, "chunk (0, 0) still held without nuclear work");
+        });
+    }
+
+    /**
      * A wave-reached chunk stays out of the player send queue until its asynchronous ruins finish.
      * Hold worker admission until the first post-wave request, then release it and verify the actual replacement.
      * A fast worker must not finish before the fixture has exercised the gate. Runs at game speed: the ruins come

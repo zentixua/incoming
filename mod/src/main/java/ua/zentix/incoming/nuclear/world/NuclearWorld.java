@@ -514,6 +514,8 @@ public final class NuclearWorld {
         lastFalloutNanos = settleStart - falloutStart;
         settle.work(level, events, clock);
         lastSettleNanos = System.nanoTime() - settleStart;
+        // from launch to the last settled chunk: ruins and settlement change blocks through the world
+        NuclearTickets.holdOrigin(level, ua.zentix.incoming.compat.SableTerrain.present() && (busy() || !events.scheduled().isEmpty()));
     }
 
     /**
