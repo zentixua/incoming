@@ -1056,7 +1056,13 @@ public final class RuinPlan {
         BlockState slowBlock = null;
         long slowBlockNanos = 0;
         BlockPos slowAt = null;
-        int readyBefore = readyMask(level, pos), radiusBefore = slowBlockLines < SLOW_BLOCK_LINES ? neighbourRadius(level, chunk) : 0;
+        boolean anySlow = false;
+        for (int c : cells) if ((c & SLOW) != 0) {
+            anySlow = true;
+            break;
+        }
+        int readyBefore = anySlow ? readyMask(level, pos) : 0;
+        int radiusBefore = anySlow && slowBlockLines < SLOW_BLOCK_LINES ? neighbourRadius(level, chunk) : 0;
         // landed containers: contents (or unopened loot table) read before the source is cleared, written into the
         // landed block entity after it is placed
         net.minecraft.nbt.CompoundTag[] carried = moves.length == 0 ? null : new net.minecraft.nbt.CompoundTag[moves.length / 2];
@@ -1111,7 +1117,7 @@ public final class RuinPlan {
 
     /** A world-path block replacement this long (a tick share) logs where and which neighbour chunks it loaded. */
     private static final long SLOW_BLOCK_NANOS = 20_000_000L;
-    /** Slow-block lines logged per server run (first ones: the pattern, not every chunk). */
+    /** Slow-block lines logged per game process (first ones: the pattern, not every chunk). */
     private static final int SLOW_BLOCK_LINES = 20;
     private static int slowBlockLines;
 
