@@ -270,8 +270,9 @@ public final class SamGameTests {
         RocketEntity grad = ModEntities.ROCKET.get().create(level);
         grad.launchFrom(point.add(0, 0, -300), new Target.Point(point), point, null);
         VirtualFlights.launch(level, grad);
+        UUID icbmId = icbm.getUUID();
         StrikeGameTests.afterTest(h, () -> {
-            if (!icbm.isRemoved()) icbm.discard();
+            StrikeGameTests.removeIcbm(level, icbmId);
             VirtualFlights.get(level).clear(level, p -> p == grad);
         });
         UUID gradId = grad.getUUID();

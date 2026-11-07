@@ -2377,6 +2377,8 @@ public final class NuclearGameTests {
         List<IcbmEntity> icbms = level.getEntitiesOfClass(IcbmEntity.class, new net.minecraft.world.phys.AABB(launcher, launcher).inflate(64));
         h.assertTrue(icbms.size() == 1, "missiles at launcher: " + icbms.size());
         IcbmEntity icbm = icbms.getFirst();
+        java.util.UUID icbmId = icbm.getUUID();
+        StrikeGameTests.afterTest(h, () -> StrikeGameTests.removeIcbm(level, icbmId));
         h.assertTrue(icbm.getX() > launcher.x + 25, "the rocket did not start behind: " + icbm.position());
         double startY = icbm.getY();
         h.succeedWhen(() -> h.assertTrue(icbm.isRemoved() || icbm.getY() > startY + 40, "the rocket does not gain altitude: " + icbm.getY()));

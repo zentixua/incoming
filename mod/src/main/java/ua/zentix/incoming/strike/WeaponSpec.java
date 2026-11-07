@@ -248,20 +248,18 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
     /**
      * Vertical-launch solid stage boost: constant thrust, mass declines with propellant burn, so acceleration
      * rises: a(t) = T / (m₀ − ṁ·t) − g, ṁ = propellant / burn time. Ignores air drag and altitude thrust
-     * increase; subtract full g as for vertical ascent: within {@code 90 − climbPitch} of vertical, error under
-     * 2% of acceleration. Simplified pitch, no public pitch program: strictly axial until {@code pitchOverTick}
-     * (tail clears silo), then smoothly tilt toward target heading to {@code climbPitch}.
+     * increase; subtracts full g as for vertical ascent: the path stays within 25° of vertical to burnout, error under
+     * 4% of acceleration. No public pitch program: strictly axial until {@code pitchOverTick} (tail clears silo),
+     * a kick toward the target heading to {@code climbPitch}, then a gravity turn ({@link #pathAngles}).
      *
      * @param thrust thrust, N
      * @param launchMass rocket launch mass, kg
      * @param propellant stage propellant, kg
      * @param burnSeconds stage burn time, s
      * @param pitchOverTick tick when nose starts tilting toward target heading
-     * @param climbPitch ascent angle above horizon after tilt, °
-     * @param ceiling blocks above world ceiling after which rocket unnecessary (strike flies on)
+     * @param climbPitch ascent angle above horizon after the kick, °
      */
-    public record Ascent(double thrust, double launchMass, double propellant, double burnSeconds, int pitchOverTick, float climbPitch,
-                         int ceiling) {
+    public record Ascent(double thrust, double launchMass, double propellant, double burnSeconds, int pitchOverTick, float climbPitch) {
         /** Gravitational acceleration, m/s². */
         static final double G = 9.81;
 
@@ -287,6 +285,31 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
          */
         public double step(double speed, int tick) {
             return speed + accel((tick - 1) / 20.0) / 400;
+        }
+
+        /** Burn time, ticks. */
+        public int burnTicks() {
+            return (int) Math.round(burnSeconds * 20);
+        }
+
+        /**
+         * Real flight path angle above the horizon at each tick 0…{@link #burnTicks}, °: 90 until {@code pitchOverTick},
+         * {@code climbPitch} after the kick, then a zero-lift gravity turn: gravity bends the path by dγ/dt = −g·cos γ / v
+         * at the real speed ({@link #step}, uncapped). Minuteman III first stage: 85° → ~65° at burnout.
+         */
+        public float[] pathAngles() {
+            float[] out = new float[burnTicks() + 1];
+            double v = 0, gamma = Math.toRadians(climbPitch);
+            for (int tick = 0; tick < out.length; tick++) {
+                if (tick > 0) v = step(v, tick);
+                if (tick <= pitchOverTick) {
+                    out[tick] = 90;
+                    continue;
+                }
+                gamma -= G * Math.cos(gamma) / Math.max(v * 20, 1) / 20;
+                out[tick] = (float) Math.toDegrees(gamma);
+            }
+            return out;
         }
     }
 
@@ -792,7 +815,7 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
     public static final Article.Propeller LOITER_MOTOR = new Article.Propeller(800, 9000, 2, 0.65, 0);
 
     /** Minuteman III first-stage boost ({@link Ascent}; values/sources in {@link #NUKE}). */
-    static final Ascent ICBM_ASCENT = new Ascent(903_700, 36_030, 20_780, 61, 60, 85, 320);
+    static final Ascent ICBM_ASCENT = new Ascent(903_700, 36_030, 20_780, 61, 60, 85);
 
     // ---- real article specifications ({@link Article}); game speeds/heights in {@link Airframe} are not physical.
 
@@ -1079,15 +1102,16 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
      * propellant 20780 kg over 61 s (S. Fetter, “A Ballistic Missile Primer”, Minuteman first-stage table, same
      * stage in Minuteman III, https://gotech.spp.umd.edu/sites/default/files/2019-08/1990-MissilePrimer.pdf).
      * Liftoff 1.56 g, at 10 s 1.82 g: 165 m/s, ~810 m axially. Strictly vertical 3 s (tail clears 25-block silo
-     * at ~1.8 s), then tilt toward target heading to 85° above horizon; exits world ceiling +320 after ~8.5 s at
-     * y 64, ~30 blocks sideways: farther would leave ready launch-site chunks. Nuclear detonation (kiloton yield
-     * {@code Loadout.Nuke}). No miss: real ICBM miss is hundreds of meters, immaterial with nuclear charge; exact
+     * at ~1.8 s), then a kick toward target heading to 85° above horizon and a gravity turn to ~65° at burnout (61 s).
+     * The whole burn is shown (flying outside the world once it leaves the ticking chunks): at the 25 blocks/tick
+     * game limit it ends ~22 km up and ~8 km downrange (real ~39 km, ~15 km). Then the scheduled strike flies on.
+     * Nuclear detonation (kiloton yield {@code Loadout.Nuke}). No miss: real ICBM miss is hundreds of meters, immaterial with nuclear charge; exact
      * marker detonation matches siren/warning. No impact fuel (warhead).
      */
     public static final WeaponSpec NUKE = new WeaponSpec(WeaponType.SirenKind.NUCLEAR, 0, Salvo.gaps(200, 300), new Warhead(true, false, true),
             Launch.ICBM,
             new Route(null, 0, 0, 0, 0, 0), Tracking.POINT, null, Blast.NONE, false, 0.5f,
-            new Airframe(() -> ModEntities.ICBM.get(), 25, 25, null, 0, 12, 0, 9, 0, 600 * 25, 0, null, 0, Attack.NONE,
+            new Airframe(() -> ModEntities.ICBM.get(), 25, 25, null, 0, 12, 0, 9, 0, ICBM_ASCENT.burnTicks() * 25, 0, null, 0, Attack.NONE,
                     ICBM_NOISE, new Signature(1.0, false), ICBM_ARTICLE, null),
             null, Munition.single(() -> ModItems.ICBM.get()), ICBM_ASCENT);
 

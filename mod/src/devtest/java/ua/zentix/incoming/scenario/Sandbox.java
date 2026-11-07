@@ -653,6 +653,17 @@ final class Sandbox {
         // houses)
         if (armed != null && armed.times[0] < 0 && !c.near()) throw new IllegalArgumentException("frames before the effect's start — only for nuke … near");
         switch (c.verb()) {
+            case ICBM -> {
+                placeCamera();
+                Vec3 pad = new Vec3(site.x, GROUND + 1, site.z);
+                onServer(true, server -> {
+                    var l = server.overworld();
+                    var icbm = ua.zentix.incoming.registry.ModEntities.ICBM.get().create(l);
+                    icbm.prepare(pad, pad.add(0, 0, -40_000), null);
+                    l.addFreshEntity(icbm);
+                });
+                pending = Pending.SERVER;
+            }
             case ARRIVAL -> {
                 placeCamera();
                 ArrivalScene.start(site, (int) c.number(0, 1), c.args().contains("flash"));
