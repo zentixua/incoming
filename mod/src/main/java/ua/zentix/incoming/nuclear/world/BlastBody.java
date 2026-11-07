@@ -49,6 +49,8 @@ import java.util.function.Predicate;
  * (front is faster).
  */
 public final class BlastBody {
+    /** {@code Direction.values()} copies its array on every call; loops over neighbours read this one. */
+    private static final net.minecraft.core.Direction[] DIRECTIONS = net.minecraft.core.Direction.values();
     /** Maximum air cells searched from the body for sky: none found — body is enclosed. */
     private static final int AIR_CELLS = 2048;
     /** Window fragment reach to the body, blocks (table 12.43: 2–4 m from window). */
@@ -401,7 +403,7 @@ public final class BlastBody {
             p.set(queue.dequeueLong());
             if (!Terrain.ready(level, p)) return true;
             if (p.getY() >= Terrain.height(level, Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, p.getX(), p.getZ())) return true;
-            for (Direction dir : Direction.values()) {
+            for (Direction dir : DIRECTIONS) {
                 BlockPos n = p.relative(dir);
                 if (n.getY() < level.getMinBuildHeight() || n.getY() >= level.getMaxBuildHeight() || seen.size() >= AIR_CELLS) continue;
                 if (!seen.add(n.asLong())) continue;
