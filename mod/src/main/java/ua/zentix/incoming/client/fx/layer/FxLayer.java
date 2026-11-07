@@ -237,6 +237,7 @@ public final class FxLayer {
         FarBlasts.heat(sky.camera(), sky.partial(), heat, air);
         ua.zentix.incoming.client.nuclear.NukeHeat.heat(sky.camera(), sky.partial(), heat);
         ua.zentix.incoming.client.fx.FireSmoke.heat(sky.camera(), heat, air);
+        ua.zentix.incoming.client.nuclear.IcbmArrivalRenderer.heat(sky.camera(), sky.partial(), heat, air);
         ua.zentix.incoming.client.fx.Exhaust.heat(sky.camera(), SmokeGrid.seconds(sky.partial()), heat, air);
         heat.eye(FarRenderer.flamesAtEye());
         FarView view = sky.exposed(Sight.exposure(sky.ambient(), heat.atEye()));

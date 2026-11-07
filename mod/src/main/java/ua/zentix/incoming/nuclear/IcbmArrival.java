@@ -10,10 +10,16 @@ import ua.zentix.incoming.util.StreamCodecs;
 
 /** Committed game approach, not physical flight. No entity, collision simulation or arrival-driven chunk loads. */
 public record IcbmArrival(int strikeId, long start, long end, Detonation geometry, Vec3 velocity) {
-    /** Presentation window, not a physical luminous-entry altitude. Short flights retain nine seconds for boost. */
-    public static final int WINDOW = 240, BOOST = 180;
-    /** presentation: a short cooling wake, independent of flight duration, yield and effects scale. */
-    public static final double WAKE = 4;
+    /**
+     * Visible entry, ticks: a real warhead glows from ~{@link #ONSET} m for ~30 s ({@code ReentryGlow}); at game speed
+     * the same 30 s start lower (≈14 km at 25 blocks/tick and the steep game path, not physical). Short flights retain
+     * nine seconds for boost.
+     */
+    public static final int WINDOW = 600, BOOST = 180;
+    /** Luminous entry onset above the burst, m (est.: plasma glow begins in the upper atmosphere, ~80 km). */
+    public static final double ONSET = 80_000;
+    /** Longest wake glow kept after the burst or drawn behind the head, ticks ({@code ReentryGlow.wakeLength}). */
+    public static final double WAKE = 120;
     public static final Codec<IcbmArrival> CODEC = RecordCodecBuilder.create(i -> i.group(
             Codec.INT.fieldOf("strike").forGetter(IcbmArrival::strikeId),
             Codec.LONG.fieldOf("start").forGetter(IcbmArrival::start),
@@ -29,7 +35,16 @@ public record IcbmArrival(int strikeId, long start, long end, Detonation geometr
             StreamCodecs.VEC3, IcbmArrival::velocity, IcbmArrival::new);
 
     public static long start(long launch, long end) {
-        return end - Math.min(WINDOW, Math.max(0, end - launch - BOOST));
+        return start(launch, end, WINDOW);
+    }
+
+    /** Window start for an approach at {@code velocity} blocks/tick: no longer than its fall from {@link #ONSET}. */
+    public static long start(long launch, long end, Vec3 velocity) {
+        return start(launch, end, (int) Math.min(WINDOW, Math.ceil(ONSET / Math.max(1e-6, -velocity.y))));
+    }
+
+    private static long start(long launch, long end, int window) {
+        return end - Math.min(window, Math.max(0, end - launch - BOOST));
     }
 
     /** Same steep game direction as the previous graphic; no researched guidance or trajectory model. */
