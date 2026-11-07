@@ -47,19 +47,37 @@ public final class ReentryGlow {
     /** A noon white wall, cd/m² ({@link BlackBody#SUN_DISK}: 1.6·10⁹ cd/m² solar disk over it). */
     static final double WALL = 1.6e9 / BlackBody.SUN_DISK;
     private static final double RHO0 = StandardAtmosphere.density(0);
+    /**
+     * Above the standard-atmosphere table (20 km): isothermal continuation at 216.65 K, e-folding height 6 341.6 m
+     * (est.: the real stratosphere warms, so this pressure is up to ~2 times lower than US 1976 at 50–80 km, against
+     * the 10³–10⁴ times a constant 20 km atmosphere would overstate it).
+     */
+    static final double TOP = 20_000, TOP_T = 216.65, TOP_SCALE = 6_341.62;
+
+    /** Pressure at {@code h}, Pa: standard atmosphere, isothermal above {@link #TOP}. */
+    static double pressure(double h) {
+        h = Math.max(0, h);
+        return h <= TOP ? StandardAtmosphere.pressure(h) : StandardAtmosphere.pressure(TOP) * Math.exp(-(h - TOP) / TOP_SCALE);
+    }
+
+    /** Air density at {@code h}, kg/m³ (as {@link #pressure}). */
+    static double density(double h) {
+        h = Math.max(0, h);
+        return h <= TOP ? StandardAtmosphere.density(h) : pressure(h) / (StandardAtmosphere.R_AIR * TOP_T);
+    }
 
     private ReentryGlow() {}
 
     /** Speed at {@code h} m above sea level, m/s, for entry speed {@code entry} and path angle sine {@code sin}. */
     public static double speed(double entry, double h, double sin) {
-        double column = StandardAtmosphere.pressure(Math.max(0, h)) / G;
+        double column = pressure(h) / G;
         return entry * Math.exp(-column / (2 * BETA * Math.max(0.05, sin)));
     }
 
     /** Drag power at {@code h}, W. */
     public static double power(double entry, double h, double sin) {
         double v = speed(entry, h, sin);
-        return 0.5 * StandardAtmosphere.density(Math.max(0, h)) * v * v * v * CDA;
+        return 0.5 * density(h) * v * v * v * CDA;
     }
 
     /** Luminous intensity, cd. */
@@ -74,7 +92,7 @@ public final class ReentryGlow {
 
     /** Wake glow e-folding time at {@code h}, s. */
     public static double quench(double h) {
-        return QUENCH * RHO0 / StandardAtmosphere.density(Math.max(0, h));
+        return QUENCH * RHO0 / density(h);
     }
 
     /** Wake glow e-folding length behind the head at {@code h}, m: real speed × quench time. */

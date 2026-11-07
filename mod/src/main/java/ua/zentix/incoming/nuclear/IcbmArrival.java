@@ -34,10 +34,6 @@ public record IcbmArrival(int strikeId, long start, long end, Detonation geometr
             Detonation.STREAM_CODEC, IcbmArrival::geometry,
             StreamCodecs.VEC3, IcbmArrival::velocity, IcbmArrival::new);
 
-    public static long start(long launch, long end) {
-        return start(launch, end, WINDOW);
-    }
-
     /** Window start for an approach at {@code velocity} blocks/tick: no longer than its fall from {@link #ONSET}. */
     public static long start(long launch, long end, Vec3 velocity) {
         return start(launch, end, (int) Math.min(WINDOW, Math.ceil(ONSET / Math.max(1e-6, -velocity.y))));

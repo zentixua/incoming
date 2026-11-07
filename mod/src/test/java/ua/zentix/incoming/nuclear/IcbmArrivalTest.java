@@ -26,7 +26,7 @@ class IcbmArrivalTest {
 
     @Test void everySupportedDurationRetainsBoostAndTheConfiguredDeadline() {
         for (int duration : new int[]{0, 200, 1800, 72000}) {
-            long end = 12345 + duration, start = IcbmArrival.start(12345, end);
+            long end = 12345 + duration, start = IcbmArrival.start(12345, end, new Vec3(0, -25, 0));
             assertTrue(start >= 12345);
             assertTrue(start <= end);
             assertTrue(end - start <= IcbmArrival.WINDOW);

@@ -84,7 +84,7 @@ public final class IcbmArrivalRenderer {
         double tau = ReentryGlow.wakeLength(ENTRY, path.at(newest).y - Air.SEA, sin) / Math.max(game, 1e-9);
         double half = ReentryGlow.RADIUS * WAKE_WIDTH;
         Vec3 head = wakeAt(path, newest, now).subtract(view.camera());
-        double first = glow(path, view, newest, newest, head, half, sin, game) * half / drawn(half, head.length(), view);
+        double first = glow(path, view, now, newest, head, half, sin, game) * half / drawn(half, head.length(), view);
         if (first <= FAINT) return;
         double reach = Math.min(tau * Math.log(first / FAINT), IcbmArrival.WAKE);
         for (int i = 0; i < SEGMENTS; i++) {
