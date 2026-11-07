@@ -1,5 +1,6 @@
 package ua.zentix.incoming.grid;
 
+import it.unimi.dsi.fastutil.ints.IntArrayList;
 import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
@@ -96,13 +97,19 @@ public final class BlackoutWorld {
     private static final double DISTRICT_SOUND_RANGE = 96;
 
     /** Cascade of one outage (or power restoration): area chunks ordered by arrival time. */
-    private static final class Sweep {
+    static final class Sweep {
+        /** Chunks per build unit: a nuclear outage row spans up to 2000 chunks (≈0.5 ms), the unit stays well within budget. */
+        static final int SEGMENT = 256;
         final Outage outage;
         final boolean restore;
-        final int minX, maxX, maxZ;
-        /** Next unprocessed chunk row (z). */
-        int row;
-        final Long2ObjectOpenHashMap<LongArrayList> byDue = new Long2ObjectOpenHashMap<>();
+        final int minX, maxX, minZ, maxZ;
+        /** Next unprocessed chunk row (z) and column (x) within it. */
+        int row, col = Integer.MIN_VALUE;
+        /** Districts of the current row from {@link #rowFrom} ({@link Districts#row}). */
+        private long[] rowDistricts;
+        private int rowFrom, rowTo;
+        /** Due time → area chunks as offsets from the area corner ({@link #offset}): half the memory of chunk keys. */
+        final Long2ObjectOpenHashMap<IntArrayList> byDue = new Long2ObjectOpenHashMap<>();
         long first = Long.MAX_VALUE, last = Long.MIN_VALUE;
         /** Next time whose chunks have not yet been issued. */
         long cursor = Long.MIN_VALUE;
@@ -122,34 +129,93 @@ public final class BlackoutWorld {
             this.restore = restore;
             this.issued = issued;
             // a district within the radius may include chunks beyond it: margin of one and a half cells
-            double r = outage.radius() + Districts.CELL * 16 * 1.5;
+            double r = margin();
             minX = (int) Math.floor((outage.x() - r) / 16);
             maxX = (int) Math.floor((outage.x() + r) / 16);
-            row = (int) Math.floor((outage.z() - r) / 16);
+            minZ = row = (int) Math.floor((outage.z() - r) / 16);
             maxZ = (int) Math.floor((outage.z() + r) / 16);
+        }
+
+        private double margin() {
+            return outage.radius() + Districts.CELL * 16 * 1.5;
         }
 
         boolean built() {
             return row > maxZ;
         }
 
-        /** Process one chunk row: each area chunk gets the time the cascade reaches its district. */
-        void buildRow() {
-            int z = row++;
-            for (int x = minX; x <= maxX; x++) {
-                long district = Districts.of(x, z);
-                if (!outage.covers(district)) continue;
-                long due = restore ? outage.lightAt(district) : outage.darkAt(district);
+        int offset(int x, int z) {
+            return (x - minX) * (maxZ - minZ + 1) + z - minZ;
+        }
+
+        long chunk(int offset) {
+            int depth = maxZ - minZ + 1;
+            return ChunkPos.asLong(minX + offset / depth, minZ + offset % depth);
+        }
+
+        /**
+         * One build unit: up to {@link #SEGMENT} chunks of the current row (its chord of the area circle) get the time the
+         * cascade reaches their district.
+         *
+         * @return chunks processed
+         */
+        int buildRow() {
+            int z = row;
+            if (col == Integer.MIN_VALUE) {
+                // the row's chord of the area circle (with the district margin), not the whole bounding square
+                double r = margin(), dz = Math.max(0, Math.abs(z * 16 + 8 - outage.z()) - 8);
+                double half = dz >= r ? -1 : Math.sqrt(r * r - dz * dz) + 16;
+                rowFrom = Math.max(minX, (int) Math.floor((outage.x() - half) / 16));
+                rowTo = Math.min(maxX, (int) Math.floor((outage.x() + half) / 16));
+                rowDistricts = rowFrom <= rowTo ? Districts.row(z, rowFrom, rowTo) : new long[0];
+                col = rowFrom;
+            }
+            int end = Math.min(rowTo, col + SEGMENT - 1), n = 0;
+            long lastDistrict = 0;
+            long lastDue = Outage.NEVER;
+            boolean seen = false;
+            for (int x = col; x <= end; x++, n++) {
+                long district = rowDistricts[x - rowFrom];
+                // neighbouring chunks mostly share a district: its due once
+                if (!seen || district != lastDistrict) {
+                    seen = true;
+                    lastDistrict = district;
+                    lastDue = !outage.covers(district) ? Outage.NEVER : restore ? outage.lightAt(district) : outage.darkAt(district);
+                }
+                long due = lastDue;
                 if (due == Outage.NEVER || due <= issued) continue;
-                byDue.computeIfAbsent(due, k -> new LongArrayList()).add(ChunkPos.asLong(x, z));
+                byDue.computeIfAbsent(due, k -> new IntArrayList()).add(offset(x, z));
                 first = Math.min(first, due);
                 last = Math.max(last, due);
             }
+            col = end + 1;
+            if (col > rowTo) {
+                row++;
+                col = Integer.MIN_VALUE;
+                rowDistricts = null;
+            }
             if (built() && cursor == Long.MIN_VALUE) cursor = first;
+            return n;
         }
 
         boolean done() {
             return built() && cursor > last;
+        }
+
+        /**
+         * Chunks loaded around players when the outage began, with their due times (pairs: chunk, due): issued while the
+         * area is still being built, so lights in front of players go dark with the flash whatever the outage radius (a
+         * nuclear area of 16 384 blocks takes seconds of budget to build). The built area issues them again, then idle.
+         */
+        final LongArrayList early = new LongArrayList();
+
+        void addEarly(long chunk) {
+            long district = Districts.of(ChunkPos.getX(chunk), ChunkPos.getZ(chunk));
+            if (!outage.covers(district)) return;
+            long due = restore ? outage.lightAt(district) : outage.darkAt(district);
+            if (due == Outage.NEVER || due <= issued) return;
+            early.add(chunk);
+            early.add(due);
         }
     }
 
@@ -278,15 +344,34 @@ public final class BlackoutWorld {
 
     // ---------------------------------------------------------------- events
 
-    /** New outage: its cascade starts this tick. */
-    void onOutage(Outage o) {
-        sweeps.add(new Sweep(o, false));
+    /** New outage: its cascade starts this tick, at once for chunks loaded around players ({@link Sweep#early}). */
+    void onOutage(ServerLevel level, Outage o) {
+        Sweep s = new Sweep(o, false);
+        int view = level.getServer().getPlayerList().getViewDistance() + 1;
+        LongOpenHashSet seen = new LongOpenHashSet();
+        for (var p : level.players()) {
+            ChunkPos at = p.chunkPosition();
+            for (int dx = -view; dx <= view; dx++) {
+                for (int dz = -view; dz <= view; dz++) {
+                    long c = ChunkPos.asLong(at.x + dx, at.z + dz);
+                    if (seen.add(c) && inMemory(level, c) != null) s.addEarly(c);
+                }
+            }
+        }
+        sweeps.add(s);
+        sweepsDue = true;
     }
 
     /** Power restoration assigned to an outage: restoration cascade replaces the previous one (if already running). */
     void onRestore(Outage o) {
+        onRestore(o, Long.MIN_VALUE);
+    }
+
+    /** Same; districts due up to {@code issued} were already relit by the previous restoration and are not issued again. */
+    void onRestore(Outage o, long issued) {
         sweeps.removeIf(s -> s.restore && s.outage.id() == o.id());
-        sweeps.add(new Sweep(o, true));
+        sweeps.add(new Sweep(o, true, issued));
+        sweepsDue = true;
     }
 
     /**
@@ -474,7 +559,24 @@ public final class BlackoutWorld {
      * tick ({@link Blackouts#work}).
      */
     public boolean busy() {
-        return !idle() || !staleLight.isEmpty() || !resignal.isEmpty();
+        return sweepsDue || !relight.isEmpty() || !queueEmpty() || !staleLight.isEmpty() || !resignal.isEmpty();
+    }
+
+    /**
+     * Some cascade has work this tick or the next: building, chunks around players, or chunks due. A built cascade waiting
+     * for its next due time is not work — a nuclear repair cascade waits weeks of game time between districts, and counting
+     * it would hold the blackout share of the budget away from impacts and ruins all that time ({@link Blackouts#pending}).
+     */
+    private boolean sweepsDue;
+
+    private void updateSweepsDue(long now) {
+        sweepsDue = false;
+        for (Sweep s : sweeps) {
+            if (!s.built() || !s.early.isEmpty() || s.cursor <= Math.min(now + 1, s.last)) {
+                sweepsDue = true;
+                return;
+            }
+        }
     }
 
     /**
@@ -547,6 +649,7 @@ public final class BlackoutWorld {
             promoteNear();
         }
         advanceSweeps(level, grid, now, clock);
+        updateSweepsDue(now);
         while (!queueEmpty() && clock.canStart()) {
             long c0 = clock.begin(), t0 = System.nanoTime();
             long[] counted = count.clone(), timed = nanos.clone();
@@ -649,18 +752,36 @@ public final class BlackoutWorld {
                 it.remove();
                 continue;
             }
+            if (!s.early.isEmpty()) {
+                // chunks around players while the area builds (Sweep.early): those due now
+                LongArrayList left = new LongArrayList();
+                for (int i = 0; i < s.early.size(); i += 2) {
+                    long c = s.early.getLong(i), due = s.early.getLong(i + 1);
+                    if (due > now) {
+                        left.add(c);
+                        left.add(due);
+                    } else if (inMemory(level, c) != null) {
+                        enqueue(c);
+                    }
+                }
+                s.early.clear();
+                // the built area covers them from here on
+                if (!s.built()) s.early.addAll(left);
+            }
             while (!s.built() && clock.canStart()) {
                 long c0 = clock.begin(), t0 = System.nanoTime();
                 long[] counted = count.clone(), timed = nanos.clone();
-                s.buildRow();
+                int built = s.buildRow();
                 note(Work.BUILD, 1, clock.end(c0));
                 long took = System.nanoTime() - t0;
-                if (slow(level, took)) logSlowUnit(level, "cascade", took, "row of " + (s.maxX - s.minX + 1) + " chunks", counted, timed);
+                if (slow(level, took)) logSlowUnit(level, "cascade", took, built + " chunks of a row", counted, timed);
             }
             if (!s.built()) continue;
             while (s.cursor <= now && s.cursor <= s.last) {
-                LongArrayList chunks = s.byDue.remove(s.cursor);
-                if (chunks != null) {
+                IntArrayList due = s.byDue.remove(s.cursor);
+                if (due != null) {
+                    LongArrayList chunks = new LongArrayList(due.size());
+                    for (int i = 0; i < due.size(); i++) chunks.add(s.chunk(due.getInt(i)));
                     // district outward from the player: lamps near the player go dark and relight first
                     if (!players.isEmpty()) {
                         long[] order = chunks.toLongArray();

@@ -934,7 +934,8 @@ public final class GridGameTests {
         h.assertTrue(dead > 64, "destroyed zone " + dead + " does not cover the platform");
         Blackouts.nuke(level, d);
         PowerGrid grid = PowerGrid.get(level);
-        Outage o = grid.outages().stream().filter(Outage::byDamage).findFirst().orElseThrow();
+        // this strike's outage: the newest (other nuclear checks leave restored outages until they are pruned)
+        Outage o = grid.outages().stream().filter(Outage::byDamage).max(java.util.Comparator.comparingInt(Outage::id)).orElseThrow();
         ChunkPos c = new ChunkPos(h.absolutePos(CENTER));
         h.assertTrue(o.lightAt(Districts.of(c.x, c.z)) == Outage.NEVER, "the destroyed district has a repair time");
         Outage down = grid.downOutage(node.id(), level.getGameTime()).orElseThrow();

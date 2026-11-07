@@ -42,6 +42,12 @@ paths:
   restoration cascade starts at `Outage.restoreFrom` and lives as long as repairs (a restarted one skips districts issued
   before the restart, `Sweep.issued`). Substations the strike hit repair as their district does; a destroyed one reroutes
   its area at `Outage.rerouteAt` but stays unpowered while its zone is destroyed (`PowerGrid.destroyed`).
+- Nuclear outage radius is the whole damage reach (`Detonation.radiusMax`), capped by `Blackouts.NUKE_MAX_RADIUS` 16384
+  (measured cost in its javadoc), not `grid.max_radius` (substations, commands). Cascade build: `Sweep.buildRow` is
+  one unit of at most `Sweep.SEGMENT` chunks of a row's circle chord, districts per row via `Districts.row` (same result as
+  `Districts.of`, `DistrictsTest`), chunks stored as int offsets; chunks loaded around players when the outage begins are
+  issued at once (`Sweep.early`). A built cascade waiting for its next due time is not pending work
+  (`BlackoutWorld.sweepsDue`): a weeks-long repair cascade would otherwise keep the grid share from impacts and ruins.
 - Lamps placed in a dark district (`Blackouts.onBlockPlaced`) run on their own supply: `PowerGrid` keeps
   position → time placed (`placeOwn`, saved with the grid, not the chunk, so disk loads and LOD copies see it), and every
   darkening path skips them via `PowerGrid.keepsLit` (lamps placed after the district's latest darkening). Forgotten

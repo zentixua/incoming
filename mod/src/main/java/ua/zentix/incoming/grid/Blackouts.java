@@ -55,6 +55,14 @@ public final class Blackouts {
      * the grid only trips.
      */
     public static final double DAMAGED_PSI = 1;
+    /**
+     * Largest nuclear outage, blocks: the whole damage reach up to about 250 kt at ground level (its 1 psi ring is 9 km, its
+     * glass and burns reach 15 km). Not {@code grid.max_radius}: that limits substation and command outages, and a strike
+     * that tears lines 9 km out must not stop going dark at 4 km. Cost, measured (unit benchmark of the cascade build):
+     * 16 384 blocks is 3.3 million chunks, ≈0.3 s of blackout budget spread over ≈75 ticks (4 ms lane), 13 MB of chunk
+     * offsets while the repairs last; chunks around players darken at once regardless ({@code BlackoutWorld.Sweep.early}).
+     */
+    public static final double NUKE_MAX_RADIUS = 16_384;
     /** Nuclear cascade: EMP and wave darken the area almost simultaneously (blocks per tick). */
     private static final double NUKE_SPEED = 50;
     /** Commanded light restoration takes 10 s. */
@@ -139,12 +147,12 @@ public final class Blackouts {
      */
     public static double nukeRadius(Detonation d) {
         if (!IncomingConfig.SERVER.gridEnabled.get() || !IncomingConfig.SERVER.gridNuke.get()) return 0;
-        return Math.min(d.radiusMax(), IncomingConfig.SERVER.gridMaxRadius.get());
+        return Math.min(d.radiusMax(), NUKE_MAX_RADIUS);
     }
 
     /**
      * Outage centered at {@code at}: cascade at {@code speed} blocks per tick, light returns according to
-     * settings. Radius capped at {@code grid.max_radius}, regardless of origin (node, command, nuclear strike).
+     * settings. Radius capped at {@code grid.max_radius} (node, command; a nuclear strike: {@link #NUKE_MAX_RADIUS}).
      *
      * @param node failed node causing this outage; -1 — not a node
      */
@@ -154,10 +162,11 @@ public final class Blackouts {
 
     /** Same, light restored uniformly from {@code restoreAt}, or by damage ({@code dead}, {@code damaged}: {@link Outage}). */
     private static Outage blackout(ServerLevel level, Vec3 at, double radius, double speed, int node, long restoreAt, double dead, double damaged) {
-        radius = Math.min(radius, IncomingConfig.SERVER.gridMaxRadius.get());
+        // a nuclear outage is bounded by its own measured limit (nukeRadius), the rest by the setting
+        if (damaged < 0) radius = Math.min(radius, IncomingConfig.SERVER.gridMaxRadius.get());
         long now = level.getGameTime();
         Outage o = PowerGrid.get(level).addOutage(new Outage(0, at.x, at.z, radius, now, speed, restoreAt, restoreSpread(), node, dead, damaged));
-        BlackoutWorld.get(level).onOutage(o);
+        BlackoutWorld.get(level).onOutage(level, o);
         String restore = o.byDamage() ? String.format(Locale.ROOT, "power returns by damage: in hours beyond %d blocks, in days beyond %d, never within %d",
                 Math.round(damaged), Math.round(dead), Math.round(dead))
                 : o.restoreAt() == Outage.NEVER ? "power will not come back by itself"
@@ -193,10 +202,12 @@ public final class Blackouts {
                 if (left >= o.restoreSpread()) continue;
                 restoring = o.restoring(o.restoreAt(), (int) left);
             }
+            // districts already relit (a repair weeks long: most of them) are not issued again; the rest are due from now
+            long relit = Math.min(grid.swept(o.id(), true), now - 1);
             grid.replace(restoring);
             // Restart restoration cascade with the new times.
             grid.swept(o.id(), true, Long.MIN_VALUE);
-            BlackoutWorld.get(level).onRestore(restoring);
+            BlackoutWorld.get(level).onRestore(restoring, relit);
             Incoming.LOG.info("Blackout #{} ({}): power restored by command", o.id(), level.dimension().location());
             n++;
         }
@@ -300,7 +311,8 @@ public final class Blackouts {
      * The lamp is the grid's again for the next outage that reaches its district after it was placed.
      */
     public static void onBlockPlaced(BlockEvent.EntityPlaceEvent e) {
-        if (e.getLevel() instanceof ServerLevel level && GridLights.isLit(e.getPlacedBlock())) {
+        // registered last (lowest priority): a placement another mod cancels leaves no record
+        if (!e.isCanceled() && e.getLevel() instanceof ServerLevel level && GridLights.isLit(e.getPlacedBlock())) {
             BlockPos pos = e.getPos();
             PowerGrid grid = PowerGrid.get(level);
             if (grid.dark(pos.getX() >> 4, pos.getZ() >> 4, level.getGameTime())) grid.placeOwn(pos, level.getGameTime());

@@ -127,8 +127,27 @@ public record Outage(int id, double x, double z, double radius, long start, doub
     /** Light returned to every district: outage can be forgotten. */
     public boolean over(long now) {
         if (restoreAt != NEVER && now >= restoreAt + restoreSpread) return true;
-        // by damage without a destroyed zone (high burst, small yield): over once the longest repair is done
-        return byDamage() && dead <= 0 && now > rerouteAt();
+        // by damage without a destroyed district (high burst, small yield): over once the longest repair is done
+        return byDamage() && now > rerouteAt() && !anyDestroyed();
+    }
+
+    /**
+     * Some covered district lies in the destroyed zone (its center within {@link #dead}): otherwise every district gets
+     * light back and the outage ends. A destroyed zone smaller than a district may hold no district center at all.
+     */
+    boolean anyDestroyed() {
+        if (dead <= 0) return false;
+        // the center chunk's own district first: its center is within about a cell of the burst
+        if (distance(Districts.of(Math.floorDiv((int) Math.floor(x), 16), Math.floorDiv((int) Math.floor(z), 16))) <= dead) return true;
+        double cell = Districts.CELL * 16;
+        int cx = (int) Math.floor(x / cell), cz = (int) Math.floor(z / cell), k = (int) Math.ceil(dead / cell) + 1;
+        for (int dx = -k; dx <= k; dx++) {
+            for (int dz = -k; dz <= k; dz++) {
+                long d = Districts.key(cx + dx, cz + dz);
+                if (distance(d) <= dead && covers(d)) return true;
+            }
+        }
+        return false;
     }
 
     /**

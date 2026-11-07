@@ -35,6 +35,44 @@ public final class Districts {
         return best;
     }
 
+    /**
+     * Districts of chunks {@code fromX..toX} in chunk row {@code chunkZ}: the same as {@link #of} for each chunk (same
+     * candidate order and tie-breaking), with the center seeds of the row's cell band computed once instead of 25 hashed
+     * seeds per chunk — an outage cascade covers millions of chunks.
+     */
+    public static long[] row(int chunkZ, int fromX, int toX) {
+        int cz = Math.floorDiv(chunkZ, CELL), cx0 = Math.floorDiv(fromX, CELL) - 2, cx1 = Math.floorDiv(toX, CELL) + 2;
+        int w = cx1 - cx0 + 1;
+        double[] sx = new double[w * 5], sz = new double[w * 5];
+        for (int i = 0; i < w; i++) {
+            for (int j = 0; j < 5; j++) {
+                sx[i * 5 + j] = seedX(cx0 + i, cz - 2 + j);
+                sz[i * 5 + j] = seedZ(cx0 + i, cz - 2 + j);
+            }
+        }
+        long[] out = new long[toX - fromX + 1];
+        double pz = chunkZ * 16 + 8;
+        for (int x = fromX; x <= toX; x++) {
+            double px = x * 16 + 8;
+            int base = Math.floorDiv(x, CELL) - 2 - cx0, bi = 0, bj = 0;
+            double bestD = Double.MAX_VALUE;
+            for (int i = 0; i < 5; i++) {
+                for (int j = 0; j < 5; j++) {
+                    int k = (base + i) * 5 + j;
+                    double dx = sx[k] - px, dz = sz[k] - pz;
+                    double d = dx * dx + dz * dz;
+                    if (d < bestD) {
+                        bestD = d;
+                        bi = i;
+                        bj = j;
+                    }
+                }
+            }
+            out[x - fromX] = key(cx0 + base + bi, cz - 2 + bj);
+        }
+        return out;
+    }
+
     public static long key(int cellX, int cellZ) {
         return (long) cellX & 0xFFFFFFFFL | ((long) cellZ & 0xFFFFFFFFL) << 32;
     }

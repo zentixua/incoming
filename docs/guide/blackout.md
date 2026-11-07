@@ -13,8 +13,8 @@ Ingredients: 3 lightning rods, 2 copper ingots, 1 redstone block and 3 iron ingo
 
 - Lights on the grid go out: glowstone, lanterns, sea lanterns, redstone lamps, copper bulbs, shroomlights, froglights,
   end rods. Torches, candles and campfires keep burning.
-- A nuclear strike cuts power without a substation, up to its damage radius or `grid.max_radius`, whichever is
-  smaller (4096 blocks by default). Both `grid.enabled` and `grid.nuke_blackout` must be on. Hit substations can also
+- A nuclear strike cuts power without a substation over its whole damage reach, as far as it breaks glass or burns
+  skin (at most 16384 blocks). Both `grid.enabled` and `grid.nuke_blackout` must be on. Hit substations can also
   cause outages in their own districts.
 - After a nuclear strike, power comes back by what the blast did to each district, on the game clock (an hour is
   50 seconds, a Minecraft day is 24 hours):

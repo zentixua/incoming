@@ -160,7 +160,7 @@ public final class Incoming {
         NeoForge.EVENT_BUS.addListener(Blackouts::onExplosion);
         // Last: other mods' handlers see and modify the explosion entity list before the mod takes it.
         NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, ua.zentix.incoming.warhead.Warheads::onDetonate);
-        NeoForge.EVENT_BUS.addListener(Blackouts::onBlockPlaced);
+        NeoForge.EVENT_BUS.addListener(net.neoforged.bus.api.EventPriority.LOWEST, Blackouts::onBlockPlaced);
         // First: other save listeners see the tag with twins already removed.
         NeoForge.EVENT_BUS.addListener(EventPriority.HIGHEST, ChunkSaves::onSave);
         NeoForge.EVENT_BUS.addListener(ua.zentix.incoming.util.RegionFiles::onSave);

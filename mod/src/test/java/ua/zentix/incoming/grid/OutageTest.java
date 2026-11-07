@@ -161,4 +161,16 @@ class OutageTest {
         assertFalse(Outage.CODEC.parse(JsonOps.INSTANCE, json).getOrThrow().byDamage());
         assertFalse(O.byDamage());
     }
+
+    /** A destroyed zone smaller than any district holds no district center: every district relights, the outage ends. */
+    @Test
+    void tinyDestroyedZoneStillEnds() {
+        // burst at a point far from every district center in its neighbourhood: 5 blocks of destroyed zone
+        Outage o = new Outage(6, 3, 3, 3000, 0, 50, Outage.NEVER, 0, -1, 5, 1000);
+        long centre = Districts.of(0, 0);
+        assertTrue(Math.hypot(Districts.seedX(centre) - 3, Districts.seedZ(centre) - 3) > 5, "test burst sits on a district center");
+        assertFalse(o.anyDestroyed());
+        assertTrue(o.over(o.rerouteAt() + 1));
+        assertTrue(NUKE.anyDestroyed());
+    }
 }
