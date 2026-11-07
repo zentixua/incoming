@@ -468,6 +468,8 @@ public final class WorkGameTests {
     /**
      * Explosion near an assembled Sable craft: the front removes hull before damaging the body behind it, not after
      * the whole world front ends. With counting clocks, all selected hull blocks are already removed inside the damage callback.
+     * The wave reaching the body is its blast-wind throw or its damage: whether a hit body loses health is the injury
+     * law's per-body fate ({@code BlastBody.fate}, from the body's random UUID), and a lucky pig lost nothing (local repro).
      */
     @GameTest(template = "range", timeoutTicks = 400, batch = "work_craft", skyAccess = true)
     public static void craftBlocksGoRightAfterDamage(GameTestHelper h) {
@@ -484,7 +486,7 @@ public final class WorkGameTests {
                 a.getX(), a.getY(), a.getZ(), b.getX(), b.getY(), b.getZ()));
         Vec3 c = Vec3.atBottomCenterOf(h.absolutePos(CENTER));
         List<BlockPos> plot = new ArrayList<>();
-        long[] at = {-1}, damaged = {-1};
+        long[] at = {-1}, damaged = {-1}, detonatedAt = {-1};
         boolean[] hullGoneAtDamage = {false};
         var body = new net.minecraft.world.entity.animal.Pig(net.minecraft.world.entity.EntityType.PIG, level) {
             @Override public boolean hurt(net.minecraft.world.damagesource.DamageSource source, float amount) {
@@ -493,6 +495,15 @@ public final class WorkGameTests {
                     hullGoneAtDamage[0] = !plot.isEmpty() && plot.stream().allMatch(p -> level.getBlockState(p).isAir());
                 }
                 return super.hurt(source, amount);
+            }
+
+            @Override public void push(double x, double y, double z) {
+                // the wave's throw (BlastBody.hit): reached the body even when its fate spared it any damage
+                if (at[0] >= 0 && damaged[0] < 0) {
+                    damaged[0] = level.getGameTime();
+                    hullGoneAtDamage[0] = !plot.isEmpty() && plot.stream().allMatch(p -> level.getBlockState(p).isAir());
+                }
+                super.push(x, y, z);
             }
         };
         body.setPos(c.add(7, 1, 0));
@@ -528,11 +539,18 @@ public final class WorkGameTests {
             WorkScheduler.useImpactClock(level.getServer(), WorkClock.counting(MS));
             h.assertTrue(net.minecraft.world.level.Explosion.getSeenPercent(c.add(0, 1 + 1e-5, 0), body) == 0,
                     "craft does not initially shield the body");
+            detonatedAt[0] = level.getGameTime();
             Warheads.detonate(level, WeaponType.MISSILE, c, null, null);
         });
         StrikeGameTests.afterTest(h, () -> WorkScheduler.useImpactClock(level.getServer(), WorkScheduler.newImpactClock()));
         h.succeedWhen(() -> {
-            h.assertTrue(checked[0] && damaged[0] >= at[0], "body behind hull did not receive this wave");
+            // the state that names a failure: whether the blast ran, the hull went and the body could still be reached
+            if (!checked[0] || damaged[0] < at[0]) h.fail("body behind hull did not receive this wave: detonated at "
+                    + detonatedAt[0] + ", world blast " + (at[0] < 0 ? "none" : "at " + at[0]) + ", reached the body " + (damaged[0] < 0 ? "never" : "at " + damaged[0])
+                    + ", now " + level.getGameTime() + ", strike idle " + StrikeWorld.get(level).idle() + ", craft blocks selected " + plot.size()
+                    + ", still standing " + plot.stream().filter(p -> !level.getBlockState(p).isAir()).count() + ", body "
+                    + (body.isAlive() ? "alive" : "dead") + " at " + body.position() + ", seen from the blast "
+                    + net.minecraft.world.level.Explosion.getSeenPercent(c.add(0, 1 + 1e-5, 0), body));
             h.assertTrue(hullGoneAtDamage[0], "hull still intact when damaging the body behind it");
             h.assertFalse(plot.isEmpty(), "rays selected no craft blocks");
             // craft blocks in the selection mean rays ran through vanilla explode() with the Sable mixin

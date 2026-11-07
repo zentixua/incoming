@@ -1199,10 +1199,13 @@ public final class RuinBackgroundGameTests {
     /**
      * A wave-reached chunk stays out of the player send queue until its asynchronous ruins finish.
      * Hold worker admission until the first post-wave request, then release it and verify the actual replacement.
-     * A fast worker must not finish before the fixture has exercised the gate.
+     * A fast worker must not finish before the fixture has exercised the gate. Runs at game speed: the ruins come
+     * from background workers in wall time (0.5–1.3 s locally after release, 50–510 unthrottled ticks), and CI's
+     * unthrottled ticks spent the 1200-tick timeout in 2–4 s before they finished.
      */
     @GameTest(template = "range", timeoutTicks = 1200, batch = "nuke_send_hold", skyAccess = true)
     public static void chunkWithheldUntilRuins(GameTestHelper h) {
+        StrikeGameTests.gameSpeed(h);
         ServerLevel level = h.getLevel();
         BlockPos glass = NuclearGameTests.CENTER.west(16);
         h.setBlock(glass, Blocks.GLASS);
@@ -1216,6 +1219,7 @@ public final class RuinBackgroundGameTests {
         RuinWorkers.fillForTest(release, RuinWorkers.Priority.SEEN);
         Detonation d = NuclearWarhead.detonate(level, Vec3.atBottomCenterOf(h.absolutePos(NuclearGameTests.CENTER)), 1, false, null, 0.1f);
         boolean[] held = {false};
+        long[] releasedAt = {-1};
         h.succeedWhen(() -> {
             LevelChunk c = level.getChunkSource().getChunkNow(ChunkPos.getX(chunk), ChunkPos.getZ(chunk));
             boolean scarred = c != null && c.getExistingData(ModAttachments.CHUNK_SCAR).orElse(0) >= d.id();
@@ -1225,9 +1229,11 @@ public final class RuinBackgroundGameTests {
                 if (w.withholds(level, chunk)) {
                     h.assertTrue(out != null && out.contains(chunk) && pending.isEmpty(), "chunk without ruins remained in the sending queue");
                     held[0] = true;
+                    if (releasedAt[0] < 0) releasedAt[0] = level.getGameTime();
                     release.countDown();
                 }
-                h.fail("the ruins have not yet risen");
+                h.fail(held[0] ? "the ruins have not yet risen " + (level.getGameTime() - releasedAt[0]) + " ticks after the workers were released"
+                        : "the chunk was never withheld: no ruin job past its wave");
             }
             h.assertTrue(out == null && pending.contains(chunk), "chunk with ruins is not given to the player");
             h.assertTrue(held[0], "chunk never waited for ruins: not verified");
