@@ -52,6 +52,8 @@ import java.util.List;
  * Reach: each block decision reads at most 16 blocks away, neighboring-chunk width in window.
  */
 record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees, List<BlockState> treeLogs) {
+    /** {@code Direction.values()} copies its array on every call; loops over neighbours read this one. */
+    private static final net.minecraft.core.Direction[] DIRECTIONS = net.minecraft.core.Direction.values();
     /** Pressure penetration depth through opening, blocks. */
     static final int SKY_DEPTH = 4;
     /**
@@ -490,7 +492,7 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
             for (int q = 0; q < reach.size(); q++) {
                 int c = reach.getInt(q), wx = c % SIDE, wz = (c / SIDE) % SIDE, y = c / (SIDE * SIDE) + yb;
                 int dc = bit(gone, c) ? 0 : sky[c];
-                for (Direction dir : Direction.values()) {
+                for (Direction dir : DIRECTIONS) {
                     int nx = wx + dir.getStepX(), ny = y + dir.getStepY(), nz = wz + dir.getStepZ();
                     if (nx < LO - ROUND_ONE || nx >= HI + ROUND_ONE || nz < LO - ROUND_ONE || nz >= HI + ROUND_ONE) continue;
                     if (!inside(nx, ny, nz) || ny > w.top(nx, nz)) continue;
@@ -504,7 +506,7 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
             IntOpenHashSet seen = new IntOpenHashSet();
             for (int q = 0; q < reach.size(); q++) {
                 int c = reach.getInt(q), wx = c % SIDE, wz = (c / SIDE) % SIDE, y = c / (SIDE * SIDE) + yb;
-                for (Direction dir : Direction.values()) {
+                for (Direction dir : DIRECTIONS) {
                     int nx = wx + dir.getStepX(), ny = y + dir.getStepY(), nz = wz + dir.getStepZ();
                     if (nx < LO - margin || nx >= HI + margin || nz < LO - margin || nz >= HI + margin || ny < yb || ny > yt) continue;
                     int n = idx(nx, ny, nz);
@@ -527,7 +529,7 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
             // sky-facing faces: most directly blast-facing (horizontal wall angle, Mach stem; vertical roof angle)
             double facing = -2;
             Direction.Axis faceAxis = null;
-            for (Direction dir : Direction.values()) {
+            for (Direction dir : DIRECTIONS) {
                 if (!open(wx + dir.getStepX(), y + dir.getStepY(), wz + dir.getStepZ())) continue;
                 double cos = dir.getAxis() == Direction.Axis.Y ? dir.getStepY() * vy : dir.getStepX() * ex + dir.getStepZ() * ez;
                 if (cos > facing) {
@@ -715,7 +717,7 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
                 int i = queue.getInt(q), depth = sky[i];
                 if (depth >= SKY_DEPTH) continue;
                 int wx = i % SIDE, wz = (i / SIDE) % SIDE, y = i / (SIDE * SIDE) + yb;
-                for (Direction dir : Direction.values()) {
+                for (Direction dir : DIRECTIONS) {
                     int nx = wx + dir.getStepX(), ny = y + dir.getStepY(), nz = wz + dir.getStepZ();
                     if (!inside(nx, ny, nz) || ny > w.top(nx, nz)) continue;
                     int n = idx(nx, ny, nz);
@@ -766,7 +768,7 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
         }
 
         boolean nearLeaves(int wx, int y, int wz) {
-            for (Direction dir : Direction.values()) if (w.props(wx + dir.getStepX(), y + dir.getStepY(), wz + dir.getStepZ()).leaves()) return true;
+            for (Direction dir : DIRECTIONS) if (w.props(wx + dir.getStepX(), y + dir.getStepY(), wz + dir.getStepZ()).leaves()) return true;
             return false;
         }
     }

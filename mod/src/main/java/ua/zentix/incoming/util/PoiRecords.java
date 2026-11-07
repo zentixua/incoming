@@ -13,6 +13,8 @@ import net.minecraft.world.level.block.state.BlockState;
  * “POI data mismatch: never registered” per block: over a hundred lines in an evening of salvos on a city map.
  */
 public final class PoiRecords {
+    /** {@code Direction.values()} copies its array on every call; loops over neighbours read this one. */
+    private static final net.minecraft.core.Direction[] DIRECTIONS = net.minecraft.core.Direction.values();
     private PoiRecords() {}
 
     /**
@@ -34,7 +36,7 @@ public final class PoiRecords {
     public static void recordWithNeighbours(ServerLevel level, BlockPos pos, BlockState state) {
         recordIfMissing(level, pos, state);
         BlockPos.MutableBlockPos n = new BlockPos.MutableBlockPos();
-        for (Direction d : Direction.values()) {
+        for (Direction d : DIRECTIONS) {
             n.setWithOffset(pos, d);
             if (!Terrain.ready(level, n)) continue;
             BlockState s = level.getBlockState(n);
