@@ -79,8 +79,8 @@ public final class VoxyIngest {
     }
 
     /**
-     * Queued (not yet started) Voxy ingest sections at which LOD Server Support 0.20 halts its own column requests
-     * ({@code IngestBackpressureGovernor}, 6144 sections). LSS calls {@code rawIngest} for every section of every column
+     * Queued (not yet started) Voxy ingest sections at which LOD Server Support halts its own column requests
+     * ({@code LodRequestManager.INGEST_BACKLOG_HALT_SECTIONS}, 6144 in 0.19–0.20). LSS calls {@code rawIngest} for every section of every column
      * it receives and paces itself to keep this queue in the thousands while it fills its radius, so the queue is never
      * empty then. Waiting for an empty queue held every acknowledgement for seconds: on Zearth 07.11.2026, with LSS
      * refilling a wiped Voxy database, ruin LODs went out at 73–122 chunks a minute and 48 % were dropped from the full
