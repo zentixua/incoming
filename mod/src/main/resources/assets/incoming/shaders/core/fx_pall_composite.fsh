@@ -47,6 +47,8 @@ uniform sampler2D Sampler6;
 uniform vec4 PallGround0;
 uniform vec4 PallGround1;
 uniform float PallFloorFrom;
+// PROFILING ONLY (not for main): fx_pall.glsl PallCut
+uniform float PallCut;
 uniform vec4 PallWater0;
 uniform vec4 PallWater1;
 // slot dust-wall head (client/nuclear/BlastWall): field-based pall remainder for pixels without own ray (pallTau)
@@ -286,7 +288,7 @@ void main() {
     vec2 ndc0 = (vec2(full) + 0.5) / vec2(fullSize) * 2.0 - 1.0;
     vec4 far0 = InvViewProj * vec4(ndc0, 1.0, 1.0);
     vec4 pall = upsample(full, fullSize, lowSize, depth, normalize(far0.xyz / far0.w));
-    if (PallFire0[0].x > 0.0 || PallFire1[0].x > 0.0) {
+    if ((PallFire0[0].x > 0.0 || PallFire1[0].x > 0.0) && (int(PallCut + 0.5) & 32768) == 0) {
         vec2 ndc = (vec2(full) + 0.5) / vec2(fullSize) * 2.0 - 1.0;
         vec4 farPoint = InvViewProj * vec4(ndc, 1.0, 1.0), nextPoint = InvViewProj * vec4(ndc + vec2(0.0, 2.0 / float(fullSize.y)), 1.0, 1.0);
         vec3 dir = normalize(farPoint.xyz / farPoint.w);
@@ -307,7 +309,7 @@ void main() {
     }
     // world only: shadow would paint patches on void below horizon
     bool balls = PallBalls[0].w > 0.0;
-    if (depth < 1e8 && (PallSun.w > 0.0 || balls) && pall.a > 0.005) {
+    if (depth < 1e8 && (PallSun.w > 0.0 || balls) && pall.a > 0.005 && (int(PallCut + 0.5) & 16384) == 0) {
         vec2 ndc = (vec2(full) + 0.5) / vec2(fullSize) * 2.0 - 1.0;
         vec4 farPoint = InvViewProj * vec4(ndc, 1.0, 1.0);
         vec3 dir = normalize(farPoint.xyz / farPoint.w);

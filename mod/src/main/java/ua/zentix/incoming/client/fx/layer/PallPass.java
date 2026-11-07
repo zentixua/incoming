@@ -434,7 +434,9 @@ public final class PallPass {
     // a few frames once ready, without waiting. Not GL_TIME_ELAPSED: OpenGL has one shared query, and Minecraft holds it for
     // the entire frame while F3 GPU load is displayed (TimerQuery) — a nested query would not start
     private static final int RING = 4;
-    private static final int[] QUERIES = new int[2 * RING];
+    /** Timestamps per frame: start, after preparation (smoke grid, shadow map, foot light), after rays, after accumulation, end. */
+    private static final int STAMPS = 5;
+    private static final int[] QUERIES = new int[STAMPS * RING];
     /** Rung generation ({@link Detail#generation}) at pair recording; −1 — pair free. */
     private static final int[] ISSUED = new int[RING];
     private static int ring;
@@ -443,6 +445,8 @@ public final class PallPass {
     /** Client scenario ({@code tools/client_scenario.sh}): frames are not real-time; detail follows setting. */
     private static final boolean SCENARIO = System.getProperty("incoming.scenario") != null;
     private static double gpuSum, gpuMax, lastGpuMean, lastGpuMax;
+    /** GPU time per part (preparation, rays, accumulation, composite) over the last second, ms per frame. */
+    private static final double[] PART_SUM = new double[STAMPS - 1], LAST_PART = new double[STAMPS - 1];
     private static int gpuFrames, drawn, lastDrawn;
 
     private PallPass() {}
@@ -683,6 +687,7 @@ public final class PallPass {
             m.safeGetUniform("PallWilson0").set(f.wilson0.x, f.wilson0.y, f.wilson0.z, f.wilson0.w);
             m.safeGetUniform("PallWilson1").set(f.wilson1.x, f.wilson1.y, f.wilson1.z, f.wilson1.w);
             m.safeGetUniform("PallFloorFrom").set(f.floorFrom);
+            m.safeGetUniform("PallCut").set((float) Integer.getInteger("incoming.pallCut", 0));
             m.safeGetUniform("PallExposure").set(f.exposure);
             m.safeGetUniform("SmokeNoise").set(f.smokeNoise.x, f.smokeNoise.y, f.smokeNoise.z, f.smokeNoise.w);
             m.safeGetUniform("SmokeWind").set(f.smokeWind.x, f.smokeWind.y, f.smokeWind.z, f.smokeWind.w);
@@ -690,8 +695,10 @@ public final class PallPass {
             m.safeGetUniform("SmokeBallLight").set(f.smokeBallLight);
             OpenAir.bind(m, open);
             SmokePass.bind(m, f.smoke);
+            if (pass == 1) stamp(timing, 1);
             quad(m, true);
         }
+        stamp(timing, 2);
 
         // 2. accumulation: from previous history into the other frame
         int next = 1 + (1 - latest);
@@ -708,6 +715,7 @@ public final class PallPass {
         SmokePass.bind(r, f.smoke);
         quad(r, false);
         latest = next - 1;
+        stamp(timing, 3);
 
         // 3. composite
         GlStateManager._glBindFramebuffer(GlConst.GL_FRAMEBUFFER, previous);
@@ -744,6 +752,7 @@ public final class PallPass {
         c.safeGetUniform("PallWall0").set(f.wall0);
         c.safeGetUniform("PallWall1").set(f.wall1);
         c.safeGetUniform("PallFloorFrom").set(f.floorFrom);
+        c.safeGetUniform("PallCut").set((float) Integer.getInteger("incoming.pallCut", 0));
         c.safeGetUniform("Haze").set(haze.x, haze.y, haze.z, haze.w);
         c.safeGetUniform("PallBalls").set(balls ? f.balls : NO_FIRE);
         c.safeGetUniform("PallBallLight").set(f.ballLight);
@@ -1100,9 +1109,16 @@ public final class PallPass {
     private static void poll(long now) {
         for (int k = 0; k < RING; k++) {
             int i = (ring + k) % RING;
-            if (ISSUED[i] < 0 || GL15.glGetQueryObjecti(QUERIES[2 * i + 1], GL15.GL_QUERY_RESULT_AVAILABLE) == 0) continue;
-            long start = GL33.glGetQueryObjecti64(QUERIES[2 * i], GL15.GL_QUERY_RESULT), stop = GL33.glGetQueryObjecti64(QUERIES[2 * i + 1], GL15.GL_QUERY_RESULT);
+            if (ISSUED[i] < 0 || GL15.glGetQueryObjecti(QUERIES[STAMPS * i + STAMPS - 1], GL15.GL_QUERY_RESULT_AVAILABLE) == 0) continue;
+            long start = GL33.glGetQueryObjecti64(QUERIES[STAMPS * i], GL15.GL_QUERY_RESULT);
+            long stop = GL33.glGetQueryObjecti64(QUERIES[STAMPS * i + STAMPS - 1], GL15.GL_QUERY_RESULT);
             double ms = Math.max(0, stop - start) / 1e6;
+            long before = start;
+            for (int q = 1; q < STAMPS; q++) {
+                long at = GL33.glGetQueryObjecti64(QUERIES[STAMPS * i + q], GL15.GL_QUERY_RESULT);
+                PART_SUM[q - 1] += Math.max(0, at - before) / 1e6;
+                before = Math.max(before, at);
+            }
             gpuSum += ms;
             gpuMax = Math.max(gpuMax, ms);
             gpuFrames++;
@@ -1120,14 +1136,21 @@ public final class PallPass {
     /** Timestamp before passes; −1 — unmeasured frame (unsupported or all pairs still pending). */
     private static int begin() {
         if (!timer() || ISSUED[ring] >= 0) return -1;
-        GL33.glQueryCounter(QUERIES[2 * ring], GL33.GL_TIMESTAMP);
+        GL33.glQueryCounter(QUERIES[STAMPS * ring], GL33.GL_TIMESTAMP);
+        // every stamp is written each measured frame (a pass skipped this frame still has its point)
+        for (int k = 1; k < STAMPS - 1; k++) GL33.glQueryCounter(QUERIES[STAMPS * ring + k], GL33.GL_TIMESTAMP);
         return ring;
+    }
+
+    /** Timestamp k between passes of the measured frame. */
+    private static void stamp(int pair, int k) {
+        if (pair >= 0) GL33.glQueryCounter(QUERIES[STAMPS * pair + k], GL33.GL_TIMESTAMP);
     }
 
     /** Timestamp after passes: pair pending, read after a few frames ({@link #poll}). */
     private static void end(int pair) {
         if (pair < 0) return;
-        GL33.glQueryCounter(QUERIES[2 * pair + 1], GL33.GL_TIMESTAMP);
+        GL33.glQueryCounter(QUERIES[STAMPS * pair + STAMPS - 1], GL33.GL_TIMESTAMP);
         ISSUED[pair] = DETAIL.generation;
         ring = (pair + 1) % RING;
     }
@@ -1135,6 +1158,10 @@ public final class PallPass {
     /** Once per second (layer tick): timing summary. */
     static void second() {
         lastGpuMean = gpuFrames > 0 ? gpuSum / gpuFrames : 0;
+        for (int k = 0; k < PART_SUM.length; k++) {
+            LAST_PART[k] = gpuFrames > 0 ? PART_SUM[k] / gpuFrames : 0;
+            PART_SUM[k] = 0;
+        }
         lastGpuMax = gpuMax;
         lastDrawn = drawn;
         gpuSum = gpuMax = 0;
@@ -1146,7 +1173,8 @@ public final class PallPass {
         if (lastDrawn == 0) return failed ? "failed" : "off";
         Step step = LADDER[Math.max(0, DETAIL.level)];
         Step top = LADDER[Math.max(0, DETAIL.ceiling)];
-        String gpu = timer < 0 ? "gpu n/a" : String.format(Locale.ROOT, "gpu %.2f ms (longest %.2f, budget %.1f)", lastGpuMean, lastGpuMax, Detail.BUDGET_MS);
+        String gpu = timer < 0 ? "gpu n/a" : String.format(Locale.ROOT, "gpu %.2f ms (longest %.2f, budget %.1f; preparation %.2f, rays %.2f, accumulation %.2f, composite %.2f)",
+                lastGpuMean, lastGpuMax, Detail.BUDGET_MS, LAST_PART[0], LAST_PART[1], LAST_PART[2], LAST_PART[3]);
         return String.format(Locale.ROOT, "%d frames, %d×%d, detail 1/%d × %d steps (step %d of %d, setting 1/%d × %d, %s, %d changes), %s",
                 lastDrawn, lowW, lowH, step.factor, step.steps, DETAIL.level, LADDER.length - 1, top.factor, top.steps,
                 DETAIL.pinned ? "pinned" : "by GPU budget", DETAIL.changes, gpu);
