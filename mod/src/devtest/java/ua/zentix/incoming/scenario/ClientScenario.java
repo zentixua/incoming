@@ -3873,6 +3873,8 @@ public final class ClientScenario {
                 case "reload" -> { holdReload = mc.reloadResourcePacks(); holdBusy = tick + 40; }
                 case "shot" -> { pallShot(tick + 30, a[1]); holdBusy = tick + 35; }
                 case "wait" -> holdBusy = tick + Integer.parseInt(a[1]);
+                case "quality" -> { ua.zentix.incoming.IncomingConfig.CLIENT.nukeDustQuality.set(
+                        ua.zentix.incoming.IncomingConfig.Client.DustQuality.valueOf(a[1])); holdBusy = tick + 40; }
                 case "log" -> Incoming.LOG.info("SCENARIO pall {} cut {} at {}: {}; layer {}", a[1], Integer.getInteger("incoming.pallCut", 0),
                         xyz(mc.gameRenderer.getMainCamera().getPosition()), ua.zentix.incoming.client.nuclear.NukePall.describe(),
                         ua.zentix.incoming.client.fx.layer.FxLayer.describeTiming());
