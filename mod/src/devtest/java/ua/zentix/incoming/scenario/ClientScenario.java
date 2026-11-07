@@ -3873,6 +3873,18 @@ public final class ClientScenario {
                 case "reload" -> { holdReload = mc.reloadResourcePacks(); holdBusy = tick + 40; }
                 case "shot" -> { pallShot(tick + 30, a[1]); holdBusy = tick + 35; }
                 case "wait" -> holdBusy = tick + Integer.parseInt(a[1]);
+                case "pan" -> {
+                    // turn the view by a[1] degrees per tick for a[2] ticks, a frame halfway: the pall in motion
+                    float d = Float.parseFloat(a[1]);
+                    int ticks = Integer.parseInt(a[2]);
+                    for (int i = 1; i <= ticks; i++) {
+                        at(tick + i, () -> {
+                            if (Minecraft.getInstance().player != null) Minecraft.getInstance().player.setYRot(Minecraft.getInstance().player.getYRot() + d);
+                        });
+                    }
+                    pallShot(tick + ticks / 2, a[3]);
+                    holdBusy = tick + ticks + 5;
+                }
                 case "cmd" -> { cmd(String.join(" ", java.util.Arrays.copyOfRange(a, 1, a.length))); holdBusy = tick + 10; }
                 case "quality" -> { ua.zentix.incoming.IncomingConfig.CLIENT.nukeDustQuality.set(
                         ua.zentix.incoming.IncomingConfig.Client.DustQuality.valueOf(a[1])); holdBusy = tick + 40; }
