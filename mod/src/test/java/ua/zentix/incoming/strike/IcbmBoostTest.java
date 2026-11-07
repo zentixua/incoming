@@ -82,6 +82,6 @@ class IcbmBoostTest {
         }
         assertTrue(y > 18_000 && y < 26_000, "height at burnout " + y);
         assertTrue(x > 5_000 && x < 11_000, "downrange at burnout " + x);
-        assertTrue(WeaponSpec.NUKE.airframe().range() >= A.burnTicks() * cap, "range ends the boost before burnout");
+        assertTrue(WeaponSpec.NUKE.airframe().range() >= A.burnTicks() * cap, "range must cover the whole burn at the speed cap");
     }
 }

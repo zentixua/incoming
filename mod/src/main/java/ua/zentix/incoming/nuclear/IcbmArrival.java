@@ -14,7 +14,8 @@ public record IcbmArrival(int strikeId, long start, long end, Detonation geometr
      * Visible entry, ticks: a real warhead glows from ~{@link #ONSET} m for ~30 s ({@code ReentryGlow}); at game speed
      * the same 30 s start lower (≈14 km at 25 blocks/tick and the steep game path, not physical). {@link #BOOST}: the
      * warhead never appears while the first stage still burns over the launch site ({@code IcbmEntity}); the default
-     * 90 s flight leaves 29 s, shorter flights less.
+     * 90 s flight leaves 29 s;
+     * flights under 61 s show no fall (the burst comes while the stage still burns).
      */
     public static final int WINDOW = 600, BOOST = ua.zentix.incoming.strike.WeaponSpec.NUKE.ascent().burnTicks();
     /** Luminous entry onset above the burst, m (est.: plasma glow begins in the upper atmosphere, ~80 km). */
