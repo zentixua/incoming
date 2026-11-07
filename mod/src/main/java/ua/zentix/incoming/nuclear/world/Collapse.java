@@ -63,9 +63,15 @@ final class Collapse {
     final RuinWindow w;
     final Blast[] blasts = new Blast[9];
     final int yb, yt, h;
-    /** Lowest original window surface (column support top): all load-bearing blocks at or below it are ground/support. */
+    /**
+     * Lowest original window surface (column support top), below every break: all load-bearing blocks at or below it are
+     * ground/support.
+     */
     final int surface;
     final long[] gone;
+    /** Logs of trunks felled whole ({@link #markFelled()}), null none. */
+    @org.jetbrains.annotations.Nullable
+    private long[] felled;
     /** Drained water. */
     final long[] drained;
 
@@ -106,11 +112,13 @@ final class Collapse {
             }
         }
         // fracture may extend below lowest support (underwater breach, leaves above ravine)
+        int broken = Integer.MAX_VALUE;
         for (int k = 0; k < 9; k++) {
             if (blasts[k] == null || blasts[k].removed().length == 0) continue;
             int c = blasts[k].removed()[0];
-            low = Math.min(low, w.minY + ((c >>> RuinPlan.SECTION_SHIFT) << 4) + ((c >> 8) & 15));
+            broken = Math.min(broken, w.minY + ((c >>> RuinPlan.SECTION_SHIFT) << 4) + ((c >> 8) & 15));
         }
+        low = Math.min(low, broken);
         if (low == Integer.MAX_VALUE) low = high;
         int ground = Integer.MAX_VALUE;
         for (int wz = 0; wz < SIDE; wz++) {
@@ -119,6 +127,10 @@ final class Collapse {
                 if (s != Integer.MIN_VALUE && w.has(wx, wz)) ground = Math.min(ground, s);
             }
         }
+        // never at or above a break: under a roof wider than the window the lowest column top is the roof, and the
+        // stories below it, taken for ground, could not fall (Zearth 250 kt, 07.11.2026: skyscraper walls hung in
+        // one-block bands up to 180 blocks above the rubble)
+        if (broken != Integer.MAX_VALUE) ground = Math.min(ground, broken - 1);
         this.surface = ground == Integer.MAX_VALUE ? w.minY - 1 : ground;
         this.yb = Math.max(w.minY, low - 16);
         this.yt = Math.min(w.maxY - 1, Math.max(high, yb) + 1);
@@ -200,13 +212,15 @@ final class Collapse {
                 breaks.add(idx(wx, y, wz));
             }
         }
+        markFelled();
         boolean logs = false, support = false;
         for (int q = 0; q < breaks.size(); q++) {
             int i = breaks.getInt(q), wx = i % SIDE, wz = (i / SIDE) % SIDE, y = i / (SIDE * SIDE) + yb;
             Blast.Props p = props(wx, y, wz);
             if (p.log()) logs = true;
-            if (support || !p.bearing() || p.log()) continue;
-            // survivors above/beside broken blocks may have lost support
+            // survivors above/beside broken blocks may have lost support (a cut stilt, pillar or branch too: what it
+            // carried, logs included, falls); a felled trunk falls whole (Blast#trunks, RuinPlanner#lay) and needs no pass
+            if (support || !p.bearing() || p.log() && felled(i)) continue;
             if (standing(wx, y + 1, wz) || standing(wx + 1, y, wz) || standing(wx - 1, y, wz) || standing(wx, y, wz + 1) || standing(wx, y, wz - 1)) support = true;
         }
         if (!logs) for (int k = 0; k < 9 && !logs; k++) logs = blasts[k] != null && !blasts[k].trees().isEmpty();
@@ -219,6 +233,22 @@ final class Collapse {
 
     private boolean standing(int wx, int y, int wz) {
         return inside(wx, y, wz) && !isGone(wx, y, wz) && props(wx, y, wz).bearing();
+    }
+
+    private boolean felled(int i) {
+        return felled != null && bit(felled, i);
+    }
+
+    /** Marks the logs of trunks felled whole this round ({@link Blast#trees}): they leave as a lying trunk, not as rubble. */
+    private void markFelled() {
+        for (Blast b : blasts) {
+            if (b == null) continue;
+            for (long[] t : b.trees()) {
+                if (felled == null) felled = new long[gone.length];
+                int wx = BlockPos.getX(t[0]) - w.x0, y = BlockPos.getY(t[0]), wz = BlockPos.getZ(t[0]) - w.z0;
+                for (int k = 0; k < t[1]; k++) if (inside(wx, y + k, wz)) set(felled, idx(wx, y + k, wz));
+            }
+        }
     }
 
     // ---------------------------------------------------------------- support
@@ -879,10 +909,11 @@ final class Collapse {
                         if (p.bearing() && !p.log()) below = y;
                         continue;
                     }
-                    if (p.air() || p.fluid() || p.leaves() || p.log() || !p.rubble()) continue;
+                    if (p.air() || p.fluid() || p.leaves() || p.log() && felled(i) || !p.rubble()) continue;
                     if (p.is(Blast.Props.CONTAINER)) {
                         // chest, barrel, furnace: heavy and whole, falls into the pile at its own column with its
-                        // contents (RuinPlan moves the block entity), so it always lands in its own chunk
+                        // contents (RuinPlan moves the block entity) and rolls off it like the rest (Debris#repose), so it
+                        // always lands in its own chunk
                         if (own) landed.add((long) ((wz - LO) << 4 | (wx - LO)) << 40 | (long) (y - yb) << 16 | paletteOf(landedState(w.get(wx, y, wz))));
                         continue;
                     }

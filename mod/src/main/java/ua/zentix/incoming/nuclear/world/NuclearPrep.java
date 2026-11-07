@@ -311,7 +311,7 @@ public final class NuclearPrep {
         for (ServerLevel other : level.getServer().getAllLevels()) {
             if (!other.hasData(ModAttachments.NUCLEAR_WORLD)) continue;
             height = Math.max(height, other.getHeight());
-            bytes += NuclearWorld.get(other).retainedRuinBytes();
+            bytes += NuclearWorld.get(other).workingRuinBytes();
         }
         return bytes + (reserveWorkers ? RuinWorkers.bufferBytes(height) : RuinWorkers.residentBufferBytes(height));
     }

@@ -49,12 +49,22 @@ public final class FlashGameTests {
 
     private FlashGameTests() {}
 
-    /** Log wall 5×4 facing the explosion (to the west): logs without leaves are not a tree, the wave does not knock them down. */
+    /** Log wall 5×4 facing the explosion (to the west). */
     private static void wall(GameTestHelper h) {
-        for (int dz = -2; dz <= 2; dz++) {
-            for (int y = 0; y < 4; y++) h.setBlock(CENTER.east(WALL_DX).south(dz).above(y), Blocks.OAK_LOG);
+        logWall(h, 2, 4);
+    }
+
+    /**
+     * Log wall {@code 2·half + 1} wide and {@code height} tall facing the explosion (to the west), {@link #DEPTH} logs deep:
+     * logs outside trees are timber, and a mass this deep neither breaks nor topples at 8 psi, so its west face keeps the marks.
+     */
+    static void logWall(GameTestHelper h, int half, int height) {
+        for (int dz = -half; dz <= half; dz++) {
+            for (int y = 0; y < height; y++) for (int dx = 0; dx < DEPTH; dx++) h.setBlock(CENTER.east(WALL_DX + dx).south(dz).above(y), Blocks.OAK_LOG);
         }
     }
+
+    private static final int DEPTH = 4;
 
     /** 15 kt in the air above the middle, 8 psi on the wall: the light there is tens of cal/cm². */
     private static Detonation burst(GameTestHelper h) {
@@ -161,9 +171,7 @@ public final class FlashGameTests {
     @GameTest(template = "range", timeoutTicks = 60, batch = "nuke_flash_shadow", skyAccess = true)
     public static void silhouetteBehindBody(GameTestHelper h) {
         ServerLevel level = h.getLevel();
-        for (int dz = -4; dz <= 4; dz++) {
-            for (int y = 0; y < 5; y++) h.setBlock(CENTER.east(WALL_DX).south(dz).above(y), Blocks.OAK_LOG);
-        }
+        logWall(h, 4, 5);
         Detonation d = burst(h);
         BlockPos standAt = CENTER.east(WALL_DX - 2);
         Vec3 feet = Vec3.atBottomCenterOf(h.absolutePos(standAt)).add(0.5, 0, 0);
@@ -220,9 +228,7 @@ public final class FlashGameTests {
     public static void preparedStrikeMarksOneLayer(GameTestHelper h) {
         ServerLevel level = h.getLevel();
         NuclearGameTests.detonation(h, CENTER, 0, 15, 0.05f); // only backfilling of the layer under the site: blasting - according to schedule
-        for (int dz = -4; dz <= 4; dz++) {
-            for (int y = 0; y < 5; y++) h.setBlock(CENTER.east(WALL_DX).south(dz).above(y), Blocks.OAK_LOG);
-        }
+        logWall(h, 4, 5);
         ArmorStand stand = EntityType.ARMOR_STAND.create(level);
         h.assertTrue(stand != null, "no stand");
         Vec3 feet = Vec3.atBottomCenterOf(h.absolutePos(CENTER.east(WALL_DX - 2))).add(0.5, 0, 0);

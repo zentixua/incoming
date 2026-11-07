@@ -396,4 +396,25 @@ public final class RuinSettleGameTests {
             h.succeed();
         });
     }
+
+    /**
+     * Durable per-chunk marks of a long pass (shadow heightmaps, applied marks) do not use up settlement admission room:
+     * 250 kt over Zearth stalled for good at 30 % when they filled the settlement's half of the plan cap (07.11.2026).
+     * The heap guard bounds them instead.
+     */
+    @GameTest(template = "range", batch = "nuke_settle_marks", timeoutTicks = 20, skyAccess = true)
+    public static void durableMarksLeaveSettlementRoom(GameTestHelper h) {
+        ServerLevel level = h.getLevel();
+        NuclearWorld world = NuclearWorld.get(level);
+        int id = NuclearEvents.get(level).nextId();
+        Detonation d = new Detonation(id, new Vec3(80000, 64, 80000), 64, 7, true, -10000, 0, 0, 20000, 3, 0.03f, false, 1);
+        StrikeGameTests.afterTest(h, () -> world.forgetRuinsForTest(id));
+        RuinContext ctx = world.ruins(level, d, level.getGameTime());
+        long room = world.settleMemoryRoom(level), retained = world.retainedRuinBytes();
+        // ~260 k chunks of shadow heightmaps (Zearth): more than the settlement's half of the cap on their own
+        ctx.padHeightsForTest(260_000);
+        h.assertTrue(world.retainedRuinBytes() - retained > room, "marks not counted as retained (or no room to take)");
+        h.assertTrue(world.settleMemoryRoom(level) == room, "durable marks took settlement room: " + world.settleMemoryRoom(level) + " of " + room);
+        h.succeed();
+    }
 }

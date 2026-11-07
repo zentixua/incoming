@@ -64,8 +64,15 @@ paths:
   6 along the blast axis, ground up to 4: cliffs and mesas stand; `H ≥ 4t`, `H` measured while air is behind: a floor
   behind a wall pier ends the lever arm at that story) topple; rounds: second behind first-round breaches (only
   columns at most 6 wide topple there, ground 4: core, corner), third through all neighbors' breaches (`Blast.remnants`);
-  trees fall as trunks. `Collapse` drops what lost support: 0-1 traversal from supports (all load-bearing blocks at
-  window bottom and no higher than the window's lowest original surface, plus indestructible blocks, strength < 0 or
+  trees (log column with leaves at its top, up to `Blast.MAX_TRUNK` = 40: mega trees) fall only as whole trunks, standing
+  trunks are never cut block by block; other logs (stilts, pillars, log walls, beams) are timber like planks (5 psi):
+  before 07.11.2026 they never broke and log stilts held houses, tall bare trunks stood (Zearth 250 kt; GameTests
+  `houseOnLogStiltsFalls`, `trunksFallOnlyWhole`); any broken log except a felled trunk's (`Collapse.markFelled`) starts
+  the support pass and lands as rubble: a cut stilt or branch carrying only logs left the logs above it hanging
+  (GameTest `timberDoesNotHang`). `Collapse` drops what lost support: 0-1 traversal from supports (all load-bearing blocks at
+  window bottom and no higher than the window's lowest original surface and below every first/second-round break:
+  under a roof wider than the window the lowest column top is the roof, and stories below it taken for ground hung,
+  GameTest `nothingHangsAfterTheWave`), plus indestructible blocks, strength < 0 or
   ≥ 50, `Props.fixed`: they neither break nor fall; upward 0, sideways/down +1, up to 8); a block holds within its span
   (`Blast.Props.span`; ground in structures — unreinforced masonry — only if support did not lengthen; hanging masonry,
   not on a bearing block, previously held by a row between supports on both sides on at least one axis, now on none,
@@ -77,13 +84,20 @@ paths:
   masonry cascades farther than two spans from their chunk (rare) are invisible across chunk boundaries); falls if the
   wave removed support (was within span or became at least 3 farther), falling blocks support nobody (cascade in one
   traversal); structures already without visible support before the strike (beyond 8) cascade from broken blocks,
-  natural ground arches and overhangs stand; leaves without trunks fall; small water bodies (up to 4096 positions and
+  natural ground arches and overhangs stand (no unbounded connectivity pass: a piece reaching a window's outer columns
+  would hold there and fall in the next window, seams along chunk lines, and it cost about one more full traversal);
+  leaves without trunks fall; small water bodies (up to 4096 positions and
   16 wide) with breached bottoms drain; attached blocks (doors, torches, signs) follow their support, liquids beside a
   breach tick; fallen blocks land as rubble of their own material (`Debris`: 0.12 of them, drifted downwind by the
   decaying blast wind on 0.2 m fragments and spread by fall height, resolved exactly within the 8-block ring; farther
   drift is exported and the chunk imports `Debris.importFraction` of its own exports at their landing columns, so no
   cross-chunk record); containers fall straight into the pile with their contents (`RuinPlan.moves` carries the block
-  entity NBT within the chunk; a `SLOW` new state goes through the world); light ignites/burns; all
+  entity NBT within the chunk; a `SLOW` new state goes through the world); landed material rests at the angle of
+  repose (`Debris.repose`: no step over one block to a 4-neighbor in the chunk, it rolls to the lowest lower neighbor),
+  otherwise a chest on every floor at one spot stood as a one-block chest tower (GameTest `stackedChestsLandAsAHeap`);
+  only a pile rolls (material on bare ground stays: terrain slopes would carry it to the chunk edge) and only onto open
+  ground (air, or a plant or thin snow the pile buries; not a standing block, water or the fireball): a pile stops at
+  the first standing block and a container rolled there lost its items (`DebrisTest`); light ignites/burns; all
   randomness comes from coordinate hashes; chunk ruins wait for ready chunks within `RuinPlanner.REACH` = 2),
   `RuinPlan` (delta only: 4 bytes per position, fires; heightmaps, lower sky sources of changed columns and light-check
   positions are calculated in the plan; on replacement, write plan positions and fire directly into sections, install
@@ -266,7 +280,10 @@ paths:
   falls. No fixed eight-ticket throughput ceiling. At most 128 reads and 2048 unconfirmed positions; poll all bounded entries so
   completed reads do not wait behind a large queue of idle ones. Admission and polling use the common nuclear clock,
   after player ruins, preparation and fallout. Preparation must be idle; heap pressure and retained ruin data plus
-  live-worker buffers at half `PLANS_CAP` limit admission (the remainder is for player windows). An idle context is evicted
+  live-worker buffers at half `PLANS_CAP` limit admission (the remainder is for player windows); durable per-chunk
+  marks (`RuinContext.durableBytes`: shadow heightmaps, applied marks, ~1.8 KB a chunk) are left to the heap guard and
+  excluded from every `PLANS_CAP` check (`NuclearWorld.workingRuinBytes`), otherwise a pass over a whole map stops for
+  good and a later strike's preparation starves (250 kt over Zearth at 30 %, GameTest `durableMarksLeaveSettlementRoom`). An idle context is evicted
   normally, allowing a long pass to resume. Count live pool threads, not configured cores: idle threads expire
   after 30 seconds; a fixed 46-thread estimate alone exceeds 256 MiB and would stop a 48-core server forever. `RuinContext.retainedBytes` counts old applied plans as well as snapshots. Empty plans must call
   `RuinContext.finished` too: otherwise unchanged streets/water leave holes in `stood`, pinning all neighboring
