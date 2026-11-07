@@ -280,8 +280,10 @@ paths:
   and shrinks by a quarter under pressure. Like workers, external MSPT excludes mod lanes; the threshold is
   50 minus the common configured work budget, with a 5 ms margin. Available plan memory further limits roots,
   reserving two uncompressed chunk snapshots (at least 1 MiB) per root; already held work drains when the limit
-  falls. No fixed eight-ticket throughput ceiling. At most 128 reads and 2048 unconfirmed positions; poll all bounded entries so
-  completed reads do not wait behind a large queue of idle ones. Admission and polling use the common nuclear clock,
+  falls. No fixed eight-ticket throughput ceiling. At most 128 reads and 2048 unconfirmed positions. Entries are filed by what they wait
+  for (held or reading, waiting for a load slot, waiting for a read) and only those that can move are visited, so
+  completed reads do not wait behind idle ones: visiting all 2048 each tick spent the lane and cut the window to 5–16
+  for "mod budget" while the server thread idled 40–47 % (250 kt over Zearth, `nuke_settle_visits`). Admission and polling use the common nuclear clock,
   after player ruins, preparation and fallout. Preparation must be idle; heap pressure and retained ruin data plus
   live-worker buffers at half `PLANS_CAP` limit admission (the remainder is for player windows); durable per-chunk
   marks (`RuinContext.durableBytes`: shadow heightmaps, applied marks, ~1.8 KB a chunk) are left to the heap guard and
@@ -294,7 +296,7 @@ paths:
   `RuinProgress` saves cursor AND unconfirmed positions: confirm a chunk only after an asynchronous storage read sees
   its scar (reads observe pending vanilla saves). A restart must retry those positions, even when the cursor is ahead.
   Shutdown releases settlement tickets before `StopDrain`; storage reads only return detached headers. No settings.
-  Regressions: `nuke_settle_disk`, `nuke_settle_restart`, `nuke_settle_budget`, `nuke_settle_load`, `nuke_settle_many`; `RuinSettleTest` checks circular order,
+  Regressions: `nuke_settle_disk`, `nuke_settle_restart`, `nuke_settle_budget`, `nuke_settle_visits`, `nuke_settle_load`, `nuke_settle_many`; `RuinSettleTest` checks circular order,
   cursor restoration/migration and growth/backoff of admission.
 - Bodies not in memory when the pulse or the front crossed their place (`LateExposure`): `PulseJob` and `BlastFront` see only
   loaded entities, so on `EntityJoinLevelEvent` a body loaded from disk is queued for what it missed — `NuclearWarhead.expose`

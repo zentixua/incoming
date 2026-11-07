@@ -42,6 +42,12 @@ final class RuinContext {
      * Server-thread writes only, immutable values; missing means no terrain (like unloaded chunk).
      */
     private final java.util.concurrent.ConcurrentHashMap<Long, int[]> heights = new java.util.concurrent.ConcurrentHashMap<>();
+    /**
+     * Chunks in {@link #heights}, server thread only. {@link #captureBand} walks the lane from the epicentre to every
+     * planned chunk, nine chunks a step: checking the boxed concurrent map for each was 0.39 ms of server thread per
+     * settled chunk of a 250 kt pass (Zearth 07.11.2026). Heights are never removed, so the set only grows with them.
+     */
+    private final LongOpenHashSet heightsKnown = new LongOpenHashSet();
     private long appliedBytes;
     private final Long2ObjectOpenHashMap<Applied> applied = new Long2ObjectOpenHashMap<>();
     private final LongOpenHashSet planned = new LongOpenHashSet(), stood = new LongOpenHashSet();
@@ -330,13 +336,13 @@ final class RuinContext {
 
     /** Disk chunk heightmap (server thread): first {@code MOTION_BLOCKING} air, if absent. */
     void putHeights(long chunk, int[] firstAir) {
-        heights.putIfAbsent(key(chunk), firstAir);
+        if (heightsKnown.add(chunk)) heights.putIfAbsent(key(chunk), firstAir);
     }
 
     /** In-memory heightmap (server thread), if absent: ruined chunk uses higher of pre-ruin/live values. */
     private void captureHeights(ServerLevel level, int cx, int cz) {
         long key = ChunkPos.asLong(cx, cz);
-        if (heights.containsKey(key(key))) return;
+        if (heightsKnown.contains(key)) return;
         LevelChunk c = level.getChunkSource().getChunkNow(cx, cz);
         if (c == null) return;
         Applied a = applied.get(key);
@@ -346,6 +352,7 @@ final class RuinContext {
             h[col] = a == null ? now : Math.max(now, a.motion[col]);
         }
         heights.put(key(key), h);
+        heightsKnown.add(key);
     }
 
     /**

@@ -40,7 +40,13 @@ final class RuinSettle {
      */
     private final it.unimi.dsi.fastutil.longs.Long2ObjectLinkedOpenHashMap<Entry> entries = new it.unimi.dsi.fastutil.longs.Long2ObjectLinkedOpenHashMap<>();
     /** Entries holding a ticket and entries with a read in flight, kept with each change instead of a scan per tick. */
-    private int holding, reading;
+    private int holding, reading, visited;
+    /**
+     * Keys of {@link #entries} by what each waits for, each entry in exactly one: holding a ticket or reading a header,
+     * read as final blocks and waiting for a load slot, or waiting for a header read (first, after its ruins, or retry).
+     */
+    private final it.unimi.dsi.fastutil.longs.LongLinkedOpenHashSet active = new it.unimi.dsi.fastutil.longs.LongLinkedOpenHashSet(),
+            ready = new it.unimi.dsi.fastutil.longs.LongLinkedOpenHashSet(), unread = new it.unimi.dsi.fastutil.longs.LongLinkedOpenHashSet();
     private Detonation detonation;
     private RuinProgress.Pass pass;
     private long nextReport, settled, loaded, began, checkAt;
@@ -86,78 +92,54 @@ final class RuinSettle {
             adaptAt = now + 20;
         }
         loadingLimit = admit ? window.limit(room, level.getHeight()) : 0;
-        // A bounded rotating window: a player-held chunk awaiting autosave cannot block all other work.
-        for (int visits = Math.min(PENDING, entries.size()); visits > 0 && !entries.isEmpty() && clock.canStart(); visits--) {
-            long key = entries.firstLongKey();
+        // Only entries that can move are visited: a pass keeps PENDING entries, most waiting for a load slot, and
+        // visiting all of them every tick took 0.75 ms of server thread and spent the lane, so the window was cut for
+        // "mod budget" with the server thread 40–47 % idle (250 kt, Zearth 07.11.2026). Each set rotates, so a short
+        // work window does not starve its tail, and a player-held chunk awaiting autosave cannot block other work.
+        visited = 0;
+        for (int n = active.size(); n > 0 && !active.isEmpty() && clock.canStart(); n--) {
+            long key = active.removeFirstLong();
+            visited++;
             Entry e = entries.get(key);
             long unit = clock.begin();
             try {
-                if (e.held && now - e.heldAt > FarZone.HOLD_LIMIT) {
-                    release(level, e);
-                    e.finalBlocks = false;
-                    e.retryAt = now + RETRY;
-                    Incoming.LOG.warn("Ruin settlement: chunk {} did not finish; releasing and retrying", e.pos);
-                }
-                if (e.held) {
-                    LevelChunk chunk = NuclearTickets.inMemory(level, e.pos.toLong());
-                    if (chunk != null) {
-                        ScarQueue scars = NuclearWorld.get(level).scars();
-                        scars.offer(chunk, detonation);
-                        if (chunk.getExistingData(ModAttachments.CHUNK_SCAR).orElse(0) >= detonation.id()) {
-                            e.applied = true;
-                            release(level, e);
-                        } else if (scars.waitsNeighbours(e.pos.toLong()) && scars.tileHoldsLeft() > 0) {
-                            // A job loaded under another scar's neighbor ticket cannot acquire its own by default.
-                            // Give it the normal bounded handoff, otherwise every settlement slot can wait forever.
-                            scars.holdForTile(level, e.pos.toLong());
-                        }
-                    }
-                }
-                if (e.read != null && e.read.isDone()) {
-                    Header h;
-                    try { h = e.read.join(); }
-                    catch (RuntimeException ex) {
-                        e.read = null;
-                        reading--;
-                        e.retryAt = now + RETRY;
-                        Incoming.LOG.warn("Ruin settlement: chunk {} read failed; retrying", e.pos, ex);
-                        continue;
-                    }
-                    e.read = null;
-                    reading--;
-                    if (!h.finalBlocks || h.scar >= detonation.id()) {
-                        release(level, e);
-                        entries.remove(key);
-                        pass.pending.remove(e.pos.toLong());
-                        progress.setDirty();
-                        if (h.scar >= detonation.id()) settled++;
-                        continue;
-                    }
-                    e.finalBlocks = true;
-                    e.retryAt = now + RETRY;
-                }
-                if (e.finalBlocks && !e.applied && !e.held && admit && holding < loadingLimit) {
-                    StrikeWorld.get(level).areas().hold(level, area(e));
-                    e.held = true;
-                    e.heldAt = now;
-                    holding++;
-                    loaded++;
-                }
-                if (e.read == null && !e.held && (!e.finalBlocks || e.applied) && now >= e.retryAt && reading < READS) {
-                    e.read = read(level, e.pos);
-                    reading++;
-                }
-            } finally {
-                // Rotate even waiting entries, so a short work window does not starve the tail.
-                if (entries.containsKey(key)) entries.getAndMoveToLast(key);
-                clock.end(unit);
+                if (advance(level, key, e, now, progress)) place(key, e);
+            } finally { clock.end(unit); }
+        }
+        while (admit && holding < loadingLimit && !ready.isEmpty() && clock.canStart()) {
+            long key = ready.removeFirstLong();
+            visited++;
+            Entry e = entries.get(key);
+            long unit = clock.begin();
+            try {
+                StrikeWorld.get(level).areas().hold(level, area(e));
+                e.held = true;
+                e.heldAt = now;
+                holding++;
+                loaded++;
+                place(key, e);
+            } finally { clock.end(unit); }
+        }
+        for (int n = unread.size(); n > 0 && reading < READS && clock.canStart(); n--) {
+            long key = unread.removeFirstLong();
+            visited++;
+            Entry e = entries.get(key);
+            if (now < e.retryAt) {
+                unread.add(key);
+                continue;
             }
+            long unit = clock.begin();
+            try {
+                e.read = read(level, e.pos);
+                reading++;
+                place(key, e);
+            } finally { clock.end(unit); }
         }
         while (admit && entries.size() < PENDING && pass.cursor < total() && clock.canStart()) {
             long unit = clock.begin();
             try {
                 ChunkPos pos = new ChunkPos(order[(int) pass.cursor++]);
-                if (pass.pending.add(pos.toLong())) entries.put(pos.toLong(), new Entry(pos.toLong()));
+                if (pass.pending.add(pos.toLong())) add(pos.toLong());
                 progress.setDirty();
             } finally { clock.end(unit); }
         }
@@ -174,6 +156,73 @@ final class RuinSettle {
             report(now, false);
             nextReport = now + 1200;
         }
+    }
+
+    /**
+     * Held or reading entry ({@link #active}): checks the hold and the header read. Returns false when the chunk is
+     * settled and the entry removed.
+     */
+    private boolean advance(ServerLevel level, long key, Entry e, long now, RuinProgress progress) {
+        if (e.held && now - e.heldAt > FarZone.HOLD_LIMIT) {
+            release(level, e);
+            e.finalBlocks = false;
+            e.retryAt = now + RETRY;
+            Incoming.LOG.warn("Ruin settlement: chunk {} did not finish; releasing and retrying", e.pos);
+        }
+        if (e.held) {
+            LevelChunk chunk = NuclearTickets.inMemory(level, e.pos.toLong());
+            if (chunk != null) {
+                ScarQueue scars = NuclearWorld.get(level).scars();
+                scars.offer(chunk, detonation);
+                if (chunk.getExistingData(ModAttachments.CHUNK_SCAR).orElse(0) >= detonation.id()) {
+                    e.applied = true;
+                    release(level, e);
+                } else if (scars.waitsNeighbours(e.pos.toLong()) && scars.tileHoldsLeft() > 0) {
+                    // A job loaded under another scar's neighbor ticket cannot acquire its own by default.
+                    // Give it the normal bounded handoff, otherwise every settlement slot can wait forever.
+                    scars.holdForTile(level, e.pos.toLong());
+                }
+            }
+        }
+        if (e.read != null && e.read.isDone()) {
+            Header h;
+            try { h = e.read.join(); }
+            catch (RuntimeException ex) {
+                e.read = null;
+                reading--;
+                e.retryAt = now + RETRY;
+                Incoming.LOG.warn("Ruin settlement: chunk {} read failed; retrying", e.pos, ex);
+                return true;
+            }
+            e.read = null;
+            reading--;
+            if (!h.finalBlocks || h.scar >= detonation.id()) {
+                release(level, e);
+                entries.remove(key);
+                pass.pending.remove(key);
+                progress.setDirty();
+                if (h.scar >= detonation.id()) settled++;
+                return false;
+            }
+            e.finalBlocks = true;
+            e.retryAt = now + RETRY;
+        }
+        return true;
+    }
+
+    private void add(long key) {
+        Entry e = new Entry(key);
+        if (entries.put(key, e) != null) active.remove(key);
+        ready.remove(key);
+        unread.remove(key);
+        place(key, e);
+    }
+
+    /** Files an entry under what it waits for: its ticket or read, a load slot, or a header read. */
+    private void place(long key, Entry e) {
+        if (e.held || e.read != null) active.add(key);
+        else if (e.finalBlocks && !e.applied) ready.add(key);
+        else unread.add(key);
     }
 
     private void select(ServerLevel level, NuclearEvents events, RuinProgress progress) {
@@ -196,7 +245,7 @@ final class RuinSettle {
             CompletableFuture<Void> written = level.getChunkSource().chunkMap.chunkScanner() instanceof net.minecraft.world.level.chunk.storage.IOWorker io
                     ? io.synchronize(false) : CompletableFuture.completedFuture(null);
             layout = written.thenApplyAsync(v -> layout(d, on), net.minecraft.Util.backgroundExecutor());
-            for (long key : p.pending) entries.put(key, new Entry(key));
+            for (long key : p.pending) add(key);
             began = level.getGameTime();
             nextReport = began + 1200;
             settled = loaded = 0;
@@ -281,6 +330,9 @@ final class RuinSettle {
     void clear(ServerLevel level) {
         for (Entry e : entries.values()) release(level, e);
         entries.clear();
+        active.clear();
+        ready.clear();
+        unread.clear();
         holding = reading = 0;
         detonation = null;
         pass = null;
@@ -292,6 +344,10 @@ final class RuinSettle {
     }
 
     int held() { return holding; }
+    /** For tests: entries visited last call, and entries read as final blocks waiting for a load slot. */
+    int visited() { return visited; }
+    int waiting() { return ready.size(); }
+    int loadingLimit() { return loadingLimit; }
     int reads() { return reading; }
 
     private void report(long now, boolean done) {
