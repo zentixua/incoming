@@ -76,10 +76,11 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   `MushroomGlslTest`; presentation): camera exposed for fire, visible surface (cap-edge temperature) with brightness L
   in noon whites on curve K·L^β (K 0.233, β 0.15, same day/night); dim glow remains in frame measure with eye adaptation
   as before. Reference is surface, not core (core reference dimmed the cap at 7–10 s). Curve only while sphere is a
-  sphere: ring share (`mushFilmShare` ↔ `NukeExposure.filmShare`, 0.15 → 0.45; ~5 → 7 s for 15 kt), held while the surface is still
-  brighter than 1–25 noon whites (`mushFilmShareLit`: rollup ∝ Y^0.2 comes before cooling ∝ Y^0.44 above ~50 kt; a 250 kt cap
-  re-blew the frame at 9–13 s; 0.1–15 kt unchanged, `NukeExposureTest.bigCapsDoNotBlowTheFrameAgainAtRollup`) transitions to the old
-  path (`pallShown`: emission with pall light, overbrightness to coverage in one hue); blend finished images, not
+  sphere: ring share (`mushFilmShare` ↔ `NukeExposure.filmShare`, 0.15 → 0.45; ~5 → 7 s for 15 kt) transitions to the old
+  path, but only once the surface through air is dimmer than 1–25 noon whites (`mushFilmShareLit` ↔ `filmShare(roll, lit)`:
+  rollup ∝ Y^0.2 comes before cooling ∝ Y^0.44 above ~50 kt, and a 250 kt cap re-blew the frame at 9–13 s; 0.1–15 kt
+  unchanged, `NukeExposureTest.bigCapsDoNotBlowTheFrameAgainAtRollup`; big caps at night keep the film curve longer). The old
+  path is `pallShown` (emission with pall light, overbrightness to coverage in one hue); blend finished images, not
   emission (even a small share through the old path already overexposes a pixel, causing a jump). Per-channel curves
   whitened the rolled cap's orange interior at night and dimmed it through haze (review #441);
   `NukeExposureTest.rolledCapIsComposedAsBeforeThroughHaze` checks cap pixels at 7 and 10 s, day/night, through haze and

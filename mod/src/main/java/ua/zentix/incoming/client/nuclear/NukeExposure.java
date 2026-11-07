@@ -73,7 +73,8 @@ public final class NukeExposure {
     /**
      * Visible-surface luminance through the air (white wall at noon = 1, without eye adaptation) between which the camera
      * hands the cap from fire exposure to the previous path ({@link #filmShare(double, double)}): at 1 white the two
-     * exposures nearly agree ({@link #gain} ≈ 0.4 by day), so the handoff cannot make the frame brighter. Upper end chosen
+     * exposures nearly agree by day ({@link #gain} ≈ 0.4), so the handoff cannot make the day frame brighter; at night
+     * the eye-adapted old path stays far brighter, as for 15 kt, and the handoff is no worse than there. Upper end chosen
      * so that 0.1–15 kt keep the ring-share handoff exactly ({@code NukeExposureTest}); presentation.
      */
     public static final double LIT_FROM = 1, LIT_TO = 25;
