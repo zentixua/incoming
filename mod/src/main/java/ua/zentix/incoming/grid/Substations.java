@@ -6,7 +6,10 @@ import net.minecraft.world.level.block.state.BlockState;
 import ua.zentix.incoming.nuclear.world.NuclearTickets;
 import ua.zentix.incoming.util.Terrain;
 
-/** Substation blocks follow the grid: knocked out — {@code powered=false} until power restoration starts in their area. */
+/**
+ * Substation blocks follow the grid: knocked out — {@code powered=false} until power restoration starts in their area;
+ * standing where a nuclear blast destroyed the grid ({@link PowerGrid#destroyed}) — for as long as that zone has no power.
+ */
 final class Substations {
     private Substations() {}
 
@@ -18,7 +21,7 @@ final class Substations {
             if (!Terrain.ready(level, pos) || !NuclearTickets.aroundLoaded(level, pos)) continue;
             BlockState state = level.getBlockState(pos);
             if (!(state.getBlock() instanceof SubstationBlock)) continue;
-            boolean powered = grid.downOutage(node.id(), now).isEmpty();
+            boolean powered = grid.downOutage(node.id(), now).isEmpty() && !grid.destroyed(pos.getX() >> 4, pos.getZ() >> 4, now);
             if (state.getValue(SubstationBlock.POWERED) != powered) {
                 level.setBlock(pos, state.setValue(SubstationBlock.POWERED, powered), ChunkLights.FLAGS);
             }
