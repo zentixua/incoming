@@ -1645,7 +1645,13 @@ public final class NuclearGameTests {
 
         scarAll(h, detonation(h, CENTER, 0, 15, 0.025f), new ColumnScar.Budget(false)); // no fires: air in place of blocks
 
-        for (BlockPos p : List.of(bell, sign)) h.assertTrue(h.getBlockState(p).isAir(), "not destroyed: " + h.getBlockState(p));
+        // gone, though rubble may land in their place: rubble lands by world-coordinate hashes (Collapse), and the test's
+        // absolute position depends on which batches ran before it
+        for (BlockPos p : List.of(bell, sign)) {
+            BlockState left = h.getBlockState(p);
+            h.assertTrue(!left.is(Blocks.BELL) && !left.is(Blocks.OAK_SIGN) && !left.hasBlockEntity() && h.getLevel().getBlockEntity(h.absolutePos(p)) == null,
+                    "not destroyed: " + left);
+        }
         // containers vaporize in the fireball, otherwise stay in the rubble with their contents; an unopened loot table
         // stays unexpanded
         int kept = 0;

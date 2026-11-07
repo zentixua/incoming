@@ -137,3 +137,9 @@ paths:
 - `nuke_send_hold` fills ruin-worker admission until the first post-wave send request exercises the gate, then
   releases workers and checks both the scar and actual glass removal. Cleanup releases the latch on failure too;
   observing an incidental worker delay after the next GameTest callback is not a deterministic gate prerequisite.
+- Blast-wave bodies (`BlastBody.hit`) lose health by the injury law's per-body fate (`BlastBody.fate`, from the
+  body's random UUID and the wave id): a hit body may lose nothing. To check that a wave reached a body, record its
+  throw (`push`) too, not damage alone (`craftBlocksGoRightAfterDamage`). Ruin rubble lands by world-coordinate hashes
+  (`Collapse`): a destroyed block's spot may hold rubble, so check that the block is gone, not that the spot is air.
+- Background ruin workers run in wall time (0.5–1.3 s for a 1 kt chunk locally, 50–510 unthrottled ticks): a test that
+  waits for them runs at game speed (`chunkWithheldUntilRuins`), or CI's unthrottled ticks spend its timeout first.
