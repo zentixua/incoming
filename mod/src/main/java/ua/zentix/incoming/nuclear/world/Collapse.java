@@ -61,7 +61,10 @@ final class Collapse {
     final RuinWindow w;
     final Blast[] blasts = new Blast[9];
     final int yb, yt, h;
-    /** Lowest original window surface (column support top): all load-bearing blocks at or below it are ground/support. */
+    /**
+     * Lowest original window surface (column support top), below every break: all load-bearing blocks at or below it are
+     * ground/support.
+     */
     final int surface;
     final long[] gone;
     /** Logs of trunks felled whole ({@link #markFelled()}), null none. */
@@ -107,27 +110,28 @@ final class Collapse {
             }
         }
         // fracture may extend below lowest support (underwater breach, leaves above ravine)
+        int broken = Integer.MAX_VALUE;
         for (int k = 0; k < 9; k++) {
             if (blasts[k] == null || blasts[k].removed().length == 0) continue;
             int c = blasts[k].removed()[0];
-            low = Math.min(low, w.minY + ((c >>> RuinPlan.SECTION_SHIFT) << 4) + ((c >> 8) & 15));
+            broken = Math.min(broken, w.minY + ((c >>> RuinPlan.SECTION_SHIFT) << 4) + ((c >> 8) & 15));
         }
+        low = Math.min(low, broken);
         if (low == Integer.MAX_VALUE) low = high;
-        this.yb = Math.max(w.minY, low - 16);
-        this.yt = Math.min(w.maxY - 1, Math.max(high, yb) + 1);
-        // ground: the top of the unbroken load-bearing run from the window bottom, not the column top (a tower filling
-        // the window made its roof the ground, and nothing under the roof could fall)
         int ground = Integer.MAX_VALUE;
         for (int wz = 0; wz < SIDE; wz++) {
             for (int wx = 0; wx < SIDE; wx++) {
                 int s = w.solid(wx, wz);
-                if (s == Integer.MIN_VALUE || !w.has(wx, wz)) continue;
-                int y = yb;
-                while (y <= Math.min(s, ground) && w.props(wx, y, wz).bearing()) y++;
-                ground = Math.min(ground, y - 1);
+                if (s != Integer.MIN_VALUE && w.has(wx, wz)) ground = Math.min(ground, s);
             }
         }
+        // never at or above a break: under a roof wider than the window the lowest column top is the roof, and the
+        // stories below it, taken for ground, could not fall (Zearth 250 kt, 07.11.2026: skyscraper walls hung in
+        // one-block bands up to 180 blocks above the rubble)
+        if (broken != Integer.MAX_VALUE) ground = Math.min(ground, broken - 1);
         this.surface = ground == Integer.MAX_VALUE ? w.minY - 1 : ground;
+        this.yb = Math.max(w.minY, low - 16);
+        this.yt = Math.min(w.maxY - 1, Math.max(high, yb) + 1);
         this.h = yt - yb + 1;
         this.gone = new long[(SIDE * SIDE * h + 63) >> 6];
         this.drained = new long[gone.length];
@@ -316,71 +320,7 @@ final class Collapse {
                 queue.add(m);
             }
         }
-        detached(down, fall, fixed);
         for (int i = 0; i < fall.size(); i++) set(gone, fall.getInt(i));
-    }
-
-    /**
-     * Whatever the strike cut off from every support falls, structural ground (terracotta, sandstone, stone) too: a
-     * floor slab more than {@link #C} from its walls, or a wall band whose stories below broke, was held only through
-     * the structure and now hangs in the air with nothing under it (Zearth 250 kt, 07.11.2026: terracotta and
-     * sandstone of skyscrapers floated in one-block bands up to 180 blocks above the rubble). The span rules
-     * ({@link #falls}, {@link #unspanned}) cannot see it: they look only {@link #C} far. Unlimited connectivity through
-     * standing load-bearing blocks from the supports of {@link #distances} and from the window's outer columns (what
-     * lies beyond is unknown, so it holds); what was connected before the strike and is not now falls. A sky island
-     * or other structure already detached before the strike stands.
-     */
-    private void detached(long[] down, IntArrayList fall, long[] fixed) {
-        long[] now = connected(true, down, fixed), was = null;
-        for (int y = yb; y <= yt; y++) {
-            for (int wz = LO - C; wz < HI + C; wz++) {
-                for (int wx = LO - C; wx < HI + C; wx++) {
-                    int i = idx(wx, y, wz);
-                    if (bit(now, i) || bit(gone, i) || bit(down, i) || !bit(bear, i)) continue;
-                    // before-strike connectivity only when something is cut off now (rare after the span rules)
-                    if (was == null) was = connected(false, null, fixed);
-                    if (!bit(was, i)) continue;
-                    set(down, i);
-                    fall.add(i);
-                }
-            }
-        }
-    }
-
-    /** Load-bearing cells connected (6-neighbors) to a support or to the window's outer columns, before or after the strike. */
-    private long[] connected(boolean afterBlast, @org.jetbrains.annotations.Nullable long[] down, long[] fixed) {
-        long[] out = new long[gone.length];
-        IntArrayList queue = new IntArrayList();
-        for (int y = yb; y <= yt; y++) {
-            boolean ground = y == yb || y <= surface;
-            for (int wz = 0; wz < SIDE; wz++) {
-                for (int wx = 0; wx < SIDE; wx++) {
-                    int i = idx(wx, y, wz);
-                    if (!ground && !bit(fixed, i) && wx != 0 && wx != SIDE - 1 && wz != 0 && wz != SIDE - 1) continue;
-                    if (!standing(i, wx, y, wz, afterBlast, down)) continue;
-                    set(out, i);
-                    // ground below the top ground layer reaches only other ground: marked, not traversed (as in distances)
-                    if (ground && y < Math.max(yb, surface) && !bit(fixed, i) && wx != 0 && wx != SIDE - 1 && wz != 0 && wz != SIDE - 1) continue;
-                    queue.add(i);
-                }
-            }
-        }
-        for (int q = 0; q < queue.size(); q++) {
-            int i = queue.getInt(q), wx = i % SIDE, wz = (i / SIDE) % SIDE, y = i / (SIDE * SIDE) + yb;
-            for (Direction dir : Direction.values()) {
-                int nx = wx + dir.getStepX(), ny = y + dir.getStepY(), nz = wz + dir.getStepZ();
-                if (!inside(nx, ny, nz)) continue;
-                int m = idx(nx, ny, nz);
-                if (bit(out, m) || !standing(m, nx, ny, nz, afterBlast, down)) continue;
-                set(out, m);
-                queue.add(m);
-            }
-        }
-        return out;
-    }
-
-    private boolean standing(int i, int wx, int y, int wz, boolean afterBlast, @org.jetbrains.annotations.Nullable long[] down) {
-        return bearing(i, wx, y, wz, afterBlast) && (down == null || !bit(down, i));
     }
 
     /** Non-ground load-bearing block unsupported within {@link #C} before/after strike, not yet falling. */

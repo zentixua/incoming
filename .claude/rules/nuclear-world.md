@@ -68,9 +68,9 @@ paths:
   `houseOnLogStiltsFalls`, `trunksFallOnlyWhole`); any broken log except a felled trunk's (`Collapse.markFelled`) starts
   the support pass and lands as rubble: a cut stilt or branch carrying only logs left the logs above it hanging
   (GameTest `timberDoesNotHang`). `Collapse` drops what lost support: 0-1 traversal from supports (all load-bearing blocks at
-  window bottom and no higher than the window's lowest original surface (the top of each column's unbroken
-  load-bearing run from the window bottom, not its top: a tower filling the window made its roof the ground, GameTest
-  `nothingHangsAfterTheWave`), plus indestructible blocks, strength < 0 or
+  window bottom and no higher than the window's lowest original surface and below every first/second-round break:
+  under a roof wider than the window the lowest column top is the roof, and stories below it taken for ground hung,
+  GameTest `nothingHangsAfterTheWave`), plus indestructible blocks, strength < 0 or
   ≥ 50, `Props.fixed`: they neither break nor fall; upward 0, sideways/down +1, up to 8); a block holds within its span
   (`Blast.Props.span`; ground in structures — unreinforced masonry — only if support did not lengthen; hanging masonry,
   not on a bearing block, previously held by a row between supports on both sides on at least one axis, now on none,
@@ -82,9 +82,9 @@ paths:
   masonry cascades farther than two spans from their chunk (rare) are invisible across chunk boundaries); falls if the
   wave removed support (was within span or became at least 3 farther), falling blocks support nobody (cascade in one
   traversal); structures already without visible support before the strike (beyond 8) cascade from broken blocks,
-  natural ground arches and overhangs stand; whatever the strike cut off from every support and the window's outer
-  columns falls, structural ground too, at any distance (`Collapse.detached`: skyscraper floor slabs and wall bands
-  more than 8 from support hung); what was detached before the strike (sky islands) stands; leaves without trunks fall; small water bodies (up to 4096 positions and
+  natural ground arches and overhangs stand (no unbounded connectivity pass: a piece reaching a window's outer columns
+  would hold there and fall in the next window, seams along chunk lines, and it cost about one more full traversal);
+  leaves without trunks fall; small water bodies (up to 4096 positions and
   16 wide) with breached bottoms drain; attached blocks (doors, torches, signs) follow their support, liquids beside a
   breach tick; fallen blocks land as rubble of their own material (`Debris`: 0.12 of them, drifted downwind by the
   decaying blast wind on 0.2 m fragments and spread by fall height, resolved exactly within the 8-block ring; farther
