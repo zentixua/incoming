@@ -92,6 +92,7 @@ public final class Incoming {
         NeoForge.EVENT_BUS.addListener(ua.zentix.incoming.warhead.SurfaceDamage::onEntityJoin);
         NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, ua.zentix.incoming.warhead.SurfaceDamage::onPlace);
         NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, ua.zentix.incoming.warhead.SurfaceDamage::onBreak);
+        NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, ua.zentix.incoming.nuclear.world.RuinPlan::onBreak);
         NeoForge.EVENT_BUS.addListener(Sightings::onLevelTick);
         // After StrikeWorld: outside-world projectiles have moved this tick; the interceptor follows their new positions.
         NeoForge.EVENT_BUS.addListener(DefenseWorld::onLevelTick);

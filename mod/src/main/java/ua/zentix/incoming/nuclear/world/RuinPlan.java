@@ -593,8 +593,9 @@ public final class RuinPlan {
 
     private boolean current(LevelChunk chunk, @Nullable RuinPlan flash, boolean marked) {
         LevelChunkSection[] now = chunk.getSections();
-        // fire only where this detonation's flash reached the chunk: before it, a block a player removed changes the plan
-        boolean lit = flash != null || marked;
+        // fire only where this detonation's flash reached the chunk and no player broke a block: a block a player removed
+        // changes the plan
+        boolean lit = (flash != null || marked) && !broken(chunk);
         int k = 0;
         while (k < cells.length) {
             int i = section(cells[k]);
@@ -626,7 +627,7 @@ public final class RuinPlan {
             BlockState live = now[i].getBlockState(c & 15, (c >> 8) & 15, (c >> 4) & 15);
             if (flash != null) live = flash.beforeFlash(c & KEY_MASK, live);
             else if (marked && fire(live)) live = Blocks.AIR.defaultBlockState();
-            if (flash != null || marked) live = unburnt(live, olds[k]);
+            if ((flash != null || marked) && !broken(chunk)) live = unburnt(live, olds[k]);
             if (normal(live) != normal(olds[k])) diff.merge(olds[k].getBlock().getDescriptionId() + "→" + live.getBlock().getDescriptionId(), 1, Integer::sum);
         }
         return diff.isEmpty() ? null : diff.toString();
@@ -642,6 +643,17 @@ public final class RuinPlan {
         if (live == old) return live;
         if (fire(live) ? old.isAir() || flammable(old) : live.isAir() && flammable(old)) return old;
         return live;
+    }
+
+    private static boolean broken(LevelChunk chunk) {
+        return chunk.getExistingData(ua.zentix.incoming.registry.ModAttachments.PLAYER_BROKE).orElse(false);
+    }
+
+    /** A player broke a block: in that chunk a removed flammable block no longer passes for burned out ({@link #unburnt}). */
+    public static void onBreak(net.neoforged.neoforge.event.level.BlockEvent.BreakEvent e) {
+        if (!e.isCanceled() && e.getLevel() instanceof net.minecraft.server.level.ServerLevel level) {
+            level.getChunkAt(e.getPos()).setData(ua.zentix.incoming.registry.ModAttachments.PLAYER_BROKE, true);
+        }
     }
 
     private static boolean flammable(BlockState s) {

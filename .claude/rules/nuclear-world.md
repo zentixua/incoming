@@ -25,8 +25,8 @@ paths:
   thread from the chunk as it is (`staleBackgroundPlanRebuiltOnServer`). Changes the world makes by itself between plan
   and wave must not stale plans, or a whole visible city re-plans at once (1 Mt: ruins 2–7 s late): `RuinPlan.normal`
   ignores daylight detector power, `RuinPlan.unburnt` accepts flash fire and burned flammable cells only in chunks the
-  flash layer reached, so a block a player removes before the flash still stales the plan (`PlanCurrentTest`,
-  `minedPlankMakesPlanStaleBeforeTheFlash`);
+  flash layer reached and no player broke a block in (`PLAYER_BROKE`), so a block a player mines still stales the plan
+  (`PlanCurrentTest`, `minedPlankMakesPlanStaleBeforeTheFlash`);
   `-Dincoming.nukeDiag=true` logs the changed blocks of each stale plan (“DIAG stale”); trunks falling into a neighboring chunk wait
   for its ruins; loads no neighbors: finished plans need none (except `RuinPlan.neighbourRadius`: world-path positions
   within 2 blocks of the edge or a nearby Sable craft need a radius-1 ticket; non-vanilla block entities through the

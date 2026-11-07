@@ -1225,8 +1225,8 @@ public final class NuclearGameTests {
     }
 
     /**
-     * A plank a player removed after the plan makes it stale before the flash reached the chunk; after it, a burned-out
-     * flammable block still matches the plan (flash fires, {@code RuinPlan.unburnt}).
+     * A plank a player removed after the plan makes it stale, before the flash reached the chunk and after it; a plank
+     * that burned out after the flash still matches the plan (flash fires, {@code RuinPlan.unburnt}).
      */
     @GameTest(template = "range", timeoutTicks = 40, batch = "nuke_stale_plan", skyAccess = true)
     public static void minedPlankMakesPlanStaleBeforeTheFlash(GameTestHelper h) {
@@ -1244,6 +1244,16 @@ public final class NuclearGameTests {
         h.setBlock(plank, Blocks.AIR);
         chunk.setData(ua.zentix.incoming.registry.ModAttachments.FLASH_LAYER, d.id());
         h.assertTrue(again.apply(level, chunk, d, budget), "a plank burned out after the flash made the plan stale");
+        // after the flash too, a plank a player mined is not taken for burned out
+        h.setBlock(plank, Blocks.OAK_PLANKS);
+        RuinPlan third = RuinPlanner.plan(level, d, chunk);
+        net.minecraft.server.level.ServerPlayer player = net.neoforged.neoforge.common.util.FakePlayerFactory.getMinecraft(level);
+        // what ServerPlayerGameMode.destroyBlock posts before it removes the block
+        h.assertFalse(net.neoforged.neoforge.common.NeoForge.EVENT_BUS.post(new net.neoforged.neoforge.event.level.BlockEvent.BreakEvent(level,
+                h.absolutePos(plank), h.getBlockState(plank), player)).isCanceled(), "the break was canceled");
+        h.setBlock(plank, Blocks.AIR);
+        chunk.setData(ua.zentix.incoming.registry.ModAttachments.FLASH_LAYER, d.id());
+        h.assertFalse(third.apply(level, chunk, d, budget), "a plank a player mined after the flash was taken for burned out");
         h.succeed();
     }
 
