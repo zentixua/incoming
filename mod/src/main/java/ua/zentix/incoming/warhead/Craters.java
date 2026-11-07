@@ -36,6 +36,8 @@ import java.util.function.BooleanSupplier;
  * {@link FuelFires}.
  */
 final class Craters {
+    /** {@code Direction.values()} copies its array on every call; loops over neighbours read this one. */
+    private static final net.minecraft.core.Direction[] DIRECTIONS = net.minecraft.core.Direction.values();
     /**
      * Maximum cells traversed by fuel fireball: Tomahawk flat-ground cells above {@link PulseIgnition#FLOOR}
      * under traversal ceiling ({@link Ignition#ceiling}) ~7 thousand (47 m circle), more in forest/under roof.
@@ -211,7 +213,7 @@ final class Craters {
                 cells++;
                 done++;
                 double q = pulse.get(p.asLong());
-                for (Direction dir : Direction.values()) {
+                for (Direction dir : DIRECTIONS) {
                     n.setWithOffset(p, dir);
                     if (!Terrain.ready(level, n)) continue;
                     BlockState s = level.getBlockState(n);

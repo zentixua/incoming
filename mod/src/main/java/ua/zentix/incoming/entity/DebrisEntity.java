@@ -38,6 +38,8 @@ import ua.zentix.incoming.registry.ModEntities;
  * chips scatter. Hot debris leaves a fire/smoke trail and may ignite its landing site.
  */
 public class DebrisEntity extends Entity {
+    /** {@code Direction.values()} copies its array on every call; loops over neighbours read this one. */
+    private static final net.minecraft.core.Direction[] DIRECTIONS = net.minecraft.core.Direction.values();
     private static final EntityDataAccessor<BlockState> DATA_BLOCK = SynchedEntityData.defineId(DebrisEntity.class, EntityDataSerializers.BLOCK_STATE);
     private static final EntityDataAccessor<Boolean> DATA_HOT = SynchedEntityData.defineId(DebrisEntity.class, EntityDataSerializers.BOOLEAN);
     private static final EntityDataAccessor<Boolean> DATA_CHIP = SynchedEntityData.defineId(DebrisEntity.class, EntityDataSerializers.BOOLEAN);
@@ -175,7 +177,7 @@ public class DebrisEntity extends Entity {
 
     /** Fuel nearby: fire here will keep burning rather than go out by itself. */
     private static boolean touchesFuel(ServerLevel level, BlockPos pos) {
-        for (Direction d : Direction.values()) {
+        for (Direction d : DIRECTIONS) {
             BlockPos n = pos.relative(d);
             if (level.getBlockState(n).isFlammable(level, n, d.getOpposite())) return true;
         }
