@@ -767,6 +767,7 @@ public final class PallPass {
         r.safeGetUniform("PallFrame").set(0f, 0f, factor, REPROJECT_MAX);
         // a ray pixel takes its new ray with the history weight of n² ordinary frames (0.9 each): the same response time
         r.safeGetUniform("PallInterleave").set(n, ox, oy, (float) Math.pow(HISTORY, n * n));
+        r.safeGetUniform("PallCut").set((float) Integer.getInteger("incoming.pallCut", 0));
         SmokePass.bind(r, f.smoke);
         quad(r, false);
         latest = next - 1;

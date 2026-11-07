@@ -40,6 +40,9 @@ uniform vec4 PallReproject;
 uniform vec4 PallFrame;
 // x: interleave n; yz: this frame's traced pixel within each block; w: history weight at a traced pixel
 uniform vec4 PallInterleave;
+// PROFILING ONLY: term switches (bits 2^25 neighbourhood, 2^26 mushroom/smoke reprojection distance, 2^27 slope, 2^28 history)
+uniform float PallCut;
+bool cut(int bit) { return (int(PallCut + 0.5) & bit) != 0; }
 
 out vec4 fragColor;
 
@@ -60,12 +63,15 @@ void main() {
     // pallAhead; a ray pixel always includes itself); no valid neighbor there means all valid neighbors (as without an
     // edge: current ray invalid, history exists). The neighbor at the same place nearest in world distance fills a pixel
     // without history
-    vec2 slope = pallSlope(Sampler2, full, fullSize, depth);
+    vec2 slope = vec2(0.0);
+    if (!cut(134217728)) slope = pallSlope(Sampler2, full, fullSize, depth);
+    int reach = 1;
+    if (cut(33554432)) reach = 0;
     vec4 lo = vec4(1e9), hi = vec4(-1e9), loAll = vec4(1e9), hiAll = vec4(-1e9);
     vec4 fill = vec4(0.0, 0.0, 0.0, 1.0);
     float fillAlike = -1.0;
-    for (int y = -1; y <= 1; y++) {
-        for (int x = -1; x <= 1; x++) {
+    for (int y = -reach; y <= reach; y++) {
+        for (int x = -reach; x <= reach; x++) {
             ivec2 c = clamp(own + ivec2(x, y), ivec2(0), cells - 1);
             vec4 v = texelFetch(Sampler0, c, 0);
             if (!pallValid(v)) continue;
@@ -99,14 +105,14 @@ void main() {
     vec3 dir = normalize(farPoint.xyz / farPoint.w);
     float scene = depth / max(dot(dir, PallForward), 1e-3);
     float t = min(scene, PallFrame.w), near = 1e9;
-    for (int k = 0; k < MUSHROOMS; k++) {
+    for (int k = 0; k < MUSHROOMS && !cut(67108864); k++) {
         if (!mushOn(Sampler3, k)) break;
         vec2 sp = mushSpan(mushLoad(Sampler3, k), dir);
         sp.y = min(sp.y, scene);
         if (sp.y > sp.x) near = min(near, 0.5 * (sp.x + sp.y));
     }
     // explosion smoke on ray: likewise its bounds midpoint (cloud hundreds of blocks away against sky)
-    if (smokeOn()) {
+    if (smokeOn() && !cut(67108864)) {
         vec2 ss = pallBox(dir, SmokeMin, SmokeMax);
         ss.y = min(ss.y, scene);
         if (ss.y > ss.x) near = min(near, 0.5 * (ss.x + ss.y));
@@ -120,7 +126,8 @@ void main() {
     // history uses same ray lattice (pallLattice), otherwise even a still view samples between pixels and
     // blurs history with neighbors each frame
     vec2 lattice = vec2(pallLattice(uv.x * float(fullSize.x), PallFrame.z), pallLattice(uv.y * float(fullSize.y), PallFrame.z));
-    vec4 past = seen ? texture(Sampler1, (lattice + 0.5) / vec2(textureSize(Sampler1, 0))) : vec4(0.0);
+    vec4 past = vec4(0.0);
+    if (seen && !cut(268435456)) past = texture(Sampler1, (lattice + 0.5) / vec2(textureSize(Sampler1, 0)));
     bool pastOk = seen && pallValid(past) && all(lessThanEqual(lo, hi));
     if (!curOk) {
         // between rays (or an invalid ray): history clamped to the rays around it; none — the nearest such ray
