@@ -480,11 +480,17 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
 
 - ICBM terminal arrival (`IcbmArrival`, `IcbmApproaches`, `IcbmArrivalRenderer`) uses the existing NUKE airframe's
   FlightScale speed (game value is not physical). Once ready ground is known during the final window, its exact
-  geometry is persisted in `ScheduledStrike.arrival` and used by detonation. The window is at most 12 seconds,
-  after nine seconds reserved for boost; no new flight setting. An unready target has no speculative head.
+  geometry is persisted in `ScheduledStrike.arrival` and used by detonation. The window is at most 30 seconds
+  (`IcbmArrival.WINDOW`; at real speed no higher than the luminous onset `ONSET`, 80 km), after nine seconds reserved
+  for boost; no new flight setting. An unready target has no speculative head.
   `NukeApproach` snapshots carry only active terminal paths and the server epoch; one tick of interpolation,
   no countdown extrapolation. A stalled server pauses upstream like an entity, never at the burst endpoint.
-  `NukeDetonation.strikeId` consumes exactly its own head; the 0.2-second emitted wake survives warning removal.
+  `NukeDetonation.strikeId` consumes exactly its own head; the emitted wake (at most `IcbmArrival.WAKE`) survives
+  warning removal. Look: `nuclear/model/ReentryGlow` (Allen–Eggers speed at the head's real height, drag power ×
+  luminous efficacy: magnitude −11…−14 from 5–10 km, `ReentryGlowTest`); head through `FarSprites.light` (core, glare,
+  veil, eye adaptation), world light through `HeatPass.Frame.light` (`IcbmArrivalRenderer.heat`); wake strip glows for
+  the real quench time ∝ 1/ρ laid along the game path, drawn until it fades below `FAINT` on screen (a fixed three
+  e-folds ended in a hard white cut at night). The previous 1.5 m spot was one pixel at 2 km: invisible by day.
   Legacy detonation packets retain location matching. Clear/dimension/replay reset arrival state.
   Arrival glows/ribbons use positive source-sized softness: zero skips the shared scene-depth sample in the
   full-resolution pass and allowed a halo over nearby Iris masonry (`arrival 1`, house 50, camera 11/2/0/800).

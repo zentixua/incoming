@@ -207,13 +207,14 @@ public final class NuclearStrikes {
             // detonation position held from launch (and after world load: tickets are not saved): ground height and crater soil
             // must be known without stalling the server
             holdGround(level, s, true);
-            long start = IcbmArrival.start(s.launchTime(), s.detonateTime());
+            double dive = ua.zentix.incoming.strike.WeaponSpec.NUKE.airframe().diveSpeed();
+            long start = IcbmArrival.start(s.launchTime(), s.detonateTime(), IcbmArrival.velocity(s.launchPos(), s.target(), dive));
             if (s.arrival().isEmpty() && start < s.detonateTime() && now >= start && now < s.detonateTime() && loaded) {
                 Vec3 at = s.surface() ? NuclearWarhead.surfaceAt(level, s.target()) : s.target();
                 Detonation geometry = NuclearWorld.get(level).planned(NuclearWarhead.geometry(level, at, s.yieldKt(),
                         s.airBurst(), (float) IncomingConfig.SERVER.effectsScale()));
                 IcbmArrival arrival = new IcbmArrival(s.id(), start, s.detonateTime(), geometry,
-                        IcbmArrival.velocity(s.launchPos(), geometry.burst(), ua.zentix.incoming.strike.WeaponSpec.NUKE.airframe().diveSpeed()));
+                        IcbmArrival.velocity(s.launchPos(), geometry.burst(), dive));
                 events.commit(s, arrival);
                 s = s.withArrival(arrival);
             }

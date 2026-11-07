@@ -19,6 +19,8 @@ final class ArrivalScene {
     private static int age = -1;
     private static boolean flash;
     private static Vec3 ground;
+    /** Terminal window of this scene's paths, ticks (as the server: {@link IcbmArrival#start}). */
+    private static int window = 240;
     private ArrivalScene() {}
 
     static void start(Vec3 at, int count, boolean burst) {
@@ -27,7 +29,9 @@ final class ArrivalScene {
         flash = burst;
         start = Minecraft.getInstance().level.getGameTime();
         age = 0;
-        long end = start + 240;
+        Vec3 v = IcbmArrival.velocity(at.add(-6000, 0, 0), at, WeaponSpec.NUKE.airframe().diveSpeed());
+        window = (int) (IcbmArrival.WINDOW + 1800 - IcbmArrival.start(0, IcbmArrival.WINDOW + 1800, v));
+        long end = start + window;
         for (int i = 0; i < count; i++) {
             Vec3 target = at.add((i % 10) * 30, 0, (i / 10) * 30);
             Vec3 launch = target.add(-6000, 0, 0);
@@ -47,8 +51,8 @@ final class ArrivalScene {
     static void tick() {
         if (age < 0) return;
         age++;
-        if (age < 240) ClientHooks.get().nukeApproach(new S2C.NukeApproach(start + age, List.copyOf(PATHS)));
-        else if (age == 240) {
+        if (age < window) ClientHooks.get().nukeApproach(new S2C.NukeApproach(start + age, List.copyOf(PATHS)));
+        else if (age == window) {
             if (flash) ClientHooks.get().nukeDetonation(new S2C.NukeDetonation(geometry(9000, ground, start + age), 0, 9000));
             else for (IcbmArrival path : PATHS) ua.zentix.incoming.client.nuclear.ClientNuclear.approaches().finish(path.strikeId());
             ClientHooks.get().nukeApproach(new S2C.NukeApproach(start + age, List.of()));

@@ -26,12 +26,25 @@ class IcbmArrivalTest {
 
     @Test void everySupportedDurationRetainsBoostAndTheConfiguredDeadline() {
         for (int duration : new int[]{0, 200, 1800, 72000}) {
-            long end = 12345 + duration, start = IcbmArrival.start(12345, end);
+            long end = 12345 + duration, start = IcbmArrival.start(12345, end, new Vec3(0, -25, 0));
             assertTrue(start >= 12345);
             assertTrue(start <= end);
             assertTrue(end - start <= IcbmArrival.WINDOW);
             if (duration >= 200) assertTrue(start >= 12345 + IcbmArrival.BOOST);
         }
+    }
+
+    @Test void visibleEntryLastsHalfAMinuteAtGameSpeedAndStartsNoHigherThanTheLuminousOnset() {
+        long launch = 0, end = 1800;
+        Vec3 target = new Vec3(0, 64, 0), from = new Vec3(-6000, 64, 0);
+        Vec3 game = IcbmArrival.velocity(from, target, WeaponSpec.NUKE.airframe().diveSpeed(0));
+        assertEquals(IcbmArrival.WINDOW, end - IcbmArrival.start(launch, end, game));
+        // the head appears kilometers up, not a few hundred meters above the burst
+        assertTrue(-game.y * IcbmArrival.WINDOW > 10_000);
+        Vec3 real = IcbmArrival.velocity(from, target, WeaponSpec.NUKE.airframe().diveSpeed(1));
+        long window = end - IcbmArrival.start(launch, end, real);
+        assertTrue(window < IcbmArrival.WINDOW);
+        assertTrue(-real.y * window <= IcbmArrival.ONSET - real.y);
     }
 
     @Test void packetsNeverRewindOrExtrapolateAHeadAndLatePacketsSeek() {
@@ -65,7 +78,7 @@ class IcbmArrivalTest {
         var first = tracks.entries().iterator().next();
         assertFalse(first.head());
         assertEquals(1000.5, first.time(0, tracks.local(0.5f)));
-        for (int i = 0; i < 5; i++) tracks.tick();
+        for (int i = 0; i <= IcbmArrival.WAKE; i++) tracks.tick();
         assertEquals(1, tracks.entries().size());
         tracks.snapshot(1000, List.of()); // cancellation at the same epoch still replaces the snapshot
         assertTrue(tracks.entries().isEmpty());
