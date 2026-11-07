@@ -1513,12 +1513,14 @@ void main() {
     clip = max(clip, 0.5 * max(max(PallSlot0[3].y, 0.0) * step(0.5, PallSlot0[1].w), max(PallSlot1[3].y, 0.0) * step(0.5, PallSlot1[1].w)));
     if (scene < 1e8) {
         scene /= axis;
-    } else if (span.y > span.x) {
+    } else {
         // no world behind pixel (beyond render range, beyond/between Distant Horizons LODs): ray ends on pall terrain (PallGround),
-        // not epicenter ground plane — from a lower valley it would go beneath that plane at the eye, leaving no pall below horizon
-        float end = min(span.y, span.x + clip);
-        scene = min(pallFloor(Sampler5, PallSlot0, PallGround0, dir, PallFloorFrom, end, FLOOR_STEPS, jitter),
-                pallFloor(Sampler6, PallSlot1, PallGround1, dir, PallFloorFrom, end, FLOOR_STEPS, jitter));
+        // not epicenter ground plane — from a lower valley it would go beneath that plane at the eye, leaving no pall below horizon.
+        // Searched to the map edge, not only within the pall: the mushroom ray ends there too. Cut at the pall's reach, a ray
+        // past the edge of the drawn chunks found no ground and ran through the mushroom's foot under the terrain: a dark ring
+        // around a lighter disc of drawn ground below a viewer minutes after the burst (Zearth 07.11)
+        scene = min(pallFloor(Sampler5, PallSlot0, PallGround0, dir, PallFloorFrom, 1e6, FLOOR_STEPS, jitter),
+                pallFloor(Sampler6, PallSlot1, PallGround1, dir, PallFloorFrom, 1e6, FLOOR_STEPS, jitter));
     }
     float t0 = span.x, t1 = min(min(span.y, scene), t0 + clip);
     vec3 sunDir = PallSun.xyz;
@@ -1575,6 +1577,9 @@ void main() {
         Mush body = mushLoad(Sampler7, k);
         vec2 sp = mushSpan(body, dir);
         sp.y = min(sp.y, scene);
+        // no world and no terrain map (pall off or gone): the ground under the mushroom is no lower than its base; its bounds
+        // reach below the base (5 % of the height), and a downward ray would march its foot under the ground
+        if (scene >= 1e8 && dir.y < 0.0) sp.y = min(sp.y, body.base.y / dir.y);
         gMushSpan[k] = sp;
         gMushes += 1;
         if (body.footShare > 0.0 && body.footMerge > 0.0) {

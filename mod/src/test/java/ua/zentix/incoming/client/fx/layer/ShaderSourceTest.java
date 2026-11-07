@@ -157,6 +157,23 @@ class ShaderSourceTest {
         assertTrue(Files.readString(core.resolve("fx_pall_composite.fsh")).contains("mushShadow("), "the world — in the same shadow");
     }
 
+    /**
+     * A pixel without world behind it ends on the ground, for the pall and the mushroom alike. Drawn chunks fill a cylinder
+     * around the eye, the render distance across and up and down; past it the ray ends on the terrain map searched to its
+     * edge, and with no map at the mushroom's base. Zearth 07.11, 25 minutes after 250 kt: rays past the drawn chunks found
+     * no ground within the pall's reach and ran through the mushroom's foot under the terrain, a dark ring around a light
+     * disc of drawn ground below the viewer, and straight down from above the drawn height, rings of its shells.
+     */
+    @Test
+    void rayWithoutWorldEndsOnTheGround() throws IOException, URISyntaxException {
+        Path include = Path.of(ShaderSourceTest.class.getResource("/assets/incoming/shaders/include").toURI());
+        String floor = blankComments(body(Files.readString(include.resolve("pall.glsl")), "float pallFloor("));
+        assertTrue(floor.contains("from / max(max(length(dir.xz), abs(dir.y)), 1e-3)"), "pallFloor: drawn chunks end up and down too");
+        String march = blankComments(body(Files.readString(include.resolve("fx_pall.glsl")), "void main("));
+        assertTrue(march.contains("PallFloorFrom, 1e6, FLOOR_STEPS"), "fx_pall: floor searched only within the pall's reach");
+        assertTrue(march.contains("sp.y = min(sp.y, body.base.y / dir.y)"), "fx_pall: mushroom under the ground without a terrain map");
+    }
+
     /** Identical dust at a joint requires one shared light source, not two independent lighting solvers. */
     @Test
     void inflowAndCarpetUseOneLightingSource() throws IOException, URISyntaxException {
