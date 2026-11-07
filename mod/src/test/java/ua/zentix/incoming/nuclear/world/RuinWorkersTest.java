@@ -117,7 +117,9 @@ class RuinWorkersTest {
         // Zearth 07.11: 12 cores, 10 threads, tick up to 43 ms without mod lanes, 7 cores idle.
         assertEquals(8, RuinWorkers.decide(10, 10, 45, room, 0.5, 2));
         assertEquals(10, RuinWorkers.decide(10, 10, 45, room, 7, 2));
-        assertEquals(3, RuinWorkers.decide(2, 10, 45, room, 7, 2));
+        // idle cores alone never add a thread on a slow tick
+        assertEquals(2, RuinWorkers.decide(2, 10, 45, room, 7, 2));
+        assertEquals(2, RuinWorkers.decide(2, 10, 33, room, 7, 2));
         assertEquals(2, RuinWorkers.decide(2, 10, 45, room, 2.5, 2));
         assertEquals(1, RuinWorkers.decide(1, 10, 45, room, 0, 2));
     }
@@ -130,5 +132,17 @@ class RuinWorkersTest {
         assertEquals(3, RuinWorkers.decide(4, 10, 45, room, -1, 2));
         assertEquals(5, RuinWorkers.decide(4, 10, 10, room, -1, 2));
         assertEquals(4, RuinWorkers.decide(4, 10, 33, room, -1, 2));
+    }
+
+    /** Own deltas: machine idle from /proc/stat, capped by what the JVM's quota leaves; short or empty windows unknown. */
+    @Test
+    void idleCoresFromOwnDeltas() {
+        // 12 CPUs, 1 s (100 jiffies each), 70 % idle; JVM used 3 cores of 12
+        assertEquals(8.4, RuinWorkers.idleCores(1200, 840, 12, 3_000_000_000L, 1_000_000_000L, 12), 1e-9);
+        // container quota 4 cores, JVM used 3: one core left though the host idles
+        assertEquals(1.0, RuinWorkers.idleCores(1200, 840, 12, 3_000_000_000L, 1_000_000_000L, 4), 1e-9);
+        // a window of a few ms (another reader of a shared counter) is unknown, not all idle
+        assertEquals(-1, RuinWorkers.idleCores(0, 0, 12, 0, 5_000_000L, 12));
+        assertEquals(-1, RuinWorkers.idleCores(1200, 840, 12, 0, 100_000_000L, 12));
     }
 }

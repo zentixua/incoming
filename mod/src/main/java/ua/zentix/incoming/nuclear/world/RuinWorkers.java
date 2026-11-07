@@ -28,8 +28,8 @@ import java.util.concurrent.atomic.AtomicLong;
  * collector)}, at least one. No cap: more cores build distant rings faster. Java thread priorities have no
  * effect on Linux, so only count and tick adaptation leave room for game: once per second ({@link #decide}), external
  * tick time over last second (tick minus mod lanes) above threshold ({@link #MARGIN_MS}) reduces active threads by
- * a quarter (at least one) unless the machine still has the game reserve idle; a fast tick, or idle cores beyond the
- * reserve, add one (at most pool thread count). Chosen count and every reduction/recovery logged.
+ * a quarter (at least one) unless the machine still has the game reserve idle; a fast tick adds one (at most pool
+ * thread count). Chosen count and every reduction/recovery logged.
  * <p>
  * At most {@link #capacity} tasks in pool (running and queued): queue keeps threads busy between ticks
  * (task 10–50 ms, tick 50 ms). Server thread submits tasks and collects results; background reads no world.
@@ -361,27 +361,68 @@ public final class RuinWorkers {
     }
 
     /**
-     * Active thread count after one adaptation step. Workers slow the server thread only by taking its CPU, so a slow
-     * external tick lowers them by a quarter only while the machine has fewer than {@code reserve} cores idle; with the
-     * reserve idle the server thread is slow by its own work (rerun on Zearth 07.11.2026, 12 cores: vanilla chunk
-     * unloads kept the tick at 25–43 ms and the old rule held the pool at 1–3 threads while 56–77 % of the machine
-     * was idle). A fast tick, or more than the reserve idle, adds one thread. {@code idleCores} below 0 (load
-     * unknown) leaves the tick-only rule.
+     * Active thread count after one adaptation step. A slow external tick lowers threads by a quarter only while the
+     * machine has fewer than {@code reserve} cores idle: with the reserve idle the server thread is slow by its own work
+     * (rerun on Zearth 07.11.2026, 12 cores: vanilla chunk unloads kept the tick at 25–43 ms and the old rule held the
+     * pool at 1–3 threads while 56–77 % of the machine was idle). Only a fast tick adds a thread: idle logical cores
+     * do not prove more workers are free for the server thread (SMT siblings, laptop boost clock, shared cache, GC).
+     * {@code idleCores} below 0 (unknown) leaves the tick-only rule.
      */
     static int decide(int active, int size, double externalMs, double room, double idleCores, int reserve) {
-        boolean known = idleCores >= 0;
-        if (externalMs > room + MARGIN_MS && active > 1 && !(known && idleCores >= reserve))
+        if (externalMs > room + MARGIN_MS && active > 1 && !(idleCores >= 0 && idleCores >= reserve))
             return Math.max(1, active - Math.max(1, active / 4));
-        if (active < size && (externalMs < room - MARGIN_MS || known && idleCores >= reserve + 1)) return active + 1;
+        if (externalMs < room - MARGIN_MS && active < size) return active + 1;
         return active;
     }
 
-    /** Idle cores of the machine (or container) since the previous call, about the last second; −1 if unknown. */
+    /** Shortest window for an idle-core reading: shorter deltas are a few jiffies of noise. */
+    private static final long CPU_WINDOW_NANOS = 200_000_000L;
+    /** Previous {@link #idleCores} sample: /proc/stat total and idle jiffies, JVM CPU time, wall time; total < 0 none. */
+    private static long cpuTotal = -1, cpuIdle, cpuProcess, cpuWall;
+
+    /**
+     * Idle cores since the previous call (once per adaptation, about a second) from our own counters, never a shared
+     * one ({@code OperatingSystemMXBean.getCpuLoad} keeps one JVM-wide previous sample: spark reading it each second
+     * leaves us a window of milliseconds, read as all idle). The smaller of the machine's idle cores ({@code
+     * /proc/stat}) and the cores this JVM may still use ({@code availableProcessors}, a container quota, minus its own
+     * CPU time). −1 on the first call, a window under {@link #CPU_WINDOW_NANOS}, or without {@code /proc/stat}.
+     */
     private static double idleCores() {
-        if (!(java.lang.management.ManagementFactory.getOperatingSystemMXBean() instanceof com.sun.management.OperatingSystemMXBean os)) return -1;
-        double load = os.getCpuLoad();
-        if (!(load >= 0 && load <= 1)) return -1;
-        return (1 - load) * Runtime.getRuntime().availableProcessors();
+        long wall = System.nanoTime();
+        long process = java.lang.management.ManagementFactory.getOperatingSystemMXBean() instanceof com.sun.management.OperatingSystemMXBean os
+                ? os.getProcessCpuTime() : -1;
+        long total = -1, idle = 0;
+        int cpus = 0;
+        try (var lines = java.nio.file.Files.lines(java.nio.file.Path.of("/proc/stat"))) {
+            for (String line : (Iterable<String>) lines::iterator) {
+                if (!line.startsWith("cpu")) break;
+                if (line.startsWith("cpu ")) {
+                    String[] f = line.trim().split("\\s+");
+                    total = 0;
+                    // user nice system idle iowait irq softirq steal; guest time is already inside user
+                    for (int i = 1; i <= 8 && i < f.length; i++) total += Long.parseLong(f[i]);
+                    idle = Long.parseLong(f[4]) + (f.length > 5 ? Long.parseLong(f[5]) : 0);
+                } else cpus++;
+            }
+        } catch (java.io.IOException | RuntimeException e) {
+            total = -1;
+        }
+        long dTotal = total - cpuTotal, dIdle = idle - cpuIdle, dProcess = process - cpuProcess, dWall = wall - cpuWall;
+        boolean first = cpuTotal < 0;
+        cpuTotal = total;
+        cpuIdle = idle;
+        cpuProcess = process;
+        cpuWall = wall;
+        if (first || total < 0 || process < 0) return -1;
+        return idleCores(dTotal, dIdle, cpus, dProcess, dWall, Runtime.getRuntime().availableProcessors());
+    }
+
+    /** {@link #idleCores()} from deltas: jiffies (total, idle) over {@code cpus} host CPUs, JVM CPU and wall ns. */
+    static double idleCores(long dTotal, long dIdle, int cpus, long dProcess, long dWall, int cores) {
+        if (dWall < CPU_WINDOW_NANOS || dTotal <= 0 || cpus <= 0 || dProcess < 0 || dIdle < 0) return -1;
+        double machine = Math.min(1, dIdle / (double) dTotal) * cpus;
+        double quota = Math.max(0, cores - dProcess / (double) dWall);
+        return Math.min(machine, quota);
     }
 
     private static void resize(ThreadPoolExecutor executor, int threads) {

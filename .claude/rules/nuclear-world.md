@@ -48,7 +48,8 @@ paths:
   all cores minus three: server, own-game rendering, world I/O; active count follows server-tick time excluding mod
   lanes (`WorkScheduler.ownNanos`): above `50 − work_ms_per_tick + 5` ms reduce by a quarter unless the machine still has the
   game reserve idle (`RuinWorkers.decide`: a slow server thread with idle cores is slow by its own work, e.g. vanilla
-  unloads), below `… − 5` or with more than the reserve idle add one, log it; using the full tick with our 30 ms would keep one thread). They call neither world nor block code; state
+  unloads; idle cores from own `/proc/stat` and JVM CPU deltas, never the shared `getCpuLoad` sample spark also reads), below
+  `… − 5` add one, log it; using the full tick with our 30 ms would keep one thread). They call neither world nor block code; state
   properties (`Blast.Props`: fire, flammability, top strength, heightmap opacity, light too) come from a table the server
   thread fills from snapshot palettes (`Blast.publish`); light shadow uses detonation heightmaps (`RuinContext.lit`).
   GameTest `backgroundSolversCallNoWorld` walks bytecode along the call graph from background-task roots;
