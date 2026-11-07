@@ -1,12 +1,12 @@
 package ua.zentix.incoming.grid;
 
 import it.unimi.dsi.fastutil.ints.IntArrayList;
+import it.unimi.dsi.fastutil.ints.IntArrays;
 import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.longs.LongArrayFIFOQueue;
 import it.unimi.dsi.fastutil.longs.LongArrayList;
-import it.unimi.dsi.fastutil.longs.LongArrays;
 import it.unimi.dsi.fastutil.longs.LongLinkedOpenHashSet;
 import it.unimi.dsi.fastutil.longs.LongOpenHashSet;
 import dev.ryanhcode.sable.companion.SubLevelAccess;
@@ -36,6 +36,7 @@ import ua.zentix.incoming.registry.ModAttachments;
 import ua.zentix.incoming.util.Palettes;
 import ua.zentix.incoming.util.Terrain;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.Iterator;
@@ -111,8 +112,16 @@ public final class BlackoutWorld {
         /** Due time → area chunks as offsets from the area corner ({@link #offset}): half the memory of chunk keys. */
         final Long2ObjectOpenHashMap<IntArrayList> byDue = new Long2ObjectOpenHashMap<>();
         long first = Long.MAX_VALUE, last = Long.MIN_VALUE;
-        /** Next time whose chunks have not yet been issued. */
+        /** Next time whose chunks have not yet been taken from {@link #byDue}. */
         long cursor = Long.MIN_VALUE;
+        /**
+         * Due chunks taken from {@link #byDue}, not yet issued: issued under the budget, {@link #ISSUE_UNIT} chunks a unit —
+         * a nuclear cascade reaches up to ~20 000 chunks a tick at its edge, and once its area is built every chunk already
+         * due arrives at once (hundreds of thousands).
+         */
+        final ArrayDeque<Bucket> issuing = new ArrayDeque<>();
+        /** Next offset to issue in the head of {@link #issuing}. */
+        int issueNext;
         /**
          * Restoration resumed after a restart: districts due up to this time were already issued before it (their chunks
          * on disk hold real lamps, distant LODs were already updated), so they are not issued again — a nuclear repair
@@ -199,7 +208,17 @@ public final class BlackoutWorld {
         }
 
         boolean done() {
-            return built() && cursor > last;
+            return built() && cursor > last && issuing.isEmpty();
+        }
+
+        /** Latest due time whose chunks were all issued (saved progress, {@link #issued} after a restart). */
+        long issuedThrough(long now) {
+            return issuing.isEmpty() ? Math.min(now, last) : issuing.peekFirst().due() - 1;
+        }
+
+        /** Some chunks are to be issued this tick or the next. A cascade waiting for a later due time is not. */
+        boolean due(long now) {
+            return !built() || !early.isEmpty() || !issuing.isEmpty() || cursor <= now || byDue.containsKey(now + 1);
         }
 
         /**
@@ -218,6 +237,12 @@ public final class BlackoutWorld {
             early.add(due);
         }
     }
+
+    /** Chunks of a cascade due at {@code due} (offsets from the area corner, {@link Sweep#offset}). */
+    record Bucket(long due, IntArrayList offsets) {}
+
+    /** Cascade chunks issued per work unit: a chunk is a holder lookup and a LOD request (≈0.1 µs–1 µs). */
+    static final int ISSUE_UNIT = 2048;
 
     private final List<Sweep> sweeps = new ArrayList<>();
     /**
@@ -292,7 +317,9 @@ public final class BlackoutWorld {
         /** Counterpart waiting for its chunk's neighbors (returns to the relight queue tail). */
         RELIGHT_WAIT,
         /** Cascade row (districts and deadlines of area chunks). */
-        BUILD
+        BUILD,
+        /** Cascade chunks issued ({@link #ISSUE_UNIT} a unit). */
+        ISSUE
     }
 
     /** Work counter window, ticks. */
@@ -572,7 +599,7 @@ public final class BlackoutWorld {
     private void updateSweepsDue(long now) {
         sweepsDue = false;
         for (Sweep s : sweeps) {
-            if (!s.built() || !s.early.isEmpty() || s.cursor <= Math.min(now + 1, s.last)) {
+            if (s.due(now)) {
                 sweepsDue = true;
                 return;
             }
@@ -779,32 +806,63 @@ public final class BlackoutWorld {
             if (!s.built()) continue;
             while (s.cursor <= now && s.cursor <= s.last) {
                 IntArrayList due = s.byDue.remove(s.cursor);
-                if (due != null) {
-                    LongArrayList chunks = new LongArrayList(due.size());
-                    for (int i = 0; i < due.size(); i++) chunks.add(s.chunk(due.getInt(i)));
-                    // district outward from the player: lamps near the player go dark and relight first
-                    if (!players.isEmpty()) {
-                        long[] order = chunks.toLongArray();
-                        LongArrays.quickSort(order, (a, b) -> Integer.compare(playerDistance(a), playerDistance(b)));
-                        chunks = LongArrayList.wrap(order);
-                    }
-                    for (int i = 0; i < chunks.size(); i++) {
-                        long c = chunks.getLong(i);
-                        if (inMemory(level, c) != null) enqueue(c);
-                        // not in memory: converts on load, with distant Distant Horizons LODs using a disk copy
-                        else FarLods.request(level, c, false);
-                    }
-                }
+                if (due != null) s.issuing.add(new Bucket(s.cursor, due));
                 s.cursor++;
             }
+            while (!s.issuing.isEmpty() && clock.canStart()) {
+                long c0 = clock.begin(), t0 = System.nanoTime();
+                long[] counted = count.clone(), timed = nanos.clone();
+                int issued = issue(level, s);
+                note(Work.ISSUE, issued, clock.end(c0));
+                long took = System.nanoTime() - t0;
+                if (slow(level, took)) logSlowUnit(level, "cascade issue", took, issued + " chunks", counted, timed);
+            }
             // save progress: fully processed — not repeated after restart
-            grid.swept(s.outage.id(), s.restore, s.done() ? Long.MAX_VALUE : Math.min(now, s.last));
+            grid.swept(s.outage.id(), s.restore, s.done() ? Long.MAX_VALUE : s.issuedThrough(now));
             if (s.done()) {
                 it.remove();
                 Incoming.LOG.info("Blackout #{} ({}): {} cascade covered the whole area", s.outage.id(), level.dimension().location(),
                         s.restore ? "restore" : "outage");
             }
         }
+    }
+
+    /**
+     * One issue unit: up to {@link #ISSUE_UNIT} due chunks of the cascade. Loaded chunks join the queue, district outward
+     * from the player (lamps near the player go dark and relight first); the rest convert on load, with distant Distant
+     * Horizons LODs using a disk copy.
+     *
+     * @return chunks issued
+     */
+    private int issue(ServerLevel level, Sweep s) {
+        LongArrayList loaded = new LongArrayList();
+        int n = 0;
+        while (n < ISSUE_UNIT && !s.issuing.isEmpty()) {
+            IntArrayList offsets = s.issuing.peekFirst().offsets();
+            int end = Math.min(offsets.size(), s.issueNext + ISSUE_UNIT - n);
+            for (int i = s.issueNext; i < end; i++, n++) {
+                long c = s.chunk(offsets.getInt(i));
+                if (inMemory(level, c) != null) loaded.add(c);
+                else FarLods.request(level, c, false);
+            }
+            s.issueNext = end;
+            if (end == offsets.size()) {
+                s.issuing.pollFirst();
+                s.issueNext = 0;
+            }
+        }
+        if (loaded.size() > 1 && !players.isEmpty()) {
+            int[] dist = new int[loaded.size()], order = new int[loaded.size()];
+            for (int i = 0; i < order.length; i++) {
+                order[i] = i;
+                dist[i] = playerDistance(loaded.getLong(i));
+            }
+            IntArrays.quickSort(order, (a, b) -> Integer.compare(dist[a], dist[b]));
+            for (int i : order) enqueue(loaded.getLong(i));
+        } else {
+            for (int i = 0; i < loaded.size(); i++) enqueue(loaded.getLong(i));
+        }
+        return n;
     }
 
     /**

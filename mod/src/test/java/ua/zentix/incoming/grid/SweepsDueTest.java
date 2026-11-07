@@ -31,5 +31,21 @@ class SweepsDueTest {
         assertFalse(world.busy(), "a cascade waiting for its first district counts as work");
         due.invoke(world, s.first - 1);
         assertTrue(world.busy(), "a district due next tick is not work");
+
+        // after the first due time is taken (the cursor moves one tick a tick): waiting between due times is not work
+        long next = s.byDue.keySet().longStream().filter(t -> t > s.first + 2).min().orElseThrow();
+        s.byDue.keySet().removeIf(t -> t < next);
+        s.cursor = next - 1;
+        due.invoke(world, next - 2);
+        assertFalse(world.busy(), "a cascade waiting between due times counts as work");
+        due.invoke(world, next - 1);
+        assertTrue(world.busy(), "a district due next tick is not work");
+
+        // chunks taken but not yet issued (out of budget) are work
+        s.cursor = next + 1;
+        s.issuing.add(new BlackoutWorld.Bucket(next, s.byDue.remove(next)));
+        due.invoke(world, next);
+        assertTrue(world.busy(), "chunks waiting to be issued are not work");
+        assertTrue(s.issuedThrough(next) == next - 1 && !s.done(), "progress counts chunks not yet issued");
     }
 }

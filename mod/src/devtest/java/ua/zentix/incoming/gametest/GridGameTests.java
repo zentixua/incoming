@@ -387,7 +387,6 @@ public final class GridGameTests {
         ServerLevel level = h.getLevel();
         quiet(level);
         WorkClock clock = WorkClock.counting(1_000_000L);
-        Blackouts.useClock(level.getServer(), clock);
         h.setBlock(CENTER, ModBlocks.SUBSTATION.get());
         Node node = PowerGrid.get(level).nodeAt(h.absolutePos(CENTER));
         h.assertTrue(node != null && node.block(), "the substation did not become a network node");
@@ -396,6 +395,9 @@ public final class GridGameTests {
         for (BlockPos p : lamps) h.setBlock(p, Blocks.LANTERN);
         int budgetMs = (int) Math.round(WorkScheduler.gridCapNanos() / 1e6);
         h.startSequence()
+                // light returns from previous checks (quiet: nuclear areas of kilometres) pass on the real clock first
+                .thenWaitUntil(() -> h.assertTrue(BlackoutWorld.get(level).idle(), "there is a queue from previous checks"))
+                .thenExecute(() -> Blackouts.useClock(level.getServer(), clock))
                 .thenIdle(1)
                 .thenExecute(() -> {
                     Vec3 c = Vec3.atCenterOf(h.absolutePos(CENTER.east(3)));
@@ -628,7 +630,11 @@ public final class GridGameTests {
         long[] lampsAtStart = {0};
         hold(level, far);
         h.startSequence()
-                .thenWaitUntil(() -> h.assertTrue(chunks.getChunkNow(far.x, far.z) != null, "chunk is loading"))
+                .thenWaitUntil(() -> {
+                    h.assertTrue(chunks.getChunkNow(far.x, far.z) != null, "chunk is loading");
+                    // light returns from previous checks (quiet) pass on the real clock before the counting one
+                    h.assertTrue(BlackoutWorld.get(level).idle(), "there is a queue from previous checks");
+                })
                 .thenExecute(() -> {
                     placed.putAll(fill(level, far, 128, light, lantern));
                     Blackouts.useClock(level.getServer(), fast);
@@ -697,7 +703,11 @@ public final class GridGameTests {
         long[] before = new long[BlackoutWorld.Work.values().length];
         held.forEach(p -> hold(level, p));
         h.startSequence()
-                .thenWaitUntil(() -> held.forEach(p -> h.assertTrue(chunks.getChunkNow(p.x, p.z) != null, "chunk " + p + " loading")))
+                .thenWaitUntil(() -> {
+                    held.forEach(p -> h.assertTrue(chunks.getChunkNow(p.x, p.z) != null, "chunk " + p + " loading"));
+                    // light returns from previous checks (quiet) pass on the real clock: the count is this cube's units only
+                    h.assertTrue(BlackoutWorld.get(level).idle(), "there is a queue from previous checks");
+                })
                 .thenExecute(() -> {
                     // one height for all four chunks - a solid cube, its middle is far from the edge
                     int y = held.stream().mapToInt(p -> caseOrigin(level, p).getY()).max().orElseThrow();

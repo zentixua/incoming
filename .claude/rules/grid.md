@@ -46,8 +46,12 @@ paths:
   (measured cost in its javadoc), not `grid.max_radius` (substations, commands). Cascade build: `Sweep.buildRow` is
   one unit of at most `Sweep.SEGMENT` chunks of a row's circle chord, districts per row via `Districts.row` (same result as
   `Districts.of`, `DistrictsTest`), chunks stored as int offsets; chunks loaded around players when the outage begins are
-  issued at once (`Sweep.early`). A built cascade waiting for its next due time is not pending work
-  (`BlackoutWorld.sweepsDue`): a weeks-long repair cascade would otherwise keep the grid share from impacts and ruins.
+  issued at once (`Sweep.early`). Due chunks are issued under the budget too (`Sweep.issuing`, `ISSUE_UNIT` a unit; a
+  nuclear cascade reaches ~20 000 chunks a tick, and once built every chunk already due arrives at once); saved progress
+  is the last fully issued due time (`Sweep.issuedThrough`). A built cascade waiting for its next due time is not pending
+  work (`Sweep.due`, `SweepsDueTest`): a weeks-long repair cascade would otherwise keep the grid share from impacts and ruins.
+  A command restore that shrinks a running spread reissues the whole uniform restoration (new times may fall before the
+  old progress).
 - Lamps placed in a dark district (`Blackouts.onBlockPlaced`) run on their own supply: `PowerGrid` keeps
   position → time placed (`placeOwn`, saved with the grid, not the chunk, so disk loads and LOD copies see it), and every
   darkening path skips them via `PowerGrid.keepsLit` (lamps placed after the district's latest darkening). Forgotten

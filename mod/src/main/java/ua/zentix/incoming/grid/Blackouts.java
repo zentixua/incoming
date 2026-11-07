@@ -61,6 +61,7 @@ public final class Blackouts {
      * that tears lines 9 km out must not stop going dark at 4 km. Cost, measured (unit benchmark of the cascade build):
      * 16 384 blocks is 3.3 million chunks, ≈0.3 s of blackout budget spread over ≈75 ticks (4 ms lane), 13 MB of chunk
      * offsets while the repairs last; chunks around players darken at once regardless ({@code BlackoutWorld.Sweep.early}).
+     * Due chunks are issued within the same budget ({@code BlackoutWorld.ISSUE_UNIT} a unit), never all at once.
      */
     public static final double NUKE_MAX_RADIUS = 16_384;
     /** Nuclear cascade: EMP and wave darken the area almost simultaneously (blocks per tick). */
@@ -194,16 +195,19 @@ public final class Blackouts {
         for (Outage o : List.copyOf(grid.outages())) {
             if (at != null && Math.hypot(o.x() - at.x, o.z() - at.z) > radius) continue;
             Outage restoring;
+            // districts already relit (a repair weeks long: most of them) are not issued again
+            long relit = Math.min(grid.swept(o.id(), true), now - 1);
             if (o.restoreAt() > now) {
+                // the rest are due from now: no new time falls at or before relit
                 restoring = o.restoring(now, spread);
             } else {
                 // Spread only shrinks: districts already lit remain lit.
                 long left = Math.min(o.restoreSpread(), now - o.restoreAt() + spread);
                 if (left >= o.restoreSpread()) continue;
                 restoring = o.restoring(o.restoreAt(), (int) left);
+                // a still dark district may now be due before relit: reissue the whole uniform restoration
+                relit = Math.min(relit, o.restoreAt() - 1);
             }
-            // districts already relit (a repair weeks long: most of them) are not issued again; the rest are due from now
-            long relit = Math.min(grid.swept(o.id(), true), now - 1);
             grid.replace(restoring);
             // Restart restoration cascade with the new times.
             grid.swept(o.id(), true, Long.MIN_VALUE);
