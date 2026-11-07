@@ -1061,6 +1061,7 @@ float mushTauOf(Mush m, vec3 p, vec3 v, float len, vec4 parts) {
     // disc in the haze below a viewer minutes after the burst, gone once the nearest sample stays above the ground; Zearth 07.11)
     if (v.y < 0.0) len = min(len, max((p.y - m.base.y + 0.02 * m.capBot) / -v.y, 1.0));
     float tau = 0.0;
+    if (cut(524288)) return 0.0;
     for (int i = 0; i < 4; i++) {
         tau += dot(mushMean(m, mushLocal(m, p + v * (len * MUSH_AT[i]))), parts) * MUSH_PART[i];
     }
@@ -1150,7 +1151,7 @@ vec4 mushDense(Mush m, vec3 q, float cone, float k, out float lobes, out float d
     float uc = mushCapUnit(m);
     if (m.capSigma > 0.0 && d.x < MUSH_CAP_REACH * uc) {
         // below deepest billow hollow cap is entirely dense: no billows needed (every sunward-ray step from shadow)
-        if (d.x + (MUSH_LOBES_DEEP * MUSH_CAP_LOBES * m.billows + MUSH_CAP_EDGE) * uc > 0.0) lobes = mushCapLobes(m, q, cone, k);
+        if (d.x + (MUSH_LOBES_DEEP * MUSH_CAP_LOBES * m.billows + MUSH_CAP_EDGE) * uc > 0.0 && !cut(8388608)) lobes = mushCapLobes(m, q, cone, k);
         float shifted = d.x - MUSH_CAP_LOBES * m.billows * uc * lobes;
         sigma.x = m.capSigma * mushEdge(shifted, MUSH_CAP_EDGE * uc);
         near = shifted - MUSH_CAP_EDGE * uc;
@@ -1215,7 +1216,7 @@ vec4 mushDense(Mush m, vec3 q, float cone, float k, out float lobes, out float d
 // soft-edge depth along the surface (tens of optical depths sideways to sun)
 float mushSunTau(Mush m, vec3 p, float k) {
     float reach = 0.75 * m.capTile, len = reach / 31.0, t = 0.0, tau = 0.0;
-    for (int i = 0; i < 5; i++) {
+    for (int i = 0; i < 5 && !cut(262144); i++) {
         float lobes, depth, near, carried;
         tau += dot(mushDense(m, mushLocal(m, p + gSun * (t + gJitter * len)), len, k, lobes, depth, near, carried), vec4(1.0)) * len;
         t += len;
@@ -1268,6 +1269,7 @@ vec4 mushAt(int k, Mush m, vec3 p, vec3 q, float cone, out float near, out vec3 
     vec3 carpetLight = vec3(0.0);
     if (fromCarpet > 0.0) carpetLight = mushFootLight(k, m, q);
     if (fromCarpet >= 1.0) return vec4(st * carpetLight, st);
+    if (cut(2097152)) return vec4(st * 0.3 * PallSunLight, st);
     vec3 w = (sig.x * m.capMat.rgb + sig.y * m.stemMat.rgb + sig.z * m.skirtMat.rgb + sig.w * m.colMat.rgb) / st;
     float g = (sig.x * m.capMat.a + sig.y * m.stemMat.a + sig.z * m.skirtMat.a + sig.w * m.colMat.a) / st;
     vec3 kd = vec3(pallK(w.r, g), pallK(w.g, g), pallK(w.b, g));
@@ -1296,7 +1298,7 @@ vec4 mushAt(int k, Mush m, vec3 p, vec3 q, float cone, out float near, out vec3 
     // stem/skirt/column depth on path (to ball, beyond it emitting surface). Cap itself does not receive it: its light is
     // its own emission (below)
     float lowShare = (sig.y + sig.z + sig.w) / st;
-    if (lowShare > 0.0 && m.capSigma > 0.0) {
+    if (lowShare > 0.0 && m.capSigma > 0.0 && !cut(1048576)) {
         // toward cap center in world axes: height-dependent wind drift (mushLocal) means mushroom body axes are not world axes
         vec3 c = vec3(0.0, m.capY, 0.0) - q;
         c.xz += m.drift * (mushShare(m.capY, m.endTop) - mushShare(q.y, m.endTop));
@@ -1752,7 +1754,9 @@ void main() {
             // at identical positions, defeating accumulation smoothing
             float ds = clamp(gap + jitter * dsMin, dsMin, dsMax);
             if (r.w > 1e-7) {
-                ds = clamp(0.5 / r.w, dsMin, dsMax);
+                float perStep = 0.5;
+                if (cut(16777216)) perStep = 1.0;
+                ds = clamp(perStep / r.w, dsMin, dsMax);
                 ds = min(ds, m1 - tm);
                 passesBefore(tm, light, transmit, lost);
                 // air haze to step (pallAir): distant mushroom light/opacity fade into sky behind

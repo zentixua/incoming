@@ -5,9 +5,10 @@ GPU time per march variant (full uber-shader, mushroom compiled out, pall steps 
 off (-Dincoming.pallCut bits). Usage: tools/pall_probe.py <client game dir>; then read "SCENARIO pall probe_*" lines."""
 import os, sys
 
-FULL = [0, 1, 2048, 2049, 8, 16, 128, 1024, 64, 32, 4, 131072, 0]
-NOMUSH = [0, 8, 16, 128, 1024, 8 | 16 | 128, 131072, 0]
-NOPALL = [0]
+# mushroom terms: near-billow sun shadow, mean depths, ball light, all lighting, cap lobes, one optical depth per step
+FULL = [0, 1, 262144, 524288, 262144 | 524288, 1048576, 2097152, 8388608, 2097152 | 8388608, 16777216, 131072, 0]
+NOMUSH = []
+NOPALL = []
 VIEWS = [(80, 10), (80, 60), (200, 60)]
 
 game = sys.argv[1]
@@ -29,6 +30,8 @@ for up, pitch in VIEWS:
         cmd("wait 100")
         cmd(f"shot probe_{q}_up{up}_p{pitch}")
         for variant, cuts in [("full", FULL), ("nomush", NOMUSH), ("nopall", NOPALL)]:
+            if not cuts:
+                continue
             cmd(f"prop incoming.pallVariant {variant}")
             for c in cuts:
                 cmd(f"prop incoming.pallCut {c}")
