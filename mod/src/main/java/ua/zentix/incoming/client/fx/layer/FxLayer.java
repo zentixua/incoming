@@ -128,6 +128,12 @@ public final class FxLayer {
             PallPass.footLighting = null;
             Incoming.LOG.error("Stem foot lighting shader failed to load: using stem lighting at the foot", ex);
         }
+        try {
+            e.registerShader(new ShaderInstance(e.getResourceProvider(), Incoming.id("fx_mush_taus"), DefaultVertexFormat.POSITION), s -> PallPass.mushTaus = s);
+        } catch (IOException ex) {
+            PallPass.mushTaus = null;
+            Incoming.LOG.error("Mushroom depth grid shader failed to load: mushroom ray steps compute their depths themselves", ex);
+        }
         // PROFILING ONLY: march variants without the mushroom or without the pall steps (-Dincoming.pallVariant)
         try {
             e.registerShader(new ShaderInstance(e.getResourceProvider(), Incoming.id("fx_pall_nomush"), DefaultVertexFormat.POSITION), s -> PallPass.marchNoMush = s);

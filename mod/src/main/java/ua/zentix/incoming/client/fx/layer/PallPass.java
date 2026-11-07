@@ -418,10 +418,12 @@ public final class PallPass {
     }
 
     @Nullable
-    static ShaderInstance march, resolve, composite, shadow, footLighting;
+    static ShaderInstance march, resolve, composite, shadow, footLighting, mushTaus;
     // PROFILING ONLY
     static ShaderInstance marchNoMush, marchNoPall;
     static final int FOOT_LIGHT_AZ = 64, FOOT_LIGHT_R = 16, FOOT_LIGHT_H = 32;
+    /** Mushroom mean depth grid ({@code fx_mush_taus}): cells across x and z and height layers per mushroom, two blocks each. */
+    static final int MUSH_TAU_N = 48;
     private static final Frame EMPTY = new Frame();
     private static final Detail DETAIL = new Detail();
     /** Noise failed (background error): no pall until restart. */
@@ -435,6 +437,8 @@ public final class PallPass {
     /** Mushroom sun shadow map ({@link MushroomField#SHADOW}² tile per mushroom) and framebuffer; −1 — failed, no shadow. */
     private static int shadowMap = -1, shadowFbo = -1;
     private static int footMap = -1, footFbo = -1;
+    /** Mushroom mean depth grid this frame and its framebuffer; −1 — failed, ray steps compute the depths themselves. */
+    private static int tauMap = -1, tauFbo = -1;
     /** Frame copy for fireball world light ({@link #copyFrame}) and size; −1 — not needed yet. */
     private static int frameCopy = -1, copyW, copyH;
     /** Slot fire maps (texture, side, owner and fill generation) and this frame's maps (−1 — absent). */
@@ -573,7 +577,7 @@ public final class PallPass {
      */
     static boolean draw(Frame f, int scene, Matrix4f view, Matrix4f projection, Vec3 eye, Vector4f haze) {
         long preparing = cold() ? System.nanoTime() : 0;
-        ShaderInstance m = march, r = resolve, c = composite, sh = shadow, fl = footLighting;
+        ShaderInstance m = march, r = resolve, c = composite, sh = shadow, fl = footLighting, mt = mushTaus;
         if (m == null || r == null || c == null || f.quality == Quality.OFF || !upload()) return false;
         Minecraft mc = Minecraft.getInstance();
         int w = mc.getMainRenderTarget().width, h = mc.getMainRenderTarget().height;
@@ -665,21 +669,28 @@ public final class PallPass {
         }
         // base light in a separate small table; main pass only samples it
         // shared source textures and parameters: same pallSource, without a second inlined ray call
-        for (int pass = 0; pass < 2; pass++) {
-            if (pass == 0 && !litFoot) continue;
-            m = pass == 0 ? fl : march;
+        // mushroom mean depths: one grid per frame, read by every mushroom ray step (fx_mush_taus)
+        boolean grid = mt != null && tauMap >= 0 && f.mushroomCount > 0 && !Boolean.getBoolean("incoming.pallLiveTaus");
+        for (int pass = 0; pass < 3; pass++) {
+            if (pass == 0 && !litFoot || pass == 1 && !grid) continue;
+            m = pass == 0 ? fl : pass == 1 ? mt : march;
             String variant = System.getProperty("incoming.pallVariant", "");
-            if (pass == 1 && variant.equals("nomush") && marchNoMush != null) m = marchNoMush;
-            if (pass == 1 && variant.equals("nopall") && marchNoPall != null) m = marchNoPall;
+            if (pass == 2 && variant.equals("nomush") && marchNoMush != null) m = marchNoMush;
+            if (pass == 2 && variant.equals("nopall") && marchNoPall != null) m = marchNoPall;
             if (pass == 0) {
                 GlStateManager._glBindFramebuffer(GlConst.GL_FRAMEBUFFER, footFbo);
                 RenderSystem.viewport(0, 0, FOOT_LIGHT_AZ + 1, FOOT_LIGHT_H * FOOT_LIGHT_R * f.mushroomCount);
+            } else if (pass == 1) {
+                GlStateManager._glBindFramebuffer(GlConst.GL_FRAMEBUFFER, tauFbo);
+                RenderSystem.viewport(0, 0, MUSH_TAU_N * MUSH_TAU_N, 2 * MUSH_TAU_N * f.mushroomCount);
             } else {
                 GlStateManager._glBindFramebuffer(GlConst.GL_FRAMEBUFFER, FBOS[0]);
                 RenderSystem.viewport(0, 0, cellsW, cellsH);
             }
-            RenderSystem.setShaderTexture(9, pass == 1 && litFoot ? footMap : table);
+            RenderSystem.setShaderTexture(9, pass == 2 && litFoot ? footMap : table);
             m.safeGetUniform("PallFootReady").set(litFoot ? 1 : 0);
+            RenderSystem.setShaderTexture(10, pass == 2 && grid ? tauMap : table);
+            m.safeGetUniform("PallTauReady").set(pass == 2 && grid ? 1 : 0);
             RenderSystem.setShaderTexture(0, scene);
             RenderSystem.setShaderTexture(1, table);
             RenderSystem.setShaderTexture(2, blue);
@@ -735,7 +746,7 @@ public final class PallPass {
             m.safeGetUniform("SmokeBallLight").set(f.smokeBallLight);
             OpenAir.bind(m, open);
             SmokePass.bind(m, f.smoke);
-            if (pass == 1) stamp(timing, 1);
+            if (pass == 2) stamp(timing, 1);
             quad(m, true);
         }
         stamp(timing, 2);
@@ -743,6 +754,8 @@ public final class PallPass {
         // 2. accumulation: from previous history into the other frame
         int next = 1 + (1 - latest);
         GlStateManager._glBindFramebuffer(GlConst.GL_FRAMEBUFFER, FBOS[next]);
+        // every pixel of the reduced frame, not only the ray cells the march drew
+        RenderSystem.viewport(0, 0, lowW, lowH);
         RenderSystem.setShaderTexture(0, TEXTURES[0]);
         RenderSystem.setShaderTexture(1, TEXTURES[1 + latest]);
         RenderSystem.setShaderTexture(2, scene);
@@ -1013,6 +1026,7 @@ public final class PallPass {
             GL11.glTexImage2D(GL11.GL_TEXTURE_2D, 0, GL30.GL_RGBA32F, MushroomField.WIDTH, MushroomField.ROWS, 0, GL11.GL_RGBA, GL11.GL_FLOAT, mushroomBuffer);
             shadowMap();
             footMap();
+            tauMap();
         } finally {
             MemoryUtil.memFree(buf);
             GlStateManager._pixelStore(GL11.GL_UNPACK_ALIGNMENT, 4);
@@ -1044,6 +1058,33 @@ public final class PallPass {
             GlStateManager._glDeleteFramebuffers(shadowFbo);
             GlStateManager._deleteTexture(shadowMap);
             shadowMap = shadowFbo = -1;
+        }
+    }
+
+    /**
+     * Mushroom mean depth grid: {@link #MUSH_TAU_N}³ cells, packed as (height layer, x) × (mushroom, block, z), linear within a
+     * layer (the shader reads two layers and blends them).
+     */
+    private static void tauMap() {
+        int previous = GlStateManager._getInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
+        tauMap = GlStateManager._genTexture();
+        GlStateManager._bindTexture(tauMap);
+        GlStateManager._texParameter(GlConst.GL_TEXTURE_2D, GlConst.GL_TEXTURE_MIN_FILTER, GlConst.GL_LINEAR);
+        GlStateManager._texParameter(GlConst.GL_TEXTURE_2D, GlConst.GL_TEXTURE_MAG_FILTER, GlConst.GL_LINEAR);
+        GlStateManager._texParameter(GlConst.GL_TEXTURE_2D, GlConst.GL_TEXTURE_WRAP_S, GlConst.GL_CLAMP_TO_EDGE);
+        GlStateManager._texParameter(GlConst.GL_TEXTURE_2D, GlConst.GL_TEXTURE_WRAP_T, GlConst.GL_CLAMP_TO_EDGE);
+        GlStateManager._texImage2D(GlConst.GL_TEXTURE_2D, 0, GL30.GL_RGBA16F, MUSH_TAU_N * MUSH_TAU_N,
+                2 * MUSH_TAU_N * MushroomField.MUSHROOMS, 0, GL11.GL_RGBA, GL11.GL_FLOAT, null);
+        tauFbo = GlStateManager.glGenFramebuffers();
+        GlStateManager._glBindFramebuffer(GlConst.GL_FRAMEBUFFER, tauFbo);
+        GlStateManager._glFramebufferTexture2D(GlConst.GL_FRAMEBUFFER, GlConst.GL_COLOR_ATTACHMENT0, GlConst.GL_TEXTURE_2D, tauMap, 0);
+        boolean ok = GlStateManager.glCheckFramebufferStatus(GlConst.GL_FRAMEBUFFER) == GlConst.GL_FRAMEBUFFER_COMPLETE;
+        GlStateManager._glBindFramebuffer(GlConst.GL_FRAMEBUFFER, previous);
+        if (!ok) {
+            Incoming.LOG.error("Mushroom depth grid not created: mushroom ray steps compute their depths themselves");
+            GlStateManager._glDeleteFramebuffers(tauFbo);
+            GlStateManager._deleteTexture(tauMap);
+            tauMap = tauFbo = -1;
         }
     }
 

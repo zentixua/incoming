@@ -113,6 +113,11 @@ uniform sampler2D Sampler8;
 // fireball surface pattern (NukeBallSurface): u, v octahedral direction map from ball center, third axis frames by rise
 // path; 3D texture undeclared in JSON, bound manually (as PallNoise)
 uniform sampler3D PallBall;
+// mushroom mean optical depths baked this frame (fx_mush_taus, mushTauGrid): MUSH_TAU_N × MUSH_TAU_N cells across each of
+// MUSH_TAU_N height layers, two blocks per mushroom
+uniform sampler2D Sampler10;
+// 1: Sampler10 holds this frame's grid; 0: no grid, ray steps compute the depths themselves
+uniform int PallTauReady;
 // texture pattern is p / BALL_P_MAX (NukeBallSurface.P_MAX)
 const float BALL_P_MAX = 2.0;
 // perceived light gain at frame skylight (Sight.adapted): mushroom emission in frame values
@@ -153,6 +158,8 @@ const vec3 LUMA = vec3(0.2126, 0.7152, 0.0722);
 // mushroom optical depth toward light: four samples at path fractions (segment midpoints), weighted by segment fractions
 const vec4 MUSH_AT = vec4(0.025, 0.1, 0.275, 0.7);
 const vec4 MUSH_PART = vec4(0.05, 0.1, 0.25, 0.6);
+// mean depth grid per mushroom (PallPass.MUSH_TAU_N): cells across its bounds cylinder and height layers
+const int MUSH_TAU_N = 48;
 
 // frame mushrooms and ray interval in each
 vec2 gMushSpan[MUSHROOMS];
@@ -1074,6 +1081,58 @@ float mushTau(Mush m, vec3 p, vec3 v, float len) {
     return mushTauOf(m, p, v, len, vec4(1.0));
 }
 
+// Mean mushroom m depths at body q, eye-relative p: block 0 up to bounds top, down to ground, away from eye along the view
+// ray through p (at every ray step p lies on its pixel ray, so that ray is p's own direction), sunward from past the near
+// billow layer (mushSunTau); block 1 away from sun, toward the ball (stem, skirt, water column only) and away from it.
+// Smooth fields of position alone: fx_mush_taus bakes them once a frame (mushTauGrid) for every ray step to read
+vec4 mushTausAt(Mush m, vec3 p, vec3 q, int block) {
+    float across = 2.0 * m.boundR;
+    if (block == 0) {
+        float sun = 0.0;
+        if (PallSun.w > 0.0) sun = mushTau(m, p + gSun * (0.75 * m.capTile), gSun, across);
+        return vec4(mushTau(m, p, vec3(0.0, 1.0, 0.0), max(m.boundTop - q.y, 1.0)), mushTau(m, p, vec3(0.0, -1.0, 0.0), max(q.y, 1.0)),
+                mushTau(m, p, p / max(length(p), 1e-3), across), sun);
+    }
+    vec4 r = vec4(0.0);
+    if (PallSun.w > 0.0) r.x = mushTau(m, p, -gSun, across);
+    if (m.capSigma > 0.0) {
+        // toward cap center in world axes: height-dependent wind drift (mushLocal) means mushroom body axes are not world axes
+        vec3 c = vec3(0.0, m.capY, 0.0) - q;
+        c.xz += m.drift * (mushShare(m.capY, m.endTop) - mushShare(q.y, m.endTop));
+        float dc = length(c);
+        vec3 v = c / max(dc, 1e-3);
+        r.y = mushTauOf(m, p, v, max(dc - m.capR, 0.0), vec4(0.0, 1.0, 1.0, 1.0));
+        r.z = mushTau(m, p, -v, across);
+    }
+    return r;
+}
+
+// Mean depth grid of mushroom m (fx_mush_taus, PallPass): cell coordinates of body point q, x and z across its bounds
+// cylinder, y from under the ground to its top (mushLine)
+vec3 mushTauCell(Mush m, vec3 q) {
+    float lo = -0.05 * m.boundTop;
+    vec3 u = vec3(0.5 * (q.x / m.boundR + 1.0), (q.y - lo) / (m.boundTop - lo), 0.5 * (q.z / m.boundR + 1.0));
+    return clamp(u, 0.0, 1.0) * float(MUSH_TAU_N - 1);
+}
+
+// Body point of grid cell c (mushTauCell inverted)
+vec3 mushTauPoint(Mush m, vec3 c) {
+    float lo = -0.05 * m.boundTop;
+    vec3 u = c / float(MUSH_TAU_N - 1);
+    return vec3((2.0 * u.x - 1.0) * m.boundR, lo + u.y * (m.boundTop - lo), (2.0 * u.z - 1.0) * m.boundR);
+}
+
+// Mean depths of mushroom k at body q, eye-relative p (mushTausAt): from this frame's grid, trilinear (bilinear in each of the
+// two nearest height layers, never across a layer's edge into the next); without a grid, computed here
+vec4 mushTauGrid(int k, Mush m, vec3 p, vec3 q, int block) {
+    if (PallTauReady == 0) return mushTausAt(m, p, q, block);
+    vec3 c = mushTauCell(m, q);
+    float layer = min(floor(c.y), float(MUSH_TAU_N - 2));
+    vec2 size = vec2(textureSize(Sampler10, 0));
+    vec2 uv = vec2(layer * float(MUSH_TAU_N) + c.x + 0.5, float((2 * k + block) * MUSH_TAU_N) + c.z + 0.5) / size;
+    return mix(texture(Sampler10, uv), texture(Sampler10, uv + vec2(float(MUSH_TAU_N) / size.x, 0.0)), c.y - layer);
+}
+
 // Billow edge offset at c (from mushroom part center, blocks), fraction of amplitude, to ±0.68: noise channel ch
 // (VolumeNoise: R Perlin–Worley patches, B Worley domes), coarse billows at quarter tile, finer within, then four times
 // finer while resolved (cone smallest resolved size); k is tile offset, unique pattern per part/mushroom
@@ -1216,7 +1275,7 @@ vec4 mushDense(Mush m, vec3 q, float cone, float k, out float lobes, out float d
 // as long, frame-jittered sample within each (sunlit billow side and neighbor shadow give “cauliflower” cap); farther,
 // mean field: billows average to it beyond the billow layer. Mean field from point would cover even sunlit billows with
 // soft-edge depth along the surface (tens of optical depths sideways to sun)
-float mushSunTau(Mush m, vec3 p, float k) {
+float mushSunTau(Mush m, vec3 p, float k, float far) {
     float reach = 0.75 * m.capTile, len = reach / 31.0, t = 0.0, tau = 0.0;
     for (int i = 0; i < 5 && !cut(262144); i++) {
         float lobes, depth, near, carried;
@@ -1224,7 +1283,8 @@ float mushSunTau(Mush m, vec3 p, float k) {
         t += len;
         len *= 2.0;
     }
-    return tau + mushTau(m, p + gSun * reach, gSun, 2.0 * m.boundR);
+    // beyond the billow layer: mean field from the reach on (mushTausAt)
+    return tau + far;
 }
 
 // Mushroom m ball surface pattern at body q (NukeBallSurface): local temperature excess relative to mean, by direction
@@ -1275,18 +1335,20 @@ vec4 mushAt(int k, Mush m, vec3 p, vec3 q, float cone, out float near, out vec3 
     vec3 w = (sig.x * m.capMat.rgb + sig.y * m.stemMat.rgb + sig.z * m.skirtMat.rgb + sig.w * m.colMat.rgb) / st;
     float g = (sig.x * m.capMat.a + sig.y * m.stemMat.a + sig.z * m.skirtMat.a + sig.w * m.colMat.a) / st;
     vec3 kd = vec3(pallK(w.r, g), pallK(w.g, g), pallK(w.b, g));
-    // mean depth: up to bounds top, down to ground, toward/away from eye; daytime also toward/away from sun
-    float up = mushTau(m, p, vec3(0.0, 1.0, 0.0), max(m.boundTop - q.y, 1.0));
-    float down = mushTau(m, p, vec3(0.0, -1.0, 0.0), max(q.y, 1.0));
-    float across = 2.0 * m.boundR;
+    // mean depth: up to bounds top, down to ground, toward/away from eye; daytime also toward/away from sun (mushTauGrid)
+    vec4 taus = mushTauGrid(k, m, p, q, 0);
+    float up = taus.x, down = taus.y;
+    float lowShare = (sig.y + sig.z + sig.w) / st;
+    vec4 more = vec4(0.0);
+    if (PallSun.w > 0.0 || (lowShare > 0.0 && m.capSigma > 0.0)) more = mushTauGrid(k, m, p, q, 1);
     // toward eye, depth traveled by ray (with billows: a hollow point is eye-exposed; mean field would block it with
     // nonexistent foreground billows); away from eye, mean field
-    float toEye = gTauEye, beyond = mushTau(m, p, gDir, across);
+    float toEye = gTauEye, beyond = taus.z;
     vec3 light = vec3(0.0);
     // emission escape depth: shortest optical depth
     float escape = min(min(up, down), toEye);
     if (PallSun.w > 0.0) {
-        float toSun = mushSunTau(m, p, kk), away = mushTau(m, p, -gSun, across);
+        float toSun = mushSunTau(m, p, kk, taus.w), away = more.x;
         escape = min(escape, min(toSun, away));
         // sun beam along slab through point on sun axis (cosine 1): its diffuse light and direct beam
         float cs = g * dot(-gDir, gSun);
@@ -1299,7 +1361,6 @@ vec4 mushAt(int k, Mush m, vec3 p, vec3 q, float cone, out float near, out vec3 
     // radiance at visible exterior temperature (core excess × edge share), L·R²/d², beam from cap center like sun, with
     // stem/skirt/column depth on path (to ball, beyond it emitting surface). Cap itself does not receive it: its light is
     // its own emission (below)
-    float lowShare = (sig.y + sig.z + sig.w) / st;
     if (lowShare > 0.0 && m.capSigma > 0.0 && !cut(1048576)) {
         // toward cap center in world axes: height-dependent wind drift (mushLocal) means mushroom body axes are not world axes
         vec3 c = vec3(0.0, m.capY, 0.0) - q;
@@ -1309,7 +1370,7 @@ vec4 mushAt(int k, Mush m, vec3 p, vec3 q, float cone, out float near, out vec3 
         if (dot(ball, LUMA) > 1e-4 * dot(PallSkyLight, LUMA)) {
             float dc = sqrt(d2);
             vec3 v = c / max(dc, 1e-3);
-            float toBall = mushTauOf(m, p, v, max(dc - m.capR, 0.0), vec4(0.0, 1.0, 1.0, 1.0)), away = mushTau(m, p, -v, across);
+            float toBall = more.y, away = more.z;
             float cb = g * dot(-gDir, v);
             vec3 lit = vec3(pallDiffuse(w.r, g, toBall, toBall + away, 0.0, 1.0, ball.r, 1.0, 0.0, 0.0, 0.0, cb),
                     pallDiffuse(w.g, g, toBall, toBall + away, 0.0, 1.0, ball.g, 1.0, 0.0, 0.0, 0.0, cb),
@@ -1511,6 +1572,7 @@ vec4 smokeStep(float t, float cone, out float gap, out float cell) {
     return vec4(st * (w * light + (1.0 - w) * bb), st);
 }
 
+#ifndef PALL_MUSH_TAUS
 #ifndef PALL_FOOT_CACHE
 void main() {
     if (cut(65536)) { fragColor = vec4(0.0, 0.0, 0.0, 1.0); return; }
@@ -1843,5 +1905,24 @@ void main() {
     vec3 light;
     pallSource(p, cone, vec4(m.base, sigma), light);
     fragColor = vec4(light, 1.0);
+}
+#endif
+#else
+// One grid of mean mushroom depths per frame (mushTausAt), not five four-sample paths at every mushroom ray step: rows are
+// cells across z in blocks (mushroom, depth block), columns cells across x in height layers. A ray step reads only the
+// eight cells around it, and only where it is in matter: cells farther from matter than a cell diagonal (mushGap: 1-Lipschitz
+// distance bound) are never read and stay zero
+void main() {
+    ivec2 at = ivec2(gl_FragCoord.xy);
+    int k = at.y / (2 * MUSH_TAU_N), block = (at.y / MUSH_TAU_N) % 2;
+    if (k >= MUSHROOMS || !mushOn(Sampler7, k)) { fragColor = vec4(0.0); return; }
+    Mush m = mushLoad(Sampler7, k);
+    vec3 q = mushTauPoint(m, vec3(float(at.x % MUSH_TAU_N), float(at.x / MUSH_TAU_N), float(at.y % MUSH_TAU_N)));
+    float cell = length(vec3(2.0 * m.boundR, 1.05 * m.boundTop, 2.0 * m.boundR)) / float(MUSH_TAU_N - 1);
+    if (mushGap(m, q) > 1.5 * cell) { fragColor = vec4(0.0); return; }
+    vec3 p = m.base + q;
+    p.xz += m.drift * mushShare(q.y, m.endTop);
+    pallLighting(p / max(length(p), 1e-3));
+    fragColor = mushTausAt(m, p, q, block);
 }
 #endif
