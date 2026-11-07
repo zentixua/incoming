@@ -1147,7 +1147,8 @@ public final class NuclearGameTests {
 
     /**
      * A chest on a collapsing wooden tower lands in the rubble at the tower's base with its contents (Collapse#land,
-     * RuinPlan moves the block entity): one chest in the column, lower than it stood, the same items, nothing on the ground.
+     * Debris#repose, RuinPlan moves the block entity): one chest at the base, lower than it stood, the same items,
+     * nothing on the ground.
      */
     @GameTest(template = "range", timeoutTicks = 40, batch = "nuke_ruins_chest_falls", skyAccess = true)
     public static void chestFallsWithContents(GameTestHelper h) {
@@ -1162,17 +1163,207 @@ public final class NuclearGameTests {
         scarAll(h, detonation(h, CENTER, 0, 15, 0.025f), new ColumnScar.Budget(false));
         BlockPos abs = h.absolutePos(chest);
         List<BlockPos> found = new java.util.ArrayList<>();
-        for (int y = level.getMinBuildHeight(); y < abs.getY() + 2; y++) {
-            BlockPos p = new BlockPos(abs.getX(), y, abs.getZ());
-            if (level.getBlockState(p).is(Blocks.CHEST)) found.add(p);
+        // the chest lands at its column or rolls off the heap there (Debris#repose)
+        for (BlockPos p : BlockPos.betweenClosed(abs.offset(-3, level.getMinBuildHeight() - abs.getY(), -3), abs.offset(3, 1, 3))) {
+            if (level.getBlockState(p).is(Blocks.CHEST)) found.add(p.immutable());
         }
-        h.assertTrue(found.size() == 1, "chests in the column: " + found);
+        h.assertTrue(found.size() == 1, "chests around the base: " + found);
         BlockPos at = found.get(0);
         h.assertTrue(at.getY() < abs.getY(), "the chest did not fall: " + at.toShortString());
         h.assertTrue(level.getBlockEntity(at) instanceof net.minecraft.world.level.block.entity.ChestBlockEntity c
                 && c.getItem(3).is(net.minecraft.world.item.Items.DIAMOND) && c.getItem(3).getCount() == 64, "contents lost at " + at.toShortString());
         var items = level.getEntitiesOfClass(net.minecraft.world.entity.item.ItemEntity.class, new net.minecraft.world.phys.AABB(h.absolutePos(CENTER)).inflate(40));
         h.assertTrue(items.isEmpty(), "items on the ground: " + items.size());
+        h.succeed();
+    }
+
+    /** Site position east of the center where incident pressure {@code dy} blocks up lies in {@code [lo, hi]} psi. */
+    private static BlockPos eastAt(GameTestHelper h, Detonation d, double lo, double hi, int dy) {
+        for (int dx = 4; dx <= 28; dx++) {
+            double psi = d.psi(Vec3.atCenterOf(h.absolutePos(CENTER.east(dx).above(dy))));
+            if (psi >= lo && psi <= hi) return CENTER.east(dx);
+        }
+        throw new AssertionError("no place with " + lo + "–" + hi + " psi on the site");
+    }
+
+    /**
+     * Eight chests stacked one on another (a block of flats with a chest on every floor at the same spot) at ~8 psi:
+     * the wave breaks them, they land with their contents as a low heap at their base (Debris#repose), not as a
+     * one-block tower of chests (Zearth 250 kt, 07.11.2026, 1.3 km).
+     */
+    @GameTest(template = "range", timeoutTicks = 40, batch = "nuke_ruins_chest_heap", skyAccess = true)
+    public static void stackedChestsLandAsAHeap(GameTestHelper h) {
+        ServerLevel level = h.getLevel();
+        Detonation d = detonation(h, CENTER, 0, 15, 0.025f);
+        BlockPos base = eastAt(h, d, 7, 10, 4);
+        for (int y = 0; y < 8; y++) {
+            h.setBlock(base.above(y), Blocks.CHEST);
+            if (h.getBlockEntity(base.above(y)) instanceof net.minecraft.world.level.block.entity.ChestBlockEntity c) {
+                c.setItem(0, new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.DIAMOND, 1 + y));
+            }
+        }
+        scarAll(h, d, new ColumnScar.Budget(false));
+        int chests = 0, highest = -1, diamonds = 0;
+        for (BlockPos p : BlockPos.betweenClosed(base.offset(-8, 0, -8), base.offset(8, 9, 8))) {
+            if (!h.getBlockState(p).is(Blocks.CHEST)) continue;
+            chests++;
+            highest = Math.max(highest, p.getY() - base.getY());
+            if (h.getBlockEntity(p) instanceof net.minecraft.world.level.block.entity.ChestBlockEntity c && c.getItem(0).is(net.minecraft.world.item.Items.DIAMOND)) {
+                diamonds += c.getItem(0).getCount();
+            }
+        }
+        h.assertTrue(chests == 8, "chests found: " + chests);
+        h.assertTrue(diamonds == 36, "contents lost: " + diamonds + " of 36 diamonds");
+        h.assertTrue(highest <= 2, "chests still stand as a tower: top chest " + (highest + 1) + " blocks up");
+        var items = level.getEntitiesOfClass(net.minecraft.world.entity.item.ItemEntity.class, new net.minecraft.world.phys.AABB(h.absolutePos(CENTER)).inflate(40));
+        h.assertTrue(items.isEmpty(), "items on the ground: " + items.size());
+        h.succeed();
+    }
+
+    /**
+     * A stone-brick hut on four acacia-log stilts at ~6 psi (Zearth 250 kt, 2.2 km, 07.11.2026): logs that are not a tree
+     * trunk are timber like planks, the stilts break and the hut falls; nothing stays at its old height.
+     */
+    @GameTest(template = "range", timeoutTicks = 40, batch = "nuke_ruins_stilts", skyAccess = true)
+    public static void houseOnLogStiltsFalls(GameTestHelper h) {
+        Detonation d = detonation(h, CENTER, 0, 15, 0.025f);
+        BlockPos base = eastAt(h, d, 5.5, 7, 3);
+        for (int sx : new int[]{-1, 1}) for (int sz : new int[]{-1, 1}) for (int y = 0; y < 5; y++) h.setBlock(base.offset(sx, y, sz), Blocks.ACACIA_LOG);
+        for (BlockPos p : BlockPos.betweenClosed(base.offset(-1, 5, -1), base.offset(1, 7, 1))) h.setBlock(p, Blocks.STONE_BRICKS);
+        scarAll(h, d, new ColumnScar.Budget(false));
+        String at = String.format(Locale.ROOT, " (at the stilts %.1f psi)", d.psi(Vec3.atCenterOf(h.absolutePos(base.above(3)))));
+        for (BlockPos p : BlockPos.betweenClosed(base.offset(-1, 5, -1), base.offset(1, 7, 1))) {
+            h.assertTrue(h.getBlockState(p).isAir(), "the hut still stands on its stilts: " + h.getBlockState(p) + " at " + p.toShortString() + at);
+        }
+        h.succeed();
+    }
+
+    /**
+     * Timber does not hang in the air. A row of log cabins (acacia-log stilts and floor) where the wave's pressure is near
+     * the log threshold, so some logs break and others survive: every log left standing still rests on the ground
+     * through logs. A cut stilt or beam carried only logs, which once started no support pass, and the floor above it
+     * floated (the support pass starts from any broken log that is not a felled trunk, Collapse#run).
+     */
+    @GameTest(template = "range", timeoutTicks = 60, batch = "nuke_ruins_stilt_row", skyAccess = true)
+    public static void timberDoesNotHang(GameTestHelper h) {
+        Detonation d = detonation(h, CENTER, 0, 15, 0.025f);
+        java.util.List<BlockPos> huts = new java.util.ArrayList<>();
+        for (int dx = 4; dx <= 28; dx += 4) {
+            double psi = d.psi(Vec3.atCenterOf(h.absolutePos(CENTER.east(dx).above(3))));
+            if (psi < 3.8 || psi > 6.5) continue;
+            for (int dz = -24; dz <= 24; dz += 4) huts.add(CENTER.offset(dx, 0, dz));
+        }
+        h.assertTrue(huts.size() >= 8, "too few places near the log threshold: " + huts.size());
+        java.util.Set<BlockPos> built = new java.util.HashSet<>();
+        for (BlockPos base : huts) {
+            for (int sx : new int[]{-1, 1}) for (int sz : new int[]{-1, 1}) for (int y = 0; y < 5; y++) built.add(base.offset(sx, y, sz));
+            for (BlockPos p : BlockPos.betweenClosed(base.offset(-1, 5, -1), base.offset(1, 5, 1))) built.add(p.immutable());
+        }
+        for (BlockPos p : built) h.setBlock(p, Blocks.ACACIA_LOG);
+        scarAll(h, d, new ColumnScar.Budget(false));
+        int broken = 0;
+        for (BlockPos p : built) if (!h.getBlockState(p).is(Blocks.ACACIA_LOG)) broken++;
+        h.assertTrue(broken > 0, "no log broke: nothing checked");
+        // logs reachable through logs from the ground (stilt bases and landed rubble at ground level)
+        java.util.Set<BlockPos> held = new java.util.HashSet<>();
+        java.util.ArrayDeque<BlockPos> queue = new java.util.ArrayDeque<>();
+        for (BlockPos base : huts) {
+            for (BlockPos p : BlockPos.betweenClosed(base.offset(-3, 0, -2), base.offset(3, 0, 2))) {
+                if (h.getBlockState(p).is(Blocks.ACACIA_LOG) && held.add(p.immutable())) queue.add(p.immutable());
+            }
+        }
+        while (!queue.isEmpty()) {
+            BlockPos p = queue.poll();
+            for (net.minecraft.core.Direction dir : net.minecraft.core.Direction.values()) {
+                BlockPos n = p.relative(dir);
+                if (n.getY() >= 0 && h.getBlockState(n).is(Blocks.ACACIA_LOG) && held.add(n)) queue.add(n);
+            }
+        }
+        for (BlockPos p : built) {
+            h.assertTrue(!h.getBlockState(p).is(Blocks.ACACIA_LOG) || held.contains(p), "a log hangs in the air at " + p.toShortString()
+                    + String.format(Locale.ROOT, " (%.1f psi; %d of %d logs broke)", d.psi(Vec3.atCenterOf(h.absolutePos(p))), broken, built.size()));
+        }
+        h.succeed();
+    }
+
+    /**
+     * Nothing hangs in the air after the wave. A glass roof over the whole site (wider than a planning window, so it is
+     * the lowest column top there) above small terracotta tables on plank legs, at ~12 psi from a ground burst 60
+     * blocks west: the roof breaks, the wave reaches the legs through the gaps, and every block left above the ground
+     * rests on it through other blocks. Zearth 250 kt (07.11.2026): skyscraper terracotta, concrete and sandstone
+     * floated in one-block bands up to 180 blocks above the rubble, because a window under one roof took the roof for
+     * the ground (Collapse#surface).
+     */
+    @GameTest(template = "range", timeoutTicks = 100, batch = "nuke_ruins_floating", skyAccess = true)
+    public static void nothingHangsAfterTheWave(GameTestHelper h) {
+        int floor = CENTER.getY(), top = floor + 19;
+        Detonation d = atPsi(h, new BlockPos(-60, floor, 32), false, new BlockPos(32, floor + 3, 32), 12);
+        for (int x = 0; x < 64; x++) {
+            for (int z = 0; z < 64; z++) {
+                if (x % 4 == 1 && z % 4 == 1) for (int y = 0; y < 5; y++) h.setBlock(new BlockPos(x, floor + y, z), Blocks.SPRUCE_PLANKS);
+                if (x % 4 != 3 && z % 4 != 3) h.setBlock(new BlockPos(x, floor + 5, z), Blocks.LIGHT_GRAY_TERRACOTTA);
+                h.setBlock(new BlockPos(x, floor + 10, z), Blocks.GLASS);
+            }
+        }
+        scarAll(h, d, new ColumnScar.Budget(false));
+        java.util.function.Predicate<BlockPos> solid = p -> {
+            var st = h.getBlockState(p);
+            return !st.isAir() && st.getFluidState().isEmpty();
+        };
+        java.util.Set<BlockPos> held = new java.util.HashSet<>();
+        java.util.ArrayDeque<BlockPos> queue = new java.util.ArrayDeque<>();
+        for (int x = 0; x < 64; x++) for (int z = 0; z < 64; z++) {
+            BlockPos p = new BlockPos(x, floor - 1, z);
+            if (solid.test(p)) {
+                held.add(p);
+                queue.add(p);
+            }
+        }
+        while (!queue.isEmpty()) {
+            BlockPos p = queue.poll();
+            for (net.minecraft.core.Direction dir : net.minecraft.core.Direction.values()) {
+                BlockPos n = p.relative(dir);
+                if (n.getX() < 0 || n.getX() > 63 || n.getZ() < 0 || n.getZ() > 63 || n.getY() < floor - 1 || n.getY() > top) continue;
+                if (!held.contains(n) && solid.test(n)) {
+                    held.add(n);
+                    queue.add(n);
+                }
+            }
+        }
+        int floating = 0;
+        BlockPos first = null;
+        for (int x = 3; x < 64; x++) for (int z = 3; z < 64; z++) for (int y = floor; y <= top; y++) {
+            // from 3: the site's barrier fence (indestructible, holds like ground) carries the tables along its west and north sides
+            BlockPos p = new BlockPos(x, y, z);
+            if (solid.test(p) && !held.contains(p)) {
+                floating++;
+                if (first == null || p.getY() > first.getY()) first = p;
+            }
+        }
+        if (floating > 0) h.fail(floating + " blocks hang in the air, highest " + h.getBlockState(first) + " at " + first.toShortString()
+                + String.format(Locale.ROOT, " (%.1f psi there)", d.psi(Vec3.atCenterOf(h.absolutePos(first)))));
+        h.succeed();
+    }
+
+    /**
+     * Trunks fall only whole. A tree at ~3.5 psi (reflected pressure on its trunk above the 5 psi log threshold, incident
+     * below it) keeps its whole trunk: no log is cut out of it. A 26-block trunk (over the old 24-block limit) with a crown (mega jungle or spruce) at
+     * ~7 psi falls whole like a small tree: no log stands above the stump height.
+     */
+    @GameTest(template = "range", timeoutTicks = 60, batch = "nuke_trunks", skyAccess = true)
+    public static void trunksFallOnlyWhole(GameTestHelper h) {
+        Detonation d = detonation(h, CENTER, 0, 15, 0.015f);
+        BlockPos small = eastAt(h, d, 3, 4.2, 2), tall = eastAt(h, d, 6, 9, 10).south(8);
+        for (int i = 0; i < 4; i++) h.setBlock(small.above(i), Blocks.OAK_LOG);
+        for (BlockPos p : BlockPos.betweenClosed(small.offset(-1, 4, -1), small.offset(1, 5, 1))) h.setBlock(p, Blocks.OAK_LEAVES);
+        for (int i = 0; i < 26; i++) h.setBlock(tall.above(i), Blocks.JUNGLE_LOG);
+        for (BlockPos p : BlockPos.betweenClosed(tall.offset(-2, 26, -2), tall.offset(2, 27, 2))) h.setBlock(p, Blocks.JUNGLE_LEAVES);
+        scarAll(h, d, new ColumnScar.Budget(false));
+        for (int i = 0; i < 4; i++) h.assertBlockPresent(Blocks.OAK_LOG, small.above(i));
+        for (int i = 2; i < 26; i++) {
+            h.assertTrue(!h.getBlockState(tall.above(i)).is(BlockTags.LOGS), "the tall trunk stands at " + i + " blocks up: "
+                    + String.format(Locale.ROOT, "%.1f psi", d.psi(Vec3.atCenterOf(h.absolutePos(tall.above(10))))));
+        }
         h.succeed();
     }
 

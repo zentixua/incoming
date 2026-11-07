@@ -105,6 +105,8 @@ import java.util.function.LongSupplier;
  * strikes/weapons. Projectile itself unharmed, like vanilla.
  */
 final class StagedExplosion implements UnitQueue.Job {
+    /** {@code Direction.values()} copies its array on every call; loops over neighbours read this one. */
+    private static final net.minecraft.core.Direction[] DIRECTIONS = net.minecraft.core.Direction.values();
     /** World block portion timed: continue while unit shorter than this. */
     static final long PORTION_NANOS = 5_000_000L;
     /** Longer block logs a line. */
@@ -701,7 +703,7 @@ final class StagedExplosion implements UnitQueue.Job {
                 // Gas loads a wall normally from every adjacent room cell. The vector from the charge is not that
                 // normal (a tall wall above a floor-level charge must not be mistaken for a backed horizontal slab).
                 boolean free = false;
-                for (Direction dir : Direction.values()) {
+                for (Direction dir : DIRECTIONS) {
                     if (room.cells().contains(p.relative(dir).asLong()) && !SurfaceBlocks.backed(level, p, dir)) {
                         free = true;
                         break;
@@ -751,7 +753,7 @@ final class StagedExplosion implements UnitQueue.Job {
                 first = false;
                 cells.add(p.asLong());
                 if (cells.size() > ROOM_CELLS) return null;
-                for (Direction dir : Direction.values()) {
+                for (Direction dir : DIRECTIONS) {
                     long n = BlockPos.offset(p.asLong(), dir);
                     if (seen.add(n)) queue.enqueue(n);
                 }

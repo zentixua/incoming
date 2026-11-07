@@ -30,6 +30,8 @@ import java.util.Optional;
  * charge, not hole width, which is ours.
  */
 final class SlabBreach {
+    /** {@code Direction.values()} copies its array on every call; loops over neighbours read this one. */
+    private static final net.minecraft.core.Direction[] DIRECTIONS = net.minecraft.core.Direction.values();
     /** Contact tolerance at a block face, metres; geometric paths use exact shape chords. */
     static final double STEP = 0.1;
     /** Vanilla-blast-resistant block (obsidian 1200, protected mod blocks): charge does not displace it. */
@@ -140,7 +142,7 @@ final class SlabBreach {
         Direction entry = axis != null && here == Cell.SOLID ? exitFace(cell, centre, axis.scale(-1)) : null;
         Direction hit = null;
         double facing = 0;
-        for (Direction d : Direction.values()) {
+        for (Direction d : DIRECTIONS) {
             BlockPos n = cell.relative(d);
             if (!Terrain.ready(level, n)) return null;
             Cell k = cell(level, n, level.getBlockState(n), e, damage);

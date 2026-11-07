@@ -59,6 +59,8 @@ import java.util.PriorityQueue;
  * out on schedule.
  */
 public final class FuelFires {
+    /** {@code Direction.values()} copies its array on every call; loops over neighbours read this one. */
+    private static final net.minecraft.core.Direction[] DIRECTIONS = net.minecraft.core.Direction.values();
     /** Maximum downward support search for fuel falling off an edge/through roof, blocks. */
     static final int FALL = 64;
     /** Maximum spread-search cells per fuel cell (around walls/holes). */
@@ -382,7 +384,7 @@ public final class FuelFires {
         if (!(s.getBlock() instanceof BaseFireBlock)) return;
         BlockPos below = cell.below();
         if (level.getBlockState(below).isFireSource(level, below, Direction.UP)) return;
-        for (Direction d : Direction.values()) {
+        for (Direction d : DIRECTIONS) {
             BlockPos n = cell.relative(d);
             if (level.getBlockState(n).isFlammable(level, n, d.getOpposite())) return;
         }
