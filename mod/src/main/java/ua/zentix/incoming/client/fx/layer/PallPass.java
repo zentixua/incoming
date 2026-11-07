@@ -776,6 +776,8 @@ public final class PallPass {
         // a ray pixel takes its new ray with the history weight of n² ordinary frames, but no lower than TRACED_HISTORY
         double traced = Double.parseDouble(System.getProperty("incoming.pallTracedHistory", String.valueOf(TRACED_HISTORY)));
         r.safeGetUniform("PallInterleave").set(n, ox, oy, (float) Math.max(Math.pow(HISTORY, n * n), traced));
+        // history moves 1/n of the way to the neighbour-ray bounds each frame: outright without interleaving
+        r.safeGetUniform("PallClamp").set(Float.parseFloat(System.getProperty("incoming.pallClamp", String.valueOf(1f / n))));
         r.safeGetUniform("PallCut").set((float) Integer.getInteger("incoming.pallCut", 0));
         SmokePass.bind(r, f.smoke);
         quad(r, false);

@@ -41,6 +41,12 @@ uniform vec4 PallReproject;
 uniform vec4 PallFrame;
 // x: interleave n; yz: this frame's traced pixel within each block; w: history weight at a traced pixel
 uniform vec4 PallInterleave;
+// share of the way history moves toward the bounds of the rays around it each frame (1: clamped outright). Interleaved rays
+// give a block of n × n pixels one set of neighbour rays, a different set each frame: snapped to one frame's set, a whole
+// block took a chance low or high bound (thin lobes, where a jittered ray either hits a billow or misses it) and showed as a
+// light or dark tile of the block's size. Pulled part of the way, history follows the bounds averaged over frames; a real
+// change outside them still wins within a few frames
+uniform float PallClamp;
 // PROFILING ONLY: term switches (bits 2^25 neighbourhood, 2^26 mushroom/smoke reprojection distance, 2^27 slope, 2^28 history)
 uniform float PallCut;
 bool cut(int bit) { return (int(PallCut + 0.5) & bit) != 0; }
@@ -130,11 +136,12 @@ void main() {
     vec4 past = vec4(0.0);
     if (seen && !cut(268435456)) past = texture(Sampler1, (lattice + 0.5) / vec2(textureSize(Sampler1, 0)));
     bool pastOk = seen && pallValid(past) && all(lessThanEqual(lo, hi));
+    vec4 held = mix(past, clamp(past, lo, hi), PallClamp);
     if (!curOk) {
-        // between rays (or an invalid ray): history clamped to the rays around it; none — the nearest such ray
-        if (pastOk) fragColor = traced ? past : clamp(past, lo, hi);
+        // between rays (or an invalid ray): history held to the rays around it; none — the nearest such ray
+        if (pastOk) fragColor = traced ? past : held;
         else fragColor = fill;
         return;
     }
-    fragColor = pastOk ? mix(cur, clamp(past, lo, hi), PallInterleave.w) : cur;
+    fragColor = pastOk ? mix(cur, held, PallInterleave.w) : cur;
 }
