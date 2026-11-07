@@ -150,12 +150,16 @@ public final class ScarQueue {
     private static final int LOOKED = 0, PLANNED_WAITS = 1, WORKED = 2;
     /** Slow nuclear-tick log/tests: jobs inspected this tick, those waiting. */
     private int inspected, waitedThisTick;
+    /** Tick of {@link #inspected} ({@link #workSeen} and {@link #work} share it). */
+    private long queueTick = Long.MIN_VALUE;
     /**
      * Only {@link NukeDiag#ON}, per tick: visible ruins/max lag, other ruins, prechecks;
      * source of latest ruin plan ({@link #ruin}).
      */
     private int diagSeen, diagUnseen, diagAhead;
     private long diagSeenLag;
+    /** Tick whose DIAG counters are running ({@link #diagStart}). */
+    private long diagTick = Long.MIN_VALUE;
     private String diagSource = "";
 
     /** Maximum simultaneous neighbor tickets for released zone squares ({@link #holdForTile}). */
@@ -703,12 +707,11 @@ public final class ScarQueue {
      */
     public void work(ServerLevel level, long now, WorkClock clock) {
         if (!NukeDiag.ON) {
-            queue(level, now, clock);
+            queue(level, now, clock, false);
             return;
         }
-        diagSeen = diagUnseen = diagAhead = 0;
-        diagSeenLag = 0;
-        queue(level, now, clock);
+        diagStart(now);
+        queue(level, now, clock, false);
         for (Job j : readySeen) j.diagSkipped++;
         if (diagSeen > 0 || !readySeen.isEmpty()) {
             Incoming.LOG.info("DIAG ruin tick {}: seen ruined {} (lag up to {}), seen left {}, unseen ruined {}, unseen left {}, checked ahead {}, "
@@ -719,7 +722,28 @@ public final class ScarQueue {
         }
     }
 
-    private void queue(ServerLevel level, long now, WorkClock clock) {
+    /**
+     * Player-visible part of {@link #work}, before other nuclear work of the tick ({@code NuclearWorld.tick}: craters): enqueue
+     * chunks loaded at detonations, then visible ruins and their prechecks; chunks nobody sees wait for {@link #work}.
+     * The crater's columns took the whole lane for its first ~4.5 s: chunks loaded at a 250 kt detonation were not even
+     * enqueued, so every chunk in view of a bot 460 m out got its ruins 105–116 ticks after the wave (Zearth r4, 07.11).
+     * GameTest {@code seenRuinsKeepUpWithCrater}.
+     */
+    public void workSeen(ServerLevel level, long now, WorkClock clock) {
+        if (NukeDiag.ON) diagStart(now);
+        queue(level, now, clock, true);
+    }
+
+    /** Per-tick DIAG counters start once a tick: {@link #workSeen} and {@link #work} add to the same line. */
+    private void diagStart(long now) {
+        if (diagTick == now) return;
+        diagTick = now;
+        diagSeen = diagUnseen = diagAhead = 0;
+        diagSeenLag = 0;
+    }
+
+    /** @param seenOnly stop when only chunks nobody sees remain ({@link #workSeen}) */
+    private void queue(ServerLevel level, long now, WorkClock clock, boolean seenOnly) {
         // first enqueue chunks loaded at detonations. Order irrelevant: queue uses wave arrival;
         // enqueuing thousands takes several ticks, wave crosses couple chunks meanwhile
         while (!scans.isEmpty() && clock.canStart()) {
@@ -792,7 +816,11 @@ public final class ScarQueue {
             job.ready = true;
             (watched(level, new ChunkPos(job.chunk)) ? readySeen : readyUnseen).add(job);
         }
-        inspected = waitedThisTick = 0;
+        // one count per tick across workSeen and work: the first inspection of a tick is free of the deadline check
+        if (queueTick != now) {
+            queueTick = now;
+            inspected = waitedThisTick = 0;
+        }
         // due visible chunks, approaching-wave visible prechecks, others. Visible/prechecks get extended
         // deadline without spare server time (SEEN_BUSY_NANOS), others lane deadline
         while (clock.canStartVisible(SEEN_BUSY_NANOS)) {
@@ -800,7 +828,7 @@ public final class ScarQueue {
             Job job;
             if (!readySeen.isEmpty()) job = readySeen.removeFirst();
             else if (lookAheadNext(level, now, clock)) continue;
-            else if (!readyUnseen.isEmpty() && clock.canStart() && !(inspected > 0 && clock.overdue())) job = readyUnseen.removeFirst();
+            else if (!seenOnly && !readyUnseen.isEmpty() && clock.canStart() && !(inspected > 0 && clock.overdue())) job = readyUnseen.removeFirst();
             else return;
             job.ready = false;
             if (jobs.get(job.chunk) != job) continue; // unloaded or removed
