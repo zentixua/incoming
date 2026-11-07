@@ -22,7 +22,12 @@ paths:
   `ScarQueue.LOOKAHEAD` (20) ticks before the wave: plans that became stale during flight (grass grew, player placed a
   block) and chunks without plans receive a background plan now, ready by the wave (GameTest
   `staleSeenPlanReplannedBeforeWave`); a background plan stale at replacement is not applied — rebuild on the server
-  thread from the chunk as it is (`staleBackgroundPlanRebuiltOnServer`); trunks falling into a neighboring chunk wait
+  thread from the chunk as it is (`staleBackgroundPlanRebuiltOnServer`). Changes the world makes by itself between plan
+  and wave must not stale plans, or a whole visible city re-plans at once (1 Mt: ruins 2–7 s late): `RuinPlan.normal`
+  ignores daylight detector power, `RuinPlan.unburnt` accepts flash fire and burned flammable cells only in chunks the
+  flash layer reached and no player broke a block in (`PLAYER_BROKE`), so a block a player mines still stales the plan
+  (`PlanCurrentTest`, `minedPlankMakesPlanStaleBeforeTheFlash`);
+  `-Dincoming.nukeDiag=true` logs the changed blocks of each stale plan (“DIAG stale”); trunks falling into a neighboring chunk wait
   for its ruins; loads no neighbors: finished plans need none (except `RuinPlan.neighbourRadius`: world-path positions
   within 2 blocks of the edge or a nearby Sable craft need a radius-1 ticket; non-vanilla block entities through the
   world (Create belts remove chains up to 20 blocks) need radius 2); background plans use a 5×5 window of memory/disk
@@ -35,7 +40,7 @@ paths:
   snapshots — section palettes, heightmaps and sky sources copied on the server thread or read from disk
   (`DiskShots`); a snapshot stays valid while chunk blocks match: section fingerprints, a lamp darkened by blackout
   remains the same lamp; fractures and plans remember their source snapshot IDs). Thus `Blast`, `Collapse` and
-  `RuinPlanner.finish` (fires, light, material sources, heightmaps, section deltas) run on background `RuinWorkers`
+  `RuinPlanner.finish` (fires, light, rubble, trunks, heightmaps, section deltas) run on background `RuinWorkers`
   threads (priority queue, `RuinWorkers.Priority`: player-visible chunks in the ruin queue, then other queued ruins
   and preparation of in-memory chunks, then distant disk plans and far LODs; a priority's task limit includes higher
   priorities: distant work keeps the pool full while the wave travels; the ruin queue promotes a chunk's queued
@@ -72,7 +77,11 @@ paths:
   traversal); structures already without visible support before the strike (beyond 8) cascade from broken blocks,
   natural ground arches and overhangs stand; leaves without trunks fall; small water bodies (up to 4096 positions and
   16 wide) with breached bottoms drain; attached blocks (doors, torches, signs) follow their support, liquids beside a
-  breach tick; removed structural material transfers to `RuinMatter`; light ignites/burns; all
+  breach tick; fallen blocks land as rubble of their own material (`Debris`: 0.12 of them, drifted downwind by the
+  decaying blast wind on 0.2 m fragments and spread by fall height, resolved exactly within the 8-block ring; farther
+  drift is exported and the chunk imports `Debris.importFraction` of its own exports at their landing columns, so no
+  cross-chunk record); containers fall straight into the pile with their contents (`RuinPlan.moves` carries the block
+  entity NBT within the chunk; a `SLOW` new state goes through the world); light ignites/burns; all
   randomness comes from coordinate hashes; chunk ruins wait for ready chunks within `RuinPlanner.REACH` = 2),
   `RuinPlan` (delta only: 4 bytes per position, fires; heightmaps, lower sky sources of changed columns and light-check
   positions are calculated in the plan; on replacement, write plan positions and fire directly into sections, install
@@ -229,47 +238,6 @@ paths:
   (`RuinContext.applied`).
 
 ## Pitfalls
-- Nuclear timber members use ordinary pressure fracture; the log tag is not immunity. Rooted connected log
-  components with a neighbouring crown use the tree path first, including branches and the full snapshot height.
-  Below the whole-tree load, or with tree fall disabled, those logs do not leak into ordinary timber fracture.
-  Breakable blocks above the legacy hardness table use the strongest nuclear proxy; conventional response is unchanged.
-- `StructuralResponse` is the exact elastic SDOF response to a triangular pulse, including post-pulse motion.
-  `Blast` uses physical positive-phase duration, actual collision volume, the existing `penetration` data map's
-  represented thickness, and inferred span. Legacy pressure thresholds remain estimated long-pulse capacities;
-  `structural_material` supplies density and estimated connection displacement/span. This is not a calibrated
-  finite-element model. Reloading tags or block data maps invalidates the snapshot property table.
-- `Collapse.detached` compares original contact connectivity with surviving components inside its window.
-  Pre-existing detached builds remain untouched. Actual removed support faces seed `RuinSupport`: a resumable
-  contact graph across ready chunks. The saved removed-contact journal is shared across all still-pending strikes,
-  with the first removed state at each position retained until reconciliation drains (event IDs only attribute
-  removals). Per-event reconstruction loses foundations broken by overlapping strikes. It reconstructs the original graph:
-  release requires an original path to a protected block/world floor and no surviving path. A broken decoration
-  does not give an End island or floating build global gravity; lower neighbours are not support-loss seeds.
-  Unknown faces wait behind a separate non-ticking material ticket, never become anchors. Loader neighbour
-  notifications invalidate the entire in-progress certificate, including contacts scanned in earlier slices;
-  release also rechecks each cell and its external contacts. Traversal, validation and release use the same
-  load-bearing face criterion: a colliding leaf is not an anchor or a new structural contact. Never bypass
-  notifications when adding supports. Registered-event regressions: `nuke_review_foliage`, `nuke_review_overlap*`.
-  Continuation removals AND deposition use `RuinPlan.callbackRadius`: non-vanilla block entities require a radius-2
-  ready neighbourhood for `onRemove`/`onPlace`, not just the two-block Sable guard. Source expansion, search, validation and
-  release run in bounded batches under the nuclear work clock; no fixed bridge length declares equilibrium.
-  Original-contact journals retire when all affected support queues drain, including cold edges; later failures
-  start from the reconciled world rather than retaining every completed strike's contact history.
-- `RuinMatter` (`incoming_ruin_matter` SavedData) owns material after successful source removal. Capture live
-  states and block-entity contents before writing; never resurrect flash-consumed blocks. Handoff IDs prevent
-  repeated release of the same records. Original block state, represented solid volume/mass, trajectory/time,
-  pending support sources and cold contact faces survive clean save/reload. Per-type and aggregate balances:
-  released = deposited + dispersed foliage/glazing + pending. Cosmetic particles own no additional mass.
-- Coarse transport integrates gravity and triangular dynamic-pressure drag relative to the air, with adaptive
-  half-metre substeps. It never advances beyond elapsed game time. Settlement uses the same block type and saved
-  contents; logs rotate horizontally, waterlogging follows destination water. A one-block coarse repose step is
-  an estimate, not measured universal friction. Fire/plants do not trap material above an otherwise valid floor.
-  Non-colliding non-replaceable decorations (rails, torches, wire) yield the destination with ordinary item drops;
-  protected blocks and block entities retain ownership. Collision and placement share the occupancy rule.
-  No decorative 12%/four-block cap remains. Outside-height material stays in a saved dormant reservoir without
-  acquiring chunks or consuming repeated work. Unloaded destinations remain pending, not discarded.
-  These are normal-save invariants, not an atomic transaction across region files and SavedData under power loss.
-  Regression batches: `nuke_structure_*`, `nuke_material*`; numeric response: `StructuralResponseTest`.
 - `RuinSettle` settles the entire saved ruin zone after its wave, including `NuclearEvents.past` from old saves,
   without players or LOD clients. Scan final-block disk chunks (`DiskStatus.blocksFinal`), skip absent/PARTIAL ones;
   old FINAL/retrogen chunks may need vanilla's asynchronous upgrade generation. Load through `AreaLoader` with
@@ -369,56 +337,8 @@ paths:
   it retains no world/preparation owner. Regressions: RuinWorkersTest, RuinInboxTest and nuke_lifecycle_* GameTests
   (cancel/resize/shutdown, nonblocking layout handoff, cross-strike/dimension admission).
 
-- Structural material retains source face scorch through `RuinScorch` (one chunk index per removal batch).
-  `RuinMatter` saves the six tiers with each pending piece; log-axis rotation rotates the faces, without
-  recomputing illumination at the destination. `FlashSync.movedChars` merges landed faces once per chunk/tick.
-- Nuclear crater ownership is `CraterMatter`: source solid volume/mass by block state is partitioned into
-  actual rim deposits, exported ejecta and thermal transformation. The rim consumes excavated ground stock;
-  it cannot create material when the bowl is protected or empty. Original soil, column heights and completed
-  columns survive clean restart, so a resumed chunk cannot deepen its already-dug columns. Conventional
-  `CraterJob.digColumn` callers retain their existing path. Region-file/SavedData power-loss atomicity is not claimed.
-
-- Material ownership participates in the same cross-dimension reservation counter as preparation. Reserve before
-  source removal; retain the plan/seed on refusal. `ScarQueue` capacity waits yield the lane instead of immediately
-  requeueing as `AGAIN`; `NuclearWorld` gives existing material one bounded batch before admitting new removals.
-  Material/settlement admission charges resident workers (`memory(level, false)`), not an idle pool's configured
-  future size. `nuke_memory_flow` and `nuke_memory_retired_workers` cover the resulting progress dependencies.
-- Completed crater chunks discard column checkpoints after advancing the saved chunk cursor. Completed passes
-  retain only material totals; terminal out-of-height material groups identical state/cargo without trajectory data.
-  Active moving pieces, support provenance/graph and crater passes are charged by `retainedRuinBytes`. The counter
-  includes collection slack and a fixed I/O workspace; it does not bound all Minecraft/mod heap or guarantee a finite
-  completion time for an arbitrarily large component at capacity.
-- Crater traversal uses the bounded row-head iterator's inclusive 15-block edge to preserve old saved chunk order.
-  Settlement uses the default 16-block edge and versioned cursors; legacy unfinished cursors restart through scar
-  marks. Never substitute the crater ordering without a cursor migration test.
-
-- Settlement must trim re-readable snapshots before reserving traversal rows. Otherwise a full budget can block the cleanup that a retained scar needs to resume; cover this through `NuclearWorld.tick` with no moving pieces or external reservation release.
 - Cancelled preparations retain disk/front-copy reservations in their NuclearPrep lifetime counter until completion,
   even after the preparation is removed. Ready results release at collection or invalidation. `RetainedPlans`
   follows put/remove/clear so consumed preplans no longer contribute historical bytes. These are admission estimates,
   not a complete nuclear heap bound. FarLods tags copies, snapshots and headers by cancellation generation; late
   results release their slots but cannot publish. Regressions: `nuke_lifecycle_detached`, `nuke_lifecycle_far`.
-
-- Material persistence (`LedgerData`) overrides the real `SavedData.save(File, Provider)` wrapper. The ledger itself
-  is the frozen snapshot until NeoForge's queued atomic I/O completes; material mutation pauses, but existing
-  ownership remains charged. Repeated autosaves cannot enqueue another snapshot. Streaming NBT writes bounded
-  rows/primitive arrays off-thread; moving numeric fields use a 145-byte big-endian payload, with ordinary registry
-  state/cargo NBT. Legacy named-field rows still load. Never restore the inherited whole-tree/copy save wrapper.
-- Cold material/progress lookup installs a placeholder without calling `DimensionDataStorage.computeIfAbsent`.
-  `LedgerScan` checks live/import ownership without allocating payload arrays, then `LedgerReader` imports one row
-  at a time under a cross-dimension reservation. Completed legacy crater arrays are skipped before allocation
-  (event IDs can follow their arrays); active checkpoints and material totals survive. Import publication transfers
-  ownership before releasing its reservation. Unknown cold ownership blocks new admission, not just same-dimension
-  work. An active legacy component exceeding the global cap remains durably paused on disk, never replaced by an
-  empty ledger; graph paging is still absent. Cold I/O/decode failures likewise preserve the source file and log.
-  Background restore must not call `Blast.props` or arbitrary block collision callbacks: use saved quantities.
-- Collected/fresh plans waiting in `ScarQueue.parked` have their own counted owner. Keep it through replacement
-  admission; release/transfer on success, staleness, unload and clear. Prepared plans keep their `RetainedPlans`
-  owner through admission and are not counted twice. `nuke_ledger_*` covers delayed real-wrapper I/O, packed/legacy
-  parity, several refused collected plans, cold cross-dimension admission and large completed legacy checkpoints.
-
-- Cold import must leave already-loaded transport/support able to free decoder workspace. Continuation growth
-  uses actual resident ownership, while unknown ledgers still close new strike removals. Resolve getters that
-  may admit another cold decoder before checking/charging headroom (`nuke_ledger_drain`, `nuke_ledger_admission`).
-  Streaming crater retirement adds to saved aggregate totals in either compound field order; never overwrite
-  totals from previously retired rows (`nuke_ledger_totals`).

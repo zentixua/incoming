@@ -292,6 +292,44 @@ public final class BlastBody {
         return new Wound(death, injury, t.peak(), away, wind);
     }
 
+    /**
+     * Bulk density of a non-living entity's box, kg/m³ (est.): boats, carts, crates and craft are mostly hollow, so a
+     * boat's box gives ≈ 110 kg and a minecart's ≈ 70 kg (real rowboat 100–200, mine cart 70–150), a dropped stack ≈ 1.6 kg.
+     */
+    static final double OBJECT_DENSITY = 100;
+
+    /**
+     * Post-front wind on a non-living entity (item, boat, minecart, falling block, mod vehicle): the body throw law
+     * ({@link BlastInjury#thrown}) with drag Cd·A/m of its box, A = width·height facing the wind, m = density·width²·height,
+     * Cd 1, so Cd·A/m = 1/(density·width). Moves only through the game's own motion ({@code push}, synced to clients);
+     * riders go with their vehicle. Reached where the wind blows (open sky, under crowns), like bodies.
+     *
+     * @return the entity was thrown
+     */
+    public static boolean blow(ServerLevel level, Detonation d, Entity e) {
+        Vec3 mid = e.position().add(0, e.getBbHeight() * 0.5, 0);
+        double kpa = d.overpressureKpa(mid);
+        if (kpa < Detonation.HIT_KPA || !windAt(level, mid)) return false;
+        Wave wave = of(d);
+        double drag = 1 / (OBJECT_DENSITY * Math.max(0.1, e.getBbWidth()));
+        double v = Math.min(MAX_THROW, BlastInjury.thrown(kpa, wave.windSpeed(mid), wave.phaseSeconds(mid), drag).peak() / 20);
+        if (!(v > 0)) return false;
+        Vec3 away = away(d.burst(), e);
+        e.push(away.x * v, Math.min(HOP, 0.25 * v), away.z * v);
+        e.hurtMarked = true;
+        return true;
+    }
+
+    /**
+     * Entity the wind moves as an object: not a body (bodies have {@link BlastBody}), not riding (moves with its vehicle),
+     * with physics (markers and displays have none), not hung on a wall, not a guided strike projectile.
+     */
+    public static boolean object(Entity e) {
+        return !(e instanceof LivingEntity) && e.isAlive() && !e.isPassenger() && !e.noPhysics && !e.isSpectator()
+                && !(e instanceof net.minecraft.world.entity.decoration.HangingEntity) && !(e instanceof net.minecraft.world.entity.projectile.Projectile)
+                && !(e instanceof ua.zentix.incoming.entity.StrikeProjectile);
+    }
+
     /** Burial: body covered by chunk ruins. Survivors stay buried and suffocate until they escape. */
     public static void bury(ServerLevel level, Detonation d, LivingEntity e, @Nullable Entity owner) {
         if (!buried(level, e)) return;
@@ -334,7 +372,7 @@ public final class BlastBody {
     }
 
     /** Horizontally away from blast (unit vector). */
-    private static Vec3 away(Vec3 centre, LivingEntity e) {
+    private static Vec3 away(Vec3 centre, Entity e) {
         Vec3 away = new Vec3(e.getX() - centre.x, 0, e.getZ() - centre.z);
         return away.lengthSqr() < 1e-4 ? new Vec3(1, 0, 0) : away.normalize();
     }

@@ -65,6 +65,13 @@ public final class ModAttachments {
      * Chunk: detonation number whose flash layer ignited fire here before ruins were applied ({@code FlashScorch}): layer fire
      * does not tick; ruins built without the layer plan (after restart) extinguish or manage it. Saved with the chunk.
      */
+    /**
+     * Chunk: a player broke a block in it this session ({@link ua.zentix.incoming.nuclear.world.RuinPlan#onBreak}): a
+     * removed flammable block there is not taken for burned out. Not saved: ready plans live in memory only.
+     */
+    public static final Supplier<AttachmentType<Boolean>> PLAYER_BROKE = REGISTER.register("player_broke",
+            () -> AttachmentType.builder(() -> false).build());
+
     public static final Supplier<AttachmentType<Integer>> FLASH_LAYER = REGISTER.register("flash_layer",
             () -> AttachmentType.builder(() -> 0).serialize(Codec.INT).build());
 

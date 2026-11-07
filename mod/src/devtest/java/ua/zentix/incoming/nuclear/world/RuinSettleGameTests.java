@@ -69,7 +69,7 @@ public final class RuinSettleGameTests {
         int ground = 64;
         LevelChunk source = fixture(level, target, ground);
         CompoundTag before = ChunkSerializer.write(level, source);
-        level.getChunkSource().chunkMap.write(target, before);
+        ua.zentix.incoming.util.RegionFiles.write(level, target, before);
         h.assertTrue(NuclearTickets.inMemory(level, target.toLong()) == null, "fixture loaded into world");
         NuclearEvents events = NuclearEvents.get(level);
         Detonation d = new Detonation(events.nextId(), new Vec3(target.getMiddleBlockX() - 48, ground + 1, target.getMiddleBlockZ()),
@@ -214,7 +214,7 @@ public final class RuinSettleGameTests {
             ChunkPos pos = new ChunkPos(center.x + x, center.z + z);
             CompoundTag tag = ChunkSerializer.write(level, fixture(level, pos, 64));
             tag.remove("Heightmaps"); // old editor maps: only four snapshots are primed per requestWindow call
-            level.getChunkSource().chunkMap.write(pos, tag);
+            ua.zentix.incoming.util.RegionFiles.write(level, pos, tag);
         }
         boolean[] partial = {false};
         h.onEachTick(() -> {
@@ -270,7 +270,7 @@ public final class RuinSettleGameTests {
             ChunkPos pos = new ChunkPos(center.x + x, center.z + z);
             targets.add(pos);
             LevelChunk source = fixture(level, pos, 64);
-            level.getChunkSource().chunkMap.write(pos, ChunkSerializer.write(level, source));
+            ua.zentix.incoming.util.RegionFiles.write(level, pos, ChunkSerializer.write(level, source));
             if (lss != null) lss.add(source);
         }
         boolean[] started = {false};
@@ -326,11 +326,11 @@ public final class RuinSettleGameTests {
         ChunkPos full = new ChunkPos(pad.x + 600, pad.z + 600);
         ChunkPos partial = new ChunkPos(full.x + 10, full.z);
         CompoundTag data = ChunkSerializer.write(level, fixture(level, full, 64));
-        level.getChunkSource().chunkMap.write(full, data);
+        ua.zentix.incoming.util.RegionFiles.write(level, full, data);
         CompoundTag unfinished = data.copy();
         unfinished.putInt("xPos", partial.x);
         unfinished.putString("Status", "minecraft:noise");
-        level.getChunkSource().chunkMap.write(partial, unfinished);
+        ua.zentix.incoming.util.RegionFiles.write(level, partial, unfinished);
         NuclearEvents events = new NuclearEvents();
         int id = NuclearEvents.get(level).nextId();
         events.add(new Detonation(id, new Vec3(full.getMiddleBlockX(), 65, full.getMiddleBlockZ()),
@@ -340,6 +340,7 @@ public final class RuinSettleGameTests {
         p.pending.add(full.toLong());
         p.pending.add(partial.toLong());
         RuinSettle settle = new RuinSettle();
+        settle.regions = (rx, rz) -> true;
         WorkClock clock = WorkClock.counting(1_000_000);
         boolean[] inside = {false}, admitted = {false};
         int[] syncLoads = {0};
@@ -373,6 +374,7 @@ public final class RuinSettleGameTests {
         StrikeGameTests.gameSpeed(h);
         ServerLevel level = h.getLevel();
         RuinSettle settle = new RuinSettle();
+        settle.regions = (rx, rz) -> true;
         NuclearEvents events = new NuclearEvents();
         int id = NuclearEvents.get(level).nextId();
         events.add(new Detonation(id, new Vec3(80000, 64, 80000), 64, 7, true, -10000, 0, 0, 20000, 3, 0.03f, false, 1));

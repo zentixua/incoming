@@ -2,7 +2,7 @@
 
 English · [Русский](ru/nuke.md)
 
-A nuclear warhead of 1 to 15 kt on an ICBM, a cruise missile or a B-2 bomb: flash, mushroom cloud, blast wave, fires, and
+A nuclear warhead of 1 kt to 1 Mt on an ICBM, a cruise missile or a B-2 bomb: flash, mushroom cloud, blast wave, fires, and
 with a ground burst a crater and a fallout trail. By default, one block represents one meter and the distant wave is slowed so you can see it coming.
 Distances below assume full radii.
 See [Not physical](not-physical.md) and [world settings](settings.md#world-settings).
@@ -17,7 +17,7 @@ By default only operators can.
 
 1. You need an ICBM item, or a missile or bomb plus a Nuclear Warhead ([recipes](munitions.md#recipes)).
 2. On the console: the Nuclear weapon, or the nuclear warhead option of the Missile and the Bomb; the yield
-   numeric field in whole kt and suggested values, up to the world’s configured maximum (at most 15 kt); for the ICBM and the missile a ground burst
+   numeric field in whole kt and suggested values, up to the world’s configured maximum (`nuclear.max_yield`, 100 kt by default, at most 1 Mt); for the ICBM and the missile a ground burst
    (the default, with a crater and fallout trail) or an air burst (wider destruction). The bomb explodes underground.
 3. LMB in the binoculars or FIRE opens a review of the server-resolved target and yield. Hold the launch button
    for three seconds, or focus it with Tab and hold Space or Enter. Releasing, moving the pointer off the button,
@@ -100,23 +100,6 @@ A Geiger Counter in hand clicks and shows your dose. Operators give it out.
 The siren warns players near the target. The flash comes first; the fireball rises into a mushroom cloud.
 Then the wave reaches the ground around it, breaking buildings and throwing up dust. The sound reaches you with the wave.
 Fires and thick dust can make the area hard to see through long after the strike.
-
-Walls, floors, columns and timber respond to their shape, material, pressure and the duration of the blast.
-Tall and branched trees can topple too. When the strike cuts a structure's last support, the support check
-continues across chunk borders. Untouched floating builds stay as they were.
-
-Broken structural blocks fall and drift before settling on actual support. Coarse rubble keeps its block type;
-containers retain their contents. Charred faces travel with the block and rotate with fallen logs. Loose piles spread into lower neighbouring spaces. Material still travelling
-is saved with the world, so leaving and returning does not erase it. Leaves and shattered glazing enter the dispersed debris reservoir.
-A surface-burst crater supplies its rim from the ground actually excavated; remaining ejecta and thermally transformed material stay accounted for.
-
-If the shared nuclear working-memory reservation is full, further material removal waits while already moving
-material can settle. Pending material and support checks survive a restart. Completed movement and crater
-checkpoints are compacted into material totals; container contents are retained. Saving can pause material
-movement until its file is written. An old active journal too large for the shared memory limit stays preserved
-on disk and paused; it is never replaced with an empty aftermath.
-
-These are reduced block-scale rules: joint properties, drag and the pile's repose angle are estimates.
 
 With the default ground burst, the dust column joins the mushroom cap. With an explicitly selected air burst
 at the standard burst height, the column starts rising later, with a billowing upper edge, and stays below the

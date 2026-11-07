@@ -54,6 +54,9 @@ final class Collapse {
     private static final ThreadLocal<Buffers> BUFFERS = ThreadLocal.withInitial(Buffers::new);
     private byte[] before, after;
     private int[] ring;
+    /** Load-bearing original cells ({@link #bearingCells}), during the support traversals. */
+    @org.jetbrains.annotations.Nullable
+    private long[] bear;
 
     final RuinWindow w;
     final Blast[] blasts = new Blast[9];
@@ -66,8 +69,16 @@ final class Collapse {
 
     /** Chunk result: new state at position (key {@link BlockPos#asLong}). */
     final it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<BlockState> changes = new it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<>();
-    /** Per chunk column: removed rubble-producing blocks and wooden subset; post-ruin ground (MIN absent). */
-    final int[] removed = new int[256], wood = new int[256], ground = new int[256];
+    /** Per chunk column: post-ruin ground (MIN absent). */
+    final int[] ground = new int[256];
+    /**
+     * Material landing in this chunk ({@link Debris}): entries {@code column << 40 | order << 16 | palette index}, sorted
+     * by column then order (bottom of the pile first: lower source blocks land first, material from upstream last).
+     */
+    final LongArrayList landed = new LongArrayList();
+    /** States of {@link #landed}. */
+    final java.util.List<BlockState> landedStates = new java.util.ArrayList<>();
+    private final it.unimi.dsi.fastutil.objects.Reference2IntOpenHashMap<BlockState> landedIndex = new it.unimi.dsi.fastutil.objects.Reference2IntOpenHashMap<>();
     /** Wave-broken leaves (position), for light-ignited fires. */
     final LongArrayList leaves = new LongArrayList();
     /** Fluid beside changed positions: tick it (including neighboring chunks beside this chunk's positions). */
@@ -192,17 +203,13 @@ final class Collapse {
             int i = breaks.getInt(q), wx = i % SIDE, wz = (i / SIDE) % SIDE, y = i / (SIDE * SIDE) + yb;
             Blast.Props p = props(wx, y, wz);
             if (p.log()) logs = true;
-            if (support || !p.bearing()) continue;
+            if (support || !p.bearing() || p.log()) continue;
             // survivors above/beside broken blocks may have lost support
             if (standing(wx, y + 1, wz) || standing(wx + 1, y, wz) || standing(wx - 1, y, wz) || standing(wx, y, wz + 1) || standing(wx, y, wz - 1)) support = true;
         }
         if (!logs) for (int k = 0; k < 9 && !logs; k++) logs = blasts[k] != null && !blasts[k].trees().isEmpty();
-        if (support) {
-            support();
-            detached();
-        }
-        // Support reconciliation can release timber even when the pressure broke only its pedestal.
-        if (logs || support) leaves();
+        if (support) support();
+        if (logs) leaves();
         if (!breaks.isEmpty()) drain();
         attachments();
         collect();
@@ -212,72 +219,12 @@ final class Collapse {
         return inside(wx, y, wz) && !isGone(wx, y, wz) && props(wx, y, wz).bearing();
     }
 
-    /**
-     * Reconcile closed components independently of the short span-distance approximation. A saturated
-     * distance is not proof of support. Only components whose original connection to a real anchor is
-     * known may be released; an untouched floating build must not acquire global gravity. Open window
-     * components remain unresolved here: this pass makes no claim about their external support.
-     */
-    private void detached() {
-        int n = SIDE * SIDE * h;
-        // The span solve is finished: reuse its two byte maps and traversal ring.
-        java.util.Arrays.fill(before, 0, n, (byte) 0);
-        java.util.Arrays.fill(after, 0, n, (byte) 0);
-        int tail = 0;
-        for (int y = yb; y <= yt; y++) for (int wz = 0; wz < SIDE; wz++) for (int wx = 0; wx < SIDE; wx++) {
-            if (!w.has(wx, wz)) continue;
-            Blast.Props p = props(wx, y, wz);
-            if (!p.bearing() || !(y <= surface || y == yb || p.fixed())) continue;
-            int i = idx(wx, y, wz);
-            before[i] = 1;
-            ring[tail++] = i;
-        }
-        for (int q = 0; q < tail; q++) {
-            int i = ring[q], wx = i % SIDE, wz = i / SIDE % SIDE, y = i / (SIDE * SIDE) + yb;
-            for (Direction dir : Direction.values()) {
-                int x = wx + dir.getStepX(), yy = y + dir.getStepY(), z = wz + dir.getStepZ();
-                if (!inside(x, yy, z) || !w.has(x, z)) continue;
-                int next = idx(x, yy, z);
-                if (before[next] != 0 || !props(x, yy, z).bearing()
-                        || !props(wx, y, wz).touches(dir, props(x, yy, z))) continue;
-                before[next] = 1;
-                ring[tail++] = next;
-            }
-        }
-        for (int start = 0; start < n; start++) {
-            if (after[start] != 0 || bit(gone, start) || before[start] == 0) continue;
-            int sx = start % SIDE, sz = start / SIDE % SIDE, sy = start / (SIDE * SIDE) + yb;
-            if (!w.has(sx, sz) || !props(sx, sy, sz).bearing()) continue;
-            tail = 1;
-            ring[0] = start;
-            after[start] = 1;
-            boolean anchored = false, open = false;
-            for (int q = 0; q < tail; q++) {
-                int i = ring[q], wx = i % SIDE, wz = i / SIDE % SIDE, y = i / (SIDE * SIDE) + yb;
-                anchored |= y <= surface || y == yb || props(wx, y, wz).fixed();
-                for (Direction dir : Direction.values()) {
-                    int x = wx + dir.getStepX(), yy = y + dir.getStepY(), z = wz + dir.getStepZ();
-                    if (yy > yt || yy < yb) continue;
-                    if (!inside(x, yy, z) || !w.has(x, z)) {
-                        open = true;
-                        continue;
-                    }
-                    int next = idx(x, yy, z);
-                    if (after[next] != 0 || bit(gone, next) || !props(x, yy, z).bearing()
-                            || !props(wx, y, wz).touches(dir, props(x, yy, z))) continue;
-                    after[next] = 1;
-                    ring[tail++] = next;
-                }
-            }
-            if (!anchored && !open) for (int q = 0; q < tail; q++) set(gone, ring[q]);
-        }
-    }
-
     // ---------------------------------------------------------------- support
 
     private void support() {
         int n = SIDE * SIDE * h;
         buffers(n);
+        bear = bearingCells(n);
         long[] fixed = fixedCells();
         distances(before, false, n, fixed);
         distances(after, true, n, fixed);
@@ -526,7 +473,23 @@ final class Collapse {
 
     private boolean bearing(int i, int wx, int y, int wz, boolean afterBlast) {
         if (afterBlast && bit(gone, i)) return false;
-        return props(wx, y, wz).bearing();
+        return bear != null ? bit(bear, i) : props(wx, y, wz).bearing();
+    }
+
+    /**
+     * Load-bearing original blocks of the window as bits: the support traversals test each cell's neighbours twice
+     * (before and after the strike), and a bit costs far less than the property lookup through section snapshots.
+     */
+    private long[] bearingCells(int n) {
+        long[] out = new long[(n + 63) >> 6];
+        for (int y = yb; y <= yt; y++) {
+            for (int wz = 0; wz < SIDE; wz++) {
+                for (int wx = 0; wx < SIDE; wx++) {
+                    if (props(wx, y, wz).bearing()) set(out, idx(wx, y, wz));
+                }
+            }
+        }
+        return out;
     }
 
     /** Indestructible load-bearing blocks in window (only sections whose palettes know them), support like ground. */
@@ -559,6 +522,8 @@ final class Collapse {
     private void distances(byte[] dist, boolean afterBlast, int n, long[] fixed) {
         java.util.Arrays.fill(dist, 0, n, (byte) INF);
         int cap = n + 1, head = 0, tail = 0;
+        // ground supports below the top ground layer only reach other ground supports: marked, not traversed
+        int top = Math.max(yb, surface);
         for (int y = yb; y <= yt; y++) {
             boolean ground = y == yb || y <= surface;
             for (int wz = 0; wz < SIDE; wz++) {
@@ -566,6 +531,7 @@ final class Collapse {
                     int i = idx(wx, y, wz);
                     if (!(ground || bit(fixed, i)) || !bearing(i, wx, y, wz, afterBlast)) continue;
                     dist[i] = 0;
+                    if (ground && y < top && !bit(fixed, i)) continue;
                     ring[tail] = i;
                     tail = (tail + 1) % cap;
                 }
@@ -848,16 +814,13 @@ final class Collapse {
                         long at = BlockPos.asLong(w.x0 + wx, y, w.z0 + wz);
                         changes.put(at, p.waterlogged() && wet(wx, y, wz) ? Blocks.WATER.defaultBlockState() : AIR);
                         if (p.leaves() && own != null && own.gone(wx - LO, y, wz - LO)) leaves.add(at);
-                        if (!p.fluid() && !p.leaves() && !p.log() && p.rubble()) {
-                            removed[column]++;
-                            if (p.wood()) wood[column]++;
-                        }
                         continue;
                     }
                     if (ground[column] == Integer.MIN_VALUE && p.bearing() && !p.log()) ground[column] = y;
                 }
             }
         }
+        land();
         // fluid ticks: beside this chunk's broken blocks, including neighboring chunks; this chunk's fluid beside neighbors' broken blocks
         for (int y = yb; y <= yt; y++) {
             for (int wz = LO - 1; wz <= HI; wz++) {
@@ -875,6 +838,115 @@ final class Collapse {
                 }
             }
         }
+    }
+
+    /**
+     * Debris landing in this chunk ({@link Debris}): every removed rubble-producing block of the chunk and of the exact
+     * ring {@link Debris#REACH} around it falls from its height above the support below it, drifts away from the burst
+     * and spreads; what lands in this chunk is kept as the same block (non-full and block-entity blocks as rubble).
+     * Each block lands in exactly one chunk, whichever chunk computes it: same hashes, same exact collapse. Material
+     * drifting farther than the ring leaves; the chunk receives the upstream share ({@link Debris#importFraction}).
+     */
+    private void land() {
+        if (!blockDamage) return;
+        double bx = d.burst().x, bz = d.burst().z;
+        double[] wind = new double[9], phase = new double[9];
+        for (int k = 0; k < 9; k++) {
+            net.minecraft.world.phys.Vec3 at = new net.minecraft.world.phys.Vec3(w.x0 + ((k % 3) << 4) + 8, d.groundY() + 1, w.z0 + ((k / 3) << 4) + 8);
+            wind[k] = d.blastWind(at);
+            phase[k] = d.positivePhaseSeconds(at);
+        }
+        int r = Debris.REACH;
+        // drift by window chunk, density and fall height: blocks, computed once (NaN: not yet)
+        double[][] drifts = new double[18][h + 1];
+        for (double[] row : drifts) java.util.Arrays.fill(row, Double.NaN);
+        LongArrayList out = new LongArrayList();
+        it.unimi.dsi.fastutil.doubles.DoubleArrayList outDrift = new it.unimi.dsi.fastutil.doubles.DoubleArrayList();
+        for (int wz = LO - r; wz < HI + r; wz++) {
+            for (int wx = LO - r; wx < HI + r; wx++) {
+                int k = (wz >> 4) * 3 + (wx >> 4);
+                int x = w.x0 + wx, z = w.z0 + wz;
+                double ox = x + 0.5 - bx, oz = z + 0.5 - bz, len = Math.hypot(ox, oz);
+                double ux = len > 1 ? ox / len : 0, uz = len > 1 ? oz / len : 0;
+                boolean own = wx >= LO && wx < HI && wz >= LO && wz < HI;
+                int below = yb - 1;
+                for (int y = yb; y <= yt; y++) {
+                    int i = idx(wx, y, wz);
+                    Blast.Props p = props(wx, y, wz);
+                    if (!bit(gone, i)) {
+                        if (p.bearing() && !p.log()) below = y;
+                        continue;
+                    }
+                    if (p.air() || p.fluid() || p.leaves() || p.log() || !p.rubble()) continue;
+                    if (p.is(Blast.Props.CONTAINER)) {
+                        // chest, barrel, furnace: heavy and whole, falls into the pile at its own column with its
+                        // contents (RuinPlan moves the block entity), so it always lands in its own chunk
+                        if (own) landed.add((long) ((wz - LO) << 4 | (wx - LO)) << 40 | (long) (y - yb) << 16 | paletteOf(landedState(w.get(wx, y, wz))));
+                        continue;
+                    }
+                    if (RuinPlanner.hash(x, y, z, 71) >= Debris.SOLID_SHARE) continue;
+                    int fall = Math.min(h, y - below);
+                    double[] row = drifts[k * 2 + (p.wood() ? 1 : 0)];
+                    double drift = row[fall];
+                    if (Double.isNaN(drift)) row[fall] = drift = d.blocks(Debris.driftMetres(d.metres(fall), wind[k], phase[k], p.wood() ? Debris.WOOD : Debris.MASONRY));
+                    double spread = Debris.spread(fall);
+                    int tx = net.minecraft.util.Mth.floor(x + 0.5 + ux * drift + RuinPlanner.grain(x, y, z, 61) * spread);
+                    int tz = net.minecraft.util.Mth.floor(z + 0.5 + uz * drift + RuinPlanner.grain(x, y, z, 67) * spread);
+                    BlockState st = rubbleOf(w.get(wx, y, wz), p, x, y, z);
+                    if (Math.max(Math.abs(tx - x), Math.abs(tz - z)) > r) {
+                        if (own) {
+                            out.add((long) (Math.floorMod(tz - w.z0 - LO, 16) << 4 | Math.floorMod(tx - w.x0 - LO, 16)) << 40 | paletteOf(st));
+                            outDrift.add(drift);
+                        }
+                        continue;
+                    }
+                    int lx = tx - w.x0 - LO, lz = tz - w.z0 - LO;
+                    if (lx < 0 || lx >= 16 || lz < 0 || lz >= 16) continue;
+                    landed.add((long) (lz << 4 | lx) << 40 | (long) (y - yb) << 16 | paletteOf(st));
+                }
+            }
+        }
+        // upstream share of exported material, on top (arrives last): it lands where this chunk's own exported material
+        // lands relative to its chunk, so it keeps the drifted footprints of the buildings it stands in for (piles, not
+        // single scattered blocks)
+        double cr = Math.hypot(w.x0 + LO + 8 - bx, w.z0 + LO + 8 - bz);
+        int cx = w.x0 + LO, cz = w.z0 + LO;
+        for (int n = 0; n < out.size(); n++) {
+            if (RuinPlanner.hash(cx, n, cz, 73) >= Debris.importFraction(cr, outDrift.getDouble(n))) continue;
+            long e = out.getLong(n);
+            landed.add(e & ~0xFFFFFFFFFFL | (long) (0x8000 + n) << 16 | e & 0xFFFF);
+        }
+        landed.sort(null);
+    }
+
+    private long paletteOf(BlockState st) {
+        int i = landedIndex.getOrDefault(st, -1);
+        if (i < 0) {
+            i = landedStates.size();
+            landedStates.add(st);
+            landedIndex.put(st, i);
+        }
+        return i;
+    }
+
+    /** Container landing in the rubble: a chest half as a lone chest (its other half lands on its own). */
+    static BlockState landedState(BlockState st) {
+        return st.hasProperty(net.minecraft.world.level.block.state.properties.BlockStateProperties.CHEST_TYPE)
+                ? st.setValue(net.minecraft.world.level.block.state.properties.BlockStateProperties.CHEST_TYPE, net.minecraft.world.level.block.state.properties.ChestType.SINGLE)
+                : st;
+    }
+
+    /** Source height of a landed container entry ({@link #landed}), or {@link Integer#MIN_VALUE} for imported material. */
+    int sourceY(long entry) {
+        int order = (int) (entry >>> 16 & 0xFFFFFF);
+        return order < 0x8000 ? yb + order : Integer.MIN_VALUE;
+    }
+
+    /** Landing block: full load-bearing blocks as themselves; other rubble-producing blocks (stairs, fences, block entities) as rubble. */
+    private static BlockState rubbleOf(BlockState st, Blast.Props p, int x, int y, int z) {
+        if (p.full() && p.bearing() && !p.is(Blast.Props.SLOW) && !p.waterlogged()) return st;
+        BlockState[] kind = p.wood() ? RuinPlanner.WOOD_RUBBLE : RuinPlanner.STONE_RUBBLE;
+        return kind[(int) (RuinPlanner.hash(x, y, z, 17) * kind.length)];
     }
 
     /** Waterlogged block broken beside remaining water (river pier) becomes water; isolated high block becomes air. */

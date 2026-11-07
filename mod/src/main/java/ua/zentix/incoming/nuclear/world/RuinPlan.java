@@ -193,6 +193,14 @@ public final class RuinPlan {
         return flash == null ? NONE : flash;
     }
 
+    /** Containers landed in the rubble: pairs of source and landing position; contents move with them ({@link #write}). */
+    private long[] moves = NO_LONGS;
+
+    /** Containers landed in the rubble (plan-building thread). */
+    void moves(long[] pairs) {
+        this.moves = pairs;
+    }
+
     /** Wave-blown flash-layer fires (plan-building thread). */
     void blown(int[] cells) {
         java.util.Arrays.sort(cells);
@@ -358,8 +366,14 @@ public final class RuinPlan {
         return sections[i].get(lx, y & 15, lz);
     }
 
-    /** State normalized for old-state comparison: blackout-darkened lamp is same lamp. */
+    /**
+     * State normalized for old-state comparison: blackout-darkened lamp is same lamp; a daylight detector at any power is
+     * the same detector (its power follows the sky every second, so plans built during the flight went stale across a city
+     * lit by detectors, and ruins near players came seconds after the wave at 1 Mt; the detector recomputes its power on
+     * its next update).
+     */
     static BlockState normal(BlockState s) {
+        if (s.getBlock() instanceof net.minecraft.world.level.block.DaylightDetectorBlock) return s.setValue(net.minecraft.world.level.block.DaylightDetectorBlock.POWER, 0);
         BlockState lit = GridLights.lit(s);
         return lit != null ? lit : s;
     }
@@ -426,19 +440,13 @@ public final class RuinPlan {
         for (int c : cells) {
             if ((c & SLOW) == 0) continue;
             BlockState old = chunk.getBlockState(at(m, c, x0, z0, minY));
-            if (callbackRadius(old) > 0) {
+            if (old.hasBlockEntity() && !"minecraft".equals(net.minecraft.core.registries.BuiltInRegistries.BLOCK.getKey(old.getBlock()).getNamespace())) {
                 return RuinPlanner.REACH;
             }
             int x = c & 15, z = (c >> 4) & 15;
             if (x < EDGE || x > 15 - EDGE || z < EDGE || z > 15 - EDGE) r = 1;
         }
         return r > 0 || SableTerrain.watched(level, chunk) ? 1 : 0;
-    }
-
-    /** Shared with post-plan support removal and material deposition (onRemove AND onPlace). */
-    static int callbackRadius(BlockState state) {
-        return state.hasBlockEntity() && !"minecraft".equals(net.minecraft.core.registries.BuiltInRegistries.BLOCK
-                .getKey(state.getBlock()).getNamespace()) ? RuinPlanner.REACH : 0;
     }
 
     /** Replacement needs neighbors ({@link #neighbourRadius}). */
@@ -548,12 +556,17 @@ public final class RuinPlan {
         return new Debris(out, removed);
     }
 
+    /** Changed positions in the plan ({@link RuinCost}). */
+    int cells() {
+        return cells.length;
+    }
+
     /** Approximate plan memory, bytes (for log). */
     public long bytes() {
         if (this == EMPTY) return 0;
         return 64 + 12L * cells.length + 8L * fluidTicks.length + 8L * oldHashes.length + 8L * states.length + 4L * fires.length + 4L * heights.length
                 + 8L * lightAt.length + (prints == null ? 0 : 16L * prints.length) + (outside == null ? 0 : 16L * outside.size()) + (biomes == null ? 0 : 96)
-                + (flash == null ? 0 : 4L * flash.length) + (blown == null ? 0 : 4L * blown.length) + 8L * material.length;
+                + (flash == null ? 0 : 4L * flash.length) + (blown == null ? 0 : 4L * blown.length);
     }
 
     private static int section(int cell) {
@@ -580,6 +593,9 @@ public final class RuinPlan {
 
     private boolean current(LevelChunk chunk, @Nullable RuinPlan flash, boolean marked) {
         LevelChunkSection[] now = chunk.getSections();
+        // fire only where this detonation's flash reached the chunk and no player broke a block: a block a player removed
+        // changes the plan
+        boolean lit = (flash != null || marked) && !broken(chunk);
         int k = 0;
         while (k < cells.length) {
             int i = section(cells[k]);
@@ -591,11 +607,57 @@ public final class RuinPlan {
                 BlockState live = s.getBlockState(c & 15, (c >> 8) & 15, (c >> 4) & 15);
                 if (flash != null) live = flash.beforeFlash(c & KEY_MASK, live);
                 else if (marked && fire(live)) live = Blocks.AIR.defaultBlockState();
-                h = mix(h, live);
+                h = mix(h, lit ? unburnt(live, olds[k]) : live);
             }
             if (h != oldHashes[i]) return false;
         }
         return true;
+    }
+
+    /** For {@link NukeDiag}: changed plan positions since the snapshot, “old→live” counts (null when current). */
+    @Nullable
+    String staleCells(LevelChunk chunk, Detonation d) {
+        RuinPlan flash = flashOf(chunk);
+        boolean marked = flash == null && FlashScorch.marked(chunk, d.id());
+        LevelChunkSection[] now = chunk.getSections();
+        java.util.Map<String, Integer> diff = new java.util.TreeMap<>();
+        for (int k = 0; k < cells.length; k++) {
+            int c = cells[k], i = section(c);
+            if (i >= now.length) return "section out of range";
+            BlockState live = now[i].getBlockState(c & 15, (c >> 8) & 15, (c >> 4) & 15);
+            if (flash != null) live = flash.beforeFlash(c & KEY_MASK, live);
+            else if (marked && fire(live)) live = Blocks.AIR.defaultBlockState();
+            if ((flash != null || marked) && !broken(chunk)) live = unburnt(live, olds[k]);
+            if (normal(live) != normal(olds[k])) diff.merge(olds[k].getBlock().getDescriptionId() + "→" + live.getBlock().getDescriptionId(), 1, Integer::sum);
+        }
+        return diff.isEmpty() ? null : diff.toString();
+    }
+
+    /**
+     * Fire between the flash and the wave (chunks the flash layer reached) still matches the plan: a flammable block now fire or air burned, an air cell now
+     * fire caught. Minecraft fire eats a plank block in seconds, while a real building does not burn through in the
+     * seconds to a minute before the blast wave; the wave overwrites these cells anyway. Without this, the fires the flash
+     * lights near a player kept turning ready plans stale and their ruins came up to 2 s after the wave (1 Mt).
+     */
+    static BlockState unburnt(BlockState live, BlockState old) {
+        if (live == old) return live;
+        if (fire(live) ? old.isAir() || flammable(old) : live.isAir() && flammable(old)) return old;
+        return live;
+    }
+
+    private static boolean broken(LevelChunk chunk) {
+        return chunk.getExistingData(ua.zentix.incoming.registry.ModAttachments.PLAYER_BROKE).orElse(false);
+    }
+
+    /** A player broke a block: in that chunk a removed flammable block no longer passes for burned out ({@link #unburnt}). */
+    public static void onBreak(net.neoforged.neoforge.event.level.BlockEvent.BreakEvent e) {
+        if (!e.isCanceled() && e.getLevel() instanceof net.minecraft.server.level.ServerLevel level) {
+            level.getChunkAt(e.getPos()).setData(ua.zentix.incoming.registry.ModAttachments.PLAYER_BROKE, true);
+        }
+    }
+
+    private static boolean flammable(BlockState s) {
+        return s.isFlammable(net.minecraft.world.level.EmptyBlockGetter.INSTANCE, BlockPos.ZERO, net.minecraft.core.Direction.UP);
     }
 
     private static boolean fire(BlockState s) {
@@ -724,11 +786,7 @@ public final class RuinPlan {
      *           detonation silhouettes and flash time
      * @return false if stale, nothing changed
      */
-    private boolean memoryWaiting;
-    boolean memoryWaiting() { return memoryWaiting; }
-
     public boolean apply(ServerLevel level, LevelChunk chunk, Detonation d, ColumnScar.Budget budget) {
-        memoryWaiting = false;
         if (this == EMPTY) {
             RuinContext kept = NuclearWorld.get(level).ruinsIfKept(d.id());
             // ruins change no blocks, layer ignited fire: wave extinguishes all (otherwise remains unticked)
@@ -744,60 +802,32 @@ public final class RuinPlan {
         RuinPlan flash = flashOf(chunk);
         boolean marked = flash == null && FlashScorch.marked(chunk, d.id());
         if (!current(chunk, flash, marked)) return false;
-        // Reserve the bounded capture/contact window before allocating it. Large container tags
-        // extend that reservation before any source mutation; refusal keeps this exact plan pending.
-        try (var reservation = RuinMemory.reserve(level, material.length * (8192L + 512))) {
-            if (reservation == null) { memoryWaiting = true; return false; }
-            java.util.List<RuinMatter.Piece> released = new java.util.ArrayList<>();
-            RuinScorch scorch = new RuinScorch(chunk);
-            for (long position : material) {
-                BlockPos at = BlockPos.of(position);
-                BlockState state = chunk.getBlockState(at);
-                // Thermal-before-blast ordering: capture what actually survived the light pulse,
-                // never resurrect a block from the original pre-flash snapshot.
-                RuinMatter.Piece piece = RuinMatter.capture(level, at, state, d, scorch);
-                if (piece != null) {
-                    if (!reservation.grow(level, piece.retainedBytes() - 512)) { memoryWaiting = true; return false; }
-                    released.add(piece);
-                }
-            }
-            short[] motion = new short[256];
-            for (int column = 0; column < 256; column++) motion[column] = (short) (chunk.getHeight(Heightmap.Types.MOTION_BLOCKING, column & 15, column >> 4) + 1);
-            // biome before blocks: Distant Horizons LOD reads chunk with biome after position writes
-            boolean recoloured = biomes != null && ScorchedBiomes.write(level, chunk, biomes);
-            try {
-                if (cells.length > 0 || fires.length > 0 || outside != null || fluidTicks.length > 0 || flash != null || marked) {
-                    // blocks outside plan positions checked before writes: afterward chunk different. Flash layer makes chunk differ
-                    // from pre-flash plan snapshot, so rescan plan columns from chunk
-                    write(level, chunk, budget, t, flash == null && !marked && cells.length > 0 && sameBlocks(chunk), flash, marked, false);
-                } else if (recoloured) {
-                    DhUpdates.mark(level, chunk.getPos(), level.getGameTime());
-                }
-            } finally {
-                // A block callback can fail after preceding cells were removed. Retain ownership of
-                // those removals even on that exceptional path; unmodified cells remain in the world.
-                released.removeIf(piece -> {
-                    BlockState now = chunk.getBlockState(piece.source);
-                    Blast.Props props = Blast.props(now);
-                    return now.getBlock() == piece.state.getBlock() || props.bearing() || props.leaves();
-                });
-                RuinMatter.get(level).release(released);
-                RuinMatter.get(level).support(level, released, d);
-            }
-            if (ctx != null) ctx.applied(chunk, this, motion);
-            FlashScorch.unmark(chunk, d.id());
-            // flash scorch with ruins (layer already applied: replace with surviving scorch); old flash traces
-            // on changed blocks removed
-            if (ctx != null) ua.zentix.incoming.nuclear.flash.FlashSync.chars(level, chunk, d, flash());
-            return true;
+        try {
+            return applyCurrent(level, chunk, d, budget, t, flash, marked);
+        } finally {
+            RuinCost.swap(RuinCost.band(d, chunk.getPos()), System.nanoTime() - t);
         }
     }
 
-    /** Structural candidates only; thermal/terrain transformations never manufacture coarse debris. */
-    private long[] material = new long[0];
-
-    void material(long[] positions) {
-        material = positions;
+    private boolean applyCurrent(ServerLevel level, LevelChunk chunk, Detonation d, ColumnScar.Budget budget, long t, @Nullable RuinPlan flash,
+                                 boolean marked) {
+        short[] motion = new short[256];
+        for (int column = 0; column < 256; column++) motion[column] = (short) (chunk.getHeight(Heightmap.Types.MOTION_BLOCKING, column & 15, column >> 4) + 1);
+        // biome before blocks: Distant Horizons LOD reads chunk with biome after position writes
+        boolean recoloured = biomes != null && ScorchedBiomes.write(level, chunk, biomes);
+        if (cells.length > 0 || fires.length > 0 || outside != null || fluidTicks.length > 0 || flash != null || marked) {
+            // blocks outside plan positions checked before writes: afterward chunk different. Flash layer makes chunk differ
+            // from pre-flash plan snapshot, so rescan plan columns from chunk
+            write(level, chunk, budget, t, flash == null && !marked && cells.length > 0 && sameBlocks(chunk), flash, marked, false);
+        } else if (recoloured) {
+            DhUpdates.mark(level, chunk.getPos(), level.getGameTime());
+        }
+        if (ctx != null) ctx.applied(chunk, this, motion);
+        FlashScorch.unmark(chunk, d.id());
+        // flash scorch with ruins (layer already applied: replace with surviving scorch); old flash traces
+        // on changed blocks removed
+        if (ctx != null) ua.zentix.incoming.nuclear.flash.FlashSync.chars(level, chunk, d, flash());
+        return true;
     }
 
     /**
@@ -1025,6 +1055,13 @@ public final class RuinPlan {
         // belt removes whole chain)
         BlockState slowBlock = null;
         long slowBlockNanos = 0;
+        // landed containers: contents (or unopened loot table) read before the source is cleared, written into the
+        // landed block entity after it is placed
+        net.minecraft.nbt.CompoundTag[] carried = moves.length == 0 ? null : new net.minecraft.nbt.CompoundTag[moves.length / 2];
+        for (int k = 0; carried != null && k < carried.length; k++) {
+            net.minecraft.world.level.block.entity.BlockEntity be = level.getBlockEntity(m.set(moves[2 * k]));
+            if (be instanceof net.minecraft.world.Container) carried[k] = be.saveWithoutMetadata(level.registryAccess());
+        }
         for (int c : cells) {
             if ((c & SLOW) == 0) continue;
             at(m, c, x0, z0, minY);
@@ -1035,6 +1072,14 @@ public final class RuinPlan {
             if (b > slowBlockNanos) {
                 slowBlockNanos = b;
                 slowBlock = old;
+            }
+        }
+        for (int k = 0; carried != null && k < carried.length; k++) {
+            if (carried[k] == null) continue;
+            net.minecraft.world.level.block.entity.BlockEntity be = level.getBlockEntity(m.set(moves[2 * k + 1]));
+            if (be instanceof net.minecraft.world.Container) {
+                be.loadWithComponents(carried[k], level.registryAccess());
+                be.setChanged();
             }
         }
         // viewed but non-ticking chunk (view edge): send full chunk via vanilla

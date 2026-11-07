@@ -95,7 +95,8 @@ public final class RuinGameTests {
         for (int dx = -r; dx <= r; dx++) {
             for (int dz = -r; dz <= r; dz++) {
                 for (int y = 1; y <= 5; y++) {
-                    if (h.getBlockState(c.offset(dx, y, dz)).is(roof)) {
+                    // the fallen roof lies as rubble of its own material on the floor (Debris): at most two blocks high
+                    if (y >= 3 && h.getBlockState(c.offset(dx, y, dz)).is(roof)) {
                         left++;
                         any = c.offset(dx, y, dz);
                     }

@@ -45,6 +45,7 @@ to apply the settings. The most useful ones are below; the rest are in the same 
 | `launch.sight_rules` | on | [spotting](rules.md#spotting): strike only spotted targets |
 | `world.block_damage`, `world.fire` | on | conventional strike destruction and fires; nuclear strikes have separate switches below |
 | `nuclear.enabled`, `ops_only` | on, on | nuclear weapons exist; only operators launch them |
+| `nuclear.default_yield`, `max_yield` | 15, 100 | yield of a command without a number; largest allowed yield, kt (up to 1000 = 1 Mt) |
 | `nuclear.block_damage`, `nuclear.fires` | on | nuclear ruins/craters and thermal fires; independent of `world.block_damage` and `world.fire` |
 | `scale.scale_preset` | GAME | GAME: game flight speeds/heights, full nuclear radii, distant nuclear wave at 0.25 of the speed of sound; REAL: reference flight speeds/heights, full radii and physical wave timing; CUSTOM: the three numbers below. Flight and air defense remain a game model in every preset; see [Not physical](not-physical.md) |
 | `scale.flight_speed` | 0 | with CUSTOM: [flight speeds and heights](weapons.md#how-they-fly), 0 the game values, 1 true to life; in between every weapon goes the same share of the way. Turns stay game values. Flight times stay, so a faster weapon starts further away |

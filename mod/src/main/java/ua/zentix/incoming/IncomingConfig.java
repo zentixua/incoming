@@ -221,8 +221,8 @@ public final class IncomingConfig {
                     .translation("incoming.config.nuke_ops_only").define("ops_only", true);
             nukeDefaultYield = b.comment("Yield of /incoming nuke without a number, kt (15 is Hiroshima). On the console the yield is entered in whole kt.")
                     .translation("incoming.config.nuke_default_yield").defineInRange("default_yield", 15, 1, Loadout.Nuke.MAX_YIELD);
-            nukeMaxYield = b.comment("Largest yield, kt.")
-                    .translation("incoming.config.nuke_max_yield").defineInRange("max_yield", Loadout.Nuke.MAX_YIELD, 1, Loadout.Nuke.MAX_YIELD);
+            nukeMaxYield = b.comment("Largest yield, kt (up to 1000 = 1 Mt). Ruins of large yields need memory and time: at 1 Mt the zone behind the wave is ruined over tens of minutes.")
+                    .translation("incoming.config.nuke_max_yield").defineInRange("max_yield", Loadout.Nuke.DEFAULT_MAX_YIELD, 1, Loadout.Nuke.MAX_YIELD);
             nukeEffectsScale = b.comment("Works with scale.scale_preset = CUSTOM. Scale of all radii: 1.0 is true to life (1 block = 1 m); lower for small worlds.")
                     .translation("incoming.config.nuke_effects_scale").defineInRange("effects_scale", 1.0, 0.005, 1.0);
             nukeWaveSpeed = b.comment("Works with scale.scale_preset = CUSTOM. Speed of the blast wave and its dust wall away from the fireball,",

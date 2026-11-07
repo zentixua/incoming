@@ -78,6 +78,10 @@ public final class RuinPlanner {
     public static final int REACH = 2;
 
     private static final BlockState AIR = Blocks.AIR.defaultBlockState();
+    static final BlockState[] STONE_RUBBLE = {Blocks.GRAVEL.defaultBlockState(), Blocks.COBBLESTONE.defaultBlockState(),
+            Blocks.ANDESITE.defaultBlockState(), Blocks.GRAVEL.defaultBlockState(), Blocks.TUFF.defaultBlockState()};
+    static final BlockState[] WOOD_RUBBLE = {Blocks.COARSE_DIRT.defaultBlockState(), Blocks.GRAVEL.defaultBlockState(),
+            Blocks.COARSE_DIRT.defaultBlockState(), Blocks.ROOTED_DIRT.defaultBlockState()};
 
     private static final BlockState DIRT = Blocks.DIRT.defaultBlockState(), COARSE_DIRT = Blocks.COARSE_DIRT.defaultBlockState(),
             PODZOL = Blocks.PODZOL.defaultBlockState(), DEAD_BUSH_STATE = Blocks.DEAD_BUSH.defaultBlockState(),
@@ -98,6 +102,8 @@ public final class RuinPlanner {
     static void ensureOwnStates() {
         if (ownStates == Blast.generation) return;
         ownStates = Blast.generation;
+        for (BlockState st : STONE_RUBBLE) Blast.ensure(st);
+        for (BlockState st : WOOD_RUBBLE) Blast.ensure(st);
         for (BlockState st : new BlockState[]{AIR, DIRT, COARSE_DIRT, PODZOL, DEAD_BUSH_STATE, WATER, ModBlocks.TRINITITE.get().defaultBlockState()}) Blast.ensure(st);
         for (BlockState st : SNOWY_GROUND) {
             Blast.ensure(st);
@@ -320,12 +326,12 @@ public final class RuinPlanner {
                 if (d.psi(Vec3.atCenterOf(m)) < 3 && g.lit(m) >= 10) s.fire(m.getX(), m.getY(), m.getZ(), 1.0, 1.0);
             }
         }
-        double[] heat = land(g, s, c.ground, false);
-        // Coarse material is released at failure and settles through RuinMatter after travel.
-        // It must not already be a finished pile in the front-time chunk delta.
+        double[] heat = land(g, s, c.ground, c, false);
+        Blast own = c.blast();
+        if (own != null) for (int i = 0; i < own.trees().size(); i++) lay(s, own.trees().get(i), own.treeLogs().get(i));
+        // after everything deposited on ground (rubble, trunks)
         for (int column = 0; column < 256; column++) if (c.ground[column] != Integer.MIN_VALUE) snowy(s, column & 15, c.ground[column], column >> 4);
         RuinPlan plan = s.finish(g.ctx(), c.fluidTicks.toLongArray(), biomes(g.ctx().noise, c.ground, heat, shot.x << 4, shot.z << 4));
-        if (plan != RuinPlan.EMPTY) plan.material(c.changes.keySet().toLongArray());
         // flash scorch on surviving faces: pre-wave world, applied with ruins
         if (plan != RuinPlan.EMPTY) plan.flash(FlashFaces.chars(g, s));
         return plan;
@@ -369,7 +375,7 @@ public final class RuinPlanner {
         int bottom = low == Integer.MAX_VALUE ? s.minY : Math.max(s.minY, low - 16);
         int[] ground = new int[256];
         for (int column = 0; column < 256; column++) ground[column] = groundOf(s, column & 15, column >> 4, bottom);
-        double[] heat = land(g, s, ground, flash);
+        double[] heat = land(g, s, ground, null, flash);
         for (int column = 0; column < 256; column++) if (ground[column] != Integer.MIN_VALUE) snowy(s, column & 15, ground[column], column >> 4);
         return biomes(g.ctx().noise, ground, heat, shot.x << 4, shot.z << 4);
     }
@@ -397,12 +403,21 @@ public final class RuinPlanner {
      *
      * @return slope-adjusted column ground light for biome tiers
      */
-    private static double[] land(RuinContext.Grid g, Sections s, int[] groundOf, boolean flash) {
+    private static double[] land(RuinContext.Grid g, Sections s, int[] groundOf, @Nullable Collapse debris, boolean flash) {
         Detonation d = g.ctx().d;
         WorldNoise noise = g.ctx().noise;
         boolean blockDamage = g.blockDamage() && !flash, fires = g.fires();
         int x0 = s.chunkX << 4, z0 = s.chunkZ << 4;
         double[] heat = new double[256];
+        // first landed entry of each column (Collapse#landed sorted by column)
+        int[] from = new int[257];
+        if (debris != null) {
+            LongArrayList landed = debris.landed;
+            for (int k = 0, column = 0; column <= 256; column++) {
+                while (k < landed.size() && (int) (landed.getLong(k) >>> 40) < column) k++;
+                from[column] = k;
+            }
+        }
         for (int column = 0; column < 256; column++) {
             int ground = groundOf[column];
             if (ground == Integer.MIN_VALUE) continue;
@@ -414,6 +429,8 @@ public final class RuinPlanner {
             double lit = g.lit(new BlockPos(x, ground, z));
             double q = lit > 0 ? lit * incidence(groundOf, lx, lz, ground, x, z, d.burst()) * edge(x, z, d.burst(), g.ctx().ruinRadius) : 0;
             heat[column] = inFireball ? lit : q;
+            // collapse leaves its material at any pressure (house falls even below 5 psi); nothing in fireball
+            if (blockDamage && !inFireball && debris != null) pile(s, lx, ground, lz, debris, from[column], from[column + 1]);
             if (inFireball) {
                 if (blockDamage) strip(s, lx, ground, lz, x, z);
                 if (lit >= ThermalModel.IGNITE) fireball(s, lx, ground, lz);
@@ -522,6 +539,24 @@ public final class RuinPlanner {
         return n == 0 ? 0 : sum / n;
     }
 
+    /** Pile of landed material ({@link Collapse#landed} entries {@code [start, end)}) on the column's post-ruin ground. */
+    private static void pile(Sections s, int lx, int ground, int lz, Collapse debris, int start, int end) {
+        int y = ground + 1;
+        for (int k = start; k < end && y < s.maxY; k++, y++) {
+            if (!s.get(lx, y, lz).isAir()) break;
+            long e = debris.landed.getLong(k);
+            BlockState st = debris.landedStates.get((int) (e & 0xFFFF));
+            s.set(lx, y, lz, st);
+            int from = debris.sourceY(e);
+            // also at its own height: a double chest half lands as a lone chest, a state change that clears it
+            if (from != Integer.MIN_VALUE && s.view.get(st).is(Blast.Props.CONTAINER)) {
+                int x = (s.chunkX << 4) + lx, z = (s.chunkZ << 4) + lz;
+                s.moves.add(BlockPos.asLong(x, from, z));
+                s.moves.add(BlockPos.asLong(x, y, z));
+            }
+        }
+    }
+
     /** Dynamic pressure stripped turf/grass: bare soil. */
     private static void strip(Sections s, int lx, int ground, int lz, int x, int z) {
         Blast.Props p = s.props(lx, ground, lz);
@@ -620,6 +655,28 @@ public final class RuinPlanner {
     /** Fire fraction surviving wave where ground pressure at least 2 psi. */
     static final double BLOWN_KEEP = 0.5;
 
+    /** Toppled trunk: horizontal logs along surface away from epicenter. */
+    private static void lay(Sections s, long[] tree, BlockState log) {
+        BlockPos base = BlockPos.of(tree[0]);
+        Direction dir = Direction.from3DDataValue((int) tree[2]);
+        BlockState lying = log.hasProperty(BlockStateProperties.AXIS) ? log.setValue(BlockStateProperties.AXIS, dir.getAxis()) : log;
+        for (int i = 0; i < tree[1]; i++) {
+            BlockPos p = base.relative(dir, i);
+            if (p.getX() >> 4 != s.chunkX || p.getZ() >> 4 != s.chunkZ) {
+                // farther along trunk, neighboring chunk: logs placed through world during replacement
+                s.outside.add(p.asLong());
+                s.outsideState.add(lying);
+                continue;
+            }
+            int lx = p.getX() & 15, lz = p.getZ() & 15;
+            // first impassable block downward from trunk-base level (+8 for uphill slope)
+            int y = Math.min(s.maxY - 1, base.getY() + 8);
+            while (y > s.minY && s.props(lx, y, lz).is(Blast.Props.REPLACEABLE)) y--;
+            if (y + 1 >= s.maxY || !s.props(lx, y + 1, lz).is(Blast.Props.REPLACEABLE)) break;
+            s.set(lx, y + 1, lz, lying);
+        }
+    }
+
     /**
      * Plan chunk: original snapshot blocks, overlaid changes (position → state). Only delta enters plan
      * ({@link RuinPlan}); properties from window table, no block-code calls.
@@ -642,6 +699,8 @@ public final class RuinPlanner {
         final List<BlockState> outsideState = new ArrayList<>();
         /** Changed positions: section index << 12 | position in section (with duplicates). */
         final IntArrayList changed = new IntArrayList();
+        /** Containers landed in rubble: pairs of source and landing position ({@link BlockPos#asLong}). */
+        final LongArrayList moves = new LongArrayList();
 
         Sections(ChunkShot shot, Blast.PropsView view) {
             this.shot = shot;
@@ -783,7 +842,8 @@ public final class RuinPlanner {
                 boolean covered = y < newTop[column];
                 boolean light = y == topChanged[column] || pw.emission() > 0 || pn.emission() > 0
                         || covered && (pw.lightBlock() != pn.lightBlock() || pw.is(Blast.Props.SHAPE_LIGHT) || pn.is(Blast.Props.SHAPE_LIGHT));
-                boolean slow = pw.is(Blast.Props.SLOW);
+                // a landed container gets its block entity through the world too
+                boolean slow = pw.is(Blast.Props.SLOW) || pn.is(Blast.Props.SLOW);
                 if (light && !slow) lightAt.add(BlockPos.asLong((chunkX << 4) + lx, y, (chunkZ << 4) + lz));
                 olds[kept] = was;
                 cells[kept++] = c | idx << RuinPlan.STATE_SHIFT | (light ? RuinPlan.LIGHT : 0) | (slow ? RuinPlan.SLOW : 0);
@@ -803,6 +863,7 @@ public final class RuinPlanner {
                     heights, lightAt.toLongArray(), shot.prints.clone(), shot.normalPrints(view),
                     outside.isEmpty() ? null : outside, outside.isEmpty() ? null : outsideState, ctx, fluidTicks, biomes);
             if (!blown.isEmpty()) plan.blown(blown.toIntArray());
+            if (!moves.isEmpty()) plan.moves(moves.toLongArray());
             return plan;
         }
 

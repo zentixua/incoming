@@ -779,7 +779,8 @@ public final class RuinBackgroundGameTests {
         for (ChunkPos c : new ChunkPos[]{q, p}) {
             int x = c.getMinBlockX() + 15, z = c.getMinBlockZ() + 8;
             chests[i] = new BlockPos(x, level.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.WORLD_SURFACE, x, z), z);
-            level.setBlock(chests[i++], Blocks.CHEST.defaultBlockState(), 3);
+            // a lectern: a block entity that the wave replaces (a container would fall into the rubble in place, Debris)
+            level.setBlock(chests[i++], Blocks.LECTERN.defaultBlockState(), 3);
         }
         int[] stage = {0};
         long[] since = {0};
@@ -823,7 +824,7 @@ public final class RuinBackgroundGameTests {
                 }
                 case 3 -> {
                     if (scars.queued(q.toLong())) return;
-                    h.assertFalse(level.getBlockState(chests[0]).is(Blocks.CHEST), "the chest in Q is intact: this is not the case");
+                    h.assertFalse(level.getBlockState(chests[0]).is(Blocks.LECTERN), "the lectern in Q is intact: this is not the case");
                     since[0] = now;
                     stage[0] = 4;
                 }

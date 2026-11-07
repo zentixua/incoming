@@ -37,8 +37,8 @@ import java.util.Locale;
 
 /**
  * Traces of the flash (DESIGN-nuke §3.5): burning on the edges of the ball - with the ruins of the chunk, the silhouette of a body on the wall behind it, the mark of the chunk
- *  survives the save, leaves with the block and goes to the player to whom the chunk is given. The walls are made of logs and obsidian. Thermal-only fixtures disable block damage so that
- *  the assertions examine scorch on surviving faces, independently of structural failure. Each check has its own batch.
+ *  survives the save, leaves with the block and goes to the player to whom the chunk is given. The walls are made of logs (without leaves this is not a
+ *  tree: a wave does not knock them down) and obsidian (does not break). Each check has its own batch (the explosion affects neighbors).
  */
 @GameTestHolder(Incoming.MOD_ID)
 @PrefixGameTestTemplate(false)
@@ -49,14 +49,7 @@ public final class FlashGameTests {
 
     private FlashGameTests() {}
 
-    /** Isolate thermal marks from structural failure; restore the world rule even on assertion failure. */
-    private static void thermalOnly(GameTestHelper h) {
-        boolean damage = IncomingConfig.SERVER.nukeBlockDamage.get();
-        StrikeGameTests.afterTest(h, () -> IncomingConfig.SERVER.nukeBlockDamage.set(damage));
-        IncomingConfig.SERVER.nukeBlockDamage.set(false);
-    }
-
-    /** Log wall 5×4 facing the explosion (to the west). */
+    /** Log wall 5×4 facing the explosion (to the west): logs without leaves are not a tree, the wave does not knock them down. */
     private static void wall(GameTestHelper h) {
         for (int dz = -2; dz <= 2; dz++) {
             for (int y = 0; y < 4; y++) h.setBlock(CENTER.east(WALL_DX).south(dz).above(y), Blocks.OAK_LOG);
@@ -83,7 +76,6 @@ public final class FlashGameTests {
      */
     @GameTest(template = "range", timeoutTicks = 60, batch = "nuke_flash_chars", skyAccess = true)
     public static void charredFacesTowardFireball(GameTestHelper h) {
-        thermalOnly(h);
         ServerLevel level = h.getLevel();
         wall(h);
         // closed face: obsidian close to west
@@ -170,9 +162,7 @@ public final class FlashGameTests {
     public static void silhouetteBehindBody(GameTestHelper h) {
         ServerLevel level = h.getLevel();
         for (int dz = -4; dz <= 4; dz++) {
-            // A thick, low wall survives pressure through geometry; preparation must keep block damage enabled.
-            for (int depth = 0; depth < 4; depth++) for (int y = 0; y < 5; y++)
-                h.setBlock(CENTER.east(WALL_DX + depth).south(dz).above(y), Blocks.OAK_LOG);
+            for (int y = 0; y < 5; y++) h.setBlock(CENTER.east(WALL_DX).south(dz).above(y), Blocks.OAK_LOG);
         }
         Detonation d = burst(h);
         BlockPos standAt = CENTER.east(WALL_DX - 2);
@@ -231,9 +221,7 @@ public final class FlashGameTests {
         ServerLevel level = h.getLevel();
         NuclearGameTests.detonation(h, CENTER, 0, 15, 0.05f); // only backfilling of the layer under the site: blasting - according to schedule
         for (int dz = -4; dz <= 4; dz++) {
-            // A thick, low wall survives pressure through geometry; preparation must keep block damage enabled.
-            for (int depth = 0; depth < 4; depth++) for (int y = 0; y < 5; y++)
-                h.setBlock(CENTER.east(WALL_DX + depth).south(dz).above(y), Blocks.OAK_LOG);
+            for (int y = 0; y < 5; y++) h.setBlock(CENTER.east(WALL_DX).south(dz).above(y), Blocks.OAK_LOG);
         }
         ArmorStand stand = EntityType.ARMOR_STAND.create(level);
         h.assertTrue(stand != null, "no stand");

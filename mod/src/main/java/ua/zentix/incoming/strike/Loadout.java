@@ -22,11 +22,14 @@ public record Loadout(WeaponType weapon, int count, int spread, TargetMode mode,
      */
     public record Nuke(int yieldKt, boolean airBurst, boolean onCarrier) {
         /**
-         * Maximum yield, kt. Heavy zone (5 psi at ground and above) grows as Y^⅔: 15 kt covers about 32 thousand
-         * chunks; higher yields exceed memory and destruction budget, leaving ruins behind the blast front. Older
-         * designators/saves with higher yield are clamped to this.
+         * Hard ceiling of yield, kt (1 Mt); the server's {@code nuclear.max_yield} sets the playable limit below it
+         * (default {@link #DEFAULT_MAX_YIELD}). Heavy zone (5 psi at ground and above) grows as Y^⅔: 15 kt covers about
+         * 33 thousand chunks, 100 kt ~116 thousand, 1 Mt ~540 thousand (most of them on disk, settled in the background).
+         * Older designators/saves with higher yield are clamped to this.
          */
-        public static final int MAX_YIELD = 15;
+        public static final int MAX_YIELD = 1000;
+        /** Default server limit, kt. */
+        public static final int DEFAULT_MAX_YIELD = 100;
         public static final Nuke DEFAULT = new Nuke(15, false, false);
         public static final Codec<Nuke> CODEC = RecordCodecBuilder.create(i -> i.group(
                 Codec.INT.optionalFieldOf("yield", DEFAULT.yieldKt).forGetter(Nuke::yieldKt),

@@ -191,6 +191,9 @@ public final class NuclearPrep {
         long nextRefresh;
         boolean capped;
         long nextZoneReport;
+        /** Zone report being counted, last finished one. */
+        @Nullable
+        Tally tally, lastTally;
         /** Chunks beyond heavy-zone edge within {@link RuinPlanner#REACH}: no prebuilt plans. */
         long[] edge = new long[0];
         List<Tile> tiles = new ArrayList<>();
@@ -297,33 +300,15 @@ public final class NuclearPrep {
         return memory(level, true);
     }
 
-    /** Already-owned bytes only: cold-load publication cannot recursively start another admission. */
-    static long residentMemory(ServerLevel level) {
-        long bytes = 0;
-        int height = level.getHeight();
-        for (ServerLevel other : level.getServer().getAllLevels()) {
-            height = Math.max(height, other.getHeight());
-            if (other.hasData(ModAttachments.NUCLEAR_WORLD))
-                bytes += other.getData(ModAttachments.NUCLEAR_WORLD).retainedRuinBytes();
-        }
-        return bytes + RuinWorkers.residentBufferBytes(height);
-    }
-
     static long memory(ServerLevel level, boolean reserveWorkers) {
         long bytes = 0;
         int height = level.getHeight();
-        boolean cold = false;
         for (ServerLevel other : level.getServer().getAllLevels()) {
+            if (!other.hasData(ModAttachments.NUCLEAR_WORLD)) continue;
             height = Math.max(height, other.getHeight());
-            NuclearWorld world = NuclearWorld.get(other);
-            bytes += world.retainedRuinBytes();
-            cold |= world.ledgers.pending();
+            bytes += NuclearWorld.get(other).retainedRuinBytes();
         }
-        // Unknown old ownership has priority over new preparation/removals. Import uses only the
-        // already-resident counter above and takes its reservation before decoding anything.
-        if (cold) return Math.max(bytes, PLANS_CAP);
-        return bytes + (reserveWorkers ? RuinWorkers.bufferBytes(height) + RuinMemory.TRANSITION_ROOM
-                : RuinWorkers.residentBufferBytes(height));
+        return bytes + (reserveWorkers ? RuinWorkers.bufferBytes(height) : RuinWorkers.residentBufferBytes(height));
     }
 
     /** Squares held by tickets (tests). */
@@ -372,7 +357,8 @@ public final class NuclearPrep {
                     frontLods(level, p, now);
                     boolean zoneDone = p.tiles.stream().noneMatch(t -> t.state != TileState.SKIP);
                     if (zoneDone && !scars.hasPrepared(p.detonation) || now - p.handedOff > ZONE_HOLD) {
-                        zoneReport(p, scars, d, now);
+                        // last finished count (a fresh full pass would cost one long tick)
+                        if (p.lastTally != null) report(p, p.lastTally, d != null && p.farAtDetonation != null && p.ruins != null);
                         scars.dropPrepared(p.detonation, zone(p));
                         p.draining = true;
                     }
@@ -967,11 +953,12 @@ public final class NuclearPrep {
             p.nextIoReport = now + 200;
             Incoming.LOG.info("DIAG I/O #{}: {}", p.detonation, NukeDiag.io(level));
         }
-        if (now >= p.nextZoneReport) {
+        if (now >= p.nextZoneReport && p.tally == null) {
             p.nextZoneReport = now + ZONE_REPORT;
-            zoneReport(p, scars, d, now);
+            p.tally = new Tally();
             if (NukeDiag.ON) diagReport(level, p, scars, now);
         }
+        tally(p, scars, d, now);
     }
 
     /**
@@ -1020,35 +1007,59 @@ public final class NuclearPrep {
         Incoming.LOG.info("DIAG ruin queue: {}", NukeDiag.takeWaits());
     }
 
-    /** Test line: ruined heavy-zone chunks (in memory at detonation and loaded behind wave). */
-    private static void zoneReport(Prep p, ScarQueue scars, @Nullable Detonation d, long now) {
-        int done = 0;
-        for (long c : p.order) if (scars.ruined(p.detonation, c)) done++;
-        Incoming.LOG.info("Detonation #{}: zone behind the wave — {} of {} chunks done, tiles held {}", p.detonation, done, p.order.length, heldTiles(p));
-        if (d == null || p.farAtDetonation == null || p.ruins == null) return;
-        // distant rings: outside-memory chunks at detonation already wave-reached, whether plan ready at arrival
-        int passed = 0, ready = 0, late = 0, none = 0, unreadable = 0;
-        long lateSum = 0, lateMax = 0;
-        for (long c : p.farAtDetonation) {
-            long wave = d.gameTime() + (long) Math.ceil(d.arrivalTicks(nearest(new ChunkPos(c), d)));
-            if (wave > now) continue;
-            passed++;
-            long at = p.ruins.doneAt(c);
-            if (at >= 0 && at <= wave) {
-                ready++;
-            } else if (at >= 0) {
-                late++;
-                lateSum += at - wave;
-                lateMax = Math.max(lateMax, at - wave);
-            } else if (p.unreadable.contains(c)) {
-                unreadable++;
-            } else {
-                none++;
+    /**
+     * Zone report counted in slices ({@link #TALLY_SLICE} chunks per tick): a 1 Mt zone holds half a million chunks, and
+     * one full pass over it cost 100–170 ms in a single tick.
+     */
+    static final class Tally {
+        int cursor, farCursor, done, passed, ready, late, none, unreadable;
+        long lateSum, lateMax;
+    }
+
+    /** Chunks counted per tick by {@link Tally}: well under a millisecond. */
+    private static final int TALLY_SLICE = 4096;
+
+    /** Advances the zone report by one slice; logs it when complete. */
+    private static void tally(Prep p, ScarQueue scars, @Nullable Detonation d, long now) {
+        Tally t = p.tally;
+        if (t == null) return;
+        int budget = TALLY_SLICE;
+        for (; t.cursor < p.order.length && budget > 0; t.cursor++, budget--) if (scars.ruined(p.detonation, p.order[t.cursor])) t.done++;
+        boolean far = d != null && p.farAtDetonation != null && p.ruins != null;
+        if (far) {
+            for (; t.farCursor < p.farAtDetonation.length && budget > 0; t.farCursor++, budget--) {
+                long c = p.farAtDetonation[t.farCursor];
+                long wave = d.gameTime() + (long) Math.ceil(d.arrivalTicks(nearest(new ChunkPos(c), d)));
+                if (wave > now) continue;
+                t.passed++;
+                long at = p.ruins.doneAt(c);
+                if (at >= 0 && at <= wave) {
+                    t.ready++;
+                } else if (at >= 0) {
+                    t.late++;
+                    t.lateSum += at - wave;
+                    t.lateMax = Math.max(t.lateMax, at - wave);
+                } else if (p.unreadable.contains(c)) {
+                    t.unreadable++;
+                } else {
+                    t.none++;
+                }
             }
         }
+        if (t.cursor < p.order.length || far && t.farCursor < p.farAtDetonation.length) return;
+        p.tally = null;
+        p.lastTally = t;
+        report(p, t, far);
+    }
+
+    /** Test line: ruined heavy-zone chunks (in memory at detonation and loaded behind wave), distant rings. */
+    private static void report(Prep p, Tally t, boolean far) {
+        Incoming.LOG.info("Detonation #{}: zone behind the wave — {} of {} chunks done, tiles held {}", p.detonation, t.done, p.order.length, heldTiles(p));
+        if (!far) return;
+        // distant rings: outside-memory chunks at detonation already wave-reached, whether plan ready at arrival
         Incoming.LOG.info("Detonation #{}: far rings: ready for the wave {} of {} (after the wave {}: avg {} ticks late, max {}; "
-                        + "no plan yet {}, not from disk {}; wave still ahead for {})", p.detonation, ready, passed, late, late == 0 ? 0 : lateSum / late, lateMax,
-                none, unreadable, p.farAtDetonation.length - passed);
+                        + "no plan yet {}, not from disk {}; wave still ahead for {})", p.detonation, t.ready, t.passed, t.late, t.late == 0 ? 0 : t.lateSum / t.late, t.lateMax,
+                t.none, t.unreadable, p.farAtDetonation.length - t.passed);
     }
 
     private static boolean ready(ServerLevel level, Tile t) {

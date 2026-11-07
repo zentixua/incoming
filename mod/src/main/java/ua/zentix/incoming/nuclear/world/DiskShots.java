@@ -128,10 +128,10 @@ final class DiskShots {
     }
 
     /** World data needed for chunk parsing (captured on server thread; parsing itself reads no world). */
-    record Format(ChunkMap storage, ResourceKey<Level> dimension, Optional<ResourceKey<MapCodec<? extends ChunkGenerator>>> generator,
+    record Format(ChunkMap storage, java.nio.file.Path regions, ResourceKey<Level> dimension, Optional<ResourceKey<MapCodec<? extends ChunkGenerator>>> generator,
                   int minSection, int sections, int minY, int height, Registry<Biome> biomes, String flashLayerKey) {
         static Format of(ServerLevel level) {
-            return new Format(level.getChunkSource().chunkMap, level.dimension(), level.getChunkSource().getGenerator().getTypeNameForDataFixer(),
+            return new Format(level.getChunkSource().chunkMap, ua.zentix.incoming.util.RegionFiles.folder(level), level.dimension(), level.getChunkSource().getGenerator().getTypeNameForDataFixer(),
                     level.getMinSection(), level.getSectionsCount(), level.getMinBuildHeight(), level.getHeight(),
                     level.registryAccess().registryOrThrow(Registries.BIOME),
                     String.valueOf(NeoForgeRegistries.ATTACHMENT_TYPES.getKey(ModAttachments.FLASH_LAYER.get())));
@@ -144,7 +144,7 @@ final class DiskShots {
      */
     static CompletableFuture<Read> read(Format f, ChunkPos pos, RuinWorkers.Priority priority) {
         long diag = NukeDiag.readStart();
-        return f.storage.read(pos).whenComplete((t, e) -> NukeDiag.readDone(diag)).thenApplyAsync(tag -> tag.map(t -> parse(f, pos, t)).orElseGet(() -> Read.skipped(pos, "not on disk")),
+        return ua.zentix.incoming.util.RegionFiles.read(f.storage, f.regions, pos).whenComplete((t, e) -> NukeDiag.readDone(diag)).thenApplyAsync(tag -> tag.map(t -> parse(f, pos, t)).orElseGet(() -> Read.skipped(pos, "not on disk")),
                 RuinWorkers.executor(priority)).exceptionally(e -> Read.skipped(pos, "read error: " + e));
     }
 
@@ -235,7 +235,7 @@ final class DiskShots {
     record Sections(ChunkPos pos, LevelChunkSection[] sections, @Nullable String skip) {}
 
     static CompletableFuture<Sections> readSections(Format f, ChunkPos pos) {
-        return f.storage.read(pos).thenApplyAsync(tag -> tag.map(t -> parseSections(f, pos, t)).orElseGet(() -> new Sections(pos, new LevelChunkSection[0], "not on disk")),
+        return ua.zentix.incoming.util.RegionFiles.read(f.storage, f.regions, pos).thenApplyAsync(tag -> tag.map(t -> parseSections(f, pos, t)).orElseGet(() -> new Sections(pos, new LevelChunkSection[0], "not on disk")),
                 RuinWorkers.executor(RuinWorkers.Priority.FAR)).exceptionally(e -> new Sections(pos, new LevelChunkSection[0], "read error: " + e));
     }
 
@@ -286,7 +286,7 @@ final class DiskShots {
     record Scorch(Sections sections, Read read) {}
 
     static CompletableFuture<Scorch> readScorch(Format f, ChunkPos pos) {
-        return f.storage.read(pos).thenApplyAsync(tag -> tag.map(t -> parseScorch(f, pos, t)).orElseGet(() -> skippedScorch(pos, "not on disk")),
+        return ua.zentix.incoming.util.RegionFiles.read(f.storage, f.regions, pos).thenApplyAsync(tag -> tag.map(t -> parseScorch(f, pos, t)).orElseGet(() -> skippedScorch(pos, "not on disk")),
                 RuinWorkers.executor(RuinWorkers.Priority.FAR)).exceptionally(e -> skippedScorch(pos, "read error: " + e));
     }
 

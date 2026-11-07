@@ -188,7 +188,7 @@ public final class DhGameTests {
         net.minecraft.nbt.CompoundTag tag = net.minecraft.world.level.chunk.storage.ChunkSerializer.write(level, sample);
         tag.putInt("xPos", far.x);
         tag.putInt("zPos", far.z);
-        level.getChunkSource().chunkMap.write(far, tag);
+        ua.zentix.incoming.util.RegionFiles.write(level, far, tag);
         long[] lods0 = FarLods.get(level).stats();
         ProtoChunk[] copy = {null};
         long[] at = {-1};

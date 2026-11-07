@@ -9,10 +9,6 @@ paths:
 # GameTest and flight scenarios
 
 ## Pitfalls
-- Synchronous nuclear snapshot fixtures finish at structural failure, before saved material has fallen. Register
-  `RuinMatterGameTests.clearFixture` in their completion cleanup (the `NuclearGameTests.rawAt` helper does this):
-  otherwise later unrelated batches inherit their moving material and loading tickets. Real save/reload and
-  settlement integration tests must retain the ledger until their own assertions complete.
 - Whole strikes against data: `SurfaceGameTests` (batches `surface_<weapon>`, `surface_<weapon>_nearby`, `surface_bomb`):
   the mod's strike path (`Warheads.detonate` with a weapon entity, axis from the spec's impact angle; bomb is a real
   entity dropped by B-2) over seven surfaces; expectations are sourced laws and data spread; report:
@@ -141,6 +137,3 @@ paths:
 - `nuke_send_hold` fills ruin-worker admission until the first post-wave send request exercises the gate, then
   releases workers and checks both the scar and actual glass removal. Cleanup releases the latch on failure too;
   observing an incidental worker delay after the next GameTest callback is not a deterministic gate prerequisite.
-- Cold-ledger fixtures must unload the currently imported `RuinMatter` before restoring the previous SavedData
-  cache entry in each dimension. The imported instance may already hold a material ticket after background import;
-  restoring the old cache alone leaves an ownerless load (`nuke_ledger_cleanup`, then `nuke_stop`).

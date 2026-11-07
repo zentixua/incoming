@@ -44,7 +44,8 @@ import java.util.function.IntPredicate;
  * Shock front on entities and craft (DESIGN-nuke §4): ring between previous and current radii hits
  * body ({@link BlastBody}: lungs, throw/impact, glass); after positive phase, slight reverse wind toward center
  * (only bodies reached by direct wind: absent in house without blast-facing window or bunker); bodies buried by chunk
- * ruins receive burial injury (also {@link BlastBody}). Chunk ruins appear one tick before front: nearby bodies remember window and wall
+ * ruins receive burial injury (also {@link BlastBody}). Objects (items, boats, minecarts, mod vehicles) take the same wind
+ * by their own size ({@link BlastBody#blow}), at once: no injury, so nothing to queue. Chunk ruins appear one tick before front: nearby bodies remember window and wall
  * as front will find them ({@link #remember}).
  * <p>
  * Front position computed each tick (entity snapshot in circle takes fractions of a millisecond); hits on those
@@ -151,6 +152,15 @@ final class BlastFront {
                 if (hitBy.add(living.getId())) ring.add(living);
             } else if (dist >= done[1] && dist < back) suck(level, d, living);
         }
+        // objects (items, boats, minecarts, mod vehicles): wind only, no injury, so no queue
+        for (Entity e : level.getEntities((Entity) null, AABB.ofSize(d.burst(), reach * 2, reach * 2, reach * 2), BlastBody::object)) {
+            double dist = e.position().distanceTo(d.burst());
+            // once per object and detonation: blown faster than the slowed front, it would be caught and blown again
+            if (dist >= done[0] && dist < r) {
+                if (hitBy.add(e.getId())) BlastBody.blow(level, d, e);
+            }
+            else if (dist >= done[1] && dist < back && BlastBody.windAt(level, e.position())) pull(d, e);
+        }
         ring.sort(Comparator.comparingDouble(e -> e.distanceToSqr(d.burst())));
         Int2ObjectMap<BlastBody.Before> seen = before.get(d.id());
         for (LivingEntity e : ring) {
@@ -256,7 +266,13 @@ final class BlastFront {
         IntSet blown = windy.get(d.id());
         boolean wind = blown != null && blown.contains(e.getId())
                 || queued.contains(key(d, e)) && BlastBody.windAt(level, e.getEyePosition());
-        if (!wind) return;
+        if (wind) pull(d, e);
+    }
+
+    /** Reverse wind on an entity in the wind ({@link #suck}): pulled back toward the epicenter. */
+    private static void pull(Detonation d, Entity e) {
+        double psi = d.psi(e.position());
+        if (psi < 1) return;
         Vec3 to = new Vec3(d.burst().x - e.getX(), 0, d.burst().z - e.getZ());
         if (to.lengthSqr() < 1e-4) return;
         to = to.normalize().scale(Math.min(0.6, 0.08 * psi));

@@ -105,13 +105,7 @@ public final class NuclearWorld {
     }
 
     public static NuclearWorld get(ServerLevel level) {
-        NuclearWorld world = level.getData(ModAttachments.NUCLEAR_WORLD);
-        // Include restored ledgers before the first preparation admission, even in an otherwise
-        // idle dimension. Refresh references because SavedData may be replaced during load/tests.
-        world.matter = RuinMatter.get(level);
-        world.craterMatter = CraterMatter.get(level);
-        world.ruinProgress = RuinProgress.get(level);
-        return world;
+        return level.getData(ModAttachments.NUCLEAR_WORLD);
     }
 
     /** Detonation ruins across chunks, shared by preparation (after detonation), queue and tests. */
@@ -155,30 +149,13 @@ public final class NuclearWorld {
      * Whether nuclear queues have server-thread work (NUCLEAR lane {@code WorkScheduler}: while present, impacts
      * do not take entire shared budget).
      */
-    final LedgerLoads ledgers = new LedgerLoads();
-    private RuinMatter matter;
-    private CraterMatter craterMatter;
-    private RuinProgress ruinProgress;
-    long materialReservation;
-
-    void ledger(LedgerData value) {
-        if (value instanceof RuinMatter material) matter = material;
-        else if (value instanceof CraterMatter crater) craterMatter = crater;
-        else if (value instanceof RuinProgress progress) ruinProgress = progress;
-    }
-
     public boolean busy() {
-        return ledgers.pending() || matter != null && matter.busy() || !pulses.isEmpty() || late.busy() || !shadows.isEmpty() || !scorches.isEmpty() || !craters.isEmpty() || scars.size() > 0 || !prep.idle() || blast.busy() || settle.busy();
+        return !pulses.isEmpty() || late.busy() || !shadows.isEmpty() || !scorches.isEmpty() || !craters.isEmpty() || scars.size() > 0 || !prep.idle() || blast.busy() || settle.busy();
     }
 
     /** Retained preparation and active-context estimates, without the shared worker buffers. */
     long retainedRuinBytes() {
-        long bytes = prep.retainedBytes() + materialReservation + scars.retainedBytes();
-        if (matter != null) bytes += matter.retainedBytes();
-        if (craterMatter != null) bytes += craterMatter.retainedBytes();
-        if (ruinProgress != null) bytes += ruinProgress.retainedBytes();
-        for (CraterJob crater : craters) bytes += crater.retainedBytes();
-        bytes += settle.retainedBytes();
+        long bytes = prep.retainedBytes();
         for (RuinContext ctx : ruins.values()) bytes += ctx.retainedBytes();
         return bytes;
     }
@@ -376,7 +353,6 @@ public final class NuclearWorld {
 
     /** Cancel: queues stopped (destruction not restored). */
     public void clear(ServerLevel level) {
-        RuinMatter.get(level).unload(level);
         // preparation before FarLods: copies return claimed requests there, to be removed with its queues
         settle.clear(level);
         prep.clear(level, scars);
@@ -416,17 +392,9 @@ public final class NuclearWorld {
 
     /** @param clock server-tick budget, shared across dimensions (already started) */
     public void tick(ServerLevel level, WorkClock clock) {
-        get(level);
-        if (!matter.loaded() || !craterMatter.loaded() || !ruinProgress.loaded()) {
-            // Already-owned transport must be able to free room for another cold ledger's
-            // decoder. New strike removals/restoration still wait for every authoritative store.
-            if (matter.loaded()) matter.work(level, clock);
-            return;
-        }
-        if (!restored && !craterMatter.writable()) return;
         long now = level.getGameTime();
         NuclearEvents events = NuclearEvents.get(level);
-        if (!restored) restore(level, events);
+        if (!restored) restore(events);
         sweepRuins(now);
         // background plans: stuck ones fall back to server thread; active threads follow server tick
         for (RuinContext ctx : ruins.values()) ctx.expire(now);
@@ -471,17 +439,11 @@ public final class NuclearWorld {
         }
         lastFrontNanos = System.nanoTime() - frontStart;
         if (now % 1200 == 0) scars.retainBudgets(events.detonations().stream().map(Detonation::id).collect(java.util.stream.Collectors.toSet()));
-        // At capacity, existing material must progress before new removals can consume the
-        // lane. One bounded batch avoids starving visible ruins while breaking that dependency.
-        matter = RuinMatter.get(level);
-        matter.work(level, clock, 1);
         long craterStart = System.nanoTime();
         digCraters(level, events, clock);
         long scarStart = System.nanoTime();
         lastCraterNanos = scarStart - craterStart;
         scars.work(level, now, clock);
-        matter = RuinMatter.get(level);
-        matter.work(level, clock);
         long scorchStart = System.nanoTime();
         lastScarNanos = scorchStart - scarStart;
         // ground light after wave-reached ruins using their remaining budget: when front crosses
@@ -550,8 +512,7 @@ public final class NuclearWorld {
     }
 
     /** After world load: resume unfinished craters from stopped chunk. */
-    private void restore(ServerLevel level, NuclearEvents events) {
-        CraterMatter.get(level).retainActive(events.craters().keySet());
+    private void restore(NuclearEvents events) {
         restored = true;
         events.craters().forEach((id, done) -> events.detonations().stream().filter(d -> d.id() == id).findFirst()
                 .ifPresent(d -> craters.add(new CraterJob(d, done))));

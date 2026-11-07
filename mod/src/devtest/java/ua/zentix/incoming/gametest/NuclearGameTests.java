@@ -18,6 +18,7 @@ import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.Items;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.LeavesBlock;
+import net.minecraft.world.level.block.RotatedPillarBlock;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.fml.ModList;
@@ -127,7 +128,6 @@ public final class NuclearGameTests {
     }
 
     private static Detonation rawAt(GameTestHelper h, BlockPos g, double hob, double yieldKt, float scale) {
-        StrikeGameTests.afterTest(h, () -> ua.zentix.incoming.nuclear.world.RuinMatterGameTests.clearFixture(h.getLevel()));
         return new Detonation(IDS.incrementAndGet(), new Vec3(g.getX() + 0.5, g.getY() + hob, g.getZ() + 0.5), g.getY(),
                 yieldKt, hob <= 0, h.getLevel().getGameTime(), 0, 0, 20_000, 7, scale, false, Detonation.OLD_WAVE);
     }
@@ -236,9 +236,12 @@ public final class NuclearGameTests {
         h.assertBlockNotPresent(Blocks.OAK_PLANKS, planks);
         for (BlockPos p : BlockPos.betweenClosed(bricks.offset(-1, 0, -1), bricks.offset(1, 1, 0))) h.assertBlockPresent(Blocks.STONE_BRICKS, p.immutable());
         h.assertTrue(!h.getBlockState(tree.above()).is(BlockTags.LOGS), "tree trunk stands" + at);
-        int falling = ua.zentix.incoming.nuclear.world.RuinMatter.get(h.getLevel())
-                .pendingFrom(h.absolutePos(tree), h.absolutePos(tree.above(3)));
-        h.assertTrue(falling == 4, "Failure must retain all four logs in flight before deposition: " + falling + at);
+        int lying = 0;
+        for (int i = 0; i < 6; i++) {
+            var s = h.getBlockState(tree.east(i));
+            if (s.is(BlockTags.LOGS) && s.getValue(RotatedPillarBlock.AXIS) == Direction.Axis.X) lying++;
+        }
+        h.assertTrue(lying >= 3, "the tree did not lie down from the epicenter: logs along x " + lying + at);
         for (BlockPos p : BlockPos.betweenClosed(tree.offset(-2, 3, -2), tree.offset(2, 5, 2))) {
             h.assertTrue(!h.getBlockState(p).is(BlockTags.LEAVES), "foliage hangs without a trunk in " + p.toShortString() + at);
         }
@@ -247,27 +250,29 @@ public final class NuclearGameTests {
     }
 
     /**
-     * A 3×3×4 stone-brick tower fails at the front, transferring all 36 blocks into motion. Heightmaps
-     * describe that failure stage; deposition is separately exercised by RuinMatterGameTests. The
-     * client debris sample retains the original material and a smaller limit is the same list prefix.
+     * Ruins: stone brick tower 3×3×4 in 480 m from 15 kt near the ground (1 block = 40 m, ~30 psi) is collapsing, around its base
+     *  lies a low pile of its bricks; chunk height maps - for ruins (replacement of entire sections, without {@code setBlock} for each block).
+     *  Debris for players ({@link RuinPlan#thrown}) - demolished places of the tower with its block; the smaller limit is the beginning of the same list.
      */
     @GameTest(template = "range", timeoutTicks = 40, batch = "nuke_ruins", skyAccess = true)
-    public static void collapsedBuildingTransfersAllMaterial(GameTestHelper h) {
+    public static void collapsedBuildingLeavesRubble(GameTestHelper h) {
         ServerLevel level = h.getLevel();
         BlockPos tower = CENTER.east(12);
         for (BlockPos p : BlockPos.betweenClosed(tower.offset(-1, 0, -1), tower.offset(1, 3, 1))) h.setBlock(p, Blocks.STONE_BRICKS);
         List<RuinPlan> plans = scarAll(h, detonation(h, CENTER, 0, 15, 0.025f), new ColumnScar.Budget(false));
         thrownTower(h, plans, tower);
-        h.assertTrue(ua.zentix.incoming.nuclear.world.RuinMatter.get(level).pendingFrom(
-                h.absolutePos(tower.offset(-1, 0, -1)), h.absolutePos(tower.offset(1, 3, 1))) == 36,
-                "The entire demolished tower must enter material transport before it can settle");
+        // the tower's own bricks lie in a low pile around its base (Debris: a share of the fallen blocks, drifted downwind)
+        int bricks = 0;
+        for (BlockPos p : BlockPos.betweenClosed(tower.offset(-4, 0, -4), tower.offset(4, 2, 4))) if (h.getBlockState(p).is(Blocks.STONE_BRICKS)) bricks++;
+        h.assertTrue(bricks > 0, "no rubble of the tower's bricks around " + tower.toShortString());
         for (BlockPos p : BlockPos.betweenClosed(tower.offset(-1, 0, -1), tower.offset(1, 0, 1))) {
             BlockPos q = p.immutable();
-            h.assertTrue(h.getBlockState(q).isAir(), "A finished pile appeared before falling: " + q.toShortString());
-            for (int y = 1; y <= 3; y++) h.assertTrue(h.getBlockState(q.above(y)).isAir(), "the tower stands: " + q.above(y).toShortString());
+            h.assertTrue(h.getBlockState(q.above(3)).isAir(), "the tower stands: " + q.above(3).toShortString());
+            int top = -1;
+            for (int y = 0; y <= 3; y++) if (!h.getBlockState(q.above(y)).isAir()) top = y;
             BlockPos abs = h.absolutePos(q);
-            h.assertTrue(level.getHeight(Heightmap.Types.WORLD_SURFACE, abs.getX(), abs.getZ()) == abs.getY(),
-                    "Height map must describe failure, not a future pile");
+            h.assertTrue(level.getHeight(Heightmap.Types.WORLD_SURFACE, abs.getX(), abs.getZ()) == abs.getY() + top + 1,
+                    "height map not for ruins: " + level.getHeight(Heightmap.Types.WORLD_SURFACE, abs.getX(), abs.getZ()) + " instead of " + (abs.getY() + top + 1));
         }
         h.succeed();
     }
@@ -291,20 +296,19 @@ public final class NuclearGameTests {
         Detonation d = detonation(h, CENTER, Yield.optimalBurstHeight(15) * 0.3, 15, 0.3f);
         // ruins in advance: plans for an untouched city, then replacement
         int built = tower(h, c);
-        long releasedBefore = ua.zentix.incoming.nuclear.world.RuinMatter.get(h.getLevel()).released();
         List<RuinPlan> ahead = new java.util.ArrayList<>();
         List<LevelChunk> chunks = chunks(h);
         for (LevelChunk chunk : chunks) ahead.add(RuinPlanner.plan(level, d, chunk));
         for (int i = 0; i < chunks.size(); i++) h.assertTrue(ahead.get(i).apply(level, chunks.get(i), d, new ColumnScar.Budget(false)), "the plan is already outdated");
-        int standingAhead = towerFell(h, d, c, built, "in advance", releasedBefore);
-        // the same tower again - ruins in place, chunk by chunk at the time of the wave
-        for (BlockPos p : BlockPos.betweenClosed(c.offset(-TOWER_HALF, 0, -TOWER_HALF), c.offset(TOWER_HALF, TOWER_HEIGHT, TOWER_HALF))) {
+        int standingAhead = towerFell(h, d, c, built, "in advance");
+        // the same tower again - ruins in place, chunk by chunk at the time of the wave; its rubble from the first run
+        // (drifted and imported across the four chunks, Debris) is cleared with it
+        for (BlockPos p : BlockPos.betweenClosed(c.offset(-16, 0, -16), c.offset(15, TOWER_HEIGHT, 15))) {
             level.setBlock(h.absolutePos(p), Blocks.AIR.defaultBlockState(), 2);
         }
         h.assertTrue(tower(h, c) == built, "the tower did not rise again");
-        releasedBefore = ua.zentix.incoming.nuclear.world.RuinMatter.get(level).released();
         scarAll(h, d, new ColumnScar.Budget(false));
-        int standingFresh = towerFell(h, d, c, built, "on site", releasedBefore);
+        int standingFresh = towerFell(h, d, c, built, "on site");
         h.assertTrue(standingAhead == standingFresh, "the ruins in advance and on site are different: above the rubble " + standingAhead + " and " + standingFresh + " blocks");
         h.succeed();
     }
@@ -323,7 +327,8 @@ public final class NuclearGameTests {
             h.assertFalse(p.state().isAir(), "a piece of air in " + p.pos().toShortString());
         }
         for (BlockPos q : BlockPos.betweenClosed(at.offset(-1, 1, -1), at.offset(1, 3, 1))) {
-            if (new ChunkPos(q).equals(chunk.getPos())) {
+            // a cell under the tower's own rubble pile is not thrown: the pile lands where the hash of the position says
+            if (new ChunkPos(q).equals(chunk.getPos()) && h.getLevel().getBlockState(q).isAir()) {
                 BlockPos b = q.immutable();
                 h.assertTrue(all.stream().anyMatch(p -> p.pos().equals(b) && p.state().is(Blocks.STONE_BRICKS)), "no tower fragment in " + b.toShortString());
             }
@@ -345,9 +350,8 @@ public final class NuclearGameTests {
         Detonation d = detonation(h, CENTER, Yield.optimalBurstHeight(15) * 0.3, 15, 0.3f, false);
         h.assertTrue(h.getBlockState(BlockPos.ZERO.offset(5, 0, 5)).isAir(), "there is no air under the platform: the test does not check anything");
         int built = tower(h, c, true);
-        long releasedBefore = ua.zentix.incoming.nuclear.world.RuinMatter.get(h.getLevel()).released();
         scarAll(h, d, new ColumnScar.Budget(false));
-        towerFell(h, d, c, built, "concrete without backfill", releasedBefore);
+        towerFell(h, d, c, built, "concrete without backfill");
         h.succeed();
     }
 
@@ -392,12 +396,15 @@ public final class NuclearGameTests {
         return out.toString();
     }
 
-    /** Failure leaves at most 5% of the upper structure, no floating survivors, and all removed material in transport. */
-    private static int towerFell(GameTestHelper h, Detonation d, BlockPos c, int built, String path, long releasedBefore) {
-        int standing = 0, survivors = 0;
+    /** From the tower there is a blockage and no more than 5% of blocks above it, nothing hangs above the void; how many blocks are above the rubble? */
+    private static int towerFell(GameTestHelper h, Detonation d, BlockPos c, int built, String path) {
+        int standing = 0, rubble = 0;
         for (int dx = -TOWER_HALF; dx <= TOWER_HALF; dx++) {
             for (int dz = -TOWER_HALF; dz <= TOWER_HALF; dz++) {
                 BlockPos col = c.offset(dx, 0, dz);
+                BlockState first = h.getBlockState(col);
+                // rubble of the tower's own material (Debris) or broken non-full blocks
+                if (!first.isAir()) rubble++;
                 int air = 0;
                 for (int y = 0; y < TOWER_HEIGHT; y++) {
                     BlockState st = h.getBlockState(col.above(y));
@@ -406,7 +413,6 @@ public final class NuclearGameTests {
                         continue;
                     }
                     if (y >= 4) standing++;
-                    survivors++;
                     if (air >= 3) h.fail(path + ": hanging in the air " + st + " in " + col.above(y).toShortString() + " over the void in " + air + " blocks; " + profile(h, c));
                     air = 0;
                 }
@@ -414,9 +420,7 @@ public final class NuclearGameTests {
         }
         h.assertTrue(standing * 20 <= built, path + ": the tower stands higher than the rubble " + standing + " blocks of " + built
                 + " (pressure at the tower " + String.format(Locale.ROOT, "%.0f", d.psi(Vec3.atCenterOf(h.absolutePos(c)))) + " psi)");
-        long transferred = ua.zentix.incoming.nuclear.world.RuinMatter.get(h.getLevel()).released() - releasedBefore;
-        h.assertTrue(transferred >= built - survivors, path + ": removed coarse/fine material has no owner: " + transferred
-                + " transferred for " + (built - survivors) + " removed blocks");
+        h.assertTrue(rubble * 2 >= (2 * TOWER_HALF + 1) * (2 * TOWER_HALF + 1), path + ": there is not enough blockage - " + rubble + " columns");
         return standing;
     }
 
@@ -480,10 +484,9 @@ public final class NuclearGameTests {
         BlockPos c = chunkCorner(h);
         Detonation d = detonation(h, c, Yield.optimalBurstHeight(15) * 0.3, 15, 0.3f);
         int built = tower(h, c);
-        long releasedBefore = ua.zentix.incoming.nuclear.world.RuinMatter.get(h.getLevel()).released();
         pool(h, c);
         scarAll(h, d, new ColumnScar.Budget(false));
-        towerFell(h, d, c, built, "with swimming pool", releasedBefore);
+        towerFell(h, d, c, built, "with swimming pool");
         h.succeed();
     }
 
@@ -493,10 +496,9 @@ public final class NuclearGameTests {
         BlockPos c = chunkCorner(h);
         Detonation d = detonation(h, CENTER, Yield.optimalBurstHeight(15) * 0.3, 15, 0.3f);
         int built = tower(h, c);
-        long releasedBefore = ua.zentix.incoming.nuclear.world.RuinMatter.get(h.getLevel()).released();
         pool(h, c);
         scarAll(h, d, new ColumnScar.Budget(false));
-        towerFell(h, d, c, built, "with a pool, the explosion is not above the core", releasedBefore);
+        towerFell(h, d, c, built, "with a pool, the explosion is not above the core");
         h.succeed();
     }
 
@@ -588,8 +590,11 @@ public final class NuclearGameTests {
             for (int dz = 0; dz < 5; dz++) {
                 for (int y = 5; y <= HOUSE_HEIGHT; y++) {
                     BlockState st = h.getBlockState(ribbon.offset(dx, y, dz));
-                    // a rubble block on a collapsed corner - not a hanging wall
-                    if (st.is(Blocks.BRICKS) || st.is(Blocks.GLASS)) h.fail("the top of the house hangs above the windows with a ribbon: " + st + " in " + ribbon.offset(dx, y, dz).toShortString() + ", " + at);
+                    // a rubble block on a collapsed corner, or the house's own bricks lying in a low pile on the floor
+                    // below (Debris) - not a hanging wall
+                    boolean pile = y < 11;
+                    for (int below = 5; below < y && pile; below++) pile = !h.getBlockState(ribbon.offset(dx, below, dz)).isAir();
+                    if (st.is(Blocks.GLASS) || st.is(Blocks.BRICKS) && !pile) h.fail("the top of the house hangs above the windows with a ribbon: " + st + " in " + ribbon.offset(dx, y, dz).toShortString() + ", " + at);
                 }
             }
         }
@@ -851,18 +856,18 @@ public final class NuclearGameTests {
         }
         Detonation d = detonation(h, CENTER, Yield.optimalBurstHeight(15) * 0.3, 15, 0.3f);
         scarAll(h, d, new ColumnScar.Budget(false));
-        // Assert structural removal before transport can place conserved rubble back in the
-        // tower's footprint. The later check is for water flow, not an empty rubble volume.
-        for (int dx = 0; dx < 5; dx++) {
-            for (int dz = 0; dz < 5; dz++) {
-                for (int y = 5; y < 60; y++) {
-                    BlockState st = h.getBlockState(t.offset(dx, y, dz));
-                    if (!st.isAir() && st.getFluidState().isEmpty()) h.fail("the tower on the shore stands: " + st + " in " + t.offset(dx, y, dz).toShortString());
-                }
-            }
-        }
         h.runAfterDelay(60, () -> {
             for (BlockPos q : bed) if (h.getBlockState(q).isAir()) h.fail("the shore or bottom is knocked out: " + q.toShortString());
+            for (int dx = 0; dx < 5; dx++) {
+                for (int dz = 0; dz < 5; dz++) {
+                    // a column's own rubble lands at its foot: 0.12 of 60 blocks is about 7, so the levels a pile can reach
+                    // are not checked (piles vary with the test position: landing hashes take world coordinates)
+                    for (int y = 12; y < 60; y++) {
+                        BlockState st = h.getBlockState(t.offset(dx, y, dz));
+                        if (!st.isAir() && st.getFluidState().isEmpty()) h.fail("the tower on the shore stands: " + st + " in " + t.offset(dx, y, dz).toShortString());
+                    }
+                }
+            }
             for (BlockPos p : BlockPos.betweenClosed(t.offset(-3, -3, -3), t.offset(10, 60, 8))) {
                 if (!h.getBlockState(p).getFluidState().isEmpty() && h.getBlockState(p.below()).isAir()) h.fail("water over the void " + p.toShortString());
             }
@@ -1094,8 +1099,9 @@ public final class NuclearGameTests {
     }
 
     /**
-     * Loot chest and bed in ruins: change across the world after replacement - no items on the ground, no block entity
-     * in the air; a blow from conservation more powerful than the limit is undermined with the limit.
+     * Chest and bed in ruins: the chest stays in the rubble with its contents, the bed is replaced across the world -
+     * no items on the ground, no block entity in the air; a blow from conservation more powerful than the limit is
+     * undermined with the limit.
      */
     @GameTest(template = "range", timeoutTicks = 40, batch = "nuke_ruins_be", skyAccess = true)
     public static void containersInRuinsLeaveNothing(GameTestHelper h) {
@@ -1106,17 +1112,96 @@ public final class NuclearGameTests {
             c.setItem(0, new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.DIAMOND, 64));
         }
         h.setBlock(bed, Blocks.RED_BED);
+        // a double chest on the ground: each half lands where it stood as a lone chest (a state change) with its items
+        BlockPos left = CENTER.east(8).south(3), right = left.east();
+        BlockState half = Blocks.CHEST.defaultBlockState().setValue(net.minecraft.world.level.block.ChestBlock.FACING, net.minecraft.core.Direction.NORTH);
+        h.setBlock(left, half.setValue(net.minecraft.world.level.block.ChestBlock.TYPE, net.minecraft.world.level.block.state.properties.ChestType.LEFT));
+        h.setBlock(right, half.setValue(net.minecraft.world.level.block.ChestBlock.TYPE, net.minecraft.world.level.block.state.properties.ChestType.RIGHT));
+        for (BlockPos p : List.of(left, right)) {
+            if (h.getBlockEntity(p) instanceof net.minecraft.world.level.block.entity.ChestBlockEntity c) c.setItem(1, new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.EMERALD, 32));
+        }
         scarAll(h, detonation(h, CENTER, 0, 15, 0.025f), new ColumnScar.Budget(false));
-        h.assertBlockNotPresent(Blocks.CHEST, chest);
-        h.assertTrue(level.getBlockEntity(h.absolutePos(chest)) == null || h.getBlockState(chest).hasBlockEntity(),
-                "the block entity of the chest remained with " + h.getBlockState(chest));
+        h.assertTrue(h.getBlockEntity(chest) instanceof net.minecraft.world.level.block.entity.ChestBlockEntity c && c.getItem(0).getCount() == 64,
+                "the chest lost its contents: " + h.getBlockState(chest));
+        for (BlockPos p : List.of(left, right)) {
+            BlockPos abs = h.absolutePos(p);
+            int found = 0;
+            for (int y = level.getMinBuildHeight(); y < abs.getY() + 2; y++) {
+                if (level.getBlockEntity(new BlockPos(abs.getX(), y, abs.getZ())) instanceof net.minecraft.world.level.block.entity.ChestBlockEntity c
+                        && c.getItem(1).is(net.minecraft.world.item.Items.EMERALD) && c.getItem(1).getCount() == 32) found++;
+            }
+            h.assertTrue(found == 1, "double chest half lost its contents: " + h.getBlockState(p) + " at " + p.toShortString());
+        }
+        h.assertBlockNotPresent(Blocks.RED_BED, bed);
+        h.assertTrue(level.getBlockEntity(h.absolutePos(bed)) == null || h.getBlockState(bed).hasBlockEntity(),
+                "the block entity of the bed remained with " + h.getBlockState(bed));
         var items = level.getEntitiesOfClass(net.minecraft.world.entity.item.ItemEntity.class, new net.minecraft.world.phys.AABB(h.absolutePos(CENTER)).inflate(40));
         h.assertTrue(items.isEmpty(), "items on the ground: " + items.size());
-        // save with impact in 1 Mt
+        // save with impact above the ceiling (10 Mt)
         var tag = NuclearEvents.ScheduledStrike.CODEC.encodeStart(net.minecraft.nbt.NbtOps.INSTANCE,
-                new NuclearEvents.ScheduledStrike(1, Vec3.ZERO, 1000, true, 0, 1, Vec3.ZERO, java.util.Optional.empty(), false)).getOrThrow();
+                new NuclearEvents.ScheduledStrike(1, Vec3.ZERO, 10000, true, 0, 1, Vec3.ZERO, java.util.Optional.empty(), false)).getOrThrow();
         double kt = NuclearEvents.ScheduledStrike.CODEC.parse(net.minecraft.nbt.NbtOps.INSTANCE, tag).getOrThrow().yieldKt();
         h.assertTrue(kt == ua.zentix.incoming.strike.Loadout.Nuke.MAX_YIELD, "power from storage is not limited: " + kt);
+        h.succeed();
+    }
+
+    /**
+     * A chest on a collapsing wooden tower lands in the rubble at the tower's base with its contents (Collapse#land,
+     * RuinPlan moves the block entity): one chest in the column, lower than it stood, the same items, nothing on the ground.
+     */
+    @GameTest(template = "range", timeoutTicks = 40, batch = "nuke_ruins_chest_falls", skyAccess = true)
+    public static void chestFallsWithContents(GameTestHelper h) {
+        ServerLevel level = h.getLevel();
+        BlockPos base = CENTER.east(10);
+        for (int y = 0; y < 5; y++) h.setBlock(base.above(y), Blocks.OAK_PLANKS);
+        BlockPos chest = base.above(5);
+        h.setBlock(chest, Blocks.CHEST);
+        if (h.getBlockEntity(chest) instanceof net.minecraft.world.level.block.entity.ChestBlockEntity c) {
+            c.setItem(3, new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.DIAMOND, 64));
+        }
+        scarAll(h, detonation(h, CENTER, 0, 15, 0.025f), new ColumnScar.Budget(false));
+        BlockPos abs = h.absolutePos(chest);
+        List<BlockPos> found = new java.util.ArrayList<>();
+        for (int y = level.getMinBuildHeight(); y < abs.getY() + 2; y++) {
+            BlockPos p = new BlockPos(abs.getX(), y, abs.getZ());
+            if (level.getBlockState(p).is(Blocks.CHEST)) found.add(p);
+        }
+        h.assertTrue(found.size() == 1, "chests in the column: " + found);
+        BlockPos at = found.get(0);
+        h.assertTrue(at.getY() < abs.getY(), "the chest did not fall: " + at.toShortString());
+        h.assertTrue(level.getBlockEntity(at) instanceof net.minecraft.world.level.block.entity.ChestBlockEntity c
+                && c.getItem(3).is(net.minecraft.world.item.Items.DIAMOND) && c.getItem(3).getCount() == 64, "contents lost at " + at.toShortString());
+        var items = level.getEntitiesOfClass(net.minecraft.world.entity.item.ItemEntity.class, new net.minecraft.world.phys.AABB(h.absolutePos(CENTER)).inflate(40));
+        h.assertTrue(items.isEmpty(), "items on the ground: " + items.size());
+        h.succeed();
+    }
+
+    /**
+     * Blast wind takes objects by one law (BlastBody#blow, BlastBody#object): an item, a boat and a minecart move away
+     * from the burst, the light item faster than the boat; living entities and item frames are left to their own paths.
+     */
+    @GameTest(template = "range", timeoutTicks = 20, batch = "nuke_wind_objects", skyAccess = true)
+    public static void blastWindMovesObjects(GameTestHelper h) {
+        ServerLevel level = h.getLevel();
+        Detonation d = detonation(h, CENTER, 0, 15, 0.025f);
+        BlockPos at = CENTER.east(12).above(1);
+        var item = new net.minecraft.world.entity.item.ItemEntity(level, h.absolutePos(at).getX() + 0.5, h.absolutePos(at).getY(), h.absolutePos(at).getZ() + 0.5,
+                new net.minecraft.world.item.ItemStack(net.minecraft.world.item.Items.COBBLESTONE, 16));
+        item.setDeltaMovement(Vec3.ZERO);
+        level.addFreshEntity(item);
+        var boat = h.spawn(EntityType.BOAT, at.south(3));
+        var cart = h.spawn(EntityType.MINECART, at.north(3));
+        var cow = h.spawn(EntityType.COW, at.south(6));
+        for (var e : List.of(item, boat, cart)) {
+            h.assertTrue(BlastBody.object(e), "not an object for the wind: " + e);
+            h.assertTrue(BlastBody.blow(level, d, e), "the wind did not reach " + e);
+            Vec3 v = e.getDeltaMovement();
+            h.assertTrue(v.x > 0.05 && Math.abs(v.z) < v.x, "not blown away from the burst: " + e + " " + v);
+        }
+        h.assertFalse(BlastBody.object(cow), "a living entity taken as an object");
+        h.assertTrue(item.getDeltaMovement().x > boat.getDeltaMovement().x, "the item is not faster than the boat: "
+                + item.getDeltaMovement() + " vs " + boat.getDeltaMovement());
+        for (var e : List.of(item, boat, cart, cow)) e.discard();
         h.succeed();
     }
 
@@ -1136,6 +1221,39 @@ public final class NuclearGameTests {
         h.assertBlockPresent(Blocks.WHITE_STAINED_GLASS, glass);
         h.assertTrue(RuinPlanner.plan(level, d, chunk).apply(level, chunk, d, budget), "no new plan has been set");
         h.assertBlockNotPresent(Blocks.WHITE_STAINED_GLASS, glass);
+        h.succeed();
+    }
+
+    /**
+     * A plank a player removed after the plan makes it stale, before the flash reached the chunk and after it; a plank
+     * that burned out after the flash still matches the plan (flash fires, {@code RuinPlan.unburnt}).
+     */
+    @GameTest(template = "range", timeoutTicks = 40, batch = "nuke_stale_plan", skyAccess = true)
+    public static void minedPlankMakesPlanStaleBeforeTheFlash(GameTestHelper h) {
+        ServerLevel level = h.getLevel();
+        BlockPos plank = CENTER.west(8);
+        h.setBlock(plank, Blocks.OAK_PLANKS);
+        Detonation d = detonation(h, CENTER, 0, 15, 0.025f);
+        LevelChunk chunk = level.getChunkAt(h.absolutePos(plank));
+        RuinPlan plan = RuinPlanner.plan(level, d, chunk);
+        h.setBlock(plank, Blocks.AIR);
+        ColumnScar.Budget budget = new ColumnScar.Budget(false);
+        h.assertFalse(plan.apply(level, chunk, d, budget), "a plan made over a mined plank was set before the flash");
+        h.setBlock(plank, Blocks.OAK_PLANKS);
+        RuinPlan again = RuinPlanner.plan(level, d, chunk);
+        h.setBlock(plank, Blocks.AIR);
+        chunk.setData(ua.zentix.incoming.registry.ModAttachments.FLASH_LAYER, d.id());
+        h.assertTrue(again.apply(level, chunk, d, budget), "a plank burned out after the flash made the plan stale");
+        // after the flash too, a plank a player mined is not taken for burned out
+        h.setBlock(plank, Blocks.OAK_PLANKS);
+        RuinPlan third = RuinPlanner.plan(level, d, chunk);
+        net.minecraft.server.level.ServerPlayer player = net.neoforged.neoforge.common.util.FakePlayerFactory.getMinecraft(level);
+        // what ServerPlayerGameMode.destroyBlock posts before it removes the block
+        h.assertFalse(net.neoforged.neoforge.common.NeoForge.EVENT_BUS.post(new net.neoforged.neoforge.event.level.BlockEvent.BreakEvent(level,
+                h.absolutePos(plank), h.getBlockState(plank), player)).isCanceled(), "the break was canceled");
+        h.setBlock(plank, Blocks.AIR);
+        chunk.setData(ua.zentix.incoming.registry.ModAttachments.FLASH_LAYER, d.id());
+        h.assertFalse(third.apply(level, chunk, d, budget), "a plank a player mined after the flash was taken for burned out");
         h.succeed();
     }
 
@@ -1295,6 +1413,7 @@ public final class NuclearGameTests {
      *  live: otherwise the deferred data is saved, and when loading the chunk it writes “Tried to load a DUMMY block
      * entity … found air.” The contents of the chests do not spill out for either one or the other, and the unexpanded extraction of chests of the
      *  generation does not unfold at all (the researcher’s map in it looks for a structure in the server thread).
+     *  Containers outside the fireball stay in the rubble with their contents or loot table.
      */
     @GameTest(template = "range", timeoutTicks = 40, batch = "nuke_block_entities", skyAccess = true)
     public static void scarLeavesNoOrphanBlockEntities(GameTestHelper h) {
@@ -1328,7 +1447,22 @@ public final class NuclearGameTests {
 
         scarAll(h, detonation(h, CENTER, 0, 15, 0.025f), new ColumnScar.Budget(false)); // no fires: air in place of blocks
 
-        for (BlockPos p : List.of(chest, packedChest, bell, sign, lootChest, packedLootBarrel)) h.assertTrue(h.getBlockState(p).isAir(), "not destroyed: " + h.getBlockState(p));
+        for (BlockPos p : List.of(bell, sign)) h.assertTrue(h.getBlockState(p).isAir(), "not destroyed: " + h.getBlockState(p));
+        // containers vaporize in the fireball, otherwise stay in the rubble with their contents; an unopened loot table
+        // stays unexpanded
+        int kept = 0;
+        for (BlockPos p : List.of(chest, packedChest, lootChest, packedLootBarrel)) if (!h.getBlockState(p).isAir()) kept++;
+        h.assertTrue(kept > 0, "every container vaporized: move them out of the fireball");
+        for (BlockPos p : List.of(chest, packedChest)) {
+            if (h.getBlockState(p).isAir()) continue;
+            h.assertTrue(h.getBlockEntity(p) instanceof net.minecraft.world.level.block.entity.ChestBlockEntity c && c.getItem(0).getCount() == 5,
+                    "chest contents lost: " + h.getBlockState(p));
+        }
+        for (BlockPos p : List.of(lootChest, packedLootBarrel)) {
+            if (h.getBlockState(p).isAir()) continue;
+            h.assertTrue(h.getBlockEntity(p) instanceof net.minecraft.world.RandomizableContainer c && c.getLootTable() != null,
+                    "loot table lost or expanded: " + h.getBlockState(p));
+        }
         BlockPos a = h.absolutePos(BlockPos.ZERO), b = h.absolutePos(new BlockPos(63, 0, 63));
         for (int cx = Math.min(a.getX(), b.getX()) >> 4; cx <= Math.max(a.getX(), b.getX()) >> 4; cx++) {
             for (int cz = Math.min(a.getZ(), b.getZ()) >> 4; cz <= Math.max(a.getZ(), b.getZ()) >> 4; cz++) {

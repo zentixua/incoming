@@ -21,7 +21,8 @@ import ua.zentix.incoming.warhead.MaterialPath;
 import ua.zentix.incoming.warhead.SurfaceBlocks;
 import ua.zentix.incoming.warhead.SurfaceDamage;
 
-import java.util.ArrayDeque;
+import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.List;
 
 /**
@@ -44,9 +45,8 @@ public final class CraterJob {
     private final Detonation d;
     private final BlockPos gz;
     private final int outer;
-    private final RadialChunks chunks;
-    private final ArrayDeque<ChunkPos> ahead = new ArrayDeque<>();
-    private int next, skip;
+    private final List<ChunkPos> chunks = new ArrayList<>();
+    private int next;
     private int column;
     @Nullable
     private CraterModel.Soil soil;
@@ -58,8 +58,16 @@ public final class CraterJob {
         this.gz = BlockPos.containing(d.burst().x, d.groundY(), d.burst().z);
         // largest soil multiplier is wet (×1.3): rim reaches two radii
         this.outer = Mth.ceil(d.blocks(CraterModel.radius(d.yieldKt(), CraterModel.Soil.WET)) * 2) + 1;
-        chunks = new RadialChunks(gz.getX(), gz.getZ(), -1, outer, 15);
-        next = skip = Math.max(0, startChunk);
+        ChunkPos c = new ChunkPos(gz);
+        int rc = (outer >> 4) + 1;
+        for (int cx = c.x - rc; cx <= c.x + rc; cx++) {
+            for (int cz = c.z - rc; cz <= c.z + rc; cz++) {
+                ChunkPos p = new ChunkPos(cx, cz);
+                if (nearest(p) <= outer) chunks.add(p);
+            }
+        }
+        chunks.sort(Comparator.comparingDouble(this::nearest));
+        this.next = Mth.clamp(startChunk, 0, chunks.size());
     }
 
     public Detonation detonation() {
@@ -77,50 +85,29 @@ public final class CraterJob {
         return soil;
     }
 
-    long retainedBytes() { return 256L + chunks.bytes() + ahead.size() * 128L; }
+    private double nearest(ChunkPos p) {
+        double x = Mth.clamp(gz.getX(), p.getMinBlockX(), p.getMaxBlockX()) - gz.getX();
+        double z = Mth.clamp(gz.getZ(), p.getMinBlockZ(), p.getMaxBlockZ()) - gz.getZ();
+        return Math.sqrt(x * x + z * z);
+    }
 
     public enum Step { PROGRESS, WAIT, DONE }
 
     /** One column. WAIT — required chunk still loading, resume next tick. */
     public Step step(ServerLevel level, RandomSource random) {
-        if (!CraterMatter.get(level).writable()) return Step.WAIT;
-        // Both row preparation and replaying a legacy chunk cursor are bounded tick units.
-        if (!chunks.prepared()) {
-            try (var reservation = RuinMemory.reserve(level, 4096)) {
-                if (reservation == null) return Step.WAIT;
-                chunks.prepare(32);
-            }
-            return Step.PROGRESS;
-        }
-        if (skip > 0) {
-            for (int i = 0; i < 64 && skip > 0 && !chunks.done(); i++, skip--) chunks.advance();
-            if (chunks.done()) skip = 0;
-            return Step.PROGRESS;
-        }
-        while (ahead.size() < LOOKAHEAD && !chunks.done()) {
-            ahead.addLast(new ChunkPos(chunks.peek())); chunks.advance();
-        }
-        if (ahead.isEmpty()) {
-            CraterMatter.get(level).complete(d.id());
+        if (next >= chunks.size()) {
             release(level);
             return Step.DONE;
         }
         if (soil == null && !sampleSoil(level)) return Step.WAIT;
-        for (ChunkPos pos : ahead) NuclearTickets.hold(level, pos, true);
-        ChunkPos cp = ahead.getFirst();
+        for (int i = next; i < Math.min(chunks.size(), next + LOOKAHEAD); i++) NuclearTickets.hold(level, chunks.get(i), true);
+        ChunkPos cp = chunks.get(next);
         if (!NuclearTickets.neighbourhoodLoaded(level, cp)) return Step.WAIT;
-        // At most one new material row per world-height layer, plus checkpoint/save slack.
-        // Refusal leaves the saved chunk cursor and every block unchanged.
-        try (var reservation = RuinMemory.reserve(level, 4096L + level.getHeight() * 1536L)) {
-            if (reservation == null) return Step.WAIT;
-            dig(level, cp.getMinBlockX() + (column & 15), cp.getMinBlockZ() + (column >> 4), random);
-        }
+        dig(level, cp.getMinBlockX() + (column & 15), cp.getMinBlockZ() + (column >> 4), random);
         if (++column >= 256) {
             column = 0;
             NuclearTickets.hold(level, cp, false);
-            ahead.removeFirst();
             next++;
-            CraterMatter.get(level).pass(d.id()).chunkFinished();
         }
         return Step.PROGRESS;
     }
@@ -131,14 +118,7 @@ public final class CraterJob {
         NuclearTickets.hold(level, c, true);
         if (!Terrain.ready(level, c.x, c.z)) return false;
         GroundMaterial mat = GroundMaterial.sample(level, gz);
-        CraterMatter matter = CraterMatter.get(level);
-        CraterMatter.Pass pass = matter.pass(d.id());
-        if (pass.soil.isEmpty()) {
-            pass.soil = mat.soil().name();
-            matter.setDirty();
-        }
-        // The excavated floor is not a new soil sample after a clean restart.
-        soil = CraterModel.Soil.valueOf(pass.soil);
+        soil = mat.soil();
         rim = mat.debris();
         // resume after restart: epicenter chunk already dug, no reason to hold it
         if (next > 0) NuclearTickets.hold(level, c, false);
@@ -157,7 +137,7 @@ public final class CraterJob {
                 return d.blocks(CraterModel.rimHeight(d.metres(r), d.yieldKt(), soil));
             }
         };
-        digColumn(level, x, z, d.burst(), outer, d.seed() % 13, p, rim, ModBlocks.TRINITITE.get().defaultBlockState(), Mode.VAPORIZE, random, CraterMatter.get(level).pass(d.id()));
+        digColumn(level, x, z, d.burst(), outer, d.seed() % 13, p, rim, ModBlocks.TRINITITE.get().defaultBlockState(), Mode.VAPORIZE, random);
     }
 
     /** How a crater column is applied to blocks. */
@@ -191,21 +171,6 @@ public final class CraterJob {
      */
     public static void digColumn(ServerLevel level, int x, int z, net.minecraft.world.phys.Vec3 centre, double outer, double phase, Profile profile,
                                  List<BlockState> rimStates, @Nullable BlockState glaze, Mode mode, RandomSource random) {
-        digColumn(level, x, z, centre, outer, phase, profile, rimStates, glaze, mode, random, null);
-    }
-
-    static void digColumn(ServerLevel level, int x, int z, Vec3 centre, double outer, double phase, Profile profile,
-                          List<BlockState> rimStates, @Nullable BlockState glaze, Mode mode, RandomSource random,
-                          @Nullable CraterMatter.Pass matter) {
-        long column = ChunkPos.asLong(x, z);
-        if (matter != null && matter.done.contains(column)) return;
-        digColumnBody(level, x, z, centre, outer, phase, profile, rimStates, glaze, mode, random, matter);
-        if (matter != null) matter.finish(column);
-    }
-
-    private static void digColumnBody(ServerLevel level, int x, int z, Vec3 centre, double outer, double phase, Profile profile,
-                                      List<BlockState> rimStates, @Nullable BlockState glaze, Mode mode, RandomSource random,
-                                      @Nullable CraterMatter.Pass matter) {
         double dx = x + 0.5 - centre.x, dz = z + 0.5 - centre.z;
         if (dx * dx + dz * dz > outer * outer) return;
         // irregular edge: radius “breathes” with angle
@@ -218,7 +183,6 @@ public final class CraterJob {
         // heights as heightmaps: first air above a block
         int top = Terrain.height(level, Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z);
         int ground = naturalSurface(level, x, z, top);
-        if (matter != null) ground = matter.ground(ChunkPos.asLong(x, z), ground);
         if (mode == Mode.DIG) ground = SurfaceBlocks.excavationTop(level, x, z, ground, top, centre.y);
         BlockPos.MutableBlockPos m = new BlockPos.MutableBlockPos(x, 0, z);
         // resulting surface = natural ground + rim − bowl (overlap near edge)
@@ -282,29 +246,19 @@ public final class CraterJob {
                 BlockState s = level.getBlockState(m.setY(y));
                 if (y >= ground && !s.getFluidState().isEmpty()) continue; // water above the floor itself remains
                 if (mode == Mode.DIG && (s.getBlock().defaultDestroyTime() < 0 || s.getExplosionResistance(level, m, excavation) >= BLAST_PROOF)) break;
-                if (!s.isAir() && s.getBlock().defaultDestroyTime() >= 0) {
-                    ColumnScar.replace(level, m, s, y < ground ? fill : Blocks.AIR.defaultBlockState());
-                    if (matter != null && level.getBlockState(m) != s)
-                        matter.removed(s, BlockResponse.of(s).kind() == BlockResponse.Kind.GROUND);
-                }
+                if (!s.isAir() && s.getBlock().defaultDestroyTime() >= 0) ColumnScar.replace(level, m, s, y < ground ? fill : Blocks.AIR.defaultBlockState());
             }
             BlockState bottom = level.getBlockState(m.setY(floor - 1));
-            if (glaze != null && bottom != glaze && depth > lift && random.nextFloat() < 0.3f && !bottom.isAir() && bottom.getFluidState().isEmpty()
+            if (glaze != null && depth > lift && random.nextFloat() < 0.3f && !bottom.isAir() && bottom.getFluidState().isEmpty()
                     && bottom.getBlock().defaultDestroyTime() >= 0) {
                 ColumnScar.replace(level, m, bottom, glaze);
-                if (matter != null && level.getBlockState(m) == glaze) matter.removed(bottom, false);
             }
         } else if (relief >= 1 && !rimStates.isEmpty()) {
             // rim: ejected soil lies over natural ground
             int crest = Mth.floor(ground + relief);
             for (int y = ground; y < crest; y++) {
                 BlockState was = level.getBlockState(m.setY(y));
-                if (was.canBeReplaced()) {
-                    BlockState deposited = matter == null ? rimStates.get(random.nextInt(rimStates.size())) : matter.rim();
-                    if (deposited == null) break;
-                    ColumnScar.replace(level, m, was, deposited);
-                    if (matter != null && level.getBlockState(m) == deposited) matter.deposited(deposited);
-                }
+                if (was.canBeReplaced()) ColumnScar.replace(level, m, was, rimStates.get(random.nextInt(rimStates.size())));
             }
         }
         // Full blocks above the residual surface have now gone; its chips must not be hidden by those old blocks.
@@ -323,6 +277,6 @@ public final class CraterJob {
 
     public void release(ServerLevel level) {
         if (soil == null) NuclearTickets.hold(level, new ChunkPos(gz), false);
-        for (ChunkPos pos : ahead) NuclearTickets.hold(level, pos, false);
+        for (int i = next; i < Math.min(chunks.size(), next + LOOKAHEAD); i++) NuclearTickets.hold(level, chunks.get(i), false);
     }
 }

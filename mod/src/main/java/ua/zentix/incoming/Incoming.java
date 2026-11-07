@@ -92,6 +92,7 @@ public final class Incoming {
         NeoForge.EVENT_BUS.addListener(ua.zentix.incoming.warhead.SurfaceDamage::onEntityJoin);
         NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, ua.zentix.incoming.warhead.SurfaceDamage::onPlace);
         NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, ua.zentix.incoming.warhead.SurfaceDamage::onBreak);
+        NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, ua.zentix.incoming.nuclear.world.RuinPlan::onBreak);
         NeoForge.EVENT_BUS.addListener(Sightings::onLevelTick);
         // After StrikeWorld: outside-world projectiles have moved this tick; the interceptor follows their new positions.
         NeoForge.EVENT_BUS.addListener(DefenseWorld::onLevelTick);
@@ -142,7 +143,6 @@ public final class Incoming {
         NeoForge.EVENT_BUS.addListener(NuclearStrikes::onRespawn);
         NeoForge.EVENT_BUS.addListener(RadiationTicker::onHeal);
         NeoForge.EVENT_BUS.addListener(BlockResponse::onTagsUpdated);
-        NeoForge.EVENT_BUS.addListener(BlockResponse::onDataMapsUpdated);
 
         NeoForge.EVENT_BUS.addListener(EventPriority.HIGHEST, WorkScheduler::onServerTickPre);
         NeoForge.EVENT_BUS.addListener(EventPriority.HIGHEST, WorkScheduler::onLevelTickPre);
@@ -163,6 +163,7 @@ public final class Incoming {
         NeoForge.EVENT_BUS.addListener(Blackouts::onBlockPlaced);
         // First: other save listeners see the tag with twins already removed.
         NeoForge.EVENT_BUS.addListener(EventPriority.HIGHEST, ChunkSaves::onSave);
+        NeoForge.EVENT_BUS.addListener(ua.zentix.incoming.util.RegionFiles::onSave);
         NeoForge.EVENT_BUS.addListener(ChunkSaves::onLoad);
     }
 

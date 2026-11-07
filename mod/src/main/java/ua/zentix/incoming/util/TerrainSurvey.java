@@ -284,7 +284,11 @@ public final class TerrainSurvey {
         reading.incrementAndGet();
         CollectFields fields = DiskStatus.fields(new FieldSelector(HEIGHTMAPS, LongArrayTag.TYPE, o.type.getSerializationKey()));
         int minY = level.getMinBuildHeight(), height = level.getHeight();
-        reads.add(level.getChunkSource().chunkMap.chunkScanner().scanChunk(new ChunkPos(o.chunk), fields).handle((v, e) -> {
+        ChunkPos at = new ChunkPos(o.chunk);
+        // never-saved region: absent, without creating its file
+        CompletableFuture<Void> scan = RegionFiles.present(RegionFiles.folder(level), at.x, at.z)
+                ? level.getChunkSource().chunkMap.chunkScanner().scanChunk(at, fields) : CompletableFuture.completedFuture(null);
+        reads.add(scan.handle((v, e) -> {
             reading.decrementAndGet();
             CompoundTag tag = e == null && fields.getResult() instanceof CompoundTag t ? t : null;
             int[] y = tag == null ? null : decode(tag, o.type, minY, height);

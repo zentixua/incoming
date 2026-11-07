@@ -172,6 +172,8 @@ final class ChunkShot {
         if (st.hasProperty(BlockStateProperties.AXIS)) {
             for (var axis : BlockStateProperties.AXIS.getPossibleValues()) Blast.ensure(st.setValue(BlockStateProperties.AXIS, axis));
         }
+        // a container lands in rubble as a lone block (Collapse#landedState)
+        if (st.hasProperty(BlockStateProperties.CHEST_TYPE)) Blast.ensure(Collapse.landedState(st));
     }
 
     /**
