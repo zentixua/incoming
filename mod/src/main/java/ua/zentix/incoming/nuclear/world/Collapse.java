@@ -203,9 +203,11 @@ final class Collapse {
             int i = breaks.getInt(q), wx = i % SIDE, wz = (i / SIDE) % SIDE, y = i / (SIDE * SIDE) + yb;
             Blast.Props p = props(wx, y, wz);
             if (p.log()) logs = true;
-            if (support || !p.bearing() || p.log()) continue;
-            // survivors above/beside broken blocks may have lost support
-            if (standing(wx, y + 1, wz) || standing(wx + 1, y, wz) || standing(wx - 1, y, wz) || standing(wx, y, wz + 1) || standing(wx, y, wz - 1)) support = true;
+            if (support || !p.bearing()) continue;
+            // survivors above/beside broken blocks may have lost support; a broken log (stilt, pillar) only when it carried
+            // something other than logs and leaves: a felled trunk among branches needs no support pass
+            if (p.log() ? carried(wx, y + 1, wz) || carried(wx + 1, y, wz) || carried(wx - 1, y, wz) || carried(wx, y, wz + 1) || carried(wx, y, wz - 1)
+                    : standing(wx, y + 1, wz) || standing(wx + 1, y, wz) || standing(wx - 1, y, wz) || standing(wx, y, wz + 1) || standing(wx, y, wz - 1)) support = true;
         }
         if (!logs) for (int k = 0; k < 9 && !logs; k++) logs = blasts[k] != null && !blasts[k].trees().isEmpty();
         if (support) support();
@@ -217,6 +219,11 @@ final class Collapse {
 
     private boolean standing(int wx, int y, int wz) {
         return inside(wx, y, wz) && !isGone(wx, y, wz) && props(wx, y, wz).bearing();
+    }
+
+    /** Standing load-bearing block other than a log. */
+    private boolean carried(int wx, int y, int wz) {
+        return standing(wx, y, wz) && !props(wx, y, wz).log();
     }
 
     // ---------------------------------------------------------------- support
@@ -880,7 +887,8 @@ final class Collapse {
                     if (p.air() || p.fluid() || p.leaves() || p.log() || !p.rubble()) continue;
                     if (p.is(Blast.Props.CONTAINER)) {
                         // chest, barrel, furnace: heavy and whole, falls into the pile at its own column with its
-                        // contents (RuinPlan moves the block entity), so it always lands in its own chunk
+                        // contents (RuinPlan moves the block entity) and rolls off it like the rest (Debris#repose), so it
+                        // always lands in its own chunk
                         if (own) landed.add((long) ((wz - LO) << 4 | (wx - LO)) << 40 | (long) (y - yb) << 16 | paletteOf(landedState(w.get(wx, y, wz))));
                         continue;
                     }

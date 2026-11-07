@@ -160,9 +160,18 @@ public final class NuclearWorld {
         return bytes;
     }
 
-    /** Leave room for loaded-player work and its background windows before admitting settlement chunks. */
+    /**
+     * Leave room for loaded-player work and its background windows before admitting settlement chunks. Durable
+     * per-chunk marks ({@link RuinContext#durableBytes}) grow with the ruined area and are bounded by the heap guard
+     * instead: counting them here stopped a large pass for good.
+     */
     long settleMemoryRoom(ServerLevel level) {
-        return Math.max(0, NuclearPrep.PLANS_CAP / 2 - NuclearPrep.memory(level, false));
+        long durable = 0;
+        for (ServerLevel other : level.getServer().getAllLevels()) {
+            if (!other.hasData(ModAttachments.NUCLEAR_WORLD)) continue;
+            for (RuinContext ctx : get(other).ruins.values()) durable += ctx.durableBytes();
+        }
+        return Math.max(0, NuclearPrep.PLANS_CAP / 2 - (NuclearPrep.memory(level, false) - durable));
     }
 
     boolean settleCanAdmit(ServerLevel level) {

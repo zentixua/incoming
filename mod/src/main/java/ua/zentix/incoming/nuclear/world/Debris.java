@@ -79,4 +79,46 @@ final class Debris {
         if (!(radiusBlocks > 0)) return 0;
         return Math.max(0, Math.min(1, (radiusBlocks - driftBlocks) / radiusBlocks));
     }
+
+    /**
+     * Where landed material comes to rest. Rubble is loose: a block cannot stand more than one block above a neighboring
+     * column (angle of repose about 45°, broken masonry 35–45°), so a block that would make a steeper step rolls to the
+     * lowest lower neighbor (4-neighbors in this chunk; chunk edges hold, no cross-chunk record) until it rests. Without
+     * this, everything landing on one column (a block of flats with a chest on every floor at the same spot) stood as a
+     * one-block tower. Entries are taken in {@link Collapse#landed} order (lower sources first), so the result is the
+     * same whoever plans the chunk.
+     *
+     * @param ground post-ruin ground per column ({@link Integer#MIN_VALUE} none: material landing there is dropped)
+     * @param from   filled: first index into the returned order for each resting column, {@code from[256]} the end
+     * @return landed entry indices grouped by resting column
+     */
+    static int[] repose(int[] ground, it.unimi.dsi.fastutil.longs.LongArrayList landed, int[] from) {
+        int n = landed.size();
+        int[] top = ground.clone(), rest = new int[n], count = new int[257];
+        for (int k = 0; k < n; k++) {
+            int c = (int) (landed.getLong(k) >>> 40);
+            if (top[c] != Integer.MIN_VALUE) {
+                while (true) {
+                    int lx = c & 15, lz = c >> 4, best = -1;
+                    for (int dir = 0; dir < 4; dir++) {
+                        int nx = lx + (dir == 0 ? 1 : dir == 1 ? -1 : 0), nz = lz + (dir == 2 ? 1 : dir == 3 ? -1 : 0);
+                        if (nx < 0 || nx > 15 || nz < 0 || nz > 15) continue;
+                        int nc = nz << 4 | nx;
+                        if (top[nc] == Integer.MIN_VALUE || top[nc] >= top[c]) continue;
+                        if (best < 0 || top[nc] < top[best]) best = nc;
+                    }
+                    if (best < 0) break;
+                    c = best;
+                }
+                top[c]++;
+            }
+            rest[k] = c;
+            count[c + 1]++;
+        }
+        for (int c = 0; c < 256; c++) count[c + 1] += count[c];
+        System.arraycopy(count, 0, from, 0, 257);
+        int[] order = new int[n];
+        for (int k = 0; k < n; k++) order[count[rest[k]]++] = k;
+        return order;
+    }
 }

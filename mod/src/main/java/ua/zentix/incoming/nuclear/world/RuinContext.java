@@ -376,6 +376,23 @@ final class RuinContext {
         return bytes + appliedBytes;
     }
 
+    /**
+     * Part of {@link #retainedBytes} kept for every chunk the pass has touched until the context is forgotten:
+     * pre-wave shadow heightmaps, applied-chunk marks with their pre-replacement heightmaps, planned/stood sets (about
+     * 1.8 KB a chunk). It grows with the ruined area, not with work in flight, so it is bounded by the heap guard,
+     * not by the plan cap: 250 kt over Zearth (313 344 positions) stalled at 93 062 when these marks alone filled the
+     * settlement's half of the cap (07.11.2026).
+     */
+    long durableBytes() {
+        return heights.size() * 1100L + applied.size() * 640L + (planned.size() + stood.size()) * 32L;
+    }
+
+    /** For tests: shadow heightmaps of {@code n} far chunks, as a long settlement pass leaves them. */
+    void padHeightsForTest(int n) {
+        int[] flat = new int[256];
+        for (int i = 0; i < n; i++) heights.putIfAbsent(ChunkPos.asLong(1_000_000 + i, 1_000_000), flat);
+    }
+
     /** Snapshots, heightmaps and flash-layer plans, toward {@link NuclearPrep#PLANS_CAP}. */
     long shotBytes() {
         return shotBytes + heights.size() * 1100L + flashedBytes;

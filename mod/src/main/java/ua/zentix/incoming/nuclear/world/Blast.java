@@ -37,6 +37,8 @@ import java.util.List;
  * <li>Block in element of thickness {@code t} ≤ 3 (row of full cubes with open ends along shortest axis) breaks at
  * {@code P ≥ T·k(t)·jitter}, {@code k = 1, 2, 3.5}; face-breached element fails through full thickness. Ground only
  * with sky on both sides (ridge, wall, overhang).</li>
+ * <li>Logs are timber like planks (pillars, stilts, log walls); a tree trunk (log column with leaves at its top, up to
+ * {@link #MAX_TRUNK}) falls only whole.</li>
  * <li>Toppling: tall narrow elements (slenderness {@code H/t ≥ 4}, {@code t} ≤ {@link #MAX_TOPPLE} away from
  * blast, sky behind) fail through full cross-section at {@code Pr·cos θ·H/t ≥ T·k(3)·jitter}. {@code H} is height above position
  * while air remains behind: floor behind wall pier ends lever arm at that story. Two-brick walls and tower cores fall,
@@ -63,6 +65,8 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
     static final double[] K = {0, 1, 2, 3.5};
     /** Toppling slenderness threshold and maximum thickness. */
     private static final int SLENDER = 4, MAX_TOPPLE = 6;
+    /** Tallest tree trunk recognised (log column with leaves at its top): vanilla mega jungle and spruce trunks reach ~30. */
+    static final int MAX_TRUNK = 40;
     /**
      * Maximum ground toppling thickness: natural pillars/mesas thicker than 4 stand (4×4 calcite or
      * terracotta tower core still falls).
@@ -112,7 +116,7 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
             return response.thresholdPsi();
         }
 
-        /** Wave-breakable (log only as tree trunk, not per block). */
+        /** Wave-breakable anywhere; a log depends on whether it is a standing tree trunk ({@code Solver#breakable}). */
         boolean breakable() {
             return response.kind() != BlockResponse.Kind.NONE && !log;
         }
@@ -262,6 +266,7 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
     private static final class Buffers {
         byte[] sky = new byte[0];
         long[] gone = new long[0];
+        long[] trunk = new long[0];
         boolean busy;
     }
 
@@ -273,6 +278,7 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
         if (b.busy) return;
         b.sky = new byte[0];
         b.gone = new long[0];
+        b.trunk = new long[0];
     }
 
     /**
@@ -308,6 +314,7 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
                     breaks.add(i);
                 }
             }
+            trunks(false);
             IntArrayList out = new IntArrayList();
             if (!breaks.isEmpty()) aroundBreaks(breaks, margin, out);
             int[] res = new int[out.size()];
@@ -327,7 +334,9 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
         /** Sky-connected air depth (1…{@link #SKY_DEPTH}); above column top, sky without stored entry. */
         final byte[] sky;
         final long[] gone;
-        /** Thread buffers {@link #sky} and {@link #gone} ({@link #BUFFERS}). */
+        /** Logs of standing tree trunks ({@link #trunks}): a trunk falls only whole, never block by block. */
+        final long[] trunk;
+        /** Thread buffers {@link #sky}, {@link #gone} and {@link #trunk} ({@link #BUFFERS}). */
         final Buffers pooled;
         final List<long[]> trees = new ArrayList<>();
         final List<BlockState> treeLogs = new ArrayList<>();
@@ -370,14 +379,18 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
             if (b.busy) {
                 this.sky = new byte[n];
                 this.gone = new long[words];
+                this.trunk = new long[words];
                 this.pooled = null;
             } else {
                 if (b.sky.length < n) b.sky = new byte[n];
                 if (b.gone.length < words) b.gone = new long[words];
+                if (b.trunk.length < words) b.trunk = new long[words];
                 java.util.Arrays.fill(b.sky, 0, n, (byte) 0);
                 java.util.Arrays.fill(b.gone, 0, words, 0L);
+                java.util.Arrays.fill(b.trunk, 0, words, 0L);
                 this.sky = b.sky;
                 this.gone = b.gone;
+                this.trunk = b.trunk;
                 b.busy = true;
                 this.pooled = b;
             }
@@ -426,7 +439,7 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
         Blast run(boolean blockDamage, boolean treeFall) {
             if (blockDamage) {
                 skyAir();
-                if (treeFall) fellTrees();
+                trunks(treeFall);
                 IntArrayList round = new IntArrayList();
                 for (int wz = LO - ROUND_ONE; wz < HI + ROUND_ONE; wz++) {
                     for (int wx = LO - ROUND_ONE; wx < HI + ROUND_ONE; wx++) {
@@ -437,7 +450,7 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
                         for (int y = Math.min(t, yt); y >= low; y--) {
                             Props p = w.props(wx, y, wz);
                             if (p.air() || isGone(wx, y, wz)) continue;
-                            if (!p.breakable()) continue;
+                            if (!breakable(p, wx, y, wz)) continue;
                             // rejection: block cannot fail even by toppling (slenderness bounded by height above, 64 blocks)
                             if (p.threshold() * 0.85 > pmax * 64 / K[3]) continue;
                             decide(wx, y, wz, p, pmax, round, true);
@@ -497,7 +510,7 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
                     int n = idx(nx, ny, nz);
                     if (bit(gone, n) || !seen.add(n)) continue;
                     Props p = w.props(nx, ny, nz);
-                    if (p.air() || !p.breakable()) continue;
+                    if (p.air() || !breakable(p, nx, ny, nz)) continue;
                     decide(nx, ny, nz, p, Double.MAX_VALUE, out, false);
                 }
             }
@@ -572,7 +585,16 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
         void take(int wx, int y, int wz, IntArrayList out) {
             if (!inside(wx, y, wz)) return;
             Props p = w.props(wx, y, wz);
-            if (p.breakable() && p.full()) out.add(idx(wx, y, wz));
+            if (breakable(p, wx, y, wz) && p.full()) out.add(idx(wx, y, wz));
+        }
+
+        /**
+         * Wave-breakable here: a log is timber like planks (pillar, stilt, log wall, beam) unless it is a standing tree
+         * trunk, which falls only whole ({@link #trunks}).
+         */
+        boolean breakable(Props p, int wx, int y, int wz) {
+            if (p.breakable()) return true;
+            return p.log() && p.response().kind() == BlockResponse.Kind.LOG && !(inside(wx, y, wz) && bit(trunk, idx(wx, y, wz)));
         }
 
         /**
@@ -704,8 +726,13 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
             }
         }
 
-        /** Supported trunks topple whole away from epicenter (before per-block wave; unsupported leaves follow, {@link Collapse}). */
-        void fellTrees() {
+        /**
+         * Tree trunks: a log column standing on a support with leaves at its top. With {@code fell}, trunks where the
+         * incident pressure reaches the log threshold topple whole away from the epicenter (before per-block wave;
+         * unsupported leaves follow, {@link Collapse}); every other trunk is marked standing, so the wave does not cut it
+         * block by block. Logs without leaves at the top are pillars, stilts or walls: timber ({@link #breakable}).
+         */
+        void trunks(boolean fell) {
             for (int wz = LO - ROUND_ONE; wz < HI + ROUND_ONE; wz++) {
                 for (int wx = LO - ROUND_ONE; wx < HI + ROUND_ONE; wx++) {
                     int t = w.top(wx, wz);
@@ -715,12 +742,15 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
                         if (!p.log() || isGone(wx, y, wz)) continue;
                         Props pb = w.props(wx, y - 1, wz);
                         if (pb.log() || pb.leaves() || !pb.bearing()) continue;
-                        int x = w.x0 + wx, z = w.z0 + wz;
-                        if (d.psi(new Vec3(x + 0.5, y + 0.5, z + 0.5)) < p.threshold()) continue;
-                        // trunk only if tree: leaves above (otherwise log wall or pillar)
+                        // trunk only if tree: leaves above (otherwise log wall or pillar); mega trees reach ~30 blocks
                         int height = 0;
-                        while (height < 24 && y + height <= yt && w.props(wx, y + height, wz).log()) height++;
+                        while (height < MAX_TRUNK && y + height <= yt && w.props(wx, y + height, wz).log()) height++;
                         if (!w.props(wx, y + height, wz).leaves() && !nearLeaves(wx, y + height - 1, wz)) continue;
+                        int x = w.x0 + wx, z = w.z0 + wz;
+                        if (!fell || d.psi(new Vec3(x + 0.5, y + 0.5, z + 0.5)) < p.threshold()) {
+                            for (int i = 0; i < height; i++) if (inside(wx, y + i, wz)) set(trunk, idx(wx, y + i, wz));
+                            break;
+                        }
                         BlockState st = w.get(wx, y, wz);
                         for (int i = 0; i < height; i++) set(gone, idx(wx, y + i, wz));
                         if (wx >= LO && wx < HI && wz >= LO && wz < HI) {

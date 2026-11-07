@@ -409,15 +409,8 @@ public final class RuinPlanner {
         boolean blockDamage = g.blockDamage() && !flash, fires = g.fires();
         int x0 = s.chunkX << 4, z0 = s.chunkZ << 4;
         double[] heat = new double[256];
-        // first landed entry of each column (Collapse#landed sorted by column)
-        int[] from = new int[257];
-        if (debris != null) {
-            LongArrayList landed = debris.landed;
-            for (int k = 0, column = 0; column <= 256; column++) {
-                while (k < landed.size() && (int) (landed.getLong(k) >>> 40) < column) k++;
-                from[column] = k;
-            }
-        }
+        // landed entries by the column where they come to rest (repose), in landing order
+        int[] from = new int[257], order = debris == null ? new int[0] : Debris.repose(groundOf, debris.landed, from);
         for (int column = 0; column < 256; column++) {
             int ground = groundOf[column];
             if (ground == Integer.MIN_VALUE) continue;
@@ -430,7 +423,7 @@ public final class RuinPlanner {
             double q = lit > 0 ? lit * incidence(groundOf, lx, lz, ground, x, z, d.burst()) * edge(x, z, d.burst(), g.ctx().ruinRadius) : 0;
             heat[column] = inFireball ? lit : q;
             // collapse leaves its material at any pressure (house falls even below 5 psi); nothing in fireball
-            if (blockDamage && !inFireball && debris != null) pile(s, lx, ground, lz, debris, from[column], from[column + 1]);
+            if (blockDamage && !inFireball && debris != null) pile(s, lx, ground, lz, debris, order, from[column], from[column + 1]);
             if (inFireball) {
                 if (blockDamage) strip(s, lx, ground, lz, x, z);
                 if (lit >= ThermalModel.IGNITE) fireball(s, lx, ground, lz);
@@ -539,19 +532,23 @@ public final class RuinPlanner {
         return n == 0 ? 0 : sum / n;
     }
 
-    /** Pile of landed material ({@link Collapse#landed} entries {@code [start, end)}) on the column's post-ruin ground. */
-    private static void pile(Sections s, int lx, int ground, int lz, Collapse debris, int start, int end) {
+    /**
+     * Pile of landed material ({@link Collapse#landed} entries {@code order[start, end)}, {@link Debris#repose}) on the column's
+     * post-ruin ground.
+     */
+    private static void pile(Sections s, int lx, int ground, int lz, Collapse debris, int[] order, int start, int end) {
         int y = ground + 1;
+        int x = (s.chunkX << 4) + lx, z = (s.chunkZ << 4) + lz;
         for (int k = start; k < end && y < s.maxY; k++, y++) {
             if (!s.get(lx, y, lz).isAir()) break;
-            long e = debris.landed.getLong(k);
+            long e = debris.landed.getLong(order[k]);
             BlockState st = debris.landedStates.get((int) (e & 0xFFFF));
             s.set(lx, y, lz, st);
-            int from = debris.sourceY(e);
+            int src = debris.sourceY(e);
             // also at its own height: a double chest half lands as a lone chest, a state change that clears it
-            if (from != Integer.MIN_VALUE && s.view.get(st).is(Blast.Props.CONTAINER)) {
-                int x = (s.chunkX << 4) + lx, z = (s.chunkZ << 4) + lz;
-                s.moves.add(BlockPos.asLong(x, from, z));
+            if (src != Integer.MIN_VALUE && s.view.get(st).is(Blast.Props.CONTAINER)) {
+                int column = (int) (e >>> 40);
+                s.moves.add(BlockPos.asLong((s.chunkX << 4) + (column & 15), src, (s.chunkZ << 4) + (column >> 4)));
                 s.moves.add(BlockPos.asLong(x, y, z));
             }
         }
