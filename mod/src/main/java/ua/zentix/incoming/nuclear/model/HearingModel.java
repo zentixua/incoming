@@ -36,6 +36,12 @@ import java.util.concurrent.ConcurrentHashMap;
  * <li>Less muffling than threshold shift: cochlear threshold shift barely affects loud sounds (recruitment — loudness
  * catches normal by {@link #DISCOMFORT} dB), so game sound (~{@link #LEVEL} dB) is quieter by {@link #loudnessLoss}, not
  * the full shift; conductive loss attenuates everything by its full amount.</li>
+ * <li>Ringing (temporary tinnitus) is a faint tone just above the shifted threshold: after intense sound, normal-hearing
+ * listeners match it at about {@link #TINNITUS_SL} dB sensation level (transient tinnitus after intense low-frequency
+ * sound, 28 of 28 normal-hearing subjects; post-exposure matches correlate with the shift). So it stands
+ * {@link #ringing} below game sound: loud only with a shift near the game level, otherwise heard only in quiet, as any
+ * louder world sound masks it. Approximation: the match is at the tinnitus pitch near the 4 kHz shift, without
+ * recruitment.</li>
  * </ul>
  */
 public final class HearingModel {
@@ -63,6 +69,8 @@ public final class HearingModel {
     static final double HEAL_FROM_DAYS = 28, HEAL_DAYS = 56;
     /** Game sound loudness and discomfort threshold, dB: recruitment between them. */
     static final double LEVEL = 70, DISCOMFORT = 100;
+    /** Ringing sensation level above the shifted threshold, dB (matched temporary tinnitus, normal hearing). */
+    static final double TINNITUS_SL = 15;
 
     /** Quiet rural night background, dBA (estimate: rural nights — 25–35 dBA). */
     static final double QUIET_NIGHT_A = 30;
@@ -223,6 +231,16 @@ public final class HearingModel {
     public static double loudnessLoss(double shift) {
         double s = Math.max(0, Math.min(shift, LEVEL));
         return (DISCOMFORT - LEVEL) * s / (DISCOMFORT - s);
+    }
+
+    /**
+     * Ringing loudness relative to game sound ({@link #LEVEL} dB), amplitude ratio: the tone stands {@link #TINNITUS_SL} dB
+     * above the high-frequency threshold shifted by {@code shift} dB; 0 — no shift. A 13 dB shift (1.2 psi) rings at
+     * −42 dB under game sound, a 40 dB shift at −15 dB, from 55 dB it is as loud as the world.
+     */
+    public static double ringing(double shift) {
+        if (!(shift > 0)) return 0;
+        return Math.pow(10, (shift + TINNITUS_SL - LEVEL) / 20);
     }
 
     /** Standard normal cumulative distribution (Abramowitz–Stegun 26.2.17, error up to 7.5·10⁻⁸). */

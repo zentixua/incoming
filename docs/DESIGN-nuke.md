@@ -56,7 +56,7 @@ What differs from the design below, and why.
 | §2 — modeled front (supersonic near epicenter, sound farther) | modeled out to two sphere radii (≤ 200 blocks), smoothly to 600 blocks toward far-zone sound-speed share `nuclear.wave_speed` (default 1.0, real 17.15 blocks/tick; lower is gameplay deviation), beyond dust-wall edge 0.3 psi sound at sound speed (`FrontProfile`); pressure still modeled distance function | Artem: real life, but server must keep up/player see and understand, one far-zone speed. 16.10 chose 0.42 from three videos, 18.10 real-life default 1.0, slower only by setting. Wall/haze/sound/damage/knockback/ruins (chunk center) share arrival time |
 | §4 — front hits ring in its tick | front position each tick, covered-body hits queued under shared budget, nearest first, after own detonation's light pulse (`BlastFront`) | hits include death/loot/all pack death handlers: host's wave through hundred epicenter mobs takes 84 ms in one tick |
 | §5 — deafen all new sounds | existing loops too (own from owner, others `SoundFilters.loops` on tick until hearing returns: Sound Physics every tick, otherwise on filter change), except music/records/tinnitus; wave sounds use pre-wave hearing | filter remains until sound end: pre-wave loops otherwise clear through hours of deafness; music not world sound |
-| §5 — hearing (`HearingModel`) | linear threshold shift between threshold and 5 psi; lows third of highs; above 40 dB recovery doubles per 10 dB; waves separated by > 2 game minutes (~1.7 s) take largest separate shift, no energy addition (seconds-spaced salvo deafens like strongest wave); no permanent loss, both eardrums together, indoors like outdoors, ringing volume not modeled, death/world exit restores hearing | little single-long-wave threshold-shift data; anchors are energy threshold/injury at eardrum-rupture threshold; no different-dose shift-addition data; ear pressures nearly equal, windows long broken at 0.34 psi, wave enters house; hearing client state |
+| §5 — hearing (`HearingModel`) | linear threshold shift between threshold and 5 psi; lows third of highs; above 40 dB recovery doubles per 10 dB; waves separated by > 2 game minutes (~1.7 s) take largest separate shift, no energy addition (seconds-spaced salvo deafens like strongest wave); no permanent loss, both eardrums together, indoors like outdoors, ringing 15 dB above shifted threshold without recruitment, death/world exit restores hearing | little single-long-wave threshold-shift data; anchors are energy threshold/injury at eardrum-rupture threshold; no different-dose shift-addition data; ear pressures nearly equal, windows long broken at 0.34 psi, wave enters house; hearing client state |
 | §6 — shake from `P` at arrival | front impulse/body lean in wind (`nuclear/model/BodySway`): transient flow loading (G&D ch. IV: chest reflected pressure decays to stagnation over 3S/U, back unpressurized L/U then 4S/U to full; body thickness 0.25 m, half-width 0.2 m, ANSUR II; G&D building idealization, body values (est.)), ~2 ms gives immediate lean velocity: 1 psi 11 N·s (8°/s), 3.5 psi 38 N·s (27°/s), along-ground cos α share; camera from body front-arrival moment, fractional tick. Ankle inverted pendulum with balance (delayed feedback via muscle activation, Peterka 2002, van der Kooij & Peterka 2011; numbers Pasma et al. 2017 without slow torque feedback, < 1 % over seconds), standing drag area 0.66 m² (Cd 1.0–1.3 Hoerner, area 0.6 m²), along-ground dynamic pressure/phase from detonation (`Detonation.dynamicPressureKpa`, `HobBlast`), wind square root with Friedlander phase. Optimal airburst, back to wave, including impulse: 15 kt (1 psi phase 1.3 s), 0.3 psi 1.2°, 1 psi 7.3°; 2 kt (0.6 s), 1 psi 5.4°, 1 kt 4.9°. Stability limits forward 8°, backward 4.5°, sideways 8°, diagonal ellipse (McCollum & Leen 1989), reached facing wave from ~0.77 psi at 15 kt/~0.88 at 2 kt, back ~1.06/~1.35; person steps there, lean stays at boundary while wind exceeds balance, straightens as wind weakens, balance restarts at edge (linear feedback would pull “fallen” body back through vertical to opposite edge). Negative-phase reverse wind leans toward burst (Friedlander ≤ 13.5 % front pressure, dynamic pressure 1.8 %): 2–3 psi gives 1–2°, reaches edge back-to-wave (backward 4.5°) ~4.6 psi, facing (forward 8°) 6–8 psi. Numbers at `effects_scale` 1, smaller shortens listener phase/reduces lean; multiple lean waves add (small-angle linear pendulum). Head with body: exact camera rotation about world-horizontal axis across lean, decomposed heading/pitch/roll (`CameraShake.leaned`; heading about world vertical, independently adding sideways angles while looking down would spin image). No ground shake before/with wave; wall within 12 blocks toward burst scales impulse/wind by open-ray share; not standing (riding/swimming/flying) no lean, jump fades lean over quarter second, restores on standing; shake setting scales lean; no flash push | Artem requested approach-growing shake (§6 above), approved physical pass 18.10 (step 7), but visible ground shake absent in reality. Airslap arrives with wave, drives ground down then partly back (G&D §6.12–6.16); ground velocity p/ρc (plane ground wave, ρ 1.8–2 t/m³, c 450–1500 m/s (est.), no G&D value; analysis design/nuke-film/sources-check.md §8): 1 psi 0.2–0.9 cm/s, displacement 1–4 mm; 15 kt at 592 m, 1.38 km (~6 psi Brode) 1.5–5 cm/s, 0.4–1.6 cm. Body feels millisecond-rise acceleration 0.1–10 m/s² versus perception threshold 0.015 m/s² (ISO 2631-1 annex C), but screen cannot: ground/player/surroundings move together, eye shift relative to distant ≤ 1.6 cm (100 m 0.01°), ground slope = ground velocity/ground-front speed (~430 m/s at 1–1.5 km), ≤ 0.007°; 1080p/70° pixel 0.065°. Deviation: no felt impulse, game cannot transmit body acceleration, camera shake invented. Pre-wave solid-ground motion weak at 1–2 km, 0.1–3 s early (est.), cannot calculate (G&D §6.84), absent; light does not push. Pendulum lacks stepping/falling beyond stability, held at edge while wind stronger, server models throw; step threshold by static lean limits, but wind center of pressure reaches foot edge earlier: wind-only foot torque implies steps facing wave ~0.6 psi at 15 kt/~0.8 at 2 kt, back ~0.8/~1.1 (needs two-link stepping model); wall wind shadow from three rays (est.); no neck/head sway (own head impulse gives half velocity of body lean at head height) |
 | §5 — own sound synthesis | recordings (CC0/CC BY) plus synthesis | recordings more realistic; synthesis supplies modeled front hit, clatter, infralow hit absent in recordings |
 | §5 — Wilson cloud | epicenter biome humidity (always over water); volumetric pall fog shell (`BlastWall`, `pallWilson`), negative phase behind front at 0.93 radius, half-thickness 0.06, 0.15–3.5·∛(Y/15) s, sphere/sun/sky-lit, patchy breakup | game has no air humidity |
@@ -68,7 +68,8 @@ What differs from the design below, and why.
   injuries (`BlastInjuryTest`: G&D ch. 12 tables, dummy at 5.3 psi), eyes (`EyeInjuryTest`: 10 s at fig. 12.88 range,
   longer closer up to cap, longer at night, retinal-burn range). Burn GameTest `BurnGameTests` (batch `nuke_burns`):
   cow shock, shirted villager third-degree face/arm burns without ignition (same flash cannot hurt twice), shirt
-  ignites at 20 cal/cm², iron-armored pillager intact, leather burns, underwater cod intact; second detonation never
+  ignites at 20 cal/cm² and the side beneath burns to shock without vanilla fire, iron-armored pillager intact, leather
+  likewise, underwater cod intact; second detonation never
   postpones shock; shock deadline kills even with fire resistance.
 - `EyeGameTests` (batches `nuke_eyes*`): retinal burns where sphere lies on retina, none to side/behind, 40 km only at
   night; entity-light path accumulates up to 8 spots, none in creative; ridge 100 blocks away hides sphere at 2 km
@@ -452,7 +453,7 @@ Like Hiroshima photos: wood charred toward sphere, stone soot-darkened, light hu
   short-sleeve shirt/trousers (thin cotton), shoes (dense cloth); face/hands/forearms exposed, 9.9 % facing skin;
   animals/monsters whole facing side, 49.5 %. Leather armor dense cloth, others metal, blocks light. Fabric ignition
   table 7.35 (shirt cotton 14, dense 20 cal/cm² at 35 kt, higher at high yields; below 35 kt slope extrapolation,
-  (est.)): body burns 10–20 s, water extinguishes. Second/third-degree burns remove health fraction relative to
+  (est.)): ignited fabric stops shielding, the skin beneath burns (below). Second/third-degree burns remove health fraction relative to
   shock threshold (third on 25 % body, second on 30 %, §12.62); `nuclear_thermal` bypasses armor (already screened
   light), no knockback; wound/`incoming:burns` cap in 10 % steps rounded up (90 % to shock threshold stays 90 %), based
   on unburned health; invulnerability-blocked wound (respawn/hit) removed only by cap, only health above it. Cap holds
@@ -460,11 +461,13 @@ Like Hiroshima photos: wood charred toward sphere, stone soot-darkened, light hu
   burn shock: health 5 %, death after 0.5–12 game hours (`burn_shock`, armor/potions/enchantments cannot reduce; no
   in-game treatment, totem saves like any death). Second detonation burns same side, larger fraction wins, each burn
   own healing deadline (weaker new effect hidden under stronger old like vanilla), existing shock unchanged.
-  Clothed flash burns face/arms only, 9.9 %, far from shock; flame burns under ignited clothes (§12.60) are Minecraft
-  fire until extinguished. Undead/fire-immune/fire-resistance-potion entities do not burn; underwater light absorbed
+  Clothed flash burns face/arms only, 9.9 %, far from shock, until clothing ignites: ignited fabric stops shielding and
+  the skin beneath burns by the flash degree (flame burns under ignited clothes, §12.60), so the whole facing side; no
+  vanilla fire on the body on top (it would kill the 1 HP shock leaves within a second, counting the flame twice).
+  Undead/fire-immune/fire-resistance-potion entities do not burn; underwater light absorbed
   (underwater eyes checked against world, not entity flag, set only by entity tick); golems/shulkers lack living skin.
-  Player-strike flash leaves rule-protected players entirely untouched (PvP off/friendly team), including self, no
-  clothing ignition, like arrows.
+  Player-strike flash leaves rule-protected players entirely untouched (PvP off/friendly team), including self, like
+  arrows.
 - **Eyes** (`model/EyeInjury`, `radiation/FlashEyes`, client `NukeFlash`; Glasstone & Dolan §12.83–12.88). Anchor fig.
   12.88: 10 s flashblindness/retinal-burn ranges for looking at sphere (10 000 ft burst, clear day/night), log yield.
   Temporary whole-field glare (client): full eye pulse if sphere visible (through windows too), sky-scattered 0.15
@@ -498,7 +501,8 @@ Like Hiroshima photos: wood charred toward sphere, stone soot-darkened, light hu
     or death. Fatality compares own random value with lognormal curve (LD50 4.5 Gy, <1 % at 2, 80 % at 6, all at 10),
     one per irradiation (UUID/time dose crossed 1 Gy). Death 6 weeks at 2 Gy, 30 days at 6, 12 at 10, 5 at 20,
     36 h at 50, faster with dose. Manifest illness: weakness, hunger ×1.5–2, from 2 Gy no regeneration/−4 max health,
-    from 6 Gy −10/weakness II.
+    from 6 Gy −10/weakness II. Cerebral form from 50 Gy (table 12.108: convulsions, tremor, ataxia): Slowness V for
+    every body from prodrome onset to death, a quarter of walking speed (est.: the table gives no measure).
 
    Vomiting: particles/sound, hunger loss. Dose death uses `radiation` damage/death message.
 - **Panic** (`nuclear/MobPanic`): flash viewers (entity light) flee 10–20 s, wave ≥ 0.3 psi 20–40 s, away from epicenter.
@@ -544,7 +548,7 @@ roll 0.75, build hit/roll slowed 0.62/0.7 “eyeballed Sachs” (Sachs from reco
 | terrain echo | after hit, by geometry | same hit recording from each returning slope, own OpenAL sources below |
 | `nuke.wind` | positive then negative phase | hurricane loop: wind follows pressure (weak wave u = p/ρc), gust/phase decay, weak reverse rarefaction; volume ∝ u (ear wind noise ∝ ρu², Strasberg 1988), full at 33 m/s (hurricane recording) |
 | `nuke.glass`, `debris.fall` | local front arrival + sound travel | actually removed nearby glass/debris (“Destruction” below) |
-| `nuke.tinnitus` | hearing-threshold shift | 4.87 kHz pure beating tone, 10 s loop, volume by shift |
+| `nuke.tinnitus` | hearing-threshold shift | 4.87 kHz pure beating tone, 10 s loop, volume 15 dB above shifted threshold |
 | `nuke.rain` | black rain | heavy drops, thinner than vanilla |
 | `geiger.click` | meter | single click, Poisson rate by dose rate |
 | `nuke.fire` | city burning | real house-fire recordings (Yle archive 1978, house burned for filming), native speed, four cardinal loops, volume by burning heat below |
@@ -622,7 +626,9 @@ normal loudness by 100 dB, game sound ~70 dB quieter by 30·S/(100 − S) dB; co
 OpenAL EFX low-pass each new source via `PlaySoundSourceEvent`, own sources, every tick other loops (water/beacon/
 minecart, `SoundFilters.loops`: pre-wave loops otherwise clear through deafness hours): `GAIN` low loss, `GAINHF`
 high/low difference. Wave's own hit/pops/glass/shock use pre-wave ear (`Deafness.before`). While threshold shifted,
-`nuke.tinnitus` non-positional head loop, volume by shift. Player category sliders untouched.
+`nuke.tinnitus` non-positional head loop: a tone 15 dB above the shifted threshold (matched temporary tinnitus after
+intense sound, normal hearing ~15 dB SL), against game sound 70 dB — loud only from a ~55 dB shift, otherwise masked by
+any louder world sound; it stops below a ~18 dB shift while dulling continues. Player category sliders untouched.
 
 ## 6. Client effects (`client/nuclear`)
 

@@ -199,4 +199,22 @@ class HearingModelTest {
         }
         return lo;
     }
+
+    @Test
+    void ringingIsAFaintToneAboveTheShiftedThreshold() {
+        assertEquals(0, HearingModel.ringing(0), 0);
+        // 15 dB above the shifted threshold, against 70 dB game sound
+        assertEquals(Math.pow(10, (40 + 15 - 70) / 20.0), HearingModel.ringing(40), 1e-12);
+        assertEquals(1, HearingModel.ringing(55), 1e-12);
+        // a 1.2 psi wave (15 kt at 3 km): ringing 40 dB under the world, below the client's audible floor (0.01 of the cap)
+        double far = HearingModel.shift(HearingModel.exposure(1.23 * PSI));
+        assertTrue(HearingModel.ringing(far) < 0.01, () -> "far ringing " + HearingModel.ringing(far));
+        // 5 psi trauma: ringing still under the world but clearly audible in quiet
+        double trauma = HearingModel.ringing(HearingModel.shift(HearingModel.exposure(5 * PSI)));
+        assertTrue(trauma > 0.3 && trauma < 1, () -> "trauma ringing " + trauma);
+        // recovery: a 39 dB shift (15 kt at 1.5 km) falls under the client's floor (0.01 of a 0.75 cap) within 1.5 game
+        // hours, while hearing is still dulled
+        assertTrue(0.75 * HearingModel.ringing(HearingModel.shiftAfter(39, 1.5)) < 0.01);
+        assertTrue(HearingModel.shiftAfter(39, 1.5) > 10);
+    }
 }

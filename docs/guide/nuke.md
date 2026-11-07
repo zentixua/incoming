@@ -70,16 +70,21 @@ with a nuclear warhead takes off 90 seconds after the alarm starts.
 - **Keep away from walls and windows.** The wave hurts mostly by throwing you against something hard and with glass
   from windows between you and the burst. A wall right behind you reflects the wave and at least doubles the pressure
   on your lungs. A house that collapses buries those inside: dig yourself out before you suffocate.
+- **The wave deafens.** At 15 kt it dulls sound out to about 4 km, and closer in everything sounds as if your ears
+  were stuffed with cotton. Hearing comes back over game hours: up to 16 beyond 1.5 km, two game days at 1 km. A faint ringing comes with it,
+  heard only when it is quiet: beyond 1.5 km for less than a game hour, loud and long only within about 1 km. From 5 psi
+  (about 1.1 km) eardrums can tear, and everything stays dull for 4–8 game weeks. Death restores your hearing.
 - **Do not look at the fireball.** Its light reaches only those who can see it, under open sky or through a window, and
   burns the side of the body that faces it.
 - **Burns** depend on the yield: the pulse of a bigger burst is longer, and skin takes more of it. At 15 kt bare skin
   reddens out to about 3.4 km, blisters out to 2.6 km and burns through out to 2.1 km; a cotton shirt catches fire out
-  to 1.6 km (water puts it out). Clothes shield you until they catch fire, so a dressed player is burned on the face
-  and arms, and an animal over its whole side. Iron armour stops the light; leather catches fire later than a shirt.
+  to 1.6 km. Clothes shield you only until they catch fire: burning clothes burn the skin beneath
+  them, so where a shirt catches fire a dressed player is burned over the whole side facing the fireball, like an animal.
+  Farther out, only the face and arms burn. Iron armour stops the light; leather catches fire later than a shirt.
   Burns take a share of your health and keep it until they heal: two game weeks for blisters, five for deep burns.
-  Deep burns over a quarter of the body, or blisters over 30 % of it, bring shock: you die within 12 game hours. The
-  flash alone burns a dressed player far less than that, but burning clothes keep burning like any fire: get into
-  water. Milk and potions do not heal burns.
+  Deep burns over a quarter of the body, or blisters over 30 % of it, bring shock: you die within 12 game hours. Where
+  your clothes catch fire, that is shock; beyond, the flash burns a dressed player far less. Milk and potions do not
+  heal burns.
 - **If you see a flash in the distance**, you have seconds before the wave arrives: get behind a slope, into a
   basement, into a pit.
 - **The flash blinds.** It dazzles everyone who sees the fireball, and more weakly everyone under the open sky it lights
@@ -96,7 +101,8 @@ with a nuclear warhead takes off 90 seconds after the alarm starts.
 - **Radiation sickness** starts hours later and keeps game time: nausea and vomiting, then days or weeks of feeling
   well, then weeks of weakness, from 2 Gy without natural healing. Whether it kills depends on the dose: below 2 Gy
   almost nobody dies, at 4.5 Gy half, from 10 Gy everyone, and the higher the dose, the sooner (from 50 Gy within a
-  game day or two). Milk does not cure it. Animals and villagers get the same dose and sickness; the undead do not.
+  game day or two). From 50 Gy it strikes the brain: within minutes you stagger at a quarter of your speed until you
+  die. Milk does not cure it. Animals and villagers get the same dose and sickness; the undead do not.
 
 A Geiger Counter in hand clicks and shows the dose rate and your dose. Operators give it out. In creative mode the
 dose does not build up.

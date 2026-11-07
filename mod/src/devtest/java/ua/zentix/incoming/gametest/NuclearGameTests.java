@@ -11,6 +11,7 @@ import net.minecraft.tags.BlockTags;
 import net.minecraft.util.Mth;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.effect.MobEffectInstance;
+import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.entity.EntityType;
 import net.minecraft.world.entity.LivingEntity;
 import net.minecraft.world.entity.animal.Cow;
@@ -37,6 +38,7 @@ import ua.zentix.incoming.nuclear.NuclearEvents;
 import ua.zentix.incoming.nuclear.NuclearStrikes;
 import ua.zentix.incoming.nuclear.NuclearWarhead;
 import ua.zentix.incoming.nuclear.model.BlastInjury;
+import ua.zentix.incoming.nuclear.model.SicknessModel;
 import ua.zentix.incoming.nuclear.model.ThermalModel;
 import ua.zentix.incoming.nuclear.model.CraterModel;
 import ua.zentix.incoming.nuclear.model.Yield;
@@ -2151,8 +2153,8 @@ public final class NuclearGameTests {
     }
 
     /**
-     * Mobs get sick like players: 1000 Gr (brain form) - the effect of the disease immediately, death after 0,4 game hour (400
-     *  ticks), and not at the time of the dose; the undead do not get sick; in the trail of precipitation, the mob gains a dose (in portions under the budget,
+     * Mobs get sick like players: 1000 Gr (brain form) - the effect of the disease immediately, ataxia (Slowness V) from onset,
+     *  death after 0,4 game hour (400 ticks), and not at the time of the dose; the undead do not get sick; in the trail of precipitation, the mob gains a dose (in portions under the budget,
      * {@link MobFallout}). The patient is in a stone booth: the precipitation does not reach him, and the duration of the illness is not delayed by its dose.
      */
     @GameTest(template = "range", timeoutTicks = 1300, batch = "nuke_mob_radiation", skyAccess = true)
@@ -2178,12 +2180,16 @@ public final class NuclearGameTests {
         MobFallout fallout = new MobFallout();
         WorkClock clock = WorkClock.counting(1_000_000L);
         long start = level.getGameTime();
+        java.util.concurrent.atomic.AtomicBoolean staggered = new java.util.concurrent.atomic.AtomicBoolean();
         h.onEachTick(() -> {
             clock.start(IncomingConfig.SERVER.workBudgetMs.get() * 1_000_000L);
             fallout.work(level, List.of(d), clock);
             if (level.getGameTime() - start < 380) h.assertTrue(sick.isAlive(), "mob with 1000 Gr died prematurely");
+            MobEffectInstance slow = sick.getEffect(MobEffects.MOVEMENT_SLOWDOWN);
+            if (sick.isAlive() && slow != null && slow.getAmplifier() == SicknessModel.ataxiaSlowness(1000)) staggered.set(true);
         });
         h.succeedWhen(() -> {
+            h.assertTrue(staggered.get(), "mob with 1000 Gr walked normally until death (no cerebral ataxia)");
             h.assertTrue(RadiationTicker.dose(grazing).doseGy() > 0, "in the trail of precipitation, the mob did not receive a dose");
             h.assertTrue(RadiationTicker.dose(zombie).doseGy() == 0, "the undead took a dose");
             h.assertFalse(sick.isAlive(), "mob with 1000 Gr is still alive");

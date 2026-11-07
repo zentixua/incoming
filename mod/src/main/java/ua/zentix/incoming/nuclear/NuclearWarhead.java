@@ -152,7 +152,7 @@ public final class NuclearWarhead {
     /**
      * Same; {@code late} — the body was not in memory when the pulse passed and loads now ({@code LateExposure}): it receives
      * the burns and dose of its place, its sickness runs from the detonation, but nothing that happens only at that moment
-     * (fleeing the flash, clothes catching fire).
+     * (fleeing the flash).
      */
     public static boolean expose(ServerLevel level, Detonation d, LivingEntity living, @Nullable Entity owner, boolean late) {
         if (!living.isAlive()) return false;
@@ -168,7 +168,7 @@ public final class NuclearWarhead {
         Vec3 eye = living.getEyePosition();
         if (sees(level, d, living)) {
             if (living instanceof ServerPlayer player) FlashEyes.flash(level, d, player, owner);
-            FlashBurns.burn(level, d, living, d.fluence(eye), owner, !late);
+            FlashBurns.burn(level, d, living, d.fluence(eye), owner);
             // saw flash: flee
             if (!late) MobPanic.flash(d, living, level.getGameTime());
         }

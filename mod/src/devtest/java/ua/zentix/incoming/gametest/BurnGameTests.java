@@ -46,8 +46,10 @@ public final class BurnGameTests {
      * 15 kt, an impulse that causes a 3 degree burn in anyone: a cow (skin on half the body with the side facing the ball) - shock,
      * health 5% (health limit - no less than one, like vanilla); resident in a shirt - 3-th degree on the face and hands
      *  (9,9 % of the body): 40 % of health taken away, limit - 60 % (up to a tenth), clothes did not catch fire; the same flash
-     *  the second time does not take away anything. At 20 cal/cm² the resident's clothing catches fire. The robber in the iron is not burned and does not
-     *  burn, in the skin he burns (thick fabric catches fire), but the skin underneath is intact. Below the lowest threshold - nothing,
+     *  the second time does not take away anything. At 20 cal/cm² the resident's clothing catches fire and no longer shields: the
+     *  whole facing side burns, shock, and the body is not also set on vanilla fire (it would kill the 1 HP shock leaves within a
+     *  second, not after 0.5–12 game hours). The robber in the iron is not burned; in leather (thick fabric catches fire) the skin
+     *  underneath burns: shock. Below the lowest threshold - nothing,
      *  cod under water, not yet ticking - too. A player whom the rules do not allow to be wounded is not affected by the explosion of the player, but the other player is burned and sets his shirt on fire. The second detonation does not touch the incoming shock; wound on top of previous burns -
      *  from health without them. A new burn, weaker than the previous one, heals on its own time: the old one is over - the limit of the new one. Shock in the
      *  end of life kills and under fire resistance with the resistance of V.
@@ -89,9 +91,9 @@ public final class BurnGameTests {
         h.assertFalse(villager.isOnFire(), "a resident's shirt caught fire when " + fmt(third) + " cal/cm²");
         FlashBurns.burn(h.getLevel(), d, villager, third, null);
         h.assertTrue(level(villager) == 4 && villager.getHealth() > 11.9f, "the same flash injured a resident a second time: " + about(villager));
-        h.assertTrue(burning.isOnFire() && level(burning) == 4, "resident at 20 cal/cm²: " + about(burning) + (burning.isOnFire() ? "" : ", clothes don't burn"));
+        h.assertTrue(!burning.isOnFire() && level(burning) == BurnsEffect.SHOCK, "resident at 20 cal/cm²: " + about(burning) + (burning.isOnFire() ? ", set on fire" : ""));
         h.assertTrue(level(iron) < 0 && !iron.isOnFire(), "the robber is burned in iron: " + about(iron));
-        h.assertTrue(level(leather) < 0 && leather.isOnFire(), "robber in leather at 20 cal/cm²: " + about(leather) + (leather.isOnFire() ? "" : ", the skin doesn't burn"));
+        h.assertTrue(level(leather) == BurnsEffect.SHOCK && !leather.isOnFire(), "robber in leather at 20 cal/cm²: " + about(leather) + (leather.isOnFire() ? ", set on fire" : ""));
         h.assertTrue(level(faint) < 0 && faint.getHealth() == faint.getMaxHealth(), "the cow is burned below the threshold: " + about(faint));
 
         twice.addEffect(new MobEffectInstance(ModEffects.BURNS, 40, BurnsEffect.SHOCK));
@@ -106,7 +108,7 @@ public final class BurnGameTests {
         FlashBurns.burn(level, d, ally, 30, launcher);
         FlashBurns.burn(level, d, enemy, 30, launcher);
         h.assertTrue(level(ally) < 0 && !ally.isOnFire(), "a player, whom the rules do not allow to be injured, was burned: " + about(ally) + (ally.isOnFire() ? ", lit" : ""));
-        h.assertTrue(level(enemy) >= 0 && enemy.isOnFire(), "the player whom the rules allow to be wounded is not burned: " + about(enemy) + (enemy.isOnFire() ? "" : ", does not light"));
+        h.assertTrue(level(enemy) == BurnsEffect.SHOCK, "the player whom the rules allow to be wounded is not burned through the shirt: " + about(enemy));
 
         // on top of previous burns the wound is from health without them: in a cow with a limit of 60 %, the shock leaves 5 % of 10, and in a chicken
         //  with 0,9 (the vanilla health limit does not fall below one) the shock takes away 5 % of 4 - less than half a unit, without a wound
@@ -132,6 +134,7 @@ public final class BurnGameTests {
         resisting.addEffect(new MobEffectInstance(MobEffects.DAMAGE_RESISTANCE, 200, 4));
         resisting.addEffect(new MobEffectInstance(ModEffects.BURNS, 5, BurnsEffect.SHOCK));
         h.succeedWhen(() -> {
+            h.assertTrue(burning.isAlive() && leather.isAlive(), "burned through clothing, died before the shock: " + about(burning) + ", " + about(leather));
             h.assertFalse(shocked.isAlive(), "the shock didn't kill");
             h.assertFalse(resisting.isAlive(), "the shock did not kill under the fire resistance and resistance of V");
             MobEffectInstance healed = healing.getEffect(ModEffects.BURNS);

@@ -33,7 +33,7 @@ import ua.zentix.incoming.registry.ModEffects;
 
 /**
  * Fireball light burns across the body ({@link BurnInjury}, DESIGN-nuke §4): the side facing the ball burns — half the
- * skin (§12.60); exposed skin by its burn degree, clothing only when ignited (then the body burns; water extinguishes).
+ * skin (§12.60); exposed skin by its burn degree, clothing only when ignited (then the skin beneath burns).
  * Body region is an armor slot: helmet — head, chestplate — torso and arms, leggings — legs, boots — feet. Empty slots
  * on humans (player, villagers, illagers, witch) mean clothing: face and hands with forearms exposed, shirt and trousers
  * thin fabric, footwear heavy fabric; animals and monsters have skin. Leather armor is heavy fabric, elytra thin
@@ -42,8 +42,9 @@ import ua.zentix.incoming.registry.ModEffects;
  *
  * <p>Second- and third-degree burns remove the health share they represent of shock threshold (§12.62), keeping it from
  * returning while healing ({@link BurnsEffect}); at threshold, shock follows after 0.5–12 game hours, fatal untreated.
- * A clothed person's flash burns affect only face and arms — far below shock; ignited clothing burns like any fire
- * until extinguished (§12.60: flame burns beneath clothing).
+ * Clothing shields only until it ignites: below that a clothed person's flash burns affect only face and arms — far below
+ * shock; ignited clothing burns the skin beneath it as the flash burns bare skin (§12.60: flame burns beneath clothing),
+ * so the whole facing side. That flame burn is part of this burn, not vanilla fire on the body.
  *
  * <p>A second burst burns the same body side: health share removed is the larger of the two, not their sum; wound is
  * only the increase. Each burn heals on its own schedule (cap set by the worst unhealed burn); ongoing shock keeps its
@@ -55,8 +56,6 @@ public final class FlashBurns {
     private static final double HEAD = 4.5, BODY = 27, LEGS = 16.5, FEET = 1.5;
     /** Clothed person's exposed hands and forearms (short-sleeved shirt), % of ball-facing body. */
     private static final double FOREARMS = 5.4;
-    /** Ignited clothing burn duration if not extinguished, s (estimate: thin fabric burns through sooner). */
-    private static final int THIN_FIRE_S = 10, HEAVY_FIRE_S = 20;
     private static final int TICKS_PER_HOUR = 1000, TICKS_PER_DAY = 24 * TICKS_PER_HOUR;
     private static final EquipmentSlot[] SLOTS = {EquipmentSlot.HEAD, EquipmentSlot.CHEST, EquipmentSlot.LEGS, EquipmentSlot.FEET};
 
@@ -64,11 +63,6 @@ public final class FlashBurns {
 
     /** Burns from fluence {@code q} cal/cm² at the eyes of an entity seeing the ball. */
     public static void burn(ServerLevel level, Detonation d, LivingEntity e, double q, @Nullable Entity owner) {
-        burn(level, d, e, q, owner, true);
-    }
-
-    /** Same; {@code ignite} false — clothes do not catch fire (a body loaded long after the flash, {@code LateExposure}). */
-    public static void burn(ServerLevel level, Detonation d, LivingEntity e, double q, @Nullable Entity owner, boolean ignite) {
         if (e.fireImmune() || e instanceof ArmorStand || e instanceof AbstractGolem || e.isInvulnerable() || underWater(level, e)
                 || e.hasEffect(MobEffects.FIRE_RESISTANCE) || q < BurnInjury.lowest(d.yieldKt())) return;
         if (e instanceof Player victim && owner instanceof Player attacker && !victim.canHarmPlayer(attacker)) return;
@@ -77,7 +71,6 @@ public final class FlashBurns {
         double z = Fragility.inverse(unit(h));
         boolean dressed = dressed(e);
         double skin = 0;
-        int fire = 0;
         for (EquipmentSlot slot : SLOTS) {
             Cover cover = cover(e.getItemBySlot(slot), slot, dressed);
             double area = area(slot);
@@ -86,9 +79,10 @@ public final class FlashBurns {
                 area -= FOREARMS;
             }
             if (cover == Cover.SKIN) skin += area;
-            else if (BurnInjury.ignites(cover, q, d.yieldKt())) fire = Math.max(fire, cover == Cover.THIN ? THIN_FIRE_S : HEAVY_FIRE_S);
+            // burning fabric no longer shields: its flame burns the skin beneath (§12.60). That flame burn is this burn,
+            // so the body is not also set on vanilla fire: 1 HP left by shock would die from it within a second
+            else if (BurnInjury.ignites(cover, q, d.yieldKt())) skin += area;
         }
-        if (fire > 0 && ignite) e.igniteForSeconds(fire);
         int degree = BurnInjury.degree(q, d.yieldKt(), z);
         if (degree == 0 || skin <= 0 || e.getType().is(EntityTypeTags.UNDEAD)) return;
         MobEffectInstance had = e.getEffect(ModEffects.BURNS);
