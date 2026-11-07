@@ -78,13 +78,13 @@ with a nuclear warhead takes off 90 seconds after the alarm starts.
   burns the side of the body that faces it.
 - **Burns** depend on the yield: the pulse of a bigger burst is longer, and skin takes more of it. At 15 kt bare skin
   reddens out to about 3.4 km, blisters out to 2.6 km and burns through out to 2.1 km; a cotton shirt catches fire out
-  to 1.6 km (water puts it out). Clothes shield you only until they catch fire: burning clothes burn the skin beneath
+  to 1.6 km. Clothes shield you only until they catch fire: burning clothes burn the skin beneath
   them, so where a shirt catches fire a dressed player is burned over the whole side facing the fireball, like an animal.
   Farther out, only the face and arms burn. Iron armour stops the light; leather catches fire later than a shirt.
   Burns take a share of your health and keep it until they heal: two game weeks for blisters, five for deep burns.
   Deep burns over a quarter of the body, or blisters over 30 % of it, bring shock: you die within 12 game hours. Where
-  your clothes catch fire, that is shock; beyond, the flash burns a dressed player far less. Burning clothes keep
-  burning like any fire: get into water. Milk and potions do not heal burns.
+  your clothes catch fire, that is shock; beyond, the flash burns a dressed player far less. Milk and potions do not
+  heal burns.
 - **If you see a flash in the distance**, you have seconds before the wave arrives: get behind a slope, into a
   basement, into a pit.
 - **The flash blinds.** It dazzles everyone who sees the fireball, and more weakly everyone under the open sky it lights

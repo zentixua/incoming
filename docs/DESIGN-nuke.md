@@ -68,7 +68,8 @@ What differs from the design below, and why.
   injuries (`BlastInjuryTest`: G&D ch. 12 tables, dummy at 5.3 psi), eyes (`EyeInjuryTest`: 10 s at fig. 12.88 range,
   longer closer up to cap, longer at night, retinal-burn range). Burn GameTest `BurnGameTests` (batch `nuke_burns`):
   cow shock, shirted villager third-degree face/arm burns without ignition (same flash cannot hurt twice), shirt
-  ignites at 20 cal/cm², iron-armored pillager intact, leather burns, underwater cod intact; second detonation never
+  ignites at 20 cal/cm² and the side beneath burns to shock without vanilla fire, iron-armored pillager intact, leather
+  likewise, underwater cod intact; second detonation never
   postpones shock; shock deadline kills even with fire resistance.
 - `EyeGameTests` (batches `nuke_eyes*`): retinal burns where sphere lies on retina, none to side/behind, 40 km only at
   night; entity-light path accumulates up to 8 spots, none in creative; ridge 100 blocks away hides sphere at 2 km
@@ -452,7 +453,7 @@ Like Hiroshima photos: wood charred toward sphere, stone soot-darkened, light hu
   short-sleeve shirt/trousers (thin cotton), shoes (dense cloth); face/hands/forearms exposed, 9.9 % facing skin;
   animals/monsters whole facing side, 49.5 %. Leather armor dense cloth, others metal, blocks light. Fabric ignition
   table 7.35 (shirt cotton 14, dense 20 cal/cm² at 35 kt, higher at high yields; below 35 kt slope extrapolation,
-  (est.)): body burns 10–20 s, water extinguishes. Second/third-degree burns remove health fraction relative to
+  (est.)): ignited fabric stops shielding, the skin beneath burns (below). Second/third-degree burns remove health fraction relative to
   shock threshold (third on 25 % body, second on 30 %, §12.62); `nuclear_thermal` bypasses armor (already screened
   light), no knockback; wound/`incoming:burns` cap in 10 % steps rounded up (90 % to shock threshold stays 90 %), based
   on unburned health; invulnerability-blocked wound (respawn/hit) removed only by cap, only health above it. Cap holds
@@ -461,11 +462,12 @@ Like Hiroshima photos: wood charred toward sphere, stone soot-darkened, light hu
   in-game treatment, totem saves like any death). Second detonation burns same side, larger fraction wins, each burn
   own healing deadline (weaker new effect hidden under stronger old like vanilla), existing shock unchanged.
   Clothed flash burns face/arms only, 9.9 %, far from shock, until clothing ignites: ignited fabric stops shielding and
-  the skin beneath burns by the flash degree (flame burns under ignited clothes, §12.60), so the whole facing side, plus
-  Minecraft fire until extinguished. Undead/fire-immune/fire-resistance-potion entities do not burn; underwater light absorbed
+  the skin beneath burns by the flash degree (flame burns under ignited clothes, §12.60), so the whole facing side; no
+  vanilla fire on the body on top (it would kill the 1 HP shock leaves within a second, counting the flame twice).
+  Undead/fire-immune/fire-resistance-potion entities do not burn; underwater light absorbed
   (underwater eyes checked against world, not entity flag, set only by entity tick); golems/shulkers lack living skin.
-  Player-strike flash leaves rule-protected players entirely untouched (PvP off/friendly team), including self, no
-  clothing ignition, like arrows.
+  Player-strike flash leaves rule-protected players entirely untouched (PvP off/friendly team), including self, like
+  arrows.
 - **Eyes** (`model/EyeInjury`, `radiation/FlashEyes`, client `NukeFlash`; Glasstone & Dolan §12.83–12.88). Anchor fig.
   12.88: 10 s flashblindness/retinal-burn ranges for looking at sphere (10 000 ft burst, clear day/night), log yield.
   Temporary whole-field glare (client): full eye pulse if sphere visible (through windows too), sky-scattered 0.15
