@@ -633,6 +633,17 @@ float mushFilmShare(float roll) {
     return 1.0 - smoothstep(MUSH_FILM_ROLL_FROM, MUSH_FILM_ROLL_TO, roll);
 }
 
+// Visible-surface luminance through air (white wall = 1, unadapted) for the handoff to the old path (NukeExposure.LIT_*)
+const float MUSH_FILM_LIT_FROM = 1.0;
+const float MUSH_FILM_LIT_TO = 25.0;
+
+// Film-curve share with the cap still bright (NukeExposure.filmShare(roll, lit)): fire exposure stays while the surface
+// is brighter than 1–25 whites; rollup of a big yield comes before the cap dims, and sky exposure would re-blow the frame
+float mushFilmShareLit(float roll, float lit) {
+    float bright = smoothstep(log2(MUSH_FILM_LIT_FROM), log2(MUSH_FILM_LIT_TO), log2(max(lit, 1e-9)));
+    return max(mushFilmShare(roll), bright);
+}
+
 // Per-channel film curve (ACES, Narkowicz 2016 approximation): exposed light → linear 0..1
 float mushFilm(float x) {
     float v = max(x, 0.0);

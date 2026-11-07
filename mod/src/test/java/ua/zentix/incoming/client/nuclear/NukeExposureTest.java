@@ -212,7 +212,7 @@ class NukeExposureTest {
                     if (fromCarpet > 0.0) source = mix(source, carpetLight, fromCarpet); hot = st * thermal * (1.0 - fromCarpet);
                     float key = dot(mushBlackBody(Sampler7, m.tAmb + m.dT * m.edge), LUMA) * PallExposure * pallAir(PallAir, length(p), gDir.y);
                     glow = hot * mushBallGain(key, PallExposure); float roll = clamp(m.ringR / max(MUSH_RING * m.capR, 1.0), 0.0, 1.0);
-                    film = dot(hot, LUMA) * mushFilmShare(roll); return vec4(st * source, st); }
+                    film = dot(hot, LUMA) * mushFilmShareLit(roll, key / max(PallExposure, 1e-9)); return vec4(st * source, st); }
                     """),
             new Block("mushStep", "vec4 mushStep(", "// ----", """
                     vec4 mushStep(float t, float cone, out float gap, out vec3 heat, out vec3 glow, out float film) { vec4 sum = vec4(0.0);
@@ -281,7 +281,7 @@ class NukeExposureTest {
         String[][] mutations = {
                 {"filmed += part * film;", "filmed += part * 0.0;", "main (ray accumulation)"},
                 {"vec3 shown = pallShown(light + heat, cover);", "vec3 shown = pallShown(light, cover);", "main (pixel assembly)"},
-                {"film = dot(hot, LUMA) * mushFilmShare(roll);", "film = dot(hot, LUMA);", "mushAt (glow)"},
+                {"film = dot(hot, LUMA) * mushFilmShareLit(roll, key / max(PallExposure, 1e-9));", "film = dot(hot, LUMA) * mushFilmShare(roll);", "mushAt (glow)"},
                 {"vec3(1.0)), film);", "vec3(1.0)), 1.0 - film);", "main (pixel assembly)"},
                 {"heat += partHeat;", "heat += partGlow;", "mushStep"},
                 {"medium += vec3(CROSS * max(dot(medium, LUMA) - 1.0, 0.0));", "", "pallShown"}};
@@ -432,5 +432,52 @@ class NukeExposureTest {
     private static double flash(double distM) {
         double r = FireballModel.maxRadius(15, false);
         return BlackBody.luminance(FireballModel.PEAK_K) * r * r / Math.max(distM * distM, r * r) * ThermalModel.transmittance(distM, Visibility.CLEAR);
+    }
+
+    /**
+     * Highest frame exposure of the cap surface from 2 s to 2 min (seen × camera gain, the glare input in
+     * {@code NukeRenderer.fireballs}): {@code ground} m from ground zero, airburst at 240·∛Y m or surface burst.
+     */
+    private static double handoffExposure(double yieldKt, boolean surface, double ground, double adapt) {
+        double hob = surface ? 0 : 240 * Math.cbrt(yieldKt), max = 0;
+        for (double t = 2; t < 120; t += 0.05) {
+            double h = FireballModel.centreHeight(t, hob, yieldKt, surface);
+            double lit = BlackBody.luminance(MushroomModel.edgeTemperature(t, yieldKt, surface))
+                    * ThermalModel.transmittance(Math.hypot(ground, h), Visibility.CLEAR);
+            double seen = lit * adapt, film = NukeExposure.filmShare(MushroomModel.rollUp(t, yieldKt, surface), lit);
+            max = Math.max(max, seen * (film * NukeExposure.gain(seen, adapt) + 1 - film));
+        }
+        return max;
+    }
+
+    /**
+     * The camera hands the cap to sky exposure only once its surface has dimmed ({@link NukeExposure#filmShare(double, double)}):
+     * 0.1–15 kt keep the ring-share handoff exactly, and from 50 kt to 1 Mt the handoff never blows the frame more than twice
+     * as much as 15 kt at 1 km does. Before, rollup came while a big cap was still bright: a 250 kt cap at 2.2 km was exposed
+     * ×23 at 10 s (glare from 18° to 40° around the ball), 1 Mt ×80.
+     */
+    @Test
+    void bigCapsDoNotBlowTheFrameAgainAtRollup() {
+        for (double y : new double[]{0.1, 1, 5, 15}) {
+            for (boolean surface : new boolean[]{false, true}) {
+                for (double t = 0; t < 120; t += 0.01) {
+                    double roll = MushroomModel.rollUp(t, y, surface);
+                    double lit = BlackBody.luminance(MushroomModel.edgeTemperature(t, y, surface));
+                    assertEquals(NukeExposure.filmShare(roll), NukeExposure.filmShare(roll, lit), 1e-12, y + " kt at " + t + " s");
+                }
+            }
+        }
+        for (double adapt : new double[]{DAY, NIGHT}) {
+            double reference = handoffExposure(15, false, 1000, adapt);
+            for (double y : new double[]{50, 100, 250, 500, 1000}) {
+                for (boolean surface : new boolean[]{false, true}) {
+                    for (double ground : new double[]{1000, 2200, 4000, 8000, 16000}) {
+                        double x = handoffExposure(y, surface, ground, adapt);
+                        assertTrue(x <= 2 * reference, String.format(Locale.ROOT, "%s kt %s at %.0f m, adapt %.0f: ×%.1f, 15 kt ×%.1f",
+                                y, surface ? "surface" : "air", ground, adapt, x, reference));
+                    }
+                }
+            }
+        }
     }
 }

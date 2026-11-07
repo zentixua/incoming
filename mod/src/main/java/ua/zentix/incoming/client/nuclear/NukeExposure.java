@@ -70,6 +70,30 @@ public final class NukeExposure {
         return 1 - u * u * (3 - 2 * u);
     }
 
+    /**
+     * Visible-surface luminance through the air (white wall at noon = 1, without eye adaptation) between which the camera
+     * hands the cap from fire exposure to the previous path ({@link #filmShare(double, double)}): at 1 white the two
+     * exposures nearly agree by day ({@link #gain} ≈ 0.4), so the handoff cannot make the day frame brighter; at night
+     * the eye-adapted old path stays far brighter, as for 15 kt, and the handoff is no worse than there. Upper end chosen
+     * so that 0.1–15 kt keep the ring-share handoff exactly ({@code NukeExposureTest}); presentation.
+     */
+    public static final double LIT_FROM = 1, LIT_TO = 25;
+
+    /**
+     * Film-curve share for a cap whose visible surface has luminance {@code lit} through the air (white wall at noon = 1,
+     * without eye adaptation; {@code mushFilmShareLit}): the ring share ({@link #filmShare(double)}), but the camera stays
+     * exposed for fire while the surface is still brighter than {@link #LIT_FROM}–{@link #LIT_TO} whites. Rollup is
+     * buoyancy time (∝ √R ∝ Y^0.2) and cooling is pulse time (∝ Y^0.44): up to 15 kt the ball has dimmed below 25 whites
+     * before rollup, but a 250 kt cap at rollup is still ~100 whites and 1 Mt ~500, and the handoff back to sky exposure
+     * re-blew the frame: glare from 18° to 40° around the ball 9–13 s after a 250 kt burst at 2.2 km, while the ball
+     * only cooled.
+     */
+    public static double filmShare(double roll, double lit) {
+        double from = Math.log(LIT_FROM) / Math.log(2), to = Math.log(LIT_TO) / Math.log(2);
+        double u = Math.max(0, Math.min(1, (Math.log(Math.max(lit, 1e-9)) / Math.log(2) - from) / (to - from)));
+        return Math.max(filmShare(roll), u * u * (3 - 2 * u));
+    }
+
     /** Per-channel film curve (ACES, Narkowicz 2016 approximation): input is exposed light, output linear 0..1. */
     public static double film(double x) {
         double v = Math.max(x, 0);
