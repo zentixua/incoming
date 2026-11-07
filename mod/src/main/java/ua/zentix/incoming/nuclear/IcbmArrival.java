@@ -13,9 +13,9 @@ public record IcbmArrival(int strikeId, long start, long end, Detonation geometr
     /**
      * Visible entry, ticks: a real warhead glows from ~{@link #ONSET} m for ~30 s ({@code ReentryGlow}); at game speed
      * the same 30 s start lower (≈14 km at 25 blocks/tick and the steep game path, not physical). {@link #BOOST}: the
-     * warhead never appears while the first stage still burns over the launch site ({@code IcbmEntity}); the default
-     * 90 s flight leaves 29 s;
-     * flights under 61 s show no fall (the burst comes while the stage still burns).
+     * warhead never appears while the first stage still burns over the launch site ({@code IcbmEntity}). A flight
+     * shorter than {@code BOOST + WINDOW} shares its time between the two in the same proportion ({@link #boost}), so
+     * launch, flight and impact all stay visible (default 90 s: 60.3 s climb, 29.7 s fall).
      */
     public static final int WINDOW = 600, BOOST = ua.zentix.incoming.strike.WeaponSpec.NUKE.ascent().burnTicks();
     /** Luminous entry onset above the burst, m (est.: plasma glow begins in the upper atmosphere, ~80 km). */
@@ -42,7 +42,16 @@ public record IcbmArrival(int strikeId, long start, long end, Detonation geometr
     }
 
     private static long start(long launch, long end, int window) {
-        return end - Math.min(window, Math.max(0, end - launch - BOOST));
+        long flight = Math.max(0, end - launch);
+        return end - Math.min(window, flight - boost(flight));
+    }
+
+    /**
+     * First-stage climb shown for a launch-to-burst flight of {@code flight} ticks ({@code IcbmEntity}): the whole burn,
+     * or for a shorter flight the burn's share of {@code BOOST + WINDOW}, the rest left for the warhead's fall.
+     */
+    public static int boost(long flight) {
+        return (int) Math.min(BOOST, Math.max(0, flight) * BOOST / (BOOST + WINDOW));
     }
 
     /** Same steep game direction as the previous graphic; no researched guidance or trajectory model. */

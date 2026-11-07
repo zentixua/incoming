@@ -31,6 +31,9 @@ public class IcbmEntity extends StrikeProjectile {
     /** Real path angle above the horizon by boost tick (gravity turn), °. */
     private static final float[] CLIMB = ASCENT.pathAngles();
 
+    /** Age at which the climb ends: first-stage burnout, earlier for a short strike ({@code IcbmArrival#boost}). */
+    private int burnout = ASCENT.burnTicks();
+
     public IcbmEntity(EntityType<? extends IcbmEntity> type, Level level) {
         super(type, level);
     }
@@ -51,8 +54,14 @@ public class IcbmEntity extends StrikeProjectile {
         return true;
     }
 
-    /** Place on the launch pad nose up. */
+    /** Place on the launch pad nose up; climbs for the whole first-stage burn. */
     public void prepare(Vec3 pad, Vec3 target, @Nullable UUID owner) {
+        prepare(pad, target, owner, ASCENT.burnTicks());
+    }
+
+    /** Place on the launch pad nose up; the climb ends after {@code burnout} ticks (at most the whole burn). */
+    public void prepare(Vec3 pad, Vec3 target, @Nullable UUID owner, int burnout) {
+        this.burnout = Math.min(burnout, ASCENT.burnTicks());
         super.launch(pad.add(0, 9, 0), new Target.Point(target), target, owner);
         float[] a = FlightController.anglesTo(pad, target);
         flight.set(a[0], -89);
@@ -69,9 +78,9 @@ public class IcbmEntity extends StrikeProjectile {
 
     @Override
     protected void serverTick(ServerLevel level) {
-        // First-stage burnout (or range exhaustion): the “strike” flies on (NuclearStrikes); the spent stage and the
+        // First-stage burnout (earlier for a short strike, or range exhaustion): the “strike” flies on (NuclearStrikes); the spent stage and the
         // second stage are a faint point 22 km up, not drawn.
-        if (age >= ASCENT.burnTicks() || exhausted()) {
+        if (age >= burnout || exhausted()) {
             discard();
             return;
         }
@@ -86,6 +95,23 @@ public class IcbmEntity extends StrikeProjectile {
         // Ahead chunk follows heading over ground: the missile is almost vertical, so a chunk “16 blocks ahead along the nose” would be
         // only a couple of horizontal blocks away; it would enter the next chunk before entities start ticking there.
         moveAlong(level, next, Vec3.directionFromRotation(0, flight.yaw()));
+    }
+
+    /** Age at which the climb ends, ticks. */
+    public int burnout() {
+        return burnout;
+    }
+
+    @Override
+    protected void readAdditionalSaveData(net.minecraft.nbt.CompoundTag tag) {
+        super.readAdditionalSaveData(tag);
+        burnout = tag.contains("burnout") ? Math.min(tag.getInt("burnout"), ASCENT.burnTicks()) : ASCENT.burnTicks();
+    }
+
+    @Override
+    protected void addAdditionalSaveData(net.minecraft.nbt.CompoundTag tag) {
+        super.addAdditionalSaveData(tag);
+        tag.putInt("burnout", burnout);
     }
 
     @Override

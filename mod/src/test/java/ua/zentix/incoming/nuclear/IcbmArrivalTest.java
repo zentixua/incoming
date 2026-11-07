@@ -30,8 +30,20 @@ class IcbmArrivalTest {
             assertTrue(start >= 12345);
             assertTrue(start <= end);
             assertTrue(end - start <= IcbmArrival.WINDOW);
-            assertTrue(start >= Math.min(end, 12345 + IcbmArrival.BOOST)); // never while the first stage burns
+            assertTrue(start >= 12345 + IcbmArrival.boost(duration)); // never while the first stage climbs
+            if (duration >= 200) assertTrue(end - start > 40, duration + " ticks: fall " + (end - start)); // and always a visible fall
         }
+    }
+
+    @Test void shortFlightsShareTheirTimeBetweenClimbAndFall() {
+        assertEquals(IcbmArrival.BOOST, IcbmArrival.boost(IcbmArrival.BOOST + IcbmArrival.WINDOW));
+        assertEquals(IcbmArrival.BOOST, IcbmArrival.boost(72_000));
+        int def = IcbmArrival.boost(1800);
+        assertTrue(def > IcbmArrival.BOOST - 20, "default flight climbs " + def); // about the whole minute
+        int s = IcbmArrival.boost(200);
+        assertTrue(s > 100 && s < 150, "200-tick flight climbs " + s);
+        long end = 200, start = IcbmArrival.start(0, end, new Vec3(0, -25, 0));
+        assertEquals(s, start); // the fall begins as the climb ends
     }
 
     @Test void visibleEntryLastsHalfAMinuteAtGameSpeedAndStartsNoHigherThanTheLuminousOnset() {

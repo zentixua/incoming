@@ -89,7 +89,7 @@ public final class NuclearStrikes {
         Vec3 pad = new Vec3(x + 0.5, Terrain.height(level, Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z), z + 0.5);
         IcbmEntity icbm = ModEntities.ICBM.get().create(level);
         if (icbm == null) return false;
-        icbm.prepare(pad, target, owner);
+        icbm.prepare(pad, target, owner, IcbmArrival.boost(flightTicks));
         if (!level.addFreshEntity(icbm)) return false;
         schedule(level, target, surface, yieldKt, airBurst, pad, owner, flightTicks);
         return true;
