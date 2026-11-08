@@ -1617,6 +1617,51 @@ float mushEyeTau(vec3 dir, float t) {
     return tau;
 }
 
+// Whirls on ray dir before the world at distance scene: spans (gWhirlSpan, entry ≥ exit: miss) and the local light of each,
+// taken once at the span's middle (lit: pall diffuse and sun through pall above it; fire: fire glow below), for the ray (whirl)
+// and the near volume's cells on it (whirlCell) alike; a cell (at ≥ 0) lights only the whirls it lies in. Needs pallLighting(dir)
+vec2 gWhirlSpan[4];
+mat4 gWhirlLit, gWhirlFire;
+
+void whirlSetup(vec3 dir, float scene, float at) {
+    vec3 sunDir = PallSun.xyz;
+    gWhirlLit = mat4(0.0);
+    gWhirlFire = mat4(0.0);
+    for (int i = 0; i < 4; i++) {
+        vec2 sp = whirlSpan(i, dir);
+        sp.y = min(sp.y, scene);
+        gWhirlSpan[i] = sp;
+        if (sp.y <= sp.x || (at >= 0.0 && (at < sp.x || at > sp.y))) continue;
+        vec3 mid = dir * (0.5 * (sp.x + sp.y));
+        Sample m = emptySample();
+        slot(PallSlot0, PallWall0, Sampler5, PallGround0, PallWater0, PallGlow0, PallHot0, mid, sunDir, dir, 1e9, vec4(0.0), m);
+        slot(PallSlot1, PallWall1, Sampler6, PallGround1, PallWater1, PallGlow1, PallHot1, mid, sunDir, dir, 1e9, vec4(0.0), m);
+        vec3 sun = pallSunAt(mid);
+        vec3 lit = scattered(m, PALL_SOOT_G * gMv, sun) + sun * (gSootSun * exp(-m.tau / gMuS));
+        float g0 = storm(Sampler3, PallSlot0, PallFire0, mid, 0.0, 1.0).y, g1 = storm(Sampler4, PallSlot1, PallFire1, mid, 0.0, 1.0).y;
+        vec3 strongest = g0 >= g1 ? PallFire0[3].rgb : PallFire1[3].rgb;
+        vec3 glow = pallFlame(PallBase, g0 * PallFire0[3].rgb + g1 * PallFire1[3].rgb, strongest);
+        gWhirlLit[i] = vec4(lit, 0.0);
+        gWhirlFire[i] = vec4(burnt(m, PALL_SOOT_G * gMv) + glow, 0.0);
+    }
+}
+
+// Whirls at eye-relative point q = dir · t (whirlSetup on dir): emission per path block (rgb) and extinction (a), as one
+// step of whirl takes them
+vec4 whirlCell(vec3 q, float t, vec3 flame) {
+    vec4 sum = vec4(0.0);
+    for (int i = 0; i < 4; i++) {
+        if (t < gWhirlSpan[i].x || t > gWhirlSpan[i].y) continue;
+        vec2 w = whirlAt(i, q);
+        if (w.x + w.y <= 1e-6) continue;
+        float yn = (q.y - PallWhirlPos[i].z) / PallWhirlShape[i].x;
+        float heat = 2.0 * PallWhirlLean[i].z * PallWhirlShape[i].y * (1.0 - yn) * (1.0 - yn);
+        vec3 sc = SOOT_LINEAR * (gWhirlLit[i].rgb + min(gWhirlFire[i].rgb + pallFlame(PallBase, WHIRL_FIRE * heat, WHIRL_FIRE), flame));
+        sum += vec4(sc * w.x + WHIRL_FIRE_LINEAR * w.y, w.x);
+    }
+    return sum;
+}
+
 #if !defined(PALL_FROXEL) && !defined(PALL_FROXEL_SUM)
 #ifndef PALL_MUSH_TAUS
 #ifndef PALL_FOOT_CACHE
@@ -1674,22 +1719,14 @@ void main() {
     gFootSpan0 = gFootSpan1 = vec2(1.0, 0.0);
     gWhirlLight = mat4(0.0);
     gWhirlIn = vec4(1e9);
+    whirlSetup(dir, scene, -1.0);
     for (int i = 0; i < 4; i++) {
-        vec2 sp = whirlSpan(i, dir);
-        sp.y = min(sp.y, scene);
-        if (sp.y <= sp.x) continue;
-        // local light: pall diffuse and sun through pall above midpoint, fire glow below
-        vec3 mid = dir * (0.5 * (sp.x + sp.y));
-        Sample m = emptySample();
-        slot(PallSlot0, PallWall0, Sampler5, PallGround0, PallWater0, PallGlow0, PallHot0, mid, sunDir, dir, 1e9, vec4(0.0), m);
-        slot(PallSlot1, PallWall1, Sampler6, PallGround1, PallWater1, PallGlow1, PallHot1, mid, sunDir, dir, 1e9, vec4(0.0), m);
-        vec3 sun = pallSunAt(mid);
-        vec3 lit = scattered(m, PALL_SOOT_G * gMv, sun) + sun * (gSootSun * exp(-m.tau / gMuS));
-        float g0 = storm(Sampler3, PallSlot0, PallFire0, mid, 0.0, 1.0).y, g1 = storm(Sampler4, PallSlot1, PallFire1, mid, 0.0, 1.0).y;
-        vec3 strongest = g0 >= g1 ? PallFire0[3].rgb : PallFire1[3].rgb;
-        vec3 glow = pallFlame(PallBase, g0 * PallFire0[3].rgb + g1 * PallFire1[3].rgb, strongest);
-        gWhirlLight[i] = whirl(i, dir, sp.x, sp.y, jitter, lit, burnt(m, PALL_SOOT_G * gMv) + glow, whirlFlame);
-        gWhirlIn[i] = sp.x;
+        // whirls nearer than the near volume's far boundary are that volume's (fx_pall_froxel); this ray takes the rest
+        float a = gWhirlSpan[i].x;
+        if (PallFroxel.z > 0.0) a = max(a, PallFroxel.z / axis);
+        if (gWhirlSpan[i].y <= a) continue;
+        gWhirlLight[i] = whirl(i, dir, a, gWhirlSpan[i].y, jitter, gWhirlLit[i].rgb, gWhirlFire[i].rgb, whirlFlame);
+        gWhirlIn[i] = a;
     }
     // Wilson cloud: up to two shell crossings per slot, likewise when step reaches crossing (before world behind pixel)
     vec4 w0 = pallWilson(PallSlot0, PallWilson0, dir, scene), w1 = pallWilson(PallSlot1, PallWilson1, dir, scene);
@@ -2017,6 +2054,9 @@ void main() {
             if (r.w > 1e-7) cur += r;
         }
     }
+    // fire whirls likewise: the rays would add a whirl nearer than the far boundary behind this volume's whole depth
+    whirlSetup(dir, 1e9, t);
+    cur += whirlCell(p, t, max(gFlame, WHIRL_FIRE_LINEAR));
     if (!pallValid(vec4(cur.rgb, 0.0)) || !(cur.w >= 0.0 && cur.w < 6.0e4)) cur = vec4(0.0);
     vec4 res = cur;
     if (PallFroxelFrame.w > 0.5) {
