@@ -147,13 +147,13 @@ public final class PallPass {
     /**
      * Detail rungs from HIGH down: each costs 0.5 to 0.85 of the previous one. Rays thin out by interleave before the
      * frame coarsens: the same rays per frame at half frame and n = 2 as at quarter frame, but a still view keeps the
-     * half-frame detail. Step count and interleave change without a new history; factor changes recreate the
-     * reduced-resolution frames (history restarts).
+     * half-frame detail. Step count and interleave change without a new history. The frame never drops below half: rungs
+     * at a third and a quarter of the frame (Artem's laptop 08.11, 2560×1600: 1–3 ms) drew distant ridges as stairs of
+     * 8–16-pixel blocks and grain on everything far; the floor, half frame with 1/16 of the rays, costs 3.4–4.4 ms there.
      */
     static final Step[] LADDER = {new Step(2, 48, 1), new Step(2, 36, 1), new Step(2, 28, 1), new Step(2, 22, 1),
             new Step(2, 64, 2), new Step(2, 48, 2), new Step(2, 36, 2), new Step(2, 28, 2), new Step(2, 22, 2),
-            new Step(2, 36, 3), new Step(2, 28, 3), new Step(2, 22, 3), new Step(2, 28, 4), new Step(2, 22, 4),
-            new Step(3, 26, 4), new Step(3, 20, 4), new Step(4, 24, 4), new Step(4, 20, 4)};
+            new Step(2, 36, 3), new Step(2, 28, 3), new Step(2, 22, 3), new Step(2, 28, 4), new Step(2, 22, 4)};
 
     /**
      * Ray pixel of each n × n block per frame, in turn (n = 1–4): far apart in consecutive frames (ordered dither), so a
@@ -170,8 +170,12 @@ public final class PallPass {
      * pinned ({@link #pin}) — setting rung, unaffected by measurements. No world or OpenGL — unit test.
      */
     static final class Detail {
-        /** Per-frame GPU pall budget, ms. */
-        static final double BUDGET_MS = 2;
+        /**
+         * Per-frame GPU pall budget, ms: about a quarter of a 60 FPS frame while the player is in the dust, for a view
+         * nothing else in the game draws (Artem 08.11: balance leaning to the picture; 2 ms kept his laptop on the coarsest
+         * rungs). A view the floor rung cannot fit stays at the floor.
+         */
+        static final double BUDGET_MS = 4;
         static final double UP_SHARE = 0.7;
         static final long WINDOW_NS = 500_000_000L, HOLD_NS = 3_000_000_000L;
         static final int MIN_SAMPLES = 4, CALM_WINDOWS = 2;
@@ -759,6 +763,10 @@ public final class PallPass {
         RenderSystem.setShaderTexture(1, TEXTURES[1 + latest]);
         RenderSystem.setShaderTexture(2, scene);
         RenderSystem.setShaderTexture(3, mushrooms);
+        // the previous frame's world distances: history taken only where it came from the same place
+        int before = SceneDepth.previous();
+        RenderSystem.setShaderTexture(4, before >= 0 ? before : scene);
+        r.safeGetUniform("PallPrevScene").set(before >= 0 ? 1f : 0f);
         r.safeGetUniform("InvViewProj").set(INVERSE);
         r.safeGetUniform("PrevViewProj").set(PREVIOUS);
         r.safeGetUniform("PallForward").set(FORWARD.x, FORWARD.y, FORWARD.z);

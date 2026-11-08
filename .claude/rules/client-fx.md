@@ -452,12 +452,16 @@ paths:
   stability to shift in both settings. The nuclear ball (the pall's volume) does not glow here. Time — the layer's line
   (`bloom`).
 - Nuclear dust pall (`fx/layer/PallPass`) — a volume in the same stage of the layer, before the squares: rays per frame
-  are a factor of 2–4 coarser per axis (`fx_pall`), and on lower rungs interleaved: one ray pixel of every n × n block
-  per frame (n up to 4, `Step.interleave`, order `ORDER`), the others keep their reprojected history; accumulation over
-  frames with transfer by world depth (`fx_pall_resolve`): a pixel taking a ray keeps history weight 0.9 for any n (with
-  0.9^n² it showed nearly one jittered ray: grain on thin lobes against the sky), and history moves 1/n of the way to the
-  bounds of the neighbour rays per frame (snapped, a whole block took one frame's chance bound: square tiles), but
-  outright at an object edge (a neighbour ray at another place: no trail behind a silhouette); a pixel without history
+  are a factor of 2 coarser per axis (`fx_pall`; never coarser: a third and a quarter drew distant ridges as stairs and
+  grain on Artem's laptop 08.11, budget `Detail.BUDGET_MS` 4 ms), and on lower rungs interleaved: one ray pixel of every
+  n × n block per frame (n up to 4, `Step.interleave`, order `ORDER`), the others keep their reprojected history;
+  accumulation over frames with transfer by world depth (`fx_pall_resolve`): a pixel taking a ray keeps history weight 0.9
+  for any n (with 0.9^n² it showed nearly one jittered ray: grain on thin lobes against the sky), and history moves 1/n of
+  the way to the bounds of the neighbour rays per frame (snapped, a whole block took one frame's chance bound: square
+  tiles). History is taken only from history pixels that saw the same place: their previous-frame world distance
+  (`SceneDepth.previous`, `Sampler4`) against this point's distance from the previous eye (`placed`, standard TAA depth
+  rejection). The edge heuristic alone (clamp outright at an object edge) missed edges the frame's rays did not catch:
+  a tree passed in flight and the hand left trails; it remains only without previous distances; a pixel without history
   takes the same-place rays weighted by screen distance (the nearest alone left n × n blocks for seconds). The
   march's viewport is the ray cells; the accumulation sets the whole reduced frame itself. Mushroom mean optical depths
   (up, down, away from the eye, sunward past the billow layer, away from the sun, toward and away from the ball) are

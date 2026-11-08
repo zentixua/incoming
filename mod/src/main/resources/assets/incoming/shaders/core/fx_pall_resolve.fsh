@@ -31,6 +31,10 @@ uniform sampler2D Sampler1;
 uniform sampler2D Sampler2;
 // frame mushrooms (mushroom.glsl)
 uniform sampler2D Sampler3;
+// previous frame's pixel world distance along its view axis (SceneDepth.previous), full resolution
+uniform sampler2D Sampler4;
+// 1: Sampler4 holds the previous frame's distances; 0: none (first frame, size change)
+uniform float PallPrevScene;
 
 uniform mat4 InvViewProj;
 uniform mat4 PrevViewProj;
@@ -49,6 +53,35 @@ uniform vec4 PallInterleave;
 uniform float PallClamp;
 
 out vec4 fragColor;
+
+// History at history-frame lattice point at (bilinear between its four pixels), only from the pixels that saw the same place
+// as this pixel: each pixel's world distance in the previous frame (Sampler4 at its ray pixel, carried to the history point
+// along its surface, pallAhead) against the distance this pixel's world point had from the previous eye (expect; far: the
+// point is past the reprojection reach, so anything as far counts). An object that moved off a pixel (a tree passed in
+// flight, the hand, a mob) leaves history of another place there; held against the rays around, interleaved rays pulled it
+// away only 1/n per frame, a trail behind every silhouette. Taken weight: how much of the bilinear footprint was the same
+// place (0: none — the pixel restarts from its rays).
+vec4 placed(vec2 at, vec2 point, ivec2 fullSize, float expect, bool far, out float taken) {
+    ivec2 size = textureSize(Sampler1, 0);
+    vec2 b = floor(at), f = at - b;
+    vec4 sum = vec4(0.0);
+    taken = 0.0;
+    for (int j = 0; j <= 1; j++) {
+        for (int i = 0; i <= 1; i++) {
+            ivec2 t = clamp(ivec2(b) + ivec2(i, j), ivec2(0), size - 1);
+            float w = mix(1.0 - f.x, f.x, float(i)) * mix(1.0 - f.y, f.y, float(j));
+            vec4 v = texelFetch(Sampler1, t, 0);
+            if (w <= 0.0 || !pallValid(v)) continue;
+            ivec2 q = clamp(ivec2((vec2(t) + 0.5) * PallFrame.z), ivec2(0), fullSize - 1);
+            float d = pallScene(texelFetch(Sampler4, q, 0).r);
+            float there = pallAhead(d, pallSlope(Sampler4, q, fullSize, d), point - (vec2(q) + 0.5));
+            float same = far ? step(0.9 * PallFrame.w, there) : step(0.2, pallAlike(there, expect));
+            sum += w * same * v;
+            taken += w * same;
+        }
+    }
+    return taken > 0.0 ? sum / taken : vec4(0.0);
+}
 
 void main() {
     ivec2 px = ivec2(gl_FragCoord.xy);
@@ -146,12 +179,20 @@ void main() {
     // history uses same ray lattice (pallLattice), otherwise even a still view samples between pixels and
     // blurs history with neighbors each frame
     vec2 lattice = vec2(pallLattice(uv.x * float(fullSize.x), PallFrame.z), pallLattice(uv.y * float(fullSize.y), PallFrame.z));
-    vec4 past = seen ? texture(Sampler1, (lattice + 0.5) / vec2(textureSize(Sampler1, 0))) : vec4(0.0);
-    bool pastOk = seen && pallValid(past) && all(lessThanEqual(lo, hi));
-    // at an object edge history may come from the other side of it (parallax, a mob crossing the dust): clamped outright
-    // there, as without interleaving, or it would trail the silhouette for frames
+    // reprojected by this pixel's world point (not a mushroom or smoke midpoint): history only from the same place (placed);
+    // otherwise, or without the previous frame's distances, bilinear, and at an object edge clamped outright, as without
+    // interleaving, since history there may come from the other side of it (parallax, a mob crossing the dust)
+    bool byWorld = near >= 1e8 && PallPrevScene > 0.5;
+    vec4 past = vec4(0.0);
+    float taken = 1.0;
+    if (seen && byWorld) {
+        past = placed(lattice, uv * vec2(fullSize), fullSize, prev.w, scene >= PallFrame.w, taken);
+    } else if (seen) {
+        past = texture(Sampler1, (lattice + 0.5) / vec2(textureSize(Sampler1, 0)));
+    }
+    bool pastOk = seen && taken > 0.0 && pallValid(past) && all(lessThanEqual(lo, hi));
     float pull = PallClamp;
-    if (edge) pull = 1.0;
+    if (edge && !byWorld) pull = 1.0;
     vec4 held = mix(past, clamp(past, lo, hi), pull);
     if (!curOk) {
         // between rays (or an invalid ray): history held to the rays around it; none — the nearest such ray

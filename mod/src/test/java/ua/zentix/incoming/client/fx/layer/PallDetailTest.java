@@ -11,6 +11,8 @@ class PallDetailTest {
     private static final long MS = 1_000_000L;
     /** Lowest rung (below the LOW setting: fewer rays per frame). */
     private static final int LOW = PallPass.LADDER.length - 1;
+    /** GPU time as a share of the budget, ms. */
+    private static final double B = PallPass.Detail.BUDGET_MS;
 
     /** Frames of 16 ms with one time on the GPU, {@code frames} pieces; watch - in {@code clock[0]}. */
     private static void frames(PallPass.Detail d, double gpuMs, int frames, long[] clock) {
@@ -32,10 +34,12 @@ class PallDetailTest {
         double old = 20 / 16.0, cost = PallPass.LADDER[low].cost();
         assertTrue(cost >= 0.9 * old && cost <= 1.15 * old, "LOW: " + cost);
         assertEquals(-1, PallPass.Quality.OFF.step());
+        // never below half frame: coarser frames drew distant ridges as stairs of 8–16-pixel blocks (Artem's laptop 08.11)
+        for (PallPass.Step step : PallPass.LADDER) assertEquals(2, step.factor(), "frame below half: " + step.describe());
         for (int i = 1; i < PallPass.LADDER.length; i++) {
             double ratio = PallPass.LADDER[i].cost() / PallPass.LADDER[i - 1].cost();
             assertTrue(ratio >= 0.5 && ratio < 0.9, "step " + i + ": " + ratio);
-            assertTrue(PallPass.LADDER[i].factor() <= 4 && PallPass.LADDER[i].steps() >= 20 && PallPass.LADDER[i].interleave() <= 4, "below the floor");
+            assertTrue(PallPass.LADDER[i].steps() >= 20 && PallPass.LADDER[i].interleave() <= 4, "below the floor");
         }
     }
 
@@ -80,9 +84,9 @@ class PallDetailTest {
         PallPass.Detail d = new PallPass.Detail();
         long[] clock = {0};
         d.ceiling(PallPass.Quality.MEDIUM.step());
-        frames(d, 3.5, 40, clock);
-        assertTrue(d.level > PallPass.Quality.MEDIUM.step(), "3,5 ms with budget 2 - lower");
-        assertTrue(d.level < LOW, "3,5 ms - not immediately until LOW");
+        frames(d, 1.75 * B, 40, clock);
+        assertTrue(d.level > PallPass.Quality.MEDIUM.step(), "1.75 budgets - lower");
+        assertTrue(d.level < LOW, "1.75 budgets - not immediately down to the floor");
         frames(d, 150, 200, clock);
         assertEquals(LOW, d.level);
         frames(d, 150, 200, clock);
@@ -96,26 +100,26 @@ class PallDetailTest {
         long[] clock = {0};
         int medium = PallPass.Quality.MEDIUM.step();
         d.ceiling(medium);
-        frames(d, 1.8, 200, clock);
-        assertEquals(medium, d.level, "1,8 ms - in budget");
-        frames(d, 6, 40, clock);
+        frames(d, 0.9 * B, 200, clock);
+        assertEquals(medium, d.level, "0.9 budget - in budget");
+        frames(d, 3 * B, 40, clock);
         int down = d.level;
         assertTrue(down > medium);
         // the reserve is large, but after descent there is a pause
-        frames(d, 0.2, 60, clock);
+        frames(d, 0.1 * B, 60, clock);
         assertEquals(down, d.level, "does not rise immediately after descent");
-        frames(d, 0.2, 400, clock);
+        frames(d, 0.1 * B, 400, clock);
         assertTrue(d.level < down, "stock - up");
-        frames(d, 0.2, 4000, clock);
+        frames(d, 0.1 * B, 4000, clock);
         assertEquals(medium, d.level, "no higher than setting");
-        // at the lower stages 1,9 ms; a step higher in price will not fit into the budget 0,7 - it’s worth it
+        // at the lower stages 0.95 budget; a step higher in price will not fit into 0.7 budget - it stays
         d.ceiling(PallPass.Quality.HIGH.step());
         assertEquals(0, d.level, "new setting - immediately its level");
-        frames(d, 3, 40, clock);
+        frames(d, 1.5 * B, 40, clock);
         assertTrue(d.level > 0);
-        frames(d, 1.9, 100, clock);
+        frames(d, 0.95 * B, 100, clock);
         int level = d.level;
-        frames(d, 1.9, 2000, clock);
+        frames(d, 0.95 * B, 2000, clock);
         assertEquals(level, d.level);
     }
 
