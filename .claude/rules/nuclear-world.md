@@ -143,7 +143,8 @@ paths:
   above 75 % stop prebuilding plans (“no more ruins are pre-built”), and the zone behind the wave loads only chunks
   with ready plans (loading nothing would waste ready plans; GameTest `heapStopZoneLoadsOnlyPlanned`); after detonation,
   the zone behind the wave loads the ≥ 5 psi heavy zone in 5×5 squares following the front (a square's tickets for
-  chunks not in memory follow `ChunkLoadPace`, `work.md`: six squares of 25 disk loads decoded in one gap between ticks) — each square's chunk whose
+  chunks not in memory follow `ChunkLoadPace`, `work.md`: before it, six new squares could put 150 disk loads and their
+  neighbors into one gap between ticks; after a heap stop a partly held square takes only chunks with ready plans) — each square's chunk whose
   5×5 ruin window is whole on disk (`DiskStatus.State.WHOLE`: `chunkScanner` header; 1.17 retrogen chunks cannot load
   without generation, so disk plans wait for players or distant LODs) or in memory, via its own level-33 load-only,
   non-ticking ticket (vanilla loads it without generation, `ChunkGenerationTask.canLoadWithoutGeneration`; windows at

@@ -116,7 +116,8 @@ final class RuinSettle {
         // next tick (ChunkLoadPace); in bursts they started 20 % of ticks 18–32 ms late after 1 Mt (Zearth r4 run6).
         ChunkLoadPace pace = ChunkLoadPace.of(level.getServer());
         while (admit && holding < loadingLimit && !ready.isEmpty() && clock.canStart()
-                && (NuclearTickets.inMemory(level, ready.firstLong()) != null || pace.tryStart(level.getServer()))) {
+                && (NuclearTickets.inMemory(level, ready.firstLong()) != null
+                    || pace.tryStart(level, ChunkPos.getX(ready.firstLong()), ChunkPos.getZ(ready.firstLong())))) {
             long key = ready.removeFirstLong();
             visited++;
             Entry e = entries.get(key);

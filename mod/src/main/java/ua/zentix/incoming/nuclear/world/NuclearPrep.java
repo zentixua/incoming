@@ -164,7 +164,8 @@ public final class NuclearPrep {
                 for (int dz = -TILE_RADIUS; dz <= TILE_RADIUS; dz++) {
                     int b = bit(dx, dz);
                     if ((want & ~held & b) == 0) continue;
-                    if (level.getChunkSource().getChunkNow(centre.x + dx, centre.z + dz) == null && !pace.tryStart(level.getServer())) return false;
+                    if (level.getChunkSource().getChunkNow(centre.x + dx, centre.z + dz) == null
+                            && !pace.tryStart(level, centre.x + dx, centre.z + dz)) return false;
                     areas.hold(level, area(strike, dx, dz));
                     held |= b;
                 }
@@ -874,7 +875,9 @@ public final class NuclearPrep {
         int loading = 0, held = 0;
         for (Tile t : p.tiles) {
             if (t.state == TileState.LOADING) {
-                // the rest of a square's tickets at the load pace; not while ruins in view wait (as for new squares)
+                // the rest of a square's tickets at the load pace; not while ruins in view wait (as for new squares);
+                // after a heap stop only chunks with ready plans, like a new square
+                if (p.heapStop) t.want &= withPlan(p, scars, t) | t.held;
                 if (t.held != t.want && !scars.seenWaiting()) t.holdMore(level, p.strike);
                 if (t.held == t.want && ready(level, t)) {
                     t.state = TileState.READY;
