@@ -256,6 +256,8 @@ vec4 upsample(ivec2 full, ivec2 fullSize, ivec2 lowSize, float depth, vec3 dir) 
     for (int j = -1; j <= 2; j++) {
         for (int i = -1; i <= 2; i++) {
             ivec2 t = clamp(base + ivec2(i, j), ivec2(0), lowSize - 1);
+            // the hand's pixels hold no pall (fx_pall_resolve: invalid): never the best
+            if (!pallValid(texelFetch(Sampler0, t, 0))) continue;
             float d = sampleDepth(t, fullSize), a = pallAlike(d, pallAhead(depth, slope, vec2(rayPixel(t, fullSize) - full)));
             if (a > bestAlike) {
                 bestAlike = a;
@@ -265,6 +267,7 @@ vec4 upsample(ivec2 full, ivec2 fullSize, ivec2 lowSize, float depth, vec3 dir) 
         }
     }
     vec4 v = texelFetch(Sampler0, best, 0);
+    if (!pallValid(v)) return vec4(0.0, 0.0, 0.0, 1.0);
     // sky/void behind pixel is beyond pall bounds, noiseless field cannot correct: unchanged. Unknown light per
     // opacity for nearly pall-free ray (like fx.fsh): unchanged too
     if (bestAlike > 0.5 || max(depth, bestDepth) >= 1e8 || 1.0 - v.a < 0.02 || depth == bestDepth) return v;

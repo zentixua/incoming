@@ -75,7 +75,7 @@ vec4 placed(vec2 at, vec2 point, ivec2 fullSize, float expect, bool far, out flo
             ivec2 q = clamp(ivec2((vec2(t) + 0.5) * PallFrame.z), ivec2(0), fullSize - 1);
             float d = pallScene(texelFetch(Sampler4, q, 0).r);
             float there = pallAhead(d, pallSlope(Sampler4, q, fullSize, d), point - (vec2(q) + 0.5));
-            float same = far ? step(0.9 * PallFrame.w, there) : step(0.2, pallAlike(there, expect));
+            float same = far ? step(0.9 * expect, there) : step(0.2, pallAlike(there, expect));
             sum += w * same * v;
             taken += w * same;
         }
