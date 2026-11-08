@@ -41,6 +41,9 @@ uniform sampler3D PallNoise;
 uniform sampler3D PallOpen;
 uniform vec4 PallOpenAt;
 uniform vec3 PallOpenWrap;
+// Minecraft's lightmap (pall.glsl: pallLightmap); PallLamps 1 — the window holds block light (OpenAir, MovingLight)
+uniform sampler2D Sampler10;
+uniform float PallLamps;
 // terrain/water under slot pall (pall.glsl: pallFloor, pallWater), slot water as in fx_pall
 uniform sampler2D Sampler5;
 uniform sampler2D Sampler6;
@@ -237,6 +240,8 @@ vec4 upsample(ivec2 full, ivec2 fullSize, ivec2 lowSize, float depth, vec3 dir) 
             same = max(same, a);
             w *= a + 1e-4;
             vec4 v = texelFetch(Sampler0, t, 0);
+            // the hand's pixels hold no pall (fx_pall_resolve: invalid)
+            if (!pallValid(v)) continue;
             clear = clear && 1.0 - v.a < 0.02;
             sum += v * w;
             total += w;
@@ -245,12 +250,14 @@ vec4 upsample(ivec2 full, ivec2 fullSize, ivec2 lowSize, float depth, vec3 dir) 
     // at least one ray crossed same place (similarity over half): use it; if four samples have almost no pall and pixel no
     // farther (cannot recover light per opacity, like fx.fsh), pixel has none either, no further search. Farther pixel
     // (background between bars) searches own ray: nearby bars' pall is not its pall
-    if (same > 0.5 || (clear && depth <= farRay * 1.05)) return sum / total;
+    if (total > 0.0 && (same > 0.5 || (clear && depth <= farRay * 1.05))) return sum / total;
     ivec2 best = clamp(base, ivec2(0), lowSize - 1);
     float bestAlike = -1.0, bestDepth = depth;
     for (int j = -1; j <= 2; j++) {
         for (int i = -1; i <= 2; i++) {
             ivec2 t = clamp(base + ivec2(i, j), ivec2(0), lowSize - 1);
+            // the hand's pixels hold no pall (fx_pall_resolve: invalid): never the best
+            if (!pallValid(texelFetch(Sampler0, t, 0))) continue;
             float d = sampleDepth(t, fullSize), a = pallAlike(d, pallAhead(depth, slope, vec2(rayPixel(t, fullSize) - full)));
             if (a > bestAlike) {
                 bestAlike = a;
@@ -260,6 +267,7 @@ vec4 upsample(ivec2 full, ivec2 fullSize, ivec2 lowSize, float depth, vec3 dir) 
         }
     }
     vec4 v = texelFetch(Sampler0, best, 0);
+    if (!pallValid(v)) return vec4(0.0, 0.0, 0.0, 1.0);
     // sky/void behind pixel is beyond pall bounds, noiseless field cannot correct: unchanged. Unknown light per
     // opacity for nearly pall-free ray (like fx.fsh): unchanged too
     if (bestAlike > 0.5 || max(depth, bestDepth) >= 1e8 || 1.0 - v.a < 0.02 || depth == bestDepth) return v;
@@ -283,6 +291,11 @@ void main() {
     ivec2 fullSize = textureSize(Sampler1, 0), lowSize = textureSize(Sampler0, 0);
     ivec2 full = ivec2(gl_FragCoord.xy);
     float depth = pallScene(texelFetch(Sampler1, clamp(full, ivec2(0), fullSize - 1), 0).r);
+    // first-person hand under Iris (pallHand): left as vanilla draws it, after the layer — no dust, no shadow
+    if (pallHand(depth)) {
+        fragColor = vec4(0.0, 0.0, 0.0, 1.0);
+        return;
+    }
     vec2 ndc0 = (vec2(full) + 0.5) / vec2(fullSize) * 2.0 - 1.0;
     vec4 far0 = InvViewProj * vec4(ndc0, 1.0, 1.0);
     vec4 pall = upsample(full, fullSize, lowSize, depth, normalize(far0.xyz / far0.w));
@@ -318,8 +331,12 @@ void main() {
         float fd = Haze.w > 0.5 ? max(length(p.xz), abs(p.y)) : length(p);
         float seen = exp(-Haze.x * length(p)) * (1.0 - smoothstep(Haze.y, Haze.z, fd));
         vec4 over = pallOver(p);
-        // pall shadows sky/sun light: torches light mines/caves (position is air block before surface)
-        float kept = mix(1.0, pallDisplay(shade(p, over)), seen * pallOpenHere(p - 0.5 * dir));
+        // pall shadows sky/sun light: torches light mines/caves (position is air block before surface); torches, lamps and a held
+        // light (LambDynamicLights) keep their share of the pixel under it outdoors as well (pallKeepLamps)
+        vec3 air = p - 0.5 * dir;
+        float open = pallOpenHere(air);
+        float kept = mix(1.0, pallDisplay(shade(p, over)), seen * open);
+        if (PallLamps > 0.5) kept = pallKeepLamps(kept, Sampler10, pallSurfaceLevel(PallOpen, PallOpenAt, PallOpenWrap, air), 15.0 * open);
         vec3 added = vec3(0.0), n = vec3(0.0, 1.0, 0.0);
         if (balls) {
             n = sceneNormal(Sampler1, InvViewProj, PallForward, full, fullSize, p);

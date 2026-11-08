@@ -5,7 +5,8 @@
         { "name": "Sampler0" },
         { "name": "Sampler1" },
         { "name": "Sampler2" },
-        { "name": "Sampler3" }
+        { "name": "Sampler3" },
+        { "name": "Sampler4" }
     ],
     "uniforms": [
         { "name": "InvViewProj", "type": "matrix4x4", "count": 16, "values": [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0] },
@@ -15,6 +16,7 @@
         { "name": "PallFrame", "type": "float", "count": 4, "values": [0.0, 24.0, 2.0, 600.0] },
         { "name": "PallInterleave", "type": "float", "count": 4, "values": [1.0, 0.0, 0.0, 0.9] },
         { "name": "PallClamp", "type": "float", "count": 1, "values": [1.0] },
+        { "name": "PallPrevScene", "type": "float", "count": 1, "values": [0.0] },
         { "name": "SmokeCascade", "type": "matrix4x4", "count": 16, "values": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0] },
         { "name": "SmokeMin", "type": "float", "count": 3, "values": [0.0, 0.0, 0.0] },
         { "name": "SmokeMax", "type": "float", "count": 3, "values": [0.0, 0.0, 0.0] },
