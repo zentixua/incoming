@@ -161,7 +161,16 @@ paths:
   (`mixin/net/PlayerChunkSenderMixin`, `ChunkSendGate`, up to 200 ticks after the wave; no public path, reason in the
   mixin; GameTests `chunkSendGateApplied`, `chunkWithheldUntilRuins`)), `ColumnScar` (world-path block replacement, fire
   counter, shadowed light), `BlockResponse` (thresholds by `nuke_*` tags or strength), `ThermalShadow` (heightmap shadow),
-  `CraterJob`, `NuclearWorld` (front on entities and craft, queues); chunk mark is attachment `CHUNK_SCAR`;
+  `CraterJob` (bowl measured from each column's ground, never from its top ground-tagged block alone: Zearth buildings
+  have terracotta floors and roof gardens, and a bowl cut from the roofs left storeys standing in the crater; a survey
+  fits a plane through the low surface of the chunks around the bowl, `CraterGround.fit`, and `CraterGround.base` walks
+  each bowl column above it up from 3 below: non-ground blocks under ground thinner than 6 (or, holding a built block,
+  thinner than they are tall, or within 3 of the plane) are a building standing on the ground below; ground-only columns
+  and anything deep inside a hill (ores by tag, caves, mineshafts) keep their surface; the rim zone keeps per-column
+  ground — GameTest
+  `groundBurstDigsCraterProfile`, `CraterGroundTest`; the plane is saved once after the survey, a crater half dug
+  before the survey keeps per-column ground), `NuclearWorld`
+  (front on entities and craft, queues); chunk mark is attachment `CHUNK_SCAR`;
 - Ground trace (`RuinPlanner.finish` after ruins, on the highest supporting block; in-memory chunks get light earlier
   via the flash layer below): blast strips turf (`STRIP_PSI`); light (`RuinContext.lit` × incidence angle `incidence`:
   blast-facing slope up to ×2.5, penumbra `LOW_SUN`; slope from ±2 columns; smooth fade to zero at

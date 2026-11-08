@@ -77,6 +77,9 @@ public final class NuclearEvents extends SavedData {
     /** Unfinished craters: detonation number → number of chunks already dug. */
     private final Map<Integer, Integer> craters = new LinkedHashMap<>();
     private static final Codec<Map<Integer, Integer>> CRATERS_CODEC = Codec.unboundedMap(Codec.STRING.xmap(Integer::parseInt, String::valueOf), Codec.INT);
+    /** Unfinished craters: detonation number → surveyed ground plane {@code {a, b, c}} ({@code CraterJob#ground}). */
+    private final Map<Integer, List<Double>> craterGrounds = new LinkedHashMap<>();
+    private static final Codec<Map<Integer, List<Double>>> GROUNDS_CODEC = Codec.unboundedMap(Codec.STRING.xmap(Integer::parseInt, String::valueOf), Codec.DOUBLE.listOf());
     private int nextId = 1;
     /**
      * First detonation number whose flash, prompt radiation and wave reach bodies loaded later ({@code LateExposure}). A world
@@ -145,7 +148,21 @@ public final class NuclearEvents extends SavedData {
     /** Crater progress: chunks dug; {@code done} — fully dug. */
     public void craterProgress(int detonation, int chunks, boolean done) {
         Integer prev = done ? craters.remove(detonation) : craters.put(detonation, chunks);
+        if (done) craterGrounds.remove(detonation);
         if (prev == null || prev != chunks || done) setDirty();
+    }
+
+    /** Surveyed ground plane of an unfinished crater, null — not surveyed (or dug before the survey existed). */
+    public @org.jetbrains.annotations.Nullable double[] craterGround(int detonation) {
+        List<Double> p = craterGrounds.get(detonation);
+        return p == null || p.size() != 3 ? null : new double[] {p.get(0), p.get(1), p.get(2)};
+    }
+
+    /** Remember a crater's ground plane so a restart digs on from the same ground; only finite planes. */
+    public void craterGround(int detonation, double[] plane) {
+        if (plane.length != 3 || !Double.isFinite(plane[0]) || !Double.isFinite(plane[1]) || !Double.isFinite(plane[2])) return;
+        List<Double> p = List.of(plane[0], plane[1], plane[2]);
+        if (!p.equals(craterGrounds.put(detonation, p))) setDirty();
     }
 
     /**
@@ -158,6 +175,7 @@ public final class NuclearEvents extends SavedData {
         detonations.clear();
         past.clear();
         craters.clear();
+        craterGrounds.clear();
         setDirty();
         return n;
     }
@@ -171,6 +189,7 @@ public final class NuclearEvents extends SavedData {
             setDirty();
         }
         if (craters.keySet().removeIf(id -> detonations.stream().noneMatch(d -> d.id() == id))) setDirty();
+        if (craterGrounds.keySet().removeIf(id -> !craters.containsKey(id))) setDirty();
     }
 
     private static NuclearEvents load(CompoundTag tag, HolderLookup.Provider registries) {
@@ -181,6 +200,7 @@ public final class NuclearEvents extends SavedData {
         if (tag.contains("past")) Detonation.CODEC.listOf().parse(NbtOps.INSTANCE, tag.get("past")).resultOrPartial(Incoming.LOG::error).ifPresent(e.past::addAll);
         ScheduledStrike.CODEC.listOf().parse(NbtOps.INSTANCE, tag.get("scheduled")).resultOrPartial(Incoming.LOG::error).ifPresent(e.scheduled::addAll);
         if (tag.contains("craters")) CRATERS_CODEC.parse(NbtOps.INSTANCE, tag.get("craters")).resultOrPartial(Incoming.LOG::error).ifPresent(e.craters::putAll);
+        if (tag.contains("crater_grounds")) GROUNDS_CODEC.parse(NbtOps.INSTANCE, tag.get("crater_grounds")).resultOrPartial(Incoming.LOG::error).ifPresent(e.craterGrounds::putAll);
         return e;
     }
 
@@ -192,6 +212,7 @@ public final class NuclearEvents extends SavedData {
         Detonation.CODEC.listOf().encodeStart(NbtOps.INSTANCE, past).resultOrPartial(Incoming.LOG::error).ifPresent(t -> tag.put("past", t));
         ScheduledStrike.CODEC.listOf().encodeStart(NbtOps.INSTANCE, scheduled).resultOrPartial(Incoming.LOG::error).ifPresent(t -> tag.put("scheduled", t));
         CRATERS_CODEC.encodeStart(NbtOps.INSTANCE, craters).resultOrPartial(Incoming.LOG::error).ifPresent(t -> tag.put("craters", t));
+        GROUNDS_CODEC.encodeStart(NbtOps.INSTANCE, craterGrounds).resultOrPartial(Incoming.LOG::error).ifPresent(t -> tag.put("crater_grounds", t));
         return tag;
     }
 }
