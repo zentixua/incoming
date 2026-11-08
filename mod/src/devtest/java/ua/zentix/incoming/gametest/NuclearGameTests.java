@@ -1854,6 +1854,44 @@ public final class NuclearGameTests {
     }
 
     /**
+     * A landed container's contents mark its block entity changed without loading a neighbour chunk. Vanilla
+     * setChanged updates comparators up to two blocks away, and its second step (through a redstone conductor) reads
+     * without vanilla's hasChunk guard, which itself admits a requested chunk still loading: a dispenser on a chunk
+     * edge loaded a neighbour synchronously, a 3.7 s tick (300 kt over Zearth, 08.11). A chunk 20 km away is loaded
+     * alone, the dispenser one block from its west edge behind stone; the west neighbour must stay below full loading.
+     */
+    @GameTest(template = "range", timeoutTicks = 200, batch = "nuke_be_neighbour", skyAccess = true)
+    public static void landedContainerLoadsNoNeighbour(GameTestHelper h) {
+        ServerLevel level = h.getLevel();
+        ChunkPos cp = new ChunkPos(h.absolutePos(CENTER).offset(20_000, 0, 0));
+        LevelChunk chunk = level.getChunk(cp.x, cp.z);
+        var source = level.getChunkSource();
+        h.assertTrue(source.getChunkNow(cp.x - 1, cp.z) == null,
+                "the far chunk's west neighbour is already loaded: the check would prove nothing");
+        int y = chunk.getHeight(Heightmap.Types.WORLD_SURFACE, 1, 8) + 1;
+        BlockPos at = new BlockPos(cp.getMinBlockX() + 1, y, cp.getMinBlockZ() + 8);
+        // straight into the section, block entity added by hand: Level.setBlock's and LevelChunk.setBlockState's own
+        // updates (and mods' hooks there) read the neighbours themselves
+        var state = Blocks.DISPENSER.defaultBlockState();
+        var section = chunk.getSection(chunk.getSectionIndex(y));
+        section.setBlockState(1, y & 15, 8, state);
+        section.setBlockState(0, y & 15, 8, Blocks.STONE.defaultBlockState());
+        var be = new net.minecraft.world.level.block.entity.DispenserBlockEntity(at, state);
+        chunk.setBlockEntity(be);
+        try {
+            h.assertTrue(source.getChunkNow(cp.x - 1, cp.z) == null, "placing the dispenser loaded the west neighbour: the check would prove nothing");
+            RuinPlan.changed(level, be);
+            h.assertTrue(source.getChunkNow(cp.x - 1, cp.z) == null, "marking the landed container changed loaded the west neighbour chunk");
+            h.assertTrue(chunk.isUnsaved(), "the container's chunk is not marked unsaved");
+        } finally {
+            chunk.removeBlockEntity(at);
+            section.setBlockState(1, y & 15, 8, Blocks.AIR.defaultBlockState());
+            section.setBlockState(0, y & 15, 8, Blocks.AIR.defaultBlockState());
+        }
+        h.succeed();
+    }
+
+    /**
      * A chunk in view is in the ruin queue by its wave although the detonation has thousands of prepared plans for zone
      * chunks that are not in memory (disk plans): the scan walks loaded chunks, those in view first. 250 kt over Zearth
      * (r4 run3, 07.11): 916 loaded of 25 931 planned; the scan walked the plans first, 64 a unit under a busy lane, and

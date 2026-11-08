@@ -1089,7 +1089,7 @@ public final class RuinPlan {
             net.minecraft.world.level.block.entity.BlockEntity be = level.getBlockEntity(m.set(moves[2 * k + 1]));
             if (be instanceof net.minecraft.world.Container) {
                 be.loadWithComponents(carried[k], level.registryAccess());
-                be.setChanged();
+                changed(level, be);
             }
         }
         // viewed but non-ticking chunk (view edge): send full chunk via vanilla
@@ -1336,4 +1336,26 @@ public final class RuinPlan {
     private static BlockPos.MutableBlockPos at(BlockPos.MutableBlockPos m, int c, int x0, int z0, int minY) {
         return m.set(x0 + (c & 15), minY + (section(c) << 4) + ((c >> 8) & 15), z0 + ((c >> 4) & 15));
     }
+
+    /**
+     * {@link net.minecraft.world.level.block.entity.BlockEntity#setChanged} without loading a neighbour chunk: its
+     * comparator update ({@code Level.updateNeighbourForOutputSignal}) reads blocks up to two away, the second step
+     * (through a redstone conductor) without vanilla's hasChunk guard, and that guard admits a requested chunk still
+     * loading; a ready plan's neighbours need not be loaded. A dispenser on a chunk edge loaded one synchronously, the
+     * tick stalled 3.7 s (300 kt over Zearth, 08.11). With a neighbour not loaded the comparators there, if any, update
+     * on their own next block update; the chunk is marked unsaved either way.
+     */
+    public static void changed(ServerLevel level, net.minecraft.world.level.block.entity.BlockEntity be) {
+        BlockPos p = be.getBlockPos();
+        level.blockEntityChanged(p);
+        BlockState state = be.getBlockState();
+        if (state.isAir()) return;
+        for (int dx = -2; dx <= 2; dx += 4) {
+            for (int dz = -2; dz <= 2; dz += 4) {
+                if (level.getChunkSource().getChunkNow((p.getX() + dx) >> 4, (p.getZ() + dz) >> 4) == null) return;
+            }
+        }
+        level.updateNeighbourForOutputSignal(p, state.getBlock());
+    }
+
 }
