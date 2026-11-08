@@ -1691,9 +1691,12 @@ void main() {
                 pallFloor(Sampler6, PallSlot1, PallGround1, dir, PallFloorFrom, 1e6, FLOOR_STEPS, jitter));
     }
     float t0 = span.x, t1 = min(min(span.y, scene), t0 + clip);
-    // the pall nearer than the froxel volume's far boundary is that volume's (fx_pall_froxel, composited in front of this
-    // frame in fx_pall_composite): its rays begin behind it. Mushrooms, smoke, whirls and the Wilson cloud keep the whole ray
-    t0 = max(t0, PallFroxel.z / axis);
+    // the pall nearer than the near volume's end is that volume's (fx_pall_froxel, composited in front of this frame in
+    // fx_pall_composite): its rays begin there — at its far boundary, or nearer, where the ray enters a dust-wall head
+    // (froxelEnd: the head is marched here, per pixel). Mushrooms, smoke and whirls likewise; the Wilson cloud keeps the whole ray
+    float nearT = 0.0;
+    if (PallFroxel.z > 0.0) nearT = froxelEnd(PallFroxel, dir, axis, PallSlot0, PallWall0, PallGround0, PallSlot1, PallWall1, PallGround1) / axis;
+    t0 = max(t0, nearT);
     vec3 sunDir = PallSun.xyz;
     pallLighting(dir);
     vec3 whirlFlame = max(gFlame, WHIRL_FIRE_LINEAR);
@@ -1716,7 +1719,7 @@ void main() {
     for (int i = 0; i < 4; i++) {
         // whirls nearer than the near volume's far boundary are that volume's (fx_pall_froxel); this ray takes the rest
         float a = gWhirlSpan[i].x;
-        if (PallFroxel.z > 0.0) a = max(a, PallFroxel.z / axis);
+        a = max(a, nearT);
         if (gWhirlSpan[i].y <= a) continue;
         gWhirlLight[i] = whirl(i, dir, a, gWhirlSpan[i].y, jitter, gWhirlLit[i].rgb, gWhirlFire[i].rgb, whirlFlame);
         gWhirlIn[i] = a;
@@ -1738,7 +1741,7 @@ void main() {
     // them from behind it, with the mushroom depth a ray from the eye would have gathered by then
     vec2 mm = mushSetup(dir, scene);
     float m0 = mm.x, m1 = mm.y;
-    if (PallFroxel.z > 0.0) m0 = max(m0, PallFroxel.z / axis);
+    m0 = max(m0, nearT);
     int steps = int(PallFrame.y);
     float n = float(steps);
     // pall steps denser near eye (along); the dust wall head and the storm frame add finer grids of their own
@@ -1788,7 +1791,7 @@ void main() {
     // mushroom: empty space to matter, then half optical depth, no finer than pixel or quarter pall step over its interval
     int mk = 0, mSteps = steps + 16;
     float tauEye = 0.0;
-    if (m1 > m0 && PallFroxel.z > 0.0) tauEye = mushEyeTau(dir, m0);
+    if (m1 > m0 && nearT > 0.0) tauEye = mushEyeTau(dir, m0);
     float dsMin = 1.0, dsMax = 1.0, tm = 1e9;
     // empty step toward matter, capped at one sixth interval: gap estimate sees bounds conservatively
     if (m1 > m0) {
@@ -1804,7 +1807,7 @@ void main() {
     float s0 = 1e9, s1 = -1.0, ts = 1e9;
     if (smokeOn()) {
         vec2 ss = pallBox(dir, SmokeMin, SmokeMax);
-        s0 = max(ss.x, PallFroxel.z / axis);
+        s0 = max(ss.x, nearT);
         s1 = min(ss.y, scene);
         if (s1 > s0) ts = s0 + jitter * min(smokeCell(dir * s0), 0.25 * (s1 - s0));
     }

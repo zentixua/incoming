@@ -885,6 +885,34 @@ vec4 froxelNear(sampler2D sum, vec4 F, vec2 pixel, float z) {
     return froxelLerp(sum, xy, log(min(z, F.z) / F.y) / froxelGrowth(F) - 1.0);
 }
 
+// View-axis depth where the near volume ends on the ray dir from the eye (axis — its cosine to the view axis): the volume's
+// far boundary, or the last slice boundary before the ray enters a slot's dust-wall head (pallWallSpans), with the slots'
+// fields S0/S1, heads V0/V1 and relief maps G0/G1. The head is a roller a few dozen blocks thick that moves with the wave:
+// one point per cell averaged over frames drew it as clumps and holes, and in front of it the ground took the volume's
+// thinner head; the rays march it per pixel from here (fx_pall), behind the volume's own part of the ray (froxelNear up to
+// this depth), so the order along the ray stays: near air, the head, the pall behind it. Every reader of the volume and the
+// rays takes the same boundary: the composite, the reduced-frame mix and the march
+float froxelEnd(vec4 F, vec3 dir, float axis, mat4 S0, mat4 V0, vec4 G0, mat4 S1, mat4 V1, vec4 G1) {
+    float far = F.z / axis;
+    vec4 h0 = pallWallSpans(S0, V0, G0, dir, 0.0, far), h1 = pallWallSpans(S1, V1, G1, dir, 0.0, far);
+    float a = far;
+    if (h0.y > h0.x) {
+        a = min(a, h0.x);
+    } else if (h0.w > h0.z) {
+        a = min(a, h0.z);
+    }
+    if (h1.y > h1.x) {
+        a = min(a, h1.x);
+    } else if (h1.w > h1.z) {
+        a = min(a, h1.z);
+    }
+    if (a >= far) return F.z;
+    // whole slices only: the slice the ray enters the head in is the rays'
+    float z = a * axis;
+    if (z <= F.y) return 0.0;
+    return froxelBoundary(F, floor(log(z / F.y) / froxelGrowth(F)));
+}
+
 // Near volume (froxelNear: linear light, rgb, and the share behind still seen, a) in front of a pall frame (pallShown display
 // light premultiplied, rgb; transmittance, a). One medium's display is that of its summed light, as one ray's (fx_pall main):
 // adding two displays instead is darker wherever the near air is dimmer than the pall behind it (display is concave: a lit

@@ -226,7 +226,7 @@ float sampleDepth(ivec2 t, ivec2 fullSize) {
 // bars took bars' pall (no own pall: bright spots). Then use nearest-distance ray within surrounding 4×4
 // (gap background finds its ray there), remainder from noiseless field: transmittance × e^(∓depth between sample/point),
 // light same ratio to opacity (pall matter color unchanged, as layer quads take foreground pall in fx.fsh).
-vec4 upsample(ivec2 full, ivec2 fullSize, ivec2 lowSize, float depth, vec3 dir) {
+vec4 upsample(ivec2 full, ivec2 fullSize, ivec2 lowSize, float depth, vec3 dir, float nearEnd) {
     vec2 at = vec2(pallLattice(float(full.x) + 0.5, PallFrame.z), pallLattice(float(full.y) + 0.5, PallFrame.z));
     ivec2 base = ivec2(floor(at));
     vec2 f = at - vec2(base), slope = pallSlope(Sampler1, full, fullSize, depth);
@@ -276,8 +276,8 @@ vec4 upsample(ivec2 full, ivec2 fullSize, ivec2 lowSize, float depth, vec3 dir) 
     // opacity for nearly pall-free ray (like fx.fsh): unchanged too
     if (bestAlike > 0.5 || max(depth, bestDepth) >= 1e8 || 1.0 - v.a < 0.02 || depth == bestDepth) return v;
     float axis = max(dot(dir, PallForward), 1e-3);
-    // rays hold the pall beyond the near volume only: the difference lies beyond its far boundary
-    float near = PallFroxel.z / axis, ta = max(bestDepth / axis, near), tb = max(depth / axis, near);
+    // rays hold the pall beyond the near volume's end only (froxelEnd): the difference lies beyond it
+    float near = nearEnd / axis, ta = max(bestDepth / axis, near), tb = max(depth / axis, near);
     float a;
     if (depth > bestDepth) {
         a = v.a * exp(-pallTau(dir, ta, tb));
@@ -304,12 +304,19 @@ void main() {
     }
     vec2 ndc0 = (vec2(full) + 0.5) / vec2(fullSize) * 2.0 - 1.0;
     vec4 far0 = InvViewProj * vec4(ndc0, 1.0, 1.0);
-    vec4 pall = upsample(full, fullSize, lowSize, depth, normalize(far0.xyz / far0.w));
-    // near pall in front of the rays, at this pixel's own depth: a block's edge cuts the volume at the block, with no ray of
-    // another place and no history from it (the halos and trails of screen-space accumulation); world behind the far
-    // boundary, sky — all of it
+    vec3 dir0 = normalize(far0.xyz / far0.w);
+    // where the near volume ends on this pixel's ray and the rays begin (froxelEnd, as in the march)
+    float nearEnd = 0.0;
     if (PallFroxel.z > 0.0) {
-        vec4 near = froxelNear(Sampler11, PallFroxel, vec2(full) + 0.5, depth);
+        nearEnd = froxelEnd(PallFroxel, dir0, max(dot(dir0, PallForward), 1e-3), PallSlot0, PallWall0, PallGround0, PallSlot1,
+                PallWall1, PallGround1);
+    }
+    vec4 pall = upsample(full, fullSize, lowSize, depth, dir0, nearEnd);
+    // near pall in front of the rays, at this pixel's own depth: a block's edge cuts the volume at the block, with no ray of
+    // another place and no history from it (the halos and trails of screen-space accumulation); world behind the volume's
+    // end, sky — all of it up to there
+    if (PallFroxel.z > 0.0) {
+        vec4 near = froxelNear(Sampler11, PallFroxel, vec2(full) + 0.5, min(depth, nearEnd));
         pall = froxelOver(near, pall);
     }
     if (PallFire0[0].x > 0.0 || PallFire1[0].x > 0.0) {

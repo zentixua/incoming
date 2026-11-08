@@ -3,7 +3,8 @@
 #moj_import <incoming:pall.glsl>
 
 // Whole pall in front of the world behind each pixel of the reduced frame (client/fx/layer/PallPass.frame): the near volume
-// (pall.glsl: froxelNear) at the world distance behind the frame pixel's ray, then this frame's rays beyond it. Layer quads
+// (pall.glsl: froxelNear) at the world distance behind the frame pixel's ray, up to its end (froxelEnd), then this frame's
+// rays beyond it. Layer quads
 // (fx.fsh: Sampler6) take the pall's colour and the world's share from it, as before the volume existed; the composite
 // does not use it (it reads the volume at every full-frame pixel)
 
@@ -17,6 +18,15 @@ uniform sampler2D Sampler2;
 // z: frame downsample factor
 uniform vec4 PallFrame;
 uniform vec4 PallFroxel;
+// where the near volume ends (froxelEnd): the view, the slots' fields, dust-wall heads and relief maps
+uniform mat4 InvViewProj;
+uniform vec3 PallForward;
+uniform mat4 PallSlot0;
+uniform mat4 PallSlot1;
+uniform mat4 PallWall0;
+uniform mat4 PallWall1;
+uniform vec4 PallGround0;
+uniform vec4 PallGround1;
 
 out vec4 fragColor;
 
@@ -35,6 +45,10 @@ void main() {
     }
     ivec2 full = clamp(ivec2((vec2(px) + 0.5) * PallFrame.z), ivec2(0), fullSize - 1);
     float depth = pallScene(texelFetch(Sampler1, full, 0).r);
-    vec4 near = froxelNear(Sampler2, PallFroxel, vec2(full) + 0.5, depth);
+    vec4 farPoint = InvViewProj * vec4((vec2(full) + 0.5) / vec2(fullSize) * 2.0 - 1.0, 1.0, 1.0);
+    vec3 dir = normalize(farPoint.xyz / farPoint.w);
+    float end = froxelEnd(PallFroxel, dir, max(dot(dir, PallForward), 1e-3), PallSlot0, PallWall0, PallGround0, PallSlot1,
+            PallWall1, PallGround1);
+    vec4 near = froxelNear(Sampler2, PallFroxel, vec2(full) + 0.5, min(depth, end));
     fragColor = froxelOver(near, far);
 }
