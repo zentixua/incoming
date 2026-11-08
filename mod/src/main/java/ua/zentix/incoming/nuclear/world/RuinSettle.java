@@ -372,8 +372,6 @@ final class RuinSettle {
     private void linger(ServerLevel level, Entry e, long now) {
         if (!e.held) return;
         StrikeWorld.get(level).areas().renew(area(e), now + LINGER_TICKS);
-        // its new scar reaches disk only when it unloads: no header reads before that
-        e.retryAt = now + LINGER_TICKS;
         e.held = false;
         holding--;
     }
