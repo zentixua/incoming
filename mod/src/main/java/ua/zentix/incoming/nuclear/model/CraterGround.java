@@ -5,20 +5,33 @@ import java.util.Arrays;
 /**
  * Ground a surface-burst crater is cut into, and the shape of its edge.
  * <p>
- * The crater is a cavity blown into the ground around the burst; buildings, roof gardens and small knolls above that
- * ground are thrown out with it. The column's own top ground-tagged block is not the ground: a city builds with the
- * same blocks (terracotta floors, stone, grass on a roof), so a bowl measured from it was cut from the roofs and left
- * the lower storeys standing in the crater as slanted slabs (Zearth 08.11.2026, 200 kt: 30 % of bowl columns kept
- * blocks up to 65 above the floor). The ground here is a plane through the low surface of each chunk of the bowl
- * ({@link #LOW_QUANTILE}: streets, yards, water), refitted without chunks standing above it ({@link #fit}): a slope
- * keeps its tilt, while buildings and knolls never move the bowl.
+ * The crater is a cavity blown into the ground around the burst; buildings and roof gardens standing on that ground are
+ * thrown out with it. A column's top ground-tagged block is not always the ground: a city builds with the same blocks
+ * (terracotta floors, stone, grass on a roof), so a bowl measured from it was cut from the roofs and left the lower
+ * storeys standing in the crater as slanted slabs (Zearth 08.11.2026, 200 kt: 30 % of bowl columns kept blocks up to 65
+ * above the floor). Two steps find the ground under a building:
+ * <ol>
+ * <li>a plane through the low surface of every chunk around the bowl ({@link #lowColumn}: streets, yards, water),
+ * refitted without the chunks standing above it ({@link #fit}), says how deep below a column the ground can be;</li>
+ * <li>{@link #base} walks a column up from just under that plane: the first built block (not ground, air or liquid), or
+ * the first air under a thin ground layer (a terracotta floor, a roof garden over a room), marks a building, and the
+ * column's ground is the ground under it. A column of ground alone (a hill, a knoll, a bank) keeps its own surface, so
+ * natural relief keeps its shape as before.</li>
+ * </ol>
  */
 public final class CraterGround {
     /** Share of a chunk's columns at or below its ground sample: streets and yards among buildings (est.). */
     public static final double LOW_QUANTILE = 0.1;
-    /** Samples standing higher above the fitted plane are buildings, not ground, blocks (est.). */
-    static final double ABOVE = 3;
-    /** Refits dropping such samples; a city settles in two or three. */
+    /**
+     * Samples standing higher above the fitted plane are buildings, not ground; {@link #base} also starts this far below
+     * the plane, blocks (est.).
+     */
+    static final double BAND = 3;
+    /** Fewer samples give a level plane: a tilt from a handful of chunks is noise. */
+    static final int MIN_FIT = 6;
+    /** A ground layer thinner than this over air is a floor or a roof garden, not ground over a cave, blocks (est.). */
+    static final int FLOOR = 6;
+    /** Refits at most; a city settles in two or three. */
     private static final int ROUNDS = 8;
     /**
      * Edge irregularity: relative change of the bowl radius with direction, standard deviation (est.). Real crater
@@ -29,47 +42,92 @@ public final class CraterGround {
     /** Harmonics of the edge: lobes from three to twelve around the crater, amplitude falling as 1/k. */
     private static final int EDGE_FROM = 3, EDGE_TO = 12;
 
+    /** What a block of a column is to {@link #base}. */
+    public enum Layer { GROUND, AIR, LIQUID, BUILT }
+
+    /** A column's blocks by height. */
+    @FunctionalInterface
+    public interface Column {
+        Layer at(int y);
+    }
+
     private CraterGround() {}
 
     /**
-     * Low surface of a chunk: the height at {@link #LOW_QUANTILE} of {@code n} column heights (sorted in place).
+     * Column of a chunk standing for its low surface: index of the column at {@link #LOW_QUANTILE} of {@code n} column
+     * heights. The sample is that column's own height at its own position, so a slope does not bias it.
      */
-    public static double low(int[] heights, int n) {
-        Arrays.sort(heights, 0, n);
-        return heights[Math.min(n - 1, (int) Math.floor(LOW_QUANTILE * n))];
+    public static int lowColumn(int[] heights, int n) {
+        long[] keys = new long[n];
+        for (int i = 0; i < n; i++) keys[i] = (long) heights[i] << 32 | i;
+        Arrays.sort(keys);
+        return (int) keys[Math.min(n - 1, (int) Math.floor(LOW_QUANTILE * n))];
     }
 
     /**
      * Ground plane through samples ({@code x}, {@code z} relative to the epicentre, {@code h} heights): least squares,
-     * refitted without samples more than {@link #ABOVE} above it. Fewer than three samples or a degenerate layout give a
-     * level plane at the lowest median of what remains.
+     * refitted without samples more than {@link #BAND} above it until none is dropped. Roofs do not hold it up; pits and
+     * ditches can pull it down, which only makes {@link #base} start its walk deeper (the plane is where the ground can
+     * be at the lowest, not where a column's ground is). Fewer than {@link #MIN_FIT} samples or a degenerate layout give
+     * a level plane at the lowest median.
      *
      * @return {@code {a, b, c}}: height = c + a·x + b·z
      */
     public static double[] fit(double[] x, double[] z, double[] h, int n) {
         boolean[] keep = new boolean[n];
         Arrays.fill(keep, true);
-        double[] p = level(h, keep, n);
-        for (int round = 0; round < ROUNDS; round++) {
-            double[] q = leastSquares(x, z, h, keep, n);
-            if (q == null) q = level(h, keep, n);
-            p = q;
+        double[] p = keptFit(x, z, h, keep, n);
+        for (int round = 0; round < ROUNDS && n >= MIN_FIT; round++) {
             boolean changed = false;
             int kept = 0;
             for (int i = 0; i < n; i++) {
-                boolean k = h[i] - at(p, x[i], z[i]) < ABOVE;
+                boolean k = h[i] - at(p, x[i], z[i]) < BAND;
                 changed |= k != keep[i];
                 keep[i] = k;
                 if (k) kept++;
             }
             if (!changed || kept == 0) break;
+            p = keptFit(x, z, h, keep, n);
         }
         return p;
+    }
+
+    private static double[] keptFit(double[] x, double[] z, double[] h, boolean[] keep, int n) {
+        int kept = 0;
+        for (int i = 0; i < n; i++) if (keep[i]) kept++;
+        double[] q = kept < MIN_FIT ? null : leastSquares(x, z, h, keep, n);
+        return q != null ? q : level(h, keep, n);
     }
 
     /** Plane height at ({@code x}, {@code z}) relative to the epicentre. */
     public static double at(double[] plane, double x, double z) {
         return plane[2] + plane[0] * x + plane[1] * z;
+    }
+
+    /**
+     * Ground of a column under the crater, as a heightmap height (first air above). {@code natural} is the column's top
+     * ground block plus one, {@code plane} the ground plane there. A column standing above the plane is walked up from
+     * {@link #BAND} below it: the first built block, or the first air under a ground layer thinner than {@link #FLOOR},
+     * is a building, and the ground is the top of the ground under it (never below that walk's start). A column of ground
+     * alone, or not above the plane, keeps {@code natural}. A thin cave roof counts as a floor too: it does not survive
+     * the burst, and the walk never goes below the plane band.
+     */
+    public static int base(Column column, int natural, double plane, int minY) {
+        if (!(natural > plane + 0.5)) return natural;
+        int from = Math.max(minY, (int) Math.floor(plane) - (int) BAND);
+        for (int y = from; y < natural - 1; y++) {
+            Layer l = column.at(y);
+            if (l == Layer.GROUND || l == Layer.LIQUID) continue;
+            if (l == Layer.AIR) {
+                int run = 0;
+                while (run < FLOOR && y + 1 + run < natural && column.at(y + 1 + run) == Layer.GROUND) run++;
+                if (run == 0 || run >= FLOOR) continue;
+            }
+            int g = y - 1;
+            while (g >= from && column.at(g) != Layer.GROUND) g--;
+            return Math.min(natural, Math.max(g + 1, from));
+        }
+        return natural;
     }
 
     /**
@@ -95,6 +153,7 @@ public final class CraterGround {
         return (bits >>> 11) * 0x1.0p-53;
     }
 
+    /** Level plane at the lowest median of the kept samples (of all, if none is kept). */
     private static double[] level(double[] h, boolean[] keep, int n) {
         double[] v = new double[n];
         int m = 0;

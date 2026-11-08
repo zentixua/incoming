@@ -542,7 +542,7 @@ public final class NuclearWorld {
                 clock.end(u0);
             }
             events.craterProgress(job.detonation().id(), job.progress(), s == CraterJob.Step.DONE);
-            double[] ground = job.ground();
+            double[] ground = job.surveyedGround();
             if (s != CraterJob.Step.DONE && ground != null) events.craterGround(job.detonation().id(), ground);
             if (s == CraterJob.Step.DONE) craters.removeFirst();
             else if (s == CraterJob.Step.WAIT) break;

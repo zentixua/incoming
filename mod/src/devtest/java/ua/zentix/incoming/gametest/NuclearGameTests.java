@@ -40,6 +40,7 @@ import ua.zentix.incoming.nuclear.NuclearWarhead;
 import ua.zentix.incoming.nuclear.model.BlastInjury;
 import ua.zentix.incoming.nuclear.model.SicknessModel;
 import ua.zentix.incoming.nuclear.model.ThermalModel;
+import ua.zentix.incoming.nuclear.model.CraterGround;
 import ua.zentix.incoming.nuclear.model.CraterModel;
 import ua.zentix.incoming.nuclear.model.Yield;
 import ua.zentix.incoming.nuclear.world.BlastBody;
@@ -1775,10 +1776,11 @@ public final class NuclearGameTests {
 
     /**
      * Ground blasting 1 Mt, bypassing the limit 15 kt (the blast was assembled in the test, not through {@code detonate}) - for the sake of a large
-     *  bowl, 1 block = 15 m: bowl according to the profile of the model ±1 block from the ground under the crater; a hillock
-     *  in the bowl is thrown out with it, and so is a building whose floors and roof garden are ground-tagged blocks
-     *  (terracotta, grass): the bowl was cut from its roof and left its storeys standing in the crater (Zearth 08.11.2026,
-     *  200 kt); the hill on the rampart is not cut off, there is a rampart around it; air blast does not give crater.
+     *  bowl, 1 block = 15 m: bowl according to the profile of the model ±1 block from the ground of each column (the hillock
+     *  in the bowl deepens from its height, the hill on the rampart is not cut off); a building whose floors and roof
+     *  garden are ground-tagged blocks (terracotta, grass) stands on the ground below it, so the bowl is cut from there, not
+     *  from its roof, which left its storeys standing in the crater (Zearth 08.11.2026, 200 kt); there is a rampart around
+     *  it; air blast does not give crater.
      */
     @GameTest(template = "range", timeoutTicks = 400, batch = "nuke_crater", skyAccess = true)
     public static void groundBurstDigsCraterProfile(GameTestHelper h) {
@@ -1811,7 +1813,7 @@ public final class NuclearGameTests {
                 BlockPos p = h.absolutePos(CENTER.east(Mth.floor(radius * f)));
                 assertSurface(h, d, soil, p, d.groundY(), "on " + f + " radius");
             }
-            assertSurface(h, d, soil, h.absolutePos(bump), d.groundY(), "on the hillock");
+            assertSurface(h, d, soil, h.absolutePos(bump), d.groundY() + 3, "on the hill");
             assertSurface(h, d, soil, h.absolutePos(tower), d.groundY(), "under the terracotta tower");
             BlockPos hillTop = h.absolutePos(hill);
             h.assertTrue(level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, hillTop.getX(), hillTop.getZ()) >= hillTop.getY() + 6,
@@ -1824,7 +1826,8 @@ public final class NuclearGameTests {
     }
 
     private static void assertSurface(GameTestHelper h, Detonation d, CraterModel.Soil soil, BlockPos p, double ground, String where) {
-        double r = d.metres(Math.hypot(p.getX() + 0.5 - d.burst().x, p.getZ() + 0.5 - d.burst().z));
+        double dx = p.getX() + 0.5 - d.burst().x, dz = p.getZ() + 0.5 - d.burst().z;
+        double r = d.metres(Math.hypot(dx, dz) / CraterGround.edge(Math.atan2(dz, dx), d.seed() % 13));
         int expected = Mth.floor(ground - d.blocks(CraterModel.profileDepth(r, d.yieldKt(), soil)));
         int actual = h.getLevel().getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, p.getX(), p.getZ());
         h.assertTrue(Math.abs(actual - expected) <= 1, "crater profile " + where + ": height " + actual + ", waited " + expected);

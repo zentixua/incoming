@@ -48,7 +48,7 @@ What differs from the design below, and why.
 | §3.1 — `LevelTickEvent.Post` processing | `ServerTickEvent.Post`, one budget/server tick across dimensions, next dimension goes first each tick | per-dimension budgets would double with two dimensions; rotation prevents endless waiting |
 | §4 — `incoming:burns`: no natural regeneration, running damage | healing allowed but health capped by burn loss until healing (game weeks); no running injury | burns remove health share by burned skin until healed (§4 “Light”); running pain is not a wound |
 | §4 — creative mode | meter shows field, no burns/dose | build/inspect aftermath without sickness |
-| §3.5 — crater profile relative to epicenter | depth/rim relative to a ground plane fitted through the low surface of the bowl chunks (`CraterGround`; a column whose natural ground is lower keeps it), plane and per-chunk progress saved | slope crater does not flatten hill to epicenter; buildings of ground-tagged blocks (terracotta floors, roof gardens) and knolls in the bowl are cut with it instead of lifting it (Zearth 08.11.2026: the bowl was cut from roofs); resumes after restart |
+| §3.5 — crater profile relative to epicenter | depth/rim relative to each column's ground: its natural ground, or for a building (a built block, or a ground layer thinner than 6 over air, found walking up from 3 below a plane fitted through the low surface of the chunks around the bowl, `CraterGround`) the ground under it; plane and per-chunk progress saved | slope crater does not flatten hill to epicenter; buildings of ground-tagged blocks (terracotta floors, roof gardens) are cut with it instead of lifting it (Zearth 08.11.2026: the bowl was cut from roofs); a solid ground-tagged podium directly on ground and a thin cave roof are approximations (est.); resumes after restart |
 | §4 — instant thermal/prompt radiation, all loaded chunks queued at once | detonation tick snapshots only; entities (nearest first)/chunk enqueue under tick budget, light before front | hundreds of mobs/thousands of chunks would stall detonation tick 0.2–0.4 s; real pulse also lasts about a second (Glasstone §7.85) |
 | §3.1 — “epicenter chunk not loaded for destruction” | loads in background 10 s before detonation | exact terrain height/crater soil needed; background load never stops server |
 | §3.1 — enqueue chunk when loaded | queued while in memory (not only fully loaded); loaded-world edge holds ticket with neighbors until processed; after 7 days detonation forgotten for fallout but retained for destruction (`NuclearEvents.past`) | view-edge chunk drops below full loading/returns without new `ChunkEvent.Load`, player-area edge would wait forever for neighbors, leaving untouched seams/bands |
@@ -381,8 +381,9 @@ Ray from sphere center to block top uses `MOTION_BLOCKING` heightmap, 16 samples
 above ray means shadow. One array read/sample, no `clip`; hill/building shadows.
 
 ### 3.5 Crater
-Separate `CraterJob`: survey of the bowl chunks (ground plane, `CraterGround`), then rim-radius columns sorted outward,
-one at a time, cut to profile depth below that ground; irregular non-periodic edge (`CraterGround.edge`); rim of ground material
+Separate `CraterJob`: survey of the chunks around the bowl (ground plane, `CraterGround.fit`), then rim-radius columns
+sorted outward, one at a time, cut to profile depth below the column's ground (`CraterGround.base`: the ground under a
+building, otherwise the column's natural ground); irregular non-periodic edge (`CraterGround.edge`); rim of ground material
 (mod `GroundMaterial`), ~30% trinitite on floor/walls. Same budget. Immediately after detonation, vanilla `level.explode`
 at center (`nuclear.core_power` 60) pushes Sable craft/nearby entities; everything else custom.
 
