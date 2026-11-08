@@ -174,6 +174,23 @@ class ShaderSourceTest {
     }
 
     /**
+     * Ordinary ray steps have one layout on every ray; the storm frame adds a finer grid of its own on top of them. When a ray
+     * through the frame took its steps from the rest of the ray, the pall behind the frame was sampled coarser than beside
+     * it: coarse steps let more light through clumped dust, and from a hill the frame stood in the far pall as a lighter
+     * rectangle with straight edges (3.11.0 check, 08.11).
+     */
+    @Test
+    void stormFrameKeepsTheOrdinarySteps() throws IOException, URISyntaxException {
+        Path include = Path.of(ShaderSourceTest.class.getResource("/assets/incoming/shaders/include").toURI());
+        String pall = Files.readString(include.resolve("fx_pall.glsl"));
+        String along = blankComments(body(pall, "float along("));
+        assertTrue(pall.contains("float along(float u, float t0, float t1)"), "fx_pall: ordinary steps depend on the storm frame");
+        assertFalse(along.contains("PallFire"), "fx_pall: ordinary steps depend on the storm frame");
+        String march = blankComments(body(pall, "void main("));
+        assertTrue(march.contains("storm.x <= ta && ta < storm.y"), "fx_pall: the storm frame is not a fine interval");
+    }
+
+    /**
      * The mean mushroom depth behind a point (view ray beyond it, away from a high sun) samples four points over kilometers; on a
      * downward path the samples under the ground count nothing and drop under it one by one as the ray tilts, so the light of the
      * haze below a viewer stepped in rings around the nadir. The path ends where the matter does, just under the ground plane.

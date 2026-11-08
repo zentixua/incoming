@@ -835,9 +835,11 @@ paths:
   surroundings' glow (`fireAround`) — all of the map's fire (its copy 1×1) as a source the size of a city, 1/r² from the
   epicentre, with the dust's phase and extinction by haze from the zone's edge: without it the dust around a burning
   city glowed at night only above the fire, and from 2 km the city stood as a dark mass behind a kilometre of unlit
-  dust. Smoke of the columns — in the same ray march of `fx_pall` (the storm frame `PallFireMin/Max`: there half the
-  steps); tornadoes (up to 4 in the frame, the near ones) — their own short march along the cylinder, merged into the
-  ray when the step reaches the entry. Flame on surfaces — in `fx_pall_composite` by the world's depth: not nearer than
+  dust. Smoke of the columns — in the same ray march of `fx_pall` (the storm frame `PallFireMin/Max`: its own grid up to
+  half the steps with the ordinary ones already there, on top of them like the head's segments; ordinary steps stay the same on every ray: taking
+  the frame's steps from the rest of the ray sampled the pall behind it coarser than beside it, and coarse steps pass more
+  light through clumped dust, so the frame stood far away as a lighter rectangle); tornadoes (up to 4 in the frame, the
+  near ones) — their own short march along the cylinder, merged into the ray when the step reaches the entry. Flame on surfaces — in `fx_pall_composite` by the world's depth: not nearer than
   `FireStorms.FLAME_NEAR` (it shows up to one and a half; there a spot of paint is visible, while real vanilla fire
   burns), not higher than Minecraft's clouds (`F[3].w`: clouds write depth, so without the cut-off the clouds "burned"),
   and beyond the edge of drawing without DH — on the terrain under the pall (`pallFloor`). The layer's quads take the

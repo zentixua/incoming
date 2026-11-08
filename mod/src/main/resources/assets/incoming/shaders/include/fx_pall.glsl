@@ -829,20 +829,13 @@ float pallClip(float sigma, float tau, float mu) {
     return -8.317766 * log2(max(1.0 - x, 1e-7)) / (x * sigma);
 }
 
-// Location of ray step u (0..1) along [t0, t1] with storm interval [fa, fb]: fraction a of steps before storm (denser
-// near eye), b inside (uniform; denser near eye if storm starts there), rest beyond. No storm (a = 1, fa = t1) —
-// simply denser near eye
-float along(float u, float t0, float fa, float fb, float t1, float a, float b) {
-    if (u < a) {
-        float x = u / a;
-        return t0 + (fa - t0) * x * x;
-    }
-    if (u < a + b) {
-        float x = (u - a) / b;
-        float k = a > 0.0 ? x : x * x;
-        return fa + (fb - fa) * k;
-    }
-    return fb + (t1 - fb) * (u - a - b) / max(1.0 - a - b, 1e-6);
+// Location of ordinary ray step u (0..1) along [t0, t1]: denser near the eye. Every ray has the same layout; finer
+// intervals (the dust-wall head, the storm frame) add their own grid on top of it. A ray through the storm frame that
+// took its steps from the rest of the ray instead sampled the pall behind the frame coarser than the rays beside the frame:
+// coarse steps let more light through clumped dust (the mean of exp(−σ·ds) exceeds exp of the mean), and the frame
+// stood in the pall far away as a lighter rectangle with straight edges
+float along(float u, float t0, float t1) {
+    return t0 + (t1 - t0) * u * u;
 }
 
 // Slot Wilson cloud (S, L — pallWilson), eye ray dir crossing at t with depth tau: light (rgb), transmittance (a).
@@ -1748,30 +1741,33 @@ void main() {
     if (PallFroxel.z > 0.0) m0 = max(m0, PallFroxel.z / axis);
     int steps = int(PallFrame.y);
     float n = float(steps);
-    // pall steps denser near eye; storm ray bounds get half the steps (columns smaller than whole-pall step)
-    float fa = t1, fb = t1, a = 1.0, b = 0.0;
-    // dust wall head: ray intervals (entry, exit), grid step below
+    // pall steps denser near eye (along); the dust wall head and the storm frame add finer grids of their own
+    // dust wall head: ray intervals (entry, exit), grid step below; storm frame: (entry, exit, grid step)
     vec4 enter = vec4(1e9), leave = vec4(1e9), fineStep = vec4(1.0);
+    vec3 storm = vec3(1e9, 1e9, 1.0);
     if (t1 > t0) {
+        // storm frame: half the steps across it (columns are smaller than a whole-pall step), counting the ordinary steps
+        // already there (along: u = √((t − t0)/(t1 − t0))) — near the eye they may be that many already
+        float stormWant = 0.0;
         vec2 fs = pallBox(dir, PallFireMin, PallFireMax);
         if (PallFireMax.x > PallFireMin.x && min(fs.y, t1) - max(fs.x, t0) > 1.0) {
-            fa = max(fs.x, t0);
-            fb = min(fs.y, t1);
-            a = fa - t0 > 1.0 ? 0.25 : 0.0;
-            float after = t1 - fb > 1.0 ? 0.2 : 0.0;
-            b = 1.0 - a - after;
+            storm.xy = vec2(max(fs.x, t0), min(fs.y, t1));
+            vec2 u = sqrt(clamp((storm.xy - t0) / (t1 - t0), 0.0, 1.0));
+            stormWant = max(0.5 * n - n * (u.y - u.x), 0.0);
+            if (stormWant < 1.0) storm = vec3(1e9, 1e9, 1.0);
         }
         // Denser dust-head marching: step one eighth of head height (a roller thicker than step would be hit or missed,
-        // accumulating shimmer instead of billows); at most steps extra steps across all intervals. Each interval has its own
-        // entry-based grid with frame jitter; ordinary steps inside are skipped
+        // accumulating shimmer instead of billows); with the storm frame at most steps extra steps across all intervals.
+        // Each interval has its own entry-based grid with frame jitter; ordinary steps inside are skipped
         vec4 hs0 = pallWallSpans(PallSlot0, PallWall0, PallGround0, dir, t0, t1);
         vec4 hs1 = pallWallSpans(PallSlot1, PallWall1, PallGround1, dir, t0, t1);
         enter = vec4(hs0.x, hs0.z, hs1.x, hs1.z);
         leave = vec4(hs0.y, hs0.w, hs1.y, hs1.w);
         fineStep = vec4(0.12 * PallWall0[0].z, 0.12 * PallWall0[0].z, 0.12 * PallWall1[0].z, 0.12 * PallWall1[0].z);
         vec4 want = max(leave - enter, vec4(0.0)) / max(fineStep, vec4(1.0));
-        float wanted = want.x + want.y + want.z + want.w;
+        float wanted = want.x + want.y + want.z + want.w + stormWant;
         float fit = wanted > n ? n / wanted : 1.0;
+        if (stormWant >= 1.0) storm.z = (storm.y - storm.x) / max(floor(stormWant * fit), 1.0);
         for (int k = 0; k < 4; k++) {
             if (leave[k] <= enter[k]) {
                 enter[k] = 1e9;
@@ -1785,9 +1781,9 @@ void main() {
     int i = 0, base = 0, pallSteps = 2 * steps + 16;
     float ta = 1e9, nextBase = 1e9, lastBase = 1e9;
     if (t1 > t0) {
-        ta = along(jitter / n, t0, fa, fb, t1, a, b);
+        ta = along(jitter / n, t0, t1);
         lastBase = ta;
-        nextBase = along((1.0 + jitter) / n, t0, fa, fb, t1, a, b);
+        nextBase = along((1.0 + jitter) / n, t0, t1);
     }
     // mushroom: empty space to matter, then half optical depth, no finer than pixel or quarter pall step over its interval
     int mk = 0, mSteps = steps + 16;
@@ -1837,7 +1833,7 @@ void main() {
             if (gap > 0.0) se += 1;
             else sk += 1;
         } else if (pallLeft && (!mushLeft || ta <= tm)) {
-            // step end: ordinary boundary or head interval entry; inside, nearest of its grid boundary (or exit) and ordinary
+            // step end: ordinary boundary or head/storm interval entry; inside, nearest of its grid boundary (or exit) and ordinary
             // boundary: near eye ordinary steps are denser, preserving nearby dust as wall passes through viewer
             float next = nextBase, grid = nextBase - lastBase;
             bool dense = false;
@@ -1849,16 +1845,23 @@ void main() {
                     next = min(next, min(enter[k] + (j + jitter) * fineStep[k], leave[k]));
                 }
             }
+            if (!dense && storm.x <= ta && ta < storm.y) {
+                dense = true;
+                grid = min(grid, storm.z);
+                float j = floor((ta - storm.x) / storm.z - jitter + 1e-3) + 1.0;
+                next = min(next, min(storm.x + (j + jitter) * storm.z, storm.y));
+            }
             if (!dense) {
                 for (int k = 0; k < 4; k++) {
                     if (enter[k] > ta) next = min(next, enter[k]);
                 }
+                if (storm.x > ta) next = min(next, storm.x);
             }
             next = min(next, t1);
             for (int k = 0; k < steps && nextBase <= next + 1e-4; k++) {
                 base += 1;
                 lastBase = nextBase;
-                nextBase = along((float(base) + 1.0 + jitter) / n, t0, fa, fb, t1, a, b);
+                nextBase = along((float(base) + 1.0 + jitter) / n, t0, t1);
             }
             if (next > ta) pallStep(ta, next - ta, grid, light, transmit, lost);
             i += 1;
