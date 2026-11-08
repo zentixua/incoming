@@ -49,7 +49,23 @@ final class RuinSettle {
      * read as final blocks and waiting for a load slot, or waiting for a header read (first, after its ruins, or retry).
      */
     private final it.unimi.dsi.fastutil.longs.LongLinkedOpenHashSet active = new it.unimi.dsi.fastutil.longs.LongLinkedOpenHashSet(),
-            ready = new it.unimi.dsi.fastutil.longs.LongLinkedOpenHashSet(), unread = new it.unimi.dsi.fastutil.longs.LongLinkedOpenHashSet();
+            unread = new it.unimi.dsi.fastutil.longs.LongLinkedOpenHashSet();
+    /**
+     * Entries waiting for a load slot, in {@link #SETTLE_ORDER}: a full load from disk also decodes its ring-1 neighbours
+     * (light), so loads next to each other share them. In the order entries became ready, 98 % of loads found all eight
+     * neighbours on disk, 8.7 decodes a load (1 Mt Zearth r4 run8).
+     */
+    private final it.unimi.dsi.fastutil.longs.LongAVLTreeSet ready = new it.unimi.dsi.fastutil.longs.LongAVLTreeSet(SETTLE_ORDER);
+    /** Side of the square tiles loads go through, chunks; inside a tile and between tiles row by row. */
+    static final int SETTLE_TILE = 8;
+    /** Settlement load order: by tile of {@link #SETTLE_TILE} chunks, then by row and column inside it. */
+    static final it.unimi.dsi.fastutil.longs.LongComparator SETTLE_ORDER = (a, b) -> {
+        int az = ChunkPos.getZ(a), ax = ChunkPos.getX(a), bz = ChunkPos.getZ(b), bx = ChunkPos.getX(b);
+        int c = Integer.compare(Math.floorDiv(az, SETTLE_TILE), Math.floorDiv(bz, SETTLE_TILE));
+        if (c == 0) c = Integer.compare(Math.floorDiv(ax, SETTLE_TILE), Math.floorDiv(bx, SETTLE_TILE));
+        if (c == 0) c = Integer.compare(az, bz);
+        return c != 0 ? c : Integer.compare(ax, bx);
+    };
     private Detonation detonation;
     private RuinProgress.Pass pass;
     private long nextReport, settled, loaded, began, checkAt;
@@ -118,7 +134,8 @@ final class RuinSettle {
         while (admit && holding < loadingLimit && !ready.isEmpty() && clock.canStart()
                 && (NuclearTickets.inMemory(level, ready.firstLong()) != null
                     || pace.tryStart(level, ChunkPos.getX(ready.firstLong()), ChunkPos.getZ(ready.firstLong())))) {
-            long key = ready.removeFirstLong();
+            long key = ready.firstLong();
+            ready.remove(key);
             visited++;
             Entry e = entries.get(key);
             long unit = clock.begin();

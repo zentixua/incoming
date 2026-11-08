@@ -26,11 +26,19 @@ import java.util.function.LongSupplier;
  * the chunks of that square that are not in memory at any status ({@link #decodes}).
  * <p>
  * The gap a tick leaves for decodes is measured where it really starts, at the end of the last Post listener: the next
- * scheduled start minus that moment. Requests come earlier, from the middle of the work lanes, so they use the smallest
- * gap of the last {@link #GAPS} ticks less {@link #MARGIN_NANOS}. A load may start while the decodes requested this tick
- * and not yet seen, times the measured decode cost, fit in it. The cost comes from consecutive
- * {@code ChunkDataEvent.Load} events (fired at the end of {@code ChunkSerializer.read}) within one gap; a pause over
- * {@link #IDLE_NANOS} between two is a wait for disk and not counted. A server with no gap still starts one load per
+ * scheduled start minus that moment. Requests come earlier, from the middle of the work lanes, and their reads land a
+ * tick or more later, so they use the gap of the last {@link #GAPS} ticks at its 20th percentile (the third smallest),
+ * times a budget factor, less
+ * {@link #MARGIN_NANOS}. A load may start while the decodes requested this tick and not yet seen, times the measured
+ * decode cost, fit in it. The factor follows the outcome: a tick that starts over {@link #LATE_NANOS} late although the
+ * tick before it ended with time to spare cuts it ({@link #FACTOR_DOWN}); a tick on time after denied loads raises it
+ * ({@link #FACTOR_UP}, up to 1). The smallest gap of 10 ticks (the first version) used 11.7 ms where 31.8 ms was free
+ * (median in ticks with denied loads) and slowed the 1 Mt settlement fourfold (r4 run8); the median itself started a
+ * fifth of slow ticks late in {@code ChunkLoadPaceTest}. The decode cost is the server thread's CPU time between the
+ * end of a tick and the start of the next, divided by the {@code ChunkDataEvent.Load} events (fired at the end of
+ * {@code ChunkSerializer.read}) in it: other between-tick work of the loads counts, waits for disk reads do not. Timing
+ * consecutive events (the first version) counted those waits: 1.1 ms where JFR showed 0.34 ms of
+ * {@code ChunkSerializer.read} and 0.4 ms of all between-tick work a decode (r4 run9). A server with no gap still starts one load per
  * {@link #FLOOR_TICKS} ticks, so background work ends eventually.
  * <p>
  * State is per server (overworld attachment), not saved.
@@ -38,47 +46,63 @@ import java.util.function.LongSupplier;
 public final class ChunkLoadPace {
     /** Decodes should end this long before the next tick's scheduled start (other between-tick tasks, estimate error). */
     static final long MARGIN_NANOS = 5_000_000;
-    /** Starting decode cost until measured: Zearth city/terrain chunks, r4 run6. */
-    static final double DEFAULT_COST_NANOS = 3e6;
     /**
-     * A pause between two decodes longer than this is a wait for the disk read, not decoding. Generous: a disk wait taken
-     * for a decode only slows loading, a heavy chunk (block entities) dropped from the average would overrun gaps.
+     * Starting decode cost until measured: Zearth, r4 run8 (between-tick server thread 69 ms/s for ~130 decodes/s, of it
+     * {@code ChunkSerializer.read} 0.33 ms a chunk; the gap measurement here read 0.9 ms).
      */
-    static final long IDLE_NANOS = 30_000_000;
-    /** Per-sample weight of the decode cost average (about a hundred decodes a second during settlement). */
+    static final double DEFAULT_COST_NANOS = 1e6;
+    /** Weight of one gap's sample in the decode cost average (a sample a tick while loads decode). */
     static final double WEIGHT = 0.05;
     /** Requested decodes not seen by the next tick keep this share per tick: their reads may still be queued. */
     static final double CARRY = 0.8;
     /** A server with no gap still starts one load per this many ticks. */
     static final int FLOOR_TICKS = 4;
-    /** Gaps remembered; requests use the smallest (a slow tick, an autosave, holds loads back for a moment). */
+    /** Gaps remembered; requests use their 20th percentile. */
     static final int GAPS = 10;
+    /** A tick starting this much after its schedule, after a tick that ended in time, was delayed between ticks. */
+    static final long LATE_NANOS = 3_000_000;
+    /** Budget factor change on such a late start, and its step up after an on-time tick with denied loads. */
+    static final double FACTOR_DOWN = 0.7, FACTOR_UP = 0.05, FACTOR_MIN = 0.2;
     /** Budget per tick while sprinting ({@code /tick sprint}: no schedule to keep). */
     static final long SPRINT_NANOS = 25_000_000;
 
-    private final LongSupplier time;
+    private final LongSupplier time, cpu;
     private double cost = DEFAULT_COST_NANOS;
     /** Decodes requested here and not yet seen. */
     private double outstanding;
     /** Gaps of the last ticks (next scheduled start minus tick end), ns. */
     private final long[] gaps = new long[GAPS];
     private int gapCount, gapNext;
-    /** Time of the previous decode in the current gap; 0 before the first. */
-    private long lastDecode;
+    /** Server thread CPU time at the end of the last tick, 0 inside a tick; decodes seen since. */
+    private long cpuAtEnd;
+    private int gapDecodes;
     private long tickEnd;
     private int lastStartTick = Integer.MIN_VALUE / 2;
+    /** Share of the gap loads may fill; see the class comment. */
+    private double factor = 1;
+    /** A load was denied since the last tick start. */
+    private boolean denied;
+    /** The last measured gap, 0 before the first. */
+    private long lastGap;
     /** Report counters: loads started, of them through the floor, decodes requested, decodes seen, decode-cost samples. */
     private long started, floored, requested, decoded, samples;
     /** Report counters: ticks, tick-start intervals over 60 ms, ticks starting over 10 ms after schedule, longest interval. */
     private long ticks, longIntervals, late, maxInterval, lastStart;
 
     public ChunkLoadPace() {
-        this(Util::getNanos);
+        this(Util::getNanos, threadCpu());
     }
 
-    /** Controlled clock (tests). */
-    ChunkLoadPace(LongSupplier time) {
+    /** Controlled clocks (tests): wall time and the calling thread's CPU time. */
+    ChunkLoadPace(LongSupplier time, LongSupplier cpu) {
         this.time = time;
+        this.cpu = cpu;
+    }
+
+    /** The calling thread's CPU time; wall time where the JVM cannot measure it (waits then count as decoding: slower). */
+    private static LongSupplier threadCpu() {
+        java.lang.management.ThreadMXBean bean = java.lang.management.ManagementFactory.getThreadMXBean();
+        return bean.isCurrentThreadCpuTimeSupported() && bean.isThreadCpuTimeEnabled() ? bean::getCurrentThreadCpuTime : Util::getNanos;
     }
 
     public static ChunkLoadPace of(MinecraftServer server) {
@@ -103,12 +127,12 @@ public final class ChunkLoadPace {
         return n;
     }
 
-    /** The smallest gap of the last ticks, less the margin; unknown before the first measured tick. */
+    /** The 20th percentile gap of the last ticks times the budget factor, less the margin; unknown before the first measured tick. */
     long gap() {
         if (gapCount == 0) return 0;
-        long min = Long.MAX_VALUE;
-        for (int i = 0; i < gapCount; i++) min = Math.min(min, gaps[i]);
-        return min - MARGIN_NANOS;
+        long[] sorted = java.util.Arrays.copyOf(gaps, gapCount);
+        java.util.Arrays.sort(sorted);
+        return (long) (factor * sorted[gapCount / 5]) - MARGIN_NANOS;
     }
 
     /**
@@ -120,6 +144,7 @@ public final class ChunkLoadPace {
         long left = sprinting ? SPRINT_NANOS : gap();
         boolean fits = left > 0 && (outstanding + decodes) * cost <= left;
         boolean floor = !fits && tick - lastStartTick >= FLOOR_TICKS;
+        if (!fits) denied = true;
         if (!fits && !floor) return false;
         outstanding += decodes;
         lastStartTick = tick;
@@ -137,13 +162,7 @@ public final class ChunkLoadPace {
 
     /** A chunk was decoded from disk on the server thread. */
     void decoded() {
-        long now = time.getAsLong();
-        long since = now - (lastDecode != 0 ? lastDecode : tickEnd);
-        if (tickEnd != 0 && since > 0 && since <= IDLE_NANOS) {
-            cost += WEIGHT * (since - cost);
-            samples++;
-        }
-        lastDecode = now;
+        if (cpuAtEnd != 0) gapDecodes++;
         outstanding = Math.max(0, outstanding - 1);
         decoded++;
     }
@@ -151,8 +170,10 @@ public final class ChunkLoadPace {
     /** The tick's work is over (last Post listener): decodes start from here. {@code nextTick}: next scheduled start. */
     void tickEnded(long nextTick) {
         tickEnd = time.getAsLong();
-        lastDecode = 0;
-        gaps[gapNext] = nextTick - tickEnd;
+        cpuAtEnd = cpu.getAsLong();
+        gapDecodes = 0;
+        lastGap = nextTick - tickEnd;
+        gaps[gapNext] = lastGap;
         gapNext = (gapNext + 1) % GAPS;
         gapCount = Math.min(GAPS, gapCount + 1);
     }
@@ -163,8 +184,18 @@ public final class ChunkLoadPace {
      */
     void tickStarted(long scheduled) {
         long now = time.getAsLong();
+        if (cpuAtEnd != 0 && gapDecodes > 0) {
+            cost += WEIGHT * ((double) (cpu.getAsLong() - cpuAtEnd) / gapDecodes - cost);
+            samples++;
+        }
+        cpuAtEnd = 0;
+        gapDecodes = 0;
+        if (scheduled != 0 && lastGap > MARGIN_NANOS) {
+            if (now - scheduled > LATE_NANOS) factor = Math.max(FACTOR_MIN, factor * FACTOR_DOWN);
+            else if (denied) factor = Math.min(1, factor + FACTOR_UP);
+        }
+        denied = false;
         tickEnd = 0;
-        lastDecode = 0;
         outstanding *= CARRY;
         if (lastStart != 0) {
             long interval = now - lastStart;
@@ -177,6 +208,7 @@ public final class ChunkLoadPace {
     }
 
     double costNanos() { return cost; }
+    double factor() { return factor; }
     double outstanding() { return outstanding; }
 
     /**
@@ -187,8 +219,9 @@ public final class ChunkLoadPace {
         long n = Math.max(1, ticks);
         String out = String.format(java.util.Locale.ROOT,
                 "tick starts: intervals over 60 ms %.1f%%, late over 10 ms %.1f%%, longest interval %.1f ms; "
-                        + "paced chunk loads %d (%d at the floor) for %d decodes, decoded %d, decode %.2f ms (%d samples)",
-                longIntervals * 100.0 / n, late * 100.0 / n, maxInterval / 1e6, started, floored, requested, decoded, cost / 1e6, samples);
+                        + "paced chunk loads %d (%d at the floor) for %d decodes, decoded %d, decode %.2f ms (%d samples), budget %.2f of the gap",
+                longIntervals * 100.0 / n, late * 100.0 / n, maxInterval / 1e6, started, floored, requested, decoded, cost / 1e6, samples,
+                factor);
         started = floored = requested = decoded = samples = ticks = longIntervals = late = maxInterval = 0;
         return out;
     }
