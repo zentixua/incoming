@@ -1861,6 +1861,19 @@ public final class NuclearGameTests {
      */
     @GameTest(template = "range", timeoutTicks = 400, batch = "nuke_scan_seen", skyAccess = true)
     public static void seenChunkEnqueuedPastDiskPlans(GameTestHelper h) {
+        seenChunkEnqueued(h, false);
+    }
+
+    /**
+     * The same behind an earlier detonation's scan whose unseen chunks wait for the lane (a crater digging, only the
+     * visible pass runs): the visible pass enqueues the later detonation's chunks in view, not just the head scan's.
+     */
+    @GameTest(template = "range", timeoutTicks = 400, batch = "nuke_scan_seen2", skyAccess = true)
+    public static void seenChunkEnqueuedBehindEarlierScan(GameTestHelper h) {
+        seenChunkEnqueued(h, true);
+    }
+
+    private static void seenChunkEnqueued(GameTestHelper h, boolean earlier) {
         ServerLevel level = h.getLevel();
         BlockPos seenGlass = CENTER.west(8);
         h.setBlock(seenGlass, Blocks.GLASS);
@@ -1878,13 +1891,20 @@ public final class NuclearGameTests {
         ScarQueue q = new ScarQueue();
         ScarQueue.seenForTest(c -> c == seenKey);
         try {
+            if (earlier) {
+                // 3 km east, its zone far from the platform: one loaded chunk nobody sees, never enqueued while only the
+                // visible pass runs
+                BlockPos far = h.absolutePos(CENTER).east(3000);
+                level.getChunk(far);
+                q.scanLoaded(rawAt(h, far, 0, 15, 0.025f));
+            }
             q.scanLoaded(d, plans);
             long due = ScarQueue.due(d, seen.getPos()), ruined = -1;
             WorkClock clock = WorkClock.counting(1_000_000);
             for (long now = d.gameTime(); now <= due + 40 && ruined < 0; now++) {
                 clock.start(3_000_000L);
                 q.workSeen(level, now, clock);
-                q.work(level, now, clock);
+                if (!earlier) q.work(level, now, clock);
                 if (seen.getExistingData(ModAttachments.CHUNK_SCAR).orElse(0) == d.id()) ruined = now;
             }
             h.assertTrue(ruined >= 0, "chunk in view not ruined 40 ticks after its wave: " + q.diagState(seenKey, due + 40));

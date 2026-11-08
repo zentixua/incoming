@@ -763,15 +763,23 @@ public final class ScarQueue {
         diagSeenLag = 0;
     }
 
+    /** First scan with chunks in view still to enqueue (or not yet snapshotted); null if none. */
+    @Nullable
+    private Scan seenScan() {
+        for (Scan s : scans) if (s.chunks == null || s.next < s.seen) return s;
+        return null;
+    }
+
     /** @param seenOnly stop when only chunks nobody sees remain ({@link #workSeen}) */
     private void queue(ServerLevel level, long now, WorkClock clock, boolean seenOnly) {
         // first enqueue chunks loaded at detonations. Order irrelevant: queue uses wave arrival;
         // enqueuing thousands takes several ticks, wave crosses couple chunks meanwhile
         // visible pass: enqueuing gates every visible ruin, so it gets the visible deadline too
         while (!scans.isEmpty() && (seenOnly ? clock.canStartVisible(SEEN_BUSY_NANOS) : clock.canStart())) {
-            Scan scan = scans.peek();
-            // visible pass enqueues only chunks in view; the rest under the lane deadline, after visible ruins
-            if (seenOnly && scan.chunks != null && scan.next >= scan.seen) break;
+            // visible pass enqueues only chunks in view, of every detonation (a later one's view does not wait behind
+            // an earlier one's unseen chunks); the rest under the lane deadline, after visible ruins
+            Scan scan = seenOnly ? seenScan() : scans.peek();
+            if (scan == null) break;
             long c0 = clock.begin();
             try {
                 if (scan.chunks == null) {
@@ -798,13 +806,13 @@ public final class ScarQueue {
             } catch (RuntimeException e) {
                 // later-loaded chunks queued by onChunkLoad
                 Incoming.LOG.error("Queueing chunks of detonation #{} failed with an exception; dropped", scan.d.id(), e);
-                scans.poll();
+                scans.remove(scan);
                 continue;
             } finally {
                 clock.end(c0);
             }
             if (scan.next >= scan.chunks.length) {
-                scans.poll();
+                scans.remove(scan);
                 // in-memory-at-detonation chunks awaiting ruins: log criteria once all done
                 var memory = atDetonation.get(scan.d.id());
                 if (memory != null) {
