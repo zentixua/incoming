@@ -305,6 +305,75 @@ float pallOpen(sampler3D open, vec4 at, vec3 wrap, sampler2D ground, mat4 S, vec
     return texelFetch(open, (ivec3(floor(q)) + ivec3(wrap)) % ivec3(PALL_OPEN_SIZE), 0).r;
 }
 
+// Block light in the window (OpenAir channel g: Minecraft's block light — torches, lamps, lava, fire — and, with LambDynamicLights,
+// light carried by entities as the larger of the two, MovingLight) at eye-relative p, as a light level 0..15, linear between
+// voxel centres (texture filtering; the window wraps in the texture, as GL_REPEAT); 0 outside the window or without it. For the
+// air the dust is in: next to a wall it fades toward the wall's 0
+float pallBlockLevel(sampler3D open, vec4 at, vec3 wrap, vec3 p) {
+    if (at.w < 0.5) return 0.0;
+    vec3 q = p - at.xyz;
+    if (any(lessThan(q, vec3(0.5))) || any(greaterThan(q, PALL_OPEN_SIZE - 0.5))) return 0.0;
+    return 15.0 * texture(open, (q + wrap) / PALL_OPEN_SIZE).g;
+}
+
+// Block light level a world surface was drawn with, at p, a point in the air just in front of it: between the eight voxel centres
+// around p, only those with light. An opaque block holds none (the light engine keeps no light inside it) yet is half of the
+// voxels around a point on its face: with them a lit floor would read half its light. Where lit air meets dark air the level
+// reads at most one level high (the light engine steps by one level per block)
+float pallSurfaceLevel(sampler3D open, vec4 at, vec3 wrap, vec3 p) {
+    if (at.w < 0.5) return 0.0;
+    vec3 q = p - at.xyz - 0.5;
+    if (any(lessThan(q, vec3(0.0))) || any(greaterThanEqual(q, PALL_OPEN_SIZE - 1.0))) return 0.0;
+    vec3 b = floor(q), f = q - b;
+    float sum = 0.0, weight = 0.0;
+    for (int c = 0; c < 8; c++) {
+        ivec3 o = ivec3(c & 1, (c >> 1) & 1, c >> 2);
+        float v = texelFetch(open, (ivec3(b) + o + ivec3(wrap)) % ivec3(PALL_OPEN_SIZE), 0).g;
+        vec3 w3 = mix(1.0 - f, f, vec3(o));
+        float w = w3.x * w3.y * w3.z * step(0.5 / 255.0, v);
+        sum += w * v;
+        weight += w;
+    }
+    return weight > 0.0 ? 15.0 * sum / weight : 0.0;
+}
+
+// Minecraft's lightmap (LightTexture: block light level along x, skylight along y; this frame's time of day, brightness setting,
+// night vision, darkness) at levels (block, sky), as it lights a white block on screen; bilinear between levels
+vec3 pallLightmap(sampler2D lightmap, float block, float sky) {
+    vec2 l = clamp(vec2(block, sky), 0.0, 15.0), b = min(floor(l), 14.0), f = l - b;
+    ivec2 i = ivec2(b);
+    vec3 a = mix(texelFetch(lightmap, i, 0).rgb, texelFetch(lightmap, i + ivec2(1, 0), 0).rgb, f.x);
+    vec3 c = mix(texelFetch(lightmap, i + ivec2(0, 1), 0).rgb, texelFetch(lightmap, i + ivec2(1, 1), 0).rgb, f.x);
+    return mix(a, c, f.y);
+}
+
+// Light of blocks at level `level` in pall units (linear; a white wall under noon daylight = 1, as the lightmap's open sky): what
+// Minecraft adds to a white block for it, over the lightmap's dark floor (level 0 everywhere: night-sky ambient and the
+// brightness setting's lift, which the pall's sky light already holds)
+vec3 pallLampLight(sampler2D lightmap, float level) {
+    if (level <= 0.0) return vec3(0.0);
+    vec3 lit = pallLightmap(lightmap, level, 0.0), dark = pallLightmap(lightmap, 0.0, 0.0);
+    return max(pow(lit, vec3(2.2)) - pow(dark, vec3(2.2)), 0.0);
+}
+
+// The pall's shadow on a world pixel lit by Minecraft from sky (level sky) and from blocks (level block). Minecraft adds the two
+// in its lightmap (LightTexture: block light's colour plus the sky's, clamped); the pall shades only the sky's part — it stands
+// between the sky and the ground, not between a torch and the floor beside it. keptSky: the pixel's multiplier with sky light
+// alone (on screen); returned: with block light kept, (s·sky + block) / lightmap(block, sky) in linear light, where s is keptSky
+// in linear. No block light — keptSky itself. Under a shaderpack the world is lit by the pack's own model, not the lightmap: the
+// same split of a pixel's light by Minecraft's levels is taken as the estimate (Iris packs read the same block and sky levels)
+float pallKeepLamps(float keptSky, sampler2D lightmap, float block, float sky) {
+    if (block <= 0.0 || keptSky >= 1.0) return keptSky;
+    const vec3 Y = vec3(0.2126, 0.7152, 0.0722);
+    float floor0 = dot(pow(pallLightmap(lightmap, 0.0, 0.0), vec3(2.2)), Y);
+    float fromSky = dot(pow(pallLightmap(lightmap, 0.0, sky), vec3(2.2)), Y) - floor0;
+    float fromBlocks = dot(pow(pallLightmap(lightmap, block, 0.0), vec3(2.2)), Y) - floor0;
+    float both = dot(pow(pallLightmap(lightmap, block, sky), vec3(2.2)), Y) - floor0;
+    if (fromBlocks <= 0.0 || both <= 1e-5) return keptSky;
+    float kept = min((pow(keptSky, 2.2) * fromSky + fromBlocks) / both, 1.0);
+    return max(pow(kept, 1.0 / 2.2), keptSky);
+}
+
 // Distance to the world behind the pixel (SceneDepth), fit for the pall: sky, and also NaN, infinity and “behind the eye”
 // (foreign LOD depth, far plane) — 1e9, there is no world behind the pixel. Otherwise the ray would go through kilometers
 // of dust, or a NaN would get into the accumulated pall — a black frame.
@@ -312,6 +381,18 @@ float pallScene(float d) {
     if (d < 0.0) return 1e9;
     if (d < 1e8) return d;
     return 1e9;
+}
+
+// Nearer than this, a distance behind the pixel (SceneDepth) is the first-person hand, not the world. Vanilla draws the hand
+// after the layer, over it; Iris draws it inside the world pass into world depth with its depth range × 0.125
+// (HandRenderer.DEPTH), so at the layer its depth reads as 2n/(1 + n/f − 0.125·(1 − n/f)) ≤ 0.1143 m with the vanilla near
+// plane n = 0.05 (any far plane f; PallHandTest). The world comes this close only at the screen edge of a wide view under a
+// ceiling or wall a hand's breadth away, where the dust in front is centimetres thick and shows nothing either. The pall
+// leaves the hand as vanilla does: no dust, no shadow, no history from it
+const float PALL_HAND = 0.12;
+
+bool pallHand(float d) {
+    return d < PALL_HAND;
 }
 
 // How much the distances d and e to the world are one place (1 — one, toward 0 — different): the weight of a pixel of the pall

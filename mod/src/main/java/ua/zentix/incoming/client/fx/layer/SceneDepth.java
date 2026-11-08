@@ -38,7 +38,14 @@ import java.util.Locale;
 public final class SceneDepth {
     @Nullable
     static ShaderInstance shader;
-    private static int fbo = -1, texture = -1, width, height;
+    /**
+     * Two distance textures, this frame's and the previous one ({@link #previous}): the pall accumulation checks that history it
+     * reprojects came from the same place ({@code fx_pall_resolve}).
+     */
+    private static final int[] FBOS = {-1, -1}, TEXTURES = {-1, -1};
+    private static int fbo = -1, texture = -1, width, height, current;
+    /** The other texture holds the frame before this one: the last two updates both succeeded at this size. */
+    private static boolean previousValid, lastOk;
     private static final LodDepth.View LOD = new LodDepth.View();
     private static final Matrix4f INVERSE = new Matrix4f();
     private static final int[] VIEWPORT = new int[4];
@@ -60,8 +67,16 @@ public final class SceneDepth {
         RenderTarget main = Minecraft.getInstance().getMainRenderTarget();
         int depth = main.getDepthTextureId();
         last = 0;
+        boolean was = lastOk;
+        lastOk = false;
+        previousValid = false;
         if (s == null || depth <= 0) return -1;
+        boolean sized = FBOS[0] >= 0 && main.width == width && main.height == height;
         if (!ensure(main.width, main.height)) return -1;
+        current = 1 - current;
+        fbo = FBOS[current];
+        texture = TEXTURES[current];
+        previousValid = was && sized;
         int previous = GlStateManager._getInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
         GL11.glGetIntegerv(GL11.GL_VIEWPORT, VIEWPORT);
         boolean lod = LodDepth.current(LOD);
@@ -88,6 +103,7 @@ public final class SceneDepth {
         RenderSystem.viewport(VIEWPORT[0], VIEWPORT[1], VIEWPORT[2], VIEWPORT[3]);
         RenderSystem.enableDepthTest();
         last = lod ? 2 : 1;
+        lastOk = true;
         if (DIAG) diag(depth, main.width, main.height, previous, main.frameBufferId);
         return texture;
     }
@@ -248,29 +264,44 @@ public final class SceneDepth {
         }
     }
 
-    /** Custom texture and framebuffer sized to the game frame (recreated on window resize). */
+    /**
+     * The previous frame's distance texture (as {@link #update} returned it then); −1 — none: the previous update failed, or the
+     * frame size changed since.
+     */
+    static int previous() {
+        return previousValid ? TEXTURES[1 - current] : -1;
+    }
+
+    /** Both textures and framebuffers sized to the game frame (recreated on window resize). */
     private static boolean ensure(int w, int h) {
-        if (fbo >= 0 && w == width && h == height) return true;
-        if (texture < 0) texture = GlStateManager._genTexture();
-        if (fbo < 0) fbo = GlStateManager.glGenFramebuffers();
+        if (FBOS[0] >= 0 && w == width && h == height) return true;
         width = w;
         height = h;
-        GlStateManager._bindTexture(texture);
+        for (int i = 0; i < 2; i++) {
+            if (!ensureOne(i, w, h)) {
+                Incoming.LOG.error("Effects layer: depth texture {}×{} not created, no soft edges", w, h);
+                width = height = 0;
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static boolean ensureOne(int i, int w, int h) {
+        if (TEXTURES[i] < 0) TEXTURES[i] = GlStateManager._genTexture();
+        if (FBOS[i] < 0) FBOS[i] = GlStateManager.glGenFramebuffers();
+        int tex = TEXTURES[i], fb = FBOS[i];
+        GlStateManager._bindTexture(tex);
         GlStateManager._texParameter(GlConst.GL_TEXTURE_2D, GlConst.GL_TEXTURE_MIN_FILTER, GlConst.GL_NEAREST);
         GlStateManager._texParameter(GlConst.GL_TEXTURE_2D, GlConst.GL_TEXTURE_MAG_FILTER, GlConst.GL_NEAREST);
         GlStateManager._texParameter(GlConst.GL_TEXTURE_2D, GlConst.GL_TEXTURE_WRAP_S, GlConst.GL_CLAMP_TO_EDGE);
         GlStateManager._texParameter(GlConst.GL_TEXTURE_2D, GlConst.GL_TEXTURE_WRAP_T, GlConst.GL_CLAMP_TO_EDGE);
         GlStateManager._texImage2D(GlConst.GL_TEXTURE_2D, 0, GL30.GL_R32F, w, h, 0, GL11.GL_RED, GL11.GL_FLOAT, null);
         int previous = GlStateManager._getInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
-        GlStateManager._glBindFramebuffer(GlConst.GL_FRAMEBUFFER, fbo);
-        GlStateManager._glFramebufferTexture2D(GlConst.GL_FRAMEBUFFER, GlConst.GL_COLOR_ATTACHMENT0, GlConst.GL_TEXTURE_2D, texture, 0);
+        GlStateManager._glBindFramebuffer(GlConst.GL_FRAMEBUFFER, fb);
+        GlStateManager._glFramebufferTexture2D(GlConst.GL_FRAMEBUFFER, GlConst.GL_COLOR_ATTACHMENT0, GlConst.GL_TEXTURE_2D, tex, 0);
         boolean ok = GlStateManager.glCheckFramebufferStatus(GlConst.GL_FRAMEBUFFER) == GlConst.GL_FRAMEBUFFER_COMPLETE;
         GlStateManager._glBindFramebuffer(GlConst.GL_FRAMEBUFFER, previous);
-        if (!ok) {
-            Incoming.LOG.error("Effects layer: depth texture {}×{} not created, no soft edges", w, h);
-            width = height = 0;
-            return false;
-        }
-        return true;
+        return ok;
     }
 }

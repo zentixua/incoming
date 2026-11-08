@@ -696,7 +696,8 @@ class PallGlslTest {
         String march = read("include/fx_pall.glsl"), composite = read("core/fx_pall_composite.fsh");
         assertTrue(march.contains("vec3 fire = min(below + under * (glow + s.fire / max(s.albedo, vec3(1e-7))) + around, gFlame);"),
                 "fire at a point - one amount under the flame limit");
-        assertTrue(march.contains("vec3 emit = s.albedo * (field + beams + fire);"), "point light - scattered, beams and fire");
+        assertTrue(march.contains("vec3 emit = s.albedo * (field + beams + fire + lamps);"), "point light - scattered, beams, fire and lamps");
+        assertTrue(march.contains("vec3 lamps = pallLampsAt(p);"), "lamps once per point, by the window's block light");
         assertTrue(march.contains("+ min(below * exp(-gSootK * self) + (0.5 + 0.75 * PALL_SOOT_G * mv) * glow + around, gFlame);"),
                 "fire on the smoke of the storm - one sum under the flame limit");
         assertTrue(march.contains("burnLight = pallFlame(") && march.contains("s.burn += burnLight;"), "fires under dust - no brighter than flames");
@@ -712,8 +713,11 @@ class PallGlslTest {
         assertTrue(march.contains("vec4 res = vec4(shown, min(transmit + lost, 1.0));"),
                 "frame transmission - real and in overexposure");
         assertEquals(4, occurrences(composite, "pallDisplay("), "shadow on the world in the screen - once, world in the light of the balls - once per channel");
-        assertTrue(composite.contains("float kept = mix(1.0, pallDisplay(shade(p, over)), seen * pallOpenHere(p - 0.5 * dir));"),
+        assertTrue(composite.contains("float kept = mix(1.0, pallDisplay(shade(p, over)), seen * open);")
+                        && composite.contains("float open = pallOpenHere(air);") && composite.contains("vec3 air = p - 0.5 * dir;"),
                 "the shadow on the world is on the screen, in the distance it melts into haze and fog, it is not underground");
+        assertTrue(composite.contains("if (PallLamps > 0.5) kept = pallKeepLamps(kept, Sampler10, pallSurfaceLevel(PallOpen, PallOpenAt, PallOpenWrap, air), 15.0 * open);"),
+                "torches and lamps keep their share of a pixel's light under the shadow");
         assertTrue(composite.contains("pall.a *= kept;"), "without the light of the balls, the shadow is a multiplier of the world in mixing");
         assertTrue(composite.contains("pall = vec4(pall.rgb + pall.a * shown, 0.0);"), "world in the light of balls - behind the pall, the whole pixel");
         assertEquals(scalar(march, "CROSS"), scalar(composite, "CROSS"), "overexposure to white - like a substance");

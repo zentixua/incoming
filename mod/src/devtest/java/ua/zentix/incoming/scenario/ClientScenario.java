@@ -3830,6 +3830,9 @@ public final class ClientScenario {
                 Incoming.LOG.info("SCENARIO {} white={} rain={} {} fps={}", name, ua.zentix.incoming.client.nuclear.NukeFlash.whiteness(0),
                         ua.zentix.incoming.client.nuclear.NukeSky.blackRain(), rain, mc.getFps());
             }
+            // every frame with the pall's state behind it: detail rung, GPU time by part, block light in the window (lamps), moving
+            // light (LambDynamicLights) — what the frame shows can be read without guessing
+            Incoming.LOG.info("SCENARIO shot {}: pall {}", name, ua.zentix.incoming.client.fx.layer.PallPass.describe());
             Screenshot.grab(mc.gameDirectory, String.format("%s_%04d.png", name, tick), mc.getMainRenderTarget(), c -> {});
         });
     }
