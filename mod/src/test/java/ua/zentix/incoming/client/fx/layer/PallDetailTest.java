@@ -9,10 +9,12 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /** Pall details by time on the GPU: steps, budget, descent immediately, ascent with a reserve and not higher than the settings. */
 class PallDetailTest {
     private static final long MS = 1_000_000L;
-    /** Lowest rung (below the LOW setting: fewer rays per frame). */
+    /** Lowest rung: the LOW setting. */
     private static final int LOW = PallPass.LADDER.length - 1;
-    /** GPU time as a share of the budget, ms. */
-    private static final double B = PallPass.Detail.BUDGET_MS;
+    /** The MEDIUM setting's budget, ms. */
+    private static final double B = PallPass.Quality.MEDIUM.budget;
+    /** The HIGH setting's budget, ms. */
+    private static final double H = PallPass.Quality.HIGH.budget;
 
     /** Frames of 16 ms with one time on the GPU, {@code frames} pieces; watch - in {@code clock[0]}. */
     private static void frames(PallPass.Detail d, double gpuMs, int frames, long[] clock) {
@@ -23,14 +25,14 @@ class PallDetailTest {
     }
 
     /**
-     * Rungs from HIGH down, each at most half the price of the previous one; MEDIUM and LOW are among them, rungs below LOW
-     * for a GPU it does not fit; LOW costs what the former LOW (quarter frame × 20 steps) did.
+     * Rungs from HIGH down, each at most half the price of the previous one; MEDIUM and LOW are among them, LOW is the floor
+     * (fewer rays per frame drew a lattice); LOW costs what the former LOW (quarter frame × 20 steps) did.
      */
     @Test
     void ladderRunsFromHighToLow() {
         assertEquals(0, PallPass.Quality.HIGH.step());
         int medium = PallPass.Quality.MEDIUM.step(), low = PallPass.Quality.LOW.step();
-        assertTrue(medium > 0 && medium < low && low < LOW);
+        assertTrue(medium > 0 && medium < low && low == LOW);
         double old = 20 / 16.0, cost = PallPass.LADDER[low].cost();
         assertTrue(cost >= 0.9 * old && cost <= 1.15 * old, "LOW: " + cost);
         assertEquals(-1, PallPass.Quality.OFF.step());
@@ -39,14 +41,32 @@ class PallDetailTest {
         for (int i = 1; i < PallPass.LADDER.length; i++) {
             double ratio = PallPass.LADDER[i].cost() / PallPass.LADDER[i - 1].cost();
             assertTrue(ratio >= 0.5 && ratio < 0.9, "step " + i + ": " + ratio);
-            assertTrue(PallPass.LADDER[i].steps() >= 20 && PallPass.LADDER[i].interleave() <= 4, "below the floor");
+            assertTrue(PallPass.LADDER[i].steps() >= 20 && PallPass.LADDER[i].interleave() <= 2, "below the floor");
+        }
+    }
+
+    /**
+     * Each setting keeps its own rung at the GPU times measured on Artem's laptop (RTX 4060, 2560×1600, 150 kt firestorm in the
+     * dust, 08.11: LOW up to 6.0 ms, MEDIUM up to 11.7, HIGH up to 16.0); finer settings get larger budgets.
+     */
+    @Test
+    void settingsHoldTheirRungAtMeasuredTimes() {
+        assertTrue(PallPass.Quality.LOW.budget < B && B < H);
+        double[][] measured = {{6.0, PallPass.Quality.LOW.ordinal()}, {11.7, PallPass.Quality.MEDIUM.ordinal()}, {16.0, PallPass.Quality.HIGH.ordinal()}};
+        for (double[] m : measured) {
+            PallPass.Quality q = PallPass.Quality.values()[(int) m[1]];
+            PallPass.Detail d = new PallPass.Detail();
+            long[] clock = {0};
+            d.setting(q);
+            frames(d, m[0], 2000, clock);
+            assertEquals(q.step(), d.level, q + " at " + m[0] + " ms");
         }
     }
 
     /** Each interleave order visits every pixel of its n × n block once per n² frames. */
     @Test
     void interleaveOrderVisitsEveryBlockPixelOnce() {
-        for (int n = 1; n <= 4; n++) {
+        for (int n = 1; n <= PallPass.ORDER.length; n++) {
             int[] order = PallPass.ORDER[n - 1];
             assertEquals(n * n, order.length);
             assertEquals(n * n, java.util.Arrays.stream(order).distinct().filter(p -> p >= 0 && p < order.length).count(), "n = " + n);
@@ -61,7 +81,7 @@ class PallDetailTest {
      */
     @Test
     void interleavedRaysCoverEveryPixelOncePerCycle() {
-        for (int n = 1; n <= 4; n++) {
+        for (int n = 1; n <= PallPass.ORDER.length; n++) {
             for (int size : new int[]{1, 7, 13, 64, 641}) {
                 int cells = (size + n - 1) / n;
                 int[] taken = new int[size];
@@ -83,7 +103,7 @@ class PallDetailTest {
     void overBudgetStepsDownButNotBelowLow() {
         PallPass.Detail d = new PallPass.Detail();
         long[] clock = {0};
-        d.ceiling(PallPass.Quality.MEDIUM.step());
+        d.setting(PallPass.Quality.MEDIUM);
         frames(d, 1.75 * B, 40, clock);
         assertTrue(d.level > PallPass.Quality.MEDIUM.step(), "1.75 budgets - lower");
         assertTrue(d.level < LOW, "1.75 budgets - not immediately down to the floor");
@@ -99,7 +119,7 @@ class PallDetailTest {
         PallPass.Detail d = new PallPass.Detail();
         long[] clock = {0};
         int medium = PallPass.Quality.MEDIUM.step();
-        d.ceiling(medium);
+        d.setting(PallPass.Quality.MEDIUM);
         frames(d, 0.9 * B, 200, clock);
         assertEquals(medium, d.level, "0.9 budget - in budget");
         frames(d, 3 * B, 40, clock);
@@ -113,13 +133,13 @@ class PallDetailTest {
         frames(d, 0.1 * B, 4000, clock);
         assertEquals(medium, d.level, "no higher than setting");
         // at the lower stages 0.95 budget; a step higher in price will not fit into 0.7 budget - it stays
-        d.ceiling(PallPass.Quality.HIGH.step());
+        d.setting(PallPass.Quality.HIGH);
         assertEquals(0, d.level, "new setting - immediately its level");
-        frames(d, 1.5 * B, 40, clock);
+        frames(d, 1.5 * H, 40, clock);
         assertTrue(d.level > 0);
-        frames(d, 0.95 * B, 100, clock);
+        frames(d, 0.95 * H, 100, clock);
         int level = d.level;
-        frames(d, 0.95 * B, 2000, clock);
+        frames(d, 0.95 * H, 2000, clock);
         assertEquals(level, d.level);
     }
 
@@ -132,8 +152,8 @@ class PallDetailTest {
         PallPass.Detail d = new PallPass.Detail();
         long[] clock = {0};
         int high = PallPass.Quality.HIGH.step();
-        d.ceiling(high);
-        frames(d, 8, 40, clock);
+        d.setting(PallPass.Quality.HIGH);
+        frames(d, 2 * H, 40, clock);
         assertTrue(d.level > high);
         int old = d.generation;
         assertTrue(d.pin(true));
@@ -141,15 +161,15 @@ class PallDetailTest {
         assertEquals(high, d.level, "nailed - setting stage");
         frames(d, 150, 400, clock);
         assertEquals(high, d.level, "slow video output frames do not reduce detail");
-        d.ceiling(PallPass.Quality.MEDIUM.step());
+        d.setting(PallPass.Quality.MEDIUM);
         assertEquals(PallPass.Quality.MEDIUM.step(), d.level, "new setting - its stage");
         frames(d, 150, 400, clock);
         assertEquals(PallPass.Quality.MEDIUM.step(), d.level);
-        d.ceiling(high);
+        d.setting(PallPass.Quality.HIGH);
         assertTrue(d.pin(false));
         for (int i = 0; i < 100; i++) assertFalse(d.sample(150, old, clock[0] += 16 * MS), "measurements before nailing do not count");
         assertEquals(high, d.level);
-        frames(d, 8, 40, clock);
+        frames(d, 2 * H, 40, clock);
         assertTrue(d.level > high, "released - again on budget");
     }
 
@@ -159,7 +179,7 @@ class PallDetailTest {
         PallPass.Detail d = new PallPass.Detail();
         long[] clock = {0};
         int medium = PallPass.Quality.MEDIUM.step();
-        d.ceiling(medium);
+        d.setting(PallPass.Quality.MEDIUM);
         frames(d, 1, 10, clock);
         int before = d.generation;
         d.restart();
@@ -175,7 +195,7 @@ class PallDetailTest {
     void staleSamplesIgnored() {
         PallPass.Detail d = new PallPass.Detail();
         assertFalse(d.sample(100, d.generation, 0));
-        d.ceiling(PallPass.Quality.MEDIUM.step());
+        d.setting(PallPass.Quality.MEDIUM);
         int old = d.generation - 1;
         for (int i = 0; i < 100; i++) assertFalse(d.sample(100, old, i * 16 * MS));
         assertEquals(PallPass.Quality.MEDIUM.step(), d.level);

@@ -168,7 +168,9 @@ class ShaderSourceTest {
         assertTrue(floor.contains("from / max(max(length(dir.xz), abs(dir.y)), 1e-3)"), "pallFloor: drawn chunks end up and down too");
         String march = blankComments(body(Files.readString(include.resolve("fx_pall.glsl")), "void main("));
         assertTrue(march.contains("PallFloorFrom, 1e6, FLOOR_STEPS"), "fx_pall: floor searched only within the pall's reach");
-        assertTrue(march.contains("sp.y = min(sp.y, body.base.y / dir.y)"), "fx_pall: mushroom under the ground without a terrain map");
+        String mushrooms = blankComments(body(Files.readString(include.resolve("fx_pall.glsl")), "vec2 mushSetup("));
+        assertTrue(march.contains("mushSetup(dir, scene)"), "fx_pall: the ray's mushroom intervals end at its world distance");
+        assertTrue(mushrooms.contains("sp.y = min(sp.y, body.base.y / dir.y)"), "fx_pall: mushroom under the ground without a terrain map");
     }
 
     /**

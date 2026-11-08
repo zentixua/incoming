@@ -701,13 +701,16 @@ paths:
   since the shadow on the ground is smooth (the cloud's edge is hundreds of metres); per straight line, three two-stream
   solutions. In the cloud (llvmpipe, scenario `mushroom` with `INCOMING_MUSHROOM=shadow`) the 128² map is +2–8 % to the
   pall passes (run-to-run spread of the same order); 256² was +18 %.
-  Detail also keeps the budget — 2 ms on the GPU (`PallPass.Detail`): if the average over half a second is longer, it
-  drops at once to a step of `PallPass.LADDER` that fits the cost; the headroom to go up a step is granted if, with it,
-  the time would be no more than 0.7 of the budget for two windows in a row and 3 s after the last change. It is never
-  above the setting and goes below LOW down to the last rung (factor 2–4, 64–20 steps, interleave 1–4). Laptop 07.11
-  (RTX 4060 Laptop, 2560×1600, 250 kt at 195 s, ~2100 MHz): MEDIUM 22–48 ms before this ladder; rung 13 (1/2 × 22, rays
-  1/16) 2.4–5 ms, last rung 1.6–2.6 ms. The `SCENARIO pall` line splits GPU time into preparation, rays, accumulation and
-  composite (five timestamps per measured frame).
+  Detail also keeps a budget per setting (`PallPass.Quality.budget`: LOW 6, MEDIUM 12, HIGH 18 ms on the GPU,
+  `PallPass.Detail`): if the average over half a second is longer, it drops at once to a step of `PallPass.LADDER` that
+  fits the cost; the headroom to go up a step is granted if, with it, the time would be no more than 0.7 of the budget for
+  two windows in a row and 3 s after the last change. It is never above the setting and never below LOW (half frame,
+  22 steps, interleave 2): rungs with interleave 3–4 drew the lattice that burns in on a still view. Budgets follow
+  Artem's 08.11 rule (picture first, the setting fits the PC): at his laptop's times (RTX 4060 Laptop, 2560×1600, 150 kt
+  firestorm, froxel near volume: LOW ≤ 6.0, MEDIUM ≤ 11.7, HIGH ≤ 16.0 ms) each setting keeps its rung
+  (`PallDetailTest.settingsHoldTheirRungAtMeasuredTimes`). The `SCENARIO pall` line splits GPU time into preparation,
+  near volume, sums, rays, accumulation and composite (timestamps per measured frame; each part's share is an estimate,
+  the exact split needs `glFinish` between parts).
   Time — `glQueryCounter(GL_TIMESTAMP)` marks before and after the passes, in a ring of 4 pairs, read when ready (without
   waiting). Not `GL_TIME_ELAPSED`: that query is single in OpenGL for everyone, and Minecraft holds it for the whole frame
   while F3's GPU load is on screen (`TimerQuery`) — a nested one would not start. Pairs taken before the pall had gone

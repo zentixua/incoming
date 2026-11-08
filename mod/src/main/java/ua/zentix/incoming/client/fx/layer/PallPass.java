@@ -74,9 +74,8 @@ import java.util.concurrent.CompletionException;
  * detonation (about one second); no pall until ready.
  * <p>
  * Detail holds its own budget ({@link Detail}): GPU pass times measured by OpenGL timestamps, read after
- * a few frames (no waiting); while above {@link Detail#BUDGET_MS} ms, ray frame resolution and step count decrease
- * and rays per frame decrease ({@link #LADDER}, down to its last rung, below the LOW setting); with headroom, detail returns
- * toward the setting. In client scenarios
+ * a few frames (no waiting); while above the setting's budget ({@link Quality#budget}), step count and rays per frame
+ * decrease ({@link #LADDER}, down to the LOW setting); with headroom, detail returns toward the setting. In client scenarios
  * and Flashback video export, frames are not real-time: a slow frame costs nothing there, so detail always
  * follows the setting ({@link Detail#pin}). {@code SCENARIO pall} line — {@link #describe}.
  */
@@ -123,17 +122,25 @@ public final class PallPass {
      * costs what the former LOW (quarter frame, 20 steps) did: half frame, a quarter of its rays per frame.
      */
     public enum Quality {
-        OFF(0, 0, 1, 0), LOW(2, 22, 2, 16), MEDIUM(2, 28, 1, 12), HIGH(2, 48, 1, 8);
+        OFF(0, 0, 1, 0, 0), LOW(2, 22, 2, 16, 6), MEDIUM(2, 28, 1, 12, 12), HIGH(2, 48, 1, 8, 18);
 
         final int factor, steps, interleave;
         /** Near volume cell width in full-frame pixels ({@link #VOLUME_FAR}). */
         final int tile;
+        /**
+         * GPU time per frame, ms, above which detail steps down ({@link Detail}). Each setting keeps its look: a setting is
+         * the player's choice of picture against frame rate (Artem 08.11: picture first, the setting fits the PC), so the
+         * budget only catches views far costlier than usual. Artem's laptop (RTX 4060, 2560×1600, 150 kt firestorm in the
+         * dust, 08.11): LOW 4.2–6.0 ms, MEDIUM 7.7–11.7, HIGH 9.2–16.0 — each setting stays at its own rung there (PallDetailTest).
+         */
+        final double budget;
 
-        Quality(int factor, int steps, int interleave, int tile) {
+        Quality(int factor, int steps, int interleave, int tile, double budget) {
             this.factor = factor;
             this.steps = steps;
             this.interleave = interleave;
             this.tile = tile;
+            this.budget = budget;
         }
 
         /** {@link #LADDER} rung for this quality (OFF — −1). */
@@ -167,39 +174,35 @@ public final class PallPass {
      * frame coarsens: the same rays per frame at half frame and n = 2 as at quarter frame, but a still view keeps the
      * half-frame detail. Step count and interleave change without a new history. The frame never drops below half: rungs
      * at a third and a quarter of the frame (Artem's laptop 08.11, 2560×1600: 1–3 ms) drew distant ridges as stairs of
-     * 8–16-pixel blocks and grain on everything far; the floor, half frame with 1/16 of the rays, costs 3.4–4.4 ms there.
+     * 8–16-pixel blocks and grain on everything far. The floor is the LOW setting: rungs with a ninth or a sixteenth of the
+     * rays per frame (n = 3, 4) drew the cellular lattice that burns in when the view stands still (each untraced pixel pulled
+     * toward its block's bounds for n² frames; Artem 08.11, measured |dL| ×4.3 from n = 1 to the floor).
      */
     static final Step[] LADDER = {new Step(2, 48, 1), new Step(2, 36, 1), new Step(2, 28, 1), new Step(2, 22, 1),
-            new Step(2, 64, 2), new Step(2, 48, 2), new Step(2, 36, 2), new Step(2, 28, 2), new Step(2, 22, 2),
-            new Step(2, 36, 3), new Step(2, 28, 3), new Step(2, 22, 3), new Step(2, 28, 4), new Step(2, 22, 4)};
+            new Step(2, 64, 2), new Step(2, 48, 2), new Step(2, 36, 2), new Step(2, 28, 2), new Step(2, 22, 2)};
 
     /**
-     * Ray pixel of each n × n block per frame, in turn (n = 1–4): far apart in consecutive frames (ordered dither), so a
+     * Ray pixel of each n × n block per frame, in turn (n = 1–2): far apart in consecutive frames (ordered dither), so a
      * moving edge refreshes evenly.
      */
-    static final int[][] ORDER = {{0}, {0, 3, 1, 2}, {0, 7, 5, 1, 8, 3, 6, 2, 4},
-            {0, 10, 2, 8, 5, 15, 7, 13, 1, 11, 3, 9, 4, 14, 6, 12}};
+    static final int[][] ORDER = {{0}, {0, 3, 1, 2}};
 
     /**
-     * Detail rung by GPU pass time: above budget over a half-second average (with at least
+     * Detail rung by GPU pass time: above the setting's budget ({@link Quality#budget}) over a half-second average (with at least
      * four measurements) — immediately switch to a rung estimated to fit; headroom — one rung up if its estimated cost
      * is at most {@link #UP_SHARE} of budget for two consecutive windows and {@link #HOLD_NS} has passed since the last change (four times
      * longer after an increase immediately followed by a decrease). No higher than the setting and no lower than the last rung;
      * pinned ({@link #pin}) — setting rung, unaffected by measurements. No world or OpenGL — unit test.
      */
     static final class Detail {
-        /**
-         * Per-frame GPU pall budget, ms: about a quarter of a 60 FPS frame while the player is in the dust, for a view
-         * nothing else in the game draws (Artem 08.11: balance leaning to the picture; 2 ms kept his laptop on the coarsest
-         * rungs). A view the floor rung cannot fit stays at the floor.
-         */
-        static final double BUDGET_MS = 4;
         static final double UP_SHARE = 0.7;
         static final long WINDOW_NS = 500_000_000L, HOLD_NS = 3_000_000_000L;
         static final int MIN_SAMPLES = 4, CALM_WINDOWS = 2;
 
         /** Current and finest rung (from setting); −1 — not set yet. */
         int level = -1, ceiling = -1;
+        /** GPU time per frame above which detail steps down, ms (the setting's {@link Quality#budget}). */
+        double budget;
         /** Rung generation by change count: measurements before a change are ignored. */
         int generation;
         /** Rung changes caused by measurements. */
@@ -213,8 +216,10 @@ public final class PallPass {
         private long windowStart, holdUntil, raisedAt = Long.MIN_VALUE;
         private boolean skip;
 
-        /** Setting ceiling: if changed, switch to it immediately. */
-        void ceiling(int c) {
+        /** Setting: its rung (ceiling) and budget; a new rung — switch to it immediately. */
+        void setting(Quality q) {
+            budget = q.budget;
+            int c = q.step();
             if (c == ceiling) return;
             ceiling = c;
             set(c);
@@ -259,9 +264,9 @@ public final class PallPass {
             sum = 0;
             samples = 0;
             int floor = LADDER.length - 1;
-            if (mean > BUDGET_MS && level < floor) {
+            if (mean > budget && level < floor) {
                 int to = level + 1;
-                while (to < floor && mean * LADDER[to].cost() / LADDER[level].cost() > BUDGET_MS) to++;
+                while (to < floor && mean * LADDER[to].cost() / LADDER[level].cost() > budget) to++;
                 // an increase exceeded capacity — delay the next increase
                 holdUntil = now + (raisedAt != Long.MIN_VALUE && now - raisedAt < 2 * HOLD_NS ? 4 * HOLD_NS : HOLD_NS);
                 calm = 0;
@@ -269,7 +274,7 @@ public final class PallPass {
                 changes++;
                 return true;
             }
-            if (level > ceiling && now >= holdUntil && mean * LADDER[level - 1].cost() / LADDER[level].cost() <= UP_SHARE * BUDGET_MS) {
+            if (level > ceiling && now >= holdUntil && mean * LADDER[level - 1].cost() / LADDER[level].cost() <= UP_SHARE * budget) {
                 if (++calm >= CALM_WINDOWS) {
                     calm = 0;
                     holdUntil = now + HOLD_NS;
@@ -617,7 +622,7 @@ public final class PallPass {
         if (m == null || r == null || c == null || fv == null || fs == null || mx == null || f.quality == Quality.OFF || !upload()) return false;
         Minecraft mc = Minecraft.getInstance();
         int w = mc.getMainRenderTarget().width, h = mc.getMainRenderTarget().height;
-        DETAIL.ceiling(f.quality.step());
+        DETAIL.setting(f.quality);
         if (DETAIL.pin(SCENARIO || FlashbackReplay.exporting())) {
             Step at = LADDER[Math.max(0, DETAIL.level)];
             if (DETAIL.pinned) {
@@ -728,10 +733,10 @@ public final class PallPass {
                 GlStateManager._glBindFramebuffer(GlConst.GL_FRAMEBUFFER, FBOS[0]);
                 RenderSystem.viewport(0, 0, cellsW, cellsH);
             }
-            RenderSystem.setShaderTexture(9, pass == 3 && litFoot ? footMap : table);
+            RenderSystem.setShaderTexture(9, pass >= 2 && litFoot ? footMap : table);
             m.safeGetUniform("PallFootReady").set(litFoot ? 1 : 0);
-            RenderSystem.setShaderTexture(10, pass == 3 && grid ? tauMap : table);
-            m.safeGetUniform("PallTauReady").set(pass == 3 && grid ? 1 : 0);
+            RenderSystem.setShaderTexture(10, pass >= 2 && grid ? tauMap : table);
+            m.safeGetUniform("PallTauReady").set(pass >= 2 && grid ? 1 : 0);
             RenderSystem.setShaderTexture(0, scene);
             RenderSystem.setShaderTexture(1, table);
             RenderSystem.setShaderTexture(2, blue);
@@ -1347,7 +1352,7 @@ public final class PallPass {
                 Step from = LADDER[was], to = LADDER[DETAIL.level];
                 // in game — DEBUG: rung changes every few seconds; scenario rung is pinned (draw)
                 Incoming.LOG.debug(String.format(Locale.ROOT, "Nuclear dust pall: %.2f ms on the GPU (budget %.1f), detail %s → %s",
-                        DETAIL.lastMean, Detail.BUDGET_MS, from.describe(), to.describe()));
+                        DETAIL.lastMean, DETAIL.budget, from.describe(), to.describe()));
             }
             ISSUED[i] = -1;
         }
@@ -1395,7 +1400,7 @@ public final class PallPass {
         Step top = LADDER[Math.max(0, DETAIL.ceiling)];
         String gpu = timer < 0 ? "gpu n/a" : String.format(Locale.ROOT,
                 "gpu %.2f ms (longest %.2f, budget %.1f; preparation %.2f, near volume %.2f + sums %.2f, rays %.2f, accumulation %.2f, composite %.2f)",
-                lastGpuMean, lastGpuMax, Detail.BUDGET_MS, LAST_PART[0], LAST_PART[1], LAST_PART[2], LAST_PART[3], LAST_PART[4], LAST_PART[5]);
+                lastGpuMean, lastGpuMax, DETAIL.budget, LAST_PART[0], LAST_PART[1], LAST_PART[2], LAST_PART[3], LAST_PART[4], LAST_PART[5]);
         return String.format(Locale.ROOT, "%d frames, %d×%d, near volume %d×%d×%d to %.0f blocks, detail %s (step %d of %d, setting %s, %s, %d changes), %s; %s",
                 lastDrawn, lowW, lowH, volumeW / VOLUME_COLUMNS, volumeH / (VOLUME_SLICES / VOLUME_COLUMNS), VOLUME_SLICES, VOLUME_FAR, step.describe(), DETAIL.level, LADDER.length - 1, top.describe(),
                 DETAIL.pinned ? "pinned" : "by GPU budget", DETAIL.changes, gpu, OpenAir.describe());

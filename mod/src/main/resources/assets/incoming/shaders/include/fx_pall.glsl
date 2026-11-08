@@ -1567,6 +1567,56 @@ vec4 smokeStep(float t, float cone, out float gap, out float cell) {
     return vec4(st * (w * light + (1.0 - w) * bb), st);
 }
 
+// Mushrooms on the eye ray dir (scene: world distance along it, 1e9 none): each one's ray interval (gMushSpan, gMushes) and
+// the carpet field interval (gFoot*); returns the combined interval of matter (empty: x > y)
+vec2 mushSetup(vec3 dir, float scene) {
+    float m0 = 1e9, m1 = -1.0;
+    gFoot0 = -1;
+    gFoot1 = -1;
+    gFootSpan0 = gFootSpan1 = vec2(1.0, 0.0);
+    gMushes = 0;
+    for (int k = 0; k < MUSHROOMS; k++) {
+        if (!mushOn(Sampler7, k)) break;
+        Mush body = mushLoad(Sampler7, k);
+        vec2 sp = mushSpan(body, dir);
+        sp.y = min(sp.y, scene);
+        // no world and no terrain map (pall off or gone): the ground under the mushroom is no lower than its base; its bounds
+        // reach below the base (5 % of the height), and a downward ray would march its foot under the ground
+        if (scene >= 1e8 && dir.y < 0.0) sp.y = min(sp.y, body.base.y / dir.y);
+        gMushSpan[k] = sp;
+        gMushes += 1;
+        if (body.footShare > 0.0 && body.footMerge > 0.0) {
+            Mush foot = body;
+            foot.boundR = foot.stemR + foot.stemFlare + 2.0 * foot.footTop + length(foot.drift);
+            foot.boundTop = foot.footMerge;
+            vec2 fs = mushSpan(foot, dir);
+            fs.y = min(fs.y, scene);
+            if (scene >= 1e8 && dir.y < 0.0) fs.y = min(fs.y, foot.base.y / dir.y);
+            if (fs.y > fs.x) {
+                if (length(foot.base.xz - PallSlot0[0].xy) < 1.0) { gFoot0 = k; gFootSpan0 = fs; }
+                if (length(foot.base.xz - PallSlot1[0].xy) < 1.0) { gFoot1 = k; gFootSpan1 = fs; }
+            }
+        }
+        if (sp.y <= sp.x) continue;
+        m0 = min(m0, sp.x);
+        m1 = max(m1, sp.y);
+    }
+    return vec2(m0, m1);
+}
+
+// Mean mushroom optical depth from the eye to distance t along dir (mushTau over each mushroom's interval before t): the depth
+// a ray marched from the eye would have gathered there (gTauEye), for points reached without marching from the eye
+float mushEyeTau(vec3 dir, float t) {
+    float tau = 0.0;
+    for (int k = 0; k < gMushes; k++) {
+        vec2 sp = gMushSpan[k];
+        if (sp.y <= sp.x || sp.x >= t) continue;
+        float b = min(sp.y, t);
+        tau += mushTau(mushLoad(Sampler7, k), dir * b, -dir, b - sp.x);
+    }
+    return tau;
+}
+
 #if !defined(PALL_FROXEL) && !defined(PALL_FROXEL_SUM)
 #ifndef PALL_MUSH_TAUS
 #ifndef PALL_FOOT_CACHE
@@ -1654,34 +1704,11 @@ void main() {
     if (w1.w <= 0.0) gWilsonIn.w = 1e9;
     gSunK = -1;
     // mushrooms: individual ray intervals (before world behind pixel) and combined interval
-    float m0 = 1e9, m1 = -1.0;
-    gMushes = 0;
-    for (int k = 0; k < MUSHROOMS; k++) {
-        if (!mushOn(Sampler7, k)) break;
-        Mush body = mushLoad(Sampler7, k);
-        vec2 sp = mushSpan(body, dir);
-        sp.y = min(sp.y, scene);
-        // no world and no terrain map (pall off or gone): the ground under the mushroom is no lower than its base; its bounds
-        // reach below the base (5 % of the height), and a downward ray would march its foot under the ground
-        if (scene >= 1e8 && dir.y < 0.0) sp.y = min(sp.y, body.base.y / dir.y);
-        gMushSpan[k] = sp;
-        gMushes += 1;
-        if (body.footShare > 0.0 && body.footMerge > 0.0) {
-            Mush foot = body;
-            foot.boundR = foot.stemR + foot.stemFlare + 2.0 * foot.footTop + length(foot.drift);
-            foot.boundTop = foot.footMerge;
-            vec2 fs = mushSpan(foot, dir);
-            fs.y = min(fs.y, scene);
-            if (scene >= 1e8 && dir.y < 0.0) fs.y = min(fs.y, foot.base.y / dir.y);
-            if (fs.y > fs.x) {
-                if (length(foot.base.xz - PallSlot0[0].xy) < 1.0) { gFoot0 = k; gFootSpan0 = fs; }
-                if (length(foot.base.xz - PallSlot1[0].xy) < 1.0) { gFoot1 = k; gFootSpan1 = fs; }
-            }
-        }
-        if (sp.y <= sp.x) continue;
-        m0 = min(m0, sp.x);
-        m1 = max(m1, sp.y);
-    }
+    // mushrooms and explosion smoke nearer than the near volume's far boundary are that volume's (fx_pall_froxel): the ray takes
+    // them from behind it, with the mushroom depth a ray from the eye would have gathered by then
+    vec2 mm = mushSetup(dir, scene);
+    float m0 = mm.x, m1 = mm.y;
+    if (PallFroxel.z > 0.0) m0 = max(m0, PallFroxel.z / axis);
     int steps = int(PallFrame.y);
     float n = float(steps);
     // pall steps denser near eye; storm ray bounds get half the steps (columns smaller than whole-pall step)
@@ -1728,6 +1755,7 @@ void main() {
     // mushroom: empty space to matter, then half optical depth, no finer than pixel or quarter pall step over its interval
     int mk = 0, mSteps = steps + 16;
     float tauEye = 0.0;
+    if (m1 > m0 && PallFroxel.z > 0.0) tauEye = mushEyeTau(dir, m0);
     float dsMin = 1.0, dsMax = 1.0, tm = 1e9;
     // empty step toward matter, capped at one sixth interval: gap estimate sees bounds conservatively
     if (m1 > m0) {
@@ -1743,7 +1771,7 @@ void main() {
     float s0 = 1e9, s1 = -1.0, ts = 1e9;
     if (smokeOn()) {
         vec2 ss = pallBox(dir, SmokeMin, SmokeMax);
-        s0 = max(ss.x, 0.0);
+        s0 = max(ss.x, PallFroxel.z / axis);
         s1 = min(ss.y, scene);
         if (s1 > s0) ts = s0 + jitter * min(smokeCell(dir * s0), 0.25 * (s1 - s0));
     }
@@ -1954,6 +1982,9 @@ void main() {
     float z = mix(z0, z1, j.z), t = z / axis;
     vec3 p = dir * t;
     pallLighting(dir);
+    // mushrooms on this cell's ray (pallSource reads the carpet field's interval, gFoot*)
+    vec2 mm = mushSetup(dir, 1e9);
+    gSunK = -1;
     vec4 farNext = InvViewProj * vec4(((pixel + vec2(0.0, PallFroxel.x)) / PallFroxelFrame.xy) * 2.0 - 1.0, 1.0, 1.0);
     // the cell's width at distance 1 and its depth: noise detail finer than the cell averages out (pallSource cone)
     gPixel = length(normalize(farNext.xyz / farNext.w) - dir);
@@ -1967,6 +1998,24 @@ void main() {
         vec3 dustLight;
         vec4 matter = pallSource(p, cone, vec4(0.0), dustLight);
         if (matter.w > 1e-7) cur = matter * open;
+    }
+    // mushrooms and explosion smoke here (mushStep, smokeStep), as a ray step takes them: their incandescence (heat) joins the
+    // light as it does in the ray's display (fx_pall main), the fireball's film curve stays with the rays (a ball nearer than
+    // the far boundary is a rare few seconds, drawn in the plain display)
+    if (t >= mm.x && t <= mm.y) {
+        gTauEye = mushEyeTau(dir, t);
+        float gap, film;
+        vec3 hot, glowing;
+        vec4 r = mushStep(t, cone, gap, hot, glowing, film);
+        if (r.w > 1e-7) cur += vec4(r.rgb + hot, r.w);
+    }
+    if (smokeOn()) {
+        vec2 ss = pallBox(dir, SmokeMin, SmokeMax);
+        if (t >= ss.x && t <= ss.y) {
+            float gap, cell;
+            vec4 r = smokeStep(t, cone, gap, cell);
+            if (r.w > 1e-7) cur += r;
+        }
     }
     if (!pallValid(vec4(cur.rgb, 0.0)) || !(cur.w >= 0.0 && cur.w < 6.0e4)) cur = vec4(0.0);
     vec4 res = cur;
