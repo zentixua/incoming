@@ -104,18 +104,36 @@ public final class PallPass {
     private static final double HISTORY = 0.9;
 
     /**
+     * Near pall volume ({@code pall.glsl}: {@code froxelNear}; {@code fx_pall_froxel}, {@code fx_pall_froxel_sum}): view-axis
+     * depth of its far boundary and of its first slice boundary, blocks. The dust a player stands in is a screen-aligned volume
+     * of {@code PALL_FROXEL_SLICES} slices to this depth, as engines draw fog around the camera; rays draw only the pall
+     * beyond it. Rays drawing it too, at half resolution with screen-space history (a sixteenth of the rays per frame on
+     * Artem's laptop), showed a lattice that burned in on a still view, rims around blocks and half-second trails behind trees
+     * as the view turned (08.11). Slices grow by (256 / 1)^(1/64) = 1.09: a slice is a tenth of its distance deep, 25 blocks
+     * at the far boundary, where a cell at 8 pixels of a 1600-pixel frame is 1.7 blocks wide.
+     */
+    static final float VOLUME_FAR = 256, VOLUME_NEAR = 1;
+    /** Slices and atlas columns (pall.glsl: {@code PALL_FROXEL_SLICES}, {@code PALL_FROXEL_COLUMNS}). */
+    static final int VOLUME_SLICES = 64, VOLUME_COLUMNS = 8;
+    /** Current point's share of a volume cell each frame (the rest is the cell's reprojected value): about ten points per cell. */
+    static final float VOLUME_CURRENT = 0.1f;
+
+    /**
      * Pall quality setting — finest {@link #LADDER} rung: frame downscale factor, steps per ray and ray interleave. LOW
      * costs what the former LOW (quarter frame, 20 steps) did: half frame, a quarter of its rays per frame.
      */
     public enum Quality {
-        OFF(0, 0, 1), LOW(2, 22, 2), MEDIUM(2, 28, 1), HIGH(2, 48, 1);
+        OFF(0, 0, 1, 0), LOW(2, 22, 2, 16), MEDIUM(2, 28, 1, 12), HIGH(2, 48, 1, 8);
 
         final int factor, steps, interleave;
+        /** Near volume cell width in full-frame pixels ({@link #VOLUME_FAR}). */
+        final int tile;
 
-        Quality(int factor, int steps, int interleave) {
+        Quality(int factor, int steps, int interleave, int tile) {
             this.factor = factor;
             this.steps = steps;
             this.interleave = interleave;
+            this.tile = tile;
         }
 
         /** {@link #LADDER} rung for this quality (OFF — −1). */
@@ -429,7 +447,7 @@ public final class PallPass {
     }
 
     @Nullable
-    static ShaderInstance march, resolve, composite, shadow, footLighting, mushTaus;
+    static ShaderInstance march, resolve, composite, shadow, footLighting, mushTaus, froxel, froxelSum, mix;
     static final int FOOT_LIGHT_AZ = 64, FOOT_LIGHT_R = 16, FOOT_LIGHT_H = 32;
     /** Mushroom mean depth grid ({@code fx_mush_taus}): cells across x and z and height layers per mushroom, two blocks each. */
     static final int MUSH_TAU_N = 48;
@@ -439,8 +457,13 @@ public final class PallPass {
     private static boolean failed;
 
     private static int fullW, fullH, lowW, lowH, factor, interleave = 1, cellsW, cellsH;
-    /** Ray frame and two history frames (alternating previous/current). */
-    private static final int[] TEXTURES = {-1, -1, -1}, FBOS = {-1, -1, -1};
+    /** Ray frame, two history frames (alternating previous/current) and the whole pall in front of the world for layer quads. */
+    private static final int[] TEXTURES = {-1, -1, -1, -1}, FBOS = {-1, -1, -1, -1};
+    /** Near volume atlases: medium, two alternating (previous/current), and pall seen to each slice; size and cell width. */
+    private static final int[] VOLUME = {-1, -1, -1}, VOLUME_FBOS = {-1, -1, -1};
+    private static int volumeW, volumeH, volumeTile, volumeLatest;
+    /** The previous frame's medium volume exists at this size (reprojected by {@code fx_pall_froxel}). */
+    private static boolean volumeHistory;
     private static int latest;
     private static int table = -1, noise = -1, blue = -1, mushrooms = -1;
     /** Mushroom sun shadow map ({@link MushroomField#SHADOW}² tile per mushroom) and framebuffer; −1 — failed, no shadow. */
@@ -477,8 +500,11 @@ public final class PallPass {
     // a few frames once ready, without waiting. Not GL_TIME_ELAPSED: OpenGL has one shared query, and Minecraft holds it for
     // the entire frame while F3 GPU load is displayed (TimerQuery) — a nested query would not start
     private static final int RING = 4;
-    /** Timestamps per frame: start, after preparation (smoke grid, shadow map, foot light), after rays, after accumulation, end. */
-    private static final int STAMPS = 5;
+    /**
+     * Timestamps per frame: start, after preparation (smoke grid, shadow map, foot light), after the near volume, after rays,
+     * after accumulation, end.
+     */
+    private static final int STAMPS = 6;
     private static final int[] QUERIES = new int[STAMPS * RING];
     /** Rung generation ({@link Detail#generation}) at pair recording; −1 — pair free. */
     private static final int[] ISSUED = new int[RING];
@@ -488,7 +514,7 @@ public final class PallPass {
     /** Client scenario ({@code tools/client_scenario.sh}): frames are not real-time; detail follows setting. */
     private static final boolean SCENARIO = System.getProperty("incoming.scenario") != null;
     private static double gpuSum, gpuMax, lastGpuMean, lastGpuMax;
-    /** GPU time per part (preparation, rays, accumulation, composite) over the last second, ms per frame. */
+    /** GPU time per part (preparation, near volume, rays, accumulation, composite) over the last second, ms per frame. */
     private static final double[] PART_SUM = new double[STAMPS - 1], LAST_PART = new double[STAMPS - 1];
     private static int gpuFrames, drawn, lastDrawn;
 
@@ -504,7 +530,7 @@ public final class PallPass {
      * screen veil shows the wall head at the eye ({@code NukeDust.veil}).
      */
     public static boolean available() {
-        return !failed && march != null && resolve != null && composite != null;
+        return !failed && march != null && resolve != null && composite != null && froxel != null && froxelSum != null && mix != null;
     }
 
     /** Noise prepared in background on world entry ({@code IncomingClient}; and first detonation): no pall or mushroom until ready. */
@@ -572,11 +598,11 @@ public final class PallPass {
     }
 
     /**
-     * This frame's accumulated pall ({@code Sampler6} in {@code fx}: light and transmission to the world behind each pixel —
-     * supplies pall light in front of a layer quad).
+     * This frame's pall ({@code Sampler6} in {@code fx}: light and transmission to the world behind each reduced-frame pixel,
+     * near volume and rays — supplies pall light in front of a layer quad).
      */
     static int frame() {
-        return TEXTURES[1 + latest];
+        return TEXTURES[3];
     }
 
     /**
@@ -586,8 +612,9 @@ public final class PallPass {
      */
     static boolean draw(Frame f, int scene, Matrix4f view, Matrix4f projection, Vec3 eye, Vector4f haze) {
         long preparing = cold() ? System.nanoTime() : 0;
-        ShaderInstance m = march, r = resolve, c = composite, sh = shadow, fl = footLighting, mt = mushTaus;
-        if (m == null || r == null || c == null || f.quality == Quality.OFF || !upload()) return false;
+        ShaderInstance m = march, r = resolve, c = composite, sh = shadow, fl = footLighting, mt = mushTaus, fv = froxel, fs = froxelSum,
+                mx = mix;
+        if (m == null || r == null || c == null || fv == null || fs == null || mx == null || f.quality == Quality.OFF || !upload()) return false;
         Minecraft mc = Minecraft.getInstance();
         int w = mc.getMainRenderTarget().width, h = mc.getMainRenderTarget().height;
         DETAIL.ceiling(f.quality.step());
@@ -602,7 +629,7 @@ public final class PallPass {
         }
         if (timer()) poll(System.nanoTime());
         Step step = LADDER[DETAIL.level];
-        if (!ensure(w, h, step.factor, step.interleave)) return false;
+        if (!ensure(w, h, step.factor, step.interleave) || !volume(w, h, f.quality.tile)) return false;
         boolean open = mc.level != null && OpenAir.update(mc.level, eye);
         // torches, lamps and light carried by entities in the window (OpenAir, MovingLight): dust glows around them, the shadow
         // leaves their light (pall.glsl: pallLampLight, pallKeepLamps) by Minecraft's own lightmap
@@ -682,23 +709,29 @@ public final class PallPass {
         // mushroom mean depths: one grid per frame, read by every mushroom ray step (fx_mush_taus)
         // also while the march is cold (the empty warm-up frame, FxLayer): the program compiles before the flash, not on it
         boolean bake = mt != null && tauMap >= 0 && (f.mushroomCount > 0 || cold()), grid = bake && f.mushroomCount > 0;
-        for (int pass = 0; pass < 3; pass++) {
+        // near volume: the medium of every cell (pass 2), then the pall seen to each slice (fx_pall_froxel_sum); rays last
+        int volumeNext = 1 - volumeLatest;
+        boolean volumePast = history && volumeHistory;
+        for (int pass = 0; pass < 4; pass++) {
             if (pass == 0 && !litFoot || pass == 1 && !bake) continue;
-            m = pass == 0 ? fl : pass == 1 ? mt : march;
+            m = pass == 0 ? fl : pass == 1 ? mt : pass == 2 ? fv : march;
             if (pass == 0) {
                 GlStateManager._glBindFramebuffer(GlConst.GL_FRAMEBUFFER, footFbo);
                 RenderSystem.viewport(0, 0, FOOT_LIGHT_AZ + 1, FOOT_LIGHT_H * FOOT_LIGHT_R * f.mushroomCount);
             } else if (pass == 1) {
                 GlStateManager._glBindFramebuffer(GlConst.GL_FRAMEBUFFER, tauFbo);
                 RenderSystem.viewport(0, 0, MUSH_TAU_N * MUSH_TAU_N, 2 * MUSH_TAU_N * Math.max(1, f.mushroomCount));
+            } else if (pass == 2) {
+                GlStateManager._glBindFramebuffer(GlConst.GL_FRAMEBUFFER, VOLUME_FBOS[volumeNext]);
+                RenderSystem.viewport(0, 0, volumeW, volumeH);
             } else {
                 GlStateManager._glBindFramebuffer(GlConst.GL_FRAMEBUFFER, FBOS[0]);
                 RenderSystem.viewport(0, 0, cellsW, cellsH);
             }
-            RenderSystem.setShaderTexture(9, pass == 2 && litFoot ? footMap : table);
+            RenderSystem.setShaderTexture(9, pass == 3 && litFoot ? footMap : table);
             m.safeGetUniform("PallFootReady").set(litFoot ? 1 : 0);
-            RenderSystem.setShaderTexture(10, pass == 2 && grid ? tauMap : table);
-            m.safeGetUniform("PallTauReady").set(pass == 2 && grid ? 1 : 0);
+            RenderSystem.setShaderTexture(10, pass == 3 && grid ? tauMap : table);
+            m.safeGetUniform("PallTauReady").set(pass == 3 && grid ? 1 : 0);
             RenderSystem.setShaderTexture(0, scene);
             RenderSystem.setShaderTexture(1, table);
             RenderSystem.setShaderTexture(2, blue);
@@ -753,12 +786,35 @@ public final class PallPass {
             m.safeGetUniform("SmokeWind").set(f.smokeWind.x, f.smokeWind.y, f.smokeWind.z, f.smokeWind.w);
             m.safeGetUniform("SmokeBalls").set(f.smokeBalls);
             m.safeGetUniform("SmokeBallLight").set(f.smokeBallLight);
+            m.safeGetUniform("PallFroxel").set(f.quality.tile, VOLUME_NEAR, VOLUME_FAR, 0f);
             OpenAir.bind(m, open);
             SmokePass.bind(m, f.smoke);
-            if (pass == 2) stamp(timing, 1);
+            if (pass == 2) {
+                // the previous medium volume in place of world distances (the volume knows no world); the point in each cell
+                // moves every frame
+                RenderSystem.setShaderTexture(0, VOLUME[volumeLatest]);
+                m.safeGetUniform("PallFrame").set((float) (frame % 4096), step.steps, factor, f.eyeDust.x);
+                m.safeGetUniform("PallFroxelFrame").set(w, h, VOLUME_CURRENT, volumePast ? 1f : 0f);
+                m.safeGetUniform("PrevViewProj").set(PREVIOUS);
+                m.safeGetUniform("PallReproject").set(dx, dy, dz, volumePast ? 1f : 0f);
+                stamp(timing, 1);
+            }
             quad(m, true);
+            if (pass == 2) {
+                volumeLatest = volumeNext;
+                volumeHistory = true;
+                GlStateManager._glBindFramebuffer(GlConst.GL_FRAMEBUFFER, VOLUME_FBOS[2]);
+                RenderSystem.setShaderTexture(0, VOLUME[volumeLatest]);
+                fs.safeGetUniform("InvViewProj").set(INVERSE);
+                fs.safeGetUniform("PallForward").set(FORWARD.x, FORWARD.y, FORWARD.z);
+                fs.safeGetUniform("PallAir").set(f.air.x, f.air.y, f.air.z, f.air.w);
+                fs.safeGetUniform("PallFroxel").set(f.quality.tile, VOLUME_NEAR, VOLUME_FAR, 0f);
+                fs.safeGetUniform("PallFroxelFrame").set(w, h, VOLUME_CURRENT, 0f);
+                quad(fs, false);
+                stamp(timing, 2);
+            }
         }
-        stamp(timing, 2);
+        stamp(timing, 3);
 
         // 2. accumulation: from previous history into the other frame
         int next = 1 + (1 - latest);
@@ -784,7 +840,15 @@ public final class PallPass {
         SmokePass.bind(r, f.smoke);
         quad(r, false);
         latest = next - 1;
-        stamp(timing, 3);
+        // the whole pall in front of the world at each reduced-frame pixel, for layer quads (frame())
+        GlStateManager._glBindFramebuffer(GlConst.GL_FRAMEBUFFER, FBOS[3]);
+        RenderSystem.setShaderTexture(0, TEXTURES[1 + latest]);
+        RenderSystem.setShaderTexture(1, scene);
+        RenderSystem.setShaderTexture(2, VOLUME[2]);
+        mx.safeGetUniform("PallFrame").set(0f, 0f, factor, 0f);
+        mx.safeGetUniform("PallFroxel").set(f.quality.tile, VOLUME_NEAR, VOLUME_FAR, 0f);
+        quad(mx, false);
+        stamp(timing, 4);
 
         // 3. composite
         GlStateManager._glBindFramebuffer(GlConst.GL_FRAMEBUFFER, previous);
@@ -805,6 +869,8 @@ public final class PallPass {
         RenderSystem.setShaderTexture(8, shade ? shadowMap : table);
         RenderSystem.setShaderTexture(9, balls ? frameCopy : table);
         RenderSystem.setShaderTexture(10, lightmap);
+        RenderSystem.setShaderTexture(11, VOLUME[2]);
+        c.safeGetUniform("PallFroxel").set(f.quality.tile, VOLUME_NEAR, VOLUME_FAR, 0f);
         c.safeGetUniform("PallLamps").set(lamps ? 1f : 0f);
         c.safeGetUniform("InvViewProj").set(INVERSE);
         c.safeGetUniform("PallForward").set(FORWARD.x, FORWARD.y, FORWARD.z);
@@ -1206,6 +1272,42 @@ public final class PallPass {
         return ok;
     }
 
+    /**
+     * Near volume atlases for a full frame w × h and cells {@code tile} pixels wide: {@link #VOLUME_SLICES} slice tiles,
+     * {@link #VOLUME_COLUMNS} across (pall.glsl: {@code PALL_FROXEL_SLICES}, {@code PALL_FROXEL_COLUMNS}), RGBA16F with
+     * bilinear sampling; recreated on change, without history.
+     */
+    private static boolean volume(int w, int h, int tile) {
+        int vw = (w + tile - 1) / tile * VOLUME_COLUMNS, vh = (h + tile - 1) / tile * (VOLUME_SLICES / VOLUME_COLUMNS);
+        if (VOLUME[0] >= 0 && vw == volumeW && vh == volumeH && tile == volumeTile) return true;
+        volumeW = vw;
+        volumeH = vh;
+        volumeTile = tile;
+        volumeHistory = false;
+        DETAIL.restart();
+        int previous = GlStateManager._getInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
+        boolean ok = true;
+        for (int i = 0; i < VOLUME.length; i++) {
+            if (VOLUME[i] < 0) VOLUME[i] = GlStateManager._genTexture();
+            if (VOLUME_FBOS[i] < 0) VOLUME_FBOS[i] = GlStateManager.glGenFramebuffers();
+            GlStateManager._bindTexture(VOLUME[i]);
+            GlStateManager._texParameter(GlConst.GL_TEXTURE_2D, GlConst.GL_TEXTURE_MIN_FILTER, GlConst.GL_LINEAR);
+            GlStateManager._texParameter(GlConst.GL_TEXTURE_2D, GlConst.GL_TEXTURE_MAG_FILTER, GlConst.GL_LINEAR);
+            GlStateManager._texParameter(GlConst.GL_TEXTURE_2D, GlConst.GL_TEXTURE_WRAP_S, GlConst.GL_CLAMP_TO_EDGE);
+            GlStateManager._texParameter(GlConst.GL_TEXTURE_2D, GlConst.GL_TEXTURE_WRAP_T, GlConst.GL_CLAMP_TO_EDGE);
+            GlStateManager._texImage2D(GlConst.GL_TEXTURE_2D, 0, GL30.GL_RGBA16F, vw, vh, 0, GL11.GL_RGBA, GL11.GL_FLOAT, null);
+            GlStateManager._glBindFramebuffer(GlConst.GL_FRAMEBUFFER, VOLUME_FBOS[i]);
+            GlStateManager._glFramebufferTexture2D(GlConst.GL_FRAMEBUFFER, GlConst.GL_COLOR_ATTACHMENT0, GlConst.GL_TEXTURE_2D, VOLUME[i], 0);
+            ok &= GlStateManager.glCheckFramebufferStatus(GlConst.GL_FRAMEBUFFER) == GlConst.GL_FRAMEBUFFER_COMPLETE;
+        }
+        GlStateManager._glBindFramebuffer(GlConst.GL_FRAMEBUFFER, previous);
+        if (!ok) {
+            Incoming.LOG.error("Nuclear dust pall: near volume {}×{} not created, no dust pall", vw, vh);
+            volumeW = volumeH = 0;
+        }
+        return ok;
+    }
+
     /** OpenGL timestamps supported (GL 3.3 or ARB_timer_query, nonempty counter); pairs created on first check. */
     private static boolean timer() {
         if (timer == 0) {
@@ -1290,10 +1392,11 @@ public final class PallPass {
         if (lastDrawn == 0) return failed ? "failed" : "off";
         Step step = LADDER[Math.max(0, DETAIL.level)];
         Step top = LADDER[Math.max(0, DETAIL.ceiling)];
-        String gpu = timer < 0 ? "gpu n/a" : String.format(Locale.ROOT, "gpu %.2f ms (longest %.2f, budget %.1f; preparation %.2f, rays %.2f, accumulation %.2f, composite %.2f)",
-                lastGpuMean, lastGpuMax, Detail.BUDGET_MS, LAST_PART[0], LAST_PART[1], LAST_PART[2], LAST_PART[3]);
-        return String.format(Locale.ROOT, "%d frames, %d×%d, detail %s (step %d of %d, setting %s, %s, %d changes), %s; %s",
-                lastDrawn, lowW, lowH, step.describe(), DETAIL.level, LADDER.length - 1, top.describe(),
+        String gpu = timer < 0 ? "gpu n/a" : String.format(Locale.ROOT,
+                "gpu %.2f ms (longest %.2f, budget %.1f; preparation %.2f, near volume %.2f, rays %.2f, accumulation %.2f, composite %.2f)",
+                lastGpuMean, lastGpuMax, Detail.BUDGET_MS, LAST_PART[0], LAST_PART[1], LAST_PART[2], LAST_PART[3], LAST_PART[4]);
+        return String.format(Locale.ROOT, "%d frames, %d×%d, near volume %d×%d×%d to %.0f blocks, detail %s (step %d of %d, setting %s, %s, %d changes), %s; %s",
+                lastDrawn, lowW, lowH, volumeW / VOLUME_COLUMNS, volumeH / (VOLUME_SLICES / VOLUME_COLUMNS), VOLUME_SLICES, VOLUME_FAR, step.describe(), DETAIL.level, LADDER.length - 1, top.describe(),
                 DETAIL.pinned ? "pinned" : "by GPU budget", DETAIL.changes, gpu, OpenAir.describe());
     }
 

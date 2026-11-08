@@ -18,6 +18,10 @@
 uniform sampler2D Sampler0;
 // pixel world distance (full resolution)
 uniform sampler2D Sampler1;
+// near pall seen to each slice (fx_pall_froxel_sum; pall.glsl: froxelNear), and the volume's tile, slices and far boundary:
+// the rays (Sampler0) hold the pall only beyond it
+uniform sampler2D Sampler11;
+uniform vec4 PallFroxel;
 // field table (PallField.row)
 uniform sampler2D Sampler2;
 
@@ -272,16 +276,18 @@ vec4 upsample(ivec2 full, ivec2 fullSize, ivec2 lowSize, float depth, vec3 dir) 
     // opacity for nearly pall-free ray (like fx.fsh): unchanged too
     if (bestAlike > 0.5 || max(depth, bestDepth) >= 1e8 || 1.0 - v.a < 0.02 || depth == bestDepth) return v;
     float axis = max(dot(dir, PallForward), 1e-3);
+    // rays hold the pall beyond the near volume only: the difference lies beyond its far boundary
+    float near = PallFroxel.z / axis, ta = max(bestDepth / axis, near), tb = max(depth / axis, near);
     float a;
     if (depth > bestDepth) {
-        a = v.a * exp(-pallTau(dir, bestDepth / axis, depth / axis));
+        a = v.a * exp(-pallTau(dir, ta, tb));
     } else if (v.a >= 0.02) {
         // pixel closer than ray: its pall is a subset of ray pall
-        a = v.a * exp(min(pallTau(dir, depth / axis, bestDepth / axis), 80.0));
+        a = v.a * exp(min(pallTau(dir, tb, ta), 80.0));
     } else {
         // ray nearly opaque (RGBA16F transmittance becomes zero beyond depth ~17; e^τ cannot restore it from zero):
         // transmittance to pixel from noiseless field
-        a = exp(-pallTau(dir, 0.0, depth / axis));
+        a = exp(-pallTau(dir, near, tb));
     }
     a = clamp(a, 0.0, 1.0);
     return vec4(v.rgb * ((1.0 - a) / (1.0 - v.a)), a);
@@ -299,6 +305,13 @@ void main() {
     vec2 ndc0 = (vec2(full) + 0.5) / vec2(fullSize) * 2.0 - 1.0;
     vec4 far0 = InvViewProj * vec4(ndc0, 1.0, 1.0);
     vec4 pall = upsample(full, fullSize, lowSize, depth, normalize(far0.xyz / far0.w));
+    // near pall in front of the rays, at this pixel's own depth: a block's edge cuts the volume at the block, with no ray of
+    // another place and no history from it (the halos and trails of screen-space accumulation); world behind the far
+    // boundary, sky — all of it
+    if (PallFroxel.z > 0.0) {
+        vec4 near = froxelNear(Sampler11, PallFroxel, vec2(full) + 0.5, depth);
+        pall = vec4(near.rgb + near.a * pall.rgb, near.a * pall.a);
+    }
     if (PallFire0[0].x > 0.0 || PallFire1[0].x > 0.0) {
         vec2 ndc = (vec2(full) + 0.5) / vec2(fullSize) * 2.0 - 1.0;
         vec4 farPoint = InvViewProj * vec4(ndc, 1.0, 1.0), nextPoint = InvViewProj * vec4(ndc + vec2(0.0, 2.0 / float(fullSize.y)), 1.0, 1.0);

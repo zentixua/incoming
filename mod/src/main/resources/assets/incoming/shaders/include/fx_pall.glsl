@@ -28,7 +28,8 @@
 // Above-white light moves toward white (CROSS: incandescent is white-yellow, not saturated orange); overexposure becomes
 // pixel coverage over the background behind matter (end of main).
 
-// world distance behind pixel along view axis (full resolution)
+// world distance behind pixel along view axis (full resolution); near-volume passes: the previous medium volume
+// (fx_pall_froxel) or this frame's (fx_pall_froxel_sum)
 uniform sampler2D Sampler0;
 // Lifted dust light: azimuth × (radius, height, mushroom), this frame's prepass.
 uniform sampler2D Sampler9;
@@ -77,6 +78,14 @@ uniform float PallGlowOnSmoke;
 uniform vec4 PallFrame;
 // interleaved rays (fx_pall_resolve): x n, yz this frame's ray pixel within each n × n block of the ray frame
 uniform vec4 PallInterleave;
+// near pall volume (pall.glsl: froxelNear): x tile in full-frame pixels, y first slice boundary, z far boundary (blocks along
+// the view axis; rays here take the pall only beyond it — 0: no volume, rays take all of it)
+uniform vec4 PallFroxel;
+// volume passes (fx_pall_froxel): xy full frame size in pixels, z current frame's share of a cell, w 1 if the previous
+// frame's volume exists; previous frame's view-projection and the eye's move since, as in fx_pall_resolve
+uniform vec4 PallFroxelFrame;
+uniform mat4 PrevViewProj;
+uniform vec4 PallReproject;
 // vertical dust depth at eye: x above, y below to ground (NukePall.tick); with PallFrame.w determines ray reach (pallClip)
 uniform vec2 PallEyeTau;
 // firestorm (client/nuclear/FireStorm, pall.glsl): slot fire maps (R flame, G column smoke, B G × rise;
@@ -1587,6 +1596,7 @@ vec4 smokeStep(float t, float cone, out float gap, out float cell) {
     return vec4(st * (w * light + (1.0 - w) * bb), st);
 }
 
+#if !defined(PALL_FROXEL) && !defined(PALL_FROXEL_SUM)
 #ifndef PALL_MUSH_TAUS
 #ifndef PALL_FOOT_CACHE
 void main() {
@@ -1622,6 +1632,9 @@ void main() {
                 pallFloor(Sampler6, PallSlot1, PallGround1, dir, PallFloorFrom, 1e6, FLOOR_STEPS, jitter));
     }
     float t0 = span.x, t1 = min(min(span.y, scene), t0 + clip);
+    // the pall nearer than the froxel volume's far boundary is that volume's (fx_pall_froxel, composited in front of this
+    // frame in fx_pall_composite): its rays begin behind it. Mushrooms, smoke, whirls and the Wilson cloud keep the whole ray
+    t0 = max(t0, PallFroxel.z / axis);
     vec3 sunDir = PallSun.xyz;
     pallLighting(dir);
     vec3 whirlFlame = max(gFlame, WHIRL_FIRE_LINEAR);
@@ -1935,4 +1948,98 @@ void main() {
     // half-float target: depths beyond 6·10⁴ pass no light anyway
     fragColor = min(mushTausAt(m, p, q, block), vec4(6.0e4));
 }
+#endif
+#else
+// eye ray through full-frame position pixel (center +0.5) and its view-axis cosine
+vec3 froxelRay(vec2 pixel, out float axis) {
+    vec2 ndc = pixel / PallFroxelFrame.xy * 2.0 - 1.0;
+    vec4 farPoint = InvViewProj * vec4(ndc, 1.0, 1.0);
+    vec3 dir = normalize(farPoint.xyz / farPoint.w);
+    axis = max(dot(dir, PallForward), 1e-3);
+    return dir;
+}
+
+#ifdef PALL_FROXEL
+// Medium of one near-volume cell (pall.glsl: froxelNear): emission (rgb) and extinction (a), pallSource at one point of the
+// cell, jittered across the cell by blue noise and frame, both open-air shares as a ray step takes them (pallStep). The cell
+// keeps its previous value reprojected from where this point was in the previous frame's volume (Sampler0), the current point
+// taking PallFroxelFrame.z: an average of many points of the cell, without noise and without a screen-space history —
+// the volume does not know the world's silhouettes, nothing at an edge to drag along or hold (Wronski 2014, slides 28–31;
+// Frostbite: same reprojection). A cell outside the previous frustum or without a valid previous value takes the current point
+// alone (Sampler0: previous volume; Sampler2: blue noise)
+void main() {
+    ivec2 at = ivec2(gl_FragCoord.xy);
+    ivec2 atlas = textureSize(Sampler0, 0);
+    ivec2 tile = atlas / ivec2(PALL_FROXEL_COLUMNS, PALL_FROXEL_SLICES / PALL_FROXEL_COLUMNS);
+    ivec2 cell = at % tile;
+    int k = (at.y / tile.y) * PALL_FROXEL_COLUMNS + at.x / tile.x;
+    // point in the cell: blue noise across cells, golden-ratio steps across frames (R3 sequence)
+    float b = texelFetch(Sampler2, (cell + ivec2(17, 29) * k) % 64, 0).r;
+    vec3 j = fract(b + PallFrame.x * vec3(0.8191725, 0.6710436, 0.5497005));
+    vec2 pixel = (vec2(cell) + j.xy) * PallFroxel.x;
+    float axis;
+    vec3 dir = froxelRay(pixel, axis);
+    float z0 = froxelBoundary(PallFroxel, float(k)), z1 = froxelBoundary(PallFroxel, float(k + 1));
+    float z = mix(z0, z1, j.z), t = z / axis;
+    vec3 p = dir * t;
+    pallLighting(dir);
+    vec4 farNext = InvViewProj * vec4(((pixel + vec2(0.0, PallFroxel.x)) / PallFroxelFrame.xy) * 2.0 - 1.0, 1.0, 1.0);
+    // the cell's width at distance 1 and its depth: noise detail finer than the cell averages out (pallSource cone)
+    gPixel = length(normalize(farNext.xyz / farNext.w) - dir);
+    gJitter = j.z;
+    float cone = max(t * gPixel, 0.35 * (z1 - z0) / axis);
+    vec4 cur = vec4(0.0);
+    float open = pallOpenHere(p);
+    if (open > 0.0) {
+        vec3 dustLight;
+        vec4 matter = pallSource(p, cone, vec4(0.0), dustLight);
+        if (matter.w > 1e-7) cur = matter * open;
+    }
+    if (!pallValid(vec4(cur.rgb, 0.0)) || !(cur.w >= 0.0 && cur.w < 6.0e4)) cur = vec4(0.0);
+    vec4 res = cur;
+    if (PallFroxelFrame.w > 0.5) {
+        // where this point was in the previous frame's volume: its eye-relative position there, screen place and view depth
+        vec4 clip = PrevViewProj * vec4(p + PallReproject.xyz, 1.0);
+        if (clip.w > 1e-3) {
+            vec2 was = (clip.xy / clip.w * 0.5 + 0.5) * PallFroxelFrame.xy / PallFroxel.x - 0.5;
+            float first = froxelBoundary(PallFroxel, 1.0);
+            // slice centers at integers: slice 0 holds everything nearer than its far boundary
+            float s = clip.w < first ? 0.0 : log(clip.w / PallFroxel.y) / froxelGrowth(PallFroxel) - 0.5;
+            if (all(greaterThanEqual(was, vec2(-0.5))) && all(lessThanEqual(was, vec2(tile) - 0.5)) && s <= float(PALL_FROXEL_SLICES) - 0.5) {
+                vec4 before = froxelLerp(Sampler0, was, s);
+                if (pallValid(vec4(before.rgb, 0.0)) && before.w >= 0.0 && before.w < 6.0e4) res = mix(before, cur, PallFroxelFrame.z);
+            }
+        }
+    }
+    fragColor = res;
+}
+#else
+// Pall seen up to the far boundary of each near-volume cell (pall.glsl: froxelNear), front to back along the cell's center
+// ray over the slices before it, as ray steps (pallStep, passMatter): each slice's light by its own transmittance, through
+// the air haze before it (pallAir) and the slices nearer; stored as display light premultiplied (pallShown) and the share
+// of what lies behind still seen (Sampler0: medium volume, fx_pall_froxel)
+void main() {
+    ivec2 at = ivec2(gl_FragCoord.xy);
+    ivec2 atlas = textureSize(Sampler0, 0);
+    ivec2 tile = atlas / ivec2(PALL_FROXEL_COLUMNS, PALL_FROXEL_SLICES / PALL_FROXEL_COLUMNS);
+    ivec2 cell = at % tile;
+    int k = (at.y / tile.y) * PALL_FROXEL_COLUMNS + at.x / tile.x;
+    float axis;
+    vec3 dir = froxelRay((vec2(cell) + 0.5) * PallFroxel.x, axis);
+    vec3 light = vec3(0.0);
+    float seen = 1.0, z0 = 0.0;
+    for (int i = 0; i <= k; i++) {
+        float z1 = froxelBoundary(PallFroxel, float(i + 1));
+        vec4 m = texelFetch(Sampler0, cell + tile * ivec2(i % PALL_FROXEL_COLUMNS, i / PALL_FROXEL_COLUMNS), 0);
+        if (m.w > 1e-7) {
+            float tr = exp(-m.w * (z1 - z0) / axis), air = pallAir(PallAir, 0.5 * (z0 + z1) / axis, dir.y);
+            light += seen * air * m.rgb * (1.0 - tr) / m.w;
+            seen *= 1.0 - air * (1.0 - tr);
+        }
+        z0 = z1;
+    }
+    vec4 res = vec4(pallShown(light, 1.0 - seen), seen);
+    fragColor = pallValid(res) ? res : vec4(0.0, 0.0, 0.0, 1.0);
+}
+#endif
 #endif
