@@ -1850,6 +1850,10 @@ void main() {
                 grid = min(grid, storm.z);
                 float j = floor((ta - storm.x) / storm.z - jitter + 1e-3) + 1.0;
                 next = min(next, min(storm.x + (j + jitter) * storm.z, storm.y));
+                // a head starting inside the storm frame takes over at its entry
+                for (int k = 0; k < 4; k++) {
+                    if (enter[k] > ta) next = min(next, enter[k]);
+                }
             }
             if (!dense) {
                 for (int k = 0; k < 4; k++) {
