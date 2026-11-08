@@ -14,9 +14,11 @@ paths:
   `Detonation.ruinRadius`, where reflected pressure still breaks glass, ~0.34 psi incident; queues snapshot chunks by
   front-arrival time, one tick early, one chunk per work unit; player-visible chunks first (in their view, including
   not yet sent), others afterward, and chunks requested by a player move to visible; visible chunks and their server
-  prechecks get an extra 6 ms beyond the short lane deadline when the server has no spare time
+  prechecks get an extra 12 ms beyond the short lane deadline when the server has no spare time
   (`ScarQueue.SEEN_BUSY_NANOS`, `WorkClock.canStartVisible`: with a full tick as the wave crossed a player's city, a
-  2 ms lane left visible ruins up to 64 ticks behind the front, netcup 16.10); the visible part (`ScarQueue.workSeen`:
+  2 ms lane left visible ruins up to 64 ticks behind the front, netcup 16.10; 6 ms left 250 kt ruins in view 18-30
+  ticks behind, Zearth r4 run4); while ruins in view wait (`ScarQueue.seenWaiting`) the zone behind the wave takes
+  no new squares, since their disk loads end on the server thread between ticks; the visible part (`ScarQueue.workSeen`:
   enqueuing chunks loaded at detonation, visible ruins, prechecks) runs before craters, unseen ruins after them: the
   crater's one-column units took the lane for 4.5 s after a 250 kt ground burst, so chunks in view were not even
   enqueued and fell 105–116 ticks after the wave (Zearth r4 07.11, GameTest `seenRuinsKeepUpWithCrater`); that

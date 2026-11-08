@@ -210,7 +210,7 @@ public final class NuclearPrep {
          * not arrived, nothing to acquire, detonation forgotten), released squares: count, ticket → full (sum/max),
          * full → release, wave → ticket.
          */
-        final long[] diagStops = new long[5], diagDone = new long[8];
+        final long[] diagStops = new long[6], diagDone = new long[8];
         /** Times ready square not released because neighbor-waiting chunks lack holds (whole detonation). */
         long diagRefused;
         long nextIoReport;
@@ -895,6 +895,11 @@ public final class NuclearPrep {
                 stop = 0;
                 break;
             }
+            // chunks nobody sees wait while ruins in view do: new squares mean disk loads on the server thread
+            if (scars.seenWaiting()) {
+                stop = 5;
+                break;
+            }
             t.hold(level, p.strike, take);
             t.state = TileState.LOADING;
             if (NukeDiag.ON) {
@@ -982,10 +987,10 @@ public final class NuclearPrep {
         long[] s = p.diagStops, dn = p.diagDone;
         long n = Math.max(1, dn[0]);
         Incoming.LOG.info("DIAG zone #{}: tiles SCAN {}, SKIP {}, WAIT {}, LOADING {}, READY {}; headers read {} of {} (in flight {}); "
-                        + "intake stalled, ticks — slots {}, disk reply {}, wave {}, nothing to take {}, detonation forgotten {}; released {}: ticket→full avg {} (max {}), "
+                        + "intake stalled, ticks — slots {}, disk reply {}, wave {}, nothing to take {}, detonation forgotten {}, visible ruins {}; released {}: ticket→full avg {} (max {}), "
                         + "full→released {} ({}), wave→ticket {} ({}); holds for tiles {}, tile releases refused (too few holds) {}",
                 p.detonation, states[0], states[1], states[2], states[3], states[4], p.nextScan - p.scanning, p.toScan.size(), p.scanning,
-                s[0], s[1], s[2], s[3], s[4], dn[0], dn[1] / n, dn[2], dn[3] / n, dn[4], dn[5] / Math.max(1, dn[7]), dn[6], scars.tileHoldsDiag(), p.diagRefused);
+                s[0], s[1], s[2], s[3], s[4], s[5], dn[0], dn[1] / n, dn[2], dn[3] / n, dn[4], dn[5] / Math.max(1, dn[7]), dn[6], scars.tileHoldsDiag(), p.diagRefused);
         java.util.Arrays.fill(s, 0);
         for (Tile t : p.tiles) {
             if (t.state == TileState.LOADING) {

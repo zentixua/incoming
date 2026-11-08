@@ -1899,6 +1899,8 @@ public final class NuclearGameTests {
                 q.scanLoaded(rawAt(h, far, 0, 15, 0.025f));
             }
             q.scanLoaded(d, plans);
+            // the zone behind the wave takes no new squares while this waits (NuclearPrep.load)
+            h.assertTrue(q.seenWaiting(), "loaded chunks not yet snapshotted: ruins in view must count as waiting");
             long due = ScarQueue.due(d, seen.getPos()), ruined = -1;
             WorkClock clock = WorkClock.counting(1_000_000);
             for (long now = d.gameTime(); now <= due + 40 && ruined < 0; now++) {
@@ -1909,6 +1911,7 @@ public final class NuclearGameTests {
             }
             h.assertTrue(ruined >= 0, "chunk in view not ruined 40 ticks after its wave: " + q.diagState(seenKey, due + 40));
             h.assertTrue(ruined <= due + 2, "chunk in view ruined " + (ruined - due) + " ticks after its wave");
+            h.assertFalse(q.seenWaiting(), "the only chunk in view is ruined, yet ruins in view still count as waiting");
             h.assertBlockNotPresent(Blocks.GLASS, seenGlass);
         } finally {
             ScarQueue.seenForTest(null);

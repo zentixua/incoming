@@ -44,7 +44,7 @@ public final class WorkScheduler {
 
     /**
      * Busy-server allowance in milliseconds. Queues still progress (one mob per nuclear unit), but the three
-     * lanes add at most 6 ms before their final units, plus up to 6 ms for visible ruins (ScarQueue.SEEN_BUSY_NANOS).
+     * lanes add at most 6 ms before their final units, plus up to 12 ms for visible ruins (ScarQueue.SEEN_BUSY_NANOS).
      */
     static final long BUSY_MS = 2;
 

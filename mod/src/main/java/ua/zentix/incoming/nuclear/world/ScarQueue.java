@@ -128,10 +128,12 @@ public final class ScarQueue {
      * busy (bots, chunk loads, other nuclear queues): netcup 16.10 (15 kt, bot at 1 km), no spare
      * tick time, lane got 1–3 ms for all nuclear work, queue took 0–2 visible chunks/tick, up to 255 accumulated,
      * ruins up to 64 ticks behind front despite average ready-plan replacement 0.24 ms. 6 ms permits 20–30 such
-     * replacements/tick, exceeding newly visible front chunks (~10/tick); at most 6 extra ms/tick only while
-     * visible chunks wait or wave approaches them (prechecks).
+     * replacements/tick, exceeding newly visible front chunks (~10/tick); at most 12 extra ms/tick only while
+     * visible chunks wait or wave approaches them (prechecks). 250 kt at 460 m (Zearth r4 run4, 08.11): the near-field
+     * front reaches all ~300 chunks in view within a few ticks, a visible ruin cost up to 0.69 ms, and 6 ms took
+     * ~10 a tick, 18-30 ticks behind the wave; 12 ms about doubles that pace, still only while visible ruins wait.
      */
-    static final long SEEN_BUSY_NANOS = 6_000_000L;
+    static final long SEEN_BUSY_NANOS = 12_000_000L;
     /** Retry delay for chunk/neighbors below full loading, ticks. */
     private static final int NEIGHBOUR_RETRY = 10;
     /**
@@ -364,6 +366,19 @@ public final class ScarQueue {
 
     private static String ms(long nanos) {
         return String.format(java.util.Locale.ROOT, "%.1f", nanos / 1e6);
+    }
+
+    /**
+     * Ruins a player sees are waiting: due chunks in view not yet ruined, or chunks loaded at a detonation still to
+     * snapshot or to enqueue from their in-view part. The zone behind the wave ({@link NuclearPrep}) takes no new
+     * squares meanwhile: their disk loads finish on the server thread between ticks and kept every tick late for the
+     * first 1.5 s after 250 kt (Zearth r4 run4, 08.11: ticks 65-120 ms instead of 50), which left visible ruins on
+     * the short busy deadline.
+     */
+    public boolean seenWaiting() {
+        if (!readySeen.isEmpty()) return true;
+        for (Scan s : scans) if (s.chunks == null || s.next < s.seen) return true;
+        return false;
     }
 
     /**
