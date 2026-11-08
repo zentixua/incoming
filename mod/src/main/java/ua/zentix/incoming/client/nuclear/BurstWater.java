@@ -18,7 +18,9 @@ final class BurstWater {
     /** Source of knowledge about water beneath ground zero; null — still resolving. */
     private NukeWater.Source source;
 
+    /** While still resolving: water beneath ground zero and the water-burst share; ignored once settled. */
     void set(double under, double wet) {
+        if (settled()) return;
         this.under = under;
         this.wet = wet;
     }

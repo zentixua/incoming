@@ -77,14 +77,14 @@ final class FireStorms {
 
     /**
      * Client tick: fire-model trust approaches comparison with fire in local chunks; which parts of the fire zone are water, ice or snow (from
-     * local chunks and terrain-map tiles; unknown areas follow ground zero, {@link FireStorm#survey}).
+     * local chunks and terrain-map tiles; unknown areas follow ground zero as resolved at the burst, {@link FireStorm#survey}).
      */
     static void tick(List<ClientNuclear.Active> all) {
         ClientLevel level = Minecraft.getInstance().level;
         for (ClientNuclear.Active a : all) {
             double was = a.storm.gate();
             a.storm.gate(was + GATE_RATE * (a.storm.trust() - was));
-            if (level != null) a.storm.survey(surface(level), NukeWater.under(level, a.d).water());
+            if (level != null) a.storm.survey(surface(level), a.water);
         }
     }
 
