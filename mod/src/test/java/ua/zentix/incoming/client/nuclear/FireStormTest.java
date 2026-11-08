@@ -217,6 +217,48 @@ class FireStormTest {
         assertEquals(0.5, FireStorm.morning(end - PallField.HAZE_FADE_TICKS / 2.0, end), 1e-12);
     }
 
+    /** Water beneath ground zero resolved at the burst ({@link NukeWater#resolve}): {@code under} 0 land, 1 sea. */
+    private static BurstWater water(double under) {
+        BurstWater w = new BurstWater();
+        w.set(under, 0);
+        w.settle(NukeWater.Source.TILES);
+        return w;
+    }
+
+    /**
+     * Unseen cells follow ground zero as it was at the burst, not as it reads later: a land burst whose crater later reads as
+     * water (it fills, or its map tile changes) keeps the whole unseen storm burning. Before ground zero is resolved, nothing
+     * is decided from a guess.
+     */
+    @Test
+    void unseenCellsKeepTheBurstWaterWhenGroundZeroLaterReadsWater() throws InterruptedException {
+        FireStorm s = new FireStorm(GROUND, new PallField(GROUND, NIGHT));
+        for (int i = 0; i < 600 && s.grid() == null; i++) Thread.sleep(10);
+        FireStorm.Grid g = s.grid();
+        assertNotNull(g);
+        FireStorm.Surface unknown = (x, z) -> -1;
+        int sweep = g.index().length / FireStorm.SURVEY_CELLS + 1;
+        // a zone cell away from ground zero
+        double[] far = centre(g, g.index()[g.index().length / 4]);
+        BurstWater w = new BurstWater();
+        w.set(1, 0);
+        for (int i = 0; i < sweep; i++) s.survey(unknown, w);
+        assertEquals(1, s.dryAt(GROUND.burst().x + far[0], GROUND.burst().z + far[1]), 0, "an unresolved guess decides nothing");
+        w.set(0, 0);
+        w.settle(NukeWater.Source.TILES);
+        for (int i = 0; i < sweep; i++) s.survey(unknown, w);
+        assertTrue(s.refresh(20 * 180));
+        double before = s.burning();
+        assertTrue(before > 0);
+        // the crater at ground zero now reads as water: the resolved burst water stays, the storm keeps burning
+        w.set(1, 1);
+        assertEquals(0, w.under(), 0, "burst water is fixed once settled");
+        for (int i = 0; i < 3 * sweep; i++) s.survey(unknown, w);
+        assertEquals(1, s.dryAt(GROUND.burst().x + far[0], GROUND.burst().z + far[1]), 0);
+        s.refresh(20 * 181 + FireStorm.FILL_SLOW);
+        assertEquals(before, s.burning(), before * 0.05, "the unseen storm does not go out");
+    }
+
     @Test
     void waterIceAndSnowThatTheClientKnowsDoNotBurn() throws InterruptedException {
         FireStorm s = new FireStorm(AIR, new PallField(AIR, NIGHT));
@@ -225,17 +267,17 @@ class FireStormTest {
         assertNotNull(g);
         // to the west of the epicenter - the sea, at the very epicenter - we don’t know, to the east - land
         FireStorm.Surface surface = (x, z) -> Math.abs(x - AIR.burst().x) < 100 ? -1 : x < AIR.burst().x ? 1 : 0;
-        for (int i = 0; i <= g.index().length / FireStorm.SURVEY_CELLS; i++) s.survey(surface, 0);
+        for (int i = 0; i <= g.index().length / FireStorm.SURVEY_CELLS; i++) s.survey(surface, water(0));
         assertEquals(0, s.dryAt(AIR.burst().x - 500, AIR.burst().z), 0);
         assertEquals(1, s.dryAt(AIR.burst().x + 500, AIR.burst().z), 0);
         assertEquals(1, s.dryAt(AIR.burst().x + 5, AIR.burst().z), 0, "we don’t know, there is land under the epicenter - it burns, as in the model");
         // the player left, the chunks were unloaded: the sea seen remains the sea
-        for (int i = 0; i <= g.index().length / FireStorm.SURVEY_CELLS; i++) s.survey((x, z) -> -1, 0);
+        for (int i = 0; i <= g.index().length / FireStorm.SURVEY_CELLS; i++) s.survey((x, z) -> -1, water(0));
         assertEquals(0, s.dryAt(AIR.burst().x - 500, AIR.burst().z), 0, "saw the sea - it doesn’t burn and then");
         // there is a sea under the epicenter: where we don’t know anything, it doesn’t burn (an explosion over the sea in the distance)
         FireStorm sea = new FireStorm(AIR, new PallField(AIR, NIGHT));
         for (int i = 0; i < 600 && sea.grid() == null; i++) Thread.sleep(10);
-        for (int i = 0; i <= g.index().length / FireStorm.SURVEY_CELLS; i++) sea.survey(surface, 1);
+        for (int i = 0; i <= g.index().length / FireStorm.SURVEY_CELLS; i++) sea.survey(surface, water(1));
         assertEquals(0, sea.dryAt(AIR.burst().x + 5, AIR.burst().z), 0, "we don’t know, the sea is under the epicenter - it doesn’t burn");
         assertEquals(1, sea.dryAt(AIR.burst().x + 500, AIR.burst().z), 0, "the land we know is burning");
         // the night of the explosion - the morning after 5 minutes: map - at the 3 minute

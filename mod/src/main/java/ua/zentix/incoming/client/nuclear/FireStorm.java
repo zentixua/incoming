@@ -356,12 +356,16 @@ public final class FireStorm {
     /**
      * Client tick: dry-ground fraction in the next {@link #SURVEY_CELLS} zone cells, cycling through them — 3 × 3 points per cell,
      * using client knowledge ({@code surface}: local chunks and terrain-map tiles). The fire model has no terrain knowledge, while burning sea
-     * or glacier is immediately visible. Where nothing is or was known, the cell follows ground zero ({@code unknownWet}: water fraction there,
-     * {@code NukeWater.under}, including a ground-height guess for a sea burst): otherwise a distant sea burst would burn the sea.
+     * or glacier is immediately visible. Where nothing is or was known, the cell follows ground zero as resolved at the burst
+     * ({@code water}, {@link BurstWater}: chunk, map tile or a ground-height guess for a sea burst): otherwise a distant sea burst would
+     * burn the sea. Nothing is decided until that is settled, and later ground-zero changes do not reach the storm: a crater that
+     * fills or whose map tile reads water would otherwise mark every unseen cell wet within one survey sweep, and the whole storm
+     * would go out while the city still burns.
      */
-    void survey(Surface surface, double unknownWet) {
+    void survey(Surface surface, BurstWater water) {
         Grid g = grid;
-        if (g == null || g.index.length == 0) return;
+        if (g == null || g.index.length == 0 || !water.settled()) return;
+        double unknownWet = water.under();
         if (dry.length != g.index.length) {
             dry = new float[g.index.length];
             Arrays.fill(dry, (float) (1 - unknownWet));
