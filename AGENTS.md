@@ -180,6 +180,8 @@ Artem, 26.10: standard Minecraft mod practice, no extra custom principles.
 ## Workflow
 The repository contains only shared contributor resources. Personal agent launchers, session records and
 machine-specific job notes belong outside version control.
+Agent skills for this project live in the `incoming` plugin (`.claude/plugins/incoming/skills/`), listed by
+`.claude-plugin/marketplace.json`; claude.ai syncs it from `main` (Project threads do not read `.claude/skills/`).
 
 Agent workflow: task → branch → code → build/tests → PR → CI → one review round → merge. Extra checks only for
 visuals/sound/FPS, since tests cannot judge beauty or lag. First principles throughout: derive from how the thing

@@ -105,7 +105,7 @@ jobs:
                 # Store publishing (publish.yml) and the pages and gallery it uploads (guide images too): test_store*.py only.
                 .github/scripts/*|.github/workflows/publish.yml|docs/store/*|docs/media/*|docs/guide/*|README.md|README.ru.md) store=true ;;
                 .github/*) mod=true; rig=true; replayscan=true; lookgate=true; stand=true; store=true ;;
-                tools/*|docs/*|*.md|.claude/*|.gitignore) ;;
+                tools/*|docs/*|*.md|.claude/*|.claude-plugin/*|.gitignore) ;;
                 *) mod=true ;;
               esac
             done <<< "$files"

@@ -1,0 +1,14 @@
+{
+  "name": "zentixua-incoming",
+  "description": "Agent skills for working on the Incoming mod",
+  "owner": {
+    "name": "zentixua"
+  },
+  "plugins": [
+    {
+      "name": "incoming",
+      "source": "./.claude/plugins/incoming",
+      "description": "Incoming project skills: deep-debug"
+    }
+  ]
+}
