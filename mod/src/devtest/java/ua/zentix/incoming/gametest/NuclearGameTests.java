@@ -1775,8 +1775,10 @@ public final class NuclearGameTests {
 
     /**
      * Ground blasting 1 Mt, bypassing the limit 15 kt (the blast was assembled in the test, not through {@code detonate}) - for the sake of a large
-     *  bowl, 1 block = 15 m: bowl according to the profile of the model ±1 block from the natural soil of each column
-     *  (the hillock in the bowl deepens from its height, the hill on the rampart is not cut off), there is a rampart around it; air blast does not give crater.
+     *  bowl, 1 block = 15 m: bowl according to the profile of the model ±1 block from the ground under the crater; a hillock
+     *  in the bowl is thrown out with it, and so is a building whose floors and roof garden are ground-tagged blocks
+     *  (terracotta, grass): the bowl was cut from its roof and left its storeys standing in the crater (Zearth 08.11.2026,
+     *  200 kt); the hill on the rampart is not cut off, there is a rampart around it; air blast does not give crater.
      */
     @GameTest(template = "range", timeoutTicks = 400, batch = "nuke_crater", skyAccess = true)
     public static void groundBurstDigsCraterProfile(GameTestHelper h) {
@@ -1787,6 +1789,15 @@ public final class NuclearGameTests {
         BlockPos bump = CENTER.north(Mth.floor(dry * 0.5)), hill = CENTER.south(Mth.floor(dry * 1.6));
         for (int y = 0; y < 3; y++) h.setBlock(bump.above(y), Blocks.DIRT);
         for (int y = 0; y < 6; y++) h.setBlock(hill.above(y), Blocks.STONE);
+        // a tower like Zearth's: terracotta floors over air every 4 blocks and a roof garden, 3×3
+        BlockPos tower = CENTER.west(Mth.floor(dry * 0.4));
+        for (int dx = -1; dx <= 1; dx++) {
+            for (int dz = -1; dz <= 1; dz++) {
+                for (int y = 3; y <= 15; y += 4) h.setBlock(tower.offset(dx, y, dz), Blocks.BLUE_TERRACOTTA);
+                h.setBlock(tower.offset(dx, 16, dz), Blocks.GRAY_TERRACOTTA);
+                h.setBlock(tower.offset(dx, 17, dz), Blocks.GRASS_BLOCK);
+            }
+        }
         CraterJob job = new CraterJob(d, 0);
         RandomSource random = RandomSource.create(3);
         h.succeedWhen(() -> {
@@ -1800,11 +1811,13 @@ public final class NuclearGameTests {
                 BlockPos p = h.absolutePos(CENTER.east(Mth.floor(radius * f)));
                 assertSurface(h, d, soil, p, d.groundY(), "on " + f + " radius");
             }
-            assertSurface(h, d, soil, h.absolutePos(bump), d.groundY() + 3, "on the hill");
+            assertSurface(h, d, soil, h.absolutePos(bump), d.groundY(), "on the hillock");
+            assertSurface(h, d, soil, h.absolutePos(tower), d.groundY(), "under the terracotta tower");
             BlockPos hillTop = h.absolutePos(hill);
             h.assertTrue(level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, hillTop.getX(), hillTop.getZ()) >= hillTop.getY() + 6,
                     "the hill on the rampart is cut off");
-            BlockPos rim = h.absolutePos(CENTER.east(Mth.floor(radius * 1.05)));
+            // beyond the widest edge (CraterGround.edge stays within 12 %)
+            BlockPos rim = h.absolutePos(CENTER.east(Mth.ceil(radius * 1.15)));
             h.assertTrue(level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, rim.getX(), rim.getZ()) >= d.groundY(), "no shaft behind the edge");
             h.assertFalse(CraterModel.formsCrater(Yield.optimalBurstHeight(15), 15), "an air blast at the optimal height digs a crater");
         });

@@ -542,6 +542,8 @@ public final class NuclearWorld {
                 clock.end(u0);
             }
             events.craterProgress(job.detonation().id(), job.progress(), s == CraterJob.Step.DONE);
+            double[] ground = job.ground();
+            if (s != CraterJob.Step.DONE && ground != null) events.craterGround(job.detonation().id(), ground);
             if (s == CraterJob.Step.DONE) craters.removeFirst();
             else if (s == CraterJob.Step.WAIT) break;
         }
@@ -551,6 +553,6 @@ public final class NuclearWorld {
     private void restore(NuclearEvents events) {
         restored = true;
         events.craters().forEach((id, done) -> events.detonations().stream().filter(d -> d.id() == id).findFirst()
-                .ifPresent(d -> craters.add(new CraterJob(d, done))));
+                .ifPresent(d -> craters.add(new CraterJob(d, done, events.craterGround(id)))));
     }
 }

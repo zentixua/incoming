@@ -12,6 +12,7 @@ import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.nuclear.Detonation;
+import ua.zentix.incoming.nuclear.model.CraterGround;
 import ua.zentix.incoming.nuclear.model.CraterModel;
 import ua.zentix.incoming.registry.ModBlocks;
 import ua.zentix.incoming.registry.ModDataMaps;
@@ -27,12 +28,15 @@ import java.util.List;
 
 /**
  * Surface-burst crater (DESIGN-nuke §1.7, §3.5): paraboloid with irregular edge, ejecta rim to two radii, trinitite on
- * floor and walls. Depth and rim measured from natural ground in each column: on a slope, the crater follows the slope
- * instead of cutting the hill to epicenter height.
+ * floor and walls. Depth and rim are measured from the ground under the crater ({@link CraterGround}): first a survey
+ * reads the surface of every bowl chunk and fits the ground plane through their low parts, so on a slope the crater
+ * follows the slope, while buildings, roof gardens and knolls inside the bowl are cut away with it instead of moving
+ * the bowl up. A column whose own natural ground lies lower (a lake bed, a ditch) keeps it.
  * <p>
- * Visits chunks outward from center, one column per step under the shared time budget. Chunks load in the background
- * via tickets ({@link NuclearTickets}) — current and several ahead; work waits until ready. Chunk index is world-saved,
- * so after restart digging resumes at the same position (operations repeatable).
+ * Visits chunks outward from center, one column per step under the shared time budget (the survey one chunk per
+ * step). Chunks load in the background via tickets ({@link NuclearTickets}) — current and several ahead; work waits
+ * until ready. Chunk index and ground plane are world-saved, so after restart digging resumes at the same position
+ * with the same ground (operations repeatable).
  */
 public final class CraterJob {
     /** How many chunks ahead to request loading. */
@@ -48,12 +52,30 @@ public final class CraterJob {
     private final List<ChunkPos> chunks = new ArrayList<>();
     private int next;
     private int column;
+    private int samples;
     @Nullable
     private CraterModel.Soil soil;
     private List<BlockState> rim = List.of();
+    /** Ground plane relative to the epicentre ({@link CraterGround#fit}); null — survey not finished. */
+    @Nullable
+    private double[] ground;
+    /** Bowl chunks for the survey (after the soil is known) and how many are read. */
+    @Nullable
+    private List<ChunkPos> survey;
+    private int surveyed;
+    private double[] sx = new double[0], sz = new double[0], sh = new double[0];
 
     /** @param startChunk chunk to resume from (0 — new crater) */
     public CraterJob(Detonation d, int startChunk) {
+        this(d, startChunk, null);
+    }
+
+    /**
+     * @param startChunk chunk to resume from (0 — new crater)
+     * @param ground     saved ground plane ({@link #ground()}); null — survey it, or for a crater half dug by a version
+     *                   without the survey, keep measuring from each column's natural ground
+     */
+    public CraterJob(Detonation d, int startChunk, @Nullable double[] ground) {
         this.d = d;
         this.gz = BlockPos.containing(d.burst().x, d.groundY(), d.burst().z);
         // largest soil multiplier is wet (×1.3): rim reaches two radii
@@ -68,6 +90,14 @@ public final class CraterJob {
         }
         chunks.sort(Comparator.comparingDouble(this::nearest));
         this.next = Mth.clamp(startChunk, 0, chunks.size());
+        // a crater half dug before the survey existed: surveying now would read its own pit as the ground
+        this.ground = ground != null ? ground.clone() : next > 0 ? new double[] {0, 0, Double.POSITIVE_INFINITY} : null;
+    }
+
+    /** Ground plane {@code {a, b, c}} relative to the epicentre (for persistence); null — survey not finished. */
+    @Nullable
+    public double[] ground() {
+        return ground == null ? null : ground.clone();
     }
 
     public Detonation detonation() {
@@ -100,6 +130,7 @@ public final class CraterJob {
             return Step.DONE;
         }
         if (soil == null && !sampleSoil(level)) return Step.WAIT;
+        if (ground == null) return survey(level);
         for (int i = next; i < Math.min(chunks.size(), next + LOOKAHEAD); i++) NuclearTickets.hold(level, chunks.get(i), true);
         ChunkPos cp = chunks.get(next);
         if (!NuclearTickets.neighbourhoodLoaded(level, cp)) return Step.WAIT;
@@ -125,7 +156,60 @@ public final class CraterJob {
         return true;
     }
 
+    /** Survey radius, blocks: the bowl of the sampled soil, where the crater cuts. */
+    private double bowl() {
+        return d.blocks(CraterModel.radius(d.yieldKt(), soil));
+    }
+
+    /**
+     * One bowl chunk of the survey: its low surface ({@link CraterGround#low} of the columns inside the bowl) at their
+     * mean position. After the last chunk, the ground plane.
+     */
+    private Step survey(ServerLevel level) {
+        double bowl = Math.max(bowl(), 1);
+        if (survey == null) {
+            survey = new ArrayList<>();
+            for (ChunkPos p : chunks) if (nearest(p) <= bowl) survey.add(p);
+            sx = new double[survey.size()];
+            sz = new double[survey.size()];
+            sh = new double[survey.size()];
+        }
+        if (surveyed >= survey.size()) {
+            // no ground anywhere in the bowl (void): each column keeps its own, as before the survey
+            ground = samples == 0 ? new double[] {0, 0, Double.POSITIVE_INFINITY} : CraterGround.fit(sx, sz, sh, samples);
+            return Step.PROGRESS;
+        }
+        for (int i = surveyed; i < Math.min(survey.size(), surveyed + LOOKAHEAD); i++) NuclearTickets.hold(level, survey.get(i), true);
+        ChunkPos cp = survey.get(surveyed);
+        if (!Terrain.ready(level, cp.x, cp.z)) return Step.WAIT;
+        int[] heights = new int[256];
+        int n = 0;
+        double mx = 0, mz = 0;
+        for (int i = 0; i < 256; i++) {
+            int x = cp.getMinBlockX() + (i & 15), z = cp.getMinBlockZ() + (i >> 4);
+            double dx = x + 0.5 - d.burst().x, dz = z + 0.5 - d.burst().z;
+            if (dx * dx + dz * dz > bowl * bowl) continue;
+            int h = Terrain.height(level, Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z);
+            // an empty column (void) is no ground: a plane at the world bottom would dig the bowl down to it
+            if (h <= level.getMinBuildHeight()) continue;
+            heights[n++] = h;
+            mx += dx;
+            mz += dz;
+        }
+        if (n > 0) {
+            sx[samples] = mx / n;
+            sz[samples] = mz / n;
+            sh[samples] = CraterGround.low(heights, n);
+            samples++;
+        }
+        // the epicentre chunk stays held: digging starts there
+        if (surveyed > 0) NuclearTickets.hold(level, cp, false);
+        surveyed++;
+        return Step.PROGRESS;
+    }
+
     private void dig(ServerLevel level, int x, int z, RandomSource random) {
+        double[] plane = ground;
         Profile p = new Profile() {
             @Override
             public double depth(double r) {
@@ -135,6 +219,11 @@ public final class CraterJob {
             @Override
             public double rim(double r) {
                 return d.blocks(CraterModel.rimHeight(d.metres(r), d.yieldKt(), soil));
+            }
+
+            @Override
+            public double ground(int x, int z) {
+                return plane == null ? Double.POSITIVE_INFINITY : CraterGround.at(plane, x + 0.5 - d.burst().x, z + 0.5 - d.burst().z);
             }
         };
         digColumn(level, x, z, d.burst(), outer, d.seed() % 13, p, rim, ModBlocks.TRINITITE.get().defaultBlockState(), Mode.VAPORIZE, random);
@@ -156,11 +245,21 @@ public final class CraterJob {
         double depth(double r);
 
         double rim(double r);
+
+        /**
+         * Ground under the crater at column ({@code x}, {@code z}) as a heightmap height (first air above): a column's
+         * natural surface above it is a building or a knoll, cut with the bowl. Infinite — each column's own natural
+         * ground (conventional craters, whose bowl is smaller than a building).
+         */
+        default double ground(int x, int z) {
+            return Double.POSITIVE_INFINITY;
+        }
     }
 
     /**
      * One crater column (nuclear and conventional share shape law, {@link CraterModel#bowl}, {@link CraterModel#rim}):
-     * irregular edge (radius “breathes” with angle), depth and rim from the column's natural ground; remove everything above
+     * irregular edge ({@link CraterGround#edge}), depth and rim from the column's ground ({@link Profile#ground}, at most its
+     * natural ground); remove everything above
      * the bowl profile (underwater pit fills with water); ejecta soil {@code rimStates} forms the rim. Blocks change via
      * {@link ColumnScar#replace}. Column chunk and neighbors must be ready.
      *
@@ -173,9 +272,7 @@ public final class CraterJob {
                                  List<BlockState> rimStates, @Nullable BlockState glaze, Mode mode, RandomSource random) {
         double dx = x + 0.5 - centre.x, dz = z + 0.5 - centre.z;
         if (dx * dx + dz * dz > outer * outer) return;
-        // irregular edge: radius “breathes” with angle
-        double wobble = 1 + 0.08 * Math.sin(Math.atan2(dz, dx) * 7 + phase);
-        double r = Math.hypot(dx, dz) / wobble;
+        double r = Math.hypot(dx, dz) / CraterGround.edge(Math.atan2(dz, dx), phase);
         double depth = profile.depth(r);
         double lift = profile.rim(r);
         if (depth <= 0 && (mode == Mode.VAPORIZE ? lift < 1 : lift <= 0)) return;
@@ -183,6 +280,8 @@ public final class CraterJob {
         // heights as heightmaps: first air above a block
         int top = Terrain.height(level, Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z);
         int ground = naturalSurface(level, x, z, top);
+        double below = profile.ground(x, z);
+        if (below < ground) ground = Math.max(level.getMinBuildHeight(), (int) Math.round(below));
         if (mode == Mode.DIG) ground = SurfaceBlocks.excavationTop(level, x, z, ground, top, centre.y);
         BlockPos.MutableBlockPos m = new BlockPos.MutableBlockPos(x, 0, z);
         // resulting surface = natural ground + rim − bowl (overlap near edge)
@@ -276,7 +375,10 @@ public final class CraterJob {
 
 
     public void release(ServerLevel level) {
-        if (soil == null) NuclearTickets.hold(level, new ChunkPos(gz), false);
+        if (soil == null || ground == null) NuclearTickets.hold(level, new ChunkPos(gz), false);
+        if (ground == null && survey != null) {
+            for (int i = surveyed; i < Math.min(survey.size(), surveyed + LOOKAHEAD); i++) NuclearTickets.hold(level, survey.get(i), false);
+        }
         for (int i = next; i < Math.min(chunks.size(), next + LOOKAHEAD); i++) NuclearTickets.hold(level, chunks.get(i), false);
     }
 }
