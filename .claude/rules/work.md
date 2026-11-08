@@ -24,6 +24,22 @@ paths:
   lane time and the remainder. It also reports the percentage of ticks with an early impact window, mean early and
   late impact time, and the percentage with mandatory unload debt; all four use the same 600-tick denominator.
   `tools/logscan.py` shows this line in full under `Work budget`, including fields beyond its usual truncation limit.
+  The line ends with tick starts as spark's tick monitor sees them (`ChunkLoadPace.report`: intervals over 60 ms,
+  ticks starting over 10 ms after schedule, longest interval) and the paced chunk loads with the measured decode cost.
+- `ChunkLoadPace` paces the mod's background disk loads (`RuinSettle` admissions, zone-behind-wave square tickets,
+  `NuclearPrep.Tile.holdMore`). Vanilla decodes a disk chunk on the server thread between ticks
+  (`ChunkSerializer.read` on the main-thread executor) and runs such tasks up to 50 ms past the tick end
+  (`delayedTasksMaxNextTickTimeNanos`), so a batch of loads starts the next tick late although the tick itself is short:
+  after 1 Mt over Zearth (r4 run6) the tick took 20 ms (p50) while 20 % of tick-start intervals were 68–82 ms, with
+  84 % of between-tick JFR samples in `ChunkSerializer.read` at ~2.6 ms a chunk. A full load decodes its 3×3 square
+  (`LOADING_PYRAMID`: light needs ring-1 neighbors at `INITIALIZE_LIGHT`, read from disk), so a load is charged the
+  square's chunks without a chunk in memory (`ChunkLoadPace.decodes`). The gap is measured at the end of the last Post
+  listener (next scheduled start minus that moment), not at the request: requests come mid-lane, and the lanes and
+  other mods' Post work after them may take most of the time left. Requests use the smallest gap of the last 10 ticks
+  less 5 ms; decode cost comes from consecutive `ChunkDataEvent.Load` events in one gap (pauses over 30 ms are disk
+  waits). No gap: one load per 4 ticks. In-memory chunks take no pace. `ChunkLoadPaceTest` holds the gap, the learned
+  cost, mid-lane requests and neighbor decodes; a new background loader
+  of disk chunks goes through it too.
 - `UnitQueue` runs new heads in enqueue order, then one unit per continuation in a persistent round-robin order.
   Unready areas and blocked dependencies are skipped. Continuation `ready`/`blocked` results are cached once per
   work window, after heads (whose first step can introduce a dependency). Post refreshes them even within the same

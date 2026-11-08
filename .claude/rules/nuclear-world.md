@@ -142,7 +142,9 @@ paths:
   9.3–10.1 GB for 6.4–6.8 live; JVMs without old-generation pools use post-GC pool sum); two consecutive measurements
   above 75 % stop prebuilding plans (“no more ruins are pre-built”), and the zone behind the wave loads only chunks
   with ready plans (loading nothing would waste ready plans; GameTest `heapStopZoneLoadsOnlyPlanned`); after detonation,
-  the zone behind the wave loads the ≥ 5 psi heavy zone in 5×5 squares following the front — each square's chunk whose
+  the zone behind the wave loads the ≥ 5 psi heavy zone in 5×5 squares following the front (a square's tickets for
+  chunks not in memory follow `ChunkLoadPace`, `work.md`: before it, six new squares could put 150 disk loads and their
+  neighbors into one gap between ticks; after a heap stop a partly held square takes only chunks with ready plans) — each square's chunk whose
   5×5 ruin window is whole on disk (`DiskStatus.State.WHOLE`: `chunkScanner` header; 1.17 retrogen chunks cannot load
   without generation, so disk plans wait for players or distant LODs) or in memory, via its own level-33 load-only,
   non-ticking ticket (vanilla loads it without generation, `ChunkGenerationTask.canLoadWithoutGeneration`; windows at
@@ -294,7 +296,8 @@ paths:
   ticket has `mayHold=false`, so a radius-zero settlement ticket alone would stall until timeout. Regression
   `nuke_settle_neighbours` resumes a completed scan with only such a chunk pending, including a stale Create-block
   plan needing radius 2; it must finish without waiting for timeout. Even an empty plan needs its saved
-  `CHUNK_SCAR`; no direct region edits. The loading window starts at 8, grows by a quarter per second with spare lane time and low external MSPT,
+  `CHUNK_SCAR`; no direct region edits. Each admission of a chunk not in memory also waits for `ChunkLoadPace`
+  (`work.md`): the window bounds held chunks, not how many decode in one gap between ticks. The loading window starts at 8, grows by a quarter per second with spare lane time and low external MSPT,
   and shrinks by a quarter under pressure. Like workers, external MSPT excludes mod lanes; the threshold is
   50 minus the common configured work budget, with a 5 ms margin. Available plan memory further limits roots,
   reserving two uncompressed chunk snapshots (at least 1 MiB) per root; already held work drains when the limit

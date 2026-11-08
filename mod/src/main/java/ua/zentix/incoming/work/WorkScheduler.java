@@ -250,13 +250,14 @@ public final class WorkScheduler {
         if (timing.active && timing.hasUnloadDebt()) WINDOW[9]++;
         if (WINDOW[0] < REPORT_TICKS) return;
         long n = WINDOW[0];
+        String pace = ChunkLoadPace.of(server).report();
         if (WINDOW[3] + WINDOW[4] + WINDOW[5] > 0) {
             ua.zentix.incoming.Incoming.LOG.info("Mod work over 30 s: server tick avg {} ms (max {}), of which mod lanes avg — "
                             + "impacts {}, nuke {}, blackout {} ms; the rest (vanilla, other mods) {} ms; "
-                            + "impact early window {}% of ticks, early avg {} ms, late avg {} ms; mandatory unload debt {}% of ticks",
+                            + "impact early window {}% of ticks, early avg {} ms, late avg {} ms; mandatory unload debt {}% of ticks; {}",
                     ms(WINDOW[1] / n), ms(WINDOW[2]), ms(WINDOW[3] / n), ms(WINDOW[4] / n), ms(WINDOW[5] / n),
                     ms(Math.max(0, WINDOW[1] - WINDOW[3] - WINDOW[4] - WINDOW[5]) / n),
-                    percent(WINDOW[6], n), ms(WINDOW[7] / n), ms(WINDOW[8] / n), percent(WINDOW[9], n));
+                    percent(WINDOW[6], n), ms(WINDOW[7] / n), ms(WINDOW[8] / n), percent(WINDOW[9], n), pace);
         }
         java.util.Arrays.fill(WINDOW, 0);
     }
