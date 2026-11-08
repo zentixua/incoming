@@ -60,7 +60,8 @@ def mcModsDir = file(project.findProperty('mcModsDir')
         ?: providers.exec { commandLine 'python3', file('../tools/paths.py').path, 'MODS' }.standardOutput.asText.get().trim())
 def runtimeModPatterns = ['create-1.21.1-*.jar', 'sable-neoforge-1.21.1-*.jar', 'create-aeronautics-bundled-1.21.1-*.jar']
 // client scenario with Sodium and Iris, as on the host (tools/client_scenario.sh nuke shaders)
-def shaderModPatterns = System.getenv('INCOMING_SHADERS') ? ['sodium-neoforge-*.jar', 'iris-neoforge-*.jar'] : []
+// (and LambDynamicLights if the directory has it, as in the pack: a held torch lights the nuclear pall, MovingLight)
+def shaderModPatterns = System.getenv('INCOMING_SHADERS') ? ['sodium-neoforge-*.jar', 'iris-neoforge-*.jar', 'lambdynamiclights-*.jar'] : []
 // ... and with Distant Horizons, as on the host: the far terrain of the aiming map (tools/client_scenario.sh target-map
 // dh)
 def dhModPatterns = System.getenv('INCOMING_DH') ? ['DistantHorizons-*.jar'] : []
