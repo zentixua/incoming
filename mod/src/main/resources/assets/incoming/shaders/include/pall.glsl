@@ -477,6 +477,46 @@ float pallDisplay(float v) {
     return pow(max(v, 0.0), 0.4545455);
 }
 
+// display (pallShown): above-white light adds this share of its excess as white to all channels (film/eye overexposure);
+// Rec. 709 luminance
+const float PALL_CROSS = 0.15;
+const vec3 PALL_LUMA = vec3(0.2126, 0.7152, 0.0722);
+
+// Film-like shoulder: display values to 0.6 unchanged, brighter smoothly approach 1 (same slope at 0.6). Frame clips
+// above 1: at night fire-lit billows would merge into flat orange. Use brightest channel, scale others equally to
+// preserve hue (independent channels turned white mist pink in ball light)
+vec3 shoulder(vec3 c) {
+    float m = max(max(c.r, c.g), c.b);
+    if (m <= 0.6) return c;
+    return c * ((0.6 + 0.4 * (1.0 - exp(-(m - 0.6) / 0.4))) / m);
+}
+
+// Display: pall material color is light light / opacity cover (source function for uniform material), converted to
+// display and premultiplied by opacity; blends with world like other translucent frame content. Above white
+// (fireball, incandescence, night glow): material light adds over background — displayed material no brighter than
+// white; overexposure becomes pixel coverage (cover·L, capped at full pixel), colored by its light, PALL_CROSS toward white.
+// Transmittance remains real: same background visible, overlaid light saturates toward white (frame RGBA16F,
+// layer quads behind it take light from frame, fx.fsh: before). Otherwise a distant ball left with cover by air haze
+// (10 km clear — 0.14) would be a pale sky patch however bright it shines. Copy — NukeExposure.pixel
+vec3 pallShown(vec3 light, float cover) {
+    float shownCover = cover;
+    vec3 medium = light / max(cover, 1e-4);
+    float lum = dot(medium, PALL_LUMA);
+    if (lum > 1.0 && cover > 1e-4) {
+        shownCover = min(cover * lum, 1.0);
+        medium *= cover / shownCover;
+    }
+    medium += vec3(PALL_CROSS * max(dot(medium, PALL_LUMA) - 1.0, 0.0));
+    return shoulder(vec3(pallDisplay(medium.r), pallDisplay(medium.g), pallDisplay(medium.b))) * shownCover;
+}
+
+// Inverse of shoulder below its ceiling (brightest channel under 1)
+vec3 unshoulder(vec3 c) {
+    float m = max(max(c.r, c.g), c.b);
+    if (m <= 0.6) return c;
+    return c * ((0.6 - 0.4 * log(max(1.0 - (m - 0.6) / 0.4, 1e-6))) / m);
+}
+
 // Light that on screen adds x to a white wall over the sky light base (also on screen: the glare of the wall of dust, the glow
 // of fires — CloudPuffs adds them on screen), in linear: (base + x)^γ − base^γ (PallLight.lift)
 float pallLift(float base, float x) {
@@ -801,7 +841,7 @@ vec2 fireUv(mat4 S, mat4 F, vec2 xz) {
 // Slice 0 starts at the eye. Each slice is one tile of a 2D atlas, PALL_FROXEL_COLUMNS tiles across: no 3D render target
 // (GL 3.2 core everywhere, as Minecraft's own targets). Two volumes: the medium in each cell (fx_pall_froxel: emission, rgb,
 // and extinction, a; jittered within the cell and averaged over frames by world-space reprojection) and the pall seen up to
-// each slice's far boundary (fx_pall_froxel_sum: display light premultiplied, rgb, and the share of what lies behind still
+// each slice's far boundary (fx_pall_froxel_sum: linear light, rgb, and the share of what lies behind still
 // seen, a). The composite reads the second at each full-frame pixel's own depth: no screen-space history at silhouettes,
 // the edge of a block cuts the volume at the block itself
 const int PALL_FROXEL_SLICES = 64;
@@ -843,4 +883,20 @@ vec4 froxelNear(sampler2D sum, vec4 F, vec2 pixel, float z) {
     float first = froxelBoundary(F, 1.0);
     if (z < first) return mix(vec4(0.0, 0.0, 0.0, 1.0), froxelLerp(sum, xy, 0.0), max(z, 0.0) / first);
     return froxelLerp(sum, xy, log(min(z, F.z) / F.y) / froxelGrowth(F) - 1.0);
+}
+
+// Near volume (froxelNear: linear light, rgb, and the share behind still seen, a) in front of a pall frame (pallShown display
+// light premultiplied, rgb; transmittance, a). One medium's display is that of its summed light, as one ray's (fx_pall main):
+// adding two displays instead is darker wherever the near air is dimmer than the pall behind it (display is concave: a lit
+// pall over a dark street, looking up). The frame's light comes back exactly while its medium is below the shoulder's ceiling
+// (no overexposure, pallShown); brighter (fireball, glow over white) the near volume goes over its display as is
+vec4 froxelOver(vec4 near, vec4 far) {
+    float cover = 1.0 - far.a, seen = near.a;
+    vec4 over = vec4(pallShown(near.rgb, 1.0 - seen) + seen * far.rgb, seen * far.a);
+    vec3 medium = far.rgb / max(cover, 1e-4);
+    float top = max(max(medium.r, medium.g), medium.b);
+    if (cover <= 1e-4 || top >= 0.85) return over;
+    vec3 farLight = pallLinear3(unshoulder(medium)) * cover;
+    vec4 joined = vec4(pallShown(near.rgb + seen * farLight, 1.0 - seen * far.a), seen * far.a);
+    return mix(joined, over, smoothstep(0.75, 0.85, top));
 }

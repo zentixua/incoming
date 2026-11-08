@@ -25,7 +25,7 @@
 // with ω' share not supplied from inside).
 // Output rgb is display pall color × opacity (pall light before world); a is world-light transmittance (extinction only:
 // layer quads also use it, fx.fsh, where pall color is rgb / (1 − a); world pall shadow is in fx_pall_composite).
-// Above-white light moves toward white (CROSS: incandescent is white-yellow, not saturated orange); overexposure becomes
+// Above-white light moves toward white (PALL_CROSS: incandescent is white-yellow, not saturated orange); overexposure becomes
 // pixel coverage over the background behind matter (end of main).
 
 // world distance behind pixel along view axis (full resolution); near-volume passes: the previous medium volume
@@ -162,8 +162,7 @@ const int FLOOR_STEPS = 24;
 // wind near whirl core, blocks/s (real whirls 10–50 m/s; faster is blurred rotation on screen)
 const float WHIRL_SPEED = 15.0;
 // above-white luminance adds this share of excess as white to all channels: film/eye overexposure
-const float CROSS = 0.15;
-const vec3 LUMA = vec3(0.2126, 0.7152, 0.0722);
+const vec3 LUMA = PALL_LUMA;
 // mushroom optical depth toward light: four samples at path fractions (segment midpoints), weighted by segment fractions
 const vec4 MUSH_AT = vec4(0.025, 0.1, 0.275, 0.7);
 const vec4 MUSH_PART = vec4(0.05, 0.1, 0.25, 0.6);
@@ -338,34 +337,6 @@ struct Sample {
 
 Sample emptySample() {
     return Sample(0.0, vec3(0.0), 0.0, vec3(0.0), 0.0, 0.0, vec3(0.0), 0.0, 0.0, vec3(0.0), 0.0, 0.0, 0.0, vec3(0.0), 0.0, 0.0, 0.0, 0.0, 1.0);
-}
-
-// Film-like shoulder: display values to 0.6 unchanged, brighter smoothly approach 1 (same slope at 0.6). Frame clips
-// above 1: at night fire-lit billows would merge into flat orange. Use brightest channel, scale others equally to
-// preserve hue (independent channels turned white mist pink in ball light)
-vec3 shoulder(vec3 c) {
-    float m = max(max(c.r, c.g), c.b);
-    if (m <= 0.6) return c;
-    return c * ((0.6 + 0.4 * (1.0 - exp(-(m - 0.6) / 0.4))) / m);
-}
-
-// Display: pall material color is light light / opacity cover (source function for uniform material), converted to
-// display and premultiplied by opacity; blends with world like other translucent frame content. Above white
-// (fireball, incandescence, night glow): material light adds over background — displayed material no brighter than
-// white; overexposure becomes pixel coverage (cover·L, capped at full pixel), colored by its light, CROSS toward white.
-// Transmittance remains real: same background visible, overlaid light saturates toward white (frame RGBA16F,
-// layer quads behind it take light from frame, fx.fsh: before). Otherwise a distant ball left with cover by air haze
-// (10 km clear — 0.14) would be a pale sky patch however bright it shines. Copy — NukeExposure.pixel
-vec3 pallShown(vec3 light, float cover) {
-    float shownCover = cover;
-    vec3 medium = light / max(cover, 1e-4);
-    float lum = dot(medium, LUMA);
-    if (lum > 1.0 && cover > 1e-4) {
-        shownCover = min(cover * lum, 1.0);
-        medium *= cover / shownCover;
-    }
-    medium += vec3(CROSS * max(dot(medium, LUMA) - 1.0, 0.0));
-    return shoulder(vec3(pallDisplay(medium.r), pallDisplay(medium.g), pallDisplay(medium.b))) * shownCover;
 }
 
 // ---------------------------------------------------------------- dust-layer head (pall.glsl: pallWall*)
@@ -1989,7 +1960,9 @@ void main() {
     gJitter = j.z;
     float cone = max(t * gPixel, 0.35 * (z1 - z0) / axis);
     vec4 cur = vec4(0.0);
-    float open = pallOpenHere(p);
+    // outside the pall's bounds (rays: pallBox) nothing to evaluate
+    bool inside = all(greaterThanEqual(p, PallMin)) && all(lessThanEqual(p, PallMax));
+    float open = inside ? pallOpenHere(p) : 0.0;
     if (open > 0.0) {
         vec3 dustLight;
         vec4 matter = pallSource(p, cone, vec4(0.0), dustLight);
@@ -2016,8 +1989,8 @@ void main() {
 #else
 // Pall seen up to the far boundary of each near-volume cell (pall.glsl: froxelNear), front to back along the cell's center
 // ray over the slices before it, as ray steps (pallStep, passMatter): each slice's light by its own transmittance, through
-// the air haze before it (pallAir) and the slices nearer; stored as display light premultiplied (pallShown) and the share
-// of what lies behind still seen (Sampler0: medium volume, fx_pall_froxel)
+// the air haze before it (pallAir) and the slices nearer; stored as linear light and the share of what lies behind still
+// seen, shown together with the rays behind (pall.glsl: froxelOver; Sampler0: medium volume, fx_pall_froxel)
 void main() {
     ivec2 at = ivec2(gl_FragCoord.xy);
     ivec2 atlas = textureSize(Sampler0, 0);
@@ -2038,7 +2011,7 @@ void main() {
         }
         z0 = z1;
     }
-    vec4 res = vec4(pallShown(light, 1.0 - seen), seen);
+    vec4 res = vec4(light, seen);
     fragColor = pallValid(res) ? res : vec4(0.0, 0.0, 0.0, 1.0);
 }
 #endif

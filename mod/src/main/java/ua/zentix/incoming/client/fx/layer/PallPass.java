@@ -501,10 +501,10 @@ public final class PallPass {
     // the entire frame while F3 GPU load is displayed (TimerQuery) — a nested query would not start
     private static final int RING = 4;
     /**
-     * Timestamps per frame: start, after preparation (smoke grid, shadow map, foot light), after the near volume, after rays,
-     * after accumulation, end.
+     * Timestamps per frame: start, after preparation (smoke grid, shadow map, foot light), after the near volume's medium,
+     * after its sums, after rays, after accumulation, end.
      */
-    private static final int STAMPS = 6;
+    private static final int STAMPS = 7;
     private static final int[] QUERIES = new int[STAMPS * RING];
     /** Rung generation ({@link Detail#generation}) at pair recording; −1 — pair free. */
     private static final int[] ISSUED = new int[RING];
@@ -514,7 +514,7 @@ public final class PallPass {
     /** Client scenario ({@code tools/client_scenario.sh}): frames are not real-time; detail follows setting. */
     private static final boolean SCENARIO = System.getProperty("incoming.scenario") != null;
     private static double gpuSum, gpuMax, lastGpuMean, lastGpuMax;
-    /** GPU time per part (preparation, near volume, rays, accumulation, composite) over the last second, ms per frame. */
+    /** GPU time per part (preparation, near volume medium and sums, rays, accumulation, composite) over the last second, ms per frame. */
     private static final double[] PART_SUM = new double[STAMPS - 1], LAST_PART = new double[STAMPS - 1];
     private static int gpuFrames, drawn, lastDrawn;
 
@@ -803,6 +803,7 @@ public final class PallPass {
             if (pass == 2) {
                 volumeLatest = volumeNext;
                 volumeHistory = true;
+                stamp(timing, 2);
                 GlStateManager._glBindFramebuffer(GlConst.GL_FRAMEBUFFER, VOLUME_FBOS[2]);
                 RenderSystem.setShaderTexture(0, VOLUME[volumeLatest]);
                 fs.safeGetUniform("InvViewProj").set(INVERSE);
@@ -811,10 +812,10 @@ public final class PallPass {
                 fs.safeGetUniform("PallFroxel").set(f.quality.tile, VOLUME_NEAR, VOLUME_FAR, 0f);
                 fs.safeGetUniform("PallFroxelFrame").set(w, h, VOLUME_CURRENT, 0f);
                 quad(fs, false);
-                stamp(timing, 2);
+                stamp(timing, 3);
             }
         }
-        stamp(timing, 3);
+        stamp(timing, 4);
 
         // 2. accumulation: from previous history into the other frame
         int next = 1 + (1 - latest);
@@ -848,7 +849,7 @@ public final class PallPass {
         mx.safeGetUniform("PallFrame").set(0f, 0f, factor, 0f);
         mx.safeGetUniform("PallFroxel").set(f.quality.tile, VOLUME_NEAR, VOLUME_FAR, 0f);
         quad(mx, false);
-        stamp(timing, 4);
+        stamp(timing, 5);
 
         // 3. composite
         GlStateManager._glBindFramebuffer(GlConst.GL_FRAMEBUFFER, previous);
@@ -1393,8 +1394,8 @@ public final class PallPass {
         Step step = LADDER[Math.max(0, DETAIL.level)];
         Step top = LADDER[Math.max(0, DETAIL.ceiling)];
         String gpu = timer < 0 ? "gpu n/a" : String.format(Locale.ROOT,
-                "gpu %.2f ms (longest %.2f, budget %.1f; preparation %.2f, near volume %.2f, rays %.2f, accumulation %.2f, composite %.2f)",
-                lastGpuMean, lastGpuMax, Detail.BUDGET_MS, LAST_PART[0], LAST_PART[1], LAST_PART[2], LAST_PART[3], LAST_PART[4]);
+                "gpu %.2f ms (longest %.2f, budget %.1f; preparation %.2f, near volume %.2f + sums %.2f, rays %.2f, accumulation %.2f, composite %.2f)",
+                lastGpuMean, lastGpuMax, Detail.BUDGET_MS, LAST_PART[0], LAST_PART[1], LAST_PART[2], LAST_PART[3], LAST_PART[4], LAST_PART[5]);
         return String.format(Locale.ROOT, "%d frames, %d×%d, near volume %d×%d×%d to %.0f blocks, detail %s (step %d of %d, setting %s, %s, %d changes), %s; %s",
                 lastDrawn, lowW, lowH, volumeW / VOLUME_COLUMNS, volumeH / (VOLUME_SLICES / VOLUME_COLUMNS), VOLUME_SLICES, VOLUME_FAR, step.describe(), DETAIL.level, LADDER.length - 1, top.describe(),
                 DETAIL.pinned ? "pinned" : "by GPU budget", DETAIL.changes, gpu, OpenAir.describe());

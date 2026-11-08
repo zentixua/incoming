@@ -310,7 +310,7 @@ void main() {
     // boundary, sky — all of it
     if (PallFroxel.z > 0.0) {
         vec4 near = froxelNear(Sampler11, PallFroxel, vec2(full) + 0.5, depth);
-        pall = vec4(near.rgb + near.a * pall.rgb, near.a * pall.a);
+        pall = froxelOver(near, pall);
     }
     if (PallFire0[0].x > 0.0 || PallFire1[0].x > 0.0) {
         vec2 ndc = (vec2(full) + 0.5) / vec2(fullSize) * 2.0 - 1.0;

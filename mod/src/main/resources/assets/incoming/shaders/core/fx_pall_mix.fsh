@@ -28,8 +28,13 @@ void main() {
         fragColor = far;
         return;
     }
+    // no near volume: the rays hold all of the pall
+    if (PallFroxel.z <= 0.0) {
+        fragColor = far;
+        return;
+    }
     ivec2 full = clamp(ivec2((vec2(px) + 0.5) * PallFrame.z), ivec2(0), fullSize - 1);
     float depth = pallScene(texelFetch(Sampler1, full, 0).r);
     vec4 near = froxelNear(Sampler2, PallFroxel, vec2(full) + 0.5, depth);
-    fragColor = vec4(near.rgb + near.a * far.rgb, near.a * far.a);
+    fragColor = froxelOver(near, far);
 }

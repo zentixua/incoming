@@ -58,7 +58,7 @@ public final class PallLight {
     static final double GAMMA = 2.2;
     /** Band around kμ = 1 where the particular-solution beam is shifted ({@link #beamMu}). */
     static final double BEAM_BAND = 0.05;
-    /** Brighter than white moves toward white: fraction of brightness above 1 added to every channel ({@code CROSS} in {@code fx_pall}). */
+    /** Brighter than white moves toward white: fraction of brightness above 1 added to every channel ({@code PALL_CROSS} in {@code pall.glsl}). */
     static final double CROSS = 0.15;
 
     private PallLight() {}

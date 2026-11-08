@@ -201,10 +201,10 @@ class NukeExposureTest {
     private record Block(String name, String from, String to, String text) {}
 
     private static final List<Block> BLOCKS = List.of(
-            new Block("pallShown", "vec3 pallShown(vec3 light, float cover)", "// ----", """
+            new Block("pallShown", "vec3 pallShown(vec3 light, float cover)", "// Inverse of shoulder", """
                     vec3 pallShown(vec3 light, float cover) { float shownCover = cover; vec3 medium = light / max(cover, 1e-4);
-                    float lum = dot(medium, LUMA); if (lum > 1.0 && cover > 1e-4) { shownCover = min(cover * lum, 1.0);
-                    medium *= cover / shownCover; } medium += vec3(CROSS * max(dot(medium, LUMA) - 1.0, 0.0));
+                    float lum = dot(medium, PALL_LUMA); if (lum > 1.0 && cover > 1e-4) { shownCover = min(cover * lum, 1.0);
+                    medium *= cover / shownCover; } medium += vec3(PALL_CROSS * max(dot(medium, PALL_LUMA) - 1.0, 0.0));
                     return shoulder(vec3(pallDisplay(medium.r), pallDisplay(medium.g), pallDisplay(medium.b))) * shownCover; }
                     """),
             new Block("mushAt (glow)", "vec3 thermal = bb * (1.0 - w * 0.6 * exp(-kd * escape));", "// Mushroom step at ray t", """
@@ -257,11 +257,16 @@ class NukeExposureTest {
         return bad;
     }
 
+    /** {@code pall.glsl} (display: {@code pallShown}, shared with the near volume's composite) and {@code fx_pall.glsl}. */
     private static String fxPall() throws IOException {
-        try (InputStream in = NukeExposureTest.class.getResourceAsStream("/assets/incoming/shaders/include/fx_pall.glsl")) {
-            assertNotNull(in, "fx_pall.glsl");
-            return new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8);
+        StringBuilder text = new StringBuilder();
+        for (String name : List.of("pall.glsl", "fx_pall.glsl")) {
+            try (InputStream in = NukeExposureTest.class.getResourceAsStream("/assets/incoming/shaders/include/" + name)) {
+                assertNotNull(in, name);
+                text.append(new String(in.readAllBytes(), java.nio.charset.StandardCharsets.UTF_8)).append('\n');
+            }
         }
+        return text.toString();
     }
 
     /** The complete {@code fx_pall} blocks modeled in Java ({@link #BLOCKS}) match. */
@@ -284,7 +289,7 @@ class NukeExposureTest {
                 {"film = dot(hot, LUMA) * mushFilmShareLit(roll, key / max(PallExposure, 1e-9));", "film = dot(hot, LUMA) * mushFilmShare(roll);", "mushAt (glow)"},
                 {"vec3(1.0)), film);", "vec3(1.0)), 1.0 - film);", "main (pixel assembly)"},
                 {"heat += partHeat;", "heat += partGlow;", "mushStep"},
-                {"medium += vec3(CROSS * max(dot(medium, LUMA) - 1.0, 0.0));", "", "pallShown"}};
+                {"medium += vec3(PALL_CROSS * max(dot(medium, PALL_LUMA) - 1.0, 0.0));", "", "pallShown"}};
         for (String[] m : mutations) {
             assertEquals(1, fx.split(java.util.regex.Pattern.quote(m[0]), -1).length - 1, "fx_pall contains this line once: " + m[0]);
             assertTrue(mismatches(fx.replace(m[0], m[1])).contains(m[2]), "mutation “" + m[0] + "» → «" + m[1] + "” passed the comparison");
