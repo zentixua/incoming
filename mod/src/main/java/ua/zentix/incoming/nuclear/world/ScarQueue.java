@@ -90,18 +90,20 @@ public final class ScarQueue {
         }
     }
 
-    /** Chunks loaded within range at detonation (snapshot first work unit); {@code next} first not enqueued. */
+    /**
+     * Chunks loaded within range at detonation (snapshot first work unit), those in a player's view first, each part by
+     * distance from the epicentre (wave order); {@code next} first not enqueued.
+     */
     private static final class Scan {
         final Detonation d;
-        /** Ready-ruin chunks nearest epicenter first: enqueue before others. */
-        final long[] first;
         @Nullable
         long[] chunks;
+        /** Chunks in a player's view at the snapshot: {@code chunks} up to this index. */
+        int seen;
         int next;
 
-        Scan(Detonation d, long[] first) {
+        Scan(Detonation d) {
             this.d = d;
-            this.first = first;
         }
     }
 
@@ -255,16 +257,17 @@ public final class ScarQueue {
      * read under budget. Nothing on detonation tick.
      */
     public void scanLoaded(Detonation d) {
-        scans.add(new Scan(d, new long[0]));
+        scans.add(new Scan(d));
     }
 
     /**
-     * Prepared detonation: prebuilt chunks nearest first queued before other loaded
-     * chunks, already queued by wave arrival.
+     * Prepared detonation: the same scan of loaded chunks, their ruins from {@code plans}. The scan does not walk the
+     * plans: most are disk plans of chunks not in memory (250 kt over Zearth: 916 loaded of 25 931 planned), and walking
+     * them first at 64 a unit kept chunks in a player's view out of the queue until +70 ticks (r4 run3, 07.11).
      */
-    public void scanLoaded(Detonation d, Long2ObjectOpenHashMap<RuinPlan> plans, long[] order) {
+    public void scanLoaded(Detonation d, Long2ObjectOpenHashMap<RuinPlan> plans) {
         prepared.put(d.id(), plans);
-        scans.add(new Scan(d, order));
+        scans.add(new Scan(d));
     }
 
     /** Whether unused prepared ruins remain (chunks held by {@link NuclearPrep}). */
@@ -454,12 +457,13 @@ public final class ScarQueue {
     }
 
     /**
-     * Coordinates of in-memory chunks within detonation radius. Chunk never fully loaded queued by
-     * {@code onChunkLoad} once loaded.
+     * Coordinates of in-memory chunks within detonation radius, those in a player's view first, then by distance from
+     * the epicentre. Chunk never fully loaded queued by {@code onChunkLoad} once loaded.
      */
-    private static long[] loadedInRange(ServerLevel level, Detonation d, long[] except) {
+    private static long[] loadedInRange(ServerLevel level, Scan scan) {
+        Detonation d = scan.d;
         double radius = d.ruinRadius();
-        it.unimi.dsi.fastutil.longs.LongOpenHashSet skip = new it.unimi.dsi.fastutil.longs.LongOpenHashSet(except);
+        it.unimi.dsi.fastutil.longs.LongOpenHashSet skip = new it.unimi.dsi.fastutil.longs.LongOpenHashSet();
         LongArrayList in = new LongArrayList();
         var chunkMap = level.getChunkSource().chunkMap;
         for (ChunkHolder holder : chunkMap.getChunks()) {
@@ -470,7 +474,24 @@ public final class ScarQueue {
         for (long c : chunkMap.pendingUnloads.keySet()) {
             if (nearest(new ChunkPos(c), d) <= radius && skip.add(c)) in.add(c);
         }
-        return in.toLongArray();
+        // chunks in a player's view first, then the rest, nearest the epicentre first within each (wave order):
+        // an unseen chunk's key is offset by more than the zone's diameter
+        long[] c = in.toLongArray();
+        double[] key = new double[c.length];
+        for (int i = 0; i < c.length; i++) {
+            boolean seen = watched(level, new ChunkPos(c[i]));
+            if (seen) scan.seen++;
+            key[i] = nearest(new ChunkPos(c[i]), d) + (seen ? 0 : 2 * radius + 1);
+        }
+        it.unimi.dsi.fastutil.Arrays.quickSort(0, c.length, (i, j) -> Double.compare(key[i], key[j]), (i, j) -> {
+            long t = c[i];
+            c[i] = c[j];
+            c[j] = t;
+            double k = key[i];
+            key[i] = key[j];
+            key[j] = k;
+        });
+        return c;
     }
 
     /** Enqueue chunk for detonation (in range, newer than chunk mark). */
@@ -742,22 +763,30 @@ public final class ScarQueue {
         diagSeenLag = 0;
     }
 
+    /** First scan with chunks in view still to enqueue (or not yet snapshotted); null if none. */
+    @Nullable
+    private Scan seenScan() {
+        for (Scan s : scans) if (s.chunks == null || s.next < s.seen) return s;
+        return null;
+    }
+
     /** @param seenOnly stop when only chunks nobody sees remain ({@link #workSeen}) */
     private void queue(ServerLevel level, long now, WorkClock clock, boolean seenOnly) {
         // first enqueue chunks loaded at detonations. Order irrelevant: queue uses wave arrival;
         // enqueuing thousands takes several ticks, wave crosses couple chunks meanwhile
-        while (!scans.isEmpty() && clock.canStart()) {
-            Scan scan = scans.peek();
+        // visible pass: enqueuing gates every visible ruin, so it gets the visible deadline too
+        while (!scans.isEmpty() && (seenOnly ? clock.canStartVisible(SEEN_BUSY_NANOS) : clock.canStart())) {
+            // visible pass enqueues only chunks in view, of every detonation (a later one's view does not wait behind
+            // an earlier one's unseen chunks); the rest under the lane deadline, after visible ruins
+            Scan scan = seenOnly ? seenScan() : scans.peek();
+            if (scan == null) break;
             long c0 = clock.begin();
             try {
                 if (scan.chunks == null) {
-                    long[] loaded = loadedInRange(level, scan.d, scan.first);
-                    scan.chunks = new long[scan.first.length + loaded.length];
-                    System.arraycopy(scan.first, 0, scan.chunks, 0, scan.first.length);
-                    System.arraycopy(loaded, 0, scan.chunks, scan.first.length, loaded.length);
+                    scan.chunks = loadedInRange(level, scan);
                 } else {
                     // unloaded after detonation: skip; onChunkLoad queues on return
-                    int end = Math.min(scan.chunks.length, scan.next + OFFERS_PER_UNIT);
+                    int end = Math.min(seenOnly ? scan.seen : scan.chunks.length, scan.next + OFFERS_PER_UNIT);
                     long[] st = preparedStats.computeIfAbsent(scan.d.id(), k -> new long[STATS]);
                     var memory = atDetonation.computeIfAbsent(scan.d.id(), k -> new it.unimi.dsi.fastutil.longs.LongOpenHashSet());
                     while (scan.next < end) {
@@ -777,13 +806,13 @@ public final class ScarQueue {
             } catch (RuntimeException e) {
                 // later-loaded chunks queued by onChunkLoad
                 Incoming.LOG.error("Queueing chunks of detonation #{} failed with an exception; dropped", scan.d.id(), e);
-                scans.poll();
+                scans.remove(scan);
                 continue;
             } finally {
                 clock.end(c0);
             }
             if (scan.next >= scan.chunks.length) {
-                scans.poll();
+                scans.remove(scan);
                 // in-memory-at-detonation chunks awaiting ruins: log criteria once all done
                 var memory = atDetonation.get(scan.d.id());
                 if (memory != null) {

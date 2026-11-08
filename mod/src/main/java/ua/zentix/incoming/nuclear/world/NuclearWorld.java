@@ -304,7 +304,7 @@ public final class NuclearWorld {
             // prebuilt and on-site ruins identical: preparation fractures/applied ruins pass to detonation
             ready.ruins().used = level.getGameTime();
             ruins.put(d.id(), ready.ruins());
-            scars.scanLoaded(d, ready.plans(), ready.order());
+            scars.scanLoaded(d, ready.plans());
         }
         else scars.scanLoaded(d);
         if (NukeDiag.ON) Incoming.LOG.info("DIAG detonation #{}: scan loaded {} ms", d.id(), (System.nanoTime() - t0) / 100_000 / 10.0);

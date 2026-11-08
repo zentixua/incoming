@@ -1854,6 +1854,70 @@ public final class NuclearGameTests {
     }
 
     /**
+     * A chunk in view is in the ruin queue by its wave although the detonation has thousands of prepared plans for zone
+     * chunks that are not in memory (disk plans): the scan walks loaded chunks, those in view first. 250 kt over Zearth
+     * (r4 run3, 07.11): 916 loaded of 25 931 planned; the scan walked the plans first, 64 a unit under a busy lane, and
+     * chunks in view entered the queue only at +70 ticks. Counting clock, 3 units a tick.
+     */
+    @GameTest(template = "range", timeoutTicks = 400, batch = "nuke_scan_seen", skyAccess = true)
+    public static void seenChunkEnqueuedPastDiskPlans(GameTestHelper h) {
+        seenChunkEnqueued(h, false);
+    }
+
+    /**
+     * The same behind an earlier detonation's scan whose unseen chunks wait for the lane (a crater digging, only the
+     * visible pass runs): the visible pass enqueues the later detonation's chunks in view, not just the head scan's.
+     */
+    @GameTest(template = "range", timeoutTicks = 400, batch = "nuke_scan_seen2", skyAccess = true)
+    public static void seenChunkEnqueuedBehindEarlierScan(GameTestHelper h) {
+        seenChunkEnqueued(h, true);
+    }
+
+    private static void seenChunkEnqueued(GameTestHelper h, boolean earlier) {
+        ServerLevel level = h.getLevel();
+        BlockPos seenGlass = CENTER.west(8);
+        h.setBlock(seenGlass, Blocks.GLASS);
+        Detonation d = detonation(h, CENTER, 0, 15, 0.025f);
+        LevelChunk seen = level.getChunkAt(h.absolutePos(seenGlass));
+        long seenKey = seen.getPos().toLong();
+        for (int dx = -RuinPlanner.REACH; dx <= RuinPlanner.REACH; dx++) {
+            for (int dz = -RuinPlanner.REACH; dz <= RuinPlanner.REACH; dz++) level.getChunk(seen.getPos().x + dx, seen.getPos().z + dz);
+        }
+        var plans = new it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap<RuinPlan>();
+        plans.put(seenKey, RuinPlanner.plan(level, d, seen));
+        // zone chunks planned from disk, never loaded here: far beyond any GameTest platform
+        RuinPlan seenPlan = plans.get(seenKey);
+        for (int i = 0; i < 20_000; i++) plans.put(ChunkPos.asLong(seen.getPos().x + 200_000 + i % 100, seen.getPos().z + i / 100), seenPlan);
+        ScarQueue q = new ScarQueue();
+        ScarQueue.seenForTest(c -> c == seenKey);
+        try {
+            if (earlier) {
+                // 3 km east, its zone far from the platform: one loaded chunk nobody sees, never enqueued while only the
+                // visible pass runs
+                BlockPos far = h.absolutePos(CENTER).east(3000);
+                level.getChunk(far);
+                q.scanLoaded(rawAt(h, far, 0, 15, 0.025f));
+            }
+            q.scanLoaded(d, plans);
+            long due = ScarQueue.due(d, seen.getPos()), ruined = -1;
+            WorkClock clock = WorkClock.counting(1_000_000);
+            for (long now = d.gameTime(); now <= due + 40 && ruined < 0; now++) {
+                clock.start(3_000_000L);
+                q.workSeen(level, now, clock);
+                if (!earlier) q.work(level, now, clock);
+                if (seen.getExistingData(ModAttachments.CHUNK_SCAR).orElse(0) == d.id()) ruined = now;
+            }
+            h.assertTrue(ruined >= 0, "chunk in view not ruined 40 ticks after its wave: " + q.diagState(seenKey, due + 40));
+            h.assertTrue(ruined <= due + 2, "chunk in view ruined " + (ruined - due) + " ticks after its wave");
+            h.assertBlockNotPresent(Blocks.GLASS, seenGlass);
+        } finally {
+            ScarQueue.seenForTest(null);
+            q.clear(level);
+        }
+        h.succeed();
+    }
+
+    /**
      * The queue of ruins holds the budget even when all the inspected jobs are waiting: the background pool of ruins is occupied by tasks that are
      *  waiting for a latch, and each chunk that the wave has reached is waiting for a place in the pool (or reading the window) - it is inspected by every
      *  tick. The inspection is not a unit, but it goes on until the deadline has expired: per tick no more than the budget and one job in excess of
