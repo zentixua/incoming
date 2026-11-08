@@ -12,8 +12,8 @@ class ChunkLoadPaceTest {
      * before the tick ends (other lanes and mods' Post work after them); vanilla decodes them all after the tick.
      */
     private static final class Server {
-        final long[] now = {0};
-        final ChunkLoadPace pace = new ChunkLoadPace(() -> now[0]);
+        final long[] now = {0}, cpu = {0};
+        final ChunkLoadPace pace = new ChunkLoadPace(() -> now[0], () -> cpu[0]);
         long scheduled = TICK;
         int tick;
         long maxLate, started, decodes;
@@ -25,12 +25,14 @@ class ChunkLoadPaceTest {
             now[0] = start;
             pace.tickStarted(scheduled - TICK);
             now[0] += tickNanos - afterNanos;
+            cpu[0] += tickNanos;
             int n = 0;
             while (n < demand && pace.tryStart(perLoad, tick, false)) n++;
             now[0] += afterNanos;
             pace.tickEnded(scheduled);
             for (int i = 0; i < n * perLoad; i++) {
                 now[0] += decodeNanos;
+                cpu[0] += decodeNanos;
                 pace.decoded();
             }
             scheduled += TICK;
@@ -70,26 +72,37 @@ class ChunkLoadPaceTest {
     }
 
     @Test void waitingForDiskIsNotDecodeTime() {
-        long[] now = {0};
-        ChunkLoadPace pace = new ChunkLoadPace(() -> now[0]);
+        // the server thread waits for reads (wall time passes, CPU time does not), then decodes two chunks of 0.4 ms
+        long[] now = {0}, cpu = {0};
+        ChunkLoadPace pace = new ChunkLoadPace(() -> now[0], () -> cpu[0]);
         pace.tickStarted(0);
         now[0] += 20 * MS;
+        cpu[0] += 20 * MS;
         pace.tickEnded(50 * MS);
-        now[0] += 35 * MS; // the read was still queued behind saves
+        now[0] += 25 * MS; // the read was still queued behind saves
+        now[0] += 400_000;
+        cpu[0] += 400_000;
         pace.decoded();
-        now[0] += 45 * MS;
+        now[0] += 4 * MS;
+        now[0] += 400_000;
+        cpu[0] += 400_000;
         pace.decoded();
-        assertEquals(ChunkLoadPace.DEFAULT_COST_NANOS, pace.costNanos());
+        now[0] = 50 * MS;
+        pace.tickStarted(50 * MS);
+        double expected = ChunkLoadPace.DEFAULT_COST_NANOS + ChunkLoadPace.WEIGHT * (400_000 - ChunkLoadPace.DEFAULT_COST_NANOS);
+        assertEquals(expected, pace.costNanos(), 1);
     }
 
     @Test void decodesInsideATickAreNotSampled() {
         long[] now = {0};
-        ChunkLoadPace pace = new ChunkLoadPace(() -> now[0]);
+        ChunkLoadPace pace = new ChunkLoadPace(() -> now[0], () -> now[0]);
         pace.tickStarted(0);
         now[0] += 1 * MS;
         pace.decoded(); // a synchronous load inside the tick
         now[0] += 10 * MS;
         pace.decoded();
+        now[0] = TICK;
+        pace.tickStarted(TICK);
         assertEquals(ChunkLoadPace.DEFAULT_COST_NANOS, pace.costNanos());
     }
 
@@ -137,7 +150,7 @@ class ChunkLoadPaceTest {
 
     @Test void lateStartAfterAnOnTimeTickCutsTheBudget() {
         long[] now = {0};
-        ChunkLoadPace pace = new ChunkLoadPace(() -> now[0]);
+        ChunkLoadPace pace = new ChunkLoadPace(() -> now[0], () -> now[0]);
         pace.tickStarted(0);
         now[0] = 20 * MS;
         pace.tickEnded(TICK); // ended with 30 ms to spare
@@ -167,7 +180,7 @@ class ChunkLoadPaceTest {
 
     @Test void requestedLoadsNotYetDecodedCount() {
         long[] now = {1};
-        ChunkLoadPace pace = new ChunkLoadPace(() -> now[0]);
+        ChunkLoadPace pace = new ChunkLoadPace(() -> now[0], () -> now[0]);
         pace.tickStarted(0);
         now[0] = 20 * MS;
         pace.tickEnded(TICK); // a 30 ms gap measured
@@ -186,7 +199,7 @@ class ChunkLoadPaceTest {
 
     @Test void reportCountsLateTickStarts() {
         long[] now = {TICK};
-        ChunkLoadPace pace = new ChunkLoadPace(() -> now[0]);
+        ChunkLoadPace pace = new ChunkLoadPace(() -> now[0], () -> now[0]);
         pace.tickStarted(0);
         now[0] = 100 * MS;
         pace.tickStarted(100 * MS);

@@ -39,9 +39,10 @@ paths:
   10 ticks times a budget factor, less 5 ms; the factor drops ×0.7 when a tick starts over 3 ms late after a tick that
   ended in time and grows +0.05 (to 1) after an on-time tick with denied loads. The smallest gap (first version) used
   11.7 ms where 31.8 ms was free and slowed the 1 Mt settlement fourfold (r4 run8: 3.1 % intervals over 60 ms instead
-  of 21 %, but 32 % settled at +75 min). Decode cost (start 1 ms; run8 0.33 ms `ChunkSerializer.read`, ~0.5 ms with
-  its between-tick work) comes from consecutive `ChunkDataEvent.Load` events in one gap (pauses over 30 ms are disk
-  waits). No gap: one load per 4 ticks. In-memory chunks take no pace. `ChunkLoadPaceTest` holds the gap, the learned
+  of 21 %, but 32 % settled at +75 min). Decode cost (start 1 ms) is the server thread's CPU time from the tick end to
+  the next start over the `ChunkDataEvent.Load` events in that gap (`ThreadMXBean`; waits for disk reads do not count).
+  Timing consecutive events counted those waits: 1.1 ms where JFR showed 0.34 ms `ChunkSerializer.read`, ~0.4 ms
+  with all between-tick work (r4 run9). No gap: one load per 4 ticks. In-memory chunks take no pace. `ChunkLoadPaceTest` holds the gap, the learned
   cost, mid-lane requests, neighbor decodes, uneven ticks and the factor; a new background loader
   of disk chunks goes through it too.
 - `UnitQueue` runs new heads in enqueue order, then one unit per continuation in a persistent round-robin order.

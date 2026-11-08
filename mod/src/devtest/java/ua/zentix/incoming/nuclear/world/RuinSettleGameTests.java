@@ -96,6 +96,8 @@ public final class RuinSettleGameTests {
         long started = System.nanoTime();
         long[] nanos = {0, 0};
         boolean[] restarted = {!restart};
+        // the tick the ruins landed in memory and the tick the chunk left it (RuinSettle.linger)
+        long[] landed = {-1, -1};
         @SuppressWarnings({"unchecked", "rawtypes"})
         CompletableFuture<Optional<CompoundTag>>[] reading = new CompletableFuture[1];
         h.onEachTick(() -> {
@@ -114,6 +116,9 @@ public final class RuinSettleGameTests {
                 level.setData(ModAttachments.NUCLEAR_WORLD, new NuclearWorld());
                 restarted[0] = true;
             }
+            LevelChunk live = NuclearTickets.inMemory(level, target.toLong());
+            if (live != null && landed[0] < 0 && live.getExistingData(ModAttachments.CHUNK_SCAR).orElse(0) >= d.id()) landed[0] = level.getGameTime();
+            if (live == null && landed[0] >= 0 && landed[1] < 0) landed[1] = level.getGameTime();
             if (reading[0] == null) reading[0] = level.getChunkSource().chunkMap.read(target);
             if (!reading[0].isDone()) return;
             CompoundTag saved = reading[0].join().orElseThrow();
@@ -136,6 +141,9 @@ public final class RuinSettleGameTests {
             }
             h.assertTrue(changes > 0, "saved chunk is unchanged");
             h.assertTrue(trace > 0, "saved chunk has no ground trace");
+            // a settled chunk stays loaded for its tile's next loads (their light neighbours), then unloads
+            if (!restart) h.assertTrue(landed[0] >= 0 && landed[1] - landed[0] >= RuinSettle.LINGER_TICKS,
+                    "settled chunk left memory " + (landed[1] - landed[0]) + " ticks after its ruins, not after " + RuinSettle.LINGER_TICKS);
             Incoming.LOG.info("SETTLEBENCH restart={} chunks=1 changed={} wallMs={} nuclearTotalMs={} nuclearMaxMs={}",
                     restart, changes, (System.nanoTime() - started) / 1_000_000, nanos[0] / 1_000_000.0, nanos[1] / 1_000_000.0);
             h.succeed();
