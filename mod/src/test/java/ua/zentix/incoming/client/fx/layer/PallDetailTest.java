@@ -52,13 +52,13 @@ class PallDetailTest {
 
     /**
      * Each setting keeps its own rung at the GPU times measured on Artem's laptop (RTX 4060, 2560×1600, 150 kt firestorm in the
-     * dust, 08.11: LOW up to 6.0 ms, MEDIUM up to 11.7, HIGH up to 17.8), also with a tenth more in passing windows; finer
+     * dust, 08.11, rung free: LOW up to 6.1 ms, MEDIUM up to 12.5, HIGH up to 19.2), also with a tenth more in passing windows; finer
      * settings get larger budgets.
      */
     @Test
     void settingsHoldTheirRungAtMeasuredTimes() {
         assertTrue(PallPass.Quality.LOW.budget < B && B < H);
-        double[][] measured = {{6.0, PallPass.Quality.LOW.ordinal()}, {11.7, PallPass.Quality.MEDIUM.ordinal()}, {17.8, PallPass.Quality.HIGH.ordinal()}};
+        double[][] measured = {{6.1, PallPass.Quality.LOW.ordinal()}, {12.5, PallPass.Quality.MEDIUM.ordinal()}, {19.2, PallPass.Quality.HIGH.ordinal()}};
         for (double[] m : measured) {
             PallPass.Quality q = PallPass.Quality.values()[(int) m[1]];
             PallPass.Detail d = new PallPass.Detail();

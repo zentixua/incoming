@@ -122,7 +122,7 @@ public final class PallPass {
      * costs what the former LOW (quarter frame, 20 steps) did: half frame, a quarter of its rays per frame.
      */
     public enum Quality {
-        OFF(0, 0, 1, 0, 0), LOW(2, 22, 2, 16, 7), MEDIUM(2, 28, 1, 12, 13), HIGH(2, 48, 1, 8, 21);
+        OFF(0, 0, 1, 0, 0), LOW(2, 22, 2, 16, 7), MEDIUM(2, 28, 1, 12, 15), HIGH(2, 48, 1, 8, 24);
 
         final int factor, steps, interleave;
         /** Near volume cell width in full-frame pixels ({@link #VOLUME_FAR}). */
@@ -130,9 +130,10 @@ public final class PallPass {
         /**
          * GPU time per frame, ms, above which detail steps down ({@link Detail}). Each setting keeps its look: a setting is
          * the player's choice of picture against frame rate (Artem 08.11: picture first, the setting fits the PC), so the
-         * budget only catches views far costlier than usual, with a sixth of headroom over the costliest measured view: a
-         * window a hair over budget dropped detail for a minute in play. Artem's laptop (RTX 4060, 2560×1600, 150 kt firestorm in
-         * the dust, 08.11): LOW 2.2–6.0 ms, MEDIUM 3.0–11.7, HIGH 4.1–17.8 — each setting stays at its own rung there (PallDetailTest).
+         * budget only catches views far costlier than usual, with a fifth of headroom over the costliest measured view (looking
+         * up into a firestorm): at a sixth, MEDIUM and HIGH still lost one or two rungs there. Artem's laptop (RTX 4060, 2560×1600,
+         * 150 kt firestorm in the dust, 08.11, rung free): LOW 2.5–6.1 ms, MEDIUM 6.2–12.5, HIGH 4.8–19.2 — each setting stays at
+         * its own rung there (PallDetailTest).
          */
         final double budget;
 

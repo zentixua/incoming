@@ -702,7 +702,7 @@ paths:
   since the shadow on the ground is smooth (the cloud's edge is hundreds of metres); per straight line, three two-stream
   solutions. In the cloud (llvmpipe, scenario `mushroom` with `INCOMING_MUSHROOM=shadow`) the 128² map is +2–8 % to the
   pall passes (run-to-run spread of the same order); 256² was +18 %.
-  Detail also keeps a budget per setting (`PallPass.Quality.budget`: LOW 7, MEDIUM 13, HIGH 21 ms on the GPU,
+  Detail also keeps a budget per setting (`PallPass.Quality.budget`: LOW 7, MEDIUM 15, HIGH 24 ms on the GPU,
   `PallPass.Detail`): if the half-second average is longer for two windows in a row (one window over 1.25 budgets is
   enough), it drops to a step of `PallPass.LADDER` estimated to fit; it goes up a step if the estimate for that step is at
   most 0.9 of the budget for two windows in a row and 3 s after the last change. Estimates scale only the rays' time (the
@@ -712,8 +712,9 @@ paths:
   (`PallDetailTest.oneWindowOverBudgetKeepsTheRung`, `fixedPassesDoNotKeepDetailDown`). It is never above the setting and
   never below LOW (half frame, 22 steps, interleave 2): rungs with interleave 3–4 drew the lattice that burns in on a
   still view. Budgets follow Artem's 08.11 rule (picture first, the setting fits the PC): at his laptop's times
-  (RTX 4060 Laptop, 2560×1600, 150 kt firestorm, froxel near volume: LOW ≤ 6.0, MEDIUM ≤ 11.7, HIGH ≤ 17.8 ms) each
-  setting keeps its rung with a sixth of headroom (`PallDetailTest.settingsHoldTheirRungAtMeasuredTimes`). The `SCENARIO pall` line splits GPU time into preparation,
+  (RTX 4060 Laptop, 2560×1600, 150 kt firestorm, froxel near volume, rung free: LOW ≤ 6.1, MEDIUM ≤ 12.5, HIGH ≤ 19.2 ms
+  looking up) each setting keeps its rung with a fifth of headroom (`PallDetailTest.settingsHoldTheirRungAtMeasuredTimes`;
+  at a sixth MEDIUM and HIGH still lost a rung or two looking up). The `SCENARIO pall` line splits GPU time into preparation,
   near volume, sums, rays, accumulation and composite (timestamps per measured frame; each part's share is an estimate,
   the exact split needs `glFinish` between parts).
   Near volume (froxels, the standard fog-the-camera-stands-in method: Wronski AC4 2014, Frostbite): the pall nearer than
