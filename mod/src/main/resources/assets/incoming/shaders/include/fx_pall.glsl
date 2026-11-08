@@ -43,6 +43,9 @@ uniform sampler3D PallNoise;
 uniform sampler3D PallOpen;
 uniform vec4 PallOpenAt;
 uniform vec3 PallOpenWrap;
+// Minecraft's lightmap (pall.glsl: pallLightmap); PallLamps 1 — the window holds block light (OpenAir, MovingLight)
+uniform sampler2D Sampler11;
+uniform float PallLamps;
 
 uniform mat4 InvViewProj;
 uniform vec3 PallForward;
@@ -934,6 +937,16 @@ void passesBefore(float t, inout vec3 light, inout float transmit, inout float l
 }
 
 
+// Light of blocks at eye-relative p (pall.glsl: pallBlockLevel, pallLampLight): torches and lamps light the dust around them.
+// Minecraft's block light is the same on every face of a block, so as light arriving alike from all around: dust scatters it
+// whole (ω'·L; a wall under it shows L), against ½ for the sky's half sphere (PallLight.thin) and ¼ for a beam. Not dimmed by the
+// dust between a lamp and the point (as Minecraft's light ignores it): within a lamp's 15 blocks dust is far thinner than one
+// optical depth except in the dust wall's head
+vec3 pallLampsAt(vec3 p) {
+    if (PallLamps < 0.5) return vec3(0.0);
+    return pallLampLight(Sampler11, pallBlockLevel(PallOpen, PallOpenAt, PallOpenWrap, p));
+}
+
 // outdoor-air share at p (pall.glsl: pallOpen); terrain beyond window uses first available slot map
 float pallOpenHere(vec3 p) {
     if (PallSlot0[1].w > 0.5) return pallOpen(PallOpen, PallOpenAt, PallOpenWrap, Sampler5, PallSlot0, PallGround0, p);
@@ -1026,8 +1039,9 @@ vec4 pallSource(vec3 p, float cone, vec4 inflow, out vec3 dustLight) {
     // (s.fire is their light × matter, divide by matter for light), regional glow
     vec3 below = burnt(s, g * mv);
     vec3 fire = min(below + under * (glow + s.fire / max(s.albedo, vec3(1e-7))) + around, gFlame);
-    dustLight = w * (field + beams + fire);
-    vec3 emit = s.albedo * (field + beams + fire);
+    vec3 lamps = pallLampsAt(p);
+    dustLight = w * (field + beams + fire + lamps);
+    vec3 emit = s.albedo * (field + beams + fire + lamps);
     // firestorm column smoke (soot) in same light and self-shadow: direct light attenuated by column depth toward sun,
     // diffuse as e^(−kτ) of soot (sunward side and billow tops bright, opposite side and bottom dark: volumetric column,
     // not flat gray stripe); fire glow below

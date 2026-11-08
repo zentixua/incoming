@@ -10,6 +10,11 @@ paths:
 # Own particles, effects layer, trails
 
 ## Pitfalls
+- Under Iris the first-person hand is in world depth at `AFTER_LEVEL` (Iris draws it inside the world pass with the depth
+  range × 0.125, `HandRenderer.DEPTH`), so the layer reads it as world 0.09–0.115 m away; vanilla draws it after the layer.
+  The pall skips those pixels (`pallHand`, `PALL_HAND` 0.12 m in `pall.glsl`, `PallHandTest`): resolve writes them invalid
+  (no history: reprojected as a world point 0.1 m off, the hand took dust from elsewhere and the interleaved partial clamp
+  held it — orange silhouette with a dot grid, trail when moving, 08.11), composite leaves them untouched (no dust, no shadow).
 - `FxLayer.describeTiming` must remain a lightweight telemetry query. `SceneDepth.describe` reports the LOD source
   without reading textures; full-resolution depth coverage/readback is opt-in through `incoming.nukeDiag`.
   Polling the ordinary line with Voxy used to synchronize with the GPU and scan millions of floats, injecting
@@ -446,13 +451,25 @@ paths:
   layer. The pyramid on the CPU (`FxBloom.halo`) uses the same samples: the test holds energy, roundness, 1/r² and
   stability to shift in both settings. The nuclear ball (the pall's volume) does not glow here. Time — the layer's line
   (`bloom`).
+- Block light in the pall: `OpenAir`'s window is RG8 (skylight, block light from the client light engine); with
+  LambDynamicLights (`compat/DynamicLights`, reflection on its public runtime class: its `api` package has no level query)
+  `MovingLight` overlays light carried by entities in a 17³ box around the eye (asked on a 2-block grid, interpolated; the
+  previous box restored from the CPU mirror each frame). Dust scatters block light by Minecraft's own lightmap
+  (`pallLampLight`: linear lightmap(level, 0) over lightmap(0, 0), factor 1 — block light is direction-free); the shadow on
+  the world keeps the pixel's block-light share (`pallKeepLamps`: (s·sky + block) / lightmap(block, sky), luminance; identity
+  without block light). The surface level skips unlit voxels (opaque blocks hold 0). Lightmap: `LightTexture.lightTexture`
+  (AT), read by `texelFetch`. `SCENARIO shot` lines print the eye's levels, the kept share and moving-light cost.
 - Nuclear dust pall (`fx/layer/PallPass`) — a volume in the same stage of the layer, before the squares: rays per frame
-  are a factor of 2–4 coarser per axis (`fx_pall`), and on lower rungs interleaved: one ray pixel of every n × n block
-  per frame (n up to 4, `Step.interleave`, order `ORDER`), the others keep their reprojected history; accumulation over
-  frames with transfer by world depth (`fx_pall_resolve`): a pixel taking a ray keeps history weight 0.9 for any n (with
-  0.9^n² it showed nearly one jittered ray: grain on thin lobes against the sky), and history moves 1/n of the way to the
-  bounds of the neighbour rays per frame (snapped, a whole block took one frame's chance bound: square tiles), but
-  outright at an object edge (a neighbour ray at another place: no trail behind a silhouette); a pixel without history
+  are a factor of 2 coarser per axis (`fx_pall`; never coarser: a third and a quarter drew distant ridges as stairs and
+  grain on Artem's laptop 08.11, budget `Detail.BUDGET_MS` 4 ms), and on lower rungs interleaved: one ray pixel of every
+  n × n block per frame (n up to 4, `Step.interleave`, order `ORDER`), the others keep their reprojected history;
+  accumulation over frames with transfer by world depth (`fx_pall_resolve`): a pixel taking a ray keeps history weight 0.9
+  for any n (with 0.9^n² it showed nearly one jittered ray: grain on thin lobes against the sky), and history moves 1/n of
+  the way to the bounds of the neighbour rays per frame (snapped, a whole block took one frame's chance bound: square
+  tiles). History is taken only from history pixels that saw the same place: their previous-frame world distance
+  (`SceneDepth.previous`, `Sampler4`) against this point's distance from the previous eye (`placed`, standard TAA depth
+  rejection). The edge heuristic alone (clamp outright at an object edge) missed edges the frame's rays did not catch:
+  a tree passed in flight and the hand left trails; it remains only without previous distances; a pixel without history
   takes the same-place rays weighted by screen distance (the nearest alone left n × n blocks for seconds). The
   march's viewport is the ray cells; the accumulation sets the whole reduced frame itself. Mushroom mean optical depths
   (up, down, away from the eye, sunward past the billow layer, away from the sun, toward and away from the ball) are
