@@ -300,9 +300,10 @@ paths:
   (`work.md`): the window bounds held chunks, not how many decode in one gap between ticks. Ready entries load in
   `RuinSettle.SETTLE_ORDER` (8×8 chunk tiles, rows inside) so held loads share their light neighbours: in ready order
   98 % of loads found all eight neighbours on disk, 8.7 decodes a load (r4 run8); `RuinSettleOrderTest`. Tile order
-  alone kept 7.9 (run9: 1–10 loads held at a time, a settled chunk released at once), so a settled chunk keeps its
-  ticket `LINGER_TICKS` (100) longer (`RuinSettle.linger`, `AreaLoader.renew`; a re-admitted lingering chunk is renewed
-  to unlimited). `oldDiskChunkGetsPlannedRuinsWithoutPlayers` checks it stays loaded that long. The loading window starts at 8, grows by a quarter per second with spare lane time and low external MSPT,
+  alone kept 7.9 (run9: 1–10 loads held at a time, a settled chunk released at once). Keeping settled chunks loaded
+  100 ticks more (run10) brought it to 1.4–2.5 while the window was open, but the extra holders cost vanilla
+  `ChunkMap.processUnloads` ~3 ms a tick, the external tick time rose to 19–20 ms, the window (grows only under 15 ms)
+  fell to 1–3 and the settlement halved (28 % at +100 min): not kept. The window rule, not the pace, then limits. The loading window starts at 8, grows by a quarter per second with spare lane time and low external MSPT,
   and shrinks by a quarter under pressure. Like workers, external MSPT excludes mod lanes; the threshold is
   50 minus the common configured work budget, with a 5 ms margin. Available plan memory further limits roots,
   reserving two uncompressed chunk snapshots (at least 1 MiB) per root; already held work drains when the limit

@@ -56,8 +56,6 @@ final class RuinSettle {
      * neighbours on disk, 8.7 decodes a load (1 Mt Zearth r4 run8).
      */
     private final it.unimi.dsi.fastutil.longs.LongAVLTreeSet ready = new it.unimi.dsi.fastutil.longs.LongAVLTreeSet(SETTLE_ORDER);
-    /** A settled chunk stays loaded this long for its tile's next loads ({@link #linger}): a tile takes ~2–3 s. */
-    static final int LINGER_TICKS = 100;
     /** Side of the square tiles loads go through, chunks; inside a tile and between tiles row by row. */
     static final int SETTLE_TILE = 8;
     /** Settlement load order: by tile of {@link #SETTLE_TILE} chunks, then by row and column inside it. */
@@ -142,12 +140,7 @@ final class RuinSettle {
             Entry e = entries.get(key);
             long unit = clock.begin();
             try {
-                AreaLoader areas = StrikeWorld.get(level).areas();
-                AreaLoader.Area area = area(e);
-                boolean lingering = areas.holds(area);
-                areas.hold(level, area);
-                // still lingering from an earlier settle of this chunk: held again until released, not until expiry
-                if (lingering) areas.renew(area, Long.MAX_VALUE);
+                StrikeWorld.get(level).areas().hold(level, area(e));
                 e.held = true;
                 e.heldAt = now;
                 holding++;
@@ -215,7 +208,7 @@ final class RuinSettle {
                 scars.offer(chunk, detonation);
                 if (chunk.getExistingData(ModAttachments.CHUNK_SCAR).orElse(0) >= detonation.id()) {
                     e.applied = true;
-                    linger(level, e, now);
+                    release(level, e);
                 } else if (scars.waitsNeighbours(e.pos.toLong()) && scars.tileHoldsLeft() > 0) {
                     // A job loaded under another scar's neighbor ticket cannot acquire its own by default.
                     // Give it the normal bounded handoff, otherwise every settlement slot can wait forever.
@@ -362,18 +355,6 @@ final class RuinSettle {
 
     private AreaLoader.Area area(Entry e) {
         return new AreaLoader.Area(TYPE, e.pos, 0, new UUID(detonation.id(), e.pos.toLong()), false);
-    }
-
-    /**
-     * Releases a settled chunk's slot but keeps its ticket {@link #LINGER_TICKS} longer ({@code AreaLoader.renew}), so
-     * the next loads of its tile find it and its light neighbours in memory instead of decoding them again: released at
-     * once, 8 of 9 chunks of every load came from disk even in tile order (r4 run9, 1–10 loads held at a time).
-     */
-    private void linger(ServerLevel level, Entry e, long now) {
-        if (!e.held) return;
-        StrikeWorld.get(level).areas().renew(area(e), now + LINGER_TICKS);
-        e.held = false;
-        holding--;
     }
 
     private void release(ServerLevel level, Entry e) {
