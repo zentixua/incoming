@@ -19,7 +19,7 @@ record CommandPlan(List<Step> steps, int nukeGate, List<Integer> blastGates, int
     /** At what tick do the steps begin and how long after the last one to wait until “SCENARIO done”. */
     static final int START = 100, TAIL = 100;
 
-    enum Kind { COMMAND, SHOT, HUD_OFF, HUD_ON }
+    enum Kind { COMMAND, SHOT, HUD_OFF, HUD_ON, SKIP, FRAMES, STORM, BURNABLE, MAX_YIELD }
 
     record Step(int tick, Kind kind, String arg) {}
 
@@ -52,6 +52,27 @@ record CommandPlan(List<Step> steps, int nukeGate, List<Integer> blastGates, int
             } else if (c.startsWith("shot:")) {
                 steps.add(new Step(t, Kind.SHOT, c.substring("shot:".length()).strip()));
                 t += 20;
+            } else if (c.equals("storm:on") || c.equals("storm:off")) {
+                steps.add(new Step(t, Kind.STORM, c.substring("storm:".length())));
+                t += 1;
+            } else if (c.equals("burnable")) {
+                // to the most flammable land within 4 km (scenario firestorm's choice), 200 blocks up
+                steps.add(new Step(t, Kind.BURNABLE, ""));
+                t += 200;
+            } else if (c.startsWith("maxyield:")) {
+                steps.add(new Step(t, Kind.MAX_YIELD, c.substring("maxyield:".length()).strip()));
+                t += 1;
+            } else if (c.startsWith("skip:")) {
+                // time skip to that many seconds after the last detonation (server clock and client rewind, as scenario firestorm)
+                steps.add(new Step(t, Kind.SKIP, c.substring("skip:".length()).strip()));
+                t += 60;
+            } else if (c.startsWith("frames:")) {
+                // frames:<name>:<count>:<yaw per frame>:<blocks forward per frame> — consecutive rendered frames while turning/moving
+                String arg = c.substring("frames:".length()).strip();
+                String[] f = arg.split(":");
+                int count = f.length > 1 ? Integer.parseInt(f[1].strip()) : 8;
+                steps.add(new Step(t, Kind.FRAMES, arg));
+                t += 12 * count + 20;
             } else if (c.equals("hud:off") || c.equals("hud:on")) {
                 steps.add(new Step(t, c.equals("hud:off") ? Kind.HUD_OFF : Kind.HUD_ON, ""));
                 t += 1;

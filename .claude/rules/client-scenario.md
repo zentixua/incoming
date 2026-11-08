@@ -35,7 +35,10 @@ Client scenarios log `SCENARIO …` lines (sounds, fps, flash; `SCENARIO far`: d
 own OpenAL sources with obstruction, per-tick `FireWatch` cost). Use these and frames to check look/sound.
 `commands` scenario (`incoming.commands`, semicolon-separated steps, `ScenarioCommands`/`CommandPlan`): commands,
 `wait:N`, `shot:<name>`, `hud:off|on`, `wait:nuke` (wait for detonation packet), `wait:blast` (wait for next server
-explosion, at most 3600 ticks). Detailed city for client-fire measurements: `INCOMING_CITY=N@tick` (`FireCity`:
+explosion, at most 3600 ticks), `maxyield:<kt>` (server yield ceiling), `burnable` (to the most flammable land
+within 4 km, 200 blocks up), `skip:<s>` (time skip to that many seconds after the last detonation, as scenario
+`firestorm`), `storm:on|off`, `frames:<name>:<count>:<yaw>:<blocks>` (consecutive frames while turning/moving, each
+with its `SCENARIO frame` pall line: trails and shimmer). Detailed city for client-fire measurements: `INCOMING_CITY=N@tick` (`FireCity`:
 surface section plus N − 1 below per client chunk, with global palette, client-only).
 
 ## Effects sandbox: frames during work; full pack under Iris only for one comparison with 3.4.1

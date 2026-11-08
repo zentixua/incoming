@@ -3490,6 +3490,14 @@ public final class ClientScenario {
                     at(step.tick(), () -> Minecraft.getInstance().options.hideGui = hide);
                 }
                 case COMMAND -> at(step.tick(), () -> cmd(step.arg()));
+                case STORM -> at(step.tick(), () -> ua.zentix.incoming.client.nuclear.NukePall.firestorm(step.arg().equals("on")));
+                case BURNABLE -> at(step.tick(), () -> {
+                    pickEpicentre();
+                    cmd(String.format(java.util.Locale.ROOT, "tp @s %d 200 %d", fsX, fsZ));
+                });
+                case MAX_YIELD -> at(step.tick(), () -> ua.zentix.incoming.IncomingConfig.SERVER.nukeMaxYield.set(Integer.parseInt(step.arg())));
+                case SKIP -> at(step.tick(), () -> fsSkip(Double.parseDouble(step.arg())));
+                case FRAMES -> at(step.tick(), () -> frameRun(step.arg()));
             }
         }
         at(plan.end(), () -> {
@@ -3835,6 +3843,53 @@ public final class ClientScenario {
             Incoming.LOG.info("SCENARIO shot {}: pall {}", name, ua.zentix.incoming.client.fx.layer.PallPass.describe());
             Screenshot.grab(mc.gameDirectory, String.format("%s_%04d.png", name, tick), mc.getMainRenderTarget(), c -> {});
         });
+    }
+
+    /** Consecutive-frame run (commands step {@code frames:}): name, frames left, yaw per frame, blocks forward per frame. */
+    private String frameName;
+    private int frameLeft, frameIndex;
+    private float frameYaw;
+    private double frameMove;
+    private boolean frameHooked;
+
+    private void frameRun(String arg) {
+        String[] f = arg.split(":");
+        frameName = f[0].strip();
+        frameLeft = f.length > 1 ? Integer.parseInt(f[1].strip()) : 8;
+        frameYaw = f.length > 2 ? Float.parseFloat(f[2].strip()) : 0f;
+        frameMove = f.length > 3 ? Double.parseDouble(f[3].strip()) : 0.0;
+        frameIndex = 0;
+        if (Minecraft.getInstance().player != null) Minecraft.getInstance().player.getAbilities().flying = true;
+        if (!frameHooked) {
+            frameHooked = true;
+            NeoForge.EVENT_BUS.addListener((net.neoforged.neoforge.client.event.RenderFrameEvent.Post e) -> frameStep());
+        }
+    }
+
+    /** After each rendered frame of a run: grab it, then turn and move the player for the next one. */
+    private void frameStep() {
+        if (frameLeft <= 0) return;
+        Minecraft mc = Minecraft.getInstance();
+        if (mc.player == null) return;
+        String name = String.format("%s_f%02d", frameName, frameIndex);
+        Incoming.LOG.info("SCENARIO frame {} yaw {} pitch {} at {}: pall {}", name, String.format(java.util.Locale.ROOT, "%.1f", mc.player.getYRot()),
+                String.format(java.util.Locale.ROOT, "%.1f", mc.player.getXRot()), xyz(mc.gameRenderer.getMainCamera().getPosition()),
+                ua.zentix.incoming.client.fx.layer.PallPass.describe());
+        Screenshot.grab(mc.gameDirectory, name + ".png", mc.getMainRenderTarget(), c -> {});
+        frameIndex++;
+        frameLeft--;
+        var p = mc.player;
+        float yaw = p.getYRot() + frameYaw;
+        p.setYRot(yaw);
+        p.yRotO = yaw;
+        p.yHeadRot = yaw;
+        p.yHeadRotO = yaw;
+        if (frameMove != 0.0) {
+            double r = Math.toRadians(yaw);
+            p.setPos(p.getX() - Math.sin(r) * frameMove, p.getY(), p.getZ() + Math.cos(r) * frameMove);
+            p.xo = p.getX();
+            p.zo = p.getZ();
+        }
     }
 
     /** Turn your gaze to B-2 (by location on the server: in the world or outside it). */
