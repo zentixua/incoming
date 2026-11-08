@@ -129,6 +129,12 @@ public final class FxLayer {
             Incoming.LOG.error("Stem foot lighting shader failed to load: using stem lighting at the foot", ex);
         }
         try {
+            e.registerShader(new ShaderInstance(e.getResourceProvider(), Incoming.id("fx_mush_taus"), DefaultVertexFormat.POSITION), s -> PallPass.mushTaus = s);
+        } catch (IOException ex) {
+            PallPass.mushTaus = null;
+            Incoming.LOG.error("Mushroom depth grid shader failed to load: mushroom ray steps compute their depths themselves", ex);
+        }
+        try {
             e.registerShader(new ShaderInstance(e.getResourceProvider(), Incoming.id("fx_mush_shadow"), DefaultVertexFormat.POSITION), s -> PallPass.shadow = s);
         } catch (IOException ex) {
             PallPass.shadow = null;

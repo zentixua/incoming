@@ -9,6 +9,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 /** Pall details by time on the GPU: steps, budget, descent immediately, ascent with a reserve and not higher than the settings. */
 class PallDetailTest {
     private static final long MS = 1_000_000L;
+    /** Lowest rung (below the LOW setting: fewer rays per frame). */
     private static final int LOW = PallPass.LADDER.length - 1;
 
     /** Frames of 16 ms with one time on the GPU, {@code frames} pieces; watch - in {@code clock[0]}. */
@@ -19,18 +20,57 @@ class PallDetailTest {
         }
     }
 
-    /** Stages - from HIGH to LOW, each one is no more than half the price of the previous one; MEDIUM is among them. */
+    /**
+     * Rungs from HIGH down, each at most half the price of the previous one; MEDIUM and LOW are among them, rungs below LOW
+     * for a GPU it does not fit; LOW costs what the former LOW (quarter frame × 20 steps) did.
+     */
     @Test
     void ladderRunsFromHighToLow() {
         assertEquals(0, PallPass.Quality.HIGH.step());
-        assertEquals(LOW, PallPass.Quality.LOW.step());
-        int medium = PallPass.Quality.MEDIUM.step();
-        assertTrue(medium > 0 && medium < LOW);
+        int medium = PallPass.Quality.MEDIUM.step(), low = PallPass.Quality.LOW.step();
+        assertTrue(medium > 0 && medium < low && low < LOW);
+        double old = 20 / 16.0, cost = PallPass.LADDER[low].cost();
+        assertTrue(cost >= 0.9 * old && cost <= 1.15 * old, "LOW: " + cost);
         assertEquals(-1, PallPass.Quality.OFF.step());
         for (int i = 1; i < PallPass.LADDER.length; i++) {
             double ratio = PallPass.LADDER[i].cost() / PallPass.LADDER[i - 1].cost();
             assertTrue(ratio >= 0.5 && ratio < 0.9, "step " + i + ": " + ratio);
-            assertTrue(PallPass.LADDER[i].factor() <= 4 && PallPass.LADDER[i].steps() >= 20, "below LOW");
+            assertTrue(PallPass.LADDER[i].factor() <= 4 && PallPass.LADDER[i].steps() >= 20 && PallPass.LADDER[i].interleave() <= 4, "below the floor");
+        }
+    }
+
+    /** Each interleave order visits every pixel of its n × n block once per n² frames. */
+    @Test
+    void interleaveOrderVisitsEveryBlockPixelOnce() {
+        for (int n = 1; n <= 4; n++) {
+            int[] order = PallPass.ORDER[n - 1];
+            assertEquals(n * n, order.length);
+            assertEquals(n * n, java.util.Arrays.stream(order).distinct().filter(p -> p >= 0 && p < order.length).count(), "n = " + n);
+        }
+    }
+
+    /**
+     * The march traces pixel cell·n + o of each block ({@code fx_pall}: {@code low}); the accumulation finds the block of every
+     * pixel as round((px − o)/n), clamped to the cells, and takes the ray only where it lands on that pixel
+     * ({@code fx_pall_resolve}: {@code own}, {@code traced}): over n² frames every pixel of a frame of any size takes exactly
+     * one ray, also when the size is not a multiple of n.
+     */
+    @Test
+    void interleavedRaysCoverEveryPixelOncePerCycle() {
+        for (int n = 1; n <= 4; n++) {
+            for (int size : new int[]{1, 7, 13, 64, 641}) {
+                int cells = (size + n - 1) / n;
+                int[] taken = new int[size];
+                for (int frame = 0; frame < n * n; frame++) {
+                    int phase = PallPass.ORDER[n - 1][frame], o = phase % n;
+                    for (int px = 0; px < size; px++) {
+                        int own = Math.max(0, Math.min(cells - 1, (int) Math.floor((px - o) / (double) n + 0.5)));
+                        if (own * n + o == px) taken[px]++;
+                    }
+                }
+                // one axis: offsets o repeat n times per cycle (the other axis takes the rest), so each pixel n times
+                for (int px = 0; px < size; px++) assertEquals(n, taken[px], "n = " + n + ", size " + size + ", pixel " + px);
+            }
         }
     }
 

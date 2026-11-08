@@ -353,10 +353,10 @@ class ShaderSourceTest {
     }
 
     @Test
-    void footLightTableDimensionsMatchItsShader() throws IOException, URISyntaxException {
+    void tableDimensionsMatchTheirShader() throws IOException, URISyntaxException {
         Path core = Path.of(ShaderSourceTest.class.getResource("/assets/incoming/shaders/core").toURI());
         String source = Files.readString(core.resolveSibling("include").resolve("fx_pall.glsl"));
-        for (Object[] pair : new Object[][]{{"FOOT_LIGHT_AZ", PallPass.FOOT_LIGHT_AZ}, {"FOOT_LIGHT_R", PallPass.FOOT_LIGHT_R}, {"FOOT_LIGHT_H", PallPass.FOOT_LIGHT_H}}) {
+        for (Object[] pair : new Object[][]{{"FOOT_LIGHT_AZ", PallPass.FOOT_LIGHT_AZ}, {"FOOT_LIGHT_R", PallPass.FOOT_LIGHT_R}, {"FOOT_LIGHT_H", PallPass.FOOT_LIGHT_H}, {"MUSH_TAU_N", PallPass.MUSH_TAU_N}}) {
             Matcher m = Pattern.compile("const int " + pair[0] + " = (\\d+);").matcher(source);
             assertTrue(m.find(), pair[0].toString());
             assertEquals(pair[1], Integer.valueOf(m.group(1)));

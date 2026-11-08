@@ -75,7 +75,8 @@ import java.util.concurrent.CompletionException;
  * <p>
  * Detail holds its own budget ({@link Detail}): GPU pass times measured by OpenGL timestamps, read after
  * a few frames (no waiting); while above {@link Detail#BUDGET_MS} ms, ray frame resolution and step count decrease
- * ({@link #LADDER}, no lower than LOW); with headroom, detail returns toward the setting. In client scenarios
+ * and rays per frame decrease ({@link #LADDER}, down to its last rung, below the LOW setting); with headroom, detail returns
+ * toward the setting. In client scenarios
  * and Flashback video export, frames are not real-time: a slow frame costs nothing there, so detail always
  * follows the setting ({@link Detail#pin}). {@code SCENARIO pall} line — {@link #describe}.
  */
@@ -93,45 +94,79 @@ public final class PallPass {
     private static final float REPROJECT_MAX = 600;
     /** Eye displacement beyond this in one frame invalidates history (teleport, projectile camera). */
     private static final double JUMP = 30;
+    /**
+     * History weight at a pixel taking a new ray (temporal accumulation, {@code fx_pall_resolve}), interleaved or not: a pixel
+     * averages about ten of its own jittered rays. With interleave n a pixel takes a ray only every n² frames; giving that ray
+     * the weight of n² ordinary frames instead (0.9^16 = 0.19 at n = 4) left a pixel showing nearly a single ray — grain on thin
+     * cloud edges against the sky (laptop frames 07.11: noise p95 10 against 3–4 without interleave; 0.9: 3–4). A change the
+     * neighbour bounds do not catch takes 10·n² frames.
+     */
+    private static final double HISTORY = 0.9;
 
-    /** Pall quality setting — finest {@link #LADDER} rung: frame downscale factor and steps per ray. */
+    /**
+     * Pall quality setting — finest {@link #LADDER} rung: frame downscale factor, steps per ray and ray interleave. LOW
+     * costs what the former LOW (quarter frame, 20 steps) did: half frame, a quarter of its rays per frame.
+     */
     public enum Quality {
-        OFF(0, 0), LOW(4, 20), MEDIUM(2, 28), HIGH(2, 48);
+        OFF(0, 0, 1), LOW(2, 22, 2), MEDIUM(2, 28, 1), HIGH(2, 48, 1);
 
-        final int factor, steps;
+        final int factor, steps, interleave;
 
-        Quality(int factor, int steps) {
+        Quality(int factor, int steps, int interleave) {
             this.factor = factor;
             this.steps = steps;
+            this.interleave = interleave;
         }
 
         /** {@link #LADDER} rung for this quality (OFF — −1). */
         int step() {
-            for (int i = 0; i < LADDER.length; i++) if (LADDER[i].factor == factor && LADDER[i].steps == steps) return i;
+            for (int i = 0; i < LADDER.length; i++) {
+                if (LADDER[i].factor == factor && LADDER[i].steps == steps && LADDER[i].interleave == interleave) return i;
+            }
             return -1;
         }
     }
 
-    /** Detail rung: ray frame downscale factor and steps per ray. */
-    record Step(int factor, int steps) {
-        /** Relative frame cost: rays — pixels / factor², each with its steps. */
+    /**
+     * Detail rung: ray frame downscale factor, steps per ray and interleave n — each frame traces one ray pixel of every
+     * n × n block, the others keep their reprojected history ({@code fx_pall_resolve}): a still frame is the same,
+     * changes reach every pixel within n² frames.
+     */
+    record Step(int factor, int steps, int interleave) {
+        /** Relative frame cost: rays — pixels / (factor · interleave)², each with its steps. */
         double cost() {
-            return steps / (double) (factor * factor);
+            return steps / (double) (factor * factor * interleave * interleave);
+        }
+
+        /** Log form: {@code 1/2 × 28 steps}, with {@code , rays 1/4 per frame} when interleaved. */
+        String describe() {
+            return String.format(Locale.ROOT, "1/%d × %d steps%s", factor, steps, interleave > 1 ? ", rays 1/" + interleave * interleave + " per frame" : "");
         }
     }
 
     /**
-     * Detail rungs from HIGH to LOW: each costs 0.5 to 0.85 of the previous one. Step count changes without a new
-     * framebuffer; factor changes recreate reduced-resolution frames (history restarts).
+     * Detail rungs from HIGH down: each costs 0.5 to 0.85 of the previous one. Rays thin out by interleave before the
+     * frame coarsens: the same rays per frame at half frame and n = 2 as at quarter frame, but a still view keeps the
+     * half-frame detail. Step count and interleave change without a new history; factor changes recreate the
+     * reduced-resolution frames (history restarts).
      */
-    static final Step[] LADDER = {new Step(2, 48), new Step(2, 36), new Step(2, 28), new Step(2, 22), new Step(3, 26),
-            new Step(3, 20), new Step(4, 24), new Step(4, 20)};
+    static final Step[] LADDER = {new Step(2, 48, 1), new Step(2, 36, 1), new Step(2, 28, 1), new Step(2, 22, 1),
+            new Step(2, 64, 2), new Step(2, 48, 2), new Step(2, 36, 2), new Step(2, 28, 2), new Step(2, 22, 2),
+            new Step(2, 36, 3), new Step(2, 28, 3), new Step(2, 22, 3), new Step(2, 28, 4), new Step(2, 22, 4),
+            new Step(3, 26, 4), new Step(3, 20, 4), new Step(4, 24, 4), new Step(4, 20, 4)};
+
+    /**
+     * Ray pixel of each n × n block per frame, in turn (n = 1–4): far apart in consecutive frames (ordered dither), so a
+     * moving edge refreshes evenly.
+     */
+    static final int[][] ORDER = {{0}, {0, 3, 1, 2}, {0, 7, 5, 1, 8, 3, 6, 2, 4},
+            {0, 10, 2, 8, 5, 15, 7, 13, 1, 11, 3, 9, 4, 14, 6, 12}};
 
     /**
      * Detail rung by GPU pass time: above budget over a half-second average (with at least
      * four measurements) — immediately switch to a rung estimated to fit; headroom — one rung up if its estimated cost
      * is at most {@link #UP_SHARE} of budget for two consecutive windows and {@link #HOLD_NS} has passed since the last change (four times
-     * longer after an increase immediately followed by a decrease). No higher than the setting and no lower than LOW;
+     * longer after an increase immediately followed by a decrease). No higher than the setting and no lower than the last rung;
      * pinned ({@link #pin}) — setting rung, unaffected by measurements. No world or OpenGL — unit test.
      */
     static final class Detail {
@@ -390,14 +425,16 @@ public final class PallPass {
     }
 
     @Nullable
-    static ShaderInstance march, resolve, composite, shadow, footLighting;
+    static ShaderInstance march, resolve, composite, shadow, footLighting, mushTaus;
     static final int FOOT_LIGHT_AZ = 64, FOOT_LIGHT_R = 16, FOOT_LIGHT_H = 32;
+    /** Mushroom mean depth grid ({@code fx_mush_taus}): cells across x and z and height layers per mushroom, two blocks each. */
+    static final int MUSH_TAU_N = 48;
     private static final Frame EMPTY = new Frame();
     private static final Detail DETAIL = new Detail();
     /** Noise failed (background error): no pall until restart. */
     private static boolean failed;
 
-    private static int fullW, fullH, lowW, lowH, factor;
+    private static int fullW, fullH, lowW, lowH, factor, interleave = 1, cellsW, cellsH;
     /** Ray frame and two history frames (alternating previous/current). */
     private static final int[] TEXTURES = {-1, -1, -1}, FBOS = {-1, -1, -1};
     private static int latest;
@@ -405,6 +442,8 @@ public final class PallPass {
     /** Mushroom sun shadow map ({@link MushroomField#SHADOW}² tile per mushroom) and framebuffer; −1 — failed, no shadow. */
     private static int shadowMap = -1, shadowFbo = -1;
     private static int footMap = -1, footFbo = -1;
+    /** Mushroom mean depth grid this frame and its framebuffer; −1 — failed, ray steps compute the depths themselves. */
+    private static int tauMap = -1, tauFbo = -1;
     /** Frame copy for fireball world light ({@link #copyFrame}) and size; −1 — not needed yet. */
     private static int frameCopy = -1, copyW, copyH;
     /** Slot fire maps (texture, side, owner and fill generation) and this frame's maps (−1 — absent). */
@@ -434,7 +473,9 @@ public final class PallPass {
     // a few frames once ready, without waiting. Not GL_TIME_ELAPSED: OpenGL has one shared query, and Minecraft holds it for
     // the entire frame while F3 GPU load is displayed (TimerQuery) — a nested query would not start
     private static final int RING = 4;
-    private static final int[] QUERIES = new int[2 * RING];
+    /** Timestamps per frame: start, after preparation (smoke grid, shadow map, foot light), after rays, after accumulation, end. */
+    private static final int STAMPS = 5;
+    private static final int[] QUERIES = new int[STAMPS * RING];
     /** Rung generation ({@link Detail#generation}) at pair recording; −1 — pair free. */
     private static final int[] ISSUED = new int[RING];
     private static int ring;
@@ -443,6 +484,8 @@ public final class PallPass {
     /** Client scenario ({@code tools/client_scenario.sh}): frames are not real-time; detail follows setting. */
     private static final boolean SCENARIO = System.getProperty("incoming.scenario") != null;
     private static double gpuSum, gpuMax, lastGpuMean, lastGpuMax;
+    /** GPU time per part (preparation, rays, accumulation, composite) over the last second, ms per frame. */
+    private static final double[] PART_SUM = new double[STAMPS - 1], LAST_PART = new double[STAMPS - 1];
     private static int gpuFrames, drawn, lastDrawn;
 
     private PallPass() {}
@@ -539,7 +582,7 @@ public final class PallPass {
      */
     static boolean draw(Frame f, int scene, Matrix4f view, Matrix4f projection, Vec3 eye, Vector4f haze) {
         long preparing = cold() ? System.nanoTime() : 0;
-        ShaderInstance m = march, r = resolve, c = composite, sh = shadow, fl = footLighting;
+        ShaderInstance m = march, r = resolve, c = composite, sh = shadow, fl = footLighting, mt = mushTaus;
         if (m == null || r == null || c == null || f.quality == Quality.OFF || !upload()) return false;
         Minecraft mc = Minecraft.getInstance();
         int w = mc.getMainRenderTarget().width, h = mc.getMainRenderTarget().height;
@@ -547,15 +590,15 @@ public final class PallPass {
         if (DETAIL.pin(SCENARIO || FlashbackReplay.exporting())) {
             Step at = LADDER[Math.max(0, DETAIL.level)];
             if (DETAIL.pinned) {
-                Incoming.LOG.info("Nuclear dust pall: {}, detail pinned at the setting 1/{} × {} steps", SCENARIO ? "client scenario" : "Flashback video export",
-                        at.factor, at.steps);
+                Incoming.LOG.info("Nuclear dust pall: {}, detail pinned at the setting {}", SCENARIO ? "client scenario" : "Flashback video export",
+                        at.describe());
             } else {
-                Incoming.LOG.info("Nuclear dust pall: Flashback video export over, detail follows the GPU budget again from 1/{} × {} steps", at.factor, at.steps);
+                Incoming.LOG.info("Nuclear dust pall: Flashback video export over, detail follows the GPU budget again from {}", at.describe());
             }
         }
         if (timer()) poll(System.nanoTime());
         Step step = LADDER[DETAIL.level];
-        if (!ensure(w, h, step.factor)) return false;
+        if (!ensure(w, h, step.factor, step.interleave)) return false;
         boolean open = mc.level != null && OpenAir.update(mc.level, eye);
         tableBuffer.clear();
         tableBuffer.put(f.table).flip();
@@ -595,6 +638,8 @@ public final class PallPass {
         float dx = (float) (previousEye == null ? 0 : eye.x - previousEye.x), dy = (float) (previousEye == null ? 0 : eye.y - previousEye.y),
                 dz = (float) (previousEye == null ? 0 : eye.z - previousEye.z);
         frame++;
+        int n = interleave, phase = ORDER[n - 1][(int) (frame % (n * n))];
+        float ox = phase % n, oy = phase / n;
         int timing = begin();
 
         int previous = GlStateManager._getInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
@@ -626,18 +671,26 @@ public final class PallPass {
         }
         // base light in a separate small table; main pass only samples it
         // shared source textures and parameters: same pallSource, without a second inlined ray call
-        for (int pass = 0; pass < 2; pass++) {
-            if (pass == 0 && !litFoot) continue;
-            m = pass == 0 ? fl : march;
+        // mushroom mean depths: one grid per frame, read by every mushroom ray step (fx_mush_taus)
+        // also while the march is cold (the empty warm-up frame, FxLayer): the program compiles before the flash, not on it
+        boolean bake = mt != null && tauMap >= 0 && (f.mushroomCount > 0 || cold()), grid = bake && f.mushroomCount > 0;
+        for (int pass = 0; pass < 3; pass++) {
+            if (pass == 0 && !litFoot || pass == 1 && !bake) continue;
+            m = pass == 0 ? fl : pass == 1 ? mt : march;
             if (pass == 0) {
                 GlStateManager._glBindFramebuffer(GlConst.GL_FRAMEBUFFER, footFbo);
                 RenderSystem.viewport(0, 0, FOOT_LIGHT_AZ + 1, FOOT_LIGHT_H * FOOT_LIGHT_R * f.mushroomCount);
+            } else if (pass == 1) {
+                GlStateManager._glBindFramebuffer(GlConst.GL_FRAMEBUFFER, tauFbo);
+                RenderSystem.viewport(0, 0, MUSH_TAU_N * MUSH_TAU_N, 2 * MUSH_TAU_N * Math.max(1, f.mushroomCount));
             } else {
                 GlStateManager._glBindFramebuffer(GlConst.GL_FRAMEBUFFER, FBOS[0]);
-                RenderSystem.viewport(0, 0, lowW, lowH);
+                RenderSystem.viewport(0, 0, cellsW, cellsH);
             }
-            RenderSystem.setShaderTexture(9, pass == 1 && litFoot ? footMap : table);
+            RenderSystem.setShaderTexture(9, pass == 2 && litFoot ? footMap : table);
             m.safeGetUniform("PallFootReady").set(litFoot ? 1 : 0);
+            RenderSystem.setShaderTexture(10, pass == 2 && grid ? tauMap : table);
+            m.safeGetUniform("PallTauReady").set(pass == 2 && grid ? 1 : 0);
             RenderSystem.setShaderTexture(0, scene);
             RenderSystem.setShaderTexture(1, table);
             RenderSystem.setShaderTexture(2, blue);
@@ -665,7 +718,9 @@ public final class PallPass {
             m.safeGetUniform("PallHot0").set(f.hot0.x, f.hot0.y, f.hot0.z, f.hot0.w);
             m.safeGetUniform("PallHot1").set(f.hot1.x, f.hot1.y, f.hot1.z, f.hot1.w);
             m.safeGetUniform("PallGlowOnSmoke").set(f.glowOnSmoke);
-            m.safeGetUniform("PallFrame").set((float) (frame % 4096), step.steps, factor, f.eyeDust.x);
+            // step jitter advances once per interleave cycle: each ray pixel takes the next value of the sequence
+            m.safeGetUniform("PallFrame").set((float) ((frame / (n * n)) % 4096), step.steps, factor, f.eyeDust.x);
+            m.safeGetUniform("PallInterleave").set(n, ox, oy, 0f);
             m.safeGetUniform("PallEyeTau").set(f.eyeDust.y, f.eyeDust.z);
             m.safeGetUniform("PallFire0").set(fireSlot0);
             m.safeGetUniform("PallFire1").set(fireSlot1);
@@ -690,12 +745,16 @@ public final class PallPass {
             m.safeGetUniform("SmokeBallLight").set(f.smokeBallLight);
             OpenAir.bind(m, open);
             SmokePass.bind(m, f.smoke);
+            if (pass == 2) stamp(timing, 1);
             quad(m, true);
         }
+        stamp(timing, 2);
 
         // 2. accumulation: from previous history into the other frame
         int next = 1 + (1 - latest);
         GlStateManager._glBindFramebuffer(GlConst.GL_FRAMEBUFFER, FBOS[next]);
+        // every pixel of the reduced frame, not only the ray cells the march drew
+        RenderSystem.viewport(0, 0, lowW, lowH);
         RenderSystem.setShaderTexture(0, TEXTURES[0]);
         RenderSystem.setShaderTexture(1, TEXTURES[1 + latest]);
         RenderSystem.setShaderTexture(2, scene);
@@ -705,9 +764,13 @@ public final class PallPass {
         r.safeGetUniform("PallForward").set(FORWARD.x, FORWARD.y, FORWARD.z);
         r.safeGetUniform("PallReproject").set(dx, dy, dz, history ? 1f : 0f);
         r.safeGetUniform("PallFrame").set(0f, 0f, factor, REPROJECT_MAX);
+        r.safeGetUniform("PallInterleave").set(n, ox, oy, (float) HISTORY);
+        // history moves 1/n of the way to the neighbour-ray bounds each frame: outright without interleaving
+        r.safeGetUniform("PallClamp").set(1f / n);
         SmokePass.bind(r, f.smoke);
         quad(r, false);
         latest = next - 1;
+        stamp(timing, 3);
 
         // 3. composite
         GlStateManager._glBindFramebuffer(GlConst.GL_FRAMEBUFFER, previous);
@@ -760,8 +823,8 @@ public final class PallPass {
         previousEye = eye;
         history = true;
         drawn++;
-        prepared = m;
-        preparedProgram = m.getId();
+        prepared = march;
+        preparedProgram = march.getId();
         if (preparing != 0) Incoming.LOG.info("Nuclear volume shaders prepared in {} ms", (System.nanoTime() - preparing) / 1_000_000);
         return true;
     }
@@ -962,6 +1025,7 @@ public final class PallPass {
             GL11.glTexImage2D(GL11.GL_TEXTURE_2D, 0, GL30.GL_RGBA32F, MushroomField.WIDTH, MushroomField.ROWS, 0, GL11.GL_RGBA, GL11.GL_FLOAT, mushroomBuffer);
             shadowMap();
             footMap();
+            tauMap();
         } finally {
             MemoryUtil.memFree(buf);
             GlStateManager._pixelStore(GL11.GL_UNPACK_ALIGNMENT, 4);
@@ -993,6 +1057,33 @@ public final class PallPass {
             GlStateManager._glDeleteFramebuffers(shadowFbo);
             GlStateManager._deleteTexture(shadowMap);
             shadowMap = shadowFbo = -1;
+        }
+    }
+
+    /**
+     * Mushroom mean depth grid: {@link #MUSH_TAU_N}³ cells, packed as (height layer, x) × (mushroom, block, z), linear within a
+     * layer (the shader reads two layers and blends them).
+     */
+    private static void tauMap() {
+        int previous = GlStateManager._getInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
+        tauMap = GlStateManager._genTexture();
+        GlStateManager._bindTexture(tauMap);
+        GlStateManager._texParameter(GlConst.GL_TEXTURE_2D, GlConst.GL_TEXTURE_MIN_FILTER, GlConst.GL_LINEAR);
+        GlStateManager._texParameter(GlConst.GL_TEXTURE_2D, GlConst.GL_TEXTURE_MAG_FILTER, GlConst.GL_LINEAR);
+        GlStateManager._texParameter(GlConst.GL_TEXTURE_2D, GlConst.GL_TEXTURE_WRAP_S, GlConst.GL_CLAMP_TO_EDGE);
+        GlStateManager._texParameter(GlConst.GL_TEXTURE_2D, GlConst.GL_TEXTURE_WRAP_T, GlConst.GL_CLAMP_TO_EDGE);
+        GlStateManager._texImage2D(GlConst.GL_TEXTURE_2D, 0, GL30.GL_RGBA16F, MUSH_TAU_N * MUSH_TAU_N,
+                2 * MUSH_TAU_N * MushroomField.MUSHROOMS, 0, GL11.GL_RGBA, GL11.GL_FLOAT, null);
+        tauFbo = GlStateManager.glGenFramebuffers();
+        GlStateManager._glBindFramebuffer(GlConst.GL_FRAMEBUFFER, tauFbo);
+        GlStateManager._glFramebufferTexture2D(GlConst.GL_FRAMEBUFFER, GlConst.GL_COLOR_ATTACHMENT0, GlConst.GL_TEXTURE_2D, tauMap, 0);
+        boolean ok = GlStateManager.glCheckFramebufferStatus(GlConst.GL_FRAMEBUFFER) == GlConst.GL_FRAMEBUFFER_COMPLETE;
+        GlStateManager._glBindFramebuffer(GlConst.GL_FRAMEBUFFER, previous);
+        if (!ok) {
+            Incoming.LOG.error("Mushroom depth grid not created: mushroom ray steps compute their depths themselves");
+            GlStateManager._glDeleteFramebuffers(tauFbo);
+            GlStateManager._deleteTexture(tauMap);
+            tauMap = tauFbo = -1;
         }
     }
 
@@ -1046,8 +1137,8 @@ public final class PallPass {
     }
 
     /** Reduced-resolution frames matching game frame size and quality (recreated on change). */
-    private static boolean ensure(int w, int h, int f) {
-        if (TEXTURES[0] >= 0 && w == fullW && h == fullH && f == factor) return true;
+    private static boolean ensure(int w, int h, int f, int n) {
+        if (TEXTURES[0] >= 0 && w == fullW && h == fullH && f == factor) return n == interleave || rays(n);
         fullW = w;
         fullH = h;
         factor = f;
@@ -1077,7 +1168,26 @@ public final class PallPass {
             fullW = fullH = 0;
             return false;
         }
-        return true;
+        return rays(n);
+    }
+
+    /** Ray target for interleave n: one pixel per n × n block of the ray frame; history stays (same frame size). */
+    private static boolean rays(int n) {
+        interleave = n;
+        cellsW = Math.max(1, (lowW + n - 1) / n);
+        cellsH = Math.max(1, (lowH + n - 1) / n);
+        int previous = GlStateManager._getInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
+        GlStateManager._bindTexture(TEXTURES[0]);
+        GlStateManager._texImage2D(GlConst.GL_TEXTURE_2D, 0, GL30.GL_RGBA16F, cellsW, cellsH, 0, GL11.GL_RGBA, GL11.GL_FLOAT, null);
+        GlStateManager._glBindFramebuffer(GlConst.GL_FRAMEBUFFER, FBOS[0]);
+        GlStateManager._glFramebufferTexture2D(GlConst.GL_FRAMEBUFFER, GlConst.GL_COLOR_ATTACHMENT0, GlConst.GL_TEXTURE_2D, TEXTURES[0], 0);
+        boolean ok = GlStateManager.glCheckFramebufferStatus(GlConst.GL_FRAMEBUFFER) == GlConst.GL_FRAMEBUFFER_COMPLETE;
+        GlStateManager._glBindFramebuffer(GlConst.GL_FRAMEBUFFER, previous);
+        if (!ok) {
+            Incoming.LOG.error("Nuclear dust pall: ray target {}×{} not created, no dust pall", cellsW, cellsH);
+            fullW = fullH = 0;
+        }
+        return ok;
     }
 
     /** OpenGL timestamps supported (GL 3.3 or ARB_timer_query, nonempty counter); pairs created on first check. */
@@ -1100,9 +1210,16 @@ public final class PallPass {
     private static void poll(long now) {
         for (int k = 0; k < RING; k++) {
             int i = (ring + k) % RING;
-            if (ISSUED[i] < 0 || GL15.glGetQueryObjecti(QUERIES[2 * i + 1], GL15.GL_QUERY_RESULT_AVAILABLE) == 0) continue;
-            long start = GL33.glGetQueryObjecti64(QUERIES[2 * i], GL15.GL_QUERY_RESULT), stop = GL33.glGetQueryObjecti64(QUERIES[2 * i + 1], GL15.GL_QUERY_RESULT);
+            if (ISSUED[i] < 0 || GL15.glGetQueryObjecti(QUERIES[STAMPS * i + STAMPS - 1], GL15.GL_QUERY_RESULT_AVAILABLE) == 0) continue;
+            long start = GL33.glGetQueryObjecti64(QUERIES[STAMPS * i], GL15.GL_QUERY_RESULT);
+            long stop = GL33.glGetQueryObjecti64(QUERIES[STAMPS * i + STAMPS - 1], GL15.GL_QUERY_RESULT);
             double ms = Math.max(0, stop - start) / 1e6;
+            long before = start;
+            for (int q = 1; q < STAMPS; q++) {
+                long at = GL33.glGetQueryObjecti64(QUERIES[STAMPS * i + q], GL15.GL_QUERY_RESULT);
+                PART_SUM[q - 1] += Math.max(0, at - before) / 1e6;
+                before = Math.max(before, at);
+            }
             gpuSum += ms;
             gpuMax = Math.max(gpuMax, ms);
             gpuFrames++;
@@ -1110,8 +1227,8 @@ public final class PallPass {
             if (DETAIL.sample(ms, ISSUED[i], now)) {
                 Step from = LADDER[was], to = LADDER[DETAIL.level];
                 // in game — DEBUG: rung changes every few seconds; scenario rung is pinned (draw)
-                Incoming.LOG.debug(String.format(Locale.ROOT, "Nuclear dust pall: %.2f ms on the GPU (budget %.1f), detail 1/%d × %d steps → 1/%d × %d",
-                        DETAIL.lastMean, Detail.BUDGET_MS, from.factor, from.steps, to.factor, to.steps));
+                Incoming.LOG.debug(String.format(Locale.ROOT, "Nuclear dust pall: %.2f ms on the GPU (budget %.1f), detail %s → %s",
+                        DETAIL.lastMean, Detail.BUDGET_MS, from.describe(), to.describe()));
             }
             ISSUED[i] = -1;
         }
@@ -1120,14 +1237,21 @@ public final class PallPass {
     /** Timestamp before passes; −1 — unmeasured frame (unsupported or all pairs still pending). */
     private static int begin() {
         if (!timer() || ISSUED[ring] >= 0) return -1;
-        GL33.glQueryCounter(QUERIES[2 * ring], GL33.GL_TIMESTAMP);
+        GL33.glQueryCounter(QUERIES[STAMPS * ring], GL33.GL_TIMESTAMP);
+        // every stamp is written each measured frame (a pass skipped this frame still has its point)
+        for (int k = 1; k < STAMPS - 1; k++) GL33.glQueryCounter(QUERIES[STAMPS * ring + k], GL33.GL_TIMESTAMP);
         return ring;
+    }
+
+    /** Timestamp k between passes of the measured frame. */
+    private static void stamp(int pair, int k) {
+        if (pair >= 0) GL33.glQueryCounter(QUERIES[STAMPS * pair + k], GL33.GL_TIMESTAMP);
     }
 
     /** Timestamp after passes: pair pending, read after a few frames ({@link #poll}). */
     private static void end(int pair) {
         if (pair < 0) return;
-        GL33.glQueryCounter(QUERIES[2 * pair + 1], GL33.GL_TIMESTAMP);
+        GL33.glQueryCounter(QUERIES[STAMPS * pair + STAMPS - 1], GL33.GL_TIMESTAMP);
         ISSUED[pair] = DETAIL.generation;
         ring = (pair + 1) % RING;
     }
@@ -1135,6 +1259,10 @@ public final class PallPass {
     /** Once per second (layer tick): timing summary. */
     static void second() {
         lastGpuMean = gpuFrames > 0 ? gpuSum / gpuFrames : 0;
+        for (int k = 0; k < PART_SUM.length; k++) {
+            LAST_PART[k] = gpuFrames > 0 ? PART_SUM[k] / gpuFrames : 0;
+            PART_SUM[k] = 0;
+        }
         lastGpuMax = gpuMax;
         lastDrawn = drawn;
         gpuSum = gpuMax = 0;
@@ -1146,9 +1274,10 @@ public final class PallPass {
         if (lastDrawn == 0) return failed ? "failed" : "off";
         Step step = LADDER[Math.max(0, DETAIL.level)];
         Step top = LADDER[Math.max(0, DETAIL.ceiling)];
-        String gpu = timer < 0 ? "gpu n/a" : String.format(Locale.ROOT, "gpu %.2f ms (longest %.2f, budget %.1f)", lastGpuMean, lastGpuMax, Detail.BUDGET_MS);
-        return String.format(Locale.ROOT, "%d frames, %d×%d, detail 1/%d × %d steps (step %d of %d, setting 1/%d × %d, %s, %d changes), %s",
-                lastDrawn, lowW, lowH, step.factor, step.steps, DETAIL.level, LADDER.length - 1, top.factor, top.steps,
+        String gpu = timer < 0 ? "gpu n/a" : String.format(Locale.ROOT, "gpu %.2f ms (longest %.2f, budget %.1f; preparation %.2f, rays %.2f, accumulation %.2f, composite %.2f)",
+                lastGpuMean, lastGpuMax, Detail.BUDGET_MS, LAST_PART[0], LAST_PART[1], LAST_PART[2], LAST_PART[3]);
+        return String.format(Locale.ROOT, "%d frames, %d×%d, detail %s (step %d of %d, setting %s, %s, %d changes), %s",
+                lastDrawn, lowW, lowH, step.describe(), DETAIL.level, LADDER.length - 1, top.describe(),
                 DETAIL.pinned ? "pinned" : "by GPU budget", DETAIL.changes, gpu);
     }
 

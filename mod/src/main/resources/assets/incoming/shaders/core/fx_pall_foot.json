@@ -11,10 +11,12 @@
         { "name": "Sampler6" },
         { "name": "Sampler7" },
         { "name": "Sampler8" },
-        { "name": "Sampler9" }
+        { "name": "Sampler9" },
+        { "name": "Sampler10" }
     ],
     "uniforms": [
         { "name": "PallFootReady", "type": "int", "count": 1, "values": [0] },
+        { "name": "PallTauReady", "type": "int", "count": 1, "values": [0] },
         { "name": "InvViewProj", "type": "matrix4x4", "count": 16, "values": [1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0] },
         { "name": "PallForward", "type": "float", "count": 3, "values": [0.0, 0.0, -1.0] },
         { "name": "PallAir", "type": "float", "count": 4, "values": [0.0, 0.0, 0.0, 0.0] },
@@ -33,6 +35,7 @@
         { "name": "PallHot1", "type": "float", "count": 4, "values": [0.0, 0.0, 0.0, 0.0] },
         { "name": "PallGlowOnSmoke", "type": "float", "count": 1, "values": [1.0] },
         { "name": "PallFrame", "type": "float", "count": 4, "values": [0.0, 24.0, 2.0, 0.0] },
+        { "name": "PallInterleave", "type": "float", "count": 4, "values": [1.0, 0.0, 0.0, 0.9] },
         { "name": "PallEyeTau", "type": "float", "count": 2, "values": [0.0, 0.0] },
         { "name": "PallFire0", "type": "matrix4x4", "count": 16, "values": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0] },
         { "name": "PallFire1", "type": "matrix4x4", "count": 16, "values": [0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0] },

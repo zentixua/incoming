@@ -360,7 +360,7 @@ public final class IncomingConfig {
                     .translation("incoming.config.zoom").defineInRange("zoom", 4.0, 1.5, 10.0);
             nukeDustQuality = b.comment("Fireball, mushroom cloud (with the water column of a burst on water), the dust wall of a nuclear blast wave and",
                             "the dust and smoke pall after it (over water, spray and the base surge), as a volume: OFF / LOW / MEDIUM / HIGH.",
-                            "LOW is lighter on a weak graphics card; MEDIUM and HIGH lower their own detail (not below LOW) while the volume takes more",
+                            "LOW is lighter on a weak graphics card; each setting lowers its own detail (below LOW too) while the volume takes more",
                             "than about 2 ms of graphics card time a frame, but not while Flashback exports a video.",
                             "OFF leaves only the dust close around you and falling ash: no dust wall, no pall or base surge, and it does not muffle",
                             "sounds. The fireball, the mushroom cloud and the water column stay, at LOW.")
