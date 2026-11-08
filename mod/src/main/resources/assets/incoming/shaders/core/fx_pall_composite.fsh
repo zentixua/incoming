@@ -41,6 +41,9 @@ uniform sampler3D PallNoise;
 uniform sampler3D PallOpen;
 uniform vec4 PallOpenAt;
 uniform vec3 PallOpenWrap;
+// Minecraft's lightmap (pall.glsl: pallLightmap); PallLamps 1 — the window holds block light (OpenAir, MovingLight)
+uniform sampler2D Sampler10;
+uniform float PallLamps;
 // terrain/water under slot pall (pall.glsl: pallFloor, pallWater), slot water as in fx_pall
 uniform sampler2D Sampler5;
 uniform sampler2D Sampler6;
@@ -325,8 +328,12 @@ void main() {
         float fd = Haze.w > 0.5 ? max(length(p.xz), abs(p.y)) : length(p);
         float seen = exp(-Haze.x * length(p)) * (1.0 - smoothstep(Haze.y, Haze.z, fd));
         vec4 over = pallOver(p);
-        // pall shadows sky/sun light: torches light mines/caves (position is air block before surface)
-        float kept = mix(1.0, pallDisplay(shade(p, over)), seen * pallOpenHere(p - 0.5 * dir));
+        // pall shadows sky/sun light: torches light mines/caves (position is air block before surface); torches, lamps and a held
+        // light (LambDynamicLights) keep their share of the pixel under it outdoors as well (pallKeepLamps)
+        vec3 air = p - 0.5 * dir;
+        float open = pallOpenHere(air);
+        float kept = mix(1.0, pallDisplay(shade(p, over)), seen * open);
+        if (PallLamps > 0.5) kept = pallKeepLamps(kept, Sampler10, pallSurfaceLevel(PallOpen, PallOpenAt, PallOpenWrap, air), 15.0 * open);
         vec3 added = vec3(0.0), n = vec3(0.0, 1.0, 0.0);
         if (balls) {
             n = sceneNormal(Sampler1, InvViewProj, PallForward, full, fullSize, p);

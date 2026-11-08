@@ -604,6 +604,10 @@ public final class PallPass {
         Step step = LADDER[DETAIL.level];
         if (!ensure(w, h, step.factor, step.interleave)) return false;
         boolean open = mc.level != null && OpenAir.update(mc.level, eye);
+        // torches, lamps and light carried by entities in the window (OpenAir, MovingLight): dust glows around them, the shadow
+        // leaves their light (pall.glsl: pallLampLight, pallKeepLamps) by Minecraft's own lightmap
+        boolean lamps = open && OpenAir.lamps();
+        int lightmap = mc.gameRenderer.lightTexture().lightTexture.getId();
         tableBuffer.clear();
         tableBuffer.put(f.table).flip();
         GlStateManager._bindTexture(table);
@@ -705,6 +709,8 @@ public final class PallPass {
             RenderSystem.setShaderTexture(7, mushrooms);
             // mushroom sun shadow on pall uses the same map as on the world (without it — table: it contains no tiles)
             RenderSystem.setShaderTexture(8, shade ? shadowMap : table);
+            RenderSystem.setShaderTexture(11, lightmap);
+            m.safeGetUniform("PallLamps").set(lamps ? 1f : 0f);
             m.safeGetUniform("InvViewProj").set(INVERSE);
             m.safeGetUniform("PallForward").set(FORWARD.x, FORWARD.y, FORWARD.z);
             m.safeGetUniform("PallAir").set(f.air.x, f.air.y, f.air.z, f.air.w);
@@ -798,6 +804,8 @@ public final class PallPass {
         RenderSystem.setShaderTexture(7, mushrooms);
         RenderSystem.setShaderTexture(8, shade ? shadowMap : table);
         RenderSystem.setShaderTexture(9, balls ? frameCopy : table);
+        RenderSystem.setShaderTexture(10, lightmap);
+        c.safeGetUniform("PallLamps").set(lamps ? 1f : 0f);
         c.safeGetUniform("InvViewProj").set(INVERSE);
         c.safeGetUniform("PallForward").set(FORWARD.x, FORWARD.y, FORWARD.z);
         c.safeGetUniform("PallSlot0").set(f.slot0);
@@ -1284,9 +1292,9 @@ public final class PallPass {
         Step top = LADDER[Math.max(0, DETAIL.ceiling)];
         String gpu = timer < 0 ? "gpu n/a" : String.format(Locale.ROOT, "gpu %.2f ms (longest %.2f, budget %.1f; preparation %.2f, rays %.2f, accumulation %.2f, composite %.2f)",
                 lastGpuMean, lastGpuMax, Detail.BUDGET_MS, LAST_PART[0], LAST_PART[1], LAST_PART[2], LAST_PART[3]);
-        return String.format(Locale.ROOT, "%d frames, %d×%d, detail %s (step %d of %d, setting %s, %s, %d changes), %s",
+        return String.format(Locale.ROOT, "%d frames, %d×%d, detail %s (step %d of %d, setting %s, %s, %d changes), %s; %s",
                 lastDrawn, lowW, lowH, step.describe(), DETAIL.level, LADDER.length - 1, top.describe(),
-                DETAIL.pinned ? "pinned" : "by GPU budget", DETAIL.changes, gpu);
+                DETAIL.pinned ? "pinned" : "by GPU budget", DETAIL.changes, gpu, OpenAir.describe());
     }
 
     /**
