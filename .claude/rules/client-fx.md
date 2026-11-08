@@ -451,6 +451,14 @@ paths:
   layer. The pyramid on the CPU (`FxBloom.halo`) uses the same samples: the test holds energy, roundness, 1/r² and
   stability to shift in both settings. The nuclear ball (the pall's volume) does not glow here. Time — the layer's line
   (`bloom`).
+- Block light in the pall: `OpenAir`'s window is RG8 (skylight, block light from the client light engine); with
+  LambDynamicLights (`compat/DynamicLights`, reflection on its public runtime class: its `api` package has no level query)
+  `MovingLight` overlays light carried by entities in a 17³ box around the eye (asked on a 2-block grid, interpolated; the
+  previous box restored from the CPU mirror each frame). Dust scatters block light by Minecraft's own lightmap
+  (`pallLampLight`: linear lightmap(level, 0) over lightmap(0, 0), factor 1 — block light is direction-free); the shadow on
+  the world keeps the pixel's block-light share (`pallKeepLamps`: (s·sky + block) / lightmap(block, sky), luminance; identity
+  without block light). The surface level skips unlit voxels (opaque blocks hold 0). Lightmap: `LightTexture.lightTexture`
+  (AT), read by `texelFetch`. `SCENARIO shot` lines print the eye's levels, the kept share and moving-light cost.
 - Nuclear dust pall (`fx/layer/PallPass`) — a volume in the same stage of the layer, before the squares: rays per frame
   are a factor of 2 coarser per axis (`fx_pall`; never coarser: a third and a quarter drew distant ridges as stairs and
   grain on Artem's laptop 08.11, budget `Detail.BUDGET_MS` 4 ms), and on lower rungs interleaved: one ray pixel of every

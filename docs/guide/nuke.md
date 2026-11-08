@@ -111,7 +111,9 @@ dose does not build up.
 
 The siren warns players near the target. The flash comes first; the fireball rises into a mushroom cloud.
 Then the wave reaches the ground around it, breaking buildings and throwing up dust. The sound reaches you with the wave.
-Fires and thick dust can make the area hard to see through long after the strike.
+Fires and thick dust can make the area hard to see through long after the strike. Torches, lanterns and other light
+sources light the dust around them and keep lighting the ground under the dust's shadow; with LambDynamicLights, so does
+a torch in your hand.
 
 With the default ground burst, the dust column joins the mushroom cap. With an explicitly selected air burst
 at the standard burst height, the column starts rising later, with a billowing upper edge, and stays below the
