@@ -1339,7 +1339,8 @@ public final class RuinPlan {
 
     /**
      * {@link net.minecraft.world.level.block.entity.BlockEntity#setChanged} without loading a neighbour chunk: its
-     * comparator update ({@code Level.updateNeighbourForOutputSignal}) reads blocks up to two away, the second step
+     * comparator update ({@code Level.updateNeighbourForOutputSignal}) reads blocks up to two away (and a comparator it
+     * notifies up to two beyond that), the second step
      * (through a redstone conductor) without vanilla's hasChunk guard, and that guard admits a requested chunk still
      * loading; a ready plan's neighbours need not be loaded. A dispenser on a chunk edge loaded one synchronously, the
      * tick stalled 3.7 s (300 kt over Zearth, 08.11). With a neighbour not loaded the comparators there, if any, update
@@ -1350,8 +1351,9 @@ public final class RuinPlan {
         level.blockEntityChanged(p);
         BlockState state = be.getBlockState();
         if (state.isAir()) return;
-        for (int dx = -2; dx <= 2; dx += 4) {
-            for (int dz = -2; dz <= 2; dz += 4) {
+        // vanilla reads two blocks away, the comparator it notifies two more (its input and side through a block)
+        for (int dx = -4; dx <= 4; dx += 8) {
+            for (int dz = -4; dz <= 4; dz += 8) {
                 if (level.getChunkSource().getChunkNow((p.getX() + dx) >> 4, (p.getZ() + dz) >> 4) == null) return;
             }
         }

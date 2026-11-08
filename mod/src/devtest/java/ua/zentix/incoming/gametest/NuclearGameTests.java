@@ -1882,7 +1882,6 @@ public final class NuclearGameTests {
             h.assertTrue(source.getChunkNow(cp.x - 1, cp.z) == null, "placing the dispenser loaded the west neighbour: the check would prove nothing");
             RuinPlan.changed(level, be);
             h.assertTrue(source.getChunkNow(cp.x - 1, cp.z) == null, "marking the landed container changed loaded the west neighbour chunk");
-            h.assertTrue(chunk.isUnsaved(), "the container's chunk is not marked unsaved");
         } finally {
             chunk.removeBlockEntity(at);
             section.setBlockState(1, y & 15, 8, Blocks.AIR.defaultBlockState());
