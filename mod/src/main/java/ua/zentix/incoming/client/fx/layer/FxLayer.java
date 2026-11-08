@@ -118,8 +118,11 @@ public final class FxLayer {
             e.registerShader(new ShaderInstance(e.getResourceProvider(), Incoming.id("fx_pall"), DefaultVertexFormat.POSITION), s -> PallPass.march = s);
             e.registerShader(new ShaderInstance(e.getResourceProvider(), Incoming.id("fx_pall_resolve"), DefaultVertexFormat.POSITION), s -> PallPass.resolve = s);
             e.registerShader(new ShaderInstance(e.getResourceProvider(), Incoming.id("fx_pall_composite"), DefaultVertexFormat.POSITION), s -> PallPass.composite = s);
+            e.registerShader(new ShaderInstance(e.getResourceProvider(), Incoming.id("fx_pall_froxel"), DefaultVertexFormat.POSITION), s -> PallPass.froxel = s);
+            e.registerShader(new ShaderInstance(e.getResourceProvider(), Incoming.id("fx_pall_froxel_sum"), DefaultVertexFormat.POSITION), s -> PallPass.froxelSum = s);
+            e.registerShader(new ShaderInstance(e.getResourceProvider(), Incoming.id("fx_pall_mix"), DefaultVertexFormat.POSITION), s -> PallPass.mix = s);
         } catch (IOException ex) {
-            PallPass.march = PallPass.resolve = PallPass.composite = null;
+            PallPass.march = PallPass.resolve = PallPass.composite = PallPass.froxel = PallPass.froxelSum = PallPass.mix = null;
             Incoming.LOG.error("Nuclear dust pall shaders failed to load: no dust pall", ex);
         }
         try {

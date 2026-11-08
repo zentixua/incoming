@@ -25,10 +25,11 @@
 // with ω' share not supplied from inside).
 // Output rgb is display pall color × opacity (pall light before world); a is world-light transmittance (extinction only:
 // layer quads also use it, fx.fsh, where pall color is rgb / (1 − a); world pall shadow is in fx_pall_composite).
-// Above-white light moves toward white (CROSS: incandescent is white-yellow, not saturated orange); overexposure becomes
+// Above-white light moves toward white (PALL_CROSS: incandescent is white-yellow, not saturated orange); overexposure becomes
 // pixel coverage over the background behind matter (end of main).
 
-// world distance behind pixel along view axis (full resolution)
+// world distance behind pixel along view axis (full resolution); near-volume passes: the previous medium volume
+// (fx_pall_froxel) or this frame's (fx_pall_froxel_sum)
 uniform sampler2D Sampler0;
 // Lifted dust light: azimuth × (radius, height, mushroom), this frame's prepass.
 uniform sampler2D Sampler9;
@@ -77,6 +78,14 @@ uniform float PallGlowOnSmoke;
 uniform vec4 PallFrame;
 // interleaved rays (fx_pall_resolve): x n, yz this frame's ray pixel within each n × n block of the ray frame
 uniform vec4 PallInterleave;
+// near pall volume (pall.glsl: froxelNear): x tile in full-frame pixels, y first slice boundary, z far boundary (blocks along
+// the view axis; rays here take the pall only beyond it — 0: no volume, rays take all of it)
+uniform vec4 PallFroxel;
+// volume passes (fx_pall_froxel): xy full frame size in pixels, z current frame's share of a cell, w 1 if the previous
+// frame's volume exists; previous frame's view-projection and the eye's move since, as in fx_pall_resolve
+uniform vec4 PallFroxelFrame;
+uniform mat4 PrevViewProj;
+uniform vec4 PallReproject;
 // vertical dust depth at eye: x above, y below to ground (NukePall.tick); with PallFrame.w determines ray reach (pallClip)
 uniform vec2 PallEyeTau;
 // firestorm (client/nuclear/FireStorm, pall.glsl): slot fire maps (R flame, G column smoke, B G × rise;
@@ -153,8 +162,7 @@ const int FLOOR_STEPS = 24;
 // wind near whirl core, blocks/s (real whirls 10–50 m/s; faster is blurred rotation on screen)
 const float WHIRL_SPEED = 15.0;
 // above-white luminance adds this share of excess as white to all channels: film/eye overexposure
-const float CROSS = 0.15;
-const vec3 LUMA = vec3(0.2126, 0.7152, 0.0722);
+const vec3 LUMA = PALL_LUMA;
 // mushroom optical depth toward light: four samples at path fractions (segment midpoints), weighted by segment fractions
 const vec4 MUSH_AT = vec4(0.025, 0.1, 0.275, 0.7);
 const vec4 MUSH_PART = vec4(0.05, 0.1, 0.25, 0.6);
@@ -329,34 +337,6 @@ struct Sample {
 
 Sample emptySample() {
     return Sample(0.0, vec3(0.0), 0.0, vec3(0.0), 0.0, 0.0, vec3(0.0), 0.0, 0.0, vec3(0.0), 0.0, 0.0, 0.0, vec3(0.0), 0.0, 0.0, 0.0, 0.0, 1.0);
-}
-
-// Film-like shoulder: display values to 0.6 unchanged, brighter smoothly approach 1 (same slope at 0.6). Frame clips
-// above 1: at night fire-lit billows would merge into flat orange. Use brightest channel, scale others equally to
-// preserve hue (independent channels turned white mist pink in ball light)
-vec3 shoulder(vec3 c) {
-    float m = max(max(c.r, c.g), c.b);
-    if (m <= 0.6) return c;
-    return c * ((0.6 + 0.4 * (1.0 - exp(-(m - 0.6) / 0.4))) / m);
-}
-
-// Display: pall material color is light light / opacity cover (source function for uniform material), converted to
-// display and premultiplied by opacity; blends with world like other translucent frame content. Above white
-// (fireball, incandescence, night glow): material light adds over background — displayed material no brighter than
-// white; overexposure becomes pixel coverage (cover·L, capped at full pixel), colored by its light, CROSS toward white.
-// Transmittance remains real: same background visible, overlaid light saturates toward white (frame RGBA16F,
-// layer quads behind it take light from frame, fx.fsh: before). Otherwise a distant ball left with cover by air haze
-// (10 km clear — 0.14) would be a pale sky patch however bright it shines. Copy — NukeExposure.pixel
-vec3 pallShown(vec3 light, float cover) {
-    float shownCover = cover;
-    vec3 medium = light / max(cover, 1e-4);
-    float lum = dot(medium, LUMA);
-    if (lum > 1.0 && cover > 1e-4) {
-        shownCover = min(cover * lum, 1.0);
-        medium *= cover / shownCover;
-    }
-    medium += vec3(CROSS * max(dot(medium, LUMA) - 1.0, 0.0));
-    return shoulder(vec3(pallDisplay(medium.r), pallDisplay(medium.g), pallDisplay(medium.b))) * shownCover;
 }
 
 // ---------------------------------------------------------------- dust-layer head (pall.glsl: pallWall*)
@@ -1587,6 +1567,102 @@ vec4 smokeStep(float t, float cone, out float gap, out float cell) {
     return vec4(st * (w * light + (1.0 - w) * bb), st);
 }
 
+// Mushrooms on the eye ray dir (scene: world distance along it, 1e9 none): each one's ray interval (gMushSpan, gMushes) and
+// the carpet field interval (gFoot*); returns the combined interval of matter (empty: x > y)
+vec2 mushSetup(vec3 dir, float scene) {
+    float m0 = 1e9, m1 = -1.0;
+    gFoot0 = -1;
+    gFoot1 = -1;
+    gFootSpan0 = gFootSpan1 = vec2(1.0, 0.0);
+    gMushes = 0;
+    for (int k = 0; k < MUSHROOMS; k++) {
+        if (!mushOn(Sampler7, k)) break;
+        Mush body = mushLoad(Sampler7, k);
+        vec2 sp = mushSpan(body, dir);
+        sp.y = min(sp.y, scene);
+        // no world and no terrain map (pall off or gone): the ground under the mushroom is no lower than its base; its bounds
+        // reach below the base (5 % of the height), and a downward ray would march its foot under the ground
+        if (scene >= 1e8 && dir.y < 0.0) sp.y = min(sp.y, body.base.y / dir.y);
+        gMushSpan[k] = sp;
+        gMushes += 1;
+        if (body.footShare > 0.0 && body.footMerge > 0.0) {
+            Mush foot = body;
+            foot.boundR = foot.stemR + foot.stemFlare + 2.0 * foot.footTop + length(foot.drift);
+            foot.boundTop = foot.footMerge;
+            vec2 fs = mushSpan(foot, dir);
+            fs.y = min(fs.y, scene);
+            if (scene >= 1e8 && dir.y < 0.0) fs.y = min(fs.y, foot.base.y / dir.y);
+            if (fs.y > fs.x) {
+                if (length(foot.base.xz - PallSlot0[0].xy) < 1.0) { gFoot0 = k; gFootSpan0 = fs; }
+                if (length(foot.base.xz - PallSlot1[0].xy) < 1.0) { gFoot1 = k; gFootSpan1 = fs; }
+            }
+        }
+        if (sp.y <= sp.x) continue;
+        m0 = min(m0, sp.x);
+        m1 = max(m1, sp.y);
+    }
+    return vec2(m0, m1);
+}
+
+// Mean mushroom optical depth from the eye to distance t along dir (mushTau over each mushroom's interval before t): the depth
+// a ray marched from the eye would have gathered there (gTauEye), for points reached without marching from the eye
+float mushEyeTau(vec3 dir, float t) {
+    float tau = 0.0;
+    for (int k = 0; k < gMushes; k++) {
+        vec2 sp = gMushSpan[k];
+        if (sp.y <= sp.x || sp.x >= t) continue;
+        float b = min(sp.y, t);
+        tau += mushTau(mushLoad(Sampler7, k), dir * b, -dir, b - sp.x);
+    }
+    return tau;
+}
+
+// Whirls on ray dir before the world at distance scene: spans (gWhirlSpan, entry ≥ exit: miss) and the local light of each,
+// taken once at the span's middle (lit: pall diffuse and sun through pall above it; fire: fire glow below), for the ray (whirl)
+// and the near volume's cells on it (whirlCell) alike; a cell (at ≥ 0) lights only the whirls it lies in. Needs pallLighting(dir)
+vec2 gWhirlSpan[4];
+mat4 gWhirlLit, gWhirlFire;
+
+void whirlSetup(vec3 dir, float scene, float at) {
+    vec3 sunDir = PallSun.xyz;
+    gWhirlLit = mat4(0.0);
+    gWhirlFire = mat4(0.0);
+    for (int i = 0; i < 4; i++) {
+        vec2 sp = whirlSpan(i, dir);
+        sp.y = min(sp.y, scene);
+        gWhirlSpan[i] = sp;
+        if (sp.y <= sp.x || (at >= 0.0 && (at < sp.x || at > sp.y))) continue;
+        vec3 mid = dir * (0.5 * (sp.x + sp.y));
+        Sample m = emptySample();
+        slot(PallSlot0, PallWall0, Sampler5, PallGround0, PallWater0, PallGlow0, PallHot0, mid, sunDir, dir, 1e9, vec4(0.0), m);
+        slot(PallSlot1, PallWall1, Sampler6, PallGround1, PallWater1, PallGlow1, PallHot1, mid, sunDir, dir, 1e9, vec4(0.0), m);
+        vec3 sun = pallSunAt(mid);
+        vec3 lit = scattered(m, PALL_SOOT_G * gMv, sun) + sun * (gSootSun * exp(-m.tau / gMuS));
+        float g0 = storm(Sampler3, PallSlot0, PallFire0, mid, 0.0, 1.0).y, g1 = storm(Sampler4, PallSlot1, PallFire1, mid, 0.0, 1.0).y;
+        vec3 strongest = g0 >= g1 ? PallFire0[3].rgb : PallFire1[3].rgb;
+        vec3 glow = pallFlame(PallBase, g0 * PallFire0[3].rgb + g1 * PallFire1[3].rgb, strongest);
+        gWhirlLit[i] = vec4(lit, 0.0);
+        gWhirlFire[i] = vec4(burnt(m, PALL_SOOT_G * gMv) + glow, 0.0);
+    }
+}
+
+// Whirls at eye-relative point q = dir · t (whirlSetup on dir): emission per path block (rgb) and extinction (a), as one
+// step of whirl takes them
+vec4 whirlCell(vec3 q, float t, vec3 flame) {
+    vec4 sum = vec4(0.0);
+    for (int i = 0; i < 4; i++) {
+        if (t < gWhirlSpan[i].x || t > gWhirlSpan[i].y) continue;
+        vec2 w = whirlAt(i, q);
+        if (w.x + w.y <= 1e-6) continue;
+        float yn = (q.y - PallWhirlPos[i].z) / PallWhirlShape[i].x;
+        float heat = 2.0 * PallWhirlLean[i].z * PallWhirlShape[i].y * (1.0 - yn) * (1.0 - yn);
+        vec3 sc = SOOT_LINEAR * (gWhirlLit[i].rgb + min(gWhirlFire[i].rgb + pallFlame(PallBase, WHIRL_FIRE * heat, WHIRL_FIRE), flame));
+        sum += vec4(sc * w.x + WHIRL_FIRE_LINEAR * w.y, w.x);
+    }
+    return sum;
+}
+
+#if !defined(PALL_FROXEL) && !defined(PALL_FROXEL_SUM)
 #ifndef PALL_MUSH_TAUS
 #ifndef PALL_FOOT_CACHE
 void main() {
@@ -1622,6 +1698,9 @@ void main() {
                 pallFloor(Sampler6, PallSlot1, PallGround1, dir, PallFloorFrom, 1e6, FLOOR_STEPS, jitter));
     }
     float t0 = span.x, t1 = min(min(span.y, scene), t0 + clip);
+    // the pall nearer than the froxel volume's far boundary is that volume's (fx_pall_froxel, composited in front of this
+    // frame in fx_pall_composite): its rays begin behind it. Mushrooms, smoke, whirls and the Wilson cloud keep the whole ray
+    t0 = max(t0, PallFroxel.z / axis);
     vec3 sunDir = PallSun.xyz;
     pallLighting(dir);
     vec3 whirlFlame = max(gFlame, WHIRL_FIRE_LINEAR);
@@ -1640,22 +1719,14 @@ void main() {
     gFootSpan0 = gFootSpan1 = vec2(1.0, 0.0);
     gWhirlLight = mat4(0.0);
     gWhirlIn = vec4(1e9);
+    whirlSetup(dir, scene, -1.0);
     for (int i = 0; i < 4; i++) {
-        vec2 sp = whirlSpan(i, dir);
-        sp.y = min(sp.y, scene);
-        if (sp.y <= sp.x) continue;
-        // local light: pall diffuse and sun through pall above midpoint, fire glow below
-        vec3 mid = dir * (0.5 * (sp.x + sp.y));
-        Sample m = emptySample();
-        slot(PallSlot0, PallWall0, Sampler5, PallGround0, PallWater0, PallGlow0, PallHot0, mid, sunDir, dir, 1e9, vec4(0.0), m);
-        slot(PallSlot1, PallWall1, Sampler6, PallGround1, PallWater1, PallGlow1, PallHot1, mid, sunDir, dir, 1e9, vec4(0.0), m);
-        vec3 sun = pallSunAt(mid);
-        vec3 lit = scattered(m, PALL_SOOT_G * gMv, sun) + sun * (gSootSun * exp(-m.tau / gMuS));
-        float g0 = storm(Sampler3, PallSlot0, PallFire0, mid, 0.0, 1.0).y, g1 = storm(Sampler4, PallSlot1, PallFire1, mid, 0.0, 1.0).y;
-        vec3 strongest = g0 >= g1 ? PallFire0[3].rgb : PallFire1[3].rgb;
-        vec3 glow = pallFlame(PallBase, g0 * PallFire0[3].rgb + g1 * PallFire1[3].rgb, strongest);
-        gWhirlLight[i] = whirl(i, dir, sp.x, sp.y, jitter, lit, burnt(m, PALL_SOOT_G * gMv) + glow, whirlFlame);
-        gWhirlIn[i] = sp.x;
+        // whirls nearer than the near volume's far boundary are that volume's (fx_pall_froxel); this ray takes the rest
+        float a = gWhirlSpan[i].x;
+        if (PallFroxel.z > 0.0) a = max(a, PallFroxel.z / axis);
+        if (gWhirlSpan[i].y <= a) continue;
+        gWhirlLight[i] = whirl(i, dir, a, gWhirlSpan[i].y, jitter, gWhirlLit[i].rgb, gWhirlFire[i].rgb, whirlFlame);
+        gWhirlIn[i] = a;
     }
     // Wilson cloud: up to two shell crossings per slot, likewise when step reaches crossing (before world behind pixel)
     vec4 w0 = pallWilson(PallSlot0, PallWilson0, dir, scene), w1 = pallWilson(PallSlot1, PallWilson1, dir, scene);
@@ -1670,34 +1741,11 @@ void main() {
     if (w1.w <= 0.0) gWilsonIn.w = 1e9;
     gSunK = -1;
     // mushrooms: individual ray intervals (before world behind pixel) and combined interval
-    float m0 = 1e9, m1 = -1.0;
-    gMushes = 0;
-    for (int k = 0; k < MUSHROOMS; k++) {
-        if (!mushOn(Sampler7, k)) break;
-        Mush body = mushLoad(Sampler7, k);
-        vec2 sp = mushSpan(body, dir);
-        sp.y = min(sp.y, scene);
-        // no world and no terrain map (pall off or gone): the ground under the mushroom is no lower than its base; its bounds
-        // reach below the base (5 % of the height), and a downward ray would march its foot under the ground
-        if (scene >= 1e8 && dir.y < 0.0) sp.y = min(sp.y, body.base.y / dir.y);
-        gMushSpan[k] = sp;
-        gMushes += 1;
-        if (body.footShare > 0.0 && body.footMerge > 0.0) {
-            Mush foot = body;
-            foot.boundR = foot.stemR + foot.stemFlare + 2.0 * foot.footTop + length(foot.drift);
-            foot.boundTop = foot.footMerge;
-            vec2 fs = mushSpan(foot, dir);
-            fs.y = min(fs.y, scene);
-            if (scene >= 1e8 && dir.y < 0.0) fs.y = min(fs.y, foot.base.y / dir.y);
-            if (fs.y > fs.x) {
-                if (length(foot.base.xz - PallSlot0[0].xy) < 1.0) { gFoot0 = k; gFootSpan0 = fs; }
-                if (length(foot.base.xz - PallSlot1[0].xy) < 1.0) { gFoot1 = k; gFootSpan1 = fs; }
-            }
-        }
-        if (sp.y <= sp.x) continue;
-        m0 = min(m0, sp.x);
-        m1 = max(m1, sp.y);
-    }
+    // mushrooms and explosion smoke nearer than the near volume's far boundary are that volume's (fx_pall_froxel): the ray takes
+    // them from behind it, with the mushroom depth a ray from the eye would have gathered by then
+    vec2 mm = mushSetup(dir, scene);
+    float m0 = mm.x, m1 = mm.y;
+    if (PallFroxel.z > 0.0) m0 = max(m0, PallFroxel.z / axis);
     int steps = int(PallFrame.y);
     float n = float(steps);
     // pall steps denser near eye; storm ray bounds get half the steps (columns smaller than whole-pall step)
@@ -1744,6 +1792,7 @@ void main() {
     // mushroom: empty space to matter, then half optical depth, no finer than pixel or quarter pall step over its interval
     int mk = 0, mSteps = steps + 16;
     float tauEye = 0.0;
+    if (m1 > m0 && PallFroxel.z > 0.0) tauEye = mushEyeTau(dir, m0);
     float dsMin = 1.0, dsMax = 1.0, tm = 1e9;
     // empty step toward matter, capped at one sixth interval: gap estimate sees bounds conservatively
     if (m1 > m0) {
@@ -1759,7 +1808,7 @@ void main() {
     float s0 = 1e9, s1 = -1.0, ts = 1e9;
     if (smokeOn()) {
         vec2 ss = pallBox(dir, SmokeMin, SmokeMax);
-        s0 = max(ss.x, 0.0);
+        s0 = max(ss.x, PallFroxel.z / axis);
         s1 = min(ss.y, scene);
         if (s1 > s0) ts = s0 + jitter * min(smokeCell(dir * s0), 0.25 * (s1 - s0));
     }
@@ -1935,4 +1984,128 @@ void main() {
     // half-float target: depths beyond 6·10⁴ pass no light anyway
     fragColor = min(mushTausAt(m, p, q, block), vec4(6.0e4));
 }
+#endif
+#else
+// eye ray through full-frame position pixel (center +0.5) and its view-axis cosine
+vec3 froxelRay(vec2 pixel, out float axis) {
+    vec2 ndc = pixel / PallFroxelFrame.xy * 2.0 - 1.0;
+    vec4 farPoint = InvViewProj * vec4(ndc, 1.0, 1.0);
+    vec3 dir = normalize(farPoint.xyz / farPoint.w);
+    axis = max(dot(dir, PallForward), 1e-3);
+    return dir;
+}
+
+#ifdef PALL_FROXEL
+// Medium of one near-volume cell (pall.glsl: froxelNear): emission (rgb) and extinction (a), pallSource at one point of the
+// cell, jittered across the cell by blue noise and frame, both open-air shares as a ray step takes them (pallStep). The cell
+// keeps its previous value reprojected from where this point was in the previous frame's volume (Sampler0), the current point
+// taking PallFroxelFrame.z: an average of many points of the cell, without noise and without a screen-space history —
+// the volume does not know the world's silhouettes, nothing at an edge to drag along or hold (Wronski 2014, slides 28–31;
+// Frostbite: same reprojection). A cell outside the previous frustum or without a valid previous value takes the current point
+// alone (Sampler0: previous volume; Sampler2: blue noise)
+void main() {
+    ivec2 at = ivec2(gl_FragCoord.xy);
+    ivec2 atlas = textureSize(Sampler0, 0);
+    ivec2 tile = atlas / ivec2(PALL_FROXEL_COLUMNS, PALL_FROXEL_SLICES / PALL_FROXEL_COLUMNS);
+    ivec2 cell = at % tile;
+    int k = (at.y / tile.y) * PALL_FROXEL_COLUMNS + at.x / tile.x;
+    // point in the cell: blue noise across cells, golden-ratio steps across frames (R3 sequence)
+    float b = texelFetch(Sampler2, (cell + ivec2(17, 29) * k) % 64, 0).r;
+    vec3 j = fract(b + PallFrame.x * vec3(0.8191725, 0.6710436, 0.5497005));
+    vec2 pixel = (vec2(cell) + j.xy) * PallFroxel.x;
+    float axis;
+    vec3 dir = froxelRay(pixel, axis);
+    float z0 = froxelBoundary(PallFroxel, float(k)), z1 = froxelBoundary(PallFroxel, float(k + 1));
+    float z = mix(z0, z1, j.z), t = z / axis;
+    vec3 p = dir * t;
+    pallLighting(dir);
+    // mushrooms on this cell's ray (pallSource reads the carpet field's interval, gFoot*)
+    vec2 mm = mushSetup(dir, 1e9);
+    gSunK = -1;
+    vec4 farNext = InvViewProj * vec4(((pixel + vec2(0.0, PallFroxel.x)) / PallFroxelFrame.xy) * 2.0 - 1.0, 1.0, 1.0);
+    // the cell's width at distance 1 and its depth: noise detail finer than the cell averages out (pallSource cone)
+    gPixel = length(normalize(farNext.xyz / farNext.w) - dir);
+    gJitter = j.z;
+    float cone = max(t * gPixel, 0.35 * (z1 - z0) / axis);
+    vec4 cur = vec4(0.0);
+    // outside the pall's bounds (rays: pallBox) nothing to evaluate
+    bool inside = all(greaterThanEqual(p, PallMin)) && all(lessThanEqual(p, PallMax));
+    float open = inside ? pallOpenHere(p) : 0.0;
+    if (open > 0.0) {
+        vec3 dustLight;
+        vec4 matter = pallSource(p, cone, vec4(0.0), dustLight);
+        if (matter.w > 1e-7) cur = matter * open;
+    }
+    // mushrooms and explosion smoke here (mushStep, smokeStep), as a ray step takes them: their incandescence (heat) joins the
+    // light as it does in the ray's display (fx_pall main), the fireball's film curve stays with the rays (a ball nearer than
+    // the far boundary is a rare few seconds, drawn in the plain display)
+    if (t >= mm.x && t <= mm.y) {
+        gTauEye = mushEyeTau(dir, t);
+        float gap, film;
+        vec3 hot, glowing;
+        vec4 r = mushStep(t, cone, gap, hot, glowing, film);
+        if (r.w > 1e-7) cur += vec4(r.rgb + hot, r.w);
+    }
+    if (smokeOn()) {
+        vec2 ss = pallBox(dir, SmokeMin, SmokeMax);
+        if (t >= ss.x && t <= ss.y) {
+            float gap, cell;
+            vec4 r = smokeStep(t, cone, gap, cell);
+            if (r.w > 1e-7) cur += r;
+        }
+    }
+    // fire whirls likewise: the rays would add a whirl nearer than the far boundary behind this volume's whole depth
+    whirlSetup(dir, 1e9, t);
+    cur += whirlCell(p, t, max(gFlame, WHIRL_FIRE_LINEAR));
+    // emission past half-float range (an incandescent ball near the eye at night exposure) saturates instead of punching a hole;
+    // NaN still drops the cell
+    if (all(equal(cur.rgb, cur.rgb))) cur.rgb = min(cur.rgb, vec3(5.0e4));
+    if (!pallValid(vec4(cur.rgb, 0.0)) || !(cur.w >= 0.0 && cur.w < 6.0e4)) cur = vec4(0.0);
+    vec4 res = cur;
+    if (PallFroxelFrame.w > 0.5) {
+        // where this point was in the previous frame's volume: its eye-relative position there, screen place and view depth
+        vec4 clip = PrevViewProj * vec4(p + PallReproject.xyz, 1.0);
+        if (clip.w > 1e-3) {
+            vec2 was = (clip.xy / clip.w * 0.5 + 0.5) * PallFroxelFrame.xy / PallFroxel.x - 0.5;
+            float first = froxelBoundary(PallFroxel, 1.0);
+            // slice centers at integers: slice 0 holds everything nearer than its far boundary
+            float s = clip.w < first ? 0.0 : log(clip.w / PallFroxel.y) / froxelGrowth(PallFroxel) - 0.5;
+            if (all(greaterThanEqual(was, vec2(-0.5))) && all(lessThanEqual(was, vec2(tile) - 0.5)) && s <= float(PALL_FROXEL_SLICES) - 0.5) {
+                vec4 before = froxelLerp(Sampler0, was, s);
+                if (pallValid(vec4(before.rgb, 0.0)) && before.w >= 0.0 && before.w < 6.0e4) res = mix(before, cur, PallFroxelFrame.z);
+            }
+        }
+    }
+    fragColor = res;
+}
+#else
+// Pall seen up to the far boundary of each near-volume cell (pall.glsl: froxelNear), front to back along the cell's center
+// ray over the slices before it, as ray steps (pallStep, passMatter): each slice's light by its own transmittance, through
+// the air haze before it (pallAir) and the slices nearer; stored as linear light and the share of what lies behind still
+// seen, shown together with the rays behind (pall.glsl: froxelOver; Sampler0: medium volume, fx_pall_froxel)
+void main() {
+    ivec2 at = ivec2(gl_FragCoord.xy);
+    ivec2 atlas = textureSize(Sampler0, 0);
+    ivec2 tile = atlas / ivec2(PALL_FROXEL_COLUMNS, PALL_FROXEL_SLICES / PALL_FROXEL_COLUMNS);
+    ivec2 cell = at % tile;
+    int k = (at.y / tile.y) * PALL_FROXEL_COLUMNS + at.x / tile.x;
+    float axis;
+    vec3 dir = froxelRay((vec2(cell) + 0.5) * PallFroxel.x, axis);
+    vec3 light = vec3(0.0);
+    float seen = 1.0, z0 = 0.0;
+    for (int i = 0; i <= k; i++) {
+        float z1 = froxelBoundary(PallFroxel, float(i + 1));
+        vec4 m = texelFetch(Sampler0, cell + tile * ivec2(i % PALL_FROXEL_COLUMNS, i / PALL_FROXEL_COLUMNS), 0);
+        if (m.w > 1e-7) {
+            float tr = exp(-m.w * (z1 - z0) / axis), air = pallAir(PallAir, 0.5 * (z0 + z1) / axis, dir.y);
+            light += seen * air * m.rgb * (1.0 - tr) / m.w;
+            seen *= 1.0 - air * (1.0 - tr);
+        }
+        z0 = z1;
+    }
+    vec4 res = vec4(light, seen);
+    if (all(equal(res.rgb, res.rgb))) res.rgb = min(res.rgb, vec3(5.0e4));
+    fragColor = pallValid(res) ? res : vec4(0.0, 0.0, 0.0, 1.0);
+}
+#endif
 #endif

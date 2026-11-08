@@ -580,7 +580,7 @@ class PallGlslTest {
         String fx = read("include/fx_pall.glsl");
         GlslFunction ball = GlslFunction.parse(fx, "pallBallShare");
         double[] dust = vec3(fx, "DUST"), fire = vec3(fx, "FIRE"), w = vec3(GLSL, "PALL_DUST_W");
-        assertEquals(PallLight.CROSS, scalar(fx, "CROSS"), 0, "to white - like PallLight.screen");
+        assertEquals(PallLight.CROSS, scalar(GLSL, "PALL_CROSS"), 0, "to white - like PallLight.screen");
         double g = scalar(GLSL, "PALL_DUST_G");
         CloudPuffs puffs = new CloudPuffs(GROUND);
         BlastWall blast = new BlastWall(GROUND, false);
@@ -704,12 +704,14 @@ class PallGlslTest {
         assertTrue(march.contains("s.tau += f.column.x + f.column.y + f.column.z;"), "thickness above a point - the entire column of the layer");
         // light pall into the screen - once per channel; glow of mushrooms - film curve on top: sum with pall in linear
         //  (its screen back - once) and into the screen - again per channel
-        assertEquals(6, occurrences(march, "pallDisplay("), "light pall into the screen - once per channel, glow of mushrooms on top - again");
+        String shown = body(GLSL, "vec3 pallShown(");
+        assertEquals(3, occurrences(shown, "pallDisplay("), "light pall into the screen - once per channel");
+        assertEquals(3, occurrences(march, "pallDisplay("), "glow of mushrooms on top - again per channel");
         assertTrue(march.contains("vec3 lin = pallLinear3(pallShown(light, cover)) + mushFilm3(emitted);"), "glow of the ball - film curve on top of the pall");
         assertTrue(march.contains("vec3 shown = pallShown(light + heat, cover);"), "glow of the curled cap - in the same way, with pall");
-        assertTrue(march.contains("shoulder(vec3(pallDisplay(medium.r), pallDisplay(medium.g), pallDisplay(medium.b))) * shownCover"),
+        assertTrue(shown.contains("shoulder(vec3(pallDisplay(medium.r), pallDisplay(medium.g), pallDisplay(medium.b))) * shownCover"),
                 "at the output - a screen with a shoulder");
-        assertTrue(march.contains("shownCover = min(cover * lum, 1.0);"), "overexposure - a fraction of a pixel, not more than the entire pixel");
+        assertTrue(shown.contains("shownCover = min(cover * lum, 1.0);"), "overexposure - a fraction of a pixel, not more than the entire pixel");
         assertTrue(march.contains("vec4 res = vec4(shown, min(transmit + lost, 1.0));"),
                 "frame transmission - real and in overexposure");
         assertEquals(4, occurrences(composite, "pallDisplay("), "shadow on the world in the screen - once, world in the light of the balls - once per channel");
@@ -720,8 +722,8 @@ class PallGlslTest {
                 "torches and lamps keep their share of a pixel's light under the shadow");
         assertTrue(composite.contains("pall.a *= kept;"), "without the light of the balls, the shadow is a multiplier of the world in mixing");
         assertTrue(composite.contains("pall = vec4(pall.rgb + pall.a * shown, 0.0);"), "world in the light of balls - behind the pall, the whole pixel");
-        assertEquals(scalar(march, "CROSS"), scalar(composite, "CROSS"), "overexposure to white - like a substance");
-        assertArrayEquals(vec3(march, "LUMA"), vec3(composite, "LUMA"));
+        assertEquals(scalar(GLSL, "PALL_CROSS"), scalar(composite, "CROSS"), "overexposure to white - like a substance");
+        assertArrayEquals(vec3(GLSL, "PALL_LUMA"), vec3(composite, "LUMA"));
     }
 
     private static int occurrences(String text, String what) {

@@ -1,0 +1,13 @@
+{
+    "vertex": "incoming:fx_depth",
+    "fragment": "incoming:fx_pall_mix",
+    "samplers": [
+        { "name": "Sampler0" },
+        { "name": "Sampler1" },
+        { "name": "Sampler2" }
+    ],
+    "uniforms": [
+        { "name": "PallFrame", "type": "float", "count": 4, "values": [0.0, 0.0, 2.0, 0.0] },
+        { "name": "PallFroxel", "type": "float", "count": 4, "values": [16.0, 1.0, 0.0, 0.0] }
+    ]
+}
