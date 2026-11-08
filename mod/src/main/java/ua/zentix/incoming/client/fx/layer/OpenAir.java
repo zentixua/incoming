@@ -216,9 +216,24 @@ public final class OpenAir {
     static String describe() {
         if (!ready) return "lamps: no window";
         int ex = (int) Math.floor(eye.x), ey = (int) Math.floor(eye.y), ez = (int) Math.floor(eye.z);
-        return String.format(java.util.Locale.ROOT, "lamps: %s, lit voxels %d, block light at eye %d, sky %d; %s", lamps() ? "on" : "off", lit,
-                blockAt(ex, ey, ez), inside(ex, ey, ez) ? stored(slot(ex, SIZE_XZ), slot(ey, SIZE_Y), slot(ez, SIZE_XZ), 0) / 17 : -1,
-                MovingLight.describe());
+        boolean in = inside(ex, ey, ez);
+        int block = in ? stored(slot(ex, SIZE_XZ), slot(ey, SIZE_Y), slot(ez, SIZE_XZ), 1) / 17 : 0;
+        int sky = in ? stored(slot(ex, SIZE_XZ), slot(ey, SIZE_Y), slot(ez, SIZE_XZ), 0) / 17 : 15;
+        // the shader's numbers at the eye block (pall.glsl: pallLampLight, pallKeepLamps), from the same lightmap on the CPU:
+        // block light's linear luminance and the share of a lit surface's light kept under a full pall shadow
+        com.mojang.blaze3d.platform.NativeImage lm = net.minecraft.client.Minecraft.getInstance().gameRenderer.lightTexture().lightPixels;
+        double dark = luminance(lm, 0, 0), fromBlocks = luminance(lm, block, 0) - dark, both = luminance(lm, block, sky) - dark;
+        double kept = both > 1e-5 ? Math.min(Math.max(fromBlocks, 0) / both, 1) : 0;
+        return String.format(java.util.Locale.ROOT,
+                "lamps: %s, lit voxels %d, at eye block light %d (light engine %d) sky %d: lamp light %.3f, kept under full shadow %.2f; %s",
+                lamps() ? "on" : "off", lit, block, blockAt(ex, ey, ez), sky, fromBlocks, kept, MovingLight.describe());
+    }
+
+    /** Linear luminance (pall units) of lightmap texel (block, sky) as Minecraft lights a white block with it. */
+    private static double luminance(com.mojang.blaze3d.platform.NativeImage lm, int block, int sky) {
+        int c = lm.getPixelRGBA(block, sky);
+        return 0.2126 * Math.pow((c & 0xFF) / 255.0, 2.2) + 0.7152 * Math.pow((c >> 8 & 0xFF) / 255.0, 2.2)
+                + 0.0722 * Math.pow((c >> 16 & 0xFF) / 255.0, 2.2);
     }
 
     /** Debug: voxels in the window lit by the light engine's block light. */

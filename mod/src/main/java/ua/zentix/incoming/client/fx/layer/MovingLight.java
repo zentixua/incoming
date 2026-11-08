@@ -23,7 +23,7 @@ import java.util.Locale;
 final class MovingLight {
     /** Grid step, blocks; grid points per axis; box side, blocks (eye block ± 8). */
     static final int STEP = 2, POINTS = 9, SIZE = (POINTS - 1) * STEP + 1;
-    private static final float[] GRID = new float[POINTS * POINTS * POINTS];
+    static final float[] GRID = new float[POINTS * POINTS * POINTS];
     private static ByteBuffer upload;
     /** Box lower corner (world blocks) written last frame; {@code had} — a box is in the texture. */
     private static int bx, by, bz;
@@ -92,13 +92,23 @@ final class MovingLight {
      * moving light. Split where the window wraps (at most two pieces per axis).
      */
     private static void write(int x, int y, int z, boolean light) {
+        split(x, y, z, (px, py, pz, w, h, d) -> piece(px, py, pz, w, h, d, x, y, z, light));
+    }
+
+    /** A box piece: world corner and size, blocks; inside it the texture does not wrap. */
+    interface Piece {
+        void at(int x, int y, int z, int w, int h, int d);
+    }
+
+    /** Box of {@link #SIZE}³ at world (x, y, z) in pieces where OpenAir's window wraps in its texture (at most two per axis). */
+    static void split(int x, int y, int z, Piece out) {
         for (int pz = z; pz < z + SIZE; ) {
             int ez = Math.min(z + SIZE, pz + OpenAir.SIZE_XZ - OpenAir.slot(pz, OpenAir.SIZE_XZ));
             for (int py = y; py < y + SIZE; ) {
                 int ey = Math.min(y + SIZE, py + OpenAir.SIZE_Y - OpenAir.slot(py, OpenAir.SIZE_Y));
                 for (int px = x; px < x + SIZE; ) {
                     int ex = Math.min(x + SIZE, px + OpenAir.SIZE_XZ - OpenAir.slot(px, OpenAir.SIZE_XZ));
-                    piece(px, py, pz, ex - px, ey - py, ez - pz, x, y, z, light);
+                    out.at(px, py, pz, ex - px, ey - py, ez - pz);
                     px = ex;
                 }
                 py = ey;
@@ -126,8 +136,8 @@ final class MovingLight {
         uploaded += n;
     }
 
-    /** Moving light at box block (i, j, k), trilinear between grid points. */
-    private static float at(int i, int j, int k) {
+    /** Moving light at box block (i, j, k), trilinear between grid points ({@code GRID}). */
+    static float at(int i, int j, int k) {
         int gi = Math.min(i / STEP, POINTS - 2), gj = Math.min(j / STEP, POINTS - 2), gk = Math.min(k / STEP, POINTS - 2);
         float fi = (i - gi * STEP) / (float) STEP, fj = (j - gj * STEP) / (float) STEP, fk = (k - gk * STEP) / (float) STEP;
         float v = 0;
