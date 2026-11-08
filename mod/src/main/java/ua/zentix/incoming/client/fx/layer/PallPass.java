@@ -122,7 +122,7 @@ public final class PallPass {
      * costs what the former LOW (quarter frame, 20 steps) did: half frame, a quarter of its rays per frame.
      */
     public enum Quality {
-        OFF(0, 0, 1, 0, 0), LOW(2, 22, 2, 16, 6), MEDIUM(2, 28, 1, 12, 12), HIGH(2, 48, 1, 8, 18);
+        OFF(0, 0, 1, 0, 0), LOW(2, 22, 2, 16, 7), MEDIUM(2, 28, 1, 12, 13), HIGH(2, 48, 1, 8, 21);
 
         final int factor, steps, interleave;
         /** Near volume cell width in full-frame pixels ({@link #VOLUME_FAR}). */
@@ -130,8 +130,9 @@ public final class PallPass {
         /**
          * GPU time per frame, ms, above which detail steps down ({@link Detail}). Each setting keeps its look: a setting is
          * the player's choice of picture against frame rate (Artem 08.11: picture first, the setting fits the PC), so the
-         * budget only catches views far costlier than usual. Artem's laptop (RTX 4060, 2560×1600, 150 kt firestorm in the
-         * dust, 08.11): LOW 4.2–6.0 ms, MEDIUM 7.7–11.7, HIGH 9.2–16.0 — each setting stays at its own rung there (PallDetailTest).
+         * budget only catches views far costlier than usual, with a sixth of headroom over the costliest measured view: a
+         * window a hair over budget dropped detail for a minute in play. Artem's laptop (RTX 4060, 2560×1600, 150 kt firestorm in
+         * the dust, 08.11): LOW 2.2–6.0 ms, MEDIUM 3.0–11.7, HIGH 4.1–17.8 — each setting stays at its own rung there (PallDetailTest).
          */
         final double budget;
 
@@ -188,14 +189,17 @@ public final class PallPass {
     static final int[][] ORDER = {{0}, {0, 3, 1, 2}};
 
     /**
-     * Detail rung by GPU pass time: above the setting's budget ({@link Quality#budget}) over a half-second average (with at least
-     * four measurements) — immediately switch to a rung estimated to fit; headroom — one rung up if its estimated cost
-     * is at most {@link #UP_SHARE} of budget for two consecutive windows and {@link #HOLD_NS} has passed since the last change (four times
-     * longer after an increase immediately followed by a decrease). No higher than the setting and no lower than the last rung;
-     * pinned ({@link #pin}) — setting rung, unaffected by measurements. No world or OpenGL — unit test.
+     * Detail rung by GPU pass time: above the setting's budget ({@link Quality#budget}) over two consecutive half-second averages
+     * (each with at least four measurements; one window above {@link #FAR_OVER} budgets is enough) — switch to a rung estimated to
+     * fit; headroom — one rung up if its estimated cost is at most {@link #UP_SHARE} of budget for two consecutive windows and
+     * {@link #HOLD_NS} has passed since the last change (four times longer after an increase immediately followed by a decrease).
+     * Estimates scale only the rays' time with the rung ({@link Step#cost}): the near volume, its sums, the accumulation and the
+     * composite do not depend on the rung (laptop 08.11: 5–9 ms of HIGH's 18), and scaling them too kept a dropped rung down for
+     * minutes. No higher than the setting and no lower than the last rung; pinned ({@link #pin}) — setting rung, unaffected by
+     * measurements. No world or OpenGL — unit test.
      */
     static final class Detail {
-        static final double UP_SHARE = 0.7;
+        static final double UP_SHARE = 0.9, FAR_OVER = 1.25;
         static final long WINDOW_NS = 500_000_000L, HOLD_NS = 3_000_000_000L;
         static final int MIN_SAMPLES = 4, CALM_WINDOWS = 2;
 
@@ -211,8 +215,8 @@ public final class PallPass {
         double lastMean;
         /** Rung pinned to the setting ({@link #pin}). */
         boolean pinned;
-        private double sum;
-        private int samples, calm;
+        private double sum, raySum;
+        private int samples, calm, over;
         private long windowStart, holdUntil, raisedAt = Long.MIN_VALUE;
         private boolean skip;
 
@@ -234,6 +238,7 @@ public final class PallPass {
             if (on == pinned) return false;
             pinned = on;
             calm = 0;
+            over = 0;
             if (ceiling >= 0) set(ceiling);
             return true;
         }
@@ -244,11 +249,15 @@ public final class PallPass {
          */
         void restart() {
             calm = 0;
+            over = 0;
             if (ceiling >= 0) set(level);
         }
 
-        /** Frame measurement at rung generation {@code gen}, time {@code now} (ns); true — rung changed. */
-        boolean sample(double ms, int gen, long now) {
+        /**
+         * Frame measurement: whole pall {@code ms} of which rays {@code rayMs}, at rung generation {@code gen}, time {@code now} (ns);
+         * true — rung changed.
+         */
+        boolean sample(double ms, double rayMs, int gen, long now) {
             if (gen != generation || ceiling < 0 || pinned) return false;
             // first rung frame has new framebuffers and cold caches
             if (skip) {
@@ -257,16 +266,20 @@ public final class PallPass {
             }
             if (samples == 0) windowStart = now;
             sum += ms;
+            raySum += Math.min(Math.max(rayMs, 0), ms);
             samples++;
             if (samples < MIN_SAMPLES || now - windowStart < WINDOW_NS) return false;
-            double mean = sum / samples;
+            double mean = sum / samples, rays = raySum / samples;
             lastMean = mean;
             sum = 0;
+            raySum = 0;
             samples = 0;
             int floor = LADDER.length - 1;
-            if (mean > budget && level < floor) {
+            over = mean > budget ? over + 1 : 0;
+            if (mean > budget && level < floor && (over >= 2 || mean > FAR_OVER * budget)) {
                 int to = level + 1;
-                while (to < floor && mean * LADDER[to].cost() / LADDER[level].cost() > budget) to++;
+                while (to < floor && estimate(mean, rays, to) > budget) to++;
+                over = 0;
                 // an increase exceeded capacity — delay the next increase
                 holdUntil = now + (raisedAt != Long.MIN_VALUE && now - raisedAt < 2 * HOLD_NS ? 4 * HOLD_NS : HOLD_NS);
                 calm = 0;
@@ -274,7 +287,7 @@ public final class PallPass {
                 changes++;
                 return true;
             }
-            if (level > ceiling && now >= holdUntil && mean * LADDER[level - 1].cost() / LADDER[level].cost() <= UP_SHARE * budget) {
+            if (level > ceiling && now >= holdUntil && estimate(mean, rays, level - 1) <= UP_SHARE * budget) {
                 if (++calm >= CALM_WINDOWS) {
                     calm = 0;
                     holdUntil = now + HOLD_NS;
@@ -289,11 +302,17 @@ public final class PallPass {
             return false;
         }
 
+        /** Cost at rung {@code to} of a window measured at the current rung: rays scale with {@link Step#cost}, the rest stays. */
+        private double estimate(double mean, double rays, int to) {
+            return mean - rays + rays * LADDER[to].cost() / LADDER[level].cost();
+        }
+
         private void set(int to) {
             level = Math.max(ceiling, Math.min(LADDER.length - 1, to));
             generation++;
             skip = true;
             sum = 0;
+            raySum = 0;
             samples = 0;
         }
     }
@@ -510,6 +529,8 @@ public final class PallPass {
      * after its sums, after rays, after accumulation, end.
      */
     private static final int STAMPS = 7;
+    /** Part of the measured frame between stamps that is the ray march ({@link #describe}: preparation, near volume, sums, rays…). */
+    private static final int RAYS_PART = 3;
     private static final int[] QUERIES = new int[STAMPS * RING];
     /** Rung generation ({@link Detail#generation}) at pair recording; −1 — pair free. */
     private static final int[] ISSUED = new int[RING];
@@ -1339,16 +1360,19 @@ public final class PallPass {
             long stop = GL33.glGetQueryObjecti64(QUERIES[STAMPS * i + STAMPS - 1], GL15.GL_QUERY_RESULT);
             double ms = Math.max(0, stop - start) / 1e6;
             long before = start;
+            double rays = 0;
             for (int q = 1; q < STAMPS; q++) {
                 long at = GL33.glGetQueryObjecti64(QUERIES[STAMPS * i + q], GL15.GL_QUERY_RESULT);
-                PART_SUM[q - 1] += Math.max(0, at - before) / 1e6;
+                double part = Math.max(0, at - before) / 1e6;
+                PART_SUM[q - 1] += part;
+                if (q - 1 == RAYS_PART) rays = part;
                 before = Math.max(before, at);
             }
             gpuSum += ms;
             gpuMax = Math.max(gpuMax, ms);
             gpuFrames++;
             int was = DETAIL.level;
-            if (DETAIL.sample(ms, ISSUED[i], now)) {
+            if (DETAIL.sample(ms, rays, ISSUED[i], now)) {
                 Step from = LADDER[was], to = LADDER[DETAIL.level];
                 // in game — DEBUG: rung changes every few seconds; scenario rung is pinned (draw)
                 Incoming.LOG.debug(String.format(Locale.ROOT, "Nuclear dust pall: %.2f ms on the GPU (budget %.1f), detail %s → %s",

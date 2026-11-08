@@ -16,11 +16,16 @@ class PallDetailTest {
     /** The HIGH setting's budget, ms. */
     private static final double H = PallPass.Quality.HIGH.budget;
 
-    /** Frames of 16 ms with one time on the GPU, {@code frames} pieces; watch - in {@code clock[0]}. */
+    /** Frames of 16 ms with one time on the GPU, all of it rays, {@code frames} pieces; clock in {@code clock[0]}. */
     private static void frames(PallPass.Detail d, double gpuMs, int frames, long[] clock) {
+        frames(d, gpuMs, gpuMs, frames, clock);
+    }
+
+    /** Frames of 16 ms: {@code gpuMs} on the GPU, of which {@code rayMs} the ray march; clock in {@code clock[0]}. */
+    private static void frames(PallPass.Detail d, double gpuMs, double rayMs, int frames, long[] clock) {
         for (int i = 0; i < frames; i++) {
             clock[0] += 16 * MS;
-            d.sample(gpuMs, d.generation, clock[0]);
+            d.sample(gpuMs, rayMs, d.generation, clock[0]);
         }
     }
 
@@ -47,12 +52,13 @@ class PallDetailTest {
 
     /**
      * Each setting keeps its own rung at the GPU times measured on Artem's laptop (RTX 4060, 2560×1600, 150 kt firestorm in the
-     * dust, 08.11: LOW up to 6.0 ms, MEDIUM up to 11.7, HIGH up to 16.0); finer settings get larger budgets.
+     * dust, 08.11: LOW up to 6.0 ms, MEDIUM up to 11.7, HIGH up to 17.8), also with a tenth more in passing windows; finer
+     * settings get larger budgets.
      */
     @Test
     void settingsHoldTheirRungAtMeasuredTimes() {
         assertTrue(PallPass.Quality.LOW.budget < B && B < H);
-        double[][] measured = {{6.0, PallPass.Quality.LOW.ordinal()}, {11.7, PallPass.Quality.MEDIUM.ordinal()}, {16.0, PallPass.Quality.HIGH.ordinal()}};
+        double[][] measured = {{6.0, PallPass.Quality.LOW.ordinal()}, {11.7, PallPass.Quality.MEDIUM.ordinal()}, {17.8, PallPass.Quality.HIGH.ordinal()}};
         for (double[] m : measured) {
             PallPass.Quality q = PallPass.Quality.values()[(int) m[1]];
             PallPass.Detail d = new PallPass.Detail();
@@ -60,6 +66,11 @@ class PallDetailTest {
             d.setting(q);
             frames(d, m[0], 2000, clock);
             assertEquals(q.step(), d.level, q + " at " + m[0] + " ms");
+            for (int k = 0; k < 20; k++) {
+                frames(d, 1.1 * m[0], 40, clock);
+                frames(d, m[0], 40, clock);
+            }
+            assertEquals(q.step(), d.level, q + " with passing windows at " + 1.1 * m[0] + " ms");
         }
     }
 
@@ -167,7 +178,7 @@ class PallDetailTest {
         assertEquals(PallPass.Quality.MEDIUM.step(), d.level);
         d.setting(PallPass.Quality.HIGH);
         assertTrue(d.pin(false));
-        for (int i = 0; i < 100; i++) assertFalse(d.sample(150, old, clock[0] += 16 * MS), "measurements before nailing do not count");
+        for (int i = 0; i < 100; i++) assertFalse(d.sample(150, 150, old, clock[0] += 16 * MS), "measurements before nailing do not count");
         assertEquals(high, d.level);
         frames(d, 2 * H, 40, clock);
         assertTrue(d.level > high, "released - again on budget");
@@ -184,7 +195,7 @@ class PallDetailTest {
         int before = d.generation;
         d.restart();
         assertEquals(medium, d.level);
-        for (int i = 0; i < 100; i++) assertFalse(d.sample(50, before, clock[0] += 16 * MS));
+        for (int i = 0; i < 100; i++) assertFalse(d.sample(50, 50, before, clock[0] += 16 * MS));
         assertEquals(medium, d.level, "old couples don't count");
         frames(d, 50, 40, clock);
         assertTrue(d.level > medium, "new ones count");
@@ -194,10 +205,47 @@ class PallDetailTest {
     @Test
     void staleSamplesIgnored() {
         PallPass.Detail d = new PallPass.Detail();
-        assertFalse(d.sample(100, d.generation, 0));
+        assertFalse(d.sample(100, 100, d.generation, 0));
         d.setting(PallPass.Quality.MEDIUM);
         int old = d.generation - 1;
-        for (int i = 0; i < 100; i++) assertFalse(d.sample(100, old, i * 16 * MS));
+        for (int i = 0; i < 100; i++) assertFalse(d.sample(100, 100, old, i * 16 * MS));
         assertEquals(PallPass.Quality.MEDIUM.step(), d.level);
+    }
+
+    /**
+     * One window a hair over budget does not drop detail (laptop 08.11: HIGH fell two rungs on a window of 18.04 ms against 18
+     * and stayed there for a minute); over budget for two windows in a row does.
+     */
+    @Test
+    void oneWindowOverBudgetKeepsTheRung() {
+        PallPass.Detail d = new PallPass.Detail();
+        long[] clock = {0};
+        d.setting(PallPass.Quality.HIGH);
+        for (int k = 0; k < 20; k++) {
+            frames(d, 1.02 * H, 40, clock);
+            frames(d, 0.9 * H, 40, clock);
+        }
+        assertEquals(0, d.level, "single windows over budget");
+        frames(d, 1.05 * H, 120, clock);
+        assertTrue(d.level > 0, "two windows over budget");
+    }
+
+    /**
+     * Only the rays scale with the rung: the near volume, sums, accumulation and composite stay. With most of the time outside the
+     * rays, a lower rung saves little, so after a costly view passes the setting's rung comes back (laptop 08.11: MEDIUM sat at
+     * the interleaved floor for 80 s at the same cost as its own rung, because the whole time was scaled by the rung).
+     */
+    @Test
+    void fixedPassesDoNotKeepDetailDown() {
+        PallPass.Detail d = new PallPass.Detail();
+        long[] clock = {0};
+        d.setting(PallPass.Quality.HIGH);
+        frames(d, 1.4 * H, 0.6 * H, 40, clock);
+        int down = d.level;
+        assertTrue(down > 0, "costly view - lower");
+        assertTrue(down < LOW, "rays alone fit a rung above the floor");
+        // the view is back to the usual: rays a third of the time at the lower rung, the rest fixed
+        frames(d, 0.75 * H, 0.25 * H, 6000, clock);
+        assertEquals(0, d.level, "the setting's rung again");
     }
 }

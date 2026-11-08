@@ -2057,6 +2057,9 @@ void main() {
     // fire whirls likewise: the rays would add a whirl nearer than the far boundary behind this volume's whole depth
     whirlSetup(dir, 1e9, t);
     cur += whirlCell(p, t, max(gFlame, WHIRL_FIRE_LINEAR));
+    // emission past half-float range (an incandescent ball near the eye at night exposure) saturates instead of punching a hole;
+    // NaN still drops the cell
+    if (all(equal(cur.rgb, cur.rgb))) cur.rgb = min(cur.rgb, vec3(5.0e4));
     if (!pallValid(vec4(cur.rgb, 0.0)) || !(cur.w >= 0.0 && cur.w < 6.0e4)) cur = vec4(0.0);
     vec4 res = cur;
     if (PallFroxelFrame.w > 0.5) {
@@ -2101,6 +2104,7 @@ void main() {
         z0 = z1;
     }
     vec4 res = vec4(light, seen);
+    if (all(equal(res.rgb, res.rgb))) res.rgb = min(res.rgb, vec3(5.0e4));
     fragColor = pallValid(res) ? res : vec4(0.0, 0.0, 0.0, 1.0);
 }
 #endif

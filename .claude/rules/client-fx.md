@@ -461,8 +461,9 @@ paths:
   (AT), read by `texelFetch`. `SCENARIO shot` lines print the eye's levels, the kept share and moving-light cost.
 - Nuclear dust pall (`fx/layer/PallPass`) — a volume in the same stage of the layer, before the squares: rays per frame
   are a factor of 2 coarser per axis (`fx_pall`; never coarser: a third and a quarter drew distant ridges as stairs and
-  grain on Artem's laptop 08.11, budget `Detail.BUDGET_MS` 4 ms), and on lower rungs interleaved: one ray pixel of every
-  n × n block per frame (n up to 4, `Step.interleave`, order `ORDER`), the others keep their reprojected history;
+  grain on Artem's laptop 08.11; budget per setting, `Quality.budget`), and on lower rungs interleaved: one ray pixel of
+  every n × n block per frame (n up to 2, `Step.interleave`, order `ORDER`), the others keep their reprojected history;
+  the rays start at the near volume's far boundary (below);
   accumulation over frames with transfer by world depth (`fx_pall_resolve`): a pixel taking a ray keeps history weight 0.9
   for any n (with 0.9^n² it showed nearly one jittered ray: grain on thin lobes against the sky), and history moves 1/n of
   the way to the bounds of the neighbour rays per frame (snapped, a whole block took one frame's chance bound: square
@@ -701,16 +702,34 @@ paths:
   since the shadow on the ground is smooth (the cloud's edge is hundreds of metres); per straight line, three two-stream
   solutions. In the cloud (llvmpipe, scenario `mushroom` with `INCOMING_MUSHROOM=shadow`) the 128² map is +2–8 % to the
   pall passes (run-to-run spread of the same order); 256² was +18 %.
-  Detail also keeps a budget per setting (`PallPass.Quality.budget`: LOW 6, MEDIUM 12, HIGH 18 ms on the GPU,
-  `PallPass.Detail`): if the average over half a second is longer, it drops at once to a step of `PallPass.LADDER` that
-  fits the cost; the headroom to go up a step is granted if, with it, the time would be no more than 0.7 of the budget for
-  two windows in a row and 3 s after the last change. It is never above the setting and never below LOW (half frame,
-  22 steps, interleave 2): rungs with interleave 3–4 drew the lattice that burns in on a still view. Budgets follow
-  Artem's 08.11 rule (picture first, the setting fits the PC): at his laptop's times (RTX 4060 Laptop, 2560×1600, 150 kt
-  firestorm, froxel near volume: LOW ≤ 6.0, MEDIUM ≤ 11.7, HIGH ≤ 16.0 ms) each setting keeps its rung
-  (`PallDetailTest.settingsHoldTheirRungAtMeasuredTimes`). The `SCENARIO pall` line splits GPU time into preparation,
+  Detail also keeps a budget per setting (`PallPass.Quality.budget`: LOW 7, MEDIUM 13, HIGH 21 ms on the GPU,
+  `PallPass.Detail`): if the half-second average is longer for two windows in a row (one window over 1.25 budgets is
+  enough), it drops to a step of `PallPass.LADDER` estimated to fit; it goes up a step if the estimate for that step is at
+  most 0.9 of the budget for two windows in a row and 3 s after the last change. Estimates scale only the rays' time (the
+  `rays` part of the timestamps) by `Step.cost`: the near volume, sums, accumulation and composite do not depend on the
+  step (laptop 08.11: 5–9 ms of HIGH's 18). Scaling the whole time, plus a drop on a single window 0.04 ms over, kept
+  MEDIUM at the floor and HIGH two steps down for over a minute at the cost of their own step
+  (`PallDetailTest.oneWindowOverBudgetKeepsTheRung`, `fixedPassesDoNotKeepDetailDown`). It is never above the setting and
+  never below LOW (half frame, 22 steps, interleave 2): rungs with interleave 3–4 drew the lattice that burns in on a
+  still view. Budgets follow Artem's 08.11 rule (picture first, the setting fits the PC): at his laptop's times
+  (RTX 4060 Laptop, 2560×1600, 150 kt firestorm, froxel near volume: LOW ≤ 6.0, MEDIUM ≤ 11.7, HIGH ≤ 17.8 ms) each
+  setting keeps its rung with a sixth of headroom (`PallDetailTest.settingsHoldTheirRungAtMeasuredTimes`). The `SCENARIO pall` line splits GPU time into preparation,
   near volume, sums, rays, accumulation and composite (timestamps per measured frame; each part's share is an estimate,
   the exact split needs `glFinish` between parts).
+  Near volume (froxels, the standard fog-the-camera-stands-in method: Wronski AC4 2014, Frostbite): the pall nearer than
+  `VOLUME_FAR` 256 blocks along the view axis is a screen-aligned volume of 64 exponential slices, each slice a tile of a
+  2D RGBA16F atlas (GL 3.2, no 3D render targets); cells 16/12/8 full-frame pixels wide for LOW/MEDIUM/HIGH
+  (`Quality.tile`). `fx_pall_froxel` evaluates `pallSource` at a jittered point per cell and blends it into the previous
+  volume reprojected in world space with weight `VOLUME_CURRENT` 0.1; `fx_pall_froxel_sum` integrates front to back with
+  the rays' step law and air haze, storing linear light and the transmittance seen so far. The composite reads it at each
+  pixel's own depth (no screen-space history at silhouettes: the old interleaved near rays left trails and rims there)
+  and joins it with the rays beyond in linear light (`froxelOver`); layer quads read `fx_pall_mix` (volume plus rays per
+  reduced pixel). Mushrooms (with the eye's optical depth through them, `mushEyeTau`), explosion smoke and fire whirls
+  (`whirlCell`) nearer than the boundary are injected into the cells; the rays take them only from the boundary, so
+  near matter is ordered against near dust. The Wilson cloud stays in the rays. Emission past half-float range is
+  clamped, not dropped (a hole). Same-frame checks (32-px checker tiles, history off): the volume over 0–256 equals the
+  per-pixel ray over that span (up view red 100.8 vs 101.2); sequential shots drift with fires and history, so A/B only
+  within one frame.
   Time — `glQueryCounter(GL_TIMESTAMP)` marks before and after the passes, in a ring of 4 pairs, read when ready (without
   waiting). Not `GL_TIME_ELAPSED`: that query is single in OpenGL for everyone, and Minecraft holds it for the whole frame
   while F3's GPU load is on screen (`TimerQuery`) — a nested one would not start. Pairs taken before the pall had gone
