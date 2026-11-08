@@ -107,6 +107,10 @@ public final class ModAttachments {
     public static final Supplier<AttachmentType<ua.zentix.incoming.work.ImpactTiming>> IMPACT_TIMING = REGISTER.register("impact_timing",
             () -> AttachmentType.builder(() -> new ua.zentix.incoming.work.ImpactTiming()).build());
 
+    /** Overworld: pace of the mod's background chunk loads ({@link ua.zentix.incoming.work.ChunkLoadPace}); not saved. */
+    public static final Supplier<AttachmentType<ua.zentix.incoming.work.ChunkLoadPace>> CHUNK_LOAD_PACE = REGISTER.register("chunk_load_pace",
+            () -> AttachmentType.builder(() -> new ua.zentix.incoming.work.ChunkLoadPace()).build());
+
     /** World: explosion timelines ({@link StrikeWorld}); not saved. */
     public static final Supplier<AttachmentType<StrikeWorld>> STRIKE_WORLD = REGISTER.register("strike_world",
             () -> AttachmentType.builder(StrikeWorld::new).build());

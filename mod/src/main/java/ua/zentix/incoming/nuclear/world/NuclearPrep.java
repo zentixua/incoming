@@ -23,6 +23,7 @@ import ua.zentix.incoming.nuclear.Detonation;
 import ua.zentix.incoming.nuclear.NuclearEvents;
 import ua.zentix.incoming.nuclear.NuclearWarhead;
 import ua.zentix.incoming.strike.AreaLoader;
+import ua.zentix.incoming.work.ChunkLoadPace;
 import ua.zentix.incoming.strike.StrikeWorld;
 import ua.zentix.incoming.util.Terrain;
 
@@ -115,6 +116,11 @@ public final class NuclearPrep {
         int partial;
         /** Square chunks whose tickets held (bits {@link #bit}). */
         int held;
+        /**
+         * Square chunks to hold (bits {@link #bit}): chunks not in memory get their tickets as the load pace allows
+         * ({@link ChunkLoadPace}), so a square's 25 disk loads do not all decode in one gap between ticks.
+         */
+        int want;
         /** Tickets taken with all chunks already in memory: square loads nothing, uses no load slot. */
         boolean resident;
         /** For {@link NukeDiag}: ticket acquisition/all-chunks-full game times, −1 if not yet. */
@@ -144,27 +150,37 @@ public final class NuclearPrep {
             return new AreaLoader.Area(TYPE, c, 0, new UUID(strike, c.toLong()), false);
         }
 
-        /** Acquire square chunk tickets from {@code chunks} mask. */
+        /** Acquire square chunk tickets from {@code chunks} mask: in-memory chunks now, the rest at the load pace. */
         void hold(ServerLevel level, int strike, int chunks) {
-            held = chunks;
-            tickets(level, strike, true);
+            want = chunks;
+            holdMore(level, strike);
+        }
+
+        /** Tickets of {@link #want} not yet held, while the load pace allows; whether all are held now. */
+        boolean holdMore(ServerLevel level, int strike) {
+            AreaLoader areas = StrikeWorld.get(level).areas();
+            ChunkLoadPace pace = ChunkLoadPace.of(level.getServer());
+            for (int dx = -TILE_RADIUS; dx <= TILE_RADIUS; dx++) {
+                for (int dz = -TILE_RADIUS; dz <= TILE_RADIUS; dz++) {
+                    int b = bit(dx, dz);
+                    if ((want & ~held & b) == 0) continue;
+                    if (level.getChunkSource().getChunkNow(centre.x + dx, centre.z + dz) == null && !pace.tryStart(level.getServer())) return false;
+                    areas.hold(level, area(strike, dx, dz));
+                    held |= b;
+                }
+            }
+            return true;
         }
 
         /** Release tickets held by square. */
         void release(ServerLevel level, int strike) {
-            tickets(level, strike, false);
-            held = 0;
-        }
-
-        private void tickets(ServerLevel level, int strike, boolean hold) {
             AreaLoader areas = StrikeWorld.get(level).areas();
             for (int dx = -TILE_RADIUS; dx <= TILE_RADIUS; dx++) {
                 for (int dz = -TILE_RADIUS; dz <= TILE_RADIUS; dz++) {
-                    if ((held & bit(dx, dz)) == 0) continue;
-                    if (hold) areas.hold(level, area(strike, dx, dz));
-                    else areas.release(level, area(strike, dx, dz));
+                    if ((held & bit(dx, dz)) != 0) areas.release(level, area(strike, dx, dz));
                 }
             }
+            held = want = 0;
         }
     }
 
@@ -858,7 +874,9 @@ public final class NuclearPrep {
         int loading = 0, held = 0;
         for (Tile t : p.tiles) {
             if (t.state == TileState.LOADING) {
-                if (ready(level, t)) {
+                // the rest of a square's tickets at the load pace; not while ruins in view wait (as for new squares)
+                if (t.held != t.want && !scars.seenWaiting()) t.holdMore(level, p.strike);
+                if (t.held == t.want && ready(level, t)) {
                     t.state = TileState.READY;
                     t.readyAt = now;
                 } else {

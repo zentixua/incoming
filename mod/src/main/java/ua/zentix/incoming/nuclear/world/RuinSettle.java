@@ -8,6 +8,7 @@ import net.minecraft.world.level.chunk.LevelChunk;
 import net.neoforged.neoforge.attachment.AttachmentHolder;
 import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.IncomingConfig;
+import ua.zentix.incoming.work.ChunkLoadPace;
 import ua.zentix.incoming.work.WorkScheduler;
 import ua.zentix.incoming.nuclear.Detonation;
 import ua.zentix.incoming.nuclear.NuclearEvents;
@@ -111,7 +112,11 @@ final class RuinSettle {
                 clock.end(unit);
             }
         }
-        while (admit && holding < loadingLimit && !ready.isEmpty() && clock.canStart()) {
+        // A disk load decodes on the server thread after this tick: start loads only as fast as they decode before the
+        // next tick (ChunkLoadPace); in bursts they started 20 % of ticks 18–32 ms late after 1 Mt (Zearth r4 run6).
+        ChunkLoadPace pace = ChunkLoadPace.of(level.getServer());
+        while (admit && holding < loadingLimit && !ready.isEmpty() && clock.canStart()
+                && (NuclearTickets.inMemory(level, ready.firstLong()) != null || pace.tryStart(level.getServer()))) {
             long key = ready.removeFirstLong();
             visited++;
             Entry e = entries.get(key);

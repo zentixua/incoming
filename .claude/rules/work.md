@@ -24,6 +24,18 @@ paths:
   lane time and the remainder. It also reports the percentage of ticks with an early impact window, mean early and
   late impact time, and the percentage with mandatory unload debt; all four use the same 600-tick denominator.
   `tools/logscan.py` shows this line in full under `Work budget`, including fields beyond its usual truncation limit.
+  The line ends with tick starts as spark's tick monitor sees them (`ChunkLoadPace.report`: intervals over 60 ms,
+  ticks starting over 10 ms after schedule, longest interval) and the paced chunk loads with the measured decode cost.
+- `ChunkLoadPace` paces the mod's background disk loads (`RuinSettle` admissions, zone-behind-wave square tickets,
+  `NuclearPrep.Tile.holdMore`). Vanilla decodes a disk chunk on the server thread between ticks
+  (`ChunkSerializer.read` on the main-thread executor) and runs such tasks up to 50 ms past the tick end
+  (`delayedTasksMaxNextTickTimeNanos`), so a batch of loads starts the next tick late although the tick itself is short:
+  after 1 Mt over Zearth (r4 run6) the tick took 20 ms (p50) while 20 % of tick-start intervals were 68–82 ms, with
+  84 % of between-tick JFR samples in `ChunkSerializer.read` at ~2.6 ms a chunk. A load starts only while the requested
+  decodes fit before the next scheduled tick start less 5 ms; decode cost comes from consecutive
+  `ChunkDataEvent.Load` events in one gap (pauses over 15 ms are disk waits). No time left: one load per 4 ticks.
+  In-memory chunks take no pace. `ChunkLoadPaceTest` holds the gap and the learned cost; a new background loader
+  of disk chunks goes through it too.
 - `UnitQueue` runs new heads in enqueue order, then one unit per continuation in a persistent round-robin order.
   Unready areas and blocked dependencies are skipped. Continuation `ready`/`blocked` results are cached once per
   work window, after heads (whose first step can introduce a dependency). Post refreshes them even within the same
