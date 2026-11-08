@@ -35,10 +35,14 @@ paths:
   (`LOADING_PYRAMID`: light needs ring-1 neighbors at `INITIALIZE_LIGHT`, read from disk), so a load is charged the
   square's chunks without a chunk in memory (`ChunkLoadPace.decodes`). The gap is measured at the end of the last Post
   listener (next scheduled start minus that moment), not at the request: requests come mid-lane, and the lanes and
-  other mods' Post work after them may take most of the time left. Requests use the smallest gap of the last 10 ticks
-  less 5 ms; decode cost comes from consecutive `ChunkDataEvent.Load` events in one gap (pauses over 30 ms are disk
+  other mods' Post work after them may take most of the time left. Requests use the 20th percentile gap of the last
+  10 ticks times a budget factor, less 5 ms; the factor drops ×0.7 when a tick starts over 3 ms late after a tick that
+  ended in time and grows +0.05 (to 1) after an on-time tick with denied loads. The smallest gap (first version) used
+  11.7 ms where 31.8 ms was free and slowed the 1 Mt settlement fourfold (r4 run8: 3.1 % intervals over 60 ms instead
+  of 21 %, but 32 % settled at +75 min). Decode cost (start 1 ms; run8 0.33 ms `ChunkSerializer.read`, ~0.5 ms with
+  its between-tick work) comes from consecutive `ChunkDataEvent.Load` events in one gap (pauses over 30 ms are disk
   waits). No gap: one load per 4 ticks. In-memory chunks take no pace. `ChunkLoadPaceTest` holds the gap, the learned
-  cost, mid-lane requests and neighbor decodes; a new background loader
+  cost, mid-lane requests, neighbor decodes, uneven ticks and the factor; a new background loader
   of disk chunks goes through it too.
 - `UnitQueue` runs new heads in enqueue order, then one unit per continuation in a persistent round-robin order.
   Unready areas and blocked dependencies are skipped. Continuation `ready`/`blocked` results are cached once per
