@@ -218,7 +218,6 @@ public final class NuclearPrep {
         /** All-chunk ruins (neighbor fractures): transferred to detonation with plans. */
         @Nullable
         RuinContext ruins;
-        final LongArrayList planned = new LongArrayList();
         /** Handed to this detonation ID (tickets still held); -1 still flying. */
         int detonation = -1;
         /** Ruins no longer needed: release a few squares per tick. */
@@ -512,7 +511,6 @@ public final class NuclearPrep {
     /** Add ready plan to prebuilt ruins; halt further building beyond capacity. */
     private static void keep(ServerLevel level, Prep p, long c, RuinPlan plan) {
         p.plans.put(c, plan);
-        p.planned.add(c);
         if (p.plans.bytes() + RuinWorkers.bufferBytes(level.getHeight()) > PLANS_CAP && !p.capped) {
             p.capped = true;
             Incoming.LOG.warn("Ruins for strike #{}: finished plans take {} MB — no more ruins are pre-built (plans {}, heavy zone chunks {})",
@@ -1127,7 +1125,7 @@ public final class NuclearPrep {
      * Detonation: transfer ready ruins at same location/yield/scale (queue processes their chunks first). Hold tickets
      * until ruins applied.
      *
-     * @return ready ruins and chunk order; null if unprepared
+     * @return ready ruins; null if unprepared
      */
     @Nullable
     Handoff handOff(ServerLevel level, Detonation d, long now) {
@@ -1172,15 +1170,14 @@ public final class NuclearPrep {
             p.nextZoneReport = now + ZONE_REPORT;
             long t2 = System.nanoTime();
             p.lods.handOff(d);
-            long[] planned = p.planned.toLongArray();
             if (NukeDiag.ON) Incoming.LOG.info("DIAG hand-off #{}: far at detonation {} ms ({} chunks), log {} ms, LODs and order {} ms", d.id(),
                     (t1 - t0) / 100_000 / 10.0, p.order.length, (t2 - t1) / 100_000 / 10.0, (System.nanoTime() - t2) / 100_000 / 10.0);
-            return new Handoff(p.plans, planned, p.ruins);
+            return new Handoff(p.plans, p.ruins);
         }
         return null;
     }
 
-    record Handoff(Long2ObjectOpenHashMap<RuinPlan> plans, long[] order, RuinContext ruins) {}
+    record Handoff(Long2ObjectOpenHashMap<RuinPlan> plans, RuinContext ruins) {}
 
     /**
      * Prepared detonation geometry if detonation matches preparation, otherwise {@code fresh}. Detonation

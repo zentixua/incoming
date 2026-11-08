@@ -1379,7 +1379,7 @@ public final class RuinBackgroundGameTests {
         ScarQueue q = new ScarQueue();
         ScarQueue.seenForTest(c -> c == seenKey);
         try {
-            q.scanLoaded(d, plans, new long[]{seenKey, unseenKey});
+            q.scanLoaded(d, plans);
             long seenWave = ScarQueue.due(d, seen.getPos()), last = Math.max(seenWave, ScarQueue.due(d, unseen.getPos()));
             ua.zentix.incoming.nuclear.world.WorkClock clock = ua.zentix.incoming.nuclear.world.WorkClock.counting(1_000_000);
             // all the chunks are in the queue, the wave is still far away
