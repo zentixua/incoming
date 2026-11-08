@@ -11,12 +11,14 @@ import net.minecraft.world.level.block.LiquidBlock;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.Vec3;
+import net.neoforged.neoforge.common.Tags;
 import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.nuclear.Detonation;
 import ua.zentix.incoming.nuclear.model.CraterGround;
 import ua.zentix.incoming.nuclear.model.CraterModel;
 import ua.zentix.incoming.registry.ModBlocks;
 import ua.zentix.incoming.registry.ModDataMaps;
+import ua.zentix.incoming.registry.ModTags;
 import ua.zentix.incoming.util.Terrain;
 import ua.zentix.incoming.warhead.GroundMaterial;
 import ua.zentix.incoming.warhead.MaterialPath;
@@ -295,9 +297,10 @@ public final class CraterJob {
         int top = Terrain.height(level, Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z);
         int ground = naturalSurface(level, x, z, top);
         double plane = profile.ground(x, z);
-        if (Double.isFinite(plane)) {
+        // only where the bowl cuts: beyond it the rim is ejecta landing on whatever stands there
+        if (Double.isFinite(plane) && depth > lift) {
             BlockPos.MutableBlockPos at = new BlockPos.MutableBlockPos(x, 0, z);
-            ground = CraterGround.base(y -> layer(level.getBlockState(at.setY(y))), ground, plane, level.getMinBuildHeight());
+            ground = CraterGround.base(y -> layer(level, at.setY(y), level.getBlockState(at)), ground, plane, level.getMinBuildHeight());
         }
         if (mode == Mode.DIG) ground = SurfaceBlocks.excavationTop(level, x, z, ground, top, centre.y);
         BlockPos.MutableBlockPos m = new BlockPos.MutableBlockPos(x, 0, z);
@@ -381,10 +384,15 @@ public final class CraterJob {
         if (damagedPos != null) SurfaceDamage.mark(level, damagedPos, level.getBlockState(damagedPos), damagedDepth);
     }
 
-    private static CraterGround.Layer layer(BlockState s) {
-        if (BlockResponse.of(s).kind() == BlockResponse.Kind.GROUND) return CraterGround.Layer.GROUND;
-        if (s.isAir()) return CraterGround.Layer.AIR;
-        return s.getBlock() instanceof LiquidBlock ? CraterGround.Layer.LIQUID : CraterGround.Layer.BUILT;
+    /**
+     * A block to {@link CraterGround#base}: ground by tag (also bedrock and obsidian, which {@link BlockResponse} leaves to
+     * no kind) and any ore (mods' ores in hills); no collision or replaceable (lichen, vines, cobwebs, plants) is air.
+     */
+    private static CraterGround.Layer layer(ServerLevel level, BlockPos pos, BlockState s) {
+        if (s.is(ModTags.NUKE_GROUND) || s.is(Tags.Blocks.ORES)) return CraterGround.Layer.GROUND;
+        if (s.getBlock() instanceof LiquidBlock) return CraterGround.Layer.LIQUID;
+        if (s.isAir() || s.canBeReplaced() || s.getCollisionShape(level, pos).isEmpty()) return CraterGround.Layer.AIR;
+        return CraterGround.Layer.BUILT;
     }
 
     /** First air above natural ground (below buildings, trees and other above-ground objects). */

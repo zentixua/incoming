@@ -107,25 +107,34 @@ public final class CraterGround {
     /**
      * Ground of a column under the crater, as a heightmap height (first air above). {@code natural} is the column's top
      * ground block plus one, {@code plane} the ground plane there. A column standing above the plane is walked up from
-     * {@link #BAND} below it: the first built block, or the first air under a ground layer thinner than {@link #FLOOR},
-     * is a building, and the ground is the top of the ground under it (never below that walk's start). A column of ground
-     * alone, or not above the plane, keeps {@code natural}. A thin cave roof counts as a floor too: it does not survive
-     * the burst, and the walk never goes below the plane band.
+     * {@link #BAND} below it, stretch by stretch of non-ground blocks (air, built, liquid). A stretch is the bottom of a
+     * building when the ground over it is thinner than {@link #FLOOR} (a terracotta floor or a roof garden over a room),
+     * or, holding a built block, thinner than the stretch is tall (a storey stack under a thick roof garden), or when it
+     * holds a built block within {@link #BAND} of the plane (a slab under a solid terracotta podium); its bottom is then
+     * the column's ground. Otherwise the column keeps {@code natural}: a hill keeps its surface over a cave, a
+     * mineshaft, a dungeon or a stray block deep inside it. A thin cave roof counts as a floor too; within the bowl it
+     * does not survive the burst.
      */
     public static int base(Column column, int natural, double plane, int minY) {
         if (!(natural > plane + 0.5)) return natural;
         int from = Math.max(minY, (int) Math.floor(plane) - (int) BAND);
-        for (int y = from; y < natural - 1; y++) {
-            Layer l = column.at(y);
-            if (l == Layer.GROUND || l == Layer.LIQUID) continue;
-            if (l == Layer.AIR) {
-                int run = 0;
-                while (run < FLOOR && y + 1 + run < natural && column.at(y + 1 + run) == Layer.GROUND) run++;
-                if (run == 0 || run >= FLOOR) continue;
+        for (int y = from; y < natural - 1; ) {
+            if (column.at(y) == Layer.GROUND) {
+                y++;
+                continue;
             }
-            int g = y - 1;
-            while (g >= from && column.at(g) != Layer.GROUND) g--;
-            return Math.min(natural, Math.max(g + 1, from));
+            int top = y;
+            boolean built = false, low = false;
+            for (Layer l; top < natural && (l = column.at(top)) != Layer.GROUND; top++) {
+                if (l == Layer.BUILT) {
+                    built = true;
+                    low |= top <= plane + BAND;
+                }
+            }
+            int limit = built ? Math.max(FLOOR, top - y) : FLOOR, run = 0;
+            while (run < limit && top + run < natural && column.at(top + run) == Layer.GROUND) run++;
+            if (low || run < limit && (built || run > 0)) return y;
+            y = top + run;
         }
         return natural;
     }

@@ -101,6 +101,16 @@ class CraterGroundTest {
         assertEquals(64, CraterGround.base(column("aaagaaagaaagaaaggg", 64), 82, 64, -64));
     }
 
+    /**
+     * A Zearth office: storeys of slabs, stairs and glass over a ground-floor hall, under a roof garden of six blocks of
+     * terracotta (thicker than {@link CraterGround#FLOOR}, thinner than the storeys under it).
+     */
+    @Test
+    void storeysUnderAThickRoofGardenStandOnTheGround() {
+        String storey = "bb" + "aaaaaa";
+        assertEquals(64, CraterGround.base(column("aaaaaaaa" + storey.repeat(5) + "gggggg", 64), 118, 63.8, -64));
+    }
+
     /** A Zearth podium: a smooth stone slab under solid terracotta; the slab is built, so the podium stands on 64. */
     @Test
     void solidPodiumOnASlabIsABuilding() {
@@ -115,6 +125,17 @@ class CraterGroundTest {
         assertEquals(64, CraterGround.base(column("", 64), 64, 64, -64), "level ground");
         assertEquals(60, CraterGround.base(column("", 60), 60, 64, -64), "lake bed under the plane");
         assertEquals(71, CraterGround.base(column("aaaa" + "g".repeat(17), 50), 71, 64, -64), "a cave below the plane band is not looked at");
+    }
+
+    /**
+     * Blocks inside a hill under thick ground are not a building: a stray block (a mod's ore not tagged, an infested or
+     * dungeon block), a cave with dripstone, a mineshaft. The hill keeps its surface instead of a shaft down to them.
+     */
+    @Test
+    void hillKeepsItsSurfaceOverWhatIsInsideIt() {
+        assertEquals(85, CraterGround.base(column("g".repeat(6) + "b" + "g".repeat(14), 64), 85, 64, -64), "stray block");
+        assertEquals(85, CraterGround.base(column("gggg" + "aba" + "g".repeat(14), 64), 85, 64, -64), "cave with dripstone");
+        assertEquals(85, CraterGround.base(column("gggg" + "bbb" + "aaaa" + "g".repeat(10), 64), 85, 64, -64), "mineshaft");
     }
 
     /** A house on a hill stands on the hill, not on the plane under it. */
