@@ -314,6 +314,18 @@ float pallScene(float d) {
     return 1e9;
 }
 
+// Nearer than this, a distance behind the pixel (SceneDepth) is the first-person hand, not the world. Vanilla draws the hand
+// after the layer, over it; Iris draws it inside the world pass into world depth with its depth range × 0.125
+// (HandRenderer.DEPTH), so at the layer its depth reads as 2n/(1 + n/f − 0.125·(1 − n/f)) ≤ 0.1143 m with the vanilla near
+// plane n = 0.05 (any far plane f; PallHandTest). The world comes this close only at the screen edge of a wide view under a
+// ceiling or wall a hand's breadth away, where the dust in front is centimetres thick and shows nothing either. The pall
+// leaves the hand as vanilla does: no dust, no shadow, no history from it
+const float PALL_HAND = 0.12;
+
+bool pallHand(float d) {
+    return d < PALL_HAND;
+}
+
 // How much the distances d and e to the world are one place (1 — one, toward 0 — different): the weight of a pixel of the pall
 // frame of its neighbor on screen (fx_pall_resolve, fx_pall_composite) — at the edge of an object the pall of the sky does not
 // lie on the wall and vice versa

@@ -63,6 +63,14 @@ void main() {
     bool curOk = traced && pallValid(cur);
     ivec2 full = clamp(ivec2((vec2(px) + 0.5) * PallFrame.z), ivec2(0), fullSize - 1);
     float depth = pallScene(texelFetch(Sampler2, full, 0).r);
+    // first-person hand (pallHand): no pall there (fx_pall_composite), and its pixels hold no history — the hand is fixed to
+    // the screen, not to a world place: reprojected as a world point 0.1 m from the eye, any turn or step brought it the
+    // dust from elsewhere, which the interleaved partial clamp held over the hand; and dust uncovered by a moving hand took
+    // the hand's empty history, a trail behind it. Invalid here, a pixel reprojecting onto it restarts from its rays
+    if (pallHand(depth)) {
+        fragColor = vec4(0.0, 0.0, 0.0, -1.0);
+        return;
+    }
     // history bounds use valid ray-pixel neighbors at same place as this pixel (its surface by world distance,
     // pallAhead; a ray pixel always includes itself); no valid neighbor there means all valid neighbors (as without an
     // edge: current ray invalid, history exists). A pixel without history takes the rays at the same place weighted by

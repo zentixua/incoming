@@ -10,6 +10,11 @@ paths:
 # Own particles, effects layer, trails
 
 ## Pitfalls
+- Under Iris the first-person hand is in world depth at `AFTER_LEVEL` (Iris draws it inside the world pass with the depth
+  range × 0.125, `HandRenderer.DEPTH`), so the layer reads it as world 0.09–0.115 m away; vanilla draws it after the layer.
+  The pall skips those pixels (`pallHand`, `PALL_HAND` 0.12 m in `pall.glsl`, `PallHandTest`): resolve writes them invalid
+  (no history: reprojected as a world point 0.1 m off, the hand took dust from elsewhere and the interleaved partial clamp
+  held it — orange silhouette with a dot grid, trail when moving, 08.11), composite leaves them untouched (no dust, no shadow).
 - `FxLayer.describeTiming` must remain a lightweight telemetry query. `SceneDepth.describe` reports the LOD source
   without reading textures; full-resolution depth coverage/readback is opt-in through `incoming.nukeDiag`.
   Polling the ordinary line with Voxy used to synchronize with the GPU and scan millions of floats, injecting
