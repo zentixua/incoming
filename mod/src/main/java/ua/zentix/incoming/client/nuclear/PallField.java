@@ -24,7 +24,7 @@ import ua.zentix.incoming.nuclear.model.WaterModel;
  * dust at the front is still in place ({@link #source}). Height starts at local ground where above ground zero
  * (hill: wind lofts dust from its slope); dust flows into valleys, where the layer starts at ground-zero elevation.
  * <p>
- * <b>Haze.</b> The city burns over the ignition zone (light pulse from {@link ThermalModel#IGNITE}): smoky haze
+ * <b>Haze.</b> The city burns over the ignition zone (light pulse from {@link ThermalModel#ignite}): smoky haze
  * (visibility {@link #HAZE_VISIBILITY_M} m) rises over a couple of minutes, stays until morning ({@link #hazeEndTicks}; morning follows world
  * time, {@link #daylight}: sleep and {@code /time} bring it closer), trails downwind, lit by fires from below.
  * <p>
@@ -185,7 +185,7 @@ public final class PallField {
         DustModel.Surface surface = DustModel.Surface.REFERENCE;
         double dustM = DustModel.reach(hob, y, d.surface(), d.visibility(), surface, GONE_DEPTH);
         // server does not ignite (Detonation.fires) — no fire zone: no haze above it, fire glow or storm
-        double ignite = !d.fires() ? 0 : groundRange(ThermalModel.rangeForFluence(ThermalModel.IGNITE, y, d.surface(), d.visibility()), hob);
+        double ignite = !d.fires() ? 0 : groundRange(ThermalModel.rangeForFluence(ThermalModel.ignite(y), y, d.surface(), d.visibility()), hob);
         this.fireReach = d.blocks(ignite);
         this.reach = Math.max(1, d.blocks(Math.max(dustM, ignite)) * 1.02);
         double last = 0;

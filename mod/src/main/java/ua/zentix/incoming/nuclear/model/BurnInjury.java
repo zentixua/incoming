@@ -77,10 +77,15 @@ public final class BurnInjury {
         return median(1, yieldKt) * Math.exp(-BETA * Fragility.TAIL);
     }
 
+    /** Thin fabric ignition fluence (table 7.35), cal/cm². */
+    public static double thinFabric(double yieldKt) {
+        return interpolate(FABRIC_YIELDS, THIN, yieldKt);
+    }
+
     /** Whether clothing {@code cover} ignites at fluence {@code q} cal/cm². */
     public static boolean ignites(Cover cover, double q, double yieldKt) {
         return switch (cover) {
-            case THIN -> q >= interpolate(FABRIC_YIELDS, THIN, yieldKt);
+            case THIN -> q >= thinFabric(yieldKt);
             case HEAVY -> q >= interpolate(FABRIC_YIELDS, HEAVY, yieldKt);
             default -> false;
         };

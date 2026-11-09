@@ -175,7 +175,7 @@ paths:
   (front on entities and craft, queues); chunk mark is attachment `CHUNK_SCAR`;
 - Ground trace (`RuinPlanner.finish` after ruins, on the highest supporting block; in-memory chunks get light earlier
   via the flash layer below): blast strips turf (`STRIP_PSI`); light (`RuinContext.lit` × incidence angle `incidence`:
-  blast-facing slope up to ×2.5, penumbra `LOW_SUN`; slope from ±2 columns; smooth fade to zero at
+  blast-facing slope up to ×2.5 for scorch/plants/biomes only, penumbra `LOW_SUN`; slope from ±2 columns; smooth fade to zero at
   `RuinContext.ruinRadius`, `EDGE_FADE`) burns plants above ground (`PLANT_Q`, tag `nuke_plants`, flag
   `Blast.Props.PLANT`; entire plant column above, some leave dead bushes), turf to dirt (`BURN_Q`), and inside the burned
   area scorches to podzol (`CHAR_Q`); snow melts; turf `snowy` follows snow above after all changes. Each uses a damage
@@ -218,12 +218,12 @@ paths:
   the ruin queue, using what wave-reached ruins leave: prioritizing distant layers delayed front ruins by ticks,
   GameTest `ruinsPreparedDuringFlightFallWithFront`; detonation jobs advance independently; errors log and remove the
   job; separate “flash scorch” time in slow nuclear-tick logs). First unit collects in-memory chunks within
-  `FlashScorch.reach` (ground trace, slope ignition ×2.5, face scorch at sphere height) and ruin-queue radius
+  `FlashScorch.reach` (ground trace, ignition threshold, face scorch at sphere height) and ruin-queue radius
   (`ScarQueue.inRange`, by ground, like `reach`: only ruins enable layer-fire ticks): player-visible first, by player
   distance (`SEEN` priority and `ScarQueue.SEEN_BUSY_NANOS`), others by epicenter distance; then one unit per chunk
   builds a 3×3 window from detonation ruin snapshots (`RuinContext.flashGrid`) and a background layer
   (`RuinPlanner.flash`: same `land` without pressure — no turf stripping or rubble; all light-ignited fires,
-  `min(1, q/20)`, with wave-blown fires marked — position roll not below chance × `BLOWN_KEEP` at ≥ 2 psi —
+  from `ThermalModel.ignite(yield)` with chance `min(1, q/igniteAll)`, with wave-blown fires marked — position roll not below chance × `BLOWN_KEEP` at ≥ 2 psi —
   `RuinPlan.blown`; biomes; `FlashFaces`); one unit per ready layer writes like ruins (`RuinPlan.applyFlash`: directly
   into sections, section packets, LODs, `FlashSync.chars`), no earlier than light at the chunk's point nearest the
   sphere reaches ignition threshold (`Detonation.flashTicks`, emitted pulse fraction
@@ -277,6 +277,11 @@ paths:
   (`RuinContext.applied`).
 
 ## Pitfalls
+- Fire ignition (`RuinPlanner.land` → `fire`) compares exposure facing the fireball (`RuinContext.lit`, `min(q, lit)`)
+  with `ThermalModel.ignite(yield)`: the fluence formula already is the exposure on a surface facing the ball, so a
+  slope cannot exceed it. The ×2.5 slope gain on ignition plus a fixed 5 cal/cm² lit fires 12.7 km from a 500 kt
+  ground burst (flat 2.0 cal/cm², Zearth 09.11.2026: 191 chunks with ~6 fires each around the player); `ThermalModelTest`
+  holds those distances.
 - `RuinSettle` settles the entire saved ruin zone after its wave, including `NuclearEvents.past` from old saves,
   without players or LOD clients. Scan final-block disk chunks (`DiskStatus.blocksFinal`), skip absent/PARTIAL ones;
   old FINAL/retrogen chunks may need vanilla's asynchronous upgrade generation. Load through `AreaLoader` with

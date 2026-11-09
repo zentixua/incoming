@@ -188,18 +188,19 @@ public final class FlashScorch {
 
     /**
      * Light scorch reach, horizontal blocks from epicenter: ground scorch ({@link RuinPlanner#scorchReach}), fires (ignition
-     * on slopes toward burst), face char (light at ball height); capped at ruin radius — no wave ruins beyond it.
+     * threshold, no slope gain: {@link ThermalModel#ignite}), face char (light at ball height); capped at ruin radius — no wave
+     * ruins beyond it.
      */
     static double reach(Detonation d) {
         double lo = 0, hi = d.ruinRadius();
         for (int i = 0; i < 40; i++) {
             double r = (lo + hi) / 2;
             Vec3 ground = new Vec3(d.burst().x + r, d.groundY() + 1, d.burst().z), high = new Vec3(d.burst().x + r, d.burst().y, d.burst().z);
-            double q = d.fluence(ground) * 2.5;
-            if (q >= ThermalModel.IGNITE || FlashChar.possible(d.fluence(high), FlashChar.CHARS) || FlashChar.possible(d.fluence(high), FlashChar.SOOTS)) lo = r;
+            if (d.fluence(ground) >= ThermalModel.ignite(d.yieldKt()) || FlashChar.possible(d.fluence(high), FlashChar.CHARS) || FlashChar.possible(d.fluence(high), FlashChar.SOOTS)) lo = r;
             else hi = r;
         }
-        return Math.max(lo, RuinPlanner.scorchReach(d));
+        // 5 % margin: ground above the burst's ground sits nearer the ball (a 100-block hill: +1–2 % light at the ignition edge)
+        return Math.max(Math.min(d.ruinRadius(), lo * 1.05), RuinPlanner.scorchReach(d));
     }
 
     /**
@@ -405,7 +406,7 @@ public final class FlashScorch {
             if (seen[j]) seenCount++;
             // light at the chunk's ground point nearest the ball: ignition threshold reached there before the rest of the chunk
             double x = Mth.clamp(d.burst().x, p.getMinBlockX(), p.getMaxBlockX() + 1), z = Mth.clamp(d.burst().z, p.getMinBlockZ(), p.getMaxBlockZ() + 1);
-            due[j] = d.gameTime() + (long) Math.ceil(d.flashTicks(d.fluence(new Vec3(x, d.groundY() + 1, z)), ThermalModel.IGNITE));
+            due[j] = d.gameTime() + (long) Math.ceil(d.flashTicks(d.fluence(new Vec3(x, d.groundY() + 1, z)), ThermalModel.ignite(d.yieldKt())));
         }
     }
 }

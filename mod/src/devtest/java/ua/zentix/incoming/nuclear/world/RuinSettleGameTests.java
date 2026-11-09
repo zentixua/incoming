@@ -81,7 +81,8 @@ public final class RuinSettleGameTests {
         RuinContext.Grid grid = ctx.cachedGridForTest(level, target);
         RuinPlan plan = RuinPlanner.finish(grid, Collapse.solve(grid));
         h.assertTrue(plan.changedBlocks() > 0, "fixture has no planned changes");
-        LevelChunkSection[] expected = plan.testAppliedCopy(level, source);
+        // A past detonation ignites nothing (its fires burned out long ago): expect the plan without its fires.
+        LevelChunkSection[] expected = plan.testAppliedCopy(level, source, false);
         // As in a 3.10.3 save: retained event, with no settlement data and no live onDetonation call.
         events.past().add(d);
         events.setDirty();
