@@ -605,21 +605,23 @@ public final class S2C {
      * outage), where lamps short with EMP arcs.
      * <p>
      * Format only grows at end (replay.md): 3.1.0 fields, then {@code wave}, {@code blackout}, detonation time of day
-     * ({@link Detonation#dayTime}) and fires ({@link Detonation#fires}), each appended to packet end; recordings
-     * predating them read “as before”: wall speed {@link Detonation#OLD_WAVE}, no EMP, time of day
-     * unknown, fires enabled.
+     * ({@link Detonation#dayTime}), fires ({@link Detonation#fires}), strike id and black rain ({@link Detonation#rain}),
+     * each appended to packet end; recordings predating them read “as before”: wall speed {@link Detonation#OLD_WAVE},
+     * no EMP, time of day unknown, fires enabled, no strike, black rain enabled.
      */
     public record NukeDetonation(Detonation detonation, float blackout, int strikeId) implements CustomPacketPayload {
         public NukeDetonation(Detonation detonation, float blackout) { this(detonation, blackout, -1); }
         public static final Type<NukeDetonation> TYPE = new Type<>(Incoming.id("nuke_detonation"));
-        public static final StreamCodec<ByteBuf, NukeDetonation> CODEC = StreamCodec.composite(
+        public static final StreamCodec<ByteBuf, NukeDetonation> CODEC = NeoForgeStreamCodecs.composite(
                 Detonation.STREAM_CODEC, NukeDetonation::detonation,
                 StreamCodecs.trailing(ByteBufCodecs.FLOAT, Detonation.OLD_WAVE), p -> p.detonation.wave(),
                 StreamCodecs.trailing(ByteBufCodecs.FLOAT, 0f), NukeDetonation::blackout,
                 StreamCodecs.trailing(ByteBufCodecs.VAR_LONG, Detonation.NO_DAY_TIME), p -> p.detonation.dayTime(),
                 StreamCodecs.trailing(ByteBufCodecs.BOOL, true), p -> p.detonation.fires(),
                 StreamCodecs.trailing(ByteBufCodecs.VAR_INT, -1), NukeDetonation::strikeId,
-                (d, wave, blackout, dayTime, fires, strikeId) -> new NukeDetonation(d.withWave(wave).withDayTime(dayTime).withFires(fires), blackout, strikeId));
+                StreamCodecs.trailing(ByteBufCodecs.BOOL, true), p -> p.detonation.rain(),
+                (d, wave, blackout, dayTime, fires, strikeId, rain) -> new NukeDetonation(
+                        d.withWave(wave).withDayTime(dayTime).withFires(fires).withRain(rain), blackout, strikeId));
 
         @Override
         public Type<? extends CustomPacketPayload> type() {
@@ -678,7 +680,7 @@ public final class S2C {
     /**
      * World entry/dimension change: active detonations and flying ICBMs in this dimension. Listed detonations use 3.1.0
      * fields ({@link Detonation#STREAM_CODEC}); additional data (wall speed {@link Detonation#wave}, time
-     * of day {@link Detonation#dayTime}, fires {@link Detonation#fires}) in trailing packet lists, one entry per detonation
+     * of day {@link Detonation#dayTime}, fires {@link Detonation#fires}, black rain {@link Detonation#rain}) in trailing packet lists, one entry per detonation
      * (format grows at end, replay.md): older recordings lack lists — “as before”.
      */
     public record NukeSync(List<Detonation> detonations, List<NukeWarning> warnings)
@@ -693,20 +695,24 @@ public final class S2C {
                 p -> p.detonations.stream().map(Detonation::dayTime).toList(),
                 StreamCodecs.trailing(ByteBufCodecs.BOOL.apply(ByteBufCodecs.list()), List.of()),
                 p -> p.detonations.stream().map(Detonation::fires).toList(),
-                (detonations, warnings, waves, dayTimes, fires) -> new NukeSync(extended(detonations, waves, dayTimes, fires), warnings));
+                StreamCodecs.trailing(ByteBufCodecs.BOOL.apply(ByteBufCodecs.list()), List.of()),
+                p -> p.detonations.stream().map(Detonation::rain).toList(),
+                (detonations, warnings, waves, dayTimes, fires, rain) -> new NukeSync(extended(detonations, waves, dayTimes, fires, rain), warnings));
 
         /** Detonations with trailing-list fields (empty list: field absent from recording). */
         private static List<Detonation> extended(List<Detonation> detonations, List<Float> waves, List<Long> dayTimes,
-                List<Boolean> fires) {
+                List<Boolean> fires, List<Boolean> rain) {
             check("waves", waves, detonations);
             check("day times", dayTimes, detonations);
             check("fires", fires, detonations);
+            check("black rain", rain, detonations);
             List<Detonation> out = new ArrayList<>(detonations.size());
             for (int i = 0; i < detonations.size(); i++) {
                 Detonation d = detonations.get(i);
                 if (!waves.isEmpty()) d = d.withWave(waves.get(i));
                 if (!dayTimes.isEmpty()) d = d.withDayTime(dayTimes.get(i));
                 if (!fires.isEmpty()) d = d.withFires(fires.get(i));
+                if (!rain.isEmpty()) d = d.withRain(rain.get(i));
                 out.add(d);
             }
             return out;

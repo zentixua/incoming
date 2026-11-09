@@ -85,7 +85,8 @@ public final class NuclearWarhead {
                 level.getGameTime(), (float) wind.direction(), (float) wind.speed(),
                 g.visibility(), random.nextLong(), scale, IncomingConfig.SERVER.nukeFallout.get(),
                 (float) IncomingConfig.SERVER.waveSpeed(), level.getDayTime(),
-                IncomingConfig.SERVER.nukeFires.get() && IncomingConfig.SERVER.nukeMaxFires.get() > 0);
+                IncomingConfig.SERVER.nukeFires.get() && IncomingConfig.SERVER.nukeMaxFires.get() > 0,
+                IncomingConfig.SERVER.nukeBlackRain.get());
         events.add(d);
         PacketDistributor.sendToPlayersInDimension(level, new S2C.NukeDetonation(d, (float) Blackouts.nukeRadius(d), strikeId));
 

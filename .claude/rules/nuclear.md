@@ -245,7 +245,9 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   water/ice/snow (client chunks, `TerrainTiles.wet` map tiles) do not burn (`FireStorm.survey`, 128 cells/tick); unknown
   cells use epicenter conditions (`NukeWater.under`: distant sea burst does not burn sea); seen cells remain seen.
   Server fires disabled (`nuclear.fires`, `fires_per_detonation` = 0) means no fire zone (`PallField`: no haze or glow),
-  storm or roar: `Detonation.fires` (settings at detonation, in detonation packet; absent field defaults yes). Storm
+  storm or roar: `Detonation.fires` (settings at detonation, in detonation packet; absent field defaults yes). Black rain
+  needs fires and `Detonation.rain` (`nuclear.black_rain` at detonation, same packet rule): off, `BlackRainModel` gets no
+  fire zone, so no rain picture/sound, washout or skin contamination on server and client alike. Storm
   also fades where fire was extinguished: `FireStorm.trust` checks local-chunk fire only while young (later vanilla
   fire burns out independently, storm lasts until morning); lives with storm, including after replay seek; no local
   zone chunks in this period means trust 1. Column laws (drift, width, map levels) are in Java and copied in

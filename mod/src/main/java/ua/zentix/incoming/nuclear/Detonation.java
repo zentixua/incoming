@@ -43,10 +43,12 @@ import ua.zentix.incoming.util.Terrain;
  * @param fires     server ignites fires for this detonation ({@code nuclear.fires} and {@code fires_per_detonation}
  *                   at detonation): without them client has no firestorm or fire roar; old-version saved or
  *                   replayed detonations default to yes, as before
+ * @param rain      black rain falls from this detonation's fires ({@code nuclear.black_rain} at detonation): without it no
+ *                   rain, its washout or skin contamination; old-version saved or replayed detonations default to yes, as before
  */
 public record Detonation(int id, Vec3 burst, double groundY, double yieldKt, boolean surface, long gameTime,
                          float windDir, float windSpeed, float visibility, long seed, float scale, boolean fallout, float wave,
-                         long dayTime, boolean fires) {
+                         long dayTime, boolean fires, boolean rain) {
 
     /** Distant wall speed for detonations saved before {@code wave_speed}: 3 blocks per tick. */
     public static final float OLD_WAVE = (float) (3 / FrontProfile.SOUND_SPEED);
@@ -66,6 +68,13 @@ public record Detonation(int id, Vec3 burst, double groundY, double yieldKt, boo
         this(id, burst, groundY, yieldKt, surface, gameTime, windDir, windSpeed, visibility, seed, scale, fallout, wave, dayTime, true);
     }
 
+    /** Detonation with black rain. */
+    public Detonation(int id, Vec3 burst, double groundY, double yieldKt, boolean surface, long gameTime,
+                      float windDir, float windSpeed, float visibility, long seed, float scale, boolean fallout, float wave,
+                      long dayTime, boolean fires) {
+        this(id, burst, groundY, yieldKt, surface, gameTime, windDir, windSpeed, visibility, seed, scale, fallout, wave, dayTime, fires, true);
+    }
+
     public static final Codec<Detonation> CODEC = RecordCodecBuilder.create(i -> i.group(
             Codec.INT.fieldOf("id").forGetter(Detonation::id),
             Vec3.CODEC.fieldOf("burst").forGetter(Detonation::burst),
@@ -81,7 +90,8 @@ public record Detonation(int id, Vec3 burst, double groundY, double yieldKt, boo
             Codec.BOOL.fieldOf("fallout").forGetter(Detonation::fallout),
             Codec.FLOAT.optionalFieldOf("wave", OLD_WAVE).forGetter(Detonation::wave),
             Codec.LONG.optionalFieldOf("day_time", NO_DAY_TIME).forGetter(Detonation::dayTime),
-            Codec.BOOL.optionalFieldOf("fires", true).forGetter(Detonation::fires)
+            Codec.BOOL.optionalFieldOf("fires", true).forGetter(Detonation::fires),
+            Codec.BOOL.optionalFieldOf("black_rain", true).forGetter(Detonation::rain)
     ).apply(i, Detonation::new));
 
     /**
@@ -114,15 +124,19 @@ public record Detonation(int id, Vec3 burst, double groundY, double yieldKt, boo
     };
 
     public Detonation withWave(float wave) {
-        return new Detonation(id, burst, groundY, yieldKt, surface, gameTime, windDir, windSpeed, visibility, seed, scale, fallout, wave, dayTime, fires);
+        return new Detonation(id, burst, groundY, yieldKt, surface, gameTime, windDir, windSpeed, visibility, seed, scale, fallout, wave, dayTime, fires, rain);
     }
 
     public Detonation withFires(boolean fires) {
-        return new Detonation(id, burst, groundY, yieldKt, surface, gameTime, windDir, windSpeed, visibility, seed, scale, fallout, wave, dayTime, fires);
+        return new Detonation(id, burst, groundY, yieldKt, surface, gameTime, windDir, windSpeed, visibility, seed, scale, fallout, wave, dayTime, fires, rain);
+    }
+
+    public Detonation withRain(boolean rain) {
+        return new Detonation(id, burst, groundY, yieldKt, surface, gameTime, windDir, windSpeed, visibility, seed, scale, fallout, wave, dayTime, fires, rain);
     }
 
     public Detonation withDayTime(long dayTime) {
-        return new Detonation(id, burst, groundY, yieldKt, surface, gameTime, windDir, windSpeed, visibility, seed, scale, fallout, wave, dayTime, fires);
+        return new Detonation(id, burst, groundY, yieldKt, surface, gameTime, windDir, windSpeed, visibility, seed, scale, fallout, wave, dayTime, fires, rain);
     }
 
     /** Whether detonation time of day is known ({@link #dayTime}). */
@@ -339,7 +353,7 @@ public record Detonation(int id, Vec3 burst, double groundY, double yieldKt, boo
         return new FalloutModel(yieldKt, hobMetres(), windDir, windSpeed);
     }
 
-    /** Black rain from this detonation's fires (no fires, no rain). */
+    /** Black rain from this detonation's fires (no fires or rain disabled at detonation, no rain). */
     public BlackRainModel blackRainModel() {
         return Caches.blackRain(this);
     }
@@ -432,10 +446,11 @@ public record Detonation(int id, Vec3 burst, double groundY, double yieldKt, boo
 
         static BlackRainModel blackRain(Detonation d) {
             return RAIN.computeIfAbsent(d, x -> {
-                // fire zone where light ignites (as for ruins and client firestorm); absent if server does not ignite fires
+                // fire zone where light ignites (as for ruins and client firestorm); absent if server does not ignite fires;
+                // without black rain (world rule) the fires make no rain cloud
                 double hob = Math.max(0, x.hobMetres());
                 double slant = ThermalModel.rangeForFluence(ThermalModel.IGNITE, x.yieldKt, x.surface, x.visibility);
-                double fire = x.fires ? Math.sqrt(Math.max(0, slant * slant - hob * hob)) : 0;
+                double fire = x.fires && x.rain ? Math.sqrt(Math.max(0, slant * slant - hob * hob)) : 0;
                 return new BlackRainModel(x.yieldKt, fire, x.windDir, x.windSpeed, 1 - x.falloutModel().surfaceFraction());
             });
         }
