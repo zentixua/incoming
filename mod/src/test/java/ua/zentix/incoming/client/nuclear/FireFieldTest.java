@@ -123,11 +123,11 @@ class FireFieldTest {
     void lightReachesTheThresholdWithinThePulse() {
         double pulse = AIR.pulseTicks();
         assertEquals(20 * FireballModel.pulseSeconds(15), pulse, 1e-9);
-        assertEquals(pulse, AIR.flashTicks(ThermalModel.IGNITE, ThermalModel.IGNITE), 1e-9, "on the threshold - towards the end of the impulse");
-        assertEquals(pulse, AIR.flashTicks(1, ThermalModel.IGNITE), 1e-9, "below the threshold - towards the end of the impulse");
+        assertEquals(pulse, AIR.flashTicks(ThermalModel.ignite(AIR.yieldKt()), ThermalModel.ignite(AIR.yieldKt())), 1e-9, "on the threshold - towards the end of the impulse");
+        assertEquals(pulse, AIR.flashTicks(1, ThermalModel.ignite(AIR.yieldKt())), 1e-9, "below the threshold - towards the end of the impulse");
         double last = pulse;
-        for (double q = ThermalModel.IGNITE * 1.1; q < 1e4; q *= 1.5) {
-            double t = AIR.flashTicks(q, ThermalModel.IGNITE);
+        for (double q = ThermalModel.ignite(AIR.yieldKt()) * 1.1; q < 1e4; q *= 1.5) {
+            double t = AIR.flashTicks(q, ThermalModel.ignite(AIR.yieldKt()));
             assertTrue(t < last && t > 0, "the brighter, the sooner: " + q + " — " + t);
             last = t;
         }

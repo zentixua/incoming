@@ -80,7 +80,7 @@ class FireStormTest {
                 assertTrue(g.strength()[k] <= g.before()[k] && g.strength()[k] >= FireField.BLOWN_KEEP * g.before()[k] - 1e-6, "the wave knocks down no more than half");
                 assertEquals(Math.pow(g.strength()[k], FireStorm.COLUMN_POWER), g.column()[k], 1e-5, "pillar - strength to degree");
                 Vec3 p = new Vec3(d.burst().x + xz[0], d.groundY() + 1, d.burst().z + xz[1]);
-                if (d.fluence(p) * Math.exp(-3 * FireStorm.SIGMA_EDGE) >= FireStorm.FULL_Q) {
+                if (d.fluence(p) * Math.exp(-3 * FireStorm.SIGMA_EDGE) >= ThermalModel.igniteAll(d.yieldKt())) {
                     sum += g.strength()[k];
                     expected += FireField.SHARE * (1 - 0.5 * FireStorm.smooth(1.5, 2.5, d.psi(p)));
                     sumBefore += g.before()[k];
@@ -126,7 +126,7 @@ class FireStormTest {
             double[] xz = centre(g, g.index()[k]);
             double wave = AIR.arrivalTicks(Math.hypot(Math.hypot(xz[0], xz[1]), AIR.burst().y - AIR.groundY()));
             Vec3 p = new Vec3(AIR.burst().x + xz[0], AIR.groundY() + 1, AIR.burst().z + xz[1]);
-            double flash = AIR.flashTicks(AIR.fluence(p), ThermalModel.IGNITE);
+            double flash = AIR.flashTicks(AIR.fluence(p), ThermalModel.ignite(AIR.yieldKt()));
             assertTrue(flash >= 0 && flash <= AIR.pulseTicks() + 1e-6, "light reaches a threshold per pulse: " + flash);
             assertTrue(g.start()[k] >= flash - 1e-3 && g.start()[k] <= flash + 20 * FireStorm.IGNITE_SPREAD_S + 1, "arson " + g.start()[k] + ", flash " + flash);
             assertEquals(wave, g.arrival()[k], 1e-2, "wave");

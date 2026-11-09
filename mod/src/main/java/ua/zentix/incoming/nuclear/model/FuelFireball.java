@@ -9,7 +9,7 @@ package ua.zentix.incoming.nuclear.model;
 public final class FuelFireball {
     /** Ball surface emission, W/m²: midpoint of 200–350 kW/m² (CCPS). */
     public static final double SURFACE_POWER = 275e3;
-    /** Joules per calorie: ignition fluence uses cal/cm², as for nuclear ({@link ThermalModel#IGNITE}). */
+    /** Joules per calorie: ignition fluence uses cal/cm², as for nuclear ({@link ThermalModel#ignite}). */
     private static final double J_PER_CAL_CM2 = 4.1868e4;
     /**
      * Share of impact fuel remaining in the crater and burning there instead of spraying into the fireball: Sandia

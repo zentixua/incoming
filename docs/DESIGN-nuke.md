@@ -576,7 +576,8 @@ teleport then) run 24/tick, echo starts later. Live only: no echo on seek/world 
 voices/loops.
 
 **Burning city** (`client/nuclear/NukeAfter`, `FireField`, `FireWatch`). Client lacks server fire settings, so distant
-`FireField` model: 32-block rings, column-burning share same as ruins (`min(1, q/20)`, 60 % columns flammable), flash
+`FireField` model: 32-block rings, column-burning share same as ruins (from the yield-dependent threshold `ThermalModel.ignite` (foliage, Glasstone tables
+7.35/7.40: 15 kt 3.6, 1 Mt 6.0 cal/cm²) up to `min(1, q/igniteAll)`, 4× threshold; 60 % columns flammable), flash
 ignites, ≥ 2 psi wave blows out half; default `fires_per_detonation` 20 000 using server post-wave count (15 kt airburst
 40 000 before wave to ~146 blocks, 20 000 after), grow 20 s, decay with 5 min time. Local chunks count real fire blocks
 (fire-palette sections sample every 8th block, chunks fitting 0.1 ms/tick; detailed-city scenario 0.13 ms/tick versus
