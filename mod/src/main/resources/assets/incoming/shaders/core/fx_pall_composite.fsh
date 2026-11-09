@@ -297,9 +297,26 @@ void main() {
     ivec2 fullSize = textureSize(Sampler1, 0), lowSize = textureSize(Sampler0, 0);
     ivec2 full = ivec2(gl_FragCoord.xy);
     float depth = pallScene(texelFetch(Sampler1, clamp(full, ivec2(0), fullSize - 1), 0).r);
-    // first-person hand under Iris (pallHand): left as vanilla draws it, after the layer — no dust, no shadow
+    // first-person hand under Iris (pallHand): left as vanilla draws it, after the layer — no dust, no shadow; a fireball still
+    // lights it as it lights the world around (ballLight, with the pall overhead at the eye): a dark hand in a world the flash
+    // made bright looked cut out of another scene
     if (pallHand(depth)) {
         fragColor = vec4(0.0, 0.0, 0.0, 1.0);
+        if (PallBalls[0].w > 0.0) {
+            vec4 farHand = InvViewProj * vec4((vec2(full) + 0.5) / vec2(fullSize) * 2.0 - 1.0, 1.0, 1.0);
+            vec3 dirHand = normalize(farHand.xyz / farHand.w);
+            vec3 p = dirHand * (depth / max(dot(dirHand, PallForward), 1e-3));
+            vec3 n = sceneNormal(Sampler1, InvViewProj, PallForward, full, fullSize, p);
+            vec3 added = ballLight(p, n, pallOver(p));
+            if (dot(added, LUMA) > 1e-6) {
+                vec3 world = texelFetch(Sampler9, full, 0).rgb, open = PallOpenSky * faceShade(PallFaceShade, n);
+                vec3 lit = vec3(relit(world.r, 1.0, open.r, added.r), relit(world.g, 1.0, open.g, added.g),
+                        relit(world.b, 1.0, open.b, added.b));
+                lit += vec3(CROSS * max(dot(lit, LUMA) - 1.0, 0.0));
+                vec3 shown = vec3(pallDisplay(lit.r), pallDisplay(lit.g), pallDisplay(lit.b));
+                fragColor = vec4(shown / max(max(max(shown.r, shown.g), shown.b), 1.0), 0.0);
+            }
+        }
         return;
     }
     vec2 ndc0 = (vec2(full) + 0.5) / vec2(fullSize) * 2.0 - 1.0;

@@ -174,6 +174,21 @@ class ShaderSourceTest {
     }
 
     /**
+     * The first-person hand under Iris gets no dust and no pall shadow, but a fireball lights it as it lights the world:
+     * skipped by the whole composite, it stayed dark in a world the night flash made bright (3.11.0 check, 09.11).
+     */
+    @Test
+    void fireballLightsTheHand() throws IOException, URISyntaxException {
+        Path core = Path.of(ShaderSourceTest.class.getResource("/assets/incoming/shaders/core").toURI());
+        String main = blankComments(body(Files.readString(core.resolve("fx_pall_composite.fsh")), "void main("));
+        int hand = main.indexOf("if (pallHand(depth))"), after = main.indexOf("return;", hand);
+        assertTrue(hand >= 0 && after > hand, "composite: no hand branch");
+        String branch = main.substring(hand, after);
+        assertTrue(branch.contains("ballLight("), "composite: the fireball does not light the hand");
+        assertFalse(branch.contains("froxelNear(") || branch.contains("upsample("), "composite: dust drawn over the hand");
+    }
+
+    /**
      * The dust-wall head nearer than the near volume's far boundary is marched by the rays per pixel, not sampled by the
      * volume's cells (one point per cell drew the moving roller as clumps with holes): every reader of the volume ends it
      * where the rays begin, at froxelEnd, or near pall is counted twice or not at all.
