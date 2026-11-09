@@ -32,6 +32,8 @@ public final class EyeGameTests {
     /** Real propagated skylight, including a torch-lit sealed chamber and a side opening. */
     @GameTest(template = "range", batch = "nuke_eyes_shelter", skyAccess = true, timeoutTicks = 400)
     public static void openingsAdmitFlashButLampsDoNot(GameTestHelper h) {
+        // Vanilla light propagation runs off-thread; unthrottled GameTest ticks can exhaust its deadline first.
+        StrikeGameTests.gameSpeed(h);
         ServerLevel level = h.getLevel();
         BlockPos eye = h.absolutePos(new BlockPos(32, 8, 32));
         for (BlockPos p : BlockPos.betweenClosed(eye.offset(-4, -2, -4), eye.offset(4, 4, 4))) {
