@@ -87,6 +87,9 @@ paths:
   (1200 = one game minute): a test waiting for background generation of a fresh area must run at game speed
   (`gameSpeed` in `StrikeGameTests`) or generate needed chunks synchronously (`level.getChunk`); otherwise it passes
   locally and fails on CI.
+- Fixtures awaiting vanilla light propagation also use `StrikeGameTests.gameSpeed`: `nuke_eyes_shelter` exhausted
+  400 unthrottled ticks in 0.4 s on CI before its opened window received skylight. Keep assertions on actual light,
+  not a fixed tick delay or a manually filled light array.
 - Before a launch-sector test in CI, the next grid row's platform already stands ahead toward +Z (FV diagnosis:
   another platform's ground 41 blocks ahead of the runway); missile elevation after arming reads terrain hundreds of
   blocks ahead (`Airframe.reliefLookahead`): an “empty runway” depended on shard composition and became blocked when
@@ -145,3 +148,10 @@ paths:
   (`RuinPlanner.leavesRubble`): a lone test block must sit where it leaves none (`blastBreaksLightKeepsMasonryFellsTrees`).
 - Background ruin workers run in wall time (0.5–1.3 s for a 1 kt chunk locally, 50–510 unthrottled ticks): a test that
   waits for them runs at game speed (`chunkWithheldUntilRuins`), or CI's unthrottled ticks spend its timeout first.
+- Light leases retain chunks after a fixture removes its own ticket, until committed light changes can be saved.
+  Assert partial conversion when removing that ticket, not at eventual unload (`grid_tower`). Fixtures isolating
+  ScarQueue neighbor handoff seed current-light chunks with `LIGHT_REPAIRED`: prior batches' scar/outage contexts
+  could otherwise trigger legitimate legacy recovery, borrowing neighbors and bypassing the intended deadlock.
+  Disk-light fixtures give vanilla a bounded spare-time unload pass before checking `pendingUnloads`: GameTest
+  pacing may otherwise consume the entire tick deadline. Do not pass unconditional true when generation holders
+  could be revived; their unload callbacks can reenqueue until server tasks get a turn.

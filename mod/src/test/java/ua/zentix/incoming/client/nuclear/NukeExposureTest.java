@@ -100,7 +100,8 @@ class NukeExposureTest {
                     double contrast = MushroomFieldContrast.of(ball[0]);
                     double lo = 1 + (percentile(d, ball[0], 0.1) - 1) * contrast * ball[1];
                     double hi = 1 + (percentile(d, ball[0], 0.9) - 1) * contrast * ball[1];
-                    double core = MushroomModel.coreTemperature(t, y, surface), share = MushroomModel.edgeShare(t, y, surface);
+                    MushroomModel.Shape shape = MushroomModel.shape(t, y, hob, surface, 0);
+                    double core = ua.zentix.incoming.nuclear.model.FlashLight.coreTemperature(shape, y, surface), share = ua.zentix.incoming.nuclear.model.FlashLight.edgeShare(shape, y, surface, core);
                     double amb = FireballModel.AMBIENT_K, dT = core - amb;
                     for (double adapt : new double[]{DAY, NIGHT}) {
                         double gain = NukeExposure.gain(BlackBody.luminance(amb + dT * share) * adapt, adapt);
@@ -210,9 +211,9 @@ class NukeExposureTest {
             new Block("mushAt (glow)", "vec3 thermal = bb * (1.0 - w * 0.6 * exp(-kd * escape));", "// Mushroom step at ray t", """
                     vec3 thermal = bb * (1.0 - w * 0.6 * exp(-kd * escape)); vec3 source = w * light;
                     if (fromCarpet > 0.0) source = mix(source, carpetLight, fromCarpet); hot = st * thermal * (1.0 - fromCarpet);
-                    float key = dot(mushBlackBody(Sampler7, m.tAmb + m.dT * m.edge), LUMA) * PallExposure * pallAir(PallAir, length(p), gDir.y);
-                    glow = hot * mushBallGain(key, PallExposure); float roll = clamp(m.ringR / max(MUSH_RING * m.capR, 1.0), 0.0, 1.0);
-                    film = dot(hot, LUMA) * mushFilmShareLit(roll, key / max(PallExposure, 1e-9)); return vec4(st * source, st); }
+                    float key = dot(mushBlackBody(Sampler7, m.tAmb + m.dT * m.edge), LUMA) * PallBodyExposure * pallAir(PallAir, length(p), gDir.y);
+                    glow = hot * (PallBodyExposure / max(PallExposure, 1e-9)) * mushBallGain(key, PallBodyExposure); float roll = clamp(m.ringR / max(MUSH_RING * m.capR, 1.0), 0.0, 1.0);
+                    film = dot(hot, LUMA) * mushFilmShareLit(roll, key / max(PallBodyExposure, 1e-9)); return vec4(st * source, st); }
                     """),
             new Block("mushStep", "vec4 mushStep(", "// ----", """
                     vec4 mushStep(float t, float cone, out float gap, out vec3 heat, out vec3 glow, out float film) { vec4 sum = vec4(0.0);
@@ -286,7 +287,7 @@ class NukeExposureTest {
         String[][] mutations = {
                 {"filmed += part * film;", "filmed += part * 0.0;", "main (ray accumulation)"},
                 {"vec3 shown = pallShown(light + heat, cover);", "vec3 shown = pallShown(light, cover);", "main (pixel assembly)"},
-                {"film = dot(hot, LUMA) * mushFilmShareLit(roll, key / max(PallExposure, 1e-9));", "film = dot(hot, LUMA) * mushFilmShare(roll);", "mushAt (glow)"},
+                {"film = dot(hot, LUMA) * mushFilmShareLit(roll, key / max(PallBodyExposure, 1e-9));", "film = dot(hot, LUMA) * mushFilmShare(roll);", "mushAt (glow)"},
                 {"vec3(1.0)), film);", "vec3(1.0)), 1.0 - film);", "main (pixel assembly)"},
                 {"heat += partHeat;", "heat += partGlow;", "mushStep"},
                 {"medium += vec3(PALL_CROSS * max(dot(medium, PALL_LUMA) - 1.0, 0.0));", "", "pallShown"}};

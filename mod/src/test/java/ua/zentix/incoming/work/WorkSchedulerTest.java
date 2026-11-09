@@ -16,6 +16,21 @@ class WorkSchedulerTest {
      * 8 ms for ruin preparation): blackout and nuke GameTest results remain unchanged.
      */
     @Test
+    void everyWorldGetsBothQueuesFirstEvenWithEvenWorldCounts() {
+        for (int worlds : new int[]{1, 2, 3, 4, 7, 8}) {
+            boolean[][] serviced = new boolean[worlds][2];
+            for (int tick = 0; tick < 2 * worlds; tick++) {
+                int firstWorld = tick % worlds;
+                serviced[firstWorld][WorkScheduler.lightFirst(tick, worlds) ? 0 : 1] = true;
+            }
+            for (boolean[] world : serviced) {
+                assertTrue(world[0], "lighting starved with " + worlds + " worlds");
+                assertTrue(world[1], "impacts starved with " + worlds + " worlds");
+            }
+        }
+    }
+
+    @Test
     void sharesKeepTheOldLimitsAtTheDefaultBudget() {
         assertEquals(4 * MS, GRID_CAP);
         assertEquals(8 * MS, (long) (TOTAL * WorkScheduler.PREP_SHARE));

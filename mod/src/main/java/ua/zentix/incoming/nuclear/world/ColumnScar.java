@@ -84,6 +84,7 @@ public final class ColumnScar {
             level.getChunkAt(pos).pendingBlockEntities.remove(pos);
         }
         if (!old.is(with.getBlock())) PoiRecords.recordIfMissing(level, pos, old);
+        ua.zentix.incoming.work.BlockLighting.changed(level, pos);
         level.setBlock(pos, with, flags);
     }
 

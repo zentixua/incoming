@@ -388,6 +388,7 @@ public final class FuelFires {
             BlockPos n = cell.relative(d);
             if (level.getBlockState(n).isFlammable(level, n, d.getOpposite())) return;
         }
+        ua.zentix.incoming.work.BlockLighting.changed(level, cell);
         level.removeBlock(cell, false);
     }
 

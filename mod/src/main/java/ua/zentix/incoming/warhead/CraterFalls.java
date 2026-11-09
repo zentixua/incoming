@@ -122,6 +122,7 @@ public final class CraterFalls {
             admit(falling, in);
             return false;
         }
+        ua.zentix.incoming.work.BlockLighting.changed(level, rest);
         settled++;
         return true;
     }

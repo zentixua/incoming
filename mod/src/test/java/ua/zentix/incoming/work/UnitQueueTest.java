@@ -14,6 +14,28 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 class UnitQueueTest {
     private static final long MS = 1_000_000L;
 
+    @Test
+    void asynchronousContinuationResamplesReadiness() {
+        UnitQueue queue = new UnitQueue();
+        boolean[] ready = {true};
+        int[] steps = {0};
+        queue.add(0, new UnitQueue.Job() {
+            @Override public boolean dynamicReadiness() { return true; }
+            @Override public boolean ready(ServerLevel level) { return ready[0]; }
+            @Override public boolean step(ServerLevel level) {
+                steps[0]++;
+                if (steps[0] == 2) ready[0] = false;
+                return steps[0] < 3;
+            }
+            @Override public String describe() { return "async continuation"; }
+        });
+        tick(queue, WorkClock.counting(MS), 100 * MS, 0);
+        assertEquals(2, steps[0], "a continuation must not join its pending future in the same window");
+        ready[0] = true;
+        tick(queue, WorkClock.counting(MS), 100 * MS, 1);
+        assertTrue(queue.isEmpty());
+    }
+
     /** A job of {@code units} work units; logs "name:number" and "name:end". */
     private static final class Fake implements UnitQueue.Job {
         final String name;

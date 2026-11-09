@@ -640,9 +640,36 @@ All from one `ClientNuclearEvents` list (event + time), updated in `ClientTickEv
 - **Flash — `NukeFlash`** GUI layer: overexposed frame catches up like camera auto-exposure (presentation,
   `NukeExposure.overexposure`: K^(e^(−u/0.2 s)) after second maximum, K camera sphere light at second maximum relative
   to frame exposure; frame gain/lens-scattered light, 15 kt/1.4 km white to ~0.25 s, normal by 1 s); strength
-  `min(1, Q/2)` if sphere visible/in FOV, otherwise 0.3 of it. Fireball exposed for fire/visible surface, film curve
+  `min(1, Q/2 + 0.6*T)` from admitted fluence and transmission (`FlashLight`; inherited glare calibration, (est.)). Fireball exposed for fire/visible surface, film curve
   like conventional (`NukeExposure`). Blindness: after white, slow-fading dark-orange retinal spot at sphere location
   (gaze-following afterimage), 5–30 s. Field glare/retinal burns §4 “Eyes”. Existing client `flash` (0 disables).
+- **Shared visible source and camera — `FlashLight` / `NukeLight`:** apparent emitting temperature follows
+  `T = 7700 * [(P(t)/P(t_max)) * (R_max/R_cap)^2]^(1/4)`. G&D 1977 fig. 7.84 is normalized thermal power,
+  not visible lumens; `BlackBody` converts its temperature to RGB/photopic luminance. The equivalent spherical
+  cap area is (est.), and the pulse beyond 10 t_max is extrapolated. This escaping brightness temperature replaces
+  the mixed exterior temperature as the light source; the original gas temperature remains for heat/structure.
+  The emitting profile is isothermal before rollup. Afterwards, inverting the existing edge-mixing share is
+  constrained by a running minimum so entrainment cannot reheat the emitting interior. The edge share is then
+  derived from the same escaping temperature. This pure age function uses 64 rollup intervals (est., numerical
+  closure; temperature convergence below 0.1% is tested). Keeping the old core while changing only the edge
+  produced a white interior at 15 kt; unconstrained inversion instead produced a second night glow at 1 kt.
+  It leaves server burn/ignition energy, thermalFraction's normalization at tau=10, and retinal scars unchanged.
+  Peak calibration is retained for compatibility: 7700 K over the existing radius implies 1.77× / 4.84× G&D's
+  absolute peak at 15 / 1000 kt (derived from §7.85, P_max=3.18·Y^0.56 kt/s). This is an inherited radiometric
+  limitation, not a claim of absolute energy agreement; the factor-two source test compares normalized pulse shape
+  after spectral conversion. Correcting absolute calibration and its visual consequences is a separate task.
+  One owner samples each active source before fog: directly visible light keeps total atmospheric transmission;
+  otherwise only `max(0, total - beam)` enters through the sky opening (angularly unresolved diffuse light, (est.)).
+  Raw skylight L maps to `L/(60-3L)`, vanilla brightness without ambient floor; its use as aperture throughput is
+  (est.) because the light engine measures falloff, not solid angle. Zero skylight plus blocked sight means zero
+  new flash. World relight uses the same mapping on its existing OpenAir sky channel; outside that local window,
+  terrain fallback remains coarse and does not resolve directional building shadows.
+  The summed eye light F drives `Sight.exposure(ambient,F)` with a 0.2 s exponential follow in log exposure,
+  using game/render time. Reset/seek reconstructs adapted state; frame readers never advance it separately.
+  World, pall, dust and amber use that exposure. Firebody gain/film retains its ambient reference and cancels frame
+  exposure once. Vanilla sky flash renews one tick only while admitted frame overexposure remains visible.
+  Sources: [G&D VII §§7.14, 7.83–7.88](https://www.atomicarchive.com/resources/documents/effects/glasstone-dolan/chapter7.html),
+  [G&D XII figs. 12.88a/b](https://www.atomicarchive.com/resources/documents/effects/glasstone-dolan/chapter12.html).
 - **Sky/fog** (`ViewportEvent.ComputeFogColor`, `RenderFog`): first seconds white/yellow, then orange-brown; black-rain
   zone gray-brown/nearer.
 - **Fireball — `FireballRenderer`:** icosphere (3 subdivisions), `RenderType.entityTranslucentEmissive`, animated plasma

@@ -610,9 +610,9 @@ public final class GridGameTests {
 
     /**
      * Chunk filled with light: 32 768 blocks of light and lantern (like invisible blocks of light of city maps, up to 7400 per chunk) —
-     *  dozens of units of work. The queue takes him through passages from where he stopped and brings him to the end (the wrong end of the chunk
-     *  would have left the lamps on). Then the chunk is unloaded in the middle of extinguishing (one per tick) and loaded again: in the dark
-     *  quarter - not a single burning lamp; all the light returns. At the pace of the game: the upload is waiting for the chunk to be recorded in the background, and the
+     *  dozens of units of work. The queue resumes its passes until every lamp is dark. The player ticket is removed
+     *  during conversion (one unit per tick); the light lease retains committed edits until they can be saved.
+     *  After unload/reload in the dark district no lamp is lit, and restoration returns all light. At game pace: saving runs in the background, and the
      *  server GameTest would pass the tower without pauses earlier.
      */
     @GameTest(template = "range", timeoutTicks = 2400, batch = "grid_tower", skyAccess = true)
@@ -627,7 +627,6 @@ public final class GridGameTests {
         WorkClock fast = WorkClock.counting(1_000_000L);
         // 3 ms unit with budget 4 ms - one unit per tick: tower extinguishing takes tens of ticks
         WorkClock slow = WorkClock.counting(3_000_000L);
-        long[] lampsAtStart = {0};
         hold(level, far);
         h.startSequence()
                 .thenWaitUntil(() -> {
@@ -653,17 +652,19 @@ public final class GridGameTests {
                     assertLamps(h, level, placed, false);
                 })
                 .thenExecute(() -> {
-                    lampsAtStart[0] = BlackoutWorld.get(level).totals()[BlackoutWorld.Work.LAMPS.ordinal()];
                     Blackouts.useClock(level.getServer(), slow);
                     Blackouts.blackout(level, Vec3.atCenterOf(placed.keySet().iterator().next()), 200, 1000, -1);
                 })
                 // the first lights went out - the chunk leaves memory in the middle of translation
                 .thenWaitUntil(() -> h.assertTrue(placed.keySet().stream().anyMatch(p -> GridLights.isUnlit(level.getBlockState(p))), "extinguishing has not started"))
-                .thenExecute(() -> chunks.removeRegionTicket(HOLD, far, 2, far))
+                .thenExecute(() -> {
+                    long lamps = placed.keySet().stream().filter(p -> GridLights.isUnlit(level.getBlockState(p))).count();
+                    h.assertTrue(lamps > 0 && lamps < placed.size(), "ticket removal missed the partial conversion: " + lamps);
+                    h.assertTrue(ua.zentix.incoming.work.BlockLighting.get(level).heldChunks() > 0, "partial conversion has no light lease");
+                    chunks.removeRegionTicket(HOLD, far, 2, far);
+                })
                 .thenWaitUntil(() -> unloaded(h, level, far))
                 .thenExecute(() -> {
-                    long lamps = BlackoutWorld.get(level).totals()[BlackoutWorld.Work.LAMPS.ordinal()] - lampsAtStart[0];
-                    h.assertTrue(lamps < placed.size(), "the tower went out before unloading (" + lamps + " lamps) - there was no unloading in the middle of the aisle");
                     hold(level, far);
                 })
                 .thenWaitUntil(() -> {

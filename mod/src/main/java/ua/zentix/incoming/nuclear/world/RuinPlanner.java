@@ -868,7 +868,7 @@ public final class RuinPlanner {
                 Blast.Props pw = view.get(was), pn = view.get(now);
                 hashes[i] = RuinPlan.mixNormal(hashes[i], pw.normal());
                 boolean covered = y < newTop[column];
-                boolean light = y == topChanged[column] || pw.emission() > 0 || pn.emission() > 0
+                boolean light = y == topChanged[column] || pw.is(Blast.Props.LIGHT_SOURCE) || pn.is(Blast.Props.LIGHT_SOURCE)
                         || covered && (pw.lightBlock() != pn.lightBlock() || pw.is(Blast.Props.SHAPE_LIGHT) || pn.is(Blast.Props.SHAPE_LIGHT));
                 // a landed container gets its block entity through the world too
                 boolean slow = pw.is(Blast.Props.SLOW) || pn.is(Blast.Props.SLOW);

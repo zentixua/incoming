@@ -257,7 +257,13 @@ public final class RuinSettleGameTests {
     }
 
     static void wholeSavedAreaSettles(GameTestHelper h, boolean checkLss) {
-        StrikeGameTests.gameSpeed(h);
+        long[] pacedAt = {System.nanoTime()}, parked = {0, 0};
+        h.onEachTick(() -> {
+            long began = System.nanoTime(), left;
+            while ((left = pacedAt[0] + 50_000_000L - System.nanoTime()) > 0) java.util.concurrent.locks.LockSupport.parkNanos(left);
+            pacedAt[0] = System.nanoTime();
+            parked[1] = parked[0]; parked[0] = pacedAt[0] - began;
+        });
         ServerLevel level = h.getLevel();
         ChunkPos pad = new ChunkPos(h.absolutePos(new BlockPos(32, 1, 32)));
         ChunkPos center = new ChunkPos(pad.x + 400, pad.z + 400);
@@ -276,7 +282,7 @@ public final class RuinSettleGameTests {
         boolean[] started = {false};
         StrikeGameTests.afterTest(h, () -> { events.past().remove(d); events.setDirty(); NuclearWorld.get(level).clear(level); });
         long[] began = {System.nanoTime()};
-        long[] cost = {0, 0};
+        long[] cost = {0, 0, 0, 0};
         int[] ticks = {0}, confirmed = {0};
         java.util.ArrayDeque<ChunkPos> remaining = new java.util.ArrayDeque<>(targets);
         java.util.Map<ChunkPos, CompletableFuture<Optional<CompoundTag>>> reads = new java.util.LinkedHashMap<>();
@@ -292,6 +298,9 @@ public final class RuinSettleGameTests {
             long took = java.util.Arrays.stream(NuclearWorld.get(level).lastNanos()).sum();
             cost[0] += took;
             cost[1] = Math.max(cost[1], took);
+            long mspt = level.getServer().getTickTimesNanos()[Math.floorMod(level.getServer().getTickCount() - 1, 100)];
+            mspt = Math.max(0, mspt - parked[1]); // GameTest paces inside the tick; exclude that known test-only sleep.
+            cost[2] += mspt; cost[3] = Math.max(cost[3], mspt);
             ticks[0]++;
             var iterator = reads.entrySet().iterator();
             while (iterator.hasNext()) {
@@ -309,9 +318,9 @@ public final class RuinSettleGameTests {
                 reads.put(pos, level.getChunkSource().chunkMap.read(pos));
             }
             if (confirmed[0] < targets.size()) return;
-            Incoming.LOG.info("SETTLEBENCH chunks={} wallMs={} ticks={} nuclearTotalMs={} nuclearMeanMs={} nuclearMaxMs={}",
+            Incoming.LOG.info("SETTLEBENCH chunks={} wallMs={} ticks={} nuclearTotalMs={} nuclearMeanMs={} nuclearMaxMs={} serverMeanWithoutPacingMs={} serverMaxWithoutPacingMs={}",
                     confirmed[0], (System.nanoTime() - began[0]) / 1_000_000, ticks[0], cost[0] / 1_000_000.0,
-                    cost[0] / 1_000_000.0 / ticks[0], cost[1] / 1_000_000.0);
+                    cost[0] / 1_000_000.0 / ticks[0], cost[1] / 1_000_000.0, cost[2] / 1_000_000.0 / ticks[0], cost[3] / 1_000_000.0);
             if (lss != null) lss.report();
             h.succeed();
         });

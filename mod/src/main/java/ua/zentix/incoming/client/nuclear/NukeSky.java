@@ -6,11 +6,7 @@ import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.util.Mth;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.client.event.ViewportEvent;
-import ua.zentix.incoming.client.far.FarView;
-import ua.zentix.incoming.client.far.Sight;
 import ua.zentix.incoming.nuclear.Detonation;
-import ua.zentix.incoming.nuclear.model.MushroomModel;
-import ua.zentix.incoming.nuclear.model.ThermalModel;
 
 /**
  * Sky and fog: white at the flash, then amber while the ball is brighter than the sky ({@link #amber}: seconds by day,
@@ -52,30 +48,10 @@ public final class NukeSky {
         rainTarget = false;
     }
 
-    /** World-space center of the detonation cap ({@link MushroomField#centre}). */
-    private static final double[] CENTRE = new double[3];
-
-    /**
-     * Amber sky from the detonation at the camera 0..1 — ball and cap light at the eye ({@link MushroomModel#light}: black body at their
-     * visible temperature, as (R/d)²) relative to the sky light the eye has adapted to ({@link Sight#adapted}), through the air
-     * ({@link ThermalModel#transmittance}: direct and scattered light together — the amber sky is the ball light scattered by
-     * the air): seconds by day while the ball is brighter than the sky; longer at night while the cap glows; the illuminated sky is visible, like
-     * the flash, from tens of kilometers away.
-     */
+    /** Air-lit sky from the same admitted light and followed exposure as the world and dust. */
     static float amber(ClientNuclear.Active a, Vec3 cam, float partial) {
-        MushroomModel.Shape s = MushroomField.shape(a, partial);
-        if (s == null) return 0;
-        Detonation d = a.d;
-        MushroomField.centre(a, s, CENTRE);
-        double dist = d.metres(Math.sqrt(Mth.square(CENTRE[0] - cam.x) + Mth.square(CENTRE[1] - cam.y) + Mth.square(CENTRE[2] - cam.z)));
-        ClientLevel level = Minecraft.getInstance().level;
-        float ambient = level == null ? 1 : FarView.ambient(level, partial);
-        // ball light at the eye relative to the sky light the eye has adapted to, through air in the weather at detonation (like sky
-        // glare from the flash, NukeFlash: the flash and amber sky are the same light) — with scattered light along the path,
-        // rather than as a beam like the ball glare (NukeRenderer.fireballs): equal to the sky — the sky is half amber
-        double air = ThermalModel.transmittance(dist, d.visibility());
-        double lit = Sight.adapted(MushroomModel.light(s, d.yieldKt(), d.surface(), dist), ambient) * air;
-        return (float) (lit / (1 + lit));
+        double lit = NukeLight.camera(a).light() * NukeLight.exposure();
+        return (float) Math.min(1, lit);
     }
 
     public static void fogColor(ViewportEvent.ComputeFogColor e) {

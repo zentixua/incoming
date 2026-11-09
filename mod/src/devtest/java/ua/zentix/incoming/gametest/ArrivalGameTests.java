@@ -487,6 +487,11 @@ public final class ArrivalGameTests {
                     SubLevelAccess sub = SubLevels.near(level, centre, 8).getFirst();
                     BlockPos plot = BlockPos.containing(SubLevels.toPlot(sub, centre.add(0, 1, 0)));
                     h.assertTrue(SubLevels.inPlotGrid(level, new ChunkPos(plot)), "craft point " + plot + " not in the plot grid");
+                    var lighting = ua.zentix.incoming.work.BlockLighting.get(level);
+                    int lightLeases = lighting.heldChunks();
+                    ua.zentix.incoming.work.BlockLighting.changed(level, plot);
+                    h.assertTrue(lighting.heldChunks() == lightLeases,
+                            "plot edit requested an unavailable vanilla light ring");
                     GameProfile profile = new GameProfile(UUID.randomUUID(), "incoming_arrival_craft");
                     FakePlayer dead = died(level, profile, plot, made);
                     h.assertTrue(ArrivalTickets.count(level, profile.getId()) == 0,

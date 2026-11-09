@@ -53,7 +53,7 @@ class CloudPuffsTest {
         for (double t : new double[]{0.5, 2, 5, 9}) {
             MushroomModel.Shape s = MushroomModel.shape(t, 15, 0, true, 3_000);
             assertTrue(puffs.pallLight(s, light));
-            BlackBody.light(MushroomModel.edgeTemperature(t, 15, true), bb);
+            ua.zentix.incoming.nuclear.model.FlashLight.source(s, 15, true, bb);
             for (int c = 0; c < 3; c++) assertEquals(bb[c], light[4 + c], 1e-6 * bb[c] + 1e-30, t + " s, channel " + c);
             assertTrue(light[4] >= light[5] && light[5] >= light[6], t + " s: warm ball: " + light[4] + " " + light[5] + " " + light[6]);
             for (double m : new double[]{50, 400, 2_000}) {

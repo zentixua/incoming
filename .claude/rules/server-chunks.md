@@ -150,3 +150,28 @@ paths:
   not `runDistanceManagerUpdates`, which copies whole chunk map for new holders, areas taken dozens/tick). Vanilla
   recalculates when called: tick start, sync load, another area's release. Otherwise same-tick versus next-tick area
   ticking depended on others requesting recalculation, hence other strikes.
+
+- Border block light: an INITIALIZE_LIGHT neighbor can have live light storage without being FULL. Light decreases reach
+  it and `ChunkHolder.sectionLightChanged` sets its wrapped LevelChunk dirty, but `ImposterProtoChunk.isUnsaved()` is
+  always false: `ChunkMap.save` skips the proxy, so unload/reload restores old spill. `work/BlockLighting` retains the
+  already FULL edited root through its light fence and saves corrected wrapped neighbors through vanilla ChunkMap
+  (one neighbor per work unit; narrow AT). Promoting the ring to FULL recursively loads a dark city: new FULL chunks
+  enter blackout, then need their own rings (49 batches / 80 promotions for one test root). No neighbor promotion is
+  needed to serialize its existing light. Legacy recovery borrows FULL ring-1 once, giving initialized ring-2
+  as source context for its ring-1 checks; borrowed loads do not recursively admit recovery. Without this extra
+  context, removing a ghost peak could also extinguish valid incoming light from an unavailable outer source.
+  Recovery marks completion with a saved chunk attachment; freshly generated chunks have no legacy spill. Source checks alone do
+  not erase boundary peaks, and boundary checks alone miss unsupported interior maxima from old missed-source checks.
+  Sable plot chunks belong to its storage, not the vanilla chunk map: skip vanilla light leases there through
+  `SubLevels.inPlotGrid`, or the ticket guard leaves a permanently unready batch (`arrival_respawn_craft`).
+  Legacy recovery borrows only wrapped saved FULL neighbors. Genuine ProtoChunks save dirty light normally;
+  promoting them generates terrain outside the ruin plan at the explored-world edge (`nuke_zone_edge`).
+  Pending legacy repair is capped at 128 coordinates per world and owns no tickets or chunk references. One repair
+  is admitted at a time, only if `getChunkNow` still returns the chunk, nearest players first; unloaded/evicted
+  entries remain unmarked for their next load. At most nine FULL leases belong to recovery. Never hold on enqueue:
+  a moving player otherwise pins an old scar zone faster than budgeted repair can drain (`light_repair_moving`, 200 chunks).
+  Mark every scanned FULL chunk after its light fence, not just the center. Fresh generation records current
+  lighting before any later scar/outage; ordinary fixed edits preserve that marker. They cannot certify unknown
+  old arrays: `light_late_fixed_scar` retains 2,363 unrelated old-lit cells before its first recovery.
+  Boundary-only checks clear Zearth's excess, but leave 2,620 cells in legacy scar/outage fixtures and 4,020 with
+  an overlapping outside source; retain interior maxima. Recovery logs one cumulative INFO line per world drain.

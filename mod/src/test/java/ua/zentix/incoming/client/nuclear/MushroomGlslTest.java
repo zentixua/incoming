@@ -345,7 +345,7 @@ class MushroomGlslTest {
     void ballLightMatchesJava() {
         GlslFunction falloff = GlslFunction.parse(GLSL, "mushBallFalloff");
         MushroomModel.Shape s = MushroomModel.shape(3, 15, 0, true, 1e9);
-        double lum = ua.zentix.incoming.nuclear.model.BlackBody.luminance(MushroomModel.edgeTemperature(3, 15, true));
+        double lum = ua.zentix.incoming.nuclear.model.BlackBody.luminance(ua.zentix.incoming.nuclear.model.FlashLight.temperature(3, 15, true, s.capR()));
         for (double d : new double[]{0, 100, s.capR(), 500, 2000, 9000}) {
             double r = s.capR();
             assertEquals(MushroomModel.light(s, 15, true, d) / lum, falloff.call(Map.of("d2", d * d, "r2", r * r)), 1e-9, "d = " + d);

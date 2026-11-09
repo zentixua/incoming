@@ -65,8 +65,7 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   column (`mushAt`), particle light (`FxLights`), world light (`fx_pall_composite`: `MushroomField.balls`, at night to
   ~12 s), glare and veil (`NukeRenderer.fireballs`), amber sky (`NukeSky.amber`; it and `NukeFlash` sky glare use weather
   at detonation, `Detonation.visibility`: air-scattered light, direct+diffuse transmittance
-  `ThermalModel.transmittance`, Glasstone fig. 7.104; glare is a beam, `Sight.Air`; sky-glare share 0.6 and world-flash
-  threshold 0.05 are (est.), `NukeFlash.SKY_GLARE`), dust-wall, pall, Wilson cloud and camera-local dust light
+  `ThermalModel.transmittance`, Glasstone fig. 7.104; glare is a beam, `Sight.Air`; sky-glare share 0.6 is inherited (est.), `FlashLight`), dust-wall, pall, Wilson cloud and camera-local dust light
   (`CloudPuffs.pallLight` → `pallBallLight`, `client-fx.md`). Matter cannot appear brighter than screen white, so at pall
   ray end (`fx_pall`) overbrightness becomes pixel coverage (cover·L, its own light color) and adds to what is behind:
   frame transmittance stays real; layer quads behind matter receive its light (`fx.fsh`: before). Otherwise a sphere
@@ -98,7 +97,7 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   near the sphere averages its disk (`hgDisc`, `NukeExposureTest`): nearby sphere spans tens of degrees; point-source
   peak (g 0.85: 82 versus ~11 for a 30° disk) made the shell several times brighter than the sphere. Flash frame
   (`NukeFlash.overexposed`): overexposure X = K^(e^(−u/0.2 s)) after the second maximum (K is camera flash light versus
-  exposure, `NukeFlash.flashOnCamera`); frame gain X^(1/2.2) via “frame × (1 + c)” blending and lens-scattered light
+  exposure, `FlashLight.Eye.peak`); frame gain X^(1/2.2) via “frame × (1 + c)” blending and lens-scattered light
   X/100; at 15 kt, 1.4 km, white until ~0.25 s, ×3 at 0.5 s, back by one second (previously white for full 1.24 s pulse
   plus 2–4 s). Eye-glare veil starts at pulse maximum. Volume noise prepares from world entry (`IncomingClient.login`):
   `/incoming nuke now` has no warning, otherwise the sphere has no body for its first second. Mushroom daytime world
@@ -498,3 +497,12 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   Legacy detonation packets retain location matching. Clear/dimension/replay reset arrival state.
   Arrival glows/ribbons use positive source-sized softness: zero skips the shared scene-depth sample in the
   full-resolution pass and allowed a halo over nearby Iris masonry (`arrival 1`, house 50, camera 11/2/0/800).
+
+## Shared nuclear flash light
+`FlashLight` is the visible pulse/area source and opening-transfer law; `NukeLight` owns one frame sample/exposure
+before fog. All nuclear illumination uses its exposure; firebody film keeps a separate ambient reference and
+cancels frame exposure once. `FlashLight.temperature` is escaping brightness temperature, distinct from the old
+core/mixed gas temperatures. Do not substitute it into server energy or injury calculations. Source derivation,
+opening approximation and outside-OpenAir limitation: DESIGN-nuke §6. Sealed eye/world pixels get no new flash;
+block light is never an opening. Paused game time cannot advance adaptation; reset/seek reconstructs exposure.
+Transient frame flash must skip non-live detonations reconstructed by sync/seek; their steady illumination still adapts.

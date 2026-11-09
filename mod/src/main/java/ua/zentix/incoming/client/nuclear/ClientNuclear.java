@@ -197,6 +197,7 @@ public final class ClientNuclear {
         Active a = new Active(d, live, level.getGameTime());
         DETONATIONS.put(d.id(), a);
         if (live) {
+            NukeLight.detonation(level);
             NukeFlash.detonation(a);
             FlashAftermath.detonation(d, p.blackout());
         }
@@ -220,6 +221,7 @@ public final class ClientNuclear {
         for (S2C.NukeWarning w : p.warnings()) WARNINGS.put(w.strikeId(), w);
         NukeDust.reset();
         NukePall.reset();
+        NukeLight.reset();
     }
 
     /**
@@ -243,6 +245,7 @@ public final class ClientNuclear {
         Deafness.reset();
         NukeDust.reset();
         NukePall.reset();
+        NukeLight.reset();
     }
 
     /**
@@ -254,6 +257,7 @@ public final class ClientNuclear {
         Deafness.reset();
         CameraShake.reset();
         NukeFlash.respawned();
+        NukeLight.reset();
     }
 
     public static void radiation(S2C.Radiation p) {
@@ -297,6 +301,7 @@ public final class ClientNuclear {
         Deafness.reset();
         NukeDust.reset();
         NukePall.reset();
+        NukeLight.reset();
     }
 
     /** Stop all detonation sounds (detonations disappear or are replaced). */
@@ -357,6 +362,7 @@ public final class ClientNuclear {
         WARNINGS.values().removeIf(w -> now > w.detonateTime() + NuclearStrikes.GIVE_UP_TICKS + 100);
         NukeSky.tick(level);
         NukeSounds.tick();
+        NukeLight.tick();
         NukeFlash.tick();
         Deafness.tick(level);
         NukeDust.tick();

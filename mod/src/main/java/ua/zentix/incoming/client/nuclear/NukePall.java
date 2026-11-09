@@ -419,6 +419,7 @@ public final class NukePall {
         f.sunLight.set(SKY.sun[0], SKY.sun[1], SKY.sun[2]);
         f.base = SKY.base;
         f.exposure = SKY.exposure;
+        f.bodyExposure = (float) NukeLight.bodyExposure();
         f.glowOnSmoke = SKY.glowOnSmoke;
         // fire glow from below on white pall, on screen above sky light (fx_pall uses its difference, pallLift; dust
         // and haze use their own albedo): barely visible by day,
@@ -469,7 +470,7 @@ public final class NukePall {
         // wall reflection and fire glow (on screen) add to on-screen sky light — this value
         into.base = ambient;
         // mushroom glow is a black body at real brightness (noon white wall = 1): into frame with eye adaptation to sky
-        into.exposure = (float) Sight.adapted(1, ambient);
+        into.exposure = (float) NukeLight.exposure();
         into.glowOnSmoke = (float) CloudPuffs.glowOnSmoke(ambient);
     }
 
@@ -673,9 +674,9 @@ public final class NukePall {
         }
         return String.format(java.util.Locale.ROOT, "sigma at camera %.4f /block (visibility %.0f blocks; mist %.4f), depth up %.2f down %.2f, muffle %.2f, ash %d, quality %s, "
                         + "light: sky %.3f, fires %.2f × %.2f, ball r %.0f blocks, black body %.3g %.3g %.3g, under the pall: %s, surge r %.0f top %.0f sigma %.4f, "
-                        + "frames: %s; mushrooms %d (exposure %.0f); firestorm: %s",
+                        + "frames: %s; mushrooms %d (exposure %.6g); firestorm: %s; nuclear camera: %s",
                 sigma, sigma > 1e-5f ? 3.912 / sigma : Double.POSITIVE_INFINITY, mist, tauUp, tauDown, muffle, NukeAsh.alive(), quality(),
                 f.skyLight.y, f.glowOnSmoke, f.glow0.y, f.glow0.x, f.hot0.x, f.hot0.y, f.hot0.z, under, f.water0.x, f.water0.y, f.water0.z,
-                mc.level == null ? "-" : PallPass.describe(), f.mushroomCount, f.exposure, FireStorms.describe());
+                mc.level == null ? "-" : PallPass.describe(), f.mushroomCount, f.exposure, FireStorms.describe(), NukeLight.describe());
     }
 }

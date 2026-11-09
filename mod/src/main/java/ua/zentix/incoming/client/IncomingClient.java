@@ -141,6 +141,8 @@ public final class IncomingClient {
         NeoForge.EVENT_BUS.addListener(FxLayer::render);
         NeoForge.EVENT_BUS.addListener(FxLayer::debugText);
         NeoForge.EVENT_BUS.addListener(NukeRenderer::renderRain);
+        NeoForge.EVENT_BUS.addListener(ua.zentix.incoming.client.nuclear.NukeLight::begin);
+        NeoForge.EVENT_BUS.addListener(net.neoforged.bus.api.EventPriority.HIGHEST, ua.zentix.incoming.client.nuclear.NukeLight::frame);
         NeoForge.EVENT_BUS.addListener(NukeSky::fogColor);
         NeoForge.EVENT_BUS.addListener(NukeSky::fog);
         NeoForge.EVENT_BUS.addListener(SoundFilters::onSound);

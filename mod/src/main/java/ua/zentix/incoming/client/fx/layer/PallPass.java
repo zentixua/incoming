@@ -446,7 +446,7 @@ public final class PallPass {
         public final float[] mushrooms = new float[MushroomField.WIDTH * MushroomField.ROWS * 4];
         public int mushroomCount;
         /** Apparent light brightness multiplier under frame skylight ({@code Sight.adapted}): mushroom glow. */
-        public float exposure = 1;
+        public float exposure = 1, bodyExposure = 1;
         /**
          * Fireballs lighting the frame world ({@code MushroomField.balls}): centres/radii, light and air extinction by
          * column; whether any emits light (otherwise composite skips them and does not copy the frame).
@@ -809,6 +809,7 @@ public final class PallPass {
             m.safeGetUniform("PallWilson1").set(f.wilson1.x, f.wilson1.y, f.wilson1.z, f.wilson1.w);
             m.safeGetUniform("PallFloorFrom").set(f.floorFrom);
             m.safeGetUniform("PallExposure").set(f.exposure);
+            m.safeGetUniform("PallBodyExposure").set(f.bodyExposure);
             m.safeGetUniform("SmokeNoise").set(f.smokeNoise.x, f.smokeNoise.y, f.smokeNoise.z, f.smokeNoise.w);
             m.safeGetUniform("SmokeWind").set(f.smokeWind.x, f.smokeWind.y, f.smokeWind.z, f.smokeWind.w);
             m.safeGetUniform("SmokeBalls").set(f.smokeBalls);

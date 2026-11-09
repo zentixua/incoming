@@ -301,3 +301,9 @@ with Iris.
 - `arrival [count] [flash]`: client-only 12-second terminal sequence (1–128 heads), warning and authoritative
   approach packets, no siren or boost sound. Optional `flash` emits the unchanged 15 kt airburst for the first
   head. `--cam '2000 2 0 800'` frames the ground observer's view; capture 10–12.2 seconds, day/night, with WAV.
+
+- `nuke <kt> camera open|sealed|window|torch`: isolated client flash fixture, detonation-relative clock and visible
+  HUD. 1000 kt: 4550 m, HOB 2400 m; other yields: 1400 m, HOB 240·cube-root(Y); wave scale 0.35. The sealed/torch
+  chamber is below ground, window room at ground. Waits for loaded blocks and propagated skylight before emitting
+  the client-only detonation; logs raw sky/block light. No server damage. Use identical fixture code on main and
+  branch for flash comparisons; `--time 16000 --at 1,3,10,20,33` for the megaton reproduction.

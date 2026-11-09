@@ -131,6 +131,8 @@ uniform int PallTauReady;
 const float BALL_P_MAX = 2.0;
 // perceived light gain at frame skylight (Sight.adapted): mushroom emission in frame values
 uniform float PallExposure;
+// Firebody film exposure remains independent of the camera light at the eye.
+uniform float PallBodyExposure;
 // conventional blast smoke (smoke.glsl): eye position within billow noise tile modulo SMOKE_TILE (xyz), time s (w);
 // smoke wind, blocks/s (xyz, at matter altitude of hundreds of blocks), two-phase noise period s (w); fireballs lighting
 // smoke (as FxLights): column i eye-relative center/radius (0 absent), surface white-wall light (rgb, linear, eye-adapted)
@@ -855,7 +857,7 @@ vec4 wilsonLight(mat4 S, vec4 G, vec4 H, vec4 L, vec3 dir, vec3 sunDir, float t,
     // ball surface radiance for shell capped at on-screen ball brightness, then light there (L·R²/d²): shell/ball display
     // ratio matches reality (forward scattering near ball ~0.76·τ of its radiance), not shell hundreds of times brighter
     vec3 surface = H.rgb * PallExposure;
-    vec3 cap = min(surface, mushBallCap(surface, PallExposure)) * pallBallShare(G.x, ballLen);
+    vec3 cap = min(surface, mushBallCap(H.rgb * PallBodyExposure, PallBodyExposure)) * pallBallShare(G.x, ballLen);
     float sinBall = min(G.x / max(ballLen, 1e-3), 1.0);
     vec3 l = PALL_MIST_W * (0.5 * PallSkyLight + PallSunLight * (0.25 * hg(PALL_MIST_G, dot(dir, sunDir)))
             + cap * (0.25 * hgDisc(PALL_MIST_G, dot(dir, toBall / max(ballLen, 1e-3)), sqrt(1.0 - sinBall * sinBall))));
@@ -1419,12 +1421,12 @@ vec4 mushAt(int k, Mush m, vec3 p, vec3 q, float cone, out float near, out vec3 
     hot = st * thermal * (1.0 - fromCarpet);
     // Ball exposure uses visible surface (cap edge temperature), as seen through air to point: a ball hundreds/thousands
     // of whites clipped to a flat disk; this preserves surface temperature pattern
-    float key = dot(mushBlackBody(Sampler7, m.tAmb + m.dT * m.edge), LUMA) * PallExposure * pallAir(PallAir, length(p), gDir.y);
-    glow = hot * mushBallGain(key, PallExposure);
+    float key = dot(mushBlackBody(Sampler7, m.tAmb + m.dT * m.edge), LUMA) * PallBodyExposure * pallAir(PallAir, length(p), gDir.y);
+    glow = hot * (PallBodyExposure / max(PallExposure, 1e-9)) * mushBallGain(key, PallBodyExposure);
     // Film curve while ball remains a ball (ring share) or its surface is still bright (mushFilmShareLit); rolled dim cap
     // uses previous path with pall: per-channel curve whitened orange interior at night and changed it through haze (review 441)
     float roll = clamp(m.ringR / max(MUSH_RING * m.capR, 1.0), 0.0, 1.0);
-    film = dot(hot, LUMA) * mushFilmShareLit(roll, key / max(PallExposure, 1e-9));
+    film = dot(hot, LUMA) * mushFilmShareLit(roll, key / max(PallBodyExposure, 1e-9));
     return vec4(st * source, st);
 }
 
