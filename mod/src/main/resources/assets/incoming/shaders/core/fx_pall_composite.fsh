@@ -293,6 +293,17 @@ vec4 upsample(ivec2 full, ivec2 fullSize, ivec2 lowSize, float depth, vec3 dir, 
     return vec4(v.rgb * ((1.0 - a) / (1.0 - v.a)), a);
 }
 
+// World pixel at full in the fireball light added on normal n, display share kept under the pall shadow: per channel relit,
+// above white toward white (CROSS, like matter light in fx_pall), no brighter than 1 with the same hue
+vec3 ballLitWorld(ivec2 full, vec3 n, float kept, vec3 added) {
+    vec3 world = texelFetch(Sampler9, full, 0).rgb, open = PallOpenSky * faceShade(PallFaceShade, n);
+    vec3 lit = vec3(relit(world.r, kept, open.r, added.r), relit(world.g, kept, open.g, added.g),
+            relit(world.b, kept, open.b, added.b));
+    lit += vec3(CROSS * max(dot(lit, LUMA) - 1.0, 0.0));
+    vec3 shown = vec3(pallDisplay(lit.r), pallDisplay(lit.g), pallDisplay(lit.b));
+    return shown / max(max(max(shown.r, shown.g), shown.b), 1.0);
+}
+
 void main() {
     ivec2 fullSize = textureSize(Sampler1, 0), lowSize = textureSize(Sampler0, 0);
     ivec2 full = ivec2(gl_FragCoord.xy);
@@ -308,14 +319,7 @@ void main() {
             vec3 p = dirHand * (depth / max(dot(dirHand, PallForward), 1e-3));
             vec3 n = sceneNormal(Sampler1, InvViewProj, PallForward, full, fullSize, p);
             vec3 added = ballLight(p, n, pallOver(p));
-            if (dot(added, LUMA) > 1e-6) {
-                vec3 world = texelFetch(Sampler9, full, 0).rgb, open = PallOpenSky * faceShade(PallFaceShade, n);
-                vec3 lit = vec3(relit(world.r, 1.0, open.r, added.r), relit(world.g, 1.0, open.g, added.g),
-                        relit(world.b, 1.0, open.b, added.b));
-                lit += vec3(CROSS * max(dot(lit, LUMA) - 1.0, 0.0));
-                vec3 shown = vec3(pallDisplay(lit.r), pallDisplay(lit.g), pallDisplay(lit.b));
-                fragColor = vec4(shown / max(max(max(shown.r, shown.g), shown.b), 1.0), 0.0);
-            }
+            if (dot(added, LUMA) > 1e-6) fragColor = vec4(ballLitWorld(full, n, 1.0, added), 0.0);
         }
         return;
     }
@@ -380,14 +384,8 @@ void main() {
             added = ballLight(p, n, over) * seen;
         }
         if (dot(added, LUMA) > 1e-6) {
-            // brighter world: full pixel, pall plus ball-lit world behind (alpha 0, blending ignores frame); above
-            // white, toward white (CROSS, like matter light in fx_pall), no brighter than 1 with same hue
-            vec3 world = texelFetch(Sampler9, full, 0).rgb, open = PallOpenSky * faceShade(PallFaceShade, n);
-            vec3 lit = vec3(relit(world.r, kept, open.r, added.r), relit(world.g, kept, open.g, added.g),
-                    relit(world.b, kept, open.b, added.b));
-            lit += vec3(CROSS * max(dot(lit, LUMA) - 1.0, 0.0));
-            vec3 shown = vec3(pallDisplay(lit.r), pallDisplay(lit.g), pallDisplay(lit.b));
-            shown /= max(max(max(shown.r, shown.g), shown.b), 1.0);
+            // brighter world: full pixel, pall plus ball-lit world behind (alpha 0, blending ignores frame)
+            vec3 shown = ballLitWorld(full, n, kept, added);
             pall = vec4(pall.rgb + pall.a * shown, 0.0);
         } else {
             pall.a *= kept;
