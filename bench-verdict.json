@@ -1,0 +1,1490 @@
+{
+ "state": "pass",
+ "pass": true,
+ "packs": {
+  "none": {
+   "state": "pass",
+   "fails": [],
+   "rows": [
+    {
+     "pack": "none",
+     "window": "100-hit",
+     "metric": "gpu.p50",
+     "cand": 16.647,
+     "base": 16.767,
+     "bases": [
+      16.767,
+      16.665
+     ],
+     "change": -0.007156915369475825,
+     "tol": null,
+     "gated": false,
+     "fail": false
+    },
+    {
+     "pack": "none",
+     "window": "100-hit",
+     "metric": "thread.p95",
+     "cand": 20.11025,
+     "base": 20.9682,
+     "bases": [
+      20.4412,
+      20.9682
+     ],
+     "change": -0.04091672151162229,
+     "tol": null,
+     "gated": false,
+     "fail": false
+    },
+    {
+     "pack": "none",
+     "window": "100-hit",
+     "metric": "cpu.p95",
+     "cand": 20.8211,
+     "base": 21.505699999999997,
+     "bases": [
+      21.0508,
+      21.505699999999997
+     ],
+     "change": -0.03183342090701513,
+     "tol": null,
+     "gated": false,
+     "fail": false
+    },
+    {
+     "pack": "none",
+     "window": "100-hit",
+     "metric": "interval.p95",
+     "cand": 28.888550000000002,
+     "base": 31.820299999999992,
+     "bases": [
+      28.7216,
+      31.820299999999992
+     ],
+     "change": -0.09213458075505232,
+     "tol": null,
+     "gated": false,
+     "fail": false
+    },
+    {
+     "pack": "none",
+     "window": "100/edge",
+     "metric": "gpu.p50",
+     "cand": 3.756,
+     "base": 3.767,
+     "bases": [
+      3.589,
+      3.767
+     ],
+     "change": -0.0029200955667639805,
+     "tol": 0.25,
+     "gated": true,
+     "fail": false
+    },
+    {
+     "pack": "none",
+     "window": "100/edge",
+     "metric": "thread.p95",
+     "cand": 5.2076,
+     "base": 5.3382999999999985,
+     "bases": [
+      5.088,
+      5.3382999999999985
+     ],
+     "change": -0.024483449787385148,
+     "tol": 0.25,
+     "gated": true,
+     "fail": false
+    },
+    {
+     "pack": "none",
+     "window": "100/edge",
+     "metric": "cpu.p95",
+     "cand": 5.2918,
+     "base": 5.445,
+     "bases": [
+      5.2225,
+      5.445
+     ],
+     "change": -0.028135904499540842,
+     "tol": null,
+     "gated": false,
+     "fail": false
+    },
+    {
+     "pack": "none",
+     "window": "100/edge",
+     "metric": "interval.p95",
+     "cand": 7.263200000000001,
+     "base": 7.357,
+     "bases": [
+      7.1335,
+      7.357
+     ],
+     "change": -0.01274976213130341,
+     "tol": null,
+     "gated": false,
+     "fail": false
+    },
+    {
+     "pack": "none",
+     "window": "100/inside",
+     "metric": "gpu.p50",
+     "cand": 3.003,
+     "base": 3.4955,
+     "bases": [
+      3.081,
+      3.4955
+     ],
+     "change": -0.14089543699041618,
+     "tol": 0.25,
+     "gated": true,
+     "fail": false
+    },
+    {
+     "pack": "none",
+     "window": "100/inside",
+     "metric": "thread.p95",
+     "cand": 4.639,
+     "base": 4.802,
+     "bases": [
+      4.7432,
+      4.802
+     ],
+     "change": -0.03394418992086623,
+     "tol": 0.25,
+     "gated": true,
+     "fail": false
+    },
+    {
+     "pack": "none",
+     "window": "100/inside",
+     "metric": "cpu.p95",
+     "cand": 4.87,
+     "base": 5.01,
+     "bases": [
+      4.928199999999999,
+      5.01
+     ],
+     "change": -0.027944111776447067,
+     "tol": null,
+     "gated": false,
+     "fail": false
+    },
+    {
+     "pack": "none",
+     "window": "100/inside",
+     "metric": "interval.p95",
+     "cand": 7.0567,
+     "base": 7.022799999999999,
+     "bases": [
+      6.9856,
+      7.022799999999999
+     ],
+     "change": 0.004827134476277362,
+     "tol": null,
+     "gated": false,
+     "fail": false
+    },
+    {
+     "pack": "none",
+     "window": "100/outside",
+     "metric": "gpu.p50",
+     "cand": 2.491,
+     "base": 2.549,
+     "bases": [
+      2.509,
+      2.549
+     ],
+     "change": -0.022754021184778317,
+     "tol": 0.25,
+     "gated": true,
+     "fail": false
+    },
+    {
+     "pack": "none",
+     "window": "100/outside",
+     "metric": "thread.p95",
+     "cand": 5.443,
+     "base": 5.7372,
+     "bases": [
+      5.5106,
+      5.7372
+     ],
+     "change": -0.05127936972739311,
+     "tol": 0.25,
+     "gated": true,
+     "fail": false
+    },
+    {
+     "pack": "none",
+     "window": "100/outside",
+     "metric": "cpu.p95",
+     "cand": 5.5478499999999995,
+     "base": 5.808,
+     "bases": [
+      5.5924,
+      5.808
+     ],
+     "change": -0.044791666666666674,
+     "tol": null,
+     "gated": false,
+     "fail": false
+    },
+    {
+     "pack": "none",
+     "window": "100/outside",
+     "metric": "interval.p95",
+     "cand": 7.11785,
+     "base": 7.297,
+     "bases": [
+      7.0348,
+      7.297
+     ],
+     "change": -0.02455118541866519,
+     "tol": null,
+     "gated": false,
+     "fail": false
+    }
+   ],
+   "notes": [],
+   "tries": 1,
+   "earlier": []
+  },
+  "complementary": {
+   "state": "pass",
+   "fails": [],
+   "rows": [
+    {
+     "pack": "complementary",
+     "window": "100-hit",
+     "metric": "gpu.p50",
+     "cand": 21.399,
+     "base": 21.733,
+     "bases": [
+      20.8155,
+      21.733
+     ],
+     "change": -0.015368333870151352,
+     "tol": null,
+     "gated": false,
+     "fail": false
+    },
+    {
+     "pack": "complementary",
+     "window": "100-hit",
+     "metric": "thread.p95",
+     "cand": 28.5,
+     "base": 31.135399999999997,
+     "bases": [
+      29.16195,
+      31.135399999999997
+     ],
+     "change": -0.08464320355608079,
+     "tol": null,
+     "gated": false,
+     "fail": false
+    },
+    {
+     "pack": "complementary",
+     "window": "100-hit",
+     "metric": "cpu.p95",
+     "cand": 29.062,
+     "base": 32.1319,
+     "bases": [
+      29.565400000000007,
+      32.1319
+     ],
+     "change": -0.09554056871831418,
+     "tol": null,
+     "gated": false,
+     "fail": false
+    },
+    {
+     "pack": "complementary",
+     "window": "100-hit",
+     "metric": "interval.p95",
+     "cand": 38.91,
+     "base": 41.040699999999994,
+     "bases": [
+      38.47975,
+      41.040699999999994
+     ],
+     "change": -0.051916755805822,
+     "tol": null,
+     "gated": false,
+     "fail": false
+    },
+    {
+     "pack": "complementary",
+     "window": "100/edge",
+     "metric": "gpu.p50",
+     "cand": 12.104,
+     "base": 12.519,
+     "bases": [
+      12.064,
+      12.519
+     ],
+     "change": -0.03314961258886495,
+     "tol": 0.25,
+     "gated": true,
+     "fail": false
+    },
+    {
+     "pack": "complementary",
+     "window": "100/edge",
+     "metric": "thread.p95",
+     "cand": 6.2885,
+     "base": 6.5111,
+     "bases": [
+      6.5111,
+      5.9933
+     ],
+     "change": -0.03418777165148745,
+     "tol": 0.25,
+     "gated": true,
+     "fail": false
+    },
+    {
+     "pack": "complementary",
+     "window": "100/edge",
+     "metric": "cpu.p95",
+     "cand": 6.3595,
+     "base": 6.545299999999999,
+     "bases": [
+      6.545299999999999,
+      6.0241
+     ],
+     "change": -0.028386781354559742,
+     "tol": null,
+     "gated": false,
+     "fail": false
+    },
+    {
+     "pack": "complementary",
+     "window": "100/edge",
+     "metric": "interval.p95",
+     "cand": 14.6892,
+     "base": 15.1375,
+     "bases": [
+      14.9201,
+      15.1375
+     ],
+     "change": -0.029615194054500416,
+     "tol": null,
+     "gated": false,
+     "fail": false
+    },
+    {
+     "pack": "complementary",
+     "window": "100/inside",
+     "metric": "gpu.p50",
+     "cand": 11.942,
+     "base": 11.573,
+     "bases": [
+      11.573,
+      11.114
+     ],
+     "change": 0.03188455888706465,
+     "tol": 0.25,
+     "gated": true,
+     "fail": false
+    },
+    {
+     "pack": "complementary",
+     "window": "100/inside",
+     "metric": "thread.p95",
+     "cand": 5.71,
+     "base": 5.594,
+     "bases": [
+      5.594,
+      5.3906
+     ],
+     "change": 0.02073650339649613,
+     "tol": 0.25,
+     "gated": true,
+     "fail": false
+    },
+    {
+     "pack": "complementary",
+     "window": "100/inside",
+     "metric": "cpu.p95",
+     "cand": 5.757,
+     "base": 5.676,
+     "bases": [
+      5.676,
+      5.4154
+     ],
+     "change": 0.014270613107822294,
+     "tol": null,
+     "gated": false,
+     "fail": false
+    },
+    {
+     "pack": "complementary",
+     "window": "100/inside",
+     "metric": "interval.p95",
+     "cand": 14.5128,
+     "base": 14.119,
+     "bases": [
+      14.119,
+      13.4222
+     ],
+     "change": 0.027891493731850847,
+     "tol": null,
+     "gated": false,
+     "fail": false
+    },
+    {
+     "pack": "complementary",
+     "window": "100/outside",
+     "metric": "gpu.p50",
+     "cand": 10.744,
+     "base": 10.802,
+     "bases": [
+      10.644,
+      10.802
+     ],
+     "change": -0.005369376041473806,
+     "tol": 0.25,
+     "gated": true,
+     "fail": false
+    },
+    {
+     "pack": "complementary",
+     "window": "100/outside",
+     "metric": "thread.p95",
+     "cand": 6.769500000000001,
+     "base": 6.9430000000000005,
+     "bases": [
+      6.9430000000000005,
+      6.899049999999999
+     ],
+     "change": -0.024989197753132575,
+     "tol": 0.25,
+     "gated": true,
+     "fail": false
+    },
+    {
+     "pack": "complementary",
+     "window": "100/outside",
+     "metric": "cpu.p95",
+     "cand": 6.823,
+     "base": 6.9987,
+     "bases": [
+      6.9987,
+      6.939899999999999
+     ],
+     "change": -0.025104662294426094,
+     "tol": null,
+     "gated": false,
+     "fail": false
+    },
+    {
+     "pack": "complementary",
+     "window": "100/outside",
+     "metric": "interval.p95",
+     "cand": 13.121,
+     "base": 13.16035,
+     "bases": [
+      13.114,
+      13.16035
+     ],
+     "change": -0.0029900420581518983,
+     "tol": null,
+     "gated": false,
+     "fail": false
+    }
+   ],
+   "notes": [],
+   "tries": 1,
+   "earlier": []
+  },
+  "photon": {
+   "state": "pass",
+   "fails": [],
+   "rows": [
+    {
+     "pack": "photon",
+     "window": "100-hit",
+     "metric": "gpu.p50",
+     "cand": 25.396500000000003,
+     "base": 26.314999999999998,
+     "bases": [
+      25.454,
+      26.314999999999998
+     ],
+     "change": -0.034904047121413484,
+     "tol": null,
+     "gated": false,
+     "fail": false
+    },
+    {
+     "pack": "photon",
+     "window": "100-hit",
+     "metric": "thread.p95",
+     "cand": 34.73455000000001,
+     "base": 36.647099999999995,
+     "bases": [
+      36.647099999999995,
+      35.60785
+     ],
+     "change": -0.05218830412229025,
+     "tol": null,
+     "gated": false,
+     "fail": false
+    },
+    {
+     "pack": "photon",
+     "window": "100-hit",
+     "metric": "cpu.p95",
+     "cand": 35.17455,
+     "base": 37.23725,
+     "bases": [
+      37.23725,
+      35.95484999999999
+     ],
+     "change": -0.055393456820791,
+     "tol": null,
+     "gated": false,
+     "fail": false
+    },
+    {
+     "pack": "photon",
+     "window": "100-hit",
+     "metric": "interval.p95",
+     "cand": 47.34885000000001,
+     "base": 48.5025,
+     "bases": [
+      48.5025,
+      46.28769999999998
+     ],
+     "change": -0.023785371888046747,
+     "tol": null,
+     "gated": false,
+     "fail": false
+    },
+    {
+     "pack": "photon",
+     "window": "100/edge",
+     "metric": "gpu.p50",
+     "cand": 12.804,
+     "base": 13.041,
+     "bases": [
+      12.564,
+      13.041
+     ],
+     "change": -0.018173452956061653,
+     "tol": 0.25,
+     "gated": true,
+     "fail": false
+    },
+    {
+     "pack": "photon",
+     "window": "100/edge",
+     "metric": "thread.p95",
+     "cand": 6.3963,
+     "base": 6.622,
+     "bases": [
+      6.5722000000000005,
+      6.622
+     ],
+     "change": -0.03408335850196309,
+     "tol": 0.25,
+     "gated": true,
+     "fail": false
+    },
+    {
+     "pack": "photon",
+     "window": "100/edge",
+     "metric": "cpu.p95",
+     "cand": 6.4315999999999995,
+     "base": 6.660200000000001,
+     "bases": [
+      6.6282,
+      6.660200000000001
+     ],
+     "change": -0.03432329359478714,
+     "tol": null,
+     "gated": false,
+     "fail": false
+    },
+    {
+     "pack": "photon",
+     "window": "100/edge",
+     "metric": "interval.p95",
+     "cand": 15.4626,
+     "base": 15.8146,
+     "bases": [
+      15.2828,
+      15.8146
+     ],
+     "change": -0.02225791357353335,
+     "tol": null,
+     "gated": false,
+     "fail": false
+    },
+    {
+     "pack": "photon",
+     "window": "100/inside",
+     "metric": "gpu.p50",
+     "cand": 12.24,
+     "base": 12.961500000000001,
+     "bases": [
+      12.316,
+      12.961500000000001
+     ],
+     "change": -0.055664853604906916,
+     "tol": 0.25,
+     "gated": true,
+     "fail": false
+    },
+    {
+     "pack": "photon",
+     "window": "100/inside",
+     "metric": "thread.p95",
+     "cand": 5.7372000000000005,
+     "base": 5.8736000000000015,
+     "bases": [
+      5.8736000000000015,
+      5.7095
+     ],
+     "change": -0.023222555162081382,
+     "tol": 0.25,
+     "gated": true,
+     "fail": false
+    },
+    {
+     "pack": "photon",
+     "window": "100/inside",
+     "metric": "cpu.p95",
+     "cand": 5.7731,
+     "base": 5.9198,
+     "bases": [
+      5.9198,
+      5.75025
+     ],
+     "change": -0.024781242609547616,
+     "tol": null,
+     "gated": false,
+     "fail": false
+    },
+    {
+     "pack": "photon",
+     "window": "100/inside",
+     "metric": "interval.p95",
+     "cand": 14.7445,
+     "base": 15.4465,
+     "bases": [
+      14.935,
+      15.4465
+     ],
+     "change": -0.04544718868352049,
+     "tol": null,
+     "gated": false,
+     "fail": false
+    },
+    {
+     "pack": "photon",
+     "window": "100/outside",
+     "metric": "gpu.p50",
+     "cand": 11.304,
+     "base": 11.332,
+     "bases": [
+      11.232,
+      11.332
+     ],
+     "change": -0.0024708789269326514,
+     "tol": 0.25,
+     "gated": true,
+     "fail": false
+    },
+    {
+     "pack": "photon",
+     "window": "100/outside",
+     "metric": "thread.p95",
+     "cand": 7.322199999999998,
+     "base": 7.3568,
+     "bases": [
+      7.3568,
+      7.2568
+     ],
+     "change": -0.004703131796433446,
+     "tol": 0.25,
+     "gated": true,
+     "fail": false
+    },
+    {
+     "pack": "photon",
+     "window": "100/outside",
+     "metric": "cpu.p95",
+     "cand": 7.403199999999999,
+     "base": 7.4252,
+     "bases": [
+      7.4252,
+      7.3172500000000005
+     ],
+     "change": -0.0029628831546626433,
+     "tol": null,
+     "gated": false,
+     "fail": false
+    },
+    {
+     "pack": "photon",
+     "window": "100/outside",
+     "metric": "interval.p95",
+     "cand": 13.719499999999998,
+     "base": 13.7008,
+     "bases": [
+      13.640799999999999,
+      13.7008
+     ],
+     "change": 0.0013648838024056253,
+     "tol": null,
+     "gated": false,
+     "fail": false
+    }
+   ],
+   "notes": [],
+   "tries": 1,
+   "earlier": []
+  }
+ },
+ "notes": [],
+ "fails": [],
+ "rows": [
+  {
+   "pack": "none",
+   "window": "100-hit",
+   "metric": "gpu.p50",
+   "cand": 16.647,
+   "base": 16.767,
+   "bases": [
+    16.767,
+    16.665
+   ],
+   "change": -0.007156915369475825,
+   "tol": null,
+   "gated": false,
+   "fail": false
+  },
+  {
+   "pack": "none",
+   "window": "100-hit",
+   "metric": "thread.p95",
+   "cand": 20.11025,
+   "base": 20.9682,
+   "bases": [
+    20.4412,
+    20.9682
+   ],
+   "change": -0.04091672151162229,
+   "tol": null,
+   "gated": false,
+   "fail": false
+  },
+  {
+   "pack": "none",
+   "window": "100-hit",
+   "metric": "cpu.p95",
+   "cand": 20.8211,
+   "base": 21.505699999999997,
+   "bases": [
+    21.0508,
+    21.505699999999997
+   ],
+   "change": -0.03183342090701513,
+   "tol": null,
+   "gated": false,
+   "fail": false
+  },
+  {
+   "pack": "none",
+   "window": "100-hit",
+   "metric": "interval.p95",
+   "cand": 28.888550000000002,
+   "base": 31.820299999999992,
+   "bases": [
+    28.7216,
+    31.820299999999992
+   ],
+   "change": -0.09213458075505232,
+   "tol": null,
+   "gated": false,
+   "fail": false
+  },
+  {
+   "pack": "none",
+   "window": "100/edge",
+   "metric": "gpu.p50",
+   "cand": 3.756,
+   "base": 3.767,
+   "bases": [
+    3.589,
+    3.767
+   ],
+   "change": -0.0029200955667639805,
+   "tol": 0.25,
+   "gated": true,
+   "fail": false
+  },
+  {
+   "pack": "none",
+   "window": "100/edge",
+   "metric": "thread.p95",
+   "cand": 5.2076,
+   "base": 5.3382999999999985,
+   "bases": [
+    5.088,
+    5.3382999999999985
+   ],
+   "change": -0.024483449787385148,
+   "tol": 0.25,
+   "gated": true,
+   "fail": false
+  },
+  {
+   "pack": "none",
+   "window": "100/edge",
+   "metric": "cpu.p95",
+   "cand": 5.2918,
+   "base": 5.445,
+   "bases": [
+    5.2225,
+    5.445
+   ],
+   "change": -0.028135904499540842,
+   "tol": null,
+   "gated": false,
+   "fail": false
+  },
+  {
+   "pack": "none",
+   "window": "100/edge",
+   "metric": "interval.p95",
+   "cand": 7.263200000000001,
+   "base": 7.357,
+   "bases": [
+    7.1335,
+    7.357
+   ],
+   "change": -0.01274976213130341,
+   "tol": null,
+   "gated": false,
+   "fail": false
+  },
+  {
+   "pack": "none",
+   "window": "100/inside",
+   "metric": "gpu.p50",
+   "cand": 3.003,
+   "base": 3.4955,
+   "bases": [
+    3.081,
+    3.4955
+   ],
+   "change": -0.14089543699041618,
+   "tol": 0.25,
+   "gated": true,
+   "fail": false
+  },
+  {
+   "pack": "none",
+   "window": "100/inside",
+   "metric": "thread.p95",
+   "cand": 4.639,
+   "base": 4.802,
+   "bases": [
+    4.7432,
+    4.802
+   ],
+   "change": -0.03394418992086623,
+   "tol": 0.25,
+   "gated": true,
+   "fail": false
+  },
+  {
+   "pack": "none",
+   "window": "100/inside",
+   "metric": "cpu.p95",
+   "cand": 4.87,
+   "base": 5.01,
+   "bases": [
+    4.928199999999999,
+    5.01
+   ],
+   "change": -0.027944111776447067,
+   "tol": null,
+   "gated": false,
+   "fail": false
+  },
+  {
+   "pack": "none",
+   "window": "100/inside",
+   "metric": "interval.p95",
+   "cand": 7.0567,
+   "base": 7.022799999999999,
+   "bases": [
+    6.9856,
+    7.022799999999999
+   ],
+   "change": 0.004827134476277362,
+   "tol": null,
+   "gated": false,
+   "fail": false
+  },
+  {
+   "pack": "none",
+   "window": "100/outside",
+   "metric": "gpu.p50",
+   "cand": 2.491,
+   "base": 2.549,
+   "bases": [
+    2.509,
+    2.549
+   ],
+   "change": -0.022754021184778317,
+   "tol": 0.25,
+   "gated": true,
+   "fail": false
+  },
+  {
+   "pack": "none",
+   "window": "100/outside",
+   "metric": "thread.p95",
+   "cand": 5.443,
+   "base": 5.7372,
+   "bases": [
+    5.5106,
+    5.7372
+   ],
+   "change": -0.05127936972739311,
+   "tol": 0.25,
+   "gated": true,
+   "fail": false
+  },
+  {
+   "pack": "none",
+   "window": "100/outside",
+   "metric": "cpu.p95",
+   "cand": 5.5478499999999995,
+   "base": 5.808,
+   "bases": [
+    5.5924,
+    5.808
+   ],
+   "change": -0.044791666666666674,
+   "tol": null,
+   "gated": false,
+   "fail": false
+  },
+  {
+   "pack": "none",
+   "window": "100/outside",
+   "metric": "interval.p95",
+   "cand": 7.11785,
+   "base": 7.297,
+   "bases": [
+    7.0348,
+    7.297
+   ],
+   "change": -0.02455118541866519,
+   "tol": null,
+   "gated": false,
+   "fail": false
+  },
+  {
+   "pack": "complementary",
+   "window": "100-hit",
+   "metric": "gpu.p50",
+   "cand": 21.399,
+   "base": 21.733,
+   "bases": [
+    20.8155,
+    21.733
+   ],
+   "change": -0.015368333870151352,
+   "tol": null,
+   "gated": false,
+   "fail": false
+  },
+  {
+   "pack": "complementary",
+   "window": "100-hit",
+   "metric": "thread.p95",
+   "cand": 28.5,
+   "base": 31.135399999999997,
+   "bases": [
+    29.16195,
+    31.135399999999997
+   ],
+   "change": -0.08464320355608079,
+   "tol": null,
+   "gated": false,
+   "fail": false
+  },
+  {
+   "pack": "complementary",
+   "window": "100-hit",
+   "metric": "cpu.p95",
+   "cand": 29.062,
+   "base": 32.1319,
+   "bases": [
+    29.565400000000007,
+    32.1319
+   ],
+   "change": -0.09554056871831418,
+   "tol": null,
+   "gated": false,
+   "fail": false
+  },
+  {
+   "pack": "complementary",
+   "window": "100-hit",
+   "metric": "interval.p95",
+   "cand": 38.91,
+   "base": 41.040699999999994,
+   "bases": [
+    38.47975,
+    41.040699999999994
+   ],
+   "change": -0.051916755805822,
+   "tol": null,
+   "gated": false,
+   "fail": false
+  },
+  {
+   "pack": "complementary",
+   "window": "100/edge",
+   "metric": "gpu.p50",
+   "cand": 12.104,
+   "base": 12.519,
+   "bases": [
+    12.064,
+    12.519
+   ],
+   "change": -0.03314961258886495,
+   "tol": 0.25,
+   "gated": true,
+   "fail": false
+  },
+  {
+   "pack": "complementary",
+   "window": "100/edge",
+   "metric": "thread.p95",
+   "cand": 6.2885,
+   "base": 6.5111,
+   "bases": [
+    6.5111,
+    5.9933
+   ],
+   "change": -0.03418777165148745,
+   "tol": 0.25,
+   "gated": true,
+   "fail": false
+  },
+  {
+   "pack": "complementary",
+   "window": "100/edge",
+   "metric": "cpu.p95",
+   "cand": 6.3595,
+   "base": 6.545299999999999,
+   "bases": [
+    6.545299999999999,
+    6.0241
+   ],
+   "change": -0.028386781354559742,
+   "tol": null,
+   "gated": false,
+   "fail": false
+  },
+  {
+   "pack": "complementary",
+   "window": "100/edge",
+   "metric": "interval.p95",
+   "cand": 14.6892,
+   "base": 15.1375,
+   "bases": [
+    14.9201,
+    15.1375
+   ],
+   "change": -0.029615194054500416,
+   "tol": null,
+   "gated": false,
+   "fail": false
+  },
+  {
+   "pack": "complementary",
+   "window": "100/inside",
+   "metric": "gpu.p50",
+   "cand": 11.942,
+   "base": 11.573,
+   "bases": [
+    11.573,
+    11.114
+   ],
+   "change": 0.03188455888706465,
+   "tol": 0.25,
+   "gated": true,
+   "fail": false
+  },
+  {
+   "pack": "complementary",
+   "window": "100/inside",
+   "metric": "thread.p95",
+   "cand": 5.71,
+   "base": 5.594,
+   "bases": [
+    5.594,
+    5.3906
+   ],
+   "change": 0.02073650339649613,
+   "tol": 0.25,
+   "gated": true,
+   "fail": false
+  },
+  {
+   "pack": "complementary",
+   "window": "100/inside",
+   "metric": "cpu.p95",
+   "cand": 5.757,
+   "base": 5.676,
+   "bases": [
+    5.676,
+    5.4154
+   ],
+   "change": 0.014270613107822294,
+   "tol": null,
+   "gated": false,
+   "fail": false
+  },
+  {
+   "pack": "complementary",
+   "window": "100/inside",
+   "metric": "interval.p95",
+   "cand": 14.5128,
+   "base": 14.119,
+   "bases": [
+    14.119,
+    13.4222
+   ],
+   "change": 0.027891493731850847,
+   "tol": null,
+   "gated": false,
+   "fail": false
+  },
+  {
+   "pack": "complementary",
+   "window": "100/outside",
+   "metric": "gpu.p50",
+   "cand": 10.744,
+   "base": 10.802,
+   "bases": [
+    10.644,
+    10.802
+   ],
+   "change": -0.005369376041473806,
+   "tol": 0.25,
+   "gated": true,
+   "fail": false
+  },
+  {
+   "pack": "complementary",
+   "window": "100/outside",
+   "metric": "thread.p95",
+   "cand": 6.769500000000001,
+   "base": 6.9430000000000005,
+   "bases": [
+    6.9430000000000005,
+    6.899049999999999
+   ],
+   "change": -0.024989197753132575,
+   "tol": 0.25,
+   "gated": true,
+   "fail": false
+  },
+  {
+   "pack": "complementary",
+   "window": "100/outside",
+   "metric": "cpu.p95",
+   "cand": 6.823,
+   "base": 6.9987,
+   "bases": [
+    6.9987,
+    6.939899999999999
+   ],
+   "change": -0.025104662294426094,
+   "tol": null,
+   "gated": false,
+   "fail": false
+  },
+  {
+   "pack": "complementary",
+   "window": "100/outside",
+   "metric": "interval.p95",
+   "cand": 13.121,
+   "base": 13.16035,
+   "bases": [
+    13.114,
+    13.16035
+   ],
+   "change": -0.0029900420581518983,
+   "tol": null,
+   "gated": false,
+   "fail": false
+  },
+  {
+   "pack": "photon",
+   "window": "100-hit",
+   "metric": "gpu.p50",
+   "cand": 25.396500000000003,
+   "base": 26.314999999999998,
+   "bases": [
+    25.454,
+    26.314999999999998
+   ],
+   "change": -0.034904047121413484,
+   "tol": null,
+   "gated": false,
+   "fail": false
+  },
+  {
+   "pack": "photon",
+   "window": "100-hit",
+   "metric": "thread.p95",
+   "cand": 34.73455000000001,
+   "base": 36.647099999999995,
+   "bases": [
+    36.647099999999995,
+    35.60785
+   ],
+   "change": -0.05218830412229025,
+   "tol": null,
+   "gated": false,
+   "fail": false
+  },
+  {
+   "pack": "photon",
+   "window": "100-hit",
+   "metric": "cpu.p95",
+   "cand": 35.17455,
+   "base": 37.23725,
+   "bases": [
+    37.23725,
+    35.95484999999999
+   ],
+   "change": -0.055393456820791,
+   "tol": null,
+   "gated": false,
+   "fail": false
+  },
+  {
+   "pack": "photon",
+   "window": "100-hit",
+   "metric": "interval.p95",
+   "cand": 47.34885000000001,
+   "base": 48.5025,
+   "bases": [
+    48.5025,
+    46.28769999999998
+   ],
+   "change": -0.023785371888046747,
+   "tol": null,
+   "gated": false,
+   "fail": false
+  },
+  {
+   "pack": "photon",
+   "window": "100/edge",
+   "metric": "gpu.p50",
+   "cand": 12.804,
+   "base": 13.041,
+   "bases": [
+    12.564,
+    13.041
+   ],
+   "change": -0.018173452956061653,
+   "tol": 0.25,
+   "gated": true,
+   "fail": false
+  },
+  {
+   "pack": "photon",
+   "window": "100/edge",
+   "metric": "thread.p95",
+   "cand": 6.3963,
+   "base": 6.622,
+   "bases": [
+    6.5722000000000005,
+    6.622
+   ],
+   "change": -0.03408335850196309,
+   "tol": 0.25,
+   "gated": true,
+   "fail": false
+  },
+  {
+   "pack": "photon",
+   "window": "100/edge",
+   "metric": "cpu.p95",
+   "cand": 6.4315999999999995,
+   "base": 6.660200000000001,
+   "bases": [
+    6.6282,
+    6.660200000000001
+   ],
+   "change": -0.03432329359478714,
+   "tol": null,
+   "gated": false,
+   "fail": false
+  },
+  {
+   "pack": "photon",
+   "window": "100/edge",
+   "metric": "interval.p95",
+   "cand": 15.4626,
+   "base": 15.8146,
+   "bases": [
+    15.2828,
+    15.8146
+   ],
+   "change": -0.02225791357353335,
+   "tol": null,
+   "gated": false,
+   "fail": false
+  },
+  {
+   "pack": "photon",
+   "window": "100/inside",
+   "metric": "gpu.p50",
+   "cand": 12.24,
+   "base": 12.961500000000001,
+   "bases": [
+    12.316,
+    12.961500000000001
+   ],
+   "change": -0.055664853604906916,
+   "tol": 0.25,
+   "gated": true,
+   "fail": false
+  },
+  {
+   "pack": "photon",
+   "window": "100/inside",
+   "metric": "thread.p95",
+   "cand": 5.7372000000000005,
+   "base": 5.8736000000000015,
+   "bases": [
+    5.8736000000000015,
+    5.7095
+   ],
+   "change": -0.023222555162081382,
+   "tol": 0.25,
+   "gated": true,
+   "fail": false
+  },
+  {
+   "pack": "photon",
+   "window": "100/inside",
+   "metric": "cpu.p95",
+   "cand": 5.7731,
+   "base": 5.9198,
+   "bases": [
+    5.9198,
+    5.75025
+   ],
+   "change": -0.024781242609547616,
+   "tol": null,
+   "gated": false,
+   "fail": false
+  },
+  {
+   "pack": "photon",
+   "window": "100/inside",
+   "metric": "interval.p95",
+   "cand": 14.7445,
+   "base": 15.4465,
+   "bases": [
+    14.935,
+    15.4465
+   ],
+   "change": -0.04544718868352049,
+   "tol": null,
+   "gated": false,
+   "fail": false
+  },
+  {
+   "pack": "photon",
+   "window": "100/outside",
+   "metric": "gpu.p50",
+   "cand": 11.304,
+   "base": 11.332,
+   "bases": [
+    11.232,
+    11.332
+   ],
+   "change": -0.0024708789269326514,
+   "tol": 0.25,
+   "gated": true,
+   "fail": false
+  },
+  {
+   "pack": "photon",
+   "window": "100/outside",
+   "metric": "thread.p95",
+   "cand": 7.322199999999998,
+   "base": 7.3568,
+   "bases": [
+    7.3568,
+    7.2568
+   ],
+   "change": -0.004703131796433446,
+   "tol": 0.25,
+   "gated": true,
+   "fail": false
+  },
+  {
+   "pack": "photon",
+   "window": "100/outside",
+   "metric": "cpu.p95",
+   "cand": 7.403199999999999,
+   "base": 7.4252,
+   "bases": [
+    7.4252,
+    7.3172500000000005
+   ],
+   "change": -0.0029628831546626433,
+   "tol": null,
+   "gated": false,
+   "fail": false
+  },
+  {
+   "pack": "photon",
+   "window": "100/outside",
+   "metric": "interval.p95",
+   "cand": 13.719499999999998,
+   "base": 13.7008,
+   "bases": [
+    13.640799999999999,
+    13.7008
+   ],
+   "change": 0.0013648838024056253,
+   "tol": null,
+   "gated": false,
+   "fail": false
+  }
+ ],
+ "cand": {
+  "label": "FLASHCAM@07c0fd3",
+  "file": "incoming-3.10.4.jar",
+  "sha256": "bf51d6ab8e80bd25741d14c6bdbf15f74a1777ae40cd54433113cc48069f9416",
+  "spec": "/mnt/data/projects/incoming/mod/run/wt-FLASHCAM/mod/build/libs/incoming-3.10.4.jar"
+ },
+ "base": {
+  "label": "main@fa0ece44",
+  "file": "incoming-3.10.4.jar",
+  "sha256": "984d566bc5e4b2dc258ea2081056f99e22950c83fc86c6b6738f396b42de374c",
+  "spec": "/mnt/data/projects/incoming/mod/run/wt-FLASHCAM/mod/run/stand/dl/jars/ci-fa0ece44b0b4/incoming-3.10.4.jar"
+ },
+ "look": []
+}
