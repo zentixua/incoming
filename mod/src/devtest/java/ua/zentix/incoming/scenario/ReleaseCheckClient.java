@@ -44,6 +44,7 @@ final class ReleaseCheckClient {
     private MapScreen pendingMap;
     private int fireAt;
     private String pendingShot;
+    private int lastImpact = -1;
 
     ReleaseCheckClient() {
         NeoForge.EVENT_BUS.addListener(this::tick);
@@ -78,9 +79,17 @@ final class ReleaseCheckClient {
             phaseStart = tick;
             fired = false;
             reviewStart = -1;
+            lastImpact = -1;
             log("PHASE " + phase + " " + p);
         }
         boolean alpha = mc.player.getGameProfile().getName().equals("Alpha");
+        if (alpha && phase == 0) {
+            int elapsed = tick - phaseStart;
+            if (elapsed == 20) mc.setScreen(new ua.zentix.incoming.client.screen.IncomingConfigScreen(
+                    net.neoforged.fml.ModList.get().getModContainerById(Incoming.MOD_ID).orElseThrow(), null));
+            if (elapsed == 40) { log("MP_CONFIG " + ConfigScreenCheck.messages(mc.screen)); shot("config-multiplayer"); }
+            if (elapsed == 60) mc.setScreen(null);
+        }
         if (!alpha && phase >= 8 && tick - phaseStart > 180 && tick % 40 == 0)
             PacketDistributor.sendToServer(new C2S.NuclearKey());
         if (alpha && !fired && Boolean.parseBoolean(p.getProperty("ready"))) {
@@ -99,6 +108,22 @@ final class ReleaseCheckClient {
             if (tick - reviewStart >= 80) PacketDistributor.sendToServer(new C2S.NuclearAction(data.id(), C2S.NuclearAction.COMMIT));
         }
         int age = tick - phaseStart;
+        if (mc.screen == null) {
+            net.minecraft.world.phys.Vec3 look = new net.minecraft.world.phys.Vec3(Double.parseDouble(p.getProperty("x")), 64, 0);
+            double nearest = Double.POSITIVE_INFINITY;
+            int impact = Integer.parseInt(p.getProperty("impact"));
+            if (impact < 0) for (var track : FlightTracks.all()) {
+                if (track.confirmedEnd()) continue;
+                double[] xyz = new double[3]; track.at(track.lastTick(), xyz);
+                var point = new net.minecraft.world.phys.Vec3(xyz[0], xyz[1], xyz[2]);
+                double distance = point.distanceToSqr(mc.player.position());
+                if (distance < nearest) { nearest = distance; look = point; }
+            }
+            var delta = look.subtract(mc.player.getEyePosition());
+            mc.player.setYRot((float) Math.toDegrees(Math.atan2(-delta.x, delta.z)));
+            mc.player.setXRot((float) -Math.toDegrees(Math.atan2(delta.y, Math.hypot(delta.x, delta.z))));
+            if (impact >= 0 && lastImpact < 0) { shot("impact-" + phase); lastImpact = impact; }
+        }
         if (age % 20 == 0) {
             int alarms = 0, warnings = 0;
             for (var warning : ClientNuclear.warnings()) { warnings++; if (warning.alarm()) alarms++; }

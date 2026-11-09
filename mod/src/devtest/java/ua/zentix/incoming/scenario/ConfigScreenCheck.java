@@ -87,7 +87,7 @@ public final class ConfigScreenCheck {
         return result;
     }
 
-    private static String messages(GuiEventListener root) {
+    static String messages(GuiEventListener root) {
         return all(root).stream().filter(AbstractWidget.class::isInstance).map(AbstractWidget.class::cast)
                 .map(w -> w.getMessage().getString() + " active=" + w.active).toList().toString();
     }
