@@ -47,8 +47,9 @@ public final class ConfigScreenCheck {
                 case 6 -> mc.screen.onClose();
                 case 7 -> {
                     if (IncomingConfig.SERVER.earlyWarning.get()) throw new IllegalStateException("widget did not change early_warning to false");
-                    String config = Files.readString(mc.getSingleplayerServer().getWorldPath(net.minecraft.world.level.storage.LevelResource.ROOT)
-                            .resolve("serverconfig/incoming-server.toml"));
+                    Path file = net.neoforged.fml.config.ModConfigs.getConfigSet(net.neoforged.fml.config.ModConfig.Type.SERVER).stream()
+                            .filter(config -> config.getModId().equals(Incoming.MOD_ID)).findFirst().orElseThrow().getFullPath();
+                    String config = Files.readString(file);
                     if (!config.contains("early_warning = false")) throw new IllegalStateException("editor did not persist false");
                     log("PASS nested editor persisted early_warning=false");
                     mc.getLanguageManager().setSelected("ru_ru");

@@ -54,6 +54,7 @@ public final class ReleaseCheckRig {
         var level = server.overworld();
         int now = server.getTickCount();
         if (phase < 0) {
+            log("INITIAL early_warning=" + IncomingConfig.SERVER.earlyWarning.get() + " default=" + IncomingConfig.SERVER.earlyWarning.getDefault());
             level.getGameRules().getRule(GameRules.RULE_DAYLIGHT).set(false, server);
             level.getGameRules().getRule(GameRules.RULE_DOMOBSPAWNING).set(false, server);
             level.setDayTime(6000);
