@@ -89,11 +89,8 @@ class NukeLightSourceTest {
         assertFalse(hand.contains("pallSurfaceLevel(") || hand.contains("Sampler10"), "lamps cannot open the shelter");
         GlslFunction opening = GlslFunction.parse(Files.readString(ROOT.resolve(SHADER + "include/pall.glsl")), "flashOpening");
         double light = 1000;
-        for (double pixel : new double[]{0.05, 0.8}) { // Dark sealed hand, then the same hand lit by a torch.
-            double admitted = light * opening.call(Map.of("sky", 0.0));
-            assertEquals(0, admitted);
-            assertEquals(MushroomField.relit(pixel, 1, 0.3, 0), MushroomField.relit(pixel, 1, 0.3, admitted));
-        }
+        // Sealed and torch-lit rooms both have raw skylight zero; the branch above cannot substitute lamp light.
+        assertEquals(0, light * opening.call(Map.of("sky", 0.0)));
         assertEquals(light, light * opening.call(Map.of("sky", 1.0)), "open sky preserves the existing hand light");
     }
 }
