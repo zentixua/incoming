@@ -23,7 +23,7 @@ import java.util.concurrent.CompletableFuture;
  * setUnsaved to its wrapped LevelChunk but always reports isUnsaved=false; vanilla would discard its corrections.
  * Retaining the already FULL root retains its initialized ring without loading more chunks. FULL promotion of that
  * ring was measured to recursively expand blackout loading (49 batches / 80 promotions for one city root).
- * One-time legacy recovery checks the entire inner ring, so it temporarily borrows that ring at FULL to obtain
+ * One-time legacy recovery checks saved FULL neighbors in the inner ring, temporarily borrowing them at FULL to obtain
  * another initialized ring of source context. Borrowed loads cannot recursively start recovery. Otherwise a real
  * source just outside the inspected square could lose its spill when a phantom peak is removed inside it.
  * Checks and wrapped-neighbor saves are bounded work units; no tick-thread access waits for loading.
@@ -146,14 +146,15 @@ public final class BlockLighting {
         }
 
         @Override public boolean ready(ServerLevel level) {
-            if (repair && borrowNext < 9) return stopping || paceDeniedAt != level.getGameTime();
             if (level.getChunkSource().getChunkNow(center.x, center.z) == null) return false;
-            int radius = repair ? 2 : 1;
-            for (int z = -radius; z <= radius; z++) for (int x = -radius; x <= radius; x++)
+            for (int z = -1; z <= 1; z++) for (int x = -1; x <= 1; x++)
                 if (lightChunk(level, new ChunkPos(center.x + x, center.z + z)) == null) return false;
-            if (repair) for (int i = 0; i < 9; i++) {
+            if (repair && borrowNext < 9) return stopping || paceDeniedAt != level.getGameTime();
+            if (repair) for (int i = 0; i < 9; i++) if (borrowed[i]) {
                 ChunkPos p = at(i);
                 if (level.getChunkSource().getChunkNow(p.x, p.z) == null) return false;
+                for (int z = -1; z <= 1; z++) for (int x = -1; x <= 1; x++)
+                    if (lightChunk(level, new ChunkPos(p.x + x, p.z + z)) == null) return false;
             }
             if (!fullSeen) { readyNanos += System.nanoTime() - born; fullSeen = true; }
             return fence == null || fence.isDone();
@@ -172,11 +173,15 @@ public final class BlockLighting {
                 int i = borrowNext;
                 if (i != 4) {
                     ChunkPos p = at(i);
-                    if (!stopping && !ChunkLoadPace.of(level.getServer()).tryStart(level, p.x, p.z)) {
-                        paceDeniedAt = level.getGameTime();
-                        return true;
+                    // Only wrapped FULL neighbors suffer the proxy-save loss. Real ProtoChunks save dirty light
+                    // normally; promoting them at the explored-world edge would generate terrain for this repair.
+                    if (wrapped(level, p) != null) {
+                        if (!stopping && !ChunkLoadPace.of(level.getServer()).tryStart(level, p.x, p.z)) {
+                            paceDeniedAt = level.getGameTime();
+                            return true;
+                        }
+                        hold(level, p); borrowed[i] = true;
                     }
-                    hold(level, p); borrowed[i] = true;
                 }
                 borrowNext++;
                 return true;
@@ -184,6 +189,10 @@ public final class BlockLighting {
             // A step can start a new asynchronous phase.
             if (!ready(level)) return true;
             if (repair && !scanned) {
+                if (repairChunk != 4 && !borrowed[repairChunk]) {
+                    scanned = ++repairChunk == 9;
+                    return true;
+                }
                 ChunkPos target = at(repairChunk);
                 var chunk = lightChunk(level, target);
                 var layers = level.getChunkSource().getLightEngine().getLayerListener(LightLayer.BLOCK);
@@ -221,7 +230,8 @@ public final class BlockLighting {
                 var waits = new ArrayList<CompletableFuture<?>>();
                 for (int i = 0; i < (repair ? 25 : 9); i++) {
                     ChunkPos p = saveAt(i);
-                    waits.add(level.getChunkSource().getLightEngine().waitForPendingTasks(p.x, p.z));
+                    if (lightChunk(level, p) != null)
+                        waits.add(level.getChunkSource().getLightEngine().waitForPendingTasks(p.x, p.z));
                 }
                 fencedRevision = revision;
                 saveNext = 0;

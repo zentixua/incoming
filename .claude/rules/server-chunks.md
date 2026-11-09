@@ -164,3 +164,5 @@ paths:
   not erase boundary peaks, and boundary checks alone miss unsupported interior maxima from old missed-source checks.
   Sable plot chunks belong to its storage, not the vanilla chunk map: skip vanilla light leases there through
   `SubLevels.inPlotGrid`, or the ticket guard leaves a permanently unready batch (`arrival_respawn_craft`).
+  Legacy recovery borrows only wrapped saved FULL neighbors. Genuine ProtoChunks save dirty light normally;
+  promoting them generates terrain outside the ruin plan at the explored-world edge (`nuke_zone_edge`).
