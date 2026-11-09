@@ -65,6 +65,7 @@ public final class ReleaseCheckRig {
             IncomingConfig.SERVER.blockDamage.set(false);
             IncomingConfig.SERVER.nukeBlockDamage.set(false);
             IncomingConfig.SERVER.nukeFires.set(false);
+            phase = Integer.getInteger("incoming.check.start", 0) - 1;
             next(alpha, bravo, now);
         }
         if (phase >= CASES.length) return;
@@ -112,7 +113,7 @@ public final class ReleaseCheckRig {
         }
         for (ServerPlayer player : new ServerPlayer[]{alpha, bravo}) {
             player.setGameMode(GameType.CREATIVE);
-            player.teleportTo(server.overworld(), phase * 800 + (player == alpha ? 65 : 90), 68, -80, 130, 0);
+            player.teleportTo(server.overworld(), phase * 800 + (player == alpha ? 65 : phase >= 8 ? 75 : 90), 68, -80, 130, 0);
             player.getAbilities().flying = true;
             player.onUpdateAbilities();
         }

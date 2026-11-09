@@ -92,7 +92,7 @@ final class ReleaseCheckClient {
         }
         if (!alpha && phase >= 8 && tick - phaseStart > 180 && tick % 40 == 0)
             PacketDistributor.sendToServer(new C2S.NuclearKey());
-        if (alpha && !fired && Boolean.parseBoolean(p.getProperty("ready"))) {
+        if (alpha && !fired && (phase > 0 || tick - phaseStart >= 80) && Boolean.parseBoolean(p.getProperty("ready"))) {
             fired = true;
             mapFire(p);
         }
