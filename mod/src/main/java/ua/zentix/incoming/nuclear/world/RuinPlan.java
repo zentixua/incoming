@@ -1036,6 +1036,7 @@ public final class RuinPlan {
             // fire tick like newly placed fire (FireBlock.onPlace): 30–39 ticks, flash-layer fire starts with ruins
             if (!layer) level.scheduleTick(m.immutable(), fire.getBlock(), 30 + (int) (RuinPlanner.hash(m.getX(), m.getY(), m.getZ(), 31) * 10));
         }
+        ua.zentix.incoming.work.BlockLighting.changed(level, chunk);
         checkLight(light, pos, checked == checks.length ? checks : java.util.Arrays.copyOf(checks, checked));
         // fluid beside breach (neighbors too) gets tick like neighbor setBlock, staggered by position hash, at most
         // FLUID_TICKS per second: replacement wakes no neighbors, unticked water would stand as wall

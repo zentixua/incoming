@@ -123,6 +123,7 @@ public final class ChunkLights {
                     break sections;
                 }
                 if (!level.setBlock(p.set(x0 + x, y0 + y, z0 + z), to, FLAGS)) continue;
+                ua.zentix.incoming.work.BlockLighting.changed(level, p);
                 changed++;
                 BlockState now = section.getBlockState(x, y, z);
                 if (now != to) {
@@ -187,7 +188,10 @@ public final class ChunkLights {
                 changed++;
             }
         }
-        if (changed > 0) chunk.setUnsaved(true);
+        if (changed > 0) {
+            ua.zentix.incoming.work.BlockLighting.changed(level, chunk);
+            chunk.setUnsaved(true);
+        }
         return new Pass(changed, done, next, 0);
     }
 
@@ -252,6 +256,7 @@ public final class ChunkLights {
     public static void relight(ServerLevel level, BlockPos pos, BlockState twin) {
         BlockState lit = GridLights.lit(twin);
         if (lit == null || !level.setBlock(pos, lit, FLAGS)) return;
+        ua.zentix.incoming.work.BlockLighting.changed(level, pos);
         if (signal(lit)) resignal(level, pos);
     }
 

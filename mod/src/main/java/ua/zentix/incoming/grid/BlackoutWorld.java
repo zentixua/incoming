@@ -259,7 +259,7 @@ public final class BlackoutWorld {
     private final LongOpenHashSet queued = new LongOpenHashSet();
     /**
      * Lamps darkened on chunk load ({@link ChunkSaves}) whose light came from disk: remove it in the first work on the chunk
-     * (light reduction spreads into loaded neighbors itself; unloaded neighbors have no light).
+     * (light reduction reaches initialized neighbor storage; the shared light lease saves corrected wrapped neighbors).
      */
     private final Long2ObjectOpenHashMap<LongArrayList> staleLight = new Long2ObjectOpenHashMap<>();
     /**
@@ -893,7 +893,8 @@ public final class BlackoutWorld {
         boolean edge = level.getChunkSource().getChunkNow(pos.x, pos.z) == null || !NuclearTickets.neighbourhoodLoaded(level, pos);
         LongArrayList stale = staleLight.get(c);
         if (stale != null) {
-            // light reduction in the neighborhood; does not enter an unloaded neighbor — world's edge, not sent to players
+            // Retain and save initialized neighbor light through the shared lease.
+            ua.zentix.incoming.work.BlockLighting.changed(level, pos);
             var light = level.getChunkSource().getLightEngine();
             int n = 0;
             for (; n < limit && !stale.isEmpty(); n++) light.checkBlock(BlockPos.of(stale.removeLong(stale.size() - 1)));

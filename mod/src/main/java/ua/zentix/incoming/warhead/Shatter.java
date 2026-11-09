@@ -298,6 +298,7 @@ final class Shatter implements UnitQueue.Job {
             m.set(x, y, z);
             if ((!zone.airborne() || open(level, x, y, z, tag))
                     && (edgesReady || Terrain.readyAround(level, Vec3.atCenterOf(m), Warheads.EDGE))) {
+                ua.zentix.incoming.work.BlockLighting.changed(level, m);
                 level.setBlock(m, Blocks.AIR.defaultBlockState(), edgesReady ? Block.UPDATE_ALL : Warheads.EDGE_FLAGS);
                 touched.add(ChunkPos.asLong(sx, sz));
                 broken++;

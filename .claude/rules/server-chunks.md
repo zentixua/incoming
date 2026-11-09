@@ -150,3 +150,13 @@ paths:
   not `runDistanceManagerUpdates`, which copies whole chunk map for new holders, areas taken dozens/tick). Vanilla
   recalculates when called: tick start, sync load, another area's release. Otherwise same-tick versus next-tick area
   ticking depended on others requesting recalculation, hence other strikes.
+
+- Border block light: an INITIALIZE_LIGHT neighbor can have live light storage without being FULL. Light decreases reach
+  it and `ChunkHolder.sectionLightChanged` sets its wrapped LevelChunk dirty, but `ImposterProtoChunk.isUnsaved()` is
+  always false: `ChunkMap.save` skips the proxy, so unload/reload restores old spill. `work/BlockLighting` retains the
+  already FULL edited root through its light fence and saves corrected wrapped neighbors through vanilla ChunkMap
+  (one neighbor per work unit; narrow AT). Promoting the ring to FULL recursively loads a dark city: new FULL chunks
+  enter blackout, then need their own rings (49 batches / 80 promotions for one test root). No neighbor promotion is
+  needed to serialize its existing light. Legacy recovery checks bounded sections in scar/outage contexts and marks
+  completion with a saved chunk attachment; freshly generated chunks have no legacy spill. Source checks alone do
+  not erase boundary peaks, and boundary checks alone miss unsupported interior maxima from old missed-source checks.

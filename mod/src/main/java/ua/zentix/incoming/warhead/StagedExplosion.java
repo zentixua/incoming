@@ -911,6 +911,7 @@ final class StagedExplosion implements UnitQueue.Job {
                     if (state.is(blocksAtRays.get(i)) && explosion.interactsWithBlocks()) {
                         PoiRecords.recordWithNeighbours(level, p, state);
                         long since = System.nanoTime();
+                        ua.zentix.incoming.work.BlockLighting.changed(level, p);
                         state.onExplosionHit(level, p, explosion, this::addOrAppend);
                         long took = System.nanoTime() - since;
                         if (took > SLOW_BLOCK_NANOS) area.slowBlock(level, state, p, took);
@@ -1310,6 +1311,7 @@ final class StagedExplosion implements UnitQueue.Job {
             if (!s.is(blocksAtRays.get(i))) continue;
             if (e.interactsWithBlocks()) {
                 PoiRecords.recordWithNeighbours(level, p, s);
+                ua.zentix.incoming.work.BlockLighting.changed(level, p);
                 s.onExplosionHit(level, p, e, (stack, at) -> addOrAppend(stack, at));
             }
             hit.add(p);
@@ -1337,6 +1339,7 @@ final class StagedExplosion implements UnitQueue.Job {
             for (BlockPos p : part) {
                 BlockState s = level.getBlockState(p);
                 PoiRecords.recordWithNeighbours(level, p, s);
+                ua.zentix.incoming.work.BlockLighting.changed(level, p);
                 s.onExplosionHit(level, p, e, (stack, at) -> addOrAppend(stack, at));
             }
         }
@@ -1347,6 +1350,7 @@ final class StagedExplosion implements UnitQueue.Job {
     private void burn(ServerLevel level, List<BlockPos> part) {
         for (BlockPos p : part) {
             if (level.random.nextInt(3) == 0 && level.getBlockState(p).isAir() && level.getBlockState(p.below()).isSolidRender(level, p.below())) {
+                ua.zentix.incoming.work.BlockLighting.changed(level, p);
                 level.setBlockAndUpdate(p, BaseFireBlock.getState(level, p));
             }
         }

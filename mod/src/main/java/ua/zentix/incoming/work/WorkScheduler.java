@@ -171,11 +171,19 @@ public final class WorkScheduler {
         return levels;
     }
 
+    /** Alternate after a full world rotation, so even world counts cannot lock a world's service priority. */
+    static boolean lightFirst(int tick, int worlds) { return (Math.floorDiv(tick, worlds) & 1) == 0; }
+
     private static void workImpacts(List<ServerLevel> levels, WorkClock impact) {
         for (ServerLevel level : levels) {
+            // Both queues retain committed world edits. Alternate first service so continuous impacts cannot
+            // starve lighting and accumulate its chunk leases indefinitely. They still share one clock.
+            boolean lightFirst = lightFirst(level.getServer().getTickCount(), levels.size());
+            if (lightFirst && level.tickRateManager().runsNormally()) BlockLighting.work(level, impact);
             if (level.tickRateManager().runsNormally() && level.hasData(ModAttachments.STRIKE_WORLD)) {
                 StrikeWorld.get(level).workImpacts(level, impact);
             }
+            if (!lightFirst && level.tickRateManager().runsNormally()) BlockLighting.work(level, impact);
         }
     }
 

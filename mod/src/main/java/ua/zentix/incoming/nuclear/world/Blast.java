@@ -99,7 +99,9 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
                 /** Block entity holds items ({@link net.minecraft.world.Container}): lands in the rubble with its contents. */
                 CONTAINER = 1 << 21,
                 /** Coniferous trunk ({@link ModTags#NUKE_CONIFERS}): its own blowdown curve ({@link ForestBlowdown}). */
-                CONIFER = 1 << 22;
+                CONIFER = 1 << 22,
+                /** A lamp can have zero live emission while its old disk light still exists. */
+                LIGHT_SOURCE = 1 << 23;
 
         boolean is(int flag) {
             return (flags & flag) != 0;
@@ -229,6 +231,7 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
         if (st.is(Blocks.FIRE)) flags |= Props.FIRE;
         if (container(st)) flags |= Props.CONTAINER;
         if (st.is(ModTags.NUKE_CONIFERS)) flags |= Props.CONIFER;
+        if (st.getLightEmission(at, BlockPos.ZERO) > 0 || ua.zentix.incoming.grid.GridLights.isUnlit(st)) flags |= Props.LIGHT_SOURCE;
         return new Props(r, st.isAir(), full, bearing, span, liquid, waterlogged, leaves, log, fixed, destroy >= 1, st.is(BlockTags.MINEABLE_WITH_AXE),
                 flags, st.getLightBlock(at, BlockPos.ZERO), st.getLightEmission(at, BlockPos.ZERO),
                 LightEngine.getOcclusionShape(at, BlockPos.ZERO, st, Direction.UP), LightEngine.getOcclusionShape(at, BlockPos.ZERO, st, Direction.DOWN),

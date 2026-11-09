@@ -52,6 +52,14 @@ public final class ModAttachments {
     public static final Supplier<AttachmentType<Integer>> CHUNK_SCAR = REGISTER.register("chunk_scar",
             () -> AttachmentType.builder(() -> 0).serialize(Codec.INT).build());
 
+    /** World: light leases and recovery queue; never saved across worlds. */
+    public static final Supplier<AttachmentType<ua.zentix.incoming.work.BlockLighting>> BLOCK_LIGHTING = REGISTER.register("block_lighting",
+            () -> AttachmentType.builder(ua.zentix.incoming.work.BlockLighting::new).build());
+
+    /** Chunk: completed one-time recovery of pre-fix Incoming light spill; ignored by vanilla. */
+    public static final Supplier<AttachmentType<Boolean>> LIGHT_REPAIRED = REGISTER.register("light_repaired",
+            () -> AttachmentType.builder(() -> false).serialize(Codec.BOOL).build());
+
     /** Cohesive surface damage smaller than a full block; vanilla crack packets display it. */
     public static final Supplier<AttachmentType<java.util.List<ua.zentix.incoming.warhead.SurfaceDamage.Mark>>> SURFACE_DAMAGE =
             REGISTER.register("surface_damage", () -> AttachmentType.builder(() -> java.util.List.<ua.zentix.incoming.warhead.SurfaceDamage.Mark>of())

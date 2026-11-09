@@ -262,6 +262,7 @@ public final class FragmentStrike implements UnitQueue.Job {
             }
             boolean edgesReady = Terrain.neighbourhoodReady(level, cx, cz);
             if (!edgesReady && !Terrain.readyAround(level, Vec3.atCenterOf(m), Warheads.EDGE)) continue;
+            ua.zentix.incoming.work.BlockLighting.changed(level, m);
             level.setBlock(m, to, edgesReady ? Block.UPDATE_ALL : Warheads.EDGE_FLAGS);
             touched.add(ChunkPos.asLong(cx, cz));
             if (to.isAir()) glassBroken++;

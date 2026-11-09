@@ -96,8 +96,8 @@ public final class ChunkSaves {
     /**
      * Chunk from disk (server thread, before becoming part of the world): in a dark district, lamps go dark directly in the
      * palette — no neighbor updates, Sable or flicker. Their light came from disk with the chunk: {@link BlackoutWorld}
-     * removes it in the first work on the chunk ({@code checkBlock}; light reduction does not reach unloaded neighbors —
-     * they have nothing to reduce). A counterpart in a lit district (save without this interception, counterpart moved by
+     * removes it in the first work on the chunk ({@code checkBlock}). The shared light lease retains the initialized ring and saves corrected
+     * wrapped neighbors: INITIALIZE_LIGHT receives reductions, but ImposterProtoChunk itself never saves them. A counterpart in a lit district (save without this interception, counterpart moved by
      * piston or craft) becomes a lamp again, and lighting is recomputed on load.
      */
     public static void onLoad(ChunkDataEvent.Load e) {
