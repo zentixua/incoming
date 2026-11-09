@@ -12,6 +12,40 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class MushroomFieldTest {
+    @org.junit.jupiter.api.Test
+    void emissionTexelsUseThePulseForBothLimbAndInterior() {
+        float[] row = new float[68 * 4];
+        for (double y : new double[]{1, 15, 1000}) for (boolean surface : new boolean[]{false, true}) {
+            for (double t : new double[]{1, 3, 5, 6, 10, 20, 33}) {
+                MushroomModel.Shape s = MushroomModel.shape(t, y, surface ? 0 : 240 * Math.cbrt(y), surface, 0);
+                MushroomField.emission(s, y, surface, row, 0);
+                double expected = ua.zentix.incoming.nuclear.model.FlashLight.temperature(t, y, surface, s.capR());
+                assertEquals(expected, row[40] + row[41] * row[64], expected * 2e-7, "float table edge");
+                if (MushroomModel.rollUp(t, y, surface) == 0) {
+                    assertEquals(1, row[64]);
+                    assertEquals(expected, row[40] + row[41], expected * 2e-7, "isothermal sphere interior");
+                }
+            }
+        }
+    }
+
+    @Test
+    void emittedTableInteriorNeverReheatsDuringRollup() {
+        float[] row = new float[68 * 4];
+        for (double y : new double[]{1, 5, 15, 1000}) for (boolean surface : new boolean[]{false, true}) {
+            double previous = Double.POSITIVE_INFINITY;
+            double tr = MushroomModel.rollUpSeconds(y, surface);
+            double tm = FireballModel.secondMaximumSeconds(y);
+            for (int i = 0; i <= 400; i++) {
+                double t = tm + (2 * tr - tm) * i / 400;
+                MushroomModel.Shape shape = MushroomModel.shape(t, y, 0, surface, 0, null);
+                MushroomField.emission(shape, y, surface, row, 0);
+                assertTrue(row[40] + row[41] <= previous + 1e-4, "shader interior reheated");
+                previous = row[40] + row[41];
+            }
+        }
+    }
+
     /** Empty-space skipping and the outer ray interval must retain the billowed dust front above its mean height. */
     @Test
     void boundsHoldTheStemFrontBillows() {

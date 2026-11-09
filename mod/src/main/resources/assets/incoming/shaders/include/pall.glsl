@@ -900,3 +900,9 @@ vec4 froxelOver(vec4 near, vec4 far) {
     vec4 joined = vec4(pallShown(near.rgb + seen * farLight, 1.0 - seen * far.a), seen * far.a);
     return mix(joined, over, smoothstep(0.75, 0.85, top));
 }
+
+// FlashLight.opening: vanilla skylight brightness without an ambient floor. (est.) Aperture throughput.
+float flashOpening(float sky) {
+    float x = clamp(sky, 0.0, 1.0);
+    return x / (4.0 - 3.0 * x);
+}

@@ -224,7 +224,7 @@ public final class MushroomModel {
      */
     public static double light(Shape s, double yieldKt, boolean surface, double distanceM) {
         double r = s.capR();
-        return BlackBody.luminance(edgeTemperature(s.t(), yieldKt, surface)) * r * r / Math.max(distanceM * distanceM, r * r);
+        return BlackBody.luminance(FlashLight.temperature(s.t(), yieldKt, surface, s.capR())) * r * r / Math.max(distanceM * distanceM, r * r);
     }
 
     /**

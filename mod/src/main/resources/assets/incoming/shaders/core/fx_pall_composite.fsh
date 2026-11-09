@@ -353,7 +353,9 @@ void main() {
         vec3 added = vec3(0.0), n = vec3(0.0, 1.0, 0.0);
         if (balls) {
             n = sceneNormal(Sampler1, InvViewProj, PallForward, full, fullSize, p);
-            added = ballLight(p, n, over) * seen;
+            // OpenAir carries raw skylight separately from lamps; torches cannot admit ball light through rock.
+            // Beyond its local window pallOpenHere uses coarse terrain / boundary light, not exact building shadows.
+            added = ballLight(p, n, over) * (seen * flashOpening(open));
         }
         if (dot(added, LUMA) > 1e-6) {
             // brighter world: full pixel, pall plus ball-lit world behind (alpha 0, blending ignores frame); above

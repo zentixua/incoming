@@ -87,6 +87,9 @@ paths:
   (1200 = one game minute): a test waiting for background generation of a fresh area must run at game speed
   (`gameSpeed` in `StrikeGameTests`) or generate needed chunks synchronously (`level.getChunk`); otherwise it passes
   locally and fails on CI.
+- Fixtures awaiting vanilla light propagation also use `StrikeGameTests.gameSpeed`: `nuke_eyes_shelter` exhausted
+  400 unthrottled ticks in 0.4 s on CI before its opened window received skylight. Keep assertions on actual light,
+  not a fixed tick delay or a manually filled light array.
 - Before a launch-sector test in CI, the next grid row's platform already stands ahead toward +Z (FV diagnosis:
   another platform's ground 41 blocks ahead of the runway); missile elevation after arming reads terrain hundreds of
   blocks ahead (`Airframe.reliefLookahead`): an “empty runway” depended on shard composition and became blocked when
