@@ -118,14 +118,16 @@ class S2CGoldenTest {
                         new S2C.NukeApproach(2300, List.of(new ua.zentix.incoming.nuclear.IcbmArrival(9, 2260, 2500,
                                 D.withWave(Detonation.OLD_WAVE).withDayTime(Detonation.NO_DAY_TIME), Q)))),
                 golden(S2C.NukeWarning.TYPE, S2C.NukeWarning.CODEC, W),
-                // 1 - release 3.1.0; 2 - wave (wall speed); 3 - blackout (EMR); 4 — time of day of detonation; 5 - fires
+                // 1 - release 3.1.0; 2 - wave (wall speed); 3 - blackout (EMR); 4 — time of day of detonation; 5 - fires;
+                // 6 - strike id; 7 - black rain
                 golden(S2C.NukeDetonation.TYPE, S2C.NukeDetonation.CODEC,
                         new S2C.NukeDetonation(D.withWave(Detonation.OLD_WAVE).withDayTime(Detonation.NO_DAY_TIME), 0f),
                         new S2C.NukeDetonation(D.withDayTime(Detonation.NO_DAY_TIME), 0f),
                         new S2C.NukeDetonation(D.withDayTime(Detonation.NO_DAY_TIME), 242f),
                         new S2C.NukeDetonation(D, 242f),
                         new S2C.NukeDetonation(D.withFires(false), 242f),
-                        new S2C.NukeDetonation(D.withFires(false), 242f, 9)),
+                        new S2C.NukeDetonation(D.withFires(false), 242f, 9),
+                        new S2C.NukeDetonation(D.withFires(false).withRain(false), 242f, 9)),
                 golden(S2C.NukeDebris.TYPE, S2C.NukeDebris.CODEC, new S2C.NukeDebris(4, List.of(
                         new S2C.NukeDebris.Piece(new BlockPos(-100, 70, 2000), Blocks.STONE.defaultBlockState()),
                         new S2C.NukeDebris.Piece(new BlockPos(1, -60, -1), Blocks.OAK_PLANKS.defaultBlockState())), S2C.NukeDebris.OLD_REMOVED),
@@ -136,12 +138,14 @@ class S2CGoldenTest {
                         new FlashMarks.Layer(3, 100, new int[]{0x12345678, -5}, new int[0], new long[0]),
                         new FlashMarks.Layer(4, 123_456, new int[0], new int[]{0x0abcdef0},
                                 new long[]{1, 2, 3, 4, 5, 6, 7, Long.MIN_VALUE + 8}))))),
-                // 1 - release 3.1.0; 2 - wall speeds and time of day of explosions are listed at the end; 3 - list of fires
+                // 1 - release 3.1.0; 2 - wall speeds and time of day of explosions are listed at the end; 3 - list of fires;
+                // 4 - list of black rain
                 golden(S2C.NukeSync.TYPE, S2C.NukeSync.CODEC,
                         new S2C.NukeSync(List.of(D.withWave(Detonation.OLD_WAVE).withDayTime(Detonation.NO_DAY_TIME),
                                 D2.withWave(Detonation.OLD_WAVE).withDayTime(Detonation.NO_DAY_TIME)), List.of(W)),
                         new S2C.NukeSync(List.of(D, D2), List.of(W)),
-                        new S2C.NukeSync(List.of(D.withFires(false), D2), List.of(W))),
+                        new S2C.NukeSync(List.of(D.withFires(false), D2), List.of(W)),
+                        new S2C.NukeSync(List.of(D.withFires(false), D2.withRain(false)), List.of(W))),
                 golden(S2C.Radiation.TYPE, S2C.Radiation.CODEC, new S2C.Radiation(1.5f, 250f, 0.125f, 2)),
                 // 1 - without target entities; 2 - their network numbers are listed at the end
                 golden(S2C.Flights.TYPE, S2C.Flights.CODEC, new S2C.Flights(List.of(

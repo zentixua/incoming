@@ -319,7 +319,7 @@
   "incoming.config.nuke_mob_radiation": "Radiation sickness in mobs",
   "incoming.config.nuke_mob_radiation.tooltip": "Mobs other than the undead take a dose from the burst and from fallout and sicken in the same stages as players. Off: prompt radiation kills them at once (from 1000 rem) or takes half their health (from 400 rem), and fallout does not affect them.",
   "incoming.config.nuke_black_rain": "Black rain",
-  "incoming.config.nuke_black_rain.tooltip": "Black rain from the fires contaminates skin and clothes until washed off with water.",
+  "incoming.config.nuke_black_rain.tooltip": "Smoke from the fires of a nuclear strike rains out downwind: it washes a little radioactivity to the ground and contaminates skin and clothes until washed off with water. Off: no black rain. Applies to new detonations.",
   "incoming.config.nuke_flight_time": "ICBM flight time, ticks",
   "incoming.config.nuke_flight_time.tooltip": "20 ticks = 1 s. A real ICBM flies about 30 minutes. A non-operator's strike takes at least 1800 ticks (90 s of alarm).",
   "incoming.config.nuke_far_zone": "Generate the zone for far ruins",

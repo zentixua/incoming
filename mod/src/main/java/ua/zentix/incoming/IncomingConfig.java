@@ -247,7 +247,9 @@ public final class IncomingConfig {
                             "sickness in the same stages as players. Off: prompt radiation kills mobs at once (from 1000 rem) or takes",
                             "half their health (from 400 rem), and fallout does not affect them.")
                     .translation("incoming.config.nuke_mob_radiation").define("mob_radiation", true);
-            nukeBlackRain = b.comment("Black rain from the fires contaminates skin and clothes until washed off with water.")
+            nukeBlackRain = b.comment("Black rain: smoke from a nuclear firestorm rains out downwind. It washes a little radioactivity to the ground",
+                            "and contaminates skin and clothes until washed off with water. Off: no black rain at all.",
+                            "Applies to new detonations.")
                     .translation("incoming.config.nuke_black_rain").define("black_rain", true);
             nukeFlightTime = b.comment("ICBM flight from launch to detonation, ticks (about 30 minutes in reality). A non-operator strike takes at least 1800 (90 s of alarm).")
                     .translation("incoming.config.nuke_flight_time").defineInRange("flight_time", 1800, 200, 72_000);
