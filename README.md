@@ -1,6 +1,6 @@
 # FLASHCAM comparison frames
 
-Review evidence for PR #646. Main: fa0ece44b. Branch: 500f311f1.
+Review evidence for PR #646. Main: fa0ece44b. Branch: 07c0fd3ee.
 Identical client-only sandbox fixture, Complementary Unbound, 1280×720 output. No image processing.
 1 Mt night: 4550 m ground range, HOB 2400 m, time 16000, wave scale 0.35.
 15 kt day: 1400 m ground range, HOB 240·cube-root(15) m. Sky/block light: sealed 0/0, window 8/0, torch 0/9.
@@ -22,3 +22,18 @@ Chat was cleared in both columns. Chamber construction waits for loaded chunks i
 | window_room, 3 s | ![main](main_window_room_003.00s.png) | ![branch](branch_window_room_003.00s.png) |
 | torch_room, 1 s | ![main](main_torch_room_001.00s.png) | ![branch](branch_torch_room_001.00s.png) |
 | torch_room, 3 s | ![main](main_torch_room_003.00s.png) | ![branch](branch_torch_room_003.00s.png) |
+
+## Cooling regression: 1 kt night, final head
+
+3 s: ![1 kt night](branch_1kt_night_003.00s.png)
+
+4 s: ![1 kt night](branch_1kt_night_004.00s.png)
+
+5 s: ![1 kt night](branch_1kt_night_005.00s.png)
+
+6 s: ![1 kt night](branch_1kt_night_006.00s.png)
+
+7 s: ![1 kt night](branch_1kt_night_007.00s.png)
+
+8 s: ![1 kt night](branch_1kt_night_008.00s.png)
+
