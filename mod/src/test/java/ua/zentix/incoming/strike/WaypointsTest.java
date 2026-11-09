@@ -35,7 +35,7 @@ class WaypointsTest {
         for (WeaponType w : WeaponType.values()) {
             double reach = w.spec().route().reach();
             Waypoints via = new Waypoints(List.of(new Vec3(0, 0, 1000)));
-            boolean flies = w == WeaponType.DRONE || w == WeaponType.MISSILE || w == WeaponType.LOITER;
+            boolean flies = w == WeaponType.DRONE || w == WeaponType.MISSILE || w == WeaponType.LOITER || w == WeaponType.BUNKER;
             assertEquals(flies, w.spec().route().waypoints(), w.getSerializedName());
             assertEquals(flies, via.within(w, FROM, new Vec3(0, 0, Math.max(1000, reach - 1))), w.getSerializedName());
             assertFalse(via.within(w, FROM, new Vec3(0, 0, reach + 1)), w.getSerializedName());

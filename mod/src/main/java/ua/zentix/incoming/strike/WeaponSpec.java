@@ -1086,7 +1086,7 @@ public record WeaponSpec(WeaponType.SirenKind siren, int sirenSeconds, Salvo sal
      */
     public static final WeaponSpec BUNKER = new WeaponSpec(WeaponType.SirenKind.AIR_RAID, 20, Salvo.gaps(60, 80), new Warhead(false, true, false),
             Launch.BOMBER,
-            new Route(() -> IncomingConfig.SERVER.bomberFlightTime, 145, 0, 1.5, 0, 0), Tracking.POINT, null, Blast.NONE, true, 0.5f,
+            new Route(() -> IncomingConfig.SERVER.bomberFlightTime, 145, 0, 1.5, turnRadius(BOMBER_SPEED, BOMBER_HANDLING.cruise().turnRate()), 30_000), Tracking.POINT, null, Blast.NONE, true, 0.5f,
             new Airframe(() -> ModEntities.BOMBER.get(), BOMBER_SPEED, BOMBER_SPEED, BOMBER_HANDLING, 170, 30, 0, 8.5, 0, 120 * BOMBER_SPEED, 0, null, 0, Attack.NONE,
                     BOMBER_NOISE, new Signature(0.15, true), BOMBER_ARTICLE, null),
             new Airframe(() -> ModEntities.BUNKER_BUSTER.get(), BOMBER_SPEED, Math.max(BOMBER_SPEED, BOMB_TERMINAL), null, 0, 12, 0, BombDrop.NOSE, 0, 300 * BOMB_TERMINAL,

@@ -146,7 +146,7 @@ public final class Trailer {
             c.bomberFlightTime.set(20);
             c.nukeFlightTime.set(600);
             c.loiterTime.set(8);
-            c.siren.set(false);
+            c.earlyWarning.set(false);
         });
         onServer(this::findLocations);
         waitTicks(5);

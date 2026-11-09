@@ -35,16 +35,16 @@ public final class LaunchPlaces {
     private LaunchPlaces() {}
 
     /**
-     * Launch of {@code weapon} from {@code from} waits for area: site exists, weapon uses a launcher (B-2 uses
-     * site only for approach heading, ICBM ignores it), and site is not ready ({@link #ready}).
+     * Launch of {@code weapon} from {@code from} waits for area: site exists, weapon starts on the ground
+     * (B-2 uses site only for approach heading), and site is not ready ({@link #ready}).
      */
     public static boolean waits(ServerLevel level, WeaponType weapon, @Nullable LaunchOrigin from) {
         return from != null && fromPad(weapon) && !ready(level, from);
     }
 
-    /** Weapon launches from a launcher at the site (has a rack): launch-site area has something to hold. */
+    /** Weapon starts on the ground (rack or ICBM pad): launch-site area has something to hold. */
     public static boolean fromPad(WeaponType weapon) {
-        return weapon.spec().rack() != null;
+        return weapon.spec().rack() != null || weapon.spec().launch() == WeaponSpec.Launch.ICBM;
     }
 
     /**

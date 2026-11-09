@@ -37,7 +37,7 @@ paths:
   climb subtracts/descent adds `Handling.TRADE` · g · sin γ, capped `diveSpeed`); `guidance/Route` side bypass/entry
   points, approach from behind target; salvo projectile in own lane (`inLane`: lateral offset smoothly from zero at
   `exit`, back to zero over `converge` before target, boundary points added; turns use bisector; game numbers
-  `WeaponSpec.Lanes`); or operator `strike/Waypoints` (target map Shift+left-click, ≤ 5 x/z points; Shahed/missile/Lancet,
+  `WeaponSpec.Lanes`); or operator `strike/Waypoints` (target map Shift+left-click, ≤ 5 x/z points; Shahed/missile/Lancet/B-2,
   specs with `WeaponSpec.Route.reach`: path from player (order launch location, console from first point) via points
   to target within 30 km, Lancet 15; points captured within `capture`, about turn radius; map/command
   `/incoming salvo … via x z …` checks `ServerActions.routeProblem`; launcher faces first point, distant projectile

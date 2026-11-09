@@ -144,19 +144,19 @@ public final class StrikeService {
             target = target.offset(miss);
             point = point.add(miss);
         }
-        if (spec.launch() == WeaponSpec.Launch.ICBM) return launchIcbm(level, target, point, nuke, shooter, IncomingConfig.SERVER.nukeFlightTime.get());
+        if (spec.launch() == WeaponSpec.Launch.ICBM) return launchIcbm(level, target, point, nuke, shooter, owner, from, IncomingConfig.SERVER.nukeFlightTime.get());
         Loadout.Nuke warhead = nuke.onCarrier() && Loadout.carriesNuke(weapon) ? nuke : null;
         Stand stand = fixed != null ? Stand.fixed(fixed) : new Stand(post(level, shooter, owner, from, point), null, from == null ? null : from.at());
         StrikeProjectile p = switch (spec.launch()) {
             case GUIDED -> launchGuided(level, weapon, target, point, approachYaw, owner, shooter, stand, via, lane);
             case ROCKET -> launchRocket(level, target, point, approachYaw, owner, shooter, stand);
             case LOITER -> launchLoiter(level, target, point, approachYaw, owner, shooter, stand, via, lane);
-            case BOMBER -> launchBomber(level, target, point, approachYaw, owner);
+            case BOMBER -> launchBomber(level, target, point, approachYaw, owner, via);
             case ICBM -> throw new IllegalStateException("ICBMs are launched by NuclearStrikes");
         };
         if (p == null) return Result.FAILED;
         p.setNuclear(warhead);
-        if (siren && IncomingConfig.SERVER.siren.get()) p.armSiren(spec.sirenLead());
+        if (siren && IncomingConfig.SERVER.earlyWarning.get()) p.armSiren(spec.sirenLead());
         int eta = p.etaTicks();
         if (!p.isVirtual()) {
             // On launcher: acquire tickets before world entry; ordered site may not entity-tick.
@@ -182,7 +182,18 @@ public final class StrikeService {
      * NuclearKeys})
      */
     public static Result launchIcbm(ServerLevel level, Target target, Vec3 point, Loadout.Nuke nuke, @Nullable ServerPlayer shooter, int flightTicks) {
+        return launchIcbm(level, target, point, nuke, shooter, shooter == null ? null : shooter.getUUID(), null, flightTicks);
+    }
+
+    /** ICBM at an ordered pad, retaining the owner even when they are offline. */
+    public static Result launchIcbm(ServerLevel level, Target target, Vec3 point, Loadout.Nuke nuke, @Nullable ServerPlayer shooter,
+                                    @Nullable UUID owner, @Nullable LaunchOrigin from, int flightTicks) {
         if (shooter != null && shooter.level() != level) shooter = null;
+        if (from != null) {
+            Vec3 aim = target instanceof Target.Ground ? point : NuclearStrikes.ground(level, point);
+            return new Result(NuclearStrikes.launchAt(level, aim, target instanceof Target.Ground, nuke.yieldKt(), nuke.airBurst(),
+                    from, owner, flightTicks), flightTicks);
+        }
         boolean ok = target instanceof Target.Ground
                 ? NuclearStrikes.launch(level, point, true, nuke.yieldKt(), nuke.airBurst(), shooter, flightTicks)
                 : NuclearStrikes.launch(level, NuclearStrikes.ground(level, point), false, nuke.yieldKt(), nuke.airBurst(), shooter, flightTicks);
@@ -635,7 +646,7 @@ public final class StrikeService {
      * Bomb strikes surface point above target (spec miss, {@link WeaponSpec.Route#error}), does not follow moving
      * target; target over 4 blocks underground (cave/bunker) means penetrate toward it.
      */
-    private static StrikeProjectile launchBomber(ServerLevel level, Target target, Vec3 point, float yaw, @Nullable UUID owner) {
+    private static StrikeProjectile launchBomber(ServerLevel level, Target target, Vec3 point, float yaw, @Nullable UUID owner, Waypoints via) {
         int sx = Mth.floor(point.x), sz = Mth.floor(point.z);
         // Surface beneath target (no chunk load for launch): target may be airborne, bomb falls to ground below;
         // unready map-site chunk already has estimate (client map better than generator); by release B-2
@@ -650,8 +661,9 @@ public final class StrikeService {
         if (e == null) return null;
         WeaponSpec spec = WeaponType.BUNKER.spec();
         double length = spec.airframe().cruiseSpeed() * spec.route().seconds() * 20 + BomberEntity.releaseLine(spec.airframe().cruiseHeight());
-        e.launch(surface.subtract(Local.horizontal(yaw).scale(length)), surface, goal, owner);
-        e.setRoute(null);
+        Vec3 start = via.isEmpty() ? surface.subtract(Local.horizontal(yaw).scale(length)) : via.afar(surface, length);
+        e.launch(start, surface, goal, owner);
+        e.routeThrough(via);
         startVirtual(level, e);
         return e;
     }
@@ -663,7 +675,7 @@ public final class StrikeService {
 
     /** Siren and “AIR ALERT” for everyone within 350 blocks of target (each has own memory, see client). */
     public static void siren(ServerLevel level, WeaponType weapon, Vec3 at) {
-        if (!IncomingConfig.SERVER.siren.get()) return;
+        if (!IncomingConfig.SERVER.earlyWarning.get()) return;
         int kind = weapon.siren() == WeaponType.SirenKind.MISSILE ? S2C.Siren.MISSILE : S2C.Siren.AIR_RAID;
         PacketDistributor.sendToPlayersNear(level, null, at.x, at.y, at.z, ALERT_RADIUS, new S2C.Siren(at, kind));
     }

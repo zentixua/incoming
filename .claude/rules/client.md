@@ -97,7 +97,7 @@ Particles and the effects layer: `client-fx.md`; models: `client-models.md`; sou
   (binoculars), `screen/RemoteScreen` (remote), `screen/MapScreen` (target map: click impact location,
   `C2S.AimHint.GROUND`, range `map_range`, or player for remote “player” target; Shift+click waypoint, drag move,
   right click remove; Ctrl+click/button launch location, operator/host only, `MapScreen.mayPickLaunchSite`, same
-  drag/right click; one `RemoteScreen.launchFrom` determines whether strike uses it (not linked launchers/ICBM),
+  drag/right click; one `RemoteScreen.launchFrom` determines whether strike uses it (not linked launchers),
   shared by firing and map route; `map/MapTarget` retains location/route/launch site; view-terrain build time logged
   as “Targeting map: view terrain ready in …”), `map/` (shared `MapProjection`; `MapPlayers`: other players requested
   via `C2S.MapPlayers` while map open (server `ServerActions.mapPlayers`: dimension, `map_range`, no invisible/spectator

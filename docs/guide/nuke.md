@@ -44,7 +44,7 @@ omitted AIR from saved designator settings because it was the default, so those 
 updating, even if you selected AIR with the button. A saved `air_burst=true` field still keeps AIR. You can select
 air burst again on the console before launching. ICBMs already scheduled keep their burst mode.
 
-The ICBM lifts off behind you. Its first stage burns for a minute: the flame and white trail climb into the sky,
+The ICBM lifts off at the launch site selected on the [map](map.md#launch-site), or behind you if none is selected. Its first stage burns for a minute: the flame and white trail climb into the sky,
 leaning toward the target, until the stage burns out about 20 km up. By default, the strike follows 90 seconds after
 launch; a shorter flight time shortens both the climb and the fall.
 Only the warhead comes back down. For the last 30 seconds it falls steeply out of the sky in the direction of the
@@ -54,10 +54,10 @@ hide it. It is faster than sound, so you hear nothing before the burst. The flig
 approach.
 
 If the world owner has allowed nuclear weapons for everyone, a player without operator rights needs a second key
-whenever someone else is online: another player within 16 blocks presses `.` within 30 seconds. Every player is told
-about such a launch. Once ordered, the ordinary launching player cannot recall the nuclear strike, even while it waits for a second key; an operator or the host can
-abort it with `/incoming clear`. The alarm at the target lasts at least 90 seconds: a missile or B-2
-with a nuclear warhead takes off 90 seconds after the alarm starts.
+whenever someone else is online: another player within 16 blocks presses `.` within 30 seconds. With `world.early_warning = true`, every player is told
+about such a launch. With it off, the second-key request still goes to nearby players who can authorize it; there is no automatic launch notice or target alarm. Once ordered, the ordinary launching player cannot recall the nuclear strike, even while it waits for a second key; an operator or the host can
+abort it with `/incoming clear`. The non-operator ICBM still flies for at least 90 seconds, and a missile or B-2
+with a nuclear warhead still waits 90 seconds before launch, even with early warning off. The owner keeps their countdown and launch confirmations.
 
 ## How to survive
 

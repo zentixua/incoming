@@ -43,6 +43,7 @@ to apply the settings. The most useful ones are below; the rest are in the same 
 | `launch.max_salvo`, `max_spread` | 30, 150 | largest salvo and spread |
 | `launch.max_active_per_player` | 0 | rejects a new order when the player already has this many active rounds; counts flight, rounds on launchers, unfired salvo rounds and nuclear orders waiting for a second key. One accepted salvo can exceed the limit; operators are exempt; 0: no limit |
 | `launch.sight_rules` | on | [spotting](rules.md#spotting): strike only spotted targets |
+| `world.early_warning` | on | an early-warning network exists: sirens, target banners and nuclear launch notices. Off: only the owner gets flight data/countdowns; other players rely on sight, sound or their SAM radar. Legacy `world.siren` migrates automatically; an explicit new key takes precedence |
 | `world.block_damage`, `world.fire` | on | conventional strike destruction and fires; nuclear strikes have separate switches below |
 | `nuclear.enabled`, `ops_only` | on, on | nuclear weapons exist; only operators launch them |
 | `nuclear.default_yield`, `max_yield` | 15, 100 | yield of a command without a number; largest allowed yield, kt (up to 1000 = 1 Mt) |

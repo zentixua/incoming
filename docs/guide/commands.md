@@ -19,7 +19,7 @@ The separate `nuke` syntax is below; it has no entity target, `at <x z>` form or
 | `/incoming <weapon> at <x z>` | strike at a place on the ground; the server finds its height, as for a place picked [on the map](map.md) |
 | `/incoming <weapon> at <x y z>` | strike at exactly this point; above the ground the round bursts in the air, a bomb falls to the ground |
 | `/incoming salvo <weapon> <count> <spread> [target]` | salvo; the target is `me` (where you stand, the default), `look`, a player or mob, `at <x z>` or `at <x y z>` |
-| `… via <x z> [<x z> …]` | route: up to five points, for the Shahed, missile and Lancet only |
+| `… via <x z> [<x z> …]` | route: up to five points, for the Shahed, missile, Lancet and B-2 only |
 | `… from <x z>` | launch point: a launcher sets up there (or at the nearest open, level spot within about 100 blocks) and stays until an abort; if there is none, the rounds take off from there without it (operators only) |
 
 `from` and `via` go after the salvo target, `from` first. A single round on a route is a salvo of one:
@@ -31,6 +31,7 @@ The separate `nuke` syntax is below; it has no entity target, `at <x z>` form or
 |---|---|
 | `/incoming nuke [kt [air\|ground]]` | ICBM where you are looking |
 | `/incoming nuke at <x y z> [kt [air\|ground]]` | ICBM at a point |
+| `/incoming nuke [at <x y z>] [kt [air\|ground]] from <x z>` | ICBM from a chosen ground pad (operator only); no waypoints |
 | `/incoming nuke now [at <x y z>] [kt [air\|ground]]` | detonation at once, without a flight (operators only) |
 
 Without a number: the world's `nuclear.default_yield` (15 kt by default). Without a burst mode: ground burst.
