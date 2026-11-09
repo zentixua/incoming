@@ -96,6 +96,23 @@ class FlashLightTest {
     }
 
     @Test
+    void emittingInteriorCannotKeepTheOldHotCoreBehindTheNewLimb() {
+        for (double y : new double[]{1, 15, 1000}) for (boolean surface : new boolean[]{false, true}) {
+            for (double t : new double[]{1, 3, 5, 6, 10, 20, 33}) {
+                MushroomModel.Shape s = MushroomModel.shape(t, y, surface ? 0 : 240 * Math.cbrt(y), surface, 0);
+                double edge = MushroomModel.edgeShare(t, y, surface);
+                double core = FlashLight.coreTemperature(s, y, surface);
+                double emitting = FlashLight.temperature(t, y, surface, s.capR());
+                assertEquals(emitting, FireballModel.AMBIENT_K + (core - FireballModel.AMBIENT_K) * edge, 1e-9);
+                if (MushroomModel.rollUp(t, y, surface) == 0) {
+                    assertEquals(1, edge);
+                    assertEquals(emitting, core, 1e-9, "sphere must be isothermal before surface pattern");
+                }
+            }
+        }
+    }
+
+    @Test
     void dayAndNightDazzleUseIndependentFigureRangeFixtures() {
         // G&D 1977 fig. 12.88a/b, HOB 10,000 ft; graph readings in miles (±1 mile).
         double[][] rows = {{1, 5.7, 40.3}, {10, 12.7, 60}, {100, 19.8, 67}, {1000, 15.1, 53.7}};

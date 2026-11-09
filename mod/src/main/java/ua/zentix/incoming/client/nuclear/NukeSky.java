@@ -51,7 +51,7 @@ public final class NukeSky {
     /** Air-lit sky from the same admitted light and followed exposure as the world and dust. */
     static float amber(ClientNuclear.Active a, Vec3 cam, float partial) {
         double lit = NukeLight.camera(a).light() * NukeLight.exposure();
-        return (float) (lit / (1 + lit));
+        return (float) Math.min(1, lit);
     }
 
     public static void fogColor(ViewportEvent.ComputeFogColor e) {

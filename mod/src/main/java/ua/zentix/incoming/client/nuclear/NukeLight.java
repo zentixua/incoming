@@ -82,6 +82,7 @@ public final class NukeLight {
     static FlashLight.Eye sample(ClientLevel level, ClientNuclear.Active a, Vec3 eye, float partial) {
         Detonation d = a.d;
         MushroomModel.Shape shape = MushroomField.shape(a, partial);
+        if (shape == null && a.seconds(partial) > 0) return FlashLight.Eye.DARK;
         double radius = FireballModel.maxRadius(d.yieldKt(), d.surface());
         Vec3 source = d.burst();
         double light = 0;
@@ -118,6 +119,14 @@ public final class NukeLight {
         if (level.clip(new ClipContext(eye, near, ClipContext.Block.VISUAL, ClipContext.Fluid.NONE,
                 Minecraft.getInstance().getCameraEntity())).getType() != HitResult.Type.MISS) return false;
         return Sightline.trace(FarTerrain.of(level), source.x, source.y, source.z, near.x, near.y, near.z).hidden() <= 0;
+    }
+
+    /** Diagnostic only; samples and clock are not advanced by readers. */
+    static String describe() {
+        double fire = 0;
+        for (FlashLight.Eye eye : CAMERA.values()) fire += eye.light();
+        return String.format(java.util.Locale.ROOT, "time %.3f s, eye %.6g, exposure %.6g, body %.6g, sources %d",
+                last, fire, exposure, bodyExposure, CAMERA.size());
     }
 
     static void reset() {

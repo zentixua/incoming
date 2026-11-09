@@ -2,7 +2,6 @@ package ua.zentix.incoming.client.nuclear;
 
 import net.minecraft.util.Mth;
 import ua.zentix.incoming.nuclear.Detonation;
-import ua.zentix.incoming.nuclear.model.BlackBody;
 import ua.zentix.incoming.nuclear.model.FlashLight;
 import ua.zentix.incoming.nuclear.model.MushroomModel;
 import ua.zentix.incoming.nuclear.model.ThermalModel;
@@ -91,7 +90,7 @@ public final class CloudPuffs {
      * — used by {@code fx_pall} to light dust (ball — {@link #ball} beam from the cap center; fires — {@link #burn} from below), and
      * by {@code NukePall.dustColor} for camera dust. Into {@code into}: cap radius (ball radius for a ball), fire incandescence, downwind
      * drift of the cap center, fire-zone edge (blocks), black-body light at the visible cap temperature
-     * ({@link MushroomModel#edgeTemperature}: linear r, g, b, fractions of a white wall at noon), cap-center height above
+     * ({@link FlashLight#source}: linear r, g, b, fractions of a white wall at noon), cap-center height above
      * ground zero (blocks). Same center as the mushroom body and particle light ({@code MushroomField.centre}). false —
      * the mushroom no longer (or not yet) exists ({@code into} zeroed): no glow either.
      */

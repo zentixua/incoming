@@ -27,7 +27,6 @@ import ua.zentix.incoming.client.fx.layer.FxLights;
 import ua.zentix.incoming.client.render.FarDraw;
 import ua.zentix.incoming.net.S2C;
 import ua.zentix.incoming.nuclear.Detonation;
-import ua.zentix.incoming.nuclear.model.BlackBody;
 import ua.zentix.incoming.nuclear.model.FlashLight;
 import ua.zentix.incoming.nuclear.model.MushroomModel;
 
@@ -117,7 +116,7 @@ public final class NukeRenderer {
      * lights frame particles and ribbons ({@link FxLights}: dust and smoke near the ball), and produces glare and veiling light in the eye
      * ({@link FarSprites#eyeLight}), with body visibility probes (occlusion by terrain and buildings, with Distant Horizons LOD,
      * pall and dust wall, other mushrooms' caps and stems). Brightness is a black body at the cap's
-     * visible outer temperature ({@link MushroomModel#edgeTemperature}): while still a ball, it is brighter than the daytime sky for
+     * visible outer temperature ({@link FlashLight#source}): while still a ball, it is brighter than the daytime sky for
      * seconds, longer at night (the eye adapts to darkness, {@link Sight#adapted}); the rolled cap's outside mixes
      * with air and fades. Air haze uses true distance (in model meters). The on-screen ball uses exposure set for
      * fire ({@link NukeExposure}): glare and veiling light do not exceed it there ({@link NukeExposure#capShown}); their sizes

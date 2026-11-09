@@ -648,7 +648,13 @@ All from one `ClientNuclearEvents` list (event + time), updated in `ClientTickEv
   not visible lumens; `BlackBody` converts its temperature to RGB/photopic luminance. The equivalent spherical
   cap area is (est.), and the pulse beyond 10 t_max is extrapolated. This escaping brightness temperature replaces
   the mixed exterior temperature as the light source; the original gas temperature remains for heat/structure.
+  The emitting profile is isothermal before rollup; afterwards the existing edge/core contrast is applied around
+  that same temperature. Keeping the old core while changing only the edge produced a white interior at 15 kt.
   It leaves server burn/ignition energy, thermalFraction's normalization at tau=10, and retinal scars unchanged.
+  Peak calibration is retained for compatibility: 7700 K over the existing radius implies 1.77× / 4.84× G&D's
+  absolute peak at 15 / 1000 kt (derived from §7.85, P_max=3.18·Y^0.56 kt/s). This is an inherited radiometric
+  limitation, not a claim of absolute energy agreement; the factor-two source test compares normalized pulse shape
+  after spectral conversion. Correcting absolute calibration and its visual consequences is a separate task.
   One owner samples each active source before fog: directly visible light keeps total atmospheric transmission;
   otherwise only `max(0, total - beam)` enters through the sky opening (angularly unresolved diffuse light, (est.)).
   Raw skylight L maps to `L/(60-3L)`, vanilla brightness without ambient floor; its use as aperture throughput is

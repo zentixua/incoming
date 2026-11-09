@@ -63,7 +63,7 @@ public final class NukeFlash {
      * The spot is a retinal burn, so it moves with gaze rather than staying in the world.
      */
     private static float afterX, afterY, afterSize;
-    private static long ticks, endTick;
+    private static long ticks;
     /**
      * Frame overexposure at which lens-scattered light whitens the entire frame (white share = overexposure / VEIL_X: the lens
      * scatters about a percent of frame light) (est.), and maximum on-screen frame gain (above this the frame
@@ -100,11 +100,11 @@ public final class NukeFlash {
         if (eyes(p) && !p.isSleeping()) dazzle(mc.level, d, eye, q);
         // "Hide Lightning Flashes": no world glare, partial white screen
         if (Flash.calm()) s = Math.min(s, Flash.CALM);
-        if (s <= strength && current != null) return;
-        current = a;
-        strength = (float) s;
-        peak = cameraLight.peak(NukeLight.bodyExposure());
-        endTick = ticks + (long) Math.ceil((FireballModel.secondMaximumSeconds(d.yieldKt()) * d.scale() + NukeExposure.settled(peak, SETTLED)) * 20);
+        if (s > strength || current == null) {
+            current = a;
+            strength = (float) s;
+            peak = cameraLight.peak(NukeLight.bodyExposure());
+        }
         // spot larger than the visible ball: the eye "smears" glare
         float[] spot = inView && q >= 0.05 ? retina(mc, p, d.burst(), Math.max(d.fireballRadius(), 30) * 2.2) : null;
         if (spot != null) {
@@ -120,13 +120,29 @@ public final class NukeFlash {
 
     /** Shared camera sample, updated before sky/fog and all light consumers; entering cover stops new glare. */
     static void frame() {
-        if (current == null) return;
-        FlashLight.Eye light = NukeLight.camera(current);
-        strength = (float) (light.strength() * IncomingConfig.CLIENT.flash.get());
-        if (Flash.calm()) strength = Math.min(strength, Flash.CALM);
-        peak = light.peak(NukeLight.bodyExposure());
-        ClientLevel level = Minecraft.getInstance().level;
-        if (level != null) lightUpWorld(level, whiteness(Minecraft.getInstance().getTimer().getGameTimeDeltaPartialTick(false)));
+        Minecraft mc = Minecraft.getInstance();
+        float partial = mc.getTimer().getGameTimeDeltaPartialTick(false);
+        current = null;
+        strength = 0;
+        peak = 1;
+        double best = 0;
+        for (ClientNuclear.Active a : ClientNuclear.detonations()) {
+            FlashLight.Eye light = NukeLight.camera(a);
+            float admitted = (float) (light.strength() * IncomingConfig.CLIENT.flash.get());
+            if (Flash.calm()) admitted = Math.min(admitted, Flash.CALM);
+            double candidatePeak = light.peak(NukeLight.bodyExposure());
+            double after = (a.seconds(partial) - FireballModel.secondMaximumSeconds(a.d.yieldKt())) * a.d.scale();
+            double x = NukeExposure.overexposure(candidatePeak, after);
+            double score = admitted * (x - 1);
+            if (x >= SETTLED && score > best) {
+                best = score;
+                current = a;
+                strength = admitted;
+                peak = candidatePeak;
+            }
+        }
+        // Resample even a flash first received in shelter: leaving cover during its pulse can expose the camera.
+        if (mc.level != null) lightUpWorld(mc.level, whiteness(partial));
     }
 
     /** Field dazzle from pulse {@code q} cal/cm² at the eye; keep existing dazzle that ends later. */
@@ -181,10 +197,6 @@ public final class NukeFlash {
     static void tick() {
         ticks++;
         if (afterLeft > 0) afterLeft--;
-        if (current != null && ticks > endTick && afterLeft <= 0) {
-            current = null;
-            strength = 0;
-        }
     }
 
     /** Eyes rather than a camera: neither creative nor spectator (nor a replay viewer). */
@@ -241,7 +253,7 @@ public final class NukeFlash {
             if (!scars.isEmpty()) scars(g, w, h);
             veil(g, partial, w, h);
         }
-        if (afterLeft > 0 && current != null) afterimage(g, partial, w, h);
+        if (afterLeft > 0) afterimage(g, partial, w, h);
     }
 
     /**

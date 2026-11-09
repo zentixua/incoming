@@ -54,6 +54,12 @@ public final class FlashLight {
         return Math.clamp(k, FireballModel.AMBIENT_K, FireballModel.HOTTEST_K);
     }
 
+    /** Emitting profile: an isothermal ball, then the existing mixed-edge contrast, all keyed to the same source. */
+    public static double coreTemperature(MushroomModel.Shape s, double yieldKt, boolean surface) {
+        return FireballModel.AMBIENT_K + (temperature(s.t(), yieldKt, surface, s.capR()) - FireballModel.AMBIENT_K)
+                / MushroomModel.edgeShare(s.t(), yieldKt, surface);
+    }
+
     /** Escaping RGB and photopic luminance, noon white = 1. Cooling changes the spectrum, not only its amplitude. */
     public static void source(MushroomModel.Shape s, double yieldKt, boolean surface, double[] into) {
         BlackBody.light(temperature(s.t(), yieldKt, surface, s.capR()), into);

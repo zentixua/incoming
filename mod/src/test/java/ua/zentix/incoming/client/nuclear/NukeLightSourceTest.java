@@ -17,10 +17,10 @@ class NukeLightSourceTest {
     private static final String CLIENT = "java/ua/zentix/incoming/client/";
     private static final String SHADER = "resources/assets/incoming/shaders/";
     private static final Map<String, String[]> READERS = Map.ofEntries(
-            Map.entry("nuclear/NukeFlash.java", new String[]{"NukeLight.sample(", "NukeLight.camera(current)", "light.fluence()", "light.strength()", "light.peak(NukeLight.bodyExposure())", "lightUpWorld(level, whiteness("}),
+            Map.entry("nuclear/NukeFlash.java", new String[]{"NukeLight.sample(", "NukeLight.camera(a)", "light.fluence()", "light.strength()", "light.peak(NukeLight.bodyExposure())", "lightUpWorld(mc.level, whiteness("}),
             Map.entry("nuclear/NukeSky.java", new String[]{"NukeLight.camera(a).light() * NukeLight.exposure()"}),
             Map.entry("nuclear/NukePall.java", new String[]{"into.exposure = (float) NukeLight.exposure()", "f.exposure = SKY.exposure", "CloudPuffs.ball(sky.exposure,"}),
-            Map.entry("nuclear/MushroomField.java", new String[]{"FlashLight.source(s,", "FlashLight.temperature(t,", "BALL[0] * exposure"}),
+            Map.entry("nuclear/MushroomField.java", new String[]{"FlashLight.source(s,", "FlashLight.coreTemperature(s,", "BALL[0] * exposure"}),
             Map.entry("nuclear/CloudPuffs.java", new String[]{"FlashLight.source(s,"}),
             Map.entry("nuclear/NukeRenderer.java", new String[]{"FlashLight.source(s,", "exposure = NukeLight.exposure()", "NukeLight.camera(a).seen()"}),
             Map.entry("fx/layer/PallPass.java", new String[]{"safeGetUniform(\"PallExposure\").set(f.exposure)", "safeGetUniform(\"PallBodyExposure\").set(f.bodyExposure)"}));
@@ -49,8 +49,12 @@ class NukeLightSourceTest {
             mutant.put(entry.getKey(), mutant.get(entry.getKey()).replace(read, "privateGuess("));
             assertFalse(wired(mutant), entry.getKey() + " bypassed " + read);
         }
+        assertFalse(original.get("nuclear/MushroomField.java").contains("MushroomModel.coreTemperature("), "old emitting interior bypasses the pulse source");
         String flash = original.get("nuclear/NukeFlash.java");
         assertFalse(flash.contains("SCATTERED"));
+        assertFalse(flash.contains("endTick"), "initial shelter cannot expire a later admitted flash");
+        assertTrue(flash.contains("for (ClientNuclear.Active a : ClientNuclear.detonations())"));
+        assertTrue(flash.contains("if (afterLeft > 0) afterimage("), "acquired afterimage survives shelter");
         assertFalse(flash.contains("Math.cbrt"));
         assertFalse(flash.contains("sees ? 0.45 : 0.3"));
         String fx = Files.readString(ROOT.resolve(SHADER + "include/fx_pall.glsl"));

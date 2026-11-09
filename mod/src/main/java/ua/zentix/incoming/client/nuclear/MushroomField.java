@@ -559,6 +559,13 @@ public final class MushroomField {
         out[1] = rises != null ? 1 - MushroomModel.rollUp(t, yieldKt, surface) : 0;
     }
 
+    /** Emission texels 10.xy / 16.x consumed by mushAt: source temperature and its existing edge contrast. */
+    static void emission(MushroomModel.Shape s, double y, boolean surface, float[] into, int o) {
+        into[o + 10 * 4] = (float) MushroomModel.AMBIENT_K;
+        into[o + 10 * 4 + 1] = (float) (FlashLight.coreTemperature(s, y, surface) - MushroomModel.AMBIENT_K);
+        into[o + 16 * 4] = (float) MushroomModel.edgeShare(s.t(), y, surface);
+    }
+
     /**
      * Mushroom into a table row starting at {@code o} ({@code mushroom.glsl}: mushroom table); by day ({@code day}) also its shadow-map
      * tile, whose upper layer is world top {@code worldTop} (y).
@@ -581,9 +588,6 @@ public final class MushroomField {
         // steam follows water picked up by the rolling ring: absent for the ball
         double capSigma = capTau(s, capMatter(s, soil, wet * MushroomModel.rollUp(t, y, d.surface()), CAP)) / Math.max(across, 1);
         double skirtSigma = s.skirtTau() / Math.max(2 * d.blocks(Math.min(s.skirtW(), s.skirtH())), 1);
-        double emitting = FlashLight.temperature(t, y, d.surface(), s.capR());
-        double tCore = Math.max(emitting, MushroomModel.coreTemperature(t, y, d.surface()));
-        double edge = (emitting - MushroomModel.AMBIENT_K) / Math.max(tCore - MushroomModel.AMBIENT_K, 1e-9);
         put(into, o, 0, d.burst().x - eye.x, d.burst().z - eye.z, d.groundY() - eye.y, 1);
         put(into, o, 1, w[0], w[1], d.blocks(s.endTop()), boundR);
         put(into, o, 2, d.blocks(s.capY()), d.blocks(s.capR()), d.blocks(s.ringR()), top);
@@ -595,7 +599,7 @@ public final class MushroomField {
         matter(into, o, 7, mix(DUST, STEAM, 0.8 * wet));
         put(into, o, 8, d.blocks(s.skirtR()), d.blocks(s.skirtW()), d.blocks(s.skirtH()), skirtSigma);
         matter(into, o, 9, mix(DUST, CloudPuffs.SPRAY, a.water.under()));
-        put(into, o, 10, MushroomModel.AMBIENT_K, tCore - MushroomModel.AMBIENT_K, d.blocks(s.capBottom()), Math.max(1, 3 * d.blocks(s.stemR())));
+        put(into, o, 10, 0, 0, d.blocks(s.capBottom()), Math.max(1, 3 * d.blocks(s.stemR())));
         // stem jets rise with air drawn by the ring (MushroomModel.stemRise); fires below mushroom: storm smoke top
         // (the same top reached by its pall columns, FireStorms.slot), and fire-zone radius (light is fire, after frame
         // lighting)
@@ -615,7 +619,8 @@ public final class MushroomField {
         // ball surface pattern (NukeBallSurface): frame position and pattern share versus billow tongues (ballSurface)
         double[] ball = BALL_SURFACE;
         ballSurface(t, d.hobMetres(), y, d.surface(), NukeBallSurface.ready(), ball);
-        put(into, o, 16, edge, MushroomModel.billows(t, y, d.surface()), ball[0], ball[1]);
+        put(into, o, 16, 0, MushroomModel.billows(t, y, d.surface()), ball[0], ball[1]);
+        emission(s, y, d.surface(), into, o);
         if (day) {
             // sun shadow: map tile projects bounds across the sun; layers above ground zero, midway
             // between it and world top, and above world top
