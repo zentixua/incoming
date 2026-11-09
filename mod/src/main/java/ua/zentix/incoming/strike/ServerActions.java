@@ -417,10 +417,9 @@ public final class ServerActions {
         Munitions.Bill bill = rules && !player.hasInfiniteMaterials() ? Munitions.Bill.of(l) : null;
         if (bill != null && !Munitions.pay(player, bill)) return false;
         if (aim.label() != null) player.sendSystemMessage(locked(weapon, aim).withStyle(ChatFormatting.GOLD));
-        // Non-operator nuclear strike: second key and at least 90 s target warning (such order has no launch site:
-        // only operator/host specify it by command or designator map, and they need no second key).
+        // Non-operator nuclear strike: second key and at least 90 s flight/delay, retaining an authorized origin.
         if (l.nuclear() && rules && !NuclearKeys.trusted(player)) {
-            return NuclearKeys.order(player, player.server.getPlayerList().getPlayers(), l, aim, via, bill);
+            return NuclearKeys.order(player, player.server.getPlayerList().getPlayers(), l, aim, via, from, bill);
         }
         return launch(player.serverLevel(), player.getGameProfile().getName(), player, player.getYRot(), l, aim, via, from, bill);
     }

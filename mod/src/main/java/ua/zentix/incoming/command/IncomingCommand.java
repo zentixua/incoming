@@ -210,7 +210,7 @@ public final class IncomingCommand {
         double kt = d != null ? d.yieldKt() : Math.min(nuke.yieldKt(), IncomingConfig.SERVER.nukeMaxYield.get());
         s.sendSuccess(() -> Component.translatable(d != null ? "incoming.nuke.detonated" : "incoming.nuke.detonating", Math.round(kt),
                 Component.translatable(nuke.airBurst() ? "incoming.nuke.burst.air" : "incoming.nuke.burst.ground"),
-                Mth.floor(pos.x), Mth.floor(pos.y), Mth.floor(pos.z)), true);
+                Mth.floor(pos.x), Mth.floor(pos.y), Mth.floor(pos.z)), IncomingConfig.SERVER.earlyWarning.get());
         return 1;
     }
 
@@ -403,13 +403,13 @@ public final class IncomingCommand {
                 ctx.getSource().sendFailure(problem);
                 return 0;
             }
-            ctx.getSource().sendSuccess(be::status, true);
+            ctx.getSource().sendSuccess(be::status, IncomingConfig.SERVER.earlyWarning.get());
             return 1;
         }));
         at.then(Commands.literal("clear").executes(ctx -> {
             FixedLauncherBlockEntity be = idleLauncherAt(ctx);
             be.setMission(null);
-            ctx.getSource().sendSuccess(be::status, true);
+            ctx.getSource().sendSuccess(be::status, IncomingConfig.SERVER.earlyWarning.get());
             return 1;
         }));
         at.then(Commands.literal("load").then(Commands.argument("items", IntegerArgumentType.integer(1, FixedLauncherBlockEntity.SLOTS * 64))
@@ -464,7 +464,7 @@ public final class IncomingCommand {
             return 0;
         }
         be.setMission(new Mission(w, count(ctx), spread(ctx), aim.target(), aim.point(), via));
-        s.sendSuccess(be::status, true);
+        s.sendSuccess(be::status, IncomingConfig.SERVER.earlyWarning.get());
         return 1;
     }
 
@@ -477,7 +477,7 @@ public final class IncomingCommand {
         }
         ItemStack rest = be.load(new ItemStack(m.weapon().spec().munition().item().get(), items));
         int loaded = items - rest.getCount();
-        ctx.getSource().sendSuccess(() -> Component.translatable("incoming.fixed_launcher.loaded", loaded).append(" ").append(be.status()), true);
+        ctx.getSource().sendSuccess(() -> Component.translatable("incoming.fixed_launcher.loaded", loaded).append(" ").append(be.status()), IncomingConfig.SERVER.earlyWarning.get());
         return loaded;
     }
 

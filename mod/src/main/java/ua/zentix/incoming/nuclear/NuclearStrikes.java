@@ -95,6 +95,33 @@ public final class NuclearStrikes {
         return true;
     }
 
+    /** Ordered ground pad: the order has already waited for LaunchPlaces, with the usual virtual timeout fallback. */
+    public static boolean launchAt(ServerLevel level, Vec3 target, boolean surface, double yieldKt, boolean airBurst,
+                                   ua.zentix.incoming.strike.LaunchOrigin from, @Nullable UUID owner, int flightTicks) {
+        if (!IncomingConfig.SERVER.nukeEnabled.get()) return false;
+        int x = Mth.floor(from.at().x), z = Mth.floor(from.at().z);
+        Terrain.Surface ground = Terrain.estimate(level, Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z, Terrain.Allowed.ORDER);
+        Vec3 pad = new Vec3(x + 0.5, ground.y(), z + 0.5);
+        IcbmEntity icbm = ModEntities.ICBM.get().create(level);
+        if (icbm == null) return false;
+        icbm.prepare(pad, target, owner, IcbmArrival.boost(flightTicks));
+        ua.zentix.incoming.strike.LaunchPlaces.hold(level, from, icbm.getUUID());
+        if (Terrain.ready(level, BlockPos.containing(pad))) {
+            icbm.holdChunks(level);
+            boolean added = false;
+            try {
+                added = level.addFreshEntity(icbm);
+            } finally {
+                if (!added) icbm.discard();
+            }
+            if (!added) return false;
+        } else {
+            ua.zentix.incoming.strike.VirtualFlights.launch(level, icbm);
+        }
+        schedule(level, target, surface, Math.min(yieldKt, IncomingConfig.SERVER.nukeMaxYield.get()), airBurst, pad, owner, flightTicks);
+        return true;
+    }
+
     /** Record a strike: detonation time = now + flight time; warning and countdown to everyone in the dimension. */
     private static void schedule(ServerLevel level, Vec3 target, boolean surface, double yieldKt, boolean airBurst, Vec3 launchPos, @Nullable UUID owner,
                                  int flightTicks) {
@@ -106,16 +133,23 @@ public final class NuclearStrikes {
         holdGround(level, s, true);
         Incoming.LOG.info("ICBM #{}: {} kt at {} {} {}, detonation in {} s", s.id(), Math.round(yieldKt), Mth.floor(target.x), Mth.floor(target.y),
                 Mth.floor(target.z), (s.detonateTime() - now) / 20);
-        for (ServerPlayer p : level.players()) PacketDistributor.sendToPlayer(p, warning(s, p));
+        for (ServerPlayer p : level.players()) {
+            if (warns(s, p)) PacketDistributor.sendToPlayer(p, warning(s, p));
+        }
         // Capability/state at launch too: new recordings never fall back to the legacy countdown graphic.
         PacketDistributor.sendToPlayersInDimension(level, new S2C.NukeApproach(now,
                 events.scheduled().stream().flatMap(x -> x.arrival().stream()).toList()));
     }
 
+    /** Network notices go to everyone only when the world's early-warning network exists. */
+    public static boolean warns(NuclearEvents.ScheduledStrike s, ServerPlayer p) {
+        return IncomingConfig.SERVER.earlyWarning.get() || s.owner().map(p.getUUID()::equals).orElse(false);
+    }
+
     /** Warning for a specific player: alarm if within {@code warning_radius} of the target. */
     public static S2C.NukeWarning warning(NuclearEvents.ScheduledStrike s, ServerPlayer p) {
         double r = IncomingConfig.SERVER.nukeWarningRadius.get();
-        boolean alarm = p.position().distanceToSqr(s.target()) <= r * r;
+        boolean alarm = IncomingConfig.SERVER.earlyWarning.get() && p.position().distanceToSqr(s.target()) <= r * r;
         boolean mine = s.owner().map(p.getUUID()::equals).orElse(false);
         return new S2C.NukeWarning(s.id(), s.target(), s.launchPos(), s.launchTime(), s.detonateTime(), s.yieldKt(), s.airBurst(), alarm, mine,
                 (float) IncomingConfig.SERVER.effectsScale());
@@ -309,7 +343,7 @@ public final class NuclearStrikes {
     private static void sync(ServerPlayer p) {
         NuclearEvents events = NuclearEvents.get(p.serverLevel());
         PacketDistributor.sendToPlayer(p, new S2C.NukeSync(List.copyOf(events.detonations()),
-                events.scheduled().stream().map(s -> warning(s, p)).toList()));
+                events.scheduled().stream().filter(s -> warns(s, p)).map(s -> warning(s, p)).toList()));
         PacketDistributor.sendToPlayer(p, new S2C.NukeApproach(p.serverLevel().getGameTime(),
                 events.scheduled().stream().flatMap(s -> s.arrival().stream()).toList()));
     }

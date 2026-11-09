@@ -73,6 +73,10 @@ public final class NuclearKeys {
         final ServerActions.Aim aim;
         final Waypoints via;
         @Nullable
+        final LaunchOrigin from;
+        final UUID placeKey = UUID.randomUUID();
+        int waited;
+        @Nullable
         final Munitions.Bill paid;
         final long created;
         final long deadline;
@@ -87,13 +91,14 @@ public final class NuclearKeys {
         @Nullable
         String confirmer;
 
-        Order(ServerPlayer owner, Loadout loadout, ServerActions.Aim aim, Waypoints via, @Nullable Munitions.Bill paid, long deadline) {
+        Order(ServerPlayer owner, Loadout loadout, ServerActions.Aim aim, Waypoints via, @Nullable LaunchOrigin from, @Nullable Munitions.Bill paid, long deadline) {
             this.level = owner.serverLevel();
             this.ownerId = owner.getUUID();
             this.name = owner.getGameProfile().getName();
             this.loadout = loadout;
             this.aim = aim;
             this.via = via;
+            this.from = from;
             this.paid = paid;
             this.created = level.getGameTime();
             this.deadline = deadline;
@@ -138,9 +143,15 @@ public final class NuclearKeys {
      */
     public static boolean order(ServerPlayer owner, Collection<? extends ServerPlayer> online, Loadout loadout, ServerActions.Aim aim, Waypoints via,
                                 @Nullable Munitions.Bill paid) {
+        return order(owner, online, loadout, aim, via, null, paid);
+    }
+
+    /** Same order with an already-authorized launch origin. */
+    public static boolean order(ServerPlayer owner, Collection<? extends ServerPlayer> online, Loadout loadout, ServerActions.Aim aim, Waypoints via,
+                                @Nullable LaunchOrigin from, @Nullable Munitions.Bill paid) {
         ServerLevel level = owner.serverLevel();
         NuclearKeys keys = get(level);
-        Order o = new Order(owner, loadout, aim, via, paid, level.getGameTime() + window());
+        Order o = new Order(owner, loadout, aim, via, from, paid, level.getGameTime() + window());
         boolean alone = true;
         for (ServerPlayer p : online) {
             if (!p.getUUID().equals(owner.getUUID())) alone = false;
@@ -203,6 +214,12 @@ public final class NuclearKeys {
      */
     private boolean arm(Order o, Collection<? extends ServerPlayer> online) {
         if (o.icbm()) {
+            if (LaunchPlaces.waits(o.level, o.loadout.weapon(), o.from)) {
+                o.launchAt = o.level.getGameTime();
+                if (!orders.contains(o)) orders.add(o);
+                LaunchPlaces.hold(o.level, o.from, o.placeKey);
+                return true;
+            }
             orders.remove(o);
             return launch(o, online).ok();
         }
@@ -223,6 +240,7 @@ public final class NuclearKeys {
      * warning radius.
      */
     private static void alarm(Order o, Collection<? extends ServerPlayer> online) {
+        if (!IncomingConfig.SERVER.earlyWarning.get()) return;
         Vec3 at = o.aim.point();
         StrikeService.siren(o.level, o.loadout.weapon(), at);
         double r = IncomingConfig.SERVER.nukeWarningRadius.get();
@@ -242,17 +260,17 @@ public final class NuclearKeys {
         Loadout l = o.loadout;
         ServerActions.Aim aim = o.aim;
         String who = o.name + (o.confirmer == null ? "" : " (second key — " + o.confirmer + ")");
-        StrikeService.log(o.level, who, l.weapon(), 1, 0, aim.target(), aim.point(), o.via, null);
+        StrikeService.log(o.level, who, l.weapon(), 1, 0, aim.target(), aim.point(), o.via, o.from);
         StrikeService.Result r;
         String why = "nuclear launch failed";
         try {
             if (o.icbm()) {
-                r = StrikeService.launchIcbm(o.level, aim.target(), aim.point(), l.nuke(), owner, flightTicks());
+                r = StrikeService.launchIcbm(o.level, aim.target(), aim.point(), l.nuke(), owner, o.ownerId, o.from, flightTicks());
             } else if (owner != null) {
-                r = StrikeService.launchBy(o.level, l.weapon(), aim.target(), aim.point(), owner.getYRot(), owner, true, l.nuke(), o.via, null);
+                r = StrikeService.launchBy(o.level, l.weapon(), aim.target(), aim.point(), owner.getYRot(), owner, true, l.nuke(), o.via, o.from);
             } else {
                 // Carrier after warning, launching player offline: launch from afar, like salvo with offline owner.
-                r = StrikeService.launch(o.level, l.weapon(), aim.target(), aim.point(), o.lastYaw, o.ownerId, true, l.nuke(), o.via, null);
+                r = StrikeService.launch(o.level, l.weapon(), aim.target(), aim.point(), o.lastYaw, o.ownerId, true, l.nuke(), o.via, o.from);
             }
         } catch (RuntimeException e) {
             Incoming.LOG.error("Nuclear launch {} failed with an exception — {}", l.weapon().getSerializedName(), who, e);
@@ -281,7 +299,8 @@ public final class NuclearKeys {
      * warned by ICBM launch (same world, within target warning radius) get no second siren.
      */
     private static void detected(Order o, Collection<? extends ServerPlayer> online) {
-        Vec3 from = o.lastPos;
+        if (!IncomingConfig.SERVER.earlyWarning.get()) return;
+        Vec3 from = o.from == null ? o.lastPos : o.from.at();
         int x = cell(from.x), z = cell(from.z);
         Component line = (o.icbm() ? Component.translatable("incoming.nuke.launch_detected", x, z)
                 : Component.translatable("incoming.nuke.launch_detected.carrier", item(o.loadout).getDescription(), x, z)).withStyle(ChatFormatting.RED);
@@ -321,6 +340,10 @@ public final class NuclearKeys {
         long now = level.getGameTime();
         for (Order o : List.copyOf(orders)) {
             if (o.launchAt >= 0) {
+                if (o.from != null && LaunchPlaces.fromPad(o.loadout.weapon())) {
+                    LaunchPlaces.hold(level, o.from, o.placeKey);
+                    if (!LaunchPlaces.ready(level, o.from) && o.waited++ < LaunchPlaces.WAIT) continue;
+                }
                 if (now < o.launchAt) continue;
                 orders.remove(o);
                 launch(o, online);

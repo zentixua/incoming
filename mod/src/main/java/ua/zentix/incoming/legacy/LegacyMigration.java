@@ -61,7 +61,7 @@ public final class LegacyMigration {
         if (cfg.isEmpty()) return;
         IncomingConfig.Server s = IncomingConfig.SERVER;
         setBool(cfg, "shatter", s.shatterGlass);
-        setBool(cfg, "siren", s.siren);
+        setBool(cfg, "siren", s.earlyWarning);
         setBool(cfg, "debris_stay", s.debrisStay);
         setBool(cfg, "collapse", s.collapse);
         IncomingConfig.SERVER_SPEC.save();

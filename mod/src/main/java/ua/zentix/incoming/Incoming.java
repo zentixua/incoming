@@ -74,7 +74,7 @@ public final class Incoming {
             register.register(modBus);
         }
 
-        container.registerConfig(ModConfig.Type.SERVER, IncomingConfig.SERVER_SPEC);
+        container.registerConfig(ModConfig.Type.SERVER, new ServerConfigMigration(IncomingConfig.SERVER_SPEC));
         container.registerConfig(ModConfig.Type.CLIENT, IncomingConfig.CLIENT_SPEC);
         // Nuclear pressure table (~25 ms): background load, not on the game/server thread at the first detonation.
         Util.backgroundExecutor().execute(HobBlast::warm);

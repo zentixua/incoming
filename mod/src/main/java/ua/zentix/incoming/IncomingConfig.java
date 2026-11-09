@@ -80,7 +80,7 @@ public final class IncomingConfig {
         public final ModConfigSpec.BooleanValue fire;
         public final ModConfigSpec.BooleanValue debrisStay;
         public final ModConfigSpec.BooleanValue collapse;
-        public final ModConfigSpec.BooleanValue siren;
+        public final ModConfigSpec.BooleanValue earlyWarning;
         public final ModConfigSpec.IntValue maxSalvo;
         public final ModConfigSpec.IntValue maxSpread;
         public final ModConfigSpec.IntValue maxActivePerPlayer;
@@ -173,8 +173,9 @@ public final class IncomingConfig {
                     .translation("incoming.config.debris_stay").define("debris_stay", true);
             collapse = b.comment("An underground blast brings down the roof of the cavity above it.")
                     .translation("incoming.config.collapse").define("collapse", true);
-            siren = b.comment("Air raid siren and on-screen warning for players within 350 blocks of the target.")
-                    .translation("incoming.config.siren").define("siren", true);
+            earlyWarning = b.comment("An early-warning network exists in this world: warns players of approaching strikes and nuclear launches.",
+                            "Off: only the launching player receives flight data; projectiles, their sounds and SAM radar still work.")
+                    .translation("incoming.config.early_warning").define("early_warning", true);
             b.pop();
 
             b.translation("incoming.config.launch").push("launch");

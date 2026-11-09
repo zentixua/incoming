@@ -24,10 +24,10 @@ projectiles in flight, your teammates, and other players where they were last [s
 
 ## Route
 
-The Shahed, the cruise missile and the Lancet fly through route points: around a SAM, or to come in from the side you
+The Shahed, the cruise missile, the Lancet and the B-2 fly through route points: around a SAM, or to come in from the side you
 choose. The bottom of the map shows the route length and flight time. A route that is too long turns red and cannot be
 fired. Without points the projectile picks its own path. A salvo flies the route as a wave, each round in its own
-lane beside it ([how they fly](weapons.md#how-they-fly)). Other weapons do not take a route.
+lane beside it ([how they fly](weapons.md#how-they-fly)). The B-2 finishes its points before lining up a straight bomb run; a point close to the target can require another approach. Routes reach up to 30 km (Lancet: 15 km). Grad and ICBM trajectories are ballistic and do not take route points.
 
 ## Launch site
 
@@ -39,7 +39,7 @@ seconds; after 30 s the projectiles take off from the spot without a launcher). 
 launcher (water, forest, a slope, a roof over it, or a blocked launch sector), the crew drives to the nearest place
 that is (level, firm, open sky, clear sector) within about 100 blocks of the mark: a clearing, a road, the shore. Only
 if there is none, the projectiles take off from the spot without one. A launch far away is seen from where you stand. The route starts at the launch site, and the bottom of the map shows its distance to the target. The B-2
-comes in from that side; the ICBM always takes off from its own site. **Launch from me** removes the launch site, and
+comes in from that side (or follows its route points); the ICBM boosts from the selected site after its area loads. Without a selected site, the ICBM still lifts off behind the launching player. **Launch from me** removes the launch site, and
 strikes launch as usual again.
 
 The launch site works like the route: it applies when you fire from the map or from the console with the target **On

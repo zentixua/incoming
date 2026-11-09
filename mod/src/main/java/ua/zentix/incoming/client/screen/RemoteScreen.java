@@ -20,7 +20,6 @@ import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.fml.ModList;
-import net.neoforged.neoforge.client.gui.ConfigurationScreen;
 import net.neoforged.neoforge.network.PacketDistributor;
 import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.Incoming;
@@ -245,11 +244,11 @@ public class RemoteScreen extends Screen {
     /**
      * Map launch site for this remote's strike: selected by operator or host ({@link MapScreen#mayPickLaunchSite}),
      * if remote is not assigning linked launchers (which launch from their own sites) and weapon launches or approaches
-     * from it (ICBM uses its own pad: an old distant selection cannot block launch). Empty means near player;
+     * from it. Empty means the default launch origin;
      * map draws path and computes its length from the same location.
      */
     Optional<Vec3> launchFrom() {
-        if (linked() > 0 || !MapScreen.mayPickLaunchSite() || loadout.weapon().spec().launch() == WeaponSpec.Launch.ICBM) return Optional.empty();
+        if (linked() > 0 || !MapScreen.mayPickLaunchSite()) return Optional.empty();
         return MapTarget.launchPoint(Minecraft.getInstance().level);
     }
 
@@ -421,7 +420,7 @@ public class RemoteScreen extends Screen {
     }
 
     private void openConfig() {
-        ModList.get().getModContainerById(Incoming.MOD_ID).ifPresent(c -> minecraft.setScreen(new ConfigurationScreen(c, this)));
+        ModList.get().getModContainerById(Incoming.MOD_ID).ifPresent(c -> minecraft.setScreen(new IncomingConfigScreen(c, this)));
     }
 
     @Override

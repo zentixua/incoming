@@ -887,12 +887,12 @@ public class MapScreen extends Screen {
 
     /**
      * Weapon behaviour at launch site {@code at} from spec launch method ({@link WeaponSpec.Launch}): launcher placed
-     * there, B-2 approaches from that side, ICBM ignores it.
+     * there (ICBM boosts at its pad), B-2 approaches from that side.
      */
     private Component launchEffect(Component at) {
         Component weapon = remote.loadout().weapon().displayName();
         return switch (remote.loadout().weapon().spec().launch()) {
-            case ICBM -> Component.translatable("incoming.map.launch.unused", at, weapon);
+            case ICBM -> Component.translatable("incoming.map.launch.icbm", at);
             case BOMBER -> Component.translatable("incoming.map.launch.approach", at, weapon);
             case GUIDED, ROCKET, LOITER -> Component.translatable("incoming.map.launch.set", at);
         };

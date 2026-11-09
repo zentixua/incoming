@@ -74,7 +74,7 @@ paths:
   runs), waiting at most `LaunchPlaces.WAIT`: launch visible from afar (`FarFlights`); without site area projectile
   would start outside world already in cruise (missile at cruise altitude, MLRS descending), nobody sees launch;
   timeout/no site launches directly from ordered location without launcher (outside world `VirtualFlights`); B-2
-  takes only approach heading from it (nothing to wait for, no rack, `LaunchPlaces.fromPad`), ICBM does not;
+  takes only approach heading from it (nothing to wait for, no rack, `LaunchPlaces.fromPad`); ICBM boosts at the selected ground site, with the same area wait;
   command `via x z …` uses same `Waypoints` as map, both checked by `ServerActions.routeProblem`; launch origin
   `LaunchOrigin`: ordered place/fixed launcher, `launcher.md`), `VirtualFlights` (SavedData: projectiles outside
   loaded world are live entity objects absent from world; entering ticking chunks returns them with same UUID),
@@ -144,3 +144,8 @@ paths:
   players use the remembered position, including during `Sightings.CURRENT`'s grace period, never unobserved live
   movement. Keep ordinary launch resolution separate from review disclosure. Packet-level regressions:
   `nuclear_review_disclosure`, `nuclear_review_last_seen`.
+
+- `world.early_warning` controls automatic sirens and nuclear launch/target notices (default true). `ServerConfigMigration`
+  decorates the registered server `IConfigSpec`: copy legacy `world.siren` before spec correction removes it; an explicit
+  new key wins. `IncomingConfigScreen` passes the underlying `ModConfigSpec` to NeoForge section widgets. Warning
+  records are owner-only with alarm false while disabled, including resync; `NukeApproach` and sensor tracks remain.
