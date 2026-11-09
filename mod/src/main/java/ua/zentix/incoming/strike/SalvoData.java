@@ -246,7 +246,7 @@ public final class SalvoData extends SavedData {
 
         /** Salvo carries nuclear warhead (one-projectile salvo: nuclear order awaiting launch site). */
         boolean nuclear() {
-            return nuke.onCarrier() && Loadout.carriesNuke(weapon);
+            return weapon.spec().warhead().always() || nuke.onCarrier() && Loadout.carriesNuke(weapon);
         }
 
         /** Salvo lines/bar recipient: online owner, unless from fixed launcher. */
