@@ -18,7 +18,7 @@ import net.neoforged.neoforge.client.event.RegisterColorHandlersEvent;
 import net.neoforged.neoforge.client.event.RegisterGuiLayersEvent;
 import net.neoforged.neoforge.client.event.RegisterKeyMappingsEvent;
 import net.neoforged.neoforge.client.event.RenderGuiLayerEvent;
-import net.neoforged.neoforge.client.gui.ConfigurationScreen;
+import ua.zentix.incoming.client.screen.IncomingConfigScreen;
 import net.neoforged.neoforge.client.gui.IConfigScreenFactory;
 import net.neoforged.neoforge.client.gui.VanillaGuiLayers;
 import net.neoforged.neoforge.common.NeoForge;
@@ -94,7 +94,7 @@ public final class IncomingClient {
     private static final int UNLIT_TINT = 0x7C7C84;
 
     public IncomingClient(IEventBus modBus, ModContainer container) {
-        container.registerExtensionPoint(IConfigScreenFactory.class, ConfigurationScreen::new);
+        container.registerExtensionPoint(IConfigScreenFactory.class, IncomingConfigScreen::new);
         modBus.addListener(IncomingClient::renderers);
         modBus.addListener(WeaponModels::register);
         modBus.addListener(WeaponModels::baked);

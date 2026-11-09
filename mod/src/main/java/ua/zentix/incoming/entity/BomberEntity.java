@@ -14,6 +14,10 @@ import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.guidance.Bearing;
 import ua.zentix.incoming.guidance.BombDrop;
+import ua.zentix.incoming.guidance.Route;
+import ua.zentix.incoming.guidance.FlightController;
+import ua.zentix.incoming.strike.Waypoints;
+import java.util.ArrayList;
 import ua.zentix.incoming.registry.ModEntities;
 import ua.zentix.incoming.strike.FlightScale;
 import ua.zentix.incoming.strike.VirtualFlights;
@@ -108,8 +112,7 @@ public class BomberEntity extends StrikeProjectile {
     public int etaTicks() {
         if (tracker == null) return 0;
         Vec3 aim = tracker.point();
-        Bearing b = bearingTo(aim);
-        return (int) Math.ceil(Math.max(0, b.horizontal() - releaseLine(getY() - aim.y)) / AIR.cruiseSpeed()) + fallTicks();
+        return (int) Math.ceil(Math.max(0, horizontalPathTo(aim) - releaseLine(getY() - aim.y)) / AIR.cruiseSpeed()) + fallTicks();
     }
 
     /** B-2 velocity in level flight at heading {@code yaw}, blocks/tick: the bomb inherits it. */
@@ -157,10 +160,32 @@ public class BomberEntity extends StrikeProjectile {
         setPhase(FlightPhase.CRUISE);
     }
 
+    /** Operator points followed by a straight bomb run with room to finish the last turn. */
+    public void routeThrough(Waypoints via) {
+        if (via.isEmpty()) { setRoute(null); return; }
+        Vec3 aim = tracker.point(), last = via.points().getLast();
+        Vec3 dir = new Vec3(aim.x - last.x, 0, aim.z - last.z);
+        if (dir.lengthSqr() < 1.0e-6) {
+            Vec3 prev = via.size() > 1 ? via.points().get(via.size() - 2) : position();
+            dir = new Vec3(last.x - prev.x, 0, last.z - prev.z);
+        }
+        if (dir.lengthSqr() < 1.0e-6) dir = new Vec3(0, 0, 1);
+        dir = dir.normalize();
+        // One capture radius may be consumed before the entry point; two turn radii still leave a full turn
+        // radius before the release line. Game handling geometry, not a physical B-2 mission planner.
+        double run = releaseDistance() + 2 * WeaponSpec.turnRadius(AIR.cruiseSpeed(), AIR.turnRate());
+        var points = new ArrayList<>(via.points());
+        points.add(new Vec3(aim.x, 0, aim.z).subtract(dir.scale(run)));
+        setRoute(Route.operator(points, position()));
+        flight.set(FlightController.anglesTo(position(), via.points().getFirst())[0], flight.pitch());
+        setYRot(flight.yaw());
+    }
+
     @Override
     protected void serverTick(ServerLevel level) {
         Vec3 aim = tracker.point();
-        Bearing b = bearingTo(aim);
+        Vec3 nav = navPoint(aim);
+        Bearing b = bearingTo(nav);
         // Cruising altitude is above the bomb impact point: launch uses the first surface estimate; retargeting lower
         // or higher, or a roof or tower absent from the generator estimate, changes it.
         double echelon = 0;
@@ -170,7 +195,7 @@ public class BomberEntity extends StrikeProjectile {
             // Release when a bomb dropped now would hit the point and waiting would not improve it (BombDrop.releaseNow): from 170
             // at 100 blocks out, a bomb at B-2 speed overshoots by ~75; a point 40 blocks ahead, by ~150; behind
             // (the bomb falls along the heading and cannot steer backward), do not release at all.
-            if (ahead(drop) && BombDrop.releaseNow(position(), flight.forward().scale(speed), drop, RELEASE_RATIO)) {
+            if (onFinalLeg() && ahead(drop) && BombDrop.releaseNow(position(), flight.forward().scale(speed), drop, RELEASE_RATIO)) {
                 release(level, drop);
             }
         }
@@ -193,10 +218,10 @@ public class BomberEntity extends StrikeProjectile {
             flight.holdPitch(Mth.clamp((getY() - echelon) * BOMBING.pitchPerBlock(), -BOMBING.levelChangePitch(), BOMBING.levelChangePitch()), BOMBING.cruisePitchGain(),
                     cruise.pitchRate(), cruise.pitchAccel());
         }
-        if (!released && b.horizontal() > releaseDistance() + BOMBING.turnClearance()) {
+        if (!released && (!onFinalLeg() || b.horizontal() > releaseDistance() + BOMBING.turnClearance())) {
             // Release point inside the turning circle (retargeted to the side, overshot): at maximum turn rate it would
             // circle forever; fly straight until the point is outside the circle, then approach again.
-            if (insideTurn(aim, AIR.turnRate())) flight.settleYaw(cruise.turnAccel());
+            if (insideTurn(nav, AIR.turnRate())) flight.settleYaw(cruise.turnAccel());
             else flight.steerYaw(b.yaw(), BOMBING.cruiseYawGain(), AIR.turnRate(), cruise.turnAccel());
         }
         // Loses speed in the departure climb; holds cruise speed at altitude.

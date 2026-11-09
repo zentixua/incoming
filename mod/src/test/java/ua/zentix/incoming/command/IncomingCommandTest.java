@@ -179,6 +179,21 @@ class IncomingCommandTest {
     }
 
     @Test
+    void nuclearCommandPassesSelectedSiteToLaunch() throws CommandSyntaxException {
+        ServerLevel level = mock(ServerLevel.class);
+        Vec3 point = new Vec3(10.25, 64.5, 20.75);
+        ServerActions.Aim aim = new ServerActions.Aim(new Target.Point(point), point, null);
+        var from = new ua.zentix.incoming.strike.LaunchOrigin.Place(new Vec3(30.25, 0, 40.75));
+        Loadout.Nuke nuke = new Loadout.Nuke(3, true);
+        try (var actions = mockStatic(ServerActions.class)) {
+            actions.when(() -> ServerActions.dispatch(level, "test", 0, WeaponType.NUKE, 1, 0, aim,
+                    nuke, Waypoints.NONE, from)).thenReturn(true);
+            assertEquals(1, dispatcher.execute("incoming nuke at 10.25 64.5 20.75 3 air from 30.25 40.75", source(2, false, level)));
+            actions.verify(() -> ServerActions.dispatch(level, "test", 0, WeaponType.NUKE, 1, 0, aim, nuke, Waypoints.NONE, from));
+        }
+    }
+
+    @Test
     void rootAndAdministrativeBranchesRespectPermissionLevels() {
         for (boolean everyone : new boolean[]{false, true}) {
             IncomingConfig.SERVER.designatorForEveryone.set(everyone);
@@ -225,10 +240,17 @@ class IncomingCommandTest {
             parses("incoming salvo " + weapon + " 1 0 at 10 20 from 30 40 via 50 60");
             parses("incoming launcher 0 64 0 mission " + weapon + " 1 0 10 64 20 via 30 40");
         }
+        parses("incoming salvo bunker 1 0 at 10 20 from 30 40 via 50 60");
+        for (String suffix : List.of("", " 1", " 1 air", " 1 ground")) {
+            parses("incoming nuke at 10 64 20" + suffix + " from 30 40");
+            assertThrows(CommandSyntaxException.class, () -> dispatcher.execute("incoming nuke at 10 64 20" + suffix + " via 30 40", source(2, false)));
+        }
+        assertThrows(CommandSyntaxException.class, () -> dispatcher.execute("incoming nuke now at 10 64 20 from 30 40", source(2, false)));
+
         String route = "incoming salvo missile 1 0 me via" + " 10 20".repeat(Waypoints.MAX);
         parses(route);
         assertThrows(CommandSyntaxException.class, () -> dispatcher.execute(route + " 30 40", source(2, false)));
-        for (String weapon : List.of("rocket", "grad", "bunker")) {
+        for (String weapon : List.of("rocket", "grad")) {
             assertEquals(Set.of("me", "look", "at", "target", "from"), children(node("incoming", "salvo", weapon, "count", "spread")));
         }
         assertEquals(Set.of("drone", "shahed", "missile", "rocket", "grad", "loiter", "lancet"),
@@ -243,7 +265,7 @@ class IncomingCommandTest {
             assertThrows(CommandSyntaxException.class, () -> dispatcher.execute("incoming " + command, source(2, false)), command);
         }
         for (String command : List.of("give", "grid status", "launcher 0 64 0", "radiation", "nuke now at 0 64 0",
-                "salvo missile 1 0 me from 0 0")) {
+                "salvo missile 1 0 me from 0 0", "nuke at 10 64 20 from 30 40")) {
             assertThrows(CommandSyntaxException.class, () -> dispatcher.execute("incoming " + command, source(1, true)), command);
         }
         assertThrows(CommandSyntaxException.class, () -> dispatcher.execute("incoming help", source(1, false)));

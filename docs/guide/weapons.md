@@ -236,6 +236,9 @@ siren at the target sounds only 8 seconds before impact.
 
 ## Bomb (B-2)
 
+The B-2 accepts up to five map/command route points over a path of up to 30 km. It finishes them before a straight bomb run; a final point close to the target may require another approach. The selected launch site sets its approach side.
+
+
 ![B-2 in flight](img/weapon-b2.jpg)
 
 A B-2 arrives from far away and drops a GBU-57 bunker buster. Use it on bunkers and underground bases. SAM radar

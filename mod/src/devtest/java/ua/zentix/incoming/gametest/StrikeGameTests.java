@@ -1053,7 +1053,7 @@ public final class StrikeGameTests {
      * the launch site itself (the console has no owner) and faces the first point; the path — arming gate and points; a second
      * order from the same place — from the same launcher. A launch site in an unready chunk — an order, even for one projectile, waits for it as a salvo
      * ({@link LaunchPlaces}), and does not start outside the world already on the cruise leg.
-     * The command does not parse points for the B-2; it does not accept a path longer than the range, or points outside the world (NaN, infinity, beyond the border). Launchers at launch sites are not counted as excess for the owner
+     * The command accepts points for the B-2 but not ballistics; it does not accept a path longer than the range, or points outside the world (NaN, infinity, beyond the border). Launchers at launch sites are not counted as excess for the owner
      * and a salvo remembers the launch site in the save.
      */
     @GameTest(template = "runway", timeoutTicks = 20, batch = "launch_from", skyAccess = true)
@@ -1114,8 +1114,14 @@ public final class StrikeGameTests {
         h.assertTrue(!LaunchPlaces.waits(level, WeaponType.BUNKER, new LaunchOrigin.Place(far)), "B-2 waits for a launch site");
         SalvoData.get(level).cancel(level, null, List.of());
 
-        // the B-2 has no points; a path beyond the weapon's range — refused
-        h.assertTrue(command(h, "incoming salvo bunker 1 0" + at + via) == -1, "command parsed route points for the B-2");
+        // B-2 follows operator points, then adds its straight bomb run; ballistics still refuse points.
+        h.assertTrue(command(h, "incoming salvo bunker 1 0" + at + via) == 1, "command refused B-2 route points");
+        BomberEntity routed = (BomberEntity) VirtualFlights.get(level).flights().stream().filter(f -> f instanceof BomberEntity).findFirst().orElseThrow();
+        h.assertTrue(routed.route() != null && routed.route().points().subList(0, 2).equals(List.of(new Vec3(a.x, 0, a.z), new Vec3(b.x, 0, b.z))),
+                "B-2 command did not retain its waypoints");
+        VirtualFlights.get(level).clear(level, f -> f == routed);
+        h.assertTrue(command(h, "incoming salvo rocket 1 0" + at + via) == -1, "Grad accepted route points");
+        h.assertTrue(command(h, "incoming nuke at " + String.format(Locale.ROOT, "%.2f %.2f %.2f", point.x, point.y, point.z) + via) == -1, "ICBM accepted route points");
         Vec3 beyond = from.add(0, 0, -WeaponType.DRONE.spec().route().reach());
         h.assertTrue(command(h, "incoming salvo drone 1 0" + at + String.format(Locale.ROOT, " via %.2f %.2f", beyond.x, beyond.z)) == 0,
                 "route longer than the range accepted");

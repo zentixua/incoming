@@ -13,6 +13,8 @@ is announced to everyone within 20 km.
 | ⚠ MISSILE THREAT ⚠ | cruise missile, Grad | 15 and 8 s |
 | ☢ MISSILE ATTACK ☢ | ICBM | 90 s, with a countdown |
 
+These warnings require `world.early_warning = true` (the default). With it off, no automatic siren, target banner or nuclear launch notice is sent. The launching player keeps their own flight HUD and countdown. SAM radar and everything visible or audible still work. `nuclear.warning_radius` only applies while the network exists.
+
 Projectiles can be seen from up to 8 km away. How far you hear one depends on its engine and on the weather. On a quiet
 night a Shahed is heard about 12 km away (its two-stroke has no muffler), a Lancet only a few hundred blocks away, and a cruise missile's turbine or a
 burning rocket motor many kilometres away. By day the warm ground bends sound upwards, and in rain the noise hides it,
