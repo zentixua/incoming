@@ -318,7 +318,8 @@ void main() {
             vec3 dirHand = normalize(farHand.xyz / farHand.w);
             vec3 p = dirHand * (depth / max(dot(dirHand, PallForward), 1e-3));
             vec3 n = sceneNormal(Sampler1, InvViewProj, PallForward, full, fullSize, p);
-            vec3 added = ballLight(p, n, pallOver(p));
+            // Iris compresses hand depth: sample skylight at the eye, independently of torch/held-item light.
+            vec3 added = ballLight(p, n, pallOver(p)) * flashOpening(pallOpenHere(vec3(0.0)));
             if (dot(added, LUMA) > 1e-6) fragColor = vec4(ballLitWorld(full, n, 1.0, added), 0.0);
         }
         return;
