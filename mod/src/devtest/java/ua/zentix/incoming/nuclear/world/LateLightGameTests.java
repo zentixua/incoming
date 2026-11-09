@@ -288,6 +288,10 @@ public final class LateLightGameTests {
             }
                 })
                 .thenWaitUntil(() -> {
+                    // GameTest pacing can consume all spare tick time, leaving even ready saves in pendingUnloads.
+                    // Give vanilla a bounded unload pass; an unconditional true could spin on generation holders.
+                    int[] opportunities = {256};
+                    level.getChunkSource().tick(() -> opportunities[0]-- > 0, false);
                     var map = level.getChunkSource().chunkMap;
                     for (int z = -1; z <= 1; z++) for (int x = -1; x <= 1; x++) {
                         long key = ChunkPos.asLong(center.x + x, center.z + z);

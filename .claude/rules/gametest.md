@@ -149,3 +149,6 @@ paths:
   Assert partial conversion when removing that ticket, not at eventual unload (`grid_tower`). Fixtures isolating
   ScarQueue neighbor handoff seed current-light chunks with `LIGHT_REPAIRED`: prior batches' scar/outage contexts
   could otherwise trigger legitimate legacy recovery, borrowing neighbors and bypassing the intended deadlock.
+  Disk-light fixtures give vanilla a bounded spare-time unload pass before checking `pendingUnloads`: GameTest
+  pacing may otherwise consume the entire tick deadline. Do not pass unconditional true when generation holders
+  could be revived; their unload callbacks can reenqueue until server tasks get a turn.
