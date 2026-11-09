@@ -157,6 +157,8 @@ paths:
   already FULL edited root through its light fence and saves corrected wrapped neighbors through vanilla ChunkMap
   (one neighbor per work unit; narrow AT). Promoting the ring to FULL recursively loads a dark city: new FULL chunks
   enter blackout, then need their own rings (49 batches / 80 promotions for one test root). No neighbor promotion is
-  needed to serialize its existing light. Legacy recovery checks bounded sections in scar/outage contexts and marks
-  completion with a saved chunk attachment; freshly generated chunks have no legacy spill. Source checks alone do
+  needed to serialize its existing light. Legacy recovery borrows FULL ring-1 once, giving initialized ring-2
+  as source context for its ring-1 checks; borrowed loads do not recursively admit recovery. Without this extra
+  context, removing a ghost peak could also extinguish valid incoming light from an unavailable outer source.
+  Recovery marks completion with a saved chunk attachment; freshly generated chunks have no legacy spill. Source checks alone do
   not erase boundary peaks, and boundary checks alone miss unsupported interior maxima from old missed-source checks.

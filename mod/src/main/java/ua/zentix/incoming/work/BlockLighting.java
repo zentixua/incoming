@@ -23,6 +23,9 @@ import java.util.concurrent.CompletableFuture;
  * setUnsaved to its wrapped LevelChunk but always reports isUnsaved=false; vanilla would discard its corrections.
  * Retaining the already FULL root retains its initialized ring without loading more chunks. FULL promotion of that
  * ring was measured to recursively expand blackout loading (49 batches / 80 promotions for one city root).
+ * One-time legacy recovery checks the entire inner ring, so it temporarily borrows that ring at FULL to obtain
+ * another initialized ring of source context. Borrowed loads cannot recursively start recovery. Otherwise a real
+ * source just outside the inspected square could lose its spill when a phantom peak is removed inside it.
  * Checks and wrapped-neighbor saves are bounded work units; no tick-thread access waits for loading.
  */
 public final class BlockLighting {
@@ -69,7 +72,7 @@ public final class BlockLighting {
         batch.repair |= repair;
     }
 
-    /** Recover pre-fix spill only in our saved scar/outage contexts. This does not promote or load neighboring chunks. */
+    /** Recover pre-fix spill once in saved scar/outage contexts; borrowed loads do not recursively admit recovery. */
     public static void onLoad(ChunkEvent.Load event) {
         if (!(event.getLevel() instanceof ServerLevel level) || !(event.getChunk() instanceof LevelChunk chunk)) return;
         if (chunk.hasData(ModAttachments.LIGHT_REPAIRED) && chunk.getData(ModAttachments.LIGHT_REPAIRED)) return;
