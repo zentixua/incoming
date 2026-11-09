@@ -247,7 +247,8 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   Server fires disabled (`nuclear.fires`, `fires_per_detonation` = 0) means no fire zone (`PallField`: no haze or glow),
   storm or roar: `Detonation.fires` (settings at detonation, in detonation packet; absent field defaults yes). Black rain
   needs fires and `Detonation.rain` (`nuclear.black_rain` at detonation, same packet rule): off, `BlackRainModel` gets no
-  fire zone, so no rain picture/sound, washout or skin contamination on server and client alike. Storm
+  fire zone, so no rain picture/sound, washout or skin contamination on server and client alike (the live rule still
+  gates contamination for detonations saved before the field, which read as rain on). Storm
   also fades where fire was extinguished: `FireStorm.trust` checks local-chunk fire only while young (later vanilla
   fire burns out independently, storm lasts until morning); lives with storm, including after replay seek; no local
   zone chunks in this period means trust 1. Column laws (drift, width, map levels) are in Java and copied in

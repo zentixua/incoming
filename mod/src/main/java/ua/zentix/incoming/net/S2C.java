@@ -680,8 +680,8 @@ public final class S2C {
     /**
      * World entry/dimension change: active detonations and flying ICBMs in this dimension. Listed detonations use 3.1.0
      * fields ({@link Detonation#STREAM_CODEC}); additional data (wall speed {@link Detonation#wave}, time
-     * of day {@link Detonation#dayTime}, fires {@link Detonation#fires}, black rain {@link Detonation#rain}) in trailing packet lists, one entry per detonation
-     * (format grows at end, replay.md): older recordings lack lists — “as before”.
+     * of day {@link Detonation#dayTime}, fires {@link Detonation#fires}, black rain {@link Detonation#rain}) in trailing
+     * packet lists, one entry per detonation (format grows at end, replay.md): older recordings lack lists — “as before”.
      */
     public record NukeSync(List<Detonation> detonations, List<NukeWarning> warnings)
             implements CustomPacketPayload {
