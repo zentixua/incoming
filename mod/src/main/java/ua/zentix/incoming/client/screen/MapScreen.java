@@ -241,7 +241,7 @@ public class MapScreen extends Screen {
 
     /**
      * Map strike launch site: selected site if remote uses it ({@link RemoteScreen#launchFrom}: neither linked
-     * launchers nor ICBM); empty means near player. Map path, length and fire use this same site.
+     * launchers); empty means the default origin. Map path, length and fire use this same site.
      */
     private Optional<Vec3> launchFrom() {
         return launchSite().isPresent() ? remote.launchFrom() : Optional.empty();
