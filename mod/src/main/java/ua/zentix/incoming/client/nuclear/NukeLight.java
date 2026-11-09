@@ -47,17 +47,22 @@ public final class NukeLight {
         Vec3 camera = e.getCamera().getPosition();
         double now = (ticks + partial) / 20, fire = 0;
         double ambient = FarView.ambient(level, partial);
-        bodyExposure = Sight.exposure(ambient, 0);
         CAMERA.clear();
         for (ClientNuclear.Active a : ClientNuclear.detonations()) {
             FlashLight.Eye eye = sample(level, a, camera, partial);
             CAMERA.put(a, eye);
             fire += eye.light();
         }
+        update(now, ambient, fire);
+        NukeFlash.frame();
+    }
+
+    /** Advance the one exposure state from a frame's summed illumination; no wall clock. */
+    static void update(double now, double ambient, double fire) {
+        bodyExposure = Sight.exposure(ambient, 0);
         double target = Sight.exposure(ambient, fire);
         exposure = Double.isNaN(last) ? target : FlashLight.follow(exposure, target, Math.max(0, now - last), NukeExposure.ADAPT_S);
         last = now;
-        NukeFlash.frame();
     }
 
     /** Pre-flash state, before the first live source starts to brighten the frame. */
@@ -89,14 +94,16 @@ public final class NukeLight {
         }
         double distance = d.metres(source.distanceTo(eye));
         double total = ThermalModel.transmittance(distance, d.visibility());
-        double beam = MushroomField.air(d, eye, d.visibility()).transmittance(distance, d.metres(source.y - eye.y));
+        // Use the same uniform-air path for beam and total, as world relight; subtracting an altitude-thinned
+        // beam from a sea-level total would erase scattered light at an elevated burst.
+        double beam = Math.exp(-Sight.KOSCHMIEDER * distance / d.visibility());
         boolean seen = visible(level, eye, source);
         int sky = level.getBrightness(LightLayer.SKY, BlockPos.containing(eye));
         double through = FlashLight.transmission(seen, sky, total, beam);
         // Fluence/peak use original burst geometry; current illumination follows the rising and drifting cap.
         double burstDistance = d.metres(d.burst().distanceTo(eye));
         double burstTotal = ThermalModel.transmittance(burstDistance, d.visibility());
-        double burstBeam = MushroomField.air(d, eye, d.visibility()).transmittance(burstDistance, d.metres(d.burst().y - eye.y));
+        double burstBeam = Math.exp(-Sight.KOSCHMIEDER * burstDistance / d.visibility());
         double burstThrough = FlashLight.transmission(seen, sky, burstTotal, burstBeam);
         return new FlashLight.Eye(light * through, PEAK * FlashLight.dilution(radius, burstDistance) * burstThrough,
                 d.fluence(eye) * burstThrough / Math.max(burstTotal, 1e-30), burstThrough, seen);

@@ -29,6 +29,39 @@ public final class EyeGameTests {
 
     private static final BlockPos CENTER = NuclearGameTests.CENTER;
 
+    /** Real propagated skylight, including a torch-lit sealed chamber and a side opening. */
+    @GameTest(template = "range", batch = "nuke_eyes_shelter", skyAccess = true, timeoutTicks = 400)
+    public static void openingsAdmitFlashButLampsDoNot(GameTestHelper h) {
+        ServerLevel level = h.getLevel();
+        BlockPos eye = h.absolutePos(new BlockPos(32, 8, 32));
+        for (BlockPos p : BlockPos.betweenClosed(eye.offset(-4, -2, -4), eye.offset(4, 4, 4))) {
+            boolean shell = Math.abs(p.getX() - eye.getX()) >= 3 || Math.abs(p.getZ() - eye.getZ()) >= 3
+                    || p.getY() <= eye.getY() - 1 || p.getY() >= eye.getY() + 2;
+            level.setBlock(p, (shell ? Blocks.STONE : Blocks.AIR).defaultBlockState(), Block.UPDATE_ALL);
+        }
+        level.setBlock(eye.offset(1, 0, 0), Blocks.TORCH.defaultBlockState(), Block.UPDATE_ALL);
+        h.startSequence().thenWaitUntil(() -> {
+            h.assertValueEqual(level.getBrightness(net.minecraft.world.level.LightLayer.SKY, eye), 0, "sealed skylight");
+            h.assertTrue(level.getBrightness(net.minecraft.world.level.LightLayer.BLOCK, eye) > 0, "torch has propagated");
+        }).thenExecute(() -> {
+            double through = ua.zentix.incoming.nuclear.model.FlashLight.transmission(false,
+                    level.getBrightness(net.minecraft.world.level.LightLayer.SKY, eye), 0.7, 0.4);
+            h.assertTrue(through == 0, "torch admitted nuclear light through stone");
+            // This chamber is below the range template's grass at y=11: open a sky shaft outside its wall.
+            for (BlockPos p : BlockPos.betweenClosed(eye.offset(-1, 0, -5), eye.offset(1, 8, -5))) {
+                level.setBlock(p, Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
+            }
+            for (BlockPos p : BlockPos.betweenClosed(eye.offset(-1, 0, -4), eye.offset(1, 1, -3))) {
+                level.setBlock(p, Blocks.AIR.defaultBlockState(), Block.UPDATE_ALL);
+            }
+        }).thenWaitUntil(() -> {
+            int sky = level.getBrightness(net.minecraft.world.level.LightLayer.SKY, eye);
+            h.assertTrue(sky > 0 && sky < 15, "window skylight propagated: " + sky);
+            double through = ua.zentix.incoming.nuclear.model.FlashLight.transmission(false, sky, 0.7, 0.4);
+            h.assertTrue(through > 0 && through < 0.3, "window admits a fraction of scattered light");
+        }).thenSucceed();
+    }
+
     /**
      * 15 kt: the one looking at the ball has a spot in the middle of his gaze the size of the image of the ball; the ball to the right and higher is the spot
      *  to the right and higher; the ball behind the back or further 60° from the view - no. In 40 km (1 block = 1 km) - between the burn ranges of

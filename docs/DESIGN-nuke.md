@@ -640,9 +640,27 @@ All from one `ClientNuclearEvents` list (event + time), updated in `ClientTickEv
 - **Flash — `NukeFlash`** GUI layer: overexposed frame catches up like camera auto-exposure (presentation,
   `NukeExposure.overexposure`: K^(e^(−u/0.2 s)) after second maximum, K camera sphere light at second maximum relative
   to frame exposure; frame gain/lens-scattered light, 15 kt/1.4 km white to ~0.25 s, normal by 1 s); strength
-  `min(1, Q/2)` if sphere visible/in FOV, otherwise 0.3 of it. Fireball exposed for fire/visible surface, film curve
+  `min(1, Q/2 + 0.6*T)` from admitted fluence and transmission (`FlashLight`; inherited glare calibration, (est.)). Fireball exposed for fire/visible surface, film curve
   like conventional (`NukeExposure`). Blindness: after white, slow-fading dark-orange retinal spot at sphere location
   (gaze-following afterimage), 5–30 s. Field glare/retinal burns §4 “Eyes”. Existing client `flash` (0 disables).
+- **Shared visible source and camera — `FlashLight` / `NukeLight`:** apparent emitting temperature follows
+  `T = 7700 * [(P(t)/P(t_max)) * (R_max/R_cap)^2]^(1/4)`. G&D 1977 fig. 7.84 is normalized thermal power,
+  not visible lumens; `BlackBody` converts its temperature to RGB/photopic luminance. The equivalent spherical
+  cap area is (est.), and the pulse beyond 10 t_max is extrapolated. This escaping brightness temperature replaces
+  the mixed exterior temperature as the light source; the original gas temperature remains for heat/structure.
+  It leaves server burn/ignition energy, thermalFraction's normalization at tau=10, and retinal scars unchanged.
+  One owner samples each active source before fog: directly visible light keeps total atmospheric transmission;
+  otherwise only `max(0, total - beam)` enters through the sky opening (angularly unresolved diffuse light, (est.)).
+  Raw skylight L maps to `L/(60-3L)`, vanilla brightness without ambient floor; its use as aperture throughput is
+  (est.) because the light engine measures falloff, not solid angle. Zero skylight plus blocked sight means zero
+  new flash. World relight uses the same mapping on its existing OpenAir sky channel; outside that local window,
+  terrain fallback remains coarse and does not resolve directional building shadows.
+  The summed eye light F drives `Sight.exposure(ambient,F)` with a 0.2 s exponential follow in log exposure,
+  using game/render time. Reset/seek reconstructs adapted state; frame readers never advance it separately.
+  World, pall, dust and amber use that exposure. Firebody gain/film retains its ambient reference and cancels frame
+  exposure once. Vanilla sky flash renews one tick only while admitted frame overexposure remains visible.
+  Sources: [G&D VII §§7.14, 7.83–7.88](https://www.atomicarchive.com/resources/documents/effects/glasstone-dolan/chapter7.html),
+  [G&D XII figs. 12.88a/b](https://www.atomicarchive.com/resources/documents/effects/glasstone-dolan/chapter12.html).
 - **Sky/fog** (`ViewportEvent.ComputeFogColor`, `RenderFog`): first seconds white/yellow, then orange-brown; black-rain
   zone gray-brown/nearer.
 - **Fireball — `FireballRenderer`:** icosphere (3 subdivisions), `RenderType.entityTranslucentEmissive`, animated plasma

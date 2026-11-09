@@ -74,7 +74,7 @@ class MushroomModelTest {
     @Test
     void ballLightsItsSurroundings() {
         MushroomModel.Shape s = MushroomModel.shape(1, 15, 0, true, 300);
-        double surface = BlackBody.luminance(MushroomModel.edgeTemperature(1, 15, true));
+        double surface = BlackBody.luminance(FlashLight.temperature(1, 15, true, s.capR()));
         assertEquals(surface, MushroomModel.light(s, 15, true, 0), 1e-9 * surface);
         assertEquals(surface / 4, MushroomModel.light(s, 15, true, 2 * s.capR()), 1e-9 * surface);
         assertTrue(MushroomModel.light(s, 15, true, 5_000) > 1, "1 s to 5 km: " + MushroomModel.light(s, 15, true, 5_000));

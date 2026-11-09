@@ -36,11 +36,10 @@ import java.util.List;
  * it is as before ({@link #overexposed}: frame gain and light scattered in the lens). Pulse light and timing follow physics;
  * previously the screen stayed white through the full pulse (~10·t_max: 1.2 s for 15 kt), then faded for another 2–4 s. Next comes a dark-orange
  * afterimage "spot" where the ball was on the retina, if the player looked at it (moves with gaze). Meanwhile the entire world is lit like lightning: night
- * briefly becomes day. Strength follows the light pulse at the player: full with direct visibility and the ball in view, otherwise
- * one third (sky glare).
+ * briefly becomes day. Strength follows the shared admitted pulse: direct visibility or scattered light through openings.
  *
  * <p>Eyes (G&amp;D §12.83–12.88): full-field dazzle is a veil from {@link EyeInjury#dazzleSeconds}, based on the pulse at the eye
- * (ball seen — full; unseen but under open sky — sky-scattered; under a roof — none) and dark adaptation:
+ * (ball seen — full; unseen — sky-scattered through openings; sealed — none) and dark adaptation:
  * a bright afterimage at first, turning gray by day or black at night after seconds, fading by the deadline; shorter
  * dazzle means a weaker veil. Retinal burns are permanent dark spots where the ball was on the retina (from server,
  * {@link FlashEyes}); they move with gaze. Creative and spectator use a camera rather than eyes (they cannot be injured): no
@@ -95,21 +94,23 @@ public final class NukeFlash {
         double q = light.fluence();
         Vec3 look = p.getViewVector(1);
         double angle = Math.toDegrees(Math.acos(Mth.clamp(look.dot(d.burst().subtract(eye).normalize()), -1, 1)));
-        boolean inView = light.seen() && angle < 60;
-        double s = light.strength() * IncomingConfig.CLIENT.flash.get();
+        boolean inView = !p.isSleeping() && light.seen() && angle < 60;
+        FlashLight.Eye cameraLight = NukeLight.sample(mc.level, a, mc.gameRenderer.getMainCamera().getPosition(), 0);
+        double s = cameraLight.strength() * IncomingConfig.CLIENT.flash.get();
         if (eyes(p) && !p.isSleeping()) dazzle(mc.level, d, eye, q);
         // "Hide Lightning Flashes": no world glare, partial white screen
         if (Flash.calm()) s = Math.min(s, Flash.CALM);
         if (s <= strength && current != null) return;
         current = a;
         strength = (float) s;
-        peak = light.peak(NukeLight.bodyExposure());
+        peak = cameraLight.peak(NukeLight.bodyExposure());
         endTick = ticks + (long) Math.ceil((FireballModel.secondMaximumSeconds(d.yieldKt()) * d.scale() + NukeExposure.settled(peak, SETTLED)) * 20);
         // spot larger than the visible ball: the eye "smears" glare
         float[] spot = inView && q >= 0.05 ? retina(mc, p, d.burst(), Math.max(d.fireballRadius(), 30) * 2.2) : null;
         if (spot != null) {
             // 5–30 s from the light pulse (cal/cm²)
-            afterStrength = strength;
+            afterStrength = (float) (light.strength() * IncomingConfig.CLIENT.flash.get());
+            if (Flash.calm()) afterStrength = Math.min(afterStrength, Flash.CALM);
             afterTotal = afterLeft = (int) (20 * Mth.clamp(5 + q * 2.5, 5, 30));
             afterX = spot[0];
             afterY = spot[1];
@@ -200,6 +201,8 @@ public final class NukeFlash {
     static void reset() {
         current = null;
         strength = 0;
+        peak = 1;
+        afterStrength = 0;
         afterLeft = 0;
         veilSeconds = 0;
     }

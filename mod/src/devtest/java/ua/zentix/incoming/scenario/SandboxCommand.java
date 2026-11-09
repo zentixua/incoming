@@ -142,7 +142,12 @@ record SandboxCommand(Verb verb, List<String> args) {
             case NUKE -> {
                 need(1, 4);
                 int kt = (int) number(0);
-                if (kt < 1 || kt > 15) throw new IllegalArgumentException("yield 1–15 kt");
+                if (kt < 1 || kt > 1000) throw new IllegalArgumentException("yield 1–1000 kt");
+                if (flashCamera()) {
+                    need(3, 3);
+                    if (!List.of("open", "sealed", "window", "torch").contains(args.get(2))) throw new IllegalArgumentException("camera open|sealed|window|torch");
+                    break;
+                }
                 int i = 1;
                 if (args.size() > i && List.of("air", "ground").contains(args.get(i))) i++;
                 if (args.size() > i && args.get(i).equals("near")) {
@@ -244,6 +249,9 @@ record SandboxCommand(Verb verb, List<String> args) {
     WeaponType raidWeapon() {
         return args.size() > 3 && !args.get(3).equals("water") ? weaponAt(3) : WeaponType.DRONE;
     }
+
+    /** Fixed flash-camera regression scene; a client detonation, no server damage. */
+    boolean flashCamera() { return verb == Verb.NUKE && args.size() > 1 && args.get(1).equals("camera"); }
 
     /** {@code nuke}: an air burst. */
     boolean air() {

@@ -731,7 +731,7 @@ final class Sandbox {
                 begin();
             }
             case REAL, NUKE, SURFACE -> {
-                if (c.near()) {
+                if (c.near() || c.flashCamera()) {
                     // the previous detonation near the camera is forgotten: this one's number and game time are the
                     // same ({@link #NEAR_ID})
                     clear();
@@ -741,7 +741,8 @@ final class Sandbox {
                     freshX += c.verb() == SandboxCommand.Verb.NUKE ? NUKE_STEP : REAL_STEP;
                     site = HOME.add(freshX, 0, 0);
                 }
-                placeCamera();
+                if (c.flashCamera()) flashCameraSetup(c);
+                else placeCamera();
                 pending = Pending.SITE;
             }
             case LAUNCH, FLIGHT -> {
@@ -956,6 +957,24 @@ final class Sandbox {
         }
     }
 
+    /** Fixed eye-height view and shelter in the sandbox only; shared unchanged by main/branch captures. */
+    private void flashCameraSetup(SandboxCommand c) {
+        String shelter = c.args().get(2);
+        boolean buried = shelter.equals("sealed") || shelter.equals("torch");
+        int x = (int) site.x, z = (int) site.z, floor = buried ? GROUND - 6 : GROUND;
+        camDist = 0;
+        camHeight = floor - GROUND + 1.62;
+        camBearing = 0;
+        camLook = 8;
+        onServer(false, server -> {
+            String me = Minecraft.getInstance().player.getGameProfile().getName();
+            run(server, "gamemode spectator " + me);
+            run(server, "tp %s %.2f %.2f %.2f 180 -12".formatted(me, site.x + 0.5, floor + 1.0, site.z + 0.5));
+        });
+        paved = -1;
+        Minecraft.getInstance().options.hideGui = false;
+    }
+
     /**
      * New site of a real blast: wait until the ground is ready at the client and at the server — then the blast or
      * detonation.
@@ -967,6 +986,44 @@ final class Sandbox {
         BlockPos s = BlockPos.containing(site);
         if (mc.player.position().distanceTo(site) < mc.options.getEffectiveRenderDistance() * 16 - 32 && !loaded(mc, s)) return;
         SandboxCommand c = pendingCmd;
+        if (c.flashCamera()) {
+            if (paved < 0) {
+                paved = tick;
+                String shelter = c.args().get(2);
+                boolean buried = shelter.equals("sealed") || shelter.equals("torch");
+                int x = (int) site.x, z = (int) site.z, floor = buried ? GROUND - 6 : GROUND;
+                onServer(false, server -> {
+            // Six-block shell puts the chamber ceiling three full blocks below the grass surface.
+            if (!shelter.equals("open")) {
+                run(server, "fill %d %d %d %d %d %d minecraft:stone_bricks".formatted(x - 5, floor, z - 5, x + 5, floor + 5, z + 5));
+                run(server, "fill %d %d %d %d %d %d minecraft:air".formatted(x - 3, floor + 1, z - 3, x + 3, floor + 3, z + 3));
+                if (shelter.equals("window")) run(server, "fill %d %d %d %d %d %d minecraft:air".formatted(x - 1, floor + 2, z - 5, x + 1, floor + 3, z - 4));
+                if (shelter.equals("torch")) run(server, "setblock %d %d %d minecraft:torch".formatted(x + 2, floor + 1, z - 2));
+            }
+                });
+                return;
+            }
+            if (tick - paved < 40) return;
+            // Wait for propagated skylight, not merely block packets; shuttered chamber must be genuinely sealed.
+            BlockPos eye = BlockPos.containing(mc.player.getEyePosition());
+            int sky = mc.level.getBrightness(net.minecraft.world.level.LightLayer.SKY, eye);
+            String shelter = c.args().get(2);
+            if ((shelter.equals("sealed") || shelter.equals("torch")) && sky != 0) return;
+            if ((shelter.equals("open") || shelter.equals("window")) && sky == 0) return;
+            int kt = (int) c.number(0);
+            double range = kt == 1000 ? 4550 : 1400, hob = 240 * Math.cbrt(kt);
+            var d = new ua.zentix.incoming.nuclear.Detonation(NEAR_ID,
+                    new Vec3(site.x, GROUND + 1 + hob, site.z - range), GROUND + 1, kt, false,
+                    mc.level.getGameTime(), 0, 5, 20_000, NEAR_ID, 1, false, 0.35f)
+                    .withDayTime(mc.level.getDayTime()).withFires(false).withRain(false);
+            ClientHooks.get().nukeDetonation(new S2C.NukeDetonation(d, 0));
+            Incoming.LOG.info("SANDBOX flash-camera {} sky {} block {} eye {} burst {}", shelter, sky,
+                    mc.level.getBrightness(net.minecraft.world.level.LightLayer.BLOCK, eye), mc.player.getEyePosition(), d.burst());
+            mc.gui.getChat().clearMessages(false);
+            paved = -1;
+            begin();
+            return;
+        }
         if ((c.masonry() || c.town()) && paved < 0) {
             // city: paving around, not lawn; the client must get it before the blast packet (dust ground — at the
             // client)
