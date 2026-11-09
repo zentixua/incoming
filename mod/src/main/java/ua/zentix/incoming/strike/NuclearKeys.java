@@ -34,10 +34,10 @@ import java.util.UUID;
  * launcher player to press “Second key” ({@link C2S.NuclearKey}) within {@code second_key_window} seconds. Nearby
  * players get who, weapon, target, and key. Timeout means no launch and payment refunded. Alone online: no key
  * needed. Operator, host, console, command block bypass key ({@link #trusted});
- * <li><b>at least 90 s warning</b> ({@link #MIN_WARNING}): ICBM flies at least 90 s (launch starts target
- * warning/countdown); carrier (cruise missile, B-2) launches 90 s after target warning, siren and line within
+ * <li><b>at least 90 s flight/delay</b> ({@link #MIN_WARNING}): ICBM flies at least 90 s (launch starts target
+ * owner countdown); carrier (cruise missile, B-2) launches after a 90 s delay. With the early-warning network, target siren and line within
  * warning radius; non-operator cannot retarget nuclear projectile from camera;
- * <li><b>launch detected</b>: all players receive “ICBM launch detected from area X, Z” ({@link #AREA_CELL}-block
+ * <li><b>launch detected</b>: with the early-warning network, all players receive “ICBM launch detected from area X, Z” ({@link #AREA_CELL}-block
  * cell) and air-raid siren.
  * </ul>
  * Orders unsaved (last seconds): nuclear abort (operator/host), server stop, or launching player logout before

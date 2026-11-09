@@ -12,7 +12,7 @@ import java.util.List;
 /**
  * Operator route: designator-map points in flight order, horizontal only (projectile holds altitude). Empty means
  * launch builds path ({@link StrikeService}), detour and approach behind shooter. Waypoint weapons have spec
- * route reach ({@link WeaponSpec.Route#reach}): Shahed, cruise missile, Lancet. At most {@link #MAX} points;
+ * route reach ({@link WeaponSpec.Route#reach}): Shahed, cruise missile, Lancet, B-2. At most {@link #MAX} points;
  * server validates finite values, map range, path within weapon reach ({@code ServerActions.routeProblem}). Same
  * points in command ({@code /incoming salvo … via x z …}).
  */

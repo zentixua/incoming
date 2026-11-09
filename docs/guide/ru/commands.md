@@ -30,6 +30,7 @@
 |---|---|
 | `/incoming nuke [кт [air\|ground]]` | МБР туда, куда смотришь |
 | `/incoming nuke at <x y z> [кт [air\|ground]]` | МБР по точке |
+| `/incoming nuke [at <x y z>] [кт [air\|ground]] from <x z>` | МБР с выбранной наземной площадки (только оператор); без точек маршрута |
 | `/incoming nuke now [at <x y z>] [кт [air\|ground]]` | подрыв сразу, без полёта (только оператор) |
 
 Без числа — `nuclear.default_yield` мира (по умолчанию 15 кт). Без типа подрыва — наземный.

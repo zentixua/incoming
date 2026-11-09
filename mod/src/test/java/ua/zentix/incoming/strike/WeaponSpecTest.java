@@ -154,13 +154,13 @@ class WeaponSpecTest {
      */
     @Test
     void waypointCaptureAndReach() {
-        for (WeaponSpec w : List.of(WeaponSpec.DRONE, WeaponSpec.MISSILE, WeaponSpec.LOITER)) {
+        for (WeaponSpec w : List.of(WeaponSpec.DRONE, WeaponSpec.MISSILE, WeaponSpec.LOITER, WeaponSpec.BUNKER)) {
             WeaponSpec.Airframe a = w.airframe();
             double r = a.turnRadius(a.cruiseSpeed());
             assertTrue(w.capture() >= 0.95 * r && w.capture() <= 2 * r, "capture point " + w.capture() + ", turning radius " + r);
             assertTrue(w.route().reach() >= 1.5 * 10_000, "route distance " + w.route().reach());
         }
-        for (WeaponSpec w : List.of(WeaponSpec.BUNKER, WeaponSpec.NUKE, WeaponSpec.ROCKET)) assertTrue(!w.route().waypoints());
+        for (WeaponSpec w : List.of(WeaponSpec.NUKE, WeaponSpec.ROCKET)) assertTrue(!w.route().waypoints());
     }
 
     /** The launcher cell is occupied while the projectile is burning on the rail and launch rail exit from it; launch no more often than the cell is freed. */

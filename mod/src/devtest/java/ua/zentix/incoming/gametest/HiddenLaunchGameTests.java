@@ -69,6 +69,10 @@ public final class HiddenLaunchGameTests {
         IcbmEntity icbm = (IcbmEntity) StrikeWorld.projectiles(level).stream().filter(p -> owner.equals(p.ownerId())).findFirst().orElseThrow();
         h.assertTrue(icbm.position().subtract(s.launchPos().add(0, 9, 0)).length() < 0.001, "boost did not begin above pad");
         h.assertTrue(LaunchPlaces.holds(level, from, icbm.getUUID()), "launch area is not held");
+        UUID nearbyOwner = UUID.randomUUID();
+        h.assertTrue(NuclearStrikes.launchFrom(level, site.add(0, 0, 160), 1, true, site, 0, nearbyOwner), "default origin launch failed");
+        NuclearEvents.ScheduledStrike nearby = NuclearEvents.get(level).scheduled().stream().filter(x -> x.owner().filter(nearbyOwner::equals).isPresent()).findFirst().orElseThrow();
+        h.assertTrue(nearby.launchPos().subtract(site.add(0, 0, -30)).horizontalDistance() < 1, "no-site launch changed its 30-block offset");
         double y = icbm.getY();
         h.runAfterDelay(10, () -> {
             StrikeProjectile current = StrikeWorld.projectiles(level).stream().filter(p -> p.getUUID().equals(icbm.getUUID())).findFirst().orElseThrow();
@@ -170,15 +174,16 @@ public final class HiddenLaunchGameTests {
         Vec3 at = Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(16, 4, 60)));
         Watcher owner = Watcher.at(h, "hidden_key_owner", at);
         Watcher other = Watcher.at(h, "hidden_key_other", at.add(3, 0, 0));
-        List<ServerPlayer> online = List.of(owner.player, other.player);
+        Watcher far = Watcher.at(h, "hidden_key_far", at.add(30_000, 0, 0));
+        List<ServerPlayer> online = List.of(owner.player, other.player, far.player);
         ServerActions.Aim aim = new ServerActions.Aim(new Target.Ground(at.add(0, 0, 120)), at.add(0, 0, 120), null);
         Loadout icbm = new Loadout(WeaponType.NUKE, 1, 0, TargetMode.LOOK, "", Loadout.Nuke.DEFAULT);
         h.assertTrue(NuclearKeys.order(owner.player, online, icbm, aim, Waypoints.NONE, null), "ICBM key order failed");
         h.assertTrue(other.player.last("incoming.nuke.key.prompt") != null, "second-key consent was hidden with warnings");
         h.assertTrue(NuclearKeys.confirm(other.player, online), "ICBM key failed");
         h.assertTrue((other.player.last("incoming.nuke.launch_detected") != null) == enabled, "ICBM detected line policy");
-        h.assertTrue(other.sounds > 0 == enabled, "ICBM detected sound policy");
-        int sounds = other.sounds;
+        h.assertTrue((far.sounds > 0) == enabled, "ICBM detected sound policy");
+        int sounds = far.sounds;
         Loadout carrier = new Loadout(WeaponType.BUNKER, 1, 0, TargetMode.LOOK, "", new Loadout.Nuke(1, true, true));
         h.assertTrue(NuclearKeys.order(owner.player, online, carrier, aim, Waypoints.NONE, null), "carrier key order failed");
         h.assertTrue(NuclearKeys.confirm(other.player, online), "carrier key failed");
@@ -187,7 +192,7 @@ public final class HiddenLaunchGameTests {
         h.assertTrue(owner.player.last("incoming.nuke.alarm.armed") != null, "owner lost pre-launch confirmation");
         h.runAfterDelay(NuclearKeys.MIN_WARNING + 2, () -> {
             h.assertTrue((other.player.last("incoming.nuke.launch_detected.carrier") != null) == enabled, "carrier detected line policy");
-            h.assertTrue((other.sounds > sounds) == enabled, "carrier detected sound policy");
+            h.assertTrue((far.sounds > sounds) == enabled, "carrier detected sound policy");
             h.succeed();
         });
     }
@@ -217,7 +222,8 @@ public final class HiddenLaunchGameTests {
         @Override
         public void send(Packet<?> packet, @Nullable PacketSendListener listener) {
             if (packet instanceof ClientboundCustomPayloadPacket custom) got.add(custom.payload());
-            if (packet instanceof net.minecraft.network.protocol.game.ClientboundSoundPacket) sounds++;
+            if (packet instanceof net.minecraft.network.protocol.game.ClientboundSoundPacket sound
+                    && sound.getSound().value() == ua.zentix.incoming.registry.ModSounds.SIREN.get()) sounds++;
         }
     }
 }

@@ -31,6 +31,7 @@ The separate `nuke` syntax is below; it has no entity target, `at <x z>` form or
 |---|---|
 | `/incoming nuke [kt [air\|ground]]` | ICBM where you are looking |
 | `/incoming nuke at <x y z> [kt [air\|ground]]` | ICBM at a point |
+| `/incoming nuke [at <x y z>] [kt [air\|ground]] from <x z>` | ICBM from a chosen ground pad (operator only); no waypoints |
 | `/incoming nuke now [at <x y z>] [kt [air\|ground]]` | detonation at once, without a flight (operators only) |
 
 Without a number: the world's `nuclear.default_yield` (15 kt by default). Without a burst mode: ground burst.

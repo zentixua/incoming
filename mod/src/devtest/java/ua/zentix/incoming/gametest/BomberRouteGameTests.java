@@ -34,7 +34,12 @@ public final class BomberRouteGameTests {
     @GameTest(template = "runway", batch = "hidden_bomber_real", timeoutTicks = 5500, skyAccess = true)
     public static void realAltitudeRouteStillReleasesOnTarget(GameTestHelper h) { route(h, true, true); }
 
-    private static void route(GameTestHelper h, boolean close, boolean real) {
+    @GameTest(template = "runway", batch = "hidden_bomber_nuclear", timeoutTicks = 4000, skyAccess = true)
+    public static void nuclearPayloadSurvivesWaypointFlight(GameTestHelper h) { route(h, false, false, true); }
+
+    private static void route(GameTestHelper h, boolean close, boolean real) { route(h, close, real, false); }
+
+    private static void route(GameTestHelper h, boolean close, boolean real, boolean nuclear) {
         if (real) StrikeGameTests.flightScale(h, 1);
         ServerLevel level = h.getLevel();
         UUID owner = UUID.randomUUID();
@@ -44,15 +49,26 @@ public final class BomberRouteGameTests {
         for (int dx = -4; dx <= 4; dx++) for (int dz = -4; dz <= 4; dz++) level.getChunk(chunk.x + dx, chunk.z + dz);
         Waypoints via = new Waypoints(List.of(aim.add(4000, 0, -4000), close ? aim.add(80, 0, -40) : aim.add(0, 0, -3000)));
         h.assertTrue(StrikeService.launch(level, WeaponType.BUNKER, new Target.Ground(aim), aim, 0, owner, false,
-                Loadout.Nuke.DEFAULT, via, null).ok(), "B-2 order failed");
+                nuclear ? new Loadout.Nuke(1, true, true) : Loadout.Nuke.DEFAULT, via, null).ok(), "B-2 order failed");
         BomberEntity original = (BomberEntity) StrikeWorld.projectiles(level).stream().filter(p -> owner.equals(p.ownerId())).findFirst().orElseThrow();
         UUID id = original.getUUID();
         Vec3 expected = original.aimPoint(); // spec guidance miss belongs to this mission
         int[] reached = {0};
         boolean[] virtual = {false}, materialized = {false};
+        List<ChunkPos> forced = new java.util.ArrayList<>();
         BomberEntity[] last = {original};
         BunkerBusterEntity[] bomb = {null};
+        // A short loaded flight corridor exercises a real materialize/park copy while preserving the route.
+        ChunkPos corridor = original.chunkPosition();
+        for (int dx = -4; dx <= 4; dx++) for (int dz = -4; dz <= 4; dz++) level.getChunk(corridor.x + dx, corridor.z + dz);
+        for (int dx = -2; dx <= 2; dx++) for (int dz = -2; dz <= 2; dz++) {
+            ChunkPos c = new ChunkPos(corridor.x + dx, corridor.z + dz);
+            level.setChunkForced(c.x, c.z, true);
+            forced.add(c);
+        }
+        h.runAfterDelay(20, () -> { forced.forEach(c -> level.setChunkForced(c.x, c.z, false)); forced.clear(); });
         StrikeGameTests.afterTest(h, () -> {
+            forced.forEach(c -> level.setChunkForced(c.x, c.z, false));
             VirtualFlights.get(level).clear(level, p -> owner.equals(p.ownerId()));
             new java.util.ArrayList<>(StrikeWorld.projectiles(level)).stream().filter(p -> owner.equals(p.ownerId())).forEach(Entity::discard);
         });
@@ -70,9 +86,10 @@ public final class BomberRouteGameTests {
         });
         h.succeedWhen(() -> {
             h.assertTrue(reached[0] == via.size(), "B-2 did not visit waypoints: " + reached[0] + ", at " + last[0].position() + ", route " + last[0].route().index());
-            h.assertTrue(bomb[0] != null && bomb[0].isDrilling(), "no bomb ground entry; B-2 at " + last[0].position() + ", route " + last[0].route().index() + ", released " + last[0].hasReleased());
+            h.assertTrue(bomb[0] != null && (nuclear || bomb[0].isDrilling()), "no bomb ground entry; B-2 at " + last[0].position() + ", route " + last[0].route().index() + ", released " + last[0].hasReleased());
+            if (nuclear) { h.assertTrue(bomb[0].isNuclear(), "route lost nuclear payload"); return; }
             h.assertTrue(bomb[0].entry().subtract(expected).horizontalDistance() < 4, "routed bomb missed by " + bomb[0].entry().subtract(expected).horizontalDistance());
-            h.assertTrue(virtual[0] && materialized[0], "route did not exercise virtual/world flight");
+            h.assertTrue(virtual[0] && (close || materialized[0]), "route did not exercise virtual/world flight");
         });
     }
 }

@@ -34,14 +34,14 @@ public final class IncomingConfigScreen extends OptionsSubScreen {
                         ? migration.delegate() : (ModConfigSpec) config.getSpec();
                 Component title = Component.translatable("neoforge.configuration.uitext.type." + type.extension(), mod.getModInfo().getDisplayName());
                 Button button = Button.builder(title, b -> minecraft.setScreen(new Section(this, config, spec, title)))
-                        .width(Button.DEFAULT_WIDTH * 2 + 10).build();
+                        .width(ConfigurationScreen.BIG_BUTTON_WIDTH).build();
                 // Same edit restrictions as NeoForge's ConfigurationScreen, including a world opened to LAN.
                 button.active = spec.isLoaded() && (type != ModConfig.Type.SERVER
                         || minecraft.getCurrentServer() == null && (!minecraft.hasSingleplayerServer() || !minecraft.getSingleplayerServer().isPublished()));
                 if (!button.active) button.setTooltip(Tooltip.create(!spec.isLoaded() ? ConfigurationScreen.TOOLTIP_CANNOT_EDIT_NOT_LOADED
                         : minecraft.getCurrentServer() != null ? ConfigurationScreen.TOOLTIP_CANNOT_EDIT_THIS_WHILE_ONLINE
                         : ConfigurationScreen.TOOLTIP_CANNOT_EDIT_THIS_WHILE_OPEN_TO_LAN));
-                list.addBig(button);
+                list.addSmall(button, null);
             }
         }
     }

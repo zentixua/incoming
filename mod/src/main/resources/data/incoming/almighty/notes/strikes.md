@@ -6,7 +6,7 @@ Incoming (https://github.com/zentixua/incoming): strikes by Shahed and Lancet dr
   the air over a loaded place.
   from is the launch site (rack weapons set up a launcher there until incoming clear; the ICBM boosts there; B-2 approaches from that side), via is up to 5 waypoints in order (drone,
   missile, loiter, bunker). A single projectile is count 1, spread 0.
-- Nuclear strike: «incoming nuke [at x y z] [kt [air|ground]]» launches an ICBM; «incoming nuke now [at x y z]
+- Nuclear strike: «incoming nuke [at x y z] [kt [air|ground]] [from x z]» launches an ICBM; from selects its ground pad (operator only; no via); «incoming nuke now [at x y z]
   [kt [air|ground]]» detonates immediately (operator only). Without kt, use nuclear.default_yield (15 kt by default);
   without a burst mode, use ground (surface contact, crater and fallout). Explicit «15 air» selects the existing
   airburst at its yield-dependent height. Burst mode is not stored in incoming-server.toml.

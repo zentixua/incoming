@@ -38,8 +38,8 @@ import java.util.UUID;
 
 /**
  * ICBM launch and scheduled strikes (DESIGN-nuke §7): the missile launches near the launcher (visible boost), leaves
- * above the world ceiling, then flight is a timer in {@link NuclearEvents}; warning for those near the target, countdown
- * for everyone. Also subscribes to world events needed by the nuclear code.
+ * above the world ceiling, then flight is a timer in {@link NuclearEvents}; optional network warning near the target,
+ * owner countdown even without the network. Also subscribes to world events needed by the nuclear code.
  */
 public final class NuclearStrikes {
     private NuclearStrikes() {}
@@ -122,7 +122,7 @@ public final class NuclearStrikes {
         return true;
     }
 
-    /** Record a strike: detonation time = now + flight time; warning and countdown to everyone in the dimension. */
+    /** Record a strike: detonation time = now + flight time; owner countdown and, with the early-warning network, notices to the dimension. */
     private static void schedule(ServerLevel level, Vec3 target, boolean surface, double yieldKt, boolean airBurst, Vec3 launchPos, @Nullable UUID owner,
                                  int flightTicks) {
         NuclearEvents events = NuclearEvents.get(level);

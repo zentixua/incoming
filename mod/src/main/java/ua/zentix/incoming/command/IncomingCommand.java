@@ -158,16 +158,28 @@ public final class IncomingCommand {
     // ---------------------------------------------------------------- nuclear strike
 
     private interface NukeAction {
-        int run(CommandContext<CommandSourceStack> ctx, Loadout.Nuke nuke) throws CommandSyntaxException;
+        int run(CommandContext<CommandSourceStack> ctx, Loadout.Nuke nuke, Path path) throws CommandSyntaxException;
     }
 
-    /** “[kt] [air|ground]” after any nuclear command. */
+    /** “[kt] [air|ground] [from x z]” for flight; instant detonation has no launch origin. */
     private static <T extends ArgumentBuilder<CommandSourceStack, T>> T yieldArgs(T node, NukeAction action) {
-        return node.executes(ctx -> action.run(ctx, Loadout.Nuke.DEFAULT.withYield(IncomingConfig.SERVER.nukeDefaultYield.get())))
-                .then(Commands.argument("kt", IntegerArgumentType.integer(1, Loadout.Nuke.MAX_YIELD))
-                        .executes(ctx -> action.run(ctx, Loadout.Nuke.DEFAULT.withYield(IntegerArgumentType.getInteger(ctx, "kt"))))
-                        .then(Commands.literal("air").executes(ctx -> action.run(ctx, new Loadout.Nuke(IntegerArgumentType.getInteger(ctx, "kt"), true))))
-                        .then(Commands.literal("ground").executes(ctx -> action.run(ctx, new Loadout.Nuke(IntegerArgumentType.getInteger(ctx, "kt"), false)))));
+        return yieldArgs(node, action, true);
+    }
+
+    private static <T extends ArgumentBuilder<CommandSourceStack, T>> T yieldArgs(T node, NukeAction action, boolean launch) {
+        var kt = nukePath(Commands.argument("kt", IntegerArgumentType.integer(1, Loadout.Nuke.MAX_YIELD)), action, launch,
+                ctx -> Loadout.Nuke.DEFAULT.withYield(IntegerArgumentType.getInteger(ctx, "kt")));
+        for (boolean air : new boolean[]{true, false}) {
+            kt.then(nukePath(Commands.literal(air ? "air" : "ground"), action, launch,
+                    ctx -> new Loadout.Nuke(IntegerArgumentType.getInteger(ctx, "kt"), air)));
+        }
+        return nukePath(node, action, launch, ctx -> Loadout.Nuke.DEFAULT.withYield(IncomingConfig.SERVER.nukeDefaultYield.get())).then(kt);
+    }
+
+    private static <T extends ArgumentBuilder<CommandSourceStack, T>> T nukePath(T node, NukeAction action, boolean launch,
+            java.util.function.Function<CommandContext<CommandSourceStack>, Loadout.Nuke> loadout) {
+        return launch ? pathArgs(node, WeaponType.NUKE, (ctx, path) -> action.run(ctx, loadout.apply(ctx), path))
+                : node.executes(ctx -> action.run(ctx, loadout.apply(ctx), Path.NONE));
     }
 
     private static LiteralArgumentBuilder<CommandSourceStack> nuke() {
@@ -175,11 +187,11 @@ public final class IncomingCommand {
         yieldArgs(nuke, IncomingCommand::nukeLook);
         return nuke
                 .then(Commands.literal("at").then(yieldArgs(Commands.argument("pos", Vec3Argument.vec3()),
-                        (ctx, n) -> nukeAt(ctx.getSource(), Vec3Argument.getVec3(ctx, "pos"), n))))
+                        (ctx, n, path) -> nukeAt(ctx.getSource(), Vec3Argument.getVec3(ctx, "pos"), n, path))))
                 // detonation without flight is a host tool: no payment or warning; unavailable to non-operators even with ops_only = false
-                .then(yieldArgs(Commands.literal("now").requires(s -> s.hasPermission(2)), (ctx, n) -> nukeNow(ctx.getSource(), lookPoint(ctx), n))
+                .then(yieldArgs(Commands.literal("now").requires(s -> s.hasPermission(2)), (ctx, n, path) -> nukeNow(ctx.getSource(), lookPoint(ctx), n), false)
                         .then(Commands.literal("at").then(yieldArgs(Commands.argument("pos", Vec3Argument.vec3()),
-                                (ctx, n) -> nukeNow(ctx.getSource(), Vec3Argument.getVec3(ctx, "pos"), n)))));
+                                (ctx, n, path) -> nukeNow(ctx.getSource(), Vec3Argument.getVec3(ctx, "pos"), n), false))));
     }
 
     private static boolean mayNuke(CommandSourceStack s) {
@@ -187,14 +199,14 @@ public final class IncomingCommand {
         return s.hasPermission(2) || !IncomingConfig.SERVER.nukeOpsOnly.get() && s.getEntity() instanceof Player p && ServerActions.mayUse(p);
     }
 
-    private static int nukeLook(CommandContext<CommandSourceStack> ctx, Loadout.Nuke nuke) throws CommandSyntaxException {
+    private static int nukeLook(CommandContext<CommandSourceStack> ctx, Loadout.Nuke nuke, Path path) throws CommandSyntaxException {
         ServerPlayer player = ctx.getSource().getPlayerOrException();
         ServerActions.Aim aim = ServerActions.fromMode(player, new Loadout(WeaponType.NUKE, 1, 0, TargetMode.LOOK, "", nuke), null);
-        return aim != null && ServerActions.strike(player, WeaponType.NUKE, 1, 0, aim, nuke, Waypoints.NONE, null, rules(ctx.getSource())) ? 1 : 0;
+        return aim != null ? fire(ctx.getSource(), WeaponType.NUKE, 1, 0, aim, nuke, path) : 0;
     }
 
-    private static int nukeAt(CommandSourceStack s, Vec3 pos, Loadout.Nuke nuke) {
-        return fire(s, WeaponType.NUKE, 1, 0, new ServerActions.Aim(new Target.Point(pos), pos, null), nuke, Path.NONE);
+    private static int nukeAt(CommandSourceStack s, Vec3 pos, Loadout.Nuke nuke, Path path) {
+        return fire(s, WeaponType.NUKE, 1, 0, new ServerActions.Aim(new Target.Point(pos), pos, null), nuke, path);
     }
 
     private static Vec3 lookPoint(CommandContext<CommandSourceStack> ctx) throws CommandSyntaxException {
