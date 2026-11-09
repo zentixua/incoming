@@ -60,6 +60,8 @@ public final class BlockLighting {
     }
 
     private void request(ServerLevel level, ChunkPos pos, boolean repair) {
+        // Sable owns plot chunks and their storage; its ticket guard cannot create a vanilla light ring there.
+        if (ua.zentix.incoming.compat.SubLevels.inPlotGrid(level, pos)) return;
         Batch batch = batches.get(pos.toLong());
         if (batch == null) {
             batch = new Batch(pos);
@@ -105,6 +107,16 @@ public final class BlockLighting {
 
     public boolean idle() { return batches.isEmpty(); }
     public int heldChunks() { return leases.size(); }
+
+    /** Pending phase diagnostics for stalled work; only inspected on demand. */
+    public String pending(ServerLevel level) {
+        return batches.values().stream().limit(12).map(b -> b.center + " repair=" + b.repair
+                + " borrow=" + b.borrowNext + " scan=" + b.repairChunk + "/" + b.section
+                + " save=" + b.saveNext + " revision=" + b.revision + "/" + b.fencedRevision
+                + " rootFull=" + (level.getChunkSource().getChunkNow(b.center.x, b.center.z) != null)
+                + " fence=" + (b.fence == null ? "none" : b.fence.isDone()))
+                .collect(java.util.stream.Collectors.joining("; "));
+    }
 
     private final class Batch implements UnitQueue.Job {
         final ChunkPos center;

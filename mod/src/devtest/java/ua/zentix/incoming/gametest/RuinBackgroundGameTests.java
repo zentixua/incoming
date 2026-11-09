@@ -773,7 +773,11 @@ public final class RuinBackgroundGameTests {
         // everything around is intact on the disk; chests at the eastern edge Q and P (places across the world at the edge are neighbors of radius 1)
         BlockPos[] chests = new BlockPos[2];
         for (int x = q.x - 2; x <= r.x + 2; x++) {
-            for (int z = q.z - 2; z <= q.z + 2; z++) level.getChunk(x, z);
+            for (int z = q.z - 2; z <= q.z + 2; z++) {
+                // This fixture seeds a current world, not legacy light. Earlier batches can leave outage/scar
+                // contexts here; their one-time recovery would deliberately borrow R and bypass this handoff.
+                level.getChunk(x, z).setData(ModAttachments.LIGHT_REPAIRED, true);
+            }
         }
         int i = 0;
         for (ChunkPos c : new ChunkPos[]{q, p}) {

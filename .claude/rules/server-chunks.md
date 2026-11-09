@@ -162,3 +162,5 @@ paths:
   context, removing a ghost peak could also extinguish valid incoming light from an unavailable outer source.
   Recovery marks completion with a saved chunk attachment; freshly generated chunks have no legacy spill. Source checks alone do
   not erase boundary peaks, and boundary checks alone miss unsupported interior maxima from old missed-source checks.
+  Sable plot chunks belong to its storage, not the vanilla chunk map: skip vanilla light leases there through
+  `SubLevels.inPlotGrid`, or the ticket guard leaves a permanently unready batch (`arrival_respawn_craft`).

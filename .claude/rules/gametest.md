@@ -145,3 +145,7 @@ paths:
   (`RuinPlanner.leavesRubble`): a lone test block must sit where it leaves none (`blastBreaksLightKeepsMasonryFellsTrees`).
 - Background ruin workers run in wall time (0.5–1.3 s for a 1 kt chunk locally, 50–510 unthrottled ticks): a test that
   waits for them runs at game speed (`chunkWithheldUntilRuins`), or CI's unthrottled ticks spend its timeout first.
+- Light leases retain chunks after a fixture removes its own ticket, until committed light changes can be saved.
+  Assert partial conversion when removing that ticket, not at eventual unload (`grid_tower`). Fixtures isolating
+  ScarQueue neighbor handoff seed current-light chunks with `LIGHT_REPAIRED`: prior batches' scar/outage contexts
+  could otherwise trigger legitimate legacy recovery, borrowing neighbors and bypassing the intended deadlock.

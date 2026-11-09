@@ -260,7 +260,10 @@ public final class LateLightGameTests {
                     fence[0] = LightInvariantGameTests.fence(level, center, 1);
                 })
                 .thenWaitUntil(() -> h.assertTrue(fence[0].isDone(), "edit light pending"))
-                .thenWaitUntil(() -> h.assertTrue(ua.zentix.incoming.work.BlockLighting.get(level).idle(), "light lease pending"))
+                .thenWaitUntil(() -> {
+                    var lighting = ua.zentix.incoming.work.BlockLighting.get(level);
+                    h.assertTrue(lighting.idle(), "light lease pending: " + lighting.pending(level));
+                })
                 .thenIdle(5)
                 .thenExecute(() -> {
                     if (path.startsWith("repair")) {
