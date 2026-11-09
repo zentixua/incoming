@@ -122,6 +122,7 @@ public final class RadiationTicker {
         RadiationDose r = dose(p);
         // the dust on the body is the same fission products as the ground under it: it decays by the same law
         double contamination = newest == Long.MAX_VALUE ? r.contamination() : decay(r.contamination(), newest / 1000.0, HOURS_PER_SECOND);
+        // the rule also applies live: detonations saved before it was stored with them read as rain on
         if (blackRain && IncomingConfig.SERVER.nukeBlackRain.get() && Detonation.underOpenSky(level, p.getEyePosition())) {
             // rain contaminates instead of washing off: contamination rises toward twice the field rate; rain never lowers it
             contamination = Math.max(contamination, Math.min(contamination + field * 0.05, field * 2));
