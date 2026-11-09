@@ -703,9 +703,14 @@ public final class RuinPlan {
      * air, without fire counter ({@link #applyToCopy}).
      */
     public LevelChunkSection[] testAppliedCopy(ServerLevel level, LevelChunk chunk) {
+        return testAppliedCopy(level, chunk, true);
+    }
+
+    /** As {@link #testAppliedCopy(ServerLevel, LevelChunk)}; {@code fires} false as for a past detonation, which ignites nothing. */
+    public LevelChunkSection[] testAppliedCopy(ServerLevel level, LevelChunk chunk, boolean fires) {
         LevelChunkSection[] live = chunk.getSections(), out = new LevelChunkSection[live.length];
         for (int i = 0; i < live.length; i++) out[i] = copyOf(live[i]);
-        if (this != EMPTY && applyToCopy(out, true, level.registryAccess().registryOrThrow(net.minecraft.core.registries.Registries.BIOME), chunk.getMinSection()) < 0) {
+        if (this != EMPTY && applyToCopy(out, fires, level.registryAccess().registryOrThrow(net.minecraft.core.registries.Registries.BIOME), chunk.getMinSection()) < 0) {
             throw new IllegalStateException("plan does not fit chunk " + chunk.getPos());
         }
         return out;
