@@ -727,7 +727,12 @@ paths:
   and joins it with the rays beyond in linear light (`froxelOver`); layer quads read `fx_pall_mix` (volume plus rays per
   reduced pixel). Mushrooms (with the eye's optical depth through them, `mushEyeTau`), explosion smoke and fire whirls
   (`whirlCell`) nearer than the boundary are injected into the cells; the rays take them only from the boundary, so
-  near matter is ordered against near dust. The Wilson cloud stays in the rays. Emission past half-float range is
+  near matter is ordered against near dust. The Wilson cloud stays in the rays, and so does the dust-wall head: on each
+  ray the volume ends at the last slice boundary before the ray enters a slot's head span (`froxelEnd`, `pallWallSpans`)
+  and the rays begin there; the march, the composite (read-out and upsample correction) and `fx_pall_mix` take the same
+  boundary. The head is a roller a few dozen blocks thick moving with the wave: one point per cell averaged over frames
+  drew it as clumps with holes and stippled the ground dust right after the front (laptop check of 3.11.0, bisected to
+  #641), and the ground in front of the volume's boundary took a thinner head than behind it (a straight seam at 256). Emission past half-float range is
   clamped, not dropped (a hole). Same-frame checks (32-px checker tiles, history off): the volume over 0–256 equals the
   per-pixel ray over that span (up view red 100.8 vs 101.2); sequential shots drift with fires and history, so A/B only
   within one frame.
