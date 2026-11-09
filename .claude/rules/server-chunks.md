@@ -166,3 +166,12 @@ paths:
   `SubLevels.inPlotGrid`, or the ticket guard leaves a permanently unready batch (`arrival_respawn_craft`).
   Legacy recovery borrows only wrapped saved FULL neighbors. Genuine ProtoChunks save dirty light normally;
   promoting them generates terrain outside the ruin plan at the explored-world edge (`nuke_zone_edge`).
+  Pending legacy repair is capped at 128 coordinates per world and owns no tickets or chunk references. One repair
+  is admitted at a time, only if `getChunkNow` still returns the chunk, nearest players first; unloaded/evicted
+  entries remain unmarked for their next load. At most nine FULL leases belong to recovery. Never hold on enqueue:
+  a moving player otherwise pins an old scar zone faster than budgeted repair can drain (`light_repair_moving`, 200 chunks).
+  Mark every scanned FULL chunk after its light fence, not just the center. Fresh generation records current
+  lighting before any later scar/outage; ordinary fixed edits preserve that marker. They cannot certify unknown
+  old arrays: `light_late_fixed_scar` retains 2,363 unrelated old-lit cells before its first recovery.
+  Boundary-only checks clear Zearth's excess, but leave 2,620 cells in legacy scar/outage fixtures and 4,020 with
+  an overlapping outside source; retain interior maxima. Recovery logs one cumulative INFO line per world drain.

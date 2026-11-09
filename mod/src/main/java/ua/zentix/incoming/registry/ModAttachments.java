@@ -56,7 +56,7 @@ public final class ModAttachments {
     public static final Supplier<AttachmentType<ua.zentix.incoming.work.BlockLighting>> BLOCK_LIGHTING = REGISTER.register("block_lighting",
             () -> AttachmentType.builder(ua.zentix.incoming.work.BlockLighting::new).build());
 
-    /** Chunk: completed one-time recovery of pre-fix Incoming light spill; ignored by vanilla. */
+    /** Chunk: generated with current lighting or completed legacy recovery; ignored by vanilla. */
     public static final Supplier<AttachmentType<Boolean>> LIGHT_REPAIRED = REGISTER.register("light_repaired",
             () -> AttachmentType.builder(() -> false).serialize(Codec.BOOL).build());
 

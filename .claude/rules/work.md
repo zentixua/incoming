@@ -92,3 +92,6 @@ paths:
   GameTest `light_late_busy` and `WorkSchedulerTest.everyWorldGetsBothQueuesFirstEvenWithEvenWorldCounts` cover both.
   Light jobs opt into UnitQueue dynamic readiness: starting a future inside a continuation must invalidate cached
   readiness before its next step in the same work window (`UnitQueueTest.asynchronousContinuationResamplesReadiness`).
+  Legacy admission is itself a budgeted unit: pending positions own no tickets, a bounded scan drops unloaded or
+  already marked entries and chooses the nearest player chunk. Only one repair can hold its source-context ring;
+  normal live-edit leases remain independent. Shutdown drops pending legacy positions and drains committed edits.

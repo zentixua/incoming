@@ -44,7 +44,7 @@ import java.util.concurrent.CompletableFuture;
 @GameTestHolder(Incoming.MOD_ID)
 public final class LateLightGameTests {
     private static final TicketType<ChunkPos> HOLD = TicketType.create("incoming_late_light_test", Comparator.comparingLong(ChunkPos::toLong));
-    private static final List<String> PATHS = List.of("edge_flags", "ruins", "blackout", "dark_load", "dark_load_ruins", "settle", "shatter", "fragments", "staged", "crater_falls", "repair_scar", "repair_outage", "stop", "dark_load_city", "repair_external", "busy");
+    private static final List<String> PATHS = List.of("edge_flags", "ruins", "blackout", "dark_load", "dark_load_ruins", "settle", "shatter", "fragments", "staged", "crater_falls", "repair_scar", "repair_outage", "stop", "dark_load_city", "repair_external", "busy", "fixed_scar");
     private LateLightGameTests() {}
 
     @GameTestGenerator
@@ -123,10 +123,10 @@ public final class LateLightGameTests {
         List<CompletableFuture<?>> writes = new ArrayList<>();
         Map<ChunkPos, CompoundTag> tags = new LinkedHashMap<>();
         for (var entry : chunks.entrySet()) {
-            if (path.startsWith("repair") && entry.getKey().equals(center)) {
+            if ((path.startsWith("repair") || path.equals("fixed_scar")) && entry.getKey().equals(center)) {
                 for (int x : new int[]{7, 15}) entry.getValue().getSection(entry.getValue().getSectionIndex(100))
                         .setBlockState(x, 100 & 15, 7, Blocks.AIR.defaultBlockState(), false);
-                if (!path.equals("repair_outage")) entry.getValue().setData(ua.zentix.incoming.registry.ModAttachments.CHUNK_SCAR, 1);
+                if (!path.equals("repair_outage") && !path.equals("fixed_scar")) entry.getValue().setData(ua.zentix.incoming.registry.ModAttachments.CHUNK_SCAR, 1);
             }
             if (path.equals("repair_external") && entry.getKey().equals(east)) entry.getValue()
                     .getSection(entry.getValue().getSectionIndex(100)).setBlockState(14, 100 & 15, 7, Blocks.AIR.defaultBlockState(), false);
@@ -202,7 +202,12 @@ public final class LateLightGameTests {
                     var storage = level.getChunkSource().getLightEngine().getLayerListener(LightLayer.BLOCK).getDataLayerData(SectionPos.of(east.x, 6, east.z));
                     Incoming.LOG.info("LIGHT_LATE {} neighborFull=false neighborLightStorage={} rootSourceLight={}", path, storage != null,
                             level.getBrightness(LightLayer.BLOCK, new BlockPos(center.getMaxBlockX(), 100, center.getMinBlockZ() + 7)));
-                    if (path.equals("settle")) {
+                    if (path.equals("fixed_scar")) {
+                        // A fixed-code edit cannot certify unrelated light inherited from a pre-fix save.
+                        BlockPos edit = new BlockPos(center.getMinBlockX() + 4, 99, center.getMinBlockZ() + 4);
+                        ColumnScar.replace(level, edit, chunk.getBlockState(edit), Blocks.STONE.defaultBlockState());
+                        chunk.setData(ua.zentix.incoming.registry.ModAttachments.CHUNK_SCAR, 1);
+                    } else if (path.equals("settle")) {
                         ua.zentix.incoming.nuclear.NuclearEvents.get(level).past().add(d);
                         RuinSettleGameTests.resumeOnly(level, d.id(), center);
                     } else if (path.equals("shatter")) {
@@ -266,6 +271,13 @@ public final class LateLightGameTests {
                 })
                 .thenIdle(5)
                 .thenExecute(() -> {
+                    if (path.equals("fixed_scar")) {
+                        var inherited = BlockLightReference.capture(level, center, 0).compare(center, 0);
+                        Incoming.LOG.info("LIGHT_FIXED_SCAR inherited {}", inherited);
+                        h.assertTrue(inherited.over() > 0, "fixture lacks unrelated legacy light");
+                        h.assertFalse(level.getChunkSource().getChunkNow(center.x, center.z).getData(ua.zentix.incoming.registry.ModAttachments.LIGHT_REPAIRED),
+                                "ordinary fixed edit certified unrelated legacy light");
+                    }
                     if (path.startsWith("repair")) {
                         h.assertTrue(level.getChunkSource().getChunkNow(center.x, center.z).getData(ua.zentix.incoming.registry.ModAttachments.LIGHT_REPAIRED), "repair completion not marked");
                     }
@@ -306,6 +318,7 @@ public final class LateLightGameTests {
                     for (int z = -2; z <= 2; z++) for (int x = -2; x <= 2; x++)
                         h.assertTrue(level.getChunkSource().getChunkNow(center.x + x, center.z + z) != null, "comparison ring not ready");
                 }).thenIdle(5)
+                .thenWaitUntil(() -> h.assertTrue(ua.zentix.incoming.work.BlockLighting.get(level).idle(), "reload recovery pending"))
                 .thenExecute(() -> fence[0] = LightInvariantGameTests.fence(level, center, 2))
                 .thenWaitUntil(() -> h.assertTrue(fence[0].isDone(), "neighbor light pending"))
                 .thenExecute(() -> {

@@ -136,6 +136,29 @@ public final class StoredLightProbe {
             }
             BlockLightReference.drain(borders);
             int afterBorders = excess(live, borders, expected);
+            int missingAfterBorders = excess(live, expected, borders);
+            LevelLightEngine boundaryAndPeaks = live.engine(true);
+            int peakAndBoundaryChecks = 0;
+            for (var tile : live.tiles.values()) for (int i = 0; i < tile.blocks.length; i++) {
+                if (tile.stored[i] == 0) continue;
+                BlockPos p = tile.position(i);
+                int x = p.getX() & 15, z = p.getZ() & 15;
+                boolean check = x == 0 || x == 15 || z == 0 || z == 15;
+                if (!check) {
+                    check = true;
+                    for (Direction d : Direction.values()) if (value(boundaryAndPeaks, p.relative(d)) > tile.stored[i]) {
+                        check = false; break;
+                    }
+                }
+                if (check) { boundaryAndPeaks.checkBlock(p); peakAndBoundaryChecks++; }
+            }
+            BlockLightReference.drain(boundaryAndPeaks);
+            String boundaryComparison = "boundary_checks=" + borderChecks + " boundary_over=" + afterBorders
+                    + " boundary_under=" + missingAfterBorders + " boundary_peak_checks=" + peakAndBoundaryChecks
+                    + " boundary_peak_over=" + excess(live, boundaryAndPeaks, expected)
+                    + " boundary_peak_under=" + excess(live, expected, boundaryAndPeaks);
+            Files.writeString(root.resolve("boundary-comparison.txt"), boundaryComparison + "\n");
+            Incoming.LOG.info("LIGHT_BOUNDARY_COMPARISON {}", boundaryComparison);
             LevelLightEngine goldenExpected = golden.engine(false), restoreSources = live.engine(true);
             int deficientSources = 0, gridSources = 0, overlap = 0, newDeficit = 0, remainingDeficit = 0;
             for (var tile : live.tiles.values()) for (int i = 0; i < tile.blocks.length; i++) {

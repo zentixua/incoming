@@ -2,6 +2,7 @@ package ua.zentix.incoming.work;
 
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap;
+import it.unimi.dsi.fastutil.longs.LongLinkedOpenHashSet;
 import net.minecraft.core.BlockPos;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.TicketType;
@@ -29,19 +30,28 @@ import java.util.concurrent.CompletableFuture;
  * Checks and wrapped-neighbor saves are bounded work units; no tick-thread access waits for loading.
  */
 public final class BlockLighting {
+    /** Positions only, no chunk references or tickets. One repair admits at most nine FULL leases per world. */
+    public static final int PENDING_REPAIRS = 128;
     private static final TicketType<ChunkPos> HOLD = TicketType.create("incoming_block_light", Comparator.comparingLong(ChunkPos::toLong));
     private final Long2ObjectOpenHashMap<Batch> batches = new Long2ObjectOpenHashMap<>();
     private final Long2IntOpenHashMap leases = new Long2IntOpenHashMap();
     private final UnitQueue queue = new UnitQueue();
+    private final LongLinkedOpenHashSet repairs = new LongLinkedOpenHashSet();
+    private Batch activeRepair;
+    private boolean admissionQueued, repairLogPending;
+    private long admitted, droppedUnloaded, droppedCapacity, marked;
+    private int peakPending;
     private boolean stopping;
     private long completed, recovered, workNanos, recoveryNanos, checks, readyNanos;
     private int peakHeld;
 
     /** Cumulative per-world diagnostics; no timing thresholds affect correctness. */
     public record Measurements(long completed, long recovered, long workNanos, long recoveryNanos,
-                               long checks, long readyNanos, int peakHeld) {}
+                               long checks, long readyNanos, int peakHeld, long admitted, long droppedUnloaded,
+                               long droppedCapacity, long marked, int peakPending) {}
     public Measurements measurements() {
-        return new Measurements(completed, recovered, workNanos, recoveryNanos, checks, readyNanos, peakHeld);
+        return new Measurements(completed, recovered, workNanos, recoveryNanos, checks, readyNanos, peakHeld,
+                admitted, droppedUnloaded, droppedCapacity, marked, peakPending);
     }
 
     public static BlockLighting get(ServerLevel level) { return level.getData(ModAttachments.BLOCK_LIGHTING); }
@@ -72,21 +82,85 @@ public final class BlockLighting {
         }
         batch.revision++;
         batch.repair |= repair;
+        if (repair) activeRepair = batch;
     }
 
     /** Recover pre-fix spill once in saved scar/outage contexts; borrowed loads do not recursively admit recovery. */
     public static void onLoad(ChunkEvent.Load event) {
         if (!(event.getLevel() instanceof ServerLevel level) || !(event.getChunk() instanceof LevelChunk chunk)) return;
+        if (ua.zentix.incoming.compat.SubLevels.inPlotGrid(level, chunk.getPos())) return;
         if (chunk.hasData(ModAttachments.LIGHT_REPAIRED) && chunk.getData(ModAttachments.LIGHT_REPAIRED)) return;
-        ChunkPos pos = chunk.getPos();
-        if ((!chunk.hasData(ModAttachments.CHUNK_SCAR) || chunk.getData(ModAttachments.CHUNK_SCAR) == 0) && !PowerGrid.get(level).covered(pos.x, pos.z)) return;
         if (event.isNewChunk()) {
             chunk.setData(ModAttachments.LIGHT_REPAIRED, true);
-            return; // No pre-fix saved light exists in freshly generated chunks.
+            return; // No pre-fix saved field, even if our first scar/outage arrives only after generation.
         }
+        ChunkPos pos = chunk.getPos();
+        if ((!chunk.hasData(ModAttachments.CHUNK_SCAR) || chunk.getData(ModAttachments.CHUNK_SCAR) == 0) && !PowerGrid.get(level).covered(pos.x, pos.z)) return;
         BlockLighting work = get(level);
         if (!work.stopping && (!work.leases.containsKey(pos.toLong()) || work.batches.containsKey(pos.toLong())))
-            work.request(level, pos, true);
+            work.offerRepair(level, pos);
+    }
+
+    private static boolean repaired(LevelChunk chunk) {
+        return chunk.hasData(ModAttachments.LIGHT_REPAIRED) && chunk.getData(ModAttachments.LIGHT_REPAIRED);
+    }
+
+    private static long distance(ServerLevel level, long key) {
+        long nearest = Long.MAX_VALUE;
+        for (var player : level.players()) {
+            long dx = (long) player.chunkPosition().x - ChunkPos.getX(key);
+            long dz = (long) player.chunkPosition().z - ChunkPos.getZ(key);
+            nearest = Math.min(nearest, dx * dx + dz * dz);
+        }
+        return nearest;
+    }
+
+    private void offerRepair(ServerLevel level, ChunkPos pos) {
+        long key = pos.toLong();
+        if (ua.zentix.incoming.compat.SubLevels.inPlotGrid(level, pos)
+                || repairs.contains(key) || activeRepair != null && activeRepair.center.equals(pos)) return;
+        repairLogPending = true;
+        if (repairs.size() == PENDING_REPAIRS) {
+            long farthest = repairs.firstLong(), far = distance(level, farthest);
+            for (long candidate : repairs) {
+                long d = distance(level, candidate);
+                if (d > far) { farthest = candidate; far = d; }
+            }
+            droppedCapacity++;
+            if (distance(level, key) >= far) return;
+            repairs.remove(farthest); // No marker: its next load may offer it again.
+        }
+        repairs.add(key);
+        peakPending = Math.max(peakPending, repairs.size());
+    }
+
+    private void admit(ServerLevel level) {
+        long closest = 0, near = Long.MAX_VALUE;
+        boolean found = false;
+        var it = repairs.iterator();
+        while (it.hasNext()) {
+            long key = it.nextLong();
+            LevelChunk chunk = level.getChunkSource().getChunkNow(ChunkPos.getX(key), ChunkPos.getZ(key));
+            if (chunk == null || repaired(chunk)) {
+                it.remove();
+                if (chunk == null) droppedUnloaded++;
+                continue;
+            }
+            long d = distance(level, key);
+            if (!found || d < near) { closest = key; near = d; found = true; }
+        }
+        if (!found) return;
+        repairs.remove(closest);
+        admitted++;
+        request(level, new ChunkPos(closest), true); // First repair-owned ticket, only at admission while still FULL.
+    }
+
+    private void drainLog(ServerLevel level) {
+        if (!repairLogPending || !repairs.isEmpty() || activeRepair != null || admissionQueued) return;
+        repairLogPending = false;
+        ua.zentix.incoming.Incoming.LOG.info("Block light recovery drained in {}: admitted {}, completed {}, marked {}, dropped unloaded {}, capacity {}, checks {}, work {} ms, pending peak {}",
+                level.dimension().location(), admitted, recovered, marked, droppedUnloaded, droppedCapacity, checks,
+                String.format(java.util.Locale.ROOT, "%.2f", recoveryNanos / 1e6), peakPending);
     }
 
     private void hold(ServerLevel level, ChunkPos pos) {
@@ -102,15 +176,31 @@ public final class BlockLighting {
     }
 
     public static void work(ServerLevel level, WorkClock clock) {
-        if (level.hasData(ModAttachments.BLOCK_LIGHTING)) get(level).queue.work(level, clock);
+        if (!level.hasData(ModAttachments.BLOCK_LIGHTING)) return;
+        BlockLighting work = get(level);
+        if (!work.stopping && work.activeRepair == null && !work.repairs.isEmpty() && !work.admissionQueued) {
+            work.admissionQueued = true;
+            work.queue.add(level, new UnitQueue.Job() {
+                @Override public boolean step(ServerLevel world) { if (!work.stopping) work.admit(world); return false; }
+                @Override public void end(ServerLevel world) { work.admissionQueued = false; }
+                @Override public String describe() { return "legacy light admission"; }
+            });
+        }
+        work.queue.work(level, clock);
+        work.drainLog(level);
     }
 
-    public boolean idle() { return batches.isEmpty(); }
+    public boolean idle() { return batches.isEmpty() && repairs.isEmpty() && !admissionQueued; }
     public int heldChunks() { return leases.size(); }
+    public int pendingRepairs() { return repairs.size(); }
+    public int activeRepairs() { return activeRepair == null ? 0 : 1; }
+    public boolean repairPending(ChunkPos pos) { return repairs.contains(pos.toLong()); }
+    /** Admitted repair center, or null when no repair owns tickets. */
+    public ChunkPos repairCenter() { return activeRepair == null ? null : activeRepair.center; }
 
     /** Pending phase diagnostics for stalled work; only inspected on demand. */
     public String pending(ServerLevel level) {
-        return batches.values().stream().limit(12).map(b -> b.center + " repair=" + b.repair
+        return "queued repairs=" + repairs.size() + "; " + batches.values().stream().limit(12).map(b -> b.center + " repair=" + b.repair
                 + " borrow=" + b.borrowNext + " scan=" + b.repairChunk + "/" + b.section
                 + " save=" + b.saveNext + " revision=" + b.revision + "/" + b.fencedRevision
                 + " rootFull=" + (level.getChunkSource().getChunkNow(b.center.x, b.center.z) != null)
@@ -254,9 +344,13 @@ public final class BlockLighting {
                 return true;
             }
             if (repair) {
-                LevelChunk chunk = level.getChunkSource().getChunkNow(center.x, center.z);
-                chunk.setData(ModAttachments.LIGHT_REPAIRED, true);
-                chunk.setUnsaved(true);
+                // Every scanned FULL chunk has passed the same checks and fence, not just the admission root.
+                for (int i = 0; i < 9; i++) if (i == 4 || borrowed[i]) {
+                    ChunkPos p = at(i);
+                    LevelChunk chunk = level.getChunkSource().getChunkNow(p.x, p.z);
+                    if (!repaired(chunk)) { chunk.setData(ModAttachments.LIGHT_REPAIRED, true); marked++; }
+                    chunk.setUnsaved(true);
+                }
             }
             succeeded = true;
             return false;
@@ -269,6 +363,7 @@ public final class BlockLighting {
         @Override public void end(ServerLevel level) {
             if (succeeded) { completed++; if (repair) { recovered++; recoveryNanos += ownNanos; } }
             batches.remove(center.toLong());
+            if (activeRepair == this) activeRepair = null;
             for (int i = 0; i < 9; i++) if (borrowed[i]) release(level, at(i));
             release(level, center);
         }
@@ -288,6 +383,7 @@ public final class BlockLighting {
         if (!level.hasData(ModAttachments.BLOCK_LIGHTING)) return;
         BlockLighting work = get(level);
         work.stopping = true;
+        work.repairs.clear(); // No committed edit and no ticket; let a future load offer legacy work again.
         WorkClock clock = new WorkClock();
         long deadline = System.nanoTime() + ua.zentix.incoming.util.StopDrain.LIMIT_NANOS;
         while (!work.idle()) {
@@ -303,5 +399,6 @@ public final class BlockLighting {
             if (!level.getChunkSource().pollTask()) java.util.concurrent.locks.LockSupport.parkNanos(100_000);
         }
         work.stopping = false;
+        work.drainLog(level);
     }
 }
