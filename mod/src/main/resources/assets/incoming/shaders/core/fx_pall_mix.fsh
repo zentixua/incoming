@@ -4,9 +4,8 @@
 
 // Whole pall in front of the world behind each pixel of the reduced frame (client/fx/layer/PallPass.frame): the near volume
 // (pall.glsl: froxelNear) at the world distance behind the frame pixel's ray, up to its end (froxelEnd), then this frame's
-// rays beyond it. Layer quads
-// (fx.fsh: Sampler6) take the pall's colour and the world's share from it, as before the volume existed; the composite
-// does not use it (it reads the volume at every full-frame pixel)
+// rays beyond it. Layer quads (fx.fsh: Sampler6) take the pall's colour and the world's share from it, as before the
+// volume existed; the composite does not use it (it reads the volume at every full-frame pixel)
 
 // accumulated rays (fx_pall_resolve)
 uniform sampler2D Sampler0;
