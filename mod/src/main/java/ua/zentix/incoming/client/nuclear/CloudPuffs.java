@@ -23,7 +23,7 @@ public final class CloudPuffs {
     private static final double GLOW_IN_SMOKE = 0.85, EMISSIVE = 0.3;
 
     private final Detonation d;
-    /** Ground distance to which the light pulse ignites (≥ {@link ThermalModel#IGNITE}), m: fires burn beneath the dust there. */
+    /** Ground distance to which the light pulse ignites (≥ {@link ThermalModel#ignite}), m: fires burn beneath the dust there. */
     private final double fireGround;
     /** {@link #pallLight} at {@link #nowT} without partial tick ({@link #pallLightNow}), and whether a mushroom existed. */
     private final float[] now = new float[8];
@@ -33,7 +33,7 @@ public final class CloudPuffs {
     public CloudPuffs(Detonation d) {
         this.d = d;
         double hob = Math.max(0, d.hobMetres());
-        double slant = ThermalModel.rangeForFluence(ThermalModel.IGNITE, d.yieldKt(), d.surface(), d.visibility());
+        double slant = ThermalModel.rangeForFluence(ThermalModel.ignite(d.yieldKt()), d.yieldKt(), d.surface(), d.visibility());
         fireGround = Math.sqrt(Math.max(0, slant * slant - hob * hob));
     }
 

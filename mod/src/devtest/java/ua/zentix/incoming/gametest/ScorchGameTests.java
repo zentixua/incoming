@@ -288,7 +288,7 @@ public final class ScorchGameTests {
         // layer A appears when the light at the point A closest to the ball reaches the ignition threshold (as in FlashScorch); nearby chunks - no later
         double nx = Mth.clamp(d.burst().x, a.getPos().getMinBlockX(), a.getPos().getMaxBlockX() + 1);
         double nz = Mth.clamp(d.burst().z, a.getPos().getMinBlockZ(), a.getPos().getMaxBlockZ() + 1);
-        long flashAt = d.gameTime() + (long) Math.ceil(d.flashTicks(d.fluence(new Vec3(nx, d.groundY() + 1, nz)), ThermalModel.IGNITE));
+        long flashAt = d.gameTime() + (long) Math.ceil(d.flashTicks(d.fluence(new Vec3(nx, d.groundY() + 1, nz)), ThermalModel.ignite(d.yieldKt())));
         // B - the chunk closest to the epicenter, to which the wave reaches after the layer (in the game it reaches the closest ones before the end of the
         //  pulse, and they get everything in ruins; the scale of the check compresses the time into a tick)
         LevelChunk b = null;

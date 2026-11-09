@@ -449,7 +449,7 @@ public record Detonation(int id, Vec3 burst, double groundY, double yieldKt, boo
                 // fire zone where light ignites (as for ruins and client firestorm); absent if server does not ignite fires;
                 // without black rain (world rule) the fires make no rain cloud
                 double hob = Math.max(0, x.hobMetres());
-                double slant = ThermalModel.rangeForFluence(ThermalModel.IGNITE, x.yieldKt, x.surface, x.visibility);
+                double slant = ThermalModel.rangeForFluence(ThermalModel.ignite(x.yieldKt), x.yieldKt, x.surface, x.visibility);
                 double fire = x.fires && x.rain ? Math.sqrt(Math.max(0, slant * slant - hob * hob)) : 0;
                 return new BlackRainModel(x.yieldKt, fire, x.windDir, x.windSpeed, 1 - x.falloutModel().surfaceFraction());
             });

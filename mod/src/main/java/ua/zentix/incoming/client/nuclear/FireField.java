@@ -11,7 +11,7 @@ import java.util.List;
 /**
  * Where and how much burns after detonation — client model for burning-city sound and secondary explosions (the server places
  * the fire itself; the client sees only fire blocks in local chunks). Rings of width {@link #RING} around ground zero: in each ring
- * light ignites a fraction of columns with the same probability as the server ({@code RuinPlanner.fire}: min(1, q/20), q is light on the
+ * light ignites a fraction of columns with the same probability as the server ({@code RuinPlanner.fire}: min(1, q/{@link ThermalModel#igniteAll}) from the threshold, q is light on the
  * ground, fading at the ruin edge); {@link #SHARE} of columns contain fuel. Fire starts with the flash
  * (server flash layer, {@code FlashScorch}: each location when light reaches the ignition threshold there, {@link Detonation#flashTicks});
  * on arrival, the wave blows out half at 2 psi and above ({@link #keep}). The server fire limit per detonation ({@link #MAX_FIRES})
@@ -38,8 +38,6 @@ final class FireField {
     static final double RISE = 20 * 20;
     /** And decay time, ticks: grass and dirt burn out in seconds, houses and forest in minutes. */
     static final double TAU = 5 * 60 * 20;
-    /** Light ignition probability threshold ({@code RuinPlanner.fire}). */
-    private static final double FULL_Q = 20;
     /** Light marks fade at the ruin edge over this fraction of radius ({@code RuinPlanner.edge}). */
     private static final double EDGE_FADE = 0.2;
 
@@ -73,7 +71,7 @@ final class FireField {
             // server counts only fires not blown out: the ring filling it receives the remaining count and removable fires between them
             f[i] = Math.min(MAX_FIRES - after, places * k[i]);
             l[i] = f[i] / k[i];
-            ig[i] = d.flashTicks(d.fluence(new Vec3(d.burst().x + r, d.groundY() + 1, d.burst().z)), ThermalModel.IGNITE);
+            ig[i] = d.flashTicks(d.fluence(new Vec3(d.burst().x + r, d.groundY() + 1, d.burst().z)), ThermalModel.ignite(d.yieldKt()));
             after += f[i];
         }
         this.lit = l;
@@ -96,9 +94,9 @@ final class FireField {
         double r = radius(ring), ruin = d.ruinRadius();
         if (d.surface() && r < d.fireballRadius() * 0.8) return 0;
         double q = d.fluence(new Vec3(d.burst().x + r, d.groundY() + 1, d.burst().z)) * edge(r, ruin);
-        if (q < ThermalModel.IGNITE) return 0;
+        if (q < ThermalModel.ignite(d.yieldKt())) return 0;
         double area = Math.PI * (Math.pow((ring + 1) * RING, 2) - Math.pow(ring * RING, 2));
-        return SHARE * Math.min(1, q / FULL_Q) * area;
+        return SHARE * Math.min(1, q / ThermalModel.igniteAll(d.yieldKt())) * area;
     }
 
     /** Share of {@code ring} fire the wave will not blow out: {@link #BLOWN_KEEP} at 2 psi and above at ring middle, otherwise 1. */

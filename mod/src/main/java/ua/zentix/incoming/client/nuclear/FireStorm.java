@@ -59,8 +59,6 @@ public final class FireStorm {
     static final double SIGMA_DISTRICT = 0.75, SIGMA_SPOT = 0.65;
     /** Ground light with district flammability: log σ makes the ignition-zone edge ragged rather than circular. */
     static final double SIGMA_EDGE = 0.35;
-    /** Ignition threshold ({@code RuinPlanner.fire}). */
-    static final double FULL_Q = 20;
     /** Cells ignite over this many seconds after the flash (most immediately). */
     static final double IGNITE_SPREAD_S = 30;
     /** The wave blows out cell fire over this many ticks from arrival. */
@@ -565,9 +563,9 @@ public final class FireStorm {
                 double district = (raw[c] - mean) / std;
                 Vec3 p = new Vec3(b.x + x, d.groundY() + 1, b.z + z);
                 double q = d.fluence(p) * Math.exp(SIGMA_EDGE * district - SIGMA_EDGE * SIGMA_EDGE / 2);
-                if (q < ThermalModel.IGNITE) continue;
+                if (q < ThermalModel.ignite(d.yieldKt())) continue;
                 // light ignites; the wave later blows out some fire (server: half at 2 psi and above), smoothly, no ring on the map
-                double chance = Math.min(1, q / FULL_Q), keep = 1 - (1 - FireField.BLOWN_KEEP) * smooth(1.5, 2.5, d.psi(p));
+                double chance = Math.min(1, q / ThermalModel.igniteAll(d.yieldKt())), keep = 1 - (1 - FireField.BLOWN_KEEP) * smooth(1.5, 2.5, d.psi(p));
                 double fuel = Math.exp(SIGMA_DISTRICT * district - SIGMA_DISTRICT * SIGMA_DISTRICT / 2);
                 long h = hash(seed, i, j);
                 double spot = Math.exp(SIGMA_SPOT * gauss(h) - SIGMA_SPOT * SIGMA_SPOT / 2);
@@ -578,7 +576,7 @@ public final class FireStorm {
                 column[k] = (float) Math.pow(s, COLUMN_POWER);
                 before[k] = (float) lit;
                 double u = unit(h >>> 17);
-                start[k] = (float) (d.flashTicks(d.fluence(p), ThermalModel.IGNITE) + 20 * IGNITE_SPREAD_S * u * u);
+                start[k] = (float) (d.flashTicks(d.fluence(p), ThermalModel.ignite(d.yieldKt())) + 20 * IGNITE_SPREAD_S * u * u);
                 arrival[k] = (float) d.arrivalTicks(Math.hypot(r, b.y - d.groundY()));
                 peak[k] = (float) (PEAK_S * (0.7 + 0.6 * unit(h >>> 34)));
                 total += s;

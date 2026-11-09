@@ -358,7 +358,7 @@ public final class RuinPlanner {
 
     /**
      * Chunk flash layer (any thread): light-only changes at flash, before wave ({@link FlashScorch}).
-     * Like {@link #scorch} without pressure: no turf stripping (wave), all light-ignited fires (min(1, q/20), without
+     * Like {@link #scorch} without pressure: no turf stripping (wave), all light-ignited fires (from {@link ThermalModel#ignite}, min(1, q/igniteAll), without
      * wave-blown fraction); fires wave will later extinguish (half from 2 psi, same hash roll as ruins)
      * listed in plan ({@link RuinPlan#blown}), extinguished by ruin replacement. Face scorch on blocks unchanged by light, using
      * chunk/in-memory-neighbor window (absent neighbor means exposed edge face). Where wave breaks nothing, ruins from
@@ -442,12 +442,14 @@ public final class RuinPlanner {
             if (blockDamage && !inFireball && debris != null) pile(s, lx, ground, lz, debris, order, from[column], from[column + 1]);
             if (inFireball) {
                 if (blockDamage) strip(s, lx, ground, lz, x, z);
-                if (lit >= ThermalModel.IGNITE) fireball(s, lx, ground, lz);
+                if (lit >= ThermalModel.ignite(d.yieldKt())) fireball(s, lx, ground, lz);
                 continue;
             }
             boolean stripped = ground(s, noise, lx, ground, lz, x, z, q, groundPsi, blockDamage);
             plants(s, noise, lx, ground, lz, x, z, q, stripped);
-            if (fires && q >= ThermalModel.IGNITE) fire(s, lx, ground, lz, x, z, q, groundPsi, flash);
+            // ignition compares exposure facing the fireball with its threshold: a slope gets no more than that
+            double qFire = Math.min(q, lit);
+            if (fires && qFire >= ThermalModel.ignite(d.yieldKt())) fire(s, lx, ground, lz, x, z, qFire / ThermalModel.igniteAll(d.yieldKt()), groundPsi, flash);
         }
         return heat;
     }
@@ -666,13 +668,13 @@ public final class RuinPlanner {
     }
 
     /**
-     * Ground fires where light ignited fuel (chance rises with light), not all extinguished by wave (from 2 psi
-     * {@link #BLOWN_KEEP} remain). {@code flash} means flash layer: candidate by light probability, fraction surviving
-     * wave separate.
+     * Ground fires where light ignited fuel (chance rises with light: {@code share} is light over
+     * {@link ThermalModel#igniteAll}), not all extinguished by wave (from 2 psi {@link #BLOWN_KEEP} remain). {@code flash}
+     * means flash layer: candidate by light probability, fraction surviving wave separate.
      */
-    private static void fire(Sections s, int lx, int ground, int lz, int x, int z, double q, double psi, boolean flash) {
+    private static void fire(Sections s, int lx, int ground, int lz, int x, int z, double share, double psi, boolean flash) {
         if (ground + 1 >= s.maxY) return;
-        double lit = Math.min(1, q / ThermalModel.IGNITE_ALL), keep = psi >= 2 ? BLOWN_KEEP : 1;
+        double lit = Math.min(1, share), keep = psi >= 2 ? BLOWN_KEEP : 1;
         Blast.Props now = s.props(lx, ground, lz);
         if (s.get(lx, ground + 1, lz).isAir() && (now.is(Blast.Props.FLAMMABLE) || now.is(Blast.Props.DIRT))) {
             if (flash) s.fire(x, ground + 1, z, lit, keep);
