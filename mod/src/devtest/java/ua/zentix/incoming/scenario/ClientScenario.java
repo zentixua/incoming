@@ -177,6 +177,10 @@ public final class ClientScenario {
         FrameTimes.startIfRequested();
         // script lines, sandbox and samples write the layer time on the GPU in parts: the sample is always running
         ua.zentix.incoming.client.fx.layer.LayerTimes.always();
+        if ("release-check".equals(scenario)) {
+            new ReleaseCheckClient();
+            return;
+        }
         if (scenario.startsWith("mp-")) {
             new MultiplayerScenario("mp-a".equals(scenario)); // your own server, without a script world (tools/mp_scenario.sh)
             return;
