@@ -85,3 +85,13 @@ paths:
   `work_impact_schedule` (40/43/47 ms plus background on controlled clocks), `work_impact_debt` (real Ignition/Shatter
   and a new front, first-block/front-end/summary ticks), `work_impact_modes` (freeze, sprint, two worlds), and
   `work_impact_profiler` (real `chunk_unload` sections on four consecutive server ticks).
+
+- `BlockLighting` shares the impact clock, alternating first service with strike work after a full world rotation.
+  A separate queue always served last can starve behind continuous impacts while retaining chunk leases. Do not use
+  tick parity alone: with an even world count, world rotation would lock each world's priority permanently.
+  GameTest `light_late_busy` and `WorkSchedulerTest.everyWorldGetsBothQueuesFirstEvenWithEvenWorldCounts` cover both.
+  Light jobs opt into UnitQueue dynamic readiness: starting a future inside a continuation must invalidate cached
+  readiness before its next step in the same work window (`UnitQueueTest.asynchronousContinuationResamplesReadiness`).
+  Legacy admission is itself a budgeted unit: pending positions own no tickets, a bounded scan drops unloaded or
+  already marked entries and chooses the nearest player chunk. Only one repair can hold its source-context ring;
+  normal live-edit leases remain independent. Shutdown drops pending legacy positions and drains committed edits.

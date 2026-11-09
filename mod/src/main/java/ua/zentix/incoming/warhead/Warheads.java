@@ -402,6 +402,7 @@ public final class Warheads {
         if (!IncomingConfig.SERVER.fire.get() || !Terrain.neighbourhoodReady(level, pos.getX() >> 4, pos.getZ() >> 4)) return false;
         BlockState fire = BaseFireBlock.getState(level, pos);
         if (!fire.canSurvive(level, pos)) return false;
+        ua.zentix.incoming.work.BlockLighting.changed(level, pos);
         level.setBlock(pos, fire, 11);
         return true;
     }

@@ -27,6 +27,9 @@ public final class UnitQueue {
             return true;
         }
 
+        /** A unit can start an asynchronous phase whose readiness changes within this work window. */
+        default boolean dynamicReadiness() { return false; }
+
         /** Is this job waiting for another job to finish? */
         default boolean blocked() {
             return false;
@@ -144,7 +147,7 @@ public final class UnitQueue {
     /** One unit; continuation readiness and dependencies are sampled once per work window. */
     private static Outcome run(ServerLevel level, long now, Entry e, WorkClock clock, long window, boolean continuation) {
         try {
-            if (!continuation || e.checkedWindow != window) {
+            if (!continuation || e.checkedWindow != window || e.job.dynamicReadiness()) {
                 e.availability = availability(level, now, e);
                 // The first step can introduce a dependency (e.g. blast blocks waiting for sibling rays).
                 // Sample again on entering the continuation queue, after all heads have had their turn.
