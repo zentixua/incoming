@@ -358,7 +358,7 @@ public final class RuinPlanner {
 
     /**
      * Chunk flash layer (any thread): light-only changes at flash, before wave ({@link FlashScorch}).
-     * Like {@link #scorch} without pressure: no turf stripping (wave), all light-ignited fires (min(1, q/20), without
+     * Like {@link #scorch} without pressure: no turf stripping (wave), all light-ignited fires (from {@link ThermalModel#ignite}, min(1, q/igniteAll), without
      * wave-blown fraction); fires wave will later extinguish (half from 2 psi, same hash roll as ruins)
      * listed in plan ({@link RuinPlan#blown}), extinguished by ruin replacement. Face scorch on blocks unchanged by light, using
      * chunk/in-memory-neighbor window (absent neighbor means exposed edge face). Where wave breaks nothing, ruins from

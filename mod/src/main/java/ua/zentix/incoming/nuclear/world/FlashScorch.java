@@ -199,7 +199,8 @@ public final class FlashScorch {
             if (d.fluence(ground) >= ThermalModel.ignite(d.yieldKt()) || FlashChar.possible(d.fluence(high), FlashChar.CHARS) || FlashChar.possible(d.fluence(high), FlashChar.SOOTS)) lo = r;
             else hi = r;
         }
-        return Math.max(lo, RuinPlanner.scorchReach(d));
+        // 5 % margin: ground above the burst's ground sits nearer the ball (a 100-block hill: +1–2 % light at the ignition edge)
+        return Math.max(Math.min(d.ruinRadius(), lo * 1.05), RuinPlanner.scorchReach(d));
     }
 
     /**
