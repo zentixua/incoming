@@ -3,6 +3,7 @@ package ua.zentix.incoming.client.nuclear;
 import net.minecraft.util.Mth;
 import ua.zentix.incoming.nuclear.Detonation;
 import ua.zentix.incoming.nuclear.model.BlackBody;
+import ua.zentix.incoming.nuclear.model.FlashLight;
 import ua.zentix.incoming.nuclear.model.MushroomModel;
 import ua.zentix.incoming.nuclear.model.ThermalModel;
 
@@ -98,7 +99,7 @@ public final class CloudPuffs {
         java.util.Arrays.fill(into, 0, 8, 0f);
         if (s == null) return false;
         double t = s.t(), y = d.yieldKt();
-        BlackBody.light(MushroomModel.edgeTemperature(t, y, d.surface()), BALL);
+        FlashLight.source(s, y, d.surface(), BALL);
         into[0] = (float) d.blocks(s.capR());
         into[1] = (float) glow(t, y);
         into[2] = (float) MushroomField.driftAlong(d, s);

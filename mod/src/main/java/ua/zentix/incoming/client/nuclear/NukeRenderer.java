@@ -28,6 +28,7 @@ import ua.zentix.incoming.client.render.FarDraw;
 import ua.zentix.incoming.net.S2C;
 import ua.zentix.incoming.nuclear.Detonation;
 import ua.zentix.incoming.nuclear.model.BlackBody;
+import ua.zentix.incoming.nuclear.model.FlashLight;
 import ua.zentix.incoming.nuclear.model.MushroomModel;
 
 import java.io.IOException;
@@ -131,8 +132,8 @@ public final class NukeRenderer {
             MushroomModel.Shape s = MushroomField.shape(a, view.partial());
             if (s == null) continue;
             Detonation d = a.d;
-            BlackBody.light(MushroomModel.edgeTemperature(s.t(), d.yieldKt(), d.surface()), BALL);
-            double adapt = Sight.adapted(1, view.ambient()), surface = BALL[3] * adapt;
+            FlashLight.source(s, d.yieldKt(), d.surface(), BALL);
+            double adapt = NukeLight.bodyExposure(), exposure = NukeLight.exposure(), surface = BALL[3] * exposure;
             if (surface < 1e-3) continue;
             MushroomField.centre(a, s, CENTRE);
             double dx = CENTRE[0] - cam.x, dy = CENTRE[1] - cam.y, dz = CENTRE[2] - cam.z, r = d.blocks(s.capR());
@@ -149,8 +150,9 @@ public final class NukeRenderer {
                     + (1 - film) * Math.min(1, Math.pow(seen, 1 / 2.2));
             lights.add(dx, dy, dz, r, surface, Math.min(1, Math.pow(surface, 1 / 2.2)), lr, lg, lb);
             // glare follows how the frame sees the surface: with ball exposure set by it through the air (mushAt in fx_pall), and overexposure
-            double exposed = seen * (film * NukeExposure.gain(seen, adapt) + 1 - film) * NukeFlash.overexposure(a, view.partial());
-            if (seen > Sight.THRESHOLD) out.eyeLight(dx, dy, dz, r, exposed, view.pixel(), cr, cg, cb, shown, GLARE);
+            double body = BALL[3] * adapt * air;
+            double exposed = (film * body * NukeExposure.gain(body, adapt) + (1 - film) * seen) * NukeFlash.overexposure(a, view.partial());
+            if (NukeLight.camera(a).seen() && seen > Sight.THRESHOLD) out.eyeLight(dx, dy, dz, r, exposed, view.pixel(), cr, cg, cb, shown, GLARE);
         }
     }
 

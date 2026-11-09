@@ -11,6 +11,7 @@ import ua.zentix.incoming.client.fx.layer.PallPass;
 import ua.zentix.incoming.client.fx.layer.WaterDecal;
 import ua.zentix.incoming.nuclear.Detonation;
 import ua.zentix.incoming.nuclear.model.BlackBody;
+import ua.zentix.incoming.nuclear.model.FlashLight;
 import ua.zentix.incoming.nuclear.model.DustModel;
 import ua.zentix.incoming.nuclear.model.FireballModel;
 import ua.zentix.incoming.nuclear.model.HobBlast;
@@ -245,7 +246,7 @@ public final class MushroomField {
             MushroomModel.Shape s = shape(a, partial);
             if (s == null) continue;
             Detonation d = a.d;
-            BlackBody.light(MushroomModel.edgeTemperature(s.t(), d.yieldKt(), d.surface()), BALL);
+            FlashLight.source(s, d.yieldKt(), d.surface(), BALL);
             double r = d.blocks(s.capR()), h = Math.max(d.blocks(s.capY()), r), surface = BALL[3] * exposure;
             // ground directly below ball is nearest to it
             boolean lit = surface * r * r / (h * h) >= BALL_SEEN * Math.max(open, 1e-4);
@@ -580,7 +581,9 @@ public final class MushroomField {
         // steam follows water picked up by the rolling ring: absent for the ball
         double capSigma = capTau(s, capMatter(s, soil, wet * MushroomModel.rollUp(t, y, d.surface()), CAP)) / Math.max(across, 1);
         double skirtSigma = s.skirtTau() / Math.max(2 * d.blocks(Math.min(s.skirtW(), s.skirtH())), 1);
-        double tCore = MushroomModel.coreTemperature(t, y, d.surface());
+        double emitting = FlashLight.temperature(t, y, d.surface(), s.capR());
+        double tCore = Math.max(emitting, MushroomModel.coreTemperature(t, y, d.surface()));
+        double edge = (emitting - MushroomModel.AMBIENT_K) / Math.max(tCore - MushroomModel.AMBIENT_K, 1e-9);
         put(into, o, 0, d.burst().x - eye.x, d.burst().z - eye.z, d.groundY() - eye.y, 1);
         put(into, o, 1, w[0], w[1], d.blocks(s.endTop()), boundR);
         put(into, o, 2, d.blocks(s.capY()), d.blocks(s.capR()), d.blocks(s.ringR()), top);
@@ -612,7 +615,7 @@ public final class MushroomField {
         // ball surface pattern (NukeBallSurface): frame position and pattern share versus billow tongues (ballSurface)
         double[] ball = BALL_SURFACE;
         ballSurface(t, d.hobMetres(), y, d.surface(), NukeBallSurface.ready(), ball);
-        put(into, o, 16, MushroomModel.edgeShare(t, y, d.surface()), MushroomModel.billows(t, y, d.surface()), ball[0], ball[1]);
+        put(into, o, 16, edge, MushroomModel.billows(t, y, d.surface()), ball[0], ball[1]);
         if (day) {
             // sun shadow: map tile projects bounds across the sun; layers above ground zero, midway
             // between it and world top, and above world top

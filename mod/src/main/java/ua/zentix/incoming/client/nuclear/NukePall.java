@@ -419,6 +419,7 @@ public final class NukePall {
         f.sunLight.set(SKY.sun[0], SKY.sun[1], SKY.sun[2]);
         f.base = SKY.base;
         f.exposure = SKY.exposure;
+        f.bodyExposure = (float) NukeLight.bodyExposure();
         f.glowOnSmoke = SKY.glowOnSmoke;
         // fire glow from below on white pall, on screen above sky light (fx_pall uses its difference, pallLift; dust
         // and haze use their own albedo): barely visible by day,
@@ -469,7 +470,7 @@ public final class NukePall {
         // wall reflection and fire glow (on screen) add to on-screen sky light — this value
         into.base = ambient;
         // mushroom glow is a black body at real brightness (noon white wall = 1): into frame with eye adaptation to sky
-        into.exposure = (float) Sight.adapted(1, ambient);
+        into.exposure = (float) NukeLight.exposure();
         into.glowOnSmoke = (float) CloudPuffs.glowOnSmoke(ambient);
     }
 

@@ -18,16 +18,12 @@ import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix4f;
 import ua.zentix.incoming.IncomingConfig;
-import ua.zentix.incoming.client.far.FarView;
 import ua.zentix.incoming.client.fx.Flash;
-import ua.zentix.incoming.client.far.Sight;
 import ua.zentix.incoming.client.render.ScreenProjection;
 import ua.zentix.incoming.nuclear.Detonation;
-import ua.zentix.incoming.nuclear.NuclearWarhead;
-import ua.zentix.incoming.nuclear.model.BlackBody;
 import ua.zentix.incoming.nuclear.model.EyeInjury;
 import ua.zentix.incoming.nuclear.model.FireballModel;
-import ua.zentix.incoming.nuclear.model.ThermalModel;
+import ua.zentix.incoming.nuclear.model.FlashLight;
 import ua.zentix.incoming.nuclear.radiation.FlashEyes;
 import ua.zentix.incoming.nuclear.radiation.RetinaScars;
 
@@ -55,7 +51,7 @@ public final class NukeFlash {
     @Nullable
     private static ClientNuclear.Active current;
     /** Flash strength 0..1 for this player. */
-    private static float strength;
+    private static float strength, afterStrength;
     /**
      * Ratio of flash light at the camera at the second maximum to the light the frame is set for (≥ 1): controls how the frame
      * catches up with the flash ({@link NukeExposure#overexposure}).
@@ -77,17 +73,6 @@ public final class NukeFlash {
     private static final double VEIL_X = 100, GAIN_MAX = 16;
     /** Overexposure below which the frame stays unchanged: gain is smaller than a screen step. */
     private static final double SETTLED = 1.004;
-    /**
-     * Sky glare at full air transmittance, fraction of a white screen, and glare threshold for flash lighting the world
-     * ({@link #lightUpWorld}). (est.), not derived: both are screen fractions, not light; glare has no yield or
-     * 1/d² term, limited only by air (Glasstone, fig. 7.104; beyond half the visibility range — extrapolated tuning). Thus
-     * the world flashes out to ~5.3 visibility ranges at any yield, while ball light at the second maximum there ({@code MushroomModel.light}
-     * through the same air) is 0.5 % of noon light for 1 kt, 4.5 % for 15 kt, 90 % for 1 Mt: at night (dark-adapted eye,
-     * {@code Sight.adapted}) this is a flash; by day, glare from small yields at distance exceeds physics.
-     */
-    private static final double SKY_GLARE = 0.6, WORLD_FLASH = 0.05;
-    /** Fraction of the pulse scattered by the sky toward someone who cannot see the ball (est.). */
-    private static final double SCATTERED = 0.15;
     /** Initial dazzle veil (almost nothing discernible in the field) and time for the bright afterimage to darken, s. */
     private static final float VEIL = 0.9f, AFTERGLOW_S = 2;
     /** Veil after the afterimage: gray by day (dazzled cones), black at night. */
@@ -106,32 +91,25 @@ public final class NukeFlash {
         LocalPlayer p = mc.player;
         if (p == null || mc.level == null) return;
         Vec3 eye = p.getEyePosition();
-        boolean sees = NuclearWarhead.sees(mc.level, d, p);
-        double q = d.fluence(eye);
-        double distM = d.metres(eye.distanceTo(d.burst()));
-        // in addition to the actual light pulse — dazzled sky (SKY_GLARE): ball light scattered by air, using transmittance
-        // of direct and scattered light together (ThermalModel.transmittance, as for the light pulse), not a beam: ball glare
-        // (NukeRenderer.fireballs) is a beam, dazzled sky is diffuse light
-        double sky = Math.min(1, q / 2 + SKY_GLARE * ThermalModel.transmittance(distM, d.visibility()));
-        lightUpWorld(mc.level, d, sky);
-        double s = sky;
+        FlashLight.Eye light = NukeLight.sample(mc.level, a, eye, 0);
+        double q = light.fluence();
         Vec3 look = p.getViewVector(1);
         double angle = Math.toDegrees(Math.acos(Mth.clamp(look.dot(d.burst().subtract(eye).normalize()), -1, 1)));
-        boolean inView = sees && angle < 60;
-        s *= inView ? 1 : sees ? 0.45 : 0.3;
-        s *= IncomingConfig.CLIENT.flash.get();
-        if (eyes(p) && !p.isSleeping()) dazzle(mc.level, d, eye, sees ? q : Detonation.underOpenSky(mc.level, eye) ? q * SCATTERED : 0);
+        boolean inView = light.seen() && angle < 60;
+        double s = light.strength() * IncomingConfig.CLIENT.flash.get();
+        if (eyes(p) && !p.isSleeping()) dazzle(mc.level, d, eye, q);
         // "Hide Lightning Flashes": no world glare, partial white screen
         if (Flash.calm()) s = Math.min(s, Flash.CALM);
         if (s <= strength && current != null) return;
         current = a;
         strength = (float) s;
-        peak = 1 + flashOnCamera(mc.level, d, distM) * (inView ? 1 : sees ? 0.45 : 0.3);
+        peak = light.peak(NukeLight.bodyExposure());
         endTick = ticks + (long) Math.ceil((FireballModel.secondMaximumSeconds(d.yieldKt()) * d.scale() + NukeExposure.settled(peak, SETTLED)) * 20);
         // spot larger than the visible ball: the eye "smears" glare
         float[] spot = inView && q >= 0.05 ? retina(mc, p, d.burst(), Math.max(d.fireballRadius(), 30) * 2.2) : null;
         if (spot != null) {
             // 5–30 s from the light pulse (cal/cm²)
+            afterStrength = strength;
             afterTotal = afterLeft = (int) (20 * Mth.clamp(5 + q * 2.5, 5, 30));
             afterX = spot[0];
             afterY = spot[1];
@@ -139,16 +117,15 @@ public final class NukeFlash {
         }
     }
 
-    /**
-     * Ball light at the camera at the second maximum relative to the frame's set exposure (sky light, {@link Sight#adapted}):
-     * Lambertian sphere of maximum radius, black body at {@link FireballModel#PEAK_K}, L·R²/max(d², R²) through air
-     * (direct and scattered together, {@link ThermalModel#transmittance}, as for sky glare). For 15 kt at 1.4 km by day ~2 000,
-     * at 5 km ~200; at night ~1 200 times more.
-     */
-    static double flashOnCamera(ClientLevel level, Detonation d, double distM) {
-        double r = FireballModel.maxRadius(d.yieldKt(), d.surface());
-        double light = BlackBody.luminance(FireballModel.PEAK_K) * r * r / Math.max(distM * distM, r * r) * ThermalModel.transmittance(distM, d.visibility());
-        return Sight.adapted(light, FarView.ambient(level, 0));
+    /** Shared camera sample, updated before sky/fog and all light consumers; entering cover stops new glare. */
+    static void frame() {
+        if (current == null) return;
+        FlashLight.Eye light = NukeLight.camera(current);
+        strength = (float) (light.strength() * IncomingConfig.CLIENT.flash.get());
+        if (Flash.calm()) strength = Math.min(strength, Flash.CALM);
+        peak = light.peak(NukeLight.bodyExposure());
+        ClientLevel level = Minecraft.getInstance().level;
+        if (level != null) lightUpWorld(level, whiteness(Minecraft.getInstance().getTimer().getGameTimeDeltaPartialTick(false)));
     }
 
     /** Field dazzle from pulse {@code q} cal/cm² at the eye; keep existing dazzle that ends later. */
@@ -193,16 +170,11 @@ public final class NukeFlash {
         return new float[]{(float) (0.5 + to.dot(right) / depth * sx), (float) (0.5 - to.dot(up) / depth * sy), (float) (radius / depth * sy)};
     }
 
-    /**
-     * World flash lighting, like lightning: vanilla sky flash (full sky light at every block, as in daylight) for
-     * 1.5–3 s × ∛(Y/15), for everyone who can see the dazzled sky (glare at least {@link #WORLD_FLASH}: for an airburst
-     * at 240·∛Y m in clear weather, 1 and 15 kt out to ~107 km, 1 Mt out to ~119 km; in rain 27, 28 and 44 km; in a thunderstorm 6,
-     * 7 and 17 km). Absent if flash is disabled in settings or vanilla "Hide Lightning Flashes" is on ({@link Flash#calm}).
-     */
-    private static void lightUpWorld(ClientLevel level, Detonation d, double sky) {
-        if (sky < WORLD_FLASH || IncomingConfig.CLIENT.flash.get() <= 0 || Flash.calm()) return;
-        int flash = (int) (20 * (1.5 + 1.5 * sky) * Math.cbrt(d.yieldKt() / 15));
-        level.setSkyFlashTime(Math.max(level.getSkyFlashTime(), flash));
+    /** Vanilla sky flash follows this frame's admitted flash, rather than an independent yield-duration clock. */
+    private static void lightUpWorld(ClientLevel level, double white) {
+        if (white <= 0 || IncomingConfig.CLIENT.flash.get() <= 0 || Flash.calm()) return;
+        // Vanilla accepts whole ticks only; renew one tick while the shared flash is visibly overexposed.
+        if (white >= 1.0 / 255) level.setSkyFlashTime(Math.max(level.getSkyFlashTime(), 1));
     }
 
     static void tick() {
@@ -322,7 +294,7 @@ public final class NukeFlash {
     private static void afterimage(GuiGraphics g, float partial, int w, int h) {
         float px = Mth.clamp(afterSize * h, 14, 400);
         float life = (afterLeft - partial) / afterTotal;
-        float a = Mth.clamp(life * 1.3f, 0, 0.6f) * Math.min(1, strength * 1.5f);
+        float a = Mth.clamp(life * 1.3f, 0, 0.6f) * Math.min(1, afterStrength * 1.5f);
         if (a <= 0.01f) return;
         ShaderInstance shader = NukeRenderer.flare;
         if (shader == null) return;
