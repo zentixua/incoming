@@ -559,11 +559,12 @@ public final class MushroomField {
         out[1] = rises != null ? 1 - MushroomModel.rollUp(t, yieldKt, surface) : 0;
     }
 
-    /** Emission texels 10.xy / 16.x consumed by mushAt: source temperature and its existing edge contrast. */
+    /** Emission texels 10.xy / 16.x consumed by mushAt: source temperature and cooling-constrained edge contrast. */
     static void emission(MushroomModel.Shape s, double y, boolean surface, float[] into, int o) {
+        double core = FlashLight.coreTemperature(s, y, surface);
         into[o + 10 * 4] = (float) MushroomModel.AMBIENT_K;
-        into[o + 10 * 4 + 1] = (float) (FlashLight.coreTemperature(s, y, surface) - MushroomModel.AMBIENT_K);
-        into[o + 16 * 4] = (float) MushroomModel.edgeShare(s.t(), y, surface);
+        into[o + 10 * 4 + 1] = (float) (core - MushroomModel.AMBIENT_K);
+        into[o + 16 * 4] = (float) FlashLight.edgeShare(s, y, surface, core);
     }
 
     /**

@@ -54,10 +54,42 @@ public final class FlashLight {
         return Math.clamp(k, FireballModel.AMBIENT_K, FireballModel.HOTTEST_K);
     }
 
-    /** Emitting profile: an isothermal ball, then the existing mixed-edge contrast, all keyed to the same source. */
+    /**
+     * Emitting profile: isothermal ball, then a warmer interior. Inverting the gas edge-mixing share alone
+     * would reheat the core during rollup: enforce cooling by its running minimum, reconstructed from age.
+     * (est.) Piecewise-linear minimum over 64 rollup intervals; convergence test bounds temperature error
+     * below 0.1%, with no frame history, new heating source or per-pixel work.
+     */
     public static double coreTemperature(MushroomModel.Shape s, double yieldKt, boolean surface) {
-        return FireballModel.AMBIENT_K + (temperature(s.t(), yieldKt, surface, s.capR()) - FireballModel.AMBIENT_K)
-                / MushroomModel.edgeShare(s.t(), yieldKt, surface);
+        double tr = MushroomModel.rollUpSeconds(yieldKt, surface), start = tr * 0.25;
+        double limb = temperature(s.t(), yieldKt, surface, s.capR());
+        if (s.t() <= start) return limb;
+        int intervals = 64;
+        double step = (tr - start) / intervals;
+        double position = Math.min(intervals, (s.t() - start) / step);
+        double minimum = profileCore(start, yieldKt, surface), previous = minimum;
+        for (int i = 1; i <= Math.ceil(position); i++) {
+            previous = minimum;
+            minimum = Math.min(minimum, profileCore(start + i * step, yieldKt, surface));
+        }
+        double core = position == Math.floor(position) ? minimum
+                : previous + (minimum - previous) * (position - Math.floor(position));
+        if (s.t() > tr) core = Math.min(core, FireballModel.AMBIENT_K
+                + (limb - FireballModel.AMBIENT_K) / MushroomModel.EDGE_HEAT);
+        return Math.max(limb, core);
+    }
+
+    private static double profileCore(double t, double yieldKt, boolean surface) {
+        // Cap radius is independent of burst height and stem dust; avoid constructing the dust table.
+        MushroomModel.Shape s = MushroomModel.shape(t, yieldKt, 0, surface, 0, null);
+        return FireballModel.AMBIENT_K + (temperature(t, yieldKt, surface, s.capR()) - FireballModel.AMBIENT_K)
+                / MushroomModel.edgeShare(t, yieldKt, surface);
+    }
+
+    /** Edge chosen from the same escaping temperature after constraining the interior to cool. */
+    public static double edgeShare(MushroomModel.Shape s, double yieldKt, boolean surface, double core) {
+        double excess = core - FireballModel.AMBIENT_K;
+        return excess <= 0 ? 1 : (temperature(s.t(), yieldKt, surface, s.capR()) - FireballModel.AMBIENT_K) / excess;
     }
 
     /** Escaping RGB and photopic luminance, noon white = 1. Cooling changes the spectrum, not only its amplitude. */

@@ -95,16 +95,7 @@ public final class NukeFlash {
         Vec3 look = p.getViewVector(1);
         double angle = Math.toDegrees(Math.acos(Mth.clamp(look.dot(d.burst().subtract(eye).normalize()), -1, 1)));
         boolean inView = !p.isSleeping() && light.seen() && angle < 60;
-        FlashLight.Eye cameraLight = NukeLight.sample(mc.level, a, mc.gameRenderer.getMainCamera().getPosition(), 0);
-        double s = cameraLight.strength() * IncomingConfig.CLIENT.flash.get();
         if (eyes(p) && !p.isSleeping()) dazzle(mc.level, d, eye, q);
-        // "Hide Lightning Flashes": no world glare, partial white screen
-        if (Flash.calm()) s = Math.min(s, Flash.CALM);
-        if (s > strength || current == null) {
-            current = a;
-            strength = (float) s;
-            peak = cameraLight.peak(NukeLight.bodyExposure());
-        }
         // spot larger than the visible ball: the eye "smears" glare
         float[] spot = inView && q >= 0.05 ? retina(mc, p, d.burst(), Math.max(d.fireballRadius(), 30) * 2.2) : null;
         if (spot != null) {
@@ -127,6 +118,7 @@ public final class NukeFlash {
         peak = 1;
         double best = 0;
         for (ClientNuclear.Active a : ClientNuclear.detonations()) {
+            if (!a.live) continue; // sync/seek reconstructs illumination without replaying a one-shot flash
             FlashLight.Eye light = NukeLight.camera(a);
             float admitted = (float) (light.strength() * IncomingConfig.CLIENT.flash.get());
             if (Flash.calm()) admitted = Math.min(admitted, Flash.CALM);

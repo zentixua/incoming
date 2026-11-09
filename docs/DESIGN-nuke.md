@@ -648,8 +648,11 @@ All from one `ClientNuclearEvents` list (event + time), updated in `ClientTickEv
   not visible lumens; `BlackBody` converts its temperature to RGB/photopic luminance. The equivalent spherical
   cap area is (est.), and the pulse beyond 10 t_max is extrapolated. This escaping brightness temperature replaces
   the mixed exterior temperature as the light source; the original gas temperature remains for heat/structure.
-  The emitting profile is isothermal before rollup; afterwards the existing edge/core contrast is applied around
-  that same temperature. Keeping the old core while changing only the edge produced a white interior at 15 kt.
+  The emitting profile is isothermal before rollup. Afterwards, inverting the existing edge-mixing share is
+  constrained by a running minimum so entrainment cannot reheat the emitting interior. The edge share is then
+  derived from the same escaping temperature. This pure age function uses 64 rollup intervals (est., numerical
+  closure; temperature convergence below 0.1% is tested). Keeping the old core while changing only the edge
+  produced a white interior at 15 kt; unconstrained inversion instead produced a second night glow at 1 kt.
   It leaves server burn/ignition energy, thermalFraction's normalization at tau=10, and retinal scars unchanged.
   Peak calibration is retained for compatibility: 7700 K over the existing radius implies 1.77× / 4.84× G&D's
   absolute peak at 15 / 1000 kt (derived from §7.85, P_max=3.18·Y^0.56 kt/s). This is an inherited radiometric

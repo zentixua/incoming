@@ -101,7 +101,7 @@ class NukeExposureTest {
                     double lo = 1 + (percentile(d, ball[0], 0.1) - 1) * contrast * ball[1];
                     double hi = 1 + (percentile(d, ball[0], 0.9) - 1) * contrast * ball[1];
                     MushroomModel.Shape shape = MushroomModel.shape(t, y, hob, surface, 0);
-                    double core = ua.zentix.incoming.nuclear.model.FlashLight.coreTemperature(shape, y, surface), share = MushroomModel.edgeShare(t, y, surface);
+                    double core = ua.zentix.incoming.nuclear.model.FlashLight.coreTemperature(shape, y, surface), share = ua.zentix.incoming.nuclear.model.FlashLight.edgeShare(shape, y, surface, core);
                     double amb = FireballModel.AMBIENT_K, dT = core - amb;
                     for (double adapt : new double[]{DAY, NIGHT}) {
                         double gain = NukeExposure.gain(BlackBody.luminance(amb + dT * share) * adapt, adapt);

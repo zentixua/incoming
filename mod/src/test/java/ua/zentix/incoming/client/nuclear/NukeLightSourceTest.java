@@ -54,6 +54,7 @@ class NukeLightSourceTest {
         assertFalse(flash.contains("SCATTERED"));
         assertFalse(flash.contains("endTick"), "initial shelter cannot expire a later admitted flash");
         assertTrue(flash.contains("for (ClientNuclear.Active a : ClientNuclear.detonations())"));
+        assertTrue(flash.contains("if (!a.live) continue;"), "sync/replay seek must not replay transient flash");
         assertTrue(flash.contains("if (afterLeft > 0) afterimage("), "acquired afterimage survives shelter");
         assertFalse(flash.contains("Math.cbrt"));
         assertFalse(flash.contains("sees ? 0.45 : 0.3"));

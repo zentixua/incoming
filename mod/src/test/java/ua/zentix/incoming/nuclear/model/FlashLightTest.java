@@ -100,14 +100,35 @@ class FlashLightTest {
         for (double y : new double[]{1, 15, 1000}) for (boolean surface : new boolean[]{false, true}) {
             for (double t : new double[]{1, 3, 5, 6, 10, 20, 33}) {
                 MushroomModel.Shape s = MushroomModel.shape(t, y, surface ? 0 : 240 * Math.cbrt(y), surface, 0);
-                double edge = MushroomModel.edgeShare(t, y, surface);
                 double core = FlashLight.coreTemperature(s, y, surface);
+                double edge = FlashLight.edgeShare(s, y, surface, core);
                 double emitting = FlashLight.temperature(t, y, surface, s.capR());
                 assertEquals(emitting, FireballModel.AMBIENT_K + (core - FireballModel.AMBIENT_K) * edge, 1e-9);
                 if (MushroomModel.rollUp(t, y, surface) == 0) {
                     assertEquals(1, edge);
                     assertEquals(emitting, core, 1e-9, "sphere must be isothermal before surface pattern");
                 }
+            }
+        }
+    }
+
+    @Test
+    void interiorCoolsThroughRollupWithoutASecondNightFlash() {
+        for (double y : new double[]{1, 2, 5, 10, 15, 100, 1000}) for (boolean surface : new boolean[]{false, true}) {
+            double tr = MushroomModel.rollUpSeconds(y, surface), start = tr * 0.25;
+            double previous = Double.POSITIVE_INFINITY, reference = previous;
+            // Fine independent running minimum: 4096 intervals versus the production 64.
+            for (int i = 0; i <= 8192; i++) {
+                double t = start + (tr - start) * i / 4096;
+                MushroomModel.Shape shape = MushroomModel.shape(t, y, 0, surface, 0, null);
+                double limb = FlashLight.temperature(t, y, surface, shape.capR());
+                reference = Math.min(reference, FireballModel.AMBIENT_K
+                        + (limb - FireballModel.AMBIENT_K) / MushroomModel.edgeShare(t, y, surface));
+                double core = FlashLight.coreTemperature(shape, y, surface);
+                assertTrue(core <= previous + 1e-8, y + " kt core reheated at " + t);
+                assertEquals(reference, core, reference * 0.001, "64-interval temperature convergence");
+                assertTrue(core >= limb);
+                previous = core;
             }
         }
     }

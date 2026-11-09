@@ -505,3 +505,4 @@ cancels frame exposure once. `FlashLight.temperature` is escaping brightness tem
 core/mixed gas temperatures. Do not substitute it into server energy or injury calculations. Source derivation,
 opening approximation and outside-OpenAir limitation: DESIGN-nuke §6. Sealed eye/world pixels get no new flash;
 block light is never an opening. Paused game time cannot advance adaptation; reset/seek reconstructs exposure.
+Transient frame flash must skip non-live detonations reconstructed by sync/seek; their steady illumination still adapts.

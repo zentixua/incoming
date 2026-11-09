@@ -29,6 +29,23 @@ class MushroomFieldTest {
         }
     }
 
+    @Test
+    void emittedTableInteriorNeverReheatsDuringRollup() {
+        float[] row = new float[68 * 4];
+        for (double y : new double[]{1, 5, 15, 1000}) for (boolean surface : new boolean[]{false, true}) {
+            double previous = Double.POSITIVE_INFINITY;
+            double tr = MushroomModel.rollUpSeconds(y, surface);
+            double tm = FireballModel.secondMaximumSeconds(y);
+            for (int i = 0; i <= 400; i++) {
+                double t = tm + (2 * tr - tm) * i / 400;
+                MushroomModel.Shape shape = MushroomModel.shape(t, y, 0, surface, 0, null);
+                MushroomField.emission(shape, y, surface, row, 0);
+                assertTrue(row[40] + row[41] <= previous + 1e-4, "shader interior reheated");
+                previous = row[40] + row[41];
+            }
+        }
+    }
+
     /** Empty-space skipping and the outer ray interval must retain the billowed dust front above its mean height. */
     @Test
     void boundsHoldTheStemFrontBillows() {
