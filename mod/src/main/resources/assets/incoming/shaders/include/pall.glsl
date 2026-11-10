@@ -6,12 +6,13 @@
 // Detonation slot — mat4 by columns:
 //   [0] = (epicenter x, z from the eye; ground under the epicenter from the eye by y; how far the table goes, blocks)
 //   [1] = (drift by wind x, z of what was lifted at the moment of detonation, blocks — for dust and spray its share by their
-//          age (haze row, a), for the basic wave all of it; length of the haze trail, blocks; 1 — slot exists)
+//          age (haze row, a), for the basic wave all of it; length of the haze trail, blocks; 1 — slot exists, 2 — and there
+//          is hard ground under its pall: channel b of the relief map is read)
 //   [2] = (wind x, z — unit; v of the dust row in the table; v of the haze row)
 //   [3] = (attenuation of dense dust — a measure of puff density, 1/block; noise tile, blocks; seconds after detonation;
 //          v of the spray row)
 // Table: across the width — radius 0..reach; rows — dust (attenuation at ground, height, smoke share; 0), spray over water
-// (attenuation over water, its height — own layer; 0; 0) and haze (attenuation, height, fire light from below; share of dust
+// (attenuation over water, its height — own layer; dust over hard ground against soil, PallField.paved; 0) and haze (attenuation, height, fire light from below; share of dust
 // drift at the same radius — PallField.share: wind carries dust from the arrival of the front, at the front it stays in
 // place). Dust and spray younger than the positive phase belong to the wall head (pallWall*); the table at the front hands
 // them over to it.
@@ -125,6 +126,13 @@ float pallWater(sampler2D ground, vec4 G, vec2 rel) {
     return clamp(textureLod(ground, rel / (2.0 * G.x) + 0.5, 0.0).g, 0.0, 1.0);
 }
 
+// share of hard ground under the point rel (from the epicenter along the ground) by the slot's map (PallGround.hard: rock, roofs,
+// roads, snow — no soil on top, only debris dust is lofted there); no map or none under the pall (S[1].w < 1.5) — soil
+float pallHard(sampler2D ground, mat4 S, vec4 G, vec2 rel) {
+    if (G.x <= 0.0 || S[1].w < 1.5) return 0.0;
+    return clamp(textureLod(ground, rel / (2.0 * G.x) + 0.5, 0.0).b, 0.0, 1.0);
+}
+
 // Field of slot S at point p (from the eye), without noise (the average over noise is that); ground, G — relief and water
 // maps of the slot; W — water of the slot; floorUp — floor of the layer under the point (top of the relief by the map,
 // blocks above the ground under the epicenter; 0 — ground under the epicenter): slab is computed from it, and above a hill
@@ -133,7 +141,8 @@ float pallWater(sampler2D ground, vec4 G, vec2 rel) {
 // lifted from (PallField: dust blown onto water stays dust): dust and spray — at the point, minus the drift (share by the
 // age of the dust — by the node of the point itself, PallField.source), where the table is also read; haze — at its source on
 // the axis of the trail (there are no fire over water), only if it is here; the basic wave — water lifted at the epicenter,
-// over whatever it rolls on (W.z = 0 — there is none). Without water under the pall (W.w = 0) the map is not read.
+// over whatever it rolls on (W.z = 0 — there is none). Without water under the pall (W.w = 0) the map is not read. Dust over
+// hard ground where it was lifted — only debris dust (pallHard, spray row b: PallField.soil).
 // bumps — top of the dust layer above the point in shares of the table's top (bumps of the top, PallField.BUMPS; without
 // noise — 1)
 PallAt pallField(sampler2D table, sampler2D ground, mat4 S, vec4 G, vec4 W, vec3 p, float floorUp, float bumps) {
@@ -153,9 +162,12 @@ PallAt pallField(sampler2D table, sampler2D ground, mat4 S, vec4 G, vec4 W, vec3
     vec4 haze = texture(table, vec2(min(uh, 1.0), S[2].w));
     float topH = max(haze.g, 1.0), sh = haze.r * (1.0 - 0.5 * along / max(len, 1.0)) * pallEdge(uh), fire = haze.b;
     float wet = 0.0, sg = 0.0, topG = 1.0;
+    float hard = sd > 0.0 ? pallHard(ground, S, G, lift) : 0.0;
+    vec4 spray = vec4(0.0);
+    if (W.w > 0.5 || hard > 0.0) spray = texture(table, vec2(min(ud, 1.0), S[3].w));
+    sd *= 1.0 + hard * (spray.b - 1.0);
     if (W.w > 0.5) {
         // spray — its own table row (its own height): only the detonation under whose pall there is water reads it
-        vec4 spray = texture(table, vec2(min(ud, 1.0), S[3].w));
         ss = spray.r * edge;
         topS = max(spray.g, 1.0);
         if (sd + ss > 0.0) wet = pallWater(ground, G, lift);
@@ -595,10 +607,10 @@ float pallDiffuse(float w, float g, float tau, float tc, float ground, float mu1
 //          1/block; 0 — no head)
 //   [1] = (angle of the rim, rad; over water — spray: its lag behind the edge of the dust, blocks; share of the top;
 //          attenuation, 1/block)
-//   [2] = (puffs — two phases of noise along the ring: the circumference of the head in tiles for each; weight of the first;
-//          noise tile, blocks)
-//   [3] = (phase numbers — each has its own puffs; attenuation of dust at the ground at the end of the wave phase at the rim
-//          and at the end of the wedge — shares of the scale)
+//   [2] = (share of the positive phase at the end of the wedge; saltation e-folds over the wedge length; share of dust rising at
+//          once behind the front — pallWallDevelop; noise tile, blocks)
+//   [3] = (dust over hard ground against soil at the rim and at the end of the wedge — BlastWall.pavedShare; attenuation of dust
+//          at the ground at the end of the wave phase at the rim and at the end of the wedge — shares of the scale)
 // The Wilson cloud of the slot — vec4 (same place): radius of the middle of the shell from the detonation point, its half-thickness
 // (blocks), attenuation in the middle (1/block; 0 — no cloud), height of the detonation point above the ground under the epicenter.
 
@@ -658,23 +670,34 @@ float pallWallInside(float s, float z, float len, float top, float lag) {
     return 1.0;
 }
 
+// Saltation development at the share u of the wedge behind the edge (BlastWall.develop): the share prompt rises at once (suspension,
+// debris), the rest as 1 − e^(−age/SALTATION_S); rate — e-folds over the wedge length
+float pallWallDevelop(float u, float rate, float prompt) {
+    return 1.0 - (1.0 - prompt) * exp(-max(u, 0.0) * rate);
+}
+
 // Attenuation multiplier of the head at s blocks beyond the edge of the dust with the lag of the spray (BlastWall.density): dust — from
 // the share edge at the edge to end at the end of the wedge of length len (× scale; dust lifted closer to the epicenter — of its own
-// density), spray — its own; wet — share of water under the point
-float pallWallDensity(float s, float len, float scale, float edge, float end, float spray, float wet) {
-    float dust = scale * (edge + (end - edge) * clamp(s / max(len, 0.001), 0.0, 1.0));
+// density), developing behind the front (pallWallDevelop: rate, prompt), thinner over hard ground (share hard; dust there against
+// soil — pavedEdge at the edge to pavedEnd at the end: debris dust only); spray — its own; wet — share of water under the point
+float pallWallDensity(float s, float len, float scale, float edge, float end, float spray, float wet, float rate, float prompt,
+        float pavedEdge, float pavedEnd, float hard) {
+    float v = s / max(len, 0.001), u = clamp(v, 0.0, 1.0);
+    float soil = 1.0 + hard * (pavedEdge + (pavedEnd - pavedEdge) * u - 1.0);
+    float dust = scale * (edge + (end - edge) * u) * pallWallDevelop(v, rate, prompt) * soil;
     return dust + (spray - dust) * wet;
 }
 
 // Share of the density of the head without noise (BlastWall.mean): s — beyond the leading edge of the dust (blocks; ahead — less than zero),
 // z — above the relief (blocks), len — length of the wedge, top — its top at the end. By height — the profile of the pall up to the top
-// of the wedge here; under the relief of the map — up to half the top (the map is coarser than the world: in the lowlands under it the head does not hang)
+// of the wedge here; under the relief of the map — up to half that local top (the map is coarser than the world: in the lowlands under
+// it the head does not hang; with the full top a dense curb stood on the leading edge)
 float pallWallMean(float s, float z, float len, float top) {
     float u = s / max(len, 0.001);
     if (u <= 0.0) return 0.0;
-    float h = top * pallWallTop(u), k = pallWallShape(u) * pallWallFade(u);
-    if (z < 0.0) return k * smoothstep(-0.5 * top, -0.25 * top, z);
-    return k * pallProfile(z / max(h, 0.001));
+    float h = max(top * pallWallTop(u), 0.001), k = pallWallShape(u) * pallWallFade(u);
+    if (z < 0.0) return k * smoothstep(-0.5 * h, -0.25 * h, z);
+    return k * pallProfile(z / h);
 }
 
 // Head of the wall at a point
@@ -687,6 +710,8 @@ struct WallAt {
     float z;
     // share of water under the point: over water the head is spray, lower and behind
     float wet;
+    // share of hard ground under the point (pallHard): only debris dust there
+    float hard;
     // the point from the axis of the ring (the epicenter: the dust at the front has not yet been carried by the wind — PallField.share), blocks
     vec2 rel;
 };
@@ -701,11 +726,14 @@ WallAt pallWallAt(sampler2D ground, mat4 S, mat4 V, vec4 G, vec4 W, vec3 p, floa
     h.s = V[0].x - length(h.rel);
     h.z = p.y - S[0].z - floorUp;
     h.wet = 0.0;
+    h.hard = 0.0;
     h.P = vec4(V[0].y, V[0].z, 0.0, 0.0);
     if (V[0].w <= 0.0 || pallWallInside(h.s, h.z, V[0].y, V[0].z, V[1].y) <= 0.0) return h;
-    if (W.w > 0.5) h.wet = pallWater(ground, G, p.xz - S[0].xy);
+    if (W.w > 0.5) h.wet = pallWater(ground, G, h.rel);
+    h.hard = pallHard(ground, S, G, h.rel);
     float lag = V[1].y * h.wet;
-    h.P = vec4(V[0].y, V[0].z * mix(1.0, V[1].z, h.wet), lag, pallWallDensity(h.s - lag, V[0].y, V[0].w, V[3].z, V[3].w, V[1].w, h.wet));
+    h.P = vec4(V[0].y, V[0].z * mix(1.0, V[1].z, h.wet), lag, pallWallDensity(h.s - lag, V[0].y, V[0].w, V[3].z, V[3].w, V[1].w, h.wet,
+            V[2].y, V[2].z, V[3].x, V[3].y, h.hard));
     return h;
 }
 

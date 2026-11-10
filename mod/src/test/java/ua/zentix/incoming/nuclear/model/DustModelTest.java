@@ -203,4 +203,22 @@ class DustModelTest {
         assertTrue(r1 < 0.6 * r15);
         assertTrue(hiroshima(r15 * 0.99).lifted() >= 0.05 && hiroshima(r15 * 1.01).lifted() <= 0.05);
     }
+
+    /**
+     * Dust rising at once behind a nuclear front ({@link DustModel#prompt}): near ground zero the wind is far above ten thresholds —
+     * suspension, no delay (Mirels); farther out saltation carries a large share and develops over {@link DustModel#SALTATION_S}
+     * (the dust-wall foot thickens behind the front). Over hard ground ({@link DustModel.Surface#PAVED}) only debris dust rises:
+     * far less than over soil near ground zero, where soil dominates.
+     */
+    @Test
+    void nuclearDustRisesPromptlyOnlyNearGroundZero() {
+        DustModel.Surface soil = DustModel.Surface.REFERENCE;
+        assertTrue(DustModel.prompt(100, 0, 15, soil) > 0.99, "15 kt at 100 m: suspension");
+        assertTrue(DustModel.prompt(2000, 0, 15, soil) < 0.6, "15 kt at 2 km: mostly saltation");
+        for (double r : new double[]{300, 600, 1000}) {
+            double paved = DustModel.column(r, 0, 15, true, 20_000, DustModel.Surface.PAVED).mass();
+            double ref = DustModel.column(r, 0, 15, true, 20_000, soil).mass();
+            assertTrue(paved < 0.2 * ref, r + " m: hard ground " + paved + " vs soil " + ref);
+        }
+    }
 }

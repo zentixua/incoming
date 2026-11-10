@@ -368,14 +368,15 @@ float wallAt(mat4 V, WallAt h, float fine, float dense) {
     return h.P.w * m * pallShape(n.xy, fill) * n.z;
 }
 
-// point h shifted by v (blocks): same underlying water/terrain, own extinction (edge to wedge end, 0 outside bounds),
+// point h shifted by v (blocks): same underlying water/terrain/hard ground, own extinction (edge to wedge end, 0 outside bounds),
 // as BlastWall.sigma at each sample
 WallAt wallMove(mat4 V, WallAt h, vec3 v) {
     WallAt m = h;
     m.rel = h.rel + v.xz;
     m.s = V[0].x - length(m.rel);
     m.z = h.z + v.y;
-    m.P.w = pallWallInside(m.s, m.z, V[0].y, V[0].z, V[1].y) * pallWallDensity(m.s - m.P.z, V[0].y, V[0].w, V[3].z, V[3].w, V[1].w, m.wet);
+    m.P.w = pallWallInside(m.s, m.z, V[0].y, V[0].z, V[1].y) * pallWallDensity(m.s - m.P.z, V[0].y, V[0].w, V[3].z, V[3].w, V[1].w, m.wet,
+            V[2].y, V[2].z, V[3].x, V[3].y, m.hard);
     return m;
 }
 

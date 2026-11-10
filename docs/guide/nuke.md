@@ -123,6 +123,9 @@ at the standard burst height, the column starts rising later, with a billowing u
 faster-rising cap. The gap is expected; in the first seconds, dust near the ground can hide the short column entirely.
 
 A ground burst leaves a crater and radioactive fallout downwind. Over water, spray takes the place of the dust wall.
+The wall rises from the ground right behind the wave and thickens over a second or two. Bare earth, fields and forests
+throw up thick dust; rock, roads, roofs and snow give only the dust of broken buildings, so there the wall is lower and
+thinner and the dust left behind is lighter.
 Burns, radiation and falling debris can still hurt you after the flash, so stay under cover and watch your dose.
 
 ![A dust wave approaches beneath the mushroom cloud at dusk](../media/blast-wave-dusk-hq.jpg)

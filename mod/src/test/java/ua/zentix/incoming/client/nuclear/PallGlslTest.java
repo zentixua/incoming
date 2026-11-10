@@ -133,11 +133,11 @@ class PallGlslTest {
         assertEquals(sample, glsl(match(wall, "float hm = (.+?);")), "head at point: not the same sample");
         String[] stop = match(at, "if \\((.+?)\\) return h;").split("\\|\\|"), p = args(match(at, "h\\.P = vec4\\(([^;]+)\\); return h;"));
         String lag = glsl(match(at, "float lag = (.+?);")), numbers = "float Px = " + glsl(p[0]) + ", Py = " + glsl(p[1]) + ", Pz = " + glsl(p[2]) + ";";
-        StringBuilder test = new StringBuilder(GLSL).append("\nfloat headAt(float pts, float ptz, float ptwet").append(SLOT_PARAMS).append(") {\n");
+        StringBuilder test = new StringBuilder(GLSL).append("\nfloat headAt(float pts, float ptz, float ptwet, float pthard").append(SLOT_PARAMS).append(") {\n");
         for (String c : stop) test.append("if (").append(glsl(c)).append(") return 0.0;\n");
         test.append("float lag = ").append(lag).append(";\n").append(numbers).append("\nfloat Pw = ").append(glsl(p[3])).append(";\nreturn ")
                 .append(sample).append(";\n}\n");
-        test.append("float headMoved(float pts, float ptz, float ptwet").append(SLOT_PARAMS).append(") {\nfloat lag = ").append(lag).append(";\n")
+        test.append("float headMoved(float pts, float ptz, float ptwet, float pthard").append(SLOT_PARAMS).append(") {\nfloat lag = ").append(lag).append(";\n")
                 .append(numbers).append("\nfloat Pw = ").append(glsl(match(move, "m\\.P\\.w = (.+?);"))).append(";\nreturn ").append(sample).append(";\n}\n");
         GlslFunction head = GlslFunction.parse(test.toString(), "headAt"), moved = GlslFunction.parse(test.toString(), "headMoved");
         float[] slot = new float[BlastWall.SLOT];
@@ -150,10 +150,11 @@ class PallGlslTest {
                 double len = slot[1], top = slot[2], back = BlastWall.HANDOFF_TO * len + slot[5];
                 for (double s = -4; s <= back + 4; s += (back + 8) / 41) {
                     for (double z = -0.7 * top; z <= 1.15 * top; z += top / 17) {
-                        for (double wet : new double[]{0, 0.35, 1}) {
+                        for (double[] under : new double[][]{{0, 0}, {0.35, 0.6}, {1, 0}, {0, 1}}) {
+                            double wet = under[0], hard = under[1];
                             double angle = 0.3 + s / 97, r = slot[0] - s, x = r * Math.cos(angle), y = r * Math.sin(angle);
-                            double want = BlastWall.sigma(slot, x, y, z, wet), shader = head.call(args(slot, slot[0] - Math.hypot(x, y), z, wet));
-                            String where = d.surface() + ", " + t + " s: s = " + s + ", z = " + z + ", water " + wet;
+                            double want = BlastWall.sigma(slot, x, y, z, wet, hard), shader = head.call(args(slot, slot[0] - Math.hypot(x, y), z, wet, hard));
+                            String where = d.surface() + ", " + t + " s: s = " + s + ", z = " + z + ", water " + wet + ", hard " + hard;
                             assertEquals(want, shader, 1e-4 * Math.abs(want) + 1e-7, where);
                             points++;
                             if (want > 0) inside++;
@@ -162,8 +163,8 @@ class PallGlslTest {
                             for (double[] v : rays) {
                                 for (double l : new double[]{0.1 * top, 0.5 * len, 1.3 * len}) {
                                     double mx = x + v[0] * Math.cos(angle) * l - v[2] * Math.sin(angle) * l, my = y + v[0] * Math.sin(angle) * l + v[2] * Math.cos(angle) * l;
-                                    double mz = z + v[1] * l, javaM = BlastWall.sigma(slot, mx, my, mz, wet);
-                                    double shaderM = moved.call(args(slot, slot[0] - Math.hypot(mx, my), mz, wet));
+                                    double mz = z + v[1] * l, javaM = BlastWall.sigma(slot, mx, my, mz, wet, hard);
+                                    double shaderM = moved.call(args(slot, slot[0] - Math.hypot(mx, my), mz, wet, hard));
                                     assertEquals(javaM, shaderM, 1e-4 * Math.abs(javaM) + 1e-7, where + ", beam " + java.util.Arrays.toString(v) + " on " + l);
                                     steps++;
                                 }
@@ -213,8 +214,12 @@ class PallGlslTest {
         String f = body(GLSL, "PallAt pallField(");
         assertTrue(f.contains("vec4 dust = texture(table, vec2(min(ud, 1.0), S[2].z));"), "dust uses the wrong row");
         assertTrue(f.contains("vec4 haze = texture(table, vec2(min(uh, 1.0), S[2].w));"), "haze - not in your own line");
-        int water = f.indexOf("if (W.w > 0.5) {"), read = f.indexOf("vec4 spray = texture(table, vec2(min(ud, 1.0), S[3].w));");
-        assertTrue(water >= 0 && read > water, "splashes - not in their own line or can be read without water under the pall");
+        assertTrue(f.contains("if (W.w > 0.5 || hard > 0.0) spray = texture(table, vec2(min(ud, 1.0), S[3].w));"),
+                "splashes - not in their own line or read without water or hard ground under the pall");
+        // dust over hard ground where it was lifted: the spray row's b (PallField.soil), the map only if there is hard ground
+        assertTrue(f.contains("float hard = sd > 0.0 ? pallHard(ground, S, G, lift) : 0.0;") && f.contains("sd *= 1.0 + hard * (spray.b - 1.0);"),
+                "dust over hard ground - not like PallField.soil");
+        assertTrue(body(GLSL, "float pallHard(").contains("if (G.x <= 0.0 || S[1].w < 1.5) return 0.0;"), "hard ground read without it under the pall");
         assertEquals(1, occurrences(f, "S[3].w"), "line of splashes - not one sample");
         // like PallField.layers and sigma: splashes at the edge - like dust, above water instead of dust, the top is not lower than the block
         for (String law : new String[]{"ss = spray.r * edge;", "topS = max(spray.g, 1.0);", "if (sd + ss > 0.0) wet = pallWater(ground, G, lift);",
@@ -233,11 +238,12 @@ class PallGlslTest {
     }
 
     /** Arguments to the head check function: point (behind the edge of dust, above the terrain, water) and slot head numbers [0..15]. */
-    private static Map<String, Double> args(float[] slot, double s, double z, double wet) {
+    private static Map<String, Double> args(float[] slot, double s, double z, double wet, double hard) {
         Map<String, Double> a = new HashMap<>();
         a.put("pts", s);
         a.put("ptz", z);
         a.put("ptwet", wet);
+        a.put("pthard", hard);
         String[] rows = {"x", "y", "z", "w"};
         for (int i = 0; i < 16; i++) a.put("V" + i / 4 + rows[i % 4], (double) slot[i]);
         return a;
@@ -250,7 +256,7 @@ class PallGlslTest {
     private static String glsl(String e) {
         e = e.replaceAll("V\\[(\\d)]\\.([xyzw])", "V$1$2");
         e = e.replaceAll("\\b[hm]\\d?\\.P\\.([xyzw])\\b", "P$1");
-        return e.replaceAll("\\b[hm]\\d?\\.(s|z|wet)\\b", "pt$1").strip();
+        return e.replaceAll("\\b[hm]\\d?\\.(s|z|wet|hard)\\b", "pt$1").strip();
     }
 
     /** Top-level call arguments (separated by commas outside parentheses). */
