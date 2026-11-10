@@ -201,7 +201,8 @@ class PallFieldTest {
     /**
      * The head of the wall and the pall are one layer: the head is dust younger than the positive phase, the pall is older, the place moves from
      *  of the head to the pall in half a phase ({@link BlastWall#handoff}). The thickness above the ground at the head and pall together is the thickness of the layer
-     * ({@link DustModel.Column#depth}) everywhere behind the front: no gap, no double dust at the junction. Raised in a wedge - along a straight line
+     * ({@link DustModel.Column#depth}, as saltation develops behind the front — {@link BlastWall#develop}) everywhere behind the front:
+     *  no gap, no double dust at the junction. Raised in a wedge - along a straight line
      *  between its edge and end (at 1 km the layer towards the epicenter grows faster than a straight line - up to +18%), at the junction - up to −11%.
      */
     @Test
@@ -219,7 +220,8 @@ class PallFieldTest {
                 if (u < 0.05) continue;
                 double head = BlastWall.tau(s, r, 0, 0, Double.POSITIVE_INFINITY, 0);
                 double pall = p.tau(r, 0, 0, Double.POSITIVE_INFINITY, 0, ticks, PallField.Water.DRY);
-                double layer = p.layer(i).depth(t - arrival / 20);
+                // the head rises with saltation development behind the front (BlastWall.develop): the layer as it develops
+                double layer = p.layer(i).depth(t - arrival / 20) * BlastWall.develop(u, s[9], s[10]);
                 assertEquals(layer, head + pall, 0.2 * layer, metres + " m, u = " + u + ": head " + head + " + pall " + pall);
                 if (u > 0.9 && metres > 2000) assertEquals(layer, head + pall, 0.06 * layer, metres + " m, u = " + u + ": joint");
                 if (u < 0.9) assertEquals(0, pall, 1e-12, "pall in the wedge of the head");
@@ -758,5 +760,25 @@ class PallFieldTest {
         double late = 20 * 60 * 8;
         assertTrue(p.sigma(1000, 0, 0, 0, late, PallField.Water.DRY) > 0, "over land haze and dust");
         assertEquals(0, p.sigma(1000, 0, 0, 0, late, sea), 1e-12, "over the sea the spray fell long ago");
+    }
+
+    /** The pall over hard ground where dust was lofted holds only debris dust ({@link PallField#soil}): thinner, never thicker. */
+    @Test
+    void pallThinsOverHardGround() {
+        PallField p = new PallField(CALM, NOON);
+        double ticks = CALM.arrivalTicks(CALM.blocks(800)) + 20 * 30;
+        PallField.Water hard = new PallField.Water() {
+            @Override
+            public double at(double dx, double dz) {
+                return 0;
+            }
+
+            @Override
+            public double hard(double dx, double dz) {
+                return 1;
+            }
+        };
+        double soil = p.sigma(CALM.blocks(800), 0, 2, 0, ticks, PallField.Water.DRY), rock = p.sigma(CALM.blocks(800), 0, 2, 0, ticks, hard);
+        assertTrue(soil > 0 && rock < 0.3 * soil, soil + " vs " + rock);
     }
 }

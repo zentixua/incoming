@@ -18,8 +18,10 @@ import ua.zentix.incoming.nuclear.model.WaterModel;
  * {@link #length}; shorter for the first ~0.6 s of a surface burst: the head and its pall transition do not enter the ground-level fireball,
  * {@link #underBall}): no dust yet at the leading edge, and zero layer height; rearward, lofted material grows with dynamic-pressure
  * impulse ({@link DustModel#lifted}), while the top follows Kuhl's dusty boundary layer, u^(5/6) ({@link #top}); thus
- * ground density peaks near the edge, one tenth into the wedge (2.6 times denser than at its end,
- * {@link #shape}), while the column above ground grows rearward. Behind the wedge, dust remains as a pall layer (its table holds the same dust,
+ * ground density peaks in the front part of the wedge ({@link #shape}: 2.6 times denser than at its end one tenth into it with
+ * steady lofting; saltation still develops right behind the front, {@link #develop}, so for 15 kt 4 s after the burst — 1.4 times at a
+ * third), while the column above ground grows rearward. Over hard ground (rock, roofs, roads, snow) only debris dust rises
+ * ({@link #pavedShare}, the pall map's hard share): the foot follows the terrain instead of an even ring. Behind the wedge, dust remains as a pall layer (its table holds the same dust,
  * {@link PallField}): the head hands over across half a wedge length ({@link #handoff}). Where wind no longer lofts dust,
  * edge density vanishes and the head fades, separating from the front — dust remains in place (MET: "stopped moving along the ground at
  * 945 m").
@@ -74,6 +76,12 @@ public final class BlastWall {
      * model seconds (nondecreasing with distance).
      */
     private final double[] lifted = new double[NODES], phaseEnd = new double[NODES];
+    /**
+     * Per node: optical depth of all lofted material over hard ground ({@link DustModel.Surface#PAVED}: rock, roofs, roads, snow),
+     * and the share of dust rising at once behind the front ({@link DustModel#prompt}; the rest develops over
+     * {@link DustModel#SALTATION_S}).
+     */
+    private final double[] paved = new double[NODES], prompt = new double[NODES];
     /** Positive phase at the table end, model s: beyond the table, wedge end follows front travel over this phase. */
     private final double lastPositive;
     /** Humid air means a Wilson cloud exists ({@link CloudModel#wilsonCloud}). */
@@ -96,6 +104,8 @@ public final class BlastWall {
             double g = tableM * i / (NODES - 1);
             DustModel.Column c = DustModel.column(g, hob, d.yieldKt(), d.surface(), d.visibility(), DustModel.Surface.REFERENCE);
             lifted[i] = c.lifted();
+            paved[i] = DustModel.column(g, hob, d.yieldKt(), d.surface(), d.visibility(), DustModel.Surface.PAVED).lifted();
+            prompt[i] = DustModel.prompt(g, hob, d.yieldKt(), DustModel.Surface.REFERENCE);
             positive = c.positive();
             first = Math.max(first, c.first());
             phaseEnd[i] = arrival(g) + positive;
@@ -121,6 +131,20 @@ public final class BlastWall {
         if (x >= NODES - 1) return 0;
         int i = (int) x;
         return Mth.lerp(x - i, table[i], table[i + 1]);
+    }
+
+    /** Node value at {@code groundM} m (linear between nodes; beyond the table — the last node). */
+    private double clamped(double[] table, double groundM) {
+        return at(table, Math.min(Math.max(0, groundM), tableM * (1 - 1e-9)));
+    }
+
+    /**
+     * Dust over hard ground relative to soil at {@code groundM} m ({@link DustModel.Surface#PAVED} against
+     * {@link DustModel.Surface#REFERENCE}): debris dust only, where buildings collapse; 1 where nothing is lofted.
+     */
+    double pavedShare(double groundM) {
+        double soil = clamped(lifted, groundM);
+        return soil > 0 ? Math.min(1, clamped(paved, groundM) / soil) : 1;
     }
 
     /** Game-front arrival at ground distance {@code groundM} m from ground zero, model seconds. */
@@ -297,10 +321,11 @@ public final class BlastWall {
      *     head);</li>
      *     <li>[4..7] — dust displacement with wind behind the front ({@link #carried(double)}); spray over water: lag behind dust
      *     edge, top fraction, extinction (1/block);</li>
-     *     <li>[8..11] — phase fraction elapsed at wedge end ({@link #backAge}: wedge fraction u means phase fraction u × this), 0, 0;
-     *     billow noise tile ({@link #TILE});</li>
-     *     <li>[12..15] — 0, 0; ground dust extinction at wave phase end, at leading edge and wedge end — fractions of
-     *     scale.</li>
+     *     <li>[8..11] — phase fraction elapsed at wedge end ({@link #backAge}: wedge fraction u means phase fraction u × this);
+     *     saltation e-folds over the wedge length (dust age at its end over {@link DustModel#SALTATION_S}) and the share of dust
+     *     rising at once ({@link #develop}); billow noise tile ({@link #TILE});</li>
+     *     <li>[12..15] — dust over hard ground relative to soil ({@link #pavedShare}) at leading edge and wedge end; ground dust
+     *     extinction at wave phase end, at leading edge and wedge end — fractions of scale.</li>
      * </ul>
      * [16..19] — Wilson cloud ({@code pallWilson}): shell-center radius from the detonation point, half-thickness, central
      * extinction (0 — no cloud), detonation-point height above ground zero.
@@ -326,7 +351,12 @@ public final class BlastWall {
             into[5] = (float) d.blocks(lag);
             into[6] = (float) Mth.clamp(WaterModel.sprayHeight(u) / Math.max(1, top), 0.15, 1);
             into[7] = (float) (s[2] / d.scale());
-            into[8] = (float) backAge(t);
+            double age = backAge(t), back = Math.max(0, head - len);
+            into[8] = (float) age;
+            into[9] = (float) (age * HobBlast.positivePhaseSeconds(back, hob, d.yieldKt()) / DustModel.SALTATION_S);
+            into[10] = (float) clamped(prompt, Math.max(0, head - 0.5 * len));
+            into[12] = (float) pavedShare(head);
+            into[13] = (float) pavedShare(back);
             // shader tile at least one block
             into[11] = (float) Math.max(1, d.blocks(tileM));
             into[14] = (float) (s[0] / ref);
@@ -395,14 +425,26 @@ public final class BlastWall {
      * Head density share without noise (billow mean), relative to ground density at wedge end: {@code s} — behind the dust leading
      * edge (blocks; negative ahead), {@code z} — above terrain (blocks), {@code len} — wedge length, {@code top} — its
      * end top. Vertically, pall profile ({@link PallField#profile}) up to the local wedge top; below map terrain, down to
-     * half the top (map is coarser than the world). Copy {@code pallWallMean}.
+     * half the local top (map is coarser than the world; with the full top, a dense curb with a flat top stood on the leading
+     * edge wherever real ground lies below the map). Copy {@code pallWallMean}.
      */
     static double mean(double s, double z, double len, double top) {
         double u = s / Math.max(len, 0.001);
         if (u <= 0) return 0;
-        double h = top * top(u), k = shape(u) * handoff(u);
-        if (z < 0) return k * smooth(-0.5 * top, -0.25 * top, z);
-        return k * PallField.profile(z / Math.max(h, 0.001));
+        double h = Math.max(top * top(u), 0.001), k = shape(u) * handoff(u);
+        if (z < 0) return k * smooth(-0.5 * h, -0.25 * h, z);
+        return k * PallField.profile(z / h);
+    }
+
+    /**
+     * Saltation development at wedge fraction u behind the leading edge, 0..1: share {@code prompt} rises at once (suspension, debris),
+     * the rest as 1 − e^(−age/{@link DustModel#SALTATION_S}) (Anderson &amp; Haff 1988: flux reaches steady state in about a second),
+     * {@code rate} — e-folds over the wedge length. Total lofted mass stays the steady-state law ({@link DustModel#column}); only the
+     * foot of the head is younger and thinner — the leading edge thickens over the first metres to tens of metres behind the front
+     * instead of standing at full density on an exact circle. Copy {@code pallWallDevelop}.
+     */
+    static double develop(double u, double rate, double prompt) {
+        return 1 - (1 - prompt) * Math.exp(-Math.max(u, 0) * rate);
     }
 
     /**
@@ -411,18 +453,28 @@ public final class BlastWall {
      * {@code wet} — water fraction below it (over water the head is spray: lower and behind the dust edge).
      */
     static double sigma(float[] slot, double relX, double relZ, double up, double wet) {
+        return sigma(slot, relX, relZ, up, wet, 0);
+    }
+
+    /** The same over ground with hard share {@code hard} ({@link PallGround#hard}). */
+    static double sigma(float[] slot, double relX, double relZ, double up, double wet, double hard) {
         if (slot[3] <= 0) return 0;
         double s = slot[0] - Math.hypot(relX, relZ), len = slot[1], top = slot[2];
         if (s < -1 || s > HANDOFF_TO * len + slot[5] || up > top || up < -0.5 * top) return 0;
         double back = slot[5] * wet, at = s - back;
-        double k = density(slot, at, wet);
+        double k = density(slot, at, wet, hard);
         return k * mean(at, up, len, top * (1 + (slot[6] - 1) * wet));
     }
 
-    /** Head extinction multiplier {@code s} blocks behind the edge (including spray lag): dust from edge to wedge end; spray has its own. */
-    private static double density(float[] slot, double s, double wet) {
-        double u = Mth.clamp(s / Math.max(slot[1], 0.001), 0, 1);
-        double dust = slot[3] * (slot[14] + (slot[15] - slot[14]) * u);
+    /**
+     * Head extinction multiplier {@code s} blocks behind the edge (including spray lag): dust from edge to wedge end, developing
+     * ({@link #develop}) and thinner over hard ground ({@code hard} share, {@link #pavedShare}); spray has its own. Copy
+     * {@code pallWallDensity}.
+     */
+    static double density(float[] slot, double s, double wet, double hard) {
+        double v = s / Math.max(slot[1], 0.001), u = Mth.clamp(v, 0, 1);
+        double soil = 1 + hard * (slot[12] + (slot[13] - slot[12]) * u - 1);
+        double dust = slot[3] * (slot[14] + (slot[15] - slot[14]) * u) * develop(v, slot[9], slot[10]) * soil;
         return dust + (slot[7] - dust) * wet;
     }
 
@@ -432,19 +484,24 @@ public final class BlastWall {
      * local wedge top. Head dust above and below the eye determines pall-ray reach ({@link NukePall}).
      */
     static double tau(float[] slot, double relX, double relZ, double from, double to, double wet) {
+        return tau(slot, relX, relZ, from, to, wet, 0);
+    }
+
+    /** The same over ground with hard share {@code hard}. */
+    static double tau(float[] slot, double relX, double relZ, double from, double to, double wet, double hard) {
         if (slot[3] <= 0) return 0;
         double s = slot[0] - Math.hypot(relX, relZ), len = slot[1];
         double full = slot[2] * (1 + (slot[6] - 1) * wet), back = slot[5] * wet;
         double here = full * top((s - back) / Math.max(len, 0.001));
-        return simpson(slot, relX, relZ, Math.max(from, -0.5 * full), Math.min(to, 0), wet)
-                + simpson(slot, relX, relZ, Math.max(from, 0), Math.min(to, here), wet);
+        return simpson(slot, relX, relZ, Math.max(from, -0.5 * full), Math.min(to, 0), wet, hard)
+                + simpson(slot, relX, relZ, Math.max(from, 0), Math.min(to, here), wet, hard);
     }
 
-    private static double simpson(float[] slot, double relX, double relZ, double a, double b, double wet) {
+    private static double simpson(float[] slot, double relX, double relZ, double a, double b, double wet, double hard) {
         if (!(b > a)) return 0;
         int n = 16;
-        double h = (b - a) / n, sum = sigma(slot, relX, relZ, a, wet) + sigma(slot, relX, relZ, b, wet);
-        for (int k = 1; k < n; k++) sum += (k % 2 == 1 ? 4 : 2) * sigma(slot, relX, relZ, a + k * h, wet);
+        double h = (b - a) / n, sum = sigma(slot, relX, relZ, a, wet, hard) + sigma(slot, relX, relZ, b, wet, hard);
+        for (int k = 1; k < n; k++) sum += (k % 2 == 1 ? 4 : 2) * sigma(slot, relX, relZ, a + k * h, wet, hard);
         return sum * h / 3;
     }
 

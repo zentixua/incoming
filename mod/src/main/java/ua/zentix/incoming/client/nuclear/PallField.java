@@ -134,6 +134,11 @@ public final class PallField {
         Water DRY = (dx, dz) -> 0;
 
         double at(double dx, double dz);
+
+        /** Hard-ground fraction beneath pall at (dx, dz) from ground zero ({@link PallGround#hard}); soil by default. */
+        default double hard(double dx, double dz) {
+            return 0;
+        }
     }
 
     private final Detonation d;
@@ -149,6 +154,11 @@ public final class PallField {
      */
     private final double[] arrival = new double[BINS], destroyed = new double[BINS], ceiling = new double[BINS],
             fire = new double[BINS], spray = new double[BINS], sprayFrom = new double[BINS];
+    /**
+     * Per node: dust over hard ground relative to soil ({@link DustModel.Surface#PAVED} against the reference; same bins, so the ratio
+     * holds at every age): the pall over rock, roofs and snow holds only debris dust.
+     */
+    private final double[] paved = new double[BINS];
     /**
      * Water beneath ground zero 0..1 ({@code NukeWater.under}: chunk, map tile or sea-level guess), and how much of a
      * "water burst" it is ({@link WaterModel#wetBurst} × that fraction), written by client tick ({@link #water}); land until resolved.
@@ -197,6 +207,8 @@ public final class PallField {
             spray[i] = WaterModel.spray(wind);
             sprayFrom[i] = Math.max(1, d.blocks(WaterModel.sprayHeight(wind)));
             columns[i] = DustModel.column(rm, hob, y, d.surface(), d.visibility(), surface);
+            double soil = columns[i].mass();
+            paved[i] = soil > 0 ? Math.min(1, DustModel.column(rm, hob, y, d.surface(), d.visibility(), DustModel.Surface.PAVED).mass() / soil) : 1;
             ceiling[i] = Math.max(MIN_TOP_BLOCKS, d.blocks(columns[i].ceiling()));
             fire[i] = ignite <= 0 ? 0 : 1 - smooth(ignite * 0.85, ignite * 1.05, rm);
             last = Math.max(last, arrival[i] + 20 * d.scale() * settledBy(columns[i]));
@@ -492,13 +504,20 @@ public final class PallField {
 
     /**
      * Node i spray over water: water-level extinction (1/block; where water lies beneath pall, excluding spray still in wall head),
-     * spray top (blocks, {@link #sprayTop}); 0, 0. Separate layer: spray does not mix with dust and is lower.
+     * spray top (blocks, {@link #sprayTop}); node i dust over hard ground relative to soil ({@link #paved}, read with the dust where it
+     * was lofted — the row has room), 0. Separate layer: spray does not mix with dust and is lower.
      */
     void spray(int i, double ticks, double[] out) {
         double age = seconds(i, ticks);
         out[0] = spray[i] <= 0 ? 0 : perBlock(SIGMA_SPRAY) * spray[i] * sprayEnvelope(age) * pallShare(i, ticks);
         out[1] = Math.max(sprayTop(sprayFrom[i], age), 1);
-        out[2] = out[3] = 0;
+        out[2] = paved[i];
+        out[3] = 0;
+    }
+
+    /** Dust over ground with hard share {@code hard} relative to soil at node i: copy of {@code pallField} (spray row, b). */
+    double soil(int i, double hard) {
+        return 1 + hard * (paved[i] - 1);
     }
 
     /**
@@ -728,7 +747,7 @@ public final class PallField {
             double sd = v[0], topD = v[1];
             spray(i, ticks, v);
             double e = edge(ud), wet = sd + v[0] > 0 ? water.at(lx, lz) : 0;
-            out[0] = sd * (1 - wet) * e;
+            out[0] = sd * (1 - wet) * e * (sd > 0 ? soil(i, water.hard(lx, lz)) : 1);
             out[1] = v[0] * wet * e;
             out[2] = Math.max(topD, 1);
             out[7] = Math.max(v[1], 1);

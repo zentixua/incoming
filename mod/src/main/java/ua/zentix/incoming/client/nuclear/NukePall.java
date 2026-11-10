@@ -111,9 +111,10 @@ public final class NukePall {
             double head = 0, wetHere = 0;
             if (a.wall.slot(a.seconds(0), WALL_TICK) && WALL_TICK[3] > 0) {
                 wetHere = a.ground.hasWater() ? a.ground.water(cam.x, cam.z) : 0;
-                head = BlastWall.sigma(WALL_TICK, dx, dz, eye - floor, wetHere);
-                up += BlastWall.tau(WALL_TICK, dx, dz, eye - floor, Double.POSITIVE_INFINITY, wetHere);
-                down += BlastWall.tau(WALL_TICK, dx, dz, 0, eye - floor, wetHere);
+                double hard = a.ground.hasHard() ? a.ground.hard(cam.x, cam.z) : 0;
+                head = BlastWall.sigma(WALL_TICK, dx, dz, eye - floor, wetHere, hard);
+                up += BlastWall.tau(WALL_TICK, dx, dz, eye - floor, Double.POSITIVE_INFINITY, wetHere, hard);
+                down += BlastWall.tau(WALL_TICK, dx, dz, 0, eye - floor, wetHere, hard);
                 if (head > headMax) {
                     headMax = head;
                     headWet = wetHere;
@@ -162,10 +163,21 @@ public final class NukePall {
         NukeAsh.tick(level, cam, dust, s - wet, nearest);
     }
 
-    /** Water fraction beneath detonation pall (dx, dz from ground zero), from its {@link PallGround} map. */
+    /** Water and hard-ground fractions beneath detonation pall (dx, dz from ground zero), from its {@link PallGround} map. */
     static PallField.Water water(ClientNuclear.Active a) {
         double x0 = a.d.burst().x, z0 = a.d.burst().z;
-        return (dx, dz) -> a.ground.water(x0 + dx, z0 + dz);
+        PallGround g = a.ground;
+        return new PallField.Water() {
+            @Override
+            public double at(double dx, double dz) {
+                return g.water(x0 + dx, z0 + dz);
+            }
+
+            @Override
+            public double hard(double dx, double dz) {
+                return g.hasHard() ? g.hard(x0 + dx, z0 + dz) : 0;
+            }
+        };
     }
 
     static void reset() {
@@ -387,7 +399,8 @@ public final class NukePall {
         double ys = Math.cbrt(d.yieldKt() / 15);
         org.joml.Matrix4f m = k == 0 ? f.slot0 : f.slot1;
         m.m00(cx).m01(cz).m02(ground).m03((float) p.reach());
-        m.m10((float) DRIFT[0]).m11((float) DRIFT[1]).m12((float) plume).m13(1);
+        // S[1].w: 1 — slot in use, 2 — and hard ground beneath its pall (the shader samples it only then)
+        m.m10((float) DRIFT[0]).m11((float) DRIFT[1]).m12((float) plume).m13(a.ground.hasHard() ? 2 : 1);
         m.m20((float) Math.cos(d.windDir())).m21((float) Math.sin(d.windDir()));
         m.m30((float) (PallField.SIGMA_DENSE / d.scale())).m31((float) Math.max(48, d.blocks(TILE_M * ys))).m32((float) (ticks / 20.0));
         tableRows(m, k);

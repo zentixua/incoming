@@ -70,7 +70,7 @@ import java.util.concurrent.CompletionException;
  * heights, as direct beam and forward scattering); composite samples it at each world pixel ({@code fx_pall_composite}).
  * <p>
  * Custom textures — three reduced-resolution frames (RGBA16F), 128×4 table, 256×5 mushroom table (RGBA32F), 128×512 mushroom shadow
- * map (RGBA16F, 0.5 MB), noise 64³ (RG8) and 64² (R8): together under 2.5 MB at 1080p; fire maps up to 0.7 MB per slot (side up to 256 cells), terrain/water maps under the pall — 64 KB per slot. Noise computed in the background on the first
+ * map (RGBA16F, 0.5 MB), noise 64³ (RG8) and 64² (R8): together under 2.5 MB at 1080p; fire maps up to 0.7 MB per slot (side up to 256 cells), terrain/water/ground maps under the pall — 128 KB per slot. Noise computed in the background on the first
  * detonation (about one second); no pall until ready.
  * <p>
  * Detail holds its own budget ({@link Detail}): GPU pass times measured by OpenGL timestamps, read after
@@ -345,13 +345,13 @@ public final class PallPass {
 
     /**
      * Terrain and water beneath a slot's pall ({@code client/nuclear/PallGround}): endpoint for rays without a world hit, and
-     * pall material (dust over land, spray over water). Map of height above epicentre ground (R) and water fraction (G), RG16F with
-     * bilinear sampling, clamped edges.
+     * pall material (dust over land, spray over water, thinner dust over hard ground). Map of height above epicentre ground (R), water
+     * fraction (G) and hard-ground fraction (B), RGBA16F with bilinear sampling, clamped edges.
      */
     public static final class Ground {
         /** Map half-side, bottom and top (above epicentre ground), cell size — blocks ({@code pall.glsl}); zeroes — no map. */
         public final Vector4f params = new Vector4f();
-        /** Height and water fraction per cell (two numbers), side {@link #side}, x fastest; null — no map. */
+        /** Height, water and hard-ground fractions, 0 per cell (four numbers), side {@link #side}, x fastest; null — no map. */
         @Nullable
         public float[] map;
         public int side;
@@ -1033,7 +1033,7 @@ public final class PallPass {
     private static int ground(int k, Ground g) {
         if (!g.on()) return -1;
         float[] map = g.map;
-        int n = g.side * g.side * 2;
+        int n = g.side * g.side * 4;
         if (map == null || map.length < n) return -1;
         if (GROUND[k] < 0) {
             GROUND[k] = GlStateManager._genTexture();
@@ -1056,7 +1056,7 @@ public final class PallPass {
         GlStateManager._pixelStore(GL11.GL_UNPACK_ROW_LENGTH, 0);
         GlStateManager._pixelStore(GL11.GL_UNPACK_SKIP_ROWS, 0);
         GlStateManager._pixelStore(GL11.GL_UNPACK_SKIP_PIXELS, 0);
-        GL11.glTexImage2D(GL11.GL_TEXTURE_2D, 0, GL30.GL_RG16F, g.side, g.side, 0, GL30.GL_RG, GL11.GL_FLOAT, buf);
+        GL11.glTexImage2D(GL11.GL_TEXTURE_2D, 0, GL30.GL_RGBA16F, g.side, g.side, 0, GL11.GL_RGBA, GL11.GL_FLOAT, buf);
         GROUND_SOURCE[k] = g.source;
         GROUND_VERSION[k] = g.version;
         GROUND_SIDE[k] = g.side;

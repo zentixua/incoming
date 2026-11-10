@@ -3,8 +3,11 @@ package ua.zentix.incoming.client.far;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.BlockPos;
 import net.minecraft.tags.FluidTags;
+import net.minecraft.world.level.block.Blocks;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.levelgen.Heightmap;
+import net.minecraft.world.level.material.MapColor;
 import ua.zentix.incoming.client.map.TerrainTiles;
 
 import java.util.OptionalInt;
@@ -58,6 +61,44 @@ public final class FarTerrain {
         int y = top;
         while (y > bottom && permeable.test(y)) y--;
         return y;
+    }
+
+    /**
+     * Hard ground on top of the column, 1 or 0 ({@link Double#NaN} — unknown), for nuclear dust ({@code DustModel.Surface.PAVED}):
+     * no soil on top — rock, roofs, roads, planks, metal, ice, snow (it shields the soil). Soil is loose ground and sod
+     * ({@link FarBlasts#loose}, {@link FarBlasts#sod}) under the canopy ({@link #dustY}: a forest lofts its floor); water is not hard
+     * (the head is spray there). In the client's chunks — the block, a snow layer on top counts as snow; further — the map color of the
+     * terrain tile ({@link TerrainTiles#color}: grass, foliage, plants, dirt, sand, clay are soil; ⚠ map colors are coarse — gravel and
+     * a stone path share {@code STONE}, red sand and orange wool share {@code COLOR_ORANGE}).
+     */
+    public static Water hard(ClientLevel level) {
+        BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
+        return (x, z) -> {
+            LevelChunk chunk = level.getChunkSource().getChunk(x >> 4, z >> 4, false);
+            if (chunk != null) {
+                int y = dustY(chunk, x, z);
+                if (y < chunk.getMinBuildHeight()) return Double.NaN;
+                BlockState top = chunk.getBlockState(pos.set(x, y, z));
+                if (!top.getFluidState().isEmpty()) return 0;
+                if (chunk.getBlockState(pos.set(x, y + 1, z)).is(Blocks.SNOW)) return 1;
+                return soil(top) ? 0 : 1;
+            }
+            int color = TerrainTiles.color(x, z);
+            return color < 0 ? Double.NaN : hardColor(color) ? 1 : 0;
+        };
+    }
+
+    /** Soil on top for nuclear dust: loose ground or sod, without snow. */
+    static boolean soil(BlockState s) {
+        boolean snow = s.is(Blocks.SNOW) || s.is(Blocks.SNOW_BLOCK) || s.is(Blocks.POWDER_SNOW);
+        return !snow && (FarBlasts.loose(s) || FarBlasts.sod(s));
+    }
+
+    /** Whether a terrain-tile map color is hard ground ({@link #hard}); {@code MapColor.NONE} and water are not. */
+    static boolean hardColor(int id) {
+        return !(id == MapColor.NONE.id || id == MapColor.WATER.id || id == MapColor.GRASS.id || id == MapColor.PLANT.id
+                || id == MapColor.DIRT.id || id == MapColor.SAND.id || id == MapColor.CLAY.id || id == MapColor.PODZOL.id
+                || id == MapColor.COLOR_ORANGE.id || id == MapColor.COLOR_GREEN.id || id == MapColor.TERRACOTTA_CYAN.id);
     }
 
     /** Whether water is on top of the column: 1 — water, 0 — land, {@link Double#NaN} — unknown. */
