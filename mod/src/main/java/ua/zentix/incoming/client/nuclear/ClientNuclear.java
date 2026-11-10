@@ -5,6 +5,7 @@ import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
 import org.jetbrains.annotations.Nullable;
+import ua.zentix.incoming.client.TickTime;
 import ua.zentix.incoming.client.far.FarTerrain;
 import ua.zentix.incoming.client.far.Sightline;
 import ua.zentix.incoming.client.fx.CameraShake;
@@ -95,7 +96,7 @@ public final class ClientNuclear {
 
         /** Ticks since detonation (with frame fraction). */
         public double ticks(float partialTick) {
-            return before + age + partialTick;
+            return TickTime.at(before + age, partialTick);
         }
 
         /** Model seconds since detonation (world scale applied). */

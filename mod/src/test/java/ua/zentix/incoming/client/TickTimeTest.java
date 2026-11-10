@@ -49,7 +49,7 @@ class TickTimeTest {
     /** Game time and tick counters take the partial tick only through {@link TickTime}: a bare sum is float arithmetic. */
     @Test
     void noBarePartialTickSums() throws IOException {
-        Pattern bare = Pattern.compile("(getGameTime\\(\\)|ticks\\(\\)|\\bticks)\\s*\\+\\s*(partial\\w*|pt\\b|view\\.partial\\(\\))");
+        Pattern bare = Pattern.compile("(getGameTime\\(\\)|ticks\\(\\)|\\bticks)\\s*\\+\\s*(partial\\w*|pt\\b|view\\.partial\\(\\)|\\w+\\.getGameTimeDeltaPartialTick\\()");
         List<String> found = new ArrayList<>();
         try (Stream<Path> files = Files.walk(Path.of("src/main/java"))) {
             for (Path f : files.filter(p -> p.toString().endsWith(".java") && !p.endsWith("TickTime.java")).toList()) {

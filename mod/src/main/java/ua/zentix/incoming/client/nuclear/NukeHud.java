@@ -51,7 +51,7 @@ public final class NukeHud {
             double left = COUNTDOWNS.computeIfAbsent(w.strikeId(), id -> new Countdown()).next(Math.max(0, (w.detonateTime() - now) / 20.0));
             if (ClientNuclear.detonationOverdue(w, now)) {
                 // the deadline plus clock-lag allowance has passed without a detonation: the server is loading the impact site —
-                // do not silently hold "0.0 s" (before the allowance expires, show "0.0 s": the client clock can run ahead of the server)
+                // do not silently hold "0 s" (before the allowance expires, show "0 s": the client clock can run ahead of the server)
                 if (w.alarm() || w.mine()) {
                     Component c = Component.translatable("incoming.nuke.delayed").withStyle(ChatFormatting.GOLD);
                     g.drawString(font, c, cx - font.width(c) / 2, y, alpha(pulse) | 0xFFFFFF);
