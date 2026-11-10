@@ -124,9 +124,12 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
 - Post-wave pall (`client/nuclear/PallField` field, `NukePall` at camera/into frame, `NukeAsh` ash;
   `client/fx/layer/PallPass` renders): dust follows ground pressure and front arrival, haze over the ignition zone
   lives the storm's smoke on the detonation clock (`PallField.clock`, set by `ClientNuclear.Active.clockTicksAt`:
-  `NukeClock` over the client world clock `ClientClock`, show end from `S2C.NukeClock`, estimated as a vanilla day
-  without one); no time-of-day logic: sleep, `/time add` move it on through the clock, `/time set` backward never
-  rewinds (AGENTS.md “Time”); dust stays on real time; detonation lives on the client while pall remains visible. Field laws in Java and copied in `shaders/include/pall.glsl` (`PallGlslTest` reads
+  `NukeClock` over the client world clock `ClientClock`; `S2C.NukeClock` carries the server's world clock and every
+  ended show's end clock, once a second while the dimension holds detonations, so its latest copy in a Flashback
+  snapshot restores them after a seek (`ClientNuclear.SHOW_ENDS` outlives `rewound`); a recording without it estimates
+  the show end as a vanilla day); no time-of-day logic: sleep, `/time add` move it on through the clock, `/time set` backward never
+  rewinds (AGENTS.md “Time”). Pace game-tick timers to the clock on a fixed game-time grid (`BurnsEffect`: every
+  20th game tick, never on the timer's own remainder, which a correction keeps landing on); dust stays on real time; detonation lives on the client while pall remains visible. Field laws in Java and copied in `shaders/include/pall.glsl` (`PallGlslTest` reads
   shader functions and compares with Java; edit laws in both); fireball/fire lighting on pall (`pallBallShare`,
   `pallBurn`) copies `CloudPuffs.ball` and `burn` (also camera dust light, `NukePall.dustColor`): change lighting there too.
   Dust and dust-wall head are one layer (`nuclear/model/DustModel`; laws: “Blast-lofted dust” survey, “cinema-level
