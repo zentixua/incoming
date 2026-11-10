@@ -55,10 +55,10 @@ public final class ClientNuclear {
         private final long before;
         private long age;
         /**
-         * Client world clock ({@link ClientClock}) at the end of the show ({@link NukeClock}); NaN — not reached, or not yet
-         * known (the server's {@code S2C.NukeClock} sets it; without one, estimated as under a vanilla day).
+         * Estimated world clock at the end of the show ({@link NukeClock}) when the server has not said ({@link #SHOW_ENDS}:
+         * a recording made before the server sent it); NaN — not estimated yet.
          */
-        private double showEnd = Double.NaN;
+        private double guessedShowEnd = Double.NaN;
         final NukeSounds.Schedule sounds;
 
         Active(Detonation d, boolean live, long clientNow) {
@@ -111,19 +111,15 @@ public final class ClientNuclear {
             double real = realTicks / 20.0;
             if (real <= NukeClock.SHOW_S) return realTicks;
             double now = ClientClock.now();
+            Double told = SHOW_ENDS.get(d.id());
             // not told by the server (old recording): as if the day had run at vanilla speed since the show's end
-            if (Double.isNaN(showEnd)) showEnd = now - (real - NukeClock.SHOW_S) * 20;
-            return NukeClock.fromClock(real, now - showEnd) * 20;
+            if (told == null && Double.isNaN(guessedShowEnd)) guessedShowEnd = now - (real - NukeClock.SHOW_S) * 20;
+            return NukeClock.fromClock(real, now - (told != null ? told : guessedShowEnd)) * 20;
         }
 
         /** Detonation-clock seconds now. */
         public double clockSeconds(float partialTick) {
             return clockTicksAt(ticks(partialTick)) / 20.0;
-        }
-
-        /** The server says the show ended {@code since} world-clock ticks ago. */
-        void showEnded(double since) {
-            showEnd = ClientClock.now() - Math.max(0, since);
         }
     }
 
@@ -222,10 +218,17 @@ public final class ClientNuclear {
         }
     }
 
-    /** A detonation's show ended on the server ({@link NukeClock}): its clock follows the world clock from there. */
+    /**
+     * The server's world clock at the end of each ended show in this dimension ({@link S2C.NukeClock}); the latest packet
+     * replaces it whole, and a replay seek keeps it (the detonations are rebuilt, this is not).
+     */
+    private static final Map<Integer, Double> SHOW_ENDS = new HashMap<>();
+
+    /** The server's clock: the client's world clock continues from it, and each ended show follows it from its end. */
     public static void clock(S2C.NukeClock p) {
-        Active a = DETONATIONS.get(p.id());
-        if (a != null) a.showEnded(p.since());
+        ClientClock.set(p.clock());
+        SHOW_ENDS.clear();
+        for (S2C.NukeClock.ShowEnd e : p.ends()) SHOW_ENDS.put(e.id(), e.at());
     }
 
     /** World entry/dimension change: all current state, without flash/hit (already passed). */
@@ -314,6 +317,7 @@ public final class ClientNuclear {
     public static void reset() {
         stopAll();
         DETONATIONS.clear();
+        SHOW_ENDS.clear();
         WARNINGS.clear();
         radiation = null;
         CLOCK.reset();

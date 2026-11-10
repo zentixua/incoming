@@ -509,7 +509,7 @@
   "incoming.grid.restore.never": "returns only by command",
   "incoming.grid.restore.damage": "returns by damage: in hours beyond %s blocks, in days beyond %s, never closer",
   "incoming.grid.restore.now": "returning",
-  "incoming.grid.restore.in": "returns in %s min",
+  "incoming.grid.restore.in": "returns in %s h of the world's day",
   "incoming.grid.node.added": "Grid node #%s: %s %s %s, radius %s",
   "incoming.grid.node.removed": "Grid node #%s removed",
   "incoming.grid.node.knocked_out": "Grid node #%s knocked out",

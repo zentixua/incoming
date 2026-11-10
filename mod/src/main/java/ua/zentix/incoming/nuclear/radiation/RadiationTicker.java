@@ -147,9 +147,9 @@ public final class RadiationTicker {
         boolean blackRain = false;
         for (int i = 0; i < c.now.length; i++) {
             Detonation d = list.get(i);
-            double rate = d.falloutRateAt(p.getX(), p.getZ(), c.now[i]);
-            field += rate;
-            roentgens += rate * c.doseHours(i);
+            field += d.falloutRateAt(p.getX(), p.getZ(), c.now[i]);
+            // over the step's own course: a long step (a sleep) counts nothing before the dust or rain reached the player
+            roentgens += MobFallout.exposure(d, p.getX(), p.getZ(), c.before[i], c.now[i]);
             if (d.blackRainAt(p.getX(), p.getZ(), c.now[i])) blackRain = true;
         }
         RadiationDose r = dose(p);

@@ -87,7 +87,7 @@ public final class MobFallout {
         NuclearEvents events = NuclearEvents.get(level);
         int lateFrom = events.lateFrom();
         double clock = WorldClock.now(level);
-        double roentgens = 0;
+        double roentgens = 0, spanHours = 0;
         long span = 0;
         long[] froms = new long[detonations.size()];
         double[] fromClocks = new double[froms.length];
@@ -110,12 +110,14 @@ public final class MobFallout {
             froms[i] = from;
             fromClocks[i] = Math.min(fromClock, clock);
             if (from >= now) continue;
-            roentgens += exposure(d, mob.getX(), mob.getZ(), events.seconds(d, from, fromClocks[i]), events.seconds(d, now, clock));
+            double s0 = events.seconds(d, from, fromClocks[i]), s1 = events.seconds(d, now, clock);
+            roentgens += exposure(d, mob.getX(), mob.getZ(), s0, s1);
             span = Math.max(span, now - from);
+            spanHours = Math.max(spanHours, (s1 - s0) / 3600);
         }
         mob.setData(ModAttachments.NUKE_SEEN, seen.withFallout(now, clock));
         // background rate over the span adds nothing (same as players): skip shielding rays
-        if (roentgens < BACKGROUND * span / 1000.0) return;
+        if (roentgens < BACKGROUND * spanHours) return;
         double gyPerR = Shielding.fallout(level, RadiationTicker.middle(mob)) * RadiationTicker.GY_PER_R;
         double gy = roentgens * gyPerR, before = RadiationTicker.dose(mob).doseGy();
         long at = now;

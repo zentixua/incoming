@@ -509,7 +509,7 @@
   "incoming.grid.restore.never": "вернут только командой",
   "incoming.grid.restore.damage": "возвращается по разрушениям: за часы дальше %s блоков, за дни дальше %s, ближе — никогда",
   "incoming.grid.restore.now": "возвращается",
-  "incoming.grid.restore.in": "вернут через %s мин",
+  "incoming.grid.restore.in": "вернут через %s ч игрового дня",
   "incoming.grid.node.added": "Узел сети №%s: %s %s %s, радиус %s",
   "incoming.grid.node.removed": "Узел сети №%s убран",
   "incoming.grid.node.knocked_out": "Узел сети №%s выведен из строя",

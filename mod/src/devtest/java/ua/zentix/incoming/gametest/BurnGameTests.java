@@ -30,6 +30,7 @@ import ua.zentix.incoming.nuclear.model.Fragility;
 import ua.zentix.incoming.nuclear.radiation.BurnsEffect;
 import ua.zentix.incoming.nuclear.radiation.FlashBurns;
 import ua.zentix.incoming.registry.ModEffects;
+import ua.zentix.incoming.util.WorldClock;
 
 import java.util.Locale;
 import java.util.UUID;
@@ -140,6 +141,27 @@ public final class BurnGameTests {
             MobEffectInstance healed = healing.getEffect(ModEffects.BURNS);
             h.assertTrue(healed != null && healed.getAmplifier() == 4 && healed.getDuration() > 24_000,
                     "the old burn has ended, but the limit is not new: " + healed);
+        });
+    }
+
+    /**
+     * Burns heal on the world clock ({@code WorldClock}), whatever the day: on a stopped day (GameTest servers') a burn loses
+     * what the clock moved — real time, not game ticks (a pacing keyed to the burn's own remainder froze it). No sleep here:
+     * jumping the server-wide clock would restore other batches' blackouts mid-test.
+     */
+    @GameTest(template = "range", timeoutTicks = 7400, batch = "nuke_burns_clock", skyAccess = true)
+    public static void burnsHealOnTheWorldClock(GameTestHelper h) {
+        ServerLevel level = h.getLevel();
+        Cow cow = still(h, EntityType.COW, 32, 32);
+        cow.addEffect(new MobEffectInstance(ModEffects.BURNS, 24_000, 4));
+        double start = WorldClock.now(level);
+        h.runAfterDelay(7200, () -> {
+            MobEffectInstance b = cow.getEffect(ModEffects.BURNS);
+            double moved = WorldClock.now(level) - start;
+            h.assertTrue(moved > 20, "the world clock stood still: " + moved);
+            h.assertTrue(b != null && Math.abs(24_000 - b.getDuration() - moved) <= 25,
+                    String.format(Locale.ROOT, "burn healed %s ticks while the world clock moved %.1f", b == null ? "all" : 24_000 - b.getDuration(), moved));
+            h.succeed();
         });
     }
 

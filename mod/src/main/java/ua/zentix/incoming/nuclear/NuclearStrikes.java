@@ -268,9 +268,10 @@ public final class NuclearStrikes {
         if (!approaches.isEmpty() || !due.isEmpty())
             PacketDistributor.sendToPlayersInDimension(level, new S2C.NukeApproach(now, List.copyOf(approaches)));
         double worldClock = ua.zentix.incoming.util.WorldClock.now(level);
-        for (Detonation ended : events.endShows(now, worldClock)) {
-            PacketDistributor.sendToPlayersInDimension(level, new S2C.NukeClock(ended.id(), events.sinceShowEnd(ended, now, worldClock)));
-        }
+        // the clock once a second (with the server's time packet) and the moment a show ends
+        boolean ended = !events.endShows(now, worldClock).isEmpty();
+        if (!events.detonations().isEmpty() && (ended || now % 20 == 0))
+            PacketDistributor.sendToPlayersInDimension(level, clockPacket(events, now, worldClock));
         if (now % 1200 == 0) events.prune(now, worldClock);
         long t1 = System.nanoTime();
         NuclearWorld world = NuclearWorld.get(level);
@@ -350,12 +351,17 @@ public final class NuclearStrikes {
                 events.scheduled().stream().filter(s -> warns(s, p)).map(s -> warning(s, p)).toList()));
         PacketDistributor.sendToPlayer(p, new S2C.NukeApproach(p.serverLevel().getGameTime(),
                 events.scheduled().stream().flatMap(s -> s.arrival().stream()).toList()));
-        long now = p.serverLevel().getGameTime();
-        double clock = ua.zentix.incoming.util.WorldClock.now(p.serverLevel());
+        PacketDistributor.sendToPlayer(p, clockPacket(events, p.serverLevel().getGameTime(), ua.zentix.incoming.util.WorldClock.now(p.serverLevel())));
+    }
+
+    /** The world clock and the clock at each ended show's end, for this dimension's players ({@link S2C.NukeClock}). */
+    static S2C.NukeClock clockPacket(NuclearEvents events, long gameNow, double clockNow) {
+        List<S2C.NukeClock.ShowEnd> ends = new java.util.ArrayList<>();
         for (Detonation d : events.detonations()) {
-            double since = events.sinceShowEnd(d, now, clock);
-            if (!Double.isNaN(since)) PacketDistributor.sendToPlayer(p, new S2C.NukeClock(d.id(), since));
+            double at = events.showEndClock(d, gameNow, clockNow);
+            if (!Double.isNaN(at)) ends.add(new S2C.NukeClock.ShowEnd(d.id(), at));
         }
+        return new S2C.NukeClock(clockNow, ends);
     }
 
     private static void sync(ServerLevel level) {

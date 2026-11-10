@@ -23,7 +23,9 @@ import java.util.Set;
  * <p>
  * Healing and shock run on the world clock ({@link WorldClock}), not game ticks: once a second the remaining duration
  * (and that of weaker burns kept beneath) is corrected by how far the world clock moved — a slow or stopped day stretches
- * them to real hours, a night's sleep heals a night's worth.
+ * them to real hours, a night's sleep heals a night's worth. The second is the game time's (every
+ * {@link WorldClock#PACE_TICKS}th game tick), not the duration's: the correction changes the duration, and a trigger on
+ * its own remainder would land on the same remainder again and stop the burn healing.
  */
 public class BurnsEffect extends MobEffect {
     /** Effect level for a burned subject facing shock. */
@@ -38,7 +40,8 @@ public class BurnsEffect extends MobEffect {
 
     @Override
     public boolean shouldApplyEffectTickThisTick(int duration, int amplifier) {
-        return amplifier >= SHOCK && duration == 1 || duration % WorldClock.PACE_TICKS == 0;
+        // every tick: the shock's last tick, and the pacing second on game time (applyEffectTick)
+        return true;
     }
 
     @Override
@@ -48,7 +51,8 @@ public class BurnsEffect extends MobEffect {
             e.hurt(ModDamageTypes.source(e.level(), ModDamageTypes.BURN_SHOCK, null, null), Float.MAX_VALUE);
             return true;
         }
-        if (burns != null && !e.level().isClientSide()) pace(e, burns, WorldClock.PACE_TICKS - WorldClock.lastSecond(e.level()));
+        if (burns != null && !e.level().isClientSide() && e.level().getGameTime() % WorldClock.PACE_TICKS == 0)
+            pace(e, burns, WorldClock.PACE_TICKS - WorldClock.lastSecond(e.level()));
         return true;
     }
 

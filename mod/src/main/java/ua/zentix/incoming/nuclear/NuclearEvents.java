@@ -195,11 +195,6 @@ public final class NuclearEvents extends SavedData {
         return seconds(d, level.getGameTime(), ua.zentix.incoming.util.WorldClock.now(level));
     }
 
-    /** World-clock ticks since detonation {@code d}'s show ended; NaN — not over. For clients ({@code S2C.NukeClock}). */
-    public double sinceShowEnd(Detonation d, long gameNow, double clockNow) {
-        return clockNow - showEndClock(d, gameNow, clockNow);
-    }
-
     /**
      * Detonation clock at the previous radiation second, and remember {@code seconds} for the next: the dose step. First
      * second (detonation, restart) — one real second back.

@@ -361,6 +361,10 @@ class FireStormTest {
                 assertEquals(0, w.strength(w.startS()), 0);
                 assertEquals(0, w.strength(w.startS() + w.lengthS()), 0);
                 assertEquals(1, w.strength(w.startS() + w.lengthS() / 2), 1e-9);
+                // its own hearth on the detonation clock: full when due in real time, none once burned out (fast day, sleep)
+                assertEquals(g.start()[at] / 20.0, w.fireS(), 1e-3);
+                assertEquals(1, w.fire(w.startS()), 1e-9, "a whirl rises over a full fire");
+                assertEquals(0, w.fire(w.fireS() + FireStorm.OUT_S), 0, "no whirl over a burned-out city");
                 for (int j = 0; j < i; j++) {
                     assertTrue(Math.hypot(w.x() - ws.get(j).x(), w.z() - ws.get(j).z()) >= FireStorm.WHIRL_GAP * Math.min(1, reach / 1000) - 1e-6, "separately");
                 }

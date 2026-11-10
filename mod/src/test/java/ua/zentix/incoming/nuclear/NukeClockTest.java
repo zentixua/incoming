@@ -78,14 +78,30 @@ class NukeClockTest {
         assertTrue(maxRate < 72 * 2.5, "rate " + maxRate);
     }
 
-    /** World clock: real time at least, a /time set backward counts as real time, sleep jumps forward. */
+    /**
+     * World clock: real time at least, a /time set backward counts as real time, sleep jumps forward; a day that steps in
+     * rare whole ticks (a day-length mod's 24-hour day: one tick every 72) runs 1:1 with real time, not twice as fast.
+     */
     @Test
     void worldClockSteps() {
-        assertEquals(WorldClock.REAL_RATE, WorldClock.step(0), 0);
-        assertEquals(WorldClock.REAL_RATE, WorldClock.step(-12_000), 0, "never backwards");
-        assertEquals(1, WorldClock.step(1), 0);
-        assertEquals(13_000, WorldClock.step(13_000), 0, "a night's sleep");
         assertEquals(1000, WorldClock.REAL_RATE * 72_000, 1e-9, "a real hour is a world hour");
+        assertEquals(72_000 * WorldClock.REAL_RATE, run(t -> 0, 72_000), 1e-6, "stopped day: real time");
+        assertEquals(72_000, run(t -> 1, 72_000), 1e-6, "vanilla day: game time");
+        assertEquals(1000, run(t -> t % 72 == 71 ? 1 : 0, 72_000), 2, "24-hour day: an hour per real hour");
+        assertEquals(36_000, run(t -> t % 2, 72_000), 1, "half-speed day");
+        assertEquals(72_000 * WorldClock.REAL_RATE, run(t -> t % 1200 == 0 ? -24_000 : 0, 72_000), 1e-6, "never backwards");
+        WorldClock.Steps steps = new WorldClock.Steps();
+        assertEquals(13_000, steps.step(13_000), 0, "a night's sleep");
+        double after = 0;
+        for (int t = 0; t < 7200; t++) after += steps.step(0);
+        assertEquals(100, after, 1e-6, "after the sleep, real time again at once");
+    }
+
+    private static double run(java.util.function.IntUnaryOperator dayDelta, int ticks) {
+        WorldClock.Steps steps = new WorldClock.Steps();
+        double clock = 0;
+        for (int t = 0; t < ticks; t++) clock += steps.step(dayDelta.applyAsInt(t));
+        return clock;
     }
 
     /** Fallout over a long step (sleep) counts the higher rate at its start: dose = rate at the end × decay-weighted hours. */

@@ -180,8 +180,20 @@ public final class FireStorm {
 
     // ---------------------------------------------------------------- grid
 
-    /** Fire whirl: where, when, what (all blocks and seconds since detonation). */
-    public record Whirl(double x, double z, double startS, double lengthS, double radius, double height, int spin, double driftDir, double phase) {
+    /**
+     * Fire whirl: where, when, what (all blocks and seconds since detonation); {@code fireS} and {@code firePeakS} — its cell's
+     * ignition and decay start on the detonation's clock ({@link #fire}).
+     */
+    public record Whirl(double x, double z, double startS, double lengthS, double radius, double height, int spin, double driftDir, double phase,
+                        double fireS, double firePeakS) {
+        /**
+         * The fire under the whirl at {@code clockSeconds} on the detonation's clock, 0..1 ({@link FireStorm#flame}): a whirl
+         * needs the mass fire beneath it, so one due after the fire burned down (a fast day, a sleep) does not rise.
+         */
+        public double fire(double clockSeconds) {
+            return flame(clockSeconds - fireS, firePeakS);
+        }
+
         /** Strength 0..1 at {@code seconds} after detonation: rises over 8 s, holds, subsides over 12 s. */
         public double strength(double seconds) {
             double age = seconds - startS;
@@ -620,7 +632,7 @@ public final class FireStorm {
         arrival = Arrays.copyOf(arrival, k);
         peak = Arrays.copyOf(peak, k);
         return new Grid(side, cell, index, strength, column, before, start, arrival, peak, total,
-                whirls(d, seed, side, cell, half, reach, index, strength, start, total), PallField.hazeTopM(d.yieldKt()));
+                whirls(d, seed, side, cell, half, reach, index, strength, start, peak, total), PallField.hazeTopM(d.yieldKt()));
     }
 
     private static Grid empty(double cell, int side) {
@@ -642,7 +654,7 @@ public final class FireStorm {
      * of a couple of minutes at storm strength, each lasting 45–90 s; core radius from cell strength, height 90–130 blocks.
      */
     private static List<Whirl> whirls(Detonation d, long seed, int side, double cell, double half, double reach, int[] index, float[] strength,
-                                      float[] start, double total) {
+                                      float[] start, float[] peak, double total) {
         int n = (int) Math.max(1, Math.min(MAX_WHIRLS, Math.round(Math.sqrt(total) / 25)));
         Integer[] order = new Integer[index.length];
         for (int i = 0; i < order.length; i++) order[i] = i;
@@ -661,7 +673,7 @@ public final class FireStorm {
             double radius = Math.min(14, 6 + 3 * strength[k]) * Math.min(1, cell / CELL * 1.5);
             double height = (90 + 40 * random.nextDouble()) * Math.min(1, cell / CELL * 1.5);
             out.add(new Whirl(d.burst().x + x, d.burst().z + z, startS, 45 + 45 * random.nextDouble(), radius, height,
-                    random.nextBoolean() ? 1 : -1, random.nextDouble() * 2 * Math.PI, random.nextDouble() * 100));
+                    random.nextBoolean() ? 1 : -1, random.nextDouble() * 2 * Math.PI, random.nextDouble() * 100, start[k] / 20.0, peak[k]));
         }
         out.sort((a, b) -> Double.compare(a.startS(), b.startS()));
         return List.copyOf(out);
