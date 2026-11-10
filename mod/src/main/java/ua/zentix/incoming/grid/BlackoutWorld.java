@@ -454,7 +454,7 @@ public final class BlackoutWorld {
 
     /** Whether a block has power: a Sable craft plot always does (its own supply), elsewhere it depends on the district. */
     public static boolean powered(ServerLevel level, BlockPos pos) {
-        return SubLevels.isInPlot(level, Vec3.atCenterOf(pos)) || !PowerGrid.get(level).dark(pos.getX() >> 4, pos.getZ() >> 4, level.getGameTime());
+        return SubLevels.isInPlot(level, Vec3.atCenterOf(pos)) || !PowerGrid.get(level).dark(pos.getX() >> 4, pos.getZ() >> 4, Blackouts.now(level));
     }
 
     /** Counterparts unrelated to blackout: {@link #LAMPS_PER_UNIT} per work unit. */
@@ -639,11 +639,13 @@ public final class BlackoutWorld {
         players.clear();
         for (var p : level.players()) players.add(p.chunkPosition().toLong());
         PowerGrid grid = PowerGrid.get(level);
-        if (!restored) restore(level, grid, now);
+        // outage times are on the grid clock (Blackouts.now), statistics and sound dedup on game time
+        long at = Blackouts.now(level);
+        if (!restored) restore(level, grid, at);
         relightPlaced(level, clock);
-        scheduleRestoreSweeps(grid, now);
+        scheduleRestoreSweeps(grid, at);
         if (now % 20 == 0) {
-            grid.prune(now);
+            grid.prune(at);
             sounded.long2LongEntrySet().removeIf(e -> now - e.getLongValue() > 200);
             // chunk left memory without becoming full (ring around edge chunks): it has no unload event
             var chunkMap = level.getChunkSource().chunkMap;
@@ -675,8 +677,8 @@ public final class BlackoutWorld {
             }
             promoteNear();
         }
-        advanceSweeps(level, grid, now, clock);
-        updateSweepsDue(now);
+        advanceSweeps(level, grid, at, clock);
+        updateSweepsDue(at);
         while (!queueEmpty() && clock.canStart()) {
             long c0 = clock.begin(), t0 = System.nanoTime();
             long[] counted = count.clone(), timed = nanos.clone();
@@ -687,7 +689,7 @@ public final class BlackoutWorld {
                 for (; chunks < CHUNKS_PER_UNIT && work < UNIT_WORK && !queueEmpty(); chunks++) {
                     c = take();
                     if (chunks == 0) first = c;
-                    work += handle(level, grid, c, now, UNIT_WORK - work);
+                    work += handle(level, grid, c, at, UNIT_WORK - work);
                 }
             } catch (RuntimeException e) {
                 if (!taken.isEmpty() && taken.firstLong() == c) taken.dequeueLong();
@@ -952,7 +954,7 @@ public final class BlackoutWorld {
         note(Work.REVERTED, pass.reverted(), 0);
         note(!needed ? Work.IDLE : edge ? Work.EDGE : pass.done() ? Work.PASS_DONE : Work.PASS_MORE, 1, System.nanoTime() - t0);
         if (changed > 0) {
-            districtSound(level, chunk, dark, now);
+            districtSound(level, chunk, dark, level.getGameTime());
             // Distant Horizons LODs: a district goes dark (and relights) in the distance too, without waiting for chunk save
             DhUpdates.mark(level, pos, level.getGameTime() + DhUpdates.SETTLE);
         }

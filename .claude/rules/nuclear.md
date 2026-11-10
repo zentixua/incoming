@@ -123,13 +123,10 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
 
 - Post-wave pall (`client/nuclear/PallField` field, `NukePall` at camera/into frame, `NukeAsh` ash;
   `client/fx/layer/PallPass` renders): dust follows ground pressure and front arrival, haze over the ignition zone
-  until morning (server time of day at detonation, `Detonation.dayTime`; less than 5 minutes before sunrise means next
-  morning; afterward world clock, `PallField.daylight`: clock jumps (sleep, `/time add`, `/time set`) are time-of-day
-  shifts relative to game time (lagging-server corrections move both); recalculate morning from time of day, not hour
-  count (`/time set` sets it directly): daytime after night fades haze over a minute, otherwise next sunrise, no earlier
-  than 5 minutes after detonation; never fade later than the old deadline; world entry and replay seek compare first
-  sample to detonation time, so unseen jumps match everyone else's, without the minute fade); detonation lives on the
-  client while pall remains visible. Field laws in Java and copied in `shaders/include/pall.glsl` (`PallGlslTest` reads
+  lives the storm's smoke on the detonation clock (`PallField.clock`, set by `ClientNuclear.Active.clockTicksAt`:
+  `NukeClock` over the client world clock `ClientClock`, show end from `S2C.NukeClock`, estimated as a vanilla day
+  without one); no time-of-day logic: sleep, `/time add` move it on through the clock, `/time set` backward never
+  rewinds (AGENTS.md “Time”); dust stays on real time; detonation lives on the client while pall remains visible. Field laws in Java and copied in `shaders/include/pall.glsl` (`PallGlslTest` reads
   shader functions and compares with Java; edit laws in both); fireball/fire lighting on pall (`pallBallShare`,
   `pallBurn`) copies `CloudPuffs.ball` and `burn` (also camera dust light, `NukePall.dustColor`): change lighting there too.
   Dust and dust-wall head are one layer (`nuclear/model/DustModel`; laws: “Blast-lofted dust” survey, “cinema-level
@@ -240,7 +237,8 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   server/sound ignition law (`FireField`), district flammability from detonation seed (grid in background); flash
   ignition like server flash layer (`Detonation.flashTicks` by cell light, spread to `IGNITE_SPREAD_S`); wave arrival
   blows out some cell fire over `BLOW_TICKS` (`Grid.before` → `strength`, from 1.5 to 2.5 psi, up to half); flame/smoke
-  by cell age, fades by pall morning (`PallField.end`); all from detonation age (seek, late entry), no packet. Known
+  by cell age on the detonation clock (t² growth over `GROW_S`, peak, decay, out by `OUT_S` = 12 h); all from detonation
+  age and that clock (seek, late entry), no per-cell packet. Known
   water/ice/snow (client chunks, `TerrainTiles.wet` map tiles) do not burn (`FireStorm.survey`, 128 cells/tick); unknown
   cells use epicenter conditions (`NukeWater.under`: distant sea burst does not burn sea); seen cells remain seen.
   Server fires disabled (`nuclear.fires`, `fires_per_detonation` = 0) means no fire zone (`PallField`: no haze or glow),
@@ -249,7 +247,7 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   fire zone, so no rain picture/sound, washout or skin contamination on server and client alike (the live rule still
   gates contamination for detonations saved before the field, which read as rain on). Storm
   also fades where fire was extinguished: `FireStorm.trust` checks local-chunk fire only while young (later vanilla
-  fire burns out independently, storm lasts until morning); lives with storm, including after replay seek; no local
+  fire burns out independently, storm lasts its hours); lives with storm, including after replay seek; no local
   zone chunks in this period means trust 1. Column laws (drift, width, map levels) are in Java and copied in
   `pall.glsl` (`PallGlslTest`).
 
@@ -403,10 +401,12 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   Client mesh checks same hash while awaiting packet. Block hash is 6 bits; all 32 mark bits are used.
 - Client game clock jumps backward during server catch-up: visual detonation time uses own client ticks since packet
   arrival (`ClientNuclear.Active`), not `level.getGameTime()`.
-- Detonation time of day is server `Detonation.dayTime` (`level.getDayTime()` at detonation, saved), not current client
-  clock: joining later (login/dimension change) after sleep soon after a night strike made detonation appear minutes
-  before sunrise, so haze waited until next morning while others had cleared. Old-save/replay detonations do not know
-  it (`NO_DAY_TIME`), then use current clock as before. Detonation stream codec (`Detonation.STREAM_CODEC`, 3.1.0 fields)
+- `Detonation.dayTime` (time of day at detonation) is no longer read: kept only for the save/packet formats. Slow
+  consequences use the world clock (`WorldClock` on the server, `ClientClock` mirroring it from the client's day) and the
+  detonation clock; server anchors per detonation (`NuclearEvents.Anchor`: world clock at burst and show end) are
+  persisted, and doses step per detonation by Δτ (`NuclearEvents.stepFrom`, `FalloutModel.decayHours` for a sleep's
+  long step). A burst-clock anchor for a detonation dated in the past (tests) uses `NuclearEvents.add(d, level)`, which
+  backdates it as a vanilla day. Detonation stream codec (`Detonation.STREAM_CODEC`, 3.1.0 fields)
   is frozen: new fields go in `CODEC` (save, `optionalFieldOf`) and at end of each detonation packet (`NukeDetonation`,
   `NukeSync`; replay.md).
 - Client scenarios (`incoming.scenario`, same-JVM server) derive wind/detonation seed from detonation ID

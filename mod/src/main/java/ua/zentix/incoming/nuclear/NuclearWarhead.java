@@ -87,7 +87,7 @@ public final class NuclearWarhead {
                 (float) IncomingConfig.SERVER.waveSpeed(), level.getDayTime(),
                 IncomingConfig.SERVER.nukeFires.get() && IncomingConfig.SERVER.nukeMaxFires.get() > 0,
                 IncomingConfig.SERVER.nukeBlackRain.get());
-        events.add(d);
+        events.add(d, ua.zentix.incoming.util.WorldClock.now(level));
         PacketDistributor.sendToPlayersInDimension(level, new S2C.NukeDetonation(d, (float) Blackouts.nukeRadius(d), strikeId));
 
         long w0 = System.nanoTime();
@@ -183,7 +183,9 @@ public final class NuclearWarhead {
             if (IncomingConfig.SERVER.nukeRadiation.get()) RadiationTicker.addDose(player, gy);
         } else if (IncomingConfig.SERVER.nukeMobRadiation.get()) {
             // mobs get sick like players (undead and armor stands do not)
-            if (RadiationTicker.affectsMob(living)) RadiationTicker.addDose(living, gy, late ? d.gameTime() : level.getGameTime());
+            if (RadiationTicker.affectsMob(living)) RadiationTicker.addDose(living, gy, late
+                    ? (long) Math.floor(NuclearEvents.get(level).burstClock(d, level.getGameTime(), ua.zentix.incoming.util.WorldClock.now(level)))
+                    : ua.zentix.incoming.util.WorldClock.ticks(level));
         } else if (rem >= 1000) {
             living.hurt(ModDamageTypes.source(level, ModDamageTypes.RADIATION, null, owner), Float.MAX_VALUE);
         } else if (rem >= 400) {

@@ -205,7 +205,7 @@ public final class ChunkLights {
     public static int applyToCopy(ServerLevel level, ChunkAccess copy, boolean dark) {
         LevelChunkSection[] sections = copy.getSections();
         ChunkPos pos = copy.getPos();
-        LongPredicate keep = dark ? PowerGrid.get(level).keepsLit(pos.x, pos.z, level.getGameTime()) : null;
+        LongPredicate keep = dark ? PowerGrid.get(level).keepsLit(pos.x, pos.z, Blackouts.now(level)) : null;
         int changed = 0;
         for (int i = 0; i < sections.length; i++) {
             LevelChunkSection section = sections[i];

@@ -1,5 +1,7 @@
 package ua.zentix.incoming.client.nuclear;
 
+import java.util.function.DoubleUnaryOperator;
+
 import ua.zentix.incoming.client.far.Sight;
 import ua.zentix.incoming.nuclear.Detonation;
 import ua.zentix.incoming.nuclear.model.BlastModel;
@@ -25,8 +27,8 @@ import ua.zentix.incoming.nuclear.model.WaterModel;
  * (hill: wind lofts dust from its slope); dust flows into valleys, where the layer starts at ground-zero elevation.
  * <p>
  * <b>Haze.</b> The city burns over the ignition zone (light pulse from {@link ThermalModel#ignite}): smoky haze
- * (visibility {@link #HAZE_VISIBILITY_M} m) grows with the fires ({@link FireStorm#growth} since the flash), stays until morning ({@link #hazeEndTicks}; morning follows world
- * time, {@link #daylight}: sleep and {@code /time} bring it closer), trails downwind, lit by fires from below.
+ * (visibility {@link #HAZE_VISIBILITY_M} m) is the fires' smoke: it grows, holds and burns out with them ({@link FireStorm#smoke} on
+ * the detonation's clock, {@link #clock}: hours of the world's day after the show), trails downwind, lit by fires from below.
  * <p>
  * <b>Water</b> (plan, step 6). No dust over water: wind behind the front tears spray from crests ({@link WaterModel#spray}) —
  * a separate layer with its own height (crest stripping height, {@link WaterModel#sprayHeight}; large drops fall out, lowering
@@ -37,8 +39,8 @@ import ua.zentix.incoming.nuclear.model.WaterModel;
  * it was lofted: dust drifted onto water stays dust. Thus the shader samples water fraction at the same location as dust
  * and spray tables — point minus drift; haze at its source (no fires over water).
  * <p>
- * Time: dust and spray use the model clock (ticks / (20·scale)), like front and head; haze, fires and paper use real
- * seconds (client ticks / 20). Lengths in model meters and blocks through detonation scale. The radius table
+ * Time: dust and spray use the model clock (ticks / (20·scale)), like front and head; paper falls in real seconds (client ticks
+ * / 20); haze and fires use the detonation's clock ({@link #clock}). Lengths in model meters and blocks through detonation scale. The radius table
  * ({@link #row}) is what the shader receives: all expensive work (dust model, front arrival) is done here.
  */
 public final class PallField {
@@ -74,18 +76,6 @@ public final class PallField {
     static final double GONE_DEPTH = 0.05;
     /** Spray and base surge below this density fraction are not rendered. */
     static final double GONE = 0.0015;
-    /** Haze lasts at least this many game ticks (5 minutes), fading over the final minute. */
-    static final long HAZE_MIN_TICKS = 6000, HAZE_FADE_TICKS = 1200;
-    /** Ticks per game day; morning (6:00) is a multiple of this time of day, daytime is its first half. */
-    static final long DAY = 24000;
-    /**
-     * Time of day advances beyond game time by more than this (sleep, {@code /time add}) — a jump. Server corrections
-     * ({@code ClientNuclear.ClockLead}: when lagging, it moves the client clock back by hundreds of ticks) move both
-     * together and do not count as jumps.
-     */
-    static final long SKIP_TICKS = 100;
-    /** Backward by more than this ({@code /time set day}). */
-    static final long SET_TICKS = 1200;
     /** Dust drifts at a fraction of detonation wind: wind is weaker near ground, heavy material settles. */
     static final double DRIFT = 0.5;
     /** Maximum downwind haze-plume length, in fire-zone radii. */
@@ -164,31 +154,11 @@ public final class PallField {
     private double under, wet;
     /** When dust has settled everywhere (optical depth below {@link #GONE_DEPTH}), ticks since detonation. */
     private final double dustEnd;
-    /** When haze fades by elapsed ticks — ticks since detonation (morning if world clocks run steadily). */
-    private final long hazeEnd;
-    /**
-     * When haze actually fades, ticks since detonation: no later than {@link #hazeEnd} or morning by world time
-     * ({@link #daylight}). Written by client tick, also read by frame — same thread.
-     */
-    private double end;
-    /** World clocks at detonation: game time and time of day. */
-    private final long burstGame, burstDay;
-    /** Previous world-clock sample ({@link #daylight}): game time and time of day; before the first — detonation time. */
-    private long lastGame, lastDay;
-    /** Previous sample was one tick ago while the client watched, not detonation time (world entry, replay seek). */
-    private boolean watched;
+    /** Detonation clock from real ticks ({@link #clock}); real time until set. */
+    private DoubleUnaryOperator clock = t -> t;
 
-    /**
-     * @param dayTime world time of day at detonation (ticks, as in {@code Level.getDayTime}): haze lasts until morning
-     */
-    public PallField(Detonation d, long dayTime) {
+    public PallField(Detonation d) {
         this.d = d;
-        this.hazeEnd = hazeEndTicks(dayTime);
-        this.end = hazeEnd;
-        this.burstGame = d.gameTime();
-        this.burstDay = dayTime;
-        this.lastGame = burstGame;
-        this.lastDay = burstDay;
         double hob = Math.max(0, d.hobMetres()), y = d.yieldKt();
         DustModel.Surface surface = DustModel.Surface.REFERENCE;
         double dustM = DustModel.reach(hob, y, d.surface(), d.visibility(), surface, GONE_DEPTH);
@@ -253,11 +223,6 @@ public final class PallField {
         return fireReach;
     }
 
-    /** When haze fades (morning), ticks since detonation; the firestorm fades by then too. */
-    double end() {
-        return end;
-    }
-
     /** Haze top over fires, blocks (260 m at 15 kt): storm smoke columns rise to it. */
     double hazeTop() {
         return d.blocks(hazeTopM(d.yieldKt()));
@@ -294,50 +259,16 @@ public final class PallField {
     }
 
     /**
-     * Client tick: world clocks — game time {@code gameTime}, time of day {@code dayTime}; {@code ticks} — ticks since
-     * detonation. While clocks run steadily, haze waits for the morning chosen at detonation ({@link #hazeEndTicks}: near-dawn detonation waits
-     * until the next). A jump (sleep, {@code /time add}, {@code /time set}) recalculates morning from time of day after the jump:
-     * already daytime after night, or clocks crossed sunrise — haze fades; otherwise next sunrise, but no earlier than
-     * 5 minutes after detonation ({@link #HAZE_MIN_TICKS}). Haze never fades later than expected before the jump. Stopped clocks
-     * ({@code doDaylightCycle false}) use elapsed ticks.
-     * <p>
-     * A jump is a time-of-day shift relative to game time: both arrive in one time packet and advance together through client
-     * ticks. The first sample after world entry or replay seek is compared with detonation time (time of day at detonation comes
-     * from the server, {@link Detonation#dayTime}): an unseen jump acts the same as for everyone who saw it, but without the
-     * fade minute (it happened earlier). Except {@code /time set} backward to a time of day later than detonation: for a joiner it
-     * lags game time like stopped clocks, indistinguishable — their haze waits for morning from detonation, longer than
-     * for those who saw the jump.
+     * The detonation's clock ({@code NukeClock}) for real client ticks since detonation, in ticks: real through the show,
+     * the world clock after ({@code ClientNuclear.Active}). Fire, its smoke and its light follow it; dust and spray do not.
      */
-    public void daylight(double ticks, long gameTime, long dayTime) {
-        long shift = (dayTime - gameTime) - (lastDay - lastGame);
-        // backward only if time of day also moved backward: with stopped clocks it lags game time without jumping
-        if (shift > SKIP_TICKS || shift < -SET_TICKS && dayTime - lastDay < -SET_TICKS) {
-            // by time of day rather than clock count: /time set assigns them directly, and in a world beyond its first day
-            // "backward" can mean a later night than before (85000 → 18000 — evening to midnight)
-            boolean dawn = day(dayTime) && (!day(lastDay) || Math.floorDiv(dayTime, DAY) > Math.floorDiv(lastDay, DAY));
-            double by = dawn ? ticks : Math.max(ticks + Math.floorMod(-dayTime, DAY), HAZE_MIN_TICKS);
-            // when witnessed, an earlier end must not jump: fade over at least a minute (if fading already, keep the fade)
-            if (by < end) end = Math.min(end, watched ? Math.max(by, ticks + HAZE_FADE_TICKS) : by);
-        }
-        lastGame = gameTime;
-        lastDay = dayTime;
-        watched = true;
+    void clock(DoubleUnaryOperator clock) {
+        this.clock = clock;
     }
 
-    /** Daytime is the first half of a day (6:00 to 18:00). */
-    private static boolean day(long dayTime) {
-        return Math.floorMod(dayTime, DAY) < DAY / 2;
-    }
-
-    /**
-     * Replay seek: world clocks come from another recording position; recalculate morning from detonation time and compare the first sample
-     * against it (a clock jump before this recording position behaves as for a world joiner).
-     */
-    public void rewound() {
-        end = hazeEnd;
-        lastGame = burstGame;
-        lastDay = burstDay;
-        watched = false;
+    /** Detonation-clock seconds at {@code ticks} real client ticks since detonation. */
+    double clockSeconds(double ticks) {
+        return clock.applyAsDouble(ticks) / 20.0;
     }
 
     // ---------------------------------------------------------------- laws (shared with fx_pall shader)
@@ -400,23 +331,13 @@ public final class PallField {
     }
 
     /**
-     * Haze over time: smoke of the fires, so it grows with them from the flash ({@link FireStorm#growth}; earlier it rose 15–150 s
-     * after the front, before the fires that make it), fades toward morning ({@link #end}). Only behind the front ({@code ageS} &gt; 0):
-     * the wave sweeps what smoke there is into its dust; before it, a few per mille of full fire.
+     * Haze over time: smoke of the fires, so it grows, holds and burns out with them ({@link FireStorm#smoke} at the nominal peak,
+     * on the detonation's clock; earlier it rose 15–150 s after the front, before the fires that make it). Only behind the front
+     * ({@code ageS} &gt; 0): the wave sweeps what smoke there is into its dust; before it, a few per mille of full fire.
      */
     double hazeEnvelope(double ageS, double ticks) {
         if (ageS <= 0) return 0;
-        return FireStorm.growth(ticks / 20.0) * (1 - smooth(end - HAZE_FADE_TICKS, end, ticks));
-    }
-
-    /**
-     * Game ticks after detonation until morning (time of day 0 = 6:00), but at least {@link #HAZE_MIN_TICKS}: the city
-     * burns until morning; near-dawn detonation until the next.
-     */
-    static long hazeEndTicks(long dayTime) {
-        long toMorning = Math.floorMod(-dayTime, 24000L);
-        while (toMorning < HAZE_MIN_TICKS) toMorning += 24000;
-        return toMorning;
+        return FireStorm.smoke(clockSeconds(ticks), FireStorm.PEAK_S);
     }
 
     // ---------------------------------------------------------------- shader table
@@ -487,7 +408,7 @@ public final class PallField {
         out[1] = Math.max(d.blocks(columns[i].height(age)), MIN_TOP_BLOCKS);
         // profile column is column(0) of top: vertical optical depth exactly matches the layer, even at minimum top
         out[0] = depth < GONE_DEPTH ? 0 : depth / (column(0) * out[1]) * pallShare(i, ticks);
-        out[2] = fire[i] * FireStorm.growth(ticks / 20.0);
+        out[2] = fire[i] * FireStorm.growth(clockSeconds(ticks));
         out[3] = mixed(age - columns[i].positive());
     }
 
@@ -575,14 +496,14 @@ public final class PallField {
     void haze(int i, double ticks, double[] out) {
         out[0] = perBlock(SIGMA_HAZE) * fire[i] * hazeEnvelope(age(i, ticks), ticks);
         // the haze top climbs with the smoke columns that feed it (FireStorm.risen from the flash)
-        out[1] = Math.max(ceiling[i], hazeTop() * FireStorm.risen(ticks / 20.0, hazeTopM(d.yieldKt())));
+        out[1] = Math.max(ceiling[i], hazeTop() * FireStorm.risen(clockSeconds(ticks), hazeTopM(d.yieldKt())));
         out[2] = fire[i] * fireLight(ticks);
         out[3] = share(i, ticks);
     }
 
-    /** Fire light from below 0..1: grows with the fires from the flash ({@link FireStorm#growth}), fades toward morning. */
+    /** Fire light from below 0..1: the fires' flame from the flash to burning out ({@link FireStorm#flame} at the nominal peak). */
     double fireLight(double ticks) {
-        return FireStorm.growth(ticks / 20.0) * (1 - smooth(end - HAZE_FADE_TICKS, end, ticks));
+        return FireStorm.flame(clockSeconds(ticks), FireStorm.PEAK_S);
     }
 
     /** Fire light beneath mushroom 0..1 (at ground zero; {@link #fireLight}): 0 if no fire zone. */
@@ -595,7 +516,8 @@ public final class PallField {
      * table and until settled everywhere (spray settles before dust), base surge.
      */
     public boolean visible(double ticks) {
-        return ticks > 0 && (fireReach > 0 && ticks < end || ticks <= arrival[BINS - 1] || ticks < dustEnd || surge(ticks, new double[3]));
+        return ticks > 0 && (fireReach > 0 && clockSeconds(ticks) < FireStorm.OUT_S || ticks <= arrival[BINS - 1] || ticks < dustEnd
+                || surge(ticks, new double[3]));
     }
 
     /**

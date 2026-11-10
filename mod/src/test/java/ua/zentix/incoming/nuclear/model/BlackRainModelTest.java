@@ -20,11 +20,16 @@ class BlackRainModelTest {
         assertEquals(0, dry.endSeconds(), 0);
     }
 
-    /** Above fires - 20 minutes after the explosion and an hour and a half, on the clock of a storm - 15 times faster. */
+    /**
+     * Above the fires: 20 minutes after the burst (real time: the show) for an hour and a half of the detonation clock; never
+     * before the fires had 20 minutes to build the storm cloud.
+     */
     @Test
     void overTheFiresWhileTheyBurn() {
-        double start = BlackRainModel.START_S / BlackRainModel.COMPRESSION;
-        assertEquals(80, start, 1e-9);
+        double start = BlackRainModel.START_S;
+        assertEquals(20 * 60, start, 1e-9);
+        for (double x = -20_000; x <= 20_000; x += 500)
+            for (double z = -8000; z <= 8000; z += 500) assertTrue(HIROSHIMA.startSeconds(x, z) >= start, "no rain before its cause");
         assertFalse(HIROSHIMA.raining(0, 0, start - 1));
         assertTrue(HIROSHIMA.raining(0, 0, start + 1));
         assertTrue(HIROSHIMA.raining(-1500, 0, start + 300));
@@ -42,7 +47,7 @@ class BlackRainModelTest {
         assertFalse(HIROSHIMA.startSeconds(-3000, 0) < late);
         // in the wind the rain comes later - on the path of the clouds
         double near = HIROSHIMA.startSeconds(2000, 0), far = HIROSHIMA.startSeconds(11000, 0);
-        assertEquals(9000 / 2.5 / BlackRainModel.COMPRESSION, far - near, 1e-6);
+        assertEquals(9000 / 2.5, far - near, 1e-6);
         assertTrue(HIROSHIMA.endSeconds() > far + BlackRainModel.durationSeconds());
     }
 
@@ -55,7 +60,7 @@ class BlackRainModelTest {
         double start = HIROSHIMA.startSeconds(2500, 0);
         assertEquals(0, HIROSHIMA.depositH1(2500, 0, start - 1), 0);
         double h1 = HIROSHIMA.depositH1(2500, 0, start);
-        double hours = start * 20 / 1000;
+        double hours = start / 3600;
         double total = 5 * h1 * Math.pow(hours, -0.2);
         assertTrue(total > 1 && total < 40, "dose for the entire time, R: " + total);
         assertEquals(0, new BlackRainModel(15, 2000, 0, 2.5, 0).depositH1(2500, 0, start), 0, "for the ground-based, everything is in the trace");

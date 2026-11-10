@@ -30,13 +30,15 @@ import java.util.concurrent.CompletableFuture;
  * 20 000 real fire blocks per detonation after the wave (before it, also those it will blow out; {@link ua.zentix.incoming.client.fx.FireWatch} sees them), while visually the whole ignition zone burns: the plan does not make "live vanilla fire across the whole
  * map".
  * <p>
- * <b>Time.</b> Real seconds since cell ignition, like the pall. The flash lights kindling; a building fire then grows as
+ * <b>Time.</b> Seconds since cell ignition on the detonation's clock ({@code NukeClock}, {@link PallField#clockSeconds}): real
+ * time through the first 20 minutes, then the world clock — the storm lives the hours of the world's day (about two minutes
+ * each under a vanilla day, real hours with a day-length mod; sleep moves it on). The flash lights kindling; a building fire then grows as
  * a t-squared fire ({@link #growth}): flame and smoke ∝ (t/{@link #GROW_S})², full strength (the cell's houses fully involved)
  * at {@link #GROW_S}, which is also when the mass fire formed at Hiroshima. Before the wave a cell holds a small flame and almost
  * no smoke; the smoke of flash-heated surfaces then is {@code FlashAftermath} pyrolysis, near the ground. Full strength holds for
- * {@link #PEAK_S} s (cell-specific), then decays e-fold over {@link #DECAY_S} s to smoldering {@link #EMBERS}; toward morning,
- * like pall haze ({@link PallField#end}), fades over the final minute. Smoke outlives flame ({@link #SMOKE_EMBERS}). All follows detonation age: a replay after
- * seeking and a late joiner see the same thing.
+ * {@link #PEAK_S} s (cell-specific), then decays e-fold over {@link #DECAY_S} s to smoldering {@link #EMBERS}, which burn out
+ * between {@link #OUT_FROM_S} and {@link #OUT_S}. Smoke outlives flame ({@link #SMOKE_EMBERS}). All follows the detonation's
+ * clock: a replay after seeking and a late joiner see the same thing.
  * <p>
  * <b>Map.</b> A grid texture for the GPU ({@link #fill}): R — flame, G — column smoke (strong cells stronger:
  * {@link #COLUMN_POWER}), B — smoke × risen fraction of the column (its head climbs from the ground at {@link #UPDRAFT_MS},
@@ -76,10 +78,14 @@ public final class FireStorm {
     /**
      * Full strength holds this many seconds after {@link #GROW_S} (±30 % per cell), then decays e-fold over {@link #DECAY_S} to
      * smoldering {@link #EMBERS}: Hiroshima burned hardest 2–6 h after the burst and abated by evening (Uda via Sutou 2020; (est.)
-     * as a cell law). The pall's morning ({@link PallField#end}, world clock) usually ends the storm first: not physical, the
-     * game day is 20 minutes.
+     * as a cell law).
      */
     static final double PEAK_S = 3 * 3600, DECAY_S = 2 * 3600, EMBERS = 0.2;
+    /**
+     * Smoldering burns out between these detonation-clock times, s: Hiroshima's fires burned out by the evening after a
+     * morning burst (est.).
+     */
+    static final double OUT_FROM_S = 9 * 3600, OUT_S = 12 * 3600;
     /** Smoke decays less than flame: smoldering material emits smoke. */
     static final double SMOKE_EMBERS = 0.45;
     /** Smoke emission into columns — cell strength raised to this power: strong sources produce columns, weak ones low haze. */
@@ -168,7 +174,8 @@ public final class FireStorm {
     }
 
     private static double decay(double ageS, double peakS, double floor) {
-        return ageS <= peakS ? 1 : floor + (1 - floor) * Math.exp(-(ageS - peakS) / DECAY_S);
+        if (ageS <= peakS) return 1;
+        return (floor + (1 - floor) * Math.exp(-(ageS - peakS) / DECAY_S)) * (1 - smooth(OUT_FROM_S, OUT_S, ageS));
     }
 
     // ---------------------------------------------------------------- grid
@@ -241,7 +248,7 @@ public final class FireStorm {
     /**
      * Local-chunk burning relative to the model there while fire is young ({@code NukeAfter}): 1 — matches model; 0 —
      * server does not burn, or extinguished. Lives with the storm even after replay seek: fire checked while young cannot be
-     * checked later — vanilla burns out its own way, while the storm burns until morning.
+     * checked later — vanilla burns out its own way, while the storm burns its hours ({@link #OUT_S}).
      */
     private double seen = 1;
     /** Terrain top under whirls, blocks (NaN — not sampled: use ground zero); written by client tick. */
@@ -469,9 +476,9 @@ public final class FireStorm {
     }
 
     /**
-     * Map at {@code ticks} since detonation (client ticks), if due: every {@link #FILL_FAST} ticks while fire catches and columns rise
-     * anywhere, then every {@link #FILL_SLOW}; immediately after a seek (time backward). true —
-     * new map ({@link #map}, {@link #version}).
+     * Map at {@code ticks} since detonation (real client ticks), if due: every {@link #FILL_FAST} ticks while fire catches and columns
+     * rise anywhere, then every {@link #FILL_SLOW}; immediately after a seek (time backward). The map itself is at the detonation's
+     * clock. true — new map ({@link #map}, {@link #version}).
      */
     boolean refresh(double ticks) {
         Grid g = grid();
@@ -481,7 +488,7 @@ public final class FireStorm {
             if (ticks - filledAt < every) return false;
         }
         if (map.length != g.side * g.side * CHANNELS) map = new float[g.side * g.side * CHANNELS];
-        fill(g, ticks, pall.end(), dry.length == g.index.length ? dry : null, map);
+        fill(g, pall.clockSeconds(ticks) * 20, dry.length == g.index.length ? dry : null, map);
         dirty = false;
         double sum = 0;
         for (int i = 0; i < map.length; i += CHANNELS) sum += map[i];
@@ -500,19 +507,12 @@ public final class FireStorm {
         return ticks < youngUntil;
     }
 
-    /** Morning: everything fades over the final minute before pall haze ends. */
-    static double morning(double ticks, double end) {
-        return 1 - smooth(end - PallField.HAZE_FADE_TICKS, end, ticks);
-    }
-
     /**
-     * Map at {@code ticks} (morning — {@code end}) into {@code out}: RGBA per cell, zero outside the zone; {@code dry} is the dry-ground
-     * fraction per zone cell ({@link #survey}; null — all land).
+     * Map at {@code ticks} on the detonation's clock, in ticks, into {@code out}: RGBA per cell, zero outside the zone; {@code dry}
+     * is the dry-ground fraction per zone cell ({@link #survey}; null — all land).
      */
-    static void fill(Grid g, double ticks, double end, @Nullable float[] dry, float[] out) {
+    static void fill(Grid g, double ticks, @Nullable float[] dry, float[] out) {
         Arrays.fill(out, 0);
-        double night = morning(ticks, end);
-        if (night <= 0) return;
         for (int k = 0; k < g.index.length; k++) {
             double age = (ticks - g.start[k]) / 20.0;
             if (age <= 0) continue;
@@ -520,8 +520,8 @@ public final class FireStorm {
             int i = g.index[k] * CHANNELS;
             double wet = dry == null ? 1 : dry[k];
             double s = g.strengthAt(k, ticks);
-            double sm = (s == g.strength[k] ? g.column[k] : Math.pow(s, COLUMN_POWER)) * smoke(age, peak) * night * wet;
-            out[i] = (float) (s * flame(age, peak) * night * wet);
+            double sm = (s == g.strength[k] ? g.column[k] : Math.pow(s, COLUMN_POWER)) * smoke(age, peak) * wet;
+            out[i] = (float) (s * flame(age, peak) * wet);
             out[i + 1] = (float) sm;
             out[i + 2] = (float) (sm * risen(age, g.topM));
         }

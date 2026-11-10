@@ -44,4 +44,21 @@ class ServerConfigMigrationTest {
             assertFalse(config.contains("world.siren"));
         }
     }
+
+    /** Power restore was real minutes; it is now hours of the world's day: the old value keeps its meaning under a vanilla day. */
+    @Test
+    void restoreMinutesBecomeGameHours() {
+        CommentedConfig config = new TomlParser().parse("[grid]\nrestore_minutes = 15.0\n");
+        assertFalse(migration.isCorrect(config));
+        migration.correct(config);
+        assertEquals(18.0, config.<Number>get("grid.restore_hours").doubleValue(), 1e-9);
+        assertFalse(config.contains("grid.restore_minutes"));
+        assertTrue(migration.isCorrect(config));
+        CommentedConfig fresh = new TomlParser().parse("");
+        migration.correct(fresh);
+        assertEquals(18.0, fresh.<Number>get("grid.restore_hours").doubleValue(), 1e-9, "default: a day's repairs");
+        CommentedConfig both = new TomlParser().parse("[grid]\nrestore_minutes = 5.0\nrestore_hours = 30.0\n");
+        migration.correct(both);
+        assertEquals(30.0, both.<Number>get("grid.restore_hours").doubleValue(), 1e-9, "explicit new setting wins");
+    }
 }

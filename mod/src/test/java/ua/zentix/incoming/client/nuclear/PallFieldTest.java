@@ -25,7 +25,6 @@ class PallFieldTest {
     /** Hiroshima: 15 kt on 592 m (DS02: 16 kt on 600 m), without wind and fires - just dust. */
     private static final Detonation HIROSHIMA = new Detonation(7, new Vec3(0, 64 + 592, 0), 64, 15, false, 0, 0, 0, 20_000, 7, 1f, false, 1f,
             Detonation.NO_DAY_TIME, false);
-    private static final long NOON = 6000;
 
     @Test
     void tableFitsTheLayer() {
@@ -40,7 +39,7 @@ class PallFieldTest {
     @Test
     void dustRowIsTheDustLayer() {
         Detonation quarter = new Detonation(5, new Vec3(0, 64, 0), 64, 15, true, 0, 0.5f, 8, 20_000, 7, 0.25f, false, 0.42f);
-        PallField p = new PallField(quarter, NOON);
+        PallField p = new PallField(quarter);
         double[] v = new double[4];
         int inBall = 0;
         for (int i : new int[]{3, 20, 60}) {
@@ -69,7 +68,7 @@ class PallFieldTest {
      */
     @Test
     void noPallInTheFireball() {
-        PallField p = new PallField(CALM, NOON);
+        PallField p = new PallField(CALM);
         double[] v = new double[4];
         int inside = 0;
         for (double t = 0.3; t <= 8; t += 0.1) {
@@ -98,7 +97,7 @@ class PallFieldTest {
      */
     @Test
     void oldPallIsOneBlanket() {
-        PallField p = new PallField(HIROSHIMA, NOON);
+        PallField p = new PallField(HIROSHIMA);
         double[] v = new double[4];
         int thick = 0;
         for (int i = 0; i < PallField.BINS; i++) {
@@ -151,9 +150,9 @@ class PallFieldTest {
      */
     @Test
     void heightRisesOverHeatedGround() {
-        PallField p = new PallField(HIROSHIMA, NOON);
+        PallField p = new PallField(HIROSHIMA);
         PallField small = new PallField(new Detonation(8, new Vec3(0, 64 + 592 * Math.cbrt(1 / 15.0), 0), 64, 1, false, 0, 0, 0, 20_000, 7, 1f,
-                false, 1f, Detonation.NO_DAY_TIME, false), NOON);
+                false, 1f, Detonation.NO_DAY_TIME, false));
         double[] v = new double[4];
         int i = (int) (1000 / p.reach() * PallField.BINS);
         double arrival = arrival(p, i), prev = 0;
@@ -181,7 +180,7 @@ class PallFieldTest {
     /** Dust rises only where the wave front has passed: before it there is nothing. */
     @Test
     void pallRisesOnlyBehindTheFront() {
-        PallField p = new PallField(GROUND, NOON);
+        PallField p = new PallField(GROUND);
         double[] v = new double[4];
         for (double ticks : new double[]{20, 100, 300, 600, 1200}) {
             double front = GROUND.frontRadius(ticks);
@@ -207,7 +206,7 @@ class PallFieldTest {
      */
     @Test
     void headAndPallAreOneLayer() {
-        PallField p = new PallField(CALM, NOON);
+        PallField p = new PallField(CALM);
         BlastWall w = new BlastWall(CALM, false);
         float[] s = new float[BlastWall.SLOT];
         int checked = 0;
@@ -239,7 +238,7 @@ class PallFieldTest {
      */
     @Test
     void layerFollowsHillsNotValleys() {
-        PallField p = new PallField(GROUND, NOON);
+        PallField p = new PallField(GROUND);
         double ticks = GROUND.arrivalTicks(1400) + 20 * 10;
         assertTrue(p.sigma(1400, 0, 2, 0, ticks, PallField.Water.DRY) > 0);
         assertEquals(p.sigma(1400, 0, 2, 0, ticks, PallField.Water.DRY), p.sigma(1400, 0, 40, 38, ticks, PallField.Water.DRY), 1e-12);
@@ -249,7 +248,7 @@ class PallFieldTest {
     /** Vertical thickness ({@link PallField#tau}) - the integral of the attenuation along the height: above the eye and below it to the ground, and on the hill. */
     @Test
     void verticalDepthIsTheIntegral() {
-        PallField p = new PallField(GROUND, NOON);
+        PallField p = new PallField(GROUND);
         for (double metres : new double[]{300, 1400, 2500}) {
             for (double age : new double[]{2, 20, 300}) {
                 double ticks = GROUND.arrivalTicks(metres) + 20 * age;
@@ -295,7 +294,7 @@ class PallFieldTest {
      */
     @Test
     void darkForTwentyMinutesAtHiroshima() {
-        PallField p = new PallField(HIROSHIMA, NOON);
+        PallField p = new PallField(HIROSHIMA);
         for (double age = 5; age <= 20 * 60; age += 10) {
             double l = hiroshimaLight(p, 1420, age);
             assertTrue(l < 1e-3, "1,42 km, " + age + " s: light " + l);
@@ -311,219 +310,62 @@ class PallFieldTest {
         assertTrue(p.visible(20 * 3600), "within an hour the dust had settled everywhere");
     }
 
-    /** haze lasts over the burning city until the morning (time of day 0 - 6:00), but not less than 5 minutes. */
-    @Test
-    void hazeUntilMorning() {
-        assertEquals(18000, PallField.hazeEndTicks(6000));
-        assertEquals(6000, PallField.hazeEndTicks(18000));
-        assertEquals(25000, PallField.hazeEndTicks(23000));
-        assertEquals(24000, PallField.hazeEndTicks(0));
-        assertEquals(24000 + 18000, PallField.hazeEndTicks(24000 * 3 + 6000) + 24000);
-        PallField p = new PallField(GROUND, 18000);
-        assertTrue(p.visible(5000));
-        double[] v = new double[4];
-        p.haze(1, 4000, v);
-        assertTrue(v[0] > 0 && v[2] > 0, "at midnight the city burns");
-        p.haze(1, 6100, v);
-        assertEquals(0, v[0], 1e-12);
-        // the dust hangs for hours (fine), but it also settles
-        assertTrue(p.visible(40000), "half an hour later the dust had already settled");
-        assertFalse(p.visible(20 * 3600 * 7), "via 7 pall hours available");
-    }
-
-    /** The world clock goes exactly from tick {@code from} to {@code to}: time of day is {@code day0} plus tick. */
-    private static void clock(PallField p, long day0, int from, int to) {
-        for (int t = from; t <= to; t++) p.daylight(t, t, day0 + t);
-    }
-
-    /** haze of the node at the center at the moment {@code ticks}, 1/block. */
+    /** Haze of the node at the centre at {@code ticks} client ticks, 1/block. */
     private static double haze(PallField p, double ticks) {
         double[] v = new double[4];
         p.haze(1, ticks, v);
         return v[0];
     }
 
-    /** The clock runs smoothly - haze goes out in the morning after the tick has passed, as if without a clock; the clock is standing too. */
+    /**
+     * Fire haze lives the city's burning on the detonation clock ({@link PallField#clock}): hours on real time (a stopped day,
+     * a day-length mod), gone once the fires are out ({@link FireStorm#OUT_S}); the dust settles on its own real time.
+     */
     @Test
-    void hazeEndsAtMorningWithSteadyOrStoppedClock() {
-        PallField p = new PallField(GROUND, 18000);
-        clock(p, 18000, 0, 6200);
-        assertTrue(haze(p, 4000) > 0);
-        assertEquals(0, haze(p, 6100), 1e-12);
-        PallField stopped = new PallField(GROUND, 14000);
-        for (int t = 0; t <= 9000; t++) stopped.daylight(t, t, 14000);
-        assertTrue(haze(stopped, 8000) > 0, "the clock stands - haze until the morning according to the past tick");
-        assertEquals(0, haze(stopped, 10100), 1e-12);
-    }
-
-    /** Dream: the clock jumps towards sunrise - haze goes out in a minute, even before 5 minutes (the explosion in 5 morning was waiting for the next morning). */
-    @Test
-    void sleepingThroughTheNightEndsTheHaze() {
-        PallField evening = new PallField(GROUND, 14000);
-        clock(evening, 14000, 0, 3000);
-        assertTrue(haze(evening, 3000) > 0);
-        evening.daylight(3001, 3001, 24000);
-        assertTrue(haze(evening, 3100) > 0, "does not go out abruptly");
-        assertEquals(0, haze(evening, 3001 + PallField.HAZE_FADE_TICKS + 1), 1e-12);
-
-        PallField dawn = new PallField(GROUND, 23000);
-        clock(dawn, 23000, 0, 300);
-        dawn.daylight(301, 301, 24000);
-        assertEquals(0, haze(dawn, 301 + PallField.HAZE_FADE_TICKS + 1), 1e-12, "haze would wait for the next morning");
-        // without sleep - rule 5 minutes: sunrise in a minute does not extinguish it, it goes out by the next morning
-        PallField natural = new PallField(GROUND, 23000);
-        clock(natural, 23000, 0, 3000);
-        assertTrue(haze(natural, 3000) > 0);
-        assertTrue(haze(natural, 24000) > 0);
-    }
-
-    /** /time set day night - day: haze goes out; /time add - morning is closer; the server sets the clock back to twilight - no. */
-    @Test
-    void timeCommandsMoveTheMorning() {
-        PallField set = new PallField(GROUND, 18000);
-        clock(set, 18000, 0, 400);
-        set.daylight(401, 401, 1000);
-        assertEquals(0, haze(set, 401 + PallField.HAZE_FADE_TICKS + 1), 1e-12);
-
-        PallField add = new PallField(GROUND, NOON);
-        clock(add, NOON, 0, 100);
-        add.daylight(101, 101, NOON + 100 + 6000);
-        clock(add, NOON + 6000, 102, 11000);
-        assertTrue(haze(add, 10000) > 0);
-        assertEquals(0, haze(add, 12100), 1e-12, "morning on 6000 tick closer");
-
-        PallField lag = new PallField(GROUND, NOON);
-        clock(lag, NOON, 0, 6100);
-        lag.daylight(6101, 6101, NOON + 5500);
-        clock(lag, NOON - 600, 6102, 7000);
-        assertTrue(haze(lag, 17000) > 0, "adjusting the clock at dusk - not morning");
+    void hazeBurnsItsHoursOnTheDetonationClock() {
+        PallField p = new PallField(GROUND);
+        assertTrue(haze(p, 20 * 600) > 0, "10 minutes: the city burns");
+        assertTrue(haze(p, 20 * 6 * 3600) > 0, "6 hours: still smouldering");
+        assertEquals(0, haze(p, 20 * (FireStorm.OUT_S + 1)), 1e-12, "burnt out");
+        assertTrue(p.visible(20 * 6 * 3600));
+        assertFalse(p.visible(20 * (FireStorm.OUT_S + 7200)), "fires out, dust settled");
     }
 
     /**
-     * The world after the first day: the clock of the world is 85000 (the evening of the fourth day), {@code /time set 18000} sets them as is, at
-     *  midnight. Morning - the nearest sunrise according to the time of day (via 6000 tick), and not the morning of the fourth day according to the number of
-     *  hours; {@code /time set day} - it’s already morning.
+     * A vanilla day (the clock 72 times real time after the show) burns the same hours in minutes; a sleep moves the clock on
+     * and the haze with it. The picture depends only on the clock, never on the time of day: one law for all.
      */
     @Test
-    void timeSetInALaterDayFollowsTheTimeOfDay() {
-        long evening = 3 * PallField.DAY + 13000;
-        PallField set = new PallField(GROUND, evening);
-        clock(set, evening, 0, 100);
-        set.daylight(101, 101, 18000);
-        clock(set, 18000 - 101, 102, 6300);
-        assertTrue(haze(set, 4800) > 0, "haze lasts until sunrise");
-        assertEquals(0, haze(set, 101 + 6000 + 1), 1e-12, "sunrise through 6000 tick after /time set — haze went out");
-        assertTrue(haze(new PallField(GROUND, evening), 101 + 6000 + 1) > 0, "without clock jump - until morning via 11000");
-
-        PallField day = new PallField(GROUND, evening);
-        clock(day, evening, 0, 100);
-        day.daylight(101, 101, 1000);
-        assertEquals(0, haze(day, 101 + PallField.HAZE_FADE_TICKS + 1), 1e-12, "/time set day - it’s already morning");
-    }
-
-    /** {@code /time add} until dawn: haze lasts 5 minutes after detonation (not yet a day), and does not go out within a minute. */
-    @Test
-    void timeAddToDawnKeepsFiveMinutes() {
-        PallField p = new PallField(GROUND, NOON);
-        clock(p, NOON, 0, 100);
-        p.daylight(101, 101, 23600);
-        clock(p, 23600 - 101, 102, 7000);
-        assertTrue(haze(p, PallField.HAZE_MIN_TICKS - PallField.HAZE_FADE_TICKS - 1) > 0, "in 4 minutes haze still available");
-        assertTrue(haze(p, PallField.HAZE_MIN_TICKS - 300) > 0, "goes out at the last minute, not before");
-        assertEquals(0, haze(p, PallField.HAZE_MIN_TICKS + 1), 1e-12, "after 5 minutes it went out");
-        // the clock then passes sunrise on its own - nothing changes
-        assertTrue(haze(p, 2000) > 0);
-    }
-
-    /**
-     * Rewind the repeat: morning - again from the moment of the explosion, and the first measurement of the clock at the recording site is compared with it: before sleep the darkness
-     *  is there again, after sleep it is gone immediately (as it was in the recording), and does not go out again for a minute.
-     */
-    @Test
-    void rewindFollowsTheClockOfThePlace() {
-        PallField p = new PallField(GROUND, 14000);
-        clock(p, 14000, 0, 3000);
-        p.daylight(3001, 3001, 24000);
-        assertEquals(0, haze(p, 5000), 1e-12);
-        p.rewound();
-        p.daylight(2000, 2000, 16000);
-        assertTrue(haze(p, 2000) > 0, "before bed");
-        p.rewound();
-        p.daylight(5000, 5000, 26000);
-        assertEquals(0, haze(p, 5000), 1e-12, "after sleep");
-    }
-
-    /**
-     * Entered later (entering the world, changing dimensions): the time of day of the explosion is from the server, and the dream that he did not see is the same jump: a night strike, the players slept until the morning - haze is not there, and does not wait for the next morning (the time of day of the explosion according to
-     *  today's clock would be 5:30 - less than 5 minutes before sunrise).
-     */
-    @Test
-    void lateJoinerAfterSleepSeesTheMorning() {
-        PallField late = new PallField(GROUND, 14000);
-        late.daylight(2000, 2000, 24000 + 1500);
-        assertEquals(0, haze(late, 2000), 1e-12);
-        PallField guessed = new PallField(GROUND, 24000 + 1500 - 2000);
-        guessed.daylight(2000, 2000, 24000 + 1500);
-        assertTrue(haze(guessed, 2000) > 0, "at current times - until next morning");
-
-        // /time set night to evening: the same sunrise as those who saw the jump
-        PallField seen = new PallField(GROUND, NOON);
-        clock(seen, NOON, 0, 1000);
-        seen.daylight(1001, 1001, 13000);
-        clock(seen, 13000 - 1001, 1002, 2000);
-        PallField joined = new PallField(GROUND, NOON);
-        joined.daylight(2000, 2000, 13000 + 999);
-        for (double t : new double[]{2000, 9000, 11000, 12000}) assertEquals(haze(seen, t), haze(joined, t), 1e-12, "tick " + t);
-    }
-
-    /** The clock is standing ({@code doDaylightCycle false}): the time of day lags behind the game time - this is not a jump for those who enter later. */
-    @Test
-    void lateJoinerWithStoppedClock() {
-        PallField late = new PallField(GROUND, 23000);
-        late.daylight(9000, 9000, 23000);
-        assertTrue(haze(late, 9000) > 0, "morning by past tick - via 25000");
-        assertEquals(haze(new PallField(GROUND, 23000), 9000), haze(late, 9000), 1e-12);
-    }
-
-    /**
-     * The client's clock ran ahead of the lagging server (together the game time and the time of day) - not a jump: detonation 10 seconds
-     *  before sunrise, the package arrived when the client's clock was 15 seconds ahead, already after sunrise - haze is waiting for the next morning,
-     *  like everyone else; adjusting the clock back later is also not a jump.
-     */
-    @Test
-    void clientClockLeadIsNotAJump() {
-        PallField p = new PallField(GROUND, 23800);
-        p.daylight(0, 300, 24100);
-        p.daylight(1, 1, 23801);
-        clock(p, 23800, 2, 3000);
-        assertTrue(haze(p, 3000) > 0, "until next morning");
-        assertTrue(p.visible(20000));
-    }
-
-    /**
-     * No fires (high detonation: no ignition on the ground) no haze - pall ends with dust, not in the morning: when it is visible,
-     *  detonation does not depend on the time of day.
-     */
-    @Test
-    void withoutFiresNoHazeUntilMorning() {
-        Detonation high = new Detonation(3, new Vec3(0, 64 + 3000, 0), 64, 15, false, 0, 0.5f, 8, 20_000, 7, 1f, false, 0.42f);
-        PallField dawn = new PallField(high, 23000), dusk = new PallField(high, 12000);
-        assertTrue(dawn.reach() > 100, "there is dust");
-        assertEquals(0, haze(dawn, 20 * 300), 1e-12);
-        assertTrue(dawn.visible(200));
-        boolean ended = false;
-        for (int t = 200; t < 20 * 3600 * 7; t += 200) {
-            assertEquals(dusk.visible(t), dawn.visible(t), "tick " + t);
-            ended |= !dawn.visible(t);
+    void hazeFollowsTheClockNotTheTimeOfDay() {
+        PallField real = new PallField(GROUND), fast = new PallField(GROUND);
+        fast.clock(t -> t <= 20 * 1200 ? t : 20 * 1200 + (t - 20 * 1200) * 72);
+        for (double hours : new double[]{0.5, 2, 6, 11}) {
+            double clockTicks = 20 * hours * 3600, realTicks = 20 * 1200 + (clockTicks - 20 * 1200) / 72;
+            assertEquals(haze(real, clockTicks), haze(fast, realTicks), 1e-9 * haze(real, clockTicks) + 1e-15, hours + " h");
         }
+        PallField slept = new PallField(GROUND);
+        slept.clock(t -> t < 20 * 1800 ? t : t + 20 * 13 * 3600);
+        assertTrue(haze(slept, 20 * 1700) > 0, "before the sleep");
+        assertEquals(0, haze(slept, 20 * 1900), 1e-12, "slept through the night: the fires are out");
+    }
+
+    /** No fires (high detonation: no ignition on the ground): no haze, pall ends with the dust. */
+    @Test
+    void withoutFiresPallEndsWithTheDust() {
+        Detonation high = new Detonation(3, new Vec3(0, 64 + 3000, 0), 64, 15, false, 0, 0.5f, 8, 20_000, 7, 1f, false, 0.42f);
+        PallField p = new PallField(high);
+        assertTrue(p.reach() > 100, "there is dust");
+        assertEquals(0, haze(p, 20 * 300), 1e-12);
+        assertTrue(p.visible(200));
+        boolean ended = false;
+        for (int t = 200; t < 20 * 3600 * 7 && !ended; t += 200) ended = !p.visible(t);
         assertTrue(ended, "dust doesn't settle");
-        assertTrue(new PallField(GROUND, 23000).visible(24000));
     }
 
     /** The attenuation at a point is the same as what the table gives (the shader calculates from it), and the wind blows away the dust. */
     @Test
     void sigmaFollowsTheTable() {
-        PallField p = new PallField(GROUND, NOON);
+        PallField p = new PallField(GROUND);
         double ticks = 20 * 120;
         float[] row = new float[4 * PallField.ROWS * PallField.BINS];
         p.row(ticks, true, false, row);
@@ -551,7 +393,7 @@ class PallFieldTest {
      */
     @Test
     void dustEdgeStaysOnTheFrontInWind() {
-        PallField p = new PallField(GROUND, NOON);
+        PallField p = new PallField(GROUND);
         int i = 110;
         double ticks = 0.5 * (arrival(p, i) + arrival(p, i + 1));
         double[] w = new double[2];
@@ -576,15 +418,15 @@ class PallFieldTest {
     /** Less blow means less pall. */
     @Test
     void smallerYieldSmallerPall() {
-        assertTrue(new PallField(SMALL, NOON).reach() < 0.6 * new PallField(GROUND, NOON).reach());
-        double reach = new PallField(GROUND, NOON).reach();
+        assertTrue(new PallField(SMALL).reach() < 0.6 * new PallField(GROUND).reach());
+        double reach = new PallField(GROUND).reach();
         assertTrue(reach > 4500 && reach < 7500, "pall 15 kt to " + reach + " blocks");
     }
 
     /** The ashes do not fall before the waves, near the center - in a minute there is, paper - only where the houses collapsed. */
     @Test
     void ashAfterTheWave() {
-        PallField p = new PallField(GROUND, NOON);
+        PallField p = new PallField(GROUND);
         assertEquals(0, p.ashRate(800, 0, 10, PallField.Water.DRY));
         assertTrue(p.ashRate(800, 0, 20 * 90, PallField.Water.DRY) > 0.1);
         assertTrue(p.paperRate(600, 0, 20 * 30, PallField.Water.DRY) > 0.3);
@@ -600,7 +442,7 @@ class PallFieldTest {
         assertEquals(0, PallField.sprayEnvelope(WaterModel.SPRAY_LAG), 1e-12, "up to the splash wall");
         assertTrue(PallField.sprayEnvelope(WaterModel.SPRAY_LAG + 3) > 0.85);
         assertEquals(0, PallField.sprayEnvelope(200), 1e-12, "after three minutes the water is clear");
-        PallField p = new PallField(GROUND, NOON);
+        PallField p = new PallField(GROUND);
         double[] v = new double[4];
         int i = 20;
         p.spray(i, 20 * 30, v);
@@ -629,7 +471,7 @@ class PallFieldTest {
             assertTrue(PallField.sprayTop(10, age) < prev);
             prev = PallField.sprayTop(10, age);
         }
-        PallField p = new PallField(GROUND, NOON);
+        PallField p = new PallField(GROUND);
         double[] dust = new double[4], spray = new double[4];
         int i = 20;
         double arrival = arrival(p, i);
@@ -648,7 +490,7 @@ class PallFieldTest {
      */
     @Test
     void tableHoldsOnlyWhatIsUnderThePall() {
-        PallField p = new PallField(GROUND, NOON);
+        PallField p = new PallField(GROUND);
         float[] row = new float[4 * PallField.ROWS * PallField.BINS];
         int dustRow = PallField.DUST_ROW * PallField.BINS, sprayRow = PallField.SPRAY_ROW * PallField.BINS, hazeRow = PallField.HAZE_ROW * PallField.BINS;
         p.row(20 * 120, true, false, row);
@@ -676,7 +518,7 @@ class PallFieldTest {
      */
     @Test
     void materialComesFromWhereItWasLifted() {
-        PallField p = new PallField(NO_FIRES, NOON);
+        PallField p = new PallField(NO_FIRES);
         double ticks = 20 * 60;
         double[] w = new double[2];
         p.drift(ticks, w);
@@ -711,7 +553,7 @@ class PallFieldTest {
     @Test
     void surgeFollowsTheWorldScale() {
         Detonation quarter = new Detonation(5, new Vec3(0, 64, 0), 64, 15, true, 0, 0.5f, 8, 20_000, 7, 0.25f, false, 0.42f);
-        PallField p = new PallField(quarter, NOON);
+        PallField p = new PallField(quarter);
         p.water(1, WaterModel.wetBurst(0, 15));
         double[] s = new double[3];
         assertTrue(p.surge(20 * 30 * 0.25, s));
@@ -721,7 +563,7 @@ class PallFieldTest {
 
     @Test
     void surgeOnlyForAWetBurst() {
-        PallField p = new PallField(NO_FIRES, NOON);
+        PallField p = new PallField(NO_FIRES);
         double[] s = new double[3];
         assertFalse(p.surge(20 * 60, s), "there are no waves on land");
         double wet = WaterModel.wetBurst(0, 15);
@@ -753,7 +595,7 @@ class PallFieldTest {
     /** There is no ashes, no paper, no haze above the water (there are no fires on the water): pall over the sea - only splashes. */
     @Test
     void noAshPaperOrHazeOverWater() {
-        PallField p = new PallField(GROUND, NOON);
+        PallField p = new PallField(GROUND);
         PallField.Water sea = (dx, dz) -> 1;
         assertEquals(0, p.ashRate(800, 0, 20 * 90, sea), 1e-12);
         assertEquals(0, p.paperRate(600, 0, 20 * 30, sea), 1e-12);
@@ -766,7 +608,7 @@ class PallFieldTest {
     /** The pall over hard ground where dust was lofted holds only debris dust ({@link PallField#soil}): thinner, never thicker. */
     @Test
     void pallThinsOverHardGround() {
-        PallField p = new PallField(CALM, NOON);
+        PallField p = new PallField(CALM);
         double ticks = CALM.arrivalTicks(CALM.blocks(800)) + 20 * 30;
         PallField.Water hard = new PallField.Water() {
             @Override

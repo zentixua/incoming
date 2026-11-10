@@ -33,7 +33,7 @@ public final class NukeSky {
         boolean in = false;
         if (Detonation.underOpenSky(level, cam)) {
             for (ClientNuclear.Active a : ClientNuclear.detonations()) {
-                if (a.d.blackRain(cam.x, cam.z, level.getGameTime() - a.d.gameTime())) {
+                if (a.d.blackRainAt(cam.x, cam.z, a.clockSeconds(0))) {
                     in = true;
                     break;
                 }

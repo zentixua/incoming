@@ -135,7 +135,7 @@ public final class PanicGameTests {
         });
         double[] start = new double[mobs.size()];
         for (int i = 0; i < mobs.size(); i++) start[i] = away(mobs.get(i), burst);
-        NuclearEvents.get(level).add(d);
+        NuclearEvents.get(level).add(d, level);
         long t0 = level.getGameTime();
         h.startSequence()
                 .thenExecuteAfter(200, () -> {

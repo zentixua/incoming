@@ -84,7 +84,7 @@ What differs from the design below, and why.
   rain; `tools/client_scenario.sh pall` — post-wave pall from hill, inside, above, twilight/night (`SCENARIO pall`);
   `tools/client_scenario.sh pall-front` — night from 400 m/120 m above ground, front arrival to one minute
   (`INCOMING_EXPORT=2560x1440`: game frame larger than window, like Flashback export).
-- Pall unit tests: `PallFieldTest` (coverage, profile/column, dust behind front only, time, haze until morning/world
+- Pall unit tests: `PallFieldTest` (coverage, profile/column, dust behind front only, time, haze on the detonation
   clock, ash, dust-top growth; spray over water settles in minutes, table includes only matter beneath pall, matter
   from lofting source, base surge only for water burst, no ash/haze over water), `PallGroundTest` (terrain below pall;
   unknown water like epicenter, shore continues, sea stays sea, camera lake never spreads onto land), `PallGlslTest`
@@ -97,7 +97,7 @@ What differs from the design below, and why.
   `CameraShakeTest`; `ShaderSourceTest` guards Veil (Sable) shader rebuilds, every program `uniform` declared in JSON.
   Headless `tools/client_scenario.sh nuke-water` (sea burst, shore viewer), `nuke-lake` (land burst beyond pond) check
   over-water pall.
-- Firestorm `FireStormTest` (ignition-law sources inside zone, ragged edge, ignition not before wave, growth/decay/morning,
+- Firestorm `FireStormTest` (ignition-law sources inside zone, ragged edge, ignition not before wave, growth/decay/burn-out,
   map/seek update, no water/ice fires, rare short tornadoes at strongest cells); headless
   `tools/client_scenario.sh firestorm` (night, `INCOMING_FIRESTORM=day` for day): 15 kt airburst, frames from 2 km/800 m
   and inside near tornado at ~1/5/15 minutes, pall time with/without storm.
@@ -120,9 +120,12 @@ What differs from the design below, and why.
    No thousands of particles: sphere mesh, mushroom a few hundred sorted billow billboards in one batch.
 6. **Default carrier: intercontinental ballistic missile (ICBM).** Point target (real ICBMs strike coordinates). Warhead
    separate from carrier (`Warhead`), so nuclear payload on cruise missile/B-2 bomb (B61) almost free architecturally.
-7. **Two time rates.** Visible flash, sphere, wave, mushroom rise in real time. Long processes (fallout arrival/decay,
-   sickness) use game time: 1 game hour = 1000 ticks (Minecraft day = 24 h). Fallout “7–10” rule remains: after 7 game
-   hours dose rate ×0.1, after 49 ×0.01. Firestorm/black rain from its smoke use own clock: real time compressed 15-fold.
+7. **Time without modes** (Artem, 10.11.2026). Visible flash, sphere, wave, mushroom and the first 20 minutes of fire run
+   in real time. Each detonation then follows the world's day (`NukeClock` over `WorldClock`: time of day, never slower
+   than real, never backward; vanilla 72×, day-length mods 1×, stopped day real, sleep jumps forward), joining it over a
+   minute. Firestorm, black rain, fallout deposition and decay run on it; sickness, burns, hearing and power repairs on
+   the world clock (1000 ticks per hour). Fallout “7–10” rule remains: after 7 hours dose rate ×0.1, after 49 ×0.01.
+   Hiroshima's timeline holds in world hours: mass fire at ~20 min, black rain from ~20 min, fires out by evening.
 8. **Physics sets events, presentation shows them.** §1–§4 model determines order, sizes, time, speed, destruction;
    no aesthetic number changes, only preset scale (`effects_scale`, `wave_speed`) and marked “not physical” deviations.
    Presentation (light, color, contrast, billows, detail, movement, sound, camera) may exceed camera footage, like a good
@@ -305,8 +308,8 @@ high-sky detonation like Hiroshima.
 | 4.3 s | **Front arrives.** Sharp powerful hit/pop muffles game: tinnitus, all sounds dull 10–20 s. Camera tossed, player thrown outward by dynamic pressure, windows burst, doors/fences/leaves break, trunks topple away from epicenter. Hurricane wind one–two seconds, then terrain echo rolls. |
 | 5…15 s | Reverse wind toward epicenter draws dust/debris back. Unextinguished fires grow. |
 | 10 s…7 min | Sphere cools dark red, rises/rolls into mushroom cap (~10 km by 6–7 min); rolled ring reflected ochre, transmitted reddish-brown, outside whitens in 1–2 min, transmitted/beneath stays brown; dusty stem, boiling cap. Echo thunder continues tens of seconds. |
-| 80 s…15 min | Black rain over fires (80–440 s), later downwind to ~15 min: dark drops, brown sky/fog, patter. Carries fallout in trace, mildly radioactive for airburst. |
-| 7 game minutes… | Fallout deposits in surface-burst trace. Geiger counter crackles. |
+| minutes… | Fallout deposits in surface-burst trace as the cloud passes (real time during the show). Geiger counter crackles. |
+| 20 min…3.5 h | Black rain over fires from 20 min for 1.5 h (world hours), later downwind: dark drops, brown sky/fog, patter. Carries fallout in trace, mildly radioactive for airburst. |
 | game hours…weeks | Radiation sickness: nausea after hours, latent period, weakness/hunger/no regeneration; dose decides survival. |
 
 Player at 20 km (1 Mt) sees same, front after ~50 s, mushroom fills half sky.
@@ -588,7 +591,7 @@ heat burning area × 175 kW/m² (burning wood face, `FirePlume.BLOCK_WATTS`; pea
 Babrauskas, SFPE Handbook ch. 26), sound fraction 10⁻⁶ (low end of open turbulent flame noise 10⁻⁶–10⁻⁵, Strahle 1978,
 (est.)), ISO 9613 path by distance rings, `Loudness` nuclear ceiling. Distant fires are `FireStorm` cells, same flame
 as pall, trusted if server ignites/local fire not extinguished; local real fire blocks. Thus roar grows first minutes
-with storm (80 s e-fold), fades with it by morning, not server fire count. Inward wind from fires within 1.5 km,
+with storm (t² growth to 20 min), fades with it over its hours, not server fire count. Inward wind from fires within 1.5 km,
 volume by old sink-based values (est.), no storm-inflow law yet.
 
 **Destruction near listener** (`client/sound/Clatter`, `NukeSounds.Schedule.clatter`). With ruins, server sends chunk

@@ -274,7 +274,7 @@ public final class DhGameTests {
         long now = level.getGameTime();
         Detonation d = new Detonation(NuclearGameTests.IDS.incrementAndGet(), burst, ground, 15, false, now + wave - (long) probe.arrivalTicks(height), 0, 0,
                 20_000, 7, 0.05f, false, Detonation.OLD_WAVE);
-        NuclearEvents.get(level).add(d);
+        NuclearEvents.get(level).add(d, level);
         FarLods.request(level, c.toLong(), true);
         h.onEachTick(() -> {
             LevelChunk chunk = level.getChunkSource().getChunkNow(c.x, c.z);

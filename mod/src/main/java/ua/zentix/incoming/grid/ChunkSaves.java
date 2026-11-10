@@ -117,9 +117,9 @@ public final class ChunkSaves {
         // the GRID_DARK mark is not saved: a chunk from disk has none
         if (grid.outages().isEmpty() && !ChunkLights.anyUnlit(sections)) return;
         ChunkPos pos = chunk.getPos();
-        boolean dark = grid.dark(pos.x, pos.z, level.getGameTime());
+        boolean dark = grid.dark(pos.x, pos.z, Blackouts.now(level));
         // lamps placed after the district went dark run on their own supply: they stay lit
-        LongPredicate keep = dark ? grid.keepsLit(pos.x, pos.z, level.getGameTime()) : null;
+        LongPredicate keep = dark ? grid.keepsLit(pos.x, pos.z, Blackouts.now(level)) : null;
         LongArrayList stale = new LongArrayList();
         int[] lit = {0};
         for (int i = 0; i < sections.length; i++) {

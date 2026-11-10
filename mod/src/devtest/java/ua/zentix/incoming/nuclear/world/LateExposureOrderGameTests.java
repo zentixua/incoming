@@ -67,11 +67,11 @@ public final class LateExposureOrderGameTests {
         Cow c = cow(h);
         Detonation older = det(level, events.nextId(), c.position().add(-40, 0, 0), 2);
         Detonation newer = det(level, events.nextId(), c.position().add(-40, 0, 0), 1);
-        events.add(older);
+        events.add(older, level);
         LateExposure late = new LateExposure();
         try {
             late.joined(level, c, true, List.of());
-            events.add(newer);
+            events.add(newer, level);
             new PulseJob(level, newer, null).work(level, clock(100));
             float newerDose = RadiationTicker.dose(c).doseGy();
             h.assertTrue(newerDose > 0, "control pulse did not reach the body");
@@ -114,7 +114,7 @@ public final class LateExposureOrderGameTests {
         Detonation geometry = det(level, events.nextId(), c.position(), 1);
         double r = 0.5 * (geometry.frontRadius(0) + geometry.frontRadius(1));
         Detonation d = det(level, geometry.id(), c.position().add(-r, 0, 0), 1);
-        events.add(d);
+        events.add(d, level);
         LateExposure late = new LateExposure();
         try {
             late.joined(level, c, true, List.of());
@@ -168,7 +168,7 @@ public final class LateExposureOrderGameTests {
         Vec3 burst = Vec3.atBottomCenterOf(h.absolutePos(new BlockPos(24, 12, 32)));
         Detonation d = new Detonation(events.nextId(), burst, burst.y, 15, true, level.getGameTime() - 600, 0, 0, 20_000, 7, 0.001f, false,
                 Detonation.OLD_WAVE);
-        events.add(d);
+        events.add(d, level);
         Cow c = h.spawn(EntityType.COW, new BlockPos(40, 12, 32));
         c.setNoAi(true);
         c.setInvulnerable(true);
@@ -206,7 +206,7 @@ public final class LateExposureOrderGameTests {
         }
         h.assertTrue(dist > 0, "no place the front reached at least 2 ticks after the burst within " + age + " ticks");
         Detonation d = det(level, geometry.id(), c.position().add(-dist, 0, 0), age);
-        events.add(d);
+        events.add(d, level);
         double arrival = d.arrivalTicks(dist);
         c.setData(ModAttachments.NUKE_SEEN, NukeSeen.NONE.withBorn(d.gameTime() + (long) (arrival / 2)));
         LateExposure late = new LateExposure();
@@ -233,7 +233,7 @@ public final class LateExposureOrderGameTests {
         NuclearEvents events = NuclearEvents.get(level);
         Cow c = cow(h);
         int n = 32;
-        for (int i = 0; i < n; i++) events.add(det(level, events.nextId(), c.position().add(-40, 0, 0), 600 + i));
+        for (int i = 0; i < n; i++) events.add(det(level, events.nextId(), c.position().add(-40, 0, 0), 600 + i), level);
         LateExposure late = new LateExposure();
         try {
             late.joined(level, c, true, List.of());

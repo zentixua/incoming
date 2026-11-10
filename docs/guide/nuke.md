@@ -138,6 +138,23 @@ Incoming keeps a bounded list of recent distant updates and asks the server to r
 
 The detailed timings, visual behavior and model limits are in the [nuclear effects reference](../dev/nuclear-effects-reference.md).
 
+### Time after the strike
+
+Everything you watch move runs in real time: the flight, the flash, the wave, the mushroom cloud and the first
+20 minutes of the fires. The slow consequences then follow your world's day: the town burns and smoulders for about
+12 hours, black rain falls from its smoke, fallout decays, and burns, radiation sickness, hearing and the power grid
+heal or are repaired. A game hour is an hour of the world's day:
+
+- in a vanilla world a day lasts 20 minutes, so a game hour passes in 50 seconds and the fires burn out in about
+  10 minutes;
+- with a mod that lengthens the day, the same hours take longer, up to real hours;
+- with the day cycle stopped (`doDaylightCycle false`), everything runs in real time;
+- sleeping or `/time add` moves the consequences forward with the clock: after a night's sleep the fires are out and
+  the fallout has decayed. `/time set` to an earlier time never turns them back.
+
+An effect never comes before its cause: fallout lands as the cloud passes over, and black rain starts only once the
+firestorm has formed, at least 20 real minutes after the burst.
+
 ### Saved ruins beyond view distance
 
 After the wave has crossed the ruin zone, the server gradually applies ruins and ground traces to existing chunks

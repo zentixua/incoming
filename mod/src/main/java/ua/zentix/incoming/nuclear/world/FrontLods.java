@@ -283,7 +283,7 @@ final class FrontLods {
             return;
         }
         // no twins on disk: set lamps by grid at front arrival (nuke blackout cascade faster than wave)
-        boolean dark = PowerGrid.get(level).dark(ChunkPos.getX(chunk), ChunkPos.getZ(chunk), Math.max(now, c.due));
+        boolean dark = PowerGrid.get(level).dark(ChunkPos.getX(chunk), ChunkPos.getZ(chunk), ua.zentix.incoming.grid.Blackouts.at(level, Math.max(now, c.due)));
         int lamps = dark ? ChunkLights.darken(c.chunk.getSections(), c.lamps) : 0;
         if (!c.ruined && lamps == 0 && !c.lights) {
             // LOD already same; lit lamps require later district-light check, like sent copy (claim)
@@ -366,7 +366,7 @@ final class FrontLods {
             }
             case SENT -> {
                 if (!lights || !c.lit) return OURS;
-                boolean dark = PowerGrid.get(level).dark(ChunkPos.getX(chunk), ChunkPos.getZ(chunk), Math.max(now, c.due));
+                boolean dark = PowerGrid.get(level).dark(ChunkPos.getX(chunk), ChunkPos.getZ(chunk), ua.zentix.incoming.grid.Blackouts.at(level, Math.max(now, c.due)));
                 if (dark == c.dark) return OURS;
                 return now < c.due ? AFTER_FRONT : NONE;
             }

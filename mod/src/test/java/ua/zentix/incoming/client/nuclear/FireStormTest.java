@@ -16,17 +16,16 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 /**
  * Firestorm ({@link FireStorm}): sources on the grid - according to the law of ignition of ruins and sound, with flammability of areas; ignition -
- *  with a flash, the wave knocks down part of the fire; flames and smoke flare up, subside and go out by morning; map; tornadoes are rare, short,
+ *  with a flash, the wave knocks down part of the fire; flames and smoke flare up, subside and burn out over hours of the detonation clock; map; tornadoes are rare, short,
  *  with strong foci.
  */
 class FireStormTest {
     private static final Detonation AIR = new Detonation(1, new Vec3(0, 64 + 500, 0), 64, 15, false, 0, 0.5f, 6, 20_000, 7, 1, false, 1);
     private static final Detonation GROUND = new Detonation(2, new Vec3(0, 64, 0), 64, 15, true, 0, 0.5f, 6, 20_000, 9, 1, false, 1);
     private static final Detonation SMALL = new Detonation(3, new Vec3(0, 64, 0), 64, 1, true, 0, 0.5f, 6, 20_000, 11, 1, false, 1);
-    private static final long NIGHT = 18000;
 
     private static FireStorm.Grid grid(Detonation d) {
-        return FireStorm.build(d, new PallField(d, NIGHT).fireReach());
+        return FireStorm.build(d, new PallField(d).fireReach());
     }
 
     /** The middle of the cell {@code c} from the epicenter, blocks. */
@@ -41,7 +40,7 @@ class FireStormTest {
             double height = surface ? 0 : ua.zentix.incoming.nuclear.model.Yield.optimalBurstHeight(yield);
             Detonation d = new Detonation(91, new Vec3(300000, 64 + height, -400000), 64, yield, surface,
                     0, 0.5f, 6, 20000, 42, 1, false, .25f);
-            double reach = new PallField(d, NIGHT).fireReach();
+            double reach = new PallField(d).fireReach();
             FireStorm.Grid g = grid(d);
             assertTrue(g.side() <= FireStorm.MAX_SIDE && g.side() * g.cell() / 2 >= reach * 1.05,
                     "clipped ignition coverage at " + yield + " kt");
@@ -62,7 +61,7 @@ class FireStormTest {
     @Test
     void sourcesFollowTheIgnitionLawInsideTheZone() {
         for (Detonation d : List.of(AIR, GROUND)) {
-            double reach = new PallField(d, NIGHT).fireReach();
+            double reach = new PallField(d).fireReach();
             FireStorm.Grid g = grid(d);
             assertEquals(FireStorm.CELL, g.cell(), 1e-9, "at 15 kt - cell 32 block");
             assertTrue(g.side() <= FireStorm.MAX_SIDE && g.side() * g.cell() / 2 >= reach, "the map covers the area: " + g.side());
@@ -139,7 +138,6 @@ class FireStormTest {
     @Test
     void waveBlowsOutPartOfTheFireThatTheFlashLit() {
         FireStorm.Grid g = grid(AIR);
-        double end = 20 * 60 * 15;
         float[] map = new float[g.side() * g.side() * FireStorm.CHANNELS];
         int checked = 0;
         for (int k = 0; k < g.index().length && checked < 50; k++) {
@@ -150,7 +148,7 @@ class FireStormTest {
             double mid = g.strengthAt(k, g.arrival()[k] + FireStorm.BLOW_TICKS / 2);
             assertTrue(mid < g.before()[k] && mid > g.strength()[k], "knocks down smoothly: " + mid);
             double ticks = (g.start()[k] + g.arrival()[k]) / 2;
-            FireStorm.fill(g, ticks, end, null, map);
+            FireStorm.fill(g, ticks, null, map);
             int c = g.index()[k];
             double age = (ticks - g.start()[k]) / 20;
             assertEquals(g.before()[k] * FireStorm.flame(age, g.peak()[k]), map[4 * c], 1e-5);
@@ -161,7 +159,7 @@ class FireStormTest {
 
     @Test
     void smallScaleKeepsEnoughCells() {
-        double reach = new PallField(SMALL, NIGHT).fireReach();
+        double reach = new PallField(SMALL).fireReach();
         FireStorm.Grid g = grid(SMALL);
         assertTrue(g.cell() <= 2 * reach / 24 + 1e-9 && g.cell() >= 2, "cell " + g.cell());
         assertTrue(g.index().length > 100, "cells " + g.index().length);
@@ -199,11 +197,10 @@ class FireStormTest {
     void noStormSmokeBeforeTheFiresGrow() {
         Detonation d = new Detonation(2, new Vec3(-3350, 117, 3076), 116, 500, true, 0, 0.5f, 6, 20_000, 42, 1, false, 0.35f);
         FireStorm.Grid g = grid(d);
-        double end = 20 * 60 * 15;
         float[] map = new float[g.side() * g.side() * FireStorm.CHANNELS];
         for (double seconds : new double[]{10, 20, 40}) {
             double ticks = 20 * seconds;
-            FireStorm.fill(g, ticks, end, null, map);
+            FireStorm.fill(g, ticks, null, map);
             double top = d.blocks(PallField.hazeTopM(500));
             for (int k = 0; k < g.index().length; k++) {
                 int c = g.index()[k];
@@ -223,12 +220,11 @@ class FireStormTest {
     }
 
     @Test
-    void mapIsTheLawAndGoesOutByMorning() {
+    void mapIsTheLawAndBurnsOut() {
         FireStorm.Grid g = grid(AIR);
-        double end = 20 * 60 * 15;
         float[] map = new float[g.side() * g.side() * FireStorm.CHANNELS];
         double ticks = 20 * 300;
-        FireStorm.fill(g, ticks, end, null, map);
+        FireStorm.fill(g, ticks, null, map);
         boolean[] cell = new boolean[g.side() * g.side()];
         for (int k = 0; k < g.index().length; k++) {
             int c = g.index()[k];
@@ -239,13 +235,11 @@ class FireStormTest {
             assertTrue(map[4 * c + 2] <= map[4 * c + 1] + 1e-7, "rise - share presentation");
         }
         for (int c = 0; c < cell.length; c++) if (!cell[c]) assertEquals(0, map[4 * c] + map[4 * c + 1] + map[4 * c + 2], 0, "outside the zone is empty");
-        // before the flash - nothing, by morning - everything goes out
-        FireStorm.fill(g, 0, end, null, map);
+        // before the flash - nothing; once the city has burnt out (detonation clock) - nothing
+        FireStorm.fill(g, 0, null, map);
         for (float v : map) assertEquals(0, v, 0);
-        FireStorm.fill(g, end, end, null, map);
+        FireStorm.fill(g, 20 * FireStorm.OUT_S + 20 * 600, null, map);
         for (float v : map) assertEquals(0, v, 0);
-        assertEquals(1, FireStorm.morning(end - PallField.HAZE_FADE_TICKS - 1, end), 1e-12);
-        assertEquals(0.5, FireStorm.morning(end - PallField.HAZE_FADE_TICKS / 2.0, end), 1e-12);
     }
 
     /** Water beneath ground zero resolved at the burst ({@link NukeWater#resolve}): {@code under} 0 land, 1 sea. */
@@ -263,7 +257,7 @@ class FireStormTest {
      */
     @Test
     void unseenCellsKeepTheBurstWaterWhenGroundZeroLaterReadsWater() throws InterruptedException {
-        FireStorm s = new FireStorm(GROUND, new PallField(GROUND, NIGHT));
+        FireStorm s = new FireStorm(GROUND, new PallField(GROUND));
         for (int i = 0; i < 600 && s.grid() == null; i++) Thread.sleep(10);
         FireStorm.Grid g = s.grid();
         assertNotNull(g);
@@ -292,7 +286,7 @@ class FireStormTest {
 
     @Test
     void waterIceAndSnowThatTheClientKnowsDoNotBurn() throws InterruptedException {
-        FireStorm s = new FireStorm(AIR, new PallField(AIR, NIGHT));
+        FireStorm s = new FireStorm(AIR, new PallField(AIR));
         for (int i = 0; i < 600 && s.grid() == null; i++) Thread.sleep(10);
         FireStorm.Grid g = s.grid();
         assertNotNull(g);
@@ -306,12 +300,12 @@ class FireStormTest {
         for (int i = 0; i <= g.index().length / FireStorm.SURVEY_CELLS; i++) s.survey((x, z) -> -1, water(0));
         assertEquals(0, s.dryAt(AIR.burst().x - 500, AIR.burst().z), 0, "saw the sea - it doesn’t burn and then");
         // there is a sea under the epicenter: where we don’t know anything, it doesn’t burn (an explosion over the sea in the distance)
-        FireStorm sea = new FireStorm(AIR, new PallField(AIR, NIGHT));
+        FireStorm sea = new FireStorm(AIR, new PallField(AIR));
         for (int i = 0; i < 600 && sea.grid() == null; i++) Thread.sleep(10);
         for (int i = 0; i <= g.index().length / FireStorm.SURVEY_CELLS; i++) sea.survey(surface, water(1));
         assertEquals(0, sea.dryAt(AIR.burst().x + 5, AIR.burst().z), 0, "we don’t know, the sea is under the epicenter - it doesn’t burn");
         assertEquals(1, sea.dryAt(AIR.burst().x + 500, AIR.burst().z), 0, "the land we know is burning");
-        // the night of the explosion - the morning after 5 minutes: map - at the 3 minute
+        // map at the 3rd minute
         assertTrue(s.refresh(20 * 180));
         float[] map = s.map();
         double half = g.side() * g.cell() / 2, west = 0, east = 0, middle = 0;
@@ -329,11 +323,11 @@ class FireStormTest {
 
     @Test
     void noStormWhereTheServerStartsNoFires() {
-        assertEquals(0, new PallField(AIR.withFires(false), NIGHT).fireReach(), 0, "no haze over the fires, no glow");
-        FireStorm off = new FireStorm(AIR.withFires(false), new PallField(AIR, NIGHT));
+        assertEquals(0, new PallField(AIR.withFires(false)).fireReach(), 0, "no haze over the fires, no glow");
+        FireStorm off = new FireStorm(AIR.withFires(false), new PallField(AIR));
         assertEquals(0, off.gate(), 0, "from the first frame");
         assertEquals(0, off.trust(), 0);
-        FireStorm on = new FireStorm(AIR, new PallField(AIR, NIGHT));
+        FireStorm on = new FireStorm(AIR, new PallField(AIR));
         assertEquals(1, on.gate(), 0);
         assertEquals(1, on.trust(), 0);
         on.seen(0);
@@ -345,7 +339,7 @@ class FireStormTest {
     @Test
     void whirlsAreRareShortAndAtTheStrongestFires() {
         for (Detonation d : List.of(AIR, GROUND)) {
-            double reach = new PallField(d, NIGHT).fireReach();
+            double reach = new PallField(d).fireReach();
             FireStorm.Grid g = grid(d);
             List<FireStorm.Whirl> ws = g.whirls();
             assertTrue(ws.size() >= 2 && ws.size() <= FireStorm.MAX_WHIRLS, "tornadoes " + ws.size());
@@ -400,7 +394,7 @@ class FireStormTest {
 
     @Test
     void mapRefreshesAndFollowsRewind() throws InterruptedException {
-        PallField pall = new PallField(AIR, NIGHT);
+        PallField pall = new PallField(AIR);
         FireStorm s = new FireStorm(AIR, pall);
         long until = System.nanoTime() + 30_000_000_000L;
         while (s.grid() == null && System.nanoTime() < until) Thread.sleep(20);

@@ -38,8 +38,8 @@ import ua.zentix.incoming.util.Terrain;
  * @param fallout   fallout enabled ({@code nuclear.fallout} at detonation): surface-burst plume and
  *                   black-rain radioactivity; old-version saved detonations only for surface bursts
  * @param wave      dust-wall speed far from fireball, fraction of sound speed ({@code nuclear.wave_speed} at detonation)
- * @param dayTime   world time of day at detonation (ticks, as in {@code Level.getDayTime}): fire haze waits for
- *                   morning; {@link #NO_DAY_TIME} means unknown (detonation saved or replayed from an older version)
+ * @param dayTime   world time of day at detonation (ticks, as in {@code Level.getDayTime}); no longer read (fires follow
+ *                   the detonation clock, {@link NukeClock}), kept for the save and packet formats; {@link #NO_DAY_TIME} — unknown
  * @param fires     server ignites fires for this detonation ({@code nuclear.fires} and {@code fires_per_detonation}
  *                   at detonation): without them client has no firestorm or fire roar; old-version saved or
  *                   replayed detonations default to yes, as before
@@ -137,11 +137,6 @@ public record Detonation(int id, Vec3 burst, double groundY, double yieldKt, boo
 
     public Detonation withDayTime(long dayTime) {
         return new Detonation(id, burst, groundY, yieldKt, surface, gameTime, windDir, windSpeed, visibility, seed, scale, fallout, wave, dayTime, fires, rain);
-    }
-
-    /** Whether detonation time of day is known ({@link #dayTime}). */
-    public boolean hasDayTime() {
-        return dayTime != NO_DAY_TIME;
     }
 
     /** Far-zone threshold: 0.5 psi (glass). */
@@ -367,31 +362,33 @@ public record Detonation(int id, Vec3 burst, double groundY, double yieldKt, boo
     }
 
     /**
-     * Fallout dose rate at point, R/h: surface-burst plume and black-rain washout, all by game clock.
+     * Fallout dose rate at point, R/h: surface-burst plume and black-rain washout, on the detonation's clock ({@link NukeClock}:
+     * real time through the show, so the plume lands as the visible cloud passes; then the world clock, so its decay takes
+     * the hours the world lives through).
      *
-     * @param ticksSince game ticks after burst (1000 ticks = 1 hour)
+     * @param seconds detonation-clock seconds after the burst
      */
-    public double falloutRate(double x, double z, long ticksSince) {
+    public double falloutRateAt(double x, double z, double seconds) {
         if (!hasFallout()) return 0;
-        double hours = ticksSince / 1000.0, mx = metres(x - burst.x), mz = metres(z - burst.z);
-        double rain = blackRainModel().depositH1(mx, mz, ticksSince / 20.0);
+        double hours = seconds / 3600, mx = metres(x - burst.x), mz = metres(z - burst.z);
+        double rain = blackRainModel().depositH1(mx, mz, seconds);
         double decay = Math.pow(Math.max(hours, FalloutModel.MIN_DECAY_HOURS), -FalloutModel.DECAY_EXP);
         return falloutModel().doseRate(mx, mz, hours) + rain * decay;
     }
 
-    /** Game ticks after burst until surface-burst plume deposits at point. */
-    public double falloutArrivalTicks(double x, double z) {
-        return falloutModel().arrivalHours(metres(x - burst.x), metres(z - burst.z)) * 1000;
+    /** Detonation-clock seconds after the burst until the surface-burst plume deposits at the point. */
+    public double falloutArrivalSeconds(double x, double z) {
+        return falloutModel().arrivalHours(metres(x - burst.x), metres(z - burst.z)) * 3600;
     }
 
-    /** Whether black rain falls at point (same on server and client): firestorm clock, tick seconds. */
-    public boolean blackRain(double x, double z, long ticksSince) {
-        return blackRainModel().raining(metres(x - burst.x), metres(z - burst.z), ticksSince / 20.0);
+    /** Whether black rain falls at the point (same on server and client), {@code seconds} on the detonation's clock. */
+    public boolean blackRainAt(double x, double z, double seconds) {
+        return blackRainModel().raining(metres(x - burst.x), metres(z - burst.z), seconds);
     }
 
-    /** Game ticks after burst until black rain ends everywhere. */
-    public double blackRainEndTicks() {
-        return blackRainModel().endSeconds() * 20;
+    /** Detonation-clock seconds after the burst until black rain ends everywhere. */
+    public double blackRainEndSeconds() {
+        return blackRainModel().endSeconds();
     }
 
     /**

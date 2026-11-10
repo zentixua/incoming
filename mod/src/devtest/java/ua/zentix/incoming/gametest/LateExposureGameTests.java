@@ -69,7 +69,7 @@ public final class LateExposureGameTests {
         for (Mob m : late) m.removeData(ModAttachments.NUKE_SEEN);
         BlockPos g = h.absolutePos(NuclearGameTests.CENTER.west(20));
         Detonation d = burst(level, g, late.getLast().position());
-        NuclearEvents.get(level).add(d);
+        NuclearEvents.get(level).add(d, level);
         for (int i = 0; i < 4; i++) born.add(h.spawn(EntityType.COW, new BlockPos(40 + 3 * i, 12, 44)));
         for (Mob m : late) {
             m.setPersistenceRequired();
@@ -133,7 +133,7 @@ public final class LateExposureGameTests {
         once.removeData(ModAttachments.NUKE_SEEN);
         BlockPos g = h.absolutePos(NuclearGameTests.CENTER.west(20));
         Detonation d = burst(level, g, twice.position());
-        NuclearEvents.get(level).add(d);
+        NuclearEvents.get(level).add(d, level);
         world.onEntityJoin(level, twice, true);
         world.onEntityJoin(level, twice, true);
         world.onEntityJoin(level, once, true);

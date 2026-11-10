@@ -167,7 +167,7 @@ final class GridCommand {
         int count = 0;
         for (Node n : grid.nodes()) {
             count++;
-            boolean down = grid.downOutage(n.id(), level.getGameTime()).isPresent();
+            boolean down = grid.downOutage(n.id(), ua.zentix.incoming.grid.Blackouts.now(level)).isPresent();
             ctx.getSource().sendSuccess(() -> Component.translatable(down ? "incoming.grid.node.down" : "incoming.grid.node.up", n.id(),
                     n.pos().getX(), n.pos().getY(), n.pos().getZ(), Math.round(n.radius()),
                     Component.translatable(n.block() ? "incoming.grid.node.block" : "incoming.grid.node.marker")), false);

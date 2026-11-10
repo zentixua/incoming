@@ -15,8 +15,8 @@ import ua.zentix.incoming.nuclear.Detonation;
 /**
  * Ash, scraps of paper and small litter falling around the camera after the nuclear wave — like weather: in a disk around
  * and above the camera, only under open sky (over a roof — onto the roof), carried by the detonation wind. Amount follows the pall above
- * the location ({@link PallField#ashRate}): from settling dust — minutes after the wave; from smoky haze above the burning city — until
- * morning; paper — where the wave demolished houses, in the first minutes. Slots use their own {@link FxBudget#ASH} group.
+ * the location ({@link PallField#ashRate}): from settling dust — minutes after the wave; from smoky haze above the burning city — while
+ * it burns; paper — where the wave demolished houses, in the first minutes. Slots use their own {@link FxBudget#ASH} group.
  */
 public final class NukeAsh {
     private static final RandomSource RANDOM = RandomSource.create();

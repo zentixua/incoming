@@ -16,8 +16,9 @@ Ingredients: 3 lightning rods, 2 copper ingots, 1 redstone block and 3 iron ingo
 - A nuclear strike cuts power without a substation over its whole damage reach, as far as it breaks glass or burns
   skin (at most 16384 blocks). Both `grid.enabled` and `grid.nuke_blackout` must be on. Hit substations can also
   cause outages in their own districts.
-- After a nuclear strike, power comes back by what the blast did to each district, on the game clock (an hour is
-  50 seconds, a Minecraft day is 24 hours):
+- After a nuclear strike, power comes back by what the blast did to each district, in hours of the world's day
+  (50 seconds each in a vanilla world, real hours with the day cycle stopped; see
+  [time after the strike](nuke.md#time-after-the-strike)):
   - where nothing broke (below 1 psi), the grid only tripped: power returns within 2 to 24 hours, the far edge first;
   - where lines are down (1 to 5 psi), crews rebuild them: 2 to 14 days, longest next to the destroyed zone;
   - where the grid is destroyed (5 psi and more), power never comes back by itself. Only fires, torches and the lamps

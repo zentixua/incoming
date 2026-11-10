@@ -264,7 +264,7 @@ public final class FarLods {
         byte kind;
         if (NuclearWorld.get(level).prep().arrivedPlan(level, NuclearEvents.get(level), chunk, now) != null) kind = RUINS;
         else if (f.ringOf(chunk, now) != null && !f.inHeavyZone(chunk, now)) kind = SCORCH;
-        else if (PowerGrid.get(level).dark(ChunkPos.getX(chunk), ChunkPos.getZ(chunk), now)) kind = LIGHTS;
+        else if (PowerGrid.get(level).dark(ChunkPos.getX(chunk), ChunkPos.getZ(chunk), ua.zentix.incoming.grid.Blackouts.now(level))) kind = LIGHTS;
         // no plan, trace outside heavy zone or darkness: copy equals disk chunk already sent by LSS
         else return;
         f.refreshFor.computeIfAbsent(chunk, c -> new java.util.HashSet<>()).add(player);
@@ -631,7 +631,7 @@ public final class FarLods {
         // unruined copy for chunk with front-held ruined copy would overwrite it
         if (!b.ruined && front(level, b.chunk, true)) return;
         // no twins on disk: darken if district dark
-        boolean dark = PowerGrid.get(level).dark(ChunkPos.getX(b.chunk), ChunkPos.getZ(b.chunk), level.getGameTime());
+        boolean dark = PowerGrid.get(level).dark(ChunkPos.getX(b.chunk), ChunkPos.getZ(b.chunk), ua.zentix.incoming.grid.Blackouts.now(level));
         int lamps = dark ? ChunkLights.applyToCopy(level, b.copy, true) : 0;
         java.util.Set<java.util.UUID> only = refreshFor.remove(b.chunk);
         if (!b.ruined && lamps == 0 && !b.lights) {
@@ -675,7 +675,7 @@ public final class FarLods {
         CompoundTag tag = ChunkSerializer.write(level, chunk);
         Built b = build(f, DiskShots.parseSections(f, chunk.getPos(), tag), plan, fires, false, false);
         if (b.copy == null) return null;
-        if (PowerGrid.get(level).dark(chunk.getPos().x, chunk.getPos().z, level.getGameTime())) ChunkLights.applyToCopy(level, b.copy, true);
+        if (PowerGrid.get(level).dark(chunk.getPos().x, chunk.getPos().z, ua.zentix.incoming.grid.Blackouts.now(level))) ChunkLights.applyToCopy(level, b.copy, true);
         return b.copy;
     }
 

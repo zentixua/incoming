@@ -62,7 +62,7 @@ final class LateExposure {
             // born now: nothing to catch up on; the fallout account starts now wherever fallout may still fall
             NukeSeen seen = e.getExistingData(ModAttachments.NUKE_SEEN).orElse(NukeSeen.NONE);
             NukeSeen born = seen.withBorn(level.getGameTime());
-            if (!events.detonations().isEmpty()) born = born.withFallout(level.getGameTime());
+            if (!events.detonations().isEmpty()) born = born.withFallout(level.getGameTime(), ua.zentix.incoming.util.WorldClock.now(level));
             if (born != seen) e.setData(ModAttachments.NUKE_SEEN, born);
             return;
         }

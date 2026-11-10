@@ -186,7 +186,7 @@ class PallGlslTest {
      */
     @Test
     void sprayHasItsOwnRow() {
-        PallField p = new PallField(GROUND, 6000);
+        PallField p = new PallField(GROUND);
         float[] row = new float[4 * PallField.ROWS * PallField.BINS];
         double[] v = new double[4];
         boolean spray = false;

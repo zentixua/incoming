@@ -25,6 +25,7 @@ import net.minecraft.world.phys.Vec3;
 import net.neoforged.fml.ModList;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
+import ua.zentix.incoming.util.WorldClock;
 import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.IncomingConfig;
 import ua.zentix.incoming.compat.SubLevels;
@@ -2074,7 +2075,7 @@ public final class NuclearGameTests {
         Detonation d = new Detonation(IDS.incrementAndGet(), Vec3.atBottomCenterOf(g), g.getY(), 0.1, true,
                 level.getGameTime() - 2, 0, 0, 20_000, 7, 0.05f, false, Detonation.OLD_WAVE);
         h.assertTrue(d.frontRadius(1) > 10 && d.frontRadius(2) > 26 && d.frontRadius(1) < 26, "the front is not where the check awaits");
-        NuclearEvents.get(level).add(d);
+        NuclearEvents.get(level).add(d, level);
         // like after a restart: the world’s nuclear bursts are from a clean slate, the detonation is from saving
         level.removeData(ModAttachments.NUCLEAR_WORLD);
         h.succeedWhen(() -> {
@@ -2395,7 +2396,8 @@ public final class NuclearGameTests {
         Cow grazing = h.spawn(EntityType.COW, CENTER.west(3));
         // accounted for up to a period ago, not since the detonation: a first round of 2000 ticks kills the cow before the second
         // (game time starts near 0 here; an account is never negative)
-        grazing.setData(ModAttachments.NUKE_SEEN, NukeSeen.NONE.withFallout(Math.max(0, level.getGameTime() - MobFallout.PERIOD)));
+        grazing.setData(ModAttachments.NUKE_SEEN, NukeSeen.NONE.withFallout(Math.max(0, level.getGameTime() - MobFallout.PERIOD),
+                WorldClock.now(level) - Math.min(level.getGameTime(), MobFallout.PERIOD)));
         for (int i = 0; i < 2 * MobFallout.PERIOD + 100; i++) h.spawn(EntityType.SHEEP, CENTER.offset(-20 + i % 41, 0, 5 + i / 41));
         BlockPos g = h.absolutePos(CENTER);
         Detonation d = new Detonation(IDS.incrementAndGet(), Vec3.atBottomCenterOf(g), g.getY(), 15, true,
@@ -2420,7 +2422,7 @@ public final class NuclearGameTests {
                 double gain = Double.longBitsToDouble(gains.get(i)[1]);
                 // the rate decays over a starved pass: its tick-by-tick sum, not the end rate times the pass
                 double roentgens = 0;
-                for (long k = t - ticks; k < t; k++) roentgens += d.falloutRate(grazing.getX(), grazing.getZ(), k - d.gameTime()) / 1000.0;
+                for (long k = t - ticks; k < t; k++) roentgens += d.falloutRateAt(grazing.getX(), grazing.getZ(), (k - d.gameTime()) / 20.0) / 1000.0;
                 double expected = roentgens * Shielding.fallout(level, RadiationTicker.middle(grazing)) * RadiationTicker.GY_PER_R;
                 h.assertTrue(Math.abs(gain / expected - 1) < 0.05, "per round " + ticks + " tick dose " + gain + " Gr, we were waiting " + expected);
             }
@@ -2494,10 +2496,10 @@ public final class NuclearGameTests {
         h.assertTrue(Detonation.CODEC.parse(NbtOps.INSTANCE, dt).getOrThrow().equals(d), "the explosion did not survive the preservation");
         // a forgotten explosion (precipitation has subsided) still destroys chunks loaded later; “Lights Out” forgets him too
         NuclearEvents events = NuclearEvents.get(level);
-        Detonation old = new Detonation(d.id(), d.burst(), d.groundY(), d.yieldKt(), d.surface(), level.getGameTime() - NuclearEvents.FORGET_AFTER - 1,
+        Detonation old = new Detonation(d.id(), d.burst(), d.groundY(), d.yieldKt(), d.surface(), level.getGameTime() - (long) (NuclearEvents.FORGET_AFTER_S * 20) - 21,
                 d.windDir(), d.windSpeed(), d.visibility(), d.seed(), d.scale(), d.fallout(), d.wave());
-        events.add(old);
-        events.prune(level.getGameTime());
+        events.add(old, level);
+        events.prune(level.getGameTime(), WorldClock.now(level));
         h.assertFalse(events.detonations().contains(old), "the old explosion is not forgotten");
         h.assertTrue(events.past().contains(old), "a forgotten explosion is not remembered for destruction");
         h.assertTrue(events.isPast(old.id()), "a forgotten explosion cannot be recognized by its number");

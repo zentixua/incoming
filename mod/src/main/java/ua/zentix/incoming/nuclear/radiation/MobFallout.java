@@ -12,6 +12,7 @@ import ua.zentix.incoming.nuclear.world.NukeSeen;
 import ua.zentix.incoming.nuclear.world.WorkClock;
 import ua.zentix.incoming.registry.ModAttachments;
 import ua.zentix.incoming.util.Terrain;
+import ua.zentix.incoming.util.WorldClock;
 
 import java.util.List;
 import java.util.function.DoubleUnaryOperator;
@@ -28,12 +29,14 @@ import java.util.function.LongToDoubleFunction;
  * Clothing contamination and black rain are player-only.
  */
 public final class MobFallout {
-    /** Ticks between mob fallout doses (10 s — 0.2 game hour). */
+    /** Ticks between mob fallout doses (10 s — 0.2 hour under a vanilla day). */
     public static final int PERIOD = 200;
     /** Rate below this (R/h) is background: adds no dose, skip shielding (same for players). */
     static final double BACKGROUND = 0.01;
     /** Accounts up to this long, ticks, use the current rate (the pass period); longer ones integrate the decay. */
     private static final long SHORT = 2L * PERIOD;
+    /** The same in detonation-clock seconds: two passes under a vanilla day (0.4 game hours). */
+    private static final double SHORT_S = SHORT * 3.6;
     /** Logarithmic-grid steps of the long-account integral (decay t^-1.2, step at fallout arrival). */
     static final int INTEGRAL_STEPS = 64;
 
@@ -81,20 +84,36 @@ public final class MobFallout {
         // snapshot older than a tick: the mob's chunk may have dropped below full loading, while shielding reads blocks
         if (!mob.isAlive() || !Terrain.ready(level, mob.blockPosition())) return;
         NukeSeen seen = mob.getExistingData(ModAttachments.NUKE_SEEN).orElse(NukeSeen.NONE);
-        int lateFrom = NuclearEvents.get(level).lateFrom();
+        NuclearEvents events = NuclearEvents.get(level);
+        int lateFrom = events.lateFrom();
+        double clock = WorldClock.now(level);
         double roentgens = 0;
         long span = 0;
         long[] froms = new long[detonations.size()];
+        double[] fromClocks = new double[froms.length];
         for (int i = 0; i < froms.length; i++) {
             Detonation d = detonations.get(i);
             // own account; none — since the detonation (it was there, unloaded or not), or this pass for an old world's mob
-            long from = seen.falloutAt() >= 0 ? Math.max(seen.falloutAt(), d.gameTime()) : d.id() >= lateFrom ? d.gameTime() : passStart;
+            long from;
+            double fromClock;
+            if (seen.falloutAt() >= 0 && seen.falloutAt() >= d.gameTime()) {
+                from = seen.falloutAt();
+                // an account saved before the world clock was kept: as if the day had run at vanilla speed since
+                fromClock = Double.isNaN(seen.falloutClock()) ? clock - (now - from) : seen.falloutClock();
+            } else if (seen.falloutAt() >= 0 || d.id() >= lateFrom) {
+                from = d.gameTime();
+                fromClock = events.burstClock(d, now, clock);
+            } else {
+                from = passStart;
+                fromClock = clock - (now - from);
+            }
             froms[i] = from;
+            fromClocks[i] = Math.min(fromClock, clock);
             if (from >= now) continue;
-            roentgens += exposure(d, mob.getX(), mob.getZ(), from - d.gameTime(), now - d.gameTime());
+            roentgens += exposure(d, mob.getX(), mob.getZ(), events.seconds(d, from, fromClocks[i]), events.seconds(d, now, clock));
             span = Math.max(span, now - from);
         }
-        mob.setData(ModAttachments.NUKE_SEEN, seen.withFallout(now));
+        mob.setData(ModAttachments.NUKE_SEEN, seen.withFallout(now, clock));
         // background rate over the span adds nothing (same as players): skip shielding rays
         if (roentgens < BACKGROUND * span / 1000.0) return;
         double gyPerR = Shielding.fallout(level, RadiationTicker.middle(mob)) * RadiationTicker.GY_PER_R;
@@ -103,19 +122,29 @@ public final class MobFallout {
         if (span > SHORT && before < SicknessModel.MIN_DOSE && before + gy >= SicknessModel.MIN_DOSE) {
             // a long account (the mob was unloaded for hours): the sickness clock starts when the dose really passed 1 Gy,
             // not on load, so a mob that would have died in those hours dies now
-            // only detonations that gave this mob fallout in the account: each bisection step integrates them again
+            // only detonations that gave this mob fallout in the account: each bisection step integrates them again.
+            // The world clock between an account's start and now is taken as running evenly (estimate)
             int[] live = java.util.stream.IntStream.range(0, froms.length)
                     .filter(i -> froms[i] < now && detonations.get(i).hasFallout()).toArray();
             at = crossing(t -> {
                 double r = 0;
                 for (int i : live) {
                     Detonation d = detonations.get(i);
-                    if (froms[i] < t) r += exposure(d, mob.getX(), mob.getZ(), froms[i] - d.gameTime(), t - d.gameTime());
+                    if (froms[i] < t) r += exposure(d, mob.getX(), mob.getZ(), events.seconds(d, froms[i], fromClocks[i]),
+                            events.seconds(d, t, between(froms[i], fromClocks[i], now, clock, t)));
                 }
                 return before + r * gyPerR;
             }, now - span, now, SicknessModel.MIN_DOSE);
         }
-        RadiationTicker.addDose(mob, (float) gy, at);
+        long first = now - span;
+        double firstClock = clock;
+        for (int i = 0; i < froms.length; i++) if (froms[i] == first) firstClock = Math.min(firstClock, fromClocks[i]);
+        RadiationTicker.addDose(mob, (float) gy, (long) Math.floor(between(first, firstClock, now, clock, at)));
+    }
+
+    /** World clock at game time {@code t} between two readings, running evenly between them. */
+    static double between(long t0, double clock0, long t1, double clock1, long t) {
+        return t1 <= t0 ? clock1 : clock0 + (clock1 - clock0) * (double) (t - t0) / (t1 - t0);
     }
 
     /**
@@ -133,15 +162,18 @@ public final class MobFallout {
         return hi;
     }
 
-    /** Unshielded fallout exposure at (x, z) from {@code t0} to {@code t1} ticks after detonation {@code d}, R. */
-    static double exposure(Detonation d, double x, double z, long t0, long t1) {
-        if (t1 - t0 <= SHORT) return d.falloutRate(x, z, t1) * (t1 - t0) / 1000.0;
-        return integral(t -> d.falloutRate(x, z, (long) t), t0, t1) / 1000.0;
+    /**
+     * Unshielded fallout exposure at (x, z) from {@code s0} to {@code s1} seconds after detonation {@code d} on its own clock
+     * ({@code NukeClock}), R.
+     */
+    static double exposure(Detonation d, double x, double z, double s0, double s1) {
+        if (s1 - s0 <= SHORT_S) return d.falloutRateAt(x, z, s1) * (s1 - s0) / 3600;
+        return integral(s -> d.falloutRateAt(x, z, s), s0, s1) / 3600;
     }
 
     /**
-     * ∫ rate dt over [{@code t0}, {@code t1}] ticks (rate × ticks): midpoint rule on a logarithmic grid of {@link #INTEGRAL_STEPS}
-     * steps, which follows a power-law decay to a fraction of a percent; from tick 1 (no fallout in the first tick).
+     * ∫ rate dt over [{@code t0}, {@code t1}] seconds (rate × seconds): midpoint rule on a logarithmic grid of {@link #INTEGRAL_STEPS}
+     * steps, which follows a power-law decay to a fraction of a percent; from the first second (no fallout before it).
      */
     static double integral(DoubleUnaryOperator rate, double t0, double t1) {
         double lo = Math.max(t0, 1);

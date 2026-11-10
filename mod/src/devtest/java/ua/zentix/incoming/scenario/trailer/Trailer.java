@@ -666,7 +666,7 @@ public final class Trailer {
             double m = Math.min(3000, d.windSpeed() * 150) * d.scale();
             double dx = Math.cos(d.windDir()), dz = Math.sin(d.windDir());
             falloutSpot = server.submit(() -> openGround(server.overworld(), d.burst().x, d.burst().z, dx, dz, m)).join();
-            falloutRain = Math.max(3000, (long) Math.ceil(d.falloutArrivalTicks(falloutSpot.x, falloutSpot.z)));
+            falloutRain = Math.max(3000, (long) Math.ceil(20 * d.falloutArrivalSeconds(falloutSpot.x, falloutSpot.z)));
             placeHidden(new Vec3(falloutSpot.x, 200, falloutSpot.z));
             return;
         }

@@ -267,7 +267,11 @@ public final class NuclearStrikes {
         // a nominal countdown: a stalled server stops motion upstream, never a spark hovering at the burst.
         if (!approaches.isEmpty() || !due.isEmpty())
             PacketDistributor.sendToPlayersInDimension(level, new S2C.NukeApproach(now, List.copyOf(approaches)));
-        if (now % 1200 == 0) events.prune(now);
+        double worldClock = ua.zentix.incoming.util.WorldClock.now(level);
+        for (Detonation ended : events.endShows(now, worldClock)) {
+            PacketDistributor.sendToPlayersInDimension(level, new S2C.NukeClock(ended.id(), events.sinceShowEnd(ended, now, worldClock)));
+        }
+        if (now % 1200 == 0) events.prune(now, worldClock);
         long t1 = System.nanoTime();
         NuclearWorld world = NuclearWorld.get(level);
         world.tick(level, clock);
@@ -346,6 +350,12 @@ public final class NuclearStrikes {
                 events.scheduled().stream().filter(s -> warns(s, p)).map(s -> warning(s, p)).toList()));
         PacketDistributor.sendToPlayer(p, new S2C.NukeApproach(p.serverLevel().getGameTime(),
                 events.scheduled().stream().flatMap(s -> s.arrival().stream()).toList()));
+        long now = p.serverLevel().getGameTime();
+        double clock = ua.zentix.incoming.util.WorldClock.now(p.serverLevel());
+        for (Detonation d : events.detonations()) {
+            double since = events.sinceShowEnd(d, now, clock);
+            if (!Double.isNaN(since)) PacketDistributor.sendToPlayer(p, new S2C.NukeClock(d.id(), since));
+        }
     }
 
     private static void sync(ServerLevel level) {

@@ -344,7 +344,7 @@ public final class RuinSettleGameTests {
         NuclearEvents events = new NuclearEvents();
         int id = NuclearEvents.get(level).nextId();
         events.add(new Detonation(id, new Vec3(full.getMiddleBlockX(), 65, full.getMiddleBlockZ()),
-                65, 7, true, -10000, 0, 0, 20000, 5, 0.1f, false, 1));
+                65, 7, true, -10000, 0, 0, 20000, 5, 0.1f, false, 1), level);
         RuinProgress.Pass p = RuinProgress.get(level).pass(id);
         p.cursor = Long.MAX_VALUE; // restored scan: only these two unconfirmed positions remain
         p.pending.add(full.toLong());
@@ -391,7 +391,7 @@ public final class RuinSettleGameTests {
         NuclearEvents events = new NuclearEvents();
         int id = NuclearEvents.get(level).nextId();
         events.add(new Detonation(id, new Vec3(center.getMiddleBlockX(), 65, center.getMiddleBlockZ()),
-                65, 7, true, -10000, 0, 0, 20000, 42, 0.1f, false, 1));
+                65, 7, true, -10000, 0, 0, 20000, 42, 0.1f, false, 1), level);
         RuinProgress.Pass p = RuinProgress.get(level).pass(id);
         p.cursor = Long.MAX_VALUE; // restored scan: only these unconfirmed positions remain
         CompoundTag data = ChunkSerializer.write(level, fixture(level, center, 64));
@@ -437,7 +437,7 @@ public final class RuinSettleGameTests {
         settle.regions = (rx, rz) -> true;
         NuclearEvents events = new NuclearEvents();
         int id = NuclearEvents.get(level).nextId();
-        events.add(new Detonation(id, new Vec3(80000, 64, 80000), 64, 7, true, -10000, 0, 0, 20000, 3, 0.03f, false, 1));
+        events.add(new Detonation(id, new Vec3(80000, 64, 80000), 64, 7, true, -10000, 0, 0, 20000, 3, 0.03f, false, 1), level);
         WorkClock clock = WorkClock.counting(1_000_000);
         RuinProgress.Pass p = RuinProgress.get(level).pass(id);
         int[] ticks = {0};

@@ -105,6 +105,7 @@ public final class Incoming {
         NeoForge.EVENT_BUS.addListener(ua.zentix.incoming.work.BlockLighting::onLoad);
         // After the mod releases its tickets and work: finish generation started before exit (otherwise the unload loop hangs).
         NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, ua.zentix.incoming.util.StopDrain::onServerStopping);
+        NeoForge.EVENT_BUS.addListener(EventPriority.HIGHEST, ua.zentix.incoming.util.WorldClock::onServerTick);
         NeoForge.EVENT_BUS.addListener(FlightStatus::onServerTick);
         NeoForge.EVENT_BUS.addListener(FarFlights::onServerTick);
         NeoForge.EVENT_BUS.addListener(FlashbackReplay::onServerTick);

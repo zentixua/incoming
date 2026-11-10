@@ -38,7 +38,8 @@ paths:
   other chunks.
 
 - Nuclear outages repair by damage (`Outage.damageLightAt`, `dead`/`damaged` = ground ranges of `Blackouts.DEAD_PSI` 5 and
-  `DAMAGED_PSI` 1): never inside `dead`, days in the belt, hours outside it, on the 1000-ticks-per-hour game clock; the
+  `DAMAGED_PSI` 1): never inside `dead`, days in the belt, hours outside it, on the world clock (`WorldClock`, 1000 ticks per hour of the day; `Blackouts.now`; cascade speed divides by
+  `Blackouts.rate` so a vanilla day keeps its pace and a stopped day stretches it to real hours); the
   restoration cascade starts at `Outage.restoreFrom` and lives as long as repairs (a restarted one skips districts issued
   before the restart, `Sweep.issued`). Substations the strike hit repair as their district does; a destroyed one reroutes
   its area at `Outage.rerouteAt` but stays unpowered while its zone is destroyed (`PowerGrid.destroyed`).
