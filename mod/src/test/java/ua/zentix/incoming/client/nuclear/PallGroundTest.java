@@ -228,4 +228,24 @@ class PallGroundTest {
         assertEquals(a, g.at(600, 400), 6, "what is known remains (on larger cells)");
         assertEquals(80 + 30 * Math.sin(600 / 700.0) * Math.cos(400 / 900.0) - 109, g.at(600, 400), 6);
     }
+
+    /**
+     * Hard ground under the pall (third channel, {@link PallGround#hard}): known cells keep what was seen, unknown take the nearest
+     * known; with no hard ground at all the shader does not read it ({@link PallGround#hasHard}); unknown ground is soil.
+     */
+    @Test
+    void hardGroundIsACellProperty() {
+        PallGround g = new PallGround(GROUND, new PallField(GROUND, 6000), FILL_HALF);
+        assertFalse(g.hasHard());
+        assertEquals(0, g.hard(1500, -800), 1e-6);
+        FarTerrain.Water rockEast = (x, z) -> x > 2000 ? 1 : 0;
+        for (int i = 0; i < PallGround.SIDE * PallGround.SIDE / PallGround.PER_TICK; i++) g.survey(0, 0, 0, UNKNOWN, null, rockEast);
+        g.fill();
+        assertTrue(g.hasHard());
+        assertEquals(1, g.hard(4000, 300), 1e-3);
+        assertEquals(0, g.hard(-4000, 300), 1e-3);
+        PallPass.Ground out = new PallPass.Ground();
+        g.frame(out);
+        assertEquals(PallGround.CHANNELS * PallGround.SIDE * PallGround.SIDE, out.map.length);
+    }
 }

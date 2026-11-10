@@ -364,7 +364,20 @@ class BlastWallTest {
         assertEquals(0, BlastWall.sigma(s, head + 2, 0, 0.1, 0));
         assertEquals(0, BlastWall.sigma(s, head - len, 0, 1.01 * top, 0));
         assertEquals(0, BlastWall.sigma(s, head - 0.1 * len, 0, 0.3 * top, 0), "at the edge above the wedge");
-        assertTrue(BlastWall.sigma(s, head - 0.1 * len, 0, 0.02 * top, 0) > 1.5 * BlastWall.sigma(s, head - len, 0, 0.02 * top, 0), "it’s not thicker at the edge");
+        // densest at the ground in the front part of the wedge (lifted in a thin layer), not at the very edge: dust there is still rising
+        // (saltation develops behind the front, BlastWall.develop)
+        double peak = 0, at = 0, end = BlastWall.sigma(s, head - len, 0, 0.02 * top, 0);
+        for (double u = 0.002; u <= 1; u += 0.002) {
+            double v = BlastWall.sigma(s, head - u * len, 0, 0.02 * top, 0);
+            if (v > peak) {
+                peak = v;
+                at = u;
+            }
+        }
+        // 15 kt at 4 s: 1.4 times the end at a third of the wedge (without development — 2.6 times at a tenth)
+        assertTrue(peak > 1.25 * end && at < 0.5, "it’s not thicker near the edge: " + peak / end + " at " + at);
+        assertTrue(at > 0.01 && BlastWall.sigma(s, head - 0.002 * len, 0, 0.02 * top, 0) < 0.8 * peak,
+                "full density right at the edge (a perfect ring at the foot): peak at " + at);
         assertEquals(0, BlastWall.sigma(s, head - 1.6 * len, 0, 0.1 * top, 0));
         double prev = 0;
         for (double back = 0.05; back <= 1; back += 0.05) {
@@ -430,7 +443,8 @@ class BlastWallTest {
                 assertTrue(c[0] > c[1] && c[1] > c[2], u + " wedge, " + up + " top: at night fires are not the color of fire, " + Arrays.toString(c));
             }
         }
-        NukePall.dustLight(s, glow, sky(false), GROUND.windDir(), head - 0.3 * len, 0.2 * h * BlastWall.top(0.3), 0, 0.2 * h * BlastWall.top(0.3), c);
+        // deeper than the young front part, which is still rising (BlastWall.develop) and thinner
+        NukePall.dustLight(s, glow, sky(false), GROUND.windDir(), head - 0.5 * len, 0.2 * h * BlastWall.top(0.5), 0, 0.2 * h * BlastWall.top(0.5), c);
         assertTrue(luminance(c) < 0.01, "at night there is no shadow in the depths of the head above the fires: " + luminance(c));
         NukePall.dustLight(s, glow, sky(true), GROUND.windDir(), head - len, 0.9 * h, 0, 0.9 * h, top);
         assertTrue(top[0] > top[1] && top[1] > top[2], "during the day, the top of the head is not brown: " + Arrays.toString(top));
@@ -475,5 +489,21 @@ class BlastWallTest {
                 if (eye > 0) assertEquals(down, BlastWall.tau(s, r, 0, 0, eye, 0), 0.02 * down + 1e-9, back + ", " + eye);
             }
         }
+    }
+
+    /**
+     * Over hard ground the head holds only debris dust ({@link BlastWall#pavedShare}): near ground zero a small fraction of soil dust,
+     * farther — debris dust from collapsing buildings is a large share; the head over half-hard ground is between soil and hard.
+     */
+    @Test
+    void headThinsOverHardGround() {
+        BlastWall w = new BlastWall(GROUND, false);
+        assertTrue(w.pavedShare(600) < 0.15, "600 m: " + w.pavedShare(600));
+        assertTrue(w.pavedShare(2500) > 0.3 && w.pavedShare(2500) <= 1, "2.5 km: " + w.pavedShare(2500));
+        float[] s = new float[BlastWall.SLOT];
+        assertTrue(w.slot(2, s) && s[3] > 0);
+        double r = s[0] - 0.4 * s[1], up = 0.05 * s[2];
+        double soil = BlastWall.sigma(s, r, 0, up, 0, 0), half = BlastWall.sigma(s, r, 0, up, 0, 0.5), hard = BlastWall.sigma(s, r, 0, up, 0, 1);
+        assertTrue(soil > 0 && hard < 0.6 * soil && half < soil && half > hard, soil + " " + half + " " + hard);
     }
 }

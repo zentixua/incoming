@@ -579,6 +579,30 @@ public final class TerrainTiles {
         return -1;
     }
 
+    /**
+     * Map color of the column surface ({@code MapColor} id), as {@link #height}: most detailed ready tile, client chunks first;
+     * −1 unknown, {@code MapColor.WATER} where water lies on top.
+     */
+    public static int color(int x, int z) {
+        for (int i = layers.size() - 1; i >= 0; i--) {
+            Layer layer = layers.get(i);
+            if (!live(layer)) continue;
+            TerrainSource.Column now = layer.source.peek(x, z);
+            if (now != null) return now.waterDepth() > 0 ? MapColor.WATER.id : now.color().id;
+            Map<Key, Tile> tiles = layer.tiles;
+            for (int l = 0; l <= MAX_LEVEL; l++) {
+                int span = SIZE << l;
+                Tile t = tiles.get(new Key(l, Math.floorDiv(x, span), Math.floorDiv(z, span)));
+                if (t == null || t.columns == null) continue;
+                int px = Math.floorMod(x, span) >> l, pz = Math.floorMod(z, span) >> l;
+                int j = pz * SIZE + px;
+                if (!t.columns.has(j)) continue;
+                return t.columns.depth[j] > 0 ? MapColor.WATER.id : t.columns.color[j] & 0x3F;
+            }
+        }
+        return -1;
+    }
+
     private static int wetness(int color, int waterDepth) {
         return waterDepth > 0 || color == MapColor.WATER.id || color == MapColor.ICE.id || color == MapColor.SNOW.id ? 1 : 0;
     }

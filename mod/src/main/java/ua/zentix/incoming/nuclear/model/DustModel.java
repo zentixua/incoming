@@ -167,6 +167,12 @@ public final class DustModel {
          * tens of times stronger).
          */
         public static final Surface HARD = new Surface(REFERENCE.threshold, 6e-4, 0);
+        /**
+         * Hard ground under a nuclear burst (rock, roofs, roads, ice, snow cover): {@link #HARD} without soil, but with the same
+         * debris dust as {@link #REFERENCE} where buildings collapse — the reference calibration treats the whole world as a town
+         * (⚠ rock without buildings also gives debris dust; snow shields the soil, lofted snow itself is not dust).
+         */
+        public static final Surface PAVED = new Surface(HARD.threshold, HARD.supply, REFERENCE.debris);
     }
 
     /** Smooth 0..1 step from e0 to e1. */
@@ -305,14 +311,35 @@ public final class DustModel {
      * 1988: flux approaches steady state in about a second; saturation length — meters, Andreotti et al., 2010).
      * ⚠ Estimate: e-folding in a quarter second. For charges of tens of kg, blast phase is milliseconds and saltation barely
      * develops (without this, the dust layer at 0.5 s was an opaque floor hundreds of meters across); suspension near the
-     * charge (post-shock injection, Mirels) has no delay. Nuclear phase lasts 0.45–1.4 s, giving a 0.85–1 factor; this change
-     * does not affect nuclear blasts (decision: nuclear unchanged), whose law remains steady-state.
+     * charge (post-shock injection, Mirels) has no delay. Nuclear total mass stays steady-state (its calibration absorbs the
+     * difference), but the dust-wall head rises with this development behind the front ({@link #prompt}, {@code BlastWall}):
+     * without it, the head jumped to full density right at the front, and its foot was a perfect ring.
      */
     public static final double SALTATION_S = 0.25;
 
-    /** Dust layer by position and burst: {@code heat} — flash fluence on ground, J/m²; {@code ball} — ball radius, m. */
+    /**
+     * Dust layer by position and burst: {@code heat} — flash fluence on ground, J/m²; {@code ball} — ball radius, m. Total lofted mass
+     * is the steady-state law calibrated to Hiroshima ({@link Surface#REFERENCE}); saltation development changes only when dust rises
+     * behind the front (dust-wall head, {@link #prompt}), not how much.
+     */
     private static Column column(double ground, double hob, double yieldKt, double heat, double ball, Surface surface) {
         return column(ground, hob, yieldKt, heat, ball, surface, 0);
+    }
+
+    /**
+     * Share of the dust lofted {@code groundM} m from the epicenter over {@code surface} that rises at once behind the front,
+     * 0..1: suspension (Mirels: from 10 thresholds, injected into the shock boundary layer) and debris dust; the rest is
+     * saltation, which develops over {@link #SALTATION_S}. 1 — nothing lofted.
+     */
+    public static double prompt(double groundM, double hobM, double yieldKt, Surface surface) {
+        double ground = Math.max(0, groundM), hob = Math.max(0, hobM);
+        double kpa = BlastModel.kpa(HobBlast.psi(ground, hob, yieldKt));
+        double positive = HobBlast.positivePhaseSeconds(ground, hob, yieldKt), along = HobBlast.alongGround(ground, hob, yieldKt);
+        double debris = surface.debris() * destroyed(BlastModel.psi(kpa));
+        // saltation multiplied by 1 − e^(−t/∞) = 0: suspension alone
+        double all = Math.min(surface.supply(), soil(kpa, along, positive, surface.threshold())) + debris;
+        double at = Math.min(surface.supply(), soil(kpa, along, positive, surface.threshold(), Double.MAX_VALUE)) + debris;
+        return all <= 0 ? 1 : Math.min(1, at / all);
     }
 
     /** The same with saltation developing over {@code develop} s ({@link #soil}). */
