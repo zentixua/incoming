@@ -504,7 +504,10 @@ before fog. All nuclear illumination uses its exposure; firebody film keeps a se
 cancels frame exposure once. `FlashLight.temperature` is escaping brightness temperature, distinct from the old
 core/mixed gas temperatures. Do not substitute it into server energy or injury calculations. Source derivation,
 opening approximation and outside-OpenAir limitation: DESIGN-nuke §6. Sealed eye/world pixels get no new flash;
-block light is never an opening. Paused game time cannot advance adaptation; reset/seek reconstructs exposure.
+block light is never an opening. A distant ball is seen by the visible share of its disc above the terrain line
+(`NukeLight.share`: `Sightline` from the ground under the centre, `FarBlasts.visible`), not one ray to its centre:
+a ground ball's centre sits at ground level for seconds, and tree crowns 2 km out hid it while 94–98 % of the disc was
+open, cutting the light 3.5 times (Zearth 09.11.2026, `NukeLightShareTest`); glare and dazzle stay yes/no at half. Paused game time cannot advance adaptation; reset/seek reconstructs exposure.
 Transient frame flash must skip non-live detonations reconstructed by sync/seek; their steady illumination still adapts.
 Vanilla sky flash (`ClientLevel.setSkyFlashTime`) mixes sky and fog toward white by min(1, timer − partial tick): a
 timer renewed to one tick each frame is a 20 Hz sawtooth (replay capture 10.11: ±0.055 frame luminance, corr 0.97 with

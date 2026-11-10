@@ -22,7 +22,16 @@ public final class FlashLight {
      * total-transmission fit can fall below the beam nearby, so the difference cannot be negative.
      */
     public static double transmission(boolean seen, double skyLevel, double total, double beam) {
-        return seen ? total : Math.max(0, total - beam) * opening(skyLevel);
+        return transmission(seen ? 1 : 0, skyLevel, total, beam);
+    }
+
+    /**
+     * Partly hidden source: the visible share of its disc arrives as seen, the rest only as scattered light through
+     * openings. A crown or ridge that covers a few percent of the ball removes a few percent of its direct light.
+     */
+    public static double transmission(double seenShare, double skyLevel, double total, double beam) {
+        double share = Math.clamp(seenShare, 0, 1);
+        return share * total + (1 - share) * Math.max(0, total - beam) * opening(skyLevel);
     }
 
     /** Source-to-eye input shared by flash, afterimage, sky flash and dazzle; fluence remains cal/cm². */

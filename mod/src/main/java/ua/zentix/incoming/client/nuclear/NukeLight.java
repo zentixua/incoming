@@ -9,6 +9,7 @@ import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.client.event.RenderFrameEvent;
 import net.neoforged.neoforge.client.event.ViewportEvent;
+import ua.zentix.incoming.client.far.FarBlasts;
 import ua.zentix.incoming.client.far.FarTerrain;
 import ua.zentix.incoming.client.far.FarView;
 import ua.zentix.incoming.client.far.Sight;
@@ -98,27 +99,45 @@ public final class NukeLight {
         // Use the same uniform-air path for beam and total, as world relight; subtracting an altitude-thinned
         // beam from a sea-level total would erase scattered light at an elevated burst.
         double beam = Math.exp(-Sight.KOSCHMIEDER * distance / d.visibility());
-        boolean seen = visible(level, eye, source);
+        double ballRadius = shape != null ? d.blocks(shape.capR()) : d.blocks(radius);
+        double share = visible(level, eye, source, d.groundY(), ballRadius);
+        // glare and dazzle keep a yes/no source: seen while most of the disc is
+        boolean seen = share >= 0.5;
         int sky = level.getBrightness(LightLayer.SKY, BlockPos.containing(eye));
-        double through = FlashLight.transmission(seen, sky, total, beam);
+        double through = FlashLight.transmission(share, sky, total, beam);
         // Fluence/peak use original burst geometry; current illumination follows the rising and drifting cap.
         double burstDistance = d.metres(d.burst().distanceTo(eye));
         double burstTotal = ThermalModel.transmittance(burstDistance, d.visibility());
         double burstBeam = Math.exp(-Sight.KOSCHMIEDER * burstDistance / d.visibility());
-        double burstThrough = FlashLight.transmission(seen, sky, burstTotal, burstBeam);
+        double burstThrough = FlashLight.transmission(share, sky, burstTotal, burstBeam);
         return new FlashLight.Eye(light * through, PEAK * FlashLight.dilution(radius, burstDistance) * burstThrough,
                 d.fluence(eye) * burstThrough / Math.max(burstTotal, 1e-30), burstThrough, seen);
     }
 
-    /** Loaded near blocks plus the existing bounded distant terrain ray, never chunk loading. */
-    static boolean visible(ClientLevel level, Vec3 eye, Vec3 source) {
+    /**
+     * Visible share of the ball disc: loaded near blocks plus the existing bounded distant terrain ray, never chunk
+     * loading. The near 48 blocks stay a yes/no test (a wall at the eye hides everything); beyond them the terrain line
+     * covers the ball from below as for conventional fireballs ({@link FarBlasts#visible}). A single ray to the centre
+     * of a ground ball, which sits at ground level for its first seconds, was hidden by tree crowns 2 km out while
+     * 94–98 % of the disc was open, and dropped the light 3.5 times (Zearth audit 09.11.2026).
+     */
+    static double visible(ClientLevel level, Vec3 eye, Vec3 source, double groundY, double radius) {
         Vec3 delta = source.subtract(eye);
         // Same 48-block near ray as NuclearWarhead.sees; the terrain ray handles the remaining distance.
         Vec3 near = eye.add(delta.scale(Math.min(1, 48 / Math.max(delta.length(), 1e-3))));
-        if (!Terrain.readyAlong(level, eye, near)) return false;
+        if (!Terrain.readyAlong(level, eye, near)) return 0;
         if (level.clip(new ClipContext(eye, near, ClipContext.Block.VISUAL, ClipContext.Fluid.NONE,
-                Minecraft.getInstance().getCameraEntity())).getType() != HitResult.Type.MISS) return false;
-        return Sightline.trace(FarTerrain.of(level), source.x, source.y, source.z, near.x, near.y, near.z).hidden() <= 0;
+                Minecraft.getInstance().getCameraEntity())).getType() != HitResult.Type.MISS) return 0;
+        return share(FarTerrain.of(level), near, source, groundY, radius);
+    }
+
+    /**
+     * Share of a ball (centre {@code centre}, radius blocks, standing on {@code groundY}) above the terrain line seen
+     * from {@code from}: the ray runs from the ground under the centre, so the line is its height above that ground.
+     */
+    static double share(Sightline.Heights heights, Vec3 from, Vec3 centre, double groundY, double radius) {
+        double line = Sightline.trace(heights, centre.x, groundY, centre.z, from.x, from.y, from.z).hidden();
+        return FarBlasts.visible(centre.y - groundY, Math.max(radius, 1), line);
     }
 
     /** Diagnostic only; samples and clock are not advanced by readers. */

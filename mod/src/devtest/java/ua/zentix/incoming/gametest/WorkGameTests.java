@@ -293,6 +293,11 @@ public final class WorkGameTests {
      */
     @GameTest(template = "range", timeoutTicks = 400, batch = "work_stop", skyAccess = true)
     public static void stopFinishesQueue(GameTestHelper h) {
+        // the world queue is shared: strike work from previous batches may still be finishing; wait until empty
+        whenQueueEmpty(h, 150, () -> stopFinishesQueueOnEmpty(h));
+    }
+
+    private static void stopFinishesQueueOnEmpty(GameTestHelper h) {
         ServerLevel level = h.getLevel();
         buildTown(h);
         WorkClock clock = WorkClock.counting(MS);
@@ -323,6 +328,11 @@ public final class WorkGameTests {
     /** The explosion leaves alone a block changed between ray selection and its batch (player placement, flowing water). */
     @GameTest(template = "range", timeoutTicks = 400, batch = "work_changed", skyAccess = true)
     public static void portionSkipsChangedBlock(GameTestHelper h) {
+        // the world queue is shared: the missile must start in the next tick, not behind earlier batches' work
+        whenQueueEmpty(h, 150, () -> portionSkipsChangedBlockOnEmpty(h));
+    }
+
+    private static void portionSkipsChangedBlockOnEmpty(GameTestHelper h) {
         ServerLevel level = h.getLevel();
         buildTown(h);
         WorkClock clock = WorkClock.counting(MS);

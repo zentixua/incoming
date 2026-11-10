@@ -23,6 +23,11 @@ class FlashLightTest {
         assertEquals(0.3, FlashLight.transmission(false, 15, 0.7, 0.4), 1e-12);
         assertEquals(0.7, FlashLight.transmission(true, 0, 0.7, 0.4));
         assertEquals(0, FlashLight.transmission(false, 15, 0.4, 0.7));
+        // a partly covered ball: its open share direct, the rest scattered through the opening
+        assertEquals(0.7, FlashLight.transmission(1.0, 0, 0.7, 0.4), 1e-12);
+        assertEquals(0, FlashLight.transmission(0.0, 0, 0.7, 0.4), 1e-12);
+        assertEquals(0.95 * 0.7 + 0.05 * 0.3, FlashLight.transmission(0.95, 15, 0.7, 0.4), 1e-12);
+        assertEquals(0.5 * 0.7, FlashLight.transmission(0.5, 0, 0.7, 0.4), 1e-12);
         assertEquals(0, FlashLight.Eye.DARK.strength());
         assertEquals(1, FlashLight.Eye.DARK.peak(1200));
         assertEquals(0, EyeInjury.dazzleSeconds(FlashLight.Eye.DARK.fluence(), 1000, 1));
