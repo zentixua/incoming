@@ -183,10 +183,12 @@ public final class NukeFlash {
      * Sky flash timer renewed each frame, in ticks. Vanilla mixes the sky toward white by min(1, timer − partial tick)
      * ({@code ClientLevel.getSkyColor}): a timer of one tick runs that share from 1 to 0 within every tick, a 20 Hz
      * sawtooth over the sky and fog (replay capture, 500 kt at 3.8 km at night: frame luminance ±0.055 on 0.33, its
-     * frame-to-frame change correlated 0.97 with the partial tick, for the 1.3 s the flash stayed overexposed). Two ticks
-     * keep the share whole through every partial tick; after the flash the timer runs out by itself over two ticks.
+     * frame-to-frame change correlated 0.97 with the partial tick, for the 1.3 s the flash stayed overexposed). The
+     * renewal runs in {@code ComputeFogColor}, after the fog color has already read the sky, so the first frame after a
+     * tick sees the timer one lower: three ticks keep the share whole through every partial tick even then; after the
+     * flash the timer runs out by itself.
      */
-    static final int SKY_FLASH_TICKS = 2;
+    static final int SKY_FLASH_TICKS = 3;
 
     /** Vanilla sky flash follows this frame's admitted flash, rather than an independent yield-duration clock. */
     private static void lightUpWorld(ClientLevel level, double white) {

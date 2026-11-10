@@ -19,6 +19,8 @@ class NukeFlashSkyTest {
             for (int i = 0; i < 100; i++) {
                 double partial = i / 100.0;
                 assertEquals(1, vanillaShare(timer, partial), 1e-12, "white " + white + ", partial " + partial);
+                // The first frame after a tick reads the fog color before this frame's renewal: one tick lower.
+                assertEquals(1, vanillaShare(timer - 1, partial), 1e-12, "after a tick, white " + white + ", partial " + partial);
             }
         }
     }
