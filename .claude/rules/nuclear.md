@@ -506,3 +506,7 @@ core/mixed gas temperatures. Do not substitute it into server energy or injury c
 opening approximation and outside-OpenAir limitation: DESIGN-nuke §6. Sealed eye/world pixels get no new flash;
 block light is never an opening. Paused game time cannot advance adaptation; reset/seek reconstructs exposure.
 Transient frame flash must skip non-live detonations reconstructed by sync/seek; their steady illumination still adapts.
+Vanilla sky flash (`ClientLevel.setSkyFlashTime`) mixes sky and fog toward white by min(1, timer − partial tick): a
+timer renewed to one tick each frame is a 20 Hz sawtooth (replay capture 10.11: ±0.055 frame luminance, corr 0.97 with
+the partial tick); `NukeFlash.SKY_FLASH_TICKS` is 3, since the fog color reads the sky before the `ComputeFogColor`
+renewal and so sees one tick less right after a tick (`NukeFlashSkyTest`).
