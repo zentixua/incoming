@@ -1100,7 +1100,7 @@ public final class FarBlasts {
      * {@code line} (0 — the place is open); the part below the base is in the ground and does not count.
      * Smoothed: the puff goes behind the ridge gradually.
      */
-    static double visible(double h, double r, double line) {
+    public static double visible(double h, double r, double line) {
         if (line <= 0) return 1;
         double lo = Math.max(0, h - r), hi = h + r;
         if (hi <= lo) return line <= h ? 1 : 0;
