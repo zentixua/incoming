@@ -16,9 +16,9 @@ class NukeLightShareTest {
     private static final double GROUND = 71;
     private static final Vec3 EYE = new Vec3(-1130.5, 91.62, -110.5);
 
-    /** Flat ground at {@link #GROUND}, plus a crown {@code crown} blocks high on a band around x = 650 (2 km from the burst). */
+    /** Flat ground at {@link #GROUND}, plus a crown {@code crown} blocks high on a 60-block band around x = 650 (2 km from the burst; wider than the 59-block sample step). */
     private static Sightline.Heights terrain(double crown) {
-        return (x, z) -> x >= 640 && x <= 660 ? GROUND + crown : GROUND;
+        return (x, z) -> x >= 620 && x <= 680 ? GROUND + crown : GROUND;
     }
 
     @Test

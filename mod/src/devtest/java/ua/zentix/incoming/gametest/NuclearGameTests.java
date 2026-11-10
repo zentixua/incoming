@@ -261,22 +261,27 @@ public final class NuclearGameTests {
     }
 
     /**
-     * Ruins: stone brick tower 3×3×4 in 480 m from 15 kt near the ground (1 block = 40 m, ~30 psi) is collapsing, around its base
-     *  lies a low pile of its bricks; chunk height maps - for ruins (replacement of entire sections, without {@code setBlock} for each block).
-     *  Debris for players ({@link RuinPlan#thrown}) - demolished places of the tower with its block; the smaller limit is the beginning of the same list.
+     * Ruins: stone brick block 3 thick along the blast and 9 wide across it, 4 tall, in 480 m from 15 kt near the ground
+     *  (1 block = 40 m, ~30 psi) is collapsing, around its base lies a low pile of its bricks; chunk height maps - for ruins
+     *  (replacement of entire sections, without {@code setBlock} for each block). Debris for players ({@link RuinPlan#thrown}) -
+     *  demolished places of the tower's middle with its block; the smaller limit is the beginning of the same list.
+     *  <p>
+     *  Size: only {@code Debris.SOLID_SHARE} (0.12) of fallen blocks land, chosen by position hash, and GameTest places the
+     *  site at a random position each run; a 3×3×4 tower (36 blocks) left no brick in ~1 % of runs (0.88^36), 108 blocks
+     *  leave ~13 and none in ~1e-6.
      */
     @GameTest(template = "range", timeoutTicks = 40, batch = "nuke_ruins", skyAccess = true)
     public static void collapsedBuildingLeavesRubble(GameTestHelper h) {
         ServerLevel level = h.getLevel();
         BlockPos tower = CENTER.east(12);
-        for (BlockPos p : BlockPos.betweenClosed(tower.offset(-1, 0, -1), tower.offset(1, 3, 1))) h.setBlock(p, Blocks.STONE_BRICKS);
+        for (BlockPos p : BlockPos.betweenClosed(tower.offset(-1, 0, -4), tower.offset(1, 3, 4))) h.setBlock(p, Blocks.STONE_BRICKS);
         List<RuinPlan> plans = scarAll(h, detonation(h, CENTER, 0, 15, 0.025f), new ColumnScar.Budget(false));
         thrownTower(h, plans, tower);
         // the tower's own bricks lie in a low pile around its base (Debris: a share of the fallen blocks, drifted downwind)
         int bricks = 0;
         for (BlockPos p : BlockPos.betweenClosed(tower.offset(-4, 0, -4), tower.offset(4, 2, 4))) if (h.getBlockState(p).is(Blocks.STONE_BRICKS)) bricks++;
         h.assertTrue(bricks > 0, "no rubble of the tower's bricks around " + tower.toShortString());
-        for (BlockPos p : BlockPos.betweenClosed(tower.offset(-1, 0, -1), tower.offset(1, 0, 1))) {
+        for (BlockPos p : BlockPos.betweenClosed(tower.offset(-1, 0, -4), tower.offset(1, 0, 4))) {
             BlockPos q = p.immutable();
             h.assertTrue(h.getBlockState(q.above(3)).isAir(), "the tower stands: " + q.above(3).toShortString());
             int top = -1;
