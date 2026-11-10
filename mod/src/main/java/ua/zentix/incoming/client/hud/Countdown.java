@@ -3,12 +3,12 @@ package ua.zentix.incoming.client.hud;
 import java.util.Locale;
 
 /**
- * Remaining time of one HUD countdown (time to impact, time to detonation), as drawn: tenths of a second, so the digits
- * run every frame instead of stepping once a second. The raw value comes from client ticks since the last server
- * packet ({@link ClientFlights}, every 5 ticks) or from the client's game time (corrected by the server once a second);
- * a packet that arrives a few ticks late or a one-tick time correction makes it rise by fractions of a second, which
- * tenths would show as the counter running backward. Such small rises are held until the countdown passes them;
- * a larger one (the server moved the deadline, a resync after a stall) is shown at once.
+ * Remaining time of one HUD countdown (time to impact, time to detonation), as drawn: whole seconds, rounded up. The raw
+ * value comes from client ticks since the last server packet ({@link ClientFlights}, every 5 ticks) or from the client's
+ * game time (corrected by the server once a second); a packet that arrives a few ticks late or a one-tick time correction
+ * makes it rise by fractions of a second, which near a second boundary would show the counter stepping back up. Such
+ * small rises are held until the countdown passes them; a larger one (the server moved the deadline, a resync after a
+ * stall) is shown at once.
  */
 public final class Countdown {
     /**
@@ -24,20 +24,19 @@ public final class Countdown {
         return shown;
     }
 
-    /** "1:05.3": minutes, seconds and tenths, rounded up (reaches "0:00.0" only at zero). */
+    /** "1:06": minutes and seconds, rounded up (reaches "0:00" only at zero). */
     public static String clock(double seconds) {
-        long t = tenths(seconds);
-        return String.format(Locale.ROOT, "%d:%02d.%d", t / 600, t / 10 % 60, t % 10);
+        long s = whole(seconds);
+        return String.format(Locale.ROOT, "%d:%02d", s / 60, s % 60);
     }
 
-    /** "65.3": seconds and tenths, rounded up. */
+    /** "66": seconds, rounded up. */
     public static String seconds(double seconds) {
-        long t = tenths(seconds);
-        return String.format(Locale.ROOT, "%d.%d", t / 10, t % 10);
+        return Long.toString(whole(seconds));
     }
 
-    private static long tenths(double seconds) {
-        // 1e-6 s keeps an exact tenth (raw 4.0 from tick arithmetic arriving as 4.0000000001) from showing the next one up
-        return Math.max(0, (long) Math.ceil(seconds * 10 - 1e-6));
+    private static long whole(double seconds) {
+        // 1e-6 s keeps an exact second (raw 4.0 from tick arithmetic arriving as 4.0000000001) from showing the next one up
+        return Math.max(0, (long) Math.ceil(seconds - 1e-6));
     }
 }

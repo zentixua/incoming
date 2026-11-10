@@ -6,18 +6,18 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 class CountdownTest {
-    /** Digits run in tenths and round up: the counter reaches zero only at zero. */
+    /** Whole seconds rounded up: the counter reaches zero only at zero. */
     @Test
-    void clockShowsTenthsRoundedUp() {
-        assertEquals("0:45.0", Countdown.clock(45));
-        assertEquals("0:44.7", Countdown.clock(44.65));
-        assertEquals("1:05.3", Countdown.clock(65.25));
-        assertEquals("0:00.1", Countdown.clock(0.01));
-        assertEquals("0:00.0", Countdown.clock(0));
-        assertEquals("0:00.0", Countdown.clock(-1));
-        assertEquals("44.7", Countdown.seconds(44.65));
-        assertEquals("4.0", Countdown.seconds(80 / 20.0 + 1e-12), "tick arithmetic noise does not show the next tenth");
-        assertEquals("1799.9", Countdown.seconds(1799.9));
+    void clockShowsWholeSecondsRoundedUp() {
+        assertEquals("0:45", Countdown.clock(45));
+        assertEquals("0:45", Countdown.clock(44.05));
+        assertEquals("1:06", Countdown.clock(65.25));
+        assertEquals("0:01", Countdown.clock(0.01));
+        assertEquals("0:00", Countdown.clock(0));
+        assertEquals("0:00", Countdown.clock(-1));
+        assertEquals("45", Countdown.seconds(44.65));
+        assertEquals("4", Countdown.seconds(80 / 20.0 + 1e-12), "tick arithmetic noise does not show the next second");
+        assertEquals("1800", Countdown.seconds(1799.9));
     }
 
     /**
