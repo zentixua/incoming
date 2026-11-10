@@ -95,7 +95,8 @@ with a nuclear warhead still waits 90 seconds before launch, even with early war
   with your gaze and is fainter off to the side; it goes away only when you die. In creative and spectator mode you
   still see the white flash and its afterimage, but your sight is not dimmed and the spots are hidden.
   A sealed shelter blocks the new flash; windows and cave mouths admit scattered light according to the opening.
-  Torches do not let the flash through rock. The camera adapts to the fireball light within seconds, revealing the
+  Torches do not let the flash through rock. A fireball partly hidden by hills or trees lights you only by its visible
+  part. The camera adapts to the fireball light within seconds, revealing the
   illuminated ground and cloud; survival eye injury can last longer. Entering cover does not erase an acquired afterimage.
 - **Leave the fallout trail, or wait it out indoors.** Fallout lies on everything open to the sky and shines through
   roofs and walls: a block of stone or earth stops nearly all of it, a block of wood about 95%, glass almost nothing,
