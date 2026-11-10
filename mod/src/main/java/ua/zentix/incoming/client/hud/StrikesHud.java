@@ -20,7 +20,6 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.Comparator;
 import java.util.List;
-import java.util.Locale;
 
 /**
  * Own projectiles in flight for their launcher: top-right list (weapon, flight phase, impact ETA) and world markers:
@@ -85,8 +84,7 @@ public final class StrikesHud {
     }
 
     public static String clock(double seconds) {
-        int s = (int) Math.ceil(seconds);
-        return String.format(Locale.ROOT, "%d:%02d", s / 60, s % 60);
+        return Countdown.clock(seconds);
     }
 
     /**

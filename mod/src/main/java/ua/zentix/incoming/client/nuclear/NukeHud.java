@@ -7,7 +7,13 @@ import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
+import ua.zentix.incoming.client.hud.Countdown;
 import ua.zentix.incoming.net.S2C;
+
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
 
 /**
  * Nuclear HUD at the top of the screen: the launcher sees a detonation countdown; those under attack see a flashing
@@ -15,6 +21,9 @@ import ua.zentix.incoming.net.S2C;
  * from the remote: a 3 s "LAUNCH" countdown; another left click cancels.
  */
 public final class NukeHud {
+    /** Drawn countdown of each warning by strike: one-tick game-time corrections do not run it backward. */
+    private static final Map<Integer, Countdown> COUNTDOWNS = new HashMap<>();
+
     private NukeHud() {}
 
     public static void render(GuiGraphics g, DeltaTracker delta) {
@@ -35,11 +44,13 @@ public final class NukeHud {
             g.drawString(font, hint, cx - font.width(hint) / 2, g.guiHeight() / 2 - 16, 0xFFFFFFFF);
         }
 
+        Set<Integer> shown = new HashSet<>();
         for (S2C.NukeWarning w : ClientNuclear.warnings()) {
-            double left = Math.max(0, (w.detonateTime() - now) / 20.0);
+            shown.add(w.strikeId());
+            double left = COUNTDOWNS.computeIfAbsent(w.strikeId(), id -> new Countdown()).next(Math.max(0, (w.detonateTime() - now) / 20.0));
             if (ClientNuclear.detonationOverdue(w, now)) {
                 // the deadline plus clock-lag allowance has passed without a detonation: the server is loading the impact site —
-                // do not silently hold "0 s" (before the allowance expires, show "0 s": the client clock can run ahead of the server)
+                // do not silently hold "0.0 s" (before the allowance expires, show "0.0 s": the client clock can run ahead of the server)
                 if (w.alarm() || w.mine()) {
                     Component c = Component.translatable("incoming.nuke.delayed").withStyle(ChatFormatting.GOLD);
                     g.drawString(font, c, cx - font.width(c) / 2, y, alpha(pulse) | 0xFFFFFF);
@@ -47,7 +58,7 @@ public final class NukeHud {
                 }
                 continue;
             }
-            String sec = String.format(java.util.Locale.ROOT, "%.0f", Math.ceil(left));
+            String sec = Countdown.seconds(left);
             if (w.alarm()) {
                 big(g, font, Component.translatable("incoming.nuke.alert").withStyle(ChatFormatting.RED, ChatFormatting.BOLD), cx, y, 1.5f, alpha(pulse));
                 y += 16;
@@ -65,6 +76,7 @@ public final class NukeHud {
                 y += 12;
             }
         }
+        COUNTDOWNS.keySet().retainAll(shown);
     }
 
     private static int alpha(float a) {

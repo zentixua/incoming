@@ -62,6 +62,8 @@ public final class ClientFlights {
         private long prevAt, at;
         /** Travelled track from server packets (for the map), at most {@link #TRAIL} points. */
         private final ArrayDeque<Vec3> trail = new ArrayDeque<>();
+        /** Time to impact as drawn: late packets do not run it backward. */
+        private final Countdown countdown = new Countdown();
 
         Tracked(S2C.Flight data, int number) {
             this.id = data.id();
@@ -95,9 +97,9 @@ public final class ClientFlights {
             return data.nuclear();
         }
 
-        /** Seconds to impact, accounting for ticks elapsed since the packet. */
+        /** Seconds to impact, accounting for ticks elapsed since the packet (one value per frame, {@link Countdown}). */
         public double etaSeconds(float partialTick) {
-            return Math.max(0, data.eta() - (tick - at) - partialTick) / 20.0;
+            return countdown.next(Math.max(0, data.eta() - (tick - at) - partialTick) / 20.0);
         }
 
         public Vec3 target() {
