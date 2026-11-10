@@ -20,6 +20,7 @@ import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Vector3f;
 import ua.zentix.incoming.Incoming;
+import ua.zentix.incoming.client.TickTime;
 import ua.zentix.incoming.client.far.FarSprites;
 import ua.zentix.incoming.client.far.FarView;
 import ua.zentix.incoming.client.far.Sight;
@@ -182,7 +183,7 @@ public final class NukeRenderer {
 
     /** Legacy recordings without authoritative approach packets: last 3 s before detonation, a glowing streak with a star-shaped head descending toward the target. */
     private static void drawReentry(ClientLevel level, Camera camera, Vec3 cam, float partial, float far) {
-        double now = level.getGameTime() + partial;
+        double now = TickTime.at(level.getGameTime(), partial);
         for (S2C.NukeWarning w : ClientNuclear.warnings()) {
             double left = w.detonateTime() - now;
             if (left < 0 || left > 60) continue;

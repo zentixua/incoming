@@ -14,6 +14,7 @@ import org.jetbrains.annotations.Nullable;
 import org.slf4j.Logger;
 import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.IncomingConfig;
+import ua.zentix.incoming.client.TickTime;
 import ua.zentix.incoming.nuclear.model.BodySway;
 import ua.zentix.incoming.nuclear.model.ConcussionDose;
 import ua.zentix.incoming.nuclear.model.ShockAtBody;
@@ -144,7 +145,7 @@ public final class Concussion {
         if (HITS.isEmpty()) return;
         Minecraft mc = Minecraft.getInstance();
         double k = strength(IncomingConfig.CLIENT.screenEffects.get(), mc.options.screenEffectScale().get());
-        double level = k * level(ticks + delta.getGameTimeDeltaPartialTick(false));
+        double level = k * level(TickTime.at(ticks, delta.getGameTimeDeltaPartialTick(false)));
         if (level < FLOOR) return;
         RenderTarget main = mc.getMainRenderTarget();
         PostChain post = chain(mc, main);

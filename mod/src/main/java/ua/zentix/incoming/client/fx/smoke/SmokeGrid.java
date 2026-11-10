@@ -1,5 +1,6 @@
 package ua.zentix.incoming.client.fx.smoke;
 
+import ua.zentix.incoming.client.TickTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -302,7 +303,7 @@ public final class SmokeGrid {
 
     /** Grid clock, s: unpaused client ticks and tick fraction. */
     public static double seconds(float partial) {
-        return (ticks + partial) / 20.0;
+        return TickTime.at(ticks, partial) / 20.0;
     }
 
     /** Client tick (unpaused); exhausted sources leave even without frames (effects layer might not draw at all). */

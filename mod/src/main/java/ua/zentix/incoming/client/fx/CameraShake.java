@@ -8,6 +8,7 @@ import net.neoforged.neoforge.client.event.ViewportEvent;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix3d;
 import ua.zentix.incoming.IncomingConfig;
+import ua.zentix.incoming.client.TickTime;
 import ua.zentix.incoming.nuclear.model.BodySway;
 
 import java.util.ArrayList;
@@ -276,7 +277,7 @@ public final class CameraShake {
      * no body lean; {@code k} — shake strength from settings.
      */
     static double[] offsets(double partial, double cameraYaw, double cameraPitch, double cameraRoll, double bodyYaw, double k) {
-        double t = ticks + partial;
+        double t = TickTime.at(ticks, partial);
         // amplitudes: yaw/pitch, °
         double yaw = 0, pitch = 0, roll = 0;
         if (!GROUNDS.isEmpty() && !Double.isNaN(bodyYaw)) {

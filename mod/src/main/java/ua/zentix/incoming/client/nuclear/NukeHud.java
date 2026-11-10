@@ -7,6 +7,7 @@ import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
+import ua.zentix.incoming.client.TickTime;
 import ua.zentix.incoming.client.hud.Countdown;
 import ua.zentix.incoming.net.S2C;
 
@@ -31,10 +32,10 @@ public final class NukeHud {
         if (mc.level == null || mc.options.hideGui) return;
         Font font = mc.font;
         float partial = delta.getGameTimeDeltaPartialTick(false);
-        double now = mc.level.getGameTime() + partial;
+        double now = TickTime.at(mc.level.getGameTime(), partial);
         int cx = g.guiWidth() / 2;
         int y = 28;
-        float pulse = 0.6f + 0.4f * Mth.sin((float) now * 0.4f);
+        float pulse = 0.6f + 0.4f * Mth.sin((float) (now * 0.4 % Mth.TWO_PI));
 
         if (NukeArming.armed()) {
             int left = (int) Math.ceil(NukeArming.ticksLeft(partial) / 20.0);
@@ -50,7 +51,7 @@ public final class NukeHud {
             double left = COUNTDOWNS.computeIfAbsent(w.strikeId(), id -> new Countdown()).next(Math.max(0, (w.detonateTime() - now) / 20.0));
             if (ClientNuclear.detonationOverdue(w, now)) {
                 // the deadline plus clock-lag allowance has passed without a detonation: the server is loading the impact site —
-                // do not silently hold "0.0 s" (before the allowance expires, show "0.0 s": the client clock can run ahead of the server)
+                // do not silently hold "0 s" (before the allowance expires, show "0 s": the client clock can run ahead of the server)
                 if (w.alarm() || w.mine()) {
                     Component c = Component.translatable("incoming.nuke.delayed").withStyle(ChatFormatting.GOLD);
                     g.drawString(font, c, cx - font.width(c) / 2, y, alpha(pulse) | 0xFFFFFF);

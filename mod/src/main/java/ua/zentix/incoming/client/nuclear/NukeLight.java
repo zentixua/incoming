@@ -9,6 +9,7 @@ import net.minecraft.world.phys.HitResult;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.client.event.RenderFrameEvent;
 import net.neoforged.neoforge.client.event.ViewportEvent;
+import ua.zentix.incoming.client.TickTime;
 import ua.zentix.incoming.client.far.FarBlasts;
 import ua.zentix.incoming.client.far.FarTerrain;
 import ua.zentix.incoming.client.far.FarView;
@@ -46,7 +47,7 @@ public final class NukeLight {
         if (level == null) return;
         float partial = (float) e.getPartialTick();
         Vec3 camera = e.getCamera().getPosition();
-        double now = (ticks + partial) / 20, fire = 0;
+        double now = TickTime.at(ticks, partial) / 20, fire = 0;
         double ambient = FarView.ambient(level, partial);
         CAMERA.clear();
         for (ClientNuclear.Active a : ClientNuclear.detonations()) {

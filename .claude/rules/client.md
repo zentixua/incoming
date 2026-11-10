@@ -85,7 +85,7 @@ Particles and the effects layer: `client-fx.md`; models: `client-models.md`; sou
   projection from `DhApiBeforeRenderEvent`, depth range/direction; under shaderpack, pack program renders LOD with
   Iris perspective and `DhApiRenderParam` planes, not DH matrix, `DhDepth.irisPlanes`, detected by replaced
   `IDhApiFramebuffer`: DH matrix reads LOD three times nearer, occluding distant smoke)), `hud/` (`ClientFlights`:
-  flying projectiles from server, `StrikesHud`: list, ETA, markers; every HUD countdown (ETA, nuclear detonation) in tenths through `Countdown`, which
+  flying projectiles from server, `StrikesHud`: list, ETA, markers; every HUD countdown (ETA, nuclear detonation) in whole seconds through `Countdown`, from game time plus the partial tick through `TickTime.at` (a bare `long + float` is float: on a 2·10⁹-tick world it steps by 128 ticks, the countdown stood 6.4 s; `TickTimeTest` rejects bare sums), which
   holds rises under half a second so late packets and one-tick time corrections never run it backward; target frame uses angular size in frame matrix,
   `ScreenProjection.rect` (zoom mods, Ok Zoomer, change FOV at `GameRenderer.getFov` return before matrix;
   `ComputeFov` event/`options.fov` miss zoom); target entities use smoothed position (network ID in trailing

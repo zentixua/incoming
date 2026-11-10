@@ -8,6 +8,7 @@ import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.network.chat.Component;
 import net.minecraft.util.Mth;
 import net.minecraft.world.phys.Vec3;
+import ua.zentix.incoming.client.TickTime;
 import ua.zentix.incoming.client.sound.Sources;
 import ua.zentix.incoming.net.S2C;
 import ua.zentix.incoming.registry.ModSounds;
@@ -77,8 +78,8 @@ public final class Alerts {
         int cx = g.guiWidth() / 2;
         int y = g.guiHeight() - 72;
         if (bannerLeft > 0) {
-            float t = ticks + delta.getGameTimeDeltaPartialTick(false);
-            float pulse = 0.55f + 0.45f * Mth.sin(t * 0.45f);
+            double t = TickTime.at(ticks, delta.getGameTimeDeltaPartialTick(false));
+            float pulse = 0.55f + 0.45f * Mth.sin((float) (t * 0.45 % Mth.TWO_PI));
             int alpha = (int) (255 * Math.min(1, bannerLeft / 20f) * pulse);
             if (alpha > 8) {
                 g.pose().pushPose();
