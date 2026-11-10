@@ -179,11 +179,27 @@ public final class NukeFlash {
         return new float[]{(float) (0.5 + to.dot(right) / depth * sx), (float) (0.5 - to.dot(up) / depth * sy), (float) (radius / depth * sy)};
     }
 
+    /**
+     * Sky flash timer renewed each frame, in ticks. Vanilla mixes the sky toward white by min(1, timer − partial tick)
+     * ({@code ClientLevel.getSkyColor}): a timer of one tick runs that share from 1 to 0 within every tick, a 20 Hz
+     * sawtooth over the sky and fog (replay capture, 500 kt at 3.8 km at night: frame luminance ±0.055 on 0.33, its
+     * frame-to-frame change correlated 0.97 with the partial tick, for the 1.3 s the flash stayed overexposed). The
+     * renewal runs in {@code ComputeFogColor}, after the fog color has already read the sky, so the first frame after a
+     * tick sees the timer one lower: three ticks keep the share whole through every partial tick even then; after the
+     * flash the timer runs out by itself.
+     */
+    static final int SKY_FLASH_TICKS = 3;
+
     /** Vanilla sky flash follows this frame's admitted flash, rather than an independent yield-duration clock. */
     private static void lightUpWorld(ClientLevel level, double white) {
-        if (white <= 0 || IncomingConfig.CLIENT.flash.get() <= 0 || Flash.calm()) return;
-        // Vanilla accepts whole ticks only; renew one tick while the shared flash is visibly overexposed.
-        if (white >= 1.0 / 255) level.setSkyFlashTime(Math.max(level.getSkyFlashTime(), 1));
+        if (IncomingConfig.CLIENT.flash.get() <= 0 || Flash.calm()) return;
+        int timer = skyFlashTimer(white);
+        if (timer > 0) level.setSkyFlashTime(Math.max(level.getSkyFlashTime(), timer));
+    }
+
+    /** Ticks to renew the vanilla sky flash for screen whiteness {@code white}: none once it is below a screen step. */
+    static int skyFlashTimer(double white) {
+        return white >= 1.0 / 255 ? SKY_FLASH_TICKS : 0;
     }
 
     static void tick() {
