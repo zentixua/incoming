@@ -30,14 +30,17 @@ import java.util.concurrent.CompletableFuture;
  * 20 000 real fire blocks per detonation after the wave (before it, also those it will blow out; {@link ua.zentix.incoming.client.fx.FireWatch} sees them), while visually the whole ignition zone burns: the plan does not make "live vanilla fire across the whole
  * map".
  * <p>
- * <b>Time.</b> Real seconds since cell ignition, like the pall: catches over {@link #FLAME_RISE_S} s at fraction
- * {@link #START} of full strength, grows into a storm e-fold over {@link #GROW_S} s, then from {@link #PEAK_S} s (cell-specific)
- * decays e-fold over {@link #DECAY_S} s to smoldering {@link #EMBERS}; toward morning, like pall haze ({@link PallField#end}),
- * fades over the final minute. Smoke outlives flame ({@link #SMOKE_EMBERS}). All follows detonation age: a replay after
+ * <b>Time.</b> Real seconds since cell ignition, like the pall. The flash lights kindling; a building fire then grows as
+ * a t-squared fire ({@link #growth}): flame and smoke ∝ (t/{@link #GROW_S})², full strength (the cell's houses fully involved)
+ * at {@link #GROW_S}, which is also when the mass fire formed at Hiroshima. Before the wave a cell holds a small flame and almost
+ * no smoke; the smoke of flash-heated surfaces then is {@code FlashAftermath} pyrolysis, near the ground. Full strength holds for
+ * {@link #PEAK_S} s (cell-specific), then decays e-fold over {@link #DECAY_S} s to smoldering {@link #EMBERS}; toward morning,
+ * like pall haze ({@link PallField#end}), fades over the final minute. Smoke outlives flame ({@link #SMOKE_EMBERS}). All follows detonation age: a replay after
  * seeking and a late joiner see the same thing.
  * <p>
  * <b>Map.</b> A grid texture for the GPU ({@link #fill}): R — flame, G — column smoke (strong cells stronger:
- * {@link #COLUMN_POWER}), B — smoke × column-rise fraction ({@link #COLUMN_RISE_S}), with mipmaps. Mipmaps are
+ * {@link #COLUMN_POWER}), B — smoke × risen fraction of the column (its head climbs from the ground at {@link #UPDRAFT_MS},
+ * {@link #risen}), with mipmaps. Mipmaps are
  * source clusters: light and smoke at height h use the level whose cell width matches column or glow width at that
  * height (like light-source trees); regardless of burning cell count, one sample per ray step. Lower down, while columns are narrower than
  * cells ({@link #PILLAR}), each cell has its own column in place (four nearest cells per ray step): near ground columns
@@ -63,18 +66,24 @@ public final class FireStorm {
     static final double IGNITE_SPREAD_S = 30;
     /** The wave blows out cell fire over this many ticks from arrival. */
     static final double BLOW_TICKS = 20;
-    /** Cell flame catches over this many seconds, up to fraction {@link #START} of full strength. */
-    static final double FLAME_RISE_S = 12, START = 0.3;
-    /** Grows into a storm e-fold over this many seconds. */
-    static final double GROW_S = 80;
-    /** From this second after ignition (±30 % per cell), decays e-fold over {@link #DECAY_S} to smoldering {@link #EMBERS}. */
-    static final double PEAK_S = 360, DECAY_S = 540, EMBERS = 0.2;
+    /**
+     * Fire growth to full strength, s: t-squared growth (heat release α·t², SFPE Handbook; NFPA 72 Annex B) at the "medium"
+     * rate α = 0.01172 kW/s² reaches 17 MW, a fully involved house (est.), in 1200 s. The same time as the record: at Hiroshima
+     * fires started in shattered houses about 5 minutes after the burst and the mass fire formed in about 20 minutes
+     * (Glasstone and Dolan 1977, §7.70; Uda's survey via Sutou 2020).
+     */
+    static final double GROW_S = 1200;
+    /**
+     * Full strength holds this many seconds after {@link #GROW_S} (±30 % per cell), then decays e-fold over {@link #DECAY_S} to
+     * smoldering {@link #EMBERS}: Hiroshima burned hardest 2–6 h after the burst and abated by evening (Uda via Sutou 2020; (est.)
+     * as a cell law). The pall's morning ({@link PallField#end}, world clock) usually ends the storm first: not physical, the
+     * game day is 20 minutes.
+     */
+    static final double PEAK_S = 3 * 3600, DECAY_S = 2 * 3600, EMBERS = 0.2;
     /** Smoke decays less than flame: smoldering material emits smoke. */
     static final double SMOKE_EMBERS = 0.45;
     /** Smoke emission into columns — cell strength raised to this power: strong sources produce columns, weak ones low haze. */
     static final double COLUMN_POWER = 1.4;
-    /** Column rises to its top over this many seconds from ignition. */
-    static final double COLUMN_RISE_S = 25;
     /** Channels per map cell (RGBA). */
     static final int CHANNELS = 4;
     /** Refill map every this many ticks while fire is catching anywhere, and every this many afterward. */
@@ -124,18 +133,38 @@ public final class FireStorm {
 
     // ---------------------------------------------------------------- time
 
-    /** Cell flame {@code ageS} seconds after ignition, fraction of full strength ({@code peakS} is its decay start). */
-    static double flame(double ageS, double peakS) {
+    /** Fire growth {@code ageS} seconds after ignition, fraction of full strength: t-squared to {@link #GROW_S}. */
+    static double growth(double ageS) {
         if (ageS <= 0) return 0;
-        double grow = START + (1 - START) * (1 - Math.exp(-ageS / GROW_S));
-        return smooth(0, FLAME_RISE_S, ageS) * grow * decay(ageS, peakS, EMBERS);
+        double u = Math.min(1, ageS / GROW_S);
+        return u * u;
     }
 
-    /** Cell smoke (emission into a column), fraction of full strength. */
+    /** Cell flame {@code ageS} seconds after ignition, fraction of full strength ({@code peakS} is its decay start). */
+    static double flame(double ageS, double peakS) {
+        return growth(ageS) * decay(ageS, peakS, EMBERS);
+    }
+
+    /** Cell smoke (emission into a column), fraction of full strength: smoke yield follows the burning rate. */
     static double smoke(double ageS, double peakS) {
-        if (ageS <= 0) return 0;
-        double grow = START + (1 - START) * (1 - Math.exp(-ageS / GROW_S));
-        return smooth(0, 1.5 * FLAME_RISE_S, ageS) * grow * decay(ageS, peakS, SMOKE_EMBERS);
+        return growth(ageS) * decay(ageS, peakS, SMOKE_EMBERS);
+    }
+
+    /**
+     * Risen fraction of a column {@code ageS} seconds after ignition: its head climbs from the ground at {@link #UPDRAFT_MS} and
+     * reaches the top ({@code topM}, metres) after topM / {@link #UPDRAFT_MS} s. Nothing stands at full height on the first frame.
+     */
+    static double risen(double ageS, double topM) {
+        return ageS <= 0 ? 0 : Math.min(1, ageS * UPDRAFT_MS / topM);
+    }
+
+    /**
+     * Column smoke feed at height {@code h} above ground ({@code fireRisen}): feed {@code g} below the column head at
+     * {@code top}·{@code b}/{@code g} ({@link #risen} share in channel B), none above; the head is a soft cap a fifth of its height.
+     */
+    static double feedAt(double h, double top, double g, double b) {
+        double head = top * Math.max(0, Math.min(1, b / Math.max(g, 1e-6)));
+        return g * (1 - smooth(0.8 * head, head + 1, h));
     }
 
     private static double decay(double ageS, double peakS, double floor) {
@@ -170,7 +199,7 @@ public final class FireStorm {
      * detonation), decay start (s).
      */
     record Grid(int side, double cell, int[] index, float[] strength, float[] column, float[] before, float[] start, float[] arrival, float[] peak,
-                double total, List<Whirl> whirls) {
+                double total, List<Whirl> whirls, double topM) {
         /** Last ignition, ticks since detonation. */
         double lastStart() {
             double last = 0;
@@ -467,7 +496,7 @@ public final class FireStorm {
      * the last ignition, or the wave is still crossing the zone.
      */
     private boolean young(Grid g, double ticks) {
-        if (Double.isNaN(youngUntil)) youngUntil = Math.max(g.lastStart() + 20 * 2 * Math.max(COLUMN_RISE_S, FLAME_RISE_S), g.lastBlow() + BLOW_TICKS);
+        if (Double.isNaN(youngUntil)) youngUntil = Math.max(g.lastStart() + 20 * 2 * g.topM / UPDRAFT_MS, g.lastBlow() + BLOW_TICKS);
         return ticks < youngUntil;
     }
 
@@ -494,7 +523,7 @@ public final class FireStorm {
             double sm = (s == g.strength[k] ? g.column[k] : Math.pow(s, COLUMN_POWER)) * smoke(age, peak) * night * wet;
             out[i] = (float) (s * flame(age, peak) * night * wet);
             out[i + 1] = (float) sm;
-            out[i + 2] = (float) (sm * Math.min(1, age / COLUMN_RISE_S));
+            out[i + 2] = (float) (sm * risen(age, g.topM));
         }
     }
 
@@ -578,7 +607,7 @@ public final class FireStorm {
                 double u = unit(h >>> 17);
                 start[k] = (float) (d.flashTicks(d.fluence(p), ThermalModel.ignite(d.yieldKt())) + 20 * IGNITE_SPREAD_S * u * u);
                 arrival[k] = (float) d.arrivalTicks(Math.hypot(r, b.y - d.groundY()));
-                peak[k] = (float) (PEAK_S * (0.7 + 0.6 * unit(h >>> 34)));
+                peak[k] = (float) (GROW_S + PEAK_S * (0.7 + 0.6 * unit(h >>> 34)));
                 total += s;
                 k++;
             }
@@ -591,19 +620,22 @@ public final class FireStorm {
         arrival = Arrays.copyOf(arrival, k);
         peak = Arrays.copyOf(peak, k);
         return new Grid(side, cell, index, strength, column, before, start, arrival, peak, total,
-                whirls(d, seed, side, cell, half, reach, index, strength, start, total));
+                whirls(d, seed, side, cell, half, reach, index, strength, start, total), PallField.hazeTopM(d.yieldKt()));
     }
 
     private static Grid empty(double cell, int side) {
-        return new Grid(side, cell, new int[0], new float[0], new float[0], new float[0], new float[0], new float[0], new float[0], 0, List.of());
+        return new Grid(side, cell, new int[0], new float[0], new float[0], new float[0], new float[0], new float[0], new float[0], 0, List.of(), 1);
     }
 
     /** Whirls per detonation: from summed strengths (three for 15 kt, one for 1 kt), capped at {@link #MAX_WHIRLS}. */
     static final int MAX_WHIRLS = 4;
     /** Minimum whirl spacing in blocks. */
     static final double WHIRL_GAP = 250;
-    /** First whirl this many seconds after its cell ignites; later ones every {@link #WHIRL_EVERY_S}. */
-    static final double WHIRL_FIRST_S = 150, WHIRL_EVERY_S = 140;
+    /**
+     * First whirl this many seconds after its cell ignites, once its fire is full ({@link #GROW_S}: whirls come from a mass fire);
+     * later ones every {@link #WHIRL_EVERY_S}.
+     */
+    static final double WHIRL_FIRST_S = GROW_S, WHIRL_EVERY_S = 140;
 
     /**
      * Whirls at the strongest cells (within 0.8 of the zone, at least {@link #WHIRL_GAP} apart): one per window

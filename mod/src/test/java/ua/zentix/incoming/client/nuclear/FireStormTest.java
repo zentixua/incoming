@@ -131,7 +131,7 @@ class FireStormTest {
             assertTrue(g.start()[k] >= flash - 1e-3 && g.start()[k] <= flash + 20 * FireStorm.IGNITE_SPREAD_S + 1, "arson " + g.start()[k] + ", flash " + flash);
             assertEquals(wave, g.arrival()[k], 1e-2, "wave");
             if (g.start()[k] < wave) early++;
-            assertTrue(g.peak()[k] >= 0.7 * FireStorm.PEAK_S - 1e-3 && g.peak()[k] <= 1.3 * FireStorm.PEAK_S + 1e-3);
+            assertTrue(g.peak()[k] >= FireStorm.GROW_S + 0.7 * FireStorm.PEAK_S - 1e-3 && g.peak()[k] <= FireStorm.GROW_S + 1.3 * FireStorm.PEAK_S + 1e-3);
         }
         assertTrue(early > g.index().length / 10, "cells lit up before the wave: " + early + " from " + g.index().length);
     }
@@ -170,25 +170,56 @@ class FireStormTest {
 
     @Test
     void flameGrowsPeaksAndDiesDown() {
-        double peak = FireStorm.PEAK_S;
+        double peak = FireStorm.GROW_S + FireStorm.PEAK_S;
         assertEquals(0, FireStorm.flame(0, peak), 1e-12);
-        assertEquals(FireStorm.START + (1 - FireStorm.START) * (1 - Math.exp(-FireStorm.FLAME_RISE_S / FireStorm.GROW_S)),
-                FireStorm.flame(FireStorm.FLAME_RISE_S, peak), 1e-9, "got busy");
+        // t-squared growth: a quarter at half the growth time, full at its end
+        assertEquals(0.25, FireStorm.flame(FireStorm.GROW_S / 2, peak), 1e-9);
+        assertEquals(1, FireStorm.flame(FireStorm.GROW_S, peak), 1e-9);
         double last = 0;
         for (double t = 1; t <= peak; t += 1) {
             double f = FireStorm.flame(t, peak);
             assertTrue(f >= last - 1e-12, "does not subside until the peak: " + t);
             last = f;
         }
-        assertTrue(last > 0.95, "to the peak - storm: " + last);
-        for (double t = peak + 1; t < peak + 3000; t += 10) {
+        for (double t = peak + 1; t < peak + 3 * FireStorm.DECAY_S; t += 10) {
             double f = FireStorm.flame(t, peak);
-            assertTrue(f <= last + 1e-12 && f >= FireStorm.EMBERS * last - 1e-9, "subsides to decay: " + t);
+            assertTrue(f <= last + 1e-12 && f >= FireStorm.EMBERS - 1e-9, "subsides to decay: " + t);
             last = f;
             assertTrue(FireStorm.smoke(t, peak) >= f, "smoke - longer than flame");
         }
-        assertEquals(FireStorm.EMBERS + (1 - FireStorm.EMBERS) * Math.exp(-1), FireStorm.flame(peak + FireStorm.DECAY_S, peak)
-                / (FireStorm.START + (1 - FireStorm.START) * (1 - Math.exp(-(peak + FireStorm.DECAY_S) / FireStorm.GROW_S))), 1e-9);
+        assertEquals(FireStorm.EMBERS + (1 - FireStorm.EMBERS) * Math.exp(-1), FireStorm.flame(peak + FireStorm.DECAY_S, peak), 1e-9);
+    }
+
+    /**
+     * 10.11.2026, 500 kt ground burst seen from 5.3 km: the storm smoke stood 840 m tall within seconds and hid the mushroom
+     * before the wave arrived. Fires are young then: until the wave crosses a cell, its smoke is a few per mille of full
+     * (real wave speed: 10.8 s there; game speed 0.35: 40 s), and no column stands above the height its head could climb.
+     */
+    @Test
+    void noStormSmokeBeforeTheFiresGrow() {
+        Detonation d = new Detonation(2, new Vec3(-3350, 117, 3076), 116, 500, true, 0, 0.5f, 6, 20_000, 42, 1, false, 0.35f);
+        FireStorm.Grid g = grid(d);
+        double end = 20 * 60 * 15;
+        float[] map = new float[g.side() * g.side() * FireStorm.CHANNELS];
+        for (double seconds : new double[]{10, 20, 40}) {
+            double ticks = 20 * seconds;
+            FireStorm.fill(g, ticks, end, null, map);
+            double top = d.blocks(PallField.hazeTopM(500));
+            for (int k = 0; k < g.index().length; k++) {
+                int c = g.index()[k];
+                double age = (ticks - g.start()[k]) / 20;
+                double strongest = Math.pow(Math.max(g.before()[k], g.strength()[k]), FireStorm.COLUMN_POWER);
+                assertTrue(map[4 * c + 1] <= strongest * Math.pow(seconds / FireStorm.GROW_S, 2) + 1e-7, "smoke at " + seconds + " s");
+                // the column head is no higher than its updraft could carry smoke since ignition
+                double head = map[4 * c + 1] <= 0 ? 0 : top * map[4 * c + 2] / map[4 * c + 1];
+                assertTrue(head <= d.blocks(FireStorm.UPDRAFT_MS * Math.max(0, age)) + 1e-3 * top, "column head " + head + " at age " + age);
+                assertEquals(0, FireStorm.feedAt(head + 2, top, map[4 * c + 1], map[4 * c + 2]), 1e-9, "no smoke above the head");
+            }
+        }
+        // the column reaches its top after top / updraft and stands there afterwards
+        double topM = PallField.hazeTopM(500);
+        assertEquals(1, FireStorm.risen(topM / FireStorm.UPDRAFT_MS, topM), 1e-9);
+        assertEquals(0.5, FireStorm.risen(topM / FireStorm.UPDRAFT_MS / 2, topM), 1e-9);
     }
 
     @Test
@@ -292,7 +323,8 @@ class FireStormTest {
             else if (Math.abs(x) < 100 - g.cell()) middle += v;
         }
         assertEquals(0, west, 0, "the sea doesn't burn");
-        assertTrue(east > 100 && middle > 0, "the land and the unknown are burning: " + east + ", " + middle);
+        // at 3 minutes fires have grown to (180 / GROW_S)² of full: 85 at the old threshold's scale
+        assertTrue(east > 100 * FireStorm.growth(180) && middle > 0, "the land and the unknown are burning: " + east + ", " + middle);
     }
 
     @Test

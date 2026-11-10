@@ -219,7 +219,8 @@ class PallFieldTest {
                 double u = (s[0] - r) / s[1], ticks = 20 * t;
                 if (u < 0.05) continue;
                 double head = BlastWall.tau(s, r, 0, 0, Double.POSITIVE_INFINITY, 0);
-                double pall = p.tau(r, 0, 0, Double.POSITIVE_INFINITY, 0, ticks, PallField.Water.DRY);
+                // dust only: fire haze grows from the flash on its own clock (FireStorm.growth), not part of the wave layer
+                double pall = p.dustTau(r, 0, ticks, PallField.Water.DRY);
                 // the head rises with saltation development behind the front (BlastWall.develop): the layer as it develops
                 double layer = p.layer(i).depth(t - arrival / 20) * BlastWall.develop(u, s[9], s[10]);
                 assertEquals(layer, head + pall, 0.2 * layer, metres + " m, u = " + u + ": head " + head + " + pall " + pall);

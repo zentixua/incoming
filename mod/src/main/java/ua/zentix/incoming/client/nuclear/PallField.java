@@ -25,7 +25,7 @@ import ua.zentix.incoming.nuclear.model.WaterModel;
  * (hill: wind lofts dust from its slope); dust flows into valleys, where the layer starts at ground-zero elevation.
  * <p>
  * <b>Haze.</b> The city burns over the ignition zone (light pulse from {@link ThermalModel#ignite}): smoky haze
- * (visibility {@link #HAZE_VISIBILITY_M} m) rises over a couple of minutes, stays until morning ({@link #hazeEndTicks}; morning follows world
+ * (visibility {@link #HAZE_VISIBILITY_M} m) grows with the fires ({@link FireStorm#growth} since the flash), stays until morning ({@link #hazeEndTicks}; morning follows world
  * time, {@link #daylight}: sleep and {@code /time} bring it closer), trails downwind, lit by fires from below.
  * <p>
  * <b>Water</b> (plan, step 6). No dust over water: wind behind the front tears spray from crests ({@link WaterModel#spray}) —
@@ -74,8 +74,6 @@ public final class PallField {
     static final double GONE_DEPTH = 0.05;
     /** Spray and base surge below this density fraction are not rendered. */
     static final double GONE = 0.0015;
-    /** Haze rises over fires from this many seconds after the front to this many. */
-    static final double HAZE_FROM_S = 15, HAZE_FULL_S = 150;
     /** Haze lasts at least this many game ticks (5 minutes), fading over the final minute. */
     static final long HAZE_MIN_TICKS = 6000, HAZE_FADE_TICKS = 1200;
     /** Ticks per game day; morning (6:00) is a multiple of this time of day, daytime is its first half. */
@@ -262,7 +260,12 @@ public final class PallField {
 
     /** Haze top over fires, blocks (260 m at 15 kt): storm smoke columns rise to it. */
     double hazeTop() {
-        return d.blocks(HAZE_TOP_M * Math.cbrt(d.yieldKt() / 15));
+        return d.blocks(hazeTopM(d.yieldKt()));
+    }
+
+    /** Haze top over fires, m ({@link #HAZE_TOP_M} at 15 kt, ∛yield). */
+    static double hazeTopM(double yieldKt) {
+        return HAZE_TOP_M * Math.cbrt(yieldKt / 15);
     }
 
     /**
@@ -396,10 +399,14 @@ public final class PallField {
         return 0.55 + 0.45 * smooth(0.3, 0.95, u);
     }
 
-    /** Haze over time: rises over fires within a couple of minutes after the front, fades toward morning ({@link #end}). */
+    /**
+     * Haze over time: smoke of the fires, so it grows with them from the flash ({@link FireStorm#growth}; earlier it rose 15–150 s
+     * after the front, before the fires that make it), fades toward morning ({@link #end}). Only behind the front ({@code ageS} &gt; 0):
+     * the wave sweeps what smoke there is into its dust; before it, a few per mille of full fire.
+     */
     double hazeEnvelope(double ageS, double ticks) {
-        if (ageS <= HAZE_FROM_S) return 0;
-        return smooth(HAZE_FROM_S, HAZE_FULL_S, ageS) * (1 - smooth(end - HAZE_FADE_TICKS, end, ticks));
+        if (ageS <= 0) return 0;
+        return FireStorm.growth(ticks / 20.0) * (1 - smooth(end - HAZE_FADE_TICKS, end, ticks));
     }
 
     /**
@@ -471,8 +478,8 @@ public final class PallField {
 
     /**
      * Node i dust: ground extinction (1/block) is layer optical depth ({@link DustModel.Column#depth}) divided by its column (0.548 of top),
-     * excluding dust still in the wall head; layer top (blocks); smoke fraction 0..1 (soot darkens dust over fires:
-     * fires develop over minutes — pall is dust-brown for the first half-minute, gray over fire by minute five); degree of layer
+     * excluding dust still in the wall head; layer top (blocks); smoke fraction 0..1 (soot darkens dust over fires as they grow,
+     * {@link FireStorm#growth}: dust-brown at first, gray over full fire); degree of layer
      * mixing ({@link #mixed}).
      */
     void dust(int i, double ticks, double[] out) {
@@ -480,7 +487,7 @@ public final class PallField {
         out[1] = Math.max(d.blocks(columns[i].height(age)), MIN_TOP_BLOCKS);
         // profile column is column(0) of top: vertical optical depth exactly matches the layer, even at minimum top
         out[0] = depth < GONE_DEPTH ? 0 : depth / (column(0) * out[1]) * pallShare(i, ticks);
-        out[2] = fire[i] * smooth(30, 300, age(i, ticks));
+        out[2] = fire[i] * FireStorm.growth(ticks / 20.0);
         out[3] = mixed(age - columns[i].positive());
     }
 
@@ -566,22 +573,21 @@ public final class PallField {
      * row at the point before drift).
      */
     void haze(int i, double ticks, double[] out) {
-        double age = age(i, ticks);
-        out[0] = perBlock(SIGMA_HAZE) * fire[i] * hazeEnvelope(age, ticks);
-        out[1] = Math.max(ceiling[i], hazeTop() * (0.5 + 0.5 * smooth(HAZE_FROM_S, HAZE_FULL_S, age)));
-        out[2] = fire[i] * fireLight(age, ticks);
+        out[0] = perBlock(SIGMA_HAZE) * fire[i] * hazeEnvelope(age(i, ticks), ticks);
+        // the haze top climbs with the smoke columns that feed it (FireStorm.risen from the flash)
+        out[1] = Math.max(ceiling[i], hazeTop() * FireStorm.risen(ticks / 20.0, hazeTopM(d.yieldKt())));
+        out[2] = fire[i] * fireLight(ticks);
         out[3] = share(i, ticks);
     }
 
-    /** Fire light from below 0..1: develops over a minute after the wave, fades toward morning. */
-    double fireLight(double ageS, double ticks) {
-        if (ageS <= 0) return 0;
-        return smooth(5, 60, ageS) * (1 - smooth(end - HAZE_FADE_TICKS, end, ticks));
+    /** Fire light from below 0..1: grows with the fires from the flash ({@link FireStorm#growth}), fades toward morning. */
+    double fireLight(double ticks) {
+        return FireStorm.growth(ticks / 20.0) * (1 - smooth(end - HAZE_FADE_TICKS, end, ticks));
     }
 
     /** Fire light beneath mushroom 0..1 (at ground zero; {@link #fireLight}): 0 if no fire zone. */
     double fireBelow(double ticks) {
-        return fireReach > 0 ? fireLight(age(0, ticks), ticks) : 0;
+        return fireReach > 0 ? fireLight(ticks) : 0;
     }
 
     /**
