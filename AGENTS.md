@@ -149,6 +149,13 @@ The mod must be the most physically accurate in its niche and spectacular like g
   each player's differs, server flight is shared. Default distant nuclear wave also game speed, 0.25 sound speed.
   `scale_preset`: `GAME` default flight 0/wave 0.25, `REAL` real life, `CUSTOM` uses `flight_speed`,
   `nuclear.wave_speed`, `nuclear.effects_scale` as set.
+- **Time** (Artem, 10.11): no modes. What players watch move (flight, flash, wave, mushroom, the first 20 minutes of
+  fires) runs in real seconds; slow consequences (fires burning out, black rain, fallout decay, sickness, burns, hearing,
+  power repairs) follow the world's day through `util/WorldClock` (time of day, never slower than real, never backward:
+  vanilla 72×, day-length mods 1×, stopped day real, sleep/`/time add` jump forward). Each detonation runs
+  `nuclear/NukeClock`: real for the 20-minute show, then joins the world clock over a minute (server anchors in
+  `NuclearEvents`, clients via `S2C.NukeClock`). An effect never precedes its cause (`NukeClockTest`). No new
+  time settings; durations stay in world hours.
 - **Physics deviations** only preset scale or Artem's explicit decision; mark every one “not physical” in code and
   guide deviation list (game flight speeds/heights, wave 0.25 let players see approach/wave; real values in weapon
   table). No silent deviations. Presentation boosts change no facts, so are not deviations.
@@ -175,7 +182,7 @@ Artem, 26.10: standard Minecraft mod practice, no extra custom principles.
   humidity): `util/Air`.
 - `WeaponType.id` enum ordinal, client `values()[id]`: append new weapons only; remote/binocular order `WeaponType.menu()`.
 - Nuclear model meters/seconds/kilotons; `Detonation` converts via `effects_scale`, game front `FrontProfile`
-  (`nuclear.md`). Fallout game clock: 1000 ticks = 1 hour.
+  (`nuclear.md`). World clock (`WorldClock`): 1000 ticks = 1 hour of the day.
 
 ## Workflow
 The repository contains only shared contributor resources. Personal agent launchers, session records and

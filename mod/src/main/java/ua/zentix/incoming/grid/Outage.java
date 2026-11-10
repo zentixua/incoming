@@ -22,7 +22,7 @@ public record Outage(int id, double x, double z, double radius, long start, doub
     /** District darkening-time variation: ±25 % of cascade arrival. The same variation applies to repair times. */
     private static final double SPREAD = 0.5;
     /** Game clock: 1000 ticks are one hour (a Minecraft day is 24 hours), as for fallout and radiation. */
-    static final double TICKS_PER_HOUR = 1000;
+    public static final double TICKS_PER_HOUR = 1000;
     /**
      * Grid outside the damage (below {@link Blackouts#DAMAGED_PSI}): nothing is broken, protection tripped as the city's
      * load and lines vanished. Dispatchers bring it back section by section, the far edge first, the districts next to the

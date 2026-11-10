@@ -32,6 +32,10 @@ import ua.zentix.incoming.nuclear.model.SicknessModel;
 import ua.zentix.incoming.registry.ModAttachments;
 import ua.zentix.incoming.registry.ModDamageTypes;
 import ua.zentix.incoming.registry.ModEffects;
+import ua.zentix.incoming.nuclear.NukeClock;
+import ua.zentix.incoming.util.WorldClock;
+
+import java.util.List;
 
 /**
  * Radiation (DESIGN-nuke §4). Players once a second: local fallout dose rate with wall and roof shielding
@@ -44,8 +48,8 @@ import ua.zentix.incoming.registry.ModEffects;
 public final class RadiationTicker {
     /** 1 R ≈ 0.01 Gy in the body. */
     public static final double GY_PER_R = 0.01;
-    /** A second in game hours: 20 of 1000 ticks. */
-    private static final double HOURS_PER_SECOND = 20 / 1000.0;
+    /** A real second in hours. */
+    private static final double REAL_SECOND_HOURS = 1 / 3600.0;
     private static final ResourceLocation HEALTH_PENALTY = Incoming.id("radiation_sickness");
 
     private RadiationTicker() {}
@@ -62,17 +66,18 @@ public final class RadiationTicker {
 
     /** Dose, Gy: prompt burst radiation or fallout. A mob with dose from 1 Gy gets sick (effect drives the course). */
     public static void addDose(LivingEntity e, float gy) {
-        addDose(e, gy, e.level().getGameTime());
+        addDose(e, gy, WorldClock.ticks(e.level()));
     }
 
     /**
-     * Dose received at game time {@code at}, Gy: a body loaded after the detonation received its dose then, so its sickness
-     * stages run from then ({@code LateExposure}).
+     * Dose received at world clock {@code at} ({@link WorldClock}), Gy: a body loaded after the detonation received its dose
+     * then, so its sickness stages run from then ({@code LateExposure}). Sickness runs on the world clock: a vanilla day's hour
+     * is 50 real seconds, a day-length mod's hour an hour; a night's sleep is a night of illness.
      */
     public static void addDose(LivingEntity e, float gy, long at) {
         RadiationDose r = dose(e);
         float total = r.doseGy() + gy;
-        set(e, new RadiationDose(total, r.contamination(), r.isExposed() || total < 1 ? r.exposedAt() : Math.min(at, e.level().getGameTime()), r.rate()));
+        set(e, new RadiationDose(total, r.contamination(), r.isExposed() || total < 1 ? r.exposedAt() : Math.min(at, WorldClock.ticks(e.level())), r.rate()));
         if (!(e instanceof Player) && total >= 1 && !e.hasEffect(ModEffects.RADIATION_SICKNESS)) {
             e.addEffect(new MobEffectInstance(ModEffects.RADIATION_SICKNESS, MobEffectInstance.INFINITE_DURATION, 0, true, false, false));
         }
@@ -103,25 +108,54 @@ public final class RadiationTicker {
     public static void tick(ServerLevel level) {
         if (!IncomingConfig.SERVER.nukeRadiation.get() || level.getGameTime() % 20 != 0) return;
         NuclearEvents events = NuclearEvents.get(level);
+        // each detonation's clock now and a second ago (NukeClock): the field at its own time, the dose over its own step
+        List<Detonation> list = events.detonations();
+        long now = level.getGameTime();
+        double clock = WorldClock.now(level);
+        Clocks c = new Clocks(list.size());
+        for (int i = 0; i < c.now.length; i++) {
+            Detonation d = list.get(i);
+            c.now[i] = events.seconds(d, now, clock);
+            c.before[i] = events.stepFrom(d, c.now[i]);
+            if (d.hasFallout() && (c.newest < 0 || c.now[i] < c.now[c.newest])) c.newest = i;
+        }
         for (ServerPlayer p : level.players()) {
             if (p.isSpectator()) continue;
-            tick(level, p, events);
+            tick(level, p, list, c);
         }
     }
 
-    private static void tick(ServerLevel level, ServerPlayer p, NuclearEvents events) {
-        long now = level.getGameTime();
-        double field = 0;
+    /** Detonation clocks for one radiation second ({@link NukeClock}): seconds now and at the previous second. */
+    private static final class Clocks {
+        final double[] now, before;
+        /** Youngest detonation with fallout; −1 — none. */
+        int newest = -1;
+
+        Clocks(int n) {
+            now = new double[n];
+            before = new double[n];
+        }
+
+        /** Dose hours of detonation {@code i}'s step at its decaying rate ({@link FalloutModel#decayHours}). */
+        double doseHours(int i) {
+            return FalloutModel.decayHours(before[i] / 3600, now[i] / 3600);
+        }
+    }
+
+    private static void tick(ServerLevel level, ServerPlayer p, List<Detonation> list, Clocks c) {
+        double field = 0, roentgens = 0;
         boolean blackRain = false;
-        long newest = Long.MAX_VALUE;
-        for (Detonation d : events.detonations()) {
-            field += d.falloutRate(p.getX(), p.getZ(), now - d.gameTime());
-            if (d.blackRain(p.getX(), p.getZ(), now - d.gameTime())) blackRain = true;
-            if (d.hasFallout()) newest = Math.min(newest, now - d.gameTime());
+        for (int i = 0; i < c.now.length; i++) {
+            Detonation d = list.get(i);
+            field += d.falloutRateAt(p.getX(), p.getZ(), c.now[i]);
+            // over the step's own course: a long step (a sleep) counts nothing before the dust or rain reached the player
+            roentgens += MobFallout.exposure(d, p.getX(), p.getZ(), c.before[i], c.now[i]);
+            if (d.blackRainAt(p.getX(), p.getZ(), c.now[i])) blackRain = true;
         }
         RadiationDose r = dose(p);
-        // the dust on the body is the same fission products as the ground under it: it decays by the same law
-        double contamination = newest == Long.MAX_VALUE ? r.contamination() : decay(r.contamination(), newest / 1000.0, HOURS_PER_SECOND);
+        // the dust on the body is the same fission products as the ground under it: it decays by the same law and clock
+        double contamination = c.newest < 0 ? r.contamination()
+                : decay(r.contamination(), c.now[c.newest] / 3600, (c.now[c.newest] - c.before[c.newest]) / 3600);
         // the rule also applies live: detonations saved before it was stored with them read as rain on
         if (blackRain && IncomingConfig.SERVER.nukeBlackRain.get() && Detonation.underOpenSky(level, p.getEyePosition())) {
             // rain contaminates instead of washing off: contamination rises toward twice the field rate; rain never lowers it
@@ -129,10 +163,12 @@ public final class RadiationTicker {
         }
         if (p.isInWater()) contamination *= 0.8;
         if (contamination < 0.01) contamination = 0;
-        double rate = (field >= MobFallout.BACKGROUND ? field * Shielding.fallout(level, middle(p)) : 0) + contamination;
+        double shield = field >= MobFallout.BACKGROUND ? Shielding.fallout(level, middle(p)) : 0;
+        double rate = field * shield + contamination;
+        double contaminationHours = c.newest < 0 ? REAL_SECOND_HOURS : c.doseHours(c.newest);
         // in creative mode the counter shows the field, but no dose accumulates and no sickness develops
-        double gy = r.doseGy() + (p.isCreative() ? 0 : rate * GY_PER_R * HOURS_PER_SECOND);
-        long exposed = r.isExposed() || gy < 1 ? r.exposedAt() : now;
+        double gy = r.doseGy() + (p.isCreative() ? 0 : (roentgens * shield + contamination * contaminationHours) * GY_PER_R);
+        long exposed = r.isExposed() || gy < 1 ? r.exposedAt() : WorldClock.ticks(level);
         RadiationDose next = new RadiationDose((float) gy, (float) contamination, exposed, (float) rate);
         set(p, next);
         sickness(level, p, next);
@@ -167,8 +203,9 @@ public final class RadiationTicker {
         return (h >>> 11) * 0x1.0p-53;
     }
 
+    /** World-clock hours since dose crossed 1 Gy ({@link WorldClock}). */
     private static double hoursSinceExposure(LivingEntity e, RadiationDose r) {
-        return (e.level().getGameTime() - r.exposedAt()) / 1000.0;
+        return (WorldClock.now(e.level()) - r.exposedAt()) / WorldClock.HOUR;
     }
 
     /**

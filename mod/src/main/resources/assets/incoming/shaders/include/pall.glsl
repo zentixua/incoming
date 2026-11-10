@@ -824,7 +824,7 @@ vec4 pallWilson(mat4 S, vec4 L, vec3 dir, float end) {
 //   [2] = (flame on surfaces — strength with day and confidence; attenuation in the column per unit of smoke supply, 1/block;
 //          seconds after detonation; 0)
 //   [3] = (light of fires on screen rgb; Minecraft clouds from the eye by y — flame on surfaces only below them)
-// Fire map: R — flame, G — smoke supply into the columns, B — G × share of the column's rise; reduced copies — clusters of
+// Fire map: R — flame, G — smoke supply into the columns, B — G × risen share of the column (fireRisen); reduced copies — clusters of
 // sources (light and smoke at height h — from the level where the map cell is the width of the column, or the glow there).
 
 // drift of the column at height h above the ground, blocks per unit of the ratio of wind to rise (FireStorm.bend)
@@ -854,6 +854,13 @@ float fireGlowLod(float h, float cell) {
 // the column by height: from the lowlands to the top, where it spreads into haze (FireStorm.column)
 float fireColumn(float h, float top) {
     return smoothstep(-40.0, 0.0, h) * (1.0 - smoothstep(0.65 * top, top, h));
+}
+
+// column smoke feed at height h: feed g below the column head at top·b/g (risen share in channel B), none above; the head is
+// a soft cap a fifth of its height (FireStorm.feedAt)
+float fireRisen(float h, float top, float g, float b) {
+    float head = top * clamp(b / max(g, 1e-6), 0.0, 1.0);
+    return g * (1.0 - smoothstep(0.8 * head, head + 1.0, h));
 }
 
 // place on the fire map of the slot under point xz (from the eye)

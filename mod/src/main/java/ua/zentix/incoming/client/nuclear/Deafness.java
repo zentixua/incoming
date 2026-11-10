@@ -12,7 +12,6 @@ import ua.zentix.incoming.client.sound.SoundFilters;
 import ua.zentix.incoming.nuclear.model.HearingModel;
 import ua.zentix.incoming.registry.ModSounds;
 
-import java.lang.ref.WeakReference;
 import java.util.Collections;
 import java.util.Locale;
 import java.util.Map;
@@ -26,17 +25,13 @@ import java.util.WeakHashMap;
  * the high–low difference on top of that. Ears ring faintly while the shift remains ({@link HearingModel#ringing}).
  * The player's category volumes are unchanged.
  * <p>
- * Hearing time follows unpaused client ticks and forward time-of-day jumps (sleep, {@code /time add}): a night of sleep restores
- * hearing as a full night would. A jump counts only when game time advanced normally (sleep and {@code /time} do not
- * move it): a new client world (portal) starts with a zero clock until the time packet, so its first packet would otherwise
- * count as sleep. Hearing belongs to the body: death (respawn) restores it, as does leaving the world (state is client
- * only).
+ * Hearing time is the world clock ({@link ClientClock}): hours of the world's day, never slower than real time — a night of sleep
+ * restores hearing as a full night would, a day-length mod's hour is a real hour. Hearing belongs to the body: death (respawn)
+ * restores it, as does leaving the world (state is client only).
  */
 public final class Deafness {
-    /** Ticks per game hour. */
-    private static final double HOUR_TICKS = 1000;
-    /** A larger time-of-day jump means elapsed time (sleep); a smaller one is a server clock correction. */
-    private static final long DAY_JUMP = 20;
+    /** World-clock ticks per hour. */
+    private static final double HOUR_TICKS = ua.zentix.incoming.util.WorldClock.HOUR;
     /** Ringing loop volume for a tone as loud as world sound ({@link HearingModel#ringing} 1), the cap (est.). */
     private static final float RINGING = 0.75f;
     /** Below this, ringing is inaudible. */
@@ -45,11 +40,9 @@ public final class Deafness {
     /** Waves that reached the ear. */
     private static final HearingModel.Ear EAR = new HearingModel.Ear();
     /** When the eardrums ruptured (hearing clock); −1 — intact. */
-    private static long rupturedAt = -1;
-    private static long clock;
-    /** Time of day, game time and client world from the previous tick. */
-    private static long lastDay, lastGame;
-    private static WeakReference<ClientLevel> lastLevel = new WeakReference<>(null);
+    private static double rupturedAt = -1;
+    /** Hearing clock: {@link ClientClock} while unpaused. */
+    private static double clock;
     /** Current filter: volume and highs (also read by the sound thread). */
     private static volatile float gain = 1, highs = 1;
     /** Current high-frequency shift, dB (for ringing and the scenario line). */
@@ -87,13 +80,7 @@ public final class Deafness {
     /** Client tick: hearing clock, filter, ringing. */
     static void tick(ClientLevel level) {
         Minecraft mc = Minecraft.getInstance();
-        long day = level.getDayTime(), game = level.getGameTime(), jump = 0;
-        // time of day advanced beyond game time while game time ran normally — time elapsed (sleep, /time add)
-        if (lastLevel.get() == level && Math.abs(game - lastGame - 1) <= DAY_JUMP) jump = day - lastDay - (game - lastGame);
-        if (lastLevel.get() != level) lastLevel = new WeakReference<>(level);
-        lastDay = day;
-        lastGame = game;
-        if (!mc.isPaused()) clock += 1 + (jump > DAY_JUMP ? jump : 0);
+        clock = ClientClock.now();
         if (!EAR.any() && rupturedAt < 0) return;
         // hearing damage disabled in settings — immediately restore hearing
         if (!IncomingConfig.CLIENT.nukeTinnitus.get()) {

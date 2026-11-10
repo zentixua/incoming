@@ -25,7 +25,7 @@ class PallGroundTest {
     private static final double FILL_HALF = 6550;
 
     private static PallGround ground() {
-        return new PallGround(GROUND, new PallField(GROUND, 6000));
+        return new PallGround(GROUND, new PallField(GROUND));
     }
 
     /** The entire circle of measurements according to {@code heights} and filling. */
@@ -64,7 +64,7 @@ class PallGroundTest {
      */
     @Test
     void unknownWaterIsWhatIsUnderTheBurst() {
-        PallField pall = new PallField(GROUND, 6000);
+        PallField pall = new PallField(GROUND);
         PallGround g = new PallGround(GROUND, pall);
         surveyAll(g, UNKNOWN);
         int version = g.version();
@@ -85,7 +85,7 @@ class PallGroundTest {
      */
     @Test
     void coastContinuesAndOpenSeaStaysSea() {
-        PallField pall = new PallField(GROUND, 6000);
+        PallField pall = new PallField(GROUND);
         pall.water(1, 1);
         PallGround g = new PallGround(GROUND, pall, FILL_HALF);
         assertEquals(FILL_HALF, g.half(), 1e-9);
@@ -121,7 +121,7 @@ class PallGroundTest {
      */
     @Test
     void aLakeByTheViewerDoesNotFloodTheLand() {
-        PallField pall = new PallField(GROUND, 6000);
+        PallField pall = new PallField(GROUND);
         PallGround g = new PallGround(GROUND, pall);
         // viewer in (0, −1500), lake 300 × 260 blocks in front of him (to detonation)
         FarTerrain.Water lake = (x, z) -> Math.hypot(x, z + 1500) >= 400 ? Double.NaN
@@ -139,7 +139,7 @@ class PallGroundTest {
     /** Under the epicenter, the map knows the water itself (chunk at the explosion): what is known there - as it is, around - by it. */
     @Test
     void knownCellsKeepTheirWater() {
-        PallField pall = new PallField(GROUND, 6000);
+        PallField pall = new PallField(GROUND);
         pall.water(1, 1);
         PallGround g = new PallGround(GROUND, pall);
         // explosion near the coast: land to −x, sea to +x, known in 600 blocks
@@ -160,7 +160,7 @@ class PallGroundTest {
      */
     @Test
     void unknownTakesTheKnownAround() {
-        PallGround g = new PallGround(GROUND, new PallField(GROUND, 6000), FILL_HALF);
+        PallGround g = new PallGround(GROUND, new PallField(GROUND), FILL_HALF);
         assertEquals(FILL_HALF, g.half(), 1e-9);
         Sightline.Heights valley = (x, z) -> Math.hypot(x + 400, z) < 192 ? 63 : Double.NaN;
         surveyAll(g, valley);
@@ -210,11 +210,11 @@ class PallGroundTest {
      */
     @Test
     void growingKeepsWhatIsKnown() {
-        PallGround g = new PallGround(GROUND, new PallField(GROUND, 6000));
+        PallGround g = new PallGround(GROUND, new PallField(GROUND));
         Sightline.Heights hills = (x, z) -> 80 + 30 * Math.sin(x / 700.0) * Math.cos(z / 900.0);
         surveyAll(g, hills);
         double half = g.half(), a = g.at(600, 400);
-        PallField pall = new PallField(GROUND, 6000);
+        PallField pall = new PallField(GROUND);
         double late = 20 * 1800;
         g.survey(late, 0, 0, UNKNOWN, null);
         double source = pall.sourceExtent(late);
@@ -235,7 +235,7 @@ class PallGroundTest {
      */
     @Test
     void hardGroundIsACellProperty() {
-        PallGround g = new PallGround(GROUND, new PallField(GROUND, 6000), FILL_HALF);
+        PallGround g = new PallGround(GROUND, new PallField(GROUND), FILL_HALF);
         assertFalse(g.hasHard());
         assertEquals(0, g.hard(1500, -800), 1e-6);
         FarTerrain.Water rockEast = (x, z) -> x > 2000 ? 1 : 0;

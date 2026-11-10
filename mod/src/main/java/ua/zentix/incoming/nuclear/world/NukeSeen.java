@@ -17,15 +17,17 @@ import java.util.List;
  * @param pulse     detonations whose light and prompt radiation this body has received
  * @param blast     detonations whose blast wave this body has received
  * @param falloutAt game time up to which fallout dose is accounted ({@code MobFallout}); -1 — never
+ * @param falloutClock world clock ({@code util.WorldClock}) at {@code falloutAt}; NaN — unknown (saved before it was kept)
  */
-public record NukeSeen(long bornAt, List<Integer> pulse, List<Integer> blast, long falloutAt) {
-    public static final NukeSeen NONE = new NukeSeen(-1, List.of(), List.of(), -1);
+public record NukeSeen(long bornAt, List<Integer> pulse, List<Integer> blast, long falloutAt, double falloutClock) {
+    public static final NukeSeen NONE = new NukeSeen(-1, List.of(), List.of(), -1, Double.NaN);
 
     public static final Codec<NukeSeen> CODEC = RecordCodecBuilder.create(i -> i.group(
             Codec.LONG.optionalFieldOf("born_at", -1L).forGetter(NukeSeen::bornAt),
             Codec.INT.listOf().optionalFieldOf("pulse", List.of()).forGetter(NukeSeen::pulse),
             Codec.INT.listOf().optionalFieldOf("blast", List.of()).forGetter(NukeSeen::blast),
-            Codec.LONG.optionalFieldOf("fallout_at", -1L).forGetter(NukeSeen::falloutAt)
+            Codec.LONG.optionalFieldOf("fallout_at", -1L).forGetter(NukeSeen::falloutAt),
+            Codec.DOUBLE.optionalFieldOf("fallout_clock", Double.NaN).forGetter(NukeSeen::falloutClock)
     ).apply(i, NukeSeen::new));
 
     public NukeSeen {
@@ -47,19 +49,20 @@ public record NukeSeen(long bornAt, List<Integer> pulse, List<Integer> blast, lo
     }
 
     public NukeSeen withBorn(long at) {
-        return bornAt >= 0 ? this : new NukeSeen(at, pulse, blast, falloutAt);
+        return bornAt >= 0 ? this : new NukeSeen(at, pulse, blast, falloutAt, falloutClock);
     }
 
     public NukeSeen withPulse(int id) {
-        return pulsed(id) ? this : new NukeSeen(bornAt, plus(pulse, id), blast, falloutAt);
+        return pulsed(id) ? this : new NukeSeen(bornAt, plus(pulse, id), blast, falloutAt, falloutClock);
     }
 
     public NukeSeen withBlast(int id) {
-        return blasted(id) ? this : new NukeSeen(bornAt, pulse, plus(blast, id), falloutAt);
+        return blasted(id) ? this : new NukeSeen(bornAt, pulse, plus(blast, id), falloutAt, falloutClock);
     }
 
-    public NukeSeen withFallout(long at) {
-        return at <= falloutAt ? this : new NukeSeen(bornAt, pulse, blast, at);
+    /** Fallout accounted up to game time {@code at}, world clock {@code clock}. */
+    public NukeSeen withFallout(long at, double clock) {
+        return at <= falloutAt ? this : new NukeSeen(bornAt, pulse, blast, at, clock);
     }
 
     private static List<Integer> plus(List<Integer> ids, int id) {

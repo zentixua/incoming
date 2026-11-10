@@ -25,6 +25,7 @@ import net.minecraft.world.phys.Vec3;
 import net.neoforged.fml.ModList;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
+import ua.zentix.incoming.util.WorldClock;
 import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.IncomingConfig;
 import ua.zentix.incoming.compat.SubLevels;
@@ -2074,7 +2075,7 @@ public final class NuclearGameTests {
         Detonation d = new Detonation(IDS.incrementAndGet(), Vec3.atBottomCenterOf(g), g.getY(), 0.1, true,
                 level.getGameTime() - 2, 0, 0, 20_000, 7, 0.05f, false, Detonation.OLD_WAVE);
         h.assertTrue(d.frontRadius(1) > 10 && d.frontRadius(2) > 26 && d.frontRadius(1) < 26, "the front is not where the check awaits");
-        NuclearEvents.get(level).add(d);
+        NuclearEvents.get(level).add(d, level);
         // like after a restart: the world’s nuclear bursts are from a clean slate, the detonation is from saving
         level.removeData(ModAttachments.NUCLEAR_WORLD);
         h.succeedWhen(() -> {
@@ -2341,6 +2342,13 @@ public final class NuclearGameTests {
     }
 
     /**
+     * Ticks from a 15 kt burst until its fallout lands at ground zero: real time during the show (Miller's first arrival,
+     * 4·Y^0.2 minutes, {@code FalloutModel.firstArrivalHours}); mob-fallout fixtures date their burst that much plus 100 s back,
+     * and stay within the show, where the detonation clock is real time.
+     */
+    private static final long FALLOUT_LANDED_TICKS = (long) Math.ceil(20 * 60 * 4 * Math.pow(15, 0.2));
+
+    /**
      * Mobs get sick like players: 1000 Gr (brain form) - the effect of the disease immediately, ataxia (Slowness V) from onset,
      *  death after 0,4 game hour (400 ticks), and not at the time of the dose; the undead do not get sick; in the trail of precipitation, the mob gains a dose (in portions under the budget,
      * {@link MobFallout}). The patient is in a stone booth: the precipitation does not reach him, and the duration of the illness is not delayed by its dose.
@@ -2361,10 +2369,10 @@ public final class NuclearGameTests {
         h.assertFalse(RadiationTicker.affectsMob(zombie), "the undead are irradiated");
         RadiationTicker.addDose(sick, 1000);
         h.assertTrue(sick.hasEffect(ModEffects.RADIATION_SICKNESS), "a cow with 1000 Gr does not have radiation sickness");
-        // ground detonation with fallout two game hours earlier; the cow is at the epicenter - in the very wake
+        // ground detonation with fallout already landed 100 s ago; the cow is at the epicenter - in the very wake
         BlockPos g = h.absolutePos(CENTER);
         Detonation d = new Detonation(IDS.incrementAndGet(), Vec3.atBottomCenterOf(g), g.getY(), 15, true,
-                level.getGameTime() - 2000, 0, 5, 20_000, 7, 0.1f, true, Detonation.OLD_WAVE);
+                level.getGameTime() - 2000 - FALLOUT_LANDED_TICKS, 0, 5, 20_000, 7, 0.1f, true, Detonation.OLD_WAVE);
         MobFallout fallout = new MobFallout();
         WorkClock clock = WorkClock.counting(1_000_000L);
         long start = level.getGameTime();
@@ -2395,21 +2403,23 @@ public final class NuclearGameTests {
         Cow grazing = h.spawn(EntityType.COW, CENTER.west(3));
         // accounted for up to a period ago, not since the detonation: a first round of 2000 ticks kills the cow before the second
         // (game time starts near 0 here; an account is never negative)
-        grazing.setData(ModAttachments.NUKE_SEEN, NukeSeen.NONE.withFallout(Math.max(0, level.getGameTime() - MobFallout.PERIOD)));
+        grazing.setData(ModAttachments.NUKE_SEEN, NukeSeen.NONE.withFallout(Math.max(0, level.getGameTime() - MobFallout.PERIOD),
+                WorldClock.now(level) - Math.min(level.getGameTime(), MobFallout.PERIOD)));
         for (int i = 0; i < 2 * MobFallout.PERIOD + 100; i++) h.spawn(EntityType.SHEEP, CENTER.offset(-20 + i % 41, 0, 5 + i / 41));
         BlockPos g = h.absolutePos(CENTER);
         Detonation d = new Detonation(IDS.incrementAndGet(), Vec3.atBottomCenterOf(g), g.getY(), 15, true,
-                level.getGameTime() - 2000, 0, 5, 20_000, 7, 0.1f, true, Detonation.OLD_WAVE);
+                level.getGameTime() - 2000 - FALLOUT_LANDED_TICKS, 0, 5, 20_000, 7, 0.1f, true, Detonation.OLD_WAVE);
         MobFallout fallout = new MobFallout();
         WorkClock clock = WorkClock.counting(1_000_000L);
-        // when the cow received a dose (tick and increase): the entire bypass is visible from two adjacent increases
+        // when the cow received a dose (its account's end, the pass snapshot, and the increase): a pass's dose covers the
+        // time between two adjacent accounts
         List<long[]> gains = new java.util.ArrayList<>();
         double[] last = {0};
         h.onEachTick(() -> {
             clock.start(1_000_000L); // one unit of work per tick
             fallout.work(level, List.of(d), clock);
             double dose = RadiationTicker.dose(grazing).doseGy();
-            if (dose > last[0]) gains.add(new long[]{level.getGameTime(), Double.doubleToLongBits(dose - last[0])});
+            if (dose > last[0]) gains.add(new long[]{grazing.getData(ModAttachments.NUKE_SEEN).falloutAt(), Double.doubleToLongBits(dose - last[0])});
             last[0] = dose;
         });
         h.succeedWhen(() -> {
@@ -2418,9 +2428,9 @@ public final class NuclearGameTests {
                 long t = gains.get(i)[0], ticks = t - gains.get(i - 1)[0];
                 h.assertTrue(ticks > 2 * MobFallout.PERIOD, "traversal shorter than two periods: " + ticks + " tick - check for nothing");
                 double gain = Double.longBitsToDouble(gains.get(i)[1]);
-                // the rate decays over a starved pass: its tick-by-tick sum, not the end rate times the pass
+                // tick-by-tick sum over the pass (the show: real time, a tick is 1/72000 h)
                 double roentgens = 0;
-                for (long k = t - ticks; k < t; k++) roentgens += d.falloutRate(grazing.getX(), grazing.getZ(), k - d.gameTime()) / 1000.0;
+                for (long k = t - ticks; k < t; k++) roentgens += d.falloutRateAt(grazing.getX(), grazing.getZ(), (k - d.gameTime()) / 20.0) / 72_000.0;
                 double expected = roentgens * Shielding.fallout(level, RadiationTicker.middle(grazing)) * RadiationTicker.GY_PER_R;
                 h.assertTrue(Math.abs(gain / expected - 1) < 0.05, "per round " + ticks + " tick dose " + gain + " Gr, we were waiting " + expected);
             }
@@ -2494,10 +2504,10 @@ public final class NuclearGameTests {
         h.assertTrue(Detonation.CODEC.parse(NbtOps.INSTANCE, dt).getOrThrow().equals(d), "the explosion did not survive the preservation");
         // a forgotten explosion (precipitation has subsided) still destroys chunks loaded later; “Lights Out” forgets him too
         NuclearEvents events = NuclearEvents.get(level);
-        Detonation old = new Detonation(d.id(), d.burst(), d.groundY(), d.yieldKt(), d.surface(), level.getGameTime() - NuclearEvents.FORGET_AFTER - 1,
+        Detonation old = new Detonation(d.id(), d.burst(), d.groundY(), d.yieldKt(), d.surface(), level.getGameTime() - (long) (NuclearEvents.FORGET_AFTER_S * 20) - 21,
                 d.windDir(), d.windSpeed(), d.visibility(), d.seed(), d.scale(), d.fallout(), d.wave());
-        events.add(old);
-        events.prune(level.getGameTime());
+        events.add(old, level);
+        events.prune(level.getGameTime(), WorldClock.now(level));
         h.assertFalse(events.detonations().contains(old), "the old explosion is not forgotten");
         h.assertTrue(events.past().contains(old), "a forgotten explosion is not remembered for destruction");
         h.assertTrue(events.isPast(old.id()), "a forgotten explosion cannot be recognized by its number");

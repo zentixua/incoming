@@ -129,7 +129,7 @@ final class NukeAfter {
             while (nextSecondary < secondaries.size() && secondaries.get(nextSecondary).ticks() <= t) nextSecondary++;
         }
         Vec3 ear = mc.gameRenderer.getMainCamera().getPosition();
-        // server fire model ended — the storm drives the roar while it burns (until pall morning)
+        // server fire model ended — the storm drives the roar while it burns (its hours on the detonation clock)
         boolean field = f.total > 0 && t < f.endTicks();
         if (!field && !a.storm.burningAt(t)) {
             end();
@@ -194,7 +194,7 @@ final class NukeAfter {
         // comparison: model versus local-chunk fire, smoothly (fire starts with the flash, the wave blows some out, it does not fade immediately)
         if (modelHere >= TRUST_MIN) {
             trust += 0.2 * (Math.min(4, seen[0] / modelHere) - trust);
-            // for the storm, only while fire is young: vanilla fire later burns out its own way, while the storm burns until morning
+            // for the storm, only while fire is young: vanilla fire later burns out its own way, while the storm burns its hours
             if (t < f.lastIgnition() + FireField.RISE + 0.7 * FireField.TAU) a.storm.seen(trust);
         }
         double sink = wind[3];

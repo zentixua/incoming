@@ -99,6 +99,20 @@ public record FalloutModel(double yieldKt, double hobM, double windDirRad, doubl
         return doseRateAtH1(x, z) * Math.pow(t, -DECAY_EXP);
     }
 
+    /**
+     * Hours of dose at the rate measured at {@code h1} that a decaying source gives from {@code h0} to {@code h1} hours after the
+     * burst: ∫ (t/h1)^−1.2 dt with the {@link #MIN_DECAY_HOURS} floor. Equal to {@code h1 − h0} for a short step; a long one
+     * (a night's sleep) counts the higher rate at its start.
+     */
+    public static double decayHours(double h0, double h1) {
+        if (h1 <= h0) return 0;
+        double a = Math.max(h1, MIN_DECAY_HOURS);
+        double flat = Math.max(0, Math.min(h1, MIN_DECAY_HOURS) - h0) * Math.pow(MIN_DECAY_HOURS / a, -DECAY_EXP);
+        double lo = Math.max(h0, MIN_DECAY_HOURS);
+        double tail = h1 <= lo ? 0 : Math.pow(a, DECAY_EXP) * (Math.pow(lo, 1 - DECAY_EXP) - Math.pow(h1, 1 - DECAY_EXP)) / (DECAY_EXP - 1);
+        return flat + tail;
+    }
+
     private double wind() {
         return Math.max(windSpeedMps, MIN_WIND);
     }

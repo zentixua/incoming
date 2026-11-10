@@ -88,7 +88,7 @@ uniform mat4 PrevViewProj;
 uniform vec4 PallReproject;
 // vertical dust depth at eye: x above, y below to ground (NukePall.tick); with PallFrame.w determines ray reach (pallClip)
 uniform vec2 PallEyeTau;
-// firestorm (client/nuclear/FireStorm, pall.glsl): slot fire maps (R flame, G column smoke, B G × rise;
+// firestorm (client/nuclear/FireStorm, pall.glsl): slot fire maps (R flame, G column smoke, B G × risen share;
 // mips aggregate sources), fire slots, storm bounds (denser ray steps there); frame whirls (up to four, per column:
 // base/core radius; height/strength/seconds/swirl; tilt/flame/seed — PallPass.Frame)
 uniform sampler2D Sampler3;
@@ -671,8 +671,7 @@ vec3 storm(sampler2D map, mat4 S, mat4 F, vec3 p, float cone, float clumps) {
     // (mean of nonnegative values: zero means no smoke in any); above unburned ground, no column/noise samples
     vec3 m = textureLod(map, uv, max(fireLod(wide, mapCell), 1.0)).rgb;
     if (m.g + m.b <= 1e-6) return vec3(0.0, glow, 0.0);
-    // column builds with smoke rise: full feed G at ground, risen share B above
-    float rise = smoothstep(0.0, 0.3 * top, h);
+    // column climbs from the ground: feed G below its head, which stands at the risen share B/G of the top
     float spread = smoothstep(0.4, 0.75, wide / cell);
     // billows rise at smoke speed and drift with column; same noise warps column lookup — billowing edge, not a flat stripe
     vec2 n = texture(PallNoise, vec3(rel.x - shift.x, h - 0.5 * F[1].z * min(t, 3000.0), rel.y - shift.y) / (2.0 * cell)).rg;
@@ -680,7 +679,7 @@ vec3 storm(sampler2D map, mat4 S, mat4 F, vec3 p, float cone, float clumps) {
     vec3 sun = PallSun.xyz;
     float across = length(sun.xz), slant = 1.0 / max(across, 0.25);
     vec2 toSun = sun.xz / max(across, 1e-4);
-    float feed = spread * mix(m.g, m.b, rise);
+    float feed = spread * fireRisen(h, top, m.g, m.b);
     // broad: smoke to column edge or top, averaged at half-path
     float tau = feed * 0.5 * min(wide * slant, max(top - h, 0.0) / max(sun.y, 0.1));
     float core = 0.6 * spread;
@@ -698,7 +697,7 @@ vec3 storm(sampler2D map, mat4 S, mat4 F, vec3 p, float cone, float clumps) {
                 if (mapCell <= cell) mc = texelFetch(map, c, 0).rgb;
                 else mc = textureLod(map, (vec2(c) + 0.5) / sourceSize, 0.0).rgb;
                 vec2 d = (g - vec2(c) - 0.5 - fireSpot(c)) * cell / w;
-                float axis = mix(mc.g, mc.b, rise) * area, r2 = dot(d, d), e = exp(-r2);
+                float axis = fireRisen(h, top, mc.g, mc.b) * area, r2 = dot(d, d), e = exp(-r2);
                 pillars += axis * e;
                 // Gaussian column depth toward sun: Gaussian across ray, erfc tail along it (via tanh),
                 // sunward side bright, other side self-shadowed

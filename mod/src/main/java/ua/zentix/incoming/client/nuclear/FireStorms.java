@@ -176,12 +176,12 @@ final class FireStorms {
             PallPass.Fire fire = j == 0 ? f.fire0 : f.fire1;
             if (fire.params.m00() <= 0) continue;
             ClientNuclear.Active a = slotted[j];
-            double seconds = a.ticks(partial) / 20.0, gate = a.storm.gate();
+            double seconds = a.ticks(partial) / 20.0, clock = a.clockSeconds(partial), gate = a.storm.gate();
             float leanX = (float) (WHIRL_LEAN * fire.params.m10()), leanZ = (float) (WHIRL_LEAN * fire.params.m11());
             List<FireStorm.Whirl> list = a.storm.whirls();
             for (int i = 0; i < list.size(); i++) {
                 FireStorm.Whirl w = list.get(i);
-                double strength = w.strength(seconds) * gate * a.storm.dryAt(w.x(), w.z());
+                double strength = w.strength(seconds) * w.fire(clock) * gate * a.storm.dryAt(w.x(), w.z());
                 if (strength < 0.01) continue;
                 float x = (float) (w.baseX(seconds) - eye.x), z = (float) (w.baseZ(seconds) - eye.z), y = (float) (a.storm.whirlGround(i) - eye.y);
                 float h = (float) w.height(), reach = (float) (w.radius() * 3);

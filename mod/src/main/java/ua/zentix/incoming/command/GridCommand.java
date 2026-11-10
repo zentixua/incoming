@@ -121,7 +121,8 @@ final class GridCommand {
         long offThread = ChunkSaves.foreignReads(ChunkSaves.OFF_THREAD), copies = ChunkSaves.foreignReads(ChunkSaves.COPY);
         if (offThread + copies > 0) ctx.getSource().sendSuccess(() -> Component.translatable("incoming.grid.status_reads", offThread, copies), false);
         for (ServerLevel level : ctx.getSource().getServer().getAllLevels()) {
-            long now = level.getGameTime();
+            // outage times are on the grid clock: hours of the world's day
+            long now = ua.zentix.incoming.grid.Blackouts.now(level);
             String dimension = level.dimension().location().toString();
             for (Outage outage : PowerGrid.get(level).outages()) {
                 long restore = outage.restoreAt();
@@ -129,7 +130,7 @@ final class GridCommand {
                         ? Component.translatable("incoming.grid.restore.damage", Math.round(outage.damaged()), Math.round(outage.dead()))
                         : restore == Outage.NEVER ? Component.translatable("incoming.grid.restore.never")
                         : restore <= now ? Component.translatable("incoming.grid.restore.now")
-                        : Component.translatable("incoming.grid.restore.in", (restore - now + 1199) / 1200);
+                        : Component.translatable("incoming.grid.restore.in", String.format(Locale.ROOT, "%.1f", (restore - now) / Outage.TICKS_PER_HOUR));
                 ctx.getSource().sendSuccess(() -> Component.translatable("incoming.grid.outage", outage.id(), dimension,
                         Math.round(outage.x()), Math.round(outage.z()), Math.round(outage.radius()), when), false);
             }
@@ -167,7 +168,7 @@ final class GridCommand {
         int count = 0;
         for (Node n : grid.nodes()) {
             count++;
-            boolean down = grid.downOutage(n.id(), level.getGameTime()).isPresent();
+            boolean down = grid.downOutage(n.id(), ua.zentix.incoming.grid.Blackouts.now(level)).isPresent();
             ctx.getSource().sendSuccess(() -> Component.translatable(down ? "incoming.grid.node.down" : "incoming.grid.node.up", n.id(),
                     n.pos().getX(), n.pos().getY(), n.pos().getZ(), Math.round(n.radius()),
                     Component.translatable(n.block() ? "incoming.grid.node.block" : "incoming.grid.node.marker")), false);

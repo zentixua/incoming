@@ -10,8 +10,8 @@ package ua.zentix.incoming.nuclear.model;
  * starts later by the cloud's travel time and lasts just as long. x, z are meters from the epicenter; wind blows toward
  * (cos, sin).
  *
- * <p>The clock is the firestorm's: real seconds compressed by {@link #COMPRESSION}, as for the client storm (peak at 80 s,
- * decline from 360 s versus 20 minutes and an hour and a half in reality; Artem's decision) — rain comes from visible smoke.
+ * <p>Seconds are the detonation's clock ({@code NukeClock}), as for the fires whose smoke makes the rain: real time through
+ * the show, so rain begins as in life 20 minutes after the burst; the world clock after, so it lasts the hours the world lives.
  *
  * <p>Radioactivity: in an airburst, fission products remain in the cloud, and rain washes some onto the ground — hundreds
  * of times weaker than surface-burst fallout (DS86, ch. 6: Hiroshima, Koi–Takasu — 1–3 R total; Nagasaki, Nishiyama —
@@ -23,11 +23,9 @@ package ua.zentix.incoming.nuclear.model;
  * @param airShare    share of fission products remaining in the cloud (1 − surface-burst share)
  */
 public record BlackRainModel(double yieldKt, double fireRadiusM, double windDirRad, double windSpeedMps, double airShare) {
-    /** How many times faster the storm clock runs than real time. */
-    public static final double COMPRESSION = 15;
-    /** Rain starts and ends above the fires, real seconds after detonation. */
+    /** Rain starts and ends above the fires, seconds after detonation. */
     public static final double START_S = 20 * 60, END_S = START_S + 90 * 60;
-    /** How long the cloud rains while moving downwind, real seconds. */
+    /** How long the cloud rains while moving downwind, seconds. */
     public static final double DRIFT_S = 2 * 3600;
     /** Band widening per meter traveled downwind. */
     public static final double SPREAD = 0.2;
@@ -36,7 +34,7 @@ public record BlackRainModel(double yieldKt, double fireRadiusM, double windDirR
     private static final double MIN_WIND = 0.5;
 
     /**
-     * When rain starts at a point, storm-clock seconds after detonation; infinity — outside the band.
+     * When rain starts at a point, detonation-clock seconds after detonation; infinity — outside the band.
      * It lasts {@link #durationSeconds} seconds.
      */
     public double startSeconds(double x, double z) {
@@ -47,27 +45,27 @@ public record BlackRainModel(double yieldKt, double fireRadiusM, double windDirR
         boolean inside = down < 0 ? down * down + cross * cross <= fireRadiusM * fireRadiusM
                 : Math.abs(cross) <= fireRadiusM + SPREAD * down;
         if (!inside || past > wind() * DRIFT_S) return Double.POSITIVE_INFINITY;
-        return (START_S + past / wind()) / COMPRESSION;
+        return START_S + past / wind();
     }
 
     /** Storm-clock seconds of rain at a point. */
     public static double durationSeconds() {
-        return (END_S - START_S) / COMPRESSION;
+        return END_S - START_S;
     }
 
-    /** Whether rain is falling at the point after {@code seconds} storm-clock seconds. */
+    /** Whether rain is falling at the point after {@code seconds} detonation-clock seconds. */
     public boolean raining(double x, double z, double seconds) {
         double start = startSeconds(x, z);
         return seconds >= start && seconds < start + durationSeconds();
     }
 
-    /** When rain ends at the band's farthest point, storm-clock seconds. */
+    /** When rain ends at the band's farthest point, detonation-clock seconds. */
     public double endSeconds() {
-        return fireRadiusM <= 0 ? 0 : (END_S + DRIFT_S) / COMPRESSION;
+        return fireRadiusM <= 0 ? 0 : END_S + DRIFT_S;
     }
 
     /**
-     * Dose rate from rain-washed ground deposits at H+1, R/h ({@code seconds} — storm clock): from rain onset at the point;
+     * Dose rate from rain-washed ground deposits at H+1, R/h ({@code seconds} — detonation clock): from rain onset at the point;
      * full near the fire zone, decaying e-fold over a third of the band downwind, Gaussian across it with half the half-width.
      */
     public double depositH1(double x, double z, double seconds) {

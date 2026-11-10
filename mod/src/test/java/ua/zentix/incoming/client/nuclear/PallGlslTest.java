@@ -186,7 +186,7 @@ class PallGlslTest {
      */
     @Test
     void sprayHasItsOwnRow() {
-        PallField p = new PallField(GROUND, 6000);
+        PallField p = new PallField(GROUND);
         float[] row = new float[4 * PallField.ROWS * PallField.BINS];
         double[] v = new double[4];
         boolean spray = false;
@@ -770,5 +770,10 @@ class PallGlslTest {
             }
             assertEquals(FireStorm.column(h, 260), column.call(Map.of("h", h, "top", 260.0)), 1e-9, "h = " + h);
         }
+        GlslFunction risen = GlslFunction.parse(GLSL, "fireRisen");
+        for (double h = -10; h <= 900; h += 3.5)
+            for (double[] gb : new double[][]{{0, 0}, {0.4, 0}, {0.4, 0.1}, {0.4, 0.4}, {0.4, 0.6}, {1e-8, 1e-8}})
+                assertEquals(FireStorm.feedAt(h, 840, gb[0], gb[1]), risen.call(Map.of("h", h, "top", 840.0, "g", gb[0], "b", gb[1])), 1e-9,
+                        "h = " + h + ", g " + gb[0] + ", b " + gb[1]);
     }
 }

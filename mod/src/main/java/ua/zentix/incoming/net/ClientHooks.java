@@ -48,6 +48,8 @@ public interface ClientHooks {
 
     default void nukeSync(S2C.NukeSync p) {}
 
+    default void nukeClock(S2C.NukeClock p) {}
+
     default void radiation(S2C.Radiation p) {}
 
     default void retinaScars(S2C.RetinaScars p) {}

@@ -1758,7 +1758,7 @@ public final class ClientScenario {
         var fd = ua.zentix.incoming.client.nuclear.ClientNuclear.detonations().getLast().d;
         double fm = Math.min(3000, fd.windSpeed() * 150) * fd.scale();
         falloutSpot = new Vec3(fd.burst().x + Math.cos(fd.windDir()) * fm, 200, fd.burst().z + Math.sin(fd.windDir()) * fm);
-        falloutGo = fd.gameTime() + Math.max(3000, (long) Math.ceil(fd.falloutArrivalTicks(falloutSpot.x, falloutSpot.z))) + 900;
+        falloutGo = fd.gameTime() + Math.max(3000, (long) Math.ceil(20 * fd.falloutArrivalSeconds(falloutSpot.x, falloutSpot.z))) + 900;
     }
 
     /**
@@ -3837,7 +3837,7 @@ public final class ClientScenario {
                 var list = ua.zentix.incoming.client.nuclear.ClientNuclear.detonations();
                 Vec3 cam = mc.gameRenderer.getMainCamera().getPosition();
                 String rain = list.isEmpty() ? "-" : String.format(java.util.Locale.ROOT, "trail=%b sky=%b",
-                        list.getLast().d.blackRain(cam.x, cam.z, mc.level.getGameTime() - list.getLast().d.gameTime()),
+                        list.getLast().d.blackRainAt(cam.x, cam.z, list.getLast().clockSeconds(0)),
                         ua.zentix.incoming.nuclear.Detonation.underOpenSky(mc.level, cam));
                 Incoming.LOG.info("SCENARIO {} white={} rain={} {} fps={}", name, ua.zentix.incoming.client.nuclear.NukeFlash.whiteness(0),
                         ua.zentix.incoming.client.nuclear.NukeSky.blackRain(), rain, mc.getFps());

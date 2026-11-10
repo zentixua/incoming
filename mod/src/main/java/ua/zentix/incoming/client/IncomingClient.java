@@ -510,6 +510,11 @@ public final class IncomingClient {
         }
 
         @Override
+        public void nukeClock(S2C.NukeClock p) {
+            ClientNuclear.clock(p);
+        }
+
+        @Override
         public void radiation(S2C.Radiation p) {
             ClientNuclear.radiation(p);
         }

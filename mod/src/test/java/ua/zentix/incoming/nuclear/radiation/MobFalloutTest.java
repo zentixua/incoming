@@ -37,6 +37,26 @@ class MobFalloutTest {
         assertEquals(exact, got, Math.pow(arrival, -k) * arrival * step);
     }
 
+    /**
+     * A player who sleeps through the plume's arrival (one long dose step, the promise in {@code RadiationTicker}) gets the
+     * dose from the moment the dust landed, not the decay law extrapolated back to when they lay down.
+     */
+    @Test
+    void sleepThroughArrivalCountsFromArrival() {
+        // 15 kt surface burst, no fires (no rain), wind 2.5 m/s along +x: 18 km downwind the plume lands 2 h after the burst
+        var d = new ua.zentix.incoming.nuclear.Detonation(1, new net.minecraft.world.phys.Vec3(0, 64, 0), 64, 15, true, 0, 0f, 2.5f,
+                20_000, 0, 1f, true, 0.25f, 0L, false);
+        double x = 18_000, arrival = d.falloutArrivalSeconds(x, 0) / 3600, h0 = 0.4, h1 = 10.4;
+        assertEquals(2, arrival, 0.01);
+        double rate = d.falloutRateAt(x, 0, h1 * 3600);
+        double truth = rate * FalloutModel.decayHours(arrival, h1);
+        // within the log grid's one step at the arrival (arrivalStepInsideTheSpan)
+        assertEquals(truth, MobFallout.exposure(d, x, 0, h0 * 3600, h1 * 3600), truth * 0.03);
+        assertTrue(rate * FalloutModel.decayHours(h0, h1) > 2 * truth, "the old extrapolation it replaces");
+        // a short step is the rate × time
+        assertEquals(rate / 3600, MobFallout.exposure(d, x, 0, h1 * 3600 - 1, h1 * 3600), 1e-12);
+    }
+
     /** Nothing before the span start or for an empty span. */
     @Test
     void emptySpan() {

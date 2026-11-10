@@ -589,6 +589,27 @@ public final class S2C {
         }
     }
 
+    /**
+     * The server's world clock ({@code util.WorldClock}) and the clock at which each ended show of this dimension ended
+     * ({@code nuclear.NukeClock}: from there a detonation's clock follows the world clock). Sent once a second while the
+     * dimension holds detonations, when a show ends and on entry: the whole state in one packet, so the last one (all a
+     * Flashback snapshot keeps) restores it after a replay seek; a lagging server pulls a client that ran ahead back.
+     */
+    public record NukeClock(double clock, List<ShowEnd> ends) implements CustomPacketPayload {
+        public static final Type<NukeClock> TYPE = new Type<>(Incoming.id("nuke_clock"));
+        public static final StreamCodec<ByteBuf, NukeClock> CODEC = StreamCodec.composite(
+                ByteBufCodecs.DOUBLE, NukeClock::clock,
+                ShowEnd.CODEC.apply(ByteBufCodecs.list()), NukeClock::ends,
+                NukeClock::new);
+        @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }
+
+        /** Detonation {@code id}'s show ended at world clock {@code at}. */
+        public record ShowEnd(int id, double at) {
+            public static final StreamCodec<ByteBuf, ShowEnd> CODEC = StreamCodec.composite(
+                    ByteBufCodecs.VAR_INT, ShowEnd::id, ByteBufCodecs.DOUBLE, ShowEnd::at, ShowEnd::new);
+        }
+    }
+
     /** Full terminal snapshot and server epoch. Repeated snapshots also restore Flashback seek/late join. */
     public record NukeApproach(long time, List<ua.zentix.incoming.nuclear.IcbmArrival> arrivals) implements CustomPacketPayload {
         public static final Type<NukeApproach> TYPE = new Type<>(Incoming.id("nuke_approach"));

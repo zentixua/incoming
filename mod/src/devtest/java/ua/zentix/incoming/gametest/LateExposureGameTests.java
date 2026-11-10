@@ -9,6 +9,7 @@ import net.minecraft.world.entity.Mob;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.gametest.GameTestHolder;
 import net.neoforged.neoforge.gametest.PrefixGameTestTemplate;
+import ua.zentix.incoming.util.WorldClock;
 import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.IncomingConfig;
 import ua.zentix.incoming.nuclear.Detonation;
@@ -69,7 +70,7 @@ public final class LateExposureGameTests {
         for (Mob m : late) m.removeData(ModAttachments.NUKE_SEEN);
         BlockPos g = h.absolutePos(NuclearGameTests.CENTER.west(20));
         Detonation d = burst(level, g, late.getLast().position());
-        NuclearEvents.get(level).add(d);
+        NuclearEvents.get(level).add(d, level);
         for (int i = 0; i < 4; i++) born.add(h.spawn(EntityType.COW, new BlockPos(40 + 3 * i, 12, 44)));
         for (Mob m : late) {
             m.setPersistenceRequired();
@@ -85,7 +86,9 @@ public final class LateExposureGameTests {
                 for (Mob m : late) {
                     var dose = RadiationTicker.dose(m);
                     h.assertTrue(dose.doseGy() > 1, String.format(Locale.ROOT, "a cow loaded after the detonation got %.2f Gy", dose.doseGy()));
-                    h.assertTrue(dose.exposedAt() == d.gameTime(), "sickness runs from " + dose.exposedAt() + ", not from the detonation " + d.gameTime());
+                    // world-clock ticks (sickness keeps the world's hours): the world clock at the burst
+                    long burst = (long) Math.floor(NuclearEvents.get(level).burstClock(d, level.getGameTime(), WorldClock.now(level)));
+                    h.assertTrue(dose.exposedAt() == burst, "sickness runs from " + dose.exposedAt() + ", not from the detonation " + burst);
                     h.assertFalse(m.isAlive(), "a cow loaded after the detonation survived " + Math.round(BlastBody.wound(level, d, m, null).death() * 100) + " % lethal pressure");
                     h.assertTrue(m.getRemainingFireTicks() <= 0, "clothes caught fire long after the flash");
                 }
@@ -133,7 +136,7 @@ public final class LateExposureGameTests {
         once.removeData(ModAttachments.NUKE_SEEN);
         BlockPos g = h.absolutePos(NuclearGameTests.CENTER.west(20));
         Detonation d = burst(level, g, twice.position());
-        NuclearEvents.get(level).add(d);
+        NuclearEvents.get(level).add(d, level);
         world.onEntityJoin(level, twice, true);
         world.onEntityJoin(level, twice, true);
         world.onEntityJoin(level, once, true);

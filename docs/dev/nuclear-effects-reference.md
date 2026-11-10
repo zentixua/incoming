@@ -88,12 +88,13 @@ column like a flared base, and its clumps drift in along the top and climb the c
 town. It does not get into the mine, cave or cellar you are in: the air there stays clear and sounds are
 not muffled by the dust; only near a shaft or an opening to the sky does some dust drift in, thinning over about 15
 blocks. Coarse grains fall out in minutes; the fine dust drifts downwind and hangs as a thinning haze for about an hour and a half, a little longer after an air burst. Where the
-light of the fireball set the town on fire, a firestorm builds up over a few minutes. Columns of smoke rise over the
+light of the fireball set the town on fire, a firestorm builds up over about twenty minutes, like the mass fire at Hiroshima. Columns of smoke rise over the
 burning blocks, lean downwind and merge higher up into a ceiling of smoke over the town. At night the fires light it
 orange-red from below, and the glow flickers; from a couple of kilometres away the town glows under its smoke, and the
 dust around it catches the glow. A few times in the first ten minutes a fire whirl rises over the hottest fires for a
-minute or so and wanders across them. From about the sixth minute the fires die down to smouldering, and by morning they
-are out, together with the smoke. A server with nuclear fires turned off (`nuclear.fires`) has no firestorm and no smoke
+minute or so and wanders across them. The fires burn hardest for about three hours, then die down to smouldering and are out
+after about 12 hours, together with the smoke; after the first 20 minutes these are hours of the world's day (see
+[time after the strike](../guide/nuke.md#time-after-the-strike)). A server with nuclear fires turned off (`nuclear.fires`) has no firestorm and no smoke
 haze over the town. Ash and scraps of burnt paper fall around you.
 
 ![Blast-wave dust approaches after a 6 kt ground burst at dusk](../guide/img/nuke-dusk-wave.jpg)
@@ -103,13 +104,13 @@ haze over the town. Ash and scraps of burnt paper fall around you.
 In a 15 kt air burst the wave kills half of those it throws against a wall out to about 0.85 km, and a few out to
 1.45 km; in an open field it rarely kills and mostly knocks you down and rolls you over the ground. A 15 kt ground
 burst kills half of those in the open out to about 0.4 km. The light of the fireball burns bare skin out to about
-3.4 km, and windows break out to 8–9.5 km. At 1 kt all of this is several times closer. A ground burst leaves a fallout trail downwind. Fallout keeps
-game time, like radiation sickness (a game hour is 50 seconds): after a 15 kt ground burst it starts to come down about
-7 game minutes later, and later farther downwind. Its radiation drops tenfold by the seventh game hour and a
-hundredfold by the third game day.
+3.4 km, and windows break out to 8–9.5 km. At 1 kt all of this is several times closer. A ground burst leaves a fallout trail downwind. Fallout comes
+down as the cloud drifts over, in real time: after a 15 kt ground burst it starts about 7 minutes later near ground zero,
+and later farther downwind. Its decay then follows the world's day, like radiation sickness: its radiation drops tenfold
+by the seventh hour and a hundredfold by the third day.
 
-About 80 seconds after the burst, black rain starts to fall from the smoke of the fires: over the burning
-town and in a wide strip downwind, for about six minutes in each place, in step with the firestorm. After an air burst
+About 20 minutes after the burst, once the firestorm has formed, black rain starts to fall from its smoke: over the
+burning town and in a wide strip downwind, for about an hour and a half of the world's day in each place. After an air burst
 it is only weakly radioactive. In the fallout trail of a ground burst it brings the fallout down onto you.
 
 ![Mushroom cloud after a 6 kt ground burst over Newisle at dusk](../guide/img/nuke-dusk-cloud.jpg)
@@ -161,6 +162,6 @@ forests and towns around you: every slope that faces both the burst and you send
 the burst go quiet for a few minutes. Indoors the echoes are as muffled as the blast itself. Mobs run away from the
 flash and the blast wave, then calm down; tamed, named and leashed mobs stay put, and mobs under cover don't run from
 the wave. Mobs in places no player was near at the time get the same burns, radiation and blast injuries when the
-area loads, and their radiation sickness counts from the burst. The town keeps burning until morning: the fires roar from where they burn, as loud as the heat of what is
+area loads, and their radiation sickness counts from the burst. The town keeps burning for hours: the fires roar from where they burn, as loud as the heat of what is
 burning, so the roar grows over the first minutes as the firestorm builds and dies down with it; you also hear wind pulled
 into the fire near them, ruins collapsing nearby, and now and then an explosion in the burning blocks.

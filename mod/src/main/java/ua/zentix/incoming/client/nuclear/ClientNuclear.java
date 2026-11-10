@@ -12,6 +12,7 @@ import ua.zentix.incoming.client.sound.SoundFilters;
 import ua.zentix.incoming.net.S2C;
 import ua.zentix.incoming.nuclear.NuclearStrikes;
 import ua.zentix.incoming.nuclear.Detonation;
+import ua.zentix.incoming.nuclear.NukeClock;
 import ua.zentix.incoming.nuclear.radiation.RetinaScars;
 
 import java.util.ArrayList;
@@ -43,17 +44,21 @@ public final class ClientNuclear {
         /** Water under burst ({@link NukeWater#resolve}): column in mushroom volume, base surge in pall. */
         final BurstWater water;
         /**
-         * Post-wave pall ({@link NukePall}): “until morning” follows time of day at detonation, then world clock
-         * ({@link PallField#daylight}).
+         * Post-wave pall ({@link NukePall}): dust on real time, fire haze on the detonation's clock ({@link #clockTicksAt}).
          */
         public final PallField pall;
-        /** Firestorm over the burning city ({@link FireStorm}): follows detonation age until pall morning. */
+        /** Firestorm over the burning city ({@link FireStorm}): on the detonation's clock ({@link #clockTicksAt}). */
         public final FireStorm storm;
         /** Terrain under pall ({@link PallGround}): end of its ray where no world lies behind. */
         final PallGround ground;
         /** Ticks elapsed before packet arrival (world-entry packets: since detonation). */
         private final long before;
         private long age;
+        /**
+         * Estimated world clock at the end of the show ({@link NukeClock}) when the server has not said ({@link #SHOW_ENDS}:
+         * a recording made before the server sent it); NaN — not estimated yet.
+         */
+        private double guessedShowEnd = Double.NaN;
         final NukeSounds.Schedule sounds;
 
         Active(Detonation d, boolean live, long clientNow) {
@@ -74,17 +79,8 @@ public final class ClientNuclear {
             this.wall = wall;
             this.water = water;
             ClientLevel level = Minecraft.getInstance().level;
-            if (pall != null) {
-                pall.rewound();
-                this.pall = pall;
-            } else {
-                // detonation time of day from server; old-save/replay detonations use current
-                // clock: jumps before entry are then invisible (nuclear.md)
-                this.pall = new PallField(d, d.hasDayTime() ? d.dayTime()
-                        : level == null ? 0 : level.getDayTime() - (level.getGameTime() - d.gameTime()));
-            }
-            // measure clock immediately: late entry after sleep shows no haze even for the frame before a tick
-            if (level != null) this.pall.daylight(ticks(0), level.getGameTime(), level.getDayTime());
+            this.pall = pall != null ? pall : new PallField(d);
+            this.pall.clock(this::clockTicksAt);
             this.storm = storm != null ? storm : new FireStorm(d, this.pall);
             // same terrain: known data stays; new map fills using water under epicenter
             if (ground == null) NukeWater.resolve(this, level);
@@ -105,6 +101,25 @@ public final class ClientNuclear {
         /** Model seconds since detonation (world scale applied). */
         public double seconds(float partialTick) {
             return ticks(partialTick) / (20.0 * d.scale());
+        }
+
+        /**
+         * The detonation's clock ({@link NukeClock}) at {@code realTicks} client ticks since detonation (now or a moment ago),
+         * in ticks: real through the show, then the world clock — fire, its smoke and black rain live the world's hours.
+         */
+        public double clockTicksAt(double realTicks) {
+            double real = realTicks / 20.0;
+            if (real <= NukeClock.SHOW_S) return realTicks;
+            double now = ClientClock.now();
+            Double told = SHOW_ENDS.get(d.id());
+            // not told by the server (old recording): as if the day had run at vanilla speed since the show's end
+            if (told == null && Double.isNaN(guessedShowEnd)) guessedShowEnd = now - (real - NukeClock.SHOW_S) * 20;
+            return NukeClock.fromClock(real, now - (told != null ? told : guessedShowEnd)) * 20;
+        }
+
+        /** Detonation-clock seconds now. */
+        public double clockSeconds(float partialTick) {
+            return clockTicksAt(ticks(partialTick)) / 20.0;
         }
     }
 
@@ -203,6 +218,19 @@ public final class ClientNuclear {
         }
     }
 
+    /**
+     * The server's world clock at the end of each ended show in this dimension ({@link S2C.NukeClock}); the latest packet
+     * replaces it whole, and a replay seek keeps it (the detonations are rebuilt, this is not).
+     */
+    private static final Map<Integer, Double> SHOW_ENDS = new HashMap<>();
+
+    /** The server's clock: the client's world clock continues from it, and each ended show follows it from its end. */
+    public static void clock(S2C.NukeClock p) {
+        ClientClock.set(p.clock());
+        SHOW_ENDS.clear();
+        for (S2C.NukeClock.ShowEnd e : p.ends()) SHOW_ENDS.put(e.id(), e.at());
+    }
+
     /** World entry/dimension change: all current state, without flash/hit (already passed). */
     public static void sync(S2C.NukeSync p) {
         stopAll();
@@ -282,13 +310,14 @@ public final class ClientNuclear {
         for (boolean surface : new boolean[]{true, false}) {
             Detonation d = new Detonation(-1, new Vec3(0, surface ? 64 : 564, 0), 64, 15, surface, 0, 0, 5, 20_000, 0, 1, false, 1);
             new BlastWall(d, false);
-            new PallField(d, 0);
+            new PallField(d);
         }
     }
 
     public static void reset() {
         stopAll();
         DETONATIONS.clear();
+        SHOW_ENDS.clear();
         WARNINGS.clear();
         radiation = null;
         CLOCK.reset();
@@ -332,6 +361,7 @@ public final class ClientNuclear {
         if (level == null) return;
         long now = level.getGameTime();
         CLOCK.tick(now);
+        ClientClock.tick(level, mc.isPaused());
         APPROACHES.tick();
         Vec3 eye = mc.gameRenderer.getMainCamera().getPosition();
         Sightline.Heights heights = ground(level);
@@ -341,7 +371,6 @@ public final class ClientNuclear {
             Active a = it.next();
             a.age++;
             a.sounds.tick();
-            a.pall.daylight(a.ticks(0), level.getGameTime(), level.getDayTime());
             // terrain/water under pall: for rays without world behind and for matter (ceiling dimensions use ground
             // under epicenter)
             // water under epicenter before pall map: map fills unknowns from it
@@ -353,7 +382,7 @@ public final class ClientNuclear {
             if (heights != null) a.storm.track(a.ticks(1) / 20.0, heights);
             NukeWater.tick(a, level, eye);
             NukeDust.front(a, eye);
-            if (a.ticks(0) > lifeTicks(a.d) && !a.pall.visible(a.ticks(0))) {
+            if (a.ticks(0) > lifeTicks(a.d) && a.clockSeconds(0) > a.d.blackRainEndSeconds() && !a.pall.visible(a.ticks(0))) {
                 a.sounds.stop();
                 it.remove();
             }
@@ -372,12 +401,12 @@ public final class ClientNuclear {
     }
 
     /**
-     * Detonation leaves client after mushroom disperses, sound reaches distant listeners (Distant Horizons: 20 km), and
-     * black rain ends (client draws no precipitation: server sends dose rate for counter).
+     * Detonation leaves client after mushroom disperses and sound reaches distant listeners (Distant Horizons: 20 km), real
+     * ticks; black rain must also have ended, on the detonation's clock (client draws no precipitation: server sends dose
+     * rate for counter).
      */
     private static double lifeTicks(Detonation d) {
-        return Math.max(Math.max(CloudPuffs.lifeSeconds(d) * 20 * d.scale(), d.arrivalTicks(d.blocks(20_000)) + 200),
-                d.blackRainEndTicks());
+        return Math.max(CloudPuffs.lifeSeconds(d) * 20 * d.scale(), d.arrivalTicks(d.blocks(20_000)) + 200);
     }
 
     // ---------------------------------------------------------------- rendering and sound
