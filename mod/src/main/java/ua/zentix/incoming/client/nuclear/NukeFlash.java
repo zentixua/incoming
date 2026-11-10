@@ -18,6 +18,7 @@ import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix4f;
 import ua.zentix.incoming.IncomingConfig;
+import ua.zentix.incoming.client.TickTime;
 import ua.zentix.incoming.client.fx.Flash;
 import ua.zentix.incoming.client.render.ScreenProjection;
 import ua.zentix.incoming.nuclear.Detonation;
@@ -342,7 +343,7 @@ public final class NukeFlash {
      */
     private static void veil(GuiGraphics g, float partial, int w, int h) {
         if (veilSeconds <= 0) return;
-        double t = (ticks + partial - veilStart) / 20;
+        double t = (TickTime.at(ticks, partial) - veilStart) / 20;
         if (t < 0 || t >= veilSeconds) return;
         double life = 1 - t / veilSeconds;
         float a = (float) (VEIL * life * life * veilStrength);

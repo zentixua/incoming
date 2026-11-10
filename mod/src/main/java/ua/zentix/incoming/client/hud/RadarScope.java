@@ -10,6 +10,7 @@ import net.minecraft.util.Mth;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.IncomingConfig;
+import ua.zentix.incoming.client.TickTime;
 import ua.zentix.incoming.client.cam.ProjectileCamera;
 import ua.zentix.incoming.net.S2C;
 import ua.zentix.incoming.strike.WeaponType;
@@ -66,7 +67,7 @@ public final class RadarScope {
         float scale = (float) RADIUS / Math.max(1, s.range());
         HudDraw.ring(g, cx, cy, s.engageRange() * scale, 1, DIM);
         HudDraw.ring(g, cx, cy, RADIUS, 1, GREEN);
-        float a = (ticks + pt) / SWEEP * Mth.TWO_PI;
+        float a = (float) (TickTime.at(ticks, pt) / SWEEP % 1 * Mth.TWO_PI);
         HudDraw.line(g, cx, cy, cx + Mth.sin(a) * RADIUS, cy - Mth.cos(a) * RADIUS, 1, 0xB046F07A);
         Font font = mc.font;
         Component north = Component.translatable("incoming.hud.north");

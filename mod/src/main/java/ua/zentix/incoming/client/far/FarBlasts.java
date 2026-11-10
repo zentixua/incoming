@@ -5,6 +5,7 @@ import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix4f;
+import ua.zentix.incoming.client.TickTime;
 import ua.zentix.incoming.client.fx.BlastSource;
 import ua.zentix.incoming.client.fx.BlastTime;
 import ua.zentix.incoming.client.fx.ClientAir;
@@ -862,7 +863,7 @@ public final class FarBlasts {
     static void collect(FarView view, FarSprites out, FxLights lights) {
         ClientLevel level = Minecraft.getInstance().level;
         Vec3 cam = view.camera();
-        double now = BlastTime.ticks() + view.partial();
+        double now = TickTime.at(BlastTime.ticks(), view.partial());
         Arrays.fill(BRIGHTEST, 0);
         for (Event e : EVENTS) {
             if (e.level != level) continue;
@@ -892,7 +893,7 @@ public final class FarBlasts {
      * of the air, 1/block). true — at least one ball was added.
      */
     public static boolean fireballs(Vec3 eye, float partial, double exposure, double air, Matrix4f centres, Matrix4f light) {
-        double now = BlastTime.ticks() + partial;
+        double now = TickTime.at(BlastTime.ticks(), partial);
         double[] weight = WEIGHT;
         boolean any = false;
         org.joml.Vector4f column = COLUMN;
