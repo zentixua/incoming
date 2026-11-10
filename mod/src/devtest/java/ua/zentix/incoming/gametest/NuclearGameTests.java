@@ -2342,6 +2342,13 @@ public final class NuclearGameTests {
     }
 
     /**
+     * Ticks from a 15 kt burst until its fallout lands at ground zero: real time during the show (Miller's first arrival,
+     * 4·Y^0.2 minutes, {@code FalloutModel.firstArrivalHours}); mob-fallout fixtures date their burst that much plus 100 s back,
+     * and stay within the show, where the detonation clock is real time.
+     */
+    private static final long FALLOUT_LANDED_TICKS = (long) Math.ceil(20 * 60 * 4 * Math.pow(15, 0.2));
+
+    /**
      * Mobs get sick like players: 1000 Gr (brain form) - the effect of the disease immediately, ataxia (Slowness V) from onset,
      *  death after 0,4 game hour (400 ticks), and not at the time of the dose; the undead do not get sick; in the trail of precipitation, the mob gains a dose (in portions under the budget,
      * {@link MobFallout}). The patient is in a stone booth: the precipitation does not reach him, and the duration of the illness is not delayed by its dose.
@@ -2362,10 +2369,10 @@ public final class NuclearGameTests {
         h.assertFalse(RadiationTicker.affectsMob(zombie), "the undead are irradiated");
         RadiationTicker.addDose(sick, 1000);
         h.assertTrue(sick.hasEffect(ModEffects.RADIATION_SICKNESS), "a cow with 1000 Gr does not have radiation sickness");
-        // ground detonation with fallout two game hours earlier; the cow is at the epicenter - in the very wake
+        // ground detonation with fallout already landed 100 s ago; the cow is at the epicenter - in the very wake
         BlockPos g = h.absolutePos(CENTER);
         Detonation d = new Detonation(IDS.incrementAndGet(), Vec3.atBottomCenterOf(g), g.getY(), 15, true,
-                level.getGameTime() - 2000, 0, 5, 20_000, 7, 0.1f, true, Detonation.OLD_WAVE);
+                level.getGameTime() - 2000 - FALLOUT_LANDED_TICKS, 0, 5, 20_000, 7, 0.1f, true, Detonation.OLD_WAVE);
         MobFallout fallout = new MobFallout();
         WorkClock clock = WorkClock.counting(1_000_000L);
         long start = level.getGameTime();
@@ -2401,17 +2408,18 @@ public final class NuclearGameTests {
         for (int i = 0; i < 2 * MobFallout.PERIOD + 100; i++) h.spawn(EntityType.SHEEP, CENTER.offset(-20 + i % 41, 0, 5 + i / 41));
         BlockPos g = h.absolutePos(CENTER);
         Detonation d = new Detonation(IDS.incrementAndGet(), Vec3.atBottomCenterOf(g), g.getY(), 15, true,
-                level.getGameTime() - 2000, 0, 5, 20_000, 7, 0.1f, true, Detonation.OLD_WAVE);
+                level.getGameTime() - 2000 - FALLOUT_LANDED_TICKS, 0, 5, 20_000, 7, 0.1f, true, Detonation.OLD_WAVE);
         MobFallout fallout = new MobFallout();
         WorkClock clock = WorkClock.counting(1_000_000L);
-        // when the cow received a dose (tick and increase): the entire bypass is visible from two adjacent increases
+        // when the cow received a dose (its account's end, the pass snapshot, and the increase): a pass's dose covers the
+        // time between two adjacent accounts
         List<long[]> gains = new java.util.ArrayList<>();
         double[] last = {0};
         h.onEachTick(() -> {
             clock.start(1_000_000L); // one unit of work per tick
             fallout.work(level, List.of(d), clock);
             double dose = RadiationTicker.dose(grazing).doseGy();
-            if (dose > last[0]) gains.add(new long[]{level.getGameTime(), Double.doubleToLongBits(dose - last[0])});
+            if (dose > last[0]) gains.add(new long[]{grazing.getData(ModAttachments.NUKE_SEEN).falloutAt(), Double.doubleToLongBits(dose - last[0])});
             last[0] = dose;
         });
         h.succeedWhen(() -> {
@@ -2420,9 +2428,9 @@ public final class NuclearGameTests {
                 long t = gains.get(i)[0], ticks = t - gains.get(i - 1)[0];
                 h.assertTrue(ticks > 2 * MobFallout.PERIOD, "traversal shorter than two periods: " + ticks + " tick - check for nothing");
                 double gain = Double.longBitsToDouble(gains.get(i)[1]);
-                // the rate decays over a starved pass: its tick-by-tick sum, not the end rate times the pass
+                // tick-by-tick sum over the pass (the show: real time, a tick is 1/72000 h)
                 double roentgens = 0;
-                for (long k = t - ticks; k < t; k++) roentgens += d.falloutRateAt(grazing.getX(), grazing.getZ(), (k - d.gameTime()) / 20.0) / 1000.0;
+                for (long k = t - ticks; k < t; k++) roentgens += d.falloutRateAt(grazing.getX(), grazing.getZ(), (k - d.gameTime()) / 20.0) / 72_000.0;
                 double expected = roentgens * Shielding.fallout(level, RadiationTicker.middle(grazing)) * RadiationTicker.GY_PER_R;
                 h.assertTrue(Math.abs(gain / expected - 1) < 0.05, "per round " + ticks + " tick dose " + gain + " Gr, we were waiting " + expected);
             }
