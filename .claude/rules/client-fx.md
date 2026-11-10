@@ -14,7 +14,8 @@ paths:
   range × 0.125, `HandRenderer.DEPTH`), so the layer reads it as world 0.09–0.115 m away; vanilla draws it after the layer.
   The pall skips those pixels (`pallHand`, `PALL_HAND` 0.12 m in `pall.glsl`, `PallHandTest`): resolve writes them invalid
   (no history: reprojected as a world point 0.1 m off, the hand took dust from elsewhere and the interleaved partial clamp
-  held it — orange silhouette with a dot grid, trail when moving, 08.11), composite leaves them untouched (no dust, no shadow).
+  held it — orange silhouette with a dot grid, trail when moving, 08.11). Composite adds only fireball light admitted
+  by `flashOpening` of raw skylight at the eye (no dust or shadow); torches cannot admit it through a sealed roof.
 - `FxLayer.describeTiming` must remain a lightweight telemetry query. `SceneDepth.describe` reports the LOD source
   without reading textures; full-resolution depth coverage/readback is opt-in through `incoming.nukeDiag`.
   Polling the ordinary line with Voxy used to synchronize with the GPU and scan millions of floats, injecting
@@ -727,7 +728,12 @@ paths:
   and joins it with the rays beyond in linear light (`froxelOver`); layer quads read `fx_pall_mix` (volume plus rays per
   reduced pixel). Mushrooms (with the eye's optical depth through them, `mushEyeTau`), explosion smoke and fire whirls
   (`whirlCell`) nearer than the boundary are injected into the cells; the rays take them only from the boundary, so
-  near matter is ordered against near dust. The Wilson cloud stays in the rays. Emission past half-float range is
+  near matter is ordered against near dust. The Wilson cloud stays in the rays, and so does the dust-wall head: on each
+  ray the volume ends at the last slice boundary before the ray enters a slot's head span (`froxelEnd`, `pallWallSpans`)
+  and the rays begin there; the march, the composite (read-out and upsample correction) and `fx_pall_mix` take the same
+  boundary. The head is a roller a few dozen blocks thick moving with the wave: one point per cell averaged over frames
+  drew it as clumps with holes and stippled the ground dust right after the front (laptop check of 3.11.0, bisected to
+  #641), and the ground in front of the volume's boundary took a thinner head than behind it (a straight seam at 256). Emission past half-float range is
   clamped, not dropped (a hole). Same-frame checks (32-px checker tiles, history off): the volume over 0–256 equals the
   per-pixel ray over that span (up view red 100.8 vs 101.2); sequential shots drift with fires and history, so A/B only
   within one frame.
@@ -835,9 +841,11 @@ paths:
   surroundings' glow (`fireAround`) — all of the map's fire (its copy 1×1) as a source the size of a city, 1/r² from the
   epicentre, with the dust's phase and extinction by haze from the zone's edge: without it the dust around a burning
   city glowed at night only above the fire, and from 2 km the city stood as a dark mass behind a kilometre of unlit
-  dust. Smoke of the columns — in the same ray march of `fx_pall` (the storm frame `PallFireMin/Max`: there half the
-  steps); tornadoes (up to 4 in the frame, the near ones) — their own short march along the cylinder, merged into the
-  ray when the step reaches the entry. Flame on surfaces — in `fx_pall_composite` by the world's depth: not nearer than
+  dust. Smoke of the columns — in the same ray march of `fx_pall` (the storm frame `PallFireMin/Max`: its own grid up to
+  half the steps with the ordinary ones already there, on top of them like the head's segments; ordinary steps stay the same on every ray: taking
+  the frame's steps from the rest of the ray sampled the pall behind it coarser than beside it, and coarse steps pass more
+  light through clumped dust, so the frame stood far away as a lighter rectangle); tornadoes (up to 4 in the frame, the
+  near ones) — their own short march along the cylinder, merged into the ray when the step reaches the entry. Flame on surfaces — in `fx_pall_composite` by the world's depth: not nearer than
   `FireStorms.FLAME_NEAR` (it shows up to one and a half; there a spot of paint is visible, while real vanilla fire
   burns), not higher than Minecraft's clouds (`F[3].w`: clouds write depth, so without the cut-off the clouds "burned"),
   and beyond the edge of drawing without DH — on the terrain under the pall (`pallFloor`). The layer's quads take the

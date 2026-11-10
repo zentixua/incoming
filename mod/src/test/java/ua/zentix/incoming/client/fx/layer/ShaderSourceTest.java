@@ -174,6 +174,60 @@ class ShaderSourceTest {
     }
 
     /**
+     * The first-person hand under Iris gets no dust and no pall shadow, but a fireball lights it as it lights the world:
+     * skipped by the whole composite, it stayed dark in a world the night flash made bright (3.11.0 check, 09.11).
+     */
+    @Test
+    void fireballLightsTheHand() throws IOException, URISyntaxException {
+        Path core = Path.of(ShaderSourceTest.class.getResource("/assets/incoming/shaders/core").toURI());
+        String main = blankComments(body(Files.readString(core.resolve("fx_pall_composite.fsh")), "void main("));
+        int hand = main.indexOf("if (pallHand(depth))"), after = main.indexOf("return;", hand);
+        assertTrue(hand >= 0 && after > hand, "composite: no hand branch");
+        String branch = main.substring(hand, after);
+        assertTrue(branch.contains("ballLight("), "composite: the fireball does not light the hand");
+        assertFalse(branch.contains("froxelNear(") || branch.contains("upsample("), "composite: dust drawn over the hand");
+    }
+
+    /**
+     * The dust-wall head nearer than the near volume's far boundary is marched by the rays per pixel, not sampled by the
+     * volume's cells (one point per cell drew the moving roller as clumps with holes): every reader of the volume ends it
+     * where the rays begin, at froxelEnd, or near pall is counted twice or not at all.
+     */
+    @Test
+    void nearVolumeEndsBeforeTheHead() throws IOException, URISyntaxException {
+        Path include = Path.of(ShaderSourceTest.class.getResource("/assets/incoming/shaders/include").toURI());
+        Path core = include.resolveSibling("core");
+        assertTrue(blankComments(body(Files.readString(include.resolve("pall.glsl")), "float froxelEnd(")).contains("pallWallSpans("),
+                "froxelEnd: the volume does not end at the head");
+        String march = blankComments(body(Files.readString(include.resolve("fx_pall.glsl")), "void main("));
+        assertTrue(march.contains("nearT = froxelEnd(") && march.contains("t0 = max(t0, nearT)"), "fx_pall: rays do not begin at froxelEnd");
+        assertFalse(march.contains("PallFroxel.z / axis"), "fx_pall: a ray part begins at the volume's far boundary, not at froxelEnd");
+        String composite = blankComments(body(Files.readString(core.resolve("fx_pall_composite.fsh")), "void main("));
+        assertTrue(composite.contains("froxelEnd(") && composite.contains("min(depth, nearEnd)"), "composite: volume read past froxelEnd");
+        String upsample = blankComments(body(Files.readString(core.resolve("fx_pall_composite.fsh")), "vec4 upsample("));
+        assertFalse(upsample.contains("PallFroxel.z / axis"), "composite: upsample correction past froxelEnd");
+        String mix = blankComments(body(Files.readString(core.resolve("fx_pall_mix.fsh")), "void main("));
+        assertTrue(mix.contains("froxelEnd(") && mix.contains("min(depth, end)"), "fx_pall_mix: volume read past froxelEnd");
+    }
+
+    /**
+     * Ordinary ray steps have one layout on every ray; the storm frame adds a finer grid of its own on top of them. When a ray
+     * through the frame took its steps from the rest of the ray, the pall behind the frame was sampled coarser than beside
+     * it: coarse steps let more light through clumped dust, and from a hill the frame stood in the far pall as a lighter
+     * rectangle with straight edges (3.11.0 check, 08.11).
+     */
+    @Test
+    void stormFrameKeepsTheOrdinarySteps() throws IOException, URISyntaxException {
+        Path include = Path.of(ShaderSourceTest.class.getResource("/assets/incoming/shaders/include").toURI());
+        String pall = Files.readString(include.resolve("fx_pall.glsl"));
+        String along = blankComments(body(pall, "float along("));
+        assertTrue(pall.contains("float along(float u, float t0, float t1)"), "fx_pall: ordinary steps depend on the storm frame");
+        assertFalse(along.contains("PallFire"), "fx_pall: ordinary steps depend on the storm frame");
+        String march = blankComments(body(pall, "void main("));
+        assertTrue(march.contains("storm.x <= ta && ta < storm.y"), "fx_pall: the storm frame is not a fine interval");
+    }
+
+    /**
      * The mean mushroom depth behind a point (view ray beyond it, away from a high sun) samples four points over kilometers; on a
      * downward path the samples under the ground count nothing and drop under it one by one as the ray tilts, so the light of the
      * haze below a viewer stepped in rings around the nadir. The path ends where the matter does, just under the ground plane.

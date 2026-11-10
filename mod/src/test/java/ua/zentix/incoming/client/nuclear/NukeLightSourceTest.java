@@ -75,4 +75,22 @@ class NukeLightSourceTest {
         assertEquals(old, sealed);
         assertTrue(MushroomField.relit(0.8, 1, 0.3, f.call(Map.of("sky", 1.0))) > sealed);
     }
+
+    @Test
+    void firstPersonHandAdmitsOnlySkylight() throws IOException {
+        String composite = Files.readString(ROOT.resolve(SHADER + "core/fx_pall_composite.fsh"))
+                .replaceAll("(?s)/\\*.*?\\*/|//[^\\n]*", "");
+        int start = composite.indexOf("if (pallHand(depth))");
+        String hand = composite.substring(start, composite.indexOf("return;", start));
+        assertTrue(hand.contains("ballLight(p, n, pallOver(p)) * flashOpening(pallOpenHere(vec3(0.0)))"),
+                "hand must gate the actual added light with raw skylight at the eye");
+        assertTrue(hand.contains("fragColor = vec4(0.0, 0.0, 0.0, 1.0)"));
+        assertTrue(hand.contains("if (dot(added, LUMA) > 1e-6)"), "zero admitted light must leave the hand pixel intact");
+        assertFalse(hand.contains("pallSurfaceLevel(") || hand.contains("Sampler10"), "lamps cannot open the shelter");
+        GlslFunction opening = GlslFunction.parse(Files.readString(ROOT.resolve(SHADER + "include/pall.glsl")), "flashOpening");
+        double light = 1000;
+        // Sealed and torch-lit rooms both have raw skylight zero; the branch above cannot substitute lamp light.
+        assertEquals(0, light * opening.call(Map.of("sky", 0.0)));
+        assertEquals(light, light * opening.call(Map.of("sky", 1.0)), "open sky preserves the existing hand light");
+    }
 }

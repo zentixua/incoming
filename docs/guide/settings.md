@@ -32,10 +32,14 @@ regular Use Item key (RMB and Shift+RMB).
 
 ## World settings
 
-The world owner changes these: in single-player in `saves/<world>/serverconfig/incoming-server.toml`; on a dedicated
-server in `<level-name>/serverconfig/incoming-server.toml`, relative to the server folder (`level-name` is in
-`server.properties`, usually `world`). Start the world once to create the file. Stop it, edit the file, then restart
-to apply the settings. The most useful ones are below; the rest are in the same file, each with a comment.
+The owner edits `config/incoming-server.toml`: under the game folder in single-player (the instance's `minecraft`
+folder in Prism), or under the server folder on a dedicated server.
+Start the world/server once to create it. NeoForge uses a world override instead if it already exists at startup:
+`saves/<world>/serverconfig/incoming-server.toml` (single-player) or
+`<level-name>/serverconfig/incoming-server.toml` (dedicated; `level-name` is in `server.properties`, usually `world`).
+
+Edits to the active file reload automatically unless NeoForge's config watcher is disabled; then restart the
+world/server. The most useful settings are below; the rest are in the same file, each with a comment.
 
 | Key | Default | What it does |
 |---|---|---|

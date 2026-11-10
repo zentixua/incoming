@@ -876,6 +876,15 @@ public final class PallPass {
         RenderSystem.setShaderTexture(2, VOLUME[2]);
         mx.safeGetUniform("PallFrame").set(0f, 0f, factor, 0f);
         mx.safeGetUniform("PallFroxel").set(f.quality.tile, VOLUME_NEAR, VOLUME_FAR, 0f);
+        // where the near volume ends on each ray (froxelEnd: before a dust-wall head the rays take over)
+        mx.safeGetUniform("InvViewProj").set(INVERSE);
+        mx.safeGetUniform("PallForward").set(FORWARD.x, FORWARD.y, FORWARD.z);
+        mx.safeGetUniform("PallSlot0").set(f.slot0);
+        mx.safeGetUniform("PallSlot1").set(f.slot1);
+        mx.safeGetUniform("PallWall0").set(f.wall0);
+        mx.safeGetUniform("PallWall1").set(f.wall1);
+        mx.safeGetUniform("PallGround0").set(groundSlot0.x, groundSlot0.y, groundSlot0.z, groundSlot0.w);
+        mx.safeGetUniform("PallGround1").set(groundSlot1.x, groundSlot1.y, groundSlot1.z, groundSlot1.w);
         quad(mx, false);
         stamp(timing, 5);
 

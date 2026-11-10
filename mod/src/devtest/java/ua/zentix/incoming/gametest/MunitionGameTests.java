@@ -319,6 +319,27 @@ public final class MunitionGameTests {
         h.succeed();
     }
 
+    /** A pending pad-launched ICBM remains nuclear for both ordinary abort and the refund path. */
+    @GameTest(template = "range", batch = "munitions_icbm_place", skyAccess = true)
+    public static void icbmWaitingForPlaceRequiresNuclearAbort(GameTestHelper h) {
+        ServerLevel level = h.getLevel();
+        Listener p = new Listener(level, "icbm_place", 2);
+        p.moveTo(Vec3.atBottomCenterOf(h.absolutePos(RANGE_CENTER.above())));
+        StrikeGameTests.afterTest(h, () -> SalvoData.get(level).cancel(level, p.getUUID(), List.of()));
+        Item icbm = ModItems.ICBM.get();
+        give(p, icbm, 1);
+        LaunchOrigin far = new LaunchOrigin.Place(p.position().add(-20_000, 0, 0));
+        h.assertTrue(LaunchPlaces.waits(level, WeaponType.NUKE, far), "fixture launch site is already ready");
+        h.assertTrue(ServerActions.strike(p, WeaponType.NUKE, 1, 0, aim(h), Loadout.Nuke.DEFAULT, Waypoints.NONE, far, true), "ICBM order failed");
+        h.assertValueEqual(held(p, icbm), 0, "ICBM not paid");
+        h.assertValueEqual(SalvoData.get(level).remaining(p.getUUID()), 1, "ICBM did not wait for the pad");
+        h.assertValueEqual(SalvoData.get(level).cancel(level, p.getUUID(), List.of(p), false), 0, "ordinary abort removed a pending ICBM");
+        h.assertValueEqual(SalvoData.get(level).remaining(p.getUUID()), 1, "ordinary abort changed the ICBM order");
+        h.assertValueEqual(SalvoData.get(level).cancel(level, p.getUUID(), List.of(p), true), 1, "nuclear abort did not remove the ICBM");
+        h.assertValueEqual(held(p, icbm), 1, "nuclear abort did not refund exactly one ICBM");
+        h.succeed();
+    }
+
     /**
      * Ammo recipes are loaded - one per item: with Create - with its exact mechanism and screw, without it -
      *  vanilla replacement (conditions NeoForge {@code neoforge:mod_loaded}); each one is assembled from its own ingredients on a workbench.
