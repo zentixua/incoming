@@ -228,7 +228,7 @@ Notation: `Y` yield, kt; `R` slant range from explosion center, m (= blocks); `H
   Glasstone/Dolan “red or reddish-brown” cloud is transmission/cooling-sphere glow. Thick-layer reflectance uses
   hemispheric-mean two-stream (R∞ 0–1), not Eddington, whose R∞ < 0 under strong absorption.
 - Cap is toroidal vortex: surface billows rotate poloidally (up inside, outward over top, down outside;
-  Glasstone/Dolan 2.20), the mushroom's “boiling”
+  Glasstone/Dolan 2.20), the mushroom's “boiling”.
   Rolled underside: the air jet that pierces the bubble from below (Walters and Davidson 1963) leaves a hollow under the
   ring, the rim hangs lowest and curls inward over it (`mushRingDist`: the jet's ellipse taken out of the lower ring
   section, lip tip at 0.61 of the section outward and 0.79 down, a quarter of the ring's volume (est.), growing over

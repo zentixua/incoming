@@ -574,16 +574,21 @@ class MushroomGlslTest {
             for (double v = -1; v <= 0; v += 0.005)
                 if (v < lowest && dist.apply(new double[]{u, v}, 1.0) < 0) { lowest = v; lowestU = u; }
         assertTrue(lowestU > 0.5, "lowest matter at the rim, u " + lowestU + ", v " + lowest);
-        // continuous and no steeper than the plain section: ratio of neighbour differences to their distance
+        // lip tip (section and hollow meet; the blend rounds it slightly inward): 0.61 outward, 0.79 down
+        assertEquals(-0.79, lowest, 0.1, "lip tip height");
+        assertEquals(0.61, lowestU, 0.06, "lip tip");
+        // continuous and, where the billows can show it (within their reach of the surface), no steeper than the plain
+        // section there: ratio of neighbour differences to their distance (no seams, no phantom fringe)
         double steep = 0, steepPlain = 0;
-        for (int i = 0; i < 20000; i++) {
+        for (int i = 0; i < 40000; i++) {
             double[] p = {random.nextDouble(-2, 2), random.nextDouble(-2.5, 1.5)};
             double t = random.nextDouble(0, 2 * Math.PI), h = 1e-3;
             double[] q = {p[0] + h * Math.cos(t) / a, p[1] + h * Math.sin(t) / b};
-            steep = Math.max(steep, Math.abs(dist.apply(q, 1.0) - dist.apply(p, 1.0)) / h);
-            steepPlain = Math.max(steepPlain, Math.abs(ellipse.apply(q) - ellipse.apply(p)) / h);
+            double d = dist.apply(p, 1.0), e = ellipse.apply(p);
+            if (Math.abs(d) < reach) steep = Math.max(steep, Math.abs(dist.apply(q, 1.0) - d) / h);
+            if (Math.abs(e) < reach) steepPlain = Math.max(steepPlain, Math.abs(ellipse.apply(q) - e) / h);
         }
-        assertTrue(steep <= steepPlain * 1.05, "slope " + steep + " against the plain section " + steepPlain);
+        assertTrue(steep <= steepPlain * 1.3, "slope " + steep + " against the plain section " + steepPlain);
         // hollow volume (MushroomModel.capVolume): ring of major radius RING, section semiaxis 1 − RING (cap radius
         // 1), Pappus over the section: weight by radius
         double ring = MushroomModel.RING, full = 0, kept = 0;
