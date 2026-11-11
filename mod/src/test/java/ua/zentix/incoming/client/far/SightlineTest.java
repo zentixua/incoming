@@ -79,4 +79,11 @@ class SightlineTest {
         Sightline.Heights h = (x, z) -> x < 4 ? 70 : x >= 2_000 ? 90 : 64;
         assertEquals(2_000, Sightline.ground(h, 0.5, 65, 0.5, 1, 0, 0, 0, 20_000), 2, "not the roof over the player's head");
     }
+
+    @Test
+    void groundTakesACliffRightWhereTheBlockPickStopped() {
+        // the block pick saw clear air up to 256; a mountain face rises there above the ray
+        Sightline.Heights h = (x, z) -> x >= 256 ? 200 : 64;
+        assertEquals(256, Sightline.ground(h, 0.5, 100, 0.5, 1, 0, 0, 256, 20_000), 1);
+    }
 }
