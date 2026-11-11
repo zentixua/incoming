@@ -539,4 +539,41 @@ class MushroomGlslTest {
             assertEquals(FireballModel.unmasked(t, 15), f.call(Map.of("f", out[0])), 1e-9, "t = " + t);
         }
     }
+
+    /**
+     * Cap-edge roll ({@code mushRollU}): the rim and the upper half of the ring section never move, the bottom keeps only
+     * the outer 1/(1 + k) of the section, and rolled matter stays inside the section's lower box (u, v in [-1, 1] x [-1, 0]),
+     * which {@code mushGap} uses as its conservative bound below the section centre.
+     */
+    @Test
+    void capRollKeepsRimAndBounds() {
+        GlslFunction roll = GlslFunction.parse(GLSL, "mushRollU");
+        double k = constants().get("MUSH_CURL");
+        for (double v = -1; v <= 1; v += 0.05) {
+            assertEquals(1, roll.call(Map.of("u", 1.0, "v", v, "k", k)), 1e-12, "rim at v " + v);
+            for (double u = -1; u <= 1; u += 0.05) {
+                double shown = roll.call(Map.of("u", u, "v", v, "k", k));
+                if (v >= 0) assertEquals(u, shown, 1e-12, "upper half u " + u + ", v " + v);
+                assertEquals(u, roll.call(Map.of("u", u, "v", v, "k", 0.0)), 1e-12, "no roll u " + u + ", v " + v);
+                assertTrue(shown <= u + 1e-12, "matter only moves toward the rim, u " + u + ", v " + v);
+            }
+        }
+        // bottom of the section: matter (|u'| <= 0) only from u = 1 - 1/(1 + k)
+        assertEquals(1 - 1 / (1 + k), solveU(roll, -1, k, 0), 1e-9);
+        // rolled matter inside the lower box: u' >= -sqrt(1 - v^2) only where u >= -1
+        for (double v = -1; v <= 0; v += 0.01) {
+            double inner = solveU(roll, v, k, -Math.sqrt(1 - v * v));
+            assertTrue(inner >= -1 - 1e-9, "inner edge " + inner + " at v " + v);
+        }
+    }
+
+    /** u where the rolled section shows section position {@code target} at height v (mushRollU rises monotonically in u). */
+    private static double solveU(GlslFunction roll, double v, double k, double target) {
+        double lo = -3, hi = 1;
+        for (int i = 0; i < 80; i++) {
+            double mid = 0.5 * (lo + hi);
+            if (roll.call(Map.of("u", mid, "v", v, "k", k)) < target) lo = mid; else hi = mid;
+        }
+        return 0.5 * (lo + hi);
+    }
 }

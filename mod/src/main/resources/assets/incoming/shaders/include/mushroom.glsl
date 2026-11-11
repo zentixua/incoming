@@ -402,12 +402,49 @@ float mushStemDist(float radial, float h, float top) {
     return max(radial, h - top);
 }
 
+// Cap-edge roll (vortex-ring rollup, Turner 1957): the rising cap is a vortex ring whose matter turns about the
+// ring's core, outward over the top and down and back in underneath, so the underside of the rim curls inward
+// toward the edge. Lower half of the ring section squeezed toward the rim, u' = 1 - (1 - u)(1 + k v^2) (u, v in
+// semiaxes from the section centre): the rim (u = 1) and the upper half never move, so cap radius, top and bounds
+// stay the model's; at the bottom only the outer 1/(1 + k) of the section remains (k = 6: the outer seventh), a lip
+// hanging under the rim with the hollow of the ring's underside inside it. The fold grows with the churn clock
+// (e-fold pi rad: half a turn of the section) once the ball has rolled into a ring (ringR / (MUSH_RING capR)). (est.)
+const float MUSH_CURL = 6.0;
+
+float mushCurl(Mush m) {
+    float roll = clamp(m.ringR / max(MUSH_RING * m.capR, 1.0), 0.0, 1.0);
+    return MUSH_CURL * roll * (1.0 - exp(-max(m.churn, 0.0) / 3.14159265));
+}
+
+// Section position u' (semiaxes) whose matter the rolled section shows at u, height v: lower half squeezed toward
+// the rim (u = 1 fixed), upper half and beyond the rim unchanged
+float mushRollU(float u, float v, float k) {
+    float w = clamp(v, -1.0, 0.0);
+    if (u >= 1.0) return u;
+    return 1.0 - (1.0 - u) * (1.0 + k * w * w);
+}
+
+// Signed distance to the rolled ring section (x from ring axis outward, y from section centre, blocks): ellipse
+// distance at the squeezed position, divided by the squeeze's stretch of its gradient
+float mushRingDist(float x, float y, float a, float b, float k) {
+    float u = x / max(a, 1e-3), v = y / max(b, 1e-3), w = clamp(v, -1.0, 0.0);
+    if (u >= 1.0 || w >= 0.0 || k <= 0.0) return mushEllipseDist(x, y, a, b);
+    float g = 1.0 + k * w * w, xs = a * mushRollU(u, v, k);
+    float d = mushEllipseDist(xs, y, a, b);
+    vec2 n = vec2(xs / max(a * a, 1e-6), y / max(b * b, 1e-6));
+    float len = length(n);
+    if (len < 1e-9) return d;
+    n /= len;
+    float dy = v > -1.0 ? -(1.0 - u) * 2.0 * k * w * a / max(b, 1e-3) : 0.0;
+    return d / max(length(vec2(n.x * g, n.x * dy + n.y)), 1e-3);
+}
+
 // Signed unbillowed cap/stem/skirt/water-column edge distances at body q, blocks (stem bottom from mushStemSigma;
 // absent column far away): column wall/crown one surface;
 // crown ring with elliptical section centered on wall center (WaterModel.Column)
 vec4 mushDist(Mush m, vec3 q) {
     float rho = length(q.xz);
-    float ring = mushEllipseDist(rho - m.ringR, q.y - m.capY, m.ringA, m.ringB);
+    float ring = mushRingDist(rho - m.ringR, q.y - m.capY, m.ringA, m.ringB, mushCurl(m));
     float dome = mushEllipseDist(rho, q.y - m.domeY, m.domeR, m.domeH);
     float column = 1e9;
     if (m.colSigma > 0.0) {
@@ -486,7 +523,10 @@ float mushGap(Mush m, vec3 q) {
     float rho = length(q.xz);
     float gap = 1e9;
     if (m.capSigma > 0.0) {
+        // upper half: the ellipse; lower half (rolled, mushRingDist): its box, the squeezed section stays inside it
         float ring = (mushRing(rho, q.y - m.capY, m.ringR, m.ringA, m.ringB) - 1.0) * min(m.ringA, m.ringB);
+        if (q.y < m.capY && mushCurl(m) > 0.0)
+            ring = max(abs(rho - m.ringR) - m.ringA, m.capY - q.y - m.ringB);
         float dome = (mushEllipse(rho, q.y - m.domeY, m.domeR, m.domeH) - 1.0) * min(m.domeR, m.domeH);
         gap = min(ring, dome) - MUSH_CAP_REACH * mushCapUnit(m);
     }
