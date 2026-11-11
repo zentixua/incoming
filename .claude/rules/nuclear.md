@@ -51,9 +51,9 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   follows Stefan–Boltzmann from luminosity and radius until the second maximum (double flash; for 15 kt, minimum at
   ~10 ms, shorter than a frame, under white screen), then cooling toward air (`FireballModel.temperature`, chronology
   keys); rolling edge mixes with air (`MushroomModel.edgeShare`: sphere 1, ring `EDGE_HEAT`) and billows grow (`billows`:
-  sphere almost smooth); ring section's lower half rolls toward the rim with the churn clock, a lip over a hollow underside:
-  `mushRingDist`/`mushRollU`, `MUSH_CURL`; `mushGap` bounds the lower half by its box, the rolled section leaves the ellipse
-  outward, `MushroomGlslTest.capRollKeepsRimAndBounds`). Fireball surface temperature variation is baked (`client/nuclear/NukeBallSurface`,
+  sphere almost smooth); the jet's hollow grows under the ring section with the churn clock, leaving a lip at the rim: `mushRingDist`
+  subtracts the `MUSH_HOLLOW_*` ellipse with a smooth maximum, only removing matter, so `mushGap`'s ellipse bound holds,
+  `MushroomGlslTest.capRollKeepsRimAndBounds`). Fireball surface temperature variation is baked (`client/nuclear/NukeBallSurface`,
   `textures/fx/nukeball.bin`, `tools/bake_fx`: Blender Mantaflow hot-gas bubble with charge-vapor clumps rises and mixes
   with air; pattern is brightness temperature along radius from outside, octahedral direction map from cap center,
   mean p⁴ = 1, power from model): absent before luminosity minimum (surface is the smooth shock front, G&D 2.117–2.119),

@@ -541,54 +541,60 @@ class MushroomGlslTest {
     }
 
     /**
-     * Cap-edge roll ({@code mushRollU}): the rim and the upper half of the ring section never move, the bottom keeps only
-     * the outer 1/(1 + k) of the section, and rolled matter stays inside the section's lower box (u, v in [-1, 1] x [-1, 0]),
-     * which {@code mushGap} uses as its conservative bound below the section centre.
+     * Cap-edge roll ({@code mushRingDist}): the jet's hollow only removes matter, so the section's ellipse (the bound of
+     * {@code mushGap}) still holds; rim and top unchanged, the lowest matter is the lip at the rim, the hollow appears
+     * continuously and the distance is no steeper than the plain section's (no seams, no phantom fringe), and the hollow
+     * takes a quarter of the ring's volume ({@code MushroomModel.capVolume}).
      */
     @Test
     void capRollKeepsRimAndBounds() {
-        GlslFunction roll = GlslFunction.parse(GLSL, "mushRollU");
-        double k = constants().get("MUSH_CURL");
-        for (double v = -1; v <= 1; v += 0.05) {
-            assertEquals(1, roll.call(Map.of("u", 1.0, "v", v, "k", k)), 1e-12, "rim at v " + v);
-            for (double u = -1; u <= 1; u += 0.05) {
-                double shown = roll.call(Map.of("u", u, "v", v, "k", k));
-                if (v >= 0) assertEquals(u, shown, 1e-12, "upper half u " + u + ", v " + v);
-                assertEquals(u, roll.call(Map.of("u", u, "v", v, "k", 0.0)), 1e-12, "no roll u " + u + ", v " + v);
-                assertTrue(shown <= u + 1e-12, "matter only moves toward the rim, u " + u + ", v " + v);
+        GlslFunction rolled = GlslFunction.parse(GLSL, "mushRingDist"), plain = GlslFunction.parse(GLSL, "mushEllipseDist");
+        double a = 45, b = 30;
+        java.util.function.BiFunction<double[], Double, Double> dist = (p, f) ->
+                rolled.call(Map.of("x", p[0] * a, "y", p[1] * b, "a", a, "b", b, "f", f));
+        java.util.function.Function<double[], Double> ellipse = p ->
+                plain.call(Map.of("x", p[0] * a, "y", p[1] * b, "rx", a, "ry", b));
+        double blend = constants().get("MUSH_BLEND") * Math.min(a, b), reach = constants().get("MUSH_CAP_REACH") * Math.min(a, b);
+        java.util.Random random = new java.util.Random(7);
+        for (int i = 0; i < 4000; i++) {
+            double[] p = {random.nextDouble(-2, 2), random.nextDouble(-2.5, 1.5)};
+            double e = ellipse.apply(p);
+            assertEquals(e, dist.apply(p, 0.0), 1e-12, "no fold");
+            for (double f : new double[]{1e-6, 0.3, 1}) assertTrue(dist.apply(p, f) >= e - 1e-9, "only loses matter, mushGap bound");
+            // outer surface (rim and top) within the cap blend width; the inner side rounds into the jet's hollow
+            if ((p[1] >= 0 && p[0] >= 0 || p[1] >= 0.5) && e > -blend) assertEquals(e, dist.apply(p, 1.0), 1e-9, "rim and top unchanged");
+            // deeper than the billows reach the density is full either way (and the ellipse distance is clamped)
+            if (e > -reach) assertEquals(e, dist.apply(p, 1e-6), 1e-3, "hollow appears continuously");
+        }
+        // hollow under the ring, lip at the rim
+        assertTrue(ellipse.apply(new double[]{0, -0.6}) < 0 && dist.apply(new double[]{0, -0.6}, 1.0) > 0, "hollow");
+        assertTrue(dist.apply(new double[]{0.85, -0.3}, 1.0) < 0, "lip");
+        double lowest = 1, lowestU = 0;
+        for (double u = -1; u <= 1; u += 0.005)
+            for (double v = -1; v <= 0; v += 0.005)
+                if (v < lowest && dist.apply(new double[]{u, v}, 1.0) < 0) { lowest = v; lowestU = u; }
+        assertTrue(lowestU > 0.5, "lowest matter at the rim, u " + lowestU + ", v " + lowest);
+        // continuous and no steeper than the plain section: ratio of neighbour differences to their distance
+        double steep = 0, steepPlain = 0;
+        for (int i = 0; i < 20000; i++) {
+            double[] p = {random.nextDouble(-2, 2), random.nextDouble(-2.5, 1.5)};
+            double t = random.nextDouble(0, 2 * Math.PI), h = 1e-3;
+            double[] q = {p[0] + h * Math.cos(t) / a, p[1] + h * Math.sin(t) / b};
+            steep = Math.max(steep, Math.abs(dist.apply(q, 1.0) - dist.apply(p, 1.0)) / h);
+            steepPlain = Math.max(steepPlain, Math.abs(ellipse.apply(q) - ellipse.apply(p)) / h);
+        }
+        assertTrue(steep <= steepPlain * 1.05, "slope " + steep + " against the plain section " + steepPlain);
+        // hollow volume (MushroomModel.capVolume): ring of major radius RING, section semiaxis 1 − RING (cap radius
+        // 1), Pappus over the section: weight by radius
+        double ring = MushroomModel.RING, full = 0, kept = 0;
+        int n = 160;
+        for (int i = 0; i < n; i++)
+            for (int j = 0; j < n; j++) {
+                double[] p = {-1 + (i + 0.5) * 2 / n, -1 + (j + 0.5) * 2 / n};
+                double rho = ring + (1 - ring) * p[0];
+                if (ellipse.apply(p) < 0) full += rho;
+                if (dist.apply(p, 1.0) < 0) kept += rho;
             }
-        }
-        // bottom of the section: matter (|u'| <= 0) only from u = 1 - 1/(1 + k)
-        assertEquals(1 - 1 / (1 + k), solveU(roll, -1, k, 0), 1e-9);
-        // rolled matter inside the lower box: u' >= -sqrt(1 - v^2) only where u >= -1
-        for (double v = -1; v <= 0; v += 0.01) {
-            double inner = solveU(roll, v, k, -Math.sqrt(1 - v * v));
-            assertTrue(inner >= -1 - 1e-9, "inner edge " + inner + " at v " + v);
-        }
-        // hollow under the ring (MushroomModel.capVolume): ring of major radius RING, section semiaxis 1 − RING (cap
-        // radius 1), Pappus over section strips; the rolled section keeps 69 % of the volume
-        double ring = MushroomModel.RING, a = 1 - ring, full = 0, rolled = 0;
-        int n = 2000;
-        for (int i = 0; i < n; i++) {
-            double v = -1 + (i + 0.5) / n, s = Math.sqrt(1 - v * v);
-            full += strip(ring, a, -s, s) / n;
-            rolled += strip(ring, a, solveU(roll, v, k, -s), solveU(roll, v, k, s)) / n;
-        }
-        assertEquals(0.31, 1 - rolled / full, 0.01, "hollow share of the ring volume");
-    }
-
-    /** Volume of a ring strip between section positions lo..hi (semiaxes), per unit height: 2π·∫ρ dx. */
-    private static double strip(double ring, double a, double lo, double hi) {
-        return 2 * Math.PI * a * (ring * (hi - lo) + a * (hi * hi - lo * lo) / 2);
-    }
-
-    /** u where the rolled section shows section position {@code target} at height v (mushRollU rises monotonically in u). */
-    private static double solveU(GlslFunction roll, double v, double k, double target) {
-        double lo = -3, hi = 1;
-        for (int i = 0; i < 80; i++) {
-            double mid = 0.5 * (lo + hi);
-            if (roll.call(Map.of("u", mid, "v", v, "k", k)) < target) lo = mid; else hi = mid;
-        }
-        return 0.5 * (lo + hi);
+        assertEquals(0.25, 1 - kept / full, 0.02, "hollow share of the ring volume");
     }
 }

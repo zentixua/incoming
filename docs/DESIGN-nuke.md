@@ -230,9 +230,9 @@ Notation: `Y` yield, kt; `R` slant range from explosion center, m (= blocks); `H
 - Cap is toroidal vortex: surface billows rotate poloidally (up inside, outward over top, down outside;
   Glasstone/Dolan 2.20), the mushroom's “boiling”
   Rolled underside: the air jet that pierces the bubble from below (Walters and Davidson 1963) leaves a hollow under the
-  ring, the rim hangs lowest and curls inward over it (`mushRingDist`: lower half of the ring section squeezed toward
-  the rim, outer seventh at the bottom (est.), growing over half a section turn of the churn clock); cap radius, top,
-  bounds and rotation speed unchanged.
+  ring, the rim hangs lowest and curls inward over it (`mushRingDist`: the jet's ellipse taken out of the lower ring
+  section, lip tip at 0.61 of the section outward and 0.79 down, a quarter of the ring's volume (est.), growing over
+  half a section turn of the churn clock); cap radius, top, bounds and rotation speed unchanged.
 - **Wilson cloud** (condensation ring/dome) first 1–3 s in humid air (biome `downfall`, always over water); hidden in
   deserts.
 - **Dust skirt:** ground lofts dust where pressure > ~3 psi, ring follows front, drawn into stem.
