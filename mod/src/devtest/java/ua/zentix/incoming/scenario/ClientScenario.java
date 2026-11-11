@@ -800,18 +800,21 @@ public final class ClientScenario {
             });
             return;
         }
-        at(20, () -> mushroomYaw = landYaw(10000));
+        // INCOMING_MUSHROOM_M: distance to ground zero, blocks; INCOMING_KT: yield (closer and bigger caps for the cap roll)
+        int far = Integer.parseInt(System.getenv().getOrDefault("INCOMING_MUSHROOM_M", "10000"));
+        String kt = System.getenv().getOrDefault("INCOMING_KT", "15");
+        at(20, () -> mushroomYaw = landYaw(far));
         at(40, () -> {
             String q = System.getenv().getOrDefault("INCOMING_PALL", "MEDIUM");
             ua.zentix.incoming.IncomingConfig.CLIENT.nukeDustQuality.set(ua.zentix.incoming.IncomingConfig.Client.DustQuality.valueOf(q));
             cmd(night ? "time set 18000" : "time set 1500");
             cmd("weather clear");
-            cmd("tp @s 0.5 270 0.5 " + mushroomYaw + " -14");
+            cmd("tp @s 0.5 270 0.5 " + mushroomYaw + " " + System.getenv().getOrDefault("INCOMING_MUSHROOM_PITCH", "-14"));
             hover = true;
         });
         at(400, () -> {
-            double x = 0.5 - 10000 * Math.sin(Math.toRadians(mushroomYaw)), z = 0.5 + 10000 * Math.cos(Math.toRadians(mushroomYaw));
-            cmd(String.format(java.util.Locale.ROOT, "incoming nuke now at %.1f 320 %.1f 15 ground", x, z));
+            double x = 0.5 - far * Math.sin(Math.toRadians(mushroomYaw)), z = 0.5 + far * Math.cos(Math.toRadians(mushroomYaw));
+            cmd(String.format(java.util.Locale.ROOT, "incoming nuke now at %.1f 320 %.1f %s ground", x, z, kt));
         });
     }
 
@@ -976,8 +979,11 @@ public final class ClientScenario {
             });
             return;
         }
-        for (int s : new int[]{2, 5, 10, 20, 22, 40, 70, 72, 120, 240}) pallShot(tick + 20 * s, "mushroom_" + s + "s");
-        at(tick + 20 * 240 + 20, () -> {
+        // INCOMING_MUSHROOM_AT: frame seconds (comma-separated) instead of the default series
+        int[] at = java.util.Arrays.stream(System.getenv().getOrDefault("INCOMING_MUSHROOM_AT", "2,5,10,20,22,40,70,72,120,240")
+                .split(",")).mapToInt(Integer::parseInt).toArray();
+        for (int s : at) pallShot(tick + 20 * s, "mushroom_" + s + "s");
+        at(tick + 20 * java.util.Arrays.stream(at).max().orElse(0) + 20, () -> {
             Incoming.LOG.info("SCENARIO done");
             Minecraft.getInstance().stop();
         });
