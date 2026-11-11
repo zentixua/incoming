@@ -565,6 +565,21 @@ class MushroomGlslTest {
             double inner = solveU(roll, v, k, -Math.sqrt(1 - v * v));
             assertTrue(inner >= -1 - 1e-9, "inner edge " + inner + " at v " + v);
         }
+        // hollow under the ring (MushroomModel.capVolume): ring of major radius RING, section semiaxis 1 − RING (cap
+        // radius 1), Pappus over section strips; the rolled section keeps 69 % of the volume
+        double ring = MushroomModel.RING, a = 1 - ring, full = 0, rolled = 0;
+        int n = 2000;
+        for (int i = 0; i < n; i++) {
+            double v = -1 + (i + 0.5) / n, s = Math.sqrt(1 - v * v);
+            full += strip(ring, a, -s, s) / n;
+            rolled += strip(ring, a, solveU(roll, v, k, -s), solveU(roll, v, k, s)) / n;
+        }
+        assertEquals(0.31, 1 - rolled / full, 0.01, "hollow share of the ring volume");
+    }
+
+    /** Volume of a ring strip between section positions lo..hi (semiaxes), per unit height: 2π·∫ρ dx. */
+    private static double strip(double ring, double a, double lo, double hi) {
+        return 2 * Math.PI * a * (ring * (hi - lo) + a * (hi * hi - lo * lo) / 2);
     }
 
     /** u where the rolled section shows section position {@code target} at height v (mushRollU rises monotonically in u). */

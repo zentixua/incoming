@@ -402,13 +402,18 @@ float mushStemDist(float radial, float h, float top) {
     return max(radial, h - top);
 }
 
-// Cap-edge roll (vortex-ring rollup, Turner 1957): the rising cap is a vortex ring whose matter turns about the
-// ring's core, outward over the top and down and back in underneath, so the underside of the rim curls inward
-// toward the edge. Lower half of the ring section squeezed toward the rim, u' = 1 - (1 - u)(1 + k v^2) (u, v in
-// semiaxes from the section centre): the rim (u = 1) and the upper half never move, so cap radius, top and bounds
-// stay the model's; at the bottom only the outer 1/(1 + k) of the section remains (k = 6: the outer seventh), a lip
-// hanging under the rim with the hollow of the ring's underside inside it. The fold grows with the churn clock
-// (e-fold pi rad: half a turn of the section) once the ball has rolled into a ring (ringR / (MUSH_RING capR)). (est.)
+// Cap-edge roll: a buoyant bubble becomes a vortex ring because ambient air drawn up beneath it pierces its
+// underside as a jet and rises through it (Walters and Davidson 1963, JFM 17, 321: spherical-cap bubble to toroid;
+// Turner 1957, buoyant vortex rings). Cap matter then turns about the ring core: up inside, outward over the top,
+// down the outside and back inward underneath, so the rim hangs lowest and its underside curls in toward the stem
+// over a hollow (Scorer 1957: thermal underside drawn up). Lower half of the ring section squeezed toward the rim,
+// u' = 1 - (1 - u)(1 + k v^2) (u, v in semiaxes from the section centre): the rim (u = 1) and the upper half never
+// move, so cap radius, top and bounds stay the model's; at the bottom only the outer 1/(1 + k) of the section remains,
+// a lip under the rim with the hollow inside it. The fold grows with the churn clock (e-fold pi rad: half a turn of the
+// section, the time for the rolled sheet to reach the underside) once the ball has rolled into a ring
+// (ringR / (MUSH_RING capR)). k = 6 (est.): no measured lip widths; the outer seventh of the section keeps a lip as
+// wide as the billows over it (MUSH_CAP_LOBES 0.4 of the smaller semiaxis), and the hollow takes 31 % of the ring's
+// volume (MushroomModel.capVolume).
 const float MUSH_CURL = 6.0;
 
 float mushCurl(Mush m) {
