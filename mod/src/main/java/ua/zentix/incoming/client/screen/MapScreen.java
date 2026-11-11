@@ -16,6 +16,8 @@ import net.neoforged.neoforge.network.PacketDistributor;
 import org.jetbrains.annotations.Nullable;
 import org.lwjgl.glfw.GLFW;
 import ua.zentix.incoming.Incoming;
+import ua.zentix.incoming.client.nuclear.ClientNuclear;
+import ua.zentix.incoming.nuclear.Detonation;
 import ua.zentix.incoming.IncomingConfig;
 import ua.zentix.incoming.nuclear.model.ImpactPreview;
 import ua.zentix.incoming.util.Visibility;
@@ -87,6 +89,8 @@ public class MapScreen extends Screen {
     private static final int FRIEND = 0xFF60FF80, HOSTILE = 0xFFFF6040;
     /** Launch site: distinct from all map symbols (players cyan, friendlies green, projectiles yellow, target red). */
     private static final int LAUNCH = 0xFFC080FF;
+    /** Shock front of a live detonation ({@link #drawFronts}). */
+    private static final int FRONT = 0xFFF4F4F4;
 
     /** Map view retained between openings while player stays in same world and dimension. */
     private static double viewX, viewZ, scale = 1;
@@ -580,6 +584,8 @@ public class MapScreen extends Screen {
             }
         }
 
+        drawFronts(g, map, partialTick);
+
         // Projectiles use server telemetry (including outside loaded world): dashed path to target, reticle at target;
         // beyond map edge, arrow at edge pointing toward them.
         for (ClientFlights.Tracked f : ClientFlights.all()) {
@@ -644,6 +650,22 @@ public class MapScreen extends Screen {
         HudDraw.heading(g, op[0], op[1], p.getViewYRot(partialTick), OPERATOR);
         label(g, Component.translatable("incoming.map.you"), op[0], op[1] + 10, OPERATOR);
         g.disableScissor();
+    }
+
+    /**
+     * Shock fronts of this dimension's detonations: a ring where the in-game front meets the ground now
+     * ({@link Detonation#groundFront}, the same front that brings dust wall, hit and ruins), from when it touches the
+     * ground until it no longer hits; distance from epicenter on its label.
+     */
+    private void drawFronts(GuiGraphics g, MapProjection map, float partialTick) {
+        for (ClientNuclear.Active a : ClientNuclear.detonations()) {
+            double ground = a.d.groundFront(a.ticks(partialTick));
+            if (Double.isNaN(ground)) continue;
+            int[] c = map.at(a.d.burst().x, a.d.burst().z);
+            float r = (float) (ground * scale);
+            HudDraw.ring(g, c[0], c[1], r, 2, FRONT);
+            if (r > 14) label(g, Component.translatable("incoming.map.shock_front", ImpactPreview.distance(ground)), c[0], Math.round(c[1] - r) - 11, FRONT);
+        }
     }
 
     /** Fixed 128-segment contours. No terrain queries, entity search, planning or server requests. */

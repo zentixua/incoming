@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Client mod without window: virtual display KWin + Xwayland (tools/nested_kwin.sh - its own bus D-Bus and settings), sound is recorded in WAV (OpenAL Soft "wave").
 # The script (mod/src/devtest/.../ClientScenario) launches all types of weapons and shoots footage.
-#   tools/client_scenario.sh [all|guide|launch|rocket|loiter|hud|map|target-map|salvo-map|route-map|launch-map|nuke|nuke-water|nuke-lake|pall|pall-front|pall-low|pall-mine|mushroom|firestorm|wall|debris|fx|fx-night|fx-late|models|far-models|occlusion|onboard|flyby|flyby-all|flyby-<case>] [shaders] [dh] [voxy] [lss]   → mod/run/scenario/screenshots/*.png, audio.wav, logs/latest.log
+#   tools/client_scenario.sh [all|guide|launch|rocket|loiter|hud|map|target-map|nuke-map|salvo-map|route-map|launch-map|nuke|nuke-water|nuke-lake|pall|pall-front|pall-low|pall-mine|mushroom|firestorm|wall|debris|fx|fx-night|fx-late|models|far-models|occlusion|onboard|flyby|flyby-all|flyby-<case>] [shaders] [dh] [voxy] [lss]   → mod/run/scenario/screenshots/*.png, audio.wav, logs/latest.log
 #   all - Shahed, rocket, bomb, salvo, binoculars and remote control (short flights from afar);
 #   guide - player guide frames (GuideShots): recipes, binoculars, remote control, GIF cards, projectiles on the screen, camera,
 #     "Lancet", SAM, stationary launcher; INCOMING_GUIDE=recipes,map - only these sections; map - based on drawing 20 chunks, without dh;
@@ -10,6 +10,7 @@
 #   rocket - MLRS salvo: camera next to the package, arcs above the head, gaps in the area;
 #   map - the projectile camera is further drawn: the video is nearby, then the map is based on telemetry, the hit is on the map;
 #   target-map — remote control map: zoom, select a location by clicking, fire at Enter, projectile on the map;
+#   nuke-map — 15 kt surface burst 1.5 km away with the targeting map open: the shock-front ring grows across the map;
 #   salvo-map - Shahed salvo with scatter on the guidance map: frames of routes and area, time of opening the map in the log;
 #   route-map - route on the guidance map: points, edit with the mouse, longer range - without fire, flying along points and hitting;
 #   launch-map - the same with the launch location from the map: button and click, the icon is dragged, start from it (launcher or from a place outside the world);

@@ -252,6 +252,7 @@ public final class ClientScenario {
         else if ("hud".equals(mode)) planHud();
         else if ("map".equals(mode)) planMap();
         else if ("target-map".equals(mode)) planTargetMap();
+        else if ("nuke-map".equals(mode)) planNukeMap();
         else if ("salvo-map".equals(mode)) planSalvoMap();
         else if ("route-map".equals(mode)) planRouteMap(false);
         else if ("launch-map".equals(mode)) planRouteMap(true);
@@ -2923,6 +2924,36 @@ public final class ClientScenario {
         at(905, () -> cmd("tp @s 0.5 214 70.5 0 20"));
         for (int t = 920; t <= 1100; t += 15) shot(t, "hud_near");
         at(1110, () -> {
+            Incoming.LOG.info("SCENARIO done");
+            Minecraft.getInstance().stop();
+        });
+    }
+
+    /**
+     * Shock-front ring on the targeting map: a 15 kt surface burst 1.5 km east, map opened at the burst; frames
+     * {@code nuke_map_<seconds>s} while the ring runs past the viewer and on to the 0.3 psi edge.
+     */
+    private void planNukeMap() {
+        at(40, () -> {
+            cmd("time set 6000");
+            cmd("weather clear");
+            cmd("gamerule doDaylightCycle false");
+            cmd("tp @s 0.5 200 0.5 90 10");
+            hover = true;
+        });
+        at(300, () -> {
+            cmd("incoming nuke now at 1500.5 320 0.5 15 ground");
+            Minecraft.getInstance().setScreen(new ua.zentix.incoming.client.screen.MapScreen(new RemoteScreen()));
+        });
+        at(320, () -> {
+            var screen = Minecraft.getInstance().screen;
+            if (screen != null) screen.mouseScrolled(screen.width / 2.0, screen.height / 2.0, 0, -10);
+        });
+        for (int s = 2; s <= 60; s += 4) {
+            int t = 300 + s * 20;
+            shot(t, String.format(java.util.Locale.ROOT, "nuke_map_%02ds", s));
+        }
+        at(300 + 62 * 20, () -> {
             Incoming.LOG.info("SCENARIO done");
             Minecraft.getInstance().stop();
         });

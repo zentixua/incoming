@@ -308,6 +308,18 @@ public record Detonation(int id, Vec3 burst, double groundY, double yieldKt, boo
         return front().radiusAt(ticks);
     }
 
+    /**
+     * Where the front crosses the ground at {@code ticks} after burst: ground range from epicenter, blocks. NaN before
+     * it reaches the ground (airburst) and once it runs past {@link #blastReach} (beyond, only sound): the targeting
+     * map's shock-front ring.
+     */
+    public double groundFront(double ticks) {
+        double slant = frontRadius(ticks);
+        double h = blocks(groundHob());
+        if (slant <= h || slant > blastReach()) return Double.NaN;
+        return groundOf(slant);
+    }
+
     /** Ground reach of any change (blocks): glass or 1st-degree burns, whichever reaches farther. */
     public double radiusMax() {
         return Caches.radiusMax(this);

@@ -30,6 +30,8 @@ first-degree burn radius for exposed skin at the shown weather visibility. These
 boundaries: terrain, shelter, clothing and materials matter. A dashed elevated fireball silhouette is not a ground-contact disk.
 The review shows your distance and a north-up downwind arrow. Unknown ground height remains an estimate.
 Viewing a wider footprint does not increase targeting range or reveal hidden players.
+After a detonation, a white ring on the map follows the shock wave along the ground in real time, labelled with its distance
+from ground zero, until the wave weakens below what still does damage.
 
 Reviewing a strike reserves no ammunition and starts no preparation or alarm. Payment and the existing second-key
 window begin only after confirmation. A changed target, weather, server limit or flight configuration requires a new
