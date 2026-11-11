@@ -386,6 +386,8 @@
   "incoming.map.selected_player_away": "Цель: %s — не в этом измерении или ещё не на карте · Enter — огонь",
   "incoming.map.last_seen": "%s · %s с",
   "incoming.map.spread": "разброс %s м",
+  "incoming.map.shock_front": "ударная волна %s · %s psi",
+  "incoming.map.shock_eta": "волна через %s с",
   "incoming.map.place": "X %s  Z %s · %s · азимут %s°",
   "incoming.map.km": "%s км",
   "incoming.map.m": "%s м",

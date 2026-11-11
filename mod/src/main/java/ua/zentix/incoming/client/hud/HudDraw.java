@@ -72,6 +72,24 @@ public final class HudDraw {
         }
     }
 
+    /** Ring band between radii {@code r0} < {@code r1} filled with {@code color}, by rows within the screen. */
+    public static void annulus(GuiGraphics g, float cx, float cy, float r0, float r1, int color) {
+        int y0 = Math.max(Math.round(cy - r1), 0), y1 = Math.min(Math.round(cy + r1), g.guiHeight());
+        for (int y = y0; y < y1; y++) {
+            float dy = y + 0.5f - cy;
+            float outer = (float) Math.sqrt(Math.max(0, r1 * r1 - dy * dy));
+            float inner = (float) Math.sqrt(Math.max(0, r0 * r0 - dy * dy));
+            int a = Math.max(Math.round(cx - outer), 0), b = Math.min(Math.round(cx + outer), g.guiWidth());
+            int ia = Math.round(cx - inner), ib = Math.round(cx + inner);
+            if (inner <= 0 || ia >= ib) {
+                if (a < b) g.fill(a, y, b, y + 1, color);
+                continue;
+            }
+            if (a < Math.min(ia, b)) g.fill(a, y, Math.min(ia, b), y + 1, color);
+            if (Math.max(ib, a) < b) g.fill(Math.max(ib, a), y, b, y + 1, color);
+        }
+    }
+
     /** Dotted line: one dot every 6 pixels. */
     public static void dotted(GuiGraphics g, int x0, int y0, int x1, int y1, int color) {
         double dx = x1 - x0, dy = y1 - y0, len = Math.sqrt(dx * dx + dy * dy);
