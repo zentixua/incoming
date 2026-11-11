@@ -664,7 +664,15 @@ public class MapScreen extends Screen {
             int[] c = map.at(a.d.burst().x, a.d.burst().z);
             float r = (float) (ground * scale);
             HudDraw.ring(g, c[0], c[1], r, 2, FRONT);
-            if (r > 14) label(g, Component.translatable("incoming.map.shock_front", ImpactPreview.distance(ground)), c[0], Math.round(c[1] - r) - 11, FRONT);
+            reticle(g, c[0], c[1], 4, FRONT);
+            if (r <= 14) continue;
+            // label beside the ring point nearest the view center: the top of a ring wider than the map is off screen
+            double vx = width / 2.0 - c[0], vy = (TOP + height - panel()) / 2.0 - c[1], len = Math.hypot(vx, vy);
+            double ux = len > 1 ? vx / len : 0, uy = len > 1 ? vy / len : -1;
+            Component text = Component.translatable("incoming.map.shock_front", ImpactPreview.distance(ground));
+            int side = len < r ? -1 : 1; // beside the ring on the view center's side
+            int lx = (int) Math.round(c[0] + ux * (r + side * (font.width(text) / 2.0 + 6))), ly = (int) Math.round(c[1] + uy * (r + side * 10)) - 4;
+            if (lx > 0 && lx < width && onMap(lx, ly)) label(g, text, lx, ly, FRONT);
         }
     }
 
