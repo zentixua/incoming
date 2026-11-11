@@ -27,6 +27,7 @@ class DetonationFrontTest {
                 shown++;
                 double slant = d.frontRadius(t);
                 assertEquals(slant * slant, g * g + h * h, slant * slant * 1e-9 + 1e-6, "ground ring lies on the front sphere");
+                assertEquals(t, d.arrivalTicks(slant), 0.05, "front arrives there now: the clock dust wall, hit and ruins use");
                 assertTrue(slant <= d.blastReach(), "no ring where the wave no longer hits");
                 assertTrue(g >= prev, "ring only grows");
                 prev = g;
