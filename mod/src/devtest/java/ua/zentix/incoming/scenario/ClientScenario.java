@@ -2940,6 +2940,9 @@ public final class ClientScenario {
             cmd("gamerule doDaylightCycle false");
             cmd("tp @s 0.5 200 0.5 90 10");
             hover = true;
+            // as on the host servers: the wave at 0.35 of sound speed, so the ring crosses the map over tens of seconds
+            ua.zentix.incoming.IncomingConfig.SERVER.scalePreset.set(ua.zentix.incoming.IncomingConfig.ScalePreset.CUSTOM);
+            ua.zentix.incoming.IncomingConfig.SERVER.nukeWaveSpeed.set(0.35);
         });
         at(300, () -> {
             cmd("incoming nuke now at 1500.5 320 0.5 15 ground");

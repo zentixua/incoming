@@ -17,6 +17,9 @@ import org.jetbrains.annotations.Nullable;
 import org.lwjgl.glfw.GLFW;
 import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.client.nuclear.ClientNuclear;
+import ua.zentix.incoming.client.hud.Countdown;
+import ua.zentix.incoming.client.map.FrontLook;
+import ua.zentix.incoming.nuclear.model.BlastModel;
 import ua.zentix.incoming.nuclear.Detonation;
 import ua.zentix.incoming.IncomingConfig;
 import ua.zentix.incoming.nuclear.model.ImpactPreview;
@@ -89,8 +92,6 @@ public class MapScreen extends Screen {
     private static final int FRIEND = 0xFF60FF80, HOSTILE = 0xFFFF6040;
     /** Launch site: distinct from all map symbols (players cyan, friendlies green, projectiles yellow, target red). */
     private static final int LAUNCH = 0xFFC080FF;
-    /** Shock front of a live detonation ({@link #drawFronts}). */
-    private static final int FRONT = 0xFFF4F4F4;
 
     /** Map view retained between openings while player stays in same world and dimension. */
     private static double viewX, viewZ, scale = 1;
@@ -584,7 +585,7 @@ public class MapScreen extends Screen {
             }
         }
 
-        drawFronts(g, map, partialTick);
+        drawFronts(g, map, me, op, partialTick);
 
         // Projectiles use server telemetry (including outside loaded world): dashed path to target, reticle at target;
         // beyond map edge, arrow at edge pointing toward them.
@@ -655,25 +656,58 @@ public class MapScreen extends Screen {
     /**
      * Shock fronts of this dimension's detonations: a ring where the in-game front meets the ground now
      * ({@link Detonation#groundFront}, the same front that brings dust wall, hit and ruins), from when it touches the
-     * ground until it no longer hits; distance from epicenter on its label.
+     * ground until it no longer hits. Ring colour and thickness follow the overpressure it carries ({@link FrontLook});
+     * behind it, a translucent band out to where the positive phase has ended ({@link Detonation#phaseEndRadius}): the
+     * ground the blast wind sweeps right now. Label: distance from ground zero and pressure; below the player marker,
+     * seconds until the front reaches the player while it still hits there.
      */
-    private void drawFronts(GuiGraphics g, MapProjection map, float partialTick) {
+    private void drawFronts(GuiGraphics g, MapProjection map, Vec3 me, int[] op, float partialTick) {
         for (ClientNuclear.Active a : ClientNuclear.detonations()) {
-            double ground = a.d.groundFront(a.ticks(partialTick));
+            Detonation d = a.d;
+            double ticks = a.ticks(partialTick);
+            // countdown in the colour of the pressure that will reach the player; an airburst front still aloft counts too
+            double toMe = me.distanceTo(d.burst());
+            if (toMe > d.frontRadius(ticks) && toMe <= d.blastReach() && onMap(op[0], op[1] + 30)) {
+                Component eta = Component.translatable("incoming.map.shock_eta", Countdown.seconds((d.arrivalTicks(toMe) - ticks) / 20));
+                label(g, eta, op[0], op[1] + 21, FrontLook.color(d.psi(me)));
+            }
+            double ground = d.groundFront(ticks);
             if (Double.isNaN(ground)) continue;
-            int[] c = map.at(a.d.burst().x, a.d.burst().z);
+            double psi = BlastModel.psi(d.groundOverpressureKpa(ground));
+            int color = FrontLook.color(psi);
+            int[] c = map.at(d.burst().x, d.burst().z);
             float r = (float) (ground * scale);
-            HudDraw.ring(g, c[0], c[1], r, 2, FRONT);
-            reticle(g, c[0], c[1], 4, FRONT);
+            float tail = (float) (d.groundOf(d.phaseEndRadius(ticks)) * scale);
+            if (r - tail >= 1) HudDraw.annulus(g, c[0], c[1], tail, r, FrontLook.wake(psi));
+            HudDraw.ring(g, c[0], c[1], r, FrontLook.width(psi), color);
+            reticle(g, c[0], c[1], 4, color);
+
             if (r <= 14) continue;
-            // label beside the ring point nearest the view center: the top of a ring wider than the map is off screen
+            // label beside the ring near the point nearest the view center: the top of a ring wider than the map is off screen
             double vx = width / 2.0 - c[0], vy = (TOP + height - panel()) / 2.0 - c[1], len = Math.hypot(vx, vy);
-            double ux = len > 1 ? vx / len : 0, uy = len > 1 ? vy / len : -1;
-            Component text = Component.translatable("incoming.map.shock_front", ImpactPreview.distance(ground));
-            int side = len < r ? -1 : 1; // beside the ring on the view center's side
-            int lx = (int) Math.round(c[0] + ux * (r + side * (font.width(text) / 2.0 + 6))), ly = (int) Math.round(c[1] + uy * (r + side * 10)) - 4;
-            if (lx > 0 && lx < width && onMap(lx, ly)) label(g, text, lx, ly, FRONT);
+            Component text = Component.translatable("incoming.map.shock_front", ImpactPreview.distance(ground),
+                    String.format(Locale.ROOT, psi >= 10 ? "%.0f" : "%.1f", psi));
+            int side = len < r ? -1 : 1;
+            double toView = len > 1 ? Math.atan2(vy, vx) : -Math.PI / 2;
+            // 20° along the ring either way (straight toward the view center it would sit on the player marker), else straight
+            for (double turn : new double[]{-20, 20, 0}) {
+                int[] at = frontLabelAt(c, r, toView + Math.toRadians(turn), side, font.width(text));
+                if (at[0] - font.width(text) / 2 >= 0 && at[0] + font.width(text) / 2 <= width && onMap(at[0], at[1]) && onMap(at[0], at[1] + 9)) {
+                    label(g, text, at[0], at[1], color);
+                    break;
+                }
+            }
         }
+    }
+
+    /**
+     * Front label center: text end touching the ring at angle {@code a} from the view center's side ({@code side} -1 inside,
+     * 1 outside), beside the ring, or above/below where the ring runs across.
+     */
+    private static int[] frontLabelAt(int[] c, float r, double a, int side, int textWidth) {
+        double ux = Math.cos(a), uy = Math.sin(a), px = c[0] + ux * r, py = c[1] + uy * r;
+        if (Math.abs(ux) >= 0.4) return new int[]{(int) Math.round(px + side * Math.signum(ux) * (textWidth / 2.0 + 6)), (int) Math.round(py) - 4};
+        return new int[]{(int) Math.round(px), (int) Math.round(py + side * Math.signum(uy) * 12) - 4};
     }
 
     /** Fixed 128-segment contours. No terrain queries, entity search, planning or server requests. */

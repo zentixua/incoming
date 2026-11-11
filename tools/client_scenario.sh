@@ -10,7 +10,7 @@
 #   rocket - MLRS salvo: camera next to the package, arcs above the head, gaps in the area;
 #   map - the projectile camera is further drawn: the video is nearby, then the map is based on telemetry, the hit is on the map;
 #   target-map — remote control map: zoom, select a location by clicking, fire at Enter, projectile on the map;
-#   nuke-map — 15 kt surface burst 1.5 km away with the targeting map open: the shock-front ring grows across the map;
+#   nuke-map — 15 kt surface burst 1.5 km away, wave 0.35, targeting map open: the shock-front ring crosses the map;
 #   salvo-map - Shahed salvo with scatter on the guidance map: frames of routes and area, time of opening the map in the log;
 #   route-map - route on the guidance map: points, edit with the mouse, longer range - without fire, flying along points and hitting;
 #   launch-map - the same with the launch location from the map: button and click, the icon is dragged, start from it (launcher or from a place outside the world);
