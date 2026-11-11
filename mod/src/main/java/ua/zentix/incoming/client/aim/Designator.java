@@ -8,14 +8,18 @@ import net.minecraft.client.DeltaTracker;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.Font;
 import net.minecraft.client.gui.GuiGraphics;
+import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.client.player.LocalPlayer;
 import net.minecraft.client.renderer.LevelRenderer;
 import net.minecraft.client.renderer.MultiBufferSource;
 import net.minecraft.client.renderer.RenderType;
 import net.minecraft.client.resources.sounds.SimpleSoundInstance;
 import net.minecraft.network.chat.Component;
+import net.minecraft.util.Mth;
 import net.minecraft.world.InteractionHand;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.chunk.LevelChunk;
+import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.client.event.CalculatePlayerTurnEvent;
@@ -25,6 +29,10 @@ import net.neoforged.neoforge.client.event.RenderLevelStageEvent;
 import net.neoforged.neoforge.network.PacketDistributor;
 import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.IncomingConfig;
+import ua.zentix.incoming.client.far.FarTerrain;
+import ua.zentix.incoming.client.far.Sight;
+import ua.zentix.incoming.client.far.Sightline;
+import ua.zentix.incoming.client.map.TerrainTiles;
 import ua.zentix.incoming.compat.SubLevels;
 import ua.zentix.incoming.item.DesignatorItem;
 import ua.zentix.incoming.launcher.LauncherLinks;
@@ -39,6 +47,7 @@ import ua.zentix.incoming.target.TargetPicker;
 
 import java.util.Locale;
 import java.util.Optional;
+import java.util.OptionalInt;
 
 /**
  * Binocular designator: hold RMB with the remote for zoom, reticle, range and what's under the crosshair (block,
@@ -46,7 +55,7 @@ import java.util.Optional;
  * the client sends its target, the server finds and validates it on its side.
  */
 public final class Designator {
-    /** Client sight range; the server still applies its own limit (aim_range). */
+    /** Block-accurate sight range (blocks, entities, craft); the server still applies its own limit (aim_range). Farther ground: {@link #far}. */
     public static final double RANGE = 400;
 
     @Nullable
@@ -74,12 +83,53 @@ public final class Designator {
             return;
         }
         pick = TargetPicker.pick(mc.level, p, p.getEyePosition(), p.getLookAngle(), RANGE);
+        if (pick == null || pick.kind() == TargetPicker.Kind.SURFACE) {
+            TargetPicker.Pick far = far(mc.level, p.getEyePosition(), p.getLookAngle());
+            if (far != null) pick = far;
+        }
         // Target acquisition: short cue when an entity or craft appears under the crosshair.
         Object locked = pick == null ? null : pick.entity() != null ? pick.entity() : pick.kind() == TargetPicker.Kind.AIRCRAFT ? pick.label().getString() : null;
         if (locked != null && !locked.equals(lastLocked)) {
             mc.getSoundManager().play(SimpleSoundInstance.forUI(ModSounds.DESIGNATOR_LOCK.get(), 1.0f, 0.6f));
         }
         lastLocked = locked;
+    }
+
+    /**
+     * Ground the crosshair rests on beyond loaded chunks: the look ray over distant terrain ({@link FarTerrain}: client
+     * chunks, then LOD Server Support, Voxy or Distant Horizons columns), as far as the eye can make out terrain in this
+     * weather ({@link Sight#range}, Koschmieder: 20 km clear, 5 km rain, 1 km thunderstorm) and the server's
+     * {@code map_range}. A laser rangefinder is limited the same way, by line of sight and visibility. Without distant
+     * terrain only loaded chunks count. Launched as a map site, so the server checks it like one.
+     */
+    @Nullable
+    static TargetPicker.Pick far(ClientLevel level, Vec3 eye, Vec3 look) {
+        if (level.dimensionType().hasCeiling()) return null;
+        double to = Math.min(Sight.range(level.getRainLevel(1f), level.getThunderLevel(1f)), IncomingConfig.SERVER.mapRange.get());
+        if (look.y > 0) to = Math.min(to, (level.getMaxBuildHeight() - eye.y) / look.y);
+        // The block ray already covered loaded chunks within RANGE: start where it stopped seeing blocks.
+        double d = Sightline.ground(FarTerrain.of(level), eye.x, eye.y, eye.z, look.x, look.y, look.z, loadedUntil(level, eye, look), to);
+        if (Double.isNaN(d)) return null;
+        int x = Mth.floor(eye.x + look.x * d), z = Mth.floor(eye.z + look.z * d);
+        OptionalInt top = surface(level, x, z);
+        if (top.isEmpty()) return null;
+        Vec3 at = new Vec3(x + 0.5, top.getAsInt(), z + 0.5);
+        return new TargetPicker.Pick(new Target.Point(at), at, TargetPicker.Kind.FAR,
+                Component.translatable("incoming.target.map_point", x, z), null);
+    }
+
+    /** Distance along the look ray covered by the block-accurate pick: up to {@link #RANGE} or the first unloaded chunk. */
+    private static double loadedUntil(ClientLevel level, Vec3 eye, Vec3 look) {
+        for (double s = 0; s < RANGE; s += 8) {
+            if (level.getChunkSource().getChunk(Mth.floor(eye.x + look.x * s) >> 4, Mth.floor(eye.z + look.z * s) >> 4, false) == null) return s;
+        }
+        return RANGE;
+    }
+
+    /** First air above ground, as the targeting map reports it (server refines once the chunk loads). */
+    private static OptionalInt surface(ClientLevel level, int x, int z) {
+        LevelChunk chunk = level.getChunkSource().getChunk(x >> 4, z >> 4, false);
+        return chunk != null ? OptionalInt.of(chunk.getHeight(Heightmap.Types.MOTION_BLOCKING, x & 15, z & 15)) : TerrainTiles.height(x, z);
     }
 
     /** Forget target: holds an entity of the current world and must not retain it after leaving. */
@@ -103,6 +153,8 @@ public final class Designator {
             hint = new C2S.AimHint(C2S.AimHint.ENTITY, pk.point(), pk.entity().getId(), Vec3.ZERO);
         } else if (pk.target() instanceof Target.OfSubLevel s) {
             hint = new C2S.AimHint(C2S.AimHint.AIRCRAFT, pk.point(), 0, s.plotPos());
+        } else if (pk.kind() == TargetPicker.Kind.FAR) {
+            hint = C2S.AimHint.ground(pk.point().x, pk.point().z, OptionalInt.of(Mth.floor(pk.point().y)));
         } else {
             hint = new C2S.AimHint(C2S.AimHint.POINT, pk.point(), 0, Vec3.ZERO);
         }

@@ -28,7 +28,8 @@ import java.util.function.Predicate;
 public final class TargetPicker {
     private TargetPicker() {}
 
-    public enum Kind { BLOCK, ENTITY, PLAYER, AIRCRAFT, SURFACE }
+    /** {@code FAR}: ground beyond loaded chunks, found by the client on distant terrain; launched as a map site. */
+    public enum Kind { BLOCK, ENTITY, PLAYER, AIRCRAFT, SURFACE, FAR }
 
     /**
      * @param target quarry to pursue
