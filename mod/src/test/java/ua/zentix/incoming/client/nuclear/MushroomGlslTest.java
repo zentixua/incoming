@@ -589,6 +589,24 @@ class MushroomGlslTest {
             if (Math.abs(e) < reach) steepPlain = Math.max(steepPlain, Math.abs(ellipse.apply(q) - e) / h);
         }
         assertTrue(steep <= steepPlain * 1.3, "slope " + steep + " against the plain section " + steepPlain);
+        // mushGap's step through the hollow (mushHollowGap, then minus the billow reach) never passes matter: brute
+        // force distance to every point the billows can fill (rolled distance below their reach)
+        GlslFunction gap = GlslFunction.parse(GLSL, "mushHollowGap");
+        java.util.List<double[]> matter = new java.util.ArrayList<>();
+        for (double u = -1.05; u <= 1.05; u += 0.01)
+            for (double v = -1.05; v <= 0.2; v += 0.01)
+                if (dist.apply(new double[]{u, v}, 1.0) < reach) matter.add(new double[]{u * a, v * b});
+        int stepped = 0;
+        for (int i = 0; i < 400; i++) {
+            double x = random.nextDouble(-1.4, 0.7) * a, y = random.nextDouble(-2, -0.1) * b;
+            double step = gap.call(Map.of("x", x, "y", y, "a", a, "b", b, "f", 1.0)) - reach;
+            if (step <= 0) continue;
+            stepped++;
+            double near = Double.MAX_VALUE;
+            for (double[] p : matter) near = Math.min(near, Math.hypot(p[0] - x, p[1] - y));
+            assertTrue(step <= near + 0.01 * Math.min(a, b), "hollow step " + step + " beyond matter " + near + " at " + x + ", " + y);
+        }
+        assertTrue(stepped > 50, "hollow steps checked: " + stepped);
         // hollow volume (MushroomModel.capVolume): ring of major radius RING, section semiaxis 1 − RING (cap radius
         // 1), Pappus over the section: weight by radius
         double ring = MushroomModel.RING, full = 0, kept = 0;
