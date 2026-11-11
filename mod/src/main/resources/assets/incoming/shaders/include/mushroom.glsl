@@ -265,10 +265,10 @@ float mushEllipse(float x, float y, float rx, float ry) {
 // Signed distance to ellipse edge, semiaxes rx/ry, blocks (negative inside): (measure − 1) divided by its
 // slope, exact at edge where billows displace it; inside, no deeper than smaller semiaxis
 float mushEllipseDist(float x, float y, float rx, float ry) {
-    vec2 r = max(vec2(rx, ry), vec2(1e-3));
-    vec2 u = vec2(x, y) / r;
-    float s = length(u), slope = length(u / r);
-    float deep = -min(r.x, r.y);
+    float ax = max(rx, 1e-3), ay = max(ry, 1e-3);
+    float u = x / ax, v = y / ay;
+    float s = sqrt(u * u + v * v), slope = sqrt(u * u / (ax * ax) + v * v / (ay * ay));
+    float deep = -min(ax, ay);
     if (slope < 1e-9) return deep;
     return max((s - 1.0) * s / slope, deep);
 }
@@ -402,12 +402,55 @@ float mushStemDist(float radial, float h, float top) {
     return max(radial, h - top);
 }
 
+// Cap-edge roll: a buoyant bubble becomes a vortex ring because ambient air drawn up beneath it pierces its
+// underside as a jet and rises through it (Walters and Davidson 1963, JFM 17, 321: spherical-cap bubble to toroid;
+// Turner 1957, buoyant vortex rings). Cap matter then turns about the ring core: up inside, outward over the top,
+// down the outside and back inward underneath, so the rim hangs lowest and its underside curls in toward the stem
+// over a hollow (Scorer 1957: thermal underside drawn up). The hollow is the jet's ellipse taken out of the lower
+// ring section: centre (MUSH_HOLLOW_U, MUSH_HOLLOW_V), semiaxes (MUSH_HOLLOW_A, MUSH_HOLLOW_B), all in section
+// semiaxes from the section centre. Matter is only removed, so the cap stays inside its ellipse (radius, top, bounds,
+// mushGap unchanged); the rim and top never move. Fully grown, the lip tip is at 0.61 of the section semiaxis
+// outward and 0.79 down, lower than the hollow's roof (0.15 down), and the hollow takes a quarter of the ring's
+// volume (MushroomModel.capVolume). Numbers are estimates: no measured lip shapes; chosen so the lip keeps the
+// width of the billows over it (MUSH_CAP_LOBES 0.4 of the smaller semiaxis). The hollow grows with the churn clock
+// (e-fold pi rad: half a turn of the section, the time for the rolled sheet to reach the underside) once the ball
+// has rolled into a ring (ringR / (MUSH_RING capR)).
+const float MUSH_HOLLOW_U = -0.35;
+const float MUSH_HOLLOW_V = -1.05;
+const float MUSH_HOLLOW_A = 1.0;
+const float MUSH_HOLLOW_B = 0.9;
+
+// Grown share of the hollow, 0..1
+float mushFold(Mush m) {
+    float roll = clamp(m.ringR / max(MUSH_RING * m.capR, 1.0), 0.0, 1.0);
+    return roll * (1.0 - exp(-max(m.churn, 0.0) / 3.14159265));
+}
+
+// Signed distance to the rolled ring section (x from ring axis outward, y from section centre, blocks; f grown
+// share): smooth maximum of the section and the outside of the hollow, rounding the lip by up to a quarter of the
+// cap blend (scaled by f, so the section is unchanged as the hollow appears). Never below the section's own distance.
+float mushRingDist(float x, float y, float a, float b, float f) {
+    float ring = mushEllipseDist(x, y, a, b);
+    if (f <= 0.0) return ring;
+    float hollow = mushEllipseDist(x - MUSH_HOLLOW_U * a, y - MUSH_HOLLOW_V * b, MUSH_HOLLOW_A * a * f, MUSH_HOLLOW_B * b * f);
+    return -mushSmin(-ring, hollow, MUSH_BLEND * min(a, b) * f);
+}
+
+// Conservative distance from inside the jet's hollow to its wall, blocks (same arguments as mushRingDist; negative
+// outside): ellipse measure grows no faster than distance / smaller semiaxis. mushGap steps through the empty hollow
+// with it instead of creeping inside the ring's ellipse.
+float mushHollowGap(float x, float y, float a, float b, float f) {
+    if (f <= 0.0) return -1e9;
+    float ha = MUSH_HOLLOW_A * a * f, hb = MUSH_HOLLOW_B * b * f;
+    return (1.0 - mushEllipse(x - MUSH_HOLLOW_U * a, y - MUSH_HOLLOW_V * b, ha, hb)) * min(ha, hb);
+}
+
 // Signed unbillowed cap/stem/skirt/water-column edge distances at body q, blocks (stem bottom from mushStemSigma;
 // absent column far away): column wall/crown one surface;
 // crown ring with elliptical section centered on wall center (WaterModel.Column)
 vec4 mushDist(Mush m, vec3 q) {
     float rho = length(q.xz);
-    float ring = mushEllipseDist(rho - m.ringR, q.y - m.capY, m.ringA, m.ringB);
+    float ring = mushRingDist(rho - m.ringR, q.y - m.capY, m.ringA, m.ringB, mushFold(m));
     float dome = mushEllipseDist(rho, q.y - m.domeY, m.domeR, m.domeH);
     float column = 1e9;
     if (m.colSigma > 0.0) {
@@ -486,7 +529,10 @@ float mushGap(Mush m, vec3 q) {
     float rho = length(q.xz);
     float gap = 1e9;
     if (m.capSigma > 0.0) {
+        // the rolled section (mushRingDist) only loses matter: its ellipse bounds it, and inside the jet's hollow
+        // the distance to the hollow's wall
         float ring = (mushRing(rho, q.y - m.capY, m.ringR, m.ringA, m.ringB) - 1.0) * min(m.ringA, m.ringB);
+        ring = max(ring, mushHollowGap(rho - m.ringR, q.y - m.capY, m.ringA, m.ringB, mushFold(m)));
         float dome = (mushEllipse(rho, q.y - m.domeY, m.domeR, m.domeH) - 1.0) * min(m.domeR, m.domeH);
         gap = min(ring, dome) - MUSH_CAP_REACH * mushCapUnit(m);
     }

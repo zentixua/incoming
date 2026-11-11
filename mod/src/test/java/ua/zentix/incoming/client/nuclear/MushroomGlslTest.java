@@ -539,4 +539,85 @@ class MushroomGlslTest {
             assertEquals(FireballModel.unmasked(t, 15), f.call(Map.of("f", out[0])), 1e-9, "t = " + t);
         }
     }
+
+    /**
+     * Cap-edge roll ({@code mushRingDist}): the jet's hollow only removes matter, so the section's ellipse (the bound of
+     * {@code mushGap}) still holds; rim and top unchanged, the lowest matter is the lip at the rim, the hollow appears
+     * continuously and the distance is no steeper than the plain section's (no seams, no phantom fringe), and the hollow
+     * takes a quarter of the ring's volume ({@code MushroomModel.capVolume}).
+     */
+    @Test
+    void capRollKeepsRimAndBounds() {
+        GlslFunction rolled = GlslFunction.parse(GLSL, "mushRingDist"), plain = GlslFunction.parse(GLSL, "mushEllipseDist");
+        double a = 45, b = 30;
+        java.util.function.BiFunction<double[], Double, Double> dist = (p, f) ->
+                rolled.call(Map.of("x", p[0] * a, "y", p[1] * b, "a", a, "b", b, "f", f));
+        java.util.function.Function<double[], Double> ellipse = p ->
+                plain.call(Map.of("x", p[0] * a, "y", p[1] * b, "rx", a, "ry", b));
+        double blend = constants().get("MUSH_BLEND") * Math.min(a, b), reach = constants().get("MUSH_CAP_REACH") * Math.min(a, b);
+        java.util.Random random = new java.util.Random(7);
+        for (int i = 0; i < 4000; i++) {
+            double[] p = {random.nextDouble(-2, 2), random.nextDouble(-2.5, 1.5)};
+            double e = ellipse.apply(p);
+            assertEquals(e, dist.apply(p, 0.0), 1e-12, "no fold");
+            for (double f : new double[]{1e-6, 0.3, 1}) assertTrue(dist.apply(p, f) >= e - 1e-9, "only loses matter, mushGap bound");
+            // outer surface (rim and top) within the cap blend width; the inner side rounds into the jet's hollow
+            if ((p[1] >= 0 && p[0] >= 0 || p[1] >= 0.5) && e > -blend) assertEquals(e, dist.apply(p, 1.0), 1e-9, "rim and top unchanged");
+            // deeper than the billows reach the density is full either way (and the ellipse distance is clamped)
+            if (e > -reach) assertEquals(e, dist.apply(p, 1e-6), 1e-3, "hollow appears continuously");
+        }
+        // hollow under the ring, lip at the rim
+        assertTrue(ellipse.apply(new double[]{0, -0.6}) < 0 && dist.apply(new double[]{0, -0.6}, 1.0) > 0, "hollow");
+        assertTrue(dist.apply(new double[]{0.85, -0.3}, 1.0) < 0, "lip");
+        double lowest = 1, lowestU = 0;
+        for (double u = -1; u <= 1; u += 0.005)
+            for (double v = -1; v <= 0; v += 0.005)
+                if (v < lowest && dist.apply(new double[]{u, v}, 1.0) < 0) { lowest = v; lowestU = u; }
+        assertTrue(lowestU > 0.5, "lowest matter at the rim, u " + lowestU + ", v " + lowest);
+        // lip tip (section and hollow meet; the blend rounds it slightly inward): 0.61 outward, 0.79 down
+        assertEquals(-0.79, lowest, 0.1, "lip tip height");
+        assertEquals(0.61, lowestU, 0.06, "lip tip");
+        // continuous and, where the billows can show it (within their reach of the surface), no steeper than the plain
+        // section there: ratio of neighbour differences to their distance (no seams, no phantom fringe)
+        double steep = 0, steepPlain = 0;
+        for (int i = 0; i < 40000; i++) {
+            double[] p = {random.nextDouble(-2, 2), random.nextDouble(-2.5, 1.5)};
+            double t = random.nextDouble(0, 2 * Math.PI), h = 1e-3;
+            double[] q = {p[0] + h * Math.cos(t) / a, p[1] + h * Math.sin(t) / b};
+            double d = dist.apply(p, 1.0), e = ellipse.apply(p);
+            if (Math.abs(d) < reach) steep = Math.max(steep, Math.abs(dist.apply(q, 1.0) - d) / h);
+            if (Math.abs(e) < reach) steepPlain = Math.max(steepPlain, Math.abs(ellipse.apply(q) - e) / h);
+        }
+        assertTrue(steep <= steepPlain * 1.3, "slope " + steep + " against the plain section " + steepPlain);
+        // mushGap's step through the hollow (mushHollowGap, then minus the billow reach) never passes matter: brute
+        // force distance to every point the billows can fill (rolled distance below their reach)
+        GlslFunction gap = GlslFunction.parse(GLSL, "mushHollowGap");
+        java.util.List<double[]> matter = new java.util.ArrayList<>();
+        for (double u = -1.05; u <= 1.05; u += 0.01)
+            for (double v = -1.05; v <= 0.2; v += 0.01)
+                if (dist.apply(new double[]{u, v}, 1.0) < reach) matter.add(new double[]{u * a, v * b});
+        int stepped = 0;
+        for (int i = 0; i < 400; i++) {
+            double x = random.nextDouble(-1.4, 0.7) * a, y = random.nextDouble(-2, -0.1) * b;
+            double step = gap.call(Map.of("x", x, "y", y, "a", a, "b", b, "f", 1.0)) - reach;
+            if (step <= 0) continue;
+            stepped++;
+            double near = Double.MAX_VALUE;
+            for (double[] p : matter) near = Math.min(near, Math.hypot(p[0] - x, p[1] - y));
+            assertTrue(step <= near + 0.01 * Math.min(a, b), "hollow step " + step + " beyond matter " + near + " at " + x + ", " + y);
+        }
+        assertTrue(stepped > 50, "hollow steps checked: " + stepped);
+        // hollow volume (MushroomModel.capVolume): ring of major radius RING, section semiaxis 1 − RING (cap radius
+        // 1), Pappus over the section: weight by radius
+        double ring = MushroomModel.RING, full = 0, kept = 0;
+        int n = 160;
+        for (int i = 0; i < n; i++)
+            for (int j = 0; j < n; j++) {
+                double[] p = {-1 + (i + 0.5) * 2 / n, -1 + (j + 0.5) * 2 / n};
+                double rho = ring + (1 - ring) * p[0];
+                if (ellipse.apply(p) < 0) full += rho;
+                if (dist.apply(p, 1.0) < 0) kept += rho;
+            }
+        assertEquals(0.25, 1 - kept / full, 0.02, "hollow share of the ring volume");
+    }
 }

@@ -229,7 +229,9 @@ public final class MushroomModel {
 
     /**
      * Cap volume, m³: spheroid of its radius and height, (2/3)·π·R²·h; fireball gives its own volume, rolled ring with dome
-     * is 5 % less than the sum of torus and half-dome.
+     * is 5 % less than the sum of torus and half-dome. The rolled underside ({@code mushRingDist} in {@code mushroom.glsl}:
+     * air jet up through the ring, hollow under the rim) is not subtracted (est.): a quarter of the ring's volume, so NO₂
+     * concentration would be at most a third higher, within {@link #NO2_SHARE}'s uncertainty (0.03–0.3).
      */
     public static double capVolume(Shape s) {
         return volume(s.capR(), s.top() - s.capBottom());
