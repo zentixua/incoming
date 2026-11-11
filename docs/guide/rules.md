@@ -25,5 +25,5 @@ Only the Shahed and the Lancet follow a moving target, and only while you keep i
 
 ## Limits
 
-Up to 30 rounds in a salvo, spread up to 150 blocks, binoculars up to 400 blocks, the map up to 10,000 blocks. These
+Up to 30 rounds in a salvo, spread up to 150 blocks, binoculars lock onto targets up to 400 blocks, the map up to 10,000 blocks. These
 are defaults that the world owner can change. How many strikes you can make is limited by your munitions.

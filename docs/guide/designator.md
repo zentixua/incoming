@@ -24,7 +24,10 @@ does not fire for other players.
 - **Mouse wheel**: weapon (Shahed, Lancet, Missile, Grad, Bomb, Nuclear).
 - **LMB**: launch.
 
-The binoculars reach 400 blocks; farther away, strike [from the map](map.md). For a nuclear launch, review the target and
+The binoculars lock onto mobs, players, aircraft and blocks up to 400 blocks away. Farther out they mark the ground you
+see, as far as the air lets you make it out: 20 km in clear weather, 5 km in rain, 1 km in a thunderstorm, and no farther
+than the map reaches. Past your render distance this needs distant terrain from Voxy, Distant Horizons or LOD Server
+Support; without one, use [the map](map.md). For a nuclear launch, review the target and
 hold the final launch control for three seconds. Releasing cancels the hold. [Nuclear strike](nuke.md#how-to-launch).
 
 ## Console

@@ -95,7 +95,9 @@ Particles and the effects layer: `client-fx.md`; models: `client-models.md`; sou
   `ClientNuclear.rewound`), `cam/ProjectileCamera` (shots: launch beside launcher, onboard with telemetry, impact
   interference/orbit; camera outside projectile is client `Marker`, not added to world; left click retargets;
   projectile absent on client means `cam/TacticalMap`, operator map using `FlightStatus` telemetry), `aim/Designator`
-  (binoculars), `screen/RemoteScreen` (remote), `screen/MapScreen` (target map: click impact location,
+  (binoculars; beyond the block range, `Designator.far` marches the look ray over `FarTerrain`, `Sightline.ground`,
+  up to weather visibility `Sight.range` and `map_range`, sent as `C2S.AimHint.GROUND`: the server checks it as a map site),
+  `screen/RemoteScreen` (remote), `screen/MapScreen` (target map: click impact location,
   `C2S.AimHint.GROUND`, range `map_range`, or player for remote “player” target; Shift+click waypoint, drag move,
   right click remove; Ctrl+click/button launch location, operator/host only, `MapScreen.mayPickLaunchSite`, same
   drag/right click; one `RemoteScreen.launchFrom` determines whether strike uses it (not linked launchers),

@@ -10,7 +10,7 @@ English · [Русский](ru/faq.md)
 | "… has not been spotted…" | find them with your own eyes or a projectile camera, or have your team spot them ([spotting](rules.md#spotting)) |
 | "No room for a launcher…" | the projectile comes in from afar; to watch the launch, move to open ground |
 | "Launch failed: the world near the target is not loaded" | the munition was returned; try again |
-| "No target found" | the target is farther than 400 blocks or nothing is under the reticle: strike from the map |
+| "No target found" | nothing is under the reticle, or the ground there is too far to make out: strike from the map |
 | "… cannot fly this route…" | remove or move route points |
 | "The designator is for operators only…" | the world owner set it up that way |
 | "Too many strikes in progress…" | the world owner set a limit: wait for impacts or [abort](designator.md#abort) |

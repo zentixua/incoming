@@ -30,6 +30,40 @@ public final class Sightline {
         public static final Result OPEN = new Result(0, 0);
     }
 
+    /** Smallest march step along {@link #ground}, blocks. */
+    public static final double GROUND_STEP = 2;
+    /**
+     * March step grows with distance: one step spans this angle seen from the eye, rad (1/512 ≈ 0.11°, a few
+     * pixels in binoculars), so a 20 km ray takes about 2 000 samples (2 below 1 km, then 512·ln(d/1 024)).
+     */
+    public static final double GROUND_ANGLE = 1.0 / 512;
+
+    /**
+     * Distance along a unit ray from the eye to the first column whose top reaches the ray, refined to a block;
+     * {@link Double#NaN} if none between {@code from} and {@code to}. Unknown columns are not ground.
+     */
+    public static double ground(Heights heights, double ex, double ey, double ez, double dx, double dy, double dz, double from, double to) {
+        double prev = from;
+        for (double s = from; s <= to; s += Math.max(GROUND_STEP, s * GROUND_ANGLE)) {
+            if (reaches(heights, ex, ey, ez, dx, dy, dz, s)) {
+                double lo = prev, hi = s;
+                while (hi - lo > 0.5) {
+                    double mid = (lo + hi) / 2;
+                    if (reaches(heights, ex, ey, ez, dx, dy, dz, mid)) hi = mid;
+                    else lo = mid;
+                }
+                return hi;
+            }
+            prev = s;
+        }
+        return Double.NaN;
+    }
+
+    private static boolean reaches(Heights heights, double ex, double ey, double ez, double dx, double dy, double dz, double s) {
+        double top = heights.at((int) Math.floor(ex + dx * s), (int) Math.floor(ez + dz * s));
+        return !Double.isNaN(top) && top >= ey + dy * s;
+    }
+
     public static Result trace(Heights heights, double sx, double sy, double sz, double ex, double ey, double ez) {
         double dx = ex - sx, dy = ey - sy, dz = ez - sz;
         double flat = Math.sqrt(dx * dx + dz * dz);

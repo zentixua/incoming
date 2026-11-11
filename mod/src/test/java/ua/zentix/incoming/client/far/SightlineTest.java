@@ -39,4 +39,37 @@ class SightlineTest {
         }, 0, 65, 0, 8000, 66, 0);
         assertTrue(calls[0] < Sightline.MAX_SAMPLES, "points " + calls[0]);
     }
+
+    @Test
+    void groundFindsTheFarSlopeTheCrosshairRestsOn() {
+        // eye at 100 over a plain at 64, looking down 1:250: the ray meets the plain 9 000 blocks out
+        double dy = -1.0 / 250, n = Math.sqrt(1 + dy * dy);
+        double d = Sightline.ground((x, z) -> 64, 0, 100, 0, 1 / n, dy / n, 0, 0, 20_000);
+        assertEquals(9_000, d / n, 2, "binoculars reach a far plain at block accuracy");
+    }
+
+    @Test
+    void groundStopsAtTheFirstRidgeAndSkipsUnknownColumns() {
+        // unknown terrain up to 3 km is not ground; a ridge above eye level at 5 km takes the ray before the plain behind it
+        Sightline.Heights h = (x, z) -> x < 3_000 ? Double.NaN : x >= 5_000 && x < 5_100 ? 140 : 64;
+        double d = Sightline.ground(h, 0, 120, 0, 1, 0, 0, 0, 20_000);
+        assertEquals(5_000, d, 2);
+    }
+
+    @Test
+    void groundMissesBeyondVisibility() {
+        // the plain is met at 9 km, but rain limits sight to 5 km
+        double dy = -1.0 / 250, n = Math.sqrt(1 + dy * dy);
+        assertTrue(Double.isNaN(Sightline.ground((x, z) -> 64, 0, 100, 0, 1 / n, dy / n, 0, 0, 5_000)));
+    }
+
+    @Test
+    void groundSamplesAreBounded() {
+        int[] calls = {0};
+        Sightline.ground((x, z) -> {
+            calls[0]++;
+            return Double.NaN;
+        }, 0, 100, 0, 1, 0, 0, 0, 20_000);
+        assertTrue(calls[0] < 2_100, "points " + calls[0]);
+    }
 }
