@@ -72,4 +72,11 @@ class SightlineTest {
         }, 0, 100, 0, 1, 0, 0, 0, 20_000);
         assertTrue(calls[0] < 2_100, "points " + calls[0]);
     }
+
+    @Test
+    void groundIgnoresTheColumnsTheEyeStartsUnder() {
+        // eye at 65 under a roof (column top 70) for the first 4 blocks, then a plain at 64 and a hill at 2 km
+        Sightline.Heights h = (x, z) -> x < 4 ? 70 : x >= 2_000 ? 90 : 64;
+        assertEquals(2_000, Sightline.ground(h, 0.5, 65, 0.5, 1, 0, 0, 0, 20_000), 2, "not the roof over the player's head");
+    }
 }

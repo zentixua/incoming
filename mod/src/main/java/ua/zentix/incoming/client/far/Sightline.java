@@ -40,12 +40,17 @@ public final class Sightline {
 
     /**
      * Distance along a unit ray from the eye to the first column whose top reaches the ray, refined to a block;
-     * {@link Double#NaN} if none between {@code from} and {@code to}. Unknown columns are not ground.
+     * {@link Double#NaN} if none between {@code from} and {@code to}. Unknown columns are not ground. Only ground met
+     * after the ray has cleared terrain counts: an eye under a roof or below the column top it starts in would otherwise
+     * "hit" at its own feet.
      */
     public static double ground(Heights heights, double ex, double ey, double ez, double dx, double dy, double dz, double from, double to) {
         double prev = from;
+        boolean clear = false;
         for (double s = from; s <= to; s += Math.max(GROUND_STEP, s * GROUND_ANGLE)) {
-            if (reaches(heights, ex, ey, ez, dx, dy, dz, s)) {
+            if (!reaches(heights, ex, ey, ez, dx, dy, dz, s)) {
+                clear = true;
+            } else if (clear) {
                 double lo = prev, hi = s;
                 while (hi - lo > 0.5) {
                     double mid = (lo + hi) / 2;

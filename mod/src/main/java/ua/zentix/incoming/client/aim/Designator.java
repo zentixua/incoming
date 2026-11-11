@@ -107,7 +107,8 @@ public final class Designator {
         if (level.dimensionType().hasCeiling()) return null;
         double to = Math.min(Sight.range(level.getRainLevel(1f), level.getThunderLevel(1f)), IncomingConfig.SERVER.mapRange.get());
         if (look.y > 0) to = Math.min(to, (level.getMaxBuildHeight() - eye.y) / look.y);
-        double d = Sightline.ground(FarTerrain.of(level), eye.x, eye.y, eye.z, look.x, look.y, look.z, 0, to);
+        // The block ray already covered loaded chunks within RANGE: start where it stopped seeing blocks.
+        double d = Sightline.ground(FarTerrain.of(level), eye.x, eye.y, eye.z, look.x, look.y, look.z, loadedUntil(level, eye, look), to);
         if (Double.isNaN(d)) return null;
         int x = Mth.floor(eye.x + look.x * d), z = Mth.floor(eye.z + look.z * d);
         OptionalInt top = surface(level, x, z);
@@ -115,6 +116,14 @@ public final class Designator {
         Vec3 at = new Vec3(x + 0.5, top.getAsInt(), z + 0.5);
         return new TargetPicker.Pick(new Target.Point(at), at, TargetPicker.Kind.FAR,
                 Component.translatable("incoming.target.map_point", x, z), null);
+    }
+
+    /** Distance along the look ray covered by the block-accurate pick: up to {@link #RANGE} or the first unloaded chunk. */
+    private static double loadedUntil(ClientLevel level, Vec3 eye, Vec3 look) {
+        for (double s = 0; s < RANGE; s += 8) {
+            if (level.getChunkSource().getChunk(Mth.floor(eye.x + look.x * s) >> 4, Mth.floor(eye.z + look.z * s) >> 4, false) == null) return s;
+        }
+        return RANGE;
     }
 
     /** First air above ground, as the targeting map reports it (server refines once the chunk loads). */
