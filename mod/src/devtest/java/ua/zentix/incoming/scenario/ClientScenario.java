@@ -193,6 +193,10 @@ public final class ClientScenario {
             new ua.zentix.incoming.client.LodBufferScenario();
             return;
         }
+        if ("shots".equals(scenario)) {
+            new ServerShots(); // still frames on an existing multiplayer server (tools/prod_client.py shots --server)
+            return;
+        }
         if ("sandbox".equals(scenario)) {
             new Sandbox(); // sandbox effects: your own flat world, commands /fx, hot swap (tools/sandbox.sh)
             return;

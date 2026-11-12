@@ -189,8 +189,8 @@ def main():
         ap.error("the scripts come from the test assembly Incoming: without it there is no script")
     if a.server and (a.world or a.quickplay):
         ap.error("--server cannot be combined with --world or --quickplay")
-    if a.server and a.scenario:
-        ap.error("--server cannot run scenarios that open local worlds")
+    if a.server and a.scenario and a.scenario != "shots":
+        ap.error("--server runs only the shots scenario (it joins the server itself); others open local worlds")
     if a.quickplay and not a.world:
         ap.error("--quickplay needed --world")
     if a.copy_only and a.no_copy:
@@ -228,7 +228,9 @@ def main():
     game_extra = ["--width", width, "--height", height]
     if a.quickplay:
         game_extra += ["--quickPlaySingleplayer", world_name(a.world)]
-    if a.server:
+    if a.server and a.scenario:
+        props["incoming.server"] = a.server  # the scenario connects from the title screen
+    elif a.server:
         game_extra += ["--quickPlayMultiplayer", a.server]
 
     java = os.path.join(os.environ.get("JAVA_HOME") or paths.JAVA, "bin", "java")
