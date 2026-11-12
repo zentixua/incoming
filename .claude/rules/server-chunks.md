@@ -155,7 +155,11 @@ paths:
   it and `ChunkHolder.sectionLightChanged` sets its wrapped LevelChunk dirty, but `ImposterProtoChunk.isUnsaved()` is
   always false: `ChunkMap.save` skips the proxy, so unload/reload restores old spill. `work/BlockLighting` retains the
   already FULL edited root through its light fence and saves corrected wrapped neighbors through vanilla ChunkMap
-  (one neighbor per work unit; narrow AT). Promoting the ring to FULL recursively loads a dark city: new FULL chunks
+  (one neighbor per work unit; narrow AT), only those whose light changed: the fence passes through the chunk cache's
+  main-thread queue (`ChunkMap.mainThreadExecutor`, AT), where the light engine queued each changed section's dirty mark
+  before completing the wait, so the wrapped chunk's `isUnsaved` is current. Saving all eight took 27.5 % of the server
+  thread during a 500 kt settlement over a 1088-high world (Silo map 12.11.2026, JFR); the `light_late_*` GameTests hold
+  that changed neighbors still save; `BlockLighting.measurements` counts saved and clean neighbors. Promoting the ring to FULL recursively loads a dark city: new FULL chunks
   enter blackout, then need their own rings (49 batches / 80 promotions for one test root). No neighbor promotion is
   needed to serialize its existing light. Legacy recovery borrows FULL ring-1 once, giving initialized ring-2
   as source context for its ring-1 checks; borrowed loads do not recursively admit recovery. Without this extra

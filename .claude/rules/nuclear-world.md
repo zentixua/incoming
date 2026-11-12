@@ -316,7 +316,10 @@ paths:
   for (held or reading, waiting for a load slot, waiting for a read) and only those that can move are visited, so
   completed reads do not wait behind idle ones: visiting all 2048 each tick spent the lane and cut the window to 5–16
   for "mod budget" while the server thread idled 40–47 % (250 kt over Zearth, `nuke_settle_visits`). Admission and polling use the common nuclear clock,
-  after player ruins, preparation and fallout. Preparation must be idle; heap pressure and retained ruin data plus
+  after player ruins, preparation and fallout. No strike in flight may be preparing in any dimension
+  (`NuclearPrep.preparing`); a detonation's own zone behind the wave does not block it: waiting for the zone stopped
+  settlement for the zone's whole 10-minute hold (500 kt over the Silo map 12.11.2026: 0 of 325 632 positions while the zone
+  did 7238 of 169 372 chunks; GameTest `settlementRunsBesideZoneBehindTheWave`); heap pressure and retained ruin data plus
   live-worker buffers at half `PLANS_CAP` limit admission (the remainder is for player windows); durable per-chunk
   marks (`RuinContext.durableBytes`: shadow heightmaps, applied marks, ~1.8 KB a chunk) are left to the heap guard and
   excluded from every `PLANS_CAP` check (`NuclearWorld.workingRuinBytes`), otherwise a pass over a whole map stops for
@@ -382,7 +385,7 @@ paths:
   buffers counted once (`NuclearPrep.memory`). Disk reads check the shared headroom before each reservation;
   near snapshots leave estimated room for their 5x5 window. Front copies include other preparations' copies while
   excluding their own bytes from the room given back to FrontLods. Settlement shares retained-memory estimates
-  and pauses new admission while any dimension prepares; it still drains existing work. These are estimates,
+  and pauses new admission while any dimension prepares a strike in flight; it still drains existing work. These are estimates,
   not a proven total heap bound: unfinished solver-result sizes, all graph/layout metadata, ordinary world chunks
   and adapter/network ownership still need full accounting before increasing yields.
 - Worker lifetime (`RuinWorkers`): configuration changes resize the same executor, never drain an old pool beside
