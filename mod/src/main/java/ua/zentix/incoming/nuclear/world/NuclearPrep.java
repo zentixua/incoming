@@ -295,6 +295,17 @@ public final class NuclearPrep {
         return preps.isEmpty();
     }
 
+    /**
+     * A strike still in flight is being prepared (not yet handed to its detonation's zone behind the wave). Ruin
+     * settlement yields to these only: a handed-off zone does the same kind of work as settlement, inside its own
+     * memory estimate, and waiting for it stopped settlement for the whole {@link #ZONE_HOLD} (500 kt over the Silo map,
+     * 12.11.2026: 0 of 325 632 positions in 10 minutes while the zone finished 7238 of 169 372 chunks).
+     */
+    boolean preparing() {
+        for (Prep p : preps) if (p.detonation < 0) return true;
+        return false;
+    }
+
     /** Chunk unloaded: background plan unnecessary. */
     void forget(long chunk) {
         for (Prep p : preps) {

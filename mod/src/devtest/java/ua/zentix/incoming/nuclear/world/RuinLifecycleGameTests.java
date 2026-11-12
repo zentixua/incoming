@@ -117,6 +117,31 @@ public final class RuinLifecycleGameTests {
         h.succeed();
     }
 
+    /**
+     * Settlement yields to a strike still in flight (another dimension's too), not to a detonation's own zone behind
+     * the wave: waiting for that stopped settlement for the zone's whole 10-minute hold (500 kt, Silo map, 12.11.2026).
+     */
+    @GameTest(template = "range", timeoutTicks = 100, batch = "nuke_lifecycle_settle_gate", skyAccess = true)
+    public static void settlementRunsBesideZoneBehindTheWave(GameTestHelper h) throws ReflectiveOperationException {
+        var level = h.getLevel();
+        var other = level.getServer().getLevel(net.minecraft.world.level.Level.NETHER);
+        h.assertTrue(other != null, "missing second dimension");
+        var world = NuclearWorld.get(level);
+        h.assertTrue(world.settleCanAdmit(level), "settlement blocked before any preparation");
+        Object zone = preparation(world.prep(), -1011);
+        Object flying = null;
+        try {
+            field(zone, "detonation").setInt(zone, 1011);
+            h.assertTrue(world.settleCanAdmit(level), "settlement waited for a handed-off zone behind the wave");
+            flying = preparation(NuclearWorld.get(other).prep(), -1012);
+            h.assertTrue(!world.settleCanAdmit(level), "settlement ignored a strike in flight in another dimension");
+        } finally {
+            preparations(world.prep()).remove(zone);
+            if (flying != null) preparations(NuclearWorld.get(other).prep()).remove(flying);
+        }
+        h.succeed();
+    }
+
     @GameTest(template = "range", timeoutTicks = 100, batch = "nuke_lifecycle_detached", skyAccess = true)
     @SuppressWarnings("unchecked")
     public static void removedPreparationKeepsUnfinishedReadsCharged(GameTestHelper h) throws ReflectiveOperationException {

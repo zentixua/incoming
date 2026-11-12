@@ -177,9 +177,10 @@ public final class NuclearWorld {
         return Math.max(0, NuclearPrep.PLANS_CAP / 2 - NuclearPrep.memory(level, false));
     }
 
+    /** No strike in flight is being prepared in any dimension ({@link NuclearPrep#preparing}). */
     boolean settleCanAdmit(ServerLevel level) {
         for (ServerLevel other : level.getServer().getAllLevels()) {
-            if (other.hasData(ModAttachments.NUCLEAR_WORLD) && !get(other).prep.idle()) return false;
+            if (other.hasData(ModAttachments.NUCLEAR_WORLD) && get(other).prep.preparing()) return false;
         }
         return true;
     }

@@ -44,14 +44,17 @@ public final class BlockLighting {
     private boolean stopping;
     private long completed, recovered, workNanos, recoveryNanos, checks, readyNanos;
     private int peakHeld;
+    /** Wrapped initialized neighbors saved because their light changed, and those left alone (light unchanged). */
+    private long savedNeighbours, cleanNeighbours;
 
     /** Cumulative per-world diagnostics; no timing thresholds affect correctness. */
     public record Measurements(long completed, long recovered, long workNanos, long recoveryNanos,
                                long checks, long readyNanos, int peakHeld, long admitted, long droppedUnloaded,
-                               long droppedCapacity, long marked, int peakPending) {}
+                               long droppedCapacity, long marked, int peakPending, long savedNeighbours,
+                               long cleanNeighbours) {}
     public Measurements measurements() {
         return new Measurements(completed, recovered, workNanos, recoveryNanos, checks, readyNanos, peakHeld,
-                admitted, droppedUnloaded, droppedCapacity, marked, peakPending);
+                admitted, droppedUnloaded, droppedCapacity, marked, peakPending, savedNeighbours, cleanNeighbours);
     }
 
     public static BlockLighting get(ServerLevel level) { return level.getData(ModAttachments.BLOCK_LIGHTING); }
@@ -325,7 +328,12 @@ public final class BlockLighting {
                 }
                 fencedRevision = revision;
                 saveNext = 0;
-                fence = CompletableFuture.allOf(waits.toArray(CompletableFuture<?>[]::new));
+                // The light engine queues each changed section's dirty mark (ServerChunkCache.onLightUpdate ->
+                // ChunkHolder.sectionLightChanged) on the chunk cache's main-thread executor before it completes these
+                // waits. Passing the fence through the same FIFO queue runs those marks first, so a wrapped neighbor's
+                // isUnsaved() below tells whether its light changed.
+                var main = level.getChunkSource().chunkMap.mainThreadExecutor;
+                fence = CompletableFuture.allOf(waits.toArray(CompletableFuture<?>[]::new)).thenRunAsync(() -> {}, main::tell);
                 return true;
             }
             fence.join(); // ready() checked completion; this never waits.
@@ -333,12 +341,19 @@ public final class BlockLighting {
                 ChunkPos p = saveAt(saveNext++);
                 LevelChunk chunk = wrapped(level, p);
                 if (chunk != null) {
-                    // The arrays are published; do not depend on still queued dirty notifications at world exit.
-                    chunk.setUnsaved(true);
-                    if (level.getChunkSource().getChunkNow(p.x, p.z) == null) {
+                    if (level.getChunkSource().getChunkNow(p.x, p.z) != null) {
+                        // FULL: vanilla saves it when dirty; the arrays are published.
+                        chunk.setUnsaved(true);
+                    } else if (chunk.isUnsaved()) {
                         // A radius-zero root retains this initialized neighbor but its proxy cannot save it.
                         // Vanilla serialization/events/async I/O remain authoritative (including ChunkSaves).
+                        // Only a neighbor whose light changed (dirty mark ran before the fence): saving all eight
+                        // took 27.5 % of the server thread during a ruin settlement over a 1088-high world and held it
+                        // to 14 chunks a second (500 kt, Silo map, 12.11.2026, JFR).
                         level.getChunkSource().chunkMap.save(chunk);
+                        savedNeighbours++;
+                    } else {
+                        cleanNeighbours++;
                     }
                 }
                 return true;
