@@ -213,7 +213,12 @@ public final class FxLayer {
                 FxViews.saveTarget();
                 try {
                     RenderLevelStageEvent view = FxViews.event(e);
-                    if (view != null) draw(view);
+                    if (view != null) {
+                        if (!ua.zentix.incoming.client.nuclear.ClientNuclear.isEmpty())
+                            ua.zentix.incoming.client.nuclear.NukeRenderer.renderView(view);
+                        draw(view);
+                        ua.zentix.incoming.client.nuclear.NukeRenderer.renderRainView(view);
+                    }
                     if (!FxViews.skipped()) ua.zentix.incoming.client.render.PlumeRenderer.endFrame();
                 } finally {
                     FxViews.restoreTarget();

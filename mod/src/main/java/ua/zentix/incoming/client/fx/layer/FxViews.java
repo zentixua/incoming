@@ -125,7 +125,10 @@ public final class FxViews {
     /** A failed world render may never dispatch AFTER_LEVEL. Unwind before the next outer frame. */
     public static void outerFrame() {
         if (scope != null) while (scope != null) end();
-        if (views != null) views.expire(System.nanoTime());
+        if (views != null) {
+            views.expire(System.nanoTime());
+            if (views.size() == 0) views = null;
+        }
     }
 
     public static void clear() {
@@ -183,8 +186,10 @@ public final class FxViews {
                 GL30.GL_FRAMEBUFFER_ATTACHMENT_TEXTURE_LEVEL) != 0
                 || GL30.glGetFramebufferAttachmentParameteri(GL30.GL_DRAW_FRAMEBUFFER, GL30.GL_DEPTH_ATTACHMENT,
                 GL32.GL_FRAMEBUFFER_ATTACHMENT_LAYERED) != 0) return null;
-        int w = GlStateManager.Viewport.width(), h = GlStateManager.Viewport.height();
-        if (w <= 0 || h <= 0 || GlStateManager.Viewport.x() != 0 || GlStateManager.Viewport.y() != 0) return null;
+        int[] viewport = new int[4];
+        GL11.glGetIntegerv(GL11.GL_VIEWPORT, viewport);
+        int w = viewport[2], h = viewport[3];
+        if (w <= 0 || h <= 0 || viewport[0] != 0 || viewport[1] != 0) return null;
         RenderTarget current = Minecraft.getInstance().getMainRenderTarget();
         if (current.frameBufferId == draw && current.getDepthTextureId() == depth) {
             return current.width == w && current.height == h ? new Target(draw, depth, w, h) : null;

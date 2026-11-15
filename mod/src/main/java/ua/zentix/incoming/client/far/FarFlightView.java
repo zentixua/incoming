@@ -136,15 +136,15 @@ public final class FarFlightView {
      * vector (shared at segment joints); frame numbers in which end and cross vector were computed.
      */
     private static final int ENDS = HEAD + MAX_NOZZLES;
-    private static final double[] EX = new double[ENDS], EY = new double[ENDS], EZ = new double[ENDS], EH = new double[ENDS];
-    private static final float[] EA = new float[ENDS], ER = new float[ENDS], EG = new float[ENDS], EB = new float[ENDS];
-    private static final float[] NX = new float[ENDS], NY = new float[ENDS], NZ = new float[ENDS];
-    private static final int[] EL = new int[ENDS], DRAWN = new int[ENDS], ACROSS = new int[ENDS];
+    private static double[] EX = new double[ENDS], EY = new double[ENDS], EZ = new double[ENDS], EH = new double[ENDS];
+    private static float[] EA = new float[ENDS], ER = new float[ENDS], EG = new float[ENDS], EB = new float[ENDS];
+    private static float[] NX = new float[ENDS], NY = new float[ENDS], NZ = new float[ENDS];
+    private static int[] EL = new int[ENDS], DRAWN = new int[ENDS], ACROSS = new int[ENDS];
     /** Tube at end: width at half centre opacity and cross-section σ, m; extinction per metre, m; albedo; billow seed. */
-    private static final double[] EW = new double[ENDS], ES = new double[ENDS], EE = new double[ENDS], EO = new double[ENDS];
-    private static final long[] ESEED = new long[ENDS];
+    private static double[] EW = new double[ENDS], ES = new double[ENDS], EE = new double[ENDS], EO = new double[ENDS];
+    private static long[] ESEED = new long[ENDS];
     /** Point's projectile: its trail tube (places in same tube never merge, {@code SmokePuffs.Draw#mergeLevel}). */
-    private static final int[] EOWNER = new int[ENDS];
+    private static int[] EOWNER = new int[ENDS];
     /** Frame look belongs to segments ({@link #segment}). */
     @Nullable
     private static FarView seen;
@@ -1387,6 +1387,26 @@ public final class FarFlightView {
                 double p = f.framePath; f.framePath = framePath; framePath = p;
             }
         }
+        private double[] EX = new double[ENDS];
+        private double[] EY = new double[ENDS];
+        private double[] EZ = new double[ENDS];
+        private double[] EH = new double[ENDS];
+        private double[] EW = new double[ENDS];
+        private double[] ES = new double[ENDS];
+        private double[] EE = new double[ENDS];
+        private double[] EO = new double[ENDS];
+        private float[] EA = new float[ENDS];
+        private float[] ER = new float[ENDS];
+        private float[] EG = new float[ENDS];
+        private float[] EB = new float[ENDS];
+        private float[] NX = new float[ENDS];
+        private float[] NY = new float[ENDS];
+        private float[] NZ = new float[ENDS];
+        private int[] EL = new int[ENDS];
+        private int[] DRAWN = new int[ENDS];
+        private int[] ACROSS = new int[ENDS];
+        private int[] EOWNER = new int[ENDS];
+        private long[] ESEED = new long[ENDS];
         private FarView seen;
         private double stride = 1;
         private int clubs;
@@ -1421,6 +1441,26 @@ public final class FarFlightView {
         public void swap() {
             optics.keySet().removeIf(f -> f.seen != pass);
             for (Far f : FARS) optics.computeIfAbsent(f, ignored -> new Optics()).swap(f);
+            double[] oldEX = FarFlightView.EX; FarFlightView.EX = EX; EX = oldEX;
+            double[] oldEY = FarFlightView.EY; FarFlightView.EY = EY; EY = oldEY;
+            double[] oldEZ = FarFlightView.EZ; FarFlightView.EZ = EZ; EZ = oldEZ;
+            double[] oldEH = FarFlightView.EH; FarFlightView.EH = EH; EH = oldEH;
+            double[] oldEW = FarFlightView.EW; FarFlightView.EW = EW; EW = oldEW;
+            double[] oldES = FarFlightView.ES; FarFlightView.ES = ES; ES = oldES;
+            double[] oldEE = FarFlightView.EE; FarFlightView.EE = EE; EE = oldEE;
+            double[] oldEO = FarFlightView.EO; FarFlightView.EO = EO; EO = oldEO;
+            float[] oldEA = FarFlightView.EA; FarFlightView.EA = EA; EA = oldEA;
+            float[] oldER = FarFlightView.ER; FarFlightView.ER = ER; ER = oldER;
+            float[] oldEG = FarFlightView.EG; FarFlightView.EG = EG; EG = oldEG;
+            float[] oldEB = FarFlightView.EB; FarFlightView.EB = EB; EB = oldEB;
+            float[] oldNX = FarFlightView.NX; FarFlightView.NX = NX; NX = oldNX;
+            float[] oldNY = FarFlightView.NY; FarFlightView.NY = NY; NY = oldNY;
+            float[] oldNZ = FarFlightView.NZ; FarFlightView.NZ = NZ; NZ = oldNZ;
+            int[] oldEL = FarFlightView.EL; FarFlightView.EL = EL; EL = oldEL;
+            int[] oldDRAWN = FarFlightView.DRAWN; FarFlightView.DRAWN = DRAWN; DRAWN = oldDRAWN;
+            int[] oldACROSS = FarFlightView.ACROSS; FarFlightView.ACROSS = ACROSS; ACROSS = oldACROSS;
+            int[] oldEOWNER = FarFlightView.EOWNER; FarFlightView.EOWNER = EOWNER; EOWNER = oldEOWNER;
+            long[] oldESEED = FarFlightView.ESEED; FarFlightView.ESEED = ESEED; ESEED = oldESEED;
             FarView oldseen = FarFlightView.seen;
             FarFlightView.seen = seen;
             seen = oldseen;

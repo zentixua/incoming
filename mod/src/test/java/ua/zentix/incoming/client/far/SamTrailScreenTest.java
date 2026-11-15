@@ -52,6 +52,7 @@ class SamTrailScreenTest {
                 FarFlightView.collectTrails(view, screen.sprites, 120 + 20 * seconds, points, air);
                 // billows trail locations waiting for frame plan: frame over
                 SmokePuffs.flush();
+                if (seconds == 30) secondaryCannotReplaceTrailCache(points, air);
                 screen.raster();
                 double peak = 0;
                 int visible = 0;
@@ -66,8 +67,36 @@ class SamTrailScreenTest {
         }
     }
 
+    private static void secondaryCannotReplaceTrailCache(TrailPoints points, Air air) throws Exception {
+        var x = FarFlightView.class.getDeclaredField("EX");
+        var drawn = FarFlightView.class.getDeclaredField("DRAWN");
+        var across = FarFlightView.class.getDeclaredField("ACROSS");
+        x.setAccessible(true); drawn.setAccessible(true); across.setAccessible(true);
+        double[] expectedX = ((double[]) x.get(null)).clone();
+        int[] expectedDrawn = ((int[]) drawn.get(null)).clone(), expectedAcross = ((int[]) across.get(null)).clone();
+        var trail = new FarFlightView.ViewState();
+        var smoke = new SmokePuffs.ViewState();
+        trail.swap(); smoke.swap();
+        try {
+            FarView other = view(new Vec3(150, 50, -150));
+            Screen secondary = new Screen(other);
+            FarFlightView.collectTrails(other, secondary.sprites, 720, points, air);
+            SmokePuffs.flush();
+            secondary.raster();
+        } finally {
+            smoke.swap(); trail.swap();
+        }
+        assertArrayEquals(expectedX, (double[]) x.get(null), "primary camera-relative trail endpoints");
+        assertArrayEquals(expectedDrawn, (int[]) drawn.get(null), "primary trail frame stamps");
+        assertArrayEquals(expectedAcross, (int[]) across.get(null), "primary ribbon-joint stamps");
+    }
+
     private static FarView view() {
-        Vec3 eye = new Vec3(-150, 100, 150), aim = new Vec3(300, 170, -700);
+        return view(new Vec3(-150, 100, 150));
+    }
+
+    private static FarView view(Vec3 eye) {
+        Vec3 aim = new Vec3(300, 170, -700);
         Vector3f f = aim.subtract(eye).toVector3f().normalize(), left = new Vector3f(0, 1, 0).cross(f, new Vector3f()).normalize();
         Vector3f up = f.cross(left, new Vector3f()).normalize();
         return new FarView(eye, f, left, up, 0, 1000, 2 * Math.tan(Math.toRadians(35)) / Screen.H,

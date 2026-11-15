@@ -93,7 +93,7 @@ public final class NukeSky {
         e.setBlue(b);
     }
 
-    private static float viewRain(Vec3 eye, float partial) {
+    static float viewRain(Vec3 eye, float partial) {
         if (!ua.zentix.incoming.client.fx.layer.FxViews.secondary()) return rain;
         ClientLevel level = Minecraft.getInstance().level;
         if (level != null && Detonation.underOpenSky(level, eye))

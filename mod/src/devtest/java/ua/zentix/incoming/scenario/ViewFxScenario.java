@@ -104,11 +104,14 @@ final class ViewFxScenario {
             try { Files.writeString(out.resolve("result.txt"), result); }
             catch (Exception ex) { throw new IllegalStateException(ex); }
             Incoming.LOG.info("VIEWFX RESULT {}", result.strip());
+            feeds.clear();
             mc.stop();
         }
     }
 
     private void unsupportedTargets() {
+        try { Class.forName("ua.zentix.incoming.client.fx.layer.FxViews"); }
+        catch (ClassNotFoundException baseline) { return; }
         int oldDraw = GL11.glGetInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
         int oldRead = GL11.glGetInteger(GL30.GL_READ_FRAMEBUFFER_BINDING);
         int oldRenderbuffer = GL11.glGetInteger(GL30.GL_RENDERBUFFER_BINDING);
@@ -125,7 +128,7 @@ final class ViewFxScenario {
             GL30.glRenderbufferStorageMultisample(GL30.GL_RENDERBUFFER, 4, GL30.GL_DEPTH_COMPONENT24, 16, 16);
             expectSkipped(camera, "multisample depth");
         } finally {
-            ua.zentix.incoming.client.fx.layer.FxViews.outerFrame();
+            viewCall("outerFrame");
             GL30.glBindRenderbuffer(GL30.GL_RENDERBUFFER, oldRenderbuffer);
             GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, oldDraw);
             GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, oldRead);
@@ -134,11 +137,19 @@ final class ViewFxScenario {
         }
     }
 
+    /** Also run the ordinary-view fixture against a pre-fix jar for the screenshot comparison. */
+    private static Object viewCall(String name, Object... args) {
+        try {
+            Class<?> type = Class.forName("ua.zentix.incoming.client.fx.layer.FxViews");
+            return type.getMethod(name, args.length == 0 ? new Class<?>[0] : new Class<?>[]{Camera.class}).invoke(null, args);
+        } catch (ReflectiveOperationException ex) { throw new IllegalStateException(ex); }
+    }
+
     private void expectSkipped(Camera camera, String description) {
         List<Object> before = snapshot();
-        ua.zentix.incoming.client.fx.layer.FxViews.begin(camera);
-        boolean skipped = ua.zentix.incoming.client.fx.layer.FxViews.skipped();
-        ua.zentix.incoming.client.fx.layer.FxViews.outerFrame();
+        viewCall("begin", camera);
+        boolean skipped = (boolean) viewCall("skipped");
+        viewCall("outerFrame");
         if (!skipped || !before.equals(snapshot())) failures++;
         Incoming.LOG.info("VIEWFX unsupported {} skipped={} primaryUnchanged={}", description, skipped, before.equals(snapshot()));
     }
@@ -173,6 +184,7 @@ final class ViewFxScenario {
     }
 
     private void frame(RenderFrameEvent.Post event) {
+        if (tick >= 640 || Minecraft.getInstance().level == null) return;
         for (Object feed : feeds) try {
             Method get = Arrays.stream(feed.getClass().getMethods()).filter(m -> m.getName().equals("getTexture")
                     && m.getParameterCount() == 3).findFirst().orElseThrow();
@@ -203,7 +215,8 @@ final class ViewFxScenario {
         outer = List.of(field(nuke, light, "prepared"), field(nuke, light, "exposure"),
                 field(nuke, light, "bodyExposure"), field(layer + "SceneDepth$ViewState", depth, "current"),
                 new org.joml.Matrix4f((org.joml.Matrix4f) field(layer + "PallPass$ViewState", pall, "PREVIOUS")),
-                field(layer + "FxLayer$ViewState", fx, "FOG"));
+                field(layer + "FxLayer$ViewState", fx, "FOG"),
+                new org.joml.Matrix4f((org.joml.Matrix4f) field("ua.zentix.incoming.client.render.ScreenProjection", null, "VIEW_PROJ")));
     }
 
     private static Object field(String type, Object object, String name) {
@@ -220,13 +233,17 @@ final class ViewFxScenario {
         return List.of(field(nuclear, null, "prepared"), field(nuclear, null, "exposure"),
                 field(nuclear, null, "bodyExposure"), field(layer + "SceneDepth", null, "current"),
                 new org.joml.Matrix4f((org.joml.Matrix4f) field(layer + "PallPass", null, "PREVIOUS")),
-                field(layer + "FxLayer", null, "FOG"));
+                field(layer + "FxLayer", null, "FOG"),
+                new org.joml.Matrix4f((org.joml.Matrix4f) field("ua.zentix.incoming.client.render.ScreenProjection", null, "VIEW_PROJ")));
     }
 
     private void metrics() {
+        try { Class.forName("ua.zentix.incoming.client.fx.layer.FxViews"); }
+        catch (ClassNotFoundException baseline) { return; }
         String layer = "ua.zentix.incoming.client.fx.layer.";
         Object cache = field(layer + "FxViews", null, "views");
         if (cache == null) return;
+        Incoming.LOG.info("VIEWFX metrics tick={} primaryFrames={} secondaryFrames={}", tick, primaryFrames, secondaryFrames);
         List<?> entries = (List<?>) field(layer + "SecondaryViews", cache, "entries");
         for (Object entry : entries) {
             Object saved = field(layer + "SecondaryViews$Entry", entry, "value");
@@ -248,9 +265,6 @@ final class ViewFxScenario {
         draw = GL11.glGetInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
         read = GL11.glGetInteger(GL30.GL_READ_FRAMEBUFFER_BINDING);
         GL11.glGetIntegerv(GL11.GL_VIEWPORT, viewport);
-        feedEye = event.getCamera().getPosition();
-        feedYaw = event.getCamera().getYRot();
-        feedPitch = event.getCamera().getXRot();
     }
 
     private void after(RenderLevelStageEvent event) {
@@ -269,7 +283,12 @@ final class ViewFxScenario {
             Incoming.LOG.error("VIEWFX target restoration failed");
         }
         if (tick >= 260 && tick < 280) shot(Minecraft.getInstance().getMainRenderTarget(), "feed-fireball");
-        if (tick >= 480 && tick < 500) shot(Minecraft.getInstance().getMainRenderTarget(), "feed-mushroom-smoke");
+        if (tick >= 480 && tick < 500 && !Files.exists(out.resolve("feed-mushroom-smoke.png"))) {
+            feedEye = event.getCamera().getPosition();
+            feedYaw = event.getCamera().getYRot();
+            feedPitch = event.getCamera().getXRot();
+            shot(Minecraft.getInstance().getMainRenderTarget(), "feed-mushroom-smoke");
+        }
     }
 
     private static void commands(String... commands) {

@@ -650,7 +650,7 @@ public final class PallPass {
         if (DETAIL.pin(SCENARIO || FxViews.secondary() || FlashbackReplay.exporting())) {
             Step at = LADDER[Math.max(0, DETAIL.level)];
             if (DETAIL.pinned) {
-                Incoming.LOG.info("Nuclear dust pall: {}, detail pinned at the setting {}", SCENARIO ? "client scenario" : "Flashback video export",
+                Incoming.LOG.info("Nuclear dust pall: {}, detail pinned at the setting {}", SCENARIO ? "client scenario" : FxViews.secondary() ? "secondary view" : "Flashback video export",
                         at.describe());
             } else {
                 Incoming.LOG.info("Nuclear dust pall: Flashback video export over, detail follows the GPU budget again from {}", at.describe());
