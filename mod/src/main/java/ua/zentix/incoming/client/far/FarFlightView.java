@@ -116,6 +116,7 @@ public final class FarFlightView {
     private static int owners;
     /** Path traversal tick (unseen paths are forgotten). */
     private static long pass;
+    private static ViewRays viewRays;
     /** Projectiles in flight (far: body and plume; near entity: plume light). */
     private static int active;
     @Nullable
@@ -233,6 +234,8 @@ public final class FarFlightView {
          */
         float openPrev = 1, open = 1, openTarget = 1;
         boolean sighted;
+        /** Secondary-only elapsed-tick sampling; the primary keeps its existing staggered tick law. */
+        long viewSight = -SIGHT_PERIOD;
         /** Model uses simplified detail copies (small onscreen; hysteresis prevents threshold flutter). */
         boolean coarse = true;
         /** Launch cloud: jet struck ground (null — did not); whether it does this path tick (then no ribbon points). */
@@ -550,6 +553,10 @@ public final class FarFlightView {
             f.open += Mth.clamp(f.openTarget - f.open, -FADE, FADE);
             return;
         }
+        sightRay(f, eye, world);
+    }
+
+    private static void sightRay(Far f, Vec3 eye, double world) {
         double dx = POS[0] - eye.x, dz = POS[2] - eye.z;
         boolean inWorld = dx * dx + dz * dz <= world * world;
         boolean hidden = heights != null && !inWorld && Sightline.trace(heights, POS[0], POS[1], POS[2], eye.x, eye.y, eye.z).hidden() > HIDDEN;
@@ -567,9 +574,28 @@ public final class FarFlightView {
     /** A feed samples occlusion at its own eye; it does not advance projectile paths. */
     public static void viewEye(Vec3 eye, double world) {
         long now = FlightTracks.now();
-        for (Far f : FARS) {
-            f.sighted = false;
-            sight(f, now, eye, world);
+        if (FARS.isEmpty() || !viewRays.begin(now)) return;
+        int size = FARS.size(), start = viewRays.cursor % size;
+        for (int i = 0; i < size; i++) {
+            int at = (start + i) % size;
+            Far f = FARS.get(at);
+            f.visPrev = f.vis;
+            f.openPrev = f.open;
+            if (f.track.isDead()) continue;
+            if (!f.track.fromServer() && !hasFlame(f, now - 1)) {
+                f.sighted = false;
+                continue;
+            }
+            // Elapsed ticks, rather than owner parity: a 10 Hz feed can otherwise permanently miss
+            // the odd phases of the primary renderer's four-tick stagger.
+            if (viewRays.trace(now, f.sighted ? f.viewSight : -SIGHT_PERIOD, SIGHT_PERIOD)) {
+                viewRays.cursor = (at + 1) % size;
+                f.viewSight = now;
+                if (f.track.predict(now - 1, POS)) sightRay(f, eye, world);
+            } else {
+                f.vis += Mth.clamp(f.visTarget - f.vis, -FADE, FADE);
+                f.open += Mth.clamp(f.openTarget - f.open, -FADE, FADE);
+            }
         }
     }
 
@@ -1373,6 +1399,7 @@ public final class FarFlightView {
         private static final class Optics {
             float visPrev = 1, vis = 1, visTarget = 1, openPrev = 1, open = 1, openTarget = 1;
             boolean sighted, coarse = true;
+            long viewSight = -SIGHT_PERIOD;
             double framePath;
 
             void swap(Far f) {
@@ -1383,6 +1410,7 @@ public final class FarFlightView {
                 float o = f.open; f.open = open; open = o;
                 float ot = f.openTarget; f.openTarget = openTarget; openTarget = ot;
                 boolean s = f.sighted; f.sighted = sighted; sighted = s;
+                long vs = f.viewSight; f.viewSight = viewSight; viewSight = vs;
                 boolean c = f.coarse; f.coarse = coarse; coarse = c;
                 double p = f.framePath; f.framePath = framePath; framePath = p;
             }
@@ -1407,6 +1435,7 @@ public final class FarFlightView {
         private int[] ACROSS = new int[ENDS];
         private int[] EOWNER = new int[ENDS];
         private long[] ESEED = new long[ENDS];
+        private ViewRays viewRays = new ViewRays(FarBlasts.TRACES_PER_TICK, 0);
         private FarView seen;
         private double stride = 1;
         private int clubs;
@@ -1439,6 +1468,7 @@ public final class FarFlightView {
         private double flamesAtEye;
 
         public void swap() {
+            ViewRays oldRays = FarFlightView.viewRays; FarFlightView.viewRays = viewRays; viewRays = oldRays;
             optics.keySet().removeIf(f -> f.seen != pass);
             for (Far f : FARS) optics.computeIfAbsent(f, ignored -> new Optics()).swap(f);
             double[] oldEX = FarFlightView.EX; FarFlightView.EX = EX; EX = oldEX;

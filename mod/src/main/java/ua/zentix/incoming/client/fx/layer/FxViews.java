@@ -55,17 +55,20 @@ public final class FxViews {
     /** Before nuclear fog/light sampling or world entity submissions. */
     public static void begin(Camera camera) {
         if (!secondary(camera)) {
-            if (scope != null) while (scope != null) end();
+            resumePrimary();
             return;
         }
-        if (level != Minecraft.getInstance().level) {
-            clear();
-            level = Minecraft.getInstance().level;
-        }
+        ClientLevel currentLevel = Minecraft.getInstance().level;
+        if (views != null && level != currentLevel) clear();
         int draw = GL11.glGetInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
-        if (scope != null && scope.camera == camera && scope.framebuffer == draw) return;
+        // Fog and entity stages may bind different pipeline FBOs. They are still one camera invocation;
+        // AFTER_LEVEL validates its target and skips it if the early target no longer matches.
+        if (scope != null && scope.camera == camera) return;
         Target target = target(draw);
-        if (views == null && target != null) views = new SecondaryViews<>(Saved::close);
+        if (views == null && target != null) {
+            views = new SecondaryViews<>(Saved::close);
+            level = currentLevel;
+        }
         if (target != null) views.invalidate(key -> key.framebuffer == draw && !key.equals(target));
         var entry = target == null ? null : views.acquire(target, System.nanoTime(), Saved::new);
         Scope next = new Scope(scope, camera, draw, entry);
@@ -89,7 +92,7 @@ public final class FxViews {
     static RenderLevelStageEvent event(RenderLevelStageEvent event) {
         if (scope == null || scope.entry == null || !scope.captured || scope.camera != event.getCamera()
                 || !scope.entry.key.equals(target(GL11.glGetInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING)))) {
-            warn("secondary AFTER_LEVEL without its AFTER_ENTITIES capture");
+            warn("secondary AFTER_LEVEL without a matching capture/target");
             return null;
         }
         return new RenderLevelStageEvent(event.getStage(), event.getLevelRenderer(), event.getPoseStack(),
@@ -122,12 +125,24 @@ public final class FxViews {
         scope = done.parent;
     }
 
+    /** An aborted secondary render must not lend its storage to the next primary stage or client tick. */
+    public static void resumePrimary() {
+        if (scope != null) while (scope != null) end();
+    }
+
     /** A failed world render may never dispatch AFTER_LEVEL. Unwind before the next outer frame. */
     public static void outerFrame() {
-        if (scope != null) while (scope != null) end();
+        resumePrimary();
         if (views != null) {
+            if (level != Minecraft.getInstance().level) {
+                clear();
+                return;
+            }
             views.expire(System.nanoTime());
-            if (views.size() == 0) views = null;
+            if (views.size() == 0) {
+                views = null;
+                level = null;
+            }
         }
     }
 

@@ -227,6 +227,7 @@ public final class FxLayer {
             }
             return;
         }
+        FxViews.resumePrimary();
         // Minecraft itself calls this stage (not the section rendering that Sodium replaces); the fog is already the
         // world's fog
         if (e.getStage() == RenderLevelStageEvent.Stage.AFTER_ENTITIES) {

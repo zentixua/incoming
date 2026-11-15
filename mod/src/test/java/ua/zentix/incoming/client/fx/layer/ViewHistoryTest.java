@@ -17,6 +17,15 @@ class ViewHistoryTest {
     }
 
     @Test
+    void secondaryBloomAllocatesItsOwnTexturesAndFramebuffers() throws ReflectiveOperationException {
+        var secondary = new FxBloom.ViewState();
+        for (String name : new String[]{"LEVEL", "LEVEL_FBO"}) {
+            int[] ids = (int[]) field(FxBloom.ViewState.class, name).get(secondary);
+            for (int id : ids) assertEquals(-1, id, "zero would bind the default target instead of allocating " + name);
+        }
+    }
+
+    @Test
     void nestedViewsDoNotChangePrimaryDepthAndPallHistory() throws ReflectiveOperationException {
         Field previous = field(PallPass.class, "PREVIOUS"), current = field(SceneDepth.class, "current");
         Field valid = field(SceneDepth.class, "previousValid"), history = field(PallPass.class, "history");

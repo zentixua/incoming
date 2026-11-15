@@ -38,11 +38,12 @@ import java.util.Optional;
 final class ViewFxScenario {
     private final boolean vista = ModList.get().isLoaded("vista");
     private final int count = Math.clamp(Integer.getInteger("incoming.viewfx.feeds", 1), 1, 4);
+    private final int raid = Math.clamp(Integer.getInteger("incoming.viewfx.strikes", 1), 1, 100);
     private final List<Object> feeds = new ArrayList<>();
     private final Path out = Minecraft.getInstance().gameDirectory.toPath().resolve("viewfx");
     private Camera primaryCamera;
     private RenderTarget primaryTarget;
-    private int tick, secondaryFrames, primaryFrames, failures;
+    private int tick, secondaryFrames, primaryFrames, failures, connected;
     private int draw, read;
     private final int[] viewport = new int[4];
     private long started, secondaryNanos;
@@ -58,7 +59,7 @@ final class ViewFxScenario {
         NeoForge.EVENT_BUS.addListener(this::tick);
         NeoForge.EVENT_BUS.addListener(this::frame);
         try { Files.createDirectories(out); } catch (Exception ex) { throw new IllegalStateException(ex); }
-        Incoming.LOG.info("VIEWFX scenario vista={} feeds={}", vista, count);
+        Incoming.LOG.info("VIEWFX scenario vista={} feeds={} strikes={}", vista, count, raid);
     }
 
     private void tick(ClientTickEvent.Post event) {
@@ -67,6 +68,7 @@ final class ViewFxScenario {
         primaryCamera = mc.gameRenderer.getMainCamera();
         primaryTarget = mc.getMainRenderTarget();
         tick++;
+        if (tick == 60) abortedScope();
         if (tick == 80) {
             commands("forceload add -64 -16 32 16", "tp @a 0.5 65 1.5 180 0");
             if (vista) for (int i = 0; i < count; i++) {
@@ -74,38 +76,77 @@ final class ViewFxScenario {
                 commands("setblock " + x + " 65 -3 minecraft:redstone_block",
                         "setblock " + x + " 66 -3 vista:television[facing=south,powered=direct]",
                         "setblock " + (10 + x) + " 65 -3 minecraft:stone",
-                        "setblock " + (10 + x) + " 66 -3 vista:viewfinder{UUID:[I;1,2,3," + (4 + i) + "],yaw:90f,pitch:-15f}");
+                        "setblock " + (10 + x) + " 66 -3 vista:viewfinder{UUID:[I;1,2,3," + (4 + i) + "],yaw:-90f,pitch:-22f}");
             }
             if (count == 4) commands("tp @a 4.5 65 6.5 180 0");
         }
-        if (vista && tick > 100 && feeds.size() < count) connect();
+        if (vista && tick > 100 && tick < 520 && feeds.size() < count) connect();
         if (tick == 120) unsupportedTargets();
         if (tick == 180) nuke(false);
         if (tick == 360) {
             ClientNuclear.reset();
             nuke(true);
-            ClientHooks.get().blast(new S2C.Blast(S2C.Blast.MISSILE, new Vec3(-40, 65, -8),
-                    GroundMaterial.DIRT.ordinal(), 65, 1234, Optional.empty(), WeaponType.MISSILE.id(),
-                    S2C.Blast.DOWN, false, Optional.empty()));
+            for (int i = 0; i < raid; i++) {
+                Vec3 at = raid == 1 ? new Vec3(-40, 65, -8) : new Vec3(-50 + (i % 10) * 2, 65, -18 + (i / 10) * 2);
+                ClientHooks.get().blast(new S2C.Blast(S2C.Blast.MISSILE, at,
+                        GroundMaterial.DIRT.ordinal(), 65, 1234 + i, Optional.empty(), WeaponType.MISSILE.id(),
+                        S2C.Blast.DOWN, false, Optional.empty()));
+            }
         }
         if (tick == 520) {
+            feeds.clear();
+            if (vista) for (int i = 0; i < count; i++)
+                commands("setblock " + (i * 3) + " 66 -3 minecraft:air",
+                        "setblock " + (i * 3) + " 65 -3 minecraft:air",
+                        "setblock " + (10 + i * 3) + " 66 -3 minecraft:air");
             // Match the real feed eye/angles, including Vista's viewfinder position offset.
-            if (feedEye == null) { feedEye = new Vec3(10.5, 66.5, -2.5); feedYaw = 90; feedPitch = -15; }
+            if (feedEye == null) { feedEye = new Vec3(10.5, 66.5, -2.5); feedYaw = 90; feedPitch = -22; }
             commands(String.format(Locale.ROOT, "tp @a %.8f %.8f %.8f %.8f %.8f", feedEye.x,
                     feedEye.y - mc.player.getEyeHeight(), feedEye.z, feedYaw, feedPitch));
         }
         if (tick == 500) metrics();
         if (tick == 640) {
-            if (vista && (feeds.size() != count || secondaryFrames == 0)) failures++;
+            if (vista && (connected != count || secondaryFrames == 0)) failures++;
             String result = String.format(Locale.ROOT,
                     "vista=%s connected=%d requested=%d secondaryFrames=%d primaryFrames=%d failures=%d secondaryCpuMs=%.4f%n",
-                    vista, feeds.size(), count, secondaryFrames, primaryFrames, failures,
+                    vista, connected, count, secondaryFrames, primaryFrames, failures,
                     secondaryFrames == 0 ? 0 : secondaryNanos / 1e6 / secondaryFrames);
             try { Files.writeString(out.resolve("result.txt"), result); }
             catch (Exception ex) { throw new IllegalStateException(ex); }
             Incoming.LOG.info("VIEWFX RESULT {}", result.strip());
             feeds.clear();
             mc.stop();
+        }
+    }
+
+    private void abortedScope() {
+        try { Class.forName("ua.zentix.incoming.client.fx.layer.FxViews"); }
+        catch (ClassNotFoundException baseline) { return; }
+        int oldDraw = GL11.glGetInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
+        int oldRead = GL11.glGetInteger(GL30.GL_READ_FRAMEBUFFER_BINDING);
+        int[] oldViewport = new int[4];
+        GL11.glGetIntegerv(GL11.GL_VIEWPORT, oldViewport);
+        List<Object> before = snapshot();
+        RenderTarget first = new com.mojang.blaze3d.pipeline.TextureTarget(32, 32, true, Minecraft.ON_OSX);
+        RenderTarget next = new com.mojang.blaze3d.pipeline.TextureTarget(32, 32, true, Minecraft.ON_OSX);
+        try {
+            Camera camera = new Camera();
+            first.bindWrite(true);
+            viewCall("begin", camera);
+            Object scope = field("ua.zentix.incoming.client.fx.layer.FxViews", null, "scope");
+            next.bindWrite(true);
+            viewCall("begin", camera);
+            boolean same = scope == field("ua.zentix.incoming.client.fx.layer.FxViews", null, "scope");
+            viewCall("resumePrimary");
+            boolean restored = before.equals(snapshot());
+            if (!same || !restored) failures++;
+            Incoming.LOG.info("VIEWFX aborted scope oneInvocation={} primaryRestored={}", same, restored);
+        } finally {
+            viewCall("clear");
+            first.destroyBuffers(); next.destroyBuffers();
+            GL30.glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, oldDraw);
+            GL30.glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, oldRead);
+            com.mojang.blaze3d.platform.GlStateManager._viewport(oldViewport[0], oldViewport[1], oldViewport[2], oldViewport[3]);
         }
     }
 
@@ -156,7 +197,7 @@ final class ViewFxScenario {
 
     private void nuke(boolean mature) {
         Minecraft mc = Minecraft.getInstance();
-        Detonation d = new Detonation(9000, new Vec3(mature ? -5990 : -1490, 65, -3), 65, 15, true,
+        Detonation d = new Detonation(9000, new Vec3(mature ? -9990 : -1490, 65, -3), 65, 15, true,
                 mc.level.getGameTime() - (mature ? 2400 : 0), 0, 5, 20_000, 1234, 1, false,
                 0.25f, mc.level.getDayTime(), false);
         ClientNuclear.detonation(new S2C.NukeDetonation(d, 0, 9000), !mature);
@@ -180,6 +221,7 @@ final class ViewFxScenario {
             Object id = vf.getClass().getMethod("getBroadcastUUID").invoke(vf);
             feeds.add(manager.getMethod("createHandle", java.util.UUID.class, size)
                     .invoke(null, id, size.getConstructor(int.class, int.class).newInstance(12, 12)));
+            connected = feeds.size();
         } catch (ReflectiveOperationException ex) { throw new IllegalStateException("Vista fixture API changed", ex); }
     }
 
@@ -196,10 +238,10 @@ final class ViewFxScenario {
         if (tick == 580) shot(primaryTarget, "direct-mushroom-smoke");
     }
 
-    private boolean secondary(RenderLevelStageEvent event) { return event.getCamera() != primaryCamera; }
+    private boolean secondary(RenderLevelStageEvent event) { return primaryCamera != null && event.getCamera() != primaryCamera; }
 
     private void fog(ViewportEvent.ComputeFogColor event) {
-        if (event.getCamera() == primaryCamera) return;
+        if (primaryCamera == null || event.getCamera() == primaryCamera) return;
         // NukeLight's HIGHEST listener is registered first: its scope already holds the suspended outer state.
         String layer = "ua.zentix.incoming.client.fx.layer.";
         Object scope = field(layer + "FxViews", null, "scope");
@@ -275,6 +317,11 @@ final class ViewFxScenario {
             if (failures < 6) Incoming.LOG.error("VIEWFX primary history/light/fog changed: before={} after={}", outer, snapshot());
         }
         outer = null;
+        int error = GL11.glGetError();
+        if (error != GL11.GL_NO_ERROR) {
+            failures++;
+            Incoming.LOG.error("VIEWFX OpenGL error {}", error);
+        }
         int[] after = new int[4];
         GL11.glGetIntegerv(GL11.GL_VIEWPORT, after);
         if (draw != GL11.glGetInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING)
@@ -285,8 +332,10 @@ final class ViewFxScenario {
         if (tick >= 260 && tick < 280) shot(Minecraft.getInstance().getMainRenderTarget(), "feed-fireball");
         if (tick >= 480 && tick < 500 && !Files.exists(out.resolve("feed-mushroom-smoke.png"))) {
             feedEye = event.getCamera().getPosition();
-            feedYaw = event.getCamera().getYRot();
-            feedPitch = event.getCamera().getXRot();
+            var look = event.getCamera().getLookVector();
+            feedYaw = (float) Math.toDegrees(Math.atan2(-look.x, look.z));
+            feedPitch = (float) Math.toDegrees(Math.asin(-look.y));
+            Incoming.LOG.info("VIEWFX eye={} yaw={} pitch={} look={}", feedEye, feedYaw, feedPitch, look);
             shot(Minecraft.getInstance().getMainRenderTarget(), "feed-mushroom-smoke");
         }
     }

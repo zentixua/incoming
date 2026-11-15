@@ -104,6 +104,7 @@ public final class FarBlasts {
     private static final float[] TINT = new float[3];
     /** Last client pre-tick: the age of an ordinary effect does not depend on the order of post-tick listeners. */
     private static long clock;
+    private static ViewRays viewRays;
     /** Last distant sound — for the scenario log. */
     private static Outdoor.Heard lastHeard;
     private static double lastDistance;
@@ -861,12 +862,29 @@ public final class FarBlasts {
     /** Secondary optical sample; its scope restores the player's terrain/audio path afterwards. */
     public static void viewEye(Vec3 eye, float partial) {
         ClientLevel level = Minecraft.getInstance().level;
-        if (level == null) return;
+        if (level == null || EVENTS.isEmpty() || !viewRays.begin(clock)) return;
         Sightline.Heights heights = FarTerrain.of(level);
         double now = TickTime.at(BlastTime.ticks(), partial);
-        for (Event e : EVENTS) if (e.level == level) {
-            trace(e, heights, eye);
-            clear(e, eye, Math.max(0, now - e.born));
+        int size = EVENTS.size(), start = viewRays.cursor % size;
+        // Traverse from the last serviced source without allocating a second event list. Limits are shared
+        // across the two portions, so changing refresh rate never multiplies a tick's ray allowance.
+        for (int portion = 0; portion < 2; portion++) {
+            int index = 0;
+            for (Event e : EVENTS) {
+                int at = index++;
+                if ((portion == 0 ? at < start : at >= start) || e.level != level) continue;
+                boolean worked = false;
+                if (viewRays.trace(clock, e.traced, RETRACE)) {
+                    trace(e, heights, eye);
+                    worked = true;
+                }
+                double age = Math.max(0, now - e.born);
+                if (age < e.ballTicks() && viewRays.clear()) {
+                    clear(e, eye, age);
+                    worked = true;
+                }
+                if (worked) viewRays.cursor = (at + 1) % size;
+            }
         }
     }
 
@@ -1180,7 +1198,7 @@ public final class FarBlasts {
             double hidden, path;
             float open = 1;
             boolean glows = true;
-            long traced;
+            long traced = -RETRACE;
 
             void swap(Event e) {
                 double h = e.hidden; e.hidden = hidden; hidden = h;
@@ -1190,9 +1208,11 @@ public final class FarBlasts {
                 long t = e.traced; e.traced = traced; traced = t;
             }
         }
+        private ViewRays viewRays = new ViewRays(TRACES_PER_TICK, CLEARS_PER_TICK);
         private double[] BRIGHTEST = new double[5];
 
         public void swap() {
+            ViewRays oldRays = FarBlasts.viewRays; FarBlasts.viewRays = viewRays; viewRays = oldRays;
             optics.keySet().removeIf(e -> !e.alive);
             for (Event e : EVENTS) optics.computeIfAbsent(e, ignored -> new Optics()).swap(e);
             double[] oldBRIGHTEST = FarBlasts.BRIGHTEST;

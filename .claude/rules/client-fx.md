@@ -22,7 +22,9 @@ paths:
   and skip a fifth live feed instead of repeatedly allocating histories. The primary path retains its storage/order.
   `NukeLight.prepared`, exposure and fog belong to the view; body flash, hearing, concussion and camera shake belong to
   the player. A delayed smoke worker must capture its own Draw, never the currently bound view's static job.
-  Regression fixture: `tools/client_scenario.sh viewfx vista`, `INCOMING_VIEWFX_FEEDS=4` for four TVs, omit `vista` for
+  Secondary visibility rays have per-view tick budgets (16 terrain traces, 8 glowing-ball checks; no catch-up burst).
+  Preserve initializer sentinels too: bloom texture/FBO arrays start at -1, never zero/default framebuffer.
+  Regression fixture: `tools/client_scenario.sh viewfx vista`, `INCOMING_VIEWFX_FEEDS=4` for four TVs, `INCOMING_VIEWFX_STRIKES=100` for raid cost; omit `vista` for
   the ordinary renderer. Vista/Moonlight are scenario-only runtime mods; no production dependency or camera-mod mixin.
 - Under Iris the first-person hand is in world depth at `AFTER_LEVEL` (Iris draws it inside the world pass with the depth
   range × 0.125, `HandRenderer.DEPTH`), so the layer reads it as world 0.09–0.115 m away; vanilla draws it after the layer.

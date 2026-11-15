@@ -231,6 +231,7 @@ public final class IncomingClient {
     }
 
     private static void tick(ClientTickEvent.Post e) {
+        ua.zentix.incoming.client.fx.layer.FxViews.resumePrimary();
         Minecraft mc = Minecraft.getInstance();
         if (mc.level == null) return;
         while (Keys.MENU.consumeClick()) mc.setScreen(new RemoteScreen());

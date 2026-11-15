@@ -742,6 +742,11 @@ public final class FxBloom {
         private int lastFirst;
         private int lastLast;
 
+        public ViewState() {
+            java.util.Arrays.fill(LEVEL, -1);
+            java.util.Arrays.fill(LEVEL_FBO, -1);
+        }
+
         void close() {
             FxViews.textures(cover, gathered); FxViews.textures(LEVEL); FxViews.framebuffers(fbo, gatheredFbo);
             FxViews.framebuffers(LEVEL_FBO); GPU.close(); PASS.close(); PYRAMID.close(); OUT.close();
