@@ -252,7 +252,7 @@ public final class NukePall {
         f.wilson0.zero();
         f.wilson1.zero();
         // frame world — chunks within render distance (chunk-edge margin): a ray into empty space crossed them without hitting anything
-        f.floorFrom = Math.max(16, Minecraft.getInstance().options.getEffectiveRenderDistance() * 16 - 24);
+        f.floorFrom = (float) Math.max(16, ua.zentix.incoming.client.fx.layer.FxViews.world(Minecraft.getInstance().options.getEffectiveRenderDistance() * 16) - 24);
         f.min.set(Float.MAX_VALUE);
         f.max.set(-Float.MAX_VALUE);
         int k = 0;
@@ -270,8 +270,34 @@ public final class NukePall {
         // ray reach from eye dust and optical depth above and below it (pallClip); disabled pall is not rendered, and
         // does not hide the mushroom behind it
         if (q == PallPass.Quality.OFF) f.eyeDust.zero();
+        else if (ua.zentix.incoming.client.fx.layer.FxViews.secondary()) eyeDust(level, eye, partial, f.eyeDust);
         else f.eyeDust.set(sigma, tauUp, tauDown);
         return f;
+    }
+
+    /** Optical medium at a camera; never updates the player's ash, hearing or dust veil. */
+    private static void eyeDust(ClientLevel level, Vec3 camera, float partial, Vector3f out) {
+        double extinction = 0, up = 0, down = 0;
+        for (ClientNuclear.Active active : ClientNuclear.detonations()) {
+            Detonation d = active.d;
+            double ticks = active.ticks(partial), dx = camera.x - d.burst().x, dz = camera.z - d.burst().z;
+            double eye = camera.y - d.groundY(), floor = active.ground.at(camera.x, camera.z);
+            if (active.wall.slot(active.seconds(partial), WALL) && WALL[3] > 0) {
+                double wet = active.ground.hasWater() ? active.ground.water(camera.x, camera.z) : 0;
+                double hard = active.ground.hasHard() ? active.ground.hard(camera.x, camera.z) : 0;
+                extinction += BlastWall.sigma(WALL, dx, dz, eye - floor, wet, hard);
+                up += BlastWall.tau(WALL, dx, dz, eye - floor, Double.POSITIVE_INFINITY, wet, hard);
+                down += BlastWall.tau(WALL, dx, dz, 0, eye - floor, wet, hard);
+            }
+            if (active.pall.visible(ticks)) {
+                PallField.Water water = water(active);
+                extinction += active.pall.sigma(dx, dz, eye, floor, ticks, water);
+                up += active.pall.tau(dx, dz, eye, Double.POSITIVE_INFINITY, floor, ticks, water);
+                down += active.pall.tau(dx, dz, floor, eye, floor, ticks, water);
+            }
+        }
+        double open = level.dimensionType().hasSkyLight() ? level.getBrightness(LightLayer.SKY, BlockPos.containing(camera)) / 15.0 : 1;
+        out.set((float) (extinction * open), (float) up, (float) down);
     }
 
     /**
@@ -314,7 +340,7 @@ public final class NukePall {
         f.whirlPos.zero();
         f.whirlShape.zero();
         f.whirlLean.zero();
-        f.floorFrom = Math.max(16, Minecraft.getInstance().options.getEffectiveRenderDistance() * 16 - 24);
+        f.floorFrom = (float) Math.max(16, ua.zentix.incoming.client.fx.layer.FxViews.world(Minecraft.getInstance().options.getEffectiveRenderDistance() * 16) - 24);
         f.min.zero();
         f.max.zero();
         f.eyeDust.zero();

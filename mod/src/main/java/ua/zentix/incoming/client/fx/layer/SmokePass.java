@@ -97,6 +97,7 @@ public final class SmokePass {
         RenderSystem.depthMask(false);
         s.setSampler("Sampler0", blobs);
         s.safeGetUniform("SmokeCorner").set(cornerMatrix(f));
+        FxViews.screenSize(s);
         s.apply();
         // additive blending after apply: a program without custom blending in JSON would disable it
         RenderSystem.enableBlend();
@@ -228,5 +229,59 @@ public final class SmokePass {
         Incoming.LOG.info("Blast smoke grid: {} cascades of {}³ cells ({} m), {} MB", SmokeGrid.CASCADES, n,
                 java.util.Arrays.toString(SmokeGrid.CELL), 2 * n * n * n * SmokeGrid.CASCADES * 8 / (1024 * 1024));
         return true;
+    }
+
+    /** Saved only for secondary views; swapping leaves the primary draw path and operation order unchanged. */
+    public static final class ViewState {
+        private int grid = -1;
+        private int blobs = -1;
+        private int clearFbo = -1;
+        private int sliceFbo = -1;
+        private int vao = -1;
+        private int vbo = -1;
+        private boolean failed;
+        private FloatBuffer blobBuffer;
+        private FloatBuffer vertexBuffer;
+        private boolean filled;
+
+        void close() {
+            FxViews.textures(grid, blobs); FxViews.framebuffers(clearFbo, sliceFbo);
+            if (vao > 0) org.lwjgl.opengl.GL30.glDeleteVertexArrays(vao);
+            if (vbo > 0) org.lwjgl.opengl.GL15.glDeleteBuffers(vbo);
+            org.lwjgl.system.MemoryUtil.memFree(blobBuffer); org.lwjgl.system.MemoryUtil.memFree(vertexBuffer);
+        }
+
+        public void swap() {
+            int oldgrid = SmokePass.grid;
+            SmokePass.grid = grid;
+            grid = oldgrid;
+            int oldblobs = SmokePass.blobs;
+            SmokePass.blobs = blobs;
+            blobs = oldblobs;
+            int oldclearFbo = SmokePass.clearFbo;
+            SmokePass.clearFbo = clearFbo;
+            clearFbo = oldclearFbo;
+            int oldsliceFbo = SmokePass.sliceFbo;
+            SmokePass.sliceFbo = sliceFbo;
+            sliceFbo = oldsliceFbo;
+            int oldvao = SmokePass.vao;
+            SmokePass.vao = vao;
+            vao = oldvao;
+            int oldvbo = SmokePass.vbo;
+            SmokePass.vbo = vbo;
+            vbo = oldvbo;
+            boolean oldfailed = SmokePass.failed;
+            SmokePass.failed = failed;
+            failed = oldfailed;
+            FloatBuffer oldblobBuffer = SmokePass.blobBuffer;
+            SmokePass.blobBuffer = blobBuffer;
+            blobBuffer = oldblobBuffer;
+            FloatBuffer oldvertexBuffer = SmokePass.vertexBuffer;
+            SmokePass.vertexBuffer = vertexBuffer;
+            vertexBuffer = oldvertexBuffer;
+            boolean oldfilled = SmokePass.filled;
+            SmokePass.filled = filled;
+            filled = oldfilled;
+        }
     }
 }

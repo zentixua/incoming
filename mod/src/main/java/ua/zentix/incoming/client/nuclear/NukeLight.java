@@ -28,7 +28,7 @@ import java.util.Map;
 
 /** One nuclear light sample and camera exposure per rendered frame, before fog, sky and effects. */
 public final class NukeLight {
-    private static final Map<ClientNuclear.Active, FlashLight.Eye> CAMERA = new IdentityHashMap<>();
+    private static Map<ClientNuclear.Active, FlashLight.Eye> CAMERA = new IdentityHashMap<>();
     private static final double PEAK = BlackBody.luminance(FireballModel.PEAK_K);
     private static long ticks;
     private static double last = Double.NaN, exposure = 1, bodyExposure = 1;
@@ -36,10 +36,18 @@ public final class NukeLight {
 
     private NukeLight() {}
 
-    public static void begin(RenderFrameEvent.Pre e) { prepared = false; }
+    public static void begin(RenderFrameEvent.Pre e) {
+        ua.zentix.incoming.client.fx.layer.FxViews.outerFrame();
+        prepared = false;
+    }
+
+    /** A secondary invocation samples its own light, without resetting the primary prepared flag. */
+    public static void newView() { prepared = false; }
 
     /** Camera setup is complete here; RenderFrameEvent.Pre still has the previous frame's camera position. */
     public static void frame(ViewportEvent.ComputeFogColor e) {
+        ua.zentix.incoming.client.fx.layer.FxViews.begin(e.getCamera());
+        if (ua.zentix.incoming.client.fx.layer.FxViews.skipped()) return;
         if (prepared) return;
         prepared = true;
         Minecraft mc = Minecraft.getInstance();
@@ -56,7 +64,7 @@ public final class NukeLight {
             fire += eye.light();
         }
         update(now, ambient, fire);
-        NukeFlash.frame();
+        if (!ua.zentix.incoming.client.fx.layer.FxViews.secondary()) NukeFlash.frame();
     }
 
     /** Advance the one exposure state from a frame's summed illumination; no wall clock. */
@@ -155,5 +163,32 @@ public final class NukeLight {
         last = Double.NaN;
         exposure = bodyExposure = 1;
         prepared = false;
+    }
+
+    /** Saved only for secondary views; swapping leaves the primary draw path and operation order unchanged. */
+    public static final class ViewState {
+        private Map<ClientNuclear.Active, FlashLight.Eye> CAMERA = new IdentityHashMap<>();
+        private double last = Double.NaN;
+        private double exposure = 1;
+        private double bodyExposure = 1;
+        private boolean prepared;
+
+        public void swap() {
+            Map<ClientNuclear.Active, FlashLight.Eye> oldCAMERA = NukeLight.CAMERA;
+            NukeLight.CAMERA = CAMERA;
+            CAMERA = oldCAMERA;
+            double oldlast = NukeLight.last;
+            NukeLight.last = last;
+            last = oldlast;
+            double oldexposure = NukeLight.exposure;
+            NukeLight.exposure = exposure;
+            exposure = oldexposure;
+            double oldbodyExposure = NukeLight.bodyExposure;
+            NukeLight.bodyExposure = bodyExposure;
+            bodyExposure = oldbodyExposure;
+            boolean oldprepared = NukeLight.prepared;
+            NukeLight.prepared = prepared;
+            prepared = oldprepared;
+        }
     }
 }

@@ -477,20 +477,21 @@ public final class PallPass {
     /** Mushroom mean depth grid ({@code fx_mush_taus}): cells across x and z and height layers per mushroom, two blocks each. */
     static final int MUSH_TAU_N = 48;
     private static final Frame EMPTY = new Frame();
-    private static final Detail DETAIL = new Detail();
+    private static Detail DETAIL = new Detail();
     /** Noise failed (background error): no pall until restart. */
     private static boolean failed;
 
     private static int fullW, fullH, lowW, lowH, factor, interleave = 1, cellsW, cellsH;
     /** Ray frame, two history frames (alternating previous/current) and the whole pall in front of the world for layer quads. */
-    private static final int[] TEXTURES = {-1, -1, -1, -1}, FBOS = {-1, -1, -1, -1};
+    private static int[] TEXTURES = {-1, -1, -1, -1}, FBOS = {-1, -1, -1, -1};
     /** Near volume atlases: medium, two alternating (previous/current), and pall seen to each slice; size and cell width. */
-    private static final int[] VOLUME = {-1, -1, -1}, VOLUME_FBOS = {-1, -1, -1};
+    private static int[] VOLUME = {-1, -1, -1}, VOLUME_FBOS = {-1, -1, -1};
     private static int volumeW, volumeH, volumeTile, volumeLatest;
     /** The previous frame's medium volume exists at this size (reprojected by {@code fx_pall_froxel}). */
     private static boolean volumeHistory;
     private static int latest;
-    private static int table = -1, noise = -1, blue = -1, mushrooms = -1;
+    private static int table = -1, mushrooms = -1;
+    private static int noise = -1, blue = -1;
     /** Mushroom sun shadow map ({@link MushroomField#SHADOW}² tile per mushroom) and framebuffer; −1 — failed, no shadow. */
     private static int shadowMap = -1, shadowFbo = -1;
     private static int footMap = -1, footFbo = -1;
@@ -499,11 +500,11 @@ public final class PallPass {
     /** Frame copy for fireball world light ({@link #copyFrame}) and size; −1 — not needed yet. */
     private static int frameCopy = -1, copyW, copyH;
     /** Slot fire maps (texture, side, owner and fill generation) and this frame's maps (−1 — absent). */
-    private static final int[] FIRE = {-1, -1}, FIRE_SIDE = new int[2], FIRE_VERSION = new int[2], FIRE_NOW = {-1, -1};
-    private static final Object[] FIRE_SOURCE = new Object[2];
+    private static int[] FIRE = {-1, -1}, FIRE_SIDE = new int[2], FIRE_VERSION = new int[2], FIRE_NOW = {-1, -1};
+    private static Object[] FIRE_SOURCE = new Object[2];
     /** Slot pall terrain maps (texture, side, owner and fill generation) and this frame's maps (−1 — absent). */
-    private static final int[] GROUND = {-1, -1}, GROUND_SIDE = new int[2], GROUND_VERSION = new int[2], GROUND_NOW = {-1, -1};
-    private static final Object[] GROUND_SOURCE = new Object[2];
+    private static int[] GROUND = {-1, -1}, GROUND_SIDE = new int[2], GROUND_VERSION = new int[2], GROUND_NOW = {-1, -1};
+    private static Object[] GROUND_SOURCE = new Object[2];
     @Nullable
     private static FloatBuffer groundBuffer;
     private static final Vector4f NO_GROUND = new Vector4f();
@@ -514,12 +515,12 @@ public final class PallPass {
     private static CompletableFuture<byte[][]> textures;
     private static FloatBuffer tableBuffer, mushroomBuffer;
     private static boolean history;
-    private static final Matrix4f VIEW_PROJECTION = new Matrix4f(), INVERSE = new Matrix4f(), PREVIOUS = new Matrix4f();
-    private static final Vector3f FORWARD = new Vector3f();
+    private static Matrix4f VIEW_PROJECTION = new Matrix4f(), INVERSE = new Matrix4f(), PREVIOUS = new Matrix4f();
+    private static Vector3f FORWARD = new Vector3f();
     @Nullable
     private static Vec3 previousEye;
     private static long frame;
-    private static final int[] VIEWPORT = new int[4];
+    private static int[] VIEWPORT = new int[4];
 
     // GPU time: timestamps (glQueryCounter) before and after passes in a ring of RING pairs — read after
     // a few frames once ready, without waiting. Not GL_TIME_ELAPSED: OpenGL has one shared query, and Minecraft holds it for
@@ -532,9 +533,9 @@ public final class PallPass {
     private static final int STAMPS = 7;
     /** Part of the measured frame between stamps that is the ray march ({@link #describe}: preparation, near volume, sums, rays…). */
     private static final int RAYS_PART = 3;
-    private static final int[] QUERIES = new int[STAMPS * RING];
+    private static int[] QUERIES = new int[STAMPS * RING];
     /** Rung generation ({@link Detail#generation}) at pair recording; −1 — pair free. */
-    private static final int[] ISSUED = new int[RING];
+    private static int[] ISSUED = new int[RING];
     private static int ring;
     /** Timestamps: 0 — unchecked, 1 — supported, −1 — unsupported (detail follows setting then). */
     private static int timer;
@@ -542,7 +543,7 @@ public final class PallPass {
     private static final boolean SCENARIO = System.getProperty("incoming.scenario") != null;
     private static double gpuSum, gpuMax, lastGpuMean, lastGpuMax;
     /** GPU time per part (preparation, near volume medium and sums, rays, accumulation, composite) over the last second, ms per frame. */
-    private static final double[] PART_SUM = new double[STAMPS - 1], LAST_PART = new double[STAMPS - 1];
+    private static double[] PART_SUM = new double[STAMPS - 1], LAST_PART = new double[STAMPS - 1];
     private static int gpuFrames, drawn, lastDrawn;
 
     private PallPass() {}
@@ -643,9 +644,10 @@ public final class PallPass {
                 mx = mix;
         if (m == null || r == null || c == null || fv == null || fs == null || mx == null || f.quality == Quality.OFF || !upload()) return false;
         Minecraft mc = Minecraft.getInstance();
-        int w = mc.getMainRenderTarget().width, h = mc.getMainRenderTarget().height;
+        int w = FxViews.width(mc.getMainRenderTarget().width), h = FxViews.height(mc.getMainRenderTarget().height);
+        if (FxViews.secondary()) f.quality = Quality.LOW;
         DETAIL.setting(f.quality);
-        if (DETAIL.pin(SCENARIO || FlashbackReplay.exporting())) {
+        if (DETAIL.pin(SCENARIO || FxViews.secondary() || FlashbackReplay.exporting())) {
             Step at = LADDER[Math.max(0, DETAIL.level)];
             if (DETAIL.pinned) {
                 Incoming.LOG.info("Nuclear dust pall: {}, detail pinned at the setting {}", SCENARIO ? "client scenario" : "Flashback video export",
@@ -970,6 +972,7 @@ public final class PallPass {
         if (mesh == null) return;
         s.setDefaultUniforms(VertexFormat.Mode.QUADS, RenderSystem.getModelViewMatrix(), RenderSystem.getProjectionMatrix(),
                 Minecraft.getInstance().getWindow());
+        FxViews.screenSize(s);
         s.apply();
         int unit = GlStateManager._getActiveTexture();
         if (withNoise) {
@@ -1454,5 +1457,288 @@ public final class PallPass {
         FIRE_NOW[0] = FIRE_NOW[1] = -1;
         GROUND_SOURCE[0] = GROUND_SOURCE[1] = null;
         GROUND_NOW[0] = GROUND_NOW[1] = -1;
+    }
+
+    /** Saved only for secondary views; swapping leaves the primary draw path and operation order unchanged. */
+    public static final class ViewState {
+        private int noise = -1, blue = -1;
+        private Detail DETAIL = new Detail();
+        private int fullW;
+        private int fullH;
+        private int lowW;
+        private int lowH;
+        private int factor;
+        private int interleave = 1;
+        private int cellsW;
+        private int cellsH;
+        private int[] TEXTURES = {-1, -1, -1, -1};
+        private int[] FBOS = {-1, -1, -1, -1};
+        private int[] VOLUME = {-1, -1, -1};
+        private int[] VOLUME_FBOS = {-1, -1, -1};
+        private int volumeW;
+        private int volumeH;
+        private int volumeTile;
+        private int volumeLatest;
+        private boolean volumeHistory;
+        private int latest;
+        private int table = -1;
+        private int mushrooms = -1;
+        private int shadowMap = -1;
+        private int shadowFbo = -1;
+        private int footMap = -1;
+        private int footFbo = -1;
+        private int tauMap = -1;
+        private int tauFbo = -1;
+        private int frameCopy = -1;
+        private int copyW;
+        private int copyH;
+        private int[] FIRE = {-1, -1};
+        private int[] FIRE_SIDE = new int[2];
+        private int[] FIRE_VERSION = new int[2];
+        private int[] FIRE_NOW = {-1, -1};
+        private Object[] FIRE_SOURCE = new Object[2];
+        private int[] GROUND = {-1, -1};
+        private int[] GROUND_SIDE = new int[2];
+        private int[] GROUND_VERSION = new int[2];
+        private int[] GROUND_NOW = {-1, -1};
+        private Object[] GROUND_SOURCE = new Object[2];
+        private FloatBuffer groundBuffer;
+        private FloatBuffer fireBuffer;
+        private FloatBuffer tableBuffer;
+        private FloatBuffer mushroomBuffer;
+        private boolean history;
+        private Matrix4f VIEW_PROJECTION = new Matrix4f();
+        private Matrix4f INVERSE = new Matrix4f();
+        private Matrix4f PREVIOUS = new Matrix4f();
+        private Vector3f FORWARD = new Vector3f();
+        private Vec3 previousEye;
+        private long frame;
+        private int[] VIEWPORT = new int[4];
+        private int[] QUERIES = new int[STAMPS * RING];
+        private int[] ISSUED = new int[RING];
+        private int ring;
+        private int timer;
+        private double gpuSum;
+        private double gpuMax;
+        private double lastGpuMean;
+        private double lastGpuMax;
+        private double[] PART_SUM = new double[STAMPS - 1];
+        private double[] LAST_PART = new double[STAMPS - 1];
+        private int gpuFrames;
+        private int drawn;
+        private int lastDrawn;
+        private ShaderInstance prepared;
+
+        void close() {
+            FxViews.textures(TEXTURES); FxViews.textures(VOLUME); FxViews.textures(FIRE); FxViews.textures(GROUND);
+            FxViews.textures(table, mushrooms, noise, blue, shadowMap, footMap, tauMap, frameCopy);
+            FxViews.framebuffers(FBOS); FxViews.framebuffers(VOLUME_FBOS); FxViews.framebuffers(shadowFbo, footFbo, tauFbo);
+            for (int query : QUERIES) if (query > 0) org.lwjgl.opengl.GL15.glDeleteQueries(query);
+            org.lwjgl.system.MemoryUtil.memFree(groundBuffer); org.lwjgl.system.MemoryUtil.memFree(fireBuffer);
+            org.lwjgl.system.MemoryUtil.memFree(tableBuffer); org.lwjgl.system.MemoryUtil.memFree(mushroomBuffer);
+        }
+
+        public void swap() {
+            int oldNoise = PallPass.noise; PallPass.noise = noise; noise = oldNoise;
+            int oldBlue = PallPass.blue; PallPass.blue = blue; blue = oldBlue;
+            Detail oldDETAIL = PallPass.DETAIL;
+            PallPass.DETAIL = DETAIL;
+            DETAIL = oldDETAIL;
+            int oldfullW = PallPass.fullW;
+            PallPass.fullW = fullW;
+            fullW = oldfullW;
+            int oldfullH = PallPass.fullH;
+            PallPass.fullH = fullH;
+            fullH = oldfullH;
+            int oldlowW = PallPass.lowW;
+            PallPass.lowW = lowW;
+            lowW = oldlowW;
+            int oldlowH = PallPass.lowH;
+            PallPass.lowH = lowH;
+            lowH = oldlowH;
+            int oldfactor = PallPass.factor;
+            PallPass.factor = factor;
+            factor = oldfactor;
+            int oldinterleave = PallPass.interleave;
+            PallPass.interleave = interleave;
+            interleave = oldinterleave;
+            int oldcellsW = PallPass.cellsW;
+            PallPass.cellsW = cellsW;
+            cellsW = oldcellsW;
+            int oldcellsH = PallPass.cellsH;
+            PallPass.cellsH = cellsH;
+            cellsH = oldcellsH;
+            int[] oldTEXTURES = PallPass.TEXTURES;
+            PallPass.TEXTURES = TEXTURES;
+            TEXTURES = oldTEXTURES;
+            int[] oldFBOS = PallPass.FBOS;
+            PallPass.FBOS = FBOS;
+            FBOS = oldFBOS;
+            int[] oldVOLUME = PallPass.VOLUME;
+            PallPass.VOLUME = VOLUME;
+            VOLUME = oldVOLUME;
+            int[] oldVOLUME_FBOS = PallPass.VOLUME_FBOS;
+            PallPass.VOLUME_FBOS = VOLUME_FBOS;
+            VOLUME_FBOS = oldVOLUME_FBOS;
+            int oldvolumeW = PallPass.volumeW;
+            PallPass.volumeW = volumeW;
+            volumeW = oldvolumeW;
+            int oldvolumeH = PallPass.volumeH;
+            PallPass.volumeH = volumeH;
+            volumeH = oldvolumeH;
+            int oldvolumeTile = PallPass.volumeTile;
+            PallPass.volumeTile = volumeTile;
+            volumeTile = oldvolumeTile;
+            int oldvolumeLatest = PallPass.volumeLatest;
+            PallPass.volumeLatest = volumeLatest;
+            volumeLatest = oldvolumeLatest;
+            boolean oldvolumeHistory = PallPass.volumeHistory;
+            PallPass.volumeHistory = volumeHistory;
+            volumeHistory = oldvolumeHistory;
+            int oldlatest = PallPass.latest;
+            PallPass.latest = latest;
+            latest = oldlatest;
+            int oldtable = PallPass.table;
+            PallPass.table = table;
+            table = oldtable;
+            int oldmushrooms = PallPass.mushrooms;
+            PallPass.mushrooms = mushrooms;
+            mushrooms = oldmushrooms;
+            int oldshadowMap = PallPass.shadowMap;
+            PallPass.shadowMap = shadowMap;
+            shadowMap = oldshadowMap;
+            int oldshadowFbo = PallPass.shadowFbo;
+            PallPass.shadowFbo = shadowFbo;
+            shadowFbo = oldshadowFbo;
+            int oldfootMap = PallPass.footMap;
+            PallPass.footMap = footMap;
+            footMap = oldfootMap;
+            int oldfootFbo = PallPass.footFbo;
+            PallPass.footFbo = footFbo;
+            footFbo = oldfootFbo;
+            int oldtauMap = PallPass.tauMap;
+            PallPass.tauMap = tauMap;
+            tauMap = oldtauMap;
+            int oldtauFbo = PallPass.tauFbo;
+            PallPass.tauFbo = tauFbo;
+            tauFbo = oldtauFbo;
+            int oldframeCopy = PallPass.frameCopy;
+            PallPass.frameCopy = frameCopy;
+            frameCopy = oldframeCopy;
+            int oldcopyW = PallPass.copyW;
+            PallPass.copyW = copyW;
+            copyW = oldcopyW;
+            int oldcopyH = PallPass.copyH;
+            PallPass.copyH = copyH;
+            copyH = oldcopyH;
+            int[] oldFIRE = PallPass.FIRE;
+            PallPass.FIRE = FIRE;
+            FIRE = oldFIRE;
+            int[] oldFIRE_SIDE = PallPass.FIRE_SIDE;
+            PallPass.FIRE_SIDE = FIRE_SIDE;
+            FIRE_SIDE = oldFIRE_SIDE;
+            int[] oldFIRE_VERSION = PallPass.FIRE_VERSION;
+            PallPass.FIRE_VERSION = FIRE_VERSION;
+            FIRE_VERSION = oldFIRE_VERSION;
+            int[] oldFIRE_NOW = PallPass.FIRE_NOW;
+            PallPass.FIRE_NOW = FIRE_NOW;
+            FIRE_NOW = oldFIRE_NOW;
+            Object[] oldFIRE_SOURCE = PallPass.FIRE_SOURCE;
+            PallPass.FIRE_SOURCE = FIRE_SOURCE;
+            FIRE_SOURCE = oldFIRE_SOURCE;
+            int[] oldGROUND = PallPass.GROUND;
+            PallPass.GROUND = GROUND;
+            GROUND = oldGROUND;
+            int[] oldGROUND_SIDE = PallPass.GROUND_SIDE;
+            PallPass.GROUND_SIDE = GROUND_SIDE;
+            GROUND_SIDE = oldGROUND_SIDE;
+            int[] oldGROUND_VERSION = PallPass.GROUND_VERSION;
+            PallPass.GROUND_VERSION = GROUND_VERSION;
+            GROUND_VERSION = oldGROUND_VERSION;
+            int[] oldGROUND_NOW = PallPass.GROUND_NOW;
+            PallPass.GROUND_NOW = GROUND_NOW;
+            GROUND_NOW = oldGROUND_NOW;
+            Object[] oldGROUND_SOURCE = PallPass.GROUND_SOURCE;
+            PallPass.GROUND_SOURCE = GROUND_SOURCE;
+            GROUND_SOURCE = oldGROUND_SOURCE;
+            FloatBuffer oldgroundBuffer = PallPass.groundBuffer;
+            PallPass.groundBuffer = groundBuffer;
+            groundBuffer = oldgroundBuffer;
+            FloatBuffer oldfireBuffer = PallPass.fireBuffer;
+            PallPass.fireBuffer = fireBuffer;
+            fireBuffer = oldfireBuffer;
+            FloatBuffer oldtableBuffer = PallPass.tableBuffer;
+            PallPass.tableBuffer = tableBuffer;
+            tableBuffer = oldtableBuffer;
+            FloatBuffer oldmushroomBuffer = PallPass.mushroomBuffer;
+            PallPass.mushroomBuffer = mushroomBuffer;
+            mushroomBuffer = oldmushroomBuffer;
+            boolean oldhistory = PallPass.history;
+            PallPass.history = history;
+            history = oldhistory;
+            Matrix4f oldVIEW_PROJECTION = PallPass.VIEW_PROJECTION;
+            PallPass.VIEW_PROJECTION = VIEW_PROJECTION;
+            VIEW_PROJECTION = oldVIEW_PROJECTION;
+            Matrix4f oldINVERSE = PallPass.INVERSE;
+            PallPass.INVERSE = INVERSE;
+            INVERSE = oldINVERSE;
+            Matrix4f oldPREVIOUS = PallPass.PREVIOUS;
+            PallPass.PREVIOUS = PREVIOUS;
+            PREVIOUS = oldPREVIOUS;
+            Vector3f oldFORWARD = PallPass.FORWARD;
+            PallPass.FORWARD = FORWARD;
+            FORWARD = oldFORWARD;
+            Vec3 oldpreviousEye = PallPass.previousEye;
+            PallPass.previousEye = previousEye;
+            previousEye = oldpreviousEye;
+            long oldframe = PallPass.frame;
+            PallPass.frame = frame;
+            frame = oldframe;
+            int[] oldVIEWPORT = PallPass.VIEWPORT;
+            PallPass.VIEWPORT = VIEWPORT;
+            VIEWPORT = oldVIEWPORT;
+            int[] oldQUERIES = PallPass.QUERIES;
+            PallPass.QUERIES = QUERIES;
+            QUERIES = oldQUERIES;
+            int[] oldISSUED = PallPass.ISSUED;
+            PallPass.ISSUED = ISSUED;
+            ISSUED = oldISSUED;
+            int oldring = PallPass.ring;
+            PallPass.ring = ring;
+            ring = oldring;
+            int oldtimer = PallPass.timer;
+            PallPass.timer = timer;
+            timer = oldtimer;
+            double oldgpuSum = PallPass.gpuSum;
+            PallPass.gpuSum = gpuSum;
+            gpuSum = oldgpuSum;
+            double oldgpuMax = PallPass.gpuMax;
+            PallPass.gpuMax = gpuMax;
+            gpuMax = oldgpuMax;
+            double oldlastGpuMean = PallPass.lastGpuMean;
+            PallPass.lastGpuMean = lastGpuMean;
+            lastGpuMean = oldlastGpuMean;
+            double oldlastGpuMax = PallPass.lastGpuMax;
+            PallPass.lastGpuMax = lastGpuMax;
+            lastGpuMax = oldlastGpuMax;
+            double[] oldPART_SUM = PallPass.PART_SUM;
+            PallPass.PART_SUM = PART_SUM;
+            PART_SUM = oldPART_SUM;
+            double[] oldLAST_PART = PallPass.LAST_PART;
+            PallPass.LAST_PART = LAST_PART;
+            LAST_PART = oldLAST_PART;
+            int oldgpuFrames = PallPass.gpuFrames;
+            PallPass.gpuFrames = gpuFrames;
+            gpuFrames = oldgpuFrames;
+            int olddrawn = PallPass.drawn;
+            PallPass.drawn = drawn;
+            drawn = olddrawn;
+            int oldlastDrawn = PallPass.lastDrawn;
+            PallPass.lastDrawn = lastDrawn;
+            lastDrawn = oldlastDrawn;
+            ShaderInstance oldprepared = PallPass.prepared;
+            PallPass.prepared = prepared;
+            prepared = oldprepared;
+        }
     }
 }

@@ -56,13 +56,13 @@ public final class PlumeRenderer {
      * This frame's jets by entity: Iris also renders entities into the shadow map, which would duplicate a jet.
      * Render thread only.
      */
-    private static final Map<net.minecraft.world.entity.Entity, Jet> FRAME = new IdentityHashMap<>();
+    private static Map<net.minecraft.world.entity.Entity, Jet> FRAME = new IdentityHashMap<>();
 
     /** Frame hot nozzle: nozzle view, booster-axis rotation (nozzle along −Z), world nozzle exit, near share. */
     private record Hot(NozzleGlow.Shine shine, Quaternionf rotation, Vec3 nozzle, float near) {}
 
     /** This frame's hot nozzles by entity, like jets ({@link #FRAME}). */
-    private static final Map<net.minecraft.world.entity.Entity, Hot> HOT = new IdentityHashMap<>();
+    private static Map<net.minecraft.world.entity.Entity, Hot> HOT = new IdentityHashMap<>();
 
     private PlumeRenderer() {}
 
@@ -71,8 +71,9 @@ public final class PlumeRenderer {
      * of rotation; near is the near share, as for the jet.
      */
     public static void glow(NozzleGlow.Shine s, net.minecraft.world.entity.Entity key, Quaternionf rotation, Vec3 nozzle, float near) {
+        if (ua.zentix.incoming.client.fx.layer.FxViews.skipped()) return;
         net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
-        if (mc.getCameraEntity() == key && mc.options.getCameraType().isFirstPerson()) return;
+        if (!ua.zentix.incoming.client.fx.layer.FxViews.secondary() && mc.getCameraEntity() == key && mc.options.getCameraType().isFirstPerson()) return;
         HOT.put(key, new Hot(s, new Quaternionf(rotation), nozzle, near));
     }
 
@@ -83,10 +84,11 @@ public final class PlumeRenderer {
      * @param origin   projectile world position this frame
      */
     public static void render(Exhaust.Plume p, net.minecraft.world.entity.Entity key, Quaternionf rotation, Vec3 origin) {
+        if (ua.zentix.incoming.client.fx.layer.FxViews.skipped()) return;
         // Onboard view cannot see its own engine jet (same as distant plume light, FarFlightView.onboard): Iris draws the camera
         // entity into the shadow map; without this the layer would draw the jet right at the eye.
         net.minecraft.client.Minecraft mc = net.minecraft.client.Minecraft.getInstance();
-        if (mc.getCameraEntity() == key && mc.options.getCameraType().isFirstPerson()) return;
+        if (!ua.zentix.incoming.client.fx.layer.FxViews.secondary() && mc.getCameraEntity() == key && mc.options.getCameraType().isFirstPerson()) return;
         FRAME.put(key, new Jet(p, new Quaternionf(rotation), origin));
     }
 
@@ -244,5 +246,20 @@ public final class PlumeRenderer {
     private static void disc(Quads out, int layer, Vector3f at, Vector3f left, Vector3f up, float s) {
         Vector3f l = new Vector3f(left).mul(s), u = new Vector3f(up).mul(s);
         out.quad(layer, 0, new Vector3f(at).sub(l).sub(u), new Vector3f(at).sub(l).add(u), new Vector3f(at).add(l).add(u), new Vector3f(at).add(l).sub(u));
+    }
+
+    /** Saved only for secondary views; swapping leaves the primary draw path and operation order unchanged. */
+    public static final class ViewState {
+        private Map<net.minecraft.world.entity.Entity, Jet> FRAME = new IdentityHashMap<>();
+        private Map<net.minecraft.world.entity.Entity, Hot> HOT = new IdentityHashMap<>();
+
+        public void swap() {
+            Map<net.minecraft.world.entity.Entity, Jet> oldFRAME = PlumeRenderer.FRAME;
+            PlumeRenderer.FRAME = FRAME;
+            FRAME = oldFRAME;
+            Map<net.minecraft.world.entity.Entity, Hot> oldHOT = PlumeRenderer.HOT;
+            PlumeRenderer.HOT = HOT;
+            HOT = oldHOT;
+        }
     }
 }

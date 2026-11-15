@@ -100,7 +100,7 @@ public final class FarBlasts {
     /** Numbers per frame without allocation: the point {@link Sight#point}, the light {@link Sight#light} and the ball's colour. */
     private static final double[] POINT = new double[2], LIGHT = new double[5], BB = new double[4];
     /** Brightest body of the last frame (for the log): core, glare and veil in pixels, overexposure, share above the terrain. */
-    private static final double[] BRIGHTEST = new double[5];
+    private static double[] BRIGHTEST = new double[5];
     private static final float[] TINT = new float[3];
     /** Last client pre-tick: the age of an ordinary effect does not depend on the order of post-tick listeners. */
     private static long clock;
@@ -805,7 +805,7 @@ public final class FarBlasts {
     private static void clear(Event e, Vec3 eye, double age) {
         double r = e.ballRadius();
         if (r <= 0) return;
-        if (e.distanceTo(eye) > Minecraft.getInstance().options.getEffectiveRenderDistance() * 16.0) {
+        if (e.distanceTo(eye) > ua.zentix.incoming.client.fx.layer.FxViews.world(Minecraft.getInstance().options.getEffectiveRenderDistance() * 16.0)) {
             e.open = 1;
             return;
         }
@@ -856,6 +856,18 @@ public final class FarBlasts {
         e.hidden = r.hidden();
         e.path = r.pathDifference();
         e.traced = clock;
+    }
+
+    /** Secondary optical sample; its scope restores the player's terrain/audio path afterwards. */
+    public static void viewEye(Vec3 eye, float partial) {
+        ClientLevel level = Minecraft.getInstance().level;
+        if (level == null) return;
+        Sightline.Heights heights = FarTerrain.of(level);
+        double now = TickTime.at(BlastTime.ticks(), partial);
+        for (Event e : EVENTS) if (e.level == level) {
+            trace(e, heights, eye);
+            clear(e, eye, Math.max(0, now - e.born));
+        }
     }
 
     // ---------------------------------------------------------------- frame
@@ -1159,4 +1171,33 @@ public final class FarBlasts {
         return t * t * (3 - 2 * t);
     }
 
+
+    /** Saved only for secondary views; swapping leaves the primary draw path and operation order unchanged. */
+    public static final class ViewState {
+        private final java.util.Map<Event, Optics> optics = new java.util.IdentityHashMap<>();
+
+        private static final class Optics {
+            double hidden, path;
+            float open = 1;
+            boolean glows = true;
+            long traced;
+
+            void swap(Event e) {
+                double h = e.hidden; e.hidden = hidden; hidden = h;
+                double p = e.path; e.path = path; path = p;
+                float o = e.open; e.open = open; open = o;
+                boolean g = e.glows; e.glows = glows; glows = g;
+                long t = e.traced; e.traced = traced; traced = t;
+            }
+        }
+        private double[] BRIGHTEST = new double[5];
+
+        public void swap() {
+            optics.keySet().removeIf(e -> !e.alive);
+            for (Event e : EVENTS) optics.computeIfAbsent(e, ignored -> new Optics()).swap(e);
+            double[] oldBRIGHTEST = FarBlasts.BRIGHTEST;
+            FarBlasts.BRIGHTEST = BRIGHTEST;
+            BRIGHTEST = oldBRIGHTEST;
+        }
+    }
 }

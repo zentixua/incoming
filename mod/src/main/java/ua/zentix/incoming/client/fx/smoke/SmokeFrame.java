@@ -63,4 +63,15 @@ public final class SmokeFrame {
         // conventional fireball light on world uses own pass (HeatPass); only smoke-grid lighting here
         return f;
     }
+
+    /** Saved only for secondary views; swapping leaves the primary draw path and operation order unchanged. */
+    public static final class ViewState {
+        private SmokeGrid.Frame grid;
+
+        public void swap() {
+            SmokeGrid.Frame oldgrid = SmokeFrame.grid;
+            SmokeFrame.grid = grid;
+            grid = oldgrid;
+        }
+    }
 }

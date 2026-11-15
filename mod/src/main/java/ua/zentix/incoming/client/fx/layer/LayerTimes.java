@@ -57,23 +57,24 @@ public final class LayerTimes {
     /** Probe remains active this long after the last line read. */
     static final long READ_NS = 5_000_000_000L;
 
-    private static boolean always, on;
+    private static boolean always;
+    private static boolean on;
     /** Last line read and drain frame times (0 — never). */
     private static long lastRead, lastDrain;
     /** Timestamps: 0 — unchecked, 1 — supported, −1 — unsupported. */
     private static int timer;
-    private static final int[][] MARK = new int[RING][MARKS];
-    private static final boolean[] ISSUED = new boolean[RING], DRAINED = new boolean[RING];
+    private static int[][] MARK = new int[RING][MARKS];
+    private static boolean[] ISSUED = new boolean[RING], DRAINED = new boolean[RING];
     /** Drain frame's part timestamp slot in {@link PartClock} (−1 — no parts). */
-    private static final int[] PART_SLOT = new int[RING];
+    private static int[] PART_SLOT = new int[RING];
     private static int ring, slot = -1;
-    private static final double[] SUM = new double[PASSES], MEAN = new double[PASSES], EXACT = new double[PASSES];
+    private static double[] SUM = new double[PASSES], MEAN = new double[PASSES], EXACT = new double[PASSES];
     private static int frames, lastFrames;
     /** Last read drain frame: time; reason for missing parts (null — parts present). */
     private static long exactAt;
     private static String partsMissing = "no drained frame yet";
 
-    private static final PartClock CLOCK = new PartClock();
+    private static PartClock CLOCK = new PartClock();
     /** Drain frame copy: texture, framebuffer and size. */
     private static int copy = -1, copyFbo = -1, copyW, copyH;
 
@@ -450,6 +451,108 @@ public final class LayerTimes {
                 b.append(String.format(Locale.ROOT, "%s %.2f/%.2f ", p.label, ms[i], screens[i]));
             }
             if (!b.isEmpty()) out.add(b.toString().trim());
+        }
+    }
+
+    /** Saved only for secondary views; swapping leaves the primary draw path and operation order unchanged. */
+    public static final class ViewState {
+        private boolean on;
+        private long lastRead;
+        private long lastDrain;
+        private int timer;
+        private int[][] MARK = new int[RING][MARKS];
+        private boolean[] ISSUED = new boolean[RING];
+        private boolean[] DRAINED = new boolean[RING];
+        private int[] PART_SLOT = new int[RING];
+        private int ring;
+        private int slot = -1;
+        private double[] SUM = new double[PASSES];
+        private double[] MEAN = new double[PASSES];
+        private double[] EXACT = new double[PASSES];
+        private int frames;
+        private int lastFrames;
+        private long exactAt;
+        private String partsMissing = "no drained frame yet";
+        private PartClock CLOCK = new PartClock();
+        private int copy = -1;
+        private int copyFbo = -1;
+        private int copyW;
+        private int copyH;
+
+        void close() {
+            FxViews.textures(copy); FxViews.framebuffers(copyFbo);
+            for (int[] row : MARK) for (int q : row) if (q > 0) GL15.glDeleteQueries(q);
+            for (int[][] queries : new int[][][]{CLOCK.marks, CLOCK.samples, CLOCK.halfSamples})
+                for (int[] row : queries) for (int q : row) if (q > 0) GL15.glDeleteQueries(q);
+        }
+
+        public void swap() {
+            boolean oldon = LayerTimes.on;
+            LayerTimes.on = on;
+            on = oldon;
+            long oldlastRead = LayerTimes.lastRead;
+            LayerTimes.lastRead = lastRead;
+            lastRead = oldlastRead;
+            long oldlastDrain = LayerTimes.lastDrain;
+            LayerTimes.lastDrain = lastDrain;
+            lastDrain = oldlastDrain;
+            int oldtimer = LayerTimes.timer;
+            LayerTimes.timer = timer;
+            timer = oldtimer;
+            int[][] oldMARK = LayerTimes.MARK;
+            LayerTimes.MARK = MARK;
+            MARK = oldMARK;
+            boolean[] oldISSUED = LayerTimes.ISSUED;
+            LayerTimes.ISSUED = ISSUED;
+            ISSUED = oldISSUED;
+            boolean[] oldDRAINED = LayerTimes.DRAINED;
+            LayerTimes.DRAINED = DRAINED;
+            DRAINED = oldDRAINED;
+            int[] oldPART_SLOT = LayerTimes.PART_SLOT;
+            LayerTimes.PART_SLOT = PART_SLOT;
+            PART_SLOT = oldPART_SLOT;
+            int oldring = LayerTimes.ring;
+            LayerTimes.ring = ring;
+            ring = oldring;
+            int oldslot = LayerTimes.slot;
+            LayerTimes.slot = slot;
+            slot = oldslot;
+            double[] oldSUM = LayerTimes.SUM;
+            LayerTimes.SUM = SUM;
+            SUM = oldSUM;
+            double[] oldMEAN = LayerTimes.MEAN;
+            LayerTimes.MEAN = MEAN;
+            MEAN = oldMEAN;
+            double[] oldEXACT = LayerTimes.EXACT;
+            LayerTimes.EXACT = EXACT;
+            EXACT = oldEXACT;
+            int oldframes = LayerTimes.frames;
+            LayerTimes.frames = frames;
+            frames = oldframes;
+            int oldlastFrames = LayerTimes.lastFrames;
+            LayerTimes.lastFrames = lastFrames;
+            lastFrames = oldlastFrames;
+            long oldexactAt = LayerTimes.exactAt;
+            LayerTimes.exactAt = exactAt;
+            exactAt = oldexactAt;
+            String oldpartsMissing = LayerTimes.partsMissing;
+            LayerTimes.partsMissing = partsMissing;
+            partsMissing = oldpartsMissing;
+            PartClock oldCLOCK = LayerTimes.CLOCK;
+            LayerTimes.CLOCK = CLOCK;
+            CLOCK = oldCLOCK;
+            int oldcopy = LayerTimes.copy;
+            LayerTimes.copy = copy;
+            copy = oldcopy;
+            int oldcopyFbo = LayerTimes.copyFbo;
+            LayerTimes.copyFbo = copyFbo;
+            copyFbo = oldcopyFbo;
+            int oldcopyW = LayerTimes.copyW;
+            LayerTimes.copyW = copyW;
+            copyW = oldcopyW;
+            int oldcopyH = LayerTimes.copyH;
+            LayerTimes.copyH = copyH;
+            copyH = oldcopyH;
         }
     }
 }

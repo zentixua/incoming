@@ -471,13 +471,13 @@ public final class FxBloom {
     private static int fbo = -1, cover = -1, gathered = -1, gatheredFbo = -1, frameW, frameH, frameG = -1;
     private static boolean failed;
     private static final int MAX = 12;
-    private static final int[] LEVEL = new int[MAX + 1], LEVEL_FBO = new int[MAX + 1], LEVEL_W = new int[MAX + 1], LEVEL_H = new int[MAX + 1];
-    private static final int[] VIEWPORT = new int[4];
+    private static int[] LEVEL = new int[MAX + 1], LEVEL_FBO = new int[MAX + 1], LEVEL_W = new int[MAX + 1], LEVEL_H = new int[MAX + 1];
+    private static int[] VIEWPORT = new int[4];
     private static final float[] ZERO = new float[4];
     /** GPU time of the glow passes (with the emission pass) and levels — for the scenario line. */
-    private static final GpuTimer GPU = new GpuTimer();
+    private static GpuTimer GPU = new GpuTimer();
     /** Parts: emission pass, pyramid, output to the frame. */
-    private static final GpuTimer PASS = new GpuTimer(), PYRAMID = new GpuTimer(), OUT = new GpuTimer();
+    private static GpuTimer PASS = new GpuTimer(), PYRAMID = new GpuTimer(), OUT = new GpuTimer();
     private static int lastFirst, lastLast;
 
     static {
@@ -570,6 +570,7 @@ public final class FxBloom {
         ShaderInstance c = gather;
         for (int i = 0; i < GATHER; i++) c.setSampler("Sampler" + i, LEVEL[first + Math.min(i, n - 1)]);
         gatherUniforms(of(c), n);
+        FxViews.screenSize(c);
         c.apply();
         GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, gatheredFbo);
         GlStateManager._viewport(0, 0, LEVEL_W[first], LEVEL_H[first]);
@@ -610,6 +611,7 @@ public final class FxBloom {
      */
     private static void begin(ShaderInstance s, int src) {
         s.setSampler("Sampler0", src);
+        FxViews.screenSize(s);
         s.apply();
     }
 
@@ -716,5 +718,93 @@ public final class FxBloom {
     static String describe() {
         return String.format(Locale.ROOT, "bloom %s %.3f ms (longest %.3f, %d frames; glow pass %.3f, pyramid %.3f, out %.3f; %dx%d, glow level %d, levels %d-%d)",
                 quality(), GPU.lastMean, GPU.lastMax, GPU.lastFrames, PASS.lastMean, PYRAMID.lastMean, OUT.lastMean, frameW, frameH, frameG, lastFirst, lastLast);
+    }
+
+    /** Saved only for secondary views; swapping leaves the primary draw path and operation order unchanged. */
+    public static final class ViewState {
+        private int fbo = -1;
+        private int cover = -1;
+        private int gathered = -1;
+        private int gatheredFbo = -1;
+        private int frameW;
+        private int frameH;
+        private int frameG = -1;
+        private boolean failed;
+        private int[] LEVEL = new int[MAX + 1];
+        private int[] LEVEL_FBO = new int[MAX + 1];
+        private int[] LEVEL_W = new int[MAX + 1];
+        private int[] LEVEL_H = new int[MAX + 1];
+        private int[] VIEWPORT = new int[4];
+        private GpuTimer GPU = new GpuTimer();
+        private GpuTimer PASS = new GpuTimer();
+        private GpuTimer PYRAMID = new GpuTimer();
+        private GpuTimer OUT = new GpuTimer();
+        private int lastFirst;
+        private int lastLast;
+
+        void close() {
+            FxViews.textures(cover, gathered); FxViews.textures(LEVEL); FxViews.framebuffers(fbo, gatheredFbo);
+            FxViews.framebuffers(LEVEL_FBO); GPU.close(); PASS.close(); PYRAMID.close(); OUT.close();
+        }
+
+        public void swap() {
+            int oldfbo = FxBloom.fbo;
+            FxBloom.fbo = fbo;
+            fbo = oldfbo;
+            int oldcover = FxBloom.cover;
+            FxBloom.cover = cover;
+            cover = oldcover;
+            int oldgathered = FxBloom.gathered;
+            FxBloom.gathered = gathered;
+            gathered = oldgathered;
+            int oldgatheredFbo = FxBloom.gatheredFbo;
+            FxBloom.gatheredFbo = gatheredFbo;
+            gatheredFbo = oldgatheredFbo;
+            int oldframeW = FxBloom.frameW;
+            FxBloom.frameW = frameW;
+            frameW = oldframeW;
+            int oldframeH = FxBloom.frameH;
+            FxBloom.frameH = frameH;
+            frameH = oldframeH;
+            int oldframeG = FxBloom.frameG;
+            FxBloom.frameG = frameG;
+            frameG = oldframeG;
+            boolean oldfailed = FxBloom.failed;
+            FxBloom.failed = failed;
+            failed = oldfailed;
+            int[] oldLEVEL = FxBloom.LEVEL;
+            FxBloom.LEVEL = LEVEL;
+            LEVEL = oldLEVEL;
+            int[] oldLEVEL_FBO = FxBloom.LEVEL_FBO;
+            FxBloom.LEVEL_FBO = LEVEL_FBO;
+            LEVEL_FBO = oldLEVEL_FBO;
+            int[] oldLEVEL_W = FxBloom.LEVEL_W;
+            FxBloom.LEVEL_W = LEVEL_W;
+            LEVEL_W = oldLEVEL_W;
+            int[] oldLEVEL_H = FxBloom.LEVEL_H;
+            FxBloom.LEVEL_H = LEVEL_H;
+            LEVEL_H = oldLEVEL_H;
+            int[] oldVIEWPORT = FxBloom.VIEWPORT;
+            FxBloom.VIEWPORT = VIEWPORT;
+            VIEWPORT = oldVIEWPORT;
+            GpuTimer oldGPU = FxBloom.GPU;
+            FxBloom.GPU = GPU;
+            GPU = oldGPU;
+            GpuTimer oldPASS = FxBloom.PASS;
+            FxBloom.PASS = PASS;
+            PASS = oldPASS;
+            GpuTimer oldPYRAMID = FxBloom.PYRAMID;
+            FxBloom.PYRAMID = PYRAMID;
+            PYRAMID = oldPYRAMID;
+            GpuTimer oldOUT = FxBloom.OUT;
+            FxBloom.OUT = OUT;
+            OUT = oldOUT;
+            int oldlastFirst = FxBloom.lastFirst;
+            FxBloom.lastFirst = lastFirst;
+            lastFirst = oldlastFirst;
+            int oldlastLast = FxBloom.lastLast;
+            FxBloom.lastLast = lastLast;
+            lastLast = oldlastLast;
+        }
     }
 }

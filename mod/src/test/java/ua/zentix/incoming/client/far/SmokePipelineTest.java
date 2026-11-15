@@ -110,6 +110,41 @@ class SmokePipelineTest {
         return null;
     }
 
+    /** A primary job finishing while another view is active must still write its original Draw and history. */
+    @Test
+    void secondaryViewCannotStealAPendingPrimaryPlan() {
+        double now = 1000;
+        List<SmokeGrid.Source> raid = SmokeRaidTest.raid(now);
+        FarView main = SmokeRaidTest.view(1), other = SmokeRaidTest.view(2);
+        Calls expected = run(raid, now, main, DIRECT, 2).get(1);
+        final class Delayed implements SmokePuffs.Planner {
+            Runnable pending;
+            boolean ready;
+            @Override public void start(Runnable task) { pending = task; ready = false; }
+            @Override public boolean await(long nanos) { return ready; }
+            @Override public void stop() { if (!ready && pending != null) { pending.run(); ready = true; } }
+        }
+        Delayed worker = new Delayed();
+        SmokePuffs.planner(worker);
+        SmokePuffs.reset();
+        FarFlightView.reset();
+        frame(raid, now, main);
+        SmokePuffs.ViewState secondary = new SmokePuffs.ViewState();
+        FarFlightView.ViewState flights = new FarFlightView.ViewState();
+        secondary.swap();
+        flights.swap();
+        try {
+            frame(raid, now, other);
+            worker.pending.run();
+            worker.ready = true;
+        } finally {
+            flights.swap();
+            secondary.swap();
+        }
+        Calls actual = frame(raid, now, main);
+        assertEquals(null, compare(expected, actual, 0, 0, 0, 0), "secondary changed the pending primary frame");
+    }
+
     @Test
     void plannedFrameDrawsTheInlineFrameOneLater() {
         double now = 1000;

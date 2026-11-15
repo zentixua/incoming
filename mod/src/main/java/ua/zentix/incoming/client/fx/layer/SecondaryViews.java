@@ -3,6 +3,7 @@ package ua.zentix.incoming.client.fx.layer;
 import java.util.ArrayList;
 import java.util.function.Consumer;
 import java.util.function.Supplier;
+import java.util.function.Predicate;
 
 /** Render-thread ownership of secondary histories. The primary view never enters this cache. */
 final class SecondaryViews<K, V> {
@@ -30,25 +31,20 @@ final class SecondaryViews<K, V> {
         }
     }
 
-    /** Null means all four entries are in use: skip this additional recursive view. */
+    /** Null means this target is recursive or all four history slots are occupied. */
     Entry<K, V> acquire(K key, long now, Supplier<V> create) {
         expire(now);
         for (Entry<K, V> entry : entries) {
             if (entry.key.equals(key)) {
+                if (entry.users != 0) return null;
                 entry.touched = now;
                 entry.users++;
                 return entry;
             }
         }
-        if (entries.size() == LIMIT) {
-            Entry<K, V> oldest = null;
-            for (Entry<K, V> entry : entries) {
-                if (entry.users == 0 && (oldest == null || entry.touched < oldest.touched)) oldest = entry;
-            }
-            if (oldest == null) return null;
-            entries.remove(oldest);
-            destroy.accept(oldest.value);
-        }
+        // Do not cycle expensive GPU histories when five screens refresh round-robin. A new feed waits
+        // until an existing feed has been absent for TTL_NS; currently rendered scopes remain pinned.
+        if (entries.size() == LIMIT) return null;
         Entry<K, V> entry = new Entry<>(key, create.get(), now);
         entry.users = 1;
         entries.add(entry);
@@ -59,6 +55,16 @@ final class SecondaryViews<K, V> {
         if (entry.users <= 0) throw new IllegalStateException("Secondary view released without acquisition");
         entry.users--;
         entry.touched = now;
+    }
+
+    void invalidate(Predicate<K> stale) {
+        for (int i = entries.size() - 1; i >= 0; i--) {
+            Entry<K, V> entry = entries.get(i);
+            if (entry.users == 0 && stale.test(entry.key)) {
+                entries.remove(i);
+                destroy.accept(entry.value);
+            }
+        }
     }
 
     void expire(long now) {

@@ -34,7 +34,7 @@ class SecondaryViewsTest {
     }
 
     @Test
-    void fifthFeedEvictsOnlyAnIdleEntryAndNestedRendersRemainPinned() {
+    void fifthFeedWaitsForExpiryAndNestedRendersRemainPinned() {
         List<Integer> freed = new ArrayList<>();
         SecondaryViews<Integer, Integer> cache = new SecondaryViews<>(freed::add);
         var first = cache.acquire(0, 0, () -> 0);
@@ -46,11 +46,27 @@ class SecondaryViewsTest {
         cache.expire(2 * SecondaryViews.TTL_NS);
         assertEquals(4, cache.size());
         cache.release(first, 2 * SecondaryViews.TTL_NS);
-        assertNotNull(cache.acquire(4, 2 * SecondaryViews.TTL_NS + 1, () -> 4));
+        assertNull(cache.acquire(4, 2 * SecondaryViews.TTL_NS + 1, () -> 4));
+        assertNotNull(cache.acquire(4, 3 * SecondaryViews.TTL_NS, () -> 4));
         assertEquals(List.of(0), freed);
         assertEquals(4, cache.size());
         cache.clear();
         assertEquals(5, freed.stream().distinct().count());
+    }
+
+    @Test
+    void recursionCannotSwapAnActiveHistoryAndReplacedAttachmentsAreFreed() {
+        List<Object> freed = new ArrayList<>();
+        SecondaryViews<Target, Object> cache = new SecondaryViews<>(freed::add);
+        Target target = new Target(1, 11, 96, 96);
+        var entry = cache.acquire(target, 0, Object::new);
+        assertNull(cache.acquire(target, 1, () -> { throw new AssertionError("Recursive acquisition"); }));
+        cache.invalidate(key -> key.framebuffer == 1);
+        assertTrue(freed.isEmpty());
+        cache.release(entry, 2);
+        cache.invalidate(key -> key.framebuffer == 1);
+        assertEquals(List.of(entry.value), freed);
+        assertEquals(0, cache.size());
     }
 
     @Test
