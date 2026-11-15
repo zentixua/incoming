@@ -46,7 +46,8 @@ final class ViewFxScenario {
     private int tick, secondaryFrames, primaryFrames, failures, connected;
     private int draw, read;
     private final int[] viewport = new int[4];
-    private long started, secondaryNanos;
+    private long started, secondaryNanos, measuredNanos;
+    private int measuredFrames;
     private List<Object> outer;
     private Vec3 feedEye;
     private float feedYaw, feedPitch;
@@ -87,7 +88,7 @@ final class ViewFxScenario {
             ClientNuclear.reset();
             nuke(true);
             for (int i = 0; i < raid; i++) {
-                Vec3 at = raid == 1 ? new Vec3(-40, 65, -8) : new Vec3(-50 + (i % 10) * 2, 65, -18 + (i / 10) * 2);
+                Vec3 at = raid == 1 ? new Vec3(-90, 65, -45) : new Vec3(-50 + (i % 10) * 2, 65, -18 + (i / 10) * 2);
                 ClientHooks.get().blast(new S2C.Blast(S2C.Blast.MISSILE, at,
                         GroundMaterial.DIRT.ordinal(), 65, 1234 + i, Optional.empty(), WeaponType.MISSILE.id(),
                         S2C.Blast.DOWN, false, Optional.empty()));
@@ -99,11 +100,16 @@ final class ViewFxScenario {
                 commands("setblock " + (i * 3) + " 66 -3 minecraft:air",
                         "setblock " + (i * 3) + " 65 -3 minecraft:air",
                         "setblock " + (10 + i * 3) + " 66 -3 minecraft:air");
-            // Match the real feed eye/angles, including Vista's viewfinder position offset.
-            if (feedEye == null) { feedEye = new Vec3(10.5, 66.5, -2.5); feedYaw = 90; feedPitch = -22; }
-            commands(String.format(Locale.ROOT, "tp @a %.8f %.8f %.8f %.8f %.8f", feedEye.x,
-                    feedEye.y - mc.player.getEyeHeight(), feedEye.z, feedYaw, feedPitch));
         }
+        if (tick == 481) {
+            // Match the feed one tick after its capture; leave the same blocks in both pictures.
+            if (feedEye == null) { feedEye = new Vec3(10.5, 66.5, -2.5); feedYaw = 90; feedPitch = -22; }
+            double y = feedEye.y - mc.player.getEyeHeight();
+            mc.player.moveTo(feedEye.x, y, feedEye.z, feedYaw, feedPitch);
+            commands(String.format(Locale.ROOT, "tp @a %.8f %.8f %.8f %.8f %.8f", feedEye.x,
+                    y, feedEye.z, feedYaw, feedPitch));
+        }
+        if (tick == 400) resetMetrics();
         if (tick == 500) metrics();
         if (tick == 640) {
             if (vista && (connected != count || secondaryFrames == 0)) failures++;
@@ -235,7 +241,7 @@ final class ViewFxScenario {
         if (primaryTarget == null) return;
         if (tick == 260) shot(primaryTarget, "tv-fireball");
         if (tick == 480) shot(primaryTarget, "tv-mushroom-smoke");
-        if (tick == 580) shot(primaryTarget, "direct-mushroom-smoke");
+        if (tick == 483) shot(primaryTarget, "direct-mushroom-smoke");
     }
 
     private boolean secondary(RenderLevelStageEvent event) { return primaryCamera != null && event.getCamera() != primaryCamera; }
@@ -279,13 +285,34 @@ final class ViewFxScenario {
                 new org.joml.Matrix4f((org.joml.Matrix4f) field("ua.zentix.incoming.client.render.ScreenProjection", null, "VIEW_PROJ")));
     }
 
+    /** Measure the established smoke/LOW history at 2–7 s after the raid, excluding cold allocations. */
+    private void resetMetrics() {
+        try { Class.forName("ua.zentix.incoming.client.fx.layer.FxViews"); }
+        catch (ClassNotFoundException baseline) { return; }
+        String layer = "ua.zentix.incoming.client.fx.layer.";
+        Object cache = field(layer + "FxViews", null, "views");
+        if (cache == null) return;
+        List<?> entries = (List<?>) field(layer + "SecondaryViews", cache, "entries");
+        for (Object entry : entries) {
+            Object saved = field(layer + "SecondaryViews$Entry", entry, "value");
+            Object timing = field(layer + "FxViews$Saved", saved, "timing");
+            Arrays.fill((double[]) field(layer + "LayerTimes$ViewState", timing, "SUM"), 0);
+            try {
+                Field frames = timing.getClass().getDeclaredField("frames");
+                frames.setAccessible(true);
+                frames.setInt(timing, 0);
+            } catch (ReflectiveOperationException ex) { throw new IllegalStateException(ex); }
+        }
+    }
+
     private void metrics() {
         try { Class.forName("ua.zentix.incoming.client.fx.layer.FxViews"); }
         catch (ClassNotFoundException baseline) { return; }
         String layer = "ua.zentix.incoming.client.fx.layer.";
         Object cache = field(layer + "FxViews", null, "views");
         if (cache == null) return;
-        Incoming.LOG.info("VIEWFX metrics tick={} primaryFrames={} secondaryFrames={}", tick, primaryFrames, secondaryFrames);
+        Incoming.LOG.info("VIEWFX metrics tick={} primaryFrames={} secondaryFrames={} windowFrames={} windowCpuMs={}",
+                tick, primaryFrames, secondaryFrames, measuredFrames, measuredFrames == 0 ? 0 : measuredNanos / 1e6 / measuredFrames);
         List<?> entries = (List<?>) field(layer + "SecondaryViews", cache, "entries");
         for (Object entry : entries) {
             Object saved = field(layer + "SecondaryViews$Entry", entry, "value");
@@ -311,7 +338,9 @@ final class ViewFxScenario {
 
     private void after(RenderLevelStageEvent event) {
         if (event.getStage() != RenderLevelStageEvent.Stage.AFTER_LEVEL || !secondary(event)) return;
-        secondaryNanos += System.nanoTime() - started;
+        long elapsed = System.nanoTime() - started;
+        secondaryNanos += elapsed;
+        if (tick >= 400 && tick < 500) { measuredNanos += elapsed; measuredFrames++; }
         if (outer != null && !outer.equals(snapshot())) {
             failures++;
             if (failures < 6) Incoming.LOG.error("VIEWFX primary history/light/fog changed: before={} after={}", outer, snapshot());
