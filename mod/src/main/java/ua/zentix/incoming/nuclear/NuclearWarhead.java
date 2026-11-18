@@ -167,9 +167,10 @@ public final class NuclearWarhead {
         // creative and spectator: no burns or dose (as with damage)
         if (living instanceof Player p && (p.isCreative() || p.isSpectator())) return false;
         Vec3 eye = living.getEyePosition();
-        if (sees(level, d, living)) {
+        double share = seenShare(level, d, living);
+        if (share > 0) {
             if (living instanceof ServerPlayer player) FlashEyes.flash(level, d, player, owner);
-            FlashBurns.burn(level, d, living, d.fluence(eye), owner);
+            FlashBurns.burn(level, d, living, share * d.fluence(eye), owner);
             // saw flash: flee
             if (!late) MobPanic.flash(d, living, level.getGameTime());
         }
@@ -194,26 +195,36 @@ public final class NuclearWarhead {
         return true;
     }
 
-    /**
-     * Whether entity sees fireball: nearby, actual block ray (walls, roof); farther, heightmap
-     * (hills, houses), densely to {@link #NEAR_TERRAIN}, sparse points beyond to avoid kilometer-long rays.
-     */
+    /** Whether entity sees any part of the fireball ({@link #seenShare}). */
     public static boolean sees(Level level, Detonation d, LivingEntity e) {
+        return seenShare(level, d, e) > 0;
+    }
+
+    /**
+     * Visible share of the fireball from the entity's eyes ({@link ThermalShadow}): nearby, actual block ray toward the
+     * middle of the ball (walls, roof hide all of it); farther, heightmap terrain line on the ball axis (hills,
+     * houses), densely to {@link #NEAR_TERRAIN}, sparse points beyond to avoid kilometer-long rays.
+     */
+    public static double seenShare(Level level, Detonation d, LivingEntity e) {
         Vec3 eye = e.getEyePosition();
-        Vec3 dir = d.burst().subtract(eye);
+        Vec3 dir = ThermalShadow.aim(d).subtract(eye);
         double len = dir.length();
         Vec3 near = eye.add(dir.scale(Math.min(1, 48 / Math.max(len, 1e-3))));
         // block ray only through loaded chunks: server must not load world for this check
-        if (Terrain.readyAlong(level, eye, near) && level.clip(new ClipContext(eye, near, ClipContext.Block.VISUAL, ClipContext.Fluid.NONE, e)).getType() != HitResult.Type.MISS) return false;
+        if (Terrain.readyAlong(level, eye, near) && level.clip(new ClipContext(eye, near, ClipContext.Block.VISUAL, ClipContext.Fluid.NONE, e)).getType() != HitResult.Type.MISS) return 0;
         // sparse ThermalShadow points for a distant eye miss nearby terrain (ridge a hundred meters away with fireball
         // 30 km away): from ray end to NEAR_TERRAIN, heightmap every TERRAIN_STEP blocks while chunks ready
         Vec3 until = Terrain.readyUntil(level, near, eye.add(dir.scale(Math.min(1, NEAR_TERRAIN / Math.max(len, 1e-3)))));
         Vec3 span = until.subtract(near);
+        double reach = Math.hypot(d.burst().x - eye.x, d.burst().z - eye.z), line = ThermalShadow.sparseLine(level, d, near);
         for (double s = TERRAIN_STEP, n = span.length(); s < n; s += TERRAIN_STEP) {
             Vec3 p = near.add(span.scale(s / n));
-            if (Terrain.height(level, Heightmap.Types.MOTION_BLOCKING, Mth.floor(p.x), Mth.floor(p.z)) > p.y + 0.5) return false;
+            double along = Math.hypot(p.x - eye.x, p.z - eye.z);
+            if (along < 1e-6 || along >= reach) continue;
+            line = Math.max(line, ThermalShadow.clearance(eye, along, reach,
+                    Terrain.height(level, Heightmap.Types.MOTION_BLOCKING, Mth.floor(p.x), Mth.floor(p.z))));
         }
-        return ThermalShadow.visible(level, d.burst(), near);
+        return ThermalShadow.share(d, line);
     }
 
     /** Range where prompt-radiation dose falls to {@code rem}, m (bisection of monotonic model). */

@@ -752,7 +752,7 @@ public final class NuclearGameTests {
                     else gone++;
                     Vec3 at = Vec3.atCenterOf(p).add(0, 0.5, 0);
                     if (Math.hypot(at.x - d.burst().x, at.z - d.burst().z) < d.fireballRadius() * 0.8) fireball++;
-                    else if (ua.zentix.incoming.nuclear.world.ThermalShadow.visible(level, d.burst(), at) && d.fluence(at) >= 5) seen++;
+                    else if (ua.zentix.incoming.nuclear.world.ThermalShadow.visible(level, d, at) && d.fluence(at) >= 5) seen++;
                 }
             }
             h.fail("not a single fire: comparison of fire sites did not check anything (top of the site after the ruins: turf " + kept
@@ -1766,17 +1766,22 @@ public final class NuclearGameTests {
         chunk.setBlockEntityNbt(tag);
     }
 
-    /** Shadow: the fireball is not visible behind a wall (neither light nor fire), but in an open place it is visible. */
+    /**
+     * Shadow: the fireball is not visible behind a wall (neither light nor fire), but in an open place it is visible. The
+     * ball (15 kt at a scale giving it a radius of one block) hangs 4.5 blocks up; the wall, 6 high at 8 blocks, hides
+     * all of it from 12 blocks.
+     */
     @GameTest(template = "range", timeoutTicks = 20, batch = "nuke_shadow", skyAccess = true)
     public static void wallCastsThermalShadow(GameTestHelper h) {
         for (int y = 0; y < 6; y++) {
             for (int z = -3; z <= 3; z++) h.setBlock(CENTER.offset(8, y, z), Blocks.STONE);
         }
-        Vec3 fireball = Vec3.atCenterOf(h.absolutePos(CENTER.above(4)));
+        Detonation d = raw(h, CENTER, 4.5, 15, 0.003f);
         Vec3 behind = Vec3.atCenterOf(h.absolutePos(CENTER.east(12)));
         Vec3 open = Vec3.atCenterOf(h.absolutePos(CENTER.west(12)));
-        h.assertFalse(ThermalShadow.visible(h.getLevel(), fireball, behind), "the ball is visible behind the wall");
-        h.assertTrue(ThermalShadow.visible(h.getLevel(), fireball, open), "in the open the ball is not visible");
+        h.assertTrue(d.fireballRadius() <= 1, "ball radius " + d.fireballRadius());
+        h.assertFalse(ThermalShadow.visible(h.getLevel(), d, behind), "the ball is visible behind the wall");
+        h.assertTrue(ThermalShadow.visible(h.getLevel(), d, open), "in the open the ball is not visible");
         h.succeed();
     }
 

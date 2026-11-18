@@ -69,7 +69,9 @@ final class FlashFaces {
             double q = d.fluence(at) * cos;
             if (!FlashChar.possible(q, material)) continue;
             if (covered(g, shot, view, lx + face.getStepX(), y + face.getStepY(), lz + face.getStepZ())) continue;
-            if (!g.sees(at)) continue;
+            // the part of the ball a face sees is the part of the pulse it gets
+            q *= g.share(at);
+            if (!FlashChar.possible(q, material)) continue;
             double chance = FlashChar.saturated(q, material) ? 0 : FlashChar.chance(noise, x, y, z, face);
             int level = FlashChar.level(q, material, chance);
             if (level > 0) out.add(FlashChar.mark(FlashChar.key(lx, y, lz, face), level, p.flashHash()));

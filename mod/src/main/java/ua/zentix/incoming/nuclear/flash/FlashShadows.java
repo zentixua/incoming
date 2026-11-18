@@ -153,7 +153,7 @@ public final class FlashShadows {
         double fluence = d.fluence(c);
         if (!FlashChar.possible(fluence, FlashChar.CHARS)) return;
         // body itself in shadow casts none
-        if (!ThermalShadow.visible(level, d.burst(), c) && !ThermalShadow.visible(level, d.burst(), c.add(0, body.height / 2, 0))) return;
+        if (!ThermalShadow.visible(level, d, c) && !ThermalShadow.visible(level, d, c.add(0, body.height / 2, 0))) return;
         Vec3 away = c.subtract(d.burst()).normalize();
         double radius = PENUMBRA * d.fireballRadius();
         Vec3[] sources = sources(d.burst(), away, radius);
@@ -204,7 +204,10 @@ public final class FlashShadows {
         if (cos <= 0) return 0;
         Vec3 at = FlashChar.front(pos.getX(), pos.getY(), pos.getZ(), face);
         double q = d.fluence(at) * cos;
-        if (!FlashChar.possible(q, material) || !ThermalShadow.visible(level, d.burst(), at)) return 0;
+        if (!FlashChar.possible(q, material)) return 0;
+        // the part of the ball a face sees is the part of the pulse it gets
+        q *= ThermalShadow.share(level, d, at);
+        if (!FlashChar.possible(q, material)) return 0;
         double chance = FlashChar.saturated(q, material) ? 0 : FlashChar.chance(noise, pos.getX(), pos.getY(), pos.getZ(), face);
         return FlashChar.level(q, material, chance);
     }

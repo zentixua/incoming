@@ -332,7 +332,9 @@ public final class FlashAftermath {
                 if (cos <= 0) continue;
                 Vec3 at = FlashChar.front(x, y, z, face);
                 double q = d.fluence(at) * cos;
-                if (!Fragility.possible(q, SMOKE_Q, SMOKE_BETA) || !ThermalShadow.visible(level, d.burst(), at)) continue;
+                if (!Fragility.possible(q, SMOKE_Q, SMOKE_BETA)) continue;
+                q *= ThermalShadow.share(level, d, at);
+                if (!Fragility.possible(q, SMOKE_Q, SMOKE_BETA)) continue;
                 if (!Fragility.hit(q, SMOKE_Q, SMOKE_BETA, rnd.nextGaussian())) continue;
                 double absorbed = ABSORB * q * CAL_CM2 * area, volatiles = ABSORB * Math.max(0, q - SMOKE_Q) * CAL_CM2 * area / GASIFY;
                 smoke.add(at.x, at.y, at.z, now, TO_AIR * absorbed, SMOKE_K_GAS, 0.5 * Math.sqrt(area), 0, SMOKE_YIELD * volatiles, SMOKE_K,

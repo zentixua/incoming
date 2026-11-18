@@ -118,7 +118,7 @@ public final class ScorchGameTests {
                 fluence[ring] = Math.max(fluence[ring], d.fluence(at));
                 psi[ring] = Math.max(psi[ring], d.psi(at));
                 if (top.is(Blocks.COARSE_DIRT)) coarse[ring]++;
-                if (ua.zentix.incoming.nuclear.world.ThermalShadow.visible(level, d.burst(), at.add(0, -0.5, 0))) seen[ring]++;
+                if (ua.zentix.incoming.nuclear.world.ThermalShadow.visible(level, d, at.add(0, -0.5, 0))) seen[ring]++;
                 // biome - near the plain, without cells at the edge of the site (there are also columns behind the barrier wall, in the shadows)
                 if (plains[x * 64 + z] && z >= 4 && x >= 4 && x < 60) {
                     cells[ring]++;
@@ -240,6 +240,67 @@ public final class ScorchGameTests {
         h.assertTrue(compared >= 4 && changed > 0 && biomes > 0, "the trail is not clear: chunks " + compared + ", places " + changed + ", chunks with biomes " + biomes);
         Incoming.LOG.info("The trail without ruins coincided with the ruins of: chunks {}, places {}, chunks with biomes {}", compared, changed, biomes);
         h.succeed();
+    }
+
+    /**
+     * A chunk's light trace depends only on terrain in its own plan window ({@code RuinContext.Grid#shadowLine},
+     * DESIGN-nuke §3.4): the same in every path and order, near a player at the wave or settled hours later. Surface
+     * burst due west of the easternmost chunk A fully on the site, at a scale giving A 25 cal/cm². A stone wall 8
+     * high across the site three chunks west of A (beyond the window) leaves A's plan unchanged; before, a chunk with
+     * the lane to the epicentre in memory took its heights and a chunk without them did not (1 Mt over the Silo map,
+     * 16.11.2026: burned turf in 63 % of chunks near the player at 4.5–5 km, 14 % elsewhere). The same wall beside A,
+     * inside the window, hides the ball: the trace is gone.
+     */
+    @GameTest(template = "range", timeoutTicks = 40, batch = "nuke_shadow_window", skyAccess = true)
+    public static void lightTraceIgnoresTerrainBeyondThePlanWindow(GameTestHelper h) {
+        ServerLevel level = h.getLevel();
+        fillBiome(h, 0, 63, Biomes.PLAINS);
+        plants(h);
+        BlockPos lo = h.absolutePos(BlockPos.ZERO), hi = h.absolutePos(new BlockPos(63, 0, 63));
+        int minX = Math.min(lo.getX(), hi.getX()), maxX = Math.max(lo.getX(), hi.getX());
+        int minZ = Math.min(lo.getZ(), hi.getZ()), maxZ = Math.max(lo.getZ(), hi.getZ());
+        int ground = h.absolutePos(new BlockPos(0, 12, 0)).getY();
+        LevelChunk a = level.getChunk(((maxX + 1) >> 4) - 1, ((minZ + maxZ) / 2) >> 4);
+        ChunkPos c = a.getPos();
+        int far = c.getMinBlockX() - 33, near = c.getMinBlockX() - 2;
+        h.assertTrue(far >= minX && c.getMaxBlockX() <= maxX, "chunk A " + c + " or the far wall " + far + " is off the site");
+        BlockPos zero = new BlockPos(c.getMinBlockX() - 400, ground - 1, c.getMiddleBlockZ());
+        Vec3 mid = new Vec3(c.getMiddleBlockX() + 0.5, ground + 0.5, c.getMiddleBlockZ() + 0.5);
+        double sLo = 0.002, sHi = 1;
+        for (int i = 0; i < 50; i++) {
+            double s = Math.sqrt(sLo * sHi);
+            Detonation probe = new Detonation(-1, Vec3.atBottomCenterOf(zero.above()), zero.getY() + 1, 15, true, 0, 0, 0, 20_000, 7, (float) s, false,
+                    Detonation.OLD_WAVE);
+            if (probe.fluence(mid) < 25) sLo = s;
+            else sHi = s;
+        }
+        Detonation d = NuclearGameTests.detonationAt(h, zero.above(), 0, 15, (float) sHi);
+        // the plan window: radius-REACH square fully loaded
+        for (int dx = -RuinPlanner.REACH; dx <= RuinPlanner.REACH; dx++) {
+            for (int dz = -RuinPlanner.REACH; dz <= RuinPlanner.REACH; dz++) level.getChunk(c.x + dx, c.z + dz);
+        }
+        RuinPlan open = RuinPlanner.planFresh(level, d, a, false);
+        wall(level, far, minZ, maxZ, ground, Blocks.STONE);
+        RuinPlan beyond = RuinPlanner.planFresh(level, d, a, false);
+        wall(level, far, minZ, maxZ, ground, Blocks.AIR);
+        wall(level, near, minZ, maxZ, ground, Blocks.STONE);
+        RuinPlan beside = RuinPlanner.planFresh(level, d, a, false);
+        wall(level, near, minZ, maxZ, ground, Blocks.AIR);
+        h.assertTrue(open.changedBlocks() > 0, "no light trace in chunk A " + c + ": nothing to compare");
+        String diff = open.differs(beyond);
+        h.assertTrue(diff == null, "a wall beyond the plan window changed the light trace of chunk " + c + " (open | wall):" + diff);
+        h.assertTrue(beside.changedBlocks() < open.changedBlocks(), "a wall beside chunk " + c + " left its trace: "
+                + beside.changedBlocks() + " of " + open.changedBlocks() + " changed blocks");
+        Incoming.LOG.info("Light trace window: chunk {}, {} changed blocks in the open and behind a far wall, {} behind a near wall, scale {}",
+                c, open.changedBlocks(), beside.changedBlocks(), String.format(Locale.ROOT, "%.4f", sHi));
+        h.succeed();
+    }
+
+    /** Wall 8 blocks high across the site at {@code x} (absolute), on its ground. */
+    private static void wall(ServerLevel level, int x, int minZ, int maxZ, int ground, Block block) {
+        for (int z = minZ; z <= maxZ; z++) {
+            for (int y = ground; y < ground + 8; y++) level.setBlock(new BlockPos(x, y, z), block.defaultBlockState(), Block.UPDATE_CLIENTS);
+        }
     }
 
     /**

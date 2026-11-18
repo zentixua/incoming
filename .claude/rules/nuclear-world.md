@@ -60,7 +60,7 @@ paths:
   unloads; idle cores from own `/proc/stat` and JVM CPU deltas, never the shared `getCpuLoad` sample spark also reads), below
   `… − 5` add one, log it; using the full tick with our 30 ms would keep one thread). They call neither world nor block code; state
   properties (`Blast.Props`: fire, flammability, top strength, heightmap opacity, light too) come from a table the server
-  thread fills from snapshot palettes (`Blast.publish`); light shadow uses detonation heightmaps (`RuinContext.lit`).
+  thread fills from snapshot palettes (`Blast.publish`); light shadow uses the pre-wave heights of the plan's own 5×5 window only (`RuinContext.Grid.lit`, `shadowLine`).
   GameTest `backgroundSolversCallNoWorld` walks bytecode along the call graph from background-task roots;
   `backgroundPlanMatchesServerPlan` and `diskPlanMatchesMemoryPlan` check equal plans; a background plan running over
   600 ticks, measured from start rather than enqueue, is abandoned and planned on the server thread): `Blast` —
@@ -174,7 +174,7 @@ paths:
   before the survey keeps per-column ground), `NuclearWorld`
   (front on entities and craft, queues); chunk mark is attachment `CHUNK_SCAR`;
 - Ground trace (`RuinPlanner.finish` after ruins, on the highest supporting block; in-memory chunks get light earlier
-  via the flash layer below): blast strips turf (`STRIP_PSI`); light (`RuinContext.lit` × incidence angle `incidence`:
+  via the flash layer below): blast strips turf (`STRIP_PSI`); light (`RuinContext.Grid.lit`: fluence × visible fireball share, `ThermalShadow`; × incidence angle `incidence`:
   blast-facing slope up to ×2.5 for scorch/plants/biomes only, penumbra `LOW_SUN`; slope from ±2 columns; smooth fade to zero at
   `RuinContext.ruinRadius`, `EDGE_FADE`) burns plants above ground (`PLANT_Q`, tag `nuke_plants`, flag
   `Blast.Props.PLANT`; entire plant column above, some leave dead bushes), turf to dirt (`BURN_Q`), and inside the burned
@@ -194,8 +194,16 @@ paths:
   zone gets planned ruins, an unprepared one gets trace too. Where the wave broke nothing, trace matches ruins
   (GameTest `scorchWithoutRuinsSameAsRuins`; detonate over the platform's own corner: light from beyond its edge would
   cross neighboring batches' structures, different in each CI shard); glass and trees in LODs stand until the chunk
-  loads. Distant light shadow is not calculated: the ring has its own `RuinContext` without heightmaps (rays to ground
-  kilometers away pass hundreds of meters above terrain; a later-loaded chunk's plan sees only in-memory chunks).
+  loads. The trace's light shadow uses only the chunk's own heights (its one-snapshot window).
+- Light shadow (`ThermalShadow`, DESIGN-nuke §3.4): the source is the luminous ball at maximum radius, never
+  `d.burst()` (a surface burst's burst point lies on the ground: every ray grazed, and a known tree or bump anywhere
+  on the line hid the whole pulse); exposure = fluence × visible share of the ball above the terrain line. Plans take
+  occluders only from their own window (`RuinContext.Grid.shadow`: pre-wave heights of exactly the window chunks
+  the plan's blocks come from); terrain beyond is not an occluder (approximation, Artem 18.11.2026). Never consult a
+  detonation-wide height map in a plan: what it holds depends on which chunks happened to be loaded or read, and
+  “absent = world bottom” lit chunks ruined beside a player while settlement, with every nearer chunk read, shadowed
+  the rest (1 Mt over the Silo map 16.11.2026: burned turf in 63 % vs 14 % of chunks at 4.5–5 km; GameTest
+  `lightTraceIgnoresTerrainBeyondThePlanWindow`, unit `ThermalShadowTest`).
 - Flash scorch on faces (`FlashFaces`, DESIGN-nuke §3.7) is added in plan completion (`RuinPlanner.finish`, background):
   surviving material blocks (`Blast.Props.flash`: `FlashChar` material and block hash from the properties table), open
   faces toward the sphere; a face under a full original-world neighbor (`Props.full`, neighboring chunk via window)
@@ -277,7 +285,7 @@ paths:
   (`RuinContext.applied`).
 
 ## Pitfalls
-- Fire ignition (`RuinPlanner.land` → `fire`) compares exposure facing the fireball (`RuinContext.lit`, `min(q, lit)`)
+- Fire ignition (`RuinPlanner.land` → `fire`) compares exposure facing the fireball (`RuinContext.Grid.lit`, `min(q, lit)`)
   with `ThermalModel.ignite(yield)`: the fluence formula already is the exposure on a surface facing the ball, so a
   slope cannot exceed it. The ×2.5 slope gain on ignition plus a fixed 5 cal/cm² lit fires 12.7 km from a 500 kt
   ground burst (flat 2.0 cal/cm², Zearth 09.11.2026: 191 chunks with ~6 fires each around the player); `ThermalModelTest`

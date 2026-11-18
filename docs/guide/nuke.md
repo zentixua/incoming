@@ -123,6 +123,11 @@ Fires and thick dust can make the area hard to see through long after the strike
 sources light the dust around them and keep lighting the ground under the dust's shadow; with LambDynamicLights, so does
 a torch in your hand.
 
+The flash scorches open ground across the zone: grass burns to dirt and charred litter, plants burn, biomes darken.
+The light comes from the whole fireball, which is over a kilometre tall at 1 Mt even for a ground burst, so ground
+behind a low rise still burns. A wall, house or hill close by (up to about 40 blocks, toward the burst) shades the
+ground behind it; terrain farther away does not, so the trace behind distant hills is stronger than in reality.
+
 With the default ground burst, the dust column joins the mushroom cap. With an explicitly selected air burst
 at the standard burst height, the column starts rising later, with a billowing upper edge, and stays below the
 faster-rising cap. The gap is expected; in the first seconds, dust near the ground can hide the short column entirely.
