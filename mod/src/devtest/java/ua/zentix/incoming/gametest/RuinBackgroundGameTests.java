@@ -65,10 +65,11 @@ public final class RuinBackgroundGameTests {
         // block Create (if it is in the assembly): a shaft with a block entity in the wall of the house
         Block shaft = BuiltInRegistries.BLOCK.get(ResourceLocation.fromNamespaceAndPath("create", "shaft"));
         if (shaft != Blocks.AIR) h.setBlock(new BlockPos(24, 6, 18), shaft);
-        // 15 kt 80 blocks over the middle of the site (1 block = 10 m), the ball (radius 21) above the tallest tower: a
-        // burst to the side lights no face in the compared chunks, as the template's barrier wall and the city's own
-        // towers in the plan window hide the whole ball
-        Detonation d = NuclearGameTests.detonation(h, new BlockPos(32, 0, 32), 80, 15, 0.1f);
+        // 15 kt 160 blocks over the middle of the site (1 block = 10 m): roofs stand (~3–4 psi) and take ~13 cal/cm²
+        // from nearly overhead, so soot and roof fires come from hundreds of faces. A burst to the side lights no face
+        // in the compared chunks (the template's barrier wall and the city's towers in the plan window hide the ball);
+        // 80 blocks up broke the roofs and left 0–11 charred faces, by the site's place on the chunk grid
+        Detonation d = NuclearGameTests.detonation(h, new BlockPos(32, 0, 32), 160, 15, 0.1f);
         int compared = 0, cells = 0, charred = 0;
         for (int rx : new int[]{24, 40}) {
             for (int rz : new int[]{24, 40}) {
@@ -231,10 +232,11 @@ public final class RuinBackgroundGameTests {
     public static void diskPlanMatchesMemoryPlan(GameTestHelper h) {
         RuinCostGameTests.city(h);
         ServerLevel level = h.getLevel();
-        // 15 kt 80 blocks over the middle of the site (1 block = 10 m), the ball (radius 21) above the tallest tower: a
-        // burst to the side lights no face in the compared chunks, as the template's barrier wall and the city's own
-        // towers in the plan window hide the whole ball
-        Detonation d = NuclearGameTests.detonation(h, new BlockPos(32, 0, 32), 80, 15, 0.1f);
+        // 15 kt 160 blocks over the middle of the site (1 block = 10 m): roofs stand (~3–4 psi) and take ~13 cal/cm²
+        // from nearly overhead, so soot and roof fires come from hundreds of faces. A burst to the side lights no face
+        // in the compared chunks (the template's barrier wall and the city's towers in the plan window hide the ball);
+        // 80 blocks up broke the roofs and left 0–11 charred faces, by the site's place on the chunk grid
+        Detonation d = NuclearGameTests.detonation(h, new BlockPos(32, 0, 32), 160, 15, 0.1f);
         int compared = 0, cells = 0, charred = 0;
         for (int rx : new int[]{24, 40}) {
             for (int rz : new int[]{24, 40}) {
