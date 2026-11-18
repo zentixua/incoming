@@ -367,18 +367,21 @@ public final class ScorchGameTests {
                 for (int dz = -RuinPlanner.REACH; dz <= RuinPlanner.REACH; dz++) level.getChunk(c.getPos().x + dx, c.getPos().z + dz);
             }
         }
-        // a stone wall 8 high along the side of C (two chunks from A toward the burst: in A's ruin window, beyond its
-        // first ring) that faces A, shading part of A. The layer and the ruins must see it alike: with a 3×3 layer
+        // a stone wall 24 high along the side of C (two chunks from A toward the burst: in A's ruin window, beyond its
+        // first ring) that faces A, shading the part of A whose rays cross it (the ball hangs about 23–47 blocks up at
+        // this scale: an 8-high wall 16–35 blocks out hid none of it). The layer and the ruins must see it alike: with a 3×3 layer
         // window the layer burned turf the ruins keep (review of #664), so A after the wave differed from ruins alone
         RuinPlan openA = RuinPlanner.planFresh(level, d, a, false);
         ChunkPos wall = inside.get(0).getPos();
         int wallX = g.getX() > a.getPos().getMiddleBlockX() ? wall.getMinBlockX() : wall.getMaxBlockX();
         for (int z = wall.getMinBlockZ(); z <= wall.getMaxBlockZ(); z++) {
-            for (int y = g.getY(); y < g.getY() + 8; y++) level.setBlock(new BlockPos(wallX, y, z), Blocks.STONE.defaultBlockState(), Block.UPDATE_CLIENTS);
+            for (int y = g.getY(); y < g.getY() + 24; y++) level.setBlock(new BlockPos(wallX, y, z), Blocks.STONE.defaultBlockState(), Block.UPDATE_CLIENTS);
         }
         // the world before the outbreak: what ruins alone would have made it (from scratch, your own ruins of an explosion)
         RuinPlan walledA = RuinPlanner.planFresh(level, d, a, false);
-        h.assertTrue(openA.differs(walledA) != null, "the wall in A's window does not shade A: the layer and ruins check means nothing");
+        h.assertTrue(openA.differs(walledA) != null, "the wall in A's window does not shade A: the layer and ruins check means nothing (ball "
+                + String.format(Locale.ROOT, "%.1f–%.1f blocks up, A at %.1f blocks", d.burst().y - g.getY() - d.fireballRadius(), d.burst().y - g.getY() + d.fireballRadius(),
+                Math.hypot(midA.x - d.burst().x, midA.z - d.burst().z)) + ")");
         LevelChunkSection[] expectA = walledA.testAppliedCopy(level, a);
         LevelChunkSection[] expectB = RuinPlanner.planFresh(level, d, b, false).testAppliedCopy(level, b);
         RuinPlan preparedB = RuinPlanner.plan(level, d, b);
@@ -518,12 +521,7 @@ public final class ScorchGameTests {
         FlashScorch flash = FlashScorch.forTest(d, keys, budget);
         WorkClock clock = WorkClock.counting(1_000_000L);
         try {
-            boolean done = false;
-            for (int i = 0; i < 40 && !done; i++) {
-                clock.start(10_000_000_000L);
-                done = flash.work(level, d.gameTime() + 10_000, clock);
-                if (!done) RuinWorkers.awaitForTest(RuinWorkers.Priority.NEAR, 60_000);
-            }
+            boolean done = flash.finishForTest(level, d.gameTime() + 10_000);
             h.assertTrue(done && flash.appliedChunks() == n, "the flash layer is stuck in " + flash.appliedChunks() + " chunks of " + n);
             int roofFires = 0, lit = 0;
             LevelChunk marked = null, forgotten = null, idle = null;

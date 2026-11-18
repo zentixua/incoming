@@ -326,14 +326,7 @@ public final class RuinBackgroundGameTests {
         }
         long[] keys = pad.stream().mapToLong(c -> c.getPos().toLong()).toArray();
         FlashScorch flash = FlashScorch.forTest(d, keys, new ColumnScar.Budget(true));
-        WorkClock clock = WorkClock.counting(1_000_000L);
-        boolean done = false;
-        for (int i = 0; i < 40 && !done; i++) {
-            clock.start(10_000_000_000L);
-            done = flash.work(level, d.gameTime() + 10_000, clock);
-            if (!done) RuinWorkers.awaitForTest(RuinWorkers.Priority.NEAR, 60_000);
-        }
-        h.assertTrue(done, "the flash layer over the block did not end");
+        h.assertTrue(flash.finishForTest(level, d.gameTime() + 10_000), "the flash layer over the block did not end");
         NuclearWorld.get(level).forgetRuinsForTest(d.id());
         int[] out = new int[2];
         for (LevelChunk c : pad) {
@@ -1089,14 +1082,8 @@ public final class RuinBackgroundGameTests {
     private static FlashScorch flashOver(GameTestHelper h, BlockPos base, ChunkPos x) {
         Detonation d = flashDetonation(h, base);
         FlashScorch f = FlashScorch.forTest(d, new long[]{x.toLong()}, new ColumnScar.Budget(false));
-        WorkClock clock = WorkClock.counting(1_000_000L);
-        boolean done = false;
-        for (int i = 0; i < 20 && !done; i++) {
-            clock.start(10_000_000_000L);
-            done = f.work(h.getLevel(), d.gameTime() + 1_000, clock);
-            if (!done) RuinWorkers.awaitForTest(RuinWorkers.Priority.NEAR, 60_000);
-        }
-        h.assertTrue(done, "the flash layer is not finished");
+        // the layer's window neighbors outside memory are read from disk first (absent ones: X's neighbors are not generated)
+        h.assertTrue(f.finishForTest(h.getLevel(), d.gameTime() + 1_000), "the flash layer is not finished");
         return f;
     }
 

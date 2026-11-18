@@ -316,6 +316,25 @@ public final class FlashScorch {
         return DONE;
     }
 
+    /**
+     * For tests: work until every layer is written or no longer needed ({@code now} as game time), waiting for
+     * background layers and for disk reads of window neighbors outside memory (at most a minute, like
+     * {@code RuinPlanner.planWithWindow}).
+     *
+     * @return finished
+     */
+    public boolean finishForTest(ServerLevel level, long now) {
+        long until = System.nanoTime() + 60_000_000_000L;
+        WorkClock clock = WorkClock.counting(1_000_000L);
+        while (System.nanoTime() < until) {
+            clock.start(10_000_000_000L);
+            if (work(level, now, clock)) return true;
+            RuinWorkers.awaitForTest(RuinWorkers.Priority.NEAR, 60_000);
+            if (!reading.isEmpty()) java.util.concurrent.locks.LockSupport.parkNanos(1_000_000L);
+        }
+        return false;
+    }
+
     /** Cancel, stop: background layers no longer needed. */
     void cancel() {
         for (Build b : building.values()) b.task.cancel(false);
