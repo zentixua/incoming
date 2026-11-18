@@ -41,7 +41,7 @@ Without a number: the world's `nuclear.default_yield` (15 kt by default). Withou
 
 | Command | What it does |
 |---|---|
-| `/incoming clear` | cancel your conventional salvos and recall eligible projectiles; operators or the host abort every player's strikes, including nuclear ones |
+| `/incoming clear` | cancel your conventional salvos and recall eligible projectiles; operators or the host abort every player's strikes, including nuclear ones, and [end the aftermath](nuke.md#ending-the-aftermath) of past nuclear blasts |
 | `/incoming menu` | console |
 | `/incoming help` | short help in chat |
 | `/incoming give [players]` | give a Strike Designator (operators only) |
