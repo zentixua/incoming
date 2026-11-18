@@ -53,6 +53,20 @@ class ThermalShadowTest {
     }
 
     @Test
+    void ownColumnShadesAPointUnderIt() {
+        // ground under a three-block glass column right under an airburst (a DH GameTest: with the column open its
+        // ground lit, the ruins put fire where the glass stood) and 0.7 blocks off the axis
+        Detonation air = new Detonation(3, new Vec3(0.5, GROUND + 40, 0.5), GROUND, 15, false, 0, 0, 0, 20_000, 7, 0.05f, false,
+                Detonation.OLD_WAVE);
+        java.util.function.IntBinaryOperator glass = (x, z) -> (x == 0 || x == -1) && z == 0 ? (int) GROUND + 4 : (int) GROUND + 1;
+        for (Vec3 under : new Vec3[]{new Vec3(0.5, GROUND + 1, 0.5), new Vec3(-0.2, GROUND + 1, 0.5)}) {
+            assertEquals(0, ThermalShadow.share(air, ThermalShadow.windowLine(air, under, glass)), 1e-9, "window, " + under);
+            assertEquals(0, ThermalShadow.share(air, ThermalShadow.sparseLine(air, under, glass)), 1e-9, "sparse, " + under);
+            assertEquals(1, ThermalShadow.share(air, ThermalShadow.windowLine(air, under, FLAT)), 1e-4, "open, " + under);
+        }
+    }
+
+    @Test
     void highAirburstUnchangedOverFlatGround() {
         Detonation air = new Detonation(2, new Vec3(0, GROUND + 580, 0), GROUND, 15, false, 0, 0, 0, 20_000, 7, 1, false, Detonation.OLD_WAVE);
         assertEquals(1, ThermalShadow.share(air, ThermalShadow.sparseLine(air, ground(2000), FLAT)), 1e-9);

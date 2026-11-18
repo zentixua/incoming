@@ -23,6 +23,8 @@ public final class ThermalShadow {
     private static final int SAMPLES = 16;
     /** Terrain line below every possible ball: nothing hides it. */
     static final double OPEN = Double.NEGATIVE_INFINITY;
+    /** Terrain line above every possible ball: the point is under its own column's top. */
+    static final double COVERED = Double.POSITIVE_INFINITY;
 
     private ThermalShadow() {}
 
@@ -41,6 +43,7 @@ public final class ThermalShadow {
 
     /** Share of the detonation's fireball above terrain line {@code line} (absolute height on the ball axis). */
     public static double share(Detonation d, double line) {
+        if (line == COVERED) return 0;
         return line == OPEN ? 1 : discShare(d.burst().y - d.groundY(), Math.max(d.fireballRadius(), 1), line - d.groundY());
     }
 
@@ -51,6 +54,17 @@ public final class ThermalShadow {
      */
     public static double clearance(Vec3 p, double s, double reach, int height) {
         return p.y + (height - 0.5 - p.y) * reach / s;
+    }
+
+    /**
+     * Whether {@code point} lies under its own column's top (first air more than half a block above it): a heightmap
+     * column is solid from below, so a floor under a roof or ground under a glass column sees nothing of the ball,
+     * whatever its direction. Before, the samples of a point under the ball's axis all fell in its own column; a
+     * GameTest's glass column under an airburst kept its ground dark that way.
+     */
+    static boolean covered(Vec3 point, java.util.function.IntBinaryOperator height) {
+        int h = height.applyAsInt(Mth.floor(point.x), Mth.floor(point.z));
+        return h != Integer.MIN_VALUE && h - 0.5 > point.y;
     }
 
     /** Visible share of the fireball from {@code point} in the live world: ready-chunk heightmaps along the ray. */
@@ -79,6 +93,7 @@ public final class ThermalShadow {
 
     /** Terrain line from {@link #SAMPLES} heightmap samples spread evenly between the point and the ball axis. */
     static double sparseLine(Detonation d, Vec3 point, java.util.function.IntBinaryOperator height) {
+        if (covered(point, height)) return COVERED;
         double dx = d.burst().x - point.x, dz = d.burst().z - point.z, reach = Math.sqrt(dx * dx + dz * dz);
         double line = OPEN;
         if (reach < 1e-6) return line;
@@ -96,6 +111,7 @@ public final class ThermalShadow {
      * {@link RuinContext.Grid#shadowLine}.
      */
     static double windowLine(Detonation d, Vec3 point, java.util.function.IntBinaryOperator height) {
+        if (covered(point, height)) return COVERED;
         double dx = d.burst().x - point.x, dz = d.burst().z - point.z, reach = Math.sqrt(dx * dx + dz * dz);
         double line = OPEN;
         if (reach < 1e-6) return line;

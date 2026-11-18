@@ -390,7 +390,9 @@ Source: the luminous ball at its maximum radius (Glasstone 2.12: 0.088·Y^0.4 km
 the burst; a surface burst's ball is a hemisphere on the ground, 1 395 m high at 1 Mt. Terrain (`MOTION_BLOCKING`
 first air) along the horizontal projection of the ray from the block top to the ball axis gives the terrain line: the
 lowest axis height seen past every sample. The visible share is the ball's vertical extent above that line, smoothed
-(`ThermalShadow.discShare`, the client's law for distant balls and puffs); exposure is fluence × share. Live world:
+(`ThermalShadow.discShare`, the client's law for distant balls and puffs); exposure is fluence × share. A point below
+its own column's top (a floor under a roof, ground under a glass column) sees nothing: heightmap columns are solid
+from below. Live world:
 16 samples on the ray. Ruin plans (`RuinContext.Grid.shadowLine`): every block on the ray inside the plan's own 5×5
 chunk window, pre-wave heights of exactly the chunks its blocks come from, so in-memory, disk, prepared and settled
 plans agree. Before 18.11.2026 the source was the burst point, on the ground for a surface burst, and a chunk absent
