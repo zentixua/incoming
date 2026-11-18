@@ -329,8 +329,8 @@ public final class GridGameTests {
         SubLevelAccess[] sub = new SubLevelAccess[1];
         int[] assembled = {0};
         h.startSequence()
-                .thenWaitUntil(() -> h.assertTrue(PowerGrid.get(level).dark(a.getX() >> 4, a.getZ() >> 4, level.getGameTime())
-                        && PowerGrid.get(level).dark(b.getX() >> 4, b.getZ() >> 4, level.getGameTime()), "the quarter is still bright"))
+                .thenWaitUntil(() -> h.assertTrue(PowerGrid.get(level).dark(a.getX() >> 4, a.getZ() >> 4, ua.zentix.incoming.grid.Blackouts.now(level))
+                        && PowerGrid.get(level).dark(b.getX() >> 4, b.getZ() >> 4, ua.zentix.incoming.grid.Blackouts.now(level)), "the quarter is still bright"))
                 .thenExecute(() -> {
                     BlockPos.betweenClosed(from, to).forEach(p -> h.setBlock(p, Blocks.OAK_PLANKS));
                     h.setBlock(sea, GridLights.unlit(Blocks.SEA_LANTERN.defaultBlockState()));
@@ -604,7 +604,7 @@ public final class GridGameTests {
         BlockPos b = bad.get(0);
         ChunkPos c = new ChunkPos(b);
         Incoming.LOG.info("GRIDDEBUG did not light up {}: first {} {} chunk {} ({} {}), dark {}, affected by {}", bad.size(), b, level.getBlockState(b), c,
-                c.x - mid.x, c.z - mid.z, PowerGrid.get(level).dark(c.x, c.z, level.getGameTime()), PowerGrid.get(level).covered(c.x, c.z));
+                c.x - mid.x, c.z - mid.z, PowerGrid.get(level).dark(c.x, c.z, ua.zentix.incoming.grid.Blackouts.now(level)), PowerGrid.get(level).covered(c.x, c.z));
         h.fail(bad.size() + " the lamps did not light up as before, the first " + b);
     }
 
@@ -1176,6 +1176,9 @@ public final class GridGameTests {
      *  with the same lamps and shines.
      */
     @GameTest(template = "range", timeoutTicks = 4800, batch = "grid_disk", skyAccess = true)
+    // outage times are on the grid clock (Blackouts.now, the world clock): with the day stopped it advances at the real
+    // floor and jumps with the time of day, so it parts from game time by however long and how the shard ran before
+    // (CI shard 2/6 of #664: "the block is already bright" with the district dark on the grid clock)
     public static void darkChunkRoundTripsThroughDisk(GameTestHelper h) {
         ServerLevel level = h.getLevel();
         quiet(level);
@@ -1222,7 +1225,7 @@ public final class GridGameTests {
                     CompoundTag saved = assertNoTwinsOnDisk(h, level, far);
                     h.assertFalse(saved.getBoolean(ChunkSerializer.IS_LIGHT_ON_TAG), "the light of the extinguished is preserved as true");
                     h.assertTrue(saved.toString().contains("minecraft:glowstone"), "glowstone is not saved");
-                    h.assertTrue(PowerGrid.get(level).dark(far.x, far.z, level.getGameTime()), "the block is already bright");
+                    h.assertTrue(PowerGrid.get(level).dark(far.x, far.z, ua.zentix.incoming.grid.Blackouts.now(level)), "the block is already bright");
                     hold(level, far);
                 })
                 .thenWaitUntil(() -> {
@@ -1245,7 +1248,7 @@ public final class GridGameTests {
                     assertNoTwinsOnDisk(h, level, far);
                     h.assertTrue(Blackouts.restore(level, Vec3.atCenterOf(glow[0]), 8) == 1, "there is nothing to return");
                 })
-                .thenWaitUntil(() -> h.assertFalse(PowerGrid.get(level).dark(far.x, far.z, level.getGameTime()), "the block is still dark"))
+                .thenWaitUntil(() -> h.assertFalse(PowerGrid.get(level).dark(far.x, far.z, ua.zentix.incoming.grid.Blackouts.now(level)), "the block is still dark"))
                 .thenExecute(() -> {
                     h.assertTrue(chunks.chunkMap.getVisibleChunkIfPresent(far.toLong()) == null, "return light loaded chunk");
                     hold(level, far);
