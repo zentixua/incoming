@@ -384,10 +384,10 @@ public final class ScorchGameTests {
     /**
      * Flash layer on a busy nuclear lane (Artem 18.11: flash fires near ground zero came with the wave). 15 kt at 592 m over
      * the middle of 3 × 3 chunks at real scale, server wave 0.35: light ignites at tick 2, ruins come about 22 ticks later.
-     * Each simulated tick, ruins and craters take the lane until its deadline (DIAG, full host pack: "stopped: budget" every
-     * tick). In the old order (layer after them) the layer gets no unit at all; with the urgent pass first
-     * ({@link FlashScorch#workUrgent}) every chunk has its layer before its deadline ({@link FlashScorch#deadline}).
-     * Counting clock: no wall time.
+     * The chunks are in a player's view. Each simulated tick, craters and ruins take the lane until its deadline (DIAG, full
+     * host pack: "stopped: budget" every tick). In the old order (layer after them) the layer gets no unit at all; with the
+     * urgent pass first ({@link FlashScorch#workUrgent}) every chunk has its layer before its deadline
+     * ({@link FlashScorch#deadline}). Counting clock: no wall time.
      */
     @GameTest(template = "range", timeoutTicks = 40, batch = "nuke_flash_busy", skyAccess = true)
     public static void flashLayerBeatsABusyLane(GameTestHelper h) {
@@ -416,6 +416,8 @@ public final class ScorchGameTests {
         for (LevelChunk c : inside) first = Math.min(first, FlashScorch.deadline(d, c.getPos()));
         String setup = String.format(Locale.ROOT, "ignition at ground zero %.1f ticks, earliest deadline %d", d.flashTicks(d.fluence(new Vec3(mid.getMiddleBlockX(), ground + 1,
                 mid.getMiddleBlockZ())), ThermalModel.ignite(15)), first - d.gameTime());
+        java.util.Set<Long> view = java.util.Arrays.stream(keys).boxed().collect(java.util.stream.Collectors.toSet());
+        ScarQueue.seenForTest(view::contains);
         FlashScorch flash = FlashScorch.forTest(d, keys, new ColumnScar.Budget(true));
         WorkClock clock = WorkClock.counting(1_000_000L);
         long budget = 4_000_000L;
@@ -448,6 +450,7 @@ public final class ScorchGameTests {
             h.assertTrue(lit > 0, "the layer lit no fire; " + setup);
             Incoming.LOG.info("Flash layer on a busy lane: all {} chunks by tick {} ({}), {} fires", keys.length, doneAt - d.gameTime(), setup, lit);
         } finally {
+            ScarQueue.seenForTest(null);
             unfire(level, inside, ground, 4);
         }
         h.succeed();

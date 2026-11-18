@@ -55,10 +55,11 @@ import java.util.concurrent.Future;
  * Order alone did not fix it: the layer ran last in the nuclear lane, on what pulse, front, ruins and craters left, and
  * their heavy units (crater column 3–5 ms, ruin swaps) kept the lane's estimate above the remainder (DIAG, 15 kt at 1.5 km,
  * wave 0.35: first layer unit on tick 104, written layers a median 122 ticks after ignition; full host pack, ruins ending
- * every tick on the budget: tick 362, 904 of 915 chunks late, no fire lit). So chunks whose deadline is within
- * {@link #URGENT_TICKS} run right after the ruins players see due this tick and before craters and unseen ruins
- * ({@link #workUrgent}, earliest deadline first); the rest still use what ruins leave ({@link #work}), so layers never
- * delay ruins in view. Layer units have their own clock estimate
+ * every tick on the budget: tick 362, 904 of 915 chunks late, no fire lit). So player-visible chunks whose deadline is
+ * within {@link #URGENT_TICKS} run right after the ruins players see due this tick and before craters and unseen ruins
+ * ({@link #workUrgent}, earliest deadline first); the rest, unseen chunks included, still use what ruins leave
+ * ({@link #work}): a unit due now comes before a later deadline, and an unseen layer's timing shows to no one, while
+ * unseen front ruins lagged 5 ticks behind it (GameTest {@code ruinsPreparedDuringFlightFallWithFront}). Layer units have their own clock estimate
  * ({@link #KIND}): a 0.2 ms layer unit is not refused for a crater column's.
  * <p>
  * No layer for: chunks the wave reached before the layer (at epicenter; their ruins apply everything at once as before);
@@ -91,7 +92,7 @@ public final class FlashScorch {
     private long[] ends;
     /** Per chunk in {@link #order}: handled by a submit unit (submitted, late, gone, waiting, skipped). */
     private boolean[] started;
-    /** Indices into {@link #order} by deadline, earliest first; {@link #nextUrgent} — first not yet past the urgent pass. */
+    /** Indices into {@link #order} of player-visible chunks by deadline, earliest first; {@link #nextUrgent} — first not yet past the urgent pass. */
     private int[] byDeadline;
     private int nextUrgent;
     private boolean[] seen;
@@ -277,7 +278,7 @@ public final class FlashScorch {
 
     /**
      * Urgent pass in the nuclear lane, after seen ruins due this tick and before craters and unseen ruins (server thread):
-     * chunks whose deadline is within
+     * player-visible chunks whose deadline is within
      * {@link #URGENT_TICKS} — first unit (collection), writes whose light has come, submissions — earliest deadline first.
      * Everything else waits for {@link #work}, after ruins.
      */
@@ -309,8 +310,8 @@ public final class FlashScorch {
     }
 
     /**
-     * Write ready layers whose light has come and whose deadline is no later than {@code until}; abandon stuck ones.
-     * false — lane refused a unit this tick.
+     * Write ready layers whose light has come and whose deadline is no later than {@code until} (player-visible ones only
+     * when {@code seenOnly}); abandon stuck ones. false — lane refused a unit this tick.
      */
     private boolean write(ServerLevel level, RuinContext ctx, ScarQueue scars, ColumnScar.Budget budget, long now, WorkClock clock, long until, int pass) {
         for (Iterator<Map.Entry<Integer, Build>> it = building.entrySet().iterator(); it.hasNext(); ) {
@@ -322,7 +323,8 @@ public final class FlashScorch {
                 continue;
             }
             if (NukeDiag.ON && dBuilt[k] < 0) dBuilt[k] = now;
-            if (due[k] > now || ends[k] > until) continue;
+            // urgent pass (0): player-visible chunks only
+            if (due[k] > now || ends[k] > until || pass == 0 && !seen[k]) continue;
             if (!admits(clock, k)) {
                 if (NukeDiag.ON) dClock[pass]++;
                 return false;
@@ -589,8 +591,9 @@ public final class FlashScorch {
             double x = Mth.clamp(d.burst().x, p.getMinBlockX(), p.getMaxBlockX() + 1), z = Mth.clamp(d.burst().z, p.getMinBlockZ(), p.getMaxBlockZ() + 1);
             due[j] = d.gameTime() + (long) Math.ceil(d.flashTicks(d.fluence(new Vec3(x, d.groundY() + 1, z)), ThermalModel.ignite(d.yieldKt())));
         }
-        // urgent pass: all chunks earliest deadline first (visible or not: the deadline is the same law)
-        byDeadline = order(new boolean[n], ends);
+        // urgent pass: player-visible chunks, earliest deadline first
+        int[] all = order(new boolean[n], ends);
+        byDeadline = java.util.Arrays.stream(all).filter(k -> seen[k]).toArray();
         if (NukeDiag.ON) {
             dSubmit = new long[n];
             dBuilt = new long[n];

@@ -474,10 +474,10 @@ public final class NuclearWorld {
         // ground burst, and the wave would pass intact chunks in view (ScarQueue.workSeen); unseen ruins after it
         long seenStart = System.nanoTime();
         scars.workSeen(level, now, clock);
-        // flash layers whose deadline is near, earliest deadline first: after seen ruins due this tick (their deadline is
-        // now; first, the layer pass took their units and glass in view stayed whole 3 ticks after the wave, GameTest
+        // flash layers players see whose deadline is near, earliest deadline first: after seen ruins due this tick (their
+        // deadline is now; ahead of them glass in view stayed whole 3 ticks after the wave, GameTest
         // seenRuinsKeepUpWithCrater), before craters and unseen ruins: after them the layer got nothing until the wave
-        // (FlashScorch: 15 kt full host pack, 904 of 915 chunks late); the rest of each layer still waits below
+        // (FlashScorch: 15 kt full host pack, 904 of 915 chunks late); unseen layers and the rest still wait below
         long urgentStart = System.nanoTime();
         for (FlashScorch job : scorches) {
             try {
