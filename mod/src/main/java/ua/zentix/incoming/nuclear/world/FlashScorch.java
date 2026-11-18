@@ -79,6 +79,12 @@ public final class FlashScorch {
     private long nanos, lastApplied = -1;
     private final HeapWatch.Tracker heap = new HeapWatch.Tracker();
 
+    /** {@link NukeDiag#ON}: per chunk in {@link #order} — submit, build seen done, write/late tick; build and snapshot ns; outcome. */
+    private long[] dSubmit, dBuilt, dEnd, dBuildNs, dGridNs;
+    private char[] dWhat;
+    /** {@link NukeDiag#ON}: submissions refused this tick by pool admission or lane clock (counts since last DIAG tick line). */
+    private int dAdmit, dClock;
+
     /** Background layer: task and work start time (game time; −1 — still waiting in pool queue). */
     private static final class Build {
         final Future<RuinPlan> task;
@@ -235,6 +241,7 @@ public final class FlashScorch {
                 if (abandoned(b, k, now)) it.remove();
                 continue;
             }
+            if (NukeDiag.ON && dBuilt[k] < 0) dBuilt[k] = now;
             if (due[k] > now) continue;
             if (!(seen[k] ? clock.canStartVisible(ScarQueue.SEEN_BUSY_NANOS) : clock.canStart())) return false;
             it.remove();
@@ -250,7 +257,14 @@ public final class FlashScorch {
         while (next < order.length) {
             int k = next;
             RuinWorkers.Priority priority = seen[k] ? RuinWorkers.Priority.SEEN : RuinWorkers.Priority.NEAR;
-            if (!RuinWorkers.admit(priority) || !(seen[k] ? clock.canStartVisible(ScarQueue.SEEN_BUSY_NANOS) : clock.canStart())) return false;
+            if (!RuinWorkers.admit(priority) || !(seen[k] ? clock.canStartVisible(ScarQueue.SEEN_BUSY_NANOS) : clock.canStart())) {
+                if (NukeDiag.ON) {
+                    if (!RuinWorkers.admit(priority)) dAdmit++;
+                    else dClock++;
+                    diagTick(now);
+                }
+                return false;
+            }
             next++;
             long key = order[k];
             LevelChunk chunk = level.getChunkSource().getChunkNow(ChunkPos.getX(key), ChunkPos.getZ(key));
@@ -260,6 +274,10 @@ public final class FlashScorch {
             }
             if (ruined(ctx, chunk)) {
                 late(k);
+                if (NukeDiag.ON) {
+                    dEnd[k] = now;
+                    dWhat[k] = 'R';
+                }
                 continue;
             }
             // near Sable craft, writing reads neighbors: without them, wait for ruins when neighbors arrive (queue waits)
@@ -274,10 +292,20 @@ public final class FlashScorch {
             }
             long t0 = clock.begin();
             try {
+                long g0 = System.nanoTime();
                 RuinContext.Grid g = ctx.flashGrid(level, chunk.getPos(), true);
+                final int kk = k;
+                final long[] buildNs = dBuildNs;
+                if (NukeDiag.ON) {
+                    dGridNs[k] = System.nanoTime() - g0;
+                    dSubmit[k] = now;
+                }
                 building.put(k, new Build(RuinWorkers.submit(() -> {
                     RuinWorkers.checkStop();
-                    return RuinPlanner.flash(g);
+                    long b0 = System.nanoTime();
+                    RuinPlan plan = RuinPlanner.flash(g);
+                    if (buildNs != null) buildNs[kk] = System.nanoTime() - b0;
+                    return plan;
                 }, priority)));
             } catch (RuntimeException ex) {
                 failed(k, ex);
@@ -285,7 +313,9 @@ public final class FlashScorch {
                 nanos += clock.end(t0);
             }
         }
+        if (NukeDiag.ON) diagTick(now);
         if (!building.isEmpty()) return false;
+        if (NukeDiag.ON) diagChunks();
         Incoming.LOG.info("Nuclear detonation #{}: flash scorch — {} of {} chunks ({} seen by players) in {} ticks (pulse {} ticks), {} ms on the server thread; "
                         + "{} blocks, {} fires lit; {} stale, {} after the wave{}, {} unloaded, {} at aircraft without neighbours, {} over the memory limit{}",
                 d.id(), applied, order.length, seenCount, lastApplied < 0 ? 0 : lastApplied - d.gameTime(),
@@ -324,6 +354,35 @@ public final class FlashScorch {
     /** Chunk failed: log the first failures, continue other chunks; this one gets everything with ruins. */
     private void failed(int k, Throwable e) {
         if (failures++ < 3) Incoming.LOG.error("Nuclear detonation #{}: flash scorch of chunk {} failed", d.id(), new ChunkPos(order[k]), e);
+    }
+
+    private long dLastTick = Long.MIN_VALUE;
+
+    /** DIAG once per tick: queue position, layers building/ready, pool load by priority, refusals since last line. */
+    private void diagTick(long now) {
+        if (now == dLastTick) return;
+        dLastTick = now;
+        int done = 0;
+        for (Build b : building.values()) if (b.task.isDone()) done++;
+        Incoming.LOG.info("DIAG flash #{} t={}: next {} of {}, building {} (done {}), pool seen {} near {} all {} of {}, refused admit {} clock {}",
+                d.id(), now - d.gameTime(), next, order.length, building.size(), done, RuinWorkers.inFlight(RuinWorkers.Priority.SEEN),
+                RuinWorkers.inFlight(RuinWorkers.Priority.NEAR), RuinWorkers.inFlight(), RuinWorkers.capacity(), dAdmit, dClock);
+        dAdmit = dClock = 0;
+    }
+
+    /** DIAG per chunk at job end: ground range, seen, ignition and deadline ticks, submit/built/end ticks, outcome, build and snapshot ms. */
+    private void diagChunks() {
+        long t0 = d.gameTime();
+        for (int k = 0; k < order.length; k++) {
+            ChunkPos p = new ChunkPos(order[k]);
+            Incoming.LOG.info(String.format(java.util.Locale.ROOT, "DIAG flash chunk #%d k=%d r=%.0f seen=%b ignite=%d deadline=%d submit=%d built=%d end=%d what=%c build=%.2fms grid=%.2fms",
+                    d.id(), k, NuclearPrep.horizontal(p, d), seen[k], due[k] - t0, deadline(d, p) - t0, rel(dSubmit[k], t0), rel(dBuilt[k], t0),
+                    rel(dEnd[k], t0), dWhat[k] == 0 ? '-' : dWhat[k], dBuildNs[k] / 1e6, dGridNs[k] / 1e6));
+        }
+    }
+
+    private static long rel(long tick, long t0) {
+        return tick < 0 ? -1 : tick - t0;
     }
 
     /** Chunk {@code k} gets no layer: the wave (its ruins) came first or will before the layer could be written. */
@@ -377,6 +436,10 @@ public final class FlashScorch {
         }
         if (ruined(ctx, chunk)) {
             late(k);
+            if (NukeDiag.ON) {
+                dEnd[k] = now;
+                dWhat[k] = 'r';
+            }
             return;
         }
         // writing needs neighbors (nearby Sable craft, edge block entity), but absent: ruins wait for them themselves
@@ -390,6 +453,10 @@ public final class FlashScorch {
             return;
         }
         applied++;
+        if (NukeDiag.ON) {
+            dEnd[k] = now;
+            dWhat[k] = 'W';
+        }
         blocks += plan.changedBlocks();
         fires += lit;
         lastApplied = now;
@@ -440,6 +507,17 @@ public final class FlashScorch {
             // light at the chunk's ground point nearest the ball: ignition threshold reached there before the rest of the chunk
             double x = Mth.clamp(d.burst().x, p.getMinBlockX(), p.getMaxBlockX() + 1), z = Mth.clamp(d.burst().z, p.getMinBlockZ(), p.getMaxBlockZ() + 1);
             due[j] = d.gameTime() + (long) Math.ceil(d.flashTicks(d.fluence(new Vec3(x, d.groundY() + 1, z)), ThermalModel.ignite(d.yieldKt())));
+        }
+        if (NukeDiag.ON) {
+            dSubmit = new long[n];
+            dBuilt = new long[n];
+            dEnd = new long[n];
+            dBuildNs = new long[n];
+            dGridNs = new long[n];
+            dWhat = new char[n];
+            java.util.Arrays.fill(dSubmit, -1);
+            java.util.Arrays.fill(dBuilt, -1);
+            java.util.Arrays.fill(dEnd, -1);
         }
     }
 }
