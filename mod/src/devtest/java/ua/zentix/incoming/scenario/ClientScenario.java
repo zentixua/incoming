@@ -401,6 +401,12 @@ public final class ClientScenario {
             cmd("time set 6000");
             cmd("weather clear");
             cmd("tp @s 0 170 0 0 0");
+            // as on the host servers (INCOMING_WAVE_SPEED, e.g. 0.35): the distant wave slower than the real one
+            String wave = System.getenv("INCOMING_WAVE_SPEED");
+            if (wave != null) {
+                ua.zentix.incoming.IncomingConfig.SERVER.scalePreset.set(ua.zentix.incoming.IncomingConfig.ScalePreset.CUSTOM);
+                ua.zentix.incoming.IncomingConfig.SERVER.nukeWaveSpeed.set(Double.parseDouble(wave));
+            }
         });
         at(200, () -> {
             Minecraft mc = Minecraft.getInstance();
@@ -413,7 +419,8 @@ public final class ClientScenario {
             cmd(String.format(java.util.Locale.ROOT, "tp @s %d.5 %d %d.5 180 -8", x, y + 30, z));
             deck = new BlockPos(x, y + 30, z);
             cmd("give @s incoming:geiger_counter");
-            target = new Vec3(x + 0.5, 320, z - 2000 + 0.5); // height 320 - the server will be lowered to the ground
+            // height 320 - the server will be lowered to the ground; INCOMING_NUKE_M - distance (default 2 km)
+            target = new Vec3(x + 0.5, 320, z - Integer.parseInt(System.getenv().getOrDefault("INCOMING_NUKE_M", "2000")) + 0.5);
         });
         at(260, () -> cmd(String.format(java.util.Locale.ROOT, "incoming nuke at %.1f %.1f %.1f 15 ground", target.x, target.y, target.z)));
         // the rocket launches behind us: we look back at the launch, then back to the target
@@ -1731,6 +1738,52 @@ public final class ClientScenario {
                 mc.getMainRenderTarget().width, mc.getMainRenderTarget().height);
     }
 
+    /** {@code INCOMING_CENSUS=1}: particle census around the camera from detonation to 2 s after the wave reaches it ({@link #census}). */
+    private static final boolean CENSUS = "1".equals(System.getenv("INCOMING_CENSUS"));
+    /** Radius of the census around the camera, blocks. */
+    private static final double CENSUS_R = 40;
+
+    /**
+     * Particles within {@link #CENSUS_R} of the camera every 5 ticks after detonation, against the wave's arrival there by the client
+     * detonation clock: our effects by kind/group/darkness ({@code FxPool.census}), the vanilla engine by particle class (package names
+     * the mod). Line {@code SCENARIO census t=… wave_in=…}; ends 40 ticks after the wave. Finds what falls near the camera before the wave.
+     */
+    private void census() {
+        Minecraft mc = Minecraft.getInstance();
+        var all = ua.zentix.incoming.client.nuclear.ClientNuclear.detonations();
+        if (all.isEmpty()) return;
+        var a = all.getLast();
+        Vec3 cam = mc.gameRenderer.getMainCamera().getPosition();
+        double waveIn = a.d.arrivalTicks(cam.distanceTo(a.d.burst())) - a.ticks(0);
+        if (waveIn < -40) return;
+        java.util.Map<String, Integer> n = new java.util.TreeMap<>();
+        ua.zentix.incoming.client.fx.particle.FxPool.INSTANCE.census(cam.x, cam.y, cam.z, CENSUS_R, n);
+        try {
+            java.lang.reflect.Field f = net.minecraft.client.particle.ParticleEngine.class.getDeclaredField("particles");
+            f.setAccessible(true);
+            for (Object q : ((java.util.Map<?, ?>) f.get(mc.particleEngine)).values()) {
+                for (Object o : (java.util.Collection<?>) q) {
+                    var pt = (net.minecraft.client.particle.Particle) o;
+                    if (pt.getBoundingBox().getCenter().distanceTo(cam) < CENSUS_R) n.merge("mc:" + pt.getClass().getName(), 1, Integer::sum);
+                }
+            }
+        } catch (ReflectiveOperationException ex) {
+            n.put("mc:unreadable " + ex, 1);
+        }
+        Incoming.LOG.info(String.format(java.util.Locale.ROOT, "SCENARIO census t=%d age=%.0f wave_in=%.0f cam=%s dist=%.0f fires<16=%d %s", tick, a.ticks(0), waveIn,
+                xyz(cam), cam.distanceTo(a.d.burst()), fires(mc, cam), n));
+    }
+
+    /** Fire blocks within 16 blocks horizontally of the camera, down to 40 below (flash-lit fire nearby, for the census). */
+    private static int fires(Minecraft mc, Vec3 cam) {
+        int n = 0;
+        BlockPos c = BlockPos.containing(cam);
+        for (BlockPos p : BlockPos.betweenClosed(c.offset(-16, -40, -16), c.offset(16, 8, 16))) {
+            if (mc.level.getBlockState(p).getBlock() instanceof net.minecraft.world.level.block.BaseFireBlock) n++;
+        }
+        return n;
+    }
+
     /** Nuclear scenario: footage of the warhead entering and after the explosion - from the moment the client received the explosion. */
     private void nukeEvents() {
         Minecraft mc = Minecraft.getInstance();
@@ -1746,6 +1799,7 @@ public final class ClientScenario {
             falloutGo = -1;
             falloutEvents();
         }
+        if (detTick >= 0 && CENSUS && (tick - detTick) % 5 == 0) census();
         if (detTick >= 0 || ua.zentix.incoming.client.nuclear.ClientNuclear.detonations().isEmpty()) return;
         detTick = tick;
         Incoming.LOG.info("SCENARIO detonation at tick {}", tick);

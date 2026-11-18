@@ -70,6 +70,11 @@ public final class FxParticle {
     // ---------------------------------------------------------------- frame appearance
     private float quadSize, rCol, gCol, bCol, aCol;
 
+    /** Start color luma (Rec. 709, color as given), for scenario census. */
+    float startLuma() {
+        return 0.2126f * r0 + 0.7152f * g0 + 0.0722f * b0;
+    }
+
     void init(Fx.Spec s, double px, double py, double pz, float sizeScale0, float sizeScale1, RandomSource random, ClientLevel level) {
         kind = s.kind;
         budget = s.budget;
