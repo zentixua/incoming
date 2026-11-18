@@ -470,9 +470,20 @@ public final class NuclearWorld {
         }
         lastFrontNanos = System.nanoTime() - frontStart;
         if (now % 1200 == 0) scars.retainBudgets(events.detonations().stream().map(Detonation::id).collect(java.util.stream.Collectors.toSet()));
+        // flash layers whose deadline is near, before ruins and craters: after them the layer got nothing until the wave
+        // (FlashScorch: 15 kt full host pack, 904 of 915 chunks late); the rest of each layer still waits below
+        long urgentStart = System.nanoTime();
+        for (FlashScorch job : scorches) {
+            try {
+                job.workUrgent(level, now, clock);
+            } catch (RuntimeException e) {
+                Incoming.LOG.error("Flash scorch of detonation #{} failed with an exception (urgent pass)", job.detonation().id(), e);
+            }
+        }
         // ruins a player sees before the crater: its columns would take the whole lane for seconds after a large
         // ground burst, and the wave would pass intact chunks in view (ScarQueue.workSeen); unseen ruins after it
         long seenStart = System.nanoTime();
+        long urgentNanos = seenStart - urgentStart;
         scars.workSeen(level, now, clock);
         long craterStart = System.nanoTime();
         digCraters(level, events, clock);
@@ -481,11 +492,11 @@ public final class NuclearWorld {
         scars.work(level, now, clock);
         long scorchStart = System.nanoTime();
         lastScarNanos = scorchStart - scarStart + (craterStart - seenStart);
-        // ground light after wave-reached ruins using their remaining budget: when front crosses
+        // the rest of each flash layer after wave-reached ruins, on their remaining budget: when front crosses
         // many chunks per tick, distant flash layers prioritized ahead delayed front ruins for ticks (25 tick units
-        // to layers, none to ruins). Wave-reached layer unnecessary: ruins apply everything
-        // (built from pre-flash world). Detonations progress independently: second layer does not await first
-        // detonation's background plans
+        // to layers, none to ruins); only near-deadline layer units go first (above). Wave-reached layer unnecessary:
+        // ruins apply everything (built from pre-flash world). Detonations progress independently: second layer does
+        // not await first detonation's background plans
         for (java.util.Iterator<FlashScorch> it = scorches.iterator(); it.hasNext(); ) {
             FlashScorch job = it.next();
             try {
@@ -499,7 +510,7 @@ public final class NuclearWorld {
         }
         if (!unburnt.isEmpty()) burnOut(level);
         long prepStart = System.nanoTime();
-        lastScorchNanos = prepStart - scorchStart;
+        lastScorchNanos = prepStart - scorchStart + urgentNanos;
         // prebuilt ruins use remaining budget: already traveling wave matters more
         try {
             prep.tick(level, events, scars, clock);

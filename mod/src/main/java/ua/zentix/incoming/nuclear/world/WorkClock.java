@@ -170,6 +170,13 @@ public final class WorkClock {
         return spare.getAsBoolean() ? now + (long) estimate < deadline : now < visibleBusyDeadline(extraBusyNanos);
     }
 
+    /** {@link #canStartVisible(long)} for a unit of {@code kind}, with that kind's estimate ({@link #canStart(int)}). */
+    public boolean canStartVisible(int kind, long extraBusyNanos) {
+        if (!worked) return true;
+        long now = time.getAsLong();
+        return spare.getAsBoolean() ? now + (long) kindEstimate(kind) < deadline : now < visibleBusyDeadline(extraBusyNanos);
+    }
+
     /** Like {@link #overdue()}, with {@link #canStartVisible} deadline. */
     public boolean overdueVisible(long extraBusyNanos) {
         return time.getAsLong() >= (spare.getAsBoolean() ? deadline : visibleBusyDeadline(extraBusyNanos));

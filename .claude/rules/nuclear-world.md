@@ -214,10 +214,15 @@ paths:
   `resendBiomesForChunks` (biome packet), to DH LODs via section copies (`RuinPlan.applyToCopy`: changed-cell count);
   a biome-only plan is still chunk ruins.
 - Flash layer (`FlashScorch`; Artem's decision: everything light does to the world happens with the flash, not the
-  wave; the wave only supplies pressure): one job per detonation in the nuclear lane (`NuclearWorld.scorches`, after
-  the ruin queue, using what wave-reached ruins leave: prioritizing distant layers delayed front ruins by ticks,
-  GameTest `ruinsPreparedDuringFlightFallWithFront`; detonation jobs advance independently; errors log and remove the
-  job; separate “flash scorch” time in slow nuclear-tick logs). First unit collects in-memory chunks within
+  wave; the wave only supplies pressure): one job per detonation in the nuclear lane (`NuclearWorld.scorches`). Units of
+  chunks whose deadline is within `FlashScorch.URGENT_TICKS` (20) run before seen ruins, craters and ruins
+  (`workUrgent`, earliest deadline first); the rest after the ruin queue, using what wave-reached ruins leave
+  (prioritizing distant layers delayed front ruins by ticks, GameTest `ruinsPreparedDuringFlightFallWithFront`). Layer
+  units have their own lane-clock kind (`FlashScorch.KIND`, `WorkClock.canStart(int)`/`canStartVisible(int, long)`).
+  Last in the lane on the shared estimate, the layer got nothing until the wave: DIAG 15 kt at 1.5 km, first layer unit
+  on tick 104; full host pack (ruins “stopped: budget” every tick) tick 362, 904 of 915 chunks late, no fire (GameTest
+  `flashLayerBeatsABusyLane`, batch `nuke_flash_busy`). Detonation jobs advance independently; errors log and remove the
+  job; separate “flash scorch” time in slow nuclear-tick logs (urgent pass included). First unit collects in-memory chunks within
   `FlashScorch.reach` (ground trace, ignition threshold, face scorch at sphere height) and ruin-queue radius
   (`ScarQueue.inRange`, by ground, like `reach`: only ruins enable layer-fire ticks): player-visible first (`SEEN`
   priority and `ScarQueue.SEEN_BUSY_NANOS`), each group earliest deadline first (`FlashScorch.order`/`deadline`: the

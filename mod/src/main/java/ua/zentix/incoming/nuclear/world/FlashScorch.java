@@ -52,6 +52,14 @@ import java.util.concurrent.Future;
  * seconds. Ordered by player distance, ground-zero chunks seen from 1.5 km waited behind the whole view and their fire came
  * with the ruins, on the wave (15 kt scenario: 238 of 859 chunks “after the wave”, layer done in 197 ticks of a 25-tick pulse).
  * <p>
+ * Order alone did not fix it: the layer ran last in the nuclear lane, on what pulse, front, ruins and craters left, and
+ * their heavy units (crater column 3–5 ms, ruin swaps) kept the lane's estimate above the remainder (DIAG, 15 kt at 1.5 km,
+ * wave 0.35: first layer unit on tick 104, written layers a median 122 ticks after ignition; full host pack, ruins ending
+ * every tick on the budget: tick 362, 904 of 915 chunks late, no fire lit). So chunks whose deadline is within
+ * {@link #URGENT_TICKS} run before ruins and craters ({@link #workUrgent}, earliest deadline first); the rest still use what
+ * ruins leave ({@link #work}), so distant layers never delay front ruins. Layer units have their own clock estimate
+ * ({@link #KIND}): a 0.2 ms layer unit is not refused for a crater column's.
+ * <p>
  * No layer for: chunks the wave reached before the layer (at epicenter; their ruins apply everything at once as before);
  * chunks near Sable craft without in-memory neighbors (Sable reads neighbors at every position — writing would load
  * them; ruins wait for neighbors themselves); new chunks while detonation snapshots and layers exceed
@@ -59,6 +67,15 @@ import java.util.concurrent.Future;
  * ruins. Job is non-persistent: pulse lasts seconds; the chunk remembers that the layer lit fire ({@link #mark}).
  */
 public final class FlashScorch {
+    /**
+     * Deadline horizon of the urgent pass, ticks ({@link #workUrgent}): snapshot, background build and write must fit before the
+     * deadline. Builds are ready the next tick (DIAG: median 1, p90 1–4, max 7 ticks after submit); 20 ticks keep margin
+     * under load (est.).
+     */
+    static final int URGENT_TICKS = 20;
+    /** Unit kind in the nuclear lane clock ({@link WorkClock#canStart(int)}): snapshot or write, 0.1–0.5 ms. */
+    static final int KIND = 1;
+
     final Detonation d;
     /** Chunks specified by a check (null — in-memory chunks within scorch radius). */
     @Nullable
@@ -69,6 +86,13 @@ public final class FlashScorch {
     @Nullable
     private long[] order;
     private long[] due;
+    /** Per chunk in {@link #order}: last tick its layer still precedes its ruins ({@link #deadline}). */
+    private long[] ends;
+    /** Per chunk in {@link #order}: handled by a submit unit (submitted, late, gone, waiting, skipped). */
+    private boolean[] started;
+    /** Indices into {@link #order} by deadline, earliest first; {@link #nextUrgent} — first not yet past the urgent pass. */
+    private int[] byDeadline;
+    private int nextUrgent;
     private boolean[] seen;
     private int next, seenCount;
     /** Layers submitted to background: chunk index in {@link #order} → task. In submission order. */
@@ -218,72 +242,18 @@ public final class FlashScorch {
      * @return true — layer applied to all chunks (or no longer needed)
      */
     public boolean work(ServerLevel level, long now, WorkClock clock) {
+        if (order == null && !collect(level, clock)) return false;
         RuinContext ctx = NuclearWorld.get(level).ruins(level, d, now);
-        if (order == null) {
-            if (!clock.canStart()) return false;
-            long t0 = clock.begin();
-            list(level);
-            nanos += clock.end(t0);
-        }
         ScarQueue scars = NuclearWorld.get(level).scars();
         ColumnScar.Budget budget = fixedBudget != null ? fixedBudget : scars.budget(level, d);
-        for (Iterator<Map.Entry<Integer, Build>> it = building.entrySet().iterator(); it.hasNext(); ) {
-            Map.Entry<Integer, Build> e = it.next();
-            int k = e.getKey();
-            Build b = e.getValue();
-            if (!b.task.isDone()) {
-                if (abandoned(b, k, now)) it.remove();
-                continue;
-            }
-            if (due[k] > now) continue;
-            if (!(seen[k] ? clock.canStartVisible(ScarQueue.SEEN_BUSY_NANOS) : clock.canStart())) return false;
-            it.remove();
-            long t0 = clock.begin();
-            try {
-                place(level, ctx, scars, k, b.task, budget, now);
-            } catch (RuntimeException ex) {
-                failed(k, ex);
-            } finally {
-                nanos += clock.end(t0);
-            }
-        }
+        if (!write(level, ctx, scars, budget, now, clock, Long.MAX_VALUE)) return false;
         while (next < order.length) {
-            int k = next;
-            RuinWorkers.Priority priority = seen[k] ? RuinWorkers.Priority.SEEN : RuinWorkers.Priority.NEAR;
-            if (!RuinWorkers.admit(priority) || !(seen[k] ? clock.canStartVisible(ScarQueue.SEEN_BUSY_NANOS) : clock.canStart())) return false;
+            if (started[next]) {
+                next++;
+                continue;
+            }
+            if (!submit(level, ctx, next, now, clock)) return false;
             next++;
-            long key = order[k];
-            LevelChunk chunk = level.getChunkSource().getChunkNow(ChunkPos.getX(key), ChunkPos.getZ(key));
-            if (chunk == null) {
-                gone++;
-                continue;
-            }
-            if (ruined(ctx, chunk)) {
-                late(k);
-                continue;
-            }
-            // near Sable craft, writing reads neighbors: without them, wait for ruins when neighbors arrive (queue waits)
-            if (SableTerrain.watched(level, chunk) && !NuclearTickets.neighbourhoodLoaded(level, chunk.getPos(), 1)) {
-                waiting++;
-                continue;
-            }
-            // snapshots and layer plans retain memory until the wave: no new ones beyond the limit or with a tight heap
-            if (ctx.shotBytes() >= NuclearPrep.PLANS_CAP || heap.tight()) {
-                skipped++;
-                continue;
-            }
-            long t0 = clock.begin();
-            try {
-                RuinContext.Grid g = ctx.flashGrid(level, chunk.getPos(), true);
-                building.put(k, new Build(RuinWorkers.submit(() -> {
-                    RuinWorkers.checkStop();
-                    return RuinPlanner.flash(g);
-                }, priority)));
-            } catch (RuntimeException ex) {
-                failed(k, ex);
-            } finally {
-                nanos += clock.end(t0);
-            }
         }
         if (!building.isEmpty()) return false;
         Incoming.LOG.info("Nuclear detonation #{}: flash scorch — {} of {} chunks ({} seen by players) in {} ticks (pulse {} ticks), {} ms on the server thread; "
@@ -292,6 +262,106 @@ public final class FlashScorch {
                 String.format(java.util.Locale.ROOT, "%.1f", d.pulseTicks()), nanos / 1_000_000, blocks, fires, stale, late,
                 late > 0 ? String.format(java.util.Locale.ROOT, " (%.0f–%.0f blocks from ground zero)", lateNear, lateFar) : "", gone, waiting, skipped,
                 failures > 0 ? ", " + failures + " failed" : "");
+        return true;
+    }
+
+    /**
+     * Urgent pass, before ruins and craters in the nuclear lane (server thread): chunks whose deadline is within
+     * {@link #URGENT_TICKS} — first unit (collection), writes whose light has come, submissions — earliest deadline first.
+     * Everything else waits for {@link #work}, after ruins.
+     */
+    public void workUrgent(ServerLevel level, long now, WorkClock clock) {
+        if (order == null && !collect(level, clock)) return;
+        RuinContext ctx = NuclearWorld.get(level).ruins(level, d, now);
+        ScarQueue scars = NuclearWorld.get(level).scars();
+        ColumnScar.Budget budget = fixedBudget != null ? fixedBudget : scars.budget(level, d);
+        if (!write(level, ctx, scars, budget, now, clock, now + URGENT_TICKS)) return;
+        while (nextUrgent < byDeadline.length && ends[byDeadline[nextUrgent]] <= now + URGENT_TICKS) {
+            int k = byDeadline[nextUrgent];
+            if (!started[k] && !submit(level, ctx, k, now, clock)) return;
+            nextUrgent++;
+        }
+    }
+
+    /** First unit: collect chunks ({@link #list}). false — no room this tick. */
+    private boolean collect(ServerLevel level, WorkClock clock) {
+        if (!clock.canStart(KIND)) return false;
+        long t0 = clock.begin();
+        list(level);
+        nanos += clock.end(t0, KIND);
+        return true;
+    }
+
+    /** Lane admission for a unit of chunk {@code k}: visible chunks get the visible extension ({@link ScarQueue#SEEN_BUSY_NANOS}). */
+    private boolean admits(WorkClock clock, int k) {
+        return seen[k] ? clock.canStartVisible(KIND, ScarQueue.SEEN_BUSY_NANOS) : clock.canStart(KIND);
+    }
+
+    /**
+     * Write ready layers whose light has come and whose deadline is no later than {@code until}; abandon stuck ones.
+     * false — lane refused a unit this tick.
+     */
+    private boolean write(ServerLevel level, RuinContext ctx, ScarQueue scars, ColumnScar.Budget budget, long now, WorkClock clock, long until) {
+        for (Iterator<Map.Entry<Integer, Build>> it = building.entrySet().iterator(); it.hasNext(); ) {
+            Map.Entry<Integer, Build> e = it.next();
+            int k = e.getKey();
+            Build b = e.getValue();
+            if (!b.task.isDone()) {
+                if (abandoned(b, k, now)) it.remove();
+                continue;
+            }
+            if (due[k] > now || ends[k] > until) continue;
+            if (!admits(clock, k)) return false;
+            it.remove();
+            long t0 = clock.begin();
+            try {
+                place(level, ctx, scars, k, b.task, budget, now);
+            } catch (RuntimeException ex) {
+                failed(k, ex);
+            } finally {
+                nanos += clock.end(t0, KIND);
+            }
+        }
+        return true;
+    }
+
+    /** Submit chunk {@code k}'s layer to the background, or account why not. false — pool or lane refused (retry next tick). */
+    private boolean submit(ServerLevel level, RuinContext ctx, int k, long now, WorkClock clock) {
+        RuinWorkers.Priority priority = seen[k] ? RuinWorkers.Priority.SEEN : RuinWorkers.Priority.NEAR;
+        if (!RuinWorkers.admit(priority) || !admits(clock, k)) return false;
+        started[k] = true;
+        long key = order[k];
+        LevelChunk chunk = level.getChunkSource().getChunkNow(ChunkPos.getX(key), ChunkPos.getZ(key));
+        if (chunk == null) {
+            gone++;
+            return true;
+        }
+        if (ruined(ctx, chunk)) {
+            late(k);
+            return true;
+        }
+        // near Sable craft, writing reads neighbors: without them, wait for ruins when neighbors arrive (queue waits)
+        if (SableTerrain.watched(level, chunk) && !NuclearTickets.neighbourhoodLoaded(level, chunk.getPos(), 1)) {
+            waiting++;
+            return true;
+        }
+        // snapshots and layer plans retain memory until the wave: no new ones beyond the limit or with a tight heap
+        if (ctx.shotBytes() >= NuclearPrep.PLANS_CAP || heap.tight()) {
+            skipped++;
+            return true;
+        }
+        long t0 = clock.begin();
+        try {
+            RuinContext.Grid g = ctx.flashGrid(level, chunk.getPos(), true);
+            building.put(k, new Build(RuinWorkers.submit(() -> {
+                RuinWorkers.checkStop();
+                return RuinPlanner.flash(g);
+            }, priority)));
+        } catch (RuntimeException ex) {
+            failed(k, ex);
+        } finally {
+            nanos += clock.end(t0, KIND);
+        }
         return true;
     }
 
@@ -335,7 +405,7 @@ public final class FlashScorch {
     }
 
     /** Last tick a layer written to chunk {@code p} still precedes its ruins (ruins replace it {@link ScarQueue#EARLY} before {@link ScarQueue#due}). */
-    static long deadline(Detonation d, ChunkPos p) {
+    public static long deadline(Detonation d, ChunkPos p) {
         return ScarQueue.due(d, p) - ScarQueue.EARLY - 1;
     }
 
@@ -415,7 +485,7 @@ public final class FlashScorch {
         List<ServerPlayer> players = level.players();
         int n = in.size();
         boolean[] watched = new boolean[n];
-        long[] ends = new long[n];
+        long[] limit = new long[n];
         for (int i = 0; i < n; i++) {
             ChunkPos p = new ChunkPos(in.getLong(i));
             for (ServerPlayer player : players) {
@@ -425,9 +495,11 @@ public final class FlashScorch {
                 }
             }
             watched[i] |= ScarQueue.seenInTest(p.toLong());
-            ends[i] = deadline(d, p);
+            limit[i] = deadline(d, p);
         }
-        int[] idx = order(watched, ends);
+        int[] idx = order(watched, limit);
+        ends = new long[n];
+        started = new boolean[n];
         order = new long[n];
         due = new long[n];
         seen = new boolean[n];
@@ -436,10 +508,13 @@ public final class FlashScorch {
             ChunkPos p = new ChunkPos(in.getLong(i));
             order[j] = p.toLong();
             seen[j] = watched[i];
+            ends[j] = limit[i];
             if (seen[j]) seenCount++;
             // light at the chunk's ground point nearest the ball: ignition threshold reached there before the rest of the chunk
             double x = Mth.clamp(d.burst().x, p.getMinBlockX(), p.getMaxBlockX() + 1), z = Mth.clamp(d.burst().z, p.getMinBlockZ(), p.getMaxBlockZ() + 1);
             due[j] = d.gameTime() + (long) Math.ceil(d.flashTicks(d.fluence(new Vec3(x, d.groundY() + 1, z)), ThermalModel.ignite(d.yieldKt())));
         }
+        // urgent pass: all chunks earliest deadline first (visible or not: the deadline is the same law)
+        byDeadline = order(new boolean[n], ends);
     }
 }
