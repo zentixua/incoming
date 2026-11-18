@@ -56,8 +56,9 @@ import java.util.concurrent.Future;
  * their heavy units (crater column 3–5 ms, ruin swaps) kept the lane's estimate above the remainder (DIAG, 15 kt at 1.5 km,
  * wave 0.35: first layer unit on tick 104, written layers a median 122 ticks after ignition; full host pack, ruins ending
  * every tick on the budget: tick 362, 904 of 915 chunks late, no fire lit). So chunks whose deadline is within
- * {@link #URGENT_TICKS} run before ruins and craters ({@link #workUrgent}, earliest deadline first); the rest still use what
- * ruins leave ({@link #work}), so distant layers never delay front ruins. Layer units have their own clock estimate
+ * {@link #URGENT_TICKS} run right after the ruins players see due this tick and before craters and unseen ruins
+ * ({@link #workUrgent}, earliest deadline first); the rest still use what ruins leave ({@link #work}), so layers never
+ * delay ruins in view. Layer units have their own clock estimate
  * ({@link #KIND}): a 0.2 ms layer unit is not refused for a crater column's.
  * <p>
  * No layer for: chunks the wave reached before the layer (at epicenter; their ruins apply everything at once as before);
@@ -275,7 +276,8 @@ public final class FlashScorch {
     }
 
     /**
-     * Urgent pass, before ruins and craters in the nuclear lane (server thread): chunks whose deadline is within
+     * Urgent pass in the nuclear lane, after seen ruins due this tick and before craters and unseen ruins (server thread):
+     * chunks whose deadline is within
      * {@link #URGENT_TICKS} — first unit (collection), writes whose light has come, submissions — earliest deadline first.
      * Everything else waits for {@link #work}, after ruins.
      */

@@ -215,8 +215,9 @@ paths:
   a biome-only plan is still chunk ruins.
 - Flash layer (`FlashScorch`; Artem's decision: everything light does to the world happens with the flash, not the
   wave; the wave only supplies pressure): one job per detonation in the nuclear lane (`NuclearWorld.scorches`). Units of
-  chunks whose deadline is within `FlashScorch.URGENT_TICKS` (20) run before seen ruins, craters and ruins
-  (`workUrgent`, earliest deadline first); the rest after the ruin queue, using what wave-reached ruins leave
+  chunks whose deadline is within `FlashScorch.URGENT_TICKS` (20) run after seen ruins (due this tick: their deadline
+  is now; ahead of them the layer kept glass in view whole 3 ticks after the wave, GameTest `seenRuinsKeepUpWithCrater`)
+  and before craters and unseen ruins (`workUrgent`, earliest deadline first); the rest after the ruin queue, using what wave-reached ruins leave
   (prioritizing distant layers delayed front ruins by ticks, GameTest `ruinsPreparedDuringFlightFallWithFront`). Layer
   units have their own lane-clock kind (`FlashScorch.KIND`, `WorkClock.canStart(int)`/`canStartVisible(int, long)`).
   Last in the lane on the shared estimate, the layer got nothing until the wave: DIAG 15 kt at 1.5 km, first layer unit

@@ -470,7 +470,13 @@ public final class NuclearWorld {
         }
         lastFrontNanos = System.nanoTime() - frontStart;
         if (now % 1200 == 0) scars.retainBudgets(events.detonations().stream().map(Detonation::id).collect(java.util.stream.Collectors.toSet()));
-        // flash layers whose deadline is near, before ruins and craters: after them the layer got nothing until the wave
+        // ruins a player sees before the crater: its columns would take the whole lane for seconds after a large
+        // ground burst, and the wave would pass intact chunks in view (ScarQueue.workSeen); unseen ruins after it
+        long seenStart = System.nanoTime();
+        scars.workSeen(level, now, clock);
+        // flash layers whose deadline is near, earliest deadline first: after seen ruins due this tick (their deadline is
+        // now; first, the layer pass took their units and glass in view stayed whole 3 ticks after the wave, GameTest
+        // seenRuinsKeepUpWithCrater), before craters and unseen ruins: after them the layer got nothing until the wave
         // (FlashScorch: 15 kt full host pack, 904 of 915 chunks late); the rest of each layer still waits below
         long urgentStart = System.nanoTime();
         for (FlashScorch job : scorches) {
@@ -480,18 +486,14 @@ public final class NuclearWorld {
                 Incoming.LOG.error("Flash scorch of detonation #{} failed with an exception (urgent pass)", job.detonation().id(), e);
             }
         }
-        // ruins a player sees before the crater: its columns would take the whole lane for seconds after a large
-        // ground burst, and the wave would pass intact chunks in view (ScarQueue.workSeen); unseen ruins after it
-        long seenStart = System.nanoTime();
-        long urgentNanos = seenStart - urgentStart;
-        scars.workSeen(level, now, clock);
         long craterStart = System.nanoTime();
+        long urgentNanos = craterStart - urgentStart;
         digCraters(level, events, clock);
         long scarStart = System.nanoTime();
         lastCraterNanos = scarStart - craterStart;
         scars.work(level, now, clock);
         long scorchStart = System.nanoTime();
-        lastScarNanos = scorchStart - scarStart + (craterStart - seenStart);
+        lastScarNanos = scorchStart - scarStart + (urgentStart - seenStart);
         // the rest of each flash layer after wave-reached ruins, on their remaining budget: when front crosses
         // many chunks per tick, distant flash layers prioritized ahead delayed front ruins for ticks (25 tick units
         // to layers, none to ruins); only near-deadline layer units go first (above). Wave-reached layer unnecessary:
