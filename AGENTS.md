@@ -217,9 +217,10 @@ actually works, fix the real cause.
   sounds, text, server and tool changes skip it. Never merge above frame-cost limit. No full-pack Iris recording per PR.
 - **Performance starts with measurement:** GPU time by layer parts (mod markers, bench line, F3), RenderDoc frame
   (`mod/run/renderdoc/`, Python analysis); edit the numerically identified cause, not a presumed model.
-- **One run gives all the data** (Artem, 18.11): every diagnosis or measurement (bug, lag, freeze, odd behavior)
-  follows the `deep-debug` skill and collects everything possibly relevant in the first run: logs, GL debug, JFR,
-  per-pass timings, counts, frames, GPU/memory samples. No guessing and no series of long reruns to add one probe.
+- **One run answers everything** (Artem, 18.11): before any run that observes the system (test, measurement,
+  reproduction), decide every question it must answer and record everything that could bear on them, so one run is
+  enough to name the cause by number. A guess is not a result; a rerun only to add a forgotten probe is waste.
+  Tooling for the mod: the `deep-debug` skill.
 - **One visual session at a time:** one GPU (`tools/gpu_lease.sh`: other sessions' clients/`--gpu` jobs refuse, naming
   holder); finish with `tools/sandbox.sh stop`, then `tools/gpu_lease.sh release`.
 - **One independent review round:** use the other vendor when available; during absence or quota exhaustion, use a
