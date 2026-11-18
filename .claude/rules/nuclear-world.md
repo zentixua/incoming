@@ -219,8 +219,11 @@ paths:
   GameTest `ruinsPreparedDuringFlightFallWithFront`; detonation jobs advance independently; errors log and remove the
   job; separate “flash scorch” time in slow nuclear-tick logs). First unit collects in-memory chunks within
   `FlashScorch.reach` (ground trace, ignition threshold, face scorch at sphere height) and ruin-queue radius
-  (`ScarQueue.inRange`, by ground, like `reach`: only ruins enable layer-fire ticks): player-visible first, by player
-  distance (`SEEN` priority and `ScarQueue.SEEN_BUSY_NANOS`), others by epicenter distance; then one unit per chunk
+  (`ScarQueue.inRange`, by ground, like `reach`: only ruins enable layer-fire ticks): player-visible first (`SEEN`
+  priority and `ScarQueue.SEEN_BUSY_NANOS`), each group earliest deadline first (`FlashScorch.order`/`deadline`: the
+  tick before the ruin tick, wave at chunk center minus `ScarQueue.EARLY`; ordering a view by player distance put
+  ground zero, whose wave follows ignition within 2–25 ticks, last: 238 of 859 chunks “after the wave” in the 15 kt
+  `nuke` scenario, `FlashScorchOrderTest`; the summary log line gives the late chunks' ground range); then one unit per chunk
   builds a 3×3 window from detonation ruin snapshots (`RuinContext.flashGrid`) and a background layer
   (`RuinPlanner.flash`: same `land` without pressure — no turf stripping or rubble; all light-ignited fires,
   from `ThermalModel.ignite(yield)` with chance `min(1, q/igniteAll)`, with wave-blown fires marked — position roll not below chance × `BLOWN_KEEP` at ≥ 2 psi —

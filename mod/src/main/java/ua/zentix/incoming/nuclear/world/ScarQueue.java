@@ -114,7 +114,7 @@ public final class ScarQueue {
      * of chunks per tick), one-tick-early hidden beneath dust wall, spreading work over extra tick; farther wall
      * travels at far-zone speed ({@code Detonation.wave}, a few blocks per tick), one tick means a few blocks.
      */
-    private static final int EARLY = 1;
+    static final int EARLY = 1;
     /**
      * Ticks before wave to precheck player-visible chunk ({@link #lookAhead}): stale ready plan
      * (grass grew, player placed block) or absent plan rebuilt in background now, ready

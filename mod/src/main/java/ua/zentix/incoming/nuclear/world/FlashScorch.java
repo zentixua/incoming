@@ -38,13 +38,19 @@ import java.util.concurrent.Future;
  * One job per detonation (server thread, shared budget nuclear lane, after ruins reached by the wave, using their
  * remainder: front ruins matter more than distant flash layers, {@link NuclearWorld#tick}). First unit collects
  * in-memory chunks that ruins will reach ({@link ScarQueue#inRange}) and light will mark ({@link #reach}), player-visible
- * first (nearest player first), then others outward from epicenter; then one unit per chunk for snapshots (detonation
+ * first, each group by deadline ({@link #order}: the tick ruins replace the chunk, wave arrival at its center one tick
+ * early, {@link ScarQueue#due}); then one unit per chunk for snapshots (detonation
  * ruin cache: same snapshots as ruins) and background layer plan ({@link RuinWorkers}: visible priority for visible
  * chunks); one unit per ready layer writes it like ruins ({@link RuinPlan#applyFlash}: directly to sections, same-tick
  * section packets to players, Distant Horizons LODs). A chunk is applied no earlier than light at its ground point
  * nearest the ball reaches ignition threshold ({@link Detonation#flashTicks}): immediately near epicenter, near pulse
  * end at the edge (15 kt — 1.24 s, 1 Mt — 10 s). Layer fire does not tick before chunk ruins: neither grows nor goes out
  * until then ({@link RuinPlan#applyFlash}).
+ * <p>
+ * A layer only counts before its deadline: near ground zero the wave follows the flash within ticks (15 kt ground burst at
+ * 500 m: ignition tick 1.5, wave tick 10.7; airburst at 592 m: 1.3 and 24.6 at ground zero), at the viewer it takes
+ * seconds. Ordered by player distance, ground-zero chunks seen from 1.5 km waited behind the whole view and their fire came
+ * with the ruins, on the wave (15 kt scenario: 238 of 859 chunks “after the wave”, layer done in 197 ticks of a 25-tick pulse).
  * <p>
  * No layer for: chunks the wave reached before the layer (at epicenter; their ruins apply everything at once as before);
  * chunks near Sable craft without in-memory neighbors (Sable reads neighbors at every position — writing would load
@@ -68,6 +74,8 @@ public final class FlashScorch {
     /** Layers submitted to background: chunk index in {@link #order} → task. In submission order. */
     private final Map<Integer, Build> building = new LinkedHashMap<>();
     private int applied, stale, late, gone, waiting, skipped, failures, blocks, fires;
+    /** Late chunks (“after the wave”): nearest and farthest ground range from epicenter, blocks. */
+    private double lateNear = Double.MAX_VALUE, lateFar;
     private long nanos, lastApplied = -1;
     private final HeapWatch.Tracker heap = new HeapWatch.Tracker();
 
@@ -251,7 +259,7 @@ public final class FlashScorch {
                 continue;
             }
             if (ruined(ctx, chunk)) {
-                late++;
+                late(k);
                 continue;
             }
             // near Sable craft, writing reads neighbors: without them, wait for ruins when neighbors arrive (queue waits)
@@ -279,9 +287,10 @@ public final class FlashScorch {
         }
         if (!building.isEmpty()) return false;
         Incoming.LOG.info("Nuclear detonation #{}: flash scorch — {} of {} chunks ({} seen by players) in {} ticks (pulse {} ticks), {} ms on the server thread; "
-                        + "{} blocks, {} fires lit; {} stale, {} after the wave, {} unloaded, {} at aircraft without neighbours, {} over the memory limit{}",
+                        + "{} blocks, {} fires lit; {} stale, {} after the wave{}, {} unloaded, {} at aircraft without neighbours, {} over the memory limit{}",
                 d.id(), applied, order.length, seenCount, lastApplied < 0 ? 0 : lastApplied - d.gameTime(),
-                String.format(java.util.Locale.ROOT, "%.1f", d.pulseTicks()), nanos / 1_000_000, blocks, fires, stale, late, gone, waiting, skipped,
+                String.format(java.util.Locale.ROOT, "%.1f", d.pulseTicks()), nanos / 1_000_000, blocks, fires, stale, late,
+                late > 0 ? String.format(java.util.Locale.ROOT, " (%.0f–%.0f blocks from ground zero)", lateNear, lateFar) : "", gone, waiting, skipped,
                 failures > 0 ? ", " + failures + " failed" : "");
         return true;
     }
@@ -317,6 +326,33 @@ public final class FlashScorch {
         if (failures++ < 3) Incoming.LOG.error("Nuclear detonation #{}: flash scorch of chunk {} failed", d.id(), new ChunkPos(order[k]), e);
     }
 
+    /** Chunk {@code k} gets no layer: the wave (its ruins) came first or will before the layer could be written. */
+    private void late(int k) {
+        late++;
+        double r = NuclearPrep.horizontal(new ChunkPos(order[k]), d);
+        lateNear = Math.min(lateNear, r);
+        lateFar = Math.max(lateFar, r);
+    }
+
+    /** Last tick a layer written to chunk {@code p} still precedes its ruins (ruins replace it {@link ScarQueue#EARLY} before {@link ScarQueue#due}). */
+    static long deadline(Detonation d, ChunkPos p) {
+        return ScarQueue.due(d, p) - ScarQueue.EARLY - 1;
+    }
+
+    /**
+     * Work order: player-visible chunks first (what players see on time), each group by deadline, earliest first
+     * ({@link #deadline}; ties keep input order). Earliest deadline first meets every deadline that can be met; the old
+     * nearest-player order put ground zero, the tightest deadline, last in a view that held it.
+     */
+    static int[] order(boolean[] seen, long[] deadline) {
+        Integer[] idx = new Integer[seen.length];
+        for (int i = 0; i < idx.length; i++) idx[i] = i;
+        java.util.Arrays.sort(idx, (a, b) -> seen[a] != seen[b] ? (seen[a] ? -1 : 1) : Long.compare(deadline[a], deadline[b]));
+        int[] out = new int[idx.length];
+        for (int i = 0; i < out.length; i++) out[i] = idx[i];
+        return out;
+    }
+
     /** Chunk already ruined (wave arrived before layer): no layer needed. */
     private boolean ruined(RuinContext ctx, LevelChunk chunk) {
         return ctx.applied(chunk.getPos().toLong()) != null || chunk.getExistingData(ModAttachments.CHUNK_SCAR).orElse(0) >= d.id();
@@ -340,7 +376,7 @@ public final class FlashScorch {
             return;
         }
         if (ruined(ctx, chunk)) {
-            late++;
+            late(k);
             return;
         }
         // writing needs neighbors (nearby Sable craft, edge block entity), but absent: ruins wait for them themselves
@@ -362,8 +398,7 @@ public final class FlashScorch {
     }
 
     /**
-     * Scorched chunks (fully in memory, within ruin radius), in order: player-visible by nearest-player distance,
-     * others outward from epicenter; application time for each.
+     * Scorched chunks (fully in memory, within ruin radius), in {@link #order}; application time for each.
      */
     private void list(ServerLevel level) {
         LongArrayList in = new LongArrayList();
@@ -379,22 +414,20 @@ public final class FlashScorch {
         }
         List<ServerPlayer> players = level.players();
         int n = in.size();
-        double[] rank = new double[n];
         boolean[] watched = new boolean[n];
+        long[] ends = new long[n];
         for (int i = 0; i < n; i++) {
             ChunkPos p = new ChunkPos(in.getLong(i));
-            double best = Double.MAX_VALUE;
             for (ServerPlayer player : players) {
-                if (!player.getChunkTrackingView().contains(p)) continue;
-                best = Math.min(best, Math.hypot(p.getMiddleBlockX() + 0.5 - player.getX(), p.getMiddleBlockZ() + 0.5 - player.getZ()));
+                if (player.getChunkTrackingView().contains(p)) {
+                    watched[i] = true;
+                    break;
+                }
             }
-            watched[i] = best < Double.MAX_VALUE || ScarQueue.seenInTest(p.toLong());
-            // visible before all invisible (offset greater than any world distance)
-            rank[i] = watched[i] ? (best < Double.MAX_VALUE ? best : 0) : 1e9 + NuclearPrep.horizontal(p, d);
+            watched[i] |= ScarQueue.seenInTest(p.toLong());
+            ends[i] = deadline(d, p);
         }
-        Integer[] idx = new Integer[n];
-        for (int i = 0; i < n; i++) idx[i] = i;
-        java.util.Arrays.sort(idx, (a, b) -> Double.compare(rank[a], rank[b]));
+        int[] idx = order(watched, ends);
         order = new long[n];
         due = new long[n];
         seen = new boolean[n];
