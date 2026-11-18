@@ -248,4 +248,26 @@ class PallDetailTest {
         frames(d, 0.75 * H, 0.25 * H, 6000, clock);
         assertEquals(0, d.level, "the setting's rung again");
     }
+
+    /**
+     * {@link GpuWatch} floor (#656): the last rung from then on, whatever the setting, the pin of the scenario or later fast
+     * frames ask.
+     */
+    @Test
+    void flooredDetailStaysAtTheLastRung() {
+        PallPass.Detail d = new PallPass.Detail();
+        d.setting(PallPass.Quality.HIGH);
+        assertEquals(0, d.level);
+        d.floor();
+        assertEquals(LOW, d.level);
+        long[] clock = {0};
+        frames(d, 1, 400, clock);
+        assertEquals(LOW, d.level, "fast frames do not raise a floored rung");
+        d.pin(true);
+        assertEquals(LOW, d.level, "pinning does not lift the floor");
+        d.pin(false);
+        d.setting(PallPass.Quality.MEDIUM);
+        d.setting(PallPass.Quality.HIGH);
+        assertEquals(LOW, d.level, "a new setting does not lift the floor");
+    }
 }

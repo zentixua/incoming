@@ -2,6 +2,7 @@ package ua.zentix.incoming.client.fx.layer;
 
 import com.mojang.blaze3d.platform.GlConst;
 import com.mojang.blaze3d.platform.GlStateManager;
+import com.mojang.blaze3d.platform.GlUtil;
 import com.mojang.blaze3d.shaders.Uniform;
 import com.mojang.blaze3d.systems.RenderSystem;
 import com.mojang.blaze3d.vertex.BufferBuilder;
@@ -10,8 +11,10 @@ import com.mojang.blaze3d.vertex.DefaultVertexFormat;
 import com.mojang.blaze3d.vertex.MeshData;
 import com.mojang.blaze3d.vertex.Tesselator;
 import com.mojang.blaze3d.vertex.VertexFormat;
+import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.ShaderInstance;
+import net.minecraft.network.chat.Component;
 import net.minecraft.world.phys.Vec3;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix4f;
@@ -216,6 +219,8 @@ public final class PallPass {
         double lastMean;
         /** Rung pinned to the setting ({@link #pin}). */
         boolean pinned;
+        /** Held at the last rung for the session ({@link #floor}): {@link GpuWatch} saw a frame far past any budget. */
+        boolean floored;
         private double sum, raySum;
         private int samples, calm, over;
         private long windowStart, holdUntil, raisedAt = Long.MIN_VALUE;
@@ -308,8 +313,15 @@ public final class PallPass {
             return mean - rays + rays * LADDER[to].cost() / LADDER[level].cost();
         }
 
+        /** Last rung from now on, whatever the setting, pin or measurements ask ({@link GpuWatch#FLOOR_MS}). */
+        void floor() {
+            floored = true;
+            set(LADDER.length - 1);
+            changes++;
+        }
+
         private void set(int to) {
-            level = Math.max(ceiling, Math.min(LADDER.length - 1, to));
+            level = floored ? LADDER.length - 1 : Math.max(ceiling, Math.min(LADDER.length - 1, to));
             generation++;
             skip = true;
             sum = 0;
@@ -480,6 +492,9 @@ public final class PallPass {
     private static Detail DETAIL = new Detail();
     /** Noise failed (background error): no pall until restart. */
     private static boolean failed;
+    /** Pall frame GPU time watchdog (#656), created with the first timer; off — no volume until restart. */
+    @Nullable
+    private static GpuWatch watch;
 
     private static int fullW, fullH, lowW, lowH, factor, interleave = 1, cellsW, cellsH;
     /** Ray frame, two history frames (alternating previous/current) and the whole pall in front of the world for layer quads. */
@@ -536,6 +551,11 @@ public final class PallPass {
     private static int[] QUERIES = new int[STAMPS * RING];
     /** Rung generation ({@link Detail#generation}) at pair recording; −1 — pair free. */
     private static int[] ISSUED = new int[RING];
+    /**
+     * Render-thread time from the first to the last timestamp of each pair, ns: while the driver compiles a program at its
+     * first draw (seconds on a cold NVIDIA cache) the GPU idles between the stamps; {@link GpuWatch} takes only the excess.
+     */
+    private static long[] SUBMIT = new long[RING];
     private static int ring;
     /** Timestamps: 0 — unchecked, 1 — supported, −1 — unsupported (detail follows setting then). */
     private static int timer;
@@ -558,7 +578,7 @@ public final class PallPass {
      * screen veil shows the wall head at the eye ({@code NukeDust.veil}).
      */
     public static boolean available() {
-        return !failed && march != null && resolve != null && composite != null && froxel != null && froxelSum != null && mix != null;
+        return !failed && !gpuOff() && march != null && resolve != null && composite != null && froxel != null && froxelSum != null && mix != null;
     }
 
     /** Noise prepared in background on world entry ({@code IncomingClient}; and first detonation): no pall or mushroom until ready. */
@@ -1357,6 +1377,7 @@ public final class PallPass {
             if (ok) {
                 for (int i = 0; i < QUERIES.length; i++) QUERIES[i] = GL15.glGenQueries();
                 Arrays.fill(ISSUED, -1);
+                watch = new GpuWatch(GlUtil.getRenderer());
             } else {
                 Incoming.LOG.info("Nuclear dust pall: no GPU timer queries, detail stays as set");
             }
@@ -1385,6 +1406,7 @@ public final class PallPass {
             gpuSum += ms;
             gpuMax = Math.max(gpuMax, ms);
             gpuFrames++;
+            if (watch != null) watched(watch.sample(ms - SUBMIT[i] / 1e6));
             int was = DETAIL.level;
             if (DETAIL.sample(ms, rays, ISSUED[i], now)) {
                 Step from = LADDER[was], to = LADDER[DETAIL.level];
@@ -1396,10 +1418,32 @@ public final class PallPass {
         }
     }
 
+    /** Volume turned off by {@link GpuWatch} for this session. */
+    private static boolean gpuOff() {
+        return watch != null && watch.state() == GpuWatch.State.OFF;
+    }
+
+    /** Act on a {@link GpuWatch} change: detail to its floor, or the volume off with one chat line. */
+    private static void watched(@Nullable GpuWatch.State state) {
+        if (state == null) return;
+        String gpu = GlUtil.getRenderer() + ", " + GlUtil.getOpenGLVersion();
+        if (state == GpuWatch.State.FLOOR) {
+            DETAIL.floor();
+            Incoming.LOG.warn(String.format(Locale.ROOT, "Nuclear dust pall: one frame took %.0f ms on the GPU (%s); detail held at %s for this session",
+                    watch.cause(), gpu, LADDER[DETAIL.level].describe()));
+            return;
+        }
+        Incoming.LOG.warn(String.format(Locale.ROOT, "Nuclear dust pall: one frame took %.0f ms on the GPU (%s), near the driver's 2 s reset; "
+                + "nuclear volume (fireball, mushroom cloud, dust wall, pall) off for this session", watch.cause(), gpu));
+        Minecraft mc = Minecraft.getInstance();
+        mc.gui.getChat().addMessage(Component.translatable("incoming.pall.gpu_off").withStyle(ChatFormatting.YELLOW));
+    }
+
     /** Timestamp before passes; −1 — unmeasured frame (unsupported or all pairs still pending). */
     private static int begin() {
         if (!timer() || ISSUED[ring] >= 0) return -1;
         GL33.glQueryCounter(QUERIES[STAMPS * ring], GL33.GL_TIMESTAMP);
+        SUBMIT[ring] = System.nanoTime();
         // every stamp is written each measured frame (a pass skipped this frame still has its point)
         for (int k = 1; k < STAMPS - 1; k++) GL33.glQueryCounter(QUERIES[STAMPS * ring + k], GL33.GL_TIMESTAMP);
         return ring;
@@ -1414,6 +1458,7 @@ public final class PallPass {
     private static void end(int pair) {
         if (pair < 0) return;
         GL33.glQueryCounter(QUERIES[STAMPS * pair + STAMPS - 1], GL33.GL_TIMESTAMP);
+        SUBMIT[pair] = System.nanoTime() - SUBMIT[pair];
         ISSUED[pair] = DETAIL.generation;
         ring = (pair + 1) % RING;
     }
@@ -1433,7 +1478,7 @@ public final class PallPass {
 
     /** Scenario line: pall frames per second, resolution, detail rung, GPU time. */
     public static String describe() {
-        if (lastDrawn == 0) return failed ? "failed" : "off";
+        if (lastDrawn == 0) return failed ? "failed" : gpuOff() ? "off by the GPU watchdog" : "off";
         Step step = LADDER[Math.max(0, DETAIL.level)];
         Step top = LADDER[Math.max(0, DETAIL.ceiling)];
         String gpu = timer < 0 ? "gpu n/a" : String.format(Locale.ROOT,
@@ -1516,6 +1561,7 @@ public final class PallPass {
         private int[] VIEWPORT = new int[4];
         private int[] QUERIES = new int[STAMPS * RING];
         private int[] ISSUED = new int[RING];
+        private long[] SUBMIT = new long[RING];
         private int ring;
         private int timer;
         private double gpuSum;
@@ -1703,6 +1749,9 @@ public final class PallPass {
             int[] oldISSUED = PallPass.ISSUED;
             PallPass.ISSUED = ISSUED;
             ISSUED = oldISSUED;
+            long[] oldSUBMIT = PallPass.SUBMIT;
+            PallPass.SUBMIT = SUBMIT;
+            SUBMIT = oldSUBMIT;
             int oldring = PallPass.ring;
             PallPass.ring = ring;
             ring = oldring;

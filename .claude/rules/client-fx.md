@@ -43,6 +43,15 @@ paths:
   resource reload replaces the instance. Use the real pass resources/state;
   a one-pixel dummy pass with placeholder textures did not remove the first-flash compilation stall.
   Check a fresh process with the driver cache disabled; a second detonation cannot verify this fix.
+- Drivers differ where GL leaves behaviour undefined (#656: a nuke froze an RX 6600 XT while sound went on; the RTX 4060
+  laptop shows 0 GL errors and ≤ 13.8 ms of pall GPU per frame in the same scene). Module globals start with a value
+  (`ShaderSourceTest.everyGlobalStartsWithAValue`: NVIDIA zeroes registers, others do not; Mesa found 20 in `fx_pall.glsl`).
+  An absent 3D map binds `Empty3D`, never object 0 (an active sampler on an incomplete texture: 229 070 NVIDIA debug
+  messages per nuke scenario). `GpuWatch` acts on one pall frame far past any budget: ≥ 250 ms GPU holds the detail at
+  its floor, ≥ 1 s turns the volume off for the session with one chat line (`incoming.pall.gpu_off`). It takes GPU time
+  minus the render thread's time between the pair's stamps (`PallPass.SUBMIT`): a cold-cache driver compile idles the
+  GPU between stamps for seconds. Software renderers (llvmpipe) are not watched. Second-compiler check without a GPU:
+  Mesa llvmpipe through EGL surfaceless prints "used uninitialized" and link errors for every core program.
 - The vanilla shader `position_tex_color` discards fragments with alpha below 0.1: faint things (distant smoke, glow,
   dots smaller than a pixel) vanish entirely, so the effects layer draws with its own `fx` shader. The vertex color
   (`BufferBuilder.setColor(float…)`) is a byte without clamping: above 1 it overflows. Vanilla fog turns blue in rain

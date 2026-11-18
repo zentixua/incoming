@@ -13,6 +13,7 @@ import org.lwjgl.opengl.GL13;
 import org.lwjgl.opengl.GL30;
 import org.lwjgl.system.MemoryUtil;
 import ua.zentix.incoming.Incoming;
+import ua.zentix.incoming.client.fx.layer.Empty3D;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -151,7 +152,7 @@ public final class NukeBallSurface extends SimplePreparableReloadListener<NukeBa
     public static void bind(ShaderInstance s) {
         int unit = GlStateManager._getActiveTexture();
         GlStateManager._activeTexture(GL13.GL_TEXTURE0 + UNIT);
-        GL11.glBindTexture(GL12.GL_TEXTURE_3D, data != null ? texture : 0);
+        GL11.glBindTexture(GL12.GL_TEXTURE_3D, data != null ? texture : Empty3D.texture());
         GlStateManager._activeTexture(unit);
         com.mojang.blaze3d.shaders.Uniform.uploadInteger(com.mojang.blaze3d.shaders.Uniform.glGetUniformLocation(s.getId(), "PallBall"), UNIT);
     }

@@ -171,7 +171,7 @@ public final class SmokePass {
         s.safeGetUniform("SmokeHi").set(BOX_HI);
         int unit = GlStateManager._getActiveTexture();
         GlStateManager._activeTexture(GL13.GL_TEXTURE0 + UNIT);
-        GL11.glBindTexture(GL12.GL_TEXTURE_3D, on ? grid : 0);
+        GL11.glBindTexture(GL12.GL_TEXTURE_3D, on ? grid : Empty3D.texture());
         GlStateManager._activeTexture(unit);
         int program = GL11.glGetInteger(GL20.GL_CURRENT_PROGRAM);
         ProgramManager.glUseProgram(s.getId());
