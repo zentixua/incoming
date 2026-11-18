@@ -113,6 +113,19 @@ public final class FxPool {
         return refused[b.ordinal()];
     }
 
+    /**
+     * Live particles within {@code radius} of a point by kind, group and darkness (start color luma below 0.3), added to
+     * {@code out} (for scenarios: what falls around the camera and when).
+     */
+    public void census(double ex, double ey, double ez, double radius, java.util.Map<String, Integer> out) {
+        for (int i = 0; i < count; i++) {
+            FxParticle p = parts[i];
+            double dx = p.x - ex, dy = p.y - ey, dz = p.z - ez;
+            if (dx * dx + dy * dy + dz * dz >= radius * radius) continue;
+            out.merge("fx:" + p.kind + "/" + p.budget + (p.startLuma() < 0.3f ? "/dark" : ""), 1, Integer::sum);
+        }
+    }
+
     /** Live particle count within {@code radius} of a point and cone {@code cos} around a direction (for scenarios). */
     public int near(double ex, double ey, double ez, double lx, double ly, double lz, double radius, double cos) {
         int n = 0;
