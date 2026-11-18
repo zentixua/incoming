@@ -71,13 +71,14 @@ public final class WaterDecal {
     static final float PACK_JITTER = 0.06f;
     @Nullable
     static ShaderInstance shader;
-    private static final double[][] RING = new double[RINGS][4];
+    private static double[][] RING = new double[RINGS][4];
     private static final String[] RING_UNIFORMS = {"Ring0", "Ring1", "Ring2", "Ring3"};
-    private static final ByteBuffer PIXELS = BufferUtils.createByteBuffer(SAMPLES * RINGS * 4);
+    private static ByteBuffer PIXELS = BufferUtils.createByteBuffer(SAMPLES * RINGS * 4);
     private static final Matrix4f INV_PROJ = new Matrix4f(), INV_VIEW = new Matrix4f();
     private static final Vector4f HAZE = new Vector4f();
     private static int count, texture = -1, lastCount;
-    private static boolean wanted, packChecked;
+    private static boolean wanted;
+    private static boolean packChecked;
     /** {@code IrisApi.isShaderPackInUse} (reflection: mod does not depend on Iris); null — no Iris. */
     @Nullable
     private static MethodHandle packInUse;
@@ -234,5 +235,40 @@ public final class WaterDecal {
     /** For the scenario line: water rings in the previous frame. */
     public static String describe() {
         return String.format(Locale.ROOT, "%d ring(s)%s", lastCount, shader == null ? " (no shader)" : "");
+    }
+
+    /** Saved only for secondary views; swapping leaves the primary draw path and operation order unchanged. */
+    public static final class ViewState {
+        private double[][] RING = new double[RINGS][4];
+        private ByteBuffer PIXELS = BufferUtils.createByteBuffer(SAMPLES * RINGS * 4);
+        private int count;
+        private int texture = -1;
+        private int lastCount;
+        private boolean wanted;
+
+        void close() {
+            FxViews.textures(texture);
+        }
+
+        public void swap() {
+            double[][] oldRING = WaterDecal.RING;
+            WaterDecal.RING = RING;
+            RING = oldRING;
+            ByteBuffer oldPIXELS = WaterDecal.PIXELS;
+            WaterDecal.PIXELS = PIXELS;
+            PIXELS = oldPIXELS;
+            int oldcount = WaterDecal.count;
+            WaterDecal.count = count;
+            count = oldcount;
+            int oldtexture = WaterDecal.texture;
+            WaterDecal.texture = texture;
+            texture = oldtexture;
+            int oldlastCount = WaterDecal.lastCount;
+            WaterDecal.lastCount = lastCount;
+            lastCount = oldlastCount;
+            boolean oldwanted = WaterDecal.wanted;
+            WaterDecal.wanted = wanted;
+            wanted = oldwanted;
+        }
     }
 }

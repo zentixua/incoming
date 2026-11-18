@@ -49,18 +49,18 @@ final class HalfPass {
     static ShaderInstance depthShader, composite;
     private static int accum = -1, accumFbo = -1, depth = -1, depthFbo = -1, width, height, ring;
     /** Tile cut textures (a ring: the one written this frame is not one a previous frame may still read). */
-    private static final int[] cuts = {-1, -1, -1}, cutW = new int[3], cutH = new int[3];
+    private static int[] cuts = {-1, -1, -1}, cutW = new int[3], cutH = new int[3];
     private static FloatBuffer cutData = MemoryUtil.memAllocFloat(1);
     /** Clip rectangles of quads split by tile, NDC (texel k % 1024, k / 1024), a ring as the cuts. */
-    private static final int[] rects = {-1, -1, -1}, rectRows = new int[3];
+    private static int[] rects = {-1, -1, -1}, rectRows = new int[3];
     private static FloatBuffer rectData = MemoryUtil.memAllocFloat(4);
     static final int RECT_ROW = 1024;
     private static boolean failed;
-    private static final Plan PLAN = new Plan();
+    private static Plan PLAN = new Plan();
     /** Per sorted quad: may draw at half resolution, and its tiles x0, y0, x1, y1 (inclusive; x0 > x1 — off screen). */
     private static boolean[] soft = new boolean[0];
     private static int[] tiles = new int[0];
-    private static final int[] VIEWPORT = new int[4];
+    private static int[] VIEWPORT = new int[4];
     /** Last frame: quads by kind and lays, for the scenario line. */
     private static int lastLow, lastFull, lastFlushes, lastScene = -1;
     /** This frame drew through the plan (the drain frame's parts follow it). */
@@ -249,6 +249,7 @@ final class HalfPass {
         if (mesh == null) return;
         s.setDefaultUniforms(VertexFormat.Mode.QUADS, RenderSystem.getModelViewMatrix(), RenderSystem.getProjectionMatrix(),
                 Minecraft.getInstance().getWindow());
+        FxViews.screenSize(s);
         s.apply();
         BufferUploader.draw(mesh);
         s.clear();
@@ -525,5 +526,114 @@ final class HalfPass {
     static String describe() {
         return String.format(java.util.Locale.ROOT, "half-resolution smoke %d quads, full %d (a quad over both kinds of tiles counts in each), lays %d",
                 lastLow, lastFull, lastFlushes);
+    }
+
+    /** Saved only for secondary views; swapping leaves the primary draw path and operation order unchanged. */
+    public static final class ViewState {
+        private int accum = -1;
+        private int accumFbo = -1;
+        private int depth = -1;
+        private int depthFbo = -1;
+        private int width;
+        private int height;
+        private int ring;
+        private int[] cuts = {-1, -1, -1};
+        private int[] cutW = new int[3];
+        private int[] cutH = new int[3];
+        private FloatBuffer cutData = MemoryUtil.memAllocFloat(1);
+        private int[] rects = {-1, -1, -1};
+        private int[] rectRows = new int[3];
+        private FloatBuffer rectData = MemoryUtil.memAllocFloat(4);
+        private boolean failed;
+        private Plan PLAN = new Plan();
+        private boolean[] soft = new boolean[0];
+        private int[] tiles = new int[0];
+        private int[] VIEWPORT = new int[4];
+        private int lastLow;
+        private int lastFull;
+        private int lastFlushes;
+        private int lastScene = -1;
+        private boolean planned;
+
+        void close() {
+            FxViews.textures(accum, depth); FxViews.textures(cuts); FxViews.textures(rects);
+            FxViews.framebuffers(accumFbo, depthFbo);
+            org.lwjgl.system.MemoryUtil.memFree(cutData); org.lwjgl.system.MemoryUtil.memFree(rectData);
+        }
+
+        public void swap() {
+            int oldaccum = HalfPass.accum;
+            HalfPass.accum = accum;
+            accum = oldaccum;
+            int oldaccumFbo = HalfPass.accumFbo;
+            HalfPass.accumFbo = accumFbo;
+            accumFbo = oldaccumFbo;
+            int olddepth = HalfPass.depth;
+            HalfPass.depth = depth;
+            depth = olddepth;
+            int olddepthFbo = HalfPass.depthFbo;
+            HalfPass.depthFbo = depthFbo;
+            depthFbo = olddepthFbo;
+            int oldwidth = HalfPass.width;
+            HalfPass.width = width;
+            width = oldwidth;
+            int oldheight = HalfPass.height;
+            HalfPass.height = height;
+            height = oldheight;
+            int oldring = HalfPass.ring;
+            HalfPass.ring = ring;
+            ring = oldring;
+            int[] oldcuts = HalfPass.cuts;
+            HalfPass.cuts = cuts;
+            cuts = oldcuts;
+            int[] oldcutW = HalfPass.cutW;
+            HalfPass.cutW = cutW;
+            cutW = oldcutW;
+            int[] oldcutH = HalfPass.cutH;
+            HalfPass.cutH = cutH;
+            cutH = oldcutH;
+            FloatBuffer oldcutData = HalfPass.cutData;
+            HalfPass.cutData = cutData;
+            cutData = oldcutData;
+            int[] oldrects = HalfPass.rects;
+            HalfPass.rects = rects;
+            rects = oldrects;
+            int[] oldrectRows = HalfPass.rectRows;
+            HalfPass.rectRows = rectRows;
+            rectRows = oldrectRows;
+            FloatBuffer oldrectData = HalfPass.rectData;
+            HalfPass.rectData = rectData;
+            rectData = oldrectData;
+            boolean oldfailed = HalfPass.failed;
+            HalfPass.failed = failed;
+            failed = oldfailed;
+            Plan oldPLAN = HalfPass.PLAN;
+            HalfPass.PLAN = PLAN;
+            PLAN = oldPLAN;
+            boolean[] oldsoft = HalfPass.soft;
+            HalfPass.soft = soft;
+            soft = oldsoft;
+            int[] oldtiles = HalfPass.tiles;
+            HalfPass.tiles = tiles;
+            tiles = oldtiles;
+            int[] oldVIEWPORT = HalfPass.VIEWPORT;
+            HalfPass.VIEWPORT = VIEWPORT;
+            VIEWPORT = oldVIEWPORT;
+            int oldlastLow = HalfPass.lastLow;
+            HalfPass.lastLow = lastLow;
+            lastLow = oldlastLow;
+            int oldlastFull = HalfPass.lastFull;
+            HalfPass.lastFull = lastFull;
+            lastFull = oldlastFull;
+            int oldlastFlushes = HalfPass.lastFlushes;
+            HalfPass.lastFlushes = lastFlushes;
+            lastFlushes = oldlastFlushes;
+            int oldlastScene = HalfPass.lastScene;
+            HalfPass.lastScene = lastScene;
+            lastScene = oldlastScene;
+            boolean oldplanned = HalfPass.planned;
+            HalfPass.planned = planned;
+            planned = oldplanned;
+        }
     }
 }

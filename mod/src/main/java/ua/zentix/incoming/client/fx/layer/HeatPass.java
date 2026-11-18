@@ -613,7 +613,7 @@ public final class HeatPass {
         return mid ? 0.75 + (node ? 0.25 : 0) : node ? 0.25 : 0;
     }
 
-    private static final Frame FRAME = new Frame();
+    private static Frame FRAME = new Frame();
     /** Fire light at eye in last collected frame ({@link Frame#atEye}). */
     private static double lastAtEye;
 
@@ -787,6 +787,7 @@ public final class HeatPass {
         }
         s.setDefaultUniforms(VertexFormat.Mode.QUADS, RenderSystem.getModelViewMatrix(), RenderSystem.getProjectionMatrix(),
                 Minecraft.getInstance().getWindow());
+        FxViews.screenSize(s);
         s.apply();
         com.mojang.blaze3d.vertex.BufferUploader.draw(mesh);
         s.clear();
@@ -916,5 +917,56 @@ public final class HeatPass {
             sb.append(String.format(java.util.Locale.ROOT, " [r %.1f h %.0f dT %.0f px %.2f]", c.w, s.x, g.x, f.hotShift[i]));
         }
         return sb.toString();
+    }
+
+    /** Saved only for secondary views; swapping leaves the primary draw path and operation order unchanged. */
+    public static final class ViewState {
+        private Frame FRAME = new Frame();
+        private double lastAtEye;
+        private int copy = -1;
+        private int copyW;
+        private int copyH;
+        private int shadowTex = -1;
+        private int shadowFbo = -1;
+        private int shadowW;
+        private int shadowH;
+        private boolean shadowFailed;
+
+        void close() {
+            FxViews.textures(copy, shadowTex); FxViews.framebuffers(shadowFbo);
+        }
+
+        public void swap() {
+            Frame oldFRAME = HeatPass.FRAME;
+            HeatPass.FRAME = FRAME;
+            FRAME = oldFRAME;
+            double oldlastAtEye = HeatPass.lastAtEye;
+            HeatPass.lastAtEye = lastAtEye;
+            lastAtEye = oldlastAtEye;
+            int oldcopy = HeatPass.copy;
+            HeatPass.copy = copy;
+            copy = oldcopy;
+            int oldcopyW = HeatPass.copyW;
+            HeatPass.copyW = copyW;
+            copyW = oldcopyW;
+            int oldcopyH = HeatPass.copyH;
+            HeatPass.copyH = copyH;
+            copyH = oldcopyH;
+            int oldshadowTex = HeatPass.shadowTex;
+            HeatPass.shadowTex = shadowTex;
+            shadowTex = oldshadowTex;
+            int oldshadowFbo = HeatPass.shadowFbo;
+            HeatPass.shadowFbo = shadowFbo;
+            shadowFbo = oldshadowFbo;
+            int oldshadowW = HeatPass.shadowW;
+            HeatPass.shadowW = shadowW;
+            shadowW = oldshadowW;
+            int oldshadowH = HeatPass.shadowH;
+            HeatPass.shadowH = shadowH;
+            shadowH = oldshadowH;
+            boolean oldshadowFailed = HeatPass.shadowFailed;
+            HeatPass.shadowFailed = shadowFailed;
+            shadowFailed = oldshadowFailed;
+        }
     }
 }

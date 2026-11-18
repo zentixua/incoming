@@ -116,6 +116,7 @@ public final class FarFlightView {
     private static int owners;
     /** Path traversal tick (unseen paths are forgotten). */
     private static long pass;
+    private static ViewRays viewRays;
     /** Projectiles in flight (far: body and plume; near entity: plume light). */
     private static int active;
     @Nullable
@@ -136,15 +137,15 @@ public final class FarFlightView {
      * vector (shared at segment joints); frame numbers in which end and cross vector were computed.
      */
     private static final int ENDS = HEAD + MAX_NOZZLES;
-    private static final double[] EX = new double[ENDS], EY = new double[ENDS], EZ = new double[ENDS], EH = new double[ENDS];
-    private static final float[] EA = new float[ENDS], ER = new float[ENDS], EG = new float[ENDS], EB = new float[ENDS];
-    private static final float[] NX = new float[ENDS], NY = new float[ENDS], NZ = new float[ENDS];
-    private static final int[] EL = new int[ENDS], DRAWN = new int[ENDS], ACROSS = new int[ENDS];
+    private static double[] EX = new double[ENDS], EY = new double[ENDS], EZ = new double[ENDS], EH = new double[ENDS];
+    private static float[] EA = new float[ENDS], ER = new float[ENDS], EG = new float[ENDS], EB = new float[ENDS];
+    private static float[] NX = new float[ENDS], NY = new float[ENDS], NZ = new float[ENDS];
+    private static int[] EL = new int[ENDS], DRAWN = new int[ENDS], ACROSS = new int[ENDS];
     /** Tube at end: width at half centre opacity and cross-section σ, m; extinction per metre, m; albedo; billow seed. */
-    private static final double[] EW = new double[ENDS], ES = new double[ENDS], EE = new double[ENDS], EO = new double[ENDS];
-    private static final long[] ESEED = new long[ENDS];
+    private static double[] EW = new double[ENDS], ES = new double[ENDS], EE = new double[ENDS], EO = new double[ENDS];
+    private static long[] ESEED = new long[ENDS];
     /** Point's projectile: its trail tube (places in same tube never merge, {@code SmokePuffs.Draw#mergeLevel}). */
-    private static final int[] EOWNER = new int[ENDS];
+    private static int[] EOWNER = new int[ENDS];
     /** Frame look belongs to segments ({@link #segment}). */
     @Nullable
     private static FarView seen;
@@ -182,7 +183,7 @@ public final class FarFlightView {
     // ---------------------------------------------------------------- last-frame summary (describe)
     /** B-2 slot in weapon counts (its bomb has its own weapon). */
     private static final int B2 = WeaponType.values().length, SAM = B2 + 1;
-    private static final int[] COUNT = new int[SAM + 1];
+    private static int[] COUNT = new int[SAM + 1];
     private static int flights, points;
     @Nullable
     private static Far nearest;
@@ -233,6 +234,8 @@ public final class FarFlightView {
          */
         float openPrev = 1, open = 1, openTarget = 1;
         boolean sighted;
+        /** Secondary-only elapsed-tick sampling; the primary keeps its existing staggered tick law. */
+        long viewSight = -SIGHT_PERIOD;
         /** Model uses simplified detail copies (small onscreen; hysteresis prevents threshold flutter). */
         boolean coarse = true;
         /** Launch cloud: jet struck ground (null — did not); whether it does this path tick (then no ribbon points). */
@@ -550,6 +553,10 @@ public final class FarFlightView {
             f.open += Mth.clamp(f.openTarget - f.open, -FADE, FADE);
             return;
         }
+        sightRay(f, eye, world);
+    }
+
+    private static void sightRay(Far f, Vec3 eye, double world) {
         double dx = POS[0] - eye.x, dz = POS[2] - eye.z;
         boolean inWorld = dx * dx + dz * dz <= world * world;
         boolean hidden = heights != null && !inWorld && Sightline.trace(heights, POS[0], POS[1], POS[2], eye.x, eye.y, eye.z).hidden() > HIDDEN;
@@ -562,6 +569,34 @@ public final class FarFlightView {
         f.sighted = true;
         f.vis += Mth.clamp(f.visTarget - f.vis, -FADE, FADE);
         f.open += Mth.clamp(f.openTarget - f.open, -FADE, FADE);
+    }
+
+    /** A feed samples occlusion at its own eye; it does not advance projectile paths. */
+    public static void viewEye(Vec3 eye, double world) {
+        long now = FlightTracks.now();
+        if (FARS.isEmpty() || !viewRays.begin(now)) return;
+        int size = FARS.size(), start = viewRays.cursor % size;
+        for (int i = 0; i < size; i++) {
+            int at = (start + i) % size;
+            Far f = FARS.get(at);
+            f.visPrev = f.vis;
+            f.openPrev = f.open;
+            if (f.track.isDead()) continue;
+            if (!f.track.fromServer() && !hasFlame(f, now - 1)) {
+                f.sighted = false;
+                continue;
+            }
+            // Elapsed ticks, rather than owner parity: a 10 Hz feed can otherwise permanently miss
+            // the odd phases of the primary renderer's four-tick stagger.
+            if (viewRays.trace(now, f.sighted ? f.viewSight : -SIGHT_PERIOD, SIGHT_PERIOD)) {
+                viewRays.cursor = (at + 1) % size;
+                f.viewSight = now;
+                if (f.track.predict(now - 1, POS)) sightRay(f, eye, world);
+            } else {
+                f.vis += Mth.clamp(f.visTarget - f.vis, -FADE, FADE);
+                f.open += Mth.clamp(f.openTarget - f.open, -FADE, FADE);
+            }
+        }
     }
 
     /** Whether projectile has visible burning plume at tick t (at its altitude). */
@@ -751,6 +786,7 @@ public final class FarFlightView {
 
     /** Camera onboard this projectile (first-person view). */
     private static boolean onboard(FlightTrack track) {
+        if (ua.zentix.incoming.client.fx.layer.FxViews.secondary()) return false;
         Minecraft mc = Minecraft.getInstance();
         Entity camera = mc.getCameraEntity();
         return camera != null && mc.options.getCameraType().isFirstPerson() && camera.getUUID().equals(track.id);
@@ -782,8 +818,8 @@ public final class FarFlightView {
      * plume itself.
      */
     private static final int LIT_MAX = 16, LIT_STRIDE = 10;
-    private static final double[] LIT = new double[LIT_MAX * LIT_STRIDE], LIT_W = new double[LIT_MAX];
-    private static final Flame[] LIT_FLAME = new Flame[LIT_MAX];
+    private static double[] LIT = new double[LIT_MAX * LIT_STRIDE], LIT_W = new double[LIT_MAX];
+    private static Flame[] LIT_FLAME = new Flame[LIT_MAX];
     private static int lit;
     /** Light of all frame plumes at eye. */
     private static double litEye;
@@ -1354,5 +1390,197 @@ public final class FarFlightView {
         heights = null;
         for (LaunchCloud c : CLOUDS) c.end();
         CLOUDS.clear();
+    }
+
+    /** Saved only for secondary views; swapping leaves the primary draw path and operation order unchanged. */
+    public static final class ViewState {
+        private final Map<Far, Optics> optics = new IdentityHashMap<>();
+
+        private static final class Optics {
+            float visPrev = 1, vis = 1, visTarget = 1, openPrev = 1, open = 1, openTarget = 1;
+            boolean sighted, coarse = true;
+            long viewSight = -SIGHT_PERIOD;
+            double framePath;
+
+            void swap(Far f) {
+                float vp = f.visPrev; f.visPrev = visPrev; visPrev = vp;
+                float v = f.vis; f.vis = vis; vis = v;
+                float vt = f.visTarget; f.visTarget = visTarget; visTarget = vt;
+                float op = f.openPrev; f.openPrev = openPrev; openPrev = op;
+                float o = f.open; f.open = open; open = o;
+                float ot = f.openTarget; f.openTarget = openTarget; openTarget = ot;
+                boolean s = f.sighted; f.sighted = sighted; sighted = s;
+                long vs = f.viewSight; f.viewSight = viewSight; viewSight = vs;
+                boolean c = f.coarse; f.coarse = coarse; coarse = c;
+                double p = f.framePath; f.framePath = framePath; framePath = p;
+            }
+        }
+        private double[] EX = new double[ENDS];
+        private double[] EY = new double[ENDS];
+        private double[] EZ = new double[ENDS];
+        private double[] EH = new double[ENDS];
+        private double[] EW = new double[ENDS];
+        private double[] ES = new double[ENDS];
+        private double[] EE = new double[ENDS];
+        private double[] EO = new double[ENDS];
+        private float[] EA = new float[ENDS];
+        private float[] ER = new float[ENDS];
+        private float[] EG = new float[ENDS];
+        private float[] EB = new float[ENDS];
+        private float[] NX = new float[ENDS];
+        private float[] NY = new float[ENDS];
+        private float[] NZ = new float[ENDS];
+        private int[] EL = new int[ENDS];
+        private int[] DRAWN = new int[ENDS];
+        private int[] ACROSS = new int[ENDS];
+        private int[] EOWNER = new int[ENDS];
+        private long[] ESEED = new long[ENDS];
+        private ViewRays viewRays = new ViewRays(FarBlasts.TRACES_PER_TICK, 0);
+        private FarView seen;
+        private double stride = 1;
+        private int clubs;
+        private int frame;
+        private int[] COUNT = new int[SAM + 1];
+        private int flights;
+        private int points;
+        private Far nearest;
+        private double nearD;
+        private double nearT;
+        private double nearBody;
+        private double nearBodyAlpha;
+        private double nearFlame;
+        private double nearFlameAlpha;
+        private double nearModel;
+        private boolean nearCoarse;
+        private int flames;
+        private Far flameOf;
+        private double flameD;
+        private double flameShare;
+        private double flameCorePx;
+        private double flameCoreAlpha;
+        private double flameGlarePx;
+        private double flameVeilPx;
+        private double[] LIT = new double[LIT_MAX * LIT_STRIDE];
+        private double[] LIT_W = new double[LIT_MAX];
+        private Flame[] LIT_FLAME = new Flame[LIT_MAX];
+        private int lit;
+        private double litEye;
+        private double flamesAtEye;
+
+        public void swap() {
+            ViewRays oldRays = FarFlightView.viewRays; FarFlightView.viewRays = viewRays; viewRays = oldRays;
+            optics.keySet().removeIf(f -> f.seen != pass);
+            for (Far f : FARS) optics.computeIfAbsent(f, ignored -> new Optics()).swap(f);
+            double[] oldEX = FarFlightView.EX; FarFlightView.EX = EX; EX = oldEX;
+            double[] oldEY = FarFlightView.EY; FarFlightView.EY = EY; EY = oldEY;
+            double[] oldEZ = FarFlightView.EZ; FarFlightView.EZ = EZ; EZ = oldEZ;
+            double[] oldEH = FarFlightView.EH; FarFlightView.EH = EH; EH = oldEH;
+            double[] oldEW = FarFlightView.EW; FarFlightView.EW = EW; EW = oldEW;
+            double[] oldES = FarFlightView.ES; FarFlightView.ES = ES; ES = oldES;
+            double[] oldEE = FarFlightView.EE; FarFlightView.EE = EE; EE = oldEE;
+            double[] oldEO = FarFlightView.EO; FarFlightView.EO = EO; EO = oldEO;
+            float[] oldEA = FarFlightView.EA; FarFlightView.EA = EA; EA = oldEA;
+            float[] oldER = FarFlightView.ER; FarFlightView.ER = ER; ER = oldER;
+            float[] oldEG = FarFlightView.EG; FarFlightView.EG = EG; EG = oldEG;
+            float[] oldEB = FarFlightView.EB; FarFlightView.EB = EB; EB = oldEB;
+            float[] oldNX = FarFlightView.NX; FarFlightView.NX = NX; NX = oldNX;
+            float[] oldNY = FarFlightView.NY; FarFlightView.NY = NY; NY = oldNY;
+            float[] oldNZ = FarFlightView.NZ; FarFlightView.NZ = NZ; NZ = oldNZ;
+            int[] oldEL = FarFlightView.EL; FarFlightView.EL = EL; EL = oldEL;
+            int[] oldDRAWN = FarFlightView.DRAWN; FarFlightView.DRAWN = DRAWN; DRAWN = oldDRAWN;
+            int[] oldACROSS = FarFlightView.ACROSS; FarFlightView.ACROSS = ACROSS; ACROSS = oldACROSS;
+            int[] oldEOWNER = FarFlightView.EOWNER; FarFlightView.EOWNER = EOWNER; EOWNER = oldEOWNER;
+            long[] oldESEED = FarFlightView.ESEED; FarFlightView.ESEED = ESEED; ESEED = oldESEED;
+            FarView oldseen = FarFlightView.seen;
+            FarFlightView.seen = seen;
+            seen = oldseen;
+            double oldstride = FarFlightView.stride;
+            FarFlightView.stride = stride;
+            stride = oldstride;
+            int oldclubs = FarFlightView.clubs;
+            FarFlightView.clubs = clubs;
+            clubs = oldclubs;
+            int oldframe = FarFlightView.frame;
+            FarFlightView.frame = frame;
+            frame = oldframe;
+            int[] oldCOUNT = FarFlightView.COUNT;
+            FarFlightView.COUNT = COUNT;
+            COUNT = oldCOUNT;
+            int oldflights = FarFlightView.flights;
+            FarFlightView.flights = flights;
+            flights = oldflights;
+            int oldpoints = FarFlightView.points;
+            FarFlightView.points = points;
+            points = oldpoints;
+            Far oldnearest = FarFlightView.nearest;
+            FarFlightView.nearest = nearest;
+            nearest = oldnearest;
+            double oldnearD = FarFlightView.nearD;
+            FarFlightView.nearD = nearD;
+            nearD = oldnearD;
+            double oldnearT = FarFlightView.nearT;
+            FarFlightView.nearT = nearT;
+            nearT = oldnearT;
+            double oldnearBody = FarFlightView.nearBody;
+            FarFlightView.nearBody = nearBody;
+            nearBody = oldnearBody;
+            double oldnearBodyAlpha = FarFlightView.nearBodyAlpha;
+            FarFlightView.nearBodyAlpha = nearBodyAlpha;
+            nearBodyAlpha = oldnearBodyAlpha;
+            double oldnearFlame = FarFlightView.nearFlame;
+            FarFlightView.nearFlame = nearFlame;
+            nearFlame = oldnearFlame;
+            double oldnearFlameAlpha = FarFlightView.nearFlameAlpha;
+            FarFlightView.nearFlameAlpha = nearFlameAlpha;
+            nearFlameAlpha = oldnearFlameAlpha;
+            double oldnearModel = FarFlightView.nearModel;
+            FarFlightView.nearModel = nearModel;
+            nearModel = oldnearModel;
+            boolean oldnearCoarse = FarFlightView.nearCoarse;
+            FarFlightView.nearCoarse = nearCoarse;
+            nearCoarse = oldnearCoarse;
+            int oldflames = FarFlightView.flames;
+            FarFlightView.flames = flames;
+            flames = oldflames;
+            Far oldflameOf = FarFlightView.flameOf;
+            FarFlightView.flameOf = flameOf;
+            flameOf = oldflameOf;
+            double oldflameD = FarFlightView.flameD;
+            FarFlightView.flameD = flameD;
+            flameD = oldflameD;
+            double oldflameShare = FarFlightView.flameShare;
+            FarFlightView.flameShare = flameShare;
+            flameShare = oldflameShare;
+            double oldflameCorePx = FarFlightView.flameCorePx;
+            FarFlightView.flameCorePx = flameCorePx;
+            flameCorePx = oldflameCorePx;
+            double oldflameCoreAlpha = FarFlightView.flameCoreAlpha;
+            FarFlightView.flameCoreAlpha = flameCoreAlpha;
+            flameCoreAlpha = oldflameCoreAlpha;
+            double oldflameGlarePx = FarFlightView.flameGlarePx;
+            FarFlightView.flameGlarePx = flameGlarePx;
+            flameGlarePx = oldflameGlarePx;
+            double oldflameVeilPx = FarFlightView.flameVeilPx;
+            FarFlightView.flameVeilPx = flameVeilPx;
+            flameVeilPx = oldflameVeilPx;
+            double[] oldLIT = FarFlightView.LIT;
+            FarFlightView.LIT = LIT;
+            LIT = oldLIT;
+            double[] oldLIT_W = FarFlightView.LIT_W;
+            FarFlightView.LIT_W = LIT_W;
+            LIT_W = oldLIT_W;
+            Flame[] oldLIT_FLAME = FarFlightView.LIT_FLAME;
+            FarFlightView.LIT_FLAME = LIT_FLAME;
+            LIT_FLAME = oldLIT_FLAME;
+            int oldlit = FarFlightView.lit;
+            FarFlightView.lit = lit;
+            lit = oldlit;
+            double oldlitEye = FarFlightView.litEye;
+            FarFlightView.litEye = litEye;
+            litEye = oldlitEye;
+            double oldflamesAtEye = FarFlightView.flamesAtEye;
+            FarFlightView.flamesAtEye = flamesAtEye;
+            flamesAtEye = oldflamesAtEye;
+        }
     }
 }

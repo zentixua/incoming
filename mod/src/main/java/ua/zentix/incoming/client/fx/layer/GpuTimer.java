@@ -26,6 +26,13 @@ final class GpuTimer {
     double lastMean, lastMax;
     int lastFrames;
 
+    void close() {
+        for (int query : queries) if (query > 0) GL15.glDeleteQueries(query);
+        Arrays.fill(queries, 0);
+        Arrays.fill(issued, false);
+        timer = 0;
+    }
+
     private boolean available() {
         if (timer == 0) {
             GLCapabilities caps = GL.getCapabilities();

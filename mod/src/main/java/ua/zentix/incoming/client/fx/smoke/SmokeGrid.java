@@ -257,10 +257,10 @@ public final class SmokeGrid {
     public static final double RESOLVE = 2;
 
     private static final List<Source> SOURCES = new ArrayList<>();
-    private static final SmokePreparation PREPARATION = new SmokePreparation();
+    private static SmokePreparation PREPARATION = new SmokePreparation();
     /** Sources whose clumps entered this frame's grid (quads render others, {@link #quads}). */
-    private static final java.util.Set<Source> IN_GRID = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
-    private static final Frame FRAME = new Frame();
+    private static java.util.Set<Source> IN_GRID = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
+    private static Frame FRAME = new Frame();
     /** Grid clock: unpaused client ticks. */
     private static long ticks;
 
@@ -379,7 +379,7 @@ public final class SmokeGrid {
     }
 
     /** Staged frame clumps: {@link #STAGE} numbers per clump; sources in order and their nearest edge. */
-    private static final double[] STAGE_BLOBS = new double[STAGED * STAGE];
+    private static double[] STAGE_BLOBS = new double[STAGED * STAGE];
     private static int staged;
 
     /** Eye of frame currently being laid out (sources read it in {@link Source#emit}). */
@@ -704,5 +704,52 @@ public final class SmokeGrid {
         v[3 * at + 1] = y;
         v[3 * at + 2] = blob;
         return at + 1;
+    }
+
+    /** Saved only for secondary views; swapping leaves the primary draw path and operation order unchanged. */
+    public static final class ViewState {
+        private SmokePreparation PREPARATION = new SmokePreparation();
+        private java.util.Set<Source> IN_GRID = java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
+        private Frame FRAME = new Frame();
+        private boolean enabled;
+        private boolean drawn = true;
+        private double[] STAGE_BLOBS = new double[STAGED * STAGE];
+        private int staged;
+        private double frameX;
+        private double frameY;
+        private double frameZ;
+
+        public void swap() {
+            SmokePreparation oldPREPARATION = SmokeGrid.PREPARATION;
+            SmokeGrid.PREPARATION = PREPARATION;
+            PREPARATION = oldPREPARATION;
+            java.util.Set<Source> oldIN_GRID = SmokeGrid.IN_GRID;
+            SmokeGrid.IN_GRID = IN_GRID;
+            IN_GRID = oldIN_GRID;
+            Frame oldFRAME = SmokeGrid.FRAME;
+            SmokeGrid.FRAME = FRAME;
+            FRAME = oldFRAME;
+            boolean oldenabled = SmokeGrid.enabled;
+            SmokeGrid.enabled = enabled;
+            enabled = oldenabled;
+            boolean olddrawn = SmokeGrid.drawn;
+            SmokeGrid.drawn = drawn;
+            drawn = olddrawn;
+            double[] oldSTAGE_BLOBS = SmokeGrid.STAGE_BLOBS;
+            SmokeGrid.STAGE_BLOBS = STAGE_BLOBS;
+            STAGE_BLOBS = oldSTAGE_BLOBS;
+            int oldstaged = SmokeGrid.staged;
+            SmokeGrid.staged = staged;
+            staged = oldstaged;
+            double oldframeX = SmokeGrid.frameX;
+            SmokeGrid.frameX = frameX;
+            frameX = oldframeX;
+            double oldframeY = SmokeGrid.frameY;
+            SmokeGrid.frameY = frameY;
+            frameY = oldframeY;
+            double oldframeZ = SmokeGrid.frameZ;
+            SmokeGrid.frameZ = frameZ;
+            frameZ = oldframeZ;
+        }
     }
 }

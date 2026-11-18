@@ -10,6 +10,22 @@ paths:
 # Own particles, effects layer, trails
 
 ## Pitfalls
+- Camera feeds are render invocations, not player frames. `FxViews` remembers the true primary camera/target outside
+  nested rendering: camera mods can replace both Minecraft getters. A secondary scope starts before nuclear fog/light
+  preparation, saves all optical/history/plume state and restores its parent after `AFTER_LEVEL`. Use that invocation's
+  `AFTER_ENTITIES` matrices: Vista restores the outer global matrix before dispatching `AFTER_LEVEL`.
+  Never assume the window or current main-target getter identifies the output. Validate the bound depth texture and
+  viewport; unsupported default, renderbuffer or multisample targets skip Incoming FX with one INFO message, without
+  copy/resolve fallbacks. Override `ScreenSize` after default uniforms at each FX shader bind. Secondary views use
+  world depth only, their own LOW pall history and smoke plan, and never end the primary LOD frame or clear its plumes.
+  Four lazy secondary histories live for five seconds after last use; pin suspended scopes, retire replaced attachments,
+  and skip a fifth live feed instead of repeatedly allocating histories. The primary path retains its storage/order.
+  `NukeLight.prepared`, exposure and fog belong to the view; body flash, hearing, concussion and camera shake belong to
+  the player. A delayed smoke worker must capture its own Draw, never the currently bound view's static job.
+  Secondary visibility rays have per-view tick budgets (16 terrain traces, 8 glowing-ball checks; no catch-up burst).
+  Preserve initializer sentinels too: bloom texture/FBO arrays start at -1, never zero/default framebuffer.
+  Regression fixture: `tools/client_scenario.sh viewfx vista`, `INCOMING_VIEWFX_FEEDS=4` for four TVs, `INCOMING_VIEWFX_STRIKES=100` for raid cost; omit `vista` for
+  the ordinary renderer. Vista/Moonlight are scenario-only runtime mods; no production dependency or camera-mod mixin.
 - Under Iris the first-person hand is in world depth at `AFTER_LEVEL` (Iris draws it inside the world pass with the depth
   range × 0.125, `HandRenderer.DEPTH`), so the layer reads it as world 0.09–0.115 m away; vanilla draws it after the layer.
   The pall skips those pixels (`pallHand`, `PALL_HAND` 0.12 m in `pall.glsl`, `PallHandTest`): resolve writes them invalid

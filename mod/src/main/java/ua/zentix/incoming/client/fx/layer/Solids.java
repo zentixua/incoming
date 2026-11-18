@@ -59,16 +59,16 @@ public final class Solids {
     private static int texture = -1;
     private static ByteBuffer section, zeros, full;
     /** World section whose blocks occupy each slot, and section for which it was zeroed ({@link SectionPos#asLong}). */
-    private static final long[] STORED = new long[ALL], ZEROED = new long[ALL];
+    private static long[] STORED = new long[ALL], ZEROED = new long[ALL];
     /** Section block fingerprint when read ({@link #print}). */
-    private static final long[] PRINT = new long[ALL];
+    private static long[] PRINT = new long[ALL];
     /** “Slot zeroed at texture creation” in {@link #ZEROED}: no need to zero it again. */
     private static final long FRESH = Long.MIN_VALUE + 1;
-    private static final int[] PENDING = new int[ALL];
-    private static final long[] PENDING_KEY = new long[ALL];
+    private static int[] PENDING = new int[ALL];
+    private static long[] PENDING_KEY = new long[ALL];
     /** Read order: squared eye distance (blocks², integer) in high bits, index in low 11 bits. */
-    private static final long[] ORDER = new long[ALL];
-    private static final int[] NEAR_PENDING = new int[ALL];
+    private static long[] ORDER = new long[ALL];
+    private static int[] NEAR_PENDING = new int[ALL];
     private static int refreshAt, nearTurn;
     /** Full opaque block is an occluder (shape without position: full-block shape is position-independent). */
     private static final java.util.function.Predicate<BlockState> SOLID = st -> !st.isAir()
@@ -78,7 +78,7 @@ public final class Solids {
     private static Vec3 eye = Vec3.ZERO;
     private static WeakReference<ClientLevel> world = new WeakReference<>(null);
     /** Sections near this frame's light sources (refreshed every frame). */
-    private static final long[] NEAR = new long[32];
+    private static long[] NEAR = new long[32];
     private static int nears;
 
     private Solids() {}
@@ -210,7 +210,7 @@ public final class Solids {
     static final int BATCH = 128;
     private static int pbo = -1, batched;
     private static ByteBuffer batch;
-    private static final int[] BATCH_AT = new int[BATCH * 3];
+    private static int[] BATCH_AT = new int[BATCH * 3];
 
     /**
      * Add section to a frame upload batch ({@link #flush}): direct memory upload to a texture still read by the previous
@@ -348,5 +348,118 @@ public final class Solids {
         GL12.glTexImage3D(GL12.GL_TEXTURE_3D, 0, GL30.GL_R8, SIZE_XZ, SIZE_Y, SIZE_XZ, 0, GL11.GL_RED, GL11.GL_UNSIGNED_BYTE, blank);
         MemoryUtil.memFree(blank);
         GL11.glBindTexture(GL12.GL_TEXTURE_3D, 0);
+    }
+
+    /** Saved only for secondary views; swapping leaves the primary draw path and operation order unchanged. */
+    public static final class ViewState {
+        private int texture = -1;
+        private ByteBuffer section;
+        private ByteBuffer zeros;
+        private ByteBuffer full;
+        private long[] STORED = new long[ALL];
+        private long[] ZEROED = new long[ALL];
+        private long[] PRINT = new long[ALL];
+        private int[] PENDING = new int[ALL];
+        private long[] PENDING_KEY = new long[ALL];
+        private long[] ORDER = new long[ALL];
+        private int[] NEAR_PENDING = new int[ALL];
+        private int refreshAt;
+        private int nearTurn;
+        private int x0;
+        private int y0;
+        private int z0;
+        private boolean ready;
+        private Vec3 eye = Vec3.ZERO;
+        private WeakReference<ClientLevel> world = new WeakReference<>(null);
+        private long[] NEAR = new long[32];
+        private int nears;
+        private int pbo = -1;
+        private int batched;
+        private ByteBuffer batch;
+        private int[] BATCH_AT = new int[BATCH * 3];
+
+        void close() {
+            FxViews.textures(texture); if (pbo > 0) org.lwjgl.opengl.GL15.glDeleteBuffers(pbo);
+            org.lwjgl.system.MemoryUtil.memFree(section); org.lwjgl.system.MemoryUtil.memFree(zeros);
+            org.lwjgl.system.MemoryUtil.memFree(full); org.lwjgl.system.MemoryUtil.memFree(batch);
+        }
+
+        public void swap() {
+            int oldtexture = Solids.texture;
+            Solids.texture = texture;
+            texture = oldtexture;
+            ByteBuffer oldsection = Solids.section;
+            Solids.section = section;
+            section = oldsection;
+            ByteBuffer oldzeros = Solids.zeros;
+            Solids.zeros = zeros;
+            zeros = oldzeros;
+            ByteBuffer oldfull = Solids.full;
+            Solids.full = full;
+            full = oldfull;
+            long[] oldSTORED = Solids.STORED;
+            Solids.STORED = STORED;
+            STORED = oldSTORED;
+            long[] oldZEROED = Solids.ZEROED;
+            Solids.ZEROED = ZEROED;
+            ZEROED = oldZEROED;
+            long[] oldPRINT = Solids.PRINT;
+            Solids.PRINT = PRINT;
+            PRINT = oldPRINT;
+            int[] oldPENDING = Solids.PENDING;
+            Solids.PENDING = PENDING;
+            PENDING = oldPENDING;
+            long[] oldPENDING_KEY = Solids.PENDING_KEY;
+            Solids.PENDING_KEY = PENDING_KEY;
+            PENDING_KEY = oldPENDING_KEY;
+            long[] oldORDER = Solids.ORDER;
+            Solids.ORDER = ORDER;
+            ORDER = oldORDER;
+            int[] oldNEAR_PENDING = Solids.NEAR_PENDING;
+            Solids.NEAR_PENDING = NEAR_PENDING;
+            NEAR_PENDING = oldNEAR_PENDING;
+            int oldrefreshAt = Solids.refreshAt;
+            Solids.refreshAt = refreshAt;
+            refreshAt = oldrefreshAt;
+            int oldnearTurn = Solids.nearTurn;
+            Solids.nearTurn = nearTurn;
+            nearTurn = oldnearTurn;
+            int oldx0 = Solids.x0;
+            Solids.x0 = x0;
+            x0 = oldx0;
+            int oldy0 = Solids.y0;
+            Solids.y0 = y0;
+            y0 = oldy0;
+            int oldz0 = Solids.z0;
+            Solids.z0 = z0;
+            z0 = oldz0;
+            boolean oldready = Solids.ready;
+            Solids.ready = ready;
+            ready = oldready;
+            Vec3 oldeye = Solids.eye;
+            Solids.eye = eye;
+            eye = oldeye;
+            WeakReference<ClientLevel> oldworld = Solids.world;
+            Solids.world = world;
+            world = oldworld;
+            long[] oldNEAR = Solids.NEAR;
+            Solids.NEAR = NEAR;
+            NEAR = oldNEAR;
+            int oldnears = Solids.nears;
+            Solids.nears = nears;
+            nears = oldnears;
+            int oldpbo = Solids.pbo;
+            Solids.pbo = pbo;
+            pbo = oldpbo;
+            int oldbatched = Solids.batched;
+            Solids.batched = batched;
+            batched = oldbatched;
+            ByteBuffer oldbatch = Solids.batch;
+            Solids.batch = batch;
+            batch = oldbatch;
+            int[] oldBATCH_AT = Solids.BATCH_AT;
+            Solids.BATCH_AT = BATCH_AT;
+            BATCH_AT = oldBATCH_AT;
+        }
     }
 }

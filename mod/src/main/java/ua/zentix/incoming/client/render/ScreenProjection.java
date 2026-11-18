@@ -23,6 +23,7 @@ public final class ScreenProjection {
 
     public static void capture(RenderLevelStageEvent e) {
         if (e.getStage() != RenderLevelStageEvent.Stage.AFTER_SKY) return;
+        if (ua.zentix.incoming.client.fx.layer.FxViews.secondary(e.getCamera())) return;
         PROJ.set(e.getProjectionMatrix());
         VIEW.set(e.getModelViewMatrix());
         VIEW_PROJ.set(PROJ).mul(VIEW);

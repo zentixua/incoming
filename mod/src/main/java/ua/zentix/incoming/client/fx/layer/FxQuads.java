@@ -539,6 +539,7 @@ public final class FxQuads {
         s.safeGetUniform("FxHalf").set(half ? 1f : 0f);
         s.safeGetUniform("FxHalfSplit").set(split, 0f, tile, 0f);
         s.safeGetUniform("FxHalfClip").set(rect >= 0 ? 1f : 0f, row, 0f, 0f);
+        FxViews.screenSize(s);
         s.apply();
         if (rect >= 0) {
             int unit = com.mojang.blaze3d.platform.GlStateManager._getActiveTexture();
@@ -681,6 +682,7 @@ public final class FxQuads {
         vb.bind();
         s.setDefaultUniforms(VertexFormat.Mode.QUADS, com.mojang.blaze3d.systems.RenderSystem.getModelViewMatrix(),
                 com.mojang.blaze3d.systems.RenderSystem.getProjectionMatrix(), net.minecraft.client.Minecraft.getInstance().getWindow());
+        FxViews.screenSize(s);
         s.apply();
         VertexFormat.IndexType type = com.mojang.blaze3d.systems.RenderSystem.getSequentialBuffer(VertexFormat.Mode.QUADS).type();
         org.lwjgl.opengl.GL11.glDrawElements(org.lwjgl.opengl.GL11.GL_TRIANGLES, (n - glowFrom) * 6, type.asGLType, (long) glowFrom * 6 * type.bytes);
@@ -703,6 +705,7 @@ public final class FxQuads {
         vb.bind();
         s.setDefaultUniforms(VertexFormat.Mode.QUADS, com.mojang.blaze3d.systems.RenderSystem.getModelViewMatrix(),
                 com.mojang.blaze3d.systems.RenderSystem.getProjectionMatrix(), net.minecraft.client.Minecraft.getInstance().getWindow());
+        FxViews.screenSize(s);
         s.apply();
         VertexFormat.IndexType type = com.mojang.blaze3d.systems.RenderSystem.getSequentialBuffer(VertexFormat.Mode.QUADS).type();
         clock.start();

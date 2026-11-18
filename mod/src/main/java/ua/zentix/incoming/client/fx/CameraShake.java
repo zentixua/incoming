@@ -258,6 +258,7 @@ public final class CameraShake {
     }
 
     public static void apply(ViewportEvent.ComputeCameraAngles e) {
+        if (ua.zentix.incoming.client.fx.layer.FxViews.secondary(e.getCamera())) return;
         Minecraft mc = Minecraft.getInstance();
         double k = strength(IncomingConfig.CLIENT.cameraShake.get(), mc.options.screenEffectScale().get());
         if (k <= 0 || GROUNDS.isEmpty() && SWAYS.isEmpty() && TREMORS.isEmpty() || mc.isPaused()) return;

@@ -203,6 +203,7 @@ public final class Designator {
 
     public static void renderWorld(RenderLevelStageEvent e) {
         if (e.getStage() != RenderLevelStageEvent.Stage.AFTER_TRANSLUCENT_BLOCKS || pick == null || !isScoping()) return;
+        if (ua.zentix.incoming.client.fx.layer.FxViews.secondary(e.getCamera())) return;
         AABB box = null;
         if (pick.entity() != null) {
             box = pick.entity().getBoundingBox().inflate(0.25);

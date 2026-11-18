@@ -55,7 +55,7 @@ public final class FxLayer {
     private static final FxQuads QUADS = new FxQuads();
     private static final FxLights LIGHTS = new FxLights();
     private static final SourceProbes PROBES = new SourceProbes();
-    private static final FxFrame.Fog FOG = new FxFrame.Fog();
+    private static FxFrame.Fog FOG = new FxFrame.Fog();
     private static final Vector4f HAZE = new Vector4f();
     private static final Matrix4f VIEW_PROJECTION = new Matrix4f(), VIEW = new Matrix4f();
     private static final FrustumIntersection FRUSTUM = new FrustumIntersection();
@@ -87,6 +87,7 @@ public final class FxLayer {
 
     /** Mod bus: layer shaders and scene depth (again on resource reload). */
     public static void registerShaders(RegisterShadersEvent e) {
+        FxViews.clear();
         try {
             e.registerShader(new ShaderInstance(e.getResourceProvider(), Incoming.id("fx"), FxQuads.FORMAT), s -> {
                 shader = s;
@@ -180,9 +181,9 @@ public final class FxLayer {
     }
 
     /** GPU time of the whole layer: water decal, pall, probes, quads. */
-    private static final GpuTimer GPU = new GpuTimer();
+    private static GpuTimer GPU = new GpuTimer();
     /** Heat shimmer and fire light pass ({@link HeatPass}) on the GPU — inside {@link #GPU}. */
-    private static final GpuTimer HEAT = new GpuTimer();
+    private static GpuTimer HEAT = new GpuTimer();
 
     /** Once per client tick (not while paused): the per-second frame time summary. */
     public static void tick() {
@@ -203,6 +204,30 @@ public final class FxLayer {
     }
 
     public static void render(RenderLevelStageEvent e) {
+        if (e.getStage() != RenderLevelStageEvent.Stage.AFTER_ENTITIES && e.getStage() != RenderLevelStageEvent.Stage.AFTER_LEVEL) return;
+        if (FxViews.secondary(e.getCamera())) {
+            if (e.getStage() == RenderLevelStageEvent.Stage.AFTER_ENTITIES) {
+                FxViews.capture(e);
+                if (!FxViews.skipped()) captureFog();
+            } else if (e.getStage() == RenderLevelStageEvent.Stage.AFTER_LEVEL) {
+                FxViews.saveTarget();
+                try {
+                    RenderLevelStageEvent view = FxViews.event(e);
+                    if (view != null) {
+                        if (!ua.zentix.incoming.client.nuclear.ClientNuclear.isEmpty())
+                            ua.zentix.incoming.client.nuclear.NukeRenderer.renderView(view);
+                        draw(view);
+                        ua.zentix.incoming.client.nuclear.NukeRenderer.renderRainView(view);
+                    }
+                    if (!FxViews.skipped()) ua.zentix.incoming.client.render.PlumeRenderer.endFrame();
+                } finally {
+                    FxViews.restoreTarget();
+                    FxViews.end();
+                }
+            }
+            return;
+        }
+        FxViews.resumePrimary();
         // Minecraft itself calls this stage (not the section rendering that Sodium replaces); the fog is already the
         // world's fog
         if (e.getStage() == RenderLevelStageEvent.Stage.AFTER_ENTITIES) {
@@ -236,6 +261,10 @@ public final class FxLayer {
         if (level == null || s == null || atlas < 0) return;
         long start = System.nanoTime(), cpu = cpuNanos(), pauses = pauses();
         FarView sky = FarRenderer.view(e, mc, level);
+        if (FxViews.secondary()) {
+            FarBlasts.viewEye(sky.camera(), sky.partial());
+            ua.zentix.incoming.client.far.FarFlightView.viewEye(sky.camera(), sky.world());
+        }
         // Light of flashes and ordinary-weapon fire on the world, air shimmer over fire and a fireball, and the blast
         // wave front of the nuke (HeatPass, NukeHeat): air is the frame's haze. Fire at the eye, before the frame is
         // collected: the exposure of the whole frame adapts to it (fireballs, puddles, fires, debris — this frame's;
@@ -258,7 +287,7 @@ public final class FxLayer {
         ua.zentix.incoming.client.far.SmokeVisibility.begin(VIEW_PROJECTION);
         QUADS.begin(view.left(), view.up());
         // glow: small glowing things — as spots in the pixels of the glow pass (FxBloom.spots); 0 — no glow
-        QUADS.glowTexel(FxBloom.texel(view.pixel(), mc.getMainRenderTarget().height));
+        QUADS.glowTexel(FxBloom.texel(view.pixel(), FxViews.height(mc.getMainRenderTarget().height)));
         WaterDecal.begin(level, e.getCamera());
         NukeWater.decals(view.partial());
         LIGHTS.begin();
@@ -466,5 +495,84 @@ public final class FxLayer {
         long n = 0;
         for (GarbageCollectorMXBean b : PAUSES) n += Math.max(0, b.getCollectionCount());
         return n;
+    }
+
+    /** Saved only for secondary views; swapping leaves the primary draw path and operation order unchanged. */
+    public static final class ViewState {
+        private FxFrame.Fog FOG = new FxFrame.Fog();
+        private boolean warmed;
+        private long frameNanos;
+        private long frameMax;
+        private long cleanMax;
+        private long cleanCpu;
+        private int frames;
+        private int ticks;
+        private int collected;
+        private int lastQuads;
+        private double lastMean;
+        private double lastMax;
+        private double lastClean;
+        private double lastCleanCpu;
+        private int lastCollected;
+        private GpuTimer GPU = new GpuTimer();
+        private GpuTimer HEAT = new GpuTimer();
+
+        void close() {
+            GPU.close(); HEAT.close();
+        }
+
+        public void swap() {
+            FxFrame.Fog oldFOG = FxLayer.FOG;
+            FxLayer.FOG = FOG;
+            FOG = oldFOG;
+            boolean oldwarmed = FxLayer.warmed;
+            FxLayer.warmed = warmed;
+            warmed = oldwarmed;
+            long oldframeNanos = FxLayer.frameNanos;
+            FxLayer.frameNanos = frameNanos;
+            frameNanos = oldframeNanos;
+            long oldframeMax = FxLayer.frameMax;
+            FxLayer.frameMax = frameMax;
+            frameMax = oldframeMax;
+            long oldcleanMax = FxLayer.cleanMax;
+            FxLayer.cleanMax = cleanMax;
+            cleanMax = oldcleanMax;
+            long oldcleanCpu = FxLayer.cleanCpu;
+            FxLayer.cleanCpu = cleanCpu;
+            cleanCpu = oldcleanCpu;
+            int oldframes = FxLayer.frames;
+            FxLayer.frames = frames;
+            frames = oldframes;
+            int oldticks = FxLayer.ticks;
+            FxLayer.ticks = ticks;
+            ticks = oldticks;
+            int oldcollected = FxLayer.collected;
+            FxLayer.collected = collected;
+            collected = oldcollected;
+            int oldlastQuads = FxLayer.lastQuads;
+            FxLayer.lastQuads = lastQuads;
+            lastQuads = oldlastQuads;
+            double oldlastMean = FxLayer.lastMean;
+            FxLayer.lastMean = lastMean;
+            lastMean = oldlastMean;
+            double oldlastMax = FxLayer.lastMax;
+            FxLayer.lastMax = lastMax;
+            lastMax = oldlastMax;
+            double oldlastClean = FxLayer.lastClean;
+            FxLayer.lastClean = lastClean;
+            lastClean = oldlastClean;
+            double oldlastCleanCpu = FxLayer.lastCleanCpu;
+            FxLayer.lastCleanCpu = lastCleanCpu;
+            lastCleanCpu = oldlastCleanCpu;
+            int oldlastCollected = FxLayer.lastCollected;
+            FxLayer.lastCollected = lastCollected;
+            lastCollected = oldlastCollected;
+            GpuTimer oldGPU = FxLayer.GPU;
+            FxLayer.GPU = GPU;
+            GPU = oldGPU;
+            GpuTimer oldHEAT = FxLayer.HEAT;
+            FxLayer.HEAT = HEAT;
+            HEAT = oldHEAT;
+        }
     }
 }

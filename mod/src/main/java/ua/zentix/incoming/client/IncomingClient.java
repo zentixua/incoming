@@ -231,6 +231,7 @@ public final class IncomingClient {
     }
 
     private static void tick(ClientTickEvent.Post e) {
+        ua.zentix.incoming.client.fx.layer.FxViews.resumePrimary();
         Minecraft mc = Minecraft.getInstance();
         if (mc.level == null) return;
         while (Keys.MENU.consumeClick()) mc.setScreen(new RemoteScreen());
@@ -277,6 +278,7 @@ public final class IncomingClient {
      * recording position; nuclear detonations retain their age ({@link ClientNuclear#rewound}).
      */
     private static void rewound() {
+        ua.zentix.incoming.client.fx.layer.FxViews.clear();
         ClientSounds.reset();
         FlightTracks.reset();
         FarRenderer.reset();
@@ -311,6 +313,7 @@ public final class IncomingClient {
      * thread ({@link ClientNuclear#warm}: dust wall and pall).
      */
     private static void login(ClientPlayerNetworkEvent.LoggingIn e) {
+        ua.zentix.incoming.client.fx.layer.FxViews.anchor();
         PallPass.prepare();
         VoxyIngest.login();
         if (!nukeWarmed) {
@@ -328,6 +331,7 @@ public final class IncomingClient {
 
     /** Everything the client holds about the world: sounds, tracks, effects, the nuke, map; world exit (and devtest effects sandbox). */
     public static void resetSession() {
+        ua.zentix.incoming.client.fx.layer.FxViews.clear();
         VoxyIngest.reset();
         ua.zentix.incoming.client.fx.BlastTime.reset();
         ClientSounds.reset();

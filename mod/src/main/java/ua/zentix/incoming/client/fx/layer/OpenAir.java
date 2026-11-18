@@ -60,10 +60,10 @@ public final class OpenAir {
     /** Window contents as uploaded from the light engine (RG per voxel, texture layout): the moving-light overlay restores from it. */
     private static byte[] mirror;
     /** Voxels with block light above 0 in each slot (debug line), and their sum. */
-    private static final int[] LIT = new int[SX * SY * SX];
+    private static int[] LIT = new int[SX * SY * SX];
     private static int lit;
     /** World section in each window slot ({@link SectionPos#asLong}); {@link Long#MIN_VALUE} — none. */
-    private static final long[] STORED = new long[SX * SY * SX];
+    private static long[] STORED = new long[SX * SY * SX];
     private static int refreshAt;
     /** Lower world window corner (blocks), and whether this frame has a window. */
     private static int x0, y0, z0;
@@ -294,5 +294,68 @@ public final class OpenAir {
         GL12.glTexImage3D(GL12.GL_TEXTURE_3D, 0, GL30.GL_RG8, SIZE_XZ, SIZE_Y, SIZE_XZ, 0, GL30.GL_RG, GL11.GL_UNSIGNED_BYTE, (ByteBuffer) null);
         GL11.glBindTexture(GL12.GL_TEXTURE_3D, 0);
         return true;
+    }
+
+    /** Saved only for secondary views; swapping leaves the primary draw path and operation order unchanged. */
+    public static final class ViewState {
+        private int texture = -1;
+        private ByteBuffer section;
+        private byte[] mirror;
+        private int[] LIT = new int[SX * SY * SX];
+        private int lit;
+        private long[] STORED = new long[SX * SY * SX];
+        private int refreshAt;
+        private int x0;
+        private int y0;
+        private int z0;
+        private boolean ready;
+        private Vec3 eye = Vec3.ZERO;
+        private WeakReference<ClientLevel> world = new WeakReference<>(null);
+
+        void close() {
+            FxViews.textures(texture); org.lwjgl.system.MemoryUtil.memFree(section);
+        }
+
+        public void swap() {
+            int oldtexture = OpenAir.texture;
+            OpenAir.texture = texture;
+            texture = oldtexture;
+            ByteBuffer oldsection = OpenAir.section;
+            OpenAir.section = section;
+            section = oldsection;
+            byte[] oldmirror = OpenAir.mirror;
+            OpenAir.mirror = mirror;
+            mirror = oldmirror;
+            int[] oldLIT = OpenAir.LIT;
+            OpenAir.LIT = LIT;
+            LIT = oldLIT;
+            int oldlit = OpenAir.lit;
+            OpenAir.lit = lit;
+            lit = oldlit;
+            long[] oldSTORED = OpenAir.STORED;
+            OpenAir.STORED = STORED;
+            STORED = oldSTORED;
+            int oldrefreshAt = OpenAir.refreshAt;
+            OpenAir.refreshAt = refreshAt;
+            refreshAt = oldrefreshAt;
+            int oldx0 = OpenAir.x0;
+            OpenAir.x0 = x0;
+            x0 = oldx0;
+            int oldy0 = OpenAir.y0;
+            OpenAir.y0 = y0;
+            y0 = oldy0;
+            int oldz0 = OpenAir.z0;
+            OpenAir.z0 = z0;
+            z0 = oldz0;
+            boolean oldready = OpenAir.ready;
+            OpenAir.ready = ready;
+            ready = oldready;
+            Vec3 oldeye = OpenAir.eye;
+            OpenAir.eye = eye;
+            eye = oldeye;
+            WeakReference<ClientLevel> oldworld = OpenAir.world;
+            OpenAir.world = world;
+            world = oldworld;
+        }
     }
 }

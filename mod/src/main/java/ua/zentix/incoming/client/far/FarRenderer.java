@@ -25,7 +25,7 @@ import java.util.Arrays;
 public final class FarRenderer {
     private static final FarSprites SPRITES = new FarSprites();
     /** Billows, dots, lights, ribbons and models in last frame (scenario line). */
-    private static final int[] LAST_FRAME = new int[6];
+    private static int[] LAST_FRAME = new int[6];
 
     private static boolean smokePlanner;
 
@@ -43,7 +43,7 @@ public final class FarRenderer {
      */
     public static void collect(FarView view, FxQuads out, FxLights lights, SourceProbes probes) {
         // smoke plans off the client thread (-Dincoming.smoke.inline=true: on it, as before, for comparison)
-        if (!smokePlanner) {
+        if (!smokePlanner && !ua.zentix.incoming.client.fx.layer.FxViews.secondary()) {
             smokePlanner = true;
             if (!Boolean.getBoolean("incoming.smoke.inline")) SmokePuffs.planner(SmokePuffs.worker());
         }
@@ -88,8 +88,8 @@ public final class FarRenderer {
         Camera camera = e.getCamera();
         float partial = e.getPartialTick().getGameTimeDeltaPartialTick(false);
         // projection: m11 = 1 / tan(fovY / 2) — vertical pixel angle
-        double pixel = 2 / (e.getProjectionMatrix().m11() * Math.max(1, mc.getWindow().getHeight()));
-        double edge = Math.atan(0.5 * pixel * Math.hypot(mc.getWindow().getWidth(), mc.getWindow().getHeight()));
+        double pixel = 2 / (e.getProjectionMatrix().m11() * Math.max(1, ua.zentix.incoming.client.fx.layer.FxViews.height(mc.getWindow().getHeight())));
+        double edge = Math.atan(0.5 * pixel * Math.hypot(ua.zentix.incoming.client.fx.layer.FxViews.width(mc.getWindow().getWidth()), ua.zentix.incoming.client.fx.layer.FxViews.height(mc.getWindow().getHeight())));
         float ambient = FarView.ambient(level, partial);
         double exposure = FarView.exposure(level, partial);
         Vec3 eye = FarDraw.eye(e);
@@ -101,7 +101,7 @@ public final class FarRenderer {
         basis[1].set(camera.getLeftVector());
         basis[2].set(camera.getUpVector());
         return new FarView(eye, basis[0], basis[1], basis[2], partial,
-                FarView.depthFar(), pixel, edge, ambient, exposure, FarView.sky(mc.gameRenderer.lightTexture(), level, partial, new org.joml.Vector3f()), range, mc.options.getEffectiveRenderDistance() * 16.0,
+                FarView.depthFar(), pixel, edge, ambient, exposure, FarView.sky(mc.gameRenderer.lightTexture(), level, partial, new org.joml.Vector3f()), range, ua.zentix.incoming.client.fx.layer.FxViews.world(mc.options.getEffectiveRenderDistance() * 16.0),
                 level.effects().getCloudHeight(), level.getRainLevel(partial), Sight.Air.at(eye.y - WaterDecal.SEA_LEVEL, range));
     }
 
@@ -145,5 +145,20 @@ public final class FarRenderer {
                 "fill %.2f screens (budget %.0f, one club per gaussian %.2f, before merging %.2f), cluster share %.2f, merge level %d, veil gaussians %d, clusters %d, plan %.2f ms off-thread",
                 SmokePuffs.lastFill(), SmokePuffs.FILL_BUDGET, SmokePuffs.lastFloor(), SmokePuffs.lastRaw(), SmokePuffs.lastShare(),
                 SmokePuffs.lastLevel(), SmokePuffs.lastVeils(), SmokePuffs.lastItems(), SmokePuffs.lastPlanMillis());
+    }
+
+    /** Saved only for secondary views; swapping leaves the primary draw path and operation order unchanged. */
+    public static final class ViewState {
+        private int[] LAST_FRAME = new int[6];
+        private boolean smokePlanner;
+
+        public void swap() {
+            int[] oldLAST_FRAME = FarRenderer.LAST_FRAME;
+            FarRenderer.LAST_FRAME = LAST_FRAME;
+            LAST_FRAME = oldLAST_FRAME;
+            boolean oldsmokePlanner = FarRenderer.smokePlanner;
+            FarRenderer.smokePlanner = smokePlanner;
+            smokePlanner = oldsmokePlanner;
+        }
     }
 }

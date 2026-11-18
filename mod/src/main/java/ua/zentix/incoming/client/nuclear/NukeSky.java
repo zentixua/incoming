@@ -55,6 +55,8 @@ public final class NukeSky {
     }
 
     public static void fogColor(ViewportEvent.ComputeFogColor e) {
+        if (ua.zentix.incoming.client.fx.layer.FxViews.skipped()) return;
+        float rain = viewRain(e.getCamera().getPosition(), (float) e.getPartialTick());
         if (ClientNuclear.isEmpty() && rain <= 0) return;
         float partial = (float) e.getPartialTick();
         float r = e.getRed(), g = e.getGreen(), b = e.getBlue();
@@ -82,7 +84,7 @@ public final class NukeSky {
         r = Mth.lerp(rain * 0.75f, r, 0.2f);
         g = Mth.lerp(rain * 0.75f, g, 0.19f);
         b = Mth.lerp(rain * 0.75f, b, 0.17f);
-        float white = NukeFlash.whiteness(partial);
+        float white = ua.zentix.incoming.client.fx.layer.FxViews.secondary() ? 0 : NukeFlash.whiteness(partial);
         r = Mth.lerp(white, r, 1f);
         g = Mth.lerp(white, g, 0.97f);
         b = Mth.lerp(white, b, 0.9f);
@@ -91,8 +93,19 @@ public final class NukeSky {
         e.setBlue(b);
     }
 
+    static float viewRain(Vec3 eye, float partial) {
+        if (!ua.zentix.incoming.client.fx.layer.FxViews.secondary()) return rain;
+        ClientLevel level = Minecraft.getInstance().level;
+        if (level != null && Detonation.underOpenSky(level, eye))
+            for (ClientNuclear.Active active : ClientNuclear.detonations())
+                if (active.d.blackRainAt(eye.x, eye.z, active.clockSeconds(partial))) return 1;
+        return 0;
+    }
+
     /** Visibility in black rain is 40–60 blocks. */
     public static void fog(ViewportEvent.RenderFog e) {
+        if (ua.zentix.incoming.client.fx.layer.FxViews.skipped()) return;
+        float rain = viewRain(e.getCamera().getPosition(), (float) e.getPartialTick());
         if (rain <= 0) return;
         float far = Mth.lerp(rain, e.getFarPlaneDistance(), Math.min(e.getFarPlaneDistance(), 48));
         e.setFarPlaneDistance(far);

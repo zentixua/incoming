@@ -25,6 +25,7 @@ import ua.zentix.incoming.client.far.FarSprites;
 import ua.zentix.incoming.client.far.FarView;
 import ua.zentix.incoming.client.far.Sight;
 import ua.zentix.incoming.client.fx.layer.FxLights;
+import ua.zentix.incoming.client.fx.layer.FxViews;
 import ua.zentix.incoming.client.render.FarDraw;
 import ua.zentix.incoming.net.S2C;
 import ua.zentix.incoming.nuclear.Detonation;
@@ -80,6 +81,12 @@ public final class NukeRenderer {
 
     public static void render(RenderLevelStageEvent e) {
         if (e.getStage() != RenderLevelStageEvent.Stage.AFTER_LEVEL || ClientNuclear.isEmpty()) return;
+        if (FxViews.secondary(e.getCamera())) return;
+        renderView(e);
+    }
+
+    /** Called inside a secondary scope with that invocation's captured matrices. */
+    public static void renderView(RenderLevelStageEvent e) {
         Minecraft mc = Minecraft.getInstance();
         ClientLevel level = mc.level;
         if (level == null) return;
@@ -99,12 +106,29 @@ public final class NukeRenderer {
     /** Black rain after the effects layer: drops right at the camera are closer than any smoke. */
     public static void renderRain(RenderLevelStageEvent e) {
         if (e.getStage() != RenderLevelStageEvent.Stage.AFTER_LEVEL || NukeSky.blackRain() <= 0) return;
+        if (FxViews.secondary(e.getCamera())) return;
         ClientLevel level = Minecraft.getInstance().level;
         if (level == null) return;
         Vec3 eye = FarDraw.eye(e);
         FarDraw.begin(e, eye);
         try {
             drawBlackRain(level, eye, e.getPartialTick().getGameTimeDeltaPartialTick(false));
+        } finally {
+            FarDraw.end();
+        }
+    }
+
+    /** Secondary rain samples the camera's location before its scope is restored. */
+    public static void renderRainView(RenderLevelStageEvent e) {
+        ClientLevel level = Minecraft.getInstance().level;
+        if (level == null) return;
+        Vec3 eye = FarDraw.eye(e);
+        float partial = e.getPartialTick().getGameTimeDeltaPartialTick(false);
+        float rain = NukeSky.viewRain(eye, partial);
+        if (rain <= 0) return;
+        FarDraw.begin(e, eye);
+        try {
+            drawBlackRain(level, eye, partial, rain);
         } finally {
             FarDraw.end();
         }
@@ -151,7 +175,7 @@ public final class NukeRenderer {
             lights.add(dx, dy, dz, r, surface, Math.min(1, Math.pow(surface, 1 / 2.2)), lr, lg, lb);
             // glare follows how the frame sees the surface: with ball exposure set by it through the air (mushAt in fx_pall), and overexposure
             double body = BALL[3] * adapt * air;
-            double exposed = (film * body * NukeExposure.gain(body, adapt) + (1 - film) * seen) * NukeFlash.overexposure(a, view.partial());
+            double exposed = (film * body * NukeExposure.gain(body, adapt) + (1 - film) * seen) * (FxViews.secondary() ? 1 : NukeFlash.overexposure(a, view.partial()));
             if (NukeLight.camera(a).seen() && seen > Sight.THRESHOLD) out.eyeLight(dx, dy, dz, r, exposed, view.pixel(), cr, cg, cb, shown, GLARE);
         }
     }
@@ -223,7 +247,10 @@ public final class NukeRenderer {
 
     /** Dark heavy drops around the player in the fallout plume: like vanilla rain, but separate and local. */
     private static void drawBlackRain(ClientLevel level, Vec3 cam, float partial) {
-        float k = NukeSky.blackRain();
+        drawBlackRain(level, cam, partial, NukeSky.blackRain());
+    }
+
+    private static void drawBlackRain(ClientLevel level, Vec3 cam, float partial, float k) {
         if (k <= 0) return;
         int cx = Mth.floor(cam.x), cz = Mth.floor(cam.z);
         int radius = 10;

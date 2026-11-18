@@ -32,6 +32,7 @@ configurations {
     // effects sandbox mods (copyRuntimeMods_scenario with INCOMING_SANDBOX)
     sandboxMods { transitive = false }
     lssGameTestMods { transitive = false }
+    viewFxMods { transitive = false }
 }
 
 repositories {
@@ -101,6 +102,8 @@ neoForge {
             if (System.getenv('INCOMING_MP_PORT')) systemProperty 'incoming.mp.port', System.getenv('INCOMING_MP_PORT')
             // scenario mode (all, launch, nuke, fx, models…) — the list is in tools/client_scenario.sh
             systemProperty 'incoming.scenario', System.getenv('INCOMING_SCENARIO') ?: 'all'
+            if (System.getenv('INCOMING_VIEWFX_STRIKES')) systemProperty 'incoming.viewfx.strikes', System.getenv('INCOMING_VIEWFX_STRIKES')
+            if (System.getenv('INCOMING_VIEWFX_FEEDS')) systemProperty 'incoming.viewfx.feeds', System.getenv('INCOMING_VIEWFX_FEEDS')
             // strike profile in the cloud without prod_client.py: steps and interval — as --prop
             // incoming.profile.steps/gap
             if (System.getenv('INCOMING_PROFILE_STEPS')) systemProperty 'incoming.profile.steps', System.getenv('INCOMING_PROFILE_STEPS')
@@ -265,6 +268,11 @@ dependencies {
 
     sandboxMods "dev.ryanhcode.sable-companion:sable-companion-common-${minecraft_version}:${sable_companion_version}"
 
+    if (System.getenv('INCOMING_VISTA')) {
+        viewFxMods 'maven.modrinth:zuARv1N7:WphbaJfQ' // Vista 5.6.9, scenario only
+        viewFxMods 'maven.modrinth:twkfQtEc:yBea1yLM' // Moonlight 3.8.3, scenario only
+    }
+
     testImplementation platform('org.junit:junit-bom:5.10.2')
     testImplementation 'org.junit.jupiter:junit-jupiter'
     testImplementation 'org.mockito:mockito-core:5.14.2'
@@ -373,6 +381,7 @@ def copyRuntimeMods = { String runDir ->
         // sandbox — without Create and Sable (starts in seconds); sable-companion is not embedded in dev — its jar sits
         // next to it
         if (sandbox && runDir == 'scenario') from(configurations.sandboxMods)
+        if (runDir == 'scenario') from(configurations.viewFxMods)
         if (runDir == 'gametest' && project.hasProperty('withLss')) from(configurations.lssGameTestMods)
         def patterns = runDir == 'scenario' ? (sandbox ? [] : runtimeModPatterns) + shaderModPatterns + dhModPatterns + voxyModPatterns + lssModPatterns
                 : runDir in ['gametest', 'scenario-sweep', 'scenario-record'] ? runtimeModPatterns + lithiumModPatterns : runtimeModPatterns
@@ -380,7 +389,7 @@ def copyRuntimeMods = { String runDir ->
         // each-closure an include would go to the task root and would filter out the sandbox jar as well
         if (patterns) from(mcModsDir, { CopySpec spec -> spec.include(patterns) } as Action<CopySpec>)
         into({ "${runDir == 'scenario' ? scenarioDir : project.findProperty(runDir + 'Dir') ?: 'run/' + runDir}/mods" })
-        onlyIf { sandbox && runDir == 'scenario' || mcModsDir.isDirectory() }
+        onlyIf { (sandbox || System.getenv('INCOMING_VISTA')) && runDir == 'scenario' || mcModsDir.isDirectory() }
     }
 }
 ['client', 'server', 'gametest', 'scenario', 'scenario-sweep', 'scenario-record'].each { copyRuntimeMods(it) }

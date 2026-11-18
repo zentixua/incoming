@@ -96,7 +96,10 @@ if [ "${1:-all}" = guide ]; then
 fi
 export INCOMING_SCENARIO="${1:-all}"
 MC="$(python3 "$ROOT/tools/paths.py" MC)"
-unset INCOMING_SHADERS INCOMING_DH INCOMING_VOXY INCOMING_LSS
+# viewfx uses the disposable sandbox's flat world. Add "vista" to test actual TV feeds;
+# without it the same scenario checks the ordinary renderer. INCOMING_VIEWFX_FEEDS=4 exercises the cache bound.
+if [ "$INCOMING_SCENARIO" = viewfx ]; then export INCOMING_SANDBOX=1; fi
+unset INCOMING_SHADERS INCOMING_DH INCOMING_VOXY INCOMING_LSS INCOMING_VISTA
 for opt in "${@:2}"; do
   case "$opt" in
     shaders)
@@ -107,12 +110,13 @@ for opt in "${@:2}"; do
       cp -r "$MC/shaderpacks/$PACK" "$RUN/shaderpacks/"
       printf 'enableShaders=true\nshaderPack=%s\ndisableUpdateMessage=true\n' "$PACK" > "$RUN/config/iris.properties"
       ;;
+    vista) export INCOMING_VISTA=1 ;;
     dh) export INCOMING_DH=1 ;;
     voxy) export INCOMING_VOXY=1 ;;
     lss) export INCOMING_LSS=1 ;;
-    *) echo "unknown parameter: $opt (there are shaders, dh, voxy, lss)" >&2; exit 2 ;;
+    *) echo "unknown parameter: $opt (there are shaders, dh, voxy, lss, vista)" >&2; exit 2 ;;
   esac
 done
 export JAVA_HOME="${JAVA_HOME:-$HOME/.var/app/org.prismlauncher.PrismLauncher/data/PrismLauncher/java/java-runtime-delta}"
 cd "$ROOT/mod"
-exec "$ROOT/tools/nested_kwin.sh" wayland-incoming-scenario 1280 720 "$ROOT/mod/gradlew runClientScenario --console=plain"
+exec "$ROOT/tools/nested_kwin.sh" wayland-incoming-scenario 1280 720 "$ROOT/mod/gradlew runClientScenario -PscenarioDir=run/scenario --console=plain"

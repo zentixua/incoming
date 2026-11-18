@@ -33,7 +33,7 @@ import ua.zentix.incoming.client.fx.smoke.SmokeGrid;
  * ({@link SmokeGrid.Sink#tube}: the fire's trail) — like a projectile's trail ({@link FarFlightView#line},
  * {@link #tube}).
  */
-final class SmokePuffs {
+public final class SmokePuffs {
     /**
      * Where puffs, veils and ribbons go as squares (frame of the layer — {@link FarSprites}; checks — their own sink).
      */
@@ -465,7 +465,7 @@ final class SmokePuffs {
      */
     private static Draw fill = new Draw(), job = new Draw();
     /** Client thread only: the replayed plan's veil, merged and laid at the current eye. */
-    private static final Draw VEIL = new Draw();
+    private static Draw VEIL = new Draw();
     /**
      * The plan being made off the client thread, and the last completed one (drawn every frame until the next
      * completes).
@@ -481,12 +481,6 @@ final class SmokePuffs {
     private static Out lastOut;
     /** Longest wait for the previous plan; past it the frame draws the plan before it and skips its own. */
     static final long WAIT_NANOS = 3_000_000;
-    private static final Runnable JOB = () -> {
-        long start = System.nanoTime();
-        job.flush();
-        job.record.nanos = System.nanoTime() - start;
-        job.record.complete = true;
-    };
     private static final SmokeGrid.Look[] LOOKS = SmokeGrid.Look.values();
 
     private SmokePuffs() {}
@@ -604,7 +598,7 @@ final class SmokePuffs {
         fill.forget();
         fill.veilClear();
         running = true;
-        p.start(JOB);
+        p.start(job.task);
     }
 
     /**
@@ -1166,6 +1160,12 @@ final class SmokePuffs {
 
     /** Sink of one source's puffs: puffs — as squares. */
     private static final class Draw implements SmokeGrid.Sink {
+        private final Runnable task = () -> {
+            long start = System.nanoTime();
+            flush();
+            this.record.nanos = System.nanoTime() - start;
+            this.record.complete = true;
+        };
         private final double[] point = new double[2];
         FarView view;
         Out out;
@@ -3603,5 +3603,100 @@ final class SmokePuffs {
     private static double smoothstep(double a, double b, double x) {
         double t = Math.max(0, Math.min(1, (x - a) / (b - a)));
         return t * t * (3 - 2 * t);
+    }
+
+    /** Saved only for secondary views; swapping leaves the primary draw path and operation order unchanged. */
+    public static final class ViewState {
+        private Draw fill = new Draw();
+        private Draw job = new Draw();
+        private Draw VEIL = new Draw();
+        private Recording planned = new Recording();
+        private Recording shown = new Recording();
+        private Planner planner;
+        private boolean running;
+        private FarView lastView;
+        private Out lastOut;
+        private double lastFill;
+        private double lastShare = 1;
+        private double lastFloor;
+        private double lastRaw;
+        private double lastPlaceMatter;
+        private int lastLevel;
+        private int lastVeils;
+        private int lastItems;
+        private int lastBlobs;
+        private int lastPlaces;
+        private int lastRefused;
+        private int lastReused;
+        private long lastPlanNanos;
+
+        public void swap() {
+            Draw oldfill = SmokePuffs.fill;
+            SmokePuffs.fill = fill;
+            fill = oldfill;
+            Draw oldjob = SmokePuffs.job;
+            SmokePuffs.job = job;
+            job = oldjob;
+            Draw oldVEIL = SmokePuffs.VEIL;
+            SmokePuffs.VEIL = VEIL;
+            VEIL = oldVEIL;
+            Recording oldplanned = SmokePuffs.planned;
+            SmokePuffs.planned = planned;
+            planned = oldplanned;
+            Recording oldshown = SmokePuffs.shown;
+            SmokePuffs.shown = shown;
+            shown = oldshown;
+            Planner oldplanner = SmokePuffs.planner;
+            SmokePuffs.planner = planner;
+            planner = oldplanner;
+            boolean oldrunning = SmokePuffs.running;
+            SmokePuffs.running = running;
+            running = oldrunning;
+            FarView oldlastView = SmokePuffs.lastView;
+            SmokePuffs.lastView = lastView;
+            lastView = oldlastView;
+            Out oldlastOut = SmokePuffs.lastOut;
+            SmokePuffs.lastOut = lastOut;
+            lastOut = oldlastOut;
+            double oldlastFill = SmokePuffs.lastFill;
+            SmokePuffs.lastFill = lastFill;
+            lastFill = oldlastFill;
+            double oldlastShare = SmokePuffs.lastShare;
+            SmokePuffs.lastShare = lastShare;
+            lastShare = oldlastShare;
+            double oldlastFloor = SmokePuffs.lastFloor;
+            SmokePuffs.lastFloor = lastFloor;
+            lastFloor = oldlastFloor;
+            double oldlastRaw = SmokePuffs.lastRaw;
+            SmokePuffs.lastRaw = lastRaw;
+            lastRaw = oldlastRaw;
+            double oldlastPlaceMatter = SmokePuffs.lastPlaceMatter;
+            SmokePuffs.lastPlaceMatter = lastPlaceMatter;
+            lastPlaceMatter = oldlastPlaceMatter;
+            int oldlastLevel = SmokePuffs.lastLevel;
+            SmokePuffs.lastLevel = lastLevel;
+            lastLevel = oldlastLevel;
+            int oldlastVeils = SmokePuffs.lastVeils;
+            SmokePuffs.lastVeils = lastVeils;
+            lastVeils = oldlastVeils;
+            int oldlastItems = SmokePuffs.lastItems;
+            SmokePuffs.lastItems = lastItems;
+            lastItems = oldlastItems;
+            int oldlastBlobs = SmokePuffs.lastBlobs;
+            SmokePuffs.lastBlobs = lastBlobs;
+            lastBlobs = oldlastBlobs;
+            int oldlastPlaces = SmokePuffs.lastPlaces;
+            SmokePuffs.lastPlaces = lastPlaces;
+            lastPlaces = oldlastPlaces;
+            int oldlastRefused = SmokePuffs.lastRefused;
+            SmokePuffs.lastRefused = lastRefused;
+            lastRefused = oldlastRefused;
+            int oldlastReused = SmokePuffs.lastReused;
+            SmokePuffs.lastReused = lastReused;
+            lastReused = oldlastReused;
+            long oldlastPlanNanos = SmokePuffs.lastPlanNanos;
+            SmokePuffs.lastPlanNanos = lastPlanNanos;
+            lastPlanNanos = oldlastPlanNanos;
+        }
     }
 }

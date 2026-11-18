@@ -42,13 +42,13 @@ public final class SceneDepth {
      * Two distance textures, this frame's and the previous one ({@link #previous}): the pall accumulation checks that history it
      * reprojects came from the same place ({@code fx_pall_resolve}).
      */
-    private static final int[] FBOS = {-1, -1}, TEXTURES = {-1, -1};
+    private static int[] FBOS = {-1, -1}, TEXTURES = {-1, -1};
     private static int fbo = -1, texture = -1, width, height, current;
     /** The other texture holds the frame before this one: the last two updates both succeeded at this size. */
     private static boolean previousValid, lastOk;
-    private static final LodDepth.View LOD = new LodDepth.View();
-    private static final Matrix4f INVERSE = new Matrix4f();
-    private static final int[] VIEWPORT = new int[4];
+    private static LodDepth.View LOD = new LodDepth.View();
+    private static Matrix4f INVERSE = new Matrix4f();
+    private static int[] VIEWPORT = new int[4];
     /** Last frame's layer occlusion: 0 — none, 1 — world, 2 — world and LOD. */
     private static int last;
     /** Explicit readback diagnostics ({@code -Dincoming.nukeDiag=true}): distance columns and LOD coverage. */
@@ -65,21 +65,22 @@ public final class SceneDepth {
     static int update(Matrix4f projection) {
         ShaderInstance s = shader;
         RenderTarget main = Minecraft.getInstance().getMainRenderTarget();
-        int depth = main.getDepthTextureId();
+        int depth = FxViews.depth(main.getDepthTextureId());
+        int w = FxViews.width(main.width), h = FxViews.height(main.height);
         last = 0;
         boolean was = lastOk;
         lastOk = false;
         previousValid = false;
         if (s == null || depth <= 0) return -1;
-        boolean sized = FBOS[0] >= 0 && main.width == width && main.height == height;
-        if (!ensure(main.width, main.height)) return -1;
+        boolean sized = FBOS[0] >= 0 && w == width && h == height;
+        if (!ensure(w, h)) return -1;
         current = 1 - current;
         fbo = FBOS[current];
         texture = TEXTURES[current];
         previousValid = was && sized;
         int previous = GlStateManager._getInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
         GL11.glGetIntegerv(GL11.GL_VIEWPORT, VIEWPORT);
-        boolean lod = LodDepth.current(LOD);
+        boolean lod = !FxViews.secondary() && LodDepth.current(LOD);
         GlStateManager._glBindFramebuffer(GlConst.GL_FRAMEBUFFER, fbo);
         RenderSystem.viewport(0, 0, width, height);
         RenderSystem.disableDepthTest();
@@ -303,5 +304,72 @@ public final class SceneDepth {
         boolean ok = GlStateManager.glCheckFramebufferStatus(GlConst.GL_FRAMEBUFFER) == GlConst.GL_FRAMEBUFFER_COMPLETE;
         GlStateManager._glBindFramebuffer(GlConst.GL_FRAMEBUFFER, previous);
         return ok;
+    }
+
+    /** Saved only for secondary views; swapping leaves the primary draw path and operation order unchanged. */
+    public static final class ViewState {
+        private int[] FBOS = {-1, -1};
+        private int[] TEXTURES = {-1, -1};
+        private int fbo = -1;
+        private int texture = -1;
+        private int width;
+        private int height;
+        private int current;
+        private boolean previousValid;
+        private boolean lastOk;
+        private LodDepth.View LOD = new LodDepth.View();
+        private Matrix4f INVERSE = new Matrix4f();
+        private int[] VIEWPORT = new int[4];
+        private int last;
+        private long nextDiag;
+
+        void close() {
+            FxViews.textures(TEXTURES); FxViews.framebuffers(FBOS);
+        }
+
+        public void swap() {
+            int[] oldFBOS = SceneDepth.FBOS;
+            SceneDepth.FBOS = FBOS;
+            FBOS = oldFBOS;
+            int[] oldTEXTURES = SceneDepth.TEXTURES;
+            SceneDepth.TEXTURES = TEXTURES;
+            TEXTURES = oldTEXTURES;
+            int oldfbo = SceneDepth.fbo;
+            SceneDepth.fbo = fbo;
+            fbo = oldfbo;
+            int oldtexture = SceneDepth.texture;
+            SceneDepth.texture = texture;
+            texture = oldtexture;
+            int oldwidth = SceneDepth.width;
+            SceneDepth.width = width;
+            width = oldwidth;
+            int oldheight = SceneDepth.height;
+            SceneDepth.height = height;
+            height = oldheight;
+            int oldcurrent = SceneDepth.current;
+            SceneDepth.current = current;
+            current = oldcurrent;
+            boolean oldpreviousValid = SceneDepth.previousValid;
+            SceneDepth.previousValid = previousValid;
+            previousValid = oldpreviousValid;
+            boolean oldlastOk = SceneDepth.lastOk;
+            SceneDepth.lastOk = lastOk;
+            lastOk = oldlastOk;
+            LodDepth.View oldLOD = SceneDepth.LOD;
+            SceneDepth.LOD = LOD;
+            LOD = oldLOD;
+            Matrix4f oldINVERSE = SceneDepth.INVERSE;
+            SceneDepth.INVERSE = INVERSE;
+            INVERSE = oldINVERSE;
+            int[] oldVIEWPORT = SceneDepth.VIEWPORT;
+            SceneDepth.VIEWPORT = VIEWPORT;
+            VIEWPORT = oldVIEWPORT;
+            int oldlast = SceneDepth.last;
+            SceneDepth.last = last;
+            last = oldlast;
+            long oldnextDiag = SceneDepth.nextDiag;
+            SceneDepth.nextDiag = nextDiag;
+            nextDiag = oldnextDiag;
+        }
     }
 }
