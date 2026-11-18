@@ -78,8 +78,10 @@ public final class ThermalShadow {
     }
 
     /**
-     * Middle of the fireball's extent above the ground, on its axis: where a near block ray aims (a wall at the eye
-     * hides the whole ball).
+     * Middle of the fireball's extent above the ground, on its axis: where light comes from for a face's or slope's
+     * incidence and a body's silhouette, and where a near block ray aims (a wall at the eye hides the whole ball). For
+     * a surface burst the burst point lies on the ground: light from it grazed every upward face, and top faces 4.8 km
+     * from 1 Mt got none, while the ball's middle stands 700 m up (8° above the horizon there).
      */
     public static Vec3 aim(Detonation d) {
         double r = Math.max(d.fireballRadius(), 1), lo = Math.max(d.groundY(), d.burst().y - r), hi = d.burst().y + r;
@@ -93,14 +95,41 @@ public final class ThermalShadow {
 
     /** Terrain line from {@link #SAMPLES} heightmap samples spread evenly between the point and the ball axis. */
     static double sparseLine(Detonation d, Vec3 point, java.util.function.IntBinaryOperator height) {
-        if (covered(point, height)) return COVERED;
-        double dx = d.burst().x - point.x, dz = d.burst().z - point.z, reach = Math.sqrt(dx * dx + dz * dz);
+        return covered(point, height) ? COVERED : sparseFrom(d, point, point, height);
+    }
+
+    /**
+     * Terrain line seen from {@code eye}: {@link #SAMPLES} columns spread evenly between {@code start} (a point on the
+     * eye's ray, already known clear up to it) and the ball axis, each projected from the eye. Projecting them from
+     * {@code start} instead gives another viewpoint's horizon: a ridge 70 blocks from an eye 500 blocks from a 15 kt
+     * surface burst hid the whole ball from a point 48 blocks ahead while 16 % of it was visible from the eye.
+     */
+    static double sparseFrom(Detonation d, Vec3 eye, Vec3 start, java.util.function.IntBinaryOperator height) {
+        double reach = Math.hypot(d.burst().x - eye.x, d.burst().z - eye.z);
+        double dx = d.burst().x - start.x, dz = d.burst().z - start.z;
         double line = OPEN;
         if (reach < 1e-6) return line;
         for (int i = 1; i <= SAMPLES; i++) {
-            double f = i / (SAMPLES + 1.0);
-            int h = height.applyAsInt(Mth.floor(point.x + dx * f), Mth.floor(point.z + dz * f));
-            line = Math.max(line, clearance(point, f * reach, reach, h));
+            double f = i / (SAMPLES + 1.0), x = start.x + dx * f, z = start.z + dz * f, along = Math.hypot(x - eye.x, z - eye.z);
+            if (along < 1e-6 || along >= reach) continue;
+            line = Math.max(line, clearance(eye, along, reach, height.applyAsInt(Mth.floor(x), Mth.floor(z))));
+        }
+        return line;
+    }
+
+    /**
+     * Terrain line seen from an entity's eye ({@code NuclearWarhead.seenShare}): columns every {@code step} blocks along
+     * the eye's ray from {@code near} to {@code until} (ready chunks, nearby ridges the sparse samples would skip), then
+     * {@link #SAMPLES} columns from {@code near} to the ball axis; all projected from the eye.
+     */
+    public static double eyeLine(Detonation d, Vec3 eye, Vec3 near, Vec3 until, double step, java.util.function.IntBinaryOperator height) {
+        double reach = Math.hypot(d.burst().x - eye.x, d.burst().z - eye.z), line = sparseFrom(d, eye, near, height);
+        Vec3 span = until.subtract(near);
+        for (double s = step, n = span.length(); s < n; s += step) {
+            Vec3 p = near.add(span.scale(s / n));
+            double along = Math.hypot(p.x - eye.x, p.z - eye.z);
+            if (along < 1e-6 || along >= reach) continue;
+            line = Math.max(line, clearance(eye, along, reach, height.applyAsInt(Mth.floor(p.x), Mth.floor(p.z))));
         }
         return line;
     }

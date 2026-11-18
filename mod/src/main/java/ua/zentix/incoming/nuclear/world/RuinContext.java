@@ -146,22 +146,17 @@ final class RuinContext {
     }
 
     /**
-     * Snapshots for chunk flash layer (server thread): chunk plus fully in-memory neighbors (edge face scorch
-     * checks neighbor; absent means exposed face), from detonation ruin cache, later reused for ruins. Chunk in memory.
+     * Snapshots for chunk flash layer (server thread): the ruins' own window ({@link #grid}: radius-{@link RuinPlanner#REACH}
+     * square, neighbors outside memory from disk via {@link #requestWindow} first), so the layer sees the same light,
+     * shadow and covered faces as the ruins that later replace it. A 3×3 in-memory window let a wall in the second
+     * neighbor shadow the ruins but not the layer: the layer burned turf the ruins kept (12 cal/cm² from 15 kt, review
+     * of #664), and ruins do not undo layer changes outside their own positions. Window finished in this tick.
      */
     Grid flashGrid(ServerLevel level, ChunkPos centre, boolean background) {
-        ChunkShot[] g = new ChunkShot[Grid.SIDE * Grid.SIDE];
-        for (int dz = -1; dz <= 1; dz++) {
-            for (int dx = -1; dx <= 1; dx++) {
-                if (level.getChunkSource().getChunkNow(centre.x + dx, centre.z + dz) == null) continue;
-                g[(dz + Grid.R) * Grid.SIDE + dx + Grid.R] = shot(level, centre.x + dx, centre.z + dz);
-            }
-        }
-        int[] shadow = shadow(level, centre, g);
-        RuinPlanner.ensureOwnStates();
-        Blast.PropsView view = background ? Blast.publish() : Blast.SERVER;
-        return new Grid(this, centre, level.getMinBuildHeight(), level.getMaxBuildHeight(), g, shadow, view,
-                IncomingConfig.SERVER.nukeBlockDamage.get(), IncomingConfig.SERVER.nukeTreeFall.get(), IncomingConfig.SERVER.nukeFires.get());
+        Grid g = grid(level, centre, background);
+        // the grid holds its snapshots now; a ruin plan of the same chunk requests the window again
+        pendingWindows.remove(centre.toLong());
+        return g;
     }
 
     /**

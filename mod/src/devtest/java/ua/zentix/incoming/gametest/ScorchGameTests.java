@@ -367,16 +367,29 @@ public final class ScorchGameTests {
                 for (int dz = -RuinPlanner.REACH; dz <= RuinPlanner.REACH; dz++) level.getChunk(c.getPos().x + dx, c.getPos().z + dz);
             }
         }
+        // a stone wall 8 high along the side of C (two chunks from A toward the burst: in A's ruin window, beyond its
+        // first ring) that faces A, shading part of A. The layer and the ruins must see it alike: with a 3×3 layer
+        // window the layer burned turf the ruins keep (review of #664), so A after the wave differed from ruins alone
+        RuinPlan openA = RuinPlanner.planFresh(level, d, a, false);
+        ChunkPos wall = inside.get(0).getPos();
+        int wallX = g.getX() > a.getPos().getMiddleBlockX() ? wall.getMinBlockX() : wall.getMaxBlockX();
+        for (int z = wall.getMinBlockZ(); z <= wall.getMaxBlockZ(); z++) {
+            for (int y = g.getY(); y < g.getY() + 8; y++) level.setBlock(new BlockPos(wallX, y, z), Blocks.STONE.defaultBlockState(), Block.UPDATE_CLIENTS);
+        }
         // the world before the outbreak: what ruins alone would have made it (from scratch, your own ruins of an explosion)
-        LevelChunkSection[] expectA = RuinPlanner.planFresh(level, d, a, false).testAppliedCopy(level, a);
+        RuinPlan walledA = RuinPlanner.planFresh(level, d, a, false);
+        h.assertTrue(openA.differs(walledA) != null, "the wall in A's window does not shade A: the layer and ruins check means nothing");
+        LevelChunkSection[] expectA = walledA.testAppliedCopy(level, a);
         LevelChunkSection[] expectB = RuinPlanner.planFresh(level, d, b, false).testAppliedCopy(level, b);
         RuinPlan preparedB = RuinPlanner.plan(level, d, b);
         long[] keys = inside.stream().mapToLong(c -> c.getPos().toLong()).toArray();
         FlashScorch flash = FlashScorch.forTest(d, keys, new ColumnScar.Budget(true));
         WorkClock clock = WorkClock.counting(1_000_000L);
         long waveA = ScarQueue.due(d, a.getPos()), waveB = ScarQueue.due(d, b.getPos());
-        String setup = String.format(Locale.ROOT, "scale %.4f, light for A %.1f, for B %.1f cal/cm², pressure for A %.2f, for B %.2f psi; impulse %.2f tick, layer A on %d, wave at A %d, at B %d",
-                sHi, d.fluence(midA), d.fluence(midB), d.psi(midA), d.psi(midB), d.pulseTicks(), flashAt - d.gameTime(), waveA - d.gameTime(), waveB - d.gameTime());
+        String setup = String.format(Locale.ROOT, "scale %.4f, light for A %.1f, for B %.1f cal/cm², pressure for A %.2f, for B %.2f psi; impulse %.2f tick, layer A on %d, wave at A %d, at B %d; "
+                        + "A changed blocks in the open %d, behind the wall %d",
+                sHi, d.fluence(midA), d.fluence(midB), d.psi(midA), d.psi(midB), d.pulseTicks(), flashAt - d.gameTime(), waveA - d.gameTime(), waveB - d.gameTime(),
+                openA.changedBlocks(), walledA.changedBlocks());
         h.assertTrue(Math.abs(d.fluence(midA) - 15) < 0.5, "the light on the A is not the same: " + setup);
         h.assertTrue(flashAt < waveA, "the wave of A is before the layer - the check means nothing: " + setup);
         ScarQueue q = new ScarQueue();

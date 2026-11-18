@@ -154,9 +154,11 @@ public final class FlashShadows {
         if (!FlashChar.possible(fluence, FlashChar.CHARS)) return;
         // body itself in shadow casts none
         if (!ThermalShadow.visible(level, d, c) && !ThermalShadow.visible(level, d, c.add(0, body.height / 2, 0))) return;
-        Vec3 away = c.subtract(d.burst()).normalize();
+        // light and its penumbra come from the fireball's middle, not the burst point (on the ground for a surface burst)
+        Vec3 ball = ThermalShadow.aim(d);
+        Vec3 away = c.subtract(ball).normalize();
         double radius = PENUMBRA * d.fireballRadius();
-        Vec3[] sources = sources(d.burst(), away, radius);
+        Vec3[] sources = sources(ball, away, radius);
         // candidates: faces reached by rays from body points away from fireball and their coplanar neighbors
         java.util.Set<FaceAt> candidates = new java.util.LinkedHashSet<>();
         for (int i = 0; i < 3; i++) {
@@ -182,9 +184,9 @@ public final class FlashShadows {
             if (material == FlashChar.NONE) continue;
             m.setWithOffset(pos, face);
             if (open(level, m) == null) continue;
-            int level0 = level(level, pos, face, material);
+            int level0 = level(level, pos, face, material, ball);
             if (level0 == 0) continue;
-            long[] mask = mask(body, pos, face, d.burst(), sources, radius);
+            long[] mask = mask(body, pos, face, ball, sources, radius);
             if (mask == null) continue;
             int mark = FlashChar.mark(FlashChar.key(pos.getX() & 15, pos.getY(), pos.getZ() & 15, face), level0, FlashChar.hash(st.getBlock()));
             long chunkKey = ChunkPos.asLong(pos.getX() >> 4, pos.getZ() >> 4);
@@ -199,8 +201,8 @@ public final class FlashShadows {
     record FaceAt(BlockPos pos, Direction face) {}
 
     /** Face scorch tier as for ruin plan ({@code FlashFaces}); shadow by pre-wave world heightmaps. */
-    private int level(ServerLevel level, BlockPos pos, Direction face, int material) {
-        double cos = FlashChar.incidence(d.burst(), pos.getX(), pos.getY(), pos.getZ(), face);
+    private int level(ServerLevel level, BlockPos pos, Direction face, int material, Vec3 ball) {
+        double cos = FlashChar.incidence(ball, pos.getX(), pos.getY(), pos.getZ(), face);
         if (cos <= 0) return 0;
         Vec3 at = FlashChar.front(pos.getX(), pos.getY(), pos.getZ(), face);
         double q = d.fluence(at) * cos;

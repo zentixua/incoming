@@ -203,7 +203,10 @@ paths:
   detonation-wide height map in a plan: what it holds depends on which chunks happened to be loaded or read, and
   “absent = world bottom” lit chunks ruined beside a player while settlement, with every nearer chunk read, shadowed
   the rest (1 Mt over the Silo map 16.11.2026: burned turf in 63 % vs 14 % of chunks at 4.5–5 km; GameTest
-  `lightTraceIgnoresTerrainBeyondThePlanWindow`, unit `ThermalShadowTest`).
+  `lightTraceIgnoresTerrainBeyondThePlanWindow`, unit `ThermalShadowTest`). The flash layer uses the same window.
+  Light direction for face and slope incidence and body silhouettes is `ThermalShadow.aim` (the ball's middle),
+  never the burst point. A body's terrain line (`NuclearWarhead.seenShare` → `ThermalShadow.eyeLine`) projects every
+  sample from the eye: projected from the near-ray end, a ridge 70 blocks out hid a ball 16 % visible from the eye.
 - Flash scorch on faces (`FlashFaces`, DESIGN-nuke §3.7) is added in plan completion (`RuinPlanner.finish`, background):
   surviving material blocks (`Blast.Props.flash`: `FlashChar` material and block hash from the properties table), open
   faces toward the sphere; a face under a full original-world neighbor (`Props.full`, neighboring chunk via window)
@@ -229,7 +232,10 @@ paths:
   `FlashScorch.reach` (ground trace, ignition threshold, face scorch at sphere height) and ruin-queue radius
   (`ScarQueue.inRange`, by ground, like `reach`: only ruins enable layer-fire ticks): player-visible first, by player
   distance (`SEEN` priority and `ScarQueue.SEEN_BUSY_NANOS`), others by epicenter distance; then one unit per chunk
-  builds a 3×3 window from detonation ruin snapshots (`RuinContext.flashGrid`) and a background layer
+  builds the ruins' own 5×5 window (`RuinContext.flashGrid` = `grid`: neighbors outside memory read from disk first
+  via `requestWindow`, the chunk waits in `FlashScorch.reading`; a 3×3 layer window let a wall in the second ring shadow
+  the ruins but not the layer, which burned turf the ruins keep — GameTest `flashScorchesBeforeTheWaveAndRuinsMatch`
+  has that wall) and a background layer
   (`RuinPlanner.flash`: same `land` without pressure — no turf stripping or rubble; all light-ignited fires,
   from `ThermalModel.ignite(yield)` with chance `min(1, q/igniteAll)`, with wave-blown fires marked — position roll not below chance × `BLOWN_KEEP` at ≥ 2 psi —
   `RuinPlan.blown`; biomes; `FlashFaces`); one unit per ready layer writes like ruins (`RuinPlan.applyFlash`: directly

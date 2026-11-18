@@ -13,7 +13,7 @@ import ua.zentix.incoming.nuclear.model.WorldNoise;
 /**
  * Flash-charred chunk faces for ruin plan (any thread, like {@link RuinPlanner#finish}): faces of blocks tagged
  * {@code incoming:nuke_chars}/{@code nuke_soots} that survive ruins, are exposed (no full block ahead of face
- * in pre-wave world), and see fireball (shadow from detonation heightmaps, {@link RuinContext.Grid#sees}). Face light is
+ * in pre-wave world), and see fireball (visible share from the plan window's pre-wave heights, {@link RuinContext.Grid#share}). Face light is
  * pulse at center × incidence cosine; tier from {@link FlashChar#level} with face randomness.
  * Reads no world: blocks from window snapshots, material and block hash from property table ({@link Blast.Props#flash}).
  */
@@ -26,7 +26,8 @@ final class FlashFaces {
     /** Face marks ({@link FlashChar#mark}), at most {@link FlashMarks#MAX_CHARS} darkest. */
     static int[] chars(RuinContext.Grid g, RuinPlanner.Sections s) {
         Detonation d = g.ctx().d;
-        Vec3 burst = d.burst();
+        // light comes from the fireball's middle, not the burst point (on the ground for a surface burst)
+        Vec3 burst = ThermalShadow.aim(d);
         ChunkShot shot = g.at(0, 0);
         int x0 = shot.x << 4, z0 = shot.z << 4;
         // brightest point is chunk point nearest fireball: if no face can darken even there, chunk is clean

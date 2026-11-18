@@ -309,6 +309,8 @@ public final class FlashAftermath {
             double area = 0.5 * sector * (r1 * r1 - r0 * r0) / SMOKE_PROBES;
             double now = SmokeGrid.seconds(0);
             BlockPos.MutableBlockPos m = new BlockPos.MutableBlockPos();
+            // light comes from the fireball, not the burst point (a surface burst's point lies on the ground)
+            Vec3 ball = ThermalShadow.aim(d);
             for (int k = 0; k < SMOKE_PER_TICK && probed < SMOKE_PROBES; k++, probed++) {
                 double a = yaw + (rnd.nextDouble() - 0.5) * sector, r = Math.sqrt(r0 * r0 + rnd.nextDouble() * (r1 * r1 - r0 * r0));
                 int x = Mth.floor(cam.x - Math.sin(a) * r), z = Mth.floor(cam.z + Math.cos(a) * r);
@@ -328,7 +330,7 @@ public final class FlashAftermath {
                 if (!burns(st, face)) continue;
                 BlockState ahead = level.getBlockState(m.move(face));
                 if (!ahead.isAir() && !ahead.canBeReplaced()) continue;
-                double cos = FlashChar.incidence(d.burst(), x, y, z, face);
+                double cos = FlashChar.incidence(ball, x, y, z, face);
                 if (cos <= 0) continue;
                 Vec3 at = FlashChar.front(x, y, z, face);
                 double q = d.fluence(at) * cos;

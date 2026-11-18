@@ -215,16 +215,8 @@ public final class NuclearWarhead {
         // sparse ThermalShadow points for a distant eye miss nearby terrain (ridge a hundred meters away with fireball
         // 30 km away): from ray end to NEAR_TERRAIN, heightmap every TERRAIN_STEP blocks while chunks ready
         Vec3 until = Terrain.readyUntil(level, near, eye.add(dir.scale(Math.min(1, NEAR_TERRAIN / Math.max(len, 1e-3)))));
-        Vec3 span = until.subtract(near);
-        double reach = Math.hypot(d.burst().x - eye.x, d.burst().z - eye.z), line = ThermalShadow.sparseLine(level, d, near);
-        for (double s = TERRAIN_STEP, n = span.length(); s < n; s += TERRAIN_STEP) {
-            Vec3 p = near.add(span.scale(s / n));
-            double along = Math.hypot(p.x - eye.x, p.z - eye.z);
-            if (along < 1e-6 || along >= reach) continue;
-            line = Math.max(line, ThermalShadow.clearance(eye, along, reach,
-                    Terrain.height(level, Heightmap.Types.MOTION_BLOCKING, Mth.floor(p.x), Mth.floor(p.z))));
-        }
-        return ThermalShadow.share(d, line);
+        return ThermalShadow.share(d, ThermalShadow.eyeLine(d, eye, near, until, TERRAIN_STEP,
+                (x, z) -> Terrain.height(level, Heightmap.Types.MOTION_BLOCKING, x, z)));
     }
 
     /** Range where prompt-radiation dose falls to {@code rem}, m (bisection of monotonic model). */

@@ -392,10 +392,13 @@ first air) along the horizontal projection of the ray from the block top to the 
 lowest axis height seen past every sample. The visible share is the ball's vertical extent above that line, smoothed
 (`ThermalShadow.discShare`, the client's law for distant balls and puffs); exposure is fluence × share. A point below
 its own column's top (a floor under a roof, ground under a glass column) sees nothing: heightmap columns are solid
-from below. Live world:
-16 samples on the ray. Ruin plans (`RuinContext.Grid.shadowLine`): every block on the ray inside the plan's own 5×5
-chunk window, pre-wave heights of exactly the chunks its blocks come from, so in-memory, disk, prepared and settled
-plans agree. Before 18.11.2026 the source was the burst point, on the ground for a surface burst, and a chunk absent
+from below. Face and slope incidence and body silhouettes take the light direction from the ball's middle
+(`ThermalShadow.aim`; 697 m up at 1 Mt surface): from the burst point on the ground every top face 4.8 km out got
+none and every slope facing the burst the ×2.5 cap. Bodies: a block ray to the ball's middle for 48 blocks, then
+terrain samples, all projected from the eye. Live world:
+16 samples on the ray. Ruin plans and the flash layer (`RuinContext.Grid.shadowLine`): every block on the ray inside
+the plan's own 5×5 chunk window, pre-wave heights of exactly the chunks its blocks come from (the flash layer reads
+neighbors outside memory from disk first), so the flash layer and in-memory, disk, prepared and settled plans agree. Before 18.11.2026 the source was the burst point, on the ground for a surface burst, and a chunk absent
 from the detonation's height map counted as the world bottom: 1 Mt over the Silo map (16.11.2026) left burned turf in
 63 % of chunks within 320 m of the player at 4.5–5 km and 14 % elsewhere; with every chunk known, 0.2–14 % of ground
 columns saw the burst point at 0.5–6 km.

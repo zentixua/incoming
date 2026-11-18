@@ -416,6 +416,8 @@ public final class RuinPlanner {
         WorldNoise noise = g.ctx().noise;
         boolean blockDamage = g.blockDamage() && !flash, fires = g.fires();
         int x0 = s.chunkX << 4, z0 = s.chunkZ << 4;
+        // slopes face the fireball's middle, not the burst point (on the ground for a surface burst)
+        Vec3 ball = ThermalShadow.aim(d);
         double[] heat = new double[256];
         // landed entries by the column where they come to rest (repose), in landing order; a pile stands only on open
         // ground (pile stops at the first standing block, the fireball takes nothing): a chest never rolls where it is lost
@@ -436,7 +438,7 @@ public final class RuinPlanner {
             double groundPsi = d.psi(new Vec3(x + 0.5, ground + 1, z + 0.5));
             boolean inFireball = inFireball(d, x, ground, z);
             double lit = g.lit(new BlockPos(x, ground, z));
-            double q = lit > 0 ? lit * incidence(groundOf, lx, lz, ground, x, z, d.burst()) * edge(x, z, d.burst(), g.ctx().ruinRadius) : 0;
+            double q = lit > 0 ? lit * incidence(groundOf, lx, lz, ground, x, z, ball) * edge(x, z, d.burst(), g.ctx().ruinRadius) : 0;
             heat[column] = inFireball ? lit : q;
             // collapse leaves its material at any pressure (house falls even below 5 psi); nothing in fireball
             if (blockDamage && !inFireball && debris != null) pile(s, lx, ground, lz, debris, order, from[column], from[column + 1]);
@@ -489,7 +491,9 @@ public final class RuinPlanner {
     }
 
     /**
-     * Ground-light factor relative to same flat ground: flux through area is cosine between
+     * Ground-light factor relative to same flat ground, light from {@code burst} — the fireball's middle
+     * ({@link ThermalShadow#aim}): from the burst point of a surface burst every ray grazed, so any slope facing it got the
+     * full ×2.5 and every slope facing away none: flux through area is cosine between
      * ray and normal (blast-facing slope burns more, opposite less, steeper than ray shadowed with penumbra of
      * {@link #LOW_SUN} rad: fireball not point); burn thresholds defined for flat ground. Normal from post-ruin chunk ground;
      * height difference capped at block per block (wall, rubble, trunk not slopes). Flat ground exactly 1 at any
