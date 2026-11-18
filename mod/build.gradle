@@ -102,6 +102,8 @@ neoForge {
             if (System.getenv('INCOMING_MP_PORT')) systemProperty 'incoming.mp.port', System.getenv('INCOMING_MP_PORT')
             // scenario mode (all, launch, nuke, fx, models…) — the list is in tools/client_scenario.sh
             systemProperty 'incoming.scenario', System.getenv('INCOMING_SCENARIO') ?: 'all'
+            // nuclear DIAG lines (NukeDiag: counts and logs only)
+            if (System.getenv('INCOMING_NUKE_DIAG')) systemProperty 'incoming.nukeDiag', 'true'
             if (System.getenv('INCOMING_VIEWFX_STRIKES')) systemProperty 'incoming.viewfx.strikes', System.getenv('INCOMING_VIEWFX_STRIKES')
             if (System.getenv('INCOMING_VIEWFX_FEEDS')) systemProperty 'incoming.viewfx.feeds', System.getenv('INCOMING_VIEWFX_FEEDS')
             // strike profile in the cloud without prod_client.py: steps and interval — as --prop

@@ -413,11 +413,20 @@ public final class ClientScenario {
             LocalPlayer p = mc.player;
             int x = (int) Math.floor(p.getX()), z = (int) Math.floor(p.getZ());
             int ground = mc.level.getHeight(Heightmap.Types.MOTION_BLOCKING, x, z);
-            // observation deck over the surrounding hills; target - 2 km to the north (−Z)
-            int y = Math.max(ground, 170);
-            cmd(String.format(java.util.Locale.ROOT, "fill %d %d %d %d %d %d minecraft:stone_bricks", x - 1, y + 29, z - 1, x + 1, y + 29, z + 1));
-            cmd(String.format(java.util.Locale.ROOT, "tp @s %d.5 %d %d.5 180 -8", x, y + 30, z));
-            deck = new BlockPos(x, y + 30, z);
+            if (NUKE_GROUND) {
+                // on the ground among grass and trees (INCOMING_NUKE_GROUND=1): where the flash lights fires around the player
+                BlockPos spot = grassAndTrees(new BlockPos(x, 0, z));
+                cmd(String.format(java.util.Locale.ROOT, "tp @s %d.5 %d %d.5 180 -4", spot.getX(), spot.getY(), spot.getZ()));
+                deck = spot;
+                x = spot.getX();
+                z = spot.getZ();
+            } else {
+                // observation deck over the surrounding hills; target - 2 km to the north (−Z)
+                int y = Math.max(ground, 170);
+                cmd(String.format(java.util.Locale.ROOT, "fill %d %d %d %d %d %d minecraft:stone_bricks", x - 1, y + 29, z - 1, x + 1, y + 29, z + 1));
+                cmd(String.format(java.util.Locale.ROOT, "tp @s %d.5 %d %d.5 180 -8", x, y + 30, z));
+                deck = new BlockPos(x, y + 30, z);
+            }
             cmd("give @s incoming:geiger_counter");
             // height 320 - the server will be lowered to the ground; INCOMING_NUKE_M - distance (default 2 km)
             target = new Vec3(x + 0.5, 320, z - Integer.parseInt(System.getenv().getOrDefault("INCOMING_NUKE_M", "2000")) + 0.5);
@@ -1742,6 +1751,45 @@ public final class ClientScenario {
     private static final boolean CENSUS = "1".equals(System.getenv("INCOMING_CENSUS"));
     /** Radius of the census around the camera, blocks. */
     private static final double CENSUS_R = 40;
+    /** {@code INCOMING_NUKE_GROUND=1}: player on the ground among grass and trees instead of the observation deck. */
+    private static final boolean NUKE_GROUND = "1".equals(System.getenv("INCOMING_NUKE_GROUND"));
+    /** Census events already logged (first occurrence each): client/server wave, server/client throw, ruins at the camera chunk. */
+    private final java.util.Set<String> censusEvents = new java.util.HashSet<>();
+
+    /**
+     * Nearest ground column within 256 blocks of {@code from} (8-block grid, spiral outward) with a grass block on top, no water, and
+     * at least 40 leaf blocks within 10 blocks around and above it: a spot among grass and trees (integrated server, synchronous chunk
+     * loads before the strike). Returns the air block above the ground; {@code from} at its surface if none found.
+     */
+    private static BlockPos grassAndTrees(BlockPos from) {
+        // on the server thread: off-thread server block reads hop threads per block
+        var server = Minecraft.getInstance().getSingleplayerServer();
+        return server.submit(() -> grassAndTrees(server.overworld(), from)).join();
+    }
+
+    private static BlockPos grassAndTrees(net.minecraft.server.level.ServerLevel level, BlockPos from) {
+        for (int ring = 0; ring <= 32; ring++) {
+            for (int i = -ring; i <= ring; i++) {
+                for (int j = -ring; j <= ring; j++) {
+                    if (Math.max(Math.abs(i), Math.abs(j)) != ring) continue;
+                    int x = from.getX() + i * 8, z = from.getZ() + j * 8;
+                    int top = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z) - 1;
+                    BlockPos g = new BlockPos(x, top, z);
+                    if (!level.getBlockState(g).is(net.minecraft.world.level.block.Blocks.GRASS_BLOCK)) continue;
+                    int leaves = 0;
+                    for (BlockPos q : BlockPos.betweenClosed(g.offset(-10, 0, -10), g.offset(10, 14, 10))) {
+                        if (level.getBlockState(q).is(net.minecraft.tags.BlockTags.LEAVES)) leaves++;
+                    }
+                    if (leaves >= 40) {
+                        Incoming.LOG.info("SCENARIO ground spot {} {} {}: grass, {} leaf blocks within 10", x, top + 1, z, leaves);
+                        return g.above();
+                    }
+                }
+            }
+        }
+        Incoming.LOG.warn("SCENARIO no grass-and-trees spot within 256 blocks; the player stays at {}", from);
+        return new BlockPos(from.getX(), level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, from.getX(), from.getZ()), from.getZ());
+    }
 
     /**
      * Particles within {@link #CENSUS_R} of the camera every 5 ticks after detonation, against the wave's arrival there by the client
@@ -1754,8 +1802,25 @@ public final class ClientScenario {
         if (all.isEmpty()) return;
         var a = all.getLast();
         Vec3 cam = mc.gameRenderer.getMainCamera().getPosition();
-        double waveIn = a.d.arrivalTicks(cam.distanceTo(a.d.burst())) - a.ticks(0);
-        if (waveIn < -40) return;
+        double arrival = a.d.arrivalTicks(cam.distanceTo(a.d.burst())), waveIn = arrival - a.ticks(0);
+        if (waveIn < -60 || cam.distanceTo(a.d.burst()) > 4000) return;
+        // both clocks: integrated server (its tick and its player) against the client's detonation clock and level time
+        var server = mc.getSingleplayerServer();
+        var sp = server == null ? null : server.getPlayerList().getPlayer(mc.player.getUUID());
+        long srvAge = server == null ? -1 : server.overworld().getGameTime() - a.d.gameTime(), clAge = mc.level.getGameTime() - a.d.gameTime();
+        double srvWaveIn = sp == null ? Double.NaN : a.d.arrivalTicks(sp.getEyePosition().distanceTo(a.d.burst())) - srvAge;
+        double srvV = sp == null ? Double.NaN : sp.getDeltaMovement().length(), clV = mc.player.getDeltaMovement().length();
+        var srvChunk = server == null ? null : server.overworld().getChunkSource().getChunkNow(sp == null ? 0 : sp.getBlockX() >> 4, sp == null ? 0 : sp.getBlockZ() >> 4);
+        boolean ruins = srvChunk != null && srvChunk.getExistingData(ua.zentix.incoming.registry.ModAttachments.CHUNK_SCAR).orElse(0) >= a.d.id();
+        boolean flashLayer = srvChunk != null && srvChunk.getExistingData(ua.zentix.incoming.registry.ModAttachments.FLASH_LAYER).orElse(0) == a.d.id();
+        censusEvent("client wave at camera", waveIn <= 0, a, srvAge, clAge);
+        censusEvent("server wave at player", srvWaveIn <= 0, a, srvAge, clAge);
+        censusEvent("server player thrown (|v| > 0.3)", srvV > 0.3, a, srvAge, clAge);
+        censusEvent("client player thrown (|v| > 0.3)", clV > 0.3, a, srvAge, clAge);
+        censusEvent("flash layer at player chunk (server)", flashLayer, a, srvAge, clAge);
+        censusEvent("ruins at player chunk (server)", ruins, a, srvAge, clAge);
+        // every tick within 60 ticks of the wave, otherwise every 5
+        if (Math.abs(waveIn) > 60 && (tick - detTick) % 5 != 0) return;
         java.util.Map<String, Integer> n = new java.util.TreeMap<>();
         ua.zentix.incoming.client.fx.particle.FxPool.INSTANCE.census(cam.x, cam.y, cam.z, CENSUS_R, n);
         try {
@@ -1770,8 +1835,15 @@ public final class ClientScenario {
         } catch (ReflectiveOperationException ex) {
             n.put("mc:unreadable " + ex, 1);
         }
-        Incoming.LOG.info(String.format(java.util.Locale.ROOT, "SCENARIO census t=%d age=%.0f wave_in=%.0f cam=%s dist=%.0f fires<16=%d %s", tick, a.ticks(0), waveIn,
-                xyz(cam), cam.distanceTo(a.d.burst()), fires(mc, cam), n));
+        Incoming.LOG.info(String.format(java.util.Locale.ROOT, "SCENARIO census t=%d age=%.0f cl_age=%d srv_age=%d wave_in=%.0f srv_wave_in=%.0f cl_v=%.2f srv_v=%.2f ruins=%b layer=%b cam=%s dist=%.0f fires<16=%d %s",
+                tick, a.ticks(0), clAge, srvAge, waveIn, srvWaveIn, clV, srvV, ruins, flashLayer, xyz(cam), cam.distanceTo(a.d.burst()), fires(mc, cam), n));
+    }
+
+    /** First time {@code happened}: one line with both clocks (server tick, client level tick, client detonation clock). */
+    private void censusEvent(String what, boolean happened, ua.zentix.incoming.client.nuclear.ClientNuclear.Active a, long srvAge, long clAge) {
+        if (!happened || !censusEvents.add(what)) return;
+        Incoming.LOG.info(String.format(java.util.Locale.ROOT, "SCENARIO census event: %s — server age %d, client level age %d, client detonation clock %.1f", what, srvAge,
+                clAge, a.ticks(0)));
     }
 
     /** Fire blocks within 16 blocks horizontally of the camera, down to 40 below (flash-lit fire nearby, for the census). */
@@ -1799,7 +1871,7 @@ public final class ClientScenario {
             falloutGo = -1;
             falloutEvents();
         }
-        if (detTick >= 0 && CENSUS && (tick - detTick) % 5 == 0) census();
+        if (detTick >= 0 && CENSUS) census();
         if (detTick >= 0 || ua.zentix.incoming.client.nuclear.ClientNuclear.detonations().isEmpty()) return;
         detTick = tick;
         Incoming.LOG.info("SCENARIO detonation at tick {}", tick);
