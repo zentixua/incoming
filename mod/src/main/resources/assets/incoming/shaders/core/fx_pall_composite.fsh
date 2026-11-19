@@ -87,14 +87,14 @@ vec4 pallOver(vec3 p) {
     if (PallSlot0[1].w > 0.5) {
         PallAt f = pallField(Sampler2, Sampler5, PallSlot0, PallGround0, PallWater0, p, pallRelief(Sampler5, PallSlot0, PallGround0, p.xz), 1.0);
         tau += f.column.x + f.column.y + f.column.z;
-        w += f.column.x * mix(PALL_DUST_W.g, PALL_SMOKE_W.g, f.smoke) + f.column.y * PALL_HAZE_W.g + f.column.z * PALL_MIST_W.g;
+        w += f.column.x * f.dustW.g + f.column.y * PALL_HAZE_W.g + f.column.z * PALL_MIST_W.g;
         g += (f.column.x + f.column.y) * PALL_DUST_G + f.column.z * PALL_MIST_G;
         water += (f.column.x + f.column.y) * f.wet + f.column.z;
     }
     if (PallSlot1[1].w > 0.5) {
         PallAt f = pallField(Sampler2, Sampler6, PallSlot1, PallGround1, PallWater1, p, pallRelief(Sampler6, PallSlot1, PallGround1, p.xz), 1.0);
         tau += f.column.x + f.column.y + f.column.z;
-        w += f.column.x * mix(PALL_DUST_W.g, PALL_SMOKE_W.g, f.smoke) + f.column.y * PALL_HAZE_W.g + f.column.z * PALL_MIST_W.g;
+        w += f.column.x * f.dustW.g + f.column.y * PALL_HAZE_W.g + f.column.z * PALL_MIST_W.g;
         g += (f.column.x + f.column.y) * PALL_DUST_G + f.column.z * PALL_MIST_G;
         water += (f.column.x + f.column.y) * f.wet + f.column.z;
     }

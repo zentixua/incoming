@@ -1123,6 +1123,68 @@ public final class ClientScenario {
                 || biome.is(net.minecraft.world.level.biome.Biomes.SUNFLOWER_PLAINS) || biome.is(net.minecraft.world.level.biome.Biomes.MEADOW);
     }
 
+    /** Ground zeros already chosen by {@code site:} (each new one at least {@link #SITE_APART} blocks from them). */
+    private final List<int[]> sites = new ArrayList<>();
+    private static final int SITE_APART = 40_000;
+
+    /**
+     * {@code site:<biomes>}: on a 2 km grid within 120 km, the ground zero whose ring within 2 km and camera line 1–16 km south are most
+     * often one of {@code biomes} (ids, or {@code #}tags), at least {@link #SITE_APART} from previous sites; teleports 150 blocks above its ground,
+     * facing north. Biomes from the generator (no chunk loading).
+     */
+    private void pickSite(String biomes) {
+        var server = Minecraft.getInstance().getSingleplayerServer();
+        int[] best = server.submit(() -> {
+            var level = server.overworld();
+            var source = level.getChunkSource();
+            List<String> want = List.of(biomes.split(","));
+            java.util.function.BiPredicate<Integer, Integer> match = (x, z) -> {
+                var b = source.getGenerator().getBiomeSource().getNoiseBiome(net.minecraft.core.QuartPos.fromBlock(x), net.minecraft.core.QuartPos.fromBlock(64),
+                        net.minecraft.core.QuartPos.fromBlock(z), source.randomState().sampler());
+                for (String w : want) {
+                    if (w.startsWith("#") ? b.is(net.minecraft.tags.TagKey.create(net.minecraft.core.registries.Registries.BIOME,
+                            net.minecraft.resources.ResourceLocation.parse(w.substring(1))))
+                            : b.is(net.minecraft.resources.ResourceKey.create(net.minecraft.core.registries.Registries.BIOME,
+                            net.minecraft.resources.ResourceLocation.parse(w)))) return true;
+                }
+                return false;
+            };
+            int bx = 0, bz = 0;
+            double bestScore = -1;
+            for (int cx = -120_000; cx <= 120_000; cx += 2000) {
+                for (int cz = -120_000; cz <= 120_000; cz += 2000) {
+                    boolean near = false;
+                    for (int[] o : sites) near |= Math.hypot(o[0] - cx, o[1] - cz) < SITE_APART;
+                    if (near) continue;
+                    int hit = 0, all = 0;
+                    for (int r = 0; r <= 2000; r += 1000) {
+                        int n = r == 0 ? 1 : 8;
+                        for (int i = 0; i < n; i++) {
+                            double a = 2 * Math.PI * i / n;
+                            all++;
+                            if (match.test(cx + (int) (r * Math.cos(a)), cz + (int) (r * Math.sin(a)))) hit++;
+                        }
+                    }
+                    for (int d = 1000; d <= 16_000; d += 1000) {
+                        all++;
+                        if (match.test(cx, cz + d)) hit++;
+                    }
+                    double score = (double) hit / all;
+                    if (score > bestScore) {
+                        bestScore = score;
+                        bx = cx;
+                        bz = cz;
+                    }
+                }
+            }
+            int ground = source.getGenerator().getBaseHeight(bx, bz, Heightmap.Types.WORLD_SURFACE_WG, level, source.randomState());
+            Incoming.LOG.info("SCENARIO site {} at {} {} ground {} (biome share {})", biomes, bx, bz, ground, String.format(java.util.Locale.ROOT, "%.2f", bestScore));
+            return new int[]{bx, bz, ground};
+        }).join();
+        sites.add(best);
+        cmd(String.format(java.util.Locale.ROOT, "tp @s %d %d %d 180 8", best[0], best[2] + 150, best[1]));
+    }
+
     /**
      * Epicenter: from points through 500 blocks in 4 km from the point of appearance - the one with the most burning places in 1,6 km (rings through
      * 400 blocks), and land under the shooting points in 800 m and 2 km to the south.
@@ -3544,6 +3606,17 @@ public final class ClientScenario {
                     cmd(String.format(java.util.Locale.ROOT, "tp @s %d 200 %d", fsX, fsZ));
                 });
                 case MAX_YIELD -> at(step.tick(), () -> ua.zentix.incoming.IncomingConfig.SERVER.nukeMaxYield.set(Integer.parseInt(step.arg())));
+                case SITE -> at(step.tick(), () -> pickSite(step.arg()));
+                case WAVE -> at(step.tick(), () -> {
+                    ua.zentix.incoming.IncomingConfig.SERVER.scalePreset.set(ua.zentix.incoming.IncomingConfig.ScalePreset.CUSTOM);
+                    ua.zentix.incoming.IncomingConfig.SERVER.nukeWaveSpeed.set(Double.parseDouble(step.arg()));
+                });
+                case PALL -> at(step.tick(), () -> ua.zentix.incoming.IncomingConfig.CLIENT.nukeDustQuality.set(
+                        ua.zentix.incoming.IncomingConfig.Client.DustQuality.valueOf(step.arg())));
+                case PAIR -> {
+                    shot(step.tick(), step.arg());
+                    offShot(step.tick() + 1, step.arg() + "_off", 3);
+                }
                 case SKIP -> at(step.tick(), () -> fsSkip(Double.parseDouble(step.arg())));
                 case FRAMES -> at(step.tick(), () -> frameRun(step.arg()));
             }
@@ -3889,6 +3962,10 @@ public final class ClientScenario {
             // every frame with the pall's state behind it: detail rung, GPU time by part, block light in the window (lamps), moving
             // light (LambDynamicLights) — what the frame shows can be read without guessing
             Incoming.LOG.info("SCENARIO shot {}: pall {}", name, ua.zentix.incoming.client.fx.layer.PallPass.describe());
+            if (!ua.zentix.incoming.client.nuclear.ClientNuclear.detonations().isEmpty()) {
+                Incoming.LOG.info("SCENARIO shot {} nuke: {}", name, ua.zentix.incoming.client.nuclear.NukePall.describe());
+                Incoming.LOG.info("SCENARIO shot {} wall: {}", name, ua.zentix.incoming.client.nuclear.WallProbe.describe());
+            }
             Screenshot.grab(mc.gameDirectory, String.format("%s_%04d.png", name, tick), mc.getMainRenderTarget(), c -> {});
         });
     }

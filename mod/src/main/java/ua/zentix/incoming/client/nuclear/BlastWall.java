@@ -1,12 +1,14 @@
 package ua.zentix.incoming.client.nuclear;
 
 import net.minecraft.util.Mth;
+import ua.zentix.incoming.client.fx.smoke.Condensation;
 import ua.zentix.incoming.nuclear.Detonation;
-import ua.zentix.incoming.nuclear.model.CloudModel;
+import ua.zentix.incoming.nuclear.model.BlastModel;
 import ua.zentix.incoming.nuclear.model.DustModel;
 import ua.zentix.incoming.nuclear.model.FireballModel;
 import ua.zentix.incoming.nuclear.model.HobBlast;
 import ua.zentix.incoming.nuclear.model.WaterModel;
+import ua.zentix.incoming.util.Air;
 
 /**
  * Head of the shock-wave dust layer (DESIGN-nuke §6): youngest, lowest and densest part of the same layer that later remains
@@ -52,6 +54,22 @@ public final class BlastWall {
      * coefficient 1 for weak distant waves; closer to ground zero decay is steeper and displacement smaller — upper estimate).
      */
     static final double CARRY = Math.exp(-1);
+    /**
+     * Eddy turn of the head's dust layer per block of wind path behind the front, per eddy diameter: eddies of the layer's size ({@link #TILE})
+     * spin at the turbulent velocity σ_u ≈ 2.5 u* (Panofsky &amp; Dutton 1984, neutral surface layer) on their radius, u* ≈ 0.04 U
+     * (Schlichting rough plate a few hundred metres behind the front, {@code DustModel.friction}): Ω = 5 u* / D, angle = 0.2 · (wind path)/D.
+     * Sense from the shear: wind faster aloft than at the ground — the top rolls outward while the wave's wind blows outward, back toward ground
+     * zero when it reverses ({@link #carriedShare}).
+     */
+    static final double EDDY = 0.2;
+    /** Deepest negative phase of a nuclear blast wave, kPa: never more than about 4 psi below ambient (Glasstone &amp; Dolan 1977, §3.05). */
+    static final double UNDER_MAX_KPA = BlastModel.kpa(4);
+    /**
+     * presentation: the eddies turn this many times faster than {@link #EDDY} — at the physical rate a 1 Mt head 5 km out turns 0.1 rad in its
+     * seconds of life, which no one sees from kilometres; at this gain about a quarter turn out and back. Where dust is, its amount and its
+     * height are unchanged: only the billow pattern turns.
+     */
+    static final double ROLL_GAIN = 8;
     /** Head hands over to pall from the wedge end (fraction of its length) to this fraction ({@link #handoff}). */
     static final double HANDOFF_FROM = 1, HANDOFF_TO = 1.5;
     /** No head when its extinction is below this, 1/m (visibility 4 km). */
@@ -84,13 +102,13 @@ public final class BlastWall {
     private final double[] paved = new double[NODES], prompt = new double[NODES];
     /** Positive phase at the table end, model s: beyond the table, wedge end follows front travel over this phase. */
     private final double lastPositive;
-    /** Humid air means a Wilson cloud exists ({@link CloudModel#wilsonCloud}). */
+    /** The negative phase condenses water: a Wilson cloud exists ({@link #condenses}). */
     private final boolean humid;
     /** Head-billow noise tile, m ({@link #TILE}). */
     private final double tileM;
 
     public BlastWall(Detonation d) {
-        this(d, CloudModel.wilsonCloud(humidity(d)));
+        this(d, condenses(d, humidity()));
     }
 
     BlastWall(Detonation d, boolean humid) {
@@ -115,14 +133,33 @@ public final class BlastWall {
         tileM = TILE * first;
     }
 
-    /** Ground-zero humidity (Wilson cloud visible in humid air): from client biome; 1 over water. */
-    static double humidity(Detonation d) {
+    /**
+     * Surface humidity of the world air at detonation ({@link Air#surfaceHumidity}: 70 % in clear weather, saturated in rain), the same air as
+     * flight, smoke and sound; {@link Air#SURFACE_CLEAR} without a world.
+     */
+    static double humidity() {
         var level = net.minecraft.client.Minecraft.getInstance().level;
-        if (level == null) return 0.5;
-        // surface block: on land, below first air; for crosshair water height (surface, 62.889), the water itself
-        var pos = new net.minecraft.core.BlockPos(Mth.floor(d.burst().x), NukeWater.surfaceBlock(d.groundY()), Mth.floor(d.burst().z));
-        if (!level.getFluidState(pos).isEmpty()) return 1;
-        return level.getBiome(pos).value().getModifiedClimateSettings().downfall();
+        return level == null ? Air.SURFACE_CLEAR : Air.of(level).surfaceHumidity();
+    }
+
+    /**
+     * Whether the wave's negative phase condenses water in air of relative humidity {@code rh} — a Wilson cloud — by the same law as for
+     * conventional blasts ({@link Condensation#water}: shock heating, isentropic expansion to the negative-phase minimum
+     * of a Friedlander b = 1 wave, p/e², no deeper than {@link #UNDER_MAX_KPA}; saturation by Magnus, latent heat; Birk 2017): at some
+     * ground range between the fireball and the 0.3 psi dust edge the expanded air holds condensed water. The 4 psi negative phase near the
+     * fireball condenses from 51 % relative humidity at any yield (15 °C air, {@code CloudModel.T_AIR_K}): yes at the clear-weather 70 % and
+     * in rain, not in dry desert air.
+     */
+    static boolean condenses(Detonation d, double rh) {
+        double hob = Math.max(0, d.hobMetres());
+        double from = Math.max(1, FireballModel.maxRadius(d.yieldKt(), d.surface())), to = Math.max(from * 1.01, HobBlast.rangeFor(0.3, hob, d.yieldKt()));
+        for (int i = 0; i <= 64; i++) {
+            double m = from * Math.pow(to / from, i / 64.0), kpa = d.groundOverpressureKpa(d.blocks(m));
+            if (kpa <= 0) continue;
+            double under = 1000 * Math.min(UNDER_MAX_KPA, kpa / Math.exp(2));
+            if (Condensation.water(kpa, -under, rh) > 0) return true;
+        }
+        return false;
     }
 
     /** Layer table at {@code groundM} m from ground zero (linear between nodes; no dust beyond the table). */
@@ -254,6 +291,35 @@ public final class BlastWall {
         double x = carried * carriedShare(u) * Math.pow(zr, 1.0 / 7);
         double len = Math.max(Math.hypot(rx, rz), 1e-3);
         return new double[] {rx - rx / len * x, z - x * (0.02 + 0.06 * zr), rz - rz / len * x};
+    }
+
+    /**
+     * Eddy turn of head dust (radians, positive — top outward) at phase fraction {@code phase} since the front: {@link #EDDY} × {@link #ROLL_GAIN} ×
+     * wind path so far ({@code carried} × {@link #carriedShare}) / eddy diameter {@code size} (blocks). Copy {@code pallWallRollAngle}.
+     */
+    static double rollAngle(double phase, double carried, double size) {
+        return ROLL_GAIN * EDDY * carried * carriedShare(phase) / Math.max(size, 1);
+    }
+
+    /**
+     * Dust-coordinate point (x, height, z: {@link #origin}) turned within its eddy, into {@code into}: eddies of diameter {@code size} side by side
+     * along the ground outward ({@code outX}, {@code outZ} — unit), resting on it; the turn {@code angle} is full at an eddy's centre and falls to
+     * zero at its rim (squared), so neighbouring eddies meet without a seam and dust outside them stays. Copy {@code pallWallRoll}.
+     */
+    static void roll(double x, double y, double z, double outX, double outZ, double size, double angle, double[] into) {
+        double along = x * outX + z * outZ, half = 0.5 * size;
+        double centre = size * (Math.floor(along / size) + 0.5), dx = along - centre, dy = y - half;
+        double r = Math.sqrt(dx * dx + dy * dy) / half;
+        into[0] = x;
+        into[1] = y;
+        into[2] = z;
+        if (r >= 1) return;
+        double a = angle * (1 - r) * (1 - r), c = Math.cos(a), sn = Math.sin(a);
+        // the pattern turns by a (top outward); the point samples where its dust came from: turned back
+        double ex = c * dx - sn * dy, ey = sn * dx + c * dy;
+        into[0] = x + outX * (ex - dx);
+        into[1] = half + ey;
+        into[2] = z + outZ * (ex - dx);
     }
 
     /** Wind immediately behind the front along the ground at ground distance {@code groundM} from ground zero, m/s. */
@@ -473,9 +539,18 @@ public final class BlastWall {
      */
     static double density(float[] slot, double s, double wet, double hard) {
         double v = s / Math.max(slot[1], 0.001), u = Mth.clamp(v, 0, 1);
-        double soil = 1 + hard * (slot[12] + (slot[13] - slot[12]) * u - 1);
+        double soil = 1 + hard * (paved(slot, s) - 1);
         double dust = slot[3] * (slot[14] + (slot[15] - slot[14]) * u) * develop(v, slot[9], slot[10]) * soil;
         return dust + (slot[7] - dust) * wet;
+    }
+
+    /**
+     * Debris dust over hard ground relative to soil at {@code s} blocks behind the dust edge: from the leading edge's ratio to the wedge end's
+     * by wedge share ({@link #pavedShare} at both, slot 12 and 13) — as {@code pallWallDensity} and the head material in {@code fx_pall}.
+     */
+    static double paved(float[] slot, double s) {
+        double u = Mth.clamp(s / Math.max(slot[1], 0.001), 0, 1);
+        return slot[12] + (slot[13] - slot[12]) * u;
     }
 
     /**

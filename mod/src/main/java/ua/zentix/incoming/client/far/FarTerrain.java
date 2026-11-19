@@ -101,6 +101,34 @@ public final class FarTerrain {
                 || id == MapColor.COLOR_ORANGE.id || id == MapColor.COLOR_GREEN.id || id == MapColor.TERRACOTTA_CYAN.id);
     }
 
+    /**
+     * Sand on top of the column, 1 or 0 ({@link Double#NaN} — unknown), for the colour of nuclear dust: what the wave lofts there is desert
+     * sand rather than the reference loamy soil under grass and forest ({@code SAND} and {@code DUST} in {@code fx_pall}). In the client's
+     * chunks — the soil block under the canopy ({@link #dustY}: {@code minecraft:sand} tag — sand, red sand, suspicious sand; a snow layer on top
+     * is not sand); further — the terrain tile's map colour {@code SAND} or {@code COLOR_ORANGE} (red sand) (⚠ coarse: sandstone and birch
+     * planks share {@code SAND}, orange wool {@code COLOR_ORANGE}; hard ones are hard ground anyway, {@link #hard}). Water is not sand.
+     */
+    public static Water sand(ClientLevel level) {
+        BlockPos.MutableBlockPos pos = new BlockPos.MutableBlockPos();
+        return (x, z) -> {
+            LevelChunk chunk = level.getChunkSource().getChunk(x >> 4, z >> 4, false);
+            if (chunk != null) {
+                int y = dustY(chunk, x, z);
+                if (y < chunk.getMinBuildHeight()) return Double.NaN;
+                BlockState top = chunk.getBlockState(pos.set(x, y, z));
+                if (!top.getFluidState().isEmpty() || chunk.getBlockState(pos.set(x, y + 1, z)).is(Blocks.SNOW)) return 0;
+                return top.is(net.minecraft.tags.BlockTags.SAND) ? 1 : 0;
+            }
+            int color = TerrainTiles.color(x, z);
+            return color < 0 ? Double.NaN : sandColor(color) ? 1 : 0;
+        };
+    }
+
+    /** Whether a terrain-tile map color is sand ({@link #sand}). */
+    static boolean sandColor(int id) {
+        return id == MapColor.SAND.id || id == MapColor.COLOR_ORANGE.id;
+    }
+
     /** Whether water is on top of the column: 1 — water, 0 — land, {@link Double#NaN} — unknown. */
     @FunctionalInterface
     public interface Water {

@@ -43,13 +43,20 @@ public final class NukePall {
     private static final float[] GLOW = new float[8];
     /** Slot dust-wall parameters ({@link BlastWall#slot}) for the frame and camera. */
     private static final float[] WALL = new float[BlastWall.SLOT], WALL_TICK = new float[BlastWall.SLOT];
-    /** Thick-dust color ({@code DUST} in {@code fx_pall.glsl}, dust-wall color). */
+    /** Thick-dust color ({@code DUST} in {@code fx_pall.glsl}, dust-wall color): the reference dry loamy soil under grass and forest. */
     public static final double[] DUST = {0.60, 0.53, 0.45};
+    /**
+     * Desert-dust single-scattering albedo ω at the red, green and blue display channels (610, 550, 465 nm), linear between
+     * AERONET desert-dust ω 0.92 at 440 nm and 0.97 at 670 nm (Dubovik et al. 2002, J. Atmos. Sci. 59: Bahrain, Solar Village, Cape Verde),
+     * and its thick-layer color ({@code SAND} in {@code fx_pall.glsl}: R∞ of ω after delta-Eddington with g = {@link PallLight#DUST_G}):
+     * dust lofted from sand.
+     */
+    static final double[] SAND_OMEGA = {0.957, 0.944, 0.925}, SAND = {0.705, 0.669, 0.626};
     /** Thick-smoke color above fires ({@code SMOKE} in {@code fx_pall.glsl}) and on-screen fire flame ({@code FIRE}). */
     static final double[] SMOKE = {0.30, 0.27, 0.24}, FIRE = {1.0, 0.541, 0.180};
     /** Dust asymmetry after delta-Eddington and per-channel dust and smoke albedos ({@code PALL_DUST_G}, {@code PALL_DUST_W}, {@code PALL_SMOKE_W}). */
     private static final double DUST_G = PallLight.truncated(PallLight.DUST_G);
-    private static final double[] DUST_W = albedo(DUST), SMOKE_W = albedo(SMOKE);
+    private static final double[] DUST_W = albedo(DUST), SAND_W = albedo(SAND), SMOKE_W = albedo(SMOKE);
     /** Sun through the air for {@link #sky} (client thread). */
     private static final double[] THROUGH_AIR = new double[3];
     /** Frame light and wall for camera dust ({@link #dustColor}). */
@@ -427,15 +434,15 @@ public final class NukePall {
         double ys = Math.cbrt(d.yieldKt() / 15);
         org.joml.Matrix4f m = k == 0 ? f.slot0 : f.slot1;
         m.m00(cx).m01(cz).m02(ground).m03((float) p.reach());
-        // S[1].w: 1 — slot in use, 2 — and hard ground beneath its pall (the shader samples it only then)
-        m.m10((float) DRIFT[0]).m11((float) DRIFT[1]).m12((float) plume).m13(a.ground.hasHard() ? 2 : 1);
+        // S[1].w: 1 — slot in use, 2 — and hard ground or sand beneath its pall (the shader samples the soil only then)
+        m.m10((float) DRIFT[0]).m11((float) DRIFT[1]).m12((float) plume).m13(a.ground.hasHard() || a.ground.hasSand() ? 2 : 1);
         m.m20((float) Math.cos(d.windDir())).m21((float) Math.sin(d.windDir()));
         m.m30((float) (PallField.SIGMA_DENSE / d.scale())).m31((float) Math.max(48, d.blocks(TILE_M * ys))).m32((float) (ticks / 20.0));
         tableRows(m, k);
         // slot water: base surge, and whether water exists beneath pall (otherwise shader skips the water map)
         (k == 0 ? f.water0 : f.water1).set((float) SURGE[0], (float) SURGE[1], (float) SURGE[2], water ? 1 : 0);
         // ball and fire light on dust (CloudPuffs.pallLight)
-        a.puffs.pallLight(MushroomField.shape(a, partial), GLOW);
+        a.puffs.pallLight(MushroomField.shape(a, partial), a.pall.fireLight(ticks), GLOW);
         (k == 0 ? f.glow0 : f.glow1).set(GLOW[0], GLOW[1], GLOW[2], GLOW[3]);
         (k == 0 ? f.hot0 : f.hot1).set(GLOW[4], GLOW[5], GLOW[6], GLOW[7]);
         a.ground.frame(k == 0 ? f.ground0 : f.ground1);
@@ -547,7 +554,10 @@ public final class NukePall {
         a.puffs.pallLightNow(a, DUST_GLOW);
         Detonation d = a.d;
         double gy = y - d.groundY();
-        dustLight(DUST_WALL, DUST_GLOW, sky, d.windDir(), x - d.burst().x, gy, z - d.burst().z, gy - a.ground.at(x, z), into);
+        double gx = x - d.burst().x, gz = z - d.burst().z;
+        double hard = a.ground.hasHard() ? a.ground.hard(x, z) : 0, sand = a.ground.hasSand() ? a.ground.sand(x, z) : 0;
+        dustLight(DUST_WALL, DUST_GLOW, sky, d.windDir(), gx, gy, gz, gy - a.ground.at(x, z), a.pall.smoke(Math.hypot(gx, gz), a.ticks(0)),
+                PallField.sandShare(sand, hard, BlastWall.paved(DUST_WALL, DUST_WALL[0] - Math.hypot(gx, gz))), into);
         return true;
     }
 
@@ -566,8 +576,11 @@ public final class NukePall {
      * @param wind  wind direction (radians, {@link Detonation#windDir}): cap center drifts along it
      * @param gx    point x from ground zero (blocks), gy above ground zero, gz along z
      * @param up    point height above its terrain (blocks)
+     * @param smoke soot share in the dust there ({@link PallField#smoke}: fire zone × fire growth, as the pall's table)
+     * @param sand  sand's share of the dust mass there ({@link PallField#sandShare}): desert dust instead of the reference soil's
      */
-    static void dustLight(float[] wall, float[] glow, Sky sky, double wind, double gx, double gy, double gz, double up, float[] into) {
+    static void dustLight(float[] wall, float[] glow, Sky sky, double wind, double gx, double gy, double gz, double up, double smoke, double sand,
+                          float[] into) {
         double rx = gx, rz = gz, len = Math.hypot(rx, rz);
         double top = wall[2], reach = BlastWall.HANDOFF_TO * wall[1] + top, s = wall[0] - len, toTop = Math.max(top - up, 0);
         double ox = len > 1e-3 ? rx / len : 1, oz = len > 1e-3 ? rz / len : 0;
@@ -585,14 +598,13 @@ public final class NukePall {
         // (ball low and behind head: the beam to the top at the leading edge crosses the whole head)
         double muS = Math.max(sky.sy, 0.12), muB = Mth.clamp(ly / ll, 0.12, 1);
         double deepB = Math.min(toBall, above + Math.max(toBall - above / muB, 0)), slabB = deepB + below;
-        double r = Math.hypot(gx, gz), fireR = Math.max(glow[3], 1e-3);
+        double r = Math.hypot(gx, gz);
         // ball light is a beam from cap center, like the mushroom body (CloudPuffs.ball), × eye adaptation
         double lit = CloudPuffs.ball(sky.exposure, glow[0], ll);
         double burn = CloudPuffs.burn(r, 0, glow[1], glow[3]) * (1 - 0.75 * sky.day);
-        double smoke = 0.77 * (1 - CloudPuffs.smooth(0.92 * fireR, 1.04 * fireR, r));
         double[] lin = new double[3];
         for (int c = 0; c < 3; c++) {
-            double w = Mth.lerp(smoke, DUST_W[c], SMOKE_W[c]);
+            double w = Mth.lerp(smoke, Mth.lerp(sand, DUST_W[c], SAND_W[c]), SMOKE_W[c]);
             double fire = FIRE[c];
             double ball = glow[4 + c] * lit;
             double field = PallLight.diffuse(w, DUST_G, depth, slab, PallLight.LAND, muS, sky.sun[c], 1, 0, sky.sky[c], 0, 0)

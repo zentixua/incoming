@@ -14,14 +14,26 @@ class CloudPuffsTest {
     /** 15 kt near the ground at a height of 64, without wind, on a scale 1 block = 4 m. */
     private static final Detonation GROUND = new Detonation(1, new Vec3(0, 64, 0), 64, 15, true, 0, 0, 0, 20_000, 7, 0.25f, false, Detonation.OLD_WAVE);
 
-    /** The reflection of fires under the dust of the wall at 15 kt is more than a minute: at 70 s - almost at full strength, at 90 s - more than half. */
+    /**
+     * Fires light the dust from below with their own flame ({@link PallField#fireLight}, the haze's fire light), not a clock of their
+     * own: while the wall passes (15 kt: front at the fire-zone edge, 2 km, in ~6 s; 1 Mt: 10.8 km in ~80 s at real wave speed)
+     * the fires lit by the flash have barely grown — under 1 % of full flame; full flame only after tens of minutes. The slot
+     * carries exactly that value (18.11 complaint: orange patches under a wall lofted seconds after the flash).
+     */
     @Test
-    void wallFireGlowLastsMoreThanAMinute() {
-        assertTrue(CloudPuffs.glow(30, 15) > 0.99);
-        assertTrue(CloudPuffs.glow(70, 15) > 0.75, "70 s: " + CloudPuffs.glow(70, 15));
-        assertTrue(CloudPuffs.glow(90, 15) > 0.5, "90 s: " + CloudPuffs.glow(90, 15));
-        assertTrue(CloudPuffs.glow(200, 15) < 0.01);
-        assertTrue(CloudPuffs.glow(50, 1) < CloudPuffs.glow(50, 15) - 0.3, "noticeably shorter at 1 kt");
+    void fireLightUnderDustIsTheFiresOwnFlame() {
+        for (double kt : new double[]{15, 1000}) {
+            Detonation d = new Detonation(1, new Vec3(0, 64, 0), 64, kt, true, 0, 0, 0, 20_000, 7, 1f, false, 1f);
+            PallField pall = new PallField(d);
+            double edge = pall.fireReach(), ticks = d.arrivalTicks(edge);
+            assertTrue(edge > 0, kt + " kt: fire zone");
+            assertTrue(pall.fireLight(ticks) < 0.01, kt + " kt: flame when the front leaves the fire zone " + pall.fireLight(ticks));
+            assertTrue(pall.fireLight(30 * 60 * 20) > 0.9, kt + " kt: flame after half an hour " + pall.fireLight(30 * 60 * 20));
+            float[] light = new float[8];
+            assertTrue(new CloudPuffs(d).pallLight(MushroomModel.shape(ticks / 20, kt, 0, true, 3_000), pall.fireLight(ticks), light));
+            assertEquals(pall.fireLight(ticks), light[1], 1e-6, kt + " kt: slot fire light");
+            assertEquals(pall.fireReach(), light[3], 1e-3 * light[3], kt + " kt: one fire zone for the pall and the light below dust");
+        }
     }
 
     /**
@@ -35,7 +47,7 @@ class CloudPuffsTest {
         MushroomModel.Shape cap = MushroomModel.shape(20, 15, 0, true, 3_000);
         assertTrue(MushroomModel.light(cap, 15, true, 1_000) < 1e-3, "cap after 20 s: " + MushroomModel.light(cap, 15, true, 1_000));
         float[] light = new float[8];
-        assertTrue(new CloudPuffs(GROUND).pallLight(cap, light));
+        assertTrue(new CloudPuffs(GROUND).pallLight(cap, 0, light));
         double lit = CloudPuffs.ball(luminance(light), light[0], GROUND.blocks(1_000));
         assertTrue(lit < 1e-3, "15 kt after 20 s: light from above in a kilometer " + lit);
     }
@@ -52,7 +64,7 @@ class CloudPuffsTest {
         double[] bb = new double[4];
         for (double t : new double[]{0.5, 2, 5, 9}) {
             MushroomModel.Shape s = MushroomModel.shape(t, 15, 0, true, 3_000);
-            assertTrue(puffs.pallLight(s, light));
+            assertTrue(puffs.pallLight(s, 0.25, light));
             ua.zentix.incoming.nuclear.model.FlashLight.source(s, 15, true, bb);
             for (int c = 0; c < 3; c++) assertEquals(bb[c], light[4 + c], 1e-6 * bb[c] + 1e-30, t + " s, channel " + c);
             assertTrue(light[4] >= light[5] && light[5] >= light[6], t + " s: warm ball: " + light[4] + " " + light[5] + " " + light[6]);
@@ -61,11 +73,35 @@ class CloudPuffsTest {
                 assertEquals(body, dust, 1e-5 * body, t + " s, " + m + " m");
             }
             assertEquals(GROUND.blocks(s.capY()), light[7], 1e-3, t + " s: middle cap");
-            assertEquals(CloudPuffs.glow(t, 15), light[1], 1e-6);
+            assertEquals(0.25, light[1], 1e-6);
             assertTrue(light[3] > light[0], "edge of fires " + light[3] + " beyond the radius cap " + light[0]);
         }
-        assertFalse(puffs.pallLight(null, light));
-        for (float v : light) assertEquals(0, v);
+        assertFalse(puffs.pallLight(null, 0.25, light));
+        for (int i : new int[]{0, 2, 4, 5, 6, 7}) assertEquals(0, light[i], "no mushroom, no ball light: " + i);
+        assertEquals(0.25, light[1], 1e-6, "fires burn on without the mushroom");
+        assertTrue(light[3] > 0, "fire zone without the mushroom");
+    }
+
+    /**
+     * Review of #669: fire light below the dust follows the fires, not the cloud's lifetime. Across the mushroom's dispersal
+     * ({@link MushroomModel#lifeSeconds}: 1 kt, 15 kt, 1 Mt) with the fires at full flame, the light below dust halfway into the fire zone
+     * does not jump (it went 0.95 → 0 when the slot was zeroed with the mushroom); only the ball's light goes.
+     */
+    @Test
+    void fireLightOutlivesTheMushroom() {
+        for (double kt : new double[]{1, 15, 1000}) {
+            Detonation d = new Detonation(1, new Vec3(0, 64, 0), 64, kt, true, 0, 0, 0, 20_000, 7, 1f, false, 1f);
+            CloudPuffs puffs = new CloudPuffs(d);
+            double life = MushroomModel.lifeSeconds(kt);
+            float[] before = new float[8], after = new float[8];
+            MushroomModel.Shape alive = MushroomModel.shape(life - 1, kt, 0, true, 3_000), gone = MushroomModel.shape(life + 1, kt, 0, true, 3_000);
+            assertTrue(alive != null && gone == null, kt + " kt: mushroom before dispersal, none after");
+            puffs.pallLight(alive, 1, before);
+            puffs.pallLight(gone, 1, after);
+            double r = 0.5 * before[3];
+            assertEquals(CloudPuffs.burn(r, 0, before[1], before[3]), CloudPuffs.burn(r, 0, after[1], after[3]), 1e-9, kt + " kt: fire light across dispersal");
+            assertEquals(0.95, CloudPuffs.burn(r, 0, after[1], after[3]), 1e-6, kt + " kt: full fire light after dispersal");
+        }
     }
 
     private static double luminance(float[] light) {
