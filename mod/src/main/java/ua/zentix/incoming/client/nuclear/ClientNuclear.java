@@ -5,7 +5,6 @@ import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.world.phys.Vec3;
 import net.neoforged.neoforge.client.event.ClientPlayerNetworkEvent;
 import org.jetbrains.annotations.Nullable;
-import ua.zentix.incoming.client.TickTime;
 import ua.zentix.incoming.client.far.FarTerrain;
 import ua.zentix.incoming.client.far.Sightline;
 import ua.zentix.incoming.client.fx.CameraShake;
@@ -32,8 +31,8 @@ import java.util.Map;
 public final class ClientNuclear {
     /**
      * Client detonation. Live (neither world entry nor Flashback replay seeking) includes flash, sound
-     * and shake. Visual time uses own client ticks since packet arrival rather than game time, which jumps backward during
-     * server catch-up; the sphere/double flash last fractions of a second and must neither be skipped nor repeated.
+     * and shake. Visual time is the {@link AgeClock}: anchored to the server's own age for the detonation, never ahead of
+     * it by more than a tick, never backward, catching up without jumps.
      */
     public static final class Active {
         public final Detonation d;
@@ -52,9 +51,10 @@ public final class ClientNuclear {
         public final FireStorm storm;
         /** Terrain under pall ({@link PallGround}): end of its ray where no world lies behind. */
         final PallGround ground;
-        /** Ticks elapsed before packet arrival (world-entry packets: since detonation). */
-        private final long before;
+        /** Own client ticks since packet arrival (since replay seek afterward). */
         private long age;
+        /** Detonation age shown on this client ({@link AgeClock}). */
+        final AgeClock clock;
         /**
          * Estimated world clock at the end of the show ({@link NukeClock}) when the server has not said ({@link #SHOW_ENDS}:
          * a recording made before the server sent it); NaN — not estimated yet.
@@ -75,7 +75,10 @@ public final class ClientNuclear {
                 @Nullable FireStorm storm, @Nullable PallGround ground) {
             this.d = d;
             this.live = live;
-            this.before = live ? 0 : Math.max(0, clientNow - d.gameTime());
+            // live: the packet is the server's first anchor (age 0 at send); past (entry, seek): the level clock's estimate
+            // until the server's next anchor, which the clock takes whole
+            this.clock = live ? new AgeClock(0, true) : new AgeClock(Math.max(0, clientNow - d.gameTime()), false);
+            if (SHOW_ENDS.containsKey(d.id())) clock.ended();
             this.puffs = puffs;
             this.wall = wall;
             this.water = water;
@@ -94,9 +97,15 @@ public final class ClientNuclear {
             return age;
         }
 
-        /** Ticks since detonation (with frame fraction). */
+        /** One client tick. */
+        void tick() {
+            age++;
+            clock.tick();
+        }
+
+        /** Ticks since detonation (with frame fraction): the shown age, monotone across frames ({@link AgeClock#at}). */
         public double ticks(float partialTick) {
-            return TickTime.at(before + age, partialTick);
+            return clock.at(partialTick);
         }
 
         /** Model seconds since detonation (world scale applied). */
@@ -121,6 +130,91 @@ public final class ClientNuclear {
         /** Detonation-clock seconds now. */
         public double clockSeconds(float partialTick) {
             return clockTicksAt(ticks(partialTick)) / 20.0;
+        }
+    }
+
+    /**
+     * The detonation age a client shows, in ticks. The law: the server's own age for the detonation (game time at send minus
+     * detonation time) arrives with each anchor — the live detonation packet (age 0) and {@code S2C.NukeTick}, sent every server
+     * tick while the dimension holds a show; the target is that age plus the client's own ticks since the anchor arrived,
+     * at most one while anchors stream (the next comes each server tick: a client ticking faster than a lagging server waits
+     * for it), unlimited without a stream (a recording made before it, a detonation past its show). Each client tick the shown
+     * age moves toward the target by at most {@link #MAX_STEP} and never back. So the drawn burst, wave, sound and body
+     * effects are never more than a tick ahead of the server's age, never repeat, and catch up after dropped ticks or a
+     * frame stall without a jump. The client level clock is not used: vanilla increments it on its own and time packets
+     * set it, so a lead or lag present at arrival, or alternating packet delays, became false age (reviews of #668: a lead
+     * of 30 at arrival made a fresh 15 kt front 621 m instead of 174 m; alternating delayed syncs added 10 false ticks a
+     * pair, 200 shown for 160 elapsed; a lag of 30 at arrival showed 50 for 20). Pure: checked by {@code ClientNuclearTest}.
+     */
+    static final class AgeClock {
+        /** Most ticks the shown age advances in one client tick: three-times speed recovers a second's lag in half a second. */
+        static final int MAX_STEP = 3;
+        /** The server's age at the latest anchor's send. */
+        private long anchor;
+        /** Own client ticks since that anchor arrived. */
+        private long since;
+        /** Anchors arrive every server tick (current server, show running): extrapolate at most one tick past the latest. */
+        private boolean streamed;
+        /** The show is over: anchors sent for other detonations' shows no longer cap this one. */
+        private boolean over;
+        /** A past detonation (entry, seek) shown from an estimate: the server's first anchor sets the age whole. */
+        private boolean estimated;
+        private long shown;
+        /** Largest age returned to a frame: frames never step back when the age holds. */
+        private double framed;
+
+        /** {@code start} — the age now; {@code live} — a fresh detonation whose packet is the server's anchor at age 0. */
+        AgeClock(long start, boolean live) {
+            anchor = start;
+            shown = start;
+            framed = start;
+            streamed = live;
+            estimated = !live;
+        }
+
+        /** An anchor: the server's age for this detonation when the packet was sent ({@code S2C.NukeTick}). */
+        void anchor(long serverAge) {
+            anchor = Math.max(0, serverAge);
+            since = 0;
+            streamed = !over;
+            if (estimated) {
+                estimated = false;
+                shown = anchor;
+                framed = anchor;
+            }
+        }
+
+        /** The show is over: no more per-tick anchors (ended shows' list in {@code S2C.NukeClock}); own ticks carry on. */
+        void ended() {
+            over = true;
+            streamed = false;
+        }
+
+        private long target(long ticksSince) {
+            return anchor + (streamed ? Math.min(ticksSince, 1) : ticksSince);
+        }
+
+        private long step(long target) {
+            return Math.max(0, Math.min(MAX_STEP, target - shown));
+        }
+
+        /** One client tick. */
+        void tick() {
+            since++;
+            shown += step(target(since));
+        }
+
+        /** The shown age in whole ticks. */
+        long shown() {
+            return shown;
+        }
+
+        /** The shown age in a frame {@code partial} of a tick after the last: the coming step's share, never less than before. */
+        double at(double partial) {
+            double v = shown + partial * step(target(since + 1));
+            if (v < framed) v = framed;
+            framed = v;
+            return v;
         }
     }
 
@@ -230,6 +324,12 @@ public final class ClientNuclear {
         ClientClock.set(p.clock());
         SHOW_ENDS.clear();
         for (S2C.NukeClock.ShowEnd e : p.ends()) SHOW_ENDS.put(e.id(), e.at());
+        for (Active a : DETONATIONS.values()) if (SHOW_ENDS.containsKey(a.d.id())) a.clock.ended();
+    }
+
+    /** The server's game time this tick ({@link S2C.NukeTick}): each detonation's anchor ({@link AgeClock}). */
+    public static void anchor(S2C.NukeTick p) {
+        for (Active a : DETONATIONS.values()) a.clock.anchor(p.gameTime() - a.d.gameTime());
     }
 
     /** World entry/dimension change: all current state, without flash/hit (already passed). */
@@ -370,7 +470,7 @@ public final class ClientNuclear {
         FarTerrain.Water water = heights == null ? null : FarTerrain.water(level), hard = heights == null ? null : FarTerrain.hard(level);
         for (Iterator<Active> it = DETONATIONS.values().iterator(); it.hasNext(); ) {
             Active a = it.next();
-            a.age++;
+            a.tick();
             a.sounds.tick();
             // terrain/water under pall: for rays without world behind and for matter (ceiling dimensions use ground
             // under epicenter)

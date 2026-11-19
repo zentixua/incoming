@@ -519,6 +519,12 @@ public final class IncomingClient {
         }
 
         @Override
+        public void nukeTick(S2C.NukeTick p) {
+            // keep order with burst packets and apply after a replay seek's reset, like the approach snapshot
+            Replay.event("nuke_tick", live -> ClientNuclear.anchor(p));
+        }
+
+        @Override
         public void radiation(S2C.Radiation p) {
             ClientNuclear.radiation(p);
         }

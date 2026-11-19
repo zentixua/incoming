@@ -610,6 +610,18 @@ public final class S2C {
         }
     }
 
+    /**
+     * The server's game time, sent every server tick while a detonation in the dimension is still in its show
+     * ({@code nuclear.NukeClock.SHOW_S}): each detonation's server age (this minus its detonation time) anchors the
+     * client's detonation clock ({@code ClientNuclear.AgeClock}), so the drawn burst, wave and sound never run ahead of
+     * the server's wave and ruins. One varlong per tick to the dimension's players.
+     */
+    public record NukeTick(long gameTime) implements CustomPacketPayload {
+        public static final Type<NukeTick> TYPE = new Type<>(Incoming.id("nuke_tick"));
+        public static final StreamCodec<ByteBuf, NukeTick> CODEC = StreamCodec.composite(ByteBufCodecs.VAR_LONG, NukeTick::gameTime, NukeTick::new);
+        @Override public Type<? extends CustomPacketPayload> type() { return TYPE; }
+    }
+
     /** Full terminal snapshot and server epoch. Repeated snapshots also restore Flashback seek/late join. */
     public record NukeApproach(long time, List<ua.zentix.incoming.nuclear.IcbmArrival> arrivals) implements CustomPacketPayload {
         public static final Type<NukeApproach> TYPE = new Type<>(Incoming.id("nuke_approach"));
