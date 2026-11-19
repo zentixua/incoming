@@ -222,11 +222,15 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   `pallWallOrigin`): position minus post-front wind path (`carried`: air path over local positive phase, U·t₊/e by
   Friedlander, tens of meters for 15 kt at 592 m; phase share `carriedShare` = u·e^(1−u)); air stationary at ground,
   1/7 boundary-layer law above, upward 0.02–0.08 of path (Kuhl §3.4). Billows form where front lofted dust and stay there;
-  against the departing front, edge dust goes up/back, rolling the wall. The pattern also turns in eddies of tile size on concentric
-  rings resting on the ground (`pallWallRoll`/`BlastWall.roll`, angle `rollAngle` = `EDDY` 0.2 × wind path × `carriedShare` / tile:
-  top outward with the wave's wind, back as it reverses; × `ROLL_GAIN` 8, presentation, turn zero at eddy rims). Where the local
-  layer is thinner than a billow (toe), billows give way to their mean (`resolved` in `wallAt`): tile-sized holes in a metres-thick
-  sheet read as a translucent shell at the front (18.11). Noise tile (`TILE` of maximum phase-end layer
+  against the departing front, edge dust goes up/back, rolling the wall. The pattern also turns in eddies on concentric rings resting on
+  the ground (`pallWallRoll`/`BlastWall.roll`, angle `rollAngle` = `EDDY` 0.2 × wind path × `carriedShare` / eddy size: top
+  outward with the wave's wind, back as it reverses; × `ROLL_GAIN` 8, presentation, turn zero at eddy rims). Eddies are the local
+  layer's size, not the tile's (the tile is the thickest layer's, near ground zero: 79 m for 15 kt where the layer 1 km out is
+  16–29 m): the octave tile/2^k nearest the local top (`wallBillows`, fixed scales, two near a boundary); thinner than tile/11
+  (toe) billows give way to their mean: tile-sized holes in a metres-thick sheet read as a translucent shell at the front (18.11).
+  Close-up check 19.11 (sandbox, side view along the front): the head is a thin ramp (15 kt 1.5 km: top 37 m over a 291 m
+  wedge), its turn lasts the head's life (0.9–3.6 s) — texture churn, not a wall rolling over itself; the tall translucent
+  sheet above it in the first seconds is the Wilson shell (`pallWilson`), not dust. Noise tile (`TILE` of maximum phase-end layer
   top) is fixed per detonation: a tile growing with the head, like old noise in a tile rotated by wall angle at front,
   moved billows over ground at front speed — dust “spread from epicenter” (18.10 complaint,
   `BlastWallTest.headCloudsStayWhereTheDustWasLifted`). Cartesian coordinates, no tiled circumference or noise phases.

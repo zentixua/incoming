@@ -358,27 +358,36 @@ vec3 wallNoise(vec3 q, float fine) {
     return vec3(n, mix(1.0, detail, fine));
 }
 
+// Head billows at one eddy scale: noise in dust coordinates (pallWallOrigin), turned in eddies of diameter size (pallWallRoll),
+// density multiplier (pallShape × fine billows, mean 1)
+float wallBillows(mat4 V, WallAt h, float ph, float size, float fine, float fill, vec3 offset) {
+    vec3 o = pallWallRoll(pallWallOrigin(h.rel, h.z, ph, h.P.y, V[1].x), h.rel / max(length(h.rel), 1e-3), size,
+            pallWallRollAngle(ph, V[1].x, size));
+    vec3 n = wallNoise(o / size + offset, fine);
+    return pallShape(n.xy, fill) * n.z;
+}
+
 // Head at h (pallWallAt) with billows: extinction, 1/block. Billows as pall (pallShape: mean 1, dense dust more continuous —
 // fill by density relative to dense, thinner toward wedge top), fine billows within while resolved (fine; 0 for shadow
-// billows). Noise at dust origin (pallWallOrigin): billows form behind front where dust was lifted and stay there;
-// relative to retreating front, edge dust moves up and back — a roller
+// billows). Noise at dust origin (pallWallOrigin): billows form behind front where dust was lifted and stay there, turning in the
+// layer's eddies. Eddies are the size of the layer here (Kuhl §3), not of the thickest layer near ground zero (the tile V[2].w:
+// 79 m for 15 kt, where the layer 1 km out is 16–29 m): the noise octave tile/2^k with k = log2(tile / local top), fixed scales so
+// billows stay where they were lofted and only their mix changes as the layer deepens; two octaves near a boundary. Thinner than
+// tile/11 (the toe right behind the front, a few metres): eddies finer than any octave — their mean, an even sheet of fresh dust
+// (18.11: tile-sized holes in a layer metres thick read as a translucent shell)
 float wallAt(mat4 V, WallAt h, float fine, float dense) {
     float s = h.s - h.P.z;
     float m = pallWallMean(s, h.z, h.P.x, h.P.y);
     if (m <= 0.0 || h.P.w <= 0.0) return 0.0;
     float u = s / max(h.P.x, 0.001), ph = u * V[2].x, tile = max(V[2].w, 1.0);
-    // billows where the dust was lofted, turning in the layer's eddies (pallWallRoll)
-    vec3 o = pallWallRoll(pallWallOrigin(h.rel, h.z, ph, h.P.y, V[1].x), h.rel / max(length(h.rel), 1e-3), tile,
-            pallWallRollAngle(ph, V[1].x, tile));
-    vec3 n = wallNoise(o / tile + vec3(0.618034, 0.414214, 0.732051), fine);
     float local = h.P.y * pallWallTop(u);
     float fill = clamp(h.P.w * m / max(dense, 1e-6) * 3.0, 0.0, 1.0) * (1.0 - smoothstep(0.4, 1.0, h.z / max(local, 0.001)));
-    // eddies are the layer's size: where the layer is thinner than a billow (a quarter tile; the toe behind the front, a few metres
-    // high), its eddies are finer than the tile's billows — their mean: from under half a billow (tile/8) to one and a half (3·tile/8)
-    // the pattern fades in. An even sheet of fresh dust thickening behind the front, not tile-sized patches with holes in a layer metres
-    // thick (the "shell" at the front edge, 18.11)
-    float resolved = smoothstep(0.125, 0.375, local / tile);
-    return h.P.w * m * mix(1.0, pallShape(n.xy, fill), resolved) * mix(1.0, n.z, resolved);
+    float k = log2(tile / max(local, 1e-3)), resolved = 1.0 - smoothstep(3.5, 4.0, k);
+    if (resolved <= 0.0) return h.P.w * m;
+    float k0 = floor(clamp(k, 0.0, 3.0)), b = k >= 3.0 ? 0.0 : smoothstep(0.35, 0.65, max(k, 0.0) - k0), size = tile * exp2(-k0);
+    float shape = b < 1.0 ? wallBillows(V, h, ph, size, fine, fill, vec3(0.618034, 0.414214, 0.732051)) : 0.0;
+    if (b > 0.0) shape = mix(shape, wallBillows(V, h, ph, 0.5 * size, fine, fill, vec3(0.381966, 0.585786, 0.267949)), b);
+    return h.P.w * m * mix(1.0, shape, resolved);
 }
 
 // point h shifted by v (blocks): same underlying water/terrain/hard ground, own extinction (edge to wedge end, 0 outside bounds),

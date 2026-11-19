@@ -350,13 +350,17 @@ class PallGlslTest {
         }
         String wall = body(read("include/fx_pall.glsl"), "float wallAt(");
         String flat = wall.replaceAll("\\s+", " ");
-        assertTrue(flat.contains("float u = s / max(h.P.x, 0.001), ph = u * V[2].x, tile = max(V[2].w, 1.0);")
-                && flat.contains("vec3 o = pallWallRoll(pallWallOrigin(h.rel, h.z, ph, h.P.y, V[1].x), h.rel / max(length(h.rel), 1e-3), tile, "
-                + "pallWallRollAngle(ph, V[1].x, tile));") && flat.contains("vec3 n = wallNoise(o / tile + "), "head noise - not in dust coordinates, turning in its eddies");
-        // where the layer is thinner than its billows (the toe right behind the front), billows give way to their mean: no holes in a sheet
-        // metres thick (18.11: a translucent textured band at the front)
-        assertTrue(flat.contains("float resolved = smoothstep(0.125, 0.375, local / tile);")
-                && flat.contains("return h.P.w * m * mix(1.0, pallShape(n.xy, fill), resolved) * mix(1.0, n.z, resolved);"), "toe billows - not their mean");
+        String billows = body(read("include/fx_pall.glsl"), "float wallBillows(").replaceAll("\\s+", " ");
+        assertTrue(billows.contains("vec3 o = pallWallRoll(pallWallOrigin(h.rel, h.z, ph, h.P.y, V[1].x), h.rel / max(length(h.rel), 1e-3), size, "
+                + "pallWallRollAngle(ph, V[1].x, size));") && billows.contains("vec3 n = wallNoise(o / size + offset, fine);"),
+                "head noise - not in dust coordinates, turning in its eddies");
+        assertTrue(flat.contains("float u = s / max(h.P.x, 0.001), ph = u * V[2].x, tile = max(V[2].w, 1.0);"), "head phase share or tile");
+        // eddies the layer's size: the octave of the tile matching the local layer top (fixed scales: billows stay where lofted); thinner
+        // than tile/11 (the toe right behind the front) — their mean: no holes in a sheet metres thick (18.11: a translucent band at the front)
+        assertTrue(flat.contains("float local = h.P.y * pallWallTop(u);")
+                && flat.contains("float k = log2(tile / max(local, 1e-3)), resolved = 1.0 - smoothstep(3.5, 4.0, k);")
+                && flat.contains("float k0 = floor(clamp(k, 0.0, 3.0)), b = k >= 3.0 ? 0.0 : smoothstep(0.35, 0.65, max(k, 0.0) - k0), size = tile * exp2(-k0);")
+                && flat.contains("return h.P.w * m * mix(1.0, shape, resolved);"), "head eddies - not the local layer's size, or toe billows not their mean");
     }
 
     /**
