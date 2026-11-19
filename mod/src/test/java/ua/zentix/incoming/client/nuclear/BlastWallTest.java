@@ -411,7 +411,8 @@ class BlastWallTest {
         double[] colour = day ? new double[]{0.47, 0.65, 1} : new double[3];
         for (int c = 0; c < 3; c++) {
             s.sky[c] = NukePall.skyLight(colour[c], floor);
-            s.sun[c] = NukePall.sunLight(1, s.sky[c], s.day);
+            s.top[c] = NukePall.sunLight(1, s.sky[c], s.day);
+            s.sun[c] = s.top[c];
         }
         s.base = ambient;
         s.exposure = (float) Sight.adapted(1, ambient);

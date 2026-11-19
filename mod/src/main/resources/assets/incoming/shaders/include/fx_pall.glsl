@@ -61,8 +61,12 @@ uniform vec3 PallMin;
 uniform vec3 PallMax;
 // sun direction (xyz), daytime sun strength 0..1 (w)
 uniform vec4 PallSun;
-// sun/sky light, linear (white wall at noon — 1); fire glow on a white wall beneath haze is in display values
+// sun/sky light, linear (white wall at noon — 1); fire glow on a white wall beneath haze is in display values. PallSunLight is
+// the sun on the ground; matter aloft takes pallSunBeam of its height
 uniform vec3 PallSunLight;
+// sun light above the air, linear (NukePall.Sky.top: weather, remainder to white after sky light); zero once the sun is below
+// every height's horizon (Sight.SUN_TOP)
+uniform vec3 PallSunTop;
 uniform vec3 PallSkyLight;
 uniform vec3 PallFireLight;
 // frame display skylight (white wall: day 1, night as wall billows, FarView.ambient): dust wall adds fire reflection
@@ -970,11 +974,57 @@ float pallOpenHere(vec3 p) {
     if (PallSlot0[1].w > 0.5) return pallOpen(PallOpen, PallOpenAt, PallOpenWrap, Sampler5, PallSlot0, PallGround0, p);
     return pallOpen(PallOpen, PallOpenAt, PallOpenWrap, Sampler6, PallSlot1, PallGround1, p);
 }
-// Sun above eye-relative pall point p through mushrooms on its ray: shadow map as world (fx_pall_composite: shade),
-// from matter above map midpoint (mushShadowFrom); no map at night
+// The sunbeam's air over a round earth (Sight.EARTH_R, AIR_HEIGHT, HAZE_HEIGHT, SHADOWED; vertical optical depths of clean air and
+// clear-day haze at the display channels 610/550/465 nm, Sight.cleanDepth/hazeDepth): SightTest holds them equal to Java
+const float SUN_EARTH_R = 6371000.0;
+const float SUN_AIR_H = 8000.0;
+const float SUN_HAZE_H = 1200.0;
+const float SUN_SHADOWED = 10000.0;
+const vec3 SUN_CLEAN = vec3(0.060825, 0.0928, 0.184086);
+const vec3 SUN_HAZE = vec3(0.192993, 0.2208, 0.274651);
+
+// Chapman function above the horizon, x = (R + z)/H, mu the sine of elevation ≥ 0 (Sight.chapman: erfcx bound, A&S 7.1.13)
+float sunChapman(float x, float mu) {
+    float y = sqrt(0.5 * x) * mu;
+    return sqrt(2.0 * x) / (y + sqrt(y * y + 1.2732395));
+}
+
+// Air column along the sunbeam from height z (m) toward elevation sine s, scale height h, relative to the vertical column above
+// the ground (Sight.column): Chapman function over a round earth; below the point's horizon the beam's lowest point passed twice,
+// SUN_SHADOWED in the earth's shadow
+float sunColumn(float z, float s, float h) {
+    float zz = max(z, 0.0), e = clamp(s, -1.0, 1.0), x = (SUN_EARTH_R + zz) / h;
+    if (e >= 0.0) return exp(-zz / h) * sunChapman(x, e);
+    float c = sqrt(1.0 - e * e), low = zz * c - SUN_EARTH_R * e * e / (1.0 + c);
+    if (low <= 0.0) return SUN_SHADOWED;
+    return min(2.0 * exp(-low / h) * sqrt(3.14159265 * (SUN_EARTH_R + low) / (2.0 * h)) - exp(-zz / h) * sunChapman(x, -e), SUN_SHADOWED);
+}
+
+// Sun light on matter z blocks (= m) above the ground (NukePall.Sky.sunAt, Sight.sunThroughAir): the beam above the air through the
+// slant column of clean air and haze, relative to the overhead sun at that height (white at noon at every height). At a low sun a
+// cap kilometres up keeps a golden beam the ground has lost; after ground sunset a red one, until the earth's shadow climbs past it
+vec3 pallSunBeam(float z) {
+    float clean = sunColumn(z, PallSun.y, SUN_AIR_H) - sunColumn(z, 1.0, SUN_AIR_H);
+    float haze = sunColumn(z, PallSun.y, SUN_HAZE_H) - sunColumn(z, 1.0, SUN_HAZE_H);
+    return PallSunTop * exp(-(clean * SUN_CLEAN + haze * SUN_HAZE));
+}
+
+// The sun lights some height this frame (PallPass.Frame.sunUp): sun branches and the shadow map exist
+bool pallSunUp() {
+    return PallSunTop.r + PallSunTop.g + PallSunTop.b > 0.0;
+}
+
+// Height of eye-relative p above ground zero of the first active pall slot, blocks: the sun's height for pall and wall
+float pallSunHeight(vec3 p) {
+    if (PallSlot0[1].w > 0.5) return p.y - PallSlot0[0].z;
+    return p.y - PallSlot1[0].z;
+}
+
+// Sun above eye-relative pall point p (at its height, pallSunBeam) through mushrooms on its ray: shadow map as world
+// (fx_pall_composite: shade), from matter above map midpoint (mushShadowFrom); no map while the sun lights no height
 vec3 pallSunAt(vec3 p) {
-    if (PallSun.w <= 0.0) return PallSunLight;
-    return PallSunLight * mushShadowFrom(Sampler7, Sampler8, mushShadowSun(PallSun.xyz), p, 0.5);
+    if (!pallSunUp()) return vec3(0.0);
+    return pallSunBeam(pallSunHeight(p)) * mushShadowFrom(Sampler7, Sampler8, mushShadowSun(PallSun.xyz), p, 0.5);
 }
 
 void pallLighting(vec3 dir) {
@@ -1113,12 +1163,12 @@ vec4 mushTausAt(Mush m, vec3 p, vec3 q, int block) {
     float across = 2.0 * m.boundR;
     if (block == 0) {
         float sun = 0.0;
-        if (PallSun.w > 0.0) sun = mushTau(m, p + gSun * (0.75 * m.capTile), gSun, across);
+        if (pallSunUp()) sun = mushTau(m, p + gSun * (0.75 * m.capTile), gSun, across);
         return vec4(mushTau(m, p, vec3(0.0, 1.0, 0.0), max(m.boundTop - q.y, 1.0)), mushTau(m, p, vec3(0.0, -1.0, 0.0), max(q.y, 1.0)),
                 mushTau(m, p, p / max(length(p), 1e-3), across), sun);
     }
     vec4 r = vec4(0.0);
-    if (PallSun.w > 0.0) r.x = mushTau(m, p, -gSun, across);
+    if (pallSunUp()) r.x = mushTau(m, p, -gSun, across);
     if (m.capSigma > 0.0) {
         // toward cap center in world axes: height-dependent wind drift (mushLocal) means mushroom body axes are not world axes
         vec3 c = vec3(0.0, m.capY, 0.0) - q;
@@ -1370,7 +1420,7 @@ vec4 mushAt(int k, Mush m, vec3 p, vec3 q, float cone, out float near, out vec3 
     float up = taus.x, down = taus.y;
     float lowShare = (sig.y + sig.z + sig.w) / st;
     vec4 more = vec4(0.0);
-    if (PallSun.w > 0.0 || (lowShare > 0.0 && m.capSigma > 0.0)) more = mushTauGrid(k, m, p, q, 1);
+    if (pallSunUp() || (lowShare > 0.0 && m.capSigma > 0.0)) more = mushTauGrid(k, m, p, q, 1);
     // toward eye, depth traveled by ray (with billows: a hollow point is eye-exposed; mean field would block it with
     // nonexistent foreground billows); away from eye, mean field
     float toEye = gTauEye, beyond = taus.z;
@@ -1380,15 +1430,18 @@ vec4 mushAt(int k, Mush m, vec3 p, vec3 q, float cone, out float near, out vec3 
     vec3 light = vec3(0.0);
     // emission escape depth: shortest optical depth
     float escape = min(min(up, down), toEye);
-    if (PallSun.w > 0.0) {
+    // sun at the point's height (pallSunBeam): the cap kilometres up keeps it after the ground has lost it; a point already in the
+    // earth's shadow (beam a ten-thousandth of the sky) skips its sunward trace
+    vec3 beam = pallSunUp() ? pallSunBeam(q.y) : vec3(0.0);
+    if (dot(beam, LUMA) > 1e-4 * dot(PallSkyLight, LUMA)) {
         float toSun = mushSunTau(k, m, p, kk, taus.w), away = more.x;
         escape = min(escape, min(toSun, away));
         // sun beam along slab through point on sun axis (cosine 1): its diffuse light and direct beam
         float cs = g * dot(-gDir, gSun);
-        light += vec3(pallDiffuse(w.r, g, toSun, toSun + away, 0.0, 1.0, PallSunLight.r, 1.0, 0.0, 0.0, 0.0, cs),
-                pallDiffuse(w.g, g, toSun, toSun + away, 0.0, 1.0, PallSunLight.g, 1.0, 0.0, 0.0, 0.0, cs),
-                pallDiffuse(w.b, g, toSun, toSun + away, 0.0, 1.0, PallSunLight.b, 1.0, 0.0, 0.0, 0.0, cs));
-        light += PallSunLight * (0.25 * hg(g, gC) * exp(-toSun));
+        light += vec3(pallDiffuse(w.r, g, toSun, toSun + away, 0.0, 1.0, beam.r, 1.0, 0.0, 0.0, 0.0, cs),
+                pallDiffuse(w.g, g, toSun, toSun + away, 0.0, 1.0, beam.g, 1.0, 0.0, 0.0, 0.0, cs),
+                pallDiffuse(w.b, g, toSun, toSun + away, 0.0, 1.0, beam.b, 1.0, 0.0, 0.0, 0.0, cs));
+        light += beam * (0.25 * hg(g, gC) * exp(-toSun));
     }
     // Ball/cap light on stem, skirt, water column (MushroomModel.light): Lambertian sphere of cap radius, black-body
     // radiance at visible exterior temperature (core excess × edge share), L·R²/d², beam from cap center like sun, with

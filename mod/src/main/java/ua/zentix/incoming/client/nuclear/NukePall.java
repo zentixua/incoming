@@ -236,7 +236,7 @@ public final class NukePall {
         MushroomField.air(all.get(0).d, eye, range, f.air);
         // frame light before mushrooms: by day include mushrooms whose shadow enters the frame (MushroomField.frame)
         light(level, eye, partial, f);
-        f.mushroomCount = MushroomField.frame(all, eye, partial, frustum, f.sun, level.getMinBuildHeight(), level.getMaxBuildHeight(), f.mushrooms);
+        f.mushroomCount = MushroomField.frame(all, eye, partial, frustum, f.sun, f.sunUp(), level.getMinBuildHeight(), level.getMaxBuildHeight(), f.mushrooms);
         // ball light on world from all detonations: a ball behind the viewer lights ground ahead
         openSky(level, f.openSky, f.faceShade);
         double open = 0.2126 * PallLight.linear(f.openSky.x) + 0.7152 * PallLight.linear(f.openSky.y) + 0.0722 * PallLight.linear(f.openSky.z);
@@ -465,6 +465,7 @@ public final class NukePall {
         f.sun.set(SKY.sx, SKY.sy, 0, SKY.day);
         f.skyLight.set(SKY.sky[0], SKY.sky[1], SKY.sky[2]);
         f.sunLight.set(SKY.sun[0], SKY.sun[1], SKY.sun[2]);
+        f.sunTop.set(SKY.top[0], SKY.top[1], SKY.top[2]);
         // airlight: the sky vanilla draws behind distant matter, without its sun, moon and stars (fx_pall: pallAirLight)
         float[] fog = ua.zentix.incoming.client.fx.layer.FxLayer.fogColor();
         f.airSky.set(SKY.shown[0], SKY.shown[1], SKY.shown[2]);
@@ -488,8 +489,26 @@ public final class NukePall {
     static final class Sky {
         /** Sun direction (x, y; z = 0) and daylight strength 0..1. */
         float sx, sy, day;
-        /** Per-channel sun and sky light, linear: white horizontal wall at noon = 1. */
+        /** Per-channel sun light on the ground and sky light, linear: white horizontal wall at noon = 1. */
         final float[] sun = new float[3], sky = new float[3];
+        /**
+         * Per-channel sun light above the air ({@link #sunAt} before the air), linear: weather and the remainder to white after sky
+         * light; zero once the sun is below the horizon of {@link Sight#SUN_TOP}.
+         */
+        final float[] top = new float[3];
+
+        /**
+         * Sun light on matter {@code height} blocks (= m) above the ground, per channel, into {@code into}: {@link #top} through the air
+         * of its beam ({@link Sight#sunThroughAir}); the copy in {@code fx_pall} is {@code pallSunBeam}.
+         */
+        void sunAt(double height, double[] into) {
+            if (top[0] <= 0 && top[1] <= 0 && top[2] <= 0) {
+                java.util.Arrays.fill(into, 0, 3, 0);
+                return;
+            }
+            Sight.sunThroughAir(sy, height, into);
+            for (int c = 0; c < 3; c++) into[c] *= top[c];
+        }
         /** Minecraft's sky colour on screen ({@code ClientLevel.getSkyColor}): the sky disc vanilla draws. */
         final float[] shown = new float[3];
         /**
@@ -505,7 +524,9 @@ public final class NukePall {
         into.sx = -Mth.sin(angle);
         into.sy = Mth.cos(angle);
         boolean sky = level.dimensionType().hasSkyLight() && !level.dimensionType().hasCeiling();
-        float day = sky ? smooth(-0.06f, 0.18f, into.sy) * (1 - 0.55f * level.getRainLevel(partial)) * (1 - 0.35f * level.getThunderLevel(partial)) : 0;
+        // clouds of rain and thunder dim the sun everywhere; vanilla's daylight at the eye fades from 10° to −3.4° (smooth)
+        float weather = sky ? (1 - 0.55f * level.getRainLevel(partial)) * (1 - 0.35f * level.getThunderLevel(partial)) : 0;
+        float day = smooth(-0.06f, 0.18f, into.sy) * weather;
         into.day = day;
         Vec3 skyColor = level.getSkyColor(eye, partial);
         into.shown[0] = (float) skyColor.x;
@@ -519,10 +540,15 @@ public final class NukePall {
         into.sky[0] = skyLight(skyColor.x, floor);
         into.sky[1] = skyLight(skyColor.y, floor);
         into.sky[2] = skyLight(skyColor.z, floor);
-        // direct sunlight through the air along its air mass (Sight.sunThroughAir: Rayleigh + clear-day haze, every elevation), relative to
-        // the overhead sun: white at noon, redder and dimmer as it sinks
-        Sight.sunThroughAir(into.sy, THROUGH_AIR);
-        for (int c = 0; c < 3; c++) into.sun[c] = (float) (THROUGH_AIR[c] * sunLight(1, into.sky[c], day));
+        // direct sunlight above the air while it reaches the highest matter (earth's shadow, not the eye's daylight: a cap kilometres
+        // up stays sunlit after ground sunset); on the ground, through the air along its slant column (Sight.sunThroughAir: Rayleigh +
+        // clear-day haze, every elevation and height), relative to the overhead sun: white at noon, redder and dimmer as it sinks
+        boolean up = weather > 0 && Sight.sunAbove(into.sy, Sight.SUN_TOP);
+        Sight.sunThroughAir(into.sy, 0, THROUGH_AIR);
+        for (int c = 0; c < 3; c++) {
+            into.top[c] = up ? sunLight(1, into.sky[c], weather) : 0;
+            into.sun[c] = (float) (THROUGH_AIR[c] * into.top[c]);
+        }
         // wall reflection and fire glow (on screen) add to on-screen sky light — this value
         into.base = ambient;
         // mushroom glow is a black body at real brightness (noon white wall = 1): into frame with eye adaptation to sky
@@ -611,14 +637,16 @@ public final class NukePall {
         // ball light is a beam from cap center, like the mushroom body (CloudPuffs.ball), × eye adaptation
         double lit = CloudPuffs.ball(sky.exposure, glow[0], ll);
         double burn = CloudPuffs.burn(r, 0, glow[1], glow[3]) * (1 - 0.75 * sky.day);
-        double[] lin = new double[3];
+        // sun at the point's height above ground zero, as fx_pall's pallSunAt (Sky.sunAt)
+        double[] lin = new double[3], sun = new double[3];
+        sky.sunAt(gy, sun);
         for (int c = 0; c < 3; c++) {
             double w = Mth.lerp(smoke, Mth.lerp(sand, DUST_W[c], SAND_W[c]), SMOKE_W[c]);
             double fire = FIRE[c];
             double ball = glow[4 + c] * lit;
-            double field = PallLight.diffuse(w, DUST_G, depth, slab, PallLight.LAND, muS, sky.sun[c], 1, 0, sky.sky[c], 0, 0)
+            double field = PallLight.diffuse(w, DUST_G, depth, slab, PallLight.LAND, muS, sun[c], 1, 0, sky.sky[c], 0, 0)
                     + PallLight.diffuse(w, DUST_G, deepB, slabB, PallLight.LAND, muS, 0, muB, ball, 0, 0, 0);
-            double beams = 0.25 * (sky.sun[c] * Math.exp(-toSun) + ball * Math.exp(-toBall));
+            double beams = 0.25 * (sun[c] * Math.exp(-toSun) + ball * Math.exp(-toBall));
             double from = 0;
             if (burn > 0) {
                 double flame = PallLight.flame(sky.base, fire * burn * sky.glowOnSmoke / DUST[c], fire);
@@ -692,11 +720,11 @@ public final class NukePall {
     }
 
     /**
-     * Channel sun light: remainder up to white after sky light {@code sky}, colour factor {@code red} (on screen), daylight strength
-     * day; {@link #sky} scales it by the air ({@link Sight#sunThroughAir}).
+     * Channel sun light above the air: remainder up to white after sky light {@code sky}, colour factor {@code red} (on screen),
+     * strength {@code weather} (rain and thunder clouds); {@link Sky#sunAt} passes it through the air ({@link Sight#sunThroughAir}).
      */
-    static float sunLight(double red, float sky, float day) {
-        return day * (float) (PallLight.linear(red) * Math.max(1 - sky, 0));
+    static float sunLight(double red, float sky, float weather) {
+        return weather * (float) (PallLight.linear(red) * Math.max(1 - sky, 0));
     }
 
     /** On-screen sky light on pall at night is at least this ({@code night} — night fraction 0..1): like sky light on wall billows. */
@@ -736,11 +764,23 @@ public final class NukePall {
                     a.ground.waterShare(), a.ground.hasLand(), a.ground.hasWater(), Math.toDegrees(a.d.windDir()), Math.hypot(w[0], w[1]),
                     a.ground.water(a.d.burst().x + from[0], a.d.burst().z + from[1]));
         }
+        // sun terms of the frame (light): elevation, eye daylight, sky, beam above the air, on the ground and at the last cap's height
+        double capM = 0;
+        if (!all.isEmpty()) {
+            ua.zentix.incoming.nuclear.model.MushroomModel.Shape cap = MushroomField.shape(all.getLast(), 0);
+            if (cap != null) capM = all.getLast().d.blocks(cap.capY());
+        }
+        double[] atCap = new double[3];
+        SKY.sunAt(capM, atCap);
+        String sun = String.format(java.util.Locale.ROOT, "sun %.2f° day %.3f, sky %.4f %.4f %.4f, beam above air %.4f %.4f %.4f, on ground %.4f %.4f %.4f, "
+                        + "at cap %.0f blocks %.4f %.4f %.4f",
+                Math.toDegrees(Math.asin(Mth.clamp(SKY.sy, -1, 1))), SKY.day, SKY.sky[0], SKY.sky[1], SKY.sky[2], SKY.top[0], SKY.top[1], SKY.top[2],
+                SKY.sun[0], SKY.sun[1], SKY.sun[2], capM, atCap[0], atCap[1], atCap[2]);
         return String.format(java.util.Locale.ROOT, "sigma at camera %.4f /block (visibility %.0f blocks; mist %.4f), depth up %.2f down %.2f, muffle %.2f, ash %d, quality %s, "
-                        + "light: sky %.3f, fires %.2f × %.2f, ball r %.0f blocks, black body %.3g %.3g %.3g, under the pall: %s, surge r %.0f top %.0f sigma %.4f, "
+                        + "light: %s, fires %.2f × %.2f, ball r %.0f blocks, black body %.3g %.3g %.3g, under the pall: %s, surge r %.0f top %.0f sigma %.4f, "
                         + "frames: %s; mushrooms %d (exposure %.6g); firestorm: %s; nuclear camera: %s",
                 sigma, sigma > 1e-5f ? 3.912 / sigma : Double.POSITIVE_INFINITY, mist, tauUp, tauDown, muffle, NukeAsh.alive(), quality(),
-                f.skyLight.y, f.glowOnSmoke, f.glow0.y, f.glow0.x, f.hot0.x, f.hot0.y, f.hot0.z, under, f.water0.x, f.water0.y, f.water0.z,
+                sun, f.glowOnSmoke, f.glow0.y, f.glow0.x, f.hot0.x, f.hot0.y, f.hot0.z, under, f.water0.x, f.water0.y, f.water0.z,
                 mc.level == null ? "-" : PallPass.describe(), f.mushroomCount, f.exposure, FireStorms.describe(), NukeLight.describe());
     }
 }
