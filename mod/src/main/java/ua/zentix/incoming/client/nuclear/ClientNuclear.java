@@ -32,9 +32,11 @@ import java.util.Map;
 public final class ClientNuclear {
     /**
      * Client detonation. Live (neither world entry nor Flashback replay seeking) includes flash, sound
-     * and shake. Visual time counts own client ticks since packet arrival and follows the client level time when that is
-     * ahead, never backward ({@link #follow}): game time jumps backward during server catch-up (the sphere/double flash
-     * last fractions of a second and must not repeat), while own ticks alone fell behind a heavy client that drops ticks
+     * and shake. Visual time starts at packet arrival and advances by one tick per client tick, or by the level clock's
+     * forward movement since the last tick when that is larger, never backward ({@link #follow}): game time jumps backward
+     * during server catch-up (the sphere/double flash last fractions of a second and must not repeat), a level clock already
+     * ahead of the server when the packet arrives must not age the burst (review of #668: 30 ticks ahead at arrival made a
+     * fresh 15 kt front 621 m instead of 174 m on its first tick), while own ticks alone fell behind a heavy client that drops ticks
      * (full host pack, 15 kt at 1.5 km: 24–26 client ticks while the server ran 44–49, so ruins, throws and debris the
      * server times by the wave came 1.5–2.7 s before the client drew the wave, its dust and sound).
      */
@@ -58,6 +60,8 @@ public final class ClientNuclear {
         /** Ticks elapsed before packet arrival (world-entry packets: since detonation). */
         private final long before;
         private long age;
+        /** Client level time at the last tick (at packet arrival before the first). */
+        private long levelLast;
         /**
          * Estimated world clock at the end of the show ({@link NukeClock}) when the server has not said ({@link #SHOW_ENDS}:
          * a recording made before the server sent it); NaN — not estimated yet.
@@ -79,6 +83,7 @@ public final class ClientNuclear {
             this.d = d;
             this.live = live;
             this.before = live ? 0 : Math.max(0, clientNow - d.gameTime());
+            this.levelLast = clientNow;
             this.puffs = puffs;
             this.wall = wall;
             this.water = water;
@@ -97,18 +102,21 @@ public final class ClientNuclear {
             return age;
         }
 
-        /** One client tick: own count, or the level clock where it is ahead ({@link #follow}). */
+        /** One client tick ({@link #follow}). */
         void tick(long levelNow) {
-            age = follow(age, levelNow - d.gameTime() - before);
+            age = follow(age, levelNow - levelLast);
+            levelLast = levelNow;
         }
 
         /**
-         * Detonation age after one client tick: one more than {@code age}, or {@code levelAge} (client level time since
-         * the detonation, less ticks counted before arrival) when that is ahead. Never backward when the level time jumps back;
-         * catches up when the server's time packet corrects a client that dropped ticks.
+         * Detonation age after one client tick in which the client level time moved by {@code levelStep}: one tick more, or
+         * the level clock's forward step when larger — a server time packet correcting a client that dropped ticks (full host
+         * pack: 24–26 client ticks while the server ran 44–49, so ruins, throws and debris came 1.5–2.7 s before the drawn
+         * wave). A backward step (server catch-up) is ignored, and only steps after the packet count: a level clock lead at
+         * arrival is never imported.
          */
-        static long follow(long age, long levelAge) {
-            return Math.max(age + 1, levelAge);
+        static long follow(long age, long levelStep) {
+            return age + Math.max(1, levelStep);
         }
 
         /** Ticks since detonation (with frame fraction). */

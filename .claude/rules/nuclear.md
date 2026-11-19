@@ -404,10 +404,12 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   restore the mark, same hash. Changes without neighbor notification (`setBlock` without flag 1, used by some mods)
   are invisible to event: next chunk save/send prunes (`FlashMarks.pruned`), unless same-type block replaced it first.
   Client mesh checks same hash while awaiting packet. Block hash is 6 bits; all 32 mark bits are used.
-- Client game clock jumps backward during server catch-up, and a heavy client drops ticks: visual detonation time is
-  own client ticks since packet arrival, or the level time when that is ahead, never backward (`ClientNuclear.Active.follow`).
-  Own ticks alone lagged the server 31–55 ticks in the full host pack, so ruins, throws and debris came 1.5–2.7 s before
-  the drawn wave (`ClientNuclearTest.heavyClientFollowsTheServerWave`).
+- Client game clock jumps backward during server catch-up, and a heavy client drops ticks: visual detonation time starts
+  at packet arrival and advances one tick per client tick, or by the level clock's forward step when larger, never
+  backward (`ClientNuclear.Active.follow`). Own ticks alone lagged the server 31–55 ticks in the full host pack, so ruins,
+  throws and debris came 1.5–2.7 s before the drawn wave (`ClientNuclearTest.heavyClientFollowsTheServerWave`); following
+  absolute level age imported a level lead present at arrival — 30 ticks ahead made a fresh 15 kt front 621 m instead of
+  174 m on its first tick (review of #668, `levelLeadAtArrivalIsNotImported`).
 - `Detonation.dayTime` (time of day at detonation) is no longer read: kept only for the save/packet formats. Slow
   consequences use the world clock (`WorldClock` on the server, `ClientClock` mirroring it from the client's day) and the
   detonation clock; server anchors per detonation (`NuclearEvents.Anchor`: world clock at burst and show end) are
