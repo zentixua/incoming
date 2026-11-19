@@ -1,7 +1,9 @@
 package ua.zentix.incoming.client.hud;
 
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.function.Predicate;
 import java.util.function.Supplier;
 import javax.annotation.Nullable;
@@ -22,14 +24,18 @@ import ua.zentix.incoming.registry.ModItems;
 
 /**
  * First-use hints for our items, taught the way the game teaches its own controls: a vanilla {@link TutorialToast}
- * (like the bundle tutorial) the first time the player holds the item, on screen for {@link #SHOW_MS} and closed early
- * once the player does what it teaches. A hint counts as shown when its toast is first drawn (not while F1 hides the
- * HUD or other toasts hold the queue), and is then remembered in {@code incoming-client.toml} ({@code shown_hints}, like
- * vanilla's {@code hideBundleTutorial} in options.txt), so a new world or server does not show it again.
+ * (like the bundle tutorial) the first time the player holds the item, closed early once the player does what it
+ * teaches. Its time counts like vanilla's tutorial timer, in unpaused game ticks, but only ticks on which the toast was
+ * actually drawn (not while F1 hides the HUD or other toasts hold the queue). A hint is remembered in
+ * {@code incoming-client.toml} ({@code shown_hints}, like vanilla's {@code hideBundleTutorial} in options.txt) once it
+ * has been on screen for {@link #SEEN_TICKS}, or as soon as the player does what it teaches, so a new world or server
+ * does not show it again.
  */
 public final class FirstUseHints {
-    /** Time on screen, ms: the vanilla bundle tutorial's 160 ticks ({@code BundleTutorial}). */
-    static final long SHOW_MS = 8000;
+    /** Time on screen, ticks: the vanilla bundle tutorial's ({@code BundleTutorial}). */
+    static final int SHOW_TICKS = 160;
+    /** Drawn ticks after which the hint counts as seen: past the toast's 0.6 s slide-in, long enough to read the title. */
+    static final int SEEN_TICKS = 30;
 
     /**
      * One hint: shown when {@code item} is in either hand; text {@code incoming.hint.<id>.title} and
@@ -44,25 +50,37 @@ public final class FirstUseHints {
     /** The hint toast waiting in the toast queue or on screen; null when none. */
     @Nullable
     private static HintToast toast;
+    /** Hints another mod refused to show (NeoForge {@code ToastAddEvent} cancelled): not offered again this session. */
+    private static final Set<String> refused = new HashSet<>();
 
     private FirstUseHints() {}
 
-    /** Client tick while the game runs. */
+    /** Every client tick with a level, paused or not. */
     public static void tick(Minecraft mc) {
         Player player = mc.player;
         if (player == null || !IncomingConfig.CLIENT_SPEC.isLoaded()) return;
+        Screen screen = mc.screen;
+        if (screen != null) {
+            for (Hint hint : HINTS) {
+                if (!hint.done().test(screen)) continue;
+                remember(hint.id());
+                if (toast != null && toast.hint == hint) toast.hide();
+            }
+        }
         if (toast != null) {
-            // gone from the toast queue and screen: hidden, timed out or cleared (ToastComponent.clear)
+            // gone from the toast queue and screen: timed out, hidden or cleared (ToastComponent.clear on leaving)
             if (mc.getToasts().getToast(HintToast.class, Toast.NO_TOKEN) == null) toast = null;
-            else if (mc.screen != null && toast.hint.done().test(mc.screen)) toast.hide();
+            else if (!mc.isPaused()) toast.tick();
             return;
         }
-        if (mc.screen != null || mc.options.hideGui) return;
+        if (screen != null || mc.options.hideGui) return;
         List<? extends String> shown = IncomingConfig.CLIENT.shownHints.get();
         for (Hint hint : HINTS) {
-            if (shown.contains(hint.id()) || !holds(player, hint.item().get())) continue;
-            toast = new HintToast(hint);
-            mc.getToasts().addToast(toast);
+            if (shown.contains(hint.id()) || refused.contains(hint.id()) || !holds(player, hint.item().get())) continue;
+            HintToast t = new HintToast(hint);
+            mc.getToasts().addToast(t);
+            if (mc.getToasts().getToast(HintToast.class, Toast.NO_TOKEN) == t) toast = t;
+            else refused.add(hint.id());
             return;
         }
     }
@@ -86,13 +104,11 @@ public final class FirstUseHints {
         }
     }
 
-    /**
-     * Vanilla tutorial toast whose time and "shown" record start when it is first drawn; dismissed while still queued
-     * (the player already did what it teaches), it closes without being recorded.
-     */
+    /** Vanilla tutorial toast that counts the ticks on which it was drawn. */
     private static final class HintToast extends TutorialToast {
         final Hint hint;
-        private boolean drawn, dismissed;
+        private boolean drawn;
+        private int ticks;
 
         HintToast(Hint hint) {
             super(hint.icon(), Component.translatable("incoming.hint." + hint.id() + ".title"),
@@ -100,30 +116,28 @@ public final class FirstUseHints {
             this.hint = hint;
         }
 
-        @Override
-        public Toast.Visibility render(GuiGraphics graphics, ToastComponent toasts, long timeSinceLastVisible) {
-            if (!drawn) {
-                if (dismissed) return Toast.Visibility.HIDE;
-                drawn = true;
-                remember(hint.id());
-            }
-            if (timeSinceLastVisible >= SHOW_MS) hide();
-            updateProgress(Math.min(1f, (float) timeSinceLastVisible / SHOW_MS));
-            return super.render(graphics, toasts, timeSinceLastVisible);
+        /** One unpaused game tick: counts it if the toast was drawn since the last one. */
+        void tick() {
+            if (!drawn) return;
+            drawn = false;
+            ticks++;
+            if (ticks == SEEN_TICKS) remember(hint.id());
+            updateProgress((float) ticks / SHOW_TICKS);
+            if (ticks >= SHOW_TICKS) hide();
         }
 
         @Override
-        public void hide() {
-            dismissed = true;
-            super.hide();
+        public Toast.Visibility render(GuiGraphics graphics, ToastComponent toasts, long timeSinceLastVisible) {
+            drawn = true;
+            return super.render(graphics, toasts, timeSinceLastVisible);
         }
     }
 
-    /** Which hints this client has shown (pure, for tests: does not load the item registry). */
+    /** Which hints are recorded (pure, for tests: does not load the item registry). */
     static final class Ledger {
         private Ledger() {}
 
-        /** Shown ids after showing {@code id}, or null if it was already shown. */
+        /** Shown ids after recording {@code id}, or null if it was already recorded. */
         @Nullable
         static List<String> claim(List<? extends String> shown, String id) {
             if (shown.contains(id)) return null;
@@ -131,5 +145,6 @@ public final class FirstUseHints {
             next.add(id);
             return next;
         }
+
     }
 }

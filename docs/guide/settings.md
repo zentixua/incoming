@@ -21,7 +21,7 @@ Each player has their own, stored in `config/incoming-client.toml`.
 | Hearing damage | on | muffled hearing and faint ringing after a blast wave that hurts the ears; torn eardrums from 5 psi |
 | Incoming's blast effects | on | the flash, fireball, smoke, dust, debris, blast wave, sound, echo, jolt and hearing loss of strike blasts, and the bunker bomb's impact, ground tremor, gas vent and collapse; off hides these effects but does not make another mod replace them; only your picture and sound change, destruction and damage are the server's; air defense hits and nuclear blasts stay |
 | Muffle distant and hidden strikes | on | distant strikes lose high tones, hidden ones sound muffled, and inside the dust pall all distant sounds are muffled |
-| Hints already shown | empty | first-use hints this game has already shown, such as the console hint the first time you hold a designator; clear the list to see them again |
+| Hints already shown | empty | first-use hints this game has already shown or whose action you have already used, such as the console hint the first time you hold a designator; clear the list to see them again |
 
 The mod's sounds follow the Ambient/Environment volume slider.
 

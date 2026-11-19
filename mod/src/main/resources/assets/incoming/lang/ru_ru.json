@@ -346,7 +346,7 @@
   "incoming.hint.console.title": "Открой экран пульта",
   "incoming.hint.console": "Shift + правый клик",
   "incoming.config.shown_hints": "Уже показанные подсказки",
-  "incoming.config.shown_hints.tooltip": "Подсказки при первом использовании, которые эта игра уже показала. Очисти список, чтобы увидеть их снова.",
+  "incoming.config.shown_hints.tooltip": "Подсказки при первом использовании, которые эта игра уже показала или чьим действием ты уже пользовался. Очисти список, чтобы увидеть их снова.",
   "subtitles.incoming.nuke.alarm": "Сирена гражданской обороны",
   "subtitles.incoming.nuke.launch": "Рёв стартующей ракеты",
   "subtitles.incoming.nuke.blast": "Ядерный взрыв",

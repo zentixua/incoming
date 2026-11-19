@@ -391,7 +391,7 @@ public final class IncomingConfig {
                             "this player's picture and sound change: destruction and damage are the server's. Air defence hits and nuclear",
                             "blasts stay Incoming's.")
                     .translation("incoming.config.blast_effects").define("blast_effects", true);
-            shownHints = b.comment("First-use hints this client has already shown (client/hud/FirstUseHints); clear the list to see them again.")
+            shownHints = b.comment("First-use hints this client has already shown or whose action the player has used (client/hud/FirstUseHints); clear the list to see them again.")
                     .translation("incoming.config.shown_hints").defineListAllowEmpty("shown_hints", List.of(), () -> "", o -> o instanceof String);
         }
     }

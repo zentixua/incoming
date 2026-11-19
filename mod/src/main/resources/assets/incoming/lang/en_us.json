@@ -346,7 +346,7 @@
   "incoming.hint.console.title": "Open the console",
   "incoming.hint.console": "Shift + Right Click",
   "incoming.config.shown_hints": "Hints already shown",
-  "incoming.config.shown_hints.tooltip": "First-use hints this game has already shown. Clear the list to see them again.",
+  "incoming.config.shown_hints.tooltip": "First-use hints this game has already shown, or whose action you have already used. Clear the list to see them again.",
   "subtitles.incoming.nuke.alarm": "Civil defense siren",
   "subtitles.incoming.nuke.launch": "Missile launch roar",
   "subtitles.incoming.nuke.blast": "Nuclear explosion",

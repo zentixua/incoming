@@ -243,9 +243,10 @@ public final class IncomingClient {
         // flash traces update while paused too: replay can seek while paused
         ua.zentix.incoming.client.nuclear.FlashMarksClient.tick();
         VoxyIngest.tick();
+        // runs while paused too: a pausing screen can be the one a hint teaches; it counts its time only unpaused
+        ua.zentix.incoming.client.hud.FirstUseHints.tick(mc);
         if (mc.isPaused()) return;
         Designator.tick();
-        ua.zentix.incoming.client.hud.FirstUseHints.tick(mc);
         ClientFlights.tick();
         TerrainTiles.tick();
         ProjectileCamera.tick();
