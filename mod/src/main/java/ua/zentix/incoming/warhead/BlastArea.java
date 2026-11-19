@@ -67,6 +67,12 @@ final class BlastArea {
     private final List<Queued> explosions = new ArrayList<>();
     /** Slow strike blocks ({@link #slowBlock}): log first {@link #SLOW_BLOCKS_LOGGED}. */
     private int slowBlocks;
+    /**
+     * World blocks this strike's explosions removed ({@link BlockPos#asLong}) and their states before removal: the
+     * collapse pass ({@link StrikeCollapse}) needs the world as it stood and what the wave took out of it.
+     */
+    private final it.unimi.dsi.fastutil.longs.LongArrayList removedAt = new it.unimi.dsi.fastutil.longs.LongArrayList();
+    private final List<BlockState> removedWas = new ArrayList<>();
 
     private record Queued(StagedExplosion explosion, long tick) {}
 
@@ -153,6 +159,23 @@ final class BlastArea {
         Incoming.LOG.warn(String.format(Locale.ROOT, "Blast: removing block %s took %.1f ms at %d %d %d (%s, block entity: %s)",
                 BuiltInRegistries.BLOCK.getKey(state.getBlock()), took / 1e6, pos.getX(), pos.getY(), pos.getZ(),
                 level.dimension().location(), state.hasBlockEntity() ? "yes" : "no"));
+    }
+
+    /** Explosion hit {@code was} at {@code pos}: record it if the block is gone (TNT primed, a block that withstands stays). */
+    void removed(ServerLevel level, BlockPos pos, BlockState was) {
+        if (level.getBlockState(pos) == was) return;
+        removedAt.add(pos.asLong());
+        removedWas.add(was);
+    }
+
+    /** Positions removed so far ({@link #removed}); live list, read by the collapse pass. */
+    it.unimi.dsi.fastutil.longs.LongArrayList removedAt() {
+        return removedAt;
+    }
+
+    /** States before removal, parallel to {@link #removedAt()}. */
+    List<BlockState> removedWas() {
+        return removedWas;
     }
 
     /** Explosion ray counters for strike summary. */

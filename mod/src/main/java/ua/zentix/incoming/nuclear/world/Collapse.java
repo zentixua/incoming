@@ -92,16 +92,27 @@ final class Collapse {
     /** Fluid beside changed positions: tick it (including neighboring chunks beside this chunk's positions). */
     final LongArrayList fluidTicks = new LongArrayList();
 
+    /** Nuclear burst; null for a conventional strike ({@link #solve(RuinWindow, Blast[])}). */
+    @org.jetbrains.annotations.Nullable
     private final Detonation d;
     private final boolean blockDamage;
 
     private Collapse(RuinContext.Grid g) {
-        this.w = g.windowOf(0, 0);
-        this.d = g.ctx().d;
-        this.blockDamage = g.blockDamage();
+        this(g.windowOf(0, 0), g, null, g.ctx().d, g.blockDamage());
+    }
+
+    /**
+     * @param g nuclear grid supplying the window chunks' fractures, or null: {@code given} holds them (conventional
+     *          strike, index {@code k = (dz + 1) * 3 + dx + 1})
+     */
+    private Collapse(RuinWindow w, @org.jetbrains.annotations.Nullable RuinContext.Grid g, @org.jetbrains.annotations.Nullable Blast[] given,
+                     @org.jetbrains.annotations.Nullable Detonation d, boolean blockDamage) {
+        this.w = w;
+        this.d = d;
+        this.blockDamage = blockDamage;
         for (int k = 0; k < 9; k++) {
             if (!w.present(k)) continue;
-            blasts[k] = g.blast(k % 3 - 1, k / 3 - 1);
+            blasts[k] = g != null ? g.blast(k % 3 - 1, k / 3 - 1) : given[k];
         }
         int low = Integer.MAX_VALUE, high = w.minY;
         for (int wz = 0; wz < SIDE; wz++) {
@@ -155,6 +166,18 @@ final class Collapse {
         return c;
     }
 
+    /**
+     * What lost support after a conventional strike (any thread): the same law over window {@code w} (the world as it
+     * stood: live snapshots with the strike's removals restored, {@link RuinWindow#restoring}) with the strike's removals as window fractures {@code blasts} (index {@code k = (dz + 1) * 3 + dx + 1}, null
+     * where nothing broke). No third wave round (that is the nuclear wave reaching remnants) and no debris landing
+     * ({@link #landed} stays empty: the caller drops the blocks).
+     */
+    static Collapse solve(RuinWindow w, Blast[] blasts) {
+        Collapse c = new Collapse(w, null, blasts, null, true);
+        c.run();
+        return c;
+    }
+
     /** Snapshot IDs used to build chunk window. */
     RuinWindow.Stamp stamp() {
         return w.stamp();
@@ -204,7 +227,7 @@ final class Collapse {
                 if (inside(wx, y, wz)) breaks.add(idx(wx, y, wz));
             }
         }
-        if (!breaks.isEmpty()) {
+        if (!breaks.isEmpty() && d != null) {
             for (int e : Blast.remnants(w, d, blasts, C + 1, blockDamage)) {
                 int wx = e & 63, wz = (e >> 6) & 63, y = w.minY + (e >>> 12);
                 if (!inside(wx, y, wz) || isGone(wx, y, wz)) continue;
@@ -880,7 +903,7 @@ final class Collapse {
      * drifting farther than the ring leaves; the chunk receives the upstream share ({@link Debris#importFraction}).
      */
     private void land() {
-        if (!blockDamage) return;
+        if (!blockDamage || d == null) return;
         double bx = d.burst().x, bz = d.burst().z;
         double[] wind = new double[9], phase = new double[9];
         for (int k = 0; k < 9; k++) {
@@ -976,7 +999,7 @@ final class Collapse {
     }
 
     /** Landing block: full load-bearing blocks as themselves; other rubble-producing blocks (stairs, fences, block entities) as rubble. */
-    private static BlockState rubbleOf(BlockState st, Blast.Props p, int x, int y, int z) {
+    static BlockState rubbleOf(BlockState st, Blast.Props p, int x, int y, int z) {
         if (p.full() && p.bearing() && !p.is(Blast.Props.SLOW) && !p.waterlogged()) return st;
         BlockState[] kind = p.wood() ? RuinPlanner.WOOD_RUBBLE : RuinPlanner.STONE_RUBBLE;
         return kind[(int) (RuinPlanner.hash(x, y, z, 17) * kind.length)];

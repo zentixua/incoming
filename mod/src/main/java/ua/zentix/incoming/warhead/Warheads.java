@@ -592,6 +592,8 @@ public final class Warheads {
             if (main.isEmpty()) return false;
             if (IncomingConfig.SERVER.blockDamage.get() && !onCraft) {
                 unit(level, area, main, ImpactCost.Kind.GROUND, "Crater", l -> happened() ? Craters.dig(l, pos, weapon.spec().charge(), mat, seed) : 0);
+                // what the blast left without support falls (the explosion's removals are known once it ends)
+                StrikeCollapse.queue(level, area, main, pos);
             }
             if (weapon.spec().fuelAtImpact() > 0 && !onCraft) {
                 Craters.ignite(level, area, main, this::happened, pos, weapon.spec().fuelAtImpact());
