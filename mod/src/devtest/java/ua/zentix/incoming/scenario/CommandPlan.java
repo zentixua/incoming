@@ -19,7 +19,7 @@ record CommandPlan(List<Step> steps, int nukeGate, List<Integer> blastGates, int
     /** At what tick do the steps begin and how long after the last one to wait until “SCENARIO done”. */
     static final int START = 100, TAIL = 100;
 
-    enum Kind { COMMAND, SHOT, HUD_OFF, HUD_ON, SKIP, FRAMES, STORM, BURNABLE, MAX_YIELD }
+    enum Kind { COMMAND, SHOT, HUD_OFF, HUD_ON, SKIP, FRAMES, STORM, BURNABLE, MAX_YIELD, WAVE, PALL, PAIR, SITE }
 
     record Step(int tick, Kind kind, String arg) {}
 
@@ -59,6 +59,23 @@ record CommandPlan(List<Step> steps, int nukeGate, List<Integer> blastGates, int
                 // to the most flammable land within 4 km (scenario firestorm's choice), 200 blocks up
                 steps.add(new Step(t, Kind.BURNABLE, ""));
                 t += 200;
+            } else if (c.startsWith("site:")) {
+                // a fresh ground zero whose surroundings and southern camera line are mostly the given biomes (comma-separated
+                // ids or #tags), 150 blocks above its ground, facing north
+                steps.add(new Step(t, Kind.SITE, c.substring("site:".length()).strip()));
+                t += 200;
+            } else if (c.startsWith("wave:")) {
+                // world wave speed (CUSTOM preset, nuclear.wave_speed), as on the host servers
+                steps.add(new Step(t, Kind.WAVE, c.substring("wave:".length()).strip()));
+                t += 1;
+            } else if (c.startsWith("pall:")) {
+                // client dust quality OFF|LOW|MEDIUM|HIGH
+                steps.add(new Step(t, Kind.PALL, c.substring("pall:".length()).strip()));
+                t += 1;
+            } else if (c.startsWith("pair:")) {
+                // frame, then the same view a few ticks later with the pall off (name_off): what the pall draws
+                steps.add(new Step(t, Kind.PAIR, c.substring("pair:".length()).strip()));
+                t += 20;
             } else if (c.startsWith("maxyield:")) {
                 steps.add(new Step(t, Kind.MAX_YIELD, c.substring("maxyield:".length()).strip()));
                 t += 1;

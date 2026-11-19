@@ -46,4 +46,21 @@ class CommandPlanTest {
         assertTrue(p.warnings().isEmpty(), p.warnings().toString());
         assertEquals(220, p.steps().get(3).tick());
     }
+
+    /**
+     * Measuring steps (wave-color run): {@code site:} picks a fresh ground zero by biome (200 ticks), {@code wave:} and {@code pall:} set the world
+     * wave speed and the client dust quality (1 tick), {@code pair:} shoots a frame and the same view with the pall off (20 ticks).
+     */
+    @Test
+    void siteWavePallPair() {
+        CommandPlan p = CommandPlan.parse("wave:0.35;pall:MEDIUM;site:#minecraft:is_forest,minecraft:desert;pair:front");
+        assertTrue(p.warnings().isEmpty(), p.warnings().toString());
+        assertEquals(java.util.List.of(CommandPlan.Kind.WAVE, CommandPlan.Kind.PALL, CommandPlan.Kind.SITE, CommandPlan.Kind.PAIR),
+                p.steps().stream().map(CommandPlan.Step::kind).toList());
+        assertEquals("0.35", p.steps().get(0).arg());
+        assertEquals("#minecraft:is_forest,minecraft:desert", p.steps().get(2).arg());
+        // wave 100 (+1), pall 101 (+1), site 102 (+200), pair 302 (+20)
+        assertEquals(302, p.steps().get(3).tick());
+        assertEquals(322 + CommandPlan.TAIL, p.end());
+    }
 }
