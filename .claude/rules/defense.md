@@ -36,14 +36,15 @@ paths:
   forgotten), `Interceptor` (flight is an object without a world: leaves the rail toward the target at the spec's angle
   (vertically for SAM), speed follows the S2 powered-flight law (`WeaponSpec.Handling.speed` via `InterceptorSpec.speed`:
   motor toward maximum speed, boost increment `boostAccel`, lower in cruise by the spec's thrust ratio; exchange altitude
-  for speed); then heads toward the target's current position each tick, with `guidance/Homing` turn limit from lateral
+  for speed); then heads each tick toward the predicted intercept point (`guidance/Homing.lead`: the target flying
+  straight on at its last tick's travel; a missile not yet faster than its target aims at it), with `guidance/Homing` turn limit from lateral
   acceleration, `InterceptorSpec.turnLimit`: tighter on boost; fuze at closest approach (closest point of the missile's
   and target's tick segments within the tick, not its end: if still closing, wait a tick) within `fuse` + target
   half-length: detonation means target down, no dice roll; if it passes farther away, it turns after the target while
   fueled; target gone, ridden, or fuel exhausted means self-destruct; ground contact means detonation; kill shares by
   target class: `InterceptShareTest`, numbers in `docs/guide/defense.md`), `InterceptorSpec` (flight numbers are for the
-  game, not physical; flight scale brings maximum speed to real `maxSpeed()`, acceleration takes the same ticks
-  `boostAccel()`, no flight above `ceiling()`, the 9M96 zone's altitude ceiling; real 9M96E2 specs in `passport`: mass,
+  game, not physical; flight scale brings maximum speed `maxSpeed()` and the boost motor (`boostAccel()`,
+  `boostTicks()`: mean Tsiolkovsky acceleration over the 9M96's 11 s burn) to real values, no flight above `ceiling()`, the 9M96 zone's altitude ceiling; real 9M96E2 specs in `passport`: mass,
   dimensions, speed, g-load, zone, warhead, fuze, motor — its mass flow also feeds the client exhaust flame),
   `DefenseWorld` (non-persistent world attachment: flying missiles, pursuit assignments, side alerts; ticks in
   `LevelTickEvent.Post` after `StrikeWorld` — targets have already moved this tick).
@@ -88,6 +89,19 @@ paths:
   into the ground (`catchesTargetPassingOverhead`, `catchesDivingTargetOverhead`; at 30 g it misses if the Shahed is
   18 blocks short of the SAM at launch or already overhead, as with the second missile in GameTest
   `shootsDownHostileDrones`); a single angular speed has the same problem.
+- The motor follows the flight scale like speed does. Real top speed in the game's 1.5 s (~70 g axial) made the
+  missile leave the canister at 9 blocks/tick and keep accelerating through its pitch-over, its turn rate falling as
+  ω = a/v: it was ~800 blocks up before it could level off and missed every cruise missile (40 m) and Shahed at REAL.
+  Pure pursuit at real speeds then still passed crossing targets 10–40 blocks away; lead to the intercept point hits
+  them. `InterceptShareTest` runs at flight scale 0, 0.5 and 1; `SamCruiseGameTests` checks the world case.
+- In-world tests against a low target need a site without GameTest barrier walls (they hide it from the radar):
+  `SamCruiseGameTests` holds its own chunks millions of blocks out, one site per test, 16 384 blocks apart; a
+  real-scale case gets its own batch (`StrikeGameTests.flightScale` restores the value it found, so two such tests in
+  one batch leave the scale changed).
+- A cruise missile flies 12 blocks above the treetops (`MOTION_BLOCKING`); the radar's line of sight ignores leaves
+  but not trunks, from an antenna 1.5 blocks above the SAM's ground. Among trees or hills it sees the missile only
+  close (in `SamCruiseGameTests` forest 120–320 blocks, hills ~100 or never): a missile aimed a few hundred blocks off the SAM can dive onto its aim before an
+  interceptor gets there. Works as designed; the guide advises open high ground.
 - Interceptor flight is not saved: after a server restart mid-intercept, the missile is gone, the target keeps flying.
 - A nuclear warhead on a cruise missile or B-2 is intercepted like a conventional one (signature belongs to the carrier);
   an ICBM is not.

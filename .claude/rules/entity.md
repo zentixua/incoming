@@ -43,7 +43,7 @@ paths:
   `/incoming salvo … via x z …` checks `ServerActions.routeProblem`; launcher faces first point, distant projectile
   enters before it via `Waypoints.afar`; range/ETA/siren follow waypoints; salvo stores route in `SalvoData`, retarget
   abandons via `Route.skip`; final leg determines missile pop-up after points only for operator route,
-  `Route.byOperator`, not launch route; `WAYPOINTS` scenario); `guidance/Homing` interceptor pursuit (bounded turn,
+  `Route.byOperator`, not launch route; `WAYPOINTS` scenario); `guidance/Homing` interceptor pursuit (lead to the intercept point, bounded turn,
   closest approach within tick); `guidance/Ballistics` unpowered gravity/quadratic drag (`WeaponSpec.Ballistic.drag`,
   game number), altitude density/world wind (`Path` by tick, 4 steps/tick), firing solution `aim` (Newton over speed/
   heading at rack angle) for MLRS with ground wind `Wind.ground`, flies through wind profile: wind drift/spec rail-exit
