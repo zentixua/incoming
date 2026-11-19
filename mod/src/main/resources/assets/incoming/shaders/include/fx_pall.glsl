@@ -460,7 +460,9 @@ float wallChordNear(mat4 V, WallAt h, vec3 v, float len, int n) {
 // flash carries next to no soot
 void wall(mat4 V, WallAt h, vec3 keyDir, vec3 sunDir, vec3 lightDir, float smoke, float cone, bool pall, float dense, float t, inout Sample s) {
     vec3 lobes = wallLobes(V);
-    float tile = mix(lobes.x, lobes.y, lobes.z), fine = 1.0 - smoothstep(0.5, 1.0, cone * 32.0 / tile);
+    // presentation: no fine sub-octave in the head (the pall keeps its own): fine noise scales with the lobe tile, several layer tops, so
+    // inside the dense lit face it reached several pixels and read as square blotches (19.11 frames); the lobes carry the structure
+    float tile = mix(lobes.x, lobes.y, lobes.z), fine = 0.0;
     float hd = wallAt(V, h, fine, dense, lobes, t);
     // neither head nor slot pall here — no light needed
     if (hd <= 0.0 && !pall) return;
