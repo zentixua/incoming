@@ -3,6 +3,7 @@ package ua.zentix.incoming.client.nuclear;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.multiplayer.ClientLevel;
 import net.minecraft.core.BlockPos;
+import net.minecraft.core.QuartPos;
 import net.minecraft.tags.BlockTags;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
@@ -15,6 +16,8 @@ import org.joml.Vector3f;
 import ua.zentix.incoming.client.fx.layer.PallPass;
 import ua.zentix.incoming.client.map.TerrainTiles;
 import ua.zentix.incoming.nuclear.Detonation;
+import ua.zentix.incoming.nuclear.world.Kindling;
+import ua.zentix.incoming.registry.ModTags;
 
 import java.util.List;
 import java.util.Locale;
@@ -84,22 +87,41 @@ final class FireStorms {
         for (ClientNuclear.Active a : all) {
             double was = a.storm.gate();
             a.storm.gate(was + GATE_RATE * (a.storm.trust() - was));
-            if (level != null) a.storm.survey(surface(level), a.water);
+            if (level != null) a.storm.survey(surface(level), a.water, Minecraft.getInstance().gameRenderer.getMainCamera().getPosition(), a.ticks(0));
         }
     }
 
     private static final BlockPos.MutableBlockPos AT = new BlockPos.MutableBlockPos();
 
-    /** Client column surface: top block in a local chunk, otherwise a terrain-map tile ({@link TerrainTiles#wet}). */
+    /**
+     * Client column surface for the fire model ({@link FireStorm.Surface}): top block in a local chunk — water, ice, snow; flash
+     * fuel ({@link Kindling#of}) or turf whose biome cures grass ({@link Kindling#cured}); natural ground, rock, plants, foliage and wood
+     * of trees hold none; anything else is built (a building lit through its windows); otherwise a terrain-map tile tells land or
+     * water ({@link TerrainTiles#wet}).
+     */
     static FireStorm.Surface surface(ClientLevel level) {
         return (x, z) -> {
             LevelChunk chunk = level.getChunkSource().getChunk(x >> 4, z >> 4, false);
-            if (chunk == null) return TerrainTiles.wet(x, z);
+            if (chunk == null) {
+                int w = TerrainTiles.wet(x, z);
+                return w < 0 ? FireStorm.Surface.UNKNOWN : w > 0 ? FireStorm.Surface.WET : FireStorm.Surface.LAND;
+            }
             int y = chunk.getHeight(Heightmap.Types.MOTION_BLOCKING, x & 15, z & 15);
-            if (y < level.getMinBuildHeight()) return -1;
+            if (y < level.getMinBuildHeight()) return FireStorm.Surface.UNKNOWN;
             BlockState state = chunk.getBlockState(AT.set(x, y, z));
-            return !state.getFluidState().isEmpty() || state.is(BlockTags.ICE) || state.is(Blocks.SNOW_BLOCK) || state.is(Blocks.POWDER_SNOW) ? 1 : 0;
+            if (!state.getFluidState().isEmpty() || state.is(BlockTags.ICE) || state.is(Blocks.SNOW_BLOCK) || state.is(Blocks.POWDER_SNOW)) return FireStorm.Surface.WET;
+            if (Kindling.of(state) != null) return FireStorm.Surface.FUEL;
+            // turf, or soil the flash burned it to, carries a grass bed where the biome cures grass
+            if (state.is(BlockTags.DIRT)) return Kindling.cured(chunk.getNoiseBiome(QuartPos.fromBlock(x), QuartPos.fromBlock(y), QuartPos.fromBlock(z)))
+                    ? FireStorm.Surface.FUEL : FireStorm.Surface.NONE;
+            return natural(state) ? FireStorm.Surface.NONE : FireStorm.Surface.FUEL;
         };
+    }
+
+    /** Ground, rock, plants and trees: no building. */
+    private static boolean natural(BlockState state) {
+        return state.is(ModTags.NUKE_GROUND) || state.is(ModTags.NUKE_PLANTS) || state.is(BlockTags.LEAVES) || state.is(BlockTags.LOGS)
+                || state.is(Blocks.MOSS_BLOCK) || state.is(Blocks.SNOW) || state.canBeReplaced();
     }
 
     /**
@@ -181,7 +203,7 @@ final class FireStorms {
             List<FireStorm.Whirl> list = a.storm.whirls();
             for (int i = 0; i < list.size(); i++) {
                 FireStorm.Whirl w = list.get(i);
-                double strength = w.strength(seconds) * w.fire(clock) * gate * a.storm.dryAt(w.x(), w.z());
+                double strength = w.strength(seconds) * w.fire(clock) * gate * a.storm.fuelAt(w.x(), w.z());
                 if (strength < 0.01) continue;
                 float x = (float) (w.baseX(seconds) - eye.x), z = (float) (w.baseZ(seconds) - eye.z), y = (float) (a.storm.whirlGround(i) - eye.y);
                 float h = (float) w.height(), reach = (float) (w.radius() * 3);

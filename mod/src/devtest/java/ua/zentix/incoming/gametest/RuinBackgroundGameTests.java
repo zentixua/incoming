@@ -310,7 +310,7 @@ public final class RuinBackgroundGameTests {
     }
 
     /**
-     * A flash layer over the {@code RuinCostGameTests.city} block: boards on the roofs (there is something for fire to stand on), a layer in all
+     * A flash layer over the {@code RuinCostGameTests.city} block: hay on the roofs (dry fuel the flash lights; boards do not hold its fire), a layer in all
      *  chunks of the site, then the ruins of the explosion are forgotten - the fire and the mark of the layer remain in the chunks. [0] - chunks with a mark,
      * [1] - layer fires.
      */
@@ -322,7 +322,7 @@ public final class RuinBackgroundGameTests {
                 for (int lz = 0; lz < 16; lz++) {
                     int x = c.getPos().getMinBlockX() + lx, z = c.getPos().getMinBlockZ() + lz;
                     int y = c.getHeight(net.minecraft.world.level.levelgen.Heightmap.Types.WORLD_SURFACE, lx, lz);
-                    if (c.getBlockState(m.set(x, y, z)).is(Blocks.SMOOTH_STONE)) level.setBlock(m.set(x, y + 1, z), Blocks.OAK_PLANKS.defaultBlockState(), 2);
+                    if (c.getBlockState(m.set(x, y, z)).is(Blocks.SMOOTH_STONE)) level.setBlock(m.set(x, y + 1, z), Blocks.HAY_BLOCK.defaultBlockState(), 2);
                 }
             }
         }

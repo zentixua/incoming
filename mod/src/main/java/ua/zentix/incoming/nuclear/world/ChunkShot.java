@@ -11,6 +11,7 @@ import net.minecraft.world.level.chunk.GlobalPalette;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.chunk.LevelChunkSection;
 import net.minecraft.world.level.chunk.Palette;
+import net.minecraft.core.QuartPos;
 import net.minecraft.world.level.chunk.PalettedContainer;
 import net.minecraft.world.level.levelgen.Heightmap;
 import org.jetbrains.annotations.Nullable;
@@ -109,9 +110,13 @@ final class ChunkShot {
     @Nullable
     private boolean[] liveKnown;
 
+    /** Biome cells whose surface biome cures grass ({@link Kindling#curedCells}: bit {@code qz << 2 | qx}). */
+    final int cured;
+
     private ChunkShot(int x, int z, int id, @Nullable RuinPlan old, boolean ruined, int minY,
                       PalettedContainer<BlockState>[] states, int[] heights, @Nullable int[] sky, @Nullable long[] livePrints,
-                      @Nullable long[] liveNormals, @Nullable boolean[] liveKnown) {
+                      @Nullable long[] liveNormals, @Nullable boolean[] liveKnown, int cured) {
+        this.cured = cured;
         this.x = x;
         this.z = z;
         this.id = id;
@@ -215,8 +220,11 @@ final class ChunkShot {
             else RuinPlan.unfire(states, own, chunk.getMinBuildHeight(), heights, sky);
         }
         ChunkPos pos = chunk.getPos();
+        int motion = type(Heightmap.Types.MOTION_BLOCKING);
+        int cured = Kindling.curedCells(chunk.getMinBuildHeight(), c -> heights[motion * 256 + c],
+                (lx, y, lz) -> chunk.getNoiseBiome(QuartPos.fromBlock(pos.getMinBlockX() + lx), QuartPos.fromBlock(y), QuartPos.fromBlock(pos.getMinBlockZ() + lz)));
         return new ChunkShot(pos.x, pos.z, System.identityHashCode(chunk), applied == null ? null : applied.plan(),
-                applied != null, chunk.getMinBuildHeight(), states, heights, sky, livePrints, liveNormals, own);
+                applied != null, chunk.getMinBuildHeight(), states, heights, sky, livePrints, liveNormals, own, cured);
     }
 
     private static final java.util.function.Predicate<BlockState> FIRE = s -> s.getBlock() instanceof BaseFireBlock;
@@ -242,7 +250,7 @@ final class ChunkShot {
             else RuinPlan.unfire(states, own, read.minY(), heights, null);
         }
         return new ChunkShot(read.pos().x, read.pos().z, 0, applied == null ? null : applied.plan(), applied != null,
-                read.minY(), states, heights, null, null, null, null);
+                read.minY(), states, heights, null, null, null, null, read.cured());
     }
 
     /**

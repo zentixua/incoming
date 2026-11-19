@@ -29,7 +29,7 @@ class FireFieldTest {
             double last = 0;
             for (int i = 0; i < f.fires.length; i++) {
                 assertTrue(f.fires[i] >= 0 && f.fires[i] <= f.lit[i] + 1e-9);
-                assertTrue(f.keep[i] == 1 || f.keep[i] == FireField.BLOWN_KEEP);
+                if (f.lit[i] > 0) assertEquals(ua.zentix.incoming.nuclear.model.Blowout.keep(d.psi(new Vec3(d.burst().x + FireField.radius(i), d.groundY() + 1, d.burst().z))), f.keep[i], 1e-12);
                 if (f.lit[i] == 0) continue;
                 assertTrue(f.ignite[i] >= last - 1e-9 && f.ignite[i] <= d.pulseTicks() + 1e-9, "the flash lights from the inside out per impulse: " + f.ignite[i]);
                 last = f.ignite[i];

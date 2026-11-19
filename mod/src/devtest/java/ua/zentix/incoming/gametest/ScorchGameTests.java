@@ -316,7 +316,7 @@ public final class ScorchGameTests {
     @GameTest(template = "range", timeoutTicks = 40, batch = "nuke_flash_scorch", skyAccess = true)
     public static void flashScorchesBeforeTheWaveAndRuinsMatch(GameTestHelper h) {
         ServerLevel level = h.getLevel();
-        fillBiome(h, 0, 63, Biomes.PLAINS);
+        fillBiome(h, 0, 63, DRY_MEADOW);
         plants(h);
         // Chunks and detonation are aligned to the chunk grid, not the test platform: the platform can start anywhere
         // relative to the grid. At the test scale, the layer at A appears on tick 1 (light reaches the threshold in
@@ -472,7 +472,7 @@ public final class ScorchGameTests {
     @GameTest(template = "range", timeoutTicks = 40, batch = "nuke_flash_busy", skyAccess = true)
     public static void flashLayerBeatsABusyLane(GameTestHelper h) {
         ServerLevel level = h.getLevel();
-        fillBiome(h, 0, 63, Biomes.PLAINS);
+        fillBiome(h, 0, 63, DRY_MEADOW);
         plants(h);
         BlockPos lo = h.absolutePos(BlockPos.ZERO), hi = h.absolutePos(new BlockPos(63, 0, 63));
         int[] sx = gridSide(Math.min(lo.getX(), hi.getX()), Math.max(lo.getX(), hi.getX()));
@@ -638,20 +638,21 @@ public final class ScorchGameTests {
     @GameTest(template = "range", timeoutTicks = 40, batch = "nuke_flash_unflash", skyAccess = true)
     public static void ruinsOverFlashWithoutShots(GameTestHelper h) {
         ServerLevel level = h.getLevel();
-        fillBiome(h, 0, 63, Biomes.PLAINS);
+        fillBiome(h, 0, 63, DRY_MEADOW);
         plants(h);
         BlockPos zero = new BlockPos(60, 12, 60), g = h.absolutePos(zero);
         int ground = h.absolutePos(new BlockPos(0, 11, 0)).getY();
         List<LevelChunk> inside = inside(h, g);
         h.assertTrue(inside.size() >= 4, "chunks entirely on site " + inside.size());
-        // house 6×6 in the middle of each chunk: walls of three blocks, roof made of boards, empty inside
+        // house 6×6 in the middle of each chunk: walls of three blocks of boards, thatch roof, empty inside
         for (LevelChunk c : inside) {
             for (int lx = 5; lx <= 10; lx++) {
                 for (int lz = 5; lz <= 10; lz++) {
                     boolean wall = lx == 5 || lx == 10 || lz == 5 || lz == 10;
                     for (int dy = 1; dy <= 4; dy++) {
                         BlockPos p = new BlockPos(c.getPos().getMinBlockX() + lx, ground + dy, c.getPos().getMinBlockZ() + lz);
-                        BlockState st = dy == 4 || wall ? Blocks.OAK_PLANKS.defaultBlockState() : Blocks.AIR.defaultBlockState();
+                        // thatch roof: dry fuel the flash lights (plank walls do not burn from a pulse)
+                        BlockState st = dy == 4 ? Blocks.HAY_BLOCK.defaultBlockState() : wall ? Blocks.OAK_PLANKS.defaultBlockState() : Blocks.AIR.defaultBlockState();
                         level.setBlock(p, st, Block.UPDATE_CLIENTS);
                     }
                 }
@@ -973,6 +974,123 @@ public final class ScorchGameTests {
         }
         return blocks + biomes == 0 ? null : blocks + " places, " + biomes + " biome cells:" + out;
     }
+
+    /**
+     * 19.11 complaint: the flash set a fire block on nearly every turf column 3–5 km from 1 Mt. One law ({@code RuinPlanner.kindling},
+     * {@code Kindling}): the flash ignites only dry fuel, with {@code PulseIgnition.share}. Light ~30 cal/cm² at the far chunks (15 kt:
+     * every fuel's median is below it): green plains turf — burned, no fire; hay bales — fire on them; wool behind a glass roof — fire
+     * indoors; wool in a closed stone box — none; a plank-roofed house — none (thick wood does not sustain); a savanna chunk (cured
+     * grass, downfall 0) — fire on most turf columns. Flash layer only (no wave).
+     */
+    @GameTest(template = "range", timeoutTicks = 40, batch = "nuke_flash_kindling", skyAccess = true)
+    public static void flashIgnitesOnlyDryFuel(GameTestHelper h) {
+        ServerLevel level = h.getLevel();
+        fillBiome(h, 0, 63, Biomes.PLAINS);
+        plants(h);
+        BlockPos zero = new BlockPos(60, 12, 60), g = h.absolutePos(zero);
+        int ground = h.absolutePos(new BlockPos(0, 11, 0)).getY();
+        List<LevelChunk> inside = inside(h, g);
+        h.assertTrue(inside.size() >= 4, "chunks entirely on site " + inside.size());
+        LevelChunk far = inside.get(inside.size() - 1), dry = inside.get(inside.size() - 2);
+        // the savanna chunk: cured grass
+        Holder<Biome> savanna = level.registryAccess().registryOrThrow(Registries.BIOME).getHolderOrThrow(Biomes.SAVANNA);
+        dry.fillBiomesFromNoise((x, y, z, sampler) -> savanna, level.getChunkSource().randomState().sampler());
+        dry.setUnsaved(true);
+        int fx = far.getPos().getMinBlockX(), fz = far.getPos().getMinBlockZ();
+        // hay bales on turf
+        BlockPos[] hay = {new BlockPos(fx + 1, ground + 1, fz + 1), new BlockPos(fx + 1, ground + 1, fz + 14), new BlockPos(fx + 14, ground + 1, fz + 1),
+                new BlockPos(fx + 14, ground + 1, fz + 14)};
+        for (BlockPos p : hay) level.setBlock(p, Blocks.HAY_BLOCK.defaultBlockState(), Block.UPDATE_CLIENTS);
+        // boxes 5×5 outside, interior 3×3×2: glass roof with wool; stone roof with wool; plank house
+        box(level, fx + 3, fz + 3, ground, Blocks.GLASS, Blocks.GLASS, Blocks.WHITE_WOOL);
+        box(level, fx + 9, fz + 3, ground, Blocks.STONE_BRICKS, Blocks.STONE_BRICKS, Blocks.WHITE_WOOL);
+        box(level, fx + 3, fz + 9, ground, Blocks.OAK_PLANKS, Blocks.OAK_PLANKS, null);
+        Detonation d = NuclearGameTests.detonation(h, zero, Yield.optimalBurstHeight(15) * scaleFor(g, far, 30), 15, (float) scaleFor(g, far, 30));
+        for (LevelChunk c : inside) {
+            for (int dx = -RuinPlanner.REACH; dx <= RuinPlanner.REACH; dx++) {
+                for (int dz = -RuinPlanner.REACH; dz <= RuinPlanner.REACH; dz++) level.getChunk(c.getPos().x + dx, c.getPos().z + dz);
+            }
+        }
+        long[] keys = inside.stream().mapToLong(c -> c.getPos().toLong()).toArray();
+        FlashScorch flash = FlashScorch.forTest(d, keys, new ColumnScar.Budget(true));
+        try {
+            h.assertTrue(flash.finishForTest(level, d.gameTime() + 10_000) && flash.appliedChunks() == inside.size(), "the flash layer is stuck");
+            String setup = String.format(Locale.ROOT, "far chunk %.1f cal/cm²", d.fluence(new Vec3(far.getPos().getMiddleBlockX(), ground + 1, far.getPos().getMiddleBlockZ())));
+            int turf = 0, burned = 0;
+            for (LevelChunk c : inside) {
+                if (c == dry) continue;
+                int[] f = surface(h, c);
+                turf += f[1];
+                burned += f[0];
+            }
+            h.assertTrue(burned > 0, "the flash burned no turf: nothing checked; " + setup);
+            h.assertTrue(turf == 0, turf + " fires on green turf; " + setup);
+            int bales = 0;
+            for (BlockPos p : hay) if (level.getBlockState(p.above()).getBlock() instanceof BaseFireBlock) bales++;
+            h.assertTrue(bales >= 3, "fire on " + bales + " of 4 hay bales; " + setup);
+            h.assertTrue(firesIn(level, fx + 3, fz + 3, ground) > 0, "no fire behind the glass; " + setup);
+            h.assertTrue(firesIn(level, fx + 9, fz + 3, ground) == 0, "fire in a closed stone box; " + setup);
+            h.assertTrue(firesIn(level, fx + 3, fz + 9, ground) == 0, "fire in or on a plank house; " + setup);
+            int savannaFires = surface(h, dry)[1];
+            h.assertTrue(savannaFires > 64, "cured grass: " + savannaFires + " fires of 256 columns; " + setup);
+            Incoming.LOG.info("Flash kindling: {}, green turf 0 fires over {} burned columns, hay {} of 4, savanna {} fires", setup, burned, bales, savannaFires);
+        } finally {
+            unfire(level, inside, ground, 8);
+        }
+        h.succeed();
+    }
+
+    /**
+     * Cured grass by the game's own climate ({@code Kindling.DRY_DOWNFALL}): of the vanilla overworld biomes exactly the arid and
+     * savanna ones (downfall 0, no precipitation) count; plains, forests, taiga, windswept hills (0.3) do not.
+     */
+    @GameTest(template = "pad", batch = "nuke_flash_kindling")
+    public static void curedGrassFollowsVanillaClimate(GameTestHelper h) {
+        var biomes = h.getLevel().registryAccess().registryOrThrow(Registries.BIOME);
+        java.util.Set<ResourceKey<Biome>> arid = java.util.Set.of(Biomes.DESERT, Biomes.SAVANNA, Biomes.SAVANNA_PLATEAU, Biomes.WINDSWEPT_SAVANNA,
+                Biomes.BADLANDS, Biomes.ERODED_BADLANDS, Biomes.WOODED_BADLANDS);
+        for (ResourceKey<Biome> key : biomes.registryKeySet()) {
+            if (!key.location().getNamespace().equals("minecraft")) continue;
+            Holder<Biome> b = biomes.getHolderOrThrow(key);
+            if (b.is(net.minecraft.tags.BiomeTags.IS_NETHER) || b.is(net.minecraft.tags.BiomeTags.IS_END)) continue;
+            h.assertTrue(ua.zentix.incoming.nuclear.world.Kindling.cured(b) == arid.contains(key), key.location() + ": cured " + ua.zentix.incoming.nuclear.world.Kindling.cured(b));
+        }
+        h.succeed();
+    }
+
+    /** Box 5 × 5 × 4 at {@code x, z} on {@code ground}: walls, roof and, if given, four fuel blocks on the floor. */
+    private static void box(ServerLevel level, int x, int z, int ground, Block wall, Block roof, @Nullable Block fuel) {
+        for (int dx = 0; dx < 5; dx++) {
+            for (int dz = 0; dz < 5; dz++) {
+                for (int dy = 1; dy <= 4; dy++) {
+                    boolean side = dx == 0 || dx == 4 || dz == 0 || dz == 4;
+                    Block b = dy == 4 ? roof : side ? wall : Blocks.AIR;
+                    level.setBlock(new BlockPos(x + dx, ground + dy, z + dz), b.defaultBlockState(), Block.UPDATE_CLIENTS);
+                }
+            }
+        }
+        if (fuel != null) {
+            for (int[] o : new int[][]{{1, 1}, {3, 1}, {1, 3}, {3, 3}}) level.setBlock(new BlockPos(x + o[0], ground + 1, z + o[1]), fuel.defaultBlockState(), Block.UPDATE_CLIENTS);
+        }
+    }
+
+    /** Fire blocks in and on the box at {@code x, z} ({@link #box}). */
+    private static int firesIn(ServerLevel level, int x, int z, int ground) {
+        int n = 0;
+        for (int dx = 0; dx < 5; dx++) {
+            for (int dz = 0; dz < 5; dz++) {
+                for (int dy = 1; dy <= 6; dy++) if (level.getBlockState(new BlockPos(x + dx, ground + dy, z + dz)).getBlock() instanceof BaseFireBlock) n++;
+            }
+        }
+        return n;
+    }
+
+    /**
+     * Test biome (devtest data): plains with downfall 0 — grass cured by its climate ({@code Kindling}), so turf carries a fuel bed the
+     * flash ignites, while rain stays on and light still darkens the biome ({@code ScorchedBiomes}). For tests that need ground fire
+     * (since 19.11 green turf never holds one).
+     */
+    static final ResourceKey<Biome> DRY_MEADOW = ResourceKey.create(Registries.BIOME, Incoming.id("test_dry_meadow"));
 
     /** Plants above the turf of the site: grass, after two - tall grass in two blocks. */
     private static void plants(GameTestHelper h) {

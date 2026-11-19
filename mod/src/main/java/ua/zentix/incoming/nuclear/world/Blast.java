@@ -101,10 +101,27 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
                 /** Coniferous trunk ({@link ModTags#NUKE_CONIFERS}): its own blowdown curve ({@link ForestBlowdown}). */
                 CONIFER = 1 << 22,
                 /** A lamp can have zero live emission while its old disk light still exists. */
-                LIGHT_SOURCE = 1 << 23;
+                LIGHT_SOURCE = 1 << 23,
+                /** The light pulse passes: air, glass and panes ({@link ModTags#SHATTERS}), blocks without collision or light occlusion. */
+                TRANSMITS = 1 << 24,
+                /** Turf carrying a grass bed ({@link Kindling#turf}): fuel where the biome cures grass. */
+                TURF = 1 << 25,
+                /** Window glass and panes ({@link ModTags#SHATTERS}): the pulse passes, {@code RuinPlanner.GLASS} of it. */
+                GLAZING = 1 << 28;
+        /** Flash fuel class ({@link Kindling#of}) in two bits from here: 0 none, else {@link #FUELS}[value − 1]. */
+        static final int FUEL_SHIFT = 26;
+        static final ua.zentix.incoming.nuclear.model.PulseIgnition.Fuel[] FUELS = {ua.zentix.incoming.nuclear.model.PulseIgnition.Fuel.PAPER,
+                ua.zentix.incoming.nuclear.model.PulseIgnition.Fuel.GRASS, ua.zentix.incoming.nuclear.model.PulseIgnition.Fuel.FABRIC};
 
         boolean is(int flag) {
             return (flags & flag) != 0;
+        }
+
+        /** Flash fuel class, null if the flash cannot ignite this block ({@link Kindling}). */
+        @org.jetbrains.annotations.Nullable
+        ua.zentix.incoming.nuclear.model.PulseIgnition.Fuel fuel() {
+            int f = flags >>> FUEL_SHIFT & 3;
+            return f == 0 ? null : FUELS[f - 1];
         }
 
         int flashMaterial() {
@@ -232,6 +249,12 @@ record Blast(RuinWindow.Stamp stamp, int minY, int[] removed, List<long[]> trees
         if (container(st)) flags |= Props.CONTAINER;
         if (st.is(ModTags.NUKE_CONIFERS)) flags |= Props.CONIFER;
         if (st.getLightEmission(at, BlockPos.ZERO) > 0 || ua.zentix.incoming.grid.GridLights.isUnlit(st)) flags |= Props.LIGHT_SOURCE;
+        if (st.isAir() || st.is(ModTags.SHATTERS) || !liquid && !leaves && shape.isEmpty() && st.getFluidState().isEmpty()
+                && st.getLightBlock(at, BlockPos.ZERO) == 0) flags |= Props.TRANSMITS;
+        if (Kindling.turf(st)) flags |= Props.TURF;
+        if (st.is(ModTags.SHATTERS)) flags |= Props.GLAZING;
+        var fuel = Kindling.of(st);
+        if (fuel != null) flags |= (java.util.Arrays.asList(Props.FUELS).indexOf(fuel) + 1) << Props.FUEL_SHIFT;
         return new Props(r, st.isAir(), full, bearing, span, liquid, waterlogged, leaves, log, fixed, destroy >= 1, st.is(BlockTags.MINEABLE_WITH_AXE),
                 flags, st.getLightBlock(at, BlockPos.ZERO), st.getLightEmission(at, BlockPos.ZERO),
                 LightEngine.getOcclusionShape(at, BlockPos.ZERO, st, Direction.UP), LightEngine.getOcclusionShape(at, BlockPos.ZERO, st, Direction.DOWN),

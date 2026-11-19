@@ -140,7 +140,7 @@ record SandboxCommand(Verb verb, List<String> args) {
                 if (args.size() > (own() ? 2 : 1) && !(number(1) >= 50 && number(1) <= 5000)) throw new IllegalArgumentException("from the point 50–5000 blocks");
             }
             case NUKE -> {
-                need(1, 4);
+                need(1, 5);
                 int kt = (int) number(0);
                 if (kt < 1 || kt > 1000) throw new IllegalArgumentException("yield 1–1000 kt");
                 if (flashCamera()) {
@@ -152,10 +152,11 @@ record SandboxCommand(Verb verb, List<String> args) {
                 if (args.size() > i && List.of("air", "ground").contains(args.get(i))) i++;
                 if (args.size() > i && args.get(i).equals("near")) {
                     i++;
-                    if (args.size() > i && (number(i) < 100 || number(i) > 10000)) throw new IllegalArgumentException("near distance 100–10000 m");
-                    if (args.size() > i) i++;
+                    if (args.size() > i && !args.get(i).equals("dry") && (number(i) < 100 || number(i) > 10000)) throw new IllegalArgumentException("near distance 100–10000 m");
+                    if (args.size() > i && !args.get(i).equals("dry")) i++;
+                    if (args.size() > i && args.get(i).equals("dry")) i++;
                 }
-                if (args.size() > i) throw new IllegalArgumentException("nuke <kt> [air|ground] [near [meters]]");
+                if (args.size() > i) throw new IllegalArgumentException("nuke <kt> [air|ground] [near [meters] [dry]]");
             }
             case RAID -> {
                 need(0, water() ? 5 : 4);
@@ -266,7 +267,12 @@ record SandboxCommand(Verb verb, List<String> args) {
     /** {@code nuke … near [meters]}: detonation distance from the houses. */
     double nearRange() {
         int i = args.indexOf("near");
-        return i >= 0 && args.size() > i + 1 ? number(i + 1) : NEAR_RANGE;
+        return i >= 0 && args.size() > i + 1 && !args.get(i + 1).equals("dry") ? number(i + 1) : NEAR_RANGE;
+    }
+
+    /** {@code nuke … near … dry}: the site in a savanna (cured grass, {@code Kindling}). */
+    boolean dry() {
+        return near() && args.getLast().equals("dry");
     }
 
     /**

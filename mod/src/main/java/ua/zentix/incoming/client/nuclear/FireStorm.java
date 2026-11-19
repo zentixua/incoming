@@ -6,6 +6,7 @@ import org.jetbrains.annotations.Nullable;
 import ua.zentix.incoming.Incoming;
 import ua.zentix.incoming.client.far.Sightline;
 import ua.zentix.incoming.nuclear.Detonation;
+import ua.zentix.incoming.nuclear.model.Blowout;
 import ua.zentix.incoming.nuclear.model.ThermalModel;
 import ua.zentix.incoming.util.noise.FastNoiseLite;
 
@@ -20,8 +21,9 @@ import java.util.concurrent.CompletableFuture;
  * glow from below, fire whirls) and surface flame ({@code fx_pall_composite}).
  * <p>
  * <b>Sources.</b> Ignition sites are grouped into sources on a {@link #CELL}-block grid. Burning cell fraction uses the same
- * law as the server and sound ({@link FireField}, {@code RuinPlanner.fire}): light ignites min(1, q/20), fuel exists over
- * {@link FireField#SHARE} of the area, and the wave blows out part of the fire on arrival (half at 2 psi and above): cell strength
+ * law as the server and sound ({@link FireField#chance}, {@code RuinPlanner.kindling}): light ignites dry fuel, fuel holds fire over
+ * {@link FireField#SHARE} of the fueled area — which ground is fueled the client surveys ({@link #survey}: cured grass and buildings,
+ * not green turf, water or ice) — and the wave blows out part of the fire on arrival ({@link Blowout}): cell strength
  * before the wave is {@link Grid#before}, after it {@link Grid#strength}; light uses district flammability rather than a threshold:
  * districts (world noise, {@link #DISTRICT_BLOCKS}-sized patches, detonation seed) burn differently, as do cells within them
  * (lognormal spread {@link #SIGMA_SPOT}), producing a ragged ignition-zone edge. Cell strength is the fraction of its area burning
@@ -46,7 +48,7 @@ import java.util.concurrent.CompletableFuture;
  * source clusters: light and smoke at height h use the level whose cell width matches column or glow width at that
  * height (like light-source trees); regardless of burning cell count, one sample per ray step. Lower down, while columns are narrower than
  * cells ({@link #PILLAR}), each cell has its own column in place (four nearest cells per ray step): near ground columns
- * are separate and merge higher up. Water, ice and snow known to the client do not burn ({@link #survey}).
+ * are separate and merge higher up. Only fuel known to the client burns ({@link #survey}).
  * <p>
  * <b>Whirls.</b> A few fire whirls ({@link Whirl}) at the strongest sources, rare and brief: an event rather than
  * wallpaper. All from the detonation seed.
@@ -266,12 +268,19 @@ public final class FireStorm {
     /** Terrain top under whirls, blocks (NaN — not sampled: use ground zero); written by client tick. */
     private double[] whirlGround = new double[0];
     /**
-     * Fraction of cell with fuel, from client terrain ({@link #survey}): water, ice and snow do not burn; unknown areas
-     * (beyond render distance without a terrain map) follow ground zero. By zone-cell index, like the grid.
+     * Fraction of cell with fuel, from client terrain ({@link #survey}): cured grass, dry fuel and buildings burn; green turf, forest,
+     * bare ground, water, ice and snow do not; land whose blocks are unknown (terrain-map tiles) follows the fuel share of the land
+     * surveyed block by block. By zone-cell index, like the grid.
      */
-    private float[] dry = new float[0];
+    private float[] fuel = new float[0];
+    /** Points classified block by block ({@link Surface#FUEL} or {@link Surface#NONE}) and the fueled among them, over all surveys. */
+    private long classified, fueled;
     /** Cell seen at least once ({@link #survey}): player leaves, chunks unload — retain what was seen. */
     private boolean[] surveyed = new boolean[0];
+    /** Cell classified block by block before its wave: settled. */
+    private boolean[] frozen = new boolean[0];
+    /** Survey order: zone-cell indices, nearest to the eye first. */
+    private int[] order = new int[0];
     private int surveyAt;
     /** Dryness changed since last map fill: refill within {@link #FILL_FAST} ticks. */
     private boolean dirty;
@@ -390,8 +399,11 @@ public final class FireStorm {
     /** Client knowledge of column surface. */
     @FunctionalInterface
     interface Surface {
-        /** −1 — unknown; 0 — fuel present; 1 — water, ice or snow. */
-        int wet(int x, int z);
+        /** What a column top tells the fire model. */
+        int UNKNOWN = -1, NONE = 0, FUEL = 1, WET = 2, LAND = 3;
+
+        /** {@link #UNKNOWN}; {@link #NONE} — ground without flash fuel; {@link #FUEL}; {@link #WET} — water, ice or snow; {@link #LAND} — dry land, blocks unknown. */
+        int at(int x, int z);
     }
 
     /** Zone cells per {@link #survey} tick: full 15 kt zone in 7 seconds. */
@@ -400,62 +412,99 @@ public final class FireStorm {
     static final int SURVEY_POINTS = 3;
 
     /**
-     * Client tick: dry-ground fraction in the next {@link #SURVEY_CELLS} zone cells, cycling through them — 3 × 3 points per cell,
-     * using client knowledge ({@code surface}: local chunks and terrain-map tiles). The fire model has no terrain knowledge, while burning sea
-     * or glacier is immediately visible. Where nothing is or was known, the cell follows ground zero as resolved at the burst
+     * Client tick: fuel fraction in the next {@link #SURVEY_CELLS} zone cells, nearest to the eye first ({@code eye} when the survey
+     * starts), cycling through them — 3 × 3 points per cell, using client knowledge ({@code surface}: local chunks block by block,
+     * terrain-map tiles land or water). The fire model has no terrain knowledge, while a burning sea, glacier or green meadow is
+     * immediately visible. Blocks tell the fuel only before the wave reaches the cell (its ruins are rubble whatever stood there): a cell
+     * classified then keeps its fraction; later, and for map-tile land, land takes the fueled share of the points classified before the
+     * wave so far (all of it while none are). Where nothing is or was known, the cell follows ground zero as resolved at the burst
      * ({@code water}, {@link BurstWater}: chunk, map tile or a ground-height guess for a sea burst): otherwise a distant sea burst would
      * burn the sea. Nothing is decided until that is settled, and later ground-zero changes do not reach the storm: a crater that
-     * fills or whose map tile reads water would otherwise mark every unseen cell wet within one survey sweep, and the whole storm
-     * would go out while the city still burns.
+     * fills or whose map tile reads water would otherwise mark every unseen cell wet within one survey sweep, and the whole storm would
+     * go out while the city still burns. {@code ticks} — detonation clock.
      */
-    void survey(Surface surface, BurstWater water) {
+    void survey(Surface surface, BurstWater water, Vec3 eye, double ticks) {
         Grid g = grid;
         if (g == null || g.index.length == 0 || !water.settled()) return;
         double unknownWet = water.under();
-        if (dry.length != g.index.length) {
-            dry = new float[g.index.length];
-            Arrays.fill(dry, (float) (1 - unknownWet));
+        double half = g.side * g.cell / 2, step = g.cell / SURVEY_POINTS;
+        Vec3 b = d.burst();
+        if (fuel.length != g.index.length) {
+            fuel = new float[g.index.length];
+            Arrays.fill(fuel, (float) (1 - unknownWet));
             surveyed = new boolean[g.index.length];
+            frozen = new boolean[g.index.length];
+            order = nearestFirst(g, b, half, eye);
             surveyAt = 0;
             // a map filled before the first survey treated everything as land: refill immediately
             filledAt = Double.NaN;
         }
-        double half = g.side * g.cell / 2, step = g.cell / SURVEY_POINTS;
-        Vec3 b = d.burst();
         int n = Math.min(SURVEY_CELLS, g.index.length);
         for (int s = 0; s < n; s++) {
-            int k = surveyAt;
+            int k = order[surveyAt];
             surveyAt = (surveyAt + 1) % g.index.length;
+            if (frozen[k]) continue;
             int c = g.index[k];
+            boolean blocks = ticks < g.arrival[k];
             double x0 = b.x + (c % g.side) * g.cell - half, z0 = b.z + (double) (c / g.side) * g.cell - half;
-            int known = 0, wet = 0;
+            int known = 0, fuels = 0, land = 0, classes = 0;
             for (int j = 0; j < SURVEY_POINTS; j++) {
                 for (int i = 0; i < SURVEY_POINTS; i++) {
-                    int w = surface.wet(Mth.floor(x0 + (i + 0.5) * step), Mth.floor(z0 + (j + 0.5) * step));
-                    if (w < 0) continue;
+                    int w = surface.at(Mth.floor(x0 + (i + 0.5) * step), Mth.floor(z0 + (j + 0.5) * step));
+                    if (w == Surface.UNKNOWN) continue;
                     known++;
-                    wet += w;
+                    if ((w == Surface.FUEL || w == Surface.NONE) && !blocks) w = Surface.LAND;
+                    if (w == Surface.LAND) land++;
+                    if (w == Surface.FUEL || w == Surface.NONE) {
+                        classes++;
+                        classified++;
+                    }
+                    if (w == Surface.FUEL) {
+                        fuels++;
+                        fueled++;
+                    }
                 }
             }
             if (known == 0 && surveyed[k]) continue;
             surveyed[k] |= known > 0;
-            float v = known == 0 ? (float) (1 - unknownWet) : 1 - (float) wet / known;
-            if (v != dry[k]) {
-                dry[k] = v;
+            frozen[k] = classes > 0 && land == 0;
+            float v = known == 0 ? (float) (1 - unknownWet) : (float) ((fuels + land * landFuel()) / known);
+            if (v != fuel[k]) {
+                fuel[k] = v;
                 dirty = true;
             }
         }
     }
 
-    /** Dry-ground fraction in the cell beneath a point (world blocks); 1 outside the fire zone. */
-    double dryAt(double x, double z) {
+    /** Zone-cell indices by horizontal distance of their middle from {@code eye}. */
+    private static int[] nearestFirst(Grid g, Vec3 b, double half, Vec3 eye) {
+        int n = g.index.length;
+        long[] keyed = new long[n];
+        for (int k = 0; k < n; k++) {
+            int c = g.index[k];
+            double x = b.x + (c % g.side + 0.5) * g.cell - half, z = b.z + (c / g.side + 0.5) * g.cell - half;
+            keyed[k] = (long) Math.min(Integer.MAX_VALUE, Math.hypot(x - eye.x, z - eye.z)) << 32 | k;
+        }
+        Arrays.sort(keyed);
+        int[] order = new int[n];
+        for (int k = 0; k < n; k++) order[k] = (int) keyed[k];
+        return order;
+    }
+
+    /** Fueled share of land whose blocks are unknown: that of the land classified block by block so far (all while none is). */
+    double landFuel() {
+        return classified == 0 ? 1 : (double) fueled / classified;
+    }
+
+    /** Fuel fraction in the cell beneath a point (world blocks); 1 outside the fire zone. */
+    double fuelAt(double x, double z) {
         Grid g = grid;
-        if (g == null || dry.length != g.index.length) return 1;
+        if (g == null || fuel.length != g.index.length) return 1;
         double half = g.side * g.cell / 2;
         int i = Mth.floor((x - d.burst().x + half) / g.cell), j = Mth.floor((z - d.burst().z + half) / g.cell);
         if (i < 0 || j < 0 || i >= g.side || j >= g.side) return 1;
         int k = Arrays.binarySearch(g.index, j * g.side + i);
-        return k < 0 ? 1 : dry[k];
+        return k < 0 ? 1 : fuel[k];
     }
 
     /** Ground beneath whirl {@code i}, blocks (not sampled — ground zero). */
@@ -500,7 +549,7 @@ public final class FireStorm {
             if (ticks - filledAt < every) return false;
         }
         if (map.length != g.side * g.side * CHANNELS) map = new float[g.side * g.side * CHANNELS];
-        fill(g, pall.clockSeconds(ticks) * 20, dry.length == g.index.length ? dry : null, map);
+        fill(g, pall.clockSeconds(ticks) * 20, fuel.length == g.index.length ? fuel : null, map);
         dirty = false;
         double sum = 0;
         for (int i = 0; i < map.length; i += CHANNELS) sum += map[i];
@@ -520,17 +569,17 @@ public final class FireStorm {
     }
 
     /**
-     * Map at {@code ticks} on the detonation's clock, in ticks, into {@code out}: RGBA per cell, zero outside the zone; {@code dry}
-     * is the dry-ground fraction per zone cell ({@link #survey}; null — all land).
+     * Map at {@code ticks} on the detonation's clock, in ticks, into {@code out}: RGBA per cell, zero outside the zone; {@code fuel}
+     * is the fuel fraction per zone cell ({@link #survey}; null — all fueled).
      */
-    static void fill(Grid g, double ticks, @Nullable float[] dry, float[] out) {
+    static void fill(Grid g, double ticks, @Nullable float[] fuel, float[] out) {
         Arrays.fill(out, 0);
         for (int k = 0; k < g.index.length; k++) {
             double age = (ticks - g.start[k]) / 20.0;
             if (age <= 0) continue;
             double peak = g.peak[k];
             int i = g.index[k] * CHANNELS;
-            double wet = dry == null ? 1 : dry[k];
+            double wet = fuel == null ? 1 : fuel[k];
             double s = g.strengthAt(k, ticks);
             double sm = (s == g.strength[k] ? g.column[k] : Math.pow(s, COLUMN_POWER)) * smoke(age, peak) * wet;
             out[i] = (float) (s * flame(age, peak) * wet);
@@ -606,7 +655,7 @@ public final class FireStorm {
                 double q = d.fluence(p) * Math.exp(SIGMA_EDGE * district - SIGMA_EDGE * SIGMA_EDGE / 2);
                 if (q < ThermalModel.ignite(d.yieldKt())) continue;
                 // light ignites; the wave later blows out some fire (server: half at 2 psi and above), smoothly, no ring on the map
-                double chance = Math.min(1, q / ThermalModel.igniteAll(d.yieldKt())), keep = 1 - (1 - FireField.BLOWN_KEEP) * smooth(1.5, 2.5, d.psi(p));
+                double chance = FireField.chance(d, q), keep = Blowout.keep(d.psi(p));
                 double fuel = Math.exp(SIGMA_DISTRICT * district - SIGMA_DISTRICT * SIGMA_DISTRICT / 2);
                 long h = hash(seed, i, j);
                 double spot = Math.exp(SIGMA_SPOT * gauss(h) - SIGMA_SPOT * SIGMA_SPOT / 2);
