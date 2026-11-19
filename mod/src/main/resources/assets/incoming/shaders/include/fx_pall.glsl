@@ -1085,7 +1085,8 @@ vec4 pallSource(vec3 p, float cone, vec4 inflow, out vec3 dustLight) {
     vec3 below = burnt(s, g * mv);
     vec3 fire = min(below + under * (glow + s.fire / max(s.albedo, vec3(1e-7))) + around, gFlame);
     vec3 lamps = pallLampsAt(p);
-    dustLight = w * (field + beams + fire + lamps) + (s.sigma > 1e-7 ? s.fill / s.sigma : vec3(0.0)) * field;
+    vec3 fillW = s.sigma > 1e-7 ? s.fill / s.sigma : vec3(0.0);
+    dustLight = w * (field + beams + fire + lamps) + fillW * field;
     vec3 emit = s.albedo * (field + beams + fire + lamps) + s.fill * field;
     // firestorm column smoke (soot) in same light and self-shadow: direct light attenuated by column depth toward sun,
     // diffuse as e^(−kτ) of soot (sunward side and billow tops bright, opposite side and bottom dark: volumetric column,
