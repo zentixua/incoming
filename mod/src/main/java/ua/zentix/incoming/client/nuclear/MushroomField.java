@@ -164,15 +164,15 @@ public final class MushroomField {
     /**
      * Frame mushrooms into table {@code into} rows (0..{@link #MUSHROOMS}−1, {@link #TEXELS} texels each; rows without
      * a mushroom are zero): largest on screen whose bounds are in the frustum ({@code frustum} — from eye, without far
-     * plane), or by day whose world shadow enters it (after all directly visible mushrooms). {@code sun} is sun direction and daylight strength ({@code PallSun}); {@code bottom}, {@code top} are world bottom
+     * plane), or while the sun lights them whose world shadow enters it (after all directly visible mushrooms). {@code sun} is sun direction and daylight strength ({@code PallSun}), {@code sunlit} — the sun lights some height ({@code PallPass.Frame.sunUp}: shadow tiles); {@code bottom}, {@code top} are world bottom
      * and top (y): shadow falls on everything between. Returns mushroom count.
      */
     public static int frame(List<ClientNuclear.Active> all, Vec3 eye, float partial, FrustumIntersection frustum, Vector4f sun,
-                            double bottom, double top, float[] into) {
+                            boolean sunlit, double bottom, double top, float[] into) {
         for (int k = 0; k < MUSHROOMS; k++) java.util.Arrays.fill(into, k * WIDTH * 4, k * WIDTH * 4 + TEXELS * 4, 0f);
         shadowSun(sun.x, sun.y, sun.z, RAYS);
         shadowAxes(RAYS, AXIS_A, AXIS_B);
-        boolean day = sun.w > 0;
+        boolean day = sunlit;
         int n = 0;
         for (int i = 0; i < all.size(); i++) {
             ClientNuclear.Active a = all.get(i);
