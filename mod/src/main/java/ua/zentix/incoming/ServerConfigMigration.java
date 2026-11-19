@@ -16,11 +16,12 @@ public record ServerConfigMigration(ModConfigSpec delegate) implements IConfigSp
      */
     private static final String OLD_RESTORE = "grid.restore_minutes", RESTORE = "grid.restore_hours";
     /**
-     * The GAME wave default rose from 0.25 to 0.35 (Artem, 19.11). A file still holding the old default with the key's
-     * comment written by an older jar was never set to 0.25 under this one: it takes the new default. The spec's
-     * correction then rewrites the comment, so a 0.25 a player sets afterwards stays.
+     * The GAME wave default rose from 0.25 to 0.35 (Artem, 19.11). Only a file whose preset is not CUSTOM moves: there the
+     * value is inert, so 0.25 is the old default left in the file, not a choice in effect; under CUSTOM 0.25 is the wave
+     * the world runs and stays. And only once: the key's comment must come from an older jar; the spec's correction then
+     * rewrites it, so a 0.25 a player sets afterwards stays too.
      */
-    private static final String WAVE = "nuclear.wave_speed";
+    private static final String WAVE = "nuclear.wave_speed", PRESET = "scale.scale_preset";
 
     @Override
     public boolean isEmpty() { return delegate.isEmpty(); }
@@ -35,6 +36,8 @@ public record ServerConfigMigration(ModConfigSpec delegate) implements IConfigSp
 
     private boolean oldWaveDefault(UnmodifiableCommentedConfig config) {
         if (!(config.get(WAVE) instanceof Number n) || n.doubleValue() != IncomingConfig.OLD_GAME_WAVE_SPEED) return false;
+        Object preset = config.get(PRESET);
+        if (preset != null && IncomingConfig.ScalePreset.CUSTOM.name().equals(preset.toString())) return false;
         String written = config.getComment(WAVE), current = delegate.getSpec().<ModConfigSpec.ValueSpec>get(WAVE).getComment();
         // line ends normalized as the spec's own comment check does
         return written == null || !written.replace("\r\n", "\n").equals(current.replace("\r\n", "\n"));

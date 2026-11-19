@@ -91,4 +91,15 @@ class ServerConfigMigrationTest {
         migration.correct(reloaded);
         assertEquals(0.25, reloaded.<Number>get("nuclear.wave_speed").doubleValue(), 1e-12);
     }
+
+    /** Under CUSTOM the 0.25 is the wave the world runs: kept, with or without an old comment. */
+    @Test
+    void customWaveStays() {
+        for (String comment : new String[]{"", "\t#Works with scale.scale_preset = CUSTOM. (0.25 is the GAME preset).\n"}) {
+            CommentedConfig config = new TomlParser().parse("[scale]\nscale_preset = \"CUSTOM\"\n[nuclear]\n" + comment + "\twave_speed = 0.25\n");
+            migration.correct(config);
+            assertEquals(0.25, config.<Number>get("nuclear.wave_speed").doubleValue(), 1e-12);
+            assertTrue(migration.isCorrect(config));
+        }
+    }
 }
