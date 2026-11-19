@@ -260,9 +260,12 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   age and that clock (seek, late entry), no per-cell packet. Known
   fuel only burns (`FireStorm.survey`, 128 cells/tick nearest the eye first, `FireStorms.surface`): cured-biome soil, dry
   fuel, buildings (non-natural tops) — not green turf, trees, rock, water/ice/snow; blocks count before and after the
-  wave alike (stripped turf reads as soil, collapsed buildings as piles of their own blocks: a late client sees the same
-  fuel, `lateClientSeesTheSameFuel`), a classified cell freezes at its first reading; map-tile land takes the classified
-  fueled share (`landFuel`); unknown cells use epicenter conditions (`NukeWater.under`: distant sea burst does not burn sea); seen cells
+  wave alike (stripped turf reads as soil, collapsed buildings as piles of their own blocks: `lateClientSeesTheSameFuel`)
+  except loose rubble (`Kindling.rubble`: gravel, rooted dirt, andesite, tuff; `Surface.LOOSE`), ground before the cell's
+  wave and land after it; each of a cell's 3 × 3 points keeps its first block reading and counts once, the cell freezes
+  when all are read (`surveyWhileChunksLoadEndsAsTheFullView`); map-tile land and post-wave rubble take the read fueled
+  share (`landFuel`). Known approximations: coarse-dirt roof rubble reads as soil, natural gravel read after its wave as
+  land; unknown cells use epicenter conditions (`NukeWater.under`: distant sea burst does not burn sea); seen cells
   remain seen. `NukeAfter` weighs model fire and secondaries by `fuelAt`. Flash pyrolysis smoke (`FlashAftermath.Smoke`):
   world-anchored 12-block grid around the eye, all directions, nearest first; volatiles bounded by bed load and moisture
   (`FlashPyrolysis`), 19.11 complaint: opaque billow at the crosshair.
