@@ -1019,12 +1019,21 @@ public final class RuinPlan {
         }
         PHASES[2] += System.nanoTime() - t;
         t = System.nanoTime();
-        // chunk viewers get changes same tick via section packets (like setBlock), not chunk queue
+        // chunk viewers get a few changes as section packets the same tick (like setBlock), a heavily ruined chunk whole
+        // after its light (RuinDelivery)
         ChunkHolder holder = level.getChunkSource().chunkMap.getVisibleChunkIfPresent(pos.toLong());
-        List<ServerPlayer> players = holder == null ? List.of() : level.getChunkSource().chunkMap.getPlayers(pos, false);
-        boolean watched = !players.isEmpty();
-        boolean sections = watched && holder.getTickingChunk() != null;
+        List<ServerPlayer> players = holder == null ? List.of() : RuinDelivery.viewers(holder);
+        boolean watched = !players.isEmpty(), ticking = watched && holder.getTickingChunk() != null;
+        int changed = 0;
+        if (ticking) {
+            for (int c : cells) if ((c & SLOW) == 0) changed++;
+            if (out != null) changed += out.size();
+            for (int k = 0; k < n; k++) if (fireWas[k] != states[(burning[k] >>> STATE_SHIFT) & STATE_MASK]) changed++;
+        }
+        boolean whole = ticking && RuinDelivery.whole(changed);
+        boolean sections = ticking && !whole;
         if (sections) {
+            RuinDelivery.deltas(changed);
             for (int c : cells) if ((c & SLOW) == 0) holder.blockChanged(at(m, c, x0, z0, minY));
             for (int k = 0; out != null && k < out.size(); k++) holder.blockChanged(m.set(out.getLong(k)));
         }
@@ -1099,9 +1108,11 @@ public final class RuinPlan {
             }
         }
         // viewed but non-ticking chunk (view edge): send full chunk via vanilla
-        if (watched && !sections) {
+        if (watched && !ticking) {
             for (ServerPlayer p : players) p.connection.chunkSender.markChunkPendingToSend(chunk);
         }
+        // after the block entities: the whole chunk carries them too
+        if (whole) RuinDelivery.wholeAfterLight(level, chunk, changed);
         // Distant Horizons LOD: ruins with wave, not next chunk save
         long dh = System.nanoTime();
         DhUpdates.mark(level, pos, level.getGameTime());

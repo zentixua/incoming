@@ -325,6 +325,7 @@ public final class ScarQueue {
         long[] ph = RuinPlan.PHASES;
         Incoming.LOG.info("Ruins: chunk swap by phase (total since start, ms) — check {}, sections {}, heightmaps {}, light and packets {}, block entities {}",
                 ph[0] / 1_000_000, ph[1] / 1_000_000, ph[2] / 1_000_000, ph[3] / 1_000_000, ph[4] / 1_000_000);
+        Incoming.LOG.info("Ruins: delivery to viewers — {}", RuinDelivery.describe());
         if (RuinPlan.slowestWorldNanos > 0) {
             Incoming.LOG.info("Ruins: slowest through the world — chunk {}: {} cells, {} ms (block entities, POI, Distant Horizons LOD); "
                             + "slowest block {} — {} ms, Distant Horizons LOD {} ms",

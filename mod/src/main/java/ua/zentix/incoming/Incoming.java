@@ -149,6 +149,7 @@ public final class Incoming {
 
         NeoForge.EVENT_BUS.addListener(EventPriority.HIGHEST, WorkScheduler::onServerTickPre);
         NeoForge.EVENT_BUS.addListener(EventPriority.HIGHEST, WorkScheduler::onLevelTickPre);
+        NeoForge.EVENT_BUS.addListener(ua.zentix.incoming.nuclear.world.RuinDelivery::onLevelTickPre);
         NeoForge.EVENT_BUS.addListener(WorkScheduler::onServerTick);
         NeoForge.EVENT_BUS.addListener(EventPriority.LOWEST, WorkScheduler::onServerTickEnd);
         NeoForge.EVENT_BUS.addListener(EventPriority.HIGHEST, ua.zentix.incoming.work.ChunkLoadPace::onTickStart);
