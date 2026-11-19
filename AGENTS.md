@@ -225,12 +225,16 @@ actually works, fix the real cause.
   holder); finish with `tools/sandbox.sh stop`, then `tools/gpu_lease.sh release`.
 - **One independent review round:** use the other vendor when available; during absence or quota exhaustion, use a
   fresh session of the available vendor, given the diff and surrounding-code access without the author's conclusions.
-  Use the effort the change needs (high for routine code, xhigh for physics/render/performance); max only after xhigh
-  missed a serious error.
+  Effort follows the effort rule below.
   Reviewer reads diff/surrounding code, not PR description or author's conversation/conclusions; checks PR frames,
   plus WAV for player-visible/audible changes. Only serious errors block: wrong behavior, crash, tick-budget or
   frame-cost breach; other findings optional, author fixes minor issues without another round. Second round only
   for serious first-round fixes, no third. Parallel tasks/measurements: GPT-6.1 Sol at medium (high for diagnosis).
+- **Effort** (Artem, 19.11), for every agent, task and review: the working range is low/medium/high.
+  **medium** is the default. **high** for work that needs deep reasoning: diagnosis of an unknown cause, physics
+  laws, rendering, performance, concurrency, and reviews of such changes. **low** for mechanical work: renames,
+  moving or copying text, routine checks, collecting files or logs. Above high only when high demonstrably failed on
+  that task (a missed serious error or a wrong result), stated in the PR or report.
 - **Author or explicitly accepted work owner merges:** green Итог (sole required check), review without serious errors. No repeated verification by
   someone else; CI-missed bugs get tests, not extra manual steps.
 - End commits with your own agent's name/address in `Co-Authored-By:`, never another agent's.

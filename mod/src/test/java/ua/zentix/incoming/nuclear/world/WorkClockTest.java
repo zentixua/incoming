@@ -196,4 +196,59 @@ class WorkClockTest {
         now[0] = 42;
         assertEquals(42, WorkClock.decaying(() -> now[0], 1).sampler().getAsLong());
     }
+
+    /**
+     * Review of #663: on the production nuclear clock (no per-tick decay) one 5 ms unit of a kind that runs after 2 ms of
+     * other work in a 6 ms lane refused every later 0.2 ms unit of that kind (0 admissions in 120 ticks), and the estimate
+     * could never fall, since only that kind's own units lower it. A kind refused by its estimate while time remained halves
+     * it per tick ({@link WorkClock#STARVED_DECAY}) and is admitted again within a few ticks.
+     */
+    @Test
+    void starvedKindRecovers() {
+        long[] now = {0};
+        WorkClock clock = WorkClock.decaying(() -> now[0], 1);
+        clock.start(6 * MS, () -> true, 2 * MS);
+        long b = clock.begin();
+        now[0] += 5 * MS;
+        clock.end(b, 1);
+        int admitted = 0, firstTick = -1;
+        for (int tick = 0; tick < 120; tick++) {
+            clock.start(6 * MS, () -> true, 2 * MS);
+            b = clock.begin();
+            now[0] += 2 * MS;
+            clock.end(b);
+            if (clock.canStartVisible(1, 12 * MS)) {
+                admitted++;
+                if (firstTick < 0) firstTick = tick;
+                b = clock.begin();
+                now[0] += MS / 5;
+                clock.end(b, 1);
+            }
+        }
+        assertTrue(firstTick >= 0 && firstTick <= 2, "first admission on tick " + firstTick);
+        assertTrue(admitted >= 117, "admissions " + admitted + " of 120");
+    }
+
+    /** A kind refused because the tick's time is used up keeps its estimate: only a refusal by the estimate itself starves it. */
+    @Test
+    void refusalWithoutTimeLeftKeepsTheEstimate() {
+        long[] now = {0};
+        WorkClock clock = WorkClock.decaying(() -> now[0], 1);
+        clock.start(6 * MS, () -> true, 2 * MS);
+        long b = clock.begin();
+        now[0] += 5 * MS;
+        clock.end(b, 1);
+        for (int tick = 0; tick < 10; tick++) {
+            clock.start(6 * MS, () -> true, 2 * MS);
+            b = clock.begin();
+            now[0] += 6 * MS;
+            clock.end(b);
+            assertFalse(clock.canStart(1), "tick " + tick);
+        }
+        clock.start(6 * MS, () -> true, 2 * MS);
+        b = clock.begin();
+        now[0] += 2 * MS;
+        clock.end(b);
+        assertFalse(clock.canStart(1), "the 5 ms estimate decayed without a refusal by it");
+    }
 }
