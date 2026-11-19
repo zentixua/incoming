@@ -342,10 +342,12 @@ struct Sample {
     float shadeDown;
     // local pall billows (coarse × fine, mean 1): also billow wide storm smoke — same air mass
     float clumps;
+    // wall head's fill colour (WALL_TINT): Σ extinction × ω' × (ω'^n − 1) — what the diffuse field loses to reddening
+    vec3 fill;
 };
 
 Sample emptySample() {
-    return Sample(0.0, vec3(0.0), 0.0, vec3(0.0), 0.0, 0.0, vec3(0.0), 0.0, 0.0, vec3(0.0), 0.0, 0.0, 0.0, vec3(0.0), 0.0, 0.0, 0.0, 0.0, 1.0);
+    return Sample(0.0, vec3(0.0), 0.0, vec3(0.0), 0.0, 0.0, vec3(0.0), 0.0, 0.0, vec3(0.0), 0.0, 0.0, 0.0, vec3(0.0), 0.0, 0.0, 0.0, 0.0, 1.0, vec3(0.0));
 }
 
 // ---------------------------------------------------------------- dust-layer head (pall.glsl: pallWall*)
@@ -357,10 +359,20 @@ Sample emptySample() {
 const float WALL_LOBE = 1.75;
 // presentation: the head's billows churn, deforming by about a fifth of a lobe width per second (footage: 0.15–0.3 lobe widths/s; eddies
 // of the layer's size turn over at σ_u/h ≈ 0.1·U/h, 0.03–0.12 per second for 1 Mt 3–6 km out); the warp of the noise moves through its
-// third axis at this rate, noise units per second
-const float WALL_CHURN = 0.08;
+// third axis at this rate, noise units per second (0.08 churned visibly slower than the footage on a 1 Mt ground sequence, 0.5 flickered
+// between frames 0.2 s apart)
+const float WALL_CHURN = 0.25;
 // presentation: vertical noise extent of the whole layer height, noise units (a quarter is one lobe): one row of lobes, crests on top
 const float WALL_ROW = 0.3;
+// presentation: the billows' self-shadow at this share of the optical depth between them: at full depth the lobes (several layer tops
+// wide) shadow each other to near black, p90/p10 of the head's luminance 20–30; the footage's soft brown clefts are 2.8–4.8
+const float WALL_SHADE = 0.25;
+// presentation: diffuse light reaches into the head as if through at most this optical depth (multiple-scattering fill): the
+// two-stream light from the layer's top or face alone left the dense front's face 1–2 % of the sky's luminance, p90/p10 20–30 against
+// the footage's 2.8–4.8; extinction, the beams and where the dust is are unchanged
+const float WALL_FILL = 1.0;
+// presentation: scatterings per optical depth the fill skips, for its colour (wall: the diffuse field takes the albedo to that power)
+const float WALL_TINT = 0.25;
 
 // Head lobe tiles: (smaller tile of the two octaves, larger, share of the larger), blocks, at least a block
 vec3 wallLobes(mat4 V) {
@@ -459,7 +471,8 @@ void wall(mat4 V, WallAt h, vec3 keyDir, vec3 sunDir, vec3 lightDir, float smoke
         WallAt h1 = wallMove(V, h, keyDir * (0.06 * tile)), h2 = wallMove(V, h, keyDir * (0.2 * tile));
         float m1 = h1.P.w * pallWallMean(h1.s - h1.P.z, h1.z, h1.P.x, h1.P.y, V[2].x, V[2].w);
         float m2 = h2.P.w * pallWallMean(h2.s - h2.P.z, h2.z, h2.P.x, h2.P.y, V[2].x, V[2].w);
-        dev = ((hd - hm) * 0.03 + (wallAt(V, h1, 0.0, dense, lobes, t) - m1) * 0.1 + (wallAt(V, h2, 0.0, dense, lobes, t) - m2) * 0.17) * tile;
+        dev = ((hd - hm) * 0.03 + (wallAt(V, h1, 0.0, dense, lobes, t) - m1) * 0.1 + (wallAt(V, h2, 0.0, dense, lobes, t) - m2) * 0.17) * tile
+                * WALL_SHADE;
         dev = clamp(dev, -3.0, 6.0);
     }
     // mean head depth above point (to local wedge top), toward leading edge (where wedge stays above point), below point
@@ -471,7 +484,7 @@ void wall(mat4 V, WallAt h, vec3 keyDir, vec3 sunDir, vec3 lightDir, float smoke
     float up = wallChord(V, h, vec3(0.0, 1.0, 0.0), max(h.P.y * pallWallTop(u0, V[2].x) * pallWallHeated(u0 * V[2].x, V[2].w) - h.z, 0.0), 4);
     float side = wallChord(V, h, vec3(out1.x, 0.0, out1.y), max(s0 - h.P.x * pallWallFace(h.z / max(h.P.y, 0.001), V[2].x), 0.0), 4);
     float down = wallChord(V, h, vec3(0.0, -1.0, 0.0), max(h.z, 0.0), 2);
-    float depth = min(up, side);
+    float deep = min(up, side), depth = min(deep, WALL_FILL);
     float sunLen = sunDir.y > 0.05 ? min(reach, toTop / sunDir.y) : reach;
     float capLen = lightDir.y > 0.05 ? min(reach, toTop / lightDir.y) : reach;
     float toSun = wallChordNear(V, h, sunDir, sunLen, 4), toCap = wallChordNear(V, h, lightDir, capLen, 4);
@@ -493,6 +506,9 @@ void wall(mat4 V, WallAt h, vec3 keyDir, vec3 sunDir, vec3 lightDir, float smoke
     s.shadeDown += dev * max(-keyDir.y, 0.0);
     s.sigma += hd;
     s.albedo += hd * w;
+    // presentation (WALL_FILL): the fill light has scattered through the depth it skips, WALL_TINT times per optical depth: its colour
+    // is the dust's albedo to that power (reddened), not the zenith sky's; the diffuse field only, not beams or fire light
+    s.fill += hd * w * (pow(w, vec3(max(deep - depth, 0.0) * WALL_TINT)) - 1.0);
     s.phase += hd * g;
 }
 
@@ -1069,8 +1085,8 @@ vec4 pallSource(vec3 p, float cone, vec4 inflow, out vec3 dustLight) {
     vec3 below = burnt(s, g * mv);
     vec3 fire = min(below + under * (glow + s.fire / max(s.albedo, vec3(1e-7))) + around, gFlame);
     vec3 lamps = pallLampsAt(p);
-    dustLight = w * (field + beams + fire + lamps);
-    vec3 emit = s.albedo * (field + beams + fire + lamps);
+    dustLight = w * (field + beams + fire + lamps) + (s.sigma > 1e-7 ? s.fill / s.sigma : vec3(0.0)) * field;
+    vec3 emit = s.albedo * (field + beams + fire + lamps) + s.fill * field;
     // firestorm column smoke (soot) in same light and self-shadow: direct light attenuated by column depth toward sun,
     // diffuse as e^(−kτ) of soot (sunward side and billow tops bright, opposite side and bottom dark: volumetric column,
     // not flat gray stripe); fire glow below

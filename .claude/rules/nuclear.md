@@ -234,7 +234,12 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   (a tile following the top moved billows over the ground — 18.10 “dust spread from epicenter”,
   `BlastWallTest.headCloudsStayWhereTheDustWasLifted`); churn `WALL_CHURN` (~0.2 lobe widths/s, Silo S3E09) moves the
   warp through its third axis on the detonation clock. All presentation, marked in code. Cartesian coordinates, no tiled
-  circumference or noise phases.
+  circumference or noise phases. Head light (presentation, 19.11): the dense lofted front lit only by the two-stream light
+  from its top or face was near black (face 1–2 % of the sky, head p90/p10 20–30 against Silo S3E09's 2.8–4.8), so its
+  diffuse depth is capped at `WALL_FILL` (multiple-scattering fill) and the fill light takes the dust's albedo to the
+  skipped depth × `WALL_TINT` (reddened; the diffuse field only, `Sample.fill`: without it the face read blue-white),
+  the billows' self-shadow `dev` × `WALL_SHADE` (the lobe tile is several layer tops, so it saturated at its clamp);
+  Java copy `NukePall.dustLight` (`PallGlslTest.headFillIsTheCameraDusts`).
   Rays sample the head more densely (`pallWallSpans`: ring from dust edge to 1.5 wedges and terrain-map height layer,
   step one eighth its height, at most `steps` extra steps). Same light as pall, light-path depth follows wedge shape
   (`wall` in `fx_pall`, copy `NukePall.dustLight`): diffuse uses the lesser mean-head depth above point (to local wedge

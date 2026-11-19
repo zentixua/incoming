@@ -574,6 +574,24 @@ class PallGlslTest {
     }
 
     /**
+     * The head's multiple-scattering fill (presentation, 19.11: the dense front's face was near black, head p90/p10 20–30 against the
+     * footage's 2.8–4.8) is the same in the shader and the camera dust ({@link NukePall#dustLight}): the diffuse depth is capped, the
+     * fill light carries the albedo to the skipped depth's power, and the billows' self-shadow is softened.
+     */
+    @Test
+    void headFillIsTheCameraDusts() {
+        String fx = read("include/fx_pall.glsl");
+        assertEquals(NukePall.WALL_FILL, scalar(fx, "WALL_FILL"), 1e-7);
+        assertEquals(NukePall.WALL_TINT, scalar(fx, "WALL_TINT"), 1e-7);
+        String wall = body(fx, "void wall(").replaceAll("\\s+", " ");
+        assertTrue(wall.contains("float deep = min(up, side), depth = min(deep, WALL_FILL);"), "head diffuse depth - not capped by the fill");
+        assertTrue(wall.contains("s.fill += hd * w * (pow(w, vec3(max(deep - depth, 0.0) * WALL_TINT)) - 1.0);"), "fill light - not the dust's colour");
+        assertTrue(fx.replaceAll("\\s+", " ").contains("vec3 emit = s.albedo * (field + beams + fire + lamps) + s.fill * field;"),
+                "fill colour - not on the diffuse field alone");
+        assertTrue(wall.contains("* WALL_SHADE;"), "billow self-shadow - not softened");
+    }
+
+    /**
      * Desert dust ({@code SAND}) is AERONET desert dust: its thick-layer colour is R∞ of the measured single-scattering albedo
      * ({@link NukePall#SAND_OMEGA}, Dubovik et al. 2002) after delta-Eddington with the dust phase g (forward peak g²), to the colour's
      * three decimals. Sand's share of lofted mass ({@code pallDustW}) is {@link PallField#sandShare}, with sand and hard ground as fractions of
@@ -770,7 +788,7 @@ class PallGlslTest {
         String march = read("include/fx_pall.glsl"), composite = read("core/fx_pall_composite.fsh");
         assertTrue(march.contains("vec3 fire = min(below + under * (glow + s.fire / max(s.albedo, vec3(1e-7))) + around, gFlame);"),
                 "fire at a point - one amount under the flame limit");
-        assertTrue(march.contains("vec3 emit = s.albedo * (field + beams + fire + lamps);"), "point light - scattered, beams, fire and lamps");
+        assertTrue(march.contains("vec3 emit = s.albedo * (field + beams + fire + lamps) + s.fill * field;"), "point light - scattered (with the head's fill colour), beams, fire and lamps");
         assertTrue(march.contains("vec3 lamps = pallLampsAt(p);"), "lamps once per point, by the window's block light");
         assertTrue(march.contains("+ min(below * exp(-gSootK * self) + (0.5 + 0.75 * PALL_SOOT_G * mv) * glow + around, gFlame);"),
                 "fire on the smoke of the storm - one sum under the flame limit");
