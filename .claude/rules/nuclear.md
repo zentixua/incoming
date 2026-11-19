@@ -435,8 +435,8 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   in [`SLOWEST` 0.8, `FASTEST` 3] toward the estimated server age less `DELAY` (one tick of jitter buffer); never back, at
   most `LEAD` 3 ticks past the latest anchor (ruins and debris arrive ≥ 2 ticks after the wave); eases to a stop over
   `EASE` only after `STALE` ticks of frames without an anchor (server stall; packets a frozen client could not read do not
-  count). Without a stream (after the show, `ended`; a live burst with no per-tick anchor within `PROBE` 1 s is a recording
-  made before them) it follows own time, uncapped; tick-time callers ask the tick's own age (`ticks(0)`: a partial ahead
+  count). Without a stream (after the show, `ended`; in a Flashback replay, a live burst with no per-tick anchor within
+  `PROBE` 1 s is a recording made before them; a live server's late first anchor only holds the burst at `LEAD`) it follows own time, uncapped; tick-time callers ask the tick's own age (`ticks(0)`: a partial ahead
   advances the clock past every frame of the tick, review of #678); a past detonation
   (entry, seek) takes the first anchor whole. #668's law (at most one tick past the anchor, whole-tick steps) held
   40–43 % of frames up to 149 ms on a 1 Mt rig: the wall moved in 20 Hz steps (19.11). Own ticks alone lagged the server

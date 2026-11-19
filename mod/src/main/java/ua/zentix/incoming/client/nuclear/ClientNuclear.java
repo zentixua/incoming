@@ -77,7 +77,8 @@ public final class ClientNuclear {
             this.live = live;
             // live: the packet is the server's first anchor (age 0 at send); past (entry, seek): the level clock's estimate
             // until the server's next anchor, which the clock takes whole
-            this.clock = live ? new AgeClock(0, true) : new AgeClock(Math.max(0, clientNow - d.gameTime()), false);
+            this.clock = live ? new AgeClock(0, true, ua.zentix.incoming.client.replay.Replay.active())
+                    : new AgeClock(Math.max(0, clientNow - d.gameTime()), false);
             if (SHOW_ENDS.containsKey(d.id())) clock.ended();
             this.puffs = puffs;
             this.wall = wall;
@@ -165,8 +166,10 @@ public final class ClientNuclear {
         /** Frame time without a new anchor before the age eases to a stop, and the ease's length, ticks (100 ms). */
         static final double STALE = 3, EASE = 2;
         /**
-         * Own time a live detonation waits for its first per-tick anchor, ticks: none by then means a recording made before them (3.13 and
-         * older, the live packet alone), which runs on own time instead of easing to a stop {@link #LEAD} past that packet.
+         * Own time a live detonation in a Flashback replay waits for its first per-tick anchor, ticks: none by then means a recording made
+         * before them (3.13 and older, the live packet alone), which runs on own time instead of easing to a stop {@link #LEAD} past that
+         * packet. Only in a replay: a live server can send its first anchor late (post-burst work), and running on own time there put the
+         * drawn wave ahead of the server's (review of #678: 24 ticks shown at server age 1 after a 30-tick gap).
          */
         static final double PROBE = 20;
         /** Own time over which the server's rate is measured, ticks. */
@@ -182,6 +185,8 @@ public final class ClientNuclear {
         private boolean streamed;
         /** A per-tick anchor has arrived ({@link #PROBE}). */
         private boolean anchored;
+        /** Viewing a Flashback replay: the recording may predate per-tick anchors ({@link #PROBE}). */
+        private final boolean replay;
         /** The show is over: anchors sent for other detonations' shows no longer cap this one. */
         private boolean over;
         /** A past detonation (entry, seek) shown from an estimate: the server's first anchor sets the age whole. */
@@ -193,6 +198,12 @@ public final class ClientNuclear {
 
         /** {@code start} — the age now; {@code live} — a fresh detonation whose packet is the server's anchor at age 0. */
         AgeClock(long start, boolean live) {
+            this(start, live, false);
+        }
+
+        /** {@code replay}: the detonation plays from a Flashback recording ({@link #PROBE}). */
+        AgeClock(long start, boolean live, boolean replay) {
+            this.replay = replay;
             anchor = start;
             shown = start;
             streamed = live;
@@ -237,7 +248,7 @@ public final class ClientNuclear {
                 seenAt = now;
                 unseen = false;
             }
-            if (streamed && !anchored && now > PROBE) streamed = false;
+            if (replay && streamed && !anchored && now > PROBE) streamed = false;
             // error against the target at the step's start (the step itself is not an error)
             if (!streamed) {
                 double target = anchor + (now - dt - anchorAt);
