@@ -78,17 +78,18 @@ public final class CloudPuffs {
      * drift of the cap center, fire-zone edge (blocks), black-body light at the visible cap temperature
      * ({@link FlashLight#source}: linear r, g, b, fractions of a white wall at noon), cap-center height above
      * ground zero (blocks). Same center as the mushroom body and particle light ({@code MushroomField.centre}). false —
-     * the mushroom no longer (or not yet) exists ({@code into} zeroed): no glow either.
+     * the mushroom no longer (or not yet) exists: ball values zeroed (no light from above), fire light and zone kept — the fires burn on.
      */
     public boolean pallLight(MushroomModel.Shape s, double fire, float[] into) {
         java.util.Arrays.fill(into, 0, 8, 0f);
+        // fires burn on the ground whether or not the cloud above them still exists: their light and zone outlive the mushroom
+        into[1] = (float) fire;
+        into[3] = (float) d.blocks(fireGround);
         if (s == null) return false;
         double y = d.yieldKt();
         FlashLight.source(s, y, d.surface(), BALL);
         into[0] = (float) d.blocks(s.capR());
-        into[1] = (float) fire;
         into[2] = (float) MushroomField.driftAlong(d, s);
-        into[3] = (float) d.blocks(fireGround);
         for (int i = 0; i < 3; i++) into[4 + i] = (float) BALL[i];
         into[7] = (float) d.blocks(s.capY());
         return true;

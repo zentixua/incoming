@@ -577,7 +577,8 @@ class PallGlslTest {
     /**
      * Desert dust ({@code SAND}) is AERONET desert dust: its thick-layer colour is R∞ of the measured single-scattering albedo
      * ({@link NukePall#SAND_OMEGA}, Dubovik et al. 2002) after delta-Eddington with the dust phase g (forward peak g²), to the colour's
-     * three decimals. Sand's share of lofted mass ({@code pallDustW}) is {@link PallField#sandShare}: soil left over hard ground.
+     * three decimals. Sand's share of lofted mass ({@code pallDustW}) is {@link PallField#sandShare}, with sand and hard ground as fractions of
+     * the ground, as the map holds them.
      */
     @Test
     void sandDustIsDesertDust() {
@@ -586,12 +587,12 @@ class PallGlslTest {
             double w = NukePall.SAND_OMEGA[c], scaled = w * (1 - f) / (1 - w * f);
             assertEquals(NukePall.SAND[c], PallLight.display(PallLight.reflectance(scaled, PallLight.truncated(g))), 6e-4, "channel " + c);
         }
-        assertTrue(GLSL.replaceAll("\\s+", " ").contains("float share = sand * (1.0 - hard) / max(1.0 + hard * (paved - 1.0), 1e-6);"),
+        assertTrue(GLSL.replaceAll("\\s+", " ").contains("float share = sand / max(1.0 + hard * (paved - 1.0), 1e-6);"),
                 "pallDustW - not PallField.sandShare");
         assertEquals(1, PallField.sandShare(1, 0, 0.2), 0);
         assertEquals(0, PallField.sandShare(0, 0.5, 0.2), 0);
-        // half the ground hard (debris dust 0.2 of the soil's mass), the rest sand: sand is 0.5 / 0.6 of the mass
-        assertEquals(0.5 / 0.6, PallField.sandShare(1, 0.5, 0.2), 1e-12);
+        // half the ground hard (debris dust 0.2 of the soil's mass), the other half sand (map: sand 0.5, hard 0.5): sand is 0.5 / 0.6 of the mass
+        assertEquals(0.5 / 0.6, PallField.sandShare(0.5, 0.5, 0.2), 1e-12);
     }
 
     /**

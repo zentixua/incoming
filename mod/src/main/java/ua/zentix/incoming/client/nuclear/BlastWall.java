@@ -516,9 +516,18 @@ public final class BlastWall {
      */
     static double density(float[] slot, double s, double wet, double hard) {
         double v = s / Math.max(slot[1], 0.001), u = Mth.clamp(v, 0, 1);
-        double soil = 1 + hard * (slot[12] + (slot[13] - slot[12]) * u - 1);
+        double soil = 1 + hard * (paved(slot, s) - 1);
         double dust = slot[3] * (slot[14] + (slot[15] - slot[14]) * u) * develop(v, slot[9], slot[10]) * soil;
         return dust + (slot[7] - dust) * wet;
+    }
+
+    /**
+     * Debris dust over hard ground relative to soil at {@code s} blocks behind the dust edge: from the leading edge's ratio to the wedge end's
+     * by wedge share ({@link #pavedShare} at both, slot 12 and 13) — as {@code pallWallDensity} and the head material in {@code fx_pall}.
+     */
+    static double paved(float[] slot, double s) {
+        double u = Mth.clamp(s / Math.max(slot[1], 0.001), 0, 1);
+        return slot[12] + (slot[13] - slot[12]) * u;
     }
 
     /**

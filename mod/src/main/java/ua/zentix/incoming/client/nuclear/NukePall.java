@@ -557,7 +557,7 @@ public final class NukePall {
         double gx = x - d.burst().x, gz = z - d.burst().z;
         double hard = a.ground.hasHard() ? a.ground.hard(x, z) : 0, sand = a.ground.hasSand() ? a.ground.sand(x, z) : 0;
         dustLight(DUST_WALL, DUST_GLOW, sky, d.windDir(), gx, gy, gz, gy - a.ground.at(x, z), a.pall.smoke(Math.hypot(gx, gz), a.ticks(0)),
-                PallField.sandShare(sand, hard, DUST_WALL[12]), into);
+                PallField.sandShare(sand, hard, BlastWall.paved(DUST_WALL, DUST_WALL[0] - Math.hypot(gx, gz))), into);
         return true;
     }
 

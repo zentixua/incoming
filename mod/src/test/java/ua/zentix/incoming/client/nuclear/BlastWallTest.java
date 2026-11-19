@@ -526,6 +526,26 @@ class BlastWallTest {
     }
 
     /**
+     * Review of #669: debris dust over hard ground relative to soil runs from the leading edge's ratio to the wedge end's ({@link BlastWall#paved}),
+     * the same interpolation as {@code pallWallDensity} and the head material in {@code fx_pall}; the camera-dust colour uses it at the point,
+     * not the edge's everywhere. 15 kt airburst at 500 m, 0.9 s: at the wedge end of mixed ground (hard 0.5, sand 0.5) sand is 0.5 of the
+     * mass (paved ratio 1 there), not 0.93 with the edge's ratio.
+     */
+    @Test
+    void pavedRatioFollowsTheWedge() {
+        Detonation air = new Detonation(1, new Vec3(0, 564, 0), 64, 15, false, 0, 0, 0, 20_000, 7, 1f, false, 1f);
+        BlastWall w = new BlastWall(air, false);
+        float[] s = new float[BlastWall.SLOT];
+        assertTrue(w.slot(0.9, s) && s[3] > 0, "head at 0.9 s");
+        assertTrue(Math.abs(s[12] - s[13]) > 0.1, "edge and wedge-end paved ratios differ: " + s[12] + " " + s[13]);
+        assertEquals(s[12], BlastWall.paved(s, 0), 1e-6);
+        assertEquals(s[13], BlastWall.paved(s, s[1]), 1e-6);
+        assertEquals(0.5 * (s[12] + s[13]), BlastWall.paved(s, 0.5 * s[1]), 1e-6);
+        assertEquals(PallField.sandShare(0.5, 0.5, s[13]), PallField.sandShare(0.5, 0.5, BlastWall.paved(s, s[1])), 1e-9, "wedge end");
+        assertTrue(Math.abs(PallField.sandShare(0.5, 0.5, s[12]) - PallField.sandShare(0.5, 0.5, s[13])) > 0.05, "the edge's ratio would differ there");
+    }
+
+    /**
      * The head's dust rolls in eddies of the layer's size (18.11, Artem: the lofted dust curls in successive rolls): the billow pattern turns about
      * horizontal axes on concentric rings of eddies, by the eddies' turn over the wind's path (σ_u ≈ 2.5 u*, u* ≈ 0.04 U; × the presentation
      * gain), top outward while the wave's wind blows outward, back toward ground zero as it reverses. Only the pattern turns: an eddy's rim

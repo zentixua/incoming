@@ -19,7 +19,7 @@ import java.util.stream.IntStream;
  * the pall consists of ({@link PallField}: dust over land, spray over water; the shader samples where the material was lofted). The third
  * is the hard share of the ground ({@link FarTerrain#hard}: rock, roofs, roads, ice, snow — no soil on top): the wave lofts only debris
  * dust there ({@code DustModel.Surface.PAVED}), so the dust-wall head and the pall thin over it. The fourth is the sand share of the
- * soil ({@link FarTerrain#sand}): what colour the lofted dust has — desert sand ({@code SAND} in {@code fx_pall}) or the reference loamy
+ * ground ({@link FarTerrain#sand}, like the hard share a fraction of the sampled columns): what colour the lofted dust has — desert sand ({@code SAND} in {@code fx_pall}) or the reference loamy
  * soil under grass and forest ({@code DUST}).
  * <p>
  * A square of {@link #SIDE}² cells around ground zero covers pall at its source ({@link PallField#sourceExtent}: table,
@@ -58,7 +58,7 @@ public final class PallGround {
     static final double GROW = 1.25;
     /** Mapped terrain around the camera extends this many meters (× strike scale): layer floor and ray end are visible up close there. */
     static final double AROUND_EYE_M = 2000;
-    /** Map channels per cell: height, water, hard ground, sand share of the soil. */
+    /** Map channels per cell: height, water, hard ground, sand (fractions of the ground). */
     static final int CHANNELS = 4;
     /** Water or land below this fraction of the whole map is considered absent beneath the pall ({@link #hasWater}, {@link #hasLand}). */
     static final float TRACE = 1e-3f;
@@ -87,7 +87,7 @@ public final class PallGround {
             knownSand = new float[SIDE * SIDE];
     /**
      * Filled map (for the shader): per cell, x fastest, {@link #CHANNELS} numbers — height above ground zero (blocks), water fraction,
-     * hard-ground fraction, sand share of the soil.
+     * hard-ground fraction, sand fraction.
      */
     private final float[] map = new float[CHANNELS * SIDE * SIDE];
     /** Filled-map bottom and top, blocks above ground zero. */
@@ -445,7 +445,7 @@ public final class PallGround {
         return bilinear(map, SIDE, CHANNELS, 2, (float) ((x - cx + half) / cell - 0.5), (float) ((z - cz + half) / cell - 0.5));
     }
 
-    /** Filled-map sand share of the soil at world (x, z) 0..1, as in the shader ({@code pallSoil}). */
+    /** Filled-map sand fraction of the ground at world (x, z) 0..1, as in the shader ({@code pallSoil}). */
     double sand(double x, double z) {
         return bilinear(map, SIDE, CHANNELS, 3, (float) ((x - cx + half) / cell - 0.5), (float) ((z - cz + half) / cell - 0.5));
     }

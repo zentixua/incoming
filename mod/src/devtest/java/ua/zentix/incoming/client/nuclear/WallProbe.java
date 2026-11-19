@@ -46,7 +46,7 @@ public final class WallProbe {
             for (double u : new double[]{0.05, 0.3, 1.0, 1.3}) {
                 double r = s[0] - u * s[1];
                 double smoke = a.pall.smoke(r, ticks), gxr = d.burst().x + ux * r, gzr = d.burst().z + uz * r;
-                double sand = PallField.sandShare(a.ground.hasSand() ? a.ground.sand(gxr, gzr) : 0, a.ground.hasHard() ? a.ground.hard(gxr, gzr) : 0, s[12]);
+                double sand = PallField.sandShare(a.ground.hasSand() ? a.ground.sand(gxr, gzr) : 0, a.ground.hasHard() ? a.ground.hard(gxr, gzr) : 0, BlastWall.paved(s, s[0] - r));
                 double burn = CloudPuffs.burn(r, 0, glow[1], glow[3]) * (1 - 0.75 * sky.day);
                 b.append(String.format(Locale.ROOT, "; u %.2f (r %.0f smoke %.2f sand %.2f burn %.3f, sigma@0.1top %.3g):", u, r, smoke, sand, burn,
                         BlastWall.sigma(s, ux * r, uz * r, 0.1 * s[2], 0)));

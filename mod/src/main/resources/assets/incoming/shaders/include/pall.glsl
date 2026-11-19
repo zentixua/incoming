@@ -131,17 +131,17 @@ float pallWater(sampler2D ground, vec4 G, vec2 rel) {
 }
 
 // soil under the point rel (from the epicenter along the ground) by the slot's map: x — share of hard ground (PallGround.hard: rock,
-// roofs, roads, snow — no soil on top, only debris dust is lofted there), y — sand share of the soil (PallGround.sand: desert dust,
-// not the reference loamy soil); no map or neither under the pall (S[1].w < 1.5) — reference soil
+// roofs, roads, snow — no soil on top, only debris dust is lofted there), y — share of sand (PallGround.sand: desert dust, not the
+// reference loamy soil); both fractions of the ground; no map or neither under the pall (S[1].w < 1.5) — reference soil
 vec2 pallSoil(sampler2D ground, mat4 S, vec4 G, vec2 rel) {
     if (G.x <= 0.0 || S[1].w < 1.5) return vec2(0.0);
     return clamp(textureLod(ground, rel / (2.0 * G.x) + 0.5, 0.0).ba, 0.0, 1.0);
 }
 
-// Albedo ω' of lofted dust (PallField.dustW): soil dust by its sand share, sand mass share by soil left over hard ground (hard share
-// hard lofts only debris dust, paved of the soil's mass: PallField.sandShare), darkened by soot from fires (smoke share)
+// Albedo ω' of lofted dust: sand's share of the lofted mass (PallField.sandShare) — sand and hard ground are fractions of the ground as the
+// map holds them; hard ground lofts only debris dust, paved of the soil's mass — darkened by soot from fires (smoke share)
 vec3 pallDustW(float sand, float hard, float paved, float smoke) {
-    float share = sand * (1.0 - hard) / max(1.0 + hard * (paved - 1.0), 1e-6);
+    float share = sand / max(1.0 + hard * (paved - 1.0), 1e-6);
     return mix(mix(PALL_DUST_W, PALL_SAND_W, clamp(share, 0.0, 1.0)), PALL_SMOKE_W, smoke);
 }
 

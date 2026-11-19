@@ -77,7 +77,31 @@ class CloudPuffsTest {
             assertTrue(light[3] > light[0], "edge of fires " + light[3] + " beyond the radius cap " + light[0]);
         }
         assertFalse(puffs.pallLight(null, 0.25, light));
-        for (float v : light) assertEquals(0, v);
+        for (int i : new int[]{0, 2, 4, 5, 6, 7}) assertEquals(0, light[i], "no mushroom, no ball light: " + i);
+        assertEquals(0.25, light[1], 1e-6, "fires burn on without the mushroom");
+        assertTrue(light[3] > 0, "fire zone without the mushroom");
+    }
+
+    /**
+     * Review of #669: fire light below the dust follows the fires, not the cloud's lifetime. Across the mushroom's dispersal
+     * ({@link MushroomModel#lifeSeconds}: 1 kt, 15 kt, 1 Mt) with the fires at full flame, the light below dust halfway into the fire zone
+     * does not jump (it went 0.95 → 0 when the slot was zeroed with the mushroom); only the ball's light goes.
+     */
+    @Test
+    void fireLightOutlivesTheMushroom() {
+        for (double kt : new double[]{1, 15, 1000}) {
+            Detonation d = new Detonation(1, new Vec3(0, 64, 0), 64, kt, true, 0, 0, 0, 20_000, 7, 1f, false, 1f);
+            CloudPuffs puffs = new CloudPuffs(d);
+            double life = MushroomModel.lifeSeconds(kt);
+            float[] before = new float[8], after = new float[8];
+            MushroomModel.Shape alive = MushroomModel.shape(life - 1, kt, 0, true, 3_000), gone = MushroomModel.shape(life + 1, kt, 0, true, 3_000);
+            assertTrue(alive != null && gone == null, kt + " kt: mushroom before dispersal, none after");
+            puffs.pallLight(alive, 1, before);
+            puffs.pallLight(gone, 1, after);
+            double r = 0.5 * before[3];
+            assertEquals(CloudPuffs.burn(r, 0, before[1], before[3]), CloudPuffs.burn(r, 0, after[1], after[3]), 1e-9, kt + " kt: fire light across dispersal");
+            assertEquals(0.95, CloudPuffs.burn(r, 0, after[1], after[3]), 1e-6, kt + " kt: full fire light after dispersal");
+        }
     }
 
     private static double luminance(float[] light) {
