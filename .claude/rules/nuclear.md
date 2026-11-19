@@ -212,28 +212,29 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   airbursts above 15 kt (1 Mt at 700 m) touch ground behind the front, shrinking the wedge by 1.5 on that tick, top
   10–25 % lower, and pall handoff band (`PALL_WALL_HANDOFF_FROM/TO` shader constants) jumps away from sphere: slot has
   no sphere radius (all 20 numbers used); game bursts (up to 15 kt, airbursts above 2.9 sphere radii) never do this.
-  Over wedge fraction u behind edge, lofted amount follows dynamic-pressure impulse (`DustModel.lifted`), top Kuhl
-  dusty-layer law u^(5/6) (`top`), ground density their ratio (`shape`: 0 at edge, at u ≈ 0.1 2.6 times denser than wedge
-  back); column depth grows rearward. Back top and edge/back density use the same `DustModel.Column` (`first`,
-  `lifted`: 256-node table down to 0.2 psi); intermediate density is linear (est.). Beyond wedge, transition to
+  Lofting burst (19.11, Artem: the dense front emerges from the lofting, not a drawn wall): over wedge fraction u behind
+  the edge (dust age u × wedge-end phase fraction `ph`), lofted mass follows the entrainment law's shape
+  (`DustModel.loftMass` 1 − (1 − x)^8: the law lofts 47–72 % of the phase's mass in its first tenth for 3–11 psi; one shape,
+  est.), the top rises at the ground friction velocity (`DustModel.loftTop` (x·e^(1−x))^0.88, within 3 % of ∫u*; Kuhl's
+  phase-end top `waveTop` still sets how high), both × `BlastWall.LOFT_GAIN` 2 (presentation: 15 kt 1.5 km out 22 m at
+  0.1 s, GRABLE 6–25 m; ×3 would exceed it and be "not physical"); ground density is their ratio (`shape`, about twice the
+  back density over the front fifth); saltation develops over `DustModel.SATURATION_M` 2 m of grain path (Andreotti 2010),
+  not 0.25 s. After the phase the heated layer lifts the same dust (`heated`, h² = h₁² + b²·x over `RISE_S`; slot lift
+  [2].w); `ceiling` bounds rays and spans. `DustModel.lifted` (impulse shape) now serves conventional dust only. Back top
+  and edge/back density use the same `DustModel.Column` (256-node table down to 0.2 psi). Beyond wedge, transition to
   pall from 1 to 1.5 wedge lengths (`handoff`; pall takes 1 − handoff by local age / t₊). Where wind no longer lofts
-  visible dust (thinner than `GONE`, visible over 4 km), no head, dust remains pall. Law copies: `pallLifted`,
-  `pallWallTop/Shape/Fade/Mean` (`PallGlslTest`). Head noise uses dust coordinates (`BlastWall.origin`, copy
-  `pallWallOrigin`): position minus post-front wind path (`carried`: air path over local positive phase, U·t₊/e by
-  Friedlander, tens of meters for 15 kt at 592 m; phase share `carriedShare` = u·e^(1−u)); air stationary at ground,
-  1/7 boundary-layer law above, upward 0.02–0.08 of path (Kuhl §3.4). Billows form where front lofted dust and stay there;
-  against the departing front, edge dust goes up/back, rolling the wall. The pattern also turns in eddies on concentric rings resting on
-  the ground (`pallWallRoll`/`BlastWall.roll`, angle `rollAngle` = `EDDY` 0.2 × wind path × `carriedShare` / eddy size: top
-  outward with the wave's wind, back as it reverses; × `ROLL_GAIN` 8, presentation, turn zero at eddy rims). Eddies are the local
-  layer's size, not the tile's (the tile is the thickest layer's, near ground zero: 79 m for 15 kt where the layer 1 km out is
-  16–29 m): the octave tile/2^k nearest the local top (`wallBillows`, fixed scales, two near a boundary); thinner than tile/11
-  (toe) billows give way to their mean: tile-sized holes in a metres-thick sheet read as a translucent shell at the front (18.11).
-  Close-up check 19.11 (sandbox, side view along the front): the head is a thin ramp (15 kt 1.5 km: top 37 m over a 291 m
-  wedge), its turn lasts the head's life (0.9–3.6 s) — texture churn, not a wall rolling over itself; the tall translucent
-  sheet above it in the first seconds is the Wilson shell (`pallWilson`), not dust. Noise tile (`TILE` of maximum phase-end layer
-  top) is fixed per detonation: a tile growing with the head, like old noise in a tile rotated by wall angle at front,
-  moved billows over ground at front speed — dust “spread from epicenter” (18.10 complaint,
-  `BlastWallTest.headCloudsStayWhereTheDustWasLifted`). Cartesian coordinates, no tiled circumference or noise phases.
+  visible dust (thinner than `GONE`, visible over 4 km), no head, dust remains pall. Law copies: `pallLoftTop/Mass`,
+  `pallWallTop/Face/Heated/Shape/Fade/Mean/Ceiling` (`PallGlslTest`). Roll-up (19.11, Artem): head noise rides the dust
+  parcels (`BlastWall.origin`, copy `pallWallOrigin`): horizontally where the front lofted it minus the post-front wind
+  path (`carried`: U·t₊/e by Friedlander; phase share `carriedShare` = u·e^(1−u); air stationary at ground, 1/7
+  boundary-layer law above), vertically its share of the local layer top (the layer grows as one self-similar body).
+  Seen from the departing front, each parcel goes up and back: a kinematic curl of trajectories, not an eddy; no
+  per-eddy turn, octave ladder or toe sheet (removed 19.11). Lobes (`wallLobes` in `fx_pall`): `WALL_LOBE` 1.75 wedge-end
+  tops wide, one row (`WALL_ROW`), tile on power-of-two block octaves with a cross-fade only when the top grows an octave
+  (a tile following the top moved billows over the ground — 18.10 “dust spread from epicenter”,
+  `BlastWallTest.headCloudsStayWhereTheDustWasLifted`); churn `WALL_CHURN` (~0.2 lobe widths/s, Silo S3E09) moves the
+  warp through its third axis on the detonation clock. All presentation, marked in code. Cartesian coordinates, no tiled
+  circumference or noise phases.
   Rays sample the head more densely (`pallWallSpans`: ring from dust edge to 1.5 wedges and terrain-map height layer,
   step one eighth its height, at most `steps` extra steps). Same light as pall, light-path depth follows wedge shape
   (`wall` in `fx_pall`, copy `NukePall.dustLight`): diffuse uses the lesser mean-head depth above point (to local wedge
@@ -430,12 +431,17 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   reviews of #668: a lead of 30 made a fresh 15 kt front 621 m instead of 174 m, alternating 10-tick delays showed 200 for
   160, a lag of 30 showed 50 for 20). Anchors carry the server's age for the detonation at send: the live detonation
   packet (0) and `S2C.NukeTick` (server game time, every server tick while the dimension holds a show,
-  `NuclearStrikes.showing`). Target = anchor + own ticks since it arrived, at most one while anchors stream (a client
-  faster than a lagging server waits), unlimited without them (old recordings, after the show, `ended`); the shown age
-  moves toward it by at most `MAX_STEP` (3) per tick, never back; a past detonation (entry, seek) takes the first anchor
-  whole; frames never step back (`at`). Own ticks alone lagged the server 31–55 ticks in the full host pack (ruins, throws
-  and debris 1.5–2.7 s before the drawn wave). `ClientNuclearTest`: lagging server, heavy client, alternating delays,
-  server stall and backward anchor, client freeze, no stream, past snap, frames.
+  `NuclearStrikes.showing`). The shown age is continuous in the client's own time (ticks plus frame partial): it advances
+  every frame at the server's measured rate (anchor ages per own tick over `RATE_WINDOW`) × steering 1 + error/`RESPONSE`
+  in [`SLOWEST` 0.8, `FASTEST` 3] toward the estimated server age less `DELAY` (one tick of jitter buffer); never back, at
+  most `LEAD` 3 ticks past the latest anchor (ruins and debris arrive ≥ 2 ticks after the wave); eases to a stop over
+  `EASE` only after `STALE` ticks of frames without an anchor (server stall; packets a frozen client could not read do not
+  count). Without a stream (old recordings, after the show, `ended`) it follows own time, uncapped; a past detonation
+  (entry, seek) takes the first anchor whole. #668's law (at most one tick past the anchor, whole-tick steps) held
+  40–43 % of frames up to 149 ms on a 1 Mt rig: the wall moved in 20 Hz steps (19.11). Own ticks alone lagged the server
+  31–55 ticks in the full host pack. `ClientNuclearTest`: recorded rig anchor streams (`age-clock/J3.txt`, `J6.txt`) with
+  jitter, lagging server, heavy client, alternating delays, server stall and backward anchor, client freeze, no stream,
+  past snap, frames.
 - `Detonation.dayTime` (time of day at detonation) is no longer read: kept only for the save/packet formats. Slow
   consequences use the world clock (`WorldClock` on the server, `ClientClock` mirroring it from the client's day) and the
   detonation clock; server anchors per detonation (`NuclearEvents.Anchor`: world clock at burst and show end) are

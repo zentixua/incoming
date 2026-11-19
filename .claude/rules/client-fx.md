@@ -849,7 +849,7 @@ paths:
   even when the pall's table has nothing yet. The cost in the head: up to 5 noise samples per step (the tile shift,
   puffs and small puffs in the dust's coordinates; the puffs' shadow — two puff samples), small ones only at the eye;
   and 24 middle-head evaluations (21 — thicknesses toward the light and the puffs' shadow, 3 — under the puffs) —
-  arithmetic without samples: two powers and an exponent each (the top of the wedge u^(5/6), raised by `pallLifted`),
+  arithmetic without samples: two powers and an exponent each (the lofting top `pallWallTop` and mass `pallLoftMass`, the heated rise),
   and one more power per step (exit sideways) and the top of the wedge above the point — the head's ALU is about 10–20 %
   more than the former wall envelope, with the same number of samples. The pall with the head and the Wilson cloud far
   away fades in the air haze like a mushroom (`pallAir`, the frame's air `PallAir` — `Sight.Air` in the model's blocks):
