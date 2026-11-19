@@ -48,6 +48,10 @@ import java.util.Locale;
  *   <li>{@code spent <weapon> [height]} — a spent booster ({@code SpentBoosterEntity}) at the height above the point (by
  *       default 20 m): it falls tumbling and lies; time — from the end of its engine's work (hot nozzle, {@code NozzleGlow});</li>
  *   <li>{@code fire [side]} — a fire: a square of netherrack with fire at the point;</li>
+ *   <li>{@code pane <block>|off [distance]} — a wall of this block (a {@code minecraft:} id, with block state in brackets if
+ *       needed) across the view, that many blocks in front of the camera (by default {@link #PANE_DISTANCE}), from the grass to
+ *       above the frame; it follows the camera ({@code cam}, effects at a new place); {@code off} removes it: effects seen
+ *       through glass, ice, leaves, bars and every other block;</li>
  *   <li>{@code cam <distance> [height] [azimuth°] [look]} — where the camera is: distance from the point, height above the ground, azimuth
  *       from the point (0 — south, 90 — west, as the player's turn), height of the look point above the ground;</li>
  *   <li>{@code stance stand|fly} — a standing player (body sway) or a flying observer (by default);</li>
@@ -79,8 +83,10 @@ record SandboxCommand(Verb verb, List<String> args) {
     static final int FLIGHT_FROM = 600;
     /** {@code blast … water}: side and depth of the pond, blocks (the pond is wider than the Shahed's column and spray ring). */
     static final int POND = 64, POND_DEPTH = 4;
+    /** {@code pane}: the wall's distance in front of the camera by default, blocks. */
+    static final double PANE_DISTANCE = 4;
 
-    enum Verb { ICBM, ARRIVAL, BLAST, REAL, NUKE, AIRBURST, LAUNCH, FLIGHT, FIRE, SPENT, CAM, STANCE, WEATHER, TIME, HUD, OVERLAY, ZOOM, TRACK, SHOTS, AGAIN, CLEAR, RELOAD, WAIT, RAID, SAM, HOUSE, SCENERY, SURFACE, TURN, UI, COLLAPSE }
+    enum Verb { ICBM, ARRIVAL, BLAST, REAL, NUKE, AIRBURST, LAUNCH, FLIGHT, FIRE, SPENT, CAM, STANCE, WEATHER, TIME, HUD, OVERLAY, ZOOM, TRACK, SHOTS, AGAIN, CLEAR, RELOAD, WAIT, RAID, SAM, HOUSE, SCENERY, SURFACE, TURN, UI, COLLAPSE, PANE }
 
     /** An effect (repeated by {@code again} and captured by {@code shots}). */
     boolean effect() {
@@ -246,6 +252,11 @@ record SandboxCommand(Verb verb, List<String> args) {
             case SCENERY -> {
                 need(1, 1);
                 if (!List.of("grass", "paved", "forest", "roof").contains(args.getFirst())) throw new IllegalArgumentException("scenery grass|paved|forest|roof");
+            }
+            case PANE -> {
+                need(1, 2);
+                if (!args.getFirst().matches("off|[a-z0-9_]+(\\[[a-z0-9_=,]+])?")) throw new IllegalArgumentException("pane <block>|off [distance]");
+                if (args.size() > 1 && (number(1) < 1 || number(1) > 64)) throw new IllegalArgumentException("pane distance 1–64 blocks");
             }
             case AGAIN, CLEAR, RELOAD -> need(0, 0);
         }
