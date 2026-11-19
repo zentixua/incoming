@@ -26,6 +26,22 @@ paths:
   Preserve initializer sentinels too: bloom texture/FBO arrays start at -1, never zero/default framebuffer.
   Regression fixture: `tools/client_scenario.sh viewfx vista`, `INCOMING_VIEWFX_FEEDS=4` for four TVs, `INCOMING_VIEWFX_STRIKES=100` for raid cost; omit `vista` for
   the ordinary renderer. Vista/Moonlight are scenario-only runtime mods; no production dependency or camera-mod mixin.
+- See-through blocks (`fx/layer/SeeThrough`, `include/see.glsl`): by `AFTER_LEVEL` translucent geometry (stained/tinted
+  glass, panes, ice, slime, honey, portal, water, translucent entities/particles, clouds) has written depth, and the layer
+  tested against it lost everything behind a window (19.11: visible share of a blast 2 s after it 0.00 behind every
+  translucent block; cutout glass, panes, leaves and bars write no depth in their holes and were fine). The opaque world's
+  depth is copied at `AFTER_BLOCK_ENTITIES` (only while the layer drew the previous frame). `SceneDepth` writes four
+  targets in one pass: opaque distance (all consumers, history), distance to the nearer translucent surface (`FxSurface`),
+  its own light X and transmittance T (`FxGlass`, RGBA8), and the layer's hardware depth (`hard`, DEPTH32F); the layer
+  draws through `SceneDepth.bindLayer` (frame colour + `hard`). A fragment behind the surface is laid as T·light +
+  opacity·X: exact for any sorted mix of fragments, quads and the pall composite (`SeeThroughGlslTest`). X and T: vanilla
+  Fast/Fancy, Sodium, Iris without a pack (`BLEND`) — frame colour copied and alpha cleared at the copy, translucent blending
+  leaves coverage 1 − T in alpha, X = frame − T·before; Fabulous — vanilla's translucent target (X, 1 − T, its depth); Iris
+  with a pack (`PACK`) — unreachable, T = 1, X = 0 (seen, untinted). Surfaces the layer must not look through count as
+  the world (`hard` stops there): T below half an 8-bit step, nearer than 0.12 m (the hand under Iris), or seen from above
+  (eye-facing normal within ~25° of up: water's top, ice, a floor — our air-borne effects are never under them).
+  New passes that lay layer content on the frame call `SceneDepth.bindSee` and apply `seeThrough`; own units 16/17.
+  Frames: sandbox `pane <block> [distance]` (a wall across the view, follows the camera).
 - Under Iris the first-person hand is in world depth at `AFTER_LEVEL` (Iris draws it inside the world pass with the depth
   range × 0.125, `HandRenderer.DEPTH`), so the layer reads it as world 0.09–0.115 m away; vanilla draws it after the layer.
   The pall skips those pixels (`pallHand`, `PALL_HAND` 0.12 m in `pall.glsl`, `PallHandTest`): resolve writes them invalid
