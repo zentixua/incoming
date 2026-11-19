@@ -95,6 +95,54 @@ public final class Sight {
         }
     }
 
+    /**
+     * Display channel wavelengths, nm: dominant wavelengths of the sRGB red, green and blue primaries (≈ 611, 549, 464 nm), rounded.
+     * Light passing through air is computed at these.
+     */
+    static final double[] CHANNEL_NM = {610, 550, 465};
+    /**
+     * Wavelength exponent of Rayleigh optical depth in the visible: τ ∝ λ^−4.08 with the refractive index and King factor
+     * dispersion (Bucholtz 1995, Appl. Opt. 34, table 3 fit for 0.5–1 µm: 4.08 at sea level).
+     */
+    static final double RAYLEIGH_EXPONENT = 4.08;
+    /** Ångström exponent of haze optical depth, τ ∝ λ^−α: 1.3 for continental aerosol (Ångström 1964; Iqbal 1983, §6.13). */
+    static final double ANGSTROM = 1.3;
+    /** Wavelength of {@link #RAYLEIGH} and of visibility range (Koschmieder: eye's peak sensitivity), nm. */
+    static final double REFERENCE_NM = 550;
+
+    /**
+     * Relative optical air mass toward a body at elevation with sine {@code sinElevation} (Kasten &amp; Young 1989, Appl. Opt. 28,
+     * 4735): m = 1 / (sin h + 0.50572·(h + 6.07995°)^−1.6364), 1 overhead, ≈ 3 at 19.3°, 38 at the horizon; below it as at the
+     * horizon (the sun is then under the hills of the world's own sky, and its light fades with {@code day}).
+     */
+    public static double airMass(double sinElevation) {
+        double h = Math.toDegrees(Math.asin(Math.max(0, Math.min(1, sinElevation))));
+        return 1 / (Math.sin(Math.toRadians(h)) + 0.50572 * Math.pow(h + 6.07995, -1.6364));
+    }
+
+    /**
+     * Vertical optical depth of the clear-day air at wavelength {@code nm}: clean air (Rayleigh, {@link #RAYLEIGH} × {@link #AIR_HEIGHT}
+     * at 550 nm: 0.093) and haze of the clear-day visibility range ({@link Visibility#CLEAR}: Koschmieder extinction less clean air,
+     * × {@link #HAZE_HEIGHT}: 0.22 at 550 nm), each with its own wavelength law — the same air as {@link Air#at}.
+     */
+    static double verticalDepth(double nm) {
+        double x = REFERENCE_NM / nm, clear = KOSCHMIEDER / CLEAR, clean = Math.min(RAYLEIGH, clear);
+        return clean * AIR_HEIGHT * Math.pow(x, RAYLEIGH_EXPONENT) + (clear - clean) * HAZE_HEIGHT * Math.pow(x, ANGSTROM);
+    }
+
+    /**
+     * Direct sunlight through the air at sun elevation sine {@code sinElevation}, per display channel relative to the overhead sun, into
+     * {@code into}: exp(−(m − 1)·τ_c) (Beer–Lambert along the air mass {@link #airMass}, {@link #verticalDepth} per channel). Overhead —
+     * 1, 1, 1: the frame's daylight is white at noon (the eye is adapted to it); toward the horizon the long path removes blue
+     * first — at m = 3 red over blue ×1.5 relative to noon (×1.85 absolute), the sun 0.53 as bright in green. One law at every
+     * elevation, no threshold.
+     */
+    public static void sunThroughAir(double sinElevation, double[] into) {
+        // relative to the formula's own overhead value (0.9997): exactly white at noon
+        double m = airMass(sinElevation) - airMass(1);
+        for (int c = 0; c < 3; c++) into[c] = Math.exp(-m * verticalDepth(CHANNEL_NM[c]));
+    }
+
     /** Segment-mean fraction of initial extinction when it rises by x height scales: (1 − e^−x) / x. */
     static double along(double x) {
         return Math.abs(x) < 1e-4 ? 1 - 0.5 * x : -Math.expm1(-x) / x;
