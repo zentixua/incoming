@@ -4,6 +4,7 @@
 #moj_import <incoming:mushroom.glsl>
 #moj_import <incoming:smoke.glsl>
 #moj_import <incoming:scene.glsl>
+#moj_import <incoming:see.glsl>
 
 // Pall onto frame (client/fx/layer/PallPass): ONE, SRC_ALPHA blending, pall light plus world behind, attenuated
 // and shadowed by pall/mushrooms. Pall frame is downsampled: four nearest pixels weighted by world-distance
@@ -73,6 +74,9 @@ uniform mat4 PallBallLight;
 uniform sampler2D Sampler9;
 uniform vec3 PallOpenSky;
 uniform vec4 PallFaceShade;
+// see-through surface in front of the world (see.glsl; SceneDepth.bindSee: own texture unit); FxSee 1 — present this frame
+uniform sampler2D FxGlass;
+uniform float FxSee;
 
 // as in fx_pall: per-channel brightness; above white (by luma), add this share of excess as white to all channels
 const vec3 LUMA = vec3(0.2126, 0.7152, 0.0722);
@@ -395,5 +399,10 @@ void main() {
         }
     }
     // accumulated pall always valid (fx_pall_resolve), but no input may damage frame world after it
-    fragColor = pallValid(pall) ? pall : vec4(0.0, 0.0, 0.0, 1.0);
+    vec4 laid = pallValid(pall) ? pall : vec4(0.0, 0.0, 0.0, 1.0);
+    // a see-through surface in front of the world: the pall, its shadow and the ball's light on the world behind it reach the
+    // eye as that world does, under the surface's own light (see.glsl; the air between the eye and the surface is counted
+    // behind it — a window or a pane is a few blocks away)
+    if (FxSee > 0.5) laid.rgb = seeThrough(laid.rgb, 1.0 - laid.a, texelFetch(FxGlass, full, 0));
+    fragColor = laid;
 }

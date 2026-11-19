@@ -9,8 +9,13 @@
 #moj_import <incoming:mushroom.glsl>
 #moj_import <incoming:smoke.glsl>
 #moj_import <incoming:pall_front.glsl>
+#moj_import <incoming:see.glsl>
 
 uniform sampler2D Sampler0;
+// see-through surfaces in front of the world (see.glsl; SceneDepth.bindSee: own texture units); FxSee 1 — present this frame
+uniform sampler2D FxSurface;
+uniform sampler2D FxGlass;
+uniform float FxSee;
 
 // eye view and frame projection
 uniform mat4 SourceView;
@@ -73,7 +78,10 @@ void main() {
         for (int k = 0; k < TAPS; k++) {
             vec2 p = at + TAP[k] * ring;
             if (any(lessThan(p, vec2(0.0))) || any(greaterThanEqual(p, size))) continue;
-            sum += clamp((texelFetch(Sampler0, ivec2(p), 0).r - front) / soft, 0.0, 1.0);
+            // behind a see-through surface the source shines through by its transmittance
+            float through = 1.0;
+            if (FxSee > 0.5 && seeBehind(front, texelFetch(FxSurface, ivec2(p), 0).r)) through = texelFetch(FxGlass, ivec2(p), 0).a;
+            sum += clamp((texelFetch(Sampler0, ivec2(p), 0).r - front) / soft, 0.0, 1.0) * through;
             // not n++: Veil (bundled by Sable) rebuilds shaders through glsl-processor 0.2.3, which drops the semicolon after n++
             n += 1;
         }

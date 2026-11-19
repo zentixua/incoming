@@ -324,7 +324,8 @@ class FxBloomTest {
     void glowIsCutLikeTheColour() throws IOException {
         String fsh = read("core/fx.fsh").replaceAll("\\s+", " "), vsh = read("core/fx.vsh").replaceAll("\\s+", " ");
         assertTrue(fsh.contains("fragColor = color * seen * ColorModulator;"), "colour — with the visible share");
-        assertTrue(fsh.contains("fragColor = vec4(glow * seen * ColorModulator.rgb, fragColor.a);"), "emission — with the same share and the colour's alpha");
+        assertTrue(fsh.contains("fragColor = vec4(glow * seen * through * ColorModulator.rgb, fragColor.a);"),
+                "emission — with the same share (and a see-through surface's transmittance) and the colour's alpha");
         assertTrue(fsh.contains("fragCover = vec4(covers, 0.0, 0.0, fragColor.a);"), "covered in front of the halo — with the colour's alpha");
         String bloom = Files.readString(Path.of("src/main/java/ua/zentix/incoming/client/fx/layer/FxBloom.java"));
         assertTrue(!bloom.contains("enableScissor"), "glow pass — full frame: inside a scissor rectangle, smoke behind it did not dim the halo (a rectangular edge)");

@@ -111,9 +111,10 @@ class ShaderSourceTest {
                         // build
                         if (!declared.add(u)) bad.add(name + ": " + file + " declared twice " + u);
                         used.add(u);
-                        // the layer binds these itself: 3D textures and the half-resolution tile cuts and quad
-                        // rectangles (FxQuads.CUT_UNIT, RECT_UNIT)
-                        if (type.equals("sampler3D") || u.equals("HalfCut") || u.equals("HalfRect")) continue;
+                        // the layer binds these itself: 3D textures, the half-resolution tile cuts and quad
+                        // rectangles (FxQuads.CUT_UNIT, RECT_UNIT), see-through surfaces (SceneDepth.SURFACE_UNIT, GLASS_UNIT)
+                        if (type.equals("sampler3D") || u.equals("HalfCut") || u.equals("HalfRect") || u.equals("FxSurface")
+                                || u.equals("FxGlass")) continue;
                         if (!(type.startsWith("sampler") ? samplers : numbers).contains(u)) bad.add(name + ": " + file + " " + type + " " + u);
                     }
                 }

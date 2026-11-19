@@ -204,6 +204,11 @@ public final class FxLayer {
     }
 
     public static void render(RenderLevelStageEvent e) {
+        // the opaque world is complete, translucent geometry follows: its depth for the layer to look through see-through blocks
+        if (e.getStage() == RenderLevelStageEvent.Stage.AFTER_BLOCK_ENTITIES) {
+            SeeThrough.capture(e);
+            return;
+        }
         if (e.getStage() != RenderLevelStageEvent.Stage.AFTER_ENTITIES && e.getStage() != RenderLevelStageEvent.Stage.AFTER_LEVEL) return;
         if (FxViews.secondary(e.getCamera())) {
             if (e.getStage() == RenderLevelStageEvent.Stage.AFTER_ENTITIES) {
@@ -238,6 +243,7 @@ public final class FxLayer {
         try {
             draw(e);
         } finally {
+            SeeThrough.endFrame();
             LodDepth.endFrame();
             ua.zentix.incoming.client.render.PlumeRenderer.endFrame();
         }
@@ -331,15 +337,19 @@ public final class FxLayer {
         lastQuads = QUADS.size();
         if (QUADS.size() == 0 && pall == null && !WaterDecal.active() && !hot) {
             PallPass.reset();
+            if (!FxViews.secondary()) SeeThrough.drew(false);
             return;
         }
+        if (!FxViews.secondary()) SeeThrough.drew(true);
         // probe (LayerTimes): time marks at pass boundaries; a drain frame — with a drain for each and with the quad
         // parts
         boolean drained = LayerTimes.begin();
         int models = FarRenderer.renderModels();
         LayerTimes.mark(LayerTimes.Pass.MODELS);
-        int scene = SceneDepth.update(e.getProjectionMatrix());
+        int scene = SceneDepth.update(e.getProjectionMatrix(), e.getModelViewMatrix());
         LayerTimes.mark(LayerTimes.Pass.DEPTH);
+        // from here the layer is hidden by the opaque world, not by see-through blocks in front of it
+        SceneDepth.bindLayer();
         LightTexture light = mc.gameRenderer.lightTexture();
         FarDraw.begin(e, view.camera());
         // a drain frame costs one more pass of quads and stalls: it does not run during the layer
@@ -381,6 +391,7 @@ public final class FxLayer {
             // pall, dust wall and mushrooms in front of the quad (pall_front.glsl): table, terrain and water maps,
             // frame mushrooms
             PallPass.bindFront(s, front, pallDrawn, atlas);
+            SceneDepth.bindSee(s);
             light.turnOnLightLayer();
             s.safeGetUniform("FxFogColor").set(FOG.color[0], FOG.color[1], FOG.color[2], FOG.color[3]);
             s.safeGetUniform("FxScene").set(scene >= 0 ? 1f : 0f);
@@ -429,6 +440,7 @@ public final class FxLayer {
         } finally {
             light.turnOffLightLayer();
             SmokePass.unbind();
+            SceneDepth.unbindLayer();
             FarDraw.end();
         }
         long spent = System.nanoTime() - start;

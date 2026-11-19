@@ -596,6 +596,9 @@ final class Sandbox {
     private double paneDistance = SandboxCommand.PANE_DISTANCE;
     /** The wall standing now: x0 y0 z0 x1 y1 z1; null — none. */
     private int @Nullable [] paneBox;
+    /** The block of the wall standing now. */
+    @Nullable
+    private String paneBlock;
 
     /** House under the point ({@code house}): height and half-width, in blocks; 0 — no house. */
     private final int[] house = new int[2];
@@ -1421,19 +1424,33 @@ final class Sandbox {
      * enough to fill the frame (the field of view at that distance and a margin); the previous wall is removed.
      */
     private void placePane(Vec3 eye, double y) {
+        int[] want = pane == null ? null : paneBox(eye, y);
+        // the same wall already stands (a shot's own cam after pane): nothing to rebuild, its blocks are at the client
+        if (want != null && java.util.Arrays.equals(want, paneBox) && pane.equals(paneBlock)) return;
         if (paneBox != null) {
             int[] b = paneBox;
             server(String.format(Locale.ROOT, "fill %d %d %d %d %d %d minecraft:air", b[0], b[1], b[2], b[3], b[4], b[5]));
             paneBox = null;
         }
-        if (pane == null) return;
+        if (want == null) return;
+        int[] b = want;
+        String block = pane;
+        paneBlock = block;
+        // the camera may have just moved to a fresh place: the wall's chunks load first (fill refuses unloaded ones)
+        onServer(false, s -> {
+            for (int x = b[0] >> 4; x <= b[3] >> 4; x++) for (int z = b[2] >> 4; z <= b[5] >> 4; z++) s.overworld().getChunk(x, z);
+            run(s, String.format(Locale.ROOT, "fill %d %d %d %d %d %d minecraft:%s", b[0], b[1], b[2], b[3], b[4], b[5], block));
+        });
+        paneBox = b;
+    }
+
+    /** The {@code pane} wall's box for this eye: x0 y0 z0 x1 y1 z1. */
+    private int[] paneBox(Vec3 eye, double y) {
         double dx = site.x - eye.x, dz = site.z - eye.z, len = Math.max(Math.hypot(dx, dz), 1e-6);
         int cx = (int) Math.floor(eye.x + dx / len * paneDistance), cz = (int) Math.floor(eye.z + dz / len * paneDistance);
         int half = (int) Math.ceil(Math.max(8, paneDistance * 3)), top = (int) Math.floor(y) + half;
-        int[] b = Math.abs(dz) >= Math.abs(dx) ? new int[]{cx - half, GROUND + 1, cz, cx + half, top, cz}
+        return Math.abs(dz) >= Math.abs(dx) ? new int[]{cx - half, GROUND + 1, cz, cx + half, top, cz}
                 : new int[]{cx, GROUND + 1, cz - half, cx, top, cz + half};
-        server(String.format(Locale.ROOT, "fill %d %d %d %d %d %d minecraft:%s", b[0], b[1], b[2], b[3], b[4], b[5], pane));
-        paneBox = b;
     }
 
     private void server(String command) {

@@ -12,11 +12,15 @@ import com.mojang.blaze3d.vertex.Tesselator;
 import com.mojang.blaze3d.vertex.VertexFormat;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.renderer.ShaderInstance;
+import com.mojang.blaze3d.shaders.ProgramManager;
+import com.mojang.blaze3d.shaders.Uniform;
 import org.jetbrains.annotations.Nullable;
 import org.joml.Matrix4f;
 import org.joml.Vector4f;
 import org.lwjgl.opengl.GL11;
 import org.lwjgl.opengl.GL15;
+import org.lwjgl.opengl.GL13;
+import org.lwjgl.opengl.GL20;
 import org.lwjgl.opengl.GL21;
 import org.lwjgl.opengl.GL30;
 import org.lwjgl.system.MemoryUtil;
@@ -44,6 +48,17 @@ public final class SceneDepth {
      */
     private static int[] FBOS = {-1, -1}, TEXTURES = {-1, -1};
     private static int fbo = -1, texture = -1, width, height, current;
+    /**
+     * See-through surfaces ({@link SeeThrough}): distance to the nearer translucent surface (R32F), its own light and
+     * transmittance (RGBA8, {@code see.glsl}), and the layer's hardware depth (the opaque world and the surfaces it must not
+     * look through); one each, attached to both framebuffers.
+     */
+    private static int surface = -1, glass = -1, hard = -1;
+    /** Framebuffer the layer draws through: the frame's colour with {@link #hard}; the colour texture it was made for. */
+    private static int layerFbo = -1, layerColour = -1, layerDraw = -1, layerRead = -1;
+    /** This frame looks through see-through surfaces. */
+    private static boolean see;
+    private static final Vector4f UP = new Vector4f();
     /** The other texture holds the frame before this one: the last two updates both succeeded at this size. */
     private static boolean previousValid, lastOk;
     private static LodDepth.View LOD = new LodDepth.View();
@@ -62,16 +77,26 @@ public final class SceneDepth {
      * Fill this frame's distance texture from the world projection; −1 — failed (shader not loaded, framebuffer
      * lacks depth): draw the layer without soft edges then.
      */
-    static int update(Matrix4f projection) {
+    static int update(Matrix4f projection, Matrix4f modelView) {
         ShaderInstance s = shader;
         RenderTarget main = Minecraft.getInstance().getMainRenderTarget();
         int depth = FxViews.depth(main.getDepthTextureId());
         int w = FxViews.width(main.width), h = FxViews.height(main.height);
         last = 0;
+        see = false;
         boolean was = lastOk;
         lastOk = false;
         previousValid = false;
         if (s == null || depth <= 0) return -1;
+        // see-through surfaces: the opaque world's depth copied before translucent geometry, the depth and colour after it
+        int opaque = SeeThrough.depth();
+        SeeThrough.Mode mode = SeeThrough.mode();
+        RenderTarget translucent = mode == SeeThrough.Mode.FABULOUS ? SeeThrough.translucent() : null;
+        if (mode == SeeThrough.Mode.FABULOUS && (translucent == null || translucent.getDepthTextureId() <= 0)) mode = SeeThrough.Mode.NONE;
+        if (mode == SeeThrough.Mode.NONE) opaque = -1;
+        int surfaceDepth = translucent != null ? translucent.getDepthTextureId() : depth;
+        int now = main.getColorTextureId();
+        int other = mode == SeeThrough.Mode.BLEND ? SeeThrough.before() : translucent != null ? translucent.getColorTextureId() : now;
         boolean sized = FBOS[0] >= 0 && w == width && h == height;
         if (!ensure(w, h)) return -1;
         current = 1 - current;
@@ -83,16 +108,24 @@ public final class SceneDepth {
         boolean lod = !FxViews.secondary() && LodDepth.current(LOD);
         GlStateManager._glBindFramebuffer(GlConst.GL_FRAMEBUFFER, fbo);
         RenderSystem.viewport(0, 0, width, height);
-        RenderSystem.disableDepthTest();
-        RenderSystem.depthMask(false);
+        // every pixel writes the layer's hardware depth
+        RenderSystem.enableDepthTest();
+        RenderSystem.depthFunc(GL11.GL_ALWAYS);
+        RenderSystem.depthMask(true);
         RenderSystem.disableBlend();
         RenderSystem.setShader(() -> s);
-        RenderSystem.setShaderTexture(0, depth);
+        RenderSystem.setShaderTexture(0, opaque > 0 ? opaque : depth);
         RenderSystem.setShaderTexture(1, lod ? LOD.texture : depth);
+        RenderSystem.setShaderTexture(2, surfaceDepth);
+        RenderSystem.setShaderTexture(3, now > 0 ? now : depth);
+        RenderSystem.setShaderTexture(4, other > 0 ? other : depth);
         s.safeGetUniform("InvProj").set(projection.invert(INVERSE));
         s.safeGetUniform("LodInvProj").set(lod ? LOD.inverseProjection : INVERSE);
         s.safeGetUniform("LodDepth").set(lod ? 1f : 0f, LOD.negativeOneToOne ? 1f : 0f, LOD.empty, lod && LOD.pinsWorldDepth ? 1f : 0f);
         s.safeGetUniform("LodWorld").set(lod ? LOD.world : -1f);
+        s.safeGetUniform("See").set(opaque > 0 ? mode.code() : 0f, 0f, 0f, 0f);
+        modelView.transform(UP.set(0, 1, 0, 0));
+        s.safeGetUniform("ViewUp").set(UP.x, UP.y, UP.z);
         BufferBuilder b = Tesselator.getInstance().begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION);
         b.addVertex(-1, -1, 0);
         b.addVertex(1, -1, 0);
@@ -102,9 +135,12 @@ public final class SceneDepth {
         if (mesh != null) BufferUploader.drawWithShader(mesh);
         GlStateManager._glBindFramebuffer(GlConst.GL_FRAMEBUFFER, previous);
         RenderSystem.viewport(VIEWPORT[0], VIEWPORT[1], VIEWPORT[2], VIEWPORT[3]);
+        RenderSystem.depthFunc(GL11.GL_LEQUAL);
+        RenderSystem.depthMask(false);
         RenderSystem.enableDepthTest();
         last = lod ? 2 : 1;
         lastOk = true;
+        see = opaque > 0;
         if (DIAG) diag(depth, main.width, main.height, previous, main.frameBufferId);
         return texture;
     }
@@ -229,11 +265,12 @@ public final class SceneDepth {
 
     /** Last frame's layer occlusion. Ordinary timing probes must not synchronize with the GPU. */
     static String describe() {
-        return switch (last) {
+        String occlusion = switch (last) {
             case 2 -> "world and LOD (" + LOD.describe() + (DIAG ? lodShare() : "") + ")";
             case 1 -> "world";
             default -> "none";
         };
+        return occlusion + ", see-through " + (see ? SeeThrough.describe() : "off");
     }
 
     /**
@@ -265,6 +302,87 @@ public final class SceneDepth {
         }
     }
 
+    /** This frame's see-through surfaces ({@link #surface}, {@link #glass}) are filled. */
+    static boolean see() {
+        return see;
+    }
+
+    /** Distance to the nearer see-through surface ({@code see.glsl}: FxSurface). */
+    static int surface() {
+        return surface;
+    }
+
+    /** The see-through surface's own light and transmittance ({@code see.glsl}: FxGlass). */
+    static int glass() {
+        return glass;
+    }
+
+    /** Own texture units of {@code FxSurface} and {@code FxGlass} (Minecraft's 12 named samplers and units 12–15 are taken). */
+    static final int SURFACE_UNIT = 16, GLASS_UNIT = 17;
+
+    /**
+     * {@code see.glsl} inputs into program {@code s}: both textures on their own units, the units into the program on every
+     * bind (Veil recompiles programs, {@link OpenAir#bind}), {@code FxSee} — this frame has them. Without see-through the
+     * units hold the frame's colour (a sampler is never left on texture 0: an incomplete texture floods driver debug output).
+     */
+    static void bindSee(ShaderInstance s) {
+        int idle = Minecraft.getInstance().getMainRenderTarget().getColorTextureId();
+        int unit = GlStateManager._getActiveTexture();
+        GlStateManager._activeTexture(GL13.GL_TEXTURE0 + SURFACE_UNIT);
+        GL11.glBindTexture(GL11.GL_TEXTURE_2D, see ? surface : idle);
+        GlStateManager._activeTexture(GL13.GL_TEXTURE0 + GLASS_UNIT);
+        GL11.glBindTexture(GL11.GL_TEXTURE_2D, see ? glass : idle);
+        GlStateManager._activeTexture(unit);
+        int program = GL11.glGetInteger(GL20.GL_CURRENT_PROGRAM);
+        ProgramManager.glUseProgram(s.getId());
+        Uniform.uploadInteger(Uniform.glGetUniformLocation(s.getId(), "FxSurface"), SURFACE_UNIT);
+        Uniform.uploadInteger(Uniform.glGetUniformLocation(s.getId(), "FxGlass"), GLASS_UNIT);
+        ProgramManager.glUseProgram(program);
+        s.safeGetUniform("FxSee").set(see ? 1f : 0f);
+    }
+
+    /**
+     * The layer draws through its own framebuffer from here to {@link #unbindLayer}: the bound frame's colour texture with the
+     * hardware depth of this frame ({@link #hard}: the opaque world, not the see-through surfaces in front of it). Passes that
+     * save and restore the bound framebuffer return to it. False — not bound (no see-through this frame, or the frame's colour
+     * is not a texture): the layer keeps the world's depth.
+     */
+    static boolean bindLayer() {
+        layerDraw = -1;
+        if (!see || hard < 0) return false;
+        int draw = GlStateManager._getInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
+        if (draw == 0) return false;
+        if (GL30.glGetFramebufferAttachmentParameteri(GL30.GL_DRAW_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0,
+                GL30.GL_FRAMEBUFFER_ATTACHMENT_OBJECT_TYPE) != GL11.GL_TEXTURE) return false;
+        int colour = GL30.glGetFramebufferAttachmentParameteri(GL30.GL_DRAW_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT0,
+                GL30.GL_FRAMEBUFFER_ATTACHMENT_OBJECT_NAME);
+        int read = GlStateManager._getInteger(GL30.GL_READ_FRAMEBUFFER_BINDING);
+        if (layerFbo < 0) layerFbo = GlStateManager.glGenFramebuffers();
+        GlStateManager._glBindFramebuffer(GlConst.GL_FRAMEBUFFER, layerFbo);
+        if (colour != layerColour) {
+            GlStateManager._glFramebufferTexture2D(GlConst.GL_FRAMEBUFFER, GlConst.GL_COLOR_ATTACHMENT0, GlConst.GL_TEXTURE_2D, colour, 0);
+            GlStateManager._glFramebufferTexture2D(GlConst.GL_FRAMEBUFFER, GlConst.GL_DEPTH_ATTACHMENT, GlConst.GL_TEXTURE_2D, hard, 0);
+            layerColour = colour;
+            if (GlStateManager.glCheckFramebufferStatus(GlConst.GL_FRAMEBUFFER) != GlConst.GL_FRAMEBUFFER_COMPLETE) {
+                layerColour = -1;
+                GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, draw);
+                GlStateManager._glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, read);
+                return false;
+            }
+        }
+        layerDraw = draw;
+        layerRead = read;
+        return true;
+    }
+
+    /** Back to the frame's own framebuffer after the layer ({@link #bindLayer}). */
+    static void unbindLayer() {
+        if (layerDraw < 0) return;
+        GlStateManager._glBindFramebuffer(GL30.GL_DRAW_FRAMEBUFFER, layerDraw);
+        GlStateManager._glBindFramebuffer(GL30.GL_READ_FRAMEBUFFER, layerRead);
+        layerDraw = -1;
+    }
+
     /**
      * The previous frame's distance texture (as {@link #update} returned it then); −1 — none: the previous update failed, or the
      * frame size changed since.
@@ -278,6 +396,11 @@ public final class SceneDepth {
         if (FBOS[0] >= 0 && w == width && h == height) return true;
         width = w;
         height = h;
+        // the colour the layer framebuffer was made for no longer matches the new depth size
+        layerColour = -1;
+        surface = image(surface, GL30.GL_R32F, GL11.GL_RED, GL11.GL_FLOAT, w, h);
+        glass = image(glass, GL11.GL_RGBA8, GL11.GL_RGBA, GL11.GL_UNSIGNED_BYTE, w, h);
+        hard = image(hard, GL30.GL_DEPTH_COMPONENT32F, GL11.GL_DEPTH_COMPONENT, GL11.GL_FLOAT, w, h);
         for (int i = 0; i < 2; i++) {
             if (!ensureOne(i, w, h)) {
                 Incoming.LOG.error("Effects layer: depth texture {}×{} not created, no soft edges", w, h);
@@ -288,19 +411,29 @@ public final class SceneDepth {
         return true;
     }
 
-    private static boolean ensureOne(int i, int w, int h) {
-        if (TEXTURES[i] < 0) TEXTURES[i] = GlStateManager._genTexture();
-        if (FBOS[i] < 0) FBOS[i] = GlStateManager.glGenFramebuffers();
-        int tex = TEXTURES[i], fb = FBOS[i];
+    /** A frame-sized texture (created once, resized after): nearest, clamped. */
+    private static int image(int tex, int internal, int format, int type, int w, int h) {
+        if (tex < 0) tex = GlStateManager._genTexture();
         GlStateManager._bindTexture(tex);
         GlStateManager._texParameter(GlConst.GL_TEXTURE_2D, GlConst.GL_TEXTURE_MIN_FILTER, GlConst.GL_NEAREST);
         GlStateManager._texParameter(GlConst.GL_TEXTURE_2D, GlConst.GL_TEXTURE_MAG_FILTER, GlConst.GL_NEAREST);
         GlStateManager._texParameter(GlConst.GL_TEXTURE_2D, GlConst.GL_TEXTURE_WRAP_S, GlConst.GL_CLAMP_TO_EDGE);
         GlStateManager._texParameter(GlConst.GL_TEXTURE_2D, GlConst.GL_TEXTURE_WRAP_T, GlConst.GL_CLAMP_TO_EDGE);
-        GlStateManager._texImage2D(GlConst.GL_TEXTURE_2D, 0, GL30.GL_R32F, w, h, 0, GL11.GL_RED, GL11.GL_FLOAT, null);
+        GlStateManager._texImage2D(GlConst.GL_TEXTURE_2D, 0, internal, w, h, 0, format, type, null);
+        return tex;
+    }
+
+    private static boolean ensureOne(int i, int w, int h) {
+        if (FBOS[i] < 0) FBOS[i] = GlStateManager.glGenFramebuffers();
+        TEXTURES[i] = image(TEXTURES[i], GL30.GL_R32F, GL11.GL_RED, GL11.GL_FLOAT, w, h);
+        int tex = TEXTURES[i], fb = FBOS[i];
         int previous = GlStateManager._getInteger(GL30.GL_DRAW_FRAMEBUFFER_BINDING);
         GlStateManager._glBindFramebuffer(GlConst.GL_FRAMEBUFFER, fb);
         GlStateManager._glFramebufferTexture2D(GlConst.GL_FRAMEBUFFER, GlConst.GL_COLOR_ATTACHMENT0, GlConst.GL_TEXTURE_2D, tex, 0);
+        GlStateManager._glFramebufferTexture2D(GlConst.GL_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT1, GlConst.GL_TEXTURE_2D, surface, 0);
+        GlStateManager._glFramebufferTexture2D(GlConst.GL_FRAMEBUFFER, GL30.GL_COLOR_ATTACHMENT2, GlConst.GL_TEXTURE_2D, glass, 0);
+        GlStateManager._glFramebufferTexture2D(GlConst.GL_FRAMEBUFFER, GlConst.GL_DEPTH_ATTACHMENT, GlConst.GL_TEXTURE_2D, hard, 0);
+        GL20.glDrawBuffers(new int[]{GL30.GL_COLOR_ATTACHMENT0, GL30.GL_COLOR_ATTACHMENT1, GL30.GL_COLOR_ATTACHMENT2});
         boolean ok = GlStateManager.glCheckFramebufferStatus(GlConst.GL_FRAMEBUFFER) == GlConst.GL_FRAMEBUFFER_COMPLETE;
         GlStateManager._glBindFramebuffer(GlConst.GL_FRAMEBUFFER, previous);
         return ok;
@@ -310,6 +443,8 @@ public final class SceneDepth {
     public static final class ViewState {
         private int[] FBOS = {-1, -1};
         private int[] TEXTURES = {-1, -1};
+        private int surface = -1, glass = -1, hard = -1, layerFbo = -1, layerColour = -1;
+        private boolean see;
         private int fbo = -1;
         private int texture = -1;
         private int width;
@@ -325,9 +460,16 @@ public final class SceneDepth {
 
         void close() {
             FxViews.textures(TEXTURES); FxViews.framebuffers(FBOS);
+            FxViews.textures(surface, glass, hard); FxViews.framebuffers(layerFbo);
         }
 
         public void swap() {
+            int t = SceneDepth.surface; SceneDepth.surface = surface; surface = t;
+            t = SceneDepth.glass; SceneDepth.glass = glass; glass = t;
+            t = SceneDepth.hard; SceneDepth.hard = hard; hard = t;
+            t = SceneDepth.layerFbo; SceneDepth.layerFbo = layerFbo; layerFbo = t;
+            t = SceneDepth.layerColour; SceneDepth.layerColour = layerColour; layerColour = t;
+            boolean b = SceneDepth.see; SceneDepth.see = see; see = b;
             int[] oldFBOS = SceneDepth.FBOS;
             SceneDepth.FBOS = FBOS;
             FBOS = oldFBOS;
