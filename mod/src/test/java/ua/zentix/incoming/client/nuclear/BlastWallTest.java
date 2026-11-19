@@ -489,6 +489,43 @@ class BlastWallTest {
     }
 
     /**
+     * 18.11 (Artem's 1 Mt): the wall inside the flash-ignition range was a black disk with a hard edge at its boundary — the head carried 77 %
+     * soot from the first second. The head takes the pall's soot (fire zone × fire growth): while it crosses the zone the fires have barely
+     * grown, so its colour inside and just outside the zone is the same dust (top within 3 % in luminance, mid-height within 10 %), and it is
+     * brown, not grey (red over blue).
+     */
+    @Test
+    void headInsideTheFireZoneIsDust() {
+        Detonation d = new Detonation(1, new Vec3(0, 64, 0), 64, 1000, true, 0, 0, 0, 20_000, 7, 1f, false, 0.35f);
+        PallField pall = new PallField(d);
+        CloudPuffs puffs = new CloudPuffs(d);
+        BlastWall w = new BlastWall(d, false);
+        float[] s = new float[BlastWall.SLOT], glow = new float[8], in = new float[3], out = new float[3];
+        double edge = pall.fireReach(), t = 0.5;
+        while (d.metres(w.wall(t).head()) < 0.7 * edge) t += 0.05;
+        double ticks = t * 20 * d.scale();
+        assertTrue(w.slot(t, s) && s[3] > 0, "head at " + t + " s");
+        assertTrue(puffs.pallLight(MushroomModel.shape(t, 1000, 0, true, d.metres(s[0])), pall.fireLight(ticks), glow));
+        double inside = s[0] - 0.5 * s[1], outside = 1.3 * edge;
+        assertTrue(inside < 0.9 * edge, "inside the fire zone");
+        double soot = pall.smoke(inside, ticks);
+        assertTrue(soot < 0.01, t + " s: soot share in fresh dust " + soot);
+        assertEquals(0, pall.smoke(outside, ticks), 0, "no soot outside the fire zone");
+        for (double z : new double[]{0.9, 0.5}) {
+            double up = z * s[2] * BlastWall.top(0.5);
+            NukePall.dustLight(s, glow, sky(true), d.windDir(), inside, up, 0, up, soot, 0, in);
+            // the same wedge point, as if it lay beyond the zone edge (same wall, no soot, no fire light)
+            float[] dark = glow.clone();
+            dark[1] = 0;
+            NukePall.dustLight(s, dark, sky(true), d.windDir(), inside, up, 0, up, 0, 0, out);
+            assertEquals(luminance(out), luminance(in), (z > 0.7 ? 0.03 : 0.1) * luminance(out),
+                    z + " top: fire zone " + Arrays.toString(in) + " vs dust " + Arrays.toString(out));
+        }
+        NukePall.dustLight(s, glow, sky(true), d.windDir(), inside, 0.5 * s[2] * BlastWall.top(0.5), 0, 0.5 * s[2] * BlastWall.top(0.5), soot, 0, in);
+        assertTrue(in[0] > in[2], "brown dust, not grey: " + Arrays.toString(in));
+    }
+
+    /**
      * The head's dust rolls in eddies of the layer's size (18.11, Artem: the lofted dust curls in successive rolls): the billow pattern turns about
      * horizontal axes on concentric rings of eddies, by the eddies' turn over the wind's path (σ_u ≈ 2.5 u*, u* ≈ 0.04 U; × the presentation
      * gain), top outward while the wave's wind blows outward, back toward ground zero as it reverses. Only the pattern turns: an eddy's rim

@@ -537,6 +537,22 @@ class PallGlslTest {
         }
     }
 
+    /**
+     * The head's material is the pall's dust at that place (18.11: a constant 77 % soot in the head made a black disk out to the ignition range):
+     * {@code wall} gets the pall's soot share ({@code f.smoke}: fire zone × fire growth) and mixes it into the soil's dust the same way
+     * ({@code pallDustW}); fire light below is the slot's fire flame ({@code G.y}, {@link PallField#fireLight}).
+     */
+    @Test
+    void headSootIsThePallsSoot() {
+        String fx = read("include/fx_pall.glsl").replaceAll("\\s+", " ");
+        assertTrue(fx.contains("if (head.P.w > 0.0) wall(V, head, keyDir, sunDir, lightDir, f.smoke, cone, pall, S[3].x, s);"), "head soot - not the pall's");
+        String wall = body(read("include/fx_pall.glsl"), "void wall(").replaceAll("\\s+", " ");
+        assertTrue(wall.contains("vec3 w = mix(pallDustW(h.sand, h.hard, V[3].x + (V[3].y - V[3].x) * uw, smoke), PALL_MIST_W, h.wet);"),
+                "head dust - not the soil's with the pall's soot");
+        assertTrue(!wall.contains("0.77"), "a constant soot share in the head");
+        assertTrue(fx.contains("float burn = pallBurn(r, 0.0, G.y, G.w)"), "fire light below - not the slot's fire flame");
+    }
+
     /** The head's eddy turn and roll ({@code pallWallRollAngle}, {@code pallWallRoll}) are {@link BlastWall#rollAngle}, {@link BlastWall#roll}. */
     @Test
     void headRollIsTheJavaLaw() {
