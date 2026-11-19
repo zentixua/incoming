@@ -24,8 +24,10 @@
 // attenuation of the table (by visibility, as the eye sees it) — already σ' of delta-Eddington: both the view ray and the
 // light to the point use it. ω' — from the color of the thick layer (fx_pall: DUST, SMOKE, HAZE, MIST; storm soot — SOOT;
 // in linear — pallLinear) by inverting the two-stream reflection: thick pall — the same color as the wall of dust and spray.
-// Dust, smoke and haze — g = 0.6, water droplets — 0.85, soot — 0.5.
+// Dust, smoke and haze — g = 0.6, water droplets — 0.85, soot — 0.5. Dust is what the wave lofts: the reference dry loamy soil under
+// grass and forest (DUST) or desert sand (SAND), by the slot map's sand share of the soil where it was lofted (pallSoil, pallDustW).
 const vec3 PALL_DUST_W = vec3(0.8687934, 0.8099112, 0.7286264);
+const vec3 PALL_SAND_W = vec3(0.9345197, 0.9149708, 0.8875681);
 const vec3 PALL_SMOKE_W = vec3(0.5520492, 0.5170717, 0.4837395);
 const vec3 PALL_HAZE_W = vec3(0.7175592, 0.6833941, 0.6480812);
 const vec3 PALL_MIST_W = vec3(0.9948032, 0.9964194, 0.9973450);
@@ -77,6 +79,8 @@ struct PallAt {
     vec3 slab;
     // share of smoke in the dust; light of fires from below
     float smoke;
+    // albedo ω' of the dust here (pallDustW: soil where it was lofted, soot)
+    vec3 dustW;
     float fire;
     // height of the point in shares of the pall: dust, haze
     vec2 height;
@@ -126,11 +130,19 @@ float pallWater(sampler2D ground, vec4 G, vec2 rel) {
     return clamp(textureLod(ground, rel / (2.0 * G.x) + 0.5, 0.0).g, 0.0, 1.0);
 }
 
-// share of hard ground under the point rel (from the epicenter along the ground) by the slot's map (PallGround.hard: rock, roofs,
-// roads, snow — no soil on top, only debris dust is lofted there); no map or none under the pall (S[1].w < 1.5) — soil
-float pallHard(sampler2D ground, mat4 S, vec4 G, vec2 rel) {
-    if (G.x <= 0.0 || S[1].w < 1.5) return 0.0;
-    return clamp(textureLod(ground, rel / (2.0 * G.x) + 0.5, 0.0).b, 0.0, 1.0);
+// soil under the point rel (from the epicenter along the ground) by the slot's map: x — share of hard ground (PallGround.hard: rock,
+// roofs, roads, snow — no soil on top, only debris dust is lofted there), y — share of sand (PallGround.sand: desert dust, not the
+// reference loamy soil); both fractions of the ground; no map or neither under the pall (S[1].w < 1.5) — reference soil
+vec2 pallSoil(sampler2D ground, mat4 S, vec4 G, vec2 rel) {
+    if (G.x <= 0.0 || S[1].w < 1.5) return vec2(0.0);
+    return clamp(textureLod(ground, rel / (2.0 * G.x) + 0.5, 0.0).ba, 0.0, 1.0);
+}
+
+// Albedo ω' of lofted dust: sand's share of the lofted mass (PallField.sandShare) — sand and hard ground are fractions of the ground as the
+// map holds them; hard ground lofts only debris dust, paved of the soil's mass — darkened by soot from fires (smoke share)
+vec3 pallDustW(float sand, float hard, float paved, float smoke) {
+    float share = sand / max(1.0 + hard * (paved - 1.0), 1e-6);
+    return mix(mix(PALL_DUST_W, PALL_SAND_W, clamp(share, 0.0, 1.0)), PALL_SMOKE_W, smoke);
 }
 
 // Field of slot S at point p (from the eye), without noise (the average over noise is that); ground, G — relief and water
@@ -162,7 +174,8 @@ PallAt pallField(sampler2D table, sampler2D ground, mat4 S, vec4 G, vec4 W, vec3
     vec4 haze = texture(table, vec2(min(uh, 1.0), S[2].w));
     float topH = max(haze.g, 1.0), sh = haze.r * (1.0 - 0.5 * along / max(len, 1.0)) * pallEdge(uh), fire = haze.b;
     float wet = 0.0, sg = 0.0, topG = 1.0;
-    float hard = sd > 0.0 ? pallHard(ground, S, G, lift) : 0.0;
+    vec2 soil = sd > 0.0 ? pallSoil(ground, S, G, lift) : vec2(0.0);
+    float hard = soil.x;
     vec4 spray = vec4(0.0);
     if (W.w > 0.5 || hard > 0.0) spray = texture(table, vec2(min(ud, 1.0), S[3].w));
     sd *= 1.0 + hard * (spray.b - 1.0);
@@ -194,6 +207,7 @@ PallAt pallField(sampler2D table, sampler2D ground, mat4 S, vec4 G, vec4 W, vec3
     a.slab = vec3(sd * topD * pallColumn(min(a.height.x, floorUp / topD)), sh * topH * pallColumn(min(a.height.y, floorUp / topH)),
             ss * topS * pallColumn(min(hs, floorUp / topS)) + sg * topG * pallColumn(min(hg, floorUp / topG)));
     a.smoke = dust.b;
+    a.dustW = pallDustW(soil.y, hard, spray.b, dust.b);
     a.fire = fire * exp(-3.0 * max(a.height.y, 0.0));
     a.dense = (sd + ss + sg) / max(S[3].x, 1e-6);
     a.wet = wet;
@@ -464,7 +478,8 @@ bool pallValid(vec4 v) {
 
 // Glare of fires under the dust, like at the wall of dust (CloudPuffs.burn — its light; fx_pall takes it so the pall beyond the
 // front continues the color of the wall): r — along the ground from the epicenter, up — share of the dust height 0..1 (the
-// bottom is darker: ground and debris), glow — heat of fires 0..1, fireR — edge of the ignition zone (soft, from 0.92 to 1.04);
+// bottom is darker: ground and debris), glow — flame of the fires 0..1 (PallField.fireLight: grows from the flash over
+// twenty minutes), fireR — edge of the ignition zone (soft, from 0.92 to 1.04);
 // r and fireR — in the same units (blocks).
 float pallBurn(float r, float up, float glow, float fireR) {
     float e = max(fireR, 1e-3);
@@ -643,6 +658,26 @@ vec3 pallWallOrigin(vec2 rel, float z, float u, float top, float carried) {
     return vec3(rel.x - out1.x * x, z - x * (0.02 + 0.06 * zr), rel.y - out1.y * x);
 }
 
+// Eddy turn of head dust, rad (BlastWall.rollAngle): positive — the top rolls outward; eddies of diameter size spin at σ_u ≈ 2.5 u*,
+// u* ≈ 0.04 U (BlastWall.EDDY), over the wind path so far (carried × pallWallCarried: out with the wave's wind, back as it reverses).
+// presentation: ×8 the physical rate (BlastWall.ROLL_GAIN) — only the billow pattern turns, not where dust is or how much
+const float PALL_WALL_ROLL = 1.6;
+float pallWallRollAngle(float ph, float carried, float size) {
+    return PALL_WALL_ROLL * carried * pallWallCarried(ph) / max(size, 1.0);
+}
+
+// Dust-coordinate point q (pallWallOrigin: x, height, z) turned within its eddy (BlastWall.roll): eddies of diameter size side by side
+// along the ground outward (out1), resting on it; the turn is full at the centre and zero at the rim — no seams between eddies
+vec3 pallWallRoll(vec3 q, vec2 out1, float size, float angle) {
+    float along = dot(q.xz, out1), rim = 0.5 * size;
+    float dx = along - size * (floor(along / size) + 0.5), dy = q.y - rim;
+    float r = length(vec2(dx, dy)) / rim;
+    if (r >= 1.0) return q;
+    float a = angle * (1.0 - r) * (1.0 - r), c = cos(a), sn = sin(a);
+    float ex = c * dx - sn * dy, ey = sn * dx + c * dy;
+    return vec3(q.x + out1.x * (ex - dx), rim + ey, q.z + out1.y * (ex - dx));
+}
+
 // Density at the ground by the share u of the wedge against its density at its end (BlastWall.shape): the lifted part in the layer of the top pallWallTop
 float pallWallShape(float u) {
     if (u <= 0.0) return 0.0;
@@ -710,8 +745,9 @@ struct WallAt {
     float z;
     // share of water under the point: over water the head is spray, lower and behind
     float wet;
-    // share of hard ground under the point (pallHard): only debris dust there
+    // share of hard ground under the point (pallSoil): only debris dust there; sand share of the soil (its colour)
     float hard;
+    float sand;
     // the point from the axis of the ring (the epicenter: the dust at the front has not yet been carried by the wind — PallField.share), blocks
     vec2 rel;
 };
@@ -727,10 +763,13 @@ WallAt pallWallAt(sampler2D ground, mat4 S, mat4 V, vec4 G, vec4 W, vec3 p, floa
     h.z = p.y - S[0].z - floorUp;
     h.wet = 0.0;
     h.hard = 0.0;
+    h.sand = 0.0;
     h.P = vec4(V[0].y, V[0].z, 0.0, 0.0);
     if (V[0].w <= 0.0 || pallWallInside(h.s, h.z, V[0].y, V[0].z, V[1].y) <= 0.0) return h;
     if (W.w > 0.5) h.wet = pallWater(ground, G, h.rel);
-    h.hard = pallHard(ground, S, G, h.rel);
+    vec2 soil = pallSoil(ground, S, G, h.rel);
+    h.hard = soil.x;
+    h.sand = soil.y;
     float lag = V[1].y * h.wet;
     h.P = vec4(V[0].y, V[0].z * mix(1.0, V[1].z, h.wet), lag, pallWallDensity(h.s - lag, V[0].y, V[0].w, V[3].z, V[3].w, V[1].w, h.wet,
             V[2].y, V[2].z, V[3].x, V[3].y, h.hard));

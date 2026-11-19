@@ -90,6 +90,8 @@ public final class MushroomField {
      * beneath it), although its model contains no smoke.
      */
     static final int DUST = display(NukePall.DUST);
+    /** The same dust lofted from sand ({@link NukePall#SAND}): stem and skirt take the soil around ground zero ({@link PallGround#sand}). */
+    static final int SAND = display(NukePall.SAND);
     /**
      * Steam share of cap extinction with full water beneath the burst and a rolled ring ({@link #capMatter}). (est.):
      * sources do not give how much water the ball lofts over water; value is the previous steam share in layer color.
@@ -597,9 +599,11 @@ public final class MushroomField {
         put(into, o, 4, d.blocks(s.domeH()), capSigma, Math.max(across, 1), t);
         put(into, o, 5, CAP[0], CAP[1], CAP[2], CAP[3]);
         put(into, o, 6, d.blocks(s.stemTop()), d.blocks(s.stemR()), d.blocks(MushroomModel.dustFlare(s)), s.stemTau());
-        matter(into, o, 7, mix(DUST, STEAM, 0.8 * wet));
+        // stem and skirt dust is the layer's around ground zero: its soil's colour
+        int dust = mix(DUST, SAND, a.ground.hasSand() ? a.ground.sand(d.burst().x, d.burst().z) : 0);
+        matter(into, o, 7, mix(dust, STEAM, 0.8 * wet));
         put(into, o, 8, d.blocks(s.skirtR()), d.blocks(s.skirtW()), d.blocks(s.skirtH()), skirtSigma);
-        matter(into, o, 9, mix(DUST, CloudPuffs.SPRAY, a.water.under()));
+        matter(into, o, 9, mix(dust, CloudPuffs.SPRAY, a.water.under()));
         put(into, o, 10, 0, 0, d.blocks(s.capBottom()), Math.max(1, 3 * d.blocks(s.stemR())));
         // stem jets rise with air drawn by the ring (MushroomModel.stemRise); fires below mushroom: storm smoke top
         // (the same top reached by its pall columns, FireStorms.slot), and fire-zone radius (light is fire, after frame

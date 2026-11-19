@@ -239,7 +239,7 @@ class PallGroundTest {
         assertFalse(g.hasHard());
         assertEquals(0, g.hard(1500, -800), 1e-6);
         FarTerrain.Water rockEast = (x, z) -> x > 2000 ? 1 : 0;
-        for (int i = 0; i < PallGround.SIDE * PallGround.SIDE / PallGround.PER_TICK; i++) g.survey(0, 0, 0, UNKNOWN, null, rockEast);
+        for (int i = 0; i < PallGround.SIDE * PallGround.SIDE / PallGround.PER_TICK; i++) g.survey(0, 0, 0, UNKNOWN, null, rockEast, null);
         g.fill();
         assertTrue(g.hasHard());
         assertEquals(1, g.hard(4000, 300), 1e-3);
@@ -247,5 +247,44 @@ class PallGroundTest {
         PallPass.Ground out = new PallPass.Ground();
         g.frame(out);
         assertEquals(PallGround.CHANNELS * PallGround.SIDE * PallGround.SIDE, out.map.length);
+    }
+
+    /**
+     * Sand under the pall (fourth channel, {@link PallGround#sand}): like hard ground a cell property — known cells keep what was seen,
+     * unknown take the nearest known; with no sand anywhere the dust is the reference soil's ({@link PallGround#hasSand} false),
+     * unknown ground is not sand.
+     */
+    @Test
+    void sandIsACellProperty() {
+        PallGround g = new PallGround(GROUND, new PallField(GROUND), FILL_HALF);
+        assertFalse(g.hasSand());
+        assertEquals(0, g.sand(1500, -800), 1e-6);
+        FarTerrain.Water desertWest = (x, z) -> x < -2000 ? 1 : 0;
+        for (int i = 0; i < PallGround.SIDE * PallGround.SIDE / PallGround.PER_TICK; i++) g.survey(0, 0, 0, UNKNOWN, null, null, desertWest);
+        g.fill();
+        assertTrue(g.hasSand());
+        assertFalse(g.hasHard(), "sand is soil, not hard ground");
+        assertEquals(1, g.sand(-4000, 300), 1e-3);
+        assertEquals(0, g.sand(4000, 300), 1e-3);
+    }
+
+    /**
+     * Review of #669: sand and hard ground are both fractions of the sampled columns. A cell of two sand and two paved columns holds
+     * sand 0.5 and hard 0.5; with debris dust 0.2 of the soil's mass, the lofted dust is 0.5 / 0.6 sand — not 0.42, which counted
+     * the hard share twice.
+     */
+    @Test
+    void sandShareFromTheMapsOwnFractions() {
+        PallGround g = new PallGround(GROUND, new PallField(GROUND), FILL_HALF);
+        // in every cell the western half of the columns is sand, the eastern half paved: of its four sampled columns, two each
+        double cell = 2 * g.half() / PallGround.SIDE, west = GROUND.burst().x - g.half();
+        FarTerrain.Water sand = (x, z) -> (x + 0.5 - west) % cell < 0.5 * cell ? 1 : 0, rock = (x, z) -> 1 - sand.at(x, z);
+        for (int i = 0; i < PallGround.SIDE * PallGround.SIDE / PallGround.PER_TICK; i++) g.survey(0, 0, 0, UNKNOWN, null, rock, sand);
+        g.fill();
+        double s = g.sand(1500, 300), h = g.hard(1500, 300);
+        assertEquals(0.5, s, 1e-3, "cell sand fraction " + s);
+        assertEquals(1, s + h, 1e-3, "sand and paved fill the ground");
+        assertEquals(s / (1 + h * (0.2 - 1)), PallField.sandShare(s, h, 0.2), 1e-9);
+        assertEquals(0.5 / 0.6, PallField.sandShare(0.5, 0.5, 0.2), 1e-9);
     }
 }

@@ -43,8 +43,6 @@ public final class CloudModel {
     private static final double CAP_RADIUS_EXP = 0.38;
     /** Cap bottom is this fraction of the path from burst to top: Grable 6.1 of 10 km, Wasp 3.2 of 5.3 km. */
     private static final double CAP_BOTTOM = 0.6;
-    /** Biome humidity threshold for a visible Wilson cloud. */
-    private static final double WILSON_HUMIDITY = 0.3;
 
     private CloudModel() {
     }
@@ -89,11 +87,6 @@ public final class CloudModel {
     public static double capBottom(double t, double hobM, double yieldKt, boolean surface) {
         double base = Math.max(0, hobM);
         return base + CAP_BOTTOM * (top(t, hobM, yieldKt, surface) - base);
-    }
-
-    /** Whether this humidity produces a Wilson cloud (0..1 from biome; 1 over water). */
-    public static boolean wilsonCloud(double humidity01) {
-        return humidity01 >= WILSON_HUMIDITY;
     }
 
     /** Top-rise time constant, s: 1 kt 227, 15 kt 121, 1 Mt and above 144 ({@link #TAU_S}). */

@@ -501,6 +501,25 @@ public final class PallField {
         out[3] = share(i, ticks);
     }
 
+    /**
+     * Soot share in dust lofted at ground range {@code r} (blocks from ground zero) at {@code ticks}: fire zone × fire growth
+     * ({@link FireStorm#growth} on the detonation clock), the dust row b of the table ({@link #dust}, {@code pallField}: smoke). Dust lofted
+     * by the wave seconds to minutes after the flash carries next to no soot; it darkens only as the fires grow.
+     */
+    double smoke(double r, double ticks) {
+        if (fireReach <= 0) return 0;
+        return (1 - smooth(fireReach * 0.85, fireReach * 1.05, r)) * FireStorm.growth(clockSeconds(ticks));
+    }
+
+    /**
+     * Sand's share of lofted dust mass over ground with sand share {@code sand} and hard share {@code hard} (both fractions of the ground, as the
+     * map holds them: {@link PallGround#sand}, {@link PallGround#hard}; hard ground lofts only debris dust, {@code paved} of the soil's mass,
+     * {@link #soil}): what colours the dust — desert sand or the reference loamy soil. Copy of {@code pallDustW} in {@code pall.glsl}.
+     */
+    static double sandShare(double sand, double hard, double paved) {
+        return Math.min(1, Math.max(0, sand / Math.max(1 + hard * (paved - 1), 1e-6)));
+    }
+
     /** Fire light from below 0..1: the fires' flame from the flash to burning out ({@link FireStorm#flame} at the nominal peak). */
     double fireLight(double ticks) {
         return FireStorm.flame(clockSeconds(ticks), FireStorm.PEAK_S);
