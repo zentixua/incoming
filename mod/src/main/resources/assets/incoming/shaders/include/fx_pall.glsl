@@ -354,8 +354,13 @@ Sample emptySample() {
 
 // ---------------------------------------------------------------- dust-layer head (pall.glsl: pallWall*)
 
-// Optical depth back toward the eye for a near-volume cell (1 there, 1e9 elsewhere): a cell's light is taken as a ray's first visible
-// depth, since a cell behind dense dust is hidden by the cells before it in the sum. Rays find the head's face instead (pallStep)
+// Optical depth from a march sample back along the view ray to where the ray entered matter, plus the step's own first optical depth
+// (pallStep; a near-volume cell: 1, its light a ray's first visible depth; 1e9 elsewhere): the view ray is one way out of the dust for
+// light too. A head step is an eighth of the wall (12.6 blocks for 1 Mt 3 km) while the lofted front's dust has a mean free path of
+// tenths of a metre, so a frame-jittered sample lands 0–70 optical depths past the face: lit through the top or face alone, its
+// light was anything from lit to black, a black or lit square per ray cell (2×2 pixels at detail 1/2), a dark speckled face (19.11,
+// sandbox probe; finding the face by bisection missed a fifth of the rays, 19 % of the face near-black). What the ray sees of the step
+// is its first optical depth, lit through at most the depth back along the ray; the billows' own shadow shapes it (WALL_SHADE)
 float gTauBack = 1e9;
 
 
@@ -373,7 +378,7 @@ const float WALL_CHURN = 0.25;
 const float WALL_ROW = 0.3;
 // presentation: the billows' self-shadow at this share of the optical depth between them: at full depth the lobes (several layer tops
 // wide) shadow each other to near black, p90/p10 of the head's luminance 20–30; the footage's soft brown clefts are 2.8–4.8
-const float WALL_SHADE = 0.5;
+const float WALL_SHADE = 0.7;
 // Sky dome at the head's face (est.): the horizon sky is whiter than the zenith's blue (longer air path, multiple Rayleigh and aerosol
 // scattering), here the zenith sky light desaturated by this share toward its own luminance; its radiance taken equal to the zenith's
 const float WALL_HORIZON_WHITE = 0.6;
@@ -1129,57 +1134,18 @@ vec4 pallSource(vec3 p, float cone, vec4 inflow, out vec3 dustLight) {
 }
 
 
-// Dust-wall head extinction at p (1/block), both slots: the head's own density with its billows (as wall, no light), for finding its
-// face along a ray (pallStep)
-float headSigmaSlot(mat4 S, mat4 V, sampler2D ground, vec4 R, vec4 W, vec3 p) {
-    if (S[1].w < 0.5 || V[0].w <= 0.0) return 0.0;
-    WallAt h = pallWallAt(ground, S, V, R, W, p, pallRelief(ground, S, R, p.xz));
-    if (h.P.w <= 0.0) return 0.0;
-    return wallAt(V, h, 0.0, S[3].x, wallLobes(V), S[3].z);
-}
-
-float headSigma(vec3 p) {
-    return headSigmaSlot(PallSlot0, PallWall0, Sampler5, PallGround0, PallWater0, p)
-            + headSigmaSlot(PallSlot1, PallWall1, Sampler6, PallGround1, PallWater1, p);
-}
-
-// Previous step start on this ray (pallStep), −1 before the first
-float gPrevTa = -1.0;
 
 void pallStep(float ta, float ds, float grid, inout vec3 light, inout float transmit, inout float haze) {
     passesBefore(ta, light, transmit, haze);
     vec3 p = gDir * ta;
-    float prev = gPrevTa;
-    gPrevTa = ta;
     float open = pallOpenHere(p);
     if (open <= 0.0) return;
     float cone = max(ta * gPixel, 0.35 * grid);
     vec3 dustLight;
+    gTauBack = -log(max(transmit, 1e-6)) + 1.0;
     vec4 matter = pallSource(p, cone, vec4(0.0), dustLight);
+    gTauBack = 1e9;
     if (matter.w <= 1e-7) return;
-    // The lofted head's face: right behind the front its dust has a mean free path of tenths of a metre, head steps are an eighth of the
-    // wall (12.6 blocks for 1 Mt 3 km). The first dense sample of a ray (still clear before it, step optical depth over 3) lies at a
-    // frame-jittered depth of 0–70 optical depths past the face, its light anything from lit to black: per ray cell (2×2 pixels at
-    // detail 1/2) a black or lit square, a dark speckled face (19.11 sandbox probe). Find the face between the previous sample and this
-    // one by the head's density (5 halvings, a 32nd of the step) and light the dense stretch by the face's own light
-    if (prev >= 0.0 && prev < ta && transmit > 0.5 && matter.w * ds > 3.0) {
-        float thr = 1.0 / (ta - prev);
-        if (headSigma(gDir * prev) < thr) {
-            float a = prev, b = ta;
-            for (int k = 0; k < 5; k++) {
-                float m = 0.5 * (a + b);
-                if (headSigma(gDir * m) > thr) b = m;
-                else a = m;
-            }
-            vec3 faceLight;
-            vec4 face = pallSource(gDir * b, max(b * gPixel, 0.35 * grid), vec4(0.0), faceLight);
-            if (face.w > 1e-7) {
-                float trf = exp(-matter.w * open * (ta + ds - b));
-                passMatter(b, face.rgb * (1.0 - trf) / face.w, trf, light, transmit, haze);
-                return;
-            }
-        }
-    }
     float tr = exp(-matter.w * open * ds);
     passMatter(ta, matter.rgb * (1.0 - tr) / matter.w, tr, light, transmit, haze);
 }
@@ -1819,7 +1785,6 @@ void main() {
     vec2 span = pallBox(dir, PallMin, PallMax);
     float jitter = fract(texelFetch(Sampler2, ivec2(mod(low, 64.0)), 0).r + PallFrame.x * 0.618034);
     gJitter = jitter;
-    gPrevTa = -1.0;
     float clip = dir.y >= 0.0 ? pallClip(PallFrame.w, PallEyeTau.x, dir.y) : pallClip(PallFrame.w, PallEyeTau.y, -dir.y);
     // and no closer than half a billow tile: clipping uses mean depth, but eye may lie in a gap (noise cell quarter tile).
     // In dense dust (meters of visibility), a ray clipped inside a gap never reached its walls, leaving sky visible through

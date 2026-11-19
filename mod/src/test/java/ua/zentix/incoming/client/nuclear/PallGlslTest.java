@@ -607,8 +607,7 @@ class PallGlslTest {
         String wall = body(fx, "void wall(").replaceAll("\\s+", " ");
         assertTrue(wall.contains("float depth = min(min(up, side), gTauBack);"), "the layer light - not through the nearest of the top, the face and the way back");
         String step = body(fx, "void pallStep(").replaceAll("\\s+", " ");
-        assertTrue(step.contains("if (headSigma(gDir * prev) < thr) {") && step.contains("passMatter(b, face.rgb * (1.0 - trf) / face.w, trf, light, transmit, haze);"),
-                "a ray's first dense head sample - lit at its jittered depth, not at the face");
+        assertTrue(step.contains("gTauBack = -log(max(transmit, 1e-6)) + 1.0;") && step.contains("gTauBack = 1e9;"), "a march sample - lit only through the top or face");
         assertTrue(fx.replaceAll("\\s+", " ").contains("gTauBack = 1.0; vec4 matter = pallSource(p, cone, vec4(0.0), dustLight); gTauBack = 1e9;"), "a near-volume cell - lit at its depth");
         assertEquals(NukePall.WALL_SUN_FACE, scalar(fx, "WALL_SUN_FACE"), 1e-7);
         assertTrue(wall.contains("s.side += hd * w * (exp(-k * min(side, gTauBack)) * face + 0.5 * exp(-k * down) * below);")
