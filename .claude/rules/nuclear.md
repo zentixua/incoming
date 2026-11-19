@@ -234,12 +234,18 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   (a tile following the top moved billows over the ground — 18.10 “dust spread from epicenter”,
   `BlastWallTest.headCloudsStayWhereTheDustWasLifted`); churn `WALL_CHURN` (~0.2 lobe widths/s, Silo S3E09) moves the
   warp through its third axis on the detonation clock. All presentation, marked in code. Cartesian coordinates, no tiled
-  circumference or noise phases. Head light (presentation, 19.11): the dense lofted front lit only by the two-stream light
-  from its top or face was near black (face 1–2 % of the sky, head p90/p10 20–30 against Silo S3E09's 2.8–4.8), so its
-  diffuse depth is capped at `WALL_FILL` (multiple-scattering fill) and the fill light takes the dust's albedo to the
-  skipped depth × `WALL_TINT` (reddened; the diffuse field only, `Sample.fill`: without it the face read blue-white),
-  the billows' self-shadow `dev` × `WALL_SHADE` (the lobe tile is several layer tops, so it saturated at its clamp);
-  Java copy `NukePall.dustLight` (`PallGlslTest.headFillIsTheCameraDusts`).
+  circumference or noise phases. Head light (19.11): the head is an aerosol volume lit from all
+  sides. The layer light (two-stream) enters through the nearest of the top, the face and the way back along the view ray
+  (`gTauBack`: −ln transmittance + one optical depth, set around `pallSource` in `pallStep` and near-volume cells, 1e9
+  elsewhere: a head step is 1/8 of the wall, 12.6 blocks for 1 Mt 3 km, while the lofted front's mean free path is tenths
+  of a metre, so a jittered sample lay 0–70 optical depths past the face and its light was lit or black per 2×2-pixel ray
+  cell). The face also sees the horizon sky (the dome: zenith sky light desaturated by `WALL_HORIZON_WHITE`, also the
+  head's share of the layer light's sky in `scattered`) and the lit ground (albedo × (sun + sky)) through the dust below,
+  each e^(−kτ); presentation: sunlight down the billowy skin, `WALL_SUN_FACE` × sun × R∞(ω′)/ω (warm). Billow
+  self-shadow × `WALL_SHADE`. Crests (presentation, `wallCrest`): rounded domes along the ring, `WALL_LOBE` end tops wide,
+  uniform across the wedge depth (seen end-on from the ground), own heights, the top dipping by up to `WALL_CREST` 0.35
+  between them, never above the law's top. Java copy `NukePall.dustLight` (`PallGlslTest.headIsLitFromAllSides`,
+  `BlastWallTest.denseFrontFaceIsLitDust`).
   Rays sample the head more densely (`pallWallSpans`: ring from dust edge to 1.5 wedges and terrain-map height layer,
   step one eighth its height, at most `steps` extra steps). Same light as pall, light-path depth follows wedge shape
   (`wall` in `fx_pall`, copy `NukePall.dustLight`): diffuse uses the lesser mean-head depth above point (to local wedge
