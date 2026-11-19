@@ -158,8 +158,11 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   Numbers marked `(est.)` (fitted to Hiroshima or estimated) in `DustModel`: debris dust 0.1 kg/m² and `FINE_S`
   (together, with `HobBlast` pressure; old Kinney–Graham ×1.8 used 0.5 kg/m² and 1000 s), `STEM_*`, `RISE_S`, `TOP_MAX`,
   `TOP_C`, heating light share 0.2, γ 5 K/km, entrainment wind over pressure phase (not dynamic-pressure phase, survey
-  §8.1), and `lifted` shaped as dynamic-pressure impulse rather than an entrainment law. No per-cell surface classes
-  (grass, city, sand) yet; `REFERENCE` everywhere. From above, pall is one blanket (18.10 complaint: golden/dark patches
+  §8.1), and `lifted` shaped as dynamic-pressure impulse rather than an entrainment law. Lofted mass uses
+  `REFERENCE` everywhere (hard ground: `PAVED` share); the colour is the soil's: `PallGround` channel a is the sand share
+  (`FarTerrain.sand`), `pallDustW`/`PallField.sandShare` mix reference `DUST` with desert `SAND` (AERONET ω, Dubovik 2002,
+  `NukePall.SAND_OMEGA`) by mass, debris over hard ground stays `DUST`; soot share is the table's fire zone × `FireStorm.growth`
+  (`PallField.smoke`), for head and pall alike (18.11: a 0.77 constant in the head made a black disk out to the ignition range). From above, pall is one blanket (18.10 complaint: golden/dark patches
   from altitude): young-layer patches (noise with gaps, `pallShape`) mix over one layer-eddy turnover (`PallField.mixed`,
   e-fold over `DustModel.RISE_S`, dust-row fourth channel) to fluctuations `MIXED` = 0.2 of mean (`clumps`, `pallMixed`;
   Willis and Deardorff 1976, (est.)), while thermals make the top bumpy, top not holes: `topD` × (1 ± `BUMPS` = 0.3,
@@ -188,8 +191,9 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   would spread a camera-local pond's pale spray across unknown land, and leave half-dust over sea near a shore burst.
 - Shock-wave dust wall (`client/nuclear/BlastWall` laws; rendered by pall: `pallWall*`, `pallWilson` in `pall.glsl`, head
   in `fx_pall`, slot numbers `PallWall0/1`, `PallWilson0/1`): front itself is invisible; along-ground wind behind it
-  (`Detonation.groundWind`: Rankine–Hugoniot × √along-ground dynamic-pressure share) lofts surface matter: dust, mixed
-  with smoke over fires, spray over water. Head is pall dust's youngest, lowest, densest part (`DustModel` above), not
+  (`Detonation.groundWind`: Rankine–Hugoniot × √along-ground dynamic-pressure share) lofts surface matter: soil dust (its
+  colour from `PallGround`, soot only as fires grow: `PallField.smoke` via `PallAt.smoke`), spray over water; fire light from below
+  is the fires' own flame (`PallField.fireLight` in slot `G.y`, as the haze's), not an incandescence clock. Head is pall dust's youngest, lowest, densest part (`DustModel` above), not
   its own curve: a wedge from front to where local positive phase has ended (`length` = front(t) − `tail`(t); `tail`
   solves in-game front arrival + local phase = t, by table nodes; phase varies by range, `HobBlast.positivePhaseSeconds`:
   15 kt at 592 m: 0.45 s beneath burst, 0.74 s at 1 km, 1.29 s at 5 km). Dust leading edge is in-game front (`head`),
@@ -218,7 +222,11 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   `pallWallOrigin`): position minus post-front wind path (`carried`: air path over local positive phase, U·t₊/e by
   Friedlander, tens of meters for 15 kt at 592 m; phase share `carriedShare` = u·e^(1−u)); air stationary at ground,
   1/7 boundary-layer law above, upward 0.02–0.08 of path (Kuhl §3.4). Billows form where front lofted dust and stay there;
-  against the departing front, edge dust goes up/back, rolling the wall. Noise tile (`TILE` of maximum phase-end layer
+  against the departing front, edge dust goes up/back, rolling the wall. The pattern also turns in eddies of tile size on concentric
+  rings resting on the ground (`pallWallRoll`/`BlastWall.roll`, angle `rollAngle` = `EDDY` 0.2 × wind path × `carriedShare` / tile:
+  top outward with the wave's wind, back as it reverses; × `ROLL_GAIN` 8, presentation, turn zero at eddy rims). Where the local
+  layer is thinner than a billow (toe), billows give way to their mean (`resolved` in `wallAt`): tile-sized holes in a metres-thick
+  sheet read as a translucent shell at the front (18.11). Noise tile (`TILE` of maximum phase-end layer
   top) is fixed per detonation: a tile growing with the head, like old noise in a tile rotated by wall angle at front,
   moved billows over ground at front speed — dust “spread from epicenter” (18.10 complaint,
   `BlastWallTest.headCloudsStayWhereTheDustWasLifted`). Cartesian coordinates, no tiled circumference or noise phases.
