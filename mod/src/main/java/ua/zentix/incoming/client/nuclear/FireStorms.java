@@ -87,7 +87,7 @@ final class FireStorms {
         for (ClientNuclear.Active a : all) {
             double was = a.storm.gate();
             a.storm.gate(was + GATE_RATE * (a.storm.trust() - was));
-            if (level != null) a.storm.survey(surface(level), a.water, Minecraft.getInstance().gameRenderer.getMainCamera().getPosition());
+            if (level != null) a.storm.survey(surface(level), a.water, Minecraft.getInstance().gameRenderer.getMainCamera().getPosition(), a.ticks(0));
         }
     }
 
@@ -96,8 +96,9 @@ final class FireStorms {
     /**
      * Client column surface for the fire model ({@link FireStorm.Surface}): top block in a local chunk — water, ice, snow; flash
      * fuel ({@link Kindling#of}) or turf whose biome cures grass ({@link Kindling#cured}); natural ground, rock, plants, foliage and wood
-     * of trees hold none; anything else is built (a building lit through its windows); otherwise a terrain-map tile tells land or
-     * water ({@link TerrainTiles#wet}).
+     * of trees hold none, except loose ground that is also building rubble ({@link Kindling#rubble}: {@link FireStorm.Surface#LOOSE});
+     * anything else is built (a building lit through its windows); otherwise a terrain-map tile tells land or water
+     * ({@link TerrainTiles#wet}).
      */
     static FireStorm.Surface surface(ClientLevel level) {
         return (x, z) -> {
@@ -112,9 +113,10 @@ final class FireStorms {
             if (!state.getFluidState().isEmpty() || state.is(BlockTags.ICE) || state.is(Blocks.SNOW_BLOCK) || state.is(Blocks.POWDER_SNOW)) return FireStorm.Surface.WET;
             if (Kindling.of(state) != null) return FireStorm.Surface.FUEL;
             // turf, or soil the flash burned it to, carries a grass bed where the biome cures grass
-            if (state.is(BlockTags.DIRT)) return Kindling.cured(chunk.getNoiseBiome(QuartPos.fromBlock(x), QuartPos.fromBlock(y), QuartPos.fromBlock(z)))
-                    ? FireStorm.Surface.FUEL : FireStorm.Surface.NONE;
-            return natural(state) ? FireStorm.Surface.NONE : FireStorm.Surface.FUEL;
+            if (state.is(BlockTags.DIRT) && Kindling.cured(chunk.getNoiseBiome(QuartPos.fromBlock(x), QuartPos.fromBlock(y), QuartPos.fromBlock(z))))
+                return FireStorm.Surface.FUEL;
+            if (!state.is(BlockTags.DIRT) && !natural(state)) return FireStorm.Surface.FUEL;
+            return Kindling.rubble(state) ? FireStorm.Surface.LOOSE : FireStorm.Surface.NONE;
         };
     }
 

@@ -273,11 +273,13 @@ public final class FireStorm {
      * surveyed block by block. By zone-cell index, like the grid.
      */
     private float[] fuel = new float[0];
-    /** Points classified block by block ({@link Surface#FUEL} or {@link Surface#NONE}) and the fueled among them, over all surveys. */
+    /** Survey points read block by block ({@link Surface#FUEL} or {@link Surface#NONE}) and the fueled among them. */
     private long classified, fueled;
     /** Cell seen at least once ({@link #survey}): player leaves, chunks unload — retain what was seen. */
     private boolean[] surveyed = new boolean[0];
-    /** Cell classified block by block: settled (its first reading, before the wave if the client saw it then). */
+    /** Block reading per survey point ({@link Surface#FUEL} or {@link Surface#NONE}, −1 none yet): a point keeps its first one. */
+    private byte[] point = new byte[0];
+    /** Cell whose every point has its block reading: settled. */
     private boolean[] frozen = new boolean[0];
     /** Survey order: zone-cell indices, nearest to the eye first. */
     private int[] order = new int[0];
@@ -400,9 +402,13 @@ public final class FireStorm {
     @FunctionalInterface
     interface Surface {
         /** What a column top tells the fire model. */
-        int UNKNOWN = -1, NONE = 0, FUEL = 1, WET = 2, LAND = 3;
+        int UNKNOWN = -1, NONE = 0, FUEL = 1, WET = 2, LAND = 3, LOOSE = 4;
 
-        /** {@link #UNKNOWN}; {@link #NONE} — ground without flash fuel; {@link #FUEL}; {@link #WET} — water, ice or snow; {@link #LAND} — dry land, blocks unknown. */
+        /**
+         * {@link #UNKNOWN}; {@link #NONE} — ground without flash fuel; {@link #FUEL}; {@link #WET} — water, ice or snow; {@link #LAND} — dry
+         * land, blocks unknown; {@link #LOOSE} — loose ground the ruins also leave as building rubble ({@code Kindling#rubble}): ground
+         * before the cell's wave, unknown land after it.
+         */
         int at(int x, int z);
     }
 
@@ -415,17 +421,19 @@ public final class FireStorm {
      * Client tick: fuel fraction in the next {@link #SURVEY_CELLS} zone cells, nearest to the eye first ({@code eye} when the survey
      * starts), cycling through them — 3 × 3 points per cell, using client knowledge ({@code surface}: local chunks block by block,
      * terrain-map tiles land or water). The fire model has no terrain knowledge, while a burning sea, glacier or green meadow is
-     * immediately visible. Blocks tell the fuel before and after the wave alike: the wave strips green turf to bare soil, which still
-     * reads as no fuel, and lands a building as piles of its own blocks, which still read as built; so a client that arrives after the
-     * wave sees the same fuel as one present before it. A cell classified block by block keeps its first fraction (later rubble cannot
-     * unfuel a city its owner saw standing); map-tile land takes the fueled share of the points classified so far (all of it while none
-     * are). Where nothing is or was known, the cell follows ground zero as resolved at the burst
+     * immediately visible. Blocks tell the fuel before and after the wave alike: the wave strips green turf to soil, which still reads
+     * as no fuel, and lands a building as piles of its own full blocks, which still read as built; its broken small parts land as loose
+     * ground ({@link Surface#LOOSE}), which after the cell's wave counts as land of unknown fuel. So a client that arrives after the wave
+     * sees nearly the fuel one present before it saw. Each survey point keeps its first block reading (later rubble cannot unfuel a city
+     * its owner saw standing, and a point read once counts once); a cell settles when all its points are read. Map-tile land and
+     * loose rubble take the fueled share of the points read so far (all of it while none are). Where nothing is or was known, the cell
+     * follows ground zero as resolved at the burst
      * ({@code water}, {@link BurstWater}: chunk, map tile or a ground-height guess for a sea burst): otherwise a distant sea burst would
      * burn the sea. Nothing is decided until that is settled, and later ground-zero changes do not reach the storm: a crater that
      * fills or whose map tile reads water would otherwise mark every unseen cell wet within one survey sweep, and the whole storm would
-     * go out while the city still burns.
+     * go out while the city still burns. {@code ticks} — detonation clock.
      */
-    void survey(Surface surface, BurstWater water, Vec3 eye) {
+    void survey(Surface surface, BurstWater water, Vec3 eye, double ticks) {
         Grid g = grid;
         if (g == null || g.index.length == 0 || !water.settled()) return;
         double unknownWet = water.under();
@@ -435,6 +443,9 @@ public final class FireStorm {
             fuel = new float[g.index.length];
             Arrays.fill(fuel, (float) (1 - unknownWet));
             surveyed = new boolean[g.index.length];
+            point = new byte[g.index.length * SURVEY_POINTS * SURVEY_POINTS];
+            Arrays.fill(point, (byte) -1);
+            classified = fueled = 0;
             frozen = new boolean[g.index.length];
             order = nearestFirst(g, b, half, eye);
             surveyAt = 0;
@@ -448,26 +459,30 @@ public final class FireStorm {
             if (frozen[k]) continue;
             int c = g.index[k];
             double x0 = b.x + (c % g.side) * g.cell - half, z0 = b.z + (double) (c / g.side) * g.cell - half;
+            boolean ruined = ticks >= g.arrival[k];
             int known = 0, fuels = 0, land = 0, classes = 0;
             for (int j = 0; j < SURVEY_POINTS; j++) {
                 for (int i = 0; i < SURVEY_POINTS; i++) {
-                    int w = surface.at(Mth.floor(x0 + (i + 0.5) * step), Mth.floor(z0 + (j + 0.5) * step));
+                    int at = (k * SURVEY_POINTS + j) * SURVEY_POINTS + i, w = point[at];
+                    if (w < 0) {
+                        w = surface.at(Mth.floor(x0 + (i + 0.5) * step), Mth.floor(z0 + (j + 0.5) * step));
+                        if (w == Surface.LOOSE) w = ruined ? Surface.LAND : Surface.NONE;
+                        if (w == Surface.FUEL || w == Surface.NONE) {
+                            point[at] = (byte) w;
+                            classified++;
+                            if (w == Surface.FUEL) fueled++;
+                        }
+                    }
                     if (w == Surface.UNKNOWN) continue;
                     known++;
                     if (w == Surface.LAND) land++;
-                    if (w == Surface.FUEL || w == Surface.NONE) {
-                        classes++;
-                        classified++;
-                    }
-                    if (w == Surface.FUEL) {
-                        fuels++;
-                        fueled++;
-                    }
+                    if (w == Surface.FUEL || w == Surface.NONE) classes++;
+                    if (w == Surface.FUEL) fuels++;
                 }
             }
             if (known == 0 && surveyed[k]) continue;
             surveyed[k] |= known > 0;
-            frozen[k] = classes > 0 && land == 0;
+            frozen[k] = classes == SURVEY_POINTS * SURVEY_POINTS;
             float v = known == 0 ? (float) (1 - unknownWet) : (float) ((fuels + land * landFuel()) / known);
             if (v != fuel[k]) {
                 fuel[k] = v;

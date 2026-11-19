@@ -62,6 +62,19 @@ public final class Kindling {
         return mask;
     }
 
+    /**
+     * Whether {@code st} is loose ground the ruins also leave as rubble of broken building parts ({@code RuinPlanner.STONE_RUBBLE},
+     * {@code WOOD_RUBBLE}): gravel, rooted dirt, andesite, tuff. Before the wave it is ground; after it, a reader cannot tell it from
+     * a fallen building. Coarse dirt is left out: the wave strips green turf to it, so it reads as ground (no fuel) — a fallen wooden
+     * house still leaves its full blocks and the rest of its rubble. Cobblestone is not ground: it reads as built anyway.
+     */
+    public static boolean rubble(BlockState st) {
+        if (st.is(Blocks.COARSE_DIRT) || st.is(Blocks.COBBLESTONE)) return false;
+        for (BlockState r : RuinPlanner.STONE_RUBBLE) if (st.is(r.getBlock())) return true;
+        for (BlockState r : RuinPlanner.WOOD_RUBBLE) if (st.is(r.getBlock())) return true;
+        return false;
+    }
+
     /** Whether {@code st} is turf that carries a grass bed. */
     public static boolean turf(BlockState st) {
         return st.is(Blocks.GRASS_BLOCK);
