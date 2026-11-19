@@ -1077,10 +1077,7 @@ final class Sandbox {
             if (c.near()) {
                 buildHouses(server, BlockPos.containing(site));
                 furnish(server, BlockPos.containing(site));
-                if (c.dry()) {
-                    BlockPos o = BlockPos.containing(site);
-                    run(server, "fillbiome %d %d %d %d %d %d minecraft:savanna".formatted(o.getX() - 160, GROUND - 8, o.getZ() - 160, o.getX() + 160, GROUND + 40, o.getZ() + 160));
-                }
+                if (c.dry()) savanna(server, BlockPos.containing(site), 160);
                 sameDetonationNumber(server);
                 sameGameTime(server, at);
             }
@@ -1149,6 +1146,24 @@ final class Sandbox {
                 "setblock %d %d %d minecraft:hay_block".formatted(x - 16, y + 1, z + 6),
                 "setblock %d %d %d minecraft:hay_block".formatted(x - 18, y + 1, z - 8),
                 "setblock %d %d %d minecraft:hay_block".formatted(x + 18, y + 1, z - 8))) run(server, c);
+    }
+
+    /** Savanna (cured grass) over a square of half-side {@code r} around {@code o}, like {@code /fillbiome} without its volume limit. */
+    private static void savanna(MinecraftServer server, BlockPos o, int r) {
+        var level = server.overworld();
+        var biome = level.registryAccess().registryOrThrow(net.minecraft.core.registries.Registries.BIOME)
+                .getHolderOrThrow(net.minecraft.world.level.biome.Biomes.SAVANNA);
+        List<net.minecraft.world.level.chunk.ChunkAccess> changed = new ArrayList<>();
+        for (int cx = (o.getX() - r) >> 4; cx <= (o.getX() + r) >> 4; cx++) {
+            for (int cz = (o.getZ() - r) >> 4; cz <= (o.getZ() + r) >> 4; cz++) {
+                var chunk = level.getChunk(cx, cz);
+                chunk.fillBiomesFromNoise((x, y, z, sampler) -> biome, level.getChunkSource().randomState().sampler());
+                chunk.setUnsaved(true);
+                changed.add(chunk);
+            }
+        }
+        level.getChunkSource().chunkMap.resendBiomesForChunks(changed);
+        Incoming.LOG.info("SANDBOX savanna: {} chunks", changed.size());
     }
 
     /**

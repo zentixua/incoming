@@ -175,19 +175,15 @@ final class DiskShots {
 
     /**
      * Cells whose surface biome cures grass ({@link Kindling#curedCells}), parsing only the biomes of the sections that hold the
-     * surface. Without a motion heightmap on disk, the highest nonempty section stands for the surface.
+     * surface.
      */
     private static int cured(Format f, ListTag list, PalettedContainer<BlockState>[] states, int[] heights, int unprimed) {
-        int motion = ChunkShot.type(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING);
-        int top = states.length - 1;
-        while (top > 0 && states[top] == null) top--;
-        int topY = f.minY + (top << 4) + 15;
-        boolean primed = (unprimed & 1 << motion) == 0;
+        java.util.function.IntUnaryOperator surface = surface(f.minY, states, heights, unprimed);
         @SuppressWarnings("unchecked")
         PalettedContainerRO<Holder<Biome>>[] parsed = (PalettedContainerRO<Holder<Biome>>[]) new PalettedContainerRO<?>[f.sections];
         Codec<PalettedContainerRO<Holder<Biome>>> codec = PalettedContainer.codecRO(f.biomes.asHolderIdMap(), f.biomes.holderByNameCodec(),
                 PalettedContainer.Strategy.SECTION_BIOMES, f.biomes.getHolderOrThrow(Biomes.PLAINS));
-        return Kindling.curedCells(f.minY, c -> primed ? heights[motion * 256 + c] : topY + 1, (lx, y, lz) -> {
+        return Kindling.curedCells(f.minY, surface, (lx, y, lz) -> {
             int index = (y - f.minY) >> 4;
             if (index < 0 || index >= f.sections) return null;
             if (parsed[index] == null) {
@@ -200,6 +196,23 @@ final class DiskShots {
             }
             return parsed[index].get(lx >> 2, (y >> 2) & 3, lz >> 2);
         });
+    }
+
+    /**
+     * First air above a column (index {@code lz << 4 | lx}): the disk motion heightmap, or without it (a map from an editor) the
+     * first air above the highest non-air block, as priming would find it up to plants and leaves ({@link Read#primed} runs later,
+     * on the server thread).
+     */
+    private static java.util.function.IntUnaryOperator surface(int minY, PalettedContainer<BlockState>[] states, int[] heights, int unprimed) {
+        int motion = ChunkShot.type(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING);
+        if ((unprimed & 1 << motion) == 0) return c -> heights[motion * 256 + c];
+        return c -> {
+            for (int i = states.length - 1; i >= 0; i--) {
+                if (states[i] == null) continue;
+                for (int y = 15; y >= 0; y--) if (!states[i].get(c & 15, y, c >> 4).isAir()) return minY + (i << 4) + y + 1;
+            }
+            return minY;
+        };
     }
 
     /** Flash-layer mark in chunk data (attachment, as NeoForge writes {@code neoforge:attachments}); 0 absent. */
@@ -332,13 +345,8 @@ final class DiskShots {
             PalettedContainer<BlockState> c = sections.sections()[i].getStates();
             if (c.maybeHas(st -> !st.isAir())) states[i] = c;
         }
-        int motion = ChunkShot.type(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING);
-        int top = states.length - 1;
-        while (top > 0 && states[top] == null) top--;
-        int topY = f.minY + (top << 4) + 15;
-        boolean primed = (unprimed & 1 << motion) == 0;
         LevelChunkSection[] all = sections.sections();
-        int cured = Kindling.curedCells(f.minY, c -> primed ? heights[motion * 256 + c] : topY + 1, (lx, y, lz) -> {
+        int cured = Kindling.curedCells(f.minY, surface(f.minY, states, heights, unprimed), (lx, y, lz) -> {
             int index = (y - f.minY) >> 4;
             return index < 0 || index >= all.length ? null : all[index].getNoiseBiome(lx >> 2, (y >> 2) & 3, lz >> 2);
         });

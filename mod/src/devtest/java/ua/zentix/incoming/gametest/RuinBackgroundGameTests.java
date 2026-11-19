@@ -230,6 +230,8 @@ public final class RuinBackgroundGameTests {
      */
     @GameTest(template = "range", timeoutTicks = 100, batch = "nuke_background_disk", skyAccess = true)
     public static void diskPlanMatchesMemoryPlan(GameTestHelper h) {
+        // street turf with cured grass: fire the wave leaves (roof fuel goes with the roofs)
+        ScorchGameTests.fillBiome(h, 0, 63, ScorchGameTests.DRY_MEADOW);
         RuinCostGameTests.city(h);
         ServerLevel level = h.getLevel();
         // 15 kt 160 blocks over the middle of the site (1 block = 10 m): roofs stand (~3–4 psi) and take ~13 cal/cm²

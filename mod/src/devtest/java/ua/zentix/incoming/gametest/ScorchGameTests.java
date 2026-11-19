@@ -1002,8 +1002,9 @@ public final class ScorchGameTests {
                 new BlockPos(fx + 14, ground + 1, fz + 14)};
         for (BlockPos p : hay) level.setBlock(p, Blocks.HAY_BLOCK.defaultBlockState(), Block.UPDATE_CLIENTS);
         // boxes 5×5 outside, interior 3×3×2: glass roof with wool; stone roof with wool; plank house
-        box(level, fx + 3, fz + 3, ground, Blocks.GLASS, Blocks.GLASS, Blocks.WHITE_WOOL);
-        box(level, fx + 9, fz + 3, ground, Blocks.STONE_BRICKS, Blocks.STONE_BRICKS, Blocks.WHITE_WOOL);
+        // the glass box nearer the burst (it lies toward +x, +z of the far chunk): the stone box must not shade it
+        box(level, fx + 9, fz + 3, ground, Blocks.GLASS, Blocks.GLASS, Blocks.WHITE_WOOL);
+        box(level, fx + 3, fz + 3, ground, Blocks.STONE_BRICKS, Blocks.STONE_BRICKS, Blocks.WHITE_WOOL);
         box(level, fx + 3, fz + 9, ground, Blocks.OAK_PLANKS, Blocks.OAK_PLANKS, null);
         Detonation d = NuclearGameTests.detonation(h, zero, Yield.optimalBurstHeight(15) * scaleFor(g, far, 30), 15, (float) scaleFor(g, far, 30));
         for (LevelChunk c : inside) {
@@ -1023,13 +1024,19 @@ public final class ScorchGameTests {
                 turf += f[1];
                 burned += f[0];
             }
+            // fire on the floor of the glass box stands on turf too: it is the wool's
+            for (int dx = 1; dx <= 3; dx++) {
+                for (int dz = 1; dz <= 3; dz++) {
+                    if (level.getBlockState(new BlockPos(fx + 9 + dx, ground + 1, fz + 3 + dz)).getBlock() instanceof BaseFireBlock) turf--;
+                }
+            }
             h.assertTrue(burned > 0, "the flash burned no turf: nothing checked; " + setup);
             h.assertTrue(turf == 0, turf + " fires on green turf; " + setup);
             int bales = 0;
             for (BlockPos p : hay) if (level.getBlockState(p.above()).getBlock() instanceof BaseFireBlock) bales++;
             h.assertTrue(bales >= 3, "fire on " + bales + " of 4 hay bales; " + setup);
-            h.assertTrue(firesIn(level, fx + 3, fz + 3, ground) > 0, "no fire behind the glass; " + setup);
-            h.assertTrue(firesIn(level, fx + 9, fz + 3, ground) == 0, "fire in a closed stone box; " + setup);
+            h.assertTrue(firesIn(level, fx + 9, fz + 3, ground) > 0, "no fire behind the glass; " + setup);
+            h.assertTrue(firesIn(level, fx + 3, fz + 3, ground) == 0, "fire in a closed stone box; " + setup);
             h.assertTrue(firesIn(level, fx + 3, fz + 9, ground) == 0, "fire in or on a plank house; " + setup);
             int savannaFires = surface(h, dry)[1];
             h.assertTrue(savannaFires > 64, "cured grass: " + savannaFires + " fires of 256 columns; " + setup);
