@@ -385,7 +385,7 @@ const float WALL_HORIZON_WHITE = 0.6;
 // presentation: sunlight scattered down the head's billowy outer skin lights its faces (a cloud's shaded side is lit by its sunlit
 // neighbouring billows; the slab model above lights a face only through the dust over it): this share of the sun on a horizontal
 // surface, reflected as by a thick layer of the dust (R∞, which falls faster in blue: warm), reaches the face through its skin
-const float WALL_SUN_FACE = 0.7;
+const float WALL_SUN_FACE = 1.0;
 
 // Head lobe tiles: (smaller tile of the two octaves, larger, share of the larger), blocks, at least a block
 vec3 wallLobes(mat4 V) {
@@ -527,18 +527,23 @@ void wall(mat4 V, WallAt h, vec3 keyDir, vec3 sunDir, vec3 lightDir, float smoke
     s.shadeDown += dev * max(-keyDir.y, 0.0);
     s.sigma += hd;
     s.head += hd;
-    s.albedo += hd * w;
+    // what leaves the head's thick dust is light scattered many times inside it: its colour is the thick layer's reflectance R∞(ω′)
+    // per channel (u = 2k/(3(1 − ωg)), PallLight.reflectance), blue/red 0.55 for the reference dust, not one scattering's ω (0.84):
+    // ω × R∞/ω relative to its brightest channel (19.11 frame judge: a greige face, saturation 0.22–0.25 against the footage's 0.45–0.67)
+    vec3 k = vec3(pallK(w.r, g), pallK(w.g, g), pallK(w.b, g));
+    vec3 ru = 2.0 * k / (3.0 * (1.0 - w * g)), rInf = (1.0 - ru) / (1.0 + ru);
+    vec3 thick = rInf / max(w, vec3(1e-3));
+    thick /= max(max(thick.r, thick.g), max(thick.b, 1e-4));
+    s.albedo += hd * w * thick;
     // The head is an aerosol volume lit from all sides, not a layer lit from its top: besides the layer light from above (the two-stream
     // through the dust over the point) and the sun's single scattering with its phase (beams), the half of the sphere around the
     // horizon brings the horizon sky through the dust toward the face (side) and the lit ground through the dust below (down): ground
     // albedo × (sun on the ground + sky). Diffuse light fades in dust as e^(−kτ), k² = 3(1 − ω)(1 − ωg) (pallK): it reddens with depth by
     // itself. Without this the face of the dense lofted front had the zenith sky's blue or nothing (19.11 frames)
-    vec3 k = vec3(pallK(w.r, g), pallK(w.g, g), pallK(w.b, g));
     vec3 horizon = mix(PallSkyLight, vec3(dot(PallSkyLight, vec3(0.2126, 0.7152, 0.0722))), WALL_HORIZON_WHITE);
     vec3 below = mix(PALL_LAND, PALL_SEA, h.wet) * (PallSunLight * max(sunDir.y, 0.0) + PallSkyLight);
-    vec3 ru = 2.0 * k / (3.0 * (1.0 - w * g)), rInf = (1.0 - ru) / (1.0 + ru);
     vec3 face = 0.5 * horizon + WALL_SUN_FACE * rInf / max(w, vec3(1e-3)) * PallSunLight * max(sunDir.y, 0.0);
-    s.side += hd * w * (exp(-k * min(side, gTauBack)) * face + 0.5 * exp(-k * down) * below);
+    s.side += hd * w * thick * (exp(-k * min(side, gTauBack)) * face + 0.5 * exp(-k * down) * below);
     s.phase += hd * g;
 }
 

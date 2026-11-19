@@ -597,7 +597,7 @@ public final class NukePall {
      * presentation: sunlight scattered down the head's billowy outer skin lights its faces (copy of {@code WALL_SUN_FACE}): this share of
      * the sun on a horizontal surface, reflected as by a thick layer of the dust (R∞), reaches the face through its skin.
      */
-    static final double WALL_SUN_FACE = 0.7;
+    static final double WALL_SUN_FACE = 1.0;
 
     static void dustLight(float[] wall, float[] glow, Sky sky, double wind, double gx, double gy, double gz, double up, double smoke, double sand,
                           float[] into) {
@@ -623,7 +623,14 @@ public final class NukePall {
         // ball light is a beam from cap center, like the mushroom body (CloudPuffs.ball), × eye adaptation
         double lit = CloudPuffs.ball(sky.exposure, glow[0], ll);
         double burn = CloudPuffs.burn(r, 0, glow[1], glow[3]) * (1 - 0.75 * sky.day);
-        double[] lin = new double[3];
+        double[] lin = new double[3], thick = new double[3];
+        double thickMax = 1e-4;
+        // what leaves the head's thick dust has the thick layer's colour R∞(ω′) per channel, relative to its brightest (fx_pall wall)
+        for (int c = 0; c < 3; c++) {
+            double w = Mth.lerp(smoke, Mth.lerp(sand, DUST_W[c], SAND_W[c]), SMOKE_W[c]);
+            thick[c] = PallLight.reflectance(w, DUST_G) / Math.max(w, 1e-3);
+            thickMax = Math.max(thickMax, thick[c]);
+        }
         for (int c = 0; c < 3; c++) {
             double w = Mth.lerp(smoke, Mth.lerp(sand, DUST_W[c], SAND_W[c]), SMOKE_W[c]);
             double fire = FIRE[c];
@@ -642,7 +649,7 @@ public final class NukePall {
             double rInf = PallLight.reflectance(w, DUST_G);
             double toFace = 0.5 * horizon + WALL_SUN_FACE * rInf / Math.max(w, 1e-3) * sky.sun[c] * Math.max(sky.sy, 0);
             double around = Math.exp(-k * side) * toFace + 0.5 * Math.exp(-k * below) * PallLight.LAND * (sky.sun[c] * Math.max(sky.sy, 0) + sky.sky[c]);
-            lin[c] = w * (Math.max(field, 0) + beams + from + around);
+            lin[c] = w * thick[c] / thickMax * (Math.max(field, 0) + beams + from + around);
         }
         // to screen like pall (fx_pall: toward white, shoulder)
         PallLight.screen(lin, into);
