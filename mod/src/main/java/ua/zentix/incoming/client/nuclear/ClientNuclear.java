@@ -31,8 +31,8 @@ import java.util.Map;
 public final class ClientNuclear {
     /**
      * Client detonation. Live (neither world entry nor Flashback replay seeking) includes flash, sound
-     * and shake. Visual time is the {@link AgeClock}: anchored to the server's own age for the detonation, never ahead of
-     * it by more than a tick, never backward, catching up without jumps.
+     * and shake. Visual time is the {@link AgeClock}: continuous in frame time, steered to the server's own age for the
+     * detonation, at most three ticks ahead of it, never backward, catching up without jumps.
      */
     public static final class Active {
         public final Detonation d;
@@ -134,87 +134,130 @@ public final class ClientNuclear {
     }
 
     /**
-     * The detonation age a client shows, in ticks. The law: the server's own age for the detonation (game time at send minus
-     * detonation time) arrives with each anchor — the live detonation packet (age 0) and {@code S2C.NukeTick}, sent every server
-     * tick while the dimension holds a show; the target is that age plus the client's own ticks since the anchor arrived,
-     * at most one while anchors stream (the next comes each server tick: a client ticking faster than a lagging server waits
-     * for it), unlimited without a stream (a recording made before it, a detonation past its show). Each client tick the shown
-     * age moves toward the target by at most {@link #MAX_STEP} and never back. So the drawn burst, wave, sound and body
-     * effects are never more than a tick ahead of the server's age, never repeat, and catch up after dropped ticks or a
-     * frame stall without a jump. The client level clock is not used: vanilla increments it on its own and time packets
-     * set it, so a lead or lag present at arrival, or alternating packet delays, became false age (reviews of #668: a lead
-     * of 30 at arrival made a fresh 15 kt front 621 m instead of 174 m; alternating delayed syncs added 10 false ticks a
-     * pair, 200 shown for 160 elapsed; a lag of 30 at arrival showed 50 for 20). Pure: checked by {@code ClientNuclearTest}.
+     * The detonation age a client shows, in ticks: a continuous function of the client's own time (its ticks plus the frame's
+     * partial tick), steered toward the server's age. The server's own age for the detonation (game time at send minus
+     * detonation time) arrives with each anchor: the live detonation packet (age 0) and {@code S2C.NukeTick}, sent every server
+     * tick while the dimension holds a show. The server's age now is estimated as the latest anchor plus the server's rate
+     * (anchor ages per own tick over the last second) times the own time since it arrived, less {@link #DELAY} (a tick of
+     * buffer for anchor jitter). The shown age advances every frame at the server's rate times a steering factor
+     * 1 + error / {@link #RESPONSE} in [{@link #SLOWEST}, {@link #FASTEST}]: within 1.25 for the error of an anchor stream's
+     * jitter, up to three times for a lag after a frozen client. It never runs backward, never more than {@link #LEAD} past the
+     * latest anchor, and eases to a stop over {@link #EASE} ticks only when no anchor has come for {@link #STALE} ticks of
+     * frames (a stalled server; ticks a frozen client could not process packets in do not count). Without a stream (a
+     * recording made before it, a detonation past its show) it follows its own time from the last anchor, uncapped.
+     * <p>
+     * The previous law (#668) let the age run at most one tick past the latest anchor in whole-tick steps: frames inside a tick
+     * held at an integer age until the next anchor landed, then jumped. On a 1 Mt wave rig 40-43 % of frames held, up to
+     * 149 ms, and the wall moved in 20 Hz steps (wave-proposal runs3). The client level clock is not used: vanilla increments
+     * it on its own and time packets set it, so a lead or lag present at arrival became false age (reviews of #668: a lead of
+     * 30 at arrival made a fresh 15 kt front 621 m instead of 174 m). Pure: checked by {@code ClientNuclearTest}, also on the
+     * rig's recorded anchor stream.
      */
     static final class AgeClock {
-        /** Most ticks the shown age advances in one client tick: three-times speed recovers a second's lag in half a second. */
-        static final int MAX_STEP = 3;
+        /** Ticks the shown age stays behind the estimated server age: one tick of buffer absorbs anchor arrival jitter. */
+        static final double DELAY = 1;
+        /** Ticks of error that change the speed by 100 %: a tick of jitter changes it by a tenth. */
+        static final double RESPONSE = 10;
+        /** Slowest and fastest steering relative to the server's pace; the fastest is also the most own ticks a tick. */
+        static final double SLOWEST = 0.8, FASTEST = 3;
+        /** Most ticks the shown age runs past the latest anchor (ruins and debris arrive two or more ticks after the wave). */
+        static final double LEAD = 3;
+        /** Frame time without a new anchor before the age eases to a stop, and the ease's length, ticks (100 ms). */
+        static final double STALE = 3, EASE = 2;
+        /** Own time over which the server's rate is measured, ticks. */
+        static final double RATE_WINDOW = 20;
         /** The server's age at the latest anchor's send. */
         private long anchor;
-        /** Own client ticks since that anchor arrived. */
-        private long since;
-        /** Anchors arrive every server tick (current server, show running): extrapolate at most one tick past the latest. */
+        /** Own time when it arrived, and at the first frame after it (a frozen client processes packets only between frames). */
+        private double anchorAt, seenAt;
+        private boolean unseen;
+        /** Recent anchors (own time, server age): the server's rate. */
+        private final java.util.ArrayDeque<double[]> recent = new java.util.ArrayDeque<>();
+        /** Anchors arrive every server tick (current server, show running). */
         private boolean streamed;
         /** The show is over: anchors sent for other detonations' shows no longer cap this one. */
         private boolean over;
         /** A past detonation (entry, seek) shown from an estimate: the server's first anchor sets the age whole. */
         private boolean estimated;
-        private long shown;
-        /** Largest age returned to a frame: frames never step back when the age holds. */
-        private double framed;
+        /** Own client ticks. */
+        private long own;
+        /** Own time of the last advance, and the shown age there. */
+        private double at, shown;
 
         /** {@code start} — the age now; {@code live} — a fresh detonation whose packet is the server's anchor at age 0. */
         AgeClock(long start, boolean live) {
             anchor = start;
             shown = start;
-            framed = start;
             streamed = live;
             estimated = !live;
+            recent.add(new double[]{0, start});
         }
 
         /** An anchor: the server's age for this detonation when the packet was sent ({@code S2C.NukeTick}). */
         void anchor(long serverAge) {
             anchor = Math.max(0, serverAge);
-            since = 0;
+            anchorAt = at;
+            unseen = true;
             streamed = !over;
             if (estimated) {
                 estimated = false;
                 shown = anchor;
-                framed = anchor;
+                recent.clear();
             }
+            recent.add(new double[]{at, anchor});
+            while (recent.size() > 2 && at - recent.peekFirst()[0] > RATE_WINDOW) recent.pollFirst();
         }
 
-        /** The show is over: no more per-tick anchors (ended shows' list in {@code S2C.NukeClock}); own ticks carry on. */
+        /** The show is over: no more per-tick anchors (ended shows' list in {@code S2C.NukeClock}); own time carries on. */
         void ended() {
             over = true;
             streamed = false;
         }
 
-        private long target(long ticksSince) {
-            return anchor + (streamed ? Math.min(ticksSince, 1) : ticksSince);
+        /** The server's age per own tick over the last second; 1 until a quarter second of anchors is known. */
+        private double rate() {
+            double[] first = recent.peekFirst(), last = recent.peekLast();
+            double span = last[0] - first[0];
+            return span < 5 ? 1 : Math.clamp((last[1] - first[1]) / span, 0.25, FASTEST);
         }
 
-        private long step(long target) {
-            return Math.max(0, Math.min(MAX_STEP, target - shown));
+        private void advance(double now) {
+            if (now <= at) return;
+            double dt = now - at;
+            at = now;
+            if (unseen) {
+                seenAt = now;
+                unseen = false;
+            }
+            // error against the target at the step's start (the step itself is not an error)
+            if (!streamed) {
+                double target = anchor + (now - dt - anchorAt);
+                shown += dt * Math.clamp(1 + (target - shown) / RESPONSE, SLOWEST, FASTEST);
+                return;
+            }
+            double rate = rate();
+            double target = anchor + rate * (now - dt - anchorAt) - DELAY;
+            double speed = Math.min(rate * Math.clamp(1 + (target - shown) / RESPONSE, SLOWEST, FASTEST), FASTEST);
+            double stale = now - seenAt;
+            double ease = stale <= STALE ? 1 : Math.max(0, 1 - (stale - STALE) / EASE);
+            shown = Math.max(shown, Math.min(shown + dt * speed * ease, anchor + LEAD));
         }
 
         /** One client tick. */
         void tick() {
-            since++;
-            shown += step(target(since));
+            own++;
+            advance(own);
         }
 
-        /** The shown age in whole ticks. */
-        long shown() {
+        /** The shown age now, ticks (after the last tick or frame). */
+        double shown() {
             return shown;
         }
 
-        /** The shown age in a frame {@code partial} of a tick after the last: the coming step's share, never less than before. */
+        /** The shown age in a frame {@code partial} of a tick after the last client tick: never less than before. */
         double at(double partial) {
-            double v = shown + partial * step(target(since + 1));
-            if (v < framed) v = framed;
-            framed = v;
-            return v;
+            advance(own + partial);
+            return shown;
         }
     }
 
