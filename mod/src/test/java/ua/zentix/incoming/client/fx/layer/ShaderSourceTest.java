@@ -528,6 +528,86 @@ class ShaderSourceTest {
         assertEquals(List.of(), unclosed("struct S {\n    float a;\n};\nvoid main() {\n}\n"));
     }
 
+    /**
+      * Every module-level variable that is not a constant, uniform or stage input/output starts with a value (#656): a
+      * program whose main never assigns one reads whatever the register held — zero on NVIDIA, anything on other drivers.
+      * Mesa reported 20 such globals of {@code fx_pall.glsl} read uninitialized in five nuclear programs (gMushes is a loop
+      * bound, gSunK a cache key).
+     */
+    @Test
+    void everyGlobalStartsWithAValue() throws IOException, URISyntaxException {
+        List<String> bad = everyShader(ShaderSourceTest::uninitialized);
+        assertTrue(bad.isEmpty(), "global without an initializer: " + bad);
+    }
+
+    @Test
+    void findsAnUninitializedGlobal() {
+        assertEquals(List.of(4, 5, 7), uninitialized("""
+                uniform vec4 A;
+                const int N = 4;
+                in vec2 texCoord0;
+                int gCount;
+                vec2 gSpan[N];
+                float gA = 1.0, gB = vec2(1.0, 2.0).x;
+                vec3 gDir = vec3(0.0), gSun;
+                float f(float x);
+                struct S {
+                    float a;
+                };
+                float f(float x) {
+                    float local;
+                    return x;
+                }
+                out vec4 fragColor;
+                """));
+    }
+
+    /** Lines of module-level variable declarations with a declarator that has no initializer. */
+    private static List<Integer> uninitialized(String source) {
+        String text = blankComments(source);
+        List<Integer> found = new ArrayList<>();
+        int depth = 0, start = 0;
+        for (int i = 0; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if (c == '{') {
+                if (depth++ == 0) start = -1;
+            } else if (c == '}') {
+                if (--depth == 0) start = i + 1;
+            } else if (c == ';' && depth == 0) {
+                if (start >= 0 && unsetDeclarator(text.substring(start, i))) {
+                    int at = start;
+                    while (Character.isWhitespace(text.charAt(at))) at++;
+                    found.add((int) text.substring(0, at).chars().filter(ch -> ch == '\n').count() + 1);
+                }
+                start = i + 1;
+            }
+        }
+        return found;
+    }
+
+    private static final Pattern NOT_A_VARIABLE = Pattern.compile(
+            "^(const|uniform|in|out|inout|flat|smooth|noperspective|centroid|layout|precision|struct|varying|attribute)\\b");
+
+    /** A top-level statement declaring variables, one of which has no {@code =}; prototypes and qualified names pass. */
+    private static boolean unsetDeclarator(String statement) {
+        String s = statement.strip();
+        if (s.isEmpty() || NOT_A_VARIABLE.matcher(s).find()) return false;
+        int eq = s.indexOf('='), paren = s.indexOf('(');
+        if (paren >= 0 && (eq < 0 || paren < eq)) return false;
+        String declarators = s.replaceFirst("^\\w+(\\s*\\[[^]]*])?\\s+", "");
+        int level = 0, from = 0;
+        for (int i = 0; i <= declarators.length(); i++) {
+            char c = i < declarators.length() ? declarators.charAt(i) : ',';
+            if (c == '(' || c == '[') level++;
+            else if (c == ')' || c == ']') level--;
+            else if (c == ',' && level == 0) {
+                if (!declarators.substring(from, i).contains("=")) return true;
+                from = i + 1;
+            }
+        }
+        return false;
+    }
+
     /** Lines of top-level declarations inside a body, and the last line if a “{” is left without a pair. */
     private static List<Integer> unclosed(String source) {
         String[] lines = blankComments(source).split("\n", -1);

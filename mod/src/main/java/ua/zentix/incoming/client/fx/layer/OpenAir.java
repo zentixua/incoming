@@ -264,7 +264,7 @@ public final class OpenAir {
         s.safeGetUniform("PallOpenWrap").set((float) Math.floorMod(x0, SIZE_XZ), (float) Math.floorMod(y0, SIZE_Y), (float) Math.floorMod(z0, SIZE_XZ));
         int unit = GlStateManager._getActiveTexture();
         GlStateManager._activeTexture(GL13.GL_TEXTURE0 + UNIT);
-        GL11.glBindTexture(GL12.GL_TEXTURE_3D, on ? texture : 0);
+        GL11.glBindTexture(GL12.GL_TEXTURE_3D, on ? texture : Empty3D.texture());
         GlStateManager._activeTexture(unit);
         // unit index into the program itself on every bind: Veil recompiles shaders, resetting program
         // uniforms (a one-time unit assignment would vanish — window sampler on unit 0); restore current program

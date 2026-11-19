@@ -225,6 +225,7 @@
   "incoming.weapon.nuke": "Nuclear",
   "incoming.weapon.nuke.desc": "ICBM with a nuclear warhead: flash, fireball, mushroom cloud, blast wave, fallout",
   "incoming.launched.nuke": "☢ ICBM launched. Detonation on a timer: see the countdown at the top of the screen.",
+  "incoming.pall.gpu_off": "Incoming: your graphics card stalled on the nuclear cloud, so the fireball, mushroom cloud and dust are off until you restart the game",
   "incoming.nuke.disabled": "Nuclear weapons are disabled in the server config",
   "incoming.nuke.ops_only": "Nuclear strikes are for operators only (setting nuclear.ops_only)",
   "key.incoming.second_key": "Second key (confirm a nuclear launch nearby)",
