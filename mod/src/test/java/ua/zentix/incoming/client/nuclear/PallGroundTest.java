@@ -239,7 +239,7 @@ class PallGroundTest {
         assertFalse(g.hasHard());
         assertEquals(0, g.hard(1500, -800), 1e-6);
         FarTerrain.Water rockEast = (x, z) -> x > 2000 ? 1 : 0;
-        for (int i = 0; i < PallGround.SIDE * PallGround.SIDE / PallGround.PER_TICK; i++) g.survey(0, 0, 0, UNKNOWN, null, rockEast);
+        for (int i = 0; i < PallGround.SIDE * PallGround.SIDE / PallGround.PER_TICK; i++) g.survey(0, 0, 0, UNKNOWN, null, rockEast, null);
         g.fill();
         assertTrue(g.hasHard());
         assertEquals(1, g.hard(4000, 300), 1e-3);
@@ -247,5 +247,24 @@ class PallGroundTest {
         PallPass.Ground out = new PallPass.Ground();
         g.frame(out);
         assertEquals(PallGround.CHANNELS * PallGround.SIDE * PallGround.SIDE, out.map.length);
+    }
+
+    /**
+     * Sand under the pall (fourth channel, {@link PallGround#sand}): like hard ground a cell property — known cells keep what was seen,
+     * unknown take the nearest known; with no sand anywhere the dust is the reference soil's ({@link PallGround#hasSand} false),
+     * unknown ground is not sand.
+     */
+    @Test
+    void sandIsACellProperty() {
+        PallGround g = new PallGround(GROUND, new PallField(GROUND), FILL_HALF);
+        assertFalse(g.hasSand());
+        assertEquals(0, g.sand(1500, -800), 1e-6);
+        FarTerrain.Water desertWest = (x, z) -> x < -2000 ? 1 : 0;
+        for (int i = 0; i < PallGround.SIDE * PallGround.SIDE / PallGround.PER_TICK; i++) g.survey(0, 0, 0, UNKNOWN, null, null, desertWest);
+        g.fill();
+        assertTrue(g.hasSand());
+        assertFalse(g.hasHard(), "sand is soil, not hard ground");
+        assertEquals(1, g.sand(-4000, 300), 1e-3);
+        assertEquals(0, g.sand(4000, 300), 1e-3);
     }
 }

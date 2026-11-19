@@ -18,7 +18,9 @@ import java.util.stream.IntStream;
  * ending the ray right at the eye — a straight cutoff below the horizon without pall. The second channel is cell water fraction: what
  * the pall consists of ({@link PallField}: dust over land, spray over water; the shader samples where the material was lofted). The third
  * is the hard share of the ground ({@link FarTerrain#hard}: rock, roofs, roads, ice, snow — no soil on top): the wave lofts only debris
- * dust there ({@code DustModel.Surface.PAVED}), so the dust-wall head and the pall thin over it.
+ * dust there ({@code DustModel.Surface.PAVED}), so the dust-wall head and the pall thin over it. The fourth is the sand share of the
+ * soil ({@link FarTerrain#sand}): what colour the lofted dust has — desert sand ({@code SAND} in {@code fx_pall}) or the reference loamy
+ * soil under grass and forest ({@code DUST}).
  * <p>
  * A square of {@link #SIDE}² cells around ground zero covers pall at its source ({@link PallField#sourceExtent}: table,
  * haze plume, base surge), dust-wall head and camera with {@link #AROUND_EYE_M} margin (as it grows, the map
@@ -39,7 +41,7 @@ import java.util.stream.IntStream;
  * </ul>
  * If nothing is known, the whole map follows ground zero: its elevation, and a sea burst is over sea (as for the firestorm,
  * {@link FireStorm#survey}). Refill the map at most once per second and only after learning something (changed water resolution beneath
- * ground zero — immediately); upload by {@link #version} ({@code PallPass}, RGBA16F: height, water, hard ground). Per-frame cost:
+ * ground zero — immediately); upload by {@link #version} ({@code PallPass}, RGBA16F: height, water, hard ground, sand). Per-frame cost:
  * map samples along rays into empty space and a water sample per pall ray step where water exists below; per-tick cost — up to 1024
  * columns.
  */
@@ -56,7 +58,7 @@ public final class PallGround {
     static final double GROW = 1.25;
     /** Mapped terrain around the camera extends this many meters (× strike scale): layer floor and ray end are visible up close there. */
     static final double AROUND_EYE_M = 2000;
-    /** Map channels per cell: height, water, hard ground, unused. */
+    /** Map channels per cell: height, water, hard ground, sand share of the soil. */
     static final int CHANNELS = 4;
     /** Water or land below this fraction of the whole map is considered absent beneath the pall ({@link #hasWater}, {@link #hasLand}). */
     static final float TRACE = 1e-3f;
@@ -81,18 +83,19 @@ public final class PallGround {
      * Cell heights above ground zero, blocks, and water fractions 0..1; {@link Float#NaN} — unknown (the client knows height and water
      * separately: a map tile can lack water depth).
      */
-    private float[] known = new float[SIDE * SIDE], knownWet = new float[SIDE * SIDE], knownHard = new float[SIDE * SIDE];
+    private float[] known = new float[SIDE * SIDE], knownWet = new float[SIDE * SIDE], knownHard = new float[SIDE * SIDE],
+            knownSand = new float[SIDE * SIDE];
     /**
      * Filled map (for the shader): per cell, x fastest, {@link #CHANNELS} numbers — height above ground zero (blocks), water fraction,
-     * hard-ground fraction, 0.
+     * hard-ground fraction, sand share of the soil.
      */
     private final float[] map = new float[CHANNELS * SIDE * SIDE];
     /** Filled-map bottom and top, blocks above ground zero. */
     private float lo, hi;
     /** Water beneath ground zero used to fill the map ({@link PallField#under}). */
     private float filledUnder;
-    /** Whether the filled map contains water, land and hard ground. */
-    private boolean water, land, hard;
+    /** Whether the filled map contains water, land, hard ground and sand. */
+    private boolean water, land, hard, sand;
     private int next, version, sinceFill;
     private boolean dirty;
     /** Smaller copies for {@link #fill} (shared: one thread fills maps — the client tick). */
@@ -120,6 +123,7 @@ public final class PallGround {
         Arrays.fill(known, Float.NaN);
         Arrays.fill(knownWet, Float.NaN);
         Arrays.fill(knownHard, Float.NaN);
+        Arrays.fill(knownSand, Float.NaN);
         resize(half > 0 ? half : pall.extent(0) * GROW);
         fill();
     }
@@ -149,6 +153,11 @@ public final class PallGround {
         return hard;
     }
 
+    /** Whether sand exists beneath the pall: otherwise the dust is the reference soil's everywhere. */
+    boolean hasSand() {
+        return sand;
+    }
+
     /**
      * Client tick: remap if source pall at {@code ticks} (ticks since detonation), dust-wall head ({@code wall} — reach,
      * blocks, {@link BlastWall#reach}: its fading edge reaches 0.3 psi, twice the pall dust reach), or camera plus margin
@@ -158,16 +167,16 @@ public final class PallGround {
      * data, refill at most once per {@link #FILL_TICKS} ticks; changed water resolution beneath ground zero — immediately.
      */
     void survey(double ticks, double wall, double eye, @Nullable Sightline.Heights heights, @Nullable FarTerrain.Water water) {
-        survey(ticks, wall, eye, heights, water, null);
+        survey(ticks, wall, eye, heights, water, null, null);
     }
 
     void survey(double ticks, double wall, double eye, @Nullable Sightline.Heights heights, @Nullable FarTerrain.Water water,
-                @Nullable FarTerrain.Water ground) {
+                @Nullable FarTerrain.Water ground, @Nullable FarTerrain.Water soil) {
         double extent = Math.max(wall, Math.min(pall.extent(ticks), Math.max(pall.sourceExtent(ticks), eye + d.blocks(AROUND_EYE_M))));
         // map and half-side enter the frame together: a remapped map is immediately filled
         boolean grew = extent > half;
         if (grew) resize(extent * GROW);
-        if (heights != null || water != null || ground != null) {
+        if (heights != null || water != null || ground != null || soil != null) {
             for (int n = 0; n < PER_TICK; n++) {
                 int i = ORDER[next];
                 next = (next + 1) % ORDER.length;
@@ -182,6 +191,10 @@ public final class PallGround {
                 if (ground != null) {
                     double g = measure(i, ground::at);
                     if (!Double.isNaN(g)) dirty |= learn(knownHard, i, (float) g, 0.01f);
+                }
+                if (soil != null) {
+                    double g = measure(i, soil::at);
+                    if (!Double.isNaN(g)) dirty |= learn(knownSand, i, (float) g, 0.01f);
                 }
             }
         }
@@ -216,6 +229,7 @@ public final class PallGround {
             known = moved(known, h, c);
             knownWet = moved(knownWet, h, c);
             knownHard = moved(knownHard, h, c);
+            knownSand = moved(knownSand, h, c);
             next = 0;
         }
         half = h;
@@ -235,9 +249,9 @@ public final class PallGround {
     }
 
     /**
-     * Fill the map: heights use the average of surrounding known data ({@link #pullPush}; ground zero — its ground, 0); water and hard
-     * ground use nearest known data ({@link #nearest}; ground zero — {@link PallField#under} and soil, 0: unknown ground is soil, as
-     * before the map knew it).
+     * Fill the map: heights use the average of surrounding known data ({@link #pullPush}; ground zero — its ground, 0); water, hard
+     * ground and sand use nearest known data ({@link #nearest}; ground zero — {@link PallField#under}, soil and no sand, 0: unknown ground
+     * is the reference soil, as before the map knew it).
      */
     void fill() {
         float under = (float) pall.under();
@@ -253,7 +267,8 @@ public final class PallGround {
         hi = b;
         nearest(knownWet, under, 1);
         nearest(knownHard, 0, 2);
-        float most = 0, least = 1, rock = 0;
+        nearest(knownSand, 0, 3);
+        float most = 0, least = 1, rock = 0, sandy = 0;
         for (int i = 0; i < SIDE * SIDE; i++) {
             float w = Mth.clamp(map[CHANNELS * i + 1], 0, 1);
             map[CHANNELS * i + 1] = w;
@@ -262,10 +277,14 @@ public final class PallGround {
             float g = Mth.clamp(map[CHANNELS * i + 2], 0, 1);
             map[CHANNELS * i + 2] = g;
             rock = Math.max(rock, g);
+            float q = Mth.clamp(map[CHANNELS * i + 3], 0, 1);
+            map[CHANNELS * i + 3] = q;
+            sandy = Math.max(sandy, q);
         }
         water = most > TRACE;
         land = least < 1 - TRACE;
         hard = rock > TRACE;
+        sand = sandy > TRACE;
         filledUnder = under;
         version++;
         sinceFill = 0;
@@ -424,6 +443,11 @@ public final class PallGround {
     /** Filled-map hard-ground fraction at world (x, z) 0..1, as in the shader ({@code pallHard}). */
     double hard(double x, double z) {
         return bilinear(map, SIDE, CHANNELS, 2, (float) ((x - cx + half) / cell - 0.5), (float) ((z - cz + half) / cell - 0.5));
+    }
+
+    /** Filled-map sand share of the soil at world (x, z) 0..1, as in the shader ({@code pallSoil}). */
+    double sand(double x, double z) {
+        return bilinear(map, SIDE, CHANNELS, 3, (float) ((x - cx + half) / cell - 0.5), (float) ((z - cz + half) / cell - 0.5));
     }
 
     /** Mean water fraction in the filled map (for the scenario line). */

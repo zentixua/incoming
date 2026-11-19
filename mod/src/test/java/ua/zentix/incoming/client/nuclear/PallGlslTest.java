@@ -217,9 +217,11 @@ class PallGlslTest {
         assertTrue(f.contains("if (W.w > 0.5 || hard > 0.0) spray = texture(table, vec2(min(ud, 1.0), S[3].w));"),
                 "splashes - not in their own line or read without water or hard ground under the pall");
         // dust over hard ground where it was lifted: the spray row's b (PallField.soil), the map only if there is hard ground
-        assertTrue(f.contains("float hard = sd > 0.0 ? pallHard(ground, S, G, lift) : 0.0;") && f.contains("sd *= 1.0 + hard * (spray.b - 1.0);"),
-                "dust over hard ground - not like PallField.soil");
-        assertTrue(body(GLSL, "float pallHard(").contains("if (G.x <= 0.0 || S[1].w < 1.5) return 0.0;"), "hard ground read without it under the pall");
+        assertTrue(f.contains("vec2 soil = sd > 0.0 ? pallSoil(ground, S, G, lift) : vec2(0.0);") && f.contains("float hard = soil.x;")
+                && f.contains("sd *= 1.0 + hard * (spray.b - 1.0);"), "dust over hard ground - not like PallField.soil");
+        assertTrue(body(GLSL, "vec2 pallSoil(").contains("if (G.x <= 0.0 || S[1].w < 1.5) return vec2(0.0);"), "soil read without hard ground or sand under the pall");
+        // dust colour from the soil where it was lofted, at the same map sample (one fetch: hard and sand)
+        assertTrue(f.contains("a.dustW = pallDustW(soil.y, hard, spray.b, dust.b);"), "dust colour - not from the soil where it was lofted");
         assertEquals(1, occurrences(f, "S[3].w"), "line of splashes - not one sample");
         // like PallField.layers and sigma: splashes at the edge - like dust, above water instead of dust, the top is not lower than the block
         for (String law : new String[]{"ss = spray.r * edge;", "topS = max(spray.g, 1.0);", "if (sd + ss > 0.0) wet = pallWater(ground, G, lift);",
@@ -529,6 +531,26 @@ class PallGlslTest {
     }
 
     /**
+     * Desert dust ({@code SAND}) is AERONET desert dust: its thick-layer colour is R∞ of the measured single-scattering albedo
+     * ({@link NukePall#SAND_OMEGA}, Dubovik et al. 2002) after delta-Eddington with the dust phase g (forward peak g²), to the colour's
+     * three decimals. Sand's share of lofted mass ({@code pallDustW}) is {@link PallField#sandShare}: soil left over hard ground.
+     */
+    @Test
+    void sandDustIsDesertDust() {
+        double g = PallLight.DUST_G, f = g * g;
+        for (int c = 0; c < 3; c++) {
+            double w = NukePall.SAND_OMEGA[c], scaled = w * (1 - f) / (1 - w * f);
+            assertEquals(NukePall.SAND[c], PallLight.display(PallLight.reflectance(scaled, PallLight.truncated(g))), 6e-4, "channel " + c);
+        }
+        assertTrue(GLSL.replaceAll("\\s+", " ").contains("float share = sand * (1.0 - hard) / max(1.0 + hard * (paved - 1.0), 1e-6);"),
+                "pallDustW - not PallField.sandShare");
+        assertEquals(1, PallField.sandShare(1, 0, 0.2), 0);
+        assertEquals(0, PallField.sandShare(0, 0.5, 0.2), 0);
+        // half the ground hard (debris dust 0.2 of the soil's mass), the rest sand: sand is 0.5 / 0.6 of the mass
+        assertEquals(0.5 / 0.6, PallField.sandShare(1, 0.5, 0.2), 1e-12);
+    }
+
+    /**
      * Shader substance ({@code PALL_*_W}, {@code PALL_*_G} in {@code pall.glsl}) - from the colors of the thick layer {@code fx_pall.glsl}
      *  in linear ({@link PallLight#albedo}, asymmetry {@link PallLight#truncated}): thick pall on the screen of the same colors,
      * that the wall of dust and splashes (R∞ albedo is its color). Soot and tornado flames in linear ({@code *_LINEAR}) are the same colors.
@@ -536,7 +558,7 @@ class PallGlslTest {
     @Test
     void materialsHaveTheirColours() {
         String fx = read("include/fx_pall.glsl");
-        String[][] materials = {{"DUST", "DUST"}, {"SMOKE", "DUST"}, {"HAZE", "DUST"}, {"MIST", "MIST"}, {"SOOT", "SOOT"}};
+        String[][] materials = {{"DUST", "DUST"}, {"SAND", "DUST"}, {"SMOKE", "DUST"}, {"HAZE", "DUST"}, {"MIST", "MIST"}, {"SOOT", "SOOT"}};
         Map<String, Double> full = Map.of("DUST", PallLight.DUST_G, "MIST", PallLight.MIST_G, "SOOT", PallLight.SOOT_G);
         for (String[] m : materials) {
             double g = scalar(GLSL, "PALL_" + m[1] + "_G");
@@ -557,6 +579,7 @@ class PallGlslTest {
         double[] dust = vec3(fx, "DUST"), smoke = vec3(fx, "SMOKE"), fire = vec3(fx, "FIRE");
         for (int c = 0; c < 3; c++) {
             assertEquals(dust[c], NukePall.DUST[c], 0, "channel " + c);
+            assertEquals(vec3(fx, "SAND")[c], NukePall.SAND[c], 0, "sand, channel " + c);
             assertEquals(smoke[c], NukePall.SMOKE[c], 0, "smoke, channel " + c);
             assertEquals(fire[c], NukePall.FIRE[c], 0, "flame, channel " + c);
         }
@@ -601,7 +624,8 @@ class PallGlslTest {
         night.glowOnSmoke = (float) k;
         int checked = 0, burning = 0;
         for (double t : new double[]{2, 6, 10, 20, 40}) {
-            assertTrue(puffs.pallLight(MushroomModel.shape(t, 15, 0, true, GROUND.metres(blast.wall(t).head())), wall));
+            // fires at full flame (PallField.fireLight = 1: a burning city under its pall) — the strongest light from below
+            assertTrue(puffs.pallLight(MushroomModel.shape(t, 15, 0, true, GROUND.metres(blast.wall(t).head())), 1, wall));
             assertTrue(blast.slot(t, slot));
             double head = blast.wall(t).head();
             for (double share : new double[]{0.01, 0.03, 0.05, 0.2, 0.5, 0.8, 0.97}) {
@@ -615,7 +639,7 @@ class PallGlslTest {
                 double b = burn.call(Map.of("r", r, "up", 0.0, "glow", (double) wall[1], "fireR", (double) wall[3]));
                 double mu = ly / toBall;
                 // the top of the head of the wall, if the end of the wedge were here (the point is in the middle of its thickness), - before it, the pall was here
-                NukePall.dustLight(here, wall, night, wind, r, 0.9 * here[2], 0, 0.9 * here[2], high);
+                NukePall.dustLight(here, wall, night, wind, r, 0.9 * here[2], 0, 0.9 * here[2], 0, 0, high);
                 double sum = 0, fires = 0;
                 double[] side = new double[3], top = new double[3], luma = {0.2126, 0.7152, 0.0722};
                 // the reflection of fires on the dust is already the color of fire in all channels: pall light - flame (pallFlame); at the edge of the fire zone,

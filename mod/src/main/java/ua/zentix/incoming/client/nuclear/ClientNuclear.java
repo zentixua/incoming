@@ -467,7 +467,8 @@ public final class ClientNuclear {
         Vec3 eye = mc.gameRenderer.getMainCamera().getPosition();
         Sightline.Heights heights = ground(level);
         // column-top water for pall map (its matter); absent under ceiling (Nether), like terrain
-        FarTerrain.Water water = heights == null ? null : FarTerrain.water(level), hard = heights == null ? null : FarTerrain.hard(level);
+        FarTerrain.Water water = heights == null ? null : FarTerrain.water(level), hard = heights == null ? null : FarTerrain.hard(level),
+                sand = heights == null ? null : FarTerrain.sand(level);
         for (Iterator<Active> it = DETONATIONS.values().iterator(); it.hasNext(); ) {
             Active a = it.next();
             a.tick();
@@ -478,7 +479,7 @@ public final class ClientNuclear {
             NukeWater.resolve(a, level);
             double wall = a.wall.reach(a.seconds(0));
             double seen = Math.hypot(eye.x - a.d.burst().x, eye.z - a.d.burst().z);
-            if (a.pall.visible(a.ticks(0)) || wall > 0) a.ground.survey(a.ticks(0), wall, seen, heights, water, hard);
+            if (a.pall.visible(a.ticks(0)) || wall > 0) a.ground.survey(a.ticks(0), wall, seen, heights, water, hard, sand);
             // firestorm tornadoes follow terrain beneath them
             if (heights != null) a.storm.track(a.ticks(1) / 20.0, heights);
             NukeWater.tick(a, level, eye);

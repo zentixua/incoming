@@ -10,7 +10,7 @@ import ua.zentix.incoming.nuclear.model.ThermalModel;
  * Detonation light on dust (DESIGN-nuke §6): ball above and fires below illuminate the dust wall, Wilson cloud and the pall
  * behind them ({@code fx_pall}, slot parameters — {@link #pallLight}), and dust at the camera ({@code NukePall.dustColor}). The ball is the same
  * source that lights the stem and particles ({@link MushroomModel#light}: Lambertian sphere of cap radius, black body at its visible
- * temperature, L·R²/d²); fires use {@link #glow}, {@link #burn}. This no longer has its own billows (the name remains): mushroom
+ * temperature, L·R²/d²); fires use {@link #burn} with the fires' own flame ({@link PallField#fireLight}). This no longer has its own billows (the name remains): mushroom
  * and water column are volumes ({@link MushroomField}); dust wall, Wilson cloud and base surge are volumes in the pall
  * ({@link BlastWall}, {@link PallField}).
  */
@@ -33,30 +33,14 @@ public final class CloudPuffs {
     public CloudPuffs(Detonation d) {
         this.d = d;
         double hob = Math.max(0, d.hobMetres());
-        double slant = ThermalModel.rangeForFluence(ThermalModel.ignite(d.yieldKt()), d.yieldKt(), d.surface(), d.visibility());
+        // the server does not ignite (Detonation.fires): no fire zone, as in PallField
+        double slant = !d.fires() ? 0 : ThermalModel.rangeForFluence(ThermalModel.ignite(d.yieldKt()), d.yieldKt(), d.surface(), d.visibility());
         fireGround = Math.sqrt(Math.max(0, slant * slant - hob * hob));
     }
 
     /** How many model seconds the mushroom is visible: rise and dispersion ({@link MushroomModel#lifeSeconds}). */
     public static double lifeSeconds(Detonation d) {
         return MushroomModel.lifeSeconds(d.yieldKt());
-    }
-
-    /**
-     * Glow time stretch with yield: 1 at 15 kt, ×0.51 at 1 kt (ball and mushroom are half as high, cool faster:
-     * full incandescence for 20 s, fades by 75 s).
-     */
-    static double glowScale(double yieldKt) {
-        return Math.pow(Math.max(yieldKt, 0.1) / 15, 0.25);
-    }
-
-    /**
-     * Fire glow beneath wall dust over time, 0..1 ({@link #burn}): at 15 kt full for 40 s, 0.57 at 90 s, fades by 150 s;
-     * at 1 kt half as long ({@link #glowScale}).
-     */
-    static double glow(double t, double yieldKt) {
-        double k = glowScale(yieldKt);
-        return 1 - smooth(40 * k, 150 * k, t);
     }
 
     /**
@@ -70,7 +54,8 @@ public final class CloudPuffs {
 
     /**
      * Fire glow beneath dust 0..1 (same as {@code pallBurn} in {@code pall.glsl}): in the ignition zone out to {@code fireR}
-     * ({@link #pallLight}), stronger from below, with incandescence {@code glow}.
+     * ({@link #pallLight}), stronger from below, by the fires' flame {@code glow} ({@link PallField#fireLight}: grows from the flash
+     * over twenty minutes, so dust lofted by the wave a minute after the flash is barely lit from below).
      */
     static double burn(double r, double up, double glow, double fireR) {
         double e = Math.max(fireR, 1e-3);
@@ -88,19 +73,20 @@ public final class CloudPuffs {
     /**
      * Ball and fire light on the dust wall, Wilson cloud and pall behind them for mushroom {@code s} ({@code MushroomField.shape})
      * — used by {@code fx_pall} to light dust (ball — {@link #ball} beam from the cap center; fires — {@link #burn} from below), and
-     * by {@code NukePall.dustColor} for camera dust. Into {@code into}: cap radius (ball radius for a ball), fire incandescence, downwind
+     * by {@code NukePall.dustColor} for camera dust. Into {@code into}: cap radius (ball radius for a ball), fires' flame {@code fire}
+     * (0..1, {@link PallField#fireLight}: the same fire that lights the haze from below), downwind
      * drift of the cap center, fire-zone edge (blocks), black-body light at the visible cap temperature
      * ({@link FlashLight#source}: linear r, g, b, fractions of a white wall at noon), cap-center height above
      * ground zero (blocks). Same center as the mushroom body and particle light ({@code MushroomField.centre}). false —
      * the mushroom no longer (or not yet) exists ({@code into} zeroed): no glow either.
      */
-    public boolean pallLight(MushroomModel.Shape s, float[] into) {
+    public boolean pallLight(MushroomModel.Shape s, double fire, float[] into) {
         java.util.Arrays.fill(into, 0, 8, 0f);
         if (s == null) return false;
-        double t = s.t(), y = d.yieldKt();
+        double y = d.yieldKt();
         FlashLight.source(s, y, d.surface(), BALL);
         into[0] = (float) d.blocks(s.capR());
-        into[1] = (float) glow(t, y);
+        into[1] = (float) fire;
         into[2] = (float) MushroomField.driftAlong(d, s);
         into[3] = (float) d.blocks(fireGround);
         for (int i = 0; i < 3; i++) into[4 + i] = (float) BALL[i];
@@ -115,7 +101,7 @@ public final class CloudPuffs {
     boolean pallLightNow(ClientNuclear.Active a, float[] into) {
         double t = a.seconds(0);
         if (t != nowT) {
-            nowLit = pallLight(MushroomField.shape(a, 0), now);
+            nowLit = pallLight(MushroomField.shape(a, 0), a.pall.fireLight(a.ticks(0)), now);
             nowT = t;
         }
         System.arraycopy(now, 0, into, 0, now.length);

@@ -143,9 +143,12 @@ uniform mat4 SmokeBallLight;
 
 out vec4 fragColor;
 
-// Thick-layer color (determines material albedo, pall.glsl: PALL_DUST_W etc.): dust as dust wall, smoke, haze;
-// mist white as spray wall over water (CloudPuffs.SPRAY: water pall continues its color)
+// Thick-layer color (determines material albedo, pall.glsl: PALL_DUST_W etc.): dust as dust wall (reference dry loamy soil under
+// grass and forest; desert sand dust SAND — from AERONET desert-dust single-scattering albedo ω 0.92 at 440 nm, 0.97 at 670 nm,
+// Dubovik et al. 2002, at 465/550/610 nm, delta-Eddington g = 0.6: NukePall.SAND), smoke, haze; mist white as spray wall over water
+// (CloudPuffs.SPRAY: water pall continues its color)
 const vec3 DUST = vec3(0.60, 0.53, 0.45);
+const vec3 SAND = vec3(0.705, 0.669, 0.626);
 const vec3 SMOKE = vec3(0.30, 0.27, 0.24);
 const vec3 HAZE = vec3(0.44, 0.41, 0.38);
 const vec3 MIST = vec3(0.902, 0.918, 0.929);
@@ -411,8 +414,9 @@ float wallChordNear(mat4 V, WallAt h, vec3 v, float len, int n) {
 // toward epicenter: beam to top at leading edge crosses the whole head; using only depth above would turn the outside
 // orange by day with light that cannot reach it). Sun/ball beams use mean-head depth toward them (nearby, actual
 // billows: neighbor-billow shadow toward keyDir, otherwise flat head), not the column above point.
-// fireR is fire zone edge (blocks), r ground range from epicenter
-void wall(mat4 V, WallAt h, vec3 keyDir, vec3 sunDir, vec3 lightDir, float fireR, float r, float cone, bool pall, float dense, inout Sample s) {
+// smoke is the soot share in the dust there, as in the pall (pallField: fire zone × fire growth): dust lofted seconds after the
+// flash carries next to no soot
+void wall(mat4 V, WallAt h, vec3 keyDir, vec3 sunDir, vec3 lightDir, float smoke, float cone, bool pall, float dense, inout Sample s) {
     float tile = max(V[2].w, 1.0), fine = 1.0 - smoothstep(0.5, 1.0, cone * 32.0 / tile);
     float hd = wallAt(V, h, fine, dense);
     // neither head nor slot pall here — no light needed
@@ -439,8 +443,10 @@ void wall(mat4 V, WallAt h, vec3 keyDir, vec3 sunDir, vec3 lightDir, float fireR
     float sunLen = sunDir.y > 0.05 ? min(reach, toTop / sunDir.y) : reach;
     float capLen = lightDir.y > 0.05 ? min(reach, toTop / lightDir.y) : reach;
     float toSun = wallChordNear(V, h, sunDir, sunLen, 4), toCap = wallChordNear(V, h, lightDir, capLen, 4);
-    float smoke = 0.77 * (1.0 - smoothstep(0.92 * max(fireR, 1e-3), 1.04 * max(fireR, 1e-3), r));
-    vec3 w = mix(mix(PALL_DUST_W, PALL_SMOKE_W, smoke), PALL_MIST_W, h.wet);
+    // dust of the soil lofted here (sand share; debris dust over hard ground, its share of the soil's mass at this wedge share — as
+    // pallWallDensity), soot as the pall's
+    float uw = clamp(s0 / max(h.P.x, 0.001), 0.0, 1.0);
+    vec3 w = mix(pallDustW(h.sand, h.hard, V[3].x + (V[3].y - V[3].x) * uw, smoke), PALL_MIST_W, h.wet);
     float g = mix(PALL_DUST_G, PALL_MIST_G, h.wet);
     s.tau += depth;
     s.slab += depth + down;
@@ -505,7 +511,7 @@ void slot(mat4 S, mat4 V, sampler2D ground, vec4 R, vec4 W, vec4 G, vec4 H, vec3
         }
     }
     WallAt head = pallWallAt(ground, S, V, R, W, p, floorUp);
-    vec3 dustW = mix(PALL_DUST_W, PALL_SMOKE_W, f.smoke);
+    vec3 dustW = f.dustW;
     s.tau += f.column.x + f.column.y + f.column.z;
     s.slab += f.slab.x + f.slab.y + f.slab.z;
     s.slabAlbedo += f.slab.x * dustW + f.slab.y * PALL_HAZE_W + f.slab.z * PALL_MIST_W;
@@ -517,8 +523,8 @@ void slot(mat4 S, mat4 V, sampler2D ground, vec4 R, vec4 W, vec4 G, vec4 H, vec3
     // added to display skylight, converted to linear by difference (pallLift): thick dust displays the reflected color.
     // Fire light capped at flame (pallFlame): at night above fires, reflection already has flame color; inversion through
     // dust color would give three times flame brightness — ground dust above 1 and flat (shoulder). Daytime fires under
-    // dust barely visible, like their haze glow (NukePall: fireLight): wall passes in seconds, pall hangs over burning city
-    // for minutes. No underwater fires (spray wall does not take them either): water is sampled at dust origin
+    // dust barely visible, like their haze glow (NukePall: fireLight). Strength G.y is the fires' own flame (PallField.fireLight,
+    // the haze's fire light): next to none while the wall passes, full only once the fires have grown. No underwater fires (spray wall does not take them either): water is sampled at dust origin
     float r = length(p.xz - S[0].xy);
     float burn = pallBurn(r, 0.0, G.y, G.w) * (1.0 - 0.75 * PallSun.w) * (1.0 - f.wet);
     vec3 toLight = pallBall(S, G, H) - p;
@@ -541,7 +547,7 @@ void slot(mat4 S, mat4 V, sampler2D ground, vec4 R, vec4 W, vec4 G, vec4 H, vec3
     vec3 keyDir = mix(sunDir, keyLight, key);
     keyDir /= max(length(keyDir), 1e-3);
     bool pall = f.sigma.x + f.sigma.y + f.sigma.z > 1e-7;
-    if (head.P.w > 0.0) wall(V, head, keyDir, sunDir, lightDir, G.w, r, cone, pall, S[3].x, s);
+    if (head.P.w > 0.0) wall(V, head, keyDir, sunDir, lightDir, f.smoke, cone, pall, S[3].x, s);
     if (!pall) return;
     float fill = clamp(f.dense * 3.0, 0.0, 1.0) * (1.0 - smoothstep(0.4, 1.0, f.height.x));
     vec3 warp = warpAt(S, p);
