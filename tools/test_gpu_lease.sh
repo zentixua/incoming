@@ -4,7 +4,7 @@
 # renew or release it; owner comes from the tree; laptop_job.sh --gpu and sandbox.sh start from another session refuse before
 # starting anything; jobs without GPU take no lease; a client without a lock (pre-lease script) also means a busy
 # GPU, not a free one; waiters form a fair FIFO queue; Artem's game is detected by its instance directory, not its
-# command-line path.
+# command-line path, and stops a --gpu job it starts during.
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 tmp=$(mktemp -d); trap 'rm -rf "$tmp"' EXIT
@@ -196,4 +196,24 @@ kill $j 2>/dev/null; wait $j 2>/dev/null
 sleep 0.3
 (PRISM=$tmp/prism; artem_playing) && ok "java in instance directory is Artem's game" || bad "java in instance directory not detected"
 kill $j 2>/dev/null; wait $j 2>/dev/null
+
+# Artem's game started while a --gpu job runs (19.11: his replay overlapped a measured GPU run unnoticed): the job's
+# whole process tree stops within seconds, the output says so, the job ends with 75
+if [ $real = 1 ]; then echo "skip: Artem's game is running"
+else
+  rm -f "$INCOMING_GPU_LEASE"
+  start=$(date +%s)
+  PRISM_DIR=$tmp/prism INCOMING_GPU_OWNER=SH INCOMING_GAME_POLL=0.2 "$ROOT/tools/laptop_job.sh" --in-unit gpu run $$ -- \
+    bash -c 'sleep 60 & echo $! > "$1/grandchild"; wait' _ "$tmp" > "$tmp/run" 2>&1 & r=$!
+  sleep 1
+  ( cd "$tmp/prism/instances/Open Skies/minecraft" && exec "$tmp/bin/java" -cp x ) & j=$!
+  wait $r; rc=$?
+  took=$(( $(date +%s) - start ))
+  [ $rc = 75 ] && grep -q "run: Artem's game started at [0-9:]*: job stopped" "$tmp/run" && [ $took -lt 5 ] \
+    && ok "game started mid-job stops the job in ${took} s: $(head -n 1 "$tmp/run")" || bad "game mid-job: code $rc after $took s: $(cat "$tmp/run")"
+  kill -0 "$(cat "$tmp/grandchild")" 2>/dev/null && bad "job's child survived the stop" || ok "job's child stopped with it"
+  kill $j 2>/dev/null; wait $j 2>/dev/null
+  out=$(PRISM_DIR=$tmp/prism INCOMING_GPU_OWNER=SH "$ROOT/tools/laptop_job.sh" --in-unit gpu quick $$ -- bash -c 'exit 3' 2>&1); rc=$?
+  [ $rc = 3 ] && [[ $out != *"Artem's game"* ]] && ok "job without his game keeps its own exit code" || bad "plain job: code $rc $out"
+fi
 exit $fail
