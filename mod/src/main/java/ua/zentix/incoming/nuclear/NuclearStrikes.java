@@ -272,6 +272,8 @@ public final class NuclearStrikes {
         boolean ended = !events.endShows(now, worldClock).isEmpty();
         if (!events.detonations().isEmpty() && (ended || now % 20 == 0))
             PacketDistributor.sendToPlayersInDimension(level, clockPacket(events, now, worldClock));
+        // the server's age for each detonation every tick while a show runs: clients never draw a burst ahead of it
+        if (showing(events, now, worldClock)) PacketDistributor.sendToPlayersInDimension(level, new S2C.NukeTick(now));
         if (now % 1200 == 0) events.prune(now, worldClock);
         long t1 = System.nanoTime();
         NuclearWorld world = NuclearWorld.get(level);
@@ -352,6 +354,12 @@ public final class NuclearStrikes {
         PacketDistributor.sendToPlayer(p, new S2C.NukeApproach(p.serverLevel().getGameTime(),
                 events.scheduled().stream().flatMap(s -> s.arrival().stream()).toList()));
         PacketDistributor.sendToPlayer(p, clockPacket(events, p.serverLevel().getGameTime(), ua.zentix.incoming.util.WorldClock.now(p.serverLevel())));
+    }
+
+    /** Some detonation in this dimension is still in its show ({@link S2C.NukeTick}). */
+    static boolean showing(NuclearEvents events, long gameNow, double clockNow) {
+        for (Detonation d : events.detonations()) if (Double.isNaN(events.showEndClock(d, gameNow, clockNow))) return true;
+        return false;
     }
 
     /** The world clock and the clock at each ended show's end, for this dimension's players ({@link S2C.NukeClock}). */

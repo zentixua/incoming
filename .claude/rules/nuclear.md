@@ -404,12 +404,17 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   restore the mark, same hash. Changes without neighbor notification (`setBlock` without flag 1, used by some mods)
   are invisible to event: next chunk save/send prunes (`FlashMarks.pruned`), unless same-type block replaced it first.
   Client mesh checks same hash while awaiting packet. Block hash is 6 bits; all 32 mark bits are used.
-- Client game clock jumps backward during server catch-up, and a heavy client drops ticks: visual detonation time starts
-  at packet arrival and advances one tick per client tick, or by the level clock's forward step when larger, never
-  backward (`ClientNuclear.Active.follow`). Own ticks alone lagged the server 31–55 ticks in the full host pack, so ruins,
-  throws and debris came 1.5–2.7 s before the drawn wave (`ClientNuclearTest.heavyClientFollowsTheServerWave`); following
-  absolute level age imported a level lead present at arrival — 30 ticks ahead made a fresh 15 kt front 621 m instead of
-  174 m on its first tick (review of #668, `levelLeadAtArrivalIsNotImported`).
+- Client detonation age (`ClientNuclear.AgeClock`) is anchored to the server, never to the client level clock (vanilla
+  increments it itself and time packets set it: a lead or lag at arrival or alternating delayed syncs became false age —
+  reviews of #668: a lead of 30 made a fresh 15 kt front 621 m instead of 174 m, alternating 10-tick delays showed 200 for
+  160, a lag of 30 showed 50 for 20). Anchors carry the server's age for the detonation at send: the live detonation
+  packet (0) and `S2C.NukeTick` (server game time, every server tick while the dimension holds a show,
+  `NuclearStrikes.showing`). Target = anchor + own ticks since it arrived, at most one while anchors stream (a client
+  faster than a lagging server waits), unlimited without them (old recordings, after the show, `ended`); the shown age
+  moves toward it by at most `MAX_STEP` (3) per tick, never back; a past detonation (entry, seek) takes the first anchor
+  whole; frames never step back (`at`). Own ticks alone lagged the server 31–55 ticks in the full host pack (ruins, throws
+  and debris 1.5–2.7 s before the drawn wave). `ClientNuclearTest`: lagging server, heavy client, alternating delays,
+  server stall and backward anchor, client freeze, no stream, past snap, frames.
 - `Detonation.dayTime` (time of day at detonation) is no longer read: kept only for the save/packet formats. Slow
   consequences use the world clock (`WorldClock` on the server, `ClientClock` mirroring it from the client's day) and the
   detonation clock; server anchors per detonation (`NuclearEvents.Anchor`: world clock at burst and show end) are
