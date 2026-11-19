@@ -713,9 +713,8 @@ vec3 mushBallCap(vec3 e, float adapt) {
     return mushFilm3(e * mushBallGain(dot(e, vec3(0.2126, 0.7152, 0.0722)), adapt));
 }
 
-// Mushroom k transmittance along ray dir over [0, len], noiseless (steps steps), for layer quads before particle; air is
-// frame air (pallAir)
-float mushTransmit(sampler2D data, vec3 dir, float len, int steps, vec4 air) {
+// Mushroom k transmittance along ray dir over [0, len], noiseless (steps steps), for layer quads before particle
+float mushTransmit(sampler2D data, vec3 dir, float len, int steps) {
     float through = 1.0;
     for (int k = 0; k < MUSHROOMS; k++) {
         if (!mushOn(data, k)) continue;
@@ -727,9 +726,8 @@ float mushTransmit(sampler2D data, vec3 dir, float len, int steps, vec4 air) {
         for (int i = 0; i < steps; i++) {
             tau += dot(mushMean(m, mushLocal(m, dir * (span.x + (float(i) + 0.5) * ds))), vec4(1.0)) * ds;
         }
-        // mushroom in air haze fades into sky behind (pallAir): light/opacity × share transmitted through air, not
-        // fog color; what lies behind becomes more visible
-        through *= 1.0 - pallAir(air, 0.5 * (span.x + span.y), dir.y) * (1.0 - exp(-tau));
+        // real transmittance: haze in front of the cap shows the air's light (fx_pall: passMatter), never what lies behind
+        through *= exp(-tau);
     }
     return through;
 }

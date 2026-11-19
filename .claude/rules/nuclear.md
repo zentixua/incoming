@@ -281,8 +281,16 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   edge grain never averages out.
 - Fires under mushroom come from storm fire map (`FireStorm.meanFlame`, trust `gate`), not haze table: it knows no water
   and made daytime cap underside orange over sea. `MushroomField.fire` writes light after frame light (day/night).
-- Distant mushroom fades into air haze (`pallAir` in `pall.glsl`, like distant `Sight.Air`): share of its light/opacity,
-  not fog color — in rain, a mushroom 10 km away is not a crisp silhouette. Haze thins with altitude (aerosol scale
+- Distant mushroom fades into air haze (`pallAir` in `pall.glsl`, like distant `Sight.Air`) by Koschmieder:
+  L = T_air·L_cap + (1 − T_air)·airlight, the cap's opacity kept whole; airlight on screen (`pallAirLight`) is vanilla's drawn sky along the
+  pixel without its sun, moon and stars, computed from the frame's sky colour (`ClientLevel.getSkyColor`) and fog colour
+  (`FxLayer.fogColor`): sky disc 16 above the eye fogged by FOG_SKY (0 → render distance, cylinder, smoothstep), fog
+  colour at/below the horizon. Never sampled from the frame: a sampled frame carried the sun (screen taps off axis)
+  and nearby blocks into the cap (review #671). The `haze` share is added after `pallShown`, alpha is the matter's
+  transmittance only — in rain, a mushroom 10 km away is not a crisp silhouette, and the sun never shows through a cap
+  (the former `lost` share let the frame behind through: the sun quad through the cap at 240 s;
+  `NukeExposureTest.hazeNeverShowsWhatLiesBehindTheCap`, `opaqueCapNeverShowsTheSunNorItsNeighbours`). Under Iris the
+  shaderpack's sky can differ from vanilla's, so distant hazed matter takes vanilla's sky tone. Haze thins with altitude (aerosol scale
   1.2 km, clean air 8 km; visibility at sea level): uniform-height haze hid two thirds of a 2 kt cap 5 km high over a
   hill 2.6 km away, leaving a pale translucent sphere. Cap is droplets and NO₂, no color clock or own color
   (`MushroomModel.capDrops`/`capNo2`, `MushroomField.capMatter`; numbers/sources DESIGN-nuke §1.3): droplets scatter

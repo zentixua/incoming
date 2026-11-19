@@ -52,6 +52,9 @@ uniform mat4 InvViewProj;
 uniform vec3 PallForward;
 // frame air (pall.glsl: pallAir)
 uniform vec4 PallAir;
+// airlight (pallAirLight): vanilla's sky colour and fog colour on screen; PallAirFog.w — render distance (sky fog end)
+uniform vec3 PallAirSky;
+uniform vec4 PallAirFog;
 uniform mat4 PallSlot0;
 uniform mat4 PallSlot1;
 uniform vec3 PallMin;
@@ -911,26 +914,41 @@ float gTauEye = 0.0;
 int gSunK = -1;
 float gSunAt = 0.0, gSunNear = 0.0;
 
-// Add matter of opacity 1 − tr and light l (already × opacity) at eye distance t to ray. Eye sees pall, whirls and
-// Wilson cloud even where mushroom fades in air haze (lost): their light weighted by transmit + lost. Air haze to t
-// (as mushroom, pallAir) removes 1 − air of opacity: background behind entire ray visible there — in lost;
-// ray transmittance stays real
-void passMatter(float t, vec3 l, float tr, inout vec3 light, inout float transmit, inout float lost) {
-    float air = pallAir(PallAir, t, gDir.y), seen = transmit + lost;
-    light += seen * air * l;
-    lost = lost * tr + seen * (1.0 - air) * (1.0 - tr);
+// Airlight along view direction dir, on screen: the air's own light in front of distant matter. It is the sky vanilla
+// draws there without its sun, moon and stars, computed from the frame's sky and fog colours, never sampled from the
+// frame (a sampled frame carries the sun and nearby blocks into the cap). Vanilla's sky (LevelRenderer.renderSky,
+// FogRenderer FOG_SKY): a disc 16 above the eye, radius 512, in the sky colour, fogged into the fog colour by its
+// cylinder distance, smoothstep from 0 to the render distance; the vertex distance runs 16 at the centre to 512 at the
+// rim, interpolated (the 45° fan's chords make the rim up to 8 % nearer, ignored); past the rim and below the horizon —
+// the clear colour, the fog colour. Copy — NukeExposure.airLight
+vec3 pallAirLight(vec3 dir) {
+    float across = length(dir.xz);
+    if (dir.y <= 0.0 || across * 16.0 >= 512.0 * dir.y) return PallAirFog.rgb;
+    float d = 16.0 + (512.0 - 16.0) * (16.0 * across / dir.y) / 512.0;
+    return mix(PallAirSky, PallAirFog.rgb, d < PallAirFog.w ? smoothstep(0.0, PallAirFog.w, d) : 1.0);
+}
+
+// Add matter of opacity 1 − tr and light l (already × opacity) at eye distance t to ray. Air haze to t (pallAir) shows
+// 1 − air of the matter as airlight (haze: share of the pixel, pallAirLight at the end), the rest as the
+// matter itself; the matter's opacity stays whole, so nothing behind it shows through the haze in front of it. The old
+// path let the frame behind (sun, distant world) through the haze's share: the vanilla sun quad shone through a 15 kt cap
+// 10 km away at 240 s, cap optical depth 11–130 (release 3.13.0 check)
+void passMatter(float t, vec3 l, float tr, inout vec3 light, inout float transmit, inout float haze) {
+    float air = pallAir(PallAir, t, gDir.y);
+    light += transmit * air * l;
+    haze += transmit * (1.0 - air) * (1.0 - tr);
     transmit *= tr;
 }
 
 // whirls and Wilson crossings entered before t add to ray light (each time)
-void passesBefore(float t, inout vec3 light, inout float transmit, inout float lost) {
+void passesBefore(float t, inout vec3 light, inout float transmit, inout float haze) {
     for (int k = 0; k < 4; k++) {
         if (gWhirlIn[k] <= t) {
-            passMatter(gWhirlIn[k], gWhirlLight[k].rgb, gWhirlLight[k].a, light, transmit, lost);
+            passMatter(gWhirlIn[k], gWhirlLight[k].rgb, gWhirlLight[k].a, light, transmit, haze);
             gWhirlIn[k] = 1e9;
         }
         if (gWilsonIn[k] <= t) {
-            passMatter(gWilsonIn[k], gWilsonLight[k].rgb, gWilsonLight[k].a, light, transmit, lost);
+            passMatter(gWilsonIn[k], gWilsonLight[k].rgb, gWilsonLight[k].a, light, transmit, haze);
             gWilsonIn[k] = 1e9;
         }
     }
@@ -1054,8 +1072,8 @@ vec4 pallSource(vec3 p, float cone, vec4 inflow, out vec3 dustLight) {
     return vec4(emit, st);
 }
 
-void pallStep(float ta, float ds, float grid, inout vec3 light, inout float transmit, inout float lost) {
-    passesBefore(ta, light, transmit, lost);
+void pallStep(float ta, float ds, float grid, inout vec3 light, inout float transmit, inout float haze) {
+    passesBefore(ta, light, transmit, haze);
     vec3 p = gDir * ta;
     float open = pallOpenHere(p);
     if (open <= 0.0) return;
@@ -1064,7 +1082,7 @@ void pallStep(float ta, float ds, float grid, inout vec3 light, inout float tran
     vec4 matter = pallSource(p, cone, vec4(0.0), dustLight);
     if (matter.w <= 1e-7) return;
     float tr = exp(-matter.w * open * ds);
-    passMatter(ta, matter.rgb * (1.0 - tr) / matter.w, tr, light, transmit, lost);
+    passMatter(ta, matter.rgb * (1.0 - tr) / matter.w, tr, light, transmit, haze);
 }
 
 // Mean mushroom m depth from eye-relative p along v over len, four samples (MUSH_AT); parts selects cap, stem, skirt,
@@ -1732,9 +1750,8 @@ void main() {
     vec3 heat = vec3(0.0), emitted = vec3(0.0);
     float filmed = 0.0;
     float transmit = 1.0;
-    // coverage mushroom would have blocked but air haze removed (pallAir): background behind entire ray visible there
-    // (sky, distant world), not mushroom's own depth; ray transmittance stays real, rear billows hidden behind front ones
-    float lost = 0.0;
+    // share of the pixel the air haze shows in place of matter (pallAir): airlight, never the background behind the matter
+    float haze = 0.0;
     // whirls: ray interval and light precomputed, added to pall ray when step reaches entry (before world behind pixel)
     gMushes = 0;
     gFoot0 = -1;
@@ -1853,10 +1870,10 @@ void main() {
             float ds = gap > 0.0 ? gap + jitter * cell : clamp(0.5 / max(r.w, 1e-6), 0.5 * cell, 2.0 * cell);
             ds = min(max(ds, 0.35 * cone), max(s1 - ts, 1e-3));
             if (r.w > 1e-7) {
-                passesBefore(ts, light, transmit, lost);
+                passesBefore(ts, light, transmit, haze);
                 float tr = exp(-r.w * ds), air = pallAir(PallAir, ts, dir.y);
                 light += transmit * air * r.rgb * (1.0 - tr) / r.w;
-                lost += transmit * (1.0 - air) * (1.0 - tr);
+                haze += transmit * (1.0 - air) * (1.0 - tr);
                 transmit *= tr;
             }
             ts += ds;
@@ -1897,7 +1914,7 @@ void main() {
                 lastBase = nextBase;
                 nextBase = along((float(base) + 1.0 + jitter) / n, t0, t1);
             }
-            if (next > ta) pallStep(ta, next - ta, grid, light, transmit, lost);
+            if (next > ta) pallStep(ta, next - ta, grid, light, transmit, haze);
             i += 1;
             ta = next;
             if (i >= pallSteps || ta >= t1) ta = 1e9;
@@ -1914,52 +1931,54 @@ void main() {
             if (r.w > 1e-7) {
                 ds = clamp(0.5 / r.w, dsMin, dsMax);
                 ds = min(ds, m1 - tm);
-                passesBefore(tm, light, transmit, lost);
-                // air haze to step (pallAir): distant mushroom light/opacity fade into sky behind
+                passesBefore(tm, light, transmit, haze);
+                // air haze to step (pallAir): a distant mushroom fades into the air's own light, not into what lies behind it
                 float tr = exp(-r.w * ds), air = pallAir(PallAir, tm, dir.y);
                 light += transmit * air * r.rgb * (1.0 - tr) / r.w;
+                haze += transmit * (1.0 - air) * (1.0 - tr);
                 float part = transmit * air * (1.0 - tr) / r.w;
                 heat += part * hot;
                 emitted += part * glowing;
                 filmed += part * film;
-                lost += transmit * (1.0 - air) * (1.0 - tr);
                 transmit *= tr;
                 tauEye += r.w * ds;
             }
             tm += ds;
             mk += 1;
         }
-        if (transmit + lost < RAY_EXIT) {
+        if (transmit < RAY_EXIT) {
             // what is left of the pixel looks like the matter so far: deeper matter takes the place of the background behind
             // it (dropping the rest instead would darken the pixel by up to its share, a few percent at this exit)
-            float keep = 1.0 / (1.0 - transmit - lost);
+            float keep = 1.0 / (1.0 - transmit);
             light *= keep;
+            haze *= keep;
             heat *= keep;
             emitted *= keep;
             filmed *= keep;
             transmit = 0.0;
-            lost = 0.0;
             break;
         }
     }
     // whirls and Wilson cloud beyond last step (before world)
-    passesBefore(1e8, light, transmit, lost);
-    float cover = 1.0 - transmit - lost;
-    // previous path: mushroom emission combined with pall light (pallShown)
-    vec3 shown = pallShown(light + heat, cover);
+    passesBefore(1e8, light, transmit, haze);
+    float cover = max(1.0 - transmit - haze, 0.0);
+    // the haze share shows the airlight on screen (Koschmieder: L = T_air·L_matter + (1 − T_air)·airlight), not the frame
+    // behind the matter; previous path: mushroom emission combined with pall light (pallShown)
+    vec3 airlight = haze * pallAirLight(dir);
+    vec3 shown = pallShown(light + heat, cover) + airlight;
     // Fireball as conventional ball (presentation: NukeExposure): ball-exposed emission (emitted) through per-channel film
     // curve (mushFilm3) over pall, summed in linear. Previous path turned everything above white into single-color pixel
     // coverage — flat disk without folds/pattern. Curve share follows ring share and surface brightness (mushFilmShareLit): rolled dim cap uses old path;
     // between them, blend completed images (blending emission would jump: even a small old-path share overexposes the pixel)
     float film = clamp(filmed / max(dot(heat, LUMA), 1e-30), 0.0, 1.0);
     if (film > 0.0) {
-        vec3 lin = pallLinear3(pallShown(light, cover)) + mushFilm3(emitted);
+        vec3 lin = pallLinear3(pallShown(light, cover) + airlight) + mushFilm3(emitted);
         shown = mix(shown, min(vec3(pallDisplay(lin.r), pallDisplay(lin.g), pallDisplay(lin.b)), vec3(1.0)), film);
     }
     // invalid result (NaN/infinity from depth, matrices or field): transmittance −1; accumulation uses previous value here,
     // or pall-free pixel without history (fx_pall_resolve)
     // float32 fraction sum may exceed 1 by an ulp — pallValid would reject the pixel
-    vec4 res = vec4(shown, min(transmit + lost, 1.0));
+    vec4 res = vec4(shown, min(transmit, 1.0));
     fragColor = pallValid(res) ? res : vec4(0.0, 0.0, 0.0, -1.0);
 }
 
@@ -2130,13 +2149,17 @@ void main() {
     vec3 dir = froxelRay((vec2(cell) + 0.5) * PallFroxel.x, axis);
     vec3 light = vec3(0.0);
     float seen = 1.0, z0 = 0.0;
+    // airlight in this volume's linear light (its sum is shown with the rays behind, pallShown)
+    vec3 airShown = pallAirLight(dir);
+    vec3 airLinear = vec3(pallLinear(airShown.r), pallLinear(airShown.g), pallLinear(airShown.b));
     for (int i = 0; i <= k; i++) {
         float z1 = froxelBoundary(PallFroxel, float(i + 1));
         vec4 m = texelFetch(Sampler0, cell + tile * ivec2(i % PALL_FROXEL_COLUMNS, i / PALL_FROXEL_COLUMNS), 0);
         if (m.w > 1e-7) {
+            // same law as passMatter: haze shows airlight in place of matter, never what lies behind it
             float tr = exp(-m.w * (z1 - z0) / axis), air = pallAir(PallAir, 0.5 * (z0 + z1) / axis, dir.y);
-            light += seen * air * m.rgb * (1.0 - tr) / m.w;
-            seen *= 1.0 - air * (1.0 - tr);
+            light += seen * (air * m.rgb / m.w + (1.0 - air) * airLinear) * (1.0 - tr);
+            seen *= tr;
         }
         z0 = z1;
     }

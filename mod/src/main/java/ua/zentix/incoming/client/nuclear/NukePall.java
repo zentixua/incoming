@@ -465,6 +465,10 @@ public final class NukePall {
         f.sun.set(SKY.sx, SKY.sy, 0, SKY.day);
         f.skyLight.set(SKY.sky[0], SKY.sky[1], SKY.sky[2]);
         f.sunLight.set(SKY.sun[0], SKY.sun[1], SKY.sun[2]);
+        // airlight: the sky vanilla draws behind distant matter, without its sun, moon and stars (fx_pall: pallAirLight)
+        float[] fog = ua.zentix.incoming.client.fx.layer.FxLayer.fogColor();
+        f.airSky.set(SKY.shown[0], SKY.shown[1], SKY.shown[2]);
+        f.airFog.set(fog[0], fog[1], fog[2], Minecraft.getInstance().gameRenderer.getRenderDistance());
         f.base = SKY.base;
         f.exposure = SKY.exposure;
         f.bodyExposure = (float) NukeLight.bodyExposure();
@@ -486,6 +490,8 @@ public final class NukePall {
         float sx, sy, day;
         /** Per-channel sun and sky light, linear: white horizontal wall at noon = 1. */
         final float[] sun = new float[3], sky = new float[3];
+        /** Minecraft's sky colour on screen ({@code ClientLevel.getSkyColor}): the sky disc vanilla draws. */
+        final float[] shown = new float[3];
         /**
          * On-screen sky light (white wall), eye adaptation to it ({@code Sight.adapted}: mushroom glow and ball light
          * into the frame), and resulting fire glow strength on dust ({@link CloudPuffs#glowOnSmoke}).
@@ -502,6 +508,9 @@ public final class NukePall {
         float day = sky ? smooth(-0.06f, 0.18f, into.sy) * (1 - 0.55f * level.getRainLevel(partial)) * (1 - 0.35f * level.getThunderLevel(partial)) : 0;
         into.day = day;
         Vec3 skyColor = level.getSkyColor(eye, partial);
+        into.shown[0] = (float) skyColor.x;
+        into.shown[1] = (float) skyColor.y;
+        into.shown[2] = (float) skyColor.z;
         float night = 1 - day;
         // at night, no darker than sky light on wall and mushroom billows (FarView.ambient, 0.17 on screen): night sky color is almost
         // black, so pall behind the front would form a black curtain over the city while the dust wall and world remain visible
