@@ -56,6 +56,10 @@ public final class NuclearWorld {
      * ({@link FlashScorch#burnOut}; no ticks scheduled during chunk load).
      */
     private final it.unimi.dsi.fastutil.longs.LongOpenHashSet unburnt = new it.unimi.dsi.fastutil.longs.LongOpenHashSet();
+    /** Chunks waiting to go to their viewers whole, by pending sends ({@link RuinDelivery}). */
+    final it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap wholeWaiting = new it.unimi.dsi.fastutil.longs.Long2IntOpenHashMap();
+    /** Game time the chunk started waiting ({@link RuinDelivery#HOLD_LIMIT}). */
+    final it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap wholeSince = new it.unimi.dsi.fastutil.longs.Long2LongOpenHashMap();
     /** Unfinished saved craters resumed (after world load). */
     private boolean restored;
     /** World game time of last slow-tick log. */

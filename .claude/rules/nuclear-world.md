@@ -120,7 +120,9 @@ paths:
   per chunk (AT); to players already holding the chunk (`RuinDelivery`: viewers from the holder's player provider, as
   vanilla's broadcast): fewer than `RuinDelivery.WHOLE_FROM` changed positions go as section packets in the same tick,
   more as one whole-chunk packet once the light engine has finished the chunk's checks (light fence through the
-  chunk cache's main-thread queue, like `BlockLighting`), so it carries the ruins' own light (plus up to 24 removed
+  chunk cache's main-thread queue, like `BlockLighting`), so it carries the ruins' own light; while it waits, vanilla's
+  light broadcast for that chunk is held (`RuinDelivery.onLevelTickPre` clears its holder's light bits, AT; at most
+  `HOLD_LIMIT` ticks): computed over the new blocks, it would light the old ones (plus up to 24 removed
   positions with their blocks as client debris, `ScarQueue.thrown`, `RuinPlan.thrown`, to players already holding the
   chunk); Distant Horizons LODs:
   `compat/DhChunks` (`overwriteChunkDataAsync`); block entities and POIs go through the world after replacement;
@@ -419,7 +421,8 @@ paths:
   19.11.2026). A whole chunk costs ~0.55 ms (`RuinDelivery.CHUNK_NANOS`, `POSITION_NANOS`). It goes after the light
   fence: built on the write tick it shows new blocks in old light until light updates arrive (GameTest
   `heavyRuinsGoWholeAfterTheirLight`: stale sky light without the fence; `heavyRuinsAsDeltasGiveTheSameChunk`: the
-  same ruins through deltas, both client chunks equal the server's). Measuring stalls: `jstack -l` and
+  same ruins through deltas, both client chunks equal the server's; `lightWaitsForTheWholeChunk`: light thread held,
+  a light mark on the waiting chunk reaches the client without the hold). Measuring stalls: `jstack -l` and
   `ThreadMXBean.dumpAllThreads(true, true)` walk the heap at a safepoint, 115–250 ms each on the full-pack client:
   probes every 0.5 s turned a 4 s stall into 13 s; subtract `-Xlog:safepoint` ThreadDump/PrintThreads time.
 - `ChunkMap.getPlayers(pos, false)` (`isChunkTracked`) excludes players whose chunk is still queued for sending;

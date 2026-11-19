@@ -74,6 +74,59 @@ public final class RuinDeliveryGameTests {
         run(h, false);
     }
 
+    /**
+     * While a heavily ruined chunk waits for its light, vanilla must not broadcast that chunk's light first: computed over
+     * the new blocks, it would light the old ones on the client. The light thread is held so the chunk keeps waiting,
+     * and a light change is marked on its holder meanwhile (as the chunk's own checks or a ruined neighbour's light
+     * would); nothing of it may reach the client before the whole chunk.
+     */
+    @GameTest(template = "range", timeoutTicks = 400, batch = "nuke_delivery_hold", skyAccess = true)
+    public static void lightWaitsForTheWholeChunk(GameTestHelper h) {
+        ServerLevel level = h.getLevel();
+        LevelChunk heavy = level.getChunkAt(h.absolutePos(new BlockPos(16, 12, 16)));
+        int y = h.absolutePos(new BlockPos(0, 12, 0)).getY();
+        house(level, heavy.getPos(), y);
+        Detonation d = atPsi(h, new BlockPos(-120, 12, 32), true, h.relativePos(heavy.getPos().getBlockAt(8, y + 2, 8)), 10);
+        Recorder rec = Recorder.attach(h, List.of(heavy.getPos()));
+        java.util.concurrent.CountDownLatch light = new java.util.concurrent.CountDownLatch(1);
+        StrikeGameTests.afterTest(h, light::countDown);
+        long[] applied = {0};
+        h.runAfterDelay(20, () -> {
+            var engine = level.getChunkSource().getLightEngine();
+            engine.addTask(heavy.getPos().x, heavy.getPos().z, net.minecraft.server.level.ThreadedLevelLightEngine.TaskType.PRE_UPDATE, () -> {
+                try {
+                    light.await(20, java.util.concurrent.TimeUnit.SECONDS);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                }
+            });
+            rec.started = true;
+            RuinPlan plan = RuinPlanner.plan(level, d, heavy);
+            h.assertTrue(plan.apply(level, heavy, d, new ColumnScar.Budget(false)), "the new plan is outdated");
+            h.assertTrue(RuinDelivery.waiting(level, heavy.getPos()), "the heavy chunk does not wait to go whole");
+            ChunkHolder holder = level.getChunkSource().chunkMap.getVisibleChunkIfPresent(heavy.getPos().toLong());
+            holder.sectionLightChanged(LightLayer.SKY, SectionPos.blockToSectionCoord(y));
+            applied[0] = level.getGameTime();
+        });
+        h.runAfterDelay(30, () -> {
+            h.assertTrue(RuinDelivery.waiting(level, heavy.getPos()), "the light fence passed while the light thread was held");
+            List<Object> got = rec.got(heavy.getPos());
+            h.assertTrue(count(got, ClientboundLightUpdatePacket.class) == 0 && count(got, ClientboundLevelChunkWithLightPacket.class) == 0,
+                    "while waiting the client got " + got.stream().map(o -> o.getClass().getSimpleName()).toList());
+            light.countDown();
+        });
+        h.succeedWhen(() -> {
+            List<Object> got = rec.got(heavy.getPos());
+            int first = indexOf(got, ClientboundLevelChunkWithLightPacket.class);
+            h.assertTrue(first >= 0 && level.getGameTime() > applied[0] + 30, "waiting for the whole chunk");
+            for (int i = 0; i < first; i++) {
+                h.assertFalse(got.get(i) instanceof ClientboundLightUpdatePacket, "a light update reached the old blocks before the ruined chunk");
+            }
+            h.assertTrue(Light.of((ClientboundLevelChunkWithLightPacket) got.get(first), level).equals(Light.of(level, heavy.getPos())),
+                    "the whole chunk carries stale light");
+        });
+    }
+
     private static void run(GameTestHelper h, boolean wholeExpected) {
         StrikeGameTests.gameSpeed(h);
         ServerLevel level = h.getLevel();
