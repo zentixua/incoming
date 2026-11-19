@@ -3225,6 +3225,22 @@ public final class SmokePuffs {
             return (float) (1 - Math.exp(-tau[k]));
         }
 
+        /**
+         * Colour of the substance around the eye seen along a ray with height cosine y (one channel, thick-layer colour
+         * {@code shown} as {@link #thick} gives it). Inside a scattering layer lit from above, the light coming down is
+         * brighter than the light the matter below sends up: in the two streams of {@link #thick} (same closure) the
+         * upward stream is R∞ = (1 − s)/(1 + s) of the downward one. Radiance linear in y between the two (the
+         * first-order angular term of the diffusion regime): ∝ 1 + s·y, at the horizon the thick-layer colour as before
+         * (the level of light deep in the cloud, its darkening under the matter above, is not modelled: puffs of the same
+         * cloud outside the veil are lit the same way). Droplet fog (s → 0) stays even, dust (s ≈ 0.5) is 2.7 times
+         * brighter overhead than underfoot, soot (s ≈ 0.93) almost black underfoot. Before, one colour for every
+         * direction: inside the dust of a B-2 salvo the frame was one flat beige (video 9:14: RGB 139/127/115, SD 0).
+         */
+        static float byHeight(float shown, double y) {
+            double lin = Math.pow(Math.max(shown, 0), 2.2), s = (1 - lin) / (1 + lin);
+            return (float) (shown * Math.pow(Math.max(1 + s * Math.clamp(y, -1, 1), 0), 1 / 2.2));
+        }
+
         /** Copy (checks: the grid at the sink survives the next frame). */
         Veil copy() {
             Veil c = new Veil();
@@ -3331,9 +3347,9 @@ public final class SmokePuffs {
                     }
                     tau[k] = sum;
                     if (sum > 0) {
-                        r[k] = (float) (sr / sum);
-                        g[k] = (float) (sg / sum);
-                        b[k] = (float) (sb / sum);
+                        r[k] = byHeight((float) (sr / sum), ry);
+                        g[k] = byHeight((float) (sg / sum), ry);
+                        b[k] = byHeight((float) (sb / sum), ry);
                         double mean = far / sum, spread = Math.sqrt(Math.max(0, far2 / sum - mean * mean));
                         double half = half(sum, mean, spread);
                         depth[k] = (float) Math.max(VEIL_AT, half);
