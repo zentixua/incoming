@@ -37,7 +37,7 @@ public record ServerConfigMigration(ModConfigSpec delegate) implements IConfigSp
     private boolean oldWaveDefault(UnmodifiableCommentedConfig config) {
         if (!(config.get(WAVE) instanceof Number n) || n.doubleValue() != IncomingConfig.OLD_GAME_WAVE_SPEED) return false;
         Object preset = config.get(PRESET);
-        if (preset != null && IncomingConfig.ScalePreset.CUSTOM.name().equals(preset.toString())) return false;
+        if (preset != null && IncomingConfig.ScalePreset.CUSTOM.name().equalsIgnoreCase(preset.toString())) return false;
         String written = config.getComment(WAVE), current = delegate.getSpec().<ModConfigSpec.ValueSpec>get(WAVE).getComment();
         // line ends normalized as the spec's own comment check does
         return written == null || !written.replace("\r\n", "\n").equals(current.replace("\r\n", "\n"));
