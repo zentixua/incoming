@@ -164,6 +164,11 @@ public final class ClientNuclear {
         static final double LEAD = 3;
         /** Frame time without a new anchor before the age eases to a stop, and the ease's length, ticks (100 ms). */
         static final double STALE = 3, EASE = 2;
+        /**
+         * Own time a live detonation waits for its first per-tick anchor, ticks: none by then means a recording made before them (3.13 and
+         * older, the live packet alone), which runs on own time instead of easing to a stop {@link #LEAD} past that packet.
+         */
+        static final double PROBE = 20;
         /** Own time over which the server's rate is measured, ticks. */
         static final double RATE_WINDOW = 20;
         /** The server's age at the latest anchor's send. */
@@ -175,6 +180,8 @@ public final class ClientNuclear {
         private final java.util.ArrayDeque<double[]> recent = new java.util.ArrayDeque<>();
         /** Anchors arrive every server tick (current server, show running). */
         private boolean streamed;
+        /** A per-tick anchor has arrived ({@link #PROBE}). */
+        private boolean anchored;
         /** The show is over: anchors sent for other detonations' shows no longer cap this one. */
         private boolean over;
         /** A past detonation (entry, seek) shown from an estimate: the server's first anchor sets the age whole. */
@@ -197,6 +204,7 @@ public final class ClientNuclear {
         void anchor(long serverAge) {
             anchor = Math.max(0, serverAge);
             anchorAt = at;
+            anchored = true;
             unseen = true;
             streamed = !over;
             if (estimated) {
@@ -229,6 +237,7 @@ public final class ClientNuclear {
                 seenAt = now;
                 unseen = false;
             }
+            if (streamed && !anchored && now > PROBE) streamed = false;
             // error against the target at the step's start (the step itself is not an error)
             if (!streamed) {
                 double target = anchor + (now - dt - anchorAt);
@@ -524,7 +533,8 @@ public final class ClientNuclear {
             double seen = Math.hypot(eye.x - a.d.burst().x, eye.z - a.d.burst().z);
             if (a.pall.visible(a.ticks(0)) || wall > 0) a.ground.survey(a.ticks(0), wall, seen, heights, water, hard, sand);
             // firestorm tornadoes follow terrain beneath them
-            if (heights != null) a.storm.track(a.ticks(1) / 20.0, heights);
+            // the tick's own age: a frame-fraction query of the next tick would advance the clock past every frame of this one
+            if (heights != null) a.storm.track(a.ticks(0) / 20.0, heights);
             NukeWater.tick(a, level, eye);
             NukeDust.front(a, eye);
             if (a.ticks(0) > lifeTicks(a.d) && a.clockSeconds(0) > a.d.blackRainEndSeconds() && !a.pall.visible(a.ticks(0))) {
