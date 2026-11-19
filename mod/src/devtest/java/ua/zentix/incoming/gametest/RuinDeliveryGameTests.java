@@ -91,7 +91,9 @@ public final class RuinDeliveryGameTests {
         java.util.concurrent.CountDownLatch light = new java.util.concurrent.CountDownLatch(1);
         StrikeGameTests.afterTest(h, light::countDown);
         long[] applied = {0};
+        Light[] before = {null};
         h.runAfterDelay(20, () -> {
+            before[0] = Light.of(level, heavy.getPos());
             var engine = level.getChunkSource().getLightEngine();
             engine.addTask(heavy.getPos().x, heavy.getPos().z, net.minecraft.server.level.ThreadedLevelLightEngine.TaskType.PRE_UPDATE, () -> {
                 try {
@@ -122,8 +124,7 @@ public final class RuinDeliveryGameTests {
             for (int i = 0; i < first; i++) {
                 h.assertFalse(got.get(i) instanceof ClientboundLightUpdatePacket, "a light update reached the old blocks before the ruined chunk");
             }
-            h.assertTrue(Light.of((ClientboundLevelChunkWithLightPacket) got.get(first), level).equals(Light.of(level, heavy.getPos())),
-                    "the whole chunk carries stale light");
+            clientLight(h, level, heavy.getPos(), before[0], rec);
         });
     }
 
@@ -171,10 +172,8 @@ public final class RuinDeliveryGameTests {
                 for (int i = 0; i < first; i++) {
                     h.assertFalse(heavyGot.get(i) instanceof ClientboundLightUpdatePacket, "a light update reached the old blocks before the ruined chunk");
                 }
-                // and its light is the ruins' own (the server's light after the wave), not the light before
-                Light sent = Light.of((ClientboundLevelChunkWithLightPacket) heavyGot.get(first), level), now = Light.of(level, heavy.getPos());
-                h.assertTrue(!now.equals(heavyClient.lightBefore), "the ruins changed no light: the test checks nothing");
-                h.assertTrue(sent.equals(now), "the whole chunk carries stale light: " + sent.diff(now));
+                // and its light is the ruins' own, applied over the client's light before the wave
+                clientLight(h, level, heavy.getPos(), heavyClient.lightBefore, rec);
             } else {
                 h.assertTrue(heavyChunks == 0 && heavyDeltas >= RuinDelivery.WHOLE_FROM,
                         "forced deltas: got " + heavyChunks + " chunks and " + heavyDeltas + " delta positions");
@@ -294,8 +293,18 @@ public final class RuinDeliveryGameTests {
         }
     }
 
-    /** Light of a chunk as a client holds it: per section and layer, absent, empty or its bytes. */
-    private record Light(Map<String, byte[]> layers) {
+    /**
+     * Light of a chunk as a client holds it: per section and layer, absent (null), empty or its bytes. A light payload
+     * (whole chunk or light update) replaces the sections in its data mask, zeroes those in its empty mask and leaves
+     * the rest as the client had them, as vanilla's client does ({@code ClientPacketListener.readSectionList}).
+     */
+    private static final class Light {
+        final Map<String, byte[]> layers;
+
+        private Light(Map<String, byte[]> layers) {
+            this.layers = layers;
+        }
+
         static Light of(ServerLevel level, ChunkPos pos) {
             var engine = level.getLightEngine();
             Map<String, byte[]> m = new HashMap<>();
@@ -308,43 +317,77 @@ public final class RuinDeliveryGameTests {
             return new Light(m);
         }
 
-        static Light of(ClientboundLevelChunkWithLightPacket p, ServerLevel level) {
-            var engine = level.getLightEngine();
-            ClientboundLightUpdatePacketData d = p.getLightData();
-            Map<String, byte[]> m = new HashMap<>();
-            read(m, LightLayer.SKY, engine.getMinLightSection(), engine.getMaxLightSection(), d.getSkyYMask(), d.getEmptySkyYMask(), d.getSkyUpdates());
-            read(m, LightLayer.BLOCK, engine.getMinLightSection(), engine.getMaxLightSection(), d.getBlockYMask(), d.getEmptyBlockYMask(), d.getBlockUpdates());
-            return new Light(m);
+        Light copy() {
+            return new Light(new HashMap<>(layers));
         }
 
-        private static void read(Map<String, byte[]> m, LightLayer layer, int min, int max, java.util.BitSet mask, java.util.BitSet empty, List<byte[]> data) {
+        /** Apply a payload the client received for this chunk. */
+        void apply(ClientboundLightUpdatePacketData d, ServerLevel level) {
+            var engine = level.getLightEngine();
+            apply(LightLayer.SKY, engine.getMinLightSection(), engine.getMaxLightSection(), d.getSkyYMask(), d.getEmptySkyYMask(), d.getSkyUpdates());
+            apply(LightLayer.BLOCK, engine.getMinLightSection(), engine.getMaxLightSection(), d.getBlockYMask(), d.getEmptyBlockYMask(), d.getBlockUpdates());
+        }
+
+        private void apply(LightLayer layer, int min, int max, java.util.BitSet mask, java.util.BitSet empty, List<byte[]> data) {
             int next = 0;
             for (int s = min; s < max; s++) {
                 int bit = s - min;
-                m.put(layer + "@" + s, mask.get(bit) ? data.get(next++) : empty.get(bit) ? new byte[0] : null);
+                if (mask.get(bit)) layers.put(layer + "@" + s, data.get(next++));
+                else if (empty.get(bit)) layers.put(layer + "@" + s, new byte[0]);
             }
         }
 
-        @Override
-        public boolean equals(Object o) {
-            return o instanceof Light l && diff(l).isEmpty();
+        private static boolean zero(byte[] a) {
+            for (byte b : a) if (b != 0) return false;
+            return true;
         }
 
-        @Override
-        public int hashCode() {
-            return layers.keySet().hashCode();
-        }
-
+        /** Sections that differ: absent against present counts, an empty section equals all zeros. */
         String diff(Light o) {
             List<String> out = new ArrayList<>();
-            for (var e : layers.entrySet()) {
-                byte[] a = e.getValue(), b = o.layers.get(e.getKey());
-                // a section the packet leaves out keeps the client's copy: only compare sections both have
-                if (a == null || b == null) continue;
-                if (!Arrays.equals(a, b)) out.add(e.getKey());
+            java.util.Set<String> keys = new java.util.TreeSet<>(layers.keySet());
+            keys.addAll(o.layers.keySet());
+            for (String k : keys) {
+                byte[] a = layers.get(k), b = o.layers.get(k);
+                if (a == null && b == null) continue;
+                if (a == null || b == null) {
+                    out.add(k + (a == null ? " absent here" : " absent there"));
+                    continue;
+                }
+                if (zero(a) && zero(b)) continue;
+                if (!Arrays.equals(a, b)) out.add(k);
             }
             return String.join(", ", out);
         }
+
+        boolean same(Light o) {
+            return diff(o).isEmpty();
+        }
+    }
+
+    /**
+     * The client's light of the chunk through the packets in order, from its light before the wave: right after the
+     * whole chunk it must already be the ruins' light, the server's light once the chunk's light has settled (the
+     * fixture chunk is alone: nothing changes its light after its own checks), not something a later light update
+     * repairs; and it stays so to the end. A packet without light, or one built before the chunk's light, fails.
+     */
+    private static void clientLight(GameTestHelper h, ServerLevel level, ChunkPos pos, Light before, Recorder rec) {
+        Light client = before.copy(), now = Light.of(level, pos);
+        h.assertTrue(!now.same(before), "the ruins changed no light: the test checks nothing");
+        int whole = 0;
+        for (Object o : rec.got(pos)) {
+            if (o instanceof ClientboundLevelChunkWithLightPacket c) {
+                client.apply(c.getLightData(), level);
+                whole++;
+                String diff = client.diff(now);
+                h.assertTrue(diff.isEmpty(), "after the whole chunk the client's light is not the ruins' light: " + diff);
+            } else if (o instanceof ClientboundLightUpdatePacket l) {
+                client.apply(l.getLightData(), level);
+            }
+        }
+        h.assertTrue(whole > 0, "no whole chunk");
+        String diff = client.diff(now);
+        h.assertTrue(diff.isEmpty(), "the client's light ends unlike the server's: " + diff);
     }
 
     /** Stands in for every viewer of the chosen chunks: records what vanilla and Incoming send them, in order. */
