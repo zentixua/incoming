@@ -593,7 +593,7 @@ public final class Warheads {
             if (IncomingConfig.SERVER.blockDamage.get() && !onCraft) {
                 unit(level, area, main, ImpactCost.Kind.GROUND, "Crater", l -> happened() ? Craters.dig(l, pos, weapon.spec().charge(), mat, seed) : 0);
                 // what the blast left without support falls (the explosion's removals are known once it ends)
-                StrikeCollapse.queue(level, area, main, pos);
+                if (IncomingConfig.SERVER.collapse.get()) StrikeCollapse.queue(level, area, main, pos);
             }
             if (weapon.spec().fuelAtImpact() > 0 && !onCraft) {
                 Craters.ignite(level, area, main, this::happened, pos, weapon.spec().fuelAtImpact());
@@ -702,6 +702,8 @@ public final class Warheads {
                 if (blocks) {
                     // Crater from top before cavity excavates charge column.
                     if (law.breaches()) unit(level, area, main, ImpactCost.Kind.GROUND, "Ejection crater", l -> happened() ? crater(l) : 0);
+                    // what the charge waves (bunker walls, the breakout wave above ground) left without support falls
+                    if (IncomingConfig.SERVER.collapse.get()) StrikeCollapse.queue(level, area, main, pos);
                     int r = Mth.ceil(law.crush());
                     for (int dy = -r; dy <= r; dy++) {
                         int y = dy;

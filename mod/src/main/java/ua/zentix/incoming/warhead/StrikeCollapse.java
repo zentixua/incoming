@@ -72,7 +72,7 @@ final class StrikeCollapse implements UnitQueue.Job {
     @Nullable
     LongSupplier clock;
     /** Measurement: blocks dropped, falling entities, rubble placed at once, positions changed since the snapshot. */
-    int dropped, live, placed, changed;
+    int dropped, live, placed, changed, solved;
 
     private record Landing(BlockPos from, BlockState state, @Nullable CompoundTag data) {}
 
@@ -140,6 +140,10 @@ final class StrikeCollapse implements UnitQueue.Job {
 
     @Override
     public void end(ServerLevel level) {
+        if (support != null && Incoming.LOG.isDebugEnabled()) {
+            Incoming.LOG.debug("Collapse at {}: blast removed {}, chunks {}, solved {}, fell {} (falling {}, landed at once {}), changed before the fall {}",
+                    BlockPos.containing(centre).toShortString(), support.removedCount(), support.chunks(), solved, dropped, live, placed, changed);
+        }
         if (support != null) support.cancel();
         area.release(level);
     }
@@ -191,6 +195,7 @@ final class StrikeCollapse implements UnitQueue.Job {
             if (m != null) kinds.merge(m, 1, Integer::sum);
         }
         fluid = r.fluidTicks();
+        solved = r.solved();
         if (mass > 0) {
             GroundMaterial material = kinds.entrySet().stream().max(java.util.Map.Entry.comparingByValue())
                     .map(java.util.Map.Entry::getKey).orElse(GroundMaterial.BRICK);

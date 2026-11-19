@@ -171,7 +171,7 @@ public final class IncomingConfig {
                     .translation("incoming.config.fire").define("fire", true);
             debrisStay = b.comment("Ground clods stay as blocks on loose ground; large airframe parts and burning debris can also remain. Small chips disperse. Off: all debris disappears on landing. Fire still needs fuel.")
                     .translation("incoming.config.debris_stay").define("debris_stay", true);
-            collapse = b.comment("An underground blast brings down the roof of the cavity above it.")
+            collapse = b.comment("What a blast leaves without support falls: storeys above blown-out walls and floors, the roof of a cavity above an underground bomb.")
                     .translation("incoming.config.collapse").define("collapse", true);
             earlyWarning = b.comment("An early-warning network exists in this world: warns players of approaching strikes and nuclear launches.",
                             "Off: only the launching player receives flight data; projectiles, their sounds and SAM radar still work.")
