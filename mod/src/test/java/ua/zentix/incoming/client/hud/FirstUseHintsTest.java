@@ -7,7 +7,7 @@ import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class FirstUseHintsTest {
-    /** A hint is shown the first time only: the second claim, as after a world change or restart, finds it recorded. */
+    /** A hint is recorded once: claiming it again finds it in the list saved in incoming-client.toml. */
     @Test
     void shownOnce() {
         List<String> after = FirstUseHints.Ledger.claim(List.of(), "console");
