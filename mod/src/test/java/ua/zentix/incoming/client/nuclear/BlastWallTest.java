@@ -546,6 +546,32 @@ class BlastWallTest {
     }
 
     /**
+     * Wilson cloud from the world air (lead decision, 19.11): one law with conventional blasts ({@code Condensation.water}) — the negative
+     * phase's expansion condenses water when it cools air below its dew point. At the clear-weather surface humidity of the world air (70 %)
+     * and in rain (saturated) the dome forms for 1 kt–1 Mt surface bursts; in desert air (10 %) it does not — no biome threshold. The negative
+     * phase is no deeper than 4 psi (Glasstone and Dolan §3.05).
+     */
+    @Test
+    void wilsonCloudFromTheWorldAir() {
+        StringBuilder rows = new StringBuilder();
+        for (double kt : new double[]{1, 15, 1000}) {
+            Detonation d = new Detonation(1, new Vec3(0, 64, 0), 64, kt, true, 0, 0, 0, 20_000, 7, 1f, false, 1f);
+            assertTrue(BlastWall.condenses(d, ua.zentix.incoming.util.Air.SURFACE_CLEAR), kt + " kt: clear-weather air");
+            assertTrue(BlastWall.condenses(d, 1), kt + " kt: rain");
+            assertTrue(!BlastWall.condenses(d, 0.1), kt + " kt: desert air");
+            double lo = 0, hi = 1;
+            for (int i = 0; i < 30; i++) {
+                double m = 0.5 * (lo + hi);
+                if (BlastWall.condenses(d, m)) hi = m;
+                else lo = m;
+            }
+            assertEquals(0.51, hi, 0.03, kt + " kt: relative humidity from which the negative phase condenses");
+            rows.append(String.format(java.util.Locale.ROOT, " %.0f kt: from %.2f;", kt, hi));
+        }
+        System.out.println("Wilson cloud forms from relative humidity" + rows);
+    }
+
+    /**
      * The head's dust rolls in eddies of the layer's size (18.11, Artem: the lofted dust curls in successive rolls): the billow pattern turns about
      * horizontal axes on concentric rings of eddies, by the eddies' turn over the wind's path (σ_u ≈ 2.5 u*, u* ≈ 0.04 U; × the presentation
      * gain), top outward while the wave's wind blows outward, back toward ground zero as it reverses. Only the pattern turns: an eddy's rim

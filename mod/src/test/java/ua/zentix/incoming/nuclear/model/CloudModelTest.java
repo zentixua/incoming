@@ -122,10 +122,4 @@ class CloudModelTest {
         assertEquals(0.6, CloudModel.capBottom(1e5, 0, 15, false) / CloudModel.top(1e5, 0, 15, false), 1e-6);
     }
 
-    @Test
-    void wilson() {
-        assertFalse(CloudModel.wilsonCloud(0));
-        assertTrue(CloudModel.wilsonCloud(0.4));
-        assertTrue(CloudModel.wilsonCloud(1));
-    }
 }

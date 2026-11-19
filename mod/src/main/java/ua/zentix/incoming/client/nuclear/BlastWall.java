@@ -1,12 +1,14 @@
 package ua.zentix.incoming.client.nuclear;
 
 import net.minecraft.util.Mth;
+import ua.zentix.incoming.client.fx.smoke.Condensation;
 import ua.zentix.incoming.nuclear.Detonation;
-import ua.zentix.incoming.nuclear.model.CloudModel;
+import ua.zentix.incoming.nuclear.model.BlastModel;
 import ua.zentix.incoming.nuclear.model.DustModel;
 import ua.zentix.incoming.nuclear.model.FireballModel;
 import ua.zentix.incoming.nuclear.model.HobBlast;
 import ua.zentix.incoming.nuclear.model.WaterModel;
+import ua.zentix.incoming.util.Air;
 
 /**
  * Head of the shock-wave dust layer (DESIGN-nuke §6): youngest, lowest and densest part of the same layer that later remains
@@ -60,6 +62,8 @@ public final class BlastWall {
      * zero when it reverses ({@link #carriedShare}).
      */
     static final double EDDY = 0.2;
+    /** Deepest negative phase of a nuclear blast wave, kPa: never more than about 4 psi below ambient (Glasstone &amp; Dolan 1977, §3.05). */
+    static final double UNDER_MAX_KPA = BlastModel.kpa(4);
     /**
      * presentation: the eddies turn this many times faster than {@link #EDDY} — at the physical rate a 1 Mt head 5 km out turns 0.1 rad in its
      * seconds of life, which no one sees from kilometres; at this gain about a quarter turn out and back. Where dust is, its amount and its
@@ -98,13 +102,13 @@ public final class BlastWall {
     private final double[] paved = new double[NODES], prompt = new double[NODES];
     /** Positive phase at the table end, model s: beyond the table, wedge end follows front travel over this phase. */
     private final double lastPositive;
-    /** Humid air means a Wilson cloud exists ({@link CloudModel#wilsonCloud}). */
+    /** The negative phase condenses water: a Wilson cloud exists ({@link #condenses}). */
     private final boolean humid;
     /** Head-billow noise tile, m ({@link #TILE}). */
     private final double tileM;
 
     public BlastWall(Detonation d) {
-        this(d, CloudModel.wilsonCloud(humidity(d)));
+        this(d, condenses(d, humidity()));
     }
 
     BlastWall(Detonation d, boolean humid) {
@@ -129,14 +133,33 @@ public final class BlastWall {
         tileM = TILE * first;
     }
 
-    /** Ground-zero humidity (Wilson cloud visible in humid air): from client biome; 1 over water. */
-    static double humidity(Detonation d) {
+    /**
+     * Surface humidity of the world air at detonation ({@link Air#surfaceHumidity}: 70 % in clear weather, saturated in rain), the same air as
+     * flight, smoke and sound; {@link Air#SURFACE_CLEAR} without a world.
+     */
+    static double humidity() {
         var level = net.minecraft.client.Minecraft.getInstance().level;
-        if (level == null) return 0.5;
-        // surface block: on land, below first air; for crosshair water height (surface, 62.889), the water itself
-        var pos = new net.minecraft.core.BlockPos(Mth.floor(d.burst().x), NukeWater.surfaceBlock(d.groundY()), Mth.floor(d.burst().z));
-        if (!level.getFluidState(pos).isEmpty()) return 1;
-        return level.getBiome(pos).value().getModifiedClimateSettings().downfall();
+        return level == null ? Air.SURFACE_CLEAR : Air.of(level).surfaceHumidity();
+    }
+
+    /**
+     * Whether the wave's negative phase condenses water in air of relative humidity {@code rh} — a Wilson cloud — by the same law as for
+     * conventional blasts ({@link Condensation#water}: shock heating, isentropic expansion to the negative-phase minimum
+     * of a Friedlander b = 1 wave, p/e², no deeper than {@link #UNDER_MAX_KPA}; saturation by Magnus, latent heat; Birk 2017): at some
+     * ground range between the fireball and the 0.3 psi dust edge the expanded air holds condensed water. The 4 psi negative phase near the
+     * fireball condenses from 51 % relative humidity at any yield (15 °C air, {@code CloudModel.T_AIR_K}): yes at the clear-weather 70 % and
+     * in rain, not in dry desert air.
+     */
+    static boolean condenses(Detonation d, double rh) {
+        double hob = Math.max(0, d.hobMetres());
+        double from = Math.max(1, FireballModel.maxRadius(d.yieldKt(), d.surface())), to = Math.max(from * 1.01, HobBlast.rangeFor(0.3, hob, d.yieldKt()));
+        for (int i = 0; i <= 64; i++) {
+            double m = from * Math.pow(to / from, i / 64.0), kpa = d.groundOverpressureKpa(d.blocks(m));
+            if (kpa <= 0) continue;
+            double under = 1000 * Math.min(UNDER_MAX_KPA, kpa / Math.exp(2));
+            if (Condensation.water(kpa, -under, rh) > 0) return true;
+        }
+        return false;
     }
 
     /** Layer table at {@code groundM} m from ground zero (linear between nodes; no dust beyond the table). */

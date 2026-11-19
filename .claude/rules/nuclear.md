@@ -243,7 +243,9 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   even steps over 1.5 wedges/top skipped thin wedge, leaving uniform light deep inside. Thus head interior is dark
   (meters of visibility), top lit by sun/fireball, bottom by fires at night (`BlastWallTest.nearDustTakesWallLight`).
   Billow shadow uses two samples toward main light. Wilson cloud is a Gaussian shell behind front (0.93 front radius,
-  humid air, 0.15–3.5·∛(Y/15) s): ray traversal is an event, like tornado (`pallWilson`, `wilsonLight`). Camera pall
+  0.15–3.5·∛(Y/15) s) when the negative phase condenses water in the world air (`BlastWall.condenses`: `Condensation.water`, the
+  conventional law, with the negative phase p/e² capped at 4 psi, G&D §3.05, and `Air.surfaceHumidity`: forms from 51 % RH, so
+  in clear weather (70 %) and rain; not biome downfall): ray traversal is an event, like tornado (`pallWilson`, `wilsonLight`). Camera pall
   (`NukePall.tick`: sound, ray range) also uses mean head (`BlastWall.sigma`). Fallback camera dust (`NukeDust.front`,
   when pall is not drawn) uses head `BlastWall.wall`, in its light (`NukePall.dustColor`, below).
 - Visible shock front and shimmer over sphere/storm use distortion pass `HeatPass` (`client/nuclear/NukeHeat`,
@@ -393,8 +395,7 @@ Ruins and everything in `nuclear/world/` are in `nuclear-world.md`.
   water before epicenter chunk arrives; `BurstWater` stays the same object after seek (`Active(Active, …)`). Land and
   heightmap `groundY` is first air above ground (integer); sight, binoculars, missile and B-2 (fluid ray) use surface
   itself, 62.889 at sea: surface block is `NukeWater.surfaceBlock` (`ceil − 1`), not `floor − 1` (block below top water
-  block, making shallow water land without column/surge, while “sea” fallback failed). `BlastWall.humidity` uses same
-  block (used to query air, making over-water Wilson cloud biome-dependent). `Level.getSeaLevel` is deprecated in
+  block, making shallow water land without column/surge, while “sea” fallback failed). `Level.getSeaLevel` is deprecated in
   1.21.1 (always 63), use `WaterDecal.SEA_LEVEL`.
 - Dust/surface pieces use `MOTION_BLOCKING` heightmap top: in ceiling dimensions (Nether), that is ceiling, so dust uses
   epicenter altitude and no surface pieces; over void (End), no terrain.
