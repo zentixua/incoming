@@ -1132,11 +1132,7 @@ public final class FarBlasts {
      * Smoothed: the puff goes behind the ridge gradually.
      */
     public static double visible(double h, double r, double line) {
-        if (line <= 0) return 1;
-        double lo = Math.max(0, h - r), hi = h + r;
-        if (hi <= lo) return line <= h ? 1 : 0;
-        double v = Math.max(0, Math.min(1, (hi - Math.max(line, lo)) / (hi - lo)));
-        return v * v * (3 - 2 * v);
+        return ua.zentix.incoming.nuclear.world.ThermalShadow.discShare(h, r, line);
     }
 
     static boolean isEmpty() {

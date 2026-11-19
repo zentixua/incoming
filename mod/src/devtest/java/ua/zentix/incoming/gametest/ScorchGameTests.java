@@ -118,7 +118,7 @@ public final class ScorchGameTests {
                 fluence[ring] = Math.max(fluence[ring], d.fluence(at));
                 psi[ring] = Math.max(psi[ring], d.psi(at));
                 if (top.is(Blocks.COARSE_DIRT)) coarse[ring]++;
-                if (ua.zentix.incoming.nuclear.world.ThermalShadow.visible(level, d.burst(), at.add(0, -0.5, 0))) seen[ring]++;
+                if (ua.zentix.incoming.nuclear.world.ThermalShadow.visible(level, d, at.add(0, -0.5, 0))) seen[ring]++;
                 // biome - near the plain, without cells at the edge of the site (there are also columns behind the barrier wall, in the shadows)
                 if (plains[x * 64 + z] && z >= 4 && x >= 4 && x < 60) {
                     cells[ring]++;
@@ -243,6 +243,67 @@ public final class ScorchGameTests {
     }
 
     /**
+     * A chunk's light trace depends only on terrain in its own plan window ({@code RuinContext.Grid#shadowLine},
+     * DESIGN-nuke §3.4): the same in every path and order, near a player at the wave or settled hours later. Surface
+     * burst due west of the easternmost chunk A fully on the site, at a scale giving A 25 cal/cm². A stone wall 8
+     * high across the site three chunks west of A (beyond the window) leaves A's plan unchanged; before, a chunk with
+     * the lane to the epicentre in memory took its heights and a chunk without them did not (1 Mt over the Silo map,
+     * 16.11.2026: burned turf in 63 % of chunks near the player at 4.5–5 km, 14 % elsewhere). The same wall beside A,
+     * inside the window, hides the ball: the trace is gone.
+     */
+    @GameTest(template = "range", timeoutTicks = 40, batch = "nuke_shadow_window", skyAccess = true)
+    public static void lightTraceIgnoresTerrainBeyondThePlanWindow(GameTestHelper h) {
+        ServerLevel level = h.getLevel();
+        fillBiome(h, 0, 63, Biomes.PLAINS);
+        plants(h);
+        BlockPos lo = h.absolutePos(BlockPos.ZERO), hi = h.absolutePos(new BlockPos(63, 0, 63));
+        int minX = Math.min(lo.getX(), hi.getX()), maxX = Math.max(lo.getX(), hi.getX());
+        int minZ = Math.min(lo.getZ(), hi.getZ()), maxZ = Math.max(lo.getZ(), hi.getZ());
+        int ground = h.absolutePos(new BlockPos(0, 12, 0)).getY();
+        LevelChunk a = level.getChunk(((maxX + 1) >> 4) - 1, ((minZ + maxZ) / 2) >> 4);
+        ChunkPos c = a.getPos();
+        int far = c.getMinBlockX() - 33, near = c.getMinBlockX() - 2;
+        h.assertTrue(far >= minX && c.getMaxBlockX() <= maxX, "chunk A " + c + " or the far wall " + far + " is off the site");
+        BlockPos zero = new BlockPos(c.getMinBlockX() - 400, ground - 1, c.getMiddleBlockZ());
+        Vec3 mid = new Vec3(c.getMiddleBlockX() + 0.5, ground + 0.5, c.getMiddleBlockZ() + 0.5);
+        double sLo = 0.002, sHi = 1;
+        for (int i = 0; i < 50; i++) {
+            double s = Math.sqrt(sLo * sHi);
+            Detonation probe = new Detonation(-1, Vec3.atBottomCenterOf(zero.above()), zero.getY() + 1, 15, true, 0, 0, 0, 20_000, 7, (float) s, false,
+                    Detonation.OLD_WAVE);
+            if (probe.fluence(mid) < 25) sLo = s;
+            else sHi = s;
+        }
+        Detonation d = NuclearGameTests.detonationAt(h, zero.above(), 0, 15, (float) sHi);
+        // the plan window: radius-REACH square fully loaded
+        for (int dx = -RuinPlanner.REACH; dx <= RuinPlanner.REACH; dx++) {
+            for (int dz = -RuinPlanner.REACH; dz <= RuinPlanner.REACH; dz++) level.getChunk(c.x + dx, c.z + dz);
+        }
+        RuinPlan open = RuinPlanner.planFresh(level, d, a, false);
+        wall(level, far, minZ, maxZ, ground, Blocks.STONE);
+        RuinPlan beyond = RuinPlanner.planFresh(level, d, a, false);
+        wall(level, far, minZ, maxZ, ground, Blocks.AIR);
+        wall(level, near, minZ, maxZ, ground, Blocks.STONE);
+        RuinPlan beside = RuinPlanner.planFresh(level, d, a, false);
+        wall(level, near, minZ, maxZ, ground, Blocks.AIR);
+        h.assertTrue(open.changedBlocks() > 0, "no light trace in chunk A " + c + ": nothing to compare");
+        String diff = open.differs(beyond);
+        h.assertTrue(diff == null, "a wall beyond the plan window changed the light trace of chunk " + c + " (open | wall):" + diff);
+        h.assertTrue(beside.changedBlocks() < open.changedBlocks(), "a wall beside chunk " + c + " left its trace: "
+                + beside.changedBlocks() + " of " + open.changedBlocks() + " changed blocks");
+        Incoming.LOG.info("Light trace window: chunk {}, {} changed blocks in the open and behind a far wall, {} behind a near wall, scale {}",
+                c, open.changedBlocks(), beside.changedBlocks(), String.format(Locale.ROOT, "%.4f", sHi));
+        h.succeed();
+    }
+
+    /** Wall 8 blocks high across the site at {@code x} (absolute), on its ground. */
+    private static void wall(ServerLevel level, int x, int minZ, int maxZ, int ground, Block block) {
+        for (int z = minZ; z <= maxZ; z++) {
+            for (int y = ground; y < ground + 8; y++) level.setBlock(new BlockPos(x, y, z), block.defaultBlockState(), Block.UPDATE_CLIENTS);
+        }
+    }
+
+    /**
      * Light - with a flash, wave - then: chunk A at ~15 cal/cm² is scorched and burns before the wave reaches it (layer
      *  of {@code FlashScorch} flash), and after the wave there is the same world in it, which would give one plan of ruins for the world before the flash - via
      * queue of ruins (plan in the background based on pictures of chunks on which there is already a layer). Chunk B, closest to the epicenter of those to which the wave reaches
@@ -306,16 +367,32 @@ public final class ScorchGameTests {
                 for (int dz = -RuinPlanner.REACH; dz <= RuinPlanner.REACH; dz++) level.getChunk(c.getPos().x + dx, c.getPos().z + dz);
             }
         }
+        // a stone wall 24 high along the side of C (two chunks from A toward the burst: in A's ruin window, beyond its
+        // first ring) that faces A, shading the part of A whose rays cross it (the ball hangs about 23–47 blocks up at
+        // this scale: an 8-high wall 16–35 blocks out hid none of it). The layer and the ruins must see it alike: with a 3×3 layer
+        // window the layer burned turf the ruins keep (review of #664), so A after the wave differed from ruins alone
+        RuinPlan openA = RuinPlanner.planFresh(level, d, a, false);
+        ChunkPos wall = inside.get(0).getPos();
+        int wallX = g.getX() > a.getPos().getMiddleBlockX() ? wall.getMinBlockX() : wall.getMaxBlockX();
+        for (int z = wall.getMinBlockZ(); z <= wall.getMaxBlockZ(); z++) {
+            for (int y = g.getY(); y < g.getY() + 24; y++) level.setBlock(new BlockPos(wallX, y, z), Blocks.STONE.defaultBlockState(), Block.UPDATE_CLIENTS);
+        }
         // the world before the outbreak: what ruins alone would have made it (from scratch, your own ruins of an explosion)
-        LevelChunkSection[] expectA = RuinPlanner.planFresh(level, d, a, false).testAppliedCopy(level, a);
+        RuinPlan walledA = RuinPlanner.planFresh(level, d, a, false);
+        h.assertTrue(openA.differs(walledA) != null, "the wall in A's window does not shade A: the layer and ruins check means nothing (ball "
+                + String.format(Locale.ROOT, "%.1f–%.1f blocks up, A at %.1f blocks", d.burst().y - g.getY() - d.fireballRadius(), d.burst().y - g.getY() + d.fireballRadius(),
+                Math.hypot(midA.x - d.burst().x, midA.z - d.burst().z)) + ")");
+        LevelChunkSection[] expectA = walledA.testAppliedCopy(level, a);
         LevelChunkSection[] expectB = RuinPlanner.planFresh(level, d, b, false).testAppliedCopy(level, b);
         RuinPlan preparedB = RuinPlanner.plan(level, d, b);
         long[] keys = inside.stream().mapToLong(c -> c.getPos().toLong()).toArray();
         FlashScorch flash = FlashScorch.forTest(d, keys, new ColumnScar.Budget(true));
         WorkClock clock = WorkClock.counting(1_000_000L);
         long waveA = ScarQueue.due(d, a.getPos()), waveB = ScarQueue.due(d, b.getPos());
-        String setup = String.format(Locale.ROOT, "scale %.4f, light for A %.1f, for B %.1f cal/cm², pressure for A %.2f, for B %.2f psi; impulse %.2f tick, layer A on %d, wave at A %d, at B %d",
-                sHi, d.fluence(midA), d.fluence(midB), d.psi(midA), d.psi(midB), d.pulseTicks(), flashAt - d.gameTime(), waveA - d.gameTime(), waveB - d.gameTime());
+        String setup = String.format(Locale.ROOT, "scale %.4f, light for A %.1f, for B %.1f cal/cm², pressure for A %.2f, for B %.2f psi; impulse %.2f tick, layer A on %d, wave at A %d, at B %d; "
+                        + "A changed blocks in the open %d, behind the wall %d",
+                sHi, d.fluence(midA), d.fluence(midB), d.psi(midA), d.psi(midB), d.pulseTicks(), flashAt - d.gameTime(), waveA - d.gameTime(), waveB - d.gameTime(),
+                openA.changedBlocks(), walledA.changedBlocks());
         h.assertTrue(Math.abs(d.fluence(midA) - 15) < 0.5, "the light on the A is not the same: " + setup);
         h.assertTrue(flashAt < waveA, "the wave of A is before the layer - the check means nothing: " + setup);
         ScarQueue q = new ScarQueue();
@@ -444,12 +521,7 @@ public final class ScorchGameTests {
         FlashScorch flash = FlashScorch.forTest(d, keys, budget);
         WorkClock clock = WorkClock.counting(1_000_000L);
         try {
-            boolean done = false;
-            for (int i = 0; i < 40 && !done; i++) {
-                clock.start(10_000_000_000L);
-                done = flash.work(level, d.gameTime() + 10_000, clock);
-                if (!done) RuinWorkers.awaitForTest(RuinWorkers.Priority.NEAR, 60_000);
-            }
+            boolean done = flash.finishForTest(level, d.gameTime() + 10_000);
             h.assertTrue(done && flash.appliedChunks() == n, "the flash layer is stuck in " + flash.appliedChunks() + " chunks of " + n);
             int roofFires = 0, lit = 0;
             LevelChunk marked = null, forgotten = null, idle = null;

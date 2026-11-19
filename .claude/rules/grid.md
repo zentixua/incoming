@@ -59,6 +59,11 @@ paths:
   once no outage covers the chunk (`prune`).
 
 ## Pitfalls
+- Outage times (`darkAt`, `lightAt`, `restoreAt`) are on the grid clock (`Blackouts.now` = `WorldClock.ticks`), never game
+  time: pass `Blackouts.now(level)` to `PowerGrid.dark`/`darkSince`, in tests too. With the day stopped (GameTest
+  servers) the clock advances at the real floor (1/72 tick a tick) and jumps with the time of day, so it parts from
+  game time by whatever ran before; `darkChunkRoundTripsThroughDisk` passed `getGameTime()` and failed in one CI shard
+  order ("the block is already bright"), passed in others.
 - Lamp-twin models and states come from the vanilla jar via `tools/gen_grid_assets.py` (do not edit by hand);
   substation textures: `tools/gen_textures.py`. Vanilla assigns the cutout layer to lanterns and end rods in code
   (`ItemBlockRenderTypes`), not the model — twins need it in the model (`render_type`). `ofFullCopy` does not transfer
