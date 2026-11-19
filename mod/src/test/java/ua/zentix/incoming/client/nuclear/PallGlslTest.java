@@ -152,7 +152,9 @@ class PallGlslTest {
         assertEquals(sample, glsl(match(wall, "float m2 = (.+?);")), "shadow billows: the sample is not the same as that of thicknesses");
         assertEquals(sample, glsl(match(wall, "float hm = (.+?);")), "head at point: not the same sample");
         String[] stop = match(at, "if \\((.+?)\\) return h;").split("\\|\\|"), p = args(match(at, "h\\.P = vec4\\(([^;]+)\\); return h;"));
-        String lag = glsl(match(at, "float lag = (.+?);")), numbers = "float Px = " + glsl(p[0]) + ", Py = " + glsl(p[1]) + ", Pz = " + glsl(p[2]) + ";";
+        // the crest (pallWallCrest, presentation like the billow noise) at 1: the law's head
+        assertTrue(at.contains("float crest = pallWallCrest(h.rel);"), "the crest - not where the head point is built (every query must see it)");
+        String lag = glsl(match(at, "float lag = (.+?);")), numbers = "float crest = 1.0;\nfloat Px = " + glsl(p[0]) + ", Py = " + glsl(p[1]) + ", Pz = " + glsl(p[2]) + ";";
         StringBuilder test = new StringBuilder(GLSL).append("\nfloat headAt(float pts, float ptz, float ptwet, float pthard").append(SLOT_PARAMS).append(") {\n");
         for (String c : stop) test.append("if (").append(glsl(c)).append(") return 0.0;\n");
         test.append("float lag = ").append(lag).append(";\n").append(numbers).append("\nfloat Pw = ").append(glsl(p[3])).append(";\nreturn ")
@@ -577,6 +579,23 @@ class PallGlslTest {
     }
 
     /**
+     * Crests (presentation, review of #678): the same along a radius (a crest seen end-on from the ground stays one dome across the wedge),
+     * within 1 − PALL_WALL_CREST..1, and continuous across the ring's ±π seam.
+     */
+    @Test
+    void crestsAreRadialDomesWithoutSeam() {
+        GlslFunction crest = GlslFunction.parse(GLSL, "pallWallCrest");
+        double dip = scalar(GLSL, "PALL_WALL_CREST");
+        for (double a = -3.14; a < 3.14; a += 0.0137) {
+            double near = crest.call(java.util.Map.of("rel.x", 800 * Math.cos(a), "rel.y", 800 * Math.sin(a))), far = crest.call(java.util.Map.of("rel.x", 3200 * Math.cos(a), "rel.y", 3200 * Math.sin(a)));
+            assertEquals(near, far, 1e-4, "angle " + a + ": the crest changes along the radius");
+            assertTrue(near >= 1 - dip - 1e-6 && near <= 1 + 1e-6, "angle " + a + ": " + near);
+        }
+        double eps = 1e-4, below = crest.call(java.util.Map.of("rel.x", -3000 * Math.cos(eps), "rel.y", -3000 * Math.sin(eps))), above = crest.call(java.util.Map.of("rel.x", -3000 * Math.cos(eps), "rel.y", 3000 * Math.sin(eps)));
+        assertEquals(below, above, 0.01, "a seam at ±π");
+    }
+
+    /**
      * The head is an aerosol volume lit from all sides (19.11: lit only by a layer from its top, the dense front's face had the zenith sky's
      * blue or nothing): the shader and the camera dust ({@link NukePall#dustLight}) both take the layer light through the dust above the point,
      * plus half the horizon sky through the face and half the lit ground through the foot, each fading as e^(−kτ).
@@ -588,11 +607,14 @@ class PallGlslTest {
         String wall = body(fx, "void wall(").replaceAll("\\s+", " ");
         assertTrue(wall.contains("float depth = min(min(up, side), gTauBack);"), "the layer light - not through the nearest of the top, the face and the way back");
         String step = body(fx, "void pallStep(").replaceAll("\\s+", " ");
-        assertTrue(step.contains("gTauBack = -log(max(transmit, 1e-6)) + 1.0;") && step.contains("gTauBack = 1e9;"), "a march sample - lit only through the top or face");
+        assertTrue(step.contains("if (headSigma(gDir * prev) < thr) {") && step.contains("passMatter(b, face.rgb * (1.0 - trf) / face.w, trf, light, transmit, haze);"),
+                "a ray's first dense head sample - lit at its jittered depth, not at the face");
+        assertTrue(fx.replaceAll("\\s+", " ").contains("gTauBack = 1.0; vec4 matter = pallSource(p, cone, vec4(0.0), dustLight); gTauBack = 1e9;"), "a near-volume cell - lit at its depth");
         assertEquals(NukePall.WALL_SUN_FACE, scalar(fx, "WALL_SUN_FACE"), 1e-7);
         assertTrue(wall.contains("s.side += hd * w * (exp(-k * min(side, gTauBack)) * face + 0.5 * exp(-k * down) * below);")
                 && wall.contains("vec3 face = 0.5 * horizon + WALL_SUN_FACE * rInf / max(w, vec3(1e-3)) * PallSunLight * max(sunDir.y, 0.0);"), "the horizon sky, the sun down the skin and the lit ground");
-        assertTrue(wall.contains("vec3 below = PALL_LAND * (PallSunLight * max(sunDir.y, 0.0) + PallSkyLight);"), "the ground below - not sun and sky on it");
+        assertTrue(wall.contains("vec3 below = mix(PALL_LAND, PALL_SEA, h.wet) * (PallSunLight * max(sunDir.y, 0.0) + PallSkyLight);"), "the ground below - not sun and sky on it");
+        assertTrue(wall.contains("vec3 ru = 2.0 * k / (3.0 * (1.0 - w * g)), rInf = (1.0 - ru) / (1.0 + ru);"), "the skin's R-inf - not the slab's (PallLight.reflectance)");
         assertTrue(fx.replaceAll("\\s+", " ").contains("vec3 emit = s.albedo * (field + beams + fire + lamps) + s.side;"), "the side light - not emitted");
         assertTrue(wall.contains("* WALL_SHADE;"), "billow self-shadow - not softened");
     }

@@ -639,7 +639,7 @@ public final class NukePall {
             }
             // the head is an aerosol volume lit from all sides (fx_pall wall): the horizon sky through the face, the lit ground through the foot
             double k = PallLight.k(w, DUST_G), horizon = dome;
-            double wp = w * (1 - DUST_G) / (1 - w * DUST_G), rInf = (1 - Math.sqrt(1 - wp)) / (1 + Math.sqrt(1 - wp));
+            double rInf = PallLight.reflectance(w, DUST_G);
             double toFace = 0.5 * horizon + WALL_SUN_FACE * rInf / Math.max(w, 1e-3) * sky.sun[c] * Math.max(sky.sy, 0);
             double around = Math.exp(-k * side) * toFace + 0.5 * Math.exp(-k * below) * PallLight.LAND * (sky.sun[c] * Math.max(sky.sy, 0) + sky.sky[c]);
             lin[c] = w * (Math.max(field, 0) + beams + from + around);

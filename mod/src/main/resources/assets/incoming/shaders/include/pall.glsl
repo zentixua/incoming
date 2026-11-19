@@ -776,6 +776,24 @@ struct WallAt {
 // epicenter (blocks), ground, G, W — relief and water maps of the slot and their numbers, water of the slot (the map is read for
 // water only if it is under the pall). Attenuation of dust — from the edge toward the end of the wedge (dust lifted closer to the
 // epicenter — of its own density); spray — its own
+// presentation: the head's top is a row of rounded crests (Silo S3E09: crests 1.5–2 band heights wide over narrow clefts): this many
+// domes around the ring (1 Mt 3 km out: 196 blocks, 1.9 end tops), each uniform along its radius (seen end-on from the ground facing
+// the burst, so the silhouette, the highest dust along hundreds of metres of view, keeps it), with its own height
+const float PALL_WALL_CRESTS = 96.0;
+// presentation: between crests the head's top dips by up to this share, never above the law's top; the dust there is denser by as
+// much, so its mass stays the law's
+const float PALL_WALL_CREST = 0.35;
+
+// Crest share of the head's top at ground offset rel from the burst (1 − PALL_WALL_CREST..1): rounded domes (√sin: round tops, narrow
+// clefts), each with its own height, the same along the radius; the index wraps so the ring has no seam
+float pallWallCrest(vec2 rel) {
+    if (rel.x * rel.x + rel.y * rel.y < 1e-6) return 1.0;
+    float a = (atan(rel.y, rel.x) / 6.2831853 + 0.5) * PALL_WALL_CRESTS;
+    float n = mod(floor(a), PALL_WALL_CRESTS), f = a - floor(a);
+    float tall = 0.55 + 0.45 * fract(sin(n * 12.9898 + 78.233) * 43758.5453);
+    return 1.0 - PALL_WALL_CREST * (1.0 - tall * sqrt(max(sin(3.1415927 * f), 0.0)));
+}
+
 WallAt pallWallAt(sampler2D ground, mat4 S, mat4 V, vec4 G, vec4 W, vec3 p, float floorUp) {
     WallAt h;
     h.rel = p.xz - S[0].xy;
@@ -791,8 +809,9 @@ WallAt pallWallAt(sampler2D ground, mat4 S, mat4 V, vec4 G, vec4 W, vec3 p, floa
     h.hard = soil.x;
     h.sand = soil.y;
     float lag = V[1].y * h.wet;
-    h.P = vec4(V[0].y, V[0].z * mix(1.0, V[1].z, h.wet), lag, pallWallDensity(h.s - lag, V[0].y, V[0].w, V[3].z, V[3].w, V[1].w, h.wet,
-            V[2].y, V[2].z, V[3].x, V[3].y, h.hard));
+    float crest = pallWallCrest(h.rel);
+    h.P = vec4(V[0].y, V[0].z * mix(1.0, V[1].z, h.wet) * crest, lag, pallWallDensity(h.s - lag, V[0].y, V[0].w, V[3].z, V[3].w, V[1].w, h.wet,
+            V[2].y, V[2].z, V[3].x, V[3].y, h.hard) / crest);
     return h;
 }
 
