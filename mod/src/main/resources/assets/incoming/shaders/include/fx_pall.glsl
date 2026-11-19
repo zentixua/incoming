@@ -370,9 +370,14 @@ const float WALL_SHADE = 0.25;
 // presentation: diffuse light reaches into the head as if through at most this optical depth (multiple-scattering fill): the
 // two-stream light from the layer's top or face alone left the dense front's face 1–2 % of the sky's luminance, p90/p10 20–30 against
 // the footage's 2.8–4.8; extinction, the beams and where the dust is are unchanged
-const float WALL_FILL = 1.0;
-// presentation: scatterings per optical depth the fill skips, for its colour (wall: the diffuse field takes the albedo to that power)
+const float WALL_FILL = 5.0;
+// presentation: scatterings per optical depth the fill skips, for its colour (wall: the diffuse field takes the albedo, relative to its
+// brightest channel, to that power), at most WALL_TINT_MAX: the colour of light diffused out of a thick layer saturates at the
+// semi-infinite layer's albedo, A = (1 − √(1 − ω'))/(1 + √(1 − ω')), ω' = ω(1 − g)/(1 − ωg): for the reference dust (ω 0.87 red, 0.73 blue,
+// g 0.7) blue/red 0.55 = (0.73/0.87)^3.4. Unbounded, the exponent reached 20–180 inside the dense front and zeroed the fill there
+// (0.87^72 ≈ 4·10⁻⁵: a black face, 19.11 probe)
 const float WALL_TINT = 0.25;
+const float WALL_TINT_MAX = 3.0;
 
 // Head lobe tiles: (smaller tile of the two octaves, larger, share of the larger), blocks, at least a block
 vec3 wallLobes(mat4 V) {
@@ -514,7 +519,8 @@ void wall(mat4 V, WallAt h, vec3 keyDir, vec3 sunDir, vec3 lightDir, float smoke
     s.albedo += hd * w;
     // presentation (WALL_FILL): the fill light has scattered through the depth it skips, WALL_TINT times per optical depth: its colour
     // is the dust's albedo to that power (reddened), not the zenith sky's; the diffuse field only, not beams or fire light
-    s.fill += hd * w * (pow(w, vec3(max(deep - depth, 0.0) * WALL_TINT)) - 1.0);
+    float tint = min(max(deep - depth, 0.0) * WALL_TINT, WALL_TINT_MAX);
+    s.fill += hd * w * (pow(w / max(max(w.r, w.g), max(w.b, 1e-4)), vec3(tint)) - 1.0);
     s.phase += hd * g;
 }
 

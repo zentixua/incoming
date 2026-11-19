@@ -588,7 +588,9 @@ class PallGlslTest {
         assertEquals(NukePall.WALL_TINT, scalar(fx, "WALL_TINT"), 1e-7);
         String wall = body(fx, "void wall(").replaceAll("\\s+", " ");
         assertTrue(wall.contains("float deep = min(up, side), depth = min(deep, WALL_FILL);"), "head diffuse depth - not capped by the fill");
-        assertTrue(wall.contains("s.fill += hd * w * (pow(w, vec3(max(deep - depth, 0.0) * WALL_TINT)) - 1.0);"), "fill light - not the dust's colour");
+        assertEquals(NukePall.WALL_TINT_MAX, scalar(fx, "WALL_TINT_MAX"), 1e-7);
+        assertTrue(wall.contains("float tint = min(max(deep - depth, 0.0) * WALL_TINT, WALL_TINT_MAX);")
+                && wall.contains("s.fill += hd * w * (pow(w / max(max(w.r, w.g), max(w.b, 1e-4)), vec3(tint)) - 1.0);"), "fill light - not the dust's colour");
         assertTrue(fx.replaceAll("\\s+", " ").contains("vec3 emit = s.albedo * (field + beams + fire + lamps) + s.fill * field;"),
                 "fill colour - not on the diffuse field alone");
         assertTrue(wall.contains("* WALL_SHADE;"), "billow self-shadow - not softened");

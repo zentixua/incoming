@@ -468,9 +468,11 @@ class BlastWallTest {
                         u + " wedge, " + up + " top: fresh fires light a fresh wall from below: " + Arrays.toString(fresh) + " vs " + Arrays.toString(none));
             }
         }
-        // deeper than the young front part, which is still rising (BlastWall.develop) and thinner
+        // deeper than the young front part, which is still rising (BlastWall.develop) and thinner; the multiple-scattering fill
+        // (presentation, NukePall.WALL_FILL: near the face the dust's mean free path is ~0.2 m, ray steps are metres) lifts the depths
+        // to at most a quarter of the fire-lit bottom (without it 0.2)
         NukePall.dustLight(s, glow, sky(false), GROUND.windDir(), head - 0.5 * len, 0.2 * BlastWall.local(s, 0.5 * len, 0), 0, 0.2 * BlastWall.local(s, 0.5 * len, 0), 0, 0, c);
-        assertTrue(luminance(c) < 0.2 * bottom, "at night there is no shadow in the depths of the head above the fires: " + luminance(c) + ", bottom " + bottom);
+        assertTrue(luminance(c) < 0.25 * bottom, "at night there is no shadow in the depths of the head above the fires: " + luminance(c) + ", bottom " + bottom);
         NukePall.dustLight(s, glow, sky(true), GROUND.windDir(), head - len, 0.9 * h, 0, 0.9 * h, 0, 0, top);
         assertTrue(top[0] > top[1] && top[1] > top[2], "during the day, the top of the head is not brown: " + Arrays.toString(top));
         assertTrue(luminance(top) > 0.5 && luminance(top) < 0.9, "head up during the day " + luminance(top));
@@ -533,6 +535,35 @@ class BlastWallTest {
         }
         NukePall.dustLight(s, glow, sky(true), d.windDir(), inside, 0.5 * BlastWall.local(s, 0.5 * s[1], 0), 0, 0.5 * BlastWall.local(s, 0.5 * s[1], 0), soot, 0, in);
         assertTrue(in[0] > in[2], "brown dust, not grey: " + Arrays.toString(in));
+    }
+
+    /**
+     * 19.11 (frame review of #678): the dense lofted front of a 1 Mt wall 2.76 km out at noon was black inside: the fill's colour exponent
+     * grew with the skipped depth (20–180 there) and zeroed the light (0.87^72 ≈ 4·10⁻⁵). Its colour saturates at the semi-infinite
+     * layer's ({@link NukePall#WALL_TINT_MAX}): 10–80 blocks behind the edge, at the foot and mid-height, the head is lit brown dust (red
+     * over blue) within the footage's contrast to its sunlit top (Silo S3E09: crests over clefts p90/p10 2.8–4.8; here 2.5–5 on screen).
+     */
+    @Test
+    void denseFrontIsLitDustInside() {
+        Detonation d = new Detonation(1, new Vec3(0, 64, 0), 64, 1000, true, 0, 0, 0, 20_000, 7, 1f, false, 0.35f);
+        CloudPuffs puffs = new CloudPuffs(d);
+        BlastWall w = new BlastWall(d, false);
+        float[] s = new float[BlastWall.SLOT], glow = new float[8], c = new float[3], top = new float[3];
+        double t = 0.5;
+        while (d.metres(w.wall(t).head()) < 2760) t += 0.01;
+        assertTrue(w.slot(t, s));
+        assertTrue(puffs.pallLight(MushroomModel.shape(t, 1000, 0, true, d.metres(w.wall(t).head())), 0, glow));
+        NukePall.dustLight(s, glow, sky(true), d.windDir(), s[0] - 10, 90, 0, 90, 0, 0, top);
+        // points inside the head (10 blocks behind the edge the dust is lower than 30)
+        for (double[] at : new double[][]{{10, 10}, {30, 10}, {30, 30}, {80, 10}, {80, 30}, {80, 60}}) {
+            double back = at[0], z = at[1];
+            {
+                NukePall.dustLight(s, glow, sky(true), d.windDir(), s[0] - back, z, 0, z, 0, 0, c);
+                double ratio = luminance(top) / luminance(c);
+                assertTrue(ratio > 2.5 && ratio < 5 && c[0] > c[2], "ratio " + ratio + ": " +
+                        back + " behind the edge, " + z + " up: " + Arrays.toString(c) + " (top " + Arrays.toString(top) + ")");
+            }
+        }
     }
 
     /**

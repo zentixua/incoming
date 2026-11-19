@@ -593,12 +593,18 @@ public final class NukePall {
      * copy of {@code WALL_FILL} in {@code fx_pall}): with the two-stream light from the layer's top or face alone the dense front's face
      * was 1–2 % of the sky's luminance (head p90/p10 20–30; Silo S3E09: 2.8–4.8). Extinction, the beams and where the dust is are unchanged.
      */
-    static final double WALL_FILL = 1;
+    static final double WALL_FILL = 5;
     /**
      * presentation: the fill light has scattered about this many times per optical depth it skips, so its colour is the dust's albedo to
      * that power (reddened) rather than the zenith sky's: without it the filled face read blue-white (copy of {@code WALL_TINT}).
      */
     static final double WALL_TINT = 0.25;
+    /**
+     * presentation: most scatterings the fill's colour takes (copy of {@code WALL_TINT_MAX}): light diffused out of a thick layer has the
+     * semi-infinite layer's albedo colour, blue/red 0.55 for the reference dust, the albedo ratio to the power ~3.4; unbounded, the
+     * exponent reached 20–180 inside the dense front and zeroed the fill (a black face, 19.11 probe). Relative to the brightest channel.
+     */
+    static final double WALL_TINT_MAX = 3;
 
     static void dustLight(float[] wall, float[] glow, Sky sky, double wind, double gx, double gy, double gz, double up, double smoke, double sand,
                           float[] into) {
@@ -610,7 +616,7 @@ public final class NukePall {
         double face = BlastWall.face(up / Math.max(top, 1e-3), wall[8]);
         double side = chord(wall, rx, rz, up, ox, 0, oz, Math.max(s - wall[1] * face, 0), 4);
         double below = chord(wall, rx, rz, up, 0, -1, 0, Math.max(up, 0), 2);
-        double deep = Math.min(above, side), depth = Math.min(deep, WALL_FILL), slab = depth + below, tint = Math.max(deep - depth, 0) * WALL_TINT;
+        double deep = Math.min(above, side), depth = Math.min(deep, WALL_FILL), slab = depth + below, tint = Math.min(Math.max(deep - depth, 0) * WALL_TINT, WALL_TINT_MAX);
         double toSun = chordNear(wall, rx, rz, up, sky.sx, sky.sy, 0, toLight(sky.sy, toTop, reach), 4);
         double lx = Math.cos(wind) * glow[2] - gx, ly = glow[7] - gy, lz = Math.sin(wind) * glow[2] - gz;
         double ll = Math.max(Math.sqrt(lx * lx + ly * ly + lz * lz), 1e-3);
@@ -625,6 +631,8 @@ public final class NukePall {
         double lit = CloudPuffs.ball(sky.exposure, glow[0], ll);
         double burn = CloudPuffs.burn(r, 0, glow[1], glow[3]) * (1 - 0.75 * sky.day);
         double[] lin = new double[3];
+        double wMax = 1e-4;
+        for (int c = 0; c < 3; c++) wMax = Math.max(wMax, Mth.lerp(smoke, Mth.lerp(sand, DUST_W[c], SAND_W[c]), SMOKE_W[c]));
         for (int c = 0; c < 3; c++) {
             double w = Mth.lerp(smoke, Mth.lerp(sand, DUST_W[c], SAND_W[c]), SMOKE_W[c]);
             double fire = FIRE[c];
@@ -637,7 +645,7 @@ public final class NukePall {
                 double flame = PallLight.flame(sky.base, fire * burn * sky.glowOnSmoke / DUST[c], fire);
                 from = Math.min(Math.max(PallLight.diffuse(w, DUST_G, depth, slab, PallLight.LAND, 1, 0, 1, 0, 0, flame, 0), 0), PallLight.linear(fire));
             }
-            lin[c] = w * (Math.pow(w, tint) * Math.max(field, 0) + beams + from);
+            lin[c] = w * (Math.pow(w / wMax, tint) * Math.max(field, 0) + beams + from);
         }
         // to screen like pall (fx_pall: toward white, shoulder)
         PallLight.screen(lin, into);
