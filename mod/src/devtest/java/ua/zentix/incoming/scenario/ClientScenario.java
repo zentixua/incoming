@@ -201,6 +201,10 @@ public final class ClientScenario {
             new Sandbox(); // sandbox effects: your own flat world, commands /fx, hot swap (tools/sandbox.sh)
             return;
         }
+        if ("newbie".equals(scenario)) {
+            new NewbieWalk(); // a new player's first strike, survival without cheats, EN then RU (its own world)
+            return;
+        }
         NeoForge.EVENT_BUS.addListener(this::onScreen);
         if ("trailer".equals(scenario)) {
             new ua.zentix.incoming.scenario.trailer.Trailer(); // your script and recording (tools/trailer)
