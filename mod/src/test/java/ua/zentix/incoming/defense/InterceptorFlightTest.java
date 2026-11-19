@@ -35,7 +35,7 @@ class InterceptorFlightTest {
         for (int tick = 1; tick <= SPEC.fuelTicks(); tick++) {
             Vec3 prev = t;
             t = t.add(velocity);
-            Vec3 next = f.steer(t);
+            Vec3 next = f.steer(t, t.subtract(prev));
             if (f.fuze(next, prev, t, halfLength) >= 0) return tick;
             f.moveTo(next);
         }
@@ -125,7 +125,7 @@ class InterceptorFlightTest {
             for (int tick = 1; tick <= SPEC.fuelTicks(); tick++) {
                 Vec3 prev = overhead(z0, tick - 1, 45, a.cruiseSpeed(), a.diveSpeed()), t = overhead(z0, tick, 45, a.cruiseSpeed(), a.diveSpeed());
                 if (t.y <= RAIL.y) break;
-                Vec3 next = f.steer(t);
+                Vec3 next = f.steer(t, t.subtract(prev));
                 if (f.fuze(next, prev, t, a.noseLength()) >= 0) {
                     hit = tick;
                     break;
@@ -145,12 +145,12 @@ class InterceptorFlightTest {
     void pitchOverIsAnArc() {
         Vec3 target = RAIL.add(1500, 100, 0);
         Interceptor f = new Interceptor(SPEC, UUID.randomUUID(), null, "test", RAIL, Interceptor.railDirection(RAIL, target, SPEC));
-        for (int i = 1; i <= SPEC.railTicks(); i++) f.moveTo(f.steer(target));
+        for (int i = 1; i <= SPEC.railTicks(); i++) f.moveTo(f.steer(target, Vec3.ZERO));
         int level = -1;
         for (int i = 1; i <= 40 && level < 0; i++) {
             Vec3 dir = f.direction();
             double speed = f.speed();
-            f.moveTo(f.steer(target));
+            f.moveTo(f.steer(target, Vec3.ZERO));
             double turn = Math.toDegrees(Math.acos(Math.min(1, dir.dot(f.direction()))));
             double byG = Math.toDegrees(SPEC.lateralG() * Ballistics.GRAVITY / Math.max(speed, SPEC.launchSpeed()));
             assertTrue(turn <= SPEC.turnLimit(speed) + 1e-9, i + "-th tick after launch rail exit: turn " + turn + "°");
@@ -188,7 +188,7 @@ class InterceptorFlightTest {
             for (int tick = 1; tick <= SPEC.fuelTicks(); tick++) {
                 Vec3 prev = diving(z0, tick - 1, a.cruiseSpeed(), a.diveSpeed()), t = diving(z0, tick, a.cruiseSpeed(), a.diveSpeed());
                 if (t.y <= RAIL.y) break;
-                Vec3 next = f.steer(t);
+                Vec3 next = f.steer(t, t.subtract(prev));
                 if (f.fuze(next, prev, t, a.noseLength()) >= 0) {
                     hit = tick;
                     break;
@@ -205,11 +205,11 @@ class InterceptorFlightTest {
         Interceptor f = new Interceptor(SPEC, UUID.randomUUID(), null, "test", RAIL, new Vec3(0, 1, 0));
         Vec3 t = RAIL.add(1, 1, 0);
         for (int i = 1; i <= SPEC.railTicks(); i++) {
-            Vec3 next = f.steer(t);
+            Vec3 next = f.steer(t, Vec3.ZERO);
             assertEquals(-1, f.fuze(next, t, t, 2), 0, "the fuse went off " + i + "-m tick launch");
             f.moveTo(next);
         }
-        Vec3 next = f.steer(f.position().add(1, 0, 0));
+        Vec3 next = f.steer(f.position().add(1, 0, 0), Vec3.ZERO);
         assertTrue(f.fuze(next, f.position().add(1, 0, 0), f.position().add(1, 0, 0), 2) >= 0, "after launch the fuse did not arm");
     }
 
@@ -222,7 +222,7 @@ class InterceptorFlightTest {
     void fuzeFiresAtClosestApproachWithinRadius() {
         Interceptor f = new Interceptor(SPEC, UUID.randomUUID(), null, "test", RAIL, new Vec3(1, 0, 0));
         // the fuse is cocked behind the rail
-        for (int i = 1; i <= SPEC.railTicks() + 1; i++) f.moveTo(f.steer(RAIL.add(1000, 0, 0)));
+        for (int i = 1; i <= SPEC.railTicks() + 1; i++) f.moveTo(f.steer(RAIL.add(1000, 0, 0), Vec3.ZERO));
         Vec3 p0 = f.position(), step = new Vec3(14, 0, 0);
         Vec3 near = p0.add(16, 3, 0), wide = p0.add(16, SPEC.fuse() + 2, 0);
         // end of tick - 3,6 block from the target, but approach is still in progress: wait
@@ -243,7 +243,7 @@ class InterceptorFlightTest {
         Vec3 target = RAIL.add(-800, 50, 600);
         Vec3 dir = Interceptor.railDirection(RAIL, target, SPEC);
         assertEquals(0, dir.subtract(0, 1, 0).length(), 1e-9, "SAM launches vertically");
-        InterceptorSpec inclined = new InterceptorSpec(SPEC.radarRange(), SPEC.engageRange(), SPEC.railTicks(), 65, SPEC.launchSpeed(), SPEC.boostTicks(), SPEC.gameBoostAccel(),
+        InterceptorSpec inclined = new InterceptorSpec(SPEC.radarRange(), SPEC.engageRange(), SPEC.railTicks(), 65, SPEC.launchSpeed(), SPEC.gameBoostTicks(), SPEC.gameBoostAccel(),
                 SPEC.gameMaxSpeed(), SPEC.lateralG(), SPEC.fuelTicks(), SPEC.fuse(), SPEC.noseLength(), SPEC.passport());
         Vec3 slant = Interceptor.railDirection(RAIL, target, inclined);
         assertEquals(65, Math.toDegrees(Math.asin(slant.y)), 1e-9);
@@ -252,12 +252,12 @@ class InterceptorFlightTest {
         Vec3 rail = f.direction();
         double speed = f.speed();
         for (int i = 1; i <= SPEC.railTicks(); i++) {
-            f.moveTo(f.steer(target));
+            f.moveTo(f.steer(target, Vec3.ZERO));
             assertEquals(rail, f.direction(), "rail course");
             assertTrue(f.speed() > speed);
             speed = f.speed();
         }
-        for (int i = SPEC.railTicks() + 1; i <= SPEC.fuelTicks(); i++) f.moveTo(f.steer(target));
+        for (int i = SPEC.railTicks() + 1; i <= SPEC.fuelTicks(); i++) f.moveTo(f.steer(target, Vec3.ZERO));
         // the motor maintains the highest speed; in the climb to the target above SAM - without exchanging altitude for
         // speed per tick
         assertEquals(SPEC.maxSpeed(), f.speed(), ua.zentix.incoming.strike.WeaponSpec.Handling.TRADE * Ballistics.GRAVITY, "after acceleration - highest speed");
