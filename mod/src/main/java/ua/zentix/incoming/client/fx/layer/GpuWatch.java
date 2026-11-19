@@ -24,6 +24,7 @@ public final class GpuWatch {
     /** Watch state: everything allowed, detail held at its floor, volume off. */
     public enum State { WATCHING, FLOOR, OFF }
 
+    private final String renderer;
     private final boolean watched;
     private State state = State.WATCHING;
     /** The frame that caused the last change, ms. */
@@ -31,7 +32,13 @@ public final class GpuWatch {
 
     /** Watch on the renderer named {@code renderer} (GL_RENDERER). */
     public GpuWatch(String renderer) {
+        this.renderer = renderer == null ? "unknown renderer" : renderer;
         this.watched = !software(renderer);
+    }
+
+    /** GL_RENDERER this watch was made for (log lines). */
+    public String renderer() {
+        return renderer;
     }
 
     /** CPU rasterizers: Mesa llvmpipe/softpipe, SwiftShader, generic "software" renderers. */

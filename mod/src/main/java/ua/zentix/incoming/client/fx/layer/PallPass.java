@@ -492,7 +492,11 @@ public final class PallPass {
     private static Detail DETAIL = new Detail();
     /** Noise failed (background error): no pall until restart. */
     private static boolean failed;
-    /** Pall frame GPU time watchdog (#656), created with the first timer; off — no volume until restart. */
+    /**
+     * Pall frame GPU time watchdog (#656): one per client session, shared by every view and never part of a view's swapped
+     * state ({@link ViewState}): a view's own timer queries must not reset it ({@link #watch}). OFF — no volume until restart;
+     * FLOOR — every view's detail at the last rung ({@link #latch}).
+     */
     @Nullable
     private static GpuWatch watch;
 
@@ -659,6 +663,8 @@ public final class PallPass {
      * {@code haze} — air haze and Minecraft fog ({@link FxFrame.Fog#haze}): world shadow fades through them.
      */
     static boolean draw(Frame f, int scene, Matrix4f view, Matrix4f projection, Vec3 eye, Vector4f haze) {
+        // the watchdog turned the volume off for the session: no pass at all, also no warm-up for a new view
+        if (gpuOff()) return false;
         long preparing = cold() ? System.nanoTime() : 0;
         ShaderInstance m = march, r = resolve, c = composite, sh = shadow, fl = footLighting, mt = mushTaus, fv = froxel, fs = froxelSum,
                 mx = mix;
@@ -677,6 +683,8 @@ public final class PallPass {
             }
         }
         if (timer()) poll(System.nanoTime());
+        latch();
+        if (gpuOff()) return false;
         Step step = LADDER[DETAIL.level];
         if (!ensure(w, h, step.factor, step.interleave) || !volume(w, h, f.quality.tile)) return false;
         boolean open = mc.level != null && OpenAir.update(mc.level, eye);
@@ -978,7 +986,7 @@ public final class PallPass {
 
     /** Resource reloads replace the shader; runtime recompilation can replace its GL program in place. */
     static boolean cold() {
-        return !failed && march != null && (prepared != march || preparedProgram != march.getId());
+        return !failed && !gpuOff() && march != null && (prepared != march || preparedProgram != march.getId());
     }
 
     /** Full-frame quad with custom shader; ray pass also binds 3D noise at its own texture unit. */
@@ -1370,14 +1378,13 @@ public final class PallPass {
     }
 
     /** OpenGL timestamps supported (GL 3.3 or ARB_timer_query, nonempty counter); pairs created on first check. */
-    private static boolean timer() {
+    static boolean timer() {
         if (timer == 0) {
             GLCapabilities caps = GL.getCapabilities();
             boolean ok = (caps.OpenGL33 || caps.GL_ARB_timer_query) && GL15.glGetQueryi(GL33.GL_TIMESTAMP, GL15.GL_QUERY_COUNTER_BITS) > 0;
             if (ok) {
                 for (int i = 0; i < QUERIES.length; i++) QUERIES[i] = GL15.glGenQueries();
                 Arrays.fill(ISSUED, -1);
-                watch = new GpuWatch(GlUtil.getRenderer());
             } else {
                 Incoming.LOG.info("Nuclear dust pall: no GPU timer queries, detail stays as set");
             }
@@ -1406,7 +1413,7 @@ public final class PallPass {
             gpuSum += ms;
             gpuMax = Math.max(gpuMax, ms);
             gpuFrames++;
-            if (watch != null) watched(watch.sample(ms - SUBMIT[i] / 1e6));
+            measured(ms - SUBMIT[i] / 1e6);
             int was = DETAIL.level;
             if (DETAIL.sample(ms, rays, ISSUED[i], now)) {
                 Step from = LADDER[was], to = LADDER[DETAIL.level];
@@ -1423,20 +1430,37 @@ public final class PallPass {
         return watch != null && watch.state() == GpuWatch.State.OFF;
     }
 
-    /** Act on a {@link GpuWatch} change: detail to its floor, or the volume off with one chat line. */
-    private static void watched(@Nullable GpuWatch.State state) {
-        if (state == null) return;
-        String gpu = GlUtil.getRenderer() + ", " + GlUtil.getOpenGLVersion();
-        if (state == GpuWatch.State.FLOOR) {
-            DETAIL.floor();
+    /** The session watchdog, created on first use (render thread: it names the renderer). */
+    static GpuWatch watch() {
+        if (watch == null) watch = new GpuWatch(GlUtil.getRenderer());
+        return watch;
+    }
+
+    /**
+     * One measured pall frame of the current view, {@code gpuMs} of GPU work: the session watchdog takes it, a change is
+     * reported once, and the latch applies to this view at once.
+     */
+    static void measured(double gpuMs) {
+        GpuWatch w = watch();
+        GpuWatch.State changed = w.sample(gpuMs);
+        latch();
+        if (changed == GpuWatch.State.FLOOR) {
             Incoming.LOG.warn(String.format(Locale.ROOT, "Nuclear dust pall: one frame took %.0f ms on the GPU (%s); detail held at %s for this session",
-                    watch.cause(), gpu, LADDER[DETAIL.level].describe()));
-            return;
+                    w.cause(), w.renderer(), LADDER[DETAIL.level].describe()));
+        } else if (changed == GpuWatch.State.OFF) {
+            Incoming.LOG.warn(String.format(Locale.ROOT, "Nuclear dust pall: one frame took %.0f ms on the GPU (%s), near the driver's 2 s reset; "
+                    + "nuclear volume (fireball, mushroom cloud, dust wall, pall) off for this session", w.cause(), w.renderer()));
+            Minecraft.getInstance().gui.getChat().addMessage(Component.translatable("incoming.pall.gpu_off").withStyle(ChatFormatting.YELLOW));
         }
-        Incoming.LOG.warn(String.format(Locale.ROOT, "Nuclear dust pall: one frame took %.0f ms on the GPU (%s), near the driver's 2 s reset; "
-                + "nuclear volume (fireball, mushroom cloud, dust wall, pall) off for this session", watch.cause(), gpu));
-        Minecraft mc = Minecraft.getInstance();
-        mc.gui.getChat().addMessage(Component.translatable("incoming.pall.gpu_off").withStyle(ChatFormatting.YELLOW));
+    }
+
+    /**
+     * The session watchdog's latch on the current view's detail: past WATCHING, the last rung. Each view takes it at its
+     * own next sample or draw — the one that tripped it, the others already swapped out, and views created later: a
+     * transition is reported once, so a per-view floor on the transition alone left the other views at their rung.
+     */
+    static void latch() {
+        if (watch != null && watch.state() != GpuWatch.State.WATCHING && !DETAIL.floored) DETAIL.floor();
     }
 
     /** Timestamp before passes; −1 — unmeasured frame (unsupported or all pairs still pending). */

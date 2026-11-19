@@ -50,7 +50,11 @@ paths:
   messages per nuke scenario). `GpuWatch` acts on one pall frame far past any budget: ≥ 250 ms GPU holds the detail at
   its floor, ≥ 1 s turns the volume off for the session with one chat line (`incoming.pall.gpu_off`). It takes GPU time
   minus the render thread's time between the pair's stamps (`PallPass.SUBMIT`): a cold-cache driver compile idles the
-  GPU between stamps for seconds. Software renderers (llvmpipe) are not watched. Second-compiler check without a GPU:
+  GPU between stamps for seconds. Software renderers (llvmpipe) are not watched. The watch belongs to the session, not
+  to a view: it lives outside `PallPass.ViewState` (a view's own timer init once replaced it, re-enabling OFF), OFF also
+  stops the cold warm-up (`cold`, `draw`), and FLOOR is a latch each view's detail takes at its next sample or draw
+  (`PallPass.latch`; a per-view floor on the transition alone left the other views at HIGH), `PallWatchViewsTest`.
+  Second-compiler check without a GPU:
   Mesa llvmpipe through EGL surfaceless prints "used uninitialized" and link errors for every core program.
 - The vanilla shader `position_tex_color` discards fragments with alpha below 0.1: faint things (distant smoke, glow,
   dots smaller than a pixel) vanish entirely, so the effects layer draws with its own `fx` shader. The vertex color
