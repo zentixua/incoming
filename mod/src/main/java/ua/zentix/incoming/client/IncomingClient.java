@@ -245,6 +245,7 @@ public final class IncomingClient {
         VoxyIngest.tick();
         if (mc.isPaused()) return;
         Designator.tick();
+        ua.zentix.incoming.client.hud.FirstUseHints.tick(mc);
         ClientFlights.tick();
         TerrainTiles.tick();
         ProjectileCamera.tick();
