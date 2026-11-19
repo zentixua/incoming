@@ -46,6 +46,18 @@ public final class WorkClock {
     private double estimate;
     /** Estimates by unit kind ({@link #canStart(int)}), ns: cheap batch does not permit a risky expensive unit. */
     private double[] kindEstimate = new double[0];
+    /**
+     * Kinds refused this tick by their own estimate while time remained, without a sample of their own ({@link #STARVED_DECAY}).
+     */
+    private boolean[] starved = new boolean[0];
+    /**
+     * Per-tick decay of a starved kind's estimate. A kind estimate falls only with its own units; a kind that runs after
+     * other work (flash layer after pulse, front and seen ruins) is refused by one slow unit's estimate on every tick and
+     * never gets the sample that would lower it (review of #663: one 5 ms unit, 4 ms left each tick, 0.2 ms units: 0
+     * admissions in 120 ticks). Halving per starved tick, as the decaying clocks do for every estimate (impacts, blackouts,
+     * preparation): an outlier is retried within a few ticks; a unit that really is slow raises the estimate again.
+     */
+    static final double STARVED_DECAY = 0.5;
     /** Some work already done this tick (always run one unit, otherwise an extremely long one would halt queue). */
     private boolean worked;
     private boolean lateStart;
@@ -103,7 +115,10 @@ public final class WorkClock {
         unitsThisTick = 0;
         usedThisTick = 0;
         estimate *= tickDecay;
-        for (int i = 0; i < kindEstimate.length; i++) kindEstimate[i] *= tickDecay;
+        for (int i = 0; i < kindEstimate.length; i++) {
+            kindEstimate[i] *= starved[i] ? Math.min(tickDecay, STARVED_DECAY) : tickDecay;
+            starved[i] = false;
+        }
         if (++ticks % 100 == 0) {
             largestBefore = largest;
             largest = 0;
@@ -145,7 +160,13 @@ public final class WorkClock {
      * rays and block batches), shared estimate after cheap units would admit an expensive one just before deadline.
      */
     public boolean canStart(int kind) {
-        return fits((long) kindEstimate(kind));
+        return admitted(kind, fits((long) kindEstimate(kind)));
+    }
+
+    /** {@code fits} for a unit of {@code kind}; a refusal by its estimate while the deadline is still ahead marks it starved. */
+    private boolean admitted(int kind, boolean fits) {
+        if (!fits && kind < kindEstimate.length && spare.getAsBoolean() && time.getAsLong() < deadline) starved[kind] = true;
+        return fits;
     }
 
     /**
@@ -168,6 +189,13 @@ public final class WorkClock {
         if (!worked) return true;
         long now = time.getAsLong();
         return spare.getAsBoolean() ? now + (long) estimate < deadline : now < visibleBusyDeadline(extraBusyNanos);
+    }
+
+    /** {@link #canStartVisible(long)} for a unit of {@code kind}, with that kind's estimate ({@link #canStart(int)}). */
+    public boolean canStartVisible(int kind, long extraBusyNanos) {
+        if (!worked) return true;
+        long now = time.getAsLong();
+        return admitted(kind, spare.getAsBoolean() ? now + (long) kindEstimate(kind) < deadline : now < visibleBusyDeadline(extraBusyNanos));
     }
 
     /** Like {@link #overdue()}, with {@link #canStartVisible} deadline. */
@@ -207,8 +235,12 @@ public final class WorkClock {
     /** Unit of {@code kind} started at {@code began} finished ({@link #canStart(int)}). */
     public long end(long began, int kind) {
         long took = end(began);
-        if (kind >= kindEstimate.length) kindEstimate = java.util.Arrays.copyOf(kindEstimate, kind + 1);
+        if (kind >= kindEstimate.length) {
+            kindEstimate = java.util.Arrays.copyOf(kindEstimate, kind + 1);
+            starved = java.util.Arrays.copyOf(starved, kind + 1);
+        }
         kindEstimate[kind] = Math.max(took, kindEstimate[kind] * DECAY);
+        starved[kind] = false;
         return took;
     }
 

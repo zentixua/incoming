@@ -225,13 +225,31 @@ paths:
   `resendBiomesForChunks` (biome packet), to DH LODs via section copies (`RuinPlan.applyToCopy`: changed-cell count);
   a biome-only plan is still chunk ruins.
 - Flash layer (`FlashScorch`; Artem's decision: everything light does to the world happens with the flash, not the
-  wave; the wave only supplies pressure): one job per detonation in the nuclear lane (`NuclearWorld.scorches`, after
-  the ruin queue, using what wave-reached ruins leave: prioritizing distant layers delayed front ruins by ticks,
-  GameTest `ruinsPreparedDuringFlightFallWithFront`; detonation jobs advance independently; errors log and remove the
-  job; separate “flash scorch” time in slow nuclear-tick logs). First unit collects in-memory chunks within
+  wave; the wave only supplies pressure): one job per detonation in the nuclear lane (`NuclearWorld.scorches`). Units of
+  player-visible chunks whose deadline is within `FlashScorch.URGENT_TICKS` (20) run after seen ruins (due this tick:
+  their deadline is now; ahead of them the layer kept glass in view whole 3 ticks after the wave, GameTest
+  `seenRuinsKeepUpWithCrater`) and before craters and unseen ruins (`workUrgent`, earliest deadline first); unseen layers
+  stay after unseen ruins (an urgent pass for them delayed unseen front ruins 5 ticks, GameTest
+  `ruinsPreparedDuringFlightFallWithFront`, and their timing shows to no one); the rest after the ruin queue, using what wave-reached ruins leave
+  (prioritizing distant layers delayed front ruins by ticks, GameTest `ruinsPreparedDuringFlightFallWithFront`). Layer
+  units have their own lane-clock kind (`FlashScorch.KIND`, `WorkClock.canStart(int)`/`canStartVisible(int, long)`), the
+  one-off collection another (`COLLECT`). The order lives in one place, `NuclearWorld.afterFront`. A kind refused by its
+  own estimate while time remained halves it per tick (`WorkClock.STARVED_DECAY`): on the production clock (no per-tick
+  decay) one 5 ms unit otherwise refused every later 0.2 ms unit of its kind for good (review of #663,
+  `WorkClockTest.starvedKindRecovers`).
+  Last in the lane on the shared estimate, the layer got nothing until the wave: DIAG 15 kt at 1.5 km, first layer unit
+  on tick 104; full host pack (ruins “stopped: budget” every tick) tick 362, 904 of 915 chunks late, no fire (GameTest
+  `flashLayerBeatsABusyLane`, batch `nuke_flash_busy`). Detonation jobs advance independently; errors log and remove the
+  job; separate “flash scorch” time in slow nuclear-tick logs (urgent pass included). First unit collects in-memory chunks within
   `FlashScorch.reach` (ground trace, ignition threshold, face scorch at sphere height) and ruin-queue radius
   (`ScarQueue.inRange`, by ground, like `reach`: only ruins enable layer-fire ticks): player-visible first, by player
-  distance (`SEEN` priority and `ScarQueue.SEEN_BUSY_NANOS`), others by epicenter distance; then one unit per chunk
+  distance (`SEEN` priority and `ScarQueue.SEEN_BUSY_NANOS`), others by epicenter distance; the urgent pass takes visible
+  chunks earliest deadline first, its ready writes too (`write` sorts them: submitted nearest player first, a due-now
+  chunk waited behind 19 later deadlines, review of #663, GameTest `urgentWritesEarliestDeadlineFirst`)
+  (`FlashScorch.urgent`/`deadline`: the tick before the ruin tick, wave at chunk center
+  minus `ScarQueue.EARLY`; by player distance alone ground zero, whose wave follows ignition within 2–25 ticks, came
+  last, while deadline order for the whole view put the player's own chunks last — fire there at tick 27 instead of 7,
+  full host pack; `FlashScorchOrderTest`; the summary log line gives the late chunks' ground range); then one unit per chunk
   builds the ruins' own 5×5 window (`RuinContext.flashGrid` = `grid`: neighbors outside memory read from disk first
   via `requestWindow`, the chunk waits in `FlashScorch.reading`; a 3×3 layer window let a wall in the second ring shadow
   the ruins but not the layer, which burned turf the ruins keep — GameTest `flashScorchesBeforeTheWaveAndRuinsMatch`
