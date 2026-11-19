@@ -32,8 +32,11 @@ import java.util.Map;
 public final class ClientNuclear {
     /**
      * Client detonation. Live (neither world entry nor Flashback replay seeking) includes flash, sound
-     * and shake. Visual time uses own client ticks since packet arrival rather than game time, which jumps backward during
-     * server catch-up; the sphere/double flash last fractions of a second and must neither be skipped nor repeated.
+     * and shake. Visual time counts own client ticks since packet arrival and follows the client level time when that is
+     * ahead, never backward ({@link #follow}): game time jumps backward during server catch-up (the sphere/double flash
+     * last fractions of a second and must not repeat), while own ticks alone fell behind a heavy client that drops ticks
+     * (full host pack, 15 kt at 1.5 km: 24–26 client ticks while the server ran 44–49, so ruins, throws and debris the
+     * server times by the wave came 1.5–2.7 s before the client drew the wave, its dust and sound).
      */
     public static final class Active {
         public final Detonation d;
@@ -92,6 +95,20 @@ public final class ClientNuclear {
         /** Own client ticks since packet arrival (since replay seek afterward). */
         long age() {
             return age;
+        }
+
+        /** One client tick: own count, or the level clock where it is ahead ({@link #follow}). */
+        void tick(long levelNow) {
+            age = follow(age, levelNow - d.gameTime() - before);
+        }
+
+        /**
+         * Detonation age after one client tick: one more than {@code age}, or {@code levelAge} (client level time since
+         * the detonation, less ticks counted before arrival) when that is ahead. Never backward when the level time jumps back;
+         * catches up when the server's time packet corrects a client that dropped ticks.
+         */
+        static long follow(long age, long levelAge) {
+            return Math.max(age + 1, levelAge);
         }
 
         /** Ticks since detonation (with frame fraction). */
@@ -370,7 +387,7 @@ public final class ClientNuclear {
         FarTerrain.Water water = heights == null ? null : FarTerrain.water(level), hard = heights == null ? null : FarTerrain.hard(level);
         for (Iterator<Active> it = DETONATIONS.values().iterator(); it.hasNext(); ) {
             Active a = it.next();
-            a.age++;
+            a.tick(now);
             a.sounds.tick();
             // terrain/water under pall: for rays without world behind and for matter (ceiling dimensions use ground
             // under epicenter)

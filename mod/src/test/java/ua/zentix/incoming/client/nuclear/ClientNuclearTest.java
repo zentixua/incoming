@@ -50,4 +50,40 @@ class ClientNuclearTest {
         for (long t = 81; t < 81 + 600; t++) clock.tick(t);
         assertEquals(0, clock.lead(), 1e-9);
     }
+
+    /**
+     * A heavy client drops every other tick (full host pack: 24–26 client ticks while the server ran 44–49); the server's time
+     * packet sets the client level time once a second. Wherever the clocks are equal, the detonation clock is within a tick of
+     * the server's, so what the server times by the wave (ruins, throws, debris) cannot precede the drawn wave by more than
+     * a tick. Own ticks alone (the old clock) fell 40+ ticks behind in 200 server ticks.
+     */
+    @Test
+    void heavyClientFollowsTheServerWave() {
+        long age = 0, own = 0, level = 0;
+        for (long server = 1; server <= 200; server++) {
+            boolean clientTick = server % 2 == 0;
+            if (server % 20 == 0) level = server; // time packet: equal clocks
+            else if (clientTick) level++;
+            if (!clientTick) continue;
+            age = ClientNuclear.Active.follow(age, level);
+            own++;
+            if (server % 20 == 0) assertTrue(age >= server - 1, "server tick " + server + ": detonation clock " + age);
+        }
+        assertTrue(200 - own > 40, "own ticks alone lagged only " + (200 - own) + " ticks");
+    }
+
+    /** Level time jumping back (server catch-up) never rewinds the detonation clock; a packet before the detonation tick starts it at zero. */
+    @Test
+    void detonationClockNeverRunsBackward() {
+        long age = ClientNuclear.Active.follow(0, -1);
+        assertEquals(1, age);
+        long level = 1;
+        for (int i = 0; i < 50; i++) {
+            level = i == 20 ? level - 30 : level + 1;
+            long next = ClientNuclear.Active.follow(age, level);
+            assertEquals(age + 1, Math.min(next, age + 1), "tick " + i);
+            assertTrue(next > age, "tick " + i + ": " + age + " → " + next);
+            age = next;
+        }
+    }
 }
