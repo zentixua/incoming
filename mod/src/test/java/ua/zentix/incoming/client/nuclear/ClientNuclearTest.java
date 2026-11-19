@@ -177,7 +177,7 @@ class ClientNuclearTest {
      */
     @Test
     void liveWithoutPerTickAnchorsRunsOnOwnTicks() {
-        ClientNuclear.AgeClock clock = new ClientNuclear.AgeClock(0, true);
+        ClientNuclear.AgeClock clock = new ClientNuclear.AgeClock(0, true, true);
         for (int c = 0; c < ClientNuclear.AgeClock.PROBE; c++) clock.tick();
         assertTrue(clock.shown() <= ClientNuclear.AgeClock.LEAD + 1e-9, "a live burst waits for its server's first anchors");
         double last = clock.shown();
@@ -187,6 +187,27 @@ class ClientNuclearTest {
             last = clock.shown();
         }
         assertEquals(120, clock.shown(), 0.5, "and catches up with its own ticks");
+    }
+
+    /**
+     * A live server can send its first per-tick anchor late (post-burst work): the burst waits at most {@link ClientNuclear.AgeClock#LEAD}
+     * past its packet however long, then follows the server without running ahead of it (review of #678: a timeout on the first anchor
+     * showed 24 ticks at server age 1 after a 30-tick gap and then froze).
+     */
+    @Test
+    void lateFirstAnchorFromALiveServer() {
+        ClientNuclear.AgeClock clock = new ClientNuclear.AgeClock(0, true, false);
+        for (int c = 0; c < 30; c++) clock.tick();
+        assertTrue(clock.shown() <= ClientNuclear.AgeClock.LEAD + 1e-9, "gap: held at " + clock.shown());
+        double last = clock.shown();
+        for (int t = 1; t <= 60; t++) {
+            clock.anchor(t);
+            clock.tick();
+            assertTrue(clock.shown() <= t + ClientNuclear.AgeClock.LEAD + 1e-9, "server age " + t + ": shown " + clock.shown());
+            assertTrue(clock.shown() >= last, "never back");
+            last = clock.shown();
+        }
+        assertEquals(60, clock.shown(), 1.5, "follows the server");
     }
 
     /**
