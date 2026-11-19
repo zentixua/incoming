@@ -117,6 +117,12 @@ The mod must be the most physically accurate in its niche and spectacular like g
   marked `(est.)`, approximate laws identified.
 - **Look: physics sets events, presentation shows them** (Artem, 23.10). Spectacular, cinematic, mesmerizing, with no
   impossible real-world phenomena.
+  - **Balance** (Artem, 19.11): the goal is a mesmerizing, cinematic picture inside real physics, never an invented
+    Hollywood fire show. The visual target is the best realistic footage of the phenomenon: real test film first, then
+    high-end film VFX that stays physically plausible (nuclear blast wave and the haze behind it: Silo S3E09,
+    01:00:26–01:00:37). Build what the law gives; where the law gives too little on screen, strengthen it as marked
+    presentation toward that target; a real size or shape changes only by Artem's word as a marked deviation.
+    Spectacle never adds what physics lacks (fire on every block, smoke from nowhere, impossible colour).
   - Physics sets order, sizes, time, speed, trajectory, destruction. Never alter for beauty: no impossible flight,
     200 m craters or “space” effects.
   - Presentation sets light, color, contrast, billows, detail, movement, sound, camera. Strengthen like good cinema in
