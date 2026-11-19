@@ -589,22 +589,15 @@ public final class NukePall {
      * @param sand  sand's share of the dust mass there ({@link PallField#sandShare}): desert dust instead of the reference soil's
      */
     /**
-     * presentation: diffuse light reaches into the dust-wall head as if through at most this optical depth (multiple-scattering fill;
-     * copy of {@code WALL_FILL} in {@code fx_pall}): with the two-stream light from the layer's top or face alone the dense front's face
-     * was 1–2 % of the sky's luminance (head p90/p10 20–30; Silo S3E09: 2.8–4.8). Extinction, the beams and where the dust is are unchanged.
+     * Sky dome at the head's face (est.; copy of {@code WALL_HORIZON_WHITE}): the horizon sky is whiter than the zenith's blue, here the
+     * zenith sky light desaturated by this share toward its own luminance, its radiance taken equal to the zenith's.
      */
-    static final double WALL_FILL = 5;
+    static final double WALL_HORIZON_WHITE = 0.6;
     /**
-     * presentation: the fill light has scattered about this many times per optical depth it skips, so its colour is the dust's albedo to
-     * that power (reddened) rather than the zenith sky's: without it the filled face read blue-white (copy of {@code WALL_TINT}).
+     * presentation: sunlight scattered down the head's billowy outer skin lights its faces (copy of {@code WALL_SUN_FACE}): this share of
+     * the sun on a horizontal surface, reflected as by a thick layer of the dust (R∞), reaches the face through its skin.
      */
-    static final double WALL_TINT = 0.25;
-    /**
-     * presentation: most scatterings the fill's colour takes (copy of {@code WALL_TINT_MAX}): light diffused out of a thick layer has the
-     * semi-infinite layer's albedo colour, blue/red 0.55 for the reference dust, the albedo ratio to the power ~3.4; unbounded, the
-     * exponent reached 20–180 inside the dense front and zeroed the fill (a black face, 19.11 probe). Relative to the brightest channel.
-     */
-    static final double WALL_TINT_MAX = 3;
+    static final double WALL_SUN_FACE = 0.7;
 
     static void dustLight(float[] wall, float[] glow, Sky sky, double wind, double gx, double gy, double gz, double up, double smoke, double sand,
                           float[] into) {
@@ -616,7 +609,7 @@ public final class NukePall {
         double face = BlastWall.face(up / Math.max(top, 1e-3), wall[8]);
         double side = chord(wall, rx, rz, up, ox, 0, oz, Math.max(s - wall[1] * face, 0), 4);
         double below = chord(wall, rx, rz, up, 0, -1, 0, Math.max(up, 0), 2);
-        double deep = Math.min(above, side), depth = Math.min(deep, WALL_FILL), slab = depth + below, tint = Math.min(Math.max(deep - depth, 0) * WALL_TINT, WALL_TINT_MAX);
+        double depth = Math.min(above, side), slab = depth + below, skyLum = 0.2126 * sky.sky[0] + 0.7152 * sky.sky[1] + 0.0722 * sky.sky[2];
         double toSun = chordNear(wall, rx, rz, up, sky.sx, sky.sy, 0, toLight(sky.sy, toTop, reach), 4);
         double lx = Math.cos(wind) * glow[2] - gx, ly = glow[7] - gy, lz = Math.sin(wind) * glow[2] - gz;
         double ll = Math.max(Math.sqrt(lx * lx + ly * ly + lz * lz), 1e-3);
@@ -631,13 +624,12 @@ public final class NukePall {
         double lit = CloudPuffs.ball(sky.exposure, glow[0], ll);
         double burn = CloudPuffs.burn(r, 0, glow[1], glow[3]) * (1 - 0.75 * sky.day);
         double[] lin = new double[3];
-        double wMax = 1e-4;
-        for (int c = 0; c < 3; c++) wMax = Math.max(wMax, Mth.lerp(smoke, Mth.lerp(sand, DUST_W[c], SAND_W[c]), SMOKE_W[c]));
         for (int c = 0; c < 3; c++) {
             double w = Mth.lerp(smoke, Mth.lerp(sand, DUST_W[c], SAND_W[c]), SMOKE_W[c]);
             double fire = FIRE[c];
             double ball = glow[4 + c] * lit;
-            double field = PallLight.diffuse(w, DUST_G, depth, slab, PallLight.LAND, muS, sky.sun[c], 1, 0, sky.sky[c], 0, 0)
+            double dome = Mth.lerp(WALL_HORIZON_WHITE, sky.sky[c], skyLum);
+            double field = PallLight.diffuse(w, DUST_G, depth, slab, PallLight.LAND, muS, sky.sun[c], 1, 0, dome, 0, 0)
                     + PallLight.diffuse(w, DUST_G, deepB, slabB, PallLight.LAND, muS, 0, muB, ball, 0, 0, 0);
             double beams = 0.25 * (sky.sun[c] * Math.exp(-toSun) + ball * Math.exp(-toBall));
             double from = 0;
@@ -645,7 +637,12 @@ public final class NukePall {
                 double flame = PallLight.flame(sky.base, fire * burn * sky.glowOnSmoke / DUST[c], fire);
                 from = Math.min(Math.max(PallLight.diffuse(w, DUST_G, depth, slab, PallLight.LAND, 1, 0, 1, 0, 0, flame, 0), 0), PallLight.linear(fire));
             }
-            lin[c] = w * (Math.pow(w / wMax, tint) * Math.max(field, 0) + beams + from);
+            // the head is an aerosol volume lit from all sides (fx_pall wall): the horizon sky through the face, the lit ground through the foot
+            double k = PallLight.k(w, DUST_G), horizon = dome;
+            double wp = w * (1 - DUST_G) / (1 - w * DUST_G), rInf = (1 - Math.sqrt(1 - wp)) / (1 + Math.sqrt(1 - wp));
+            double toFace = 0.5 * horizon + WALL_SUN_FACE * rInf / Math.max(w, 1e-3) * sky.sun[c] * Math.max(sky.sy, 0);
+            double around = Math.exp(-k * side) * toFace + 0.5 * Math.exp(-k * below) * PallLight.LAND * (sky.sun[c] * Math.max(sky.sy, 0) + sky.sky[c]);
+            lin[c] = w * (Math.max(field, 0) + beams + from + around);
         }
         // to screen like pall (fx_pall: toward white, shoulder)
         PallLight.screen(lin, into);

@@ -577,22 +577,23 @@ class PallGlslTest {
     }
 
     /**
-     * The head's multiple-scattering fill (presentation, 19.11: the dense front's face was near black, head p90/p10 20–30 against the
-     * footage's 2.8–4.8) is the same in the shader and the camera dust ({@link NukePall#dustLight}): the diffuse depth is capped, the
-     * fill light carries the albedo to the skipped depth's power, and the billows' self-shadow is softened.
+     * The head is an aerosol volume lit from all sides (19.11: lit only by a layer from its top, the dense front's face had the zenith sky's
+     * blue or nothing): the shader and the camera dust ({@link NukePall#dustLight}) both take the layer light through the dust above the point,
+     * plus half the horizon sky through the face and half the lit ground through the foot, each fading as e^(−kτ).
      */
     @Test
-    void headFillIsTheCameraDusts() {
+    void headIsLitFromAllSides() {
         String fx = read("include/fx_pall.glsl");
-        assertEquals(NukePall.WALL_FILL, scalar(fx, "WALL_FILL"), 1e-7);
-        assertEquals(NukePall.WALL_TINT, scalar(fx, "WALL_TINT"), 1e-7);
+        assertEquals(NukePall.WALL_HORIZON_WHITE, scalar(fx, "WALL_HORIZON_WHITE"), 1e-7);
         String wall = body(fx, "void wall(").replaceAll("\\s+", " ");
-        assertTrue(wall.contains("float deep = min(up, side), depth = min(deep, WALL_FILL);"), "head diffuse depth - not capped by the fill");
-        assertEquals(NukePall.WALL_TINT_MAX, scalar(fx, "WALL_TINT_MAX"), 1e-7);
-        assertTrue(wall.contains("float tint = min(max(deep - depth, 0.0) * WALL_TINT, WALL_TINT_MAX);")
-                && wall.contains("s.fill += hd * w * (pow(w / max(max(w.r, w.g), max(w.b, 1e-4)), vec3(tint)) - 1.0);"), "fill light - not the dust's colour");
-        assertTrue(fx.replaceAll("\\s+", " ").contains("vec3 emit = s.albedo * (field + beams + fire + lamps) + s.fill * field;"),
-                "fill colour - not on the diffuse field alone");
+        assertTrue(wall.contains("float depth = min(min(up, side), gTauBack);"), "the layer light - not through the nearest of the top, the face and the way back");
+        String step = body(fx, "void pallStep(").replaceAll("\\s+", " ");
+        assertTrue(step.contains("gTauBack = -log(max(transmit, 1e-6)) + 1.0;") && step.contains("gTauBack = 1e9;"), "a march sample - lit only through the top or face");
+        assertEquals(NukePall.WALL_SUN_FACE, scalar(fx, "WALL_SUN_FACE"), 1e-7);
+        assertTrue(wall.contains("s.side += hd * w * (exp(-k * min(side, gTauBack)) * face + 0.5 * exp(-k * down) * below);")
+                && wall.contains("vec3 face = 0.5 * horizon + WALL_SUN_FACE * rInf / max(w, vec3(1e-3)) * PallSunLight * max(sunDir.y, 0.0);"), "the horizon sky, the sun down the skin and the lit ground");
+        assertTrue(wall.contains("vec3 below = PALL_LAND * (PallSunLight * max(sunDir.y, 0.0) + PallSkyLight);"), "the ground below - not sun and sky on it");
+        assertTrue(fx.replaceAll("\\s+", " ").contains("vec3 emit = s.albedo * (field + beams + fire + lamps) + s.side;"), "the side light - not emitted");
         assertTrue(wall.contains("* WALL_SHADE;"), "billow self-shadow - not softened");
     }
 
@@ -793,7 +794,7 @@ class PallGlslTest {
         String march = read("include/fx_pall.glsl"), composite = read("core/fx_pall_composite.fsh");
         assertTrue(march.contains("vec3 fire = min(below + under * (glow + s.fire / max(s.albedo, vec3(1e-7))) + around, gFlame);"),
                 "fire at a point - one amount under the flame limit");
-        assertTrue(march.contains("vec3 emit = s.albedo * (field + beams + fire + lamps) + s.fill * field;"), "point light - scattered (with the head's fill colour), beams, fire and lamps");
+        assertTrue(march.contains("vec3 emit = s.albedo * (field + beams + fire + lamps) + s.side;"), "point light - scattered (and the head's side light), beams, fire and lamps");
         assertTrue(march.contains("vec3 lamps = pallLampsAt(p);"), "lamps once per point, by the window's block light");
         assertTrue(march.contains("+ min(below * exp(-gSootK * self) + (0.5 + 0.75 * PALL_SOOT_G * mv) * glow + around, gFlame);"),
                 "fire on the smoke of the storm - one sum under the flame limit");
