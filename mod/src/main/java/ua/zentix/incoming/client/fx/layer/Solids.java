@@ -314,7 +314,7 @@ public final class Solids {
         s.safeGetUniform("HeatSolidsWrap").set((float) Math.floorMod(x0, SIZE_XZ), (float) Math.floorMod(y0, SIZE_Y), (float) Math.floorMod(z0, SIZE_XZ));
         int unit = GlStateManager._getActiveTexture();
         GlStateManager._activeTexture(GL13.GL_TEXTURE0 + UNIT);
-        GL11.glBindTexture(GL12.GL_TEXTURE_3D, on ? texture : 0);
+        GL11.glBindTexture(GL12.GL_TEXTURE_3D, on ? texture : Empty3D.texture());
         GlStateManager._activeTexture(unit);
         int program = GL11.glGetInteger(GL20.GL_CURRENT_PROGRAM);
         ProgramManager.glUseProgram(s.getId());

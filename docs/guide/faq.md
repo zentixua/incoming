@@ -15,6 +15,7 @@ English · [Русский](ru/faq.md)
 | "The designator is for operators only…" | the world owner set it up that way |
 | "Too many strikes in progress…" | the world owner set a limit: wait for impacts or [abort](designator.md#abort) |
 | "Mission given to launchers…" | [launchers](launcher.md#mission) are linked to the designator; unlink them with RMB to make it fire by itself |
+| "Incoming: your graphics card stalled on the nuclear cloud…" | one frame of the nuclear cloud took your graphics card over a second, so the fireball, mushroom cloud and dust stay off until you restart the game; update the graphics driver, set "Mushroom cloud, dust wall and pall" lower, and [report it](https://github.com/zentixua/incoming/issues) with your log |
 
 ## Troubleshooting
 

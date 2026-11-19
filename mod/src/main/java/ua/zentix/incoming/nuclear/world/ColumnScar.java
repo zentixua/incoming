@@ -88,9 +88,10 @@ public final class ColumnScar {
         level.setBlock(pos, with, flags);
     }
 
-    /** Thermal fluence at a point with terrain and building shadows, cal/cm². */
+    /** Thermal fluence at a point with terrain and building shadows ({@link ThermalShadow}), cal/cm². */
     static double lit(Level level, Detonation d, BlockPos pos) {
         Vec3 p = Vec3.atCenterOf(pos).add(0, 0.5, 0);
-        return ThermalShadow.visible(level, d.burst(), p) ? d.fluence(p) : 0;
+        double share = ThermalShadow.share(level, d, p);
+        return share > 0 ? share * d.fluence(p) : 0;
     }
 }

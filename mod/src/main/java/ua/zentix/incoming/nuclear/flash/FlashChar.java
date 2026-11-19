@@ -93,8 +93,8 @@ public final class FlashChar {
     }
 
     /**
-     * Cosine between face normal and direction from face center to {@code burst}; 0 if face points away
-     * or sideways.
+     * Cosine between face normal and direction from face center to the light source {@code burst} (the fireball's
+     * middle, {@code ThermalShadow.aim}); 0 if face points away or sideways.
      */
     public static double incidence(Vec3 burst, int x, int y, int z, Direction face) {
         double rx = burst.x - (x + 0.5 + 0.5 * face.getStepX()), ry = burst.y - (y + 0.5 + 0.5 * face.getStepY()),

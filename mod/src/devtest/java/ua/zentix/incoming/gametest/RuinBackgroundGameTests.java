@@ -65,7 +65,11 @@ public final class RuinBackgroundGameTests {
         // block Create (if it is in the assembly): a shaft with a block entity in the wall of the house
         Block shaft = BuiltInRegistries.BLOCK.get(ResourceLocation.fromNamespaceAndPath("create", "shaft"));
         if (shaft != Blocks.AIR) h.setBlock(new BlockPos(24, 6, 18), shaft);
-        Detonation d = NuclearGameTests.atPsi(h, new BlockPos(-600, 0, 32), true, new BlockPos(32, 1, 32), 12);
+        // 15 kt 160 blocks over the middle of the site (1 block = 10 m): roofs stand (~3–4 psi) and take ~13 cal/cm²
+        // from nearly overhead, so soot and roof fires come from hundreds of faces. A burst to the side lights no face
+        // in the compared chunks (the template's barrier wall and the city's towers in the plan window hide the ball);
+        // 80 blocks up broke the roofs and left 0–11 charred faces, by the site's place on the chunk grid
+        Detonation d = NuclearGameTests.detonation(h, new BlockPos(32, 0, 32), 160, 15, 0.1f);
         int compared = 0, cells = 0, charred = 0;
         for (int rx : new int[]{24, 40}) {
             for (int rz : new int[]{24, 40}) {
@@ -228,7 +232,11 @@ public final class RuinBackgroundGameTests {
     public static void diskPlanMatchesMemoryPlan(GameTestHelper h) {
         RuinCostGameTests.city(h);
         ServerLevel level = h.getLevel();
-        Detonation d = NuclearGameTests.atPsi(h, new BlockPos(-600, 0, 32), true, new BlockPos(32, 1, 32), 12);
+        // 15 kt 160 blocks over the middle of the site (1 block = 10 m): roofs stand (~3–4 psi) and take ~13 cal/cm²
+        // from nearly overhead, so soot and roof fires come from hundreds of faces. A burst to the side lights no face
+        // in the compared chunks (the template's barrier wall and the city's towers in the plan window hide the ball);
+        // 80 blocks up broke the roofs and left 0–11 charred faces, by the site's place on the chunk grid
+        Detonation d = NuclearGameTests.detonation(h, new BlockPos(32, 0, 32), 160, 15, 0.1f);
         int compared = 0, cells = 0, charred = 0;
         for (int rx : new int[]{24, 40}) {
             for (int rz : new int[]{24, 40}) {
@@ -320,14 +328,7 @@ public final class RuinBackgroundGameTests {
         }
         long[] keys = pad.stream().mapToLong(c -> c.getPos().toLong()).toArray();
         FlashScorch flash = FlashScorch.forTest(d, keys, new ColumnScar.Budget(true));
-        WorkClock clock = WorkClock.counting(1_000_000L);
-        boolean done = false;
-        for (int i = 0; i < 40 && !done; i++) {
-            clock.start(10_000_000_000L);
-            done = flash.work(level, d.gameTime() + 10_000, clock);
-            if (!done) RuinWorkers.awaitForTest(RuinWorkers.Priority.NEAR, 60_000);
-        }
-        h.assertTrue(done, "the flash layer over the block did not end");
+        h.assertTrue(flash.finishForTest(level, d.gameTime() + 10_000), "the flash layer over the block did not end");
         NuclearWorld.get(level).forgetRuinsForTest(d.id());
         int[] out = new int[2];
         for (LevelChunk c : pad) {
@@ -1083,14 +1084,8 @@ public final class RuinBackgroundGameTests {
     private static FlashScorch flashOver(GameTestHelper h, BlockPos base, ChunkPos x) {
         Detonation d = flashDetonation(h, base);
         FlashScorch f = FlashScorch.forTest(d, new long[]{x.toLong()}, new ColumnScar.Budget(false));
-        WorkClock clock = WorkClock.counting(1_000_000L);
-        boolean done = false;
-        for (int i = 0; i < 20 && !done; i++) {
-            clock.start(10_000_000_000L);
-            done = f.work(h.getLevel(), d.gameTime() + 1_000, clock);
-            if (!done) RuinWorkers.awaitForTest(RuinWorkers.Priority.NEAR, 60_000);
-        }
-        h.assertTrue(done, "the flash layer is not finished");
+        // the layer's window neighbors outside memory are read from disk first (absent ones: X's neighbors are not generated)
+        h.assertTrue(f.finishForTest(h.getLevel(), d.gameTime() + 1_000), "the flash layer is not finished");
         return f;
     }
 

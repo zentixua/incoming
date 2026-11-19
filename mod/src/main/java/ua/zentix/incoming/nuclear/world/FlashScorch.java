@@ -68,6 +68,11 @@ public final class FlashScorch {
     /** Layers submitted to background: chunk index in {@link #order} → task. In submission order. */
     private final Map<Integer, Build> building = new LinkedHashMap<>();
     private int applied, stale, late, gone, waiting, skipped, failures, blocks, fires;
+    /** Chunks (indexes in {@link #order}) waiting for disk reads of their window; chunks that waited. */
+    private final it.unimi.dsi.fastutil.ints.IntArrayList reading = new it.unimi.dsi.fastutil.ints.IntArrayList();
+    private int read;
+    /** {@link #start} results. */
+    private static final int BUSY = 0, READING = 1, DONE = 2;
     private long nanos, lastApplied = -1;
     private final HeapWatch.Tracker heap = new HeapWatch.Tracker();
 
@@ -239,57 +244,102 @@ public final class FlashScorch {
                 nanos += clock.end(t0);
             }
         }
+        // chunks whose window neighbors were reading from disk: those now complete go first, in their order
+        for (int i = 0; i < reading.size(); ) {
+            int r = start(level, ctx, reading.getInt(i), clock);
+            if (r == BUSY) return false;
+            if (r == DONE) reading.removeInt(i);
+            else i++;
+        }
         while (next < order.length) {
             int k = next;
-            RuinWorkers.Priority priority = seen[k] ? RuinWorkers.Priority.SEEN : RuinWorkers.Priority.NEAR;
-            if (!RuinWorkers.admit(priority) || !(seen[k] ? clock.canStartVisible(ScarQueue.SEEN_BUSY_NANOS) : clock.canStart())) return false;
+            int r = start(level, ctx, k, clock);
+            if (r == BUSY) return false;
             next++;
-            long key = order[k];
-            LevelChunk chunk = level.getChunkSource().getChunkNow(ChunkPos.getX(key), ChunkPos.getZ(key));
-            if (chunk == null) {
-                gone++;
-                continue;
-            }
-            if (ruined(ctx, chunk)) {
-                late++;
-                continue;
-            }
-            // near Sable craft, writing reads neighbors: without them, wait for ruins when neighbors arrive (queue waits)
-            if (SableTerrain.watched(level, chunk) && !NuclearTickets.neighbourhoodLoaded(level, chunk.getPos(), 1)) {
-                waiting++;
-                continue;
-            }
-            // snapshots and layer plans retain memory until the wave: no new ones beyond the limit or with a tight heap
-            if (ctx.shotBytes() >= NuclearPrep.PLANS_CAP || heap.tight()) {
-                skipped++;
-                continue;
-            }
-            long t0 = clock.begin();
-            try {
-                RuinContext.Grid g = ctx.flashGrid(level, chunk.getPos(), true);
-                building.put(k, new Build(RuinWorkers.submit(() -> {
-                    RuinWorkers.checkStop();
-                    return RuinPlanner.flash(g);
-                }, priority)));
-            } catch (RuntimeException ex) {
-                failed(k, ex);
-            } finally {
-                nanos += clock.end(t0);
+            if (r == READING) {
+                reading.add(k);
+                read++;
             }
         }
-        if (!building.isEmpty()) return false;
+        if (!building.isEmpty() || !reading.isEmpty()) return false;
         Incoming.LOG.info("Nuclear detonation #{}: flash scorch — {} of {} chunks ({} seen by players) in {} ticks (pulse {} ticks), {} ms on the server thread; "
-                        + "{} blocks, {} fires lit; {} stale, {} after the wave, {} unloaded, {} at aircraft without neighbours, {} over the memory limit{}",
+                        + "{} blocks, {} fires lit; {} stale, {} after the wave, {} unloaded, {} at aircraft without neighbours, {} over the memory limit, "
+                        + "{} read window neighbours from disk first{}",
                 d.id(), applied, order.length, seenCount, lastApplied < 0 ? 0 : lastApplied - d.gameTime(),
-                String.format(java.util.Locale.ROOT, "%.1f", d.pulseTicks()), nanos / 1_000_000, blocks, fires, stale, late, gone, waiting, skipped,
+                String.format(java.util.Locale.ROOT, "%.1f", d.pulseTicks()), nanos / 1_000_000, blocks, fires, stale, late, gone, waiting, skipped, read,
                 failures > 0 ? ", " + failures + " failed" : "");
         return true;
+    }
+
+    /**
+     * Start chunk {@code k}'s layer (server thread): {@link #BUSY} — no budget or pool room now, retry; {@link #READING}
+     * — window neighbors outside memory still reading from disk; {@link #DONE} — submitted or not needed.
+     */
+    private int start(ServerLevel level, RuinContext ctx, int k, WorkClock clock) {
+        RuinWorkers.Priority priority = seen[k] ? RuinWorkers.Priority.SEEN : RuinWorkers.Priority.NEAR;
+        if (!RuinWorkers.admit(priority) || !(seen[k] ? clock.canStartVisible(ScarQueue.SEEN_BUSY_NANOS) : clock.canStart())) return BUSY;
+        long key = order[k];
+        LevelChunk chunk = level.getChunkSource().getChunkNow(ChunkPos.getX(key), ChunkPos.getZ(key));
+        if (chunk == null) {
+            gone++;
+            return DONE;
+        }
+        if (ruined(ctx, chunk)) {
+            late++;
+            return DONE;
+        }
+        // near Sable craft, writing reads neighbors: without them, wait for ruins when neighbors arrive (queue waits)
+        if (SableTerrain.watched(level, chunk) && !NuclearTickets.neighbourhoodLoaded(level, chunk.getPos(), 1)) {
+            waiting++;
+            return DONE;
+        }
+        // snapshots and layer plans retain memory until the wave: no new ones beyond the limit or with a tight heap
+        if (ctx.shotBytes() >= NuclearPrep.PLANS_CAP || heap.tight()) {
+            skipped++;
+            return DONE;
+        }
+        long t0 = clock.begin();
+        try {
+            // one light for every path: the layer's window is the ruins' window; neighbors outside memory (view edge) are
+            // read from disk first, in the background, and the ruins reuse those snapshots
+            if (ctx.requestWindow(level, chunk.getPos(), priority) > 0) return READING;
+            RuinContext.Grid g = ctx.flashGrid(level, chunk.getPos(), true);
+            building.put(k, new Build(RuinWorkers.submit(() -> {
+                RuinWorkers.checkStop();
+                return RuinPlanner.flash(g);
+            }, priority)));
+        } catch (RuntimeException ex) {
+            failed(k, ex);
+        } finally {
+            nanos += clock.end(t0);
+        }
+        return DONE;
+    }
+
+    /**
+     * For tests: work until every layer is written or no longer needed ({@code now} as game time), waiting for
+     * background layers and for disk reads of window neighbors outside memory (at most a minute, like
+     * {@code RuinPlanner.planWithWindow}).
+     *
+     * @return finished
+     */
+    public boolean finishForTest(ServerLevel level, long now) {
+        long until = System.nanoTime() + 60_000_000_000L;
+        WorkClock clock = WorkClock.counting(1_000_000L);
+        while (System.nanoTime() < until) {
+            clock.start(10_000_000_000L);
+            if (work(level, now, clock)) return true;
+            RuinWorkers.awaitForTest(RuinWorkers.Priority.NEAR, 60_000);
+            if (!reading.isEmpty()) java.util.concurrent.locks.LockSupport.parkNanos(1_000_000L);
+        }
+        return false;
     }
 
     /** Cancel, stop: background layers no longer needed. */
     void cancel() {
         for (Build b : building.values()) b.task.cancel(false);
         building.clear();
+        reading.clear();
     }
 
     /**

@@ -37,15 +37,15 @@ final class RuinContext {
     /** Chunk snapshots (server thread) retained while unfinished plan windows read them. Outside-memory chunks from disk ({@link DiskShots}). */
     private final it.unimi.dsi.fastutil.longs.Long2ObjectLinkedOpenHashMap<ChunkShot> shots = new it.unimi.dsi.fastutil.longs.Long2ObjectLinkedOpenHashMap<>();
     /**
-     * Pre-wave {@code MOTION_BLOCKING} heightmaps (first air) for light-pulse shadow
-     * ({@link #lit}) on any thread: in-memory from live chunk (pre-ruin for ruined chunk), others disk.
-     * Server-thread writes only, immutable values; missing means no terrain (like unloaded chunk).
+     * Pre-wave {@code MOTION_BLOCKING} heightmaps (first air) for light-pulse shadow inside plan windows
+     * ({@link Grid#shadow}): in-memory from live chunk (pre-ruin for ruined chunk), others disk.
+     * Server-thread writes only, immutable values.
      */
     private final java.util.concurrent.ConcurrentHashMap<Long, int[]> heights = new java.util.concurrent.ConcurrentHashMap<>();
     /**
-     * Chunks in {@link #heights}, server thread only. {@link #captureBand} walks the lane from the epicentre to every
-     * planned chunk, nine chunks a step: checking the boxed concurrent map for each was 0.39 ms of server thread per
-     * settled chunk of a 250 kt pass (Zearth 07.11.2026). Heights are never removed, so the set only grows with them.
+     * Chunks in {@link #heights}, server thread only: checking the boxed concurrent map for every window chunk was
+     * 0.39 ms of server thread per settled chunk of a 250 kt pass (Zearth 07.11.2026, then for a nine-chunk-wide lane
+     * to the epicentre). Heights are never removed, so the set only grows with them.
      */
     private final LongOpenHashSet heightsKnown = new LongOpenHashSet();
     private long appliedBytes;
@@ -146,22 +146,17 @@ final class RuinContext {
     }
 
     /**
-     * Snapshots for chunk flash layer (server thread): chunk plus fully in-memory neighbors (edge face scorch
-     * checks neighbor; absent means exposed face), from detonation ruin cache, later reused for ruins. Chunk in memory.
+     * Snapshots for chunk flash layer (server thread): the ruins' own window ({@link #grid}: radius-{@link RuinPlanner#REACH}
+     * square, neighbors outside memory from disk via {@link #requestWindow} first), so the layer sees the same light,
+     * shadow and covered faces as the ruins that later replace it. A 3×3 in-memory window let a wall in the second
+     * neighbor shadow the ruins but not the layer: the layer burned turf the ruins kept (12 cal/cm² from 15 kt, review
+     * of #664), and ruins do not undo layer changes outside their own positions. Window finished in this tick.
      */
     Grid flashGrid(ServerLevel level, ChunkPos centre, boolean background) {
-        ChunkShot[] g = new ChunkShot[Grid.SIDE * Grid.SIDE];
-        for (int dz = -1; dz <= 1; dz++) {
-            for (int dx = -1; dx <= 1; dx++) {
-                if (level.getChunkSource().getChunkNow(centre.x + dx, centre.z + dz) == null) continue;
-                g[(dz + Grid.R) * Grid.SIDE + dx + Grid.R] = shot(level, centre.x + dx, centre.z + dz);
-            }
-        }
-        captureBand(level, centre);
-        RuinPlanner.ensureOwnStates();
-        Blast.PropsView view = background ? Blast.publish() : Blast.SERVER;
-        return new Grid(this, centre, level.getMinBuildHeight(), level.getMaxBuildHeight(), g, view,
-                IncomingConfig.SERVER.nukeBlockDamage.get(), IncomingConfig.SERVER.nukeTreeFall.get(), IncomingConfig.SERVER.nukeFires.get());
+        Grid g = grid(level, centre, background);
+        // the grid holds its snapshots now; a ruin plan of the same chunk requests the window again
+        pendingWindows.remove(centre.toLong());
+        return g;
     }
 
     /**
@@ -356,34 +351,28 @@ final class RuinContext {
     }
 
     /**
-     * Heightmaps between epicenter/chunk (server thread, before plan): rays to chunk pass overhead. Three-chunk-wide
-     * lane along line from epicenter.
+     * Light-shadow occluders of a plan (server thread): pre-wave first air of the window chunks the plan's blocks come
+     * from ({@code shots}, the same in every path: in memory, disk, preparation, settlement), {@link Integer#MIN_VALUE}
+     * for an empty slot (chunk absent on disk, like the world edge). Terrain outside the window is never an occluder:
+     * before, a chunk absent from the shared map counted as the world bottom, so a chunk ruined beside a player with the
+     * lane to the epicentre unloaded was lit, and the same chunk settled later, with every nearer chunk read, was
+     * shadowed (1 Mt over the Silo map 16.11.2026: burned turf in 63 % of chunks near the player at 4.5–5 km, 14 %
+     * elsewhere). {@link Grid#shadowLine} has the cost of that approximation.
      */
-    private void captureBand(ServerLevel level, ChunkPos to) {
-        int bx = net.minecraft.util.Mth.floor(d.burst().x) >> 4, bz = net.minecraft.util.Mth.floor(d.burst().z) >> 4;
-        int steps = Math.max(Math.abs(to.x - bx), Math.abs(to.z - bz));
-        for (int i = 0; i <= steps; i++) {
-            int cx = bx + (int) Math.round((to.x - bx) * (double) i / Math.max(1, steps));
-            int cz = bz + (int) Math.round((to.z - bz) * (double) i / Math.max(1, steps));
-            for (int dx = -1; dx <= 1; dx++) for (int dz = -1; dz <= 1; dz++) captureHeights(level, cx + dx, cz + dz);
+    private int[] shadow(ServerLevel level, ChunkPos centre, ChunkShot[] shots) {
+        int[] out = new int[shots.length * 256];
+        java.util.Arrays.fill(out, Integer.MIN_VALUE);
+        int motion = ChunkShot.type(net.minecraft.world.level.levelgen.Heightmap.Types.MOTION_BLOCKING);
+        for (int i = 0; i < shots.length; i++) {
+            ChunkShot s = shots[i];
+            if (s == null) continue;
+            int cx = centre.x + i % Grid.SIDE - Grid.R, cz = centre.z + i / Grid.SIDE - Grid.R;
+            captureHeights(level, cx, cz);
+            int[] h = heights.get(key(ChunkPos.asLong(cx, cz)));
+            if (h != null) System.arraycopy(h, 0, out, i * 256, 256);
+            else System.arraycopy(s.heights, motion * 256, out, i * 256, 256);
         }
-    }
-
-    /** First pre-wave air over {@code MOTION_BLOCKING} (any thread); chunk absent from maps means world bottom. */
-    private int height(int x, int z, int minY) {
-        int[] h = heights.get(key(ChunkPos.asLong(x >> 4, z >> 4)));
-        return h == null ? minY : h[(z & 15) << 4 | (x & 15)];
-    }
-
-    /** Light pulse at position as pre-wave world saw it (any thread). */
-    double lit(net.minecraft.core.BlockPos pos, int minY) {
-        Vec3 p = Vec3.atCenterOf(pos).add(0, 0.5, 0);
-        return ThermalShadow.visible(d.burst(), p, (x, z) -> height(x, z, minY)) ? d.fluence(p) : 0;
-    }
-
-    /** Whether fireball sees point as pre-wave world saw it (any thread): same shadow heightmaps as {@link #lit}. */
-    boolean sees(Vec3 p, int minY) {
-        return ThermalShadow.visible(d.burst(), p, (x, z) -> height(x, z, minY));
+        return out;
     }
 
     /** Conservative retained-plan accounting for long disk settlement passes, including old blocks and marks. */
@@ -419,8 +408,8 @@ final class RuinContext {
      * neighbor windows), property table/settings captured on server thread. Uncached fractures computed by plan
      * itself on its execution thread.
      */
-    record Grid(RuinContext ctx, ChunkPos centre, int minY, int maxY, ChunkShot[] shots, Blast.PropsView view, boolean blockDamage, boolean treeFall,
-                boolean fires) {
+    record Grid(RuinContext ctx, ChunkPos centre, int minY, int maxY, ChunkShot[] shots, int[] shadow, Blast.PropsView view, boolean blockDamage,
+                boolean treeFall, boolean fires) {
         static final int R = RuinPlanner.REACH, SIDE = 2 * R + 1;
 
         @Nullable
@@ -450,14 +439,37 @@ final class RuinContext {
             return b;
         }
 
-        /** Light pulse at position as pre-wave world saw it. */
+        /** Light pulse at position as pre-wave world saw it: free fluence times the visible fireball share. */
         double lit(net.minecraft.core.BlockPos pos) {
-            return ctx.lit(pos, minY);
+            Vec3 p = Vec3.atCenterOf(pos).add(0, 0.5, 0);
+            double share = share(p);
+            return share > 0 ? share * ctx.d.fluence(p) : 0;
         }
 
-        /** Whether fireball sees point as pre-wave world saw it. */
-        boolean sees(Vec3 p) {
-            return ctx.sees(p, minY);
+        /** Visible share of the fireball from {@code p} as pre-wave world saw it ({@link ThermalShadow}). */
+        double share(Vec3 p) {
+            return ThermalShadow.share(ctx.d, shadowLine(p));
+        }
+
+        /**
+         * Terrain line toward the fireball from this window's terrain only ({@link #shadow}): every block along the
+         * ray until it leaves the window. Approximation (DESIGN-nuke §3.4, “not physical”: far-terrain shadow
+         * dropped): a ridge or forest farther than the window (16–40 blocks toward the epicentre) casts no shadow.
+         * With the ball as the source that is what all terrain did at 1 Mt over the Silo map, measured on the
+         * untouched map's heightmaps (16.11.2026): ground columns seeing the ball with all terrain 98–99 % at
+         * 0.5–3 km, 88–93 % at 3–4 km, 76–79 % at 4–5 km, 30 % at 5.5–6 km (behind mountains); without far terrain
+         * 99–100 % to 5 km, 93 % at 5.5–6 km. The trace beyond hills is therefore stronger than real there. Reading
+         * every chunk on the line from disk would keep it, at tens of extra chunk reads per plan.
+         */
+        double shadowLine(Vec3 p) {
+            return ThermalShadow.windowLine(ctx.d, p, this::shadowHeight);
+        }
+
+        /** Pre-wave first air in this window, {@link Integer#MIN_VALUE} outside it or in an empty slot. */
+        int shadowHeight(int x, int z) {
+            int dx = (x >> 4) - centre.x + R, dz = (z >> 4) - centre.z + R;
+            if (dx < 0 || dx >= SIDE || dz < 0 || dz >= SIDE) return Integer.MIN_VALUE;
+            return shadow[(dz * SIDE + dx) * 256 + ((z & 15) << 4 | (x & 15))];
         }
 
         /** Offset chunk fracture already cached from same snapshots. */
@@ -476,10 +488,10 @@ final class RuinContext {
         for (int dz = -Grid.R; dz <= Grid.R; dz++) {
             for (int dx = -Grid.R; dx <= Grid.R; dx++) g[(dz + Grid.R) * Grid.SIDE + dx + Grid.R] = shot(level, centre.x + dx, centre.z + dz);
         }
-        captureBand(level, centre);
+        int[] shadow = shadow(level, centre, g);
         RuinPlanner.ensureOwnStates();
         Blast.PropsView view = background ? Blast.publish() : Blast.SERVER;
-        return new Grid(this, centre, level.getMinBuildHeight(), level.getMaxBuildHeight(), g, view,
+        return new Grid(this, centre, level.getMinBuildHeight(), level.getMaxBuildHeight(), g, shadow, view,
                 IncomingConfig.SERVER.nukeBlockDamage.get(), IncomingConfig.SERVER.nukeTreeFall.get(), IncomingConfig.SERVER.nukeFires.get());
     }
 
@@ -492,9 +504,9 @@ final class RuinContext {
         for (int dz = -Grid.R; dz <= Grid.R; dz++) {
             for (int dx = -Grid.R; dx <= Grid.R; dx++) g[(dz + Grid.R) * Grid.SIDE + dx + Grid.R] = shots.getAndMoveToLast(ChunkPos.asLong(centre.x + dx, centre.z + dz));
         }
-        captureBand(level, centre);
+        int[] shadow = shadow(level, centre, g);
         RuinPlanner.ensureOwnStates();
-        return new Grid(this, centre, level.getMinBuildHeight(), level.getMaxBuildHeight(), g, Blast.publish(),
+        return new Grid(this, centre, level.getMinBuildHeight(), level.getMaxBuildHeight(), g, shadow, Blast.publish(),
                 IncomingConfig.SERVER.nukeBlockDamage.get(), IncomingConfig.SERVER.nukeTreeFall.get(), IncomingConfig.SERVER.nukeFires.get());
     }
 
@@ -505,7 +517,7 @@ final class RuinContext {
     Grid scorchGrid(ServerLevel level, ChunkShot shot, Blast.PropsView view) {
         ChunkShot[] g = new ChunkShot[Grid.SIDE * Grid.SIDE];
         g[Grid.R * Grid.SIDE + Grid.R] = shot;
-        return new Grid(this, shot.pos(), level.getMinBuildHeight(), level.getMaxBuildHeight(), g, view,
+        return new Grid(this, shot.pos(), level.getMinBuildHeight(), level.getMaxBuildHeight(), g, shadow(level, shot.pos(), g), view,
                 IncomingConfig.SERVER.nukeBlockDamage.get(), IncomingConfig.SERVER.nukeTreeFall.get(), IncomingConfig.SERVER.nukeFires.get());
     }
 

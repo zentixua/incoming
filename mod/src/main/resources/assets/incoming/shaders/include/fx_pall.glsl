@@ -173,12 +173,13 @@ const int MUSH_TAU_N = 48;
 // a ray ends once the background shows through less than this share of the pixel
 const float RAY_EXIT = 0.02;
 
-// frame mushrooms and ray interval in each
-vec2 gMushSpan[MUSHROOMS];
-int gMushes;
-vec3 gDir;
-int gFoot0, gFoot1;
-vec2 gFootSpan0, gFootSpan1;
+// frame mushrooms and ray interval in each. Every module global starts at its "none" value: a program whose main never
+// sets one reads it as unset, not as whatever the register held (zero on NVIDIA, garbage elsewhere; ShaderSourceTest)
+vec2 gMushSpan[MUSHROOMS] = vec2[MUSHROOMS](vec2(0.0), vec2(0.0), vec2(0.0), vec2(0.0));
+int gMushes = 0;
+vec3 gDir = vec3(0.0, 0.0, -1.0);
+int gFoot0 = -1, gFoot1 = -1;
+vec2 gFootSpan0 = vec2(0.0, 1e9), gFootSpan1 = vec2(0.0, 1e9);
 const int FOOT_LIGHT_AZ = 64;
 const int FOOT_LIGHT_R = 16;
 const int FOOT_LIGHT_H = 32;
@@ -866,25 +867,25 @@ vec4 wilsonLight(mat4 S, vec4 G, vec4 H, vec4 L, vec3 dir, vec3 sunDir, float t,
 }
 
 // This pixel's ray (gDir above) and shared step data: sun, cosines, soot, brightest flame, pixel width
-vec3 gSun;
-float gMuS;
-float gC;
-float gMv;
-vec3 gSootK;
-float gSootSun;
-vec3 gFlame;
-float gPixel;
-float gJitter;
+vec3 gSun = vec3(0.0, 1.0, 0.0);
+float gMuS = 1.0;
+float gC = 0.0;
+float gMv = 0.0;
+vec3 gSootK = vec3(0.0);
+float gSootSun = 0.0;
+vec3 gFlame = vec3(0.0);
+float gPixel = 0.0;
+float gJitter = 0.5;
 // whirls: light/transmittance of each and ray entry (main); likewise Wilson crossings (two per slot)
-mat4 gWhirlLight;
-vec4 gWhirlIn;
-mat4 gWilsonLight;
-vec4 gWilsonIn;
+mat4 gWhirlLight = mat4(0.0);
+vec4 gWhirlIn = vec4(1e9);
+mat4 gWilsonLight = mat4(0.0);
+vec4 gWilsonIn = vec4(1e9);
 // eye-to-step mushroom depth: actual billowing depth — skylight from eye side lost before point
-float gTauEye;
+float gTauEye = 0.0;
 // near sunward billow depth of mushroom gSunK last traced at ray distance gSunAt (mushSunTau); −1: none yet on this ray
-int gSunK;
-float gSunAt, gSunNear;
+int gSunK = -1;
+float gSunAt = 0.0, gSunNear = 0.0;
 
 // Add matter of opacity 1 − tr and light l (already × opacity) at eye distance t to ray. Eye sees pall, whirls and
 // Wilson cloud even where mushroom fades in air haze (lost): their light weighted by transmit + lost. Air haze to t
@@ -1615,8 +1616,8 @@ float mushEyeTau(vec3 dir, float t) {
 // Whirls on ray dir before the world at distance scene: spans (gWhirlSpan, entry ≥ exit: miss) and the local light of each,
 // taken once at the span's middle (lit: pall diffuse and sun through pall above it; fire: fire glow below), for the ray (whirl)
 // and the near volume's cells on it (whirlCell) alike; a cell (at ≥ 0) lights only the whirls it lies in. Needs pallLighting(dir)
-vec2 gWhirlSpan[4];
-mat4 gWhirlLit, gWhirlFire;
+vec2 gWhirlSpan[4] = vec2[4](vec2(1e9, 0.0), vec2(1e9, 0.0), vec2(1e9, 0.0), vec2(1e9, 0.0));
+mat4 gWhirlLit = mat4(0.0), gWhirlFire = mat4(0.0);
 
 void whirlSetup(vec3 dir, float scene, float at) {
     vec3 sunDir = PallSun.xyz;

@@ -17,7 +17,7 @@ What differs from the design below, and why.
 | §0.6, §7 — nuclear warhead on cruise missile/B-2 | “Warhead” switch on remote (`Loadout.Nuke.onCarrier`), not separate `Warhead` class; missile bursts as selected (air/surface), B-2 bomb underground after drilling; single, no salvo | projectile already knows its explosion (`impact`), a `StrikeProjectile` flag suffices; B61-11 is a penetrating bomb, nuclear salvos excessive; disabled by `nuclear.carrier_nukes` |
 | §0.4 — palette-based section skipping | column scans top to natural ground (≤ 96 blocks), stops | wave does not affect ground, so palette rarely needed; simpler, equally cheap |
 | §3.1–3.3 — destroy chunk block by block on wave arrival | prebuild chunk ruins during ICBM flight (`NuclearPrep`: ≥ 5 psi heavy zone loaded from disk in non-ticking 5×5 squares, chunks with whole ruin windows on disk, plan `RuinPlanner`), apply per chunk at once (`RuinPlan`: position delta written directly into sections on replacement; changed-column heightmaps, sky sources, light-check positions calculated in plan, replacement only installs (chunk changed after plan: rescan all columns with plan positions); low memory (live heap above 75 % after two consecutive GCs) stops new plans, zone loads only planned chunks, other ruins built on-site; section packets to clients, immediate Distant Horizons LODs; fires in same replacement); block entities/POIs via world; stale plan (plan positions changed) rebuilt | `setBlock` costs ≈10 µs/block: city destruction would lag wave by seconds/tens of seconds; Artem: “wave and destruction synchronized, no lag” |
-| §3.4 — light trace over all ground in radius | beyond heavy zone in Distant Horizons LODs (chunks outside world), ground trace only, no ruins (`RuinPlanner.scorch`, `FarLods.scorch`): turf, plants, scorch, fires, biomes from one disk-chunk snapshot, on wave arrival, nearest first, to `RuinPlanner.scorchReach` (~7.5 km at 15 kt); glass/trees stand until chunk load (then full ruins); no distant terrain light shadow | neighbor-window ruin plans for hundreds of thousands of distant chunks would occupy background threads for hours; without trace, LODs beyond heavy zone stayed green with a sharp circular edge (16.10.2026 frames) |
+| §3.4 — light trace over all ground in radius | beyond heavy zone in Distant Horizons LODs (chunks outside world), ground trace only, no ruins (`RuinPlanner.scorch`, `FarLods.scorch`): turf, plants, scorch, fires, biomes from one disk-chunk snapshot, on wave arrival, nearest first, to `RuinPlanner.scorchReach` (~7.5 km at 15 kt); glass/trees stand until chunk load (then full ruins); light shadow only from the chunk's own terrain (§3.4 approximation) | neighbor-window ruin plans for hundreds of thousands of distant chunks would occupy background threads for hours; without trace, LODs beyond heavy zone stayed green with a sharp circular edge (16.10.2026 frames) |
 | §3.3 — pressure thresholds at blocks | two physical processes over original world around chunk (“physical”): wave breaks thin sky-air-exposed elements, blast-facing reflected pressure versus block threshold × thickness (1–3), tall/narrow topples, three rounds (farther behind breaches); then unsupported blocks fall (material span, cascading), trunkless leaves, bottomless water, attachments; ground breaks only if thin with sky both sides, leaving mountains, mesas, cliffs, caves, bunkers; ≥ 5 psi rubble except fireball; same chunk plan in advance/on-site | Artem: “destruction must derive from a physical process”; column rules (building signs, +4 % per height block, “half column removed, whole column falls”) produce chunk-border stripes and surviving towers |
 | §8 — yield to `max_yield` 1000 kt, presets to 10 Mt | maximum 15 kt (`Loadout.Nuke.MAX_YIELD`), presets 1/15 kt | 15 kt heavy zone ~32 thousand chunks (ground 5 psi to 1.6 km by Brode; old model ~11 thousand), preplans capped at 512 MB; higher yields would leave ruins behind wave; Artem: “better a high-quality bomb that is not too powerful” |
 | §3.2 — nuclear debris (`max_debris`) | broken blocks vanish without debris entities; server sends chunk viewers up to 24 removed positions and former blocks (`S2C.NukeDebris`, `RuinPlan.thrown`); client tears pieces when front reaches position: initially stationary material bodies (fragment, plank, glass shard, leaf) carried by Friedlander post-front wind, drag from own fall speed (`client/nuclear/BlastGust`, `client/fx/Fragments`: ≤ 1200 alive, nearer camera pieces evict farthest at cap); stone/brick/ground breach dust trails downwind as effects-layer billows (`client/nuclear/BlastDust`: 5·10⁻⁴ of removed mineral mass, modeled debris dust per kilogram of building clay/plaster, (est.)) | thousands of flying blocks per detonation are main lag source; conventional weapons retain debris; client pieces cost server nothing and never settle into world |
@@ -256,8 +256,10 @@ Notation: `Y` yield, kt; `R` slant range from explosion center, m (= blocks); `H
   leaves/grass/wool ignition 5–10; wood darkens/smokes 10–15; surface melting/sand glass > 50–100 (near sphere).
 - Skin burns in half people (§4), slant range (clear airburst): 15 kt third-degree ~2.1 km, first ~3.4 km; 1 Mt
   11.5/18 km; surface less (15 kt 1.5/2.5 km).
-- **Shadows.** Straight-line light, point affected only if fireball visible. Blocks use ray heightmap check (3.4),
-  entities `Level.clip` from eyes to sphere center. Naturally gives “Hiroshima shadows”, preserved slopes behind hills.
+- **Shadows.** Straight-line light from the luminous fireball, not the burst point: a point gets the free fluence
+  times the visible share of the ball (3.4). Blocks use a heightmap terrain line (3.4), entities a `Level.clip` from
+  the eyes to the middle of the ball for the first 48 blocks, then the same line. Naturally gives “Hiroshima
+  shadows”, preserved slopes behind hills.
 
 ### 1.5 Prompt radiation — `PromptRadiationModel`
 - First-minute dose `D = K·Y·exp(−R/λ) / R²`, `λ` 330 m, `K` 1.52·10⁹ rem·m²/kt, from Nagasaki kerma (RERF:
@@ -384,8 +386,37 @@ climates (snow/desert remain), not oceans/rivers/caves (`incoming:nuke_keeps_bio
 change from 8 blocks below their columns' lower ground quartile.
 
 ### 3.4 Sphere visibility for a block (cheap)
-Ray from sphere center to block top uses `MOTION_BLOCKING` heightmap, 16 samples over horizontal projection; terrain
-above ray means shadow. One array read/sample, no `clip`; hill/building shadows.
+Source: the luminous ball at its maximum radius (Glasstone 2.12: 0.088·Y^0.4 km surface, 0.07·Y^0.4 km air), centre at
+the burst; a surface burst's ball is a hemisphere on the ground, 1 395 m high at 1 Mt. Terrain (`MOTION_BLOCKING`
+first air) along the horizontal projection of the ray from the block top to the ball axis gives the terrain line: the
+lowest axis height seen past every sample. The visible share is the ball's vertical extent above that line, smoothed
+(`ThermalShadow.discShare`, the client's law for distant balls and puffs); exposure is fluence × share. A point below
+its own column's top (a floor under a roof, ground under a glass column) sees nothing: heightmap columns are solid
+from below. Face and slope incidence and body silhouettes take the light direction from the ball's middle
+(`ThermalShadow.aim`; 697 m up at 1 Mt surface): from the burst point on the ground every top face 4.8 km out got
+none and every slope facing the burst the ×2.5 cap. Bodies: a block ray to the ball's middle for 48 blocks, then
+terrain samples, all projected from the eye. Live world:
+16 samples on the ray. Ruin plans and the flash layer (`RuinContext.Grid.shadowLine`): every block on the ray inside
+the plan's own 5×5 chunk window, pre-wave heights of exactly the chunks its blocks come from (the flash layer reads
+neighbors outside memory from disk first), so the flash layer and in-memory, disk, prepared and settled plans agree. Before 18.11.2026 the source was the burst point, on the ground for a surface burst, and a chunk absent
+from the detonation's height map counted as the world bottom: 1 Mt over the Silo map (16.11.2026) left burned turf in
+63 % of chunks within 320 m of the player at 4.5–5 km and 14 % elsewhere; with every chunk known, 0.2–14 % of ground
+columns saw the burst point at 0.5–6 km.
+
+Approximation (not physical, Artem's decision 18.11.2026): terrain beyond the plan window (16–40 blocks toward the
+epicentre) is not an occluder. Measured on the untouched Silo map's heightmaps, 3 000 ground columns a ring, ball as
+the source, 1 Mt surface burst at −193 76 651:
+
+| ring | all terrain known | only terrain within 320 m of two player spots |
+|---|---|---|
+| 0.5–3 km | 98–99.9 % see the ball | 100 % |
+| 3–4 km | 88–93 % | 100 % |
+| 4–5 km | 76–79 % | 99.4–100 % |
+| 5–5.5 km | 66 % | 98 % |
+| 5.5–6 km | 30 % (behind mountains) | 93 % |
+
+So the trace behind distant ridges is stronger than real, mostly at the faint outer edge. Keeping far shadows would mean
+reading every chunk on the line from disk before planning (tens of reads per chunk).
 
 ### 3.5 Crater
 Separate `CraterJob`: survey of the chunks around the bowl (ground plane, `CraterGround.fit`), then rim-radius columns
