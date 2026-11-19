@@ -213,6 +213,17 @@ else
     && ok "game started mid-job stops the job in ${took} s: $(head -n 1 "$tmp/run")" || bad "game mid-job: code $rc after $took s: $(cat "$tmp/run")"
   kill -0 "$(cat "$tmp/grandchild")" 2>/dev/null && bad "job's child survived the stop" || ok "job's child stopped with it"
   kill $j 2>/dev/null; wait $j 2>/dev/null
+  # a job that ignores TERM (its children inherit the ignore) is killed 10 s later, still with 75
+  start=$(date +%s)
+  PRISM_DIR=$tmp/prism INCOMING_GPU_OWNER=SH INCOMING_GAME_POLL=0.2 "$ROOT/tools/laptop_job.sh" --in-unit gpu deaf $$ -- \
+    bash -c 'trap "" TERM; sleep 60 & echo $! > "$1/deaf"; wait' _ "$tmp" > "$tmp/deaf.out" 2>&1 & r=$!
+  sleep 1
+  ( cd "$tmp/prism/instances/Open Skies/minecraft" && exec "$tmp/bin/java" -cp x ) & j=$!
+  wait $r; rc=$?
+  took=$(( $(date +%s) - start ))
+  [ $rc = 75 ] && [ $took -ge 9 ] && [ $took -lt 16 ] && ! kill -0 "$(cat "$tmp/deaf")" 2>/dev/null \
+    && ok "job ignoring TERM is killed after the grace in ${took} s" || bad "TERM-deaf job: code $rc after $took s: $(cat "$tmp/deaf.out")"
+  kill $j 2>/dev/null; wait $j 2>/dev/null
   out=$(PRISM_DIR=$tmp/prism INCOMING_GPU_OWNER=SH "$ROOT/tools/laptop_job.sh" --in-unit gpu quick $$ -- bash -c 'exit 3' 2>&1); rc=$?
   [ $rc = 3 ] && [[ $out != *"Artem's game"* ]] && ok "job without his game keeps its own exit code" || bad "plain job: code $rc $out"
 fi
