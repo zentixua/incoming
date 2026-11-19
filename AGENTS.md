@@ -222,10 +222,11 @@ actually works, fix the real cause.
 - **One independent review round:** use the other vendor when available; during absence or quota exhaustion, use a
   fresh session of the available vendor, given the diff and surrounding-code access without the author's conclusions.
   Effort follows the effort rule below.
-  Reviewer reads diff/surrounding code, not PR description or author's conversation/conclusions; checks PR frames,
-  plus WAV for player-visible/audible changes. Only serious errors block: wrong behavior, crash, tick-budget or
+  Reviewer reads diff/surrounding code, not PR description or author's conversation/conclusions. Each agent only
+  where it is strong (Artem, 19.11): Codex reviews code (correctness, tests, budgets, concurrency), never frames, WAV
+  or look; a Claude session judges PR frames and WAV for player-visible/audible changes. Only serious errors block: wrong behavior, crash, tick-budget or
   frame-cost breach; other findings optional, author fixes minor issues without another round. Second round only
-  for serious first-round fixes, no third. Parallel tasks/measurements: GPT-6.1 Sol at medium (high for diagnosis).
+  for serious first-round fixes, no third. Parallel tasks/measurements: GPT-6.2 Sol at medium (high for diagnosis).
 - **Effort** (Artem, 19.11), for every agent, task and review: the working range is low/medium/high.
   **medium** is the default. **high** for work that needs deep reasoning: diagnosis of an unknown cause, physics
   laws, rendering, performance, concurrency, and reviews of such changes. **low** for mechanical work: renames,
